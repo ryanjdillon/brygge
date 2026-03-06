@@ -1,0 +1,43 @@
+# Go
+/brygge
+*.exe
+.go/
+
+# Embedded frontend build (populated by Dockerfile / build step)
+backend/internal/web/dist/
+!backend/internal/web/dist/.gitkeep
+
+# Node / Vue
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+*.local
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Nix
+result
+.direnv/
+
+# Docker
+deploy/traefik/acme.json
+
+# Testing
+coverage/
+frontend/coverage/
+playwright-report/
+test-results/
