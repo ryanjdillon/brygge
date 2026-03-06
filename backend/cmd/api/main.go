@@ -18,8 +18,10 @@ import (
 	"github.com/rs/zerolog"
 
 	backend "github.com/brygge-klubb/brygge"
+	"github.com/brygge-klubb/brygge/internal/auth"
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/handlers"
+	"github.com/brygge-klubb/brygge/internal/middleware"
 )
 
 func main() {
@@ -59,6 +61,12 @@ func main() {
 		log.Info().Msg("connected to redis")
 	}
 
+	jwtService := auth.NewJWTService(&cfg)
+	vippsClient := auth.NewVippsClient(&cfg)
+
+	healthHandler := handlers.NewHealthHandler(db, rdb)
+	authHandler := handlers.NewAuthHandler(db, rdb, jwtService, vippsClient, &cfg, log)
+
 	r := chi.NewRouter()
 
 	r.Use(chimw.RequestID)
@@ -74,24 +82,35 @@ func main() {
 		MaxAge:           300,
 	}))
 
-	healthHandler := handlers.NewHealthHandler(db, rdb)
-
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Method(http.MethodGet, "/health", healthHandler)
 
 		r.Route("/auth", func(r chi.Router) {
-			r.Get("/", placeholder("auth"))
+			r.Get("/vipps/login", authHandler.HandleVippsLogin)
+			r.Get("/vipps/callback", authHandler.HandleVippsCallback)
+			r.Post("/register", authHandler.HandleEmailRegister)
+			r.Post("/login", authHandler.HandleEmailLogin)
+			r.Post("/refresh", authHandler.HandleRefreshToken)
+
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.Authenticate(jwtService))
+				r.Post("/logout", authHandler.HandleLogout)
+				r.Get("/me", authHandler.HandleMe)
+			})
 		})
 
 		r.Route("/members", func(r chi.Router) {
+			r.Use(middleware.Authenticate(jwtService))
 			r.Get("/", placeholder("members"))
 		})
 
 		r.Route("/slips", func(r chi.Router) {
+			r.Use(middleware.Authenticate(jwtService))
 			r.Get("/", placeholder("slips"))
 		})
 
 		r.Route("/bookings", func(r chi.Router) {
+			r.Use(middleware.Authenticate(jwtService))
 			r.Get("/", placeholder("bookings"))
 		})
 
@@ -100,10 +119,13 @@ func main() {
 		})
 
 		r.Route("/documents", func(r chi.Router) {
+			r.Use(middleware.Authenticate(jwtService))
 			r.Get("/", placeholder("documents"))
 		})
 
 		r.Route("/admin", func(r chi.Router) {
+			r.Use(middleware.Authenticate(jwtService))
+			r.Use(middleware.RequireRole("admin"))
 			r.Get("/", placeholder("admin"))
 		})
 	})

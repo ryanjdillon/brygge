@@ -13,14 +13,15 @@ type Config struct {
 	ClubSlug    string
 
 	// Authentication
-	JWTSecret       string
-	JWTAccessExpiry time.Duration
+	JWTSecret        string
+	JWTAccessExpiry  time.Duration
 	JWTRefreshExpiry time.Duration
 
 	// Vipps
 	VippsClientID     string
 	VippsClientSecret string
 	VippsCallbackURL  string
+	VippsTestMode     bool
 
 	// Object storage
 	S3Endpoint  string
@@ -47,6 +48,7 @@ func Load() Config {
 		VippsClientID:     envStr("VIPPS_CLIENT_ID", ""),
 		VippsClientSecret: envStr("VIPPS_CLIENT_SECRET", ""),
 		VippsCallbackURL:  envStr("VIPPS_CALLBACK_URL", ""),
+		VippsTestMode:     envBool("VIPPS_TEST_MODE", true),
 
 		S3Endpoint:  envStr("S3_ENDPOINT", ""),
 		S3Bucket:    envStr("S3_BUCKET", "brygge"),
@@ -69,6 +71,15 @@ func envInt(key string, fallback int) int {
 	if v := os.Getenv(key); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
 			return n
+		}
+	}
+	return fallback
+}
+
+func envBool(key string, fallback bool) bool {
+	if v := os.Getenv(key); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			return b
 		}
 	}
 	return fallback
