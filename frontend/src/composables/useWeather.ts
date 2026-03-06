@@ -1,12 +1,19 @@
 import { useQuery } from '@tanstack/vue-query'
 
 export interface WeatherData {
-  windSpeed: number
-  windDirection: string
-  waveHeight: number
-  temperature: number
-  humidity: number
-  updatedAt: string
+  temperature: number | null
+  windSpeed: number | null
+  windDirection: number | null
+  humidity: number | null
+  symbolCode: string
+}
+
+interface WeatherApiResponse {
+  temperature: number | null
+  wind_speed: number | null
+  wind_direction: number | null
+  humidity: number | null
+  symbol_code: string
 }
 
 async function fetchWeather(): Promise<WeatherData> {
@@ -14,7 +21,14 @@ async function fetchWeather(): Promise<WeatherData> {
   if (!response.ok) {
     throw new Error('Failed to fetch weather data')
   }
-  return response.json()
+  const data: WeatherApiResponse = await response.json()
+  return {
+    temperature: data.temperature,
+    windSpeed: data.wind_speed,
+    windDirection: data.wind_direction,
+    humidity: data.humidity,
+    symbolCode: data.symbol_code,
+  }
 }
 
 export function useWeather() {

@@ -1,19 +1,25 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import { useWeather } from '@/composables/useWeather'
-import { Wind, Waves, Thermometer, Droplets } from 'lucide-vue-next'
+import { Wind, Thermometer, Droplets } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const { data: weather, isLoading, isError } = useWeather()
+
+function windDirectionLabel(degrees: number | null): string {
+  if (degrees == null) return '—'
+  const dirs = ['N', 'NØ', 'Ø', 'SØ', 'S', 'SV', 'V', 'NV']
+  return dirs[Math.round(degrees / 45) % 8]
+}
 </script>
 
 <template>
   <div class="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
     <h1 class="text-3xl font-bold text-gray-900">{{ t('weather.title') }}</h1>
 
-    <div v-if="isLoading" class="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+    <div v-if="isLoading" class="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
       <div
-        v-for="i in 4"
+        v-for="i in 3"
         :key="i"
         class="animate-pulse rounded-lg border border-gray-200 p-6"
       >
@@ -27,30 +33,24 @@ const { data: weather, isLoading, isError } = useWeather()
       {{ t('weather.error') }}
     </div>
 
-    <div v-else-if="weather" class="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-      <div class="rounded-lg border border-gray-200 p-6">
-        <Wind class="h-8 w-8 text-blue-600" />
-        <p class="mt-4 text-sm text-gray-500">{{ t('weather.wind') }}</p>
-        <p class="mt-1 text-2xl font-bold text-gray-900">{{ weather.windSpeed }} m/s</p>
-        <p class="text-sm text-gray-500">{{ weather.windDirection }}</p>
-      </div>
-
-      <div class="rounded-lg border border-gray-200 p-6">
-        <Waves class="h-8 w-8 text-blue-600" />
-        <p class="mt-4 text-sm text-gray-500">{{ t('weather.waves') }}</p>
-        <p class="mt-1 text-2xl font-bold text-gray-900">{{ weather.waveHeight }} m</p>
-      </div>
-
+    <div v-else-if="weather" class="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
       <div class="rounded-lg border border-gray-200 p-6">
         <Thermometer class="h-8 w-8 text-blue-600" />
         <p class="mt-4 text-sm text-gray-500">{{ t('weather.temperature') }}</p>
-        <p class="mt-1 text-2xl font-bold text-gray-900">{{ weather.temperature }}&deg;C</p>
+        <p class="mt-1 text-2xl font-bold text-gray-900">{{ weather.temperature ?? '—' }}&deg;C</p>
+      </div>
+
+      <div class="rounded-lg border border-gray-200 p-6">
+        <Wind class="h-8 w-8 text-blue-600" />
+        <p class="mt-4 text-sm text-gray-500">{{ t('weather.wind') }}</p>
+        <p class="mt-1 text-2xl font-bold text-gray-900">{{ weather.windSpeed ?? '—' }} m/s</p>
+        <p class="text-sm text-gray-500">{{ windDirectionLabel(weather.windDirection) }}</p>
       </div>
 
       <div class="rounded-lg border border-gray-200 p-6">
         <Droplets class="h-8 w-8 text-blue-600" />
         <p class="mt-4 text-sm text-gray-500">{{ t('weather.humidity') }}</p>
-        <p class="mt-1 text-2xl font-bold text-gray-900">{{ weather.humidity }}%</p>
+        <p class="mt-1 text-2xl font-bold text-gray-900">{{ weather.humidity ?? '—' }}%</p>
       </div>
     </div>
 
