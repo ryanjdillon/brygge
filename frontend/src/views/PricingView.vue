@@ -1,17 +1,17 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { usePricing } from '@/composables/usePricing'
+import { usePricing, unitLabel } from '@/composables/usePricing'
 
 const { t } = useI18n()
-const { data: categories, isLoading, isError } = usePricing()
+const { categories, isLoading, isError } = usePricing()
 
-const categoryLabels: Record<string, string> = {
-  yearlyDues: 'pricing.yearlyDues',
-  andel: 'pricing.andel',
-  slipFees: 'pricing.slipFees',
-  guestSlip: 'pricing.guestSlip',
-  bobilParking: 'pricing.bobilParking',
-  roomHire: 'pricing.roomHire',
+function formatAmount(amount: number): string {
+  return amount.toLocaleString('nb-NO')
+}
+
+function seasonLabel(metadata: Record<string, string>): string | null {
+  if (!metadata.period_start || !metadata.period_end) return null
+  return `${metadata.period_start} – ${metadata.period_end}`
 }
 </script>
 
@@ -37,30 +37,39 @@ const categoryLabels: Record<string, string> = {
       {{ t('pricing.error') }}
     </div>
 
-    <div v-else-if="!categories?.length" class="mt-8 text-center text-gray-500">
+    <div v-else-if="!categories.length" class="mt-8 text-center text-gray-500">
       {{ t('pricing.noPricing') }}
     </div>
 
     <div v-else class="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
       <div
-        v-for="category in categories"
-        :key="category.key"
-        class="rounded-lg border border-gray-200 p-6"
+        v-for="cat in categories"
+        :key="cat.key"
+        class="rounded-lg border border-gray-200 bg-white p-6"
       >
-        <h2 class="text-lg font-semibold text-gray-900">
-          {{ categoryLabels[category.key] ? t(categoryLabels[category.key]) : category.label }}
-        </h2>
+        <h2 class="text-lg font-semibold text-gray-900">{{ cat.label }}</h2>
         <ul class="mt-4 space-y-3">
           <li
-            v-for="item in category.items"
-            :key="item.name"
-            class="flex items-baseline justify-between"
+            v-for="item in cat.items"
+            :key="item.id"
+            class="border-b border-gray-100 pb-3 last:border-0 last:pb-0"
           >
-            <span class="text-gray-600">{{ item.name }}</span>
-            <span class="font-semibold text-gray-900">
-              {{ item.price }} kr
-              <span class="text-sm font-normal text-gray-500">{{ item.unit }}</span>
-            </span>
+            <div class="flex items-baseline justify-between">
+              <span class="text-gray-700">{{ item.name }}</span>
+              <span class="font-semibold text-gray-900">
+                {{ formatAmount(item.amount) }} kr
+                <span class="text-sm font-normal text-gray-500">{{ unitLabel(item.unit) }}</span>
+              </span>
+            </div>
+            <p v-if="item.description" class="mt-0.5 text-sm text-gray-500">
+              {{ item.description }}
+            </p>
+            <p v-if="seasonLabel(item.metadata)" class="mt-0.5 text-xs text-gray-400">
+              Periode: {{ seasonLabel(item.metadata) }}
+            </p>
+            <p v-if="item.installments_allowed" class="mt-0.5 text-xs text-blue-600">
+              Kan deles opp i inntil {{ item.max_installments }} avdrag
+            </p>
           </li>
         </ul>
       </div>

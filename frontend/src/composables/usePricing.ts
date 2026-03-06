@@ -1,46 +1,76 @@
+import { computed } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
+import { useApi } from '@/composables/useApi'
+
+export interface PriceItem {
+  id: string
+  category: string
+  name: string
+  description: string
+  amount: number
+  currency: string
+  unit: string
+  installments_allowed: boolean
+  max_installments: number
+  metadata: Record<string, string>
+  sort_order: number
+  is_active: boolean
+}
 
 export interface PricingCategory {
   key: string
   label: string
-  items: PricingItem[]
+  items: PriceItem[]
 }
 
-export interface PricingItem {
-  name: string
-  price: number
-  unit: string
-  description?: string
+const categoryLabels: Record<string, string> = {
+  moloandel: 'Moloandel',
+  slip_fee: 'Plassleie',
+  seasonal_rental: 'Sesongplass',
+  guest: 'Gjesteplasser',
+  bobil: 'Bobilparkering',
+  room_hire: 'Romutleie',
+  service: 'Tjenester',
+  other: 'Annet',
 }
 
-async function fetchPricing(): Promise<PricingCategory[]> {
-  const response = await fetch('/api/v1/pricing')
-  if (!response.ok) {
-    throw new Error('Failed to fetch pricing data')
-  }
-  const data = await response.json()
-  const pricing = data.pricing ?? {}
+const unitLabels: Record<string, string> = {
+  once: 'engangs',
+  year: '/år',
+  season: '/sesong',
+  day: '/døgn',
+  night: '/natt',
+  hour: '/time',
+}
 
-  return Object.entries(pricing).map(([key, value]) => {
-    if (Array.isArray(value)) {
-      return { key, label: key, items: value as PricingItem[] }
-    }
-    if (typeof value === 'object' && value !== null) {
-      const items = Object.entries(value as Record<string, unknown>).map(([name, price]) => ({
-        name,
-        price: Number(price) || 0,
-        unit: '',
-      }))
-      return { key, label: key, items }
-    }
-    return { key, label: key, items: [] }
-  })
+export function unitLabel(unit: string): string {
+  return unitLabels[unit] ?? `/${unit}`
 }
 
 export function usePricing() {
-  return useQuery({
+  const { fetchApi } = useApi()
+
+  const query = useQuery({
     queryKey: ['pricing'],
-    queryFn: fetchPricing,
+    queryFn: () => fetchApi<{ items: PriceItem[] }>('/api/v1/pricing'),
     staleTime: 10 * 60 * 1000,
   })
+
+  const items = computed(() => query.data.value?.items ?? [])
+
+  const categories = computed<PricingCategory[]>(() => {
+    const grouped = new Map<string, PriceItem[]>()
+    for (const item of items.value) {
+      const list = grouped.get(item.category) ?? []
+      list.push(item)
+      grouped.set(item.category, list)
+    }
+    return Array.from(grouped.entries()).map(([key, items]) => ({
+      key,
+      label: categoryLabels[key] ?? key,
+      items,
+    }))
+  })
+
+  return { ...query, items, categories }
 }
