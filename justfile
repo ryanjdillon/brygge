@@ -3,13 +3,24 @@ set dotenv-load
 default:
     @just --list
 
+compose := "docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml"
+
 # Start full local dev stack
 dev:
-    docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml up --build
+    {{compose}} up --build
 
 # Stop local dev stack
 down:
-    docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml down
+    {{compose}} down
+
+# First-time setup: start services, run migrations, seed data
+setup:
+    {{compose}} up -d db redis
+    @echo "waiting for postgres to be ready..."
+    @sleep 3
+    DATABASE_URL=postgres://brygge:brygge@localhost:5432/brygge?sslmode=disable just migrate
+    DATABASE_URL=postgres://brygge:brygge@localhost:5432/brygge?sslmode=disable just seed
+    @echo "\nsetup complete! run 'just dev' to start the full stack"
 
 # Run all tests (Go unit + Vue + Playwright)
 test: test-go test-vue test-e2e
@@ -32,11 +43,11 @@ test-e2e:
 
 # Start only db and redis for running integration tests locally
 test-services:
-    docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml up -d db redis
+    {{compose}} up -d db redis
 
 # Stop test services
 test-services-down:
-    docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml down db redis
+    {{compose}} down db redis
 
 # Run Go coverage report
 coverage-go:

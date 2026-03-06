@@ -2,27 +2,6 @@
 # Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 
 services:
-  # ── Traefik: no TLS, dashboard on :8081 ───────────────────────
-  traefik:
-    command:
-      - --providers.docker=true
-      - --providers.docker.exposedbydefault=false
-      - --providers.docker.network=brygge
-      # Plain HTTP only
-      - --entrypoints.web.address=:80
-      - --entrypoints.websecure.address=:443
-      # Dashboard without auth
-      - --api.dashboard=true
-      - --api.insecure=true
-      - --entrypoints.dashboard.address=:8081
-      - --log.level=DEBUG
-    ports:
-      - "80:80"
-      - "443:443"
-      - "8081:8081"
-    labels:
-      - traefik.enable=false
-
   # ── API: dev target with hot-reload mount ─────────────────────
   api:
     build:
@@ -34,16 +13,7 @@ services:
     ports:
       - "8080:8080"
     labels:
-      - traefik.enable=true
-      - traefik.http.routers.api.rule=Host(`${DOMAIN}`) && PathPrefix(`/api`)
-      - traefik.http.routers.api.entrypoints=web
-      - traefik.http.routers.api.tls=false
-      - traefik.http.services.api.loadbalancer.server.port=8080
-      - traefik.http.routers.frontend.rule=Host(`${DOMAIN}`)
-      - traefik.http.routers.frontend.entrypoints=web
-      - traefik.http.routers.frontend.tls=false
-      - traefik.http.routers.frontend.priority=1
-      - traefik.http.services.frontend.loadbalancer.server.port=8080
+      - traefik.enable=false
 
   # ── Postgres: expose for local tooling ─────────────────────────
   db:
@@ -56,6 +26,14 @@ services:
       - "6379:6379"
 
   # ── Disable services not needed in dev ─────────────────────────
+  traefik:
+    profiles:
+      - disabled
+
+  dendrite:
+    profiles:
+      - disabled
+
   element:
     profiles:
       - disabled

@@ -32,8 +32,8 @@ ENTRYPOINT ["/brygge"]
 FROM golang:1.25-alpine AS dev
 RUN go install github.com/air-verse/air@latest
 WORKDIR /app
-COPY go.* ./
+COPY backend/go.* ./
 RUN go mod download
-COPY . .
+COPY backend/ .
 EXPOSE 8080
 CMD ["air", "-c", ".air.toml"]

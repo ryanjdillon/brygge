@@ -15,6 +15,7 @@ frontend/.vite/
 
 # Environment
 .env
+deploy/.env
 .env.local
 .env.*.local
 
