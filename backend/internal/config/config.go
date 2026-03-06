@@ -29,6 +29,10 @@ type Config struct {
 	S3AccessKey string
 	S3SecretKey string
 
+	// Dendrite (Matrix)
+	DendriteInternalURL  string
+	DendriteServiceToken string
+
 	// Optional integrations
 	ResendAPIKey    string
 	AnthropicAPIKey string
@@ -54,6 +58,9 @@ func Load() Config {
 		S3Bucket:    envStr("S3_BUCKET", "brygge"),
 		S3AccessKey: envStr("S3_ACCESS_KEY", ""),
 		S3SecretKey: envStr("S3_SECRET_KEY", ""),
+
+		DendriteInternalURL:  envStr("DENDRITE_INTERNAL_URL", "http://dendrite:8008"),
+		DendriteServiceToken: envStr("DENDRITE_SERVICE_TOKEN", ""),
 
 		ResendAPIKey:    envStr("RESEND_API_KEY", ""),
 		AnthropicAPIKey: envStr("ANTHROPIC_API_KEY", ""),
