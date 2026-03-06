@@ -1,0 +1,22 @@
+{
+  "nav": {
+    "home": "Home",
+    "calendar": "Calendar",
+    "weather": "Weather",
+    "directions": "Directions",
+    "contact": "Contact",
+    "pricing": "Pricing",
+    "join": "Join",
+    "login": "Log in",
+    "portal": "My page",
+    "admin": "Admin"
+  },
+  "common": {
+    "loading": "Loading",
+    "error": "Error",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "confirm": "Confirm"
+  }
+}

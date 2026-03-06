@@ -1,0 +1,22 @@
+{
+  "nav": {
+    "home": "Hjem",
+    "calendar": "Kalender",
+    "weather": "V\u00e6r",
+    "directions": "Veibeskrivelse",
+    "contact": "Kontakt",
+    "pricing": "Priser",
+    "join": "Bli medlem",
+    "login": "Logg inn",
+    "portal": "Min side",
+    "admin": "Admin"
+  },
+  "common": {
+    "loading": "Laster",
+    "error": "Feil",
+    "save": "Lagre",
+    "cancel": "Avbryt",
+    "delete": "Slett",
+    "confirm": "Bekreft"
+  }
+}
