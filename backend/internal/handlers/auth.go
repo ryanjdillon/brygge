@@ -101,14 +101,14 @@ func (h *AuthHandler) HandleVippsCallback(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	userID, roles, err := h.upsertVippsUser(ctx, userInfo)
+	userID, clubID, roles, err := h.upsertVippsUser(ctx, userInfo)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to upsert vipps user")
 		Error(w, http.StatusInternalServerError, "failed to create or update user")
 		return
 	}
 
-	accessToken, err := h.jwt.GenerateAccessToken(userID, h.config.ClubSlug, roles)
+	accessToken, err := h.jwt.GenerateAccessToken(userID, clubID, roles)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to generate access token")
 		Error(w, http.StatusInternalServerError, "internal error")
@@ -148,14 +148,37 @@ func (h *AuthHandler) HandleEmailRegister(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	_, err = h.db.Exec(r.Context(),
-		`INSERT INTO users (email, password_hash, full_name, club_slug, auth_provider)
-		 VALUES ($1, $2, $3, $4, 'email')`,
-		req.Email, hash, req.FullName, h.config.ClubSlug,
-	)
+	var clubID string
+	err = h.db.QueryRow(r.Context(),
+		`SELECT id FROM clubs WHERE slug = $1`,
+		h.config.ClubSlug,
+	).Scan(&clubID)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to resolve club")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	var userID string
+	err = h.db.QueryRow(r.Context(),
+		`INSERT INTO users (club_id, email, password_hash, full_name)
+		 VALUES ($1, $2, $3, $4)
+		 RETURNING id`,
+		clubID, req.Email, hash, req.FullName,
+	).Scan(&userID)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to insert user")
 		Error(w, http.StatusConflict, "user already exists or registration failed")
+		return
+	}
+
+	_, err = h.db.Exec(r.Context(),
+		`INSERT INTO user_roles (user_id, club_id, role) VALUES ($1, $2, 'applicant')`,
+		userID, clubID,
+	)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to assign default role")
+		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
@@ -174,12 +197,14 @@ func (h *AuthHandler) HandleEmailLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var userID, passwordHash string
-	var roles []string
+	var userID, clubID, passwordHash string
 	err := h.db.QueryRow(r.Context(),
-		`SELECT id, password_hash, roles FROM users WHERE email = $1 AND club_slug = $2`,
+		`SELECT u.id, u.club_id, u.password_hash
+		 FROM users u
+		 JOIN clubs c ON c.id = u.club_id
+		 WHERE u.email = $1 AND c.slug = $2`,
 		req.Email, h.config.ClubSlug,
-	).Scan(&userID, &passwordHash, &roles)
+	).Scan(&userID, &clubID, &passwordHash)
 	if err != nil {
 		Error(w, http.StatusUnauthorized, "invalid credentials")
 		return
@@ -190,7 +215,14 @@ func (h *AuthHandler) HandleEmailLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	accessToken, err := h.jwt.GenerateAccessToken(userID, h.config.ClubSlug, roles)
+	roles, err := h.getUserRoles(r.Context(), userID, clubID)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to fetch user roles")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	accessToken, err := h.jwt.GenerateAccessToken(userID, clubID, roles)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to generate access token")
 		Error(w, http.StatusInternalServerError, "internal error")
@@ -235,17 +267,24 @@ func (h *AuthHandler) HandleRefreshToken(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	var roles []string
+	var clubID string
 	err = h.db.QueryRow(r.Context(),
-		`SELECT roles FROM users WHERE id = $1`,
+		`SELECT club_id FROM users WHERE id = $1`,
 		claims.UserID,
-	).Scan(&roles)
+	).Scan(&clubID)
 	if err != nil {
 		Error(w, http.StatusUnauthorized, "user not found")
 		return
 	}
 
-	accessToken, err := h.jwt.GenerateAccessToken(claims.UserID, h.config.ClubSlug, roles)
+	roles, err := h.getUserRoles(r.Context(), claims.UserID, clubID)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to fetch user roles")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	accessToken, err := h.jwt.GenerateAccessToken(claims.UserID, clubID, roles)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to generate access token")
 		Error(w, http.StatusInternalServerError, "internal error")
@@ -286,47 +325,88 @@ func (h *AuthHandler) HandleMe(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *AuthHandler) upsertVippsUser(ctx context.Context, info *auth.VippsUserInfo) (string, []string, error) {
-	var userID string
-	var roles []string
+func (h *AuthHandler) getUserRoles(ctx context.Context, userID, clubID string) ([]string, error) {
+	rows, err := h.db.Query(ctx,
+		`SELECT role FROM user_roles WHERE user_id = $1 AND club_id = $2`,
+		userID, clubID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("querying user roles: %w", err)
+	}
+	defer rows.Close()
 
+	var roles []string
+	for rows.Next() {
+		var role string
+		if err := rows.Scan(&role); err != nil {
+			return nil, fmt.Errorf("scanning role: %w", err)
+		}
+		roles = append(roles, role)
+	}
+	return roles, rows.Err()
+}
+
+func (h *AuthHandler) upsertVippsUser(ctx context.Context, info *auth.VippsUserInfo) (string, string, []string, error) {
+	var clubID string
 	err := h.db.QueryRow(ctx,
-		`SELECT id, roles FROM users WHERE vipps_sub = $1 AND club_slug = $2`,
-		info.Sub, h.config.ClubSlug,
-	).Scan(&userID, &roles)
+		`SELECT id FROM clubs WHERE slug = $1`,
+		h.config.ClubSlug,
+	).Scan(&clubID)
+	if err != nil {
+		return "", "", nil, fmt.Errorf("resolving club: %w", err)
+	}
+
+	var userID string
+	err = h.db.QueryRow(ctx,
+		`SELECT id FROM users WHERE vipps_sub = $1 AND club_id = $2`,
+		info.Sub, clubID,
+	).Scan(&userID)
 
 	if err == pgx.ErrNoRows {
 		err = h.db.QueryRow(ctx,
-			`INSERT INTO users (vipps_sub, email, full_name, phone, address_street, address_postal_code, address_city, address_country, club_slug, auth_provider, roles)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'vipps', ARRAY['applicant'])
-			 RETURNING id, roles`,
-			info.Sub, info.Email, info.Name, info.Phone,
-			info.Address.Street, info.Address.PostalCode, info.Address.City, info.Address.Country,
-			h.config.ClubSlug,
-		).Scan(&userID, &roles)
+			`INSERT INTO users (club_id, vipps_sub, email, full_name, phone, address_line, postal_code, city)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+			 RETURNING id`,
+			clubID, info.Sub, info.Email, info.Name, info.Phone,
+			info.Address.Street, info.Address.PostalCode, info.Address.City,
+		).Scan(&userID)
 		if err != nil {
-			return "", nil, fmt.Errorf("inserting vipps user: %w", err)
+			return "", "", nil, fmt.Errorf("inserting vipps user: %w", err)
 		}
-		return userID, roles, nil
+
+		_, err = h.db.Exec(ctx,
+			`INSERT INTO user_roles (user_id, club_id, role) VALUES ($1, $2, 'applicant')`,
+			userID, clubID,
+		)
+		if err != nil {
+			return "", "", nil, fmt.Errorf("assigning default role: %w", err)
+		}
+
+		return userID, clubID, []string{"applicant"}, nil
 	}
 	if err != nil {
-		return "", nil, fmt.Errorf("looking up vipps user: %w", err)
+		return "", "", nil, fmt.Errorf("looking up vipps user: %w", err)
 	}
 
 	_, err = h.db.Exec(ctx,
 		`UPDATE users SET email = $1, full_name = $2, phone = $3,
-		 address_street = $4, address_postal_code = $5, address_city = $6, address_country = $7,
+		 address_line = $4, postal_code = $5, city = $6,
 		 updated_at = now()
-		 WHERE id = $8`,
+		 WHERE id = $7`,
 		info.Email, info.Name, info.Phone,
-		info.Address.Street, info.Address.PostalCode, info.Address.City, info.Address.Country,
+		info.Address.Street, info.Address.PostalCode, info.Address.City,
 		userID,
 	)
 	if err != nil {
-		return "", nil, fmt.Errorf("updating vipps user: %w", err)
+		return "", "", nil, fmt.Errorf("updating vipps user: %w", err)
 	}
 
-	return userID, roles, nil
+	roles, err := h.getUserRoles(ctx, userID, clubID)
+	if err != nil {
+		return "", "", nil, fmt.Errorf("fetching roles: %w", err)
+	}
+
+	return userID, clubID, roles, nil
 }
 
 type tokenResponse struct {
