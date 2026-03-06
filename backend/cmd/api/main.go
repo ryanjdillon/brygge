@@ -66,6 +66,11 @@ func main() {
 
 	healthHandler := handlers.NewHealthHandler(db, rdb)
 	authHandler := handlers.NewAuthHandler(db, rdb, jwtService, vippsClient, &cfg, log)
+	waitingListHandler := handlers.NewWaitingListHandler(db, rdb, &cfg, log)
+	adminUsersHandler := handlers.NewAdminUsersHandler(db, &cfg, log)
+	adminSlipsHandler := handlers.NewAdminSlipsHandler(db, &cfg, log)
+	adminPricingHandler := handlers.NewAdminPricingHandler(db, &cfg, log)
+	adminDocumentsHandler := handlers.NewAdminDocumentsHandler(db, &cfg, log)
 
 	r := chi.NewRouter()
 
@@ -99,6 +104,30 @@ func main() {
 			})
 		})
 
+		r.Get("/pricing", adminPricingHandler.HandleGetPricing)
+
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.Authenticate(jwtService))
+			r.Get("/documents", adminDocumentsHandler.HandleListDocuments)
+			r.Get("/documents/{docID}", adminDocumentsHandler.HandleGetDocument)
+		})
+
+		r.Route("/waiting-list", func(r chi.Router) {
+			r.Use(middleware.Authenticate(jwtService))
+
+			r.Post("/join", waitingListHandler.HandleJoinWaitingList)
+			r.Get("/me", waitingListHandler.HandleGetMyPosition)
+			r.Post("/withdraw", waitingListHandler.HandleWithdraw)
+			r.Post("/{entryID}/accept", waitingListHandler.HandleAcceptOffer)
+
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.RequireRole("styre"))
+				r.Get("/", waitingListHandler.HandleListWaitingList)
+				r.Post("/{entryID}/offer", waitingListHandler.HandleOfferSlip)
+				r.Put("/{entryID}/position", waitingListHandler.HandleReorderEntry)
+			})
+		})
+
 		r.Route("/members", func(r chi.Router) {
 			r.Use(middleware.Authenticate(jwtService))
 			r.Get("/", placeholder("members"))
@@ -118,15 +147,37 @@ func main() {
 			r.Get("/", placeholder("calendar"))
 		})
 
-		r.Route("/documents", func(r chi.Router) {
-			r.Use(middleware.Authenticate(jwtService))
-			r.Get("/", placeholder("documents"))
-		})
-
 		r.Route("/admin", func(r chi.Router) {
 			r.Use(middleware.Authenticate(jwtService))
-			r.Use(middleware.RequireRole("admin"))
-			r.Get("/", placeholder("admin"))
+
+			r.Route("/users", func(r chi.Router) {
+				r.Use(middleware.RequireRole("styre", "admin"))
+				r.Get("/", adminUsersHandler.HandleListUsers)
+				r.Get("/{userID}", adminUsersHandler.HandleGetUser)
+				r.Put("/{userID}/roles", adminUsersHandler.HandleUpdateUserRoles)
+				r.Delete("/{userID}", adminUsersHandler.HandleDeleteUser)
+			})
+
+			r.Route("/slips", func(r chi.Router) {
+				r.Use(middleware.RequireRole("styre", "harbour_master"))
+				r.Get("/", adminSlipsHandler.HandleListSlips)
+				r.Post("/", adminSlipsHandler.HandleCreateSlip)
+				r.Get("/{slipID}", adminSlipsHandler.HandleGetSlip)
+				r.Put("/{slipID}", adminSlipsHandler.HandleUpdateSlip)
+				r.Post("/{slipID}/assign", adminSlipsHandler.HandleAssignSlip)
+				r.Post("/{slipID}/release", adminSlipsHandler.HandleReleaseSlip)
+			})
+
+			r.Route("/pricing", func(r chi.Router) {
+				r.Use(middleware.RequireRole("admin", "treasurer"))
+				r.Put("/", adminPricingHandler.HandleUpdatePricing)
+			})
+
+			r.Route("/documents", func(r chi.Router) {
+				r.Use(middleware.RequireRole("styre"))
+				r.Post("/", adminDocumentsHandler.HandleUploadDocument)
+				r.Delete("/{docID}", adminDocumentsHandler.HandleDeleteDocument)
+			})
 		})
 	})
 
