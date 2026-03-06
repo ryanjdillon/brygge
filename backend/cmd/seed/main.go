@@ -180,6 +180,31 @@ func main() {
 	}
 	fmt.Println("  events: 4 created")
 
+	// Create merchandise products
+	type productSeed struct {
+		name, description string
+		price             float64
+		stock, sortOrder  int
+	}
+	products := []productSeed{
+		{"Klubbvimpel", "Brygge-vimpel i flaggstoff, 30x40 cm", 350, 25, 10},
+		{"T-skjorte", "Brygge-logo, 100% bomull. Tilgjengelig i S-XXL", 299, 50, 20},
+		{"Caps", "Brygge-caps, one size fits all", 199, 40, 30},
+		{"Seilerhanske", "Halvfinger, skinnhåndflate. S-XL", 449, 15, 40},
+		{"Drybag 10L", "Vanntett bag med Brygge-logo", 249, 20, 50},
+	}
+	for _, p := range products {
+		_, err = db.Exec(ctx, `
+			INSERT INTO products (club_id, name, description, price, stock, sort_order)
+			VALUES ($1, $2, $3, $4, $5, $6)
+			ON CONFLICT DO NOTHING
+		`, clubID, p.name, p.description, p.price, p.stock, p.sortOrder)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to create product %s: %v\n", p.name, err)
+		}
+	}
+	fmt.Printf("  products: %d created\n", len(products))
+
 	fmt.Println("\ndone! you can now log in with:")
 	fmt.Println("  admin:  admin@brygge.local  / admin123")
 	fmt.Println("  member: member@brygge.local / member123")
