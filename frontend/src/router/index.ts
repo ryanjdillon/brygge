@@ -35,6 +35,14 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/MerchandiseView.vue'),
   },
   {
+    path: '/checkout',
+    component: () => import('@/views/CheckoutView.vue'),
+  },
+  {
+    path: '/checkout/confirm',
+    component: () => import('@/views/CheckoutConfirmView.vue'),
+  },
+  {
     path: '/login',
     component: () => import('@/views/LoginView.vue'),
   },
@@ -145,6 +153,11 @@ const routes: RouteRecordRaw[] = [
         path: 'pricing',
         name: 'admin-pricing',
         component: () => import('@/views/admin/PricingAdminView.vue'),
+      },
+      {
+        path: 'products',
+        name: 'admin-products',
+        component: () => import('@/views/admin/ProductsAdminView.vue'),
       },
       {
         path: 'communication',
