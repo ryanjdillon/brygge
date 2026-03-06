@@ -518,11 +518,6 @@ func (h *MembersHandler) HandleGetDirectory(w http.ResponseWriter, r *http.Reque
 		 JOIN user_roles ur ON ur.user_id = u.id AND ur.club_id = u.club_id
 		 WHERE u.club_id = $1
 		 AND ur.role IN ('member', 'slip_owner', 'styre', 'harbour_master', 'treasurer', 'admin')
-		 AND NOT EXISTS (
-		     SELECT 1 FROM users u2
-		     WHERE u2.id = u.id
-		     AND (u2.config->>'directory_opt_out')::boolean = true
-		 )
 		 GROUP BY u.id, u.full_name, u.phone, u.email
 		 ORDER BY u.full_name`,
 		claims.ClubID,
