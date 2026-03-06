@@ -13,6 +13,7 @@ import {
   Anchor,
   CalendarDays,
   MessageCircle,
+  Lightbulb,
   Menu,
   X,
 } from 'lucide-vue-next'
@@ -40,6 +41,7 @@ const navItems = computed<NavItem[]>(() => {
     { to: '/portal/waiting-list', icon: ListOrdered, label: t('portal.sidebar.waitingList'), roles: ['applicant'] },
     { to: '/portal/slip', icon: Anchor, label: t('portal.sidebar.slip'), roles: ['slip_owner'] },
     { to: '/portal/bookings', icon: CalendarDays, label: t('portal.sidebar.bookings') },
+    { to: '/portal/feature-requests', icon: Lightbulb, label: t('portal.sidebar.featureRequests'), roles: ['member', 'slip_owner', 'styre', 'admin'] },
     { to: '/portal/forum', icon: MessageCircle, label: t('portal.sidebar.forum'), roles: ['member', 'slip_owner', 'styre', 'admin'] },
   ]
 
