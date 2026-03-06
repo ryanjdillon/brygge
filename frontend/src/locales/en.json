@@ -9,7 +9,8 @@
     "join": "Join",
     "login": "Log in",
     "portal": "My page",
-    "admin": "Admin"
+    "admin": "Admin",
+    "merchandise": "Shop"
   },
   "common": {
     "loading": "Loading",
@@ -18,5 +19,107 @@
     "cancel": "Cancel",
     "delete": "Delete",
     "confirm": "Confirm"
+  },
+  "home": {
+    "welcome": "Welcome to Brygge",
+    "tagline": "Your harbour club, digitally",
+    "featureCalendar": "Calendar",
+    "featureCalendarDesc": "Stay up to date with regattas, working days and social events",
+    "featureWeather": "Weather conditions",
+    "featureWeatherDesc": "Real-time weather data for the harbour from Yr.no",
+    "featureBookings": "Bookings",
+    "featureBookingsDesc": "Reserve guest slips, rooms and other services",
+    "featureMembers": "Members",
+    "featureMembersDesc": "Join the community and access member benefits",
+    "ctaJoin": "Join the waiting list"
+  },
+  "calendar": {
+    "title": "Club Calendar",
+    "description": "Upcoming events and activities",
+    "export": "Export to calendar (iCal)",
+    "filterRegatta": "Regatta",
+    "filterDugnad": "Working day",
+    "filterSocial": "Social",
+    "filterAgm": "AGM"
+  },
+  "weather": {
+    "title": "Harbour Weather",
+    "wind": "Wind",
+    "windSpeed": "Wind speed",
+    "windDirection": "Wind direction",
+    "waves": "Wave height",
+    "temperature": "Temperature",
+    "humidity": "Humidity",
+    "loading": "Fetching weather data...",
+    "error": "Could not fetch weather data",
+    "attribution": "Data from Yr.no (Meteorologisk institutt)"
+  },
+  "directions": {
+    "title": "Directions",
+    "land": "By Land",
+    "landInstructions": "Follow the signs from the main road. Parking is available at the harbour.",
+    "sea": "By Sea",
+    "coordinates": "Coordinates",
+    "vhf": "VHF Channel",
+    "approach": "Approach",
+    "approachNotes": "Keep a safe distance from the buoys at the entrance. Follow the marked fairway into the guest harbour.",
+    "depth": "Depth",
+    "depthInfo": "Minimum depth at the entrance: 3.5 metres",
+    "harbourChart": "Harbour Chart"
+  },
+  "contact": {
+    "title": "Contact Us",
+    "address": "Address",
+    "phone": "Phone",
+    "vhf": "VHF Channel",
+    "email": "Email",
+    "matrixRoom": "Public chat room (Matrix)",
+    "formName": "Name",
+    "formEmail": "Email",
+    "formSubject": "Subject",
+    "formMessage": "Message",
+    "send": "Send message",
+    "sending": "Sending...",
+    "sent": "Message sent!",
+    "sendError": "Could not send message. Please try again."
+  },
+  "pricing": {
+    "title": "Pricing",
+    "yearlyDues": "Yearly dues",
+    "andel": "Harbour share (andel)",
+    "slipFees": "Slip fees by size",
+    "guestSlip": "Guest slips",
+    "bobilParking": "Motorhome parking",
+    "roomHire": "Room hire",
+    "loading": "Fetching prices...",
+    "error": "Could not fetch prices",
+    "perYear": "/year",
+    "perNight": "/night",
+    "perDay": "/day"
+  },
+  "join": {
+    "title": "Join the club",
+    "subtitle": "Sign up for the harbour slip waiting list",
+    "fullName": "Full name",
+    "email": "Email",
+    "phone": "Phone",
+    "boatDetails": "Boat details",
+    "boatName": "Boat name",
+    "boatType": "Boat type",
+    "boatLength": "Length (m)",
+    "boatBeam": "Beam (m)",
+    "boatDraft": "Draft (m)",
+    "payWithVipps": "Pay with Vipps",
+    "queuePosition": "Your queue position",
+    "queueMessage": "You are number {position} on the waiting list",
+    "submitting": "Submitting...",
+    "submitted": "Registration complete!"
+  },
+  "merchandise": {
+    "title": "Shop",
+    "comingSoon": "Coming soon! We are working on a selection of club merchandise.",
+    "burgee": "Club burgee",
+    "tshirt": "T-shirt",
+    "cap": "Cap"
   }
 }

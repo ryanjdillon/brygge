@@ -9,7 +9,8 @@
     "join": "Bli medlem",
     "login": "Logg inn",
     "portal": "Min side",
-    "admin": "Admin"
+    "admin": "Admin",
+    "merchandise": "Nettbutikk"
   },
   "common": {
     "loading": "Laster",
@@ -18,5 +19,107 @@
     "cancel": "Avbryt",
     "delete": "Slett",
     "confirm": "Bekreft"
+  },
+  "home": {
+    "welcome": "Velkommen til Brygge",
+    "tagline": "Din havneklubb, digitalt",
+    "featureCalendar": "Kalender",
+    "featureCalendarDesc": "Hold deg oppdatert p\u00e5 regattaer, dugnader og sosiale arrangement",
+    "featureWeather": "V\u00e6rforhold",
+    "featureWeatherDesc": "Sanntids v\u00e6rdata for havna fra Yr.no",
+    "featureBookings": "Bestillinger",
+    "featureBookingsDesc": "Reserver gjesteplasser, rom og andre tjenester",
+    "featureMembers": "Medlemmer",
+    "featureMembersDesc": "Bli med i fellesskapet og f\u00e5 tilgang til medlemsfordeler",
+    "ctaJoin": "Meld deg p\u00e5 ventelisten"
+  },
+  "calendar": {
+    "title": "Klubbkalender",
+    "description": "Kommende arrangementer og aktiviteter",
+    "export": "Eksporter til kalender (iCal)",
+    "filterRegatta": "Regatta",
+    "filterDugnad": "Dugnad",
+    "filterSocial": "Sosialt",
+    "filterAgm": "\u00c5rsm\u00f8te"
+  },
+  "weather": {
+    "title": "V\u00e6rforhold i havna",
+    "wind": "Vind",
+    "windSpeed": "Vindstyrke",
+    "windDirection": "Vindretning",
+    "waves": "B\u00f8lgeh\u00f8yde",
+    "temperature": "Temperatur",
+    "humidity": "Luftfuktighet",
+    "loading": "Henter v\u00e6rdata...",
+    "error": "Kunne ikke hente v\u00e6rdata",
+    "attribution": "Data fra Yr.no (Meteorologisk institutt)"
+  },
+  "directions": {
+    "title": "Veibeskrivelse",
+    "land": "Til lands",
+    "landInstructions": "F\u00f8lg skiltene fra hovedveien. Parkering er tilgjengelig ved havna.",
+    "sea": "Til sj\u00f8s",
+    "coordinates": "Koordinater",
+    "vhf": "VHF-kanal",
+    "approach": "Innseiling",
+    "approachNotes": "Hold godt avstand fra b\u00f8yene ved innl\u00f8pet. F\u00f8lg merket led inn til gjestehavna.",
+    "depth": "Dybde",
+    "depthInfo": "Minimum dybde i innl\u00f8pet: 3,5 meter",
+    "harbourChart": "Havnekart"
+  },
+  "contact": {
+    "title": "Kontakt oss",
+    "address": "Adresse",
+    "phone": "Telefon",
+    "vhf": "VHF-kanal",
+    "email": "E-post",
+    "matrixRoom": "Offentlig chatterom (Matrix)",
+    "formName": "Navn",
+    "formEmail": "E-post",
+    "formSubject": "Emne",
+    "formMessage": "Melding",
+    "send": "Send melding",
+    "sending": "Sender...",
+    "sent": "Meldingen er sendt!",
+    "sendError": "Kunne ikke sende meldingen. Pr\u00f8v igjen."
+  },
+  "pricing": {
+    "title": "Priser",
+    "yearlyDues": "\u00c5rlig kontingent",
+    "andel": "Andel (havneplass)",
+    "slipFees": "Plassleie etter st\u00f8rrelse",
+    "guestSlip": "Gjesteplasser",
+    "bobilParking": "Bobilparkering",
+    "roomHire": "Romutleie",
+    "loading": "Henter priser...",
+    "error": "Kunne ikke hente priser",
+    "perYear": "/\u00e5r",
+    "perNight": "/natt",
+    "perDay": "/dag"
+  },
+  "join": {
+    "title": "Bli medlem",
+    "subtitle": "Meld deg p\u00e5 ventelisten for havneplass",
+    "fullName": "Fullt navn",
+    "email": "E-post",
+    "phone": "Telefon",
+    "boatDetails": "B\u00e5tdetaljer",
+    "boatName": "B\u00e5tnavn",
+    "boatType": "B\u00e5ttype",
+    "boatLength": "Lengde (m)",
+    "boatBeam": "Bredde (m)",
+    "boatDraft": "Dypg\u00e5ende (m)",
+    "payWithVipps": "Betal med Vipps",
+    "queuePosition": "Din plass i k\u00f8en",
+    "queueMessage": "Du er nummer {position} p\u00e5 ventelisten",
+    "submitting": "Sender...",
+    "submitted": "Registrering fullf\u00f8rt!"
+  },
+  "merchandise": {
+    "title": "Nettbutikk",
+    "comingSoon": "Kommer snart! Vi jobber med \u00e5 f\u00e5 p\u00e5 plass et utvalg av klubbeffekter.",
+    "burgee": "Klubbvimpel",
+    "tshirt": "T-skjorte",
+    "cap": "Caps"
   }
 }
