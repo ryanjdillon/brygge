@@ -71,6 +71,12 @@ func main() {
 	adminSlipsHandler := handlers.NewAdminSlipsHandler(db, &cfg, log)
 	adminPricingHandler := handlers.NewAdminPricingHandler(db, &cfg, log)
 	adminDocumentsHandler := handlers.NewAdminDocumentsHandler(db, &cfg, log)
+	forumHandler := handlers.NewForumHandler(db, &cfg, log)
+	bookingsHandler := handlers.NewBookingsHandler(db, rdb, &cfg, log)
+	calendarHandler := handlers.NewCalendarHandler(db, &cfg, log)
+	membersHandler := handlers.NewMembersHandler(db, &cfg, log)
+	weatherHandler := handlers.NewWeatherHandler(db, rdb, &cfg, log)
+	contactHandler := handlers.NewContactHandler(&cfg, log)
 
 	r := chi.NewRouter()
 
@@ -105,6 +111,8 @@ func main() {
 		})
 
 		r.Get("/pricing", adminPricingHandler.HandleGetPricing)
+		r.Get("/weather", weatherHandler.HandleGetWeather)
+		r.Post("/contact", contactHandler.HandleContactForm)
 
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.Authenticate(jwtService))
@@ -128,9 +136,54 @@ func main() {
 			})
 		})
 
+		r.Route("/bookings", func(r chi.Router) {
+			r.Get("/resources", bookingsHandler.HandleListResources)
+			r.Get("/resources/{resourceID}/availability", bookingsHandler.HandleGetResourceAvailability)
+
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.OptionalAuth(jwtService))
+				r.Post("/", bookingsHandler.HandleCreateBooking)
+			})
+
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.Authenticate(jwtService))
+				r.Get("/me", bookingsHandler.HandleListMyBookings)
+				r.Get("/{bookingID}", bookingsHandler.HandleGetBooking)
+				r.Post("/{bookingID}/cancel", bookingsHandler.HandleCancelBooking)
+			})
+
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.Authenticate(jwtService))
+				r.Use(middleware.RequireRole("styre", "harbour_master"))
+				r.Post("/{bookingID}/confirm", bookingsHandler.HandleConfirmBooking)
+			})
+		})
+
+		r.Route("/calendar", func(r chi.Router) {
+			r.Get("/", calendarHandler.HandleListPublicEvents)
+			r.Get("/public.ics", calendarHandler.HandleExportICS)
+			r.Get("/{eventID}", calendarHandler.HandleGetEvent)
+
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.Authenticate(jwtService))
+				r.Use(middleware.RequireRole("styre"))
+				r.Post("/", calendarHandler.HandleCreateEvent)
+				r.Put("/{eventID}", calendarHandler.HandleUpdateEvent)
+				r.Delete("/{eventID}", calendarHandler.HandleDeleteEvent)
+			})
+		})
+
 		r.Route("/members", func(r chi.Router) {
 			r.Use(middleware.Authenticate(jwtService))
-			r.Get("/", placeholder("members"))
+			r.Get("/me", membersHandler.HandleGetMe)
+			r.Put("/me", membersHandler.HandleUpdateMe)
+			r.Get("/me/boats", membersHandler.HandleListMyBoats)
+			r.Post("/me/boats", membersHandler.HandleCreateBoat)
+			r.Put("/me/boats/{boatID}", membersHandler.HandleUpdateBoat)
+			r.Delete("/me/boats/{boatID}", membersHandler.HandleDeleteBoat)
+			r.Get("/me/slip", membersHandler.HandleGetMySlip)
+			r.Post("/me/slip/issues", membersHandler.HandleReportIssue)
+			r.Get("/directory", membersHandler.HandleGetDirectory)
 		})
 
 		r.Route("/slips", func(r chi.Router) {
@@ -138,13 +191,12 @@ func main() {
 			r.Get("/", placeholder("slips"))
 		})
 
-		r.Route("/bookings", func(r chi.Router) {
+		r.Route("/forum", func(r chi.Router) {
 			r.Use(middleware.Authenticate(jwtService))
-			r.Get("/", placeholder("bookings"))
-		})
-
-		r.Route("/calendar", func(r chi.Router) {
-			r.Get("/", placeholder("calendar"))
+			r.Get("/rooms", forumHandler.HandleListRooms)
+			r.Get("/rooms/{roomID}/messages", forumHandler.HandleGetRoomMessages)
+			r.Post("/rooms/{roomID}/messages", forumHandler.HandleSendMessage)
+			r.Get("/rooms/{roomID}/members", forumHandler.HandleGetRoomMembers)
 		})
 
 		r.Route("/admin", func(r chi.Router) {
@@ -166,6 +218,11 @@ func main() {
 				r.Put("/{slipID}", adminSlipsHandler.HandleUpdateSlip)
 				r.Post("/{slipID}/assign", adminSlipsHandler.HandleAssignSlip)
 				r.Post("/{slipID}/release", adminSlipsHandler.HandleReleaseSlip)
+			})
+
+			r.Route("/bookings", func(r chi.Router) {
+				r.Use(middleware.RequireRole("styre", "harbour_master"))
+				r.Get("/", bookingsHandler.HandleListBookingsAdmin)
 			})
 
 			r.Route("/pricing", func(r chi.Router) {

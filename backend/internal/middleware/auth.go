@@ -38,6 +38,35 @@ func Authenticate(jwtService *auth.JWTService) func(http.Handler) http.Handler {
 	}
 }
 
+// OptionalAuth extracts JWT claims if present but does not require authentication.
+// If no token is provided or the token is invalid, the request proceeds without claims.
+func OptionalAuth(jwtService *auth.JWTService) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			header := r.Header.Get("Authorization")
+			if header == "" {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			token, found := strings.CutPrefix(header, "Bearer ")
+			if !found {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			claims, err := jwtService.ValidateAccessToken(token)
+			if err != nil {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			ctx := context.WithValue(r.Context(), contextKey{}, claims)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
 func RequireRole(roles ...string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
