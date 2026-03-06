@@ -1,0 +1,34 @@
+# Traefik Static Configuration Template
+# Copy to traefik.yml and substitute environment variables before use.
+
+# ── Entrypoints ──────────────────────────────────────────────
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+  websecure:
+    address: ":443"
+
+# ── Docker Provider ──────────────────────────────────────────
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+    network: brygge
+
+# ── Let's Encrypt Certificate Resolver ───────────────────────
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: "${LETSENCRYPT_EMAIL}"
+      storage: "/acme/acme.json"
+      httpChallenge:
+        entryPoint: web
+
+# ── Logging ──────────────────────────────────────────────────
+log:
+  level: WARN

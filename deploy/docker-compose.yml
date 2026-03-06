@@ -1,0 +1,159 @@
+# Brygge — Production Docker Compose
+# Usage: docker compose -f docker-compose.yml up -d
+
+services:
+  # ── Reverse Proxy ──────────────────────────────────────────────
+  traefik:
+    image: traefik:v3.3
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_acme:/acme
+    command:
+      # Docker provider
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=brygge
+      # Entrypoints
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      # Let's Encrypt ACME
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge=true
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+      - --certificatesresolvers.letsencrypt.acme.email=${LETSENCRYPT_EMAIL}
+      - --certificatesresolvers.letsencrypt.acme.storage=/acme/acme.json
+      # Logging
+      - --log.level=WARN
+    networks:
+      - brygge
+    labels:
+      - traefik.enable=true
+      # Optional dashboard (uncomment and set basic-auth middleware to enable)
+      # - traefik.http.routers.dashboard.rule=Host(`traefik.${DOMAIN}`)
+      # - traefik.http.routers.dashboard.service=api@internal
+      # - traefik.http.routers.dashboard.entrypoints=websecure
+      # - traefik.http.routers.dashboard.tls.certresolver=letsencrypt
+
+  # ── API (Go backend + embedded SPA) ───────────────────────────
+  api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file: .env
+    networks:
+      - brygge
+    labels:
+      - traefik.enable=true
+      # API routes
+      - traefik.http.routers.api.rule=Host(`${DOMAIN}`) && PathPrefix(`/api`)
+      - traefik.http.routers.api.entrypoints=websecure
+      - traefik.http.routers.api.tls.certresolver=letsencrypt
+      - traefik.http.services.api.loadbalancer.server.port=8080
+      # Frontend catch-all (served by the same binary)
+      - traefik.http.routers.frontend.rule=Host(`${DOMAIN}`)
+      - traefik.http.routers.frontend.entrypoints=websecure
+      - traefik.http.routers.frontend.tls.certresolver=letsencrypt
+      - traefik.http.routers.frontend.priority=1
+      - traefik.http.services.frontend.loadbalancer.server.port=8080
+
+  # ── PostgreSQL ─────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - brygge
+
+  # ── Redis ──────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - brygge
+
+  # ── Dendrite (Matrix homeserver) ───────────────────────────────
+  dendrite:
+    image: matrixdotorg/dendrite-monolith:latest
+    restart: unless-stopped
+    volumes:
+      - dendrite_config:/etc/dendrite
+      - dendrite_data:/var/dendrite
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - brygge
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.dendrite.rule=Host(`matrix.${DOMAIN}`)
+      - traefik.http.routers.dendrite.entrypoints=websecure
+      - traefik.http.routers.dendrite.tls.certresolver=letsencrypt
+      - traefik.http.services.dendrite.loadbalancer.server.port=8008
+
+  # ── Element Web (Matrix client) ───────────────────────────────
+  element:
+    image: vectorim/element-web:latest
+    restart: unless-stopped
+    networks:
+      - brygge
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.element.rule=Host(`element.${DOMAIN}`)
+      - traefik.http.routers.element.entrypoints=websecure
+      - traefik.http.routers.element.tls.certresolver=letsencrypt
+      - traefik.http.services.element.loadbalancer.server.port=80
+
+  # ── Uptime Kuma (status page) ─────────────────────────────────
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    restart: unless-stopped
+    volumes:
+      - uptime_data:/app/data
+    networks:
+      - brygge
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.uptime.rule=Host(`status.${DOMAIN}`)
+      - traefik.http.routers.uptime.entrypoints=websecure
+      - traefik.http.routers.uptime.tls.certresolver=letsencrypt
+      - traefik.http.services.uptime.loadbalancer.server.port=3001
+
+volumes:
+  postgres_data:
+  redis_data:
+  dendrite_data:
+  dendrite_config:
+  uptime_data:
+  traefik_acme:
+
+networks:
+  brygge:
+    name: brygge
