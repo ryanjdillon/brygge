@@ -34,7 +34,9 @@ func (h *HealthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	dbStatus := "ok"
-	if err := h.db.Ping(ctx); err != nil {
+	if h.db == nil {
+		dbStatus = "unavailable"
+	} else if err := h.db.Ping(ctx); err != nil {
 		dbStatus = "unavailable"
 	}
 
