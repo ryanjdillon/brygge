@@ -69,10 +69,10 @@ func (h *ForumHandler) HandleListRooms(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := h.db.Query(r.Context(),
-		`SELECT matrix_room_id, alias, name, topic, member_count
+		`SELECT room_id, name, is_private
 		 FROM matrix_rooms
 		 WHERE club_id = $1
-		 ORDER BY sort_order ASC, name ASC`,
+		 ORDER BY name ASC`,
 		claims.ClubID,
 	)
 	if err != nil {
@@ -85,9 +85,13 @@ func (h *ForumHandler) HandleListRooms(w http.ResponseWriter, r *http.Request) {
 	rooms := make([]forumRoom, 0)
 	for rows.Next() {
 		var room forumRoom
-		if err := rows.Scan(&room.ID, &room.Alias, &room.Name, &room.Topic, &room.MemberCount); err != nil {
+		var isPrivate bool
+		if err := rows.Scan(&room.ID, &room.Name, &isPrivate); err != nil {
 			h.log.Error().Err(err).Msg("failed to scan room row")
 			continue
+		}
+		if isPrivate {
+			room.Topic = "private"
 		}
 		rooms = append(rooms, room)
 	}

@@ -599,7 +599,7 @@ func (h *MembersHandler) HandleDashboard(w http.ResponseWriter, r *http.Request)
 	err = h.db.QueryRow(ctx,
 		`SELECT s.number, s.section FROM slips s
 		 JOIN slip_assignments sa ON sa.slip_id = s.id
-		 WHERE sa.user_id = $1 AND s.club_id = $2 AND sa.status = 'active'`,
+		 WHERE sa.user_id = $1 AND s.club_id = $2 AND sa.released_at IS NULL`,
 		claims.UserID, claims.ClubID,
 	).Scan(&slipNum, &slipSection)
 	if err == nil {
