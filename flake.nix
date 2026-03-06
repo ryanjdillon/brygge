@@ -15,7 +15,7 @@
         devShells.default = pkgs.mkShell {
           packages = with pkgs; [
             # Go toolchain
-            go_1_23
+            go
             golangci-lint
 
             # Node.js
@@ -23,7 +23,7 @@
 
             # Database tooling
             sqlc
-            golang-migrate  # go-migrate CLI (migrate command)
+            go-migrate  # golang-migrate CLI
             postgresql_16   # provides psql client
 
             # atlas (ariga.io/atlas) is not currently packaged in nixpkgs.
