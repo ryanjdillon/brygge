@@ -107,6 +107,119 @@ func TestAuthenticateMalformedHeader(t *testing.T) {
 	}
 }
 
+func TestOptionalAuthValidToken(t *testing.T) {
+	svc := newTestJWTService("test-secret")
+	token := generateTestToken(t, svc, "user-1", "club-1", []string{"member"})
+
+	var gotClaims *auth.Claims
+	handler := OptionalAuth(svc)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotClaims = GetClaims(r.Context())
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rr.Code, http.StatusOK)
+	}
+	if gotClaims == nil {
+		t.Fatal("expected claims in context")
+	}
+	if gotClaims.UserID != "user-1" {
+		t.Errorf("UserID = %q, want %q", gotClaims.UserID, "user-1")
+	}
+	if gotClaims.ClubID != "club-1" {
+		t.Errorf("ClubID = %q, want %q", gotClaims.ClubID, "club-1")
+	}
+}
+
+func TestOptionalAuthNoToken(t *testing.T) {
+	svc := newTestJWTService("test-secret")
+
+	var gotClaims *auth.Claims
+	called := false
+	handler := OptionalAuth(svc)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		gotClaims = GetClaims(r.Context())
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rr.Code, http.StatusOK)
+	}
+	if !called {
+		t.Error("next handler was not called")
+	}
+	if gotClaims != nil {
+		t.Errorf("expected nil claims, got %+v", gotClaims)
+	}
+}
+
+func TestOptionalAuthInvalidToken(t *testing.T) {
+	svc := newTestJWTService("test-secret")
+
+	var gotClaims *auth.Claims
+	called := false
+	handler := OptionalAuth(svc)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		gotClaims = GetClaims(r.Context())
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Authorization", "Bearer invalid-token")
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rr.Code, http.StatusOK)
+	}
+	if !called {
+		t.Error("next handler was not called")
+	}
+	if gotClaims != nil {
+		t.Errorf("expected nil claims for invalid token, got %+v", gotClaims)
+	}
+}
+
+func TestOptionalAuthMalformedHeader(t *testing.T) {
+	svc := newTestJWTService("test-secret")
+
+	called := false
+	var gotClaims *auth.Claims
+	handler := OptionalAuth(svc)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		gotClaims = GetClaims(r.Context())
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Authorization", "Basic dXNlcjpwYXNz")
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", rr.Code, http.StatusOK)
+	}
+	if !called {
+		t.Error("next handler was not called")
+	}
+	if gotClaims != nil {
+		t.Errorf("expected nil claims for malformed header, got %+v", gotClaims)
+	}
+}
+
 func TestRequireRoleAllowed(t *testing.T) {
 	claims := &auth.Claims{
 		UserID: "user-1",

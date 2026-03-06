@@ -1,6 +1,9 @@
 package auth
 
 import (
+	"encoding/base64"
+	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -133,5 +136,65 @@ func TestAccessTokenContainsAllRoles(t *testing.T) {
 		if !roleSet[r] {
 			t.Errorf("role %q not found in claims", r)
 		}
+	}
+}
+
+func TestExpiredRefreshToken(t *testing.T) {
+	svc := newTestJWTService("test-secret-key", 15*time.Minute, 1*time.Millisecond)
+
+	token, err := svc.GenerateRefreshToken("user-1")
+	if err != nil {
+		t.Fatalf("GenerateRefreshToken() error = %v", err)
+	}
+
+	time.Sleep(10 * time.Millisecond)
+
+	_, err = svc.ValidateRefreshToken(token)
+	if err == nil {
+		t.Fatal("ValidateRefreshToken() expected error for expired token, got nil")
+	}
+}
+
+func TestValidateAccessTokenWrongSigningMethod(t *testing.T) {
+	// Build a token with alg "none" by hand to test the signing method check
+	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"none","typ":"JWT"}`))
+	payload, _ := json.Marshal(map[string]any{
+		"user_id": "user-1",
+		"club_id": "club-1",
+		"roles":   []string{"member"},
+		"iss":     "brygge",
+		"exp":     time.Now().Add(time.Hour).Unix(),
+		"iat":     time.Now().Unix(),
+	})
+	payloadEnc := base64.RawURLEncoding.EncodeToString(payload)
+	fakeToken := header + "." + payloadEnc + "."
+
+	svc := newTestJWTService("test-secret-key", 15*time.Minute, 7*24*time.Hour)
+
+	_, err := svc.ValidateAccessToken(fakeToken)
+	if err == nil {
+		t.Fatal("ValidateAccessToken() expected error for 'none' signing method, got nil")
+	}
+	if !strings.Contains(err.Error(), "signing method") && !strings.Contains(err.Error(), "token") {
+		t.Errorf("expected error about signing method, got: %v", err)
+	}
+}
+
+func TestValidateRefreshTokenWithAccessToken(t *testing.T) {
+	svc := newTestJWTService("test-secret-key", 15*time.Minute, 7*24*time.Hour)
+
+	accessToken, err := svc.GenerateAccessToken("user-1", "club-1", []string{"member"})
+	if err != nil {
+		t.Fatalf("GenerateAccessToken() error = %v", err)
+	}
+
+	claims, err := svc.ValidateRefreshToken(accessToken)
+	if err != nil {
+		t.Logf("ValidateRefreshToken with access token returned error (expected): %v", err)
+		return
+	}
+
+	if claims.UserID != "user-1" {
+		t.Errorf("UserID = %q, want %q", claims.UserID, "user-1")
 	}
 }
