@@ -18,6 +18,7 @@ import (
 	"github.com/rs/zerolog"
 
 	backend "github.com/brygge-klubb/brygge"
+	"github.com/brygge-klubb/brygge/internal/ai"
 	"github.com/brygge-klubb/brygge/internal/auth"
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/handlers"
@@ -64,6 +65,14 @@ func main() {
 	jwtService := auth.NewJWTService(&cfg)
 	vippsClient := auth.NewVippsClient(&cfg)
 
+	var claudeClient *ai.ClaudeClient
+	if cfg.AnthropicAPIKey != "" {
+		claudeClient = ai.NewClaudeClient(cfg.AnthropicAPIKey)
+		log.Info().Msg("AI document processing enabled (Anthropic API key configured)")
+	} else {
+		log.Info().Msg("AI document processing disabled (no ANTHROPIC_API_KEY)")
+	}
+
 	healthHandler := handlers.NewHealthHandler(db, rdb)
 	authHandler := handlers.NewAuthHandler(db, rdb, jwtService, vippsClient, &cfg, log)
 	waitingListHandler := handlers.NewWaitingListHandler(db, rdb, &cfg, log)
@@ -71,12 +80,17 @@ func main() {
 	adminSlipsHandler := handlers.NewAdminSlipsHandler(db, &cfg, log)
 	adminPricingHandler := handlers.NewAdminPricingHandler(db, &cfg, log)
 	adminDocumentsHandler := handlers.NewAdminDocumentsHandler(db, &cfg, log)
+	aiDocumentsHandler := handlers.NewAIDocumentsHandler(db, claudeClient, &cfg, log)
 	forumHandler := handlers.NewForumHandler(db, &cfg, log)
 	bookingsHandler := handlers.NewBookingsHandler(db, rdb, &cfg, log)
 	calendarHandler := handlers.NewCalendarHandler(db, &cfg, log)
 	membersHandler := handlers.NewMembersHandler(db, &cfg, log)
 	weatherHandler := handlers.NewWeatherHandler(db, rdb, &cfg, log)
 	contactHandler := handlers.NewContactHandler(&cfg, log)
+	broadcastHandler := handlers.NewBroadcastHandler(db, &cfg, log)
+	projectsHandler := handlers.NewProjectsHandler(db, &cfg, log)
+	featureRequestsHandler := handlers.NewFeatureRequestsHandler(db, &cfg, log)
+	financialsHandler := handlers.NewFinancialsHandler(db, &cfg, log)
 
 	r := chi.NewRouter()
 
@@ -199,8 +213,59 @@ func main() {
 			r.Get("/rooms/{roomID}/members", forumHandler.HandleGetRoomMembers)
 		})
 
+		r.Route("/projects", func(r chi.Router) {
+			r.Use(middleware.Authenticate(jwtService))
+			r.Use(middleware.RequireRole("styre"))
+			r.Get("/", projectsHandler.HandleListProjects)
+			r.Post("/", projectsHandler.HandleCreateProject)
+			r.Get("/{projectID}", projectsHandler.HandleGetProject)
+			r.Get("/{projectID}/tasks", projectsHandler.HandleListTasks)
+			r.Post("/{projectID}/tasks", projectsHandler.HandleCreateTask)
+		})
+
+		r.Route("/tasks", func(r chi.Router) {
+			r.Use(middleware.Authenticate(jwtService))
+			r.Use(middleware.RequireRole("styre"))
+			r.Put("/{taskID}", projectsHandler.HandleUpdateTask)
+			r.Delete("/{taskID}", projectsHandler.HandleDeleteTask)
+		})
+
+		r.Route("/feature-requests", func(r chi.Router) {
+			r.Use(middleware.Authenticate(jwtService))
+			r.Get("/", featureRequestsHandler.HandleListFeatureRequests)
+			r.Post("/", featureRequestsHandler.HandleCreateFeatureRequest)
+			r.Get("/{requestID}", featureRequestsHandler.HandleGetFeatureRequest)
+			r.Post("/{requestID}/vote", featureRequestsHandler.HandleVote)
+
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.RequireRole("styre"))
+				r.Put("/{requestID}/status", featureRequestsHandler.HandleUpdateFeatureRequestStatus)
+				r.Post("/{requestID}/promote", featureRequestsHandler.HandlePromoteToTask)
+			})
+		})
+
 		r.Route("/admin", func(r chi.Router) {
 			r.Use(middleware.Authenticate(jwtService))
+
+			r.Route("/broadcast", func(r chi.Router) {
+				r.Use(middleware.RequireRole("styre", "admin"))
+				r.Post("/", broadcastHandler.HandleSendBroadcast)
+			})
+
+			r.Route("/broadcasts", func(r chi.Router) {
+				r.Use(middleware.RequireRole("styre", "admin"))
+				r.Get("/", broadcastHandler.HandleListBroadcasts)
+			})
+
+			r.Route("/financials", func(r chi.Router) {
+				r.Use(middleware.RequireRole("treasurer", "styre", "admin"))
+				r.Get("/summary", financialsHandler.HandleGetFinancialSummary)
+				r.Get("/payments", financialsHandler.HandleListPayments)
+				r.Get("/payments/{paymentID}", financialsHandler.HandleGetPaymentDetails)
+				r.Get("/export", financialsHandler.HandleExportCSV)
+				r.Post("/invoices", financialsHandler.HandleGenerateInvoice)
+				r.Get("/overdue", financialsHandler.HandleListOverdue)
+			})
 
 			r.Route("/users", func(r chi.Router) {
 				r.Use(middleware.RequireRole("styre", "admin"))
@@ -234,6 +299,8 @@ func main() {
 				r.Use(middleware.RequireRole("styre"))
 				r.Post("/", adminDocumentsHandler.HandleUploadDocument)
 				r.Delete("/{docID}", adminDocumentsHandler.HandleDeleteDocument)
+				r.Post("/{docID}/summarize", aiDocumentsHandler.HandleSummarizeComments)
+				r.Post("/{docID}/sakliste", aiDocumentsHandler.HandleGenerateSakliste)
 			})
 		})
 	})

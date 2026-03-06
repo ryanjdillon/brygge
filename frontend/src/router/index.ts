@@ -84,6 +84,11 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/portal/BookingsView.vue'),
       },
       {
+        path: 'feature-requests',
+        name: 'portal-feature-requests',
+        component: () => import('@/views/portal/FeatureRequestsView.vue'),
+      },
+      {
         path: 'forum',
         name: 'forum',
         component: () => import('@/views/portal/ForumView.vue'),
@@ -99,8 +104,59 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/admin',
-    component: () => import('@/views/AdminView.vue'),
+    component: () => import('@/views/admin/AdminLayout.vue'),
     meta: { requiresAuth: true, requiresAdmin: true },
+    children: [
+      {
+        path: '',
+        redirect: '/admin/events',
+      },
+      {
+        path: 'events',
+        name: 'admin-events',
+        component: () => import('@/views/admin/EventsAdminView.vue'),
+      },
+      {
+        path: 'bookings',
+        name: 'admin-bookings',
+        component: () => import('@/views/admin/BookingsAdminView.vue'),
+      },
+      {
+        path: 'communication',
+        name: 'admin-communication',
+        component: () => import('@/views/admin/CommunicationView.vue'),
+      },
+      {
+        path: 'projects',
+        name: 'admin-projects',
+        component: () => import('@/views/admin/ProjectsView.vue'),
+      },
+      {
+        path: 'projects/:projectId',
+        name: 'admin-kanban',
+        component: () => import('@/views/admin/KanbanView.vue'),
+      },
+      {
+        path: 'financials',
+        name: 'admin-financials',
+        component: () => import('@/views/admin/FinancialsView.vue'),
+      },
+      {
+        path: 'financials/payments',
+        name: 'admin-payments',
+        component: () => import('@/views/admin/PaymentsListView.vue'),
+      },
+      {
+        path: 'financials/overdue',
+        name: 'admin-overdue',
+        component: () => import('@/views/admin/OverdueView.vue'),
+      },
+      {
+        path: 'financials/invoices/new',
+        name: 'admin-invoice-create',
+        component: () => import('@/views/admin/InvoiceCreateView.vue'),
+      },
+    ],
   },
 ]
 
@@ -116,7 +172,7 @@ router.beforeEach((to) => {
     return { path: '/login' }
   }
 
-  if (to.meta.requiresAdmin && !auth.hasRole('admin')) {
+  if (to.meta.requiresAdmin && !auth.hasRole('admin') && !auth.hasRole('styre')) {
     return { path: '/' }
   }
 })
