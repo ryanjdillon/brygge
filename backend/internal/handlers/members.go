@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"time"
@@ -557,4 +558,104 @@ func (h *MembersHandler) HandleGetDirectory(w http.ResponseWriter, r *http.Reque
 	}
 
 	JSON(w, http.StatusOK, entries)
+}
+
+type dashboardResponse struct {
+	MembershipStatus     string       `json:"membershipStatus"`
+	QueuePosition        *int         `json:"queuePosition"`
+	QueueTotal           *int         `json:"queueTotal"`
+	Slip                 *dashSlip    `json:"slip"`
+	UpcomingBookingCount int          `json:"upcomingBookingsCount"`
+}
+
+type dashSlip struct {
+	Number   string `json:"number"`
+	Location string `json:"location"`
+}
+
+func (h *MembersHandler) HandleDashboard(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	resp := dashboardResponse{}
+
+	// Determine highest role as membership status
+	roles, _ := h.getRoles(ctx, claims.UserID, claims.ClubID)
+	resp.MembershipStatus = bestRole(roles)
+
+	// Queue position
+	var pos, total int
+	err := h.db.QueryRow(ctx,
+		`SELECT position, (SELECT count(*) FROM waiting_list_entries WHERE club_id = $2 AND status = 'active')
+		 FROM waiting_list_entries WHERE user_id = $1 AND club_id = $2 AND status = 'active'`,
+		claims.UserID, claims.ClubID,
+	).Scan(&pos, &total)
+	if err == nil {
+		resp.QueuePosition = &pos
+		resp.QueueTotal = &total
+	}
+
+	// Slip info
+	var slipNum, slipSection string
+	err = h.db.QueryRow(ctx,
+		`SELECT s.number, s.section FROM slips s
+		 JOIN slip_assignments sa ON sa.slip_id = s.id
+		 WHERE sa.user_id = $1 AND s.club_id = $2 AND sa.status = 'active'`,
+		claims.UserID, claims.ClubID,
+	).Scan(&slipNum, &slipSection)
+	if err == nil {
+		resp.Slip = &dashSlip{Number: slipNum, Location: slipSection}
+	}
+
+	// Upcoming bookings count
+	var count int
+	_ = h.db.QueryRow(ctx,
+		`SELECT count(*) FROM bookings
+		 WHERE user_id = $1 AND club_id = $2 AND status != 'cancelled' AND end_date >= now()`,
+		claims.UserID, claims.ClubID,
+	).Scan(&count)
+	resp.UpcomingBookingCount = count
+
+	JSON(w, http.StatusOK, resp)
+}
+
+func (h *MembersHandler) getRoles(ctx context.Context, userID, clubID string) ([]string, error) {
+	rows, err := h.db.Query(ctx,
+		`SELECT role FROM user_roles WHERE user_id = $1 AND club_id = $2`,
+		userID, clubID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var roles []string
+	for rows.Next() {
+		var role string
+		if err := rows.Scan(&role); err != nil {
+			return nil, err
+		}
+		roles = append(roles, role)
+	}
+	return roles, rows.Err()
+}
+
+func bestRole(roles []string) string {
+	order := []string{"admin", "styre", "slip_owner", "member", "applicant"}
+	roleSet := make(map[string]bool, len(roles))
+	for _, r := range roles {
+		roleSet[r] = true
+	}
+	for _, r := range order {
+		if roleSet[r] {
+			return r
+		}
+	}
+	if len(roles) > 0 {
+		return roles[0]
+	}
+	return "member"
 }

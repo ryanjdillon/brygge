@@ -318,10 +318,17 @@ func (h *AuthHandler) HandleMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var fullName, email string
+	_ = h.db.QueryRow(r.Context(),
+		`SELECT full_name, email FROM users WHERE id = $1`, claims.UserID,
+	).Scan(&fullName, &email)
+
 	JSON(w, http.StatusOK, meResponse{
-		UserID: claims.UserID,
-		ClubID: claims.ClubID,
-		Roles:  claims.Roles,
+		UserID:   claims.UserID,
+		ClubID:   claims.ClubID,
+		Roles:    claims.Roles,
+		FullName: fullName,
+		Email:    email,
 	})
 }
 
@@ -433,9 +440,11 @@ type refreshRequest struct {
 }
 
 type meResponse struct {
-	UserID string   `json:"user_id"`
-	ClubID string   `json:"club_id"`
-	Roles  []string `json:"roles"`
+	UserID   string   `json:"user_id"`
+	ClubID   string   `json:"club_id"`
+	Roles    []string `json:"roles"`
+	FullName string   `json:"full_name"`
+	Email    string   `json:"email"`
 }
 
 func randomState() (string, error) {

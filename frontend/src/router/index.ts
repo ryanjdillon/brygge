@@ -165,8 +165,9 @@ export const router = createRouter({
   routes,
 })
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   const auth = useAuthStore()
+  await auth.ready
 
   if (to.meta.requiresAuth && !auth.isAuthenticated) {
     return { path: '/login' }

@@ -19,6 +19,8 @@ interface MeResponse {
   user_id: string
   club_id: string
   roles: string[]
+  full_name: string
+  email: string
 }
 
 export const useAuthStore = defineStore('auth', () => {
@@ -44,8 +46,8 @@ export const useAuthStore = defineStore('auth', () => {
       const data: MeResponse = await res.json()
       user.value = {
         id: data.user_id,
-        name: '',
-        email: '',
+        name: data.full_name,
+        email: data.email,
         clubId: data.club_id,
         roles: data.roles,
       }
@@ -115,9 +117,7 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   // Restore session on store init
-  if (accessToken.value) {
-    fetchMe()
-  }
+  const ready = accessToken.value ? fetchMe() : Promise.resolve()
 
-  return { user, accessToken, refreshToken, loginError, isAuthenticated, login, logout, fetchMe, hasRole }
+  return { user, accessToken, refreshToken, loginError, isAuthenticated, ready, login, logout, fetchMe, hasRole }
 })

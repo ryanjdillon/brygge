@@ -191,6 +191,7 @@ func main() {
 			r.Use(middleware.Authenticate(jwtService))
 			r.Get("/me", membersHandler.HandleGetMe)
 			r.Put("/me", membersHandler.HandleUpdateMe)
+			r.Get("/me/dashboard", membersHandler.HandleDashboard)
 			r.Get("/me/boats", membersHandler.HandleListMyBoats)
 			r.Post("/me/boats", membersHandler.HandleCreateBoat)
 			r.Put("/me/boats/{boatID}", membersHandler.HandleUpdateBoat)
