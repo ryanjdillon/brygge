@@ -12,15 +12,9 @@ const queryClient = useQueryClient()
 interface WaitingListEntry {
   id: string
   position: number
-  total: number
-  isLocal: boolean
-  paymentStatus: 'paid' | 'unpaid'
-  status: 'waiting' | 'offered'
-  offer: {
-    slipNumber: string
-    slipLocation: string
-    deadline: string
-  } | null
+  is_local: boolean
+  status: string
+  offer_deadline: string | null
 }
 
 const toast = ref<{ type: 'success' | 'error'; message: string } | null>(null)
@@ -93,9 +87,7 @@ function confirmWithdraw() {
       <div class="mt-6 grid gap-4 sm:grid-cols-3">
         <div class="rounded-lg border border-gray-200 bg-white p-5">
           <p class="text-sm font-medium text-gray-500">{{ t('portal.waitingList.position') }}</p>
-          <p class="mt-1 text-2xl font-bold text-gray-900">
-            {{ t('portal.waitingList.positionOf', { position: entry.position, total: entry.total }) }}
-          </p>
+          <p class="mt-1 text-2xl font-bold text-gray-900">#{{ entry.position }}</p>
         </div>
 
         <div class="rounded-lg border border-gray-200 bg-white p-5">
@@ -103,38 +95,29 @@ function confirmWithdraw() {
           <span
             :class="[
               'mt-1 inline-block rounded-full px-3 py-1 text-sm font-medium',
-              entry.isLocal ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800',
+              entry.is_local ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800',
             ]"
           >
-            {{ entry.isLocal ? t('portal.waitingList.local') : t('portal.waitingList.nonLocal') }}
+            {{ entry.is_local ? t('portal.waitingList.local') : t('portal.waitingList.nonLocal') }}
           </span>
         </div>
 
         <div class="rounded-lg border border-gray-200 bg-white p-5">
-          <p class="text-sm font-medium text-gray-500">{{ t('portal.waitingList.paymentStatus') }}</p>
-          <span
-            :class="[
-              'mt-1 inline-block rounded-full px-3 py-1 text-sm font-medium',
-              entry.paymentStatus === 'paid' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800',
-            ]"
-          >
-            {{ entry.paymentStatus === 'paid' ? t('portal.waitingList.paid') : t('portal.waitingList.unpaid') }}
+          <p class="text-sm font-medium text-gray-500">{{ t('portal.waitingList.status') }}</p>
+          <span class="mt-1 inline-block rounded-full bg-blue-100 px-3 py-1 text-sm font-medium text-blue-800">
+            {{ entry.status }}
           </span>
         </div>
       </div>
 
       <div
-        v-if="entry.status === 'offered' && entry.offer"
+        v-if="entry.status === 'offered' && entry.offer_deadline"
         class="mt-6 rounded-lg border-2 border-blue-300 bg-blue-50 p-6"
       >
         <h2 class="text-lg font-bold text-blue-900">{{ t('portal.waitingList.slipOffer') }}</h2>
-        <p class="mt-1 text-sm text-blue-800">{{ t('portal.waitingList.slipOfferDesc') }}</p>
-
-        <div class="mt-4 space-y-1 text-sm text-blue-900">
-          <p><strong>{{ t('portal.slip.slipNumber') }}:</strong> {{ entry.offer.slipNumber }}</p>
-          <p><strong>{{ t('portal.slip.location') }}:</strong> {{ entry.offer.slipLocation }}</p>
-          <p><strong>Deadline:</strong> {{ new Date(entry.offer.deadline).toLocaleDateString() }}</p>
-        </div>
+        <p class="mt-2 text-sm text-blue-800">
+          <strong>Deadline:</strong> {{ new Date(entry.offer_deadline).toLocaleDateString() }}
+        </p>
 
         <div class="mt-5 flex gap-3">
           <button

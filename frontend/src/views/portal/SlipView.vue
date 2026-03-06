@@ -8,18 +8,15 @@ import { AlertTriangle } from 'lucide-vue-next'
 const { t } = useI18n()
 const { fetchApi } = useApi()
 
-interface SlipPayment {
-  date: string
-  amount: number
-}
-
 interface SlipData {
+  slip_id: string
   number: string
-  size: string
-  location: string
-  yearlyFee: number
-  feeStatus: 'paid' | 'unpaid'
-  payments: SlipPayment[]
+  section: string
+  length_m: number | null
+  width_m: number | null
+  depth_m: number | null
+  status: string
+  assigned_at: string
 }
 
 const { data: slip, isLoading, isError } = useQuery({
@@ -80,51 +77,32 @@ const { mutate: reportIssue, isPending: isReporting } = useMutation({
           <p class="mt-1 text-lg font-semibold text-gray-900">#{{ slip.number }}</p>
         </div>
         <div class="rounded-lg border border-gray-200 bg-white p-5">
+          <p class="text-sm font-medium text-gray-500">{{ t('portal.slip.section') }}</p>
+          <p class="mt-1 text-lg font-semibold text-gray-900">{{ slip.section }}</p>
+        </div>
+        <div class="rounded-lg border border-gray-200 bg-white p-5">
           <p class="text-sm font-medium text-gray-500">{{ t('portal.slip.size') }}</p>
-          <p class="mt-1 text-lg font-semibold text-gray-900">{{ slip.size }}</p>
+          <p class="mt-1 text-lg font-semibold text-gray-900">
+            {{ slip.length_m ?? '—' }} × {{ slip.width_m ?? '—' }} m
+          </p>
         </div>
         <div class="rounded-lg border border-gray-200 bg-white p-5">
-          <p class="text-sm font-medium text-gray-500">{{ t('portal.slip.location') }}</p>
-          <p class="mt-1 text-lg font-semibold text-gray-900">{{ slip.location }}</p>
-        </div>
-        <div class="rounded-lg border border-gray-200 bg-white p-5">
-          <p class="text-sm font-medium text-gray-500">{{ t('portal.slip.feeStatus') }}</p>
+          <p class="text-sm font-medium text-gray-500">{{ t('portal.slip.status') }}</p>
           <span
             :class="[
               'mt-1 inline-block rounded-full px-3 py-1 text-sm font-medium',
-              slip.feeStatus === 'paid' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800',
+              slip.status === 'available' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800',
             ]"
           >
-            {{ slip.feeStatus === 'paid' ? t('portal.slip.paid') : t('portal.slip.unpaid') }}
+            {{ slip.status }}
           </span>
         </div>
       </div>
 
       <div class="mt-8 rounded-lg border border-gray-200 bg-white p-5">
-        <h2 class="text-lg font-semibold text-gray-900">{{ t('portal.slip.mapPosition') }}</h2>
-        <div class="mt-3 flex h-48 items-center justify-center rounded-md bg-gray-100 text-sm text-gray-400">
-          <!-- Map placeholder -->
-          {{ t('portal.slip.mapPosition') }} — #{{ slip.number }}
-        </div>
-      </div>
-
-      <div class="mt-8">
-        <h2 class="text-lg font-semibold text-gray-900">{{ t('portal.slip.paymentHistory') }}</h2>
-        <div v-if="!slip.payments.length" class="mt-3 text-sm text-gray-500">{{ t('common.noResults') }}</div>
-        <table v-else class="mt-3 min-w-full divide-y divide-gray-200">
-          <thead class="bg-gray-50">
-            <tr>
-              <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('portal.slip.date') }}</th>
-              <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('portal.slip.amount') }}</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-200 bg-white">
-            <tr v-for="(payment, idx) in slip.payments" :key="idx">
-              <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-900">{{ new Date(payment.date).toLocaleDateString() }}</td>
-              <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ payment.amount }} kr</td>
-            </tr>
-          </tbody>
-        </table>
+        <p class="text-sm text-gray-500">
+          {{ t('portal.slip.assignedAt') }}: {{ new Date(slip.assigned_at).toLocaleDateString() }}
+        </p>
       </div>
 
       <div class="mt-8">

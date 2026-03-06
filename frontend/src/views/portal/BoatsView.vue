@@ -13,10 +13,10 @@ interface Boat {
   id: string
   name: string
   type: string
-  length: number | null
-  beam: number | null
-  draft: number | null
-  registrationNumber: string
+  length_m: number | null
+  beam_m: number | null
+  draft_m: number | null
+  registration_number: string
 }
 
 type BoatForm = Omit<Boat, 'id'>
@@ -24,10 +24,10 @@ type BoatForm = Omit<Boat, 'id'>
 const emptyForm = (): BoatForm => ({
   name: '',
   type: '',
-  length: null,
-  beam: null,
-  draft: null,
-  registrationNumber: '',
+  length_m: null,
+  beam_m: null,
+  draft_m: null,
+  registration_number: '',
 })
 
 const showForm = ref(false)
@@ -86,10 +86,10 @@ function openEdit(boat: Boat) {
   form.value = {
     name: boat.name,
     type: boat.type,
-    length: boat.length,
-    beam: boat.beam,
-    draft: boat.draft,
-    registrationNumber: boat.registrationNumber,
+    length_m: boat.length_m,
+    beam_m: boat.beam_m,
+    draft_m: boat.draft_m,
+    registration_number: boat.registration_number,
   }
   showForm.value = true
 }
@@ -169,7 +169,7 @@ function confirmDelete(id: string) {
             <label for="boat-length" class="block text-sm font-medium text-gray-700">{{ t('portal.boats.length') }}</label>
             <input
               id="boat-length"
-              v-model.number="form.length"
+              v-model.number="form.length_m"
               type="number"
               step="0.1"
               min="0"
@@ -180,7 +180,7 @@ function confirmDelete(id: string) {
             <label for="boat-beam" class="block text-sm font-medium text-gray-700">{{ t('portal.boats.beam') }}</label>
             <input
               id="boat-beam"
-              v-model.number="form.beam"
+              v-model.number="form.beam_m"
               type="number"
               step="0.1"
               min="0"
@@ -191,7 +191,7 @@ function confirmDelete(id: string) {
             <label for="boat-draft" class="block text-sm font-medium text-gray-700">{{ t('portal.boats.draft') }}</label>
             <input
               id="boat-draft"
-              v-model.number="form.draft"
+              v-model.number="form.draft_m"
               type="number"
               step="0.1"
               min="0"
@@ -204,7 +204,7 @@ function confirmDelete(id: string) {
           <label for="boat-reg" class="block text-sm font-medium text-gray-700">{{ t('portal.boats.registrationNumber') }}</label>
           <input
             id="boat-reg"
-            v-model="form.registrationNumber"
+            v-model="form.registration_number"
             type="text"
             class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
@@ -249,10 +249,10 @@ function confirmDelete(id: string) {
             <tr v-for="boat in boats" :key="boat.id">
               <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-900">{{ boat.name }}</td>
               <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ boat.type }}</td>
-              <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ boat.length ?? '—' }}</td>
-              <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ boat.beam ?? '—' }}</td>
-              <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ boat.draft ?? '—' }}</td>
-              <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ boat.registrationNumber || '—' }}</td>
+              <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ boat.length_m ?? '—' }}</td>
+              <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ boat.beam_m ?? '—' }}</td>
+              <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ boat.draft_m ?? '—' }}</td>
+              <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ boat.registration_number || '—' }}</td>
               <td class="whitespace-nowrap px-4 py-3 text-sm">
                 <div class="flex gap-2">
                   <button

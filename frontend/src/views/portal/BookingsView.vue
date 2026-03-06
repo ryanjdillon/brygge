@@ -12,9 +12,11 @@ const queryClient = useQueryClient()
 
 interface Booking {
   id: string
-  resource: string
-  date: string
-  status: 'pending' | 'confirmed' | 'cancelled'
+  resource_id: string
+  start_date: string
+  end_date: string
+  status: string
+  notes: string
 }
 
 const toast = ref<{ type: 'success' | 'error'; message: string } | null>(null)
@@ -26,12 +28,12 @@ function showToast(type: 'success' | 'error', message: string) {
 
 const { data: bookings, isLoading, isError } = useQuery({
   queryKey: ['portal', 'bookings'],
-  queryFn: () => fetchApi<Booking[]>('/api/v1/members/me/bookings'),
+  queryFn: () => fetchApi<Booking[]>('/api/v1/bookings/me'),
 })
 
 const { mutate: cancelBooking } = useMutation({
   mutationFn: (id: string) =>
-    fetchApi(`/api/v1/members/me/bookings/${id}/cancel`, { method: 'POST' }),
+    fetchApi(`/api/v1/bookings/${id}/cancel`, { method: 'POST' }),
   onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: ['portal', 'bookings'] })
     showToast('success', t('portal.bookings.cancelSuccess'))
@@ -92,15 +94,17 @@ const statusClasses: Record<string, string> = {
         <thead class="bg-gray-50">
           <tr>
             <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('portal.bookings.resource') }}</th>
-            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('portal.bookings.date') }}</th>
+            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('portal.bookings.startDate') }}</th>
+            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('portal.bookings.endDate') }}</th>
             <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('portal.bookings.status') }}</th>
             <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('common.actions') }}</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-200 bg-white">
           <tr v-for="booking in bookings" :key="booking.id">
-            <td class="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">{{ booking.resource }}</td>
-            <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ new Date(booking.date).toLocaleDateString() }}</td>
+            <td class="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">{{ booking.resource_id }}</td>
+            <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ new Date(booking.start_date).toLocaleDateString() }}</td>
+            <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ new Date(booking.end_date).toLocaleDateString() }}</td>
             <td class="whitespace-nowrap px-4 py-3 text-sm">
               <span :class="['rounded-full px-2.5 py-0.5 text-xs font-medium', statusClasses[booking.status]]">
                 {{ t(`portal.bookings.${booking.status}`) }}

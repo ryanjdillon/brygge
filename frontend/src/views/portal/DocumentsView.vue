@@ -12,16 +12,16 @@ const queryClient = useQueryClient()
 interface Document {
   id: string
   title: string
+  filename: string
   visibility: string
-  url: string
-  createdAt: string
+  created_at: string
 }
 
 interface Comment {
   id: string
   author: string
   body: string
-  createdAt: string
+  created_at: string
 }
 
 const activeFilter = ref('all')
@@ -133,13 +133,13 @@ function submitComment(docId: string) {
           <div>
             <p class="text-sm font-medium text-gray-900">{{ doc.title }}</p>
             <p class="mt-0.5 text-xs text-gray-500">
-              {{ new Date(doc.createdAt).toLocaleDateString() }}
+              {{ new Date(doc.created_at).toLocaleDateString() }}
               <span class="ml-2 rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600">{{ doc.visibility }}</span>
             </p>
           </div>
           <div class="flex items-center gap-2">
             <a
-              :href="doc.url"
+              :href="`/api/v1/documents/${doc.id}`"
               target="_blank"
               class="flex items-center gap-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
             >
@@ -168,7 +168,7 @@ function submitComment(docId: string) {
             <li v-for="comment in comments" :key="comment.id" class="rounded-md bg-white p-3 text-sm">
               <div class="flex justify-between">
                 <span class="font-medium text-gray-900">{{ comment.author }}</span>
-                <span class="text-xs text-gray-400">{{ new Date(comment.createdAt).toLocaleDateString() }}</span>
+                <span class="text-xs text-gray-400">{{ new Date(comment.created_at).toLocaleDateString() }}</span>
               </div>
               <p class="mt-1 text-gray-700">{{ comment.body }}</p>
             </li>

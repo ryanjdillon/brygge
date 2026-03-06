@@ -9,8 +9,7 @@ const { t } = useI18n()
 const { fetchApi } = useApi()
 
 interface DirectoryMember {
-  id: string
-  name: string
+  full_name: string
   phone: string | null
   email: string | null
 }
@@ -26,7 +25,7 @@ const filteredMembers = computed(() => {
   if (!members.value) return []
   const q = searchQuery.value.toLowerCase().trim()
   if (!q) return members.value
-  return members.value.filter((m) => m.name.toLowerCase().includes(q))
+  return members.value.filter((m) => m.full_name.toLowerCase().includes(q))
 })
 </script>
 
@@ -64,8 +63,8 @@ const filteredMembers = computed(() => {
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-200 bg-white">
-          <tr v-for="member in filteredMembers" :key="member.id">
-            <td class="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">{{ member.name }}</td>
+          <tr v-for="(member, idx) in filteredMembers" :key="idx">
+            <td class="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">{{ member.full_name }}</td>
             <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ member.phone ?? '—' }}</td>
             <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">
               <a v-if="member.email" :href="`mailto:${member.email}`" class="text-blue-600 hover:text-blue-800">
