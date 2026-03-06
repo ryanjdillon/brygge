@@ -78,7 +78,6 @@ func main() {
 	waitingListHandler := handlers.NewWaitingListHandler(db, rdb, &cfg, log)
 	adminUsersHandler := handlers.NewAdminUsersHandler(db, &cfg, log)
 	adminSlipsHandler := handlers.NewAdminSlipsHandler(db, &cfg, log)
-	adminPricingHandler := handlers.NewAdminPricingHandler(db, &cfg, log)
 	adminDocumentsHandler := handlers.NewAdminDocumentsHandler(db, &cfg, log)
 	aiDocumentsHandler := handlers.NewAIDocumentsHandler(db, claudeClient, &cfg, log)
 	forumHandler := handlers.NewForumHandler(db, &cfg, log)
@@ -91,6 +90,7 @@ func main() {
 	projectsHandler := handlers.NewProjectsHandler(db, &cfg, log)
 	featureRequestsHandler := handlers.NewFeatureRequestsHandler(db, &cfg, log)
 	financialsHandler := handlers.NewFinancialsHandler(db, &cfg, log)
+	priceItemsHandler := handlers.NewPriceItemsHandler(db, &cfg, log)
 
 	r := chi.NewRouter()
 
@@ -124,7 +124,7 @@ func main() {
 			})
 		})
 
-		r.Get("/pricing", adminPricingHandler.HandleGetPricing)
+		r.Get("/pricing", priceItemsHandler.HandleListPublic)
 		r.Get("/weather", weatherHandler.HandleGetWeather)
 		r.Post("/contact", contactHandler.HandleContactForm)
 
@@ -293,7 +293,10 @@ func main() {
 
 			r.Route("/pricing", func(r chi.Router) {
 				r.Use(middleware.RequireRole("admin", "treasurer"))
-				r.Put("/", adminPricingHandler.HandleUpdatePricing)
+				r.Get("/", priceItemsHandler.HandleListAdmin)
+				r.Post("/", priceItemsHandler.HandleCreate)
+				r.Put("/{itemID}", priceItemsHandler.HandleUpdate)
+				r.Delete("/{itemID}", priceItemsHandler.HandleDelete)
 			})
 
 			r.Route("/documents", func(r chi.Router) {

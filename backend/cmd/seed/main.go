@@ -124,6 +124,40 @@ func main() {
 	}
 	fmt.Println("  booking resources: 4 created")
 
+	// Create pricing catalog
+	type priceItemSeed struct {
+		category, name, description, unit string
+		amount                            float64
+		installments                      bool
+		maxInstall                        int
+		metadata                          string
+		sortOrder                         int
+	}
+	priceItems := []priceItemSeed{
+		{"moloandel", "Moloandel", "Engangsavgift for andel i moloanlegget", "once", 50000, true, 12, `{}`, 10},
+		{"slip_fee", "Årlig plassleie", "Årlig leie for fast båtplass", "year", 8500, false, 1, `{}`, 20},
+		{"seasonal_rental", "Sommersesong", "Sesongplass sommer", "season", 6000, false, 1, `{"season":"summer","period_start":"05-01","period_end":"09-30"}`, 30},
+		{"seasonal_rental", "Vintersesong", "Sesongplass vinter", "season", 4000, false, 1, `{"season":"winter","period_start":"10-01","period_end":"04-30"}`, 31},
+		{"guest", "Gjesteplass per døgn", "Gjesteplass ved hovedbrygga", "day", 250, false, 1, `{}`, 40},
+		{"bobil", "Bobilplass per døgn", "Bobilparkering med strøm", "day", 300, false, 1, `{}`, 50},
+		{"room_hire", "Klubbhuset", "Klubbhus med kjøkken, per dag", "day", 1500, false, 1, `{}`, 60},
+		{"service", "Kran – opp/utsett", "Bruk av kran for sjøsetting/opptak", "once", 1200, false, 1, `{}`, 70},
+		{"service", "Strøm vinter", "Strømtilkobling gjennom vinteren", "season", 2000, false, 1, `{"season":"winter","period_start":"10-01","period_end":"04-30"}`, 71},
+	}
+	for _, p := range priceItems {
+		_, err = db.Exec(ctx, `
+			INSERT INTO price_items (club_id, category, name, description, amount, unit,
+			                         installments_allowed, max_installments, metadata, sort_order)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10)
+			ON CONFLICT DO NOTHING
+		`, clubID, p.category, p.name, p.description, p.amount, p.unit,
+			p.installments, p.maxInstall, p.metadata, p.sortOrder)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to create price item %s: %v\n", p.name, err)
+		}
+	}
+	fmt.Printf("  price items: %d created\n", len(priceItems))
+
 	// Create some sample events
 	now := time.Now()
 	events := []struct {
