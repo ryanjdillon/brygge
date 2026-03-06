@@ -109,6 +109,7 @@
     "roomHire": "Romutleie",
     "loading": "Henter priser...",
     "error": "Kunne ikke hente priser",
+    "noPricing": "Ingen priser er lagt inn enn\u00e5",
     "perYear": "/\u00e5r",
     "perNight": "/natt",
     "perDay": "/dag"

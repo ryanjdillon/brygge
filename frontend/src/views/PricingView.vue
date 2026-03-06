@@ -37,7 +37,11 @@ const categoryLabels: Record<string, string> = {
       {{ t('pricing.error') }}
     </div>
 
-    <div v-else-if="categories" class="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+    <div v-else-if="!categories?.length" class="mt-8 text-center text-gray-500">
+      {{ t('pricing.noPricing') }}
+    </div>
+
+    <div v-else class="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
       <div
         v-for="category in categories"
         :key="category.key"
