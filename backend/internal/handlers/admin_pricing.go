@@ -78,7 +78,7 @@ func (h *AdminPricingHandler) HandleUpdatePricing(w http.ResponseWriter, r *http
 	var oldConfig json.RawMessage
 	err = tx.QueryRow(ctx,
 		`SELECT id, COALESCE(config->'pricing', '{}')
-		 FROM clubs WHERE slug = $1 FOR UPDATE`,
+		 FROM clubs WHERE id = $1 FOR UPDATE`,
 		claims.ClubID,
 	).Scan(&clubID, &oldConfig)
 	if err == pgx.ErrNoRows {

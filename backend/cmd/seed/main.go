@@ -35,11 +35,11 @@ func main() {
 	// Create default club
 	var clubID string
 	err = db.QueryRow(ctx, `
-		INSERT INTO clubs (slug, name, description)
-		VALUES ($1, $2, $3)
-		ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name
+		INSERT INTO clubs (slug, name, description, latitude, longitude)
+		VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name, latitude = EXCLUDED.latitude, longitude = EXCLUDED.longitude
 		RETURNING id
-	`, cfg.ClubSlug, "Brygge Båtklubb", "En hyggelig båtklubb").Scan(&clubID)
+	`, cfg.ClubSlug, "Brygge Båtklubb", "En hyggelig båtklubb", 59.9075, 10.7350).Scan(&clubID)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to create club: %v\n", err)
 		os.Exit(1)
