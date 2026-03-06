@@ -3,11 +3,18 @@ import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
-import { Menu, X, LogIn, User } from 'lucide-vue-next'
+import { useRouter } from 'vue-router'
+import { Menu, X, LogIn, LogOut, User, Shield } from 'lucide-vue-next'
 
 const { t } = useI18n()
+const router = useRouter()
 const auth = useAuthStore()
 const mobileOpen = ref(false)
+
+async function handleLogout() {
+  await auth.logout()
+  router.push('/')
+}
 
 const navLinks = [
   { to: '/', label: 'nav.home' },
@@ -43,6 +50,16 @@ const navLinks = [
         <div class="hidden items-center gap-2 md:flex">
           <template v-if="auth.isAuthenticated">
             <RouterLink
+              v-if="auth.hasRole('admin') || auth.hasRole('styre')"
+              to="/admin"
+              class="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
+            >
+              <span class="flex items-center gap-1">
+                <Shield class="h-4 w-4" />
+                {{ t('nav.admin') }}
+              </span>
+            </RouterLink>
+            <RouterLink
               to="/portal"
               class="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
             >
@@ -51,6 +68,12 @@ const navLinks = [
                 {{ t('nav.portal') }}
               </span>
             </RouterLink>
+            <button
+              class="inline-flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+              @click="handleLogout"
+            >
+              <LogOut class="h-4 w-4" />
+            </button>
           </template>
           <template v-else>
             <RouterLink
@@ -87,12 +110,26 @@ const navLinks = [
         <div class="border-t border-gray-200 pt-2">
           <template v-if="auth.isAuthenticated">
             <RouterLink
+              v-if="auth.hasRole('admin') || auth.hasRole('styre')"
+              to="/admin"
+              class="block rounded-md px-3 py-2 text-base font-medium text-gray-700 hover:bg-gray-100"
+              @click="mobileOpen = false"
+            >
+              {{ t('nav.admin') }}
+            </RouterLink>
+            <RouterLink
               to="/portal"
               class="block rounded-md px-3 py-2 text-base font-medium text-gray-700 hover:bg-gray-100"
               @click="mobileOpen = false"
             >
               {{ t('nav.portal') }}
             </RouterLink>
+            <button
+              class="block w-full rounded-md px-3 py-2 text-left text-base font-medium text-gray-500 hover:bg-gray-100"
+              @click="handleLogout(); mobileOpen = false"
+            >
+              {{ t('nav.login') === 'Logg inn' ? 'Logg ut' : 'Log out' }}
+            </button>
           </template>
           <template v-else>
             <RouterLink

@@ -138,6 +138,16 @@
     "tshirt": "T-skjorte",
     "cap": "Caps"
   },
+  "login": {
+    "title": "Logg inn",
+    "email": "E-post",
+    "password": "Passord",
+    "submit": "Logg inn",
+    "submitting": "Logger inn...",
+    "noAccount": "Har du ikke konto?",
+    "joinLink": "Meld deg inn",
+    "forgotPassword": "Glemt passord?"
+  },
   "portal": {
     "title": "Min side",
     "sidebar": {
