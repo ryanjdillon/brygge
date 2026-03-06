@@ -112,6 +112,21 @@ const routes: RouteRecordRaw[] = [
         redirect: '/admin/events',
       },
       {
+        path: 'users',
+        name: 'admin-users',
+        component: () => import('@/views/admin/UsersAdminView.vue'),
+      },
+      {
+        path: 'slips',
+        name: 'admin-slips',
+        component: () => import('@/views/admin/SlipsAdminView.vue'),
+      },
+      {
+        path: 'waiting-list',
+        name: 'admin-waiting-list',
+        component: () => import('@/views/admin/WaitingListAdminView.vue'),
+      },
+      {
         path: 'events',
         name: 'admin-events',
         component: () => import('@/views/admin/EventsAdminView.vue'),
@@ -120,6 +135,16 @@ const routes: RouteRecordRaw[] = [
         path: 'bookings',
         name: 'admin-bookings',
         component: () => import('@/views/admin/BookingsAdminView.vue'),
+      },
+      {
+        path: 'documents',
+        name: 'admin-documents',
+        component: () => import('@/views/admin/DocumentsAdminView.vue'),
+      },
+      {
+        path: 'pricing',
+        name: 'admin-pricing',
+        component: () => import('@/views/admin/PricingAdminView.vue'),
       },
       {
         path: 'communication',
