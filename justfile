@@ -11,12 +11,16 @@ dev:
 down:
     docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml down
 
-# Run all tests (Go + Vitest + Playwright)
+# Run all tests (Go unit + Vue + Playwright)
 test: test-go test-vue test-e2e
 
-# Run Go tests
+# Run Go unit tests (no database required)
 test-go:
     cd backend && go test ./...
+
+# Run Go tests with integration tests (requires DATABASE_URL and REDIS_URL)
+test-go-integration:
+    cd backend && go test -count=1 ./...
 
 # Run Vue component tests
 test-vue:
@@ -25,6 +29,22 @@ test-vue:
 # Run Playwright E2E tests
 test-e2e:
     cd frontend && npx playwright test
+
+# Start only db and redis for running integration tests locally
+test-services:
+    docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml up -d db redis
+
+# Stop test services
+test-services-down:
+    docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml down db redis
+
+# Run Go coverage report
+coverage-go:
+    cd backend && go test -coverprofile=coverage.out ./... && go tool cover -func=coverage.out
+
+# Run Vue coverage report
+coverage-vue:
+    cd frontend && npx vitest run --coverage
 
 # Run pending database migrations
 migrate:
