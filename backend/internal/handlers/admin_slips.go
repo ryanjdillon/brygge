@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
@@ -54,10 +55,9 @@ func (h *AdminSlipsHandler) HandleListSlips(w http.ResponseWriter, r *http.Reque
 		       s.status, s.map_x, s.map_y, s.created_at, s.updated_at,
 		       sa.user_id, u.full_name, u.email
 		FROM slips s
-		JOIN clubs c ON c.id = s.club_id
 		LEFT JOIN slip_assignments sa ON sa.slip_id = s.id AND sa.released_at IS NULL
 		LEFT JOIN users u ON u.id = sa.user_id
-		WHERE c.slug = $1`
+		WHERE s.club_id = $1`
 
 	args := []any{claims.ClubID}
 	argIdx := 2
@@ -94,8 +94,8 @@ func (h *AdminSlipsHandler) HandleListSlips(w http.ResponseWriter, r *http.Reque
 		Status        string   `json:"status"`
 		MapX          *float64 `json:"map_x"`
 		MapY          *float64 `json:"map_y"`
-		CreatedAt     string   `json:"created_at"`
-		UpdatedAt     string   `json:"updated_at"`
+		CreatedAt     time.Time `json:"created_at"`
+		UpdatedAt     time.Time `json:"updated_at"`
 		OccupantID    *string  `json:"occupant_id"`
 		OccupantName  *string  `json:"occupant_name"`
 		OccupantEmail *string  `json:"occupant_email"`

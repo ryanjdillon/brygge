@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
@@ -77,14 +78,14 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 	defer rows.Close()
 
 	type userRow struct {
-		ID        string   `json:"id"`
-		Email     string   `json:"email"`
-		FullName  string   `json:"full_name"`
-		Phone     string   `json:"phone"`
-		IsLocal   bool     `json:"is_local"`
-		CreatedAt string   `json:"created_at"`
-		UpdatedAt string   `json:"updated_at"`
-		Roles     []string `json:"roles"`
+		ID        string    `json:"id"`
+		Email     string    `json:"email"`
+		FullName  string    `json:"full_name"`
+		Phone     string    `json:"phone"`
+		IsLocal   bool      `json:"is_local"`
+		CreatedAt time.Time `json:"created_at"`
+		UpdatedAt time.Time `json:"updated_at"`
+		Roles     []string  `json:"roles"`
 	}
 
 	var users []userRow

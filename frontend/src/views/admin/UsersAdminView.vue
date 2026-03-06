@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useApi } from '@/composables/useApi'
@@ -18,10 +18,17 @@ interface User {
   created_at: string
 }
 
-const { data: users, isLoading, isError } = useQuery({
+interface UsersResponse {
+  users: User[]
+  total_count: number
+}
+
+const { data: usersResponse, isLoading, isError } = useQuery({
   queryKey: ['admin', 'users'],
-  queryFn: () => fetchApi<User[]>('/api/v1/admin/users'),
+  queryFn: () => fetchApi<UsersResponse>('/api/v1/admin/users'),
 })
+
+const users = computed(() => usersResponse.value?.users ?? [])
 
 const editingRoles = ref<Record<string, string[]>>({})
 

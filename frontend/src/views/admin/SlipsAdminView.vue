@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useApi } from '@/composables/useApi'
@@ -20,10 +20,12 @@ interface Slip {
   assignee_name: string | null
 }
 
-const { data: slips, isLoading, isError } = useQuery({
+const { data: slipsResponse, isLoading, isError } = useQuery({
   queryKey: ['admin', 'slips'],
-  queryFn: () => fetchApi<Slip[]>('/api/v1/admin/slips'),
+  queryFn: () => fetchApi<{ slips: Slip[] }>('/api/v1/admin/slips'),
 })
+
+const slips = computed(() => slipsResponse.value?.slips ?? [])
 
 const showForm = ref(false)
 const form = ref({ number: '', section: '', length_m: '', width_m: '', depth_m: '' })
