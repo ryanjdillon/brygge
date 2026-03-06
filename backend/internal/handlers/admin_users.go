@@ -49,9 +49,7 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 
 	var totalCount int
 	err := h.db.QueryRow(ctx,
-		`SELECT COUNT(*) FROM users u
-		 JOIN clubs c ON c.id = u.club_id
-		 WHERE c.slug = $1`,
+		`SELECT COUNT(*) FROM users WHERE club_id = $1`,
 		claims.ClubID,
 	).Scan(&totalCount)
 	if err != nil {
@@ -64,9 +62,8 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 		`SELECT u.id, u.email, u.full_name, u.phone, u.is_local, u.created_at, u.updated_at,
 		        COALESCE(array_agg(ur.role) FILTER (WHERE ur.role IS NOT NULL), '{}')
 		 FROM users u
-		 JOIN clubs c ON c.id = u.club_id
 		 LEFT JOIN user_roles ur ON ur.user_id = u.id AND ur.club_id = u.club_id
-		 WHERE c.slug = $1
+		 WHERE u.club_id = $1
 		 GROUP BY u.id
 		 ORDER BY u.created_at DESC
 		 LIMIT $2 OFFSET $3`,
@@ -152,9 +149,8 @@ func (h *AdminUsersHandler) HandleGetUser(w http.ResponseWriter, r *http.Request
 		        u.is_local, u.created_at, u.updated_at,
 		        COALESCE(array_agg(ur.role) FILTER (WHERE ur.role IS NOT NULL), '{}')
 		 FROM users u
-		 JOIN clubs c ON c.id = u.club_id
 		 LEFT JOIN user_roles ur ON ur.user_id = u.id AND ur.club_id = u.club_id
-		 WHERE u.id = $1 AND c.slug = $2
+		 WHERE u.id = $1 AND u.club_id = $2
 		 GROUP BY u.id`,
 		userID, claims.ClubID,
 	).Scan(&u.ID, &u.Email, &u.FullName, &u.Phone, &u.Address, &u.PostalCd, &u.City,
@@ -170,19 +166,18 @@ func (h *AdminUsersHandler) HandleGetUser(w http.ResponseWriter, r *http.Request
 	}
 
 	type boatRow struct {
-		ID       string  `json:"id"`
-		Name     string  `json:"name"`
-		Type     string  `json:"type"`
-		LengthM  *float64 `json:"length_m"`
-		BeamM    *float64 `json:"beam_m"`
-		RegNum   string  `json:"registration_number"`
+		ID      string   `json:"id"`
+		Name    string   `json:"name"`
+		Type    string   `json:"type"`
+		LengthM *float64 `json:"length_m"`
+		BeamM   *float64 `json:"beam_m"`
+		RegNum  string   `json:"registration_number"`
 	}
 
 	boatRows, err := h.db.Query(ctx,
 		`SELECT b.id, b.name, b.type, b.length_m, b.beam_m, b.registration_number
 		 FROM boats b
-		 JOIN clubs c ON c.id = b.club_id
-		 WHERE b.user_id = $1 AND c.slug = $2
+		 WHERE b.user_id = $1 AND b.club_id = $2
 		 ORDER BY b.created_at DESC`,
 		userID, claims.ClubID,
 	)
@@ -220,8 +215,7 @@ func (h *AdminUsersHandler) HandleGetUser(w http.ResponseWriter, r *http.Request
 	payRows, err := h.db.Query(ctx,
 		`SELECT p.id, p.type, p.amount, p.currency, p.status, p.paid_at, p.created_at
 		 FROM payments p
-		 JOIN clubs c ON c.id = p.club_id
-		 WHERE p.user_id = $1 AND c.slug = $2
+		 WHERE p.user_id = $1 AND p.club_id = $2
 		 ORDER BY p.created_at DESC
 		 LIMIT 50`,
 		userID, claims.ClubID,
@@ -295,13 +289,7 @@ func (h *AdminUsersHandler) HandleUpdateUserRoles(w http.ResponseWriter, r *http
 	}
 	defer tx.Rollback(ctx)
 
-	var clubID string
-	err = tx.QueryRow(ctx, `SELECT id FROM clubs WHERE slug = $1`, claims.ClubID).Scan(&clubID)
-	if err != nil {
-		h.log.Error().Err(err).Msg("failed to resolve club")
-		Error(w, http.StatusInternalServerError, "internal error")
-		return
-	}
+	clubID := claims.ClubID
 
 	var exists bool
 	err = tx.QueryRow(ctx,
@@ -415,13 +403,7 @@ func (h *AdminUsersHandler) HandleDeleteUser(w http.ResponseWriter, r *http.Requ
 	}
 	defer tx.Rollback(ctx)
 
-	var clubID string
-	err = tx.QueryRow(ctx, `SELECT id FROM clubs WHERE slug = $1`, claims.ClubID).Scan(&clubID)
-	if err != nil {
-		h.log.Error().Err(err).Msg("failed to resolve club")
-		Error(w, http.StatusInternalServerError, "internal error")
-		return
-	}
+	clubID := claims.ClubID
 
 	var userEmail, userName string
 	err = tx.QueryRow(ctx,
