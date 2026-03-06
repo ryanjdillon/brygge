@@ -8,19 +8,25 @@ const { t } = useI18n()
 const { fetchApi } = useApi()
 const queryClient = useQueryClient()
 
-interface Profile {
+interface ProfileResponse {
+  full_name: string
+  email: string
+  phone: string
+  address_line: string
+  postal_code: string
+  city: string
+  is_local: boolean
+}
+
+interface ProfileForm {
   name: string
   email: string
   phone: string
-  address: {
-    street: string
-    postalCode: string
-    city: string
-  }
+  address: { street: string; postalCode: string; city: string }
   isLocal: boolean
 }
 
-const form = ref<Profile>({
+const form = ref<ProfileForm>({
   name: '',
   email: '',
   phone: '',
@@ -32,30 +38,31 @@ const toast = ref<{ type: 'success' | 'error'; message: string } | null>(null)
 
 const { data: profile, isLoading } = useQuery({
   queryKey: ['portal', 'profile'],
-  queryFn: () => fetchApi<Profile>('/api/v1/members/me'),
+  queryFn: () => fetchApi<ProfileResponse>('/api/v1/members/me'),
 })
 
 watch(profile, (p) => {
   if (p) {
     form.value = {
-      name: p.name,
+      name: p.full_name,
       email: p.email,
       phone: p.phone,
-      address: { ...p.address },
-      isLocal: p.isLocal,
+      address: { street: p.address_line, postalCode: p.postal_code, city: p.city },
+      isLocal: p.is_local,
     }
   }
 }, { immediate: true })
 
 const { mutate: saveProfile, isPending: isSaving } = useMutation({
   mutationFn: () =>
-    fetchApi<Profile>('/api/v1/members/me', {
+    fetchApi<ProfileResponse>('/api/v1/members/me', {
       method: 'PUT',
       body: JSON.stringify({
-        name: form.value.name,
-        email: form.value.email,
+        full_name: form.value.name,
         phone: form.value.phone,
-        address: form.value.address,
+        address_line: form.value.address.street,
+        postal_code: form.value.address.postalCode,
+        city: form.value.address.city,
       }),
     }),
   onSuccess: () => {
