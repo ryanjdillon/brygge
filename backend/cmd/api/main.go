@@ -91,6 +91,8 @@ func main() {
 	featureRequestsHandler := handlers.NewFeatureRequestsHandler(db, &cfg, log)
 	financialsHandler := handlers.NewFinancialsHandler(db, &cfg, log)
 	priceItemsHandler := handlers.NewPriceItemsHandler(db, &cfg, log)
+	productsHandler := handlers.NewProductsHandler(db, &cfg, log)
+	ordersHandler := handlers.NewOrdersHandler(db, &cfg, log)
 
 	r := chi.NewRouter()
 
@@ -125,8 +127,15 @@ func main() {
 		})
 
 		r.Get("/pricing", priceItemsHandler.HandleListPublic)
+		r.Get("/products", productsHandler.HandleListPublic)
 		r.Get("/weather", weatherHandler.HandleGetWeather)
 		r.Post("/contact", contactHandler.HandleContactForm)
+
+		r.Route("/orders", func(r chi.Router) {
+			r.Post("/", ordersHandler.HandleCreateOrder)
+			r.Get("/{orderID}", ordersHandler.HandleGetOrder)
+			r.Post("/{orderID}/confirm", ordersHandler.HandleConfirmOrder)
+		})
 
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.Authenticate(jwtService))
@@ -297,6 +306,14 @@ func main() {
 				r.Post("/", priceItemsHandler.HandleCreate)
 				r.Put("/{itemID}", priceItemsHandler.HandleUpdate)
 				r.Delete("/{itemID}", priceItemsHandler.HandleDelete)
+			})
+
+			r.Route("/products", func(r chi.Router) {
+				r.Use(middleware.RequireRole("styre", "admin"))
+				r.Get("/", productsHandler.HandleListAdmin)
+				r.Post("/", productsHandler.HandleCreate)
+				r.Put("/{productID}", productsHandler.HandleUpdate)
+				r.Delete("/{productID}", productsHandler.HandleDelete)
 			})
 
 			r.Route("/documents", func(r chi.Router) {
