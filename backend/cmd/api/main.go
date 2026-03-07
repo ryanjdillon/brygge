@@ -97,6 +97,8 @@ func main() {
 	dugnadHandler := handlers.NewDugnadHandler(db, &cfg, log)
 	shoppingListsHandler := handlers.NewShoppingListsHandler(db, &cfg, log)
 	mapHandler := handlers.NewMapHandler(db, &cfg, log)
+	clubSettingsHandler := handlers.NewClubSettingsHandler(db, &cfg, log)
+	slipSharesHandler := handlers.NewSlipSharesHandler(db, &cfg, log)
 
 	r := chi.NewRouter()
 
@@ -176,6 +178,9 @@ func main() {
 		r.Route("/bookings", func(r chi.Router) {
 			r.Get("/resources", bookingsHandler.HandleListResources)
 			r.Get("/resources/{resourceID}/availability", bookingsHandler.HandleGetResourceAvailability)
+			r.Get("/availability", bookingsHandler.HandleAggregateAvailability)
+			r.Get("/availability/today", bookingsHandler.HandleTodayAvailability)
+			r.Get("/hoist/slots", bookingsHandler.HandleHoistSlots)
 
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.OptionalAuth(jwtService))
@@ -228,6 +233,15 @@ func main() {
 		r.Route("/slips", func(r chi.Router) {
 			r.Use(middleware.Authenticate(jwtService))
 			r.Get("/", placeholder("slips"))
+		})
+
+		r.Route("/portal/slip-shares", func(r chi.Router) {
+			r.Use(middleware.Authenticate(jwtService))
+			r.Get("/", slipSharesHandler.HandleListMySlipShares)
+			r.Post("/", slipSharesHandler.HandleCreateSlipShare)
+			r.Put("/{shareID}", slipSharesHandler.HandleUpdateSlipShare)
+			r.Delete("/{shareID}", slipSharesHandler.HandleDeleteSlipShare)
+			r.Get("/rebates", slipSharesHandler.HandleListMyRebates)
 		})
 
 		r.Route("/forum", func(r chi.Router) {
@@ -362,6 +376,19 @@ func main() {
 			r.Route("/bookings", func(r chi.Router) {
 				r.Use(middleware.RequireRole("styre", "harbour_master"))
 				r.Get("/", bookingsHandler.HandleListBookingsAdmin)
+			})
+
+			r.Route("/slip-shares", func(r chi.Router) {
+				r.Use(middleware.RequireRole("styre", "harbour_master"))
+				r.Get("/", slipSharesHandler.HandleListAllSlipShares)
+				r.Get("/rebates", slipSharesHandler.HandleListAllRebates)
+				r.Put("/rebates/{rebateID}", slipSharesHandler.HandleUpdateRebateStatus)
+			})
+
+			r.Route("/settings/booking", func(r chi.Router) {
+				r.Use(middleware.RequireRole("styre"))
+				r.Get("/", clubSettingsHandler.HandleGetBookingSettings)
+				r.Put("/", clubSettingsHandler.HandleUpdateBookingSettings)
 			})
 
 			r.Route("/pricing", func(r chi.Router) {

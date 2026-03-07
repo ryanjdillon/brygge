@@ -15,8 +15,24 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/WeatherView.vue'),
   },
   {
+    path: '/harbour',
+    component: () => import('@/views/HarbourView.vue'),
+  },
+  {
+    path: '/bobil',
+    component: () => import('@/views/BobilView.vue'),
+  },
+  {
     path: '/directions',
     component: () => import('@/views/DirectionsView.vue'),
+  },
+  {
+    path: '/history',
+    component: () => import('@/views/HistoryView.vue'),
+  },
+  {
+    path: '/book',
+    component: () => import('@/views/BookView.vue'),
   },
   {
     path: '/contact',
@@ -99,6 +115,16 @@ const routes: RouteRecordRaw[] = [
         path: 'dugnad',
         name: 'portal-dugnad',
         component: () => import('@/views/portal/DugnadView.vue'),
+      },
+      {
+        path: 'slip-sharing',
+        name: 'portal-slip-sharing',
+        component: () => import('@/views/portal/SlipSharingView.vue'),
+      },
+      {
+        path: 'hoist',
+        name: 'portal-hoist',
+        component: () => import('@/views/portal/HoistBookingView.vue'),
       },
       {
         path: 'feature-requests',
@@ -217,6 +243,16 @@ const routes: RouteRecordRaw[] = [
         path: 'map',
         name: 'admin-map',
         component: () => import('@/views/admin/MapMarkersAdminView.vue'),
+      },
+      {
+        path: 'slip-shares',
+        name: 'admin-slip-shares',
+        component: () => import('@/views/admin/SlipSharesAdminView.vue'),
+      },
+      {
+        path: 'settings/booking',
+        name: 'admin-booking-settings',
+        component: () => import('@/views/admin/BookingSettingsView.vue'),
       },
     ],
   },
