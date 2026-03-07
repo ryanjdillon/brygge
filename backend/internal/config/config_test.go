@@ -16,7 +16,7 @@ func TestLoadDefaults(t *testing.T) {
 		{"Port", cfg.Port, 8080},
 		{"DatabaseURL", cfg.DatabaseURL, "postgres://brygge:brygge@localhost:5432/brygge?sslmode=disable"},
 		{"RedisURL", cfg.RedisURL, "redis://localhost:6379/0"},
-		{"ClubSlug", cfg.ClubSlug, "default"},
+		{"ClubSlug", cfg.ClubSlug, "brygge"},
 		{"JWTAccessExpiry", cfg.JWTAccessExpiry, 15 * time.Minute},
 		{"JWTRefreshExpiry", cfg.JWTRefreshExpiry, 7 * 24 * time.Hour},
 		{"VippsTestMode", cfg.VippsTestMode, true},
@@ -37,7 +37,7 @@ func TestLoadFromEnv(t *testing.T) {
 	t.Setenv("PORT", "9090")
 	t.Setenv("DATABASE_URL", "postgres://custom:custom@db:5432/custom")
 	t.Setenv("JWT_SECRET", "super-secret")
-	t.Setenv("CLUB_SLUG", "my-club")
+	// ClubSlug is a constant, not configurable via env
 	t.Setenv("VIPPS_CLIENT_ID", "vipps-id")
 	t.Setenv("VIPPS_TEST_MODE", "false")
 	t.Setenv("S3_BUCKET", "custom-bucket")
@@ -53,7 +53,7 @@ func TestLoadFromEnv(t *testing.T) {
 		{"Port", cfg.Port, 9090},
 		{"DatabaseURL", cfg.DatabaseURL, "postgres://custom:custom@db:5432/custom"},
 		{"JWTSecret", cfg.JWTSecret, "super-secret"},
-		{"ClubSlug", cfg.ClubSlug, "my-club"},
+		{"ClubSlug", cfg.ClubSlug, "brygge"},
 		{"VippsClientID", cfg.VippsClientID, "vipps-id"},
 		{"VippsTestMode", cfg.VippsTestMode, false},
 		{"S3Bucket", cfg.S3Bucket, "custom-bucket"},
