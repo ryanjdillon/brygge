@@ -9,6 +9,7 @@ import { ShoppingCart, X, Check, Plus } from 'lucide-vue-next'
 const { t } = useI18n()
 const { fetchApi } = useApi()
 const cart = useCartStore()
+const brokenImages = ref<Record<string, boolean>>({})
 
 interface Variant {
   id: string
@@ -212,10 +213,11 @@ function addToCart() {
       >
         <div class="flex h-48 items-center justify-center overflow-hidden rounded-t-lg bg-gray-50 text-gray-300">
           <img
-            v-if="product.image_url"
+            v-if="product.image_url && !brokenImages[product.image_url]"
             :src="product.image_url"
             :alt="product.name"
             class="h-full w-full object-cover"
+            @error="brokenImages[product.image_url] = true"
           />
           <ShoppingCart v-else class="h-16 w-16" aria-hidden="true" />
         </div>
@@ -253,12 +255,13 @@ function addToCart() {
           </button>
         </div>
 
-        <div class="flex items-center justify-center overflow-hidden bg-gray-50" :class="modalImage ? 'h-64' : 'h-32'">
+        <div class="flex items-center justify-center overflow-hidden bg-gray-50" :class="modalImage && !brokenImages[modalImage] ? 'h-64' : 'h-32'">
           <img
-            v-if="modalImage"
+            v-if="modalImage && !brokenImages[modalImage]"
             :src="modalImage"
             :alt="selectedProduct.name"
             class="h-full w-full object-contain"
+            @error="brokenImages[modalImage] = true"
           />
           <ShoppingCart v-else class="h-16 w-16 text-gray-300" aria-hidden="true" />
         </div>
