@@ -45,7 +45,7 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
 </script>
 
 <template>
-  <nav class="sticky top-0 z-50 bg-white shadow-sm" aria-label="Hovednavigasjon">
+  <nav class="sticky top-0 z-50 bg-white shadow-sm" :aria-label="t('nav.ariaMainNav')">
     <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
       <div class="flex h-16 items-center justify-between">
         <RouterLink to="/" class="flex items-center gap-2 text-xl font-bold text-blue-900">
@@ -116,7 +116,7 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
             </RouterLink>
             <button
               class="inline-flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700"
-              aria-label="Logg ut"
+              :aria-label="t('nav.ariaLogout')"
               @click="handleLogout"
             >
               <LogOut class="h-4 w-4" aria-hidden="true" />
@@ -136,7 +136,7 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
         <button
           class="inline-flex items-center justify-center rounded-md p-2 text-gray-700 hover:bg-gray-100 md:hidden"
           :aria-expanded="mobileOpen"
-          aria-label="Meny"
+          :aria-label="t('nav.ariaMenu')"
           @click="mobileOpen = !mobileOpen"
         >
           <X v-if="mobileOpen" class="h-6 w-6" aria-hidden="true" />
@@ -197,7 +197,7 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
               class="block w-full rounded-md px-3 py-2 text-left text-base font-medium text-gray-500 hover:bg-gray-100"
               @click="handleLogout(); mobileOpen = false"
             >
-              {{ t('nav.login') === 'Logg inn' ? 'Logg ut' : 'Log out' }}
+              {{ t('nav.logout') }}
             </button>
           </template>
           <template v-else>

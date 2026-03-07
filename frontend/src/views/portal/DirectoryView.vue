@@ -37,7 +37,7 @@ const filteredMembers = computed(() => {
       <Search class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
       <input
         v-model="searchQuery"
-        aria-label="Søk i medlemsliste"
+        :aria-label="t('portal.directory.searchAriaLabel')"
         type="text"
         :placeholder="t('portal.directory.searchPlaceholder')"
         class="block w-full rounded-md border border-gray-300 py-2 pl-10 pr-3 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"

@@ -108,7 +108,7 @@ const { mutate: deleteProduct } = useMutation({
 })
 
 function confirmDelete(id: string) {
-  if (confirm('Er du sikker på at du vil slette dette produktet?')) {
+  if (confirm(t('admin.products.deleteConfirm'))) {
     deleteProduct(id)
   }
 }
@@ -117,14 +117,14 @@ function confirmDelete(id: string) {
 <template>
   <div>
     <div class="flex items-center justify-between">
-      <h1 class="text-2xl font-bold text-gray-900">Produkter</h1>
+      <h1 class="text-2xl font-bold text-gray-900">{{ t('admin.products.title') }}</h1>
       <button
         v-if="!showForm"
         class="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
         @click="openCreate"
       >
         <Plus class="h-4 w-4" />
-        Nytt produkt
+        {{ t('admin.products.newProduct') }}
       </button>
     </div>
 
@@ -135,7 +135,7 @@ function confirmDelete(id: string) {
     >
       <div class="flex items-center justify-between">
         <h2 class="text-lg font-semibold text-gray-900">
-          {{ form.id ? 'Rediger produkt' : 'Nytt produkt' }}
+          {{ form.id ? t('admin.products.editProduct') : t('admin.products.newProduct') }}
         </h2>
         <button type="button" class="text-gray-400 hover:text-gray-600" @click="showForm = false">
           <X class="h-5 w-5" />
@@ -143,7 +143,7 @@ function confirmDelete(id: string) {
       </div>
 
       <div>
-        <label class="block text-sm font-medium text-gray-700">Navn</label>
+        <label class="block text-sm font-medium text-gray-700">{{ t('admin.products.name') }}</label>
         <input
           v-model="form.name"
           type="text"
@@ -153,7 +153,7 @@ function confirmDelete(id: string) {
       </div>
 
       <div>
-        <label class="block text-sm font-medium text-gray-700">Beskrivelse</label>
+        <label class="block text-sm font-medium text-gray-700">{{ t('admin.products.description') }}</label>
         <textarea
           v-model="form.description"
           rows="2"
@@ -163,7 +163,7 @@ function confirmDelete(id: string) {
 
       <div class="grid grid-cols-3 gap-4">
         <div>
-          <label class="block text-sm font-medium text-gray-700">Pris (kr)</label>
+          <label class="block text-sm font-medium text-gray-700">{{ t('admin.products.price') }}</label>
           <input
             v-model="form.price"
             type="number"
@@ -174,7 +174,7 @@ function confirmDelete(id: string) {
           />
         </div>
         <div>
-          <label class="block text-sm font-medium text-gray-700">Lager</label>
+          <label class="block text-sm font-medium text-gray-700">{{ t('admin.products.stock') }}</label>
           <input
             v-model="form.stock"
             type="number"
@@ -183,7 +183,7 @@ function confirmDelete(id: string) {
           />
         </div>
         <div>
-          <label class="block text-sm font-medium text-gray-700">Sortering</label>
+          <label class="block text-sm font-medium text-gray-700">{{ t('admin.products.sortOrder') }}</label>
           <input
             v-model="form.sort_order"
             type="number"
@@ -193,7 +193,7 @@ function confirmDelete(id: string) {
       </div>
 
       <div>
-        <label class="block text-sm font-medium text-gray-700">Bilde-URL</label>
+        <label class="block text-sm font-medium text-gray-700">{{ t('admin.products.imageUrl') }}</label>
         <input
           v-model="form.image_url"
           type="text"
@@ -204,7 +204,7 @@ function confirmDelete(id: string) {
 
       <label class="flex items-center gap-2 text-sm text-gray-700">
         <input v-model="form.is_active" type="checkbox" class="rounded border-gray-300" />
-        Aktiv (synlig i nettbutikken)
+        {{ t('admin.products.activeCheckbox') }}
       </label>
 
       <div class="flex gap-3 pt-2">
@@ -231,16 +231,16 @@ function confirmDelete(id: string) {
       <table class="min-w-full divide-y divide-gray-200">
         <thead class="bg-gray-50">
           <tr>
-            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Produkt</th>
-            <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">Pris</th>
-            <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">Lager</th>
-            <th scope="col" class="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500">Status</th>
-            <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">Handlinger</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.products.product') }}</th>
+            <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.products.price') }}</th>
+            <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.products.stock') }}</th>
+            <th scope="col" class="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.products.status') }}</th>
+            <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('common.actions') }}</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-200 bg-white">
           <tr v-if="!response?.products?.length">
-            <td colspan="5" class="px-4 py-8 text-center text-gray-500">Ingen produkter</td>
+            <td colspan="5" class="px-4 py-8 text-center text-gray-500">{{ t('admin.products.noProducts') }}</td>
           </tr>
           <tr v-for="p in response?.products" :key="p.id">
             <td class="px-4 py-3 text-sm">
@@ -262,7 +262,7 @@ function confirmDelete(id: string) {
                   p.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-500',
                 ]"
               >
-                {{ p.is_active ? 'Aktiv' : 'Inaktiv' }}
+                {{ p.is_active ? t('admin.products.active') : t('admin.products.inactive') }}
               </span>
             </td>
             <td class="whitespace-nowrap px-4 py-3 text-right text-sm">

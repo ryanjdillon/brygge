@@ -201,7 +201,7 @@ function addToCart() {
     </div>
 
     <div v-else-if="!response?.products?.length" class="mt-10 text-center text-gray-500">
-      Ingen produkter tilgjengelig ennå
+      {{ t('merchandise.noProducts') }}
     </div>
 
     <div v-else class="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -226,7 +226,7 @@ function addToCart() {
           <p class="mt-1 flex-1 text-sm text-gray-500">{{ product.description }}</p>
           <div class="mt-4 flex items-center justify-between">
             <span class="text-xl font-bold text-gray-900">{{ priceRange(product) }}</span>
-            <span v-if="!isInStock(product)" class="text-xs font-medium text-red-600">Utsolgt</span>
+            <span v-if="!isInStock(product)" class="text-xs font-medium text-red-600">{{ t('merchandise.soldOut') }}</span>
           </div>
         </div>
       </button>
@@ -273,7 +273,7 @@ function addToCart() {
 
           <!-- Size selector -->
           <div v-if="availableSizes.length > 0">
-            <label class="block text-sm font-medium text-gray-700">Størrelse</label>
+            <label class="block text-sm font-medium text-gray-700">{{ t('merchandise.size') }}</label>
             <div class="mt-2 flex flex-wrap gap-2">
               <button
                 v-for="size in availableSizes"
@@ -296,7 +296,7 @@ function addToCart() {
 
           <!-- Color selector -->
           <div v-if="availableColors.length > 0">
-            <label class="block text-sm font-medium text-gray-700">Farge</label>
+            <label class="block text-sm font-medium text-gray-700">{{ t('merchandise.color') }}</label>
             <div class="mt-2 flex flex-wrap gap-2">
               <button
                 v-for="color in availableColors"
@@ -319,10 +319,10 @@ function addToCart() {
 
           <!-- Stock info -->
           <div v-if="hasVariants && canAddToCart" class="text-xs text-gray-400">
-            {{ variantForSelection()?.stock }} på lager
+            {{ variantForSelection()?.stock }} {{ t('merchandise.inStock') }}
           </div>
           <div v-else-if="!hasVariants && totalStock > 0 && totalStock <= 5" class="text-xs text-amber-600">
-            {{ totalStock }} igjen
+            {{ totalStock }} {{ t('merchandise.remaining') }}
           </div>
 
           <!-- Add to cart button -->
@@ -340,7 +340,7 @@ function addToCart() {
           >
             <Check v-if="justAdded" class="h-5 w-5" aria-hidden="true" />
             <Plus v-else class="h-5 w-5" aria-hidden="true" />
-            {{ justAdded ? 'Lagt til i handlekurven' : 'Legg i handlekurv' }}
+            {{ justAdded ? t('merchandise.addedToCart') : t('merchandise.addToCart') }}
           </button>
         </div>
       </div>

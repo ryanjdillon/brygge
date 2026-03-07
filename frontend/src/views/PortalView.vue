@@ -84,7 +84,7 @@ function closeSidebar() {
         </button>
       </div>
 
-      <nav class="space-y-1 px-3 py-4" aria-label="Portal-navigasjon">
+      <nav class="space-y-1 px-3 py-4" :aria-label="t('portal.ariaNav')">
         <RouterLink
           v-for="item in navItems"
           :key="item.to"
@@ -108,7 +108,7 @@ function closeSidebar() {
 
     <div class="flex-1">
       <div class="flex items-center border-b border-gray-200 px-4 py-3 lg:hidden">
-        <button class="text-gray-500 hover:text-gray-700" :aria-expanded="sidebarOpen" aria-label="Meny" @click="sidebarOpen = true">
+        <button class="text-gray-500 hover:text-gray-700" :aria-expanded="sidebarOpen" :aria-label="t('nav.ariaMenu')" @click="sidebarOpen = true">
           <Menu class="h-5 w-5" aria-hidden="true" />
         </button>
         <span class="ml-3 text-lg font-semibold text-gray-900">{{ t('portal.title') }}</span>

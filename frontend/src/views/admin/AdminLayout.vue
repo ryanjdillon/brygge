@@ -36,7 +36,7 @@ interface NavItem {
 }
 
 interface NavGroup {
-  title?: string
+  titleKey?: string
   items: NavItem[]
 }
 
@@ -50,7 +50,7 @@ const navGroups = computed<NavGroup[]>(() => {
       ],
     },
     {
-      title: 'Havn',
+      titleKey: 'admin.groupHarbour',
       items: [
         { to: '/admin/slips', icon: Anchor, label: t('admin.sidebar.slips'), roles: ['styre', 'harbour_master', 'admin'] },
         { to: '/admin/boats', icon: Ship, label: t('admin.sidebar.boats'), roles: ['styre', 'harbour_master', 'admin'] },
@@ -61,7 +61,7 @@ const navGroups = computed<NavGroup[]>(() => {
       ],
     },
     {
-      title: 'Økonomi',
+      titleKey: 'admin.groupFinance',
       items: [
         { to: '/admin/pricing', icon: DollarSign, label: t('admin.sidebar.pricing'), roles: ['admin', 'treasurer'] },
         { to: '/admin/products', icon: ShoppingBag, label: t('admin.sidebar.products'), roles: ['styre', 'admin'] },
@@ -69,7 +69,7 @@ const navGroups = computed<NavGroup[]>(() => {
       ],
     },
     {
-      title: 'Arkiv og info',
+      titleKey: 'admin.groupArchive',
       items: [
         { to: '/admin/documents', icon: FileText, label: t('admin.sidebar.documents') },
         { to: '/admin/communication', icon: Megaphone, label: t('admin.sidebar.communication') },
@@ -118,13 +118,13 @@ function closeSidebar() {
         </button>
       </div>
 
-      <nav class="px-3 py-4" aria-label="Admin-navigasjon">
+      <nav class="px-3 py-4" :aria-label="t('admin.ariaNav')">
         <div v-for="(group, gi) in navGroups" :key="gi" :class="gi > 0 ? 'mt-4' : ''">
           <div
-            v-if="group.title"
+            v-if="group.titleKey"
             class="mb-1 px-3 text-xs font-semibold uppercase tracking-wider text-gray-400"
           >
-            {{ group.title }}
+            {{ t(group.titleKey) }}
           </div>
           <div class="space-y-0.5">
             <RouterLink
@@ -152,7 +152,7 @@ function closeSidebar() {
 
     <div class="flex-1">
       <div class="flex items-center border-b border-gray-200 px-4 py-3 lg:hidden">
-        <button class="text-gray-500 hover:text-gray-700" :aria-expanded="sidebarOpen" aria-label="Meny" @click="sidebarOpen = true">
+        <button class="text-gray-500 hover:text-gray-700" :aria-expanded="sidebarOpen" :aria-label="t('nav.ariaMenu')" @click="sidebarOpen = true">
           <Menu class="h-5 w-5" aria-hidden="true" />
         </button>
         <span class="ml-3 text-lg font-semibold text-gray-900">{{ t('admin.title') }}</span>

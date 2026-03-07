@@ -43,7 +43,7 @@ async function checkout() {
     cart.clear()
     router.push(result.checkout_url)
   } catch (e: any) {
-    error.value = e?.message ?? 'Noe gikk galt. Prøv igjen.'
+    error.value = e?.message ?? t('merchandise.somethingWentWrong')
   } finally {
     isSubmitting.value = false
   }
@@ -52,16 +52,16 @@ async function checkout() {
 
 <template>
   <div class="mx-auto max-w-3xl px-4 py-12 sm:px-6 lg:px-8">
-    <h1 class="text-3xl font-bold text-gray-900">Handlekurv</h1>
+    <h1 class="text-3xl font-bold text-gray-900">{{ t('merchandise.cart') }}</h1>
 
     <div v-if="cart.items.length === 0" class="mt-10 text-center">
       <ShoppingCart class="mx-auto h-16 w-16 text-gray-300" />
-      <p class="mt-4 text-gray-500">Handlekurven er tom</p>
+      <p class="mt-4 text-gray-500">{{ t('merchandise.cartEmpty') }}</p>
       <router-link
         to="/merchandise"
         class="mt-4 inline-block rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
       >
-        Gå til nettbutikken
+        {{ t('merchandise.backToShop') }}
       </router-link>
     </div>
 
@@ -78,7 +78,7 @@ async function checkout() {
             <span v-if="item.size && item.color"> / </span>
             <span v-if="item.color">{{ item.color }}</span>
           </p>
-          <p class="text-sm text-gray-500">{{ item.unitPrice }} kr stk</p>
+          <p class="text-sm text-gray-500">{{ item.unitPrice }} kr {{ t('merchandise.each') }}</p>
         </div>
 
         <div class="flex items-center gap-3">
@@ -110,7 +110,7 @@ async function checkout() {
 
       <div class="rounded-lg border border-gray-200 bg-gray-50 p-4">
         <div class="flex items-center justify-between text-lg font-bold text-gray-900">
-          <span>Totalt</span>
+          <span>{{ t('merchandise.total') }}</span>
           <span>{{ cart.totalAmount.toLocaleString('nb-NO') }} kr</span>
         </div>
       </div>
@@ -124,7 +124,7 @@ async function checkout() {
           to="/merchandise"
           class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
         >
-          Fortsett å handle
+          {{ t('merchandise.continueShopping') }}
         </router-link>
         <button
           :disabled="isSubmitting"
@@ -136,7 +136,7 @@ async function checkout() {
             alt=""
             class="h-5 w-5"
           />
-          {{ isSubmitting ? 'Behandler...' : 'Betal med Vipps' }}
+          {{ isSubmitting ? t('merchandise.processingPayment') : t('merchandise.payWithVipps') }}
         </button>
       </div>
     </div>

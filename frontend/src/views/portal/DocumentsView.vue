@@ -178,7 +178,7 @@ function submitComment(docId: string) {
             <input
               v-model="commentText"
               type="text"
-              aria-label="Legg til kommentar"
+              :aria-label="t('portal.documents.addComment')"
               :placeholder="t('portal.documents.commentPlaceholder')"
               class="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />

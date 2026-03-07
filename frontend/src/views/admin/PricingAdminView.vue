@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useApi } from '@/composables/useApi'
@@ -15,25 +15,25 @@ const { data: response, isLoading } = useQuery({
   queryFn: () => fetchApi<{ items: PriceItem[] }>('/api/v1/admin/pricing'),
 })
 
-const categories = [
-  { value: 'moloandel', label: 'Moloandel' },
-  { value: 'slip_fee', label: 'Plassleie' },
-  { value: 'seasonal_rental', label: 'Sesongplass' },
-  { value: 'guest', label: 'Gjesteplasser' },
-  { value: 'bobil', label: 'Bobilparkering' },
-  { value: 'room_hire', label: 'Romutleie' },
-  { value: 'service', label: 'Tjenester' },
-  { value: 'other', label: 'Annet' },
-]
+const categories = computed(() => [
+  { value: 'moloandel', label: t('admin.pricing.categoryMoloandel') },
+  { value: 'slip_fee', label: t('admin.pricing.categorySlipFee') },
+  { value: 'seasonal_rental', label: t('admin.pricing.categorySeasonalRental') },
+  { value: 'guest', label: t('admin.pricing.categoryGuest') },
+  { value: 'bobil', label: t('admin.pricing.categoryBobil') },
+  { value: 'room_hire', label: t('admin.pricing.categoryRoomHire') },
+  { value: 'service', label: t('admin.pricing.categoryService') },
+  { value: 'other', label: t('admin.pricing.categoryOther') },
+])
 
-const units = [
-  { value: 'once', label: 'Engangs' },
-  { value: 'year', label: 'Per år' },
-  { value: 'season', label: 'Per sesong' },
-  { value: 'day', label: 'Per døgn' },
-  { value: 'night', label: 'Per natt' },
-  { value: 'hour', label: 'Per time' },
-]
+const units = computed(() => [
+  { value: 'once', label: t('admin.pricing.unitOnce') },
+  { value: 'year', label: t('admin.pricing.unitYear') },
+  { value: 'season', label: t('admin.pricing.unitSeason') },
+  { value: 'day', label: t('admin.pricing.unitDay') },
+  { value: 'night', label: t('admin.pricing.unitNight') },
+  { value: 'hour', label: t('admin.pricing.unitHour') },
+])
 
 interface FormData {
   id?: string
@@ -147,9 +147,9 @@ const { mutate: saveItem, isPending: isSaving } = useMutation({
     queryClient.invalidateQueries({ queryKey: ['admin', 'pricing'] })
     queryClient.invalidateQueries({ queryKey: ['pricing'] })
     showForm.value = false
-    showToast('success', form.value.id ? 'Pris oppdatert' : 'Pris opprettet')
+    showToast('success', form.value.id ? t('admin.pricing.priceUpdated') : t('admin.pricing.priceCreated'))
   },
-  onError: () => showToast('error', 'Kunne ikke lagre'),
+  onError: () => showToast('error', t('admin.pricing.saveError')),
 })
 
 const { mutate: deleteItem } = useMutation({
@@ -158,23 +158,23 @@ const { mutate: deleteItem } = useMutation({
   onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: ['admin', 'pricing'] })
     queryClient.invalidateQueries({ queryKey: ['pricing'] })
-    showToast('success', 'Pris slettet')
+    showToast('success', t('admin.pricing.priceDeleted'))
   },
-  onError: () => showToast('error', 'Kunne ikke slette'),
+  onError: () => showToast('error', t('admin.pricing.deleteError')),
 })
 
 function confirmDelete(id: string) {
-  if (confirm('Er du sikker på at du vil slette denne prisen?')) {
+  if (confirm(t('admin.pricing.deleteConfirm'))) {
     deleteItem(id)
   }
 }
 
 function categoryLabel(value: string): string {
-  return categories.find((c) => c.value === value)?.label ?? value
+  return categories.value.find((c) => c.value === value)?.label ?? value
 }
 
 function unitLabel(value: string): string {
-  return units.find((u) => u.value === value)?.label ?? value
+  return units.value.find((u) => u.value === value)?.label ?? value
 }
 </script>
 
@@ -188,7 +188,7 @@ function unitLabel(value: string): string {
         @click="openCreate"
       >
         <Plus class="h-4 w-4" />
-        Ny pris
+        {{ t('admin.pricing.newPrice') }}
       </button>
     </div>
 
@@ -207,7 +207,7 @@ function unitLabel(value: string): string {
     >
       <div class="flex items-center justify-between">
         <h2 class="text-lg font-semibold text-gray-900">
-          {{ form.id ? 'Rediger pris' : 'Ny pris' }}
+          {{ form.id ? t('admin.pricing.editPrice') : t('admin.pricing.newPrice') }}
         </h2>
         <button type="button" class="text-gray-400 hover:text-gray-600" @click="showForm = false">
           <X class="h-5 w-5" />
@@ -216,7 +216,7 @@ function unitLabel(value: string): string {
 
       <div class="grid grid-cols-2 gap-4">
         <div>
-          <label class="block text-sm font-medium text-gray-700">Kategori</label>
+          <label class="block text-sm font-medium text-gray-700">{{ t('admin.pricing.category') }}</label>
           <select
             v-model="form.category"
             class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -227,7 +227,7 @@ function unitLabel(value: string): string {
           </select>
         </div>
         <div>
-          <label class="block text-sm font-medium text-gray-700">Navn</label>
+          <label class="block text-sm font-medium text-gray-700">{{ t('admin.pricing.name') }}</label>
           <input
             v-model="form.name"
             type="text"
@@ -238,7 +238,7 @@ function unitLabel(value: string): string {
       </div>
 
       <div>
-        <label class="block text-sm font-medium text-gray-700">Beskrivelse</label>
+        <label class="block text-sm font-medium text-gray-700">{{ t('admin.pricing.description') }}</label>
         <input
           v-model="form.description"
           type="text"
@@ -248,7 +248,7 @@ function unitLabel(value: string): string {
 
       <div class="grid grid-cols-3 gap-4">
         <div>
-          <label class="block text-sm font-medium text-gray-700">Beløp (kr)</label>
+          <label class="block text-sm font-medium text-gray-700">{{ t('admin.pricing.amount') }}</label>
           <input
             v-model="form.amount"
             type="number"
@@ -259,7 +259,7 @@ function unitLabel(value: string): string {
           />
         </div>
         <div>
-          <label class="block text-sm font-medium text-gray-700">Enhet</label>
+          <label class="block text-sm font-medium text-gray-700">{{ t('admin.pricing.unit') }}</label>
           <select
             v-model="form.unit"
             class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -268,7 +268,7 @@ function unitLabel(value: string): string {
           </select>
         </div>
         <div>
-          <label class="block text-sm font-medium text-gray-700">Sortering</label>
+          <label class="block text-sm font-medium text-gray-700">{{ t('admin.pricing.sortOrder') }}</label>
           <input
             v-model="form.sort_order"
             type="number"
@@ -281,10 +281,10 @@ function unitLabel(value: string): string {
       <div class="flex items-center gap-4">
         <label class="flex items-center gap-2 text-sm text-gray-700">
           <input v-model="form.installments_allowed" type="checkbox" class="rounded border-gray-300" />
-          Kan betales i avdrag
+          {{ t('admin.pricing.installments') }}
         </label>
         <div v-if="form.installments_allowed" class="flex items-center gap-2">
-          <label class="text-sm text-gray-700">Maks avdrag:</label>
+          <label class="text-sm text-gray-700">{{ t('admin.pricing.maxInstallments') }}</label>
           <input
             v-model="form.max_installments"
             type="number"
@@ -297,21 +297,21 @@ function unitLabel(value: string): string {
 
       <!-- Season metadata (for seasonal items) -->
       <div v-if="form.unit === 'season'" class="rounded-md border border-gray-100 bg-gray-50 p-4">
-        <p class="mb-3 text-sm font-medium text-gray-700">Sesongperiode</p>
+        <p class="mb-3 text-sm font-medium text-gray-700">{{ t('admin.pricing.seasonPeriod') }}</p>
         <div class="grid grid-cols-3 gap-3">
           <div>
-            <label class="block text-xs text-gray-500">Sesong</label>
+            <label class="block text-xs text-gray-500">{{ t('admin.pricing.season') }}</label>
             <select
               v-model="form.season"
               class="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
             >
-              <option value="">Ingen</option>
-              <option value="summer">Sommer</option>
-              <option value="winter">Vinter</option>
+              <option value="">{{ t('admin.pricing.seasonNone') }}</option>
+              <option value="summer">{{ t('admin.pricing.seasonSummer') }}</option>
+              <option value="winter">{{ t('admin.pricing.seasonWinter') }}</option>
             </select>
           </div>
           <div>
-            <label class="block text-xs text-gray-500">Fra (MM-DD)</label>
+            <label class="block text-xs text-gray-500">{{ t('admin.pricing.dateFrom') }}</label>
             <input
               v-model="form.period_start"
               type="text"
@@ -320,7 +320,7 @@ function unitLabel(value: string): string {
             />
           </div>
           <div>
-            <label class="block text-xs text-gray-500">Til (MM-DD)</label>
+            <label class="block text-xs text-gray-500">{{ t('admin.pricing.dateTo') }}</label>
             <input
               v-model="form.period_end"
               type="text"
@@ -333,10 +333,10 @@ function unitLabel(value: string): string {
 
       <!-- Beam range for slip_fee -->
       <div v-if="form.category === 'slip_fee'" class="rounded-md border border-gray-100 bg-gray-50 p-4">
-        <p class="mb-3 text-sm font-medium text-gray-700">Breddeintervall (m)</p>
+        <p class="mb-3 text-sm font-medium text-gray-700">{{ t('admin.pricing.beamRange') }}</p>
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="block text-xs text-gray-500">Fra (min bredde)</label>
+            <label class="block text-xs text-gray-500">{{ t('admin.pricing.beamMin') }}</label>
             <input
               v-model="form.beam_min"
               type="number"
@@ -347,7 +347,7 @@ function unitLabel(value: string): string {
             />
           </div>
           <div>
-            <label class="block text-xs text-gray-500">Til (maks bredde)</label>
+            <label class="block text-xs text-gray-500">{{ t('admin.pricing.beamMax') }}</label>
             <input
               v-model="form.beam_max"
               type="number"
@@ -363,7 +363,7 @@ function unitLabel(value: string): string {
       <div class="flex items-center gap-4">
         <label class="flex items-center gap-2 text-sm text-gray-700">
           <input v-model="form.is_active" type="checkbox" class="rounded border-gray-300" />
-          Aktiv (synlig på prissiden)
+          {{ t('admin.pricing.activeCheckbox') }}
         </label>
       </div>
 
@@ -392,24 +392,24 @@ function unitLabel(value: string): string {
       <table class="min-w-full divide-y divide-gray-200">
         <thead class="bg-gray-50">
           <tr>
-            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Navn</th>
-            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Kategori</th>
-            <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">Beløp</th>
-            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Enhet</th>
-            <th scope="col" class="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500">Status</th>
-            <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">Handlinger</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.pricing.name') }}</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.pricing.category') }}</th>
+            <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.pricing.amount') }}</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.pricing.unit') }}</th>
+            <th scope="col" class="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('common.status') }}</th>
+            <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('common.actions') }}</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-200 bg-white">
           <tr v-if="!response?.items?.length">
-            <td colspan="6" class="px-4 py-8 text-center text-gray-500">Ingen priser lagt inn</td>
+            <td colspan="6" class="px-4 py-8 text-center text-gray-500">{{ t('admin.pricing.noItems') }}</td>
           </tr>
           <tr v-for="item in response?.items" :key="item.id">
             <td class="px-4 py-3 text-sm">
               <div class="font-medium text-gray-900">{{ item.name }}</div>
               <div v-if="item.description" class="text-xs text-gray-500">{{ item.description }}</div>
               <div v-if="item.category === 'slip_fee' && (item.metadata?.beam_min || item.metadata?.beam_max)" class="text-xs text-blue-600">
-                Bredde: {{ item.metadata.beam_min || '0' }}–{{ item.metadata.beam_max || '∞' }} m
+                {{ t('admin.pricing.beam') }}: {{ item.metadata.beam_min || '0' }}–{{ item.metadata.beam_max || '∞' }} m
               </div>
             </td>
             <td class="whitespace-nowrap px-4 py-3 text-sm">
@@ -430,7 +430,7 @@ function unitLabel(value: string): string {
                   item.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-500',
                 ]"
               >
-                {{ item.is_active ? 'Aktiv' : 'Inaktiv' }}
+                {{ item.is_active ? t('admin.pricing.active') : t('admin.pricing.inactive') }}
               </span>
             </td>
             <td class="whitespace-nowrap px-4 py-3 text-right text-sm">

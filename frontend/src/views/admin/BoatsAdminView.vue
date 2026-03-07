@@ -74,11 +74,11 @@ const { mutate: confirmBoat, isPending: isConfirming } = useMutation({
   },
   onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: ['admin', 'boats', 'unconfirmed'] })
-    showToast('success', 'Mål godkjent')
+    showToast('success', t('admin.boats.approveSuccess'))
     expanded.value = null
   },
   onError: () => {
-    showToast('error', 'Kunne ikke godkjenne mål')
+    showToast('error', t('admin.boats.approveError'))
   },
 })
 
@@ -87,7 +87,7 @@ const { mutate: confirmBoat, isPending: isConfirming } = useMutation({
 <template>
   <div>
     <h1 class="text-2xl font-bold text-gray-900">{{ t('admin.sidebar.boats') }}</h1>
-    <p class="mt-1 text-sm text-gray-500">Båter som trenger godkjenning av mål fra styret eller havnesjefen.</p>
+    <p class="mt-1 text-sm text-gray-500">{{ t('admin.boats.description') }}</p>
 
     <div
       v-if="toast"
@@ -100,11 +100,11 @@ const { mutate: confirmBoat, isPending: isConfirming } = useMutation({
     </div>
 
     <div v-if="isLoading" class="mt-6 text-gray-500">{{ t('common.loading') }}...</div>
-    <div v-else-if="isError" class="mt-6 rounded-md bg-red-50 p-3 text-sm text-red-800">Kunne ikke hente båter</div>
+    <div v-else-if="isError" class="mt-6 rounded-md bg-red-50 p-3 text-sm text-red-800">{{ t('admin.boats.loadError') }}</div>
 
     <div v-else-if="!boats?.length" class="mt-6 flex flex-col items-center gap-2 py-12 text-gray-400">
       <ShieldCheck class="h-10 w-10" />
-      <p>Alle båter er godkjent</p>
+      <p>{{ t('admin.boats.allApproved') }}</p>
     </div>
 
     <div v-else class="mt-6 space-y-3">
@@ -129,12 +129,12 @@ const { mutate: confirmBoat, isPending: isConfirming } = useMutation({
 
         <div v-if="expanded === boat.id" class="border-t border-gray-100 px-4 py-4">
           <div class="mb-3 text-sm text-gray-600">
-            Oppgitte mål fra eier:
+            {{ t('admin.boats.ownerDimensions') }}
           </div>
 
           <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div>
-              <label class="block text-xs font-medium text-gray-500">Lengde (m)</label>
+              <label class="block text-xs font-medium text-gray-500">{{ t('admin.boats.length') }}</label>
               <input
                 v-model.number="adjusting[boat.id].length_m"
                 type="number"
@@ -143,7 +143,7 @@ const { mutate: confirmBoat, isPending: isConfirming } = useMutation({
               />
             </div>
             <div>
-              <label class="block text-xs font-medium text-gray-500">Bredde (m)</label>
+              <label class="block text-xs font-medium text-gray-500">{{ t('admin.boats.beam') }}</label>
               <input
                 v-model.number="adjusting[boat.id].beam_m"
                 type="number"
@@ -152,7 +152,7 @@ const { mutate: confirmBoat, isPending: isConfirming } = useMutation({
               />
             </div>
             <div>
-              <label class="block text-xs font-medium text-gray-500">Dypgående (m)</label>
+              <label class="block text-xs font-medium text-gray-500">{{ t('admin.boats.draft') }}</label>
               <input
                 v-model.number="adjusting[boat.id].draft_m"
                 type="number"
@@ -161,7 +161,7 @@ const { mutate: confirmBoat, isPending: isConfirming } = useMutation({
               />
             </div>
             <div>
-              <label class="block text-xs font-medium text-gray-500">Vekt (kg)</label>
+              <label class="block text-xs font-medium text-gray-500">{{ t('admin.boats.weight') }}</label>
               <input
                 v-model.number="adjusting[boat.id].weight_kg"
                 type="number"
@@ -174,7 +174,7 @@ const { mutate: confirmBoat, isPending: isConfirming } = useMutation({
           <div v-if="!boat.boat_model_id" class="mt-3">
             <label class="flex items-center gap-2 text-sm text-gray-700">
               <input v-model="addToModels[boat.id]" type="checkbox" class="rounded border-gray-300" />
-              Legg til som ny båtmodell i registeret
+              {{ t('admin.boats.addToModels') }}
             </label>
           </div>
 
@@ -185,7 +185,7 @@ const { mutate: confirmBoat, isPending: isConfirming } = useMutation({
               @click="confirmBoat(boat.id)"
             >
               <ShieldCheck class="h-4 w-4" />
-              Godkjenn mål
+              {{ t('admin.boats.approveDimensions') }}
             </button>
             <button
               class="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50"

@@ -26,18 +26,18 @@ const { data: documents, isLoading, isError } = useQuery({
     <h1 class="text-2xl font-bold text-gray-900">{{ t('admin.sidebar.documents') }}</h1>
 
     <div v-if="isLoading" class="mt-6 text-gray-500">{{ t('common.loading') }}...</div>
-    <div v-else-if="isError" class="mt-6 rounded-md bg-red-50 p-3 text-sm text-red-800">Kunne ikke hente dokumenter</div>
+    <div v-else-if="isError" class="mt-6 rounded-md bg-red-50 p-3 text-sm text-red-800">{{ t('admin.documents.loadError') }}</div>
 
-    <div v-else-if="!documents?.length" class="mt-6 text-gray-500">Ingen dokumenter</div>
+    <div v-else-if="!documents?.length" class="mt-6 text-gray-500">{{ t('admin.documents.noDocuments') }}</div>
 
     <div v-else class="mt-6 overflow-x-auto">
       <table class="min-w-full divide-y divide-gray-200">
         <thead class="bg-gray-50">
           <tr>
-            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Tittel</th>
-            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Fil</th>
-            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Synlighet</th>
-            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Dato</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.documents.title') }}</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.documents.file') }}</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.documents.visibility') }}</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.documents.date') }}</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-200 bg-white">

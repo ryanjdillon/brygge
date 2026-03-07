@@ -71,7 +71,7 @@ function toggleRole(userId: string, role: string) {
 }
 
 function confirmDelete(userId: string) {
-  if (confirm('Er du sikker på at du vil slette denne brukeren?')) {
+  if (confirm(t('admin.users.deleteConfirm'))) {
     deleteUser(userId)
   }
 }
@@ -82,15 +82,15 @@ function confirmDelete(userId: string) {
     <h1 class="text-2xl font-bold text-gray-900">{{ t('admin.sidebar.users') }}</h1>
 
     <div v-if="isLoading" class="mt-6 text-gray-500">{{ t('common.loading') }}...</div>
-    <div v-else-if="isError" class="mt-6 rounded-md bg-red-50 p-3 text-sm text-red-800">Kunne ikke hente brukere</div>
+    <div v-else-if="isError" class="mt-6 rounded-md bg-red-50 p-3 text-sm text-red-800">{{ t('admin.users.loadError') }}</div>
 
     <div v-else class="mt-6 overflow-x-auto">
       <table class="min-w-full divide-y divide-gray-200">
         <thead class="bg-gray-50">
           <tr>
-            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Navn</th>
-            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">E-post</th>
-            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Roller</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.users.name') }}</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.users.email') }}</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.users.roles') }}</th>
             <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('common.actions') }}</th>
           </tr>
         </thead>
@@ -116,8 +116,8 @@ function confirmDelete(userId: string) {
                   </button>
                 </div>
                 <div class="mt-1 flex gap-1">
-                  <button class="text-xs text-blue-600 hover:underline" @click="updateRoles({ userId: user.id, roles: editingRoles[user.id] })">Lagre</button>
-                  <button class="text-xs text-gray-500 hover:underline" @click="cancelEditRoles(user.id)">Avbryt</button>
+                  <button class="text-xs text-blue-600 hover:underline" @click="updateRoles({ userId: user.id, roles: editingRoles[user.id] })">{{ t('common.save') }}</button>
+                  <button class="text-xs text-gray-500 hover:underline" @click="cancelEditRoles(user.id)">{{ t('common.cancel') }}</button>
                 </div>
               </template>
               <template v-else>
