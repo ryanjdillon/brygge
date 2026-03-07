@@ -146,19 +146,19 @@ function statusClass(status: string): string {
       <table class="min-w-full divide-y divide-gray-200">
         <thead class="bg-gray-50">
           <tr>
-            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
               {{ t('portal.bookings.resource') }}
             </th>
-            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
               {{ t('admin.bookings.bookedBy') }}
             </th>
-            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
               {{ t('portal.bookings.date') }}
             </th>
-            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
               {{ t('common.status') }}
             </th>
-            <th class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
+            <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
               {{ t('common.actions') }}
             </th>
           </tr>

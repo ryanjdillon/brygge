@@ -40,14 +40,14 @@ const { data: entries, isLoading, isError } = useQuery({
       <table class="min-w-full divide-y divide-gray-200">
         <thead class="bg-gray-50">
           <tr>
-            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">#</th>
-            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Navn</th>
-            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">E-post</th>
-            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Lokal</th>
-            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">B&aring;t</th>
-            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Bredde</th>
-            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Status</th>
-            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Registrert</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">#</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Navn</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">E-post</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Lokal</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">B&aring;t</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Bredde</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Status</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Registrert</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-200 bg-white">

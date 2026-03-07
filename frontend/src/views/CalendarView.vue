@@ -151,7 +151,7 @@ function tagLabel(tag: string): string {
     <Teleport to="body">
       <div
         v-if="showProposeModal"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+        role="dialog" aria-modal="true" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
         @click.self="showProposeModal = false"
       >
         <div class="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl">

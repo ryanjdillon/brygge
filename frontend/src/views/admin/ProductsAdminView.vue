@@ -231,11 +231,11 @@ function confirmDelete(id: string) {
       <table class="min-w-full divide-y divide-gray-200">
         <thead class="bg-gray-50">
           <tr>
-            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Produkt</th>
-            <th class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">Pris</th>
-            <th class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">Lager</th>
-            <th class="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500">Status</th>
-            <th class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">Handlinger</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Produkt</th>
+            <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">Pris</th>
+            <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">Lager</th>
+            <th scope="col" class="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500">Status</th>
+            <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">Handlinger</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-200 bg-white">

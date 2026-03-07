@@ -138,6 +138,7 @@ const { mutate: saveProfile, isPending: isSaving } = useMutation({
           <input
             v-model="form.address.street"
             type="text"
+            :aria-label="t('portal.profile.street')"
             :placeholder="t('portal.profile.street')"
             class="block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
@@ -145,12 +146,14 @@ const { mutate: saveProfile, isPending: isSaving } = useMutation({
             <input
               v-model="form.address.postalCode"
               type="text"
+              :aria-label="t('portal.profile.postalCode')"
               :placeholder="t('portal.profile.postalCode')"
               class="block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
             <input
               v-model="form.address.city"
               type="text"
+              :aria-label="t('portal.profile.city')"
               :placeholder="t('portal.profile.city')"
               class="block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />

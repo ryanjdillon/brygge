@@ -392,12 +392,12 @@ function unitLabel(value: string): string {
       <table class="min-w-full divide-y divide-gray-200">
         <thead class="bg-gray-50">
           <tr>
-            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Navn</th>
-            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Kategori</th>
-            <th class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">Beløp</th>
-            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Enhet</th>
-            <th class="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500">Status</th>
-            <th class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">Handlinger</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Navn</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Kategori</th>
+            <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">Beløp</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Enhet</th>
+            <th scope="col" class="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500">Status</th>
+            <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">Handlinger</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-200 bg-white">

@@ -169,7 +169,7 @@ function handleVote(request: FeatureRequest, value: 1 | -1) {
     <!-- Submit new request modal -->
     <div
       v-if="showModal"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      role="dialog" aria-modal="true" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
       @click.self="showModal = false"
     >
       <div class="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">

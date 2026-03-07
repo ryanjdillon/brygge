@@ -137,19 +137,19 @@ function tagLabel(tag: string): string {
       <table class="min-w-full divide-y divide-gray-200">
         <thead class="bg-gray-50">
           <tr>
-            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
               {{ t('admin.events.eventTitle') }}
             </th>
-            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
               {{ t('admin.events.date') }}
             </th>
-            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
               {{ t('admin.events.tag') }}
             </th>
-            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
               {{ t('admin.events.visibility') }}
             </th>
-            <th class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
+            <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
               {{ t('common.actions') }}
             </th>
           </tr>
@@ -199,7 +199,7 @@ function tagLabel(tag: string): string {
     <Teleport to="body">
       <div
         v-if="showModal"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+        role="dialog" aria-modal="true" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
         @click.self="closeModal"
       >
         <div class="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl">

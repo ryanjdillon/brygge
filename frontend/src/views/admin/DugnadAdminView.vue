@@ -60,11 +60,11 @@ function handleSetRequired() {
       <table class="min-w-full divide-y divide-gray-200">
         <thead class="bg-gray-50">
           <tr>
-            <th class="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">{{ t('common.name') }}</th>
-            <th class="px-4 py-3 text-right text-xs font-medium uppercase text-gray-500">{{ t('dugnad.signedUpHours') }}</th>
-            <th class="px-4 py-3 text-right text-xs font-medium uppercase text-gray-500">{{ t('dugnad.completedHours') }}</th>
-            <th class="px-4 py-3 text-right text-xs font-medium uppercase text-gray-500">{{ t('dugnad.requiredHours') }}</th>
-            <th class="px-4 py-3 text-right text-xs font-medium uppercase text-gray-500">{{ t('dugnad.remaining') }}</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">{{ t('common.name') }}</th>
+            <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase text-gray-500">{{ t('dugnad.signedUpHours') }}</th>
+            <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase text-gray-500">{{ t('dugnad.completedHours') }}</th>
+            <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase text-gray-500">{{ t('dugnad.requiredHours') }}</th>
+            <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase text-gray-500">{{ t('dugnad.remaining') }}</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-200 bg-white">
@@ -85,7 +85,7 @@ function handleSetRequired() {
     <!-- Settings modal -->
     <div
       v-if="showSettings"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      role="dialog" aria-modal="true" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
       @click.self="showSettings = false"
     >
       <div class="w-full max-w-sm rounded-lg bg-white p-6 shadow-xl">

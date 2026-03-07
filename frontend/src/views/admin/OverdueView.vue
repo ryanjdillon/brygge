@@ -61,25 +61,25 @@ function handleSendReminder(_paymentId: string) {
       <table class="min-w-full divide-y divide-gray-200">
         <thead class="bg-gray-50">
           <tr>
-            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
               {{ t('admin.financials.member') }}
             </th>
-            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
               {{ t('contact.email') }}
             </th>
-            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
               {{ t('contact.phone') }}
             </th>
-            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
               {{ t('admin.financials.paymentType') }}
             </th>
-            <th class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
+            <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
               {{ t('admin.financials.amount') }}
             </th>
-            <th class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
+            <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
               {{ t('admin.financials.daysOverdue') }}
             </th>
-            <th class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
+            <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
               {{ t('common.actions') }}
             </th>
           </tr>
