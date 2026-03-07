@@ -29,7 +29,7 @@ const navLinks = [
 </script>
 
 <template>
-  <nav class="sticky top-0 z-50 bg-white shadow-sm">
+  <nav class="sticky top-0 z-50 bg-white shadow-sm" aria-label="Hovednavigasjon">
     <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
       <div class="flex h-16 items-center justify-between">
         <RouterLink to="/" class="flex items-center gap-2 text-xl font-bold text-blue-900">
@@ -70,9 +70,10 @@ const navLinks = [
             </RouterLink>
             <button
               class="inline-flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+              aria-label="Logg ut"
               @click="handleLogout"
             >
-              <LogOut class="h-4 w-4" />
+              <LogOut class="h-4 w-4" aria-hidden="true" />
             </button>
           </template>
           <template v-else>
@@ -88,10 +89,12 @@ const navLinks = [
 
         <button
           class="inline-flex items-center justify-center rounded-md p-2 text-gray-700 hover:bg-gray-100 md:hidden"
+          :aria-expanded="mobileOpen"
+          aria-label="Meny"
           @click="mobileOpen = !mobileOpen"
         >
-          <X v-if="mobileOpen" class="h-6 w-6" />
-          <Menu v-else class="h-6 w-6" />
+          <X v-if="mobileOpen" class="h-6 w-6" aria-hidden="true" />
+          <Menu v-else class="h-6 w-6" aria-hidden="true" />
         </button>
       </div>
     </div>

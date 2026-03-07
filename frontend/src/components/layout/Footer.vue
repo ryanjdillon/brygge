@@ -6,7 +6,7 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <footer class="border-t border-gray-200 bg-gray-50">
+  <footer class="border-t border-gray-200 bg-gray-50" role="contentinfo">
     <div class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <div class="flex flex-col items-center justify-between gap-4 sm:flex-row">
         <p class="text-sm text-gray-500">
