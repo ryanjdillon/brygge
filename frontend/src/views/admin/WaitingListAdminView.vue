@@ -15,6 +15,10 @@ interface WaitingListEntry {
   is_local: boolean
   status: string
   created_at: string
+  boat_id: string | null
+  boat_name: string | null
+  boat_beam: number | null
+  boat_confirmed: boolean | null
 }
 
 const { data: entries, isLoading, isError } = useQuery({
@@ -40,6 +44,8 @@ const { data: entries, isLoading, isError } = useQuery({
             <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Navn</th>
             <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">E-post</th>
             <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Lokal</th>
+            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">B&aring;t</th>
+            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Bredde</th>
             <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Status</th>
             <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Registrert</th>
           </tr>
@@ -53,6 +59,16 @@ const { data: entries, isLoading, isError } = useQuery({
               <span :class="['rounded-full px-2.5 py-0.5 text-xs font-medium', entry.is_local ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800']">
                 {{ entry.is_local ? 'Ja' : 'Nei' }}
               </span>
+            </td>
+            <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">
+              <template v-if="entry.boat_name">
+                {{ entry.boat_name }}
+                <span v-if="entry.boat_confirmed === false" class="ml-1 text-xs text-yellow-600">(ubekreftet)</span>
+              </template>
+              <span v-else class="text-gray-300">—</span>
+            </td>
+            <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">
+              {{ entry.boat_beam ? `${entry.boat_beam} m` : '—' }}
             </td>
             <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ entry.status }}</td>
             <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ new Date(entry.created_at).toLocaleDateString() }}</td>

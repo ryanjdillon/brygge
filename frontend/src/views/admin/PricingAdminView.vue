@@ -49,6 +49,8 @@ interface FormData {
   season: string
   period_start: string
   period_end: string
+  beam_min: string
+  beam_max: string
 }
 
 const emptyForm: FormData = {
@@ -64,6 +66,8 @@ const emptyForm: FormData = {
   season: '',
   period_start: '',
   period_end: '',
+  beam_min: '',
+  beam_max: '',
 }
 
 const showForm = ref(false)
@@ -90,6 +94,8 @@ function openEdit(item: PriceItem) {
     season: item.metadata?.season ?? '',
     period_start: item.metadata?.period_start ?? '',
     period_end: item.metadata?.period_end ?? '',
+    beam_min: item.metadata?.beam_min ?? '',
+    beam_max: item.metadata?.beam_max ?? '',
   }
   showForm.value = true
 }
@@ -99,6 +105,10 @@ function buildPayload() {
   if (form.value.season) metadata.season = form.value.season
   if (form.value.period_start) metadata.period_start = form.value.period_start
   if (form.value.period_end) metadata.period_end = form.value.period_end
+  if (form.value.category === 'slip_fee') {
+    if (form.value.beam_min) metadata.beam_min = form.value.beam_min
+    if (form.value.beam_max) metadata.beam_max = form.value.beam_max
+  }
 
   return {
     category: form.value.category,
@@ -321,6 +331,35 @@ function unitLabel(value: string): string {
         </div>
       </div>
 
+      <!-- Beam range for slip_fee -->
+      <div v-if="form.category === 'slip_fee'" class="rounded-md border border-gray-100 bg-gray-50 p-4">
+        <p class="mb-3 text-sm font-medium text-gray-700">Breddeintervall (m)</p>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs text-gray-500">Fra (min bredde)</label>
+            <input
+              v-model="form.beam_min"
+              type="number"
+              step="0.1"
+              min="0"
+              placeholder="0"
+              class="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+            />
+          </div>
+          <div>
+            <label class="block text-xs text-gray-500">Til (maks bredde)</label>
+            <input
+              v-model="form.beam_max"
+              type="number"
+              step="0.1"
+              min="0"
+              placeholder="99"
+              class="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+            />
+          </div>
+        </div>
+      </div>
+
       <div class="flex items-center gap-4">
         <label class="flex items-center gap-2 text-sm text-gray-700">
           <input v-model="form.is_active" type="checkbox" class="rounded border-gray-300" />
@@ -369,6 +408,9 @@ function unitLabel(value: string): string {
             <td class="px-4 py-3 text-sm">
               <div class="font-medium text-gray-900">{{ item.name }}</div>
               <div v-if="item.description" class="text-xs text-gray-500">{{ item.description }}</div>
+              <div v-if="item.category === 'slip_fee' && (item.metadata?.beam_min || item.metadata?.beam_max)" class="text-xs text-blue-600">
+                Bredde: {{ item.metadata.beam_min || '0' }}–{{ item.metadata.beam_max || '∞' }} m
+              </div>
             </td>
             <td class="whitespace-nowrap px-4 py-3 text-sm">
               <span class="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">
