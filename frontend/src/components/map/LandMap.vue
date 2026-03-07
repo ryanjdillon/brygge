@@ -30,7 +30,7 @@ onMounted(() => {
           tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
           tileSize: 256,
           attribution:
-            '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+            '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> | <a href="https://maplibre.org/">MapLibre</a>',
         },
       },
       layers: [
@@ -67,7 +67,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="relative">
+  <div class="relative h-full">
     <div ref="container" class="h-full w-full rounded-lg" style="min-height: 256px" />
     <a
       :href="googleMapsUrl"

@@ -102,5 +102,8 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div ref="container" class="h-full w-full rounded-lg" />
+  <div class="relative h-full">
+    <div ref="container" class="h-full w-full rounded-lg" />
+    <slot name="overlay" />
+  </div>
 </template>

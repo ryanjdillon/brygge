@@ -24,11 +24,12 @@ vi.mock('maplibre-gl', () => ({
 }))
 
 vi.mock('lucide-vue-next', () => ({
-  MapPin: { template: '<span data-icon="map-pin" />' },
-  Navigation: { template: '<span data-icon="navigation" />' },
+  Car: { template: '<span data-icon="car" />' },
+  Ship: { template: '<span data-icon="ship" />' },
   Radio: { template: '<span data-icon="radio" />' },
   Anchor: { template: '<span data-icon="anchor" />' },
   Download: { template: '<span data-icon="download" />' },
+  Info: { template: '<span data-icon="info" />' },
   ExternalLink: { template: '<span data-icon="external-link" />' },
 }))
 
