@@ -4,13 +4,13 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 import { Car, Plug, Droplets, Info } from 'lucide-vue-next'
 import { useClubCoordinates } from '@/composables/useMap'
-import { usePricing, unitLabel } from '@/composables/usePricing'
+import { usePricing } from '@/composables/usePricing'
 import { useTodayAvailability } from '@/composables/useBookings'
 import LandMap from '@/components/map/LandMap.vue'
 
 const { t } = useI18n()
 const { data: club } = useClubCoordinates()
-const { categories, isLoading: pricingLoading } = usePricing()
+const { categories, isLoading: pricingLoading, unitLabel } = usePricing()
 const { data: todayAvail, isLoading: resourcesLoading } = useTodayAvailability('bobil_spot')
 
 const totalCapacity = computed(() => todayAvail.value?.available ?? 0)

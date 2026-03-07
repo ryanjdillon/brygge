@@ -4,14 +4,14 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 import { Anchor, Radio, Sailboat, HandCoins, Download } from 'lucide-vue-next'
 import { useClubCoordinates, useMapMarkers } from '@/composables/useMap'
-import { usePricing, unitLabel } from '@/composables/usePricing'
+import { usePricing } from '@/composables/usePricing'
 import { useTodayAvailability } from '@/composables/useBookings'
 import SeaChart from '@/components/map/SeaChart.vue'
 
 const { t } = useI18n()
 const { data: club } = useClubCoordinates()
 const { data: markers } = useMapMarkers()
-const { categories, isLoading: pricingLoading } = usePricing()
+const { categories, isLoading: pricingLoading, unitLabel } = usePricing()
 const { data: todayAvail, isLoading: resourcesLoading } = useTodayAvailability('guest_slip')
 
 const totalCapacity = computed(() => todayAvail.value?.available ?? 0)

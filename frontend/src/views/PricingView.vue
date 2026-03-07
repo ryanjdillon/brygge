@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { usePricing, unitLabel } from '@/composables/usePricing'
+import { usePricing } from '@/composables/usePricing'
 
 const { t } = useI18n()
-const { categories, isLoading, isError } = usePricing()
+const { categories, isLoading, isError, unitLabel } = usePricing()
 
 function formatAmount(amount: number): string {
   return amount.toLocaleString('nb-NO')
