@@ -116,8 +116,16 @@ export const useAuthStore = defineStore('auth', () => {
     return user.value?.roles.includes(role) ?? false
   }
 
+  async function setTokens(at: string, rt: string) {
+    accessToken.value = at
+    refreshToken.value = rt
+    localStorage.setItem('access_token', at)
+    localStorage.setItem('refresh_token', rt)
+    await fetchMe()
+  }
+
   // Restore session on store init
   const ready = accessToken.value ? fetchMe() : Promise.resolve()
 
-  return { user, accessToken, refreshToken, loginError, isAuthenticated, ready, login, logout, fetchMe, hasRole }
+  return { user, accessToken, refreshToken, loginError, isAuthenticated, ready, login, logout, fetchMe, hasRole, setTokens }
 })
