@@ -8,6 +8,9 @@ export interface CartItem {
   unitPrice: number
   quantity: number
   imageUrl?: string
+  variantId?: string
+  size?: string
+  color?: string
 }
 
 export const useCartStore = defineStore('cart', () => {
@@ -22,7 +25,9 @@ export const useCartStore = defineStore('cart', () => {
   )
 
   function addItem(item: Omit<CartItem, 'quantity'>, quantity = 1) {
-    const existing = items.value.find((i) => i.id === item.id && i.type === item.type)
+    const existing = items.value.find(
+      (i) => i.id === item.id && i.type === item.type && (i.variantId ?? '') === (item.variantId ?? ''),
+    )
     if (existing) {
       existing.quantity += quantity
     } else {
@@ -31,19 +36,23 @@ export const useCartStore = defineStore('cart', () => {
     persist()
   }
 
-  function updateQuantity(id: string, quantity: number) {
-    const item = items.value.find((i) => i.id === id)
+  function updateQuantity(id: string, quantity: number, variantId?: string) {
+    const item = items.value.find(
+      (i) => i.id === id && (i.variantId ?? '') === (variantId ?? ''),
+    )
     if (!item) return
     if (quantity <= 0) {
-      removeItem(id)
+      removeItem(id, variantId)
       return
     }
     item.quantity = quantity
     persist()
   }
 
-  function removeItem(id: string) {
-    items.value = items.value.filter((i) => i.id !== id)
+  function removeItem(id: string, variantId?: string) {
+    items.value = items.value.filter(
+      (i) => !(i.id === id && (i.variantId ?? '') === (variantId ?? '')),
+    )
     persist()
   }
 

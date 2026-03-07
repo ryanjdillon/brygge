@@ -26,6 +26,7 @@ async function checkout() {
     const lines = cart.items.map((item) => ({
       product_id: item.type === 'product' ? item.id : undefined,
       price_item_id: item.type === 'price_item' ? item.id : undefined,
+      variant_id: item.variantId || undefined,
       name: item.name,
       quantity: item.quantity,
       unit_price: item.unitPrice,
@@ -72,6 +73,11 @@ async function checkout() {
       >
         <div class="flex-1">
           <h3 class="font-medium text-gray-900">{{ item.name }}</h3>
+          <p v-if="item.size || item.color" class="text-xs text-gray-400">
+            <span v-if="item.size">{{ item.size }}</span>
+            <span v-if="item.size && item.color"> / </span>
+            <span v-if="item.color">{{ item.color }}</span>
+          </p>
           <p class="text-sm text-gray-500">{{ item.unitPrice }} kr stk</p>
         </div>
 
