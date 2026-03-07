@@ -34,6 +34,7 @@ type productVariant struct {
 	Color         string   `json:"color"`
 	Stock         int      `json:"stock"`
 	PriceOverride *float64 `json:"price_override"`
+	ImageURL      string   `json:"image_url"`
 	SortOrder     int      `json:"sort_order"`
 }
 
@@ -59,7 +60,7 @@ func (h *ProductsHandler) loadVariantsForProducts(r *http.Request, products []pr
 	}
 
 	rows, err := h.db.Query(r.Context(),
-		`SELECT id, product_id, size, color, stock, price_override, sort_order
+		`SELECT id, product_id, size, color, stock, price_override, image_url, sort_order
 		 FROM product_variants
 		 WHERE product_id = ANY($1)
 		 ORDER BY sort_order, size, color`,
@@ -78,7 +79,7 @@ func (h *ProductsHandler) loadVariantsForProducts(r *http.Request, products []pr
 	for rows.Next() {
 		var v productVariant
 		var productID string
-		if err := rows.Scan(&v.ID, &productID, &v.Size, &v.Color, &v.Stock, &v.PriceOverride, &v.SortOrder); err != nil {
+		if err := rows.Scan(&v.ID, &productID, &v.Size, &v.Color, &v.Stock, &v.PriceOverride, &v.ImageURL, &v.SortOrder); err != nil {
 			h.log.Warn().Err(err).Msg("failed to scan variant row")
 			continue
 		}
@@ -294,6 +295,7 @@ type variantRequest struct {
 	Color         string   `json:"color"`
 	Stock         int      `json:"stock"`
 	PriceOverride *float64 `json:"price_override"`
+	ImageURL      string   `json:"image_url"`
 	SortOrder     int      `json:"sort_order"`
 }
 
@@ -326,12 +328,12 @@ func (h *ProductsHandler) HandleCreateVariant(w http.ResponseWriter, r *http.Req
 
 	var v productVariant
 	err := h.db.QueryRow(ctx,
-		`INSERT INTO product_variants (product_id, size, color, stock, price_override, sort_order)
-		 VALUES ($1, $2, $3, $4, $5, $6)
-		 ON CONFLICT (product_id, size, color) DO UPDATE SET stock = EXCLUDED.stock, price_override = EXCLUDED.price_override, sort_order = EXCLUDED.sort_order
-		 RETURNING id, size, color, stock, price_override, sort_order`,
-		productID, req.Size, req.Color, req.Stock, req.PriceOverride, req.SortOrder,
-	).Scan(&v.ID, &v.Size, &v.Color, &v.Stock, &v.PriceOverride, &v.SortOrder)
+		`INSERT INTO product_variants (product_id, size, color, stock, price_override, image_url, sort_order)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)
+		 ON CONFLICT (product_id, size, color) DO UPDATE SET stock = EXCLUDED.stock, price_override = EXCLUDED.price_override, image_url = EXCLUDED.image_url, sort_order = EXCLUDED.sort_order
+		 RETURNING id, size, color, stock, price_override, image_url, sort_order`,
+		productID, req.Size, req.Color, req.Stock, req.PriceOverride, req.ImageURL, req.SortOrder,
+	).Scan(&v.ID, &v.Size, &v.Color, &v.Stock, &v.PriceOverride, &v.ImageURL, &v.SortOrder)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to create variant")
 		Error(w, http.StatusInternalServerError, "internal error")

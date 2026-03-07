@@ -303,6 +303,11 @@ func main() {
 	}
 
 	// Clear idempotent-unsafe tables before re-seeding
+	// Nullify order_lines FKs first so product/price_item deletes succeed
+	_, _ = db.Exec(ctx, `UPDATE order_lines SET product_id = NULL, variant_id = NULL
+		WHERE order_id IN (SELECT id FROM orders WHERE club_id = $1)`, clubID)
+	_, _ = db.Exec(ctx, `UPDATE order_lines SET price_item_id = NULL
+		WHERE order_id IN (SELECT id FROM orders WHERE club_id = $1)`, clubID)
 	_, _ = db.Exec(ctx, `DELETE FROM price_items WHERE club_id = $1`, clubID)
 	_, _ = db.Exec(ctx, `DELETE FROM events WHERE club_id = $1`, clubID)
 	_, _ = db.Exec(ctx, `DELETE FROM products WHERE club_id = $1`, clubID)
@@ -417,46 +422,56 @@ func main() {
 
 	// Create merchandise products with variants
 	type variantSeed struct {
-		size, color string
-		stock       int
+		size, color, imageURL string
+		stock                 int
 	}
 	type productSeed struct {
-		name, description string
-		price             float64
-		stock, sortOrder  int
-		variants          []variantSeed
+		name, description, imageURL string
+		price                       float64
+		stock, sortOrder            int
+		variants                    []variantSeed
 	}
 	products := []productSeed{
-		{"Klubbvimpel", "Brygge-vimpel i flaggstoff, 30x40 cm", 350, 25, 10, nil},
-		{"T-skjorte", "Brygge-logo, 100% bomull", 299, 0, 20, []variantSeed{
-			{"S", "Hvit", 10}, {"M", "Hvit", 15}, {"L", "Hvit", 12}, {"XL", "Hvit", 8}, {"XXL", "Hvit", 5},
-			{"S", "Navy", 8}, {"M", "Navy", 12}, {"L", "Navy", 10}, {"XL", "Navy", 6}, {"XXL", "Navy", 3},
+		{"Klubbvimpel", "Brygge-vimpel i flaggstoff, 30x40 cm", "/images/products/vimpel.jpg", 350, 25, 10, nil},
+		{"T-skjorte", "Brygge-logo, 100% bomull", "/images/products/tskjorte-hvit.jpg", 299, 0, 20, []variantSeed{
+			{"S", "Hvit", "/images/products/tskjorte-hvit.jpg", 10},
+			{"M", "Hvit", "/images/products/tskjorte-hvit.jpg", 15},
+			{"L", "Hvit", "/images/products/tskjorte-hvit.jpg", 12},
+			{"XL", "Hvit", "/images/products/tskjorte-hvit.jpg", 8},
+			{"XXL", "Hvit", "/images/products/tskjorte-hvit.jpg", 5},
+			{"S", "Navy", "/images/products/tskjorte-navy.jpg", 8},
+			{"M", "Navy", "/images/products/tskjorte-navy.jpg", 12},
+			{"L", "Navy", "/images/products/tskjorte-navy.jpg", 10},
+			{"XL", "Navy", "/images/products/tskjorte-navy.jpg", 6},
+			{"XXL", "Navy", "/images/products/tskjorte-navy.jpg", 3},
 		}},
-		{"Caps", "Brygge-caps, one size fits all", 199, 0, 30, []variantSeed{
-			{"", "Navy", 20}, {"", "Hvit", 15}, {"", "Rød", 5},
+		{"Caps", "Brygge-caps, one size fits all", "/images/products/caps-navy.jpg", 199, 0, 30, []variantSeed{
+			{"", "Navy", "/images/products/caps-navy.jpg", 20},
+			{"", "Hvit", "/images/products/caps-hvit.jpg", 15},
+			{"", "Rød", "/images/products/caps-rod.jpg", 5},
 		}},
-		{"Seilerhanske", "Halvfinger, skinnhåndflate", 449, 0, 40, []variantSeed{
-			{"S", "", 5}, {"M", "", 8}, {"L", "", 10}, {"XL", "", 4},
+		{"Seilerhanske", "Halvfinger, skinnhåndflate", "/images/products/seilerhanske.jpg", 449, 0, 40, []variantSeed{
+			{"S", "", "", 5}, {"M", "", "", 8}, {"L", "", "", 10}, {"XL", "", "", 4},
 		}},
-		{"Drybag 10L", "Vanntett bag med Brygge-logo", 249, 20, 50, nil},
+		{"Drybag 10L", "Vanntett bag med Brygge-logo", "/images/products/drybag.jpg", 249, 20, 50, nil},
 	}
 	for _, p := range products {
 		var productID string
 		err = db.QueryRow(ctx, `
-			INSERT INTO products (club_id, name, description, price, stock, sort_order)
-			VALUES ($1, $2, $3, $4, $5, $6)
+			INSERT INTO products (club_id, name, description, price, image_url, stock, sort_order)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)
 			RETURNING id
-		`, clubID, p.name, p.description, p.price, p.stock, p.sortOrder).Scan(&productID)
+		`, clubID, p.name, p.description, p.price, p.imageURL, p.stock, p.sortOrder).Scan(&productID)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "failed to create product %s: %v\n", p.name, err)
 			continue
 		}
 		for i, v := range p.variants {
 			_, err = db.Exec(ctx, `
-				INSERT INTO product_variants (product_id, size, color, stock, sort_order)
-				VALUES ($1, $2, $3, $4, $5)
-				ON CONFLICT (product_id, size, color) DO UPDATE SET stock = EXCLUDED.stock
-			`, productID, v.size, v.color, v.stock, i)
+				INSERT INTO product_variants (product_id, size, color, stock, image_url, sort_order)
+				VALUES ($1, $2, $3, $4, $5, $6)
+				ON CONFLICT (product_id, size, color) DO UPDATE SET stock = EXCLUDED.stock, image_url = EXCLUDED.image_url
+			`, productID, v.size, v.color, v.stock, v.imageURL, i)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "  failed to create variant %s/%s for %s: %v\n", v.size, v.color, p.name, err)
 			}
