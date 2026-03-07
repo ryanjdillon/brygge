@@ -28,18 +28,71 @@ func NewProductsHandler(db *pgxpool.Pool, cfg *config.Config, log zerolog.Logger
 	}
 }
 
+type productVariant struct {
+	ID            string   `json:"id"`
+	Size          string   `json:"size"`
+	Color         string   `json:"color"`
+	Stock         int      `json:"stock"`
+	PriceOverride *float64 `json:"price_override"`
+	SortOrder     int      `json:"sort_order"`
+}
+
 type product struct {
-	ID          string    `json:"id"`
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	Price       float64   `json:"price"`
-	Currency    string    `json:"currency"`
-	ImageURL    string    `json:"image_url"`
-	Stock       int       `json:"stock"`
-	IsActive    bool      `json:"is_active"`
-	SortOrder   int       `json:"sort_order"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID          string           `json:"id"`
+	Name        string           `json:"name"`
+	Description string           `json:"description"`
+	Price       float64          `json:"price"`
+	Currency    string           `json:"currency"`
+	ImageURL    string           `json:"image_url"`
+	Stock       int              `json:"stock"`
+	IsActive    bool             `json:"is_active"`
+	SortOrder   int              `json:"sort_order"`
+	Variants    []productVariant `json:"variants"`
+	CreatedAt   time.Time        `json:"created_at"`
+	UpdatedAt   time.Time        `json:"updated_at"`
+}
+
+func (h *ProductsHandler) loadVariantsForProducts(r *http.Request, products []product) []product {
+	ids := make([]string, len(products))
+	for i, p := range products {
+		ids[i] = p.ID
+	}
+
+	rows, err := h.db.Query(r.Context(),
+		`SELECT id, product_id, size, color, stock, price_override, sort_order
+		 FROM product_variants
+		 WHERE product_id = ANY($1)
+		 ORDER BY sort_order, size, color`,
+		ids,
+	)
+	if err != nil {
+		h.log.Warn().Err(err).Msg("failed to query variants, returning products without variants")
+		for i := range products {
+			products[i].Variants = []productVariant{}
+		}
+		return products
+	}
+	defer rows.Close()
+
+	variantMap := make(map[string][]productVariant)
+	for rows.Next() {
+		var v productVariant
+		var productID string
+		if err := rows.Scan(&v.ID, &productID, &v.Size, &v.Color, &v.Stock, &v.PriceOverride, &v.SortOrder); err != nil {
+			h.log.Warn().Err(err).Msg("failed to scan variant row")
+			continue
+		}
+		variantMap[productID] = append(variantMap[productID], v)
+	}
+
+	for i := range products {
+		if variants, ok := variantMap[products[i].ID]; ok {
+			products[i].Variants = variants
+		} else {
+			products[i].Variants = []productVariant{}
+		}
+	}
+	return products
 }
 
 func (h *ProductsHandler) HandleListPublic(w http.ResponseWriter, r *http.Request) {
@@ -67,6 +120,8 @@ func (h *ProductsHandler) HandleListPublic(w http.ResponseWriter, r *http.Reques
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+
+	products = h.loadVariantsForProducts(r, products)
 
 	JSON(w, http.StatusOK, map[string]any{"products": products})
 }
@@ -100,6 +155,8 @@ func (h *ProductsHandler) HandleListAdmin(w http.ResponseWriter, r *http.Request
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+
+	products = h.loadVariantsForProducts(r, products)
 
 	JSON(w, http.StatusOK, map[string]any{"products": products})
 }
@@ -152,6 +209,7 @@ func (h *ProductsHandler) HandleCreate(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	p.Variants = []productVariant{}
 
 	JSON(w, http.StatusCreated, p)
 }
@@ -199,6 +257,7 @@ func (h *ProductsHandler) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	p.Variants = []productVariant{}
 
 	JSON(w, http.StatusOK, p)
 }
@@ -224,6 +283,87 @@ func (h *ProductsHandler) HandleDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	if tag.RowsAffected() == 0 {
 		Error(w, http.StatusNotFound, "product not found")
+		return
+	}
+
+	JSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+type variantRequest struct {
+	Size          string   `json:"size"`
+	Color         string   `json:"color"`
+	Stock         int      `json:"stock"`
+	PriceOverride *float64 `json:"price_override"`
+	SortOrder     int      `json:"sort_order"`
+}
+
+func (h *ProductsHandler) HandleCreateVariant(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	productID := chi.URLParam(r, "productID")
+
+	// Verify product belongs to club
+	var exists bool
+	_ = h.db.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM products WHERE id = $1 AND club_id = $2)`,
+		productID, claims.ClubID,
+	).Scan(&exists)
+	if !exists {
+		Error(w, http.StatusNotFound, "product not found")
+		return
+	}
+
+	var req variantRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	var v productVariant
+	err := h.db.QueryRow(ctx,
+		`INSERT INTO product_variants (product_id, size, color, stock, price_override, sort_order)
+		 VALUES ($1, $2, $3, $4, $5, $6)
+		 ON CONFLICT (product_id, size, color) DO UPDATE SET stock = EXCLUDED.stock, price_override = EXCLUDED.price_override, sort_order = EXCLUDED.sort_order
+		 RETURNING id, size, color, stock, price_override, sort_order`,
+		productID, req.Size, req.Color, req.Stock, req.PriceOverride, req.SortOrder,
+	).Scan(&v.ID, &v.Size, &v.Color, &v.Stock, &v.PriceOverride, &v.SortOrder)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to create variant")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	JSON(w, http.StatusCreated, v)
+}
+
+func (h *ProductsHandler) HandleDeleteVariant(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	variantID := chi.URLParam(r, "variantID")
+
+	tag, err := h.db.Exec(ctx,
+		`DELETE FROM product_variants
+		 WHERE id = $1
+		   AND product_id IN (SELECT id FROM products WHERE club_id = $2)`,
+		variantID, claims.ClubID,
+	)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to delete variant")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if tag.RowsAffected() == 0 {
+		Error(w, http.StatusNotFound, "variant not found")
 		return
 	}
 

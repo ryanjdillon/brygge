@@ -378,6 +378,8 @@ func main() {
 				r.Post("/", productsHandler.HandleCreate)
 				r.Put("/{productID}", productsHandler.HandleUpdate)
 				r.Delete("/{productID}", productsHandler.HandleDelete)
+				r.Post("/{productID}/variants", productsHandler.HandleCreateVariant)
+				r.Delete("/variants/{variantID}", productsHandler.HandleDeleteVariant)
 			})
 
 			r.Route("/documents", func(r chi.Router) {
