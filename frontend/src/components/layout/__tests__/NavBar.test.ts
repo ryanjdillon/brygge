@@ -7,7 +7,9 @@ vi.mock('lucide-vue-next', () => ({
   Menu: { template: '<span data-icon="menu" />' },
   X: { template: '<span data-icon="x" />' },
   LogIn: { template: '<span data-icon="login" />' },
+  LogOut: { template: '<span data-icon="logout" />' },
   User: { template: '<span data-icon="user" />' },
+  Shield: { template: '<span data-icon="shield" />' },
 }))
 
 describe('NavBar', () => {
