@@ -16,6 +16,7 @@ import {
   ShoppingBag,
   FolderKanban,
   Ship,
+  HardHat,
   Menu,
   X,
 } from 'lucide-vue-next'
@@ -54,6 +55,7 @@ const navGroups = computed<NavGroup[]>(() => {
         { to: '/admin/boats', icon: Ship, label: t('admin.sidebar.boats'), roles: ['styre', 'harbour_master', 'admin'] },
         { to: '/admin/bookings', icon: CalendarCheck, label: t('admin.sidebar.bookings'), roles: ['styre', 'harbour_master', 'admin'] },
         { to: '/admin/projects', icon: FolderKanban, label: t('admin.sidebar.projects') },
+        { to: '/admin/dugnad', icon: HardHat, label: t('dugnad.title') },
       ],
     },
     {

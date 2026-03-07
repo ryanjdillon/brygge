@@ -9,8 +9,10 @@ import {
   useUpdateTask,
   useDeleteTask,
   type Task,
+  type MaterialItem,
 } from '@/composables/useProjects'
-import { ArrowLeft, ArrowRight, Plus, X, Trash2, Pencil } from 'lucide-vue-next'
+import { useJoinTask, useLeaveTask } from '@/composables/useDugnad'
+import { ArrowLeft, ArrowRight, Plus, X, Trash2, Users, Clock, Package } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -22,6 +24,8 @@ const { data: tasks, isLoading, isError } = useProjectTasks(() => projectId.valu
 const createTask = useCreateTask(() => projectId.value)
 const updateTask = useUpdateTask()
 const deleteTask = useDeleteTask()
+const joinTask = useJoinTask()
+const leaveTask = useLeaveTask()
 
 const toast = ref<{ type: 'success' | 'error'; message: string } | null>(null)
 const showCreateModal = ref(false)
@@ -34,12 +38,17 @@ const newDescription = ref('')
 const newPriority = ref('medium')
 const newAssigneeId = ref('')
 const newDueDate = ref('')
+const newEstimatedHours = ref<string>('')
+const newMaxCollaborators = ref('5')
 
 const editTitle = ref('')
 const editDescription = ref('')
 const editPriority = ref('')
 const editAssigneeId = ref('')
 const editDueDate = ref('')
+const editEstimatedHours = ref<string>('')
+const editMaxCollaborators = ref('5')
+const editMaterials = ref<MaterialItem[]>([])
 
 function showToast(type: 'success' | 'error', message: string) {
   toast.value = { type, message }
@@ -73,6 +82,8 @@ function openCreateModal(status: 'todo' | 'in_progress' | 'done') {
   newPriority.value = 'medium'
   newAssigneeId.value = ''
   newDueDate.value = ''
+  newEstimatedHours.value = ''
+  newMaxCollaborators.value = '5'
   showCreateModal.value = true
 }
 
@@ -85,6 +96,8 @@ function handleCreate() {
       priority: newPriority.value,
       assignee_id: newAssigneeId.value || undefined,
       due_date: newDueDate.value || undefined,
+      estimated_hours: newEstimatedHours.value ? Number(newEstimatedHours.value) : undefined,
+      max_collaborators: newMaxCollaborators.value ? Number(newMaxCollaborators.value) : undefined,
     },
     {
       onSuccess: (task) => {
@@ -111,7 +124,24 @@ function openDetail(task: Task) {
   editPriority.value = task.priority
   editAssigneeId.value = task.assignee_id ?? ''
   editDueDate.value = task.due_date ?? ''
+  editEstimatedHours.value = task.estimated_hours != null ? String(task.estimated_hours) : ''
+  editMaxCollaborators.value = String(task.max_collaborators)
+  editMaterials.value = task.materials ? [...task.materials] : []
   showDetailModal.value = true
+}
+
+function handleJoinTask(taskId: string) {
+  joinTask.mutate(taskId, {
+    onSuccess: () => showToast('success', t('dugnad.joined')),
+    onError: () => showToast('error', t('dugnad.joinError')),
+  })
+}
+
+function handleLeaveTask(taskId: string) {
+  leaveTask.mutate(taskId, {
+    onSuccess: () => showToast('success', t('dugnad.left')),
+    onError: () => showToast('error', t('dugnad.leaveError')),
+  })
 }
 
 function handleSaveDetail() {
@@ -125,6 +155,9 @@ function handleSaveDetail() {
         priority: editPriority.value,
         assignee_id: editAssigneeId.value || '',
         due_date: editDueDate.value || '',
+        estimated_hours: editEstimatedHours.value ? Number(editEstimatedHours.value) : undefined,
+        max_collaborators: editMaxCollaborators.value ? Number(editMaxCollaborators.value) : undefined,
+        materials: editMaterials.value.length ? editMaterials.value : undefined,
       },
     },
     {
@@ -222,10 +255,19 @@ function moveTask(task: Task, direction: 'prev' | 'next') {
                 {{ t(`projects.priority${task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}`) }}
               </span>
             </div>
-            <div v-if="task.due_date" class="mt-1.5 text-xs text-gray-500">
-              {{ task.due_date }}
+            <div class="mt-1.5 flex flex-wrap gap-2 text-xs text-gray-500">
+              <span v-if="task.due_date">{{ task.due_date }}</span>
+              <span v-if="task.estimated_hours != null" class="flex items-center gap-0.5">
+                <Clock class="h-3 w-3" /> {{ task.estimated_hours }}t
+              </span>
+              <span class="flex items-center gap-0.5">
+                <Users class="h-3 w-3" /> {{ task.participant_count }}/{{ task.max_collaborators }}
+              </span>
+              <span v-if="task.materials?.length" class="flex items-center gap-0.5">
+                <Package class="h-3 w-3" /> {{ task.materials.length }}
+              </span>
             </div>
-            <div class="mt-2 flex gap-1">
+            <div class="mt-2 flex items-center gap-1">
               <button
                 v-if="statusOrder.indexOf(task.status) > 0"
                 class="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
@@ -241,6 +283,13 @@ function moveTask(task: Task, direction: 'prev' | 'next') {
                 @click.stop="moveTask(task, 'next')"
               >
                 <ArrowRight class="h-3.5 w-3.5" />
+              </button>
+              <button
+                v-if="task.participant_count < task.max_collaborators && task.status !== 'done'"
+                class="ml-auto rounded bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 hover:bg-green-100"
+                @click.stop="handleJoinTask(task.id)"
+              >
+                {{ t('dugnad.join') }}
               </button>
             </div>
           </div>
@@ -300,6 +349,27 @@ function moveTask(task: Task, direction: 'prev' | 'next') {
               <input
                 v-model="newDueDate"
                 type="date"
+                class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700">{{ t('dugnad.estimatedHours') }}</label>
+              <input
+                v-model="newEstimatedHours"
+                type="number"
+                min="0"
+                step="0.5"
+                class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700">{{ t('dugnad.maxParticipants') }}</label>
+              <input
+                v-model="newMaxCollaborators"
+                type="number"
+                min="1"
                 class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
@@ -383,6 +453,47 @@ function moveTask(task: Task, direction: 'prev' | 'next') {
                 class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700">{{ t('dugnad.estimatedHours') }}</label>
+              <input
+                v-model="editEstimatedHours"
+                type="number"
+                min="0"
+                step="0.5"
+                class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700">{{ t('dugnad.maxParticipants') }}</label>
+              <input
+                v-model="editMaxCollaborators"
+                type="number"
+                min="1"
+                class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+          <div v-if="selectedTask && selectedTask.status !== 'done'" class="flex gap-2">
+            <button
+              type="button"
+              class="rounded-md bg-green-50 px-3 py-1.5 text-sm font-medium text-green-700 hover:bg-green-100"
+              @click="handleJoinTask(selectedTask!.id)"
+            >
+              {{ t('dugnad.join') }}
+            </button>
+            <button
+              type="button"
+              class="rounded-md bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100"
+              @click="handleLeaveTask(selectedTask!.id)"
+            >
+              {{ t('dugnad.leave') }}
+            </button>
+            <span class="ml-auto flex items-center gap-1 text-sm text-gray-500">
+              <Users class="h-4 w-4" />
+              {{ selectedTask.participant_count }}/{{ selectedTask.max_collaborators }}
+            </span>
           </div>
           <div class="flex justify-end gap-3">
             <button

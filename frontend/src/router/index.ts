@@ -96,6 +96,11 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/portal/BookingsView.vue'),
       },
       {
+        path: 'dugnad',
+        name: 'portal-dugnad',
+        component: () => import('@/views/portal/DugnadView.vue'),
+      },
+      {
         path: 'feature-requests',
         name: 'portal-feature-requests',
         component: () => import('@/views/portal/FeatureRequestsView.vue'),
@@ -202,6 +207,11 @@ const routes: RouteRecordRaw[] = [
         path: 'boats',
         name: 'admin-boats',
         component: () => import('@/views/admin/BoatsAdminView.vue'),
+      },
+      {
+        path: 'dugnad',
+        name: 'admin-dugnad',
+        component: () => import('@/views/admin/DugnadAdminView.vue'),
       },
     ],
   },
