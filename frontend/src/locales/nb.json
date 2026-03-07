@@ -316,9 +316,10 @@
       "bookings": "Bestillinger",
       "documents": "Dokumenter",
       "pricing": "Priser",
+      "products": "Produkter",
       "communication": "Kommunikasjon",
       "projects": "Prosjekter",
-      "financials": "\u00d8konomi"
+      "financials": "Regnskap"
     },
     "financials": {
       "title": "\u00d8konomi",

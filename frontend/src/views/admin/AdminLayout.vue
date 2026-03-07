@@ -32,25 +32,54 @@ interface NavItem {
   roles?: string[]
 }
 
-const navItems = computed<NavItem[]>(() => {
-  const items: NavItem[] = [
-    { to: '/admin/users', icon: Users, label: t('admin.sidebar.users') },
-    { to: '/admin/slips', icon: Anchor, label: t('admin.sidebar.slips'), roles: ['styre', 'harbour_master', 'admin'] },
-    { to: '/admin/waiting-list', icon: ListOrdered, label: t('admin.sidebar.waitingList'), roles: ['styre', 'admin'] },
-    { to: '/admin/events', icon: CalendarDays, label: t('admin.sidebar.events') },
-    { to: '/admin/bookings', icon: CalendarCheck, label: t('admin.sidebar.bookings'), roles: ['styre', 'harbour_master', 'admin'] },
-    { to: '/admin/documents', icon: FileText, label: t('admin.sidebar.documents') },
-    { to: '/admin/pricing', icon: DollarSign, label: t('admin.sidebar.pricing'), roles: ['admin', 'treasurer'] },
-    { to: '/admin/products', icon: ShoppingBag, label: 'Produkter', roles: ['styre', 'admin'] },
-    { to: '/admin/financials', icon: Banknote, label: t('admin.sidebar.financials'), roles: ['treasurer', 'styre', 'admin'] },
-    { to: '/admin/projects', icon: FolderKanban, label: t('admin.sidebar.projects') },
-    { to: '/admin/communication', icon: Megaphone, label: t('admin.sidebar.communication') },
+interface NavGroup {
+  title?: string
+  items: NavItem[]
+}
+
+const navGroups = computed<NavGroup[]>(() => {
+  const groups: NavGroup[] = [
+    {
+      items: [
+        { to: '/admin/events', icon: CalendarDays, label: t('admin.sidebar.events') },
+        { to: '/admin/users', icon: Users, label: t('admin.sidebar.users') },
+        { to: '/admin/waiting-list', icon: ListOrdered, label: t('admin.sidebar.waitingList'), roles: ['styre', 'admin'] },
+      ],
+    },
+    {
+      title: 'Havn',
+      items: [
+        { to: '/admin/slips', icon: Anchor, label: t('admin.sidebar.slips'), roles: ['styre', 'harbour_master', 'admin'] },
+        { to: '/admin/bookings', icon: CalendarCheck, label: t('admin.sidebar.bookings'), roles: ['styre', 'harbour_master', 'admin'] },
+        { to: '/admin/projects', icon: FolderKanban, label: t('admin.sidebar.projects') },
+      ],
+    },
+    {
+      title: 'Økonomi',
+      items: [
+        { to: '/admin/pricing', icon: DollarSign, label: t('admin.sidebar.pricing'), roles: ['admin', 'treasurer'] },
+        { to: '/admin/products', icon: ShoppingBag, label: t('admin.sidebar.products'), roles: ['styre', 'admin'] },
+        { to: '/admin/financials', icon: Banknote, label: t('admin.sidebar.financials'), roles: ['treasurer', 'styre', 'admin'] },
+      ],
+    },
+    {
+      title: 'Arkiv og info',
+      items: [
+        { to: '/admin/documents', icon: FileText, label: t('admin.sidebar.documents') },
+        { to: '/admin/communication', icon: Megaphone, label: t('admin.sidebar.communication') },
+      ],
+    },
   ]
 
-  return items.filter((item) => {
-    if (!item.roles) return true
-    return item.roles.some((role) => auth.hasRole(role))
-  })
+  return groups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => {
+        if (!item.roles) return true
+        return item.roles.some((role) => auth.hasRole(role))
+      }),
+    }))
+    .filter((group) => group.items.length > 0)
 })
 
 function isActive(to: string): boolean {
@@ -83,25 +112,35 @@ function closeSidebar() {
         </button>
       </div>
 
-      <nav class="space-y-1 px-3 py-4">
-        <RouterLink
-          v-for="item in navItems"
-          :key="item.to"
-          :to="item.to"
-          :class="[
-            'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition',
-            isActive(item.to)
-              ? 'bg-blue-50 text-blue-700'
-              : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900',
-          ]"
-          @click="closeSidebar"
-        >
-          <component
-            :is="item.icon"
-            :class="['h-5 w-5', isActive(item.to) ? 'text-blue-600' : 'text-gray-400']"
-          />
-          {{ item.label }}
-        </RouterLink>
+      <nav class="px-3 py-4">
+        <div v-for="(group, gi) in navGroups" :key="gi" :class="gi > 0 ? 'mt-4' : ''">
+          <div
+            v-if="group.title"
+            class="mb-1 px-3 text-xs font-semibold uppercase tracking-wider text-gray-400"
+          >
+            {{ group.title }}
+          </div>
+          <div class="space-y-0.5">
+            <RouterLink
+              v-for="item in group.items"
+              :key="item.to"
+              :to="item.to"
+              :class="[
+                'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition',
+                isActive(item.to)
+                  ? 'bg-blue-50 text-blue-700'
+                  : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900',
+              ]"
+              @click="closeSidebar"
+            >
+              <component
+                :is="item.icon"
+                :class="['h-5 w-5', isActive(item.to) ? 'text-blue-600' : 'text-gray-400']"
+              />
+              {{ item.label }}
+            </RouterLink>
+          </div>
+        </div>
       </nav>
     </aside>
 
