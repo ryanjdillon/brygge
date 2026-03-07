@@ -98,6 +98,8 @@ var authPageTmpl = template.Must(template.New("auth").Parse(`<!DOCTYPE html>
   <p>Velg testbruker for innlogging</p>
   <div class="buttons">
     <a class="admin" href="{{.RedirectURI}}?code=admin&state={{.State}}">Admin bruker</a>
+    <a class="member" href="{{.RedirectURI}}?code=slip-member&state={{.State}}">Medlem med plass (Kari)</a>
+    <a class="member" href="{{.RedirectURI}}?code=wl-member&state={{.State}}">Medlem på venteliste (Per)</a>
     <a class="member" href="{{.RedirectURI}}?code=member&state={{.State}}">Vanlig medlem</a>
   </div>
 </body>
@@ -132,9 +134,9 @@ func handleToken(w http.ResponseWriter, r *http.Request) {
 var testUsers = map[string]map[string]any{
 	"admin": {
 		"sub":          "vipps-admin-001",
-		"name":         "Admin Testbruker",
+		"name":         "Admin Bruker",
 		"email":        "admin@brygge.local",
-		"phone_number": "+4799999999",
+		"phone_number": "+4712345678",
 		"address": map[string]string{
 			"street_address": "Havnegata 1",
 			"postal_code":    "0150",
@@ -142,11 +144,35 @@ var testUsers = map[string]map[string]any{
 			"country":        "NO",
 		},
 	},
+	"slip-member": {
+		"sub":          "vipps-slip-001",
+		"name":         "Kari Sjømann",
+		"email":        "slip-member@brygge.local",
+		"phone_number": "+4711111111",
+		"address": map[string]string{
+			"street_address": "Molovegen 3",
+			"postal_code":    "0150",
+			"region":         "Oslo",
+			"country":        "NO",
+		},
+	},
+	"wl-member": {
+		"sub":          "vipps-wl-001",
+		"name":         "Per Venansen",
+		"email":        "wl-member@brygge.local",
+		"phone_number": "+4722222222",
+		"address": map[string]string{
+			"street_address": "Strandveien 7",
+			"postal_code":    "0150",
+			"region":         "Oslo",
+			"country":        "NO",
+		},
+	},
 	"member": {
 		"sub":          "vipps-member-001",
-		"name":         "Medlem Testbruker",
+		"name":         "Medlem Hansen",
 		"email":        "member@brygge.local",
-		"phone_number": "+4788888888",
+		"phone_number": "+4798765432",
 		"address": map[string]string{
 			"street_address": "Sjøgata 5",
 			"postal_code":    "0151",
