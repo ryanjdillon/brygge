@@ -94,6 +94,8 @@ func main() {
 	productsHandler := handlers.NewProductsHandler(db, &cfg, log)
 	ordersHandler := handlers.NewOrdersHandler(db, &cfg, log)
 	boatModelsHandler := handlers.NewBoatModelsHandler(db, log)
+	dugnadHandler := handlers.NewDugnadHandler(db, &cfg, log)
+	shoppingListsHandler := handlers.NewShoppingListsHandler(db, &cfg, log)
 
 	r := chi.NewRouter()
 
@@ -212,6 +214,7 @@ func main() {
 			r.Delete("/me/boats/{boatID}", membersHandler.HandleDeleteBoat)
 			r.Get("/me/slip", membersHandler.HandleGetMySlip)
 			r.Post("/me/slip/issues", membersHandler.HandleReportIssue)
+			r.Get("/me/dugnad-hours", dugnadHandler.HandleGetMyDugnadHours)
 			r.Get("/directory", membersHandler.HandleGetDirectory)
 		})
 
@@ -230,19 +233,46 @@ func main() {
 
 		r.Route("/projects", func(r chi.Router) {
 			r.Use(middleware.Authenticate(jwtService))
-			r.Use(middleware.RequireRole("styre"))
+
 			r.Get("/", projectsHandler.HandleListProjects)
-			r.Post("/", projectsHandler.HandleCreateProject)
 			r.Get("/{projectID}", projectsHandler.HandleGetProject)
 			r.Get("/{projectID}/tasks", projectsHandler.HandleListTasks)
-			r.Post("/{projectID}/tasks", projectsHandler.HandleCreateTask)
+
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.RequireRole("styre"))
+				r.Post("/", projectsHandler.HandleCreateProject)
+				r.Post("/{projectID}/tasks", projectsHandler.HandleCreateTask)
+			})
 		})
 
 		r.Route("/tasks", func(r chi.Router) {
 			r.Use(middleware.Authenticate(jwtService))
-			r.Use(middleware.RequireRole("styre"))
-			r.Put("/{taskID}", projectsHandler.HandleUpdateTask)
-			r.Delete("/{taskID}", projectsHandler.HandleDeleteTask)
+
+			r.Post("/{taskID}/join", dugnadHandler.HandleJoinTask)
+			r.Delete("/{taskID}/leave", dugnadHandler.HandleLeaveTask)
+			r.Get("/{taskID}/participants", dugnadHandler.HandleListTaskParticipants)
+
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.RequireRole("styre"))
+				r.Put("/{taskID}", projectsHandler.HandleUpdateTask)
+				r.Delete("/{taskID}", projectsHandler.HandleDeleteTask)
+				r.Put("/{taskID}/assign", dugnadHandler.HandleAssignTask)
+				r.Put("/{taskID}/hours", dugnadHandler.HandleAdjustHours)
+			})
+		})
+
+		r.Route("/shopping-lists", func(r chi.Router) {
+			r.Use(middleware.Authenticate(jwtService))
+			r.Get("/", shoppingListsHandler.HandleListShoppingLists)
+			r.Post("/", shoppingListsHandler.HandleCreateShoppingList)
+			r.Get("/{listID}", shoppingListsHandler.HandleGetShoppingList)
+			r.Put("/{listID}", shoppingListsHandler.HandleUpdateShoppingList)
+			r.Delete("/{listID}", shoppingListsHandler.HandleDeleteShoppingList)
+			r.Get("/{listID}/items", shoppingListsHandler.HandleListItems)
+			r.Post("/{listID}/items", shoppingListsHandler.HandleAddItem)
+			r.Post("/{listID}/from-tasks", shoppingListsHandler.HandlePopulateFromTasks)
+			r.Put("/items/{itemID}/toggle", shoppingListsHandler.HandleToggleItem)
+			r.Delete("/items/{itemID}", shoppingListsHandler.HandleDeleteItem)
 		})
 
 		r.Route("/feature-requests", func(r chi.Router) {
@@ -261,6 +291,15 @@ func main() {
 
 		r.Route("/admin", func(r chi.Router) {
 			r.Use(middleware.Authenticate(jwtService))
+
+			r.Route("/dugnad", func(r chi.Router) {
+				r.Use(middleware.RequireRole("styre"))
+				r.Get("/hours", dugnadHandler.HandleListAllDugnadHours)
+				r.Put("/settings/hours", dugnadHandler.HandleSetRequiredHours)
+				r.Post("/events/{eventID}/projects", dugnadHandler.HandleLinkProjectEvent)
+				r.Delete("/events/{eventID}/projects/{projectID}", dugnadHandler.HandleUnlinkProjectEvent)
+				r.Get("/events/{eventID}/projects", dugnadHandler.HandleGetEventProjects)
+			})
 
 			r.Route("/boats", func(r chi.Router) {
 				r.Use(middleware.RequireRole("styre", "harbour_master"))
