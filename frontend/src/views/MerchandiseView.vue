@@ -16,6 +16,7 @@ interface Variant {
   color: string
   stock: number
   price_override: number | null
+  image_url: string
   sort_order: number
 }
 
@@ -114,6 +115,17 @@ const effectivePrice = computed(() => {
   return variant?.price_override ?? selectedProduct.value.price
 })
 
+const modalImage = computed(() => {
+  if (!selectedProduct.value) return ''
+  if (selectedColor.value) {
+    const variantWithImage = selectedProduct.value.variants.find(
+      (v) => v.color === selectedColor.value && v.image_url,
+    )
+    if (variantWithImage) return variantWithImage.image_url
+  }
+  return selectedProduct.value.image_url
+})
+
 const totalStock = computed(() => {
   if (!selectedProduct.value) return 0
   if (!hasVariants.value) return selectedProduct.value.stock
@@ -198,8 +210,14 @@ function addToCart() {
         class="flex flex-col rounded-lg border border-gray-200 bg-white text-left transition hover:border-gray-300 hover:shadow-md"
         @click="openProduct(product)"
       >
-        <div class="flex h-48 items-center justify-center rounded-t-lg bg-gray-50 text-gray-300">
-          <ShoppingCart class="h-16 w-16" aria-hidden="true" />
+        <div class="flex h-48 items-center justify-center overflow-hidden rounded-t-lg bg-gray-50 text-gray-300">
+          <img
+            v-if="product.image_url"
+            :src="product.image_url"
+            :alt="product.name"
+            class="h-full w-full object-cover"
+          />
+          <ShoppingCart v-else class="h-16 w-16" aria-hidden="true" />
         </div>
         <div class="flex flex-1 flex-col p-5">
           <h3 class="text-lg font-semibold text-gray-900">{{ product.name }}</h3>
@@ -233,6 +251,16 @@ function addToCart() {
           >
             <X class="h-5 w-5" />
           </button>
+        </div>
+
+        <div class="flex items-center justify-center overflow-hidden bg-gray-50" :class="modalImage ? 'h-64' : 'h-32'">
+          <img
+            v-if="modalImage"
+            :src="modalImage"
+            :alt="selectedProduct.name"
+            class="h-full w-full object-contain"
+          />
+          <ShoppingCart v-else class="h-16 w-16 text-gray-300" aria-hidden="true" />
         </div>
 
         <div class="space-y-5 p-6">

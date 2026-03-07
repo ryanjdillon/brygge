@@ -23,10 +23,11 @@ vi.mock('@tanstack/vue-query', async () => {
     useQuery: () => ({
       data: ref({
         products: [
-          { id: '1', name: 'Klubbvimpel', description: 'Fin vimpel', price: 350, currency: 'NOK', image_url: '', stock: 25, variants: [] },
-          { id: '2', name: 'T-skjorte', description: 'Brygge-logo', price: 299, currency: 'NOK', image_url: '', stock: 0, variants: [
-            { id: 'v1', size: 'S', color: 'Hvit', stock: 10, price_override: null, sort_order: 0 },
-            { id: 'v2', size: 'M', color: 'Hvit', stock: 0, price_override: null, sort_order: 1 },
+          { id: '1', name: 'Klubbvimpel', description: 'Fin vimpel', price: 350, currency: 'NOK', image_url: '/images/products/vimpel.jpg', stock: 25, variants: [] },
+          { id: '2', name: 'T-skjorte', description: 'Brygge-logo', price: 299, currency: 'NOK', image_url: '/images/products/tskjorte-hvit.jpg', stock: 0, variants: [
+            { id: 'v1', size: 'S', color: 'Hvit', stock: 10, price_override: null, image_url: '/images/products/tskjorte-hvit.jpg', sort_order: 0 },
+            { id: 'v2', size: 'M', color: 'Hvit', stock: 0, price_override: null, image_url: '/images/products/tskjorte-hvit.jpg', sort_order: 1 },
+            { id: 'v3', size: 'S', color: 'Navy', stock: 8, price_override: null, image_url: '/images/products/tskjorte-navy.jpg', sort_order: 2 },
           ] },
         ],
       }),
@@ -111,5 +112,35 @@ describe('MerchandiseView', () => {
     const dialog = wrapper.find('[role="dialog"]')
     const addBtn = dialog.findAll('button').find((b) => b.text().includes('Legg i handlekurv'))
     expect(addBtn!.attributes('disabled')).toBeDefined()
+  })
+
+  it('shows product image on card when image_url is set', () => {
+    const wrapper = mountWithPlugins(MerchandiseView)
+    const images = wrapper.findAll('img').filter((img) => img.attributes('alt') === 'Klubbvimpel')
+    expect(images.length).toBe(1)
+    expect(images[0].attributes('src')).toBe('/images/products/vimpel.jpg')
+  })
+
+  it('shows product image in modal', async () => {
+    const wrapper = mountWithPlugins(MerchandiseView)
+    const card = wrapper.findAll('button').find((b) => b.text().includes('T-skjorte'))
+    await card!.trigger('click')
+    const dialog = wrapper.find('[role="dialog"]')
+    const img = dialog.find('img')
+    expect(img.exists()).toBe(true)
+    expect(img.attributes('src')).toBe('/images/products/tskjorte-hvit.jpg')
+  })
+
+  it('switches modal image when selecting a different color', async () => {
+    const wrapper = mountWithPlugins(MerchandiseView)
+    const card = wrapper.findAll('button').find((b) => b.text().includes('T-skjorte'))
+    await card!.trigger('click')
+    const dialog = wrapper.find('[role="dialog"]')
+    // Click Navy color button
+    const navyBtn = dialog.findAll('button').find((b) => b.text().trim() === 'Navy')
+    expect(navyBtn).toBeDefined()
+    await navyBtn!.trigger('click')
+    const img = dialog.find('img')
+    expect(img.attributes('src')).toBe('/images/products/tskjorte-navy.jpg')
   })
 })
