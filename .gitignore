@@ -40,5 +40,17 @@ deploy/traefik/acme.json
 # Testing
 coverage/
 frontend/coverage/
+backend/coverage.out
 playwright-report/
 test-results/
+
+# Build artifacts
+backend/seed
+backend/tmp/
+dev/vipps-mock/vipps-mock
+
+# Playwright MCP
+.playwright-mcp/
+
+# Claude Code
+.claude/
