@@ -1,6 +1,5 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { mountWithPlugins } from '@/test/test-utils'
-import { useAuthStore } from '@/stores/auth'
 import NavBar from '@/components/layout/NavBar.vue'
 
 vi.mock('lucide-vue-next', () => ({
@@ -10,6 +9,7 @@ vi.mock('lucide-vue-next', () => ({
   LogOut: { template: '<span data-icon="logout" />' },
   User: { template: '<span data-icon="user" />' },
   Shield: { template: '<span data-icon="shield" />' },
+  ChevronDown: { template: '<span data-icon="chevron-down" />' },
 }))
 
 describe('NavBar', () => {
@@ -18,22 +18,36 @@ describe('NavBar', () => {
     expect(wrapper.text()).toContain('Brygge')
   })
 
-  it('renders all public nav links', () => {
+  it('renders top-level nav links', () => {
     const wrapper = mountWithPlugins(NavBar)
     const expectedLinks = [
       'nav.home',
-      'nav.calendar',
+      'nav.harbour',
+      'nav.bobil',
       'nav.weather',
-      'nav.directions',
-      'nav.contact',
-      'nav.pricing',
       'nav.merchandise',
-      'nav.join',
+      'nav.contact',
     ]
 
     for (const label of expectedLinks) {
       expect(wrapper.text()).toContain(label)
     }
+  })
+
+  it('renders club dropdown trigger', () => {
+    const wrapper = mountWithPlugins(NavBar)
+    expect(wrapper.text()).toContain('nav.club')
+  })
+
+  it('shows club dropdown items on click', async () => {
+    const wrapper = mountWithPlugins(NavBar)
+    const dropdownBtn = wrapper.findAll('button').find((b) => b.text().includes('nav.club'))
+    await dropdownBtn!.trigger('click')
+
+    expect(wrapper.text()).toContain('nav.calendar')
+    expect(wrapper.text()).toContain('nav.pricing')
+    expect(wrapper.text()).toContain('nav.join')
+    expect(wrapper.text()).toContain('nav.history')
   })
 
   it('shows login button when unauthenticated', () => {
@@ -69,5 +83,16 @@ describe('NavBar', () => {
 
     await hamburger.trigger('click')
     expect(mobileMenu().exists()).toBe(false)
+  })
+
+  it('mobile menu shows club links under section header', async () => {
+    const wrapper = mountWithPlugins(NavBar)
+    const hamburger = wrapper.find('button.md\\:hidden')
+    await hamburger.trigger('click')
+
+    const mobileMenu = wrapper.find('.md\\:hidden.border-t')
+    expect(mobileMenu.text()).toContain('nav.club')
+    expect(mobileMenu.text()).toContain('nav.calendar')
+    expect(mobileMenu.text()).toContain('nav.history')
   })
 })

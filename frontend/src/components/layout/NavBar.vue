@@ -1,15 +1,17 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { ref, onMounted, onUnmounted } from 'vue'
+import { RouterLink, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
-import { useRouter } from 'vue-router'
-import { Menu, X, LogIn, LogOut, User, Shield } from 'lucide-vue-next'
+import { Menu, X, LogIn, LogOut, User, Shield, ChevronDown } from 'lucide-vue-next'
+import LanguageSwitcher from '@/components/layout/LanguageSwitcher.vue'
 
 const { t } = useI18n()
 const router = useRouter()
 const auth = useAuthStore()
 const mobileOpen = ref(false)
+const clubOpen = ref(false)
+const clubDropdownRef = ref<HTMLElement>()
 
 async function handleLogout() {
   await auth.logout()
@@ -18,14 +20,28 @@ async function handleLogout() {
 
 const navLinks = [
   { to: '/', label: 'nav.home' },
-  { to: '/calendar', label: 'nav.calendar' },
+  { to: '/harbour', label: 'nav.harbour' },
+  { to: '/bobil', label: 'nav.bobil' },
   { to: '/weather', label: 'nav.weather' },
-  { to: '/directions', label: 'nav.directions' },
-  { to: '/contact', label: 'nav.contact' },
-  { to: '/pricing', label: 'nav.pricing' },
   { to: '/merchandise', label: 'nav.merchandise' },
-  { to: '/join', label: 'nav.join' },
+  { to: '/contact', label: 'nav.contact' },
 ]
+
+const clubLinks = [
+  { to: '/calendar', label: 'nav.calendar' },
+  { to: '/pricing', label: 'nav.pricing' },
+  { to: '/join', label: 'nav.join' },
+  { to: '/history', label: 'nav.history' },
+]
+
+function handleClickOutside(event: MouseEvent) {
+  if (clubDropdownRef.value && !clubDropdownRef.value.contains(event.target as Node)) {
+    clubOpen.value = false
+  }
+}
+
+onMounted(() => document.addEventListener('click', handleClickOutside))
+onUnmounted(() => document.removeEventListener('click', handleClickOutside))
 </script>
 
 <template>
@@ -45,9 +61,39 @@ const navLinks = [
           >
             {{ t(link.label) }}
           </RouterLink>
+
+          <!-- Club dropdown -->
+          <div ref="clubDropdownRef" class="relative">
+            <button
+              class="flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-blue-900"
+              @click.stop="clubOpen = !clubOpen"
+            >
+              {{ t('nav.club') }}
+              <ChevronDown
+                class="h-3 w-3 transition-transform"
+                :class="{ 'rotate-180': clubOpen }"
+                aria-hidden="true"
+              />
+            </button>
+            <div
+              v-if="clubOpen"
+              class="absolute left-0 top-full z-50 mt-1 w-48 rounded-md bg-white py-1 shadow-lg ring-1 ring-black/5"
+            >
+              <RouterLink
+                v-for="link in clubLinks"
+                :key="link.to"
+                :to="link.to"
+                class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-blue-900"
+                @click="clubOpen = false"
+              >
+                {{ t(link.label) }}
+              </RouterLink>
+            </div>
+          </div>
         </div>
 
         <div class="hidden items-center gap-2 md:flex">
+          <LanguageSwitcher />
           <template v-if="auth.isAuthenticated">
             <RouterLink
               v-if="auth.hasRole('admin') || auth.hasRole('styre')"
@@ -110,6 +156,26 @@ const navLinks = [
         >
           {{ t(link.label) }}
         </RouterLink>
+
+        <div class="border-t border-gray-100 pt-1">
+          <span class="block px-3 py-1 text-xs font-semibold uppercase tracking-wider text-gray-400">
+            {{ t('nav.club') }}
+          </span>
+          <RouterLink
+            v-for="link in clubLinks"
+            :key="link.to"
+            :to="link.to"
+            class="block rounded-md px-3 py-2 text-base font-medium text-gray-700 hover:bg-gray-100"
+            @click="mobileOpen = false"
+          >
+            {{ t(link.label) }}
+          </RouterLink>
+        </div>
+
+        <div class="border-t border-gray-100 pt-2 px-3">
+          <LanguageSwitcher />
+        </div>
+
         <div class="border-t border-gray-200 pt-2">
           <template v-if="auth.isAuthenticated">
             <RouterLink
