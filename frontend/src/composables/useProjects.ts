@@ -15,6 +15,13 @@ export interface Project {
   done_count: number
 }
 
+export interface MaterialItem {
+  item: string
+  quantity: number | null
+  unit: string
+  est_cost: number | null
+}
+
 export interface Task {
   id: string
   project_id: string
@@ -28,6 +35,12 @@ export interface Task {
   created_by: string
   created_at: string
   updated_at: string
+  estimated_hours: number | null
+  actual_hours: number | null
+  ansvarlig_id: string | null
+  max_collaborators: number
+  materials: MaterialItem[]
+  participant_count: number
 }
 
 export interface GroupedTasks {
@@ -47,6 +60,9 @@ export interface CreateTaskInput {
   assignee_id?: string
   due_date?: string
   priority: string
+  estimated_hours?: number
+  max_collaborators?: number
+  materials?: MaterialItem[]
 }
 
 export interface UpdateTaskInput {
@@ -56,6 +72,9 @@ export interface UpdateTaskInput {
   status?: string
   priority?: string
   due_date?: string
+  estimated_hours?: number
+  max_collaborators?: number
+  materials?: MaterialItem[]
 }
 
 export function useProjects() {
