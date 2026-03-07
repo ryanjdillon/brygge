@@ -1,5 +1,6 @@
 import { computed } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
+import { useI18n } from 'vue-i18n'
 import { useApi } from '@/composables/useApi'
 
 export interface PriceItem {
@@ -23,32 +24,37 @@ export interface PricingCategory {
   items: PriceItem[]
 }
 
-const categoryLabels: Record<string, string> = {
-  moloandel: 'Moloandel',
-  slip_fee: 'Plassleie',
-  seasonal_rental: 'Sesongplass',
-  guest: 'Gjesteplasser',
-  bobil: 'Bobilparkering',
-  room_hire: 'Romutleie',
-  service: 'Tjenester',
-  other: 'Annet',
+const categoryKeys: Record<string, string> = {
+  moloandel: 'admin.pricing.categoryMoloandel',
+  slip_fee: 'admin.pricing.categorySlipFee',
+  seasonal_rental: 'admin.pricing.categorySeasonalRental',
+  guest: 'admin.pricing.categoryGuest',
+  bobil: 'admin.pricing.categoryBobil',
+  room_hire: 'admin.pricing.categoryRoomHire',
+  service: 'admin.pricing.categoryService',
+  other: 'admin.pricing.categoryOther',
 }
 
-const unitLabels: Record<string, string> = {
-  once: 'engangs',
-  year: '/år',
-  season: '/sesong',
-  day: '/døgn',
-  night: '/natt',
-  hour: '/time',
-}
-
-export function unitLabel(unit: string): string {
-  return unitLabels[unit] ?? `/${unit}`
+const unitKeys: Record<string, string> = {
+  once: 'admin.pricing.unitOnce',
+  year: 'admin.pricing.unitYear',
+  season: 'admin.pricing.unitSeason',
+  day: 'admin.pricing.unitDay',
+  night: 'admin.pricing.unitNight',
+  hour: 'admin.pricing.unitHour',
 }
 
 export function usePricing() {
   const { fetchApi } = useApi()
+  const { t } = useI18n()
+
+  function categoryLabel(key: string): string {
+    return categoryKeys[key] ? t(categoryKeys[key]) : key
+  }
+
+  function unitLabel(unit: string): string {
+    return unitKeys[unit] ? t(unitKeys[unit]) : `/${unit}`
+  }
 
   const query = useQuery({
     queryKey: ['pricing'],
@@ -67,10 +73,10 @@ export function usePricing() {
     }
     return Array.from(grouped.entries()).map(([key, items]) => ({
       key,
-      label: categoryLabels[key] ?? key,
+      label: categoryLabel(key),
       items,
     }))
   })
 
-  return { ...query, items, categories }
+  return { ...query, items, categories, unitLabel }
 }
