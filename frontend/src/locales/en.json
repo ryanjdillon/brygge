@@ -66,7 +66,14 @@
     "filterSocial": "Social",
     "filterAgm": "AGM",
     "proposeEvent": "Propose event",
-    "proposeDescription": "Suggest an event for the club. The board will review your proposal."
+    "proposeDescription": "Suggest an event for the club. The board will review your proposal.",
+    "weekdayMon": "Mo",
+    "weekdayTue": "Tu",
+    "weekdayWed": "We",
+    "weekdayThu": "Th",
+    "weekdayFri": "Fr",
+    "weekdaySat": "Sa",
+    "weekdaySun": "Su"
   },
   "weather": {
     "title": "Harbour Weather",
@@ -78,7 +85,15 @@
     "humidity": "Humidity",
     "loading": "Fetching weather data...",
     "error": "Could not fetch weather data",
-    "attribution": "Data from Yr.no (Meteorologisk institutt)"
+    "attribution": "Data from Yr.no (Meteorologisk institutt)",
+    "dirN": "N",
+    "dirNE": "NE",
+    "dirE": "E",
+    "dirSE": "SE",
+    "dirS": "S",
+    "dirSW": "SW",
+    "dirW": "W",
+    "dirNW": "NW"
   },
   "directions": {
     "title": "Directions",
@@ -125,7 +140,9 @@
     "perYear": "/year",
     "perNight": "/night",
     "perDay": "/day",
-    "noPricing": "No pricing has been added yet"
+    "noPricing": "No pricing has been added yet",
+    "period": "Period",
+    "installments": "Can be split into up to {max} installments"
   },
   "join": {
     "title": "Join the club",
@@ -225,6 +242,9 @@
     "password": "Password",
     "submit": "Log in",
     "submitting": "Logging in...",
+    "vipps": "Log in with Vipps",
+    "or": "or",
+    "otherMethods": "Other login methods",
     "noAccount": "Don't have an account?",
     "joinLink": "Join the club",
     "forgotPassword": "Forgot password?"

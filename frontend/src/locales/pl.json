@@ -66,7 +66,14 @@
     "filterSocial": "Towarzyskie",
     "filterAgm": "Walne zgromadzenie",
     "proposeEvent": "Zaproponuj wydarzenie",
-    "proposeDescription": "Zaproponuj wydarzenie dla klubu. Zarząd rozpatrzy Twoją propozycję."
+    "proposeDescription": "Zaproponuj wydarzenie dla klubu. Zarząd rozpatrzy Twoją propozycję.",
+    "weekdayMon": "Pn",
+    "weekdayTue": "Wt",
+    "weekdayWed": "Śr",
+    "weekdayThu": "Cz",
+    "weekdayFri": "Pt",
+    "weekdaySat": "So",
+    "weekdaySun": "Nd"
   },
   "weather": {
     "title": "Pogoda w porcie",
@@ -78,7 +85,15 @@
     "humidity": "Wilgotność",
     "loading": "Pobieranie danych pogodowych...",
     "error": "Nie udało się pobrać danych pogodowych",
-    "attribution": "Dane z Yr.no (Meteorologisk institutt)"
+    "attribution": "Dane z Yr.no (Meteorologisk institutt)",
+    "dirN": "N",
+    "dirNE": "NE",
+    "dirE": "E",
+    "dirSE": "SE",
+    "dirS": "S",
+    "dirSW": "SW",
+    "dirW": "W",
+    "dirNW": "NW"
   },
   "directions": {
     "title": "Dojazd",
@@ -125,7 +140,9 @@
     "perYear": "/rok",
     "perNight": "/noc",
     "perDay": "/dzień",
-    "noPricing": "Nie dodano jeszcze cennika"
+    "noPricing": "Nie dodano jeszcze cennika",
+    "period": "Okres",
+    "installments": "Można podzielić na maksymalnie {max} rat"
   },
   "join": {
     "title": "Dołącz do klubu",
@@ -199,7 +216,10 @@
     "submitting": "Logowanie...",
     "noAccount": "Nie masz konta?",
     "joinLink": "Dołącz do klubu",
-    "forgotPassword": "Zapomniałeś hasła?"
+    "forgotPassword": "Zapomniałeś hasła?",
+    "vipps": "Zaloguj się przez Vipps",
+    "or": "lub",
+    "otherMethods": "Inne metody logowania"
   },
   "merchandise": {
     "title": "Sklep",

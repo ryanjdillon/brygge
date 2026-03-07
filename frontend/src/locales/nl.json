@@ -66,7 +66,14 @@
     "filterSocial": "Sociaal",
     "filterAgm": "ALV",
     "proposeEvent": "Evenement voorstellen",
-    "proposeDescription": "Stel een evenement voor aan de club. Het bestuur beoordeelt uw voorstel."
+    "proposeDescription": "Stel een evenement voor aan de club. Het bestuur beoordeelt uw voorstel.",
+    "weekdayMon": "Ma",
+    "weekdayTue": "Di",
+    "weekdayWed": "Wo",
+    "weekdayThu": "Do",
+    "weekdayFri": "Vr",
+    "weekdaySat": "Za",
+    "weekdaySun": "Zo"
   },
   "weather": {
     "title": "Havenweer",
@@ -78,7 +85,15 @@
     "humidity": "Luchtvochtigheid",
     "loading": "Weergegevens ophalen...",
     "error": "Kon weergegevens niet ophalen",
-    "attribution": "Gegevens van Yr.no (Meteorologisk institutt)"
+    "attribution": "Gegevens van Yr.no (Meteorologisk institutt)",
+    "dirN": "N",
+    "dirNE": "NO",
+    "dirE": "O",
+    "dirSE": "ZO",
+    "dirS": "Z",
+    "dirSW": "ZW",
+    "dirW": "W",
+    "dirNW": "NW"
   },
   "directions": {
     "title": "Routebeschrijving",
@@ -125,7 +140,9 @@
     "perYear": "/jaar",
     "perNight": "/nacht",
     "perDay": "/dag",
-    "noPricing": "Er zijn nog geen tarieven toegevoegd"
+    "noPricing": "Er zijn nog geen tarieven toegevoegd",
+    "period": "Periode",
+    "installments": "Kan worden opgedeeld in maximaal {max} termijnen"
   },
   "join": {
     "title": "Lid worden",
@@ -199,7 +216,10 @@
     "submitting": "Bezig met inloggen...",
     "noAccount": "Nog geen account?",
     "joinLink": "Lid worden",
-    "forgotPassword": "Wachtwoord vergeten?"
+    "forgotPassword": "Wachtwoord vergeten?",
+    "vipps": "Inloggen met Vipps",
+    "or": "of",
+    "otherMethods": "Andere inlogmethoden"
   },
   "merchandise": {
     "title": "Winkel",

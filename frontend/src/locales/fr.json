@@ -66,7 +66,14 @@
     "filterSocial": "Social",
     "filterAgm": "AG",
     "proposeEvent": "Proposer un événement",
-    "proposeDescription": "Suggérez un événement pour le club. Le bureau examinera votre proposition."
+    "proposeDescription": "Suggérez un événement pour le club. Le bureau examinera votre proposition.",
+    "weekdayMon": "Lu",
+    "weekdayTue": "Ma",
+    "weekdayWed": "Me",
+    "weekdayThu": "Je",
+    "weekdayFri": "Ve",
+    "weekdaySat": "Sa",
+    "weekdaySun": "Di"
   },
   "weather": {
     "title": "Météo du port",
@@ -78,7 +85,15 @@
     "humidity": "Humidité",
     "loading": "Récupération des données météo...",
     "error": "Impossible de récupérer les données météo",
-    "attribution": "Données fournies par Yr.no (Meteorologisk institutt)"
+    "attribution": "Données fournies par Yr.no (Meteorologisk institutt)",
+    "dirN": "N",
+    "dirNE": "NE",
+    "dirE": "E",
+    "dirSE": "SE",
+    "dirS": "S",
+    "dirSW": "SO",
+    "dirW": "O",
+    "dirNW": "NO"
   },
   "directions": {
     "title": "Itinéraire",
@@ -125,7 +140,9 @@
     "perYear": "/an",
     "perNight": "/nuit",
     "perDay": "/jour",
-    "noPricing": "Aucun tarif n'a encore été ajouté"
+    "noPricing": "Aucun tarif n'a encore été ajouté",
+    "period": "Période",
+    "installments": "Peut être divisé en {max} versements maximum"
   },
   "join": {
     "title": "Rejoindre le club",
@@ -199,7 +216,10 @@
     "submitting": "Connexion en cours...",
     "noAccount": "Pas encore de compte ?",
     "joinLink": "Rejoindre le club",
-    "forgotPassword": "Mot de passe oublié ?"
+    "forgotPassword": "Mot de passe oublié ?",
+    "vipps": "Se connecter avec Vipps",
+    "or": "ou",
+    "otherMethods": "Autres méthodes de connexion"
   },
   "merchandise": {
     "title": "Boutique",

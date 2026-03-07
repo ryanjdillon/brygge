@@ -66,7 +66,14 @@
     "filterSocial": "Gesellig",
     "filterAgm": "Mitgliederversammlung",
     "proposeEvent": "Veranstaltung vorschlagen",
-    "proposeDescription": "Schlagen Sie eine Veranstaltung für den Verein vor. Der Vorstand wird Ihren Vorschlag prüfen."
+    "proposeDescription": "Schlagen Sie eine Veranstaltung für den Verein vor. Der Vorstand wird Ihren Vorschlag prüfen.",
+    "weekdayMon": "Mo",
+    "weekdayTue": "Di",
+    "weekdayWed": "Mi",
+    "weekdayThu": "Do",
+    "weekdayFri": "Fr",
+    "weekdaySat": "Sa",
+    "weekdaySun": "So"
   },
   "weather": {
     "title": "Hafenwetter",
@@ -78,7 +85,15 @@
     "humidity": "Luftfeuchtigkeit",
     "loading": "Wetterdaten werden abgerufen...",
     "error": "Wetterdaten konnten nicht abgerufen werden",
-    "attribution": "Daten von Yr.no (Meteorologisk institutt)"
+    "attribution": "Daten von Yr.no (Meteorologisk institutt)",
+    "dirN": "N",
+    "dirNE": "NO",
+    "dirE": "O",
+    "dirSE": "SO",
+    "dirS": "S",
+    "dirSW": "SW",
+    "dirW": "W",
+    "dirNW": "NW"
   },
   "directions": {
     "title": "Anfahrt",
@@ -125,7 +140,9 @@
     "perYear": "/Jahr",
     "perNight": "/Nacht",
     "perDay": "/Tag",
-    "noPricing": "Es wurden noch keine Preise hinzugefügt"
+    "noPricing": "Es wurden noch keine Preise hinzugefügt",
+    "period": "Zeitraum",
+    "installments": "Kann in bis zu {max} Raten aufgeteilt werden"
   },
   "join": {
     "title": "Dem Verein beitreten",
@@ -199,7 +216,10 @@
     "submitting": "Anmeldung läuft...",
     "noAccount": "Noch kein Konto?",
     "joinLink": "Dem Verein beitreten",
-    "forgotPassword": "Passwort vergessen?"
+    "forgotPassword": "Passwort vergessen?",
+    "vipps": "Mit Vipps anmelden",
+    "or": "oder",
+    "otherMethods": "Andere Anmeldemethoden"
   },
   "merchandise": {
     "title": "Shop",

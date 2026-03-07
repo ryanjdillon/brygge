@@ -66,7 +66,14 @@
     "filterSocial": "Sociale",
     "filterAgm": "Assemblea generale",
     "proposeEvent": "Proponi un evento",
-    "proposeDescription": "Suggerisci un evento per il circolo. Il consiglio direttivo esaminerà la tua proposta."
+    "proposeDescription": "Suggerisci un evento per il circolo. Il consiglio direttivo esaminerà la tua proposta.",
+    "weekdayMon": "Lu",
+    "weekdayTue": "Ma",
+    "weekdayWed": "Me",
+    "weekdayThu": "Gi",
+    "weekdayFri": "Ve",
+    "weekdaySat": "Sa",
+    "weekdaySun": "Do"
   },
   "weather": {
     "title": "Meteo del porto",
@@ -78,7 +85,15 @@
     "humidity": "Umidità",
     "loading": "Recupero dati meteo...",
     "error": "Impossibile recuperare i dati meteo",
-    "attribution": "Dati da Yr.no (Meteorologisk institutt)"
+    "attribution": "Dati da Yr.no (Meteorologisk institutt)",
+    "dirN": "N",
+    "dirNE": "NE",
+    "dirE": "E",
+    "dirSE": "SE",
+    "dirS": "S",
+    "dirSW": "SO",
+    "dirW": "O",
+    "dirNW": "NO"
   },
   "directions": {
     "title": "Come raggiungerci",
@@ -125,7 +140,9 @@
     "perYear": "/anno",
     "perNight": "/notte",
     "perDay": "/giorno",
-    "noPricing": "Non sono ancora state aggiunte tariffe"
+    "noPricing": "Non sono ancora state aggiunte tariffe",
+    "period": "Periodo",
+    "installments": "Può essere suddiviso in massimo {max} rate"
   },
   "join": {
     "title": "Iscriviti al circolo",
@@ -199,7 +216,10 @@
     "submitting": "Accesso in corso...",
     "noAccount": "Non hai un account?",
     "joinLink": "Iscriviti al circolo",
-    "forgotPassword": "Password dimenticata?"
+    "forgotPassword": "Password dimenticata?",
+    "vipps": "Accedi con Vipps",
+    "or": "o",
+    "otherMethods": "Altri metodi di accesso"
   },
   "merchandise": {
     "title": "Shop",
