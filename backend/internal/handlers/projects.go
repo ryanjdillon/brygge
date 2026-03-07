@@ -50,18 +50,24 @@ type projectWithCounts struct {
 }
 
 type task struct {
-	ID          string    `json:"id"`
-	ProjectID   string    `json:"project_id"`
-	ClubID      string    `json:"club_id"`
-	Title       string    `json:"title"`
-	Description string    `json:"description"`
-	AssigneeID  *string   `json:"assignee_id"`
-	Status      string    `json:"status"`
-	Priority    string    `json:"priority"`
-	DueDate     *string   `json:"due_date"`
-	CreatedBy   string    `json:"created_by"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID               string           `json:"id"`
+	ProjectID        string           `json:"project_id"`
+	ClubID           string           `json:"club_id"`
+	Title            string           `json:"title"`
+	Description      string           `json:"description"`
+	AssigneeID       *string          `json:"assignee_id"`
+	Status           string           `json:"status"`
+	Priority         string           `json:"priority"`
+	DueDate          *string          `json:"due_date"`
+	CreatedBy        string           `json:"created_by"`
+	CreatedAt        time.Time        `json:"created_at"`
+	UpdatedAt        time.Time        `json:"updated_at"`
+	EstimatedHours   *float64         `json:"estimated_hours"`
+	ActualHours      *float64         `json:"actual_hours"`
+	AnsvarligID      *string          `json:"ansvarlig_id"`
+	MaxCollaborators int              `json:"max_collaborators"`
+	Materials        json.RawMessage  `json:"materials"`
+	ParticipantCount int              `json:"participant_count"`
 }
 
 type groupedTasks struct {
@@ -76,20 +82,26 @@ type createProjectRequest struct {
 }
 
 type createTaskRequest struct {
-	Title       string  `json:"title"`
-	Description string  `json:"description"`
-	AssigneeID  *string `json:"assignee_id"`
-	DueDate     *string `json:"due_date"`
-	Priority    string  `json:"priority"`
+	Title            string          `json:"title"`
+	Description      string          `json:"description"`
+	AssigneeID       *string         `json:"assignee_id"`
+	DueDate          *string         `json:"due_date"`
+	Priority         string          `json:"priority"`
+	EstimatedHours   *float64        `json:"estimated_hours"`
+	MaxCollaborators *int            `json:"max_collaborators"`
+	Materials        json.RawMessage `json:"materials"`
 }
 
 type updateTaskRequest struct {
-	Title       *string `json:"title,omitempty"`
-	Description *string `json:"description,omitempty"`
-	AssigneeID  *string `json:"assignee_id,omitempty"`
-	Status      *string `json:"status,omitempty"`
-	Priority    *string `json:"priority,omitempty"`
-	DueDate     *string `json:"due_date,omitempty"`
+	Title            *string         `json:"title,omitempty"`
+	Description      *string         `json:"description,omitempty"`
+	AssigneeID       *string         `json:"assignee_id,omitempty"`
+	Status           *string         `json:"status,omitempty"`
+	Priority         *string         `json:"priority,omitempty"`
+	DueDate          *string         `json:"due_date,omitempty"`
+	EstimatedHours   *float64        `json:"estimated_hours,omitempty"`
+	MaxCollaborators *int            `json:"max_collaborators,omitempty"`
+	Materials        json.RawMessage `json:"materials,omitempty"`
 }
 
 func (h *ProjectsHandler) HandleListProjects(w http.ResponseWriter, r *http.Request) {
@@ -232,10 +244,15 @@ func (h *ProjectsHandler) HandleListTasks(w http.ResponseWriter, r *http.Request
 	}
 
 	rows, err := h.db.Query(ctx,
-		`SELECT id, project_id, club_id, title, description, assignee_id, status, priority, due_date, created_by, created_at, updated_at
-		 FROM tasks
-		 WHERE project_id = $1 AND club_id = $2
-		 ORDER BY priority DESC, created_at`,
+		`SELECT t.id, t.project_id, t.club_id, t.title, t.description,
+		        t.assignee_id, t.status, t.priority, t.due_date,
+		        t.created_by, t.created_at, t.updated_at,
+		        t.estimated_hours, t.actual_hours, t.ansvarlig_id,
+		        t.max_collaborators, t.materials,
+		        (SELECT COUNT(*) FROM task_participants tp WHERE tp.task_id = t.id)
+		 FROM tasks t
+		 WHERE t.project_id = $1 AND t.club_id = $2
+		 ORDER BY t.priority DESC, t.created_at`,
 		projectID, claims.ClubID,
 	)
 	if err != nil {
@@ -258,6 +275,8 @@ func (h *ProjectsHandler) HandleListTasks(w http.ResponseWriter, r *http.Request
 			&t.ID, &t.ProjectID, &t.ClubID, &t.Title, &t.Description,
 			&t.AssigneeID, &t.Status, &t.Priority, &dueDate,
 			&t.CreatedBy, &t.CreatedAt, &t.UpdatedAt,
+			&t.EstimatedHours, &t.ActualHours, &t.AnsvarligID,
+			&t.MaxCollaborators, &t.Materials, &t.ParticipantCount,
 		); err != nil {
 			h.log.Error().Err(err).Msg("failed to scan task")
 			Error(w, http.StatusInternalServerError, "internal error")
@@ -335,18 +354,31 @@ func (h *ProjectsHandler) HandleCreateTask(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	maxCollab := 5
+	if req.MaxCollaborators != nil {
+		maxCollab = *req.MaxCollaborators
+	}
+	materials := json.RawMessage("[]")
+	if req.Materials != nil {
+		materials = req.Materials
+	}
+
 	var t task
 	var dueDateOut *time.Time
 	err = h.db.QueryRow(ctx,
-		`INSERT INTO tasks (project_id, club_id, title, description, assignee_id, priority, due_date, created_by)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		 RETURNING id, project_id, club_id, title, description, assignee_id, status, priority, due_date, created_by, created_at, updated_at`,
+		`INSERT INTO tasks (project_id, club_id, title, description, assignee_id, priority, due_date, created_by, estimated_hours, max_collaborators, materials)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		 RETURNING id, project_id, club_id, title, description, assignee_id, status, priority, due_date, created_by, created_at, updated_at,
+		           estimated_hours, actual_hours, ansvarlig_id, max_collaborators, materials`,
 		projectID, claims.ClubID, req.Title, req.Description,
 		req.AssigneeID, priority, dueDate, claims.UserID,
+		req.EstimatedHours, maxCollab, materials,
 	).Scan(
 		&t.ID, &t.ProjectID, &t.ClubID, &t.Title, &t.Description,
 		&t.AssigneeID, &t.Status, &t.Priority, &dueDateOut,
 		&t.CreatedBy, &t.CreatedAt, &t.UpdatedAt,
+		&t.EstimatedHours, &t.ActualHours, &t.AnsvarligID,
+		&t.MaxCollaborators, &t.Materials,
 	)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to create task")
@@ -376,19 +408,24 @@ func (h *ProjectsHandler) HandleUpdateTask(w http.ResponseWriter, r *http.Reques
 	}
 
 	var existing struct {
-		title       string
-		description string
-		assigneeID  *string
-		status      string
-		priority    string
-		dueDate     *time.Time
+		title            string
+		description      string
+		assigneeID       *string
+		status           string
+		priority         string
+		dueDate          *time.Time
+		estimatedHours   *float64
+		maxCollaborators int
+		materials        json.RawMessage
 	}
 	err := h.db.QueryRow(ctx,
-		`SELECT title, description, assignee_id, status, priority, due_date
+		`SELECT title, description, assignee_id, status, priority, due_date,
+		        estimated_hours, max_collaborators, materials
 		 FROM tasks WHERE id = $1 AND club_id = $2`,
 		taskID, claims.ClubID,
 	).Scan(&existing.title, &existing.description, &existing.assigneeID,
-		&existing.status, &existing.priority, &existing.dueDate)
+		&existing.status, &existing.priority, &existing.dueDate,
+		&existing.estimatedHours, &existing.maxCollaborators, &existing.materials)
 	if err == pgx.ErrNoRows {
 		Error(w, http.StatusNotFound, "task not found")
 		return
@@ -436,21 +473,35 @@ func (h *ProjectsHandler) HandleUpdateTask(w http.ResponseWriter, r *http.Reques
 			existing.dueDate = &d
 		}
 	}
+	if req.EstimatedHours != nil {
+		existing.estimatedHours = req.EstimatedHours
+	}
+	if req.MaxCollaborators != nil {
+		existing.maxCollaborators = *req.MaxCollaborators
+	}
+	if req.Materials != nil {
+		existing.materials = req.Materials
+	}
 
 	var t task
 	var dueDateOut *time.Time
 	err = h.db.QueryRow(ctx,
 		`UPDATE tasks
-		 SET title = $3, description = $4, assignee_id = $5, status = $6, priority = $7, due_date = $8, updated_at = now()
+		 SET title = $3, description = $4, assignee_id = $5, status = $6, priority = $7, due_date = $8,
+		     estimated_hours = $9, max_collaborators = $10, materials = $11, updated_at = now()
 		 WHERE id = $1 AND club_id = $2
-		 RETURNING id, project_id, club_id, title, description, assignee_id, status, priority, due_date, created_by, created_at, updated_at`,
+		 RETURNING id, project_id, club_id, title, description, assignee_id, status, priority, due_date, created_by, created_at, updated_at,
+		           estimated_hours, actual_hours, ansvarlig_id, max_collaborators, materials`,
 		taskID, claims.ClubID,
 		existing.title, existing.description, existing.assigneeID,
 		existing.status, existing.priority, existing.dueDate,
+		existing.estimatedHours, existing.maxCollaborators, existing.materials,
 	).Scan(
 		&t.ID, &t.ProjectID, &t.ClubID, &t.Title, &t.Description,
 		&t.AssigneeID, &t.Status, &t.Priority, &dueDateOut,
 		&t.CreatedBy, &t.CreatedAt, &t.UpdatedAt,
+		&t.EstimatedHours, &t.ActualHours, &t.AnsvarligID,
+		&t.MaxCollaborators, &t.Materials,
 	)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to update task")
