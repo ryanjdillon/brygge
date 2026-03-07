@@ -52,6 +52,10 @@ func NewAuthHandler(
 	}
 }
 
+func (h *AuthHandler) HandleVippsStatus(w http.ResponseWriter, r *http.Request) {
+	JSON(w, http.StatusOK, map[string]bool{"enabled": h.vipps.Enabled()})
+}
+
 func (h *AuthHandler) HandleVippsLogin(w http.ResponseWriter, r *http.Request) {
 	state, err := randomState()
 	if err != nil {
@@ -122,11 +126,9 @@ func (h *AuthHandler) HandleVippsCallback(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	JSON(w, http.StatusOK, tokenResponse{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-		TokenType:    "Bearer",
-	})
+	redirectURL := fmt.Sprintf("%s/auth/callback?access_token=%s&refresh_token=%s",
+		h.config.FrontendURL, accessToken, refreshToken)
+	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
 
 func (h *AuthHandler) HandleEmailRegister(w http.ResponseWriter, r *http.Request) {
@@ -370,6 +372,35 @@ func (h *AuthHandler) upsertVippsUser(ctx context.Context, info *auth.VippsUserI
 	).Scan(&userID)
 
 	if err == pgx.ErrNoRows {
+		// Check if a user with this email already exists (account linking)
+		var existingID string
+		linkErr := h.db.QueryRow(ctx,
+			`SELECT id FROM users WHERE email = $1 AND club_id = $2 AND vipps_sub IS NULL`,
+			info.Email, clubID,
+		).Scan(&existingID)
+
+		if linkErr == nil {
+			// Link Vipps identity to existing email user
+			_, err = h.db.Exec(ctx,
+				`UPDATE users SET vipps_sub = $1, full_name = $2, phone = $3,
+				 address_line = $4, postal_code = $5, city = $6, updated_at = now()
+				 WHERE id = $7`,
+				info.Sub, info.Name, info.Phone,
+				info.Address.Street, info.Address.PostalCode, info.Address.City,
+				existingID,
+			)
+			if err != nil {
+				return "", "", nil, fmt.Errorf("linking vipps to existing user: %w", err)
+			}
+
+			roles, err := h.getUserRoles(ctx, existingID, clubID)
+			if err != nil {
+				return "", "", nil, fmt.Errorf("fetching roles: %w", err)
+			}
+			return existingID, clubID, roles, nil
+		}
+
+		// Create new user
 		err = h.db.QueryRow(ctx,
 			`INSERT INTO users (club_id, vipps_sub, email, full_name, phone, address_line, postal_code, city)
 			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)

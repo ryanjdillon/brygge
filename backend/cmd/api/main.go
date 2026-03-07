@@ -113,6 +113,7 @@ func main() {
 		r.Method(http.MethodGet, "/health", healthHandler)
 
 		r.Route("/auth", func(r chi.Router) {
+			r.Get("/vipps/status", authHandler.HandleVippsStatus)
 			r.Get("/vipps/login", authHandler.HandleVippsLogin)
 			r.Get("/vipps/callback", authHandler.HandleVippsCallback)
 			r.Post("/register", authHandler.HandleEmailRegister)
