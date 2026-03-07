@@ -96,6 +96,7 @@ func main() {
 	boatModelsHandler := handlers.NewBoatModelsHandler(db, log)
 	dugnadHandler := handlers.NewDugnadHandler(db, &cfg, log)
 	shoppingListsHandler := handlers.NewShoppingListsHandler(db, &cfg, log)
+	mapHandler := handlers.NewMapHandler(db, &cfg, log)
 
 	r := chi.NewRouter()
 
@@ -135,6 +136,12 @@ func main() {
 		r.Get("/boat-models", boatModelsHandler.HandleSearch)
 		r.Get("/weather", weatherHandler.HandleGetWeather)
 		r.Post("/contact", contactHandler.HandleContactForm)
+
+		r.Route("/map", func(r chi.Router) {
+			r.Get("/coordinates", mapHandler.HandleGetClubCoordinates)
+			r.Get("/markers", mapHandler.HandleListMarkers)
+			r.Get("/export/gpx", mapHandler.HandleExportGPX)
+		})
 
 		r.Route("/orders", func(r chi.Router) {
 			r.Post("/", ordersHandler.HandleCreateOrder)
@@ -299,6 +306,13 @@ func main() {
 				r.Post("/events/{eventID}/projects", dugnadHandler.HandleLinkProjectEvent)
 				r.Delete("/events/{eventID}/projects/{projectID}", dugnadHandler.HandleUnlinkProjectEvent)
 				r.Get("/events/{eventID}/projects", dugnadHandler.HandleGetEventProjects)
+			})
+
+			r.Route("/map/markers", func(r chi.Router) {
+				r.Use(middleware.RequireRole("styre"))
+				r.Post("/", mapHandler.HandleCreateMarker)
+				r.Put("/{markerID}", mapHandler.HandleUpdateMarker)
+				r.Delete("/{markerID}", mapHandler.HandleDeleteMarker)
 			})
 
 			r.Route("/boats", func(r chi.Router) {
