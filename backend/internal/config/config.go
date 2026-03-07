@@ -23,6 +23,14 @@ type Config struct {
 	VippsCallbackURL  string
 	VippsTestMode     bool
 
+	// Vipps ePayment
+	VippsMSN             string
+	VippsSubscriptionKey string
+	VippsWebhookSecret   string
+
+	// Frontend
+	FrontendURL string
+
 	// Object storage
 	S3Endpoint  string
 	S3Bucket    string
@@ -54,6 +62,12 @@ func Load() Config {
 		VippsCallbackURL:  envStr("VIPPS_CALLBACK_URL", ""),
 		VippsTestMode:     envBool("VIPPS_TEST_MODE", true),
 
+		VippsMSN:             envStr("VIPPS_MSN", ""),
+		VippsSubscriptionKey: envStr("VIPPS_SUBSCRIPTION_KEY", ""),
+		VippsWebhookSecret:   envStr("VIPPS_WEBHOOK_SECRET", ""),
+
+		FrontendURL: envStr("FRONTEND_URL", "http://localhost:5173"),
+
 		S3Endpoint:  envStr("S3_ENDPOINT", ""),
 		S3Bucket:    envStr("S3_BUCKET", "brygge"),
 		S3AccessKey: envStr("S3_ACCESS_KEY", ""),
@@ -65,6 +79,26 @@ func Load() Config {
 		ResendAPIKey:    envStr("RESEND_API_KEY", ""),
 		AnthropicAPIKey: envStr("ANTHROPIC_API_KEY", ""),
 	}
+}
+
+// VippsBaseURL returns the Vipps API base URL for server-to-server calls.
+func (c *Config) VippsBaseURL() string {
+	if c.VippsTestMode && c.VippsMSN == "" {
+		return envStr("VIPPS_MOCK_URL", "http://vipps-mock:8090")
+	}
+	if c.VippsTestMode {
+		return "https://apitest.vipps.no"
+	}
+	return "https://api.vipps.no"
+}
+
+// VippsBrowserURL returns the Vipps base URL for browser redirects.
+// In mock mode this is localhost:8090 (accessible from browser), otherwise same as VippsBaseURL.
+func (c *Config) VippsBrowserURL() string {
+	if c.VippsTestMode && c.VippsMSN == "" {
+		return envStr("VIPPS_MOCK_BROWSER_URL", "http://localhost:8090")
+	}
+	return c.VippsBaseURL()
 }
 
 func envStr(key, fallback string) string {

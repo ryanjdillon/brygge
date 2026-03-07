@@ -12,9 +12,6 @@ import (
 )
 
 const (
-	vippsTestBaseURL = "https://apitest.vipps.no"
-	vippsProdBaseURL = "https://api.vipps.no"
-
 	vippsAuthPath     = "/access-management-1.0/access/oauth2/auth"
 	vippsTokenPath    = "/access-management-1.0/access/oauth2/token"
 	vippsUserInfoPath = "/vipps-userinfo-api/userinfo"
@@ -47,28 +44,46 @@ type VippsTokenResponse struct {
 }
 
 type VippsClient struct {
-	ClientID     string
-	ClientSecret string
-	CallbackURL  string
-	TestMode     bool
-	HTTPClient   *http.Client
+	ClientID        string
+	ClientSecret    string
+	CallbackURL     string
+	MSN             string
+	SubscriptionKey string
+	BaseURL         string
+	BrowserURL      string
+	HTTPClient      *http.Client
 }
 
 func NewVippsClient(cfg *config.Config) *VippsClient {
 	return &VippsClient{
-		ClientID:     cfg.VippsClientID,
-		ClientSecret: cfg.VippsClientSecret,
-		CallbackURL:  cfg.VippsCallbackURL,
-		TestMode:     cfg.VippsTestMode,
-		HTTPClient:   http.DefaultClient,
+		ClientID:        cfg.VippsClientID,
+		ClientSecret:    cfg.VippsClientSecret,
+		CallbackURL:     cfg.VippsCallbackURL,
+		MSN:             cfg.VippsMSN,
+		SubscriptionKey: cfg.VippsSubscriptionKey,
+		BaseURL:         cfg.VippsBaseURL(),
+		BrowserURL:      cfg.VippsBrowserURL(),
+		HTTPClient:      http.DefaultClient,
 	}
 }
 
-func (c *VippsClient) baseURL() string {
-	if c.TestMode {
-		return vippsTestBaseURL
+func (c *VippsClient) Enabled() bool {
+	// Mock mode: enabled when base URL points to mock server
+	if strings.Contains(c.BaseURL, "vipps-mock") || strings.Contains(c.BaseURL, "localhost:8090") {
+		return true
 	}
-	return vippsProdBaseURL
+	return c.ClientID != "" && c.ClientSecret != ""
+}
+
+func (c *VippsClient) setSystemHeaders(req *http.Request) {
+	if c.MSN != "" {
+		req.Header.Set("Merchant-Serial-Number", c.MSN)
+	}
+	if c.SubscriptionKey != "" {
+		req.Header.Set("Ocp-Apim-Subscription-Key", c.SubscriptionKey)
+	}
+	req.Header.Set("Vipps-System-Name", "brygge")
+	req.Header.Set("Vipps-System-Version", "1.0.0")
 }
 
 func (c *VippsClient) AuthorizationURL(state string) string {
@@ -79,7 +94,7 @@ func (c *VippsClient) AuthorizationURL(state string) string {
 		"state":         {state},
 		"redirect_uri":  {c.CallbackURL},
 	}
-	return c.baseURL() + vippsAuthPath + "?" + params.Encode()
+	return c.BrowserURL + vippsAuthPath + "?" + params.Encode()
 }
 
 func (c *VippsClient) ExchangeCode(ctx context.Context, code string) (*VippsTokenResponse, error) {
@@ -89,7 +104,7 @@ func (c *VippsClient) ExchangeCode(ctx context.Context, code string) (*VippsToke
 		"redirect_uri": {c.CallbackURL},
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL()+vippsTokenPath, strings.NewReader(data.Encode()))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+vippsTokenPath, strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("creating token request: %w", err)
 	}
@@ -114,11 +129,12 @@ func (c *VippsClient) ExchangeCode(ctx context.Context, code string) (*VippsToke
 }
 
 func (c *VippsClient) GetUserInfo(ctx context.Context, accessToken string) (*VippsUserInfo, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL()+vippsUserInfoPath, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+vippsUserInfoPath, nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating userinfo request: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+accessToken)
+	c.setSystemHeaders(req)
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {

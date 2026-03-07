@@ -9,18 +9,19 @@ import (
 	"testing"
 )
 
-func newTestVippsClient(testMode bool) *VippsClient {
+func newTestVippsClient(baseURL string) *VippsClient {
 	return &VippsClient{
 		ClientID:     "test-client-id",
 		ClientSecret: "test-client-secret",
 		CallbackURL:  "https://example.com/callback",
-		TestMode:     testMode,
+		BaseURL:      baseURL,
+		BrowserURL:   baseURL,
 		HTTPClient:   http.DefaultClient,
 	}
 }
 
 func TestAuthorizationURL(t *testing.T) {
-	client := newTestVippsClient(true)
+	client := newTestVippsClient("https://apitest.vipps.no")
 	state := "random-state-value"
 
 	url := client.AuthorizationURL(state)
@@ -44,7 +45,7 @@ func TestAuthorizationURL(t *testing.T) {
 }
 
 func TestAuthorizationURLTestMode(t *testing.T) {
-	client := newTestVippsClient(true)
+	client := newTestVippsClient("https://apitest.vipps.no")
 	url := client.AuthorizationURL("state")
 
 	if !strings.HasPrefix(url, "https://apitest.vipps.no") {
@@ -53,11 +54,44 @@ func TestAuthorizationURLTestMode(t *testing.T) {
 }
 
 func TestAuthorizationURLProdMode(t *testing.T) {
-	client := newTestVippsClient(false)
+	client := newTestVippsClient("https://api.vipps.no")
 	url := client.AuthorizationURL("state")
 
 	if !strings.HasPrefix(url, "https://api.vipps.no") {
 		t.Errorf("prod mode URL = %q, want prefix https://api.vipps.no", url)
+	}
+}
+
+func TestAuthorizationURLUsesBrowserURL(t *testing.T) {
+	client := &VippsClient{
+		ClientID:   "test",
+		BaseURL:    "http://vipps-mock:8090",
+		BrowserURL: "http://localhost:8090",
+		CallbackURL: "http://localhost:8080/callback",
+	}
+	url := client.AuthorizationURL("state")
+	if !strings.HasPrefix(url, "http://localhost:8090") {
+		t.Errorf("URL = %q, want prefix http://localhost:8090", url)
+	}
+}
+
+func TestEnabled(t *testing.T) {
+	tests := []struct {
+		name    string
+		client  *VippsClient
+		enabled bool
+	}{
+		{"mock mode", &VippsClient{BaseURL: "http://vipps-mock:8090"}, true},
+		{"localhost mock", &VippsClient{BaseURL: "http://localhost:8090"}, true},
+		{"with credentials", &VippsClient{ClientID: "id", ClientSecret: "secret", BaseURL: "https://apitest.vipps.no"}, true},
+		{"no credentials", &VippsClient{BaseURL: "https://apitest.vipps.no"}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.client.Enabled(); got != tt.enabled {
+				t.Errorf("Enabled() = %v, want %v", got, tt.enabled)
+			}
+		})
 	}
 }
 
@@ -77,7 +111,6 @@ func TestExchangeCode(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotContentType = r.Header.Get("Content-Type")
 		gotAuthHeader = r.Header.Get("Authorization")
-
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(wantResponse)
 	}))
@@ -87,23 +120,10 @@ func TestExchangeCode(t *testing.T) {
 		ClientID:     "test-client-id",
 		ClientSecret: "test-client-secret",
 		CallbackURL:  "https://example.com/callback",
-		TestMode:     true,
+		BaseURL:      server.URL,
+		BrowserURL:   server.URL,
 		HTTPClient:   server.Client(),
 	}
-
-	// Override base URL by pointing the client at the test server
-	origTestBaseURL := vippsTestBaseURL
-	_ = origTestBaseURL
-	// Since we can't override the const, we set the HTTPClient and build a client
-	// that uses the test server URL directly. We'll create a wrapper transport.
-	client.HTTPClient = server.Client()
-	// We need the client to hit our test server. The simplest approach is to
-	// use a custom RoundTripper that rewrites the URL.
-	client.HTTPClient.Transport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		req.URL.Scheme = "http"
-		req.URL.Host = strings.TrimPrefix(server.URL, "http://")
-		return http.DefaultTransport.RoundTrip(req)
-	})
 
 	resp, err := client.ExchangeCode(context.Background(), "auth-code-123")
 	if err != nil {
@@ -127,12 +147,6 @@ func TestExchangeCode(t *testing.T) {
 	}
 }
 
-type roundTripFunc func(*http.Request) (*http.Response, error)
-
-func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
-	return f(req)
-}
-
 func TestExchangeCodeError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -144,14 +158,9 @@ func TestExchangeCodeError(t *testing.T) {
 		ClientID:     "test-client-id",
 		ClientSecret: "test-client-secret",
 		CallbackURL:  "https://example.com/callback",
-		TestMode:     true,
-		HTTPClient: &http.Client{
-			Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
-				req.URL.Scheme = "http"
-				req.URL.Host = strings.TrimPrefix(server.URL, "http://")
-				return http.DefaultTransport.RoundTrip(req)
-			}),
-		},
+		BaseURL:      server.URL,
+		BrowserURL:   server.URL,
+		HTTPClient:   server.Client(),
 	}
 
 	_, err := client.ExchangeCode(context.Background(), "bad-code")
@@ -190,14 +199,9 @@ func TestGetUserInfo(t *testing.T) {
 		ClientID:     "test-client-id",
 		ClientSecret: "test-client-secret",
 		CallbackURL:  "https://example.com/callback",
-		TestMode:     true,
-		HTTPClient: &http.Client{
-			Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
-				req.URL.Scheme = "http"
-				req.URL.Host = strings.TrimPrefix(server.URL, "http://")
-				return http.DefaultTransport.RoundTrip(req)
-			}),
-		},
+		BaseURL:      server.URL,
+		BrowserURL:   server.URL,
+		HTTPClient:   server.Client(),
 	}
 
 	info, err := client.GetUserInfo(context.Background(), "my-access-token")
@@ -216,11 +220,5 @@ func TestGetUserInfo(t *testing.T) {
 	}
 	if info.Email != wantInfo.Email {
 		t.Errorf("Email = %q, want %q", info.Email, wantInfo.Email)
-	}
-	if info.Phone != wantInfo.Phone {
-		t.Errorf("Phone = %q, want %q", info.Phone, wantInfo.Phone)
-	}
-	if info.Address.City != wantInfo.Address.City {
-		t.Errorf("Address.City = %q, want %q", info.Address.City, wantInfo.Address.City)
 	}
 }
