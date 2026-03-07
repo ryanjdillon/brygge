@@ -202,10 +202,17 @@
       "deleteConfirm": "Er du sikker p\u00e5 at du vil slette denne b\u00e5ten?",
       "name": "B\u00e5tnavn",
       "type": "B\u00e5ttype",
+      "manufacturer": "Produsent",
+      "model": "Modell",
       "length": "Lengde (m)",
       "beam": "Bredde (m)",
       "draft": "Dypg\u00e5ende (m)",
+      "weight": "Vekt (kg)",
       "registrationNumber": "Registreringsnummer",
+      "searchModel": "S\u00f8k b\u00e5tmodell",
+      "searchModelPlaceholder": "Skriv produsent eller modell...",
+      "confirmed": "Godkjent",
+      "pendingConfirmation": "Venter p\u00e5 godkjenning",
       "noBoats": "Du har ingen registrerte b\u00e5ter",
       "saveSuccess": "B\u00e5ten er lagret",
       "saveError": "Kunne ikke lagre b\u00e5ten",
@@ -257,7 +264,11 @@
       "acceptSuccess": "Tilbudet er godtatt",
       "declineSuccess": "Tilbudet er avsl\u00e5tt",
       "withdrawSuccess": "Du er fjernet fra ventelisten",
-      "loadError": "Kunne ikke hente ventelisteinformasjon"
+      "loadError": "Kunne ikke hente ventelisteinformasjon",
+      "queueOverview": "Ventelisten",
+      "queueDescription": "Lokale medlemmer kan ha forrang over ikke-lokale høyere opp i køen.",
+      "name": "Navn",
+      "you": "deg"
     },
     "slip": {
       "title": "Min havneplass",
@@ -319,7 +330,8 @@
       "products": "Produkter",
       "communication": "Kommunikasjon",
       "projects": "Prosjekter",
-      "financials": "Regnskap"
+      "financials": "Regnskap",
+      "boats": "B\u00e5tgodkjenning"
     },
     "financials": {
       "title": "\u00d8konomi",

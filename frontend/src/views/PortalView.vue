@@ -38,7 +38,7 @@ const navItems = computed<NavItem[]>(() => {
     { to: '/portal/boats', icon: Ship, label: t('portal.sidebar.boats') },
     { to: '/portal/directory', icon: Users, label: t('portal.sidebar.directory'), roles: ['member', 'slip_owner', 'styre', 'admin'] },
     { to: '/portal/documents', icon: FileText, label: t('portal.sidebar.documents') },
-    { to: '/portal/waiting-list', icon: ListOrdered, label: t('portal.sidebar.waitingList'), roles: ['applicant'] },
+    { to: '/portal/waiting-list', icon: ListOrdered, label: t('portal.sidebar.waitingList') },
     { to: '/portal/slip', icon: Anchor, label: t('portal.sidebar.slip'), roles: ['slip_owner'] },
     { to: '/portal/bookings', icon: CalendarDays, label: t('portal.sidebar.bookings') },
     { to: '/portal/feature-requests', icon: Lightbulb, label: t('portal.sidebar.featureRequests'), roles: ['member', 'slip_owner', 'styre', 'admin'] },
