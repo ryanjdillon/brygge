@@ -302,6 +302,11 @@ func main() {
 		}
 	}
 
+	// Clear idempotent-unsafe tables before re-seeding
+	_, _ = db.Exec(ctx, `DELETE FROM price_items WHERE club_id = $1`, clubID)
+	_, _ = db.Exec(ctx, `DELETE FROM events WHERE club_id = $1`, clubID)
+	_, _ = db.Exec(ctx, `DELETE FROM products WHERE club_id = $1`, clubID)
+
 	// Seed beam-based slip fee pricing tiers
 	slipFeeTiers := []struct {
 		name    string
