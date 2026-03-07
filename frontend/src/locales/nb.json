@@ -81,7 +81,9 @@
     "approachNotes": "Hold godt avstand fra b\u00f8yene ved innl\u00f8pet. F\u00f8lg merket led inn til gjestehavna.",
     "depth": "Dybde",
     "depthInfo": "Minimum dybde i innl\u00f8pet: 3,5 meter",
-    "harbourChart": "Havnekart"
+    "harbourChart": "Havnekart",
+    "openGoogleMaps": "Åpne i Google Maps",
+    "downloadGPX": "Last ned GPX"
   },
   "contact": {
     "title": "Kontakt oss",
@@ -331,7 +333,8 @@
       "communication": "Kommunikasjon",
       "projects": "Prosjekter",
       "financials": "Regnskap",
-      "boats": "B\u00e5tgodkjenning"
+      "boats": "Båtgodkjenning",
+      "mapMarkers": "Sjøkart-markører"
     },
     "financials": {
       "title": "\u00d8konomi",
@@ -517,6 +520,27 @@
     "settingsUpdated": "Innstillinger oppdatert",
     "allMembers": "Alle medlemmer",
     "eventProjects": "Prosjekter for dugnad"
+  },
+  "mapAdmin": {
+    "title": "Sjøkart-markører",
+    "addMarker": "Legg til markør",
+    "editMarker": "Rediger markør",
+    "deleteConfirm": "Er du sikker på at du vil slette denne markøren?",
+    "markerType": "Type",
+    "label": "Etikett",
+    "lat": "Breddegrad",
+    "lng": "Lengdegrad",
+    "sortOrder": "Sortering",
+    "types": {
+      "waypoint": "Navigasjonspunkt",
+      "buoy": "Bøye",
+      "hazard": "Fare",
+      "anchorage": "Ankringsplass",
+      "harbour": "Havn"
+    },
+    "noMarkers": "Ingen markører lagt til ennå",
+    "saved": "Markør lagret",
+    "deleted": "Markør slettet"
   },
   "forum": {
     "title": "Forum",

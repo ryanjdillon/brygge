@@ -1,8 +1,18 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { MapPin, Navigation, Radio, Anchor } from 'lucide-vue-next'
+import { MapPin, Navigation, Radio, Anchor, Download } from 'lucide-vue-next'
+import { useClubCoordinates, useMapMarkers } from '@/composables/useMap'
+import SeaChart from '@/components/map/SeaChart.vue'
+import LandMap from '@/components/map/LandMap.vue'
 
 const { t } = useI18n()
+const { data: club } = useClubCoordinates()
+const { data: markers } = useMapMarkers()
+
+const hasCoordinates = computed(
+  () => club.value?.latitude != null && club.value?.longitude != null
+)
 </script>
 
 <template>
@@ -12,35 +22,76 @@ const { t } = useI18n()
     <div class="mt-10 grid gap-10 lg:grid-cols-2">
       <section>
         <h2 class="flex items-center gap-2 text-xl font-semibold text-gray-900">
-          <MapPin class="h-5 w-5 text-blue-600" />
+          <MapPin class="h-5 w-5 text-blue-600" aria-hidden="true" />
           {{ t('directions.land') }}
         </h2>
-        <div
-          class="mt-4 flex h-64 items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 text-gray-400"
-        >
-          Embedded map placeholder
+        <div class="mt-4 h-72 overflow-hidden rounded-lg border border-gray-200">
+          <LandMap
+            v-if="hasCoordinates"
+            :lat="club!.latitude!"
+            :lng="club!.longitude!"
+            :club-name="club!.name"
+          />
+          <div
+            v-else
+            class="flex h-full items-center justify-center bg-gray-50 text-gray-400"
+          >
+            {{ t('common.loading') }}
+          </div>
         </div>
         <p class="mt-4 text-gray-600">{{ t('directions.landInstructions') }}</p>
       </section>
 
       <section>
         <h2 class="flex items-center gap-2 text-xl font-semibold text-gray-900">
-          <Navigation class="h-5 w-5 text-blue-600" />
+          <Navigation class="h-5 w-5 text-blue-600" aria-hidden="true" />
           {{ t('directions.sea') }}
         </h2>
+
+        <div class="mt-4 h-72 overflow-hidden rounded-lg border border-gray-200">
+          <SeaChart
+            v-if="hasCoordinates"
+            :lat="club!.latitude!"
+            :lng="club!.longitude!"
+            :markers="markers ?? []"
+            :club-name="club!.name"
+          />
+          <div
+            v-else
+            class="flex h-full items-center justify-center bg-gray-50 text-gray-400"
+          >
+            {{ t('common.loading') }}
+          </div>
+        </div>
+
+        <div class="mt-4 flex justify-end">
+          <a
+            href="/api/v1/map/export/gpx"
+            download
+            class="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50"
+          >
+            <Download class="h-4 w-4" aria-hidden="true" />
+            {{ t('directions.downloadGPX') }}
+          </a>
+        </div>
 
         <dl class="mt-4 space-y-4">
           <div class="rounded-lg border border-gray-200 p-4">
             <dt class="flex items-center gap-2 text-sm font-medium text-gray-500">
-              <Anchor class="h-4 w-4" />
+              <Anchor class="h-4 w-4" aria-hidden="true" />
               {{ t('directions.coordinates') }}
             </dt>
-            <dd class="mt-1 font-mono text-gray-900">59&deg;54.3'N 010&deg;44.1'E</dd>
+            <dd class="mt-1 font-mono text-gray-900">
+              <span v-if="hasCoordinates">
+                {{ club!.latitude!.toFixed(4) }}&deg;N {{ club!.longitude!.toFixed(4) }}&deg;E
+              </span>
+              <span v-else>—</span>
+            </dd>
           </div>
 
           <div class="rounded-lg border border-gray-200 p-4">
             <dt class="flex items-center gap-2 text-sm font-medium text-gray-500">
-              <Radio class="h-4 w-4" />
+              <Radio class="h-4 w-4" aria-hidden="true" />
               {{ t('directions.vhf') }}
             </dt>
             <dd class="mt-1 font-mono text-gray-900">Ch 16 / Ch 73</dd>
@@ -56,15 +107,6 @@ const { t } = useI18n()
             <dd class="mt-1 text-gray-600">{{ t('directions.depthInfo') }}</dd>
           </div>
         </dl>
-
-        <div class="mt-6">
-          <h3 class="text-sm font-medium text-gray-500">{{ t('directions.harbourChart') }}</h3>
-          <div
-            class="mt-2 flex h-48 items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 text-gray-400"
-          >
-            Harbour chart image placeholder
-          </div>
-        </div>
       </section>
     </div>
   </div>
