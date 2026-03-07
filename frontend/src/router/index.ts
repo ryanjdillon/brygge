@@ -213,6 +213,11 @@ const routes: RouteRecordRaw[] = [
         name: 'admin-dugnad',
         component: () => import('@/views/admin/DugnadAdminView.vue'),
       },
+      {
+        path: 'map',
+        name: 'admin-map',
+        component: () => import('@/views/admin/MapMarkersAdminView.vue'),
+      },
     ],
   },
 ]

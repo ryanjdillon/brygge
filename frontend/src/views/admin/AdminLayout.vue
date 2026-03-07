@@ -17,6 +17,7 @@ import {
   FolderKanban,
   Ship,
   HardHat,
+  MapPin,
   Menu,
   X,
 } from 'lucide-vue-next'
@@ -56,6 +57,7 @@ const navGroups = computed<NavGroup[]>(() => {
         { to: '/admin/bookings', icon: CalendarCheck, label: t('admin.sidebar.bookings'), roles: ['styre', 'harbour_master', 'admin'] },
         { to: '/admin/projects', icon: FolderKanban, label: t('admin.sidebar.projects') },
         { to: '/admin/dugnad', icon: HardHat, label: t('dugnad.title') },
+        { to: '/admin/map', icon: MapPin, label: t('admin.sidebar.mapMarkers') },
       ],
     },
     {
