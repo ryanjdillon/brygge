@@ -69,7 +69,7 @@ onMounted(() => {
         'kartverket-sjokart': {
           type: 'raster',
           tiles: [
-            'https://cache.kartverket.no/v1/wmts/1.0.0/sjokart/default/webmercator/{z}/{y}/{x}.png',
+            'https://cache.kartverket.no/v1/wmts/1.0.0/sjokartraster/default/webmercator/{z}/{y}/{x}.png',
           ],
           tileSize: 256,
           attribution: '&copy; <a href="https://kartverket.no">Kartverket</a>',
