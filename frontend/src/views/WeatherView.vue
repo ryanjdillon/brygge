@@ -8,7 +8,10 @@ const { data: weather, isLoading, isError } = useWeather()
 
 function windDirectionLabel(degrees: number | null): string {
   if (degrees == null) return '—'
-  const dirs = ['N', 'NØ', 'Ø', 'SØ', 'S', 'SV', 'V', 'NV']
+  const dirs = [
+    t('weather.dirN'), t('weather.dirNE'), t('weather.dirE'), t('weather.dirSE'),
+    t('weather.dirS'), t('weather.dirSW'), t('weather.dirW'), t('weather.dirNW'),
+  ]
   return dirs[Math.round(degrees / 45) % 8]
 }
 </script>

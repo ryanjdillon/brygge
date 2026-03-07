@@ -60,7 +60,7 @@ async function handleEmailLogin() {
           <svg viewBox="0 0 28 28" class="h-6 w-6" fill="currentColor">
             <path d="M6.36 17.59c-.78 0-1.57-.37-2.05-1.07L.2 10.44a1.1 1.1 0 0 1 .3-1.52 1.1 1.1 0 0 1 1.52.3l4.11 6.08c.15.22.35.27.5.27.16 0 .34-.06.49-.27l9.54-14.14a1.1 1.1 0 0 1 1.52-.3 1.1 1.1 0 0 1 .3 1.52L9.43 16.51c-.47.7-1.26 1.07-2.04 1.08h-.03z" transform="translate(3 5)" />
           </svg>
-          Logg inn med Vipps
+          {{ t('login.vipps') }}
         </button>
 
         <div v-if="vippsEnabled" class="relative">
@@ -68,7 +68,7 @@ async function handleEmailLogin() {
             <div class="w-full border-t border-gray-200" />
           </div>
           <div class="relative flex justify-center text-sm">
-            <span class="bg-white px-3 text-gray-400">eller</span>
+            <span class="bg-white px-3 text-gray-400">{{ t('login.or') }}</span>
           </div>
         </div>
 
@@ -77,7 +77,7 @@ async function handleEmailLogin() {
           class="flex w-full items-center justify-center gap-1.5 text-sm text-gray-500 hover:text-gray-700"
           @click="showEmailForm = !showEmailForm"
         >
-          Andre innloggingsmetoder
+          {{ t('login.otherMethods') }}
           <component :is="showEmailForm ? ChevronUp : ChevronDown" class="h-4 w-4" />
         </button>
 

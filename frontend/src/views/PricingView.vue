@@ -65,10 +65,10 @@ function seasonLabel(metadata: Record<string, string>): string | null {
               {{ item.description }}
             </p>
             <p v-if="seasonLabel(item.metadata)" class="mt-0.5 text-xs text-gray-400">
-              Periode: {{ seasonLabel(item.metadata) }}
+              {{ t('pricing.period') }}: {{ seasonLabel(item.metadata) }}
             </p>
             <p v-if="item.installments_allowed" class="mt-0.5 text-xs text-blue-600">
-              Kan deles opp i inntil {{ item.max_installments }} avdrag
+              {{ t('pricing.installments', { max: item.max_installments }) }}
             </p>
           </li>
         </ul>
