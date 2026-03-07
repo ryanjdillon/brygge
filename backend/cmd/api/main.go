@@ -93,6 +93,7 @@ func main() {
 	priceItemsHandler := handlers.NewPriceItemsHandler(db, &cfg, log)
 	productsHandler := handlers.NewProductsHandler(db, &cfg, log)
 	ordersHandler := handlers.NewOrdersHandler(db, &cfg, log)
+	boatModelsHandler := handlers.NewBoatModelsHandler(db, log)
 
 	r := chi.NewRouter()
 
@@ -129,6 +130,7 @@ func main() {
 
 		r.Get("/pricing", priceItemsHandler.HandleListPublic)
 		r.Get("/products", productsHandler.HandleListPublic)
+		r.Get("/boat-models", boatModelsHandler.HandleSearch)
 		r.Get("/weather", weatherHandler.HandleGetWeather)
 		r.Post("/contact", contactHandler.HandleContactForm)
 
@@ -149,6 +151,8 @@ func main() {
 
 			r.Post("/join", waitingListHandler.HandleJoinWaitingList)
 			r.Get("/me", waitingListHandler.HandleGetMyPosition)
+			r.Get("/portal", waitingListHandler.HandlePortalWaitingList)
+			r.Put("/me/boat", waitingListHandler.HandleUpdateMyBoat)
 			r.Post("/withdraw", waitingListHandler.HandleWithdraw)
 			r.Post("/{entryID}/accept", waitingListHandler.HandleAcceptOffer)
 
@@ -257,6 +261,12 @@ func main() {
 
 		r.Route("/admin", func(r chi.Router) {
 			r.Use(middleware.Authenticate(jwtService))
+
+			r.Route("/boats", func(r chi.Router) {
+				r.Use(middleware.RequireRole("styre", "harbour_master"))
+				r.Get("/unconfirmed", boatModelsHandler.HandleListUnconfirmed)
+				r.Post("/{boatID}/confirm", boatModelsHandler.HandleConfirmBoat)
+			})
 
 			r.Route("/broadcast", func(r chi.Router) {
 				r.Use(middleware.RequireRole("styre", "admin"))

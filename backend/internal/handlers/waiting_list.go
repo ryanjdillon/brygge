@@ -53,9 +53,23 @@ type waitingListEntry struct {
 
 type waitingListEntryWithUser struct {
 	waitingListEntry
-	FullName string `json:"full_name"`
-	Email    string `json:"email"`
-	Phone    string `json:"phone"`
+	FullName string  `json:"full_name"`
+	Email    string  `json:"email"`
+	Phone    string  `json:"phone"`
+	BoatID   *string `json:"boat_id,omitempty"`
+	BoatName *string `json:"boat_name,omitempty"`
+	BoatBeam *float64 `json:"boat_beam,omitempty"`
+	BoatConfirmed *bool `json:"boat_confirmed,omitempty"`
+}
+
+type portalWaitingListEntry struct {
+	Position int      `json:"position"`
+	IsLocal  bool     `json:"is_local"`
+	IsYou    bool     `json:"is_you"`
+	Name     string   `json:"name"`
+	Status   string   `json:"status"`
+	BoatName *string  `json:"boat_name,omitempty"`
+	BoatBeam *float64 `json:"boat_beam,omitempty"`
 }
 
 type joinResponse struct {
@@ -198,9 +212,11 @@ func (h *WaitingListHandler) HandleListWaitingList(w http.ResponseWriter, r *htt
 
 	query := `SELECT wle.id, wle.user_id, wle.club_id, wle.position, wle.is_local,
 	                 wle.status, wle.offer_deadline, wle.created_at, wle.updated_at,
-	                 u.full_name, u.email, u.phone
+	                 u.full_name, u.email, u.phone,
+	                 b.id, b.name, b.beam_m, b.measurements_confirmed
 	          FROM waiting_list_entries wle
 	          JOIN users u ON u.id = wle.user_id
+	          LEFT JOIN boats b ON b.id = wle.boat_id
 	          WHERE wle.club_id = $1`
 	args := []any{claims.ClubID}
 
@@ -225,6 +241,7 @@ func (h *WaitingListHandler) HandleListWaitingList(w http.ResponseWriter, r *htt
 			&e.ID, &e.UserID, &e.ClubID, &e.Position, &e.IsLocal,
 			&e.Status, &e.OfferDeadline, &e.CreatedAt, &e.UpdatedAt,
 			&e.FullName, &e.Email, &e.Phone,
+			&e.BoatID, &e.BoatName, &e.BoatBeam, &e.BoatConfirmed,
 		); err != nil {
 			h.log.Error().Err(err).Msg("failed to scan waiting list entry")
 			Error(w, http.StatusInternalServerError, "internal error")
@@ -239,6 +256,120 @@ func (h *WaitingListHandler) HandleListWaitingList(w http.ResponseWriter, r *htt
 	}
 
 	JSON(w, http.StatusOK, entries)
+}
+
+func (h *WaitingListHandler) HandlePortalWaitingList(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	rows, err := h.db.Query(ctx,
+		`SELECT wle.position, wle.is_local, wle.status, wle.user_id, u.full_name,
+		        b.name, b.beam_m
+		 FROM waiting_list_entries wle
+		 JOIN users u ON u.id = wle.user_id
+		 LEFT JOIN boats b ON b.id = wle.boat_id
+		 WHERE wle.club_id = $1 AND wle.status IN ('active', 'offered')
+		 ORDER BY wle.position`,
+		claims.ClubID,
+	)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to list portal waiting list")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	defer rows.Close()
+
+	entries := make([]portalWaitingListEntry, 0)
+	for rows.Next() {
+		var position int
+		var isLocal bool
+		var status, userID, fullName string
+		var boatName *string
+		var boatBeam *float64
+		if err := rows.Scan(&position, &isLocal, &status, &userID, &fullName, &boatName, &boatBeam); err != nil {
+			h.log.Error().Err(err).Msg("failed to scan portal waiting list entry")
+			Error(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+
+		isYou := userID == claims.UserID
+		name := fmt.Sprintf("Medlem #%d", position)
+		if isYou {
+			name = fullName
+		}
+
+		entries = append(entries, portalWaitingListEntry{
+			Position: position,
+			IsLocal:  isLocal,
+			IsYou:    isYou,
+			Name:     name,
+			Status:   status,
+			BoatName: boatName,
+			BoatBeam: boatBeam,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		h.log.Error().Err(err).Msg("error iterating portal waiting list rows")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	JSON(w, http.StatusOK, entries)
+}
+
+type updateBoatReq struct {
+	BoatID *string `json:"boat_id"`
+}
+
+func (h *WaitingListHandler) HandleUpdateMyBoat(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	var req updateBoatReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if req.BoatID != nil {
+		var boatOwner string
+		err := h.db.QueryRow(ctx,
+			`SELECT user_id FROM boats WHERE id = $1`, *req.BoatID,
+		).Scan(&boatOwner)
+		if err != nil {
+			Error(w, http.StatusBadRequest, "boat not found")
+			return
+		}
+		if boatOwner != claims.UserID {
+			Error(w, http.StatusForbidden, "not your boat")
+			return
+		}
+	}
+
+	tag, err := h.db.Exec(ctx,
+		`UPDATE waiting_list_entries SET boat_id = $3, updated_at = now()
+		 WHERE user_id = $1 AND club_id = $2 AND status IN ('active', 'offered')`,
+		claims.UserID, claims.ClubID, req.BoatID,
+	)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to update waiting list boat")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if tag.RowsAffected() == 0 {
+		Error(w, http.StatusNotFound, "not on waiting list")
+		return
+	}
+
+	JSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 func (h *WaitingListHandler) HandleOfferSlip(w http.ResponseWriter, r *http.Request) {

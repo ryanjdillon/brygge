@@ -56,35 +56,50 @@ type updateProfileRequest struct {
 }
 
 type boat struct {
-	ID                 string    `json:"id"`
-	UserID             string    `json:"user_id"`
-	ClubID             string    `json:"club_id"`
-	Name               string    `json:"name"`
-	Type               string    `json:"type"`
-	LengthM            *float64  `json:"length_m,omitempty"`
-	BeamM              *float64  `json:"beam_m,omitempty"`
-	DraftM             *float64  `json:"draft_m,omitempty"`
-	RegistrationNumber string    `json:"registration_number"`
-	CreatedAt          time.Time `json:"created_at"`
-	UpdatedAt          time.Time `json:"updated_at"`
+	ID                    string     `json:"id"`
+	UserID                string     `json:"user_id"`
+	ClubID                string     `json:"club_id"`
+	Name                  string     `json:"name"`
+	Type                  string     `json:"type"`
+	Manufacturer          string     `json:"manufacturer"`
+	Model                 string     `json:"model"`
+	LengthM               *float64   `json:"length_m,omitempty"`
+	BeamM                 *float64   `json:"beam_m,omitempty"`
+	DraftM                *float64   `json:"draft_m,omitempty"`
+	WeightKg              *float64   `json:"weight_kg,omitempty"`
+	RegistrationNumber    string     `json:"registration_number"`
+	BoatModelID           *string    `json:"boat_model_id,omitempty"`
+	MeasurementsConfirmed bool       `json:"measurements_confirmed"`
+	ConfirmedBy           *string    `json:"confirmed_by,omitempty"`
+	ConfirmedAt           *time.Time `json:"confirmed_at,omitempty"`
+	CreatedAt             time.Time  `json:"created_at"`
+	UpdatedAt             time.Time  `json:"updated_at"`
 }
 
 type createBoatRequest struct {
 	Name               string   `json:"name"`
 	Type               string   `json:"type"`
+	Manufacturer       string   `json:"manufacturer"`
+	Model              string   `json:"model"`
 	LengthM            *float64 `json:"length_m,omitempty"`
 	BeamM              *float64 `json:"beam_m,omitempty"`
 	DraftM             *float64 `json:"draft_m,omitempty"`
+	WeightKg           *float64 `json:"weight_kg,omitempty"`
 	RegistrationNumber string   `json:"registration_number"`
+	BoatModelID        *string  `json:"boat_model_id,omitempty"`
 }
 
 type updateBoatRequest struct {
 	Name               *string  `json:"name,omitempty"`
 	Type               *string  `json:"type,omitempty"`
+	Manufacturer       *string  `json:"manufacturer,omitempty"`
+	Model              *string  `json:"model,omitempty"`
 	LengthM            *float64 `json:"length_m,omitempty"`
 	BeamM              *float64 `json:"beam_m,omitempty"`
 	DraftM             *float64 `json:"draft_m,omitempty"`
+	WeightKg           *float64 `json:"weight_kg,omitempty"`
 	RegistrationNumber *string  `json:"registration_number,omitempty"`
+	BoatModelID        *string  `json:"boat_model_id,omitempty"`
 }
 
 type memberSlip struct {
@@ -218,7 +233,10 @@ func (h *MembersHandler) HandleListMyBoats(w http.ResponseWriter, r *http.Reques
 	}
 
 	rows, err := h.db.Query(ctx,
-		`SELECT id, user_id, club_id, name, type, length_m, beam_m, draft_m, registration_number, created_at, updated_at
+		`SELECT id, user_id, club_id, name, type, manufacturer, model,
+		        length_m, beam_m, draft_m, weight_kg, registration_number,
+		        boat_model_id, measurements_confirmed, confirmed_by, confirmed_at,
+		        created_at, updated_at
 		 FROM boats WHERE user_id = $1 AND club_id = $2
 		 ORDER BY name`,
 		claims.UserID, claims.ClubID,
@@ -234,8 +252,9 @@ func (h *MembersHandler) HandleListMyBoats(w http.ResponseWriter, r *http.Reques
 	for rows.Next() {
 		var b boat
 		if err := rows.Scan(
-			&b.ID, &b.UserID, &b.ClubID, &b.Name, &b.Type,
-			&b.LengthM, &b.BeamM, &b.DraftM, &b.RegistrationNumber,
+			&b.ID, &b.UserID, &b.ClubID, &b.Name, &b.Type, &b.Manufacturer, &b.Model,
+			&b.LengthM, &b.BeamM, &b.DraftM, &b.WeightKg, &b.RegistrationNumber,
+			&b.BoatModelID, &b.MeasurementsConfirmed, &b.ConfirmedBy, &b.ConfirmedAt,
 			&b.CreatedAt, &b.UpdatedAt,
 		); err != nil {
 			h.log.Error().Err(err).Msg("failed to scan boat")
@@ -267,16 +286,38 @@ func (h *MembersHandler) HandleCreateBoat(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// Determine if measurements can be auto-confirmed from a trusted model
+	confirmed := false
+	if req.BoatModelID != nil {
+		var mLength, mBeam, mDraft *float64
+		err := h.db.QueryRow(ctx,
+			`SELECT length_m, beam_m, draft_m FROM boat_models WHERE id = $1`,
+			*req.BoatModelID,
+		).Scan(&mLength, &mBeam, &mDraft)
+		if err == nil {
+			confirmed = dimsMatch(req.LengthM, mLength) &&
+				dimsMatch(req.BeamM, mBeam) &&
+				dimsMatch(req.DraftM, mDraft)
+		}
+	}
+
 	var b boat
 	err := h.db.QueryRow(ctx,
-		`INSERT INTO boats (user_id, club_id, name, type, length_m, beam_m, draft_m, registration_number)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		 RETURNING id, user_id, club_id, name, type, length_m, beam_m, draft_m, registration_number, created_at, updated_at`,
-		claims.UserID, claims.ClubID, req.Name, req.Type,
-		req.LengthM, req.BeamM, req.DraftM, req.RegistrationNumber,
+		`INSERT INTO boats (user_id, club_id, name, type, manufacturer, model,
+		                    length_m, beam_m, draft_m, weight_kg, registration_number,
+		                    boat_model_id, measurements_confirmed)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+		 RETURNING id, user_id, club_id, name, type, manufacturer, model,
+		           length_m, beam_m, draft_m, weight_kg, registration_number,
+		           boat_model_id, measurements_confirmed, confirmed_by, confirmed_at,
+		           created_at, updated_at`,
+		claims.UserID, claims.ClubID, req.Name, req.Type, req.Manufacturer, req.Model,
+		req.LengthM, req.BeamM, req.DraftM, req.WeightKg, req.RegistrationNumber,
+		req.BoatModelID, confirmed,
 	).Scan(
-		&b.ID, &b.UserID, &b.ClubID, &b.Name, &b.Type,
-		&b.LengthM, &b.BeamM, &b.DraftM, &b.RegistrationNumber,
+		&b.ID, &b.UserID, &b.ClubID, &b.Name, &b.Type, &b.Manufacturer, &b.Model,
+		&b.LengthM, &b.BeamM, &b.DraftM, &b.WeightKg, &b.RegistrationNumber,
+		&b.BoatModelID, &b.MeasurementsConfirmed, &b.ConfirmedBy, &b.ConfirmedAt,
 		&b.CreatedAt, &b.UpdatedAt,
 	)
 	if err != nil {
@@ -304,12 +345,18 @@ func (h *MembersHandler) HandleUpdateBoat(w http.ResponseWriter, r *http.Request
 
 	var current boat
 	err := h.db.QueryRow(ctx,
-		`SELECT id, user_id, club_id, name, type, length_m, beam_m, draft_m, registration_number, created_at, updated_at
+		`SELECT id, user_id, club_id, name, type, manufacturer, model,
+		        length_m, beam_m, draft_m, weight_kg, registration_number,
+		        boat_model_id, measurements_confirmed, confirmed_by, confirmed_at,
+		        created_at, updated_at
 		 FROM boats WHERE id = $1 AND user_id = $2 AND club_id = $3`,
 		boatID, claims.UserID, claims.ClubID,
 	).Scan(
 		&current.ID, &current.UserID, &current.ClubID, &current.Name, &current.Type,
-		&current.LengthM, &current.BeamM, &current.DraftM, &current.RegistrationNumber,
+		&current.Manufacturer, &current.Model,
+		&current.LengthM, &current.BeamM, &current.DraftM, &current.WeightKg,
+		&current.RegistrationNumber,
+		&current.BoatModelID, &current.MeasurementsConfirmed, &current.ConfirmedBy, &current.ConfirmedAt,
 		&current.CreatedAt, &current.UpdatedAt,
 	)
 	if err == pgx.ErrNoRows {
@@ -328,11 +375,20 @@ func (h *MembersHandler) HandleUpdateBoat(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// Track whether dimensions are changing
+	oldLength, oldBeam, oldDraft := current.LengthM, current.BeamM, current.DraftM
+
 	if req.Name != nil {
 		current.Name = *req.Name
 	}
 	if req.Type != nil {
 		current.Type = *req.Type
+	}
+	if req.Manufacturer != nil {
+		current.Manufacturer = *req.Manufacturer
+	}
+	if req.Model != nil {
+		current.Model = *req.Model
 	}
 	if req.LengthM != nil {
 		current.LengthM = req.LengthM
@@ -343,21 +399,74 @@ func (h *MembersHandler) HandleUpdateBoat(w http.ResponseWriter, r *http.Request
 	if req.DraftM != nil {
 		current.DraftM = req.DraftM
 	}
+	if req.WeightKg != nil {
+		current.WeightKg = req.WeightKg
+	}
 	if req.RegistrationNumber != nil {
 		current.RegistrationNumber = *req.RegistrationNumber
+	}
+	if req.BoatModelID != nil {
+		current.BoatModelID = req.BoatModelID
+	}
+
+	// If dimensions changed, reset confirmation
+	dimsChanged := !dimsMatch(current.LengthM, oldLength) ||
+		!dimsMatch(current.BeamM, oldBeam) ||
+		!dimsMatch(current.DraftM, oldDraft)
+
+	confirmed := current.MeasurementsConfirmed
+	var confirmedBy *string
+	var confirmedAt *time.Time
+
+	if dimsChanged {
+		// Check if new dims match the linked model (auto-re-confirm)
+		reconfirmed := false
+		if current.BoatModelID != nil {
+			var mLength, mBeam, mDraft *float64
+			mErr := h.db.QueryRow(ctx,
+				`SELECT length_m, beam_m, draft_m FROM boat_models WHERE id = $1`,
+				*current.BoatModelID,
+			).Scan(&mLength, &mBeam, &mDraft)
+			if mErr == nil {
+				reconfirmed = dimsMatch(current.LengthM, mLength) &&
+					dimsMatch(current.BeamM, mBeam) &&
+					dimsMatch(current.DraftM, mDraft)
+			}
+		}
+		if reconfirmed {
+			confirmed = true
+		} else {
+			confirmed = false
+			confirmedBy = nil
+			confirmedAt = nil
+		}
+	} else {
+		confirmedBy = current.ConfirmedBy
+		confirmedAt = current.ConfirmedAt
 	}
 
 	var b boat
 	err = h.db.QueryRow(ctx,
 		`UPDATE boats
-		 SET name = $4, type = $5, length_m = $6, beam_m = $7, draft_m = $8, registration_number = $9, updated_at = now()
+		 SET name = $4, type = $5, manufacturer = $6, model = $7,
+		     length_m = $8, beam_m = $9, draft_m = $10, weight_kg = $11,
+		     registration_number = $12, boat_model_id = $13,
+		     measurements_confirmed = $14, confirmed_by = $15, confirmed_at = $16,
+		     updated_at = now()
 		 WHERE id = $1 AND user_id = $2 AND club_id = $3
-		 RETURNING id, user_id, club_id, name, type, length_m, beam_m, draft_m, registration_number, created_at, updated_at`,
+		 RETURNING id, user_id, club_id, name, type, manufacturer, model,
+		           length_m, beam_m, draft_m, weight_kg, registration_number,
+		           boat_model_id, measurements_confirmed, confirmed_by, confirmed_at,
+		           created_at, updated_at`,
 		boatID, claims.UserID, claims.ClubID,
-		current.Name, current.Type, current.LengthM, current.BeamM, current.DraftM, current.RegistrationNumber,
+		current.Name, current.Type, current.Manufacturer, current.Model,
+		current.LengthM, current.BeamM, current.DraftM, current.WeightKg,
+		current.RegistrationNumber, current.BoatModelID,
+		confirmed, confirmedBy, confirmedAt,
 	).Scan(
-		&b.ID, &b.UserID, &b.ClubID, &b.Name, &b.Type,
-		&b.LengthM, &b.BeamM, &b.DraftM, &b.RegistrationNumber,
+		&b.ID, &b.UserID, &b.ClubID, &b.Name, &b.Type, &b.Manufacturer, &b.Model,
+		&b.LengthM, &b.BeamM, &b.DraftM, &b.WeightKg, &b.RegistrationNumber,
+		&b.BoatModelID, &b.MeasurementsConfirmed, &b.ConfirmedBy, &b.ConfirmedAt,
 		&b.CreatedAt, &b.UpdatedAt,
 	)
 	if err != nil {
@@ -636,6 +745,16 @@ func (h *MembersHandler) getRoles(ctx context.Context, userID, clubID string) ([
 		roles = append(roles, role)
 	}
 	return roles, rows.Err()
+}
+
+func dimsMatch(a, b *float64) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
 }
 
 func bestRole(roles []string) string {
