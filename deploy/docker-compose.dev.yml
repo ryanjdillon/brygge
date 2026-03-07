@@ -38,6 +38,8 @@ services:
       - "8090:8090"
     environment:
       - WEBHOOK_TARGET=http://api:8080/api/v1/webhooks/vipps
+    networks:
+      - brygge
 
   # ── Disable services not needed in dev ─────────────────────────
   traefik:
