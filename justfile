@@ -5,12 +5,24 @@ default:
 
 compose := "docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml"
 
-# Start full local dev stack
-dev:
-    {{compose}} up --build
+# Start compose services + frontend dev server
+up:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    {{compose}} up -d --build
+    cd frontend && nohup npx vite > /tmp/brygge-vite.log 2>&1 &
+    echo $! > /tmp/brygge-vite.pid
+    echo "compose services started, vite dev server running (pid $(cat /tmp/brygge-vite.pid), log: /tmp/brygge-vite.log)"
 
-# Stop local dev stack
+# Stop compose services + frontend dev server
 down:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -f /tmp/brygge-vite.pid ]; then
+        kill "$(cat /tmp/brygge-vite.pid)" 2>/dev/null || true
+        rm -f /tmp/brygge-vite.pid
+        echo "vite dev server stopped"
+    fi
     {{compose}} down
 
 # First-time setup: start services, run migrations, seed data
