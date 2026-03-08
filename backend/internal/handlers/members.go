@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"time"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/middleware"
+	"github.com/brygge-klubb/brygge/internal/shared"
 )
 
 type MembersHandler struct {
@@ -621,6 +621,8 @@ func (h *MembersHandler) HandleGetDirectory(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	pg := shared.ParsePagination(r, 100, 500)
+
 	rows, err := h.db.Query(ctx,
 		`SELECT u.full_name, u.phone, u.email
 		 FROM users u
@@ -628,8 +630,9 @@ func (h *MembersHandler) HandleGetDirectory(w http.ResponseWriter, r *http.Reque
 		 WHERE u.club_id = $1
 		 AND ur.role IN ('member', 'slip_owner', 'styre', 'harbour_master', 'treasurer', 'admin')
 		 GROUP BY u.id, u.full_name, u.phone, u.email
-		 ORDER BY u.full_name`,
-		claims.ClubID,
+		 ORDER BY u.full_name
+		 LIMIT $2 OFFSET $3`,
+		claims.ClubID, pg.Limit, pg.Offset,
 	)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to list directory")
@@ -661,7 +664,7 @@ func (h *MembersHandler) HandleGetDirectory(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	JSON(w, http.StatusOK, entries)
+	JSON(w, http.StatusOK, shared.NewPaginatedResponse(entries, len(entries), pg))
 }
 
 type dashboardResponse struct {
@@ -687,64 +690,56 @@ func (h *MembersHandler) HandleDashboard(w http.ResponseWriter, r *http.Request)
 
 	resp := dashboardResponse{}
 
-	// Determine highest role as membership status
-	roles, _ := h.getRoles(ctx, claims.UserID, claims.ClubID)
-	resp.MembershipStatus = bestRole(roles)
+	// Single query combining roles, waiting list, slip, and booking count
+	var rolesArr []string
+	var queuePos, queueTotal *int
+	var slipNum, slipSection *string
+	var bookingCount int
 
-	// Queue position
-	var pos, total int
-	err := h.db.QueryRow(ctx,
-		`SELECT position, (SELECT count(*) FROM waiting_list_entries WHERE club_id = $2 AND status = 'active')
-		 FROM waiting_list_entries WHERE user_id = $1 AND club_id = $2 AND status = 'active'`,
-		claims.UserID, claims.ClubID,
-	).Scan(&pos, &total)
-	if err == nil {
-		resp.QueuePosition = &pos
-		resp.QueueTotal = &total
+	err := h.db.QueryRow(ctx, `
+		WITH user_roles_agg AS (
+			SELECT array_agg(role) AS roles
+			FROM user_roles WHERE user_id = $1 AND club_id = $2
+		),
+		queue AS (
+			SELECT position,
+				(SELECT count(*) FROM waiting_list_entries WHERE club_id = $2 AND status = 'active') AS total
+			FROM waiting_list_entries WHERE user_id = $1 AND club_id = $2 AND status = 'active'
+		),
+		slip AS (
+			SELECT s.number, s.section
+			FROM slips s JOIN slip_assignments sa ON sa.slip_id = s.id
+			WHERE sa.user_id = $1 AND s.club_id = $2 AND sa.released_at IS NULL
+			LIMIT 1
+		),
+		bookings_count AS (
+			SELECT count(*) AS cnt FROM bookings
+			WHERE user_id = $1 AND club_id = $2 AND status != 'cancelled' AND end_date >= now()
+		)
+		SELECT
+			COALESCE((SELECT roles FROM user_roles_agg), '{}'),
+			(SELECT position FROM queue),
+			(SELECT total FROM queue),
+			(SELECT number FROM slip),
+			(SELECT section FROM slip),
+			(SELECT cnt FROM bookings_count)
+	`, claims.UserID, claims.ClubID,
+	).Scan(&rolesArr, &queuePos, &queueTotal, &slipNum, &slipSection, &bookingCount)
+
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "failed to load dashboard")
+		return
 	}
 
-	// Slip info
-	var slipNum, slipSection string
-	err = h.db.QueryRow(ctx,
-		`SELECT s.number, s.section FROM slips s
-		 JOIN slip_assignments sa ON sa.slip_id = s.id
-		 WHERE sa.user_id = $1 AND s.club_id = $2 AND sa.released_at IS NULL`,
-		claims.UserID, claims.ClubID,
-	).Scan(&slipNum, &slipSection)
-	if err == nil {
-		resp.Slip = &dashSlip{Number: slipNum, Location: slipSection}
+	resp.MembershipStatus = bestRole(rolesArr)
+	resp.QueuePosition = queuePos
+	resp.QueueTotal = queueTotal
+	if slipNum != nil {
+		resp.Slip = &dashSlip{Number: *slipNum, Location: *slipSection}
 	}
-
-	// Upcoming bookings count
-	var count int
-	_ = h.db.QueryRow(ctx,
-		`SELECT count(*) FROM bookings
-		 WHERE user_id = $1 AND club_id = $2 AND status != 'cancelled' AND end_date >= now()`,
-		claims.UserID, claims.ClubID,
-	).Scan(&count)
-	resp.UpcomingBookingCount = count
+	resp.UpcomingBookingCount = bookingCount
 
 	JSON(w, http.StatusOK, resp)
-}
-
-func (h *MembersHandler) getRoles(ctx context.Context, userID, clubID string) ([]string, error) {
-	rows, err := h.db.Query(ctx,
-		`SELECT role FROM user_roles WHERE user_id = $1 AND club_id = $2`,
-		userID, clubID,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var roles []string
-	for rows.Next() {
-		var role string
-		if err := rows.Scan(&role); err != nil {
-			return nil, err
-		}
-		roles = append(roles, role)
-	}
-	return roles, rows.Err()
 }
 
 func dimsMatch(a, b *float64) bool {

@@ -15,6 +15,7 @@ import (
 
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/middleware"
+	"github.com/brygge-klubb/brygge/internal/shared"
 )
 
 const (
@@ -1066,6 +1067,8 @@ func (h *BookingsHandler) HandleListBookingsAdmin(w http.ResponseWriter, r *http
 		return
 	}
 
+	pg := shared.ParsePagination(r, 50, 200)
+
 	statusFilter := r.URL.Query().Get("status")
 	resourceTypeFilter := r.URL.Query().Get("resource_type")
 	startStr := r.URL.Query().Get("start")
@@ -1114,6 +1117,8 @@ func (h *BookingsHandler) HandleListBookingsAdmin(w http.ResponseWriter, r *http
 		argIdx++
 	}
 	query += ` ORDER BY b.start_date DESC`
+	query += fmt.Sprintf(` LIMIT $%d OFFSET $%d`, argIdx, argIdx+1)
+	args = append(args, pg.Limit, pg.Offset)
 
 	rows, err := h.db.Query(ctx, query, args...)
 	if err != nil {
@@ -1146,7 +1151,7 @@ func (h *BookingsHandler) HandleListBookingsAdmin(w http.ResponseWriter, r *http
 		return
 	}
 
-	JSON(w, http.StatusOK, bookings)
+	JSON(w, http.StatusOK, shared.NewPaginatedResponse(bookings, len(bookings), pg))
 }
 
 func hasRole(roles []string, target string) bool {

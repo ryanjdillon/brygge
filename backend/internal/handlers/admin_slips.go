@@ -13,6 +13,7 @@ import (
 
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/middleware"
+	"github.com/brygge-klubb/brygge/internal/shared"
 )
 
 type AdminSlipsHandler struct {
@@ -47,6 +48,8 @@ func (h *AdminSlipsHandler) HandleListSlips(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	pg := shared.ParsePagination(r, 100, 500)
+
 	status := r.URL.Query().Get("status")
 	section := r.URL.Query().Get("section")
 
@@ -72,9 +75,9 @@ func (h *AdminSlipsHandler) HandleListSlips(w http.ResponseWriter, r *http.Reque
 		args = append(args, section)
 		argIdx++
 	}
-	_ = argIdx
-
 	query += ` ORDER BY s.section, s.number`
+	query += ` LIMIT $` + itoa(argIdx) + ` OFFSET $` + itoa(argIdx+1)
+	args = append(args, pg.Limit, pg.Offset)
 
 	rows, err := h.db.Query(ctx, query, args...)
 	if err != nil {
@@ -125,7 +128,7 @@ func (h *AdminSlipsHandler) HandleListSlips(w http.ResponseWriter, r *http.Reque
 		slips = []slipRow{}
 	}
 
-	JSON(w, http.StatusOK, map[string]any{"slips": slips})
+	JSON(w, http.StatusOK, shared.NewPaginatedResponse(slips, len(slips), pg))
 }
 
 func (h *AdminSlipsHandler) HandleGetSlip(w http.ResponseWriter, r *http.Request) {
