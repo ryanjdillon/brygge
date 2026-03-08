@@ -14,6 +14,8 @@ vi.mock('lucide-vue-next', () => ({
   MessageCircle: { template: '<span data-icon="message-circle" />' },
   Lightbulb: { template: '<span data-icon="lightbulb" />' },
   HardHat: { template: '<span data-icon="hard-hat" />' },
+  Bell: { template: '<span data-icon="bell" />' },
+  ShieldCheck: { template: '<span data-icon="shield-check" />' },
   Menu: { template: '<span data-icon="menu" />' },
   X: { template: '<span data-icon="x" />' },
 }))
