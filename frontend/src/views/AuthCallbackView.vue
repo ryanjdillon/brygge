@@ -9,15 +9,31 @@ const router = useRouter()
 const auth = useAuthStore()
 
 onMounted(async () => {
-  const at = route.query.access_token as string
-  const rt = route.query.refresh_token as string
+  const code = route.query.code as string
 
-  if (at && rt) {
-    await auth.setTokens(at, rt)
-    // Clear tokens from URL
+  if (code) {
+    // Clear code from URL immediately
     window.history.replaceState({}, '', '/auth/callback')
-    const redirect = auth.hasRole('admin') || auth.hasRole('styre') ? '/admin' : '/portal'
-    router.replace(redirect)
+
+    try {
+      const res = await fetch('/api/v1/auth/exchange', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      })
+
+      if (!res.ok) {
+        router.replace('/login')
+        return
+      }
+
+      const data = await res.json()
+      await auth.setTokens(data.access_token, data.refresh_token)
+      const redirect = auth.hasRole('admin') || auth.hasRole('styre') ? '/admin' : '/portal'
+      router.replace(redirect)
+    } catch {
+      router.replace('/login')
+    }
   } else {
     router.replace('/login')
   }

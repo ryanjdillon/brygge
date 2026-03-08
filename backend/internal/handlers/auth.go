@@ -22,6 +22,8 @@ import (
 const (
 	oauthStateTTL    = 10 * time.Minute
 	oauthStatePrefix = "oauth_state:"
+	authCodePrefix   = "auth_code:"
+	authCodeTTL      = 60 * time.Second
 	revokedPrefix    = "revoked_refresh:"
 )
 
@@ -112,22 +114,21 @@ func (h *AuthHandler) HandleVippsCallback(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	accessToken, err := h.jwt.GenerateAccessToken(userID, clubID, roles)
+	authCode, err := randomState()
 	if err != nil {
-		h.log.Error().Err(err).Msg("failed to generate access token")
+		h.log.Error().Err(err).Msg("failed to generate auth code")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
-	refreshToken, err := h.jwt.GenerateRefreshToken(userID)
-	if err != nil {
-		h.log.Error().Err(err).Msg("failed to generate refresh token")
+	codeData, _ := json.Marshal(authCodePayload{UserID: userID, ClubID: clubID, Roles: roles})
+	if err := h.redis.Set(ctx, authCodePrefix+authCode, codeData, authCodeTTL).Err(); err != nil {
+		h.log.Error().Err(err).Msg("failed to store auth code")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
-	redirectURL := fmt.Sprintf("%s/auth/callback?access_token=%s&refresh_token=%s",
-		h.config.FrontendURL, accessToken, refreshToken)
+	redirectURL := fmt.Sprintf("%s/auth/callback?code=%s", h.config.FrontendURL, authCode)
 	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
 
@@ -140,6 +141,11 @@ func (h *AuthHandler) HandleEmailRegister(w http.ResponseWriter, r *http.Request
 
 	if req.Email == "" || req.Password == "" || req.FullName == "" {
 		Error(w, http.StatusBadRequest, "email, password, and full_name are required")
+		return
+	}
+
+	if err := validatePassword(req.Password); err != nil {
+		Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -269,6 +275,18 @@ func (h *AuthHandler) HandleRefreshToken(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	if claims.ID != "" && h.db != nil {
+		var found bool
+		_ = h.db.QueryRow(r.Context(),
+			`SELECT EXISTS(SELECT 1 FROM revoked_tokens WHERE jti = $1)`,
+			claims.ID,
+		).Scan(&found)
+		if found {
+			Error(w, http.StatusUnauthorized, "token has been revoked")
+			return
+		}
+	}
+
 	var clubID string
 	err = h.db.QueryRow(r.Context(),
 		`SELECT club_id FROM users WHERE id = $1`,
@@ -307,7 +325,17 @@ func (h *AuthHandler) HandleLogout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.RefreshToken != "" {
-		h.redis.Set(r.Context(), revokedPrefix+req.RefreshToken, "1", h.config.JWTRefreshExpiry)
+		ctx := r.Context()
+		h.redis.Set(ctx, revokedPrefix+req.RefreshToken, "1", h.config.JWTRefreshExpiry)
+
+		claims, err := h.jwt.ValidateRefreshToken(req.RefreshToken)
+		if err == nil && claims.ID != "" && h.db != nil {
+			_, _ = h.db.Exec(ctx,
+				`INSERT INTO revoked_tokens (jti, user_id, expires_at)
+				 VALUES ($1, $2, $3) ON CONFLICT (jti) DO NOTHING`,
+				claims.ID, claims.UserID, claims.ExpiresAt.Time,
+			)
+		}
 	}
 
 	JSON(w, http.StatusOK, map[string]string{"status": "logged_out"})
@@ -449,6 +477,63 @@ func (h *AuthHandler) upsertVippsUser(ctx context.Context, info *auth.VippsUserI
 	return userID, clubID, roles, nil
 }
 
+func (h *AuthHandler) HandleAuthCodeExchange(w http.ResponseWriter, r *http.Request) {
+	var req authCodeExchangeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if req.Code == "" {
+		Error(w, http.StatusBadRequest, "code is required")
+		return
+	}
+
+	key := authCodePrefix + req.Code
+	data, err := h.redis.GetDel(r.Context(), key).Result()
+	if err != nil || data == "" {
+		Error(w, http.StatusBadRequest, "invalid or expired code")
+		return
+	}
+
+	var payload authCodePayload
+	if err := json.Unmarshal([]byte(data), &payload); err != nil {
+		h.log.Error().Err(err).Msg("failed to decode auth code payload")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	accessToken, err := h.jwt.GenerateAccessToken(payload.UserID, payload.ClubID, payload.Roles)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to generate access token")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	refreshToken, err := h.jwt.GenerateRefreshToken(payload.UserID)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to generate refresh token")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	JSON(w, http.StatusOK, tokenResponse{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		TokenType:    "Bearer",
+	})
+}
+
+type authCodeExchangeRequest struct {
+	Code string `json:"code"`
+}
+
+type authCodePayload struct {
+	UserID string   `json:"user_id"`
+	ClubID string   `json:"club_id"`
+	Roles  []string `json:"roles"`
+}
+
 type tokenResponse struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token,omitempty"`
@@ -478,6 +563,13 @@ type meResponse struct {
 	Roles    []string `json:"roles"`
 	FullName string   `json:"full_name"`
 	Email    string   `json:"email"`
+}
+
+func validatePassword(password string) error {
+	if len(password) < 12 {
+		return fmt.Errorf("password must be at least 12 characters")
+	}
+	return nil
 }
 
 func randomState() (string, error) {

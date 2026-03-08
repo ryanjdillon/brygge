@@ -108,10 +108,11 @@ func main() {
 	r.Use(chimw.RealIP)
 	r.Use(requestLogger(log))
 	r.Use(chimw.Recoverer)
+	r.Use(securityHeaders)
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"*"},
+		AllowedOrigins:   []string{cfg.FrontendURL},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		ExposedHeaders:   []string{"Link"},
 		AllowCredentials: true,
 		MaxAge:           300,
@@ -127,6 +128,7 @@ func main() {
 			r.Post("/register", authHandler.HandleEmailRegister)
 			r.Post("/login", authHandler.HandleEmailLogin)
 			r.Post("/refresh", authHandler.HandleRefreshToken)
+			r.Post("/exchange", authHandler.HandleAuthCodeExchange)
 
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.Authenticate(jwtService))
@@ -187,7 +189,7 @@ func main() {
 			r.Get("/hoist/slots", bookingsHandler.HandleHoistSlots)
 
 			r.Group(func(r chi.Router) {
-				r.Use(middleware.OptionalAuth(jwtService))
+				r.Use(middleware.OptionalAuth(jwtService, middleware.WithLogger(log)))
 				r.Post("/", bookingsHandler.HandleCreateBooking)
 			})
 
@@ -514,6 +516,21 @@ func requestLogger(log zerolog.Logger) func(http.Handler) http.Handler {
 				Msg("request")
 		})
 	}
+}
+
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		w.Header().Set("Content-Security-Policy",
+			"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "+
+				"img-src 'self' data: https:; connect-src 'self' https://api.vipps.no https://apitest.vipps.no https://tiles.stadiamaps.com; "+
+				"font-src 'self'")
+		next.ServeHTTP(w, r)
+	})
 }
 
 func serveFrontend(r chi.Router, frontendFS fs.FS) {

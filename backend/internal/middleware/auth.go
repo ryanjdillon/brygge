@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/brygge-klubb/brygge/internal/auth"
+	"github.com/rs/zerolog"
 )
 
 type contextKey struct{}
@@ -40,7 +41,11 @@ func Authenticate(jwtService *auth.JWTService) func(http.Handler) http.Handler {
 
 // OptionalAuth extracts JWT claims if present but does not require authentication.
 // If no token is provided or the token is invalid, the request proceeds without claims.
-func OptionalAuth(jwtService *auth.JWTService) func(http.Handler) http.Handler {
+func OptionalAuth(jwtService *auth.JWTService, opts ...func(*optionalAuthConfig)) func(http.Handler) http.Handler {
+	cfg := optionalAuthConfig{}
+	for _, o := range opts {
+		o(&cfg)
+	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			header := r.Header.Get("Authorization")
@@ -57,6 +62,9 @@ func OptionalAuth(jwtService *auth.JWTService) func(http.Handler) http.Handler {
 
 			claims, err := jwtService.ValidateAccessToken(token)
 			if err != nil {
+				if cfg.log != nil {
+					cfg.log.Warn().Err(err).Str("ip", r.RemoteAddr).Msg("invalid token on optional auth endpoint")
+				}
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -65,6 +73,14 @@ func OptionalAuth(jwtService *auth.JWTService) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+type optionalAuthConfig struct {
+	log *zerolog.Logger
+}
+
+func WithLogger(log zerolog.Logger) func(*optionalAuthConfig) {
+	return func(c *optionalAuthConfig) { c.log = &log }
 }
 
 func RequireRole(roles ...string) func(http.Handler) http.Handler {
