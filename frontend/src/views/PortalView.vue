@@ -4,6 +4,7 @@ import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useFeatures } from '@/composables/useFeatures'
+import ErrorBoundary from '@/components/ui/ErrorBoundary.vue'
 import {
   LayoutDashboard,
   User,
@@ -123,7 +124,9 @@ function closeSidebar() {
       </div>
 
       <main class="p-6 lg:p-8">
-        <RouterView />
+        <ErrorBoundary>
+          <RouterView />
+        </ErrorBoundary>
       </main>
     </div>
   </div>

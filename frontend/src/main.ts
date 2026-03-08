@@ -31,6 +31,10 @@ app.use(router)
 app.use(VueQueryPlugin)
 app.use(i18n)
 
+app.config.errorHandler = (err, _instance, info) => {
+  console.error('Global Vue error:', err, info)
+}
+
 app.mount('#app')
 
 if ('serviceWorker' in navigator) {

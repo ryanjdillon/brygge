@@ -3,6 +3,8 @@ import { RouterView } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import NavBar from '@/components/layout/NavBar.vue'
 import Footer from '@/components/layout/Footer.vue'
+import ToastContainer from '@/components/ui/ToastContainer.vue'
+import NetworkStatus from '@/components/ui/NetworkStatus.vue'
 
 const { t } = useI18n()
 </script>
@@ -15,5 +17,7 @@ const { t } = useI18n()
       <RouterView />
     </main>
     <Footer />
+    <ToastContainer />
+    <NetworkStatus />
   </div>
 </template>
