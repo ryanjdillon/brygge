@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"crypto/rand"
 	"fmt"
 	"time"
 
@@ -8,6 +9,14 @@ import (
 
 	"github.com/brygge-klubb/brygge/internal/config"
 )
+
+func newJTI() string {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	b[6] = (b[6] & 0x0f) | 0x40
+	b[8] = (b[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
+}
 
 type Claims struct {
 	jwt.RegisteredClaims
@@ -39,6 +48,7 @@ func (s *JWTService) GenerateAccessToken(userID, clubID string, roles []string) 
 	now := time.Now()
 	claims := Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        newJTI(),
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(s.accessExpiry)),
 			Issuer:    "brygge",
@@ -60,6 +70,7 @@ func (s *JWTService) GenerateRefreshToken(userID string) (string, error) {
 	now := time.Now()
 	claims := RefreshClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        newJTI(),
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(s.refreshExpiry)),
 			Issuer:    "brygge",
