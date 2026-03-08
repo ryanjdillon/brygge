@@ -321,9 +321,11 @@ func (h *AuthHandler) HandleMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var fullName, email string
-	_ = h.db.QueryRow(r.Context(),
-		`SELECT full_name, email FROM users WHERE id = $1`, claims.UserID,
-	).Scan(&fullName, &email)
+	if h.db != nil {
+		_ = h.db.QueryRow(r.Context(),
+			`SELECT full_name, email FROM users WHERE id = $1`, claims.UserID,
+		).Scan(&fullName, &email)
+	}
 
 	JSON(w, http.StatusOK, meResponse{
 		UserID:   claims.UserID,

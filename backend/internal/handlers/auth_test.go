@@ -50,8 +50,8 @@ func TestHandleVippsLogin(t *testing.T) {
 	if !strings.Contains(location, "test-vipps-client-id") {
 		t.Errorf("expected Location to contain client_id, got %s", location)
 	}
-	if !strings.Contains(location, "apitest.vipps.no") {
-		t.Errorf("expected Location to use test base URL, got %s", location)
+	if !strings.Contains(location, "localhost:8090") {
+		t.Errorf("expected Location to use mock browser URL, got %s", location)
 	}
 }
 

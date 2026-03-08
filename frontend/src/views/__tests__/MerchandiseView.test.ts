@@ -93,7 +93,7 @@ describe('MerchandiseView', () => {
     const card = wrapper.findAll('button').find((b) => b.text().includes('T-skjorte'))
     await card!.trigger('click')
     expect(wrapper.find('[role="dialog"]').exists()).toBe(true)
-    expect(wrapper.text()).toContain('Størrelse')
+    expect(wrapper.text()).toContain('merchandise.size')
   })
 
   it('shows size options in modal for product with variants', async () => {
@@ -110,7 +110,7 @@ describe('MerchandiseView', () => {
     const card = wrapper.findAll('button').find((b) => b.text().includes('T-skjorte'))
     await card!.trigger('click')
     const dialog = wrapper.find('[role="dialog"]')
-    const addBtn = dialog.findAll('button').find((b) => b.text().includes('Legg i handlekurv'))
+    const addBtn = dialog.findAll('button').find((b) => b.text().includes('merchandise.addToCart'))
     expect(addBtn!.attributes('disabled')).toBeDefined()
   })
 
