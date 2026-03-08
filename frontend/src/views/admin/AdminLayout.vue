@@ -19,6 +19,7 @@ import {
   HardHat,
   MapPin,
   Bell,
+  ShieldCheck,
   Menu,
   X,
 } from 'lucide-vue-next'
@@ -75,6 +76,7 @@ const navGroups = computed<NavGroup[]>(() => {
         { to: '/admin/documents', icon: FileText, label: t('admin.sidebar.documents') },
         { to: '/admin/communication', icon: Megaphone, label: t('admin.sidebar.communication') },
         { to: '/admin/notifications', icon: Bell, label: t('notifications.admin.title') },
+        { to: '/admin/gdpr', icon: ShieldCheck, label: t('gdpr.admin.title') },
       ],
     },
   ]
