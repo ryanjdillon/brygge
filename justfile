@@ -102,6 +102,21 @@ lint-vue:
 # Lint all
 lint: lint-go lint-vue
 
+# Run Go security scanner (gosec)
+security-go:
+    cd backend && gosec -exclude-dir=gen ./...
+
+# Run Go vulnerability check
+vuln-go:
+    cd backend && govulncheck ./...
+
+# Run npm dependency audit
+audit-npm:
+    cd frontend && npm audit --audit-level=high
+
+# Run all security checks
+security: security-go vuln-go audit-npm
+
 # Format all code
 fmt:
     cd backend && gofmt -w .
