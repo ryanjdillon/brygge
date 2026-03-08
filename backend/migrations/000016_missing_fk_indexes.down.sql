@@ -1,0 +1,15 @@
+DROP INDEX IF EXISTS idx_project_events_project;
+DROP INDEX IF EXISTS idx_project_events_event;
+DROP INDEX IF EXISTS idx_boats_model;
+DROP INDEX IF EXISTS idx_waiting_list_boat;
+DROP INDEX IF EXISTS idx_slip_assignments_boat;
+DROP INDEX IF EXISTS idx_shopping_list_items_task;
+DROP INDEX IF EXISTS idx_cancellation_policies_resource;
+DROP INDEX IF EXISTS idx_slip_share_rebates_booking;
+DROP INDEX IF EXISTS idx_order_lines_product;
+DROP INDEX IF EXISTS idx_order_lines_variant;
+DROP INDEX IF EXISTS idx_push_subscriptions_user;
+DROP INDEX IF EXISTS idx_deletion_requests_user;
+DROP INDEX IF EXISTS idx_deletion_requests_club_status;
+DROP INDEX IF EXISTS idx_notif_prefs_user_club;
+DROP INDEX IF EXISTS idx_forum_messages_room;
