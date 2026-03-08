@@ -108,3 +108,84 @@ func TestHandleContactFormInvalidJSON(t *testing.T) {
 		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
 	}
 }
+
+func TestHandleContactFormInvalidEmail(t *testing.T) {
+	h := newTestContactHandler(t)
+
+	tests := []struct {
+		name  string
+		email string
+	}{
+		{"no at sign", "invalid"},
+		{"no domain", "user@"},
+		{"no tld", "user@domain"},
+		{"no local part", "@domain.com"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			body := `{"name":"Test","email":"` + tt.email + `","subject":"Hi","message":"This is a valid message."}`
+			req := httptest.NewRequest(http.MethodPost, "/contact", strings.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+
+			h.HandleContactForm(rec, req)
+
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("expected 400, got %d; body: %s", rec.Code, rec.Body.String())
+			}
+
+			var resp errorResponse
+			json.NewDecoder(rec.Body).Decode(&resp)
+			if !strings.Contains(resp.Error, "email") {
+				t.Errorf("expected error about email, got %q", resp.Error)
+			}
+		})
+	}
+}
+
+func TestHandleContactFormMessageTooShort(t *testing.T) {
+	h := newTestContactHandler(t)
+
+	body := `{"name":"Test","email":"user@example.com","subject":"Hi","message":"short"}`
+	req := httptest.NewRequest(http.MethodPost, "/contact", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	h.HandleContactForm(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d; body: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp errorResponse
+	json.NewDecoder(rec.Body).Decode(&resp)
+	if !strings.Contains(resp.Error, "10 characters") {
+		t.Errorf("expected error about 10 characters, got %q", resp.Error)
+	}
+}
+
+func TestIsValidEmail(t *testing.T) {
+	tests := []struct {
+		email string
+		valid bool
+	}{
+		{"user@example.com", true},
+		{"a@b.no", true},
+		{"name+tag@domain.co.uk", true},
+		{"invalid", false},
+		{"@domain.com", false},
+		{"user@", false},
+		{"user@domain", false},
+		{"", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.email, func(t *testing.T) {
+			got := isValidEmail(tt.email)
+			if got != tt.valid {
+				t.Errorf("isValidEmail(%q) = %v, want %v", tt.email, got, tt.valid)
+			}
+		})
+	}
+}
