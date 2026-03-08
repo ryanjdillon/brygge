@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
+import { useFeatures } from '@/composables/useFeatures'
 import {
   Users,
   Anchor,
@@ -26,6 +27,7 @@ import {
 
 const { t } = useI18n()
 const auth = useAuthStore()
+const { isEnabled } = useFeatures()
 const route = useRoute()
 
 const sidebarOpen = ref(false)
@@ -35,6 +37,7 @@ interface NavItem {
   icon: typeof Users
   label: string
   roles?: string[]
+  feature?: 'bookings' | 'projects' | 'calendar' | 'commerce' | 'communications'
 }
 
 interface NavGroup {
@@ -56,26 +59,26 @@ const navGroups = computed<NavGroup[]>(() => {
       items: [
         { to: '/admin/slips', icon: Anchor, label: t('admin.sidebar.slips'), roles: ['styre', 'harbour_master', 'admin'] },
         { to: '/admin/boats', icon: Ship, label: t('admin.sidebar.boats'), roles: ['styre', 'harbour_master', 'admin'] },
-        { to: '/admin/bookings', icon: CalendarCheck, label: t('admin.sidebar.bookings'), roles: ['styre', 'harbour_master', 'admin'] },
-        { to: '/admin/projects', icon: FolderKanban, label: t('admin.sidebar.projects') },
-        { to: '/admin/dugnad', icon: HardHat, label: t('dugnad.title') },
+        { to: '/admin/bookings', icon: CalendarCheck, label: t('admin.sidebar.bookings'), roles: ['styre', 'harbour_master', 'admin'], feature: 'bookings' },
+        { to: '/admin/projects', icon: FolderKanban, label: t('admin.sidebar.projects'), feature: 'projects' },
+        { to: '/admin/dugnad', icon: HardHat, label: t('dugnad.title'), feature: 'projects' },
         { to: '/admin/map', icon: MapPin, label: t('admin.sidebar.mapMarkers') },
       ],
     },
     {
       titleKey: 'admin.groupFinance',
       items: [
-        { to: '/admin/pricing', icon: DollarSign, label: t('admin.sidebar.pricing'), roles: ['admin', 'treasurer'] },
-        { to: '/admin/products', icon: ShoppingBag, label: t('admin.sidebar.products'), roles: ['styre', 'admin'] },
-        { to: '/admin/financials', icon: Banknote, label: t('admin.sidebar.financials'), roles: ['treasurer', 'styre', 'admin'] },
+        { to: '/admin/pricing', icon: DollarSign, label: t('admin.sidebar.pricing'), roles: ['admin', 'treasurer'], feature: 'commerce' },
+        { to: '/admin/products', icon: ShoppingBag, label: t('admin.sidebar.products'), roles: ['styre', 'admin'], feature: 'commerce' },
+        { to: '/admin/financials', icon: Banknote, label: t('admin.sidebar.financials'), roles: ['treasurer', 'styre', 'admin'], feature: 'commerce' },
       ],
     },
     {
       titleKey: 'admin.groupArchive',
       items: [
         { to: '/admin/documents', icon: FileText, label: t('admin.sidebar.documents') },
-        { to: '/admin/communication', icon: Megaphone, label: t('admin.sidebar.communication') },
-        { to: '/admin/notifications', icon: Bell, label: t('notifications.admin.title') },
+        { to: '/admin/communication', icon: Megaphone, label: t('admin.sidebar.communication'), feature: 'communications' },
+        { to: '/admin/notifications', icon: Bell, label: t('notifications.admin.title'), feature: 'communications' },
         { to: '/admin/gdpr', icon: ShieldCheck, label: t('gdpr.admin.title') },
       ],
     },
@@ -85,6 +88,7 @@ const navGroups = computed<NavGroup[]>(() => {
     .map((group) => ({
       ...group,
       items: group.items.filter((item) => {
+        if (item.feature && !isEnabled(item.feature)) return false
         if (!item.roles) return true
         return item.roles.some((role) => auth.hasRole(role))
       }),

@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
+import { useFeatures } from '@/composables/useFeatures'
 import {
   LayoutDashboard,
   User,
@@ -23,6 +24,7 @@ import {
 
 const { t } = useI18n()
 const auth = useAuthStore()
+const { isEnabled } = useFeatures()
 const route = useRoute()
 
 const sidebarOpen = ref(false)
@@ -32,6 +34,7 @@ interface NavItem {
   icon: typeof LayoutDashboard
   label: string
   roles?: string[]
+  feature?: 'bookings' | 'projects' | 'calendar' | 'commerce' | 'communications'
 }
 
 const navItems = computed<NavItem[]>(() => {
@@ -43,15 +46,16 @@ const navItems = computed<NavItem[]>(() => {
     { to: '/portal/documents', icon: FileText, label: t('portal.sidebar.documents') },
     { to: '/portal/waiting-list', icon: ListOrdered, label: t('portal.sidebar.waitingList') },
     { to: '/portal/slip', icon: Anchor, label: t('portal.sidebar.slip'), roles: ['slip_owner'] },
-    { to: '/portal/bookings', icon: CalendarDays, label: t('portal.sidebar.bookings') },
-    { to: '/portal/dugnad', icon: HardHat, label: t('dugnad.title') },
-    { to: '/portal/notifications', icon: Bell, label: t('notifications.title') },
+    { to: '/portal/bookings', icon: CalendarDays, label: t('portal.sidebar.bookings'), feature: 'bookings' },
+    { to: '/portal/dugnad', icon: HardHat, label: t('dugnad.title'), feature: 'projects' },
+    { to: '/portal/notifications', icon: Bell, label: t('notifications.title'), feature: 'communications' },
     { to: '/portal/privacy', icon: ShieldCheck, label: t('gdpr.title') },
     { to: '/portal/feature-requests', icon: Lightbulb, label: t('portal.sidebar.featureRequests'), roles: ['member', 'slip_owner', 'styre', 'admin'] },
-    { to: '/portal/forum', icon: MessageCircle, label: t('portal.sidebar.forum'), roles: ['member', 'slip_owner', 'styre', 'admin'] },
+    { to: '/portal/forum', icon: MessageCircle, label: t('portal.sidebar.forum'), roles: ['member', 'slip_owner', 'styre', 'admin'], feature: 'communications' },
   ]
 
   return items.filter((item) => {
+    if (item.feature && !isEnabled(item.feature)) return false
     if (!item.roles) return true
     return item.roles.some((role) => auth.hasRole(role))
   })
