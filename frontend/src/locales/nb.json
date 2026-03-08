@@ -924,5 +924,17 @@
       "publish": "Publiser umiddelbart",
       "save": "Lagre"
     }
+  },
+  "error": {
+    "title": "Noe gikk galt",
+    "description": "En uventet feil oppstod. Vennligst prøv igjen.",
+    "retry": "Prøv igjen",
+    "unauthorized": "Vennligst logg inn for å fortsette.",
+    "forbidden": "Du har ikke tilgang til denne handlingen.",
+    "notFound": "Den forespurte ressursen ble ikke funnet.",
+    "rateLimited": "For mange forespørsler. Vennligst vent litt.",
+    "validation": "Vennligst sjekk input og prøv igjen.",
+    "offline": "Du ser ut til å være frakoblet.",
+    "backOnline": "Tilkoblingen er gjenopprettet."
   }
 }
