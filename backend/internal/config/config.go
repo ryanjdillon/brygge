@@ -50,6 +50,17 @@ type Config struct {
 	// Optional integrations
 	ResendAPIKey    string
 	AnthropicAPIKey string
+
+	// Feature flags
+	Features Features
+}
+
+type Features struct {
+	Bookings       bool
+	Projects       bool
+	Calendar       bool
+	Commerce       bool
+	Communications bool
 }
 
 func Load() Config {
@@ -87,6 +98,14 @@ func Load() Config {
 
 		ResendAPIKey:    envStr("RESEND_API_KEY", ""),
 		AnthropicAPIKey: envStr("ANTHROPIC_API_KEY", ""),
+
+		Features: Features{
+			Bookings:       envBool("FEATURE_BOOKINGS", true),
+			Projects:       envBool("FEATURE_PROJECTS", true),
+			Calendar:       envBool("FEATURE_CALENDAR", true),
+			Commerce:       envBool("FEATURE_COMMERCE", true),
+			Communications: envBool("FEATURE_COMMUNICATIONS", true),
+		},
 	}
 }
 
