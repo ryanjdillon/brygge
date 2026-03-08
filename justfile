@@ -141,3 +141,9 @@ rollback sha host="brygge":
 # Build Docker image locally
 docker-build:
     docker build -t brygge:local --target production .
+
+# ── Database ──────────────────────────────────────────────────
+
+# Run EXPLAIN ANALYZE on a query
+explain query:
+    psql "$DATABASE_URL" -c "EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT) {{query}}"
