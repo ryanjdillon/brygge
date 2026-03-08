@@ -892,5 +892,41 @@
       "testSent": "Test notification sent",
       "testFailed": "Failed to send test notification"
     }
+  },
+  "gdpr": {
+    "title": "Privacy & Data",
+    "subtitle": "Manage your personal data and privacy settings",
+    "exportTitle": "Download my data",
+    "exportDescription": "Download all your personal data in JSON format",
+    "exportButton": "Download",
+    "deleteTitle": "Delete account",
+    "deleteDescription": "Request permanent deletion of your account. A 14-day grace period applies before data is removed.",
+    "deleteButton": "Request deletion",
+    "deleteConfirm": "Are you sure? You will lose your slip, waiting list position, and all club benefits. You have 14 days to cancel.",
+    "deletePending": "Your account deletion is pending.",
+    "deleteGraceEnd": "Your data will be deleted after {date}.",
+    "cancelDelete": "Cancel deletion",
+    "consentsTitle": "Consent history",
+    "noConsents": "No consents recorded",
+    "consentType": {
+      "terms": "Terms of service",
+      "privacy_policy": "Privacy policy"
+    },
+    "admin": {
+      "title": "GDPR Management",
+      "subtitle": "Manage deletion requests and legal documents",
+      "deletionRequests": "Deletion Requests",
+      "noPending": "No pending deletion requests",
+      "process": "Process",
+      "graceNotExpired": "Grace period has not expired",
+      "legalDocuments": "Legal Documents",
+      "noDocuments": "No legal documents",
+      "createDocument": "Create document",
+      "docType": "Document type",
+      "version": "Version",
+      "content": "Content",
+      "publish": "Publish immediately",
+      "save": "Save"
+    }
   }
 }

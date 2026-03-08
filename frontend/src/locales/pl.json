@@ -860,5 +860,41 @@
       "emailInvalid": "Nieprawidłowy adres e-mail",
       "phoneInvalid": "Nieprawidłowy numer telefonu"
     }
+  },
+  "gdpr": {
+    "title": "Privacy & Data",
+    "subtitle": "Manage your personal data, export your information, or request account deletion.",
+    "exportTitle": "Export My Data",
+    "exportDescription": "Download a copy of all your personal data stored in the system.",
+    "exportButton": "Download Export",
+    "deleteTitle": "Delete My Account",
+    "deleteDescription": "Request permanent deletion of your account. A 14-day grace period applies during which you can cancel.",
+    "deleteButton": "Request Deletion",
+    "deleteConfirm": "Are you sure you want to request account deletion? You will have 14 days to cancel.",
+    "deletePending": "Your account deletion request is pending.",
+    "deleteGraceEnd": "Grace period ends: {date}",
+    "cancelDelete": "Cancel Deletion Request",
+    "consentsTitle": "Consent History",
+    "noConsents": "No consents recorded yet.",
+    "consentType": {
+      "terms": "Terms of Service",
+      "privacy_policy": "Privacy Policy"
+    },
+    "admin": {
+      "title": "GDPR & Privacy",
+      "subtitle": "Manage deletion requests and legal documents.",
+      "deletionRequests": "Deletion Requests",
+      "noPending": "No pending deletion requests.",
+      "process": "Process Deletion",
+      "graceNotExpired": "Grace period active",
+      "legalDocuments": "Legal Documents",
+      "createDocument": "New Document",
+      "noDocuments": "No legal documents yet.",
+      "docType": "Document Type",
+      "version": "Version",
+      "content": "Content",
+      "publish": "Publish immediately",
+      "save": "Create Document"
+    }
   }
 }
