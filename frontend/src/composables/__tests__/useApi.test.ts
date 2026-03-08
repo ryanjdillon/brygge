@@ -67,7 +67,7 @@ describe('useApi', () => {
     } catch (err) {
       expect(err).toBeInstanceOf(ApiError)
       expect((err as ApiError).status).toBe(404)
-      expect((err as ApiError).message).toBe('Not Found')
+      expect((err as ApiError).message).toBe('Request failed')
     }
   })
 
@@ -84,6 +84,27 @@ describe('useApi', () => {
 
     const calledHeaders = fetchSpy.mock.calls[0][1]?.headers as Headers
     expect(calledHeaders.get('Content-Type')).toBe('application/json')
+  })
+
+  it('fetchApi parses JSON error with code', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: 'Rate limited', code: 'RATE_LIMITED' }), {
+        status: 429,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+
+    const { fetchApi } = useApi()
+
+    try {
+      await fetchApi('/api/test')
+      expect.fail('Should have thrown')
+    } catch (err) {
+      expect(err).toBeInstanceOf(ApiError)
+      expect((err as ApiError).status).toBe(429)
+      expect((err as ApiError).message).toBe('Rate limited')
+      expect((err as ApiError).code).toBe('RATE_LIMITED')
+    }
   })
 
   it('fetchApi returns undefined for 204 responses', async () => {

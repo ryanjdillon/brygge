@@ -4,6 +4,7 @@ export class ApiError extends Error {
   constructor(
     public status: number,
     message: string,
+    public code?: string,
   ) {
     super(message)
     this.name = 'ApiError'
@@ -29,14 +30,16 @@ export function useApi() {
 
     const response = await fetch(url, { ...options, headers })
 
-    if (response.status === 401) {
-      auth.logout()
-      throw new ApiError(401, 'Unauthorized')
-    }
-
     if (!response.ok) {
-      const text = await response.text().catch(() => 'Request failed')
-      throw new ApiError(response.status, text)
+      const body = await response.json().catch(() => null)
+      const message = body?.error || response.statusText || 'Request failed'
+      const code = body?.code as string | undefined
+
+      if (response.status === 401) {
+        auth.logout()
+      }
+
+      throw new ApiError(response.status, message, code)
     }
 
     if (response.status === 204) {
