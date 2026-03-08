@@ -100,6 +100,7 @@ func main() {
 	clubSettingsHandler := handlers.NewClubSettingsHandler(db, &cfg, log)
 	slipSharesHandler := handlers.NewSlipSharesHandler(db, &cfg, log)
 	notificationsHandler := handlers.NewNotificationsHandler(db, &cfg, log)
+	gdprHandler := handlers.NewGDPRHandler(db, &cfg, log)
 
 	r := chi.NewRouter()
 
@@ -139,6 +140,8 @@ func main() {
 		r.Get("/boat-models", boatModelsHandler.HandleSearch)
 		r.Get("/weather", weatherHandler.HandleGetWeather)
 		r.Post("/contact", contactHandler.HandleContactForm)
+
+		r.Get("/legal/{docType}", gdprHandler.HandleGetLegalDocument)
 
 		r.Route("/map", func(r chi.Router) {
 			r.Get("/coordinates", mapHandler.HandleGetClubCoordinates)
@@ -228,6 +231,12 @@ func main() {
 			r.Get("/me/slip", membersHandler.HandleGetMySlip)
 			r.Post("/me/slip/issues", membersHandler.HandleReportIssue)
 			r.Get("/me/dugnad-hours", dugnadHandler.HandleGetMyDugnadHours)
+			r.Get("/me/data-export", gdprHandler.HandleDataExport)
+			r.Post("/me/delete-request", gdprHandler.HandleRequestDeletion)
+			r.Delete("/me/delete-request", gdprHandler.HandleCancelDeletion)
+			r.Get("/me/delete-request", gdprHandler.HandleGetDeletionStatus)
+			r.Post("/me/consent", gdprHandler.HandleRecordConsent)
+			r.Get("/me/consents", gdprHandler.HandleGetMyConsents)
 			r.Get("/directory", membersHandler.HandleGetDirectory)
 		})
 
@@ -436,6 +445,14 @@ func main() {
 				r.Get("/config", notificationsHandler.HandleGetConfig)
 				r.Put("/config", notificationsHandler.HandleUpdateConfig)
 				r.Post("/test", notificationsHandler.HandleTestPush)
+			})
+
+			r.Route("/gdpr", func(r chi.Router) {
+				r.Use(middleware.RequireRole("styre", "admin"))
+				r.Get("/deletion-requests", gdprHandler.HandleListDeletionRequests)
+				r.Post("/deletion-requests/{requestID}/process", gdprHandler.HandleProcessDeletion)
+				r.Get("/legal", gdprHandler.HandleAdminListLegalDocuments)
+				r.Post("/legal", gdprHandler.HandleAdminCreateLegalDocument)
 			})
 		})
 	})
