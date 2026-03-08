@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/rs/zerolog"
 
@@ -43,6 +44,16 @@ func (h *ContactHandler) HandleContactForm(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	if !isValidEmail(req.Email) {
+		Error(w, http.StatusBadRequest, "invalid email address")
+		return
+	}
+
+	if len(strings.TrimSpace(req.Message)) < 10 {
+		Error(w, http.StatusBadRequest, "message must be at least 10 characters")
+		return
+	}
+
 	h.log.Info().
 		Str("name", req.Name).
 		Str("email", req.Email).
@@ -50,4 +61,14 @@ func (h *ContactHandler) HandleContactForm(w http.ResponseWriter, r *http.Reques
 		Msg("contact form submission received")
 
 	JSON(w, http.StatusOK, map[string]string{"status": "received"})
+}
+
+func isValidEmail(email string) bool {
+	at := strings.Index(email, "@")
+	if at < 1 {
+		return false
+	}
+	domain := email[at+1:]
+	dot := strings.LastIndex(domain, ".")
+	return dot > 0 && dot < len(domain)-1
 }

@@ -118,6 +118,10 @@ func main() {
 		MaxAge:           300,
 	}))
 
+	strictRL := middleware.RateLimitByIP(rdb, log, 5, time.Minute)
+	standardRL := middleware.RateLimitByIP(rdb, log, 30, time.Minute)
+	authedRL := middleware.RateLimitByUser(rdb, log, 120, time.Minute)
+
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Method(http.MethodGet, "/health", healthHandler)
 
@@ -125,23 +129,31 @@ func main() {
 			r.Get("/vipps/status", authHandler.HandleVippsStatus)
 			r.Get("/vipps/login", authHandler.HandleVippsLogin)
 			r.Get("/vipps/callback", authHandler.HandleVippsCallback)
-			r.Post("/register", authHandler.HandleEmailRegister)
-			r.Post("/login", authHandler.HandleEmailLogin)
-			r.Post("/refresh", authHandler.HandleRefreshToken)
-			r.Post("/exchange", authHandler.HandleAuthCodeExchange)
+
+			r.Group(func(r chi.Router) {
+				r.Use(strictRL)
+				r.Post("/register", authHandler.HandleEmailRegister)
+				r.Post("/login", authHandler.HandleEmailLogin)
+				r.Post("/refresh", authHandler.HandleRefreshToken)
+				r.Post("/exchange", authHandler.HandleAuthCodeExchange)
+			})
 
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.Authenticate(jwtService))
+				r.Use(authedRL)
 				r.Post("/logout", authHandler.HandleLogout)
 				r.Get("/me", authHandler.HandleMe)
 			})
 		})
 
-		r.Get("/pricing", priceItemsHandler.HandleListPublic)
-		r.Get("/products", productsHandler.HandleListPublic)
-		r.Get("/boat-models", boatModelsHandler.HandleSearch)
-		r.Get("/weather", weatherHandler.HandleGetWeather)
-		r.Post("/contact", contactHandler.HandleContactForm)
+		r.Group(func(r chi.Router) {
+			r.Use(standardRL)
+			r.Get("/pricing", priceItemsHandler.HandleListPublic)
+			r.Get("/products", productsHandler.HandleListPublic)
+			r.Get("/boat-models", boatModelsHandler.HandleSearch)
+			r.Get("/weather", weatherHandler.HandleGetWeather)
+			r.Post("/contact", contactHandler.HandleContactForm)
+		})
 
 		r.Get("/legal/{docType}", gdprHandler.HandleGetLegalDocument)
 
