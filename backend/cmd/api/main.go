@@ -19,6 +19,7 @@ import (
 
 	backend "github.com/brygge-klubb/brygge"
 	"github.com/brygge-klubb/brygge/internal/ai"
+	"github.com/brygge-klubb/brygge/internal/audit"
 	"github.com/brygge-klubb/brygge/internal/auth"
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/handlers"
@@ -73,8 +74,11 @@ func main() {
 		log.Info().Msg("AI document processing disabled (no ANTHROPIC_API_KEY)")
 	}
 
+	auditService := audit.NewService(db, log)
+
 	healthHandler := handlers.NewHealthHandler(db, rdb)
-	authHandler := handlers.NewAuthHandler(db, rdb, jwtService, vippsClient, &cfg, log)
+	auditHandler := handlers.NewAuditHandler(db, auditService, &cfg, log)
+	authHandler := handlers.NewAuthHandler(db, rdb, jwtService, vippsClient, &cfg, log, handlers.WithAuditService(auditService))
 	waitingListHandler := handlers.NewWaitingListHandler(db, rdb, &cfg, log)
 	adminUsersHandler := handlers.NewAdminUsersHandler(db, &cfg, log)
 	adminSlipsHandler := handlers.NewAdminSlipsHandler(db, &cfg, log)
@@ -349,6 +353,11 @@ func main() {
 
 		r.Route("/admin", func(r chi.Router) {
 			r.Use(middleware.Authenticate(jwtService))
+
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.RequireRole("styre", "admin"))
+				r.Get("/audit", auditHandler.HandleListAuditLog)
+			})
 
 			r.Route("/dugnad", func(r chi.Router) {
 				r.Use(middleware.RequireRole("styre"))

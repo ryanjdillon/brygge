@@ -14,6 +14,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog"
 
+	"github.com/brygge-klubb/brygge/internal/audit"
 	"github.com/brygge-klubb/brygge/internal/auth"
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/middleware"
@@ -32,6 +33,7 @@ type AuthHandler struct {
 	redis  *redis.Client
 	jwt    *auth.JWTService
 	vipps  *auth.VippsClient
+	audit  *audit.Service
 	config *config.Config
 	log    zerolog.Logger
 }
@@ -43,8 +45,9 @@ func NewAuthHandler(
 	vipps *auth.VippsClient,
 	cfg *config.Config,
 	log zerolog.Logger,
+	opts ...func(*AuthHandler),
 ) *AuthHandler {
-	return &AuthHandler{
+	h := &AuthHandler{
 		db:     db,
 		redis:  rdb,
 		jwt:    jwt,
@@ -52,6 +55,14 @@ func NewAuthHandler(
 		config: cfg,
 		log:    log.With().Str("handler", "auth").Logger(),
 	}
+	for _, o := range opts {
+		o(h)
+	}
+	return h
+}
+
+func WithAuditService(svc *audit.Service) func(*AuthHandler) {
+	return func(h *AuthHandler) { h.audit = svc }
 }
 
 func (h *AuthHandler) HandleVippsStatus(w http.ResponseWriter, r *http.Request) {
@@ -214,11 +225,17 @@ func (h *AuthHandler) HandleEmailLogin(w http.ResponseWriter, r *http.Request) {
 		req.Email, h.config.ClubSlug,
 	).Scan(&userID, &clubID, &passwordHash)
 	if err != nil {
+		h.logAudit(r, audit.ActionLoginFailed, "session", "", map[string]string{
+			"method": "email", "email": req.Email, "reason": "user not found",
+		})
 		Error(w, http.StatusUnauthorized, "invalid credentials")
 		return
 	}
 
 	if !auth.CheckPassword(passwordHash, req.Password) {
+		h.logAudit(r, audit.ActionLoginFailed, "session", "", map[string]string{
+			"method": "email", "email": req.Email, "reason": "wrong password",
+		})
 		Error(w, http.StatusUnauthorized, "invalid credentials")
 		return
 	}
@@ -243,6 +260,10 @@ func (h *AuthHandler) HandleEmailLogin(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+
+	h.logAudit(r, audit.ActionLoginSuccess, "session", userID, map[string]string{
+		"method": "email",
+	})
 
 	JSON(w, http.StatusOK, tokenResponse{
 		AccessToken:  accessToken,
@@ -336,6 +357,13 @@ func (h *AuthHandler) HandleLogout(w http.ResponseWriter, r *http.Request) {
 				claims.ID, claims.UserID, claims.ExpiresAt.Time,
 			)
 		}
+	}
+
+	claims := middleware.GetClaims(r.Context())
+	if claims != nil {
+		h.logAudit(r, audit.ActionTokenRevoked, "session", claims.UserID, map[string]string{
+			"reason": "logout",
+		})
 	}
 
 	JSON(w, http.StatusOK, map[string]string{"status": "logged_out"})
@@ -563,6 +591,19 @@ type meResponse struct {
 	Roles    []string `json:"roles"`
 	FullName string   `json:"full_name"`
 	Email    string   `json:"email"`
+}
+
+func (h *AuthHandler) logAudit(r *http.Request, action, resource, resourceID string, details any) {
+	if h.audit == nil {
+		return
+	}
+	h.audit.Log(r.Context(), audit.Entry{
+		ActorIP:    r.RemoteAddr,
+		Action:     action,
+		Resource:   resource,
+		ResourceID: resourceID,
+		Details:    details,
+	})
 }
 
 func validatePassword(password string) error {
