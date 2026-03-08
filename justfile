@@ -121,3 +121,23 @@ security: security-go vuln-go audit-npm
 fmt:
     cd backend && gofmt -w .
     cd frontend && npm run format
+
+# ── Deployment ────────────────────────────────────────────────
+
+prod-compose := "docker compose -f deploy/docker-compose.yml"
+
+# Deploy latest image to production
+deploy host="brygge":
+    ssh {{host}} 'cd /opt/brygge && git pull --ff-only origin main && docker compose -f deploy/docker-compose.yml pull api && docker compose -f deploy/docker-compose.yml run --rm migrate && docker compose -f deploy/docker-compose.yml up -d api && docker image prune -f'
+
+# Run smoke tests against a URL
+smoke url="http://localhost:8080":
+    ./scripts/smoke-test.sh {{url}}
+
+# Rollback to a specific image SHA
+rollback sha host="brygge":
+    ssh {{host}} 'cd /opt/brygge && IMAGE=ghcr.io/brygge-klubb/brygge:{{sha}} docker compose -f deploy/docker-compose.yml up -d api'
+
+# Build Docker image locally
+docker-build:
+    docker build -t brygge:local --target production .
