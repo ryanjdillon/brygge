@@ -76,6 +76,7 @@ func main() {
 
 	auditService := audit.NewService(db, log)
 
+	featuresHandler := handlers.NewFeaturesHandler(&cfg)
 	healthHandler := handlers.NewHealthHandler(db, rdb)
 	auditHandler := handlers.NewAuditHandler(db, auditService, &cfg, log)
 	authHandler := handlers.NewAuthHandler(db, rdb, jwtService, vippsClient, &cfg, log, handlers.WithAuditService(auditService))
@@ -128,6 +129,7 @@ func main() {
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Method(http.MethodGet, "/health", healthHandler)
+		r.Get("/features", featuresHandler.HandleGetFeatures)
 
 		r.Route("/auth", func(r chi.Router) {
 			r.Get("/vipps/status", authHandler.HandleVippsStatus)
@@ -152,8 +154,10 @@ func main() {
 
 		r.Group(func(r chi.Router) {
 			r.Use(standardRL)
-			r.Get("/pricing", priceItemsHandler.HandleListPublic)
-			r.Get("/products", productsHandler.HandleListPublic)
+			if cfg.Features.Commerce {
+				r.Get("/pricing", priceItemsHandler.HandleListPublic)
+				r.Get("/products", productsHandler.HandleListPublic)
+			}
 			r.Get("/boat-models", boatModelsHandler.HandleSearch)
 			r.Get("/weather", weatherHandler.HandleGetWeather)
 			r.Post("/contact", contactHandler.HandleContactForm)
@@ -167,11 +171,13 @@ func main() {
 			r.Get("/export/gpx", mapHandler.HandleExportGPX)
 		})
 
-		r.Route("/orders", func(r chi.Router) {
-			r.Post("/", ordersHandler.HandleCreateOrder)
-			r.Get("/{orderID}", ordersHandler.HandleGetOrder)
-			r.Post("/{orderID}/confirm", ordersHandler.HandleConfirmOrder)
-		})
+		if cfg.Features.Commerce {
+			r.Route("/orders", func(r chi.Router) {
+				r.Post("/", ordersHandler.HandleCreateOrder)
+				r.Get("/{orderID}", ordersHandler.HandleGetOrder)
+				r.Post("/{orderID}/confirm", ordersHandler.HandleConfirmOrder)
+			})
+		}
 
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.Authenticate(jwtService))
@@ -197,45 +203,49 @@ func main() {
 			})
 		})
 
-		r.Route("/bookings", func(r chi.Router) {
-			r.Get("/resources", bookingsHandler.HandleListResources)
-			r.Get("/resources/{resourceID}/availability", bookingsHandler.HandleGetResourceAvailability)
-			r.Get("/availability", bookingsHandler.HandleAggregateAvailability)
-			r.Get("/availability/today", bookingsHandler.HandleTodayAvailability)
-			r.Get("/hoist/slots", bookingsHandler.HandleHoistSlots)
+		if cfg.Features.Bookings {
+			r.Route("/bookings", func(r chi.Router) {
+				r.Get("/resources", bookingsHandler.HandleListResources)
+				r.Get("/resources/{resourceID}/availability", bookingsHandler.HandleGetResourceAvailability)
+				r.Get("/availability", bookingsHandler.HandleAggregateAvailability)
+				r.Get("/availability/today", bookingsHandler.HandleTodayAvailability)
+				r.Get("/hoist/slots", bookingsHandler.HandleHoistSlots)
 
-			r.Group(func(r chi.Router) {
-				r.Use(middleware.OptionalAuth(jwtService, middleware.WithLogger(log)))
-				r.Post("/", bookingsHandler.HandleCreateBooking)
+				r.Group(func(r chi.Router) {
+					r.Use(middleware.OptionalAuth(jwtService, middleware.WithLogger(log)))
+					r.Post("/", bookingsHandler.HandleCreateBooking)
+				})
+
+				r.Group(func(r chi.Router) {
+					r.Use(middleware.Authenticate(jwtService))
+					r.Get("/me", bookingsHandler.HandleListMyBookings)
+					r.Get("/{bookingID}", bookingsHandler.HandleGetBooking)
+					r.Post("/{bookingID}/cancel", bookingsHandler.HandleCancelBooking)
+				})
+
+				r.Group(func(r chi.Router) {
+					r.Use(middleware.Authenticate(jwtService))
+					r.Use(middleware.RequireRole("styre", "harbour_master"))
+					r.Post("/{bookingID}/confirm", bookingsHandler.HandleConfirmBooking)
+				})
 			})
+		}
 
-			r.Group(func(r chi.Router) {
-				r.Use(middleware.Authenticate(jwtService))
-				r.Get("/me", bookingsHandler.HandleListMyBookings)
-				r.Get("/{bookingID}", bookingsHandler.HandleGetBooking)
-				r.Post("/{bookingID}/cancel", bookingsHandler.HandleCancelBooking)
+		if cfg.Features.Calendar {
+			r.Route("/calendar", func(r chi.Router) {
+				r.Get("/", calendarHandler.HandleListPublicEvents)
+				r.Get("/public.ics", calendarHandler.HandleExportICS)
+				r.Get("/{eventID}", calendarHandler.HandleGetEvent)
+
+				r.Group(func(r chi.Router) {
+					r.Use(middleware.Authenticate(jwtService))
+					r.Use(middleware.RequireRole("styre"))
+					r.Post("/", calendarHandler.HandleCreateEvent)
+					r.Put("/{eventID}", calendarHandler.HandleUpdateEvent)
+					r.Delete("/{eventID}", calendarHandler.HandleDeleteEvent)
+				})
 			})
-
-			r.Group(func(r chi.Router) {
-				r.Use(middleware.Authenticate(jwtService))
-				r.Use(middleware.RequireRole("styre", "harbour_master"))
-				r.Post("/{bookingID}/confirm", bookingsHandler.HandleConfirmBooking)
-			})
-		})
-
-		r.Route("/calendar", func(r chi.Router) {
-			r.Get("/", calendarHandler.HandleListPublicEvents)
-			r.Get("/public.ics", calendarHandler.HandleExportICS)
-			r.Get("/{eventID}", calendarHandler.HandleGetEvent)
-
-			r.Group(func(r chi.Router) {
-				r.Use(middleware.Authenticate(jwtService))
-				r.Use(middleware.RequireRole("styre"))
-				r.Post("/", calendarHandler.HandleCreateEvent)
-				r.Put("/{eventID}", calendarHandler.HandleUpdateEvent)
-				r.Delete("/{eventID}", calendarHandler.HandleDeleteEvent)
-			})
-		})
+		}
 
 		r.Route("/members", func(r chi.Router) {
 			r.Use(middleware.Authenticate(jwtService))
@@ -272,70 +282,74 @@ func main() {
 			r.Get("/rebates", slipSharesHandler.HandleListMyRebates)
 		})
 
-		r.Route("/push", func(r chi.Router) {
-			r.Use(middleware.Authenticate(jwtService))
-			r.Get("/vapid-key", notificationsHandler.HandleGetVAPIDKey)
-			r.Post("/subscribe", notificationsHandler.HandleSubscribe)
-			r.Delete("/subscribe", notificationsHandler.HandleUnsubscribe)
-		})
-
-		r.Route("/members/me/notifications", func(r chi.Router) {
-			r.Use(middleware.Authenticate(jwtService))
-			r.Get("/", notificationsHandler.HandleGetPreferences)
-			r.Put("/", notificationsHandler.HandleUpdatePreferences)
-		})
-
-		r.Route("/forum", func(r chi.Router) {
-			r.Use(middleware.Authenticate(jwtService))
-			r.Get("/rooms", forumHandler.HandleListRooms)
-			r.Get("/rooms/{roomID}/messages", forumHandler.HandleGetRoomMessages)
-			r.Post("/rooms/{roomID}/messages", forumHandler.HandleSendMessage)
-			r.Get("/rooms/{roomID}/members", forumHandler.HandleGetRoomMembers)
-		})
-
-		r.Route("/projects", func(r chi.Router) {
-			r.Use(middleware.Authenticate(jwtService))
-
-			r.Get("/", projectsHandler.HandleListProjects)
-			r.Get("/{projectID}", projectsHandler.HandleGetProject)
-			r.Get("/{projectID}/tasks", projectsHandler.HandleListTasks)
-
-			r.Group(func(r chi.Router) {
-				r.Use(middleware.RequireRole("styre"))
-				r.Post("/", projectsHandler.HandleCreateProject)
-				r.Post("/{projectID}/tasks", projectsHandler.HandleCreateTask)
+		if cfg.Features.Communications {
+			r.Route("/push", func(r chi.Router) {
+				r.Use(middleware.Authenticate(jwtService))
+				r.Get("/vapid-key", notificationsHandler.HandleGetVAPIDKey)
+				r.Post("/subscribe", notificationsHandler.HandleSubscribe)
+				r.Delete("/subscribe", notificationsHandler.HandleUnsubscribe)
 			})
-		})
 
-		r.Route("/tasks", func(r chi.Router) {
-			r.Use(middleware.Authenticate(jwtService))
-
-			r.Post("/{taskID}/join", dugnadHandler.HandleJoinTask)
-			r.Delete("/{taskID}/leave", dugnadHandler.HandleLeaveTask)
-			r.Get("/{taskID}/participants", dugnadHandler.HandleListTaskParticipants)
-
-			r.Group(func(r chi.Router) {
-				r.Use(middleware.RequireRole("styre"))
-				r.Put("/{taskID}", projectsHandler.HandleUpdateTask)
-				r.Delete("/{taskID}", projectsHandler.HandleDeleteTask)
-				r.Put("/{taskID}/assign", dugnadHandler.HandleAssignTask)
-				r.Put("/{taskID}/hours", dugnadHandler.HandleAdjustHours)
+			r.Route("/members/me/notifications", func(r chi.Router) {
+				r.Use(middleware.Authenticate(jwtService))
+				r.Get("/", notificationsHandler.HandleGetPreferences)
+				r.Put("/", notificationsHandler.HandleUpdatePreferences)
 			})
-		})
 
-		r.Route("/shopping-lists", func(r chi.Router) {
-			r.Use(middleware.Authenticate(jwtService))
-			r.Get("/", shoppingListsHandler.HandleListShoppingLists)
-			r.Post("/", shoppingListsHandler.HandleCreateShoppingList)
-			r.Get("/{listID}", shoppingListsHandler.HandleGetShoppingList)
-			r.Put("/{listID}", shoppingListsHandler.HandleUpdateShoppingList)
-			r.Delete("/{listID}", shoppingListsHandler.HandleDeleteShoppingList)
-			r.Get("/{listID}/items", shoppingListsHandler.HandleListItems)
-			r.Post("/{listID}/items", shoppingListsHandler.HandleAddItem)
-			r.Post("/{listID}/from-tasks", shoppingListsHandler.HandlePopulateFromTasks)
-			r.Put("/items/{itemID}/toggle", shoppingListsHandler.HandleToggleItem)
-			r.Delete("/items/{itemID}", shoppingListsHandler.HandleDeleteItem)
-		})
+			r.Route("/forum", func(r chi.Router) {
+				r.Use(middleware.Authenticate(jwtService))
+				r.Get("/rooms", forumHandler.HandleListRooms)
+				r.Get("/rooms/{roomID}/messages", forumHandler.HandleGetRoomMessages)
+				r.Post("/rooms/{roomID}/messages", forumHandler.HandleSendMessage)
+				r.Get("/rooms/{roomID}/members", forumHandler.HandleGetRoomMembers)
+			})
+		}
+
+		if cfg.Features.Projects {
+			r.Route("/projects", func(r chi.Router) {
+				r.Use(middleware.Authenticate(jwtService))
+
+				r.Get("/", projectsHandler.HandleListProjects)
+				r.Get("/{projectID}", projectsHandler.HandleGetProject)
+				r.Get("/{projectID}/tasks", projectsHandler.HandleListTasks)
+
+				r.Group(func(r chi.Router) {
+					r.Use(middleware.RequireRole("styre"))
+					r.Post("/", projectsHandler.HandleCreateProject)
+					r.Post("/{projectID}/tasks", projectsHandler.HandleCreateTask)
+				})
+			})
+
+			r.Route("/tasks", func(r chi.Router) {
+				r.Use(middleware.Authenticate(jwtService))
+
+				r.Post("/{taskID}/join", dugnadHandler.HandleJoinTask)
+				r.Delete("/{taskID}/leave", dugnadHandler.HandleLeaveTask)
+				r.Get("/{taskID}/participants", dugnadHandler.HandleListTaskParticipants)
+
+				r.Group(func(r chi.Router) {
+					r.Use(middleware.RequireRole("styre"))
+					r.Put("/{taskID}", projectsHandler.HandleUpdateTask)
+					r.Delete("/{taskID}", projectsHandler.HandleDeleteTask)
+					r.Put("/{taskID}/assign", dugnadHandler.HandleAssignTask)
+					r.Put("/{taskID}/hours", dugnadHandler.HandleAdjustHours)
+				})
+			})
+
+			r.Route("/shopping-lists", func(r chi.Router) {
+				r.Use(middleware.Authenticate(jwtService))
+				r.Get("/", shoppingListsHandler.HandleListShoppingLists)
+				r.Post("/", shoppingListsHandler.HandleCreateShoppingList)
+				r.Get("/{listID}", shoppingListsHandler.HandleGetShoppingList)
+				r.Put("/{listID}", shoppingListsHandler.HandleUpdateShoppingList)
+				r.Delete("/{listID}", shoppingListsHandler.HandleDeleteShoppingList)
+				r.Get("/{listID}/items", shoppingListsHandler.HandleListItems)
+				r.Post("/{listID}/items", shoppingListsHandler.HandleAddItem)
+				r.Post("/{listID}/from-tasks", shoppingListsHandler.HandlePopulateFromTasks)
+				r.Put("/items/{itemID}/toggle", shoppingListsHandler.HandleToggleItem)
+				r.Delete("/items/{itemID}", shoppingListsHandler.HandleDeleteItem)
+			})
+		}
 
 		r.Route("/feature-requests", func(r chi.Router) {
 			r.Use(middleware.Authenticate(jwtService))
@@ -359,14 +373,16 @@ func main() {
 				r.Get("/audit", auditHandler.HandleListAuditLog)
 			})
 
-			r.Route("/dugnad", func(r chi.Router) {
-				r.Use(middleware.RequireRole("styre"))
-				r.Get("/hours", dugnadHandler.HandleListAllDugnadHours)
-				r.Put("/settings/hours", dugnadHandler.HandleSetRequiredHours)
-				r.Post("/events/{eventID}/projects", dugnadHandler.HandleLinkProjectEvent)
-				r.Delete("/events/{eventID}/projects/{projectID}", dugnadHandler.HandleUnlinkProjectEvent)
-				r.Get("/events/{eventID}/projects", dugnadHandler.HandleGetEventProjects)
-			})
+			if cfg.Features.Projects {
+				r.Route("/dugnad", func(r chi.Router) {
+					r.Use(middleware.RequireRole("styre"))
+					r.Get("/hours", dugnadHandler.HandleListAllDugnadHours)
+					r.Put("/settings/hours", dugnadHandler.HandleSetRequiredHours)
+					r.Post("/events/{eventID}/projects", dugnadHandler.HandleLinkProjectEvent)
+					r.Delete("/events/{eventID}/projects/{projectID}", dugnadHandler.HandleUnlinkProjectEvent)
+					r.Get("/events/{eventID}/projects", dugnadHandler.HandleGetEventProjects)
+				})
+			}
 
 			r.Route("/map/markers", func(r chi.Router) {
 				r.Use(middleware.RequireRole("styre"))
@@ -381,25 +397,29 @@ func main() {
 				r.Post("/{boatID}/confirm", boatModelsHandler.HandleConfirmBoat)
 			})
 
-			r.Route("/broadcast", func(r chi.Router) {
-				r.Use(middleware.RequireRole("styre", "admin"))
-				r.Post("/", broadcastHandler.HandleSendBroadcast)
-			})
+			if cfg.Features.Communications {
+				r.Route("/broadcast", func(r chi.Router) {
+					r.Use(middleware.RequireRole("styre", "admin"))
+					r.Post("/", broadcastHandler.HandleSendBroadcast)
+				})
 
-			r.Route("/broadcasts", func(r chi.Router) {
-				r.Use(middleware.RequireRole("styre", "admin"))
-				r.Get("/", broadcastHandler.HandleListBroadcasts)
-			})
+				r.Route("/broadcasts", func(r chi.Router) {
+					r.Use(middleware.RequireRole("styre", "admin"))
+					r.Get("/", broadcastHandler.HandleListBroadcasts)
+				})
+			}
 
-			r.Route("/financials", func(r chi.Router) {
-				r.Use(middleware.RequireRole("treasurer", "styre", "admin"))
-				r.Get("/summary", financialsHandler.HandleGetFinancialSummary)
-				r.Get("/payments", financialsHandler.HandleListPayments)
-				r.Get("/payments/{paymentID}", financialsHandler.HandleGetPaymentDetails)
-				r.Get("/export", financialsHandler.HandleExportCSV)
-				r.Post("/invoices", financialsHandler.HandleGenerateInvoice)
-				r.Get("/overdue", financialsHandler.HandleListOverdue)
-			})
+			if cfg.Features.Commerce {
+				r.Route("/financials", func(r chi.Router) {
+					r.Use(middleware.RequireRole("treasurer", "styre", "admin"))
+					r.Get("/summary", financialsHandler.HandleGetFinancialSummary)
+					r.Get("/payments", financialsHandler.HandleListPayments)
+					r.Get("/payments/{paymentID}", financialsHandler.HandleGetPaymentDetails)
+					r.Get("/export", financialsHandler.HandleExportCSV)
+					r.Post("/invoices", financialsHandler.HandleGenerateInvoice)
+					r.Get("/overdue", financialsHandler.HandleListOverdue)
+				})
+			}
 
 			r.Route("/users", func(r chi.Router) {
 				r.Use(middleware.RequireRole("styre", "admin"))
@@ -419,10 +439,18 @@ func main() {
 				r.Post("/{slipID}/release", adminSlipsHandler.HandleReleaseSlip)
 			})
 
-			r.Route("/bookings", func(r chi.Router) {
-				r.Use(middleware.RequireRole("styre", "harbour_master"))
-				r.Get("/", bookingsHandler.HandleListBookingsAdmin)
-			})
+			if cfg.Features.Bookings {
+				r.Route("/bookings", func(r chi.Router) {
+					r.Use(middleware.RequireRole("styre", "harbour_master"))
+					r.Get("/", bookingsHandler.HandleListBookingsAdmin)
+				})
+
+				r.Route("/settings/booking", func(r chi.Router) {
+					r.Use(middleware.RequireRole("styre"))
+					r.Get("/", clubSettingsHandler.HandleGetBookingSettings)
+					r.Put("/", clubSettingsHandler.HandleUpdateBookingSettings)
+				})
+			}
 
 			r.Route("/slip-shares", func(r chi.Router) {
 				r.Use(middleware.RequireRole("styre", "harbour_master"))
@@ -431,29 +459,25 @@ func main() {
 				r.Put("/rebates/{rebateID}", slipSharesHandler.HandleUpdateRebateStatus)
 			})
 
-			r.Route("/settings/booking", func(r chi.Router) {
-				r.Use(middleware.RequireRole("styre"))
-				r.Get("/", clubSettingsHandler.HandleGetBookingSettings)
-				r.Put("/", clubSettingsHandler.HandleUpdateBookingSettings)
-			})
+			if cfg.Features.Commerce {
+				r.Route("/pricing", func(r chi.Router) {
+					r.Use(middleware.RequireRole("admin", "treasurer"))
+					r.Get("/", priceItemsHandler.HandleListAdmin)
+					r.Post("/", priceItemsHandler.HandleCreate)
+					r.Put("/{itemID}", priceItemsHandler.HandleUpdate)
+					r.Delete("/{itemID}", priceItemsHandler.HandleDelete)
+				})
 
-			r.Route("/pricing", func(r chi.Router) {
-				r.Use(middleware.RequireRole("admin", "treasurer"))
-				r.Get("/", priceItemsHandler.HandleListAdmin)
-				r.Post("/", priceItemsHandler.HandleCreate)
-				r.Put("/{itemID}", priceItemsHandler.HandleUpdate)
-				r.Delete("/{itemID}", priceItemsHandler.HandleDelete)
-			})
-
-			r.Route("/products", func(r chi.Router) {
-				r.Use(middleware.RequireRole("styre", "admin"))
-				r.Get("/", productsHandler.HandleListAdmin)
-				r.Post("/", productsHandler.HandleCreate)
-				r.Put("/{productID}", productsHandler.HandleUpdate)
-				r.Delete("/{productID}", productsHandler.HandleDelete)
-				r.Post("/{productID}/variants", productsHandler.HandleCreateVariant)
-				r.Delete("/variants/{variantID}", productsHandler.HandleDeleteVariant)
-			})
+				r.Route("/products", func(r chi.Router) {
+					r.Use(middleware.RequireRole("styre", "admin"))
+					r.Get("/", productsHandler.HandleListAdmin)
+					r.Post("/", productsHandler.HandleCreate)
+					r.Put("/{productID}", productsHandler.HandleUpdate)
+					r.Delete("/{productID}", productsHandler.HandleDelete)
+					r.Post("/{productID}/variants", productsHandler.HandleCreateVariant)
+					r.Delete("/variants/{variantID}", productsHandler.HandleDeleteVariant)
+				})
+			}
 
 			r.Route("/documents", func(r chi.Router) {
 				r.Use(middleware.RequireRole("styre"))
@@ -463,12 +487,14 @@ func main() {
 				r.Post("/{docID}/sakliste", aiDocumentsHandler.HandleGenerateSakliste)
 			})
 
-			r.Route("/notifications", func(r chi.Router) {
-				r.Use(middleware.RequireRole("styre", "admin"))
-				r.Get("/config", notificationsHandler.HandleGetConfig)
-				r.Put("/config", notificationsHandler.HandleUpdateConfig)
-				r.Post("/test", notificationsHandler.HandleTestPush)
-			})
+			if cfg.Features.Communications {
+				r.Route("/notifications", func(r chi.Router) {
+					r.Use(middleware.RequireRole("styre", "admin"))
+					r.Get("/config", notificationsHandler.HandleGetConfig)
+					r.Put("/config", notificationsHandler.HandleUpdateConfig)
+					r.Post("/test", notificationsHandler.HandleTestPush)
+				})
+			}
 
 			r.Route("/gdpr", func(r chi.Router) {
 				r.Use(middleware.RequireRole("styre", "admin"))
