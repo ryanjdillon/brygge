@@ -132,6 +132,11 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/portal/FeatureRequestsView.vue'),
       },
       {
+        path: 'notifications',
+        name: 'portal-notifications',
+        component: () => import('@/views/portal/NotificationsView.vue'),
+      },
+      {
         path: 'forum',
         name: 'forum',
         component: () => import('@/views/portal/ForumView.vue'),
@@ -198,6 +203,11 @@ const routes: RouteRecordRaw[] = [
         path: 'communication',
         name: 'admin-communication',
         component: () => import('@/views/admin/CommunicationView.vue'),
+      },
+      {
+        path: 'notifications',
+        name: 'admin-notifications',
+        component: () => import('@/views/admin/NotificationsAdminView.vue'),
       },
       {
         path: 'projects',

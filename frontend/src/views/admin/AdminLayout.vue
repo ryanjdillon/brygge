@@ -18,6 +18,7 @@ import {
   Ship,
   HardHat,
   MapPin,
+  Bell,
   Menu,
   X,
 } from 'lucide-vue-next'
@@ -73,6 +74,7 @@ const navGroups = computed<NavGroup[]>(() => {
       items: [
         { to: '/admin/documents', icon: FileText, label: t('admin.sidebar.documents') },
         { to: '/admin/communication', icon: Megaphone, label: t('admin.sidebar.communication') },
+        { to: '/admin/notifications', icon: Bell, label: t('notifications.admin.title') },
       ],
     },
   ]

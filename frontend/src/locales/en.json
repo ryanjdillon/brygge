@@ -860,5 +860,37 @@
       "emailInvalid": "Invalid email address",
       "phoneInvalid": "Invalid phone number"
     }
+  },
+  "notifications": {
+    "title": "Notifications",
+    "subtitle": "Manage your notification preferences",
+    "pushToggle": "Push Notifications",
+    "pushEnabled": "You will receive push notifications",
+    "pushDisabled": "Push notifications are turned off",
+    "enable": "Enable",
+    "disable": "Disable",
+    "notSupported": "Not supported in this browser",
+    "required": "required",
+    "iosTitle": "Enable notifications on iOS",
+    "iosInstructions": "To receive push notifications on iOS, add this app to your home screen: tap the Share button, then 'Add to Home Screen'.",
+    "cat": {
+      "payment_reminder": "Payment reminders",
+      "slip_offer": "Slip offers",
+      "booking_confirm": "Booking confirmations",
+      "dugnad_reminder": "Working day reminders",
+      "styre_announcement": "Board announcements",
+      "waiting_list": "Waiting list updates",
+      "new_document": "New documents",
+      "event_reminder": "Event reminders"
+    },
+    "admin": {
+      "title": "Notification Settings",
+      "subtitle": "Configure notification requirements for all members",
+      "requiredToggle": "Required",
+      "leadDays": "Reminder days before",
+      "testPush": "Send test notification",
+      "testSent": "Test notification sent",
+      "testFailed": "Failed to send test notification"
+    }
   }
 }
