@@ -39,11 +39,21 @@ services:
       # - traefik.http.routers.dashboard.entrypoints=websecure
       # - traefik.http.routers.dashboard.tls.certresolver=letsencrypt
 
+  # ── Database Migrations ──────────────────────────────────────
+  migrate:
+    image: migrate/migrate:v4.18.2
+    command: ["-path=/migrations", "-database", "${DATABASE_URL}", "up"]
+    volumes:
+      - ../backend/migrations:/migrations:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - brygge
+
   # ── API (Go backend + embedded SPA) ───────────────────────────
   api:
-    build:
-      context: ..
-      dockerfile: Dockerfile
+    image: ${IMAGE:-ghcr.io/brygge-klubb/brygge:latest}
     restart: unless-stopped
     depends_on:
       db:
