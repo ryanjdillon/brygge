@@ -45,4 +45,7 @@ func TestHealthEndpoint(t *testing.T) {
 	if resp.Services.Database != "unavailable" {
 		t.Errorf("expected database 'unavailable', got %q", resp.Services.Database)
 	}
+	if resp.Pool != nil {
+		t.Error("expected pool to be nil when db is nil")
+	}
 }
