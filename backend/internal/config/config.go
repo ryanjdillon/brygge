@@ -51,6 +51,13 @@ type Config struct {
 	ResendAPIKey    string
 	AnthropicAPIKey string
 
+	// Database pool
+	DBMaxConns          int32
+	DBMinConns          int32
+	DBMaxConnLifetime   time.Duration
+	DBMaxConnIdleTime   time.Duration
+	DBStatementTimeout  string
+
 	// Feature flags
 	Features Features
 }
@@ -82,6 +89,12 @@ func Load() Config {
 		VippsMSN:             envStr("VIPPS_MSN", ""),
 		VippsSubscriptionKey: envStr("VIPPS_SUBSCRIPTION_KEY", ""),
 		VippsWebhookSecret:   envStr("VIPPS_WEBHOOK_SECRET", ""),
+
+		DBMaxConns:         int32(envInt("DB_MAX_CONNS", 20)),
+		DBMinConns:         int32(envInt("DB_MIN_CONNS", 2)),
+		DBMaxConnLifetime:  envDuration("DB_MAX_CONN_LIFETIME", 30*time.Minute),
+		DBMaxConnIdleTime:  envDuration("DB_MAX_CONN_IDLE_TIME", 5*time.Minute),
+		DBStatementTimeout: envStr("DB_STATEMENT_TIMEOUT", "30000"),
 
 		FrontendURL: envStr("FRONTEND_URL", "http://localhost:5173"),
 

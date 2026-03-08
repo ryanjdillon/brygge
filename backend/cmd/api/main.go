@@ -38,7 +38,17 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	db, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	poolCfg, err := pgxpool.ParseConfig(cfg.DatabaseURL)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to parse database URL")
+	}
+	poolCfg.MaxConns = cfg.DBMaxConns
+	poolCfg.MinConns = cfg.DBMinConns
+	poolCfg.MaxConnLifetime = cfg.DBMaxConnLifetime
+	poolCfg.MaxConnIdleTime = cfg.DBMaxConnIdleTime
+	poolCfg.ConnConfig.RuntimeParams["statement_timeout"] = cfg.DBStatementTimeout
+
+	db, err := pgxpool.NewWithConfig(ctx, poolCfg)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to connect to database")
 	}
@@ -47,7 +57,10 @@ func main() {
 	if err := db.Ping(ctx); err != nil {
 		log.Warn().Err(err).Msg("database ping failed on startup")
 	} else {
-		log.Info().Msg("connected to database")
+		log.Info().
+			Int32("max_conns", cfg.DBMaxConns).
+			Int32("min_conns", cfg.DBMinConns).
+			Msg("connected to database")
 	}
 
 	redisOpts, err := redis.ParseURL(cfg.RedisURL)
