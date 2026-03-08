@@ -43,6 +43,10 @@ type Config struct {
 	DendriteInternalURL  string
 	DendriteServiceToken string
 
+	// Web Push (VAPID)
+	VAPIDPublicKey  string
+	VAPIDPrivateKey string
+
 	// Optional integrations
 	ResendAPIKey    string
 	AnthropicAPIKey string
@@ -77,6 +81,9 @@ func Load() Config {
 
 		DendriteInternalURL:  envStr("DENDRITE_INTERNAL_URL", "http://dendrite:8008"),
 		DendriteServiceToken: envStr("DENDRITE_SERVICE_TOKEN", ""),
+
+		VAPIDPublicKey:  envStr("VAPID_PUBLIC_KEY", ""),
+		VAPIDPrivateKey: envStr("VAPID_PRIVATE_KEY", ""),
 
 		ResendAPIKey:    envStr("RESEND_API_KEY", ""),
 		AnthropicAPIKey: envStr("ANTHROPIC_API_KEY", ""),

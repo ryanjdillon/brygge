@@ -99,6 +99,7 @@ func main() {
 	mapHandler := handlers.NewMapHandler(db, &cfg, log)
 	clubSettingsHandler := handlers.NewClubSettingsHandler(db, &cfg, log)
 	slipSharesHandler := handlers.NewSlipSharesHandler(db, &cfg, log)
+	notificationsHandler := handlers.NewNotificationsHandler(db, &cfg, log)
 
 	r := chi.NewRouter()
 
@@ -242,6 +243,19 @@ func main() {
 			r.Put("/{shareID}", slipSharesHandler.HandleUpdateSlipShare)
 			r.Delete("/{shareID}", slipSharesHandler.HandleDeleteSlipShare)
 			r.Get("/rebates", slipSharesHandler.HandleListMyRebates)
+		})
+
+		r.Route("/push", func(r chi.Router) {
+			r.Use(middleware.Authenticate(jwtService))
+			r.Get("/vapid-key", notificationsHandler.HandleGetVAPIDKey)
+			r.Post("/subscribe", notificationsHandler.HandleSubscribe)
+			r.Delete("/subscribe", notificationsHandler.HandleUnsubscribe)
+		})
+
+		r.Route("/members/me/notifications", func(r chi.Router) {
+			r.Use(middleware.Authenticate(jwtService))
+			r.Get("/", notificationsHandler.HandleGetPreferences)
+			r.Put("/", notificationsHandler.HandleUpdatePreferences)
 		})
 
 		r.Route("/forum", func(r chi.Router) {
@@ -415,6 +429,13 @@ func main() {
 				r.Delete("/{docID}", adminDocumentsHandler.HandleDeleteDocument)
 				r.Post("/{docID}/summarize", aiDocumentsHandler.HandleSummarizeComments)
 				r.Post("/{docID}/sakliste", aiDocumentsHandler.HandleGenerateSakliste)
+			})
+
+			r.Route("/notifications", func(r chi.Router) {
+				r.Use(middleware.RequireRole("styre", "admin"))
+				r.Get("/config", notificationsHandler.HandleGetConfig)
+				r.Put("/config", notificationsHandler.HandleUpdateConfig)
+				r.Post("/test", notificationsHandler.HandleTestPush)
 			})
 		})
 	})
