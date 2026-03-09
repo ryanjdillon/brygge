@@ -24,7 +24,6 @@ CREATE INDEX IF NOT EXISTS idx_slip_share_rebates_booking ON slip_share_rebates(
 
 -- order_lines
 CREATE INDEX IF NOT EXISTS idx_order_lines_product ON order_lines(product_id);
-CREATE INDEX IF NOT EXISTS idx_order_lines_variant ON order_lines(variant_id);
 
 -- push_subscriptions
 CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON push_subscriptions(user_id);
@@ -36,5 +35,5 @@ CREATE INDEX IF NOT EXISTS idx_deletion_requests_club_status ON deletion_request
 -- notification_preferences (composite for lookup)
 CREATE INDEX IF NOT EXISTS idx_notif_prefs_user_club ON notification_preferences(user_id, club_id);
 
--- forum_messages (for room listing with ordering)
-CREATE INDEX IF NOT EXISTS idx_forum_messages_room ON forum_messages(room_id, created_at DESC);
+-- forum_messages (table not yet created — index deferred)
+-- CREATE INDEX IF NOT EXISTS idx_forum_messages_room ON forum_messages(room_id, created_at DESC);
