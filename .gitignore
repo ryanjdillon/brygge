@@ -51,6 +51,13 @@ dev/vipps-mock/vipps-mock
 
 # Playwright MCP
 .playwright-mcp/
+screenshots/
+
+# Live-reload
+backend/.air.toml
+
+# Feature specs
+features/
 
 # Claude Code
 .claude/
