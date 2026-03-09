@@ -45,7 +45,8 @@ const { data: bookings, isLoading, error } = useQuery({
     if (dateFrom.value) params.set('start', dateFrom.value)
     if (dateTo.value) params.set('end', dateTo.value)
     const qs = params.toString()
-    return fetchApi<Booking[]>(`/api/v1/admin/bookings${qs ? `?${qs}` : ''}`)
+    const res = await fetchApi<{ items: Booking[] }>(`/api/v1/admin/bookings${qs ? `?${qs}` : ''}`)
+    return res.items ?? []
   },
   staleTime: 30 * 1000,
 })

@@ -18,7 +18,10 @@ const searchQuery = ref('')
 
 const { data: members, isLoading, isError } = useQuery({
   queryKey: ['portal', 'directory'],
-  queryFn: () => fetchApi<DirectoryMember[]>('/api/v1/members/directory'),
+  queryFn: async () => {
+    const res = await fetchApi<{ items: DirectoryMember[] }>('/api/v1/members/directory')
+    return res.items ?? []
+  },
 })
 
 const filteredMembers = computed(() => {

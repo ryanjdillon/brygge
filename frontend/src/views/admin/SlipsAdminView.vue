@@ -17,15 +17,18 @@ interface Slip {
   width_m: number | null
   depth_m: number | null
   status: string
-  assignee_name: string | null
+  occupant_name: string | null
 }
 
 const { data: slipsResponse, isLoading, isError } = useQuery({
   queryKey: ['admin', 'slips'],
-  queryFn: () => fetchApi<{ slips: Slip[] }>('/api/v1/admin/slips'),
+  queryFn: async () => {
+    const res = await fetchApi<{ items: Slip[] }>('/api/v1/admin/slips')
+    return res.items ?? []
+  },
 })
 
-const slips = computed(() => slipsResponse.value?.slips ?? [])
+const slips = computed(() => slipsResponse.value ?? [])
 
 const showForm = ref(false)
 const form = ref({ number: '', section: '', length_m: '', width_m: '', depth_m: '' })
@@ -119,11 +122,11 @@ const { mutate: createSlip, isPending: isCreating } = useMutation({
             <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ slip.section }}</td>
             <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ slip.length_m ?? '—' }} × {{ slip.width_m ?? '—' }} m</td>
             <td class="whitespace-nowrap px-4 py-3 text-sm">
-              <span :class="['rounded-full px-2.5 py-0.5 text-xs font-medium', slip.status === 'available' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800']">
+              <span :class="['rounded-full px-2.5 py-0.5 text-xs font-medium', slip.status === 'vacant' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800']">
                 {{ slip.status }}
               </span>
             </td>
-            <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ slip.assignee_name ?? '—' }}</td>
+            <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ slip.occupant_name ?? '—' }}</td>
           </tr>
         </tbody>
       </table>
