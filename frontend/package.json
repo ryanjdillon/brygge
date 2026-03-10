@@ -39,6 +39,7 @@
     "@vue/tsconfig": "^0.7",
     "eslint": "^9",
     "jsdom": "^28.1.0",
+    "openapi-typescript": "^7.13.0",
     "prettier": "^3",
     "typescript": "^5.7",
     "vite": "^6",
