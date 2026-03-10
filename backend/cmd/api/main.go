@@ -24,6 +24,7 @@ import (
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/handlers"
 	"github.com/brygge-klubb/brygge/internal/middleware"
+	oa "github.com/brygge-klubb/brygge/internal/openapi"
 )
 
 func main() {
@@ -518,6 +519,16 @@ func main() {
 			})
 		})
 	})
+
+	// Mount OpenAPI docs on a separate sub-router to avoid conflicts with chi handlers.
+	// Enabled by default; set DISABLE_API_DOCS=true in production.
+	if os.Getenv("DISABLE_API_DOCS") != "true" {
+		docsRouter := chi.NewRouter()
+		docsAPI := oa.NewAPI(docsRouter, oa.Config{DocsEnabled: true})
+		oa.RegisterAllOperations(docsAPI)
+		r.Mount("/api/docs", http.StripPrefix("/api/docs", docsRouter))
+		log.Info().Msg("API docs available at /api/docs/docs")
+	}
 
 	frontendFS, err := backend.FrontendFS()
 	if err != nil {
