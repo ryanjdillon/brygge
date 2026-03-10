@@ -2303,6 +2303,54 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        "Adjust-task-hoursRequest": {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/Adjust-task-hoursRequest.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: double
+             * @description Hours to set
+             */
+            hours: number;
+            /** @description User UUID */
+            user_id: string;
+        };
+        "Admin-link-project-eventRequest": {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/Admin-link-project-eventRequest.json
+             */
+            readonly $schema?: string;
+            /** @description Project UUID */
+            project_id: string;
+        };
+        "Admin-set-required-hoursRequest": {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/Admin-set-required-hoursRequest.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: double
+             * @description Required hours per member
+             */
+            required_hours: number;
+        };
+        "Admin-update-rebate-statusRequest": {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/Admin-update-rebate-statusRequest.json
+             */
+            readonly $schema?: string;
+            /** @description New rebate status */
+            status: string;
+        };
         "Admin-update-user-rolesRequest": {
             /**
              * Format: uri
@@ -2313,6 +2361,166 @@ export interface components {
             /** @description Role names to assign */
             roles: string[] | null;
         };
+        AdminUser: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/AdminUser.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: date-time
+             * @description Creation timestamp
+             */
+            created_at: string;
+            /** @description Email address */
+            email: string;
+            /** @description Full name */
+            full_name: string;
+            /** @description User UUID */
+            id: string;
+            /** @description Phone number */
+            phone: string;
+            /** @description Assigned roles */
+            roles: string[] | null;
+        };
+        AdminUsersResponse: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/AdminUsersResponse.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: int64
+             * @description Total user count
+             */
+            total_count: number;
+            /** @description List of users */
+            users: components["schemas"]["AdminUser"][] | null;
+        };
+        "Assign-taskRequest": {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/Assign-taskRequest.json
+             */
+            readonly $schema?: string;
+            /** @description User UUID to assign */
+            assignee_id: string;
+        };
+        Boat: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/Boat.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: double
+             * @description Beam in metres
+             */
+            beam_m?: number;
+            /** @description Linked boat model UUID */
+            boat_model_id?: string;
+            /** @description Club UUID */
+            club_id: string;
+            /**
+             * Format: date-time
+             * @description Confirmation timestamp
+             */
+            confirmed_at?: string;
+            /** @description UUID of confirming user */
+            confirmed_by?: string;
+            /**
+             * Format: date-time
+             * @description Creation timestamp
+             */
+            created_at: string;
+            /**
+             * Format: double
+             * @description Draft in metres
+             */
+            draft_m?: number;
+            /** @description Boat UUID */
+            id: string;
+            /**
+             * Format: double
+             * @description Length in metres
+             */
+            length_m?: number;
+            /** @description Manufacturer */
+            manufacturer: string;
+            /** @description Whether measurements are confirmed */
+            measurements_confirmed: boolean;
+            /** @description Model name */
+            model: string;
+            /** @description Boat name */
+            name: string;
+            /** @description Registration number */
+            registration_number: string;
+            /** @description Boat type */
+            type: string;
+            /**
+             * Format: date-time
+             * @description Last update timestamp
+             */
+            updated_at: string;
+            /** @description Owner user UUID */
+            user_id: string;
+            /**
+             * Format: double
+             * @description Weight in kilograms
+             */
+            weight_kg?: number;
+        };
+        BoatModel: {
+            /**
+             * Format: double
+             * @description Beam in metres
+             */
+            beam_m?: number;
+            /** @description Type classification */
+            boat_type: string;
+            /**
+             * Format: date-time
+             * @description Creation timestamp
+             */
+            created_at: string;
+            /**
+             * Format: double
+             * @description Draft in metres
+             */
+            draft_m?: number;
+            /** @description Model UUID */
+            id: string;
+            /**
+             * Format: double
+             * @description Length in metres
+             */
+            length_m?: number;
+            /** @description Boat manufacturer */
+            manufacturer: string;
+            /** @description Boat model name */
+            model: string;
+            /** @description Data source */
+            source: string;
+            /**
+             * Format: double
+             * @description Weight in kilograms
+             */
+            weight_kg?: number;
+            /**
+             * Format: int64
+             * @description Production start year
+             */
+            year_from?: number;
+            /**
+             * Format: int64
+             * @description Production end year
+             */
+            year_to?: number;
+        };
         Booking: {
             /**
              * Format: uri
@@ -2320,31 +2528,136 @@ export interface components {
              * @example https://example.com/schemas/Booking.json
              */
             readonly $schema?: string;
-            /** @description Creation timestamp */
+            /**
+             * Format: double
+             * @description Boat beam in metres
+             */
+            boat_beam_m?: number;
+            /**
+             * Format: double
+             * @description Boat draft in metres
+             */
+            boat_draft_m?: number;
+            /**
+             * Format: double
+             * @description Boat length in metres
+             */
+            boat_length_m?: number;
+            /** @description Club UUID */
+            club_id: string;
+            /**
+             * Format: date-time
+             * @description Creation timestamp
+             */
             created_at: string;
-            /** @description End date (ISO 8601) */
+            /**
+             * Format: date-time
+             * @description End date (ISO 8601)
+             */
             end_date: string;
+            /** @description Guest email */
+            guest_email?: string;
             /** @description Guest name */
             guest_name?: string;
+            /** @description Guest phone */
+            guest_phone?: string;
             /** @description Booking UUID */
             id: string;
             /** @description Optional notes */
             notes: string;
+            /** @description Payment UUID */
+            payment_id?: string;
             /** @description Resource UUID */
             resource_id: string;
-            /** @description Resource display name */
-            resource_name: string;
-            /** @description Resource type */
-            resource_type: string;
-            /** @description Start date (ISO 8601) */
+            /** @description Resource unit UUID */
+            resource_unit_id?: string;
+            /**
+             * Format: date-time
+             * @description Start date (ISO 8601)
+             */
             start_date: string;
             /**
              * @description Booking status
              * @enum {string}
              */
             status: "pending" | "confirmed" | "cancelled" | "completed" | "no_show";
+            /**
+             * Format: date-time
+             * @description Last update timestamp
+             */
+            updated_at: string;
             /** @description Booking member UUID */
             user_id?: string;
+        };
+        BookingAdmin: {
+            /**
+             * Format: double
+             * @description Boat beam in metres
+             */
+            boat_beam_m?: number;
+            /**
+             * Format: double
+             * @description Boat draft in metres
+             */
+            boat_draft_m?: number;
+            /**
+             * Format: double
+             * @description Boat length in metres
+             */
+            boat_length_m?: number;
+            /** @description Club UUID */
+            club_id: string;
+            /**
+             * Format: date-time
+             * @description Creation timestamp
+             */
+            created_at: string;
+            /**
+             * Format: date-time
+             * @description End date (ISO 8601)
+             */
+            end_date: string;
+            /** @description Guest email */
+            guest_email?: string;
+            /** @description Guest name */
+            guest_name?: string;
+            /** @description Guest phone */
+            guest_phone?: string;
+            /** @description Booking UUID */
+            id: string;
+            /** @description Optional notes */
+            notes: string;
+            /** @description Payment UUID */
+            payment_id?: string;
+            /** @description Resource UUID */
+            resource_id: string;
+            /** @description Resource display name */
+            resource_name: string;
+            /** @description Resource type */
+            resource_type: string;
+            /** @description Resource unit UUID */
+            resource_unit_id?: string;
+            /**
+             * Format: date-time
+             * @description Start date (ISO 8601)
+             */
+            start_date: string;
+            /**
+             * @description Booking status
+             * @enum {string}
+             */
+            status: "pending" | "confirmed" | "cancelled" | "completed" | "no_show";
+            /**
+             * Format: date-time
+             * @description Last update timestamp
+             */
+            updated_at: string;
+            /** @description Booking member email */
+            user_email?: string;
+            /** @description Booking member UUID */
+            user_id?: string;
+            /** @description Booking member name */
+            user_name?: string;
         };
         BookingResource: {
             /**
@@ -2352,6 +2665,15 @@ export interface components {
              * @description Total capacity
              */
             capacity: number;
+            /** @description Club UUID */
+            club_id: string;
+            /**
+             * Format: date-time
+             * @description Creation timestamp
+             */
+            created_at: string;
+            /** @description Resource description */
+            description: string;
             /** @description Resource UUID */
             id: string;
             /** @description Resource name */
@@ -2362,7 +2684,36 @@ export interface components {
              */
             price_per_unit: number;
             /** @description Resource type key */
-            resource_type: string;
+            type: string;
+            /** @description Booking unit (e.g. night, hour) */
+            unit: string;
+            /**
+             * Format: date-time
+             * @description Last update timestamp
+             */
+            updated_at: string;
+        };
+        Broadcast: {
+            /** @description Email body */
+            body: string;
+            /**
+             * Format: date-time
+             * @description Creation timestamp
+             */
+            created_at: string;
+            /** @description Broadcast UUID */
+            id: string;
+            /** @description Recipient group (all, members, styre, slip_owners) */
+            recipients: string;
+            /**
+             * Format: date-time
+             * @description Send timestamp
+             */
+            sent_at: string;
+            /** @description Sender user UUID */
+            sent_by: string;
+            /** @description Email subject */
+            subject: string;
         };
         CalendarEvent: {
             /**
@@ -2371,20 +2722,42 @@ export interface components {
              * @example https://example.com/schemas/CalendarEvent.json
              */
             readonly $schema?: string;
+            /** @description Club UUID */
+            club_id: string;
+            /**
+             * Format: date-time
+             * @description Creation timestamp
+             */
+            created_at: string;
+            /** @description Creator user UUID */
+            created_by: string;
             /** @description Event description */
             description: string;
-            /** @description End date/time (ISO 8601) */
-            end_date: string;
+            /**
+             * Format: date-time
+             * @description End date/time (ISO 8601)
+             */
+            end_time: string;
             /** @description Event UUID */
             id: string;
             /** @description Whether event is publicly visible */
             is_public: boolean;
             /** @description Event location */
-            location?: string;
-            /** @description Start date/time (ISO 8601) */
-            start_date: string;
+            location: string;
+            /**
+             * Format: date-time
+             * @description Start date/time (ISO 8601)
+             */
+            start_time: string;
+            /** @description Event tag/category */
+            tag: string;
             /** @description Event title */
             title: string;
+            /**
+             * Format: date-time
+             * @description Last update timestamp
+             */
+            updated_at: string;
         };
         ClubCoordinatesResponse: {
             /**
@@ -2411,6 +2784,19 @@ export interface components {
              */
             name: string;
         };
+        Consent: {
+            /** @description Type of consent */
+            consent_type: string;
+            /**
+             * Format: date-time
+             * @description Grant timestamp
+             */
+            granted_at: string;
+            /** @description Consent UUID */
+            id: string;
+            /** @description Consent version */
+            version: string;
+        };
         ContactRequest: {
             /**
              * Format: uri
@@ -2430,6 +2816,145 @@ export interface components {
             /** @description Subject line */
             subject: string;
         };
+        "Create-feature-requestRequest": {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/Create-feature-requestRequest.json
+             */
+            readonly $schema?: string;
+            /** @description Request description */
+            description: string;
+            /** @description Request title */
+            title: string;
+        };
+        "Create-projectRequest": {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/Create-projectRequest.json
+             */
+            readonly $schema?: string;
+            /** @description Project description */
+            description?: string;
+            /** @description Project name */
+            name: string;
+        };
+        CreateBookingRequest: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/CreateBookingRequest.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: double
+             * @description Boat beam in metres
+             */
+            boat_beam_m?: number;
+            /**
+             * Format: double
+             * @description Boat draft in metres
+             */
+            boat_draft_m?: number;
+            /**
+             * Format: double
+             * @description Boat length in metres
+             */
+            boat_length_m?: number;
+            /** @description End date (ISO 8601) */
+            end_date: string;
+            /** @description Guest email */
+            guest_email?: string;
+            /** @description Guest name */
+            guest_name?: string;
+            /** @description Guest phone */
+            guest_phone?: string;
+            /** @description Optional notes */
+            notes?: string;
+            /** @description Resource type to book */
+            resource_type: string;
+            /** @description Season identifier */
+            season?: string;
+            /** @description Start date (ISO 8601) */
+            start_date: string;
+        };
+        CreateEventRequest: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/CreateEventRequest.json
+             */
+            readonly $schema?: string;
+            /** @description Event description */
+            description?: string;
+            /** @description End date/time (ISO 8601) */
+            end_time: string;
+            /** @description Whether event is publicly visible */
+            is_public: boolean;
+            /** @description Event location */
+            location?: string;
+            /** @description Start date/time (ISO 8601) */
+            start_time: string;
+            /** @description Event tag/category */
+            tag?: string;
+            /** @description Event title */
+            title: string;
+        };
+        CreateInvoiceRequest: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/CreateInvoiceRequest.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: double
+             * @description Invoice amount
+             */
+            amount: number;
+            /** @description Invoice description */
+            description: string;
+            /** @description Due date */
+            due_date: string;
+            /** @description Invoice type */
+            type: string;
+            /** @description User UUID */
+            user_id: string;
+        };
+        DashboardResponse: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/DashboardResponse.json
+             */
+            readonly $schema?: string;
+            /** @description Current membership status */
+            membershipStatus: string;
+            /**
+             * Format: int64
+             * @description Position in waiting list
+             */
+            queuePosition: number | null;
+            /**
+             * Format: int64
+             * @description Total entries in waiting list
+             */
+            queueTotal: number | null;
+            /** @description Assigned slip info */
+            slip?: components["schemas"]["DashboardSlip"];
+            /**
+             * Format: int64
+             * @description Number of upcoming bookings
+             */
+            upcomingBookingsCount: number;
+        };
+        DashboardSlip: {
+            /** @description Harbour section/location */
+            location: string;
+            /** @description Slip number */
+            number: string;
+        };
         DayAvailability: {
             /**
              * Format: int64
@@ -2444,6 +2969,38 @@ export interface components {
              */
             total_units: number;
         };
+        DeletionRequest: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/DeletionRequest.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: date-time
+             * @description Cancellation timestamp
+             */
+            cancelled_at?: string;
+            /**
+             * Format: date-time
+             * @description Grace period end
+             */
+            grace_end: string;
+            /** @description Request UUID */
+            id: string;
+            /**
+             * Format: date-time
+             * @description Processing timestamp
+             */
+            processed_at?: string;
+            /**
+             * Format: date-time
+             * @description Request timestamp
+             */
+            requested_at: string;
+            /** @description Request status */
+            status: string;
+        };
         DirectoryMember: {
             /** @description Email address */
             email?: string;
@@ -2451,6 +3008,67 @@ export interface components {
             full_name: string;
             /** @description Phone number */
             phone?: string;
+        };
+        Document: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/Document.json
+             */
+            readonly $schema?: string;
+            /** @description MIME content type */
+            content_type: string;
+            /** @description Creation timestamp */
+            created_at: string;
+            /** @description Original filename */
+            filename: string;
+            /** @description Document UUID */
+            id: string;
+            /**
+             * Format: int64
+             * @description File size in bytes
+             */
+            size_bytes: number;
+            /** @description Document title */
+            title: string;
+            /** @description Last update timestamp */
+            updated_at: string;
+            /** @description Uploader user UUID */
+            uploaded_by: string;
+            /** @description Visibility level */
+            visibility: string;
+        };
+        DugnadHoursSummary: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/DugnadHoursSummary.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: double
+             * @description Hours completed
+             */
+            completed_hours: number;
+            /** @description Member name */
+            name: string;
+            /**
+             * Format: double
+             * @description Remaining hours
+             */
+            remaining: number;
+            /**
+             * Format: double
+             * @description Required hours
+             */
+            required_hours: number;
+            /**
+             * Format: double
+             * @description Hours signed up for
+             */
+            signed_up_hours: number;
+            /** @description User UUID */
+            user_id: string;
         };
         EmailLoginRequest: {
             /**
@@ -2543,6 +3161,46 @@ export interface components {
             /** @description Authorization code */
             code: string;
         };
+        FeatureRequest: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/FeatureRequest.json
+             */
+            readonly $schema?: string;
+            /** @description Club UUID */
+            club_id: string;
+            /**
+             * Format: date-time
+             * @description Creation timestamp
+             */
+            created_at: string;
+            /** @description Request description */
+            description: string;
+            /** @description Feature request UUID */
+            id: string;
+            /** @description Request status */
+            status: string;
+            /** @description Submitter user UUID */
+            submitted_by: string;
+            /** @description Request title */
+            title: string;
+            /**
+             * Format: date-time
+             * @description Last update timestamp
+             */
+            updated_at: string;
+            /**
+             * Format: int64
+             * @description Current user's vote
+             */
+            user_vote: number | null;
+            /**
+             * Format: int64
+             * @description Total vote count
+             */
+            vote_count: number;
+        };
         FeaturesResponse: {
             /**
              * Format: uri
@@ -2561,6 +3219,44 @@ export interface components {
             /** @description Projects module enabled */
             projects: boolean;
         };
+        FinancialSummary: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/FinancialSummary.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: double
+             * @description Total andel collected
+             */
+            total_andel_collected: number;
+            /**
+             * Format: double
+             * @description Total booking revenue
+             */
+            total_booking_revenue: number;
+            /**
+             * Format: double
+             * @description Total dues received
+             */
+            total_dues_received: number;
+            /**
+             * Format: double
+             * @description Total outstanding amount
+             */
+            total_outstanding: number;
+            /**
+             * Format: double
+             * @description Total overdue amount
+             */
+            total_overdue: number;
+            /**
+             * Format: int64
+             * @description Financial year
+             */
+            year?: number;
+        };
         "Get-vapid-keyResponse": {
             /**
              * Format: uri
@@ -2570,6 +3266,20 @@ export interface components {
             readonly $schema?: string;
             /** @description VAPID public key for push subscriptions */
             vapid_key: string;
+        };
+        GroupedTasks: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/GroupedTasks.json
+             */
+            readonly $schema?: string;
+            /** @description Completed tasks */
+            done: components["schemas"]["Task"][] | null;
+            /** @description In-progress tasks */
+            in_progress: components["schemas"]["Task"][] | null;
+            /** @description Todo tasks */
+            todo: components["schemas"]["Task"][] | null;
         };
         HealthPoolStats: {
             /**
@@ -2656,6 +3366,52 @@ export interface components {
             /** @description Available time slots */
             slots: components["schemas"]["HoistSlot"][] | null;
         };
+        "Join-waiting-listRequest": {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/Join-waiting-listRequest.json
+             */
+            readonly $schema?: string;
+            /** @description Boat UUID to link */
+            boat_id?: string;
+        };
+        "Join-waiting-listResponse": {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/Join-waiting-listResponse.json
+             */
+            readonly $schema?: string;
+            /** @description Created entry */
+            entry: components["schemas"]["WaitingListEntry"];
+            /**
+             * Format: int64
+             * @description Queue position
+             */
+            position: number;
+        };
+        LegalDocument: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/LegalDocument.json
+             */
+            readonly $schema?: string;
+            /** @description Document content */
+            content: string;
+            /** @description Document type */
+            doc_type: string;
+            /** @description Document UUID */
+            id: string;
+            /**
+             * Format: date-time
+             * @description Publication timestamp
+             */
+            published_at: string;
+            /** @description Document version */
+            version: string;
+        };
         MapMarker: {
             /**
              * Format: uri
@@ -2700,6 +3456,152 @@ export interface components {
              */
             sort_order: number;
         };
+        MaterialItem: {
+            /**
+             * Format: double
+             * @description Estimated cost
+             */
+            est_cost?: number;
+            /** @description Material name */
+            item: string;
+            /**
+             * Format: double
+             * @description Quantity needed
+             */
+            quantity?: number;
+            /** @description Unit of measurement */
+            unit?: string;
+        };
+        MemberProfile: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/MemberProfile.json
+             */
+            readonly $schema?: string;
+            /** @description Street address */
+            address_line: string;
+            /** @description City */
+            city: string;
+            /** @description Club UUID */
+            club_id: string;
+            /**
+             * Format: date-time
+             * @description Creation timestamp
+             */
+            created_at: string;
+            /** @description Email address */
+            email: string;
+            /** @description Full name */
+            full_name: string;
+            /** @description Member UUID */
+            id: string;
+            /** @description Whether member is a local resident */
+            is_local: boolean;
+            /** @description Phone number */
+            phone: string;
+            /** @description Postal code */
+            postal_code: string;
+            /**
+             * Format: date-time
+             * @description Last update timestamp
+             */
+            updated_at: string;
+        };
+        MemberSlip: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/MemberSlip.json
+             */
+            readonly $schema?: string;
+            /** @description Assignment date */
+            assigned_at: string;
+            /**
+             * Format: double
+             * @description Depth in metres
+             */
+            depth_m?: number;
+            /**
+             * Format: double
+             * @description Length in metres
+             */
+            length_m?: number;
+            /** @description Slip number */
+            number: string;
+            /** @description Harbour section */
+            section: string;
+            /** @description Slip UUID */
+            slip_id: string;
+            /** @description Slip status */
+            status: string;
+            /**
+             * Format: double
+             * @description Width in metres
+             */
+            width_m?: number;
+        };
+        NotificationConfig: {
+            /** @description Notification category */
+            category: string;
+            /**
+             * Format: int64
+             * @description Days before event to notify
+             */
+            lead_days?: number;
+            /** @description Whether category is required */
+            required: boolean;
+        };
+        NotificationPreference: {
+            /** @description Notification category */
+            category: string;
+            /** @description Default enabled state */
+            default: boolean;
+            /** @description Whether enabled */
+            enabled: boolean;
+            /** @description Whether category is required (cannot disable) */
+            required: boolean;
+        };
+        "Offer-slipRequest": {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/Offer-slipRequest.json
+             */
+            readonly $schema?: string;
+            /** @description Slip UUID to offer */
+            slip_id: string;
+        };
+        OverduePayment: {
+            /**
+             * Format: double
+             * @description Payment amount
+             */
+            amount: number;
+            /** @description Currency code */
+            currency: string;
+            /**
+             * Format: int64
+             * @description Number of days overdue
+             */
+            days_overdue: number;
+            /** @description Payment description */
+            description: string;
+            /** @description Due date */
+            due_date: string;
+            /** @description Payment UUID */
+            id: string;
+            /** @description Payment type */
+            type: string;
+            /** @description User email */
+            user_email: string;
+            /** @description User UUID */
+            user_id: string;
+            /** @description User name */
+            user_name: string;
+            /** @description User phone */
+            user_phone: string;
+        };
         PaginatedResponseBooking: {
             /**
              * Format: uri
@@ -2711,6 +3613,28 @@ export interface components {
             has_more: boolean;
             /** @description List of items */
             items: components["schemas"]["Booking"][] | null;
+            /**
+             * Format: int64
+             * @description Applied limit
+             */
+            limit: number;
+            /**
+             * Format: int64
+             * @description Applied offset
+             */
+            offset: number;
+        };
+        PaginatedResponseBookingAdmin: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/PaginatedResponseBookingAdmin.json
+             */
+            readonly $schema?: string;
+            /** @description Whether more items exist beyond this page */
+            has_more: boolean;
+            /** @description List of items */
+            items: components["schemas"]["BookingAdmin"][] | null;
             /**
              * Format: int64
              * @description Applied limit
@@ -2790,27 +3714,300 @@ export interface components {
              */
             offset: number;
         };
-        PaginatedResponseUserProfile: {
+        Payment: {
             /**
              * Format: uri
              * @description A URL to the JSON Schema for this object.
-             * @example https://example.com/schemas/PaginatedResponseUserProfile.json
+             * @example https://example.com/schemas/Payment.json
              */
             readonly $schema?: string;
-            /** @description Whether more items exist beyond this page */
-            has_more: boolean;
-            /** @description List of items */
-            items: components["schemas"]["UserProfile"][] | null;
+            /**
+             * Format: double
+             * @description Payment amount
+             */
+            amount: number;
+            /**
+             * Format: date-time
+             * @description Creation timestamp
+             */
+            created_at: string;
+            /** @description Currency code */
+            currency: string;
+            /** @description Payment description */
+            description: string;
+            /**
+             * Format: date-time
+             * @description Due date
+             */
+            due_date?: string;
+            /** @description Payment UUID */
+            id: string;
+            /**
+             * Format: date-time
+             * @description Payment date
+             */
+            paid_at?: string;
+            /** @description Payment status */
+            status: string;
+            /** @description Payment type */
+            type: string;
+            /** @description User email */
+            user_email: string;
+            /** @description User UUID */
+            user_id: string;
+            /** @description User name */
+            user_name: string;
+            /** @description Vipps payment reference */
+            vipps_reference: string;
+        };
+        PaymentsListResponse: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/PaymentsListResponse.json
+             */
+            readonly $schema?: string;
             /**
              * Format: int64
-             * @description Applied limit
+             * @description Current page
              */
-            limit: number;
+            page: number;
+            /** @description List of payments */
+            payments: components["schemas"]["Payment"][] | null;
             /**
              * Format: int64
-             * @description Applied offset
+             * @description Items per page
              */
-            offset: number;
+            per_page: number;
+            /**
+             * Format: int64
+             * @description Total count
+             */
+            total: number;
+        };
+        PortalWaitingListEntry: {
+            /**
+             * Format: double
+             * @description Boat beam in metres
+             */
+            boat_beam?: number;
+            /** @description Boat name */
+            boat_name?: string;
+            /** @description Whether member is local resident */
+            is_local: boolean;
+            /** @description Whether this is the current user */
+            is_you: boolean;
+            /** @description Member name */
+            name: string;
+            /**
+             * Format: int64
+             * @description Queue position
+             */
+            position: number;
+            /** @description Entry status */
+            status: string;
+        };
+        PriceItem: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/PriceItem.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: double
+             * @description Price amount
+             */
+            amount: number;
+            /** @description Price category */
+            category: string;
+            /** @description Currency code */
+            currency: string;
+            /** @description Item description */
+            description: string;
+            /** @description Price item UUID */
+            id: string;
+            /** @description Whether installments are allowed */
+            installments_allowed: boolean;
+            /** @description Whether item is active */
+            is_active: boolean;
+            /**
+             * Format: int64
+             * @description Maximum installment count
+             */
+            max_installments: number;
+            /** @description Additional metadata */
+            metadata: unknown;
+            /** @description Item name */
+            name: string;
+            /**
+             * Format: int64
+             * @description Display order
+             */
+            sort_order: number;
+            /** @description Pricing unit */
+            unit: string;
+        };
+        Product: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/Product.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: date-time
+             * @description Creation timestamp
+             */
+            created_at: string;
+            /** @description Currency code */
+            currency: string;
+            /** @description Product description */
+            description: string;
+            /** @description Product UUID */
+            id: string;
+            /** @description Product image URL */
+            image_url: string;
+            /** @description Whether product is active */
+            is_active: boolean;
+            /** @description Product name */
+            name: string;
+            /**
+             * Format: double
+             * @description Base price
+             */
+            price: number;
+            /**
+             * Format: int64
+             * @description Display order
+             */
+            sort_order: number;
+            /**
+             * Format: int64
+             * @description Available stock
+             */
+            stock: number;
+            /**
+             * Format: date-time
+             * @description Last update timestamp
+             */
+            updated_at: string;
+            /** @description Product variants */
+            variants: components["schemas"]["ProductVariant"][] | null;
+        };
+        ProductVariant: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/ProductVariant.json
+             */
+            readonly $schema?: string;
+            /** @description Color */
+            color: string;
+            /** @description Variant UUID */
+            id: string;
+            /** @description Variant image URL */
+            image_url: string;
+            /**
+             * Format: double
+             * @description Price override
+             */
+            price_override?: number;
+            /** @description Size */
+            size: string;
+            /**
+             * Format: int64
+             * @description Display order
+             */
+            sort_order: number;
+            /**
+             * Format: int64
+             * @description Available stock
+             */
+            stock: number;
+        };
+        Project: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/Project.json
+             */
+            readonly $schema?: string;
+            /** @description Club UUID */
+            club_id: string;
+            /**
+             * Format: date-time
+             * @description Creation timestamp
+             */
+            created_at: string;
+            /** @description Creator user UUID */
+            created_by: string;
+            /** @description Project description */
+            description: string;
+            /** @description Project UUID */
+            id: string;
+            /** @description Project name */
+            name: string;
+            /**
+             * Format: date-time
+             * @description Last update timestamp
+             */
+            updated_at: string;
+        };
+        ProjectWithCounts: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/ProjectWithCounts.json
+             */
+            readonly $schema?: string;
+            /** @description Club UUID */
+            club_id: string;
+            /**
+             * Format: date-time
+             * @description Creation timestamp
+             */
+            created_at: string;
+            /** @description Creator user UUID */
+            created_by: string;
+            /** @description Project description */
+            description: string;
+            /**
+             * Format: int64
+             * @description Number of completed tasks
+             */
+            done_count: number;
+            /** @description Project UUID */
+            id: string;
+            /**
+             * Format: int64
+             * @description Number of in-progress tasks
+             */
+            in_progress_count: number;
+            /** @description Project name */
+            name: string;
+            /**
+             * Format: int64
+             * @description Number of todo tasks
+             */
+            todo_count: number;
+            /**
+             * Format: date-time
+             * @description Last update timestamp
+             */
+            updated_at: string;
+        };
+        "Record-consentRequest": {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/Record-consentRequest.json
+             */
+            readonly $schema?: string;
+            /** @description Type of consent */
+            consent_type: string;
+            /** @description Consent version */
+            version: string;
         };
         RefreshRequest: {
             /**
@@ -2821,6 +4018,29 @@ export interface components {
             readonly $schema?: string;
             /** @description Refresh token to exchange */
             refresh_token: string;
+        };
+        "Reorder-waiting-list-entryRequest": {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/Reorder-waiting-list-entryRequest.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: int64
+             * @description New position
+             */
+            position: number;
+        };
+        "Report-slip-issueRequest": {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/Report-slip-issueRequest.json
+             */
+            readonly $schema?: string;
+            /** @description Issue description */
+            description: string;
         };
         Slip: {
             /**
@@ -2858,6 +4078,111 @@ export interface components {
              */
             width_m?: number;
         };
+        SlipShare: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/SlipShare.json
+             */
+            readonly $schema?: string;
+            /** @description Start date */
+            available_from: string;
+            /** @description End date */
+            available_to: string;
+            /** @description Club UUID */
+            club_id: string;
+            /**
+             * Format: date-time
+             * @description Creation timestamp
+             */
+            created_at: string;
+            /** @description Share UUID */
+            id: string;
+            /** @description Notes */
+            notes: string;
+            /** @description Slip assignment UUID */
+            slip_assignment_id: string;
+            /** @description Share status */
+            status: string;
+            /**
+             * Format: date-time
+             * @description Last update timestamp
+             */
+            updated_at: string;
+        };
+        SlipShareAdmin: {
+            /** @description Start date */
+            available_from: string;
+            /** @description End date */
+            available_to: string;
+            /** @description Club UUID */
+            club_id: string;
+            /**
+             * Format: date-time
+             * @description Creation timestamp
+             */
+            created_at: string;
+            /** @description Share UUID */
+            id: string;
+            /** @description Member name */
+            member_name: string;
+            /** @description Notes */
+            notes: string;
+            /** @description Harbour section */
+            section: string;
+            /** @description Slip assignment UUID */
+            slip_assignment_id: string;
+            /** @description Slip number */
+            slip_number: string;
+            /** @description Share status */
+            status: string;
+            /**
+             * Format: date-time
+             * @description Last update timestamp
+             */
+            updated_at: string;
+        };
+        SlipShareRebate: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/SlipShareRebate.json
+             */
+            readonly $schema?: string;
+            /** @description Booking UUID */
+            booking_id: string;
+            /**
+             * Format: date-time
+             * @description Creation timestamp
+             */
+            created_at: string;
+            /** @description Rebate UUID */
+            id: string;
+            /**
+             * Format: int64
+             * @description Number of nights rented
+             */
+            nights_rented: number;
+            /**
+             * Format: double
+             * @description Calculated rebate amount
+             */
+            rebate_amount: number;
+            /**
+             * Format: double
+             * @description Rebate percentage
+             */
+            rebate_pct: number;
+            /**
+             * Format: double
+             * @description Total rental income
+             */
+            rental_income: number;
+            /** @description Share UUID */
+            slip_share_id: string;
+            /** @description Rebate status */
+            status: string;
+        };
         StatusResponse: {
             /**
              * Format: uri
@@ -2870,6 +4195,88 @@ export interface components {
              * @example received
              */
             status: string;
+        };
+        Task: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/Task.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: double
+             * @description Actual hours spent
+             */
+            actual_hours: number | null;
+            /** @description Responsible person UUID */
+            ansvarlig_id: string | null;
+            /** @description Assignee user UUID */
+            assignee_id: string | null;
+            /** @description Club UUID */
+            club_id: string;
+            /**
+             * Format: date-time
+             * @description Creation timestamp
+             */
+            created_at: string;
+            /** @description Creator user UUID */
+            created_by: string;
+            /** @description Task description */
+            description: string;
+            /** @description Due date */
+            due_date?: string;
+            /**
+             * Format: double
+             * @description Estimated hours
+             */
+            estimated_hours: number | null;
+            /** @description Task UUID */
+            id: string;
+            /** @description Required materials */
+            materials: components["schemas"]["MaterialItem"][] | null;
+            /**
+             * Format: int64
+             * @description Maximum collaborators
+             */
+            max_collaborators: number;
+            /**
+             * Format: int64
+             * @description Number of participants
+             */
+            participant_count: number;
+            /** @description Task priority */
+            priority: string;
+            /** @description Project UUID */
+            project_id: string;
+            /** @description Task status */
+            status: string;
+            /** @description Task title */
+            title: string;
+            /**
+             * Format: date-time
+             * @description Last update timestamp
+             */
+            updated_at: string;
+        };
+        TaskParticipant: {
+            /**
+             * Format: double
+             * @description Hours contributed
+             */
+            hours: number | null;
+            /**
+             * Format: date-time
+             * @description Join timestamp
+             */
+            joined_at: string;
+            /** @description Participant name */
+            name: string;
+            /** @description Participant role */
+            role: string;
+            /** @description Task UUID */
+            task_id: string;
+            /** @description User UUID */
+            user_id: string;
         };
         TodayAvailability: {
             /**
@@ -2911,6 +4318,70 @@ export interface components {
              */
             token_type: string;
         };
+        UnconfirmedBoat: {
+            /**
+             * Format: double
+             * @description Beam in metres
+             */
+            beam_m?: number;
+            /** @description Linked boat model UUID */
+            boat_model_id?: string;
+            /** @description Creation timestamp */
+            created_at: string;
+            /**
+             * Format: double
+             * @description Draft in metres
+             */
+            draft_m?: number;
+            /** @description Boat UUID */
+            id: string;
+            /**
+             * Format: double
+             * @description Length in metres
+             */
+            length_m?: number;
+            /** @description Manufacturer */
+            manufacturer: string;
+            /** @description Model name */
+            model: string;
+            /** @description Boat name */
+            name: string;
+            /** @description Owner name */
+            owner_name: string;
+            /** @description Registration number */
+            registration_number: string;
+            /** @description Boat type */
+            type: string;
+            /** @description Last update timestamp */
+            updated_at: string;
+            /** @description Owner user UUID */
+            user_id: string;
+            /**
+             * Format: double
+             * @description Weight in kilograms
+             */
+            weight_kg?: number;
+        };
+        "Update-feature-request-statusRequest": {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/Update-feature-request-statusRequest.json
+             */
+            readonly $schema?: string;
+            /** @description New status */
+            status: string;
+        };
+        "Update-waiting-list-boatRequest": {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/Update-waiting-list-boatRequest.json
+             */
+            readonly $schema?: string;
+            /** @description Boat UUID */
+            boat_id: string;
+        };
         UserProfile: {
             /**
              * Format: uri
@@ -2928,6 +4399,106 @@ export interface components {
             phone: string;
             /** @description Assigned roles */
             roles: string[] | null;
+        };
+        "Vote-feature-requestRequest": {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/Vote-feature-requestRequest.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: int64
+             * @description Vote value (1 or -1)
+             */
+            value: number;
+        };
+        WaitingListEntry: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/WaitingListEntry.json
+             */
+            readonly $schema?: string;
+            /** @description Club UUID */
+            club_id: string;
+            /**
+             * Format: date-time
+             * @description Creation timestamp
+             */
+            created_at: string;
+            /** @description Entry UUID */
+            id: string;
+            /** @description Whether member is local resident */
+            is_local: boolean;
+            /**
+             * Format: date-time
+             * @description Deadline to accept offer
+             */
+            offer_deadline?: string;
+            /**
+             * Format: int64
+             * @description Queue position
+             */
+            position: number;
+            /** @description Entry status */
+            status: string;
+            /**
+             * Format: date-time
+             * @description Last update timestamp
+             */
+            updated_at: string;
+            /** @description User UUID */
+            user_id: string;
+        };
+        WaitingListEntryAdmin: {
+            /**
+             * Format: double
+             * @description Boat beam in metres
+             */
+            boat_beam?: number;
+            /** @description Whether boat measurements are confirmed */
+            boat_confirmed?: boolean;
+            /** @description Boat UUID */
+            boat_id?: string;
+            /** @description Boat name */
+            boat_name?: string;
+            /** @description Club UUID */
+            club_id: string;
+            /**
+             * Format: date-time
+             * @description Creation timestamp
+             */
+            created_at: string;
+            /** @description Member email */
+            email: string;
+            /** @description Member full name */
+            full_name: string;
+            /** @description Entry UUID */
+            id: string;
+            /** @description Whether member is local resident */
+            is_local: boolean;
+            /**
+             * Format: date-time
+             * @description Deadline to accept offer
+             */
+            offer_deadline?: string;
+            /** @description Member phone */
+            phone: string;
+            /**
+             * Format: int64
+             * @description Queue position
+             */
+            position: number;
+            /** @description Entry status */
+            status: string;
+            /**
+             * Format: date-time
+             * @description Last update timestamp
+             */
+            updated_at: string;
+            /** @description User UUID */
+            user_id: string;
         };
         WeatherResponse: {
             /**
@@ -3020,9 +4591,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[] | null;
+                    "application/json": components["schemas"]["UnconfirmedBoat"][] | null;
                 };
             };
             /** @description Error */
@@ -3096,7 +4665,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaginatedResponseBooking"];
+                    "application/json": components["schemas"]["PaginatedResponseBookingAdmin"];
                 };
             };
             /** @description Error */
@@ -3160,9 +4729,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[] | null;
+                    "application/json": components["schemas"]["Broadcast"][] | null;
                 };
             };
             /** @description Error */
@@ -3197,9 +4764,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["Document"];
                 };
             };
             /** @description Error */
@@ -3329,9 +4894,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[] | null;
+                    "application/json": components["schemas"]["Project"][] | null;
                 };
             };
             /** @description Error */
@@ -3357,9 +4920,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["Admin-link-project-eventRequest"];
             };
         };
         responses: {
@@ -3430,9 +4991,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[] | null;
+                    "application/json": components["schemas"]["DugnadHoursSummary"][] | null;
                 };
             };
             /** @description Error */
@@ -3455,9 +5014,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["Admin-set-required-hoursRequest"];
             };
         };
         responses: {
@@ -3467,9 +5024,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["StatusResponse"];
                 };
             };
             /** @description Error */
@@ -3519,9 +5074,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["CreateInvoiceRequest"];
             };
         };
         responses: {
@@ -3531,9 +5084,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["Payment"];
                 };
             };
             /** @description Error */
@@ -3562,9 +5113,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[] | null;
+                    "application/json": components["schemas"]["OverduePayment"][] | null;
                 };
             };
             /** @description Error */
@@ -3598,7 +5147,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaginatedResponseMapStringInterface {}"];
+                    "application/json": components["schemas"]["PaymentsListResponse"];
                 };
             };
             /** @description Error */
@@ -3630,9 +5179,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["Payment"];
                 };
             };
             /** @description Error */
@@ -3661,9 +5208,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["FinancialSummary"];
                 };
             };
             /** @description Error */
@@ -3692,9 +5237,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[] | null;
+                    "application/json": components["schemas"]["DeletionRequest"][] | null;
                 };
             };
             /** @description Error */
@@ -3755,9 +5298,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[] | null;
+                    "application/json": components["schemas"]["LegalDocument"][] | null;
                 };
             };
             /** @description Error */
@@ -3780,9 +5321,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["LegalDocument"];
             };
         };
         responses: {
@@ -3792,9 +5331,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["LegalDocument"];
                 };
             };
             /** @description Error */
@@ -3926,9 +5463,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["NotificationConfig"][] | null;
                 };
             };
             /** @description Error */
@@ -3951,9 +5486,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["NotificationConfig"][] | null;
             };
         };
         responses: {
@@ -3963,9 +5496,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["NotificationConfig"][] | null;
                 };
             };
             /** @description Error */
@@ -4023,9 +5554,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[] | null;
+                    "application/json": components["schemas"]["PriceItem"][] | null;
                 };
             };
             /** @description Error */
@@ -4048,9 +5577,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["PriceItem"];
             };
         };
         responses: {
@@ -4060,9 +5587,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["PriceItem"];
                 };
             };
             /** @description Error */
@@ -4088,9 +5613,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["PriceItem"];
             };
         };
         responses: {
@@ -4100,9 +5623,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["PriceItem"];
                 };
             };
             /** @description Error */
@@ -4161,9 +5682,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[] | null;
+                    "application/json": components["schemas"]["Product"][] | null;
                 };
             };
             /** @description Error */
@@ -4186,9 +5705,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["Product"];
             };
         };
         responses: {
@@ -4198,9 +5715,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["Product"];
                 };
             };
             /** @description Error */
@@ -4256,9 +5771,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["Product"];
             };
         };
         responses: {
@@ -4268,9 +5781,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["Product"];
                 };
             };
             /** @description Error */
@@ -4326,9 +5837,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["ProductVariant"];
             };
         };
         responses: {
@@ -4338,9 +5847,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["ProductVariant"];
                 };
             };
             /** @description Error */
@@ -4437,9 +5944,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[] | null;
+                    "application/json": components["schemas"]["SlipShareAdmin"][] | null;
                 };
             };
             /** @description Error */
@@ -4468,9 +5973,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[] | null;
+                    "application/json": components["schemas"]["SlipShareRebate"][] | null;
                 };
             };
             /** @description Error */
@@ -4496,9 +5999,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["Admin-update-rebate-statusRequest"];
             };
         };
         responses: {
@@ -4508,9 +6009,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["SlipShareRebate"];
                 };
             };
             /** @description Error */
@@ -4753,7 +6252,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaginatedResponseUserProfile"];
+                    "application/json": components["schemas"]["AdminUsersResponse"];
                 };
             };
             /** @description Error */
@@ -4785,7 +6284,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["UserProfile"];
+                    "application/json": components["schemas"]["AdminUser"];
                 };
             };
             /** @description Error */
@@ -4851,7 +6350,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["UserProfile"];
+                    "application/json": components["schemas"]["AdminUser"];
                 };
             };
             /** @description Error */
@@ -5163,9 +6662,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[] | null;
+                    "application/json": components["schemas"]["BoatModel"][] | null;
                 };
             };
             /** @description Error */
@@ -5188,9 +6685,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["CreateBookingRequest"];
             };
         };
         responses: {
@@ -5548,9 +7043,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["CreateEventRequest"];
             };
         };
         responses: {
@@ -5645,9 +7138,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["CreateEventRequest"];
             };
         };
         responses: {
@@ -5749,9 +7240,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[] | null;
+                    "application/json": components["schemas"]["Document"][] | null;
                 };
             };
             /** @description Error */
@@ -5783,9 +7272,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["Document"];
                 };
             };
             /** @description Error */
@@ -5814,9 +7301,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[] | null;
+                    "application/json": components["schemas"]["FeatureRequest"][] | null;
                 };
             };
             /** @description Error */
@@ -5839,9 +7324,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["Create-feature-requestRequest"];
             };
         };
         responses: {
@@ -5851,9 +7334,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["FeatureRequest"];
                 };
             };
             /** @description Error */
@@ -5885,9 +7366,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["FeatureRequest"];
                 };
             };
             /** @description Error */
@@ -5919,9 +7398,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["Task"];
                 };
             };
             /** @description Error */
@@ -5947,9 +7424,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["Update-feature-request-statusRequest"];
             };
         };
         responses: {
@@ -5959,9 +7434,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["FeatureRequest"];
                 };
             };
             /** @description Error */
@@ -5985,7 +7458,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Vote-feature-requestRequest"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {
@@ -5993,9 +7470,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["FeatureRequest"];
                 };
             };
             /** @description Error */
@@ -6224,9 +7699,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["LegalDocument"];
                 };
             };
             /** @description Error */
@@ -6369,7 +7842,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["UserProfile"];
+                    "application/json": components["schemas"]["MemberProfile"];
                 };
             };
             /** @description Error */
@@ -6392,9 +7865,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["MemberProfile"];
             };
         };
         responses: {
@@ -6404,7 +7875,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["UserProfile"];
+                    "application/json": components["schemas"]["MemberProfile"];
                 };
             };
             /** @description Error */
@@ -6433,9 +7904,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[] | null;
+                    "application/json": components["schemas"]["Boat"][] | null;
                 };
             };
             /** @description Error */
@@ -6458,9 +7927,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["Boat"];
             };
         };
         responses: {
@@ -6470,9 +7937,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["Boat"];
                 };
             };
             /** @description Error */
@@ -6498,9 +7963,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["Boat"];
             };
         };
         responses: {
@@ -6510,9 +7973,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["Boat"];
                 };
             };
             /** @description Error */
@@ -6565,9 +8026,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["Record-consentRequest"];
             };
         };
         responses: {
@@ -6606,9 +8065,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[] | null;
+                    "application/json": components["schemas"]["Consent"][] | null;
                 };
             };
             /** @description Error */
@@ -6637,9 +8094,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["DashboardResponse"];
                 };
             };
             /** @description Error */
@@ -6699,9 +8154,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["DeletionRequest"];
                 };
             };
             /** @description Error */
@@ -6730,9 +8183,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["DeletionRequest"];
                 };
             };
             /** @description Error */
@@ -6790,9 +8241,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["DugnadHoursSummary"];
                 };
             };
             /** @description Error */
@@ -6821,9 +8270,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["NotificationPreference"][] | null;
                 };
             };
             /** @description Error */
@@ -6846,9 +8293,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["NotificationPreference"][] | null;
             };
         };
         responses: {
@@ -6858,9 +8303,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["NotificationPreference"][] | null;
                 };
             };
             /** @description Error */
@@ -6889,9 +8332,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["MemberSlip"];
                 };
             };
             /** @description Error */
@@ -6914,9 +8355,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["Report-slip-issueRequest"];
             };
         };
         responses: {
@@ -7058,9 +8497,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[] | null;
+                    "application/json": components["schemas"]["SlipShare"][] | null;
                 };
             };
             /** @description Error */
@@ -7083,9 +8520,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["SlipShare"];
             };
         };
         responses: {
@@ -7095,9 +8530,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["SlipShare"];
                 };
             };
             /** @description Error */
@@ -7126,9 +8559,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[] | null;
+                    "application/json": components["schemas"]["SlipShareRebate"][] | null;
                 };
             };
             /** @description Error */
@@ -7154,9 +8585,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["SlipShare"];
             };
         };
         responses: {
@@ -7166,9 +8595,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["SlipShare"];
                 };
             };
             /** @description Error */
@@ -7227,9 +8654,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[] | null;
+                    "application/json": components["schemas"]["PriceItem"][] | null;
                 };
             };
             /** @description Error */
@@ -7258,9 +8683,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[] | null;
+                    "application/json": components["schemas"]["Product"][] | null;
                 };
             };
             /** @description Error */
@@ -7289,9 +8712,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[] | null;
+                    "application/json": components["schemas"]["ProjectWithCounts"][] | null;
                 };
             };
             /** @description Error */
@@ -7314,9 +8735,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["Create-projectRequest"];
             };
         };
         responses: {
@@ -7326,9 +8745,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["Project"];
                 };
             };
             /** @description Error */
@@ -7360,9 +8777,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["ProjectWithCounts"];
                 };
             };
             /** @description Error */
@@ -7394,9 +8809,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[] | null;
+                    "application/json": components["schemas"]["GroupedTasks"];
                 };
             };
             /** @description Error */
@@ -7422,9 +8835,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["Task"];
             };
         };
         responses: {
@@ -7434,9 +8845,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["Task"];
                 };
             };
             /** @description Error */
@@ -7899,9 +9308,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["Task"];
             };
         };
         responses: {
@@ -7911,9 +9318,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["Task"];
                 };
             };
             /** @description Error */
@@ -7969,9 +9374,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["Assign-taskRequest"];
             };
         };
         responses: {
@@ -7981,9 +9384,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["Task"];
                 };
             };
             /** @description Error */
@@ -8009,9 +9410,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["Adjust-task-hoursRequest"];
             };
         };
         responses: {
@@ -8021,9 +9420,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["StatusResponse"];
                 };
             };
             /** @description Error */
@@ -8119,9 +9516,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[] | null;
+                    "application/json": components["schemas"]["TaskParticipant"][] | null;
                 };
             };
             /** @description Error */
@@ -8150,9 +9545,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[] | null;
+                    "application/json": components["schemas"]["WaitingListEntryAdmin"][] | null;
                 };
             };
             /** @description Error */
@@ -8175,9 +9568,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["Join-waiting-listRequest"];
             };
         };
         responses: {
@@ -8187,9 +9578,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["Join-waiting-listResponse"];
                 };
             };
             /** @description Error */
@@ -8218,9 +9607,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["WaitingListEntry"];
                 };
             };
             /** @description Error */
@@ -8243,9 +9630,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["Update-waiting-list-boatRequest"];
             };
         };
         responses: {
@@ -8255,9 +9640,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["WaitingListEntry"];
                 };
             };
             /** @description Error */
@@ -8286,9 +9669,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[] | null;
+                    "application/json": components["schemas"]["PortalWaitingListEntry"][] | null;
                 };
             };
             /** @description Error */
@@ -8375,9 +9756,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["Offer-slipRequest"];
             };
         };
         responses: {
@@ -8413,9 +9792,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["Reorder-waiting-list-entryRequest"];
             };
         };
         responses: {
@@ -8425,9 +9802,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["WaitingListEntry"];
                 };
             };
             /** @description Error */
