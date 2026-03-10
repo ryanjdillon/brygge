@@ -73,7 +73,7 @@ const columnHeaderClasses: Record<string, string> = {
   green: 'bg-green-100 text-green-700',
 }
 
-const statusOrder: ('todo' | 'in_progress' | 'done')[] = ['todo', 'in_progress', 'done']
+const statusOrder = ['todo', 'in_progress', 'done'] as const
 
 function openCreateModal(status: 'todo' | 'in_progress' | 'done') {
   createForStatus.value = status

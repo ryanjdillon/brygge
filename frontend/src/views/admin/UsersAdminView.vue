@@ -4,24 +4,14 @@ import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useApi } from '@/composables/useApi'
 import { Trash2 } from 'lucide-vue-next'
+import type { components } from '@/types/api'
+
+type User = components['schemas']['AdminUser']
+type UsersResponse = components['schemas']['AdminUsersResponse']
 
 const { t } = useI18n()
 const { fetchApi } = useApi()
 const queryClient = useQueryClient()
-
-interface User {
-  id: string
-  full_name: string
-  email: string
-  phone: string
-  roles: string[]
-  created_at: string
-}
-
-interface UsersResponse {
-  users: User[]
-  total_count: number
-}
 
 const { data: usersResponse, isLoading, isError } = useQuery({
   queryKey: ['admin', 'users'],
@@ -33,7 +23,7 @@ const users = computed(() => usersResponse.value?.users ?? [])
 const editingRoles = ref<Record<string, string[]>>({})
 
 function startEditRoles(user: User) {
-  editingRoles.value[user.id] = [...user.roles]
+  editingRoles.value[user.id] = [...(user.roles ?? [])]
 }
 
 function cancelEditRoles(userId: string) {

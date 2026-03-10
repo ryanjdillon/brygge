@@ -1,4 +1,7 @@
 import { useQuery } from '@tanstack/vue-query'
+import type { components } from '@/types/api'
+
+type WeatherApiResponse = components['schemas']['WeatherResponse']
 
 export interface WeatherData {
   temperature: number | null
@@ -6,14 +9,6 @@ export interface WeatherData {
   windDirection: number | null
   humidity: number | null
   symbolCode: string
-}
-
-interface WeatherApiResponse {
-  temperature: number | null
-  wind_speed: number | null
-  wind_direction: number | null
-  humidity: number | null
-  symbol_code: string
 }
 
 async function fetchWeather(): Promise<WeatherData> {

@@ -19,13 +19,9 @@ const { t } = useI18n()
 const auth = useAuthStore()
 const { fetchApi } = useApi()
 
-interface DashboardData {
-  membershipStatus: string
-  queuePosition: number | null
-  queueTotal: number | null
-  slip: { number: string; location: string } | null
-  upcomingBookingsCount: number
-}
+import type { components } from '@/types/api'
+
+type DashboardData = components['schemas']['DashboardResponse']
 
 const { data: dashboard, isLoading } = useQuery({
   queryKey: ['portal', 'dashboard'],

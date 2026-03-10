@@ -1,33 +1,11 @@
 import { computed, type Ref } from 'vue'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useApi } from '@/composables/useApi'
+import type { components } from '@/types/api'
 
-export interface CalendarEvent {
-  id: string
-  club_id: string
-  title: string
-  description: string
-  location: string
-  start_time: string
-  end_time: string
-  tag: string
-  is_public: boolean
-  created_by: string
-  created_at: string
-  updated_at: string
-}
-
-export interface CreateEventPayload {
-  title: string
-  description: string
-  location: string
-  start_time: string
-  end_time: string
-  tag: string
-  is_public: boolean
-}
-
-export interface UpdateEventPayload extends Partial<CreateEventPayload> {}
+export type CalendarEvent = components['schemas']['CalendarEvent']
+export type CreateEventPayload = components['schemas']['CreateEventRequest']
+export type UpdateEventPayload = Partial<CreateEventPayload>
 
 export function useEvents(filters?: { start?: Ref<string>; end?: Ref<string>; tag?: Ref<string> }) {
   const { fetchApi } = useApi()

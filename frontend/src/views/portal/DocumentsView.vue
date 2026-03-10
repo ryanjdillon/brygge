@@ -9,13 +9,9 @@ const { t } = useI18n()
 const { fetchApi } = useApi()
 const queryClient = useQueryClient()
 
-interface Document {
-  id: string
-  title: string
-  filename: string
-  visibility: string
-  created_at: string
-}
+import type { components } from '@/types/api'
+
+type Document = components['schemas']['Document']
 
 interface Comment {
   id: string

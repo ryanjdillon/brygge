@@ -10,6 +10,10 @@ const { t } = useI18n()
 const { fetchApi } = useApi()
 const queryClient = useQueryClient()
 
+function meta(item: PriceItem): Record<string, string> {
+  return (item.metadata ?? {}) as Record<string, string>
+}
+
 const { data: response, isLoading } = useQuery({
   queryKey: ['admin', 'pricing'],
   queryFn: () => fetchApi<{ items: PriceItem[] }>('/api/v1/admin/pricing'),
@@ -80,6 +84,7 @@ function openCreate() {
 }
 
 function openEdit(item: PriceItem) {
+  const meta = (item.metadata ?? {}) as Record<string, string>
   form.value = {
     id: item.id,
     category: item.category,
@@ -91,11 +96,11 @@ function openEdit(item: PriceItem) {
     max_installments: String(item.max_installments),
     sort_order: String(item.sort_order),
     is_active: item.is_active,
-    season: item.metadata?.season ?? '',
-    period_start: item.metadata?.period_start ?? '',
-    period_end: item.metadata?.period_end ?? '',
-    beam_min: item.metadata?.beam_min ?? '',
-    beam_max: item.metadata?.beam_max ?? '',
+    season: meta.season ?? '',
+    period_start: meta.period_start ?? '',
+    period_end: meta.period_end ?? '',
+    beam_min: meta.beam_min ?? '',
+    beam_max: meta.beam_max ?? '',
   }
   showForm.value = true
 }
@@ -408,8 +413,8 @@ function unitLabel(value: string): string {
             <td class="px-4 py-3 text-sm">
               <div class="font-medium text-gray-900">{{ item.name }}</div>
               <div v-if="item.description" class="text-xs text-gray-500">{{ item.description }}</div>
-              <div v-if="item.category === 'slip_fee' && (item.metadata?.beam_min || item.metadata?.beam_max)" class="text-xs text-blue-600">
-                {{ t('admin.pricing.beam') }}: {{ item.metadata.beam_min || '0' }}–{{ item.metadata.beam_max || '∞' }} m
+              <div v-if="item.category === 'slip_fee' && (meta(item).beam_min || meta(item).beam_max)" class="text-xs text-blue-600">
+                {{ t('admin.pricing.beam') }}: {{ meta(item).beam_min || '0' }}–{{ meta(item).beam_max || '∞' }} m
               </div>
             </td>
             <td class="whitespace-nowrap px-4 py-3 text-sm">

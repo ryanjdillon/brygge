@@ -1,16 +1,9 @@
 import { computed } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import { useApi } from '@/composables/useApi'
+import type { components } from '@/types/api'
 
-export interface Resource {
-  id: string
-  type: string
-  name: string
-  description: string
-  capacity: number
-  price_per_unit: number
-  unit: string
-}
+export type Resource = components['schemas']['BookingResource']
 
 export function useResources(type: string) {
   const { fetchApi } = useApi()

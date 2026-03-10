@@ -6,14 +6,9 @@ import { useApi } from '@/composables/useApi'
 const { t } = useI18n()
 const { fetchApi } = useApi()
 
-interface Document {
-  id: string
-  title: string
-  filename: string
-  visibility: string
-  created_at: string
-  uploaded_by: string
-}
+import type { components } from '@/types/api'
+
+type Document = components['schemas']['Document']
 
 const { data: documents, isLoading, isError } = useQuery({
   queryKey: ['admin', 'documents'],

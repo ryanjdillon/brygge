@@ -3,23 +3,12 @@ import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 import { useApi } from '@/composables/useApi'
 
+import type { components } from '@/types/api'
+
+type WaitingListEntry = components['schemas']['WaitingListEntryAdmin']
+
 const { t } = useI18n()
 const { fetchApi } = useApi()
-
-interface WaitingListEntry {
-  id: string
-  user_id: string
-  full_name: string
-  email: string
-  position: number
-  is_local: boolean
-  status: string
-  created_at: string
-  boat_id: string | null
-  boat_name: string | null
-  boat_beam: number | null
-  boat_confirmed: boolean | null
-}
 
 const { data: entries, isLoading, isError } = useQuery({
   queryKey: ['admin', 'waiting-list'],

@@ -1,30 +1,11 @@
 import { computed } from 'vue'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useApi } from '@/composables/useApi'
+import type { components } from '@/types/api'
 
-export interface DeletionRequest {
-  id: string
-  status: string
-  requested_at: string
-  grace_end: string
-  cancelled_at: string | null
-  processed_at: string | null
-}
-
-export interface Consent {
-  id: string
-  consent_type: string
-  version: string
-  granted_at: string
-}
-
-export interface LegalDocument {
-  id: string
-  doc_type: string
-  version: string
-  content: string
-  published_at: string
-}
+export type DeletionRequest = components['schemas']['DeletionRequest']
+export type Consent = components['schemas']['Consent']
+export type LegalDocument = components['schemas']['LegalDocument']
 
 export function useDeletionStatus() {
   const { fetchApi } = useApi()

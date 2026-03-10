@@ -1,81 +1,20 @@
 import { computed } from 'vue'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useApi } from '@/composables/useApi'
+import type { components } from '@/types/api'
 
-export interface Project {
-  id: string
-  club_id: string
-  name: string
-  description: string
-  created_by: string
-  created_at: string
-  updated_at: string
-  todo_count: number
-  in_progress_count: number
-  done_count: number
-}
-
-export interface MaterialItem {
-  item: string
-  quantity: number | null
-  unit: string
-  est_cost: number | null
-}
-
-export interface Task {
-  id: string
-  project_id: string
-  club_id: string
-  title: string
-  description: string
-  assignee_id: string | null
-  status: 'todo' | 'in_progress' | 'done'
-  priority: 'low' | 'medium' | 'high'
-  due_date: string | null
-  created_by: string
-  created_at: string
-  updated_at: string
-  estimated_hours: number | null
-  actual_hours: number | null
-  ansvarlig_id: string | null
-  max_collaborators: number
-  materials: MaterialItem[]
-  participant_count: number
-}
-
-export interface GroupedTasks {
-  todo: Task[]
-  in_progress: Task[]
-  done: Task[]
-}
+export type Project = components['schemas']['ProjectWithCounts']
+export type MaterialItem = components['schemas']['MaterialItem']
+export type Task = components['schemas']['Task']
+export type GroupedTasks = components['schemas']['GroupedTasks']
 
 export interface CreateProjectInput {
   name: string
   description: string
 }
 
-export interface CreateTaskInput {
-  title: string
-  description: string
-  assignee_id?: string
-  due_date?: string
-  priority: string
-  estimated_hours?: number
-  max_collaborators?: number
-  materials?: MaterialItem[]
-}
-
-export interface UpdateTaskInput {
-  title?: string
-  description?: string
-  assignee_id?: string
-  status?: string
-  priority?: string
-  due_date?: string
-  estimated_hours?: number
-  max_collaborators?: number
-  materials?: MaterialItem[]
-}
+export type CreateTaskInput = Partial<Task> & { title: string; priority: string }
+export type UpdateTaskInput = Partial<Task>
 
 export function useProjects() {
   const { fetchApi } = useApi()

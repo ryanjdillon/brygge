@@ -9,17 +9,9 @@ const { t } = useI18n()
 const { fetchApi } = useApi()
 const queryClient = useQueryClient()
 
-interface Product {
-  id: string
-  name: string
-  description: string
-  price: number
-  currency: string
-  image_url: string
-  stock: number
-  is_active: boolean
-  sort_order: number
-}
+import type { components } from '@/types/api'
+
+type Product = components['schemas']['Product']
 
 const { data: response, isLoading } = useQuery({
   queryKey: ['admin', 'products'],

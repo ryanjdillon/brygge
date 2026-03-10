@@ -11,26 +11,10 @@ const { fetchApi } = useApi()
 const cart = useCartStore()
 const brokenImages = ref<Record<string, boolean>>({})
 
-interface Variant {
-  id: string
-  size: string
-  color: string
-  stock: number
-  price_override: number | null
-  image_url: string
-  sort_order: number
-}
+import type { components } from '@/types/api'
 
-interface Product {
-  id: string
-  name: string
-  description: string
-  price: number
-  currency: string
-  image_url: string
-  stock: number
-  variants: Variant[]
-}
+type Product = components['schemas']['Product']
+type Variant = components['schemas']['ProductVariant']
 
 const { data: response, isLoading } = useQuery({
   queryKey: ['products'],
@@ -59,23 +43,23 @@ function closeModal() {
   selectedProduct.value = null
 }
 
-const hasVariants = computed(() => (selectedProduct.value?.variants.length ?? 0) > 0)
+const hasVariants = computed(() => (selectedProduct.value?.variants?.length ?? 0) > 0)
 
 const availableSizes = computed(() => {
   if (!selectedProduct.value) return []
-  const sizes = [...new Set(selectedProduct.value.variants.map((v) => v.size).filter(Boolean))]
+  const sizes = [...new Set((selectedProduct.value.variants ?? []).map((v) => v.size).filter(Boolean))]
   return sizes
 })
 
 const availableColors = computed(() => {
   if (!selectedProduct.value) return []
-  const colors = [...new Set(selectedProduct.value.variants.map((v) => v.color).filter(Boolean))]
+  const colors = [...new Set((selectedProduct.value.variants ?? []).map((v) => v.color).filter(Boolean))]
   return colors
 })
 
 function variantForSelection(): Variant | undefined {
   if (!selectedProduct.value) return undefined
-  return selectedProduct.value.variants.find(
+  return (selectedProduct.value.variants ?? []).find(
     (v) =>
       (v.size === selectedSize.value || (!v.size && !selectedSize.value)) &&
       (v.color === selectedColor.value || (!v.color && !selectedColor.value)),
@@ -84,7 +68,7 @@ function variantForSelection(): Variant | undefined {
 
 function isSizeAvailable(size: string): boolean {
   if (!selectedProduct.value) return false
-  return selectedProduct.value.variants.some(
+  return (selectedProduct.value.variants ?? []).some(
     (v) =>
       v.size === size &&
       v.stock > 0 &&
@@ -94,7 +78,7 @@ function isSizeAvailable(size: string): boolean {
 
 function isColorAvailable(color: string): boolean {
   if (!selectedProduct.value) return false
-  return selectedProduct.value.variants.some(
+  return (selectedProduct.value.variants ?? []).some(
     (v) =>
       v.color === color &&
       v.stock > 0 &&
@@ -119,7 +103,7 @@ const effectivePrice = computed(() => {
 const modalImage = computed(() => {
   if (!selectedProduct.value) return ''
   if (selectedColor.value) {
-    const variantWithImage = selectedProduct.value.variants.find(
+    const variantWithImage = (selectedProduct.value.variants ?? []).find(
       (v) => v.color === selectedColor.value && v.image_url,
     )
     if (variantWithImage) return variantWithImage.image_url
@@ -130,19 +114,19 @@ const modalImage = computed(() => {
 const totalStock = computed(() => {
   if (!selectedProduct.value) return 0
   if (!hasVariants.value) return selectedProduct.value.stock
-  return selectedProduct.value.variants.reduce((sum, v) => sum + v.stock, 0)
+  return (selectedProduct.value.variants ?? []).reduce((sum, v) => sum + v.stock, 0)
 })
 
 function isInStock(product: Product): boolean {
-  if (product.variants.length > 0) {
-    return product.variants.some((v) => v.stock > 0)
+  if ((product.variants ?? []).length > 0) {
+    return (product.variants ?? []).some((v) => v.stock > 0)
   }
   return product.stock > 0
 }
 
 function priceRange(product: Product): string {
-  if (product.variants.length === 0) return `${product.price} kr`
-  const prices = product.variants
+  if ((product.variants ?? []).length === 0) return `${product.price} kr`
+  const prices = (product.variants ?? [])
     .map((v) => v.price_override ?? product.price)
     .filter((p, i, arr) => arr.indexOf(p) === i)
     .sort((a, b) => a - b)

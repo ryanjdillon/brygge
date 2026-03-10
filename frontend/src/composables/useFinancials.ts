@@ -1,60 +1,13 @@
 import { computed, type Ref } from 'vue'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useApi } from '@/composables/useApi'
+import type { components } from '@/types/api'
 
-export interface FinancialSummary {
-  total_dues_received: number
-  total_outstanding: number
-  total_overdue: number
-  total_andel_collected: number
-  total_booking_revenue: number
-  year?: number
-}
-
-export interface Payment {
-  id: string
-  user_id: string
-  user_name: string
-  user_email: string
-  type: string
-  amount: number
-  currency: string
-  status: string
-  description: string
-  due_date?: string
-  paid_at?: string
-  vipps_reference: string
-  created_at: string
-}
-
-export interface PaymentsListResponse {
-  payments: Payment[]
-  total: number
-  page: number
-  per_page: number
-}
-
-export interface OverduePayment {
-  id: string
-  user_id: string
-  user_name: string
-  user_email: string
-  user_phone: string
-  type: string
-  amount: number
-  currency: string
-  description: string
-  due_date: string
-  days_overdue: number
-}
-
-export interface CreateInvoiceRequest {
-  user_id: string
-  type: string
-  amount: number
-  description: string
-  due_date: string
-}
+export type FinancialSummary = components['schemas']['FinancialSummary']
+export type Payment = components['schemas']['Payment']
+export type PaymentsListResponse = components['schemas']['PaymentsListResponse']
+export type OverduePayment = components['schemas']['OverduePayment']
+export type CreateInvoiceRequest = components['schemas']['CreateInvoiceRequest']
 
 export interface PaymentsFilters {
   type?: string

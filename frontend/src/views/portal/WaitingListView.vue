@@ -9,23 +9,10 @@ const { t } = useI18n()
 const { fetchApi } = useApi()
 const queryClient = useQueryClient()
 
-interface WaitingListEntry {
-  id: string
-  position: number
-  is_local: boolean
-  status: string
-  offer_deadline: string | null
-}
+import type { components } from '@/types/api'
 
-interface PortalListEntry {
-  position: number
-  is_local: boolean
-  is_you: boolean
-  name: string
-  status: string
-  boat_name: string | null
-  boat_beam: number | null
-}
+type WaitingListEntry = components['schemas']['WaitingListEntry']
+type PortalListEntry = components['schemas']['PortalWaitingListEntry']
 
 const toast = ref<{ type: 'success' | 'error'; message: string } | null>(null)
 

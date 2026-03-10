@@ -4,32 +4,14 @@ import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useApi } from '@/composables/useApi'
 
+import type { components } from '@/types/api'
+
+type SlipShareAdmin = components['schemas']['SlipShareAdmin']
+type Rebate = components['schemas']['SlipShareRebate']
+
 const { t } = useI18n()
 const { fetchApi } = useApi()
 const queryClient = useQueryClient()
-
-interface SlipShareAdmin {
-  id: string
-  slip_number: string
-  section: string
-  member_name: string
-  available_from: string
-  available_to: string
-  status: string
-  notes: string
-}
-
-interface Rebate {
-  id: string
-  slip_share_id: string
-  booking_id: string
-  nights_rented: number
-  rebate_pct: number
-  rental_income: number
-  rebate_amount: number
-  status: string
-  created_at: string
-}
 
 const tab = ref<'shares' | 'rebates'>('shares')
 const statusFilter = ref('active')

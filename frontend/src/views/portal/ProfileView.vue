@@ -8,15 +8,9 @@ const { t } = useI18n()
 const { fetchApi } = useApi()
 const queryClient = useQueryClient()
 
-interface ProfileResponse {
-  full_name: string
-  email: string
-  phone: string
-  address_line: string
-  postal_code: string
-  city: string
-  is_local: boolean
-}
+import type { components } from '@/types/api'
+
+type ProfileResponse = components['schemas']['MemberProfile']
 
 interface ProfileForm {
   name: string

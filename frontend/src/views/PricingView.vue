@@ -9,9 +9,11 @@ function formatAmount(amount: number): string {
   return amount.toLocaleString('nb-NO')
 }
 
-function seasonLabel(metadata: Record<string, string>): string | null {
-  if (!metadata.period_start || !metadata.period_end) return null
-  return `${metadata.period_start} – ${metadata.period_end}`
+function seasonLabel(metadata: Record<string, string> | unknown): string | null {
+  if (!metadata || typeof metadata !== 'object') return null
+  const m = metadata as Record<string, string>
+  if (!m.period_start || !m.period_end) return null
+  return `${m.period_start} – ${m.period_end}`
 }
 </script>
 

@@ -177,7 +177,7 @@ function handleExport() {
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-200 bg-white">
-          <tr v-if="!data?.payments.length">
+          <tr v-if="!data?.payments?.length">
             <td colspan="6" class="px-4 py-8 text-center text-gray-500">
               {{ t('common.noResults') }}
             </td>

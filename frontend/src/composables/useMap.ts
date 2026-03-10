@@ -1,21 +1,8 @@
 import { useQuery } from '@tanstack/vue-query'
+import type { components } from '@/types/api'
 
-export interface ClubCoordinates {
-  name: string
-  latitude: number | null
-  longitude: number | null
-}
-
-export interface MapMarker {
-  id: string
-  club_id: string
-  marker_type: string
-  label: string
-  lat: number
-  lng: number
-  sort_order: number
-  created_at: string
-}
+export type ClubCoordinates = components['schemas']['ClubCoordinatesResponse']
+export type MapMarker = components['schemas']['MapMarker']
 
 async function fetchClubCoordinates(): Promise<ClubCoordinates> {
   const res = await fetch('/api/v1/map/coordinates')

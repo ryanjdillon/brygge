@@ -1,65 +1,14 @@
 import { computed, type Ref } from 'vue'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useApi } from '@/composables/useApi'
+import type { components } from '@/types/api'
 
-export interface Booking {
-  id: string
-  resource_id: string
-  resource_unit_id?: string
-  user_id?: string
-  club_id: string
-  start_date: string
-  end_date: string
-  status: string
-  guest_name?: string
-  guest_email?: string
-  guest_phone?: string
-  payment_id?: string
-  boat_length_m?: number
-  boat_beam_m?: number
-  boat_draft_m?: number
-  notes: string
-  created_at: string
-  updated_at: string
-}
-
-export interface AggregateDay {
-  date: string
-  total_units: number
-  available_units: number
-}
-
-export interface TodayAvailability {
-  available: number
-  total: number
-}
-
-export interface HoistSlot {
-  start: string
-  end: string
-  available: boolean
-  booked_by?: string
-}
-
-export interface HoistSlotsResponse {
-  date: string
-  slot_duration_minutes: number
-  slots: HoistSlot[]
-}
-
-export interface CreateBookingRequest {
-  resource_type: string
-  start_date: string
-  end_date: string
-  boat_length_m?: number
-  boat_beam_m?: number
-  boat_draft_m?: number
-  season?: string
-  guest_name?: string
-  guest_email?: string
-  guest_phone?: string
-  notes?: string
-}
+export type Booking = components['schemas']['Booking']
+export type AggregateDay = components['schemas']['DayAvailability']
+export type TodayAvailability = components['schemas']['TodayAvailability']
+export type HoistSlot = components['schemas']['HoistSlot']
+export type HoistSlotsResponse = components['schemas']['HoistSlotsResponse']
+export type CreateBookingRequest = components['schemas']['CreateBookingRequest']
 
 export interface BoatDimensions {
   length: number | null

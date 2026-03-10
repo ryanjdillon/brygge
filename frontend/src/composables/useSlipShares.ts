@@ -1,29 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useApi } from '@/composables/useApi'
+import type { components } from '@/types/api'
 
-export interface SlipShare {
-  id: string
-  slip_assignment_id: string
-  club_id: string
-  available_from: string
-  available_to: string
-  notes: string
-  status: string
-  created_at: string
-  updated_at: string
-}
-
-export interface SlipShareRebate {
-  id: string
-  slip_share_id: string
-  booking_id: string
-  nights_rented: number
-  rebate_pct: number
-  rental_income: number
-  rebate_amount: number
-  status: string
-  created_at: string
-}
+export type SlipShare = components['schemas']['SlipShare']
+export type SlipShareRebate = components['schemas']['SlipShareRebate']
 
 export function useMySlipShares() {
   const { fetchApi } = useApi()

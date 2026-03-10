@@ -4,24 +4,13 @@ import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useApi } from '@/composables/useApi'
 import { Check, XCircle } from 'lucide-vue-next'
+import type { components } from '@/types/api'
+
+type Booking = components['schemas']['BookingAdmin']
 
 const { t } = useI18n()
 const { fetchApi } = useApi()
 const queryClient = useQueryClient()
-
-interface Booking {
-  id: string
-  resource_id: string
-  resource_name: string
-  resource_type: string
-  user_id: string | null
-  guest_name: string | null
-  start_date: string
-  end_date: string
-  status: string
-  notes: string
-  created_at: string
-}
 
 const statusFilter = ref('')
 const resourceTypeFilter = ref('')

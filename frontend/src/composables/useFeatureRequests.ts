@@ -1,19 +1,9 @@
 import { computed } from 'vue'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useApi } from '@/composables/useApi'
+import type { components } from '@/types/api'
 
-export interface FeatureRequest {
-  id: string
-  club_id: string
-  title: string
-  description: string
-  status: 'proposed' | 'reviewing' | 'accepted' | 'rejected' | 'done'
-  submitted_by: string
-  vote_count: number
-  user_vote: number | null
-  created_at: string
-  updated_at: string
-}
+export type FeatureRequest = components['schemas']['FeatureRequest']
 
 export interface CreateFeatureRequestInput {
   title: string

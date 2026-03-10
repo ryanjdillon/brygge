@@ -4,15 +4,12 @@ import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 import { useApi } from '@/composables/useApi'
 import { Search } from 'lucide-vue-next'
+import type { components } from '@/types/api'
+
+type DirectoryMember = components['schemas']['DirectoryMember']
 
 const { t } = useI18n()
 const { fetchApi } = useApi()
-
-interface DirectoryMember {
-  full_name: string
-  phone: string | null
-  email: string | null
-}
 
 const searchQuery = ref('')
 

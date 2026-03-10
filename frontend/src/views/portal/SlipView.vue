@@ -8,16 +8,9 @@ import { AlertTriangle } from 'lucide-vue-next'
 const { t } = useI18n()
 const { fetchApi } = useApi()
 
-interface SlipData {
-  slip_id: string
-  number: string
-  section: string
-  length_m: number | null
-  width_m: number | null
-  depth_m: number | null
-  status: string
-  assigned_at: string
-}
+import type { components } from '@/types/api'
+
+type SlipData = components['schemas']['MemberSlip']
 
 const { data: slip, isLoading, isError } = useQuery({
   queryKey: ['portal', 'slip'],

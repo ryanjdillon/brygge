@@ -4,21 +4,13 @@ import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useApi } from '@/composables/useApi'
 import { Plus } from 'lucide-vue-next'
+import type { components } from '@/types/api'
+
+type Slip = components['schemas']['Slip']
 
 const { t } = useI18n()
 const { fetchApi } = useApi()
 const queryClient = useQueryClient()
-
-interface Slip {
-  id: string
-  number: string
-  section: string
-  length_m: number | null
-  width_m: number | null
-  depth_m: number | null
-  status: string
-  occupant_name: string | null
-}
 
 const { data: slipsResponse, isLoading, isError } = useQuery({
   queryKey: ['admin', 'slips'],

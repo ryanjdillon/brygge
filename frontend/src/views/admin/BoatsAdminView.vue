@@ -4,25 +4,13 @@ import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useApi } from '@/composables/useApi'
 import { ShieldCheck, ChevronDown, ChevronUp } from 'lucide-vue-next'
+import type { components } from '@/types/api'
+
+type UnconfirmedBoat = components['schemas']['UnconfirmedBoat']
 
 const { t } = useI18n()
 const { fetchApi } = useApi()
 const queryClient = useQueryClient()
-
-interface UnconfirmedBoat {
-  id: string
-  name: string
-  type: string
-  manufacturer: string
-  model: string
-  length_m: number | null
-  beam_m: number | null
-  draft_m: number | null
-  weight_kg: number | null
-  registration_number: string
-  owner_name: string
-  boat_model_id: string | null
-}
 
 const { data: boats, isLoading, isError } = useQuery({
   queryKey: ['admin', 'boats', 'unconfirmed'],
@@ -30,7 +18,7 @@ const { data: boats, isLoading, isError } = useQuery({
 })
 
 const expanded = ref<string | null>(null)
-const adjusting = ref<Record<string, { length_m: number | null; beam_m: number | null; draft_m: number | null; weight_kg: number | null }>>({})
+const adjusting = ref<Record<string, { length_m?: number; beam_m?: number; draft_m?: number; weight_kg?: number }>>({})
 const addToModels = ref<Record<string, boolean>>({})
 const toast = ref<{ type: 'success' | 'error'; message: string } | null>(null)
 

@@ -2,21 +2,9 @@ import { computed } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import { useI18n } from 'vue-i18n'
 import { useApi } from '@/composables/useApi'
+import type { components } from '@/types/api'
 
-export interface PriceItem {
-  id: string
-  category: string
-  name: string
-  description: string
-  amount: number
-  currency: string
-  unit: string
-  installments_allowed: boolean
-  max_installments: number
-  metadata: Record<string, string>
-  sort_order: number
-  is_active: boolean
-}
+export type PriceItem = components['schemas']['PriceItem']
 
 export interface PricingCategory {
   key: string

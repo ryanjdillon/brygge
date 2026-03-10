@@ -1,23 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useApi } from '@/composables/useApi'
+import type { components } from '@/types/api'
 
-export interface TaskParticipant {
-  task_id: string
-  user_id: string
-  role: 'ansvarlig' | 'collaborator'
-  hours: number | null
-  joined_at: string
-  name: string
-}
-
-export interface DugnadHoursSummary {
-  user_id: string
-  name: string
-  signed_up_hours: number
-  completed_hours: number
-  required_hours: number
-  remaining: number
-}
+export type TaskParticipant = components['schemas']['TaskParticipant']
+export type DugnadHoursSummary = components['schemas']['DugnadHoursSummary']
 
 export function useJoinTask() {
   const { fetchApi } = useApi()

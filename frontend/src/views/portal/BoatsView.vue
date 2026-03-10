@@ -9,47 +9,22 @@ const { t } = useI18n()
 const { fetchApi } = useApi()
 const queryClient = useQueryClient()
 
-interface BoatModel {
-  id: string
-  manufacturer: string
-  model: string
-  year_from: number | null
-  year_to: number | null
-  length_m: number | null
-  beam_m: number | null
-  draft_m: number | null
-  weight_kg: number | null
-  boat_type: string
-}
+import type { components } from '@/types/api'
 
-interface Boat {
-  id: string
-  name: string
-  type: string
-  manufacturer: string
-  model: string
-  length_m: number | null
-  beam_m: number | null
-  draft_m: number | null
-  weight_kg: number | null
-  registration_number: string
-  boat_model_id: string | null
-  measurements_confirmed: boolean
-  confirmed_by: string | null
-  confirmed_at: string | null
-}
+type BoatModel = components['schemas']['BoatModel']
+type Boat = components['schemas']['Boat']
 
 interface BoatForm {
   name: string
   type: string
   manufacturer: string
   model: string
-  length_m: number | null
-  beam_m: number | null
-  draft_m: number | null
-  weight_kg: number | null
+  length_m?: number
+  beam_m?: number
+  draft_m?: number
+  weight_kg?: number
   registration_number: string
-  boat_model_id: string | null
+  boat_model_id?: string
 }
 
 const emptyForm = (): BoatForm => ({
@@ -57,12 +32,12 @@ const emptyForm = (): BoatForm => ({
   type: '',
   manufacturer: '',
   model: '',
-  length_m: null,
-  beam_m: null,
-  draft_m: null,
-  weight_kg: null,
+  length_m: undefined,
+  beam_m: undefined,
+  draft_m: undefined,
+  weight_kg: undefined,
   registration_number: '',
-  boat_model_id: null,
+  boat_model_id: undefined,
 })
 
 const showForm = ref(false)
@@ -214,7 +189,7 @@ function confirmDelete(id: string) {
   }
 }
 
-function formatDim(v: number | null): string {
+function formatDim(v?: number): string {
   return v != null ? `${v} m` : '—'
 }
 </script>
