@@ -167,7 +167,7 @@ func registerPublicContentOps(api huma.API) {
 		Summary:     "Get legal document",
 	}, stub[struct {
 		DocType string `path:"docType" enum:"terms,privacy" doc:"Document type"`
-	}, struct{ Body map[string]any }]())
+	}, struct{ Body LegalDocument }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "list-public-pricing",
@@ -175,7 +175,7 @@ func registerPublicContentOps(api huma.API) {
 		Path:        "/api/v1/pricing",
 		Tags:        []string{"Commerce"},
 		Summary:     "List public pricing",
-	}, stub[struct{}, struct{ Body []map[string]any }]())
+	}, stub[struct{}, struct{ Body []PriceItem }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "list-public-products",
@@ -183,7 +183,7 @@ func registerPublicContentOps(api huma.API) {
 		Path:        "/api/v1/products",
 		Tags:        []string{"Commerce"},
 		Summary:     "List public products",
-	}, stub[struct{}, struct{ Body []map[string]any }]())
+	}, stub[struct{}, struct{ Body []Product }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "search-boat-models",
@@ -193,7 +193,7 @@ func registerPublicContentOps(api huma.API) {
 		Summary:     "Search boat models",
 	}, stub[struct {
 		Query string `query:"q" doc:"Search query"`
-	}, struct{ Body []map[string]any }]())
+	}, struct{ Body []BoatModel }]())
 }
 
 func registerMapOps(api huma.API) {
@@ -283,7 +283,7 @@ func registerBookingOps(api huma.API) {
 		Tags:        []string{"Bookings"},
 		Summary:     "Create a booking",
 		Description: "Create a booking. Authentication optional — guests provide contact info.",
-	}, stub[struct{ Body map[string]any }, struct{ Body Booking }]())
+	}, stub[struct{ Body CreateBookingRequest }, struct{ Body Booking }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "list-my-bookings",
@@ -364,7 +364,7 @@ func registerCalendarOps(api huma.API) {
 		Tags:        []string{"Calendar"},
 		Summary:     "Create event (admin)",
 		Security:    BearerSecurity,
-	}, stub[struct{ Body map[string]any }, struct{ Body CalendarEvent }]())
+	}, stub[struct{ Body CreateEventRequest }, struct{ Body CalendarEvent }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "update-event",
@@ -375,7 +375,7 @@ func registerCalendarOps(api huma.API) {
 		Security:    BearerSecurity,
 	}, stub[struct {
 		EventID string `path:"eventID" doc:"Event UUID"`
-		Body    map[string]any
+		Body    CreateEventRequest
 	}, struct{ Body CalendarEvent }]())
 
 	huma.Register(api, huma.Operation{
@@ -398,7 +398,7 @@ func registerMemberOps(api huma.API) {
 		Tags:        []string{"Members"},
 		Summary:     "Get my profile",
 		Security:    BearerSecurity,
-	}, stub[struct{}, struct{ Body UserProfile }]())
+	}, stub[struct{}, struct{ Body MemberProfile }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "update-my-profile",
@@ -407,7 +407,7 @@ func registerMemberOps(api huma.API) {
 		Tags:        []string{"Members"},
 		Summary:     "Update my profile",
 		Security:    BearerSecurity,
-	}, stub[struct{ Body map[string]any }, struct{ Body UserProfile }]())
+	}, stub[struct{ Body MemberProfile }, struct{ Body MemberProfile }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "get-dashboard",
@@ -416,7 +416,7 @@ func registerMemberOps(api huma.API) {
 		Tags:        []string{"Members"},
 		Summary:     "Get member dashboard",
 		Security:    BearerSecurity,
-	}, stub[struct{}, struct{ Body map[string]any }]())
+	}, stub[struct{}, struct{ Body DashboardResponse }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "list-my-boats",
@@ -425,7 +425,7 @@ func registerMemberOps(api huma.API) {
 		Tags:        []string{"Members", "Boats"},
 		Summary:     "List my boats",
 		Security:    BearerSecurity,
-	}, stub[struct{}, struct{ Body []map[string]any }]())
+	}, stub[struct{}, struct{ Body []Boat }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "create-boat",
@@ -434,7 +434,7 @@ func registerMemberOps(api huma.API) {
 		Tags:        []string{"Members", "Boats"},
 		Summary:     "Register a boat",
 		Security:    BearerSecurity,
-	}, stub[struct{ Body map[string]any }, struct{ Body map[string]any }]())
+	}, stub[struct{ Body Boat }, struct{ Body Boat }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "update-boat",
@@ -445,8 +445,8 @@ func registerMemberOps(api huma.API) {
 		Security:    BearerSecurity,
 	}, stub[struct {
 		BoatID string `path:"boatID" doc:"Boat UUID"`
-		Body   map[string]any
-	}, struct{ Body map[string]any }]())
+		Body   Boat
+	}, struct{ Body Boat }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "delete-boat",
@@ -466,7 +466,7 @@ func registerMemberOps(api huma.API) {
 		Tags:        []string{"Members"},
 		Summary:     "Get my slip assignment",
 		Security:    BearerSecurity,
-	}, stub[struct{}, struct{ Body map[string]any }]())
+	}, stub[struct{}, struct{ Body MemberSlip }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "report-slip-issue",
@@ -475,7 +475,11 @@ func registerMemberOps(api huma.API) {
 		Tags:        []string{"Members"},
 		Summary:     "Report a slip issue",
 		Security:    BearerSecurity,
-	}, stub[struct{ Body map[string]any }, struct{ Body StatusResponse }]())
+	}, stub[struct {
+		Body struct {
+			Description string `json:"description" doc:"Issue description"`
+		}
+	}, struct{ Body StatusResponse }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "get-my-dugnad-hours",
@@ -484,7 +488,7 @@ func registerMemberOps(api huma.API) {
 		Tags:        []string{"Members", "Dugnad"},
 		Summary:     "Get my volunteer hours",
 		Security:    BearerSecurity,
-	}, stub[struct{}, struct{ Body map[string]any }]())
+	}, stub[struct{}, struct{ Body DugnadHoursSummary }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "get-member-directory",
@@ -506,7 +510,16 @@ func registerWaitingListOps(api huma.API) {
 		Tags:        []string{"Waiting List"},
 		Summary:     "Join the waiting list",
 		Security:    BearerSecurity,
-	}, stub[struct{ Body map[string]any }, struct{ Body map[string]any }]())
+	}, stub[struct {
+		Body struct {
+			BoatID *string `json:"boat_id,omitempty" doc:"Boat UUID to link"`
+		}
+	}, struct {
+		Body struct {
+			Position int              `json:"position" doc:"Queue position"`
+			Entry    WaitingListEntry `json:"entry" doc:"Created entry"`
+		}
+	}]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "get-my-waiting-list-position",
@@ -515,7 +528,7 @@ func registerWaitingListOps(api huma.API) {
 		Tags:        []string{"Waiting List"},
 		Summary:     "Get my position",
 		Security:    BearerSecurity,
-	}, stub[struct{}, struct{ Body map[string]any }]())
+	}, stub[struct{}, struct{ Body WaitingListEntry }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "get-portal-waiting-list",
@@ -524,7 +537,7 @@ func registerWaitingListOps(api huma.API) {
 		Tags:        []string{"Waiting List"},
 		Summary:     "View waiting list (portal)",
 		Security:    BearerSecurity,
-	}, stub[struct{}, struct{ Body []map[string]any }]())
+	}, stub[struct{}, struct{ Body []PortalWaitingListEntry }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "update-waiting-list-boat",
@@ -533,7 +546,11 @@ func registerWaitingListOps(api huma.API) {
 		Tags:        []string{"Waiting List"},
 		Summary:     "Update boat on waiting list entry",
 		Security:    BearerSecurity,
-	}, stub[struct{ Body map[string]any }, struct{ Body map[string]any }]())
+	}, stub[struct {
+		Body struct {
+			BoatID string `json:"boat_id" doc:"Boat UUID"`
+		}
+	}, struct{ Body WaitingListEntry }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "withdraw-from-waiting-list",
@@ -562,7 +579,7 @@ func registerWaitingListOps(api huma.API) {
 		Tags:        []string{"Waiting List"},
 		Summary:     "List all entries (admin)",
 		Security:    BearerSecurity,
-	}, stub[struct{}, struct{ Body []map[string]any }]())
+	}, stub[struct{}, struct{ Body []WaitingListEntryAdmin }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "offer-slip",
@@ -573,7 +590,9 @@ func registerWaitingListOps(api huma.API) {
 		Security:    BearerSecurity,
 	}, stub[struct {
 		EntryID string `path:"entryID" doc:"Entry UUID"`
-		Body    map[string]any
+		Body    struct {
+			SlipID string `json:"slip_id" doc:"Slip UUID to offer"`
+		}
 	}, struct{ Body StatusResponse }]())
 
 	huma.Register(api, huma.Operation{
@@ -585,8 +604,10 @@ func registerWaitingListOps(api huma.API) {
 		Security:    BearerSecurity,
 	}, stub[struct {
 		EntryID string `path:"entryID" doc:"Entry UUID"`
-		Body    map[string]any
-	}, struct{ Body map[string]any }]())
+		Body    struct {
+			Position int `json:"position" doc:"New position"`
+		}
+	}, struct{ Body WaitingListEntry }]())
 }
 
 func registerSlipShareOps(api huma.API) {
@@ -597,7 +618,7 @@ func registerSlipShareOps(api huma.API) {
 		Tags:        []string{"Slip Shares"},
 		Summary:     "List my slip share windows",
 		Security:    BearerSecurity,
-	}, stub[struct{}, struct{ Body []map[string]any }]())
+	}, stub[struct{}, struct{ Body []SlipShare }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "create-slip-share",
@@ -606,7 +627,7 @@ func registerSlipShareOps(api huma.API) {
 		Tags:        []string{"Slip Shares"},
 		Summary:     "Create slip share window",
 		Security:    BearerSecurity,
-	}, stub[struct{ Body map[string]any }, struct{ Body map[string]any }]())
+	}, stub[struct{ Body SlipShare }, struct{ Body SlipShare }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "update-slip-share",
@@ -617,8 +638,8 @@ func registerSlipShareOps(api huma.API) {
 		Security:    BearerSecurity,
 	}, stub[struct {
 		ShareID string `path:"shareID" doc:"Share UUID"`
-		Body    map[string]any
-	}, struct{ Body map[string]any }]())
+		Body    SlipShare
+	}, struct{ Body SlipShare }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "delete-slip-share",
@@ -638,7 +659,7 @@ func registerSlipShareOps(api huma.API) {
 		Tags:        []string{"Slip Shares"},
 		Summary:     "List my rebate history",
 		Security:    BearerSecurity,
-	}, stub[struct{}, struct{ Body []map[string]any }]())
+	}, stub[struct{}, struct{ Body []SlipShareRebate }]())
 }
 
 func registerNotificationOps(api huma.API) {
@@ -680,7 +701,7 @@ func registerNotificationOps(api huma.API) {
 		Tags:        []string{"Notifications"},
 		Summary:     "Get notification preferences",
 		Security:    BearerSecurity,
-	}, stub[struct{}, struct{ Body map[string]any }]())
+	}, stub[struct{}, struct{ Body []NotificationPreference }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "update-notification-preferences",
@@ -689,7 +710,7 @@ func registerNotificationOps(api huma.API) {
 		Tags:        []string{"Notifications"},
 		Summary:     "Update notification preferences",
 		Security:    BearerSecurity,
-	}, stub[struct{ Body map[string]any }, struct{ Body map[string]any }]())
+	}, stub[struct{ Body []NotificationPreference }, struct{ Body []NotificationPreference }]())
 }
 
 func registerForumOps(api huma.API) {
@@ -745,7 +766,7 @@ func registerProjectOps(api huma.API) {
 		Tags:        []string{"Projects"},
 		Summary:     "List projects",
 		Security:    BearerSecurity,
-	}, stub[struct{}, struct{ Body []map[string]any }]())
+	}, stub[struct{}, struct{ Body []ProjectWithCounts }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "get-project",
@@ -756,7 +777,7 @@ func registerProjectOps(api huma.API) {
 		Security:    BearerSecurity,
 	}, stub[struct {
 		ProjectID string `path:"projectID" doc:"Project UUID"`
-	}, struct{ Body map[string]any }]())
+	}, struct{ Body ProjectWithCounts }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "list-project-tasks",
@@ -767,7 +788,7 @@ func registerProjectOps(api huma.API) {
 		Security:    BearerSecurity,
 	}, stub[struct {
 		ProjectID string `path:"projectID" doc:"Project UUID"`
-	}, struct{ Body []map[string]any }]())
+	}, struct{ Body GroupedTasks }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "create-project",
@@ -776,7 +797,12 @@ func registerProjectOps(api huma.API) {
 		Tags:        []string{"Projects"},
 		Summary:     "Create project (admin)",
 		Security:    BearerSecurity,
-	}, stub[struct{ Body map[string]any }, struct{ Body map[string]any }]())
+	}, stub[struct {
+		Body struct {
+			Name        string `json:"name" doc:"Project name"`
+			Description string `json:"description,omitempty" doc:"Project description"`
+		}
+	}, struct{ Body Project }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "create-task",
@@ -787,8 +813,8 @@ func registerProjectOps(api huma.API) {
 		Security:    BearerSecurity,
 	}, stub[struct {
 		ProjectID string `path:"projectID" doc:"Project UUID"`
-		Body      map[string]any
-	}, struct{ Body map[string]any }]())
+		Body      Task
+	}, struct{ Body Task }]())
 
 	// Task operations
 	huma.Register(api, huma.Operation{
@@ -822,7 +848,7 @@ func registerProjectOps(api huma.API) {
 		Security:    BearerSecurity,
 	}, stub[struct {
 		TaskID string `path:"taskID" doc:"Task UUID"`
-	}, struct{ Body []map[string]any }]())
+	}, struct{ Body []TaskParticipant }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "update-task",
@@ -833,8 +859,8 @@ func registerProjectOps(api huma.API) {
 		Security:    BearerSecurity,
 	}, stub[struct {
 		TaskID string `path:"taskID" doc:"Task UUID"`
-		Body   map[string]any
-	}, struct{ Body map[string]any }]())
+		Body   Task
+	}, struct{ Body Task }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "delete-task",
@@ -856,8 +882,10 @@ func registerProjectOps(api huma.API) {
 		Security:    BearerSecurity,
 	}, stub[struct {
 		TaskID string `path:"taskID" doc:"Task UUID"`
-		Body   map[string]any
-	}, struct{ Body map[string]any }]())
+		Body   struct {
+			AssigneeID string `json:"assignee_id" doc:"User UUID to assign"`
+		}
+	}, struct{ Body Task }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "adjust-task-hours",
@@ -868,8 +896,11 @@ func registerProjectOps(api huma.API) {
 		Security:    BearerSecurity,
 	}, stub[struct {
 		TaskID string `path:"taskID" doc:"Task UUID"`
-		Body   map[string]any
-	}, struct{ Body map[string]any }]())
+		Body   struct {
+			UserID string  `json:"user_id" doc:"User UUID"`
+			Hours  float64 `json:"hours" doc:"Hours to set"`
+		}
+	}, struct{ Body StatusResponse }]())
 }
 
 func registerShoppingListOps(api huma.API) {
@@ -990,7 +1021,7 @@ func registerFeatureRequestOps(api huma.API) {
 		Tags:        []string{"Feature Requests"},
 		Summary:     "List feature requests",
 		Security:    BearerSecurity,
-	}, stub[struct{}, struct{ Body []map[string]any }]())
+	}, stub[struct{}, struct{ Body []FeatureRequest }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "create-feature-request",
@@ -999,7 +1030,12 @@ func registerFeatureRequestOps(api huma.API) {
 		Tags:        []string{"Feature Requests"},
 		Summary:     "Create feature request",
 		Security:    BearerSecurity,
-	}, stub[struct{ Body map[string]any }, struct{ Body map[string]any }]())
+	}, stub[struct {
+		Body struct {
+			Title       string `json:"title" doc:"Request title"`
+			Description string `json:"description" doc:"Request description"`
+		}
+	}, struct{ Body FeatureRequest }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "get-feature-request",
@@ -1010,7 +1046,7 @@ func registerFeatureRequestOps(api huma.API) {
 		Security:    BearerSecurity,
 	}, stub[struct {
 		RequestID string `path:"requestID" doc:"Request UUID"`
-	}, struct{ Body map[string]any }]())
+	}, struct{ Body FeatureRequest }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "vote-feature-request",
@@ -1021,7 +1057,10 @@ func registerFeatureRequestOps(api huma.API) {
 		Security:    BearerSecurity,
 	}, stub[struct {
 		RequestID string `path:"requestID" doc:"Request UUID"`
-	}, struct{ Body map[string]any }]())
+		Body      struct {
+			Value int `json:"value" doc:"Vote value (1 or -1)"`
+		}
+	}, struct{ Body FeatureRequest }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "update-feature-request-status",
@@ -1032,8 +1071,10 @@ func registerFeatureRequestOps(api huma.API) {
 		Security:    BearerSecurity,
 	}, stub[struct {
 		RequestID string `path:"requestID" doc:"Request UUID"`
-		Body      map[string]any
-	}, struct{ Body map[string]any }]())
+		Body      struct {
+			Status string `json:"status" doc:"New status"`
+		}
+	}, struct{ Body FeatureRequest }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "promote-to-task",
@@ -1044,7 +1085,7 @@ func registerFeatureRequestOps(api huma.API) {
 		Security:    BearerSecurity,
 	}, stub[struct {
 		RequestID string `path:"requestID" doc:"Request UUID"`
-	}, struct{ Body map[string]any }]())
+	}, struct{ Body Task }]())
 }
 
 func registerOrderOps(api huma.API) {
@@ -1085,7 +1126,7 @@ func registerGDPROps(api huma.API) {
 		Tags:        []string{"GDPR"},
 		Summary:     "Export my data",
 		Security:    BearerSecurity,
-	}, stub[struct{}, struct{ Body map[string]any }]())
+	}, stub[struct{}, struct{ Body map[string]any }]()) // data export is dynamic
 
 	huma.Register(api, huma.Operation{
 		OperationID: "request-deletion",
@@ -1094,7 +1135,7 @@ func registerGDPROps(api huma.API) {
 		Tags:        []string{"GDPR"},
 		Summary:     "Request account deletion",
 		Security:    BearerSecurity,
-	}, stub[struct{}, struct{ Body map[string]any }]())
+	}, stub[struct{}, struct{ Body DeletionRequest }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "cancel-deletion",
@@ -1112,7 +1153,7 @@ func registerGDPROps(api huma.API) {
 		Tags:        []string{"GDPR"},
 		Summary:     "Get deletion request status",
 		Security:    BearerSecurity,
-	}, stub[struct{}, struct{ Body map[string]any }]())
+	}, stub[struct{}, struct{ Body DeletionRequest }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "record-consent",
@@ -1121,7 +1162,12 @@ func registerGDPROps(api huma.API) {
 		Tags:        []string{"GDPR"},
 		Summary:     "Record consent",
 		Security:    BearerSecurity,
-	}, stub[struct{ Body map[string]any }, struct{ Body StatusResponse }]())
+	}, stub[struct {
+		Body struct {
+			ConsentType string `json:"consent_type" doc:"Type of consent"`
+			Version     string `json:"version" doc:"Consent version"`
+		}
+	}, struct{ Body StatusResponse }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "get-my-consents",
@@ -1130,7 +1176,7 @@ func registerGDPROps(api huma.API) {
 		Tags:        []string{"GDPR"},
 		Summary:     "List my consents",
 		Security:    BearerSecurity,
-	}, stub[struct{}, struct{ Body []map[string]any }]())
+	}, stub[struct{}, struct{ Body []Consent }]())
 }
 
 func registerAdminOps(api huma.API) {
@@ -1142,7 +1188,7 @@ func registerAdminOps(api huma.API) {
 		Tags:        []string{"Documents"},
 		Summary:     "List documents",
 		Security:    BearerSecurity,
-	}, stub[struct{}, struct{ Body []map[string]any }]())
+	}, stub[struct{}, struct{ Body []Document }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "get-document",
@@ -1153,7 +1199,7 @@ func registerAdminOps(api huma.API) {
 		Security:    BearerSecurity,
 	}, stub[struct {
 		DocID string `path:"docID" doc:"Document UUID"`
-	}, struct{ Body map[string]any }]())
+	}, struct{ Body Document }]())
 
 	// Audit
 	huma.Register(api, huma.Operation{
@@ -1176,7 +1222,7 @@ func registerAdminOps(api huma.API) {
 		Summary:     "List all users",
 		Security:    BearerSecurity,
 	}, stub[struct{ PaginationParams }, struct {
-		Body PaginatedResponse[UserProfile]
+		Body AdminUsersResponse
 	}]())
 
 	huma.Register(api, huma.Operation{
@@ -1188,7 +1234,7 @@ func registerAdminOps(api huma.API) {
 		Security:    BearerSecurity,
 	}, stub[struct {
 		UserID string `path:"userID" doc:"User UUID"`
-	}, struct{ Body UserProfile }]())
+	}, struct{ Body AdminUser }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "admin-update-user-roles",
@@ -1202,7 +1248,7 @@ func registerAdminOps(api huma.API) {
 		Body   struct {
 			Roles []string `json:"roles" doc:"Role names to assign"`
 		}
-	}, struct{ Body UserProfile }]())
+	}, struct{ Body AdminUser }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "admin-delete-user",
@@ -1297,7 +1343,7 @@ func registerAdminOps(api huma.API) {
 		Start        string `query:"start,omitempty" doc:"Filter from date"`
 		End          string `query:"end,omitempty" doc:"Filter to date"`
 	}, struct {
-		Body PaginatedResponse[Booking]
+		Body PaginatedResponse[BookingAdmin]
 	}]())
 
 	huma.Register(api, huma.Operation{
@@ -1326,7 +1372,7 @@ func registerAdminOps(api huma.API) {
 		Tags:        []string{"Admin", "Slip Shares"},
 		Summary:     "List all slip shares",
 		Security:    BearerSecurity,
-	}, stub[struct{}, struct{ Body []map[string]any }]())
+	}, stub[struct{}, struct{ Body []SlipShareAdmin }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "admin-list-rebates",
@@ -1335,7 +1381,7 @@ func registerAdminOps(api huma.API) {
 		Tags:        []string{"Admin", "Slip Shares"},
 		Summary:     "List all rebates",
 		Security:    BearerSecurity,
-	}, stub[struct{}, struct{ Body []map[string]any }]())
+	}, stub[struct{}, struct{ Body []SlipShareRebate }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "admin-update-rebate-status",
@@ -1346,8 +1392,10 @@ func registerAdminOps(api huma.API) {
 		Security:    BearerSecurity,
 	}, stub[struct {
 		RebateID string `path:"rebateID" doc:"Rebate UUID"`
-		Body     map[string]any
-	}, struct{ Body map[string]any }]())
+		Body     struct {
+			Status string `json:"status" doc:"New rebate status"`
+		}
+	}, struct{ Body SlipShareRebate }]())
 
 	// Admin Documents
 	huma.Register(api, huma.Operation{
@@ -1357,7 +1405,7 @@ func registerAdminOps(api huma.API) {
 		Tags:        []string{"Admin", "Documents"},
 		Summary:     "Upload document",
 		Security:    BearerSecurity,
-	}, stub[struct{ Body map[string]any }, struct{ Body map[string]any }]())
+	}, stub[struct{ Body map[string]any }, struct{ Body Document }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "admin-delete-document",
@@ -1400,7 +1448,7 @@ func registerAdminOps(api huma.API) {
 		Tags:        []string{"Admin", "Boats"},
 		Summary:     "List unconfirmed boats",
 		Security:    BearerSecurity,
-	}, stub[struct{}, struct{ Body []map[string]any }]())
+	}, stub[struct{}, struct{ Body []UnconfirmedBoat }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "admin-confirm-boat",
@@ -1463,7 +1511,7 @@ func registerAdminOps(api huma.API) {
 		Tags:        []string{"Admin"},
 		Summary:     "List sent broadcasts",
 		Security:    BearerSecurity,
-	}, stub[struct{}, struct{ Body []map[string]any }]())
+	}, stub[struct{}, struct{ Body []Broadcast }]())
 
 	// Admin Financials
 	huma.Register(api, huma.Operation{
@@ -1473,7 +1521,7 @@ func registerAdminOps(api huma.API) {
 		Tags:        []string{"Admin", "Financials"},
 		Summary:     "Get financial summary",
 		Security:    BearerSecurity,
-	}, stub[struct{}, struct{ Body map[string]any }]())
+	}, stub[struct{}, struct{ Body FinancialSummary }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "admin-list-payments",
@@ -1483,7 +1531,7 @@ func registerAdminOps(api huma.API) {
 		Summary:     "List payments",
 		Security:    BearerSecurity,
 	}, stub[struct{ PaginationParams }, struct {
-		Body PaginatedResponse[map[string]any]
+		Body PaymentsListResponse
 	}]())
 
 	huma.Register(api, huma.Operation{
@@ -1495,7 +1543,7 @@ func registerAdminOps(api huma.API) {
 		Security:    BearerSecurity,
 	}, stub[struct {
 		PaymentID string `path:"paymentID" doc:"Payment UUID"`
-	}, struct{ Body map[string]any }]())
+	}, struct{ Body Payment }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "admin-export-financials",
@@ -1513,7 +1561,7 @@ func registerAdminOps(api huma.API) {
 		Tags:        []string{"Admin", "Financials"},
 		Summary:     "Generate invoice",
 		Security:    BearerSecurity,
-	}, stub[struct{ Body map[string]any }, struct{ Body map[string]any }]())
+	}, stub[struct{ Body CreateInvoiceRequest }, struct{ Body Payment }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "admin-list-overdue",
@@ -1522,7 +1570,7 @@ func registerAdminOps(api huma.API) {
 		Tags:        []string{"Admin", "Financials"},
 		Summary:     "List overdue payments",
 		Security:    BearerSecurity,
-	}, stub[struct{}, struct{ Body []map[string]any }]())
+	}, stub[struct{}, struct{ Body []OverduePayment }]())
 
 	// Admin Pricing
 	huma.Register(api, huma.Operation{
@@ -1532,7 +1580,7 @@ func registerAdminOps(api huma.API) {
 		Tags:        []string{"Admin", "Commerce"},
 		Summary:     "List pricing items (admin)",
 		Security:    BearerSecurity,
-	}, stub[struct{}, struct{ Body []map[string]any }]())
+	}, stub[struct{}, struct{ Body []PriceItem }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "admin-create-pricing",
@@ -1541,7 +1589,7 @@ func registerAdminOps(api huma.API) {
 		Tags:        []string{"Admin", "Commerce"},
 		Summary:     "Create pricing item",
 		Security:    BearerSecurity,
-	}, stub[struct{ Body map[string]any }, struct{ Body map[string]any }]())
+	}, stub[struct{ Body PriceItem }, struct{ Body PriceItem }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "admin-update-pricing",
@@ -1552,8 +1600,8 @@ func registerAdminOps(api huma.API) {
 		Security:    BearerSecurity,
 	}, stub[struct {
 		ItemID string `path:"itemID" doc:"Item UUID"`
-		Body   map[string]any
-	}, struct{ Body map[string]any }]())
+		Body   PriceItem
+	}, struct{ Body PriceItem }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "admin-delete-pricing",
@@ -1574,7 +1622,7 @@ func registerAdminOps(api huma.API) {
 		Tags:        []string{"Admin", "Commerce"},
 		Summary:     "List products (admin)",
 		Security:    BearerSecurity,
-	}, stub[struct{}, struct{ Body []map[string]any }]())
+	}, stub[struct{}, struct{ Body []Product }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "admin-create-product",
@@ -1583,7 +1631,7 @@ func registerAdminOps(api huma.API) {
 		Tags:        []string{"Admin", "Commerce"},
 		Summary:     "Create product",
 		Security:    BearerSecurity,
-	}, stub[struct{ Body map[string]any }, struct{ Body map[string]any }]())
+	}, stub[struct{ Body Product }, struct{ Body Product }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "admin-update-product",
@@ -1594,8 +1642,8 @@ func registerAdminOps(api huma.API) {
 		Security:    BearerSecurity,
 	}, stub[struct {
 		ProductID string `path:"productID" doc:"Product UUID"`
-		Body      map[string]any
-	}, struct{ Body map[string]any }]())
+		Body      Product
+	}, struct{ Body Product }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "admin-delete-product",
@@ -1617,8 +1665,8 @@ func registerAdminOps(api huma.API) {
 		Security:    BearerSecurity,
 	}, stub[struct {
 		ProductID string `path:"productID" doc:"Product UUID"`
-		Body      map[string]any
-	}, struct{ Body map[string]any }]())
+		Body      ProductVariant
+	}, struct{ Body ProductVariant }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "admin-delete-variant",
@@ -1639,7 +1687,7 @@ func registerAdminOps(api huma.API) {
 		Tags:        []string{"Admin", "Notifications"},
 		Summary:     "Get notification config",
 		Security:    BearerSecurity,
-	}, stub[struct{}, struct{ Body map[string]any }]())
+	}, stub[struct{}, struct{ Body []NotificationConfig }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "admin-update-notification-config",
@@ -1648,7 +1696,7 @@ func registerAdminOps(api huma.API) {
 		Tags:        []string{"Admin", "Notifications"},
 		Summary:     "Update notification config",
 		Security:    BearerSecurity,
-	}, stub[struct{ Body map[string]any }, struct{ Body map[string]any }]())
+	}, stub[struct{ Body []NotificationConfig }, struct{ Body []NotificationConfig }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "admin-test-push",
@@ -1667,7 +1715,7 @@ func registerAdminOps(api huma.API) {
 		Tags:        []string{"Admin", "GDPR"},
 		Summary:     "List deletion requests",
 		Security:    BearerSecurity,
-	}, stub[struct{}, struct{ Body []map[string]any }]())
+	}, stub[struct{}, struct{ Body []DeletionRequest }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "admin-process-deletion",
@@ -1687,7 +1735,7 @@ func registerAdminOps(api huma.API) {
 		Tags:        []string{"Admin", "GDPR"},
 		Summary:     "List legal documents (admin)",
 		Security:    BearerSecurity,
-	}, stub[struct{}, struct{ Body []map[string]any }]())
+	}, stub[struct{}, struct{ Body []LegalDocument }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "admin-create-legal-document",
@@ -1696,7 +1744,7 @@ func registerAdminOps(api huma.API) {
 		Tags:        []string{"Admin", "GDPR"},
 		Summary:     "Create/update legal document",
 		Security:    BearerSecurity,
-	}, stub[struct{ Body map[string]any }, struct{ Body map[string]any }]())
+	}, stub[struct{ Body LegalDocument }, struct{ Body LegalDocument }]())
 
 	// Admin Dugnad
 	huma.Register(api, huma.Operation{
@@ -1706,7 +1754,7 @@ func registerAdminOps(api huma.API) {
 		Tags:        []string{"Admin", "Dugnad"},
 		Summary:     "List all volunteer hours",
 		Security:    BearerSecurity,
-	}, stub[struct{}, struct{ Body []map[string]any }]())
+	}, stub[struct{}, struct{ Body []DugnadHoursSummary }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "admin-set-required-hours",
@@ -1715,7 +1763,11 @@ func registerAdminOps(api huma.API) {
 		Tags:        []string{"Admin", "Dugnad"},
 		Summary:     "Set required volunteer hours",
 		Security:    BearerSecurity,
-	}, stub[struct{ Body map[string]any }, struct{ Body map[string]any }]())
+	}, stub[struct {
+		Body struct {
+			RequiredHours float64 `json:"required_hours" doc:"Required hours per member"`
+		}
+	}, struct{ Body StatusResponse }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "admin-link-project-event",
@@ -1726,7 +1778,9 @@ func registerAdminOps(api huma.API) {
 		Security:    BearerSecurity,
 	}, stub[struct {
 		EventID string `path:"eventID" doc:"Event UUID"`
-		Body    map[string]any
+		Body    struct {
+			ProjectID string `json:"project_id" doc:"Project UUID"`
+		}
 	}, struct{ Body StatusResponse }]())
 
 	huma.Register(api, huma.Operation{
@@ -1750,5 +1804,5 @@ func registerAdminOps(api huma.API) {
 		Security:    BearerSecurity,
 	}, stub[struct {
 		EventID string `path:"eventID" doc:"Event UUID"`
-	}, struct{ Body []map[string]any }]())
+	}, struct{ Body []Project }]())
 }
