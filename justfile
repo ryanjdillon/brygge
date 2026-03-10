@@ -142,6 +142,18 @@ rollback sha host="brygge":
 docker-build:
     docker build -t brygge:local --target production .
 
+# ── API Documentation ─────────────────────────────────────────
+
+# Generate OpenAPI spec (JSON to stdout)
+openapi-spec:
+    cd backend && go run ./cmd/openapi/
+
+# Generate TypeScript API types from OpenAPI spec
+api-types:
+    cd backend && go run ./cmd/openapi/ > /tmp/brygge-openapi.json
+    cd frontend && npx openapi-typescript /tmp/brygge-openapi.json -o src/types/api.d.ts
+    @echo "generated frontend/src/types/api.d.ts"
+
 # ── Database ──────────────────────────────────────────────────
 
 # Run EXPLAIN ANALYZE on a query
