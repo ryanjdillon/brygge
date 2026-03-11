@@ -1,6 +1,6 @@
 import { computed, type Ref } from 'vue'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
-import { useApi } from '@/composables/useApi'
+import { useApiClient, unwrap } from '@/lib/apiClient'
 import type { components } from '@/types/api'
 
 export type FinancialSummary = components['schemas']['FinancialSummary']
@@ -25,72 +25,65 @@ export interface ExportFilters {
   end?: string
 }
 
-function buildQuery(params: Record<string, string | number | undefined>): string {
-  const parts: string[] = []
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== '') {
-      parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
-    }
-  }
-  return parts.length > 0 ? `?${parts.join('&')}` : ''
-}
-
 export function useFinancialSummary(year?: Ref<number | undefined>) {
-  const { fetchApi } = useApi()
+  const client = useApiClient()
 
   return useQuery({
     queryKey: computed(() => ['financials', 'summary', year?.value]),
-    queryFn: () => {
-      const query = year?.value ? `?year=${year.value}` : ''
-      return fetchApi<FinancialSummary>(`/api/v1/admin/financials/summary${query}`)
+    queryFn: async () => {
+      const query = year?.value ? { year: year.value } : {}
+      return unwrap(await client.GET('/api/v1/admin/financials/summary', {
+        params: { query } as any,
+      }))
     },
     staleTime: 2 * 60 * 1000,
   })
 }
 
 export function usePaymentsList(filters: Ref<PaymentsFilters>) {
-  const { fetchApi } = useApi()
+  const client = useApiClient()
 
   return useQuery({
     queryKey: computed(() => ['financials', 'payments', filters.value]),
-    queryFn: () => {
-      const query = buildQuery(filters.value as Record<string, string | number | undefined>)
-      return fetchApi<PaymentsListResponse>(`/api/v1/admin/financials/payments${query}`)
-    },
+    queryFn: async () =>
+      unwrap(await client.GET('/api/v1/admin/financials/payments', {
+        params: { query: filters.value } as any,
+      })),
     staleTime: 60 * 1000,
   })
 }
 
 export function usePaymentDetails(paymentId: Ref<string | undefined>) {
-  const { fetchApi } = useApi()
+  const client = useApiClient()
 
   return useQuery({
     queryKey: computed(() => ['financials', 'payment', paymentId.value]),
-    queryFn: () => fetchApi<Payment>(`/api/v1/admin/financials/payments/${paymentId.value}`),
+    queryFn: async () =>
+      unwrap(await client.GET('/api/v1/admin/financials/payments/{paymentID}', {
+        params: { path: { paymentID: paymentId.value! } },
+      })),
     enabled: computed(() => !!paymentId.value),
   })
 }
 
 export function useOverduePayments() {
-  const { fetchApi } = useApi()
+  const client = useApiClient()
 
   return useQuery({
     queryKey: ['financials', 'overdue'],
-    queryFn: () => fetchApi<OverduePayment[]>('/api/v1/admin/financials/overdue'),
+    queryFn: async () =>
+      unwrap(await client.GET('/api/v1/admin/financials/overdue')),
     staleTime: 2 * 60 * 1000,
   })
 }
 
 export function useCreateInvoice() {
-  const { fetchApi } = useApi()
+  const client = useApiClient()
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (data: CreateInvoiceRequest) =>
-      fetchApi<Payment>('/api/v1/admin/financials/invoices', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
+    mutationFn: async (data: CreateInvoiceRequest) =>
+      unwrap(await client.POST('/api/v1/admin/financials/invoices', { body: data as any })),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['financials'] })
     },
@@ -99,8 +92,14 @@ export function useCreateInvoice() {
 
 export function useExportCSV() {
   async function downloadCSV(filters: ExportFilters = {}) {
-    const query = buildQuery(filters as Record<string, string | number | undefined>)
-    const response = await fetch(`/api/v1/admin/financials/export${query}`, {
+    const query = new URLSearchParams()
+    for (const [key, value] of Object.entries(filters)) {
+      if (value !== undefined && value !== '') {
+        query.set(key, String(value))
+      }
+    }
+    const qs = query.toString()
+    const response = await fetch(`/api/v1/admin/financials/export${qs ? `?${qs}` : ''}`, {
       headers: {
         Authorization: `Bearer ${localStorage.getItem('access_token')}`,
       },

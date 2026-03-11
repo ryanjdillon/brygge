@@ -1,7 +1,7 @@
 import { computed } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import { useI18n } from 'vue-i18n'
-import { useApi } from '@/composables/useApi'
+import { useApiClient, unwrap } from '@/lib/apiClient'
 import type { components } from '@/types/api'
 
 export type PriceItem = components['schemas']['PriceItem']
@@ -33,7 +33,7 @@ const unitKeys: Record<string, string> = {
 }
 
 export function usePricing() {
-  const { fetchApi } = useApi()
+  const client = useApiClient()
   const { t } = useI18n()
 
   function categoryLabel(key: string): string {
@@ -46,7 +46,8 @@ export function usePricing() {
 
   const query = useQuery({
     queryKey: ['pricing'],
-    queryFn: () => fetchApi<{ items: PriceItem[] }>('/api/v1/pricing'),
+    queryFn: async () =>
+      unwrap(await client.GET('/api/v1/pricing')),
     staleTime: 10 * 60 * 1000,
   })
 

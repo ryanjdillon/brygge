@@ -1,6 +1,6 @@
 import { ref, computed } from 'vue'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
-import { useApi } from '@/composables/useApi'
+import { useApiClient, unwrap } from '@/lib/apiClient'
 
 export interface NotificationPreference {
   category: string
@@ -16,11 +16,12 @@ export interface NotificationConfig {
 }
 
 export function useNotificationPreferences() {
-  const { fetchApi } = useApi()
+  const client = useApiClient()
 
   const query = useQuery({
     queryKey: ['notification-preferences'],
-    queryFn: () => fetchApi<{ categories: NotificationPreference[] }>('/api/v1/members/me/notifications'),
+    queryFn: async () =>
+      unwrap(await client.GET('/api/v1/members/me/notifications')),
   })
 
   const categories = computed(() => query.data.value?.categories ?? [])
@@ -29,25 +30,23 @@ export function useNotificationPreferences() {
 }
 
 export function useUpdatePreference() {
-  const { fetchApi } = useApi()
+  const client = useApiClient()
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (payload: { category: string; enabled: boolean }) =>
-      fetchApi('/api/v1/members/me/notifications', {
-        method: 'PUT',
-        body: JSON.stringify(payload),
-      }),
+    mutationFn: async (payload: { category: string; enabled: boolean }) =>
+      unwrap(await client.PUT('/api/v1/members/me/notifications', { body: payload as any })),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notification-preferences'] }),
   })
 }
 
 export function useNotificationConfig() {
-  const { fetchApi } = useApi()
+  const client = useApiClient()
 
   const query = useQuery({
     queryKey: ['admin', 'notification-config'],
-    queryFn: () => fetchApi<{ categories: NotificationConfig[] }>('/api/v1/admin/notifications/config'),
+    queryFn: async () =>
+      unwrap(await client.GET('/api/v1/admin/notifications/config')),
   })
 
   const categories = computed(() => query.data.value?.categories ?? [])
@@ -56,29 +55,27 @@ export function useNotificationConfig() {
 }
 
 export function useUpdateNotificationConfig() {
-  const { fetchApi } = useApi()
+  const client = useApiClient()
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (payload: { category: string; required: boolean; lead_days?: number }) =>
-      fetchApi('/api/v1/admin/notifications/config', {
-        method: 'PUT',
-        body: JSON.stringify(payload),
-      }),
+    mutationFn: async (payload: { category: string; required: boolean; lead_days?: number }) =>
+      unwrap(await client.PUT('/api/v1/admin/notifications/config', { body: payload as any })),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'notification-config'] }),
   })
 }
 
 export function useTestPush() {
-  const { fetchApi } = useApi()
+  const client = useApiClient()
 
   return useMutation({
-    mutationFn: () => fetchApi('/api/v1/admin/notifications/test', { method: 'POST' }),
+    mutationFn: async () =>
+      unwrap(await client.POST('/api/v1/admin/notifications/test')),
   })
 }
 
 export function usePushSubscription() {
-  const { fetchApi } = useApi()
+  const client = useApiClient()
   const isSupported = ref('serviceWorker' in navigator && 'PushManager' in window)
   const isSubscribed = ref(false)
   const isLoading = ref(false)
@@ -98,26 +95,25 @@ export function usePushSubscription() {
     if (!isSupported.value) return
     isLoading.value = true
     try {
-      const { public_key } = await fetchApi<{ public_key: string }>('/api/v1/push/vapid-key')
-      if (!public_key) throw new Error('VAPID key not configured')
+      const { vapid_key } = unwrap(await client.GET('/api/v1/push/vapid-key'))
+      if (!vapid_key) throw new Error('VAPID key not configured')
 
       const reg = await navigator.serviceWorker.ready
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(public_key) as BufferSource,
+        applicationServerKey: urlBase64ToUint8Array(vapid_key) as BufferSource,
       })
 
       const json = sub.toJSON()
-      await fetchApi('/api/v1/push/subscribe', {
-        method: 'POST',
-        body: JSON.stringify({
+      await unwrap(await client.POST('/api/v1/push/subscribe', {
+        body: {
           endpoint: sub.endpoint,
           keys: {
             p256dh: json.keys?.p256dh ?? '',
             auth: json.keys?.auth ?? '',
           },
-        }),
-      })
+        } as any,
+      }))
 
       isSubscribed.value = true
     } finally {
@@ -132,10 +128,9 @@ export function usePushSubscription() {
       const reg = await navigator.serviceWorker.ready
       const sub = await reg.pushManager.getSubscription()
       if (sub) {
-        await fetchApi('/api/v1/push/subscribe', {
-          method: 'DELETE',
-          body: JSON.stringify({ endpoint: sub.endpoint }),
-        })
+        await unwrap(await client.DELETE('/api/v1/push/subscribe', {
+          body: { endpoint: sub.endpoint } as any,
+        }))
         await sub.unsubscribe()
       }
       isSubscribed.value = false

@@ -1,16 +1,19 @@
 import { computed } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
-import { useApi } from '@/composables/useApi'
+import { useApiClient, unwrap } from '@/lib/apiClient'
 import type { components } from '@/types/api'
 
 export type Resource = components['schemas']['BookingResource']
 
 export function useResources(type: string) {
-  const { fetchApi } = useApi()
+  const client = useApiClient()
 
   const query = useQuery({
     queryKey: ['resources', type],
-    queryFn: () => fetchApi<Resource[]>(`/api/v1/resources?type=${type}`),
+    queryFn: async () =>
+      unwrap(await client.GET('/api/v1/bookings/resources', {
+        params: { query: { type } } as any,
+      })),
     staleTime: 5 * 60 * 1000,
   })
 

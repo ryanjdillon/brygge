@@ -1,17 +1,19 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
-import { useApi } from '@/composables/useApi'
+import { useApiClient, unwrap } from '@/lib/apiClient'
 import type { components } from '@/types/api'
 
 export type TaskParticipant = components['schemas']['TaskParticipant']
 export type DugnadHoursSummary = components['schemas']['DugnadHoursSummary']
 
 export function useJoinTask() {
-  const { fetchApi } = useApi()
+  const client = useApiClient()
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (taskId: string) =>
-      fetchApi(`/api/v1/tasks/${taskId}/join`, { method: 'POST' }),
+    mutationFn: async (taskId: string) =>
+      unwrap(await client.POST('/api/v1/tasks/{taskID}/join', {
+        params: { path: { taskID: taskId } },
+      })),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] })
     },
@@ -19,12 +21,14 @@ export function useJoinTask() {
 }
 
 export function useLeaveTask() {
-  const { fetchApi } = useApi()
+  const client = useApiClient()
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (taskId: string) =>
-      fetchApi(`/api/v1/tasks/${taskId}/leave`, { method: 'DELETE' }),
+    mutationFn: async (taskId: string) =>
+      unwrap(await client.DELETE('/api/v1/tasks/{taskID}/leave', {
+        params: { path: { taskID: taskId } },
+      })),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] })
     },
@@ -32,43 +36,47 @@ export function useLeaveTask() {
 }
 
 export function useTaskParticipants(taskId: () => string) {
-  const { fetchApi } = useApi()
+  const client = useApiClient()
 
   return useQuery({
     queryKey: ['task-participants', taskId],
-    queryFn: () => fetchApi<TaskParticipant[]>(`/api/v1/tasks/${taskId()}/participants`),
+    queryFn: async () =>
+      unwrap(await client.GET('/api/v1/tasks/{taskID}/participants', {
+        params: { path: { taskID: taskId() } },
+      })),
     enabled: () => !!taskId(),
   })
 }
 
 export function useMyDugnadHours() {
-  const { fetchApi } = useApi()
+  const client = useApiClient()
 
   return useQuery({
     queryKey: ['dugnad-hours', 'me'],
-    queryFn: () => fetchApi<DugnadHoursSummary>('/api/v1/members/me/dugnad-hours'),
+    queryFn: async () =>
+      unwrap(await client.GET('/api/v1/members/me/dugnad-hours')),
   })
 }
 
 export function useAllDugnadHours() {
-  const { fetchApi } = useApi()
+  const client = useApiClient()
 
   return useQuery({
     queryKey: ['dugnad-hours', 'all'],
-    queryFn: () => fetchApi<DugnadHoursSummary[]>('/api/v1/admin/dugnad/hours'),
+    queryFn: async () =>
+      unwrap(await client.GET('/api/v1/admin/dugnad/hours')),
   })
 }
 
 export function useSetRequiredHours() {
-  const { fetchApi } = useApi()
+  const client = useApiClient()
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (hours: number) =>
-      fetchApi('/api/v1/admin/dugnad/settings/hours', {
-        method: 'PUT',
-        body: JSON.stringify({ hours }),
-      }),
+    mutationFn: async (hours: number) =>
+      unwrap(await client.PUT('/api/v1/admin/dugnad/settings/hours', {
+        body: { hours } as any,
+      })),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['dugnad-hours'] })
     },

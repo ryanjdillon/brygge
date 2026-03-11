@@ -1,6 +1,6 @@
 import { computed, type Ref } from 'vue'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
-import { useApi } from '@/composables/useApi'
+import { useApiClient, unwrap } from '@/lib/apiClient'
 import type { components } from '@/types/api'
 
 export type Booking = components['schemas']['Booking']
@@ -22,17 +22,25 @@ export function useAggregateAvailability(
   end: Ref<string>,
   dimensions?: Ref<BoatDimensions | undefined>,
 ) {
-  const { fetchApi } = useApi()
+  const client = useApiClient()
 
   return useQuery({
     queryKey: ['availability', type, start, end, dimensions],
-    queryFn: () => {
-      let url = `/api/v1/bookings/availability?type=${type.value}&start=${start.value}&end=${end.value}`
+    queryFn: async () => {
       const dims = dimensions?.value
-      if (dims?.length && dims?.beam && dims?.draft) {
-        url += `&length=${dims.length}&beam=${dims.beam}&draft=${dims.draft}`
+      const query: Record<string, string> = {
+        type: type.value,
+        start: start.value,
+        end: end.value,
       }
-      return fetchApi<{ dates: AggregateDay[] }>(url)
+      if (dims?.length && dims?.beam && dims?.draft) {
+        query.length = String(dims.length)
+        query.beam = String(dims.beam)
+        query.draft = String(dims.draft)
+      }
+      return unwrap(await client.GET('/api/v1/bookings/availability', {
+        params: { query: query as any },
+      }))
     },
     enabled: computed(() => !!type.value && !!start.value && !!end.value),
     staleTime: 60 * 1000,
@@ -40,48 +48,50 @@ export function useAggregateAvailability(
 }
 
 export function useTodayAvailability(type: string) {
-  const { fetchApi } = useApi()
+  const client = useApiClient()
 
   return useQuery({
     queryKey: ['availability-today', type],
-    queryFn: () => fetchApi<TodayAvailability>(`/api/v1/bookings/availability/today?type=${type}`),
+    queryFn: async () =>
+      unwrap(await client.GET('/api/v1/bookings/availability/today', {
+        params: { query: { type } },
+      })),
     staleTime: 60 * 1000,
   })
 }
 
 export function useHoistSlots(date: Ref<string>) {
-  const { fetchApi } = useApi()
+  const client = useApiClient()
 
   return useQuery({
     queryKey: ['hoist-slots', date],
-    queryFn: () => fetchApi<HoistSlotsResponse>(`/api/v1/bookings/hoist/slots?date=${date.value}`),
+    queryFn: async () =>
+      unwrap(await client.GET('/api/v1/bookings/hoist/slots', {
+        params: { query: { date: date.value } },
+      })),
     enabled: computed(() => !!date.value),
     staleTime: 30 * 1000,
   })
 }
 
 export function useMyBookings(status?: string) {
-  const { fetchApi } = useApi()
-
-  const url = status ? `/api/v1/bookings/me?status=${status}` : '/api/v1/bookings/me'
+  const client = useApiClient()
 
   return useQuery({
     queryKey: ['my-bookings', status ?? 'all'],
-    queryFn: () => fetchApi<Booking[]>(url),
+    queryFn: async () =>
+      unwrap(await client.GET('/api/v1/bookings/me')),
     staleTime: 30 * 1000,
   })
 }
 
 export function useCreateBooking() {
-  const { fetchApi } = useApi()
+  const client = useApiClient()
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (req: CreateBookingRequest) =>
-      fetchApi<Booking>('/api/v1/bookings', {
-        method: 'POST',
-        body: JSON.stringify(req),
-      }),
+    mutationFn: async (req: CreateBookingRequest) =>
+      unwrap(await client.POST('/api/v1/bookings', { body: req as any })),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['availability'] })
       queryClient.invalidateQueries({ queryKey: ['availability-today'] })
@@ -92,12 +102,14 @@ export function useCreateBooking() {
 }
 
 export function useCancelBooking() {
-  const { fetchApi } = useApi()
+  const client = useApiClient()
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (bookingId: string) =>
-      fetchApi<Booking>(`/api/v1/bookings/${bookingId}/cancel`, { method: 'POST' }),
+    mutationFn: async (bookingId: string) =>
+      unwrap(await client.POST('/api/v1/bookings/{bookingID}/cancel', {
+        params: { path: { bookingID: bookingId } },
+      })),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['availability'] })
       queryClient.invalidateQueries({ queryKey: ['availability-today'] })

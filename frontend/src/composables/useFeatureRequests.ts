@@ -1,6 +1,6 @@
 import { computed } from 'vue'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
-import { useApi } from '@/composables/useApi'
+import { useApiClient, unwrap } from '@/lib/apiClient'
 import type { components } from '@/types/api'
 
 export type FeatureRequest = components['schemas']['FeatureRequest']
@@ -15,39 +15,41 @@ export interface VoteInput {
 }
 
 export function useFeatureRequests(statusFilter?: () => string) {
-  const { fetchApi } = useApi()
+  const client = useApiClient()
   const filter = statusFilter ? computed(() => statusFilter()) : computed(() => '')
 
   return useQuery({
     queryKey: ['feature-requests', filter],
-    queryFn: () => {
-      const params = filter.value ? `?status=${filter.value}` : ''
-      return fetchApi<FeatureRequest[]>(`/api/v1/feature-requests${params}`)
+    queryFn: async () => {
+      const query = filter.value ? { status: filter.value } : {}
+      return unwrap(await client.GET('/api/v1/feature-requests', {
+        params: { query } as any,
+      }))
     },
   })
 }
 
 export function useFeatureRequest(requestId: () => string) {
-  const { fetchApi } = useApi()
+  const client = useApiClient()
   const id = computed(() => requestId())
 
   return useQuery({
     queryKey: ['feature-requests', id],
-    queryFn: () => fetchApi<FeatureRequest>(`/api/v1/feature-requests/${id.value}`),
+    queryFn: async () =>
+      unwrap(await client.GET('/api/v1/feature-requests/{requestID}', {
+        params: { path: { requestID: id.value } },
+      })),
     enabled: () => !!id.value,
   })
 }
 
 export function useCreateFeatureRequest() {
-  const { fetchApi } = useApi()
+  const client = useApiClient()
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (input: CreateFeatureRequestInput) =>
-      fetchApi<FeatureRequest>('/api/v1/feature-requests', {
-        method: 'POST',
-        body: JSON.stringify(input),
-      }),
+    mutationFn: async (input: CreateFeatureRequestInput) =>
+      unwrap(await client.POST('/api/v1/feature-requests', { body: input as any })),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['feature-requests'] })
     },
@@ -55,15 +57,15 @@ export function useCreateFeatureRequest() {
 }
 
 export function useVote() {
-  const { fetchApi } = useApi()
+  const client = useApiClient()
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ requestId, value }: { requestId: string; value: 1 | -1 }) =>
-      fetchApi<{ vote_count: number; user_vote: number }>(`/api/v1/feature-requests/${requestId}/vote`, {
-        method: 'POST',
-        body: JSON.stringify({ value }),
-      }),
+    mutationFn: async ({ requestId, value }: { requestId: string; value: 1 | -1 }) =>
+      unwrap(await client.POST('/api/v1/feature-requests/{requestID}/vote', {
+        params: { path: { requestID: requestId } },
+        body: { value } as any,
+      })),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['feature-requests'] })
     },
@@ -71,15 +73,15 @@ export function useVote() {
 }
 
 export function useUpdateFeatureRequestStatus() {
-  const { fetchApi } = useApi()
+  const client = useApiClient()
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ requestId, status }: { requestId: string; status: string }) =>
-      fetchApi(`/api/v1/feature-requests/${requestId}/status`, {
-        method: 'PUT',
-        body: JSON.stringify({ status }),
-      }),
+    mutationFn: async ({ requestId, status }: { requestId: string; status: string }) =>
+      unwrap(await client.PUT('/api/v1/feature-requests/{requestID}/status', {
+        params: { path: { requestID: requestId } },
+        body: { status } as any,
+      })),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['feature-requests'] })
     },
@@ -87,15 +89,15 @@ export function useUpdateFeatureRequestStatus() {
 }
 
 export function usePromoteToTask() {
-  const { fetchApi } = useApi()
+  const client = useApiClient()
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ requestId, projectId }: { requestId: string; projectId: string }) =>
-      fetchApi(`/api/v1/feature-requests/${requestId}/promote`, {
-        method: 'POST',
-        body: JSON.stringify({ project_id: projectId }),
-      }),
+    mutationFn: async ({ requestId, projectId }: { requestId: string; projectId: string }) =>
+      unwrap(await client.POST('/api/v1/feature-requests/{requestID}/promote', {
+        params: { path: { requestID: requestId } },
+        body: { project_id: projectId } as any,
+      })),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['feature-requests'] })
       queryClient.invalidateQueries({ queryKey: ['projects'] })
