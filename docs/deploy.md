@@ -15,12 +15,12 @@ This guide covers deploying Brygge to production. For the full initial setup wal
 
 Point the following A records to your server's IP address:
 
-| Type | Name | Value |
-|------|------|-------|
-| A | `@` (root) | `<server IP>` |
-| A | `matrix` | `<server IP>` |
-| A | `element` | `<server IP>` |
-| A | `status` | `<server IP>` |
+| Type | Name       | Value         |
+|------|------      |-------        |
+| A    | `@` (root) | `<server IP>` |
+| A    | `matrix`   | `<server IP>` |
+| A    | `element`  | `<server IP>` |
+| A    | `status`   | `<server IP>` |
 
 ---
 
@@ -142,26 +142,26 @@ gunzip -c backups/brygge_20260306_020000.sql.gz | \
 
 ## Services Overview
 
-| Service | Image | Purpose | Subdomain |
-|---------|-------|---------|-----------|
-| **api** | `ghcr.io/brygge-klubb/brygge` | Go API + embedded SPA | `@` |
-| **db** | `postgres:16-alpine` | Primary database | internal |
-| **redis** | `redis:7-alpine` | Cache, sessions, rate limiting | internal |
-| **traefik** | `traefik:v3.3` | Reverse proxy, TLS | internal |
-| **dendrite** | `matrixdotorg/dendrite-monolith` | Matrix homeserver (forum) | `matrix.*` |
-| **element** | `vectorim/element-web` | Matrix web client | `element.*` |
-| **uptime-kuma** | `louislam/uptime-kuma:1` | Status page | `status.*` |
-| **migrate** | `migrate/migrate:v4` | Database migrations (one-shot) | internal |
+| Service         | Image                            | Purpose                        | Subdomain   |
+|---------        |-------                           |---------                       |-----------  |
+| **api**         | `ghcr.io/brygge-klubb/brygge`    | Go API + embedded SPA          | `@`         |
+| **db**          | `postgres:16-alpine`             | Primary database               | internal    |
+| **redis**       | `redis:7-alpine`                 | Cache, sessions, rate limiting | internal    |
+| **traefik**     | `traefik:v3.3`                   | Reverse proxy, TLS             | internal    |
+| **dendrite**    | `matrixdotorg/dendrite-monolith` | Matrix homeserver (forum)      | `matrix.*`  |
+| **element**     | `vectorim/element-web`           | Matrix web client              | `element.*` |
+| **uptime-kuma** | `louislam/uptime-kuma:1`         | Status page                    | `status.*`  |
+| **migrate**     | `migrate/migrate:v4`             | Database migrations (one-shot) | internal    |
 
 ---
 
 ## Resource Requirements
 
-| Size | Users | Recommended Server |
-|------|-------|--------------------|
-| Small club (<100 members) | Low traffic | 2 vCPU, 4 GB RAM, 40 GB disk |
-| Medium club (100-500) | Moderate | 4 vCPU, 8 GB RAM, 80 GB disk |
-| Large club (500+) | High traffic | Consider [Kubernetes](k8s.md) |
+| Size                      | Users        | Recommended Server            |
+|------                     |-------       |--------------------           |
+| Small club (<100 members) | Low traffic  | 2 vCPU, 4 GB RAM, 40 GB disk  |
+| Medium club (100-500)     | Moderate     | 4 vCPU, 8 GB RAM, 80 GB disk  |
+| Large club (500+)         | High traffic | Consider [Kubernetes](k8s.md) |
 
 ---
 
@@ -225,11 +225,11 @@ S3_REGION=fsn1
 
 In the Hetzner Cloud console under **Firewalls**:
 
-| Direction | Protocol | Port | Source |
-|-----------|----------|------|--------|
-| Inbound | TCP | 22 | Your IP (SSH) |
-| Inbound | TCP | 80 | Any (HTTP → HTTPS redirect) |
-| Inbound | TCP | 443 | Any (HTTPS) |
+| Direction | Protocol | Port | Source                      |
+|-----------|----------|------|--------                     |
+| Inbound   | TCP      | 22   | Your IP (SSH)               |
+| Inbound   | TCP      | 80   | Any (HTTP → HTTPS redirect) |
+| Inbound   | TCP      | 443  | Any (HTTPS)                 |
 
 Apply the firewall to your server.
 
@@ -264,12 +264,12 @@ For database-level backups, use the [cron backup](#backups) in addition to snaps
 
 #### Cost Estimate
 
-| Resource | Monthly Cost |
-|----------|-------------|
-| CAX11 server (ARM64, 2 vCPU, 4 GB) | ~3.29 EUR |
-| Snapshots (20% of server) | ~0.66 EUR |
-| Object Storage (10 GB) | ~0.52 EUR |
-| **Total** | **~4.47 EUR** |
+| Resource                           | Monthly Cost  |
+|----------                          |-------------  |
+| CAX11 server (ARM64, 2 vCPU, 4 GB) | ~3.29 EUR     |
+| Snapshots (20% of server)          | ~0.66 EUR     |
+| Object Storage (10 GB)             | ~0.52 EUR     |
+| **Total**                          | **~4.47 EUR** |
 
 </details>
 

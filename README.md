@@ -24,29 +24,29 @@ Brygge (Norwegian for *dock*) is a self-hosted management platform for harbour c
 
 ## Features
 
-| Area | Highlights |
-|------|-----------|
+| Area              | Highlights                                                                                                      |
+|------             |-----------                                                                                                      |
 | **Member portal** | Profile, boat registry, slip management, waiting list, document archive, directory, GDPR data export & deletion |
-| **Bookings** | Guest slips, motorhome spots, club rooms, hoist scheduling with calendar availability |
-| **Finances** | Dues & invoices, Vipps payments, merchandise shop, overdue tracking, financial reports (CSV export) |
-| **Communication** | Broadcast email, web push notifications, integrated forum (Matrix/Dendrite) |
-| **Projects** | Dugnad (working day) tracking, task boards with kanban view, shopping lists |
-| **Calendar** | Events with iCal export, RSVP, regatta & social event management |
-| **Admin** | Role-based access (7 roles), audit log, slip & waiting list management, feature flags |
-| **Harbour map** | Interactive MapLibre GL map with configurable markers and harbour chart overlay |
-| **i18n** | 7 languages: Norwegian, English, German, French, Italian, Dutch, Polish |
+| **Bookings**      | Guest slips, motorhome spots, club rooms, hoist scheduling with calendar availability                           |
+| **Finances**      | Dues & invoices, Vipps payments, merchandise shop, overdue tracking, financial reports (CSV export)             |
+| **Communication** | Broadcast email, web push notifications, integrated forum (Matrix/Dendrite)                                     |
+| **Projects**      | Dugnad (working day) tracking, task boards with kanban view, shopping lists                                     |
+| **Calendar**      | Events with iCal export, RSVP, regatta & social event management                                                |
+| **Admin**         | Role-based access (7 roles), audit log, slip & waiting list management, feature flags                           |
+| **Harbour map**   | Interactive MapLibre GL map with configurable markers and harbour chart overlay                                 |
+| **i18n**          | 7 languages: Norwegian, English, German, French, Italian, Dutch, Polish                                         |
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Backend | Go 1.25, chi/v5, pgx/v5, Redis 7, Huma (OpenAPI 3.1) |
-| Frontend | Vue 3.5, TanStack Query, Pinia, Shadcn-vue, TailwindCSS 4, MapLibre GL |
-| API client | openapi-fetch with generated TypeScript types |
-| Auth | JWT + Vipps Login (Norwegian payment provider) |
-| Database | PostgreSQL 16 (raw SQL + sqlc code generation) |
+| Layer          | Technology                                                               |
+|-------         |-----------                                                               |
+| Backend        | Go 1.25, chi/v5, pgx/v5, Redis 7, Huma (OpenAPI 3.1)                     |
+| Frontend       | Vue 3.5, TanStack Query, Pinia, Shadcn-vue, TailwindCSS 4, MapLibre GL   |
+| API client     | openapi-fetch with generated TypeScript types                            |
+| Auth           | JWT + Vipps Login (Norwegian payment provider)                           |
+| Database       | PostgreSQL 16 (raw SQL + sqlc code generation)                           |
 | Infrastructure | Docker Compose, Traefik v3.3 (TLS via Let's Encrypt), Distroless runtime |
-| CI | GitHub Actions (lint, test, security scan, build, deploy) |
+| CI             | GitHub Actions (lint, test, security scan, build, deploy)                |
 
 ## Quick Start
 
@@ -104,16 +104,16 @@ The Go binary embeds the Vue production build via `go:embed` and serves both the
 
 Copy `deploy/.env.example` to `deploy/.env` and configure:
 
-| Variable | Purpose |
-|----------|---------|
-| `DOMAIN` | Your club's domain |
-| `DATABASE_URL` | PostgreSQL connection string |
-| `REDIS_URL` | Redis connection string |
-| `JWT_SECRET` | Token signing secret |
-| `VIPPS_*` | Vipps payment & login credentials |
-| `S3_*` | Object storage for documents |
-| `RESEND_API_KEY` | Transactional email |
-| `FEATURE_*` | Toggle feature modules (bookings, projects, calendar, commerce, communications) |
+| Variable         | Purpose                                                                         |
+|----------        |---------                                                                        |
+| `DOMAIN`         | Your club's domain                                                              |
+| `DATABASE_URL`   | PostgreSQL connection string                                                    |
+| `REDIS_URL`      | Redis connection string                                                         |
+| `JWT_SECRET`     | Token signing secret                                                            |
+| `VIPPS_*`        | Vipps payment & login credentials                                               |
+| `S3_*`           | Object storage for documents                                                    |
+| `RESEND_API_KEY` | Transactional email                                                             |
+| `FEATURE_*`      | Toggle feature modules (bookings, projects, calendar, commerce, communications) |
 
 See [deploy/.env.example](deploy/.env.example) for the full list with inline documentation.
 
