@@ -2409,6 +2409,16 @@ export interface components {
             /** @description User UUID to assign */
             assignee_id: string;
         };
+        AvailabilityResponse: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/AvailabilityResponse.json
+             */
+            readonly $schema?: string;
+            /** @description Availability per date */
+            dates: components["schemas"]["DayAvailability"][] | null;
+        };
         Boat: {
             /**
              * Format: uri
@@ -2797,6 +2807,16 @@ export interface components {
             /** @description Consent version */
             version: string;
         };
+        ConsentsResponse: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/ConsentsResponse.json
+             */
+            readonly $schema?: string;
+            /** @description User consents */
+            consents: components["schemas"]["Consent"][] | null;
+        };
         ContactRequest: {
             /**
              * Format: uri
@@ -3001,6 +3021,16 @@ export interface components {
             /** @description Request status */
             status: string;
         };
+        DeletionRequestsResponse: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/DeletionRequestsResponse.json
+             */
+            readonly $schema?: string;
+            /** @description Deletion requests */
+            requests: components["schemas"]["DeletionRequest"][] | null;
+        };
         DirectoryMember: {
             /** @description Email address */
             email?: string;
@@ -3037,6 +3067,16 @@ export interface components {
             uploaded_by: string;
             /** @description Visibility level */
             visibility: string;
+        };
+        DocumentsResponse: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/DocumentsResponse.json
+             */
+            readonly $schema?: string;
+            /** @description Document list */
+            documents: components["schemas"]["Document"][] | null;
         };
         DugnadHoursSummary: {
             /**
@@ -3412,6 +3452,16 @@ export interface components {
             /** @description Document version */
             version: string;
         };
+        LegalDocumentsResponse: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/LegalDocumentsResponse.json
+             */
+            readonly $schema?: string;
+            /** @description Legal documents */
+            documents: components["schemas"]["LegalDocument"][] | null;
+        };
         MapMarker: {
             /**
              * Format: uri
@@ -3552,6 +3602,16 @@ export interface components {
             /** @description Whether category is required */
             required: boolean;
         };
+        NotificationConfigResponse: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/NotificationConfigResponse.json
+             */
+            readonly $schema?: string;
+            /** @description Notification config categories */
+            categories: components["schemas"]["NotificationConfig"][] | null;
+        };
         NotificationPreference: {
             /** @description Notification category */
             category: string;
@@ -3561,6 +3621,16 @@ export interface components {
             enabled: boolean;
             /** @description Whether category is required (cannot disable) */
             required: boolean;
+        };
+        NotificationPreferencesResponse: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/NotificationPreferencesResponse.json
+             */
+            readonly $schema?: string;
+            /** @description Notification preference categories */
+            categories: components["schemas"]["NotificationPreference"][] | null;
         };
         "Offer-slipRequest": {
             /**
@@ -3601,28 +3671,6 @@ export interface components {
             user_name: string;
             /** @description User phone */
             user_phone: string;
-        };
-        PaginatedResponseBooking: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example https://example.com/schemas/PaginatedResponseBooking.json
-             */
-            readonly $schema?: string;
-            /** @description Whether more items exist beyond this page */
-            has_more: boolean;
-            /** @description List of items */
-            items: components["schemas"]["Booking"][] | null;
-            /**
-             * Format: int64
-             * @description Applied limit
-             */
-            limit: number;
-            /**
-             * Format: int64
-             * @description Applied offset
-             */
-            offset: number;
         };
         PaginatedResponseBookingAdmin: {
             /**
@@ -3848,6 +3896,16 @@ export interface components {
             /** @description Pricing unit */
             unit: string;
         };
+        PricingResponse: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/PricingResponse.json
+             */
+            readonly $schema?: string;
+            /** @description Pricing items */
+            items: components["schemas"]["PriceItem"][] | null;
+        };
         Product: {
             /**
              * Format: uri
@@ -3925,6 +3983,16 @@ export interface components {
              * @description Available stock
              */
             stock: number;
+        };
+        ProductsResponse: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/ProductsResponse.json
+             */
+            readonly $schema?: string;
+            /** @description Product list */
+            products: components["schemas"]["Product"][] | null;
         };
         Project: {
             /**
@@ -5237,7 +5305,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DeletionRequest"][] | null;
+                    "application/json": components["schemas"]["DeletionRequestsResponse"];
                 };
             };
             /** @description Error */
@@ -5298,7 +5366,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["LegalDocument"][] | null;
+                    "application/json": components["schemas"]["LegalDocumentsResponse"];
                 };
             };
             /** @description Error */
@@ -5463,7 +5531,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NotificationConfig"][] | null;
+                    "application/json": components["schemas"]["NotificationConfigResponse"];
                 };
             };
             /** @description Error */
@@ -5554,7 +5622,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PriceItem"][] | null;
+                    "application/json": components["schemas"]["PricingResponse"];
                 };
             };
             /** @description Error */
@@ -5682,7 +5750,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Product"][] | null;
+                    "application/json": components["schemas"]["ProductsResponse"];
                 };
             };
             /** @description Error */
@@ -5931,7 +5999,10 @@ export interface operations {
     };
     "admin-list-slip-shares": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Filter by status (e.g. active, cancelled) */
+                status?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -6731,7 +6802,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DayAvailability"][] | null;
+                    "application/json": components["schemas"]["AvailabilityResponse"];
                 };
             };
             /** @description Error */
@@ -6811,12 +6882,7 @@ export interface operations {
     };
     "list-my-bookings": {
         parameters: {
-            query?: {
-                /** @description Items per page */
-                limit?: number;
-                /** @description Number of items to skip */
-                offset?: number;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
@@ -6829,7 +6895,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaginatedResponseBooking"];
+                    "application/json": components["schemas"]["Booking"][] | null;
                 };
             };
             /** @description Error */
@@ -7240,7 +7306,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Document"][] | null;
+                    "application/json": components["schemas"]["DocumentsResponse"];
                 };
             };
             /** @description Error */
@@ -8065,7 +8131,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Consent"][] | null;
+                    "application/json": components["schemas"]["ConsentsResponse"];
                 };
             };
             /** @description Error */
@@ -8270,7 +8336,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NotificationPreference"][] | null;
+                    "application/json": components["schemas"]["NotificationPreferencesResponse"];
                 };
             };
             /** @description Error */
@@ -8654,7 +8720,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PriceItem"][] | null;
+                    "application/json": components["schemas"]["PricingResponse"];
                 };
             };
             /** @description Error */
@@ -8683,7 +8749,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Product"][] | null;
+                    "application/json": components["schemas"]["ProductsResponse"];
                 };
             };
             /** @description Error */

@@ -16,6 +16,44 @@ type PaginatedResponse[T any] struct {
 	HasMore bool `json:"has_more" doc:"Whether more items exist beyond this page"`
 }
 
+// Wrapper response types matching handler map[string]any envelopes.
+
+type AvailabilityResponse struct {
+	Dates []DayAvailability `json:"dates" doc:"Availability per date"`
+}
+
+type PricingResponse struct {
+	Items []PriceItem `json:"items" doc:"Pricing items"`
+}
+
+type ProductsResponse struct {
+	Products []Product `json:"products" doc:"Product list"`
+}
+
+type DocumentsResponse struct {
+	Documents []Document `json:"documents" doc:"Document list"`
+}
+
+type ConsentsResponse struct {
+	Consents []Consent `json:"consents" doc:"User consents"`
+}
+
+type DeletionRequestsResponse struct {
+	Requests []DeletionRequest `json:"requests" doc:"Deletion requests"`
+}
+
+type LegalDocumentsResponse struct {
+	Documents []LegalDocument `json:"documents" doc:"Legal documents"`
+}
+
+type NotificationPreferencesResponse struct {
+	Categories []NotificationPreference `json:"categories" doc:"Notification preference categories"`
+}
+
+type NotificationConfigResponse struct {
+	Categories []NotificationConfig `json:"categories" doc:"Notification config categories"`
+}
+
 // --- Health ---
 
 type HealthServiceStatus struct {

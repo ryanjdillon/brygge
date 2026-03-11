@@ -175,7 +175,7 @@ func registerPublicContentOps(api huma.API) {
 		Path:        "/api/v1/pricing",
 		Tags:        []string{"Commerce"},
 		Summary:     "List public pricing",
-	}, stub[struct{}, struct{ Body []PriceItem }]())
+	}, stub[struct{}, struct{ Body PricingResponse }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "list-public-products",
@@ -183,7 +183,7 @@ func registerPublicContentOps(api huma.API) {
 		Path:        "/api/v1/products",
 		Tags:        []string{"Commerce"},
 		Summary:     "List public products",
-	}, stub[struct{}, struct{ Body []Product }]())
+	}, stub[struct{}, struct{ Body ProductsResponse }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "search-boat-models",
@@ -254,7 +254,7 @@ func registerBookingOps(api huma.API) {
 		Type  string `query:"type" doc:"Resource type"`
 		Start string `query:"start" doc:"Start date"`
 		End   string `query:"end" doc:"End date"`
-	}, struct{ Body []DayAvailability }]())
+	}, struct{ Body AvailabilityResponse }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "get-today-availability",
@@ -292,9 +292,7 @@ func registerBookingOps(api huma.API) {
 		Tags:        []string{"Bookings"},
 		Summary:     "List my bookings",
 		Security:    BearerSecurity,
-	}, stub[struct{ PaginationParams }, struct {
-		Body PaginatedResponse[Booking]
-	}]())
+	}, stub[struct{}, struct{ Body []Booking }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "get-booking",
@@ -701,7 +699,7 @@ func registerNotificationOps(api huma.API) {
 		Tags:        []string{"Notifications"},
 		Summary:     "Get notification preferences",
 		Security:    BearerSecurity,
-	}, stub[struct{}, struct{ Body []NotificationPreference }]())
+	}, stub[struct{}, struct{ Body NotificationPreferencesResponse }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "update-notification-preferences",
@@ -1176,7 +1174,7 @@ func registerGDPROps(api huma.API) {
 		Tags:        []string{"GDPR"},
 		Summary:     "List my consents",
 		Security:    BearerSecurity,
-	}, stub[struct{}, struct{ Body []Consent }]())
+	}, stub[struct{}, struct{ Body ConsentsResponse }]())
 }
 
 func registerAdminOps(api huma.API) {
@@ -1188,7 +1186,7 @@ func registerAdminOps(api huma.API) {
 		Tags:        []string{"Documents"},
 		Summary:     "List documents",
 		Security:    BearerSecurity,
-	}, stub[struct{}, struct{ Body []Document }]())
+	}, stub[struct{}, struct{ Body DocumentsResponse }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "get-document",
@@ -1372,7 +1370,9 @@ func registerAdminOps(api huma.API) {
 		Tags:        []string{"Admin", "Slip Shares"},
 		Summary:     "List all slip shares",
 		Security:    BearerSecurity,
-	}, stub[struct{}, struct{ Body []SlipShareAdmin }]())
+	}, stub[struct {
+		Status string `query:"status" doc:"Filter by status (e.g. active, cancelled)" required:"false"`
+	}, struct{ Body []SlipShareAdmin }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "admin-list-rebates",
@@ -1580,7 +1580,7 @@ func registerAdminOps(api huma.API) {
 		Tags:        []string{"Admin", "Commerce"},
 		Summary:     "List pricing items (admin)",
 		Security:    BearerSecurity,
-	}, stub[struct{}, struct{ Body []PriceItem }]())
+	}, stub[struct{}, struct{ Body PricingResponse }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "admin-create-pricing",
@@ -1622,7 +1622,7 @@ func registerAdminOps(api huma.API) {
 		Tags:        []string{"Admin", "Commerce"},
 		Summary:     "List products (admin)",
 		Security:    BearerSecurity,
-	}, stub[struct{}, struct{ Body []Product }]())
+	}, stub[struct{}, struct{ Body ProductsResponse }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "admin-create-product",
@@ -1687,7 +1687,7 @@ func registerAdminOps(api huma.API) {
 		Tags:        []string{"Admin", "Notifications"},
 		Summary:     "Get notification config",
 		Security:    BearerSecurity,
-	}, stub[struct{}, struct{ Body []NotificationConfig }]())
+	}, stub[struct{}, struct{ Body NotificationConfigResponse }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "admin-update-notification-config",
@@ -1715,7 +1715,7 @@ func registerAdminOps(api huma.API) {
 		Tags:        []string{"Admin", "GDPR"},
 		Summary:     "List deletion requests",
 		Security:    BearerSecurity,
-	}, stub[struct{}, struct{ Body []DeletionRequest }]())
+	}, stub[struct{}, struct{ Body DeletionRequestsResponse }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "admin-process-deletion",
@@ -1735,7 +1735,7 @@ func registerAdminOps(api huma.API) {
 		Tags:        []string{"Admin", "GDPR"},
 		Summary:     "List legal documents (admin)",
 		Security:    BearerSecurity,
-	}, stub[struct{}, struct{ Body []LegalDocument }]())
+	}, stub[struct{}, struct{ Body LegalDocumentsResponse }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "admin-create-legal-document",
