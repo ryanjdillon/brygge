@@ -99,8 +99,9 @@ The API is available at `http://localhost:8080` and the Vue dev server at `http:
 │   └── brygge.sh               Deployment CLI wrapper
 │
 ├── docs/
-│   ├── SETUP.md                Non-developer deployment guide
-│   ├── CONTRIBUTING.md         This file
+│   ├── setup.md                Non-developer deployment guide
+│   ├── contributing.md         This file
+│   ├── deploy.md               Deployment guide with provider instructions
 │   └── k8s.md                  Kubernetes portability notes
 │
 ├── flake.nix                   Nix dev shell definition
