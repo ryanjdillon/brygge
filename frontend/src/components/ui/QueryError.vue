@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { ApiError } from '@/composables/useApi'
+import { ApiError } from '@/lib/errors'
 
 const { t } = useI18n()
 

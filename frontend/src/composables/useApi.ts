@@ -1,15 +1,7 @@
 import { useAuthStore } from '@/stores/auth'
+import { ApiError } from '@/lib/errors'
 
-export class ApiError extends Error {
-  constructor(
-    public status: number,
-    message: string,
-    public code?: string,
-  ) {
-    super(message)
-    this.name = 'ApiError'
-  }
-}
+export { ApiError }
 
 export function useApi() {
   const auth = useAuthStore()

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
 import QueryError from '@/components/ui/QueryError.vue'
-import { ApiError } from '@/composables/useApi'
+import { ApiError } from '@/lib/errors'
 
 describe('QueryError', () => {
   it('renders nothing when error is null', () => {
