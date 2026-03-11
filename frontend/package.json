@@ -21,6 +21,7 @@
     "clsx": "^2",
     "lucide-vue-next": "^0.474",
     "maplibre-gl": "^5.19.0",
+    "openapi-fetch": "^0.17.0",
     "pinia": "^2",
     "radix-vue": "^1",
     "tailwind-merge": "^3",
