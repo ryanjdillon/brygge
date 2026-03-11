@@ -1,0 +1,247 @@
+{
+  "type": "excalidraw",
+  "version": 2,
+  "source": "https://excalidraw.com",
+  "elements": [
+    {
+      "id": "traefik-box",
+      "type": "rectangle",
+      "x": 280,
+      "y": 20,
+      "width": 220,
+      "height": 70,
+      "strokeColor": "#4f46e5",
+      "backgroundColor": "#e0e7ff",
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "roundness": { "type": 3 },
+      "boundElements": [
+        { "type": "text", "id": "traefik-label" }
+      ]
+    },
+    {
+      "id": "traefik-label",
+      "type": "text",
+      "x": 310,
+      "y": 30,
+      "width": 160,
+      "height": 50,
+      "text": "Traefik\nTLS & Routing",
+      "fontSize": 18,
+      "fontFamily": 1,
+      "textAlign": "center",
+      "verticalAlign": "middle",
+      "containerId": "traefik-box"
+    },
+    {
+      "id": "api-box",
+      "type": "rectangle",
+      "x": 120,
+      "y": 160,
+      "width": 220,
+      "height": 80,
+      "strokeColor": "#2563eb",
+      "backgroundColor": "#dbeafe",
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "roundness": { "type": 3 },
+      "boundElements": [
+        { "type": "text", "id": "api-label" }
+      ]
+    },
+    {
+      "id": "api-label",
+      "type": "text",
+      "x": 150,
+      "y": 170,
+      "width": 160,
+      "height": 60,
+      "text": "Go API\n+ embedded SPA",
+      "fontSize": 18,
+      "fontFamily": 1,
+      "textAlign": "center",
+      "verticalAlign": "middle",
+      "containerId": "api-box"
+    },
+    {
+      "id": "element-box",
+      "type": "rectangle",
+      "x": 400,
+      "y": 160,
+      "width": 160,
+      "height": 80,
+      "strokeColor": "#7c3aed",
+      "backgroundColor": "#f3e8ff",
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "roundness": { "type": 3 },
+      "boundElements": [
+        { "type": "text", "id": "element-label" }
+      ]
+    },
+    {
+      "id": "element-label",
+      "type": "text",
+      "x": 420,
+      "y": 175,
+      "width": 120,
+      "height": 50,
+      "text": "Element\nWeb",
+      "fontSize": 18,
+      "fontFamily": 1,
+      "textAlign": "center",
+      "verticalAlign": "middle",
+      "containerId": "element-box"
+    },
+    {
+      "id": "dendrite-box",
+      "type": "rectangle",
+      "x": 610,
+      "y": 160,
+      "width": 160,
+      "height": 80,
+      "strokeColor": "#7c3aed",
+      "backgroundColor": "#f3e8ff",
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "roundness": { "type": 3 },
+      "boundElements": [
+        { "type": "text", "id": "dendrite-label" }
+      ]
+    },
+    {
+      "id": "dendrite-label",
+      "type": "text",
+      "x": 630,
+      "y": 175,
+      "width": 120,
+      "height": 50,
+      "text": "Dendrite\n(Matrix)",
+      "fontSize": 18,
+      "fontFamily": 1,
+      "textAlign": "center",
+      "verticalAlign": "middle",
+      "containerId": "dendrite-box"
+    },
+    {
+      "id": "pg-box",
+      "type": "rectangle",
+      "x": 80,
+      "y": 320,
+      "width": 180,
+      "height": 70,
+      "strokeColor": "#d97706",
+      "backgroundColor": "#fef3c7",
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "roundness": { "type": 3 },
+      "boundElements": [
+        { "type": "text", "id": "pg-label" }
+      ]
+    },
+    {
+      "id": "pg-label",
+      "type": "text",
+      "x": 110,
+      "y": 335,
+      "width": 120,
+      "height": 40,
+      "text": "PostgreSQL 16",
+      "fontSize": 18,
+      "fontFamily": 1,
+      "textAlign": "center",
+      "verticalAlign": "middle",
+      "containerId": "pg-box"
+    },
+    {
+      "id": "redis-box",
+      "type": "rectangle",
+      "x": 310,
+      "y": 320,
+      "width": 140,
+      "height": 70,
+      "strokeColor": "#db2777",
+      "backgroundColor": "#fce7f3",
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "roundness": { "type": 3 },
+      "boundElements": [
+        { "type": "text", "id": "redis-label" }
+      ]
+    },
+    {
+      "id": "redis-label",
+      "type": "text",
+      "x": 340,
+      "y": 335,
+      "width": 80,
+      "height": 40,
+      "text": "Redis 7",
+      "fontSize": 18,
+      "fontFamily": 1,
+      "textAlign": "center",
+      "verticalAlign": "middle",
+      "containerId": "redis-box"
+    },
+    {
+      "id": "arrow-traefik-api",
+      "type": "arrow",
+      "x": 340,
+      "y": 90,
+      "width": 0,
+      "height": 70,
+      "strokeColor": "#374151",
+      "strokeWidth": 2,
+      "points": [[0, 0], [0, 70]]
+    },
+    {
+      "id": "arrow-traefik-element",
+      "type": "arrow",
+      "x": 430,
+      "y": 90,
+      "width": 50,
+      "height": 70,
+      "strokeColor": "#374151",
+      "strokeWidth": 2,
+      "points": [[0, 0], [50, 70]]
+    },
+    {
+      "id": "arrow-traefik-dendrite",
+      "type": "arrow",
+      "x": 470,
+      "y": 90,
+      "width": 220,
+      "height": 70,
+      "strokeColor": "#374151",
+      "strokeWidth": 2,
+      "points": [[0, 0], [220, 70]]
+    },
+    {
+      "id": "arrow-api-pg",
+      "type": "arrow",
+      "x": 200,
+      "y": 240,
+      "width": 0,
+      "height": 80,
+      "strokeColor": "#374151",
+      "strokeWidth": 2,
+      "points": [[0, 0], [0, 80]]
+    },
+    {
+      "id": "arrow-api-redis",
+      "type": "arrow",
+      "x": 280,
+      "y": 240,
+      "width": 100,
+      "height": 80,
+      "strokeColor": "#374151",
+      "strokeWidth": 2,
+      "points": [[0, 0], [100, 80]]
+    }
+  ],
+  "appState": {
+    "viewBackgroundColor": "#ffffff",
+    "gridSize": null
+  },
+  "files": {}
+}

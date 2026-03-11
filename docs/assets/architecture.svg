@@ -1,0 +1,51 @@
+<svg viewBox="0 0 840 440" xmlns="http://www.w3.org/2000/svg">
+  <!-- ── Background ── -->
+  <rect width="840" height="440" fill="#ffffff" rx="8"/>
+
+  <!-- ── Traefik ── -->
+  <rect x="290" y="24" width="230" height="68" rx="12" fill="#e0e7ff" stroke="#6366f1" stroke-width="2"/>
+  <text x="405" y="52" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="17" font-weight="600" fill="#1e293b">Traefik</text>
+  <text x="405" y="74" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="13" fill="#64748b">TLS termination &amp; routing</text>
+
+  <!-- ── Go API ── -->
+  <rect x="110" y="164" width="240" height="78" rx="12" fill="#dbeafe" stroke="#3b82f6" stroke-width="2"/>
+  <text x="230" y="194" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="17" font-weight="600" fill="#1e293b">Go API</text>
+  <text x="230" y="216" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="13" fill="#64748b">+ embedded Vue SPA</text>
+
+  <!-- ── Element Web ── -->
+  <rect x="410" y="164" width="160" height="78" rx="12" fill="#f3e8ff" stroke="#8b5cf6" stroke-width="2"/>
+  <text x="490" y="194" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="17" font-weight="600" fill="#1e293b">Element</text>
+  <text x="490" y="216" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="13" fill="#64748b">Web client</text>
+
+  <!-- ── Dendrite ── -->
+  <rect x="620" y="164" width="170" height="78" rx="12" fill="#f3e8ff" stroke="#8b5cf6" stroke-width="2"/>
+  <text x="705" y="194" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="17" font-weight="600" fill="#1e293b">Dendrite</text>
+  <text x="705" y="216" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="13" fill="#64748b">Matrix homeserver</text>
+
+  <!-- ── PostgreSQL ── -->
+  <rect x="68" y="324" width="200" height="68" rx="12" fill="#fef3c7" stroke="#d97706" stroke-width="2"/>
+  <text x="168" y="353" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="17" font-weight="600" fill="#1e293b">PostgreSQL 16</text>
+  <text x="168" y="375" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="13" fill="#64748b">Primary database</text>
+
+  <!-- ── Redis ── -->
+  <rect x="318" y="324" width="160" height="68" rx="12" fill="#fce7f3" stroke="#ec4899" stroke-width="2"/>
+  <text x="398" y="353" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="17" font-weight="600" fill="#1e293b">Redis 7</text>
+  <text x="398" y="375" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="13" fill="#64748b">Cache &amp; sessions</text>
+
+  <!-- ── Arrows: Traefik → services ── -->
+  <path d="M 350,92 C 340,120 260,140 240,164" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round"/>
+  <polygon points="236,158 240,168 246,160" fill="#94a3b8"/>
+
+  <path d="M 410,92 C 430,120 475,140 488,164" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round"/>
+  <polygon points="483,158 488,168 494,159" fill="#94a3b8"/>
+
+  <path d="M 460,92 C 520,115 660,140 700,164" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round"/>
+  <polygon points="695,158 700,168 706,159" fill="#94a3b8"/>
+
+  <!-- ── Arrows: API → data stores ── -->
+  <path d="M 200,242 C 195,270 180,300 175,324" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round"/>
+  <polygon points="170,318 175,328 181,319" fill="#94a3b8"/>
+
+  <path d="M 280,242 C 310,275 360,300 385,324" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round"/>
+  <polygon points="380,318 385,328 391,319" fill="#94a3b8"/>
+</svg>

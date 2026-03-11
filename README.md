@@ -92,26 +92,11 @@ just docker-build       # Docker image (ARM64)
 
 ## Architecture
 
-```
-                    ┌─────────────┐
-                    │   Traefik   │  TLS termination, routing
-                    └──────┬──────┘
-                           │
-              ┌────────────┼────────────┐
-              │            │            │
-        ┌─────┴─────┐ ┌───┴───┐ ┌─────┴─────┐
-        │  Go API   │ │Element│ │  Dendrite  │
-        │+ embedded │ │  Web  │ │  (Matrix)  │
-        │   SPA     │ └───────┘ └────────────┘
-        └─────┬─────┘
-              │
-      ┌───────┼───────┐
-      │               │
-┌─────┴─────┐  ┌──────┴──────┐
-│ PostgreSQL │  │    Redis    │
-│     16     │  │      7      │
-└────────────┘  └─────────────┘
-```
+<p align="center">
+  <picture>
+    <img src="docs/assets/architecture.svg" alt="Architecture diagram" width="700" />
+  </picture>
+</p>
 
 The Go binary embeds the Vue production build via `go:embed` and serves both the API (`/api/v1/*`) and SPA from a single process. For Kubernetes deployments, a `noembed` build tag separates the frontend. See [docs/k8s.md](docs/k8s.md).
 
