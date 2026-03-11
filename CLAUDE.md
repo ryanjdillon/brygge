@@ -78,14 +78,24 @@ cd frontend && npx vitest src/views/__tests__/PricingView.test.ts
 - **Pinia** for client state (auth store)
 - **vue-i18n** with 7 locales in `src/locales/` (nb, en, de, fr, it, nl, pl)
 - **Shadcn-vue** + Radix-vue + TailwindCSS 4 for UI, **lucide-vue-next** icons, **MapLibre GL** for maps
-- 17 composables in `src/composables/` wrap API calls with TanStack Query (useBookings, useResources, useEvents, useProjects, useDugnad, useSlipShares, usePricing, useFinancials, useWeather, useMap, useNotifications, useMatrix, useGdpr, useFeatures, useFeatureRequests, useApi, useToast)
+- **openapi-fetch** typed API client in `src/lib/apiClient.ts` — provides `useApiClient()`, `unwrap()`, and re-exports `ApiError`
+- Composables in `src/composables/` wrap API calls with TanStack Query (useBookings, useResources, useEvents, useProjects, useDugnad, useSlipShares, usePricing, useFinancials, useWeather, useMap, useNotifications, useMatrix, useGdpr, useFeatures, useFeatureRequests, useToast)
 - Routes in `src/router/index.ts` — public routes at `/`, portal routes under `/portal/` (16 pages), admin routes under `/admin/` (25 pages)
 - Portal sidebar nav: `src/views/PortalView.vue`, admin sidebar nav: `src/views/admin/AdminLayout.vue`
 - E2E tests: Playwright specs in `e2e/` (directions, accessibility)
 
+### OpenAPI spec & typed client
+
+- **Spec generation**: `backend/cmd/openapi/main.go` dumps the OpenAPI 3.1 JSON spec; `backend/internal/openapi/register.go` registers all operations with huma
+- **Type generation**: `just api-types` runs `openapi-typescript` to produce `frontend/src/types/api.d.ts` from `frontend/src/types/openapi.json`
+- **Typed client**: `src/lib/apiClient.ts` uses `openapi-fetch` with auth middleware. All composables and most views use `useApiClient()` + `unwrap()` for compile-time type safety on paths, params, bodies, and responses
+- **Legacy `fetchApi`**: `src/composables/useApi.ts` still provides `fetchApi()` for 2 views with endpoints not yet in the OpenAPI spec (document comments, waiting-list decline)
+- **`ApiError`**: Canonical definition in `src/lib/errors.ts`, re-exported by both `apiClient.ts` and `useApi.ts`
+- **CI freshness check**: The `api-types` CI job regenerates the spec and types, failing if they differ from committed versions
+
 ### Data flow pattern
 
-Views call composables → composables use `useApi().fetchApi()` → TanStack Query manages caching → backend handler processes request → returns JSON. Paginated endpoints return `{ items, limit, offset, has_more }`; composables must extract `.items`.
+Views/composables call `useApiClient()` → `client.GET/POST/PUT/DELETE(path, { params, body })` → `unwrap()` throws `ApiError` on failure → TanStack Query manages caching. Paginated endpoints return `{ items, limit, offset, has_more }`; composables must extract `.items`.
 
 ## Code Conventions
 
@@ -96,10 +106,12 @@ Views call composables → composables use `useApi().fetchApi()` → TanStack Qu
 - **i18n**: When adding/modifying locale keys, update all 7 JSON files. Norwegian (nb) has unicode characters — use jq or Python for safe JSON editing, not raw string replacement
 - **Migrations**: Create sequential numbered files (`000017_feature.up.sql` / `.down.sql`)
 - **After schema changes**: Run `just generate` to update sqlc-generated code in `backend/gen/`
+- **After OpenAPI spec changes**: Run `just api-types` to regenerate `frontend/src/types/api.d.ts`. When adding new endpoints, register them in `backend/internal/openapi/register.go` and add any new response wrapper types to `backend/internal/openapi/types.go`
+- **API calls in views**: Use `const client = useApiClient()` + `unwrap(await client.GET(...))` pattern. Only use `fetchApi` from `useApi` for endpoints not in the OpenAPI spec
 
 ## CI Pipeline
 
-GitHub Actions runs on push/PR to main: lint (nix + golangci-lint + eslint), test-go (with Postgres/Redis service containers), test-vue, build, nix flake check. All must pass.
+GitHub Actions runs on push/PR to main: lint (nix + golangci-lint + eslint), test-go (with Postgres/Redis service containers), test-vue, api-types (spec freshness check), build, nix flake check. All must pass.
 
 ## Docker / Deployment
 
