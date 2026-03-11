@@ -1,18 +1,18 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
-import { useApi } from '@/composables/useApi'
+import { useApiClient, unwrap } from '@/lib/apiClient'
 
 import type { components } from '@/types/api'
 
 type WaitingListEntry = components['schemas']['WaitingListEntryAdmin']
 
 const { t } = useI18n()
-const { fetchApi } = useApi()
+const client = useApiClient()
 
 const { data: entries, isLoading, isError } = useQuery({
   queryKey: ['admin', 'waiting-list'],
-  queryFn: () => fetchApi<WaitingListEntry[]>('/api/v1/waiting-list'),
+  queryFn: async () => unwrap(await client.GET('/api/v1/waiting-list')),
 })
 </script>
 

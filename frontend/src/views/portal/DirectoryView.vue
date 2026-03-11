@@ -2,21 +2,21 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
-import { useApi } from '@/composables/useApi'
+import { useApiClient, unwrap } from '@/lib/apiClient'
 import { Search } from 'lucide-vue-next'
 import type { components } from '@/types/api'
 
 type DirectoryMember = components['schemas']['DirectoryMember']
 
 const { t } = useI18n()
-const { fetchApi } = useApi()
+const client = useApiClient()
 
 const searchQuery = ref('')
 
 const { data: members, isLoading, isError } = useQuery({
   queryKey: ['portal', 'directory'],
   queryFn: async () => {
-    const res = await fetchApi<{ items: DirectoryMember[] }>('/api/v1/members/directory')
+    const res = unwrap(await client.GET('/api/v1/members/directory'))
     return res.items ?? []
   },
 })

@@ -2,20 +2,20 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
-import { useApi } from '@/composables/useApi'
+import { useApiClient, unwrap } from '@/lib/apiClient'
 import { Plus } from 'lucide-vue-next'
 import type { components } from '@/types/api'
 
 type Slip = components['schemas']['Slip']
 
 const { t } = useI18n()
-const { fetchApi } = useApi()
+const client = useApiClient()
 const queryClient = useQueryClient()
 
 const { data: slipsResponse, isLoading, isError } = useQuery({
   queryKey: ['admin', 'slips'],
   queryFn: async () => {
-    const res = await fetchApi<{ items: Slip[] }>('/api/v1/admin/slips')
+    const res = unwrap(await client.GET('/api/v1/admin/slips'))
     return res.items ?? []
   },
 })
@@ -26,17 +26,16 @@ const showForm = ref(false)
 const form = ref({ number: '', section: '', length_m: '', width_m: '', depth_m: '' })
 
 const { mutate: createSlip, isPending: isCreating } = useMutation({
-  mutationFn: () =>
-    fetchApi('/api/v1/admin/slips', {
-      method: 'POST',
-      body: JSON.stringify({
+  mutationFn: async () =>
+    unwrap(await client.POST('/api/v1/admin/slips', {
+      body: {
         number: form.value.number,
         section: form.value.section,
         length_m: form.value.length_m ? parseFloat(form.value.length_m) : null,
         width_m: form.value.width_m ? parseFloat(form.value.width_m) : null,
         depth_m: form.value.depth_m ? parseFloat(form.value.depth_m) : null,
-      }),
-    }),
+      } as any,
+    })),
   onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: ['admin', 'slips'] })
     showForm.value = false

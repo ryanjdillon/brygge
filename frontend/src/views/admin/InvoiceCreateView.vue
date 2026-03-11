@@ -3,13 +3,13 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
-import { useApi } from '@/composables/useApi'
+import { useApiClient, unwrap } from '@/lib/apiClient'
 import { useCreateInvoice } from '@/composables/useFinancials'
 import { FilePlus, Search } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const router = useRouter()
-const { fetchApi } = useApi()
+const client = useApiClient()
 
 interface UserOption {
   id: string
@@ -27,16 +27,17 @@ const dueDate = ref('')
 const showUserSearch = ref(false)
 const successMessage = ref('')
 
-const { data: users } = useQuery({
+const { data: usersResponse } = useQuery({
   queryKey: ['admin-users-search'],
-  queryFn: () => fetchApi<UserOption[]>('/api/v1/admin/users'),
+  queryFn: async () => unwrap(await client.GET('/api/v1/admin/users')),
   staleTime: 5 * 60 * 1000,
 })
 
 const filteredUsers = computed(() => {
-  if (!users.value || !searchQuery.value) return []
+  const userList = usersResponse.value?.users
+  if (!userList || !searchQuery.value) return []
   const q = searchQuery.value.toLowerCase()
-  return (users.value as UserOption[]).filter(
+  return (userList as UserOption[]).filter(
     (u) => u.full_name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q),
   ).slice(0, 10)
 })

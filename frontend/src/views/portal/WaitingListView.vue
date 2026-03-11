@@ -2,11 +2,13 @@
 import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useApi } from '@/composables/useApi'
+import { useApiClient, unwrap } from '@/lib/apiClient'
 import { ref, computed } from 'vue'
 import { CheckCircle, XCircle, LogOut, MapPin } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const { fetchApi } = useApi()
+const client = useApiClient()
 const queryClient = useQueryClient()
 
 import type { components } from '@/types/api'
@@ -23,20 +25,20 @@ function showToast(type: 'success' | 'error', message: string) {
 
 const { data: entry, isLoading: isLoadingMe } = useQuery({
   queryKey: ['portal', 'waiting-list', 'me'],
-  queryFn: () => fetchApi<WaitingListEntry>('/api/v1/waiting-list/me'),
+  queryFn: async () => unwrap(await client.GET('/api/v1/waiting-list/me')),
   retry: false,
 })
 
 const { data: listEntries, isLoading: isLoadingList } = useQuery({
   queryKey: ['portal', 'waiting-list', 'list'],
-  queryFn: () => fetchApi<PortalListEntry[]>('/api/v1/waiting-list/portal'),
+  queryFn: async () => unwrap(await client.GET('/api/v1/waiting-list/portal')),
 })
 
 const isLoading = computed(() => isLoadingMe.value || isLoadingList.value)
 
 const { mutate: acceptOffer, isPending: isAccepting } = useMutation({
-  mutationFn: () =>
-    fetchApi(`/api/v1/waiting-list/${entry.value!.id}/accept`, { method: 'POST' }),
+  mutationFn: async () =>
+    unwrap(await client.POST('/api/v1/waiting-list/{entryID}/accept', { params: { path: { entryID: entry.value!.id } } })),
   onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: ['portal', 'waiting-list'] })
     showToast('success', t('portal.waitingList.acceptSuccess'))
@@ -53,8 +55,8 @@ const { mutate: declineOffer, isPending: isDeclining } = useMutation({
 })
 
 const { mutate: withdraw, isPending: isWithdrawing } = useMutation({
-  mutationFn: () =>
-    fetchApi('/api/v1/waiting-list/withdraw', { method: 'POST' }),
+  mutationFn: async () =>
+    unwrap(await client.POST('/api/v1/waiting-list/withdraw')),
   onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: ['portal', 'waiting-list'] })
     showToast('success', t('portal.waitingList.withdrawSuccess'))

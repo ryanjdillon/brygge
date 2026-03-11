@@ -2,16 +2,14 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
+import { useApiClient, unwrap } from '@/lib/apiClient'
 import { useApi } from '@/composables/useApi'
 import { Download, MessageSquare, ChevronDown, ChevronUp } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const { fetchApi } = useApi()
+const client = useApiClient()
 const queryClient = useQueryClient()
-
-import type { components } from '@/types/api'
-
-type Document = components['schemas']['Document']
 
 interface Comment {
   id: string
@@ -38,9 +36,9 @@ const filters = [
 
 const { data: documents, isLoading, isError } = useQuery({
   queryKey: ['portal', 'documents', activeFilter],
-  queryFn: () => {
-    const params = activeFilter.value !== 'all' ? `?visibility=${activeFilter.value}` : ''
-    return fetchApi<Document[]>(`/api/v1/documents${params}`)
+  queryFn: async () => {
+    const res = unwrap(await client.GET('/api/v1/documents'))
+    return res?.documents ?? []
   },
 })
 

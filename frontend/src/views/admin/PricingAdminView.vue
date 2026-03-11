@@ -2,12 +2,12 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
-import { useApi } from '@/composables/useApi'
+import { useApiClient, unwrap } from '@/lib/apiClient'
 import { Plus, Pencil, Trash2, X } from 'lucide-vue-next'
 import type { PriceItem } from '@/composables/usePricing'
 
 const { t } = useI18n()
-const { fetchApi } = useApi()
+const client = useApiClient()
 const queryClient = useQueryClient()
 
 function meta(item: PriceItem): Record<string, string> {
@@ -16,7 +16,7 @@ function meta(item: PriceItem): Record<string, string> {
 
 const { data: response, isLoading } = useQuery({
   queryKey: ['admin', 'pricing'],
-  queryFn: () => fetchApi<{ items: PriceItem[] }>('/api/v1/admin/pricing'),
+  queryFn: async () => unwrap(await client.GET('/api/v1/admin/pricing')),
 })
 
 const categories = computed(() => [
@@ -135,18 +135,17 @@ function showToast(type: 'success' | 'error', message: string) {
 }
 
 const { mutate: saveItem, isPending: isSaving } = useMutation({
-  mutationFn: () => {
+  mutationFn: async () => {
     const payload = buildPayload()
     if (form.value.id) {
-      return fetchApi(`/api/v1/admin/pricing/${form.value.id}`, {
-        method: 'PUT',
-        body: JSON.stringify(payload),
-      })
+      return unwrap(await client.PUT('/api/v1/admin/pricing/{itemID}', {
+        params: { path: { itemID: form.value.id } },
+        body: payload as any,
+      }))
     }
-    return fetchApi('/api/v1/admin/pricing', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    })
+    return unwrap(await client.POST('/api/v1/admin/pricing', {
+      body: payload as any,
+    }))
   },
   onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: ['admin', 'pricing'] })
@@ -158,8 +157,8 @@ const { mutate: saveItem, isPending: isSaving } = useMutation({
 })
 
 const { mutate: deleteItem } = useMutation({
-  mutationFn: (id: string) =>
-    fetchApi(`/api/v1/admin/pricing/${id}`, { method: 'DELETE' }),
+  mutationFn: async (id: string) =>
+    unwrap(await client.DELETE('/api/v1/admin/pricing/{itemID}', { params: { path: { itemID: id } } })),
   onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: ['admin', 'pricing'] })
     queryClient.invalidateQueries({ queryKey: ['pricing'] })

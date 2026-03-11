@@ -54,12 +54,6 @@ vi.mock('@/composables/useBookings', () => ({
   }),
 }))
 
-vi.mock('@/composables/useApi', () => ({
-  useApi: () => ({
-    fetchApi: vi.fn(),
-  }),
-}))
-
 describe('BobilView', () => {
   it('renders without errors', () => {
     const wrapper = mountWithPlugins(BobilView)

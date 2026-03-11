@@ -2,11 +2,11 @@
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
-import { useApi } from '@/composables/useApi'
+import { useApiClient, unwrap } from '@/lib/apiClient'
 import { Plus, Pencil, Trash2, Search, ShieldCheck, AlertTriangle } from 'lucide-vue-next'
 
 const { t } = useI18n()
-const { fetchApi } = useApi()
+const client = useApiClient()
 const queryClient = useQueryClient()
 
 import type { components } from '@/types/api'
@@ -66,9 +66,9 @@ watch(modelQuery, (q) => {
   }
   searchTimeout = setTimeout(async () => {
     try {
-      const results = await fetchApi<BoatModel[]>(`/api/v1/boat-models?q=${encodeURIComponent(q)}`)
-      modelResults.value = results
-      showModelResults.value = results.length > 0
+      const results = unwrap(await client.GET('/api/v1/boat-models', { params: { query: { q } } }))
+      modelResults.value = results ?? []
+      showModelResults.value = (results ?? []).length > 0
     } catch {
       modelResults.value = []
     }
@@ -94,11 +94,11 @@ function selectModel(m: BoatModel) {
 
 const { data: boats, isLoading } = useQuery({
   queryKey: ['portal', 'boats'],
-  queryFn: () => fetchApi<Boat[]>('/api/v1/members/me/boats'),
+  queryFn: async () => unwrap(await client.GET('/api/v1/members/me/boats')),
 })
 
 const { mutate: saveBoat, isPending: isSaving } = useMutation({
-  mutationFn: () => {
+  mutationFn: async () => {
     // If editing a confirmed boat and user changed dimensions, show warning
     if (editingId.value && editingConfirmed.value) {
       const original = boats.value?.find((b) => b.id === editingId.value)
@@ -119,11 +119,15 @@ const { mutate: saveBoat, isPending: isSaving } = useMutation({
       }
     }
 
-    const url = editingId.value
-      ? `/api/v1/members/me/boats/${editingId.value}`
-      : '/api/v1/members/me/boats'
-    const method = editingId.value ? 'PUT' : 'POST'
-    return fetchApi<Boat>(url, { method, body: JSON.stringify(form.value) })
+    if (editingId.value) {
+      return unwrap(await client.PUT('/api/v1/members/me/boats/{boatID}', {
+        params: { path: { boatID: editingId.value } },
+        body: form.value as any,
+      }))
+    }
+    return unwrap(await client.POST('/api/v1/members/me/boats', {
+      body: form.value as any,
+    }))
   },
   onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: ['portal', 'boats'] })
@@ -137,8 +141,8 @@ const { mutate: saveBoat, isPending: isSaving } = useMutation({
 })
 
 const { mutate: deleteBoat } = useMutation({
-  mutationFn: (id: string) =>
-    fetchApi(`/api/v1/members/me/boats/${id}`, { method: 'DELETE' }),
+  mutationFn: async (id: string) =>
+    unwrap(await client.DELETE('/api/v1/members/me/boats/{boatID}', { params: { path: { boatID: id } } })),
   onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: ['portal', 'boats'] })
     showToast('success', t('portal.boats.deleteSuccess'))

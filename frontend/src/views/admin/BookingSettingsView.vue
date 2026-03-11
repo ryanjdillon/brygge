@@ -2,15 +2,15 @@
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
-import { useApi } from '@/composables/useApi'
+import { useApiClient, unwrap } from '@/lib/apiClient'
 
 const { t } = useI18n()
-const { fetchApi } = useApi()
+const client = useApiClient()
 const queryClient = useQueryClient()
 
 const { data: settings, isLoading } = useQuery({
   queryKey: ['admin-booking-settings'],
-  queryFn: () => fetchApi<Record<string, number | string>>('/api/v1/admin/settings/booking'),
+  queryFn: async () => unwrap(await client.GET('/api/v1/admin/settings/booking')),
 })
 
 const form = ref({
@@ -33,15 +33,14 @@ watch(settings, (s) => {
 const saved = ref(false)
 
 const { mutateAsync: save, isPending: saving } = useMutation({
-  mutationFn: () =>
-    fetchApi('/api/v1/admin/settings/booking', {
-      method: 'PUT',
-      body: JSON.stringify({
+  mutationFn: async () =>
+    unwrap(await client.PUT('/api/v1/admin/settings/booking', {
+      body: {
         settings: Object.fromEntries(
           Object.entries(form.value).map(([k, v]) => [k, v]),
         ),
-      }),
-    }),
+      } as any,
+    })),
   onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: ['admin-booking-settings'] })
     saved.value = true

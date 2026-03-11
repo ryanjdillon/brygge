@@ -2,19 +2,19 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
-import { useApi } from '@/composables/useApi'
+import { useApiClient, unwrap } from '@/lib/apiClient'
 import { ShieldCheck, ChevronDown, ChevronUp } from 'lucide-vue-next'
 import type { components } from '@/types/api'
 
 type UnconfirmedBoat = components['schemas']['UnconfirmedBoat']
 
 const { t } = useI18n()
-const { fetchApi } = useApi()
+const client = useApiClient()
 const queryClient = useQueryClient()
 
 const { data: boats, isLoading, isError } = useQuery({
   queryKey: ['admin', 'boats', 'unconfirmed'],
-  queryFn: () => fetchApi<UnconfirmedBoat[]>('/api/v1/admin/boats/unconfirmed'),
+  queryFn: async () => unwrap(await client.GET('/api/v1/admin/boats/unconfirmed')),
 })
 
 const expanded = ref<string | null>(null)
@@ -47,18 +47,18 @@ function toggle(id: string, boat: UnconfirmedBoat) {
 }
 
 const { mutate: confirmBoat, isPending: isConfirming } = useMutation({
-  mutationFn: (boatId: string) => {
+  mutationFn: async (boatId: string) => {
     const adj = adjusting.value[boatId]
-    return fetchApi(`/api/v1/admin/boats/${boatId}/confirm`, {
-      method: 'POST',
-      body: JSON.stringify({
+    return unwrap(await client.POST('/api/v1/admin/boats/{boatID}/confirm', {
+      params: { path: { boatID: boatId } },
+      body: {
         length_m: adj?.length_m,
         beam_m: adj?.beam_m,
         draft_m: adj?.draft_m,
         weight_kg: adj?.weight_kg,
         add_to_models: addToModels.value[boatId] || false,
-      }),
-    })
+      } as any,
+    }))
   },
   onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: ['admin', 'boats', 'unconfirmed'] })

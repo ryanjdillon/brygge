@@ -2,14 +2,14 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
-import { useApi } from '@/composables/useApi'
+import { useApiClient, unwrap } from '@/lib/apiClient'
 import { Check, XCircle } from 'lucide-vue-next'
 import type { components } from '@/types/api'
 
 type Booking = components['schemas']['BookingAdmin']
 
 const { t } = useI18n()
-const { fetchApi } = useApi()
+const client = useApiClient()
 const queryClient = useQueryClient()
 
 const statusFilter = ref('')
@@ -28,29 +28,28 @@ const queryKey = computed(() => [
 const { data: bookings, isLoading, error } = useQuery({
   queryKey,
   queryFn: async () => {
-    const params = new URLSearchParams()
-    if (statusFilter.value) params.set('status', statusFilter.value)
-    if (resourceTypeFilter.value) params.set('resource_type', resourceTypeFilter.value)
-    if (dateFrom.value) params.set('start', dateFrom.value)
-    if (dateTo.value) params.set('end', dateTo.value)
-    const qs = params.toString()
-    const res = await fetchApi<{ items: Booking[] }>(`/api/v1/admin/bookings${qs ? `?${qs}` : ''}`)
+    const query: Record<string, string> = {}
+    if (statusFilter.value) query.status = statusFilter.value
+    if (resourceTypeFilter.value) query.resource_type = resourceTypeFilter.value
+    if (dateFrom.value) query.start = dateFrom.value
+    if (dateTo.value) query.end = dateTo.value
+    const res = unwrap(await client.GET('/api/v1/admin/bookings', { params: { query } }))
     return res.items ?? []
   },
   staleTime: 30 * 1000,
 })
 
 const confirmMutation = useMutation({
-  mutationFn: (id: string) =>
-    fetchApi(`/api/v1/bookings/${id}/confirm`, { method: 'POST' }),
+  mutationFn: async (id: string) =>
+    unwrap(await client.POST('/api/v1/bookings/{bookingID}/confirm', { params: { path: { bookingID: id } } })),
   onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: ['admin-bookings'] })
   },
 })
 
 const cancelMutation = useMutation({
-  mutationFn: (id: string) =>
-    fetchApi(`/api/v1/bookings/${id}/cancel`, { method: 'POST' }),
+  mutationFn: async (id: string) =>
+    unwrap(await client.POST('/api/v1/bookings/{bookingID}/cancel', { params: { path: { bookingID: id } } })),
   onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: ['admin-bookings'] })
   },

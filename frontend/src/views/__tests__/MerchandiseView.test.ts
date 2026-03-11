@@ -10,10 +10,9 @@ vi.mock('lucide-vue-next', () => ({
   X: { template: '<span data-icon="x" />' },
 }))
 
-vi.mock('@/composables/useApi', () => ({
-  useApi: () => ({
-    fetchApi: vi.fn(),
-  }),
+vi.mock('@/lib/apiClient', () => ({
+  useApiClient: () => ({ GET: vi.fn(), POST: vi.fn(), PUT: vi.fn(), DELETE: vi.fn() }),
+  unwrap: vi.fn((x) => x),
 }))
 
 vi.mock('@tanstack/vue-query', async () => {

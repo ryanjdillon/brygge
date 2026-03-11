@@ -2,11 +2,11 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
-import { useApi } from '@/composables/useApi'
+import { useApiClient, unwrap } from '@/lib/apiClient'
 import { Send, Eye, History } from 'lucide-vue-next'
 
 const { t } = useI18n()
-const { fetchApi } = useApi()
+const client = useApiClient()
 const queryClient = useQueryClient()
 
 import type { components } from '@/types/api'
@@ -28,20 +28,19 @@ const recipientOptions = [
 
 const { data: broadcasts, isLoading: historyLoading } = useQuery({
   queryKey: ['broadcasts'],
-  queryFn: () => fetchApi<Broadcast[]>('/api/v1/admin/broadcasts'),
+  queryFn: async () => unwrap(await client.GET('/api/v1/admin/broadcasts')),
   staleTime: 60 * 1000,
 })
 
 const sendMutation = useMutation({
-  mutationFn: () =>
-    fetchApi<Broadcast>('/api/v1/admin/broadcast', {
-      method: 'POST',
-      body: JSON.stringify({
+  mutationFn: async () =>
+    unwrap(await client.POST('/api/v1/admin/broadcast', {
+      body: {
         subject: subject.value,
         body: body.value,
         recipients: recipients.value,
-      }),
-    }),
+      } as any,
+    })),
   onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: ['broadcasts'] })
     subject.value = ''

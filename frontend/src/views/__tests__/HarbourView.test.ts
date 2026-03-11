@@ -60,12 +60,6 @@ vi.mock('@/composables/useBookings', () => ({
   }),
 }))
 
-vi.mock('@/composables/useApi', () => ({
-  useApi: () => ({
-    fetchApi: vi.fn(),
-  }),
-}))
-
 describe('HarbourView', () => {
   it('renders without errors', () => {
     const wrapper = mountWithPlugins(HarbourView)

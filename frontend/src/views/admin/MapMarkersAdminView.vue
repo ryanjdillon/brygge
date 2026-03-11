@@ -4,10 +4,10 @@ import { useI18n } from 'vue-i18n'
 import { useQueryClient } from '@tanstack/vue-query'
 import { Plus, Pencil, Trash2 } from 'lucide-vue-next'
 import { useMapMarkers, type MapMarker } from '@/composables/useMap'
-import { useApi } from '@/composables/useApi'
+import { useApiClient, unwrap } from '@/lib/apiClient'
 
 const { t } = useI18n()
-const { fetchApi } = useApi()
+const client = useApiClient()
 const queryClient = useQueryClient()
 const { data: markers, isLoading } = useMapMarkers()
 
@@ -48,15 +48,14 @@ async function save() {
   saving.value = true
   try {
     if (editing.value) {
-      await fetchApi(`/api/v1/admin/map/markers/${editing.value.id}`, {
-        method: 'PUT',
-        body: JSON.stringify(form.value),
-      })
+      await unwrap(await client.PUT('/api/v1/admin/map/markers/{markerID}', {
+        params: { path: { markerID: editing.value.id } },
+        body: form.value as any,
+      }))
     } else {
-      await fetchApi('/api/v1/admin/map/markers', {
-        method: 'POST',
-        body: JSON.stringify(form.value),
-      })
+      await unwrap(await client.POST('/api/v1/admin/map/markers', {
+        body: form.value as any,
+      }))
     }
     queryClient.invalidateQueries({ queryKey: ['map', 'markers'] })
     showModal.value = false
@@ -67,7 +66,7 @@ async function save() {
 
 async function deleteMarker(m: MapMarker) {
   if (!confirm(t('mapAdmin.deleteConfirm'))) return
-  await fetchApi(`/api/v1/admin/map/markers/${m.id}`, { method: 'DELETE' })
+  await unwrap(await client.DELETE('/api/v1/admin/map/markers/{markerID}', { params: { path: { markerID: m.id } } }))
   queryClient.invalidateQueries({ queryKey: ['map', 'markers'] })
 }
 

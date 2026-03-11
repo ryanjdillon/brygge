@@ -1,19 +1,18 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
-import { useApi } from '@/composables/useApi'
+import { useApiClient, unwrap } from '@/lib/apiClient'
 
 const { t } = useI18n()
-const { fetchApi } = useApi()
+const client = useApiClient()
 
-import type { components } from '@/types/api'
-
-type Document = components['schemas']['Document']
-
-const { data: documents, isLoading, isError } = useQuery({
+const { data: response, isLoading, isError } = useQuery({
   queryKey: ['admin', 'documents'],
-  queryFn: () => fetchApi<Document[]>('/api/v1/documents'),
+  queryFn: async () => unwrap(await client.GET('/api/v1/documents')),
 })
+
+const documents = computed(() => response.value?.documents ?? [])
 </script>
 
 <template>

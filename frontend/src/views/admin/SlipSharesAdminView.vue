@@ -2,15 +2,10 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
-import { useApi } from '@/composables/useApi'
-
-import type { components } from '@/types/api'
-
-type SlipShareAdmin = components['schemas']['SlipShareAdmin']
-type Rebate = components['schemas']['SlipShareRebate']
+import { useApiClient, unwrap } from '@/lib/apiClient'
 
 const { t } = useI18n()
-const { fetchApi } = useApi()
+const client = useApiClient()
 const queryClient = useQueryClient()
 
 const tab = ref<'shares' | 'rebates'>('shares')
@@ -18,21 +13,23 @@ const statusFilter = ref('active')
 
 const { data: shares, isLoading: sharesLoading } = useQuery({
   queryKey: ['admin-slip-shares', statusFilter],
-  queryFn: () =>
-    fetchApi<SlipShareAdmin[]>(`/api/v1/admin/slip-shares?status=${statusFilter.value}`),
+  queryFn: async () =>
+    unwrap(await client.GET('/api/v1/admin/slip-shares', {
+      params: { query: { status: statusFilter.value } },
+    })) ?? [],
 })
 
 const { data: rebates, isLoading: rebatesLoading } = useQuery({
   queryKey: ['admin-rebates'],
-  queryFn: () => fetchApi<Rebate[]>('/api/v1/admin/slip-shares/rebates'),
+  queryFn: async () => unwrap(await client.GET('/api/v1/admin/slip-shares/rebates')),
 })
 
 const { mutateAsync: updateRebateStatus } = useMutation({
-  mutationFn: ({ id, status }: { id: string; status: string }) =>
-    fetchApi(`/api/v1/admin/slip-shares/rebates/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify({ status }),
-    }),
+  mutationFn: async ({ id, status }: { id: string; status: string }) =>
+    unwrap(await client.PUT('/api/v1/admin/slip-shares/rebates/{rebateID}', {
+      params: { path: { rebateID: id } },
+      body: { status } as any,
+    })),
   onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-rebates'] }),
 })
 

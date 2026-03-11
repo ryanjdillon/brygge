@@ -2,19 +2,15 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation } from '@tanstack/vue-query'
-import { useApi } from '@/composables/useApi'
+import { useApiClient, unwrap } from '@/lib/apiClient'
 import { AlertTriangle } from 'lucide-vue-next'
 
 const { t } = useI18n()
-const { fetchApi } = useApi()
-
-import type { components } from '@/types/api'
-
-type SlipData = components['schemas']['MemberSlip']
+const client = useApiClient()
 
 const { data: slip, isLoading, isError } = useQuery({
   queryKey: ['portal', 'slip'],
-  queryFn: () => fetchApi<SlipData>('/api/v1/members/me/slip'),
+  queryFn: async () => unwrap(await client.GET('/api/v1/members/me/slip')),
 })
 
 const showIssueForm = ref(false)
@@ -27,11 +23,10 @@ function showToast(type: 'success' | 'error', message: string) {
 }
 
 const { mutate: reportIssue, isPending: isReporting } = useMutation({
-  mutationFn: () =>
-    fetchApi('/api/v1/members/me/slip/issues', {
-      method: 'POST',
-      body: JSON.stringify(issueForm.value),
-    }),
+  mutationFn: async () =>
+    unwrap(await client.POST('/api/v1/members/me/slip/issues', {
+      body: issueForm.value as any,
+    })),
   onSuccess: () => {
     showToast('success', t('portal.slip.issueSuccess'))
     showIssueForm.value = false

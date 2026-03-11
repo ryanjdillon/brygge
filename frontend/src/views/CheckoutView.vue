@@ -4,14 +4,14 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useCartStore } from '@/stores/cart'
 import { useAuthStore } from '@/stores/auth'
-import { useApi } from '@/composables/useApi'
+import { useApiClient, unwrap } from '@/lib/apiClient'
 import { Trash2, Minus, Plus, ShoppingCart } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const router = useRouter()
 const cart = useCartStore()
 const auth = useAuthStore()
-const { fetchApi } = useApi()
+const client = useApiClient()
 
 const isSubmitting = ref(false)
 const error = ref('')
@@ -32,13 +32,9 @@ async function checkout() {
       unit_price: item.unitPrice,
     }))
 
-    const result = await fetchApi<{ id: string; checkout_url: string; total_amount: number }>(
-      '/api/v1/orders',
-      {
-        method: 'POST',
-        body: JSON.stringify({ lines }),
-      },
-    )
+    const result = unwrap(await client.POST('/api/v1/orders', {
+      body: { lines } as any,
+    })) as { id: string; checkout_url: string; total_amount: number }
 
     cart.clear()
     router.push(result.checkout_url)

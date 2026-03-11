@@ -4,7 +4,7 @@ import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 import { useAuthStore } from '@/stores/auth'
-import { useApi } from '@/composables/useApi'
+import { useApiClient, unwrap } from '@/lib/apiClient'
 import {
   User,
   Ship,
@@ -17,15 +17,11 @@ import {
 
 const { t } = useI18n()
 const auth = useAuthStore()
-const { fetchApi } = useApi()
-
-import type { components } from '@/types/api'
-
-type DashboardData = components['schemas']['DashboardResponse']
+const client = useApiClient()
 
 const { data: dashboard, isLoading } = useQuery({
   queryKey: ['portal', 'dashboard'],
-  queryFn: () => fetchApi<DashboardData>('/api/v1/members/me/dashboard'),
+  queryFn: async () => unwrap(await client.GET('/api/v1/members/me/dashboard')),
 })
 
 const userName = computed(() => auth.user?.name ?? '')

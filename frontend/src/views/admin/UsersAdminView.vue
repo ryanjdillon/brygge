@@ -2,20 +2,19 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
-import { useApi } from '@/composables/useApi'
+import { useApiClient, unwrap } from '@/lib/apiClient'
 import { Trash2 } from 'lucide-vue-next'
 import type { components } from '@/types/api'
 
 type User = components['schemas']['AdminUser']
-type UsersResponse = components['schemas']['AdminUsersResponse']
 
 const { t } = useI18n()
-const { fetchApi } = useApi()
+const client = useApiClient()
 const queryClient = useQueryClient()
 
 const { data: usersResponse, isLoading, isError } = useQuery({
   queryKey: ['admin', 'users'],
-  queryFn: () => fetchApi<UsersResponse>('/api/v1/admin/users'),
+  queryFn: async () => unwrap(await client.GET('/api/v1/admin/users')),
 })
 
 const users = computed(() => usersResponse.value?.users ?? [])
@@ -31,11 +30,11 @@ function cancelEditRoles(userId: string) {
 }
 
 const { mutate: updateRoles } = useMutation({
-  mutationFn: ({ userId, roles }: { userId: string; roles: string[] }) =>
-    fetchApi(`/api/v1/admin/users/${userId}/roles`, {
-      method: 'PUT',
-      body: JSON.stringify({ roles }),
-    }),
+  mutationFn: async ({ userId, roles }: { userId: string; roles: string[] }) =>
+    unwrap(await client.PUT('/api/v1/admin/users/{userID}/roles', {
+      params: { path: { userID: userId } },
+      body: { roles } as any,
+    })),
   onSuccess: (_, { userId }) => {
     delete editingRoles.value[userId]
     queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
@@ -43,8 +42,8 @@ const { mutate: updateRoles } = useMutation({
 })
 
 const { mutate: deleteUser } = useMutation({
-  mutationFn: (userId: string) =>
-    fetchApi(`/api/v1/admin/users/${userId}`, { method: 'DELETE' }),
+  mutationFn: async (userId: string) =>
+    unwrap(await client.DELETE('/api/v1/admin/users/{userID}', { params: { path: { userID: userId } } })),
   onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
   },

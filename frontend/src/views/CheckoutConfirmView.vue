@@ -2,12 +2,12 @@
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useApi } from '@/composables/useApi'
+import { useApiClient, unwrap } from '@/lib/apiClient'
 import { CheckCircle, XCircle, Loader2 } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const route = useRoute()
-const { fetchApi } = useApi()
+const client = useApiClient()
 
 const status = ref<'loading' | 'success' | 'error'>('loading')
 const orderData = ref<any>(null)
@@ -20,9 +20,8 @@ onMounted(async () => {
   }
 
   try {
-    // Stub: auto-confirm the order (in production, Vipps callback does this)
-    await fetchApi(`/api/v1/orders/${orderId}/confirm`, { method: 'POST' })
-    const order = await fetchApi(`/api/v1/orders/${orderId}`)
+    await unwrap(await client.POST('/api/v1/orders/{orderID}/confirm', { params: { path: { orderID: orderId } } }))
+    const order = unwrap(await client.GET('/api/v1/orders/{orderID}', { params: { path: { orderID: orderId } } }))
     orderData.value = order
     status.value = 'success'
   } catch {

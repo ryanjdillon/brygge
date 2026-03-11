@@ -3,11 +3,11 @@ import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
-import { useApi } from '@/composables/useApi'
+import { useApiClient, unwrap } from '@/lib/apiClient'
 import { Plus, X } from 'lucide-vue-next'
 
 const { t } = useI18n()
-const { fetchApi } = useApi()
+const client = useApiClient()
 const queryClient = useQueryClient()
 
 import type { components } from '@/types/api'
@@ -23,12 +23,12 @@ function showToast(type: 'success' | 'error', message: string) {
 
 const { data: bookings, isLoading, isError } = useQuery({
   queryKey: ['portal', 'bookings'],
-  queryFn: () => fetchApi<Booking[]>('/api/v1/bookings/me'),
+  queryFn: async () => unwrap(await client.GET('/api/v1/bookings/me')),
 })
 
 const { mutate: cancelBooking } = useMutation({
-  mutationFn: (id: string) =>
-    fetchApi(`/api/v1/bookings/${id}/cancel`, { method: 'POST' }),
+  mutationFn: async (id: string) =>
+    unwrap(await client.POST('/api/v1/bookings/{bookingID}/cancel', { params: { path: { bookingID: id } } })),
   onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: ['portal', 'bookings'] })
     showToast('success', t('portal.bookings.cancelSuccess'))

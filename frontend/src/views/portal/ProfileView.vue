@@ -2,10 +2,10 @@
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
-import { useApi } from '@/composables/useApi'
+import { useApiClient, unwrap } from '@/lib/apiClient'
 
 const { t } = useI18n()
-const { fetchApi } = useApi()
+const client = useApiClient()
 const queryClient = useQueryClient()
 
 import type { components } from '@/types/api'
@@ -32,7 +32,7 @@ const toast = ref<{ type: 'success' | 'error'; message: string } | null>(null)
 
 const { data: profile, isLoading } = useQuery({
   queryKey: ['portal', 'profile'],
-  queryFn: () => fetchApi<ProfileResponse>('/api/v1/members/me'),
+  queryFn: async () => unwrap(await client.GET('/api/v1/members/me')),
 })
 
 watch(profile, (p) => {
@@ -48,17 +48,16 @@ watch(profile, (p) => {
 }, { immediate: true })
 
 const { mutate: saveProfile, isPending: isSaving } = useMutation({
-  mutationFn: () =>
-    fetchApi<ProfileResponse>('/api/v1/members/me', {
-      method: 'PUT',
-      body: JSON.stringify({
+  mutationFn: async () =>
+    unwrap(await client.PUT('/api/v1/members/me', {
+      body: {
         full_name: form.value.name,
         phone: form.value.phone,
         address_line: form.value.address.street,
         postal_code: form.value.address.postalCode,
         city: form.value.address.city,
-      }),
-    }),
+      } as any,
+    })),
   onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: ['portal', 'profile'] })
     toast.value = { type: 'success', message: t('portal.profile.saveSuccess') }

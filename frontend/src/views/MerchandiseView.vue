@@ -2,12 +2,12 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
-import { useApi } from '@/composables/useApi'
+import { useApiClient, unwrap } from '@/lib/apiClient'
 import { useCartStore } from '@/stores/cart'
 import { ShoppingCart, X, Check, Plus } from 'lucide-vue-next'
 
 const { t } = useI18n()
-const { fetchApi } = useApi()
+const client = useApiClient()
 const cart = useCartStore()
 const brokenImages = ref<Record<string, boolean>>({})
 
@@ -18,7 +18,7 @@ type Variant = components['schemas']['ProductVariant']
 
 const { data: response, isLoading } = useQuery({
   queryKey: ['products'],
-  queryFn: () => fetchApi<{ products: Product[] }>('/api/v1/products'),
+  queryFn: async () => unwrap(await client.GET('/api/v1/products')),
 })
 
 const selectedProduct = ref<Product | null>(null)
