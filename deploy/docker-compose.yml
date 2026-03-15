@@ -6,6 +6,8 @@ services:
   traefik:
     image: traefik:v3.3
     restart: unless-stopped
+    environment:
+      - DOCKER_API_VERSION=1.40
     ports:
       - "80:80"
       - "443:443"
@@ -65,17 +67,38 @@ services:
       - brygge
     labels:
       - traefik.enable=true
-      # API routes
+      # Single service definition (both routers use it)
+      - traefik.http.services.brygge.loadbalancer.server.port=8080
+      # API routes (higher priority)
       - traefik.http.routers.api.rule=Host(`${DOMAIN}`) && PathPrefix(`/api`)
       - traefik.http.routers.api.entrypoints=websecure
       - traefik.http.routers.api.tls.certresolver=letsencrypt
-      - traefik.http.services.api.loadbalancer.server.port=8080
-      # Frontend catch-all (served by the same binary)
+      - traefik.http.routers.api.service=brygge
+      # Frontend catch-all
       - traefik.http.routers.frontend.rule=Host(`${DOMAIN}`)
       - traefik.http.routers.frontend.entrypoints=websecure
       - traefik.http.routers.frontend.tls.certresolver=letsencrypt
       - traefik.http.routers.frontend.priority=1
-      - traefik.http.services.frontend.loadbalancer.server.port=8080
+      - traefik.http.routers.frontend.service=brygge
+
+  # ── Vipps Mock (demo/testing only) ─────────────────────────────
+  vipps-mock:
+    build:
+      context: ../dev/vipps-mock
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - WEBHOOK_TARGET=http://api:8080/api/v1/webhooks/vipps
+    networks:
+      - brygge
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.vipps-mock.rule=Host(`${DOMAIN}`) && PathPrefix(`/vipps-mock`)
+      - traefik.http.routers.vipps-mock.entrypoints=websecure
+      - traefik.http.routers.vipps-mock.tls.certresolver=letsencrypt
+      - traefik.http.middlewares.vipps-strip.stripprefix.prefixes=/vipps-mock
+      - traefik.http.routers.vipps-mock.middlewares=vipps-strip
+      - traefik.http.services.vipps-mock.loadbalancer.server.port=8090
 
   # ── PostgreSQL ─────────────────────────────────────────────────
   db:
