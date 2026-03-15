@@ -10,6 +10,7 @@ up:
     #!/usr/bin/env bash
     set -euo pipefail
     {{compose}} up -d --build
+    rm -rf frontend/node_modules/.vite
     cd frontend && nohup npx vite > /tmp/brygge-vite.log 2>&1 &
     echo $! > /tmp/brygge-vite.pid
     echo "compose services started, vite dev server running (pid $(cat /tmp/brygge-vite.pid), log: /tmp/brygge-vite.log)"
@@ -30,9 +31,9 @@ setup:
     {{compose}} up -d db redis
     @echo "waiting for postgres to be ready..."
     @sleep 3
-    DATABASE_URL=postgres://brygge:brygge@localhost:5432/brygge?sslmode=disable just migrate
-    DATABASE_URL=postgres://brygge:brygge@localhost:5432/brygge?sslmode=disable just seed
-    @echo "\nsetup complete! run 'just dev' to start the full stack"
+    just migrate
+    just seed
+    @echo "\nsetup complete! run 'just up' to start the full stack"
 
 # Run all tests (Go unit + Vue + Playwright)
 test: test-go test-vue test-e2e
@@ -71,8 +72,7 @@ coverage-vue:
 
 # Run pending database migrations
 migrate:
-    cd backend && go run github.com/golang-migrate/migrate/v4/cmd/migrate@latest \
-        -path migrations -database "$DATABASE_URL" up
+    {{compose}} run --rm migrate -path=/migrations -database 'postgres://brygge:brygge@db:5432/brygge?sslmode=disable' up
 
 # Run sqlc code generation
 generate:
@@ -153,6 +153,20 @@ api-types:
     cd backend && go run ./cmd/openapi/ > /tmp/brygge-openapi.json
     cd frontend && npx openapi-typescript /tmp/brygge-openapi.json -o src/types/api.d.ts
     @echo "generated frontend/src/types/api.d.ts"
+
+# ── Infrastructure (Terranix + OpenTofu) ───────────────────────
+
+# Plan infrastructure changes
+tf-plan:
+    nix run .#tf-plan
+
+# Apply infrastructure changes
+tf-apply:
+    nix run .#tf-apply
+
+# Show current infrastructure outputs
+tf-output:
+    cd terraform && tofu output
 
 # ── Database ──────────────────────────────────────────────────
 
