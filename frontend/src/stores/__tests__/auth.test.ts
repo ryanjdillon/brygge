@@ -20,7 +20,7 @@ describe('auth store', () => {
 
   it('login sets user and isAuthenticated', () => {
     const auth = useAuthStore()
-    auth.user = { id: '1', name: 'Test User', email: 'test@example.com', roles: ['member'] }
+    auth.user = { id: '1', name: 'Test User', email: 'test@example.com', clubId: 'c1', roles: ['member'] }
     auth.accessToken = 'test-token'
 
     expect(auth.isAuthenticated).toBe(true)
@@ -29,7 +29,7 @@ describe('auth store', () => {
 
   it('logout clears state', async () => {
     const auth = useAuthStore()
-    auth.user = { id: '1', name: 'Test', email: 'test@example.com', roles: ['member'] }
+    auth.user = { id: '1', name: 'Test', email: 'test@example.com', clubId: 'c1', roles: ['member'] }
     auth.accessToken = 'test-token'
 
     await auth.logout()
@@ -41,7 +41,7 @@ describe('auth store', () => {
 
   it('hasRole returns true for matching role', () => {
     const auth = useAuthStore()
-    auth.user = { id: '1', name: 'Test', email: 'test@example.com', roles: ['member', 'admin'] }
+    auth.user = { id: '1', name: 'Test', email: 'test@example.com', clubId: 'c1', roles: ['member', 'admin'] }
 
     expect(auth.hasRole('admin')).toBe(true)
     expect(auth.hasRole('member')).toBe(true)
@@ -49,7 +49,7 @@ describe('auth store', () => {
 
   it('hasRole returns false for non-matching role', () => {
     const auth = useAuthStore()
-    auth.user = { id: '1', name: 'Test', email: 'test@example.com', roles: ['member'] }
+    auth.user = { id: '1', name: 'Test', email: 'test@example.com', clubId: 'c1', roles: ['member'] }
 
     expect(auth.hasRole('admin')).toBe(false)
     expect(auth.hasRole('board')).toBe(false)

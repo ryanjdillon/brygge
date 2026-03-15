@@ -1,5 +1,5 @@
 import { vi } from 'vitest'
-import { mount, shallowMount, type ComponentMountingOptions } from '@vue/test-utils'
+import { mount, type ComponentMountingOptions } from '@vue/test-utils'
 import { createTestingPinia, type TestingOptions } from '@pinia/testing'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import { type Component } from 'vue'
