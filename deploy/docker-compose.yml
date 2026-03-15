@@ -4,10 +4,8 @@
 services:
   # ── Reverse Proxy ──────────────────────────────────────────────
   traefik:
-    image: traefik:v3.3
+    image: traefik:v2.11
     restart: unless-stopped
-    environment:
-      - DOCKER_API_VERSION=1.40
     ports:
       - "80:80"
       - "443:443"
