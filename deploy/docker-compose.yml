@@ -55,7 +55,10 @@ services:
 
   # ── API (Go backend + embedded SPA) ───────────────────────────
   api:
-    image: ${IMAGE:-ghcr.io/brygge-klubb/brygge:latest}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: production
     restart: unless-stopped
     depends_on:
       db:
