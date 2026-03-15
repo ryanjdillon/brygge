@@ -39,10 +39,10 @@ func (h *AdminDocumentsHandler) HandleListDocuments(w http.ResponseWriter, r *ht
 		return
 	}
 
-	hasStyre := false
+	hasBoard := false
 	for _, role := range claims.Roles {
-		if role == "styre" || role == "admin" || role == "harbour_master" || role == "treasurer" {
-			hasStyre = true
+		if role == "board" || role == "admin" || role == "harbor_master" || role == "treasurer" {
+			hasBoard = true
 			break
 		}
 	}
@@ -50,7 +50,7 @@ func (h *AdminDocumentsHandler) HandleListDocuments(w http.ResponseWriter, r *ht
 	var rows pgx.Rows
 	var err error
 
-	if hasStyre {
+	if hasBoard {
 		rows, err = h.db.Query(ctx,
 			`SELECT d.id, d.title, d.filename, d.content_type, d.size_bytes,
 			        d.visibility, d.created_at, d.updated_at, u.full_name
@@ -130,10 +130,10 @@ func (h *AdminDocumentsHandler) HandleGetDocument(w http.ResponseWriter, r *http
 		return
 	}
 
-	hasStyre := false
+	hasBoard := false
 	for _, role := range claims.Roles {
-		if role == "styre" || role == "admin" || role == "harbour_master" || role == "treasurer" {
-			hasStyre = true
+		if role == "board" || role == "admin" || role == "harbor_master" || role == "treasurer" {
+			hasBoard = true
 			break
 		}
 	}
@@ -172,7 +172,7 @@ func (h *AdminDocumentsHandler) HandleGetDocument(w http.ResponseWriter, r *http
 		return
 	}
 
-	if d.Visibility == "styre" && !hasStyre {
+	if d.Visibility == "board" && !hasBoard {
 		Error(w, http.StatusForbidden, "insufficient permissions")
 		return
 	}
@@ -207,7 +207,7 @@ func (h *AdminDocumentsHandler) HandleUploadDocument(w http.ResponseWriter, r *h
 	}
 
 	visibility := r.FormValue("visibility")
-	if visibility != "member" && visibility != "styre" {
+	if visibility != "member" && visibility != "board" {
 		visibility = "member"
 	}
 

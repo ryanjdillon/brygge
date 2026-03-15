@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useAllDugnadHours, useSetRequiredHours } from '@/composables/useDugnad'
+import { useAllVolunteerHours, useSetRequiredHours } from '@/composables/useVolunteer'
 import { Settings } from 'lucide-vue-next'
 
 const { t } = useI18n()
-const { data: allHours, isLoading } = useAllDugnadHours()
+const { data: allHours, isLoading } = useAllVolunteerHours()
 const setRequired = useSetRequiredHours()
 
 const showSettings = ref(false)
@@ -28,7 +28,7 @@ function handleSetRequired() {
   setRequired.mutate(hours, {
     onSuccess: () => {
       showSettings.value = false
-      showToast('success', t('dugnad.settingsUpdated'))
+      showToast('success', t('volunteer.settingsUpdated'))
     },
   })
 }
@@ -37,13 +37,13 @@ function handleSetRequired() {
 <template>
   <div>
     <div class="flex items-center justify-between">
-      <h1 class="text-2xl font-bold text-gray-900">{{ t('dugnad.title') }} — {{ t('dugnad.allMembers') }}</h1>
+      <h1 class="text-2xl font-bold text-gray-900">{{ t('volunteer.title') }} — {{ t('volunteer.allMembers') }}</h1>
       <button
         class="flex items-center gap-1.5 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
         @click="openSettings"
       >
         <Settings class="h-4 w-4" />
-        {{ t('dugnad.settings') }}
+        {{ t('volunteer.settings') }}
       </button>
     </div>
 
@@ -61,20 +61,20 @@ function handleSetRequired() {
         <thead class="bg-gray-50">
           <tr>
             <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">{{ t('common.name') }}</th>
-            <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase text-gray-500">{{ t('dugnad.signedUpHours') }}</th>
-            <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase text-gray-500">{{ t('dugnad.completedHours') }}</th>
-            <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase text-gray-500">{{ t('dugnad.requiredHours') }}</th>
-            <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase text-gray-500">{{ t('dugnad.remaining') }}</th>
+            <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase text-gray-500">{{ t('volunteer.signedUpHours') }}</th>
+            <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase text-gray-500">{{ t('volunteer.completedHours') }}</th>
+            <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase text-gray-500">{{ t('volunteer.requiredHours') }}</th>
+            <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase text-gray-500">{{ t('volunteer.remaining') }}</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-200 bg-white">
           <tr v-for="member in allHours" :key="member.user_id">
             <td class="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">{{ member.name }}</td>
-            <td class="whitespace-nowrap px-4 py-3 text-right text-sm text-gray-500">{{ member.signed_up_hours }}{{ t('dugnad.hoursUnit') }}</td>
-            <td class="whitespace-nowrap px-4 py-3 text-right text-sm text-gray-500">{{ member.completed_hours }}{{ t('dugnad.hoursUnit') }}</td>
-            <td class="whitespace-nowrap px-4 py-3 text-right text-sm text-gray-500">{{ member.required_hours }}{{ t('dugnad.hoursUnit') }}</td>
+            <td class="whitespace-nowrap px-4 py-3 text-right text-sm text-gray-500">{{ member.signed_up_hours }}{{ t('volunteer.hoursUnit') }}</td>
+            <td class="whitespace-nowrap px-4 py-3 text-right text-sm text-gray-500">{{ member.completed_hours }}{{ t('volunteer.hoursUnit') }}</td>
+            <td class="whitespace-nowrap px-4 py-3 text-right text-sm text-gray-500">{{ member.required_hours }}{{ t('volunteer.hoursUnit') }}</td>
             <td :class="['whitespace-nowrap px-4 py-3 text-right text-sm font-medium', member.remaining > 0 ? 'text-orange-600' : 'text-green-600']">
-              {{ member.remaining > 0 ? member.remaining : Math.abs(member.remaining) }}{{ t('dugnad.hoursUnit') }}
+              {{ member.remaining > 0 ? member.remaining : Math.abs(member.remaining) }}{{ t('volunteer.hoursUnit') }}
               {{ member.remaining > 0 ? '' : '✓' }}
             </td>
           </tr>
@@ -89,10 +89,10 @@ function handleSetRequired() {
       @click.self="showSettings = false"
     >
       <div class="w-full max-w-sm rounded-lg bg-white p-6 shadow-xl">
-        <h2 class="text-lg font-semibold text-gray-900">{{ t('dugnad.settings') }}</h2>
+        <h2 class="text-lg font-semibold text-gray-900">{{ t('volunteer.settings') }}</h2>
         <form class="mt-4 space-y-4" @submit.prevent="handleSetRequired">
           <div>
-            <label class="block text-sm font-medium text-gray-700">{{ t('dugnad.requiredHoursPerYear') }}</label>
+            <label class="block text-sm font-medium text-gray-700">{{ t('volunteer.requiredHoursPerYear') }}</label>
             <input
               v-model="requiredInput"
               type="number"

@@ -10,8 +10,6 @@
     "login": "Inloggen",
     "portal": "Mijn pagina",
     "admin": "Beheer",
-    "harbour": "Haven",
-    "bobil": "Camper",
     "club": "Club",
     "history": "Geschiedenis",
     "merchandise": "Winkel",
@@ -19,7 +17,9 @@
     "logout": "Uitloggen",
     "ariaMainNav": "Hoofdnavigatie",
     "ariaLogout": "Uitloggen",
-    "ariaMenu": "Menu"
+    "ariaMenu": "Menu",
+    "harbor": "Haven",
+    "motorhome": "Camper"
   },
   "common": {
     "loading": "Laden",
@@ -62,7 +62,6 @@
     "description": "Aankomende evenementen en activiteiten",
     "export": "Exporteren naar kalender (iCal)",
     "filterRegatta": "Regatta",
-    "filterDugnad": "Werkdag",
     "filterSocial": "Sociaal",
     "filterAgm": "ALV",
     "proposeEvent": "Evenement voorstellen",
@@ -73,7 +72,8 @@
     "weekdayThu": "Do",
     "weekdayFri": "Vr",
     "weekdaySat": "Za",
-    "weekdaySun": "Zo"
+    "weekdaySun": "Zo",
+    "filterVolunteer": "Werkdag"
   },
   "weather": {
     "title": "Havenweer",
@@ -107,9 +107,9 @@
     "approachNotes": "Houd voldoende afstand van de boeien bij de ingang. Volg het gemarkeerde vaarwater naar de gasthaven.",
     "depth": "Diepte",
     "depthInfo": "Minimale diepte bij de ingang: 3,5 meter",
-    "harbourChart": "Havenkaart",
     "openGoogleMaps": "Openen in Google Maps",
-    "downloadGPX": "GPX downloaden"
+    "downloadGPX": "GPX downloaden",
+    "harborChart": "Havenkaart"
   },
   "contact": {
     "title": "Neem contact op",
@@ -130,10 +130,8 @@
   "pricing": {
     "title": "Tarieven",
     "yearlyDues": "Jaarlijkse contributie",
-    "andel": "Havenaandeel (andel)",
     "slipFees": "Ligplaatskosten per afmeting",
     "guestSlip": "Gastligplaatsen",
-    "bobilParking": "Camperparkeren",
     "roomHire": "Zaalhuur",
     "loading": "Tarieven ophalen...",
     "error": "Kon tarieven niet ophalen",
@@ -142,7 +140,9 @@
     "perDay": "/dag",
     "noPricing": "Er zijn nog geen tarieven toegevoegd",
     "period": "Periode",
-    "installments": "Kan worden opgedeeld in maximaal {max} termijnen"
+    "installments": "Kan worden opgedeeld in maximaal {max} termijnen",
+    "harbor_membership": "Havenaandeel (andel)",
+    "motorhomeParking": "Camperparkeren"
   },
   "join": {
     "title": "Lid worden",
@@ -162,7 +162,7 @@
     "submitting": "Verzenden...",
     "submitted": "Inschrijving voltooid!"
   },
-  "harbour": {
+  "harbor": {
     "title": "Gasthaven",
     "subtitle": "Welkom in onze gasthaven. Hier vindt u tarieven, kaarten en praktische informatie.",
     "spotsAvailable": "gastligplaatsen",
@@ -176,7 +176,7 @@
     "ctaDescription": "Neem contact met ons op om een gastligplaats te reserveren of voor meer informatie.",
     "ctaButton": "Neem contact op"
   },
-  "bobil": {
+  "motorhome": {
     "title": "Camperparkeren",
     "subtitle": "Camperplaatsen met stroom en voorzieningen direct aan de haven.",
     "spotsAvailable": "plaatsen",
@@ -274,9 +274,9 @@
       "role": {
         "applicant": "Aanvrager",
         "member": "Lid",
-        "slip_owner": "Ligplaatshouder",
-        "styre": "Bestuurslid",
-        "admin": "Beheerder"
+        "admin": "Beheerder",
+        "slip_holder": "Ligplaatshouder",
+        "board": "Bestuurslid"
       },
       "noSlip": "Geen toegewezen ligplaats",
       "noBookings": "Geen aankomende reserveringen",
@@ -337,7 +337,6 @@
       "title": "Documenten",
       "filterAll": "Alle",
       "filterMember": "Leden",
-      "filterStyre": "Bestuur",
       "download": "Downloaden",
       "comments": "Opmerkingen",
       "addComment": "Opmerking toevoegen",
@@ -346,7 +345,8 @@
       "noComments": "Nog geen opmerkingen",
       "commentSuccess": "Opmerking toegevoegd",
       "commentError": "Kon opmerking niet toevoegen",
-      "loadError": "Kon documenten niet laden"
+      "loadError": "Kon documenten niet laden",
+      "filterBoard": "Bestuur"
     },
     "waitingList": {
       "title": "Wachtlijst",
@@ -425,7 +425,6 @@
   "admin": {
     "title": "Beheer",
     "ariaNav": "Beheernavigatie",
-    "groupHarbour": "Haven",
     "groupFinance": "Financiën",
     "groupArchive": "Archief en info",
     "sidebar": {
@@ -451,7 +450,6 @@
       "duesReceived": "Ontvangen contributie",
       "outstanding": "Openstaand",
       "overdue": "Achterstallig",
-      "andelCollected": "Geïnd andelgeld",
       "bookingRevenue": "Reserveringsinkomsten",
       "viewPayments": "Betalingen bekijken",
       "viewOverdue": "Achterstallige bekijken",
@@ -462,7 +460,6 @@
       "allTypes": "Alle typen",
       "allStatuses": "Alle statussen",
       "typeDues": "Contributie",
-      "typeAndel": "Andel",
       "typeSlipFee": "Ligplaatsgeld",
       "typeSlipfee": "Ligplaatsgeld",
       "typeBooking": "Reservering",
@@ -489,7 +486,9 @@
       "selectMember": "Lid selecteren",
       "searchMember": "Zoeken op naam of e-mail...",
       "invoicePreview": "Factuur voor {name}: {type}, {amount} NOK, vervalt op {due}",
-      "invoiceCreated": "Factuur aangemaakt"
+      "invoiceCreated": "Factuur aangemaakt",
+      "harborMembershipCollected": "Geïnd andelgeld",
+      "typeHarborMembership": "Havenlidmaatschap"
     },
     "events": {
       "title": "Evenementenbeheer",
@@ -515,10 +514,10 @@
       "resourceType": "Type faciliteit",
       "allTypes": "Alle typen",
       "guestSlip": "Gastligplaats",
-      "bobilSpot": "Camperplaats",
       "clubRoom": "Clubruimte",
       "dateFrom": "Van",
-      "dateTo": "Tot"
+      "dateTo": "Tot",
+      "motorhomeSpot": "Camperplaats"
     },
     "communication": {
       "title": "Communicatie",
@@ -529,11 +528,11 @@
       "recipients": "Ontvangers",
       "recipientAll": "Alle leden",
       "recipientMembers": "Alleen leden",
-      "recipientStyre": "Bestuursleden",
-      "recipientSlipOwners": "Ligplaatshouders",
       "preview": "Voorbeeld",
       "send": "Bericht verzenden",
-      "noHistory": "Nog geen berichten verstuurd"
+      "noHistory": "Nog geen berichten verstuurd",
+      "recipientBoard": "Bestuursleden",
+      "recipientSlipHolders": "Ligplaatshouders"
     },
     "bookingSettings": {
       "title": "Reserveringsinstellingen",
@@ -607,11 +606,9 @@
       "priceDeleted": "Tarief verwijderd",
       "saveError": "Kon niet opslaan",
       "deleteError": "Kon niet verwijderen",
-      "categoryMoloandel": "Golfbrekeraandeel",
       "categorySlipFee": "Ligplaatsgeld",
       "categorySeasonalRental": "Seizoensligplaats",
       "categoryGuest": "Gastligplaatsen",
-      "categoryBobil": "Camperparkeren",
       "categoryRoomHire": "Zaalhuur",
       "categoryService": "Diensten",
       "categoryOther": "Overig",
@@ -620,7 +617,9 @@
       "unitSeason": "Per seizoen",
       "unitDay": "Per dag",
       "unitNight": "Per nacht",
-      "unitHour": "Per uur"
+      "unitHour": "Per uur",
+      "categoryHarborMembership": "Golfbrekeraandeel",
+      "categoryMotorhome": "Camperparkeren"
     },
     "users": {
       "name": "Naam",
@@ -677,7 +676,8 @@
       "approveDimensions": "Afmetingen goedkeuren",
       "approveSuccess": "Afmetingen goedgekeurd",
       "approveError": "Kon afmetingen niet goedkeuren"
-    }
+    },
+    "groupHarbor": "Haven"
   },
   "projects": {
     "title": "Projecten",
@@ -742,13 +742,13 @@
     "loadMore": "Oudere berichten laden",
     "rooms": {
       "general": "Algemeen",
-      "harbour": "Haven",
       "events": "Evenementen",
       "forsale": "Te koop",
-      "styre": "Bestuur"
+      "harbor": "Haven",
+      "board": "Bestuur"
     }
   },
-  "dugnad": {
+  "volunteer": {
     "title": "Werkdag",
     "join": "Deelnemen",
     "leave": "Afmelden",
@@ -761,7 +761,6 @@
     "maxParticipants": "Max. deelnemers",
     "participants": "Deelnemers",
     "materials": "Materialen",
-    "ansvarlig": "Verantwoordelijke",
     "collaborator": "Deelnemer",
     "hours": "Uren",
     "signedUpHours": "Ingeschreven uren",
@@ -785,7 +784,8 @@
     "requiredHoursPerYear": "Werkuren per jaar",
     "settingsUpdated": "Instellingen bijgewerkt",
     "allMembers": "Alle leden",
-    "eventProjects": "Werkdagprojecten"
+    "eventProjects": "Werkdagprojecten",
+    "responsible": "Verantwoordelijke"
   },
   "mapAdmin": {
     "title": "Kaartmarkeringen",
@@ -802,7 +802,7 @@
       "buoy": "Boei",
       "hazard": "Gevaar",
       "anchorage": "Ankerplaats",
-      "harbour": "Haven"
+      "harbor": "Haven"
     },
     "noMarkers": "Nog geen markeringen toegevoegd",
     "saved": "Markering opgeslagen",
@@ -812,7 +812,6 @@
     "title": "Reserveren",
     "subtitle": "Reserveer een gastligplaats, camperplaats, clubhuis of hijskraan",
     "guestSlip": "Gastligplaats",
-    "bobilSpot": "Camperplaats",
     "clubRoom": "Clubhuis",
     "slipHoist": "Hijskraan",
     "boatDimensions": "Bootafmetingen",
@@ -859,7 +858,8 @@
       "emailRequired": "E-mail is verplicht",
       "emailInvalid": "Ongeldig e-mailadres",
       "phoneInvalid": "Ongeldig telefoonnummer"
-    }
+    },
+    "motorhomeSpot": "Camperplaats"
   },
   "gdpr": {
     "title": "Privacy & Data",

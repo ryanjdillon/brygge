@@ -39,7 +39,7 @@ func waitingListRouter(t *testing.T, h *WaitingListHandler) *chi.Mux {
 		r.Post("/{entryID}/accept", h.HandleAcceptOffer)
 
 		r.Group(func(r chi.Router) {
-			r.Use(middleware.RequireRole("styre"))
+			r.Use(middleware.RequireRole("board"))
 			r.Get("/", h.HandleListWaitingList)
 			r.Post("/{entryID}/offer", h.HandleOfferSlip)
 			r.Put("/{entryID}/position", h.HandleReorderEntry)

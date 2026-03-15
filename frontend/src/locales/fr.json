@@ -10,8 +10,6 @@
     "login": "Se connecter",
     "portal": "Mon espace",
     "admin": "Administration",
-    "harbour": "Port",
-    "bobil": "Camping-car",
     "club": "Club",
     "history": "Historique",
     "merchandise": "Boutique",
@@ -19,7 +17,9 @@
     "logout": "Se déconnecter",
     "ariaMainNav": "Navigation principale",
     "ariaLogout": "Se déconnecter",
-    "ariaMenu": "Menu"
+    "ariaMenu": "Menu",
+    "harbor": "Port",
+    "motorhome": "Camping-car"
   },
   "common": {
     "loading": "Chargement",
@@ -62,7 +62,6 @@
     "description": "Événements et activités à venir",
     "export": "Exporter vers le calendrier (iCal)",
     "filterRegatta": "Régate",
-    "filterDugnad": "Journée de travaux",
     "filterSocial": "Social",
     "filterAgm": "AG",
     "proposeEvent": "Proposer un événement",
@@ -73,7 +72,8 @@
     "weekdayThu": "Je",
     "weekdayFri": "Ve",
     "weekdaySat": "Sa",
-    "weekdaySun": "Di"
+    "weekdaySun": "Di",
+    "filterVolunteer": "Journée de travaux"
   },
   "weather": {
     "title": "Météo du port",
@@ -107,9 +107,9 @@
     "approachNotes": "Gardez une distance de sécurité avec les bouées à l'entrée. Suivez le chenal balisé jusqu'au port visiteurs.",
     "depth": "Profondeur",
     "depthInfo": "Profondeur minimale à l'entrée : 3,5 mètres",
-    "harbourChart": "Plan du port",
     "openGoogleMaps": "Ouvrir dans Google Maps",
-    "downloadGPX": "Télécharger GPX"
+    "downloadGPX": "Télécharger GPX",
+    "harborChart": "Plan du port"
   },
   "contact": {
     "title": "Nous contacter",
@@ -130,10 +130,8 @@
   "pricing": {
     "title": "Tarifs",
     "yearlyDues": "Cotisation annuelle",
-    "andel": "Part de port (andel)",
     "slipFees": "Frais de poste par taille",
     "guestSlip": "Places visiteurs",
-    "bobilParking": "Stationnement camping-car",
     "roomHire": "Location de salle",
     "loading": "Récupération des tarifs...",
     "error": "Impossible de récupérer les tarifs",
@@ -142,7 +140,9 @@
     "perDay": "/jour",
     "noPricing": "Aucun tarif n'a encore été ajouté",
     "period": "Période",
-    "installments": "Peut être divisé en {max} versements maximum"
+    "installments": "Peut être divisé en {max} versements maximum",
+    "harbor_membership": "Part de port (andel)",
+    "motorhomeParking": "Stationnement camping-car"
   },
   "join": {
     "title": "Rejoindre le club",
@@ -162,7 +162,7 @@
     "submitting": "Envoi en cours...",
     "submitted": "Inscription terminée !"
   },
-  "harbour": {
+  "harbor": {
     "title": "Port visiteurs",
     "subtitle": "Bienvenue dans notre port visiteurs. Retrouvez les tarifs, plans et informations pratiques.",
     "spotsAvailable": "places visiteurs",
@@ -176,7 +176,7 @@
     "ctaDescription": "Contactez-nous pour réserver une place visiteur ou pour plus d'informations.",
     "ctaButton": "Nous contacter"
   },
-  "bobil": {
+  "motorhome": {
     "title": "Stationnement camping-car",
     "subtitle": "Emplacements camping-car avec électricité et commodités au bord du port.",
     "spotsAvailable": "emplacements",
@@ -274,9 +274,9 @@
       "role": {
         "applicant": "Candidat",
         "member": "Membre",
-        "slip_owner": "Titulaire de poste",
-        "styre": "Membre du bureau",
-        "admin": "Administrateur"
+        "admin": "Administrateur",
+        "slip_holder": "Titulaire de poste",
+        "board": "Membre du bureau"
       },
       "noSlip": "Aucun poste attribué",
       "noBookings": "Aucune réservation à venir",
@@ -337,7 +337,6 @@
       "title": "Documents",
       "filterAll": "Tous",
       "filterMember": "Membres",
-      "filterStyre": "Bureau",
       "download": "Télécharger",
       "comments": "Commentaires",
       "addComment": "Ajouter un commentaire",
@@ -346,7 +345,8 @@
       "noComments": "Aucun commentaire pour le moment",
       "commentSuccess": "Commentaire ajouté",
       "commentError": "Impossible d'ajouter le commentaire",
-      "loadError": "Impossible de charger les documents"
+      "loadError": "Impossible de charger les documents",
+      "filterBoard": "Bureau"
     },
     "waitingList": {
       "title": "Liste d'attente",
@@ -425,7 +425,6 @@
   "admin": {
     "title": "Administration",
     "ariaNav": "Navigation d'administration",
-    "groupHarbour": "Port",
     "groupFinance": "Finances",
     "groupArchive": "Archives et informations",
     "sidebar": {
@@ -451,7 +450,6 @@
       "duesReceived": "Cotisations perçues",
       "outstanding": "En attente",
       "overdue": "En retard",
-      "andelCollected": "Parts collectées",
       "bookingRevenue": "Revenus de réservation",
       "viewPayments": "Voir les paiements",
       "viewOverdue": "Voir les retards",
@@ -462,7 +460,6 @@
       "allTypes": "Tous les types",
       "allStatuses": "Tous les statuts",
       "typeDues": "Cotisation",
-      "typeAndel": "Part",
       "typeSlipFee": "Frais de poste",
       "typeSlipfee": "Frais de poste",
       "typeBooking": "Réservation",
@@ -489,7 +486,9 @@
       "selectMember": "Sélectionner un membre",
       "searchMember": "Rechercher par nom ou e-mail...",
       "invoicePreview": "Facture pour {name} : {type}, {amount} NOK, échéance {due}",
-      "invoiceCreated": "Facture créée"
+      "invoiceCreated": "Facture créée",
+      "harborMembershipCollected": "Parts collectées",
+      "typeHarborMembership": "Part portuaire"
     },
     "events": {
       "title": "Gestion des événements",
@@ -515,10 +514,10 @@
       "resourceType": "Type de ressource",
       "allTypes": "Tous les types",
       "guestSlip": "Place visiteur",
-      "bobilSpot": "Emplacement camping-car",
       "clubRoom": "Salle du club",
       "dateFrom": "Du",
-      "dateTo": "Au"
+      "dateTo": "Au",
+      "motorhomeSpot": "Emplacement camping-car"
     },
     "communication": {
       "title": "Communication",
@@ -529,11 +528,11 @@
       "recipients": "Destinataires",
       "recipientAll": "Tous les membres",
       "recipientMembers": "Membres uniquement",
-      "recipientStyre": "Membres du bureau",
-      "recipientSlipOwners": "Titulaires de poste",
       "preview": "Aperçu",
       "send": "Envoyer la diffusion",
-      "noHistory": "Aucune diffusion envoyée pour le moment"
+      "noHistory": "Aucune diffusion envoyée pour le moment",
+      "recipientBoard": "Membres du bureau",
+      "recipientSlipHolders": "Titulaires de poste"
     },
     "bookingSettings": {
       "title": "Paramètres de réservation",
@@ -607,11 +606,9 @@
       "priceDeleted": "Tarif supprimé",
       "saveError": "Impossible d'enregistrer",
       "deleteError": "Impossible de supprimer",
-      "categoryMoloandel": "Part de môle",
       "categorySlipFee": "Frais de poste",
       "categorySeasonalRental": "Location saisonnière",
       "categoryGuest": "Places visiteurs",
-      "categoryBobil": "Stationnement camping-car",
       "categoryRoomHire": "Location de salle",
       "categoryService": "Services",
       "categoryOther": "Autre",
@@ -620,7 +617,9 @@
       "unitSeason": "Par saison",
       "unitDay": "Par jour",
       "unitNight": "Par nuit",
-      "unitHour": "Par heure"
+      "unitHour": "Par heure",
+      "categoryHarborMembership": "Part de môle",
+      "categoryMotorhome": "Stationnement camping-car"
     },
     "users": {
       "name": "Nom",
@@ -677,7 +676,8 @@
       "approveDimensions": "Approuver les dimensions",
       "approveSuccess": "Dimensions approuvées",
       "approveError": "Impossible d'approuver les dimensions"
-    }
+    },
+    "groupHarbor": "Port"
   },
   "projects": {
     "title": "Projets",
@@ -742,13 +742,13 @@
     "loadMore": "Charger les messages précédents",
     "rooms": {
       "general": "Général",
-      "harbour": "Port",
       "events": "Événements",
       "forsale": "À vendre",
-      "styre": "Bureau"
+      "harbor": "Port",
+      "board": "Bureau"
     }
   },
-  "dugnad": {
+  "volunteer": {
     "title": "Journée de travaux",
     "join": "Participer",
     "leave": "Se retirer",
@@ -761,7 +761,6 @@
     "maxParticipants": "Participants max.",
     "participants": "Participants",
     "materials": "Matériaux",
-    "ansvarlig": "Responsable",
     "collaborator": "Participant",
     "hours": "Heures",
     "signedUpHours": "Heures inscrites",
@@ -785,7 +784,8 @@
     "requiredHoursPerYear": "Heures de travail par an",
     "settingsUpdated": "Paramètres mis à jour",
     "allMembers": "Tous les membres",
-    "eventProjects": "Projets de journée de travaux"
+    "eventProjects": "Projets de journée de travaux",
+    "responsible": "Responsable"
   },
   "mapAdmin": {
     "title": "Marqueurs de carte",
@@ -802,7 +802,7 @@
       "buoy": "Bouée",
       "hazard": "Danger",
       "anchorage": "Mouillage",
-      "harbour": "Port"
+      "harbor": "Port"
     },
     "noMarkers": "Aucun marqueur ajouté",
     "saved": "Marqueur enregistré",
@@ -812,7 +812,6 @@
     "title": "Réserver",
     "subtitle": "Réservez une place visiteur, un emplacement camping-car, le clubhouse ou la grue",
     "guestSlip": "Place visiteur",
-    "bobilSpot": "Emplacement camping-car",
     "clubRoom": "Clubhouse",
     "slipHoist": "Grue de mise à l'eau",
     "boatDimensions": "Dimensions du bateau",
@@ -859,7 +858,8 @@
       "emailRequired": "L'e-mail est requis",
       "emailInvalid": "Adresse e-mail invalide",
       "phoneInvalid": "Numéro de téléphone invalide"
-    }
+    },
+    "motorhomeSpot": "Emplacement camping-car"
   },
   "gdpr": {
     "title": "Privacy & Data",

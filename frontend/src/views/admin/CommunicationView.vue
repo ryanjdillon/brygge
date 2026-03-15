@@ -22,8 +22,8 @@ const activeTab = ref<'compose' | 'history'>('compose')
 const recipientOptions = [
   { value: 'all', labelKey: 'admin.communication.recipientAll' },
   { value: 'members', labelKey: 'admin.communication.recipientMembers' },
-  { value: 'styre', labelKey: 'admin.communication.recipientStyre' },
-  { value: 'slip_owners', labelKey: 'admin.communication.recipientSlipOwners' },
+  { value: 'board', labelKey: 'admin.communication.recipientBoard' },
+  { value: 'slip_holders', labelKey: 'admin.communication.recipientSlipHolders' },
 ]
 
 const { data: broadcasts, isLoading: historyLoading } = useQuery({

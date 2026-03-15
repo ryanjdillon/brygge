@@ -64,7 +64,7 @@ type task struct {
 	UpdatedAt        time.Time        `json:"updated_at"`
 	EstimatedHours   *float64         `json:"estimated_hours"`
 	ActualHours      *float64         `json:"actual_hours"`
-	AnsvarligID      *string          `json:"ansvarlig_id"`
+	ResponsibleID    *string          `json:"responsible_id"`
 	MaxCollaborators int              `json:"max_collaborators"`
 	Materials        json.RawMessage  `json:"materials"`
 	ParticipantCount int              `json:"participant_count"`
@@ -247,7 +247,7 @@ func (h *ProjectsHandler) HandleListTasks(w http.ResponseWriter, r *http.Request
 		`SELECT t.id, t.project_id, t.club_id, t.title, t.description,
 		        t.assignee_id, t.status, t.priority, t.due_date,
 		        t.created_by, t.created_at, t.updated_at,
-		        t.estimated_hours, t.actual_hours, t.ansvarlig_id,
+		        t.estimated_hours, t.actual_hours, t.responsible_id,
 		        t.max_collaborators, t.materials,
 		        (SELECT COUNT(*) FROM task_participants tp WHERE tp.task_id = t.id)
 		 FROM tasks t
@@ -275,7 +275,7 @@ func (h *ProjectsHandler) HandleListTasks(w http.ResponseWriter, r *http.Request
 			&t.ID, &t.ProjectID, &t.ClubID, &t.Title, &t.Description,
 			&t.AssigneeID, &t.Status, &t.Priority, &dueDate,
 			&t.CreatedBy, &t.CreatedAt, &t.UpdatedAt,
-			&t.EstimatedHours, &t.ActualHours, &t.AnsvarligID,
+			&t.EstimatedHours, &t.ActualHours, &t.ResponsibleID,
 			&t.MaxCollaborators, &t.Materials, &t.ParticipantCount,
 		); err != nil {
 			h.log.Error().Err(err).Msg("failed to scan task")
@@ -369,7 +369,7 @@ func (h *ProjectsHandler) HandleCreateTask(w http.ResponseWriter, r *http.Reques
 		`INSERT INTO tasks (project_id, club_id, title, description, assignee_id, priority, due_date, created_by, estimated_hours, max_collaborators, materials)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		 RETURNING id, project_id, club_id, title, description, assignee_id, status, priority, due_date, created_by, created_at, updated_at,
-		           estimated_hours, actual_hours, ansvarlig_id, max_collaborators, materials`,
+		           estimated_hours, actual_hours, responsible_id, max_collaborators, materials`,
 		projectID, claims.ClubID, req.Title, req.Description,
 		req.AssigneeID, priority, dueDate, claims.UserID,
 		req.EstimatedHours, maxCollab, materials,
@@ -377,7 +377,7 @@ func (h *ProjectsHandler) HandleCreateTask(w http.ResponseWriter, r *http.Reques
 		&t.ID, &t.ProjectID, &t.ClubID, &t.Title, &t.Description,
 		&t.AssigneeID, &t.Status, &t.Priority, &dueDateOut,
 		&t.CreatedBy, &t.CreatedAt, &t.UpdatedAt,
-		&t.EstimatedHours, &t.ActualHours, &t.AnsvarligID,
+		&t.EstimatedHours, &t.ActualHours, &t.ResponsibleID,
 		&t.MaxCollaborators, &t.Materials,
 	)
 	if err != nil {
@@ -491,7 +491,7 @@ func (h *ProjectsHandler) HandleUpdateTask(w http.ResponseWriter, r *http.Reques
 		     estimated_hours = $9, max_collaborators = $10, materials = $11, updated_at = now()
 		 WHERE id = $1 AND club_id = $2
 		 RETURNING id, project_id, club_id, title, description, assignee_id, status, priority, due_date, created_by, created_at, updated_at,
-		           estimated_hours, actual_hours, ansvarlig_id, max_collaborators, materials`,
+		           estimated_hours, actual_hours, responsible_id, max_collaborators, materials`,
 		taskID, claims.ClubID,
 		existing.title, existing.description, existing.assigneeID,
 		existing.status, existing.priority, existing.dueDate,
@@ -500,7 +500,7 @@ func (h *ProjectsHandler) HandleUpdateTask(w http.ResponseWriter, r *http.Reques
 		&t.ID, &t.ProjectID, &t.ClubID, &t.Title, &t.Description,
 		&t.AssigneeID, &t.Status, &t.Priority, &dueDateOut,
 		&t.CreatedBy, &t.CreatedAt, &t.UpdatedAt,
-		&t.EstimatedHours, &t.ActualHours, &t.AnsvarligID,
+		&t.EstimatedHours, &t.ActualHours, &t.ResponsibleID,
 		&t.MaxCollaborators, &t.Materials,
 	)
 	if err != nil {

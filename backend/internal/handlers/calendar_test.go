@@ -27,7 +27,7 @@ func TestHandleCreateEventUnauthorized(t *testing.T) {
 	jwtSvc := testJWTService()
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Authenticate(jwtSvc))
-		r.Use(middleware.RequireRole("styre"))
+		r.Use(middleware.RequireRole("board"))
 		r.Post("/calendar", h.HandleCreateEvent)
 	})
 
@@ -48,7 +48,7 @@ func TestHandleCreateEventForbiddenForMember(t *testing.T) {
 	jwtSvc := testJWTService()
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Authenticate(jwtSvc))
-		r.Use(middleware.RequireRole("styre"))
+		r.Use(middleware.RequireRole("board"))
 		r.Post("/calendar", h.HandleCreateEvent)
 	})
 
@@ -127,7 +127,7 @@ func TestHandleCreateEventMissingFields(t *testing.T) {
 		r.Post("/calendar", h.HandleCreateEvent)
 	})
 
-	token := generateTestToken("user-1", "club-1", []string{"styre"})
+	token := generateTestToken("user-1", "club-1", []string{"board"})
 
 	tests := []struct {
 		name string
@@ -190,7 +190,7 @@ func TestHandleCreateEventInvalidTimestamps(t *testing.T) {
 		r.Post("/calendar", h.HandleCreateEvent)
 	})
 
-	token := generateTestToken("user-1", "club-1", []string{"styre"})
+	token := generateTestToken("user-1", "club-1", []string{"board"})
 
 	tests := []struct {
 		name string
@@ -243,7 +243,7 @@ func TestHandleCreateEventEndBeforeStart(t *testing.T) {
 		r.Post("/calendar", h.HandleCreateEvent)
 	})
 
-	token := generateTestToken("user-1", "club-1", []string{"styre"})
+	token := generateTestToken("user-1", "club-1", []string{"board"})
 
 	body := `{"title":"Test","start_time":"2025-06-01T14:00:00Z","end_time":"2025-06-01T10:00:00Z"}`
 	req := httptest.NewRequest(http.MethodPost, "/calendar", strings.NewReader(body))

@@ -29,8 +29,8 @@ const userName = computed(() => auth.user?.name ?? '')
 const displayRole = computed(() => {
   const roles = auth.user?.roles ?? []
   if (roles.includes('admin')) return t('portal.dashboard.role.admin')
-  if (roles.includes('styre')) return t('portal.dashboard.role.styre')
-  if (roles.includes('slip_owner')) return t('portal.dashboard.role.slip_owner')
+  if (roles.includes('board')) return t('portal.dashboard.role.board')
+  if (roles.includes('slip_holder')) return t('portal.dashboard.role.slip_holder')
   if (roles.includes('member')) return t('portal.dashboard.role.member')
   if (roles.includes('applicant')) return t('portal.dashboard.role.applicant')
   return ''
@@ -46,7 +46,7 @@ const quickLinks = computed(() => {
   if (auth.hasRole('applicant') && !auth.hasRole('member')) {
     links.push({ to: '/portal/waiting-list', icon: ListOrdered, label: t('portal.sidebar.waitingList') })
   }
-  if (auth.hasRole('slip_owner')) {
+  if (auth.hasRole('slip_holder')) {
     links.push({ to: '/portal/slip', icon: Anchor, label: t('portal.sidebar.slip') })
   }
   links.push({ to: '/portal/bookings', icon: CalendarDays, label: t('portal.sidebar.bookings') })

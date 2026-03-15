@@ -1,40 +1,40 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
-import { useMyDugnadHours } from '@/composables/useDugnad'
+import { useMyVolunteerHours } from '@/composables/useVolunteer'
 import { useProjects } from '@/composables/useProjects'
 import { FolderKanban, TrendingUp, TrendingDown } from 'lucide-vue-next'
 
 const { t } = useI18n()
-const { data: hours, isLoading: hoursLoading } = useMyDugnadHours()
+const { data: hours, isLoading: hoursLoading } = useMyVolunteerHours()
 const { data: projects, isLoading: projectsLoading } = useProjects()
 </script>
 
 <template>
   <div>
-    <h1 class="text-2xl font-bold text-gray-900">{{ t('dugnad.title') }}</h1>
+    <h1 class="text-2xl font-bold text-gray-900">{{ t('volunteer.title') }}</h1>
 
     <div v-if="hoursLoading" class="mt-4 text-gray-500">{{ t('common.loading') }}...</div>
 
     <div v-else-if="hours" class="mt-6 grid gap-4 sm:grid-cols-4">
       <div class="rounded-lg border border-gray-200 bg-white p-4">
-        <div class="text-sm text-gray-500">{{ t('dugnad.signedUpHours') }}</div>
-        <div class="mt-1 text-2xl font-bold text-blue-600">{{ hours.signed_up_hours }}{{ t('dugnad.hoursUnit') }}</div>
+        <div class="text-sm text-gray-500">{{ t('volunteer.signedUpHours') }}</div>
+        <div class="mt-1 text-2xl font-bold text-blue-600">{{ hours.signed_up_hours }}{{ t('volunteer.hoursUnit') }}</div>
       </div>
       <div class="rounded-lg border border-gray-200 bg-white p-4">
-        <div class="text-sm text-gray-500">{{ t('dugnad.completedHours') }}</div>
-        <div class="mt-1 text-2xl font-bold text-green-600">{{ hours.completed_hours }}{{ t('dugnad.hoursUnit') }}</div>
+        <div class="text-sm text-gray-500">{{ t('volunteer.completedHours') }}</div>
+        <div class="mt-1 text-2xl font-bold text-green-600">{{ hours.completed_hours }}{{ t('volunteer.hoursUnit') }}</div>
       </div>
       <div class="rounded-lg border border-gray-200 bg-white p-4">
-        <div class="text-sm text-gray-500">{{ t('dugnad.requiredHours') }}</div>
-        <div class="mt-1 text-2xl font-bold text-gray-900">{{ hours.required_hours }}{{ t('dugnad.hoursUnit') }}</div>
+        <div class="text-sm text-gray-500">{{ t('volunteer.requiredHours') }}</div>
+        <div class="mt-1 text-2xl font-bold text-gray-900">{{ hours.required_hours }}{{ t('volunteer.hoursUnit') }}</div>
       </div>
       <div class="rounded-lg border border-gray-200 bg-white p-4">
-        <div class="text-sm text-gray-500">{{ hours.remaining > 0 ? t('dugnad.remaining') : t('dugnad.surplus') }}</div>
+        <div class="text-sm text-gray-500">{{ hours.remaining > 0 ? t('volunteer.remaining') : t('volunteer.surplus') }}</div>
         <div :class="['mt-1 flex items-center gap-1 text-2xl font-bold', hours.remaining > 0 ? 'text-orange-600' : 'text-green-600']">
           <TrendingDown v-if="hours.remaining > 0" class="h-5 w-5" />
           <TrendingUp v-else class="h-5 w-5" />
-          {{ Math.abs(hours.remaining) }}{{ t('dugnad.hoursUnit') }}
+          {{ Math.abs(hours.remaining) }}{{ t('volunteer.hoursUnit') }}
         </div>
       </div>
     </div>

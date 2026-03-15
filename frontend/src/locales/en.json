@@ -11,15 +11,15 @@
     "logout": "Log out",
     "portal": "My page",
     "admin": "Admin",
-    "harbour": "Harbour",
-    "bobil": "Motorhome",
     "club": "Club",
     "history": "History",
     "merchandise": "Shop",
     "forum": "Forum",
     "ariaMainNav": "Main navigation",
     "ariaLogout": "Log out",
-    "ariaMenu": "Menu"
+    "ariaMenu": "Menu",
+    "harbor": "Harbor",
+    "motorhome": "Motorhome"
   },
   "common": {
     "loading": "Loading",
@@ -48,7 +48,7 @@
     "welcome": "Welcome to Brygge",
     "tagline": "Your harbour club, digitally",
     "featureCalendar": "Calendar",
-    "featureCalendarDesc": "Stay up to date with regattas, working days and social events",
+    "featureCalendarDesc": "Stay up to date with regattas, volunteer days and social events",
     "featureWeather": "Weather conditions",
     "featureWeatherDesc": "Real-time weather data for the harbour from Yr.no",
     "featureBookings": "Bookings",
@@ -62,7 +62,6 @@
     "description": "Upcoming events and activities",
     "export": "Export to calendar (iCal)",
     "filterRegatta": "Regatta",
-    "filterDugnad": "Working day",
     "filterSocial": "Social",
     "filterAgm": "AGM",
     "proposeEvent": "Propose event",
@@ -73,10 +72,11 @@
     "weekdayThu": "Th",
     "weekdayFri": "Fr",
     "weekdaySat": "Sa",
-    "weekdaySun": "Su"
+    "weekdaySun": "Su",
+    "filterVolunteer": "Volunteer day"
   },
   "weather": {
-    "title": "Harbour Weather",
+    "title": "Harbor Weather",
     "wind": "Wind",
     "windSpeed": "Wind speed",
     "windDirection": "Wind direction",
@@ -107,9 +107,9 @@
     "approachNotes": "Keep a safe distance from the buoys at the entrance. Follow the marked fairway into the guest harbour.",
     "depth": "Depth",
     "depthInfo": "Minimum depth at the entrance: 3.5 metres",
-    "harbourChart": "Harbour Chart",
     "openGoogleMaps": "Open in Google Maps",
-    "downloadGPX": "Download GPX"
+    "downloadGPX": "Download GPX",
+    "harborChart": "Harbor Chart"
   },
   "contact": {
     "title": "Contact Us",
@@ -130,10 +130,8 @@
   "pricing": {
     "title": "Pricing",
     "yearlyDues": "Yearly dues",
-    "andel": "Harbour share (andel)",
     "slipFees": "Slip fees by size",
     "guestSlip": "Guest slips",
-    "bobilParking": "Motorhome parking",
     "roomHire": "Room hire",
     "loading": "Fetching prices...",
     "error": "Could not fetch prices",
@@ -142,7 +140,9 @@
     "perDay": "/day",
     "noPricing": "No pricing has been added yet",
     "period": "Period",
-    "installments": "Can be split into up to {max} installments"
+    "installments": "Can be split into up to {max} installments",
+    "harbor_membership": "Harbor share (andel)",
+    "motorhomeParking": "Motorhome parking"
   },
   "join": {
     "title": "Join the club",
@@ -162,11 +162,11 @@
     "submitting": "Submitting...",
     "submitted": "Registration complete!"
   },
-  "harbour": {
-    "title": "Guest Harbour",
+  "harbor": {
+    "title": "Guest Harbor",
     "subtitle": "Welcome to our guest harbour. Find pricing, charts and practical information.",
     "spotsAvailable": "guest slips",
-    "pricing": "Harbour Pricing",
+    "pricing": "Harbor Pricing",
     "navigation": "Approach and Navigation",
     "slipFeeNote": "for berth holders",
     "joinWaitingList": "Join the waiting list",
@@ -176,7 +176,7 @@
     "ctaDescription": "Get in touch to reserve a guest slip or for more information.",
     "ctaButton": "Contact us"
   },
-  "bobil": {
+  "motorhome": {
     "title": "Motorhome Parking",
     "subtitle": "Motorhome pitches with power and facilities right by the harbour.",
     "spotsAvailable": "pitches",
@@ -203,7 +203,7 @@
     "foundedDesc": "The club was founded by a group of enthusiastic boat owners who wanted a community centred on life at sea.",
     "clubhouse": "Clubhouse Built",
     "clubhouseDesc": "The first clubhouse was completed and quickly became a gathering point for members.",
-    "expansion": "Harbour Expansion",
+    "expansion": "Harbor Expansion",
     "expansionDesc": "The harbour was expanded with a new breakwater and additional berths to meet growing demand.",
     "modernisation": "Modernisation",
     "modernisationDesc": "Comprehensive upgrade of pontoons, electrical systems and digital infrastructure for modern operations."
@@ -274,9 +274,9 @@
       "role": {
         "applicant": "Applicant",
         "member": "Member",
-        "slip_owner": "Slip Owner",
-        "styre": "Board Member",
-        "admin": "Administrator"
+        "admin": "Administrator",
+        "slip_holder": "Slip Owner",
+        "board": "Board Member"
       },
       "noSlip": "No assigned slip",
       "noBookings": "No upcoming bookings",
@@ -337,7 +337,6 @@
       "title": "Documents",
       "filterAll": "All",
       "filterMember": "Members",
-      "filterStyre": "Board",
       "download": "Download",
       "comments": "Comments",
       "addComment": "Add comment",
@@ -346,7 +345,8 @@
       "noComments": "No comments yet",
       "commentSuccess": "Comment added",
       "commentError": "Could not add comment",
-      "loadError": "Could not load documents"
+      "loadError": "Could not load documents",
+      "filterBoard": "Board"
     },
     "waitingList": {
       "title": "Waiting List",
@@ -425,7 +425,6 @@
   "admin": {
     "title": "Administration",
     "ariaNav": "Admin navigation",
-    "groupHarbour": "Harbour",
     "groupFinance": "Finance",
     "groupArchive": "Archive and info",
     "sidebar": {
@@ -451,7 +450,6 @@
       "duesReceived": "Dues received",
       "outstanding": "Outstanding",
       "overdue": "Overdue",
-      "andelCollected": "Andel collected",
       "bookingRevenue": "Booking revenue",
       "viewPayments": "View payments",
       "viewOverdue": "View overdue",
@@ -462,7 +460,6 @@
       "allTypes": "All types",
       "allStatuses": "All statuses",
       "typeDues": "Dues",
-      "typeAndel": "Andel",
       "typeSlipFee": "Slip fee",
       "typeSlipfee": "Slip fee",
       "typeBooking": "Booking",
@@ -489,7 +486,9 @@
       "selectMember": "Select member",
       "searchMember": "Search by name or email...",
       "invoicePreview": "Invoice for {name}: {type}, {amount} NOK, due {due}",
-      "invoiceCreated": "Invoice created"
+      "invoiceCreated": "Invoice created",
+      "harborMembershipCollected": "Andel collected",
+      "typeHarborMembership": "Harbor Membership"
     },
     "events": {
       "title": "Event Management",
@@ -515,10 +514,10 @@
       "resourceType": "Resource type",
       "allTypes": "All types",
       "guestSlip": "Guest slip",
-      "bobilSpot": "Motorhome spot",
       "clubRoom": "Club room",
       "dateFrom": "From",
-      "dateTo": "To"
+      "dateTo": "To",
+      "motorhomeSpot": "Motorhome spot"
     },
     "bookingSettings": {
       "title": "Booking Settings",
@@ -551,11 +550,11 @@
       "recipients": "Recipients",
       "recipientAll": "All members",
       "recipientMembers": "Members only",
-      "recipientStyre": "Board members",
-      "recipientSlipOwners": "Slip owners",
       "preview": "Preview",
       "send": "Send broadcast",
-      "noHistory": "No broadcasts sent yet"
+      "noHistory": "No broadcasts sent yet",
+      "recipientBoard": "Board members",
+      "recipientSlipHolders": "Slip owners"
     },
     "products": {
       "title": "Products",
@@ -607,11 +606,9 @@
       "priceDeleted": "Price deleted",
       "saveError": "Could not save",
       "deleteError": "Could not delete",
-      "categoryMoloandel": "Breakwater share",
       "categorySlipFee": "Slip fee",
       "categorySeasonalRental": "Seasonal berth",
       "categoryGuest": "Guest slips",
-      "categoryBobil": "Motorhome parking",
       "categoryRoomHire": "Room hire",
       "categoryService": "Services",
       "categoryOther": "Other",
@@ -620,7 +617,9 @@
       "unitSeason": "Per season",
       "unitDay": "Per day",
       "unitNight": "Per night",
-      "unitHour": "Per hour"
+      "unitHour": "Per hour",
+      "categoryHarborMembership": "Breakwater share",
+      "categoryMotorhome": "Motorhome parking"
     },
     "users": {
       "name": "Name",
@@ -677,7 +676,8 @@
       "approveDimensions": "Approve dimensions",
       "approveSuccess": "Dimensions approved",
       "approveError": "Could not approve dimensions"
-    }
+    },
+    "groupHarbor": "Harbor"
   },
   "projects": {
     "title": "Projects",
@@ -742,14 +742,14 @@
     "loadMore": "Load older messages",
     "rooms": {
       "general": "General",
-      "harbour": "Harbour",
       "events": "Events",
       "forsale": "For sale",
-      "styre": "Board"
+      "harbor": "Harbor",
+      "board": "Board"
     }
   },
-  "dugnad": {
-    "title": "Working Day",
+  "volunteer": {
+    "title": "Volunteer Schedule",
     "join": "Join",
     "leave": "Leave",
     "joined": "You have joined the task",
@@ -761,7 +761,6 @@
     "maxParticipants": "Max participants",
     "participants": "Participants",
     "materials": "Materials",
-    "ansvarlig": "Responsible",
     "collaborator": "Participant",
     "hours": "Hours",
     "signedUpHours": "Signed-up hours",
@@ -782,10 +781,11 @@
     "listActive": "Active",
     "listCompleted": "Completed",
     "settings": "Settings",
-    "requiredHoursPerYear": "Working hours per year",
+    "requiredHoursPerYear": "Volunteer hours per year",
     "settingsUpdated": "Settings updated",
     "allMembers": "All members",
-    "eventProjects": "Working day projects"
+    "eventProjects": "Volunteer day projects",
+    "responsible": "Responsible"
   },
   "mapAdmin": {
     "title": "Chart Markers",
@@ -802,7 +802,7 @@
       "buoy": "Buoy",
       "hazard": "Hazard",
       "anchorage": "Anchorage",
-      "harbour": "Harbour"
+      "harbor": "Harbor"
     },
     "noMarkers": "No markers added yet",
     "saved": "Marker saved",
@@ -812,7 +812,6 @@
     "title": "Book",
     "subtitle": "Reserve a guest slip, motorhome spot, clubhouse, or hoist",
     "guestSlip": "Guest Slip",
-    "bobilSpot": "Motorhome Spot",
     "clubRoom": "Clubhouse",
     "slipHoist": "Slip Hoist",
     "boatDimensions": "Boat Dimensions",
@@ -859,7 +858,8 @@
       "emailRequired": "Email is required",
       "emailInvalid": "Invalid email address",
       "phoneInvalid": "Invalid phone number"
-    }
+    },
+    "motorhomeSpot": "Motorhome Spot"
   },
   "notifications": {
     "title": "Notifications",
@@ -877,11 +877,11 @@
       "payment_reminder": "Payment reminders",
       "slip_offer": "Slip offers",
       "booking_confirm": "Booking confirmations",
-      "dugnad_reminder": "Working day reminders",
-      "styre_announcement": "Board announcements",
       "waiting_list": "Waiting list updates",
       "new_document": "New documents",
-      "event_reminder": "Event reminders"
+      "event_reminder": "Event reminders",
+      "volunteer_reminder": "Volunteer day reminders",
+      "board_announcement": "Board announcements"
     },
     "admin": {
       "title": "Notification Settings",

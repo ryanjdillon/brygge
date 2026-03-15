@@ -183,13 +183,13 @@ func (h *AdminSlipsHandler) HandleGetSlip(w http.ResponseWriter, r *http.Request
 		ID          string   `json:"id"`
 		UserID      string   `json:"user_id"`
 		UserName    string   `json:"user_name"`
-		AndelAmount *float64 `json:"andel_amount"`
-		AssignedAt  string   `json:"assigned_at"`
-		ReleasedAt  *string  `json:"released_at"`
+		HarborMembershipAmount *float64 `json:"harbor_membership_amount"`
+		AssignedAt             string   `json:"assigned_at"`
+		ReleasedAt             *string  `json:"released_at"`
 	}
 
 	aRows, err := h.db.Query(ctx,
-		`SELECT sa.id, sa.user_id, u.full_name, sa.andel_amount, sa.assigned_at, sa.released_at
+		`SELECT sa.id, sa.user_id, u.full_name, sa.harbor_membership_amount, sa.assigned_at, sa.released_at
 		 FROM slip_assignments sa
 		 JOIN users u ON u.id = sa.user_id
 		 WHERE sa.slip_id = $1
@@ -206,7 +206,7 @@ func (h *AdminSlipsHandler) HandleGetSlip(w http.ResponseWriter, r *http.Request
 	var assignments []assignmentRow
 	for aRows.Next() {
 		var a assignmentRow
-		if err := aRows.Scan(&a.ID, &a.UserID, &a.UserName, &a.AndelAmount, &a.AssignedAt, &a.ReleasedAt); err != nil {
+		if err := aRows.Scan(&a.ID, &a.UserID, &a.UserName, &a.HarborMembershipAmount, &a.AssignedAt, &a.ReleasedAt); err != nil {
 			h.log.Error().Err(err).Msg("failed to scan assignment row")
 			Error(w, http.StatusInternalServerError, "internal error")
 			return
@@ -351,7 +351,7 @@ func (h *AdminSlipsHandler) HandleAssignSlip(w http.ResponseWriter, r *http.Requ
 
 	var req struct {
 		UserID      string   `json:"user_id"`
-		AndelAmount *float64 `json:"andel_amount"`
+		HarborMembershipAmount *float64 `json:"harbor_membership_amount"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		Error(w, http.StatusBadRequest, "invalid request body")
@@ -392,10 +392,10 @@ func (h *AdminSlipsHandler) HandleAssignSlip(w http.ResponseWriter, r *http.Requ
 
 	var assignmentID string
 	err = tx.QueryRow(ctx,
-		`INSERT INTO slip_assignments (slip_id, user_id, club_id, andel_amount)
+		`INSERT INTO slip_assignments (slip_id, user_id, club_id, harbor_membership_amount)
 		 VALUES ($1, $2, $3, $4)
 		 RETURNING id`,
-		slipID, req.UserID, clubID, req.AndelAmount,
+		slipID, req.UserID, clubID, req.HarborMembershipAmount,
 	).Scan(&assignmentID)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to create slip assignment")
@@ -414,8 +414,8 @@ func (h *AdminSlipsHandler) HandleAssignSlip(w http.ResponseWriter, r *http.Requ
 	}
 
 	newData, _ := json.Marshal(map[string]any{
-		"user_id":       req.UserID,
-		"andel_amount":  req.AndelAmount,
+		"user_id":                  req.UserID,
+		"harbor_membership_amount": req.HarborMembershipAmount,
 		"assignment_id": assignmentID,
 	})
 	_, err = tx.Exec(ctx,

@@ -19,7 +19,7 @@ const markerTypeColors: Record<string, string> = {
   buoy: '#f59e0b',
   hazard: '#dc2626',
   anchorage: '#3b82f6',
-  harbour: '#059669',
+  harbor: '#059669',
 }
 
 function addMarkers() {

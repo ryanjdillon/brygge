@@ -123,32 +123,32 @@ func TestSummarizeCommentsAPIError(t *testing.T) {
 	}
 }
 
-func TestGenerateSakliste(t *testing.T) {
-	saklisteJSON := `{"items":[{"number":1,"title":"Vedlikehold brygge 3","description":"Diskutere reparasjon"}]}`
+func TestGenerateAgenda(t *testing.T) {
+	agendaJSON := `{"items":[{"number":1,"title":"Vedlikehold brygge 3","description":"Diskutere reparasjon"}]}`
 
 	server := newMockAnthropicServer(t, http.StatusOK, messagesResponse{
 		Content: []contentBlock{
-			{Type: "text", Text: saklisteJSON},
+			{Type: "text", Text: agendaJSON},
 		},
 	}, nil)
 	defer server.Close()
 
 	client := newTestClaudeClient(server.URL)
 
-	sakliste, err := client.GenerateSakliste(context.Background(), "Board Meeting", []Comment{
+	agenda, err := client.GenerateAgenda(context.Background(), "Board Meeting", []Comment{
 		{Author: "Kari", Body: "Dock 3 needs repair", CreatedAt: "2025-01-01"},
 	}, "")
 	if err != nil {
-		t.Fatalf("GenerateSakliste() error = %v", err)
+		t.Fatalf("GenerateAgenda() error = %v", err)
 	}
 
-	if len(sakliste.Items) != 1 {
-		t.Fatalf("got %d items, want 1", len(sakliste.Items))
+	if len(agenda.Items) != 1 {
+		t.Fatalf("got %d items, want 1", len(agenda.Items))
 	}
-	if sakliste.Items[0].Number != 1 {
-		t.Errorf("Items[0].Number = %d, want 1", sakliste.Items[0].Number)
+	if agenda.Items[0].Number != 1 {
+		t.Errorf("Items[0].Number = %d, want 1", agenda.Items[0].Number)
 	}
-	if sakliste.Items[0].Title != "Vedlikehold brygge 3" {
-		t.Errorf("Items[0].Title = %q, want %q", sakliste.Items[0].Title, "Vedlikehold brygge 3")
+	if agenda.Items[0].Title != "Vedlikehold brygge 3" {
+		t.Errorf("Items[0].Title = %q, want %q", agenda.Items[0].Title, "Vedlikehold brygge 3")
 	}
 }

@@ -116,7 +116,7 @@ func TestHandleConfirmBookingRequiresStyre(t *testing.T) {
 	jwtSvc := testJWTService()
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Authenticate(jwtSvc))
-		r.Use(middleware.RequireRole("styre", "harbour_master"))
+		r.Use(middleware.RequireRole("board", "harbor_master"))
 		r.Post("/bookings/{bookingID}/confirm", h.HandleConfirmBooking)
 	})
 

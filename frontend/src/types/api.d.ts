@@ -140,7 +140,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/admin/documents/{docID}/sakliste": {
+    "/api/v1/admin/documents/{docID}/agenda": {
         parameters: {
             query?: never;
             header?: never;
@@ -168,75 +168,6 @@ export interface paths {
         put?: never;
         /** AI-summarize document comments */
         post: operations["summarize-document-comments"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/admin/dugnad/events/{eventID}/projects": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List projects linked to event */
-        get: operations["admin-get-event-projects"];
-        put?: never;
-        /** Link project to event */
-        post: operations["admin-link-project-event"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/admin/dugnad/events/{eventID}/projects/{projectID}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Unlink project from event */
-        delete: operations["admin-unlink-project-event"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/admin/dugnad/hours": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List all volunteer hours */
-        get: operations["admin-list-dugnad-hours"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/admin/dugnad/settings/hours": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Set required volunteer hours */
-        put: operations["admin-set-required-hours"];
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -757,6 +688,75 @@ export interface paths {
         get?: never;
         /** Update user roles */
         put: operations["admin-update-user-roles"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/volunteer/events/{eventID}/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List projects linked to event */
+        get: operations["admin-get-event-projects"];
+        put?: never;
+        /** Link project to event */
+        post: operations["admin-link-project-event"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/volunteer/events/{eventID}/projects/{projectID}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Unlink project from event */
+        delete: operations["admin-unlink-project-event"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/volunteer/hours": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List all volunteer hours */
+        get: operations["admin-list-volunteer-hours"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/volunteer/settings/hours": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set required volunteer hours */
+        put: operations["admin-set-required-hours"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1622,23 +1622,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/members/me/dugnad-hours": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get my volunteer hours */
-        get: operations["get-my-dugnad-hours"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/members/me/notifications": {
         parameters: {
             query?: never;
@@ -1685,6 +1668,23 @@ export interface paths {
         put?: never;
         /** Report a slip issue */
         post: operations["report-slip-issue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/members/me/volunteer-hours": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get my volunteer hours */
+        get: operations["get-my-volunteer-hours"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2713,7 +2713,7 @@ export interface components {
             created_at: string;
             /** @description Broadcast UUID */
             id: string;
-            /** @description Recipient group (all, members, styre, slip_owners) */
+            /** @description Recipient group (all, members, board, slip_holders) */
             recipients: string;
             /**
              * Format: date-time
@@ -2970,7 +2970,7 @@ export interface components {
             upcomingBookingsCount: number;
         };
         DashboardSlip: {
-            /** @description Harbour section/location */
+            /** @description Harbor section/location */
             location: string;
             /** @description Slip number */
             number: string;
@@ -3077,38 +3077,6 @@ export interface components {
             readonly $schema?: string;
             /** @description Document list */
             documents: components["schemas"]["Document"][] | null;
-        };
-        DugnadHoursSummary: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example https://example.com/schemas/DugnadHoursSummary.json
-             */
-            readonly $schema?: string;
-            /**
-             * Format: double
-             * @description Hours completed
-             */
-            completed_hours: number;
-            /** @description Member name */
-            name: string;
-            /**
-             * Format: double
-             * @description Remaining hours
-             */
-            remaining: number;
-            /**
-             * Format: double
-             * @description Required hours
-             */
-            required_hours: number;
-            /**
-             * Format: double
-             * @description Hours signed up for
-             */
-            signed_up_hours: number;
-            /** @description User UUID */
-            user_id: string;
         };
         EmailLoginRequest: {
             /**
@@ -3268,11 +3236,6 @@ export interface components {
             readonly $schema?: string;
             /**
              * Format: double
-             * @description Total andel collected
-             */
-            total_andel_collected: number;
-            /**
-             * Format: double
              * @description Total booking revenue
              */
             total_booking_revenue: number;
@@ -3281,6 +3244,11 @@ export interface components {
              * @description Total dues received
              */
             total_dues_received: number;
+            /**
+             * Format: double
+             * @description Total harbor membership collected
+             */
+            total_harbor_membership_collected: number;
             /**
              * Format: double
              * @description Total outstanding amount
@@ -3579,7 +3547,7 @@ export interface components {
             length_m?: number;
             /** @description Slip number */
             number: string;
-            /** @description Harbour section */
+            /** @description Harbor section */
             section: string;
             /** @description Slip UUID */
             slip_id: string;
@@ -4133,7 +4101,7 @@ export interface components {
             number: string;
             /** @description Current occupant name */
             occupant_name?: string;
-            /** @description Harbour section */
+            /** @description Harbor section */
             section: string;
             /**
              * @description Slip status
@@ -4196,7 +4164,7 @@ export interface components {
             member_name: string;
             /** @description Notes */
             notes: string;
-            /** @description Harbour section */
+            /** @description Harbor section */
             section: string;
             /** @description Slip assignment UUID */
             slip_assignment_id: string;
@@ -4276,8 +4244,6 @@ export interface components {
              * @description Actual hours spent
              */
             actual_hours: number | null;
-            /** @description Responsible person UUID */
-            ansvarlig_id: string | null;
             /** @description Assignee user UUID */
             assignee_id: string | null;
             /** @description Club UUID */
@@ -4316,6 +4282,8 @@ export interface components {
             priority: string;
             /** @description Project UUID */
             project_id: string;
+            /** @description Responsible person UUID */
+            responsible_id: string | null;
             /** @description Task status */
             status: string;
             /** @description Task title */
@@ -4467,6 +4435,38 @@ export interface components {
             phone: string;
             /** @description Assigned roles */
             roles: string[] | null;
+        };
+        VolunteerHoursSummary: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/VolunteerHoursSummary.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: double
+             * @description Hours completed
+             */
+            completed_hours: number;
+            /** @description Member name */
+            name: string;
+            /**
+             * Format: double
+             * @description Remaining hours
+             */
+            remaining: number;
+            /**
+             * Format: double
+             * @description Required hours
+             */
+            required_hours: number;
+            /**
+             * Format: double
+             * @description Hours signed up for
+             */
+            signed_up_hours: number;
+            /** @description User UUID */
+            user_id: string;
         };
         "Vote-feature-requestRequest": {
             /**
@@ -4931,168 +4931,6 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "admin-get-event-projects": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Event UUID */
-                eventID: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Project"][] | null;
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "admin-link-project-event": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Event UUID */
-                eventID: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["Admin-link-project-eventRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["StatusResponse"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "admin-unlink-project-event": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Event UUID */
-                eventID: string;
-                /** @description Project UUID */
-                projectID: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description No Content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "admin-list-dugnad-hours": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DugnadHoursSummary"][] | null;
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "admin-set-required-hours": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["Admin-set-required-hoursRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["StatusResponse"];
                 };
             };
             /** @description Error */
@@ -6422,6 +6260,168 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminUser"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "admin-get-event-projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Event UUID */
+                eventID: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "admin-link-project-event": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Event UUID */
+                eventID: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Admin-link-project-eventRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "admin-unlink-project-event": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Event UUID */
+                eventID: string;
+                /** @description Project UUID */
+                projectID: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "admin-list-volunteer-hours": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VolunteerHoursSummary"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "admin-set-required-hours": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Admin-set-required-hoursRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponse"];
                 };
             };
             /** @description Error */
@@ -8292,35 +8292,6 @@ export interface operations {
             };
         };
     };
-    "get-my-dugnad-hours": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DugnadHoursSummary"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
     "get-notification-preferences": {
         parameters: {
             query?: never;
@@ -8432,6 +8403,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StatusResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-my-volunteer-hours": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VolunteerHoursSummary"];
                 };
             };
             /** @description Error */

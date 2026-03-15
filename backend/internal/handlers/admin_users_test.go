@@ -19,7 +19,7 @@ func newTestAdminUsersHandler(t *testing.T) *AdminUsersHandler {
 
 func TestHandleListUsersUnauthenticated(t *testing.T) {
 	h := newTestAdminUsersHandler(t)
-	r := setupRoleProtectedRouter(http.MethodGet, "/admin/users", h.HandleListUsers, "styre", "admin")
+	r := setupRoleProtectedRouter(http.MethodGet, "/admin/users", h.HandleListUsers, "board", "admin")
 
 	req := httptest.NewRequest(http.MethodGet, "/admin/users", nil)
 	rec := httptest.NewRecorder()
@@ -33,7 +33,7 @@ func TestHandleListUsersUnauthenticated(t *testing.T) {
 
 func TestHandleListUsersForbidden(t *testing.T) {
 	h := newTestAdminUsersHandler(t)
-	r := setupRoleProtectedRouter(http.MethodGet, "/admin/users", h.HandleListUsers, "styre", "admin")
+	r := setupRoleProtectedRouter(http.MethodGet, "/admin/users", h.HandleListUsers, "board", "admin")
 
 	token := generateTestToken("user-1", "club-1", []string{"member"})
 
@@ -50,7 +50,7 @@ func TestHandleListUsersForbidden(t *testing.T) {
 
 func TestHandleGetUserUnauthenticated(t *testing.T) {
 	h := newTestAdminUsersHandler(t)
-	r := setupRoleProtectedRouter(http.MethodGet, "/admin/users/{userID}", h.HandleGetUser, "styre", "admin")
+	r := setupRoleProtectedRouter(http.MethodGet, "/admin/users/{userID}", h.HandleGetUser, "board", "admin")
 
 	req := httptest.NewRequest(http.MethodGet, "/admin/users/some-id", nil)
 	rec := httptest.NewRecorder()
@@ -64,7 +64,7 @@ func TestHandleGetUserUnauthenticated(t *testing.T) {
 
 func TestHandleGetUserForbidden(t *testing.T) {
 	h := newTestAdminUsersHandler(t)
-	r := setupRoleProtectedRouter(http.MethodGet, "/admin/users/{userID}", h.HandleGetUser, "styre", "admin")
+	r := setupRoleProtectedRouter(http.MethodGet, "/admin/users/{userID}", h.HandleGetUser, "board", "admin")
 
 	token := generateTestToken("user-1", "club-1", []string{"member"})
 
@@ -81,7 +81,7 @@ func TestHandleGetUserForbidden(t *testing.T) {
 
 func TestHandleUpdateUserRolesUnauthenticated(t *testing.T) {
 	h := newTestAdminUsersHandler(t)
-	r := setupRoleProtectedRouter(http.MethodPut, "/admin/users/{userID}/roles", h.HandleUpdateUserRoles, "styre", "admin")
+	r := setupRoleProtectedRouter(http.MethodPut, "/admin/users/{userID}/roles", h.HandleUpdateUserRoles, "board", "admin")
 
 	body := `{"roles":["member"]}`
 	req := httptest.NewRequest(http.MethodPut, "/admin/users/some-id/roles", strings.NewReader(body))
@@ -97,7 +97,7 @@ func TestHandleUpdateUserRolesUnauthenticated(t *testing.T) {
 
 func TestHandleUpdateUserRolesForbidden(t *testing.T) {
 	h := newTestAdminUsersHandler(t)
-	r := setupRoleProtectedRouter(http.MethodPut, "/admin/users/{userID}/roles", h.HandleUpdateUserRoles, "styre", "admin")
+	r := setupRoleProtectedRouter(http.MethodPut, "/admin/users/{userID}/roles", h.HandleUpdateUserRoles, "board", "admin")
 
 	token := generateTestToken("user-1", "club-1", []string{"member"})
 
@@ -116,9 +116,9 @@ func TestHandleUpdateUserRolesForbidden(t *testing.T) {
 
 func TestHandleUpdateUserRolesInvalidBody(t *testing.T) {
 	h := newTestAdminUsersHandler(t)
-	r := setupRoleProtectedRouter(http.MethodPut, "/admin/users/{userID}/roles", h.HandleUpdateUserRoles, "styre", "admin")
+	r := setupRoleProtectedRouter(http.MethodPut, "/admin/users/{userID}/roles", h.HandleUpdateUserRoles, "board", "admin")
 
-	token := generateTestToken("user-1", "club-1", []string{"styre"})
+	token := generateTestToken("user-1", "club-1", []string{"board"})
 
 	req := httptest.NewRequest(http.MethodPut, "/admin/users/some-id/roles", strings.NewReader("not json"))
 	req.Header.Set("Content-Type", "application/json")
@@ -134,9 +134,9 @@ func TestHandleUpdateUserRolesInvalidBody(t *testing.T) {
 
 func TestHandleUpdateUserRolesInvalidRole(t *testing.T) {
 	h := newTestAdminUsersHandler(t)
-	r := setupRoleProtectedRouter(http.MethodPut, "/admin/users/{userID}/roles", h.HandleUpdateUserRoles, "styre", "admin")
+	r := setupRoleProtectedRouter(http.MethodPut, "/admin/users/{userID}/roles", h.HandleUpdateUserRoles, "board", "admin")
 
-	token := generateTestToken("user-1", "club-1", []string{"styre"})
+	token := generateTestToken("user-1", "club-1", []string{"board"})
 
 	body := `{"roles":["member","superadmin"]}`
 	req := httptest.NewRequest(http.MethodPut, "/admin/users/some-id/roles", strings.NewReader(body))
@@ -161,7 +161,7 @@ func TestHandleUpdateUserRolesInvalidRole(t *testing.T) {
 
 func TestHandleDeleteUserUnauthenticated(t *testing.T) {
 	h := newTestAdminUsersHandler(t)
-	r := setupRoleProtectedRouter(http.MethodDelete, "/admin/users/{userID}", h.HandleDeleteUser, "styre", "admin")
+	r := setupRoleProtectedRouter(http.MethodDelete, "/admin/users/{userID}", h.HandleDeleteUser, "board", "admin")
 
 	req := httptest.NewRequest(http.MethodDelete, "/admin/users/some-id", nil)
 	rec := httptest.NewRecorder()
@@ -175,7 +175,7 @@ func TestHandleDeleteUserUnauthenticated(t *testing.T) {
 
 func TestHandleDeleteUserForbidden(t *testing.T) {
 	h := newTestAdminUsersHandler(t)
-	r := setupRoleProtectedRouter(http.MethodDelete, "/admin/users/{userID}", h.HandleDeleteUser, "styre", "admin")
+	r := setupRoleProtectedRouter(http.MethodDelete, "/admin/users/{userID}", h.HandleDeleteUser, "board", "admin")
 
 	token := generateTestToken("user-1", "club-1", []string{"member"})
 
@@ -192,7 +192,7 @@ func TestHandleDeleteUserForbidden(t *testing.T) {
 
 func TestHandleDeleteUserSelfDeletion(t *testing.T) {
 	h := newTestAdminUsersHandler(t)
-	r := setupRoleProtectedRouter(http.MethodDelete, "/admin/users/{userID}", h.HandleDeleteUser, "styre", "admin")
+	r := setupRoleProtectedRouter(http.MethodDelete, "/admin/users/{userID}", h.HandleDeleteUser, "board", "admin")
 
 	token := generateTestToken("user-1", "club-1", []string{"admin"})
 

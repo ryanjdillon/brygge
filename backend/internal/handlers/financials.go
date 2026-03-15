@@ -35,7 +35,7 @@ type financialSummary struct {
 	TotalDuesReceived  float64 `json:"total_dues_received"`
 	TotalOutstanding   float64 `json:"total_outstanding"`
 	TotalOverdue       float64 `json:"total_overdue"`
-	TotalAndelCollected float64 `json:"total_andel_collected"`
+	TotalHarborMembershipCollected float64 `json:"total_harbor_membership_collected"`
 	TotalBookingRevenue float64 `json:"total_booking_revenue"`
 	Year               *int    `json:"year,omitempty"`
 }
@@ -117,7 +117,7 @@ func (h *FinancialsHandler) HandleGetFinancialSummary(w http.ResponseWriter, r *
 			COALESCE(SUM(CASE WHEN p.type = 'dues' AND p.status = 'completed' THEN p.amount ELSE 0 END), 0),
 			COALESCE(SUM(CASE WHEN p.status = 'pending' THEN p.amount ELSE 0 END), 0),
 			COALESCE(SUM(CASE WHEN p.status = 'pending' AND p.due_date < now() THEN p.amount ELSE 0 END), 0),
-			COALESCE(SUM(CASE WHEN p.type = 'andel' AND p.status = 'completed' THEN p.amount ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN p.type = 'harbor_membership' AND p.status = 'completed' THEN p.amount ELSE 0 END), 0),
 			COALESCE(SUM(CASE WHEN p.type = 'booking' AND p.status = 'completed' THEN p.amount ELSE 0 END), 0)
 		FROM payments p
 		WHERE p.club_id = $1%s
@@ -128,7 +128,7 @@ func (h *FinancialsHandler) HandleGetFinancialSummary(w http.ResponseWriter, r *
 		&s.TotalDuesReceived,
 		&s.TotalOutstanding,
 		&s.TotalOverdue,
-		&s.TotalAndelCollected,
+		&s.TotalHarborMembershipCollected,
 		&s.TotalBookingRevenue,
 	)
 	if err != nil {

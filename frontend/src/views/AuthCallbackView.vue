@@ -29,7 +29,7 @@ onMounted(async () => {
 
       const data = await res.json()
       await auth.setTokens(data.access_token, data.refresh_token)
-      const redirect = auth.hasRole('admin') || auth.hasRole('styre') ? '/admin' : '/portal'
+      const redirect = auth.hasRole('admin') || auth.hasRole('board') ? '/admin' : '/portal'
       router.replace(redirect)
     } catch {
       router.replace('/login')

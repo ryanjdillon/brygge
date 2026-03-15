@@ -52,7 +52,7 @@ describe('auth store', () => {
     auth.user = { id: '1', name: 'Test', email: 'test@example.com', roles: ['member'] }
 
     expect(auth.hasRole('admin')).toBe(false)
-    expect(auth.hasRole('styre')).toBe(false)
+    expect(auth.hasRole('board')).toBe(false)
   })
 
   it('hasRole returns false when no user', () => {

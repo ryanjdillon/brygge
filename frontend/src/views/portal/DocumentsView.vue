@@ -31,7 +31,7 @@ function showToast(type: 'success' | 'error', message: string) {
 const filters = [
   { value: 'all', label: 'portal.documents.filterAll' },
   { value: 'member', label: 'portal.documents.filterMember' },
-  { value: 'styre', label: 'portal.documents.filterStyre' },
+  { value: 'board', label: 'portal.documents.filterBoard' },
 ]
 
 const { data: documents, isLoading, isError } = useQuery({

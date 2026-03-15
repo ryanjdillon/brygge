@@ -18,7 +18,7 @@ import {
   ShoppingBag,
   FolderKanban,
   Ship,
-  HardHat,
+  BrushCleaning,
   MapPin,
   Bell,
   ShieldCheck,
@@ -52,17 +52,17 @@ const navGroups = computed<NavGroup[]>(() => {
       items: [
         { to: '/admin/events', icon: CalendarDays, label: t('admin.sidebar.events') },
         { to: '/admin/users', icon: Users, label: t('admin.sidebar.users') },
-        { to: '/admin/waiting-list', icon: ListOrdered, label: t('admin.sidebar.waitingList'), roles: ['styre', 'admin'] },
+        { to: '/admin/waiting-list', icon: ListOrdered, label: t('admin.sidebar.waitingList'), roles: ['board', 'admin'] },
       ],
     },
     {
-      titleKey: 'admin.groupHarbour',
+      titleKey: 'admin.groupHarbor',
       items: [
-        { to: '/admin/slips', icon: Anchor, label: t('admin.sidebar.slips'), roles: ['styre', 'harbour_master', 'admin'] },
-        { to: '/admin/boats', icon: Ship, label: t('admin.sidebar.boats'), roles: ['styre', 'harbour_master', 'admin'] },
-        { to: '/admin/bookings', icon: CalendarCheck, label: t('admin.sidebar.bookings'), roles: ['styre', 'harbour_master', 'admin'], feature: 'bookings' },
+        { to: '/admin/slips', icon: Anchor, label: t('admin.sidebar.slips'), roles: ['board', 'harbor_master', 'admin'] },
+        { to: '/admin/boats', icon: Ship, label: t('admin.sidebar.boats'), roles: ['board', 'harbor_master', 'admin'] },
+        { to: '/admin/bookings', icon: CalendarCheck, label: t('admin.sidebar.bookings'), roles: ['board', 'harbor_master', 'admin'], feature: 'bookings' },
         { to: '/admin/projects', icon: FolderKanban, label: t('admin.sidebar.projects'), feature: 'projects' },
-        { to: '/admin/dugnad', icon: HardHat, label: t('dugnad.title'), feature: 'projects' },
+        { to: '/admin/volunteer', icon: BrushCleaning, label: t('volunteer.title'), feature: 'projects' },
         { to: '/admin/map', icon: MapPin, label: t('admin.sidebar.mapMarkers') },
       ],
     },
@@ -70,8 +70,8 @@ const navGroups = computed<NavGroup[]>(() => {
       titleKey: 'admin.groupFinance',
       items: [
         { to: '/admin/pricing', icon: DollarSign, label: t('admin.sidebar.pricing'), roles: ['admin', 'treasurer'], feature: 'commerce' },
-        { to: '/admin/products', icon: ShoppingBag, label: t('admin.sidebar.products'), roles: ['styre', 'admin'], feature: 'commerce' },
-        { to: '/admin/financials', icon: Banknote, label: t('admin.sidebar.financials'), roles: ['treasurer', 'styre', 'admin'], feature: 'commerce' },
+        { to: '/admin/products', icon: ShoppingBag, label: t('admin.sidebar.products'), roles: ['board', 'admin'], feature: 'commerce' },
+        { to: '/admin/financials', icon: Banknote, label: t('admin.sidebar.financials'), roles: ['treasurer', 'board', 'admin'], feature: 'commerce' },
       ],
     },
     {

@@ -46,14 +46,14 @@ type priceItem struct {
 }
 
 var validCategories = map[string]bool{
-	"moloandel":        true,
-	"slip_fee":         true,
-	"seasonal_rental":  true,
-	"guest":            true,
-	"bobil":            true,
-	"room_hire":        true,
-	"service":          true,
-	"other":            true,
+	"harbor_membership": true,
+	"slip_fee":          true,
+	"seasonal_rental":   true,
+	"guest":             true,
+	"motorhome":         true,
+	"room_hire":         true,
+	"service":           true,
+	"other":             true,
 }
 
 // HandleListPublic returns active price items grouped by category (no auth required).

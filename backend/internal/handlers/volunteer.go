@@ -14,21 +14,21 @@ import (
 	"github.com/brygge-klubb/brygge/internal/middleware"
 )
 
-type DugnadHandler struct {
+type VolunteerHandler struct {
 	db     *pgxpool.Pool
 	config *config.Config
 	log    zerolog.Logger
 }
 
-func NewDugnadHandler(
+func NewVolunteerHandler(
 	db *pgxpool.Pool,
 	cfg *config.Config,
 	log zerolog.Logger,
-) *DugnadHandler {
-	return &DugnadHandler{
+) *VolunteerHandler {
+	return &VolunteerHandler{
 		db:     db,
 		config: cfg,
-		log:    log.With().Str("handler", "dugnad").Logger(),
+		log:    log.With().Str("handler", "volunteer").Logger(),
 	}
 }
 
@@ -41,7 +41,7 @@ type taskParticipant struct {
 	Name     string    `json:"name"`
 }
 
-type dugnadHoursSummary struct {
+type volunteerHoursSummary struct {
 	UserID         string  `json:"user_id"`
 	Name           string  `json:"name"`
 	SignedUpHours  float64 `json:"signed_up_hours"`
@@ -67,7 +67,7 @@ type setRequiredHoursRequest struct {
 }
 
 // HandleJoinTask lets a member join a task as a participant.
-func (h *DugnadHandler) HandleJoinTask(w http.ResponseWriter, r *http.Request) {
+func (h *VolunteerHandler) HandleJoinTask(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
 	if claims == nil {
@@ -102,7 +102,7 @@ func (h *DugnadHandler) HandleJoinTask(w http.ResponseWriter, r *http.Request) {
 
 	role := "collaborator"
 	if currentCount == 0 {
-		role = "ansvarlig"
+		role = "responsible"
 	}
 
 	_, err = h.db.Exec(ctx,
@@ -117,9 +117,9 @@ func (h *DugnadHandler) HandleJoinTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if role == "ansvarlig" {
+	if role == "responsible" {
 		_, _ = h.db.Exec(ctx,
-			`UPDATE tasks SET ansvarlig_id = $1 WHERE id = $2`,
+			`UPDATE tasks SET responsible_id = $1 WHERE id = $2`,
 			claims.UserID, taskID,
 		)
 	}
@@ -128,7 +128,7 @@ func (h *DugnadHandler) HandleJoinTask(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleLeaveTask removes a member from a task.
-func (h *DugnadHandler) HandleLeaveTask(w http.ResponseWriter, r *http.Request) {
+func (h *VolunteerHandler) HandleLeaveTask(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
 	if claims == nil {
@@ -155,9 +155,9 @@ func (h *DugnadHandler) HandleLeaveTask(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if role == "ansvarlig" {
+	if role == "responsible" {
 		_, _ = h.db.Exec(ctx,
-			`UPDATE tasks SET ansvarlig_id = (
+			`UPDATE tasks SET responsible_id = (
 				SELECT user_id FROM task_participants
 				WHERE task_id = $1 ORDER BY joined_at LIMIT 1
 			) WHERE id = $1`,
@@ -169,7 +169,7 @@ func (h *DugnadHandler) HandleLeaveTask(w http.ResponseWriter, r *http.Request) 
 }
 
 // HandleListTaskParticipants returns participants for a task.
-func (h *DugnadHandler) HandleListTaskParticipants(w http.ResponseWriter, r *http.Request) {
+func (h *VolunteerHandler) HandleListTaskParticipants(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
 	if claims == nil {
@@ -210,7 +210,7 @@ func (h *DugnadHandler) HandleListTaskParticipants(w http.ResponseWriter, r *htt
 }
 
 // HandleAssignTask assigns a member to a task (admin).
-func (h *DugnadHandler) HandleAssignTask(w http.ResponseWriter, r *http.Request) {
+func (h *VolunteerHandler) HandleAssignTask(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
 	if claims == nil {
@@ -248,9 +248,9 @@ func (h *DugnadHandler) HandleAssignTask(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if req.Role == "ansvarlig" {
+	if req.Role == "responsible" {
 		_, _ = h.db.Exec(ctx,
-			`UPDATE tasks SET ansvarlig_id = $1 WHERE id = $2`,
+			`UPDATE tasks SET responsible_id = $1 WHERE id = $2`,
 			req.UserID, taskID,
 		)
 	}
@@ -259,7 +259,7 @@ func (h *DugnadHandler) HandleAssignTask(w http.ResponseWriter, r *http.Request)
 }
 
 // HandleAdjustHours sets actual hours for a completed task and per-participant hours.
-func (h *DugnadHandler) HandleAdjustHours(w http.ResponseWriter, r *http.Request) {
+func (h *VolunteerHandler) HandleAdjustHours(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
 	if claims == nil {
@@ -316,8 +316,8 @@ func (h *DugnadHandler) HandleAdjustHours(w http.ResponseWriter, r *http.Request
 	JSON(w, http.StatusOK, map[string]string{"status": "updated"})
 }
 
-// HandleGetMyDugnadHours returns the current user's dugnad hour summary.
-func (h *DugnadHandler) HandleGetMyDugnadHours(w http.ResponseWriter, r *http.Request) {
+// HandleGetMyVolunteerHours returns the current user's volunteer hour summary.
+func (h *VolunteerHandler) HandleGetMyVolunteerHours(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
 	if claims == nil {
@@ -325,7 +325,7 @@ func (h *DugnadHandler) HandleGetMyDugnadHours(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	var summary dugnadHoursSummary
+	var summary volunteerHoursSummary
 	err := h.db.QueryRow(ctx,
 		`SELECT
 			$1::uuid AS user_id,
@@ -342,14 +342,14 @@ func (h *DugnadHandler) HandleGetMyDugnadHours(w http.ResponseWriter, r *http.Re
 				JOIN tasks t ON t.id = tp.task_id
 				WHERE tp.user_id = $1 AND t.status = 'done' AND tp.hours IS NOT NULL
 			), 0) AS completed_hours,
-			COALESCE(c.required_dugnad_hours, 0) AS required_hours
+			COALESCE(c.required_volunteer_hours, 0) AS required_hours
 		 FROM users u
 		 JOIN clubs c ON c.id = u.club_id
 		 WHERE u.id = $1`,
 		claims.UserID,
 	).Scan(&summary.UserID, &summary.Name, &summary.SignedUpHours, &summary.CompletedHours, &summary.RequiredHours)
 	if err != nil {
-		h.log.Error().Err(err).Msg("failed to get dugnad hours")
+		h.log.Error().Err(err).Msg("failed to get volunteer hours")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
@@ -358,8 +358,8 @@ func (h *DugnadHandler) HandleGetMyDugnadHours(w http.ResponseWriter, r *http.Re
 	JSON(w, http.StatusOK, summary)
 }
 
-// HandleListAllDugnadHours returns dugnad hours for all members (admin).
-func (h *DugnadHandler) HandleListAllDugnadHours(w http.ResponseWriter, r *http.Request) {
+// HandleListAllVolunteerHours returns volunteer hours for all members (admin).
+func (h *VolunteerHandler) HandleListAllVolunteerHours(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
 	if claims == nil {
@@ -383,7 +383,7 @@ func (h *DugnadHandler) HandleListAllDugnadHours(w http.ResponseWriter, r *http.
 				JOIN tasks t2 ON t2.id = tp2.task_id
 				WHERE tp2.user_id = u.id AND t2.status = 'done' AND tp2.hours IS NOT NULL
 			), 0) AS completed_hours,
-			COALESCE(c.required_dugnad_hours, 0) AS required_hours
+			COALESCE(c.required_volunteer_hours, 0) AS required_hours
 		 FROM users u
 		 JOIN clubs c ON c.id = u.club_id
 		 WHERE u.club_id = $1
@@ -391,17 +391,17 @@ func (h *DugnadHandler) HandleListAllDugnadHours(w http.ResponseWriter, r *http.
 		claims.ClubID,
 	)
 	if err != nil {
-		h.log.Error().Err(err).Msg("failed to list dugnad hours")
+		h.log.Error().Err(err).Msg("failed to list volunteer hours")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	defer rows.Close()
 
-	summaries := make([]dugnadHoursSummary, 0)
+	summaries := make([]volunteerHoursSummary, 0)
 	for rows.Next() {
-		var s dugnadHoursSummary
+		var s volunteerHoursSummary
 		if err := rows.Scan(&s.UserID, &s.Name, &s.SignedUpHours, &s.CompletedHours, &s.RequiredHours); err != nil {
-			h.log.Error().Err(err).Msg("failed to scan dugnad hours")
+			h.log.Error().Err(err).Msg("failed to scan volunteer hours")
 			Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
@@ -412,8 +412,8 @@ func (h *DugnadHandler) HandleListAllDugnadHours(w http.ResponseWriter, r *http.
 	JSON(w, http.StatusOK, summaries)
 }
 
-// HandleSetRequiredHours sets the club's required dugnad hours.
-func (h *DugnadHandler) HandleSetRequiredHours(w http.ResponseWriter, r *http.Request) {
+// HandleSetRequiredHours sets the club's required volunteer hours.
+func (h *VolunteerHandler) HandleSetRequiredHours(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
 	if claims == nil {
@@ -428,7 +428,7 @@ func (h *DugnadHandler) HandleSetRequiredHours(w http.ResponseWriter, r *http.Re
 	}
 
 	_, err := h.db.Exec(ctx,
-		`UPDATE clubs SET required_dugnad_hours = $1 WHERE id = $2`,
+		`UPDATE clubs SET required_volunteer_hours = $1 WHERE id = $2`,
 		req.Hours, claims.ClubID,
 	)
 	if err != nil {
@@ -440,8 +440,8 @@ func (h *DugnadHandler) HandleSetRequiredHours(w http.ResponseWriter, r *http.Re
 	JSON(w, http.StatusOK, map[string]string{"status": "updated"})
 }
 
-// HandleLinkProjectEvent links a project to a dugnad event.
-func (h *DugnadHandler) HandleLinkProjectEvent(w http.ResponseWriter, r *http.Request) {
+// HandleLinkProjectEvent links a project to a volunteer event.
+func (h *VolunteerHandler) HandleLinkProjectEvent(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
 	if claims == nil {
@@ -488,7 +488,7 @@ func (h *DugnadHandler) HandleLinkProjectEvent(w http.ResponseWriter, r *http.Re
 }
 
 // HandleUnlinkProjectEvent removes a project-event link.
-func (h *DugnadHandler) HandleUnlinkProjectEvent(w http.ResponseWriter, r *http.Request) {
+func (h *VolunteerHandler) HandleUnlinkProjectEvent(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
 	if claims == nil {
@@ -523,7 +523,7 @@ func (h *DugnadHandler) HandleUnlinkProjectEvent(w http.ResponseWriter, r *http.
 }
 
 // HandleGetEventProjects returns projects linked to an event.
-func (h *DugnadHandler) HandleGetEventProjects(w http.ResponseWriter, r *http.Request) {
+func (h *VolunteerHandler) HandleGetEventProjects(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
 	if claims == nil {

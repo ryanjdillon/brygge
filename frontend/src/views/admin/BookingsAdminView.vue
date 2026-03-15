@@ -100,7 +100,7 @@ function statusClass(status: string): string {
         >
           <option value="">{{ t('admin.bookings.allTypes') }}</option>
           <option value="guest_slip">{{ t('admin.bookings.guestSlip') }}</option>
-          <option value="bobil_spot">{{ t('admin.bookings.bobilSpot') }}</option>
+          <option value="bobil_spot">{{ t('admin.bookings.motorhomeSpot') }}</option>
           <option value="club_room">{{ t('admin.bookings.clubRoom') }}</option>
           <option value="other">{{ t('admin.events.tagOther') }}</option>
         </select>

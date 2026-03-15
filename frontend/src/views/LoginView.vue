@@ -36,7 +36,7 @@ async function handleEmailLogin() {
   const ok = await auth.login(email.value, password.value)
   submitting.value = false
   if (ok) {
-    const redirect = auth.hasRole('admin') || auth.hasRole('styre') ? '/admin' : '/portal'
+    const redirect = auth.hasRole('admin') || auth.hasRole('board') ? '/admin' : '/portal'
     router.push(redirect)
   }
 }

@@ -11,7 +11,7 @@ import {
   type Task,
   type MaterialItem,
 } from '@/composables/useProjects'
-import { useJoinTask, useLeaveTask } from '@/composables/useDugnad'
+import { useJoinTask, useLeaveTask } from '@/composables/useVolunteer'
 import { ArrowLeft, ArrowRight, Plus, X, Trash2, Users, Clock, Package } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -132,15 +132,15 @@ function openDetail(task: Task) {
 
 function handleJoinTask(taskId: string) {
   joinTask.mutate(taskId, {
-    onSuccess: () => showToast('success', t('dugnad.joined')),
-    onError: () => showToast('error', t('dugnad.joinError')),
+    onSuccess: () => showToast('success', t('volunteer.joined')),
+    onError: () => showToast('error', t('volunteer.joinError')),
   })
 }
 
 function handleLeaveTask(taskId: string) {
   leaveTask.mutate(taskId, {
-    onSuccess: () => showToast('success', t('dugnad.left')),
-    onError: () => showToast('error', t('dugnad.leaveError')),
+    onSuccess: () => showToast('success', t('volunteer.left')),
+    onError: () => showToast('error', t('volunteer.leaveError')),
   })
 }
 
@@ -289,7 +289,7 @@ function moveTask(task: Task, direction: 'prev' | 'next') {
                 class="ml-auto rounded bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 hover:bg-green-100"
                 @click.stop="handleJoinTask(task.id)"
               >
-                {{ t('dugnad.join') }}
+                {{ t('volunteer.join') }}
               </button>
             </div>
           </div>
@@ -355,7 +355,7 @@ function moveTask(task: Task, direction: 'prev' | 'next') {
           </div>
           <div class="grid grid-cols-2 gap-4">
             <div>
-              <label class="block text-sm font-medium text-gray-700">{{ t('dugnad.estimatedHours') }}</label>
+              <label class="block text-sm font-medium text-gray-700">{{ t('volunteer.estimatedHours') }}</label>
               <input
                 v-model="newEstimatedHours"
                 type="number"
@@ -365,7 +365,7 @@ function moveTask(task: Task, direction: 'prev' | 'next') {
               />
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700">{{ t('dugnad.maxParticipants') }}</label>
+              <label class="block text-sm font-medium text-gray-700">{{ t('volunteer.maxParticipants') }}</label>
               <input
                 v-model="newMaxCollaborators"
                 type="number"
@@ -456,7 +456,7 @@ function moveTask(task: Task, direction: 'prev' | 'next') {
           </div>
           <div class="grid grid-cols-2 gap-4">
             <div>
-              <label class="block text-sm font-medium text-gray-700">{{ t('dugnad.estimatedHours') }}</label>
+              <label class="block text-sm font-medium text-gray-700">{{ t('volunteer.estimatedHours') }}</label>
               <input
                 v-model="editEstimatedHours"
                 type="number"
@@ -466,7 +466,7 @@ function moveTask(task: Task, direction: 'prev' | 'next') {
               />
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700">{{ t('dugnad.maxParticipants') }}</label>
+              <label class="block text-sm font-medium text-gray-700">{{ t('volunteer.maxParticipants') }}</label>
               <input
                 v-model="editMaxCollaborators"
                 type="number"
@@ -481,14 +481,14 @@ function moveTask(task: Task, direction: 'prev' | 'next') {
               class="rounded-md bg-green-50 px-3 py-1.5 text-sm font-medium text-green-700 hover:bg-green-100"
               @click="handleJoinTask(selectedTask!.id)"
             >
-              {{ t('dugnad.join') }}
+              {{ t('volunteer.join') }}
             </button>
             <button
               type="button"
               class="rounded-md bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100"
               @click="handleLeaveTask(selectedTask!.id)"
             >
-              {{ t('dugnad.leave') }}
+              {{ t('volunteer.leave') }}
             </button>
             <span class="ml-auto flex items-center gap-1 text-sm text-gray-500">
               <Users class="h-4 w-4" />

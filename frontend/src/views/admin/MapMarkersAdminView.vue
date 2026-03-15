@@ -22,7 +22,7 @@ const form = ref({
   sort_order: 0,
 })
 
-const markerTypes = ['waypoint', 'buoy', 'hazard', 'anchorage', 'harbour'] as const
+const markerTypes = ['waypoint', 'buoy', 'hazard', 'anchorage', 'harbor'] as const
 
 function openCreate() {
   editing.value = null

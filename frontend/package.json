@@ -19,7 +19,7 @@
     "@tanstack/vue-query": "^5",
     "class-variance-authority": "^0.7",
     "clsx": "^2",
-    "lucide-vue-next": "^0.474",
+    "lucide-vue-next": "^0.577.0",
     "maplibre-gl": "^5.19.0",
     "openapi-fetch": "^0.17.0",
     "pinia": "^2",

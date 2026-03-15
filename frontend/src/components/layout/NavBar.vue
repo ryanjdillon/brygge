@@ -20,8 +20,8 @@ async function handleLogout() {
 
 const navLinks = [
   { to: '/', label: 'nav.home' },
-  { to: '/harbour', label: 'nav.harbour' },
-  { to: '/bobil', label: 'nav.bobil' },
+  { to: '/harbor', label: 'nav.harbor' },
+  { to: '/motorhome', label: 'nav.motorhome' },
   { to: '/weather', label: 'nav.weather' },
   { to: '/merchandise', label: 'nav.merchandise' },
   { to: '/contact', label: 'nav.contact' },
@@ -96,7 +96,7 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
           <LanguageSwitcher />
           <template v-if="auth.isAuthenticated">
             <RouterLink
-              v-if="auth.hasRole('admin') || auth.hasRole('styre')"
+              v-if="auth.hasRole('admin') || auth.hasRole('board')"
               to="/admin"
               class="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
             >
@@ -179,7 +179,7 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
         <div class="border-t border-gray-200 pt-2">
           <template v-if="auth.isAuthenticated">
             <RouterLink
-              v-if="auth.hasRole('admin') || auth.hasRole('styre')"
+              v-if="auth.hasRole('admin') || auth.hasRole('board')"
               to="/admin"
               class="block rounded-md px-3 py-2 text-base font-medium text-gray-700 hover:bg-gray-100"
               @click="mobileOpen = false"

@@ -10,7 +10,7 @@ const auth = useAuthStore()
 
 const tags = [
   { key: 'regatta', label: 'calendar.filterRegatta' },
-  { key: 'dugnad', label: 'calendar.filterDugnad' },
+  { key: 'volunteer', label: 'calendar.filterVolunteer' },
   { key: 'social', label: 'calendar.filterSocial' },
   { key: 'agm', label: 'calendar.filterAgm' },
 ]
@@ -56,7 +56,7 @@ function formatDate(iso: string): string {
 function tagColor(tag: string): string {
   switch (tag) {
     case 'regatta': return 'bg-blue-100 text-blue-800'
-    case 'dugnad': return 'bg-orange-100 text-orange-800'
+    case 'volunteer': return 'bg-orange-100 text-orange-800'
     case 'social': return 'bg-green-100 text-green-800'
     case 'agm': return 'bg-purple-100 text-purple-800'
     default: return 'bg-gray-100 text-gray-800'
@@ -66,7 +66,7 @@ function tagColor(tag: string): string {
 function tagLabel(tag: string): string {
   const map: Record<string, string> = {
     regatta: t('calendar.filterRegatta'),
-    dugnad: t('calendar.filterDugnad'),
+    volunteer: t('calendar.filterVolunteer'),
     social: t('calendar.filterSocial'),
     agm: t('calendar.filterAgm'),
   }

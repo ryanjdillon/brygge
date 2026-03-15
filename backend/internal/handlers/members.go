@@ -569,23 +569,23 @@ func (h *MembersHandler) HandleReportIssue(w http.ResponseWriter, r *http.Reques
 
 	var projectID string
 	err := h.db.QueryRow(ctx,
-		`SELECT id FROM projects WHERE club_id = $1 AND name = 'harbour-maintenance'`,
+		`SELECT id FROM projects WHERE club_id = $1 AND name = 'harbor-maintenance'`,
 		claims.ClubID,
 	).Scan(&projectID)
 	if err == pgx.ErrNoRows {
 		err = h.db.QueryRow(ctx,
 			`INSERT INTO projects (club_id, name, description, created_by)
-			 VALUES ($1, 'harbour-maintenance', 'Harbour maintenance issues reported by members', $2)
+			 VALUES ($1, 'harbor-maintenance', 'Harbor maintenance issues reported by members', $2)
 			 RETURNING id`,
 			claims.ClubID, claims.UserID,
 		).Scan(&projectID)
 		if err != nil {
-			h.log.Error().Err(err).Msg("failed to create harbour-maintenance project")
+			h.log.Error().Err(err).Msg("failed to create harbor-maintenance project")
 			Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
 	} else if err != nil {
-		h.log.Error().Err(err).Msg("failed to find harbour-maintenance project")
+		h.log.Error().Err(err).Msg("failed to find harbor-maintenance project")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
@@ -628,7 +628,7 @@ func (h *MembersHandler) HandleGetDirectory(w http.ResponseWriter, r *http.Reque
 		 FROM users u
 		 JOIN user_roles ur ON ur.user_id = u.id AND ur.club_id = u.club_id
 		 WHERE u.club_id = $1
-		 AND ur.role IN ('member', 'slip_owner', 'styre', 'harbour_master', 'treasurer', 'admin')
+		 AND ur.role IN ('member', 'slip_holder', 'board', 'harbor_master', 'treasurer', 'admin')
 		 GROUP BY u.id, u.full_name, u.phone, u.email
 		 ORDER BY u.full_name
 		 LIMIT $2 OFFSET $3`,
@@ -753,7 +753,7 @@ func dimsMatch(a, b *float64) bool {
 }
 
 func bestRole(roles []string) string {
-	order := []string{"admin", "styre", "slip_owner", "member", "applicant"}
+	order := []string{"admin", "board", "slip_holder", "member", "applicant"}
 	roleSet := make(map[string]bool, len(roles))
 	for _, r := range roles {
 		roleSet[r] = true

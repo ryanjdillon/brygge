@@ -293,7 +293,7 @@ type MemberProfile struct {
 type MemberSlip struct {
 	SlipID   string   `json:"slip_id" doc:"Slip UUID"`
 	Number   string   `json:"number" doc:"Slip number"`
-	Section  string   `json:"section" doc:"Harbour section"`
+	Section  string   `json:"section" doc:"Harbor section"`
 	LengthM  *float64 `json:"length_m,omitempty" doc:"Length in metres"`
 	WidthM   *float64 `json:"width_m,omitempty" doc:"Width in metres"`
 	DepthM   *float64 `json:"depth_m,omitempty" doc:"Depth in metres"`
@@ -303,7 +303,7 @@ type MemberSlip struct {
 
 type DashboardSlip struct {
 	Number   string `json:"number" doc:"Slip number"`
-	Location string `json:"location" doc:"Harbour section/location"`
+	Location string `json:"location" doc:"Harbor section/location"`
 }
 
 type DashboardResponse struct {
@@ -375,7 +375,7 @@ type UnconfirmedBoat struct {
 type Slip struct {
 	ID           string   `json:"id" doc:"Slip UUID"`
 	Number       string   `json:"number" doc:"Slip number"`
-	Section      string   `json:"section" doc:"Harbour section"`
+	Section      string   `json:"section" doc:"Harbor section"`
 	LengthM      *float64 `json:"length_m,omitempty" doc:"Length in metres"`
 	WidthM       *float64 `json:"width_m,omitempty" doc:"Width in metres"`
 	DepthM       *float64 `json:"depth_m,omitempty" doc:"Depth in metres"`
@@ -400,7 +400,7 @@ type SlipShare struct {
 type SlipShareAdmin struct {
 	SlipShare
 	SlipNumber string `json:"slip_number" doc:"Slip number"`
-	Section    string `json:"section" doc:"Harbour section"`
+	Section    string `json:"section" doc:"Harbor section"`
 	MemberName string `json:"member_name" doc:"Member name"`
 }
 
@@ -507,7 +507,7 @@ type Task struct {
 	UpdatedAt        time.Time     `json:"updated_at" doc:"Last update timestamp"`
 	EstimatedHours   *float64      `json:"estimated_hours" doc:"Estimated hours"`
 	ActualHours      *float64      `json:"actual_hours" doc:"Actual hours spent"`
-	AnsvarligID      *string       `json:"ansvarlig_id" doc:"Responsible person UUID"`
+	ResponsibleID    *string       `json:"responsible_id" doc:"Responsible person UUID"`
 	MaxCollaborators int           `json:"max_collaborators" doc:"Maximum collaborators"`
 	Materials        []MaterialItem `json:"materials" doc:"Required materials"`
 	ParticipantCount int           `json:"participant_count" doc:"Number of participants"`
@@ -596,7 +596,7 @@ type FinancialSummary struct {
 	TotalDuesReceived   float64 `json:"total_dues_received" doc:"Total dues received"`
 	TotalOutstanding    float64 `json:"total_outstanding" doc:"Total outstanding amount"`
 	TotalOverdue        float64 `json:"total_overdue" doc:"Total overdue amount"`
-	TotalAndelCollected float64 `json:"total_andel_collected" doc:"Total andel collected"`
+	TotalHarborMembershipCollected float64 `json:"total_harbor_membership_collected" doc:"Total harbor membership collected"`
 	TotalBookingRevenue float64 `json:"total_booking_revenue" doc:"Total booking revenue"`
 	Year                *int    `json:"year,omitempty" doc:"Financial year"`
 }
@@ -646,7 +646,7 @@ type CreateInvoiceRequest struct {
 	DueDate     string  `json:"due_date" doc:"Due date"`
 }
 
-// --- Dugnad ---
+// --- Volunteer ---
 
 type TaskParticipant struct {
 	TaskID   string    `json:"task_id" doc:"Task UUID"`
@@ -657,7 +657,7 @@ type TaskParticipant struct {
 	Name     string    `json:"name" doc:"Participant name"`
 }
 
-type DugnadHoursSummary struct {
+type VolunteerHoursSummary struct {
 	UserID         string  `json:"user_id" doc:"User UUID"`
 	Name           string  `json:"name" doc:"Member name"`
 	SignedUpHours  float64 `json:"signed_up_hours" doc:"Hours signed up for"`
@@ -714,7 +714,7 @@ type Broadcast struct {
 	ID         string    `json:"id" doc:"Broadcast UUID"`
 	Subject    string    `json:"subject" doc:"Email subject"`
 	Body       string    `json:"body" doc:"Email body"`
-	Recipients string    `json:"recipients" doc:"Recipient group (all, members, styre, slip_owners)"`
+	Recipients string    `json:"recipients" doc:"Recipient group (all, members, board, slip_holders)"`
 	SentBy     string    `json:"sent_by" doc:"Sender user UUID"`
 	SentAt     time.Time `json:"sent_at" doc:"Send timestamp"`
 	CreatedAt  time.Time `json:"created_at" doc:"Creation timestamp"`

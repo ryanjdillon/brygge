@@ -34,7 +34,7 @@ describe('CalendarView', () => {
   it('renders filter buttons for event tags', () => {
     const wrapper = mountWithPlugins(CalendarView)
     expect(wrapper.text()).toContain('calendar.filterRegatta')
-    expect(wrapper.text()).toContain('calendar.filterDugnad')
+    expect(wrapper.text()).toContain('calendar.filterVolunteer')
     expect(wrapper.text()).toContain('calendar.filterSocial')
     expect(wrapper.text()).toContain('calendar.filterAgm')
   })

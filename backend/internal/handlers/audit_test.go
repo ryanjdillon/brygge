@@ -35,7 +35,7 @@ func TestHandleListAuditLogUnauthorized(t *testing.T) {
 func TestHandleListAuditLogRequiresRole(t *testing.T) {
 	h := newTestAuditHandler(t)
 
-	r := setupRoleProtectedRouter(http.MethodGet, "/admin/audit", h.HandleListAuditLog, "styre", "admin")
+	r := setupRoleProtectedRouter(http.MethodGet, "/admin/audit", h.HandleListAuditLog, "board", "admin")
 
 	token := generateTestToken("user-1", "club-1", []string{"member"})
 	req := httptest.NewRequest(http.MethodGet, "/admin/audit", nil)
