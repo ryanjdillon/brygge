@@ -62,3 +62,7 @@ features/
 
 # Claude Code
 .claude/
+
+# Local planning notes
+TODO.md
+remove-from-git.txt
