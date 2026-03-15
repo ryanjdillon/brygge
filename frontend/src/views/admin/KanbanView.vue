@@ -186,7 +186,7 @@ function handleDelete(taskId: string) {
 }
 
 function moveTask(task: Task, direction: 'prev' | 'next') {
-  const currentIdx = statusOrder.indexOf(task.status)
+  const currentIdx = statusOrder.indexOf(task.status as typeof statusOrder[number])
   const newIdx = direction === 'next' ? currentIdx + 1 : currentIdx - 1
   if (newIdx < 0 || newIdx >= statusOrder.length) return
   updateTask.mutate({
@@ -269,7 +269,7 @@ function moveTask(task: Task, direction: 'prev' | 'next') {
             </div>
             <div class="mt-2 flex items-center gap-1">
               <button
-                v-if="statusOrder.indexOf(task.status) > 0"
+                v-if="statusOrder.indexOf(task.status as typeof statusOrder[number]) > 0"
                 class="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
                 :title="t('projects.movePrev')"
                 @click.stop="moveTask(task, 'prev')"
@@ -277,7 +277,7 @@ function moveTask(task: Task, direction: 'prev' | 'next') {
                 <ArrowLeft class="h-3.5 w-3.5" />
               </button>
               <button
-                v-if="statusOrder.indexOf(task.status) < statusOrder.length - 1"
+                v-if="statusOrder.indexOf(task.status as typeof statusOrder[number]) < statusOrder.length - 1"
                 class="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
                 :title="t('projects.moveNext')"
                 @click.stop="moveTask(task, 'next')"

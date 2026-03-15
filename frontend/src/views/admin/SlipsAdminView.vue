@@ -4,10 +4,6 @@ import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useApiClient, unwrap } from '@/lib/apiClient'
 import { Plus } from 'lucide-vue-next'
-import type { components } from '@/types/api'
-
-type Slip = components['schemas']['Slip']
-
 const { t } = useI18n()
 const client = useApiClient()
 const queryClient = useQueryClient()

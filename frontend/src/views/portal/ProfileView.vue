@@ -8,10 +8,6 @@ const { t } = useI18n()
 const client = useApiClient()
 const queryClient = useQueryClient()
 
-import type { components } from '@/types/api'
-
-type ProfileResponse = components['schemas']['MemberProfile']
-
 interface ProfileForm {
   name: string
   email: string

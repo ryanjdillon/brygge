@@ -2,7 +2,7 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
-import { useEvents, type CalendarEvent } from '@/composables/useEvents'
+import { useEvents } from '@/composables/useEvents'
 import { Download, Plus, X } from 'lucide-vue-next'
 
 const { t } = useI18n()

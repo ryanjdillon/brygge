@@ -3,7 +3,10 @@ import { useApiClient, unwrap } from '@/lib/apiClient'
 import type { components } from '@/types/api'
 
 export type TaskParticipant = components['schemas']['TaskParticipant']
-export type DugnadHoursSummary = components['schemas']['DugnadHoursSummary']
+export interface DugnadHoursSummary {
+  user_id: string
+  total_hours: number
+}
 
 export function useJoinTask() {
   const client = useApiClient()

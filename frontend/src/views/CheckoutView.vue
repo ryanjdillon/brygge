@@ -3,14 +3,12 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useCartStore } from '@/stores/cart'
-import { useAuthStore } from '@/stores/auth'
 import { useApiClient, unwrap } from '@/lib/apiClient'
 import { Trash2, Minus, Plus, ShoppingCart } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const router = useRouter()
 const cart = useCartStore()
-const auth = useAuthStore()
 const client = useApiClient()
 
 const isSubmitting = ref(false)

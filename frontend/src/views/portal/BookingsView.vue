@@ -10,10 +10,6 @@ const { t } = useI18n()
 const client = useApiClient()
 const queryClient = useQueryClient()
 
-import type { components } from '@/types/api'
-
-type Booking = components['schemas']['Booking']
-
 const toast = ref<{ type: 'success' | 'error'; message: string } | null>(null)
 
 function showToast(type: 'success' | 'error', message: string) {

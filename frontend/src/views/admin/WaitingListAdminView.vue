@@ -3,10 +3,6 @@ import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 import { useApiClient, unwrap } from '@/lib/apiClient'
 
-import type { components } from '@/types/api'
-
-type WaitingListEntry = components['schemas']['WaitingListEntryAdmin']
-
 const { t } = useI18n()
 const client = useApiClient()
 

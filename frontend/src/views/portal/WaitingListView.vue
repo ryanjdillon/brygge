@@ -11,11 +11,6 @@ const { fetchApi } = useApi()
 const client = useApiClient()
 const queryClient = useQueryClient()
 
-import type { components } from '@/types/api'
-
-type WaitingListEntry = components['schemas']['WaitingListEntry']
-type PortalListEntry = components['schemas']['PortalWaitingListEntry']
-
 const toast = ref<{ type: 'success' | 'error'; message: string } | null>(null)
 
 function showToast(type: 'success' | 'error', message: string) {

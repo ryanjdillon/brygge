@@ -80,8 +80,8 @@ function handleCreate() {
           </thead>
           <tbody class="divide-y divide-gray-100">
             <tr v-for="req in requests" :key="req.id">
-              <td class="px-4 py-3 text-sm font-medium text-gray-900">{{ req.user_name }}</td>
-              <td class="px-4 py-3 text-sm text-gray-500">{{ req.user_email }}</td>
+              <td class="px-4 py-3 text-sm font-medium text-gray-900">{{ (req as any).user_name }}</td>
+              <td class="px-4 py-3 text-sm text-gray-500">{{ (req as any).user_email }}</td>
               <td class="px-4 py-3 text-sm text-gray-500">{{ formatDate(req.requested_at) }}</td>
               <td class="px-4 py-3 text-sm text-gray-500">{{ formatDate(req.grace_end) }}</td>
               <td class="px-4 py-3">
