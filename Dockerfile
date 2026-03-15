@@ -20,10 +20,13 @@ COPY backend/ .
 COPY --from=frontend /frontend/dist ./internal/web/dist
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=arm64 \
     go build -ldflags="-s -w" -o /brygge ./cmd/api
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=arm64 \
+    go build -ldflags="-s -w" -o /brygge-seed ./cmd/seed
 
 # ── Stage 3: Minimal runtime ────────────────────────────────
 FROM gcr.io/distroless/static:nonroot AS production
 COPY --from=builder /brygge /brygge
+COPY --from=builder /brygge-seed /brygge-seed
 USER nonroot:nonroot
 EXPOSE 8080
 ENTRYPOINT ["/brygge"]
