@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { mountWithPlugins, createMockAuthStore } from '@/test/test-utils'
+import { mountWithPlugins } from '@/test/test-utils'
 import PortalView from '@/views/PortalView.vue'
 
 vi.mock('lucide-vue-next', () => ({

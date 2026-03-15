@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
-import { defineComponent, nextTick } from 'vue'
+import { nextTick } from 'vue'
 import ErrorBoundary from '@/components/ui/ErrorBoundary.vue'
 
 vi.mock('lucide-vue-next', () => ({}))
