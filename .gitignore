@@ -8,7 +8,7 @@ backend/internal/web/dist/
 !backend/internal/web/dist/.gitkeep
 
 # Node / Vue
-frontend/node_modules/
+node_modules/
 frontend/dist/
 frontend/.vite/
 *.local
@@ -46,6 +46,7 @@ test-results/
 
 # Build artifacts
 backend/seed
+backend/openapi
 backend/tmp/
 dev/vipps-mock/vipps-mock
 
