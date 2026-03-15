@@ -598,8 +598,10 @@ func securityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
 		w.Header().Set("Content-Security-Policy",
-			"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "+
-				"img-src 'self' data: https:; connect-src 'self' https://api.vipps.no https://apitest.vipps.no https://tiles.stadiamaps.com; "+
+			"default-src 'self'; script-src 'self' blob:; style-src 'self' 'unsafe-inline'; "+
+				"worker-src 'self' blob:; "+
+				"img-src 'self' data: https:; "+
+				"connect-src 'self' https://api.vipps.no https://apitest.vipps.no https://cache.kartverket.no https://tile.openstreetmap.org https://api.met.no; "+
 				"font-src 'self'")
 		next.ServeHTTP(w, r)
 	})
