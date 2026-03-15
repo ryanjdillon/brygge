@@ -1,0 +1,27 @@
+#cloud-config
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - curl
+  - git
+  - jq
+  - unattended-upgrades
+
+runcmd:
+  # Install Docker
+  - curl -fsSL https://get.docker.com | sh
+  - systemctl enable --now docker
+
+  # Install Docker Compose plugin
+  - mkdir -p /usr/local/lib/docker/cli-plugins
+  - curl -fsSL "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/lib/docker/cli-plugins/docker-compose
+  - chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+  # Create app directory
+  - mkdir -p /opt/brygge
+  - echo "${server_name} provisioned by terraform" > /opt/brygge/.provisioned
+
+  # Enable automatic security updates
+  - systemctl enable --now unattended-upgrades

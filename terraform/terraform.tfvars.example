@@ -1,0 +1,17 @@
+# Copy to terraform.tfvars and fill in values
+# DO NOT commit terraform.tfvars — it contains secrets
+
+# ── Hetzner Cloud ──────────────────────────────────────────────
+hcloud_token   = ""
+ssh_public_key = "ssh-ed25519 AAAA..."
+
+# ── S3 State Backend (Hetzner Object Storage) ─────────────────
+# These are read as env vars by the tf-plan/tf-apply nix apps
+hetzner_s3_access_key = ""
+hetzner_s3_secret_key = ""
+
+# ── Optional overrides (defaults shown) ────────────────────────
+# server_name = "brygge"
+# server_type = "cax11"       # ARM64: cax11 (2vCPU/4GB), cax21 (4vCPU/8GB)
+# location    = "fsn1"        # fsn1=Falkenstein, nbg1=Nuremberg, hel1=Helsinki
+# image       = "debian-12"
