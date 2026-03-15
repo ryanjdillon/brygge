@@ -4,10 +4,6 @@ import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 import { useApiClient, unwrap } from '@/lib/apiClient'
 import { Search } from 'lucide-vue-next'
-import type { components } from '@/types/api'
-
-type DirectoryMember = components['schemas']['DirectoryMember']
-
 const { t } = useI18n()
 const client = useApiClient()
 

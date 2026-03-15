@@ -12,13 +12,7 @@ function formatNOK(amount: number): string {
   return new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK' }).format(amount)
 }
 
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('nb-NO', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
-}
+
 
 function handleExportOverdue() {
   downloadCSV({ status: 'pending' })

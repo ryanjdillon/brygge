@@ -9,10 +9,6 @@ const { t } = useI18n()
 const client = useApiClient()
 const queryClient = useQueryClient()
 
-import type { components } from '@/types/api'
-
-type Broadcast = components['schemas']['Broadcast']
-
 const subject = ref('')
 const body = ref('')
 const recipients = ref('all')

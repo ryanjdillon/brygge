@@ -4,10 +4,6 @@ import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useApiClient, unwrap } from '@/lib/apiClient'
 import { Check, XCircle } from 'lucide-vue-next'
-import type { components } from '@/types/api'
-
-type Booking = components['schemas']['BookingAdmin']
-
 const { t } = useI18n()
 const client = useApiClient()
 const queryClient = useQueryClient()

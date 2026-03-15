@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Plus, Pencil, Trash2, Check, X } from 'lucide-vue-next'
+import { Plus, Pencil, Trash2, X } from 'lucide-vue-next'
 import {
   useEvents,
   useCreateEvent,

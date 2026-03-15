@@ -14,8 +14,6 @@ const { data: markers } = useMapMarkers()
 const { categories, isLoading: pricingLoading, unitLabel } = usePricing()
 const { data: todayAvail, isLoading: resourcesLoading } = useTodayAvailability('guest_slip')
 
-const totalCapacity = computed(() => todayAvail.value?.available ?? 0)
-
 const hasCoordinates = computed(
   () => club.value?.latitude != null && club.value?.longitude != null,
 )

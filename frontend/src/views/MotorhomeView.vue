@@ -13,8 +13,6 @@ const { data: club } = useClubCoordinates()
 const { categories, isLoading: pricingLoading, unitLabel } = usePricing()
 const { data: todayAvail, isLoading: resourcesLoading } = useTodayAvailability('motorhome_spot')
 
-const totalCapacity = computed(() => todayAvail.value?.available ?? 0)
-
 const hasCoordinates = computed(
   () => club.value?.latitude != null && club.value?.longitude != null,
 )
