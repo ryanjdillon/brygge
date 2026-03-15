@@ -46,7 +46,7 @@ func main() {
 		VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name, latitude = EXCLUDED.latitude, longitude = EXCLUDED.longitude
 		RETURNING id
-	`, cfg.ClubSlug, "Brygge Båtklubb", "En hyggelig båtklubb", 59.9075, 10.7350).Scan(&clubID)
+	`, cfg.ClubSlug, "Klokkarvik Båtlag", "En hyggelig båtklubb i Klokkarvik", 60.224303, 5.155736).Scan(&clubID)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to create club: %v\n", err)
 		os.Exit(1)
