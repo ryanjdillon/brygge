@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
+	"strings"
 	"os/signal"
 	"syscall"
 	"time"
@@ -606,7 +607,19 @@ func securityHeaders(next http.Handler) http.Handler {
 
 func serveFrontend(r chi.Router, frontendFS fs.FS) {
 	fileServer := http.FileServer(http.FS(frontendFS))
-	r.Get("/*", func(w http.ResponseWriter, r *http.Request) {
-		fileServer.ServeHTTP(w, r)
+	r.Get("/*", func(w http.ResponseWriter, req *http.Request) {
+		// Try to serve the static file; fall back to index.html for SPA routes
+		path := strings.TrimPrefix(req.URL.Path, "/")
+		if path == "" {
+			path = "index.html"
+		}
+		if _, err := fs.Stat(frontendFS, path); err != nil {
+			// File not found — serve index.html so the SPA router handles it
+			indexFile, _ := fs.ReadFile(frontendFS, "index.html")
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.Write(indexFile)
+			return
+		}
+		fileServer.ServeHTTP(w, req)
 	})
 }
