@@ -20,12 +20,12 @@ const hasCoordinates = computed(
   () => club.value?.latitude != null && club.value?.longitude != null,
 )
 
-const harbourCategoryOrder = ['guest', 'seasonal_rental', 'moloandel', 'slip_fee']
+const harborCategoryOrder = ['guest', 'seasonal_rental', 'harbor_membership', 'slip_fee']
 
-const harbourCategories = computed(() =>
+const harborCategories = computed(() =>
   categories.value
-    .filter((c) => harbourCategoryOrder.includes(c.key))
-    .sort((a, b) => harbourCategoryOrder.indexOf(a.key) - harbourCategoryOrder.indexOf(b.key)),
+    .filter((c) => harborCategoryOrder.includes(c.key))
+    .sort((a, b) => harborCategoryOrder.indexOf(a.key) - harborCategoryOrder.indexOf(b.key)),
 )
 
 function formatAmount(amount: number): string {
@@ -37,8 +37,8 @@ function formatAmount(amount: number): string {
   <div class="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
     <div class="flex flex-wrap items-center justify-between gap-4">
       <div>
-        <h1 class="text-3xl font-bold text-gray-900">{{ t('harbour.title') }}</h1>
-        <p class="mt-1 text-gray-600">{{ t('harbour.subtitle') }}</p>
+        <h1 class="text-3xl font-bold text-gray-900">{{ t('harbor.title') }}</h1>
+        <p class="mt-1 text-gray-600">{{ t('harbor.subtitle') }}</p>
       </div>
       <div
         v-if="!resourcesLoading && todayAvail"
@@ -82,7 +82,7 @@ function formatAmount(amount: number): string {
       <section>
         <h2 class="flex items-center gap-2 text-xl font-semibold text-gray-900">
           <Sailboat class="h-5 w-5 text-blue-600" aria-hidden="true" />
-          {{ t('harbour.navigation') }}
+          {{ t('harbor.navigation') }}
         </h2>
 
         <dl class="mt-4 space-y-4">
@@ -122,7 +122,7 @@ function formatAmount(amount: number): string {
           to="/directions"
           class="mt-4 inline-block text-sm font-medium text-blue-600 hover:text-blue-700"
         >
-          {{ t('harbour.fullDirections') }} &rarr;
+          {{ t('harbor.fullDirections') }} &rarr;
         </RouterLink>
       </section>
 
@@ -130,7 +130,7 @@ function formatAmount(amount: number): string {
       <section>
         <h2 class="flex items-center gap-2 text-xl font-semibold text-gray-900">
           <HandCoins class="h-5 w-5 text-blue-600" aria-hidden="true" />
-          {{ t('harbour.pricing') }}
+          {{ t('harbor.pricing') }}
         </h2>
 
         <div v-if="pricingLoading" class="mt-4 space-y-4">
@@ -140,9 +140,9 @@ function formatAmount(amount: number): string {
           </div>
         </div>
 
-        <div v-else-if="harbourCategories.length" class="mt-4 space-y-4">
+        <div v-else-if="harborCategories.length" class="mt-4 space-y-4">
           <div
-            v-for="cat in harbourCategories"
+            v-for="cat in harborCategories"
             :key="cat.key"
             class="rounded-lg border border-gray-200 bg-white p-5"
           >
@@ -150,7 +150,7 @@ function formatAmount(amount: number): string {
               <h3 class="font-semibold text-gray-900">
                 {{ cat.label }}
                 <span v-if="cat.key === 'slip_fee'" class="text-sm font-normal text-gray-500">
-                  ({{ t('harbour.slipFeeNote') }})
+                  ({{ t('harbor.slipFeeNote') }})
                 </span>
               </h3>
             </div>
@@ -168,11 +168,11 @@ function formatAmount(amount: number): string {
               </li>
             </ul>
             <RouterLink
-              v-if="cat.key === 'moloandel'"
+              v-if="cat.key === 'harbor_membership'"
               to="/join"
               class="mt-3 inline-flex items-center gap-1 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700"
             >
-              {{ t('harbour.joinWaitingList') }}
+              {{ t('harbor.joinWaitingList') }}
             </RouterLink>
           </div>
         </div>
@@ -183,15 +183,15 @@ function formatAmount(amount: number): string {
           to="/pricing"
           class="mt-4 inline-block text-sm font-medium text-blue-600 hover:text-blue-700"
         >
-          {{ t('harbour.allPrices') }} &rarr;
+          {{ t('harbor.allPrices') }} &rarr;
         </RouterLink>
       </section>
     </div>
 
     <!-- CTA -->
     <div class="mt-12 rounded-lg bg-blue-50 p-8 text-center">
-      <h2 class="text-xl font-semibold text-blue-900">{{ t('harbour.ctaTitle') }}</h2>
-      <p class="mt-2 text-blue-700">{{ t('harbour.ctaDescription') }}</p>
+      <h2 class="text-xl font-semibold text-blue-900">{{ t('harbor.ctaTitle') }}</h2>
+      <p class="mt-2 text-blue-700">{{ t('harbor.ctaDescription') }}</p>
       <div class="mt-4 flex items-center justify-center gap-3">
         <RouterLink
           to="/book?type=guest_slip"
@@ -203,7 +203,7 @@ function formatAmount(amount: number): string {
           to="/contact"
           class="inline-block rounded-md border border-blue-600 px-6 py-3 text-sm font-semibold text-blue-600 hover:bg-blue-50"
         >
-          {{ t('harbour.ctaButton') }}
+          {{ t('harbor.ctaButton') }}
         </RouterLink>
       </div>
     </div>

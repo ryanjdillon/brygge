@@ -22,8 +22,8 @@ describe('NavBar', () => {
     const wrapper = mountWithPlugins(NavBar)
     const expectedLinks = [
       'nav.home',
-      'nav.harbour',
-      'nav.bobil',
+      'nav.harbor',
+      'nav.motorhome',
       'nav.weather',
       'nav.merchandise',
       'nav.contact',

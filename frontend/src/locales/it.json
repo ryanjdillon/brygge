@@ -10,8 +10,6 @@
     "login": "Accedi",
     "portal": "La mia pagina",
     "admin": "Amministrazione",
-    "harbour": "Porto",
-    "bobil": "Camper",
     "club": "Circolo",
     "history": "Storia",
     "merchandise": "Shop",
@@ -19,7 +17,9 @@
     "logout": "Esci",
     "ariaMainNav": "Navigazione principale",
     "ariaLogout": "Esci",
-    "ariaMenu": "Menu"
+    "ariaMenu": "Menu",
+    "harbor": "Porto",
+    "motorhome": "Camper"
   },
   "common": {
     "loading": "Caricamento",
@@ -62,7 +62,6 @@
     "description": "Prossimi eventi e attività",
     "export": "Esporta nel calendario (iCal)",
     "filterRegatta": "Regata",
-    "filterDugnad": "Giornata di lavoro",
     "filterSocial": "Sociale",
     "filterAgm": "Assemblea generale",
     "proposeEvent": "Proponi un evento",
@@ -73,7 +72,8 @@
     "weekdayThu": "Gi",
     "weekdayFri": "Ve",
     "weekdaySat": "Sa",
-    "weekdaySun": "Do"
+    "weekdaySun": "Do",
+    "filterVolunteer": "Giornata di lavoro"
   },
   "weather": {
     "title": "Meteo del porto",
@@ -107,9 +107,9 @@
     "approachNotes": "Mantenere una distanza di sicurezza dalle boe all'ingresso. Seguire il canale segnalato verso il porto ospiti.",
     "depth": "Profondità",
     "depthInfo": "Profondità minima all'ingresso: 3,5 metri",
-    "harbourChart": "Carta del porto",
     "openGoogleMaps": "Apri in Google Maps",
-    "downloadGPX": "Scarica GPX"
+    "downloadGPX": "Scarica GPX",
+    "harborChart": "Carta del porto"
   },
   "contact": {
     "title": "Contattaci",
@@ -130,10 +130,8 @@
   "pricing": {
     "title": "Tariffe",
     "yearlyDues": "Quote annuali",
-    "andel": "Quota porto (andel)",
     "slipFees": "Tariffe ormeggio per dimensione",
     "guestSlip": "Posti barca ospiti",
-    "bobilParking": "Parcheggio camper",
     "roomHire": "Affitto sala",
     "loading": "Recupero tariffe...",
     "error": "Impossibile recuperare le tariffe",
@@ -142,7 +140,9 @@
     "perDay": "/giorno",
     "noPricing": "Non sono ancora state aggiunte tariffe",
     "period": "Periodo",
-    "installments": "Può essere suddiviso in massimo {max} rate"
+    "installments": "Può essere suddiviso in massimo {max} rate",
+    "harbor_membership": "Quota porto (andel)",
+    "motorhomeParking": "Parcheggio camper"
   },
   "join": {
     "title": "Iscriviti al circolo",
@@ -162,7 +162,7 @@
     "submitting": "Invio in corso...",
     "submitted": "Registrazione completata!"
   },
-  "harbour": {
+  "harbor": {
     "title": "Porto ospiti",
     "subtitle": "Benvenuti nel nostro porto ospiti. Trova tariffe, carte nautiche e informazioni pratiche.",
     "spotsAvailable": "posti barca ospiti",
@@ -176,7 +176,7 @@
     "ctaDescription": "Contattaci per prenotare un posto barca ospiti o per maggiori informazioni.",
     "ctaButton": "Contattaci"
   },
-  "bobil": {
+  "motorhome": {
     "title": "Parcheggio camper",
     "subtitle": "Piazzole camper con corrente e servizi direttamente sul porto.",
     "spotsAvailable": "piazzole",
@@ -274,9 +274,9 @@
       "role": {
         "applicant": "Richiedente",
         "member": "Socio",
-        "slip_owner": "Titolare di ormeggio",
-        "styre": "Membro del consiglio",
-        "admin": "Amministratore"
+        "admin": "Amministratore",
+        "slip_holder": "Titolare di ormeggio",
+        "board": "Membro del consiglio"
       },
       "noSlip": "Nessun ormeggio assegnato",
       "noBookings": "Nessuna prenotazione in programma",
@@ -337,7 +337,6 @@
       "title": "Documenti",
       "filterAll": "Tutti",
       "filterMember": "Soci",
-      "filterStyre": "Consiglio",
       "download": "Scarica",
       "comments": "Commenti",
       "addComment": "Aggiungi commento",
@@ -346,7 +345,8 @@
       "noComments": "Nessun commento",
       "commentSuccess": "Commento aggiunto",
       "commentError": "Impossibile aggiungere il commento",
-      "loadError": "Impossibile caricare i documenti"
+      "loadError": "Impossibile caricare i documenti",
+      "filterBoard": "Consiglio"
     },
     "waitingList": {
       "title": "Lista d'attesa",
@@ -425,7 +425,6 @@
   "admin": {
     "title": "Amministrazione",
     "ariaNav": "Navigazione amministrazione",
-    "groupHarbour": "Porto",
     "groupFinance": "Finanze",
     "groupArchive": "Archivio e informazioni",
     "sidebar": {
@@ -451,7 +450,6 @@
       "duesReceived": "Quote ricevute",
       "outstanding": "In sospeso",
       "overdue": "Scaduto",
-      "andelCollected": "Andel raccolte",
       "bookingRevenue": "Ricavi prenotazioni",
       "viewPayments": "Vedi pagamenti",
       "viewOverdue": "Vedi scaduti",
@@ -462,7 +460,6 @@
       "allTypes": "Tutti i tipi",
       "allStatuses": "Tutti gli stati",
       "typeDues": "Quote",
-      "typeAndel": "Andel",
       "typeSlipFee": "Tariffa ormeggio",
       "typeSlipfee": "Tariffa ormeggio",
       "typeBooking": "Prenotazione",
@@ -489,7 +486,9 @@
       "selectMember": "Seleziona socio",
       "searchMember": "Cerca per nome o email...",
       "invoicePreview": "Fattura per {name}: {type}, {amount} NOK, scadenza {due}",
-      "invoiceCreated": "Fattura creata"
+      "invoiceCreated": "Fattura creata",
+      "harborMembershipCollected": "Andel raccolte",
+      "typeHarborMembership": "Quota portuale"
     },
     "events": {
       "title": "Gestione eventi",
@@ -515,10 +514,10 @@
       "resourceType": "Tipo di risorsa",
       "allTypes": "Tutti i tipi",
       "guestSlip": "Posto barca ospiti",
-      "bobilSpot": "Piazzola camper",
       "clubRoom": "Sala del circolo",
       "dateFrom": "Dal",
-      "dateTo": "Al"
+      "dateTo": "Al",
+      "motorhomeSpot": "Piazzola camper"
     },
     "communication": {
       "title": "Comunicazioni",
@@ -529,11 +528,11 @@
       "recipients": "Destinatari",
       "recipientAll": "Tutti i soci",
       "recipientMembers": "Solo soci",
-      "recipientStyre": "Membri del consiglio",
-      "recipientSlipOwners": "Titolari di ormeggio",
       "preview": "Anteprima",
       "send": "Invia comunicazione",
-      "noHistory": "Nessuna comunicazione inviata"
+      "noHistory": "Nessuna comunicazione inviata",
+      "recipientBoard": "Membri del consiglio",
+      "recipientSlipHolders": "Titolari di ormeggio"
     },
     "bookingSettings": {
       "title": "Impostazioni prenotazioni",
@@ -607,11 +606,9 @@
       "priceDeleted": "Tariffa eliminata",
       "saveError": "Impossibile salvare",
       "deleteError": "Impossibile eliminare",
-      "categoryMoloandel": "Quota frangiflutti",
       "categorySlipFee": "Tariffa ormeggio",
       "categorySeasonalRental": "Ormeggio stagionale",
       "categoryGuest": "Posti barca ospiti",
-      "categoryBobil": "Parcheggio camper",
       "categoryRoomHire": "Affitto sala",
       "categoryService": "Servizi",
       "categoryOther": "Altro",
@@ -620,7 +617,9 @@
       "unitSeason": "A stagione",
       "unitDay": "Al giorno",
       "unitNight": "A notte",
-      "unitHour": "All'ora"
+      "unitHour": "All'ora",
+      "categoryHarborMembership": "Quota frangiflutti",
+      "categoryMotorhome": "Parcheggio camper"
     },
     "users": {
       "name": "Nome",
@@ -677,7 +676,8 @@
       "approveDimensions": "Approva dimensioni",
       "approveSuccess": "Dimensioni approvate",
       "approveError": "Impossibile approvare le dimensioni"
-    }
+    },
+    "groupHarbor": "Porto"
   },
   "projects": {
     "title": "Progetti",
@@ -742,13 +742,13 @@
     "loadMore": "Carica messaggi precedenti",
     "rooms": {
       "general": "Generale",
-      "harbour": "Porto",
       "events": "Eventi",
       "forsale": "In vendita",
-      "styre": "Consiglio"
+      "harbor": "Porto",
+      "board": "Consiglio"
     }
   },
-  "dugnad": {
+  "volunteer": {
     "title": "Giornata di lavoro",
     "join": "Partecipa",
     "leave": "Ritirati",
@@ -761,7 +761,6 @@
     "maxParticipants": "Max partecipanti",
     "participants": "Partecipanti",
     "materials": "Materiali",
-    "ansvarlig": "Responsabile",
     "collaborator": "Partecipante",
     "hours": "Ore",
     "signedUpHours": "Ore iscritte",
@@ -785,7 +784,8 @@
     "requiredHoursPerYear": "Ore di lavoro annuali",
     "settingsUpdated": "Impostazioni aggiornate",
     "allMembers": "Tutti i soci",
-    "eventProjects": "Progetti giornata di lavoro"
+    "eventProjects": "Progetti giornata di lavoro",
+    "responsible": "Responsabile"
   },
   "mapAdmin": {
     "title": "Marcatori carta",
@@ -802,7 +802,7 @@
       "buoy": "Boa",
       "hazard": "Pericolo",
       "anchorage": "Ancoraggio",
-      "harbour": "Porto"
+      "harbor": "Porto"
     },
     "noMarkers": "Nessun marcatore aggiunto",
     "saved": "Marcatore salvato",
@@ -812,7 +812,6 @@
     "title": "Prenota",
     "subtitle": "Prenota un posto barca ospiti, una piazzola camper, la sede del circolo o la gru",
     "guestSlip": "Posto barca ospiti",
-    "bobilSpot": "Piazzola camper",
     "clubRoom": "Sede del circolo",
     "slipHoist": "Gru per alaggio",
     "boatDimensions": "Dimensioni dell'imbarcazione",
@@ -859,7 +858,8 @@
       "emailRequired": "L'email è obbligatoria",
       "emailInvalid": "Indirizzo email non valido",
       "phoneInvalid": "Numero di telefono non valido"
-    }
+    },
+    "motorhomeSpot": "Piazzola camper"
   },
   "gdpr": {
     "title": "Privacy & Data",

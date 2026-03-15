@@ -66,11 +66,28 @@ function statusClass(status: string): string {
   }
 }
 
+const typeKeys: Record<string, string> = {
+  dues: 'admin.financials.typeDues',
+  harbor_membership: 'admin.financials.typeHarborMembership',
+  slip_fee: 'admin.financials.typeSlipFee',
+  booking: 'admin.financials.typeBooking',
+  merchandise: 'admin.financials.typeMerchandise',
+}
+
+function translateType(type: string): string {
+  return typeKeys[type] ? t(typeKeys[type]) : type
+}
+
+function translateStatus(status: string): string {
+  const key = `admin.financials.status${status.charAt(0).toUpperCase() + status.slice(1)}`
+  return t(key)
+}
+
 function typeClass(type: string): string {
   switch (type) {
     case 'dues':
       return 'bg-blue-100 text-blue-800'
-    case 'andel':
+    case 'harbor_membership':
       return 'bg-purple-100 text-purple-800'
     case 'booking':
       return 'bg-teal-100 text-teal-800'
@@ -112,7 +129,7 @@ function handleExport() {
         >
           <option value="">{{ t('admin.financials.allTypes') }}</option>
           <option value="dues">{{ t('admin.financials.typeDues') }}</option>
-          <option value="andel">{{ t('admin.financials.typeAndel') }}</option>
+          <option value="harbor_membership">{{ t('admin.financials.typeHarborMembership') }}</option>
           <option value="slip_fee">{{ t('admin.financials.typeSlipFee') }}</option>
           <option value="booking">{{ t('admin.financials.typeBooking') }}</option>
           <option value="merchandise">{{ t('admin.financials.typeMerchandise') }}</option>
@@ -196,7 +213,7 @@ function handleExport() {
             </td>
             <td class="px-4 py-3">
               <span :class="['inline-flex rounded-full px-2 py-0.5 text-xs font-medium', typeClass(payment.type)]">
-                {{ t(`admin.financials.type${payment.type.charAt(0).toUpperCase() + payment.type.slice(1).replace('_', '')}`) }}
+                {{ translateType(payment.type) }}
               </span>
             </td>
             <td class="whitespace-nowrap px-4 py-3 text-right text-sm font-medium text-gray-900">
@@ -258,7 +275,7 @@ function handleExport() {
           </div>
           <div class="flex justify-between">
             <dt class="text-sm text-gray-500">{{ t('admin.financials.paymentType') }}</dt>
-            <dd class="text-sm text-gray-700">{{ selectedPayment.type }}</dd>
+            <dd class="text-sm text-gray-700">{{ translateType(selectedPayment.type) }}</dd>
           </div>
           <div class="flex justify-between">
             <dt class="text-sm text-gray-500">{{ t('admin.financials.amount') }}</dt>
@@ -268,7 +285,7 @@ function handleExport() {
             <dt class="text-sm text-gray-500">{{ t('common.status') }}</dt>
             <dd>
               <span :class="['inline-flex rounded-full px-2 py-0.5 text-xs font-medium', statusClass(selectedPayment.status)]">
-                {{ selectedPayment.status }}
+                {{ translateStatus(selectedPayment.status) }}
               </span>
             </dd>
           </div>

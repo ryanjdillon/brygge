@@ -21,7 +21,7 @@ const deleteMutation = useDeleteEvent()
 const showModal = ref(false)
 const editingEvent = ref<CalendarEvent | null>(null)
 
-const tagOptions = ['regatta', 'dugnad', 'social', 'agm', 'other'] as const
+const tagOptions = ['regatta', 'volunteer', 'social', 'agm', 'other'] as const
 
 const form = ref<CreateEventPayload>({
   title: '',
@@ -103,7 +103,7 @@ function formatDate(iso: string): string {
 function tagLabel(tag: string): string {
   const map: Record<string, string> = {
     regatta: t('calendar.filterRegatta'),
-    dugnad: t('calendar.filterDugnad'),
+    volunteer: t('calendar.filterVolunteer'),
     social: t('calendar.filterSocial'),
     agm: t('calendar.filterAgm'),
     other: t('admin.events.tagOther'),

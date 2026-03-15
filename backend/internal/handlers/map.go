@@ -166,7 +166,7 @@ func (h *MapHandler) HandleExportGPX(w http.ResponseWriter, r *http.Request) {
 
 	if lat != nil && lng != nil {
 		wpts = append(wpts, fmt.Sprintf(
-			`  <wpt lat="%f" lon="%f"><name>%s</name><type>harbour</type></wpt>`,
+			`  <wpt lat="%f" lon="%f"><name>%s</name><type>harbor</type></wpt>`,
 			*lat, *lng, xmlEscape(clubName),
 		))
 	}

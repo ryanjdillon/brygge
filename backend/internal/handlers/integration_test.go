@@ -489,8 +489,8 @@ func TestIntegration_CalendarEventCRUD(t *testing.T) {
 	env := setupIntegrationEnv(t)
 	ch := env.calendarHandler()
 
-	userID, _ := testutil.SeedUser(t, env.db, env.clubID, []string{"styre"})
-	token := env.generateToken(userID, []string{"styre"})
+	userID, _ := testutil.SeedUser(t, env.db, env.clubID, []string{"board"})
+	token := env.generateToken(userID, []string{"board"})
 
 	r := chi.NewRouter()
 	r.Get("/events/public", ch.HandleListPublicEvents)
@@ -513,7 +513,7 @@ func TestIntegration_CalendarEventCRUD(t *testing.T) {
 		"location":    "Main dock",
 		"start_time":  startTime.Format(time.RFC3339),
 		"end_time":    endTime.Format(time.RFC3339),
-		"tag":         "dugnad",
+		"tag":         "volunteer",
 		"is_public":   true,
 	}))
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -525,8 +525,8 @@ func TestIntegration_CalendarEventCRUD(t *testing.T) {
 	if created.Title != "Dugnad Weekend" {
 		t.Fatalf("expected title 'Dugnad Weekend', got %q", created.Title)
 	}
-	if created.Tag != "dugnad" {
-		t.Fatalf("expected tag 'dugnad', got %q", created.Tag)
+	if created.Tag != "volunteer" {
+		t.Fatalf("expected tag 'volunteer', got %q", created.Tag)
 	}
 
 	// List public events
@@ -633,7 +633,7 @@ func TestIntegration_AdminUsersListAndRoles(t *testing.T) {
 	// Update roles
 	rec = httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodPut, "/admin/users/"+targetID+"/roles", jsonBody(t, map[string]any{
-		"roles": []string{"member", "slip_owner"},
+		"roles": []string{"member", "slip_holder"},
 	}))
 	req.Header.Set("Authorization", "Bearer "+adminToken)
 	req.Header.Set("Content-Type", "application/json")
@@ -649,8 +649,8 @@ func TestIntegration_AdminUsersListAndRoles(t *testing.T) {
 	for _, r := range roles {
 		roleSet[r.(string)] = true
 	}
-	if !roleSet["member"] || !roleSet["slip_owner"] {
-		t.Fatalf("expected member and slip_owner roles, got %v", roles)
+	if !roleSet["member"] || !roleSet["slip_holder"] {
+		t.Fatalf("expected member and slip_holder roles, got %v", roles)
 	}
 
 	// Verify audit log
@@ -678,8 +678,8 @@ func TestIntegration_BookingsFullFlow(t *testing.T) {
 	userID, _ := testutil.SeedUser(t, env.db, env.clubID, []string{"member"})
 	userToken := env.generateToken(userID, []string{"member"})
 
-	styreID, _ := testutil.SeedUser(t, env.db, env.clubID, []string{"styre"})
-	styreToken := env.generateToken(styreID, []string{"styre"})
+	boardID, _ := testutil.SeedUser(t, env.db, env.clubID, []string{"board"})
+	boardToken := env.generateToken(boardID, []string{"board"})
 
 	ctx := context.Background()
 	var resourceID string
@@ -738,10 +738,10 @@ func TestIntegration_BookingsFullFlow(t *testing.T) {
 		t.Fatalf("expected pending status, got %q", createdBooking.Status)
 	}
 
-	// Confirm booking (styre)
+	// Confirm booking (board)
 	rec = httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodPost, "/bookings/"+createdBooking.ID+"/confirm", nil)
-	req.Header.Set("Authorization", "Bearer "+styreToken)
+	req.Header.Set("Authorization", "Bearer "+boardToken)
 	r.ServeHTTP(rec, req)
 	assertStatus(t, rec, http.StatusOK)
 
@@ -753,7 +753,7 @@ func TestIntegration_BookingsFullFlow(t *testing.T) {
 	// Cancel booking
 	rec = httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodPost, "/bookings/"+createdBooking.ID+"/cancel", nil)
-	req.Header.Set("Authorization", "Bearer "+styreToken)
+	req.Header.Set("Authorization", "Bearer "+boardToken)
 	r.ServeHTTP(rec, req)
 	assertStatus(t, rec, http.StatusOK)
 

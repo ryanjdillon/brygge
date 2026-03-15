@@ -122,7 +122,7 @@ func (h *AIDocumentsHandler) HandleSummarizeComments(w http.ResponseWriter, r *h
 	JSON(w, http.StatusOK, map[string]any{"summary": summary})
 }
 
-func (h *AIDocumentsHandler) HandleGenerateSakliste(w http.ResponseWriter, r *http.Request) {
+func (h *AIDocumentsHandler) HandleGenerateAgenda(w http.ResponseWriter, r *http.Request) {
 	docTitle, comments, ok := h.fetchDocumentComments(w, r)
 	if !ok {
 		return
@@ -138,14 +138,14 @@ func (h *AIDocumentsHandler) HandleGenerateSakliste(w http.ResponseWriter, r *ht
 	h.log.Info().
 		Str("doc_title", docTitle).
 		Int("comment_count", len(comments)).
-		Msg("GDPR notice: sending document comments to Anthropic API for sakliste generation")
+		Msg("GDPR notice: sending document comments to Anthropic API for agenda generation")
 
-	sakliste, err := h.claude.GenerateSakliste(r.Context(), docTitle, comments, body.ExistingAgenda)
+	agenda, err := h.claude.GenerateAgenda(r.Context(), docTitle, comments, body.ExistingAgenda)
 	if err != nil {
-		h.log.Error().Err(err).Msg("failed to generate sakliste via AI")
+		h.log.Error().Err(err).Msg("failed to generate agenda via AI")
 		Error(w, http.StatusBadGateway, "AI service unavailable")
 		return
 	}
 
-	JSON(w, http.StatusOK, map[string]any{"sakliste": sakliste})
+	JSON(w, http.StatusOK, map[string]any{"agenda": agenda})
 }

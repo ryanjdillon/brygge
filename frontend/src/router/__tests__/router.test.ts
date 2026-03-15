@@ -35,7 +35,7 @@ function createTestRouter(): Router {
       return { path: '/login' }
     }
 
-    if (to.meta.requiresAdmin && !auth.hasRole('admin') && !auth.hasRole('styre')) {
+    if (to.meta.requiresAdmin && !auth.hasRole('admin') && !auth.hasRole('board')) {
       return { path: '/' }
     }
   })
@@ -72,7 +72,7 @@ describe('router guards', () => {
     expect(router.currentRoute.value.path).toBe('/login')
   })
 
-  it('/admin redirects to / when user lacks admin/styre role', async () => {
+  it('/admin redirects to / when user lacks admin/board role', async () => {
     const auth = useAuthStore()
     auth.user = { id: '1', name: 'Test', email: 'test@example.com', roles: ['member'] }
 
@@ -105,9 +105,9 @@ describe('router guards', () => {
     expect(router.currentRoute.value.path).toBe('/admin')
   })
 
-  it('/admin is accessible with styre role', async () => {
+  it('/admin is accessible with board role', async () => {
     const auth = useAuthStore()
-    auth.user = { id: '1', name: 'Test', email: 'test@example.com', roles: ['styre'] }
+    auth.user = { id: '1', name: 'Test', email: 'test@example.com', roles: ['board'] }
 
     await router.push('/admin')
     await router.isReady()

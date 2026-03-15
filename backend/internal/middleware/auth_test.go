@@ -224,11 +224,11 @@ func TestRequireRoleAllowed(t *testing.T) {
 	claims := &auth.Claims{
 		UserID: "user-1",
 		ClubID: "club-1",
-		Roles:  []string{"styre"},
+		Roles:  []string{"board"},
 	}
 
 	called := false
-	handler := RequireRole("styre")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := RequireRole("board")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -283,7 +283,7 @@ func TestRequireRoleMultipleRoles(t *testing.T) {
 	}
 
 	called := false
-	handler := RequireRole("styre", "admin")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := RequireRole("board", "admin")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusOK)
 	}))

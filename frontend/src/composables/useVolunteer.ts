@@ -48,23 +48,23 @@ export function useTaskParticipants(taskId: () => string) {
   })
 }
 
-export function useMyDugnadHours() {
+export function useMyVolunteerHours() {
   const client = useApiClient()
 
   return useQuery({
-    queryKey: ['dugnad-hours', 'me'],
+    queryKey: ['volunteer-hours', 'me'],
     queryFn: async () =>
-      unwrap(await client.GET('/api/v1/members/me/dugnad-hours')),
+      unwrap(await client.GET('/api/v1/members/me/volunteer-hours')),
   })
 }
 
-export function useAllDugnadHours() {
+export function useAllVolunteerHours() {
   const client = useApiClient()
 
   return useQuery({
-    queryKey: ['dugnad-hours', 'all'],
+    queryKey: ['volunteer-hours', 'all'],
     queryFn: async () =>
-      unwrap(await client.GET('/api/v1/admin/dugnad/hours')),
+      unwrap(await client.GET('/api/v1/admin/volunteer/hours')),
   })
 }
 
@@ -74,11 +74,11 @@ export function useSetRequiredHours() {
 
   return useMutation({
     mutationFn: async (hours: number) =>
-      unwrap(await client.PUT('/api/v1/admin/dugnad/settings/hours', {
+      unwrap(await client.PUT('/api/v1/admin/volunteer/settings/hours', {
         body: { hours } as any,
       })),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['dugnad-hours'] })
+      queryClient.invalidateQueries({ queryKey: ['volunteer-hours'] })
     },
   })
 }

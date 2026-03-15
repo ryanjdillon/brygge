@@ -253,7 +253,7 @@ func TestHandleUpdatePreferencesUnknownCategory(t *testing.T) {
 
 func TestHandleUpdateConfigUnauthenticated(t *testing.T) {
 	h := newTestNotificationsHandler(t)
-	r := setupRoleProtectedRouter(http.MethodPut, "/admin/notifications/config", h.HandleUpdateConfig, "styre", "admin")
+	r := setupRoleProtectedRouter(http.MethodPut, "/admin/notifications/config", h.HandleUpdateConfig, "board", "admin")
 
 	body := `{"category":"payment_reminder","required":true}`
 	req := httptest.NewRequest(http.MethodPut, "/admin/notifications/config", strings.NewReader(body))
@@ -269,7 +269,7 @@ func TestHandleUpdateConfigUnauthenticated(t *testing.T) {
 
 func TestHandleUpdateConfigForbidden(t *testing.T) {
 	h := newTestNotificationsHandler(t)
-	r := setupRoleProtectedRouter(http.MethodPut, "/admin/notifications/config", h.HandleUpdateConfig, "styre", "admin")
+	r := setupRoleProtectedRouter(http.MethodPut, "/admin/notifications/config", h.HandleUpdateConfig, "board", "admin")
 
 	token := generateTestToken("user-123", "club-456", []string{"member"})
 
@@ -288,9 +288,9 @@ func TestHandleUpdateConfigForbidden(t *testing.T) {
 
 func TestHandleUpdateConfigUnknownCategory(t *testing.T) {
 	h := newTestNotificationsHandler(t)
-	r := setupRoleProtectedRouter(http.MethodPut, "/admin/notifications/config", h.HandleUpdateConfig, "styre", "admin")
+	r := setupRoleProtectedRouter(http.MethodPut, "/admin/notifications/config", h.HandleUpdateConfig, "board", "admin")
 
-	token := generateTestToken("user-123", "club-456", []string{"styre"})
+	token := generateTestToken("user-123", "club-456", []string{"board"})
 
 	body := `{"category":"nonexistent","required":true}`
 	req := httptest.NewRequest(http.MethodPut, "/admin/notifications/config", strings.NewReader(body))
@@ -310,9 +310,9 @@ func TestHandleTestPushNoVAPIDKeys(t *testing.T) {
 	log := zerolog.Nop()
 	h := NewNotificationsHandler(nil, cfg, log)
 
-	r := setupRoleProtectedRouter(http.MethodPost, "/admin/notifications/test", h.HandleTestPush, "styre", "admin")
+	r := setupRoleProtectedRouter(http.MethodPost, "/admin/notifications/test", h.HandleTestPush, "board", "admin")
 
-	token := generateTestToken("user-123", "club-456", []string{"styre"})
+	token := generateTestToken("user-123", "club-456", []string{"board"})
 
 	req := httptest.NewRequest(http.MethodPost, "/admin/notifications/test", nil)
 	req.Header.Set("Authorization", authHeader(token))
@@ -342,8 +342,8 @@ func TestDefaultCategories(t *testing.T) {
 		"payment_reminder":   true,
 		"slip_offer":         true,
 		"booking_confirm":    true,
-		"dugnad_reminder":    true,
-		"styre_announcement": true,
+		"volunteer_reminder":    true,
+		"board_announcement": true,
 		"waiting_list":       true,
 		"new_document":       false,
 		"event_reminder":     true,

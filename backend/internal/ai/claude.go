@@ -32,12 +32,12 @@ type Summary struct {
 	RawText     string   `json:"raw_text"`
 }
 
-type Sakliste struct {
-	Items   []SaklisteItem `json:"items"`
+type Agenda struct {
+	Items   []AgendaItem `json:"items"`
 	RawText string         `json:"raw_text"`
 }
 
-type SaklisteItem struct {
+type AgendaItem struct {
 	Number      int    `json:"number"`
 	Title       string `json:"title"`
 	Description string `json:"description"`
@@ -172,7 +172,7 @@ func formatComments(comments []Comment) string {
 }
 
 func (c *ClaudeClient) SummarizeComments(ctx context.Context, documentTitle string, comments []Comment) (*Summary, error) {
-	systemPrompt := "You are helping a Norwegian harbour club board process member feedback on documents. " +
+	systemPrompt := "You are helping a Norwegian harbor club board process member feedback on documents. " +
 		"Extract and summarize: 1) Action items, 2) Issues/concerns raised, 3) Proposals. " +
 		"Write in Norwegian unless the comments are in English. Be concise. " +
 		"Respond in JSON format with keys: action_items (array of strings), issues (array of strings), proposals (array of strings)."
@@ -202,8 +202,8 @@ func (c *ClaudeClient) SummarizeComments(ctx context.Context, documentTitle stri
 	return summary, nil
 }
 
-func (c *ClaudeClient) GenerateSakliste(ctx context.Context, documentTitle string, comments []Comment, existingAgenda string) (*Sakliste, error) {
-	systemPrompt := "Generate a structured meeting agenda (sakliste) for a Norwegian harbour club board meeting " +
+func (c *ClaudeClient) GenerateAgenda(ctx context.Context, documentTitle string, comments []Comment, existingAgenda string) (*Agenda, error) {
+	systemPrompt := "Generate a structured meeting agenda for a Norwegian harbor club board meeting " +
 		"based on the following document comments and feedback. Format with numbered items. Write in Norwegian. " +
 		"Respond in JSON format with key: items (array of objects with number, title, description)."
 
@@ -216,10 +216,10 @@ func (c *ClaudeClient) GenerateSakliste(ctx context.Context, documentTitle strin
 
 	rawText, err := c.sendMessage(ctx, systemPrompt, userMessage.String())
 	if err != nil {
-		return nil, fmt.Errorf("generating sakliste: %w", err)
+		return nil, fmt.Errorf("generating agenda: %w", err)
 	}
 
-	sakliste := &Sakliste{RawText: rawText}
+	agenda := &Agenda{RawText: rawText}
 
 	cleaned := rawText
 	if start := strings.Index(cleaned, "{"); start >= 0 {
@@ -228,9 +228,9 @@ func (c *ClaudeClient) GenerateSakliste(ctx context.Context, documentTitle strin
 		}
 	}
 
-	if err := json.Unmarshal([]byte(cleaned), sakliste); err != nil {
-		sakliste.Items = []SaklisteItem{}
+	if err := json.Unmarshal([]byte(cleaned), agenda); err != nil {
+		agenda.Items = []AgendaItem{}
 	}
 
-	return sakliste, nil
+	return agenda, nil
 }

@@ -15,12 +15,12 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/WeatherView.vue'),
   },
   {
-    path: '/harbour',
-    component: () => import('@/views/HarbourView.vue'),
+    path: '/harbor',
+    component: () => import('@/views/HarborView.vue'),
   },
   {
-    path: '/bobil',
-    component: () => import('@/views/BobilView.vue'),
+    path: '/motorhome',
+    component: () => import('@/views/MotorhomeView.vue'),
   },
   {
     path: '/directions',
@@ -112,9 +112,9 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/portal/BookingsView.vue'),
       },
       {
-        path: 'dugnad',
-        name: 'portal-dugnad',
-        component: () => import('@/views/portal/DugnadView.vue'),
+        path: 'volunteer',
+        name: 'portal-volunteer',
+        component: () => import('@/views/portal/VolunteerView.vue'),
       },
       {
         path: 'slip-sharing',
@@ -255,9 +255,9 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/BoatsAdminView.vue'),
       },
       {
-        path: 'dugnad',
-        name: 'admin-dugnad',
-        component: () => import('@/views/admin/DugnadAdminView.vue'),
+        path: 'volunteer',
+        name: 'admin-volunteer',
+        component: () => import('@/views/admin/VolunteerAdminView.vue'),
       },
       {
         path: 'map',
@@ -291,7 +291,7 @@ router.beforeEach(async (to) => {
     return { path: '/login' }
   }
 
-  if (to.meta.requiresAdmin && !auth.hasRole('admin') && !auth.hasRole('styre')) {
+  if (to.meta.requiresAdmin && !auth.hasRole('admin') && !auth.hasRole('board')) {
     return { path: '/' }
   }
 })

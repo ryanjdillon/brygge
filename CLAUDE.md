@@ -61,7 +61,7 @@ cd frontend && npx vitest src/views/__tests__/PricingView.test.ts
 - **Redis 7** for caching and session storage
 - Routes defined in `cmd/api/main.go` — all handler registration lives here
 - One handler struct per domain: `handlers.NewBookingsHandler(db, rdb, cfg, log)`
-- Auth: JWT tokens via `middleware.Authenticate(jwtService)`, role gates via `middleware.RequireRole("styre", "admin")`
+- Auth: JWT tokens via `middleware.Authenticate(jwtService)`, role gates via `middleware.RequireRole("board", "admin")`
 - Claims extracted with `middleware.GetClaims(ctx)` returning `*middleware.Claims` (UserID, ClubID, Roles)
 - Pagination: `shared.PaginatedResponse` wraps lists as `{ items: [...], limit, offset, has_more }` — frontend must unwrap `.items`
 - Feature flags: `cfg.Features.{Bookings, Projects, Calendar, Commerce, Communications}` toggle route groups

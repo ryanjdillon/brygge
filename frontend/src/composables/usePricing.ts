@@ -13,11 +13,11 @@ export interface PricingCategory {
 }
 
 const categoryKeys: Record<string, string> = {
-  moloandel: 'admin.pricing.categoryMoloandel',
+  harbor_membership: 'admin.pricing.categoryHarborMembership',
   slip_fee: 'admin.pricing.categorySlipFee',
   seasonal_rental: 'admin.pricing.categorySeasonalRental',
   guest: 'admin.pricing.categoryGuest',
-  bobil: 'admin.pricing.categoryBobil',
+  motorhome: 'admin.pricing.categoryMotorhome',
   room_hire: 'admin.pricing.categoryRoomHire',
   service: 'admin.pricing.categoryService',
   other: 'admin.pricing.categoryOther',

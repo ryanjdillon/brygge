@@ -18,7 +18,7 @@ func newTestAdminSlipsHandler(t *testing.T) *AdminSlipsHandler {
 
 func TestHandleListSlipsUnauthenticated(t *testing.T) {
 	h := newTestAdminSlipsHandler(t)
-	r := setupRoleProtectedRouter(http.MethodGet, "/admin/slips", h.HandleListSlips, "styre", "harbour_master")
+	r := setupRoleProtectedRouter(http.MethodGet, "/admin/slips", h.HandleListSlips, "board", "harbor_master")
 
 	req := httptest.NewRequest(http.MethodGet, "/admin/slips", nil)
 	rec := httptest.NewRecorder()
@@ -32,7 +32,7 @@ func TestHandleListSlipsUnauthenticated(t *testing.T) {
 
 func TestHandleListSlipsForbidden(t *testing.T) {
 	h := newTestAdminSlipsHandler(t)
-	r := setupRoleProtectedRouter(http.MethodGet, "/admin/slips", h.HandleListSlips, "styre", "harbour_master")
+	r := setupRoleProtectedRouter(http.MethodGet, "/admin/slips", h.HandleListSlips, "board", "harbor_master")
 
 	token := generateTestToken("user-1", "club-1", []string{"member"})
 
@@ -49,7 +49,7 @@ func TestHandleListSlipsForbidden(t *testing.T) {
 
 func TestHandleGetSlipUnauthenticated(t *testing.T) {
 	h := newTestAdminSlipsHandler(t)
-	r := setupRoleProtectedRouter(http.MethodGet, "/admin/slips/{slipID}", h.HandleGetSlip, "styre", "harbour_master")
+	r := setupRoleProtectedRouter(http.MethodGet, "/admin/slips/{slipID}", h.HandleGetSlip, "board", "harbor_master")
 
 	req := httptest.NewRequest(http.MethodGet, "/admin/slips/some-id", nil)
 	rec := httptest.NewRecorder()
@@ -63,7 +63,7 @@ func TestHandleGetSlipUnauthenticated(t *testing.T) {
 
 func TestHandleGetSlipForbidden(t *testing.T) {
 	h := newTestAdminSlipsHandler(t)
-	r := setupRoleProtectedRouter(http.MethodGet, "/admin/slips/{slipID}", h.HandleGetSlip, "styre", "harbour_master")
+	r := setupRoleProtectedRouter(http.MethodGet, "/admin/slips/{slipID}", h.HandleGetSlip, "board", "harbor_master")
 
 	token := generateTestToken("user-1", "club-1", []string{"member"})
 
@@ -80,7 +80,7 @@ func TestHandleGetSlipForbidden(t *testing.T) {
 
 func TestHandleCreateSlipUnauthenticated(t *testing.T) {
 	h := newTestAdminSlipsHandler(t)
-	r := setupRoleProtectedRouter(http.MethodPost, "/admin/slips", h.HandleCreateSlip, "styre", "harbour_master")
+	r := setupRoleProtectedRouter(http.MethodPost, "/admin/slips", h.HandleCreateSlip, "board", "harbor_master")
 
 	body := `{"number":"A1","section":"A"}`
 	req := httptest.NewRequest(http.MethodPost, "/admin/slips", strings.NewReader(body))
@@ -96,7 +96,7 @@ func TestHandleCreateSlipUnauthenticated(t *testing.T) {
 
 func TestHandleCreateSlipForbidden(t *testing.T) {
 	h := newTestAdminSlipsHandler(t)
-	r := setupRoleProtectedRouter(http.MethodPost, "/admin/slips", h.HandleCreateSlip, "styre", "harbour_master")
+	r := setupRoleProtectedRouter(http.MethodPost, "/admin/slips", h.HandleCreateSlip, "board", "harbor_master")
 
 	token := generateTestToken("user-1", "club-1", []string{"member"})
 
@@ -115,7 +115,7 @@ func TestHandleCreateSlipForbidden(t *testing.T) {
 
 func TestHandleUpdateSlipUnauthenticated(t *testing.T) {
 	h := newTestAdminSlipsHandler(t)
-	r := setupRoleProtectedRouter(http.MethodPut, "/admin/slips/{slipID}", h.HandleUpdateSlip, "styre", "harbour_master")
+	r := setupRoleProtectedRouter(http.MethodPut, "/admin/slips/{slipID}", h.HandleUpdateSlip, "board", "harbor_master")
 
 	req := httptest.NewRequest(http.MethodPut, "/admin/slips/some-id", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -130,7 +130,7 @@ func TestHandleUpdateSlipUnauthenticated(t *testing.T) {
 
 func TestHandleUpdateSlipForbidden(t *testing.T) {
 	h := newTestAdminSlipsHandler(t)
-	r := setupRoleProtectedRouter(http.MethodPut, "/admin/slips/{slipID}", h.HandleUpdateSlip, "styre", "harbour_master")
+	r := setupRoleProtectedRouter(http.MethodPut, "/admin/slips/{slipID}", h.HandleUpdateSlip, "board", "harbor_master")
 
 	token := generateTestToken("user-1", "club-1", []string{"member"})
 
@@ -148,7 +148,7 @@ func TestHandleUpdateSlipForbidden(t *testing.T) {
 
 func TestHandleAssignSlipUnauthenticated(t *testing.T) {
 	h := newTestAdminSlipsHandler(t)
-	r := setupRoleProtectedRouter(http.MethodPost, "/admin/slips/{slipID}/assign", h.HandleAssignSlip, "styre", "harbour_master")
+	r := setupRoleProtectedRouter(http.MethodPost, "/admin/slips/{slipID}/assign", h.HandleAssignSlip, "board", "harbor_master")
 
 	body := `{"user_id":"user-2"}`
 	req := httptest.NewRequest(http.MethodPost, "/admin/slips/some-id/assign", strings.NewReader(body))
@@ -164,7 +164,7 @@ func TestHandleAssignSlipUnauthenticated(t *testing.T) {
 
 func TestHandleAssignSlipForbidden(t *testing.T) {
 	h := newTestAdminSlipsHandler(t)
-	r := setupRoleProtectedRouter(http.MethodPost, "/admin/slips/{slipID}/assign", h.HandleAssignSlip, "styre", "harbour_master")
+	r := setupRoleProtectedRouter(http.MethodPost, "/admin/slips/{slipID}/assign", h.HandleAssignSlip, "board", "harbor_master")
 
 	token := generateTestToken("user-1", "club-1", []string{"member"})
 
@@ -183,7 +183,7 @@ func TestHandleAssignSlipForbidden(t *testing.T) {
 
 func TestHandleReleaseSlipUnauthenticated(t *testing.T) {
 	h := newTestAdminSlipsHandler(t)
-	r := setupRoleProtectedRouter(http.MethodPost, "/admin/slips/{slipID}/release", h.HandleReleaseSlip, "styre", "harbour_master")
+	r := setupRoleProtectedRouter(http.MethodPost, "/admin/slips/{slipID}/release", h.HandleReleaseSlip, "board", "harbor_master")
 
 	req := httptest.NewRequest(http.MethodPost, "/admin/slips/some-id/release", nil)
 	rec := httptest.NewRecorder()
@@ -197,7 +197,7 @@ func TestHandleReleaseSlipUnauthenticated(t *testing.T) {
 
 func TestHandleReleaseSlipForbidden(t *testing.T) {
 	h := newTestAdminSlipsHandler(t)
-	r := setupRoleProtectedRouter(http.MethodPost, "/admin/slips/{slipID}/release", h.HandleReleaseSlip, "styre", "harbour_master")
+	r := setupRoleProtectedRouter(http.MethodPost, "/admin/slips/{slipID}/release", h.HandleReleaseSlip, "board", "harbor_master")
 
 	token := generateTestToken("user-1", "club-1", []string{"member"})
 

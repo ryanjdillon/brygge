@@ -19,7 +19,7 @@ func newTestFinancialsHandler(t *testing.T) *FinancialsHandler {
 
 func TestHandleGetFinancialSummaryUnauthenticated(t *testing.T) {
 	h := newTestFinancialsHandler(t)
-	r := setupRoleProtectedRouter(http.MethodGet, "/admin/financials/summary", h.HandleGetFinancialSummary, "treasurer", "styre", "admin")
+	r := setupRoleProtectedRouter(http.MethodGet, "/admin/financials/summary", h.HandleGetFinancialSummary, "treasurer", "board", "admin")
 
 	req := httptest.NewRequest(http.MethodGet, "/admin/financials/summary", nil)
 	rec := httptest.NewRecorder()
@@ -33,7 +33,7 @@ func TestHandleGetFinancialSummaryUnauthenticated(t *testing.T) {
 
 func TestHandleGetFinancialSummaryForbidden(t *testing.T) {
 	h := newTestFinancialsHandler(t)
-	r := setupRoleProtectedRouter(http.MethodGet, "/admin/financials/summary", h.HandleGetFinancialSummary, "treasurer", "styre", "admin")
+	r := setupRoleProtectedRouter(http.MethodGet, "/admin/financials/summary", h.HandleGetFinancialSummary, "treasurer", "board", "admin")
 
 	token := generateTestToken("user-1", "club-1", []string{"member"})
 
@@ -50,7 +50,7 @@ func TestHandleGetFinancialSummaryForbidden(t *testing.T) {
 
 func TestHandleGetFinancialSummaryInvalidYear(t *testing.T) {
 	h := newTestFinancialsHandler(t)
-	r := setupRoleProtectedRouter(http.MethodGet, "/admin/financials/summary", h.HandleGetFinancialSummary, "treasurer", "styre", "admin")
+	r := setupRoleProtectedRouter(http.MethodGet, "/admin/financials/summary", h.HandleGetFinancialSummary, "treasurer", "board", "admin")
 
 	token := generateTestToken("user-1", "club-1", []string{"treasurer"})
 
@@ -67,7 +67,7 @@ func TestHandleGetFinancialSummaryInvalidYear(t *testing.T) {
 
 func TestHandleListPaymentsUnauthenticated(t *testing.T) {
 	h := newTestFinancialsHandler(t)
-	r := setupRoleProtectedRouter(http.MethodGet, "/admin/financials/payments", h.HandleListPayments, "treasurer", "styre", "admin")
+	r := setupRoleProtectedRouter(http.MethodGet, "/admin/financials/payments", h.HandleListPayments, "treasurer", "board", "admin")
 
 	req := httptest.NewRequest(http.MethodGet, "/admin/financials/payments", nil)
 	rec := httptest.NewRecorder()
@@ -81,7 +81,7 @@ func TestHandleListPaymentsUnauthenticated(t *testing.T) {
 
 func TestHandleListPaymentsForbidden(t *testing.T) {
 	h := newTestFinancialsHandler(t)
-	r := setupRoleProtectedRouter(http.MethodGet, "/admin/financials/payments", h.HandleListPayments, "treasurer", "styre", "admin")
+	r := setupRoleProtectedRouter(http.MethodGet, "/admin/financials/payments", h.HandleListPayments, "treasurer", "board", "admin")
 
 	token := generateTestToken("user-1", "club-1", []string{"member"})
 
@@ -98,7 +98,7 @@ func TestHandleListPaymentsForbidden(t *testing.T) {
 
 func TestHandleListPaymentsInvalidYear(t *testing.T) {
 	h := newTestFinancialsHandler(t)
-	r := setupRoleProtectedRouter(http.MethodGet, "/admin/financials/payments", h.HandleListPayments, "treasurer", "styre", "admin")
+	r := setupRoleProtectedRouter(http.MethodGet, "/admin/financials/payments", h.HandleListPayments, "treasurer", "board", "admin")
 
 	token := generateTestToken("user-1", "club-1", []string{"treasurer"})
 
@@ -115,7 +115,7 @@ func TestHandleListPaymentsInvalidYear(t *testing.T) {
 
 func TestHandleGetPaymentDetailsUnauthenticated(t *testing.T) {
 	h := newTestFinancialsHandler(t)
-	r := setupRoleProtectedRouter(http.MethodGet, "/admin/financials/payments/{paymentID}", h.HandleGetPaymentDetails, "treasurer", "styre", "admin")
+	r := setupRoleProtectedRouter(http.MethodGet, "/admin/financials/payments/{paymentID}", h.HandleGetPaymentDetails, "treasurer", "board", "admin")
 
 	req := httptest.NewRequest(http.MethodGet, "/admin/financials/payments/some-id", nil)
 	rec := httptest.NewRecorder()
@@ -129,7 +129,7 @@ func TestHandleGetPaymentDetailsUnauthenticated(t *testing.T) {
 
 func TestHandleExportCSVUnauthenticated(t *testing.T) {
 	h := newTestFinancialsHandler(t)
-	r := setupRoleProtectedRouter(http.MethodGet, "/admin/financials/export", h.HandleExportCSV, "treasurer", "styre", "admin")
+	r := setupRoleProtectedRouter(http.MethodGet, "/admin/financials/export", h.HandleExportCSV, "treasurer", "board", "admin")
 
 	req := httptest.NewRequest(http.MethodGet, "/admin/financials/export", nil)
 	rec := httptest.NewRecorder()
@@ -143,7 +143,7 @@ func TestHandleExportCSVUnauthenticated(t *testing.T) {
 
 func TestHandleExportCSVInvalidDateFormats(t *testing.T) {
 	h := newTestFinancialsHandler(t)
-	r := setupRoleProtectedRouter(http.MethodGet, "/admin/financials/export", h.HandleExportCSV, "treasurer", "styre", "admin")
+	r := setupRoleProtectedRouter(http.MethodGet, "/admin/financials/export", h.HandleExportCSV, "treasurer", "board", "admin")
 
 	token := generateTestToken("user-1", "club-1", []string{"treasurer"})
 
@@ -173,7 +173,7 @@ func TestHandleExportCSVInvalidDateFormats(t *testing.T) {
 
 func TestHandleGenerateInvoiceUnauthenticated(t *testing.T) {
 	h := newTestFinancialsHandler(t)
-	r := setupRoleProtectedRouter(http.MethodPost, "/admin/financials/invoices", h.HandleGenerateInvoice, "treasurer", "styre", "admin")
+	r := setupRoleProtectedRouter(http.MethodPost, "/admin/financials/invoices", h.HandleGenerateInvoice, "treasurer", "board", "admin")
 
 	req := httptest.NewRequest(http.MethodPost, "/admin/financials/invoices", nil)
 	rec := httptest.NewRecorder()
@@ -187,7 +187,7 @@ func TestHandleGenerateInvoiceUnauthenticated(t *testing.T) {
 
 func TestHandleGenerateInvoiceInvalidBody(t *testing.T) {
 	h := newTestFinancialsHandler(t)
-	r := setupRoleProtectedRouter(http.MethodPost, "/admin/financials/invoices", h.HandleGenerateInvoice, "treasurer", "styre", "admin")
+	r := setupRoleProtectedRouter(http.MethodPost, "/admin/financials/invoices", h.HandleGenerateInvoice, "treasurer", "board", "admin")
 
 	token := generateTestToken("user-1", "club-1", []string{"treasurer"})
 
@@ -205,7 +205,7 @@ func TestHandleGenerateInvoiceInvalidBody(t *testing.T) {
 
 func TestHandleGenerateInvoiceMissingFields(t *testing.T) {
 	h := newTestFinancialsHandler(t)
-	r := setupRoleProtectedRouter(http.MethodPost, "/admin/financials/invoices", h.HandleGenerateInvoice, "treasurer", "styre", "admin")
+	r := setupRoleProtectedRouter(http.MethodPost, "/admin/financials/invoices", h.HandleGenerateInvoice, "treasurer", "board", "admin")
 
 	token := generateTestToken("user-1", "club-1", []string{"treasurer"})
 
@@ -246,7 +246,7 @@ func TestHandleGenerateInvoiceMissingFields(t *testing.T) {
 
 func TestHandleGenerateInvoiceInvalidDueDate(t *testing.T) {
 	h := newTestFinancialsHandler(t)
-	r := setupRoleProtectedRouter(http.MethodPost, "/admin/financials/invoices", h.HandleGenerateInvoice, "treasurer", "styre", "admin")
+	r := setupRoleProtectedRouter(http.MethodPost, "/admin/financials/invoices", h.HandleGenerateInvoice, "treasurer", "board", "admin")
 
 	token := generateTestToken("user-1", "club-1", []string{"treasurer"})
 
@@ -265,7 +265,7 @@ func TestHandleGenerateInvoiceInvalidDueDate(t *testing.T) {
 
 func TestHandleListOverdueUnauthenticated(t *testing.T) {
 	h := newTestFinancialsHandler(t)
-	r := setupRoleProtectedRouter(http.MethodGet, "/admin/financials/overdue", h.HandleListOverdue, "treasurer", "styre", "admin")
+	r := setupRoleProtectedRouter(http.MethodGet, "/admin/financials/overdue", h.HandleListOverdue, "treasurer", "board", "admin")
 
 	req := httptest.NewRequest(http.MethodGet, "/admin/financials/overdue", nil)
 	rec := httptest.NewRecorder()
@@ -279,7 +279,7 @@ func TestHandleListOverdueUnauthenticated(t *testing.T) {
 
 func TestHandleListOverdueForbidden(t *testing.T) {
 	h := newTestFinancialsHandler(t)
-	r := setupRoleProtectedRouter(http.MethodGet, "/admin/financials/overdue", h.HandleListOverdue, "treasurer", "styre", "admin")
+	r := setupRoleProtectedRouter(http.MethodGet, "/admin/financials/overdue", h.HandleListOverdue, "treasurer", "board", "admin")
 
 	token := generateTestToken("user-1", "club-1", []string{"member"})
 

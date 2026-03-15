@@ -10,8 +10,6 @@
     "login": "Zaloguj się",
     "portal": "Moja strona",
     "admin": "Administracja",
-    "harbour": "Port",
-    "bobil": "Kamper",
     "club": "Klub",
     "history": "Historia",
     "merchandise": "Sklep",
@@ -19,7 +17,9 @@
     "logout": "Wyloguj się",
     "ariaMainNav": "Nawigacja główna",
     "ariaLogout": "Wyloguj się",
-    "ariaMenu": "Menu"
+    "ariaMenu": "Menu",
+    "harbor": "Port",
+    "motorhome": "Kamper"
   },
   "common": {
     "loading": "Ładowanie",
@@ -62,7 +62,6 @@
     "description": "Nadchodzące wydarzenia i aktywności",
     "export": "Eksportuj do kalendarza (iCal)",
     "filterRegatta": "Regaty",
-    "filterDugnad": "Dzień pracy",
     "filterSocial": "Towarzyskie",
     "filterAgm": "Walne zgromadzenie",
     "proposeEvent": "Zaproponuj wydarzenie",
@@ -73,7 +72,8 @@
     "weekdayThu": "Cz",
     "weekdayFri": "Pt",
     "weekdaySat": "So",
-    "weekdaySun": "Nd"
+    "weekdaySun": "Nd",
+    "filterVolunteer": "Dzień pracy"
   },
   "weather": {
     "title": "Pogoda w porcie",
@@ -107,9 +107,9 @@
     "approachNotes": "Zachowaj bezpieczną odległość od boi przy wejściu. Podążaj oznakowanym torem wodnym do portu gościnnego.",
     "depth": "Głębokość",
     "depthInfo": "Minimalna głębokość przy wejściu: 3,5 metra",
-    "harbourChart": "Mapa portu",
     "openGoogleMaps": "Otwórz w Google Maps",
-    "downloadGPX": "Pobierz GPX"
+    "downloadGPX": "Pobierz GPX",
+    "harborChart": "Mapa portu"
   },
   "contact": {
     "title": "Kontakt",
@@ -130,10 +130,8 @@
   "pricing": {
     "title": "Cennik",
     "yearlyDues": "Składka roczna",
-    "andel": "Udział portowy (andel)",
     "slipFees": "Opłaty za miejsce wg rozmiaru",
     "guestSlip": "Miejsca gościnne",
-    "bobilParking": "Parking dla kamperów",
     "roomHire": "Wynajem sali",
     "loading": "Pobieranie cennika...",
     "error": "Nie udało się pobrać cennika",
@@ -142,7 +140,9 @@
     "perDay": "/dzień",
     "noPricing": "Nie dodano jeszcze cennika",
     "period": "Okres",
-    "installments": "Można podzielić na maksymalnie {max} rat"
+    "installments": "Można podzielić na maksymalnie {max} rat",
+    "harbor_membership": "Udział portowy (andel)",
+    "motorhomeParking": "Parking dla kamperów"
   },
   "join": {
     "title": "Dołącz do klubu",
@@ -162,7 +162,7 @@
     "submitting": "Wysyłanie...",
     "submitted": "Rejestracja zakończona!"
   },
-  "harbour": {
+  "harbor": {
     "title": "Port gościnny",
     "subtitle": "Witamy w naszym porcie gościnnym. Znajdziesz tu cennik, mapy i informacje praktyczne.",
     "spotsAvailable": "miejsc gościnnych",
@@ -176,7 +176,7 @@
     "ctaDescription": "Skontaktuj się z nami, aby zarezerwować miejsce gościnne lub uzyskać więcej informacji.",
     "ctaButton": "Skontaktuj się"
   },
-  "bobil": {
+  "motorhome": {
     "title": "Parking dla kamperów",
     "subtitle": "Stanowiska dla kamperów z prądem i zapleczem sanitarnym tuż przy porcie.",
     "spotsAvailable": "stanowisk",
@@ -274,9 +274,9 @@
       "role": {
         "applicant": "Kandydat",
         "member": "Członek",
-        "slip_owner": "Posiadacz miejsca",
-        "styre": "Członek zarządu",
-        "admin": "Administrator"
+        "admin": "Administrator",
+        "slip_holder": "Posiadacz miejsca",
+        "board": "Członek zarządu"
       },
       "noSlip": "Brak przypisanego miejsca",
       "noBookings": "Brak nadchodzących rezerwacji",
@@ -337,7 +337,6 @@
       "title": "Dokumenty",
       "filterAll": "Wszystkie",
       "filterMember": "Członkowie",
-      "filterStyre": "Zarząd",
       "download": "Pobierz",
       "comments": "Komentarze",
       "addComment": "Dodaj komentarz",
@@ -346,7 +345,8 @@
       "noComments": "Brak komentarzy",
       "commentSuccess": "Komentarz dodany",
       "commentError": "Nie udało się dodać komentarza",
-      "loadError": "Nie udało się załadować dokumentów"
+      "loadError": "Nie udało się załadować dokumentów",
+      "filterBoard": "Zarząd"
     },
     "waitingList": {
       "title": "Lista oczekujących",
@@ -425,7 +425,6 @@
   "admin": {
     "title": "Administracja",
     "ariaNav": "Nawigacja administracji",
-    "groupHarbour": "Port",
     "groupFinance": "Finanse",
     "groupArchive": "Archiwum i informacje",
     "sidebar": {
@@ -451,7 +450,6 @@
       "duesReceived": "Otrzymane składki",
       "outstanding": "Zaległe",
       "overdue": "Przeterminowane",
-      "andelCollected": "Zebrane udziały",
       "bookingRevenue": "Przychody z rezerwacji",
       "viewPayments": "Zobacz płatności",
       "viewOverdue": "Zobacz przeterminowane",
@@ -462,7 +460,6 @@
       "allTypes": "Wszystkie typy",
       "allStatuses": "Wszystkie statusy",
       "typeDues": "Składka",
-      "typeAndel": "Udział",
       "typeSlipFee": "Opłata za miejsce",
       "typeSlipfee": "Opłata za miejsce",
       "typeBooking": "Rezerwacja",
@@ -489,7 +486,9 @@
       "selectMember": "Wybierz członka",
       "searchMember": "Szukaj po nazwisku lub e-mailu...",
       "invoicePreview": "Faktura dla {name}: {type}, {amount} NOK, termin {due}",
-      "invoiceCreated": "Faktura wystawiona"
+      "invoiceCreated": "Faktura wystawiona",
+      "harborMembershipCollected": "Zebrane udziały",
+      "typeHarborMembership": "Udział"
     },
     "events": {
       "title": "Zarządzanie wydarzeniami",
@@ -515,10 +514,10 @@
       "resourceType": "Typ zasobu",
       "allTypes": "Wszystkie typy",
       "guestSlip": "Miejsce gościnne",
-      "bobilSpot": "Stanowisko kamperowe",
       "clubRoom": "Sala klubowa",
       "dateFrom": "Od",
-      "dateTo": "Do"
+      "dateTo": "Do",
+      "motorhomeSpot": "Stanowisko kamperowe"
     },
     "communication": {
       "title": "Komunikacja",
@@ -529,11 +528,11 @@
       "recipients": "Odbiorcy",
       "recipientAll": "Wszyscy członkowie",
       "recipientMembers": "Tylko członkowie",
-      "recipientStyre": "Członkowie zarządu",
-      "recipientSlipOwners": "Posiadacze miejsc",
       "preview": "Podgląd",
       "send": "Wyślij wiadomość",
-      "noHistory": "Nie wysłano jeszcze żadnych wiadomości"
+      "noHistory": "Nie wysłano jeszcze żadnych wiadomości",
+      "recipientBoard": "Członkowie zarządu",
+      "recipientSlipHolders": "Posiadacze miejsc"
     },
     "bookingSettings": {
       "title": "Ustawienia rezerwacji",
@@ -607,11 +606,9 @@
       "priceDeleted": "Cena usunięta",
       "saveError": "Nie udało się zapisać",
       "deleteError": "Nie udało się usunąć",
-      "categoryMoloandel": "Udział w falochronie",
       "categorySlipFee": "Opłata za miejsce",
       "categorySeasonalRental": "Wynajem sezonowy",
       "categoryGuest": "Miejsca gościnne",
-      "categoryBobil": "Parking dla kamperów",
       "categoryRoomHire": "Wynajem sali",
       "categoryService": "Usługi",
       "categoryOther": "Inne",
@@ -620,7 +617,9 @@
       "unitSeason": "Za sezon",
       "unitDay": "Za dzień",
       "unitNight": "Za noc",
-      "unitHour": "Za godzinę"
+      "unitHour": "Za godzinę",
+      "categoryHarborMembership": "Udział w falochronie",
+      "categoryMotorhome": "Parking dla kamperów"
     },
     "users": {
       "name": "Imię i nazwisko",
@@ -677,7 +676,8 @@
       "approveDimensions": "Zatwierdź wymiary",
       "approveSuccess": "Wymiary zatwierdzone",
       "approveError": "Nie udało się zatwierdzić wymiarów"
-    }
+    },
+    "groupHarbor": "Port"
   },
   "projects": {
     "title": "Projekty",
@@ -742,13 +742,13 @@
     "loadMore": "Załaduj starsze wiadomości",
     "rooms": {
       "general": "Ogólny",
-      "harbour": "Port",
       "events": "Wydarzenia",
       "forsale": "Na sprzedaż",
-      "styre": "Zarząd"
+      "harbor": "Port",
+      "board": "Zarząd"
     }
   },
-  "dugnad": {
+  "volunteer": {
     "title": "Dzień pracy",
     "join": "Dołącz",
     "leave": "Opuść",
@@ -761,7 +761,6 @@
     "maxParticipants": "Maks. uczestników",
     "participants": "Uczestnicy",
     "materials": "Materiały",
-    "ansvarlig": "Odpowiedzialny",
     "collaborator": "Uczestnik",
     "hours": "Godziny",
     "signedUpHours": "Zadeklarowane godziny",
@@ -785,7 +784,8 @@
     "requiredHoursPerYear": "Godziny pracy rocznie",
     "settingsUpdated": "Ustawienia zaktualizowane",
     "allMembers": "Wszyscy członkowie",
-    "eventProjects": "Projekty dnia pracy"
+    "eventProjects": "Projekty dnia pracy",
+    "responsible": "Odpowiedzialny"
   },
   "mapAdmin": {
     "title": "Znaczniki mapy",
@@ -802,7 +802,7 @@
       "buoy": "Boja",
       "hazard": "Zagrożenie",
       "anchorage": "Kotwicowisko",
-      "harbour": "Port"
+      "harbor": "Port"
     },
     "noMarkers": "Nie dodano jeszcze znaczników",
     "saved": "Znacznik zapisany",
@@ -812,7 +812,6 @@
     "title": "Rezerwacja",
     "subtitle": "Zarezerwuj miejsce gościnne, stanowisko kamperowe, dom klubowy lub dźwig",
     "guestSlip": "Miejsce gościnne",
-    "bobilSpot": "Stanowisko kamperowe",
     "clubRoom": "Dom klubowy",
     "slipHoist": "Dźwig slipowy",
     "boatDimensions": "Wymiary łodzi",
@@ -859,7 +858,8 @@
       "emailRequired": "E-mail jest wymagany",
       "emailInvalid": "Nieprawidłowy adres e-mail",
       "phoneInvalid": "Nieprawidłowy numer telefonu"
-    }
+    },
+    "motorhomeSpot": "Stanowisko kamperowe"
   },
   "gdpr": {
     "title": "Privacy & Data",

@@ -968,9 +968,9 @@ func (h *BookingsHandler) HandleCancelBooking(w http.ResponseWriter, r *http.Req
 	}
 
 	isOwner := b.UserID != nil && *b.UserID == claims.UserID
-	isStyre := hasRole(claims.Roles, "styre") || hasRole(claims.Roles, "harbour_master")
+	isStyre := hasRole(claims.Roles, "board") || hasRole(claims.Roles, "harbor_master")
 	if !isOwner && !isStyre {
-		Error(w, http.StatusForbidden, "only the booking owner or styre can cancel")
+		Error(w, http.StatusForbidden, "only the booking owner or board can cancel")
 		return
 	}
 

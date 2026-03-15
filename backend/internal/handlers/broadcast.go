@@ -67,13 +67,13 @@ func (h *BroadcastHandler) HandleSendBroadcast(w http.ResponseWriter, r *http.Re
 	}
 
 	validRecipients := map[string]bool{
-		"all":         true,
-		"members":     true,
-		"styre":       true,
-		"slip_owners": true,
+		"all":          true,
+		"members":      true,
+		"board":        true,
+		"slip_holders": true,
 	}
 	if !validRecipients[req.Recipients] {
-		Error(w, http.StatusBadRequest, "recipients must be one of: all, members, styre, slip_owners")
+		Error(w, http.StatusBadRequest, "recipients must be one of: all, members, board, slip_holders")
 		return
 	}
 

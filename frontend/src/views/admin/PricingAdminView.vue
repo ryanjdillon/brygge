@@ -20,11 +20,11 @@ const { data: response, isLoading } = useQuery({
 })
 
 const categories = computed(() => [
-  { value: 'moloandel', label: t('admin.pricing.categoryMoloandel') },
+  { value: 'harbor_membership', label: t('admin.pricing.categoryHarborMembership') },
   { value: 'slip_fee', label: t('admin.pricing.categorySlipFee') },
   { value: 'seasonal_rental', label: t('admin.pricing.categorySeasonalRental') },
   { value: 'guest', label: t('admin.pricing.categoryGuest') },
-  { value: 'bobil', label: t('admin.pricing.categoryBobil') },
+  { value: 'motorhome', label: t('admin.pricing.categoryMotorhome') },
   { value: 'room_hire', label: t('admin.pricing.categoryRoomHire') },
   { value: 'service', label: t('admin.pricing.categoryService') },
   { value: 'other', label: t('admin.pricing.categoryOther') },

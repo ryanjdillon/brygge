@@ -386,7 +386,7 @@ func (h *SlipSharesHandler) HandleDeleteSlipShare(w http.ResponseWriter, r *http
 		return
 	}
 	if confirmedBookings > 0 {
-		Error(w, http.StatusConflict, "cannot cancel — confirmed bookings exist in this window; contact styre")
+		Error(w, http.StatusConflict, "cannot cancel — confirmed bookings exist in this window; contact board")
 		return
 	}
 

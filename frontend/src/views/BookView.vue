@@ -17,7 +17,7 @@ const auth = useAuthStore()
 
 const resourceTypes = [
   { key: 'guest_slip', icon: Anchor, label: 'booking.guestSlip' },
-  { key: 'bobil_spot', icon: Truck, label: 'booking.bobilSpot' },
+  { key: 'bobil_spot', icon: Truck, label: 'booking.motorhomeSpot' },
   { key: 'club_room', icon: Home, label: 'booking.clubRoom' },
   { key: 'slip_hoist', icon: Wrench, label: 'booking.slipHoist' },
 ]
@@ -44,7 +44,7 @@ const { items: priceItems, unitLabel } = usePricing()
 
 const pricingCategoryMap: Record<string, string> = {
   guest_slip: 'guest',
-  bobil_spot: 'bobil',
+  bobil_spot: 'motorhome',
   club_room: 'room_hire',
   slip_hoist: 'service',
 }
@@ -293,7 +293,7 @@ function startOver() {
         <dl class="mt-2 space-y-1">
           <div class="flex justify-between">
             <dt class="text-gray-500">{{ t('booking.type') }}</dt>
-            <dd>{{ t(`booking.${selectedType === 'guest_slip' ? 'guestSlip' : selectedType === 'bobil_spot' ? 'bobilSpot' : selectedType === 'club_room' ? 'clubRoom' : 'slipHoist'}`) }}</dd>
+            <dd>{{ t(`booking.${selectedType === 'guest_slip' ? 'guestSlip' : selectedType === 'bobil_spot' ? 'motorhomeSpot' : selectedType === 'club_room' ? 'clubRoom' : 'slipHoist'}`) }}</dd>
           </div>
           <div class="flex justify-between">
             <dt class="text-gray-500">{{ t('booking.dates') }}</dt>

@@ -59,8 +59,8 @@ const cards = computed(() => {
       bg: 'bg-red-50',
     },
     {
-      label: t('admin.financials.andelCollected'),
-      value: formatNOK(summary.value.total_andel_collected),
+      label: t('admin.financials.harborMembershipCollected'),
+      value: formatNOK(summary.value.total_harbor_membership_collected),
       icon: TrendingUp,
       color: 'text-blue-600',
       bg: 'bg-blue-50',

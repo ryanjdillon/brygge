@@ -129,7 +129,7 @@ function handleSubmit() {
           class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
         >
           <option value="dues">{{ t('admin.financials.typeDues') }}</option>
-          <option value="andel">{{ t('admin.financials.typeAndel') }}</option>
+          <option value="harbor_membership">{{ t('admin.financials.typeHarborMembership') }}</option>
           <option value="slip_fee">{{ t('admin.financials.typeSlipFee') }}</option>
           <option value="booking">{{ t('admin.financials.typeBooking') }}</option>
           <option value="merchandise">{{ t('admin.financials.typeMerchandise') }}</option>

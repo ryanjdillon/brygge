@@ -49,7 +49,7 @@ const { mutate: deleteUser } = useMutation({
   },
 })
 
-const allRoles = ['member', 'slip_owner', 'styre', 'harbour_master', 'treasurer', 'admin']
+const allRoles = ['member', 'slip_holder', 'board', 'harbor_master', 'treasurer', 'admin']
 
 function toggleRole(userId: string, role: string) {
   const roles = editingRoles.value[userId]

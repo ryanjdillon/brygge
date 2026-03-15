@@ -480,13 +480,13 @@ func registerMemberOps(api huma.API) {
 	}, struct{ Body StatusResponse }]())
 
 	huma.Register(api, huma.Operation{
-		OperationID: "get-my-dugnad-hours",
+		OperationID: "get-my-volunteer-hours",
 		Method:      http.MethodGet,
-		Path:        "/api/v1/members/me/dugnad-hours",
-		Tags:        []string{"Members", "Dugnad"},
+		Path:        "/api/v1/members/me/volunteer-hours",
+		Tags:        []string{"Members", "Volunteer"},
 		Summary:     "Get my volunteer hours",
 		Security:    BearerSecurity,
-	}, stub[struct{}, struct{ Body DugnadHoursSummary }]())
+	}, stub[struct{}, struct{ Body VolunteerHoursSummary }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "get-member-directory",
@@ -819,7 +819,7 @@ func registerProjectOps(api huma.API) {
 		OperationID: "join-task",
 		Method:      http.MethodPost,
 		Path:        "/api/v1/tasks/{taskID}/join",
-		Tags:        []string{"Projects", "Dugnad"},
+		Tags:        []string{"Projects", "Volunteer"},
 		Summary:     "Join a task",
 		Security:    BearerSecurity,
 	}, stub[struct {
@@ -830,7 +830,7 @@ func registerProjectOps(api huma.API) {
 		OperationID: "leave-task",
 		Method:      http.MethodDelete,
 		Path:        "/api/v1/tasks/{taskID}/leave",
-		Tags:        []string{"Projects", "Dugnad"},
+		Tags:        []string{"Projects", "Volunteer"},
 		Summary:     "Leave a task",
 		Security:    BearerSecurity,
 	}, stub[struct {
@@ -841,7 +841,7 @@ func registerProjectOps(api huma.API) {
 		OperationID: "list-task-participants",
 		Method:      http.MethodGet,
 		Path:        "/api/v1/tasks/{taskID}/participants",
-		Tags:        []string{"Projects", "Dugnad"},
+		Tags:        []string{"Projects", "Volunteer"},
 		Summary:     "List task participants",
 		Security:    BearerSecurity,
 	}, stub[struct {
@@ -875,7 +875,7 @@ func registerProjectOps(api huma.API) {
 		OperationID: "assign-task",
 		Method:      http.MethodPut,
 		Path:        "/api/v1/tasks/{taskID}/assign",
-		Tags:        []string{"Projects", "Dugnad"},
+		Tags:        []string{"Projects", "Volunteer"},
 		Summary:     "Assign task to member (admin)",
 		Security:    BearerSecurity,
 	}, stub[struct {
@@ -889,7 +889,7 @@ func registerProjectOps(api huma.API) {
 		OperationID: "adjust-task-hours",
 		Method:      http.MethodPut,
 		Path:        "/api/v1/tasks/{taskID}/hours",
-		Tags:        []string{"Projects", "Dugnad"},
+		Tags:        []string{"Projects", "Volunteer"},
 		Summary:     "Adjust volunteer hours (admin)",
 		Security:    BearerSecurity,
 	}, stub[struct {
@@ -1432,7 +1432,7 @@ func registerAdminOps(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "generate-meeting-agenda",
 		Method:      http.MethodPost,
-		Path:        "/api/v1/admin/documents/{docID}/sakliste",
+		Path:        "/api/v1/admin/documents/{docID}/agenda",
 		Tags:        []string{"Admin", "Documents"},
 		Summary:     "Generate meeting agenda from comments",
 		Security:    BearerSecurity,
@@ -1746,21 +1746,21 @@ func registerAdminOps(api huma.API) {
 		Security:    BearerSecurity,
 	}, stub[struct{ Body LegalDocument }, struct{ Body LegalDocument }]())
 
-	// Admin Dugnad
+	// Admin Volunteer
 	huma.Register(api, huma.Operation{
-		OperationID: "admin-list-dugnad-hours",
+		OperationID: "admin-list-volunteer-hours",
 		Method:      http.MethodGet,
-		Path:        "/api/v1/admin/dugnad/hours",
-		Tags:        []string{"Admin", "Dugnad"},
+		Path:        "/api/v1/admin/volunteer/hours",
+		Tags:        []string{"Admin", "Volunteer"},
 		Summary:     "List all volunteer hours",
 		Security:    BearerSecurity,
-	}, stub[struct{}, struct{ Body []DugnadHoursSummary }]())
+	}, stub[struct{}, struct{ Body []VolunteerHoursSummary }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "admin-set-required-hours",
 		Method:      http.MethodPut,
-		Path:        "/api/v1/admin/dugnad/settings/hours",
-		Tags:        []string{"Admin", "Dugnad"},
+		Path:        "/api/v1/admin/volunteer/settings/hours",
+		Tags:        []string{"Admin", "Volunteer"},
 		Summary:     "Set required volunteer hours",
 		Security:    BearerSecurity,
 	}, stub[struct {
@@ -1772,8 +1772,8 @@ func registerAdminOps(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "admin-link-project-event",
 		Method:      http.MethodPost,
-		Path:        "/api/v1/admin/dugnad/events/{eventID}/projects",
-		Tags:        []string{"Admin", "Dugnad"},
+		Path:        "/api/v1/admin/volunteer/events/{eventID}/projects",
+		Tags:        []string{"Admin", "Volunteer"},
 		Summary:     "Link project to event",
 		Security:    BearerSecurity,
 	}, stub[struct {
@@ -1786,8 +1786,8 @@ func registerAdminOps(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "admin-unlink-project-event",
 		Method:      http.MethodDelete,
-		Path:        "/api/v1/admin/dugnad/events/{eventID}/projects/{projectID}",
-		Tags:        []string{"Admin", "Dugnad"},
+		Path:        "/api/v1/admin/volunteer/events/{eventID}/projects/{projectID}",
+		Tags:        []string{"Admin", "Volunteer"},
 		Summary:     "Unlink project from event",
 		Security:    BearerSecurity,
 	}, stub[struct {
@@ -1798,8 +1798,8 @@ func registerAdminOps(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "admin-get-event-projects",
 		Method:      http.MethodGet,
-		Path:        "/api/v1/admin/dugnad/events/{eventID}/projects",
-		Tags:        []string{"Admin", "Dugnad"},
+		Path:        "/api/v1/admin/volunteer/events/{eventID}/projects",
+		Tags:        []string{"Admin", "Volunteer"},
 		Summary:     "List projects linked to event",
 		Security:    BearerSecurity,
 	}, stub[struct {

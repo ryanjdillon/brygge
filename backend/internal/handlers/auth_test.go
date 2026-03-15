@@ -194,7 +194,7 @@ func TestHandleMeAuthenticated(t *testing.T) {
 	r.Use(middleware.Authenticate(jwtSvc))
 	r.Get("/auth/me", h.HandleMe)
 
-	token := generateTestToken("user-456", "club-789", []string{"member", "styre"})
+	token := generateTestToken("user-456", "club-789", []string{"member", "board"})
 
 	req := httptest.NewRequest(http.MethodGet, "/auth/me", nil)
 	req.Header.Set("Authorization", authHeader(token))
@@ -222,7 +222,7 @@ func TestHandleMeAuthenticated(t *testing.T) {
 	if resp.ClubID != "club-789" {
 		t.Errorf("expected club_id 'club-789', got %q", resp.ClubID)
 	}
-	if len(resp.Roles) != 2 || resp.Roles[0] != "member" || resp.Roles[1] != "styre" {
-		t.Errorf("expected roles [member, styre], got %v", resp.Roles)
+	if len(resp.Roles) != 2 || resp.Roles[0] != "member" || resp.Roles[1] != "board" {
+		t.Errorf("expected roles [member, board], got %v", resp.Roles)
 	}
 }

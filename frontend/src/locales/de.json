@@ -10,8 +10,6 @@
     "login": "Anmelden",
     "portal": "Meine Seite",
     "admin": "Verwaltung",
-    "harbour": "Hafen",
-    "bobil": "Wohnmobil",
     "club": "Verein",
     "history": "Geschichte",
     "merchandise": "Shop",
@@ -19,7 +17,9 @@
     "logout": "Abmelden",
     "ariaMainNav": "Hauptnavigation",
     "ariaLogout": "Abmelden",
-    "ariaMenu": "Menü"
+    "ariaMenu": "Menü",
+    "harbor": "Hafen",
+    "motorhome": "Wohnmobil"
   },
   "common": {
     "loading": "Wird geladen",
@@ -62,7 +62,6 @@
     "description": "Kommende Veranstaltungen und Aktivitäten",
     "export": "In Kalender exportieren (iCal)",
     "filterRegatta": "Regatta",
-    "filterDugnad": "Arbeitstag",
     "filterSocial": "Gesellig",
     "filterAgm": "Mitgliederversammlung",
     "proposeEvent": "Veranstaltung vorschlagen",
@@ -73,7 +72,8 @@
     "weekdayThu": "Do",
     "weekdayFri": "Fr",
     "weekdaySat": "Sa",
-    "weekdaySun": "So"
+    "weekdaySun": "So",
+    "filterVolunteer": "Arbeitstag"
   },
   "weather": {
     "title": "Hafenwetter",
@@ -107,9 +107,9 @@
     "approachNotes": "Halten Sie sicheren Abstand zu den Tonnen an der Einfahrt. Folgen Sie der markierten Fahrrinne in den Gasthafen.",
     "depth": "Tiefe",
     "depthInfo": "Mindesttiefe an der Einfahrt: 3,5 Meter",
-    "harbourChart": "Hafenplan",
     "openGoogleMaps": "In Google Maps öffnen",
-    "downloadGPX": "GPX herunterladen"
+    "downloadGPX": "GPX herunterladen",
+    "harborChart": "Hafenplan"
   },
   "contact": {
     "title": "Kontakt",
@@ -130,10 +130,8 @@
   "pricing": {
     "title": "Preise",
     "yearlyDues": "Jahresbeitrag",
-    "andel": "Hafenanteil (Andel)",
     "slipFees": "Liegeplatzgebühren nach Größe",
     "guestSlip": "Gastliegeplätze",
-    "bobilParking": "Wohnmobilstellplatz",
     "roomHire": "Raumvermietung",
     "loading": "Preise werden abgerufen...",
     "error": "Preise konnten nicht abgerufen werden",
@@ -142,7 +140,9 @@
     "perDay": "/Tag",
     "noPricing": "Es wurden noch keine Preise hinzugefügt",
     "period": "Zeitraum",
-    "installments": "Kann in bis zu {max} Raten aufgeteilt werden"
+    "installments": "Kann in bis zu {max} Raten aufgeteilt werden",
+    "harbor_membership": "Hafenanteil (Andel)",
+    "motorhomeParking": "Wohnmobilstellplatz"
   },
   "join": {
     "title": "Dem Verein beitreten",
@@ -162,7 +162,7 @@
     "submitting": "Wird gesendet...",
     "submitted": "Anmeldung abgeschlossen!"
   },
-  "harbour": {
+  "harbor": {
     "title": "Gasthafen",
     "subtitle": "Willkommen in unserem Gasthafen. Hier finden Sie Preise, Hafenpläne und praktische Informationen.",
     "spotsAvailable": "Gastliegeplätze",
@@ -176,7 +176,7 @@
     "ctaDescription": "Kontaktieren Sie uns, um einen Gastliegeplatz zu reservieren oder weitere Informationen zu erhalten.",
     "ctaButton": "Kontakt aufnehmen"
   },
-  "bobil": {
+  "motorhome": {
     "title": "Wohnmobilstellplatz",
     "subtitle": "Wohnmobilstellplätze mit Stromanschluss und Einrichtungen direkt am Hafen.",
     "spotsAvailable": "Stellplätze",
@@ -274,9 +274,9 @@
       "role": {
         "applicant": "Bewerber",
         "member": "Mitglied",
-        "slip_owner": "Liegeplatzinhaber",
-        "styre": "Vorstandsmitglied",
-        "admin": "Administrator"
+        "admin": "Administrator",
+        "slip_holder": "Liegeplatzinhaber",
+        "board": "Vorstandsmitglied"
       },
       "noSlip": "Kein zugewiesener Liegeplatz",
       "noBookings": "Keine kommenden Buchungen",
@@ -337,7 +337,6 @@
       "title": "Dokumente",
       "filterAll": "Alle",
       "filterMember": "Mitglieder",
-      "filterStyre": "Vorstand",
       "download": "Herunterladen",
       "comments": "Kommentare",
       "addComment": "Kommentar hinzufügen",
@@ -346,7 +345,8 @@
       "noComments": "Noch keine Kommentare",
       "commentSuccess": "Kommentar hinzugefügt",
       "commentError": "Kommentar konnte nicht hinzugefügt werden",
-      "loadError": "Dokumente konnten nicht geladen werden"
+      "loadError": "Dokumente konnten nicht geladen werden",
+      "filterBoard": "Vorstand"
     },
     "waitingList": {
       "title": "Warteliste",
@@ -425,7 +425,6 @@
   "admin": {
     "title": "Verwaltung",
     "ariaNav": "Administrationsnavigation",
-    "groupHarbour": "Hafen",
     "groupFinance": "Finanzen",
     "groupArchive": "Archiv und Info",
     "sidebar": {
@@ -451,7 +450,6 @@
       "duesReceived": "Eingegangene Beiträge",
       "outstanding": "Ausstehend",
       "overdue": "Überfällig",
-      "andelCollected": "Eingezogene Anteile",
       "bookingRevenue": "Buchungseinnahmen",
       "viewPayments": "Zahlungen anzeigen",
       "viewOverdue": "Überfällige anzeigen",
@@ -462,7 +460,6 @@
       "allTypes": "Alle Typen",
       "allStatuses": "Alle Status",
       "typeDues": "Beitrag",
-      "typeAndel": "Anteil",
       "typeSlipFee": "Liegeplatzgebühr",
       "typeSlipfee": "Liegeplatzgebühr",
       "typeBooking": "Buchung",
@@ -489,7 +486,9 @@
       "selectMember": "Mitglied auswählen",
       "searchMember": "Nach Name oder E-Mail suchen...",
       "invoicePreview": "Rechnung für {name}: {type}, {amount} NOK, fällig am {due}",
-      "invoiceCreated": "Rechnung erstellt"
+      "invoiceCreated": "Rechnung erstellt",
+      "harborMembershipCollected": "Eingezogene Anteile",
+      "typeHarborMembership": "Anteil"
     },
     "events": {
       "title": "Veranstaltungsverwaltung",
@@ -515,10 +514,10 @@
       "resourceType": "Ressourcentyp",
       "allTypes": "Alle Typen",
       "guestSlip": "Gastliegeplatz",
-      "bobilSpot": "Wohnmobilstellplatz",
       "clubRoom": "Vereinsraum",
       "dateFrom": "Von",
-      "dateTo": "Bis"
+      "dateTo": "Bis",
+      "motorhomeSpot": "Wohnmobilstellplatz"
     },
     "communication": {
       "title": "Kommunikation",
@@ -529,11 +528,11 @@
       "recipients": "Empfänger",
       "recipientAll": "Alle Mitglieder",
       "recipientMembers": "Nur Mitglieder",
-      "recipientStyre": "Vorstandsmitglieder",
-      "recipientSlipOwners": "Liegeplatzinhaber",
       "preview": "Vorschau",
       "send": "Rundschreiben senden",
-      "noHistory": "Noch keine Rundschreiben versendet"
+      "noHistory": "Noch keine Rundschreiben versendet",
+      "recipientBoard": "Vorstandsmitglieder",
+      "recipientSlipHolders": "Liegeplatzinhaber"
     },
     "bookingSettings": {
       "title": "Buchungseinstellungen",
@@ -607,11 +606,9 @@
       "priceDeleted": "Preis gelöscht",
       "saveError": "Konnte nicht gespeichert werden",
       "deleteError": "Konnte nicht gelöscht werden",
-      "categoryMoloandel": "Moloanteil",
       "categorySlipFee": "Liegeplatzgebühr",
       "categorySeasonalRental": "Saisonliegeplatz",
       "categoryGuest": "Gastliegeplätze",
-      "categoryBobil": "Wohnmobilstellplatz",
       "categoryRoomHire": "Raumvermietung",
       "categoryService": "Dienstleistungen",
       "categoryOther": "Sonstiges",
@@ -620,7 +617,9 @@
       "unitSeason": "Pro Saison",
       "unitDay": "Pro Tag",
       "unitNight": "Pro Nacht",
-      "unitHour": "Pro Stunde"
+      "unitHour": "Pro Stunde",
+      "categoryHarborMembership": "Moloanteil",
+      "categoryMotorhome": "Wohnmobilstellplatz"
     },
     "users": {
       "name": "Name",
@@ -677,7 +676,8 @@
       "approveDimensions": "Maße genehmigen",
       "approveSuccess": "Maße genehmigt",
       "approveError": "Maße konnten nicht genehmigt werden"
-    }
+    },
+    "groupHarbor": "Hafen"
   },
   "projects": {
     "title": "Projekte",
@@ -742,13 +742,13 @@
     "loadMore": "Ältere Nachrichten laden",
     "rooms": {
       "general": "Allgemein",
-      "harbour": "Hafen",
       "events": "Veranstaltungen",
       "forsale": "Zu verkaufen",
-      "styre": "Vorstand"
+      "harbor": "Hafen",
+      "board": "Vorstand"
     }
   },
-  "dugnad": {
+  "volunteer": {
     "title": "Arbeitstag",
     "join": "Teilnehmen",
     "leave": "Abmelden",
@@ -761,7 +761,6 @@
     "maxParticipants": "Max. Teilnehmer",
     "participants": "Teilnehmer",
     "materials": "Materialien",
-    "ansvarlig": "Verantwortlich",
     "collaborator": "Teilnehmer",
     "hours": "Stunden",
     "signedUpHours": "Angemeldete Stunden",
@@ -785,7 +784,8 @@
     "requiredHoursPerYear": "Arbeitsstunden pro Jahr",
     "settingsUpdated": "Einstellungen aktualisiert",
     "allMembers": "Alle Mitglieder",
-    "eventProjects": "Arbeitstag-Projekte"
+    "eventProjects": "Arbeitstag-Projekte",
+    "responsible": "Verantwortlich"
   },
   "mapAdmin": {
     "title": "Kartenmarkierungen",
@@ -802,7 +802,7 @@
       "buoy": "Tonne",
       "hazard": "Gefahrenstelle",
       "anchorage": "Ankerplatz",
-      "harbour": "Hafen"
+      "harbor": "Hafen"
     },
     "noMarkers": "Noch keine Markierungen hinzugefügt",
     "saved": "Markierung gespeichert",
@@ -812,7 +812,6 @@
     "title": "Buchen",
     "subtitle": "Reservieren Sie einen Gastliegeplatz, Wohnmobilstellplatz, das Vereinshaus oder den Kran",
     "guestSlip": "Gastliegeplatz",
-    "bobilSpot": "Wohnmobilstellplatz",
     "clubRoom": "Vereinshaus",
     "slipHoist": "Slipkran",
     "boatDimensions": "Bootsmaße",
@@ -859,7 +858,8 @@
       "emailRequired": "E-Mail ist erforderlich",
       "emailInvalid": "Ungültige E-Mail-Adresse",
       "phoneInvalid": "Ungültige Telefonnummer"
-    }
+    },
+    "motorhomeSpot": "Wohnmobilstellplatz"
   },
   "gdpr": {
     "title": "Privacy & Data",

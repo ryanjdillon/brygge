@@ -25,7 +25,7 @@ RETURNING *;
 
 -- name: AssignSlip :one
 INSERT INTO slip_assignments (
-    slip_id, user_id, club_id, andel_amount, andel_paid_at
+    slip_id, user_id, club_id, harbor_membership_amount, harbor_membership_paid_at
 ) VALUES (
     $1, $2, $3, $4, $5
 )

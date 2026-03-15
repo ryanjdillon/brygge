@@ -58,7 +58,7 @@ func main() {
 
 	// All users to seed
 	users := []seedUser{
-		{email: "admin@brygge.local", name: "Admin Bruker", phone: "+4712345678", vippsSub: "vipps-admin-001", isLocal: true, roles: []string{"admin", "styre", "member"}},
+		{email: "admin@brygge.local", name: "Admin Bruker", phone: "+4712345678", vippsSub: "vipps-admin-001", isLocal: true, roles: []string{"admin", "board", "member"}},
 		{email: "slip-member@brygge.local", name: "Kari Sjømann", phone: "+4711111111", vippsSub: "vipps-slip-001", isLocal: true, roles: []string{"member"}},
 		{email: "wl-member@brygge.local", name: "Per Venansen", phone: "+4722222222", vippsSub: "vipps-wl-001", isLocal: true, roles: []string{"member"}},
 		{email: "member@brygge.local", name: "Medlem Hansen", phone: "+4798765432", vippsSub: "vipps-member-001", isLocal: false, roles: []string{"member"}},
@@ -210,7 +210,7 @@ func main() {
 	}
 	fmt.Printf("  slips: %d created\n", len(slips))
 
-	// Assign slip A1 to Kari Sjømann (slip-member) with moloandel
+	// Assign slip A1 to Kari Sjømann (slip-member) with harbor membership
 	slipMemberID := userIDs["slip-member@brygge.local"]
 	slipA1 := slipIDs["A1"]
 	if slipMemberID != "" && slipA1 != "" {
@@ -225,13 +225,13 @@ func main() {
 
 		now := time.Now()
 		_, err = db.Exec(ctx, `
-			INSERT INTO slip_assignments (slip_id, user_id, club_id, andel_amount, andel_paid_at, assigned_at)
+			INSERT INTO slip_assignments (slip_id, user_id, club_id, harbor_membership_amount, harbor_membership_paid_at, assigned_at)
 			VALUES ($1, $2, $3, 50000, $4, $4)
 		`, slipA1, slipMemberID, clubID, now)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "  failed to assign slip to Kari: %v\n", err)
 		} else {
-			fmt.Println("  slip A1 assigned to Kari Sjømann (moloandel paid)")
+			fmt.Println("  slip A1 assigned to Kari Sjømann (harbor membership paid)")
 		}
 	}
 
@@ -348,7 +348,7 @@ func main() {
 	}{
 		{"guest_slip", "Gjesteplass A", "Gjesteplass ved hovedbrygga", "night", 5, 250},
 		{"guest_slip", "Gjesteplass B", "Gjesteplass ved nordbrygga", "night", 3, 200},
-		{"bobil_spot", "Bobilplass", "Bobilparkering med strøm", "night", 4, 300},
+		{"motorhome_spot", "Bobilplass", "Bobilparkering med strøm", "night", 4, 300},
 		{"club_room", "Klubbhuset", "Klubbhuset med kjøkken", "day", 1, 1500},
 	}
 	for _, r := range resources {
@@ -373,12 +373,12 @@ func main() {
 		sortOrder                         int
 	}
 	priceItems := []priceItemSeed{
-		{"moloandel", "Moloandel", "Engangsavgift for andel i moloanlegget", "once", 50000, true, 12, `{}`, 10},
+		{"harbor_membership", "Harbor Membership", "One-time harbor infrastructure equity payment", "once", 50000, true, 12, `{}`, 10},
 		{"slip_fee", "Årlig plassleie", "Årlig leie for fast båtplass", "year", 8500, false, 1, `{}`, 20},
 		{"seasonal_rental", "Sommersesong", "Sesongplass sommer", "season", 6000, false, 1, `{"season":"summer","period_start":"05-01","period_end":"09-30"}`, 30},
 		{"seasonal_rental", "Vintersesong", "Sesongplass vinter", "season", 4000, false, 1, `{"season":"winter","period_start":"10-01","period_end":"04-30"}`, 31},
 		{"guest", "Gjesteplass per døgn", "Gjesteplass ved hovedbrygga", "day", 250, false, 1, `{}`, 40},
-		{"bobil", "Bobilplass per døgn", "Bobilparkering med strøm", "day", 300, false, 1, `{}`, 50},
+		{"motorhome", "Bobilplass per døgn", "Bobilparkering med strøm", "day", 300, false, 1, `{}`, 50},
 		{"room_hire", "Klubbhuset", "Klubbhus med kjøkken, per dag", "day", 1500, false, 1, `{}`, 60},
 		{"service", "Kran – opp/utsett", "Bruk av kran for sjøsetting/opptak", "once", 1200, false, 1, `{}`, 70},
 		{"service", "Strøm vinter", "Strømtilkobling gjennom vinteren", "season", 2000, false, 1, `{"season":"winter","period_start":"10-01","period_end":"04-30"}`, 71},
@@ -404,7 +404,7 @@ func main() {
 		startOffset, endOffset            time.Duration
 	}{
 		{"Vårregatta 2026", "Årets første regatta!", "Fjorden", "regatta", 7 * 24 * time.Hour, 7*24*time.Hour + 8*time.Hour},
-		{"Dugnad vår", "Vårdugnad for alle medlemmer", "Brygga", "dugnad", 14 * 24 * time.Hour, 14*24*time.Hour + 4*time.Hour},
+		{"Dugnad vår", "Vårdugnad for alle medlemmer", "Brygga", "volunteer", 14 * 24 * time.Hour, 14*24*time.Hour + 4*time.Hour},
 		{"Sommerfest", "Sommeravslutning med grilling", "Klubbhuset", "social", 30 * 24 * time.Hour, 30*24*time.Hour + 6*time.Hour},
 		{"Årsmøte 2026", "Ordinært årsmøte", "Klubbhuset", "agm", 60 * 24 * time.Hour, 60*24*time.Hour + 3*time.Hour},
 	}
@@ -481,7 +481,7 @@ func main() {
 
 	fmt.Println("\ndone! you can now log in with:")
 	fmt.Println("  admin:          admin@brygge.local / admin123")
-	fmt.Println("  member (slip):  slip-member@brygge.local / member123  (Kari Sjømann, has moloandel + slip A1)")
+	fmt.Println("  member (slip):  slip-member@brygge.local / member123  (Kari Sjømann, has harbor membership + slip A1)")
 	fmt.Println("  member (wl):    wl-member@brygge.local / member123  (Per Venansen, on waiting list #2)")
 	fmt.Println("  member:         member@brygge.local / member123  (Medlem Hansen, on waiting list #7)")
 	fmt.Println("\n  or via Vipps mock with corresponding test users")

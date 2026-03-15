@@ -11,7 +11,7 @@ import LandMap from '@/components/map/LandMap.vue'
 const { t } = useI18n()
 const { data: club } = useClubCoordinates()
 const { categories, isLoading: pricingLoading, unitLabel } = usePricing()
-const { data: todayAvail, isLoading: resourcesLoading } = useTodayAvailability('bobil_spot')
+const { data: todayAvail, isLoading: resourcesLoading } = useTodayAvailability('motorhome_spot')
 
 const totalCapacity = computed(() => todayAvail.value?.available ?? 0)
 
@@ -19,8 +19,8 @@ const hasCoordinates = computed(
   () => club.value?.latitude != null && club.value?.longitude != null,
 )
 
-const bobilCategories = computed(() =>
-  categories.value.filter((c) => c.key === 'bobil'),
+const motorhomeCategories = computed(() =>
+  categories.value.filter((c) => c.key === 'motorhome'),
 )
 
 function formatAmount(amount: number): string {
@@ -32,8 +32,8 @@ function formatAmount(amount: number): string {
   <div class="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
     <div class="flex flex-wrap items-center justify-between gap-4">
       <div>
-        <h1 class="text-3xl font-bold text-gray-900">{{ t('bobil.title') }}</h1>
-        <p class="mt-1 text-gray-600">{{ t('bobil.subtitle') }}</p>
+        <h1 class="text-3xl font-bold text-gray-900">{{ t('motorhome.title') }}</h1>
+        <p class="mt-1 text-gray-600">{{ t('motorhome.subtitle') }}</p>
       </div>
       <div
         v-if="!resourcesLoading && todayAvail"
@@ -65,34 +65,34 @@ function formatAmount(amount: number): string {
       <section>
         <h2 class="flex items-center gap-2 text-xl font-semibold text-gray-900">
           <Info class="h-5 w-5 text-blue-600" aria-hidden="true" />
-          {{ t('bobil.practicalInfo') }}
+          {{ t('motorhome.practicalInfo') }}
         </h2>
 
         <dl class="mt-4 space-y-4">
           <div class="rounded-lg border border-gray-200 p-4">
             <dt class="flex items-center gap-2 text-sm font-medium text-gray-500">
               <Plug class="h-4 w-4" aria-hidden="true" />
-              {{ t('bobil.power') }}
+              {{ t('motorhome.power') }}
             </dt>
-            <dd class="mt-1 text-sm text-gray-600">{{ t('bobil.powerInfo') }}</dd>
+            <dd class="mt-1 text-sm text-gray-600">{{ t('motorhome.powerInfo') }}</dd>
           </div>
 
           <div class="rounded-lg border border-gray-200 p-4">
             <dt class="flex items-center gap-2 text-sm font-medium text-gray-500">
               <Droplets class="h-4 w-4" aria-hidden="true" />
-              {{ t('bobil.facilities') }}
+              {{ t('motorhome.facilities') }}
             </dt>
-            <dd class="mt-1 text-sm text-gray-600">{{ t('bobil.facilitiesInfo') }}</dd>
+            <dd class="mt-1 text-sm text-gray-600">{{ t('motorhome.facilitiesInfo') }}</dd>
           </div>
 
           <div class="rounded-lg border border-gray-200 p-4">
-            <dt class="text-sm font-medium text-gray-500">{{ t('bobil.checkin') }}</dt>
-            <dd class="mt-1 text-sm text-gray-600">{{ t('bobil.checkinInfo') }}</dd>
+            <dt class="text-sm font-medium text-gray-500">{{ t('motorhome.checkin') }}</dt>
+            <dd class="mt-1 text-sm text-gray-600">{{ t('motorhome.checkinInfo') }}</dd>
           </div>
 
           <div class="rounded-lg border border-gray-200 p-4">
-            <dt class="text-sm font-medium text-gray-500">{{ t('bobil.rules') }}</dt>
-            <dd class="mt-1 text-sm text-gray-600">{{ t('bobil.rulesInfo') }}</dd>
+            <dt class="text-sm font-medium text-gray-500">{{ t('motorhome.rules') }}</dt>
+            <dd class="mt-1 text-sm text-gray-600">{{ t('motorhome.rulesInfo') }}</dd>
           </div>
         </dl>
 
@@ -100,7 +100,7 @@ function formatAmount(amount: number): string {
           to="/directions"
           class="mt-4 inline-block text-sm font-medium text-blue-600 hover:text-blue-700"
         >
-          {{ t('bobil.fullDirections') }} &rarr;
+          {{ t('motorhome.fullDirections') }} &rarr;
         </RouterLink>
       </section>
 
@@ -108,7 +108,7 @@ function formatAmount(amount: number): string {
       <section>
         <h2 class="flex items-center gap-2 text-xl font-semibold text-gray-900">
           <Car class="h-5 w-5 text-blue-600" aria-hidden="true" />
-          {{ t('bobil.pricing') }}
+          {{ t('motorhome.pricing') }}
         </h2>
 
         <div v-if="pricingLoading" class="mt-4 animate-pulse rounded-lg border border-gray-200 p-5">
@@ -116,9 +116,9 @@ function formatAmount(amount: number): string {
           <div class="mt-3 h-4 w-full rounded bg-gray-200" />
         </div>
 
-        <div v-else-if="bobilCategories.length" class="mt-4 space-y-4">
+        <div v-else-if="motorhomeCategories.length" class="mt-4 space-y-4">
           <div
-            v-for="cat in bobilCategories"
+            v-for="cat in motorhomeCategories"
             :key="cat.key"
             class="rounded-lg border border-gray-200 bg-white p-5"
           >
@@ -145,18 +145,18 @@ function formatAmount(amount: number): string {
           to="/pricing"
           class="mt-4 inline-block text-sm font-medium text-blue-600 hover:text-blue-700"
         >
-          {{ t('bobil.allPrices') }} &rarr;
+          {{ t('motorhome.allPrices') }} &rarr;
         </RouterLink>
       </section>
     </div>
 
     <!-- CTA -->
     <div class="mt-12 rounded-lg bg-blue-50 p-8 text-center">
-      <h2 class="text-xl font-semibold text-blue-900">{{ t('bobil.ctaTitle') }}</h2>
-      <p class="mt-2 text-blue-700">{{ t('bobil.ctaDescription') }}</p>
+      <h2 class="text-xl font-semibold text-blue-900">{{ t('motorhome.ctaTitle') }}</h2>
+      <p class="mt-2 text-blue-700">{{ t('motorhome.ctaDescription') }}</p>
       <div class="mt-4 flex items-center justify-center gap-3">
         <RouterLink
-          to="/book?type=bobil_spot"
+          to="/book?type=motorhome_spot"
           class="inline-block rounded-md bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow hover:bg-blue-700"
         >
           {{ t('booking.bookNow') }}
@@ -165,7 +165,7 @@ function formatAmount(amount: number): string {
           to="/contact"
           class="inline-block rounded-md border border-blue-600 px-6 py-3 text-sm font-semibold text-blue-600 hover:bg-blue-50"
         >
-          {{ t('bobil.ctaButton') }}
+          {{ t('motorhome.ctaButton') }}
         </RouterLink>
       </div>
     </div>

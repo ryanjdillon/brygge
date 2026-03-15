@@ -112,7 +112,7 @@ func TestWrongSigningKey(t *testing.T) {
 func TestAccessTokenContainsAllRoles(t *testing.T) {
 	svc := newTestJWTService("test-secret-key", 15*time.Minute, 7*24*time.Hour)
 
-	roles := []string{"member", "styre", "admin", "treasurer"}
+	roles := []string{"member", "board", "admin", "treasurer"}
 
 	token, err := svc.GenerateAccessToken("user-1", "club-1", roles)
 	if err != nil {

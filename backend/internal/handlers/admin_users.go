@@ -272,8 +272,8 @@ func (h *AdminUsersHandler) HandleUpdateUserRoles(w http.ResponseWriter, r *http
 	}
 
 	validRoles := map[string]bool{
-		"applicant": true, "member": true, "slip_owner": true,
-		"styre": true, "harbour_master": true, "treasurer": true, "admin": true,
+		"applicant": true, "member": true, "slip_holder": true,
+		"board": true, "harbor_master": true, "treasurer": true, "admin": true,
 	}
 	for _, role := range req.Roles {
 		if !validRoles[role] {
