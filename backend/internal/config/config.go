@@ -1,6 +1,7 @@
 package config
 
 import (
+	"math"
 	"os"
 	"strconv"
 	"time"
@@ -90,8 +91,8 @@ func Load() Config {
 		VippsSubscriptionKey: envStr("VIPPS_SUBSCRIPTION_KEY", ""),
 		VippsWebhookSecret:   envStr("VIPPS_WEBHOOK_SECRET", ""),
 
-		DBMaxConns:         int32(envInt("DB_MAX_CONNS", 20)),
-		DBMinConns:         int32(envInt("DB_MIN_CONNS", 2)),
+		DBMaxConns:         clampInt32(envInt("DB_MAX_CONNS", 20)),
+		DBMinConns:         clampInt32(envInt("DB_MIN_CONNS", 2)),
 		DBMaxConnLifetime:  envDuration("DB_MAX_CONN_LIFETIME", 30*time.Minute),
 		DBMaxConnIdleTime:  envDuration("DB_MAX_CONN_IDLE_TIME", 5*time.Minute),
 		DBStatementTimeout: envStr("DB_STATEMENT_TIMEOUT", "30000"),
@@ -147,6 +148,16 @@ func envStr(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func clampInt32(n int) int32 {
+	if n > math.MaxInt32 {
+		return math.MaxInt32
+	}
+	if n < math.MinInt32 {
+		return math.MinInt32
+	}
+	return int32(n)
 }
 
 func envInt(key string, fallback int) int {
