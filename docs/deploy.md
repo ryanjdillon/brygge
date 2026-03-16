@@ -190,7 +190,7 @@ Returns service status for PostgreSQL and Redis with HTTP 200 (healthy) or 503 (
 
 ## Troubleshooting
 
-See the [troubleshooting section in setup.md](setup.md#10-troubleshooting) for common issues.
+See [troubleshooting.md](troubleshooting.md) for common deployment and development issues, including dirty migrations, TLS certificates, CSP errors, and Vipps mock debugging.
 
 ---
 
