@@ -1,0 +1,25 @@
+version: "2"
+
+linters:
+  enable:
+    - gocognit
+    - cyclop
+  disable:
+    - errcheck
+
+  settings:
+    gocognit:
+      min-complexity: 30
+    cyclop:
+      max-complexity: 20
+
+  exclusions:
+    generated: lax
+    paths:
+      - gen
+      - ".*_test\\.go"
+    rules:
+      - path: "cmd/"
+        linters:
+          - gocognit
+          - cyclop
