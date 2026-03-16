@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/brygge-klubb/brygge/internal/config"
 )
@@ -63,7 +64,7 @@ func NewVippsClient(cfg *config.Config) *VippsClient {
 		SubscriptionKey: cfg.VippsSubscriptionKey,
 		BaseURL:         cfg.VippsBaseURL(),
 		BrowserURL:      cfg.VippsBrowserURL(),
-		HTTPClient:      http.DefaultClient,
+		HTTPClient:      &http.Client{Timeout: 15 * time.Second},
 	}
 }
 
