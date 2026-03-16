@@ -126,17 +126,17 @@ fmt:
 
 prod-compose := "docker compose -f deploy/docker-compose.yml"
 
-# Deploy latest image to production
+# Deploy latest code to production (builds from source on server)
 deploy host="brygge":
-    ssh {{host}} 'cd /opt/brygge && git pull --ff-only origin main && docker compose -f deploy/docker-compose.yml pull api && docker compose -f deploy/docker-compose.yml run --rm migrate && docker compose -f deploy/docker-compose.yml up -d api && docker image prune -f'
+    ssh {{host}} 'cd /opt/brygge && git pull --ff-only origin main && docker compose -f deploy/docker-compose.yml build api && docker compose -f deploy/docker-compose.yml run --rm migrate && docker compose -f deploy/docker-compose.yml up -d api && docker image prune -f'
 
 # Run smoke tests against a URL
 smoke url="http://localhost:8080":
     ./scripts/smoke-test.sh {{url}}
 
-# Rollback to a specific image SHA
+# Rollback to a specific git commit
 rollback sha host="brygge":
-    ssh {{host}} 'cd /opt/brygge && IMAGE=ghcr.io/brygge-klubb/brygge:{{sha}} docker compose -f deploy/docker-compose.yml up -d api'
+    ssh {{host}} 'cd /opt/brygge && git checkout {{sha}} && docker compose -f deploy/docker-compose.yml up -d --build api'
 
 # Build Docker image locally
 docker-build:

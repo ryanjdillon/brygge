@@ -135,7 +135,7 @@ VIPPS_CLIENT_ID=<from Vipps developer portal>
 VIPPS_CLIENT_SECRET=<from Vipps developer portal>
 VIPPS_SUBSCRIPTION_KEY=<from Vipps developer portal>
 VIPPS_MERCHANT_SERIAL=<from Vipps developer portal>
-VIPPS_CALLBACK_URL=https://mitt-klubb.no/api/vipps/callback
+VIPPS_CALLBACK_URL=https://mitt-klubb.no/api/v1/auth/vipps/callback
 VIPPS_RETURN_URL=https://mitt-klubb.no/payment/complete
 ```
 
@@ -184,7 +184,7 @@ chmod +x scripts/brygge.sh
 
 This will:
 
-1. Pull all required Docker images.
+1. Build the API image from source.
 2. Start the database and Redis.
 3. Run database migrations to create the schema.
 4. Start all services (API, Traefik, Dendrite, Element, Uptime Kuma).
@@ -220,7 +220,7 @@ Brygge uses Vipps Login for authentication and Vipps payments for dues and booki
 
 1. Go to the [Vipps developer portal](https://developer.vippsmobilepay.com/).
 2. Create a new application (or use an existing one) under your organisation.
-3. Under **Login**, set the redirect URI to: `https://mitt-klubb.no/api/auth/vipps/callback`
+3. Under **Login**, set the redirect URI to: `https://mitt-klubb.no/api/v1/auth/vipps/callback`
 4. Note the **Client ID**, **Client Secret**, **Subscription Key**, and **Merchant Serial Number**.
 5. Enter these values in your `deploy/.env` file.
 
@@ -269,7 +269,7 @@ git pull
 ./scripts/brygge.sh update
 ```
 
-This pulls the latest Docker images, runs any new database migrations, and restarts services. Downtime is typically a few seconds.
+This rebuilds the API image from source, runs any new database migrations, and restarts services. Downtime is typically a few seconds.
 
 ---
 
