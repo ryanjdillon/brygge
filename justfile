@@ -102,6 +102,10 @@ lint-vue:
 # Lint all
 lint: lint-go lint-vue
 
+# Find unused exports, dependencies, and dead code in frontend
+knip:
+    cd frontend && npx knip --reporter compact
+
 # Run Go security scanner (gosec)
 security-go:
     cd backend && gosec -exclude-dir=gen ./...
