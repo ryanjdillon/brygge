@@ -240,6 +240,12 @@ jobs:
           echo "Smoke test failed"
           exit 1
 
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./scripts/check-docs.sh
+
   nix-check:
     runs-on: ubuntu-latest
     steps:
