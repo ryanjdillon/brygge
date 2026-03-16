@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -29,7 +30,7 @@ func NewForumHandler(db *pgxpool.Pool, cfg *config.Config, log zerolog.Logger) *
 		db:     db,
 		config: cfg,
 		log:    log.With().Str("handler", "forum").Logger(),
-		client: &http.Client{},
+		client: &http.Client{Timeout: 15 * time.Second},
 	}
 }
 
