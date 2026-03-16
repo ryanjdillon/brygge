@@ -26,6 +26,7 @@ import (
 	"github.com/brygge-klubb/brygge/internal/handlers"
 	"github.com/brygge-klubb/brygge/internal/middleware"
 	oa "github.com/brygge-klubb/brygge/internal/openapi"
+	"github.com/brygge-klubb/brygge/internal/telemetry"
 )
 
 func main() {
@@ -39,6 +40,20 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	otelShutdown, err := telemetry.Setup(ctx, "brygge-api", "1.0.0")
+	if err != nil {
+		log.Warn().Err(err).Msg("failed to initialize OpenTelemetry — metrics and tracing disabled")
+	} else {
+		defer func() {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := otelShutdown(shutdownCtx); err != nil {
+				log.Warn().Err(err).Msg("error shutting down OpenTelemetry")
+			}
+		}()
+		log.Info().Msg("OpenTelemetry initialized")
+	}
 
 	poolCfg, err := pgxpool.ParseConfig(cfg.DatabaseURL)
 	if err != nil {
@@ -128,6 +143,7 @@ func main() {
 	r.Use(chimw.RealIP)
 	r.Use(requestLogger(log))
 	r.Use(chimw.Recoverer)
+	r.Use(middleware.Metrics)
 	r.Use(securityHeaders)
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{cfg.FrontendURL},
