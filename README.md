@@ -45,7 +45,7 @@ Brygge (Norwegian for *dock*) is a self-hosted management platform for harbour c
 | API client     | openapi-fetch with generated TypeScript types                            |
 | Auth           | JWT + Vipps Login (Norwegian payment provider)                           |
 | Database       | PostgreSQL 16 (raw SQL + sqlc code generation)                           |
-| Infrastructure | Docker Compose, Traefik v3.3 (TLS via Let's Encrypt), Distroless runtime |
+| Infrastructure | Docker Compose, Traefik v2.11 (TLS via Let's Encrypt), Distroless runtime |
 | CI             | GitHub Actions (lint, test, security scan, build, deploy)                |
 
 ## Quick Start

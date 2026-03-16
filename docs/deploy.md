@@ -67,7 +67,15 @@ chmod +x scripts/brygge.sh
 ./scripts/brygge.sh setup
 ```
 
-This pulls Docker images, starts the database and Redis, runs migrations, and starts all services. Traefik automatically provisions TLS certificates from Let's Encrypt.
+This builds the API image from source, starts the database and Redis, runs migrations, and starts all services. Traefik automatically provisions TLS certificates from Let's Encrypt.
+
+### Seeding Demo Data
+
+The Docker image includes a seed binary for loading demo data:
+
+```bash
+docker compose -f deploy/docker-compose.yml run --rm --entrypoint /brygge-seed api
+```
 
 ### 4. Verify
 
@@ -84,7 +92,7 @@ All containers should show "Up" or "healthy". Visit:
 ### 5. Configure Vipps Login
 
 1. Go to the [Vipps developer portal](https://developer.vippsmobilepay.com/)
-2. Create an application and set the redirect URI to `https://your-domain.com/api/auth/vipps/callback`
+2. Create an application and set the redirect URI to `https://your-domain.com/api/v1/auth/vipps/callback`
 3. Enter the Client ID, Client Secret, Subscription Key, and Merchant Serial Number in `deploy/.env`
 4. Restart: `./scripts/brygge.sh update`
 
@@ -98,14 +106,16 @@ git pull
 ./scripts/brygge.sh update
 ```
 
-This pulls the latest Docker images, runs any new migrations, and restarts services. Downtime is typically a few seconds.
+This rebuilds the API image from source, runs any new migrations, and restarts services. Downtime is typically a few seconds.
 
 ### Rollback
 
-If something goes wrong, roll back to a specific image SHA:
+If something goes wrong, roll back to a specific commit:
 
 ```bash
-IMAGE=ghcr.io/brygge-klubb/brygge:<sha> docker compose -f deploy/docker-compose.yml up -d api
+cd /opt/brygge
+git checkout <commit-sha>
+docker compose -f deploy/docker-compose.yml up -d --build api
 ```
 
 ---
@@ -144,14 +154,15 @@ gunzip -c backups/brygge_20260306_020000.sql.gz | \
 
 | Service         | Image                            | Purpose                        | Subdomain   |
 |---------        |-------                           |---------                       |-----------  |
-| **api**         | `ghcr.io/brygge-klubb/brygge`    | Go API + embedded SPA          | `@`         |
+| **api**         | built from source                | Go API + embedded SPA          | `@`         |
 | **db**          | `postgres:16-alpine`             | Primary database               | internal    |
 | **redis**       | `redis:7-alpine`                 | Cache, sessions, rate limiting | internal    |
-| **traefik**     | `traefik:v3.3`                   | Reverse proxy, TLS             | internal    |
+| **traefik**     | `traefik:v2.11`                  | Reverse proxy, TLS             | internal    |
+| **vipps-mock**  | custom build                     | Vipps OAuth/payment simulator  | internal    |
 | **dendrite**    | `matrixdotorg/dendrite-monolith` | Matrix homeserver (forum)      | `matrix.*`  |
 | **element**     | `vectorim/element-web`           | Matrix web client              | `element.*` |
 | **uptime-kuma** | `louislam/uptime-kuma:1`         | Status page                    | `status.*`  |
-| **migrate**     | `migrate/migrate:v4`             | Database migrations (one-shot) | internal    |
+| **migrate**     | `migrate/migrate:v4.18.2`        | Database migrations (one-shot) | internal    |
 
 ---
 

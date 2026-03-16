@@ -67,7 +67,7 @@ cd frontend && npx vitest src/views/__tests__/PricingView.test.ts
 - Feature flags: `cfg.Features.{Bookings, Projects, Calendar, Commerce, Communications}` toggle route groups
 - Rate limiting: 3 tiers — strict (5/min IP, auth), standard (30/min IP, public), authed (120/min user)
 - Internal packages: `ai/` (Anthropic API), `audit/` (audit trail), `shared/` (pagination, JSON helpers), `testutil/` (DB/Redis test containers)
-- Migrations in `backend/migrations/` numbered sequentially (000001–000016)
+- Migrations in `backend/migrations/` — single baseline `000001_init` (consolidated)
 - sqlc queries in `backend/queries/`, generated code in `backend/gen/` (committed)
 - Handler tests use `setupAuthenticatedRouter()` and `setupRoleProtectedRouter()` helpers with `generateTestToken()` for JWT mocking
 
@@ -104,7 +104,7 @@ Views/composables call `useApiClient()` → `client.GET/POST/PUT/DELETE(path, { 
 - **Responses**: Backend uses `handlers.JSON(w, status, data)` and `handlers.Error(w, status, msg)` helpers
 - **Tests**: Go handler tests mock auth via JWT test tokens (no DB mocking — unit tests use nil db, integration tests use real containers). Vue tests use `mountWithPlugins()` from `src/test/test-utils.ts` and mock lucide-vue-next icons
 - **i18n**: When adding/modifying locale keys, update all 7 JSON files. Norwegian (nb) has unicode characters — use jq or Python for safe JSON editing, not raw string replacement
-- **Migrations**: Create sequential numbered files (`000017_feature.up.sql` / `.down.sql`)
+- **Migrations**: Create sequential numbered files (`000002_feature.up.sql` / `.down.sql`)
 - **After schema changes**: Run `just generate` to update sqlc-generated code in `backend/gen/`
 - **After OpenAPI spec changes**: Run `just api-types` to regenerate `frontend/src/types/api.d.ts`. When adding new endpoints, register them in `backend/internal/openapi/register.go` and add any new response wrapper types to `backend/internal/openapi/types.go`
 - **API calls in views**: Use `const client = useApiClient()` + `unwrap(await client.GET(...))` pattern. Only use `fetchApi` from `useApi` for endpoints not in the OpenAPI spec

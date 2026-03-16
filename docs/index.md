@@ -34,7 +34,7 @@ Brygge is a **monorepo** with a Go API backend and a Vue 3 SPA frontend. In prod
 
 ### Infrastructure
 
-- **Docker Compose** with Traefik v3.3 reverse proxy (auto TLS via Let's Encrypt)
+- **Docker Compose** with Traefik v2.11 reverse proxy (auto TLS via Let's Encrypt)
 - **Dendrite** (Matrix homeserver) and **Element Web** for integrated forum
 - **Uptime Kuma** for status monitoring
 - Multi-stage Dockerfile producing a distroless container image

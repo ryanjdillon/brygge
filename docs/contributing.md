@@ -22,7 +22,7 @@ If you prefer not to use Nix, install the following tools manually:
 
 | Tool              | Version | Purpose                          |
 |-------------------|---------|----------------------------------|
-| Go                | 1.23+   | Backend                          |
+| Go                | 1.25+   | Backend                          |
 | Node.js           | 22+     | Frontend                         |
 | sqlc              | latest  | SQL-to-Go code generation        |
 | golang-migrate    | latest  | Database migration CLI           |
@@ -245,6 +245,7 @@ This runs `sqlc generate` to regenerate type-safe Go code from your SQL queries.
 ### Migration best practices
 
 - Each migration should be a single logical change.
+- The schema starts from a single consolidated baseline (`000001_init`). New migrations start at `000002`.
 - Never modify an existing migration that has been merged to `main`. Create a new migration instead.
 - Test both up and down migrations locally.
 - Avoid destructive changes (dropping columns, renaming tables) without a multi-step migration plan.
