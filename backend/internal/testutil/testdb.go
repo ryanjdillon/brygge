@@ -140,7 +140,7 @@ func runMigrations(ctx context.Context, pool *pgxpool.Pool, schema string) error
 	sort.Strings(upFiles)
 
 	for _, name := range upFiles {
-		sql, err := os.ReadFile(filepath.Join(dir, name))
+		sql, err := os.ReadFile(filepath.Join(dir, name)) // #nosec G304 -- test-only, dir is hardcoded migrations path
 		if err != nil {
 			return fmt.Errorf("reading migration %s: %w", name, err)
 		}
@@ -193,7 +193,7 @@ func SetupTestRedis(t *testing.T) *redis.Client {
 func TestConfig() config.Config {
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
-		dbURL = "postgres://brygge:brygge@localhost:5432/brygge?sslmode=disable"
+		dbURL = "postgres://brygge:brygge@localhost:5432/brygge?sslmode=disable" // #nosec G101 -- test-only default credentials
 	}
 	redisURL := os.Getenv("REDIS_URL")
 	if redisURL == "" {

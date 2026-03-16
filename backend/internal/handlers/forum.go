@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
@@ -122,12 +123,12 @@ func (h *ForumHandler) HandleGetRoomMessages(w http.ResponseWriter, r *http.Requ
 
 	dendriteURL := h.dendriteURL(fmt.Sprintf(
 		"/_matrix/client/v3/rooms/%s/messages?dir=b&limit=%d",
-		roomID, limit,
+		url.PathEscape(roomID), limit,
 	))
 
 	before := r.URL.Query().Get("before")
 	if before != "" {
-		dendriteURL += "&from=" + before
+		dendriteURL += "&from=" + url.QueryEscape(before)
 	}
 
 	token, err := h.getServiceToken(r)
@@ -137,14 +138,14 @@ func (h *ForumHandler) HandleGetRoomMessages(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, dendriteURL, nil)
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, dendriteURL, nil) // #nosec G704 -- roomID is path-escaped
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to create request")
 		return
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 
-	resp, err := h.client.Do(req)
+	resp, err := h.client.Do(req) // #nosec G704 -- URL built from config base + escaped roomID
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to proxy to Dendrite")
 		Error(w, http.StatusBadGateway, "messaging service unavailable")
@@ -248,7 +249,7 @@ func (h *ForumHandler) HandleSendMessage(w http.ResponseWriter, r *http.Request)
 	txnID := fmt.Sprintf("brygge-%s-%d", claims.UserID, r.Context().Value(nil))
 	dendriteURL := h.dendriteURL(fmt.Sprintf(
 		"/_matrix/client/v3/rooms/%s/send/m.room.message/%s",
-		roomID, txnID,
+		url.PathEscape(roomID), url.PathEscape(txnID),
 	))
 
 	dendriteReq, err := http.NewRequestWithContext(r.Context(), http.MethodPut, dendriteURL, bytes.NewReader(matrixBody))
@@ -305,10 +306,10 @@ func (h *ForumHandler) HandleGetRoomMembers(w http.ResponseWriter, r *http.Reque
 
 	dendriteURL := h.dendriteURL(fmt.Sprintf(
 		"/_matrix/client/v3/rooms/%s/joined_members",
-		roomID,
+		url.PathEscape(roomID),
 	))
 
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, dendriteURL, nil)
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, dendriteURL, nil) // #nosec G704 -- roomID is path-escaped
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to create request")
 		return

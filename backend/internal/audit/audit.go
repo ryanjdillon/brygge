@@ -13,8 +13,8 @@ const (
 	// Auth events
 	ActionLoginSuccess    = "auth.login_success"
 	ActionLoginFailed     = "auth.login_failed"
-	ActionTokenRevoked    = "auth.token_revoked"
-	ActionInvalidToken    = "auth.invalid_token"
+	ActionTokenRevoked    = "auth.token_revoked"  // #nosec G101 -- not a credential
+	ActionInvalidToken    = "auth.invalid_token" // #nosec G101 -- not a credential
 
 	// Admin user operations
 	ActionUserRoleUpdated = "user.role_updated"
