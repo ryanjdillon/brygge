@@ -63,6 +63,9 @@ features/
 # Claude Code
 .claude/
 
+# MCP config
+.mcp.json
+
 # Local planning notes
 TODO.md
 remove-from-git.txt
