@@ -78,7 +78,7 @@ Spec generation (`backend/cmd/openapi/main.go`) → `just api-types` → `fronte
 
 ## CI Pipeline
 
-GitHub Actions on push/PR to main: lint (nix + golangci-lint + eslint), test-go (Postgres/Redis service containers), test-vue, api-types (spec freshness), build, nix flake check. Security scans (`just security`) run as `continue-on-error`.
+GitHub Actions on push/PR to main: lint (nix + golangci-lint + eslint), test-go (with coverage profiling), test-vue, api-types (spec freshness), build, nix flake check. Security scans: `govulncheck` and `npm audit` block merges; `gosec` and `trivy` run as `continue-on-error`. Dependabot updates Go modules, npm deps, GitHub Actions, and Docker images weekly/monthly.
 
 ## Docker / Deployment
 
