@@ -9,6 +9,7 @@ Welcome to the Brygge documentation. Brygge is an open-source harbour club manag
 | [deploy.md](deploy.md) | Operators | Step-by-step deployment guide with provider-specific instructions |
 | [setup.md](setup.md) | Club admins | Non-developer guide for initial server setup and configuration |
 | [contributing.md](contributing.md) | Developers | Development environment, code style, testing, and PR workflow |
+| [troubleshooting.md](troubleshooting.md) | All | Common issues and solutions for dev and deployment |
 | [k8s.md](k8s.md) | DevOps | Kubernetes migration notes for scaling beyond a single VPS |
 
 ## Architecture Overview
