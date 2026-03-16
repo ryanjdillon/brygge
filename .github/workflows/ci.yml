@@ -49,7 +49,15 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.25"
-      - run: cd backend && go test ./...
+      - name: Run tests with coverage
+        run: cd backend && go test -coverprofile=coverage.out -covermode=atomic ./...
+      - name: Coverage summary
+        run: |
+          cd backend
+          go tool cover -func=coverage.out | tail -1
+          COVERAGE=$(go tool cover -func=coverage.out | tail -1 | awk '{print $3}' | tr -d '%')
+          echo "Total coverage: ${COVERAGE}%"
+          echo "## Go Test Coverage: ${COVERAGE}%" >> $GITHUB_STEP_SUMMARY
 
   test-vue:
     runs-on: ubuntu-latest
