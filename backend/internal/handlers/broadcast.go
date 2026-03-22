@@ -16,14 +16,14 @@ import (
 type BroadcastHandler struct {
 	db     *pgxpool.Pool
 	config *config.Config
-	email  *email.Client
+	email  email.Sender
 	log    zerolog.Logger
 }
 
 func NewBroadcastHandler(
 	db *pgxpool.Pool,
 	cfg *config.Config,
-	emailClient *email.Client,
+	emailClient email.Sender,
 	log zerolog.Logger,
 ) *BroadcastHandler {
 	return &BroadcastHandler{
