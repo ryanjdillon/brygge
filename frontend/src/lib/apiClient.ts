@@ -26,7 +26,7 @@ function createAuthMiddleware(): Middleware {
 
 let _client: ReturnType<typeof createClient<paths>> | null = null
 
-export function getClient() {
+function getClient() {
   if (!_client) {
     _client = createClient<paths>()
     _client.use(createAuthMiddleware())

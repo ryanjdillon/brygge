@@ -33,19 +33,6 @@ export function useEvents(filters?: { start?: Ref<string>; end?: Ref<string>; ta
   })
 }
 
-export function useEvent(eventId: Ref<string>) {
-  const client = useApiClient()
-
-  return useQuery({
-    queryKey: computed(() => ['events', eventId.value]),
-    queryFn: async () =>
-      unwrap(await client.GET('/api/v1/calendar/{eventID}', {
-        params: { path: { eventID: eventId.value } },
-      })),
-    enabled: computed(() => !!eventId.value),
-  })
-}
-
 export function useCreateEvent() {
   const client = useApiClient()
   const queryClient = useQueryClient()

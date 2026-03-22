@@ -5,8 +5,6 @@ import type { components } from '@/types/api'
 
 export type FinancialSummary = components['schemas']['FinancialSummary']
 export type Payment = components['schemas']['Payment']
-export type PaymentsListResponse = components['schemas']['PaymentsListResponse']
-export type OverduePayment = components['schemas']['OverduePayment']
 export type CreateInvoiceRequest = components['schemas']['CreateInvoiceRequest']
 
 export interface PaymentsFilters {
@@ -50,19 +48,6 @@ export function usePaymentsList(filters: Ref<PaymentsFilters>) {
         params: { query: filters.value } as any,
       })),
     staleTime: 60 * 1000,
-  })
-}
-
-export function usePaymentDetails(paymentId: Ref<string | undefined>) {
-  const client = useApiClient()
-
-  return useQuery({
-    queryKey: computed(() => ['financials', 'payment', paymentId.value]),
-    queryFn: async () =>
-      unwrap(await client.GET('/api/v1/admin/financials/payments/{paymentID}', {
-        params: { path: { paymentID: paymentId.value! } },
-      })),
-    enabled: computed(() => !!paymentId.value),
   })
 }
 

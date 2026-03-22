@@ -4,10 +4,7 @@ import { useApiClient, unwrap } from '@/lib/apiClient'
 import type { components } from '@/types/api'
 
 export type Booking = components['schemas']['Booking']
-export type AggregateDay = components['schemas']['DayAvailability']
 export type TodayAvailability = components['schemas']['TodayAvailability']
-export type HoistSlot = components['schemas']['HoistSlot']
-export type HoistSlotsResponse = components['schemas']['HoistSlotsResponse']
 export type CreateBookingRequest = components['schemas']['CreateBookingRequest']
 
 export interface BoatDimensions {
@@ -74,17 +71,6 @@ export function useHoistSlots(date: Ref<string>) {
   })
 }
 
-export function useMyBookings(status?: string) {
-  const client = useApiClient()
-
-  return useQuery({
-    queryKey: ['my-bookings', status ?? 'all'],
-    queryFn: async () =>
-      unwrap(await client.GET('/api/v1/bookings/me')),
-    staleTime: 30 * 1000,
-  })
-}
-
 export function useCreateBooking() {
   const client = useApiClient()
   const queryClient = useQueryClient()
@@ -101,19 +87,3 @@ export function useCreateBooking() {
   })
 }
 
-export function useCancelBooking() {
-  const client = useApiClient()
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: async (bookingId: string) =>
-      unwrap(await client.POST('/api/v1/bookings/{bookingID}/cancel', {
-        params: { path: { bookingID: bookingId } },
-      })),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['availability'] })
-      queryClient.invalidateQueries({ queryKey: ['availability-today'] })
-      queryClient.invalidateQueries({ queryKey: ['my-bookings'] })
-    },
-  })
-}

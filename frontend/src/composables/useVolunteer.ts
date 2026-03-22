@@ -3,10 +3,6 @@ import { useApiClient, unwrap } from '@/lib/apiClient'
 import type { components } from '@/types/api'
 
 export type TaskParticipant = components['schemas']['TaskParticipant']
-export interface DugnadHoursSummary {
-  user_id: string
-  total_hours: number
-}
 
 export function useJoinTask() {
   const client = useApiClient()
@@ -35,19 +31,6 @@ export function useLeaveTask() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] })
     },
-  })
-}
-
-export function useTaskParticipants(taskId: () => string) {
-  const client = useApiClient()
-
-  return useQuery({
-    queryKey: ['task-participants', taskId],
-    queryFn: async () =>
-      unwrap(await client.GET('/api/v1/tasks/{taskID}/participants', {
-        params: { path: { taskID: taskId() } },
-      })),
-    enabled: () => !!taskId(),
   })
 }
 
