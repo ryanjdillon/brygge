@@ -122,6 +122,7 @@ func main() {
 	healthHandler := handlers.NewHealthHandler(db, rdb)
 	auditHandler := handlers.NewAuditHandler(db, auditService, &cfg, log)
 	authHandler := handlers.NewAuthHandler(db, rdb, jwtService, vippsClient, &cfg, log, handlers.WithAuditService(auditService))
+	magicLinkHandler := handlers.NewMagicLinkHandler(db, &cfg, emailClient, log)
 	waitingListHandler := handlers.NewWaitingListHandler(db, rdb, &cfg, log)
 	adminUsersHandler := handlers.NewAdminUsersHandler(db, &cfg, log)
 	adminSlipsHandler := handlers.NewAdminSlipsHandler(db, &cfg, log)
@@ -181,6 +182,8 @@ func main() {
 
 			r.Group(func(r chi.Router) {
 				r.Use(strictRL)
+				r.Post("/magic-link", magicLinkHandler.HandleRequestMagicLink)
+				r.Get("/verify", magicLinkHandler.HandleVerifyMagicLink)
 				r.Post("/register", authHandler.HandleEmailRegister)
 				r.Post("/login", authHandler.HandleEmailLogin)
 				r.Post("/refresh", authHandler.HandleRefreshToken)
