@@ -49,8 +49,9 @@ type Config struct {
 	VAPIDPrivateKey string
 
 	// Optional integrations
-	ResendAPIKey    string
-	AnthropicAPIKey string
+	ResendAPIKey      string
+	ResendFromAddress string
+	AnthropicAPIKey   string
 
 	// Database pool
 	DBMaxConns          int32
@@ -110,8 +111,9 @@ func Load() Config {
 		VAPIDPublicKey:  envStr("VAPID_PUBLIC_KEY", ""),
 		VAPIDPrivateKey: envStr("VAPID_PRIVATE_KEY", ""),
 
-		ResendAPIKey:    envStr("RESEND_API_KEY", ""),
-		AnthropicAPIKey: envStr("ANTHROPIC_API_KEY", ""),
+		ResendAPIKey:      envStr("RESEND_API_KEY", ""),
+		ResendFromAddress: envStr("RESEND_FROM_ADDRESS", "noreply@example.com"),
+		AnthropicAPIKey:   envStr("ANTHROPIC_API_KEY", ""),
 
 		Features: Features{
 			Bookings:       envBool("FEATURE_BOOKINGS", true),

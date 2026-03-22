@@ -9,23 +9,27 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/brygge-klubb/brygge/internal/config"
+	"github.com/brygge-klubb/brygge/internal/email"
 	"github.com/brygge-klubb/brygge/internal/middleware"
 )
 
 type BroadcastHandler struct {
 	db     *pgxpool.Pool
 	config *config.Config
+	email  *email.Client
 	log    zerolog.Logger
 }
 
 func NewBroadcastHandler(
 	db *pgxpool.Pool,
 	cfg *config.Config,
+	emailClient *email.Client,
 	log zerolog.Logger,
 ) *BroadcastHandler {
 	return &BroadcastHandler{
 		db:     db,
 		config: cfg,
+		email:  emailClient,
 		log:    log.With().Str("handler", "broadcast").Logger(),
 	}
 }

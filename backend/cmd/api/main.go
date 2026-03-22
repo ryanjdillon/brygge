@@ -22,6 +22,7 @@ import (
 	"github.com/brygge-klubb/brygge/internal/ai"
 	"github.com/brygge-klubb/brygge/internal/audit"
 	"github.com/brygge-klubb/brygge/internal/auth"
+	"github.com/brygge-klubb/brygge/internal/email"
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/handlers"
 	"github.com/brygge-klubb/brygge/internal/middleware"
@@ -100,6 +101,13 @@ func main() {
 	jwtService := auth.NewJWTService(&cfg)
 	vippsClient := auth.NewVippsClient(&cfg)
 
+	emailClient := email.NewClient(cfg.ResendAPIKey, cfg.ResendFromAddress)
+	if emailClient != nil {
+		log.Info().Msg("email delivery enabled (Resend API key configured)")
+	} else {
+		log.Warn().Msg("email delivery disabled (no RESEND_API_KEY)")
+	}
+
 	var claudeClient *ai.ClaudeClient
 	if cfg.AnthropicAPIKey != "" {
 		claudeClient = ai.NewClaudeClient(cfg.AnthropicAPIKey)
@@ -125,7 +133,7 @@ func main() {
 	membersHandler := handlers.NewMembersHandler(db, &cfg, log)
 	weatherHandler := handlers.NewWeatherHandler(db, rdb, &cfg, log)
 	contactHandler := handlers.NewContactHandler(&cfg, log)
-	broadcastHandler := handlers.NewBroadcastHandler(db, &cfg, log)
+	broadcastHandler := handlers.NewBroadcastHandler(db, &cfg, emailClient, log)
 	projectsHandler := handlers.NewProjectsHandler(db, &cfg, log)
 	featureRequestsHandler := handlers.NewFeatureRequestsHandler(db, &cfg, log)
 	financialsHandler := handlers.NewFinancialsHandler(db, &cfg, log)
