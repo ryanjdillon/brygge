@@ -45,37 +45,37 @@ func NewBookingsHandler(
 }
 
 type resource struct {
-	ID           string   `json:"id"`
-	ClubID       string   `json:"club_id"`
-	Type         string   `json:"type"`
-	Name         string   `json:"name"`
-	Description  string   `json:"description"`
-	Capacity     int      `json:"capacity"`
-	PricePerUnit float64  `json:"price_per_unit"`
-	Unit         string   `json:"unit"`
+	ID           string    `json:"id"`
+	ClubID       string    `json:"club_id"`
+	Type         string    `json:"type"`
+	Name         string    `json:"name"`
+	Description  string    `json:"description"`
+	Capacity     int       `json:"capacity"`
+	PricePerUnit float64   `json:"price_per_unit"`
+	Unit         string    `json:"unit"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 type booking struct {
-	ID             string     `json:"id"`
-	ResourceID     string     `json:"resource_id"`
-	ResourceUnitID *string    `json:"resource_unit_id,omitempty"`
-	UserID         *string    `json:"user_id,omitempty"`
-	ClubID         string     `json:"club_id"`
-	StartDate      time.Time  `json:"start_date"`
-	EndDate        time.Time  `json:"end_date"`
-	Status         string     `json:"status"`
-	GuestName      *string    `json:"guest_name,omitempty"`
-	GuestEmail     *string    `json:"guest_email,omitempty"`
-	GuestPhone     *string    `json:"guest_phone,omitempty"`
-	PaymentID      *string    `json:"payment_id,omitempty"`
-	BoatLengthM    *float64   `json:"boat_length_m,omitempty"`
-	BoatBeamM      *float64   `json:"boat_beam_m,omitempty"`
-	BoatDraftM     *float64   `json:"boat_draft_m,omitempty"`
-	Notes          string     `json:"notes"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
+	ID             string    `json:"id"`
+	ResourceID     string    `json:"resource_id"`
+	ResourceUnitID *string   `json:"resource_unit_id,omitempty"`
+	UserID         *string   `json:"user_id,omitempty"`
+	ClubID         string    `json:"club_id"`
+	StartDate      time.Time `json:"start_date"`
+	EndDate        time.Time `json:"end_date"`
+	Status         string    `json:"status"`
+	GuestName      *string   `json:"guest_name,omitempty"`
+	GuestEmail     *string   `json:"guest_email,omitempty"`
+	GuestPhone     *string   `json:"guest_phone,omitempty"`
+	PaymentID      *string   `json:"payment_id,omitempty"`
+	BoatLengthM    *float64  `json:"boat_length_m,omitempty"`
+	BoatBeamM      *float64  `json:"boat_beam_m,omitempty"`
+	BoatDraftM     *float64  `json:"boat_draft_m,omitempty"`
+	Notes          string    `json:"notes"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 type bookingAdmin struct {
@@ -266,6 +266,66 @@ func (h *BookingsHandler) HandleGetResourceAvailability(w http.ResponseWriter, r
 	JSON(w, http.StatusOK, slots)
 }
 
+type boatDimensions struct {
+	length, beam, draft float64
+}
+
+func (h *BookingsHandler) countTotalUnits(ctx context.Context, clubSlug, resourceType string, dims *boatDimensions) (int, error) {
+	var totalUnits int
+	var err error
+	if dims != nil {
+		err = h.db.QueryRow(ctx,
+			`SELECT COUNT(*) FROM resource_units ru
+			 JOIN resources r ON r.id = ru.resource_id
+			 LEFT JOIN slips s ON s.id = ru.slip_id
+			 WHERE r.club_id = (SELECT id FROM clubs WHERE slug = $1)
+			 AND r.type = $2 AND ru.is_active = true
+			 AND (s.id IS NULL OR (s.length_m >= $3 AND s.width_m >= $4 AND s.depth_m >= $5))`,
+			clubSlug, resourceType, dims.length, dims.beam, dims.draft,
+		).Scan(&totalUnits)
+	} else {
+		err = h.db.QueryRow(ctx,
+			`SELECT COUNT(*) FROM resource_units ru
+			 JOIN resources r ON r.id = ru.resource_id
+			 WHERE r.club_id = (SELECT id FROM clubs WHERE slug = $1)
+			 AND r.type = $2 AND ru.is_active = true`,
+			clubSlug, resourceType,
+		).Scan(&totalUnits)
+	}
+	return totalUnits, err
+}
+
+func (h *BookingsHandler) queryBookingsForRange(ctx context.Context, clubSlug, resourceType string, start, end time.Time, dims *boatDimensions) (pgx.Rows, error) {
+	if dims != nil {
+		return h.db.Query(ctx,
+			`SELECT b.resource_unit_id, b.start_date, b.end_date
+			 FROM bookings b
+			 JOIN resources r ON r.id = b.resource_id
+			 JOIN resource_units ru ON ru.id = b.resource_unit_id
+			 LEFT JOIN slips s ON s.id = ru.slip_id
+			 WHERE r.club_id = (SELECT id FROM clubs WHERE slug = $1)
+			 AND r.type = $2
+			 AND b.status IN ('pending', 'confirmed')
+			 AND b.start_date < $4 AND b.end_date > $3
+			 AND b.resource_unit_id IS NOT NULL
+			 AND (s.id IS NULL OR (s.length_m >= $5 AND s.width_m >= $6 AND s.depth_m >= $7))`,
+			clubSlug, resourceType, start, end.AddDate(0, 0, 1),
+			dims.length, dims.beam, dims.draft,
+		)
+	}
+	return h.db.Query(ctx,
+		`SELECT b.resource_unit_id, b.start_date, b.end_date
+		 FROM bookings b
+		 JOIN resources r ON r.id = b.resource_id
+		 WHERE r.club_id = (SELECT id FROM clubs WHERE slug = $1)
+		 AND r.type = $2
+		 AND b.status IN ('pending', 'confirmed')
+		 AND b.start_date < $4 AND b.end_date > $3
+		 AND b.resource_unit_id IS NOT NULL`,
+		clubSlug, resourceType, start, end.AddDate(0, 0, 1),
+	)
+}
+
 // HandleAggregateAvailability returns per-day unit counts for a resource type.
 func (h *BookingsHandler) HandleAggregateAvailability(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -294,75 +354,26 @@ func (h *BookingsHandler) HandleAggregateAvailability(w http.ResponseWriter, r *
 		return
 	}
 
-	// Optional dimension filters for slip-type resources
 	lengthStr := r.URL.Query().Get("length")
 	beamStr := r.URL.Query().Get("beam")
 	draftStr := r.URL.Query().Get("draft")
-	hasDimensions := lengthStr != "" && beamStr != "" && draftStr != ""
 
-	var boatLength, boatBeam, boatDraft float64
-	if hasDimensions {
-		fmt.Sscanf(lengthStr, "%f", &boatLength)
-		fmt.Sscanf(beamStr, "%f", &boatBeam)
-		fmt.Sscanf(draftStr, "%f", &boatDraft)
+	var dims *boatDimensions
+	if lengthStr != "" && beamStr != "" && draftStr != "" {
+		dims = &boatDimensions{}
+		fmt.Sscanf(lengthStr, "%f", &dims.length)
+		fmt.Sscanf(beamStr, "%f", &dims.beam)
+		fmt.Sscanf(draftStr, "%f", &dims.draft)
 	}
 
-	var totalUnits int
-	if hasDimensions {
-		err = h.db.QueryRow(ctx,
-			`SELECT COUNT(*) FROM resource_units ru
-			 JOIN resources r ON r.id = ru.resource_id
-			 LEFT JOIN slips s ON s.id = ru.slip_id
-			 WHERE r.club_id = (SELECT id FROM clubs WHERE slug = $1)
-			 AND r.type = $2 AND ru.is_active = true
-			 AND (s.id IS NULL OR (s.length_m >= $3 AND s.width_m >= $4 AND s.depth_m >= $5))`,
-			h.config.ClubSlug, resourceType, boatLength, boatBeam, boatDraft,
-		).Scan(&totalUnits)
-	} else {
-		err = h.db.QueryRow(ctx,
-			`SELECT COUNT(*) FROM resource_units ru
-			 JOIN resources r ON r.id = ru.resource_id
-			 WHERE r.club_id = (SELECT id FROM clubs WHERE slug = $1)
-			 AND r.type = $2 AND ru.is_active = true`,
-			h.config.ClubSlug, resourceType,
-		).Scan(&totalUnits)
-	}
+	totalUnits, err := h.countTotalUnits(ctx, h.config.ClubSlug, resourceType, dims)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to count total units")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
-	var rows pgx.Rows
-	if hasDimensions {
-		rows, err = h.db.Query(ctx,
-			`SELECT b.resource_unit_id, b.start_date, b.end_date
-			 FROM bookings b
-			 JOIN resources r ON r.id = b.resource_id
-			 JOIN resource_units ru ON ru.id = b.resource_unit_id
-			 LEFT JOIN slips s ON s.id = ru.slip_id
-			 WHERE r.club_id = (SELECT id FROM clubs WHERE slug = $1)
-			 AND r.type = $2
-			 AND b.status IN ('pending', 'confirmed')
-			 AND b.start_date < $4 AND b.end_date > $3
-			 AND b.resource_unit_id IS NOT NULL
-			 AND (s.id IS NULL OR (s.length_m >= $5 AND s.width_m >= $6 AND s.depth_m >= $7))`,
-			h.config.ClubSlug, resourceType, startDate, endDate.AddDate(0, 0, 1),
-			boatLength, boatBeam, boatDraft,
-		)
-	} else {
-		rows, err = h.db.Query(ctx,
-			`SELECT b.resource_unit_id, b.start_date, b.end_date
-			 FROM bookings b
-			 JOIN resources r ON r.id = b.resource_id
-			 WHERE r.club_id = (SELECT id FROM clubs WHERE slug = $1)
-			 AND r.type = $2
-			 AND b.status IN ('pending', 'confirmed')
-			 AND b.start_date < $4 AND b.end_date > $3
-			 AND b.resource_unit_id IS NOT NULL`,
-			h.config.ClubSlug, resourceType, startDate, endDate.AddDate(0, 0, 1),
-		)
-	}
+	rows, err := h.queryBookingsForRange(ctx, h.config.ClubSlug, resourceType, startDate, endDate, dims)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to query bookings for aggregate availability")
 		Error(w, http.StatusInternalServerError, "internal error")
@@ -466,6 +477,19 @@ func (h *BookingsHandler) HandleTodayAvailability(w http.ResponseWriter, r *http
 	JSON(w, http.StatusOK, todayAvailability{Available: avail, Total: totalUnits})
 }
 
+func shortenName(fullName string) string {
+	if len(fullName) == 0 {
+		return fullName
+	}
+	parts := []rune(fullName)
+	for i, c := range parts {
+		if c == ' ' && i+1 < len(parts) {
+			return string(parts[:i+2]) + "."
+		}
+	}
+	return fullName
+}
+
 // HandleHoistSlots returns time-slot availability for the slip hoist on a given date.
 func (h *BookingsHandler) HandleHoistSlots(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -549,17 +573,8 @@ func (h *BookingsHandler) HandleHoistSlots(w http.ResponseWriter, r *http.Reques
 		for _, bs := range booked {
 			if bs.start.Before(slotEnd) && bs.end.After(t) {
 				hs.Available = false
-				firstName := bs.name
-				if len(firstName) > 0 {
-					parts := []rune(firstName)
-					for i, c := range parts {
-						if c == ' ' && i+1 < len(parts) {
-							firstName = string(parts[:i+2]) + "."
-							break
-						}
-					}
-				}
-				hs.BookedBy = &firstName
+				shortened := shortenName(bs.name)
+				hs.BookedBy = &shortened
 				break
 			}
 		}
@@ -608,6 +623,77 @@ func getIntSetting(settings map[string]json.RawMessage, key string, defaultVal i
 	return n
 }
 
+func (h *BookingsHandler) parseBookingDates(req createBookingRequest) (time.Time, time.Time, error) {
+	isTimeBased := req.ResourceType == "slip_hoist"
+	if isTimeBased {
+		start, err := time.Parse(time.RFC3339, req.StartDate)
+		if err != nil {
+			return time.Time{}, time.Time{}, fmt.Errorf("invalid start_date format for hoist, use RFC3339")
+		}
+		end, err := time.Parse(time.RFC3339, req.EndDate)
+		if err != nil {
+			return time.Time{}, time.Time{}, fmt.Errorf("invalid end_date format for hoist, use RFC3339")
+		}
+		return start, end, nil
+	}
+	start, err := time.Parse("2006-01-02", req.StartDate)
+	if err != nil {
+		return time.Time{}, time.Time{}, fmt.Errorf("invalid start_date format, use YYYY-MM-DD")
+	}
+	end, err := time.Parse("2006-01-02", req.EndDate)
+	if err != nil {
+		return time.Time{}, time.Time{}, fmt.Errorf("invalid end_date format, use YYYY-MM-DD")
+	}
+	return start, end, nil
+}
+
+func (h *BookingsHandler) resolveResource(ctx context.Context, resourceID, resourceType, clubSlug string) (string, string, error) {
+	var resID, clubID string
+	var err error
+	if resourceID != "" {
+		err = h.db.QueryRow(ctx,
+			`SELECT r.id, r.club_id FROM resources r
+			 JOIN clubs c ON c.id = r.club_id
+			 WHERE r.id = $1 AND c.slug = $2`,
+			resourceID, clubSlug,
+		).Scan(&resID, &clubID)
+	} else {
+		err = h.db.QueryRow(ctx,
+			`SELECT r.id, r.club_id FROM resources r
+			 JOIN clubs c ON c.id = r.club_id
+			 WHERE r.type = $1 AND c.slug = $2
+			 LIMIT 1`,
+			resourceType, clubSlug,
+		).Scan(&resID, &clubID)
+	}
+	return resID, clubID, err
+}
+
+func needsBoatDimensions(resourceType string) bool {
+	return resourceType == "guest_slip" || resourceType == "shared_slip" || resourceType == "seasonal_rental"
+}
+
+func (h *BookingsHandler) findBookingUnit(ctx context.Context, req createBookingRequest, resourceID, clubID string, start, end time.Time) (*string, error) {
+	if needsBoatDimensions(req.ResourceType) {
+		unitID, err := h.findBestFitUnit(ctx, resourceID, clubID, start, end, *req.BoatLengthM, *req.BoatBeamM, *req.BoatDraftM)
+		if err != nil {
+			return nil, fmt.Errorf("find matching unit: %w", err)
+		}
+		if unitID == nil {
+			return nil, &httpError{http.StatusConflict, "no suitable slip available for the given boat dimensions and date range"}
+		}
+		return unitID, nil
+	}
+	unitID, err := h.findAvailableUnit(ctx, resourceID, start, end)
+	if err != nil {
+		return nil, fmt.Errorf("find available unit: %w", err)
+	}
+	if unitID == nil {
+		return nil, &httpError{http.StatusConflict, "no available units for the requested dates"}
+	}
+	return unitID, nil
+}
+
 func (h *BookingsHandler) HandleCreateBooking(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -626,38 +712,15 @@ func (h *BookingsHandler) HandleCreateBooking(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	needsDimensions := req.ResourceType == "guest_slip" || req.ResourceType == "shared_slip" || req.ResourceType == "seasonal_rental"
-	if needsDimensions && (req.BoatLengthM == nil || req.BoatBeamM == nil || req.BoatDraftM == nil) {
+	if needsBoatDimensions(req.ResourceType) && (req.BoatLengthM == nil || req.BoatBeamM == nil || req.BoatDraftM == nil) {
 		Error(w, http.StatusBadRequest, "boat_length_m, boat_beam_m, and boat_draft_m are required for slip bookings")
 		return
 	}
 
-	isTimeBased := req.ResourceType == "slip_hoist"
-	var startDate, endDate time.Time
-	var err error
-
-	if isTimeBased {
-		startDate, err = time.Parse(time.RFC3339, req.StartDate)
-		if err != nil {
-			Error(w, http.StatusBadRequest, "invalid start_date format for hoist, use RFC3339")
-			return
-		}
-		endDate, err = time.Parse(time.RFC3339, req.EndDate)
-		if err != nil {
-			Error(w, http.StatusBadRequest, "invalid end_date format for hoist, use RFC3339")
-			return
-		}
-	} else {
-		startDate, err = time.Parse("2006-01-02", req.StartDate)
-		if err != nil {
-			Error(w, http.StatusBadRequest, "invalid start_date format, use YYYY-MM-DD")
-			return
-		}
-		endDate, err = time.Parse("2006-01-02", req.EndDate)
-		if err != nil {
-			Error(w, http.StatusBadRequest, "invalid end_date format, use YYYY-MM-DD")
-			return
-		}
+	startDate, endDate, err := h.parseBookingDates(req)
+	if err != nil {
+		Error(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	if !endDate.After(startDate) {
@@ -665,23 +728,7 @@ func (h *BookingsHandler) HandleCreateBooking(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	var resourceID, clubID string
-	if req.ResourceID != "" {
-		err = h.db.QueryRow(ctx,
-			`SELECT r.id, r.club_id FROM resources r
-			 JOIN clubs c ON c.id = r.club_id
-			 WHERE r.id = $1 AND c.slug = $2`,
-			req.ResourceID, h.config.ClubSlug,
-		).Scan(&resourceID, &clubID)
-	} else {
-		err = h.db.QueryRow(ctx,
-			`SELECT r.id, r.club_id FROM resources r
-			 JOIN clubs c ON c.id = r.club_id
-			 WHERE r.type = $1 AND c.slug = $2
-			 LIMIT 1`,
-			req.ResourceType, h.config.ClubSlug,
-		).Scan(&resourceID, &clubID)
-	}
+	resourceID, clubID, err := h.resolveResource(ctx, req.ResourceID, req.ResourceType, h.config.ClubSlug)
 	if err == pgx.ErrNoRows {
 		Error(w, http.StatusNotFound, "resource not found")
 		return
@@ -705,29 +752,15 @@ func (h *BookingsHandler) HandleCreateBooking(w http.ResponseWriter, r *http.Req
 	}
 	defer h.redis.Del(ctx, lockKey)
 
-	var unitID *string
-	if needsDimensions {
-		unitID, err = h.findBestFitUnit(ctx, resourceID, clubID, startDate, endDate, *req.BoatLengthM, *req.BoatBeamM, *req.BoatDraftM)
-		if err != nil {
-			h.log.Error().Err(err).Msg("failed to find matching unit")
-			Error(w, http.StatusInternalServerError, "internal error")
+	unitID, err := h.findBookingUnit(ctx, req, resourceID, clubID, startDate, endDate)
+	if err != nil {
+		if he, ok := err.(*httpError); ok {
+			Error(w, he.status, he.message)
 			return
 		}
-		if unitID == nil {
-			Error(w, http.StatusConflict, "no suitable slip available for the given boat dimensions and date range")
-			return
-		}
-	} else {
-		unitID, err = h.findAvailableUnit(ctx, resourceID, startDate, endDate)
-		if err != nil {
-			h.log.Error().Err(err).Msg("failed to find available unit")
-			Error(w, http.StatusInternalServerError, "internal error")
-			return
-		}
-		if unitID == nil {
-			Error(w, http.StatusConflict, "no available units for the requested dates")
-			return
-		}
+		h.log.Error().Err(err).Msg("failed to find unit")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
 	}
 
 	var userID *string
