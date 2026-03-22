@@ -12,15 +12,11 @@ export function useApi() {
   ): Promise<T> {
     const headers = new Headers(options.headers)
 
-    if (auth.accessToken) {
-      headers.set('Authorization', `Bearer ${auth.accessToken}`)
-    }
-
     if (options.body && !headers.has('Content-Type')) {
       headers.set('Content-Type', 'application/json')
     }
 
-    const response = await fetch(url, { ...options, headers })
+    const response = await fetch(url, { ...options, headers, credentials: 'include' })
 
     if (!response.ok) {
       const body = await response.json().catch(() => null)

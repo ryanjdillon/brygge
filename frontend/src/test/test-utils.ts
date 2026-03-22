@@ -52,15 +52,14 @@ export function mountWithPlugins<T extends Component>(
 
 export function createMockAuthStore(overrides: {
   user?: { id: string; name: string; email: string; roles: string[] } | null
-  accessToken?: string | null
   isAuthenticated?: boolean
 } = {}) {
   return {
     user: overrides.user ?? null,
-    accessToken: overrides.accessToken ?? null,
     isAuthenticated: overrides.isAuthenticated ?? overrides.user !== null,
-    login: vi.fn(),
     logout: vi.fn(),
     hasRole: vi.fn((role: string) => overrides.user?.roles.includes(role) ?? false),
+    checkSession: vi.fn(),
+    requestMagicLink: vi.fn(),
   }
 }

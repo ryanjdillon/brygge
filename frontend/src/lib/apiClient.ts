@@ -1,35 +1,14 @@
-import createClient, { type Middleware } from 'openapi-fetch'
+import createClient from 'openapi-fetch'
 import type { paths } from '@/types/api'
-import { useAuthStore } from '@/stores/auth'
 import { ApiError } from '@/lib/errors'
 
 export { ApiError }
-
-function createAuthMiddleware(): Middleware {
-  return {
-    onRequest({ request }) {
-      const auth = useAuthStore()
-      if (auth.accessToken) {
-        request.headers.set('Authorization', `Bearer ${auth.accessToken}`)
-      }
-      return request
-    },
-    onResponse({ response }) {
-      if (response.status === 401) {
-        const auth = useAuthStore()
-        auth.logout()
-      }
-      return response
-    },
-  }
-}
 
 let _client: ReturnType<typeof createClient<paths>> | null = null
 
 function getClient() {
   if (!_client) {
-    _client = createClient<paths>()
-    _client.use(createAuthMiddleware())
+    _client = createClient<paths>({ credentials: 'include' })
   }
   return _client
 }
