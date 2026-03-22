@@ -80,6 +80,10 @@ func main() {
 			Msg("connected to database")
 	}
 
+	if err := telemetry.RegisterPoolMetrics(db); err != nil {
+		log.Warn().Err(err).Msg("failed to register database pool metrics")
+	}
+
 	redisOpts, err := redis.ParseURL(cfg.RedisURL)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to parse redis URL")
