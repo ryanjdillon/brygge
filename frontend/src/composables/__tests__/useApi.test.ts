@@ -8,43 +8,37 @@ vi.unmock('@tanstack/vue-query')
 
 describe('useApi', () => {
   beforeEach(() => {
-    setActivePinia(createPinia())
     vi.restoreAllMocks()
+    // Mock fetch before creating pinia so checkSession resolves cleanly
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('', { status: 401 }),
+    )
+    setActivePinia(createPinia())
   })
 
-  it('fetchApi adds Authorization header when token exists', async () => {
+  it('fetchApi sends credentials include', async () => {
     const auth = useAuthStore()
-    auth.accessToken = 'test-token'
+    await auth.ready
 
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+    const fetchMock = vi.mocked(globalThis.fetch)
+    fetchMock.mockResolvedValueOnce(
       new Response(JSON.stringify({ data: 'ok' }), { status: 200 }),
     )
 
+    const callsBefore = fetchMock.mock.calls.length
     const { fetchApi } = useApi()
     await fetchApi('/api/test')
 
-    const calledHeaders = fetchSpy.mock.calls[0][1]?.headers as Headers
-    expect(calledHeaders.get('Authorization')).toBe('Bearer test-token')
-  })
-
-  it('fetchApi works without auth token', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
-      new Response(JSON.stringify({ data: 'ok' }), { status: 200 }),
-    )
-
-    const { fetchApi } = useApi()
-    await fetchApi('/api/test')
-
-    const calledHeaders = fetchSpy.mock.calls[0][1]?.headers as Headers
-    expect(calledHeaders.get('Authorization')).toBeNull()
+    const calledOptions = fetchMock.mock.calls[callsBefore][1]
+    expect(calledOptions?.credentials).toBe('include')
   })
 
   it('fetchApi handles 401 by triggering logout', async () => {
     const auth = useAuthStore()
-    auth.accessToken = 'expired-token'
+    await auth.ready
     const logoutSpy = vi.spyOn(auth, 'logout')
 
-    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
       new Response('Unauthorized', { status: 401 }),
     )
 
@@ -55,7 +49,10 @@ describe('useApi', () => {
   })
 
   it('fetchApi throws ApiError on non-ok responses', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+    const auth = useAuthStore()
+    await auth.ready
+
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
       new Response('Not Found', { status: 404 }),
     )
 
@@ -72,22 +69,30 @@ describe('useApi', () => {
   })
 
   it('fetchApi sets Content-Type for requests with body', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+    const auth = useAuthStore()
+    await auth.ready
+
+    const fetchMock = vi.mocked(globalThis.fetch)
+    fetchMock.mockResolvedValueOnce(
       new Response(JSON.stringify({ id: 1 }), { status: 200 }),
     )
 
+    const callsBefore = fetchMock.mock.calls.length
     const { fetchApi } = useApi()
     await fetchApi('/api/test', {
       method: 'POST',
       body: JSON.stringify({ name: 'test' }),
     })
 
-    const calledHeaders = fetchSpy.mock.calls[0][1]?.headers as Headers
+    const calledHeaders = fetchMock.mock.calls[callsBefore][1]?.headers as Headers
     expect(calledHeaders.get('Content-Type')).toBe('application/json')
   })
 
   it('fetchApi parses JSON error with code', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+    const auth = useAuthStore()
+    await auth.ready
+
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
       new Response(JSON.stringify({ error: 'Rate limited', code: 'RATE_LIMITED' }), {
         status: 429,
         headers: { 'Content-Type': 'application/json' },
@@ -108,7 +113,10 @@ describe('useApi', () => {
   })
 
   it('fetchApi returns undefined for 204 responses', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+    const auth = useAuthStore()
+    await auth.ready
+
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
       new Response(null, { status: 204 }),
     )
 

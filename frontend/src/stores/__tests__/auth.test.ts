@@ -8,68 +8,107 @@ vi.unmock('@tanstack/vue-query')
 describe('auth store', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
-    localStorage.clear()
+    vi.restoreAllMocks()
   })
 
   it('initial state is unauthenticated', () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response('', { status: 401 }),
+    )
     const auth = useAuthStore()
     expect(auth.isAuthenticated).toBe(false)
     expect(auth.user).toBeNull()
-    expect(auth.accessToken).toBeNull()
   })
 
-  it('login sets user and isAuthenticated', () => {
+  it('checkSession sets user on success', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({
+        user_id: '1',
+        club_id: 'c1',
+        roles: ['member'],
+        full_name: 'Test User',
+        email: 'test@example.com',
+      }), { status: 200 }),
+    )
     const auth = useAuthStore()
-    auth.user = { id: '1', name: 'Test User', email: 'test@example.com', clubId: 'c1', roles: ['member'] }
-    auth.accessToken = 'test-token'
+    await auth.ready
 
     expect(auth.isAuthenticated).toBe(true)
     expect(auth.user?.name).toBe('Test User')
   })
 
   it('logout clears state', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({
+        user_id: '1',
+        club_id: 'c1',
+        roles: ['member'],
+        full_name: 'Test',
+        email: 'test@example.com',
+      }), { status: 200 }),
+    )
     const auth = useAuthStore()
-    auth.user = { id: '1', name: 'Test', email: 'test@example.com', clubId: 'c1', roles: ['member'] }
-    auth.accessToken = 'test-token'
+    await auth.ready
 
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response('', { status: 200 }),
+    )
     await auth.logout()
 
     expect(auth.user).toBeNull()
-    expect(auth.accessToken).toBeNull()
     expect(auth.isAuthenticated).toBe(false)
   })
 
-  it('hasRole returns true for matching role', () => {
+  it('hasRole returns true for matching role', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({
+        user_id: '1',
+        club_id: 'c1',
+        roles: ['member', 'admin'],
+        full_name: 'Test',
+        email: 'test@example.com',
+      }), { status: 200 }),
+    )
     const auth = useAuthStore()
-    auth.user = { id: '1', name: 'Test', email: 'test@example.com', clubId: 'c1', roles: ['member', 'admin'] }
+    await auth.ready
 
     expect(auth.hasRole('admin')).toBe(true)
     expect(auth.hasRole('member')).toBe(true)
   })
 
-  it('hasRole returns false for non-matching role', () => {
+  it('hasRole returns false for non-matching role', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({
+        user_id: '1',
+        club_id: 'c1',
+        roles: ['member'],
+        full_name: 'Test',
+        email: 'test@example.com',
+      }), { status: 200 }),
+    )
     const auth = useAuthStore()
-    auth.user = { id: '1', name: 'Test', email: 'test@example.com', clubId: 'c1', roles: ['member'] }
+    await auth.ready
 
     expect(auth.hasRole('admin')).toBe(false)
     expect(auth.hasRole('board')).toBe(false)
   })
 
   it('hasRole returns false when no user', () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response('', { status: 401 }),
+    )
     const auth = useAuthStore()
     expect(auth.hasRole('member')).toBe(false)
   })
 
-  it('accessToken is persisted via localStorage', () => {
-    localStorage.setItem('access_token', 'persisted-token')
+  it('checkSession clears user on failed response', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('', { status: 401 }),
+    )
     const auth = useAuthStore()
-    expect(auth.accessToken).toBe('persisted-token')
-  })
+    await auth.ready
 
-  it('logout removes token from localStorage', async () => {
-    localStorage.setItem('access_token', 'token-to-remove')
-    const auth = useAuthStore()
-    await auth.logout()
-    expect(localStorage.getItem('access_token')).toBeNull()
+    expect(auth.user).toBeNull()
+    expect(auth.isAuthenticated).toBe(false)
   })
 })

@@ -189,6 +189,18 @@ func (h *MagicLinkHandler) HandleVerifyMagicLink(w http.ResponseWriter, r *http.
 	http.Redirect(w, r, h.config.FrontendURL+"/portal", http.StatusFound)
 }
 
+// HandleSessionLogout destroys the current session and clears the cookie.
+func (h *MagicLinkHandler) HandleSessionLogout(w http.ResponseWriter, r *http.Request) {
+	sessionID := middleware.GetSessionID(r.Context())
+	if sessionID != "" && h.sessions != nil {
+		if err := h.sessions.DeleteSession(r.Context(), sessionID); err != nil {
+			h.log.Error().Err(err).Msg("failed to delete session on logout")
+		}
+	}
+	middleware.ClearSessionCookie(w)
+	JSON(w, http.StatusOK, map[string]string{"message": "logged out"})
+}
+
 func generateToken() (string, error) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {

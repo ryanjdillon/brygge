@@ -192,11 +192,19 @@ func main() {
 				r.Post("/exchange", authHandler.HandleAuthCodeExchange)
 			})
 
+			// JWT-based auth (legacy, will be removed in DIL-28)
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.Authenticate(jwtService))
 				r.Use(authedRL)
 				r.Post("/logout", authHandler.HandleLogout)
 				r.Get("/me", authHandler.HandleMe)
+			})
+
+			// Session-based auth (new)
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.AuthenticateSession(sessionService))
+				r.Post("/session/logout", magicLinkHandler.HandleSessionLogout)
+				r.Get("/session/me", authHandler.HandleMe) // same handler — reads from context
 			})
 		})
 

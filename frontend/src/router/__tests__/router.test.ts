@@ -47,6 +47,9 @@ describe('router guards', () => {
   let router: Router
 
   beforeEach(() => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('', { status: 401 }),
+    )
     setActivePinia(createPinia())
     router = createTestRouter()
   })
@@ -74,6 +77,7 @@ describe('router guards', () => {
 
   it('/admin redirects to / when user lacks admin/board role', async () => {
     const auth = useAuthStore()
+    await auth.ready
     auth.user = { id: '1', name: 'Test', email: 'test@example.com', clubId: 'c1', roles: ['member'] }
 
     await router.push('/admin')
@@ -89,6 +93,7 @@ describe('router guards', () => {
 
   it('/portal is accessible when authenticated', async () => {
     const auth = useAuthStore()
+    await auth.ready
     auth.user = { id: '1', name: 'Test', email: 'test@example.com', clubId: 'c1', roles: ['member'] }
 
     await router.push('/portal')
@@ -98,6 +103,7 @@ describe('router guards', () => {
 
   it('/admin is accessible with admin role', async () => {
     const auth = useAuthStore()
+    await auth.ready
     auth.user = { id: '1', name: 'Test', email: 'test@example.com', clubId: 'c1', roles: ['admin'] }
 
     await router.push('/admin')
@@ -107,6 +113,7 @@ describe('router guards', () => {
 
   it('/admin is accessible with board role', async () => {
     const auth = useAuthStore()
+    await auth.ready
     auth.user = { id: '1', name: 'Test', email: 'test@example.com', clubId: 'c1', roles: ['board'] }
 
     await router.push('/admin')

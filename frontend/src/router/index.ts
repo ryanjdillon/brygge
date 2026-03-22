@@ -63,10 +63,6 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/LoginView.vue'),
   },
   {
-    path: '/auth/callback',
-    component: () => import('@/views/AuthCallbackView.vue'),
-  },
-  {
     path: '/portal',
     component: () => import('@/views/PortalView.vue'),
     meta: { requiresAuth: true },
