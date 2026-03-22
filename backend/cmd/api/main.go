@@ -117,12 +117,13 @@ func main() {
 	}
 
 	auditService := audit.NewService(db, log)
+	sessionService := auth.NewSessionService(db)
 
 	featuresHandler := handlers.NewFeaturesHandler(&cfg)
 	healthHandler := handlers.NewHealthHandler(db, rdb)
 	auditHandler := handlers.NewAuditHandler(db, auditService, &cfg, log)
 	authHandler := handlers.NewAuthHandler(db, rdb, jwtService, vippsClient, &cfg, log, handlers.WithAuditService(auditService))
-	magicLinkHandler := handlers.NewMagicLinkHandler(db, &cfg, emailClient, log)
+	magicLinkHandler := handlers.NewMagicLinkHandler(db, &cfg, emailClient, sessionService, log)
 	waitingListHandler := handlers.NewWaitingListHandler(db, rdb, &cfg, log)
 	adminUsersHandler := handlers.NewAdminUsersHandler(db, &cfg, log)
 	adminSlipsHandler := handlers.NewAdminSlipsHandler(db, &cfg, log)

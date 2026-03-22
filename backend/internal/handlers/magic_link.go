@@ -12,30 +12,35 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 
+	"github.com/brygge-klubb/brygge/internal/auth"
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/email"
+	"github.com/brygge-klubb/brygge/internal/middleware"
 )
 
 const magicLinkExpiry = 15 * time.Minute
 
 type MagicLinkHandler struct {
-	db     *pgxpool.Pool
-	config *config.Config
-	email  email.Sender
-	log    zerolog.Logger
+	db       *pgxpool.Pool
+	config   *config.Config
+	email    email.Sender
+	sessions *auth.SessionService
+	log      zerolog.Logger
 }
 
 func NewMagicLinkHandler(
 	db *pgxpool.Pool,
 	cfg *config.Config,
 	emailClient email.Sender,
+	sessions *auth.SessionService,
 	log zerolog.Logger,
 ) *MagicLinkHandler {
 	return &MagicLinkHandler{
-		db:     db,
-		config: cfg,
-		email:  emailClient,
-		log:    log.With().Str("handler", "magic_link").Logger(),
+		db:       db,
+		config:   cfg,
+		email:    emailClient,
+		sessions: sessions,
+		log:      log.With().Str("handler", "magic_link").Logger(),
 	}
 }
 
@@ -155,27 +160,33 @@ func (h *MagicLinkHandler) HandleVerifyMagicLink(w http.ResponseWriter, r *http.
 		return
 	}
 
-	// Look up user and roles
-	var userID, fullName string
+	// Look up user
+	var userID string
 	err = h.db.QueryRow(ctx,
-		`SELECT id, full_name FROM users WHERE email = $1 AND club_id = $2`,
+		`SELECT id FROM users WHERE email = $1 AND club_id = $2`,
 		linkEmail, clubID,
-	).Scan(&userID, &fullName)
+	).Scan(&userID)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to look up user after magic link verification")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
-	// TODO (DIL-26): Create session and set cookie instead of returning JSON.
-	// For now, return JWT tokens using the existing auth flow.
-	JSON(w, http.StatusOK, map[string]string{
-		"user_id": userID,
-		"club_id": clubID,
-		"email":   linkEmail,
-		"name":    fullName,
-		"status":  "verified",
-	})
+	// Create session
+	ip := r.RemoteAddr
+	ua := r.UserAgent()
+	sessionID, err := h.sessions.CreateSession(ctx, userID, clubID, ip, ua)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to create session")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	secure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
+	middleware.SetSessionCookie(w, sessionID, secure)
+
+	// Redirect to frontend
+	http.Redirect(w, r, h.config.FrontendURL+"/portal", http.StatusFound)
 }
 
 func generateToken() (string, error) {
