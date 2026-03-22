@@ -1,7 +1,7 @@
 import { ref, computed } from 'vue'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 
-export interface MatrixRoom {
+interface MatrixRoom {
   id: string
   alias: string
   name: string

@@ -3,8 +3,6 @@ import { useApiClient, unwrap } from '@/lib/apiClient'
 import type { components } from '@/types/api'
 
 export type SlipShare = components['schemas']['SlipShare']
-export type SlipShareRebate = components['schemas']['SlipShareRebate']
-
 export function useMySlipShares() {
   const client = useApiClient()
 

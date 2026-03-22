@@ -6,8 +6,6 @@ import type { components } from '@/types/api'
 export type Project = components['schemas']['ProjectWithCounts']
 export type MaterialItem = components['schemas']['MaterialItem']
 export type Task = components['schemas']['Task']
-export type GroupedTasks = components['schemas']['GroupedTasks']
-
 export interface CreateProjectInput {
   name: string
   description: string

@@ -3,7 +3,7 @@ import type { components } from '@/types/api'
 
 type WeatherApiResponse = components['schemas']['WeatherResponse']
 
-export interface WeatherData {
+interface WeatherData {
   temperature: number | null
   windSpeed: number | null
   windDirection: number | null
