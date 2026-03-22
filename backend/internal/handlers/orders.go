@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -62,11 +63,86 @@ type orderLineResp struct {
 	TotalPrice float64 `json:"total_price"`
 }
 
+type resolvedLine struct {
+	productID   *string
+	priceItemID *string
+	name        string
+	quantity    int
+	unitPrice   float64
+	totalPrice  float64
+}
+
+type httpError struct {
+	status  int
+	message string
+}
+
+func (e *httpError) Error() string { return e.message }
+
+func (h *OrdersHandler) resolveOrderLine(ctx context.Context, tx pgx.Tx, line orderLine, clubID string) (resolvedLine, error) {
+	if line.Quantity < 1 {
+		return resolvedLine{}, &httpError{http.StatusBadRequest, "quantity must be at least 1"}
+	}
+
+	var unitPrice float64
+	var name string
+
+	if line.ProductID != nil && *line.ProductID != "" {
+		var stock int
+		err := tx.QueryRow(ctx,
+			`SELECT name, price, stock FROM products
+			 WHERE id = $1 AND club_id = $2 AND is_active = true
+			 FOR UPDATE`,
+			*line.ProductID, clubID,
+		).Scan(&name, &unitPrice, &stock)
+		if err == pgx.ErrNoRows {
+			return resolvedLine{}, &httpError{http.StatusBadRequest, fmt.Sprintf("product %s not found or inactive", *line.ProductID)}
+		}
+		if err != nil {
+			return resolvedLine{}, fmt.Errorf("query product: %w", err)
+		}
+		if stock < line.Quantity {
+			return resolvedLine{}, &httpError{http.StatusConflict, fmt.Sprintf("insufficient stock for %s (available: %d)", name, stock)}
+		}
+
+		_, err = tx.Exec(ctx,
+			`UPDATE products SET stock = stock - $1, updated_at = now() WHERE id = $2`,
+			line.Quantity, *line.ProductID,
+		)
+		if err != nil {
+			return resolvedLine{}, fmt.Errorf("decrement stock: %w", err)
+		}
+	} else if line.PriceItemID != nil && *line.PriceItemID != "" {
+		err := tx.QueryRow(ctx,
+			`SELECT name, amount FROM price_items
+			 WHERE id = $1 AND club_id = $2 AND is_active = true`,
+			*line.PriceItemID, clubID,
+		).Scan(&name, &unitPrice)
+		if err == pgx.ErrNoRows {
+			return resolvedLine{}, &httpError{http.StatusBadRequest, fmt.Sprintf("price item %s not found", *line.PriceItemID)}
+		}
+		if err != nil {
+			return resolvedLine{}, fmt.Errorf("query price item: %w", err)
+		}
+	} else {
+		return resolvedLine{}, &httpError{http.StatusBadRequest, "each line must reference a product_id or price_item_id"}
+	}
+
+	lineTotal := unitPrice * float64(line.Quantity)
+	return resolvedLine{
+		productID:   line.ProductID,
+		priceItemID: line.PriceItemID,
+		name:        name,
+		quantity:    line.Quantity,
+		unitPrice:   unitPrice,
+		totalPrice:  lineTotal,
+	}, nil
+}
+
 // HandleCreateOrder creates an order from a cart and returns a (stubbed) Vipps checkout URL.
 func (h *OrdersHandler) HandleCreateOrder(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// Allow both authenticated and guest orders
 	claims := middleware.GetClaims(ctx)
 
 	var req createOrderRequest
@@ -80,7 +156,6 @@ func (h *OrdersHandler) HandleCreateOrder(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Resolve club ID
 	var clubID string
 	err := h.db.QueryRow(ctx,
 		`SELECT id FROM clubs WHERE slug = $1`, h.config.ClubSlug,
@@ -99,94 +174,24 @@ func (h *OrdersHandler) HandleCreateOrder(w http.ResponseWriter, r *http.Request
 	}
 	defer tx.Rollback(ctx)
 
-	// Calculate total and validate stock
 	var totalAmount float64
-	type resolvedLine struct {
-		productID   *string
-		priceItemID *string
-		name        string
-		quantity    int
-		unitPrice   float64
-		totalPrice  float64
-	}
 	var resolved []resolvedLine
 
 	for _, line := range req.Lines {
-		if line.Quantity < 1 {
-			Error(w, http.StatusBadRequest, "quantity must be at least 1")
+		rl, err := h.resolveOrderLine(ctx, tx, line, clubID)
+		if err != nil {
+			if he, ok := err.(*httpError); ok {
+				Error(w, he.status, he.message)
+				return
+			}
+			h.log.Error().Err(err).Msg("failed to resolve order line")
+			Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
-
-		var unitPrice float64
-		var name string
-
-		if line.ProductID != nil && *line.ProductID != "" {
-			// Product order — validate stock and get price
-			var stock int
-			err := tx.QueryRow(ctx,
-				`SELECT name, price, stock FROM products
-				 WHERE id = $1 AND club_id = $2 AND is_active = true
-				 FOR UPDATE`,
-				*line.ProductID, clubID,
-			).Scan(&name, &unitPrice, &stock)
-			if err == pgx.ErrNoRows {
-				Error(w, http.StatusBadRequest, fmt.Sprintf("product %s not found or inactive", *line.ProductID))
-				return
-			}
-			if err != nil {
-				h.log.Error().Err(err).Msg("failed to query product")
-				Error(w, http.StatusInternalServerError, "internal error")
-				return
-			}
-			if stock < line.Quantity {
-				Error(w, http.StatusConflict, fmt.Sprintf("insufficient stock for %s (available: %d)", name, stock))
-				return
-			}
-
-			// Decrement stock
-			_, err = tx.Exec(ctx,
-				`UPDATE products SET stock = stock - $1, updated_at = now() WHERE id = $2`,
-				line.Quantity, *line.ProductID,
-			)
-			if err != nil {
-				h.log.Error().Err(err).Msg("failed to decrement stock")
-				Error(w, http.StatusInternalServerError, "internal error")
-				return
-			}
-		} else if line.PriceItemID != nil && *line.PriceItemID != "" {
-			// Service/fee order
-			err := tx.QueryRow(ctx,
-				`SELECT name, amount FROM price_items
-				 WHERE id = $1 AND club_id = $2 AND is_active = true`,
-				*line.PriceItemID, clubID,
-			).Scan(&name, &unitPrice)
-			if err == pgx.ErrNoRows {
-				Error(w, http.StatusBadRequest, fmt.Sprintf("price item %s not found", *line.PriceItemID))
-				return
-			}
-			if err != nil {
-				h.log.Error().Err(err).Msg("failed to query price item")
-				Error(w, http.StatusInternalServerError, "internal error")
-				return
-			}
-		} else {
-			Error(w, http.StatusBadRequest, "each line must reference a product_id or price_item_id")
-			return
-		}
-
-		lineTotal := unitPrice * float64(line.Quantity)
-		totalAmount += lineTotal
-		resolved = append(resolved, resolvedLine{
-			productID:   line.ProductID,
-			priceItemID: line.PriceItemID,
-			name:        name,
-			quantity:    line.Quantity,
-			unitPrice:   unitPrice,
-			totalPrice:  lineTotal,
-		})
+		totalAmount += rl.totalPrice
+		resolved = append(resolved, rl)
 	}
 
-	// Create order
 	var userID *string
 	guestEmail := req.GuestEmail
 	guestName := req.GuestName
@@ -210,7 +215,6 @@ func (h *OrdersHandler) HandleCreateOrder(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Create order lines
 	var lineResponses []orderLineResp
 	for _, rl := range resolved {
 		var lineID string
@@ -262,7 +266,7 @@ func (h *OrdersHandler) HandleCreateOrder(w http.ResponseWriter, r *http.Request
 	})
 }
 
-// HandleConfirmOrder is a stub for the Vipps callback — marks order as paid.
+// HandleConfirmOrder is a stub for the Vipps callback -- marks order as paid.
 func (h *OrdersHandler) HandleConfirmOrder(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	orderID := chi.URLParam(r, "orderID")
