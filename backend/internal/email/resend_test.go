@@ -119,3 +119,65 @@ func TestSendAPIError(t *testing.T) {
 		t.Fatal("expected error for 422")
 	}
 }
+
+func TestSendWithAttachmentSuccess(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decoding request: %v", err)
+		}
+		attachments, ok := body["attachments"].([]any)
+		if !ok || len(attachments) != 1 {
+			t.Fatalf("expected 1 attachment, got %v", body["attachments"])
+		}
+		att := attachments[0].(map[string]any)
+		if att["filename"] != "invoice.pdf" {
+			t.Errorf("filename = %q, want %q", att["filename"], "invoice.pdf")
+		}
+
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(sendResponse{ID: "email-456"})
+	}))
+	defer server.Close()
+
+	c := &Client{
+		apiKey:      "re_test_key",
+		fromAddress: "noreply@test.com",
+		httpClient:  server.Client(),
+	}
+	resendAPIURLOverride = server.URL
+	defer func() { resendAPIURLOverride = "" }()
+
+	err := c.SendWithAttachment(
+		context.Background(),
+		"user@example.com", "Your Invoice", "<p>Attached</p>",
+		"invoice.pdf", []byte("%PDF-fake"),
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestMockSenderRecordsCalls(t *testing.T) {
+	mock := &MockSender{}
+
+	err := mock.Send(context.Background(), "a@b.com", "Hello", "<p>Hi</p>")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	err = mock.SendWithAttachment(context.Background(), "c@d.com", "Invoice", "<p>PDF</p>", "inv.pdf", []byte("data"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(mock.Calls) != 2 {
+		t.Fatalf("expected 2 calls, got %d", len(mock.Calls))
+	}
+	if mock.Calls[0].To != "a@b.com" || mock.Calls[0].Subject != "Hello" {
+		t.Errorf("call 0 = %+v", mock.Calls[0])
+	}
+	if mock.Calls[1].To != "c@d.com" || mock.Calls[1].Filename != "inv.pdf" {
+		t.Errorf("call 1 = %+v", mock.Calls[1])
+	}
+}

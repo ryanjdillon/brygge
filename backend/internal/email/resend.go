@@ -24,6 +24,16 @@ func apiURL() string {
 	return resendAPIURL
 }
 
+// Sender is the interface for sending emails. Handlers accept this
+// instead of *Client so tests can use MockSender.
+type Sender interface {
+	Send(ctx context.Context, to, subject, htmlBody string) error
+	SendWithAttachment(ctx context.Context, to, subject, htmlBody, filename string, attachment []byte) error
+}
+
+// Compile-time check that *Client implements Sender.
+var _ Sender = (*Client)(nil)
+
 // Client sends emails via the Resend API.
 type Client struct {
 	apiKey      string
