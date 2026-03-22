@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"time"
@@ -329,6 +330,66 @@ func (h *MembersHandler) HandleCreateBoat(w http.ResponseWriter, r *http.Request
 	JSON(w, http.StatusCreated, b)
 }
 
+func applyBoatUpdates(current *boat, req updateBoatRequest) {
+	if req.Name != nil {
+		current.Name = *req.Name
+	}
+	if req.Type != nil {
+		current.Type = *req.Type
+	}
+	if req.Manufacturer != nil {
+		current.Manufacturer = *req.Manufacturer
+	}
+	if req.Model != nil {
+		current.Model = *req.Model
+	}
+	if req.LengthM != nil {
+		current.LengthM = req.LengthM
+	}
+	if req.BeamM != nil {
+		current.BeamM = req.BeamM
+	}
+	if req.DraftM != nil {
+		current.DraftM = req.DraftM
+	}
+	if req.WeightKg != nil {
+		current.WeightKg = req.WeightKg
+	}
+	if req.RegistrationNumber != nil {
+		current.RegistrationNumber = *req.RegistrationNumber
+	}
+	if req.BoatModelID != nil {
+		current.BoatModelID = req.BoatModelID
+	}
+}
+
+func (h *MembersHandler) checkDimensionConfirmation(ctx context.Context, current *boat, oldLength, oldBeam, oldDraft *float64) (bool, *string, *time.Time) {
+	dimsChanged := !dimsMatch(current.LengthM, oldLength) ||
+		!dimsMatch(current.BeamM, oldBeam) ||
+		!dimsMatch(current.DraftM, oldDraft)
+
+	if !dimsChanged {
+		return current.MeasurementsConfirmed, current.ConfirmedBy, current.ConfirmedAt
+	}
+
+	if current.BoatModelID != nil {
+		var mLength, mBeam, mDraft *float64
+		mErr := h.db.QueryRow(ctx,
+			`SELECT length_m, beam_m, draft_m FROM boat_models WHERE id = $1`,
+			*current.BoatModelID,
+		).Scan(&mLength, &mBeam, &mDraft)
+		if mErr == nil {
+			reconfirmed := dimsMatch(current.LengthM, mLength) &&
+				dimsMatch(current.BeamM, mBeam) &&
+				dimsMatch(current.DraftM, mDraft)
+			if reconfirmed {
+				return true, nil, nil
+			}
+		}
+	}
+	return false, nil, nil
+}
+
 func (h *MembersHandler) HandleUpdateBoat(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
@@ -375,75 +436,9 @@ func (h *MembersHandler) HandleUpdateBoat(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Track whether dimensions are changing
 	oldLength, oldBeam, oldDraft := current.LengthM, current.BeamM, current.DraftM
-
-	if req.Name != nil {
-		current.Name = *req.Name
-	}
-	if req.Type != nil {
-		current.Type = *req.Type
-	}
-	if req.Manufacturer != nil {
-		current.Manufacturer = *req.Manufacturer
-	}
-	if req.Model != nil {
-		current.Model = *req.Model
-	}
-	if req.LengthM != nil {
-		current.LengthM = req.LengthM
-	}
-	if req.BeamM != nil {
-		current.BeamM = req.BeamM
-	}
-	if req.DraftM != nil {
-		current.DraftM = req.DraftM
-	}
-	if req.WeightKg != nil {
-		current.WeightKg = req.WeightKg
-	}
-	if req.RegistrationNumber != nil {
-		current.RegistrationNumber = *req.RegistrationNumber
-	}
-	if req.BoatModelID != nil {
-		current.BoatModelID = req.BoatModelID
-	}
-
-	// If dimensions changed, reset confirmation
-	dimsChanged := !dimsMatch(current.LengthM, oldLength) ||
-		!dimsMatch(current.BeamM, oldBeam) ||
-		!dimsMatch(current.DraftM, oldDraft)
-
-	confirmed := current.MeasurementsConfirmed
-	var confirmedBy *string
-	var confirmedAt *time.Time
-
-	if dimsChanged {
-		// Check if new dims match the linked model (auto-re-confirm)
-		reconfirmed := false
-		if current.BoatModelID != nil {
-			var mLength, mBeam, mDraft *float64
-			mErr := h.db.QueryRow(ctx,
-				`SELECT length_m, beam_m, draft_m FROM boat_models WHERE id = $1`,
-				*current.BoatModelID,
-			).Scan(&mLength, &mBeam, &mDraft)
-			if mErr == nil {
-				reconfirmed = dimsMatch(current.LengthM, mLength) &&
-					dimsMatch(current.BeamM, mBeam) &&
-					dimsMatch(current.DraftM, mDraft)
-			}
-		}
-		if reconfirmed {
-			confirmed = true
-		} else {
-			confirmed = false
-			confirmedBy = nil
-			confirmedAt = nil
-		}
-	} else {
-		confirmedBy = current.ConfirmedBy
-		confirmedAt = current.ConfirmedAt
-	}
+	applyBoatUpdates(&current, req)
+	confirmed, confirmedBy, confirmedAt := h.checkDimensionConfirmation(ctx, &current, oldLength, oldBeam, oldDraft)
 
 	var b boat
 	err = h.db.QueryRow(ctx,
@@ -668,11 +663,11 @@ func (h *MembersHandler) HandleGetDirectory(w http.ResponseWriter, r *http.Reque
 }
 
 type dashboardResponse struct {
-	MembershipStatus     string       `json:"membershipStatus"`
-	QueuePosition        *int         `json:"queuePosition"`
-	QueueTotal           *int         `json:"queueTotal"`
-	Slip                 *dashSlip    `json:"slip"`
-	UpcomingBookingCount int          `json:"upcomingBookingsCount"`
+	MembershipStatus     string    `json:"membershipStatus"`
+	QueuePosition        *int      `json:"queuePosition"`
+	QueueTotal           *int      `json:"queueTotal"`
+	Slip                 *dashSlip `json:"slip"`
+	UpcomingBookingCount int       `json:"upcomingBookingsCount"`
 }
 
 type dashSlip struct {
