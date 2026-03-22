@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/brygge-klubb/brygge/internal/shared"
@@ -17,6 +16,3 @@ func Error(w http.ResponseWriter, status int, message string) {
 	shared.Error(w, status, message)
 }
 
-func jsonUnmarshal(data []byte, v any) error {
-	return json.Unmarshal(data, v)
-}

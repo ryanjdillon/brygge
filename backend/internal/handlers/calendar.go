@@ -105,7 +105,6 @@ func (h *CalendarHandler) HandleListPublicEvents(w http.ResponseWriter, r *http.
 	if tagFilter != "" {
 		query += fmt.Sprintf(` AND tag = $%d`, argIdx)
 		args = append(args, tagFilter)
-		argIdx++
 	}
 	query += ` ORDER BY start_time`
 
@@ -193,7 +192,7 @@ func (h *CalendarHandler) HandleExportICS(w http.ResponseWriter, r *http.Request
 	var b strings.Builder
 	b.WriteString("BEGIN:VCALENDAR\r\n")
 	b.WriteString("VERSION:2.0\r\n")
-	b.WriteString(fmt.Sprintf("PRODID:-//Brygge//%s//EN\r\n", h.config.ClubSlug))
+	fmt.Fprintf(&b, "PRODID:-//Brygge//%s//EN\r\n", h.config.ClubSlug)
 	b.WriteString("CALSCALE:GREGORIAN\r\n")
 	b.WriteString("METHOD:PUBLISH\r\n")
 
@@ -207,15 +206,15 @@ func (h *CalendarHandler) HandleExportICS(w http.ResponseWriter, r *http.Request
 		}
 
 		b.WriteString("BEGIN:VEVENT\r\n")
-		b.WriteString(fmt.Sprintf("UID:%s@brygge\r\n", id))
-		b.WriteString(fmt.Sprintf("DTSTART:%s\r\n", startTime.UTC().Format("20060102T150405Z")))
-		b.WriteString(fmt.Sprintf("DTEND:%s\r\n", endTime.UTC().Format("20060102T150405Z")))
-		b.WriteString(fmt.Sprintf("SUMMARY:%s\r\n", icsEscape(title)))
+		fmt.Fprintf(&b, "UID:%s@brygge\r\n", id)
+		fmt.Fprintf(&b, "DTSTART:%s\r\n", startTime.UTC().Format("20060102T150405Z"))
+		fmt.Fprintf(&b, "DTEND:%s\r\n", endTime.UTC().Format("20060102T150405Z"))
+		fmt.Fprintf(&b, "SUMMARY:%s\r\n", icsEscape(title))
 		if description != "" {
-			b.WriteString(fmt.Sprintf("DESCRIPTION:%s\r\n", icsEscape(description)))
+			fmt.Fprintf(&b, "DESCRIPTION:%s\r\n", icsEscape(description))
 		}
 		if location != "" {
-			b.WriteString(fmt.Sprintf("LOCATION:%s\r\n", icsEscape(location)))
+			fmt.Fprintf(&b, "LOCATION:%s\r\n", icsEscape(location))
 		}
 		b.WriteString("END:VEVENT\r\n")
 	}
