@@ -48,6 +48,9 @@ type Config struct {
 	VAPIDPublicKey  string
 	VAPIDPrivateKey string
 
+	// TOTP
+	TOTPEncryptionKey string // 32-byte hex-encoded key for encrypting TOTP secrets
+
 	// Optional integrations
 	ResendAPIKey      string
 	ResendFromAddress string
@@ -110,6 +113,8 @@ func Load() Config {
 
 		VAPIDPublicKey:  envStr("VAPID_PUBLIC_KEY", ""),
 		VAPIDPrivateKey: envStr("VAPID_PRIVATE_KEY", ""),
+
+		TOTPEncryptionKey: envStr("TOTP_ENCRYPTION_KEY", ""),
 
 		ResendAPIKey:      envStr("RESEND_API_KEY", ""),
 		ResendFromAddress: envStr("RESEND_FROM_ADDRESS", "noreply@example.com"),

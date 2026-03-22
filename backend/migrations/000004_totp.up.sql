@@ -1,0 +1,2 @@
+ALTER TABLE users ADD COLUMN totp_secret_encrypted BYTEA;
+ALTER TABLE users ADD COLUMN totp_enabled BOOLEAN NOT NULL DEFAULT FALSE;

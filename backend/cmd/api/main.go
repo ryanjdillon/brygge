@@ -124,6 +124,7 @@ func main() {
 	auditHandler := handlers.NewAuditHandler(db, auditService, &cfg, log)
 	authHandler := handlers.NewAuthHandler(db, rdb, jwtService, vippsClient, &cfg, log, handlers.WithAuditService(auditService))
 	magicLinkHandler := handlers.NewMagicLinkHandler(db, &cfg, emailClient, sessionService, log)
+	totpHandler := handlers.NewTOTPHandler(db, &cfg, sessionService, auditService, log)
 	waitingListHandler := handlers.NewWaitingListHandler(db, rdb, &cfg, log)
 	adminUsersHandler := handlers.NewAdminUsersHandler(db, &cfg, log)
 	adminSlipsHandler := handlers.NewAdminSlipsHandler(db, &cfg, log)
@@ -414,6 +415,13 @@ func main() {
 
 		r.Route("/admin", func(r chi.Router) {
 			r.Use(middleware.Authenticate(jwtService))
+
+			r.Route("/totp", func(r chi.Router) {
+				r.Use(middleware.RequireRole("admin", "board", "treasurer"))
+				r.Post("/setup", totpHandler.HandleSetup)
+				r.Post("/confirm", totpHandler.HandleConfirm)
+				r.Post("/verify", totpHandler.HandleVerify)
+			})
 
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.RequireRole("board", "admin"))

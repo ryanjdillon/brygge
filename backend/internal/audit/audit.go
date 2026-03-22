@@ -16,6 +16,9 @@ const (
 	ActionTokenRevoked    = "auth.token_revoked"  // #nosec G101 -- not a credential
 	ActionInvalidToken    = "auth.invalid_token" // #nosec G101 -- not a credential
 
+	// TOTP events
+	ActionTOTPVerified = "admin.totp_verified"
+
 	// Admin user operations
 	ActionUserRoleUpdated = "user.role_updated"
 	ActionUserDeleted     = "user.deleted"
