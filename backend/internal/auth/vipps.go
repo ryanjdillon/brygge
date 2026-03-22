@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+
 	"github.com/brygge-klubb/brygge/internal/config"
 )
 
@@ -64,7 +66,7 @@ func NewVippsClient(cfg *config.Config) *VippsClient {
 		SubscriptionKey: cfg.VippsSubscriptionKey,
 		BaseURL:         cfg.VippsBaseURL(),
 		BrowserURL:      cfg.VippsBrowserURL(),
-		HTTPClient:      &http.Client{Timeout: 15 * time.Second},
+		HTTPClient:      &http.Client{Timeout: 15 * time.Second, Transport: otelhttp.NewTransport(http.DefaultTransport)},
 	}
 }
 

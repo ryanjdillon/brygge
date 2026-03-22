@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"time"
 
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
@@ -30,7 +32,7 @@ func NewForumHandler(db *pgxpool.Pool, cfg *config.Config, log zerolog.Logger) *
 		db:     db,
 		config: cfg,
 		log:    log.With().Str("handler", "forum").Logger(),
-		client: &http.Client{Timeout: 15 * time.Second},
+		client: &http.Client{Timeout: 15 * time.Second, Transport: otelhttp.NewTransport(http.DefaultTransport)},
 	}
 }
 

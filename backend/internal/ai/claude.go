@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 const (
@@ -62,7 +64,8 @@ func NewClaudeClient(apiKey string) *ClaudeClient {
 	return &ClaudeClient{
 		APIKey: apiKey,
 		HTTPClient: &http.Client{
-			Timeout: defaultHTTPTimeout,
+			Timeout:   defaultHTTPTimeout,
+			Transport: otelhttp.NewTransport(http.DefaultTransport),
 		},
 	}
 }

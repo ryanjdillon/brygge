@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
 	"github.com/brygge-klubb/brygge/internal/config"
 )
@@ -42,7 +43,7 @@ func NewWeatherHandler(
 		redis:  rdb,
 		config: cfg,
 		log:    log.With().Str("handler", "weather").Logger(),
-		client: &http.Client{Timeout: 10 * time.Second},
+		client: &http.Client{Timeout: 10 * time.Second, Transport: otelhttp.NewTransport(http.DefaultTransport)},
 	}
 }
 
