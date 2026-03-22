@@ -140,6 +140,7 @@ func main() {
 	projectsHandler := handlers.NewProjectsHandler(db, &cfg, log)
 	featureRequestsHandler := handlers.NewFeatureRequestsHandler(db, &cfg, log)
 	financialsHandler := handlers.NewFinancialsHandler(db, &cfg, log)
+	invoiceHandler := handlers.NewInvoiceHandler(db, &cfg, emailClient, log)
 	priceItemsHandler := handlers.NewPriceItemsHandler(db, &cfg, log)
 	productsHandler := handlers.NewProductsHandler(db, &cfg, log)
 	ordersHandler := handlers.NewOrdersHandler(db, &cfg, log)
@@ -480,6 +481,8 @@ func main() {
 					r.Get("/payments/{paymentID}", financialsHandler.HandleGetPaymentDetails)
 					r.Get("/export", financialsHandler.HandleExportCSV)
 					r.Post("/invoices", financialsHandler.HandleGenerateInvoice)
+					r.Post("/invoices/full", invoiceHandler.HandleCreateInvoice)
+					r.Get("/invoices/{invoiceID}/pdf", invoiceHandler.HandleGetInvoicePDF)
 					r.Get("/overdue", financialsHandler.HandleListOverdue)
 				})
 			}
