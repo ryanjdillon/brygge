@@ -346,7 +346,6 @@ func (h *FinancialsHandler) HandleExportCSV(w http.ResponseWriter, r *http.Reque
 		}
 		whereClause += fmt.Sprintf(" AND p.created_at < $%d", argIdx)
 		args = append(args, endDate.AddDate(0, 0, 1))
-		argIdx++
 	}
 
 	query := fmt.Sprintf(`
