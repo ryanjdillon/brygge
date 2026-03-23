@@ -36,6 +36,14 @@ const (
 	ActionDocumentUploaded = "document.uploaded"
 	ActionDocumentDeleted  = "document.deleted"
 
+	// Finance operations
+	ActionInvoiceCreated     = "invoice.created"
+	ActionInvoicePDFGenerated = "invoice.pdf_generated"
+	ActionInvoiceEmailed     = "invoice.emailed"
+	ActionFinanceCSVExported = "finance.csv_exported"
+	ActionPaymentCreated     = "payment.created"
+	ActionPaymentViewed      = "finance.payment_viewed"
+
 	// Booking operations
 	ActionBookingConfirmed = "booking.confirmed"
 

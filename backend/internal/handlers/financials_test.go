@@ -14,7 +14,7 @@ func newTestFinancialsHandler(t *testing.T) *FinancialsHandler {
 	t.Helper()
 	cfg := testConfig()
 	log := zerolog.Nop()
-	return NewFinancialsHandler(nil, cfg, log)
+	return NewFinancialsHandler(nil, cfg, nil, log)
 }
 
 func TestHandleGetFinancialSummaryUnauthenticated(t *testing.T) {
