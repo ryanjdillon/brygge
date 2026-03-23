@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 
+	"github.com/brygge-klubb/brygge/internal/audit"
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/email"
 	"github.com/brygge-klubb/brygge/internal/finance"
@@ -21,6 +22,7 @@ type InvoiceHandler struct {
 	db     *pgxpool.Pool
 	config *config.Config
 	email  email.Sender
+	audit  *audit.Service
 	log    zerolog.Logger
 }
 
@@ -28,12 +30,14 @@ func NewInvoiceHandler(
 	db *pgxpool.Pool,
 	cfg *config.Config,
 	emailClient email.Sender,
+	auditService *audit.Service,
 	log zerolog.Logger,
 ) *InvoiceHandler {
 	return &InvoiceHandler{
 		db:     db,
 		config: cfg,
 		email:  emailClient,
+		audit:  auditService,
 		log:    log.With().Str("handler", "invoices").Logger(),
 	}
 }
@@ -214,7 +218,18 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 			now := time.Now().Format(time.RFC3339)
 			sentAt = &now
 			h.db.Exec(ctx, `UPDATE invoices SET sent_at = NOW() WHERE id = $1`, invoiceID)
+			if h.audit != nil {
+				h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,
+					audit.ActionInvoiceEmailed, "invoice", invoiceID,
+					map[string]any{"email": memberEmail, "invoice_number": invoiceSeq})
+			}
 		}
+	}
+
+	if h.audit != nil {
+		h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,
+			audit.ActionInvoiceCreated, "invoice", invoiceID,
+			map[string]any{"invoice_number": invoiceSeq, "kid": kid, "total": total, "user_id": req.UserID})
 	}
 
 	JSON(w, http.StatusCreated, invoiceResponse{

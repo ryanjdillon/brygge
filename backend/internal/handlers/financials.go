@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 
+	"github.com/brygge-klubb/brygge/internal/audit"
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/middleware"
 )
@@ -20,13 +21,15 @@ import (
 type FinancialsHandler struct {
 	db     *pgxpool.Pool
 	config *config.Config
+	audit  *audit.Service
 	log    zerolog.Logger
 }
 
-func NewFinancialsHandler(db *pgxpool.Pool, cfg *config.Config, log zerolog.Logger) *FinancialsHandler {
+func NewFinancialsHandler(db *pgxpool.Pool, cfg *config.Config, auditService *audit.Service, log zerolog.Logger) *FinancialsHandler {
 	return &FinancialsHandler{
 		db:     db,
 		config: cfg,
+		audit:  auditService,
 		log:    log.With().Str("handler", "financials").Logger(),
 	}
 }
@@ -399,6 +402,12 @@ func (h *FinancialsHandler) HandleExportCSV(w http.ResponseWriter, r *http.Reque
 		})
 	}
 	csvWriter.Flush()
+
+	if h.audit != nil {
+		h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,
+			audit.ActionFinanceCSVExported, "export", "",
+			map[string]any{"type": typeFilter, "status": statusFilter, "year": yearStr})
+	}
 }
 
 func (h *FinancialsHandler) HandleGenerateInvoice(w http.ResponseWriter, r *http.Request) {
@@ -465,11 +474,10 @@ func (h *FinancialsHandler) HandleGenerateInvoice(w http.ResponseWriter, r *http
 	p.UserName = userName
 	p.UserEmail = userEmail
 
-	if auditErr := LogAudit(ctx, h.db, claims.ClubID, claims.UserID, "create_invoice", "payment", p.ID,
-		nil,
-		map[string]any{"type": req.Type, "amount": req.Amount, "user_id": req.UserID, "due_date": req.DueDate},
-	); auditErr != nil {
-		h.log.Error().Err(auditErr).Msg("failed to write audit log")
+	if h.audit != nil {
+		h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,
+			audit.ActionPaymentCreated, "payment", p.ID,
+			map[string]any{"type": req.Type, "amount": req.Amount, "user_id": req.UserID, "due_date": req.DueDate})
 	}
 
 	JSON(w, http.StatusCreated, p)
