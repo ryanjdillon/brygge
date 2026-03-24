@@ -6,9 +6,11 @@ hcloud_token   = ""
 ssh_public_key = "ssh-ed25519 AAAA..."
 
 # ── S3 State Backend (Hetzner Object Storage) ─────────────────
-# These are read as env vars by the tf-plan/tf-apply nix apps
+# Create a bucket and S3 credentials in your Hetzner project
 hetzner_s3_access_key = ""
 hetzner_s3_secret_key = ""
+s3_bucket             = "my-club-tfstate"
+s3_endpoint           = "https://nbg1.your-objectstorage.com"
 
 # ── DNS (managed via hcloud API — same token as above) ────────
 domain = "klubb.no"
