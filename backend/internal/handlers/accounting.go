@@ -1106,3 +1106,160 @@ func (h *AccountingHandler) getReportHeader(ctx context.Context, clubID string, 
 	}
 	return header
 }
+
+// ── Momskompensasjon ────────────────────────────────────────
+
+func (h *AccountingHandler) HandleMomskompensasjon(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	periodID := r.URL.Query().Get("period_id")
+	model := r.URL.Query().Get("model")
+	if periodID == "" {
+		Error(w, http.StatusBadRequest, "period_id is required")
+		return
+	}
+	if model == "" {
+		model = "simplified"
+	}
+
+	report, err := h.svc.Momskompensasjon(r.Context(), claims.ClubID, periodID, model)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to calculate momskompensasjon")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	JSON(w, http.StatusOK, report)
+}
+
+func (h *AccountingHandler) HandleMomskompensasjonPDF(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	periodID := r.URL.Query().Get("period_id")
+	model := r.URL.Query().Get("model")
+	if periodID == "" {
+		Error(w, http.StatusBadRequest, "period_id is required")
+		return
+	}
+	if model == "" {
+		model = "simplified"
+	}
+
+	report, err := h.svc.Momskompensasjon(r.Context(), claims.ClubID, periodID, model)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to calculate momskompensasjon")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	header := h.getReportHeader(r.Context(), claims.ClubID, report.Year)
+	pdfData, err := accounting.MomskompPDF(header, report)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to generate momskomp PDF")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	if h.audit != nil {
+		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,
+			"accounting.momskomp_pdf_generated", "momskomp", periodID,
+			map[string]any{"model": model, "compensation": report.CompensationAmount})
+	}
+
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="momskompensasjon-%d-%s.pdf"`, report.Year, model))
+	w.Write(pdfData)
+}
+
+type saveMomskompRequest struct {
+	PeriodID string `json:"period_id"`
+	Model    string `json:"model"`
+}
+
+func (h *AccountingHandler) HandleSaveMomskompReport(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	var req saveMomskompRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.PeriodID == "" {
+		Error(w, http.StatusBadRequest, "period_id is required")
+		return
+	}
+	if req.Model == "" {
+		req.Model = "simplified"
+	}
+
+	report, err := h.svc.Momskompensasjon(r.Context(), claims.ClubID, req.PeriodID, req.Model)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to calculate momskompensasjon")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	id, err := h.svc.SaveMomskompReport(r.Context(), claims.ClubID, req.PeriodID, req.Model, claims.UserID, report)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to save momskomp report")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	if h.audit != nil {
+		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,
+			"accounting.momskomp_saved", "momskomp", id,
+			map[string]any{"model": req.Model, "compensation": report.CompensationAmount})
+	}
+
+	JSON(w, http.StatusCreated, map[string]any{"id": id, "compensation_amount": report.CompensationAmount})
+}
+
+type updateMomskompStatusRequest struct {
+	Status string `json:"status"`
+}
+
+func (h *AccountingHandler) HandleUpdateMomskompStatus(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	reportID := chi.URLParam(r, "reportID")
+	var req updateMomskompStatusRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.Status != "submitted" && req.Status != "draft" {
+		Error(w, http.StatusBadRequest, "status must be 'draft' or 'submitted'")
+		return
+	}
+
+	if err := h.svc.UpdateMomskompStatus(r.Context(), reportID, req.Status); err != nil {
+		h.log.Error().Err(err).Msg("failed to update momskomp status")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	if h.audit != nil {
+		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,
+			"accounting.momskomp_status_updated", "momskomp", reportID,
+			map[string]any{"status": req.Status})
+	}
+
+	JSON(w, http.StatusOK, map[string]string{"message": "status updated"})
+}

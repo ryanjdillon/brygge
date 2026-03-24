@@ -628,6 +628,10 @@ func main() {
 						r.Get("/balance-sheet/pdf", accountingHandler.HandleBalanceSheetPDF)
 						r.Get("/trial-balance", accountingHandler.HandleTrialBalance)
 						r.Get("/general-ledger", accountingHandler.HandleGeneralLedger)
+						r.Get("/momskomp", accountingHandler.HandleMomskompensasjon)
+						r.Get("/momskomp/pdf", accountingHandler.HandleMomskompensasjonPDF)
+						r.Post("/momskomp", accountingHandler.HandleSaveMomskompReport)
+						r.Put("/momskomp/{reportID}/status", accountingHandler.HandleUpdateMomskompStatus)
 					})
 				})
 			}
