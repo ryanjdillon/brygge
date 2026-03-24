@@ -475,3 +475,75 @@ func (h *AccountingHandler) HandleVoidJournalEntry(w http.ResponseWriter, r *htt
 
 	JSON(w, http.StatusOK, reversal)
 }
+
+// ── Sync ────────────────────────────────────────────────────
+
+type syncRequest struct {
+	PeriodID string `json:"period_id"`
+}
+
+func (h *AccountingHandler) HandleSyncPayments(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	var req syncRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.PeriodID == "" {
+		Error(w, http.StatusBadRequest, "period_id is required")
+		return
+	}
+
+	result, err := h.svc.SyncPayments(r.Context(), claims.ClubID, req.PeriodID, claims.UserID)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to sync payments")
+		Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if h.audit != nil {
+		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,
+			"accounting.payments_synced", "sync", req.PeriodID,
+			map[string]any{"synced": result.Synced, "skipped": result.Skipped})
+	}
+
+	JSON(w, http.StatusOK, result)
+}
+
+func (h *AccountingHandler) HandleSyncInvoices(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	var req syncRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.PeriodID == "" {
+		Error(w, http.StatusBadRequest, "period_id is required")
+		return
+	}
+
+	result, err := h.svc.SyncInvoices(r.Context(), claims.ClubID, req.PeriodID, claims.UserID)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to sync invoices")
+		Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if h.audit != nil {
+		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,
+			"accounting.invoices_synced", "sync", req.PeriodID,
+			map[string]any{"synced": result.Synced, "skipped": result.Skipped})
+	}
+
+	JSON(w, http.StatusOK, result)
+}

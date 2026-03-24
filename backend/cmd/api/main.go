@@ -599,6 +599,11 @@ func main() {
 						r.Post("/{entryID}/post", accountingHandler.HandlePostJournalEntry)
 						r.Post("/{entryID}/void", accountingHandler.HandleVoidJournalEntry)
 					})
+
+					r.Route("/sync", func(r chi.Router) {
+						r.Post("/payments", accountingHandler.HandleSyncPayments)
+						r.Post("/invoices", accountingHandler.HandleSyncInvoices)
+					})
 				})
 			}
 		})
