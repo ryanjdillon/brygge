@@ -73,6 +73,7 @@ type Features struct {
 	Calendar       bool
 	Commerce       bool
 	Communications bool
+	Accounting     bool
 }
 
 func Load() Config {
@@ -126,6 +127,7 @@ func Load() Config {
 			Calendar:       envBool("FEATURE_CALENDAR", true),
 			Commerce:       envBool("FEATURE_COMMERCE", true),
 			Communications: envBool("FEATURE_COMMUNICATIONS", true),
+			Accounting:     envBool("FEATURE_ACCOUNTING", false),
 		},
 	}
 }

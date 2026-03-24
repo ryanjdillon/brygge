@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
 
+	"github.com/brygge-klubb/brygge/internal/accounting"
 	"github.com/brygge-klubb/brygge/internal/auth"
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/middleware"
@@ -760,5 +761,166 @@ func TestIntegration_BookingsFullFlow(t *testing.T) {
 	cancelled := decodeJSON[booking](t, rec)
 	if cancelled.Status != "cancelled" {
 		t.Fatalf("expected cancelled status, got %q", cancelled.Status)
+	}
+}
+
+// ---------- Test 9: Accounting — Seed Kontoplan + CRUD ----------
+
+func (e *integrationEnv) accountingHandler() *AccountingHandler {
+	svc := accounting.NewService(e.db, nil, e.log)
+	return NewAccountingHandler(svc, nil, e.log)
+}
+
+func TestIntegration_AccountingSeedAndCRUD(t *testing.T) {
+	t.Parallel()
+	env := setupIntegrationEnv(t)
+	ah := env.accountingHandler()
+
+	userID, _ := testutil.SeedUser(t, env.db, env.clubID, []string{"treasurer"})
+	token := env.generateToken(userID, []string{"treasurer"})
+
+	r := chi.NewRouter()
+	r.Use(middleware.Authenticate(env.jwt))
+	r.Use(middleware.RequireRole("treasurer", "board", "admin"))
+	r.Get("/accounts", ah.HandleListAccounts)
+	r.Post("/accounts", ah.HandleCreateAccount)
+	r.Put("/accounts/{accountID}", ah.HandleUpdateAccount)
+	r.Delete("/accounts/{accountID}", ah.HandleDeleteAccount)
+	r.Post("/accounts/seed", ah.HandleSeedAccounts)
+
+	// Step 1: List accounts — should be empty initially
+	req := httptest.NewRequest(http.MethodGet, "/accounts", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	assertStatus(t, rec, http.StatusOK)
+
+	var accounts []accounting.Account
+	json.NewDecoder(rec.Body).Decode(&accounts)
+	if len(accounts) != 0 {
+		t.Fatalf("expected 0 accounts before seed, got %d", len(accounts))
+	}
+
+	// Step 2: Seed kontoplan
+	req = httptest.NewRequest(http.MethodPost, "/accounts/seed", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	assertStatus(t, rec, http.StatusOK)
+
+	var seedResult map[string]any
+	json.NewDecoder(rec.Body).Decode(&seedResult)
+	seeded := int(seedResult["seeded"].(float64))
+	if seeded < 25 {
+		t.Fatalf("expected at least 25 seeded accounts, got %d", seeded)
+	}
+
+	// Step 3: Seed again — should be idempotent (0 new accounts)
+	req = httptest.NewRequest(http.MethodPost, "/accounts/seed", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	assertStatus(t, rec, http.StatusOK)
+
+	json.NewDecoder(rec.Body).Decode(&seedResult)
+	if int(seedResult["seeded"].(float64)) != 0 {
+		t.Fatalf("expected 0 seeded on second run, got %v", seedResult["seeded"])
+	}
+
+	// Step 4: List accounts — should have seeded accounts
+	req = httptest.NewRequest(http.MethodGet, "/accounts", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	assertStatus(t, rec, http.StatusOK)
+
+	json.NewDecoder(rec.Body).Decode(&accounts)
+	if len(accounts) < 25 {
+		t.Fatalf("expected at least 25 accounts after seed, got %d", len(accounts))
+	}
+
+	// Verify boat costs are ineligible
+	for _, a := range accounts {
+		if a.Code == "6100" && a.MVAEligible != "ineligible" {
+			t.Errorf("account 6100 (bryggeanlegg) should be ineligible, got %q", a.MVAEligible)
+		}
+		if a.Code == "6200" && a.MVAEligible != "eligible" {
+			t.Errorf("account 6200 (klubbhus) should be eligible, got %q", a.MVAEligible)
+		}
+	}
+
+	// Step 5: Create custom account
+	body := jsonBody(t, map[string]any{
+		"code":         "8000",
+		"name":         "Ekstraordinære kostnader",
+		"account_type": "expense",
+		"mva_eligible": "ineligible",
+		"sort_order":   400,
+	})
+	req = httptest.NewRequest(http.MethodPost, "/accounts", body)
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	assertStatus(t, rec, http.StatusCreated)
+
+	var created map[string]string
+	json.NewDecoder(rec.Body).Decode(&created)
+	customID := created["id"]
+	if customID == "" {
+		t.Fatal("expected account ID in response")
+	}
+
+	// Step 6: Update custom account
+	body = jsonBody(t, map[string]any{
+		"name":         "Ekstraordinære utgifter",
+		"description":  "Uforutsette kostnader",
+		"mva_eligible": "eligible",
+	})
+	req = httptest.NewRequest(http.MethodPut, "/accounts/"+customID, body)
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	assertStatus(t, rec, http.StatusOK)
+
+	// Step 7: Delete custom account (should work — no journal lines)
+	req = httptest.NewRequest(http.MethodDelete, "/accounts/"+customID, nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	assertStatus(t, rec, http.StatusOK)
+
+	// Step 8: Try to delete a system account — should fail
+	var systemAccountID string
+	env.db.QueryRow(context.Background(),
+		`SELECT id FROM accounts WHERE club_id = $1 AND is_system = true LIMIT 1`,
+		env.clubID,
+	).Scan(&systemAccountID)
+
+	if systemAccountID != "" {
+		req = httptest.NewRequest(http.MethodDelete, "/accounts/"+systemAccountID, nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec = httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400 for system account delete, got %d; body: %s", rec.Code, rec.Body.String())
+		}
+	}
+
+	// Step 9: Try to update a system account — should fail
+	if systemAccountID != "" {
+		body = jsonBody(t, map[string]any{
+			"name":         "Hacked",
+			"mva_eligible": "eligible",
+		})
+		req = httptest.NewRequest(http.MethodPut, "/accounts/"+systemAccountID, body)
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Content-Type", "application/json")
+		rec = httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400 for system account update, got %d", rec.Code)
+		}
 	}
 }
