@@ -620,6 +620,15 @@ func main() {
 						r.Put("/{ruleID}", accountingHandler.HandleUpdateRule)
 						r.Delete("/{ruleID}", accountingHandler.HandleDeleteRule)
 					})
+
+					r.Route("/reports", func(r chi.Router) {
+						r.Get("/income-statement", accountingHandler.HandleIncomeStatement)
+						r.Get("/income-statement/pdf", accountingHandler.HandleIncomeStatementPDF)
+						r.Get("/balance-sheet", accountingHandler.HandleBalanceSheet)
+						r.Get("/balance-sheet/pdf", accountingHandler.HandleBalanceSheetPDF)
+						r.Get("/trial-balance", accountingHandler.HandleTrialBalance)
+						r.Get("/general-ledger", accountingHandler.HandleGeneralLedger)
+					})
 				})
 			}
 		})
