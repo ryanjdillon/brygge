@@ -924,3 +924,193 @@ func TestIntegration_AccountingSeedAndCRUD(t *testing.T) {
 		}
 	}
 }
+
+// ---------- Test 10: Accounting — Journal Entry Lifecycle ----------
+
+func TestIntegration_JournalEntryLifecycle(t *testing.T) {
+	t.Parallel()
+	env := setupIntegrationEnv(t)
+	ah := env.accountingHandler()
+
+	userID, _ := testutil.SeedUser(t, env.db, env.clubID, []string{"treasurer"})
+	token := env.generateToken(userID, []string{"treasurer"})
+
+	r := chi.NewRouter()
+	r.Use(middleware.Authenticate(env.jwt))
+	r.Use(middleware.RequireRole("treasurer", "board", "admin"))
+	r.Post("/accounts/seed", ah.HandleSeedAccounts)
+	r.Post("/periods", ah.HandleCreatePeriod)
+	r.Post("/periods/{periodID}/close", ah.HandleClosePeriod)
+	r.Post("/periods/{periodID}/reopen", ah.HandleReopenPeriod)
+	r.Get("/journal", ah.HandleListJournalEntries)
+	r.Post("/journal", ah.HandleCreateJournalEntry)
+	r.Get("/journal/{entryID}", ah.HandleGetJournalEntry)
+	r.Post("/journal/{entryID}/post", ah.HandlePostJournalEntry)
+	r.Post("/journal/{entryID}/void", ah.HandleVoidJournalEntry)
+
+	auth := "Bearer " + token
+
+	// Step 1: Seed kontoplan
+	req := httptest.NewRequest(http.MethodPost, "/accounts/seed", nil)
+	req.Header.Set("Authorization", auth)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	assertStatus(t, rec, http.StatusOK)
+
+	// Step 2: Create fiscal period
+	body := jsonBody(t, map[string]any{"year": 2026})
+	req = httptest.NewRequest(http.MethodPost, "/periods", body)
+	req.Header.Set("Authorization", auth)
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	assertStatus(t, rec, http.StatusCreated)
+
+	var period accounting.FiscalPeriod
+	json.NewDecoder(rec.Body).Decode(&period)
+	periodID := period.ID
+	if period.Year != 2026 || period.Status != "open" {
+		t.Fatalf("unexpected period: year=%d status=%s", period.Year, period.Status)
+	}
+
+	// Step 3: Create balanced journal entry (draft)
+	body = jsonBody(t, map[string]any{
+		"fiscal_period_id": periodID,
+		"entry_date":       "2026-03-15",
+		"description":      "Strømregning mars",
+		"lines": []map[string]any{
+			{"account_code": "6300", "debit": 2500.00, "credit": 0, "mva_amount": 625.00, "description": "Strøm"},
+			{"account_code": "1920", "debit": 0, "credit": 2500.00, "description": ""},
+		},
+	})
+	req = httptest.NewRequest(http.MethodPost, "/journal", body)
+	req.Header.Set("Authorization", auth)
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	assertStatus(t, rec, http.StatusCreated)
+
+	var entry accounting.JournalEntry
+	json.NewDecoder(rec.Body).Decode(&entry)
+	entryID := entry.ID
+	if entry.Status != "draft" {
+		t.Fatalf("expected draft, got %s", entry.Status)
+	}
+	if entry.EntryNumber != 1 {
+		t.Fatalf("expected entry_number 1, got %d", entry.EntryNumber)
+	}
+	if len(entry.Lines) != 2 {
+		t.Fatalf("expected 2 lines, got %d", len(entry.Lines))
+	}
+
+	// Step 4: Get the entry
+	req = httptest.NewRequest(http.MethodGet, "/journal/"+entryID, nil)
+	req.Header.Set("Authorization", auth)
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	assertStatus(t, rec, http.StatusOK)
+
+	// Step 5: Post the entry
+	req = httptest.NewRequest(http.MethodPost, "/journal/"+entryID+"/post", nil)
+	req.Header.Set("Authorization", auth)
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	assertStatus(t, rec, http.StatusOK)
+
+	// Step 6: Try to post again — should fail (not draft)
+	req = httptest.NewRequest(http.MethodPost, "/journal/"+entryID+"/post", nil)
+	req.Header.Set("Authorization", auth)
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for double-post, got %d", rec.Code)
+	}
+
+	// Step 7: Void the entry
+	req = httptest.NewRequest(http.MethodPost, "/journal/"+entryID+"/void", nil)
+	req.Header.Set("Authorization", auth)
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	assertStatus(t, rec, http.StatusOK)
+
+	var reversal accounting.JournalEntry
+	json.NewDecoder(rec.Body).Decode(&reversal)
+	if reversal.Status != "posted" {
+		t.Fatalf("reversal should be posted, got %s", reversal.Status)
+	}
+	if reversal.EntryNumber != 2 {
+		t.Fatalf("reversal should be entry #2, got %d", reversal.EntryNumber)
+	}
+
+	// Step 8: Verify original is now voided
+	req = httptest.NewRequest(http.MethodGet, "/journal/"+entryID, nil)
+	req.Header.Set("Authorization", auth)
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	assertStatus(t, rec, http.StatusOK)
+
+	json.NewDecoder(rec.Body).Decode(&entry)
+	if entry.Status != "voided" {
+		t.Fatalf("original should be voided, got %s", entry.Status)
+	}
+
+	// Step 9: Create unbalanced entry and try to post — should fail
+	body = jsonBody(t, map[string]any{
+		"fiscal_period_id": periodID,
+		"entry_date":       "2026-03-16",
+		"description":      "Unbalanced test",
+		"lines": []map[string]any{
+			{"account_code": "6500", "debit": 1000.00, "credit": 0},
+			{"account_code": "1920", "debit": 0, "credit": 999.00},
+		},
+	})
+	req = httptest.NewRequest(http.MethodPost, "/journal", body)
+	req.Header.Set("Authorization", auth)
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	assertStatus(t, rec, http.StatusCreated)
+
+	var unbalanced accounting.JournalEntry
+	json.NewDecoder(rec.Body).Decode(&unbalanced)
+
+	req = httptest.NewRequest(http.MethodPost, "/journal/"+unbalanced.ID+"/post", nil)
+	req.Header.Set("Authorization", auth)
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for unbalanced post, got %d; body: %s", rec.Code, rec.Body.String())
+	}
+
+	// Step 10: Close period, try to create entry — should fail
+	req = httptest.NewRequest(http.MethodPost, "/periods/"+periodID+"/close", nil)
+	req.Header.Set("Authorization", auth)
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	assertStatus(t, rec, http.StatusOK)
+
+	body = jsonBody(t, map[string]any{
+		"fiscal_period_id": periodID,
+		"entry_date":       "2026-03-17",
+		"description":      "Should fail",
+		"lines": []map[string]any{
+			{"account_code": "6600", "debit": 100.00, "credit": 0},
+			{"account_code": "1920", "debit": 0, "credit": 100.00},
+		},
+	})
+	req = httptest.NewRequest(http.MethodPost, "/journal", body)
+	req.Header.Set("Authorization", auth)
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("expected 409 for closed period, got %d; body: %s", rec.Code, rec.Body.String())
+	}
+
+	// Step 11: Reopen period — should work
+	req = httptest.NewRequest(http.MethodPost, "/periods/"+periodID+"/reopen", nil)
+	req.Header.Set("Authorization", auth)
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	assertStatus(t, rec, http.StatusOK)
+}
