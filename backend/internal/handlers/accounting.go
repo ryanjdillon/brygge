@@ -547,3 +547,221 @@ func (h *AccountingHandler) HandleSyncInvoices(w http.ResponseWriter, r *http.Re
 
 	JSON(w, http.StatusOK, result)
 }
+
+// ── Bank Import ─────────────────────────────────────────────
+
+func (h *AccountingHandler) HandleListBankFormats(w http.ResponseWriter, r *http.Request) {
+	JSON(w, http.StatusOK, accounting.ListBankFormats())
+}
+
+func (h *AccountingHandler) HandleImportBankStatement(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		Error(w, http.StatusBadRequest, "file too large or invalid multipart form")
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		Error(w, http.StatusBadRequest, "file is required")
+		return
+	}
+	defer file.Close()
+
+	formatName := r.FormValue("format")
+	periodID := r.FormValue("period_id")
+	if formatName == "" || periodID == "" {
+		Error(w, http.StatusBadRequest, "format and period_id are required")
+		return
+	}
+
+	bankFormat, ok := accounting.BankFormats[formatName]
+	if !ok {
+		Error(w, http.StatusBadRequest, "unknown bank format: "+formatName)
+		return
+	}
+
+	parser := &accounting.CSVParser{Format: bankFormat}
+	rows, err := parser.Parse(file)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to parse CSV")
+		Error(w, http.StatusBadRequest, "failed to parse CSV: "+err.Error())
+		return
+	}
+
+	var importID string
+	err = h.svc.DB().QueryRow(r.Context(),
+		`INSERT INTO bank_imports (club_id, filename, format, imported_by, row_count)
+		 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+		claims.ClubID, header.Filename, formatName, claims.UserID, len(rows),
+	).Scan(&importID)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to create import record")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	matched, err := h.svc.ImportBankRows(r.Context(), claims.ClubID, importID, periodID, rows)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to import bank rows")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	h.svc.DB().Exec(r.Context(), `UPDATE bank_imports SET matched_count = $1 WHERE id = $2`, matched, importID)
+
+	if h.audit != nil {
+		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,
+			"accounting.bank_imported", "bank_import", importID,
+			map[string]any{"filename": header.Filename, "format": formatName, "rows": len(rows), "matched": matched})
+	}
+
+	JSON(w, http.StatusCreated, map[string]any{
+		"id": importID, "filename": header.Filename, "format": formatName,
+		"rows": len(rows), "matched": matched,
+	})
+}
+
+func (h *AccountingHandler) HandleGetBankImport(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	importID := chi.URLParam(r, "importID")
+	dbRows, err := h.svc.DB().Query(r.Context(),
+		`SELECT bir.id, bir.row_date::text, bir.description, bir.amount, bir.balance, bir.reference,
+		        bir.kid_number, bir.counterpart, bir.journal_entry_id, bir.auto_matched
+		 FROM bank_import_rows bir JOIN bank_imports bi ON bi.id = bir.bank_import_id
+		 WHERE bi.id = $1 AND bi.club_id = $2 ORDER BY bir.row_date`,
+		importID, claims.ClubID,
+	)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to get bank import rows")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	defer dbRows.Close()
+
+	type importRow struct {
+		ID             string   `json:"id"`
+		Date           string   `json:"date"`
+		Description    string   `json:"description"`
+		Amount         float64  `json:"amount"`
+		Balance        *float64 `json:"balance"`
+		Reference      string   `json:"reference"`
+		KID            string   `json:"kid_number"`
+		Counterpart    string   `json:"counterpart"`
+		JournalEntryID *string  `json:"journal_entry_id"`
+		AutoMatched    bool     `json:"auto_matched"`
+	}
+	var importRows []importRow
+	for dbRows.Next() {
+		var row importRow
+		if err := dbRows.Scan(&row.ID, &row.Date, &row.Description, &row.Amount, &row.Balance,
+			&row.Reference, &row.KID, &row.Counterpart, &row.JournalEntryID, &row.AutoMatched); err != nil {
+			continue
+		}
+		importRows = append(importRows, row)
+	}
+	if importRows == nil {
+		importRows = []importRow{}
+	}
+	JSON(w, http.StatusOK, importRows)
+}
+
+func (h *AccountingHandler) HandleListUnmatchedRows(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	importID := chi.URLParam(r, "importID")
+	dbRows, err := h.svc.DB().Query(r.Context(),
+		`SELECT bir.id, bir.row_date::text, bir.description, bir.amount, bir.balance, bir.reference,
+		        bir.kid_number, bir.counterpart
+		 FROM bank_import_rows bir JOIN bank_imports bi ON bi.id = bir.bank_import_id
+		 WHERE bi.id = $1 AND bi.club_id = $2 AND bir.journal_entry_id IS NULL
+		 ORDER BY bir.row_date`,
+		importID, claims.ClubID,
+	)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to get unmatched rows")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	defer dbRows.Close()
+
+	type unmatchedRow struct {
+		ID          string   `json:"id"`
+		Date        string   `json:"date"`
+		Description string   `json:"description"`
+		Amount      float64  `json:"amount"`
+		Balance     *float64 `json:"balance"`
+		Reference   string   `json:"reference"`
+		KID         string   `json:"kid_number"`
+		Counterpart string   `json:"counterpart"`
+	}
+	var result []unmatchedRow
+	for dbRows.Next() {
+		var row unmatchedRow
+		if err := dbRows.Scan(&row.ID, &row.Date, &row.Description, &row.Amount, &row.Balance,
+			&row.Reference, &row.KID, &row.Counterpart); err != nil {
+			continue
+		}
+		result = append(result, row)
+	}
+	if result == nil {
+		result = []unmatchedRow{}
+	}
+	JSON(w, http.StatusOK, result)
+}
+
+type matchRowRequest struct {
+	PeriodID          string  `json:"period_id"`
+	DebitAccountCode  string  `json:"debit_account_code"`
+	CreditAccountCode string  `json:"credit_account_code"`
+	MVAAmount         float64 `json:"mva_amount"`
+}
+
+func (h *AccountingHandler) HandleMatchBankRow(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	rowID := chi.URLParam(r, "rowID")
+	var req matchRowRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.PeriodID == "" || req.DebitAccountCode == "" || req.CreditAccountCode == "" {
+		Error(w, http.StatusBadRequest, "period_id, debit_account_code, and credit_account_code are required")
+		return
+	}
+
+	err := h.svc.MatchBankRow(r.Context(), claims.ClubID, req.PeriodID, rowID,
+		req.DebitAccountCode, req.CreditAccountCode, claims.UserID, req.MVAAmount)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to match bank row")
+		Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if h.audit != nil {
+		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,
+			"accounting.bank_row_matched", "bank_import_row", rowID,
+			map[string]any{"debit": req.DebitAccountCode, "credit": req.CreditAccountCode})
+	}
+
+	JSON(w, http.StatusOK, map[string]string{"message": "row matched"})
+}
