@@ -89,19 +89,28 @@
             set -euo pipefail
             cd "$(${pkgs.git}/bin/git rev-parse --show-toplevel)/terraform"
             [[ -f terraform.tfvars ]] || { echo "error: terraform/terraform.tfvars not found (copy from terraform.tfvars.example)"; exit 1; }
+
+            # Read backend config from tfvars
             export AWS_ACCESS_KEY_ID=$(${pkgs.gnugrep}/bin/grep -oP 'hetzner_s3_access_key\s*=\s*"\K[^"]+' terraform.tfvars)
             export AWS_SECRET_ACCESS_KEY=$(${pkgs.gnugrep}/bin/grep -oP 'hetzner_s3_secret_key\s*=\s*"\K[^"]+' terraform.tfvars)
+            S3_BUCKET=$(${pkgs.gnugrep}/bin/grep -oP 's3_bucket\s*=\s*"\K[^"]+' terraform.tfvars)
+            S3_ENDPOINT=$(${pkgs.gnugrep}/bin/grep -oP 's3_endpoint\s*=\s*"\K[^"]+' terraform.tfvars)
+
             if [[ -e config.tf.json ]]; then rm -f config.tf.json; fi
             cp ${terraformConfiguration} config.tf.json
-            echo "backend bucket: $(${pkgs.jq}/bin/jq -r '.terraform.backend.s3.bucket' config.tf.json)"
-            echo "backend endpoint: $(${pkgs.jq}/bin/jq -r '.terraform.backend.s3.endpoints.s3' config.tf.json)"
+
+            echo "backend bucket: $S3_BUCKET"
+            echo "backend endpoint: $S3_ENDPOINT"
             echo "AWS_ACCESS_KEY_ID is set: $([ -n "$AWS_ACCESS_KEY_ID" ] && echo yes || echo no)"
             echo "testing S3 access..."
             ${pkgs.curl}/bin/curl -s -o /dev/null -w "S3 HEAD bucket: HTTP %{http_code}\n" \
-              --head "https://brygge-tfstate.fsn1.your-objectstorage.com/" \
+              --head "$S3_ENDPOINT/$S3_BUCKET" \
               --aws-sigv4 "aws:amz:eu-central-1:s3" \
               --user "$AWS_ACCESS_KEY_ID:$AWS_SECRET_ACCESS_KEY"
-            ${pkgs.opentofu}/bin/tofu init
+
+            ${pkgs.opentofu}/bin/tofu init \
+              -backend-config="bucket=$S3_BUCKET" \
+              -backend-config="endpoints={s3=\"$S3_ENDPOINT\"}"
             ${pkgs.opentofu}/bin/tofu plan "$@"
           '');
         };
@@ -113,11 +122,19 @@
             set -euo pipefail
             cd "$(${pkgs.git}/bin/git rev-parse --show-toplevel)/terraform"
             [[ -f terraform.tfvars ]] || { echo "error: terraform/terraform.tfvars not found (copy from terraform.tfvars.example)"; exit 1; }
+
+            # Read backend config from tfvars
             export AWS_ACCESS_KEY_ID=$(${pkgs.gnugrep}/bin/grep -oP 'hetzner_s3_access_key\s*=\s*"\K[^"]+' terraform.tfvars)
             export AWS_SECRET_ACCESS_KEY=$(${pkgs.gnugrep}/bin/grep -oP 'hetzner_s3_secret_key\s*=\s*"\K[^"]+' terraform.tfvars)
+            S3_BUCKET=$(${pkgs.gnugrep}/bin/grep -oP 's3_bucket\s*=\s*"\K[^"]+' terraform.tfvars)
+            S3_ENDPOINT=$(${pkgs.gnugrep}/bin/grep -oP 's3_endpoint\s*=\s*"\K[^"]+' terraform.tfvars)
+
             if [[ -e config.tf.json ]]; then rm -f config.tf.json; fi
             cp ${terraformConfiguration} config.tf.json
-            ${pkgs.opentofu}/bin/tofu init
+
+            ${pkgs.opentofu}/bin/tofu init \
+              -backend-config="bucket=$S3_BUCKET" \
+              -backend-config="endpoints={s3=\"$S3_ENDPOINT\"}"
             ${pkgs.opentofu}/bin/tofu apply "$@"
           '');
         };

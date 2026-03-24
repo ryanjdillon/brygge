@@ -19,6 +19,14 @@
       sensitive   = true;
       description = "Hetzner Object Storage secret key (used by backend via env vars)";
     };
+    s3_bucket = {
+      type        = "string";
+      description = "S3 bucket name for Terraform state";
+    };
+    s3_endpoint = {
+      type        = "string";
+      description = "S3-compatible endpoint URL (e.g. https://nbg1.your-objectstorage.com)";
+    };
     server_name = {
       type    = "string";
       default = "brygge";
