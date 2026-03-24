@@ -576,11 +576,29 @@ func main() {
 			if cfg.Features.Accounting {
 				r.Route("/accounting", func(r chi.Router) {
 					r.Use(middleware.RequireRole("treasurer", "board", "admin"))
-					r.Get("/accounts", accountingHandler.HandleListAccounts)
-					r.Post("/accounts", accountingHandler.HandleCreateAccount)
-					r.Put("/accounts/{accountID}", accountingHandler.HandleUpdateAccount)
-					r.Delete("/accounts/{accountID}", accountingHandler.HandleDeleteAccount)
-					r.Post("/accounts/seed", accountingHandler.HandleSeedAccounts)
+
+					r.Route("/accounts", func(r chi.Router) {
+						r.Get("/", accountingHandler.HandleListAccounts)
+						r.Post("/", accountingHandler.HandleCreateAccount)
+						r.Put("/{accountID}", accountingHandler.HandleUpdateAccount)
+						r.Delete("/{accountID}", accountingHandler.HandleDeleteAccount)
+						r.Post("/seed", accountingHandler.HandleSeedAccounts)
+					})
+
+					r.Route("/periods", func(r chi.Router) {
+						r.Get("/", accountingHandler.HandleListPeriods)
+						r.Post("/", accountingHandler.HandleCreatePeriod)
+						r.Post("/{periodID}/close", accountingHandler.HandleClosePeriod)
+						r.Post("/{periodID}/reopen", accountingHandler.HandleReopenPeriod)
+					})
+
+					r.Route("/journal", func(r chi.Router) {
+						r.Get("/", accountingHandler.HandleListJournalEntries)
+						r.Post("/", accountingHandler.HandleCreateJournalEntry)
+						r.Get("/{entryID}", accountingHandler.HandleGetJournalEntry)
+						r.Post("/{entryID}/post", accountingHandler.HandlePostJournalEntry)
+						r.Post("/{entryID}/void", accountingHandler.HandleVoidJournalEntry)
+					})
 				})
 			}
 		})
