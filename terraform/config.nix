@@ -5,5 +5,6 @@
     ./variables.nix
     ./outputs.nix
     ./server.nix
+    ./dns.nix
   ];
 }

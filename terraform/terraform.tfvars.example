@@ -10,6 +10,9 @@ ssh_public_key = "ssh-ed25519 AAAA..."
 hetzner_s3_access_key = ""
 hetzner_s3_secret_key = ""
 
+# ── DNS (managed via hcloud API — same token as above) ────────
+domain = "klubb.no"
+
 # ── Optional overrides (defaults shown) ────────────────────────
 # server_name = "brygge"
 # server_type = "cax11"       # ARM64: cax11 (2vCPU/4GB), cax21 (4vCPU/8GB)
