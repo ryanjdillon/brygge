@@ -611,6 +611,14 @@ func main() {
 						r.Get("/{importID}", accountingHandler.HandleGetBankImport)
 						r.Get("/{importID}/unmatched", accountingHandler.HandleListUnmatchedRows)
 						r.Post("/{importID}/rows/{rowID}/match", accountingHandler.HandleMatchBankRow)
+						r.Post("/{importID}/auto-match", accountingHandler.HandleAutoMatchImport)
+					})
+
+					r.Route("/rules", func(r chi.Router) {
+						r.Get("/", accountingHandler.HandleListRules)
+						r.Post("/", accountingHandler.HandleCreateRule)
+						r.Put("/{ruleID}", accountingHandler.HandleUpdateRule)
+						r.Delete("/{ruleID}", accountingHandler.HandleDeleteRule)
 					})
 				})
 			}
