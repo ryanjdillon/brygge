@@ -37,5 +37,11 @@
       type    = "string";
       default = "debian-12";
     };
+
+    # DNS
+    domain = {
+      type        = "string";
+      description = "Primary domain for the club (e.g. klubb.no)";
+    };
   };
 }

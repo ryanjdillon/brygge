@@ -13,7 +13,13 @@ This guide covers deploying Brygge to production. For the full initial setup wal
 
 ### DNS Records
 
-Point the following A records to your server's IP address:
+If using the Terranix infrastructure (`just tf-apply`), DNS records are created automatically via the Hetzner DNS provider. After the first apply, point your domain registrar's nameservers to Hetzner's:
+
+- `hydrogen.ns.hetzner.com`
+- `oxygen.ns.hetzner.com`
+- `helium.ns.hetzner.de`
+
+The following A records are managed by Terraform (all pointing to the server's IPv4 address):
 
 | Type | Name       | Value         |
 |------|------      |-------        |
@@ -21,6 +27,8 @@ Point the following A records to your server's IP address:
 | A    | `matrix`   | `<server IP>` |
 | A    | `element`  | `<server IP>` |
 | A    | `status`   | `<server IP>` |
+
+If not using Terraform, create these records manually at your DNS provider.
 
 ---
 
