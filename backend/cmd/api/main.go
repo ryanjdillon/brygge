@@ -19,6 +19,7 @@ import (
 	"github.com/rs/zerolog"
 
 	backend "github.com/brygge-klubb/brygge"
+	"github.com/brygge-klubb/brygge/internal/accounting"
 	"github.com/brygge-klubb/brygge/internal/ai"
 	"github.com/brygge-klubb/brygge/internal/audit"
 	"github.com/brygge-klubb/brygge/internal/auth"
@@ -141,6 +142,8 @@ func main() {
 	featureRequestsHandler := handlers.NewFeatureRequestsHandler(db, &cfg, log)
 	financialsHandler := handlers.NewFinancialsHandler(db, &cfg, auditService, log)
 	invoiceHandler := handlers.NewInvoiceHandler(db, &cfg, emailClient, auditService, log)
+	accountingSvc := accounting.NewService(db, auditService, log)
+	accountingHandler := handlers.NewAccountingHandler(accountingSvc, auditService, log)
 	priceItemsHandler := handlers.NewPriceItemsHandler(db, &cfg, log)
 	productsHandler := handlers.NewProductsHandler(db, &cfg, log)
 	ordersHandler := handlers.NewOrdersHandler(db, &cfg, log)
@@ -569,6 +572,17 @@ func main() {
 				r.Get("/legal", gdprHandler.HandleAdminListLegalDocuments)
 				r.Post("/legal", gdprHandler.HandleAdminCreateLegalDocument)
 			})
+
+			if cfg.Features.Accounting {
+				r.Route("/accounting", func(r chi.Router) {
+					r.Use(middleware.RequireRole("treasurer", "board", "admin"))
+					r.Get("/accounts", accountingHandler.HandleListAccounts)
+					r.Post("/accounts", accountingHandler.HandleCreateAccount)
+					r.Put("/accounts/{accountID}", accountingHandler.HandleUpdateAccount)
+					r.Delete("/accounts/{accountID}", accountingHandler.HandleDeleteAccount)
+					r.Post("/accounts/seed", accountingHandler.HandleSeedAccounts)
+				})
+			}
 		})
 	})
 
