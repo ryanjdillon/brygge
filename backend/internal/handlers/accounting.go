@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -931,4 +933,176 @@ func (h *AccountingHandler) HandleAutoMatchImport(w http.ResponseWriter, r *http
 	}
 
 	JSON(w, http.StatusOK, map[string]any{"matched": matched})
+}
+
+// ── Reports ─────────────────────────────────────────────────
+
+func (h *AccountingHandler) HandleIncomeStatement(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	periodID := r.URL.Query().Get("period_id")
+	if periodID == "" {
+		Error(w, http.StatusBadRequest, "period_id is required")
+		return
+	}
+
+	stmt, err := h.svc.IncomeStatement(r.Context(), claims.ClubID, periodID)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to generate income statement")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	JSON(w, http.StatusOK, stmt)
+}
+
+func (h *AccountingHandler) HandleIncomeStatementPDF(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	periodID := r.URL.Query().Get("period_id")
+	if periodID == "" {
+		Error(w, http.StatusBadRequest, "period_id is required")
+		return
+	}
+
+	stmt, err := h.svc.IncomeStatement(r.Context(), claims.ClubID, periodID)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to generate income statement")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	header := h.getReportHeader(r.Context(), claims.ClubID, stmt.Year)
+	pdfData, err := accounting.IncomeStatementPDF(header, stmt)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to generate PDF")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="resultatregnskap-%d.pdf"`, stmt.Year))
+	w.Write(pdfData)
+}
+
+func (h *AccountingHandler) HandleBalanceSheet(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	periodID := r.URL.Query().Get("period_id")
+	if periodID == "" {
+		Error(w, http.StatusBadRequest, "period_id is required")
+		return
+	}
+
+	bs, err := h.svc.BalanceSheet(r.Context(), claims.ClubID, periodID)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to generate balance sheet")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	JSON(w, http.StatusOK, bs)
+}
+
+func (h *AccountingHandler) HandleBalanceSheetPDF(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	periodID := r.URL.Query().Get("period_id")
+	if periodID == "" {
+		Error(w, http.StatusBadRequest, "period_id is required")
+		return
+	}
+
+	bs, err := h.svc.BalanceSheet(r.Context(), claims.ClubID, periodID)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to generate balance sheet")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	header := h.getReportHeader(r.Context(), claims.ClubID, bs.Year)
+	pdfData, err := accounting.BalanceSheetPDF(header, bs)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to generate PDF")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="balanse-%d.pdf"`, bs.Year))
+	w.Write(pdfData)
+}
+
+func (h *AccountingHandler) HandleTrialBalance(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	periodID := r.URL.Query().Get("period_id")
+	if periodID == "" {
+		Error(w, http.StatusBadRequest, "period_id is required")
+		return
+	}
+
+	tb, err := h.svc.TrialBalance(r.Context(), claims.ClubID, periodID)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to generate trial balance")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	JSON(w, http.StatusOK, tb)
+}
+
+func (h *AccountingHandler) HandleGeneralLedger(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	periodID := r.URL.Query().Get("period_id")
+	accountID := r.URL.Query().Get("account_id")
+	if periodID == "" || accountID == "" {
+		Error(w, http.StatusBadRequest, "period_id and account_id are required")
+		return
+	}
+
+	gl, err := h.svc.GeneralLedger(r.Context(), claims.ClubID, periodID, accountID)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to generate general ledger")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	JSON(w, http.StatusOK, gl)
+}
+
+func (h *AccountingHandler) getReportHeader(ctx context.Context, clubID string, year int) accounting.ReportHeader {
+	header := accounting.ReportHeader{Year: year}
+	if h.svc.DB() != nil {
+		h.svc.DB().QueryRow(ctx,
+			`SELECT name, COALESCE(org_number, '') FROM clubs WHERE id = $1`,
+			clubID,
+		).Scan(&header.ClubName, &header.OrgNumber)
+	}
+	return header
 }
