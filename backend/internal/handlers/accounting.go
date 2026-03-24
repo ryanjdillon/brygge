@@ -765,3 +765,170 @@ func (h *AccountingHandler) HandleMatchBankRow(w http.ResponseWriter, r *http.Re
 
 	JSON(w, http.StatusOK, map[string]string{"message": "row matched"})
 }
+
+// ── Mapping Rules ───────────────────────────────────────────
+
+func (h *AccountingHandler) HandleListRules(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	rules, err := h.svc.ListRules(r.Context(), claims.ClubID)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to list rules")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if rules == nil {
+		rules = []accounting.MappingRule{}
+	}
+	JSON(w, http.StatusOK, rules)
+}
+
+type createRuleRequest struct {
+	Name              string                    `json:"name"`
+	Priority          int                       `json:"priority"`
+	MatchField        string                    `json:"match_field"`
+	MatchValue        string                    `json:"match_value"`
+	MatchOperator     string                    `json:"match_operator"`
+	DebitAccountCode  string                    `json:"debit_account_code"`
+	CreditAccountCode string                    `json:"credit_account_code"`
+	MVAEligible       accounting.MVAEligibility `json:"mva_eligible"`
+}
+
+func (h *AccountingHandler) HandleCreateRule(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	var req createRuleRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.Name == "" || req.MatchField == "" || req.MatchValue == "" {
+		Error(w, http.StatusBadRequest, "name, match_field, and match_value are required")
+		return
+	}
+
+	id, err := h.svc.CreateRule(r.Context(), claims.ClubID, accounting.CreateRuleInput{
+		Name:              req.Name,
+		Priority:          req.Priority,
+		MatchField:        req.MatchField,
+		MatchValue:        req.MatchValue,
+		MatchOperator:     req.MatchOperator,
+		DebitAccountCode:  req.DebitAccountCode,
+		CreditAccountCode: req.CreditAccountCode,
+		MVAEligible:       req.MVAEligible,
+	})
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to create rule")
+		Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if h.audit != nil {
+		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,
+			"accounting.rule_created", "mapping_rule", id,
+			map[string]any{"name": req.Name, "field": req.MatchField, "value": req.MatchValue})
+	}
+
+	JSON(w, http.StatusCreated, map[string]string{"id": id})
+}
+
+func (h *AccountingHandler) HandleUpdateRule(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	ruleID := chi.URLParam(r, "ruleID")
+	var req createRuleRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	err := h.svc.UpdateRule(r.Context(), ruleID, accounting.CreateRuleInput{
+		Name:              req.Name,
+		Priority:          req.Priority,
+		MatchField:        req.MatchField,
+		MatchValue:        req.MatchValue,
+		MatchOperator:     req.MatchOperator,
+		DebitAccountCode:  req.DebitAccountCode,
+		CreditAccountCode: req.CreditAccountCode,
+		MVAEligible:       req.MVAEligible,
+	}, claims.ClubID)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to update rule")
+		Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	JSON(w, http.StatusOK, map[string]string{"message": "rule updated"})
+}
+
+func (h *AccountingHandler) HandleDeleteRule(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	ruleID := chi.URLParam(r, "ruleID")
+	if err := h.svc.DeleteRule(r.Context(), ruleID); err != nil {
+		h.log.Error().Err(err).Msg("failed to delete rule")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	if h.audit != nil {
+		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,
+			"accounting.rule_deleted", "mapping_rule", ruleID, nil)
+	}
+
+	JSON(w, http.StatusOK, map[string]string{"message": "rule deleted"})
+}
+
+type autoMatchRequest struct {
+	PeriodID string `json:"period_id"`
+}
+
+func (h *AccountingHandler) HandleAutoMatchImport(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	importID := chi.URLParam(r, "importID")
+	var req autoMatchRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.PeriodID == "" {
+		Error(w, http.StatusBadRequest, "period_id is required")
+		return
+	}
+
+	matched, err := h.svc.AutoMatchImport(r.Context(), claims.ClubID, importID, req.PeriodID, claims.UserID)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to auto-match import")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	if h.audit != nil {
+		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,
+			"accounting.auto_matched", "bank_import", importID,
+			map[string]any{"matched": matched})
+	}
+
+	JSON(w, http.StatusOK, map[string]any{"matched": matched})
+}
