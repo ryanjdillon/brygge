@@ -27,6 +27,11 @@ func NewService(db *pgxpool.Pool, auditService *audit.Service, log zerolog.Logge
 	}
 }
 
+// DB returns the database pool for direct queries from handlers.
+func (s *Service) DB() *pgxpool.Pool {
+	return s.db
+}
+
 // Account represents a row in the accounts table.
 type Account struct {
 	ID          string         `json:"id"`

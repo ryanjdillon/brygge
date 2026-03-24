@@ -604,6 +604,14 @@ func main() {
 						r.Post("/payments", accountingHandler.HandleSyncPayments)
 						r.Post("/invoices", accountingHandler.HandleSyncInvoices)
 					})
+
+					r.Get("/bank-formats", accountingHandler.HandleListBankFormats)
+					r.Route("/bank-import", func(r chi.Router) {
+						r.Post("/", accountingHandler.HandleImportBankStatement)
+						r.Get("/{importID}", accountingHandler.HandleGetBankImport)
+						r.Get("/{importID}/unmatched", accountingHandler.HandleListUnmatchedRows)
+						r.Post("/{importID}/rows/{rowID}/match", accountingHandler.HandleMatchBankRow)
+					})
 				})
 			}
 		})
