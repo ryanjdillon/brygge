@@ -15,6 +15,12 @@ s3_endpoint           = "https://nbg1.your-objectstorage.com"
 # ── DNS (managed via hcloud API — same token as above) ────────
 domain = "klubb.no"
 
+# ── Email (Resend) — leave empty to skip DNS records ─────────
+# Get these values from https://resend.com/domains after adding your domain
+# resend_dkim_value = "p=MIGfMA0GCS..."
+# resend_spf_value  = "v=spf1 include:amazonses.com ~all"
+# resend_mx_value   = "feedback-smtp.us-east-1.amazonses.com"
+
 # ── Optional overrides (defaults shown) ────────────────────────
 # server_name = "brygge"
 # server_type = "cax11"       # ARM64: cax11 (2vCPU/4GB), cax21 (4vCPU/8GB)
