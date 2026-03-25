@@ -51,5 +51,22 @@
       type        = "string";
       description = "Primary domain for the club (e.g. klubb.no)";
     };
+
+    # Email (Resend)
+    resend_dkim_value = {
+      type        = "string";
+      default     = "";
+      description = "Resend DKIM public key value for TXT record (resend._domainkey)";
+    };
+    resend_spf_value = {
+      type        = "string";
+      default     = "";
+      description = "Resend SPF value for TXT record on send subdomain";
+    };
+    resend_mx_value = {
+      type        = "string";
+      default     = "";
+      description = "Resend MX value for send subdomain (e.g. feedback-smtp.us-east-1.amazonses.com)";
+    };
   };
 }
