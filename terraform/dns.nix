@@ -61,7 +61,7 @@
       name    = "send";
       type    = "MX";
       ttl     = 300;
-      records = [{ value = "10 \${var.resend_mx_value}"; }];
+      records = [{ value = "10 \${var.resend_mx_value}."; }];
     };
     resend_dmarc = {
       count   = "\${var.resend_dkim_value != \"\" ? 1 : 0}";
@@ -69,7 +69,7 @@
       name    = "_dmarc";
       type    = "TXT";
       ttl     = 300;
-      records = [{ value = "v=DMARC1; p=none;"; }];
+      records = [{ value = "\"v=DMARC1; p=none;\""; }];
     };
   };
 }
