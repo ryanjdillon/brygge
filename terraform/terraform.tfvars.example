@@ -17,9 +17,10 @@ domain = "klubb.no"
 
 # ── Email (Resend) — leave empty to skip DNS records ─────────
 # Get these values from https://resend.com/domains after adding your domain
-# resend_dkim_value = "p=MIGfMA0GCS..."
-# resend_spf_value  = "v=spf1 include:amazonses.com ~all"
-# resend_mx_value   = "feedback-smtp.us-east-1.amazonses.com"
+# NOTE: TXT values must include escaped \"quotes\" — Hetzner DNS API requires this
+# resend_dkim_value = "\"p=MIGfMA0GCS...\""
+# resend_spf_value  = "\"v=spf1 include:amazonses.com ~all\""
+# resend_mx_value   = "feedback-smtp.us-east-1.amazonses.com"  # no quotes, trailing dot added by dns.nix
 
 # ── Optional overrides (defaults shown) ────────────────────────
 # server_name = "brygge"
