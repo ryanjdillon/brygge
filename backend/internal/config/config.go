@@ -74,6 +74,7 @@ type Features struct {
 	Commerce       bool
 	Communications bool
 	Accounting     bool
+	DemoAuth       bool
 }
 
 func Load() Config {
@@ -128,6 +129,7 @@ func Load() Config {
 			Commerce:       envBool("FEATURE_COMMERCE", true),
 			Communications: envBool("FEATURE_COMMUNICATIONS", true),
 			Accounting:     envBool("FEATURE_ACCOUNTING", false),
+			DemoAuth:       envBool("FEATURE_DEMO_AUTH", false),
 		},
 	}
 }

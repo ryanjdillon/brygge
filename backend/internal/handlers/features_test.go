@@ -63,6 +63,8 @@ func TestHandleGetFeaturesAllEnabled(t *testing.T) {
 			Calendar:       true,
 			Commerce:       true,
 			Communications: true,
+			Accounting:     true,
+			DemoAuth:       true,
 		},
 	}
 
