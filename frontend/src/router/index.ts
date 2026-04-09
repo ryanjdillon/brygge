@@ -270,6 +270,31 @@ const routes: RouteRecordRaw[] = [
         name: 'admin-booking-settings',
         component: () => import('@/views/admin/BookingSettingsView.vue'),
       },
+      {
+        path: 'accounting',
+        name: 'admin-accounting',
+        component: () => import('@/views/admin/AccountingDashboard.vue'),
+      },
+      {
+        path: 'accounting/accounts',
+        name: 'admin-accounts',
+        component: () => import('@/views/admin/ChartOfAccountsView.vue'),
+      },
+      {
+        path: 'accounting/periods',
+        name: 'admin-periods',
+        component: () => import('@/views/admin/FiscalPeriodsView.vue'),
+      },
+      {
+        path: 'accounting/journal',
+        name: 'admin-journal',
+        component: () => import('@/views/admin/JournalEntriesView.vue'),
+      },
+      {
+        path: 'accounting/journal/new',
+        name: 'admin-journal-new',
+        component: () => import('@/views/admin/JournalEntryForm.vue'),
+      },
     ],
   },
 ]

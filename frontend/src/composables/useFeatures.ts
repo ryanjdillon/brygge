@@ -2,7 +2,7 @@ import { ref, readonly } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import type { components } from '@/types/api'
 
-type FeaturesMap = components['schemas']['FeaturesResponse']
+type FeaturesMap = components['schemas']['FeaturesResponse'] & { accounting?: boolean }
 
 const features = ref<FeaturesMap>({
   bookings: true,
