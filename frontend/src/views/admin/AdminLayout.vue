@@ -24,6 +24,8 @@ import {
   ShieldCheck,
   Menu,
   X,
+  Calculator,
+  BookOpen,
 } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -38,7 +40,7 @@ interface NavItem {
   icon: typeof Users
   label: string
   roles?: string[]
-  feature?: 'bookings' | 'projects' | 'calendar' | 'commerce' | 'communications'
+  feature?: 'bookings' | 'projects' | 'calendar' | 'commerce' | 'communications' | 'accounting'
 }
 
 interface NavGroup {
@@ -72,6 +74,15 @@ const navGroups = computed<NavGroup[]>(() => {
         { to: '/admin/pricing', icon: DollarSign, label: t('admin.sidebar.pricing'), roles: ['admin', 'treasurer'], feature: 'commerce' },
         { to: '/admin/products', icon: ShoppingBag, label: t('admin.sidebar.products'), roles: ['board', 'admin'], feature: 'commerce' },
         { to: '/admin/financials', icon: Banknote, label: t('admin.sidebar.financials'), roles: ['treasurer', 'board', 'admin'], feature: 'commerce' },
+      ],
+    },
+    {
+      titleKey: 'Regnskap',
+      items: [
+        { to: '/admin/accounting', icon: Calculator, label: 'Oversikt', roles: ['treasurer', 'board', 'admin'], feature: 'accounting' },
+        { to: '/admin/accounting/accounts', icon: BookOpen, label: 'Kontoplan', roles: ['treasurer', 'board', 'admin'], feature: 'accounting' },
+        { to: '/admin/accounting/periods', icon: CalendarDays, label: 'Perioder', roles: ['treasurer', 'board', 'admin'], feature: 'accounting' },
+        { to: '/admin/accounting/journal', icon: FileText, label: 'Bilag', roles: ['treasurer', 'board', 'admin'], feature: 'accounting' },
       ],
     },
     {
