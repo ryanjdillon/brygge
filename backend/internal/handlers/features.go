@@ -21,5 +21,7 @@ func (h *FeaturesHandler) HandleGetFeatures(w http.ResponseWriter, r *http.Reque
 		"calendar":       h.config.Features.Calendar,
 		"commerce":       h.config.Features.Commerce,
 		"communications": h.config.Features.Communications,
+		"accounting":     h.config.Features.Accounting,
+		"demo_auth":      h.config.Features.DemoAuth,
 	})
 }

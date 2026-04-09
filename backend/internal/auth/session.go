@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"net"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -32,11 +33,17 @@ func (s *SessionService) CreateSession(ctx context.Context, userID, clubID, ip, 
 		return "", fmt.Errorf("generating session ID: %w", err)
 	}
 
+	// Strip port from RemoteAddr (e.g. "172.18.0.1:49068" → "172.18.0.1")
+	host, _, _ := net.SplitHostPort(ip)
+	if host == "" {
+		host = ip
+	}
+
 	expiresAt := time.Now().Add(sessionExpiry)
 	_, err = s.db.Exec(ctx,
 		`INSERT INTO sessions (id, user_id, club_id, expires_at, ip_address, user_agent)
 		 VALUES ($1, $2, $3, $4, $5::inet, $6)`,
-		id, userID, clubID, expiresAt, ip, userAgent,
+		id, userID, clubID, expiresAt, host, userAgent,
 	)
 	if err != nil {
 		return "", fmt.Errorf("inserting session: %w", err)
