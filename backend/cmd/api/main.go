@@ -126,6 +126,7 @@ func main() {
 	authHandler := handlers.NewAuthHandler(db, rdb, jwtService, vippsClient, &cfg, log, handlers.WithAuditService(auditService))
 	magicLinkHandler := handlers.NewMagicLinkHandler(db, &cfg, emailClient, sessionService, log)
 	totpHandler := handlers.NewTOTPHandler(db, &cfg, sessionService, auditService, log)
+	demoAuthHandler := handlers.NewDemoAuthHandler(db, &cfg, sessionService, log)
 	waitingListHandler := handlers.NewWaitingListHandler(db, rdb, &cfg, log)
 	adminUsersHandler := handlers.NewAdminUsersHandler(db, &cfg, log)
 	adminSlipsHandler := handlers.NewAdminSlipsHandler(db, &cfg, log)
@@ -186,6 +187,11 @@ func main() {
 			r.Get("/vipps/login", authHandler.HandleVippsLogin)
 			r.Get("/vipps/callback", authHandler.HandleVippsCallback)
 
+			if cfg.Features.DemoAuth {
+				r.Get("/demo/users", demoAuthHandler.HandleListDemoUsers)
+				r.Post("/demo/login", demoAuthHandler.HandleDemoLogin)
+			}
+
 			r.Group(func(r chi.Router) {
 				r.Use(strictRL)
 				r.Post("/magic-link", magicLinkHandler.HandleRequestMagicLink)
@@ -198,7 +204,7 @@ func main() {
 
 			// JWT-based auth (legacy, will be removed in DIL-28)
 			r.Group(func(r chi.Router) {
-				r.Use(middleware.Authenticate(jwtService))
+				r.Use(middleware.AuthenticateSession(sessionService))
 				r.Use(authedRL)
 				r.Post("/logout", authHandler.HandleLogout)
 				r.Get("/me", authHandler.HandleMe)
@@ -240,13 +246,13 @@ func main() {
 		}
 
 		r.Group(func(r chi.Router) {
-			r.Use(middleware.Authenticate(jwtService))
+			r.Use(middleware.AuthenticateSession(sessionService))
 			r.Get("/documents", adminDocumentsHandler.HandleListDocuments)
 			r.Get("/documents/{docID}", adminDocumentsHandler.HandleGetDocument)
 		})
 
 		r.Route("/waiting-list", func(r chi.Router) {
-			r.Use(middleware.Authenticate(jwtService))
+			r.Use(middleware.AuthenticateSession(sessionService))
 
 			r.Post("/join", waitingListHandler.HandleJoinWaitingList)
 			r.Get("/me", waitingListHandler.HandleGetMyPosition)
@@ -272,19 +278,19 @@ func main() {
 				r.Get("/hoist/slots", bookingsHandler.HandleHoistSlots)
 
 				r.Group(func(r chi.Router) {
-					r.Use(middleware.OptionalAuth(jwtService, middleware.WithLogger(log)))
+					r.Use(middleware.OptionalSessionAuth(sessionService))
 					r.Post("/", bookingsHandler.HandleCreateBooking)
 				})
 
 				r.Group(func(r chi.Router) {
-					r.Use(middleware.Authenticate(jwtService))
+					r.Use(middleware.AuthenticateSession(sessionService))
 					r.Get("/me", bookingsHandler.HandleListMyBookings)
 					r.Get("/{bookingID}", bookingsHandler.HandleGetBooking)
 					r.Post("/{bookingID}/cancel", bookingsHandler.HandleCancelBooking)
 				})
 
 				r.Group(func(r chi.Router) {
-					r.Use(middleware.Authenticate(jwtService))
+					r.Use(middleware.AuthenticateSession(sessionService))
 					r.Use(middleware.RequireRole("board", "harbor_master"))
 					r.Post("/{bookingID}/confirm", bookingsHandler.HandleConfirmBooking)
 				})
@@ -298,7 +304,7 @@ func main() {
 				r.Get("/{eventID}", calendarHandler.HandleGetEvent)
 
 				r.Group(func(r chi.Router) {
-					r.Use(middleware.Authenticate(jwtService))
+					r.Use(middleware.AuthenticateSession(sessionService))
 					r.Use(middleware.RequireRole("board"))
 					r.Post("/", calendarHandler.HandleCreateEvent)
 					r.Put("/{eventID}", calendarHandler.HandleUpdateEvent)
@@ -308,7 +314,7 @@ func main() {
 		}
 
 		r.Route("/members", func(r chi.Router) {
-			r.Use(middleware.Authenticate(jwtService))
+			r.Use(middleware.AuthenticateSession(sessionService))
 			r.Get("/me", membersHandler.HandleGetMe)
 			r.Put("/me", membersHandler.HandleUpdateMe)
 			r.Get("/me/dashboard", membersHandler.HandleDashboard)
@@ -329,12 +335,12 @@ func main() {
 		})
 
 		r.Route("/slips", func(r chi.Router) {
-			r.Use(middleware.Authenticate(jwtService))
+			r.Use(middleware.AuthenticateSession(sessionService))
 			r.Get("/", placeholder("slips"))
 		})
 
 		r.Route("/portal/slip-shares", func(r chi.Router) {
-			r.Use(middleware.Authenticate(jwtService))
+			r.Use(middleware.AuthenticateSession(sessionService))
 			r.Get("/", slipSharesHandler.HandleListMySlipShares)
 			r.Post("/", slipSharesHandler.HandleCreateSlipShare)
 			r.Put("/{shareID}", slipSharesHandler.HandleUpdateSlipShare)
@@ -344,20 +350,20 @@ func main() {
 
 		if cfg.Features.Communications {
 			r.Route("/push", func(r chi.Router) {
-				r.Use(middleware.Authenticate(jwtService))
+				r.Use(middleware.AuthenticateSession(sessionService))
 				r.Get("/vapid-key", notificationsHandler.HandleGetVAPIDKey)
 				r.Post("/subscribe", notificationsHandler.HandleSubscribe)
 				r.Delete("/subscribe", notificationsHandler.HandleUnsubscribe)
 			})
 
 			r.Route("/members/me/notifications", func(r chi.Router) {
-				r.Use(middleware.Authenticate(jwtService))
+				r.Use(middleware.AuthenticateSession(sessionService))
 				r.Get("/", notificationsHandler.HandleGetPreferences)
 				r.Put("/", notificationsHandler.HandleUpdatePreferences)
 			})
 
 			r.Route("/forum", func(r chi.Router) {
-				r.Use(middleware.Authenticate(jwtService))
+				r.Use(middleware.AuthenticateSession(sessionService))
 				r.Get("/rooms", forumHandler.HandleListRooms)
 				r.Get("/rooms/{roomID}/messages", forumHandler.HandleGetRoomMessages)
 				r.Post("/rooms/{roomID}/messages", forumHandler.HandleSendMessage)
@@ -367,7 +373,7 @@ func main() {
 
 		if cfg.Features.Projects {
 			r.Route("/projects", func(r chi.Router) {
-				r.Use(middleware.Authenticate(jwtService))
+				r.Use(middleware.AuthenticateSession(sessionService))
 
 				r.Get("/", projectsHandler.HandleListProjects)
 				r.Get("/{projectID}", projectsHandler.HandleGetProject)
@@ -381,7 +387,7 @@ func main() {
 			})
 
 			r.Route("/tasks", func(r chi.Router) {
-				r.Use(middleware.Authenticate(jwtService))
+				r.Use(middleware.AuthenticateSession(sessionService))
 
 				r.Post("/{taskID}/join", volunteerHandler.HandleJoinTask)
 				r.Delete("/{taskID}/leave", volunteerHandler.HandleLeaveTask)
@@ -397,7 +403,7 @@ func main() {
 			})
 
 			r.Route("/shopping-lists", func(r chi.Router) {
-				r.Use(middleware.Authenticate(jwtService))
+				r.Use(middleware.AuthenticateSession(sessionService))
 				r.Get("/", shoppingListsHandler.HandleListShoppingLists)
 				r.Post("/", shoppingListsHandler.HandleCreateShoppingList)
 				r.Get("/{listID}", shoppingListsHandler.HandleGetShoppingList)
@@ -412,7 +418,7 @@ func main() {
 		}
 
 		r.Route("/feature-requests", func(r chi.Router) {
-			r.Use(middleware.Authenticate(jwtService))
+			r.Use(middleware.AuthenticateSession(sessionService))
 			r.Get("/", featureRequestsHandler.HandleListFeatureRequests)
 			r.Post("/", featureRequestsHandler.HandleCreateFeatureRequest)
 			r.Get("/{requestID}", featureRequestsHandler.HandleGetFeatureRequest)
@@ -426,7 +432,7 @@ func main() {
 		})
 
 		r.Route("/admin", func(r chi.Router) {
-			r.Use(middleware.Authenticate(jwtService))
+			r.Use(middleware.AuthenticateSession(sessionService))
 
 			r.Route("/totp", func(r chi.Router) {
 				r.Use(middleware.RequireRole("admin", "board", "treasurer"))
