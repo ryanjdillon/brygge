@@ -32,10 +32,17 @@ const { data: periods } = useFiscalPeriods()
 const selectedPeriodId = ref('')
 const statusFilter = ref('all')
 const expandedId = ref<string | null>(null)
-const newYear = ref(new Date().getFullYear())
 const syncing = ref(false)
 const syncMessage = ref('')
-const showCreatePeriod = ref(false)
+const showCreateYear = ref(false)
+
+const nextYear = computed(() => {
+  if (!periods.value?.length) return new Date().getFullYear()
+  const maxYear = Math.max(...periods.value.map(p => p.year))
+  return maxYear + 1
+})
+const newYear = ref(0)
+watch(nextYear, (val) => { newYear.value = val }, { immediate: true })
 
 watch(periods, (val) => {
   if (val && val.length > 0 && !selectedPeriodId.value) {
@@ -126,6 +133,8 @@ function handleCreatePeriod() {
   createPeriodMutation.mutate({ year: newYear.value }, {
     onSuccess: (period) => {
       selectedPeriodId.value = period.id
+      showCreateYear.value = false
+      newYear.value = nextYear.value
       handleSync()
     },
   })
@@ -212,10 +221,24 @@ function formatNOK(amount: number): string {
         </button>
 
         <div class="ml-auto flex items-center gap-2">
+          <input
+            v-if="showCreateYear"
+            v-model.number="newYear"
+            type="number"
+            min="2000"
+            max="2100"
+            class="w-20 rounded-md border border-gray-300 px-2 py-2 text-sm"
+          />
           <button
-            class="inline-flex items-center gap-1.5 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            :class="[
+              'inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium disabled:opacity-50',
+              showCreateYear
+                ? 'bg-blue-600 text-white hover:bg-blue-700'
+                : 'border border-gray-300 text-gray-700 hover:bg-gray-50',
+            ]"
             :title="t('admin.accounting.journal.createPeriodTooltip')"
-            @click="showCreatePeriod = !showCreatePeriod"
+            :disabled="createPeriodMutation.isPending.value"
+            @click="showCreateYear ? handleCreatePeriod() : (showCreateYear = true)"
           >
             <Plus class="h-4 w-4" />
             {{ t('admin.accounting.journal.createPeriod') }}
@@ -240,24 +263,6 @@ function formatNOK(amount: number): string {
         {{ syncMessage }}
       </p>
 
-      <!-- Inline create period form -->
-      <div v-if="showCreatePeriod" class="mt-3 flex items-center gap-3 border-t border-gray-100 pt-3">
-        <input
-          v-model.number="newYear"
-          type="number"
-          min="2000"
-          max="2100"
-          class="w-24 rounded-md border border-gray-300 px-3 py-2 text-sm"
-        />
-        <button
-          class="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-          :disabled="createPeriodMutation.isPending.value"
-          @click="handleCreatePeriod"
-        >
-          <Plus class="h-4 w-4" />
-          {{ t('admin.accounting.journal.createPeriod') }}
-        </button>
-      </div>
     </div>
 
     <!-- Action bar -->
