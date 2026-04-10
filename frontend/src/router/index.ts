@@ -281,11 +281,6 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/ChartOfAccountsView.vue'),
       },
       {
-        path: 'accounting/periods',
-        name: 'admin-periods',
-        component: () => import('@/views/admin/FiscalPeriodsView.vue'),
-      },
-      {
         path: 'accounting/journal',
         name: 'admin-journal',
         component: () => import('@/views/admin/JournalEntriesView.vue'),
