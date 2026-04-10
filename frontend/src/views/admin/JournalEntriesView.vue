@@ -8,12 +8,20 @@ import {
   ChevronRight,
   Send,
   Ban,
+  RefreshCw,
+  Lock,
+  Unlock,
 } from 'lucide-vue-next'
 import {
   useFiscalPeriods,
   useJournalEntries,
   usePostEntry,
   useVoidEntry,
+  useCreatePeriod,
+  useClosePeriod,
+  useReopenPeriod,
+  useSyncPayments,
+  useSyncInvoices,
   type JournalEntry,
 } from '@/composables/useAccounting'
 
@@ -24,6 +32,9 @@ const { data: periods } = useFiscalPeriods()
 const selectedPeriodId = ref('')
 const statusFilter = ref('all')
 const expandedId = ref<string | null>(null)
+const newYear = ref(new Date().getFullYear())
+const syncing = ref(false)
+const syncMessage = ref('')
 
 watch(periods, (val) => {
   if (val && val.length > 0 && !selectedPeriodId.value) {
@@ -32,11 +43,22 @@ watch(periods, (val) => {
   }
 }, { immediate: true })
 
+const selectedPeriod = computed(() =>
+  periods.value?.find(p => p.id === selectedPeriodId.value),
+)
+
+const hasPeriods = computed(() => (periods.value?.length ?? 0) > 0)
+
 const statusRef = computed(() => statusFilter.value)
 const { data: entries, isLoading } = useJournalEntries(selectedPeriodId, statusRef)
 
 const postMutation = usePostEntry()
 const voidMutation = useVoidEntry()
+const createPeriodMutation = useCreatePeriod()
+const closePeriodMutation = useClosePeriod()
+const reopenPeriodMutation = useReopenPeriod()
+const syncPaymentsMutation = useSyncPayments()
+const syncInvoicesMutation = useSyncInvoices()
 
 const statusLabels = computed<Record<string, string>>(() => ({
   draft: t('admin.accounting.journal.draft'),
@@ -66,9 +88,56 @@ function handlePost(entryId: string) {
 }
 
 function handleVoid(entryId: string) {
-  if (confirm('Er du sikker på at du vil annullere dette bilaget? En reverseringspostering vil bli opprettet.')) {
+  if (confirm(t('admin.accounting.journal.confirmVoid'))) {
     voidMutation.mutate(entryId)
   }
+}
+
+async function handleSync() {
+  if (!selectedPeriodId.value) return
+  syncing.value = true
+  syncMessage.value = ''
+
+  try {
+    const payResult = await new Promise<{ synced: number }>((resolve, reject) => {
+      syncPaymentsMutation.mutate(
+        { period_id: selectedPeriodId.value },
+        { onSuccess: resolve, onError: reject },
+      )
+    })
+
+    const invResult = await new Promise<{ synced: number }>((resolve, reject) => {
+      syncInvoicesMutation.mutate(
+        { period_id: selectedPeriodId.value },
+        { onSuccess: resolve, onError: reject },
+      )
+    })
+
+    syncMessage.value = `${t('admin.accounting.journal.updateComplete')}: ${payResult.synced} ${t('admin.accounting.journal.paymentsSynced')}, ${invResult.synced} ${t('admin.accounting.journal.invoicesSynced')}`
+  } catch (err) {
+    syncMessage.value = `${t('common.error')}: ${(err as Error).message}`
+  } finally {
+    syncing.value = false
+  }
+}
+
+function handleCreatePeriod() {
+  createPeriodMutation.mutate({ year: newYear.value }, {
+    onSuccess: (period) => {
+      selectedPeriodId.value = period.id
+      handleSync()
+    },
+  })
+}
+
+function handleClosePeriod() {
+  if (!selectedPeriodId.value) return
+  closePeriodMutation.mutate(selectedPeriodId.value)
+}
+
+function handleReopenPeriod() {
+  if (!selectedPeriodId.value) return
+  reopenPeriodMutation.mutate(selectedPeriodId.value)
 }
 
 function formatNOK(amount: number): string {
@@ -79,8 +148,89 @@ function formatNOK(amount: number): string {
 
 <template>
   <div>
-    <div class="flex items-center justify-between">
-      <h1 class="text-2xl font-bold text-gray-900">{{ t('admin.accounting.journal.title') }}</h1>
+    <h1 class="text-2xl font-bold text-gray-900">{{ t('admin.accounting.journal.title') }}</h1>
+
+    <!-- Top bar: period management -->
+    <div class="mt-4 rounded-lg border border-gray-200 bg-white p-4">
+      <div v-if="!hasPeriods" class="flex flex-wrap items-center gap-3">
+        <p class="text-sm text-gray-500">{{ t('admin.accounting.journal.noPeriods') }}</p>
+        <input
+          v-model.number="newYear"
+          type="number"
+          min="2000"
+          max="2100"
+          class="w-24 rounded-md border border-gray-300 px-3 py-2 text-sm"
+        />
+        <button
+          class="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+          :disabled="createPeriodMutation.isPending.value"
+          @click="handleCreatePeriod"
+        >
+          <Plus class="h-4 w-4" />
+          {{ t('admin.accounting.journal.createPeriod') }}
+        </button>
+      </div>
+
+      <div v-else class="flex flex-wrap items-center gap-3">
+        <div class="flex items-center gap-2">
+          <label class="text-sm font-medium text-gray-700">{{ t('admin.accounting.journal.period') }}:</label>
+          <select v-model="selectedPeriodId" class="rounded-md border border-gray-300 px-3 py-2 text-sm">
+            <option v-for="p in periods" :key="p.id" :value="p.id">{{ p.year }}</option>
+          </select>
+        </div>
+
+        <span
+          v-if="selectedPeriod"
+          :class="[
+            'inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium',
+            selectedPeriod.status === 'open' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800',
+          ]"
+        >
+          {{ selectedPeriod.status === 'open' ? t('admin.accounting.periods.open') : t('admin.accounting.periods.closed') }}
+        </span>
+
+        <button
+          v-if="selectedPeriod?.status === 'open'"
+          class="inline-flex items-center gap-1.5 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          :disabled="closePeriodMutation.isPending.value"
+          @click="handleClosePeriod"
+        >
+          <Lock class="h-4 w-4" />
+          {{ t('admin.accounting.journal.closePeriod') }}
+        </button>
+        <button
+          v-if="selectedPeriod?.status === 'closed'"
+          class="inline-flex items-center gap-1.5 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          :disabled="reopenPeriodMutation.isPending.value"
+          @click="handleReopenPeriod"
+        >
+          <Unlock class="h-4 w-4" />
+          {{ t('admin.accounting.journal.reopenPeriod') }}
+        </button>
+
+        <div class="ml-auto">
+          <button
+            class="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            :disabled="syncing || !selectedPeriodId"
+            @click="handleSync"
+          >
+            <RefreshCw class="h-4 w-4" :class="{ 'animate-spin': syncing }" />
+            {{ syncing ? t('admin.accounting.journal.updating') : t('admin.accounting.journal.updatePostings') }}
+          </button>
+        </div>
+      </div>
+
+      <p
+        v-if="syncMessage"
+        class="mt-2 text-sm"
+        :class="syncMessage.startsWith(t('common.error')) ? 'text-red-600' : 'text-green-600'"
+      >
+        {{ syncMessage }}
+      </p>
+    </div>
+
+    <!-- Action bar -->
+    <div class="mt-4 flex flex-wrap items-center gap-4">
       <RouterLink
         to="/admin/accounting/journal/new"
         class="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
@@ -88,17 +238,7 @@ function formatNOK(amount: number): string {
         <Plus class="h-4 w-4" />
         {{ t('admin.accounting.journal.newEntry') }}
       </RouterLink>
-    </div>
 
-    <div class="mt-4 flex flex-wrap items-center gap-4">
-      <div class="flex items-center gap-2">
-        <label class="text-sm font-medium text-gray-700">{{ t('admin.accounting.journal.period') }}:</label>
-        <select v-model="selectedPeriodId" class="rounded-md border border-gray-300 px-3 py-2 text-sm">
-          <option v-for="p in periods" :key="p.id" :value="p.id">
-            {{ p.year }} ({{ p.status === 'open' ? t('admin.accounting.periods.open') : t('admin.accounting.periods.closed') }})
-          </option>
-        </select>
-      </div>
       <div class="flex items-center gap-2">
         <label class="text-sm font-medium text-gray-700">{{ t('admin.accounting.journal.status') }}:</label>
         <select v-model="statusFilter" class="rounded-md border border-gray-300 px-3 py-2 text-sm">
@@ -110,6 +250,7 @@ function formatNOK(amount: number): string {
       </div>
     </div>
 
+    <!-- Table -->
     <div v-if="isLoading" class="mt-6 text-gray-500">{{ t('common.loading') }}...</div>
 
     <div v-else class="mt-6 overflow-x-auto">
