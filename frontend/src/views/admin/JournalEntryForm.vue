@@ -41,7 +41,6 @@ interface FormLine {
 
 const lines = ref<FormLine[]>([
   { account_code: '', debit: null, credit: null, mva_amount: null, description: '' },
-  { account_code: '', debit: null, credit: null, mva_amount: null, description: '' },
 ])
 
 const openPeriods = computed(() => periods.value?.filter(p => p.status === 'open') ?? [])
@@ -67,7 +66,7 @@ function addLine() {
 }
 
 function removeLine(index: number) {
-  if (lines.value.length > 2) {
+  if (lines.value.length > 1) {
     lines.value.splice(index, 1)
   }
 }
@@ -276,7 +275,7 @@ function accountLabel(a: Account): string {
               <td class="py-2">
                 <button
                   class="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-30"
-                  :disabled="lines.length <= 2"
+                  :disabled="lines.length <= 1"
                   @click="removeLine(idx)"
                 >
                   <Trash2 class="h-4 w-4" />
