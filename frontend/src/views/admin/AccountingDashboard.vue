@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { RouterLink } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import {
   BookOpen,
   CalendarDays,
@@ -17,6 +18,8 @@ import {
   useSyncPayments,
   useSyncInvoices,
 } from '@/composables/useAccounting'
+
+const { t } = useI18n()
 
 const { data: accounts } = useAccountsList()
 const { data: periods, isLoading: periodsLoading } = useFiscalPeriods()
@@ -57,10 +60,10 @@ async function handleSyncPayments() {
   syncMessage.value = ''
   syncPaymentsMutation.mutate({ period_id: selectedPeriodId.value }, {
     onSuccess: (data) => {
-      syncMessage.value = `Betalinger synkronisert: ${data.synced} nye, ${data.skipped} hoppet over`
+      syncMessage.value = `${t('admin.accounting.dashboard.syncPayments')} ${t('admin.accounting.dashboard.synced')}: ${data.synced}`
     },
     onError: (err) => {
-      syncMessage.value = `Feil: ${(err as Error).message}`
+      syncMessage.value = `${t('common.error')}: ${(err as Error).message}`
     },
   })
 }
@@ -69,10 +72,10 @@ async function handleSyncInvoices() {
   syncMessage.value = ''
   syncInvoicesMutation.mutate({ period_id: selectedPeriodId.value }, {
     onSuccess: (data) => {
-      syncMessage.value = `Fakturaer synkronisert: ${data.synced} nye, ${data.skipped} hoppet over`
+      syncMessage.value = `${t('admin.accounting.dashboard.syncInvoices')} ${t('admin.accounting.dashboard.synced')}: ${data.synced}`
     },
     onError: (err) => {
-      syncMessage.value = `Feil: ${(err as Error).message}`
+      syncMessage.value = `${t('common.error')}: ${(err as Error).message}`
     },
   })
 }
@@ -80,15 +83,15 @@ async function handleSyncInvoices() {
 
 <template>
   <div>
-    <h1 class="text-2xl font-bold text-gray-900">Regnskap</h1>
+    <h1 class="text-2xl font-bold text-gray-900">{{ t('admin.accounting.dashboard.title') }}</h1>
 
-    <div v-if="periodsLoading" class="mt-6 text-gray-500">Laster...</div>
+    <div v-if="periodsLoading" class="mt-6 text-gray-500">{{ t('common.loading') }}...</div>
 
     <template v-else>
       <div v-if="!hasPeriods" class="mt-6 rounded-lg border border-dashed border-gray-300 p-8 text-center">
         <CalendarDays class="mx-auto h-12 w-12 text-gray-400" />
-        <h3 class="mt-2 text-sm font-semibold text-gray-900">Ingen regnskapsperioder</h3>
-        <p class="mt-1 text-sm text-gray-500">Opprett ditt første regnskapsår for å komme i gang.</p>
+        <h3 class="mt-2 text-sm font-semibold text-gray-900">{{ t('admin.accounting.dashboard.noPeriods') }}</h3>
+        <p class="mt-1 text-sm text-gray-500">{{ t('admin.accounting.dashboard.noPeriodsDesc') }}</p>
         <div class="mt-4 flex items-center justify-center gap-2">
           <input
             v-model.number="newYear"
@@ -103,21 +106,21 @@ async function handleSyncInvoices() {
             @click="handleCreatePeriod"
           >
             <Plus class="h-4 w-4" />
-            Opprett regnskapsår
+            {{ t('admin.accounting.dashboard.createYear') }}
           </button>
         </div>
       </div>
 
       <div v-if="!hasAccounts && hasPeriods" class="mt-4 rounded-lg border border-dashed border-gray-300 p-6 text-center">
         <BookOpen class="mx-auto h-10 w-10 text-gray-400" />
-        <h3 class="mt-2 text-sm font-semibold text-gray-900">Ingen kontoplan</h3>
-        <p class="mt-1 text-sm text-gray-500">Opprett standard norsk kontoplan for båtforening.</p>
+        <h3 class="mt-2 text-sm font-semibold text-gray-900">{{ t('admin.accounting.accounts.title') }}</h3>
+        <p class="mt-1 text-sm text-gray-500">{{ t('admin.accounting.accounts.seedButton') }}</p>
         <button
           class="mt-3 inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
           :disabled="seedMutation.isPending.value"
           @click="handleSeedAccounts"
         >
-          Opprett standard kontoplan
+          {{ t('admin.accounting.accounts.seedButton') }}
         </button>
         <p v-if="seedMutation.isSuccess.value" class="mt-2 text-sm text-green-600">
           {{ seedMutation.data.value?.seeded }} kontoer opprettet
@@ -126,28 +129,28 @@ async function handleSyncInvoices() {
 
       <template v-if="hasPeriods">
         <div class="mt-6 flex items-center gap-4">
-          <label class="text-sm font-medium text-gray-700">Periode:</label>
+          <label class="text-sm font-medium text-gray-700">{{ t('admin.accounting.journal.period') }}:</label>
           <select
             v-model="selectedPeriodId"
             class="rounded-md border border-gray-300 px-3 py-2 text-sm"
           >
             <option v-for="p in periods" :key="p.id" :value="p.id">
-              {{ p.year }} ({{ p.status === 'open' ? 'Åpen' : 'Lukket' }})
+              {{ p.year }} ({{ p.status === 'open' ? t('admin.accounting.periods.open') : t('admin.accounting.periods.closed') }})
             </option>
           </select>
         </div>
 
         <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div class="rounded-lg border border-gray-200 bg-white p-5">
-            <p class="text-sm font-medium text-gray-500">Kontoer</p>
+            <p class="text-sm font-medium text-gray-500">{{ t('admin.accounting.dashboard.accounts') }}</p>
             <p class="mt-1 text-2xl font-semibold text-gray-900">{{ totalAccounts }}</p>
           </div>
           <div class="rounded-lg border border-gray-200 bg-white p-5">
-            <p class="text-sm font-medium text-gray-500">Bilag totalt</p>
+            <p class="text-sm font-medium text-gray-500">{{ t('admin.accounting.dashboard.totalEntries') }}</p>
             <p class="mt-1 text-2xl font-semibold text-gray-900">{{ totalEntries }}</p>
           </div>
           <div class="rounded-lg border border-gray-200 bg-white p-5">
-            <p class="text-sm font-medium text-gray-500">Posterte bilag</p>
+            <p class="text-sm font-medium text-gray-500">{{ t('admin.accounting.dashboard.posted') }}</p>
             <p class="mt-1 text-2xl font-semibold text-gray-900">{{ postedCount }}</p>
           </div>
         </div>
@@ -159,7 +162,7 @@ async function handleSyncInvoices() {
             @click="handleSyncPayments"
           >
             <RefreshCw class="h-4 w-4" :class="{ 'animate-spin': syncPaymentsMutation.isPending.value }" />
-            Sync betalinger
+            {{ t('admin.accounting.dashboard.syncPayments') }}
           </button>
           <button
             class="inline-flex items-center gap-1.5 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
@@ -167,11 +170,11 @@ async function handleSyncInvoices() {
             @click="handleSyncInvoices"
           >
             <RefreshCw class="h-4 w-4" :class="{ 'animate-spin': syncInvoicesMutation.isPending.value }" />
-            Sync fakturaer
+            {{ t('admin.accounting.dashboard.syncInvoices') }}
           </button>
         </div>
 
-        <p v-if="syncMessage" class="mt-3 text-sm" :class="syncMessage.startsWith('Feil') ? 'text-red-600' : 'text-green-600'">
+        <p v-if="syncMessage" class="mt-3 text-sm" :class="syncMessage.startsWith(t('common.error')) ? 'text-red-600' : 'text-green-600'">
           {{ syncMessage }}
         </p>
 
@@ -182,8 +185,8 @@ async function handleSyncInvoices() {
           >
             <BookOpen class="h-8 w-8 text-blue-600" />
             <div>
-              <p class="font-medium text-gray-900">Kontoplan</p>
-              <p class="text-sm text-gray-500">Administrer kontoer</p>
+              <p class="font-medium text-gray-900">{{ t('admin.accounting.dashboard.navAccounts') }}</p>
+              <p class="text-sm text-gray-500">{{ t('admin.accounting.dashboard.navAccountsDesc') }}</p>
             </div>
           </RouterLink>
           <RouterLink
@@ -192,8 +195,8 @@ async function handleSyncInvoices() {
           >
             <FileText class="h-8 w-8 text-blue-600" />
             <div>
-              <p class="font-medium text-gray-900">Bilag</p>
-              <p class="text-sm text-gray-500">Bilagsjournal</p>
+              <p class="font-medium text-gray-900">{{ t('admin.accounting.dashboard.navJournal') }}</p>
+              <p class="text-sm text-gray-500">{{ t('admin.accounting.dashboard.navJournalDesc') }}</p>
             </div>
           </RouterLink>
           <RouterLink
@@ -202,8 +205,8 @@ async function handleSyncInvoices() {
           >
             <CalendarDays class="h-8 w-8 text-blue-600" />
             <div>
-              <p class="font-medium text-gray-900">Perioder</p>
-              <p class="text-sm text-gray-500">Regnskapsperioder</p>
+              <p class="font-medium text-gray-900">{{ t('admin.accounting.dashboard.navPeriods') }}</p>
+              <p class="text-sm text-gray-500">{{ t('admin.accounting.dashboard.navPeriodsDesc') }}</p>
             </div>
           </RouterLink>
         </div>
