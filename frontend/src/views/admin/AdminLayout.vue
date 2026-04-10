@@ -77,12 +77,12 @@ const navGroups = computed<NavGroup[]>(() => {
       ],
     },
     {
-      titleKey: 'Regnskap',
+      titleKey: 'admin.groupAccounting',
       items: [
-        { to: '/admin/accounting', icon: Calculator, label: 'Oversikt', roles: ['treasurer', 'board', 'admin'], feature: 'accounting' },
-        { to: '/admin/accounting/accounts', icon: BookOpen, label: 'Kontoplan', roles: ['treasurer', 'board', 'admin'], feature: 'accounting' },
-        { to: '/admin/accounting/periods', icon: CalendarDays, label: 'Perioder', roles: ['treasurer', 'board', 'admin'], feature: 'accounting' },
-        { to: '/admin/accounting/journal', icon: FileText, label: 'Bilag', roles: ['treasurer', 'board', 'admin'], feature: 'accounting' },
+        { to: '/admin/accounting', icon: Calculator, label: t('admin.sidebar.accountingOverview'), roles: ['treasurer', 'board', 'admin'], feature: 'accounting' },
+        { to: '/admin/accounting/accounts', icon: BookOpen, label: t('admin.sidebar.accounts'), roles: ['treasurer', 'board', 'admin'], feature: 'accounting' },
+        { to: '/admin/accounting/periods', icon: CalendarDays, label: t('admin.sidebar.periods'), roles: ['treasurer', 'board', 'admin'], feature: 'accounting' },
+        { to: '/admin/accounting/journal', icon: FileText, label: t('admin.sidebar.journal'), roles: ['treasurer', 'board', 'admin'], feature: 'accounting' },
       ],
     },
     {

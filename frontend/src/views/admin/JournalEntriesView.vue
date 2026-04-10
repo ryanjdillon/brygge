@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { RouterLink } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import {
   Plus,
   ChevronDown,
@@ -15,6 +16,8 @@ import {
   useVoidEntry,
   type JournalEntry,
 } from '@/composables/useAccounting'
+
+const { t } = useI18n()
 
 const { data: periods } = useFiscalPeriods()
 
@@ -35,11 +38,11 @@ const { data: entries, isLoading } = useJournalEntries(selectedPeriodId, statusR
 const postMutation = usePostEntry()
 const voidMutation = useVoidEntry()
 
-const statusLabels: Record<string, string> = {
-  draft: 'Kladd',
-  posted: 'Postert',
-  voided: 'Annullert',
-}
+const statusLabels = computed<Record<string, string>>(() => ({
+  draft: t('admin.accounting.journal.draft'),
+  posted: t('admin.accounting.journal.posted'),
+  voided: t('admin.accounting.journal.voided'),
+}))
 
 const statusColors: Record<string, string> = {
   draft: 'bg-yellow-100 text-yellow-800',
@@ -47,12 +50,12 @@ const statusColors: Record<string, string> = {
   voided: 'bg-red-100 text-red-800',
 }
 
-const sourceLabels: Record<string, string> = {
-  manual: 'Manuell',
-  sync_payment: 'Betaling',
-  sync_invoice: 'Faktura',
-  bank_import: 'Bank',
-}
+const sourceLabels = computed<Record<string, string>>(() => ({
+  manual: t('admin.accounting.journal.sourceManual'),
+  sync_payment: t('admin.accounting.journal.sourcePaymentSync'),
+  sync_invoice: t('admin.accounting.journal.sourceInvoiceSync'),
+  bank_import: t('admin.accounting.journal.sourceBankImport'),
+}))
 
 function toggleExpand(entry: JournalEntry) {
   expandedId.value = expandedId.value === entry.id ? null : entry.id
@@ -77,49 +80,49 @@ function formatNOK(amount: number): string {
 <template>
   <div>
     <div class="flex items-center justify-between">
-      <h1 class="text-2xl font-bold text-gray-900">Bilagsjournal</h1>
+      <h1 class="text-2xl font-bold text-gray-900">{{ t('admin.accounting.journal.title') }}</h1>
       <RouterLink
         to="/admin/accounting/journal/new"
         class="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
       >
         <Plus class="h-4 w-4" />
-        Nytt bilag
+        {{ t('admin.accounting.journal.newEntry') }}
       </RouterLink>
     </div>
 
     <div class="mt-4 flex flex-wrap items-center gap-4">
       <div class="flex items-center gap-2">
-        <label class="text-sm font-medium text-gray-700">Periode:</label>
+        <label class="text-sm font-medium text-gray-700">{{ t('admin.accounting.journal.period') }}:</label>
         <select v-model="selectedPeriodId" class="rounded-md border border-gray-300 px-3 py-2 text-sm">
           <option v-for="p in periods" :key="p.id" :value="p.id">
-            {{ p.year }} ({{ p.status === 'open' ? 'Åpen' : 'Lukket' }})
+            {{ p.year }} ({{ p.status === 'open' ? t('admin.accounting.periods.open') : t('admin.accounting.periods.closed') }})
           </option>
         </select>
       </div>
       <div class="flex items-center gap-2">
-        <label class="text-sm font-medium text-gray-700">Status:</label>
+        <label class="text-sm font-medium text-gray-700">{{ t('admin.accounting.journal.status') }}:</label>
         <select v-model="statusFilter" class="rounded-md border border-gray-300 px-3 py-2 text-sm">
-          <option value="all">Alle</option>
-          <option value="draft">Kladd</option>
-          <option value="posted">Postert</option>
-          <option value="voided">Annullert</option>
+          <option value="all">{{ t('admin.accounting.journal.allStatuses') }}</option>
+          <option value="draft">{{ t('admin.accounting.journal.draft') }}</option>
+          <option value="posted">{{ t('admin.accounting.journal.posted') }}</option>
+          <option value="voided">{{ t('admin.accounting.journal.voided') }}</option>
         </select>
       </div>
     </div>
 
-    <div v-if="isLoading" class="mt-6 text-gray-500">Laster...</div>
+    <div v-if="isLoading" class="mt-6 text-gray-500">{{ t('common.loading') }}...</div>
 
     <div v-else class="mt-6 overflow-x-auto">
       <table class="min-w-full divide-y divide-gray-200">
         <thead class="bg-gray-50">
           <tr>
             <th class="w-8 px-2 py-3"></th>
-            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Bilagsnr</th>
-            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Dato</th>
-            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Beskrivelse</th>
-            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Status</th>
-            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Kilde</th>
-            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Handlinger</th>
+            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.accounting.journal.entryNumber') }}</th>
+            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.accounting.journal.date') }}</th>
+            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.accounting.journal.description') }}</th>
+            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.accounting.journal.status') }}</th>
+            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.accounting.journal.source') }}</th>
+            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.accounting.journal.actions') }}</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-200 bg-white">
@@ -152,7 +155,7 @@ function formatNOK(amount: number): string {
                   @click="handlePost(entry.id)"
                 >
                   <Send class="h-3.5 w-3.5" />
-                  Poster
+                  {{ t('admin.accounting.journal.post') }}
                 </button>
                 <button
                   v-if="entry.status === 'posted'"
@@ -161,7 +164,7 @@ function formatNOK(amount: number): string {
                   @click="handleVoid(entry.id)"
                 >
                   <Ban class="h-3.5 w-3.5" />
-                  Annuller
+                  {{ t('admin.accounting.journal.void') }}
                 </button>
               </td>
             </tr>
@@ -170,12 +173,12 @@ function formatNOK(amount: number): string {
                 <table v-if="entry.lines?.length" class="min-w-full text-sm">
                   <thead>
                     <tr class="text-xs font-medium uppercase text-gray-500">
-                      <th class="pb-2 pr-4 text-left">Konto</th>
-                      <th class="pb-2 pr-4 text-left">Navn</th>
-                      <th class="pb-2 pr-4 text-right">Debet</th>
-                      <th class="pb-2 pr-4 text-right">Kredit</th>
-                      <th class="pb-2 pr-4 text-right">MVA</th>
-                      <th class="pb-2 text-left">Beskrivelse</th>
+                      <th class="pb-2 pr-4 text-left">{{ t('admin.accounting.accounts.code') }}</th>
+                      <th class="pb-2 pr-4 text-left">{{ t('admin.accounting.accounts.name') }}</th>
+                      <th class="pb-2 pr-4 text-right">{{ t('admin.accounting.journalForm.debit') }}</th>
+                      <th class="pb-2 pr-4 text-right">{{ t('admin.accounting.journalForm.credit') }}</th>
+                      <th class="pb-2 pr-4 text-right">{{ t('admin.accounting.journalForm.mva') }}</th>
+                      <th class="pb-2 text-left">{{ t('admin.accounting.journal.description') }}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -189,14 +192,14 @@ function formatNOK(amount: number): string {
                     </tr>
                   </tbody>
                 </table>
-                <p v-else class="text-sm text-gray-500">Ingen linjer.</p>
+                <p v-else class="text-sm text-gray-500">{{ t('admin.accounting.journal.noEntries') }}</p>
               </td>
             </tr>
           </template>
         </tbody>
       </table>
       <p v-if="!entries?.length" class="mt-4 text-center text-sm text-gray-500">
-        Ingen bilag i denne perioden.
+        {{ t('admin.accounting.journal.noEntries') }}
       </p>
     </div>
   </div>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Lock, Plus, Check, X } from 'lucide-vue-next'
 import {
   useAccountsList,
@@ -9,6 +10,8 @@ import {
   type Account,
 } from '@/composables/useAccounting'
 
+const { t } = useI18n()
+
 const { data: accounts, isLoading, isError } = useAccountsList()
 const seedMutation = useSeedAccounts()
 const createMutation = useCreateAccount()
@@ -16,28 +19,28 @@ const updateMutation = useUpdateAccount()
 
 const hasAccounts = computed(() => (accounts.value?.length ?? 0) > 0)
 
-const typeLabels: Record<string, string> = {
-  asset: 'Eiendeler',
-  liability: 'Gjeld',
-  revenue: 'Inntekter',
-  expense: 'Kostnader',
-}
+const typeLabels = computed<Record<string, string>>(() => ({
+  asset: t('admin.accounting.accounts.typeAsset'),
+  liability: t('admin.accounting.accounts.typeLiability'),
+  revenue: t('admin.accounting.accounts.typeRevenue'),
+  expense: t('admin.accounting.accounts.typeExpense'),
+}))
 
 const typeOrder = ['asset', 'liability', 'revenue', 'expense']
 
-const mvaLabels: Record<string, string> = {
-  eligible: 'Kvalifisert',
-  ineligible: 'Ikke kvalifisert',
-  partial: 'Delvis',
-  not_applicable: 'Ikke aktuelt',
-}
+const mvaLabels = computed<Record<string, string>>(() => ({
+  eligible: t('admin.accounting.accounts.mvaEligible'),
+  ineligible: t('admin.accounting.accounts.mvaIneligible'),
+  partial: t('admin.accounting.accounts.mvaPartial'),
+  not_applicable: t('admin.accounting.accounts.mvaNA'),
+}))
 
 const grouped = computed(() => {
   if (!accounts.value) return []
   return typeOrder
     .map(type => ({
       type,
-      label: typeLabels[type] ?? type,
+      label: typeLabels.value[type] ?? type,
       accounts: accounts.value!.filter(a => a.account_type === type),
     }))
     .filter(g => g.accounts.length > 0)
@@ -102,29 +105,29 @@ function handleAddAccount() {
 <template>
   <div>
     <div class="flex items-center justify-between">
-      <h1 class="text-2xl font-bold text-gray-900">Kontoplan</h1>
+      <h1 class="text-2xl font-bold text-gray-900">{{ t('admin.accounting.accounts.title') }}</h1>
       <button
         v-if="hasAccounts"
         class="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
         @click="showAddForm = !showAddForm"
       >
         <Plus class="h-4 w-4" />
-        Legg til konto
+        {{ t('admin.accounting.accounts.addAccount') }}
       </button>
     </div>
 
-    <div v-if="isLoading" class="mt-6 text-gray-500">Laster...</div>
-    <div v-else-if="isError" class="mt-6 rounded-md bg-red-50 p-3 text-sm text-red-800">Kunne ikke laste kontoplan</div>
+    <div v-if="isLoading" class="mt-6 text-gray-500">{{ t('common.loading') }}...</div>
+    <div v-else-if="isError" class="mt-6 rounded-md bg-red-50 p-3 text-sm text-red-800">{{ t('common.error') }}</div>
 
     <div v-else-if="!hasAccounts" class="mt-6 rounded-lg border border-dashed border-gray-300 p-8 text-center">
-      <h3 class="text-sm font-semibold text-gray-900">Ingen kontoer</h3>
-      <p class="mt-1 text-sm text-gray-500">Opprett standard norsk kontoplan for båtforening.</p>
+      <h3 class="text-sm font-semibold text-gray-900">{{ t('admin.accounting.accounts.title') }}</h3>
+      <p class="mt-1 text-sm text-gray-500">{{ t('admin.accounting.accounts.seedButton') }}</p>
       <button
         class="mt-3 inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
         :disabled="seedMutation.isPending.value"
         @click="seedMutation.mutate(undefined)"
       >
-        Opprett standard kontoplan
+        {{ t('admin.accounting.accounts.seedButton') }}
       </button>
       <p v-if="seedMutation.isSuccess.value" class="mt-2 text-sm text-green-600">
         {{ seedMutation.data.value?.seeded }} kontoer opprettet
@@ -133,23 +136,23 @@ function handleAddAccount() {
 
     <template v-else>
       <div v-if="showAddForm" class="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
-        <h3 class="mb-3 text-sm font-semibold text-gray-700">Ny konto</h3>
+        <h3 class="mb-3 text-sm font-semibold text-gray-700">{{ t('admin.accounting.accounts.addAccount') }}</h3>
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-6">
-          <input v-model="newAccount.code" placeholder="Kode (f.eks. 6150)" class="rounded-md border border-gray-300 px-3 py-2 text-sm" />
-          <input v-model="newAccount.name" placeholder="Navn" class="rounded-md border border-gray-300 px-3 py-2 text-sm sm:col-span-2" />
+          <input v-model="newAccount.code" :placeholder="t('admin.accounting.accounts.code')" class="rounded-md border border-gray-300 px-3 py-2 text-sm" />
+          <input v-model="newAccount.name" :placeholder="t('admin.accounting.accounts.name')" class="rounded-md border border-gray-300 px-3 py-2 text-sm sm:col-span-2" />
           <select v-model="newAccount.account_type" class="rounded-md border border-gray-300 px-3 py-2 text-sm">
-            <option value="asset">Eiendeler</option>
-            <option value="liability">Gjeld</option>
-            <option value="revenue">Inntekter</option>
-            <option value="expense">Kostnader</option>
+            <option value="asset">{{ t('admin.accounting.accounts.typeAsset') }}</option>
+            <option value="liability">{{ t('admin.accounting.accounts.typeLiability') }}</option>
+            <option value="revenue">{{ t('admin.accounting.accounts.typeRevenue') }}</option>
+            <option value="expense">{{ t('admin.accounting.accounts.typeExpense') }}</option>
           </select>
           <select v-model="newAccount.mva_eligible" class="rounded-md border border-gray-300 px-3 py-2 text-sm">
-            <option value="not_applicable">Ikke aktuelt</option>
-            <option value="eligible">Kvalifisert</option>
-            <option value="ineligible">Ikke kvalifisert</option>
-            <option value="partial">Delvis</option>
+            <option value="not_applicable">{{ t('admin.accounting.accounts.mvaNA') }}</option>
+            <option value="eligible">{{ t('admin.accounting.accounts.mvaEligible') }}</option>
+            <option value="ineligible">{{ t('admin.accounting.accounts.mvaIneligible') }}</option>
+            <option value="partial">{{ t('admin.accounting.accounts.mvaPartial') }}</option>
           </select>
-          <input v-model="newAccount.description" placeholder="Beskrivelse" class="rounded-md border border-gray-300 px-3 py-2 text-sm" />
+          <input v-model="newAccount.description" :placeholder="t('admin.accounting.accounts.description')" class="rounded-md border border-gray-300 px-3 py-2 text-sm" />
         </div>
         <div class="mt-3 flex gap-2">
           <button
@@ -157,10 +160,10 @@ function handleAddAccount() {
             :disabled="!newAccount.code || !newAccount.name || createMutation.isPending.value"
             @click="handleAddAccount"
           >
-            Lagre
+            {{ t('admin.accounting.accounts.save') }}
           </button>
           <button class="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" @click="showAddForm = false">
-            Avbryt
+            {{ t('admin.accounting.accounts.cancel') }}
           </button>
         </div>
         <p v-if="createMutation.isError.value" class="mt-2 text-sm text-red-600">
@@ -174,11 +177,11 @@ function handleAddAccount() {
           <table class="min-w-full divide-y divide-gray-200">
             <thead class="bg-gray-50">
               <tr>
-                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Konto</th>
-                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Navn</th>
-                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Type</th>
-                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">MVA-status</th>
-                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Beskrivelse</th>
+                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.accounting.accounts.code') }}</th>
+                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.accounting.accounts.name') }}</th>
+                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.accounting.accounts.type') }}</th>
+                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.accounting.accounts.mvaStatus') }}</th>
+                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.accounting.accounts.description') }}</th>
                 <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500"></th>
               </tr>
             </thead>
@@ -197,10 +200,10 @@ function handleAddAccount() {
                   <td class="px-4 py-3 text-sm text-gray-500">{{ typeLabels[account.account_type] }}</td>
                   <td class="px-4 py-3">
                     <select v-model="editForm.mva_eligible" class="rounded border border-gray-300 px-2 py-1 text-sm" @click.stop>
-                      <option value="not_applicable">Ikke aktuelt</option>
-                      <option value="eligible">Kvalifisert</option>
-                      <option value="ineligible">Ikke kvalifisert</option>
-                      <option value="partial">Delvis</option>
+                      <option value="not_applicable">{{ t('admin.accounting.accounts.mvaNA') }}</option>
+                      <option value="eligible">{{ t('admin.accounting.accounts.mvaEligible') }}</option>
+                      <option value="ineligible">{{ t('admin.accounting.accounts.mvaIneligible') }}</option>
+                      <option value="partial">{{ t('admin.accounting.accounts.mvaPartial') }}</option>
                     </select>
                   </td>
                   <td class="px-4 py-3">

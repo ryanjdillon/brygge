@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import {
   ArrowLeft,
   Plus,
@@ -17,6 +18,7 @@ import {
 } from '@/composables/useAccounting'
 
 const router = useRouter()
+const { t } = useI18n()
 
 const { data: accounts } = useAccountsList()
 const { data: periods } = useFiscalPeriods()
@@ -123,7 +125,7 @@ function handlePost() {
           router.push('/admin/accounting/journal')
         },
         onError: (err) => {
-          errorMessage.value = `Bilag opprettet som kladd, men kunne ikke postere: ${(err as Error).message}`
+          errorMessage.value = `${t('common.error')}: ${(err as Error).message}`
         },
       })
     },
@@ -149,24 +151,24 @@ function accountLabel(a: Account): string {
       @click="router.push('/admin/accounting/journal')"
     >
       <ArrowLeft class="h-4 w-4" />
-      Tilbake til bilagslisten
+      {{ t('admin.accounting.journalForm.back') }}
     </button>
 
-    <h1 class="text-2xl font-bold text-gray-900">Nytt bilag</h1>
+    <h1 class="text-2xl font-bold text-gray-900">{{ t('admin.accounting.journalForm.title') }}</h1>
 
     <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
       <div>
-        <label class="mb-1 block text-sm font-medium text-gray-700">Periode</label>
+        <label class="mb-1 block text-sm font-medium text-gray-700">{{ t('admin.accounting.journalForm.period') }}</label>
         <select
           v-model="selectedPeriodId"
           class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
         >
           <option v-for="p in openPeriods" :key="p.id" :value="p.id">{{ p.year }}</option>
         </select>
-        <p v-if="!openPeriods.length" class="mt-1 text-xs text-red-600">Ingen åpne perioder</p>
+        <p v-if="!openPeriods.length" class="mt-1 text-xs text-red-600">{{ t('admin.accounting.periods.noPeriods') }}</p>
       </div>
       <div>
-        <label class="mb-1 block text-sm font-medium text-gray-700">Dato</label>
+        <label class="mb-1 block text-sm font-medium text-gray-700">{{ t('admin.accounting.journalForm.date') }}</label>
         <input
           v-model="entryDate"
           type="date"
@@ -174,27 +176,27 @@ function accountLabel(a: Account): string {
         />
       </div>
       <div>
-        <label class="mb-1 block text-sm font-medium text-gray-700">Beskrivelse</label>
+        <label class="mb-1 block text-sm font-medium text-gray-700">{{ t('admin.accounting.journalForm.description') }}</label>
         <input
           v-model="description"
           type="text"
-          placeholder="F.eks. Strømregning mars"
+          :placeholder="t('admin.accounting.journalForm.descriptionPlaceholder')"
           class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
         />
       </div>
     </div>
 
     <div class="mt-6">
-      <h2 class="mb-3 text-lg font-semibold text-gray-800">Posteringslinjer</h2>
+      <h2 class="mb-3 text-lg font-semibold text-gray-800">{{ t('admin.accounting.journalForm.lines') }}</h2>
       <div class="overflow-x-auto">
         <table class="min-w-full">
           <thead>
             <tr class="text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-              <th class="pb-2 pr-3">Konto</th>
-              <th class="pb-2 pr-3 text-right">Debet</th>
-              <th class="pb-2 pr-3 text-right">Kredit</th>
-              <th class="pb-2 pr-3 text-right">MVA</th>
-              <th class="pb-2 pr-3">Beskrivelse</th>
+              <th class="pb-2 pr-3">{{ t('admin.accounting.journalForm.account') }}</th>
+              <th class="pb-2 pr-3 text-right">{{ t('admin.accounting.journalForm.debit') }}</th>
+              <th class="pb-2 pr-3 text-right">{{ t('admin.accounting.journalForm.credit') }}</th>
+              <th class="pb-2 pr-3 text-right">{{ t('admin.accounting.journalForm.mva') }}</th>
+              <th class="pb-2 pr-3">{{ t('admin.accounting.journalForm.lineDescription') }}</th>
               <th class="pb-2"></th>
             </tr>
           </thead>
@@ -205,7 +207,7 @@ function accountLabel(a: Account): string {
                   v-model="line.account_code"
                   class="w-full min-w-[200px] rounded-md border border-gray-300 px-2 py-1.5 text-sm"
                 >
-                  <option value="">Velg konto...</option>
+                  <option value="">{{ t('admin.accounting.journalForm.selectAccount') }}</option>
                   <option v-for="a in accounts" :key="a.id" :value="a.code">
                     {{ accountLabel(a) }}
                   </option>
@@ -247,7 +249,7 @@ function accountLabel(a: Account): string {
                 <input
                   v-model="line.description"
                   type="text"
-                  placeholder="Valgfri"
+                  :placeholder="t('admin.accounting.journalForm.optional')"
                   class="w-full min-w-[150px] rounded-md border border-gray-300 px-2 py-1.5 text-sm"
                 />
               </td>
@@ -270,28 +272,28 @@ function accountLabel(a: Account): string {
         @click="addLine"
       >
         <Plus class="h-4 w-4" />
-        Legg til linje
+        {{ t('admin.accounting.journalForm.addLine') }}
       </button>
     </div>
 
     <div class="mt-6 flex items-center gap-6 rounded-lg border border-gray-200 bg-gray-50 p-4">
       <div class="text-sm">
-        <span class="font-medium text-gray-700">Sum debet:</span>
+        <span class="font-medium text-gray-700">{{ t('admin.accounting.journalForm.totalDebit') }}:</span>
         <span class="ml-1 font-mono">{{ formatNOK(totalDebit) }}</span>
       </div>
       <div class="text-sm">
-        <span class="font-medium text-gray-700">Sum kredit:</span>
+        <span class="font-medium text-gray-700">{{ t('admin.accounting.journalForm.totalCredit') }}:</span>
         <span class="ml-1 font-mono">{{ formatNOK(totalCredit) }}</span>
       </div>
       <div class="text-sm">
-        <span class="font-medium text-gray-700">Differanse:</span>
+        <span class="font-medium text-gray-700">{{ t('admin.accounting.journalForm.difference') }}:</span>
         <span class="ml-1 font-mono">{{ formatNOK(difference) }}</span>
       </div>
       <div class="flex items-center gap-1">
         <Check v-if="isBalanced" class="h-5 w-5 text-green-600" />
         <X v-else class="h-5 w-5 text-red-500" />
         <span :class="isBalanced ? 'text-green-600' : 'text-red-500'" class="text-sm font-medium">
-          {{ isBalanced ? 'Balansert' : 'Ikke balansert' }}
+          {{ isBalanced ? t('admin.accounting.journalForm.balanced') : t('admin.accounting.journalForm.notBalanced') }}
         </span>
       </div>
     </div>
@@ -304,14 +306,14 @@ function accountLabel(a: Account): string {
         :disabled="!canSave || createMutation.isPending.value"
         @click="handleSaveDraft"
       >
-        Lagre som kladd
+        {{ t('admin.accounting.journalForm.saveDraft') }}
       </button>
       <button
         class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
         :disabled="!canSave || !isBalanced || createMutation.isPending.value || postMutation.isPending.value"
         @click="handlePost"
       >
-        Poster
+        {{ t('admin.accounting.journalForm.postEntry') }}
       </button>
     </div>
   </div>
