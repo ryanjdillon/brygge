@@ -14,7 +14,6 @@ import {
   FileText,
   DollarSign,
   Megaphone,
-  Banknote,
   ShoppingBag,
   FolderKanban,
   Ship,
@@ -69,20 +68,19 @@ const navGroups = computed<NavGroup[]>(() => {
       ],
     },
     {
-      titleKey: 'admin.groupFinance',
-      items: [
-        { to: '/admin/pricing', icon: DollarSign, label: t('admin.sidebar.pricing'), roles: ['admin', 'treasurer'], feature: 'commerce' },
-        { to: '/admin/products', icon: ShoppingBag, label: t('admin.sidebar.products'), roles: ['board', 'admin'], feature: 'commerce' },
-        { to: '/admin/financials', icon: Banknote, label: t('admin.sidebar.financials'), roles: ['treasurer', 'board', 'admin'], feature: 'commerce' },
-      ],
-    },
-    {
-      titleKey: 'admin.groupAccounting',
+      titleKey: 'admin.groupEconomy',
       items: [
         { to: '/admin/accounting', icon: Calculator, label: t('admin.sidebar.accountingOverview'), roles: ['treasurer', 'board', 'admin'], feature: 'accounting' },
+        { to: '/admin/pricing', icon: DollarSign, label: t('admin.sidebar.pricing'), roles: ['admin', 'treasurer'], feature: 'commerce' },
         { to: '/admin/accounting/accounts', icon: BookOpen, label: t('admin.sidebar.accounts'), roles: ['treasurer', 'board', 'admin'], feature: 'accounting' },
         { to: '/admin/accounting/periods', icon: CalendarDays, label: t('admin.sidebar.periods'), roles: ['treasurer', 'board', 'admin'], feature: 'accounting' },
         { to: '/admin/accounting/journal', icon: FileText, label: t('admin.sidebar.journal'), roles: ['treasurer', 'board', 'admin'], feature: 'accounting' },
+      ],
+    },
+    {
+      titleKey: 'admin.groupShop',
+      items: [
+        { to: '/admin/products', icon: ShoppingBag, label: t('admin.sidebar.products'), roles: ['board', 'admin'], feature: 'commerce' },
       ],
     },
     {

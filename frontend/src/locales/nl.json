@@ -425,7 +425,6 @@
   "admin": {
     "title": "Beheer",
     "ariaNav": "Beheernavigatie",
-    "groupFinance": "Financiën",
     "groupArchive": "Archief en info",
     "sidebar": {
       "users": "Gebruikers",
@@ -682,7 +681,6 @@
       "approveError": "Kon afmetingen niet goedkeuren"
     },
     "groupHarbor": "Haven",
-    "groupAccounting": "Accounting",
     "accounting": {
       "title": "Accounting",
       "dashboard": {
@@ -788,7 +786,9 @@
         "saveDraft": "Save as draft",
         "postEntry": "Post"
       }
-    }
+    },
+    "groupEconomy": "Economy",
+    "groupShop": "Shop"
   },
   "projects": {
     "title": "Projecten",
