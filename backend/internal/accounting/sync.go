@@ -45,6 +45,9 @@ func (s *Service) SyncPayments(ctx context.Context, clubID, periodID, syncedBy s
 		return nil, fmt.Errorf("getting period: %w", err)
 	}
 
+	// Add one day to end date for inclusive range
+	endDatePlusOne := endDate.AddDate(0, 0, 1)
+
 	// Query completed payments within the period that haven't been synced
 	rows, err := s.db.Query(ctx,
 		`SELECT p.id, p.type, p.amount, p.created_at::date::text, u.full_name
@@ -52,13 +55,13 @@ func (s *Service) SyncPayments(ctx context.Context, clubID, periodID, syncedBy s
 		 LEFT JOIN users u ON u.id = p.user_id
 		 WHERE p.club_id = $1
 		   AND p.status = 'completed'
-		   AND p.created_at >= $2 AND p.created_at < $3 + INTERVAL '1 day'
+		   AND p.created_at >= $2 AND p.created_at < $3
 		   AND NOT EXISTS (
 		     SELECT 1 FROM journal_entries je
 		     WHERE je.source = 'payment_sync' AND je.source_id = p.id::text
 		   )
 		 ORDER BY p.created_at`,
-		clubID, startDate, endDate,
+		clubID, startDate, endDatePlusOne,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("querying payments: %w", err)
