@@ -88,6 +88,13 @@ const sourceLabels = computed<Record<string, string>>(() => ({
   bank_import: t('admin.accounting.journal.sourceBankImport'),
 }))
 
+const accountTypeColors: Record<string, string> = {
+  asset: 'bg-blue-100 text-blue-800',
+  liability: 'bg-amber-100 text-amber-800',
+  revenue: 'bg-green-100 text-green-800',
+  expense: 'bg-red-100 text-red-800',
+}
+
 function toggleExpand(entry: JournalEntry) {
   expandedId.value = expandedId.value === entry.id ? null : entry.id
 }
@@ -313,6 +320,9 @@ function formatNOK(amount: number): string {
               <span class="inline-flex items-center gap-1">{{ t('admin.accounting.journal.description') }}<Info class="h-3.5 w-3.5 text-gray-400" :title="t('admin.accounting.journal.tooltipDescription')" /></span>
             </th>
             <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+              <span class="inline-flex items-center gap-1">{{ t('admin.accounting.accounts.code') }}</span>
+            </th>
+            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
               <span class="inline-flex items-center gap-1">{{ t('admin.accounting.journal.status') }}<Info class="h-3.5 w-3.5 text-gray-400" :title="t('admin.accounting.journal.tooltipStatus')" /></span>
             </th>
             <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
@@ -330,6 +340,18 @@ function formatNOK(amount: number): string {
               <td class="whitespace-nowrap px-4 py-3 text-sm font-mono text-gray-900">{{ entry.entry_number }}</td>
               <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ entry.entry_date }}</td>
               <td class="px-4 py-3 text-sm text-gray-900">{{ entry.description }}</td>
+              <td class="px-4 py-3">
+                <div v-if="entry.lines?.length" class="flex flex-wrap gap-1">
+                  <span
+                    v-for="line in entry.lines"
+                    :key="line.id"
+                    :class="['inline-flex rounded px-1.5 py-0.5 font-mono text-xs font-semibold', accountTypeColors[line.account_type] ?? 'bg-gray-100 text-gray-800']"
+                  >
+                    {{ line.account_code }}
+                  </span>
+                </div>
+                <span v-else class="text-sm text-gray-400">-</span>
+              </td>
               <td class="whitespace-nowrap px-4 py-3">
                 <span
                   :class="[
@@ -365,11 +387,8 @@ function formatNOK(amount: number): string {
               </td>
             </tr>
             <tr v-if="expandedId === entry.id">
-              <td colspan="7" class="bg-gray-50 px-8 py-4">
-                <div v-if="entry.lines?.length" class="space-y-3">
-                  <p class="text-xs font-medium text-gray-500">
-                    <span class="font-mono text-sm font-bold text-gray-800">{{ accountsSummary(entry) }}</span>
-                  </p>
+              <td colspan="8" class="bg-gray-50 px-8 py-4">
+                <div v-if="entry.lines?.length">
                   <table class="min-w-full text-sm">
                     <thead>
                       <tr class="text-xs font-medium uppercase text-gray-500">
@@ -383,7 +402,11 @@ function formatNOK(amount: number): string {
                     </thead>
                     <tbody>
                       <tr v-for="line in entry.lines" :key="line.id" class="border-t border-gray-200">
-                        <td class="py-2 pr-4 font-mono font-bold text-gray-900">{{ line.account_code }}</td>
+                        <td class="py-2 pr-4">
+                          <span :class="['inline-flex rounded px-1.5 py-0.5 font-mono text-sm font-semibold', accountTypeColors[line.account_type] ?? 'bg-gray-100 text-gray-800']">
+                            {{ line.account_code }}
+                          </span>
+                        </td>
                         <td class="py-2 pr-4">{{ line.account_name }}</td>
                         <td class="py-2 pr-4 text-right">{{ formatNOK(line.debit) }}</td>
                         <td class="py-2 pr-4 text-right">{{ formatNOK(line.credit) }}</td>
