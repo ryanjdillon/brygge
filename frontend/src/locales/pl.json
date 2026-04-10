@@ -425,7 +425,6 @@
   "admin": {
     "title": "Administracja",
     "ariaNav": "Nawigacja administracji",
-    "groupFinance": "Finanse",
     "groupArchive": "Archiwum i informacje",
     "sidebar": {
       "users": "Użytkownicy",
@@ -682,7 +681,6 @@
       "approveError": "Nie udało się zatwierdzić wymiarów"
     },
     "groupHarbor": "Port",
-    "groupAccounting": "Accounting",
     "accounting": {
       "title": "Accounting",
       "dashboard": {
@@ -788,7 +786,9 @@
         "saveDraft": "Save as draft",
         "postEntry": "Post"
       }
-    }
+    },
+    "groupEconomy": "Economy",
+    "groupShop": "Shop"
   },
   "projects": {
     "title": "Projekty",

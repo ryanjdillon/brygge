@@ -421,7 +421,6 @@
   "admin": {
     "title": "Administrasjon",
     "ariaNav": "Admin-navigasjon",
-    "groupFinance": "Økonomi",
     "groupArchive": "Arkiv og info",
     "sidebar": {
       "users": "Brukere",
@@ -678,7 +677,6 @@
       "approveError": "Kunne ikke godkjenne mål"
     },
     "groupHarbor": "Havn",
-    "groupAccounting": "Regnskap",
     "accounting": {
       "title": "Regnskap",
       "dashboard": {
@@ -784,7 +782,9 @@
         "saveDraft": "Lagre som kladd",
         "postEntry": "Poster"
       }
-    }
+    },
+    "groupEconomy": "Økonomi",
+    "groupShop": "Butikk"
   },
   "projects": {
     "title": "Prosjekter",
