@@ -44,6 +44,7 @@ export interface JournalLine {
   account_id: string
   account_code: string
   account_name: string
+  account_type: string
   debit: number
   credit: number
   description: string
