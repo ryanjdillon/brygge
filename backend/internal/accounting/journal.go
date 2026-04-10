@@ -46,6 +46,7 @@ type JournalLine struct {
 	AccountID      string         `json:"account_id"`
 	AccountCode    string         `json:"account_code,omitempty"`
 	AccountName    string         `json:"account_name,omitempty"`
+	AccountType    string         `json:"account_type,omitempty"`
 	Debit          float64        `json:"debit"`
 	Credit         float64        `json:"credit"`
 	Description    string         `json:"description"`
@@ -368,8 +369,18 @@ func (s *Service) GetJournalEntry(ctx context.Context, entryID string) (*Journal
 		return nil, fmt.Errorf("getting entry: %w", err)
 	}
 
+	lines, err := s.getEntryLines(ctx, entryID)
+	if err != nil {
+		return nil, err
+	}
+	entry.Lines = lines
+
+	return &entry, nil
+}
+
+func (s *Service) getEntryLines(ctx context.Context, entryID string) ([]JournalLine, error) {
 	rows, err := s.db.Query(ctx,
-		`SELECT jl.id, jl.journal_entry_id, jl.account_id, a.code, a.name, jl.debit, jl.credit, jl.description, jl.mva_amount, jl.mva_eligible
+		`SELECT jl.id, jl.journal_entry_id, jl.account_id, a.code, a.name, a.account_type, jl.debit, jl.credit, jl.description, jl.mva_amount, jl.mva_eligible
 		 FROM journal_lines jl
 		 JOIN accounts a ON a.id = jl.account_id
 		 WHERE jl.journal_entry_id = $1
@@ -381,16 +392,16 @@ func (s *Service) GetJournalEntry(ctx context.Context, entryID string) (*Journal
 	}
 	defer rows.Close()
 
+	var lines []JournalLine
 	for rows.Next() {
 		var l JournalLine
-		if err := rows.Scan(&l.ID, &l.JournalEntryID, &l.AccountID, &l.AccountCode, &l.AccountName,
+		if err := rows.Scan(&l.ID, &l.JournalEntryID, &l.AccountID, &l.AccountCode, &l.AccountName, &l.AccountType,
 			&l.Debit, &l.Credit, &l.Description, &l.MVAAmount, &l.MVAEligible); err != nil {
 			return nil, fmt.Errorf("scanning line: %w", err)
 		}
-		entry.Lines = append(entry.Lines, l)
+		lines = append(lines, l)
 	}
-
-	return &entry, rows.Err()
+	return lines, rows.Err()
 }
 
 // JournalFilters for listing journal entries.
@@ -449,5 +460,17 @@ func (s *Service) ListJournalEntries(ctx context.Context, clubID string, filters
 		}
 		entries = append(entries, e)
 	}
-	return entries, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	for i := range entries {
+		lines, err := s.getEntryLines(ctx, entries[i].ID)
+		if err != nil {
+			return nil, err
+		}
+		entries[i].Lines = lines
+	}
+
+	return entries, nil
 }
