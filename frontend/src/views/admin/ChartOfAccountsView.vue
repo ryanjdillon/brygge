@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Lock, Plus, Check, X } from 'lucide-vue-next'
+import { Lock, Plus, Check, X, ChevronUp, ChevronDown } from 'lucide-vue-next'
 import {
   useAccountsList,
   useSeedAccounts,
@@ -26,8 +26,6 @@ const typeLabels = computed<Record<string, string>>(() => ({
   expense: t('admin.accounting.accounts.typeExpense'),
 }))
 
-const typeOrder = ['asset', 'liability', 'revenue', 'expense']
-
 const mvaLabels = computed<Record<string, string>>(() => ({
   eligible: t('admin.accounting.accounts.mvaEligible'),
   ineligible: t('admin.accounting.accounts.mvaIneligible'),
@@ -35,15 +33,55 @@ const mvaLabels = computed<Record<string, string>>(() => ({
   not_applicable: t('admin.accounting.accounts.mvaNA'),
 }))
 
-const grouped = computed(() => {
+const typeColors: Record<string, string> = {
+  asset: 'bg-blue-100 text-blue-800',
+  liability: 'bg-amber-100 text-amber-800',
+  revenue: 'bg-green-100 text-green-800',
+  expense: 'bg-red-100 text-red-800',
+}
+
+const typeFilterOptions = ['all', 'asset', 'liability', 'revenue', 'expense']
+const typeFilter = ref('all')
+const searchQuery = ref('')
+
+type SortKey = 'code' | 'name' | 'account_type' | 'mva_eligible'
+const sortKey = ref<SortKey>('code')
+const sortAsc = ref(true)
+
+function toggleSort(key: SortKey) {
+  if (sortKey.value === key) {
+    sortAsc.value = !sortAsc.value
+  } else {
+    sortKey.value = key
+    sortAsc.value = true
+  }
+}
+
+const filteredAccounts = computed(() => {
   if (!accounts.value) return []
-  return typeOrder
-    .map(type => ({
-      type,
-      label: typeLabels.value[type] ?? type,
-      accounts: accounts.value!.filter(a => a.account_type === type),
-    }))
-    .filter(g => g.accounts.length > 0)
+  let list = accounts.value
+
+  if (typeFilter.value !== 'all') {
+    list = list.filter(a => a.account_type === typeFilter.value)
+  }
+
+  if (searchQuery.value.trim()) {
+    const q = searchQuery.value.trim().toLowerCase()
+    list = list.filter(a =>
+      a.code.toLowerCase().includes(q) ||
+      a.name.toLowerCase().includes(q) ||
+      a.description.toLowerCase().includes(q),
+    )
+  }
+
+  const dir = sortAsc.value ? 1 : -1
+  return [...list].sort((a, b) => {
+    const aVal = a[sortKey.value] ?? ''
+    const bVal = b[sortKey.value] ?? ''
+    if (aVal < bVal) return -1 * dir
+    if (aVal > bVal) return 1 * dir
+    return 0
+  })
 })
 
 const editingId = ref<string | null>(null)
@@ -171,70 +209,131 @@ function handleAddAccount() {
         </p>
       </div>
 
-      <div v-for="group in grouped" :key="group.type" class="mt-6">
-        <h2 class="mb-2 text-lg font-semibold text-gray-800">{{ group.label }}</h2>
-        <div class="overflow-x-auto">
-          <table class="min-w-full divide-y divide-gray-200">
-            <thead class="bg-gray-50">
-              <tr>
-                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.accounting.accounts.code') }}</th>
-                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.accounting.accounts.name') }}</th>
-                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.accounting.accounts.type') }}</th>
-                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.accounting.accounts.mvaStatus') }}</th>
-                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.accounting.accounts.description') }}</th>
-                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500"></th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-200 bg-white">
-              <tr
-                v-for="account in group.accounts"
-                :key="account.id"
-                :class="{ 'cursor-pointer hover:bg-gray-50': !account.is_system }"
-                @click="startEdit(account)"
+      <!-- Filters -->
+      <div class="mt-4 flex flex-wrap items-center gap-3">
+        <input
+          v-model="searchQuery"
+          type="text"
+          :placeholder="t('admin.accounting.accounts.search')"
+          class="w-64 rounded-md border border-gray-300 px-3 py-2 text-sm"
+        />
+        <select v-model="typeFilter" class="rounded-md border border-gray-300 px-3 py-2 text-sm">
+          <option v-for="opt in typeFilterOptions" :key="opt" :value="opt">
+            {{ opt === 'all' ? t('admin.accounting.journal.allStatuses') : typeLabels[opt] }}
+          </option>
+        </select>
+        <span class="text-sm text-gray-500">
+          {{ filteredAccounts.length }} / {{ accounts?.length ?? 0 }}
+        </span>
+      </div>
+
+      <!-- Single table -->
+      <div class="mt-4 overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-gray-50">
+            <tr>
+              <th
+                class="cursor-pointer select-none px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 hover:text-gray-700"
+                @click="toggleSort('code')"
               >
-                <template v-if="editingId === account.id">
-                  <td class="whitespace-nowrap px-4 py-3 text-sm font-mono text-gray-900">{{ account.code }}</td>
-                  <td class="px-4 py-3">
-                    <input v-model="editForm.name" class="w-full rounded border border-gray-300 px-2 py-1 text-sm" @click.stop />
-                  </td>
-                  <td class="px-4 py-3 text-sm text-gray-500">{{ typeLabels[account.account_type] }}</td>
-                  <td class="px-4 py-3">
-                    <select v-model="editForm.mva_eligible" class="rounded border border-gray-300 px-2 py-1 text-sm" @click.stop>
-                      <option value="not_applicable">{{ t('admin.accounting.accounts.mvaNA') }}</option>
-                      <option value="eligible">{{ t('admin.accounting.accounts.mvaEligible') }}</option>
-                      <option value="ineligible">{{ t('admin.accounting.accounts.mvaIneligible') }}</option>
-                      <option value="partial">{{ t('admin.accounting.accounts.mvaPartial') }}</option>
-                    </select>
-                  </td>
-                  <td class="px-4 py-3">
-                    <input v-model="editForm.description" class="w-full rounded border border-gray-300 px-2 py-1 text-sm" @click.stop />
-                  </td>
-                  <td class="whitespace-nowrap px-4 py-3">
-                    <div class="flex gap-1">
-                      <button class="rounded p-1 text-green-600 hover:bg-green-50" @click.stop="saveEdit(account.id)">
-                        <Check class="h-4 w-4" />
-                      </button>
-                      <button class="rounded p-1 text-gray-400 hover:bg-gray-100" @click.stop="cancelEdit">
-                        <X class="h-4 w-4" />
-                      </button>
-                    </div>
-                  </td>
-                </template>
-                <template v-else>
-                  <td class="whitespace-nowrap px-4 py-3 text-sm font-mono text-gray-900">
+                <span class="inline-flex items-center gap-1">
+                  {{ t('admin.accounting.accounts.code') }}
+                  <ChevronUp v-if="sortKey === 'code' && sortAsc" class="h-3.5 w-3.5" />
+                  <ChevronDown v-else-if="sortKey === 'code' && !sortAsc" class="h-3.5 w-3.5" />
+                </span>
+              </th>
+              <th
+                class="cursor-pointer select-none px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 hover:text-gray-700"
+                @click="toggleSort('name')"
+              >
+                <span class="inline-flex items-center gap-1">
+                  {{ t('admin.accounting.accounts.name') }}
+                  <ChevronUp v-if="sortKey === 'name' && sortAsc" class="h-3.5 w-3.5" />
+                  <ChevronDown v-else-if="sortKey === 'name' && !sortAsc" class="h-3.5 w-3.5" />
+                </span>
+              </th>
+              <th
+                class="cursor-pointer select-none px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 hover:text-gray-700"
+                @click="toggleSort('account_type')"
+              >
+                <span class="inline-flex items-center gap-1">
+                  {{ t('admin.accounting.accounts.type') }}
+                  <ChevronUp v-if="sortKey === 'account_type' && sortAsc" class="h-3.5 w-3.5" />
+                  <ChevronDown v-else-if="sortKey === 'account_type' && !sortAsc" class="h-3.5 w-3.5" />
+                </span>
+              </th>
+              <th
+                class="cursor-pointer select-none px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 hover:text-gray-700"
+                @click="toggleSort('mva_eligible')"
+              >
+                <span class="inline-flex items-center gap-1">
+                  {{ t('admin.accounting.accounts.mvaStatus') }}
+                  <ChevronUp v-if="sortKey === 'mva_eligible' && sortAsc" class="h-3.5 w-3.5" />
+                  <ChevronDown v-else-if="sortKey === 'mva_eligible' && !sortAsc" class="h-3.5 w-3.5" />
+                </span>
+              </th>
+              <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.accounting.accounts.description') }}</th>
+              <th class="w-16 px-4 py-3"></th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-200 bg-white">
+            <tr
+              v-for="account in filteredAccounts"
+              :key="account.id"
+              :class="{ 'cursor-pointer hover:bg-gray-50': !account.is_system }"
+              @click="startEdit(account)"
+            >
+              <template v-if="editingId === account.id">
+                <td class="whitespace-nowrap px-4 py-3">
+                  <span :class="['inline-flex rounded px-2 py-0.5 font-mono text-sm font-semibold', typeColors[account.account_type]]">
                     {{ account.code }}
-                    <Lock v-if="account.is_system" class="ml-1 inline h-3.5 w-3.5 text-gray-400" />
-                  </td>
-                  <td class="px-4 py-3 text-sm text-gray-900">{{ account.name }}</td>
-                  <td class="px-4 py-3 text-sm text-gray-500">{{ typeLabels[account.account_type] }}</td>
-                  <td class="px-4 py-3 text-sm text-gray-500">{{ mvaLabels[account.mva_eligible] ?? account.mva_eligible }}</td>
-                  <td class="px-4 py-3 text-sm text-gray-500">{{ account.description }}</td>
-                  <td class="px-4 py-3"></td>
-                </template>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+                  </span>
+                </td>
+                <td class="px-4 py-3">
+                  <input v-model="editForm.name" class="w-full rounded border border-gray-300 px-2 py-1 text-sm" @click.stop />
+                </td>
+                <td class="px-4 py-3 text-sm text-gray-500">{{ typeLabels[account.account_type] }}</td>
+                <td class="px-4 py-3">
+                  <select v-model="editForm.mva_eligible" class="rounded border border-gray-300 px-2 py-1 text-sm" @click.stop>
+                    <option value="not_applicable">{{ t('admin.accounting.accounts.mvaNA') }}</option>
+                    <option value="eligible">{{ t('admin.accounting.accounts.mvaEligible') }}</option>
+                    <option value="ineligible">{{ t('admin.accounting.accounts.mvaIneligible') }}</option>
+                    <option value="partial">{{ t('admin.accounting.accounts.mvaPartial') }}</option>
+                  </select>
+                </td>
+                <td class="px-4 py-3">
+                  <input v-model="editForm.description" class="w-full rounded border border-gray-300 px-2 py-1 text-sm" @click.stop />
+                </td>
+                <td class="whitespace-nowrap px-4 py-3">
+                  <div class="flex gap-1">
+                    <button class="rounded p-1 text-green-600 hover:bg-green-50" @click.stop="saveEdit(account.id)">
+                      <Check class="h-4 w-4" />
+                    </button>
+                    <button class="rounded p-1 text-gray-400 hover:bg-gray-100" @click.stop="cancelEdit">
+                      <X class="h-4 w-4" />
+                    </button>
+                  </div>
+                </td>
+              </template>
+              <template v-else>
+                <td class="whitespace-nowrap px-4 py-3">
+                  <span :class="['inline-flex items-center gap-1 rounded px-2 py-0.5 font-mono text-sm font-semibold', typeColors[account.account_type]]">
+                    {{ account.code }}
+                    <Lock v-if="account.is_system" class="h-3 w-3 opacity-50" />
+                  </span>
+                </td>
+                <td class="px-4 py-3 text-sm text-gray-900">{{ account.name }}</td>
+                <td class="px-4 py-3 text-sm text-gray-500">{{ typeLabels[account.account_type] }}</td>
+                <td class="px-4 py-3 text-sm text-gray-500">{{ mvaLabels[account.mva_eligible] ?? account.mva_eligible }}</td>
+                <td class="px-4 py-3 text-sm text-gray-500">{{ account.description }}</td>
+                <td class="px-4 py-3"></td>
+              </template>
+            </tr>
+          </tbody>
+        </table>
+        <p v-if="!filteredAccounts.length" class="mt-4 text-center text-sm text-gray-500">
+          {{ t('admin.accounting.journal.noEntries') }}
+        </p>
       </div>
     </template>
   </div>
