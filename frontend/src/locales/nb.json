@@ -718,7 +718,8 @@
         "system": "System",
         "save": "Lagre",
         "cancel": "Avbryt",
-        "confirmDelete": "Deaktiver denne kontoen?"
+        "confirmDelete": "Deaktiver denne kontoen?",
+        "search": "S\u00f8k i kontoer..."
       },
       "periods": {
         "title": "Regnskapsperioder",
@@ -812,7 +813,8 @@
       }
     },
     "groupEconomy": "Økonomi",
-    "groupShop": "Butikk"
+    "groupShop": "Butikk",
+    "groupSite": "Nettsted"
   },
   "projects": {
     "title": "Prosjekter",
