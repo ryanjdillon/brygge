@@ -8,6 +8,7 @@ import {
   Trash2,
   Check,
   X,
+  Info,
 } from 'lucide-vue-next'
 import {
   useAccountsList,
@@ -158,7 +159,10 @@ function accountLabel(a: Account): string {
 
     <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
       <div>
-        <label class="mb-1 block text-sm font-medium text-gray-700">{{ t('admin.accounting.journalForm.period') }}</label>
+        <label class="mb-1 flex items-center gap-1 text-sm font-medium text-gray-700">
+          {{ t('admin.accounting.journalForm.period') }}
+          <Info class="h-3.5 w-3.5 text-gray-400" :title="t('admin.accounting.journalForm.tooltipPeriod')" />
+        </label>
         <select
           v-model="selectedPeriodId"
           class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
@@ -168,7 +172,10 @@ function accountLabel(a: Account): string {
         <p v-if="!openPeriods.length" class="mt-1 text-xs text-red-600">{{ t('admin.accounting.periods.noPeriods') }}</p>
       </div>
       <div>
-        <label class="mb-1 block text-sm font-medium text-gray-700">{{ t('admin.accounting.journalForm.date') }}</label>
+        <label class="mb-1 flex items-center gap-1 text-sm font-medium text-gray-700">
+          {{ t('admin.accounting.journalForm.date') }}
+          <Info class="h-3.5 w-3.5 text-gray-400" :title="t('admin.accounting.journalForm.tooltipDate')" />
+        </label>
         <input
           v-model="entryDate"
           type="date"
@@ -176,7 +183,10 @@ function accountLabel(a: Account): string {
         />
       </div>
       <div>
-        <label class="mb-1 block text-sm font-medium text-gray-700">{{ t('admin.accounting.journalForm.description') }}</label>
+        <label class="mb-1 flex items-center gap-1 text-sm font-medium text-gray-700">
+          {{ t('admin.accounting.journalForm.description') }}
+          <Info class="h-3.5 w-3.5 text-gray-400" :title="t('admin.accounting.journalForm.tooltipDescription')" />
+        </label>
         <input
           v-model="description"
           type="text"
@@ -192,12 +202,22 @@ function accountLabel(a: Account): string {
         <table class="min-w-full">
           <thead>
             <tr class="text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-              <th class="pb-2 pr-3">{{ t('admin.accounting.journalForm.account') }}</th>
-              <th class="pb-2 pr-3 text-right">{{ t('admin.accounting.journalForm.debit') }}</th>
-              <th class="pb-2 pr-3 text-right">{{ t('admin.accounting.journalForm.credit') }}</th>
-              <th class="pb-2 pr-3 text-right">{{ t('admin.accounting.journalForm.mva') }}</th>
-              <th class="pb-2 pr-3">{{ t('admin.accounting.journalForm.lineDescription') }}</th>
-              <th class="pb-2"></th>
+              <th class="min-w-[200px] pb-2 pr-3">
+                <span class="inline-flex items-center gap-1">{{ t('admin.accounting.journalForm.account') }}<Info class="h-3.5 w-3.5 text-gray-400" :title="t('admin.accounting.journalForm.tooltipAccount')" /></span>
+              </th>
+              <th class="w-28 pb-2 pr-3 text-right">
+                <span class="inline-flex items-center justify-end gap-1">{{ t('admin.accounting.journalForm.debit') }}<Info class="h-3.5 w-3.5 text-gray-400" :title="t('admin.accounting.journalForm.tooltipDebit')" /></span>
+              </th>
+              <th class="w-28 pb-2 pr-3 text-right">
+                <span class="inline-flex items-center justify-end gap-1">{{ t('admin.accounting.journalForm.credit') }}<Info class="h-3.5 w-3.5 text-gray-400" :title="t('admin.accounting.journalForm.tooltipCredit')" /></span>
+              </th>
+              <th class="w-24 pb-2 pr-3 text-right">
+                <span class="inline-flex items-center justify-end gap-1">{{ t('admin.accounting.journalForm.mva') }}<Info class="h-3.5 w-3.5 text-gray-400" :title="t('admin.accounting.journalForm.tooltipMva')" /></span>
+              </th>
+              <th class="pb-2 pr-3">
+                <span class="inline-flex items-center gap-1">{{ t('admin.accounting.journalForm.lineDescription') }}<Info class="h-3.5 w-3.5 text-gray-400" :title="t('admin.accounting.journalForm.tooltipLineDesc')" /></span>
+              </th>
+              <th class="w-10 pb-2"></th>
             </tr>
           </thead>
           <tbody>
@@ -241,9 +261,9 @@ function accountLabel(a: Account): string {
                   step="0.01"
                   min="0"
                   placeholder="0.00"
-                  class="w-28 rounded-md border border-gray-300 px-2 py-1.5 text-right text-sm"
+                  class="w-24 rounded-md border border-gray-300 px-2 py-1.5 text-right text-sm"
                 />
-                <span v-else class="block w-28 text-right text-sm text-gray-400">-</span>
+                <span v-else class="block w-24 text-right text-sm text-gray-400">-</span>
               </td>
               <td class="py-2 pr-3">
                 <input

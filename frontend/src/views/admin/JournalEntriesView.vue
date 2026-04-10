@@ -11,6 +11,7 @@ import {
   RefreshCw,
   Lock,
   Unlock,
+  Info,
 } from 'lucide-vue-next'
 import {
   useFiscalPeriods,
@@ -148,6 +149,14 @@ function handleClosePeriod() {
 function handleReopenPeriod() {
   if (!selectedPeriodId.value) return
   reopenPeriodMutation.mutate(selectedPeriodId.value)
+}
+
+function accountsSummary(entry: JournalEntry): string {
+  if (!entry.lines?.length) return '-'
+  const debits = entry.lines.filter(l => l.debit > 0).map(l => l.account_code)
+  const credits = entry.lines.filter(l => l.credit > 0).map(l => l.account_code)
+  if (!debits.length && !credits.length) return '-'
+  return `${[...new Set(debits)].join(', ')} \u2192 ${[...new Set(credits)].join(', ')}`
 }
 
 function formatNOK(amount: number): string {
@@ -294,11 +303,21 @@ function formatNOK(amount: number): string {
         <thead class="bg-gray-50">
           <tr>
             <th class="w-8 px-2 py-3"></th>
-            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.accounting.journal.entryNumber') }}</th>
-            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.accounting.journal.date') }}</th>
-            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.accounting.journal.description') }}</th>
-            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.accounting.journal.status') }}</th>
-            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.accounting.journal.source') }}</th>
+            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+              <span class="inline-flex items-center gap-1">{{ t('admin.accounting.journal.entryNumber') }}<Info class="h-3.5 w-3.5 text-gray-400" :title="t('admin.accounting.journal.tooltipEntryNumber')" /></span>
+            </th>
+            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+              <span class="inline-flex items-center gap-1">{{ t('admin.accounting.journal.date') }}<Info class="h-3.5 w-3.5 text-gray-400" :title="t('admin.accounting.journal.tooltipDate')" /></span>
+            </th>
+            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+              <span class="inline-flex items-center gap-1">{{ t('admin.accounting.journal.description') }}<Info class="h-3.5 w-3.5 text-gray-400" :title="t('admin.accounting.journal.tooltipDescription')" /></span>
+            </th>
+            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+              <span class="inline-flex items-center gap-1">{{ t('admin.accounting.journal.status') }}<Info class="h-3.5 w-3.5 text-gray-400" :title="t('admin.accounting.journal.tooltipStatus')" /></span>
+            </th>
+            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+              <span class="inline-flex items-center gap-1">{{ t('admin.accounting.journal.source') }}<Info class="h-3.5 w-3.5 text-gray-400" :title="t('admin.accounting.journal.tooltipSource')" /></span>
+            </th>
             <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.accounting.journal.actions') }}</th>
           </tr>
         </thead>
@@ -347,28 +366,33 @@ function formatNOK(amount: number): string {
             </tr>
             <tr v-if="expandedId === entry.id">
               <td colspan="7" class="bg-gray-50 px-8 py-4">
-                <table v-if="entry.lines?.length" class="min-w-full text-sm">
-                  <thead>
-                    <tr class="text-xs font-medium uppercase text-gray-500">
-                      <th class="pb-2 pr-4 text-left">{{ t('admin.accounting.accounts.code') }}</th>
-                      <th class="pb-2 pr-4 text-left">{{ t('admin.accounting.accounts.name') }}</th>
-                      <th class="pb-2 pr-4 text-right">{{ t('admin.accounting.journalForm.debit') }}</th>
-                      <th class="pb-2 pr-4 text-right">{{ t('admin.accounting.journalForm.credit') }}</th>
-                      <th class="pb-2 pr-4 text-right">{{ t('admin.accounting.journalForm.mva') }}</th>
-                      <th class="pb-2 text-left">{{ t('admin.accounting.journal.description') }}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="line in entry.lines" :key="line.id" class="border-t border-gray-200">
-                      <td class="py-2 pr-4 font-mono">{{ line.account_code }}</td>
-                      <td class="py-2 pr-4">{{ line.account_name }}</td>
-                      <td class="py-2 pr-4 text-right">{{ formatNOK(line.debit) }}</td>
-                      <td class="py-2 pr-4 text-right">{{ formatNOK(line.credit) }}</td>
-                      <td class="py-2 pr-4 text-right">{{ formatNOK(line.mva_amount) }}</td>
-                      <td class="py-2">{{ line.description }}</td>
-                    </tr>
-                  </tbody>
-                </table>
+                <div v-if="entry.lines?.length" class="space-y-3">
+                  <p class="text-xs font-medium text-gray-500">
+                    <span class="font-mono text-sm font-bold text-gray-800">{{ accountsSummary(entry) }}</span>
+                  </p>
+                  <table class="min-w-full text-sm">
+                    <thead>
+                      <tr class="text-xs font-medium uppercase text-gray-500">
+                        <th class="pb-2 pr-4 text-left">{{ t('admin.accounting.accounts.code') }}</th>
+                        <th class="pb-2 pr-4 text-left">{{ t('admin.accounting.accounts.name') }}</th>
+                        <th class="pb-2 pr-4 text-right">{{ t('admin.accounting.journalForm.debit') }}</th>
+                        <th class="pb-2 pr-4 text-right">{{ t('admin.accounting.journalForm.credit') }}</th>
+                        <th class="pb-2 pr-4 text-right">{{ t('admin.accounting.journalForm.mva') }}</th>
+                        <th class="pb-2 text-left">{{ t('admin.accounting.journal.description') }}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="line in entry.lines" :key="line.id" class="border-t border-gray-200">
+                        <td class="py-2 pr-4 font-mono font-bold text-gray-900">{{ line.account_code }}</td>
+                        <td class="py-2 pr-4">{{ line.account_name }}</td>
+                        <td class="py-2 pr-4 text-right">{{ formatNOK(line.debit) }}</td>
+                        <td class="py-2 pr-4 text-right">{{ formatNOK(line.credit) }}</td>
+                        <td class="py-2 pr-4 text-right">{{ formatNOK(line.mva_amount) }}</td>
+                        <td class="py-2">{{ line.description }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
                 <p v-else class="text-sm text-gray-500">{{ t('admin.accounting.journal.noEntries') }}</p>
               </td>
             </tr>

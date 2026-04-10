@@ -769,7 +769,13 @@
         "updatePeriodTooltip": "Synkroniserer betalinger og fakturaer fra Brygge til regnskapet for valgt periode",
         "createPeriodTooltip": "Opprett et nytt regnskapsår",
         "closePeriodTooltip": "Lukk perioden slik at bilag ikke kan endres. Kan gjenåpnes senere.",
-        "reopenPeriodTooltip": "Gjenåpne perioden slik at bilag kan redigeres igjen"
+        "reopenPeriodTooltip": "Gjenåpne perioden slik at bilag kan redigeres igjen",
+        "tooltipEntryNumber": "Fortløpende bilagsnummer i perioden",
+        "tooltipDate": "Transaksjonsdato",
+        "tooltipDescription": "Hva dette bilaget gjelder",
+        "tooltipStatus": "Kladd = ikke ferdigstilt, Postert = ferdigstilt, Annullert = reversert",
+        "tooltipSource": "Hvordan bilaget ble opprettet (manuelt, synkronisert, bankimport)",
+        "tooltipAccounts": "Hvilke kontoer som er berørt"
       },
       "journalForm": {
         "title": "Nytt bilag",
@@ -794,7 +800,15 @@
         "balanced": "Balansert",
         "notBalanced": "Ikke balansert",
         "saveDraft": "Lagre som kladd",
-        "postEntry": "Poster"
+        "postEntry": "Poster",
+        "tooltipPeriod": "Regnskapsåret dette bilaget tilhører",
+        "tooltipDate": "Dato for transaksjonen",
+        "tooltipDescription": "Kort beskrivelse av transaksjonen",
+        "tooltipAccount": "Velg kontokoden denne linjen posteres til",
+        "tooltipDebit": "Beløp å debitere (øker eiendeler/kostnader)",
+        "tooltipCredit": "Beløp å kreditere (øker inntekter/gjeld)",
+        "tooltipMva": "MVA-andel av denne kostnaden (for momskompensasjon)",
+        "tooltipLineDesc": "Valgfri merknad for denne linjen"
       }
     },
     "groupEconomy": "Økonomi",
