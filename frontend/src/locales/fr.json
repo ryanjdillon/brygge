@@ -759,7 +759,17 @@
         "sourceManual": "Manual",
         "sourcePaymentSync": "Payment sync",
         "sourceInvoiceSync": "Invoice sync",
-        "sourceBankImport": "Bank import"
+        "sourceBankImport": "Bank import",
+        "confirmVoid": "Are you sure you want to void this entry? A reversal entry will be created.",
+        "updatePostings": "Update postings",
+        "updating": "Updating...",
+        "updateComplete": "Update complete",
+        "paymentsSynced": "payments synced",
+        "invoicesSynced": "invoices synced",
+        "createPeriod": "Create period",
+        "closePeriod": "Close period",
+        "reopenPeriod": "Reopen period",
+        "noPeriods": "No fiscal periods. Create one to get started."
       },
       "journalForm": {
         "title": "New entry",

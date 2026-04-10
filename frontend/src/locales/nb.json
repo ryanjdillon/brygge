@@ -755,7 +755,17 @@
         "sourceManual": "Manuell",
         "sourcePaymentSync": "Betalingssynk",
         "sourceInvoiceSync": "Fakturasynk",
-        "sourceBankImport": "Bankimport"
+        "sourceBankImport": "Bankimport",
+        "confirmVoid": "Er du sikker på at du vil annullere dette bilaget? En reverseringspostering vil bli opprettet.",
+        "updatePostings": "Oppdater posteringer",
+        "updating": "Oppdaterer...",
+        "updateComplete": "Oppdatering fullført",
+        "paymentsSynced": "betalinger synkronisert",
+        "invoicesSynced": "fakturaer synkronisert",
+        "createPeriod": "Opprett periode",
+        "closePeriod": "Lukk periode",
+        "reopenPeriod": "Gjenåpne periode",
+        "noPeriods": "Ingen regnskapsperioder. Opprett en for å komme i gang."
       },
       "journalForm": {
         "title": "Nytt bilag",
