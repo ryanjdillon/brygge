@@ -761,7 +761,6 @@
         "sourceInvoiceSync": "Invoice sync",
         "sourceBankImport": "Bank import",
         "confirmVoid": "Are you sure you want to void this entry? A reversal entry will be created.",
-        "updatePostings": "Update postings",
         "updating": "Updating...",
         "updateComplete": "Update complete",
         "paymentsSynced": "payments synced",
@@ -769,7 +768,12 @@
         "createPeriod": "Create period",
         "closePeriod": "Close period",
         "reopenPeriod": "Reopen period",
-        "noPeriods": "No fiscal periods. Create one to get started."
+        "noPeriods": "No fiscal periods. Create one to get started.",
+        "updatePeriod": "Update period",
+        "updatePeriodTooltip": "Sync payments and invoices from Brygge into the ledger for the selected period",
+        "createPeriodTooltip": "Create a new fiscal year",
+        "closePeriodTooltip": "Close the period so entries cannot be modified. Can be reopened later.",
+        "reopenPeriodTooltip": "Reopen the period so entries can be edited again"
       },
       "journalForm": {
         "title": "New entry",

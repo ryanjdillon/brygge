@@ -35,6 +35,7 @@ const expandedId = ref<string | null>(null)
 const newYear = ref(new Date().getFullYear())
 const syncing = ref(false)
 const syncMessage = ref('')
+const showCreatePeriod = ref(false)
 
 watch(periods, (val) => {
   if (val && val.length > 0 && !selectedPeriodId.value) {
@@ -193,6 +194,7 @@ function formatNOK(amount: number): string {
           v-if="selectedPeriod?.status === 'open'"
           class="inline-flex items-center gap-1.5 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
           :disabled="closePeriodMutation.isPending.value"
+          :title="t('admin.accounting.journal.closePeriodTooltip')"
           @click="handleClosePeriod"
         >
           <Lock class="h-4 w-4" />
@@ -202,20 +204,30 @@ function formatNOK(amount: number): string {
           v-if="selectedPeriod?.status === 'closed'"
           class="inline-flex items-center gap-1.5 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
           :disabled="reopenPeriodMutation.isPending.value"
+          :title="t('admin.accounting.journal.reopenPeriodTooltip')"
           @click="handleReopenPeriod"
         >
           <Unlock class="h-4 w-4" />
           {{ t('admin.accounting.journal.reopenPeriod') }}
         </button>
 
-        <div class="ml-auto">
+        <div class="ml-auto flex items-center gap-2">
+          <button
+            class="inline-flex items-center gap-1.5 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            :title="t('admin.accounting.journal.createPeriodTooltip')"
+            @click="showCreatePeriod = !showCreatePeriod"
+          >
+            <Plus class="h-4 w-4" />
+            {{ t('admin.accounting.journal.createPeriod') }}
+          </button>
           <button
             class="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
             :disabled="syncing || !selectedPeriodId"
+            :title="t('admin.accounting.journal.updatePeriodTooltip')"
             @click="handleSync"
           >
             <RefreshCw class="h-4 w-4" :class="{ 'animate-spin': syncing }" />
-            {{ syncing ? t('admin.accounting.journal.updating') : t('admin.accounting.journal.updatePostings') }}
+            {{ syncing ? t('admin.accounting.journal.updating') : t('admin.accounting.journal.updatePeriod') }}
           </button>
         </div>
       </div>
@@ -227,6 +239,25 @@ function formatNOK(amount: number): string {
       >
         {{ syncMessage }}
       </p>
+
+      <!-- Inline create period form -->
+      <div v-if="showCreatePeriod" class="mt-3 flex items-center gap-3 border-t border-gray-100 pt-3">
+        <input
+          v-model.number="newYear"
+          type="number"
+          min="2000"
+          max="2100"
+          class="w-24 rounded-md border border-gray-300 px-3 py-2 text-sm"
+        />
+        <button
+          class="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+          :disabled="createPeriodMutation.isPending.value"
+          @click="handleCreatePeriod"
+        >
+          <Plus class="h-4 w-4" />
+          {{ t('admin.accounting.journal.createPeriod') }}
+        </button>
+      </div>
     </div>
 
     <!-- Action bar -->
