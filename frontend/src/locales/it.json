@@ -425,7 +425,6 @@
   "admin": {
     "title": "Amministrazione",
     "ariaNav": "Navigazione amministrazione",
-    "groupFinance": "Finanze",
     "groupArchive": "Archivio e informazioni",
     "sidebar": {
       "users": "Utenti",
@@ -682,7 +681,6 @@
       "approveError": "Impossibile approvare le dimensioni"
     },
     "groupHarbor": "Porto",
-    "groupAccounting": "Accounting",
     "accounting": {
       "title": "Accounting",
       "dashboard": {
@@ -788,7 +786,9 @@
         "saveDraft": "Save as draft",
         "postEntry": "Post"
       }
-    }
+    },
+    "groupEconomy": "Economy",
+    "groupShop": "Shop"
   },
   "projects": {
     "title": "Progetti",

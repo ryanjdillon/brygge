@@ -425,7 +425,6 @@
   "admin": {
     "title": "Verwaltung",
     "ariaNav": "Administrationsnavigation",
-    "groupFinance": "Finanzen",
     "groupArchive": "Archiv und Info",
     "sidebar": {
       "users": "Benutzer",
@@ -682,7 +681,6 @@
       "approveError": "Maße konnten nicht genehmigt werden"
     },
     "groupHarbor": "Hafen",
-    "groupAccounting": "Accounting",
     "accounting": {
       "title": "Accounting",
       "dashboard": {
@@ -788,7 +786,9 @@
         "saveDraft": "Save as draft",
         "postEntry": "Post"
       }
-    }
+    },
+    "groupEconomy": "Economy",
+    "groupShop": "Shop"
   },
   "projects": {
     "title": "Projekte",

@@ -425,7 +425,6 @@
   "admin": {
     "title": "Administration",
     "ariaNav": "Admin navigation",
-    "groupFinance": "Finance",
     "groupArchive": "Archive and info",
     "sidebar": {
       "users": "Users",
@@ -682,7 +681,6 @@
       "approveError": "Could not approve dimensions"
     },
     "groupHarbor": "Harbor",
-    "groupAccounting": "Accounting",
     "accounting": {
       "title": "Accounting",
       "dashboard": {
@@ -788,7 +786,9 @@
         "saveDraft": "Save as draft",
         "postEntry": "Post"
       }
-    }
+    },
+    "groupEconomy": "Economy",
+    "groupShop": "Shop"
   },
   "projects": {
     "title": "Projects",
