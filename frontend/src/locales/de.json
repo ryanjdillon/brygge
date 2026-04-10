@@ -773,7 +773,13 @@
         "updatePeriodTooltip": "Sync payments and invoices from Brygge into the ledger for the selected period",
         "createPeriodTooltip": "Create a new fiscal year",
         "closePeriodTooltip": "Close the period so entries cannot be modified. Can be reopened later.",
-        "reopenPeriodTooltip": "Reopen the period so entries can be edited again"
+        "reopenPeriodTooltip": "Reopen the period so entries can be edited again",
+        "tooltipEntryNumber": "Sequential voucher number within the period",
+        "tooltipDate": "Transaction date",
+        "tooltipDescription": "What this entry is for",
+        "tooltipStatus": "Draft = not finalized, Posted = finalized, Voided = reversed",
+        "tooltipSource": "How this entry was created (manual, payment sync, bank import)",
+        "tooltipAccounts": "Which accounts are affected"
       },
       "journalForm": {
         "title": "New entry",
@@ -798,7 +804,15 @@
         "balanced": "Balanced",
         "notBalanced": "Not balanced",
         "saveDraft": "Save as draft",
-        "postEntry": "Post"
+        "postEntry": "Post",
+        "tooltipPeriod": "Fiscal year this entry belongs to",
+        "tooltipDate": "Transaction date (when the expense/income occurred)",
+        "tooltipDescription": "Short description of the transaction (e.g. 'Electricity bill March')",
+        "tooltipAccount": "Select the account code this line posts to",
+        "tooltipDebit": "Amount to debit (increase assets/expenses)",
+        "tooltipCredit": "Amount to credit (increase revenue/liabilities)",
+        "tooltipMva": "VAT portion of this expense (for momskompensasjon)",
+        "tooltipLineDesc": "Optional note for this line"
       }
     },
     "groupEconomy": "Economy",
