@@ -722,7 +722,8 @@
         "system": "System",
         "save": "Save",
         "cancel": "Cancel",
-        "confirmDelete": "Deactivate this account?"
+        "confirmDelete": "Deactivate this account?",
+        "search": "Search accounts..."
       },
       "periods": {
         "title": "Fiscal Periods",
@@ -816,7 +817,8 @@
       }
     },
     "groupEconomy": "Economy",
-    "groupShop": "Shop"
+    "groupShop": "Shop",
+    "groupSite": "Site"
   },
   "projects": {
     "title": "Projecten",

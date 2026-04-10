@@ -64,7 +64,6 @@ const navGroups = computed<NavGroup[]>(() => {
         { to: '/admin/bookings', icon: CalendarCheck, label: t('admin.sidebar.bookings'), roles: ['board', 'harbor_master', 'admin'], feature: 'bookings' },
         { to: '/admin/projects', icon: FolderKanban, label: t('admin.sidebar.projects'), feature: 'projects' },
         { to: '/admin/volunteer', icon: BrushCleaning, label: t('volunteer.title'), feature: 'projects' },
-        { to: '/admin/map', icon: MapPin, label: t('admin.sidebar.mapMarkers') },
       ],
     },
     {
@@ -87,6 +86,12 @@ const navGroups = computed<NavGroup[]>(() => {
       items: [
         { to: '/admin/documents', icon: FileText, label: t('admin.sidebar.documents') },
         { to: '/admin/communication', icon: Megaphone, label: t('admin.sidebar.communication'), feature: 'communications' },
+      ],
+    },
+    {
+      titleKey: 'admin.groupSite',
+      items: [
+        { to: '/admin/map', icon: MapPin, label: t('admin.sidebar.mapMarkers') },
         { to: '/admin/notifications', icon: Bell, label: t('notifications.admin.title'), feature: 'communications' },
         { to: '/admin/gdpr', icon: ShieldCheck, label: t('gdpr.admin.title') },
       ],
