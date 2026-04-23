@@ -46,6 +46,13 @@
 
     overlay = final: prev: {
       brygge = final.callPackage ./nix/package.nix { };
+
+      # nixpkgs builds go-migrate with the snowflake driver linked in, whose
+      # init() panics at startup ("failed to parse CA certificate"). Rebuild
+      # with only postgres to avoid the bad package-level init.
+      go-migrate = prev.go-migrate.overrideAttrs (old: {
+        tags = [ "postgres" ];
+      });
     };
 
     mkTerraformConfig = system:
