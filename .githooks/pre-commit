@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Pre-commit hook: block commits of terraform/terraform.tfvars.json.
+# Each deployer fills in secrets in their working copy. To prevent those
+# from ever being staged, run once per clone:
+#
+#   git update-index --skip-worktree terraform/terraform.tfvars.json
+#
+# This hook is a second line of defence in case skip-worktree is cleared
+# or someone uses `git add -f`.
+
+set -e
+
+staged_tfvars=$(git diff --cached --name-only | grep -x 'terraform/terraform.tfvars.json' || true)
+
+if [ -n "$staged_tfvars" ]; then
+  cat >&2 <<'EOF'
+═══════════════════════════════════════════════════════════════════════
+ refusing to commit terraform/terraform.tfvars.json
+
+ That file is tracked with placeholder values only. Your working copy
+ contains secrets that must never be committed.
+
+ To keep your local edits invisible to git:
+   git reset HEAD terraform/terraform.tfvars.json
+   git update-index --skip-worktree terraform/terraform.tfvars.json
+
+ To update the committed placeholder (rare, requires skip-worktree off):
+   git update-index --no-skip-worktree terraform/terraform.tfvars.json
+   git add -f terraform/terraform.tfvars.json
+   # commit only a sanitized/placeholder version
+═══════════════════════════════════════════════════════════════════════
+EOF
+  exit 1
+fi
