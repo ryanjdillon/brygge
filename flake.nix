@@ -79,6 +79,7 @@
 
       deploy.nodes.brygge = {
         hostname = clubConfig.domain;
+        sshUser = "root";
         profiles.system = {
           user = "root";
           path = deploy-rs.lib.${deploySystem}.activate.nixos self.nixosConfigurations.brygge;
