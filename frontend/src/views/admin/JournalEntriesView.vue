@@ -158,13 +158,6 @@ function handleReopenPeriod() {
   reopenPeriodMutation.mutate(selectedPeriodId.value)
 }
 
-function accountsSummary(entry: JournalEntry): string {
-  if (!entry.lines?.length) return '-'
-  const debits = entry.lines.filter(l => l.debit > 0).map(l => l.account_code)
-  const credits = entry.lines.filter(l => l.credit > 0).map(l => l.account_code)
-  if (!debits.length && !credits.length) return '-'
-  return `${[...new Set(debits)].join(', ')} \u2192 ${[...new Set(credits)].join(', ')}`
-}
 
 function formatNOK(amount: number): string {
   if (!amount) return '-'
