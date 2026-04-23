@@ -126,25 +126,28 @@ fmt:
     cd backend && gofmt -w .
     cd frontend && npm run format
 
-# ── Deployment ────────────────────────────────────────────────
+# ── Deployment (NixOS on Hetzner) ─────────────────────────────
 
-prod-compose := "docker compose -f deploy/docker-compose.yml"
+# One-time bootstrap: install NixOS onto a fresh Hetzner VM via nixos-anywhere.
+# Requires the target in rescue mode (hcloud server enable-rescue <name> --type linux64 && reset <name>).
+install host:
+    nix run .#install -- {{host}}
 
-# Deploy latest code to production (builds from source on server)
+# Deploy the current flake state to the server (builds locally, activates remotely).
 deploy host="brygge":
-    ssh {{host}} 'cd /opt/brygge && git pull --ff-only origin main && docker compose -f deploy/docker-compose.yml build api && docker compose -f deploy/docker-compose.yml run --rm migrate && docker compose -f deploy/docker-compose.yml up -d api && docker image prune -f'
+    nix run .#deploy -- {{host}}
+
+# Roll back to the previous system generation on the server.
+rollback host="brygge":
+    nix run .#deploy -- {{host}} --rollback
+
+# Build the brygge package locally (frontend + Go binary with embedded SPA).
+build-nix:
+    nix build .#brygge
 
 # Run smoke tests against a URL
 smoke url="http://localhost:8080":
     ./scripts/smoke-test.sh {{url}}
-
-# Rollback to a specific git commit
-rollback sha host="brygge":
-    ssh {{host}} 'cd /opt/brygge && git checkout {{sha}} && docker compose -f deploy/docker-compose.yml up -d --build api'
-
-# Build Docker image locally
-docker-build:
-    docker build -t brygge:local --target production .
 
 # ── API Documentation ─────────────────────────────────────────
 

@@ -1,368 +1,286 @@
-# Deployment Guide
+## Deployment Guide
 
-This guide covers deploying Brygge to production. For the full initial setup walkthrough (aimed at non-developer club administrators), see [setup.md](setup.md).
+Brygge is deployed to a single Hetzner Cloud VM running **NixOS**, provisioned declaratively with **Terranix** (infrastructure) and **nixos-anywhere** + **deploy-rs** (operating system). There are no container images or long-running shell sessions — every change to the server goes through the flake.
+
+For the non-developer club administrator walkthrough, see [setup.md](setup.md).
+
+---
+
+## How it fits together
+
+```
+  ┌────────────────────────┐   tf-apply    ┌──────────────────────┐
+  │ terraform/ (Terranix)  │ ────────────▶ │  Hetzner Cloud VM    │
+  │  server, firewall, DNS │               │  (CX23, Debian boot) │
+  └────────────────────────┘               └───────────┬──────────┘
+                                                       │ rescue mode
+                                              nix run .#install
+                                                       │
+                                                       ▼
+                                           ┌─────────────────────┐
+                                           │  NixOS (disko, GPT) │
+                                           └───────────┬─────────┘
+                                                       │ subsequent deploys
+                                              nix run .#deploy
+                                                       │
+                                                       ▼
+                                           ┌─────────────────────────────┐
+                                           │ services.brygge (systemd)   │
+                                           │ postgres • redis • caddy    │
+                                           │ dendrite • element • kuma   │
+                                           └─────────────────────────────┘
+```
 
 ---
 
 ## Prerequisites
 
-- A **VPS** or cloud server running **Ubuntu 24.04 LTS** (ARM64 or x86_64)
-- A **domain name** with DNS access
-- **Docker** with the Compose plugin
-- **SSH access** to your server
+- A workstation with **Nix** (flakes + `nix-command` enabled)
+- A **Hetzner Cloud** account with a project
+- A **domain name** you control the nameservers for
+- An **SSH key** — the public key goes into `nix/configuration.local.nix`
 
-### DNS Records
+---
 
-If using the Terranix infrastructure (`just tf-apply`), DNS records are created automatically via the Hetzner DNS provider. After the first apply, point your domain registrar's nameservers to Hetzner's:
+## Initial deployment
+
+### 1. Configure the club
+
+One file drives everything — infra + NixOS — so per-club config lives in one place: `terraform/terraform.tfvars.json`. It is **tracked in git with placeholder values** so the flake can read it in pure evaluation mode. Edit it with your real values, then tell git to ignore your local changes:
+
+```bash
+$EDITOR terraform/terraform.tfvars.json
+
+# Mark the file skip-worktree — git will ignore your edits forever
+git update-index --skip-worktree terraform/terraform.tfvars.json
+```
+
+After `skip-worktree`:
+
+- `git status`, `git diff`, `git commit -a` all ignore your changes.
+- The flake (via `builtins.readFile`) still sees your values because Nix reads the working tree, not HEAD.
+- A pre-commit hook (auto-installed by the dev shell) blocks accidental commits of this file as a second line of defence.
+
+To pull upstream changes to the placeholder in the future:
+
+```bash
+git update-index --no-skip-worktree terraform/terraform.tfvars.json
+git pull
+$EDITOR terraform/terraform.tfvars.json   # re-apply your values
+git update-index --skip-worktree terraform/terraform.tfvars.json
+```
+
+Required values:
+
+| Key | Used by | Purpose |
+|-----|---------|---------|
+| `hcloud_token` | terraform | Hetzner Cloud + DNS API |
+| `admin_email` | terraform, NixOS | ACME/Let's Encrypt contact |
+| `admin_ssh_keys` | terraform, NixOS | Root SSH access and rescue-mode bootstrap |
+| `hetzner_s3_*`, `s3_bucket`, `s3_endpoint` | terraform | State backend |
+| `domain` | terraform, NixOS | Primary domain for the club |
+| `server_name` | terraform, NixOS | Hetzner server name + NixOS hostname |
+| `server_type`, `location`, `timezone` | terraform, NixOS | Server size, region, TZ |
+| `resend_*` | terraform | Optional email DNS records |
+
+`terraform.tfvars.json` is the **single source of truth**. The flake reads it via `builtins.fromJSON` to populate the NixOS host config, so nothing club-specific is hardcoded in `nix/`.
+
+### 2. Provision infrastructure
+
+```bash
+nix run .#tf-plan    # preview
+nix run .#tf-apply   # creates server, firewall, DNS zone + records
+```
+
+After the first apply, switch your registrar's nameservers to Hetzner's:
 
 - `hydrogen.ns.hetzner.com`
 - `oxygen.ns.hetzner.com`
 - `helium.ns.hetzner.de`
 
-The following A records are managed by Terraform (all pointing to the server's IPv4 address):
+DNS propagation typically takes a few minutes; Let's Encrypt cert issuance depends on this.
 
-| Type | Name       | Value         |
-|------|------      |-------        |
-| A    | `@` (root) | `<server IP>` |
-| A    | `matrix`   | `<server IP>` |
-| A    | `element`  | `<server IP>` |
-| A    | `status`   | `<server IP>` |
+### 3. Boot the server into rescue mode
 
-If not using Terraform, create these records manually at your DNS provider.
-
----
-
-## Deployment Steps
-
-### 1. Prepare the Server
+nixos-anywhere kexecs into the NixOS installer from Hetzner's Debian-based rescue system:
 
 ```bash
-# Install Docker
-curl -fsSL https://get.docker.com | sudo sh
-sudo usermod -aG docker $USER
-# Log out and back in
+hcloud server enable-rescue brygge --type linux64 --ssh-key <your-key-id>
+hcloud server reset brygge
 ```
 
-### 2. Clone and Configure
+Wait ~30 seconds for the server to come back up in rescue. Confirm you can SSH:
 
 ```bash
-cd /opt
-sudo git clone https://github.com/brygge-klubb/brygge.git
-sudo chown -R $USER:$USER brygge
-cd brygge
-
-# Copy and edit environment configuration
-cp deploy/.env.example deploy/.env
-nano deploy/.env
+ssh root@<server-ip>   # rescue mode fingerprint; accept it
 ```
 
-Generate secrets:
+### 4. Install NixOS
 
 ```bash
-# Database password
-openssl rand -base64 32
-
-# JWT secret
-openssl rand -base64 48
+nix run .#install -- <server-ip>
 ```
 
-See [deploy/.env.example](../deploy/.env.example) for all configuration options with inline documentation.
+This:
+1. Builds `nixosConfigurations.brygge` locally
+2. Uses nixos-anywhere to kexec into the installer
+3. Runs disko to partition `/dev/sda` (GPT + BIOS boot + ext4 root)
+4. Copies the system closure to the new root and activates it
+5. Reboots into NixOS
 
-### 3. Initial Setup
+First install takes 5–10 minutes.
+
+### 5. Install secrets
+
+The `services.brygge` systemd unit reads a root-owned EnvironmentFile at `/etc/brygge/env`. Create it on the server:
 
 ```bash
-chmod +x scripts/brygge.sh
-./scripts/brygge.sh setup
+ssh root@<server-ip>
+install -m 0400 -o root -g root /dev/stdin /etc/brygge/env <<'EOF'
+JWT_SECRET=...
+VIPPS_CLIENT_ID=...
+VIPPS_CLIENT_SECRET=...
+VIPPS_SUBSCRIPTION_KEY=...
+VIPPS_MSN=...
+RESEND_API_KEY=...
+S3_ENDPOINT=https://nbg1.your-objectstorage.com
+S3_BUCKET=brygge-documents
+S3_ACCESS_KEY=...
+S3_SECRET_KEY=...
+S3_REGION=nbg1
+EOF
+systemctl restart brygge
 ```
 
-This builds the API image from source, starts the database and Redis, runs migrations, and starts all services. Traefik automatically provisions TLS certificates from Let's Encrypt.
+See `deploy/.env.example` for the full list of keys Brygge reads.
 
-### Seeding Demo Data
-
-The Docker image includes a seed binary for loading demo data:
+### 6. Verify
 
 ```bash
-docker compose -f deploy/docker-compose.yml run --rm --entrypoint /brygge-seed api
+curl -I https://klubb.no                     # → 200 from Brygge
+curl -I https://matrix.klubb.no/_matrix/...  # → Dendrite
+curl -I https://element.klubb.no             # → Element static
+curl -I https://status.klubb.no              # → Uptime Kuma
 ```
 
-### 4. Verify
+### 7. Seed demo data (optional)
 
 ```bash
-./scripts/brygge.sh status
-```
-
-All containers should show "Up" or "healthy". Visit:
-
-- `https://your-domain.com` — main site
-- `https://status.your-domain.com` — Uptime Kuma status page
-- `https://element.your-domain.com` — Matrix client
-
-### 5. Configure Vipps Login
-
-1. Go to the [Vipps developer portal](https://developer.vippsmobilepay.com/)
-2. Create an application and set the redirect URI to `https://your-domain.com/api/v1/auth/vipps/callback`
-3. Enter the Client ID, Client Secret, Subscription Key, and Merchant Serial Number in `deploy/.env`
-4. Restart: `./scripts/brygge.sh update`
-
----
-
-## Updating
-
-```bash
-cd /opt/brygge
-git pull
-./scripts/brygge.sh update
-```
-
-This rebuilds the API image from source, runs any new migrations, and restarts services. Downtime is typically a few seconds.
-
-### Rollback
-
-If something goes wrong, roll back to a specific commit:
-
-```bash
-cd /opt/brygge
-git checkout <commit-sha>
-docker compose -f deploy/docker-compose.yml up -d --build api
+ssh root@<server-ip> 'sudo -u brygge brygge-seed'
 ```
 
 ---
 
-## Backups
+## Updating the server
+
+Every change — app code, service config, kernel upgrade — goes through one command:
+
+```bash
+nix run .#deploy -- <server-ip-or-hostname>
+```
+
+Under the hood, deploy-rs:
+- builds the new system closure on your workstation
+- copies the closure to the server
+- activates it with a health check and an automatic rollback window
+
+If activation fails the server rolls back on its own. To manually undo:
+
+```bash
+nix run .#deploy -- <host> --rollback
+```
+
+Or from the server: `nixos-rebuild switch --rollback`.
+
+---
+
+## DNS records managed by terraform
+
+All point to the brygge server's IPv4 (plus Resend TXT/MX when configured):
+
+| Type | Name       | Purpose              |
+|------|------------|----------------------|
+| A    | `@`        | Main site, API       |
+| A    | `matrix`   | Dendrite (Matrix)    |
+| A    | `element`  | Element Web          |
+| A    | `status`   | Uptime Kuma          |
+| TXT  | `resend._domainkey` | Resend DKIM (optional) |
+| TXT  | `send`              | Resend SPF (optional)  |
+| MX   | `send`              | Resend MX (optional)   |
+| TXT  | `_dmarc`            | Resend DMARC (optional)|
+
+---
+
+## Services on the VM
+
+| Systemd unit          | Port             | Purpose                     |
+|-----------------------|------------------|-----------------------------|
+| `caddy.service`       | 80, 443          | Reverse proxy + Let's Encrypt |
+| `brygge.service`      | 8080 (loopback)  | Go API + embedded Vue SPA   |
+| `brygge-migrate.service` | —             | Oneshot, runs before brygge |
+| `postgresql.service`  | unix socket      | brygge + dendrite databases |
+| `redis-brygge.service`| unix socket      | Cache, sessions, rate limit |
+| `dendrite.service`    | 8008 (loopback)  | Matrix homeserver           |
+| `uptime-kuma.service` | 3001 (loopback)  | Status page                 |
+
+Caddy provisions TLS automatically for each virtualhost using the ACME email in `configuration.local.nix`.
+
+---
+
+## Operations
+
+### Logs
+
+```bash
+ssh brygge journalctl -u brygge -f
+ssh brygge journalctl -u caddy -f
+```
 
 ### Database
 
-The `brygge backup` command creates a compressed database dump:
-
 ```bash
-./scripts/brygge.sh backup
+ssh brygge 'sudo -u brygge psql brygge'
 ```
 
-Set up a daily cron job:
+### Backups
+
+The server itself is disposable — rebuild it from the flake at any time. Data that needs real backups:
+
+- `/var/lib/postgresql` — both `brygge` and `dendrite` databases
+- `/var/lib/dendrite` — matrix signing keys
+- `/var/lib/uptime-kuma` — monitor config and history
+
+Enable **Hetzner Snapshots** (20% of server cost, daily automatic) for filesystem-level protection, and run pg_dump on a cron for logical backups:
 
 ```bash
-crontab -e
-# Add:
-0 2 * * * /opt/brygge/scripts/brygge.sh backup >> /var/log/brygge-backup.log 2>&1
+ssh brygge 'sudo -u postgres pg_dumpall | gzip' > backup-$(date +%Y%m%d).sql.gz
 ```
 
-Backups are stored in the `backups/` directory. Old backups (30+ days) are automatically removed.
+### Rebuild on a new server
 
-### Restore
-
-```bash
-gunzip -c backups/brygge_20260306_020000.sql.gz | \
-  docker compose -f deploy/docker-compose.yml exec -T db \
-  psql -U brygge brygge
-```
+If the VM is destroyed, `nix run .#tf-apply` provisions a new one and `nix run .#install -- <new-ip>` re-lays the exact same system. Restore Postgres from the logical backup.
 
 ---
 
-## Services Overview
+## Cost
 
-| Service         | Image                            | Purpose                        | Subdomain   |
-|---------        |-------                           |---------                       |-----------  |
-| **api**         | built from source                | Go API + embedded SPA          | `@`         |
-| **db**          | `postgres:16-alpine`             | Primary database               | internal    |
-| **redis**       | `redis:7-alpine`                 | Cache, sessions, rate limiting | internal    |
-| **traefik**     | `traefik:v2.11`                  | Reverse proxy, TLS             | internal    |
-| **vipps-mock**  | custom build                     | Vipps OAuth/payment simulator  | internal    |
-| **dendrite**    | `matrixdotorg/dendrite-monolith` | Matrix homeserver (forum)      | `matrix.*`  |
-| **element**     | `vectorim/element-web`           | Matrix web client              | `element.*` |
-| **uptime-kuma** | `louislam/uptime-kuma:1`         | Status page                    | `status.*`  |
-| **migrate**     | `migrate/migrate:v4.18.2`        | Database migrations (one-shot) | internal    |
-
----
-
-## Resource Requirements
-
-| Size                      | Users        | Recommended Server            |
-|------                     |-------       |--------------------           |
-| Small club (<100 members) | Low traffic  | 2 vCPU, 4 GB RAM, 40 GB disk  |
-| Medium club (100-500)     | Moderate     | 4 vCPU, 8 GB RAM, 80 GB disk  |
-| Large club (500+)         | High traffic | Consider [Kubernetes](k8s.md) |
-
----
-
-## Monitoring
-
-Brygge includes Uptime Kuma for status monitoring at `status.your-domain.com`. The API exposes a health endpoint:
-
-```bash
-curl https://your-domain.com/api/health
-```
-
-Returns service status for PostgreSQL and Redis with HTTP 200 (healthy) or 503 (degraded).
+| Resource                           | Monthly (EUR) |
+|------------------------------------|---------------|
+| CX23 (x86_64, 2 vCPU, 4 GB, 40 GB) | 4.59          |
+| IPv4 address                       | 0.50          |
+| Hetzner snapshots (20%)            | 0.92          |
+| Object Storage (10 GB docs)        | 0.52          |
+| Hetzner DNS                        | free          |
+| **Total**                          | **~6.53**     |
 
 ---
 
 ## Troubleshooting
 
-See [troubleshooting.md](troubleshooting.md) for common deployment and development issues, including dirty migrations, TLS certificates, CSP errors, and Vipps mock debugging.
-
----
-
-## Providers
-
-Provider-specific deployment guides with optimized configurations.
-
-<details>
-<summary><h3>Hetzner Cloud</h3></summary>
-
-Hetzner Cloud is the recommended hosting provider. It offers affordable ARM64 servers in European data centers with excellent performance.
-
-#### 1. Create a Server
-
-1. Sign up at [hetzner.com/cloud](https://www.hetzner.com/cloud/)
-2. Create a new project
-3. Add your SSH public key under **Security > SSH Keys**
-4. Create a server:
-   - **Location**: Falkenstein (fsn1), Nuremberg (nbg1), or Helsinki (hel1)
-   - **Image**: Ubuntu 24.04
-   - **Type**: **CAX11** (ARM64, 2 vCPU, 4 GB RAM, 40 GB disk) — ~3.29 EUR/month
-   - **SSH key**: Select the key you added
-   - **Name**: e.g. `brygge-prod`
-
-#### 2. Set Up Object Storage
-
-For document uploads and harbour charts:
-
-1. Go to **Object Storage** in the Hetzner Cloud console
-2. Create a bucket (e.g. `brygge-documents`) in the same region as your server
-3. Generate S3 credentials under **Security > API Tokens > Object Storage**
-4. Add to `deploy/.env`:
-
-```env
-S3_ENDPOINT=https://fsn1.your-objectstorage.com
-S3_BUCKET=brygge-documents
-S3_ACCESS_KEY=<your access key>
-S3_SECRET_KEY=<your secret key>
-S3_REGION=fsn1
-```
-
-#### 3. Configure Firewall
-
-In the Hetzner Cloud console under **Firewalls**:
-
-| Direction | Protocol | Port | Source                      |
-|-----------|----------|------|--------                     |
-| Inbound   | TCP      | 22   | Your IP (SSH)               |
-| Inbound   | TCP      | 80   | Any (HTTP → HTTPS redirect) |
-| Inbound   | TCP      | 443  | Any (HTTPS)                 |
-
-Apply the firewall to your server.
-
-#### 4. Configure DNS
-
-If using Hetzner DNS (or your domain registrar):
-
-```
-A    @        <server IPv4>
-A    matrix   <server IPv4>
-A    element  <server IPv4>
-A    status   <server IPv4>
-AAAA @        <server IPv6>    (optional)
-```
-
-#### 5. Deploy
-
-SSH into your server and follow the [deployment steps](#deployment-steps) above.
-
-```bash
-ssh root@<server-ip>
-```
-
-#### 6. Automatic Backups (Hetzner)
-
-Enable **Hetzner Snapshots** for full server backup (20% of server cost):
-
-1. Go to your server in the Hetzner Cloud console
-2. Enable **Backups** (automatic daily snapshots, 7-day retention)
-
-For database-level backups, use the [cron backup](#backups) in addition to snapshots.
-
-#### Cost Estimate
-
-| Resource                           | Monthly Cost  |
-|----------                          |-------------  |
-| CAX11 server (ARM64, 2 vCPU, 4 GB) | ~3.29 EUR     |
-| Snapshots (20% of server)          | ~0.66 EUR     |
-| Object Storage (10 GB)             | ~0.52 EUR     |
-| **Total**                          | **~4.47 EUR** |
-
-</details>
-
-<details>
-<summary><h3>DigitalOcean</h3></summary>
-
-#### Server Setup
-
-1. Create a Droplet:
-   - **Image**: Ubuntu 24.04
-   - **Plan**: Basic, Regular (AMD), $6/month (1 vCPU, 1 GB RAM) or $12/month (2 vCPU, 2 GB RAM)
-   - **Region**: Choose closest to your users
-   - **Authentication**: SSH key
-
-2. Point your domain's DNS to the Droplet IP
-3. SSH in and follow the [deployment steps](#deployment-steps)
-
-#### Object Storage
-
-Use DigitalOcean Spaces for document storage:
-
-```env
-S3_ENDPOINT=https://ams3.digitaloceanspaces.com
-S3_BUCKET=brygge-documents
-S3_ACCESS_KEY=<spaces access key>
-S3_SECRET_KEY=<spaces secret key>
-S3_REGION=ams3
-```
-
-</details>
-
-<details>
-<summary><h3>Generic VPS</h3></summary>
-
-Brygge runs on any VPS provider that supports Docker. Requirements:
-
-- **OS**: Ubuntu 24.04 LTS (other Debian-based distros work too)
-- **Architecture**: ARM64 or x86_64 (rebuild the Docker image for x86_64, see below)
-- **Minimum**: 1 vCPU, 2 GB RAM, 20 GB disk
-- **Recommended**: 2 vCPU, 4 GB RAM, 40 GB disk
-
-#### Building for x86_64
-
-The default Dockerfile targets ARM64. To build for x86_64, change the build args:
-
-```bash
-# In the Dockerfile, change:
-# GOARCH=arm64  →  GOARCH=amd64
-
-docker build --platform linux/amd64 -t brygge .
-```
-
-Or use Docker Buildx for multi-platform:
-
-```bash
-docker buildx build --platform linux/amd64,linux/arm64 -t brygge .
-```
-
-#### S3-Compatible Storage
-
-Any S3-compatible provider works (MinIO, Wasabi, Backblaze B2, Cloudflare R2):
-
-```env
-S3_ENDPOINT=https://s3.your-provider.com
-S3_BUCKET=brygge-documents
-S3_ACCESS_KEY=<key>
-S3_SECRET_KEY=<secret>
-S3_REGION=auto
-```
-
-</details>
+See [troubleshooting.md](troubleshooting.md) for dirty migrations, TLS issues, and deploy-rs rollback scenarios.
 
 ---
 
 ## Scaling
 
-For deployments beyond a single VPS, see the [Kubernetes migration guide](k8s.md). The API is stateless and supports horizontal scaling behind a load balancer.
+The API is stateless and supports horizontal scaling. For multi-node deployments, see the [Kubernetes migration guide](k8s.md). For a single larger VM, change `server_type` in `terraform.tfvars` to `cx32` (4 vCPU / 8 GB) and redeploy — the NixOS config is portable across Hetzner x86 instance sizes.
