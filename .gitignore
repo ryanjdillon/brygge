@@ -32,7 +32,17 @@ Thumbs.db
 
 # Nix
 result
+result-*
 .direnv/
+nix/hardware-configuration.nix
+
+# Terraform
+terraform/config.tf.json
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+terraform/terraform.tfvars
+terraform/terraform.tfvars.*.bak
+terraform/terraform.tfvars.old
 
 # Docker
 deploy/traefik/acme.json
