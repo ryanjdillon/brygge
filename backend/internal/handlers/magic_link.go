@@ -123,7 +123,7 @@ func (h *MagicLinkHandler) HandleRequestMagicLink(w http.ResponseWriter, r *http
 			// Don't fail the request — the link is stored, user can retry
 		}
 	} else {
-		h.log.Warn().Str("email", req.Email).Msg("magic link created but email delivery disabled (no RESEND_API_KEY)")
+		h.log.Warn().Str("email", req.Email).Msg("magic link created but email delivery disabled (no SMTP_HOST)")
 	}
 
 	JSON(w, http.StatusOK, resp)

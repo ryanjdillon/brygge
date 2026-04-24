@@ -52,8 +52,12 @@ type Config struct {
 	TOTPEncryptionKey string // 32-byte hex-encoded key for encrypting TOTP secrets
 
 	// Optional integrations
-	ResendAPIKey      string
-	ResendFromAddress string
+	// SMTP (self-hosted mail).
+	SMTPHost     string
+	SMTPPort     int
+	SMTPUsername string
+	SMTPPassword string
+	EmailFrom    string
 	AnthropicAPIKey   string
 
 	// Database pool
@@ -118,8 +122,11 @@ func Load() Config {
 
 		TOTPEncryptionKey: envStr("TOTP_ENCRYPTION_KEY", ""),
 
-		ResendAPIKey:      envStr("RESEND_API_KEY", ""),
-		ResendFromAddress: envStr("RESEND_FROM_ADDRESS", "noreply@example.com"),
+		SMTPHost:     envStr("SMTP_HOST", ""),
+		SMTPPort:     envInt("SMTP_PORT", 587),
+		SMTPUsername: envStr("SMTP_USERNAME", ""),
+		SMTPPassword: envStr("SMTP_PASSWORD", ""),
+		EmailFrom:    envStr("EMAIL_FROM", ""),
 		AnthropicAPIKey:   envStr("ANTHROPIC_API_KEY", ""),
 
 		Features: Features{
