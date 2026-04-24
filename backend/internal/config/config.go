@@ -13,6 +13,7 @@ type Config struct {
 	RedisURL    string
 	ClubSlug    string
 	ClubName    string // Human-readable club name used in email subjects etc.
+	Domain      string // Public domain (DOMAIN env) — used in email footers and canonical URLs
 
 	// Authentication
 	JWTSecret        string
@@ -88,6 +89,7 @@ func Load() Config {
 		RedisURL:    envStr("REDIS_URL", "redis://localhost:6379/0"),
 		ClubSlug: envStr("CLUB_SLUG", "brygge"),
 		ClubName: envStr("CLUB_NAME", ""),
+		Domain:   envStr("DOMAIN", "localhost"),
 
 		JWTSecret:        envStr("JWT_SECRET", ""),
 		JWTAccessExpiry:  envDuration("JWT_ACCESS_EXPIRY", 15*time.Minute),
