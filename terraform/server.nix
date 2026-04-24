@@ -35,4 +35,14 @@
     firewall_id = "\${hcloud_firewall.brygge.id}";
     server_ids  = [ "\${hcloud_server.brygge.id}" ];
   };
+
+  # Reverse DNS for mail deliverability. Gmail/Outlook require PTR to match
+  # the HELO hostname (FCrDNS). Points at mail.<domain>; ensure dns.nix
+  # publishes an A record for `mail` in the same tf-apply.
+  resource.hcloud_rdns.brygge_ipv4 = {
+    server_id  = "\${hcloud_server.brygge.id}";
+    ip_address = "\${hcloud_server.brygge.ipv4_address}";
+    dns_ptr    = "mail.\${var.domain}";
+  };
+  # IPv6 rDNS omitted until the host gets a global IPv6 on enp1s0.
 }

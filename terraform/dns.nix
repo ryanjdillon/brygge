@@ -38,7 +38,80 @@
       records = [{ value = "\${hcloud_server.brygge.ipv4_address}"; }];
     };
 
-    # Email (Resend) — only created when resend_dkim_value is set
+    # Self-hosted mail (simple-nixos-mailserver)
+    mail_a = {
+      zone    = "\${var.domain}";
+      name    = "mail";
+      type    = "A";
+      ttl     = 300;
+      records = [{ value = "\${hcloud_server.brygge.ipv4_address}"; }];
+    };
+    # AAAA intentionally omitted until IPv6 is configured on the host
+    # interface. Hetzner allocates a /64 but the server currently has only
+    # link-local IPv6 — no global address on enp1s0 under NixOS default
+    # DHCP. Revisit once networking.interfaces.enp1s0.ipv6 is set up.
+    webmail = {
+      zone    = "\${var.domain}";
+      name    = "webmail";
+      type    = "A";
+      ttl     = 300;
+      records = [{ value = "\${hcloud_server.brygge.ipv4_address}"; }];
+    };
+    root_mx = {
+      zone    = "\${var.domain}";
+      name    = "@";
+      type    = "MX";
+      ttl     = 300;
+      records = [{ value = "10 mail.\${var.domain}."; }];
+    };
+    # Permit both our own MX and Resend's amazonses during transition.
+    # Tighten to "v=spf1 mx -all" once fully off Resend.
+    root_spf = {
+      zone    = "\${var.domain}";
+      name    = "@";
+      type    = "TXT";
+      ttl     = 300;
+      records = [{ value = "\"v=spf1 mx include:amazonses.com -all\""; }];
+    };
+    mail_dkim = {
+      count   = "\${var.dkim_public_value != \"\" ? 1 : 0}";
+      zone    = "\${var.domain}";
+      name    = "mail._domainkey";
+      type    = "TXT";
+      ttl     = 300;
+      records = [{ value = "\${var.dkim_public_value}"; }];
+    };
+    dmarc = {
+      zone    = "\${var.domain}";
+      name    = "_dmarc";
+      type    = "TXT";
+      ttl     = 300;
+      records = [{ value = "\"v=DMARC1; p=\${var.dmarc_policy}; rua=mailto:\${var.admin_email}; fo=1\""; }];
+    };
+    autoconfig = {
+      zone    = "\${var.domain}";
+      name    = "autoconfig";
+      type    = "CNAME";
+      ttl     = 300;
+      records = [{ value = "mail.\${var.domain}."; }];
+    };
+    imaps_srv = {
+      zone    = "\${var.domain}";
+      name    = "_imaps._tcp";
+      type    = "SRV";
+      ttl     = 300;
+      records = [{ value = "0 0 993 mail.\${var.domain}."; }];
+    };
+    submission_srv = {
+      zone    = "\${var.domain}";
+      name    = "_submission._tcp";
+      type    = "SRV";
+      ttl     = 300;
+      records = [{ value = "0 0 587 mail.\${var.domain}."; }];
+    };
+
+    # Email (Resend) — only created when resend_dkim_value is set.
+    # Retained until DIL-148 cutover completes; then remove these entries.
     resend_dkim = {
       count   = "\${var.resend_dkim_value != \"\" ? 1 : 0}";
       zone    = "\${var.domain}";
@@ -62,14 +135,6 @@
       type    = "MX";
       ttl     = 300;
       records = [{ value = "10 \${var.resend_mx_value}."; }];
-    };
-    resend_dmarc = {
-      count   = "\${var.resend_dkim_value != \"\" ? 1 : 0}";
-      zone    = "\${var.domain}";
-      name    = "_dmarc";
-      type    = "TXT";
-      ttl     = 300;
-      records = [{ value = "\"v=DMARC1; p=none;\""; }];
     };
   };
 }

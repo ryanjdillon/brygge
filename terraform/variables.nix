@@ -83,5 +83,17 @@
       default     = "";
       description = "Resend MX value for send subdomain.";
     };
+
+    # Self-hosted mail (simple-nixos-mailserver)
+    dkim_public_value = {
+      type        = "string";
+      default     = "";
+      description = "DKIM public key TXT record value for selector `mail._domainkey`. Empty until first boot of simple-nixos-mailserver has generated the key at /var/dkim/<domain>.mail.txt — fetch it then paste and tf-apply again.";
+    };
+    dmarc_policy = {
+      type        = "string";
+      default     = "quarantine";
+      description = "DMARC policy: none | quarantine | reject. Start with quarantine; tighten to reject once deliverability is proven.";
+    };
   };
 }
