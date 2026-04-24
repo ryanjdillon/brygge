@@ -29,16 +29,19 @@ Brygge is configured entirely via environment variables. In production, set thes
 openssl rand -hex 32
 ```
 
-## Email (Resend)
+## Email (SMTP)
 
-Used for magic link login, invoice delivery, and broadcasts. See [resend.md](resend.md) for setup.
+Used for magic link login, invoice delivery, and broadcasts. Brygge talks SMTP to the self-hosted Stalwart mail server on the same host. See [mail/setup.md](mail/setup.md) for the server-side setup.
 
-| Variable              | Required  | Default               | Description                                        |
-|----------             |---------- |---------              |-------------                                       |
-| `RESEND_API_KEY`      | For email | —                     | Resend API key (`re_...`)                          |
-| `RESEND_FROM_ADDRESS` | No        | `noreply@example.com` | Sender address (must use a verified Resend domain) |
+| Variable        | Required  | Default     | Description                                               |
+|-----------------|-----------|-------------|-----------------------------------------------------------|
+| `SMTP_HOST`     | For email | —           | SMTP server (usually `localhost`)                         |
+| `SMTP_PORT`     | No        | `587`       | Submission (STARTTLS) or `465` for SMTPS                  |
+| `SMTP_USERNAME` | For email | —           | Mailbox used for auth (usually `noreply@<domain>`)        |
+| `SMTP_PASSWORD` | For email | —           | Password for that mailbox (set in Stalwart admin UI)      |
+| `EMAIL_FROM`    | For email | —           | From-address on outgoing mail (usually matches username)  |
 
-If `RESEND_API_KEY` is not set, the app starts in degraded mode — magic link auth and invoice emails will not work.
+If `SMTP_HOST` is not set, the app starts in degraded mode — magic link auth and invoice emails will not work.
 
 ## Vipps MobilePay
 
@@ -122,4 +125,4 @@ If the collector is unreachable, the app starts normally with a warning log.
 
 ---
 
-See also: [deploy.md](deploy.md) | [resend.md](resend.md) | [otel.md](otel.md) | [setup.md](setup.md)
+See also: [deploy.md](deploy.md) | [mail/setup.md](mail/setup.md) | [otel.md](otel.md) | [setup.md](setup.md)
