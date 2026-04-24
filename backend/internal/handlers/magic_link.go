@@ -113,7 +113,10 @@ func (h *MagicLinkHandler) HandleRequestMagicLink(w http.ResponseWriter, r *http
 
 	// Send email
 	if h.email != nil {
-		loginURL := fmt.Sprintf("%s/auth/verify?token=%s", h.config.FrontendURL, token)
+		// Point at the backend verify endpoint. It consumes the token,
+		// sets the session cookie, and 302-redirects to /portal in one
+		// request — no frontend-side glue needed.
+		loginURL := fmt.Sprintf("%s/api/v1/auth/verify?token=%s", h.config.FrontendURL, token)
 		locale := email.DetectLocale(r)
 		subject := email.MagicLinkSubject(locale, h.config.ClubName, time.Now())
 		htmlBody := email.MagicLinkBody(locale, h.config.ClubName, h.config.Domain, loginURL)
