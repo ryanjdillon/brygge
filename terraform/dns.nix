@@ -64,14 +64,12 @@
       ttl     = 300;
       records = [{ value = "10 mail.\${var.domain}."; }];
     };
-    # Permit both our own MX and Resend's amazonses during transition.
-    # Tighten to "v=spf1 mx -all" once fully off Resend.
     root_spf = {
       zone    = "\${var.domain}";
       name    = "@";
       type    = "TXT";
       ttl     = 300;
-      records = [{ value = "\"v=spf1 mx include:amazonses.com -all\""; }];
+      records = [{ value = "\"v=spf1 mx -all\""; }];
     };
     mail_dkim = {
       count   = "\${var.dkim_public_value != \"\" ? 1 : 0}";
@@ -110,31 +108,5 @@
       records = [{ value = "0 0 587 mail.\${var.domain}."; }];
     };
 
-    # Email (Resend) — only created when resend_dkim_value is set.
-    # Retained until DIL-148 cutover completes; then remove these entries.
-    resend_dkim = {
-      count   = "\${var.resend_dkim_value != \"\" ? 1 : 0}";
-      zone    = "\${var.domain}";
-      name    = "resend._domainkey";
-      type    = "TXT";
-      ttl     = 300;
-      records = [{ value = "\${var.resend_dkim_value}"; }];
-    };
-    resend_spf = {
-      count   = "\${var.resend_spf_value != \"\" ? 1 : 0}";
-      zone    = "\${var.domain}";
-      name    = "send";
-      type    = "TXT";
-      ttl     = 300;
-      records = [{ value = "\${var.resend_spf_value}"; }];
-    };
-    resend_mx = {
-      count   = "\${var.resend_mx_value != \"\" ? 1 : 0}";
-      zone    = "\${var.domain}";
-      name    = "send";
-      type    = "MX";
-      ttl     = 300;
-      records = [{ value = "10 \${var.resend_mx_value}."; }];
-    };
   };
 }

@@ -67,24 +67,7 @@
       description = "IANA timezone for the host (systemd time.timeZone).";
     };
 
-    # Resend email DNS (optional — leave empty to skip)
-    resend_dkim_value = {
-      type        = "string";
-      default     = "";
-      description = "Resend DKIM public key TXT record value.";
-    };
-    resend_spf_value = {
-      type        = "string";
-      default     = "";
-      description = "Resend SPF TXT record value for send subdomain.";
-    };
-    resend_mx_value = {
-      type        = "string";
-      default     = "";
-      description = "Resend MX value for send subdomain.";
-    };
-
-    # Self-hosted mail (simple-nixos-mailserver)
+    # Self-hosted mail (Stalwart)
     dkim_public_value = {
       type        = "string";
       default     = "";

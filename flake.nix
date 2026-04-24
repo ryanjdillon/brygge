@@ -37,12 +37,11 @@
     tfvars = builtins.fromJSON (builtins.readFile ./terraform/terraform.tfvars.json);
 
     clubConfig = {
-      domain            = tfvars.domain;
-      adminEmail        = tfvars.admin_email;
-      adminSshKeys      = tfvars.admin_ssh_keys;
-      hostname          = tfvars.server_name;
-      timezone          = tfvars.timezone;
-      mailLoginAccounts = tfvars.mail_login_accounts or { };
+      domain       = tfvars.domain;
+      adminEmail   = tfvars.admin_email;
+      adminSshKeys = tfvars.admin_ssh_keys;
+      hostname     = tfvars.server_name;
+      timezone     = tfvars.timezone;
     };
 
     overlay = final: prev: {
