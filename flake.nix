@@ -16,9 +16,6 @@
 
     nixos-anywhere.url = "github:nix-community/nixos-anywhere";
     nixos-anywhere.inputs.nixpkgs.follows = "nixpkgs";
-
-    simple-nixos-mailserver.url = "gitlab:simple-nixos-mailserver/nixos-mailserver";
-    simple-nixos-mailserver.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs = {
@@ -29,7 +26,6 @@
     disko,
     deploy-rs,
     nixos-anywhere,
-    simple-nixos-mailserver,
   }: let
     deploySystem = "x86_64-linux";
 
@@ -77,7 +73,6 @@
         modules = [
           { nixpkgs.overlays = [ overlay ]; }
           disko.nixosModules.disko
-          simple-nixos-mailserver.nixosModule
           self.nixosModules.default
           ./nix/host.nix
         ];

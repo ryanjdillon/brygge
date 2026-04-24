@@ -258,17 +258,22 @@ in
       reverse_proxy 127.0.0.1:3001
     '';
 
-    # Serve ACME HTTP-01 challenges for the mail cert (managed by
-    # security.acme via webroot, below). The `http://` prefix tells Caddy
-    # NOT to auto-enable HTTPS for this host — Caddy would otherwise fight
-    # with security.acme over the cert for mail.<domain> and send LE into
-    # a redirect loop that 403s the challenge.
-    virtualHosts."http://mail.${cfg.domain}".extraConfig = ''
+    # mail.<domain> serves Stalwart's HTTP listener (JMAP, admin, .well-known
+    # autoconfig) behind TLS. security.acme (below) issues the cert via
+    # HTTP-01 on webroot; Caddy serves the challenge alongside the proxy.
+    virtualHosts."mail.${cfg.domain}".extraConfig = ''
+      tls /var/lib/acme/mail.${cfg.domain}/fullchain.pem /var/lib/acme/mail.${cfg.domain}/key.pem
       handle /.well-known/acme-challenge/* {
         root * /var/lib/acme/acme-challenge
         file_server
       }
-      respond 200
+      reverse_proxy 127.0.0.1:8080
+    '';
+
+    # Bulwark webmail (JMAP client, Next.js in a container).
+    virtualHosts."webmail.${cfg.domain}".extraConfig = ''
+      encode gzip zstd
+      reverse_proxy 127.0.0.1:3000
     '';
   };
 
@@ -287,51 +292,115 @@ in
   # the challenge tokens. Without this the cert order gets 403.
   users.users.caddy.extraGroups = [ "acme" ];
 
-  # Self-hosted mail (postfix + dovecot + rspamd + opendkim).
-  # Replaces Resend for brygge's transactional mail, plus provides shared
-  # role mailboxes (treasurer@, secretary@, ...) that outlive individuals.
-  mailserver = {
+  # Stalwart Mail Server — all-in-one SMTP + IMAP + JMAP (Rust).
+  # Replaces simple-nixos-mailserver. JMAP is what Bulwark speaks.
+  services.stalwart = {
     enable = true;
-    stateVersion = 3;
-    fqdn = "mail.${cfg.domain}";
-    domains = [ cfg.domain ];
+    stateVersion = "26.05";
+    openFirewall = false; # firewall ports managed above in networking.firewall
+    settings = {
+      server.hostname = "mail.${cfg.domain}";
 
-    # Account map comes straight from tfvars.mail_login_accounts.
-    # Each entry: { hashedPassword = "$2b$..."; aliases = [...]; quota = "..."; sendOnly = bool; }
-    # Generate hashes with: nix run nixpkgs#mkpasswd -- -sm bcrypt
-    accounts = clubConfig.mailLoginAccounts;
+      server.tls = {
+        certificate = "default";
+        enable = true;
+        implicit = false;
+      };
+      certificate."default" = {
+        # security.acme (below) writes here via HTTP-01 on webroot.
+        cert = "%{file:/var/lib/acme/mail.${cfg.domain}/fullchain.pem}%";
+        private-key = "%{file:/var/lib/acme/mail.${cfg.domain}/key.pem}%";
+        default = true;
+      };
 
-    # DKIM selector → TXT record at mail._domainkey.<domain> (see dns.nix).
-    # 1024-bit keySize keeps the public key TXT under Hetzner DNS's 255-byte
-    # per-substring limit (Hetzner Cloud DNS API doesn't accept multi-
-    # substring TXT records). 1024-bit RSA is still universally accepted;
-    # upgrade to 2048 if we ever move DNS to a provider that supports
-    # multi-substring TXT.
-    dkim.defaults = {
-      selector = "mail";
-      keyLength = 1024;
+      server.listener = {
+        smtp = {
+          bind = [ "[::]:25" ];
+          protocol = "smtp";
+        };
+        submissions = {
+          bind = [ "[::]:465" ];
+          protocol = "smtp";
+          tls.implicit = true;
+        };
+        submission = {
+          bind = [ "[::]:587" ];
+          protocol = "smtp";
+        };
+        imaptls = {
+          bind = [ "[::]:993" ];
+          protocol = "imap";
+          tls.implicit = true;
+        };
+        # HTTP (JMAP + admin + autoconfig). Caddy terminates TLS externally.
+        http = {
+          bind = [ "127.0.0.1:8080" ];
+          protocol = "http";
+          tls.implicit = false;
+          url = "https://mail.${cfg.domain}";
+        };
+      };
+
+      # All-local storage on rocksdb.
+      storage = {
+        data = "rocksdb";
+        fts = "rocksdb";
+        blob = "rocksdb";
+        lookup = "rocksdb";
+        directory = "internal";
+      };
+      store.rocksdb = {
+        type = "rocksdb";
+        path = "/var/lib/stalwart/data";
+        compression = "lz4";
+      };
+      directory.internal = {
+        type = "internal";
+        store = "rocksdb";
+      };
+
+      session.auth = {
+        mechanisms = "[plain login]";
+        directory = "'internal'";
+      };
+      session.rcpt.directory = "'internal'";
+      queue.strategy.route = "'local'";
+
+      # DKIM — Stalwart auto-generates a key on first boot. Publish the
+      # public key via tfvars.dkim_public_value after deploy (same flow as
+      # before).
+      signature."rsa-mail" = {
+        private-key = "%{file:/var/lib/stalwart/dkim/mail-private.pem}%";
+        domain = cfg.domain;
+        selector = "mail";
+        canonicalization = "relaxed/relaxed";
+        algorithm = "rsa-sha256";
+        set-body-length = false;
+      };
     };
+  };
 
-    # Reuse the ACME cert provisioned below via security.acme (HTTP-01
-    # served by Caddy on port 80). Postfix/dovecot auto-reload on renewal.
-    x509.useACMEHost = "mail.${cfg.domain}";
+  # Stalwart needs group access to /var/lib/acme/mail.<domain>/ to read
+  # the cert security.acme issues (defaults are 0750 acme:acme).
+  users.users.stalwart.extraGroups = [ "acme" ];
 
-    # IMAPS + Submission exposed for any mail client; no plain IMAP/SMTP.
-    enableImap = false;
-    enableImapSsl = true;
-    enableSubmission = false;
-    enableSubmissionSsl = true;
-    enablePop3 = false;
-    enablePop3Ssl = false;
+  # Bulwark webmail (JMAP client for Stalwart). Runs in a container.
+  virtualisation.oci-containers = {
+    backend = "podman";
+    containers.bulwark = {
+      image = "ghcr.io/bulwarkmail/webmail:latest";
+      ports = [ "127.0.0.1:3000:3000" ];
+      environment = {
+        JMAP_SERVER_URL = "https://mail.${cfg.domain}";
+      };
+      autoStart = true;
+    };
+  };
 
-    # rspamd defaults are enough at this scale — no ClamAV (DIL-154 tracks).
-    virusScanning = false;
-
-    # Default is knot-resolver for DNS. Leaving it enabled broke DNS
-    # resolution for acme-order during first boot ("Temporary failure in
-    # name resolution" for acme-v02.api.letsencrypt.org). Use the system's
-    # upstream DNS (Hetzner's recursive resolvers) instead.
-    localDnsResolver = false;
+  virtualisation.podman = {
+    enable = true;
+    dockerCompat = false;
+    defaultNetwork.settings.dns_enabled = true;
   };
 
   system.autoUpgrade = {
