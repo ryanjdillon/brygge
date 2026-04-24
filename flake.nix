@@ -16,6 +16,9 @@
 
     nixos-anywhere.url = "github:nix-community/nixos-anywhere";
     nixos-anywhere.inputs.nixpkgs.follows = "nixpkgs";
+
+    simple-nixos-mailserver.url = "gitlab:simple-nixos-mailserver/nixos-mailserver";
+    simple-nixos-mailserver.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs = {
@@ -26,6 +29,7 @@
     disko,
     deploy-rs,
     nixos-anywhere,
+    simple-nixos-mailserver,
   }: let
     deploySystem = "x86_64-linux";
 
@@ -37,11 +41,12 @@
     tfvars = builtins.fromJSON (builtins.readFile ./terraform/terraform.tfvars.json);
 
     clubConfig = {
-      domain       = tfvars.domain;
-      adminEmail   = tfvars.admin_email;
-      adminSshKeys = tfvars.admin_ssh_keys;
-      hostname     = tfvars.server_name;
-      timezone     = tfvars.timezone;
+      domain            = tfvars.domain;
+      adminEmail        = tfvars.admin_email;
+      adminSshKeys      = tfvars.admin_ssh_keys;
+      hostname          = tfvars.server_name;
+      timezone          = tfvars.timezone;
+      mailLoginAccounts = tfvars.mail_login_accounts or { };
     };
 
     overlay = final: prev: {
@@ -72,6 +77,7 @@
         modules = [
           { nixpkgs.overlays = [ overlay ]; }
           disko.nixosModules.disko
+          simple-nixos-mailserver.nixosModule
           self.nixosModules.default
           ./nix/host.nix
         ];
@@ -86,6 +92,12 @@
         };
         remoteBuild = false;
         fastConnection = true;
+        # First mailserver activation (rspamd hyperscan init, DKIM key gen,
+        # postfix table build) can take >30s, exceeding magic-rollback's
+        # default confirmation window. Extend to 5min so the initial deploy
+        # doesn't trip into a false rollback.
+        confirmTimeout = 300;
+        activationTimeout = 300;
       };
 
       checks = builtins.mapAttrs (_: lib: lib.deployChecks self.deploy) deploy-rs.lib;

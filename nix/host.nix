@@ -70,6 +70,11 @@ in
         22
         80
         443
+        # Mail server (simple-nixos-mailserver)
+        25   # SMTP (inbound from other MTAs)
+        465  # SMTPS
+        587  # Submission (STARTTLS)
+        993  # IMAPS
       ];
       allowedUDPPorts = [
         443
@@ -252,11 +257,81 @@ in
     virtualHosts."status.${cfg.domain}".extraConfig = ''
       reverse_proxy 127.0.0.1:3001
     '';
+
+    # Serve ACME HTTP-01 challenges for the mail cert (managed by
+    # security.acme via webroot, below). The `http://` prefix tells Caddy
+    # NOT to auto-enable HTTPS for this host — Caddy would otherwise fight
+    # with security.acme over the cert for mail.<domain> and send LE into
+    # a redirect loop that 403s the challenge.
+    virtualHosts."http://mail.${cfg.domain}".extraConfig = ''
+      handle /.well-known/acme-challenge/* {
+        root * /var/lib/acme/acme-challenge
+        file_server
+      }
+      respond 200
+    '';
   };
 
-  services.fail2ban = {
-    enable = lib.mkDefault true;
-    maxretry = 5;
+  # ACME cert for mail.<domain> — HTTP-01 challenge via webroot served by
+  # Caddy (above). simple-nixos-mailserver reads it via useACMEHost.
+  security.acme = {
+    acceptTerms = true;
+    defaults.email = clubConfig.adminEmail;
+    certs."mail.${cfg.domain}" = {
+      webroot = "/var/lib/acme/acme-challenge";
+      group = "acme";
+    };
+  };
+
+  # Caddy needs read access to the ACME webroot (0750 acme:acme) to serve
+  # the challenge tokens. Without this the cert order gets 403.
+  users.users.caddy.extraGroups = [ "acme" ];
+
+  # Self-hosted mail (postfix + dovecot + rspamd + opendkim).
+  # Replaces Resend for brygge's transactional mail, plus provides shared
+  # role mailboxes (treasurer@, secretary@, ...) that outlive individuals.
+  mailserver = {
+    enable = true;
+    stateVersion = 3;
+    fqdn = "mail.${cfg.domain}";
+    domains = [ cfg.domain ];
+
+    # Account map comes straight from tfvars.mail_login_accounts.
+    # Each entry: { hashedPassword = "$2b$..."; aliases = [...]; quota = "..."; sendOnly = bool; }
+    # Generate hashes with: nix run nixpkgs#mkpasswd -- -sm bcrypt
+    accounts = clubConfig.mailLoginAccounts;
+
+    # DKIM selector → TXT record at mail._domainkey.<domain> (see dns.nix).
+    # 1024-bit keySize keeps the public key TXT under Hetzner DNS's 255-byte
+    # per-substring limit (Hetzner Cloud DNS API doesn't accept multi-
+    # substring TXT records). 1024-bit RSA is still universally accepted;
+    # upgrade to 2048 if we ever move DNS to a provider that supports
+    # multi-substring TXT.
+    dkim.defaults = {
+      selector = "mail";
+      keyLength = 1024;
+    };
+
+    # Reuse the ACME cert provisioned below via security.acme (HTTP-01
+    # served by Caddy on port 80). Postfix/dovecot auto-reload on renewal.
+    x509.useACMEHost = "mail.${cfg.domain}";
+
+    # IMAPS + Submission exposed for any mail client; no plain IMAP/SMTP.
+    enableImap = false;
+    enableImapSsl = true;
+    enableSubmission = false;
+    enableSubmissionSsl = true;
+    enablePop3 = false;
+    enablePop3Ssl = false;
+
+    # rspamd defaults are enough at this scale — no ClamAV (DIL-154 tracks).
+    virusScanning = false;
+
+    # Default is knot-resolver for DNS. Leaving it enabled broke DNS
+    # resolution for acme-order during first boot ("Temporary failure in
+    # name resolution" for acme-v02.api.letsencrypt.org). Use the system's
+    # upstream DNS (Hetzner's recursive resolvers) instead.
+    localDnsResolver = false;
   };
 
   system.autoUpgrade = {
