@@ -34,7 +34,7 @@ All external HTTP clients are wrapped with `otelhttp.NewTransport`, creating chi
 - **Yr.no** (weather API) — 10s timeout
 - **Vipps** (OAuth/payment) — 15s timeout
 - **Anthropic** (AI document processing) — default timeout
-- **Resend** (email delivery) — 10s timeout
+- **SMTP** (email delivery to Stalwart on localhost) — 10s timeout
 
 Each span includes `http.method`, `http.url`, `http.status_code`, and propagates W3C trace context headers.
 

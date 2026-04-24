@@ -65,7 +65,7 @@ Required values:
 | `domain` | terraform, NixOS | Primary domain for the club (e.g. `klubb.no`) |
 | `server_name` | terraform, NixOS | Hetzner server name + NixOS hostname |
 | `server_type`, `location`, `timezone` | terraform, NixOS | Defaults: `cx23`, `nbg1`, `Europe/Oslo` |
-| `resend_*` | terraform | Optional email DNS records |
+| `dkim_public_value`, `dmarc_policy` | terraform | Mail DNS records (see [mail/setup.md](mail/setup.md)) |
 
 **Protection against committing secrets**: a pre-commit hook at `.githooks/pre-commit` rejects any attempt to stage `terraform/terraform.tfvars.json`. The dev shell's `shellHook` auto-installs it by setting `core.hooksPath` the first time you `nix develop`. If you accept the hook, `git status` will still show the file as modified, but `git commit` (with or without `-a`) will fail:
 
@@ -173,8 +173,14 @@ VIPPS_CLIENT_SECRET=
 VIPPS_SUBSCRIPTION_KEY=
 VIPPS_MSN=
 
-# Resend (email)
-RESEND_API_KEY=
+# Mail (self-hosted Stalwart; see docs/mail/setup.md).
+# Fill in after the mail server is set up and a noreply@<domain>
+# mailbox has been created in Stalwart's admin UI.
+SMTP_HOST=localhost
+SMTP_PORT=587
+SMTP_USERNAME=noreply@<domain>
+SMTP_PASSWORD=
+EMAIL_FROM=noreply@<domain>
 
 # S3-compatible object storage (documents, chart tiles, etc.)
 S3_ENDPOINT=https://nbg1.your-objectstorage.com
@@ -206,6 +212,17 @@ curl -sI https://klubb.no/api/health
 ssh root@<server-ip> 'journalctl -u caddy -f'
 # look for "certificate obtained successfully" for each vhost
 ```
+
+### 8. Set up the mail server
+
+Follow [docs/mail/setup.md](mail/setup.md) for:
+
+- Stalwart admin bootstrap (first password, DKIM generation)
+- DNS DKIM record publishing
+- Creating `noreply@<domain>` for brygge outbound + role mailboxes for board members
+- Bulwark webmail first login
+
+Once `SMTP_HOST`/`SMTP_PASSWORD` are filled in `/etc/brygge/env` and `brygge.service` is restarted, magic-link login via self-hosted mail works end-to-end.
 
 All four should respond 200 within ~60 seconds:
 
@@ -265,18 +282,27 @@ ssh root@<host> 'systemctl stop caddy && rm -rf /var/lib/caddy/.local/share/cadd
 
 ## DNS records managed by terraform
 
-All point to the brygge server's IPv4 (plus Resend TXT/MX when configured):
+All point to the brygge server's IPv4:
 
-| Type | Name       | Purpose              |
-|------|------------|----------------------|
-| A    | `@`        | Main site, API       |
-| A    | `matrix`   | Dendrite (Matrix)    |
-| A    | `element`  | Element Web          |
-| A    | `status`   | Uptime Kuma          |
-| TXT  | `resend._domainkey` | Resend DKIM (optional) |
-| TXT  | `send`              | Resend SPF (optional)  |
-| MX   | `send`              | Resend MX (optional)   |
-| TXT  | `_dmarc`            | Resend DMARC (optional)|
+| Type  | Name                 | Purpose                                |
+|-------|----------------------|----------------------------------------|
+| A     | `@`                  | Main site, API                         |
+| A     | `matrix`             | Dendrite (Matrix)                      |
+| A     | `element`            | Element Web                            |
+| A     | `status`             | Uptime Kuma                            |
+| A     | `mail`               | Stalwart (SMTP/IMAP/JMAP)              |
+| A     | `webmail`            | Bulwark webmail                        |
+| MX    | `@` → mail           | Inbound mail to the server             |
+| TXT   | `@`                  | SPF                                    |
+| TXT   | `_dmarc`             | DMARC policy                           |
+| TXT   | `mail._domainkey`    | DKIM public key                        |
+| CNAME | `autoconfig`         | Thunderbird autoconfig                 |
+| SRV   | `_imaps._tcp`        | IMAPS service record                   |
+| SRV   | `_submission._tcp`   | SMTP submission service record         |
+
+The server also has a PTR (rDNS) record pointing at `mail.<domain>`, managed via `hcloud_rdns` in `terraform/server.nix`.
+
+Mail-specific DNS setup is covered in [docs/mail/setup.md](mail/setup.md).
 
 ---
 
@@ -291,9 +317,14 @@ All point to the brygge server's IPv4 (plus Resend TXT/MX when configured):
 | `redis-brygge.service`| unix socket      | Cache, sessions, rate limit |
 | `dendrite.service`    | 8008 (loopback)  | Matrix homeserver           |
 | `uptime-kuma.service` | 3001 (loopback)  | Status page                 |
+| `stalwart.service`    | 25, 465, 587, 993 public; 8088 loopback | Stalwart mail server (SMTP/IMAP/JMAP) |
+| `podman-bulwark.service` | 3000 (loopback) | Bulwark webmail (JMAP client) |
+| `acme-mail.<domain>.service` | — (systemd timer) | Renews mail cert via Let's Encrypt HTTP-01 |
 | `fail2ban.service`    | —                | SSH brute-force protection  |
 
-All non-Caddy services bind to loopback only. Caddy is the sole internet-facing service and terminates TLS for each virtualhost using the ACME email from `clubConfig.adminEmail` (→ `admin_email` in tfvars).
+Caddy is the sole internet-facing HTTP service and terminates TLS for each HTTPS virtualhost using the ACME email from `clubConfig.adminEmail` (→ `admin_email` in tfvars). Stalwart terminates TLS itself for SMTPS/IMAPS, reading the same Let's Encrypt cert files that security.acme issues for `mail.<domain>`.
+
+For mail-specific configuration, admin bootstrap, DKIM, and troubleshooting, see [docs/mail/setup.md](mail/setup.md).
 
 ---
 

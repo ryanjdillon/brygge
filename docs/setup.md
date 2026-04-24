@@ -153,14 +153,17 @@ S3_REGION=fsn1
 
 If you are on Hetzner, create an Object Storage bucket in the Hetzner Cloud console. Use the generated credentials here. Documents, harbour charts, and other uploads are stored in this bucket.
 
-### Email (Resend)
+### Email (self-hosted SMTP)
 
 ```
-RESEND_API_KEY=<from resend.com>
+SMTP_HOST=localhost
+SMTP_PORT=587
+SMTP_USERNAME=noreply@mitt-klubb.no
+SMTP_PASSWORD=<set in Stalwart admin UI>
 EMAIL_FROM=noreply@mitt-klubb.no
 ```
 
-Sign up at [resend.com](https://resend.com), verify your domain, and copy your API key. The free tier is sufficient for most clubs.
+Brygge talks SMTP to the Stalwart mail server running on the same VM. See [mail/setup.md](mail/setup.md) for the one-time server setup: creating the `noreply@` mailbox, generating DKIM, and publishing DNS records.
 
 ### Club configuration
 

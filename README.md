@@ -112,7 +112,7 @@ Copy `deploy/.env.example` to `deploy/.env` and configure:
 | `JWT_SECRET`     | Token signing secret                                                            |
 | `VIPPS_*`        | Vipps payment & login credentials                                               |
 | `S3_*`           | Object storage for documents                                                    |
-| `RESEND_API_KEY` | Transactional email                                                             |
+| `SMTP_*`         | Transactional email via self-hosted Stalwart                                    |
 | `FEATURE_*`      | Toggle feature modules (bookings, projects, calendar, commerce, communications) |
 
 See [deploy/.env.example](deploy/.env.example) for the full list with inline documentation.
