@@ -207,11 +207,11 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 	var sentAt *string
 	if req.SendEmail && h.email != nil && memberEmail != "" {
 		filename := fmt.Sprintf("faktura-%d.pdf", invoiceSeq)
-		subject := fmt.Sprintf("Faktura #%d fra %s", invoiceSeq, clubName)
-		htmlBody := fmt.Sprintf(
-			`<p>Hei %s,</p><p>Vedlagt finner du faktura #%d.</p><p>Forfallsdato: %s<br>Beløp: kr %.2f<br>KID: %s<br>Kontonummer: %s</p><p>Med vennlig hilsen,<br>%s</p>`,
-			memberName, invoiceSeq, dueDate.Format("02.01.2006"), total, kid, bankAccount, clubName,
-		)
+		// Invoice locale follows the requesting admin's UI language for now.
+		// DIL-185 (users.preferred_locale) will swap this for per-member.
+		locale := email.DetectLocale(r)
+		subject := email.InvoiceSubject(locale, clubName, invoiceSeq)
+		htmlBody := email.InvoiceBody(locale, memberName, clubName, invoiceSeq, dueDate, total, kid, bankAccount)
 		if err := h.email.SendWithAttachment(ctx, memberEmail, subject, htmlBody, filename, pdfData); err != nil {
 			h.log.Error().Err(err).Str("email", memberEmail).Msg("failed to send invoice email")
 		} else {
