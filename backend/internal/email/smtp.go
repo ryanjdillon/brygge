@@ -26,12 +26,16 @@ type SMTPClient struct {
 	username    string
 	password    string
 	fromAddress string
+	replyTo     string
 }
 
 // NewSMTPClient returns a Sender that speaks SMTP. Returns nil if host
 // or fromAddress is empty. Default port is 587 (Submission with STARTTLS);
-// port 465 is treated as implicit TLS (SMTPS).
-func NewSMTPClient(host string, port int, username, password, fromAddress string) *SMTPClient {
+// port 465 is treated as implicit TLS (SMTPS). replyTo is optional; when
+// set it's added as the Reply-To header so recipients' mail clients
+// direct replies at a monitored address (e.g. info@) even when the
+// From address is a sending-only identity (e.g. login@).
+func NewSMTPClient(host string, port int, username, password, fromAddress, replyTo string) *SMTPClient {
 	if host == "" || fromAddress == "" {
 		return nil
 	}
@@ -44,6 +48,7 @@ func NewSMTPClient(host string, port int, username, password, fromAddress string
 		username:    username,
 		password:    password,
 		fromAddress: fromAddress,
+		replyTo:     replyTo,
 	}
 }
 
@@ -128,6 +133,9 @@ func (c *SMTPClient) buildMessage(to, subject, htmlBody, filename string, attach
 	header := textproto.MIMEHeader{}
 	header.Set("From", c.fromAddress)
 	header.Set("To", to)
+	if c.replyTo != "" {
+		header.Set("Reply-To", c.replyTo)
+	}
 	header.Set("Subject", mime.QEncoding.Encode("utf-8", subject))
 	header.Set("MIME-Version", "1.0")
 	header.Set("Date", time.Now().UTC().Format(time.RFC1123Z))
