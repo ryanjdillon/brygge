@@ -7,8 +7,6 @@ import (
 	"time"
 )
 
-const ClubSlug = "brygge"
-
 type Config struct {
 	Port        int
 	DatabaseURL string
@@ -87,7 +85,7 @@ func Load() Config {
 		Port:        envInt("PORT", 8080),
 		DatabaseURL: envStr("DATABASE_URL", "postgres://brygge:brygge@localhost:5432/brygge?sslmode=disable"),
 		RedisURL:    envStr("REDIS_URL", "redis://localhost:6379/0"),
-		ClubSlug: ClubSlug,
+		ClubSlug: envStr("CLUB_SLUG", "brygge"),
 
 		JWTSecret:        envStr("JWT_SECRET", ""),
 		JWTAccessExpiry:  envDuration("JWT_ACCESS_EXPIRY", 15*time.Minute),
