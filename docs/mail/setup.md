@@ -132,8 +132,15 @@ dig TXT mail._domainkey.<domain> @hydrogen.ns.hetzner.com +short
 
 In the admin UI → **Management → Accounts → New**:
 
-- `noreply@<domain>` — used by brygge for outbound transactional mail (magic links, notifications). Generate a strong password and save it for the env file step below.
+- `login@<domain>` — used by brygge as the SMTP auth + `From:` identity for outbound transactional mail (magic links, invoices, notifications). Generate a strong password and save it for the env file step below.
+- `info@<domain>` — a real inbox monitored by a board member (or rotating role). Set a password for the current officeholder.
 - `treasurer@<domain>`, `secretary@<domain>`, `admin@<domain>`, etc. — shared role mailboxes for board members. Password per role.
+
+**Alias `login@` to `info@`** (admin UI → `login@<domain>` account → Aliases tab → add `info@<domain>` or a forwarding rule). This means any reply that somehow reaches `login@` (an old mail client that ignores `Reply-To`, for example) still lands where someone reads it.
+
+Brygge is configured to set the `Reply-To: info@<domain>` header on outbound mail (via `EMAIL_REPLY_TO` env var), so well-behaved mail clients send replies directly to `info@` when a member hits "Reply". Between the header and the alias, no member mail is black-holed.
+
+**Why `login@` instead of `noreply@`**: modern spam filters don't penalize `noreply@` specifically, but elderly members often don't read "do-not-reply" notices and reply anyway. `login@` is descriptive, still sender-only in intent, and its replies can be monitored.
 
 Aliases: each mailbox can have multiple aliases configured in the same screen (e.g. `kasserer@<domain>` → treasurer).
 
@@ -144,10 +151,13 @@ Edit `/etc/brygge/env` on the server to add SMTP credentials:
 ```
 SMTP_HOST=localhost
 SMTP_PORT=587
-SMTP_USERNAME=noreply@<domain>
+SMTP_USERNAME=login@<domain>
 SMTP_PASSWORD=<password from step 5>
-EMAIL_FROM=noreply@<domain>
+EMAIL_FROM=login@<domain>
+EMAIL_REPLY_TO=info@<domain>
 ```
+
+`EMAIL_REPLY_TO` is optional but recommended — it sets the `Reply-To` header so replies land in the `info@` mailbox, not back at `login@`.
 
 Restart brygge:
 

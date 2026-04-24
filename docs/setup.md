@@ -158,9 +158,10 @@ If you are on Hetzner, create an Object Storage bucket in the Hetzner Cloud cons
 ```
 SMTP_HOST=localhost
 SMTP_PORT=587
-SMTP_USERNAME=noreply@mitt-klubb.no
+SMTP_USERNAME=login@mitt-klubb.no
 SMTP_PASSWORD=<set in Stalwart admin UI>
-EMAIL_FROM=noreply@mitt-klubb.no
+EMAIL_FROM=login@mitt-klubb.no
+EMAIL_REPLY_TO=info@mitt-klubb.no
 ```
 
 Brygge talks SMTP to the Stalwart mail server running on the same VM. See [mail/setup.md](mail/setup.md) for the one-time server setup: creating the `noreply@` mailbox, generating DKIM, and publishing DNS records.

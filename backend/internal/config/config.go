@@ -58,6 +58,7 @@ type Config struct {
 	SMTPUsername string
 	SMTPPassword string
 	EmailFrom    string
+	EmailReplyTo string
 	AnthropicAPIKey   string
 
 	// Database pool
@@ -127,6 +128,7 @@ func Load() Config {
 		SMTPUsername: envStr("SMTP_USERNAME", ""),
 		SMTPPassword: envStr("SMTP_PASSWORD", ""),
 		EmailFrom:    envStr("EMAIL_FROM", ""),
+		EmailReplyTo: envStr("EMAIL_REPLY_TO", ""),
 		AnthropicAPIKey:   envStr("ANTHROPIC_API_KEY", ""),
 
 		Features: Features{
