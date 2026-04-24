@@ -267,7 +267,7 @@ in
         root * /var/lib/acme/acme-challenge
         file_server
       }
-      reverse_proxy 127.0.0.1:8080
+      reverse_proxy 127.0.0.1:8088
     '';
 
     # Bulwark webmail (JMAP client, Next.js in a container).
@@ -298,6 +298,13 @@ in
     enable = true;
     stateVersion = "26.05";
     openFirewall = false; # firewall ports managed above in networking.firewall
+
+    # Bootstrap admin — read from a root-owned file outside /nix/store so
+    # the password doesn't end up in the world-readable store. systemd
+    # LoadCredential exposes it at /run/credentials/stalwart.service/.
+    # Create the file on the server with: install -m 0400 -o root /dev/stdin /etc/stalwart/admin-password <<<"yourpassword"
+    credentials.admin_password = "/etc/stalwart/admin-password";
+
     settings = {
       server.hostname = "mail.${cfg.domain}";
 
@@ -333,8 +340,9 @@ in
           tls.implicit = true;
         };
         # HTTP (JMAP + admin + autoconfig). Caddy terminates TLS externally.
+        # Port 8088 to avoid collision with brygge's API on 127.0.0.1:8080.
         http = {
-          bind = [ "127.0.0.1:8080" ];
+          bind = [ "127.0.0.1:8088" ];
           protocol = "http";
           tls.implicit = false;
           url = "https://mail.${cfg.domain}";
@@ -365,6 +373,13 @@ in
       };
       session.rcpt.directory = "'internal'";
       queue.strategy.route = "'local'";
+
+      # Fallback admin — used only until a real admin account is created
+      # in the admin UI. Change via the UI immediately after first login.
+      authentication.fallback-admin = {
+        user = "admin";
+        secret = "%{file:/run/credentials/stalwart.service/admin_password}%";
+      };
 
       # DKIM — Stalwart auto-generates a key on first boot. Publish the
       # public key via tfvars.dkim_public_value after deploy (same flow as

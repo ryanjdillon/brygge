@@ -53,7 +53,7 @@ in
       type = lib.types.path;
       description = ''
         Path to a systemd EnvironmentFile containing secret values
-        (JWT_SECRET, VIPPS_*, RESEND_API_KEY, S3 creds, etc.).
+        (JWT_SECRET, VIPPS_*, SMTP_*, S3 creds, etc.).
         Must be readable only by root (chmod 0400).
       '';
     };
