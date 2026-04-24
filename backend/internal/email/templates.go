@@ -44,10 +44,11 @@ func parseAcceptLanguage(header string) string {
 }
 
 // MagicLinkSubject returns a localized Subject header for magic-link emails.
-// The clock time is appended so consecutive emails get unique subjects and
-// Gmail (and similar) doesn't collapse them into a single thread.
-func MagicLinkSubject(locale, clubName string, now time.Time) string {
-	ts := now.Format("15:04")
+// Deliberately constant across sends so spam classifiers (Gmail's in
+// particular) recognize repeated transactional mail from the same sender
+// and let the reputation compound. Gmail will thread consecutive logins —
+// that's fine; only the latest link works anyway.
+func MagicLinkSubject(locale, clubName string, _ time.Time) string {
 	tpl, ok := magicLinkSubjects[locale]
 	if !ok {
 		tpl = magicLinkSubjects[defaultLocale]
@@ -55,7 +56,7 @@ func MagicLinkSubject(locale, clubName string, now time.Time) string {
 	if clubName == "" {
 		clubName = tpl.fallbackClub
 	}
-	return fmt.Sprintf("%s %s · %s", tpl.verb, clubName, ts)
+	return fmt.Sprintf("%s %s", tpl.verb, clubName)
 }
 
 // MagicLinkBody returns a localized HTML body for magic-link emails.
