@@ -9,6 +9,7 @@ import (
 	"mime"
 	"mime/multipart"
 	"net"
+	"net/mail"
 	"net/smtp"
 	"net/textproto"
 	"strconv"
@@ -107,7 +108,13 @@ func (c *SMTPClient) send(ctx context.Context, to, subject, htmlBody, filename s
 		}
 	}
 
-	if err := client.Mail(c.fromAddress); err != nil {
+	// SMTP envelope MAIL FROM must be a bare address — strip any display
+	// name if EmailFrom came in RFC 5322 "Name <addr>" form.
+	envelopeFrom := c.fromAddress
+	if addr, err := mail.ParseAddress(c.fromAddress); err == nil {
+		envelopeFrom = addr.Address
+	}
+	if err := client.Mail(envelopeFrom); err != nil {
 		return fmt.Errorf("smtp MAIL FROM: %w", err)
 	}
 	if err := client.Rcpt(to); err != nil {
