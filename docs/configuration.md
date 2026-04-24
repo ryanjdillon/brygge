@@ -40,6 +40,7 @@ Used for magic link login, invoice delivery, and broadcasts. Brygge talks SMTP t
 | `SMTP_USERNAME` | For email | —           | Mailbox used for auth (usually `noreply@<domain>`)        |
 | `SMTP_PASSWORD` | For email | —           | Password for that mailbox (set in Stalwart admin UI)      |
 | `EMAIL_FROM`    | For email | —           | From-address on outgoing mail (usually matches username)  |
+| `EMAIL_REPLY_TO`| No        | —           | Reply-To header (e.g. `info@<domain>`) — routes replies to a human-read mailbox when the From address is sending-only |
 
 If `SMTP_HOST` is not set, the app starts in degraded mode — magic link auth and invoice emails will not work.
 
