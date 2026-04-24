@@ -114,11 +114,10 @@ func (h *MagicLinkHandler) HandleRequestMagicLink(w http.ResponseWriter, r *http
 	// Send email
 	if h.email != nil {
 		loginURL := fmt.Sprintf("%s/auth/verify?token=%s", h.config.FrontendURL, token)
-		htmlBody := fmt.Sprintf(
-			`<p>Klikk lenken under for å logge inn:</p><p><a href="%s">Logg inn</a></p><p>Lenken er gyldig i 15 minutter.</p>`,
-			loginURL,
-		)
-		if err := h.email.Send(ctx, req.Email, "Logg inn", htmlBody); err != nil {
+		locale := email.DetectLocale(r)
+		subject := email.MagicLinkSubject(locale, h.config.ClubName, time.Now())
+		htmlBody := email.MagicLinkBody(locale, h.config.ClubName, loginURL)
+		if err := h.email.Send(ctx, req.Email, subject, htmlBody); err != nil {
 			h.log.Error().Err(err).Str("email", req.Email).Msg("failed to send magic link email")
 			// Don't fail the request — the link is stored, user can retry
 		}
