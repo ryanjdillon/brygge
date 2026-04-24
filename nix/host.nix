@@ -261,12 +261,29 @@ in
     # mail.<domain> serves Stalwart's HTTP listener (JMAP, admin, .well-known
     # autoconfig) behind TLS. security.acme (below) issues the cert via
     # HTTP-01 on webroot; Caddy serves the challenge alongside the proxy.
+    # CORS: Bulwark (webmail.<domain>) calls JMAP cross-origin, so we need
+    # to allow its origin and answer the OPTIONS preflight here.
     virtualHosts."mail.${cfg.domain}".extraConfig = ''
       tls /var/lib/acme/mail.${cfg.domain}/fullchain.pem /var/lib/acme/mail.${cfg.domain}/key.pem
       handle /.well-known/acme-challenge/* {
         root * /var/lib/acme/acme-challenge
         file_server
       }
+
+      @preflight method OPTIONS
+      handle @preflight {
+        header Access-Control-Allow-Origin "https://webmail.${cfg.domain}"
+        header Access-Control-Allow-Methods "GET, POST, PATCH, PUT, DELETE, OPTIONS"
+        header Access-Control-Allow-Headers "Authorization, Content-Type, X-Requested-With, Origin, Accept"
+        header Access-Control-Allow-Credentials "true"
+        header Access-Control-Max-Age "86400"
+        respond 204
+      }
+
+      header Access-Control-Allow-Origin "https://webmail.${cfg.domain}"
+      header Access-Control-Allow-Credentials "true"
+      header Vary "Origin"
+
       reverse_proxy 127.0.0.1:8088
     '';
 
