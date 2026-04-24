@@ -12,6 +12,7 @@ type Config struct {
 	DatabaseURL string
 	RedisURL    string
 	ClubSlug    string
+	ClubName    string // Human-readable club name used in email subjects etc.
 
 	// Authentication
 	JWTSecret        string
@@ -86,6 +87,7 @@ func Load() Config {
 		DatabaseURL: envStr("DATABASE_URL", "postgres://brygge:brygge@localhost:5432/brygge?sslmode=disable"),
 		RedisURL:    envStr("REDIS_URL", "redis://localhost:6379/0"),
 		ClubSlug: envStr("CLUB_SLUG", "brygge"),
+		ClubName: envStr("CLUB_NAME", ""),
 
 		JWTSecret:        envStr("JWT_SECRET", ""),
 		JWTAccessExpiry:  envDuration("JWT_ACCESS_EXPIRY", 15*time.Minute),
