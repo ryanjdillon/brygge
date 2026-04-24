@@ -84,6 +84,68 @@ type magicLinkTpl struct {
 	fallbackClub string // used when CLUB_NAME env is unset
 }
 
+// InvoiceSubject returns a localized Subject for invoice-delivery emails.
+func InvoiceSubject(locale, clubName string, invoiceNumber int) string {
+	tpl, ok := invoiceTemplates[locale]
+	if !ok {
+		tpl = invoiceTemplates[defaultLocale]
+	}
+	return fmt.Sprintf(tpl.subject, invoiceNumber, clubName)
+}
+
+// InvoiceBody returns a localized HTML body for invoice-delivery emails.
+func InvoiceBody(locale, memberName, clubName string, invoiceNumber int, dueDate time.Time, total float64, kid, bankAccount string) string {
+	tpl, ok := invoiceTemplates[locale]
+	if !ok {
+		tpl = invoiceTemplates[defaultLocale]
+	}
+	return fmt.Sprintf(tpl.body,
+		memberName,
+		invoiceNumber,
+		dueDate.Format("02.01.2006"),
+		total,
+		kid,
+		bankAccount,
+		clubName,
+	)
+}
+
+type invoiceTpl struct {
+	subject string // fmt: "%d", "%s" (invoice number, club name)
+	body    string // fmt args: memberName, invoiceNumber, dueDate, total, kid, bankAccount, clubName
+}
+
+var invoiceTemplates = map[string]invoiceTpl{
+	"nb": {
+		subject: "Faktura #%d fra %s",
+		body:    `<p>Hei %s,</p><p>Vedlagt finner du faktura #%d.</p><p>Forfallsdato: %s<br>Beløp: kr %.2f<br>KID: %s<br>Kontonummer: %s</p><p>Med vennlig hilsen,<br>%s</p>`,
+	},
+	"en": {
+		subject: "Invoice #%d from %s",
+		body:    `<p>Hi %s,</p><p>Attached is invoice #%d.</p><p>Due date: %s<br>Amount: NOK %.2f<br>KID: %s<br>Account: %s</p><p>Kind regards,<br>%s</p>`,
+	},
+	"de": {
+		subject: "Rechnung #%d von %s",
+		body:    `<p>Hallo %s,</p><p>Im Anhang findest du die Rechnung #%d.</p><p>Fälligkeitsdatum: %s<br>Betrag: NOK %.2f<br>KID: %s<br>Konto: %s</p><p>Mit freundlichen Grüßen,<br>%s</p>`,
+	},
+	"fr": {
+		subject: "Facture n° %d de %s",
+		body:    `<p>Bonjour %s,</p><p>Vous trouverez en pièce jointe la facture n° %d.</p><p>Date d'échéance : %s<br>Montant : %.2f NOK<br>KID : %s<br>Compte : %s</p><p>Cordialement,<br>%s</p>`,
+	},
+	"it": {
+		subject: "Fattura #%d da %s",
+		body:    `<p>Ciao %s,</p><p>In allegato la fattura #%d.</p><p>Scadenza: %s<br>Importo: NOK %.2f<br>KID: %s<br>Conto: %s</p><p>Cordiali saluti,<br>%s</p>`,
+	},
+	"nl": {
+		subject: "Factuur #%d van %s",
+		body:    `<p>Hallo %s,</p><p>In de bijlage vind je factuur #%d.</p><p>Vervaldatum: %s<br>Bedrag: NOK %.2f<br>KID: %s<br>Rekening: %s</p><p>Met vriendelijke groet,<br>%s</p>`,
+	},
+	"pl": {
+		subject: "Faktura #%d od %s",
+		body:    `<p>Witaj %s,</p><p>W załączniku znajdziesz fakturę #%d.</p><p>Termin płatności: %s<br>Kwota: %.2f NOK<br>KID: %s<br>Konto: %s</p><p>Z poważaniem,<br>%s</p>`,
+	},
+}
+
 var magicLinkSubjects = map[string]magicLinkTpl{
 	"nb": {
 		verb:         "Logg inn hos",
