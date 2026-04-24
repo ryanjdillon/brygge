@@ -372,7 +372,11 @@ in
         directory = "'internal'";
       };
       session.rcpt.directory = "'internal'";
-      queue.strategy.route = "'local'";
+      # Default outbound routing: local delivery for our own domain, MX
+      # lookup for everything else. Do NOT set queue.strategy.route to a
+      # single literal — that forces ALL mail (including outbound to
+      # gmail.com etc.) to route locally, which fails with
+      # "550 Mailbox not found".
 
       # Fallback admin — used only until a real admin account is created
       # in the admin UI. Change via the UI immediately after first login.
