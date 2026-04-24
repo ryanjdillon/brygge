@@ -10,7 +10,7 @@ Welcome to the Brygge documentation. Brygge is an open-source harbour club manag
 | [setup.md](setup.md) | Club admins | Non-developer guide for initial server setup and configuration |
 | [contributing.md](contributing.md) | Developers | Development environment, code style, testing, and PR workflow |
 | [configuration.md](configuration.md) | Operators | Environment variables and feature flags |
-| [resend.md](resend.md) | Operators | Resend email setup (magic links, invoices, broadcasts) |
+| [mail/setup.md](mail/setup.md) | Operators | Self-hosted mail (Stalwart + Bulwark): deploy, DKIM, role mailboxes, webmail |
 | [otel.md](otel.md) | Operators | OpenTelemetry metrics, traces, and collector setup |
 | [troubleshooting.md](troubleshooting.md) | All | Common issues and solutions for dev and deployment |
 | [k8s.md](k8s.md) | DevOps | Kubernetes migration notes for scaling beyond a single VPS |
@@ -62,7 +62,7 @@ Key variable groups:
 - **Database** — `DATABASE_URL`, `POSTGRES_*`
 - **Auth** — `JWT_SECRET`, `VIPPS_*`
 - **Storage** — `S3_*` (documents, charts)
-- **Email** — `RESEND_API_KEY`
+- **Email** — `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `EMAIL_FROM` (self-hosted Stalwart; see [mail/setup.md](mail/setup.md))
 - **Features** — `FEATURE_BOOKINGS`, `FEATURE_PROJECTS`, `FEATURE_CALENDAR`, `FEATURE_COMMERCE`, `FEATURE_COMMUNICATIONS`
 
 ## Common Tasks
