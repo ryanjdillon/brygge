@@ -102,11 +102,12 @@ func main() {
 	jwtService := auth.NewJWTService(&cfg)
 	vippsClient := auth.NewVippsClient(&cfg)
 
-	emailClient := email.NewClient(cfg.ResendAPIKey, cfg.ResendFromAddress)
-	if emailClient != nil {
-		log.Info().Msg("email delivery enabled (Resend API key configured)")
+	var emailClient email.Sender
+	if cfg.SMTPHost != "" {
+		emailClient = email.NewSMTPClient(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUsername, cfg.SMTPPassword, cfg.EmailFrom)
+		log.Info().Str("host", cfg.SMTPHost).Int("port", cfg.SMTPPort).Str("from", cfg.EmailFrom).Msg("email delivery enabled (SMTP)")
 	} else {
-		log.Warn().Msg("email delivery disabled (no RESEND_API_KEY)")
+		log.Warn().Msg("email delivery disabled (SMTP_HOST unset)")
 	}
 
 	var claudeClient *ai.ClaudeClient

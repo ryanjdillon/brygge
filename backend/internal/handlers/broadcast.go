@@ -85,7 +85,7 @@ func (h *BroadcastHandler) HandleSendBroadcast(w http.ResponseWriter, r *http.Re
 		Str("subject", req.Subject).
 		Str("recipients", req.Recipients).
 		Str("sent_by", claims.UserID).
-		Msg("broadcast sent (stub — Resend integration pending)")
+		Msg("broadcast sent (stub — mail delivery pending)")
 
 	var b broadcast
 	err := h.db.QueryRow(ctx,
