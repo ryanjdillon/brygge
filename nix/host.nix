@@ -583,5 +583,8 @@ in
     OTEL_EXPORTER_OTLP_PROTOCOL = "grpc";
     OTEL_SERVICE_NAME = "brygge-api";
     OTEL_TRACES_SAMPLER_ARG = "0.1";
+    # Magic-link / share URLs use this as the public origin. Without it,
+    # config defaults to the dev Vite URL (http://localhost:5173).
+    FRONTEND_URL = "https://${clubConfig.domain}";
   };
 }
