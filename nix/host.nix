@@ -454,6 +454,19 @@ in
   services.tailscale = {
     enable = true;
     openFirewall = true;
+    # accept-dns: use the tailnet's DNS resolver so MagicDNS hostnames resolve.
+    # accept-routes: accept subnet routes advertised by other peers (e.g. a
+    # gateway router exporting LAN access for the in-cluster collector).
+    # advertise-tags: brygge identifies as a downstream node — the tailnet ACL
+    # allows other hosts to dial in but blocks brygge from initiating
+    # connections to them (so a compromised public VM can't pivot inward).
+    # If the control server (Headscale URL) ever needs (re-)setting, do that
+    # interactively on the host: `tailscale up --login-server=<url>`.
+    extraUpFlags = [
+      "--accept-dns=true"
+      "--accept-routes=true"
+      "--advertise-tags=tag:downstream"
+    ];
   };
 
   # OpenTelemetry collector. Two responsibilities:
