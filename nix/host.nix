@@ -574,11 +574,14 @@ in
     SupplementaryGroups = [ "systemd-journal" ];
   };
 
-  # Brygge sends OTLP to the local collector instead of giving up.
+  # Brygge sends OTLP to the local collector. Per-club tagging
+  # (club.slug, club.domain) is set by brygge itself from /etc/brygge/env;
+  # see telemetry.Options. Sampler arg overrides the in-code default (0.1) —
+  # bump during incident debugging if needed.
   services.brygge.extraEnvironment = {
     OTEL_EXPORTER_OTLP_ENDPOINT = "http://127.0.0.1:4317";
     OTEL_EXPORTER_OTLP_PROTOCOL = "grpc";
     OTEL_SERVICE_NAME = "brygge-api";
-    OTEL_RESOURCE_ATTRIBUTES = "service.namespace=${clubConfig.domain}";
+    OTEL_TRACES_SAMPLER_ARG = "0.1";
   };
 }

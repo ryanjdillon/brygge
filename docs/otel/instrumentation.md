@@ -42,8 +42,14 @@ The SDK automatically sets:
 |-----------|-------|
 | `service.name` | `brygge-api` |
 | `service.version` | `1.0.0` |
+| `club.slug` | from `CLUB_SLUG` env (e.g. `kbl`) — short identifier for upstream filtering |
+| `club.domain` | from `DOMAIN` env (e.g. `klokkarvikbaatlag.no`) — full domain when slugs might collide across tenants |
 
 Additional attributes can be added via `OTEL_RESOURCE_ATTRIBUTES` — see [app-config.md](app-config.md).
+
+## Trace sampling
+
+Traces use a parent-based ratio sampler (`ParentBased(TraceIDRatioBased(ratio))`). The default ratio is **0.1** (10% of root traces sampled; child spans inherit the parent decision). Override at runtime by setting `OTEL_TRACES_SAMPLER_ARG` to any value in `[0.0, 1.0]`. Metrics are pre-aggregated and not sampled.
 
 ## Graceful degradation
 

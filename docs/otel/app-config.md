@@ -14,8 +14,8 @@ OTEL_EXPORTER_OTLP_PROTOCOL=grpc
 # Optional: extra resource attributes (comma-separated key=value pairs)
 OTEL_RESOURCE_ATTRIBUTES=deployment.environment=production,service.namespace=brygge
 
-# Optional: trace sampling (default: always_on)
-OTEL_TRACES_SAMPLER=parentbased_traceidratio
+# Optional: trace sampling — code default is 0.1 (10%) with parent-based
+# inheritance. Bump to 1.0 during incident debugging if needed.
 OTEL_TRACES_SAMPLER_ARG=0.1
 ```
 
@@ -35,7 +35,7 @@ services.brygge.extraEnvironment = {
   OTEL_EXPORTER_OTLP_ENDPOINT = "http://127.0.0.1:4317";
   OTEL_EXPORTER_OTLP_PROTOCOL = "grpc";
   OTEL_SERVICE_NAME = "brygge-api";
-  OTEL_RESOURCE_ATTRIBUTES = "service.namespace=<club-domain>";
+  OTEL_TRACES_SAMPLER_ARG = "0.1";
 };
 ```
 
