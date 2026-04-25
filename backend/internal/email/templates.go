@@ -73,6 +73,11 @@ func MagicLinkBody(locale, clubName, domain, loginURL string) string {
 	if clubName == "" {
 		clubName = tpl.FallbackClub
 	}
+	// Pre-render Explanation since html/template doesn't recursively
+	// evaluate text substituted into a template — embedding {{.Club}}
+	// in the locale string would emit it literally. Use %s instead.
+	rendered := tpl
+	rendered.Explanation = fmt.Sprintf(tpl.Explanation, clubName)
 	data := struct {
 		Club     string
 		Domain   string
@@ -82,7 +87,7 @@ func MagicLinkBody(locale, clubName, domain, loginURL string) string {
 		Club:     clubName,
 		Domain:   domain,
 		LoginURL: template.URL(loginURL),
-		Copy:     tpl,
+		Copy:     rendered,
 	}
 	var buf bytes.Buffer
 	if err := magicLinkHTMLTpl.Execute(&buf, data); err != nil {
@@ -108,7 +113,7 @@ var magicLinkCopy = map[string]magicLinkCopyT{
 	"nb": {
 		Subject:       "Logg inn hos %s",
 		Greeting:      "Hei,",
-		Explanation:   "Noen – forhåpentligvis du – ba om en innloggingslenke til medlemsportalen til {{.Club}}.",
+		Explanation:   "Noen ba om en innloggingslenke til medlemsportalen til %s.",
 		CTA:           "Logg inn",
 		LinkIntro:     "Eller kopier denne lenken til nettleseren din:",
 		Expiry:        "Lenken er gyldig i 15 minutter og kan kun brukes én gang.",
@@ -119,7 +124,7 @@ var magicLinkCopy = map[string]magicLinkCopyT{
 	"en": {
 		Subject:       "Sign in to %s",
 		Greeting:      "Hello,",
-		Explanation:   "Someone – hopefully you – requested a sign-in link for the {{.Club}} member portal.",
+		Explanation:   "Someone requested a sign-in link for the %s member portal.",
 		CTA:           "Sign in",
 		LinkIntro:     "Or copy this link into your browser:",
 		Expiry:        "This link is valid for 15 minutes and can be used only once.",
@@ -130,7 +135,7 @@ var magicLinkCopy = map[string]magicLinkCopyT{
 	"de": {
 		Subject:       "Anmeldung bei %s",
 		Greeting:      "Hallo,",
-		Explanation:   "Jemand – hoffentlich du – hat einen Anmeldelink für das Mitgliederportal von {{.Club}} angefordert.",
+		Explanation:   "Es wurde ein Anmeldelink für das Mitgliederportal von %s angefordert.",
 		CTA:           "Anmelden",
 		LinkIntro:     "Oder kopiere diesen Link in deinen Browser:",
 		Expiry:        "Der Link ist 15 Minuten gültig und kann nur einmal verwendet werden.",
@@ -141,7 +146,7 @@ var magicLinkCopy = map[string]magicLinkCopyT{
 	"fr": {
 		Subject:       "Connexion à %s",
 		Greeting:      "Bonjour,",
-		Explanation:   "Quelqu'un – on espère vous – a demandé un lien de connexion au portail membre de {{.Club}}.",
+		Explanation:   "Quelqu'un a demandé un lien de connexion au portail membre de %s.",
 		CTA:           "Se connecter",
 		LinkIntro:     "Ou copiez ce lien dans votre navigateur :",
 		Expiry:        "Ce lien est valable 15 minutes et ne peut être utilisé qu'une seule fois.",
@@ -152,7 +157,7 @@ var magicLinkCopy = map[string]magicLinkCopyT{
 	"it": {
 		Subject:       "Accedi a %s",
 		Greeting:      "Ciao,",
-		Explanation:   "Qualcuno – speriamo tu – ha richiesto un link di accesso al portale soci di {{.Club}}.",
+		Explanation:   "Qualcuno ha richiesto un link di accesso al portale soci di %s.",
 		CTA:           "Accedi",
 		LinkIntro:     "Oppure copia questo link nel tuo browser:",
 		Expiry:        "Il link è valido per 15 minuti e può essere usato una sola volta.",
@@ -163,7 +168,7 @@ var magicLinkCopy = map[string]magicLinkCopyT{
 	"nl": {
 		Subject:       "Inloggen bij %s",
 		Greeting:      "Hallo,",
-		Explanation:   "Iemand – hopelijk jij – heeft een inloglink aangevraagd voor het ledenportaal van {{.Club}}.",
+		Explanation:   "Iemand heeft een inloglink aangevraagd voor het ledenportaal van %s.",
 		CTA:           "Inloggen",
 		LinkIntro:     "Of kopieer deze link naar je browser:",
 		Expiry:        "De link is 15 minuten geldig en kan één keer worden gebruikt.",
@@ -174,7 +179,7 @@ var magicLinkCopy = map[string]magicLinkCopyT{
 	"pl": {
 		Subject:       "Zaloguj się do %s",
 		Greeting:      "Cześć,",
-		Explanation:   "Ktoś – mamy nadzieję, że Ty – poprosił o link do logowania w portalu członkowskim {{.Club}}.",
+		Explanation:   "Ktoś poprosił o link do logowania w portalu członkowskim %s.",
 		CTA:           "Zaloguj się",
 		LinkIntro:     "Albo skopiuj ten link do przeglądarki:",
 		Expiry:        "Link jest ważny przez 15 minut i można go użyć tylko raz.",
