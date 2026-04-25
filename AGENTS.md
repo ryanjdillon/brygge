@@ -114,6 +114,15 @@ Production stack via `deploy/docker-compose.yml` on Hetzner CAX11 (ARM64):
 
 Multi-stage Dockerfile: build frontend → embed in Go binary → distroless runtime. The Go binary serves the SPA with an `index.html` fallback for unmatched routes. CSP headers allow MapLibre, Kartverket, OSM, and Yr.no. See [docs/deploy.md](docs/deploy.md) for full guide.
 
+## Secrets in `terraform/terraform.tfvars.json`
+
+Tracked as a placeholder; deployers fill it in locally. Two layers keep secrets out of git:
+
+1. **`skip-worktree`** (run once per clone): `git update-index --skip-worktree terraform/terraform.tfvars.json` — git then ignores local edits (`S` flag in `git ls-files -v`).
+2. **Pre-commit hook** at `.githooks/pre-commit` (wired via `core.hooksPath = .githooks`) — rejects staged versions with a non-empty `hcloud_token` or any domain not ending in `example.invalid`. Backstops `skip-worktree` against `git add -f`.
+
+To update the committed placeholder, temporarily clear skip-worktree, commit a sanitized version, then re-set skip-worktree. Never `git add -f` a file containing real values — the hook will reject it.
+
 ## Deployment Operations
 
 ```bash
