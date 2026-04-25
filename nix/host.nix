@@ -510,12 +510,19 @@ in
         };
       };
       exporters = {
-        # Endpoint + optional Authorization header come from /etc/otel/env
-        # (root-only, not committed). See docs/deploy.md.
-        "otlphttp/home" = {
-          endpoint = "\${env:HOME_OTLP_ENDPOINT}";
+        # Endpoint and auth come from /etc/otel/env (root-only, not committed):
+        #   OTLP_ENDPOINT=collector.example.com:4317
+        #   OTLP_AUTH_HEADER=Bearer <token>
+        # No scheme on endpoint — gRPC OTLP exporter takes host:port directly.
+        # tls.insecure only disables transport TLS; if the path is over a
+        # private network (e.g. Tailscale's WireGuard tunnel) transport TLS
+        # is redundant. The bearer token still rides in gRPC metadata
+        # headers regardless of tls.insecure.
+        "otlp/upstream" = {
+          endpoint = "\${env:OTLP_ENDPOINT}";
+          tls.insecure = true;
           headers = {
-            Authorization = "\${env:HOME_OTLP_AUTH_HEADER}";
+            Authorization = "\${env:OTLP_AUTH_HEADER}";
           };
         };
       };
@@ -524,17 +531,17 @@ in
           metrics = {
             receivers = [ "hostmetrics" "otlp" ];
             processors = [ "resourcedetection" "resource" "batch" ];
-            exporters = [ "otlphttp/home" ];
+            exporters = [ "otlp/upstream" ];
           };
           traces = {
             receivers = [ "otlp" ];
             processors = [ "resourcedetection" "resource" "batch" ];
-            exporters = [ "otlphttp/home" ];
+            exporters = [ "otlp/upstream" ];
           };
           logs = {
             receivers = [ "otlp" "journald" ];
             processors = [ "resourcedetection" "resource" "batch" ];
-            exporters = [ "otlphttp/home" ];
+            exporters = [ "otlp/upstream" ];
           };
         };
         telemetry = {
