@@ -447,4 +447,118 @@ in
     SystemMaxUse=500M
     MaxRetentionSec=1month
   '';
+
+  # Tailscale — used as the network path for forwarding telemetry to the
+  # home cluster's OTel stack. Run `tailscale up` once on first deploy
+  # to authenticate the node into the tailnet.
+  services.tailscale = {
+    enable = true;
+    openFirewall = true;
+  };
+
+  # OpenTelemetry collector. Two responsibilities:
+  #   1. Scrape VM system metrics (CPU, memory, disk, network, processes)
+  #   2. Receive OTLP from brygge on 127.0.0.1:4317 and forward to the
+  #      home cluster's OTel stack (endpoint set via /etc/otel/env)
+  services.opentelemetry-collector = {
+    enable = true;
+    package = pkgs.opentelemetry-collector-contrib;
+    settings = {
+      receivers = {
+        hostmetrics = {
+          collection_interval = "30s";
+          scrapers = {
+            cpu = { };
+            memory = { };
+            disk = { };
+            filesystem = { };
+            load = { };
+            network = { };
+            paging = { };
+            processes = { };
+          };
+        };
+        otlp = {
+          protocols = {
+            grpc.endpoint = "127.0.0.1:4317";
+            http.endpoint = "127.0.0.1:4318";
+          };
+        };
+        journald = {
+          units = [
+            "brygge.service"
+            "stalwart.service"
+            "caddy.service"
+            "postgresql.service"
+            "podman-bulwark.service"
+          ];
+        };
+      };
+      processors = {
+        batch = {
+          timeout = "10s";
+          send_batch_size = 1024;
+        };
+        resourcedetection = {
+          detectors = [ "system" "env" ];
+        };
+        resource = {
+          attributes = [
+            { key = "host.name"; value = clubConfig.hostname; action = "upsert"; }
+            { key = "service.namespace"; value = clubConfig.domain; action = "upsert"; }
+          ];
+        };
+      };
+      exporters = {
+        # Endpoint + optional Authorization header come from /etc/otel/env
+        # (root-only, not committed). See docs/deploy.md.
+        "otlphttp/home" = {
+          endpoint = "\${env:HOME_OTLP_ENDPOINT}";
+          headers = {
+            Authorization = "\${env:HOME_OTLP_AUTH_HEADER}";
+          };
+        };
+      };
+      service = {
+        pipelines = {
+          metrics = {
+            receivers = [ "hostmetrics" "otlp" ];
+            processors = [ "resourcedetection" "resource" "batch" ];
+            exporters = [ "otlphttp/home" ];
+          };
+          traces = {
+            receivers = [ "otlp" ];
+            processors = [ "resourcedetection" "resource" "batch" ];
+            exporters = [ "otlphttp/home" ];
+          };
+          logs = {
+            receivers = [ "otlp" "journald" ];
+            processors = [ "resourcedetection" "resource" "batch" ];
+            exporters = [ "otlphttp/home" ];
+          };
+        };
+        telemetry = {
+          # Suppress the collector's own internal metrics endpoint to
+          # avoid yet another exporter loop.
+          metrics.level = "none";
+        };
+      };
+    };
+  };
+
+  systemd.services.opentelemetry-collector.serviceConfig = {
+    # /etc/otel/env contains HOME_OTLP_ENDPOINT and (optionally)
+    # HOME_OTLP_AUTH_HEADER — managed by the deployer, not Nix.
+    EnvironmentFile = "/etc/otel/env";
+    # Read journald — needs the systemd-journal group.
+    SupplementaryGroups = [ "systemd-journal" ];
+  };
+
+  # Brygge sends OTLP to the local collector instead of giving up.
+  services.brygge.extraEnvironment = {
+    OTEL_EXPORTER_OTLP_ENDPOINT = "http://127.0.0.1:4317";
+    OTEL_EXPORTER_OTLP_PROTOCOL = "grpc";
+    OTEL_SERVICE_NAME = "brygge-api";
+    OTEL_RESOURCE_ATTRIBUTES = "service.namespace=${clubConfig.domain}";
+  };
 }
