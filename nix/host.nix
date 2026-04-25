@@ -420,6 +420,76 @@ in
   # the cert security.acme issues (defaults are 0750 acme:acme).
   users.users.stalwart.extraGroups = [ "acme" ];
 
+  # Provision a dedicated `relay@<domain>` principal in Stalwart for the
+  # brygge API to authenticate against when sending magic-link / invoice /
+  # broadcast mail. Keeping this separate from any human mailbox (e.g.
+  # info@) means brygge's credentials are unaffected by webmail-side
+  # password changes or mailbox renames.
+  #
+  # Plaintext lives in /etc/stalwart/relay-password (root:root 0400, not
+  # in /nix/store). The same plaintext goes in /etc/brygge/env as
+  # SMTP_PASSWORD — the two files are the source of truth for the
+  # relay credentials and must be kept in sync when rotating.
+  systemd.services.stalwart-relay-account = {
+    description = "Provision the brygge SMTP relay@ principal in Stalwart";
+    after = [ "stalwart.service" ];
+    wants = [ "stalwart.service" ];
+    wantedBy = [ "multi-user.target" ];
+    path = with pkgs; [ curl jq mkpasswd coreutils ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
+    script = ''
+      set -eu
+
+      ADMIN_FILE=/etc/stalwart/admin-password
+      RELAY_FILE=/etc/stalwart/relay-password
+
+      for f in "$ADMIN_FILE" "$RELAY_FILE"; do
+        if [ ! -s "$f" ]; then
+          echo "ERROR: required password file missing or empty: $f" >&2
+          echo "  See docs/mail/setup.md (step 6: provision relay account)." >&2
+          echo "  Place a strong password with:" >&2
+          echo "    install -m 0400 -o root /dev/stdin $f <<< \"<strong-password>\"" >&2
+          echo "  Then: systemctl restart stalwart-relay-account" >&2
+          exit 1
+        fi
+      done
+
+      ADMIN=$(cat "$ADMIN_FILE")
+      PLAIN=$(cat "$RELAY_FILE")
+      BCRYPT=$(mkpasswd -sm bcrypt "$PLAIN")
+      DOMAIN="${cfg.domain}"
+      API="http://127.0.0.1:8088/api/principal"
+
+      # Wait up to 30s for Stalwart admin API.
+      for _ in $(seq 1 30); do
+        if curl -fsS -o /dev/null -u "admin:$ADMIN" "$API" 2>/dev/null; then
+          break
+        fi
+        sleep 1
+      done
+
+      # Stalwart's admin API returns 200 with {"data": null} when a
+      # principal does not exist (not 404). Detect existence by reading
+      # whether .data.id is present in the body.
+      EXISTS=$(curl -fsS -u "admin:$ADMIN" "$API/relay" | jq -r 'if (.data.id // null) != null then "yes" else "no" end')
+
+      if [ "$EXISTS" = "no" ]; then
+        BODY=$(jq -nc \
+          --arg email "relay@$DOMAIN" \
+          --arg secret "$BCRYPT" \
+          '{type:"individual",name:"relay",emails:[$email],secrets:[$secret],description:"Brygge SMTP send-only",roles:["user"],quota:1}')
+        curl -fsS -u "admin:$ADMIN" -X POST "$API" -H 'Content-Type: application/json' -d "$BODY"
+      else
+        BODY=$(jq -nc --arg secret "$BCRYPT" \
+          '[{action:"set",field:"secrets",value:[$secret]}]')
+        curl -fsS -u "admin:$ADMIN" -X PATCH "$API/relay" -H 'Content-Type: application/json' -d "$BODY"
+      fi
+    '';
+  };
+
   # Bulwark webmail (JMAP client for Stalwart). Runs in a container.
   virtualisation.oci-containers = {
     backend = "podman";
