@@ -128,36 +128,50 @@ dig TXT mail._domainkey.<domain> @hydrogen.ns.hetzner.com +short
 # expect: "v=DKIM1; k=rsa; p=MIG..."
 ```
 
-### 5. Create role mailboxes
+### 5. Create human role mailboxes
 
 In the admin UI → **Management → Accounts → New**:
 
-- `login@<domain>` — used by brygge as the SMTP auth + `From:` identity for outbound transactional mail (magic links, invoices, notifications). Generate a strong password and save it for the env file step below.
 - `info@<domain>` — a real inbox monitored by a board member (or rotating role). Set a password for the current officeholder.
 - `treasurer@<domain>`, `secretary@<domain>`, `admin@<domain>`, etc. — shared role mailboxes for board members. Password per role.
 
-**Alias `login@` to `info@`** (admin UI → `login@<domain>` account → Aliases tab → add `info@<domain>` or a forwarding rule). This means any reply that somehow reaches `login@` (an old mail client that ignores `Reply-To`, for example) still lands where someone reads it.
-
-Brygge is configured to set the `Reply-To: info@<domain>` header on outbound mail (via `EMAIL_REPLY_TO` env var), so well-behaved mail clients send replies directly to `info@` when a member hits "Reply". Between the header and the alias, no member mail is black-holed.
-
-**Why `login@` instead of `noreply@`**: modern spam filters don't penalize `noreply@` specifically, but elderly members often don't read "do-not-reply" notices and reply anyway. `login@` is descriptive, still sender-only in intent, and its replies can be monitored.
-
 Aliases: each mailbox can have multiple aliases configured in the same screen (e.g. `kasserer@<domain>` → treasurer).
 
-### 6. Wire brygge to SMTP
+These are the mailboxes humans log into via Bulwark webmail or any IMAP client.
 
-Edit `/etc/brygge/env` on the server to add SMTP credentials:
+### 6. Provision the brygge SMTP relay account
+
+Brygge sends mail (magic links, invoices, broadcasts) as a dedicated `relay@<domain>` principal — separate from any human mailbox so that webmail-side renames or password changes can't break service mail.
+
+The `relay@<domain>` principal is provisioned **declaratively** by the `stalwart-relay-account.service` systemd unit defined in `nix/host.nix`. You only have to supply its password as a server-side file:
+
+```bash
+ssh root@<server-ip> 'install -m 0400 -o root /dev/stdin /etc/stalwart/relay-password' <<< "<strong-password>"
+ssh root@<server-ip> 'systemctl restart stalwart-relay-account.service'
+```
+
+The unit waits for Stalwart's admin API, then either creates the principal (first run) or updates its bcrypt secret (subsequent runs). It runs at every boot, so the principal stays in sync with the password file.
+
+### 7. Wire brygge to SMTP
+
+Edit `/etc/brygge/env` on the server:
 
 ```
-SMTP_HOST=localhost
-SMTP_PORT=587
-SMTP_USERNAME=login@<domain>
-SMTP_PASSWORD=<password from step 5>
-EMAIL_FROM=login@<domain>
+SMTP_HOST=mail.<domain>
+SMTP_PORT=465
+SMTP_USERNAME=relay
+SMTP_PASSWORD=<same value as /etc/stalwart/relay-password>
+EMAIL_FROM=<Club Name> <relay@<domain>>
 EMAIL_REPLY_TO=info@<domain>
 ```
 
-`EMAIL_REPLY_TO` is optional but recommended — it sets the `Reply-To` header so replies land in the `info@` mailbox, not back at `login@`.
+Notes:
+
+- **Port 465 (implicit TLS)**, not 587. Brygge's SMTP client supports both; 465 sidesteps an intermittent STARTTLS hang in current Stalwart.
+- **`SMTP_USERNAME=relay`** — the bare principal name, not the email address. Stalwart's auth lookup uses the principal slug.
+- **`SMTP_HOST=mail.<domain>`** — use the public hostname so the TLS SNI matches the cert. Don't use `localhost` or `127.0.0.1`.
+- **`EMAIL_REPLY_TO`** sets the `Reply-To:` header so member replies land in the monitored `info@` inbox instead of the send-only `relay@` account.
+- **`SMTP_PASSWORD` must equal the contents of `/etc/stalwart/relay-password`.** When rotating, update both files and restart `stalwart-relay-account.service` and `brygge.service`.
 
 Restart brygge:
 
@@ -167,7 +181,7 @@ ssh root@<server-ip> 'systemctl restart brygge'
 
 Test by requesting a magic link against `https://<domain>/api/v1/auth/magic-link`. The email should arrive in your inbox within ~30s.
 
-### 7. First Bulwark login
+### 8. First Bulwark login
 
 Open `https://webmail.<domain>/` — Bulwark's login screen. Enter:
 
@@ -193,6 +207,19 @@ No NixOS deploy needed. Stalwart writes to its RocksDB immediately.
 ### Adding a new role
 
 Same flow as step 5 — Stalwart admin UI handles everything. No code change.
+
+### Rotating the brygge SMTP relay password
+
+The `relay@<domain>` principal that brygge authenticates as is provisioned by `stalwart-relay-account.service` from `/etc/stalwart/relay-password`. To rotate:
+
+```bash
+NEW=$(openssl rand -base64 24)
+ssh root@<server-ip> "install -m 0400 -o root /dev/stdin /etc/stalwart/relay-password" <<< "$NEW"
+# Mirror the same value into brygge's env (line: SMTP_PASSWORD=...)
+ssh root@<server-ip> 'systemctl restart stalwart-relay-account brygge'
+```
+
+The systemd unit re-bcrypts the new plaintext and PATCHes Stalwart's stored secret on every restart, so the principal stays in sync with the file. brygge picks up the new `SMTP_PASSWORD` from `/etc/brygge/env` on its restart.
 
 ### Replacing the bootstrap admin password
 
