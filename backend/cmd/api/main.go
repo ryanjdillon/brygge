@@ -43,7 +43,13 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	otelShutdown, err := telemetry.Setup(ctx, "brygge-api", "1.0.0")
+	otelShutdown, err := telemetry.Setup(ctx, telemetry.Options{
+		ServiceName:      "brygge-api",
+		ServiceVersion:   "1.0.0",
+		ClubSlug:         cfg.ClubSlug,
+		ClubDomain:       cfg.Domain,
+		TraceSampleRatio: 0.1,
+	})
 	if err != nil {
 		log.Warn().Err(err).Msg("failed to initialize OpenTelemetry — metrics and tracing disabled")
 	} else {
