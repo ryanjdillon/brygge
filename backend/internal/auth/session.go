@@ -79,7 +79,7 @@ func (s *SessionService) ValidateSession(ctx context.Context, sessionID string) 
 	}
 	defer rows.Close()
 
-	var roles []string
+	roles := []string{}
 	for rows.Next() {
 		var role string
 		if err := rows.Scan(&role); err != nil {
