@@ -3,12 +3,15 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
+import { useClubStore } from '@/stores/club'
 import { Menu, X, LogIn, LogOut, User, Shield, ChevronDown } from 'lucide-vue-next'
 import LanguageSwitcher from '@/components/layout/LanguageSwitcher.vue'
 
 const { t } = useI18n()
 const router = useRouter()
 const auth = useAuthStore()
+const club = useClubStore()
+club.ensureLoaded()
 const mobileOpen = ref(false)
 const clubOpen = ref(false)
 const clubDropdownRef = ref<HTMLElement>()
@@ -49,7 +52,7 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
     <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
       <div class="flex h-16 items-center justify-between">
         <RouterLink to="/" class="flex items-center gap-2 text-xl font-bold text-blue-900">
-          Brygge
+          {{ club.name || 'Brygge' }}
         </RouterLink>
 
         <div class="hidden items-center gap-1 md:flex">

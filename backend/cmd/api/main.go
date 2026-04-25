@@ -234,6 +234,13 @@ func main() {
 			r.Get("/boat-models", boatModelsHandler.HandleSearch)
 			r.Get("/weather", weatherHandler.HandleGetWeather)
 			r.Post("/contact", contactHandler.HandleContactForm)
+			r.Get("/club", func(w http.ResponseWriter, r *http.Request) {
+				handlers.JSON(w, http.StatusOK, map[string]string{
+					"name":   cfg.ClubName,
+					"slug":   cfg.ClubSlug,
+					"domain": cfg.Domain,
+				})
+			})
 		})
 
 		r.Get("/legal/{docType}", gdprHandler.HandleGetLegalDocument)
