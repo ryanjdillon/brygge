@@ -4,13 +4,13 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 errors=0
 
-# Check CLAUDE.md line count
-claude_lines=$(wc -l < "$REPO_ROOT/CLAUDE.md")
-if [ "$claude_lines" -gt 150 ]; then
-  echo "ERROR: CLAUDE.md is $claude_lines lines (max 150)"
+# Check AGENTS.md line count
+agents_lines=$(wc -l < "$REPO_ROOT/AGENTS.md")
+if [ "$agents_lines" -gt 150 ]; then
+  echo "ERROR: AGENTS.md is $agents_lines lines (max 150)"
   errors=$((errors + 1))
 else
-  echo "OK: CLAUDE.md is $claude_lines lines"
+  echo "OK: AGENTS.md is $agents_lines lines"
 fi
 
 # Check relative markdown links resolve to existing files

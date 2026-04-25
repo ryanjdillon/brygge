@@ -96,7 +96,7 @@ npx web-push generate-vapid-keys
 
 ## OpenTelemetry
 
-Metrics and traces are exported via OTLP gRPC. See [otel.md](otel.md) for collector setup.
+Metrics and traces are exported via OTLP gRPC. See [otel/index.md](otel/index.md) for collector setup.
 
 Configuration uses standard OTEL environment variables — no Brygge-specific vars needed:
 
@@ -126,4 +126,4 @@ If the collector is unreachable, the app starts normally with a warning log.
 
 ---
 
-See also: [deploy.md](deploy.md) | [mail/setup.md](mail/setup.md) | [otel.md](otel.md) | [setup.md](setup.md)
+See also: [deploy.md](deploy.md) | [mail/setup.md](mail/setup.md) | [otel/index.md](otel/index.md) | [setup.md](setup.md)

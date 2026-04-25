@@ -1,6 +1,22 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to AI coding agents (Claude Code, Cursor, etc.) when working with code in this repository.
+
+## Documentation map
+
+Docs are organized by topic so you can read just the section you need without loading everything:
+
+| Topic | Entry point |
+|-------|-------------|
+| Architecture overview | [docs/index.md](docs/index.md) |
+| Local setup | [docs/setup.md](docs/setup.md) |
+| Contributing workflow | [docs/contributing.md](docs/contributing.md) |
+| Configuration / env vars | [docs/configuration.md](docs/configuration.md) |
+| Production deploy | [docs/deploy.md](docs/deploy.md) |
+| Troubleshooting | [docs/troubleshooting.md](docs/troubleshooting.md) |
+| Mail (Stalwart + Bulwark) | [docs/mail/setup.md](docs/mail/setup.md) |
+| OpenTelemetry | [docs/otel/index.md](docs/otel/index.md) — instrumentation, app config, local collector, upstream contract, standalone collector |
+| Kubernetes notes | [docs/k8s.md](docs/k8s.md) |
 
 ## Dev Environment
 
