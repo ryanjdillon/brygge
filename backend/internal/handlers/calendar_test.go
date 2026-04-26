@@ -24,9 +24,9 @@ func TestHandleCreateEventUnauthorized(t *testing.T) {
 	h := newTestCalendarHandler(t)
 
 	r := chi.NewRouter()
-	jwtSvc := testJWTService()
+	
 	r.Group(func(r chi.Router) {
-		r.Use(middleware.Authenticate(jwtSvc))
+		r.Use(testAuthMiddleware)
 		r.Use(middleware.RequireRole("board"))
 		r.Post("/calendar", h.HandleCreateEvent)
 	})
@@ -45,9 +45,9 @@ func TestHandleCreateEventForbiddenForMember(t *testing.T) {
 	h := newTestCalendarHandler(t)
 
 	r := chi.NewRouter()
-	jwtSvc := testJWTService()
+	
 	r.Group(func(r chi.Router) {
-		r.Use(middleware.Authenticate(jwtSvc))
+		r.Use(testAuthMiddleware)
 		r.Use(middleware.RequireRole("board"))
 		r.Post("/calendar", h.HandleCreateEvent)
 	})
@@ -121,9 +121,9 @@ func TestHandleCreateEventMissingFields(t *testing.T) {
 	h := newTestCalendarHandler(t)
 
 	r := chi.NewRouter()
-	jwtSvc := testJWTService()
+	
 	r.Group(func(r chi.Router) {
-		r.Use(middleware.Authenticate(jwtSvc))
+		r.Use(testAuthMiddleware)
 		r.Post("/calendar", h.HandleCreateEvent)
 	})
 
@@ -184,9 +184,9 @@ func TestHandleCreateEventInvalidTimestamps(t *testing.T) {
 	h := newTestCalendarHandler(t)
 
 	r := chi.NewRouter()
-	jwtSvc := testJWTService()
+	
 	r.Group(func(r chi.Router) {
-		r.Use(middleware.Authenticate(jwtSvc))
+		r.Use(testAuthMiddleware)
 		r.Post("/calendar", h.HandleCreateEvent)
 	})
 
@@ -237,9 +237,9 @@ func TestHandleCreateEventEndBeforeStart(t *testing.T) {
 	h := newTestCalendarHandler(t)
 
 	r := chi.NewRouter()
-	jwtSvc := testJWTService()
+	
 	r.Group(func(r chi.Router) {
-		r.Use(middleware.Authenticate(jwtSvc))
+		r.Use(testAuthMiddleware)
 		r.Post("/calendar", h.HandleCreateEvent)
 	})
 

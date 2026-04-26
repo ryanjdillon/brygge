@@ -13,7 +13,6 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/brygge-klubb/brygge/internal/accounting"
-	"github.com/brygge-klubb/brygge/internal/auth"
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/middleware"
 	"github.com/brygge-klubb/brygge/internal/testutil"
@@ -26,7 +25,6 @@ type integrationEnv struct {
 	db     *pgxpool.Pool
 	redis  *redis.Client
 	cfg    *config.Config
-	jwt    *auth.JWTService
 	log    zerolog.Logger
 	clubID string
 }
@@ -40,13 +38,7 @@ func setupIntegrationEnv(t *testing.T) *integrationEnv {
 
 	clubID := testutil.SeedClub(t, db)
 
-	cfg := &config.Config{
-		Port:             8080,
-		JWTSecret:        "integration-test-secret-key-32bytes!",
-		JWTAccessExpiry:  15 * time.Minute,
-		JWTRefreshExpiry: 7 * 24 * time.Hour,
-		VippsTestMode:    true,
-	}
+	cfg := &config.Config{Port: 8080}
 
 	var clubSlug string
 	err := db.QueryRow(context.Background(),
@@ -61,14 +53,13 @@ func setupIntegrationEnv(t *testing.T) *integrationEnv {
 		db:     db,
 		redis:  rdb,
 		cfg:    cfg,
-		jwt:    auth.NewJWTService(cfg),
 		log:    zerolog.Nop(),
 		clubID: clubID,
 	}
 }
 
 func (e *integrationEnv) authHandler() *AuthHandler {
-	return NewAuthHandler(e.db, e.redis, e.jwt, nil, e.cfg, e.log)
+	return NewAuthHandler(e.db, e.cfg, e.log)
 }
 
 func (e *integrationEnv) membersHandler() *MembersHandler {
@@ -87,44 +78,11 @@ func (e *integrationEnv) bookingsHandler() *BookingsHandler {
 	return NewBookingsHandler(e.db, e.redis, e.cfg, e.log)
 }
 
+// generateToken returns an opaque test token (decoded by testAuthMiddleware
+// in testhelpers_test.go). Bound to integrationEnv so callers don't have
+// to thread clubID through every test.
 func (e *integrationEnv) generateToken(userID string, roles []string) string {
-	token, err := e.jwt.GenerateAccessToken(userID, e.clubID, roles)
-	if err != nil {
-		panic("failed to generate test token: " + err.Error())
-	}
-	return token
-}
-
-func (e *integrationEnv) seedUserWithPassword(t *testing.T, password string, roles []string) (userID, email string) {
-	t.Helper()
-	ctx := context.Background()
-
-	hash, err := auth.HashPassword(password)
-	if err != nil {
-		t.Fatalf("hashing password: %v", err)
-	}
-
-	email = "testuser-" + testutil.RandomHex(4) + "@example.com"
-	err = e.db.QueryRow(ctx,
-		`INSERT INTO users (club_id, email, password_hash, full_name, phone)
-		 VALUES ($1, $2, $3, $4, $5)
-		 RETURNING id`,
-		e.clubID, email, hash, "Test User", "+4700000000",
-	).Scan(&userID)
-	if err != nil {
-		t.Fatalf("seeding user with password: %v", err)
-	}
-
-	for _, role := range roles {
-		if _, err := e.db.Exec(ctx,
-			`INSERT INTO user_roles (user_id, club_id, role) VALUES ($1, $2, $3)`,
-			userID, e.clubID, role,
-		); err != nil {
-			t.Fatalf("granting role %q: %v", role, err)
-		}
-	}
-
-	return userID, email
+	return generateTestToken(userID, e.clubID, roles)
 }
 
 func jsonBody(t *testing.T, v any) *bytes.Buffer {
@@ -152,185 +110,7 @@ func assertStatus(t *testing.T, rec *httptest.ResponseRecorder, expected int) {
 	}
 }
 
-// ---------- Test 1: Auth Register + Login + Me ----------
-
-func TestIntegration_AuthEmailRegisterLoginMe(t *testing.T) {
-	t.Parallel()
-	env := setupIntegrationEnv(t)
-	ah := env.authHandler()
-
-	r := chi.NewRouter()
-	r.Post("/auth/register", ah.HandleEmailRegister)
-	r.Post("/auth/login", ah.HandleEmailLogin)
-	r.Group(func(r chi.Router) {
-		r.Use(middleware.Authenticate(env.jwt))
-		r.Get("/auth/me", ah.HandleMe)
-	})
-
-	email := "register-" + testutil.RandomHex(4) + "@example.com"
-	password := "SecurePass123!"
-
-	// Register
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/auth/register", jsonBody(t, map[string]string{
-		"email":     email,
-		"password":  password,
-		"full_name": "Test Register User",
-	}))
-	req.Header.Set("Content-Type", "application/json")
-	r.ServeHTTP(rec, req)
-	assertStatus(t, rec, http.StatusCreated)
-
-	// Login
-	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodPost, "/auth/login", jsonBody(t, map[string]string{
-		"email":    email,
-		"password": password,
-	}))
-	req.Header.Set("Content-Type", "application/json")
-	r.ServeHTTP(rec, req)
-	assertStatus(t, rec, http.StatusOK)
-
-	loginResp := decodeJSON[tokenResponse](t, rec)
-	if loginResp.AccessToken == "" {
-		t.Fatal("expected non-empty access_token")
-	}
-	if loginResp.RefreshToken == "" {
-		t.Fatal("expected non-empty refresh_token")
-	}
-	if loginResp.TokenType != "Bearer" {
-		t.Fatalf("expected token_type Bearer, got %q", loginResp.TokenType)
-	}
-
-	// Me
-	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodGet, "/auth/me", nil)
-	req.Header.Set("Authorization", "Bearer "+loginResp.AccessToken)
-	r.ServeHTTP(rec, req)
-	assertStatus(t, rec, http.StatusOK)
-
-	meResp := decodeJSON[meResponse](t, rec)
-	if meResp.UserID == "" {
-		t.Fatal("expected non-empty user_id")
-	}
-	if meResp.ClubID != env.clubID {
-		t.Fatalf("expected club_id %q, got %q", env.clubID, meResp.ClubID)
-	}
-	found := false
-	for _, role := range meResp.Roles {
-		if role == "applicant" {
-			found = true
-		}
-	}
-	if !found {
-		t.Fatalf("expected applicant role in %v", meResp.Roles)
-	}
-}
-
-// ---------- Test 2: Refresh Token Flow ----------
-
-func TestIntegration_AuthRefreshToken(t *testing.T) {
-	t.Parallel()
-	env := setupIntegrationEnv(t)
-	ah := env.authHandler()
-
-	r := chi.NewRouter()
-	r.Post("/auth/login", ah.HandleEmailLogin)
-	r.Post("/auth/refresh", ah.HandleRefreshToken)
-	r.Group(func(r chi.Router) {
-		r.Use(middleware.Authenticate(env.jwt))
-		r.Get("/auth/me", ah.HandleMe)
-	})
-
-	password := "RefreshPass123!"
-	_, email := env.seedUserWithPassword(t, password, []string{"member"})
-
-	// Login
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/auth/login", jsonBody(t, map[string]string{
-		"email":    email,
-		"password": password,
-	}))
-	req.Header.Set("Content-Type", "application/json")
-	r.ServeHTTP(rec, req)
-	assertStatus(t, rec, http.StatusOK)
-
-	loginResp := decodeJSON[tokenResponse](t, rec)
-
-	// Refresh
-	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodPost, "/auth/refresh", jsonBody(t, map[string]string{
-		"refresh_token": loginResp.RefreshToken,
-	}))
-	req.Header.Set("Content-Type", "application/json")
-	r.ServeHTTP(rec, req)
-	assertStatus(t, rec, http.StatusOK)
-
-	refreshResp := decodeJSON[tokenResponse](t, rec)
-	if refreshResp.AccessToken == "" {
-		t.Fatal("expected non-empty access_token from refresh")
-	}
-
-	// Use new access token
-	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodGet, "/auth/me", nil)
-	req.Header.Set("Authorization", "Bearer "+refreshResp.AccessToken)
-	r.ServeHTTP(rec, req)
-	assertStatus(t, rec, http.StatusOK)
-}
-
-// ---------- Test 3: Logout Revokes Refresh Token ----------
-
-func TestIntegration_AuthLogoutRevokesRefresh(t *testing.T) {
-	t.Parallel()
-	env := setupIntegrationEnv(t)
-	ah := env.authHandler()
-
-	r := chi.NewRouter()
-	r.Post("/auth/login", ah.HandleEmailLogin)
-	r.Post("/auth/logout", ah.HandleLogout)
-	r.Post("/auth/refresh", ah.HandleRefreshToken)
-
-	password := "LogoutPass123!"
-	_, email := env.seedUserWithPassword(t, password, []string{"member"})
-
-	// Login
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/auth/login", jsonBody(t, map[string]string{
-		"email":    email,
-		"password": password,
-	}))
-	req.Header.Set("Content-Type", "application/json")
-	r.ServeHTTP(rec, req)
-	assertStatus(t, rec, http.StatusOK)
-
-	loginResp := decodeJSON[tokenResponse](t, rec)
-
-	// Logout
-	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodPost, "/auth/logout", jsonBody(t, map[string]string{
-		"refresh_token": loginResp.RefreshToken,
-	}))
-	req.Header.Set("Content-Type", "application/json")
-	r.ServeHTTP(rec, req)
-	assertStatus(t, rec, http.StatusOK)
-
-	// Refresh should fail
-	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodPost, "/auth/refresh", jsonBody(t, map[string]string{
-		"refresh_token": loginResp.RefreshToken,
-	}))
-	req.Header.Set("Content-Type", "application/json")
-	r.ServeHTTP(rec, req)
-	assertStatus(t, rec, http.StatusUnauthorized)
-
-	errResp := decodeJSON[errorResponse](t, rec)
-	if errResp.Error != "token has been revoked" {
-		t.Fatalf("expected revoked error, got %q", errResp.Error)
-	}
-}
-
-// ---------- Test 4: Members Profile CRUD ----------
+// ---------- Members Profile CRUD ----------
 
 func TestIntegration_MembersProfileCRUD(t *testing.T) {
 	t.Parallel()
@@ -341,7 +121,7 @@ func TestIntegration_MembersProfileCRUD(t *testing.T) {
 	token := env.generateToken(userID, []string{"member"})
 
 	r := chi.NewRouter()
-	r.Use(middleware.Authenticate(env.jwt))
+	r.Use(testAuthMiddleware)
 	r.Get("/me", mh.HandleGetMe)
 	r.Patch("/me", mh.HandleUpdateMe)
 
@@ -405,7 +185,7 @@ func TestIntegration_MembersBoatCRUD(t *testing.T) {
 	token := env.generateToken(userID, []string{"member"})
 
 	r := chi.NewRouter()
-	r.Use(middleware.Authenticate(env.jwt))
+	r.Use(testAuthMiddleware)
 	r.Post("/boats", mh.HandleCreateBoat)
 	r.Get("/boats", mh.HandleListMyBoats)
 	r.Put("/boats/{boatID}", mh.HandleUpdateBoat)
@@ -497,7 +277,7 @@ func TestIntegration_CalendarEventCRUD(t *testing.T) {
 	r.Get("/events/public", ch.HandleListPublicEvents)
 	r.Get("/events/export.ics", ch.HandleExportICS)
 	r.Group(func(r chi.Router) {
-		r.Use(middleware.Authenticate(env.jwt))
+		r.Use(testAuthMiddleware)
 		r.Post("/events", ch.HandleCreateEvent)
 		r.Put("/events/{eventID}", ch.HandleUpdateEvent)
 		r.Delete("/events/{eventID}", ch.HandleDeleteEvent)
@@ -614,7 +394,7 @@ func TestIntegration_AdminUsersListAndRoles(t *testing.T) {
 	targetID, _ := testutil.SeedUser(t, env.db, env.clubID, []string{"applicant"})
 
 	r := chi.NewRouter()
-	r.Use(middleware.Authenticate(env.jwt))
+	r.Use(testAuthMiddleware)
 	r.Get("/admin/users", auh.HandleListUsers)
 	r.Put("/admin/users/{userID}/roles", auh.HandleUpdateUserRoles)
 
@@ -697,11 +477,11 @@ func TestIntegration_BookingsFullFlow(t *testing.T) {
 	r := chi.NewRouter()
 	r.Get("/resources", bh.HandleListResources)
 	r.Group(func(r chi.Router) {
-		r.Use(middleware.OptionalAuth(env.jwt))
+		r.Use(testAuthMiddleware)
 		r.Post("/bookings", bh.HandleCreateBooking)
 	})
 	r.Group(func(r chi.Router) {
-		r.Use(middleware.Authenticate(env.jwt))
+		r.Use(testAuthMiddleware)
 		r.Get("/bookings", bh.HandleListMyBookings)
 		r.Post("/bookings/{bookingID}/confirm", bh.HandleConfirmBooking)
 		r.Post("/bookings/{bookingID}/cancel", bh.HandleCancelBooking)
@@ -780,7 +560,7 @@ func TestIntegration_AccountingSeedAndCRUD(t *testing.T) {
 	token := env.generateToken(userID, []string{"treasurer"})
 
 	r := chi.NewRouter()
-	r.Use(middleware.Authenticate(env.jwt))
+	r.Use(testAuthMiddleware)
 	r.Use(middleware.RequireRole("treasurer", "board", "admin"))
 	r.Get("/accounts", ah.HandleListAccounts)
 	r.Post("/accounts", ah.HandleCreateAccount)
@@ -936,7 +716,7 @@ func TestIntegration_JournalEntryLifecycle(t *testing.T) {
 	token := env.generateToken(userID, []string{"treasurer"})
 
 	r := chi.NewRouter()
-	r.Use(middleware.Authenticate(env.jwt))
+	r.Use(testAuthMiddleware)
 	r.Use(middleware.RequireRole("treasurer", "board", "admin"))
 	r.Post("/accounts/seed", ah.HandleSeedAccounts)
 	r.Post("/periods", ah.HandleCreatePeriod)
