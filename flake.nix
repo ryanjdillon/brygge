@@ -38,6 +38,11 @@
 
     clubConfig = {
       domain       = tfvars.domain;
+      # Per-club identity — sourced from tfvars so a deploy doesn't
+      # require touching /etc/brygge/env. Fallbacks keep fresh-clone
+      # eval working before a deployer fills these in.
+      slug         = tfvars.club_slug or "brygge";
+      name         = tfvars.club_name or "";
       adminEmail   = tfvars.admin_email;
       adminSshKeys = tfvars.admin_ssh_keys;
       hostname     = tfvars.server_name;
