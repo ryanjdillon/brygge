@@ -52,16 +52,28 @@ func (s *SessionService) CreateSession(ctx context.Context, userID, clubID, ip, 
 	return id, nil
 }
 
+// SessionInfo carries the per-request session state that's separate
+// from the Claims principal: when TOTP was last verified for this
+// session (nil = never), and whether the user has TOTP enrolled at all.
+// The two answer different questions: enrolled drives "should we let
+// them through the admin gate at all"; verifiedAt drives "is the gate
+// open right now".
+type SessionInfo struct {
+	TOTPVerifiedAt *time.Time
+	TOTPEnabled    bool
+}
+
 // ValidateSession checks a session ID and returns the associated claims.
 // Returns ErrSessionNotFound if the session is invalid or expired.
-func (s *SessionService) ValidateSession(ctx context.Context, sessionID string) (*Claims, *time.Time, error) {
+func (s *SessionService) ValidateSession(ctx context.Context, sessionID string) (*Claims, *SessionInfo, error) {
 	var userID, clubID string
-	var totpVerifiedAt *time.Time
+	var info SessionInfo
 	err := s.db.QueryRow(ctx,
-		`SELECT user_id, club_id, totp_verified_at FROM sessions
-		 WHERE id = $1 AND expires_at > NOW()`,
+		`SELECT s.user_id, s.club_id, s.totp_verified_at, COALESCE(u.totp_enabled, false)
+		 FROM sessions s JOIN users u ON u.id = s.user_id
+		 WHERE s.id = $1 AND s.expires_at > NOW()`,
 		sessionID,
-	).Scan(&userID, &clubID, &totpVerifiedAt)
+	).Scan(&userID, &clubID, &info.TOTPVerifiedAt, &info.TOTPEnabled)
 	if err == pgx.ErrNoRows {
 		return nil, nil, ErrSessionNotFound
 	}
@@ -96,7 +108,7 @@ func (s *SessionService) ValidateSession(ctx context.Context, sessionID string) 
 		ClubID: clubID,
 		Roles:  roles,
 	}
-	return claims, totpVerifiedAt, nil
+	return claims, &info, nil
 }
 
 // DeleteSession removes a single session (logout).
