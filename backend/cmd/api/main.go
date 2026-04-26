@@ -527,6 +527,14 @@ func main() {
 						r.Use(middleware.RequireFreshTOTP(5 * time.Minute))
 						r.Put("/{userID}/roles", adminUsersHandler.HandleUpdateUserRoles)
 						r.Delete("/{userID}", adminUsersHandler.HandleDeleteUser)
+
+						// Lost-device backstop — admin disables a target
+						// user's TOTP so they can re-enroll. Acting admin
+						// must be fresh-verified (no privilege loop).
+						r.Group(func(r chi.Router) {
+							r.Use(middleware.RequireRole("admin"))
+							r.Post("/{userID}/totp/disable", totpHandler.HandleAdminDisableTOTP)
+						})
 					})
 				})
 
