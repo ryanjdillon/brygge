@@ -1191,6 +1191,24 @@ func registerAdminOps(api huma.API) {
 	}, struct{ Body AdminUser }]())
 
 	huma.Register(api, huma.Operation{
+		OperationID: "admin-create-user",
+		Method:      http.MethodPost,
+		Path:        "/api/v1/admin/users",
+		Tags:        []string{"Admin"},
+		Summary:     "Create a single user",
+		Security:    BearerSecurity,
+	}, stub[struct{ Body AdminUserCreate }, struct{ Body AdminUserCreateResponse }]())
+
+	huma.Register(api, huma.Operation{
+		OperationID: "admin-import-users-csv",
+		Method:      http.MethodPost,
+		Path:        "/api/v1/admin/users/import",
+		Tags:        []string{"Admin"},
+		Summary:     "Bulk-import users from a CSV file (multipart/form-data, field 'file'). Required columns: email, full_name. Optional: phone, address_line, postal_code, city, is_local, roles (semicolon-separated).",
+		Security:    BearerSecurity,
+	}, stub[struct{}, struct{ Body ImportUsersResult }]())
+
+	huma.Register(api, huma.Operation{
 		OperationID: "admin-update-user-roles",
 		Method:      http.MethodPut,
 		Path:        "/api/v1/admin/users/{userID}/roles",

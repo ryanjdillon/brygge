@@ -653,7 +653,25 @@ export interface paths {
         /** List all users */
         get: operations["admin-list-users"];
         put?: never;
-        post?: never;
+        /** Create a single user */
+        post: operations["admin-create-user"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Bulk-import users from a CSV file (multipart/form-data, field 'file'). Required columns: email, full_name. Optional: phone, address_line, postal_code, city, is_local, roles (semicolon-separated). */
+        post: operations["admin-import-users-csv"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2287,13 +2305,61 @@ export interface components {
             created_at: string;
             /** @description Email address */
             email: string;
-            /** @description Full name */
+            /** @description Given name */
+            first_name: string;
+            /** @description Computed: first_name + ' ' + last_name (kept for backwards compat — DIL-230 will drop) */
             full_name: string;
             /** @description User UUID */
             id: string;
+            /** @description Family name */
+            last_name: string;
             /** @description Phone number */
             phone: string;
             /** @description Assigned roles */
+            roles: string[] | null;
+        };
+        AdminUserCreate: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/AdminUserCreate.json
+             */
+            readonly $schema?: string;
+            /** @description Street address */
+            address_line?: string;
+            /** @description City */
+            city?: string;
+            /** @description Email address (required, unique per club) */
+            email: string;
+            /** @description Given name (required if last_name and full_name are empty) */
+            first_name?: string;
+            /** @description Deprecated — use first_name and last_name. When supplied alone, the server splits on the last space. */
+            full_name?: string;
+            /** @description Whether the user qualifies for the local-resident rate */
+            is_local?: boolean;
+            /** @description Family name */
+            last_name?: string;
+            /** @description Phone number */
+            phone?: string;
+            /** @description Postal code */
+            postal_code?: string;
+            /** @description Initial roles to grant (member, slip_holder, board, harbor_master, treasurer, admin) */
+            roles?: string[] | null;
+        };
+        AdminUserCreateResponse: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/AdminUserCreateResponse.json
+             */
+            readonly $schema?: string;
+            email: string;
+            first_name: string;
+            /** @description Computed convenience field */
+            full_name: string;
+            /** @description New user UUID */
+            id: string;
+            last_name: string;
             roles: string[] | null;
         };
         AdminUsersResponse: {
@@ -3241,6 +3307,40 @@ export interface components {
             slot_duration_minutes: number;
             /** @description Available time slots */
             slots: components["schemas"]["HoistSlot"][] | null;
+        };
+        ImportUsersResult: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/ImportUsersResult.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: int64
+             * @description Number of rows successfully created
+             */
+            created: number;
+            /** @description Per-row outcome */
+            rows: components["schemas"]["ImportUsersResultRow"][] | null;
+            /**
+             * Format: int64
+             * @description Total rows processed
+             */
+            total: number;
+        };
+        ImportUsersResultRow: {
+            email?: string;
+            /** @description Reason when status is skipped or error */
+            error?: string;
+            /**
+             * Format: int64
+             * @description 1-based row number in the CSV (header is row 1)
+             */
+            row: number;
+            /** @description created | skipped | error */
+            status: string;
+            /** @description New user UUID when status is created */
+            user_id?: string;
         };
         "Join-waiting-listRequest": {
             /**
@@ -6011,6 +6111,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminUsersResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "admin-create-user": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminUserCreate"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserCreateResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "admin-import-users-csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportUsersResult"];
                 };
             };
             /** @description Error */

@@ -673,7 +673,9 @@ type LegalDocument struct {
 
 type AdminUser struct {
 	ID        string    `json:"id" doc:"User UUID"`
-	FullName  string    `json:"full_name" doc:"Full name"`
+	FirstName string    `json:"first_name" doc:"Given name"`
+	LastName  string    `json:"last_name" doc:"Family name"`
+	FullName  string    `json:"full_name" doc:"Computed: first_name + ' ' + last_name (kept for backwards compat — DIL-230 will drop)"`
 	Email     string    `json:"email" doc:"Email address"`
 	Phone     string    `json:"phone" doc:"Phone number"`
 	Roles     []string  `json:"roles" doc:"Assigned roles"`
@@ -683,6 +685,47 @@ type AdminUser struct {
 type AdminUsersResponse struct {
 	Users      []AdminUser `json:"users" doc:"List of users"`
 	TotalCount int         `json:"total_count" doc:"Total user count"`
+}
+
+// AdminUserCreate is the request body for POST /api/v1/admin/users.
+// Required fields are email + (first_name OR last_name). full_name is
+// accepted as a deprecated fallback for older clients (split on the
+// last space) and will be removed alongside DIL-230.
+type AdminUserCreate struct {
+	Email       string   `json:"email" doc:"Email address (required, unique per club)"`
+	FirstName   string   `json:"first_name,omitempty" doc:"Given name (required if last_name and full_name are empty)"`
+	LastName    string   `json:"last_name,omitempty" doc:"Family name"`
+	FullName    string   `json:"full_name,omitempty" doc:"Deprecated — use first_name and last_name. When supplied alone, the server splits on the last space."`
+	Phone       string   `json:"phone,omitempty" doc:"Phone number"`
+	AddressLine string   `json:"address_line,omitempty" doc:"Street address"`
+	PostalCode  string   `json:"postal_code,omitempty" doc:"Postal code"`
+	City        string   `json:"city,omitempty" doc:"City"`
+	IsLocal     bool     `json:"is_local,omitempty" doc:"Whether the user qualifies for the local-resident rate"`
+	Roles       []string `json:"roles,omitempty" doc:"Initial roles to grant (member, slip_holder, board, harbor_master, treasurer, admin)"`
+}
+
+type AdminUserCreateResponse struct {
+	ID        string   `json:"id" doc:"New user UUID"`
+	Email     string   `json:"email"`
+	FirstName string   `json:"first_name"`
+	LastName  string   `json:"last_name"`
+	FullName  string   `json:"full_name" doc:"Computed convenience field"`
+	Roles     []string `json:"roles"`
+}
+
+// ImportUsersResultRow records the per-row outcome of a CSV import.
+type ImportUsersResultRow struct {
+	Row    int    `json:"row" doc:"1-based row number in the CSV (header is row 1)"`
+	Email  string `json:"email,omitempty"`
+	Status string `json:"status" doc:"created | skipped | error"`
+	Error  string `json:"error,omitempty" doc:"Reason when status is skipped or error"`
+	UserID string `json:"user_id,omitempty" doc:"New user UUID when status is created"`
+}
+
+type ImportUsersResult struct {
+	Created int                    `json:"created" doc:"Number of rows successfully created"`
+	Total   int                    `json:"total" doc:"Total rows processed"`
+	Rows    []ImportUsersResultRow `json:"rows" doc:"Per-row outcome"`
 }
 
 // --- Broadcasts ---
