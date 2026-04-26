@@ -191,6 +191,20 @@ func (h *TOTPHandler) HandleConfirm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The 6-digit code the user just submitted to /confirm came from
+	// their authenticator — that's exactly what /verify checks. Treat
+	// successful enrollment as proof-of-possession and stamp the
+	// session, so a user who arrived here from a 12h-gate redirect
+	// (e.g. clicked Admin → got bounced to verify-totp → bounced
+	// again to /portal/security) walks straight into their original
+	// destination after enrolling, instead of having to do the
+	// authenticator-code dance a second time.
+	if sessionID := middleware.GetSessionID(ctx); sessionID != "" && h.sessions != nil {
+		if err := h.sessions.StampTOTP(ctx, sessionID); err != nil {
+			h.log.Warn().Err(err).Msg("failed to stamp TOTP after enrollment (non-fatal)")
+		}
+	}
+
 	JSON(w, http.StatusOK, totpConfirmResponse{
 		Message:       "TOTP enabled",
 		RecoveryCodes: codes,
