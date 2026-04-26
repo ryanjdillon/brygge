@@ -1,9 +1,14 @@
 package middleware
 
 import (
+	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
+
+	"github.com/brygge-klubb/brygge/internal/auth"
 )
 
 func TestAuthenticateSessionMissingCookie(t *testing.T) {
@@ -88,5 +93,83 @@ func TestGetSessionIDFromContext(t *testing.T) {
 	id := GetSessionID(req.Context())
 	if id != "" {
 		t.Errorf("expected empty session ID, got %q", id)
+	}
+}
+
+// withSessionInfo is a test-only injector that puts SessionInfo into
+// context the same way AuthenticateSession does in production.
+func withSessionInfo(ctx context.Context, info *auth.SessionInfo) context.Context {
+	return context.WithValue(ctx, sessionInfoContextKey{}, info)
+}
+
+func runRequireAdminTOTP(t *testing.T, info *auth.SessionInfo) *httptest.ResponseRecorder {
+	t.Helper()
+	called := false
+	handler := RequireAdminTOTP(nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/test", nil)
+	req = req.WithContext(withSessionInfo(req.Context(), info))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code == http.StatusOK && !called {
+		t.Fatal("status 200 but downstream handler not called")
+	}
+	return rec
+}
+
+func TestRequireAdminTOTPNotEnrolled(t *testing.T) {
+	rec := runRequireAdminTOTP(t, &auth.SessionInfo{TOTPEnabled: false})
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+	var body map[string]string
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+	if body["error"] != "totp_not_enrolled" {
+		t.Errorf("error = %q, want totp_not_enrolled", body["error"])
+	}
+}
+
+func TestRequireAdminTOTPNeverVerified(t *testing.T) {
+	rec := runRequireAdminTOTP(t, &auth.SessionInfo{TOTPEnabled: true, TOTPVerifiedAt: nil})
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+	var body map[string]string
+	json.NewDecoder(rec.Body).Decode(&body)
+	if body["error"] != "totp_required" {
+		t.Errorf("error = %q, want totp_required", body["error"])
+	}
+}
+
+func TestRequireAdminTOTPFreshAllowed(t *testing.T) {
+	verified := time.Now().Add(-11 * time.Hour)
+	rec := runRequireAdminTOTP(t, &auth.SessionInfo{TOTPEnabled: true, TOTPVerifiedAt: &verified})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d (body: %s)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+}
+
+func TestRequireAdminTOTPStaleRejected(t *testing.T) {
+	verified := time.Now().Add(-13 * time.Hour)
+	rec := runRequireAdminTOTP(t, &auth.SessionInfo{TOTPEnabled: true, TOTPVerifiedAt: &verified})
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+	var body map[string]string
+	json.NewDecoder(rec.Body).Decode(&body)
+	if body["error"] != "totp_required" {
+		t.Errorf("error = %q, want totp_required", body["error"])
+	}
+}
+
+func TestGetSessionInfoMissing(t *testing.T) {
+	if got := GetSessionInfo(context.Background()); got != nil {
+		t.Errorf("GetSessionInfo on bare ctx = %v, want nil", got)
 	}
 }
