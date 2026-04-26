@@ -6,8 +6,8 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
-	"strings"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -23,8 +23,8 @@ import (
 	"github.com/brygge-klubb/brygge/internal/ai"
 	"github.com/brygge-klubb/brygge/internal/audit"
 	"github.com/brygge-klubb/brygge/internal/auth"
-	"github.com/brygge-klubb/brygge/internal/email"
 	"github.com/brygge-klubb/brygge/internal/config"
+	"github.com/brygge-klubb/brygge/internal/email"
 	"github.com/brygge-klubb/brygge/internal/handlers"
 	"github.com/brygge-klubb/brygge/internal/middleware"
 	oa "github.com/brygge-klubb/brygge/internal/openapi"
@@ -435,6 +435,9 @@ func main() {
 		r.Route("/admin", func(r chi.Router) {
 			r.Use(middleware.AuthenticateSession(sessionService))
 
+			// /totp endpoints provision the TOTP factor itself — they
+			// must NOT be gated by RequireAdminTOTP (chicken-and-egg).
+			// Role-gated only.
 			r.Route("/totp", func(r chi.Router) {
 				r.Use(middleware.RequireRole("admin", "board", "treasurer"))
 				r.Post("/setup", totpHandler.HandleSetup)
@@ -442,206 +445,212 @@ func main() {
 				r.Post("/verify", totpHandler.HandleVerify)
 			})
 
+			// Everything else under /admin requires a fresh TOTP
+			// verification within the 12-hour step-up window.
 			r.Group(func(r chi.Router) {
-				r.Use(middleware.RequireRole("board", "admin"))
-				r.Get("/audit", auditHandler.HandleListAuditLog)
-			})
+				r.Use(middleware.RequireAdminTOTP(sessionService))
 
-			if cfg.Features.Projects {
-				r.Route("/volunteer", func(r chi.Router) {
+				r.Group(func(r chi.Router) {
+					r.Use(middleware.RequireRole("board", "admin"))
+					r.Get("/audit", auditHandler.HandleListAuditLog)
+				})
+
+				if cfg.Features.Projects {
+					r.Route("/volunteer", func(r chi.Router) {
+						r.Use(middleware.RequireRole("board"))
+						r.Get("/hours", volunteerHandler.HandleListAllVolunteerHours)
+						r.Put("/settings/hours", volunteerHandler.HandleSetRequiredHours)
+						r.Post("/events/{eventID}/projects", volunteerHandler.HandleLinkProjectEvent)
+						r.Delete("/events/{eventID}/projects/{projectID}", volunteerHandler.HandleUnlinkProjectEvent)
+						r.Get("/events/{eventID}/projects", volunteerHandler.HandleGetEventProjects)
+					})
+				}
+
+				r.Route("/map/markers", func(r chi.Router) {
 					r.Use(middleware.RequireRole("board"))
-					r.Get("/hours", volunteerHandler.HandleListAllVolunteerHours)
-					r.Put("/settings/hours", volunteerHandler.HandleSetRequiredHours)
-					r.Post("/events/{eventID}/projects", volunteerHandler.HandleLinkProjectEvent)
-					r.Delete("/events/{eventID}/projects/{projectID}", volunteerHandler.HandleUnlinkProjectEvent)
-					r.Get("/events/{eventID}/projects", volunteerHandler.HandleGetEventProjects)
-				})
-			}
-
-			r.Route("/map/markers", func(r chi.Router) {
-				r.Use(middleware.RequireRole("board"))
-				r.Post("/", mapHandler.HandleCreateMarker)
-				r.Put("/{markerID}", mapHandler.HandleUpdateMarker)
-				r.Delete("/{markerID}", mapHandler.HandleDeleteMarker)
-			})
-
-			r.Route("/boats", func(r chi.Router) {
-				r.Use(middleware.RequireRole("board", "harbor_master"))
-				r.Get("/unconfirmed", boatModelsHandler.HandleListUnconfirmed)
-				r.Post("/{boatID}/confirm", boatModelsHandler.HandleConfirmBoat)
-			})
-
-			if cfg.Features.Communications {
-				r.Route("/broadcast", func(r chi.Router) {
-					r.Use(middleware.RequireRole("board", "admin"))
-					r.Post("/", broadcastHandler.HandleSendBroadcast)
+					r.Post("/", mapHandler.HandleCreateMarker)
+					r.Put("/{markerID}", mapHandler.HandleUpdateMarker)
+					r.Delete("/{markerID}", mapHandler.HandleDeleteMarker)
 				})
 
-				r.Route("/broadcasts", func(r chi.Router) {
-					r.Use(middleware.RequireRole("board", "admin"))
-					r.Get("/", broadcastHandler.HandleListBroadcasts)
-				})
-			}
-
-			if cfg.Features.Commerce {
-				r.Route("/financials", func(r chi.Router) {
-					r.Use(middleware.RequireRole("treasurer", "board", "admin"))
-					r.Get("/summary", financialsHandler.HandleGetFinancialSummary)
-					r.Get("/payments", financialsHandler.HandleListPayments)
-					r.Get("/payments/{paymentID}", financialsHandler.HandleGetPaymentDetails)
-					r.Get("/export", financialsHandler.HandleExportCSV)
-					r.Post("/invoices", financialsHandler.HandleGenerateInvoice)
-					r.Post("/invoices/full", invoiceHandler.HandleCreateInvoice)
-					r.Get("/invoices/{invoiceID}/pdf", invoiceHandler.HandleGetInvoicePDF)
-					r.Get("/overdue", financialsHandler.HandleListOverdue)
-				})
-			}
-
-			r.Route("/users", func(r chi.Router) {
-				r.Use(middleware.RequireRole("board", "admin"))
-				r.Get("/", adminUsersHandler.HandleListUsers)
-				r.Get("/{userID}", adminUsersHandler.HandleGetUser)
-				r.Put("/{userID}/roles", adminUsersHandler.HandleUpdateUserRoles)
-				r.Delete("/{userID}", adminUsersHandler.HandleDeleteUser)
-			})
-
-			r.Route("/slips", func(r chi.Router) {
-				r.Use(middleware.RequireRole("board", "harbor_master"))
-				r.Get("/", adminSlipsHandler.HandleListSlips)
-				r.Post("/", adminSlipsHandler.HandleCreateSlip)
-				r.Get("/{slipID}", adminSlipsHandler.HandleGetSlip)
-				r.Put("/{slipID}", adminSlipsHandler.HandleUpdateSlip)
-				r.Post("/{slipID}/assign", adminSlipsHandler.HandleAssignSlip)
-				r.Post("/{slipID}/release", adminSlipsHandler.HandleReleaseSlip)
-			})
-
-			if cfg.Features.Bookings {
-				r.Route("/bookings", func(r chi.Router) {
+				r.Route("/boats", func(r chi.Router) {
 					r.Use(middleware.RequireRole("board", "harbor_master"))
-					r.Get("/", bookingsHandler.HandleListBookingsAdmin)
+					r.Get("/unconfirmed", boatModelsHandler.HandleListUnconfirmed)
+					r.Post("/{boatID}/confirm", boatModelsHandler.HandleConfirmBoat)
 				})
 
-				r.Route("/settings/booking", func(r chi.Router) {
+				if cfg.Features.Communications {
+					r.Route("/broadcast", func(r chi.Router) {
+						r.Use(middleware.RequireRole("board", "admin"))
+						r.Post("/", broadcastHandler.HandleSendBroadcast)
+					})
+
+					r.Route("/broadcasts", func(r chi.Router) {
+						r.Use(middleware.RequireRole("board", "admin"))
+						r.Get("/", broadcastHandler.HandleListBroadcasts)
+					})
+				}
+
+				if cfg.Features.Commerce {
+					r.Route("/financials", func(r chi.Router) {
+						r.Use(middleware.RequireRole("treasurer", "board", "admin"))
+						r.Get("/summary", financialsHandler.HandleGetFinancialSummary)
+						r.Get("/payments", financialsHandler.HandleListPayments)
+						r.Get("/payments/{paymentID}", financialsHandler.HandleGetPaymentDetails)
+						r.Get("/export", financialsHandler.HandleExportCSV)
+						r.Post("/invoices", financialsHandler.HandleGenerateInvoice)
+						r.Post("/invoices/full", invoiceHandler.HandleCreateInvoice)
+						r.Get("/invoices/{invoiceID}/pdf", invoiceHandler.HandleGetInvoicePDF)
+						r.Get("/overdue", financialsHandler.HandleListOverdue)
+					})
+				}
+
+				r.Route("/users", func(r chi.Router) {
+					r.Use(middleware.RequireRole("board", "admin"))
+					r.Get("/", adminUsersHandler.HandleListUsers)
+					r.Get("/{userID}", adminUsersHandler.HandleGetUser)
+					r.Put("/{userID}/roles", adminUsersHandler.HandleUpdateUserRoles)
+					r.Delete("/{userID}", adminUsersHandler.HandleDeleteUser)
+				})
+
+				r.Route("/slips", func(r chi.Router) {
+					r.Use(middleware.RequireRole("board", "harbor_master"))
+					r.Get("/", adminSlipsHandler.HandleListSlips)
+					r.Post("/", adminSlipsHandler.HandleCreateSlip)
+					r.Get("/{slipID}", adminSlipsHandler.HandleGetSlip)
+					r.Put("/{slipID}", adminSlipsHandler.HandleUpdateSlip)
+					r.Post("/{slipID}/assign", adminSlipsHandler.HandleAssignSlip)
+					r.Post("/{slipID}/release", adminSlipsHandler.HandleReleaseSlip)
+				})
+
+				if cfg.Features.Bookings {
+					r.Route("/bookings", func(r chi.Router) {
+						r.Use(middleware.RequireRole("board", "harbor_master"))
+						r.Get("/", bookingsHandler.HandleListBookingsAdmin)
+					})
+
+					r.Route("/settings/booking", func(r chi.Router) {
+						r.Use(middleware.RequireRole("board"))
+						r.Get("/", clubSettingsHandler.HandleGetBookingSettings)
+						r.Put("/", clubSettingsHandler.HandleUpdateBookingSettings)
+					})
+				}
+
+				r.Route("/slip-shares", func(r chi.Router) {
+					r.Use(middleware.RequireRole("board", "harbor_master"))
+					r.Get("/", slipSharesHandler.HandleListAllSlipShares)
+					r.Get("/rebates", slipSharesHandler.HandleListAllRebates)
+					r.Put("/rebates/{rebateID}", slipSharesHandler.HandleUpdateRebateStatus)
+				})
+
+				if cfg.Features.Commerce {
+					r.Route("/pricing", func(r chi.Router) {
+						r.Use(middleware.RequireRole("admin", "treasurer"))
+						r.Get("/", priceItemsHandler.HandleListAdmin)
+						r.Post("/", priceItemsHandler.HandleCreate)
+						r.Put("/{itemID}", priceItemsHandler.HandleUpdate)
+						r.Delete("/{itemID}", priceItemsHandler.HandleDelete)
+					})
+
+					r.Route("/products", func(r chi.Router) {
+						r.Use(middleware.RequireRole("board", "admin"))
+						r.Get("/", productsHandler.HandleListAdmin)
+						r.Post("/", productsHandler.HandleCreate)
+						r.Put("/{productID}", productsHandler.HandleUpdate)
+						r.Delete("/{productID}", productsHandler.HandleDelete)
+						r.Post("/{productID}/variants", productsHandler.HandleCreateVariant)
+						r.Delete("/variants/{variantID}", productsHandler.HandleDeleteVariant)
+					})
+				}
+
+				r.Route("/documents", func(r chi.Router) {
 					r.Use(middleware.RequireRole("board"))
-					r.Get("/", clubSettingsHandler.HandleGetBookingSettings)
-					r.Put("/", clubSettingsHandler.HandleUpdateBookingSettings)
-				})
-			}
-
-			r.Route("/slip-shares", func(r chi.Router) {
-				r.Use(middleware.RequireRole("board", "harbor_master"))
-				r.Get("/", slipSharesHandler.HandleListAllSlipShares)
-				r.Get("/rebates", slipSharesHandler.HandleListAllRebates)
-				r.Put("/rebates/{rebateID}", slipSharesHandler.HandleUpdateRebateStatus)
-			})
-
-			if cfg.Features.Commerce {
-				r.Route("/pricing", func(r chi.Router) {
-					r.Use(middleware.RequireRole("admin", "treasurer"))
-					r.Get("/", priceItemsHandler.HandleListAdmin)
-					r.Post("/", priceItemsHandler.HandleCreate)
-					r.Put("/{itemID}", priceItemsHandler.HandleUpdate)
-					r.Delete("/{itemID}", priceItemsHandler.HandleDelete)
+					r.Post("/", adminDocumentsHandler.HandleUploadDocument)
+					r.Delete("/{docID}", adminDocumentsHandler.HandleDeleteDocument)
+					r.Post("/{docID}/summarize", aiDocumentsHandler.HandleSummarizeComments)
+					r.Post("/{docID}/agenda", aiDocumentsHandler.HandleGenerateAgenda)
 				})
 
-				r.Route("/products", func(r chi.Router) {
+				if cfg.Features.Communications {
+					r.Route("/notifications", func(r chi.Router) {
+						r.Use(middleware.RequireRole("board", "admin"))
+						r.Get("/config", notificationsHandler.HandleGetConfig)
+						r.Put("/config", notificationsHandler.HandleUpdateConfig)
+						r.Post("/test", notificationsHandler.HandleTestPush)
+					})
+				}
+
+				r.Route("/gdpr", func(r chi.Router) {
 					r.Use(middleware.RequireRole("board", "admin"))
-					r.Get("/", productsHandler.HandleListAdmin)
-					r.Post("/", productsHandler.HandleCreate)
-					r.Put("/{productID}", productsHandler.HandleUpdate)
-					r.Delete("/{productID}", productsHandler.HandleDelete)
-					r.Post("/{productID}/variants", productsHandler.HandleCreateVariant)
-					r.Delete("/variants/{variantID}", productsHandler.HandleDeleteVariant)
+					r.Get("/deletion-requests", gdprHandler.HandleListDeletionRequests)
+					r.Post("/deletion-requests/{requestID}/process", gdprHandler.HandleProcessDeletion)
+					r.Get("/legal", gdprHandler.HandleAdminListLegalDocuments)
+					r.Post("/legal", gdprHandler.HandleAdminCreateLegalDocument)
 				})
-			}
 
-			r.Route("/documents", func(r chi.Router) {
-				r.Use(middleware.RequireRole("board"))
-				r.Post("/", adminDocumentsHandler.HandleUploadDocument)
-				r.Delete("/{docID}", adminDocumentsHandler.HandleDeleteDocument)
-				r.Post("/{docID}/summarize", aiDocumentsHandler.HandleSummarizeComments)
-				r.Post("/{docID}/agenda", aiDocumentsHandler.HandleGenerateAgenda)
-			})
+				if cfg.Features.Accounting {
+					r.Route("/accounting", func(r chi.Router) {
+						r.Use(middleware.RequireRole("treasurer", "board", "admin"))
 
-			if cfg.Features.Communications {
-				r.Route("/notifications", func(r chi.Router) {
-					r.Use(middleware.RequireRole("board", "admin"))
-					r.Get("/config", notificationsHandler.HandleGetConfig)
-					r.Put("/config", notificationsHandler.HandleUpdateConfig)
-					r.Post("/test", notificationsHandler.HandleTestPush)
-				})
-			}
+						r.Route("/accounts", func(r chi.Router) {
+							r.Get("/", accountingHandler.HandleListAccounts)
+							r.Post("/", accountingHandler.HandleCreateAccount)
+							r.Put("/{accountID}", accountingHandler.HandleUpdateAccount)
+							r.Delete("/{accountID}", accountingHandler.HandleDeleteAccount)
+							r.Post("/seed", accountingHandler.HandleSeedAccounts)
+						})
 
-			r.Route("/gdpr", func(r chi.Router) {
-				r.Use(middleware.RequireRole("board", "admin"))
-				r.Get("/deletion-requests", gdprHandler.HandleListDeletionRequests)
-				r.Post("/deletion-requests/{requestID}/process", gdprHandler.HandleProcessDeletion)
-				r.Get("/legal", gdprHandler.HandleAdminListLegalDocuments)
-				r.Post("/legal", gdprHandler.HandleAdminCreateLegalDocument)
-			})
+						r.Route("/periods", func(r chi.Router) {
+							r.Get("/", accountingHandler.HandleListPeriods)
+							r.Post("/", accountingHandler.HandleCreatePeriod)
+							r.Post("/{periodID}/close", accountingHandler.HandleClosePeriod)
+							r.Post("/{periodID}/reopen", accountingHandler.HandleReopenPeriod)
+						})
 
-			if cfg.Features.Accounting {
-				r.Route("/accounting", func(r chi.Router) {
-					r.Use(middleware.RequireRole("treasurer", "board", "admin"))
+						r.Route("/journal", func(r chi.Router) {
+							r.Get("/", accountingHandler.HandleListJournalEntries)
+							r.Post("/", accountingHandler.HandleCreateJournalEntry)
+							r.Get("/{entryID}", accountingHandler.HandleGetJournalEntry)
+							r.Post("/{entryID}/post", accountingHandler.HandlePostJournalEntry)
+							r.Post("/{entryID}/void", accountingHandler.HandleVoidJournalEntry)
+						})
 
-					r.Route("/accounts", func(r chi.Router) {
-						r.Get("/", accountingHandler.HandleListAccounts)
-						r.Post("/", accountingHandler.HandleCreateAccount)
-						r.Put("/{accountID}", accountingHandler.HandleUpdateAccount)
-						r.Delete("/{accountID}", accountingHandler.HandleDeleteAccount)
-						r.Post("/seed", accountingHandler.HandleSeedAccounts)
+						r.Route("/sync", func(r chi.Router) {
+							r.Post("/payments", accountingHandler.HandleSyncPayments)
+							r.Post("/invoices", accountingHandler.HandleSyncInvoices)
+						})
+
+						r.Get("/bank-formats", accountingHandler.HandleListBankFormats)
+						r.Route("/bank-import", func(r chi.Router) {
+							r.Post("/", accountingHandler.HandleImportBankStatement)
+							r.Get("/{importID}", accountingHandler.HandleGetBankImport)
+							r.Get("/{importID}/unmatched", accountingHandler.HandleListUnmatchedRows)
+							r.Post("/{importID}/rows/{rowID}/match", accountingHandler.HandleMatchBankRow)
+							r.Post("/{importID}/auto-match", accountingHandler.HandleAutoMatchImport)
+						})
+
+						r.Route("/rules", func(r chi.Router) {
+							r.Get("/", accountingHandler.HandleListRules)
+							r.Post("/", accountingHandler.HandleCreateRule)
+							r.Put("/{ruleID}", accountingHandler.HandleUpdateRule)
+							r.Delete("/{ruleID}", accountingHandler.HandleDeleteRule)
+						})
+
+						r.Route("/reports", func(r chi.Router) {
+							r.Get("/income-statement", accountingHandler.HandleIncomeStatement)
+							r.Get("/income-statement/pdf", accountingHandler.HandleIncomeStatementPDF)
+							r.Get("/balance-sheet", accountingHandler.HandleBalanceSheet)
+							r.Get("/balance-sheet/pdf", accountingHandler.HandleBalanceSheetPDF)
+							r.Get("/trial-balance", accountingHandler.HandleTrialBalance)
+							r.Get("/general-ledger", accountingHandler.HandleGeneralLedger)
+							r.Get("/momskomp", accountingHandler.HandleMomskompensasjon)
+							r.Get("/momskomp/pdf", accountingHandler.HandleMomskompensasjonPDF)
+							r.Post("/momskomp", accountingHandler.HandleSaveMomskompReport)
+							r.Put("/momskomp/{reportID}/status", accountingHandler.HandleUpdateMomskompStatus)
+						})
 					})
-
-					r.Route("/periods", func(r chi.Router) {
-						r.Get("/", accountingHandler.HandleListPeriods)
-						r.Post("/", accountingHandler.HandleCreatePeriod)
-						r.Post("/{periodID}/close", accountingHandler.HandleClosePeriod)
-						r.Post("/{periodID}/reopen", accountingHandler.HandleReopenPeriod)
-					})
-
-					r.Route("/journal", func(r chi.Router) {
-						r.Get("/", accountingHandler.HandleListJournalEntries)
-						r.Post("/", accountingHandler.HandleCreateJournalEntry)
-						r.Get("/{entryID}", accountingHandler.HandleGetJournalEntry)
-						r.Post("/{entryID}/post", accountingHandler.HandlePostJournalEntry)
-						r.Post("/{entryID}/void", accountingHandler.HandleVoidJournalEntry)
-					})
-
-					r.Route("/sync", func(r chi.Router) {
-						r.Post("/payments", accountingHandler.HandleSyncPayments)
-						r.Post("/invoices", accountingHandler.HandleSyncInvoices)
-					})
-
-					r.Get("/bank-formats", accountingHandler.HandleListBankFormats)
-					r.Route("/bank-import", func(r chi.Router) {
-						r.Post("/", accountingHandler.HandleImportBankStatement)
-						r.Get("/{importID}", accountingHandler.HandleGetBankImport)
-						r.Get("/{importID}/unmatched", accountingHandler.HandleListUnmatchedRows)
-						r.Post("/{importID}/rows/{rowID}/match", accountingHandler.HandleMatchBankRow)
-						r.Post("/{importID}/auto-match", accountingHandler.HandleAutoMatchImport)
-					})
-
-					r.Route("/rules", func(r chi.Router) {
-						r.Get("/", accountingHandler.HandleListRules)
-						r.Post("/", accountingHandler.HandleCreateRule)
-						r.Put("/{ruleID}", accountingHandler.HandleUpdateRule)
-						r.Delete("/{ruleID}", accountingHandler.HandleDeleteRule)
-					})
-
-					r.Route("/reports", func(r chi.Router) {
-						r.Get("/income-statement", accountingHandler.HandleIncomeStatement)
-						r.Get("/income-statement/pdf", accountingHandler.HandleIncomeStatementPDF)
-						r.Get("/balance-sheet", accountingHandler.HandleBalanceSheet)
-						r.Get("/balance-sheet/pdf", accountingHandler.HandleBalanceSheetPDF)
-						r.Get("/trial-balance", accountingHandler.HandleTrialBalance)
-						r.Get("/general-ledger", accountingHandler.HandleGeneralLedger)
-						r.Get("/momskomp", accountingHandler.HandleMomskompensasjon)
-						r.Get("/momskomp/pdf", accountingHandler.HandleMomskompensasjonPDF)
-						r.Post("/momskomp", accountingHandler.HandleSaveMomskompReport)
-						r.Put("/momskomp/{reportID}/status", accountingHandler.HandleUpdateMomskompStatus)
-					})
-				})
-			}
+				}
+			}) // close TOTP-gated group
 		})
 	})
 

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
@@ -38,19 +39,27 @@ func (h *AuthHandler) HandleMe(w http.ResponseWriter, r *http.Request) {
 		).Scan(&fullName, &email)
 	}
 
-	JSON(w, http.StatusOK, meResponse{
+	resp := meResponse{
 		UserID:   claims.UserID,
 		ClubID:   claims.ClubID,
 		Roles:    claims.Roles,
 		FullName: fullName,
 		Email:    email,
-	})
+	}
+	if info := middleware.GetSessionInfo(r.Context()); info != nil {
+		resp.TOTPEnabled = info.TOTPEnabled
+		resp.TOTPVerifiedAt = info.TOTPVerifiedAt
+	}
+
+	JSON(w, http.StatusOK, resp)
 }
 
 type meResponse struct {
-	UserID   string   `json:"user_id"`
-	ClubID   string   `json:"club_id"`
-	Roles    []string `json:"roles"`
-	FullName string   `json:"full_name"`
-	Email    string   `json:"email"`
+	UserID         string     `json:"user_id"`
+	ClubID         string     `json:"club_id"`
+	Roles          []string   `json:"roles"`
+	FullName       string     `json:"full_name"`
+	Email          string     `json:"email"`
+	TOTPEnabled    bool       `json:"totp_enabled"`
+	TOTPVerifiedAt *time.Time `json:"totp_verified_at,omitempty"`
 }
