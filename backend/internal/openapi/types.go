@@ -128,29 +128,6 @@ type StatusResponse struct {
 
 // --- Auth ---
 
-type EmailRegisterRequest struct {
-	Email    string `json:"email" format:"email" doc:"Email address"`
-	Password string `json:"password" minLength:"8" doc:"Password"`
-	Name     string `json:"name" minLength:"1" doc:"Full name"`
-	Phone    string `json:"phone,omitempty" doc:"Phone number"`
-}
-
-type EmailLoginRequest struct {
-	Email    string `json:"email" format:"email" doc:"Email address"`
-	Password string `json:"password" doc:"Password"`
-}
-
-type TokenResponse struct {
-	AccessToken  string `json:"access_token" doc:"JWT access token"`
-	RefreshToken string `json:"refresh_token" doc:"JWT refresh token"`
-	TokenType    string `json:"token_type" example:"Bearer" doc:"Token type"`
-	ExpiresIn    int    `json:"expires_in" doc:"Access token TTL in seconds"`
-}
-
-type RefreshRequest struct {
-	RefreshToken string `json:"refresh_token" doc:"Refresh token to exchange"`
-}
-
 type UserProfile struct {
 	ID    string   `json:"id" doc:"User UUID"`
 	Email string   `json:"email" doc:"Email address"`

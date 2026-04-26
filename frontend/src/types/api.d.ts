@@ -764,7 +764,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/auth/exchange": {
+    "/api/v1/auth/magic-link": {
         parameters: {
             query?: never;
             header?: never;
@@ -773,15 +773,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Exchange authorization code for tokens */
-        post: operations["exchange-auth-code"];
+        /** Request a magic-link sign-in email */
+        post: operations["request-magic-link"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/auth/login": {
+    "/api/v1/auth/session/logout": {
         parameters: {
             query?: never;
             header?: never;
@@ -790,32 +790,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Login with email/password */
-        post: operations["email-login"];
+        /** Destroy the current session and clear the cookie */
+        post: operations["session-logout"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/auth/logout": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Logout and revoke tokens */
-        post: operations["logout"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/me": {
+    "/api/v1/auth/session/me": {
         parameters: {
             query?: never;
             header?: never;
@@ -832,86 +815,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/auth/refresh": {
+    "/api/v1/auth/verify": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        put?: never;
-        /** Refresh access token */
-        post: operations["refresh-token"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/register": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Register with email/password */
-        post: operations["email-register"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/vipps/callback": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Vipps OAuth callback */
-        get: operations["vipps-callback"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/vipps/login": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Initiate Vipps OAuth login
-         * @description Redirects to Vipps for authentication.
-         */
-        get: operations["vipps-login"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/vipps/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Vipps integration status */
-        get: operations["vipps-status"];
+        /** Consume a magic-link token, set session cookie, redirect */
+        get: operations["verify-magic-link"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3078,40 +2990,6 @@ export interface components {
             /** @description Document list */
             documents: components["schemas"]["Document"][] | null;
         };
-        EmailLoginRequest: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example https://example.com/schemas/EmailLoginRequest.json
-             */
-            readonly $schema?: string;
-            /**
-             * Format: email
-             * @description Email address
-             */
-            email: string;
-            /** @description Password */
-            password: string;
-        };
-        EmailRegisterRequest: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example https://example.com/schemas/EmailRegisterRequest.json
-             */
-            readonly $schema?: string;
-            /**
-             * Format: email
-             * @description Email address
-             */
-            email: string;
-            /** @description Full name */
-            name: string;
-            /** @description Password */
-            password: string;
-            /** @description Phone number */
-            phone?: string;
-        };
         ErrorDetail: {
             /** @description Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id' */
             location?: string;
@@ -3158,16 +3036,6 @@ export interface components {
              * @example https://example.com/errors/example
              */
             type: string;
-        };
-        "Exchange-auth-codeRequest": {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example https://example.com/schemas/Exchange-auth-codeRequest.json
-             */
-            readonly $schema?: string;
-            /** @description Authorization code */
-            code: string;
         };
         FeatureRequest: {
             /**
@@ -4045,16 +3913,6 @@ export interface components {
             /** @description Consent version */
             version: string;
         };
-        RefreshRequest: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example https://example.com/schemas/RefreshRequest.json
-             */
-            readonly $schema?: string;
-            /** @description Refresh token to exchange */
-            refresh_token: string;
-        };
         "Reorder-waiting-list-entryRequest": {
             /**
              * Format: uri
@@ -4077,6 +3935,19 @@ export interface components {
             readonly $schema?: string;
             /** @description Issue description */
             description: string;
+        };
+        "Request-magic-linkRequest": {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/Request-magic-linkRequest.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: email
+             * @description Email address to send the link to
+             */
+            email: string;
         };
         Slip: {
             /**
@@ -4331,28 +4202,6 @@ export interface components {
              * @description Total units
              */
             total: number;
-        };
-        TokenResponse: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example https://example.com/schemas/TokenResponse.json
-             */
-            readonly $schema?: string;
-            /** @description JWT access token */
-            access_token: string;
-            /**
-             * Format: int64
-             * @description Access token TTL in seconds
-             */
-            expires_in: number;
-            /** @description JWT refresh token */
-            refresh_token: string;
-            /**
-             * @description Token type
-             * @example Bearer
-             */
-            token_type: string;
         };
         UnconfirmedBoat: {
             /**
@@ -6435,7 +6284,7 @@ export interface operations {
             };
         };
     };
-    "exchange-auth-code": {
+    "request-magic-link": {
         parameters: {
             query?: never;
             header?: never;
@@ -6444,7 +6293,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["Exchange-auth-codeRequest"];
+                "application/json": components["schemas"]["Request-magic-linkRequest"];
             };
         };
         responses: {
@@ -6454,7 +6303,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TokenResponse"];
+                    "application/json": components["schemas"]["StatusResponse"];
                 };
             };
             /** @description Error */
@@ -6468,40 +6317,7 @@ export interface operations {
             };
         };
     };
-    "email-login": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["EmailLoginRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TokenResponse"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    logout: {
+    "session-logout": {
         parameters: {
             query?: never;
             header?: never;
@@ -6559,107 +6375,12 @@ export interface operations {
             };
         };
     };
-    "refresh-token": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RefreshRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TokenResponse"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "email-register": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["EmailRegisterRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TokenResponse"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "vipps-callback": {
+    "verify-magic-link": {
         parameters: {
             query?: {
-                code?: string;
-                state?: string;
+                /** @description Magic-link token from the email */
+                token?: string;
             };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TokenResponse"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "vipps-login": {
-        parameters: {
-            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
@@ -6672,37 +6393,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "vipps-status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
             };
             /** @description Error */
             default: {
