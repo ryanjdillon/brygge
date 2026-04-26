@@ -157,6 +157,15 @@ const routes: RouteRecordRaw[] = [
     ],
   },
   {
+    // Stand-alone step-up verify page reached via 403 totp_required
+    // redirects from useApi. Must NOT live under /admin/* so it
+    // doesn't itself require step-up.
+    path: '/admin/verify-totp',
+    name: 'admin-verify-totp',
+    component: () => import('@/views/auth/VerifyTotpView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/admin',
     component: () => import('@/views/admin/AdminLayout.vue'),
     meta: { requiresAuth: true, requiresAdmin: true },

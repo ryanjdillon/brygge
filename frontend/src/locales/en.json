@@ -1113,5 +1113,23 @@
       "freshRequired": "Verify your 2FA code again to continue",
       "codeFormat": "The code must be 6 digits"
     }
+  },
+  "totpVerify": {
+    "title": "Verify identity",
+    "subtitle": "Enter the code from your authenticator app to continue.",
+    "modalTitle": "Confirm this action",
+    "modalSubtitle": "Sensitive operations require a fresh 2FA code.",
+    "codeLabel": "6-digit code",
+    "recoveryLabel": "Recovery code",
+    "submitButton": "Verify",
+    "useRecovery": "Use a recovery code instead",
+    "useAuthenticator": "Use the authenticator app instead",
+    "suggestRecovery": "Several failed attempts? Try one of your recovery codes.",
+    "errors": {
+      "required": "Enter a code",
+      "failed": "Verification failed",
+      "invalidCode": "Invalid code — check that your authenticator app's clock is correct",
+      "invalidRecovery": "Invalid or already-used recovery code"
+    }
   }
 }
