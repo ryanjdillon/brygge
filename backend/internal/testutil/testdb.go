@@ -236,10 +236,10 @@ func SeedUser(t *testing.T, pool *pgxpool.Pool, clubID string, roles []string) (
 
 	email = fmt.Sprintf("testuser-%s@example.com", RandomHex(4))
 	err := pool.QueryRow(ctx,
-		`INSERT INTO users (club_id, email, full_name, phone)
-		 VALUES ($1, $2, $3, $4)
+		`INSERT INTO users (club_id, email, first_name, last_name, phone)
+		 VALUES ($1, $2, $3, $4, $5)
 		 RETURNING id`,
-		clubID, email, "Test User", "+4700000000",
+		clubID, email, "Test", "User", "+4700000000",
 	).Scan(&userID)
 	if err != nil {
 		t.Fatalf("seeding user: %v", err)

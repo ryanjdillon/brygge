@@ -203,14 +203,20 @@ func (h *MembersHandler) HandleUpdateMe(w http.ResponseWriter, r *http.Request) 
 		current.City = *req.City
 	}
 
+	// full_name became a generated column in DIL-228; we now write
+	// first/last directly. Until /me starts shipping these fields
+	// (DIL-229), the request still arrives as a single full_name and
+	// we split on the last space to populate both columns.
+	first, last := splitFullName(current.FullName)
+
 	var p memberProfile
 	err = h.db.QueryRow(ctx,
 		`UPDATE users
-		 SET full_name = $3, phone = $4, address_line = $5, postal_code = $6, city = $7, updated_at = now()
+		 SET first_name = $3, last_name = $4, phone = $5, address_line = $6, postal_code = $7, city = $8, updated_at = now()
 		 WHERE id = $1 AND club_id = $2
 		 RETURNING id, club_id, email, full_name, phone, address_line, postal_code, city, is_local, created_at, updated_at`,
 		claims.UserID, claims.ClubID,
-		current.FullName, current.Phone, current.Address, current.PostalCode, current.City,
+		first, last, current.Phone, current.Address, current.PostalCode, current.City,
 	).Scan(
 		&p.ID, &p.ClubID, &p.Email, &p.FullName, &p.Phone,
 		&p.Address, &p.PostalCode, &p.City, &p.IsLocal,
