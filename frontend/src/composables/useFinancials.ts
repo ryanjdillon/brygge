@@ -85,9 +85,7 @@ export function useExportCSV() {
     }
     const qs = query.toString()
     const response = await fetch(`/api/v1/admin/financials/export${qs ? `?${qs}` : ''}`, {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('access_token')}`,
-      },
+      credentials: 'include',
     })
     if (!response.ok) throw new Error('Export failed')
     const blob = await response.blob()
