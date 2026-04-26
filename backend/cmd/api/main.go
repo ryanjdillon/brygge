@@ -527,6 +527,7 @@ func main() {
 						r.Use(middleware.RequireFreshTOTP(5 * time.Minute))
 						r.Post("/", adminUsersHandler.HandleCreateUser)
 						r.Post("/import", adminUsersHandler.HandleImportUsersCSV)
+						r.Patch("/{userID}", adminUsersHandler.HandleUpdateUser)
 						r.Put("/{userID}/roles", adminUsersHandler.HandleUpdateUserRoles)
 						r.Delete("/{userID}", adminUsersHandler.HandleDeleteUser)
 

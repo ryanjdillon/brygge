@@ -672,19 +672,38 @@ type LegalDocument struct {
 // --- Admin Users ---
 
 type AdminUser struct {
-	ID        string    `json:"id" doc:"User UUID"`
-	FirstName string    `json:"first_name" doc:"Given name"`
-	LastName  string    `json:"last_name" doc:"Family name"`
-	FullName  string    `json:"full_name" doc:"Computed: first_name + ' ' + last_name (kept for backwards compat — DIL-230 will drop)"`
-	Email     string    `json:"email" doc:"Email address"`
-	Phone     string    `json:"phone" doc:"Phone number"`
-	Roles     []string  `json:"roles" doc:"Assigned roles"`
-	CreatedAt time.Time `json:"created_at" doc:"Creation timestamp"`
+	ID          string    `json:"id" doc:"User UUID"`
+	FirstName   string    `json:"first_name" doc:"Given name"`
+	LastName    string    `json:"last_name" doc:"Family name"`
+	FullName    string    `json:"full_name" doc:"Computed: first_name + ' ' + last_name (kept for backwards compat — DIL-230 will drop)"`
+	Email       string    `json:"email" doc:"Email address"`
+	Phone       string    `json:"phone" doc:"Phone number"`
+	AddressLine string    `json:"address_line" doc:"Street address"`
+	PostalCode  string    `json:"postal_code" doc:"Postal code"`
+	City        string    `json:"city" doc:"City"`
+	IsLocal     bool      `json:"is_local" doc:"Local-resident rate eligible"`
+	Roles       []string  `json:"roles" doc:"Assigned roles"`
+	CreatedAt   time.Time `json:"created_at" doc:"Creation timestamp"`
+}
+
+// AdminUserUpdate is the request body for PATCH /api/v1/admin/users/{userID}.
+// All fields optional — only supplied keys are written. Email + roles are
+// out of scope (separate endpoints).
+type AdminUserUpdate struct {
+	FirstName   *string `json:"first_name,omitempty" doc:"Given name"`
+	LastName    *string `json:"last_name,omitempty" doc:"Family name"`
+	Phone       *string `json:"phone,omitempty" doc:"Phone number"`
+	AddressLine *string `json:"address_line,omitempty" doc:"Street address"`
+	PostalCode  *string `json:"postal_code,omitempty" doc:"Postal code"`
+	City        *string `json:"city,omitempty" doc:"City"`
+	IsLocal     *bool   `json:"is_local,omitempty" doc:"Local-resident rate eligible"`
 }
 
 type AdminUsersResponse struct {
 	Users      []AdminUser `json:"users" doc:"List of users"`
-	TotalCount int         `json:"total_count" doc:"Total user count"`
+	TotalCount int         `json:"total_count" doc:"Total user count across the whole club"`
+	Limit      int         `json:"limit" doc:"Applied page size"`
+	Offset     int         `json:"offset" doc:"Applied row offset"`
 }
 
 // AdminUserCreate is the request body for POST /api/v1/admin/users.
