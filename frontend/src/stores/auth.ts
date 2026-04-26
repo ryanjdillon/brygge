@@ -3,7 +3,9 @@ import { defineStore } from 'pinia'
 
 interface User {
   id: string
-  name: string
+  firstName: string
+  lastName: string
+  name: string // computed convenience: `${firstName} ${lastName}` (kept while DIL-230 is pending)
   email: string
   clubId: string
   roles: string[]
@@ -15,6 +17,8 @@ interface MeResponse {
   user_id: string
   club_id: string
   roles: string[]
+  first_name: string
+  last_name: string
   full_name: string
   email: string
   totp_enabled: boolean
@@ -58,9 +62,13 @@ export const useAuthStore = defineStore('auth', () => {
         return
       }
       const data: MeResponse = await res.json()
+      const first = data.first_name ?? ''
+      const last = data.last_name ?? ''
       user.value = {
         id: data.user_id,
-        name: data.full_name,
+        firstName: first,
+        lastName: last,
+        name: data.full_name || `${first} ${last}`.trim(),
         email: data.email,
         clubId: data.club_id,
         roles: data.roles,

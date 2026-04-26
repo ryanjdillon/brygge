@@ -32,19 +32,21 @@ func (h *AuthHandler) HandleMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var fullName, email string
+	var firstName, lastName, fullName, email string
 	if h.db != nil {
 		_ = h.db.QueryRow(r.Context(),
-			`SELECT full_name, email FROM users WHERE id = $1`, claims.UserID,
-		).Scan(&fullName, &email)
+			`SELECT first_name, last_name, COALESCE(full_name, ''), email FROM users WHERE id = $1`, claims.UserID,
+		).Scan(&firstName, &lastName, &fullName, &email)
 	}
 
 	resp := meResponse{
-		UserID:   claims.UserID,
-		ClubID:   claims.ClubID,
-		Roles:    claims.Roles,
-		FullName: fullName,
-		Email:    email,
+		UserID:    claims.UserID,
+		ClubID:    claims.ClubID,
+		Roles:     claims.Roles,
+		FirstName: firstName,
+		LastName:  lastName,
+		FullName:  fullName,
+		Email:     email,
 	}
 	if info := middleware.GetSessionInfo(r.Context()); info != nil {
 		resp.TOTPEnabled = info.TOTPEnabled
@@ -58,7 +60,9 @@ type meResponse struct {
 	UserID         string     `json:"user_id"`
 	ClubID         string     `json:"club_id"`
 	Roles          []string   `json:"roles"`
-	FullName       string     `json:"full_name"`
+	FirstName      string     `json:"first_name"`
+	LastName       string     `json:"last_name"`
+	FullName       string     `json:"full_name"` // computed convenience; DIL-230 will drop
 	Email          string     `json:"email"`
 	TOTPEnabled    bool       `json:"totp_enabled"`
 	TOTPVerifiedAt *time.Time `json:"totp_verified_at,omitempty"`
