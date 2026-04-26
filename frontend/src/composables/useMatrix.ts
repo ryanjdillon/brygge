@@ -27,11 +27,7 @@ interface MessagesResponse {
 }
 
 async function fetchRooms(): Promise<MatrixRoom[]> {
-  const response = await fetch('/api/v1/forum/rooms', {
-    headers: {
-      'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-    },
-  })
+  const response = await fetch('/api/v1/forum/rooms', { credentials: 'include' })
   if (!response.ok) {
     throw new Error('Failed to fetch rooms')
   }
@@ -45,9 +41,7 @@ async function fetchMessages(roomId: string, limit = 50, before?: string): Promi
   }
 
   const response = await fetch(`/api/v1/forum/rooms/${roomId}/messages?${params}`, {
-    headers: {
-      'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-    },
+    credentials: 'include',
   })
   if (!response.ok) {
     throw new Error('Failed to fetch messages')
@@ -58,10 +52,8 @@ async function fetchMessages(roomId: string, limit = 50, before?: string): Promi
 async function postMessage({ roomId, content }: SendMessagePayload): Promise<{ id: string }> {
   const response = await fetch(`/api/v1/forum/rooms/${roomId}/messages`, {
     method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-      'Content-Type': 'application/json',
-    },
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify({ content }),
   })
   if (!response.ok) {

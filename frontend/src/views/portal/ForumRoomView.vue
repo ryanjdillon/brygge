@@ -77,9 +77,7 @@ async function loadOlder() {
       before: olderMessagesToken.value,
     })
     const response = await fetch(`/api/v1/forum/rooms/${roomId.value}/messages?${params}`, {
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-      },
+      credentials: 'include',
     })
     if (!response.ok) throw new Error('Failed to load older messages')
     const data = await response.json()
