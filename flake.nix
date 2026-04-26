@@ -315,8 +315,7 @@
             PW=$(${pkgs.openssl}/bin/openssl rand -base64 24 | tr -d '/+=')
 
             # Verify create-account is available on the VM. It only is
-            # if `pkgs.dendrite` is in environment.systemPackages
-            # (added after the first DIL-219-era deploy).
+            # if `pkgs.dendrite` is in environment.systemPackages.
             if ! ${pkgs.openssh}/bin/ssh -o BatchMode=yes "root@$VM" "command -v create-account >/dev/null"; then
               echo "ERROR: 'create-account' not found on PATH on $VM." >&2
               echo "Re-deploy with the latest nix/host.nix (dendrite added to systemPackages):" >&2
@@ -325,13 +324,26 @@
               exit 1
             fi
 
+            # NixOS's services.dendrite generates the config in /nix/store
+            # and points the systemd unit at it via --config; there's no
+            # /etc/dendrite/dendrite.yaml. Discover the path from the
+            # running unit so we don't have to hardcode it.
+            CONFIG=$(${pkgs.openssh}/bin/ssh -o BatchMode=yes "root@$VM" \
+              "systemctl show dendrite -p ExecStart --value | grep -oE '/nix/store/[^ ]+dendrite\.yaml' | head -1")
+            if [[ -z "$CONFIG" ]]; then
+              echo "ERROR: couldn't discover dendrite config path on $VM." >&2
+              echo "Is the dendrite service running?  systemctl status dendrite" >&2
+              exit 1
+            fi
+            echo "    using config: $CONFIG" >&2
+
             echo "==> creating dendrite user '$USER' on $VM" >&2
             create_output=$(${pkgs.openssh}/bin/ssh -o BatchMode=yes "root@$VM" \
-              "create-account -config /etc/dendrite/dendrite.yaml -username $USER -password '$PW' 2>&1" || true)
+              "create-account -config '$CONFIG' -username $USER -password '$PW' 2>&1" || true)
             if echo "$create_output" | grep -q "already exists"; then
               echo "    (user already exists; resetting password to issue a fresh token)" >&2
               ${pkgs.openssh}/bin/ssh -o BatchMode=yes "root@$VM" \
-                "create-account -reset-password -config /etc/dendrite/dendrite.yaml -username $USER -password '$PW'" >&2
+                "create-account -reset-password -config '$CONFIG' -username $USER -password '$PW'" >&2
             elif echo "$create_output" | grep -q "Created account"; then
               :
             else
