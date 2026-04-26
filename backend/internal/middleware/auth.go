@@ -4,85 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"strings"
 
 	"github.com/brygge-klubb/brygge/internal/auth"
-	"github.com/rs/zerolog"
 )
 
+// contextKey is the unexported key under which auth.Claims live in
+// request context. Both this package's session middleware and any
+// future test-injected claims share this key.
 type contextKey struct{}
 
-func Authenticate(jwtService *auth.JWTService) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			header := r.Header.Get("Authorization")
-			if header == "" {
-				writeError(w, http.StatusUnauthorized, "missing authorization header")
-				return
-			}
-
-			token, found := strings.CutPrefix(header, "Bearer ")
-			if !found {
-				writeError(w, http.StatusUnauthorized, "invalid authorization header format")
-				return
-			}
-
-			claims, err := jwtService.ValidateAccessToken(token)
-			if err != nil {
-				writeError(w, http.StatusUnauthorized, "invalid or expired token")
-				return
-			}
-
-			ctx := context.WithValue(r.Context(), contextKey{}, claims)
-			next.ServeHTTP(w, r.WithContext(ctx))
-		})
-	}
-}
-
-// OptionalAuth extracts JWT claims if present but does not require authentication.
-// If no token is provided or the token is invalid, the request proceeds without claims.
-func OptionalAuth(jwtService *auth.JWTService, opts ...func(*optionalAuthConfig)) func(http.Handler) http.Handler {
-	cfg := optionalAuthConfig{}
-	for _, o := range opts {
-		o(&cfg)
-	}
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			header := r.Header.Get("Authorization")
-			if header == "" {
-				next.ServeHTTP(w, r)
-				return
-			}
-
-			token, found := strings.CutPrefix(header, "Bearer ")
-			if !found {
-				next.ServeHTTP(w, r)
-				return
-			}
-
-			claims, err := jwtService.ValidateAccessToken(token)
-			if err != nil {
-				if cfg.log != nil {
-					cfg.log.Warn().Err(err).Str("ip", r.RemoteAddr).Msg("invalid token on optional auth endpoint")
-				}
-				next.ServeHTTP(w, r)
-				return
-			}
-
-			ctx := context.WithValue(r.Context(), contextKey{}, claims)
-			next.ServeHTTP(w, r.WithContext(ctx))
-		})
-	}
-}
-
-type optionalAuthConfig struct {
-	log *zerolog.Logger
-}
-
-func WithLogger(log zerolog.Logger) func(*optionalAuthConfig) {
-	return func(c *optionalAuthConfig) { c.log = &log }
-}
-
+// RequireRole returns 403 unless the request's authenticated claims
+// include at least one of the named roles. Must run after a middleware
+// that has already populated claims (e.g. AuthenticateSession).
 func RequireRole(roles ...string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -106,9 +39,18 @@ func RequireRole(roles ...string) func(http.Handler) http.Handler {
 	}
 }
 
+// GetClaims returns the authenticated principal's claims, or nil if
+// the request is unauthenticated.
 func GetClaims(ctx context.Context) *auth.Claims {
 	claims, _ := ctx.Value(contextKey{}).(*auth.Claims)
 	return claims
+}
+
+// WithClaims returns a copy of ctx that carries the supplied claims.
+// Used by session middleware (and tests) to populate the request
+// principal before downstream handlers read it.
+func WithClaims(ctx context.Context, claims *auth.Claims) context.Context {
+	return context.WithValue(ctx, contextKey{}, claims)
 }
 
 func writeError(w http.ResponseWriter, status int, message string) {

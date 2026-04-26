@@ -445,7 +445,7 @@ func (h *AdminUsersHandler) HandleDeleteUser(w http.ResponseWriter, r *http.Requ
 		_, err = tx.Exec(ctx,
 			`UPDATE users SET email = 'deleted@deleted', full_name = 'Deleted User',
 			 phone = '', address_line = '', postal_code = '', city = '',
-			 password_hash = NULL, vipps_sub = NULL, updated_at = now()
+			 updated_at = now()
 			 WHERE id = $1 AND club_id = $2`,
 			userID, clubID,
 		)
