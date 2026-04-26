@@ -173,3 +173,76 @@ func TestGetSessionInfoMissing(t *testing.T) {
 		t.Errorf("GetSessionInfo on bare ctx = %v, want nil", got)
 	}
 }
+
+func runRequireFreshTOTP(t *testing.T, info *auth.SessionInfo, window time.Duration) *httptest.ResponseRecorder {
+	t.Helper()
+	called := false
+	handler := RequireFreshTOTP(window)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodPut, "/admin/users/x/roles", nil)
+	req = req.WithContext(withSessionInfo(req.Context(), info))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code == http.StatusOK && !called {
+		t.Fatal("status 200 but downstream handler not called")
+	}
+	return rec
+}
+
+func TestRequireFreshTOTPFreshAllowed(t *testing.T) {
+	verified := time.Now().Add(-2 * time.Minute)
+	rec := runRequireFreshTOTP(t, &auth.SessionInfo{TOTPEnabled: true, TOTPVerifiedAt: &verified}, 5*time.Minute)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body: %s)", rec.Code, rec.Body.String())
+	}
+}
+
+func TestRequireFreshTOTPStaleRejected(t *testing.T) {
+	verified := time.Now().Add(-6 * time.Minute)
+	rec := runRequireFreshTOTP(t, &auth.SessionInfo{TOTPEnabled: true, TOTPVerifiedAt: &verified}, 5*time.Minute)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", rec.Code)
+	}
+	var body map[string]any
+	json.NewDecoder(rec.Body).Decode(&body)
+	if body["error"] != "totp_fresh_required" {
+		t.Errorf("error = %v, want totp_fresh_required", body["error"])
+	}
+	if window, _ := body["window_seconds"].(float64); window != 300 {
+		t.Errorf("window_seconds = %v, want 300", body["window_seconds"])
+	}
+}
+
+func TestRequireFreshTOTPNotEnrolled(t *testing.T) {
+	rec := runRequireFreshTOTP(t, &auth.SessionInfo{TOTPEnabled: false}, 5*time.Minute)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", rec.Code)
+	}
+}
+
+func TestRequireFreshTOTPNoSessionInfo(t *testing.T) {
+	handler := RequireFreshTOTP(5 * time.Minute)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("handler should not run without session info")
+	}))
+	req := httptest.NewRequest(http.MethodPut, "/admin/users/x/roles", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403", rec.Code)
+	}
+}
+
+func TestIsFreshTOTPHandlerLevel(t *testing.T) {
+	verified := time.Now().Add(-30 * time.Second)
+	ctx := withSessionInfo(context.Background(), &auth.SessionInfo{TOTPEnabled: true, TOTPVerifiedAt: &verified})
+	if !IsFreshTOTP(ctx, 5*time.Minute) {
+		t.Error("expected fresh within 5min window")
+	}
+	if IsFreshTOTP(ctx, 10*time.Second) {
+		t.Error("expected stale outside 10s window")
+	}
+}

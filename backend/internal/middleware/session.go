@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/brygge-klubb/brygge/internal/auth"
@@ -107,12 +108,53 @@ func RequireAdminTOTP(sessionService *auth.SessionService) func(http.Handler) ht
 	}
 }
 
+// RequireFreshTOTP gates a route on a TOTP verification within a short
+// (per-action) window — typically 5 minutes for high-blast-radius
+// operations like role grants, account deletion, or bank-account
+// changes. Returns `403 totp_fresh_required` distinct from
+// RequireAdminTOTP's `totp_required`, so the SPA can render an
+// in-context modal instead of a full-page redirect. Must run after
+// AuthenticateSession.
+func RequireFreshTOTP(window time.Duration) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !IsFreshTOTP(r.Context(), window) {
+				writeTOTPFreshRequired(w, window)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// IsFreshTOTP reports whether the current session has TOTP verified
+// within the supplied window. Useful for handlers that need to gate
+// only on certain field changes (where the middleware can't inspect
+// the request body).
+func IsFreshTOTP(ctx context.Context, window time.Duration) bool {
+	info := GetSessionInfo(ctx)
+	if info == nil || !info.TOTPEnabled || info.TOTPVerifiedAt == nil {
+		return false
+	}
+	return time.Since(*info.TOTPVerifiedAt) <= window
+}
+
 // writeTOTPRequired emits a 403 with a stable JSON shape the SPA reads
 // to choose between "redirect to enrollment" and "prompt for code".
 func writeTOTPRequired(w http.ResponseWriter, reason string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusForbidden)
 	w.Write([]byte(`{"error":"` + reason + `","verify_url":"/admin/verify-totp"}`))
+}
+
+// writeTOTPFreshRequired emits a 403 the SPA decodes to mount the
+// in-context per-action modal (instead of full-page redirecting).
+func writeTOTPFreshRequired(w http.ResponseWriter, window time.Duration) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusForbidden)
+	body := `{"error":"totp_fresh_required","window_seconds":` +
+		strconv.Itoa(int(window.Seconds())) + `}`
+	w.Write([]byte(body))
 }
 
 // GetSessionID returns the session ID from context, or empty string.
