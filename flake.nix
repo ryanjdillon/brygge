@@ -324,23 +324,16 @@
               exit 1
             fi
 
-            # First-run setup: dendrite needs $REGISTRATION_SHARED_SECRET
-            # in /etc/dendrite/env before create-account works. The
-            # NixOS module substitutes it into client_api at activation.
-            # Auto-provision on first run; reuse on subsequent runs.
+            # /etc/dendrite/env (containing REGISTRATION_SHARED_SECRET) is
+            # provisioned declaratively by dendrite-secret-init.service
+            # on first deploy. Sanity-check that it exists; if not, the
+            # deploy hasn't run with the latest nix yet.
             if ! ${pkgs.openssh}/bin/ssh -o BatchMode=yes "root@$VM" "test -s /etc/dendrite/env"; then
-              echo "==> first run: provisioning /etc/dendrite/env with REGISTRATION_SHARED_SECRET" >&2
-              SECRET=$(${pkgs.openssl}/bin/openssl rand -base64 48 | tr -d '\n')
-              ${pkgs.openssh}/bin/ssh -o BatchMode=yes "root@$VM" \
-                "install -m 0400 -o dendrite -g dendrite /dev/stdin /etc/dendrite/env && systemctl restart dendrite" \
-                <<<"REGISTRATION_SHARED_SECRET=$SECRET"
-              echo "    waiting for dendrite to come back up..." >&2
-              for _ in 1 2 3 4 5 6 7 8 9 10; do
-                if ${pkgs.openssh}/bin/ssh -o BatchMode=yes "root@$VM" "${pkgs.curl}/bin/curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8008/_matrix/client/versions" 2>/dev/null | grep -q 200; then
-                  break
-                fi
-                sleep 2
-              done
+              echo "ERROR: /etc/dendrite/env missing on $VM." >&2
+              echo "Re-deploy with the latest nix/host.nix; dendrite-secret-init.service" >&2
+              echo "will provision it on the next activation." >&2
+              echo "  nix run .#deploy -- $VM" >&2
+              exit 1
             fi
 
             # NixOS's services.dendrite writes its config under /run
