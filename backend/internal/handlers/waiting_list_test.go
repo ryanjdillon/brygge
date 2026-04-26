@@ -29,10 +29,10 @@ func newTestWaitingListHandler(t *testing.T) *WaitingListHandler {
 func waitingListRouter(t *testing.T, h *WaitingListHandler) *chi.Mux {
 	t.Helper()
 	r := chi.NewRouter()
-	jwtSvc := testJWTService()
+	
 
 	r.Route("/waiting-list", func(r chi.Router) {
-		r.Use(middleware.Authenticate(jwtSvc))
+		r.Use(testAuthMiddleware)
 		r.Post("/join", h.HandleJoinWaitingList)
 		r.Get("/me", h.HandleGetMyPosition)
 		r.Post("/withdraw", h.HandleWithdraw)

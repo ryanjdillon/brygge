@@ -93,9 +93,9 @@ func TestHandleCancelBookingUnauthorized(t *testing.T) {
 	h := newTestBookingsHandler(t)
 
 	r := chi.NewRouter()
-	jwtSvc := testJWTService()
+	
 	r.Group(func(r chi.Router) {
-		r.Use(middleware.Authenticate(jwtSvc))
+		r.Use(testAuthMiddleware)
 		r.Post("/bookings/{bookingID}/cancel", h.HandleCancelBooking)
 	})
 
@@ -113,9 +113,9 @@ func TestHandleConfirmBookingRequiresStyre(t *testing.T) {
 	h := newTestBookingsHandler(t)
 
 	r := chi.NewRouter()
-	jwtSvc := testJWTService()
+	
 	r.Group(func(r chi.Router) {
-		r.Use(middleware.Authenticate(jwtSvc))
+		r.Use(testAuthMiddleware)
 		r.Use(middleware.RequireRole("board", "harbor_master"))
 		r.Post("/bookings/{bookingID}/confirm", h.HandleConfirmBooking)
 	})

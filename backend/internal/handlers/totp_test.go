@@ -9,8 +9,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
-
-	"github.com/brygge-klubb/brygge/internal/middleware"
 )
 
 func newTestTOTPHandler(t *testing.T) *TOTPHandler {
@@ -123,9 +121,9 @@ func TestHandleTOTPVerifyMissingCode(t *testing.T) {
 	h := NewTOTPHandler(nil, cfg, nil, nil, log)
 
 	r := chi.NewRouter()
-	jwtSvc := testJWTService()
+	
 	r.Group(func(r chi.Router) {
-		r.Use(middleware.Authenticate(jwtSvc))
+		r.Use(testAuthMiddleware)
 		r.Post("/totp/verify", h.HandleVerify)
 	})
 	token := generateTestToken("user-1", "club-1", []string{"admin"})
