@@ -7,7 +7,7 @@ import (
 	"io/fs"
 )
 
-//go:embed internal/web/dist
+//go:embed all:internal/web/dist
 var frontendFiles embed.FS
 
 // FrontendFS returns the embedded frontend filesystem rooted at internal/web/dist.
