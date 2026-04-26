@@ -1,15 +1,28 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ShieldCheck, KeyRound } from 'lucide-vue-next'
 
+import { useAuthStore } from '@/stores/auth'
 import { useTotp, TotpError } from '@/composables/useTotp'
 
 const router = useRouter()
 const route = useRoute()
 const { t } = useI18n()
 const totp = useTotp()
+const auth = useAuthStore()
+
+// If we land here without 2FA enrolled, the verify form is a
+// dead-end — there's no code to type. Redirect into enrollment so
+// the user has a path forward instead of staring at an empty input.
+onMounted(async () => {
+  await auth.ready
+  if (auth.user && !auth.user.totpEnabled) {
+    const next = (route.query.next as string) || '/admin'
+    router.replace({ path: '/portal/security', query: { next } })
+  }
+})
 
 const code = ref('')
 const useRecovery = ref(false)
