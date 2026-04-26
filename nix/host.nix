@@ -231,11 +231,39 @@ in
   };
 
   systemd.services.dendrite = {
-    after = [ "postgresql.service" ];
-    requires = [ "postgresql.service" ];
+    after = [ "postgresql.service" "dendrite-secret-init.service" ];
+    requires = [ "postgresql.service" "dendrite-secret-init.service" ];
     preStart = lib.mkAfter ''
       if [ ! -f /var/lib/dendrite/matrix_key.pem ]; then
         ${pkgs.dendrite}/bin/generate-keys -private-key /var/lib/dendrite/matrix_key.pem
+      fi
+    '';
+  };
+
+  # Bootstraps /etc/dendrite/env with a randomly-generated
+  # REGISTRATION_SHARED_SECRET on first activation. Dendrite's
+  # environmentFile setting REQUIRES this file to exist, so without
+  # this oneshot the service can't start on a fresh deploy. Writes
+  # the file once and leaves it alone on subsequent deploys (the
+  # secret must persist; rotating it would invalidate any
+  # outstanding registration tokens).
+  systemd.services.dendrite-secret-init = {
+    description = "Bootstrap dendrite registration shared secret";
+    before = [ "dendrite.service" ];
+    wantedBy = [ "dendrite.service" ];
+    path = with pkgs; [ openssl coreutils ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
+    script = ''
+      mkdir -p /etc/dendrite
+      if [ ! -s /etc/dendrite/env ]; then
+        SECRET=$(openssl rand -base64 48 | tr -d '\n')
+        echo "REGISTRATION_SHARED_SECRET=$SECRET" > /etc/dendrite/env
+        chmod 0400 /etc/dendrite/env
+        chown dendrite:dendrite /etc/dendrite/env 2>/dev/null || true
+        echo "provisioned /etc/dendrite/env with a fresh shared secret"
       fi
     '';
   };
