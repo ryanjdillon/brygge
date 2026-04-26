@@ -7,14 +7,12 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"golang.org/x/crypto/bcrypt"
 
 	"github.com/brygge-klubb/brygge/internal/config"
 )
 
 type seedUser struct {
 	email, name, phone string
-	vippsSub           string
 	isLocal            bool
 	roles              []string
 }
@@ -53,15 +51,14 @@ func main() {
 	}
 	fmt.Printf("  club: %s (id: %s)\n", cfg.ClubSlug, clubID)
 
-	hash, _ := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
-	memberHash, _ := bcrypt.GenerateFromPassword([]byte("member123"), bcrypt.DefaultCost)
-
-	// All users to seed
+	// All users to seed. Auth is magic-link only (DIL-22 + DIL-28); no
+	// password storage. Test logins go through the demo-auth handler when
+	// FEATURE_DEMO_AUTH is set.
 	users := []seedUser{
-		{email: "admin@brygge.local", name: "Admin Bruker", phone: "+4712345678", vippsSub: "vipps-admin-001", isLocal: true, roles: []string{"admin", "board", "member"}},
-		{email: "slip-member@brygge.local", name: "Kari Sjømann", phone: "+4711111111", vippsSub: "vipps-slip-001", isLocal: true, roles: []string{"member"}},
-		{email: "wl-member@brygge.local", name: "Per Venansen", phone: "+4722222222", vippsSub: "vipps-wl-001", isLocal: true, roles: []string{"member"}},
-		{email: "member@brygge.local", name: "Medlem Hansen", phone: "+4798765432", vippsSub: "vipps-member-001", isLocal: false, roles: []string{"member"}},
+		{email: "admin@brygge.local", name: "Admin Bruker", phone: "+4712345678", isLocal: true, roles: []string{"admin", "board", "member"}},
+		{email: "slip-member@brygge.local", name: "Kari Sjømann", phone: "+4711111111", isLocal: true, roles: []string{"member"}},
+		{email: "wl-member@brygge.local", name: "Per Venansen", phone: "+4722222222", isLocal: true, roles: []string{"member"}},
+		{email: "member@brygge.local", name: "Medlem Hansen", phone: "+4798765432", isLocal: false, roles: []string{"member"}},
 	}
 
 	// Waiting list members (not login users, just populate the list)
@@ -78,23 +75,17 @@ func main() {
 
 	userIDs := make(map[string]string) // email -> id
 
-	// Create login users (with password)
+	// Create login users
 	for _, u := range users {
-		pw := memberHash
-		if u.email == "admin@brygge.local" {
-			pw = hash
-		}
 		var id string
 		err = db.QueryRow(ctx, `
-			INSERT INTO users (club_id, email, password_hash, full_name, phone, vipps_sub, is_local)
-			VALUES ($1, $2, $3, $4, $5, $6, $7)
+			INSERT INTO users (club_id, email, full_name, phone, is_local)
+			VALUES ($1, $2, $3, $4, $5)
 			ON CONFLICT (club_id, email) DO UPDATE SET
-				password_hash = EXCLUDED.password_hash,
 				full_name = EXCLUDED.full_name,
-				vipps_sub = EXCLUDED.vipps_sub,
 				is_local = EXCLUDED.is_local
 			RETURNING id
-		`, clubID, u.email, string(pw), u.name, u.phone, u.vippsSub, u.isLocal).Scan(&id)
+		`, clubID, u.email, u.name, u.phone, u.isLocal).Scan(&id)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "failed to create user %s: %v\n", u.email, err)
 			os.Exit(1)
@@ -114,7 +105,7 @@ func main() {
 		}
 	}
 
-	// Create waiting list filler users (member role, no password — Vipps-only or just data)
+	// Create waiting list filler users (data only)
 	for _, u := range waitingListUsers {
 		var id string
 		err = db.QueryRow(ctx, `
