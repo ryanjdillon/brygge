@@ -50,15 +50,46 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
-	if page < 1 {
-		page = 1
-	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	if limit < 1 || limit > 100 {
-		limit = 20
+	if limit < 1 || limit > 500 {
+		limit = 100
 	}
-	offset := (page - 1) * limit
+	// Accept either ?offset (matches the OpenAPI PaginationParams shape)
+	// or legacy ?page=N as a 1-based index. Offset wins if both are set.
+	offset := 0
+	if v := r.URL.Query().Get("offset"); v != "" {
+		offset, _ = strconv.Atoi(v)
+	} else if v := r.URL.Query().Get("page"); v != "" {
+		if page, _ := strconv.Atoi(v); page > 1 {
+			offset = (page - 1) * limit
+		}
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	// Whitelist sort columns + direction so callers can't smuggle SQL.
+	// Default surface (last_name, first_name) keeps the natural roster
+	// ordering for admin scanning.
+	sortCol := "u.last_name NULLS LAST, u.first_name"
+	switch r.URL.Query().Get("sort") {
+	case "first_name":
+		sortCol = "u.first_name, u.last_name"
+	case "-first_name":
+		sortCol = "u.first_name DESC, u.last_name DESC"
+	case "last_name":
+		sortCol = "u.last_name NULLS LAST, u.first_name"
+	case "-last_name":
+		sortCol = "u.last_name DESC NULLS LAST, u.first_name DESC"
+	case "email":
+		sortCol = "u.email"
+	case "-email":
+		sortCol = "u.email DESC"
+	case "created_at":
+		sortCol = "u.created_at"
+	case "-created_at":
+		sortCol = "u.created_at DESC"
+	}
 
 	var totalCount int
 	err := h.db.QueryRow(ctx,
@@ -73,13 +104,14 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 
 	rows, err := h.db.Query(ctx,
 		`SELECT u.id, u.email, u.first_name, u.last_name, COALESCE(u.full_name, ''),
-		        u.phone, u.is_local, u.created_at, u.updated_at,
+		        u.phone, u.address_line, u.postal_code, u.city,
+		        u.is_local, u.created_at, u.updated_at,
 		        COALESCE(array_agg(ur.role) FILTER (WHERE ur.role IS NOT NULL), '{}')
 		 FROM users u
 		 LEFT JOIN user_roles ur ON ur.user_id = u.id AND ur.club_id = u.club_id
 		 WHERE u.club_id = $1
 		 GROUP BY u.id
-		 ORDER BY u.last_name NULLS LAST, u.first_name
+		 ORDER BY `+sortCol+`
 		 LIMIT $2 OFFSET $3`,
 		claims.ClubID, limit, offset,
 	)
@@ -91,22 +123,25 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 	defer rows.Close()
 
 	type userRow struct {
-		ID        string    `json:"id"`
-		Email     string    `json:"email"`
-		FirstName string    `json:"first_name"`
-		LastName  string    `json:"last_name"`
-		FullName  string    `json:"full_name"`
-		Phone     string    `json:"phone"`
-		IsLocal   bool      `json:"is_local"`
-		CreatedAt time.Time `json:"created_at"`
-		UpdatedAt time.Time `json:"updated_at"`
-		Roles     []string  `json:"roles"`
+		ID          string    `json:"id"`
+		Email       string    `json:"email"`
+		FirstName   string    `json:"first_name"`
+		LastName    string    `json:"last_name"`
+		FullName    string    `json:"full_name"`
+		Phone       string    `json:"phone"`
+		AddressLine string    `json:"address_line"`
+		PostalCode  string    `json:"postal_code"`
+		City        string    `json:"city"`
+		IsLocal     bool      `json:"is_local"`
+		CreatedAt   time.Time `json:"created_at"`
+		UpdatedAt   time.Time `json:"updated_at"`
+		Roles       []string  `json:"roles"`
 	}
 
 	var users []userRow
 	for rows.Next() {
 		var u userRow
-		if err := rows.Scan(&u.ID, &u.Email, &u.FirstName, &u.LastName, &u.FullName, &u.Phone, &u.IsLocal, &u.CreatedAt, &u.UpdatedAt, &u.Roles); err != nil {
+		if err := rows.Scan(&u.ID, &u.Email, &u.FirstName, &u.LastName, &u.FullName, &u.Phone, &u.AddressLine, &u.PostalCode, &u.City, &u.IsLocal, &u.CreatedAt, &u.UpdatedAt, &u.Roles); err != nil {
 			h.log.Error().Err(err).Msg("failed to scan user row")
 			Error(w, http.StatusInternalServerError, "internal error")
 			return
@@ -126,8 +161,8 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 	JSON(w, http.StatusOK, map[string]any{
 		"users":       users,
 		"total_count": totalCount,
-		"page":        page,
 		"limit":       limit,
+		"offset":      offset,
 	})
 }
 
@@ -638,8 +673,12 @@ func (h *AdminUsersHandler) createUser(ctx context.Context, clubID, actorID stri
 		"last_name":  lastName,
 		"roles":      req.Roles,
 	})
+	// audit_log canonical schema (000001_init): actor_id, resource,
+	// resource_id, details. Sibling admin handlers in this file use a
+	// (user_id, entity_type, entity_id, new_data) shape that doesn't
+	// match the table — tracked separately as a latent-bug sweep.
 	if _, err := tx.Exec(ctx,
-		`INSERT INTO audit_log (club_id, user_id, action, entity_type, entity_id, new_data)
+		`INSERT INTO audit_log (club_id, actor_id, action, resource, resource_id, details)
 		 VALUES ($1, $2, 'create_user', 'user', $3, $4)`,
 		clubID, actorID, id, auditData,
 	); err != nil {
@@ -787,4 +826,109 @@ func (h *AdminUsersHandler) HandleImportUsersCSV(w http.ResponseWriter, r *http.
 		"total":   len(results),
 		"rows":    results,
 	})
+}
+
+type adminUserUpdateRequest struct {
+	FirstName   *string `json:"first_name,omitempty"`
+	LastName    *string `json:"last_name,omitempty"`
+	Phone       *string `json:"phone,omitempty"`
+	AddressLine *string `json:"address_line,omitempty"`
+	PostalCode  *string `json:"postal_code,omitempty"`
+	City        *string `json:"city,omitempty"`
+	IsLocal     *bool   `json:"is_local,omitempty"`
+}
+
+// HandleUpdateUser applies a partial update to a user's profile fields.
+// Only supplied keys are written; nil pointers are left untouched. Email
+// + roles are intentionally out of scope (separate endpoints).
+func (h *AdminUsersHandler) HandleUpdateUser(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	userID := chi.URLParam(r, "userID")
+	if userID == "" {
+		Error(w, http.StatusBadRequest, "user ID is required")
+		return
+	}
+
+	var req adminUserUpdateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	sets := []string{}
+	args := []any{}
+	add := func(col string, val any) {
+		args = append(args, val)
+		sets = append(sets, fmt.Sprintf("%s = $%d", col, len(args)))
+	}
+	if req.FirstName != nil {
+		v := strings.TrimSpace(*req.FirstName)
+		if v == "" && (req.LastName == nil || strings.TrimSpace(*req.LastName) == "") {
+			Error(w, http.StatusBadRequest, "first_name and last_name cannot both be empty")
+			return
+		}
+		add("first_name", v)
+	}
+	if req.LastName != nil {
+		add("last_name", strings.TrimSpace(*req.LastName))
+	}
+	if req.Phone != nil {
+		add("phone", strings.TrimSpace(*req.Phone))
+	}
+	if req.AddressLine != nil {
+		add("address_line", strings.TrimSpace(*req.AddressLine))
+	}
+	if req.PostalCode != nil {
+		add("postal_code", strings.TrimSpace(*req.PostalCode))
+	}
+	if req.City != nil {
+		add("city", strings.TrimSpace(*req.City))
+	}
+	if req.IsLocal != nil {
+		add("is_local", *req.IsLocal)
+	}
+	if len(sets) == 0 {
+		Error(w, http.StatusBadRequest, "no fields to update")
+		return
+	}
+	sets = append(sets, "updated_at = now()")
+	args = append(args, userID, claims.ClubID)
+
+	q := fmt.Sprintf(
+		`UPDATE users SET %s WHERE id = $%d AND club_id = $%d`,
+		strings.Join(sets, ", "), len(args)-1, len(args),
+	)
+
+	tag, err := h.db.Exec(ctx, q, args...)
+	if err != nil {
+		h.log.Error().Err(err).Str("user_id", userID).Msg("failed to update user")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if tag.RowsAffected() == 0 {
+		Error(w, http.StatusNotFound, "user not found")
+		return
+	}
+
+	auditData, _ := json.Marshal(req)
+	if _, err := h.db.Exec(ctx,
+		`INSERT INTO audit_log (club_id, actor_id, action, resource, resource_id, details)
+		 VALUES ($1, $2, 'update_user', 'user', $3, $4)`,
+		claims.ClubID, claims.UserID, userID, auditData,
+	); err != nil {
+		h.log.Warn().Err(err).Msg("failed to write audit log for update_user")
+	}
+
+	h.log.Info().
+		Str("target_user", userID).
+		Str("actor", claims.UserID).
+		Msg("user updated")
+
+	JSON(w, http.StatusOK, map[string]any{"id": userID, "updated": true})
 }

@@ -1209,6 +1209,18 @@ func registerAdminOps(api huma.API) {
 	}, stub[struct{}, struct{ Body ImportUsersResult }]())
 
 	huma.Register(api, huma.Operation{
+		OperationID: "admin-update-user",
+		Method:      http.MethodPatch,
+		Path:        "/api/v1/admin/users/{userID}",
+		Tags:        []string{"Admin"},
+		Summary:     "Update user profile fields (partial)",
+		Security:    BearerSecurity,
+	}, stub[struct {
+		UserID string `path:"userID" doc:"User UUID"`
+		Body   AdminUserUpdate
+	}, struct{ Body AdminUser }]())
+
+	huma.Register(api, huma.Operation{
 		OperationID: "admin-update-user-roles",
 		Method:      http.MethodPut,
 		Path:        "/api/v1/admin/users/{userID}/roles",
