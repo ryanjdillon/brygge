@@ -125,6 +125,10 @@ in
     postgresql_16
     redis
     go-migrate
+    # Dendrite admin helpers (create-account, etc.) — needed by
+    # `nix run .#gen-dendrite-token` and any manual recovery work.
+    # NixOS doesn't put them on PATH automatically.
+    dendrite
   ];
 
   services.postgresql = {
