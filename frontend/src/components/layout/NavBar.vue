@@ -4,7 +4,7 @@ import { RouterLink, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useClubStore } from '@/stores/club'
-import { Menu, X, LogIn, LogOut, User, Shield, ChevronDown } from 'lucide-vue-next'
+import { Menu, X, LogIn, LogOut, User, Shield, ShieldAlert, ChevronDown } from 'lucide-vue-next'
 import LanguageSwitcher from '@/components/layout/LanguageSwitcher.vue'
 
 const { t } = useI18n()
@@ -99,13 +99,24 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
           <LanguageSwitcher />
           <template v-if="auth.isAuthenticated">
             <RouterLink
-              v-if="auth.hasRole('admin') || auth.hasRole('board')"
+              v-if="auth.canAccessAdmin"
               to="/admin"
               class="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
             >
               <span class="flex items-center gap-1">
                 <Shield class="h-4 w-4" />
                 {{ t('nav.admin') }}
+              </span>
+            </RouterLink>
+            <RouterLink
+              v-else-if="auth.hasAdminRole && auth.user && !auth.user.totpEnabled"
+              to="/portal/security"
+              class="rounded-md px-3 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50"
+              :title="t('nav.enable2faTooltip')"
+            >
+              <span class="flex items-center gap-1">
+                <ShieldAlert class="h-4 w-4" />
+                {{ t('nav.enable2fa') }}
               </span>
             </RouterLink>
             <RouterLink
@@ -182,12 +193,20 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
         <div class="border-t border-gray-200 pt-2">
           <template v-if="auth.isAuthenticated">
             <RouterLink
-              v-if="auth.hasRole('admin') || auth.hasRole('board')"
+              v-if="auth.canAccessAdmin"
               to="/admin"
               class="block rounded-md px-3 py-2 text-base font-medium text-gray-700 hover:bg-gray-100"
               @click="mobileOpen = false"
             >
               {{ t('nav.admin') }}
+            </RouterLink>
+            <RouterLink
+              v-else-if="auth.hasAdminRole && auth.user && !auth.user.totpEnabled"
+              to="/portal/security"
+              class="block rounded-md px-3 py-2 text-base font-medium text-amber-700 hover:bg-amber-50"
+              @click="mobileOpen = false"
+            >
+              {{ t('nav.enable2fa') }}
             </RouterLink>
             <RouterLink
               to="/portal"

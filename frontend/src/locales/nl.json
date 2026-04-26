@@ -10,6 +10,8 @@
     "login": "Inloggen",
     "portal": "Mijn pagina",
     "admin": "Beheer",
+    "enable2fa": "2FA inschakelen",
+    "enable2faTooltip": "Schakel 2FA in om toegang te krijgen tot het beheergedeelte",
     "club": "Club",
     "history": "Geschiedenis",
     "merchandise": "Winkel",
