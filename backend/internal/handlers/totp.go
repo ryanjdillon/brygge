@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/pquerna/otp/totp"
@@ -512,6 +513,98 @@ func normalizeRecoveryCode(in string) string {
 		return ""
 	}
 	return cleaned[:4] + "-" + cleaned[4:]
+}
+
+// HandleAdminDisableTOTP is the lost-device backstop: another admin
+// disables a target user's TOTP entirely so they can re-enroll from
+// scratch via /admin/totp/setup. All of the target's recovery codes
+// and active sessions are wiped in the same transaction so any
+// in-flight elevated state (a stolen cookie that's somehow still
+// valid) loses access immediately.
+//
+// The acting admin must be fresh-TOTP-verified (RequireFreshTOTP at
+// the route level). Audit logged.
+func (h *TOTPHandler) HandleAdminDisableTOTP(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	actor := middleware.GetClaims(ctx)
+	if actor == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	targetID := chi.URLParam(r, "userID")
+	if targetID == "" {
+		Error(w, http.StatusBadRequest, "userID is required")
+		return
+	}
+
+	// Verify target belongs to the same club so an admin from one
+	// tenant can't reset users in another.
+	var targetClubID string
+	err := h.db.QueryRow(ctx,
+		`SELECT club_id FROM users WHERE id = $1`, targetID,
+	).Scan(&targetClubID)
+	if err == pgx.ErrNoRows {
+		Error(w, http.StatusNotFound, "user not found")
+		return
+	}
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to look up target user")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if targetClubID != actor.ClubID {
+		Error(w, http.StatusNotFound, "user not found")
+		return
+	}
+
+	tx, err := h.db.Begin(ctx)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to begin transaction")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	if _, err := tx.Exec(ctx,
+		`UPDATE users SET totp_secret_encrypted = NULL, totp_enabled = false WHERE id = $1`,
+		targetID,
+	); err != nil {
+		h.log.Error().Err(err).Msg("failed to disable TOTP")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	if _, err := tx.Exec(ctx,
+		`DELETE FROM totp_recovery_codes WHERE user_id = $1`, targetID,
+	); err != nil {
+		h.log.Error().Err(err).Msg("failed to clear recovery codes")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	if _, err := tx.Exec(ctx,
+		`DELETE FROM sessions WHERE user_id = $1`, targetID,
+	); err != nil {
+		h.log.Error().Err(err).Msg("failed to revoke sessions")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		h.log.Error().Err(err).Msg("failed to commit admin TOTP disable")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	if h.audit != nil {
+		h.audit.LogAction(ctx, actor.ClubID, actor.UserID, r.RemoteAddr,
+			audit.ActionTOTPAdminDisabled, "user", targetID, nil)
+	}
+
+	JSON(w, http.StatusOK, map[string]string{
+		"message": "TOTP disabled for user; they will need to re-enroll on next login",
+	})
 }
 
 // insertRecoveryCodes bcrypts and inserts each plaintext code on the
