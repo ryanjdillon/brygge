@@ -30,10 +30,13 @@
     deploySystem = "x86_64-linux";
 
     # terraform/terraform.tfvars.json is tracked by git with placeholder
-    # values, so the flake can read it in pure eval. Each deployer edits
-    # it with their real values locally and runs
-    #   git update-index --skip-worktree terraform/terraform.tfvars.json
-    # to prevent those changes from being staged or committed.
+    # values so the flake can read it in pure eval. Each deployer edits
+    # it with their real values; the file shows as "modified" in git
+    # status — that's expected. Nix reads the working copy directly,
+    # so any technique that hides local edits from git (skip-worktree,
+    # assume-unchanged) also hides them from nix and breaks deploys.
+    # The .githooks/pre-commit hook prevents accidentally committing
+    # a working-copy version that contains real secrets.
     tfvars = builtins.fromJSON (builtins.readFile ./terraform/terraform.tfvars.json);
 
     clubConfig = {
@@ -159,9 +162,10 @@
               export PLAYWRIGHT_BROWSERS_PATH="''${PLAYWRIGHT_DRIVER_PATH}"
             fi
 
-            # Install pre-commit hook that blocks committing terraform.tfvars.json.
-            # If you haven't yet marked the file skip-worktree, run:
-            #   git update-index --skip-worktree terraform/terraform.tfvars.json
+            # Install the pre-commit hook that blocks committing real
+            # secrets in terraform/terraform.tfvars.json. The file will
+            # show as "modified" in git status — that's expected; nix
+            # flakes read it directly from the working copy.
             if [ -d .githooks ] && [ "$(git config core.hooksPath)" != ".githooks" ]; then
               git config core.hooksPath .githooks
               echo "installed .githooks/ (blocks accidental commits of tfvars.json)"
