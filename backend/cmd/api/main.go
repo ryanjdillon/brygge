@@ -105,9 +105,6 @@ func main() {
 		log.Info().Msg("connected to redis")
 	}
 
-	jwtService := auth.NewJWTService(&cfg)
-	vippsClient := auth.NewVippsClient(&cfg)
-
 	var emailClient email.Sender
 	if cfg.SMTPHost != "" {
 		emailClient = email.NewSMTPClient(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUsername, cfg.SMTPPassword, cfg.EmailFrom, cfg.EmailReplyTo)
@@ -130,7 +127,7 @@ func main() {
 	featuresHandler := handlers.NewFeaturesHandler(&cfg)
 	healthHandler := handlers.NewHealthHandler(db, rdb)
 	auditHandler := handlers.NewAuditHandler(db, auditService, &cfg, log)
-	authHandler := handlers.NewAuthHandler(db, rdb, jwtService, vippsClient, &cfg, log, handlers.WithAuditService(auditService))
+	authHandler := handlers.NewAuthHandler(db, &cfg, log)
 	magicLinkHandler := handlers.NewMagicLinkHandler(db, &cfg, emailClient, sessionService, log)
 	totpHandler := handlers.NewTOTPHandler(db, &cfg, sessionService, auditService, log)
 	demoAuthHandler := handlers.NewDemoAuthHandler(db, &cfg, sessionService, log)
@@ -190,10 +187,6 @@ func main() {
 		r.Get("/features", featuresHandler.HandleGetFeatures)
 
 		r.Route("/auth", func(r chi.Router) {
-			r.Get("/vipps/status", authHandler.HandleVippsStatus)
-			r.Get("/vipps/login", authHandler.HandleVippsLogin)
-			r.Get("/vipps/callback", authHandler.HandleVippsCallback)
-
 			if cfg.Features.DemoAuth {
 				r.Get("/demo/users", demoAuthHandler.HandleListDemoUsers)
 				r.Post("/demo/login", demoAuthHandler.HandleDemoLogin)
@@ -203,17 +196,11 @@ func main() {
 				r.Use(strictRL)
 				r.Post("/magic-link", magicLinkHandler.HandleRequestMagicLink)
 				r.Get("/verify", magicLinkHandler.HandleVerifyMagicLink)
-				r.Post("/register", authHandler.HandleEmailRegister)
-				r.Post("/login", authHandler.HandleEmailLogin)
-				r.Post("/refresh", authHandler.HandleRefreshToken)
-				r.Post("/exchange", authHandler.HandleAuthCodeExchange)
 			})
 
-			// JWT-based auth (legacy, will be removed in DIL-28)
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.AuthenticateSession(sessionService))
 				r.Use(authedRL)
-				r.Post("/logout", authHandler.HandleLogout)
 				r.Get("/me", authHandler.HandleMe)
 			})
 
@@ -688,6 +675,29 @@ func main() {
 		log.Info().Str("addr", addr).Msg("starting server")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatal().Err(err).Msg("server failed")
+		}
+	}()
+
+	// Hourly background sweep of expired sessions. Cookies expire on the
+	// client after 30 days; the row stays until something deletes it,
+	// which would otherwise grow unbounded.
+	go func() {
+		ticker := time.NewTicker(time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				n, err := sessionService.PurgeExpired(ctx)
+				if err != nil {
+					log.Warn().Err(err).Msg("session purge failed")
+					continue
+				}
+				if n > 0 {
+					log.Info().Int64("rows", n).Msg("purged expired sessions")
+				}
+			}
 		}
 	}()
 
