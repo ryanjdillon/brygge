@@ -199,6 +199,12 @@ in
   services.dendrite = {
     enable = true;
     httpPort = 8008;
+    # NixOS dendrite reads $REGISTRATION_SHARED_SECRET out of this file
+    # at activation time and substitutes it into the rendered config.
+    # Provisioned by `nix run .#gen-dendrite-token` on first run.
+    # Without it, create-account fails with "Shared secret registration
+    # is not enabled" because the placeholder substitutes to empty.
+    environmentFile = "/etc/dendrite/env";
     settings = {
       global = {
         server_name = "matrix.${cfg.domain}";
