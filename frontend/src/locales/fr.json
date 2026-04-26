@@ -44,7 +44,8 @@
     "success": "Succès",
     "noResults": "Aucun résultat",
     "next": "Suivant",
-    "skipToContent": "Aller au contenu principal"
+    "skipToContent": "Aller au contenu principal",
+    "previous": "Précédent"
   },
   "home": {
     "welcome": "Bienvenue à Brygge",
@@ -640,6 +641,8 @@
       "addTitle": "Nouvel utilisateur",
       "addSubmit": "Créer",
       "createError": "Échec de la création de l'utilisateur",
+      "editTitle": "Modifier l'utilisateur",
+      "updateError": "Échec de la mise à jour de l'utilisateur",
       "phone": "Téléphone",
       "isLocal": "Local",
       "address": "Adresse",
@@ -653,7 +656,8 @@
       "importStatus": "Statut",
       "importDetail": "Détails",
       "importError": "Échec de l'import",
-      "importFreshRequired": "La session nécessite une nouvelle vérification 2FA. Rechargez la page et réessayez."
+      "importFreshRequired": "La session nécessite une nouvelle vérification 2FA. Rechargez la page et réessayez.",
+      "showing": "Affichage de {from}–{to} sur {total}"
     },
     "waitingList": {
       "loadError": "Impossible de charger la liste d'attente",

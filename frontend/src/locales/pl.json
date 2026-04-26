@@ -44,7 +44,8 @@
     "success": "Sukces",
     "noResults": "Brak wyników",
     "next": "Dalej",
-    "skipToContent": "Przejdź do treści głównej"
+    "skipToContent": "Przejdź do treści głównej",
+    "previous": "Poprzedni"
   },
   "home": {
     "welcome": "Witamy w Brygge",
@@ -640,6 +641,8 @@
       "addTitle": "Nowy użytkownik",
       "addSubmit": "Utwórz",
       "createError": "Nie udało się utworzyć użytkownika",
+      "editTitle": "Edytuj użytkownika",
+      "updateError": "Nie udało się zaktualizować użytkownika",
       "phone": "Telefon",
       "isLocal": "Lokalny",
       "address": "Adres",
@@ -653,7 +656,8 @@
       "importStatus": "Status",
       "importDetail": "Szczegóły",
       "importError": "Import nie powiódł się",
-      "importFreshRequired": "Sesja wymaga świeżej weryfikacji 2FA. Odśwież stronę i spróbuj ponownie."
+      "importFreshRequired": "Sesja wymaga świeżej weryfikacji 2FA. Odśwież stronę i spróbuj ponownie.",
+      "showing": "Wyświetlanie {from}–{to} z {total}"
     },
     "waitingList": {
       "loadError": "Nie udało się załadować listy oczekujących",

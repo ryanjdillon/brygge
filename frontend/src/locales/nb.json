@@ -44,6 +44,7 @@
     "success": "Vellykket",
     "noResults": "Ingen resultater",
     "next": "Neste",
+    "previous": "Forrige",
     "skipToContent": "Hopp til hovedinnhold"
   },
   "home": {
@@ -636,6 +637,8 @@
       "addTitle": "Ny bruker",
       "addSubmit": "Opprett",
       "createError": "Kunne ikke opprette bruker",
+      "editTitle": "Rediger bruker",
+      "updateError": "Kunne ikke oppdatere bruker",
       "phone": "Telefon",
       "isLocal": "Lokal",
       "address": "Adresse",
@@ -649,7 +652,8 @@
       "importStatus": "Status",
       "importDetail": "Detaljer",
       "importError": "Importen feilet",
-      "importFreshRequired": "Sesjonen krever fersk 2FA-bekreftelse. Last siden på nytt og prøv igjen."
+      "importFreshRequired": "Sesjonen krever fersk 2FA-bekreftelse. Last siden på nytt og prøv igjen.",
+      "showing": "Viser {from}–{to} av {total}"
     },
     "waitingList": {
       "loadError": "Kunne ikke hente ventelisten",
@@ -741,7 +745,7 @@
         "save": "Lagre",
         "cancel": "Avbryt",
         "confirmDelete": "Deaktiver denne kontoen?",
-        "search": "S\u00f8k i kontoer..."
+        "search": "Søk i kontoer..."
       },
       "periods": {
         "title": "Regnskapsperioder",

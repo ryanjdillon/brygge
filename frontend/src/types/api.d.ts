@@ -693,7 +693,8 @@ export interface paths {
         delete: operations["admin-delete-user"];
         options?: never;
         head?: never;
-        patch?: never;
+        /** Update user profile fields (partial) */
+        patch: operations["admin-update-user"];
         trace?: never;
     };
     "/api/v1/admin/users/{userID}/roles": {
@@ -2298,6 +2299,10 @@ export interface components {
              * @example https://example.com/schemas/AdminUser.json
              */
             readonly $schema?: string;
+            /** @description Street address */
+            address_line: string;
+            /** @description City */
+            city: string;
             /**
              * Format: date-time
              * @description Creation timestamp
@@ -2311,12 +2316,31 @@ export interface components {
             full_name: string;
             /** @description User UUID */
             id: string;
+            /** @description Local-resident rate eligible */
+            is_local: boolean;
             /** @description Family name */
             last_name: string;
             /** @description Phone number */
             phone: string;
+            /** @description Postal code */
+            postal_code: string;
             /** @description Assigned roles */
             roles: string[] | null;
+        };
+        AdminUserUpdate: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/AdminUserUpdate.json
+             */
+            readonly $schema?: string;
+            address_line?: string;
+            city?: string;
+            first_name?: string;
+            is_local?: boolean;
+            last_name?: string;
+            phone?: string;
+            postal_code?: string;
         };
         AdminUserCreate: {
             /**
@@ -2371,7 +2395,17 @@ export interface components {
             readonly $schema?: string;
             /**
              * Format: int64
-             * @description Total user count
+             * @description Applied page size
+             */
+            limit: number;
+            /**
+             * Format: int64
+             * @description Applied row offset
+             */
+            offset: number;
+            /**
+             * Format: int64
+             * @description Total user count across the whole club
              */
             total_count: number;
             /** @description List of users */
@@ -6236,6 +6270,42 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "admin-update-user": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description User UUID */
+                userID: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminUserUpdate"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUser"];
+                };
             };
             /** @description Error */
             default: {

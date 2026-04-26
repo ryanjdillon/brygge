@@ -30,6 +30,11 @@ interface MeResponse {
 // nav links when the gate would 403 anyway).
 const TOTP_FRESH_MS = 12 * 60 * 60 * 1000
 
+// Mirrors the 5-minute per-action freshness window enforced by
+// RequireFreshTOTP on mutating admin endpoints. Used to prompt the
+// step-up modal on button click instead of after form submit.
+const TOTP_ACTION_FRESH_MS = 5 * 60 * 1000
+
 const ADMIN_ROLES = ['admin', 'board', 'treasurer', 'harbor_master']
 
 export const useAuthStore = defineStore('auth', () => {
@@ -50,6 +55,11 @@ export const useAuthStore = defineStore('auth', () => {
     if (!hasAdminRole.value || !user.value) return false
     if (!user.value.totpEnabled || !user.value.totpVerifiedAt) return false
     return Date.now() - user.value.totpVerifiedAt.getTime() < TOTP_FRESH_MS
+  })
+
+  const hasFreshTotp = computed(() => {
+    if (!user.value?.totpEnabled || !user.value.totpVerifiedAt) return false
+    return Date.now() - user.value.totpVerifiedAt.getTime() < TOTP_ACTION_FRESH_MS
   })
 
   async function checkSession() {
@@ -125,6 +135,7 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated,
     hasAdminRole,
     canAccessAdmin,
+    hasFreshTotp,
     ready,
     logout,
     hasRole,

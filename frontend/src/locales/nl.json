@@ -44,7 +44,8 @@
     "success": "Gelukt",
     "noResults": "Geen resultaten",
     "next": "Volgende",
-    "skipToContent": "Ga naar hoofdinhoud"
+    "skipToContent": "Ga naar hoofdinhoud",
+    "previous": "Vorige"
   },
   "home": {
     "welcome": "Welkom bij Brygge",
@@ -640,6 +641,8 @@
       "addTitle": "Nieuwe gebruiker",
       "addSubmit": "Aanmaken",
       "createError": "Aanmaken van gebruiker mislukt",
+      "editTitle": "Gebruiker bewerken",
+      "updateError": "Bijwerken van gebruiker mislukt",
       "phone": "Telefoon",
       "isLocal": "Lokaal",
       "address": "Adres",
@@ -653,7 +656,8 @@
       "importStatus": "Status",
       "importDetail": "Details",
       "importError": "Import mislukt",
-      "importFreshRequired": "Sessie vereist nieuwe 2FA-verificatie. Herlaad de pagina en probeer opnieuw."
+      "importFreshRequired": "Sessie vereist nieuwe 2FA-verificatie. Herlaad de pagina en probeer opnieuw.",
+      "showing": "Tonen {from}–{to} van {total}"
     },
     "waitingList": {
       "loadError": "Kon wachtlijst niet laden",
