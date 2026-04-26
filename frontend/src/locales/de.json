@@ -10,6 +10,8 @@
     "login": "Anmelden",
     "portal": "Meine Seite",
     "admin": "Verwaltung",
+    "enable2fa": "2FA aktivieren",
+    "enable2faTooltip": "Aktivieren Sie 2FA, um auf den Admin-Bereich zuzugreifen",
     "club": "Verein",
     "history": "Geschichte",
     "merchandise": "Shop",

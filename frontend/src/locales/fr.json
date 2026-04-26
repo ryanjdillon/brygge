@@ -10,6 +10,8 @@
     "login": "Se connecter",
     "portal": "Mon espace",
     "admin": "Administration",
+    "enable2fa": "Activer 2FA",
+    "enable2faTooltip": "Activez 2FA pour accéder à l'administration",
     "club": "Club",
     "history": "Historique",
     "merchandise": "Boutique",

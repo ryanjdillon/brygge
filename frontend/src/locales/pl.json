@@ -10,6 +10,8 @@
     "login": "Zaloguj się",
     "portal": "Moja strona",
     "admin": "Administracja",
+    "enable2fa": "Włącz 2FA",
+    "enable2faTooltip": "Włącz 2FA, aby uzyskać dostęp do panelu administracyjnego",
     "club": "Klub",
     "history": "Historia",
     "merchandise": "Sklep",
