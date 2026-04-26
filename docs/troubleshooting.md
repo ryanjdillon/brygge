@@ -106,6 +106,59 @@ Common causes:
 
 ---
 
+## Two-factor authentication
+
+### Admin link disappeared from the nav
+
+**Symptom**: A user with admin/board role no longer sees "Admin" in the nav after a deploy.
+
+**Cause**: Step-up 2FA is enforced (`RequireAdminTOTP`). The SPA hides the Admin link until the user has TOTP enrolled and a fresh verification.
+
+**Fix**: Click the amber "Enable 2FA" prompt in the nav (or go to `/portal/security`) and enroll. Save the recovery codes. After enrollment + initial verify, the Admin link reappears.
+
+### Magic link succeeded but TOTP still asked for
+
+**Symptom**: User logs in successfully via magic link but is immediately redirected to `/admin/verify-totp` and asked for a code.
+
+**Cause**: This is expected. Magic-link login establishes the session, but the 12-hour step-up window for `/admin/*` requires a fresh TOTP verification on top.
+
+**Fix**: Enter the 6-digit code from the authenticator app. The user lands on the page they were trying to reach (read from `?next=`).
+
+### Recovery code rejected as "invalid or already-used"
+
+**Symptom**: User types a recovery code in `/admin/verify-totp` and it's rejected.
+
+**Causes**:
+1. Code was already redeemed (single-use)
+2. Code was typed wrong (codes use only `A-Z` minus `O/I/L` and `2-9` minus `0/1` to avoid ambiguity — check for confused glyphs)
+3. Codes were regenerated since the user saved this batch
+
+**Fix**: Try another code from the saved batch. If none work, see "Lost authenticator AND recovery codes" below.
+
+### Lost authenticator AND recovery codes
+
+**Symptom**: User can sign in via magic link but can't pass the 2FA gate at all.
+
+**Fix**: Another admin (with `admin` role specifically, not just `board`) hits `POST /api/v1/admin/users/{userID}/totp/disable` from a fresh-TOTP-verified session. Full procedure in [security/2fa.md → Admin reset](security/2fa.md#admin-reset-lost-authenticator-and-recovery-codes).
+
+### All admins lost their devices simultaneously
+
+**Symptom**: No admin can pass the 2FA gate, so no admin can run the admin-reset endpoint.
+
+**Cause**: The chicken-and-egg case the admin-reset endpoint can't solve.
+
+**Fix**: Manual DB intervention on the production VM. Full SQL in [security/2fa.md → What if all admins lose their devices](security/2fa.md#what-if-all-admins-lose-their-devices). After unlocking yourself, use the admin-reset endpoint for any other locked-out admins.
+
+### `503 TOTP not configured` errors after a deploy
+
+**Symptom**: Enrollment fails with `503 TOTP not configured (missing encryption key)`.
+
+**Cause**: `TOTP_ENCRYPTION_KEY` is missing or invalid in `/etc/brygge/env`. Must be 64 hex characters (32 bytes).
+
+**Fix**: Generate a key with `openssl rand -hex 32` and set it in the env file. Restart brygge. **Do not rotate this key once enrollments exist** — every enrolled user becomes unrecoverable.
+
+---
+
 ## Nuke and rebuild
 
 If all else fails, you can reset the entire local or production environment:
