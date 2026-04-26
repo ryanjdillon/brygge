@@ -124,6 +124,24 @@ Tracked as a placeholder; deployers fill it in locally. Two layers keep secrets 
 
 To update the committed placeholder, temporarily clear skip-worktree, commit a sanitized version, then re-set skip-worktree. Never `git add -f` a file containing real values — the hook will reject it.
 
+## Env var layering
+
+Each runtime variable Brygge reads lives in **exactly one** of three layers. Keeping them separated avoids the silent-fallback failure mode (env file forgets a non-secret → site quietly defaults) and the secret-in-/nix/store antipattern.
+
+| Layer | What goes here | Examples | Why |
+|-------|----------------|----------|-----|
+| `clubConfig` (`flake.nix`, sourced from `terraform/terraform.tfvars.json`) | Per-club identity and config known at deploy time, not secret | `domain`, `slug`, `name`, `hostname`, `timezone`, `adminEmail`, `adminSshKeys` | Declarative per club; tfvars-driven; survives redeploy |
+| `services.brygge.{environment, extraEnvironment}` (NixOS, in `nix/host.nix`) | Connection wiring + values derived from `clubConfig` | `DATABASE_URL`, `REDIS_URL`, `FRONTEND_URL`, `OTEL_*`, `FEATURE_*`, `DOMAIN` | Single source per host; in source control; survives redeploy |
+| `/etc/brygge/env` (root-owned 0400, outside `/nix/store`) | Secrets only | `SMTP_PASSWORD`, `TOTP_ENCRYPTION_KEY`, `S3_SECRET_KEY`, `VAPID_PRIVATE_KEY`, `VIPPS_WEBHOOK_SECRET`, `ANTHROPIC_API_KEY`, `DENDRITE_SERVICE_TOKEN` | World-readable `/nix/store` is the wrong place; rotates independently of the nix config |
+
+**Anti-rules:**
+
+- A var must NOT appear in two layers — drift risk; precedence falls out of systemd unit ordering and isn't intentional.
+- The env file must NOT carry non-secret config — when forgotten, the site silently defaults instead of failing loudly. (Symptom: NavBar shows literal "Brygge", magic-link emails say "your club".)
+- The systemd unit must NOT carry secrets — anything in `services.X.environment` ends up in `/nix/store`, which is world-readable.
+
+**docker-compose deploys** are a separate path. `deploy/.env` (copied from `.env.example`) carries all three layers' worth of values for that path — there's no nix to inject. The `[nix-injected]` tags in `.env.example` mark which lines exist only for compose deploys.
+
 ## Deployment Operations
 
 ```bash

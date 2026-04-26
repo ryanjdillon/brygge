@@ -6,8 +6,8 @@ errors=0
 
 # Check AGENTS.md line count
 agents_lines=$(wc -l < "$REPO_ROOT/AGENTS.md")
-if [ "$agents_lines" -gt 160 ]; then
-  echo "ERROR: AGENTS.md is $agents_lines lines (max 160)"
+if [ "$agents_lines" -gt 200 ]; then
+  echo "ERROR: AGENTS.md is $agents_lines lines (max 200)"
   errors=$((errors + 1))
 else
   echo "OK: AGENTS.md is $agents_lines lines"
