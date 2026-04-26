@@ -525,6 +525,8 @@ func main() {
 					// each time, regardless of the 12h step-up window.
 					r.Group(func(r chi.Router) {
 						r.Use(middleware.RequireFreshTOTP(5 * time.Minute))
+						r.Post("/", adminUsersHandler.HandleCreateUser)
+						r.Post("/import", adminUsersHandler.HandleImportUsersCSV)
 						r.Put("/{userID}/roles", adminUsersHandler.HandleUpdateUserRoles)
 						r.Delete("/{userID}", adminUsersHandler.HandleDeleteUser)
 
