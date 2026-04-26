@@ -50,6 +50,10 @@
       adminSshKeys = tfvars.admin_ssh_keys;
       hostname     = tfvars.server_name;
       timezone     = tfvars.timezone;
+      # Feature flags. Pass-through to services.brygge.features (a
+      # submodule with per-flag defaults), so this can be empty {} or
+      # a partial override like {accounting = true;}.
+      features     = tfvars.features or { };
     };
 
     overlay = final: prev: {
