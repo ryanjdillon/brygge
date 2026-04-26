@@ -16,7 +16,6 @@ services:
       - traefik.enable=false
     environment:
       - VIPPS_MOCK_URL=http://vipps-mock:8090
-      - VIPPS_CALLBACK_URL=http://localhost:8080/api/v1/auth/vipps/callback
       - FRONTEND_URL=http://localhost:5173
 
   # ── Postgres: expose for local tooling ─────────────────────────
