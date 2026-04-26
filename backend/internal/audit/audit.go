@@ -11,13 +11,15 @@ import (
 // Action constants for audit events.
 const (
 	// Auth events
-	ActionLoginSuccess    = "auth.login_success"
-	ActionLoginFailed     = "auth.login_failed"
-	ActionTokenRevoked    = "auth.token_revoked"  // #nosec G101 -- not a credential
-	ActionInvalidToken    = "auth.invalid_token" // #nosec G101 -- not a credential
+	ActionLoginSuccess = "auth.login_success"
+	ActionLoginFailed  = "auth.login_failed"
+	ActionTokenRevoked = "auth.token_revoked" // #nosec G101 -- not a credential
+	ActionInvalidToken = "auth.invalid_token" // #nosec G101 -- not a credential
 
 	// TOTP events
-	ActionTOTPVerified = "admin.totp_verified"
+	ActionTOTPVerified         = "admin.totp_verified"
+	ActionTOTPRecoveryRedeemed = "admin.totp_recovery_redeemed"
+	ActionTOTPCodesRegenerated = "admin.totp_codes_regenerated"
 
 	// Admin user operations
 	ActionUserRoleUpdated = "user.role_updated"
@@ -29,30 +31,30 @@ const (
 	ActionSlipReleased = "slip.released"
 
 	// Content operations
-	ActionEventCreated    = "event.created"
-	ActionEventDeleted    = "event.deleted"
-	ActionPricingUpdated  = "pricing.updated"
-	ActionBroadcastSent   = "broadcast.sent"
+	ActionEventCreated     = "event.created"
+	ActionEventDeleted     = "event.deleted"
+	ActionPricingUpdated   = "pricing.updated"
+	ActionBroadcastSent    = "broadcast.sent"
 	ActionDocumentUploaded = "document.uploaded"
 	ActionDocumentDeleted  = "document.deleted"
 
 	// Finance operations
-	ActionInvoiceCreated     = "invoice.created"
+	ActionInvoiceCreated      = "invoice.created"
 	ActionInvoicePDFGenerated = "invoice.pdf_generated"
-	ActionInvoiceEmailed     = "invoice.emailed"
-	ActionFinanceCSVExported = "finance.csv_exported"
-	ActionPaymentCreated     = "payment.created"
-	ActionPaymentViewed      = "finance.payment_viewed"
+	ActionInvoiceEmailed      = "invoice.emailed"
+	ActionFinanceCSVExported  = "finance.csv_exported"
+	ActionPaymentCreated      = "payment.created"
+	ActionPaymentViewed       = "finance.payment_viewed"
 
 	// Booking operations
 	ActionBookingConfirmed = "booking.confirmed"
 
 	// GDPR operations
-	ActionGDPRExportRequested    = "gdpr.export_requested"
-	ActionGDPRDeletionRequested  = "gdpr.deletion_requested"
-	ActionGDPRDeletionCancelled  = "gdpr.deletion_cancelled"
-	ActionGDPRDeletionProcessed  = "gdpr.deletion_processed"
-	ActionLegalDocumentCreated   = "legal_document.created"
+	ActionGDPRExportRequested       = "gdpr.export_requested"
+	ActionGDPRDeletionRequested     = "gdpr.deletion_requested"
+	ActionGDPRDeletionCancelled     = "gdpr.deletion_cancelled"
+	ActionGDPRDeletionProcessed     = "gdpr.deletion_processed"
+	ActionLegalDocumentCreated      = "legal_document.created"
 	ActionNotificationConfigUpdated = "notification_config.updated"
 )
 
