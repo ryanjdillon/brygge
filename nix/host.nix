@@ -184,6 +184,10 @@ in
     package = pkgs.brygge;
     domain = clubConfig.domain;
     environmentFile = "/etc/brygge/env";
+    # Per-club feature flags from tfvars. Defaults live in nix/module.nix's
+    # submodule (everything on except accounting + demoAuth); tfvars
+    # carries only the keys this deployment overrides.
+    features = clubConfig.features;
   };
 
   users.users.brygge.extraGroups = [ config.services.redis.servers.brygge.user ];

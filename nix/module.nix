@@ -65,14 +65,21 @@ in
     };
 
     features = lib.mkOption {
-      type = lib.types.attrsOf lib.types.bool;
-      default = {
-        bookings = true;
-        projects = true;
-        calendar = true;
-        commerce = true;
-        communications = true;
+      # Submodule with per-flag options so a host can override a single
+      # flag (e.g. `services.brygge.features.accounting = true`) without
+      # losing the others' defaults — which is what attrsOf-bool would do.
+      type = lib.types.submodule {
+        options = {
+          bookings       = lib.mkOption { type = lib.types.bool; default = true;  description = "Harbor / hoist booking system."; };
+          projects       = lib.mkOption { type = lib.types.bool; default = true;  description = "Project + task management."; };
+          calendar       = lib.mkOption { type = lib.types.bool; default = true;  description = "Club calendar."; };
+          commerce       = lib.mkOption { type = lib.types.bool; default = true;  description = "Product catalog and orders (Vipps ePayment)."; };
+          communications = lib.mkOption { type = lib.types.bool; default = true;  description = "Member broadcasts and notifications."; };
+          accounting     = lib.mkOption { type = lib.types.bool; default = false; description = "Norwegian accounting (kontoplan, momskompensasjon)."; };
+          demoAuth       = lib.mkOption { type = lib.types.bool; default = false; description = "Demo-user login (testing only — never in production)."; };
+        };
       };
+      default = { };
       description = "Feature flag toggles (mapped to FEATURE_* env vars).";
     };
 
