@@ -509,8 +509,14 @@ func main() {
 					r.Use(middleware.RequireRole("board", "admin"))
 					r.Get("/", adminUsersHandler.HandleListUsers)
 					r.Get("/{userID}", adminUsersHandler.HandleGetUser)
-					r.Put("/{userID}/roles", adminUsersHandler.HandleUpdateUserRoles)
-					r.Delete("/{userID}", adminUsersHandler.HandleDeleteUser)
+
+					// High-blast-radius mutations — re-prompt for TOTP
+					// each time, regardless of the 12h step-up window.
+					r.Group(func(r chi.Router) {
+						r.Use(middleware.RequireFreshTOTP(5 * time.Minute))
+						r.Put("/{userID}/roles", adminUsersHandler.HandleUpdateUserRoles)
+						r.Delete("/{userID}", adminUsersHandler.HandleDeleteUser)
+					})
 				})
 
 				r.Route("/slips", func(r chi.Router) {
