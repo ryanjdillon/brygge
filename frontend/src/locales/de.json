@@ -44,7 +44,8 @@
     "success": "Erfolgreich",
     "noResults": "Keine Ergebnisse",
     "next": "Weiter",
-    "skipToContent": "Zum Hauptinhalt springen"
+    "skipToContent": "Zum Hauptinhalt springen",
+    "previous": "Vorherige"
   },
   "home": {
     "welcome": "Willkommen bei Brygge",
@@ -640,6 +641,8 @@
       "addTitle": "Neuer Benutzer",
       "addSubmit": "Erstellen",
       "createError": "Benutzer konnte nicht erstellt werden",
+      "editTitle": "Benutzer bearbeiten",
+      "updateError": "Benutzer konnte nicht aktualisiert werden",
       "phone": "Telefon",
       "isLocal": "Lokal",
       "address": "Adresse",
@@ -653,7 +656,8 @@
       "importStatus": "Status",
       "importDetail": "Details",
       "importError": "Import fehlgeschlagen",
-      "importFreshRequired": "Sitzung benötigt aktuelle 2FA-Bestätigung. Seite neu laden und erneut versuchen."
+      "importFreshRequired": "Sitzung benötigt aktuelle 2FA-Bestätigung. Seite neu laden und erneut versuchen.",
+      "showing": "Zeige {from}–{to} von {total}"
     },
     "waitingList": {
       "loadError": "Warteliste konnte nicht geladen werden",

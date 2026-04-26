@@ -44,7 +44,8 @@
     "success": "Operazione riuscita",
     "noResults": "Nessun risultato",
     "next": "Avanti",
-    "skipToContent": "Vai al contenuto principale"
+    "skipToContent": "Vai al contenuto principale",
+    "previous": "Precedente"
   },
   "home": {
     "welcome": "Benvenuti a Brygge",
@@ -640,6 +641,8 @@
       "addTitle": "Nuovo utente",
       "addSubmit": "Crea",
       "createError": "Creazione utente fallita",
+      "editTitle": "Modifica utente",
+      "updateError": "Aggiornamento utente fallito",
       "phone": "Telefono",
       "isLocal": "Locale",
       "address": "Indirizzo",
@@ -653,7 +656,8 @@
       "importStatus": "Stato",
       "importDetail": "Dettagli",
       "importError": "Importazione fallita",
-      "importFreshRequired": "La sessione richiede una nuova verifica 2FA. Ricarica la pagina e riprova."
+      "importFreshRequired": "La sessione richiede una nuova verifica 2FA. Ricarica la pagina e riprova.",
+      "showing": "Mostrando {from}–{to} di {total}"
     },
     "waitingList": {
       "loadError": "Impossibile caricare la lista d'attesa",
