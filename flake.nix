@@ -244,6 +244,103 @@
               .#brygge
           '');
         };
+
+        # Generates a fresh P-256 VAPID key pair for Web Push and prints
+        # them as env-var lines ready to paste into /etc/brygge/env.
+        # Same keys must persist for the lifetime of the deploy —
+        # rotating invalidates every existing browser subscription.
+        #
+        # VAPID format: public key is the uncompressed P-256 point
+        # (0x04 || X || Y, 65 bytes) base64url-encoded; private key is
+        # the 32-byte scalar base64url-encoded. Generated via openssl
+        # so we don't pull in a node-packages dep.
+        apps.gen-vapid = {
+          type = "app";
+          program = toString (pkgs.writers.writeBash "brygge-gen-vapid" ''
+            set -euo pipefail
+            tmp=$(mktemp -d)
+            trap 'rm -rf "$tmp"' EXIT
+
+            ${pkgs.openssl}/bin/openssl ecparam -name prime256v1 -genkey -noout -out "$tmp/priv.pem"
+
+            # 32-byte private scalar — DER-encoded ECPrivateKey wraps it
+            # at a fixed offset for P-256 (7-byte prelude).
+            priv=$(${pkgs.openssl}/bin/openssl ec -in "$tmp/priv.pem" -outform DER 2>/dev/null \
+              | dd bs=1 skip=7 count=32 2>/dev/null \
+              | ${pkgs.coreutils}/bin/base64 -w0 \
+              | ${pkgs.coreutils}/bin/tr '+/' '-_' \
+              | ${pkgs.coreutils}/bin/tr -d '=')
+
+            # 65-byte uncompressed public point — last 65 bytes of the
+            # SubjectPublicKeyInfo DER for a P-256 key.
+            pub=$(${pkgs.openssl}/bin/openssl ec -in "$tmp/priv.pem" -pubout -outform DER 2>/dev/null \
+              | ${pkgs.coreutils}/bin/tail -c 65 \
+              | ${pkgs.coreutils}/bin/base64 -w0 \
+              | ${pkgs.coreutils}/bin/tr '+/' '-_' \
+              | ${pkgs.coreutils}/bin/tr -d '=')
+
+            cat <<EOF
+            # Generated $(${pkgs.coreutils}/bin/date -u +%Y-%m-%dT%H:%M:%SZ) by nix run .#gen-vapid
+            # Append to /etc/brygge/env then: systemctl restart brygge
+            VAPID_PUBLIC_KEY=$pub
+            VAPID_PRIVATE_KEY=$priv
+            EOF
+          '');
+        };
+
+        # Provisions a Dendrite "service account" user on a deployed
+        # brygge VM and prints the access token in env-var form.
+        # Brygge proxies forum reads/writes to Dendrite using this token
+        # (see backend/internal/handlers/forum.go:374).
+        #
+        # Usage: nix run .#gen-dendrite-token -- <vm-host>
+        # Example: nix run .#gen-dendrite-token -- 46.225.99.41
+        apps.gen-dendrite-token = {
+          type = "app";
+          program = toString (pkgs.writers.writeBash "brygge-gen-dendrite-token" ''
+            set -euo pipefail
+
+            VM="''${1:-}"
+            if [[ -z "$VM" ]]; then
+              echo "usage: nix run .#gen-dendrite-token -- <vm-host>" >&2
+              echo "" >&2
+              echo "Creates a 'brygge-svc' service account in the deployed" >&2
+              echo "Dendrite and prints DENDRITE_SERVICE_TOKEN to paste into" >&2
+              echo "/etc/brygge/env. Re-run to issue a fresh token (revokes" >&2
+              echo "the previous one if -r is passed)." >&2
+              exit 1
+            fi
+
+            USER=brygge-svc
+            PW=$(${pkgs.openssl}/bin/openssl rand -base64 24 | tr -d '/+=')
+
+            echo "==> creating dendrite user '$USER' on $VM" >&2
+            ${pkgs.openssh}/bin/ssh -o BatchMode=yes "root@$VM" \
+              "create-account -config /etc/dendrite/dendrite.yaml -username $USER -password '$PW' 2>&1 | tail -5" \
+              || echo "(ignored — user likely already exists; will log in to refresh token)" >&2
+
+            echo "==> logging in to obtain access token" >&2
+            TOKEN=$(${pkgs.openssh}/bin/ssh -o BatchMode=yes "root@$VM" \
+              "${pkgs.curl}/bin/curl -s -X POST http://127.0.0.1:8008/_matrix/client/v3/login \
+                -H 'Content-Type: application/json' \
+                -d '{\"type\":\"m.login.password\",\"identifier\":{\"type\":\"m.id.user\",\"user\":\"$USER\"},\"password\":\"$PW\"}' \
+                | ${pkgs.jq}/bin/jq -r .access_token")
+
+            if [[ -z "$TOKEN" || "$TOKEN" == "null" ]]; then
+              echo "ERROR: login did not return an access_token. Most likely the password" >&2
+              echo "differs from a previous run. Either:" >&2
+              echo "  1. Reset it: ssh root@$VM 'create-account -reset-password -config /etc/dendrite/dendrite.yaml -username $USER -password <new>'" >&2
+              echo "  2. Use the password from a previous run if you saved it." >&2
+              exit 1
+            fi
+
+            cat <<EOF
+            # Generated $(date -u +%Y-%m-%dT%H:%M:%SZ) by nix run .#gen-dendrite-token
+            # Append to /etc/brygge/env on $VM then: systemctl restart brygge
+            DENDRITE_SERVICE_TOKEN=$TOKEN
+            EOF
+          '');
+        };
       }
     );
 }
