@@ -1,8 +1,13 @@
 package handlers
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/rs/zerolog"
 )
 
 func TestGenerateRecoveryCodesShape(t *testing.T) {
@@ -31,6 +36,43 @@ func TestGenerateRecoveryCodesShape(t *testing.T) {
 			t.Errorf("duplicate code %q", c)
 		}
 		seen[c] = true
+	}
+}
+
+func TestHandleAdminDisableTOTPUnauthenticated(t *testing.T) {
+	h := NewTOTPHandler(nil, testConfig(), nil, nil, zerolog.Nop())
+
+	// No auth wrapper — handler should reject for missing claims.
+	r := chi.NewRouter()
+	r.Post("/admin/users/{userID}/totp/disable", h.HandleAdminDisableTOTP)
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/users/abc/totp/disable", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected %d, got %d (body: %s)", http.StatusUnauthorized, rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleAdminDisableTOTPMissingUserID(t *testing.T) {
+	h := NewTOTPHandler(nil, testConfig(), nil, nil, zerolog.Nop())
+
+	// Wrap with the test auth middleware so claims are present, but
+	// don't bind the URL param — the handler should fall into the
+	// "userID required" branch.
+	r := chi.NewRouter()
+	r.Use(testAuthMiddleware)
+	r.Post("/disable", h.HandleAdminDisableTOTP)
+
+	token := generateTestToken("admin-1", "club-1", []string{"admin"})
+	req := httptest.NewRequest(http.MethodPost, "/disable", nil)
+	req.Header.Set("Authorization", authHeader(token))
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected %d, got %d (body: %s)", http.StatusBadRequest, rec.Code, rec.Body.String())
 	}
 }
 
