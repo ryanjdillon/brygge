@@ -117,12 +117,18 @@ Multi-stage Dockerfile: build frontend → embed in Go binary → distroless run
 
 ## Secrets in `terraform/terraform.tfvars.json`
 
-Tracked as a placeholder; deployers fill it in locally. Two layers keep secrets out of git:
+Tracked as a placeholder; deployers fill it in locally. The file will show as **modified** in `git status` — that's expected. Nix flakes read it directly from the working copy, so techniques that hide local edits from git (`skip-worktree`, `assume-unchanged`) also hide them from nix and silently break deploys with stale placeholder values.
 
-1. **`skip-worktree`** (run once per clone): `git update-index --skip-worktree terraform/terraform.tfvars.json` — git then ignores local edits (`S` flag in `git ls-files -v`).
-2. **Pre-commit hook** at `.githooks/pre-commit` (wired via `core.hooksPath = .githooks`) — rejects staged versions with a non-empty `hcloud_token` or any domain not ending in `example.invalid`. Backstops `skip-worktree` against `git add -f`.
+Protection against accidentally committing real secrets is the **pre-commit hook** at `.githooks/pre-commit` (wired via `core.hooksPath = .githooks`, installed automatically the first time you enter `nix develop`). It rejects staged versions of `terraform/terraform.tfvars.json` with a non-empty `hcloud_token` or any `domain` not ending in `example.invalid`. If you accidentally `git add` the file, the hook tells you exactly how to recover.
 
-To update the committed placeholder, temporarily clear skip-worktree, commit a sanitized version, then re-set skip-worktree. Never `git add -f` a file containing real values — the hook will reject it.
+To update the committed **placeholder** (rare — adding a new field, etc.):
+```bash
+git stash push -- terraform/terraform.tfvars.json   # set aside your secrets
+# edit the file: add only placeholder/empty values
+git add terraform/terraform.tfvars.json
+git commit
+git stash pop                                       # restore your secrets
+```
 
 ## Env var layering
 

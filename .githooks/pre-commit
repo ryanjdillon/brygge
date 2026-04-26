@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Pre-commit hook: block commits of terraform/terraform.tfvars.json unless
 # the staged version contains only placeholder values (no real secrets).
-# Each deployer fills in secrets in their working copy. To prevent those
-# from ever being staged, run once per clone:
 #
-#   git update-index --skip-worktree terraform/terraform.tfvars.json
-#
-# This hook is a second line of defence in case skip-worktree is cleared
-# or someone uses `git add -f`.
+# Each deployer fills in real values in their working copy and lives with
+# git showing the file as "modified" — that's intentional. Nix flakes
+# read the working copy directly, so any technique that hides the local
+# edits from git (skip-worktree, assume-unchanged) also hides them from
+# nix and breaks the deploy. This hook is the sole protection against
+# accidentally `git add`-ing a working-copy version that contains secrets.
 
 set -e
 
@@ -28,14 +28,18 @@ if [ -n "$staged_tfvars" ]; then
  That file is tracked with placeholder values only. Your working copy
  contains secrets that must never be committed.
 
- To keep your local edits invisible to git:
+ To unstage your local edits and continue:
    git reset HEAD terraform/terraform.tfvars.json
-   git update-index --skip-worktree terraform/terraform.tfvars.json
 
- To update the committed placeholder (rare, requires skip-worktree off):
-   git update-index --no-skip-worktree terraform/terraform.tfvars.json
-   git add -f terraform/terraform.tfvars.json
-   # commit only a sanitized/placeholder version
+ The file will continue to show as "modified" in git status — that's
+ expected. Nix flakes read it directly from the working copy.
+
+ To update the committed PLACEHOLDER (rare, e.g. adding a new field):
+   git stash push -- terraform/terraform.tfvars.json   # set aside your secrets
+   # edit the file: add only placeholder/empty values
+   git add terraform/terraform.tfvars.json
+   git commit
+   git stash pop                                       # restore your secrets
 ═══════════════════════════════════════════════════════════════════════
 EOF
     exit 1
