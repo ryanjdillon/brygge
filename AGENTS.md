@@ -16,6 +16,7 @@ Docs are organized by topic so you can read just the section you need without lo
 | Troubleshooting | [docs/troubleshooting.md](docs/troubleshooting.md) |
 | Mail (Stalwart + Bulwark) | [docs/mail/setup.md](docs/mail/setup.md) |
 | OpenTelemetry | [docs/otel/index.md](docs/otel/index.md) — instrumentation, app config, local collector, upstream contract, standalone collector |
+| 2FA (TOTP) | [docs/security/2fa.md](docs/security/2fa.md) — enrollment, recovery codes, admin reset, all-admins-lost recovery |
 | Kubernetes notes | [docs/k8s.md](docs/k8s.md) |
 
 ## Dev Environment

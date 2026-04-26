@@ -12,6 +12,7 @@ Welcome to the Brygge documentation. Brygge is an open-source harbour club manag
 | [configuration.md](configuration.md) | Operators | Environment variables and feature flags |
 | [mail/setup.md](mail/setup.md) | Operators | Self-hosted mail (Stalwart + Bulwark): deploy, DKIM, role mailboxes, webmail |
 | [otel/index.md](otel/index.md) | Operators | OpenTelemetry: instrumentation, app config, local + upstream collectors |
+| [security/2fa.md](security/2fa.md) | Board members + Operators | Two-factor authentication: enrollment, recovery codes, admin reset |
 | [troubleshooting.md](troubleshooting.md) | All | Common issues and solutions for dev and deployment |
 | [k8s.md](k8s.md) | DevOps | Kubernetes migration notes for scaling beyond a single VPS |
 
