@@ -138,6 +138,11 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/portal/PrivacyView.vue'),
       },
       {
+        path: 'security',
+        name: 'portal-security',
+        component: () => import('@/views/portal/SecurityView.vue'),
+      },
+      {
         path: 'forum',
         name: 'forum',
         component: () => import('@/views/portal/ForumView.vue'),

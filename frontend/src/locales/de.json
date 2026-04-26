@@ -1037,5 +1037,37 @@
       "publish": "Publish immediately",
       "save": "Create Document"
     }
+  },
+  "security": {
+    "title": "Security",
+    "subtitle": "Two-factor authentication for board roles and sensitive operations.",
+    "statusEnabled": "2FA is enabled",
+    "statusEnabledDescription": "You'll need a code from your authenticator app to use the admin area.",
+    "statusDisabled": "2FA is not enabled",
+    "statusDisabledDescription": "Enable 2FA to access the admin area.",
+    "enableTitle": "Enable 2FA",
+    "enableDescription": "Use an authenticator app like Google Authenticator, Authy or 1Password.",
+    "enableButton": "Enable 2FA",
+    "scanTitle": "Scan the QR code",
+    "scanDescription": "Scan with your authenticator app, or enter the key manually.",
+    "manualEntry": "Manual key",
+    "codeLabel": "6-digit code",
+    "confirmButton": "Confirm",
+    "manageTitle": "Manage 2FA",
+    "regenerateButton": "Generate new recovery codes",
+    "regenerateHelp": "Requires a fresh authenticator code. Previous codes stop working.",
+    "recoveryCodesTitle": "Save these recovery codes",
+    "recoveryCodesWarning": "Shown only once. Each code is single-use, for when you lose access to your authenticator app.",
+    "copyAll": "Copy all",
+    "downloadCodes": "Download",
+    "acknowledgeSaved": "I've saved the codes in my password manager",
+    "continueAfterSave": "Continue",
+    "errors": {
+      "setupFailed": "Couldn't start 2FA setup",
+      "confirmFailed": "Couldn't confirm the code",
+      "regenerateFailed": "Couldn't generate new codes",
+      "freshRequired": "Verify your 2FA code again to continue",
+      "codeFormat": "The code must be 6 digits"
+    }
   }
 }
