@@ -7,6 +7,8 @@ interface User {
   email: string
   clubId: string
   roles: string[]
+  totpEnabled: boolean
+  totpVerifiedAt: Date | null
 }
 
 interface MeResponse {
@@ -15,13 +17,36 @@ interface MeResponse {
   roles: string[]
   full_name: string
   email: string
+  totp_enabled: boolean
+  totp_verified_at?: string | null
 }
+
+// Mirrors the 12-hour step-up window enforced by the backend's
+// RequireAdminTOTP middleware. Used purely for soft UX (hiding admin
+// nav links when the gate would 403 anyway).
+const TOTP_FRESH_MS = 12 * 60 * 60 * 1000
+
+const ADMIN_ROLES = ['admin', 'board', 'treasurer', 'harbor_master']
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null)
   const loginError = ref<string | null>(null)
 
   const isAuthenticated = computed(() => user.value !== null)
+
+  const hasAdminRole = computed(() => {
+    if (!user.value) return false
+    return user.value.roles.some((r) => ADMIN_ROLES.includes(r))
+  })
+
+  // canAccessAdmin: role-eligible AND TOTP enrolled AND verified
+  // within the step-up window. The backend is the hard gate; this
+  // just keeps the nav from showing dead-ends.
+  const canAccessAdmin = computed(() => {
+    if (!hasAdminRole.value || !user.value) return false
+    if (!user.value.totpEnabled || !user.value.totpVerifiedAt) return false
+    return Date.now() - user.value.totpVerifiedAt.getTime() < TOTP_FRESH_MS
+  })
 
   async function checkSession() {
     try {
@@ -39,6 +64,8 @@ export const useAuthStore = defineStore('auth', () => {
         email: data.email,
         clubId: data.club_id,
         roles: data.roles,
+        totpEnabled: !!data.totp_enabled,
+        totpVerifiedAt: data.totp_verified_at ? new Date(data.totp_verified_at) : null,
       }
     } catch {
       user.value = null
@@ -84,5 +111,16 @@ export const useAuthStore = defineStore('auth', () => {
 
   const ready = checkSession()
 
-  return { user, loginError, isAuthenticated, ready, logout, hasRole, checkSession, requestMagicLink }
+  return {
+    user,
+    loginError,
+    isAuthenticated,
+    hasAdminRole,
+    canAccessAdmin,
+    ready,
+    logout,
+    hasRole,
+    checkSession,
+    requestMagicLink,
+  }
 })

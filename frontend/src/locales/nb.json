@@ -1077,5 +1077,37 @@
     "validation": "Vennligst sjekk input og prøv igjen.",
     "offline": "Du ser ut til å være frakoblet.",
     "backOnline": "Tilkoblingen er gjenopprettet."
+  },
+  "security": {
+    "title": "Sikkerhet",
+    "subtitle": "Tofaktorautentisering for styreverv og sensitive operasjoner.",
+    "statusEnabled": "2FA er aktivert",
+    "statusEnabledDescription": "Du må oppgi en kode fra autentiseringsappen for å bruke admin-området.",
+    "statusDisabled": "2FA er ikke aktivert",
+    "statusDisabledDescription": "Aktiver 2FA for å få tilgang til admin-området.",
+    "enableTitle": "Aktiver 2FA",
+    "enableDescription": "Bruk en autentiseringsapp som Google Authenticator, Authy eller 1Password.",
+    "enableButton": "Aktiver 2FA",
+    "scanTitle": "Skann QR-koden",
+    "scanDescription": "Skann med autentiseringsappen din, eller skriv inn nøkkelen manuelt.",
+    "manualEntry": "Manuell nøkkel",
+    "codeLabel": "6-sifret kode",
+    "confirmButton": "Bekreft",
+    "manageTitle": "Administrer 2FA",
+    "regenerateButton": "Generer nye gjenopprettingskoder",
+    "regenerateHelp": "Krever en fersk autentiseringskode. Tidligere koder slutter å virke.",
+    "recoveryCodesTitle": "Lagre disse gjenopprettingskodene",
+    "recoveryCodesWarning": "Vises kun én gang. Hver kode kan brukes én gang hvis du mister tilgang til autentiseringsappen.",
+    "copyAll": "Kopier alle",
+    "downloadCodes": "Last ned",
+    "acknowledgeSaved": "Jeg har lagret kodene i passordhåndtereren min",
+    "continueAfterSave": "Fortsett",
+    "errors": {
+      "setupFailed": "Kunne ikke starte 2FA-oppsett",
+      "confirmFailed": "Kunne ikke bekrefte koden",
+      "regenerateFailed": "Kunne ikke generere nye koder",
+      "freshRequired": "Bekreft 2FA-koden på nytt for å fortsette",
+      "codeFormat": "Koden må være 6 siffer"
+    }
   }
 }

@@ -78,7 +78,7 @@ describe('router guards', () => {
   it('/admin redirects to / when user lacks admin/board role', async () => {
     const auth = useAuthStore()
     await auth.ready
-    auth.user = { id: '1', name: 'Test', email: 'test@example.com', clubId: 'c1', roles: ['member'] }
+    auth.user = { id: '1', name: 'Test', email: 'test@example.com', clubId: 'c1', roles: ['member'], totpEnabled: false, totpVerifiedAt: null }
 
     await router.push('/admin')
     await router.isReady()
@@ -94,7 +94,7 @@ describe('router guards', () => {
   it('/portal is accessible when authenticated', async () => {
     const auth = useAuthStore()
     await auth.ready
-    auth.user = { id: '1', name: 'Test', email: 'test@example.com', clubId: 'c1', roles: ['member'] }
+    auth.user = { id: '1', name: 'Test', email: 'test@example.com', clubId: 'c1', roles: ['member'], totpEnabled: false, totpVerifiedAt: null }
 
     await router.push('/portal')
     await router.isReady()
@@ -104,7 +104,7 @@ describe('router guards', () => {
   it('/admin is accessible with admin role', async () => {
     const auth = useAuthStore()
     await auth.ready
-    auth.user = { id: '1', name: 'Test', email: 'test@example.com', clubId: 'c1', roles: ['admin'] }
+    auth.user = { id: '1', name: 'Test', email: 'test@example.com', clubId: 'c1', roles: ['admin'], totpEnabled: false, totpVerifiedAt: null }
 
     await router.push('/admin')
     await router.isReady()
@@ -114,7 +114,7 @@ describe('router guards', () => {
   it('/admin is accessible with board role', async () => {
     const auth = useAuthStore()
     await auth.ready
-    auth.user = { id: '1', name: 'Test', email: 'test@example.com', clubId: 'c1', roles: ['board'] }
+    auth.user = { id: '1', name: 'Test', email: 'test@example.com', clubId: 'c1', roles: ['board'], totpEnabled: false, totpVerifiedAt: null }
 
     await router.push('/admin')
     await router.isReady()
