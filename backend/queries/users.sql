@@ -1,9 +1,9 @@
 -- name: CreateUser :one
 INSERT INTO users (
     club_id, email, password_hash, vipps_sub,
-    full_name, phone, address_line, postal_code, city, is_local
+    first_name, last_name, phone, address_line, postal_code, city, is_local
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
 )
 RETURNING *;
 
@@ -21,7 +21,8 @@ WHERE vipps_sub = $1 AND club_id = $2;
 
 -- name: UpdateUser :one
 UPDATE users SET
-    full_name     = COALESCE(sqlc.narg('full_name'), full_name),
+    first_name    = COALESCE(sqlc.narg('first_name'), first_name),
+    last_name     = COALESCE(sqlc.narg('last_name'), last_name),
     phone         = COALESCE(sqlc.narg('phone'), phone),
     address_line  = COALESCE(sqlc.narg('address_line'), address_line),
     postal_code   = COALESCE(sqlc.narg('postal_code'), postal_code),
@@ -37,7 +38,7 @@ RETURNING *;
 -- name: ListUsersByClub :many
 SELECT * FROM users
 WHERE club_id = $1
-ORDER BY full_name;
+ORDER BY last_name, first_name;
 
 -- name: DeleteUser :exec
 DELETE FROM users

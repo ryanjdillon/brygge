@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -15,6 +16,24 @@ type seedUser struct {
 	email, name, phone string
 	isLocal            bool
 	roles              []string
+}
+
+// users.full_name is generated; we write first/last directly. The seed
+// data uses the same last-space heuristic as the SQL backfill (DIL-227).
+func splitFirst(name string) string {
+	name = strings.TrimSpace(name)
+	if i := strings.LastIndex(name, " "); i > 0 {
+		return strings.TrimSpace(name[:i])
+	}
+	return name
+}
+
+func splitLast(name string) string {
+	name = strings.TrimSpace(name)
+	if i := strings.LastIndex(name, " "); i > 0 {
+		return strings.TrimSpace(name[i+1:])
+	}
+	return ""
 }
 
 func main() {
@@ -79,13 +98,14 @@ func main() {
 	for _, u := range users {
 		var id string
 		err = db.QueryRow(ctx, `
-			INSERT INTO users (club_id, email, full_name, phone, is_local)
-			VALUES ($1, $2, $3, $4, $5)
+			INSERT INTO users (club_id, email, first_name, last_name, phone, is_local)
+			VALUES ($1, $2, $3, $4, $5, $6)
 			ON CONFLICT (club_id, email) DO UPDATE SET
-				full_name = EXCLUDED.full_name,
+				first_name = EXCLUDED.first_name,
+				last_name = EXCLUDED.last_name,
 				is_local = EXCLUDED.is_local
 			RETURNING id
-		`, clubID, u.email, u.name, u.phone, u.isLocal).Scan(&id)
+		`, clubID, u.email, splitFirst(u.name), splitLast(u.name), u.phone, u.isLocal).Scan(&id)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "failed to create user %s: %v\n", u.email, err)
 			os.Exit(1)
@@ -109,13 +129,14 @@ func main() {
 	for _, u := range waitingListUsers {
 		var id string
 		err = db.QueryRow(ctx, `
-			INSERT INTO users (club_id, email, full_name, phone, is_local)
-			VALUES ($1, $2, $3, $4, $5)
+			INSERT INTO users (club_id, email, first_name, last_name, phone, is_local)
+			VALUES ($1, $2, $3, $4, $5, $6)
 			ON CONFLICT (club_id, email) DO UPDATE SET
-				full_name = EXCLUDED.full_name,
+				first_name = EXCLUDED.first_name,
+				last_name = EXCLUDED.last_name,
 				is_local = EXCLUDED.is_local
 			RETURNING id
-		`, clubID, u.email, u.name, u.phone, u.isLocal).Scan(&id)
+		`, clubID, u.email, splitFirst(u.name), splitLast(u.name), u.phone, u.isLocal).Scan(&id)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "failed to create user %s: %v\n", u.email, err)
 			continue

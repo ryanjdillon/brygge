@@ -483,7 +483,8 @@ func (h *GDPRHandler) HandleProcessDeletion(w http.ResponseWriter, r *http.Reque
 	defer tx.Rollback(ctx)
 
 	_, err = tx.Exec(ctx,
-		`UPDATE users SET name = 'Slettet bruker', email = gen_random_uuid()::text || '@deleted.local', phone = NULL WHERE id = $1`,
+		`UPDATE users SET first_name = 'Slettet', last_name = 'bruker',
+		    email = gen_random_uuid()::text || '@deleted.local', phone = '' WHERE id = $1`,
 		userID,
 	)
 	if err != nil {
