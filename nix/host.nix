@@ -656,5 +656,10 @@ in
     # Magic-link / share URLs use this as the public origin. Without it,
     # config defaults to the dev Vite URL (http://localhost:5173).
     FRONTEND_URL = "https://${clubConfig.domain}";
+    # Per-club identity — sourced from clubConfig (tfvars) instead of
+    # /etc/brygge/env to eliminate the silent-fallback failure mode
+    # (missing CLUB_NAME → NavBar shows "Brygge", emails say "your club").
+    CLUB_SLUG = clubConfig.slug;
+    CLUB_NAME = clubConfig.name;
   };
 }
