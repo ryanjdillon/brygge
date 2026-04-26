@@ -50,6 +50,7 @@ const navItems = computed<NavItem[]>(() => {
     { to: '/portal/bookings', icon: CalendarDays, label: t('portal.sidebar.bookings'), feature: 'bookings' },
     { to: '/portal/volunteer', icon: BrushCleaning, label: t('volunteer.title'), feature: 'projects' },
     { to: '/portal/notifications', icon: Bell, label: t('notifications.title'), feature: 'communications' },
+    { to: '/portal/security', icon: ShieldCheck, label: t('security.title') },
     { to: '/portal/privacy', icon: ShieldCheck, label: t('gdpr.title') },
     { to: '/portal/feature-requests', icon: Lightbulb, label: t('portal.sidebar.featureRequests'), roles: ['member', 'slip_holder', 'board', 'admin'] },
     { to: '/portal/forum', icon: MessageCircle, label: t('portal.sidebar.forum'), roles: ['member', 'slip_holder', 'board', 'admin'], feature: 'communications' },

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ShieldCheck, ShieldAlert, KeyRound, RefreshCw, Copy, Download, Check } from 'lucide-vue-next'
 import QRCode from 'qrcode'
@@ -8,6 +9,8 @@ import { useAuthStore } from '@/stores/auth'
 import { useTotp, TotpError } from '@/composables/useTotp'
 
 const { t } = useI18n()
+const route = useRoute()
+const router = useRouter()
 const auth = useAuthStore()
 const totp = useTotp()
 
@@ -106,6 +109,14 @@ function dismissCodes() {
   recoveryCodes.value = []
   codesAcknowledged.value = false
   stage.value = 'idle'
+  // If the user arrived from a 403 redirect on a protected page,
+  // honor the original destination. The freshly-confirmed enrollment
+  // already stamped the session as TOTP-verified, so they walk
+  // straight in.
+  const next = route.query.next
+  if (typeof next === 'string' && next.startsWith('/')) {
+    router.replace(next)
+  }
 }
 
 function formatError(e: unknown, fallback: string): string {
