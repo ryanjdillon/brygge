@@ -17,11 +17,11 @@ func NewAPI(router chi.Router, cfg Config) huma.API {
 	humaConfig.Info.Description = "Marina and club management platform API"
 
 	humaConfig.Components.SecuritySchemes = map[string]*huma.SecurityScheme{
-		"bearer": {
-			Type:         "http",
-			Scheme:       "bearer",
-			BearerFormat: "JWT",
-			Description:  "JWT access token from /api/v1/auth/login or /api/v1/auth/vipps/callback",
+		"sessionCookie": {
+			Type:        "apiKey",
+			In:          "cookie",
+			Name:        "brygge_session",
+			Description: "Session cookie set by /api/v1/auth/verify after a successful magic-link click.",
 		},
 	}
 
@@ -35,7 +35,10 @@ func NewAPI(router chi.Router, cfg Config) huma.API {
 }
 
 // BearerSecurity is the security requirement for authenticated endpoints.
-var BearerSecurity = []map[string][]string{{"bearer": {}}}
+// Despite the historical name, the SPA authenticates via the
+// `brygge_session` cookie issued by /api/v1/auth/verify; the value here
+// references the sessionCookie security scheme defined above.
+var BearerSecurity = []map[string][]string{{"sessionCookie": {}}}
 
 // RoleSecurity returns a security requirement with role documentation.
 func RoleSecurity(roles ...string) []map[string][]string {

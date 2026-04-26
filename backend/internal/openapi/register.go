@@ -59,85 +59,41 @@ func registerHealthOps(api huma.API) {
 
 func registerAuthOps(api huma.API) {
 	huma.Register(api, huma.Operation{
-		OperationID: "vipps-status",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/auth/vipps/status",
-		Tags:        []string{"Auth"},
-		Summary:     "Vipps integration status",
-	}, stub[struct{}, struct{ Body map[string]any }]())
-
-	huma.Register(api, huma.Operation{
-		OperationID: "vipps-login",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/auth/vipps/login",
-		Tags:        []string{"Auth"},
-		Summary:     "Initiate Vipps OAuth login",
-		Description: "Redirects to Vipps for authentication.",
-	}, stub[struct{}, struct{}]())
-
-	huma.Register(api, huma.Operation{
-		OperationID: "vipps-callback",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/auth/vipps/callback",
-		Tags:        []string{"Auth"},
-		Summary:     "Vipps OAuth callback",
-	}, stub[struct {
-		Code  string `query:"code"`
-		State string `query:"state"`
-	}, struct{ Body TokenResponse }]())
-
-	huma.Register(api, huma.Operation{
-		OperationID: "email-register",
+		OperationID: "request-magic-link",
 		Method:      http.MethodPost,
-		Path:        "/api/v1/auth/register",
+		Path:        "/api/v1/auth/magic-link",
 		Tags:        []string{"Auth"},
-		Summary:     "Register with email/password",
-	}, stub[struct{ Body EmailRegisterRequest }, struct{ Body TokenResponse }]())
-
-	huma.Register(api, huma.Operation{
-		OperationID: "email-login",
-		Method:      http.MethodPost,
-		Path:        "/api/v1/auth/login",
-		Tags:        []string{"Auth"},
-		Summary:     "Login with email/password",
-	}, stub[struct{ Body EmailLoginRequest }, struct{ Body TokenResponse }]())
-
-	huma.Register(api, huma.Operation{
-		OperationID: "refresh-token",
-		Method:      http.MethodPost,
-		Path:        "/api/v1/auth/refresh",
-		Tags:        []string{"Auth"},
-		Summary:     "Refresh access token",
-	}, stub[struct{ Body RefreshRequest }, struct{ Body TokenResponse }]())
-
-	huma.Register(api, huma.Operation{
-		OperationID: "exchange-auth-code",
-		Method:      http.MethodPost,
-		Path:        "/api/v1/auth/exchange",
-		Tags:        []string{"Auth"},
-		Summary:     "Exchange authorization code for tokens",
+		Summary:     "Request a magic-link sign-in email",
 	}, stub[struct {
 		Body struct {
-			Code string `json:"code" doc:"Authorization code"`
+			Email string `json:"email" format:"email" doc:"Email address to send the link to"`
 		}
-	}, struct{ Body TokenResponse }]())
+	}, struct{ Body StatusResponse }]())
 
 	huma.Register(api, huma.Operation{
-		OperationID: "logout",
-		Method:      http.MethodPost,
-		Path:        "/api/v1/auth/logout",
+		OperationID: "verify-magic-link",
+		Method:      http.MethodGet,
+		Path:        "/api/v1/auth/verify",
 		Tags:        []string{"Auth"},
-		Summary:     "Logout and revoke tokens",
-		Security:    BearerSecurity,
+		Summary:     "Consume a magic-link token, set session cookie, redirect",
+	}, stub[struct {
+		Token string `query:"token" doc:"Magic-link token from the email"`
+	}, struct{}]())
+
+	huma.Register(api, huma.Operation{
+		OperationID: "session-logout",
+		Method:      http.MethodPost,
+		Path:        "/api/v1/auth/session/logout",
+		Tags:        []string{"Auth"},
+		Summary:     "Destroy the current session and clear the cookie",
 	}, stub[struct{}, struct{ Body StatusResponse }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "get-current-user",
 		Method:      http.MethodGet,
-		Path:        "/api/v1/auth/me",
+		Path:        "/api/v1/auth/session/me",
 		Tags:        []string{"Auth"},
 		Summary:     "Get current authenticated user",
-		Security:    BearerSecurity,
 	}, stub[struct{}, struct{ Body UserProfile }]())
 }
 
