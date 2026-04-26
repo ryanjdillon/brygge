@@ -71,7 +71,7 @@ cd frontend && npm install && cd ..
 just up
 ```
 
-The app is available at `http://localhost:5173` (frontend) and `http://localhost:8080` (API).
+The app is available at `http://localhost:5173` (frontend) and `http://localhost:8080` (API). Captured emails (magic links, invoices, broadcasts) appear at `http://localhost:8025` — the MailPit web UI. No mail ever leaves the host in dev.
 
 ### Running Tests
 

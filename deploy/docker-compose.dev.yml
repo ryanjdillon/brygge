@@ -17,6 +17,18 @@ services:
     environment:
       - VIPPS_MOCK_URL=http://vipps-mock:8090
       - FRONTEND_URL=http://localhost:5173
+      # Mail goes to MailPit (mock SMTP) — captures every send and
+      # exposes a web UI at http://localhost:8025 for inspection.
+      # Production uses Stalwart on port 465 with auth; dev uses
+      # plaintext on 1025 with no auth.
+      - SMTP_HOST=mailpit
+      - SMTP_PORT=1025
+      - SMTP_USERNAME=
+      - SMTP_PASSWORD=
+      - EMAIL_FROM=Brygge Dev <dev@example.com>
+      - EMAIL_REPLY_TO=dev@example.com
+    depends_on:
+      - mailpit
 
   # ── Postgres: expose for local tooling ─────────────────────────
   db:
@@ -39,6 +51,23 @@ services:
       - WEBHOOK_TARGET=http://api:8080/api/v1/webhooks/vipps
     networks:
       - brygge
+
+  # ── MailPit: mock SMTP + captured-mail web UI ─────────────────
+  # Brygge sends → MailPit accepts (1025) → inspect at :8025.
+  # Same role as vipps-mock for the mail loop. No mail ever leaves
+  # the host. Production uses Stalwart instead.
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - "1025:1025"  # SMTP
+      - "8025:8025"  # Web UI
+    networks:
+      - brygge
+    environment:
+      - MP_SMTP_AUTH_ACCEPT_ANY=1
+      - MP_SMTP_AUTH_ALLOW_INSECURE=1
+      - MP_MAX_MESSAGES=500
 
   # ── Disable services not needed in dev ─────────────────────────
   traefik:
