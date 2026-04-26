@@ -200,15 +200,12 @@ func TestConfig() config.Config {
 		redisURL = "redis://localhost:6379/0"
 	}
 	return config.Config{
-		Port:             8080,
-		DatabaseURL:      dbURL,
-		RedisURL:         redisURL,
-		ClubSlug:         "test-club",
-		JWTSecret:        "test-secret-do-not-use-in-production",
-		JWTAccessExpiry:  15 * time.Minute,
-		JWTRefreshExpiry: 7 * 24 * time.Hour,
-		VippsTestMode:    true,
-		S3Bucket:         "brygge-test",
+		Port:          8080,
+		DatabaseURL:   dbURL,
+		RedisURL:      redisURL,
+		ClubSlug:      "test-club",
+		VippsTestMode: true,
+		S3Bucket:      "brygge-test",
 	}
 }
 

@@ -15,18 +15,8 @@ type Config struct {
 	ClubName    string // Human-readable club name used in email subjects etc.
 	Domain      string // Public domain (DOMAIN env) — used in email footers and canonical URLs
 
-	// Authentication
-	JWTSecret        string
-	JWTAccessExpiry  time.Duration
-	JWTRefreshExpiry time.Duration
-
-	// Vipps
-	VippsClientID     string
-	VippsClientSecret string
-	VippsCallbackURL  string
-	VippsTestMode     bool
-
 	// Vipps ePayment
+	VippsTestMode        bool
 	VippsMSN             string
 	VippsSubscriptionKey string
 	VippsWebhookSecret   string
@@ -91,15 +81,7 @@ func Load() Config {
 		ClubName: envStr("CLUB_NAME", ""),
 		Domain:   envStr("DOMAIN", "localhost"),
 
-		JWTSecret:        envStr("JWT_SECRET", ""),
-		JWTAccessExpiry:  envDuration("JWT_ACCESS_EXPIRY", 15*time.Minute),
-		JWTRefreshExpiry: envDuration("JWT_REFRESH_EXPIRY", 7*24*time.Hour),
-
-		VippsClientID:     envStr("VIPPS_CLIENT_ID", ""),
-		VippsClientSecret: envStr("VIPPS_CLIENT_SECRET", ""),
-		VippsCallbackURL:  envStr("VIPPS_CALLBACK_URL", ""),
-		VippsTestMode:     envBool("VIPPS_TEST_MODE", true),
-
+		VippsTestMode:        envBool("VIPPS_TEST_MODE", true),
 		VippsMSN:             envStr("VIPPS_MSN", ""),
 		VippsSubscriptionKey: envStr("VIPPS_SUBSCRIPTION_KEY", ""),
 		VippsWebhookSecret:   envStr("VIPPS_WEBHOOK_SECRET", ""),
