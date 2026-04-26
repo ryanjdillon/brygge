@@ -1109,5 +1109,23 @@
       "freshRequired": "Bekreft 2FA-koden på nytt for å fortsette",
       "codeFormat": "Koden må være 6 siffer"
     }
+  },
+  "totpVerify": {
+    "title": "Bekreft identitet",
+    "subtitle": "Skriv inn koden fra autentiseringsappen din for å fortsette.",
+    "modalTitle": "Bekreft handlingen",
+    "modalSubtitle": "Sensitive operasjoner krever en fersk 2FA-kode.",
+    "codeLabel": "6-sifret kode",
+    "recoveryLabel": "Gjenopprettingskode",
+    "submitButton": "Bekreft",
+    "useRecovery": "Bruk en gjenopprettingskode i stedet",
+    "useAuthenticator": "Bruk autentiseringsappen i stedet",
+    "suggestRecovery": "Mange feilforsøk? Bruk en av gjenopprettingskodene.",
+    "errors": {
+      "required": "Skriv inn en kode",
+      "failed": "Bekreftelsen feilet",
+      "invalidCode": "Ugyldig kode — sjekk at klokken på autentiseringsappen er riktig",
+      "invalidRecovery": "Ugyldig eller allerede brukt gjenopprettingskode"
+    }
   }
 }

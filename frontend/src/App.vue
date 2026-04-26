@@ -5,6 +5,7 @@ import NavBar from '@/components/layout/NavBar.vue'
 import Footer from '@/components/layout/Footer.vue'
 import ToastContainer from '@/components/ui/ToastContainer.vue'
 import NetworkStatus from '@/components/ui/NetworkStatus.vue'
+import FreshTotpModal from '@/components/auth/FreshTotpModal.vue'
 
 const { t } = useI18n()
 </script>
@@ -19,5 +20,6 @@ const { t } = useI18n()
     <Footer />
     <ToastContainer />
     <NetworkStatus />
+    <FreshTotpModal />
   </div>
 </template>
