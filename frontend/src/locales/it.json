@@ -10,6 +10,8 @@
     "login": "Accedi",
     "portal": "La mia pagina",
     "admin": "Amministrazione",
+    "enable2fa": "Attiva 2FA",
+    "enable2faTooltip": "Attiva 2FA per accedere all'area amministrativa",
     "club": "Circolo",
     "history": "Storia",
     "merchandise": "Shop",

@@ -11,6 +11,8 @@
     "logout": "Logg ut",
     "portal": "Min side",
     "admin": "Admin",
+    "enable2fa": "Aktiver 2FA",
+    "enable2faTooltip": "Du må aktivere 2FA for å få tilgang til admin-området",
     "club": "Klubben",
     "history": "Historie",
     "merchandise": "Nettbutikk",

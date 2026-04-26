@@ -11,6 +11,8 @@
     "logout": "Log out",
     "portal": "My page",
     "admin": "Admin",
+    "enable2fa": "Enable 2FA",
+    "enable2faTooltip": "Enable 2FA to access the admin area",
     "club": "Club",
     "history": "History",
     "merchandise": "Shop",
