@@ -324,15 +324,17 @@
               exit 1
             fi
 
-            # NixOS's services.dendrite generates the config in /nix/store
-            # and points the systemd unit at it via --config; there's no
-            # /etc/dendrite/dendrite.yaml. Discover the path from the
-            # running unit so we don't have to hardcode it.
+            # NixOS's services.dendrite writes its config under /run
+            # (or /nix/store, depending on version) and points the
+            # systemd unit at it via --config. Discover the path from
+            # the running unit so we don't have to hardcode it.
             CONFIG=$(${pkgs.openssh}/bin/ssh -o BatchMode=yes "root@$VM" \
-              "systemctl show dendrite -p ExecStart --value | grep -oE '/nix/store/[^ ]+dendrite\.yaml' | head -1")
+              "systemctl show dendrite -p ExecStart --value | grep -oE -- '--config [^ ;]+' | head -1 | cut -d' ' -f2")
             if [[ -z "$CONFIG" ]]; then
               echo "ERROR: couldn't discover dendrite config path on $VM." >&2
               echo "Is the dendrite service running?  systemctl status dendrite" >&2
+              echo "Raw ExecStart for debugging:" >&2
+              ${pkgs.openssh}/bin/ssh -o BatchMode=yes "root@$VM" "systemctl show dendrite -p ExecStart --value" >&2
               exit 1
             fi
             echo "    using config: $CONFIG" >&2
