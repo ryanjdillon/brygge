@@ -314,10 +314,31 @@
             USER=brygge-svc
             PW=$(${pkgs.openssl}/bin/openssl rand -base64 24 | tr -d '/+=')
 
+            # Verify create-account is available on the VM. It only is
+            # if `pkgs.dendrite` is in environment.systemPackages
+            # (added after the first DIL-219-era deploy).
+            if ! ${pkgs.openssh}/bin/ssh -o BatchMode=yes "root@$VM" "command -v create-account >/dev/null"; then
+              echo "ERROR: 'create-account' not found on PATH on $VM." >&2
+              echo "Re-deploy with the latest nix/host.nix (dendrite added to systemPackages):" >&2
+              echo "  nix run .#deploy -- $VM" >&2
+              echo "Then re-run this command." >&2
+              exit 1
+            fi
+
             echo "==> creating dendrite user '$USER' on $VM" >&2
-            ${pkgs.openssh}/bin/ssh -o BatchMode=yes "root@$VM" \
-              "create-account -config /etc/dendrite/dendrite.yaml -username $USER -password '$PW' 2>&1 | tail -5" \
-              || echo "(ignored — user likely already exists; will log in to refresh token)" >&2
+            create_output=$(${pkgs.openssh}/bin/ssh -o BatchMode=yes "root@$VM" \
+              "create-account -config /etc/dendrite/dendrite.yaml -username $USER -password '$PW' 2>&1" || true)
+            if echo "$create_output" | grep -q "already exists"; then
+              echo "    (user already exists; resetting password to issue a fresh token)" >&2
+              ${pkgs.openssh}/bin/ssh -o BatchMode=yes "root@$VM" \
+                "create-account -reset-password -config /etc/dendrite/dendrite.yaml -username $USER -password '$PW'" >&2
+            elif echo "$create_output" | grep -q "Created account"; then
+              :
+            else
+              echo "ERROR: create-account failed:" >&2
+              echo "$create_output" | sed 's/^/    /' >&2
+              exit 1
+            fi
 
             echo "==> logging in to obtain access token" >&2
             TOKEN=$(${pkgs.openssh}/bin/ssh -o BatchMode=yes "root@$VM" \
@@ -327,10 +348,9 @@
                 | ${pkgs.jq}/bin/jq -r .access_token")
 
             if [[ -z "$TOKEN" || "$TOKEN" == "null" ]]; then
-              echo "ERROR: login did not return an access_token. Most likely the password" >&2
-              echo "differs from a previous run. Either:" >&2
-              echo "  1. Reset it: ssh root@$VM 'create-account -reset-password -config /etc/dendrite/dendrite.yaml -username $USER -password <new>'" >&2
-              echo "  2. Use the password from a previous run if you saved it." >&2
+              echo "ERROR: login did not return an access_token. Check Dendrite is reachable" >&2
+              echo "at http://127.0.0.1:8008 on $VM and that the homeserver_name in" >&2
+              echo "/etc/dendrite/dendrite.yaml matches what create-account used." >&2
               exit 1
             fi
 
