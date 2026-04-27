@@ -431,7 +431,7 @@
     "ariaNav": "Nawigacja administracji",
     "groupArchive": "Archiwum i informacje",
     "sidebar": {
-      "users": "Użytkownicy",
+      "users": "Członkowie",
       "slips": "Miejsca cumownicze",
       "waitingList": "Lista oczekujących",
       "events": "Wydarzenia",
@@ -639,7 +639,7 @@
       "firstName": "Imię",
       "lastName": "Nazwisko",
       "addButton": "Dodaj użytkownika",
-      "addTitle": "Nowy użytkownik",
+      "addTitle": "Nowy członek",
       "addSubmit": "Utwórz",
       "createError": "Nie udało się utworzyć użytkownika",
       "editTitle": "Edytuj użytkownika",
