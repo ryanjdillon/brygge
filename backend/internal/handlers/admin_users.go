@@ -396,12 +396,11 @@ func (h *AdminUsersHandler) HandleUpdateUserRoles(w http.ResponseWriter, r *http
 		}
 	}
 
-	oldData, _ := json.Marshal(map[string]any{"roles": oldRoles})
-	newData, _ := json.Marshal(map[string]any{"roles": req.Roles})
+	auditDetails, _ := json.Marshal(map[string]any{"old_roles": oldRoles, "new_roles": req.Roles})
 	_, err = tx.Exec(ctx,
-		`INSERT INTO audit_log (club_id, user_id, action, entity_type, entity_id, old_data, new_data)
-		 VALUES ($1, $2, 'update_roles', 'user', $3, $4, $5)`,
-		clubID, claims.UserID, userID, oldData, newData,
+		`INSERT INTO audit_log (club_id, actor_id, action, resource, resource_id, details)
+		 VALUES ($1, $2, 'update_roles', 'user', $3, $4)`,
+		clubID, claims.UserID, userID, auditDetails,
 	)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to write audit log")
@@ -473,15 +472,15 @@ func (h *AdminUsersHandler) HandleDeleteUser(w http.ResponseWriter, r *http.Requ
 
 	erasure := r.URL.Query().Get("erasure") == "true"
 
-	oldData, _ := json.Marshal(map[string]any{
-		"email":     userEmail,
-		"full_name": userName,
-		"erasure":   erasure,
+	auditDetails, _ := json.Marshal(map[string]any{
+		"old_email":     userEmail,
+		"old_full_name": userName,
+		"erasure":       erasure,
 	})
 	_, err = tx.Exec(ctx,
-		`INSERT INTO audit_log (club_id, user_id, action, entity_type, entity_id, old_data)
+		`INSERT INTO audit_log (club_id, actor_id, action, resource, resource_id, details)
 		 VALUES ($1, $2, 'delete_user', 'user', $3, $4)`,
-		clubID, claims.UserID, userID, oldData,
+		clubID, claims.UserID, userID, auditDetails,
 	)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to write audit log")
