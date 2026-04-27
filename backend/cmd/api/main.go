@@ -543,13 +543,21 @@ func main() {
 				})
 
 				r.Route("/slips", func(r chi.Router) {
-					r.Use(middleware.RequireRole("board", "harbor_master"))
+					r.Use(middleware.RequireRole("board", "harbor_master", "admin"))
 					r.Get("/", adminSlipsHandler.HandleListSlips)
-					r.Post("/", adminSlipsHandler.HandleCreateSlip)
 					r.Get("/{slipID}", adminSlipsHandler.HandleGetSlip)
-					r.Put("/{slipID}", adminSlipsHandler.HandleUpdateSlip)
-					r.Post("/{slipID}/assign", adminSlipsHandler.HandleAssignSlip)
-					r.Post("/{slipID}/release", adminSlipsHandler.HandleReleaseSlip)
+
+					// Mutating operations re-prompt for TOTP within a 5-min
+					// window, matching the admin-users UX so the SPA can
+					// surface the in-context modal instead of failing silently.
+					r.Group(func(r chi.Router) {
+						r.Use(middleware.RequireFreshTOTP(5 * time.Minute))
+						r.Post("/", adminSlipsHandler.HandleCreateSlip)
+						r.Put("/{slipID}", adminSlipsHandler.HandleUpdateSlip)
+						r.Delete("/{slipID}", adminSlipsHandler.HandleDeleteSlip)
+						r.Post("/{slipID}/assign", adminSlipsHandler.HandleAssignSlip)
+						r.Post("/{slipID}/release", adminSlipsHandler.HandleReleaseSlip)
+					})
 				})
 
 				if cfg.Features.Bookings {

@@ -603,7 +603,8 @@ export interface paths {
         /** Update slip */
         put: operations["admin-update-slip"];
         post?: never;
-        delete?: never;
+        /** Delete slip */
+        delete: operations["admin-delete-slip"];
         options?: never;
         head?: never;
         patch?: never;
@@ -6078,6 +6079,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Slip"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "admin-delete-slip": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Slip UUID */
+                slipID: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponse"];
                 };
             };
             /** @description Error */
