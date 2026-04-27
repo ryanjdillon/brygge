@@ -42,6 +42,12 @@ const { data: slipsResponse, isLoading, isError } = useQuery({
 })
 
 const dockFilter = ref<string>('')
+const notesOnly = ref(false)
+const slipSortDir = ref<'asc' | 'desc'>('asc')
+
+function toggleSlipSort() {
+  slipSortDir.value = slipSortDir.value === 'asc' ? 'desc' : 'asc'
+}
 
 const allDocks = computed<string[]>(() => {
   const set = new Set<string>()
@@ -53,16 +59,20 @@ const allDocks = computed<string[]>(() => {
 
 const slips = computed<Slip[]>(() => {
   const all = slipsResponse.value ?? []
-  const filtered = dockFilter.value ? all.filter((s) => s.section === dockFilter.value) : all
-  return sortBySlip(filtered)
+  const filtered = all.filter((s) => {
+    if (dockFilter.value && s.section !== dockFilter.value) return false
+    if (notesOnly.value && !(s.notes && s.notes.trim())) return false
+    return true
+  })
+  return sortBySlip(filtered, slipSortDir.value)
 })
 
 const showCreateForm = ref(false)
 const editingSlip = ref<Slip | null>(null)
 const deletingSlip = ref<Slip | null>(null)
 
-const createForm = ref({ number: '', section: '', length_m: '', width_m: '', depth_m: '' })
-const editForm = ref({ number: '', section: '', length_m: '', width_m: '', depth_m: '' })
+const createForm = ref({ number: '', section: '', length_m: '', width_m: '', depth_m: '', notes: '' })
+const editForm = ref({ number: '', section: '', length_m: '', width_m: '', depth_m: '', notes: '' })
 
 const submitError = ref<string | null>(null)
 const deleteError = ref<string | null>(null)
@@ -242,18 +252,19 @@ function closeDelete() {
       <table class="min-w-full divide-y divide-gray-200">
         <thead class="bg-gray-50">
           <tr>
-            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.slips.section') }}</th>
-            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.slips.number') }}</th>
+            <SortableTh :active="true" :dir="slipSortDir" @click="toggleSlipSort">{{ t('admin.slips.slip') }}</SortableTh>
             <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.slips.size') }}</th>
             <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.slips.status') }}</th>
             <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.slips.assignee') }}</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.slips.notes') }}</th>
             <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('common.actions') }}</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-200 bg-white">
           <tr v-for="slip in slips" :key="slip.id">
-            <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ slip.section }}</td>
-            <td class="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">#{{ slip.number }}</td>
+            <td class="whitespace-nowrap px-4 py-3 text-sm">
+              <SlipCell :section="slip.section" :number="slip.number" />
+            </td>
             <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ slip.length_m ?? '—' }} × {{ slip.width_m ?? '—' }} m</td>
             <td class="whitespace-nowrap px-4 py-3 text-sm">
               <span :class="['rounded-full px-2.5 py-0.5 text-xs font-medium', slip.status === 'vacant' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800']">
