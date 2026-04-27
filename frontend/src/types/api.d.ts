@@ -4142,6 +4142,8 @@ export interface components {
             length_m?: number;
             /** @description Slip number */
             number: string;
+            /** @description Free-text admin notes */
+            notes?: string;
             /** @description Current occupant name */
             occupant_name?: string;
             /** @description Harbor section */

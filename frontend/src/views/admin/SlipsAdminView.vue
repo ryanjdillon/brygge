@@ -26,6 +26,7 @@ type Slip = {
   width_m?: number | null
   depth_m?: number | null
   status: string
+  notes?: string | null
   occupant_name?: string | null
 }
 
@@ -72,13 +73,14 @@ const { mutate: createSlip, isPending: isCreating } = useMutation({
         length_m: createForm.value.length_m ? parseFloat(createForm.value.length_m) : null,
         width_m: createForm.value.width_m ? parseFloat(createForm.value.width_m) : null,
         depth_m: createForm.value.depth_m ? parseFloat(createForm.value.depth_m) : null,
+        notes: createForm.value.notes,
       } as any,
     })),
   onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: ['admin', 'slips'] })
     showCreateForm.value = false
     submitError.value = null
-    createForm.value = { number: '', section: '', length_m: '', width_m: '', depth_m: '' }
+    createForm.value = { number: '', section: '', length_m: '', width_m: '', depth_m: '', notes: '' }
   },
   onError: (err: unknown) => {
     submitError.value = err instanceof Error ? err.message : String(err)
@@ -97,6 +99,7 @@ const { mutate: updateSlip, isPending: isUpdating } = useMutation({
         length_m: editForm.value.length_m ? parseFloat(editForm.value.length_m) : null,
         width_m: editForm.value.width_m ? parseFloat(editForm.value.width_m) : null,
         depth_m: editForm.value.depth_m ? parseFloat(editForm.value.depth_m) : null,
+        notes: editForm.value.notes,
       } as any,
     }))
   },
@@ -146,6 +149,7 @@ async function openEdit(slip: Slip) {
     length_m: slip.length_m != null ? String(slip.length_m) : '',
     width_m: slip.width_m != null ? String(slip.width_m) : '',
     depth_m: slip.depth_m != null ? String(slip.depth_m) : '',
+    notes: slip.notes ?? '',
   }
   submitError.value = null
 }
@@ -219,6 +223,10 @@ function closeDelete() {
           <input v-model="createForm.depth_m" type="number" step="0.1" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
         </div>
       </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700">{{ t('admin.slips.notes') }} <span class="text-xs font-normal text-gray-400">({{ t('common.optional') }})</span></label>
+        <textarea v-model="createForm.notes" rows="3" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+      </div>
       <div v-if="submitError" class="rounded-md bg-red-50 p-3 text-sm text-red-800">{{ submitError }}</div>
       <div class="flex gap-3">
         <button type="submit" :disabled="isCreating" class="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50">{{ t('common.save') }}</button>
@@ -252,6 +260,7 @@ function closeDelete() {
               </span>
             </td>
             <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ slip.occupant_name ?? '—' }}</td>
+            <td class="max-w-xs truncate px-4 py-3 text-sm text-gray-500" :title="slip.notes ?? ''">{{ slip.notes || '—' }}</td>
             <td class="whitespace-nowrap px-4 py-3 text-right text-sm">
               <div class="flex justify-end gap-2">
                 <button
@@ -314,6 +323,10 @@ function closeDelete() {
             <label class="block text-sm font-medium text-gray-700">{{ t('admin.slips.depth') }} <span class="text-xs font-normal text-gray-400">({{ t('common.optional') }})</span></label>
             <input v-model="editForm.depth_m" type="number" step="0.1" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
           </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700">{{ t('admin.slips.notes') }} <span class="text-xs font-normal text-gray-400">({{ t('common.optional') }})</span></label>
+          <textarea v-model="editForm.notes" rows="3" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
         </div>
         <div v-if="submitError" class="rounded-md bg-red-50 p-3 text-sm text-red-800">{{ submitError }}</div>
         <div class="flex justify-end gap-3">

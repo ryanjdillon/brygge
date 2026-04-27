@@ -718,7 +718,10 @@
       "deleteTitle": "Usuń miejsce",
       "deleteConfirm": "Trwale usunąć miejsce {number}? Tej operacji nie można cofnąć.",
       "dockFilterLabel": "Pomost",
-      "dockFilterAll": "Wszystkie"
+      "dockFilterAll": "Wszystkie",
+      "notes": "Notatki",
+      "notesOnly": "Tylko z notatkami",
+      "slip": "Miejsce"
     },
     "boats": {
       "description": "Łodzie wymagające zatwierdzenia wymiarów przez zarząd lub kapitanat portu.",

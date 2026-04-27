@@ -714,7 +714,10 @@
       "deleteTitle": "Slett båtplass",
       "deleteConfirm": "Slette båtplass {number} permanent? Dette kan ikke angres.",
       "dockFilterLabel": "Brygge",
-      "dockFilterAll": "Alle"
+      "dockFilterAll": "Alle",
+      "notes": "Notater",
+      "notesOnly": "Bare med notater",
+      "slip": "Båtplass"
     },
     "boats": {
       "description": "Båter som trenger godkjenning av mål fra styret eller havnesjefen.",

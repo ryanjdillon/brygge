@@ -718,7 +718,10 @@
       "deleteTitle": "Delete slip",
       "deleteConfirm": "Permanently delete slip {number}? This cannot be undone.",
       "dockFilterLabel": "Dock",
-      "dockFilterAll": "All"
+      "dockFilterAll": "All",
+      "notes": "Notes",
+      "notesOnly": "Notes only",
+      "slip": "Slip"
     },
     "boats": {
       "description": "Boats that need dimension approval from the board or harbour master.",
