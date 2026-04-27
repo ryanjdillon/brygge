@@ -94,7 +94,7 @@ const slipsLoading = ref(false)
 // Eagerly preload the slip list on mount so the dock-filter dropdown
 // has options to render. Cheap (~hundreds of rows max) and the same
 // data feeds the slip-picker inside the user-edit modal.
-onMounted(() => { loadSlips() })
+onMounted(() => { loadSlips({ force: false }) })
 
 const dockOptions = computed<string[]>(() => {
   const set = new Set<string>()
@@ -104,8 +104,13 @@ const dockOptions = computed<string[]>(() => {
   return [...set].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
 })
 
-async function loadSlips() {
-  if (slipOptions.value.length > 0) return
+// Always refetch — occupancy changes as slips get assigned/released
+// elsewhere (this session, another tab, another admin), and a stale
+// cache here would show occupied slips as available in the picker.
+// Caller can pass { force: false } to opt back into the one-shot cache
+// for the dock-filter dropdown's mount-time prefetch.
+async function loadSlips({ force = true }: { force?: boolean } = {}) {
+  if (!force && slipOptions.value.length > 0) return
   slipsLoading.value = true
   try {
     const res = await fetch('/api/v1/admin/slips?limit=500', { credentials: 'include' })
@@ -296,6 +301,9 @@ async function submitEdit() {
     detailEditing.value = false
     closeDetail()
     queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
+    // Slip occupancy may have flipped — refresh the cached picker list
+    // so the next edit sees the new state.
+    if (slipChanged || typeChanged) loadSlips()
   } catch (err: any) {
     detailError.value = err?.message ?? t('admin.users.updateError')
   } finally {
