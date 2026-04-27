@@ -238,6 +238,42 @@
             fi
             shift
 
+            # Nix flakes copy git-tracked files (including unstaged
+            # edits) into the build, but skip untracked files entirely —
+            # an untracked source/migration file ships as an invisible
+            # no-op (or, for an imported module, a build-time TS2307).
+            # Auto-stage anything under the build inputs we care about
+            # so the build sees it; the deployer should still commit +
+            # push so the deployed artefact matches a repo SHA.
+            untracked=$(${pkgs.git}/bin/git ls-files --others --exclude-standard \
+                backend/migrations backend/internal backend/cmd backend/pkg \
+                frontend/src 2>/dev/null \
+              | ${pkgs.gnugrep}/bin/grep -E '\.(sql|go|ts|tsx|vue|js|mjs|json|css)$' || true)
+            if [[ -n "$untracked" ]]; then
+              echo "deploy: staging untracked source files so the flake build can see them:"
+              while IFS= read -r f; do
+                echo "  + $f"
+                ${pkgs.git}/bin/git add -- "$f"
+              done <<< "$untracked"
+            fi
+
+            # Surface anything that's tracked-but-uncommitted so the
+            # deployer notices their working tree drifted from the repo.
+            # The build will pick these edits up regardless; the
+            # recommendation is to commit + push so the deployed state
+            # reflects the current committed state of the repository.
+            uncommitted=$(${pkgs.git}/bin/git status --porcelain -- \
+                backend/migrations backend/internal backend/cmd backend/pkg \
+                frontend/src 2>/dev/null \
+              | ${pkgs.gnugrep}/bin/grep -E '\.(sql|go|ts|tsx|vue|js|mjs|json|css)$' || true)
+            if [[ -n "$uncommitted" ]]; then
+              echo "deploy: NOTE — uncommitted source changes will be deployed:"
+              while IFS= read -r line; do echo "  $line"; done <<< "$uncommitted"
+              echo "deploy: please commit and push these so the deployed state matches HEAD."
+              echo "deploy: continuing in 5s — Ctrl-C to abort."
+              sleep 5
+            fi
+
             ${deploy-rs.packages.${system}.default}/bin/deploy \
               --hostname "$HOSTNAME" \
               "$@" \
