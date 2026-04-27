@@ -1302,6 +1302,17 @@ func registerAdminOps(api huma.API) {
 	}, struct{ Body Slip }]())
 
 	huma.Register(api, huma.Operation{
+		OperationID: "admin-delete-slip",
+		Method:      http.MethodDelete,
+		Path:        "/api/v1/admin/slips/{slipID}",
+		Tags:        []string{"Admin"},
+		Summary:     "Delete slip",
+		Security:    BearerSecurity,
+	}, stub[struct {
+		SlipID string `path:"slipID" doc:"Slip UUID"`
+	}, struct{ Body StatusResponse }]())
+
+	huma.Register(api, huma.Operation{
 		OperationID: "admin-assign-slip",
 		Method:      http.MethodPost,
 		Path:        "/api/v1/admin/slips/{slipID}/assign",

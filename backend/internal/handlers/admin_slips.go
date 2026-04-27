@@ -333,6 +333,56 @@ func (h *AdminSlipsHandler) HandleUpdateSlip(w http.ResponseWriter, r *http.Requ
 	JSON(w, http.StatusOK, map[string]string{"status": "updated"})
 }
 
+func (h *AdminSlipsHandler) HandleDeleteSlip(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	clubID, _, err := h.clubID(r)
+	if err != nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	slipID := chi.URLParam(r, "slipID")
+	if slipID == "" {
+		Error(w, http.StatusBadRequest, "slip ID is required")
+		return
+	}
+
+	// Reject delete when there is an active assignment so an occupied
+	// slip cannot vanish out from under a member.
+	var activeCount int
+	err = h.db.QueryRow(ctx,
+		`SELECT COUNT(*) FROM slip_assignments
+		 WHERE slip_id = $1 AND club_id = $2 AND released_at IS NULL`,
+		slipID, clubID,
+	).Scan(&activeCount)
+	if err != nil {
+		h.log.Error().Err(err).Str("slip_id", slipID).Msg("failed to check assignments")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if activeCount > 0 {
+		Error(w, http.StatusConflict, "slip has an active assignment; release it first")
+		return
+	}
+
+	tag, err := h.db.Exec(ctx,
+		`DELETE FROM slips WHERE id = $1 AND club_id = $2`,
+		slipID, clubID,
+	)
+	if err != nil {
+		h.log.Error().Err(err).Str("slip_id", slipID).Msg("failed to delete slip")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if tag.RowsAffected() == 0 {
+		Error(w, http.StatusNotFound, "slip not found")
+		return
+	}
+
+	h.log.Info().Str("slip_id", slipID).Msg("slip deleted")
+	JSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
 func (h *AdminSlipsHandler) HandleAssignSlip(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	clubID, actorID, err := h.clubID(r)
