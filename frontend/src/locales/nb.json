@@ -673,7 +673,10 @@
       "importDetail": "Detaljer",
       "importError": "Importen feilet",
       "importFreshRequired": "Sesjonen krever fersk 2FA-bekreftelse. Last siden på nytt og prøv igjen.",
-      "showing": "Viser {from}–{to} av {total}"
+      "showing": "Viser {from}–{to} av {total}",
+      "searchPlaceholder": "Søk etter navn eller e-post…",
+      "dockFilterLabel": "Brygge",
+      "dockFilterAll": "Alle"
     },
     "waitingList": {
       "loadError": "Kunne ikke hente ventelisten",

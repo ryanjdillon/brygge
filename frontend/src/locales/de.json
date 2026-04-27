@@ -677,7 +677,10 @@
       "importDetail": "Details",
       "importError": "Import fehlgeschlagen",
       "importFreshRequired": "Sitzung benötigt aktuelle 2FA-Bestätigung. Seite neu laden und erneut versuchen.",
-      "showing": "Zeige {from}–{to} von {total}"
+      "showing": "Zeige {from}–{to} von {total}",
+      "searchPlaceholder": "Nach Name oder E-Mail suchen…",
+      "dockFilterLabel": "Steg",
+      "dockFilterAll": "Alle"
     },
     "waitingList": {
       "loadError": "Warteliste konnte nicht geladen werden",

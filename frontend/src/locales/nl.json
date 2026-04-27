@@ -677,7 +677,10 @@
       "importDetail": "Details",
       "importError": "Import mislukt",
       "importFreshRequired": "Sessie vereist nieuwe 2FA-verificatie. Herlaad de pagina en probeer opnieuw.",
-      "showing": "Tonen {from}–{to} van {total}"
+      "showing": "Tonen {from}–{to} van {total}",
+      "searchPlaceholder": "Zoeken op naam of e-mail…",
+      "dockFilterLabel": "Steiger",
+      "dockFilterAll": "Alle"
     },
     "waitingList": {
       "loadError": "Kon wachtlijst niet laden",
