@@ -529,6 +529,7 @@ func main() {
 						r.Post("/import", adminUsersHandler.HandleImportUsersCSV)
 						r.Patch("/{userID}", adminUsersHandler.HandleUpdateUser)
 						r.Put("/{userID}/roles", adminUsersHandler.HandleUpdateUserRoles)
+						r.Put("/{userID}/slip", adminUsersHandler.HandleSetUserSlip)
 						r.Delete("/{userID}", adminUsersHandler.HandleDeleteUser)
 
 						// Lost-device backstop — admin disables a target
