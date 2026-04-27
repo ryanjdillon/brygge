@@ -45,7 +45,8 @@
     "noResults": "Ingen resultater",
     "next": "Neste",
     "previous": "Forrige",
-    "skipToContent": "Hopp til hovedinnhold"
+    "skipToContent": "Hopp til hovedinnhold",
+    "optional": "valgfri"
   },
   "home": {
     "welcome": "Velkommen til Brygge",
@@ -705,7 +706,12 @@
       "size": "Størrelse",
       "status": "Status",
       "assignee": "Tildelt",
-      "loadError": "Kunne ikke hente plasser"
+      "loadError": "Kunne ikke hente plasser",
+      "editTitle": "Rediger båtplass {number}",
+      "deleteTitle": "Slett båtplass",
+      "deleteConfirm": "Slette båtplass {number} permanent? Dette kan ikke angres.",
+      "dockFilterLabel": "Brygge",
+      "dockFilterAll": "Alle"
     },
     "boats": {
       "description": "Båter som trenger godkjenning av mål fra styret eller havnesjefen.",

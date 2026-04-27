@@ -45,7 +45,8 @@
     "noResults": "Geen resultaten",
     "next": "Volgende",
     "skipToContent": "Ga naar hoofdinhoud",
-    "previous": "Vorige"
+    "previous": "Vorige",
+    "optional": "optioneel"
   },
   "home": {
     "welcome": "Welkom bij Brygge",
@@ -709,7 +710,12 @@
       "size": "Afmeting",
       "status": "Status",
       "assignee": "Toegewezen aan",
-      "loadError": "Kon ligplaatsen niet laden"
+      "loadError": "Kon ligplaatsen niet laden",
+      "editTitle": "Ligplaats {number} bewerken",
+      "deleteTitle": "Ligplaats verwijderen",
+      "deleteConfirm": "Ligplaats {number} definitief verwijderen? Dit kan niet ongedaan worden gemaakt.",
+      "dockFilterLabel": "Steiger",
+      "dockFilterAll": "Alle"
     },
     "boats": {
       "description": "Boten waarvan de afmetingen goedgekeurd moeten worden door het bestuur of de havenmeester.",

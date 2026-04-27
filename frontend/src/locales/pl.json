@@ -45,7 +45,8 @@
     "noResults": "Brak wyników",
     "next": "Dalej",
     "skipToContent": "Przejdź do treści głównej",
-    "previous": "Poprzedni"
+    "previous": "Poprzedni",
+    "optional": "opcjonalne"
   },
   "home": {
     "welcome": "Witamy w Brygge",
@@ -709,7 +710,12 @@
       "size": "Rozmiar",
       "status": "Status",
       "assignee": "Przypisane do",
-      "loadError": "Nie udało się załadować miejsc"
+      "loadError": "Nie udało się załadować miejsc",
+      "editTitle": "Edytuj miejsce {number}",
+      "deleteTitle": "Usuń miejsce",
+      "deleteConfirm": "Trwale usunąć miejsce {number}? Tej operacji nie można cofnąć.",
+      "dockFilterLabel": "Pomost",
+      "dockFilterAll": "Wszystkie"
     },
     "boats": {
       "description": "Łodzie wymagające zatwierdzenia wymiarów przez zarząd lub kapitanat portu.",

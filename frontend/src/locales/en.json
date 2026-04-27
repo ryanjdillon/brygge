@@ -45,7 +45,8 @@
     "noResults": "No results",
     "next": "Next",
     "skipToContent": "Skip to main content",
-    "previous": "Previous"
+    "previous": "Previous",
+    "optional": "optional"
   },
   "home": {
     "welcome": "Welcome to Brygge",
@@ -709,7 +710,12 @@
       "size": "Size",
       "status": "Status",
       "assignee": "Assigned to",
-      "loadError": "Could not load slips"
+      "loadError": "Could not load slips",
+      "editTitle": "Edit slip {number}",
+      "deleteTitle": "Delete slip",
+      "deleteConfirm": "Permanently delete slip {number}? This cannot be undone.",
+      "dockFilterLabel": "Dock",
+      "dockFilterAll": "All"
     },
     "boats": {
       "description": "Boats that need dimension approval from the board or harbour master.",
