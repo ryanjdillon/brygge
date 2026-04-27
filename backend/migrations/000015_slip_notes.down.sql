@@ -1,0 +1,1 @@
+ALTER TABLE slips DROP COLUMN IF EXISTS notes;

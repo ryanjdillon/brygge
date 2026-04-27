@@ -357,6 +357,7 @@ type Slip struct {
 	WidthM       *float64 `json:"width_m,omitempty" doc:"Width in metres"`
 	DepthM       *float64 `json:"depth_m,omitempty" doc:"Depth in metres"`
 	Status       string   `json:"status" enum:"vacant,occupied,reserved,maintenance" doc:"Slip status"`
+	Notes        string   `json:"notes" doc:"Free-text admin notes"`
 	OccupantName *string  `json:"occupant_name,omitempty" doc:"Current occupant name"`
 }
 

@@ -718,7 +718,10 @@
       "deleteTitle": "Supprimer la place",
       "deleteConfirm": "Supprimer définitivement la place {number} ? Cette action est irréversible.",
       "dockFilterLabel": "Ponton",
-      "dockFilterAll": "Tous"
+      "dockFilterAll": "Tous",
+      "notes": "Notes",
+      "notesOnly": "Avec notes uniquement",
+      "slip": "Place"
     },
     "boats": {
       "description": "Bateaux nécessitant l'approbation des dimensions par le bureau ou le capitaine de port.",

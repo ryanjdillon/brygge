@@ -53,7 +53,7 @@ func (h *AdminSlipsHandler) HandleListSlips(w http.ResponseWriter, r *http.Reque
 
 	query := `
 		SELECT s.id, s.number, s.section, s.length_m, s.width_m, s.depth_m,
-		       s.status, s.map_x, s.map_y, s.created_at, s.updated_at,
+		       s.status, s.notes, s.map_x, s.map_y, s.created_at, s.updated_at,
 		       sa.user_id, u.full_name, u.email
 		FROM slips s
 		LEFT JOIN slip_assignments sa ON sa.slip_id = s.id AND sa.released_at IS NULL
@@ -93,6 +93,7 @@ func (h *AdminSlipsHandler) HandleListSlips(w http.ResponseWriter, r *http.Reque
 		WidthM        *float64 `json:"width_m"`
 		DepthM        *float64 `json:"depth_m"`
 		Status        string   `json:"status"`
+		Notes         string   `json:"notes"`
 		MapX          *float64 `json:"map_x"`
 		MapY          *float64 `json:"map_y"`
 		CreatedAt     time.Time `json:"created_at"`
@@ -107,7 +108,7 @@ func (h *AdminSlipsHandler) HandleListSlips(w http.ResponseWriter, r *http.Reque
 		var s slipRow
 		if err := rows.Scan(
 			&s.ID, &s.Number, &s.Section, &s.LengthM, &s.WidthM, &s.DepthM,
-			&s.Status, &s.MapX, &s.MapY, &s.CreatedAt, &s.UpdatedAt,
+			&s.Status, &s.Notes, &s.MapX, &s.MapY, &s.CreatedAt, &s.UpdatedAt,
 			&s.OccupantID, &s.OccupantName, &s.OccupantEmail,
 		); err != nil {
 			h.log.Error().Err(err).Msg("failed to scan slip row")
@@ -151,6 +152,7 @@ func (h *AdminSlipsHandler) HandleGetSlip(w http.ResponseWriter, r *http.Request
 		WidthM    *float64 `json:"width_m"`
 		DepthM    *float64 `json:"depth_m"`
 		Status    string   `json:"status"`
+		Notes     string   `json:"notes"`
 		MapX      *float64 `json:"map_x"`
 		MapY      *float64 `json:"map_y"`
 		CreatedAt string   `json:"created_at"`
@@ -160,13 +162,12 @@ func (h *AdminSlipsHandler) HandleGetSlip(w http.ResponseWriter, r *http.Request
 	var s slipDetail
 	err := h.db.QueryRow(ctx,
 		`SELECT s.id, s.number, s.section, s.length_m, s.width_m, s.depth_m,
-		        s.status, s.map_x, s.map_y, s.created_at, s.updated_at
+		        s.status, s.notes, s.map_x, s.map_y, s.created_at, s.updated_at
 		 FROM slips s
-		 JOIN clubs c ON c.id = s.club_id
-		 WHERE s.id = $1 AND c.slug = $2`,
+		 WHERE s.id = $1 AND s.club_id = $2`,
 		slipID, claims.ClubID,
 	).Scan(&s.ID, &s.Number, &s.Section, &s.LengthM, &s.WidthM, &s.DepthM,
-		&s.Status, &s.MapX, &s.MapY, &s.CreatedAt, &s.UpdatedAt)
+		&s.Status, &s.Notes, &s.MapX, &s.MapY, &s.CreatedAt, &s.UpdatedAt)
 	if err == pgx.ErrNoRows {
 		Error(w, http.StatusNotFound, "slip not found")
 		return
@@ -235,6 +236,7 @@ func (h *AdminSlipsHandler) HandleCreateSlip(w http.ResponseWriter, r *http.Requ
 		LengthM *float64 `json:"length_m"`
 		WidthM  *float64 `json:"width_m"`
 		DepthM  *float64 `json:"depth_m"`
+		Notes   string   `json:"notes"`
 		MapX    *float64 `json:"map_x"`
 		MapY    *float64 `json:"map_y"`
 	}
@@ -249,10 +251,10 @@ func (h *AdminSlipsHandler) HandleCreateSlip(w http.ResponseWriter, r *http.Requ
 
 	var slipID string
 	err = h.db.QueryRow(ctx,
-		`INSERT INTO slips (club_id, number, section, length_m, width_m, depth_m, map_x, map_y)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		`INSERT INTO slips (club_id, number, section, length_m, width_m, depth_m, notes, map_x, map_y)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		 RETURNING id`,
-		clubID, req.Number, req.Section, req.LengthM, req.WidthM, req.DepthM, req.MapX, req.MapY,
+		clubID, req.Number, req.Section, req.LengthM, req.WidthM, req.DepthM, req.Notes, req.MapX, req.MapY,
 	).Scan(&slipID)
 	if err != nil {
 		h.log.Error().Err(err).Str("number", req.Number).Msg("failed to create slip")
@@ -286,6 +288,7 @@ func (h *AdminSlipsHandler) HandleUpdateSlip(w http.ResponseWriter, r *http.Requ
 		WidthM  *float64 `json:"width_m"`
 		DepthM  *float64 `json:"depth_m"`
 		Status  *string  `json:"status"`
+		Notes   *string  `json:"notes"`
 		MapX    *float64 `json:"map_x"`
 		MapY    *float64 `json:"map_y"`
 	}
@@ -312,13 +315,14 @@ func (h *AdminSlipsHandler) HandleUpdateSlip(w http.ResponseWriter, r *http.Requ
 		    width_m  = COALESCE($6, width_m),
 		    depth_m  = COALESCE($7, depth_m),
 		    status   = COALESCE($8, status),
-		    map_x    = COALESCE($9, map_x),
-		    map_y    = COALESCE($10, map_y),
+		    notes    = COALESCE($9, notes),
+		    map_x    = COALESCE($10, map_x),
+		    map_y    = COALESCE($11, map_y),
 		    updated_at = now()
 		 WHERE id = $1 AND club_id = $2`,
 		slipID, clubID,
 		req.Number, req.Section, req.LengthM, req.WidthM, req.DepthM,
-		req.Status, req.MapX, req.MapY,
+		req.Status, req.Notes, req.MapX, req.MapY,
 	)
 	if err != nil {
 		h.log.Error().Err(err).Str("slip_id", slipID).Msg("failed to update slip")

@@ -718,7 +718,10 @@
       "deleteTitle": "Liegeplatz löschen",
       "deleteConfirm": "Liegeplatz {number} dauerhaft löschen? Dies kann nicht rückgängig gemacht werden.",
       "dockFilterLabel": "Steg",
-      "dockFilterAll": "Alle"
+      "dockFilterAll": "Alle",
+      "notes": "Notizen",
+      "notesOnly": "Nur mit Notizen",
+      "slip": "Liegeplatz"
     },
     "boats": {
       "description": "Boote, deren Maße vom Vorstand oder Hafenmeister genehmigt werden müssen.",

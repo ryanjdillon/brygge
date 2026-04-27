@@ -718,7 +718,10 @@
       "deleteTitle": "Ligplaats verwijderen",
       "deleteConfirm": "Ligplaats {number} definitief verwijderen? Dit kan niet ongedaan worden gemaakt.",
       "dockFilterLabel": "Steiger",
-      "dockFilterAll": "Alle"
+      "dockFilterAll": "Alle",
+      "notes": "Notities",
+      "notesOnly": "Alleen met notities",
+      "slip": "Ligplaats"
     },
     "boats": {
       "description": "Boten waarvan de afmetingen goedgekeurd moeten worden door het bestuur of de havenmeester.",

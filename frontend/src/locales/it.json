@@ -718,7 +718,10 @@
       "deleteTitle": "Elimina posto",
       "deleteConfirm": "Eliminare definitivamente il posto {number}? Questa azione è irreversibile.",
       "dockFilterLabel": "Pontile",
-      "dockFilterAll": "Tutti"
+      "dockFilterAll": "Tutti",
+      "notes": "Note",
+      "notesOnly": "Solo con note",
+      "slip": "Posto"
     },
     "boats": {
       "description": "Imbarcazioni le cui dimensioni necessitano dell'approvazione del consiglio o del capitano di porto.",
