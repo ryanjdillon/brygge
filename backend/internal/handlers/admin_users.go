@@ -91,9 +91,24 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 		sortCol = "u.created_at DESC"
 	}
 
+	// Optional ?spot=permanent|seasonal|none filter. Anything else is
+	// silently ignored (returns the unfiltered set).
+	spotFilter := ""
+	switch r.URL.Query().Get("spot") {
+	case "permanent":
+		spotFilter = "AND sa.id IS NOT NULL AND sa.assignment_type = 'permanent'"
+	case "seasonal":
+		spotFilter = "AND sa.id IS NOT NULL AND sa.assignment_type = 'seasonal'"
+	case "none":
+		spotFilter = "AND sa.id IS NULL"
+	}
+
 	var totalCount int
 	err := h.db.QueryRow(ctx,
-		`SELECT COUNT(*) FROM users WHERE club_id = $1`,
+		`SELECT COUNT(*) FROM users u
+		 LEFT JOIN slip_assignments sa
+		        ON sa.user_id = u.id AND sa.club_id = u.club_id AND sa.released_at IS NULL
+		 WHERE u.club_id = $1 `+spotFilter,
 		claims.ClubID,
 	).Scan(&totalCount)
 	if err != nil {
@@ -106,11 +121,16 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 		`SELECT u.id, u.email, u.first_name, u.last_name, COALESCE(u.full_name, ''),
 		        u.phone, u.address_line, u.postal_code, u.city,
 		        u.is_local, u.created_at, u.updated_at,
-		        COALESCE(array_agg(ur.role) FILTER (WHERE ur.role IS NOT NULL), '{}')
+		        COALESCE(array_agg(DISTINCT ur.role) FILTER (WHERE ur.role IS NOT NULL), '{}'),
+		        sa.slip_id, COALESCE(s.number, ''), COALESCE(s.section, ''),
+		        COALESCE(sa.assignment_type::text, '')
 		 FROM users u
 		 LEFT JOIN user_roles ur ON ur.user_id = u.id AND ur.club_id = u.club_id
-		 WHERE u.club_id = $1
-		 GROUP BY u.id
+		 LEFT JOIN slip_assignments sa
+		        ON sa.user_id = u.id AND sa.club_id = u.club_id AND sa.released_at IS NULL
+		 LEFT JOIN slips s ON s.id = sa.slip_id
+		 WHERE u.club_id = $1 `+spotFilter+`
+		 GROUP BY u.id, sa.slip_id, sa.assignment_type, s.number, s.section
 		 ORDER BY `+sortCol+`
 		 LIMIT $2 OFFSET $3`,
 		claims.ClubID, limit, offset,
@@ -123,25 +143,29 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 	defer rows.Close()
 
 	type userRow struct {
-		ID          string    `json:"id"`
-		Email       string    `json:"email"`
-		FirstName   string    `json:"first_name"`
-		LastName    string    `json:"last_name"`
-		FullName    string    `json:"full_name"`
-		Phone       string    `json:"phone"`
-		AddressLine string    `json:"address_line"`
-		PostalCode  string    `json:"postal_code"`
-		City        string    `json:"city"`
-		IsLocal     bool      `json:"is_local"`
-		CreatedAt   time.Time `json:"created_at"`
-		UpdatedAt   time.Time `json:"updated_at"`
-		Roles       []string  `json:"roles"`
+		ID                 string    `json:"id"`
+		Email              string    `json:"email"`
+		FirstName          string    `json:"first_name"`
+		LastName           string    `json:"last_name"`
+		FullName           string    `json:"full_name"`
+		Phone              string    `json:"phone"`
+		AddressLine        string    `json:"address_line"`
+		PostalCode         string    `json:"postal_code"`
+		City               string    `json:"city"`
+		IsLocal            bool      `json:"is_local"`
+		CreatedAt          time.Time `json:"created_at"`
+		UpdatedAt          time.Time `json:"updated_at"`
+		Roles              []string  `json:"roles"`
+		SlipID             *string   `json:"slip_id,omitempty"`
+		SlipNumber         string    `json:"slip_number"`
+		SlipSection        string    `json:"slip_section"`
+		SlipAssignmentType string    `json:"slip_assignment_type"`
 	}
 
 	var users []userRow
 	for rows.Next() {
 		var u userRow
-		if err := rows.Scan(&u.ID, &u.Email, &u.FirstName, &u.LastName, &u.FullName, &u.Phone, &u.AddressLine, &u.PostalCode, &u.City, &u.IsLocal, &u.CreatedAt, &u.UpdatedAt, &u.Roles); err != nil {
+		if err := rows.Scan(&u.ID, &u.Email, &u.FirstName, &u.LastName, &u.FullName, &u.Phone, &u.AddressLine, &u.PostalCode, &u.City, &u.IsLocal, &u.CreatedAt, &u.UpdatedAt, &u.Roles, &u.SlipID, &u.SlipNumber, &u.SlipSection, &u.SlipAssignmentType); err != nil {
 			h.log.Error().Err(err).Msg("failed to scan user row")
 			Error(w, http.StatusInternalServerError, "internal error")
 			return
@@ -930,4 +954,164 @@ func (h *AdminUsersHandler) HandleUpdateUser(w http.ResponseWriter, r *http.Requ
 		Msg("user updated")
 
 	JSON(w, http.StatusOK, map[string]any{"id": userID, "updated": true})
+}
+
+type adminUserSlipUpdateRequest struct {
+	SlipID         *string `json:"slip_id"`
+	AssignmentType string  `json:"assignment_type,omitempty"`
+}
+
+// HandleSetUserSlip atomically sets or releases a user's active slip
+// assignment. Pass slip_id=null to release. The new assignment_type
+// defaults to 'permanent'. Conflicts (slip already taken, etc.) come
+// back as 409.
+func (h *AdminUsersHandler) HandleSetUserSlip(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	userID := chi.URLParam(r, "userID")
+	if userID == "" {
+		Error(w, http.StatusBadRequest, "user ID is required")
+		return
+	}
+
+	var req adminUserSlipUpdateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	assignmentType := req.AssignmentType
+	if assignmentType == "" {
+		assignmentType = "permanent"
+	}
+	if assignmentType != "permanent" && assignmentType != "seasonal" {
+		Error(w, http.StatusBadRequest, "assignment_type must be 'permanent' or 'seasonal'")
+		return
+	}
+
+	tx, err := h.db.Begin(ctx)
+	if err != nil {
+		h.log.Error().Err(err).Msg("begin tx")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	defer tx.Rollback(ctx)
+
+	var exists bool
+	if err := tx.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM users WHERE id = $1 AND club_id = $2)`,
+		userID, claims.ClubID,
+	).Scan(&exists); err != nil || !exists {
+		Error(w, http.StatusNotFound, "user not found")
+		return
+	}
+
+	// Release any existing active assignment for this user. Also flip
+	// the slip back to vacant so /admin/slips listings stay consistent.
+	rows, err := tx.Query(ctx,
+		`UPDATE slip_assignments SET released_at = now()
+		 WHERE user_id = $1 AND club_id = $2 AND released_at IS NULL
+		 RETURNING slip_id`,
+		userID, claims.ClubID,
+	)
+	if err != nil {
+		h.log.Error().Err(err).Msg("release prior assignments")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	var releasedSlipIDs []string
+	for rows.Next() {
+		var sid string
+		if err := rows.Scan(&sid); err != nil {
+			rows.Close()
+			h.log.Error().Err(err).Msg("scan released slip id")
+			Error(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		releasedSlipIDs = append(releasedSlipIDs, sid)
+	}
+	rows.Close()
+	for _, sid := range releasedSlipIDs {
+		if _, err := tx.Exec(ctx,
+			`UPDATE slips SET status = 'vacant', updated_at = now()
+			 WHERE id = $1 AND club_id = $2`,
+			sid, claims.ClubID,
+		); err != nil {
+			h.log.Error().Err(err).Msg("update slip vacant")
+			Error(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+	}
+
+	var newAssignmentID string
+	if req.SlipID != nil && *req.SlipID != "" {
+		var status string
+		err = tx.QueryRow(ctx,
+			`SELECT status FROM slips WHERE id = $1 AND club_id = $2 FOR UPDATE`,
+			*req.SlipID, claims.ClubID,
+		).Scan(&status)
+		if err == pgx.ErrNoRows {
+			Error(w, http.StatusNotFound, "slip not found")
+			return
+		}
+		if err != nil {
+			h.log.Error().Err(err).Msg("lock slip")
+			Error(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		if status == "occupied" {
+			Error(w, http.StatusConflict, "slip is already occupied")
+			return
+		}
+
+		if err := tx.QueryRow(ctx,
+			`INSERT INTO slip_assignments (slip_id, user_id, club_id, assignment_type)
+			 VALUES ($1, $2, $3, $4)
+			 RETURNING id`,
+			*req.SlipID, userID, claims.ClubID, assignmentType,
+		).Scan(&newAssignmentID); err != nil {
+			h.log.Error().Err(err).Msg("insert assignment")
+			Error(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		if _, err := tx.Exec(ctx,
+			`UPDATE slips SET status = 'occupied', updated_at = now() WHERE id = $1`,
+			*req.SlipID,
+		); err != nil {
+			h.log.Error().Err(err).Msg("set slip occupied")
+			Error(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+	}
+
+	auditData, _ := json.Marshal(map[string]any{
+		"slip_id":         req.SlipID,
+		"assignment_type": assignmentType,
+		"released_slips":  releasedSlipIDs,
+	})
+	if _, err := tx.Exec(ctx,
+		`INSERT INTO audit_log (club_id, actor_id, action, resource, resource_id, details)
+		 VALUES ($1, $2, 'set_user_slip', 'user', $3, $4)`,
+		claims.ClubID, claims.UserID, userID, auditData,
+	); err != nil {
+		h.log.Warn().Err(err).Msg("audit log set_user_slip")
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		h.log.Error().Err(err).Msg("commit")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	JSON(w, http.StatusOK, map[string]any{
+		"user_id":         userID,
+		"slip_id":         req.SlipID,
+		"assignment_type": assignmentType,
+		"assignment_id":   newAssignmentID,
+	})
 }

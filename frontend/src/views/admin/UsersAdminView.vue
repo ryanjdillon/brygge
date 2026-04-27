@@ -30,18 +30,63 @@ const sortField = ref<SortField>('last_name')
 const sortDir = ref<'asc' | 'desc'>('asc')
 const sortParam = computed(() => (sortDir.value === 'desc' ? '-' : '') + sortField.value)
 
+type SpotFilter = '' | 'permanent' | 'seasonal' | 'none'
+const spotFilter = ref<SpotFilter>('')
+
 const PAGE_SIZE = 100
 const offset = ref(0)
 
 const { data: usersResponse, isLoading, isError } = useQuery({
-  queryKey: ['admin', 'users', sortParam, offset],
+  queryKey: ['admin', 'users', sortParam, spotFilter, offset],
   queryFn: async () =>
     unwrap(
       await client.GET('/api/v1/admin/users', {
-        params: { query: { limit: PAGE_SIZE, offset: offset.value, sort: sortParam.value } as any },
+        params: {
+          query: {
+            limit: PAGE_SIZE,
+            offset: offset.value,
+            sort: sortParam.value,
+            ...(spotFilter.value ? { spot: spotFilter.value } : {}),
+          } as any,
+        },
       }),
     ),
 })
+
+function onSpotFilterChange() {
+  offset.value = 0
+}
+
+// Slip picker — fetched once per modal-open, lightweight raw fetch since
+// the openapi-fetch typing for /admin/slips wraps the row shape in a
+// PaginatedResponse the codegen doesn't fully express.
+type SlipOption = {
+  id: string
+  number: string
+  section: string
+  status: string
+  occupant_id: string | null
+}
+const slipOptions = ref<SlipOption[]>([])
+const slipsLoading = ref(false)
+async function loadSlips() {
+  if (slipOptions.value.length > 0) return
+  slipsLoading.value = true
+  try {
+    const res = await fetch('/api/v1/admin/slips?limit=500', { credentials: 'include' })
+    if (!res.ok) return
+    const body = await res.json()
+    slipOptions.value = (body.items ?? body.data ?? []).map((s: any) => ({
+      id: s.id,
+      number: s.number,
+      section: s.section,
+      status: s.status,
+      occupant_id: s.occupant_id ?? null,
+    }))
+  } finally {
+    slipsLoading.value = false
+  }
+}
 
 const users = computed(() => usersResponse.value?.users ?? [])
 const totalCount = computed(() => usersResponse.value?.total_count ?? 0)
@@ -94,7 +139,20 @@ const { mutate: deleteUser } = useMutation({
   },
 })
 
-const allRoles = ['member', 'slip_holder', 'board', 'harbor_master', 'treasurer', 'admin']
+const allRoles = [
+  'member', 'slip_holder', 'board', 'harbor_master', 'treasurer', 'admin',
+  'chair', 'vice_chair', 'deputy', 'secretary',
+]
+
+// roleLabel returns the localized display name for a role identifier,
+// falling back to the raw key if no translation is registered (so new
+// roles added on the backend don't blow up the UI before locales catch
+// up).
+function roleLabel(role: string): string {
+  const key = `admin.users.role.${role}`
+  const label = t(key)
+  return label === key ? role : label
+}
 
 function toggleRole(userId: string, role: string) {
   const roles = editingRoles.value[userId]
@@ -116,6 +174,10 @@ const detailUser = ref<User | null>(null)
 const detailEditing = ref(false)
 const detailError = ref<string | null>(null)
 const editForm = reactive<UpdateBody>({})
+const editRoles = ref<string[]>([])
+const editSlipId = ref<string>('')
+const editSlipType = ref<'permanent' | 'seasonal'>('permanent')
+const savingEdit = ref(false)
 
 function openDetail(user: User) {
   detailUser.value = user
@@ -141,8 +203,12 @@ async function startDetailEdit() {
     city: u.city ?? '',
     is_local: !!u.is_local,
   })
+  editRoles.value = [...(u.roles ?? [])]
+  editSlipId.value = u.slip_id ?? ''
+  editSlipType.value = (u.slip_assignment_type === 'seasonal' ? 'seasonal' : 'permanent')
   detailError.value = null
   detailEditing.value = true
+  loadSlips()
 }
 
 async function openEditDirect(user: User) {
@@ -150,27 +216,64 @@ async function openEditDirect(user: User) {
   await startDetailEdit()
 }
 
-const { mutate: updateUser, isPending: savingEdit } = useMutation({
-  mutationFn: async ({ userId, body }: { userId: string; body: UpdateBody }) =>
-    unwrap(await client.PATCH('/api/v1/admin/users/{userID}', {
-      params: { path: { userID: userId } },
-      body,
-    })),
-  onSuccess: () => {
+function toggleEditRole(role: string) {
+  const idx = editRoles.value.indexOf(role)
+  if (idx >= 0) editRoles.value.splice(idx, 1)
+  else editRoles.value.push(role)
+}
+
+async function submitEdit() {
+  if (!detailUser.value) return
+  const u = detailUser.value
+  detailError.value = null
+  savingEdit.value = true
+  try {
+    await unwrap(await client.PATCH('/api/v1/admin/users/{userID}', {
+      params: { path: { userID: u.id } },
+      body: { ...editForm },
+    }))
+
+    // Roles diff — call the dedicated endpoint only if the set changed.
+    const before = new Set(u.roles ?? [])
+    const after = new Set(editRoles.value)
+    const sameRoles = before.size === after.size && [...before].every((r) => after.has(r))
+    if (!sameRoles) {
+      await unwrap(await client.PUT('/api/v1/admin/users/{userID}/roles', {
+        params: { path: { userID: u.id } },
+        body: { roles: editRoles.value } as any,
+      }))
+    }
+
+    // Slip diff — release/assign through the new endpoint when the
+    // selection or type has changed.
+    const slipChanged = (u.slip_id ?? '') !== editSlipId.value
+    const typeChanged = !!editSlipId.value && (u.slip_assignment_type || 'permanent') !== editSlipType.value
+    if (slipChanged || typeChanged) {
+      await unwrap(await client.PUT('/api/v1/admin/users/{userID}/slip', {
+        params: { path: { userID: u.id } },
+        body: {
+          slip_id: editSlipId.value || null,
+          assignment_type: editSlipType.value,
+        } as any,
+      }))
+    }
+
     detailEditing.value = false
     closeDetail()
     queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
-  },
-  onError: (err: any) => {
+  } catch (err: any) {
     detailError.value = err?.message ?? t('admin.users.updateError')
-  },
-})
-
-function submitEdit() {
-  if (!detailUser.value) return
-  detailError.value = null
-  updateUser({ userId: detailUser.value.id, body: { ...editForm } })
+  } finally {
+    savingEdit.value = false
+  }
 }
+
+// Filter slip-picker options to: vacant slips OR the user's currently
+// assigned slip (so it stays selectable in the dropdown).
+const slipPickerOptions = computed(() => {
+  const currentId = detailUser.value?.slip_id ?? ''
+  return slipOptions.value.filter((s) => s.status !== 'occupied' || s.id === currentId)
+})
 
 // --- Create user modal ---
 const showCreateModal = ref(false)
@@ -280,7 +383,20 @@ async function submitImport() {
   <div>
     <div class="flex flex-wrap items-center justify-between gap-3">
       <h1 class="text-2xl font-bold text-gray-900">{{ t('admin.sidebar.users') }}</h1>
-      <div class="flex gap-2">
+      <div class="flex flex-wrap items-center gap-2">
+        <label class="sr-only" for="spot-filter">{{ t('admin.users.spotFilterLabel') }}</label>
+        <select
+          id="spot-filter"
+          v-model="spotFilter"
+          class="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm"
+          :title="t('admin.users.spotFilterLabel')"
+          @change="onSpotFilterChange"
+        >
+          <option value="">{{ t('admin.users.spotFilterLabel') }}: {{ t('admin.users.spotFilterAll') }}</option>
+          <option value="permanent">{{ t('admin.users.spotFilterLabel') }}: {{ t('admin.users.spotPermanent') }}</option>
+          <option value="seasonal">{{ t('admin.users.spotFilterLabel') }}: {{ t('admin.users.spotSeasonal') }}</option>
+          <option value="none">{{ t('admin.users.spotFilterLabel') }}: {{ t('admin.users.spotNone') }}</option>
+        </select>
         <button
           class="inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"
           @click="openCreateModal"
@@ -299,7 +415,7 @@ async function submitImport() {
     <div v-if="isLoading" class="mt-6 text-gray-500">{{ t('common.loading') }}...</div>
     <div v-else-if="isError" class="mt-6 rounded-md bg-red-50 p-3 text-sm text-red-800">{{ t('admin.users.loadError') }}</div>
 
-    <div v-else class="mt-6 overflow-x-auto">
+    <div v-else class="mt-4 overflow-x-auto">
       <p class="mb-2 text-xs text-gray-500">
         {{ t('admin.users.showing', { from: pageStart, to: pageEnd, total: totalCount }) }}
       </p>
@@ -341,6 +457,7 @@ async function submitImport() {
               </span>
             </th>
             <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.users.phone') }}</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.users.spot') }}</th>
             <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.users.roles') }}</th>
             <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('common.actions') }}</th>
           </tr>
@@ -357,6 +474,20 @@ async function submitImport() {
             <td class="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">{{ user.last_name }}</td>
             <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ user.email }}</td>
             <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ user.phone }}</td>
+            <td class="whitespace-nowrap px-4 py-3 text-sm">
+              <template v-if="user.slip_id">
+                <span class="font-medium text-gray-900">{{ user.slip_section ? user.slip_section + ' ' : '' }}{{ user.slip_number }}</span>
+                <span
+                  :class="[
+                    'ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide',
+                    user.slip_assignment_type === 'seasonal'
+                      ? 'bg-amber-100 text-amber-800'
+                      : 'bg-emerald-100 text-emerald-800',
+                  ]"
+                >{{ t('admin.users.spot' + (user.slip_assignment_type === 'seasonal' ? 'Seasonal' : 'Permanent')) }}</span>
+              </template>
+              <span v-else class="text-gray-400">—</span>
+            </td>
             <td class="px-4 py-3 text-sm" @click.stop>
               <template v-if="editingRoles[user.id]">
                 <div class="flex flex-wrap gap-1">
@@ -371,7 +502,7 @@ async function submitImport() {
                     ]"
                     @click="toggleRole(user.id, role)"
                   >
-                    {{ role }}
+                    {{ roleLabel(role) }}
                   </button>
                 </div>
                 <div class="mt-1 flex gap-1">
@@ -387,7 +518,7 @@ async function submitImport() {
                     class="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700 cursor-pointer hover:bg-gray-200"
                     @click="startEditRoles(user)"
                   >
-                    {{ role }}
+                    {{ roleLabel(role) }}
                   </span>
                 </div>
               </template>
@@ -458,9 +589,17 @@ async function submitImport() {
             <dd class="col-span-2 text-gray-900">{{ detailUser.city || '—' }}</dd>
             <dt class="text-xs font-medium text-gray-500">{{ t('admin.users.isLocal') }}</dt>
             <dd class="col-span-2 text-gray-900">{{ detailUser.is_local ? t('common.yes') : t('common.no') }}</dd>
+            <dt class="text-xs font-medium text-gray-500">{{ t('admin.users.spot') }}</dt>
+            <dd class="col-span-2 text-gray-900">
+              <template v-if="detailUser.slip_id">
+                {{ detailUser.slip_section ? detailUser.slip_section + ' ' : '' }}{{ detailUser.slip_number }}
+                <span class="ml-1 text-xs text-gray-500">({{ t('admin.users.spot' + (detailUser.slip_assignment_type === 'seasonal' ? 'Seasonal' : 'Permanent')) }})</span>
+              </template>
+              <span v-else>—</span>
+            </dd>
             <dt class="text-xs font-medium text-gray-500">{{ t('admin.users.roles') }}</dt>
             <dd class="col-span-2 flex flex-wrap gap-1">
-              <span v-for="role in detailUser.roles" :key="role" class="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">{{ role }}</span>
+              <span v-for="role in detailUser.roles" :key="role" class="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">{{ roleLabel(role) }}</span>
               <span v-if="!detailUser.roles?.length" class="text-gray-500">—</span>
             </dd>
           </dl>
@@ -511,6 +650,51 @@ async function submitImport() {
             <div class="col-span-2">
               <label class="block text-xs font-medium text-gray-700" for="ed-city">{{ t('admin.users.city') }}</label>
               <input id="ed-city" v-model="editForm.city" type="text" class="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm" />
+            </div>
+          </div>
+          <div>
+            <span class="block text-xs font-medium text-gray-700">{{ t('admin.users.roles') }}</span>
+            <div class="mt-1 flex flex-wrap gap-1">
+              <button
+                v-for="role in allRoles"
+                :key="role"
+                type="button"
+                :class="[
+                  'rounded-full px-2 py-0.5 text-xs font-medium transition',
+                  editRoles.includes(role)
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
+                ]"
+                @click="toggleEditRole(role)"
+              >{{ roleLabel(role) }}</button>
+            </div>
+          </div>
+          <div class="grid grid-cols-3 gap-2">
+            <div class="col-span-2">
+              <label class="block text-xs font-medium text-gray-700" for="ed-slip">{{ t('admin.users.spot') }}</label>
+              <select
+                id="ed-slip"
+                v-model="editSlipId"
+                class="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm"
+                :disabled="slipsLoading"
+              >
+                <option value="">{{ t('admin.users.spotNone') }}</option>
+                <option v-for="s in slipPickerOptions" :key="s.id" :value="s.id">
+                  {{ (s.section ? s.section + ' ' : '') + s.number }}
+                </option>
+              </select>
+            </div>
+            <div class="col-span-1">
+              <label class="block text-xs font-medium text-gray-700" for="ed-slip-type">{{ t('admin.users.spotType') }}</label>
+              <select
+                id="ed-slip-type"
+                v-model="editSlipType"
+                :disabled="!editSlipId"
+                class="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm disabled:bg-gray-100"
+              >
+                <option value="permanent">{{ t('admin.users.spotPermanent') }}</option>
+                <option value="seasonal">{{ t('admin.users.spotSeasonal') }}</option>
+              </select>
             </div>
           </div>
           <p v-if="detailError" class="rounded-md bg-red-50 px-2 py-1 text-xs text-red-700">{{ detailError }}</p>
@@ -593,7 +777,7 @@ async function submitImport() {
                 ]"
                 @click="toggleCreateRole(role)"
               >
-                {{ role }}
+                {{ roleLabel(role) }}
               </button>
             </div>
           </div>

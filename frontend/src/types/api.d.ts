@@ -714,6 +714,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/users/{userID}/slip": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set or release a user's active slip assignment */
+        put: operations["admin-set-user-slip"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/volunteer/events/{eventID}/projects": {
         parameters: {
             query?: never;
@@ -2326,6 +2343,26 @@ export interface components {
             postal_code: string;
             /** @description Assigned roles */
             roles: string[] | null;
+            /** @description Active slip assignment slip UUID, if any */
+            slip_id?: string;
+            /** @description permanent | seasonal | '' when unassigned */
+            slip_assignment_type: string;
+            /** @description Active slip number (empty when unassigned) */
+            slip_number: string;
+            /** @description Active slip section (empty when unassigned) */
+            slip_section: string;
+        };
+        AdminUserSlipUpdate: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/AdminUserSlipUpdate.json
+             */
+            readonly $schema?: string;
+            /** @description permanent | seasonal (default permanent) */
+            assignment_type?: string;
+            /** @description Slip UUID to assign, or null to release */
+            slip_id: string | null;
         };
         AdminUserUpdate: {
             /**
@@ -6295,6 +6332,42 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["AdminUserUpdate"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUser"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "admin-set-user-slip": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description User UUID */
+                userID: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminUserSlipUpdate"];
             };
         };
         responses: {

@@ -672,18 +672,30 @@ type LegalDocument struct {
 // --- Admin Users ---
 
 type AdminUser struct {
-	ID          string    `json:"id" doc:"User UUID"`
-	FirstName   string    `json:"first_name" doc:"Given name"`
-	LastName    string    `json:"last_name" doc:"Family name"`
-	FullName    string    `json:"full_name" doc:"Computed: first_name + ' ' + last_name (kept for backwards compat — DIL-230 will drop)"`
-	Email       string    `json:"email" doc:"Email address"`
-	Phone       string    `json:"phone" doc:"Phone number"`
-	AddressLine string    `json:"address_line" doc:"Street address"`
-	PostalCode  string    `json:"postal_code" doc:"Postal code"`
-	City        string    `json:"city" doc:"City"`
-	IsLocal     bool      `json:"is_local" doc:"Local-resident rate eligible"`
-	Roles       []string  `json:"roles" doc:"Assigned roles"`
-	CreatedAt   time.Time `json:"created_at" doc:"Creation timestamp"`
+	ID                 string    `json:"id" doc:"User UUID"`
+	FirstName          string    `json:"first_name" doc:"Given name"`
+	LastName           string    `json:"last_name" doc:"Family name"`
+	FullName           string    `json:"full_name" doc:"Computed: first_name + ' ' + last_name (kept for backwards compat — DIL-230 will drop)"`
+	Email              string    `json:"email" doc:"Email address"`
+	Phone              string    `json:"phone" doc:"Phone number"`
+	AddressLine        string    `json:"address_line" doc:"Street address"`
+	PostalCode         string    `json:"postal_code" doc:"Postal code"`
+	City               string    `json:"city" doc:"City"`
+	IsLocal            bool      `json:"is_local" doc:"Local-resident rate eligible"`
+	Roles              []string  `json:"roles" doc:"Assigned roles"`
+	SlipID             *string   `json:"slip_id,omitempty" doc:"Active slip assignment slip UUID, if any"`
+	SlipNumber         string    `json:"slip_number" doc:"Active slip number (empty when unassigned)"`
+	SlipSection        string    `json:"slip_section" doc:"Active slip section (empty when unassigned)"`
+	SlipAssignmentType string    `json:"slip_assignment_type" doc:"permanent | seasonal | '' when unassigned"`
+	CreatedAt          time.Time `json:"created_at" doc:"Creation timestamp"`
+}
+
+// AdminUserSlipUpdate is the request body for PUT /api/v1/admin/users/{userID}/slip.
+// Pass slip_id=null to release the user's current slip. assignment_type is
+// honoured only when slip_id is set (defaults to 'permanent').
+type AdminUserSlipUpdate struct {
+	SlipID         *string `json:"slip_id" doc:"Slip UUID to assign, or null to release"`
+	AssignmentType string  `json:"assignment_type,omitempty" doc:"permanent | seasonal (default permanent)"`
 }
 
 // AdminUserUpdate is the request body for PATCH /api/v1/admin/users/{userID}.
