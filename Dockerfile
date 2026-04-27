@@ -18,9 +18,10 @@ COPY backend/go.* ./
 RUN go mod download
 COPY backend/ .
 COPY --from=frontend /frontend/dist ./internal/web/dist
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=arm64 \
+ARG TARGETARCH=arm64
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} \
     go build -ldflags="-s -w" -o /brygge ./cmd/api
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=arm64 \
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} \
     go build -ldflags="-s -w" -o /brygge-seed ./cmd/seed
 
 # ── Stage 3: Minimal runtime ────────────────────────────────
