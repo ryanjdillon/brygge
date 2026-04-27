@@ -11,6 +11,13 @@ let _client: ReturnType<typeof createClient<paths>> | null = null
 // modal so we don't loop if the backend keeps answering 403.
 const retried = new WeakSet<Request>()
 
+// Stash a pristine clone of every outgoing request so onResponse can
+// replay it after a TOTP step-up. By the time onResponse fires the
+// original Request's body stream has already been consumed by fetch(),
+// so request.clone() throws "Request body is already used" — we have
+// to clone *before* the network call.
+const pristineClones = new WeakMap<Request, Request>()
+
 function getClient() {
   if (_client) return _client
   _client = createClient<paths>({ credentials: 'include' })
@@ -19,6 +26,15 @@ function getClient() {
   // every consumer (useApiClient, useQuery, etc.) gets the same UX
   // that useApi.ts provides for raw fetch callers.
   _client.use({
+    async onRequest({ request }) {
+      try {
+        pristineClones.set(request, request.clone())
+      } catch {
+        // GET/HEAD requests have no body — clone is cheap and safe;
+        // ignore any environment that disallows it.
+      }
+      return undefined
+    },
     async onResponse({ request, response }) {
       if (response.status !== 403) return
 
@@ -43,8 +59,10 @@ function getClient() {
         const totpGate = useTotpGateStore()
         const verified = await totpGate.open()
         if (!verified) return
+        const pristine = pristineClones.get(request) ?? request
+        const retry = pristine.clone()
         retried.add(request)
-        return fetch(request)
+        return fetch(retry)
       }
     },
   })
@@ -63,7 +81,12 @@ export function useApiClient() {
 export function unwrap<T>(result: { data?: T; error?: unknown; response: Response }): T {
   if (result.error !== undefined || !result.response.ok) {
     const err = result.error as Record<string, unknown> | undefined
-    const message = (err?.detail as string) ?? (err?.title as string) ?? result.response.statusText ?? 'Request failed'
+    const message =
+      (err?.error as string) ??
+      (err?.detail as string) ??
+      (err?.title as string) ??
+      result.response.statusText ??
+      'Request failed'
     const code = err?.code as string | undefined
     throw new ApiError(result.response.status, message, code)
   }
