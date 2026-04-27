@@ -430,7 +430,7 @@
     "groupArchive": "Arkiv og info",
     "sidebar": {
       "users": "Medlemmer",
-      "slips": "Plasser",
+      "slips": "Båtplasser",
       "waitingList": "Venteliste",
       "events": "Arrangementer",
       "bookings": "Bestillinger",
@@ -702,7 +702,7 @@
       "date": "Dato"
     },
     "slips": {
-      "newSlip": "Ny plass",
+      "newSlip": "Ny båtplass",
       "number": "Nummer",
       "section": "Seksjon",
       "length": "Lengde (m)",
