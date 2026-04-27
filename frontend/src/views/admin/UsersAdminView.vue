@@ -499,51 +499,11 @@ async function submitImport() {
         <thead class="bg-gray-50">
           <tr>
             <th scope="col" class="w-12 px-3 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">#</th>
-            <th
-              scope="col"
-              class="cursor-pointer select-none px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 hover:text-gray-700"
-              @click="setSort('first_name')"
-            >
-              <span class="inline-flex items-center gap-1">
-                {{ t('admin.users.firstName') }}
-                <ArrowUp v-if="sortField === 'first_name' && sortDir === 'asc'" class="h-3 w-3" />
-                <ArrowDown v-else-if="sortField === 'first_name' && sortDir === 'desc'" class="h-3 w-3" />
-              </span>
-            </th>
-            <th
-              scope="col"
-              class="cursor-pointer select-none px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 hover:text-gray-700"
-              @click="setSort('last_name')"
-            >
-              <span class="inline-flex items-center gap-1">
-                {{ t('admin.users.lastName') }}
-                <ArrowUp v-if="sortField === 'last_name' && sortDir === 'asc'" class="h-3 w-3" />
-                <ArrowDown v-else-if="sortField === 'last_name' && sortDir === 'desc'" class="h-3 w-3" />
-              </span>
-            </th>
-            <th
-              scope="col"
-              class="cursor-pointer select-none px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 hover:text-gray-700"
-              @click="setSort('email')"
-            >
-              <span class="inline-flex items-center gap-1">
-                {{ t('admin.users.email') }}
-                <ArrowUp v-if="sortField === 'email' && sortDir === 'asc'" class="h-3 w-3" />
-                <ArrowDown v-else-if="sortField === 'email' && sortDir === 'desc'" class="h-3 w-3" />
-              </span>
-            </th>
+            <SortableTh :active="sortField === 'first_name'" :dir="sortDir" @click="setSort('first_name')">{{ t('admin.users.firstName') }}</SortableTh>
+            <SortableTh :active="sortField === 'last_name'" :dir="sortDir" @click="setSort('last_name')">{{ t('admin.users.lastName') }}</SortableTh>
+            <SortableTh :active="sortField === 'email'" :dir="sortDir" @click="setSort('email')">{{ t('admin.users.email') }}</SortableTh>
             <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.users.phone') }}</th>
-            <th
-              scope="col"
-              class="cursor-pointer select-none px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 hover:text-gray-700"
-              @click="setSort('slip')"
-            >
-              <span class="inline-flex items-center gap-1">
-                {{ t('admin.users.spot') }}
-                <ArrowUp v-if="sortField === 'slip' && sortDir === 'asc'" class="h-3 w-3" />
-                <ArrowDown v-else-if="sortField === 'slip' && sortDir === 'desc'" class="h-3 w-3" />
-              </span>
-            </th>
+            <SortableTh :active="sortField === 'slip'" :dir="sortDir" @click="setSort('slip')">{{ t('admin.users.spot') }}</SortableTh>
             <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.users.roles') }}</th>
             <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('common.actions') }}</th>
           </tr>
@@ -562,7 +522,7 @@ async function submitImport() {
             <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ user.phone }}</td>
             <td class="whitespace-nowrap px-4 py-3 text-sm">
               <template v-if="user.slip_id">
-                <span class="font-medium text-gray-900">{{ user.slip_section ? user.slip_section + ' ' : '' }}{{ user.slip_number }}</span>
+                <SlipCell :section="user.slip_section" :number="user.slip_number" />
                 <span
                   :class="[
                     'ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide',
@@ -572,7 +532,7 @@ async function submitImport() {
                   ]"
                 >{{ t('admin.users.spot' + (user.slip_assignment_type === 'seasonal' ? 'Seasonal' : 'Permanent')) }}</span>
               </template>
-              <span v-else class="text-gray-400">—</span>
+              <SlipCell v-else />
             </td>
             <td class="px-4 py-3 text-sm" @click.stop>
               <template v-if="editingRoles[user.id]">
