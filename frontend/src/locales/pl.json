@@ -46,7 +46,9 @@
     "next": "Dalej",
     "skipToContent": "Przejdź do treści głównej",
     "previous": "Poprzedni",
-    "optional": "opcjonalne"
+    "optional": "opcjonalne",
+    "dock": "Pomost",
+    "dockAll": "Wszystkie"
   },
   "home": {
     "welcome": "Witamy w Brygge",
