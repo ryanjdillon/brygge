@@ -35,9 +35,7 @@ func (h *AdminSlipsHandler) clubID(r *http.Request) (string, string, error) {
 	if claims == nil {
 		return "", "", pgx.ErrNoRows
 	}
-	var clubID string
-	err := h.db.QueryRow(r.Context(), `SELECT id FROM clubs WHERE slug = $1`, claims.ClubID).Scan(&clubID)
-	return clubID, claims.UserID, err
+	return claims.ClubID, claims.UserID, nil
 }
 
 func (h *AdminSlipsHandler) HandleListSlips(w http.ResponseWriter, r *http.Request) {

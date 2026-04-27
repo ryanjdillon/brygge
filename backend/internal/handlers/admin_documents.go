@@ -211,13 +211,7 @@ func (h *AdminDocumentsHandler) HandleUploadDocument(w http.ResponseWriter, r *h
 		visibility = "member"
 	}
 
-	var clubID string
-	err = h.db.QueryRow(ctx, `SELECT id FROM clubs WHERE slug = $1`, claims.ClubID).Scan(&clubID)
-	if err != nil {
-		h.log.Error().Err(err).Msg("failed to resolve club")
-		Error(w, http.StatusInternalServerError, "internal error")
-		return
-	}
+	clubID := claims.ClubID
 
 	s3Key := fmt.Sprintf("documents/%s/%s", clubID, filepath.Base(header.Filename))
 
