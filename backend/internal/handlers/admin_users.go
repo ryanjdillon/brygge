@@ -26,6 +26,10 @@ import (
 var validUserRoles = map[string]bool{
 	"applicant": true, "member": true, "slip_holder": true,
 	"board": true, "harbor_master": true, "treasurer": true, "admin": true,
+	// Board-officer roles. Identifier strings stay English snake_case
+	// to match the existing convention; display labels are localized
+	// in the SPA.
+	"chair": true, "vice_chair": true, "deputy": true, "secretary": true,
 }
 
 type AdminUsersHandler struct {
