@@ -677,7 +677,10 @@
       "importDetail": "Détails",
       "importError": "Échec de l'import",
       "importFreshRequired": "La session nécessite une nouvelle vérification 2FA. Rechargez la page et réessayez.",
-      "showing": "Affichage de {from}–{to} sur {total}"
+      "showing": "Affichage de {from}–{to} sur {total}",
+      "searchPlaceholder": "Rechercher par nom ou e-mail…",
+      "dockFilterLabel": "Ponton",
+      "dockFilterAll": "Tous"
     },
     "waitingList": {
       "loadError": "Impossible de charger la liste d'attente",

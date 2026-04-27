@@ -93,6 +93,12 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 		sortCol = "u.created_at"
 	case "-created_at":
 		sortCol = "u.created_at DESC"
+	case "slip":
+		// Section then number, naturally; users with no slip last so a
+		// scan over assigned slips reads as a continuous block.
+		sortCol = "s.section NULLS LAST, NULLIF(regexp_replace(s.number, '\\D', '', 'g'), '')::int NULLS LAST, s.number"
+	case "-slip":
+		sortCol = "s.section DESC NULLS LAST, NULLIF(regexp_replace(s.number, '\\D', '', 'g'), '')::int DESC NULLS LAST, s.number DESC"
 	}
 
 	// Optional ?spot=permanent|seasonal|none filter. Anything else is
@@ -107,13 +113,44 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 		spotFilter = "AND sa.id IS NULL"
 	}
 
+	// Optional ?dock= filter restricts to users whose active slip is in
+	// that section. Implies "has any slip" since the LEFT JOIN row would
+	// otherwise be NULL.
+	dockClause := ""
+	args := []any{claims.ClubID}
+	nextArg := 2
+	if d := r.URL.Query().Get("dock"); d != "" {
+		dockClause = fmt.Sprintf(" AND s.section = $%d", nextArg)
+		args = append(args, d)
+		nextArg++
+	}
+
+	// Optional ?q= fuzzy search across first_name, last_name, email.
+	// Token-AND so multi-word queries (e.g. "ola nor") narrow the result;
+	// each token is independently anchored with ILIKE %tok% across the
+	// three name/email fields.
+	searchClause := ""
+	if q := r.URL.Query().Get("q"); q != "" {
+		var conds []string
+		for _, raw := range strings.Fields(q) {
+			tok := "%" + strings.ReplaceAll(strings.ReplaceAll(raw, "%", `\%`), "_", `\_`) + "%"
+			conds = append(conds, fmt.Sprintf("(u.first_name ILIKE $%d OR u.last_name ILIKE $%d OR u.email ILIKE $%d)", nextArg, nextArg, nextArg))
+			args = append(args, tok)
+			nextArg++
+		}
+		if len(conds) > 0 {
+			searchClause = " AND " + strings.Join(conds, " AND ")
+		}
+	}
+
 	var totalCount int
 	err := h.db.QueryRow(ctx,
-		`SELECT COUNT(*) FROM users u
+		`SELECT COUNT(DISTINCT u.id) FROM users u
 		 LEFT JOIN slip_assignments sa
 		        ON sa.user_id = u.id AND sa.club_id = u.club_id AND sa.released_at IS NULL
-		 WHERE u.club_id = $1 `+spotFilter,
-		claims.ClubID,
+		 LEFT JOIN slips s ON s.id = sa.slip_id
+		 WHERE u.club_id = $1 `+spotFilter+dockClause+searchClause,
+		args...,
 	).Scan(&totalCount)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to count users")
@@ -121,6 +158,8 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	limitArg := len(args) + 1
+	offsetArg := len(args) + 2
 	rows, err := h.db.Query(ctx,
 		`SELECT u.id, u.email, u.first_name, u.last_name, COALESCE(u.full_name, ''),
 		        u.phone, u.address_line, u.postal_code, u.city,
@@ -133,11 +172,11 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 		 LEFT JOIN slip_assignments sa
 		        ON sa.user_id = u.id AND sa.club_id = u.club_id AND sa.released_at IS NULL
 		 LEFT JOIN slips s ON s.id = sa.slip_id
-		 WHERE u.club_id = $1 `+spotFilter+`
+		 WHERE u.club_id = $1 `+spotFilter+dockClause+searchClause+`
 		 GROUP BY u.id, sa.slip_id, sa.assignment_type, s.number, s.section
 		 ORDER BY `+sortCol+`
-		 LIMIT $2 OFFSET $3`,
-		claims.ClubID, limit, offset,
+		 LIMIT $`+strconv.Itoa(limitArg)+` OFFSET $`+strconv.Itoa(offsetArg),
+		append(args, limit, offset)...,
 	)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to query users")

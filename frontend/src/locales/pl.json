@@ -677,7 +677,10 @@
       "importDetail": "Szczegóły",
       "importError": "Import nie powiódł się",
       "importFreshRequired": "Sesja wymaga świeżej weryfikacji 2FA. Odśwież stronę i spróbuj ponownie.",
-      "showing": "Wyświetlanie {from}–{to} z {total}"
+      "showing": "Wyświetlanie {from}–{to} z {total}",
+      "searchPlaceholder": "Szukaj po nazwisku lub e-mailu…",
+      "dockFilterLabel": "Pomost",
+      "dockFilterAll": "Wszystkie"
     },
     "waitingList": {
       "loadError": "Nie udało się załadować listy oczekujących",

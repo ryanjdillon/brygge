@@ -677,7 +677,10 @@
       "importDetail": "Details",
       "importError": "Import failed",
       "importFreshRequired": "Session needs fresh 2FA verification. Reload the page and try again.",
-      "showing": "Showing {from}–{to} of {total}"
+      "showing": "Showing {from}–{to} of {total}",
+      "searchPlaceholder": "Search by name or email…",
+      "dockFilterLabel": "Dock",
+      "dockFilterAll": "All"
     },
     "waitingList": {
       "loadError": "Could not load the waiting list",

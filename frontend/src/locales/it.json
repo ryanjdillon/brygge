@@ -677,7 +677,10 @@
       "importDetail": "Dettagli",
       "importError": "Importazione fallita",
       "importFreshRequired": "La sessione richiede una nuova verifica 2FA. Ricarica la pagina e riprova.",
-      "showing": "Mostrando {from}–{to} di {total}"
+      "showing": "Mostrando {from}–{to} di {total}",
+      "searchPlaceholder": "Cerca per nome o e-mail…",
+      "dockFilterLabel": "Pontile",
+      "dockFilterAll": "Tutti"
     },
     "waitingList": {
       "loadError": "Impossibile caricare la lista d'attesa",

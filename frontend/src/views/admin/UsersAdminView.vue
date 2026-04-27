@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, computed, reactive } from 'vue'
+import { ref, computed, reactive, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useApiClient, unwrap } from '@/lib/apiClient'
+import { sortBySlip } from '@/lib/slipSort'
 import { Trash2, UserPlus, Upload, X, ArrowUp, ArrowDown, Pencil } from 'lucide-vue-next'
 import type { components } from '@/types/api'
 import { formatName } from '@/lib/format'
@@ -25,19 +26,34 @@ async function ensureFreshTotp(): Promise<boolean> {
   return totpGate.open()
 }
 
-type SortField = 'first_name' | 'last_name' | 'email'
+type SortField = 'first_name' | 'last_name' | 'email' | 'slip'
 const sortField = ref<SortField>('last_name')
 const sortDir = ref<'asc' | 'desc'>('asc')
 const sortParam = computed(() => (sortDir.value === 'desc' ? '-' : '') + sortField.value)
 
 type SpotFilter = '' | 'permanent' | 'seasonal' | 'none'
 const spotFilter = ref<SpotFilter>('')
+const dockFilter = ref<string>('')
 
 const PAGE_SIZE = 100
 const offset = ref(0)
 
+// Two-stage search: `searchInput` mirrors the textbox for instant
+// keystroke feedback; `searchQuery` is the value actually sent to the
+// API, debounced 250ms so we don't burn a request per keystroke.
+const searchInput = ref('')
+const searchQuery = ref('')
+let searchDebounce: ReturnType<typeof setTimeout> | null = null
+function onSearchInput() {
+  if (searchDebounce) clearTimeout(searchDebounce)
+  searchDebounce = setTimeout(() => {
+    searchQuery.value = searchInput.value.trim()
+    offset.value = 0
+  }, 250)
+}
+
 const { data: usersResponse, isLoading, isError } = useQuery({
-  queryKey: ['admin', 'users', sortParam, spotFilter, offset],
+  queryKey: ['admin', 'users', sortParam, spotFilter, dockFilter, searchQuery, offset],
   queryFn: async () =>
     unwrap(
       await client.GET('/api/v1/admin/users', {
@@ -47,6 +63,8 @@ const { data: usersResponse, isLoading, isError } = useQuery({
             offset: offset.value,
             sort: sortParam.value,
             ...(spotFilter.value ? { spot: spotFilter.value } : {}),
+            ...(dockFilter.value ? { dock: dockFilter.value } : {}),
+            ...(searchQuery.value ? { q: searchQuery.value } : {}),
           } as any,
         },
       }),
@@ -54,6 +72,10 @@ const { data: usersResponse, isLoading, isError } = useQuery({
 })
 
 function onSpotFilterChange() {
+  offset.value = 0
+}
+
+function onDockFilterChange() {
   offset.value = 0
 }
 
@@ -69,6 +91,19 @@ type SlipOption = {
 }
 const slipOptions = ref<SlipOption[]>([])
 const slipsLoading = ref(false)
+// Eagerly preload the slip list on mount so the dock-filter dropdown
+// has options to render. Cheap (~hundreds of rows max) and the same
+// data feeds the slip-picker inside the user-edit modal.
+onMounted(() => { loadSlips() })
+
+const dockOptions = computed<string[]>(() => {
+  const set = new Set<string>()
+  for (const s of slipOptions.value) {
+    if (s.section) set.add(s.section)
+  }
+  return [...set].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+})
+
 async function loadSlips() {
   if (slipOptions.value.length > 0) return
   slipsLoading.value = true
@@ -269,10 +304,25 @@ async function submitEdit() {
 }
 
 // Filter slip-picker options to: vacant slips OR the user's currently
-// assigned slip (so it stays selectable in the dropdown).
+// assigned slip (so it stays selectable in the dropdown). Sort by dock
+// (section) then slip number using natural-numeric collation so A2 sorts
+// before A10.
+// Occupancy is derived from active slip_assignments (occupant_id),
+// not the slips.status column — the latter isn't updated automatically
+// when an assignment is created/released, so a freshly-assigned slip
+// could still read status='vacant'. Trust the live join instead.
 const slipPickerOptions = computed(() => {
-  const currentId = detailUser.value?.slip_id ?? ''
-  return slipOptions.value.filter((s) => s.status !== 'occupied' || s.id === currentId)
+  const currentUserId = detailUser.value?.id ?? ''
+  const currentSlipId = detailUser.value?.slip_id ?? ''
+  return sortBySlip(
+    slipOptions.value.filter((s) => {
+      // Always keep this user's own current slip so it stays selectable.
+      if (s.id === currentSlipId) return true
+      // Otherwise only show slips with no active assignment, or whose
+      // active assignment somehow already points at this user.
+      return !s.occupant_id || s.occupant_id === currentUserId
+    }),
+  )
 })
 
 // --- Create user modal ---
@@ -384,6 +434,26 @@ async function submitImport() {
     <div class="flex flex-wrap items-center justify-between gap-3">
       <h1 class="text-2xl font-bold text-gray-900">{{ t('admin.sidebar.users') }}</h1>
       <div class="flex flex-wrap items-center gap-2">
+        <label class="sr-only" for="user-search">{{ t('admin.users.searchPlaceholder') }}</label>
+        <input
+          id="user-search"
+          v-model="searchInput"
+          type="search"
+          :placeholder="t('admin.users.searchPlaceholder')"
+          class="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          @input="onSearchInput"
+        />
+        <label class="sr-only" for="dock-filter">{{ t('admin.users.dockFilterLabel') }}</label>
+        <select
+          id="dock-filter"
+          v-model="dockFilter"
+          class="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm"
+          :title="t('admin.users.dockFilterLabel')"
+          @change="onDockFilterChange"
+        >
+          <option value="">{{ t('admin.users.dockFilterLabel') }}: {{ t('admin.users.dockFilterAll') }}</option>
+          <option v-for="d in dockOptions" :key="d" :value="d">{{ t('admin.users.dockFilterLabel') }}: {{ d }}</option>
+        </select>
         <label class="sr-only" for="spot-filter">{{ t('admin.users.spotFilterLabel') }}</label>
         <select
           id="spot-filter"
@@ -457,7 +527,17 @@ async function submitImport() {
               </span>
             </th>
             <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.users.phone') }}</th>
-            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.users.spot') }}</th>
+            <th
+              scope="col"
+              class="cursor-pointer select-none px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 hover:text-gray-700"
+              @click="setSort('slip')"
+            >
+              <span class="inline-flex items-center gap-1">
+                {{ t('admin.users.spot') }}
+                <ArrowUp v-if="sortField === 'slip' && sortDir === 'asc'" class="h-3 w-3" />
+                <ArrowDown v-else-if="sortField === 'slip' && sortDir === 'desc'" class="h-3 w-3" />
+              </span>
+            </th>
             <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.users.roles') }}</th>
             <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('common.actions') }}</th>
           </tr>
