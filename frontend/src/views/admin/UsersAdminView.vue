@@ -4,7 +4,10 @@ import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useApiClient, unwrap } from '@/lib/apiClient'
 import { sortBySlip } from '@/lib/slipSort'
-import { Trash2, UserPlus, Upload, X, ArrowUp, ArrowDown, Pencil } from 'lucide-vue-next'
+import DockFilter from '@/components/admin/DockFilter.vue'
+import SortableTh from '@/components/admin/SortableTh.vue'
+import SlipCell from '@/components/admin/SlipCell.vue'
+import { Trash2, UserPlus, Upload, X, Pencil } from 'lucide-vue-next'
 import type { components } from '@/types/api'
 import { formatName } from '@/lib/format'
 import { useAuthStore } from '@/stores/auth'
@@ -451,17 +454,12 @@ async function submitImport() {
           class="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           @input="onSearchInput"
         />
-        <label class="sr-only" for="dock-filter">{{ t('admin.users.dockFilterLabel') }}</label>
-        <select
-          id="dock-filter"
+        <DockFilter
+          id="member-dock-filter"
           v-model="dockFilter"
-          class="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm"
-          :title="t('admin.users.dockFilterLabel')"
-          @change="onDockFilterChange"
-        >
-          <option value="">{{ t('admin.users.dockFilterLabel') }}: {{ t('admin.users.dockFilterAll') }}</option>
-          <option v-for="d in dockOptions" :key="d" :value="d">{{ t('admin.users.dockFilterLabel') }}: {{ d }}</option>
-        </select>
+          :options="dockOptions"
+          @update:model-value="onDockFilterChange"
+        />
         <label class="sr-only" for="spot-filter">{{ t('admin.users.spotFilterLabel') }}</label>
         <select
           id="spot-filter"

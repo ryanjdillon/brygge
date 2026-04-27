@@ -46,7 +46,9 @@
     "next": "Next",
     "skipToContent": "Skip to main content",
     "previous": "Previous",
-    "optional": "optional"
+    "optional": "optional",
+    "dock": "Dock",
+    "dockAll": "All"
   },
   "home": {
     "welcome": "Welcome to Brygge",

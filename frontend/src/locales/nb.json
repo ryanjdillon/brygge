@@ -46,7 +46,9 @@
     "next": "Neste",
     "previous": "Forrige",
     "skipToContent": "Hopp til hovedinnhold",
-    "optional": "valgfri"
+    "optional": "valgfri",
+    "dock": "Brygge",
+    "dockAll": "Alle"
   },
   "home": {
     "welcome": "Velkommen til Brygge",

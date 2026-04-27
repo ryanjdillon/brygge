@@ -46,7 +46,9 @@
     "next": "Volgende",
     "skipToContent": "Ga naar hoofdinhoud",
     "previous": "Vorige",
-    "optional": "optioneel"
+    "optional": "optioneel",
+    "dock": "Steiger",
+    "dockAll": "Alle"
   },
   "home": {
     "welcome": "Welkom bij Brygge",

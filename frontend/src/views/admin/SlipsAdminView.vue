@@ -6,6 +6,9 @@ import { useApiClient, unwrap } from '@/lib/apiClient'
 import { sortBySlip } from '@/lib/slipSort'
 import { useAuthStore } from '@/stores/auth'
 import { useTotpGateStore } from '@/stores/totpGate'
+import DockFilter from '@/components/admin/DockFilter.vue'
+import SortableTh from '@/components/admin/SortableTh.vue'
+import SlipCell from '@/components/admin/SlipCell.vue'
 import { Plus, Pencil, Trash2 } from 'lucide-vue-next'
 const { t } = useI18n()
 const client = useApiClient()
@@ -175,14 +178,12 @@ function closeDelete() {
   <div>
     <div class="flex flex-wrap items-center justify-between gap-3">
       <h1 class="text-2xl font-bold text-gray-900">{{ t('admin.sidebar.slips') }}</h1>
-      <div class="flex items-center gap-3">
-        <label class="flex items-center gap-2 text-sm text-gray-700">
-          <span class="font-medium">{{ t('admin.slips.dockFilterLabel') }}:</span>
-          <select v-model="dockFilter" class="rounded-md border border-gray-300 px-2 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
-            <option value="">{{ t('admin.slips.dockFilterAll') }}</option>
-            <option v-for="d in allDocks" :key="d" :value="d">{{ d }}</option>
-          </select>
+      <div class="flex flex-wrap items-center gap-3">
+        <label class="inline-flex cursor-pointer items-center gap-2 text-sm text-gray-700">
+          <input v-model="notesOnly" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+          <span>{{ t('admin.slips.notesOnly') }}</span>
         </label>
+        <DockFilter id="slips-dock-filter" v-model="dockFilter" :options="allDocks" />
         <button
           v-if="!showCreateForm"
           class="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
