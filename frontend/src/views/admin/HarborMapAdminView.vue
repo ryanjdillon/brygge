@@ -105,13 +105,13 @@ function highlightSelectedFinger(id: string | null) {
   if (!m || !m.getLayer('fingers-line')) return
   m.setPaintProperty('fingers-line', 'line-color', [
     'case',
-    ['==', ['get', 'kind'], 'finger'],
-    ['case', ['==', ['id'], id ?? ''], '#dc2626', '#0f172a'],
+    ['==', ['get', '_id'], id ?? ''],
+    '#dc2626',
     '#0f172a',
   ])
   m.setPaintProperty('fingers-line', 'line-width', [
     'case',
-    ['==', ['id'], id ?? ''],
+    ['==', ['get', '_id'], id ?? ''],
     6,
     4,
   ])
