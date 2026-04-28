@@ -103,6 +103,11 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/portal/SlipView.vue'),
       },
       {
+        path: 'harbor-map',
+        name: 'portal-harbor-map',
+        component: () => import('@/views/portal/HarborMapView.vue'),
+      },
+      {
         path: 'bookings',
         name: 'portal-bookings',
         component: () => import('@/views/portal/BookingsView.vue'),

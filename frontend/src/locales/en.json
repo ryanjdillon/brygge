@@ -266,9 +266,26 @@
       "documents": "Documents",
       "waitingList": "Waiting List",
       "slip": "Slip",
+      "harborMap": "Harbor Map",
       "bookings": "Bookings",
       "featureRequests": "Feature Requests",
       "forum": "Forum"
+    },
+    "harborMap": {
+      "title": "Harbor Map",
+      "subtitle": "Click a boat to see who's berthed there.",
+      "occupied": "occupied",
+      "available": "available",
+      "slip": "Slip",
+      "details": "Slip details",
+      "assignmentType": "Assignment",
+      "permanent": "Permanent",
+      "seasonal": "Seasonal",
+      "dimensions": "Dimensions",
+      "holder": "Holder",
+      "email": "Email",
+      "boat": "Boat",
+      "availableNotice": "This slip is currently available."
     },
     "dashboard": {
       "welcome": "Welcome, {name}",
