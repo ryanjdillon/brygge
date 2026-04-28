@@ -156,6 +156,7 @@ func main() {
 	volunteerHandler := handlers.NewVolunteerHandler(db, &cfg, log)
 	shoppingListsHandler := handlers.NewShoppingListsHandler(db, &cfg, log)
 	mapHandler := handlers.NewMapHandler(db, &cfg, log)
+	harborHandler := handlers.NewHarborHandler(db, &cfg, log)
 	clubSettingsHandler := handlers.NewClubSettingsHandler(db, &cfg, log)
 	slipSharesHandler := handlers.NewSlipSharesHandler(db, &cfg, log)
 	notificationsHandler := handlers.NewNotificationsHandler(db, &cfg, log)
@@ -236,6 +237,11 @@ func main() {
 			r.Get("/coordinates", mapHandler.HandleGetClubCoordinates)
 			r.Get("/markers", mapHandler.HandleListMarkers)
 			r.Get("/export/gpx", mapHandler.HandleExportGPX)
+		})
+
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.OptionalSessionAuth(sessionService))
+			r.Get("/harbor/layout", harborHandler.HandleGetLayout)
 		})
 
 		if cfg.Features.Commerce {
@@ -482,6 +488,11 @@ func main() {
 					r.Post("/", mapHandler.HandleCreateMarker)
 					r.Put("/{markerID}", mapHandler.HandleUpdateMarker)
 					r.Delete("/{markerID}", mapHandler.HandleDeleteMarker)
+				})
+
+				r.Route("/harbor/layout", func(r chi.Router) {
+					r.Use(middleware.RequireRole("board", "admin", "harbor_master"))
+					r.Put("/", harborHandler.HandlePutLayout)
 				})
 
 				r.Route("/boats", func(r chi.Router) {
