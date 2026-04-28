@@ -31,6 +31,7 @@ const placementSlipId = ref<string | null>(null)
 
 const map = shallowRef<maplibregl.Map | null>(null)
 const dragMarkers = shallowRef<maplibregl.Marker[]>([])
+const deleteMarker = shallowRef<maplibregl.Marker | null>(null)
 const previewSourceAdded = ref(false)
 const dragStart = ref<[number, number] | null>(null)
 
@@ -94,6 +95,26 @@ function pickSlipToPlace(id: string) {
 function clearDragMarkers() {
   for (const m of dragMarkers.value) m.remove()
   dragMarkers.value = []
+  deleteMarker.value?.remove()
+  deleteMarker.value = null
+  highlightSelectedFinger(null)
+}
+
+function highlightSelectedFinger(id: string | null) {
+  const m = map.value
+  if (!m || !m.getLayer('fingers-line')) return
+  m.setPaintProperty('fingers-line', 'line-color', [
+    'case',
+    ['==', ['get', 'kind'], 'finger'],
+    ['case', ['==', ['id'], id ?? ''], '#dc2626', '#0f172a'],
+    '#0f172a',
+  ])
+  m.setPaintProperty('fingers-line', 'line-width', [
+    'case',
+    ['==', ['id'], id ?? ''],
+    6,
+    4,
+  ])
 }
 
 function refreshDragMarkers() {
@@ -101,11 +122,14 @@ function refreshDragMarkers() {
   if (!map.value || !selectedFingerId.value) return
   const f = fingers.value.find((x) => x.id === selectedFingerId.value)
   if (!f?.geometry) return
+
+  highlightSelectedFinger(selectedFingerId.value)
+
   for (let i = 0; i < f.geometry.coordinates.length; i++) {
     const [lng, lat] = f.geometry.coordinates[i]
     const el = document.createElement('div')
     el.style.cssText =
-      'width:14px;height:14px;border-radius:50%;background:#fff;border:2px solid #dc2626;cursor:grab;'
+      'width:16px;height:16px;border-radius:50%;background:#fff;border:3px solid #dc2626;cursor:grab;box-shadow:0 1px 4px rgba(0,0,0,.4);'
     const marker = new maplibregl.Marker({ element: el, draggable: true })
       .setLngLat([lng, lat])
       .addTo(map.value)
@@ -114,7 +138,6 @@ function refreshDragMarkers() {
       const updated = fingers.value.find((x) => x.id === selectedFingerId.value)
       if (!updated?.geometry) return
       updated.geometry.coordinates[i] = [ll.lng, ll.lat]
-      // Trigger reactivity by replacing the array reference.
       updated.geometry = {
         type: 'LineString',
         coordinates: [...updated.geometry.coordinates],
@@ -123,6 +146,24 @@ function refreshDragMarkers() {
     })
     dragMarkers.value.push(marker)
   }
+
+  // Delete (×) button at the line midpoint.
+  const a = f.geometry.coordinates[0]
+  const b = f.geometry.coordinates[1] ?? a
+  const mid: [number, number] = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]
+  const x = document.createElement('button')
+  x.type = 'button'
+  x.textContent = '×'
+  x.setAttribute('aria-label', 'Delete')
+  x.style.cssText =
+    'width:22px;height:22px;border-radius:50%;background:#dc2626;color:#fff;border:2px solid #fff;font-size:14px;line-height:1;font-weight:700;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.4);padding:0;'
+  x.addEventListener('click', (ev) => {
+    ev.stopPropagation()
+    deleteSelectedFinger()
+  })
+  deleteMarker.value = new maplibregl.Marker({ element: x })
+    .setLngLat(mid)
+    .addTo(map.value)
 }
 
 function ensurePreviewSource() {
@@ -207,6 +248,8 @@ function onMapReady(m: maplibregl.Map) {
       },
     })
     dirty.value = true
+    // Drop back to view mode so the user can immediately edit/select.
+    setMode('view')
   })
 
   // Place a queued slip on click.
@@ -221,6 +264,18 @@ function onMapReady(m: maplibregl.Map) {
     dirty.value = true
     placementSlipId.value = null
     setMode('view')
+  })
+
+  // Click-on-empty-map deselects the current finger in view mode.
+  m.on('click', (e) => {
+    if (mode.value !== 'view') return
+    const hits = m.queryRenderedFeatures(e.point, {
+      layers: ['fingers-line'],
+    })
+    if (hits.length === 0) {
+      selectedFingerId.value = null
+      clearDragMarkers()
+    }
   })
 }
 
