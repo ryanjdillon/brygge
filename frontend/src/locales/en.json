@@ -27,6 +27,7 @@
     "loading": "Loading",
     "error": "Error",
     "save": "Save",
+    "saving": "Saving...",
     "cancel": "Cancel",
     "delete": "Delete",
     "confirm": "Confirm",
@@ -266,9 +267,26 @@
       "documents": "Documents",
       "waitingList": "Waiting List",
       "slip": "Slip",
+      "harborMap": "Harbor Map",
       "bookings": "Bookings",
       "featureRequests": "Feature Requests",
       "forum": "Forum"
+    },
+    "harborMap": {
+      "title": "Harbor Map",
+      "subtitle": "Click a boat to see who's berthed there.",
+      "occupied": "occupied",
+      "available": "available",
+      "slip": "Slip",
+      "details": "Slip details",
+      "assignmentType": "Assignment",
+      "permanent": "Permanent",
+      "seasonal": "Seasonal",
+      "dimensions": "Dimensions",
+      "holder": "Holder",
+      "email": "Email",
+      "boat": "Boat",
+      "availableNotice": "This slip is currently available."
     },
     "dashboard": {
       "welcome": "Welcome, {name}",
@@ -435,6 +453,7 @@
     "sidebar": {
       "users": "Members",
       "slips": "Slips",
+      "harborMap": "Harbor Map",
       "waitingList": "Waiting List",
       "events": "Events",
       "bookings": "Bookings",
@@ -704,6 +723,25 @@
       "file": "File",
       "visibility": "Visibility",
       "date": "Date"
+    },
+    "harborMap": {
+      "title": "Harbor Map Editor",
+      "subtitle": "Place dock fingers and slip positions on the harbor chart.",
+      "tool": "Tool",
+      "toolView": "View",
+      "toolFinger": "Add finger",
+      "toolSlip": "Place slip",
+      "fingerDragHint": "Click and drag on the map to draw a dock finger.",
+      "fingerSelectedHint": "Drag the red endpoints to reshape, or delete from the panel.",
+      "placeSlipPick": "Pick a slip from the list, then click on the map.",
+      "placeSlipClick": "Click on the map to place this slip.",
+      "selectedFinger": "Selected finger",
+      "unplacedSlips": "Unplaced slips",
+      "placedSlips": "Placed slips",
+      "allPlaced": "All slips placed.",
+      "placedCount": "{count} of {total} slips placed",
+      "unplace": "Unplace",
+      "unsaved": "Unsaved changes"
     },
     "slips": {
       "newSlip": "New slip",
