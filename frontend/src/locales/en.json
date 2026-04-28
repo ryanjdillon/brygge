@@ -732,7 +732,7 @@
       "toolFinger": "Add finger",
       "toolSlip": "Place slip",
       "fingerDragHint": "Click and drag on the map to draw a dock finger.",
-      "fingerSelectedHint": "Drag the red endpoints to reshape, or delete from the panel.",
+      "fingerSelectedHint": "Drag the endpoints to reshape, or click × to delete.",
       "placeSlipPick": "Pick a slip from the list, then click on the map.",
       "placeSlipClick": "Click on the map to place this slip.",
       "selectedFinger": "Selected finger",
