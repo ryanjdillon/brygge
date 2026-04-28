@@ -2,6 +2,22 @@
 import { ref, computed, onMounted, onUnmounted, watch, shallowRef } from 'vue'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
+
+// In Vite dev mode, maplibre-gl's GeoJSON worker is bundled separately
+// and the worker bundle is missing esbuild's __publicField helper, so
+// every worker call (parsing, projecting) throws silently and GeoJSON
+// sources never populate. Inject the helper into workers as a script
+// before any Map is created.
+{
+  const helperBlob = new Blob(
+    [
+      'self.__publicField = (obj, key, value) => { Object.defineProperty(obj, key, { enumerable: true, configurable: true, writable: true, value }); return value; };',
+    ],
+    { type: 'application/javascript' },
+  )
+  const helperUrl = URL.createObjectURL(helperBlob)
+  void maplibregl.importScriptInWorkers(helperUrl)
+}
 import {
   isFinger,
   isSlip,
