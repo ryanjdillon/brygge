@@ -250,8 +250,7 @@ func main() {
 			INSERT INTO slips (club_id, number, section, length_m, width_m, status,
 			                   map_x, map_y, map_rotation, map_finger_id, map_side)
 			VALUES ($1, $2, $3, $4, $5, 'vacant', $6, $7, $8, $9, $10)
-			ON CONFLICT (club_id, number) DO UPDATE SET
-			  section = EXCLUDED.section,
+			ON CONFLICT (club_id, section, number) DO UPDATE SET
 			  map_x = EXCLUDED.map_x,
 			  map_y = EXCLUDED.map_y,
 			  map_rotation = EXCLUDED.map_rotation,

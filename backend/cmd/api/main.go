@@ -244,6 +244,12 @@ func main() {
 			r.Get("/harbor/layout", harborHandler.HandleGetLayout)
 		})
 
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.AuthenticateSession(sessionService))
+			r.Use(middleware.RequireRole("board", "admin", "harbor_master"))
+			r.Put("/harbor/layout", harborHandler.HandlePutLayout)
+		})
+
 		if cfg.Features.Commerce {
 			r.Route("/orders", func(r chi.Router) {
 				r.Post("/", ordersHandler.HandleCreateOrder)
@@ -488,11 +494,6 @@ func main() {
 					r.Post("/", mapHandler.HandleCreateMarker)
 					r.Put("/{markerID}", mapHandler.HandleUpdateMarker)
 					r.Delete("/{markerID}", mapHandler.HandleDeleteMarker)
-				})
-
-				r.Route("/harbor/layout", func(r chi.Router) {
-					r.Use(middleware.RequireRole("board", "admin", "harbor_master"))
-					r.Put("/", harborHandler.HandlePutLayout)
 				})
 
 				r.Route("/boats", func(r chi.Router) {
