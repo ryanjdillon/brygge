@@ -192,28 +192,74 @@ func main() {
 	}
 	fmt.Printf("  waiting list: %d entries created\n", len(waitingListEmails))
 
-	// Create slips and assign one to slip-member (Kari Sjømann)
-	slips := []struct {
-		number, section string
-		lengthM, widthM float64
+	// Seed dock fingers — placed inside the harbor outline (viewBox 757x463).
+	// Two horizontal piers; slips hang off the south side.
+	fingers := []struct {
+		label                  string
+		x1, y1, x2, y2, widthM float64
+		position               int
 	}{
-		{"A1", "A", 10, 3.5},
-		{"A2", "A", 12, 4.0},
-		{"A3", "A", 8, 3.0},
-		{"B1", "B", 14, 4.5},
-		{"B2", "B", 10, 3.5},
-		{"B3", "B", 12, 4.0},
+		{"A", 200, 200, 420, 200, 1.5, 1},
+		{"B", 200, 280, 440, 280, 1.5, 2},
+	}
+	fingerIDs := make(map[string]string)
+	for _, f := range fingers {
+		var fid string
+		err = db.QueryRow(ctx, `
+			INSERT INTO dock_fingers (club_id, label, x1, y1, x2, y2, width_m, position)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+			ON CONFLICT DO NOTHING
+			RETURNING id
+		`, clubID, f.label, f.x1, f.y1, f.x2, f.y2, f.widthM, f.position).Scan(&fid)
+		if err != nil {
+			// ON CONFLICT DO NOTHING returns no rows; fall back to a SELECT.
+			_ = db.QueryRow(ctx,
+				`SELECT id FROM dock_fingers WHERE club_id = $1 AND label = $2 LIMIT 1`,
+				clubID, f.label,
+			).Scan(&fid)
+		}
+		fingerIDs[f.label] = fid
+	}
+	fmt.Printf("  dock fingers: %d created\n", len(fingers))
+
+	// Create slips with map positions along the fingers and assign one
+	// to slip-member (Kari Sjømann). Boats are oriented perpendicular
+	// to the finger (rotation=90) and on the south (port) side.
+	slips := []struct {
+		number, section            string
+		lengthM, widthM            float64
+		mapX, mapY, mapRotation    float64
+		mapFingerLabel, mapSide    string
+	}{
+		{"A1", "A", 10, 3.5, 240, 215, 90, "A", "port"},
+		{"A2", "A", 12, 4.0, 290, 215, 90, "A", "port"},
+		{"A3", "A", 8, 3.0, 340, 215, 90, "A", "port"},
+		{"B1", "B", 14, 4.5, 240, 295, 90, "B", "port"},
+		{"B2", "B", 10, 3.5, 300, 295, 90, "B", "port"},
+		{"B3", "B", 12, 4.0, 360, 295, 90, "B", "port"},
 	}
 
 	slipIDs := make(map[string]string)
 	for _, s := range slips {
+		var fingerID *string
+		if id, ok := fingerIDs[s.mapFingerLabel]; ok && id != "" {
+			fingerID = &id
+		}
 		var slipID string
 		err = db.QueryRow(ctx, `
-			INSERT INTO slips (club_id, number, section, length_m, width_m, status)
-			VALUES ($1, $2, $3, $4, $5, 'vacant')
-			ON CONFLICT (club_id, number) DO UPDATE SET section = EXCLUDED.section
+			INSERT INTO slips (club_id, number, section, length_m, width_m, status,
+			                   map_x, map_y, map_rotation, map_finger_id, map_side)
+			VALUES ($1, $2, $3, $4, $5, 'vacant', $6, $7, $8, $9, $10)
+			ON CONFLICT (club_id, number) DO UPDATE SET
+			  section = EXCLUDED.section,
+			  map_x = EXCLUDED.map_x,
+			  map_y = EXCLUDED.map_y,
+			  map_rotation = EXCLUDED.map_rotation,
+			  map_finger_id = EXCLUDED.map_finger_id,
+			  map_side = EXCLUDED.map_side
 			RETURNING id
-		`, clubID, s.number, s.section, s.lengthM, s.widthM).Scan(&slipID)
+		`, clubID, s.number, s.section, s.lengthM, s.widthM,
+			s.mapX, s.mapY, s.mapRotation, fingerID, s.mapSide).Scan(&slipID)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "  failed to create slip %s: %v\n", s.number, err)
 			continue
@@ -237,13 +283,34 @@ func main() {
 
 		now := time.Now()
 		_, err = db.Exec(ctx, `
-			INSERT INTO slip_assignments (slip_id, user_id, club_id, harbor_membership_amount, harbor_membership_paid_at, assigned_at)
-			VALUES ($1, $2, $3, 50000, $4, $4)
+			INSERT INTO slip_assignments (slip_id, user_id, club_id, harbor_membership_amount, harbor_membership_paid_at, assigned_at, assignment_type)
+			VALUES ($1, $2, $3, 50000, $4, $4, 'permanent')
 		`, slipA1, slipMemberID, clubID, now)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "  failed to assign slip to Kari: %v\n", err)
 		} else {
 			fmt.Println("  slip A1 assigned to Kari Sjømann (harbor membership paid)")
+		}
+	}
+
+	// Assign slip B2 as a seasonal rental to Medlem Hansen — gives the
+	// harbor map a second occupied slip with a different color.
+	memberID := userIDs["member@brygge.local"]
+	slipB2 := slipIDs["B2"]
+	if memberID != "" && slipB2 != "" {
+		_, _ = db.Exec(ctx, `UPDATE slips SET status = 'occupied' WHERE id = $1`, slipB2)
+		_, _ = db.Exec(ctx, `
+			UPDATE slip_assignments SET released_at = now()
+			WHERE slip_id = $1 AND released_at IS NULL
+		`, slipB2)
+		now := time.Now()
+		if _, err := db.Exec(ctx, `
+			INSERT INTO slip_assignments (slip_id, user_id, club_id, assigned_at, assignment_type)
+			VALUES ($1, $2, $3, $4, 'seasonal')
+		`, slipB2, memberID, clubID, now); err != nil {
+			fmt.Fprintf(os.Stderr, "  failed to assign slip B2: %v\n", err)
+		} else {
+			fmt.Println("  slip B2 assigned to Medlem Hansen (seasonal)")
 		}
 	}
 
