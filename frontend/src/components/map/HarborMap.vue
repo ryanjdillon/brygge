@@ -64,6 +64,9 @@ const slipsCollection = computed(() => ({
     ...f,
     properties: {
       ...f.properties,
+      // maplibre re-keys feature.id to an internal integer in vector
+      // tiles, so we duplicate the canonical UUID into properties.
+      _id: f.id,
       _occupied: Boolean(
         f.properties.occupant_id || f.properties.occupant_last_name,
       ),
@@ -74,7 +77,10 @@ const slipsCollection = computed(() => ({
 
 const fingersCollection = computed(() => ({
   type: 'FeatureCollection' as const,
-  features: fingers.value,
+  features: fingers.value.map((f) => ({
+    ...f,
+    properties: { ...f.properties, _id: f.id },
+  })),
 }))
 
 function fitToContent(m: maplibregl.Map) {
@@ -210,8 +216,10 @@ onMounted(() => {
     })
 
     m.on('click', 'slips-circle', (e) => {
-      const f = e.features?.[0] as unknown as SlipFeature | undefined
-      if (f) emit('select', f)
+      const raw = e.features?.[0]
+      if (!raw) return
+      const id = (raw.properties as { _id?: string })?._id ?? String(raw.id)
+      emit('select', { ...(raw as unknown as SlipFeature), id })
     })
     m.on('mouseenter', 'slips-circle', () => {
       m.getCanvas().style.cursor = 'pointer'
@@ -221,8 +229,16 @@ onMounted(() => {
     })
 
     m.on('click', 'fingers-line', (e) => {
-      const f = e.features?.[0] as unknown as FingerFeature | undefined
-      if (f) emit('select-finger', f)
+      const raw = e.features?.[0]
+      if (!raw) return
+      const id = (raw.properties as { _id?: string })?._id ?? String(raw.id)
+      emit('select-finger', { ...(raw as unknown as FingerFeature), id })
+    })
+    m.on('mouseenter', 'fingers-line', () => {
+      m.getCanvas().style.cursor = 'pointer'
+    })
+    m.on('mouseleave', 'fingers-line', () => {
+      m.getCanvas().style.cursor = ''
     })
 
     fitToContent(m)
