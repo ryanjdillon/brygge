@@ -192,28 +192,55 @@ func main() {
 	}
 	fmt.Printf("  waiting list: %d entries created\n", len(waitingListEmails))
 
-	// Create slips and assign one to slip-member (Kari Sjømann)
+	// Seed dock fingers as GeoJSON LineStrings near the club coords
+	// (60.224303 N, 5.155736 E). Two parallel east-west fingers ~25m
+	// apart; the admin can drag them onto real dock positions later.
+	type fingerSeed struct {
+		label    string
+		geometry string
+		position int
+	}
+	fingers := []fingerSeed{
+		{"A", `{"type":"LineString","coordinates":[[5.15540,60.22445],[5.15620,60.22445]]}`, 1},
+		{"B", `{"type":"LineString","coordinates":[[5.15540,60.22425],[5.15620,60.22425]]}`, 2},
+	}
+	// Idempotent re-seed: clear existing fingers for this club first.
+	_, _ = db.Exec(ctx, `DELETE FROM dock_fingers WHERE club_id = $1`, clubID)
+	for _, f := range fingers {
+		if _, err := db.Exec(ctx,
+			`INSERT INTO dock_fingers (club_id, geometry, position) VALUES ($1, $2::jsonb, $3)`,
+			clubID, f.geometry, f.position,
+		); err != nil {
+			fmt.Fprintf(os.Stderr, "  failed to insert dock finger %s: %v\n", f.label, err)
+		}
+	}
+	fmt.Printf("  dock fingers: %d created\n", len(fingers))
+
+	// Create slips with GeoJSON Point locations along the fingers.
 	slips := []struct {
-		number, section string
-		lengthM, widthM float64
+		number, section, location string
+		lengthM, widthM           float64
 	}{
-		{"A1", "A", 10, 3.5},
-		{"A2", "A", 12, 4.0},
-		{"A3", "A", 8, 3.0},
-		{"B1", "B", 14, 4.5},
-		{"B2", "B", 10, 3.5},
-		{"B3", "B", 12, 4.0},
+		{"A1", "A", `{"type":"Point","coordinates":[5.15555,60.22440]}`, 10, 3.5},
+		{"A2", "A", `{"type":"Point","coordinates":[5.15580,60.22440]}`, 12, 4.0},
+		{"A3", "A", `{"type":"Point","coordinates":[5.15605,60.22440]}`, 8, 3.0},
+		{"B1", "B", `{"type":"Point","coordinates":[5.15555,60.22420]}`, 14, 4.5},
+		{"B2", "B", `{"type":"Point","coordinates":[5.15580,60.22420]}`, 10, 3.5},
+		{"B3", "B", `{"type":"Point","coordinates":[5.15605,60.22420]}`, 12, 4.0},
 	}
 
 	slipIDs := make(map[string]string)
 	for _, s := range slips {
 		var slipID string
 		err = db.QueryRow(ctx, `
-			INSERT INTO slips (club_id, number, section, length_m, width_m, status)
-			VALUES ($1, $2, $3, $4, $5, 'vacant')
-			ON CONFLICT (club_id, number) DO UPDATE SET section = EXCLUDED.section
+			INSERT INTO slips (club_id, number, section, length_m, width_m, status, location)
+			VALUES ($1, $2, $3, $4, $5, 'vacant', $6::jsonb)
+			ON CONFLICT (club_id, section, number) DO UPDATE SET
+			  location = EXCLUDED.location,
+			  length_m = EXCLUDED.length_m,
+			  width_m  = EXCLUDED.width_m
 			RETURNING id
-		`, clubID, s.number, s.section, s.lengthM, s.widthM).Scan(&slipID)
+		`, clubID, s.number, s.section, s.lengthM, s.widthM, s.location).Scan(&slipID)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "  failed to create slip %s: %v\n", s.number, err)
 			continue
@@ -237,13 +264,35 @@ func main() {
 
 		now := time.Now()
 		_, err = db.Exec(ctx, `
-			INSERT INTO slip_assignments (slip_id, user_id, club_id, harbor_membership_amount, harbor_membership_paid_at, assigned_at)
-			VALUES ($1, $2, $3, 50000, $4, $4)
+			INSERT INTO slip_assignments (slip_id, user_id, club_id, harbor_membership_amount, harbor_membership_paid_at, assigned_at, assignment_type)
+			VALUES ($1, $2, $3, 50000, $4, $4, 'permanent')
 		`, slipA1, slipMemberID, clubID, now)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "  failed to assign slip to Kari: %v\n", err)
 		} else {
 			fmt.Println("  slip A1 assigned to Kari Sjømann (harbor membership paid)")
+		}
+	}
+
+	// Assign slip B2 as a seasonal rental to Medlem Hansen so the
+	// harbor map demo includes a second occupied slip with a different
+	// color (permanent vs seasonal).
+	memberID := userIDs["member@brygge.local"]
+	slipB2 := slipIDs["B2"]
+	if memberID != "" && slipB2 != "" {
+		_, _ = db.Exec(ctx, `UPDATE slips SET status = 'occupied' WHERE id = $1`, slipB2)
+		_, _ = db.Exec(ctx, `
+			UPDATE slip_assignments SET released_at = now()
+			WHERE slip_id = $1 AND released_at IS NULL
+		`, slipB2)
+		now := time.Now()
+		if _, err := db.Exec(ctx, `
+			INSERT INTO slip_assignments (slip_id, user_id, club_id, assigned_at, assignment_type)
+			VALUES ($1, $2, $3, $4, 'seasonal')
+		`, slipB2, memberID, clubID, now); err != nil {
+			fmt.Fprintf(os.Stderr, "  failed to assign slip B2: %v\n", err)
+		} else {
+			fmt.Println("  slip B2 assigned to Medlem Hansen (seasonal)")
 		}
 	}
 

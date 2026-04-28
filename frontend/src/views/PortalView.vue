@@ -19,6 +19,7 @@ import {
   BrushCleaning,
   Bell,
   ShieldCheck,
+  Map,
   Menu,
   X,
 } from 'lucide-vue-next'
@@ -47,6 +48,7 @@ const navItems = computed<NavItem[]>(() => {
     { to: '/portal/documents', icon: FileText, label: t('portal.sidebar.documents') },
     { to: '/portal/waiting-list', icon: ListOrdered, label: t('portal.sidebar.waitingList') },
     { to: '/portal/slip', icon: Anchor, label: t('portal.sidebar.slip'), roles: ['slip_holder'] },
+    { to: '/portal/harbor-map', icon: Map, label: t('portal.sidebar.harborMap') },
     { to: '/portal/bookings', icon: CalendarDays, label: t('portal.sidebar.bookings'), feature: 'bookings' },
     { to: '/portal/volunteer', icon: BrushCleaning, label: t('volunteer.title'), feature: 'projects' },
     { to: '/portal/notifications', icon: Bell, label: t('notifications.title'), feature: 'communications' },

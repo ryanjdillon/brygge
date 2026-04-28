@@ -103,6 +103,11 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/portal/SlipView.vue'),
       },
       {
+        path: 'harbor-map',
+        name: 'portal-harbor-map',
+        component: () => import('@/views/portal/HarborMapView.vue'),
+      },
+      {
         path: 'bookings',
         name: 'portal-bookings',
         component: () => import('@/views/portal/BookingsView.vue'),
@@ -183,6 +188,11 @@ const routes: RouteRecordRaw[] = [
         path: 'slips',
         name: 'admin-slips',
         component: () => import('@/views/admin/SlipsAdminView.vue'),
+      },
+      {
+        path: 'harbor-map',
+        name: 'admin-harbor-map',
+        component: () => import('@/views/admin/HarborMapAdminView.vue'),
       },
       {
         path: 'waiting-list',

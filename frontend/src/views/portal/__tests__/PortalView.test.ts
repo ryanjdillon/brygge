@@ -16,6 +16,7 @@ vi.mock('lucide-vue-next', () => ({
   BrushCleaning: { template: '<span data-icon="brush-cleaning" />' },
   Bell: { template: '<span data-icon="bell" />' },
   ShieldCheck: { template: '<span data-icon="shield-check" />' },
+  Map: { template: '<span data-icon="map" />' },
   Menu: { template: '<span data-icon="menu" />' },
   X: { template: '<span data-icon="x" />' },
 }))

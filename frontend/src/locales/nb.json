@@ -27,6 +27,7 @@
     "loading": "Laster",
     "error": "Feil",
     "save": "Lagre",
+    "saving": "Lagrer...",
     "cancel": "Avbryt",
     "delete": "Slett",
     "confirm": "Bekreft",
@@ -262,9 +263,26 @@
       "documents": "Dokumenter",
       "waitingList": "Venteliste",
       "slip": "Havneplass",
+      "harborMap": "Havnekart",
       "bookings": "Bestillinger",
       "featureRequests": "Forslag og ønsker",
       "forum": "Forum"
+    },
+    "harborMap": {
+      "title": "Havnekart",
+      "subtitle": "Trykk på en båt for å se hvem som ligger der.",
+      "occupied": "opptatt",
+      "available": "ledig",
+      "slip": "Båtplass",
+      "details": "Plassdetaljer",
+      "assignmentType": "Tildeling",
+      "permanent": "Fastplass",
+      "seasonal": "Sesongplass",
+      "dimensions": "Mål",
+      "holder": "Innehaver",
+      "email": "E-post",
+      "boat": "Båt",
+      "availableNotice": "Denne plassen er ledig."
     },
     "dashboard": {
       "welcome": "Velkommen, {name}",
@@ -431,6 +449,7 @@
     "sidebar": {
       "users": "Medlemmer",
       "slips": "Båtplasser",
+      "harborMap": "Havnekart",
       "waitingList": "Venteliste",
       "events": "Arrangementer",
       "bookings": "Bestillinger",
@@ -700,6 +719,25 @@
       "file": "Fil",
       "visibility": "Synlighet",
       "date": "Dato"
+    },
+    "harborMap": {
+      "title": "Havnekart-redigering",
+      "subtitle": "Plasser brygger og båtplasser på havnekartet.",
+      "tool": "Verktøy",
+      "toolView": "Vis",
+      "toolFinger": "Ny brygge",
+      "toolSlip": "Plasser plass",
+      "fingerDragHint": "Klikk og dra på kartet for å tegne en brygge.",
+      "fingerSelectedHint": "Dra de røde endepunktene for å justere, eller slett i panelet.",
+      "placeSlipPick": "Velg en plass i lista, og klikk så på kartet.",
+      "placeSlipClick": "Klikk på kartet for å plassere denne plassen.",
+      "selectedFinger": "Valgt brygge",
+      "unplacedSlips": "Uplasserte båtplasser",
+      "placedSlips": "Plasserte båtplasser",
+      "allPlaced": "Alle plasser er plassert.",
+      "placedCount": "{count} av {total} plasser plassert",
+      "unplace": "Fjern plassering",
+      "unsaved": "Ulagrede endringer"
     },
     "slips": {
       "newSlip": "Ny båtplass",
