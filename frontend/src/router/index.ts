@@ -190,6 +190,11 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/SlipsAdminView.vue'),
       },
       {
+        path: 'harbor-map',
+        name: 'admin-harbor-map',
+        component: () => import('@/views/admin/HarborMapAdminView.vue'),
+      },
+      {
         path: 'waiting-list',
         name: 'admin-waiting-list',
         component: () => import('@/views/admin/WaitingListAdminView.vue'),

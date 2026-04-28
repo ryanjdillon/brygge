@@ -27,6 +27,7 @@
     "loading": "Laster",
     "error": "Feil",
     "save": "Lagre",
+    "saving": "Lagrer...",
     "cancel": "Avbryt",
     "delete": "Slett",
     "confirm": "Bekreft",
@@ -448,6 +449,7 @@
     "sidebar": {
       "users": "Medlemmer",
       "slips": "Båtplasser",
+      "harborMap": "Havnekart",
       "waitingList": "Venteliste",
       "events": "Arrangementer",
       "bookings": "Bestillinger",
@@ -717,6 +719,26 @@
       "file": "Fil",
       "visibility": "Synlighet",
       "date": "Dato"
+    },
+    "harborMap": {
+      "title": "Havnekart-redigering",
+      "subtitle": "Plasser brygger og båtplasser på havnekartet.",
+      "tool": "Verktøy",
+      "toolView": "Vis",
+      "toolFinger": "Ny brygge",
+      "toolSlip": "Plasser plass",
+      "fingerFirstPoint": "Klikk for å sette første endepunkt på bryggen.",
+      "fingerSecondPoint": "Klikk for å sette andre endepunkt.",
+      "placeSlipPick": "Velg en plass i lista, og klikk så på kartet.",
+      "placeSlipClick": "Klikk på kartet for å plassere denne plassen.",
+      "fingers": "Brygger",
+      "noFingers": "Ingen brygger ennå.",
+      "unplacedSlips": "Uplasserte båtplasser",
+      "allPlaced": "Alle plasser er plassert.",
+      "placedCount": "{count} av {total} plasser plassert",
+      "selected": "Valgt plass",
+      "unplace": "Fjern",
+      "unsaved": "Ulagrede endringer"
     },
     "slips": {
       "newSlip": "Ny båtplass",
