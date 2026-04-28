@@ -262,9 +262,26 @@
       "documents": "Dokumenter",
       "waitingList": "Venteliste",
       "slip": "Havneplass",
+      "harborMap": "Havnekart",
       "bookings": "Bestillinger",
       "featureRequests": "Forslag og ønsker",
       "forum": "Forum"
+    },
+    "harborMap": {
+      "title": "Havnekart",
+      "subtitle": "Trykk på en båt for å se hvem som ligger der.",
+      "occupied": "opptatt",
+      "available": "ledig",
+      "slip": "Båtplass",
+      "details": "Plassdetaljer",
+      "assignmentType": "Tildeling",
+      "permanent": "Fastplass",
+      "seasonal": "Sesongplass",
+      "dimensions": "Mål",
+      "holder": "Innehaver",
+      "email": "E-post",
+      "boat": "Båt",
+      "availableNotice": "Denne plassen er ledig."
     },
     "dashboard": {
       "welcome": "Velkommen, {name}",
