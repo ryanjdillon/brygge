@@ -21,7 +21,7 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   highlightSlipId: null,
   fallbackCenter: () => [5.155736, 60.224303],
-  fallbackZoom: 17,
+  fallbackZoom: 18,
 })
 
 const emit = defineEmits<{
@@ -87,7 +87,7 @@ function fitToContent(m: maplibregl.Map) {
         [minLng, minLat],
         [maxLng, maxLat],
       ],
-      { padding: 80, maxZoom: 16, duration: 0 },
+      { padding: 80, maxZoom: 18, duration: 0 },
     )
   }
 }
@@ -99,17 +99,17 @@ onMounted(() => {
     style: {
       version: 8,
       sources: {
-        sjokart: {
+        topo: {
           type: 'raster',
           tiles: [
-            'https://cache.kartverket.no/v1/wmts/1.0.0/sjokartraster/default/webmercator/{z}/{y}/{x}.png',
+            'https://cache.kartverket.no/v1/wmts/1.0.0/topo/default/webmercator/{z}/{y}/{x}.png',
           ],
           tileSize: 256,
-          maxzoom: 17,
+          maxzoom: 18,
           attribution: '&copy; <a href="https://kartverket.no">Kartverket</a>',
         },
       },
-      layers: [{ id: 'sjokart', type: 'raster', source: 'sjokart' }],
+      layers: [{ id: 'topo', type: 'raster', source: 'topo' }],
     },
     center: props.fallbackCenter,
     zoom: props.fallbackZoom,
