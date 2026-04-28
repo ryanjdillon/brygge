@@ -27,6 +27,7 @@
     "loading": "Loading",
     "error": "Error",
     "save": "Save",
+    "saving": "Saving...",
     "cancel": "Cancel",
     "delete": "Delete",
     "confirm": "Confirm",
@@ -452,6 +453,7 @@
     "sidebar": {
       "users": "Members",
       "slips": "Slips",
+      "harborMap": "Harbor Map",
       "waitingList": "Waiting List",
       "events": "Events",
       "bookings": "Bookings",
@@ -721,6 +723,26 @@
       "file": "File",
       "visibility": "Visibility",
       "date": "Date"
+    },
+    "harborMap": {
+      "title": "Harbor Map Editor",
+      "subtitle": "Place dock fingers and slip positions on the harbor.",
+      "tool": "Tool",
+      "toolView": "View",
+      "toolFinger": "Add finger",
+      "toolSlip": "Place slip",
+      "fingerFirstPoint": "Click to set the first endpoint of the dock finger.",
+      "fingerSecondPoint": "Click to set the second endpoint.",
+      "placeSlipPick": "Pick a slip from the list, then click on the map.",
+      "placeSlipClick": "Click on the map to place this slip.",
+      "fingers": "Dock fingers",
+      "noFingers": "No dock fingers yet.",
+      "unplacedSlips": "Unplaced slips",
+      "allPlaced": "All slips placed.",
+      "placedCount": "{count} of {total} slips placed",
+      "selected": "Selected slip",
+      "unplace": "Remove",
+      "unsaved": "Unsaved changes"
     },
     "slips": {
       "newSlip": "New slip",
