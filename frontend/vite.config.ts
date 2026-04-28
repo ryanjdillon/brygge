@@ -10,6 +10,9 @@ export default defineConfig({
       '@': resolve(__dirname, 'src'),
     },
   },
+  optimizeDeps: {
+    include: ['maplibre-gl'],
+  },
   server: {
     proxy: {
       '/api': {
