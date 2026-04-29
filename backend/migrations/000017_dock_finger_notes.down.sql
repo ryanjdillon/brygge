@@ -1,0 +1,1 @@
+ALTER TABLE dock_fingers DROP COLUMN IF EXISTS notes;
