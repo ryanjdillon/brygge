@@ -2319,6 +2319,8 @@ export interface components {
             readonly $schema?: string;
             /** @description Street address */
             address_line: string;
+            /** @description Free-text admin notes (admin-only) */
+            admin_notes: string;
             /** @description City */
             city: string;
             /**
@@ -2373,6 +2375,7 @@ export interface components {
              */
             readonly $schema?: string;
             address_line?: string;
+            admin_notes?: string;
             city?: string;
             email?: string;
             first_name?: string;

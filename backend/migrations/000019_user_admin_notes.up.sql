@@ -1,0 +1,2 @@
+ALTER TABLE users
+    ADD COLUMN admin_notes TEXT NOT NULL DEFAULT '';

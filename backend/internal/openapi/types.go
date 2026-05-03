@@ -683,6 +683,7 @@ type AdminUser struct {
 	PostalCode         string    `json:"postal_code" doc:"Postal code"`
 	City               string    `json:"city" doc:"City"`
 	IsLocal            bool      `json:"is_local" doc:"Local-resident rate eligible"`
+	AdminNotes         string    `json:"admin_notes" doc:"Free-text admin notes (admin-only)"`
 	Roles              []string  `json:"roles" doc:"Assigned roles"`
 	SlipID             *string   `json:"slip_id,omitempty" doc:"Active slip assignment slip UUID, if any"`
 	SlipNumber         string    `json:"slip_number" doc:"Active slip number (empty when unassigned)"`
@@ -711,6 +712,7 @@ type AdminUserUpdate struct {
 	PostalCode  *string `json:"postal_code,omitempty" doc:"Postal code"`
 	City        *string `json:"city,omitempty" doc:"City"`
 	IsLocal     *bool   `json:"is_local,omitempty" doc:"Local-resident rate eligible"`
+	AdminNotes  *string `json:"admin_notes,omitempty" doc:"Free-text admin notes (admin-only, never returned to the member themselves)"`
 }
 
 type AdminUsersResponse struct {

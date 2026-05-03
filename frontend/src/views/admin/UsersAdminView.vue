@@ -37,6 +37,7 @@ const sortParam = computed(() => (sortDir.value === 'desc' ? '-' : '') + sortFie
 type SpotFilter = '' | 'permanent' | 'seasonal' | 'none'
 const spotFilter = ref<SpotFilter>('')
 const dockFilter = ref<string>('')
+const notesOnly = ref(false)
 
 const PAGE_SIZE = 100
 const offset = ref(0)
@@ -56,7 +57,7 @@ function onSearchInput() {
 }
 
 const { data: usersResponse, isLoading, isError } = useQuery({
-  queryKey: ['admin', 'users', sortParam, spotFilter, dockFilter, searchQuery, offset],
+  queryKey: ['admin', 'users', sortParam, spotFilter, dockFilter, notesOnly, searchQuery, offset],
   queryFn: async () =>
     unwrap(
       await client.GET('/api/v1/admin/users', {
@@ -67,6 +68,7 @@ const { data: usersResponse, isLoading, isError } = useQuery({
             sort: sortParam.value,
             ...(spotFilter.value ? { spot: spotFilter.value } : {}),
             ...(dockFilter.value ? { dock: dockFilter.value } : {}),
+            ...(notesOnly.value ? { notes_only: 'true' } : {}),
             ...(searchQuery.value ? { q: searchQuery.value } : {}),
           } as any,
         },
@@ -79,6 +81,10 @@ function onSpotFilterChange() {
 }
 
 function onDockFilterChange() {
+  offset.value = 0
+}
+
+function onNotesOnlyChange() {
   offset.value = 0
 }
 
@@ -246,6 +252,7 @@ async function startDetailEdit() {
     postal_code: u.postal_code ?? '',
     city: u.city ?? '',
     is_local: !!u.is_local,
+    admin_notes: u.admin_notes ?? '',
   })
   editRoles.value = [...(u.roles ?? [])]
   editSlipId.value = u.slip_id ?? ''
@@ -501,6 +508,19 @@ async function submitImport() {
           <option value="seasonal">{{ t('admin.users.spotFilterLabel') }}: {{ t('admin.users.spotSeasonal') }}</option>
           <option value="none">{{ t('admin.users.spotFilterLabel') }}: {{ t('admin.users.spotNone') }}</option>
         </select>
+        <label
+          v-if="auth.hasRole('admin')"
+          class="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-700"
+          :title="t('admin.users.notesOnlyHint')"
+        >
+          <input
+            v-model="notesOnly"
+            type="checkbox"
+            class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            @change="onNotesOnlyChange"
+          />
+          <span>{{ t('admin.users.notesOnly') }}</span>
+        </label>
         <button
           class="inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"
           @click="openCreateModal"
@@ -672,6 +692,10 @@ async function submitImport() {
             <dd class="col-span-2 text-gray-900">{{ detailUser.city || '—' }}</dd>
             <dt class="text-xs font-medium text-gray-500">{{ t('admin.users.isLocal') }}</dt>
             <dd class="col-span-2 text-gray-900">{{ detailUser.is_local ? t('common.yes') : t('common.no') }}</dd>
+            <template v-if="detailUser.admin_notes">
+              <dt class="text-xs font-medium text-gray-500">{{ t('admin.users.adminNotes') }}</dt>
+              <dd class="col-span-2 whitespace-pre-wrap rounded-md bg-amber-50 px-2 py-1 text-gray-900">{{ detailUser.admin_notes }}</dd>
+            </template>
             <dt class="text-xs font-medium text-gray-500">{{ t('admin.users.spot') }}</dt>
             <dd class="col-span-2 text-gray-900">
               <template v-if="detailUser.slip_id">
@@ -783,6 +807,19 @@ async function submitImport() {
                 <option value="seasonal">{{ t('admin.users.spotSeasonal') }}</option>
               </select>
             </div>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-700" for="ed-notes">
+              {{ t('admin.users.adminNotes') }}
+              <span class="ml-1 font-normal text-gray-400">({{ t('admin.users.adminNotesHint') }})</span>
+            </label>
+            <textarea
+              id="ed-notes"
+              v-model="editForm.admin_notes"
+              rows="3"
+              class="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm"
+              :placeholder="t('admin.users.adminNotesPlaceholder')"
+            />
           </div>
           <p v-if="detailError" class="rounded-md bg-red-50 px-2 py-1 text-xs text-red-700">{{ detailError }}</p>
           <div class="flex justify-end gap-2 pt-1">

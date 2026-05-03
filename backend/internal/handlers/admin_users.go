@@ -125,6 +125,14 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 		nextArg++
 	}
 
+	// Optional ?notes_only=true filter restricts to users with non-empty
+	// admin_notes (an admin-only convenience for review backlogs).
+	notesClause := ""
+	if v := r.URL.Query().Get("notes_only"); v != "" &&
+		(strings.EqualFold(v, "true") || v == "1" || strings.EqualFold(v, "yes")) {
+		notesClause = " AND COALESCE(u.admin_notes, '') <> ''"
+	}
+
 	// Optional ?q= fuzzy search across first_name, last_name, email.
 	// Token-AND so multi-word queries (e.g. "ola nor") narrow the result;
 	// each token is independently anchored with ILIKE %tok% across the
@@ -149,7 +157,7 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 		 LEFT JOIN slip_assignments sa
 		        ON sa.user_id = u.id AND sa.club_id = u.club_id AND sa.released_at IS NULL
 		 LEFT JOIN slips s ON s.id = sa.slip_id
-		 WHERE u.club_id = $1 `+spotFilter+dockClause+searchClause,
+		 WHERE u.club_id = $1 `+spotFilter+dockClause+notesClause+searchClause,
 		args...,
 	).Scan(&totalCount)
 	if err != nil {
@@ -163,7 +171,7 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 	rows, err := h.db.Query(ctx,
 		`SELECT u.id, u.email, u.first_name, u.last_name, COALESCE(u.full_name, ''),
 		        u.phone, u.address_line, u.postal_code, u.city,
-		        u.is_local, u.created_at, u.updated_at,
+		        u.is_local, u.admin_notes, u.created_at, u.updated_at,
 		        COALESCE(array_agg(DISTINCT ur.role) FILTER (WHERE ur.role IS NOT NULL), '{}'),
 		        sa.slip_id, COALESCE(s.number, ''), COALESCE(s.section, ''),
 		        COALESCE(sa.assignment_type::text, '')
@@ -172,7 +180,7 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 		 LEFT JOIN slip_assignments sa
 		        ON sa.user_id = u.id AND sa.club_id = u.club_id AND sa.released_at IS NULL
 		 LEFT JOIN slips s ON s.id = sa.slip_id
-		 WHERE u.club_id = $1 `+spotFilter+dockClause+searchClause+`
+		 WHERE u.club_id = $1 `+spotFilter+dockClause+notesClause+searchClause+`
 		 GROUP BY u.id, sa.slip_id, sa.assignment_type, s.number, s.section
 		 ORDER BY `+sortCol+`
 		 LIMIT $`+strconv.Itoa(limitArg)+` OFFSET $`+strconv.Itoa(offsetArg),
@@ -196,6 +204,7 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 		PostalCode         string    `json:"postal_code"`
 		City               string    `json:"city"`
 		IsLocal            bool      `json:"is_local"`
+		AdminNotes         string    `json:"admin_notes"`
 		CreatedAt          time.Time `json:"created_at"`
 		UpdatedAt          time.Time `json:"updated_at"`
 		Roles              []string  `json:"roles"`
@@ -208,7 +217,7 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 	var users []userRow
 	for rows.Next() {
 		var u userRow
-		if err := rows.Scan(&u.ID, &u.Email, &u.FirstName, &u.LastName, &u.FullName, &u.Phone, &u.AddressLine, &u.PostalCode, &u.City, &u.IsLocal, &u.CreatedAt, &u.UpdatedAt, &u.Roles, &u.SlipID, &u.SlipNumber, &u.SlipSection, &u.SlipAssignmentType); err != nil {
+		if err := rows.Scan(&u.ID, &u.Email, &u.FirstName, &u.LastName, &u.FullName, &u.Phone, &u.AddressLine, &u.PostalCode, &u.City, &u.IsLocal, &u.AdminNotes, &u.CreatedAt, &u.UpdatedAt, &u.Roles, &u.SlipID, &u.SlipNumber, &u.SlipSection, &u.SlipAssignmentType); err != nil {
 			h.log.Error().Err(err).Msg("failed to scan user row")
 			Error(w, http.StatusInternalServerError, "internal error")
 			return
@@ -248,26 +257,27 @@ func (h *AdminUsersHandler) HandleGetUser(w http.ResponseWriter, r *http.Request
 	}
 
 	type userDetail struct {
-		ID        string   `json:"id"`
-		Email     string   `json:"email"`
-		FirstName string   `json:"first_name"`
-		LastName  string   `json:"last_name"`
-		FullName  string   `json:"full_name"`
-		Phone     string   `json:"phone"`
-		Address   string   `json:"address_line"`
-		PostalCd  string   `json:"postal_code"`
-		City      string   `json:"city"`
-		IsLocal   bool     `json:"is_local"`
-		CreatedAt string   `json:"created_at"`
-		UpdatedAt string   `json:"updated_at"`
-		Roles     []string `json:"roles"`
+		ID         string   `json:"id"`
+		Email      string   `json:"email"`
+		FirstName  string   `json:"first_name"`
+		LastName   string   `json:"last_name"`
+		FullName   string   `json:"full_name"`
+		Phone      string   `json:"phone"`
+		Address    string   `json:"address_line"`
+		PostalCd   string   `json:"postal_code"`
+		City       string   `json:"city"`
+		IsLocal    bool     `json:"is_local"`
+		AdminNotes string   `json:"admin_notes"`
+		CreatedAt  string   `json:"created_at"`
+		UpdatedAt  string   `json:"updated_at"`
+		Roles      []string `json:"roles"`
 	}
 
 	var u userDetail
 	err := h.db.QueryRow(ctx,
 		`SELECT u.id, u.email, u.first_name, u.last_name, COALESCE(u.full_name, ''),
 		        u.phone, u.address_line, u.postal_code, u.city,
-		        u.is_local, u.created_at, u.updated_at,
+		        u.is_local, u.admin_notes, u.created_at, u.updated_at,
 		        COALESCE(array_agg(ur.role) FILTER (WHERE ur.role IS NOT NULL), '{}')
 		 FROM users u
 		 LEFT JOIN user_roles ur ON ur.user_id = u.id AND ur.club_id = u.club_id
@@ -276,7 +286,7 @@ func (h *AdminUsersHandler) HandleGetUser(w http.ResponseWriter, r *http.Request
 		userID, claims.ClubID,
 	).Scan(&u.ID, &u.Email, &u.FirstName, &u.LastName, &u.FullName,
 		&u.Phone, &u.Address, &u.PostalCd, &u.City,
-		&u.IsLocal, &u.CreatedAt, &u.UpdatedAt, &u.Roles)
+		&u.IsLocal, &u.AdminNotes, &u.CreatedAt, &u.UpdatedAt, &u.Roles)
 	if err == pgx.ErrNoRows {
 		Error(w, http.StatusNotFound, "user not found")
 		return
@@ -605,6 +615,7 @@ type adminUserCreateRequest struct {
 	PostalCode  string   `json:"postal_code"`
 	City        string   `json:"city"`
 	IsLocal     bool     `json:"is_local"`
+	AdminNotes  string   `json:"admin_notes"`
 	Roles       []string `json:"roles"`
 }
 
@@ -711,10 +722,10 @@ func (h *AdminUsersHandler) createUser(ctx context.Context, clubID, actorID stri
 
 	var id string
 	err = tx.QueryRow(ctx,
-		`INSERT INTO users (club_id, email, first_name, last_name, phone, address_line, postal_code, city, is_local)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		`INSERT INTO users (club_id, email, first_name, last_name, phone, address_line, postal_code, city, is_local, admin_notes)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		 RETURNING id`,
-		clubID, email, firstName, lastName, req.Phone, req.AddressLine, req.PostalCode, req.City, req.IsLocal,
+		clubID, email, firstName, lastName, req.Phone, req.AddressLine, req.PostalCode, req.City, req.IsLocal, req.AdminNotes,
 	).Scan(&id)
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -847,6 +858,7 @@ func (h *AdminUsersHandler) HandleImportUsersCSV(w http.ResponseWriter, r *http.
 			AddressLine: get(record, "address_line"),
 			PostalCode:  get(record, "postal_code"),
 			City:        get(record, "city"),
+			AdminNotes:  get(record, "admin_notes"),
 		}
 		if v := get(record, "is_local"); v != "" {
 			req.IsLocal = strings.EqualFold(v, "true") || v == "1" || strings.EqualFold(v, "yes")
@@ -910,6 +922,7 @@ func (h *AdminUsersHandler) HandleExportUsersCSV(w http.ResponseWriter, r *http.
 		SELECT u.email,
 		       u.first_name, u.last_name,
 		       u.phone, u.address_line, u.postal_code, u.city, u.is_local,
+		       COALESCE(u.admin_notes, ''),
 		       COALESCE(
 		           (SELECT string_agg(ur.role::text, ';' ORDER BY ur.role::text)
 		              FROM user_roles ur
@@ -935,14 +948,15 @@ func (h *AdminUsersHandler) HandleExportUsersCSV(w http.ResponseWriter, r *http.
 	cw := csv.NewWriter(w)
 	_ = cw.Write([]string{
 		"email", "first_name", "last_name",
-		"phone", "address_line", "postal_code", "city", "is_local", "roles",
+		"phone", "address_line", "postal_code", "city", "is_local",
+		"admin_notes", "roles",
 	})
 
 	count := 0
 	for rows.Next() {
-		var email, firstName, lastName, phone, addr, postal, city, roles string
+		var email, firstName, lastName, phone, addr, postal, city, notes, roles string
 		var isLocal bool
-		if err := rows.Scan(&email, &firstName, &lastName, &phone, &addr, &postal, &city, &isLocal, &roles); err != nil {
+		if err := rows.Scan(&email, &firstName, &lastName, &phone, &addr, &postal, &city, &isLocal, &notes, &roles); err != nil {
 			h.log.Error().Err(err).Msg("failed to scan user CSV row")
 			continue
 		}
@@ -950,7 +964,7 @@ func (h *AdminUsersHandler) HandleExportUsersCSV(w http.ResponseWriter, r *http.
 		if isLocal {
 			isLocalStr = "true"
 		}
-		_ = cw.Write([]string{email, firstName, lastName, phone, addr, postal, city, isLocalStr, roles})
+		_ = cw.Write([]string{email, firstName, lastName, phone, addr, postal, city, isLocalStr, notes, roles})
 		count++
 	}
 	cw.Flush()
@@ -970,6 +984,7 @@ type adminUserUpdateRequest struct {
 	PostalCode  *string `json:"postal_code,omitempty"`
 	City        *string `json:"city,omitempty"`
 	IsLocal     *bool   `json:"is_local,omitempty"`
+	AdminNotes  *string `json:"admin_notes,omitempty"`
 }
 
 // HandleUpdateUser applies a partial update to a user's profile fields.
@@ -1034,6 +1049,9 @@ func (h *AdminUsersHandler) HandleUpdateUser(w http.ResponseWriter, r *http.Requ
 	}
 	if req.IsLocal != nil {
 		add("is_local", *req.IsLocal)
+	}
+	if req.AdminNotes != nil {
+		add("admin_notes", *req.AdminNotes)
 	}
 	if len(sets) == 0 {
 		Error(w, http.StatusBadRequest, "no fields to update")
