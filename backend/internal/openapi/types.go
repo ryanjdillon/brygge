@@ -684,6 +684,7 @@ type AdminUser struct {
 	City               string    `json:"city" doc:"City"`
 	IsLocal            bool      `json:"is_local" doc:"Local-resident rate eligible"`
 	AdminNotes         string    `json:"admin_notes" doc:"Free-text admin notes (admin-only)"`
+	Slips              []AdminUserSlipsAssignment `json:"slips" doc:"All active slip assignments for the user"`
 	Roles              []string  `json:"roles" doc:"Assigned roles"`
 	SlipID             *string   `json:"slip_id,omitempty" doc:"Active slip assignment slip UUID, if any"`
 	SlipNumber         string    `json:"slip_number" doc:"Active slip number (empty when unassigned)"`
@@ -698,6 +699,20 @@ type AdminUser struct {
 type AdminUserSlipUpdate struct {
 	SlipID         *string `json:"slip_id" doc:"Slip UUID to assign, or null to release"`
 	AssignmentType string  `json:"assignment_type,omitempty" doc:"permanent | seasonal (default permanent)"`
+}
+
+// AdminUserSlipsAssignment is one row in AdminUserSlipsUpdate.Slips.
+type AdminUserSlipsAssignment struct {
+	SlipID         string `json:"slip_id" doc:"Slip UUID"`
+	AssignmentType string `json:"assignment_type,omitempty" doc:"permanent | seasonal (default permanent)"`
+}
+
+// AdminUserSlipsUpdate is the request body for PUT /api/v1/admin/users/{userID}/slips.
+// Replaces the user's full set of active slip assignments. Slips not in
+// the list are released. New slips must currently be vacant. Type changes
+// are applied in place. Pass an empty list to release all.
+type AdminUserSlipsUpdate struct {
+	Slips []AdminUserSlipsAssignment `json:"slips" doc:"Full desired set of active slip assignments"`
 }
 
 // AdminUserUpdate is the request body for PATCH /api/v1/admin/users/{userID}.

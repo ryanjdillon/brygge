@@ -2321,6 +2321,8 @@ export interface components {
             address_line: string;
             /** @description Free-text admin notes (admin-only) */
             admin_notes: string;
+            /** @description All active slip assignments for the user */
+            slips?: { slip_id: string; slip_number?: string; slip_section?: string; assignment_type?: string }[] | null;
             /** @description City */
             city: string;
             /**

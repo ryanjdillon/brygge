@@ -224,8 +224,10 @@ const detailEditing = ref(false)
 const detailError = ref<string | null>(null)
 const editForm = reactive<UpdateBody>({})
 const editRoles = ref<string[]>([])
-const editSlipId = ref<string>('')
-const editSlipType = ref<'permanent' | 'seasonal'>('permanent')
+type EditSlip = { slip_id: string; assignment_type: 'permanent' | 'seasonal' }
+const editSlips = ref<EditSlip[]>([])
+const addSlipPickId = ref<string>('')
+const addSlipPickType = ref<'permanent' | 'seasonal'>('permanent')
 const savingEdit = ref(false)
 
 function openDetail(user: User) {
@@ -255,11 +257,35 @@ async function startDetailEdit() {
     admin_notes: u.admin_notes ?? '',
   })
   editRoles.value = [...(u.roles ?? [])]
-  editSlipId.value = u.slip_id ?? ''
-  editSlipType.value = (u.slip_assignment_type === 'seasonal' ? 'seasonal' : 'permanent')
+  editSlips.value = ((u as any).slips ?? []).map((s: any) => ({
+    slip_id: s.slip_id,
+    assignment_type: s.assignment_type === 'seasonal' ? 'seasonal' : 'permanent',
+  }))
+  // Fall back to legacy single-slip fields if `slips` isn't populated
+  // yet (e.g. first paint of an older cached user object).
+  if (editSlips.value.length === 0 && u.slip_id) {
+    editSlips.value = [{
+      slip_id: u.slip_id,
+      assignment_type: u.slip_assignment_type === 'seasonal' ? 'seasonal' : 'permanent',
+    }]
+  }
+  addSlipPickId.value = ''
+  addSlipPickType.value = 'permanent'
   detailError.value = null
   detailEditing.value = true
   loadSlips()
+}
+
+function removeEditSlip(slipId: string) {
+  editSlips.value = editSlips.value.filter((s) => s.slip_id !== slipId)
+}
+
+function addEditSlip() {
+  if (!addSlipPickId.value) return
+  if (editSlips.value.some((s) => s.slip_id === addSlipPickId.value)) return
+  editSlips.value.push({ slip_id: addSlipPickId.value, assignment_type: addSlipPickType.value })
+  addSlipPickId.value = ''
+  addSlipPickType.value = 'permanent'
 }
 
 async function openEditDirect(user: User) {
@@ -295,16 +321,18 @@ async function submitEdit() {
       }))
     }
 
-    // Slip diff — release/assign through the new endpoint when the
-    // selection or type has changed.
-    const slipChanged = (u.slip_id ?? '') !== editSlipId.value
-    const typeChanged = !!editSlipId.value && (u.slip_assignment_type || 'permanent') !== editSlipType.value
-    if (slipChanged || typeChanged) {
-      await unwrap(await client.PUT('/api/v1/admin/users/{userID}/slip', {
+    // Slip diff — replace the full set via the multi-slip endpoint.
+    const slipsBefore = ((u as any).slips ?? []).map((s: any) => `${s.slip_id}:${s.assignment_type || 'permanent'}`).sort().join('|')
+    const slipsAfter = editSlips.value.map((s) => `${s.slip_id}:${s.assignment_type}`).sort().join('|')
+    const slipsChanged = slipsBefore !== slipsAfter
+    if (slipsChanged) {
+      await unwrap(await client.PUT('/api/v1/admin/users/{userID}/slips' as any, {
         params: { path: { userID: u.id } },
         body: {
-          slip_id: editSlipId.value || null,
-          assignment_type: editSlipType.value,
+          slips: editSlips.value.map((s) => ({
+            slip_id: s.slip_id,
+            assignment_type: s.assignment_type,
+          })),
         } as any,
       }))
     }
@@ -314,7 +342,7 @@ async function submitEdit() {
     queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
     // Slip occupancy may have flipped — refresh the cached picker list
     // so the next edit sees the new state.
-    if (slipChanged || typeChanged) loadSlips()
+    if (slipsChanged) loadSlips()
   } catch (err: any) {
     detailError.value = err?.message ?? t('admin.users.updateError')
   } finally {
@@ -332,17 +360,31 @@ async function submitEdit() {
 // could still read status='vacant'. Trust the live join instead.
 const slipPickerOptions = computed(() => {
   const currentUserId = detailUser.value?.id ?? ''
-  const currentSlipId = detailUser.value?.slip_id ?? ''
+  const alreadyPicked = new Set(editSlips.value.map((s) => s.slip_id))
   return sortBySlip(
     slipOptions.value.filter((s) => {
-      // Always keep this user's own current slip so it stays selectable.
-      if (s.id === currentSlipId) return true
+      // Hide slips already selected for this user (the picker is the
+      // "+ add another" affordance).
+      if (alreadyPicked.has(s.id)) return false
       // Otherwise only show slips with no active assignment, or whose
-      // active assignment somehow already points at this user.
+      // active assignment already points at this user (e.g. just removed
+      // and being re-added).
       return !s.occupant_id || s.occupant_id === currentUserId
     }),
   )
 })
+
+const slipById = computed(() => {
+  const m = new Map<string, SlipOption>()
+  for (const s of slipOptions.value) m.set(s.id, s)
+  return m
+})
+
+function slipLabel(slipId: string): string {
+  const s = slipById.value.get(slipId)
+  if (!s) return slipId
+  return (s.section ? s.section + ' ' : '') + s.number
+}
 
 // --- Create user modal ---
 const showCreateModal = ref(false)
@@ -588,6 +630,11 @@ async function submitImport() {
                       : 'bg-emerald-100 text-emerald-800',
                   ]"
                 >{{ t('admin.users.spot' + (user.slip_assignment_type === 'seasonal' ? 'Seasonal' : 'Permanent')) }}</span>
+                <span
+                  v-if="((user as any).slips?.length ?? 0) > 1"
+                  class="ml-1 rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-700"
+                  :title="(user as any).slips?.map((s: any) => (s.slip_section ? s.slip_section + ' ' : '') + s.slip_number).join(', ')"
+                >+{{ ((user as any).slips?.length ?? 1) - 1 }}</span>
               </template>
               <SlipCell v-else />
             </td>
@@ -696,9 +743,19 @@ async function submitImport() {
               <dt class="text-xs font-medium text-gray-500">{{ t('admin.users.adminNotes') }}</dt>
               <dd class="col-span-2 whitespace-pre-wrap rounded-md bg-amber-50 px-2 py-1 text-gray-900">{{ detailUser.admin_notes }}</dd>
             </template>
-            <dt class="text-xs font-medium text-gray-500">{{ t('admin.users.spot') }}</dt>
+            <dt class="text-xs font-medium text-gray-500">{{ t('admin.users.spots') }}</dt>
             <dd class="col-span-2 text-gray-900">
-              <template v-if="detailUser.slip_id">
+              <template v-if="(detailUser as any).slips?.length">
+                <span
+                  v-for="s in (detailUser as any).slips"
+                  :key="s.slip_id"
+                  class="mr-1.5 inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs"
+                >
+                  <span class="font-mono">{{ (s.slip_section ? s.slip_section + ' ' : '') + s.slip_number }}</span>
+                  <span class="text-gray-500">({{ t('admin.users.spot' + (s.assignment_type === 'seasonal' ? 'Seasonal' : 'Permanent')) }})</span>
+                </span>
+              </template>
+              <template v-else-if="detailUser.slip_id">
                 {{ detailUser.slip_section ? detailUser.slip_section + ' ' : '' }}{{ detailUser.slip_number }}
                 <span class="ml-1 text-xs text-gray-500">({{ t('admin.users.spot' + (detailUser.slip_assignment_type === 'seasonal' ? 'Seasonal' : 'Permanent')) }})</span>
               </template>
@@ -780,32 +837,61 @@ async function submitImport() {
               >{{ roleLabel(role) }}</button>
             </div>
           </div>
-          <div class="grid grid-cols-3 gap-2">
-            <div class="col-span-2">
-              <label class="block text-xs font-medium text-gray-700" for="ed-slip">{{ t('admin.users.spot') }}</label>
+          <div>
+            <label class="block text-xs font-medium text-gray-700">{{ t('admin.users.spots') }}</label>
+            <ul v-if="editSlips.length" class="mt-1 space-y-1">
+              <li
+                v-for="row in editSlips"
+                :key="row.slip_id"
+                class="flex items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-2 py-1"
+              >
+                <span class="font-mono text-sm text-gray-900">{{ slipLabel(row.slip_id) }}</span>
+                <select
+                  v-model="row.assignment_type"
+                  class="rounded-md border border-gray-300 bg-white px-1.5 py-0.5 text-xs"
+                >
+                  <option value="permanent">{{ t('admin.users.spotPermanent') }}</option>
+                  <option value="seasonal">{{ t('admin.users.spotSeasonal') }}</option>
+                </select>
+                <button
+                  type="button"
+                  class="ml-auto text-red-600 hover:text-red-800"
+                  :title="t('common.remove')"
+                  @click="removeEditSlip(row.slip_id)"
+                >
+                  <X class="h-4 w-4" />
+                </button>
+              </li>
+            </ul>
+            <p v-else class="mt-1 text-xs text-gray-500">{{ t('admin.users.spotNone') }}</p>
+
+            <div class="mt-2 flex items-center gap-1.5">
               <select
-                id="ed-slip"
-                v-model="editSlipId"
-                class="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm"
+                v-model="addSlipPickId"
+                class="flex-1 rounded-md border border-gray-300 px-2 py-1 text-sm"
                 :disabled="slipsLoading"
               >
-                <option value="">{{ t('admin.users.spotNone') }}</option>
+                <option value="">{{ t('admin.users.addSlip') }}</option>
                 <option v-for="s in slipPickerOptions" :key="s.id" :value="s.id">
                   {{ (s.section ? s.section + ' ' : '') + s.number }}
                 </option>
               </select>
-            </div>
-            <div class="col-span-1">
-              <label class="block text-xs font-medium text-gray-700" for="ed-slip-type">{{ t('admin.users.spotType') }}</label>
               <select
-                id="ed-slip-type"
-                v-model="editSlipType"
-                :disabled="!editSlipId"
-                class="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm disabled:bg-gray-100"
+                v-model="addSlipPickType"
+                class="rounded-md border border-gray-300 px-2 py-1 text-sm"
+                :disabled="!addSlipPickId"
               >
                 <option value="permanent">{{ t('admin.users.spotPermanent') }}</option>
                 <option value="seasonal">{{ t('admin.users.spotSeasonal') }}</option>
               </select>
+              <button
+                type="button"
+                class="rounded-md bg-blue-600 px-2 py-1 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                :disabled="!addSlipPickId"
+                @click="addEditSlip"
+              >
+                {{ t('common.add') }}
+              </button>
             </div>
           </div>
           <div>

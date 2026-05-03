@@ -551,6 +551,7 @@ func main() {
 						r.Patch("/{userID}", adminUsersHandler.HandleUpdateUser)
 						r.Put("/{userID}/roles", adminUsersHandler.HandleUpdateUserRoles)
 						r.Put("/{userID}/slip", adminUsersHandler.HandleSetUserSlip)
+						r.Put("/{userID}/slips", adminUsersHandler.HandleSetUserSlips)
 						r.Delete("/{userID}", adminUsersHandler.HandleDeleteUser)
 
 						// Lost-device backstop — admin disables a target

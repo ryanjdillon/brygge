@@ -1230,11 +1230,23 @@ func registerAdminOps(api huma.API) {
 	}, struct{ Body AdminUser }]())
 
 	huma.Register(api, huma.Operation{
+		OperationID: "admin-set-user-slips",
+		Method:      http.MethodPut,
+		Path:        "/api/v1/admin/users/{userID}/slips",
+		Tags:        []string{"Admin"},
+		Summary:     "Replace the user's full set of active slip assignments",
+		Security:    BearerSecurity,
+	}, stub[struct {
+		UserID string `path:"userID" doc:"User UUID"`
+		Body   AdminUserSlipsUpdate
+	}, struct{ Body map[string]any }]())
+
+	huma.Register(api, huma.Operation{
 		OperationID: "admin-set-user-slip",
 		Method:      http.MethodPut,
 		Path:        "/api/v1/admin/users/{userID}/slip",
 		Tags:        []string{"Admin"},
-		Summary:     "Set or release a user's active slip assignment",
+		Summary:     "Set or release a user's active slip assignment (single-slip; deprecated, use /slips)",
 		Security:    BearerSecurity,
 	}, stub[struct {
 		UserID string `path:"userID" doc:"User UUID"`
