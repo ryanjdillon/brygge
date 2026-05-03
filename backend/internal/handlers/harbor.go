@@ -40,10 +40,21 @@ type feature struct {
 	Properties map[string]interface{} `json:"properties"`
 }
 
+type dock struct {
+	ID          string   `json:"id,omitempty"`
+	Slug        string   `json:"slug"`
+	Name        string   `json:"name"`
+	DefaultLng  *float64 `json:"default_lng"`
+	DefaultLat  *float64 `json:"default_lat"`
+	DefaultZoom *float64 `json:"default_zoom"`
+	Position    int      `json:"position"`
+}
+
 type featureCollection struct {
 	Type     string    `json:"type"`
 	Mode     string    `json:"mode"`
 	Features []feature `json:"features"`
+	Docks    []dock    `json:"docks"`
 }
 
 // HandleGetLayout returns the harbor layout as a GeoJSON FeatureCollection.
@@ -85,7 +96,7 @@ func (h *HarborHandler) HandleGetLayout(w http.ResponseWriter, r *http.Request) 
 
 	// Dock fingers (LineStrings)
 	fingerRows, err := h.db.Query(ctx,
-		`SELECT id, geometry, position
+		`SELECT id, geometry, position, notes
 		   FROM dock_fingers
 		  WHERE club_id = $1
 		  ORDER BY position, id`, clubID)
@@ -98,7 +109,8 @@ func (h *HarborHandler) HandleGetLayout(w http.ResponseWriter, r *http.Request) 
 		var id string
 		var geom rawJSON
 		var position int
-		if err := fingerRows.Scan(&id, &geom, &position); err != nil {
+		var notes string
+		if err := fingerRows.Scan(&id, &geom, &position, &notes); err != nil {
 			fingerRows.Close()
 			h.log.Error().Err(err).Msg("failed to scan dock finger")
 			Error(w, http.StatusInternalServerError, "internal error")
@@ -111,6 +123,7 @@ func (h *HarborHandler) HandleGetLayout(w http.ResponseWriter, r *http.Request) 
 			Properties: map[string]interface{}{
 				"kind":     "finger",
 				"position": position,
+				"notes":    notes,
 			},
 		})
 	}
@@ -122,8 +135,8 @@ func (h *HarborHandler) HandleGetLayout(w http.ResponseWriter, r *http.Request) 
 		`SELECT s.id, s.number, s.section, s.status,
 		        s.length_m, s.width_m, s.location,
 		        sa.assignment_type,
-		        sa.user_id, u.first_name, u.last_name, u.email,
-		        b.id, b.name, b.length_m, b.beam_m
+		        sa.user_id, u.first_name, u.last_name, u.email, u.phone,
+		        b.id, b.name, b.length_m, b.beam_m, b.manufacturer, b.model
 		   FROM slips s
 		   LEFT JOIN slip_assignments sa
 		     ON sa.slip_id = s.id AND sa.released_at IS NULL
@@ -140,16 +153,16 @@ func (h *HarborHandler) HandleGetLayout(w http.ResponseWriter, r *http.Request) 
 		var id, number, section, status string
 		var lengthM, widthM *float64
 		var location *rawJSON
-		var assignmentType, userID, firstName, lastName, email *string
-		var boatID, boatName *string
+		var assignmentType, userID, firstName, lastName, email, phone *string
+		var boatID, boatName, boatMfg, boatModel *string
 		var boatLength, boatBeam *float64
 
 		if err := slipRows.Scan(
 			&id, &number, &section, &status,
 			&lengthM, &widthM, &location,
 			&assignmentType,
-			&userID, &firstName, &lastName, &email,
-			&boatID, &boatName, &boatLength, &boatBeam,
+			&userID, &firstName, &lastName, &email, &phone,
+			&boatID, &boatName, &boatLength, &boatBeam, &boatMfg, &boatModel,
 		); err != nil {
 			slipRows.Close()
 			h.log.Error().Err(err).Msg("failed to scan slip")
@@ -189,6 +202,9 @@ func (h *HarborHandler) HandleGetLayout(w http.ResponseWriter, r *http.Request) 
 			if email != nil {
 				props["occupant_email"] = *email
 			}
+			if phone != nil && *phone != "" {
+				props["occupant_phone"] = *phone
+			}
 			if boatID != nil {
 				props["boat_id"] = *boatID
 			}
@@ -200,6 +216,12 @@ func (h *HarborHandler) HandleGetLayout(w http.ResponseWriter, r *http.Request) 
 			}
 			if boatBeam != nil {
 				props["boat_beam_m"] = *boatBeam
+			}
+			if boatMfg != nil && *boatMfg != "" {
+				props["boat_manufacturer"] = *boatMfg
+			}
+			if boatModel != nil && *boatModel != "" {
+				props["boat_model"] = *boatModel
 			}
 		}
 
@@ -219,10 +241,58 @@ func (h *HarborHandler) HandleGetLayout(w http.ResponseWriter, r *http.Request) 
 	}
 	slipRows.Close()
 
+	// Auto-seed docks from distinct slip sections if none exist yet.
+	var dockCount int
+	if err := h.db.QueryRow(ctx,
+		`SELECT count(*) FROM docks WHERE club_id = $1`, clubID,
+	).Scan(&dockCount); err != nil {
+		h.log.Error().Err(err).Msg("failed to count docks")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if dockCount == 0 {
+		if _, err := h.db.Exec(ctx,
+			`INSERT INTO docks (club_id, slug, name, position)
+			 SELECT $1, section, section, ROW_NUMBER() OVER (ORDER BY section) - 1
+			   FROM (SELECT DISTINCT section FROM slips
+			          WHERE club_id = $1 AND section IS NOT NULL AND section <> '') s
+			 ON CONFLICT (club_id, slug) DO NOTHING`,
+			clubID,
+		); err != nil {
+			h.log.Error().Err(err).Msg("failed to seed docks")
+		}
+	}
+
+	docks := []dock{}
+	dockRows, err := h.db.Query(ctx,
+		`SELECT id, slug, name, default_lng, default_lat, default_zoom, position
+		   FROM docks
+		  WHERE club_id = $1
+		  ORDER BY position, slug`, clubID)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to query docks")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	for dockRows.Next() {
+		var d dock
+		var zoom *float64
+		if err := dockRows.Scan(&d.ID, &d.Slug, &d.Name, &d.DefaultLng, &d.DefaultLat, &zoom, &d.Position); err != nil {
+			dockRows.Close()
+			h.log.Error().Err(err).Msg("failed to scan dock")
+			Error(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		d.DefaultZoom = zoom
+		docks = append(docks, d)
+	}
+	dockRows.Close()
+
 	resp := featureCollection{
 		Type:     "FeatureCollection",
 		Mode:     mode,
 		Features: features,
+		Docks:    docks,
 	}
 	w.Header().Set("Cache-Control", "private, max-age=15")
 	JSON(w, http.StatusOK, resp)
@@ -251,6 +321,7 @@ func (h *HarborHandler) HandlePutLayout(w http.ResponseWriter, r *http.Request) 
 		Type              string    `json:"type"`
 		Features          []feature `json:"features"`
 		DeletedFingerIDs  []string  `json:"deleted_finger_ids"`
+		Docks             []dock    `json:"docks"`
 	}
 	var req putRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -286,11 +357,12 @@ func (h *HarborHandler) HandlePutLayout(w http.ResponseWriter, r *http.Request) 
 			if v, ok := f.Properties["position"].(float64); ok {
 				position = int(v)
 			}
+			notes, _ := f.Properties["notes"].(string)
 			if f.ID == "" || isClientGeneratedID(f.ID) {
 				if _, err := tx.Exec(ctx,
-					`INSERT INTO dock_fingers (club_id, geometry, position)
-					 VALUES ($1, $2, $3)`,
-					claims.ClubID, []byte(f.Geometry), position,
+					`INSERT INTO dock_fingers (club_id, geometry, position, notes)
+					 VALUES ($1, $2, $3, $4)`,
+					claims.ClubID, []byte(f.Geometry), position, notes,
 				); err != nil {
 					h.log.Error().Err(err).Msg("failed to insert dock finger")
 					Error(w, http.StatusInternalServerError, "internal error")
@@ -299,9 +371,9 @@ func (h *HarborHandler) HandlePutLayout(w http.ResponseWriter, r *http.Request) 
 			} else {
 				if _, err := tx.Exec(ctx,
 					`UPDATE dock_fingers
-					    SET geometry = $1, position = $2, updated_at = $3
-					  WHERE id = $4 AND club_id = $5`,
-					[]byte(f.Geometry), position, time.Now(), f.ID, claims.ClubID,
+					    SET geometry = $1, position = $2, notes = $3, updated_at = $4
+					  WHERE id = $5 AND club_id = $6`,
+					[]byte(f.Geometry), position, notes, time.Now(), f.ID, claims.ClubID,
 				); err != nil {
 					h.log.Error().Err(err).Msg("failed to update dock finger")
 					Error(w, http.StatusInternalServerError, "internal error")
@@ -328,6 +400,32 @@ func (h *HarborHandler) HandlePutLayout(w http.ResponseWriter, r *http.Request) 
 				Error(w, http.StatusInternalServerError, "internal error")
 				return
 			}
+		}
+	}
+
+	for _, d := range req.Docks {
+		if d.Slug == "" {
+			continue
+		}
+		name := d.Name
+		if name == "" {
+			name = d.Slug
+		}
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO docks (club_id, slug, name, default_lng, default_lat, default_zoom, position, updated_at)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, now())
+			 ON CONFLICT (club_id, slug)
+			   DO UPDATE SET name = EXCLUDED.name,
+			                 default_lng = EXCLUDED.default_lng,
+			                 default_lat = EXCLUDED.default_lat,
+			                 default_zoom = EXCLUDED.default_zoom,
+			                 position = EXCLUDED.position,
+			                 updated_at = now()`,
+			claims.ClubID, d.Slug, name, d.DefaultLng, d.DefaultLat, d.DefaultZoom, d.Position,
+		); err != nil {
+			h.log.Error().Err(err).Msg("failed to upsert dock")
+			Error(w, http.StatusInternalServerError, "internal error")
+			return
 		}
 	}
 
