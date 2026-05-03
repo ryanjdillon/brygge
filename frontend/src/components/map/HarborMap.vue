@@ -3,11 +3,8 @@ import { ref, computed, onMounted, onUnmounted, watch, shallowRef } from 'vue'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 
-// In Vite dev mode, maplibre-gl's GeoJSON worker is bundled separately
-// and the worker bundle is missing esbuild's __publicField helper, so
-// every worker call (parsing, projecting) throws silently and GeoJSON
-// sources never populate. Inject the helper into workers as a script
-// before any Map is created.
+// Inject __publicField helper into maplibre's GeoJSON workers (vite dev
+// bundles the worker separately and esbuild's helper is missing there).
 {
   const helperBlob = new Blob(
     [
@@ -21,6 +18,7 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 import {
   isFinger,
   isSlip,
+  formatSlipLabel,
   type HarborLayoutResponse,
   type SlipFeature,
   type FingerFeature,
@@ -29,6 +27,12 @@ import {
 interface Props {
   layout: HarborLayoutResponse
   highlightSlipId?: string | null
+  /** When true, placed slip markers can be dragged. */
+  draggableSlips?: boolean
+  /** When set, hides this dock's pinned label (so a centered ghost label can take over while editing). */
+  hiddenDockSlug?: string | null
+  /** Multiplier for slip + dock label sizes (1 = default). */
+  labelScale?: number
   /** Default center if the layout has no placed features yet. */
   fallbackCenter?: [number, number]
   fallbackZoom?: number
@@ -36,6 +40,9 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   highlightSlipId: null,
+  draggableSlips: false,
+  hiddenDockSlug: null,
+  labelScale: 1,
   fallbackCenter: () => [5.155736, 60.224303],
   fallbackZoom: 18,
 })
@@ -43,11 +50,13 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
   (e: 'select', slip: SlipFeature): void
   (e: 'select-finger', finger: FingerFeature): void
+  (e: 'slip-dragend', payload: { id: string; lng: number; lat: number }): void
   (e: 'map-ready', map: maplibregl.Map): void
 }>()
 
 const container = ref<HTMLDivElement>()
 const map = shallowRef<maplibregl.Map | null>(null)
+const slipMarkers = new Map<string, maplibregl.Marker>()
 
 const placedSlips = computed<SlipFeature[]>(() =>
   props.layout.features.filter(
@@ -58,23 +67,6 @@ const fingers = computed<FingerFeature[]>(() =>
   props.layout.features.filter(isFinger),
 )
 
-const slipsCollection = computed(() => ({
-  type: 'FeatureCollection' as const,
-  features: placedSlips.value.map((f) => ({
-    ...f,
-    properties: {
-      ...f.properties,
-      // maplibre re-keys feature.id to an internal integer in vector
-      // tiles, so we duplicate the canonical UUID into properties.
-      _id: f.id,
-      _occupied: Boolean(
-        f.properties.occupant_id || f.properties.occupant_last_name,
-      ),
-      _highlighted: f.id === props.highlightSlipId,
-    },
-  })),
-}))
-
 const fingersCollection = computed(() => ({
   type: 'FeatureCollection' as const,
   features: fingers.value.map((f) => ({
@@ -82,6 +74,127 @@ const fingersCollection = computed(() => ({
     properties: { ...f.properties, _id: f.id },
   })),
 }))
+
+const docksCollection = computed(() => ({
+  type: 'FeatureCollection' as const,
+  features: (props.layout.docks ?? [])
+    .filter(
+      (d) =>
+        d.default_lng != null &&
+        d.default_lat != null &&
+        d.slug !== props.hiddenDockSlug,
+    )
+    .map((d) => ({
+      type: 'Feature' as const,
+      geometry: {
+        type: 'Point' as const,
+        coordinates: [d.default_lng as number, d.default_lat as number],
+      },
+      properties: {
+        _slug: d.slug,
+        name: `Dock ${d.name}`,
+      },
+    })),
+}))
+
+function buildSlipMarkerEl(slip: SlipFeature, highlighted: boolean): HTMLElement {
+  const root = document.createElement('div')
+  root.className = 'slip-marker'
+  const occupied = Boolean(
+    slip.properties.occupant_id || slip.properties.occupant_last_name,
+  )
+  const seasonal = slip.properties.assignment_type === 'seasonal'
+  const fill = occupied ? (seasonal ? '#f59e0b' : '#0ea5e9') : 'transparent'
+  const stroke = highlighted
+    ? '#dc2626'
+    : occupied
+      ? '#0c4a6e'
+      : '#94a3b8'
+  const text = occupied ? '#ffffff' : '#0f172a'
+  const label = formatSlipLabel(slip.properties.section, slip.properties.number)
+  const owner =
+    slip.properties.occupant_last_name ||
+    slip.properties.occupant_name ||
+    ''
+  const s = props.labelScale
+
+  root.style.cssText =
+    'display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;'
+  root.innerHTML = `
+    <div style="
+      min-width:${30 * s}px;height:${20 * s}px;padding:0 ${6 * s}px;
+      display:flex;align-items:center;justify-content:center;
+      background:${fill};
+      border:${Math.max(1, 2 * s)}px solid ${stroke};
+      border-radius:${3 * s}px;
+      color:${text};
+      font:600 ${11 * s}px/1 system-ui,sans-serif;
+      box-shadow:0 1px 3px rgba(0,0,0,.25);
+      white-space:nowrap;">${label}</div>
+    ${owner ? `<div style="
+      font:500 ${10 * s}px/1.1 system-ui,sans-serif;
+      color:#0f172a;
+      background:rgba(255,255,255,.85);
+      padding:${1 * s}px ${4 * s}px;border-radius:${2 * s}px;
+      white-space:nowrap;
+      box-shadow:0 1px 2px rgba(0,0,0,.15);">${escapeHtml(owner)}</div>` : ''}
+  `
+  return root
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!),
+  )
+}
+
+function syncSlipMarkers() {
+  const m = map.value
+  if (!m) return
+  const wanted = new Set<string>()
+  for (const slip of placedSlips.value) {
+    if (!slip.geometry) continue
+    wanted.add(slip.id)
+    const highlighted = slip.id === props.highlightSlipId
+    const existing = slipMarkers.get(slip.id)
+    const el = buildSlipMarkerEl(slip, highlighted)
+    el.addEventListener('click', (ev) => {
+      ev.stopPropagation()
+      emit('select', slip)
+    })
+    if (existing) {
+      existing.getElement().replaceWith(el)
+      // maplibre's Marker keeps a reference to its element, so swap-in
+      // requires a fresh marker for the new element to bind events.
+      existing.remove()
+    }
+    const marker = new maplibregl.Marker({
+      element: el,
+      draggable: props.draggableSlips,
+      anchor: 'center',
+    })
+      .setLngLat(slip.geometry.coordinates)
+      .addTo(m)
+    if (props.draggableSlips) {
+      marker.on('dragend', () => {
+        const ll = marker.getLngLat()
+        emit('slip-dragend', { id: slip.id, lng: ll.lng, lat: ll.lat })
+      })
+    }
+    slipMarkers.set(slip.id, marker)
+  }
+  for (const [id, marker] of slipMarkers) {
+    if (!wanted.has(id)) {
+      marker.remove()
+      slipMarkers.delete(id)
+    }
+  }
+}
+
+function clearSlipMarkers() {
+  for (const marker of slipMarkers.values()) marker.remove()
+  slipMarkers.clear()
+}
 
 function fitToContent(m: maplibregl.Map) {
   const features = [...fingers.value, ...placedSlips.value]
@@ -120,6 +233,7 @@ onMounted(() => {
     container: container.value,
     style: {
       version: 8,
+      glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
       sources: {
         topo: {
           type: 'raster',
@@ -146,9 +260,9 @@ onMounted(() => {
       type: 'geojson',
       data: fingersCollection.value as never,
     })
-    m.addSource('harbor-slips', {
+    m.addSource('harbor-docks', {
       type: 'geojson',
-      data: slipsCollection.value as never,
+      data: docksCollection.value as never,
     })
 
     m.addLayer({
@@ -161,86 +275,49 @@ onMounted(() => {
       },
     })
 
+    // Wide transparent hitbox so clicking *near* a finger line still selects it.
     m.addLayer({
-      id: 'slips-circle',
-      type: 'circle',
-      source: 'harbor-slips',
+      id: 'fingers-hitbox',
+      type: 'line',
+      source: 'harbor-fingers',
       paint: {
-        'circle-radius': [
-          'interpolate', ['linear'], ['zoom'],
-          15, 4,
-          18, 9,
-          20, 14,
-        ],
-        'circle-color': [
-          'case',
-          ['!', ['get', '_occupied']], 'transparent',
-          ['==', ['get', 'assignment_type'], 'seasonal'], '#f59e0b',
-          '#0ea5e9',
-        ],
-        'circle-stroke-color': [
-          'case',
-          ['get', '_highlighted'], '#dc2626',
-          ['get', '_occupied'], '#0c4a6e',
-          '#94a3b8',
-        ],
-        'circle-stroke-width': [
-          'case',
-          ['get', '_highlighted'], 3,
-          1.5,
-        ],
+        'line-color': '#000',
+        'line-opacity': 0,
+        'line-width': 22,
       },
     })
 
-    m.addLayer({
-      id: 'slips-label',
-      type: 'symbol',
-      source: 'harbor-slips',
-      minzoom: 17,
-      layout: {
-        'text-field': [
-          'case',
-          ['has', 'occupant_last_name'], ['get', 'occupant_last_name'],
-          ['get', 'number'],
-        ],
-        'text-size': 11,
-        'text-offset': [0, 1.2],
-        'text-anchor': 'top',
-        'text-allow-overlap': false,
-      },
-      paint: {
-        'text-color': '#0f172a',
-        'text-halo-color': '#fff',
-        'text-halo-width': 1.5,
-      },
-    })
-
-    m.on('click', 'slips-circle', (e) => {
-      const raw = e.features?.[0]
-      if (!raw) return
-      const id = (raw.properties as { _id?: string })?._id ?? String(raw.id)
-      emit('select', { ...(raw as unknown as SlipFeature), id })
-    })
-    m.on('mouseenter', 'slips-circle', () => {
-      m.getCanvas().style.cursor = 'pointer'
-    })
-    m.on('mouseleave', 'slips-circle', () => {
-      m.getCanvas().style.cursor = ''
-    })
-
-    m.on('click', 'fingers-line', (e) => {
+    m.on('click', 'fingers-hitbox', (e) => {
       const raw = e.features?.[0]
       if (!raw) return
       const id = (raw.properties as { _id?: string })?._id ?? String(raw.id)
       emit('select-finger', { ...(raw as unknown as FingerFeature), id })
     })
-    m.on('mouseenter', 'fingers-line', () => {
+    m.on('mouseenter', 'fingers-hitbox', () => {
       m.getCanvas().style.cursor = 'pointer'
     })
-    m.on('mouseleave', 'fingers-line', () => {
+    m.on('mouseleave', 'fingers-hitbox', () => {
       m.getCanvas().style.cursor = ''
     })
 
+    m.addLayer({
+      id: 'docks-label',
+      type: 'symbol',
+      source: 'harbor-docks',
+      layout: {
+        'text-field': ['get', 'name'],
+        'text-size': 14 * props.labelScale,
+        'text-font': ['Open Sans Regular'],
+        'text-allow-overlap': true,
+      },
+      paint: {
+        'text-color': '#0f172a',
+        'text-halo-color': '#ffffff',
+        'text-halo-width': 2,
+      },
+    })
+
+    syncSlipMarkers()
     fitToContent(m)
     emit('map-ready', m)
   })
@@ -249,16 +326,27 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  clearSlipMarkers()
   map.value?.remove()
   map.value = null
 })
 
-watch(slipsCollection, (next) => {
-  const src = map.value?.getSource('harbor-slips') as
-    | maplibregl.GeoJSONSource
-    | undefined
-  src?.setData(next as never)
-})
+watch(
+  [placedSlips, () => props.highlightSlipId, () => props.draggableSlips, () => props.labelScale],
+  () => {
+    if (map.value?.isStyleLoaded()) syncSlipMarkers()
+  },
+  { deep: true },
+)
+
+watch(
+  () => props.labelScale,
+  (s) => {
+    const m = map.value
+    if (!m || !m.getLayer('docks-label')) return
+    m.setLayoutProperty('docks-label', 'text-size', 14 * s)
+  },
+)
 
 watch(fingersCollection, (next) => {
   const src = map.value?.getSource('harbor-fingers') as
@@ -267,7 +355,17 @@ watch(fingersCollection, (next) => {
   src?.setData(next as never)
 })
 
-defineExpose({ getMap: () => map.value, fitToContent: () => map.value && fitToContent(map.value) })
+watch(docksCollection, (next) => {
+  const src = map.value?.getSource('harbor-docks') as
+    | maplibregl.GeoJSONSource
+    | undefined
+  src?.setData(next as never)
+})
+
+defineExpose({
+  getMap: () => map.value,
+  fitToContent: () => map.value && fitToContent(map.value),
+})
 </script>
 
 <template>
