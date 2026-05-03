@@ -2374,6 +2374,7 @@ export interface components {
             readonly $schema?: string;
             address_line?: string;
             city?: string;
+            email?: string;
             first_name?: string;
             is_local?: boolean;
             last_name?: string;

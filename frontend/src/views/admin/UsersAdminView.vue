@@ -238,6 +238,7 @@ async function startDetailEdit() {
   if (!(await ensureFreshTotp())) return
   const u = detailUser.value
   Object.assign(editForm, {
+    email: u.email ?? '',
     first_name: u.first_name ?? '',
     last_name: u.last_name ?? '',
     phone: u.phone ?? '',
@@ -662,6 +663,10 @@ async function submitImport() {
 
         <!-- Edit mode -->
         <form v-else class="space-y-3" @submit.prevent="submitEdit">
+          <div>
+            <label class="block text-xs font-medium text-gray-700" for="ed-email">{{ t('admin.users.email') }}</label>
+            <input id="ed-email" v-model="editForm.email" type="email" required class="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm" />
+          </div>
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="block text-xs font-medium text-gray-700" for="ed-first">{{ t('admin.users.firstName') }}</label>

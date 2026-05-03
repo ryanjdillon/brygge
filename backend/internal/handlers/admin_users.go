@@ -933,6 +933,14 @@ func (h *AdminUsersHandler) HandleUpdateUser(w http.ResponseWriter, r *http.Requ
 		args = append(args, val)
 		sets = append(sets, fmt.Sprintf("%s = $%d", col, len(args)))
 	}
+	if req.Email != nil {
+		v := strings.ToLower(strings.TrimSpace(*req.Email))
+		if _, err := mail.ParseAddress(v); err != nil {
+			Error(w, http.StatusBadRequest, "invalid email")
+			return
+		}
+		add("email", v)
+	}
 	if req.FirstName != nil {
 		v := strings.TrimSpace(*req.FirstName)
 		if v == "" && (req.LastName == nil || strings.TrimSpace(*req.LastName) == "") {
@@ -973,6 +981,11 @@ func (h *AdminUsersHandler) HandleUpdateUser(w http.ResponseWriter, r *http.Requ
 
 	tag, err := h.db.Exec(ctx, q, args...)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			Error(w, http.StatusConflict, "email already in use")
+			return
+		}
 		h.log.Error().Err(err).Str("user_id", userID).Msg("failed to update user")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return

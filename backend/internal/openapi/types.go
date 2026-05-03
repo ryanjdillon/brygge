@@ -700,9 +700,10 @@ type AdminUserSlipUpdate struct {
 }
 
 // AdminUserUpdate is the request body for PATCH /api/v1/admin/users/{userID}.
-// All fields optional — only supplied keys are written. Email + roles are
-// out of scope (separate endpoints).
+// All fields optional — only supplied keys are written. Roles are managed
+// via a separate endpoint.
 type AdminUserUpdate struct {
+	Email       *string `json:"email,omitempty" doc:"Email address (must remain unique per club)"`
 	FirstName   *string `json:"first_name,omitempty" doc:"Given name"`
 	LastName    *string `json:"last_name,omitempty" doc:"Family name"`
 	Phone       *string `json:"phone,omitempty" doc:"Phone number"`
