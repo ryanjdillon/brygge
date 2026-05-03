@@ -894,7 +894,75 @@ func (h *AdminUsersHandler) HandleImportUsersCSV(w http.ResponseWriter, r *http.
 	})
 }
 
+// HandleExportUsersCSV streams the club's user list as a CSV file in the
+// same column shape that HandleImportUsersCSV accepts, so an admin can
+// round-trip (export → edit in spreadsheet → import) without column
+// renames. Roles are joined with ';' to match the import parser.
+func (h *AdminUsersHandler) HandleExportUsersCSV(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	rows, err := h.db.Query(ctx, `
+		SELECT u.email,
+		       u.first_name, u.last_name,
+		       u.phone, u.address_line, u.postal_code, u.city, u.is_local,
+		       COALESCE(
+		           (SELECT string_agg(ur.role::text, ';' ORDER BY ur.role::text)
+		              FROM user_roles ur
+		             WHERE ur.user_id = u.id),
+		           ''
+		       ) AS roles
+		  FROM users u
+		 WHERE u.club_id = $1
+		 ORDER BY u.last_name, u.first_name, u.email`,
+		claims.ClubID,
+	)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to query users for CSV export")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	defer rows.Close()
+
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition",
+		fmt.Sprintf(`attachment; filename="users_%s.csv"`, time.Now().Format("2006-01-02")))
+
+	cw := csv.NewWriter(w)
+	_ = cw.Write([]string{
+		"email", "first_name", "last_name",
+		"phone", "address_line", "postal_code", "city", "is_local", "roles",
+	})
+
+	count := 0
+	for rows.Next() {
+		var email, firstName, lastName, phone, addr, postal, city, roles string
+		var isLocal bool
+		if err := rows.Scan(&email, &firstName, &lastName, &phone, &addr, &postal, &city, &isLocal, &roles); err != nil {
+			h.log.Error().Err(err).Msg("failed to scan user CSV row")
+			continue
+		}
+		isLocalStr := "false"
+		if isLocal {
+			isLocalStr = "true"
+		}
+		_ = cw.Write([]string{email, firstName, lastName, phone, addr, postal, city, isLocalStr, roles})
+		count++
+	}
+	cw.Flush()
+
+	h.log.Info().
+		Str("actor", claims.UserID).
+		Int("rows", count).
+		Msg("user CSV export")
+}
+
 type adminUserUpdateRequest struct {
+	Email       *string `json:"email,omitempty"`
 	FirstName   *string `json:"first_name,omitempty"`
 	LastName    *string `json:"last_name,omitempty"`
 	Phone       *string `json:"phone,omitempty"`

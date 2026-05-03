@@ -533,12 +533,21 @@ func main() {
 					r.Get("/", adminUsersHandler.HandleListUsers)
 					r.Get("/{userID}", adminUsersHandler.HandleGetUser)
 
+					// CSV bulk import/export — site admin only. Export is a
+					// read endpoint but emits PII for the entire club, so
+					// it gates the same as import.
+					r.Group(func(r chi.Router) {
+						r.Use(middleware.RequireRole("admin"))
+						r.Get("/export.csv", adminUsersHandler.HandleExportUsersCSV)
+						r.With(middleware.RequireFreshTOTP(5 * time.Minute)).
+							Post("/import", adminUsersHandler.HandleImportUsersCSV)
+					})
+
 					// High-blast-radius mutations — re-prompt for TOTP
 					// each time, regardless of the 12h step-up window.
 					r.Group(func(r chi.Router) {
 						r.Use(middleware.RequireFreshTOTP(5 * time.Minute))
 						r.Post("/", adminUsersHandler.HandleCreateUser)
-						r.Post("/import", adminUsersHandler.HandleImportUsersCSV)
 						r.Patch("/{userID}", adminUsersHandler.HandleUpdateUser)
 						r.Put("/{userID}/roles", adminUsersHandler.HandleUpdateUserRoles)
 						r.Put("/{userID}/slip", adminUsersHandler.HandleSetUserSlip)

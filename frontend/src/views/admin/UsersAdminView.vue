@@ -7,7 +7,7 @@ import { sortBySlip } from '@/lib/slipSort'
 import DockFilter from '@/components/admin/DockFilter.vue'
 import SortableTh from '@/components/admin/SortableTh.vue'
 import SlipCell from '@/components/admin/SlipCell.vue'
-import { Trash2, UserPlus, Upload, X, Pencil } from 'lucide-vue-next'
+import { Trash2, UserPlus, Upload, Download, X, Pencil } from 'lucide-vue-next'
 import type { components } from '@/types/api'
 import { formatName } from '@/lib/format'
 import { useAuthStore } from '@/stores/auth'
@@ -383,6 +383,33 @@ function submitCreate() {
   createUser({ ...createForm })
 }
 
+// --- CSV export ---
+const exporting = ref(false)
+async function exportUsersCSV() {
+  if (exporting.value) return
+  exporting.value = true
+  try {
+    const res = await fetch('/api/v1/admin/users/export.csv', {
+      credentials: 'include',
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    const today = new Date().toISOString().slice(0, 10)
+    a.download = `users_${today}.csv`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  } catch (err) {
+    console.error('user CSV export failed', err)
+  } finally {
+    exporting.value = false
+  }
+}
+
 // --- CSV import modal ---
 const showImportModal = ref(false)
 const importFile = ref<File | null>(null)
@@ -481,10 +508,19 @@ async function submitImport() {
           <UserPlus class="h-4 w-4" /> {{ t('admin.users.addButton') }}
         </button>
         <button
+          v-if="auth.hasRole('admin')"
           class="inline-flex items-center gap-1 rounded-md bg-white px-3 py-1.5 text-sm font-semibold text-gray-700 ring-1 ring-gray-300 hover:bg-gray-50"
           @click="openImportModal"
         >
           <Upload class="h-4 w-4" /> {{ t('admin.users.importButton') }}
+        </button>
+        <button
+          v-if="auth.hasRole('admin')"
+          class="inline-flex items-center gap-1 rounded-md bg-white px-3 py-1.5 text-sm font-semibold text-gray-700 ring-1 ring-gray-300 hover:bg-gray-50 disabled:opacity-60"
+          :disabled="exporting"
+          @click="exportUsersCSV"
+        >
+          <Download class="h-4 w-4" /> {{ exporting ? t('common.loading') : t('admin.users.exportButton') }}
         </button>
       </div>
     </div>

@@ -694,6 +694,7 @@
       "postal": "Postal code",
       "city": "City",
       "importButton": "Import CSV",
+      "exportButton": "Export CSV",
       "importTitle": "Import members from CSV",
       "importDescription": "Required columns: email, full_name. Optional: phone, address_line, postal_code, city, is_local, roles (semicolon-separated).",
       "importSubmit": "Upload",

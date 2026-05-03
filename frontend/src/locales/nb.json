@@ -690,6 +690,7 @@
       "postal": "Postnummer",
       "city": "Sted",
       "importButton": "Importer CSV",
+      "exportButton": "Eksporter CSV",
       "importTitle": "Importer medlemmer fra CSV",
       "importDescription": "Påkrevd: email, full_name. Valgfritt: phone, address_line, postal_code, city, is_local, roles (semikolonseparert).",
       "importSubmit": "Last opp",
