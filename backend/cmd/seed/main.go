@@ -221,12 +221,12 @@ func main() {
 		number, section, location string
 		lengthM, widthM           float64
 	}{
-		{"A1", "A", `{"type":"Point","coordinates":[5.15555,60.22440]}`, 10, 3.5},
-		{"A2", "A", `{"type":"Point","coordinates":[5.15580,60.22440]}`, 12, 4.0},
-		{"A3", "A", `{"type":"Point","coordinates":[5.15605,60.22440]}`, 8, 3.0},
-		{"B1", "B", `{"type":"Point","coordinates":[5.15555,60.22420]}`, 14, 4.5},
-		{"B2", "B", `{"type":"Point","coordinates":[5.15580,60.22420]}`, 10, 3.5},
-		{"B3", "B", `{"type":"Point","coordinates":[5.15605,60.22420]}`, 12, 4.0},
+		{"1", "A", `{"type":"Point","coordinates":[5.15555,60.22440]}`, 10, 3.5},
+		{"2", "A", `{"type":"Point","coordinates":[5.15580,60.22440]}`, 12, 4.0},
+		{"3", "A", `{"type":"Point","coordinates":[5.15605,60.22440]}`, 8, 3.0},
+		{"1", "B", `{"type":"Point","coordinates":[5.15555,60.22420]}`, 14, 4.5},
+		{"2", "B", `{"type":"Point","coordinates":[5.15580,60.22420]}`, 10, 3.5},
+		{"3", "B", `{"type":"Point","coordinates":[5.15605,60.22420]}`, 12, 4.0},
 	}
 
 	slipIDs := make(map[string]string)
@@ -245,7 +245,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "  failed to create slip %s: %v\n", s.number, err)
 			continue
 		}
-		slipIDs[s.number] = slipID
+		slipIDs[s.section+s.number] = slipID
 	}
 	fmt.Printf("  slips: %d created\n", len(slips))
 
