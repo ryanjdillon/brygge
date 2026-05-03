@@ -36,30 +36,75 @@ export interface SlipProperties {
   occupant_id?: string
   occupant_name?: string
   occupant_email?: string
+  occupant_phone?: string
   boat_id?: string
   boat_name?: string
   boat_length_m?: number
   boat_beam_m?: number
+  boat_manufacturer?: string
+  boat_model?: string
 }
 
 export interface FingerProperties {
   kind: 'finger'
   position: number
+  notes?: string
+}
+
+export function formatSlipLabel(
+  section: string | null | undefined,
+  number: string | null | undefined,
+): string {
+  const s = (section ?? '').trim()
+  const n = (number ?? '').trim()
+  if (!n) return s
+  if (!s) return n
+  return n.toLowerCase().startsWith(s.toLowerCase()) ? n : `${s}${n}`
+}
+
+export function lineLengthM(coords: Array<[number, number]>): number {
+  const R = 6371000
+  let total = 0
+  for (let i = 1; i < coords.length; i++) {
+    const [lng1, lat1] = coords[i - 1]
+    const [lng2, lat2] = coords[i]
+    const phi1 = (lat1 * Math.PI) / 180
+    const phi2 = (lat2 * Math.PI) / 180
+    const dphi = ((lat2 - lat1) * Math.PI) / 180
+    const dlam = ((lng2 - lng1) * Math.PI) / 180
+    const a =
+      Math.sin(dphi / 2) ** 2 +
+      Math.cos(phi1) * Math.cos(phi2) * Math.sin(dlam / 2) ** 2
+    total += 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  }
+  return total
 }
 
 export type SlipFeature = Feature<Point, SlipProperties>
 export type FingerFeature = Feature<LineString, FingerProperties>
 
+export interface Dock {
+  id?: string
+  slug: string
+  name: string
+  default_lng: number | null
+  default_lat: number | null
+  default_zoom: number | null
+  position: number
+}
+
 export interface HarborLayoutResponse {
   type: 'FeatureCollection'
   mode: HarborMode
   features: Array<SlipFeature | FingerFeature>
+  docks: Dock[]
 }
 
 export interface HarborLayoutPutPayload {
   type: 'FeatureCollection'
   features: Array<Partial<SlipFeature> | Partial<FingerFeature>>
   deleted_finger_ids?: string[]
+  docks?: Dock[]
 }
 
 async function fetchLayout(): Promise<HarborLayoutResponse> {
