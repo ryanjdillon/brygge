@@ -366,12 +366,14 @@ func (h *AdminUsersHandler) HandleGetUser(w http.ResponseWriter, r *http.Request
 		BeamM              *float64 `json:"beam_m"`
 		DraftM             *float64 `json:"draft_m"`
 		WeightKg           *float64 `json:"weight_kg"`
-		RegistrationNumber string   `json:"registration_number"`
+		RegistrationNumber    string   `json:"registration_number"`
+		MeasurementsConfirmed bool     `json:"measurements_confirmed"`
 	}
 
 	boatRows, err := h.db.Query(ctx,
 		`SELECT b.id, b.name, b.type, b.manufacturer, b.model,
-		        b.length_m, b.beam_m, b.draft_m, b.weight_kg, b.registration_number
+		        b.length_m, b.beam_m, b.draft_m, b.weight_kg, b.registration_number,
+		        b.measurements_confirmed
 		 FROM boats b
 		 WHERE b.user_id = $1 AND b.club_id = $2
 		 ORDER BY b.created_at DESC`,
@@ -388,7 +390,8 @@ func (h *AdminUsersHandler) HandleGetUser(w http.ResponseWriter, r *http.Request
 	for boatRows.Next() {
 		var b boatRow
 		if err := boatRows.Scan(&b.ID, &b.Name, &b.Type, &b.Manufacturer, &b.Model,
-			&b.LengthM, &b.BeamM, &b.DraftM, &b.WeightKg, &b.RegistrationNumber); err != nil {
+			&b.LengthM, &b.BeamM, &b.DraftM, &b.WeightKg, &b.RegistrationNumber,
+			&b.MeasurementsConfirmed); err != nil {
 			h.log.Error().Err(err).Msg("failed to scan boat row")
 			Error(w, http.StatusInternalServerError, "internal error")
 			return
