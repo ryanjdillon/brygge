@@ -281,8 +281,14 @@ func (h *InvoiceHandler) HandleGetInvoicePDF(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Default to inline so clicking "preview" opens the PDF in the
+	// browser viewer. Append ?download=1 to force a save dialog.
+	disposition := "inline"
+	if r.URL.Query().Get("download") != "" {
+		disposition = "attachment"
+	}
 	w.Header().Set("Content-Type", "application/pdf")
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="faktura-%d.pdf"`, invoiceNumber))
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`%s; filename="faktura-%d.pdf"`, disposition, invoiceNumber))
 	w.Write(pdfData)
 }
 
