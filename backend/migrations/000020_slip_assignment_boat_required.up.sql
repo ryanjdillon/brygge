@@ -1,5 +1,3 @@
-BEGIN;
-
 -- Backfill where exactly one boat exists for the slip-assignment owner.
 UPDATE slip_assignments sa
    SET boat_id = b.id
@@ -44,5 +42,3 @@ END $$ LANGUAGE plpgsql;
 CREATE TRIGGER trg_slip_assignment_user
   BEFORE INSERT OR UPDATE OF boat_id ON slip_assignments
   FOR EACH ROW EXECUTE FUNCTION sync_slip_assignment_user();
-
-COMMIT;
