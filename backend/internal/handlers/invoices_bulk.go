@@ -181,9 +181,9 @@ func (h *InvoiceHandler) HandleBulkCreateInvoices(w http.ResponseWriter, r *http
 		if flatItem != nil {
 			chosen = flatItem
 		} else {
-			beam := h.beamForUser(ctx, claims.ClubID, userID)
-			if beam == nil {
-				skipReason = "no boat on active slip"
+			beam, lookupErr := h.beamForUser(ctx, claims.ClubID, userID)
+			if lookupErr != "" {
+				skipReason = lookupErr
 			} else {
 				for i := range tiers {
 					t := &tiers[i]
@@ -255,24 +255,39 @@ func (h *InvoiceHandler) HandleBulkCreateInvoices(w http.ResponseWriter, r *http
 }
 
 // beamForUser returns the beam in metres of the boat occupying the
-// user's active slip assignment, or nil if none.
-func (h *InvoiceHandler) beamForUser(ctx context.Context, clubID, userID string) *float64 {
-	var beam *float64
+// user's active permanent slip assignment, plus a distinguishable
+// human-readable reason when the lookup can't yield a usable beam.
+// Distinguishing between "no slip", "no boat on slip", and "boat has
+// no beam recorded" matters for the bulk-faktura skip list.
+func (h *InvoiceHandler) beamForUser(ctx context.Context, clubID, userID string) (*float64, string) {
+	var (
+		hasAssignment bool
+		boatID        *string
+		beam          *float64
+	)
 	err := h.db.QueryRow(ctx,
-		`SELECT b.beam_m
+		`SELECT TRUE, sa.boat_id, b.beam_m
 		   FROM slip_assignments sa
-		   JOIN boats b ON b.id = sa.boat_id
+		   LEFT JOIN boats b ON b.id = sa.boat_id
 		  WHERE sa.user_id = $1 AND sa.club_id = $2
 		    AND sa.released_at IS NULL
-		    AND sa.assignment_type = 'permanent'
-		  ORDER BY sa.created_at
+		  ORDER BY sa.assigned_at
 		  LIMIT 1`,
 		userID, clubID,
-	).Scan(&beam)
-	if err != nil {
-		return nil
+	).Scan(&hasAssignment, &boatID, &beam)
+	if err == pgx.ErrNoRows {
+		return nil, "no active slip assignment"
 	}
-	return beam
+	if err != nil {
+		return nil, "lookup failed"
+	}
+	if boatID == nil {
+		return nil, "active slip has no boat_id set"
+	}
+	if beam == nil {
+		return nil, "boat on slip has no beam recorded — set boat.beam_m"
+	}
+	return beam, ""
 }
 
 type priceTier struct {
