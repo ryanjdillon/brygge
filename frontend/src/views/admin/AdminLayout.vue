@@ -26,6 +26,8 @@ import {
   X,
   Calculator,
   BookOpen,
+  Receipt,
+  Settings,
 } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -72,9 +74,11 @@ const navGroups = computed<NavGroup[]>(() => {
       titleKey: 'admin.groupEconomy',
       items: [
         { to: '/admin/accounting', icon: Calculator, label: t('admin.sidebar.accountingOverview'), roles: ['treasurer', 'board', 'admin'], feature: 'accounting' },
+        { to: '/admin/accounting/invoice-drafts', icon: Receipt, label: t('admin.sidebar.invoiceDrafts'), roles: ['treasurer', 'admin'], feature: 'commerce' },
         { to: '/admin/pricing', icon: DollarSign, label: t('admin.sidebar.pricing'), roles: ['admin', 'treasurer'], feature: 'commerce' },
         { to: '/admin/accounting/accounts', icon: BookOpen, label: t('admin.sidebar.accounts'), roles: ['treasurer', 'board', 'admin'], feature: 'accounting' },
         { to: '/admin/accounting/journal', icon: FileText, label: t('admin.sidebar.journal'), roles: ['treasurer', 'board', 'admin'], feature: 'accounting' },
+        { to: '/admin/accounting/settings', icon: Settings, label: t('admin.sidebar.financialSettings'), roles: ['treasurer', 'admin'], feature: 'accounting' },
       ],
     },
     {

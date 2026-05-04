@@ -116,18 +116,18 @@ func (h *InvoiceHandler) HandleBulkCreateInvoices(w http.ResponseWriter, r *http
 		var t priceTier
 		var meta json.RawMessage
 		if err := h.db.QueryRow(ctx,
-			`SELECT id, amount, description, metadata
+			`SELECT id, category, amount, description, metadata
 			   FROM price_items
 			  WHERE id = $1 AND club_id = $2 AND is_active`,
 			req.PriceItemID, claims.ClubID,
-		).Scan(&t.id, &t.amount, &t.desc, &meta); err != nil {
+		).Scan(&t.id, &t.category, &t.amount, &t.desc, &meta); err != nil {
 			Error(w, http.StatusBadRequest, "price item not found or inactive")
 			return
 		}
 		flatItem = &t
 	} else {
 		rows, err := h.db.Query(ctx,
-			`SELECT id, amount, description, metadata
+			`SELECT id, category, amount, description, metadata
 			   FROM price_items
 			  WHERE club_id = $1 AND category = $2 AND is_active`,
 			claims.ClubID, req.Category,
@@ -141,7 +141,7 @@ func (h *InvoiceHandler) HandleBulkCreateInvoices(w http.ResponseWriter, r *http
 		for rows.Next() {
 			var t priceTier
 			var meta json.RawMessage
-			if err := rows.Scan(&t.id, &t.amount, &t.desc, &meta); err != nil {
+			if err := rows.Scan(&t.id, &t.category, &t.amount, &t.desc, &meta); err != nil {
 				h.log.Error().Err(err).Msg("failed to scan price tier")
 				Error(w, http.StatusInternalServerError, "internal error")
 				return
@@ -209,16 +209,19 @@ func (h *InvoiceHandler) HandleBulkCreateInvoices(w http.ResponseWriter, r *http
 			continue
 		}
 
-		// Idempotency: skip if invoice for this (user, price_item, fiscal_period) already exists.
+		// Idempotency: skip if a non-voided invoice for this
+		// (user, category, fiscal_period) already exists. Voided rows
+		// fall out so a re-issue after voiding is permitted.
 		var existing string
 		err := h.db.QueryRow(ctx,
 			`SELECT id FROM invoices
 			  WHERE club_id = $1 AND user_id = $2
-			    AND price_item_id = $3 AND fiscal_period_id = $4`,
-			claims.ClubID, userID, chosen.id, req.FiscalPeriodID,
+			    AND category = $3 AND fiscal_period_id = $4
+			    AND status <> 'voided'`,
+			claims.ClubID, userID, chosen.category, req.FiscalPeriodID,
 		).Scan(&existing)
 		if err == nil {
-			resp.Skipped = append(resp.Skipped, bulkInvoiceSkipped{UserID: userID, Reason: "already invoiced for this item this period"})
+			resp.Skipped = append(resp.Skipped, bulkInvoiceSkipped{UserID: userID, Reason: "already invoiced in this category for this period"})
 			continue
 		}
 		if err != pgx.ErrNoRows {
@@ -328,11 +331,12 @@ func (h *InvoiceHandler) slipBoatForUser(ctx context.Context, clubID, userID str
 }
 
 type priceTier struct {
-	id      string
-	amount  float64
-	desc    string
-	beamMin *float64
-	beamMax *float64
+	id       string
+	category string
+	amount   float64
+	desc     string
+	beamMin  *float64
+	beamMax  *float64
 }
 
 func (h *InvoiceHandler) createBulkInvoice(
@@ -407,10 +411,11 @@ func (h *InvoiceHandler) createBulkInvoice(
 	var invoiceID string
 	if err := h.db.QueryRow(ctx,
 		`INSERT INTO invoices (club_id, user_id, invoice_number, kid_number, due_date,
-		                       total_amount, pdf_data, price_item_id, fiscal_period_id)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		                       total_amount, pdf_data, price_item_id, fiscal_period_id,
+		                       category, status)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'open')
 		 RETURNING id`,
-		clubID, userID, invoiceSeq, kid, dueDate, t.amount, pdfData, t.id, fiscalPeriodID,
+		clubID, userID, invoiceSeq, kid, dueDate, t.amount, pdfData, t.id, fiscalPeriodID, t.category,
 	).Scan(&invoiceID); err != nil {
 		return "", 0, 0, err
 	}

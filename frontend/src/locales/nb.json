@@ -462,6 +462,8 @@
       "bookings": "Bestillinger",
       "documents": "Dokumenter",
       "pricing": "Priser",
+      "invoiceDrafts": "Fakturakladder",
+      "financialSettings": "Faktura­innstillinger",
       "products": "Produkter",
       "communication": "Kommunikasjon",
       "projects": "Prosjekter",
@@ -507,6 +509,8 @@
       "previewPdf": "Forhåndsvis PDF",
       "send": "Send",
       "delete": "Slett",
+      "void": "Annuller",
+      "voidConfirm": "Annullere denne fakturaen? Den fjernes fra dedup-sjekken slik at en ny kan utstedes for samme kategori og år.",
       "empty": "Ingen usendte fakturaer."
     },
     "financials": {

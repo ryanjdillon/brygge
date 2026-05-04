@@ -534,7 +534,10 @@ func main() {
 							Post("/invoices/{invoiceID}/send", invoiceHandler.HandleSendInvoice)
 						r.With(middleware.RequireRole("treasurer", "admin"),
 							middleware.RequireFreshTOTP(10*time.Minute)).
-							Delete("/invoices/{invoiceID}", invoiceHandler.HandleDeleteDraftInvoice)
+							Post("/invoices/{invoiceID}/void", invoiceHandler.HandleVoidInvoice)
+						r.With(middleware.RequireRole("treasurer", "admin"),
+							middleware.RequireFreshTOTP(10*time.Minute)).
+							Delete("/invoices/{invoiceID}", invoiceHandler.HandleDeleteInvoice)
 					})
 				}
 

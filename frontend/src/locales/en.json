@@ -466,6 +466,8 @@
       "bookings": "Bookings",
       "documents": "Documents",
       "pricing": "Pricing",
+      "invoiceDrafts": "Faktura drafts",
+      "financialSettings": "Faktura settings",
       "communication": "Communication",
       "projects": "Projects",
       "financials": "Financials",
@@ -511,6 +513,8 @@
       "previewPdf": "Preview PDF",
       "send": "Send",
       "delete": "Delete",
+      "void": "Void",
+      "voidConfirm": "Void this faktura? It will fall out of dedup so a re-issue under the same category and year is allowed.",
       "empty": "No unsent fakturas."
     },
     "financials": {

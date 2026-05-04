@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, FileDown, Send, Trash2, RefreshCw } from 'lucide-vue-next'
+import { ArrowLeft, FileDown, Send, Trash2, RefreshCw, Ban } from 'lucide-vue-next'
 import { useTotpGateStore } from '@/stores/totpGate'
 import { useAuthStore } from '@/stores/auth'
 
@@ -130,6 +130,26 @@ async function deleteOne(id: string) {
   try {
     const res = await fetch(`/api/v1/admin/financials/invoices/${id}`, {
       method: 'DELETE', credentials: 'include',
+    })
+    if (!res.ok && res.status !== 204) {
+      const txt = await res.text().catch(() => '')
+      error.value = `${res.status} ${txt}`
+      return
+    }
+    drafts.value = drafts.value.filter((d) => d.id !== id)
+    selected.value.delete(id)
+  } finally {
+    busyIds.value.delete(id)
+  }
+}
+
+async function voidOne(id: string) {
+  if (!confirm(t('admin.invoiceDrafts.voidConfirm'))) return
+  if (!(await ensureFreshTotp())) return
+  busyIds.value.add(id)
+  try {
+    const res = await fetch(`/api/v1/admin/financials/invoices/${id}/void`, {
+      method: 'POST', credentials: 'include',
     })
     if (!res.ok && res.status !== 204) {
       const txt = await res.text().catch(() => '')
@@ -287,6 +307,14 @@ function formatNOK(n: number): string {
                     @click="sendOne(d.id)"
                   >
                     <Send class="h-4 w-4" />
+                  </button>
+                  <button
+                    class="text-amber-600 hover:text-amber-800 disabled:opacity-50"
+                    :disabled="busyIds.has(d.id)"
+                    :title="t('admin.invoiceDrafts.void')"
+                    @click="voidOne(d.id)"
+                  >
+                    <Ban class="h-4 w-4" />
                   </button>
                   <button
                     class="text-red-600 hover:text-red-800 disabled:opacity-50"

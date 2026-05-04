@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -262,10 +263,18 @@ func (h *InvoiceHandler) HandleGetInvoicePDF(w http.ResponseWriter, r *http.Requ
 
 	var pdfData []byte
 	var invoiceNumber int
+	var memberLast, memberFirst string
+	var fiscalYear *int
 	err := h.db.QueryRow(ctx,
-		`SELECT pdf_data, invoice_number FROM invoices WHERE id = $1 AND club_id = $2`,
+		`SELECT i.pdf_data, i.invoice_number,
+		        COALESCE(u.last_name, ''), COALESCE(u.first_name, ''),
+		        fp.year
+		   FROM invoices i
+		   JOIN users u ON u.id = i.user_id
+		   LEFT JOIN fiscal_periods fp ON fp.id = i.fiscal_period_id
+		  WHERE i.id = $1 AND i.club_id = $2`,
 		invoiceID, claims.ClubID,
-	).Scan(&pdfData, &invoiceNumber)
+	).Scan(&pdfData, &invoiceNumber, &memberLast, &memberFirst, &fiscalYear)
 	if err == pgx.ErrNoRows {
 		Error(w, http.StatusNotFound, "invoice not found")
 		return
@@ -287,9 +296,47 @@ func (h *InvoiceHandler) HandleGetInvoicePDF(w http.ResponseWriter, r *http.Requ
 	if r.URL.Query().Get("download") != "" {
 		disposition = "attachment"
 	}
+	filename := buildInvoiceFilename(invoiceNumber, memberLast, memberFirst, fiscalYear)
 	w.Header().Set("Content-Type", "application/pdf")
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`%s; filename="faktura-%d.pdf"`, disposition, invoiceNumber))
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`%s; filename="%s"`, disposition, filename))
 	w.Write(pdfData)
+}
+
+// buildInvoiceFilename produces a descriptive, ASCII-safe filename
+// such as "faktura-0001-dillon-ryan-2026.pdf" so a folder of saved
+// invoices sorts and searches sensibly.
+func buildInvoiceFilename(num int, last, first string, year *int) string {
+	parts := []string{fmt.Sprintf("faktura-%04d", num)}
+	if s := slugify(last); s != "" {
+		parts = append(parts, s)
+	}
+	if s := slugify(first); s != "" {
+		parts = append(parts, s)
+	}
+	if year != nil && *year > 0 {
+		parts = append(parts, fmt.Sprintf("%d", *year))
+	}
+	return strings.Join(parts, "-") + ".pdf"
+}
+
+func slugify(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r == 'å':
+			b.WriteString("aa")
+		case r == 'æ':
+			b.WriteString("ae")
+		case r == 'ø':
+			b.WriteString("oe")
+		case r == ' ' || r == '-' || r == '_':
+			b.WriteRune('-')
+		}
+	}
+	return strings.Trim(b.String(), "-")
 }
 
 type draftInvoiceRow struct {
@@ -330,7 +377,7 @@ func (h *InvoiceHandler) HandleListDraftInvoices(w http.ResponseWriter, r *http.
 		   JOIN users u ON u.id = i.user_id
 		   LEFT JOIN price_items pi ON pi.id = i.price_item_id
 		   LEFT JOIN fiscal_periods fp ON fp.id = i.fiscal_period_id
-		  WHERE i.club_id = $1 AND i.sent_at IS NULL
+		  WHERE i.club_id = $1 AND i.sent_at IS NULL AND i.status = 'open'
 		  ORDER BY i.created_at DESC`,
 		claims.ClubID,
 	)
@@ -380,7 +427,10 @@ func (h *InvoiceHandler) HandleSendInvoice(w http.ResponseWriter, r *http.Reques
 		invoiceNumber int
 		userID        string
 		memberName    string
+		memberLast    string
+		memberFirst   string
 		memberEmail   string
+		fiscalYear    *int
 		total         float64
 		dueDate       time.Time
 		kid           string
@@ -390,14 +440,16 @@ func (h *InvoiceHandler) HandleSendInvoice(w http.ResponseWriter, r *http.Reques
 	if err := h.db.QueryRow(ctx,
 		`SELECT i.invoice_number, i.user_id,
 		        COALESCE(u.full_name, u.first_name || ' ' || u.last_name),
-		        u.email, i.total_amount, i.due_date, i.kid_number,
+		        COALESCE(u.last_name, ''), COALESCE(u.first_name, ''),
+		        u.email, fp.year, i.total_amount, i.due_date, i.kid_number,
 		        i.pdf_data, i.sent_at
 		   FROM invoices i
 		   JOIN users u ON u.id = i.user_id
+		   LEFT JOIN fiscal_periods fp ON fp.id = i.fiscal_period_id
 		  WHERE i.id = $1 AND i.club_id = $2`,
 		invoiceID, claims.ClubID,
-	).Scan(&invoiceNumber, &userID, &memberName, &memberEmail,
-		&total, &dueDate, &kid, &pdfData, &alreadySent); err != nil {
+	).Scan(&invoiceNumber, &userID, &memberName, &memberLast, &memberFirst, &memberEmail,
+		&fiscalYear, &total, &dueDate, &kid, &pdfData, &alreadySent); err != nil {
 		if err == pgx.ErrNoRows {
 			Error(w, http.StatusNotFound, "invoice not found")
 			return
@@ -432,7 +484,7 @@ func (h *InvoiceHandler) HandleSendInvoice(w http.ResponseWriter, r *http.Reques
 	locale := email.DetectLocale(r)
 	subject := email.InvoiceSubject(locale, clubName, invoiceNumber)
 	htmlBody := email.InvoiceBody(locale, memberName, clubName, invoiceNumber, dueDate, total, kid, bankAccount)
-	filename := fmt.Sprintf("faktura-%d.pdf", invoiceNumber)
+	filename := buildInvoiceFilename(invoiceNumber, memberLast, memberFirst, fiscalYear)
 	if err := h.email.SendWithAttachment(ctx, memberEmail, subject, htmlBody, filename, pdfData); err != nil {
 		h.log.Error().Err(err).Str("email", memberEmail).Msg("send invoice email")
 		Error(w, http.StatusBadGateway, "failed to send email")
@@ -453,10 +505,11 @@ func (h *InvoiceHandler) HandleSendInvoice(w http.ResponseWriter, r *http.Reques
 	JSON(w, http.StatusOK, map[string]any{"id": invoiceID, "sent": true})
 }
 
-// HandleDeleteDraftInvoice permanently removes an unsent invoice.
-// Refuses to touch sent invoices — voiding sent fakturas is a separate
-// concern (will arrive with the planned status column).
-func (h *InvoiceHandler) HandleDeleteDraftInvoice(w http.ResponseWriter, r *http.Request) {
+// HandleDeleteInvoice permanently removes an invoice. Allowed for
+// drafts (sent_at IS NULL) and for voided invoices — sent+open
+// invoices must be voided first so an audit trail of the original
+// send remains until the admin explicitly retires it.
+func (h *InvoiceHandler) HandleDeleteInvoice(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
 	if claims == nil {
@@ -471,22 +524,61 @@ func (h *InvoiceHandler) HandleDeleteDraftInvoice(w http.ResponseWriter, r *http
 
 	tag, err := h.db.Exec(ctx,
 		`DELETE FROM invoices
-		  WHERE id = $1 AND club_id = $2 AND sent_at IS NULL`,
+		  WHERE id = $1 AND club_id = $2
+		    AND (sent_at IS NULL OR status = 'voided')`,
 		invoiceID, claims.ClubID,
 	)
 	if err != nil {
-		h.log.Error().Err(err).Msg("delete draft invoice")
+		h.log.Error().Err(err).Msg("delete invoice")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	if tag.RowsAffected() == 0 {
-		Error(w, http.StatusNotFound, "draft invoice not found (already sent or wrong club)")
+		Error(w, http.StatusConflict, "invoice cannot be deleted — void it first")
 		return
 	}
 	if h.audit != nil {
 		h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,
 			audit.ActionInvoiceCreated, "invoice", invoiceID,
-			map[string]any{"deleted_draft": true})
+			map[string]any{"deleted": true})
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// HandleVoidInvoice flips an invoice's status to 'voided'. Voided
+// invoices fall out of the bulk-faktura dedup index so the admin can
+// re-issue under the same (member, category, period) without manual
+// SQL. Idempotent — voiding an already-voided invoice returns 204.
+func (h *InvoiceHandler) HandleVoidInvoice(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	invoiceID := chi.URLParam(r, "invoiceID")
+	if invoiceID == "" {
+		Error(w, http.StatusBadRequest, "invoice ID is required")
+		return
+	}
+	tag, err := h.db.Exec(ctx,
+		`UPDATE invoices SET status = 'voided'
+		  WHERE id = $1 AND club_id = $2`,
+		invoiceID, claims.ClubID,
+	)
+	if err != nil {
+		h.log.Error().Err(err).Msg("void invoice")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if tag.RowsAffected() == 0 {
+		Error(w, http.StatusNotFound, "invoice not found")
+		return
+	}
+	if h.audit != nil {
+		h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,
+			audit.ActionInvoiceCreated, "invoice", invoiceID,
+			map[string]any{"voided": true})
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
