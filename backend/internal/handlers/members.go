@@ -75,6 +75,14 @@ type boat struct {
 	ConfirmedAt           *time.Time `json:"confirmed_at,omitempty"`
 	CreatedAt             time.Time  `json:"created_at"`
 	UpdatedAt             time.Time  `json:"updated_at"`
+	Slip                  *boatSlip  `json:"slip,omitempty"`
+}
+
+type boatSlip struct {
+	SlipID         string `json:"slip_id"`
+	Section        string `json:"section"`
+	Number         string `json:"number"`
+	AssignmentType string `json:"assignment_type"`
 }
 
 type createBoatRequest struct {
@@ -240,12 +248,17 @@ func (h *MembersHandler) HandleListMyBoats(w http.ResponseWriter, r *http.Reques
 	}
 
 	rows, err := h.db.Query(ctx,
-		`SELECT id, user_id, club_id, name, type, manufacturer, model,
-		        length_m, beam_m, draft_m, weight_kg, registration_number,
-		        boat_model_id, measurements_confirmed, confirmed_by, confirmed_at,
-		        created_at, updated_at
-		 FROM boats WHERE user_id = $1 AND club_id = $2
-		 ORDER BY name`,
+		`SELECT b.id, b.user_id, b.club_id, b.name, b.type, b.manufacturer, b.model,
+		        b.length_m, b.beam_m, b.draft_m, b.weight_kg, b.registration_number,
+		        b.boat_model_id, b.measurements_confirmed, b.confirmed_by, b.confirmed_at,
+		        b.created_at, b.updated_at,
+		        sa.slip_id, s.section, s.number, sa.assignment_type::text
+		 FROM boats b
+		 LEFT JOIN slip_assignments sa
+		        ON sa.boat_id = b.id AND sa.released_at IS NULL
+		 LEFT JOIN slips s ON s.id = sa.slip_id
+		 WHERE b.user_id = $1 AND b.club_id = $2
+		 ORDER BY b.name`,
 		claims.UserID, claims.ClubID,
 	)
 	if err != nil {
@@ -258,15 +271,25 @@ func (h *MembersHandler) HandleListMyBoats(w http.ResponseWriter, r *http.Reques
 	boats := make([]boat, 0)
 	for rows.Next() {
 		var b boat
+		var slipID, slipSection, slipNumber, slipType *string
 		if err := rows.Scan(
 			&b.ID, &b.UserID, &b.ClubID, &b.Name, &b.Type, &b.Manufacturer, &b.Model,
 			&b.LengthM, &b.BeamM, &b.DraftM, &b.WeightKg, &b.RegistrationNumber,
 			&b.BoatModelID, &b.MeasurementsConfirmed, &b.ConfirmedBy, &b.ConfirmedAt,
 			&b.CreatedAt, &b.UpdatedAt,
+			&slipID, &slipSection, &slipNumber, &slipType,
 		); err != nil {
 			h.log.Error().Err(err).Msg("failed to scan boat")
 			Error(w, http.StatusInternalServerError, "internal error")
 			return
+		}
+		if slipID != nil {
+			b.Slip = &boatSlip{
+				SlipID:         *slipID,
+				Section:        deref(slipSection),
+				Number:         deref(slipNumber),
+				AssignmentType: deref(slipType),
+			}
 		}
 		boats = append(boats, b)
 	}

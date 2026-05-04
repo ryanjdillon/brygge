@@ -2527,6 +2527,8 @@ export interface components {
             registration_number: string;
             /** @description Boat type */
             type: string;
+            /** @description Active slip currently held by this boat (null if none) */
+            slip?: { slip_id: string; section: string; number: string; assignment_type: string } | null;
             /**
              * Format: date-time
              * @description Last update timestamp
