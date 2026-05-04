@@ -28,7 +28,7 @@ defineProps<{
   hideSlip?: boolean
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   (e: 'edit', boat: BoatCardBoat): void
   (e: 'delete', boatId: string): void
 }>()
@@ -71,14 +71,14 @@ const fmtDim = (v?: number | null): string => (v != null ? `${v} m` : '—')
         <button
           class="text-blue-600 hover:text-blue-800"
           :title="t('common.edit')"
-          @click="$emit('edit', boat)"
+          @click="emit('edit', boat)"
         >
           <Pencil :class="compact ? 'h-3.5 w-3.5' : 'h-4 w-4'" />
         </button>
         <button
           class="text-red-600 hover:text-red-800"
           :title="t('common.delete')"
-          @click="$emit('delete', boat.id)"
+          @click="emit('delete', boat.id)"
         >
           <Trash2 :class="compact ? 'h-3.5 w-3.5' : 'h-4 w-4'" />
         </button>
