@@ -311,8 +311,8 @@ func (h *AdminUsersHandler) HandleGetUser(w http.ResponseWriter, r *http.Request
 		City       string                 `json:"city"`
 		IsLocal    bool                   `json:"is_local"`
 		AdminNotes string                 `json:"admin_notes"`
-		CreatedAt  string                 `json:"created_at"`
-		UpdatedAt  string                 `json:"updated_at"`
+		CreatedAt  time.Time              `json:"created_at"`
+		UpdatedAt  time.Time              `json:"updated_at"`
 		Roles      []string               `json:"roles"`
 		Slips      []slipAssignmentDetail `json:"slips"`
 	}
@@ -399,8 +399,8 @@ func (h *AdminUsersHandler) HandleGetUser(w http.ResponseWriter, r *http.Request
 		Amount    float64 `json:"amount"`
 		Currency  string  `json:"currency"`
 		Status    string  `json:"status"`
-		PaidAt    *string `json:"paid_at"`
-		CreatedAt string  `json:"created_at"`
+		PaidAt    *time.Time `json:"paid_at"`
+		CreatedAt time.Time  `json:"created_at"`
 	}
 
 	payRows, err := h.db.Query(ctx,
