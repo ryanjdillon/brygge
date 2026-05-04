@@ -843,7 +843,7 @@ async function submitImport() {
     <div
       v-if="detailUser"
       class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      @click.self="closeDetail"
+      v-backdrop-close="closeDetail"
     >
       <div class="w-full max-w-lg rounded-lg bg-white p-5 shadow-xl">
         <div class="mb-3 flex items-center justify-between">
@@ -1090,7 +1090,7 @@ async function submitImport() {
     <div
       v-if="showCreateModal"
       class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      @click.self="showCreateModal = false"
+      v-backdrop-close="() => (showCreateModal = false)"
     >
       <div class="w-full max-w-md rounded-lg bg-white p-5 shadow-xl">
         <div class="mb-3 flex items-center justify-between">
@@ -1174,7 +1174,7 @@ async function submitImport() {
     <div
       v-if="showImportModal"
       class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      @click.self="showImportModal = false"
+      v-backdrop-close="() => (showImportModal = false)"
     >
       <div class="w-full max-w-2xl rounded-lg bg-white p-5 shadow-xl">
         <div class="mb-3 flex items-center justify-between">

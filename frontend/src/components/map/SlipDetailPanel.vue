@@ -64,7 +64,7 @@ const hasBoat = computed(() => {
   <div
     class="absolute inset-0 z-20 flex items-center justify-center p-4"
     role="presentation"
-    @click.self="$emit('close')"
+    v-backdrop-close="() => $emit('close')"
   >
     <aside
       class="flex max-h-full w-full max-w-sm flex-col overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-2xl"

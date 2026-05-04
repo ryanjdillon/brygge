@@ -305,7 +305,7 @@ function moveTask(task: Task, direction: 'prev' | 'next') {
     <div
       v-if="showCreateModal"
       role="dialog" aria-modal="true" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      @click.self="showCreateModal = false"
+      v-backdrop-close="() => (showCreateModal = false)"
     >
       <div class="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
         <div class="flex items-center justify-between">
@@ -398,7 +398,7 @@ function moveTask(task: Task, direction: 'prev' | 'next') {
     <div
       v-if="showDetailModal && selectedTask"
       role="dialog" aria-modal="true" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      @click.self="showDetailModal = false"
+      v-backdrop-close="() => (showDetailModal = false)"
     >
       <div class="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
         <div class="flex items-center justify-between">

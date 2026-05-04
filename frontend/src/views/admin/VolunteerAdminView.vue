@@ -86,7 +86,7 @@ function handleSetRequired() {
     <div
       v-if="showSettings"
       role="dialog" aria-modal="true" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      @click.self="showSettings = false"
+      v-backdrop-close="() => (showSettings = false)"
     >
       <div class="w-full max-w-sm rounded-lg bg-white p-6 shadow-xl">
         <h2 class="text-lg font-semibold text-gray-900">{{ t('volunteer.settings') }}</h2>

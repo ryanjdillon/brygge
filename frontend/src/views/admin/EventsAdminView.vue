@@ -200,7 +200,7 @@ function tagLabel(tag: string): string {
       <div
         v-if="showModal"
         role="dialog" aria-modal="true" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-        @click.self="closeModal"
+        v-backdrop-close="closeModal"
       >
         <div class="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl">
           <div class="flex items-center justify-between">

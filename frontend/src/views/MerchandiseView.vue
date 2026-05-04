@@ -222,7 +222,7 @@ function addToCart() {
       class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
       role="dialog"
       aria-modal="true"
-      @click.self="closeModal"
+      v-backdrop-close="closeModal"
     >
       <div class="w-full max-w-lg rounded-xl bg-white shadow-xl">
         <div class="flex items-start justify-between border-b border-gray-100 p-6 pb-4">

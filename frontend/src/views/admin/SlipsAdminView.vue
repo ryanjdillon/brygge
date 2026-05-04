@@ -329,7 +329,7 @@ function closeDelete() {
       role="dialog"
       aria-modal="true"
       class="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4"
-      @click.self="closeEdit"
+      v-backdrop-close="closeEdit"
     >
       <form
         class="w-full max-w-lg space-y-4 rounded-lg border border-gray-200 bg-white p-5 shadow-xl"
@@ -377,7 +377,7 @@ function closeDelete() {
       role="dialog"
       aria-modal="true"
       class="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4"
-      @click.self="closeDelete"
+      v-backdrop-close="closeDelete"
     >
       <div class="w-full max-w-md space-y-4 rounded-lg border border-gray-200 bg-white p-5 shadow-xl">
         <h2 class="text-lg font-semibold text-gray-900">{{ t('admin.slips.deleteTitle') }}</h2>
