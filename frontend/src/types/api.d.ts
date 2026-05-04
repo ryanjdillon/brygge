@@ -715,7 +715,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/admin/users/{userID}/slip": {
+    "/api/v1/admin/users/{userID}/boats/{boatID}/slip": {
         parameters: {
             query?: never;
             header?: never;
@@ -723,8 +723,8 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Set or release a user's active slip assignment */
-        put: operations["admin-set-user-slip"];
+        /** Set or release the active slip assignment for one of a user's boats */
+        put: operations["admin-set-user-boat-slip"];
         post?: never;
         delete?: never;
         options?: never;
@@ -2322,7 +2322,7 @@ export interface components {
             /** @description Free-text admin notes (admin-only) */
             admin_notes: string;
             /** @description All active slip assignments for the user */
-            slips?: { slip_id: string; slip_number?: string; slip_section?: string; assignment_type?: string }[] | null;
+            slips?: { slip_id: string; slip_number?: string; slip_section?: string; assignment_type?: string; boat_id?: string | null }[] | null;
             /** @description City */
             city: string;
             /**
@@ -2357,11 +2357,11 @@ export interface components {
             /** @description Active slip section (empty when unassigned) */
             slip_section: string;
         };
-        AdminUserSlipUpdate: {
+        AdminUserBoatSlipUpdate: {
             /**
              * Format: uri
              * @description A URL to the JSON Schema for this object.
-             * @example https://example.com/schemas/AdminUserSlipUpdate.json
+             * @example https://example.com/schemas/AdminUserBoatSlipUpdate.json
              */
             readonly $schema?: string;
             /** @description permanent | seasonal (default permanent) */
@@ -6404,19 +6404,21 @@ export interface operations {
             };
         };
     };
-    "admin-set-user-slip": {
+    "admin-set-user-boat-slip": {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 /** @description User UUID */
                 userID: string;
+                /** @description Boat UUID owned by the user */
+                boatID: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["AdminUserSlipUpdate"];
+                "application/json": components["schemas"]["AdminUserBoatSlipUpdate"];
             };
         };
         responses: {
@@ -6426,7 +6428,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AdminUser"];
+                    "application/json": Record<string, unknown>;
                 };
             };
             /** @description Error */

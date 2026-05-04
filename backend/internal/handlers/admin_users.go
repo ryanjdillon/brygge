@@ -293,10 +293,11 @@ func (h *AdminUsersHandler) HandleGetUser(w http.ResponseWriter, r *http.Request
 	}
 
 	type slipAssignmentDetail struct {
-		SlipID         string `json:"slip_id"`
-		SlipNumber     string `json:"slip_number"`
-		SlipSection    string `json:"slip_section"`
-		AssignmentType string `json:"assignment_type"`
+		SlipID         string  `json:"slip_id"`
+		SlipNumber     string  `json:"slip_number"`
+		SlipSection    string  `json:"slip_section"`
+		AssignmentType string  `json:"assignment_type"`
+		BoatID         *string `json:"boat_id"`
 	}
 
 	type userDetail struct {
@@ -329,7 +330,8 @@ func (h *AdminUsersHandler) HandleGetUser(w http.ResponseWriter, r *http.Request
 		                'slip_id', sa.slip_id,
 		                'slip_number', s.number,
 		                'slip_section', s.section,
-		                'assignment_type', sa.assignment_type::text
+		                'assignment_type', sa.assignment_type::text,
+		                'boat_id', sa.boat_id
 		            ) ORDER BY s.section, s.number)
 		              FROM slip_assignments sa
 		              JOIN slips s ON s.id = sa.slip_id
@@ -1166,30 +1168,33 @@ func (h *AdminUsersHandler) HandleUpdateUser(w http.ResponseWriter, r *http.Requ
 	JSON(w, http.StatusOK, map[string]any{"id": userID, "updated": true})
 }
 
-type adminUserSlipUpdateRequest struct {
+// adminBoatSlipUpdateRequest is the body for PUT
+// /admin/users/{userID}/boats/{boatID}/slip — assigns a single slip to a
+// specific boat (or releases it when slip_id is null/omitted).
+type adminBoatSlipUpdateRequest struct {
 	SlipID         *string `json:"slip_id"`
 	AssignmentType string  `json:"assignment_type,omitempty"`
 }
 
-// HandleSetUserSlip atomically sets or releases a user's active slip
-// assignment. Pass slip_id=null to release. The new assignment_type
-// defaults to 'permanent'. Conflicts (slip already taken, etc.) come
-// back as 409.
-func (h *AdminUsersHandler) HandleSetUserSlip(w http.ResponseWriter, r *http.Request) {
+// HandleSetUserBoatSlip atomically sets or releases the active slip
+// assignment for a specific boat. Pass slip_id=null to release. Honors
+// the per-boat unique active assignment constraint and the per-slip
+// vacancy check. Conflicts come back as 409.
+func (h *AdminUsersHandler) HandleSetUserBoatSlip(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
 	if claims == nil {
 		Error(w, http.StatusUnauthorized, "authentication required")
 		return
 	}
-
 	userID := chi.URLParam(r, "userID")
-	if userID == "" {
-		Error(w, http.StatusBadRequest, "user ID is required")
+	boatID := chi.URLParam(r, "boatID")
+	if userID == "" || boatID == "" {
+		Error(w, http.StatusBadRequest, "user ID and boat ID are required")
 		return
 	}
 
-	var req adminUserSlipUpdateRequest
+	var req adminBoatSlipUpdateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		Error(w, http.StatusBadRequest, "invalid request body")
 		return
@@ -1212,25 +1217,25 @@ func (h *AdminUsersHandler) HandleSetUserSlip(w http.ResponseWriter, r *http.Req
 	}
 	defer tx.Rollback(ctx)
 
-	var exists bool
+	var ownerCheck bool
 	if err := tx.QueryRow(ctx,
-		`SELECT EXISTS(SELECT 1 FROM users WHERE id = $1 AND club_id = $2)`,
-		userID, claims.ClubID,
-	).Scan(&exists); err != nil || !exists {
-		Error(w, http.StatusNotFound, "user not found")
+		`SELECT EXISTS(SELECT 1 FROM boats
+		    WHERE id = $1 AND user_id = $2 AND club_id = $3)`,
+		boatID, userID, claims.ClubID,
+	).Scan(&ownerCheck); err != nil || !ownerCheck {
+		Error(w, http.StatusNotFound, "boat not found for user")
 		return
 	}
 
-	// Release any existing active assignment for this user. Also flip
-	// the slip back to vacant so /admin/slips listings stay consistent.
+	// Release any existing active assignment for this boat.
 	rows, err := tx.Query(ctx,
 		`UPDATE slip_assignments SET released_at = now()
-		 WHERE user_id = $1 AND club_id = $2 AND released_at IS NULL
+		 WHERE boat_id = $1 AND club_id = $2 AND released_at IS NULL
 		 RETURNING slip_id`,
-		userID, claims.ClubID,
+		boatID, claims.ClubID,
 	)
 	if err != nil {
-		h.log.Error().Err(err).Msg("release prior assignments")
+		h.log.Error().Err(err).Msg("release prior boat assignments")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
@@ -1239,7 +1244,6 @@ func (h *AdminUsersHandler) HandleSetUserSlip(w http.ResponseWriter, r *http.Req
 		var sid string
 		if err := rows.Scan(&sid); err != nil {
 			rows.Close()
-			h.log.Error().Err(err).Msg("scan released slip id")
 			Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
@@ -1278,13 +1282,17 @@ func (h *AdminUsersHandler) HandleSetUserSlip(w http.ResponseWriter, r *http.Req
 			Error(w, http.StatusConflict, "slip is already occupied")
 			return
 		}
-
 		if err := tx.QueryRow(ctx,
-			`INSERT INTO slip_assignments (slip_id, user_id, club_id, assignment_type)
-			 VALUES ($1, $2, $3, $4)
+			`INSERT INTO slip_assignments (slip_id, user_id, club_id, assignment_type, boat_id)
+			 VALUES ($1, $2, $3, $4, $5)
 			 RETURNING id`,
-			*req.SlipID, userID, claims.ClubID, assignmentType,
+			*req.SlipID, userID, claims.ClubID, assignmentType, boatID,
 		).Scan(&newAssignmentID); err != nil {
+			var pgErr *pgconn.PgError
+			if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+				Error(w, http.StatusConflict, "slip or boat already assigned")
+				return
+			}
 			h.log.Error().Err(err).Msg("insert assignment")
 			Error(w, http.StatusInternalServerError, "internal error")
 			return
@@ -1300,16 +1308,17 @@ func (h *AdminUsersHandler) HandleSetUserSlip(w http.ResponseWriter, r *http.Req
 	}
 
 	auditData, _ := json.Marshal(map[string]any{
+		"boat_id":         boatID,
 		"slip_id":         req.SlipID,
 		"assignment_type": assignmentType,
 		"released_slips":  releasedSlipIDs,
 	})
 	if _, err := tx.Exec(ctx,
 		`INSERT INTO audit_log (club_id, actor_id, action, resource, resource_id, details)
-		 VALUES ($1, $2, 'set_user_slip', 'user', $3, $4)`,
-		claims.ClubID, claims.UserID, userID, auditData,
+		 VALUES ($1, $2, 'set_user_boat_slip', 'boat', $3, $4)`,
+		claims.ClubID, claims.UserID, boatID, auditData,
 	); err != nil {
-		h.log.Warn().Err(err).Msg("audit log set_user_slip")
+		h.log.Warn().Err(err).Msg("audit log set_user_boat_slip")
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -1320,15 +1329,18 @@ func (h *AdminUsersHandler) HandleSetUserSlip(w http.ResponseWriter, r *http.Req
 
 	JSON(w, http.StatusOK, map[string]any{
 		"user_id":         userID,
+		"boat_id":         boatID,
 		"slip_id":         req.SlipID,
 		"assignment_type": assignmentType,
 		"assignment_id":   newAssignmentID,
 	})
 }
 
+
 type slipAssignmentRow struct {
-	SlipID         string `json:"slip_id"`
-	AssignmentType string `json:"assignment_type,omitempty"`
+	SlipID         string  `json:"slip_id"`
+	BoatID         *string `json:"boat_id,omitempty"`
+	AssignmentType string  `json:"assignment_type,omitempty"`
 }
 
 type adminUserSlipsUpdateRequest struct {
@@ -1368,7 +1380,12 @@ func (h *AdminUsersHandler) HandleSetUserSlips(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	wanted := map[string]string{}
+	type wantedRow struct {
+		assignmentType string
+		boatID         string
+	}
+	wanted := map[string]wantedRow{}
+	usedBoats := map[string]string{}
 	for _, s := range req.Slips {
 		if s.SlipID == "" {
 			continue
@@ -1385,7 +1402,18 @@ func (h *AdminUsersHandler) HandleSetUserSlips(w http.ResponseWriter, r *http.Re
 			Error(w, http.StatusBadRequest, "duplicate slip_id in request")
 			return
 		}
-		wanted[s.SlipID] = t
+		bid := ""
+		if s.BoatID != nil {
+			bid = *s.BoatID
+		}
+		wanted[s.SlipID] = wantedRow{assignmentType: t, boatID: bid}
+		if bid != "" {
+			if other, dup := usedBoats[bid]; dup {
+				Error(w, http.StatusBadRequest, fmt.Sprintf("boat %s assigned to multiple slips (%s and %s)", bid, other, s.SlipID))
+				return
+			}
+			usedBoats[bid] = s.SlipID
+		}
 	}
 
 	tx, err := h.db.Begin(ctx)
@@ -1405,13 +1433,69 @@ func (h *AdminUsersHandler) HandleSetUserSlips(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// Load this user's boats so we can default the boat_id when omitted
+	// and validate any explicitly-supplied ids.
+	ownerBoats := []string{}
+	boatRows, err := tx.Query(ctx,
+		`SELECT id FROM boats WHERE user_id = $1 AND club_id = $2 ORDER BY created_at`,
+		userID, claims.ClubID,
+	)
+	if err != nil {
+		h.log.Error().Err(err).Msg("query owner boats")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	for boatRows.Next() {
+		var id string
+		if err := boatRows.Scan(&id); err != nil {
+			boatRows.Close()
+			h.log.Error().Err(err).Msg("scan owner boat")
+			Error(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		ownerBoats = append(ownerBoats, id)
+	}
+	boatRows.Close()
+	ownedBoatSet := map[string]bool{}
+	for _, id := range ownerBoats {
+		ownedBoatSet[id] = true
+	}
+
+	// Resolve boat_id for every wanted row. Validate ownership.
+	for sid, wr := range wanted {
+		if wr.boatID == "" {
+			if len(ownerBoats) == 0 {
+				Error(w, http.StatusBadRequest, fmt.Sprintf("user has no boats; cannot assign slip %s", sid))
+				return
+			}
+			if len(ownerBoats) > 1 {
+				Error(w, http.StatusBadRequest, fmt.Sprintf("user has multiple boats; boat_id required for slip %s", sid))
+				return
+			}
+			wr.boatID = ownerBoats[0]
+			if other, dup := usedBoats[wr.boatID]; dup && other != sid {
+				Error(w, http.StatusBadRequest, fmt.Sprintf("boat %s already assigned to slip %s", wr.boatID, other))
+				return
+			}
+			usedBoats[wr.boatID] = sid
+			wanted[sid] = wr
+			continue
+		}
+		if !ownedBoatSet[wr.boatID] {
+			Error(w, http.StatusBadRequest, fmt.Sprintf("boat %s not owned by user", wr.boatID))
+			return
+		}
+	}
+
 	// Snapshot current active assignments for this user.
-	current := map[string]struct {
+	type currentRow struct {
 		assignmentID   string
 		assignmentType string
-	}{}
+		boatID         *string
+	}
+	current := map[string]currentRow{}
 	rows, err := tx.Query(ctx,
-		`SELECT id, slip_id, assignment_type::text
+		`SELECT id, slip_id, assignment_type::text, boat_id
 		   FROM slip_assignments
 		  WHERE user_id = $1 AND club_id = $2 AND released_at IS NULL`,
 		userID, claims.ClubID,
@@ -1423,16 +1507,14 @@ func (h *AdminUsersHandler) HandleSetUserSlips(w http.ResponseWriter, r *http.Re
 	}
 	for rows.Next() {
 		var aid, sid, at string
-		if err := rows.Scan(&aid, &sid, &at); err != nil {
+		var bid *string
+		if err := rows.Scan(&aid, &sid, &at, &bid); err != nil {
 			rows.Close()
 			h.log.Error().Err(err).Msg("scan current assignment")
 			Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
-		current[sid] = struct {
-			assignmentID   string
-			assignmentType string
-		}{aid, at}
+		current[sid] = currentRow{assignmentID: aid, assignmentType: at, boatID: bid}
 	}
 	rows.Close()
 
@@ -1461,14 +1543,21 @@ func (h *AdminUsersHandler) HandleSetUserSlips(w http.ResponseWriter, r *http.Re
 	}
 
 	added := []string{}
-	for sid, t := range wanted {
+	for sid, wr := range wanted {
 		if cur, exists := current[sid]; exists {
-			if cur.assignmentType != t {
+			needType := cur.assignmentType != wr.assignmentType
+			needBoat := cur.boatID == nil || *cur.boatID != wr.boatID
+			if needType || needBoat {
 				if _, err := tx.Exec(ctx,
-					`UPDATE slip_assignments SET assignment_type = $1 WHERE id = $2`,
-					t, cur.assignmentID,
+					`UPDATE slip_assignments SET assignment_type = $1, boat_id = $2 WHERE id = $3`,
+					wr.assignmentType, wr.boatID, cur.assignmentID,
 				); err != nil {
-					h.log.Error().Err(err).Msg("update assignment type")
+					var pgErr *pgconn.PgError
+					if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+						Error(w, http.StatusConflict, "boat already assigned to another active slip")
+						return
+					}
+					h.log.Error().Err(err).Msg("update assignment")
 					Error(w, http.StatusInternalServerError, "internal error")
 					return
 				}
@@ -1494,13 +1583,13 @@ func (h *AdminUsersHandler) HandleSetUserSlips(w http.ResponseWriter, r *http.Re
 			return
 		}
 		if _, err := tx.Exec(ctx,
-			`INSERT INTO slip_assignments (slip_id, user_id, club_id, assignment_type)
-			 VALUES ($1, $2, $3, $4)`,
-			sid, userID, claims.ClubID, t,
+			`INSERT INTO slip_assignments (slip_id, user_id, club_id, assignment_type, boat_id)
+			 VALUES ($1, $2, $3, $4, $5)`,
+			sid, userID, claims.ClubID, wr.assignmentType, wr.boatID,
 		); err != nil {
 			var pgErr *pgconn.PgError
 			if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-				Error(w, http.StatusConflict, "slip is already occupied")
+				Error(w, http.StatusConflict, "slip or boat already assigned")
 				return
 			}
 			h.log.Error().Err(err).Msg("insert assignment")

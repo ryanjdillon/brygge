@@ -550,13 +550,13 @@ func main() {
 						r.Post("/", adminUsersHandler.HandleCreateUser)
 						r.Patch("/{userID}", adminUsersHandler.HandleUpdateUser)
 						r.Put("/{userID}/roles", adminUsersHandler.HandleUpdateUserRoles)
-						r.Put("/{userID}/slip", adminUsersHandler.HandleSetUserSlip)
 						r.Put("/{userID}/slips", adminUsersHandler.HandleSetUserSlips)
 						r.Group(func(r chi.Router) {
 							r.Use(middleware.RequireRole("admin"))
 							r.Post("/{userID}/boats", adminUsersHandler.HandleCreateUserBoat)
 							r.Put("/{userID}/boats/{boatID}", adminUsersHandler.HandleUpdateUserBoat)
 							r.Delete("/{userID}/boats/{boatID}", adminUsersHandler.HandleDeleteUserBoat)
+							r.Put("/{userID}/boats/{boatID}/slip", adminUsersHandler.HandleSetUserBoatSlip)
 						})
 						r.Delete("/{userID}", adminUsersHandler.HandleDeleteUser)
 

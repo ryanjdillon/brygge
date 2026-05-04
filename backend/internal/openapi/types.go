@@ -691,7 +691,7 @@ type AdminUser struct {
 	City               string    `json:"city" doc:"City"`
 	IsLocal            bool      `json:"is_local" doc:"Local-resident rate eligible"`
 	AdminNotes         string    `json:"admin_notes" doc:"Free-text admin notes (admin-only)"`
-	Slips              []AdminUserSlipsAssignment `json:"slips" doc:"All active slip assignments for the user"`
+	Slips              []AdminUserSlipDetail `json:"slips" doc:"All active slip assignments for the user"`
 	Roles              []string  `json:"roles" doc:"Assigned roles"`
 	SlipID             *string   `json:"slip_id,omitempty" doc:"Active slip assignment slip UUID, if any"`
 	SlipNumber         string    `json:"slip_number" doc:"Active slip number (empty when unassigned)"`
@@ -700,18 +700,31 @@ type AdminUser struct {
 	CreatedAt          time.Time `json:"created_at" doc:"Creation timestamp"`
 }
 
-// AdminUserSlipUpdate is the request body for PUT /api/v1/admin/users/{userID}/slip.
-// Pass slip_id=null to release the user's current slip. assignment_type is
-// honoured only when slip_id is set (defaults to 'permanent').
-type AdminUserSlipUpdate struct {
+// AdminUserSlipDetail is one row of AdminUser.Slips — the read-side
+// projection of an active slip assignment, joined to the slip for
+// display (section, number) and including the boat that holds it.
+type AdminUserSlipDetail struct {
+	SlipID         string  `json:"slip_id" doc:"Slip UUID"`
+	SlipNumber     string  `json:"slip_number" doc:"Slip number (e.g. 12)"`
+	SlipSection    string  `json:"slip_section" doc:"Slip section / dock letter (e.g. A)"`
+	AssignmentType string  `json:"assignment_type" doc:"permanent | seasonal"`
+	BoatID         *string `json:"boat_id" doc:"Boat UUID holding the slip (null for legacy rows)"`
+}
+
+// AdminUserBoatSlipUpdate is the request body for PUT
+// /api/v1/admin/users/{userID}/boats/{boatID}/slip — the per-boat write
+// path. Pass slip_id=null to release. assignment_type honoured only when
+// slip_id is set (defaults to 'permanent').
+type AdminUserBoatSlipUpdate struct {
 	SlipID         *string `json:"slip_id" doc:"Slip UUID to assign, or null to release"`
 	AssignmentType string  `json:"assignment_type,omitempty" doc:"permanent | seasonal (default permanent)"`
 }
 
 // AdminUserSlipsAssignment is one row in AdminUserSlipsUpdate.Slips.
 type AdminUserSlipsAssignment struct {
-	SlipID         string `json:"slip_id" doc:"Slip UUID"`
-	AssignmentType string `json:"assignment_type,omitempty" doc:"permanent | seasonal (default permanent)"`
+	SlipID         string  `json:"slip_id" doc:"Slip UUID"`
+	BoatID         *string `json:"boat_id,omitempty" doc:"Owner-boat UUID; required when the user has multiple boats"`
+	AssignmentType string  `json:"assignment_type,omitempty" doc:"permanent | seasonal (default permanent)"`
 }
 
 // AdminUserSlipsUpdate is the request body for PUT /api/v1/admin/users/{userID}/slips.

@@ -1242,16 +1242,17 @@ func registerAdminOps(api huma.API) {
 	}, struct{ Body map[string]any }]())
 
 	huma.Register(api, huma.Operation{
-		OperationID: "admin-set-user-slip",
+		OperationID: "admin-set-user-boat-slip",
 		Method:      http.MethodPut,
-		Path:        "/api/v1/admin/users/{userID}/slip",
+		Path:        "/api/v1/admin/users/{userID}/boats/{boatID}/slip",
 		Tags:        []string{"Admin"},
-		Summary:     "Set or release a user's active slip assignment (single-slip; deprecated, use /slips)",
+		Summary:     "Set or release the active slip assignment for one of a user's boats",
 		Security:    BearerSecurity,
 	}, stub[struct {
 		UserID string `path:"userID" doc:"User UUID"`
-		Body   AdminUserSlipUpdate
-	}, struct{ Body AdminUser }]())
+		BoatID string `path:"boatID" doc:"Boat UUID owned by the user"`
+		Body   AdminUserBoatSlipUpdate
+	}, struct{ Body map[string]any }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "admin-update-user-roles",
