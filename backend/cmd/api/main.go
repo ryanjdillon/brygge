@@ -609,6 +609,13 @@ func main() {
 						r.Get("/", clubSettingsHandler.HandleGetBookingSettings)
 						r.Put("/", clubSettingsHandler.HandleUpdateBookingSettings)
 					})
+
+					r.Route("/settings/financials", func(r chi.Router) {
+						r.Use(middleware.RequireRole("treasurer", "admin"))
+						r.Get("/", clubSettingsHandler.HandleGetFinancialSettings)
+						r.With(middleware.RequireFreshTOTP(10*time.Minute)).
+							Patch("/", clubSettingsHandler.HandleUpdateFinancialSettings)
+					})
 				}
 
 				r.Route("/slip-shares", func(r chi.Router) {

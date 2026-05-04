@@ -319,6 +319,11 @@ const routes: RouteRecordRaw[] = [
         name: 'admin-invoice-drafts',
         component: () => import('@/views/admin/InvoiceDraftsView.vue'),
       },
+      {
+        path: 'accounting/settings',
+        name: 'admin-financial-settings',
+        component: () => import('@/views/admin/FinancialSettingsView.vue'),
+      },
     ],
   },
 ]

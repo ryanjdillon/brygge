@@ -477,6 +477,18 @@
       "periods": "Periods",
       "journal": "Journal entries"
     },
+    "financialSettings": {
+      "title": "Faktura settings",
+      "subtitle": "These values appear on every faktura PDF the club issues.",
+      "cardDesc": "Org.nr, address, bank account",
+      "clubName": "Club name",
+      "clubNameHint": "Set in your Nix module configuration; not editable here.",
+      "orgNumber": "Organization number",
+      "address": "Address",
+      "bankAccount": "Bank account number",
+      "bankAccountHint": "Norwegian format: XXXX.YY.ZZZZZ — used for KID-paid fakturas.",
+      "saved": "Saved"
+    },
     "invoiceDrafts": {
       "title": "Faktura drafts",
       "subtitle": "Review unsent fakturas, then send or delete.",

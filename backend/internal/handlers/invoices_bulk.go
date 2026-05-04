@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -175,28 +176,31 @@ func (h *InvoiceHandler) HandleBulkCreateInvoices(w http.ResponseWriter, r *http
 	resp := bulkInvoiceResponse{Created: []bulkInvoiceCreated{}, Skipped: []bulkInvoiceSkipped{}}
 	for _, userID := range req.UserIDs {
 		userID := userID
-		// Resolve which price_item applies to this user.
+		// Resolve which price_item applies to this user, plus boat/slip
+		// context to enrich the line description.
 		var chosen *priceTier
+		var slipInfo *slipBoatInfo
 		var skipReason string
 		if flatItem != nil {
 			chosen = flatItem
 		} else {
-			beam, lookupErr := h.beamForUser(ctx, claims.ClubID, userID)
+			info, lookupErr := h.slipBoatForUser(ctx, claims.ClubID, userID)
 			if lookupErr != "" {
 				skipReason = lookupErr
 			} else {
+				slipInfo = info
 				for i := range tiers {
 					t := &tiers[i]
 					if t.beamMin == nil || t.beamMax == nil {
 						continue
 					}
-					if *beam >= *t.beamMin && *beam < *t.beamMax {
+					if *info.beam >= *t.beamMin && *info.beam < *t.beamMax {
 						chosen = t
 						break
 					}
 				}
 				if chosen == nil {
-					skipReason = fmt.Sprintf("beam %.2fm has no matching tier", *beam)
+					skipReason = fmt.Sprintf("beam %.2fm has no matching tier", *info.beam)
 				}
 			}
 		}
@@ -224,7 +228,7 @@ func (h *InvoiceHandler) HandleBulkCreateInvoices(w http.ResponseWriter, r *http
 		}
 
 		invID, invNum, amount, err := h.createBulkInvoice(ctx,
-			claims.ClubID, claims.UserID, userID, chosen,
+			claims.ClubID, claims.UserID, userID, chosen, slipInfo,
 			req.FiscalPeriodID, fiscalYear, dueDate,
 			clubName, orgNumber, clubAddress, bankAccount)
 		if err != nil {
@@ -254,27 +258,42 @@ func (h *InvoiceHandler) HandleBulkCreateInvoices(w http.ResponseWriter, r *http
 	JSON(w, http.StatusOK, resp)
 }
 
-// beamForUser returns the beam in metres of the boat occupying the
-// user's active permanent slip assignment, plus a distinguishable
-// human-readable reason when the lookup can't yield a usable beam.
-// Distinguishing between "no slip", "no boat on slip", and "boat has
-// no beam recorded" matters for the bulk-faktura skip list.
-func (h *InvoiceHandler) beamForUser(ctx context.Context, clubID, userID string) (*float64, string) {
+type slipBoatInfo struct {
+	beam     *float64
+	boatName string
+	mfg      string
+	model    string
+	slipLbl  string
+}
+
+// slipBoatForUser returns the boat + slip on the user's active slip
+// assignment, plus a distinguishable human-readable reason when the
+// lookup can't yield a usable beam. Distinguishing between "no slip",
+// "no boat on slip", and "boat has no beam recorded" matters for the
+// bulk-faktura skip list.
+func (h *InvoiceHandler) slipBoatForUser(ctx context.Context, clubID, userID string) (*slipBoatInfo, string) {
 	var (
-		hasAssignment bool
-		boatID        *string
-		beam          *float64
+		hasAssignment   bool
+		boatID          *string
+		beam            *float64
+		boatName        *string
+		mfg             *string
+		model           *string
+		slipSection     *string
+		slipNumber      *string
 	)
 	err := h.db.QueryRow(ctx,
-		`SELECT TRUE, sa.boat_id, b.beam_m
+		`SELECT TRUE, sa.boat_id, b.beam_m, b.name, b.manufacturer, b.model,
+		        s.section, s.number
 		   FROM slip_assignments sa
 		   LEFT JOIN boats b ON b.id = sa.boat_id
+		   JOIN slips s ON s.id = sa.slip_id
 		  WHERE sa.user_id = $1 AND sa.club_id = $2
 		    AND sa.released_at IS NULL
 		  ORDER BY sa.assigned_at
 		  LIMIT 1`,
 		userID, clubID,
-	).Scan(&hasAssignment, &boatID, &beam)
+	).Scan(&hasAssignment, &boatID, &beam, &boatName, &mfg, &model, &slipSection, &slipNumber)
 	if err == pgx.ErrNoRows {
 		return nil, "no active slip assignment"
 	}
@@ -287,7 +306,25 @@ func (h *InvoiceHandler) beamForUser(ctx context.Context, clubID, userID string)
 	if beam == nil {
 		return nil, "boat on slip has no beam recorded — set boat.beam_m"
 	}
-	return beam, ""
+	info := &slipBoatInfo{beam: beam}
+	if boatName != nil {
+		info.boatName = *boatName
+	}
+	if mfg != nil {
+		info.mfg = *mfg
+	}
+	if model != nil {
+		info.model = *model
+	}
+	if slipSection != nil && slipNumber != nil {
+		// "A1" if number doesn't already start with section, else just number.
+		if len(*slipNumber) > 0 && len(*slipSection) > 0 && string((*slipNumber)[0]) != *slipSection {
+			info.slipLbl = *slipSection + *slipNumber
+		} else {
+			info.slipLbl = *slipNumber
+		}
+	}
+	return info, ""
 }
 
 type priceTier struct {
@@ -302,6 +339,7 @@ func (h *InvoiceHandler) createBulkInvoice(
 	ctx context.Context,
 	clubID, actorID, userID string,
 	t *priceTier,
+	slipInfo *slipBoatInfo,
 	fiscalPeriodID string,
 	fiscalYear int,
 	dueDate time.Time,
@@ -326,6 +364,27 @@ func (h *InvoiceHandler) createBulkInvoice(
 
 	kid := finance.GenerateKID("000", invoiceSeq, 1)
 	desc := fmt.Sprintf("%s %d", t.desc, fiscalYear)
+	if slipInfo != nil {
+		// Append boat name (or mfg+model) and slip label to the line so
+		// the recipient can see exactly what they're paying for.
+		boatLabel := slipInfo.boatName
+		if boatLabel == "" {
+			boatLabel = strings.TrimSpace(slipInfo.mfg + " " + slipInfo.model)
+		}
+		extras := []string{}
+		if slipInfo.slipLbl != "" {
+			extras = append(extras, "Plass "+slipInfo.slipLbl)
+		}
+		if boatLabel != "" {
+			extras = append(extras, boatLabel)
+		}
+		if slipInfo.beam != nil {
+			extras = append(extras, fmt.Sprintf("bredde %.2f m", *slipInfo.beam))
+		}
+		if len(extras) > 0 {
+			desc = desc + " — " + strings.Join(extras, ", ")
+		}
+	}
 	pdfLines := []finance.InvoiceLine{{Description: desc, Quantity: 1, UnitPrice: t.amount}}
 	inv := finance.Invoice{
 		ClubName:      clubName,

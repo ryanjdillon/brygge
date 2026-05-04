@@ -146,3 +146,77 @@ func (h *ClubSettingsHandler) HandleUpdateBookingSettings(w http.ResponseWriter,
 
 	JSON(w, http.StatusOK, map[string]string{"status": "updated"})
 }
+
+type clubFinancialSettings struct {
+	Name        string `json:"name"`
+	OrgNumber   string `json:"org_number"`
+	Address     string `json:"address"`
+	BankAccount string `json:"bank_account"`
+}
+
+// HandleGetFinancialSettings returns the club's invoice-relevant
+// fields stored on the clubs table (org_number, address, bank_account).
+// These render on every faktura PDF.
+func (h *ClubSettingsHandler) HandleGetFinancialSettings(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	var s clubFinancialSettings
+	if err := h.db.QueryRow(ctx,
+		`SELECT name, COALESCE(org_number, ''), COALESCE(address, ''), COALESCE(bank_account, '')
+		   FROM clubs WHERE id = $1`,
+		claims.ClubID,
+	).Scan(&s.Name, &s.OrgNumber, &s.Address, &s.BankAccount); err != nil {
+		h.log.Error().Err(err).Msg("load financial settings")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	JSON(w, http.StatusOK, s)
+}
+
+type updateFinancialSettingsRequest struct {
+	OrgNumber   *string `json:"org_number,omitempty"`
+	Address     *string `json:"address,omitempty"`
+	BankAccount *string `json:"bank_account,omitempty"`
+}
+
+// HandleUpdateFinancialSettings updates org_number, address, and
+// bank_account on the clubs row. Each field is optional; only supplied
+// keys are written.
+func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	var req updateFinancialSettingsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.OrgNumber == nil && req.Address == nil && req.BankAccount == nil {
+		Error(w, http.StatusBadRequest, "no fields supplied")
+		return
+	}
+	// Build COALESCE-style update so unspecified fields stay as-is.
+	if _, err := h.db.Exec(ctx,
+		`UPDATE clubs SET
+		   org_number   = COALESCE($2, org_number),
+		   address      = COALESCE($3, address),
+		   bank_account = COALESCE($4, bank_account)
+		 WHERE id = $1`,
+		claims.ClubID, req.OrgNumber, req.Address, req.BankAccount,
+	); err != nil {
+		h.log.Error().Err(err).Msg("update financial settings")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if auditErr := LogAudit(ctx, h.db, claims.ClubID, claims.UserID, "update_financial_settings", "clubs", claims.ClubID, nil, req); auditErr != nil {
+		h.log.Error().Err(auditErr).Msg("audit financial settings")
+	}
+	JSON(w, http.StatusOK, map[string]string{"status": "updated"})
+}

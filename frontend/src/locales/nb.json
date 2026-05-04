@@ -473,6 +473,18 @@
       "periods": "Perioder",
       "journal": "Bilag"
     },
+    "financialSettings": {
+      "title": "Faktura­innstillinger",
+      "subtitle": "Disse verdiene vises på hver faktura klubben sender.",
+      "cardDesc": "Org.nr, adresse, kontonummer",
+      "clubName": "Klubbnavn",
+      "clubNameHint": "Settes i Nix-modulkonfigurasjonen; kan ikke endres her.",
+      "orgNumber": "Organisasjonsnummer",
+      "address": "Adresse",
+      "bankAccount": "Kontonummer",
+      "bankAccountHint": "Norsk format: XXXX.YY.ZZZZZ — brukes til KID-betalte fakturaer.",
+      "saved": "Lagret"
+    },
     "invoiceDrafts": {
       "title": "Fakturakladder",
       "subtitle": "Gå gjennom usendte fakturaer, og send eller slett.",
