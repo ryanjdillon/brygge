@@ -1,8 +1,8 @@
 package handlers
 
 import (
-	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 
@@ -293,46 +293,12 @@ func (h *MembersHandler) HandleCreateBoat(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Determine if measurements can be auto-confirmed from a trusted model
-	confirmed := false
-	if req.BoatModelID != nil {
-		var mLength, mBeam, mDraft *float64
-		err := h.db.QueryRow(ctx,
-			`SELECT length_m, beam_m, draft_m FROM boat_models WHERE id = $1`,
-			*req.BoatModelID,
-		).Scan(&mLength, &mBeam, &mDraft)
-		if err == nil {
-			confirmed = dimsMatch(req.LengthM, mLength) &&
-				dimsMatch(req.BeamM, mBeam) &&
-				dimsMatch(req.DraftM, mDraft)
-		}
-	}
-
-	var b boat
-	err := h.db.QueryRow(ctx,
-		`INSERT INTO boats (user_id, club_id, name, type, manufacturer, model,
-		                    length_m, beam_m, draft_m, weight_kg, registration_number,
-		                    boat_model_id, measurements_confirmed)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-		 RETURNING id, user_id, club_id, name, type, manufacturer, model,
-		           length_m, beam_m, draft_m, weight_kg, registration_number,
-		           boat_model_id, measurements_confirmed, confirmed_by, confirmed_at,
-		           created_at, updated_at`,
-		claims.UserID, claims.ClubID, req.Name, req.Type, req.Manufacturer, req.Model,
-		req.LengthM, req.BeamM, req.DraftM, req.WeightKg, req.RegistrationNumber,
-		req.BoatModelID, confirmed,
-	).Scan(
-		&b.ID, &b.UserID, &b.ClubID, &b.Name, &b.Type, &b.Manufacturer, &b.Model,
-		&b.LengthM, &b.BeamM, &b.DraftM, &b.WeightKg, &b.RegistrationNumber,
-		&b.BoatModelID, &b.MeasurementsConfirmed, &b.ConfirmedBy, &b.ConfirmedAt,
-		&b.CreatedAt, &b.UpdatedAt,
-	)
+	b, err := createBoatForUser(ctx, h.db, h.log,
+		claims.UserID, claims.ClubID, claims.UserID, req, false)
 	if err != nil {
-		h.log.Error().Err(err).Msg("failed to create boat")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-
 	JSON(w, http.StatusCreated, b)
 }
 
@@ -369,32 +335,6 @@ func applyBoatUpdates(current *boat, req updateBoatRequest) {
 	}
 }
 
-func (h *MembersHandler) checkDimensionConfirmation(ctx context.Context, current *boat, oldLength, oldBeam, oldDraft *float64) (bool, *string, *time.Time) {
-	dimsChanged := !dimsMatch(current.LengthM, oldLength) ||
-		!dimsMatch(current.BeamM, oldBeam) ||
-		!dimsMatch(current.DraftM, oldDraft)
-
-	if !dimsChanged {
-		return current.MeasurementsConfirmed, current.ConfirmedBy, current.ConfirmedAt
-	}
-
-	if current.BoatModelID != nil {
-		var mLength, mBeam, mDraft *float64
-		mErr := h.db.QueryRow(ctx,
-			`SELECT length_m, beam_m, draft_m FROM boat_models WHERE id = $1`,
-			*current.BoatModelID,
-		).Scan(&mLength, &mBeam, &mDraft)
-		if mErr == nil {
-			reconfirmed := dimsMatch(current.LengthM, mLength) &&
-				dimsMatch(current.BeamM, mBeam) &&
-				dimsMatch(current.DraftM, mDraft)
-			if reconfirmed {
-				return true, nil, nil
-			}
-		}
-	}
-	return false, nil, nil
-}
 
 func (h *MembersHandler) HandleUpdateBoat(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -410,72 +350,22 @@ func (h *MembersHandler) HandleUpdateBoat(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	var current boat
-	err := h.db.QueryRow(ctx,
-		`SELECT id, user_id, club_id, name, type, manufacturer, model,
-		        length_m, beam_m, draft_m, weight_kg, registration_number,
-		        boat_model_id, measurements_confirmed, confirmed_by, confirmed_at,
-		        created_at, updated_at
-		 FROM boats WHERE id = $1 AND user_id = $2 AND club_id = $3`,
-		boatID, claims.UserID, claims.ClubID,
-	).Scan(
-		&current.ID, &current.UserID, &current.ClubID, &current.Name, &current.Type,
-		&current.Manufacturer, &current.Model,
-		&current.LengthM, &current.BeamM, &current.DraftM, &current.WeightKg,
-		&current.RegistrationNumber,
-		&current.BoatModelID, &current.MeasurementsConfirmed, &current.ConfirmedBy, &current.ConfirmedAt,
-		&current.CreatedAt, &current.UpdatedAt,
-	)
-	if err == pgx.ErrNoRows {
-		Error(w, http.StatusNotFound, "boat not found")
-		return
-	}
-	if err != nil {
-		h.log.Error().Err(err).Msg("failed to fetch boat for update")
-		Error(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-
 	var req updateBoatRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
-	oldLength, oldBeam, oldDraft := current.LengthM, current.BeamM, current.DraftM
-	applyBoatUpdates(&current, req)
-	confirmed, confirmedBy, confirmedAt := h.checkDimensionConfirmation(ctx, &current, oldLength, oldBeam, oldDraft)
-
-	var b boat
-	err = h.db.QueryRow(ctx,
-		`UPDATE boats
-		 SET name = $4, type = $5, manufacturer = $6, model = $7,
-		     length_m = $8, beam_m = $9, draft_m = $10, weight_kg = $11,
-		     registration_number = $12, boat_model_id = $13,
-		     measurements_confirmed = $14, confirmed_by = $15, confirmed_at = $16,
-		     updated_at = now()
-		 WHERE id = $1 AND user_id = $2 AND club_id = $3
-		 RETURNING id, user_id, club_id, name, type, manufacturer, model,
-		           length_m, beam_m, draft_m, weight_kg, registration_number,
-		           boat_model_id, measurements_confirmed, confirmed_by, confirmed_at,
-		           created_at, updated_at`,
-		boatID, claims.UserID, claims.ClubID,
-		current.Name, current.Type, current.Manufacturer, current.Model,
-		current.LengthM, current.BeamM, current.DraftM, current.WeightKg,
-		current.RegistrationNumber, current.BoatModelID,
-		confirmed, confirmedBy, confirmedAt,
-	).Scan(
-		&b.ID, &b.UserID, &b.ClubID, &b.Name, &b.Type, &b.Manufacturer, &b.Model,
-		&b.LengthM, &b.BeamM, &b.DraftM, &b.WeightKg, &b.RegistrationNumber,
-		&b.BoatModelID, &b.MeasurementsConfirmed, &b.ConfirmedBy, &b.ConfirmedAt,
-		&b.CreatedAt, &b.UpdatedAt,
-	)
+	b, err := updateBoatForUser(ctx, h.db, h.log,
+		boatID, claims.UserID, claims.ClubID, claims.UserID, req, false)
+	if errors.Is(err, boatErrNotFound) {
+		Error(w, http.StatusNotFound, "boat not found")
+		return
+	}
 	if err != nil {
-		h.log.Error().Err(err).Msg("failed to update boat")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-
 	JSON(w, http.StatusOK, b)
 }
 

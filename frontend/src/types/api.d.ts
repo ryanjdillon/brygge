@@ -4152,6 +4152,14 @@ export interface components {
             notes?: string;
             /** @description Current occupant name */
             occupant_name?: string;
+            /** @description Boat linked to the active slip assignment */
+            boat_id?: string;
+            boat_name?: string;
+            boat_manufacturer?: string;
+            boat_model?: string;
+            boat_length_m?: number;
+            boat_beam_m?: number;
+            boat_weight_kg?: number;
             /** @description Harbor section */
             section: string;
             /**

@@ -350,15 +350,22 @@ type UnconfirmedBoat struct {
 // --- Slips ---
 
 type Slip struct {
-	ID           string   `json:"id" doc:"Slip UUID"`
-	Number       string   `json:"number" doc:"Slip number"`
-	Section      string   `json:"section" doc:"Harbor section"`
-	LengthM      *float64 `json:"length_m,omitempty" doc:"Length in metres"`
-	WidthM       *float64 `json:"width_m,omitempty" doc:"Width in metres"`
-	DepthM       *float64 `json:"depth_m,omitempty" doc:"Depth in metres"`
-	Status       string   `json:"status" enum:"vacant,occupied,reserved,maintenance" doc:"Slip status"`
-	Notes        string   `json:"notes" doc:"Free-text admin notes"`
-	OccupantName *string  `json:"occupant_name,omitempty" doc:"Current occupant name"`
+	ID               string   `json:"id" doc:"Slip UUID"`
+	Number           string   `json:"number" doc:"Slip number"`
+	Section          string   `json:"section" doc:"Harbor section"`
+	LengthM          *float64 `json:"length_m,omitempty" doc:"Length in metres"`
+	WidthM           *float64 `json:"width_m,omitempty" doc:"Width in metres"`
+	DepthM           *float64 `json:"depth_m,omitempty" doc:"Depth in metres"`
+	Status           string   `json:"status" enum:"vacant,occupied,reserved,maintenance" doc:"Slip status"`
+	Notes            string   `json:"notes" doc:"Free-text admin notes"`
+	OccupantName     *string  `json:"occupant_name,omitempty" doc:"Current occupant name"`
+	BoatID           *string  `json:"boat_id,omitempty" doc:"Boat linked to the active slip assignment"`
+	BoatName         *string  `json:"boat_name,omitempty" doc:"Boat name"`
+	BoatManufacturer *string  `json:"boat_manufacturer,omitempty" doc:"Boat manufacturer"`
+	BoatModel        *string  `json:"boat_model,omitempty" doc:"Boat model"`
+	BoatLengthM      *float64 `json:"boat_length_m,omitempty" doc:"Boat length in metres"`
+	BoatBeamM        *float64 `json:"boat_beam_m,omitempty" doc:"Boat beam in metres"`
+	BoatWeightKg     *float64 `json:"boat_weight_kg,omitempty" doc:"Boat weight in kg"`
 }
 
 // --- Slip Shares ---

@@ -54,10 +54,12 @@ func (h *AdminSlipsHandler) HandleListSlips(w http.ResponseWriter, r *http.Reque
 	query := `
 		SELECT s.id, s.number, s.section, s.length_m, s.width_m, s.depth_m,
 		       s.status, s.notes, s.map_x, s.map_y, s.created_at, s.updated_at,
-		       sa.user_id, u.full_name, u.email
+		       sa.user_id, u.full_name, u.email,
+		       b.id, b.name, b.manufacturer, b.model, b.length_m, b.beam_m, b.weight_kg
 		FROM slips s
 		LEFT JOIN slip_assignments sa ON sa.slip_id = s.id AND sa.released_at IS NULL
 		LEFT JOIN users u ON u.id = sa.user_id
+		LEFT JOIN boats b ON b.id = sa.boat_id
 		WHERE s.club_id = $1`
 
 	args := []any{claims.ClubID}
@@ -101,6 +103,13 @@ func (h *AdminSlipsHandler) HandleListSlips(w http.ResponseWriter, r *http.Reque
 		OccupantID    *string  `json:"occupant_id"`
 		OccupantName  *string  `json:"occupant_name"`
 		OccupantEmail *string  `json:"occupant_email"`
+		BoatID            *string  `json:"boat_id"`
+		BoatName          *string  `json:"boat_name"`
+		BoatManufacturer  *string  `json:"boat_manufacturer"`
+		BoatModel         *string  `json:"boat_model"`
+		BoatLengthM       *float64 `json:"boat_length_m"`
+		BoatBeamM         *float64 `json:"boat_beam_m"`
+		BoatWeightKg      *float64 `json:"boat_weight_kg"`
 	}
 
 	var slips []slipRow
@@ -110,6 +119,8 @@ func (h *AdminSlipsHandler) HandleListSlips(w http.ResponseWriter, r *http.Reque
 			&s.ID, &s.Number, &s.Section, &s.LengthM, &s.WidthM, &s.DepthM,
 			&s.Status, &s.Notes, &s.MapX, &s.MapY, &s.CreatedAt, &s.UpdatedAt,
 			&s.OccupantID, &s.OccupantName, &s.OccupantEmail,
+			&s.BoatID, &s.BoatName, &s.BoatManufacturer, &s.BoatModel,
+			&s.BoatLengthM, &s.BoatBeamM, &s.BoatWeightKg,
 		); err != nil {
 			h.log.Error().Err(err).Msg("failed to scan slip row")
 			Error(w, http.StatusInternalServerError, "internal error")

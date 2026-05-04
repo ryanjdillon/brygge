@@ -357,16 +357,21 @@ func (h *AdminUsersHandler) HandleGetUser(w http.ResponseWriter, r *http.Request
 	}
 
 	type boatRow struct {
-		ID      string   `json:"id"`
-		Name    string   `json:"name"`
-		Type    string   `json:"type"`
-		LengthM *float64 `json:"length_m"`
-		BeamM   *float64 `json:"beam_m"`
-		RegNum  string   `json:"registration_number"`
+		ID                 string   `json:"id"`
+		Name               string   `json:"name"`
+		Type               string   `json:"type"`
+		Manufacturer       string   `json:"manufacturer"`
+		Model              string   `json:"model"`
+		LengthM            *float64 `json:"length_m"`
+		BeamM              *float64 `json:"beam_m"`
+		DraftM             *float64 `json:"draft_m"`
+		WeightKg           *float64 `json:"weight_kg"`
+		RegistrationNumber string   `json:"registration_number"`
 	}
 
 	boatRows, err := h.db.Query(ctx,
-		`SELECT b.id, b.name, b.type, b.length_m, b.beam_m, b.registration_number
+		`SELECT b.id, b.name, b.type, b.manufacturer, b.model,
+		        b.length_m, b.beam_m, b.draft_m, b.weight_kg, b.registration_number
 		 FROM boats b
 		 WHERE b.user_id = $1 AND b.club_id = $2
 		 ORDER BY b.created_at DESC`,
@@ -382,7 +387,8 @@ func (h *AdminUsersHandler) HandleGetUser(w http.ResponseWriter, r *http.Request
 	var boats []boatRow
 	for boatRows.Next() {
 		var b boatRow
-		if err := boatRows.Scan(&b.ID, &b.Name, &b.Type, &b.LengthM, &b.BeamM, &b.RegNum); err != nil {
+		if err := boatRows.Scan(&b.ID, &b.Name, &b.Type, &b.Manufacturer, &b.Model,
+			&b.LengthM, &b.BeamM, &b.DraftM, &b.WeightKg, &b.RegistrationNumber); err != nil {
 			h.log.Error().Err(err).Msg("failed to scan boat row")
 			Error(w, http.StatusInternalServerError, "internal error")
 			return
@@ -1534,4 +1540,148 @@ func (h *AdminUsersHandler) HandleSetUserSlips(w http.ResponseWriter, r *http.Re
 		"released": released,
 		"added":    added,
 	})
+}
+
+// adminBoatCreateRequest mirrors createBoatRequest plus an admin-only
+// `approve` flag. When approve=true, the new boat is marked
+// measurements_confirmed=true with confirmed_by set to the acting admin
+// — bypassing the model-match heuristic the member path relies on.
+type adminBoatCreateRequest struct {
+	createBoatRequest
+	Approve bool `json:"approve"`
+}
+
+type adminBoatUpdateRequest struct {
+	updateBoatRequest
+	Approve bool `json:"approve"`
+}
+
+// HandleCreateUserBoat creates a boat for a target user via the shared
+// createBoatForUser helper. Admin-only — regular members use
+// /members/me/boats which dispatches through the same helper.
+func (h *AdminUsersHandler) HandleCreateUserBoat(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	userID := chi.URLParam(r, "userID")
+	if userID == "" {
+		Error(w, http.StatusBadRequest, "user ID is required")
+		return
+	}
+	var req adminBoatCreateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	var exists bool
+	if err := h.db.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM users WHERE id = $1 AND club_id = $2)`,
+		userID, claims.ClubID,
+	).Scan(&exists); err != nil || !exists {
+		Error(w, http.StatusNotFound, "user not found")
+		return
+	}
+
+	b, err := createBoatForUser(ctx, h.db, h.log,
+		userID, claims.ClubID, claims.UserID, req.createBoatRequest, req.Approve)
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	auditData, _ := json.Marshal(req)
+	if _, err := h.db.Exec(ctx,
+		`INSERT INTO audit_log (club_id, actor_id, action, resource, resource_id, details)
+		 VALUES ($1, $2, 'admin_create_boat', 'boat', $3, $4)`,
+		claims.ClubID, claims.UserID, b.ID, auditData,
+	); err != nil {
+		h.log.Warn().Err(err).Msg("audit admin_create_boat")
+	}
+
+	JSON(w, http.StatusCreated, b)
+}
+
+// HandleUpdateUserBoat updates a target user's boat via the shared helper.
+// (boatID,userID) is verified so a stale URL can't reach into another
+// user's row.
+func (h *AdminUsersHandler) HandleUpdateUserBoat(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	userID := chi.URLParam(r, "userID")
+	boatID := chi.URLParam(r, "boatID")
+	if userID == "" || boatID == "" {
+		Error(w, http.StatusBadRequest, "user and boat IDs are required")
+		return
+	}
+	var req adminBoatUpdateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	b, err := updateBoatForUser(ctx, h.db, h.log,
+		boatID, userID, claims.ClubID, claims.UserID, req.updateBoatRequest, req.Approve)
+	if errors.Is(err, boatErrNotFound) {
+		Error(w, http.StatusNotFound, "boat not found")
+		return
+	}
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	auditData, _ := json.Marshal(req)
+	if _, err := h.db.Exec(ctx,
+		`INSERT INTO audit_log (club_id, actor_id, action, resource, resource_id, details)
+		 VALUES ($1, $2, 'admin_update_boat', 'boat', $3, $4)`,
+		claims.ClubID, claims.UserID, boatID, auditData,
+	); err != nil {
+		h.log.Warn().Err(err).Msg("audit admin_update_boat")
+	}
+
+	JSON(w, http.StatusOK, b)
+}
+
+// HandleDeleteUserBoat removes a boat. ON DELETE SET NULL on
+// slip_assignments.boat_id unlinks the boat from any active assignment.
+func (h *AdminUsersHandler) HandleDeleteUserBoat(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	userID := chi.URLParam(r, "userID")
+	boatID := chi.URLParam(r, "boatID")
+	if userID == "" || boatID == "" {
+		Error(w, http.StatusBadRequest, "user and boat IDs are required")
+		return
+	}
+
+	if err := deleteBoatForUser(ctx, h.db, h.log, boatID, userID, claims.ClubID); err != nil {
+		if errors.Is(err, boatErrNotFound) {
+			Error(w, http.StatusNotFound, "boat not found")
+			return
+		}
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	if _, err := h.db.Exec(ctx,
+		`INSERT INTO audit_log (club_id, actor_id, action, resource, resource_id, details)
+		 VALUES ($1, $2, 'admin_delete_boat', 'boat', $3, $4)`,
+		claims.ClubID, claims.UserID, boatID, json.RawMessage(`{}`),
+	); err != nil {
+		h.log.Warn().Err(err).Msg("audit admin_delete_boat")
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }

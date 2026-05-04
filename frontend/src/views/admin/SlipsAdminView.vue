@@ -31,6 +31,13 @@ type Slip = {
   status: string
   notes?: string | null
   occupant_name?: string | null
+  boat_id?: string | null
+  boat_name?: string | null
+  boat_manufacturer?: string | null
+  boat_model?: string | null
+  boat_length_m?: number | null
+  boat_beam_m?: number | null
+  boat_weight_kg?: number | null
 }
 
 const { data: slipsResponse, isLoading, isError } = useQuery({
@@ -256,6 +263,7 @@ function closeDelete() {
             <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.slips.size') }}</th>
             <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.slips.status') }}</th>
             <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.slips.assignee') }}</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.slips.boat') }}</th>
             <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.slips.notes') }}</th>
             <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('common.actions') }}</th>
           </tr>
@@ -272,6 +280,22 @@ function closeDelete() {
               </span>
             </td>
             <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ slip.occupant_name ?? '—' }}</td>
+            <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-700">
+              <template v-if="slip.boat_id">
+                <span>{{ [slip.boat_manufacturer, slip.boat_model].filter(Boolean).join(' ') || slip.boat_name || '—' }}</span>
+                <span
+                  v-if="slip.boat_length_m || slip.boat_beam_m || slip.boat_weight_kg"
+                  class="ml-1 text-xs text-gray-500"
+                >
+                  ({{ [
+                    slip.boat_length_m ? `${slip.boat_length_m}m L` : null,
+                    slip.boat_beam_m ? `${slip.boat_beam_m}m B` : null,
+                    slip.boat_weight_kg ? `${slip.boat_weight_kg}kg` : null,
+                  ].filter(Boolean).join(' · ') }})
+                </span>
+              </template>
+              <span v-else class="text-gray-400">—</span>
+            </td>
             <td class="max-w-xs truncate px-4 py-3 text-sm text-gray-500" :title="slip.notes ?? ''">{{ slip.notes || '—' }}</td>
             <td class="whitespace-nowrap px-4 py-3 text-right text-sm">
               <div class="flex justify-end gap-2">

@@ -8,6 +8,8 @@ import DockFilter from '@/components/admin/DockFilter.vue'
 import SortableTh from '@/components/admin/SortableTh.vue'
 import SlipCell from '@/components/admin/SlipCell.vue'
 import { Trash2, UserPlus, Upload, Download, X, Pencil } from 'lucide-vue-next'
+import BoatForm, { type BoatFormValue } from '@/components/boats/BoatForm.vue'
+import BoatCard from '@/components/boats/BoatCard.vue'
 import type { components } from '@/types/api'
 import { formatName } from '@/lib/format'
 import { useAuthStore } from '@/stores/auth'
@@ -219,7 +221,132 @@ async function confirmDelete(userId: string) {
 }
 
 // --- Detail + edit modal ---
+type UserBoat = {
+  id: string
+  name: string
+  type: string
+  manufacturer: string
+  model: string
+  length_m: number | null
+  beam_m: number | null
+  draft_m: number | null
+  weight_kg: number | null
+  registration_number: string
+  measurements_confirmed: boolean
+  boat_model_id: string | null
+}
 const detailUser = ref<User | null>(null)
+const userBoats = ref<UserBoat[]>([])
+const boatsLoading = ref(false)
+// 'new' = adding, otherwise the boat id being edited
+const editingBoatId = ref<string | null>(null)
+const editingBoat = ref<UserBoat | null>(null)
+const boatError = ref<string | null>(null)
+const boatSaving = ref(false)
+
+const userBoatsError = ref<string | null>(null)
+
+async function loadUserBoats(userId: string) {
+  boatsLoading.value = true
+  userBoatsError.value = null
+  try {
+    // Use openapi-fetch via the shared client so the request goes
+    // through the same auth + TOTP-retry middleware as every other
+    // admin call. Raw fetch silently swallowed 403/totp_fresh_required
+    // because it didn't run the retry hook.
+    const result = await client.GET('/api/v1/admin/users/{userID}', {
+      params: { path: { userID: userId } },
+    })
+    if (!result.response.ok) {
+      userBoatsError.value = `${result.response.status} ${result.response.statusText}`
+      console.error('loadUserBoats failed', userId, result.response.status, result.error)
+      userBoats.value = []
+      return
+    }
+    // The endpoint actually returns { user, boats, payments } even
+    // though its OpenAPI stub claims it returns AdminUser directly.
+    // Accept either shape: top-level boats array, or boats nested
+    // under user.boats (older deploys), or fall back to empty.
+    const data = result.data as unknown as { boats?: unknown; user?: { boats?: unknown } } | undefined
+    const raw = data?.boats ?? data?.user?.boats ?? []
+    if (!Array.isArray(raw)) {
+      console.warn('loadUserBoats: unexpected response shape', data)
+      userBoats.value = []
+      return
+    }
+    userBoats.value = raw as UserBoat[]
+  } catch (err) {
+    console.error('loadUserBoats threw', err)
+    userBoatsError.value = (err as Error)?.message ?? 'error'
+    userBoats.value = []
+  } finally {
+    boatsLoading.value = false
+  }
+}
+
+function startEditBoat(b: UserBoat) {
+  editingBoatId.value = b.id
+  editingBoat.value = b
+  boatError.value = null
+}
+
+function startAddBoat() {
+  editingBoatId.value = 'new'
+  editingBoat.value = null
+  boatError.value = null
+}
+
+function cancelBoatEdit() {
+  editingBoatId.value = null
+  editingBoat.value = null
+  boatError.value = null
+}
+
+async function saveBoat(value: BoatFormValue & { approve?: boolean }) {
+  if (!detailUser.value) return
+  if (!(await ensureFreshTotp())) return
+  const userId = detailUser.value.id
+  boatError.value = null
+  boatSaving.value = true
+  try {
+    const isNew = editingBoatId.value === 'new'
+    const url = isNew
+      ? `/api/v1/admin/users/${userId}/boats`
+      : `/api/v1/admin/users/${userId}/boats/${editingBoatId.value}`
+    const res = await fetch(url, {
+      method: isNew ? 'POST' : 'PUT',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(value),
+    })
+    if (!res.ok) {
+      boatError.value = `${res.status} ${res.statusText}`
+      return
+    }
+    await loadUserBoats(userId)
+    cancelBoatEdit()
+    queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
+  } catch (err: any) {
+    boatError.value = err?.message ?? 'error'
+  } finally {
+    boatSaving.value = false
+  }
+}
+
+async function deleteBoat(boatId: string) {
+  if (!detailUser.value) return
+  if (!(await ensureFreshTotp())) return
+  if (!confirm(t('admin.users.boatDeleteConfirm'))) return
+  const userId = detailUser.value.id
+  const res = await fetch(`/api/v1/admin/users/${userId}/boats/${boatId}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  })
+  if (res.ok) {
+    await loadUserBoats(userId)
+    queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
+  }
+}
 const detailEditing = ref(false)
 const detailError = ref<string | null>(null)
 const editForm = reactive<UpdateBody>({})
@@ -234,11 +361,16 @@ function openDetail(user: User) {
   detailUser.value = user
   detailEditing.value = false
   detailError.value = null
+  userBoats.value = []
+  editingBoatId.value = null
+  loadUserBoats(user.id)
 }
 
 function closeDetail() {
   detailUser.value = null
   detailEditing.value = false
+  userBoats.value = []
+  editingBoatId.value = null
 }
 
 async function startDetailEdit() {
@@ -767,6 +899,25 @@ async function submitImport() {
               <span v-if="!detailUser.roles?.length" class="text-gray-500">—</span>
             </dd>
           </dl>
+
+          <!-- Boats (read-only) -->
+          <div class="mt-4">
+            <h3 class="mb-1 text-xs font-medium uppercase tracking-wide text-gray-500">{{ t('admin.users.boats') }}</h3>
+            <p v-if="boatsLoading" class="text-xs text-gray-500">{{ t('common.loading') }}</p>
+            <p v-else-if="userBoatsError" class="rounded-md bg-red-50 px-2 py-1 text-xs text-red-700">
+              {{ t('admin.users.boatLoadError') }}: {{ userBoatsError }}
+            </p>
+            <p v-else-if="!userBoats.length" class="text-xs text-gray-500">—</p>
+            <div v-else class="space-y-1.5">
+              <BoatCard
+                v-for="b in userBoats"
+                :key="b.id"
+                :boat="b"
+                compact
+              />
+            </div>
+          </div>
+
           <div class="flex justify-end gap-2 pt-3">
             <button class="rounded-md px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100" @click="closeDetail">{{ t('common.close') }}</button>
             <button
@@ -907,6 +1058,50 @@ async function submitImport() {
               :placeholder="t('admin.users.adminNotesPlaceholder')"
             />
           </div>
+          <!-- Boats (admin-only) — uses the same BoatForm/BoatCard as the
+               member portal so the UI is mirrored. The admin variant
+               passes show-approve so the form exposes the "approve
+               measurements" toggle. -->
+          <div v-if="auth.hasRole('admin')" class="rounded-md border border-gray-200 p-3">
+            <div class="mb-2 flex items-center justify-between">
+              <span class="text-xs font-medium uppercase tracking-wide text-gray-500">{{ t('admin.users.boats') }}</span>
+              <button
+                v-if="editingBoatId === null"
+                type="button"
+                class="text-xs font-medium text-blue-600 hover:underline"
+                @click="startAddBoat"
+              >
+                + {{ t('admin.users.addBoat') }}
+              </button>
+            </div>
+
+            <div v-if="editingBoatId" class="rounded-md border border-blue-200 bg-blue-50/40 p-3">
+              <BoatForm
+                :initial="editingBoat ?? undefined"
+                :editing="editingBoatId !== 'new'"
+                :confirmed="editingBoat?.measurements_confirmed"
+                :saving="boatSaving"
+                :error="boatError"
+                show-approve
+                @submit="saveBoat"
+                @cancel="cancelBoatEdit"
+              />
+            </div>
+
+            <div v-if="!editingBoatId && userBoats.length" class="space-y-1.5">
+              <BoatCard
+                v-for="b in userBoats"
+                :key="b.id"
+                :boat="b"
+                actions
+                compact
+                @edit="(b) => startEditBoat(b as UserBoat)"
+                @delete="deleteBoat"
+              />
+            </div>
+            <p v-else-if="!editingBoatId" class="text-xs italic text-gray-500">{{ t('admin.users.noBoats') }}</p>
+          </div>
+
           <p v-if="detailError" class="rounded-md bg-red-50 px-2 py-1 text-xs text-red-700">{{ detailError }}</p>
           <div class="flex justify-end gap-2 pt-1">
             <button type="button" class="rounded-md px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100" @click="detailEditing = false">{{ t('common.cancel') }}</button>
