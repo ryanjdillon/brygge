@@ -525,6 +525,9 @@ func main() {
 						r.Post("/invoices/full", invoiceHandler.HandleCreateInvoice)
 						r.Get("/invoices/{invoiceID}/pdf", invoiceHandler.HandleGetInvoicePDF)
 						r.Get("/overdue", financialsHandler.HandleListOverdue)
+						r.With(middleware.RequireRole("treasurer", "admin"),
+							middleware.RequireFreshTOTP(10*time.Minute)).
+							Post("/invoices/bulk", invoiceHandler.HandleBulkCreateInvoices)
 					})
 				}
 

@@ -24,6 +24,7 @@
     "motorhome": "Bobil"
   },
   "common": {
+    "select": "Velg…",
     "loading": "Laster",
     "error": "Feil",
     "save": "Lagre",
@@ -723,6 +724,10 @@
       "importError": "Importen feilet",
       "importFreshRequired": "Sesjonen krever fersk 2FA-bekreftelse. Last siden på nytt og prøv igjen.",
       "showing": "Viser {from}–{to} av {total}",
+      "selectedCount": "{n} valgt",
+      "selectAllFiltered": "Velg alle {total} som matcher filteret",
+      "clearSelection": "Tøm",
+      "generateFakturas": "Generer fakturaer",
       "searchPlaceholder": "Søk etter navn eller e-post…",
       "dockFilterLabel": "Brygge",
       "dockFilterAll": "Alle"
@@ -1281,6 +1286,25 @@
       "failed": "Bekreftelsen feilet",
       "invalidCode": "Ugyldig kode — sjekk at klokken på autentiseringsappen er riktig",
       "invalidRecovery": "Ugyldig eller allerede brukt gjenopprettingskode"
+    }
+  },
+  "bulkInvoices": {
+    "title": "Generer fakturaer for {n} medlemmer",
+    "fiscalPeriod": "Regnskapsår",
+    "mode": "Pris",
+    "modeFlat": "Fast beløp — samme for alle",
+    "modeBeamTier": "Plassleie — velges per registrert båtbredde",
+    "priceItem": "Prispost",
+    "beamCategory": "Prispostkategori",
+    "beamCategoryHint": "Hvert medlem faktureres med prisposten i denne kategorien hvis breddeintervall dekker båten på medlemmets aktive faste plass.",
+    "dueDate": "Forfallsdato",
+    "submit": "Opprett kladder",
+    "resultSummary": "Opprettet {created} fakturakladder, hoppet over {skipped}.",
+    "member": "Medlem",
+    "amount": "Beløp",
+    "skipReason": "Årsak",
+    "errors": {
+      "fiscalPeriodRequired": "Velg et regnskapsår"
     }
   },
   "totpExpiring": {

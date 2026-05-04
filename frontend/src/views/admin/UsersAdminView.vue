@@ -10,6 +10,8 @@ import SlipCell from '@/components/admin/SlipCell.vue'
 import { Trash2, UserPlus, Upload, Download, X, Pencil } from 'lucide-vue-next'
 import BoatForm, { type BoatFormValue } from '@/components/boats/BoatForm.vue'
 import BoatCard from '@/components/boats/BoatCard.vue'
+import BulkInvoicesModal from '@/components/admin/BulkInvoicesModal.vue'
+import { Receipt } from 'lucide-vue-next'
 import type { components } from '@/types/api'
 import { formatName } from '@/lib/format'
 import { useAuthStore } from '@/stores/auth'
@@ -194,6 +196,77 @@ const allRoles = [
   'member', 'slip_holder', 'board', 'harbor_master', 'treasurer', 'admin',
   'chair', 'vice_chair', 'deputy', 'secretary',
 ]
+
+// --- Multiselect for bulk actions ---
+const selectedIds = ref<Set<string>>(new Set())
+const showBulkInvoices = ref(false)
+
+const allOnPageSelected = computed(() =>
+  users.value.length > 0 && users.value.every((u) => selectedIds.value.has(u.id)),
+)
+const someOnPageSelected = computed(() =>
+  users.value.some((u) => selectedIds.value.has(u.id)) && !allOnPageSelected.value,
+)
+
+function toggleUser(id: string) {
+  const next = new Set(selectedIds.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  selectedIds.value = next
+}
+function togglePage() {
+  const next = new Set(selectedIds.value)
+  if (allOnPageSelected.value) {
+    for (const u of users.value) next.delete(u.id)
+  } else {
+    for (const u of users.value) next.add(u.id)
+  }
+  selectedIds.value = next
+}
+function clearSelection() {
+  selectedIds.value = new Set()
+}
+
+async function selectAllFiltered() {
+  // Hit /admin/users with the same filters but full count, harvest ids.
+  const result = await client.GET('/api/v1/admin/users', {
+    params: {
+      query: {
+        limit: Math.max(totalCount.value, 1),
+        offset: 0,
+        sort: sortParam.value,
+        ...(spotFilter.value ? { spot: spotFilter.value } : {}),
+        ...(dockFilter.value ? { dock: dockFilter.value } : {}),
+        ...(notesOnly.value ? { notes_only: 'true' } : {}),
+        ...(searchQuery.value ? { q: searchQuery.value } : {}),
+      } as any,
+    },
+  })
+  const data = result.data as any
+  const all = (data?.users ?? []) as { id: string }[]
+  const next = new Set(selectedIds.value)
+  for (const u of all) next.add(u.id)
+  selectedIds.value = next
+}
+
+const userNamesById = computed(() => {
+  const m: Record<string, string> = {}
+  for (const u of users.value) m[u.id] = formatName(u as any)
+  return m
+})
+
+async function openBulkInvoices() {
+  if (!(await ensureFreshTotp())) return
+  showBulkInvoices.value = true
+}
+function closeBulkInvoices() {
+  showBulkInvoices.value = false
+}
+function bulkInvoicesCompleted() {
+  // Drafts created — drop selection so the next click won't re-target
+  // the same set on a re-open.
+  clearSelection()
+}
 
 // roleLabel returns the localized display name for a role identifier,
 // falling back to the raw key if no translation is registered (so new
@@ -729,9 +802,52 @@ async function submitImport() {
       <p class="mb-2 text-xs text-gray-500">
         {{ t('admin.users.showing', { from: pageStart, to: pageEnd, total: totalCount }) }}
       </p>
+      <div
+        v-if="selectedIds.size > 0"
+        class="mb-2 flex flex-wrap items-center gap-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm"
+      >
+        <span class="font-medium text-blue-900">
+          {{ t('admin.users.selectedCount', { n: selectedIds.size }) }}
+        </span>
+        <button
+          v-if="totalCount > selectedIds.size && totalCount > users.length"
+          type="button"
+          class="text-xs text-blue-700 underline hover:text-blue-900"
+          @click="selectAllFiltered"
+        >
+          {{ t('admin.users.selectAllFiltered', { total: totalCount }) }}
+        </button>
+        <button
+          type="button"
+          class="text-xs text-gray-600 underline hover:text-gray-900"
+          @click="clearSelection"
+        >
+          {{ t('admin.users.clearSelection') }}
+        </button>
+        <span class="ml-auto flex gap-2">
+          <button
+            v-if="auth.hasRole('admin') || auth.hasRole('treasurer')"
+            type="button"
+            class="inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700"
+            @click="openBulkInvoices"
+          >
+            <Receipt class="h-3.5 w-3.5" />
+            {{ t('admin.users.generateFakturas') }}
+          </button>
+        </span>
+      </div>
       <table class="min-w-full divide-y divide-gray-200">
         <thead class="bg-gray-50">
           <tr>
+            <th scope="col" class="w-8 px-2 py-3 text-center">
+              <input
+                type="checkbox"
+                :checked="allOnPageSelected"
+                :indeterminate.prop="someOnPageSelected"
+                class="rounded border-gray-300"
+                @change="togglePage"
+              />
+            </th>
             <th scope="col" class="w-12 px-3 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">#</th>
             <SortableTh :active="sortField === 'first_name'" :dir="sortDir" @click="setSort('first_name')">{{ t('admin.users.firstName') }}</SortableTh>
             <SortableTh :active="sortField === 'last_name'" :dir="sortDir" @click="setSort('last_name')">{{ t('admin.users.lastName') }}</SortableTh>
@@ -747,8 +863,17 @@ async function submitImport() {
             v-for="(user, index) in users"
             :key="user.id"
             class="cursor-pointer hover:bg-gray-50"
+            :class="{ 'bg-blue-50/50': selectedIds.has(user.id) }"
             @click="openDetail(user)"
           >
+            <td class="px-2 py-3 text-center" @click.stop>
+              <input
+                type="checkbox"
+                :checked="selectedIds.has(user.id)"
+                class="rounded border-gray-300"
+                @change="toggleUser(user.id)"
+              />
+            </td>
             <td class="whitespace-nowrap px-3 py-3 text-right text-xs text-gray-400 tabular-nums">{{ offset + index + 1 }}</td>
             <td class="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">{{ user.first_name || formatName(user) }}</td>
             <td class="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">{{ user.last_name }}</td>
@@ -1235,5 +1360,13 @@ grace@example.com,Grace,Hopper,+47 555 1234,,,,true,member</pre>
         </div>
       </div>
     </div>
+
+    <BulkInvoicesModal
+      v-if="showBulkInvoices"
+      :user-ids="[...selectedIds]"
+      :user-names-by-id="userNamesById"
+      @close="closeBulkInvoices"
+      @completed="bulkInvoicesCompleted"
+    />
   </div>
 </template>

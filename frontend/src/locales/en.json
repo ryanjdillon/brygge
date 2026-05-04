@@ -24,6 +24,7 @@
     "motorhome": "Motorhome"
   },
   "common": {
+    "select": "Select…",
     "loading": "Loading",
     "error": "Error",
     "save": "Save",
@@ -727,6 +728,10 @@
       "importError": "Import failed",
       "importFreshRequired": "Session needs fresh 2FA verification. Reload the page and try again.",
       "showing": "Showing {from}–{to} of {total}",
+      "selectedCount": "{n} selected",
+      "selectAllFiltered": "Select all {total} matching filters",
+      "clearSelection": "Clear",
+      "generateFakturas": "Generate fakturas",
       "searchPlaceholder": "Search by name or email…",
       "dockFilterLabel": "Dock",
       "dockFilterAll": "All"
@@ -1285,6 +1290,25 @@
       "failed": "Verification failed",
       "invalidCode": "Invalid code — check that your authenticator app's clock is correct",
       "invalidRecovery": "Invalid or already-used recovery code"
+    }
+  },
+  "bulkInvoices": {
+    "title": "Generate fakturas for {n} members",
+    "fiscalPeriod": "Fiscal year",
+    "mode": "Pricing",
+    "modeFlat": "Flat fee — same amount for everyone",
+    "modeBeamTier": "Beam-based slip rental — pick by registered boat width",
+    "priceItem": "Price item",
+    "beamCategory": "Price item category",
+    "beamCategoryHint": "Each member is billed using the price item in this category whose beam range covers the boat on their active permanent slip.",
+    "dueDate": "Due date",
+    "submit": "Create drafts",
+    "resultSummary": "Created {created} draft fakturas, skipped {skipped}.",
+    "member": "Member",
+    "amount": "Amount",
+    "skipReason": "Reason",
+    "errors": {
+      "fiscalPeriodRequired": "Pick a fiscal year"
     }
   },
   "totpExpiring": {
