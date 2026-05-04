@@ -14,6 +14,7 @@ export interface BoatCardBoat {
   weight_kg?: number | null
   registration_number?: string
   measurements_confirmed?: boolean
+  slip?: { slip_id: string; section: string; number: string; assignment_type: string } | null
 }
 
 defineProps<{
@@ -104,5 +105,16 @@ const fmtDim = (v?: number | null): string => (v != null ? `${v} m` : '—')
     >
       {{ t('portal.boats.registrationNumber') }}: {{ boat.registration_number }}
     </div>
+    <div
+      v-if="boat.slip && !$slots.slip"
+      :class="['text-gray-700', compact ? 'mt-0.5 text-xs' : 'mt-1 text-sm']"
+    >
+      <span class="text-gray-500">{{ t('admin.users.spots') }}:</span>
+      <span class="ml-1 font-mono">{{ (boat.slip.section ? boat.slip.section + ' ' : '') + boat.slip.number }}</span>
+      <span class="ml-1 text-xs text-gray-500">
+        ({{ t('admin.users.spot' + (boat.slip.assignment_type === 'seasonal' ? 'Seasonal' : 'Permanent')) }})
+      </span>
+    </div>
+    <slot name="slip" />
   </div>
 </template>

@@ -351,10 +351,9 @@ const detailEditing = ref(false)
 const detailError = ref<string | null>(null)
 const editForm = reactive<UpdateBody>({})
 const editRoles = ref<string[]>([])
-type EditSlip = { slip_id: string; assignment_type: 'permanent' | 'seasonal' }
-const editSlips = ref<EditSlip[]>([])
-const addSlipPickId = ref<string>('')
-const addSlipPickType = ref<'permanent' | 'seasonal'>('permanent')
+type BoatSlip = { slip_id: string; assignment_type: 'permanent' | 'seasonal' }
+const editBoatSlips = ref<Record<string, BoatSlip>>({})
+const initialBoatSlips = ref<Record<string, BoatSlip>>({})
 const savingEdit = ref(false)
 
 function openDetail(user: User) {
@@ -389,35 +388,37 @@ async function startDetailEdit() {
     admin_notes: u.admin_notes ?? '',
   })
   editRoles.value = [...(u.roles ?? [])]
-  editSlips.value = ((u as any).slips ?? []).map((s: any) => ({
-    slip_id: s.slip_id,
-    assignment_type: s.assignment_type === 'seasonal' ? 'seasonal' : 'permanent',
-  }))
-  // Fall back to legacy single-slip fields if `slips` isn't populated
-  // yet (e.g. first paint of an older cached user object).
-  if (editSlips.value.length === 0 && u.slip_id) {
-    editSlips.value = [{
-      slip_id: u.slip_id,
-      assignment_type: u.slip_assignment_type === 'seasonal' ? 'seasonal' : 'permanent',
-    }]
+  // Build per-boat slip map keyed by boat_id from the user.slips
+  // aggregation. Boats with no active slip stay absent until the user
+  // assigns one in the dropdown.
+  const map: Record<string, BoatSlip> = {}
+  for (const s of ((u as any).slips ?? [])) {
+    if (s.boat_id) {
+      map[s.boat_id as string] = {
+        slip_id: s.slip_id,
+        assignment_type: s.assignment_type === 'seasonal' ? 'seasonal' : 'permanent',
+      }
+    }
   }
-  addSlipPickId.value = ''
-  addSlipPickType.value = 'permanent'
+  editBoatSlips.value = map
+  initialBoatSlips.value = JSON.parse(JSON.stringify(map))
   detailError.value = null
   detailEditing.value = true
   loadSlips()
 }
 
-function removeEditSlip(slipId: string) {
-  editSlips.value = editSlips.value.filter((s) => s.slip_id !== slipId)
+function getBoatSlip(boatId: string): BoatSlip {
+  return editBoatSlips.value[boatId] ?? { slip_id: '', assignment_type: 'permanent' }
 }
 
-function addEditSlip() {
-  if (!addSlipPickId.value) return
-  if (editSlips.value.some((s) => s.slip_id === addSlipPickId.value)) return
-  editSlips.value.push({ slip_id: addSlipPickId.value, assignment_type: addSlipPickType.value })
-  addSlipPickId.value = ''
-  addSlipPickType.value = 'permanent'
+function setBoatSlipId(boatId: string, slipId: string) {
+  const cur = editBoatSlips.value[boatId] ?? { slip_id: '', assignment_type: 'permanent' as const }
+  editBoatSlips.value = { ...editBoatSlips.value, [boatId]: { ...cur, slip_id: slipId } }
+}
+
+function setBoatSlipType(boatId: string, t: 'permanent' | 'seasonal') {
+  const cur = editBoatSlips.value[boatId] ?? { slip_id: '', assignment_type: 'permanent' as const }
+  editBoatSlips.value = { ...editBoatSlips.value, [boatId]: { ...cur, assignment_type: t } }
 }
 
 async function openEditDirect(user: User) {
@@ -453,19 +454,38 @@ async function submitEdit() {
       }))
     }
 
-    // Slip diff — replace the full set via the multi-slip endpoint.
-    const slipsBefore = ((u as any).slips ?? []).map((s: any) => `${s.slip_id}:${s.assignment_type || 'permanent'}`).sort().join('|')
-    const slipsAfter = editSlips.value.map((s) => `${s.slip_id}:${s.assignment_type}`).sort().join('|')
-    const slipsChanged = slipsBefore !== slipsAfter
-    if (slipsChanged) {
-      await unwrap(await client.PUT('/api/v1/admin/users/{userID}/slips' as any, {
-        params: { path: { userID: u.id } },
-        body: {
-          slips: editSlips.value.map((s) => ({
-            slip_id: s.slip_id,
-            assignment_type: s.assignment_type,
-          })),
-        } as any,
+    // Per-boat slip diff. For each boat where (slip_id, type) changed
+    // vs. initial, hit PUT /admin/users/{id}/boats/{bid}/slip — passing
+    // slip_id=null releases. Releases must run before adds so a user
+    // can swap a slip from boat A to boat B in one save without
+    // tripping the per-slip vacancy check.
+    const releases: { boatId: string }[] = []
+    const writes: { boatId: string; slipId: string; type: 'permanent' | 'seasonal' }[] = []
+    const boatIds = new Set([
+      ...Object.keys(editBoatSlips.value),
+      ...Object.keys(initialBoatSlips.value),
+    ])
+    for (const bid of boatIds) {
+      const cur = editBoatSlips.value[bid] ?? { slip_id: '', assignment_type: 'permanent' as const }
+      const prev = initialBoatSlips.value[bid] ?? { slip_id: '', assignment_type: 'permanent' as const }
+      if (cur.slip_id === prev.slip_id && cur.assignment_type === prev.assignment_type) continue
+      if (!cur.slip_id) {
+        releases.push({ boatId: bid })
+      } else {
+        writes.push({ boatId: bid, slipId: cur.slip_id, type: cur.assignment_type })
+      }
+    }
+    const slipsChanged = releases.length > 0 || writes.length > 0
+    for (const r of releases) {
+      await unwrap(await client.PUT('/api/v1/admin/users/{userID}/boats/{boatID}/slip' as any, {
+        params: { path: { userID: u.id, boatID: r.boatId } },
+        body: { slip_id: null } as any,
+      }))
+    }
+    for (const w of writes) {
+      await unwrap(await client.PUT('/api/v1/admin/users/{userID}/boats/{boatID}/slip' as any, {
+        params: { path: { userID: u.id, boatID: w.boatId } },
+        body: { slip_id: w.slipId, assignment_type: w.type } as any,
       }))
     }
 
@@ -482,40 +502,23 @@ async function submitEdit() {
   }
 }
 
-// Filter slip-picker options to: vacant slips OR the user's currently
-// assigned slip (so it stays selectable in the dropdown). Sort by dock
-// (section) then slip number using natural-numeric collation so A2 sorts
-// before A10.
-// Occupancy is derived from active slip_assignments (occupant_id),
-// not the slips.status column — the latter isn't updated automatically
-// when an assignment is created/released, so a freshly-assigned slip
-// could still read status='vacant'. Trust the live join instead.
-const slipPickerOptions = computed(() => {
+// Per-boat slip-picker options: include vacant slips, plus any slip
+// already held by this user (so an existing assignment stays selectable
+// in its own dropdown). Slips picked for *another* of this user's boats
+// in the current edit are filtered out per-picker via the boatId arg
+// so the same slip can't be saved twice in one submit.
+function pickerFor(boatId: string) {
   const currentUserId = detailUser.value?.id ?? ''
-  const alreadyPicked = new Set(editSlips.value.map((s) => s.slip_id))
+  const otherPicked = new Set<string>()
+  for (const [bid, sel] of Object.entries(editBoatSlips.value)) {
+    if (bid !== boatId && sel.slip_id) otherPicked.add(sel.slip_id)
+  }
   return sortBySlip(
     slipOptions.value.filter((s) => {
-      // Hide slips already selected for this user (the picker is the
-      // "+ add another" affordance).
-      if (alreadyPicked.has(s.id)) return false
-      // Otherwise only show slips with no active assignment, or whose
-      // active assignment already points at this user (e.g. just removed
-      // and being re-added).
+      if (otherPicked.has(s.id)) return false
       return !s.occupant_id || s.occupant_id === currentUserId
     }),
   )
-})
-
-const slipById = computed(() => {
-  const m = new Map<string, SlipOption>()
-  for (const s of slipOptions.value) m.set(s.id, s)
-  return m
-})
-
-function slipLabel(slipId: string): string {
-  const s = slipById.value.get(slipId)
-  if (!s) return slipId
-  return (s.section ? s.section + ' ' : '') + s.number
 }
 
 // --- Create user modal ---
@@ -989,63 +992,6 @@ async function submitImport() {
             </div>
           </div>
           <div>
-            <label class="block text-xs font-medium text-gray-700">{{ t('admin.users.spots') }}</label>
-            <ul v-if="editSlips.length" class="mt-1 space-y-1">
-              <li
-                v-for="row in editSlips"
-                :key="row.slip_id"
-                class="flex items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-2 py-1"
-              >
-                <span class="font-mono text-sm text-gray-900">{{ slipLabel(row.slip_id) }}</span>
-                <select
-                  v-model="row.assignment_type"
-                  class="rounded-md border border-gray-300 bg-white px-1.5 py-0.5 text-xs"
-                >
-                  <option value="permanent">{{ t('admin.users.spotPermanent') }}</option>
-                  <option value="seasonal">{{ t('admin.users.spotSeasonal') }}</option>
-                </select>
-                <button
-                  type="button"
-                  class="ml-auto text-red-600 hover:text-red-800"
-                  :title="t('common.remove')"
-                  @click="removeEditSlip(row.slip_id)"
-                >
-                  <X class="h-4 w-4" />
-                </button>
-              </li>
-            </ul>
-            <p v-else class="mt-1 text-xs text-gray-500">{{ t('admin.users.spotNone') }}</p>
-
-            <div class="mt-2 flex items-center gap-1.5">
-              <select
-                v-model="addSlipPickId"
-                class="flex-1 rounded-md border border-gray-300 px-2 py-1 text-sm"
-                :disabled="slipsLoading"
-              >
-                <option value="">{{ t('admin.users.addSlip') }}</option>
-                <option v-for="s in slipPickerOptions" :key="s.id" :value="s.id">
-                  {{ (s.section ? s.section + ' ' : '') + s.number }}
-                </option>
-              </select>
-              <select
-                v-model="addSlipPickType"
-                class="rounded-md border border-gray-300 px-2 py-1 text-sm"
-                :disabled="!addSlipPickId"
-              >
-                <option value="permanent">{{ t('admin.users.spotPermanent') }}</option>
-                <option value="seasonal">{{ t('admin.users.spotSeasonal') }}</option>
-              </select>
-              <button
-                type="button"
-                class="rounded-md bg-blue-600 px-2 py-1 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
-                :disabled="!addSlipPickId"
-                @click="addEditSlip"
-              >
-                {{ t('common.add') }}
-              </button>
-            </div>
-          </div>
-          <div>
             <label class="block text-xs font-medium text-gray-700" for="ed-notes">
               {{ t('admin.users.adminNotes') }}
               <span class="ml-1 font-normal text-gray-400">({{ t('admin.users.adminNotesHint') }})</span>
@@ -1095,9 +1041,35 @@ async function submitImport() {
                 :boat="b"
                 actions
                 compact
-                @edit="(b) => startEditBoat(b as UserBoat)"
+                @edit="(eb) => startEditBoat(eb as UserBoat)"
                 @delete="deleteBoat"
-              />
+              >
+                <template #slip>
+                  <div class="mt-2 flex items-center gap-1.5 border-t border-gray-100 pt-1.5">
+                    <span class="text-xs font-medium text-gray-500">{{ t('admin.users.spots') }}:</span>
+                    <select
+                      :value="getBoatSlip(b.id).slip_id"
+                      class="flex-1 rounded-md border border-gray-300 px-1.5 py-0.5 text-xs"
+                      :disabled="slipsLoading"
+                      @change="setBoatSlipId(b.id, ($event.target as HTMLSelectElement).value)"
+                    >
+                      <option value="">{{ t('admin.users.addSlip') }}</option>
+                      <option v-for="s in pickerFor(b.id)" :key="s.id" :value="s.id">
+                        {{ (s.section ? s.section + ' ' : '') + s.number }}
+                      </option>
+                    </select>
+                    <select
+                      :value="getBoatSlip(b.id).assignment_type"
+                      class="rounded-md border border-gray-300 px-1.5 py-0.5 text-xs"
+                      :disabled="!getBoatSlip(b.id).slip_id"
+                      @change="setBoatSlipType(b.id, ($event.target as HTMLSelectElement).value as 'permanent' | 'seasonal')"
+                    >
+                      <option value="permanent">{{ t('admin.users.spotPermanent') }}</option>
+                      <option value="seasonal">{{ t('admin.users.spotSeasonal') }}</option>
+                    </select>
+                  </div>
+                </template>
+              </BoatCard>
             </div>
             <p v-else-if="!editingBoatId" class="text-xs italic text-gray-500">{{ t('admin.users.noBoats') }}</p>
           </div>
