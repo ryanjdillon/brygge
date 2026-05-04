@@ -61,6 +61,11 @@ const form = reactive<BoatFormValue>({
 })
 const approve = ref(false)
 
+const modelQuery = ref('')
+const modelResults = ref<BoatModel[]>([])
+const showModelResults = ref(false)
+let searchTimeout: ReturnType<typeof setTimeout> | null = null
+
 function reset() {
   form.name = props.initial?.name ?? ''
   form.type = props.initial?.type ?? ''
@@ -78,11 +83,6 @@ function reset() {
 }
 reset()
 watch(() => props.initial, reset, { deep: true })
-
-const modelQuery = ref('')
-const modelResults = ref<BoatModel[]>([])
-const showModelResults = ref(false)
-let searchTimeout: ReturnType<typeof setTimeout> | null = null
 
 watch(modelQuery, (q) => {
   if (searchTimeout) clearTimeout(searchTimeout)
