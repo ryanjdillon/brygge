@@ -1041,6 +1041,7 @@ async function submitImport() {
                 :boat="b"
                 actions
                 compact
+                hide-slip
                 @edit="(eb) => startEditBoat(eb as UserBoat)"
                 @delete="deleteBoat"
               >

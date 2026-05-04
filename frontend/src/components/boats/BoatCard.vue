@@ -23,6 +23,9 @@ defineProps<{
   actions?: boolean
   /** Compact density used inside small modals. */
   compact?: boolean
+  /** Suppress the auto-rendered slip chip — the parent supplies its own
+      via the #slip slot (admin per-boat picker). */
+  hideSlip?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -106,7 +109,7 @@ const fmtDim = (v?: number | null): string => (v != null ? `${v} m` : '—')
       {{ t('portal.boats.registrationNumber') }}: {{ boat.registration_number }}
     </div>
     <div
-      v-if="boat.slip && !$slots.slip"
+      v-if="boat.slip && !hideSlip"
       :class="['text-gray-700', compact ? 'mt-0.5 text-xs' : 'mt-1 text-sm']"
     >
       <span class="text-gray-500">{{ t('admin.users.spots') }}:</span>
