@@ -1286,5 +1286,11 @@
       "invalidCode": "Invalid code — check that your authenticator app's clock is correct",
       "invalidRecovery": "Invalid or already-used recovery code"
     }
+  },
+  "totpExpiring": {
+    "title": "Still working?",
+    "body": "Your sensitive-action session is about to expire. Verify again to keep going, or dismiss to let it lapse.",
+    "keepWorking": "Yes, keep going",
+    "dismiss": "Dismiss"
   }
 }

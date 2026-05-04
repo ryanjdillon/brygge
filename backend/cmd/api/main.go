@@ -463,7 +463,7 @@ func main() {
 				// with only a stale session cookie must not be able
 				// to lock the legitimate owner out.
 				r.Group(func(r chi.Router) {
-					r.Use(middleware.RequireFreshTOTP(5 * time.Minute))
+					r.Use(middleware.RequireFreshTOTP(10 * time.Minute))
 					r.Post("/regenerate-codes", totpHandler.HandleRegenerateCodes)
 				})
 			})
@@ -539,14 +539,14 @@ func main() {
 					r.Group(func(r chi.Router) {
 						r.Use(middleware.RequireRole("admin"))
 						r.Get("/export.csv", adminUsersHandler.HandleExportUsersCSV)
-						r.With(middleware.RequireFreshTOTP(5 * time.Minute)).
+						r.With(middleware.RequireFreshTOTP(10 * time.Minute)).
 							Post("/import", adminUsersHandler.HandleImportUsersCSV)
 					})
 
 					// High-blast-radius mutations — re-prompt for TOTP
 					// each time, regardless of the 12h step-up window.
 					r.Group(func(r chi.Router) {
-						r.Use(middleware.RequireFreshTOTP(5 * time.Minute))
+						r.Use(middleware.RequireFreshTOTP(10 * time.Minute))
 						r.Post("/", adminUsersHandler.HandleCreateUser)
 						r.Patch("/{userID}", adminUsersHandler.HandleUpdateUser)
 						r.Put("/{userID}/roles", adminUsersHandler.HandleUpdateUserRoles)
@@ -579,7 +579,7 @@ func main() {
 					// window, matching the admin-users UX so the SPA can
 					// surface the in-context modal instead of failing silently.
 					r.Group(func(r chi.Router) {
-						r.Use(middleware.RequireFreshTOTP(5 * time.Minute))
+						r.Use(middleware.RequireFreshTOTP(10 * time.Minute))
 						r.Post("/", adminSlipsHandler.HandleCreateSlip)
 						r.Put("/{slipID}", adminSlipsHandler.HandleUpdateSlip)
 						r.Delete("/{slipID}", adminSlipsHandler.HandleDeleteSlip)

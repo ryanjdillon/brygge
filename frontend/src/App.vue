@@ -6,6 +6,7 @@ import Footer from '@/components/layout/Footer.vue'
 import ToastContainer from '@/components/ui/ToastContainer.vue'
 import NetworkStatus from '@/components/ui/NetworkStatus.vue'
 import FreshTotpModal from '@/components/auth/FreshTotpModal.vue'
+import TotpExpiringModal from '@/components/auth/TotpExpiringModal.vue'
 
 const { t } = useI18n()
 </script>
@@ -21,5 +22,6 @@ const { t } = useI18n()
     <ToastContainer />
     <NetworkStatus />
     <FreshTotpModal />
+    <TotpExpiringModal />
   </div>
 </template>

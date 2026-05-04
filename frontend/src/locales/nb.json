@@ -1282,5 +1282,11 @@
       "invalidCode": "Ugyldig kode — sjekk at klokken på autentiseringsappen er riktig",
       "invalidRecovery": "Ugyldig eller allerede brukt gjenopprettingskode"
     }
+  },
+  "totpExpiring": {
+    "title": "Jobber du fortsatt?",
+    "body": "Den sensitive økten din utløper snart. Bekreft på nytt for å fortsette, eller avvis for å la den utløpe.",
+    "keepWorking": "Ja, fortsett",
+    "dismiss": "Avvis"
   }
 }

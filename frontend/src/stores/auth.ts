@@ -1,5 +1,6 @@
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { defineStore } from 'pinia'
+import { useTotpGateStore } from '@/stores/totpGate'
 
 interface User {
   id: string
@@ -30,10 +31,12 @@ interface MeResponse {
 // nav links when the gate would 403 anyway).
 const TOTP_FRESH_MS = 12 * 60 * 60 * 1000
 
-// Mirrors the 5-minute per-action freshness window enforced by
-// RequireFreshTOTP on mutating admin endpoints. Used to prompt the
-// step-up modal on button click instead of after form submit.
-const TOTP_ACTION_FRESH_MS = 5 * 60 * 1000
+// Mirrors the per-action freshness window enforced by RequireFreshTOTP
+// on mutating admin endpoints. Used to prompt the step-up modal on
+// button click instead of after form submit.
+export const TOTP_ACTION_FRESH_MS = 10 * 60 * 1000
+// Show a "still working?" warning this many ms before expiry.
+export const TOTP_ACTION_WARN_MS = 60 * 1000
 
 const ADMIN_ROLES = ['admin', 'board', 'treasurer', 'harbor_master']
 
@@ -126,6 +129,28 @@ export const useAuthStore = defineStore('auth', () => {
   function hasRole(role: string): boolean {
     return user.value?.roles.includes(role) ?? false
   }
+
+  // Schedule a "still working?" warning ~1 minute before the fresh-TOTP
+  // window lapses. Re-arms whenever totpVerifiedAt advances (i.e. on a
+  // successful step-up).
+  let warnTimer: ReturnType<typeof setTimeout> | null = null
+  watch(
+    () => user.value?.totpVerifiedAt,
+    (verifiedAt) => {
+      if (warnTimer) {
+        clearTimeout(warnTimer)
+        warnTimer = null
+      }
+      if (!verifiedAt || !user.value?.totpEnabled) return
+      const warnAt = verifiedAt.getTime() + TOTP_ACTION_FRESH_MS - TOTP_ACTION_WARN_MS
+      const delay = warnAt - Date.now()
+      if (delay <= 0) return
+      warnTimer = setTimeout(() => {
+        useTotpGateStore().showExpiringWarning()
+      }, delay)
+    },
+    { immediate: true },
+  )
 
   const ready = checkSession()
 
