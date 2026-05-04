@@ -285,3 +285,202 @@ func (h *InvoiceHandler) HandleGetInvoicePDF(w http.ResponseWriter, r *http.Requ
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="faktura-%d.pdf"`, invoiceNumber))
 	w.Write(pdfData)
 }
+
+type draftInvoiceRow struct {
+	ID            string    `json:"id"`
+	InvoiceNumber int       `json:"invoice_number"`
+	UserID        string    `json:"user_id"`
+	MemberName    string    `json:"member_name"`
+	MemberEmail   string    `json:"member_email"`
+	TotalAmount   float64   `json:"total_amount"`
+	IssueDate     string    `json:"issue_date"`
+	DueDate       string    `json:"due_date"`
+	PriceItemName string    `json:"price_item_name"`
+	FiscalYear    *int      `json:"fiscal_year"`
+	Description   string    `json:"description"`
+	CreatedAt     time.Time `json:"created_at"`
+}
+
+// HandleListDraftInvoices returns every unsent invoice (sent_at IS
+// NULL) for the club, joined to user/price_item/fiscal_period for
+// display in the regnskap drafts review page.
+func (h *InvoiceHandler) HandleListDraftInvoices(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	rows, err := h.db.Query(ctx,
+		`SELECT i.id, i.invoice_number, i.user_id,
+		        COALESCE(u.full_name, u.first_name || ' ' || u.last_name),
+		        u.email,
+		        i.total_amount, i.issue_date, i.due_date,
+		        COALESCE(pi.name, ''), fp.year,
+		        COALESCE((SELECT description FROM invoice_lines WHERE invoice_id = i.id LIMIT 1), ''),
+		        i.created_at
+		   FROM invoices i
+		   JOIN users u ON u.id = i.user_id
+		   LEFT JOIN price_items pi ON pi.id = i.price_item_id
+		   LEFT JOIN fiscal_periods fp ON fp.id = i.fiscal_period_id
+		  WHERE i.club_id = $1 AND i.sent_at IS NULL
+		  ORDER BY i.created_at DESC`,
+		claims.ClubID,
+	)
+	if err != nil {
+		h.log.Error().Err(err).Msg("list draft invoices")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	defer rows.Close()
+
+	out := make([]draftInvoiceRow, 0)
+	for rows.Next() {
+		var d draftInvoiceRow
+		var issue, due time.Time
+		if err := rows.Scan(&d.ID, &d.InvoiceNumber, &d.UserID,
+			&d.MemberName, &d.MemberEmail,
+			&d.TotalAmount, &issue, &due,
+			&d.PriceItemName, &d.FiscalYear, &d.Description, &d.CreatedAt); err != nil {
+			h.log.Error().Err(err).Msg("scan draft row")
+			Error(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		d.IssueDate = issue.Format("2006-01-02")
+		d.DueDate = due.Format("2006-01-02")
+		out = append(out, d)
+	}
+
+	JSON(w, http.StatusOK, map[string]any{"items": out})
+}
+
+// HandleSendInvoice emails the stored PDF to the member and stamps
+// sent_at. Idempotent: 409 if already sent.
+func (h *InvoiceHandler) HandleSendInvoice(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	invoiceID := chi.URLParam(r, "invoiceID")
+	if invoiceID == "" {
+		Error(w, http.StatusBadRequest, "invoice ID is required")
+		return
+	}
+
+	var (
+		invoiceNumber int
+		userID        string
+		memberName    string
+		memberEmail   string
+		total         float64
+		dueDate       time.Time
+		kid           string
+		pdfData       []byte
+		alreadySent   *time.Time
+	)
+	if err := h.db.QueryRow(ctx,
+		`SELECT i.invoice_number, i.user_id,
+		        COALESCE(u.full_name, u.first_name || ' ' || u.last_name),
+		        u.email, i.total_amount, i.due_date, i.kid_number,
+		        i.pdf_data, i.sent_at
+		   FROM invoices i
+		   JOIN users u ON u.id = i.user_id
+		  WHERE i.id = $1 AND i.club_id = $2`,
+		invoiceID, claims.ClubID,
+	).Scan(&invoiceNumber, &userID, &memberName, &memberEmail,
+		&total, &dueDate, &kid, &pdfData, &alreadySent); err != nil {
+		if err == pgx.ErrNoRows {
+			Error(w, http.StatusNotFound, "invoice not found")
+			return
+		}
+		h.log.Error().Err(err).Msg("load invoice for send")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if alreadySent != nil {
+		Error(w, http.StatusConflict, "invoice already sent")
+		return
+	}
+	if h.email == nil {
+		Error(w, http.StatusServiceUnavailable, "email delivery not configured")
+		return
+	}
+	if memberEmail == "" {
+		Error(w, http.StatusBadRequest, "member has no email address on file")
+		return
+	}
+	if pdfData == nil {
+		Error(w, http.StatusInternalServerError, "invoice has no stored PDF")
+		return
+	}
+
+	var clubName, bankAccount string
+	_ = h.db.QueryRow(ctx,
+		`SELECT name, COALESCE(bank_account, '') FROM clubs WHERE id = $1`,
+		claims.ClubID,
+	).Scan(&clubName, &bankAccount)
+
+	locale := email.DetectLocale(r)
+	subject := email.InvoiceSubject(locale, clubName, invoiceNumber)
+	htmlBody := email.InvoiceBody(locale, memberName, clubName, invoiceNumber, dueDate, total, kid, bankAccount)
+	filename := fmt.Sprintf("faktura-%d.pdf", invoiceNumber)
+	if err := h.email.SendWithAttachment(ctx, memberEmail, subject, htmlBody, filename, pdfData); err != nil {
+		h.log.Error().Err(err).Str("email", memberEmail).Msg("send invoice email")
+		Error(w, http.StatusBadGateway, "failed to send email")
+		return
+	}
+	if _, err := h.db.Exec(ctx,
+		`UPDATE invoices SET sent_at = now() WHERE id = $1`, invoiceID,
+	); err != nil {
+		h.log.Error().Err(err).Msg("stamp sent_at")
+	}
+
+	if h.audit != nil {
+		h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,
+			audit.ActionInvoiceEmailed, "invoice", invoiceID,
+			map[string]any{"email": memberEmail, "invoice_number": invoiceNumber})
+	}
+
+	JSON(w, http.StatusOK, map[string]any{"id": invoiceID, "sent": true})
+}
+
+// HandleDeleteDraftInvoice permanently removes an unsent invoice.
+// Refuses to touch sent invoices — voiding sent fakturas is a separate
+// concern (will arrive with the planned status column).
+func (h *InvoiceHandler) HandleDeleteDraftInvoice(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	invoiceID := chi.URLParam(r, "invoiceID")
+	if invoiceID == "" {
+		Error(w, http.StatusBadRequest, "invoice ID is required")
+		return
+	}
+
+	tag, err := h.db.Exec(ctx,
+		`DELETE FROM invoices
+		  WHERE id = $1 AND club_id = $2 AND sent_at IS NULL`,
+		invoiceID, claims.ClubID,
+	)
+	if err != nil {
+		h.log.Error().Err(err).Msg("delete draft invoice")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if tag.RowsAffected() == 0 {
+		Error(w, http.StatusNotFound, "draft invoice not found (already sent or wrong club)")
+		return
+	}
+	if h.audit != nil {
+		h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,
+			audit.ActionInvoiceCreated, "invoice", invoiceID,
+			map[string]any{"deleted_draft": true})
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

@@ -314,6 +314,11 @@ const routes: RouteRecordRaw[] = [
         name: 'admin-journal-new',
         component: () => import('@/views/admin/JournalEntryForm.vue'),
       },
+      {
+        path: 'accounting/invoice-drafts',
+        name: 'admin-invoice-drafts',
+        component: () => import('@/views/admin/InvoiceDraftsView.vue'),
+      },
     ],
   },
 ]

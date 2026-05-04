@@ -525,9 +525,16 @@ func main() {
 						r.Post("/invoices/full", invoiceHandler.HandleCreateInvoice)
 						r.Get("/invoices/{invoiceID}/pdf", invoiceHandler.HandleGetInvoicePDF)
 						r.Get("/overdue", financialsHandler.HandleListOverdue)
+						r.Get("/invoices/drafts", invoiceHandler.HandleListDraftInvoices)
 						r.With(middleware.RequireRole("treasurer", "admin"),
 							middleware.RequireFreshTOTP(10*time.Minute)).
 							Post("/invoices/bulk", invoiceHandler.HandleBulkCreateInvoices)
+						r.With(middleware.RequireRole("treasurer", "admin"),
+							middleware.RequireFreshTOTP(10*time.Minute)).
+							Post("/invoices/{invoiceID}/send", invoiceHandler.HandleSendInvoice)
+						r.With(middleware.RequireRole("treasurer", "admin"),
+							middleware.RequireFreshTOTP(10*time.Minute)).
+							Delete("/invoices/{invoiceID}", invoiceHandler.HandleDeleteDraftInvoice)
 					})
 				}
 

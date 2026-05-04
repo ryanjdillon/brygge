@@ -25,6 +25,7 @@
   },
   "common": {
     "select": "Select…",
+    "refresh": "Refresh",
     "loading": "Loading",
     "error": "Error",
     "save": "Save",
@@ -475,6 +476,30 @@
       "accounts": "Chart of Accounts",
       "periods": "Periods",
       "journal": "Journal entries"
+    },
+    "invoiceDrafts": {
+      "title": "Faktura drafts",
+      "subtitle": "Review unsent fakturas, then send or delete.",
+      "cardDesc": "Review and send unsent fakturas",
+      "summary": "{n} drafts · {total} total",
+      "selectedCount": "{n} selected",
+      "sendSelected": "Send selected",
+      "deleteSelected": "Delete selected",
+      "sendConfirm": "Send {n} fakturas? This emails the PDF to each member and stamps sent_at.",
+      "deleteConfirm": "Delete this draft faktura? This is permanent.",
+      "deleteSelectedConfirm": "Delete {n} draft fakturas? This is permanent.",
+      "filterMember": "Member name or email",
+      "filterAllItems": "All price items",
+      "filterAllYears": "All years",
+      "member": "Member",
+      "priceItem": "Item",
+      "year": "Year",
+      "amount": "Amount",
+      "dueDate": "Due",
+      "previewPdf": "Preview PDF",
+      "send": "Send",
+      "delete": "Delete",
+      "empty": "No unsent fakturas."
     },
     "financials": {
       "title": "Financials",

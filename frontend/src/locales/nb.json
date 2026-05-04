@@ -25,6 +25,7 @@
   },
   "common": {
     "select": "Velg…",
+    "refresh": "Oppdater",
     "loading": "Laster",
     "error": "Feil",
     "save": "Lagre",
@@ -471,6 +472,30 @@
       "accounts": "Kontoplan",
       "periods": "Perioder",
       "journal": "Bilag"
+    },
+    "invoiceDrafts": {
+      "title": "Fakturakladder",
+      "subtitle": "Gå gjennom usendte fakturaer, og send eller slett.",
+      "cardDesc": "Gå gjennom og send usendte fakturaer",
+      "summary": "{n} kladder · {total} totalt",
+      "selectedCount": "{n} valgt",
+      "sendSelected": "Send valgte",
+      "deleteSelected": "Slett valgte",
+      "sendConfirm": "Sende {n} fakturaer? PDF-en sendes på e-post til hvert medlem og sent_at settes.",
+      "deleteConfirm": "Slette denne fakturakladden? Dette kan ikke angres.",
+      "deleteSelectedConfirm": "Slette {n} fakturakladder? Dette kan ikke angres.",
+      "filterMember": "Medlemsnavn eller e-post",
+      "filterAllItems": "Alle prisposter",
+      "filterAllYears": "Alle år",
+      "member": "Medlem",
+      "priceItem": "Post",
+      "year": "År",
+      "amount": "Beløp",
+      "dueDate": "Forfall",
+      "previewPdf": "Forhåndsvis PDF",
+      "send": "Send",
+      "delete": "Slett",
+      "empty": "Ingen usendte fakturaer."
     },
     "financials": {
       "title": "Økonomi",
