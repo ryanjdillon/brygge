@@ -17,6 +17,8 @@ export interface BoatFormValue {
   draft_m?: number | null
   weight_kg?: number | null
   registration_number: string
+  mmsi: string
+  call_sign: string
   boat_model_id?: string | null
 }
 
@@ -57,6 +59,8 @@ const form = reactive<BoatFormValue>({
   draft_m: undefined,
   weight_kg: undefined,
   registration_number: '',
+  mmsi: '',
+  call_sign: '',
   boat_model_id: undefined,
 })
 const approve = ref(false)
@@ -76,6 +80,8 @@ function reset() {
   form.draft_m = props.initial?.draft_m ?? undefined
   form.weight_kg = props.initial?.weight_kg ?? undefined
   form.registration_number = props.initial?.registration_number ?? ''
+  form.mmsi = props.initial?.mmsi ?? ''
+  form.call_sign = props.initial?.call_sign ?? ''
   form.boat_model_id = props.initial?.boat_model_id ?? undefined
   approve.value = false
   modelQuery.value =
@@ -193,8 +199,11 @@ function submit() {
     </div>
 
     <div>
-      <label for="bf-name" class="block text-sm font-medium text-gray-700">{{ t('portal.boats.name') }}</label>
-      <input id="bf-name" v-model="form.name" type="text" required class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+      <label for="bf-name" class="block text-sm font-medium text-gray-700">
+        {{ t('portal.boats.name') }}
+        <span class="text-xs font-normal text-gray-400">{{ t('common.optional') }}</span>
+      </label>
+      <input id="bf-name" v-model="form.name" type="text" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
     </div>
 
     <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -216,10 +225,24 @@ function submit() {
       </div>
     </div>
 
-    <div>
-      <label for="bf-reg" class="block text-sm font-medium text-gray-700">{{ t('portal.boats.registrationNumber') }}</label>
-      <input id="bf-reg" v-model="form.registration_number" type="text" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
-    </div>
+    <fieldset class="rounded-md border border-gray-200 bg-gray-50 p-3">
+      <legend class="px-1 text-sm font-semibold text-gray-700">{{ t('portal.boats.safety.title') }}</legend>
+      <p class="mb-2 text-xs text-gray-500">{{ t('portal.boats.safety.hint') }}</p>
+      <div class="grid gap-3 sm:grid-cols-3">
+        <div>
+          <label for="bf-reg" class="block text-sm font-medium text-gray-700">{{ t('portal.boats.registrationNumber') }}</label>
+          <input id="bf-reg" v-model="form.registration_number" type="text" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label for="bf-mmsi" class="block text-sm font-medium text-gray-700">{{ t('portal.boats.mmsi') }}</label>
+          <input id="bf-mmsi" v-model="form.mmsi" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="9" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label for="bf-callsign" class="block text-sm font-medium text-gray-700">{{ t('portal.boats.callSign') }}</label>
+          <input id="bf-callsign" v-model="form.call_sign" type="text" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+        </div>
+      </div>
+    </fieldset>
 
     <label v-if="showApprove" class="flex items-center gap-2 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
       <input v-model="approve" type="checkbox" class="rounded border-emerald-300" />

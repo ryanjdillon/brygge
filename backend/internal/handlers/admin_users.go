@@ -369,12 +369,15 @@ func (h *AdminUsersHandler) HandleGetUser(w http.ResponseWriter, r *http.Request
 		DraftM             *float64 `json:"draft_m"`
 		WeightKg           *float64 `json:"weight_kg"`
 		RegistrationNumber    string   `json:"registration_number"`
+		MMSI                  string   `json:"mmsi"`
+		CallSign              string   `json:"call_sign"`
 		MeasurementsConfirmed bool     `json:"measurements_confirmed"`
 	}
 
 	boatRows, err := h.db.Query(ctx,
 		`SELECT b.id, b.name, b.type, b.manufacturer, b.model,
 		        b.length_m, b.beam_m, b.draft_m, b.weight_kg, b.registration_number,
+		        b.mmsi, b.call_sign,
 		        b.measurements_confirmed
 		 FROM boats b
 		 WHERE b.user_id = $1 AND b.club_id = $2
@@ -393,6 +396,7 @@ func (h *AdminUsersHandler) HandleGetUser(w http.ResponseWriter, r *http.Request
 		var b boatRow
 		if err := boatRows.Scan(&b.ID, &b.Name, &b.Type, &b.Manufacturer, &b.Model,
 			&b.LengthM, &b.BeamM, &b.DraftM, &b.WeightKg, &b.RegistrationNumber,
+			&b.MMSI, &b.CallSign,
 			&b.MeasurementsConfirmed); err != nil {
 			h.log.Error().Err(err).Msg("failed to scan boat row")
 			Error(w, http.StatusInternalServerError, "internal error")

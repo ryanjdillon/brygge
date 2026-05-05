@@ -69,6 +69,8 @@ type boat struct {
 	DraftM                *float64   `json:"draft_m,omitempty"`
 	WeightKg              *float64   `json:"weight_kg,omitempty"`
 	RegistrationNumber    string     `json:"registration_number"`
+	MMSI                  string     `json:"mmsi"`
+	CallSign              string     `json:"call_sign"`
 	BoatModelID           *string    `json:"boat_model_id,omitempty"`
 	MeasurementsConfirmed bool       `json:"measurements_confirmed"`
 	ConfirmedBy           *string    `json:"confirmed_by,omitempty"`
@@ -95,6 +97,8 @@ type createBoatRequest struct {
 	DraftM             *float64 `json:"draft_m,omitempty"`
 	WeightKg           *float64 `json:"weight_kg,omitempty"`
 	RegistrationNumber string   `json:"registration_number"`
+	MMSI               string   `json:"mmsi"`
+	CallSign           string   `json:"call_sign"`
 	BoatModelID        *string  `json:"boat_model_id,omitempty"`
 }
 
@@ -108,6 +112,8 @@ type updateBoatRequest struct {
 	DraftM             *float64 `json:"draft_m,omitempty"`
 	WeightKg           *float64 `json:"weight_kg,omitempty"`
 	RegistrationNumber *string  `json:"registration_number,omitempty"`
+	MMSI               *string  `json:"mmsi,omitempty"`
+	CallSign           *string  `json:"call_sign,omitempty"`
 	BoatModelID        *string  `json:"boat_model_id,omitempty"`
 }
 
@@ -250,6 +256,7 @@ func (h *MembersHandler) HandleListMyBoats(w http.ResponseWriter, r *http.Reques
 	rows, err := h.db.Query(ctx,
 		`SELECT b.id, b.user_id, b.club_id, b.name, b.type, b.manufacturer, b.model,
 		        b.length_m, b.beam_m, b.draft_m, b.weight_kg, b.registration_number,
+		        b.mmsi, b.call_sign,
 		        b.boat_model_id, b.measurements_confirmed, b.confirmed_by, b.confirmed_at,
 		        b.created_at, b.updated_at,
 		        sa.slip_id, s.section, s.number, sa.assignment_type::text
@@ -275,6 +282,7 @@ func (h *MembersHandler) HandleListMyBoats(w http.ResponseWriter, r *http.Reques
 		if err := rows.Scan(
 			&b.ID, &b.UserID, &b.ClubID, &b.Name, &b.Type, &b.Manufacturer, &b.Model,
 			&b.LengthM, &b.BeamM, &b.DraftM, &b.WeightKg, &b.RegistrationNumber,
+			&b.MMSI, &b.CallSign,
 			&b.BoatModelID, &b.MeasurementsConfirmed, &b.ConfirmedBy, &b.ConfirmedAt,
 			&b.CreatedAt, &b.UpdatedAt,
 			&slipID, &slipSection, &slipNumber, &slipType,
@@ -352,6 +360,12 @@ func applyBoatUpdates(current *boat, req updateBoatRequest) {
 	}
 	if req.RegistrationNumber != nil {
 		current.RegistrationNumber = *req.RegistrationNumber
+	}
+	if req.MMSI != nil {
+		current.MMSI = *req.MMSI
+	}
+	if req.CallSign != nil {
+		current.CallSign = *req.CallSign
 	}
 	if req.BoatModelID != nil {
 		current.BoatModelID = req.BoatModelID

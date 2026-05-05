@@ -341,6 +341,12 @@
       "beam": "Beam (m)",
       "draft": "Draft (m)",
       "registrationNumber": "Registration number",
+      "mmsi": "MMSI",
+      "callSign": "Radio call sign",
+      "safety": {
+        "title": "Safety information",
+        "hint": "Optional, but useful for VHF/AIS contact in an emergency."
+      },
       "manufacturer": "Manufacturer",
       "model": "Model",
       "weight": "Weight (kg)",

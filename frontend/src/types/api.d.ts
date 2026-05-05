@@ -662,6 +662,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/users/export.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export all users in the club as CSV (round-trippable with /users/import). Site-admin role required. */
+        get: operations["admin-export-users-csv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/users/import": {
         parameters: {
             query?: never;
@@ -671,7 +688,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Bulk-import users from a CSV file (multipart/form-data, field 'file'). Required columns: email, full_name. Optional: phone, address_line, postal_code, city, is_local, roles (semicolon-separated). */
+        /** Bulk-import users from a CSV file (multipart/form-data, field 'file'). Required columns: email, full_name. Optional: phone, address_line, postal_code, city, is_local, roles (semicolon-separated). Site-admin role required. */
         post: operations["admin-import-users-csv"];
         delete?: never;
         options?: never;
@@ -698,6 +715,23 @@ export interface paths {
         patch: operations["admin-update-user"];
         trace?: never;
     };
+    "/api/v1/admin/users/{userID}/boats/{boatID}/slip": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set or release the active slip assignment for one of a user's boats */
+        put: operations["admin-set-user-boat-slip"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/users/{userID}/roles": {
         parameters: {
             query?: never;
@@ -715,7 +749,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/admin/users/{userID}/boats/{boatID}/slip": {
+    "/api/v1/admin/users/{userID}/slips": {
         parameters: {
             query?: never;
             header?: never;
@@ -723,8 +757,8 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Set or release the active slip assignment for one of a user's boats */
-        put: operations["admin-set-user-boat-slip"];
+        /** Replace the user's full set of active slip assignments */
+        put: operations["admin-set-user-slips"];
         post?: never;
         delete?: never;
         options?: never;
@@ -2321,8 +2355,6 @@ export interface components {
             address_line: string;
             /** @description Free-text admin notes (admin-only) */
             admin_notes: string;
-            /** @description All active slip assignments for the user */
-            slips?: { slip_id: string; slip_number?: string; slip_section?: string; assignment_type?: string; boat_id?: string | null }[] | null;
             /** @description City */
             city: string;
             /**
@@ -2348,14 +2380,16 @@ export interface components {
             postal_code: string;
             /** @description Assigned roles */
             roles: string[] | null;
-            /** @description Active slip assignment slip UUID, if any */
-            slip_id?: string;
             /** @description permanent | seasonal | '' when unassigned */
             slip_assignment_type: string;
+            /** @description Active slip assignment slip UUID, if any */
+            slip_id?: string;
             /** @description Active slip number (empty when unassigned) */
             slip_number: string;
             /** @description Active slip section (empty when unassigned) */
             slip_section: string;
+            /** @description All active slip assignments for the user */
+            slips: components["schemas"]["AdminUserSlipDetail"][] | null;
         };
         AdminUserBoatSlipUpdate: {
             /**
@@ -2368,23 +2402,6 @@ export interface components {
             assignment_type?: string;
             /** @description Slip UUID to assign, or null to release */
             slip_id: string | null;
-        };
-        AdminUserUpdate: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example https://example.com/schemas/AdminUserUpdate.json
-             */
-            readonly $schema?: string;
-            address_line?: string;
-            admin_notes?: string;
-            city?: string;
-            email?: string;
-            first_name?: string;
-            is_local?: boolean;
-            last_name?: string;
-            phone?: string;
-            postal_code?: string;
         };
         AdminUserCreate: {
             /**
@@ -2429,6 +2446,62 @@ export interface components {
             id: string;
             last_name: string;
             roles: string[] | null;
+        };
+        AdminUserSlipDetail: {
+            /** @description permanent | seasonal */
+            assignment_type: string;
+            /** @description Boat UUID holding the slip (null for legacy rows) */
+            boat_id: string | null;
+            /** @description Slip UUID */
+            slip_id: string;
+            /** @description Slip number (e.g. 12) */
+            slip_number: string;
+            /** @description Slip section / dock letter (e.g. A) */
+            slip_section: string;
+        };
+        AdminUserSlipsAssignment: {
+            /** @description permanent | seasonal (default permanent) */
+            assignment_type?: string;
+            /** @description Owner-boat UUID; required when the user has multiple boats */
+            boat_id?: string;
+            /** @description Slip UUID */
+            slip_id: string;
+        };
+        AdminUserSlipsUpdate: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/AdminUserSlipsUpdate.json
+             */
+            readonly $schema?: string;
+            /** @description Full desired set of active slip assignments */
+            slips: components["schemas"]["AdminUserSlipsAssignment"][] | null;
+        };
+        AdminUserUpdate: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/AdminUserUpdate.json
+             */
+            readonly $schema?: string;
+            /** @description Street address */
+            address_line?: string;
+            /** @description Free-text admin notes (admin-only, never returned to the member themselves) */
+            admin_notes?: string;
+            /** @description City */
+            city?: string;
+            /** @description Email address (must remain unique per club) */
+            email?: string;
+            /** @description Given name */
+            first_name?: string;
+            /** @description Local-resident rate eligible */
+            is_local?: boolean;
+            /** @description Family name */
+            last_name?: string;
+            /** @description Phone number */
+            phone?: string;
+            /** @description Postal code */
+            postal_code?: string;
         };
         AdminUsersResponse: {
             /**
@@ -2489,6 +2562,8 @@ export interface components {
             beam_m?: number;
             /** @description Linked boat model UUID */
             boat_model_id?: string;
+            /** @description Radio call sign */
+            call_sign: string;
             /** @description Club UUID */
             club_id: string;
             /**
@@ -2519,6 +2594,8 @@ export interface components {
             manufacturer: string;
             /** @description Whether measurements are confirmed */
             measurements_confirmed: boolean;
+            /** @description MMSI for AIS/DSC */
+            mmsi: string;
             /** @description Model name */
             model: string;
             /** @description Boat name */
@@ -2527,8 +2604,6 @@ export interface components {
             registration_number: string;
             /** @description Boat type */
             type: string;
-            /** @description Active slip currently held by this boat (null if none) */
-            slip?: { slip_id: string; section: string; number: string; assignment_type: string } | null;
             /**
              * Format: date-time
              * @description Last update timestamp
@@ -4138,6 +4213,29 @@ export interface components {
             readonly $schema?: string;
             /**
              * Format: double
+             * @description Boat beam in metres
+             */
+            boat_beam_m?: number;
+            /** @description Boat linked to the active slip assignment */
+            boat_id?: string;
+            /**
+             * Format: double
+             * @description Boat length in metres
+             */
+            boat_length_m?: number;
+            /** @description Boat manufacturer */
+            boat_manufacturer?: string;
+            /** @description Boat model */
+            boat_model?: string;
+            /** @description Boat name */
+            boat_name?: string;
+            /**
+             * Format: double
+             * @description Boat weight in kg
+             */
+            boat_weight_kg?: number;
+            /**
+             * Format: double
              * @description Depth in metres
              */
             depth_m?: number;
@@ -4148,20 +4246,12 @@ export interface components {
              * @description Length in metres
              */
             length_m?: number;
+            /** @description Free-text admin notes */
+            notes: string;
             /** @description Slip number */
             number: string;
-            /** @description Free-text admin notes */
-            notes?: string;
             /** @description Current occupant name */
             occupant_name?: string;
-            /** @description Boat linked to the active slip assignment */
-            boat_id?: string;
-            boat_name?: string;
-            boat_manufacturer?: string;
-            boat_model?: string;
-            boat_length_m?: number;
-            boat_beam_m?: number;
-            boat_weight_kg?: number;
             /** @description Harbor section */
             section: string;
             /**
@@ -6279,6 +6369,33 @@ export interface operations {
             };
         };
     };
+    "admin-export-users-csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "admin-import-users-csv": {
         parameters: {
             query?: never;
@@ -6430,7 +6547,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, unknown>;
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Error */
@@ -6467,6 +6586,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminUser"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "admin-set-user-slips": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description User UUID */
+                userID: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminUserSlipsUpdate"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Error */

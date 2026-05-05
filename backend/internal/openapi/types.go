@@ -321,6 +321,8 @@ type Boat struct {
 	DraftM                *float64   `json:"draft_m,omitempty" doc:"Draft in metres"`
 	WeightKg              *float64   `json:"weight_kg,omitempty" doc:"Weight in kilograms"`
 	RegistrationNumber    string     `json:"registration_number" doc:"Registration number"`
+	MMSI                  string     `json:"mmsi" doc:"MMSI for AIS/DSC"`
+	CallSign              string     `json:"call_sign" doc:"Radio call sign"`
 	BoatModelID           *string    `json:"boat_model_id,omitempty" doc:"Linked boat model UUID"`
 	MeasurementsConfirmed bool       `json:"measurements_confirmed" doc:"Whether measurements are confirmed"`
 	ConfirmedBy           *string    `json:"confirmed_by,omitempty" doc:"UUID of confirming user"`

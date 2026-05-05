@@ -340,6 +340,12 @@
       "draft": "Dypgående (m)",
       "weight": "Vekt (kg)",
       "registrationNumber": "Registreringsnummer",
+      "mmsi": "MMSI",
+      "callSign": "Kallesignal",
+      "safety": {
+        "title": "Sikkerhetsinformasjon",
+        "hint": "Valgfritt, men nyttig for VHF/AIS-kontakt i en nødsituasjon."
+      },
       "searchModel": "Søk båtmodell",
       "searchModelPlaceholder": "Skriv produsent eller modell...",
       "confirmed": "Godkjent",

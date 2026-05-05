@@ -58,18 +58,22 @@ func createBoatForUser(
 	err := db.QueryRow(ctx,
 		`INSERT INTO boats (user_id, club_id, name, type, manufacturer, model,
 		                    length_m, beam_m, draft_m, weight_kg, registration_number,
+		                    mmsi, call_sign,
 		                    boat_model_id, measurements_confirmed, confirmed_by, confirmed_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
 		 RETURNING id, user_id, club_id, name, type, manufacturer, model,
 		           length_m, beam_m, draft_m, weight_kg, registration_number,
+		           mmsi, call_sign,
 		           boat_model_id, measurements_confirmed, confirmed_by, confirmed_at,
 		           created_at, updated_at`,
 		ownerID, clubID, req.Name, req.Type, req.Manufacturer, req.Model,
 		req.LengthM, req.BeamM, req.DraftM, req.WeightKg, req.RegistrationNumber,
+		req.MMSI, req.CallSign,
 		req.BoatModelID, confirmed, confirmedBy, confirmedAt,
 	).Scan(
 		&b.ID, &b.UserID, &b.ClubID, &b.Name, &b.Type, &b.Manufacturer, &b.Model,
 		&b.LengthM, &b.BeamM, &b.DraftM, &b.WeightKg, &b.RegistrationNumber,
+		&b.MMSI, &b.CallSign,
 		&b.BoatModelID, &b.MeasurementsConfirmed, &b.ConfirmedBy, &b.ConfirmedAt,
 		&b.CreatedAt, &b.UpdatedAt,
 	)
@@ -96,6 +100,7 @@ func updateBoatForUser(
 	err := db.QueryRow(ctx,
 		`SELECT id, user_id, club_id, name, type, manufacturer, model,
 		        length_m, beam_m, draft_m, weight_kg, registration_number,
+		        mmsi, call_sign,
 		        boat_model_id, measurements_confirmed, confirmed_by, confirmed_at,
 		        created_at, updated_at
 		 FROM boats WHERE id = $1 AND user_id = $2 AND club_id = $3`,
@@ -105,6 +110,7 @@ func updateBoatForUser(
 		&current.Manufacturer, &current.Model,
 		&current.LengthM, &current.BeamM, &current.DraftM, &current.WeightKg,
 		&current.RegistrationNumber,
+		&current.MMSI, &current.CallSign,
 		&current.BoatModelID, &current.MeasurementsConfirmed, &current.ConfirmedBy, &current.ConfirmedAt,
 		&current.CreatedAt, &current.UpdatedAt,
 	)
@@ -159,10 +165,12 @@ func updateBoatForUser(
 		     length_m = $8, beam_m = $9, draft_m = $10, weight_kg = $11,
 		     registration_number = $12, boat_model_id = $13,
 		     measurements_confirmed = $14, confirmed_by = $15, confirmed_at = $16,
+		     mmsi = $17, call_sign = $18,
 		     updated_at = now()
 		 WHERE id = $1 AND user_id = $2 AND club_id = $3
 		 RETURNING id, user_id, club_id, name, type, manufacturer, model,
 		           length_m, beam_m, draft_m, weight_kg, registration_number,
+		           mmsi, call_sign,
 		           boat_model_id, measurements_confirmed, confirmed_by, confirmed_at,
 		           created_at, updated_at`,
 		boatID, ownerID, clubID,
@@ -170,9 +178,11 @@ func updateBoatForUser(
 		current.LengthM, current.BeamM, current.DraftM, current.WeightKg,
 		current.RegistrationNumber, current.BoatModelID,
 		confirmed, confirmedBy, confirmedAt,
+		current.MMSI, current.CallSign,
 	).Scan(
 		&b.ID, &b.UserID, &b.ClubID, &b.Name, &b.Type, &b.Manufacturer, &b.Model,
 		&b.LengthM, &b.BeamM, &b.DraftM, &b.WeightKg, &b.RegistrationNumber,
+		&b.MMSI, &b.CallSign,
 		&b.BoatModelID, &b.MeasurementsConfirmed, &b.ConfirmedBy, &b.ConfirmedAt,
 		&b.CreatedAt, &b.UpdatedAt,
 	)
