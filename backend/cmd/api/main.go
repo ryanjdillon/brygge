@@ -612,14 +612,28 @@ func main() {
 						r.Get("/", clubSettingsHandler.HandleGetBookingSettings)
 						r.Put("/", clubSettingsHandler.HandleUpdateBookingSettings)
 					})
-
-					r.Route("/settings/financials", func(r chi.Router) {
-						r.Use(middleware.RequireRole("treasurer", "admin"))
-						r.Get("/", clubSettingsHandler.HandleGetFinancialSettings)
-						r.With(middleware.RequireFreshTOTP(10*time.Minute)).
-							Patch("/", clubSettingsHandler.HandleUpdateFinancialSettings)
-					})
 				}
+
+				// Financial settings are not gated on the bookings feature
+				// flag — fakturas always need org/address/bank/logo.
+				// Registered as flat paths (not r.Route) so chi matches
+				// requests with no trailing slash.
+				r.With(middleware.RequireRole("treasurer", "admin")).
+					Get("/settings/financials", clubSettingsHandler.HandleGetFinancialSettings)
+				r.With(
+					middleware.RequireRole("treasurer", "admin"),
+					middleware.RequireFreshTOTP(10*time.Minute),
+				).Patch("/settings/financials", clubSettingsHandler.HandleUpdateFinancialSettings)
+				r.With(middleware.RequireRole("treasurer", "admin")).
+					Get("/settings/financials/logo", clubSettingsHandler.HandleGetClubLogo)
+				r.With(
+					middleware.RequireRole("treasurer", "admin"),
+					middleware.RequireFreshTOTP(10*time.Minute),
+				).Post("/settings/financials/logo", clubSettingsHandler.HandleUploadClubLogo)
+				r.With(
+					middleware.RequireRole("treasurer", "admin"),
+					middleware.RequireFreshTOTP(10*time.Minute),
+				).Delete("/settings/financials/logo", clubSettingsHandler.HandleDeleteClubLogo)
 
 				r.Route("/slip-shares", func(r chi.Router) {
 					r.Use(middleware.RequireRole("board", "harbor_master"))

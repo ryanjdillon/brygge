@@ -140,12 +140,15 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Get club settings for PDF
-	var clubName, orgNumber, clubAddress, bankAccount string
+	var clubName, orgNumber, clubAddress, bankAccount, website, treasurerEmail, logoMIME string
+	var logoData []byte
 	err = h.db.QueryRow(ctx,
-		`SELECT name, COALESCE(org_number, ''), COALESCE(address, ''), COALESCE(bank_account, '')
+		`SELECT name, COALESCE(org_number, ''), COALESCE(address, ''), COALESCE(bank_account, ''),
+		        COALESCE(website_url, ''), COALESCE(treasurer_email, ''),
+		        logo_data, COALESCE(logo_mime, '')
 		 FROM clubs WHERE id = $1`,
 		claims.ClubID,
-	).Scan(&clubName, &orgNumber, &clubAddress, &bankAccount)
+	).Scan(&clubName, &orgNumber, &clubAddress, &bankAccount, &website, &treasurerEmail, &logoData, &logoMIME)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to get club details for invoice")
 		Error(w, http.StatusInternalServerError, "internal error")
@@ -158,8 +161,12 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 	inv := finance.Invoice{
 		ClubName:      clubName,
 		OrgNumber:     orgNumber,
-		ClubAddress:   clubAddress,
-		MemberName:    memberName,
+		ClubAddress:    clubAddress,
+		Website:        website,
+		TreasurerEmail: treasurerEmail,
+		LogoData:       logoData,
+		LogoMIME:       logoMIME,
+		MemberName:     memberName,
 		MemberAddress: memberAddress,
 		InvoiceNumber: invoiceSeq,
 		IssueDate:     time.Now(),

@@ -1,0 +1,2 @@
+ALTER TABLE clubs DROP COLUMN IF EXISTS logo_mime;
+ALTER TABLE clubs DROP COLUMN IF EXISTS logo_data;

@@ -162,12 +162,15 @@ func (h *InvoiceHandler) HandleBulkCreateInvoices(w http.ResponseWriter, r *http
 	}
 
 	// Club details for PDF rendering.
-	var clubName, orgNumber, clubAddress, bankAccount string
+	var clubName, orgNumber, clubAddress, bankAccount, website, treasurerEmail, logoMIME string
+	var logoData []byte
 	if err := h.db.QueryRow(ctx,
-		`SELECT name, COALESCE(org_number, ''), COALESCE(address, ''), COALESCE(bank_account, '')
+		`SELECT name, COALESCE(org_number, ''), COALESCE(address, ''), COALESCE(bank_account, ''),
+		        COALESCE(website_url, ''), COALESCE(treasurer_email, ''),
+		        logo_data, COALESCE(logo_mime, '')
 		   FROM clubs WHERE id = $1`,
 		claims.ClubID,
-	).Scan(&clubName, &orgNumber, &clubAddress, &bankAccount); err != nil {
+	).Scan(&clubName, &orgNumber, &clubAddress, &bankAccount, &website, &treasurerEmail, &logoData, &logoMIME); err != nil {
 		h.log.Error().Err(err).Msg("failed to load club for bulk invoices")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
@@ -233,7 +236,7 @@ func (h *InvoiceHandler) HandleBulkCreateInvoices(w http.ResponseWriter, r *http
 		invID, invNum, amount, err := h.createBulkInvoice(ctx,
 			claims.ClubID, claims.UserID, userID, chosen, slipInfo,
 			req.FiscalPeriodID, fiscalYear, dueDate,
-			clubName, orgNumber, clubAddress, bankAccount)
+			clubName, orgNumber, clubAddress, bankAccount, website, treasurerEmail, logoData, logoMIME)
 		if err != nil {
 			h.log.Error().Err(err).Str("user_id", userID).Msg("bulk invoice create failed")
 			resp.Skipped = append(resp.Skipped, bulkInvoiceSkipped{UserID: userID, Reason: "create failed: " + err.Error()})
@@ -347,7 +350,8 @@ func (h *InvoiceHandler) createBulkInvoice(
 	fiscalPeriodID string,
 	fiscalYear int,
 	dueDate time.Time,
-	clubName, orgNumber, clubAddress, bankAccount string,
+	clubName, orgNumber, clubAddress, bankAccount, website, treasurerEmail string,
+	logoData []byte, logoMIME string,
 ) (string, int, float64, error) {
 	var memberName, memberEmail, memberAddress string
 	if err := h.db.QueryRow(ctx,
@@ -368,9 +372,10 @@ func (h *InvoiceHandler) createBulkInvoice(
 
 	kid := finance.GenerateKID("000", invoiceSeq, 1)
 	desc := fmt.Sprintf("%s %d", t.desc, fiscalYear)
+	subDesc := ""
 	if slipInfo != nil {
-		// Append boat name (or mfg+model) and slip label to the line so
-		// the recipient can see exactly what they're paying for.
+		// Render boat/slip detail on a sub-line under the main description
+		// so the line item stays compact.
 		boatLabel := slipInfo.boatName
 		if boatLabel == "" {
 			boatLabel = strings.TrimSpace(slipInfo.mfg + " " + slipInfo.model)
@@ -386,15 +391,19 @@ func (h *InvoiceHandler) createBulkInvoice(
 			extras = append(extras, fmt.Sprintf("bredde %.2f m", *slipInfo.beam))
 		}
 		if len(extras) > 0 {
-			desc = desc + " — " + strings.Join(extras, ", ")
+			subDesc = strings.Join(extras, ", ")
 		}
 	}
-	pdfLines := []finance.InvoiceLine{{Description: desc, Quantity: 1, UnitPrice: t.amount}}
+	pdfLines := []finance.InvoiceLine{{Description: desc, SubDescription: subDesc, Quantity: 1, UnitPrice: t.amount}}
 	inv := finance.Invoice{
 		ClubName:      clubName,
 		OrgNumber:     orgNumber,
-		ClubAddress:   clubAddress,
-		MemberName:    memberName,
+		ClubAddress:    clubAddress,
+		Website:        website,
+		TreasurerEmail: treasurerEmail,
+		LogoData:       logoData,
+		LogoMIME:       logoMIME,
+		MemberName:     memberName,
 		MemberAddress: memberAddress,
 		InvoiceNumber: invoiceSeq,
 		IssueDate:     time.Now(),
