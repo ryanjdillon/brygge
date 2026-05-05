@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { ArrowLeft, FileDown, Send, Trash2, RefreshCw, Ban } from 'lucide-vue-next'
 import { useTotpGateStore } from '@/stores/totpGate'
 import { useAuthStore } from '@/stores/auth'
+import { useConfirm } from '@/stores/confirm'
 
 interface Draft {
   id: string
@@ -24,6 +25,7 @@ interface Draft {
 const { t } = useI18n()
 const auth = useAuthStore()
 const totpGate = useTotpGateStore()
+const confirm = useConfirm()
 
 const drafts = ref<Draft[]>([])
 const loading = ref(true)
@@ -95,8 +97,11 @@ function toggleAll() {
   selected.value = next
 }
 
-async function sendOne(id: string) {
-  if (!(await ensureFreshTotp())) return
+function draftLabel(d: Draft): string {
+  return `#${d.invoice_number} — ${d.member_name} (${formatNOK(Number(d.total_amount))})`
+}
+
+async function doSend(id: string) {
   busyIds.value.add(id)
   try {
     const res = await fetch(`/api/v1/admin/financials/invoices/${id}/send`, {
@@ -114,18 +119,7 @@ async function sendOne(id: string) {
   }
 }
 
-async function sendSelected() {
-  if (selected.value.size === 0) return
-  if (!confirm(t('admin.invoiceDrafts.sendConfirm', { n: selected.value.size }))) return
-  if (!(await ensureFreshTotp())) return
-  for (const id of [...selected.value]) {
-    await sendOne(id)
-  }
-}
-
-async function deleteOne(id: string) {
-  if (!confirm(t('admin.invoiceDrafts.deleteConfirm'))) return
-  if (!(await ensureFreshTotp())) return
+async function doDelete(id: string) {
   busyIds.value.add(id)
   try {
     const res = await fetch(`/api/v1/admin/financials/invoices/${id}`, {
@@ -143,9 +137,7 @@ async function deleteOne(id: string) {
   }
 }
 
-async function voidOne(id: string) {
-  if (!confirm(t('admin.invoiceDrafts.voidConfirm'))) return
-  if (!(await ensureFreshTotp())) return
+async function doVoid(id: string) {
   busyIds.value.add(id)
   try {
     const res = await fetch(`/api/v1/admin/financials/invoices/${id}/void`, {
@@ -163,12 +155,73 @@ async function voidOne(id: string) {
   }
 }
 
+async function sendOne(d: Draft) {
+  const ok = await confirm({
+    title: t('admin.invoiceDrafts.sendConfirmTitle'),
+    body: t('admin.invoiceDrafts.sendOneBody', { name: d.member_name }),
+    confirmLabel: t('admin.invoiceDrafts.sendAction'),
+    tone: 'info',
+  })
+  if (!ok) return
+  if (!(await ensureFreshTotp())) return
+  await doSend(d.id)
+}
+
+async function deleteOne(d: Draft) {
+  const ok = await confirm({
+    title: t('admin.invoiceDrafts.deleteConfirmTitle'),
+    body: t('admin.invoiceDrafts.deleteOneBody', { name: d.member_name }),
+    confirmLabel: t('common.delete'),
+    tone: 'danger',
+  })
+  if (!ok) return
+  if (!(await ensureFreshTotp())) return
+  await doDelete(d.id)
+}
+
+async function voidOne(d: Draft) {
+  const ok = await confirm({
+    title: t('admin.invoiceDrafts.voidConfirmTitle'),
+    body: t('admin.invoiceDrafts.voidOneBody', { name: d.member_name }),
+    confirmLabel: t('admin.invoiceDrafts.voidAction'),
+    tone: 'warning',
+  })
+  if (!ok) return
+  if (!(await ensureFreshTotp())) return
+  await doVoid(d.id)
+}
+
+async function sendSelected() {
+  if (selected.value.size === 0) return
+  const items = drafts.value.filter((d) => selected.value.has(d.id))
+  const ok = await confirm({
+    title: t('admin.invoiceDrafts.sendConfirmTitle'),
+    body: t('admin.invoiceDrafts.sendBulkBody', { n: items.length }),
+    details: items.map(draftLabel),
+    confirmLabel: t('admin.invoiceDrafts.sendAction'),
+    tone: 'info',
+  })
+  if (!ok) return
+  if (!(await ensureFreshTotp())) return
+  for (const id of items.map((d) => d.id)) {
+    await doSend(id)
+  }
+}
+
 async function deleteSelected() {
   if (selected.value.size === 0) return
-  if (!confirm(t('admin.invoiceDrafts.deleteSelectedConfirm', { n: selected.value.size }))) return
+  const items = drafts.value.filter((d) => selected.value.has(d.id))
+  const ok = await confirm({
+    title: t('admin.invoiceDrafts.deleteConfirmTitle'),
+    body: t('admin.invoiceDrafts.deleteBulkBody', { n: items.length }),
+    details: items.map(draftLabel),
+    confirmLabel: t('common.delete'),
+    tone: 'danger',
+  })
+  if (!ok) return
   if (!(await ensureFreshTotp())) return
-  for (const id of [...selected.value]) {
-    await deleteOne(id)
+  for (const id of items.map((d) => d.id)) {
+    await doDelete(id)
   }
 }
 
@@ -304,7 +357,7 @@ function formatNOK(n: number): string {
                     class="text-blue-600 hover:text-blue-800 disabled:opacity-50"
                     :disabled="busyIds.has(d.id)"
                     :title="t('admin.invoiceDrafts.send')"
-                    @click="sendOne(d.id)"
+                    @click="sendOne(d)"
                   >
                     <Send class="h-4 w-4" />
                   </button>
@@ -312,7 +365,7 @@ function formatNOK(n: number): string {
                     class="text-amber-600 hover:text-amber-800 disabled:opacity-50"
                     :disabled="busyIds.has(d.id)"
                     :title="t('admin.invoiceDrafts.void')"
-                    @click="voidOne(d.id)"
+                    @click="voidOne(d)"
                   >
                     <Ban class="h-4 w-4" />
                   </button>
@@ -320,7 +373,7 @@ function formatNOK(n: number): string {
                     class="text-red-600 hover:text-red-800 disabled:opacity-50"
                     :disabled="busyIds.has(d.id)"
                     :title="t('admin.invoiceDrafts.delete')"
-                    @click="deleteOne(d.id)"
+                    @click="deleteOne(d)"
                   >
                     <Trash2 class="h-4 w-4" />
                   </button>

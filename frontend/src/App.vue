@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import NavBar from '@/components/layout/NavBar.vue'
 import Footer from '@/components/layout/Footer.vue'
 import ToastContainer from '@/components/ui/ToastContainer.vue'
+import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 import NetworkStatus from '@/components/ui/NetworkStatus.vue'
 import FreshTotpModal from '@/components/auth/FreshTotpModal.vue'
 import TotpExpiringModal from '@/components/auth/TotpExpiringModal.vue'
@@ -20,6 +21,7 @@ const { t } = useI18n()
     </main>
     <Footer />
     <ToastContainer />
+    <ConfirmDialog />
     <NetworkStatus />
     <FreshTotpModal />
     <TotpExpiringModal />
