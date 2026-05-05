@@ -78,7 +78,6 @@ const navGroups = computed<NavGroup[]>(() => {
         { to: '/admin/pricing', icon: DollarSign, label: t('admin.sidebar.pricing'), roles: ['admin', 'treasurer'], feature: 'commerce' },
         { to: '/admin/accounting/accounts', icon: BookOpen, label: t('admin.sidebar.accounts'), roles: ['treasurer', 'board', 'admin'], feature: 'accounting' },
         { to: '/admin/accounting/journal', icon: FileText, label: t('admin.sidebar.journal'), roles: ['treasurer', 'board', 'admin'], feature: 'accounting' },
-        { to: '/admin/accounting/settings', icon: Settings, label: t('admin.sidebar.financialSettings'), roles: ['treasurer', 'admin'], feature: 'accounting' },
       ],
     },
     {
@@ -100,6 +99,7 @@ const navGroups = computed<NavGroup[]>(() => {
         { to: '/admin/map', icon: MapPin, label: t('admin.sidebar.mapMarkers') },
         { to: '/admin/notifications', icon: Bell, label: t('notifications.admin.title'), feature: 'communications' },
         { to: '/admin/gdpr', icon: ShieldCheck, label: t('gdpr.admin.title') },
+        { to: '/admin/accounting/settings', icon: Settings, label: t('admin.sidebar.settings'), roles: ['treasurer', 'admin'] },
       ],
     },
   ]
