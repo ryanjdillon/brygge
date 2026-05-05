@@ -3635,6 +3635,8 @@ export interface components {
             email: string;
             /** @description Full name */
             full_name: string;
+            /** @description Hide email/phone from member directory and harbor map */
+            hide_in_directory: boolean;
             /** @description Member UUID */
             id: string;
             /** @description Whether member is a local resident */

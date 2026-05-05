@@ -44,16 +44,18 @@ type memberProfile struct {
 	PostalCode string    `json:"postal_code"`
 	City       string    `json:"city"`
 	IsLocal    bool      `json:"is_local"`
+	HideInDirectory bool `json:"hide_in_directory"`
 	CreatedAt  time.Time `json:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 type updateProfileRequest struct {
-	FullName   *string `json:"full_name,omitempty"`
-	Phone      *string `json:"phone,omitempty"`
-	Address    *string `json:"address_line,omitempty"`
-	PostalCode *string `json:"postal_code,omitempty"`
-	City       *string `json:"city,omitempty"`
+	FullName        *string `json:"full_name,omitempty"`
+	Phone           *string `json:"phone,omitempty"`
+	Address         *string `json:"address_line,omitempty"`
+	PostalCode      *string `json:"postal_code,omitempty"`
+	City            *string `json:"city,omitempty"`
+	HideInDirectory *bool   `json:"hide_in_directory,omitempty"`
 }
 
 type boat struct {
@@ -150,12 +152,12 @@ func (h *MembersHandler) HandleGetMe(w http.ResponseWriter, r *http.Request) {
 
 	var p memberProfile
 	err := h.db.QueryRow(ctx,
-		`SELECT id, club_id, email, full_name, phone, address_line, postal_code, city, is_local, created_at, updated_at
+		`SELECT id, club_id, email, full_name, phone, address_line, postal_code, city, is_local, hide_in_directory, created_at, updated_at
 		 FROM users WHERE id = $1 AND club_id = $2`,
 		claims.UserID, claims.ClubID,
 	).Scan(
 		&p.ID, &p.ClubID, &p.Email, &p.FullName, &p.Phone,
-		&p.Address, &p.PostalCode, &p.City, &p.IsLocal,
+		&p.Address, &p.PostalCode, &p.City, &p.IsLocal, &p.HideInDirectory,
 		&p.CreatedAt, &p.UpdatedAt,
 	)
 	if err == pgx.ErrNoRows {
@@ -187,12 +189,12 @@ func (h *MembersHandler) HandleUpdateMe(w http.ResponseWriter, r *http.Request) 
 
 	var current memberProfile
 	err := h.db.QueryRow(ctx,
-		`SELECT id, club_id, email, full_name, phone, address_line, postal_code, city, is_local, created_at, updated_at
+		`SELECT id, club_id, email, full_name, phone, address_line, postal_code, city, is_local, hide_in_directory, created_at, updated_at
 		 FROM users WHERE id = $1 AND club_id = $2`,
 		claims.UserID, claims.ClubID,
 	).Scan(
 		&current.ID, &current.ClubID, &current.Email, &current.FullName, &current.Phone,
-		&current.Address, &current.PostalCode, &current.City, &current.IsLocal,
+		&current.Address, &current.PostalCode, &current.City, &current.IsLocal, &current.HideInDirectory,
 		&current.CreatedAt, &current.UpdatedAt,
 	)
 	if err != nil {
@@ -216,6 +218,9 @@ func (h *MembersHandler) HandleUpdateMe(w http.ResponseWriter, r *http.Request) 
 	if req.City != nil {
 		current.City = *req.City
 	}
+	if req.HideInDirectory != nil {
+		current.HideInDirectory = *req.HideInDirectory
+	}
 
 	// full_name became a generated column in DIL-228; we now write
 	// first/last directly. Until /me starts shipping these fields
@@ -226,14 +231,14 @@ func (h *MembersHandler) HandleUpdateMe(w http.ResponseWriter, r *http.Request) 
 	var p memberProfile
 	err = h.db.QueryRow(ctx,
 		`UPDATE users
-		 SET first_name = $3, last_name = $4, phone = $5, address_line = $6, postal_code = $7, city = $8, updated_at = now()
+		 SET first_name = $3, last_name = $4, phone = $5, address_line = $6, postal_code = $7, city = $8, hide_in_directory = $9, updated_at = now()
 		 WHERE id = $1 AND club_id = $2
-		 RETURNING id, club_id, email, full_name, phone, address_line, postal_code, city, is_local, created_at, updated_at`,
+		 RETURNING id, club_id, email, full_name, phone, address_line, postal_code, city, is_local, hide_in_directory, created_at, updated_at`,
 		claims.UserID, claims.ClubID,
-		first, last, current.Phone, current.Address, current.PostalCode, current.City,
+		first, last, current.Phone, current.Address, current.PostalCode, current.City, current.HideInDirectory,
 	).Scan(
 		&p.ID, &p.ClubID, &p.Email, &p.FullName, &p.Phone,
-		&p.Address, &p.PostalCode, &p.City, &p.IsLocal,
+		&p.Address, &p.PostalCode, &p.City, &p.IsLocal, &p.HideInDirectory,
 		&p.CreatedAt, &p.UpdatedAt,
 	)
 	if err != nil {
@@ -556,6 +561,7 @@ func (h *MembersHandler) HandleGetDirectory(w http.ResponseWriter, r *http.Reque
 		 FROM users u
 		 JOIN user_roles ur ON ur.user_id = u.id AND ur.club_id = u.club_id
 		 WHERE u.club_id = $1
+		 AND u.hide_in_directory = FALSE
 		 AND ur.role IN ('member', 'slip_holder', 'board', 'harbor_master', 'treasurer', 'admin')
 		 GROUP BY u.id, u.full_name, u.phone, u.email
 		 ORDER BY u.full_name

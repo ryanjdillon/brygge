@@ -136,6 +136,7 @@ func (h *HarborHandler) HandleGetLayout(w http.ResponseWriter, r *http.Request) 
 		        s.length_m, s.width_m, s.location,
 		        sa.assignment_type,
 		        sa.user_id, u.first_name, u.last_name, u.email, u.phone,
+		        u.hide_in_directory,
 		        b.id, b.name, b.length_m, b.beam_m, b.manufacturer, b.model
 		   FROM slips s
 		   LEFT JOIN slip_assignments sa
@@ -154,6 +155,7 @@ func (h *HarborHandler) HandleGetLayout(w http.ResponseWriter, r *http.Request) 
 		var lengthM, widthM *float64
 		var location *rawJSON
 		var assignmentType, userID, firstName, lastName, email, phone *string
+		var hideInDirectory *bool
 		var boatID, boatName, boatMfg, boatModel *string
 		var boatLength, boatBeam *float64
 
@@ -162,6 +164,7 @@ func (h *HarborHandler) HandleGetLayout(w http.ResponseWriter, r *http.Request) 
 			&lengthM, &widthM, &location,
 			&assignmentType,
 			&userID, &firstName, &lastName, &email, &phone,
+			&hideInDirectory,
 			&boatID, &boatName, &boatLength, &boatBeam, &boatMfg, &boatModel,
 		); err != nil {
 			slipRows.Close()
@@ -186,7 +189,12 @@ func (h *HarborHandler) HandleGetLayout(w http.ResponseWriter, r *http.Request) 
 			props["assignment_type"] = *assignmentType
 		}
 
-		if mode != "public" && lastName != nil && *lastName != "" {
+		// Member mode honors hide_in_directory; admin mode always sees the
+		// occupant since admins need it for harbour operations.
+		hidden := hideInDirectory != nil && *hideInDirectory
+		if mode == "member" && !hidden && lastName != nil && *lastName != "" {
+			props["occupant_last_name"] = *lastName
+		} else if canSeeDetail && lastName != nil && *lastName != "" {
 			props["occupant_last_name"] = *lastName
 		}
 		if canSeeDetail {
