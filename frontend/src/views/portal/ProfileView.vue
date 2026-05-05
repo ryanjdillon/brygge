@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
+import { RouterLink } from 'vue-router'
 import { useApiClient, unwrap } from '@/lib/apiClient'
+import { useLegalDocument, useMyConsents, useRecordConsent } from '@/composables/useGdpr'
 
 const { t } = useI18n()
 const client = useApiClient()
@@ -14,6 +16,7 @@ interface ProfileForm {
   phone: string
   address: { street: string; postalCode: string; city: string }
   isLocal: boolean
+  hideInDirectory: boolean
 }
 
 const form = ref<ProfileForm>({
@@ -22,9 +25,25 @@ const form = ref<ProfileForm>({
   phone: '',
   address: { street: '', postalCode: '', city: '' },
   isLocal: false,
+  hideInDirectory: false,
 })
 
 const toast = ref<{ type: 'success' | 'error'; message: string } | null>(null)
+const privacyAgreed = ref(false)
+
+const { data: privacyDoc } = useLegalDocument('privacy')
+const { consents } = useMyConsents()
+const { mutateAsync: recordConsent } = useRecordConsent()
+
+const privacyConsentNeeded = computed(() => {
+  const v = privacyDoc.value?.version
+  if (!v) return false
+  return !consents.value.some(
+    (c) => c.consent_type === 'privacy' && c.version === v,
+  )
+})
+
+const canSubmit = computed(() => !privacyConsentNeeded.value || privacyAgreed.value)
 
 const { data: profile, isLoading } = useQuery({
   queryKey: ['portal', 'profile'],
@@ -39,21 +58,27 @@ watch(profile, (p) => {
       phone: p.phone,
       address: { street: p.address_line, postalCode: p.postal_code, city: p.city },
       isLocal: p.is_local,
+      hideInDirectory: p.hide_in_directory ?? false,
     }
   }
 }, { immediate: true })
 
 const { mutate: saveProfile, isPending: isSaving } = useMutation({
-  mutationFn: async () =>
-    unwrap(await client.PUT('/api/v1/members/me', {
+  mutationFn: async () => {
+    if (privacyConsentNeeded.value && privacyDoc.value?.version) {
+      await recordConsent({ consent_type: 'privacy', version: privacyDoc.value.version })
+    }
+    return unwrap(await client.PUT('/api/v1/members/me', {
       body: {
         full_name: form.value.name,
         phone: form.value.phone,
         address_line: form.value.address.street,
         postal_code: form.value.address.postalCode,
         city: form.value.address.city,
+        hide_in_directory: form.value.hideInDirectory,
       } as any,
-    })),
+    }))
+  },
   onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: ['portal', 'profile'] })
     toast.value = { type: 'success', message: t('portal.profile.saveSuccess') }
@@ -162,9 +187,42 @@ const { mutate: saveProfile, isPending: isSaving } = useMutation({
         </span>
       </div>
 
+      <fieldset class="rounded-md border border-gray-200 bg-gray-50 p-3">
+        <legend class="px-1 text-sm font-semibold text-gray-700">{{ t('portal.profile.privacyTitle') }}</legend>
+        <label class="flex items-start gap-3 text-sm">
+          <input
+            v-model="form.hideInDirectory"
+            type="checkbox"
+            class="mt-0.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+          />
+          <span>
+            <span class="font-medium text-gray-800">{{ t('portal.profile.hideInDirectoryLabel') }}</span>
+            <span class="block text-xs text-gray-500">{{ t('portal.profile.hideInDirectoryHint') }}</span>
+          </span>
+        </label>
+      </fieldset>
+
+      <div v-if="privacyConsentNeeded" class="rounded-md border border-amber-200 bg-amber-50 p-3">
+        <label class="flex items-start gap-3 text-sm">
+          <input
+            v-model="privacyAgreed"
+            type="checkbox"
+            required
+            class="mt-0.5 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+          />
+          <span class="text-amber-900">
+            {{ t('portal.profile.privacyAgreePrefix') }}
+            <RouterLink to="/portal/privacy-policy" class="font-semibold underline">
+              {{ t('portal.profile.privacyAgreeLink') }}
+            </RouterLink>
+            <span v-if="privacyDoc?.version"> (v{{ privacyDoc.version }})</span>
+          </span>
+        </label>
+      </div>
+
       <button
         type="submit"
-        :disabled="isSaving"
+        :disabled="isSaving || !canSubmit"
         class="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
       >
         {{ isSaving ? t('portal.profile.saving') : t('common.save') }}

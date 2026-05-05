@@ -51,8 +51,14 @@
     "skipToContent": "Skip to main content",
     "previous": "Previous",
     "optional": "optional",
+    "view": "View",
     "dock": "Dock",
     "dockAll": "All"
+  },
+  "privacyPolicy": {
+    "title": "Privacy policy",
+    "version": "Version {version} — published {date}",
+    "notPublished": "No privacy policy has been published yet. Please contact the club board."
   },
   "home": {
     "welcome": "Welcome to Brygge",
@@ -327,7 +333,12 @@
       "nonLocal": "Non-local",
       "saveSuccess": "Profile updated",
       "saveError": "Could not save profile",
-      "saving": "Saving..."
+      "saving": "Saving...",
+      "privacyTitle": "Privacy",
+      "hideInDirectoryLabel": "Hide me from the member directory",
+      "hideInDirectoryHint": "Your name, phone, and email will not be shown to other members in the directory or on the harbor map. Admins still see your details for harbour operations.",
+      "privacyAgreePrefix": "I have read and accept the",
+      "privacyAgreeLink": "privacy policy"
     },
     "boats": {
       "title": "My Boats",
@@ -1244,6 +1255,8 @@
   "gdpr": {
     "title": "Privacy & Data",
     "subtitle": "Manage your personal data and privacy settings",
+    "privacyPolicyTitle": "Privacy policy",
+    "privacyPolicyDescription": "Read how the club collects, uses, and stores your personal data",
     "exportTitle": "Download my data",
     "exportDescription": "Download all your personal data in JSON format",
     "exportButton": "Download",

@@ -51,8 +51,14 @@
     "previous": "Forrige",
     "skipToContent": "Hopp til hovedinnhold",
     "optional": "valgfri",
+    "view": "Vis",
     "dock": "Brygge",
     "dockAll": "Alle"
+  },
+  "privacyPolicy": {
+    "title": "Personvernerklæring",
+    "version": "Versjon {version} — publisert {date}",
+    "notPublished": "Ingen personvernerklæring er publisert ennå. Vennligst kontakt styret."
   },
   "home": {
     "welcome": "Velkommen til Brygge",
@@ -323,7 +329,12 @@
       "nonLocal": "Ikke-lokal",
       "saveSuccess": "Profilen er oppdatert",
       "saveError": "Kunne ikke lagre profilen",
-      "saving": "Lagrer..."
+      "saving": "Lagrer...",
+      "privacyTitle": "Personvern",
+      "hideInDirectoryLabel": "Skjul meg i medlemskatalogen",
+      "hideInDirectoryHint": "Navn, telefon og e-post vises ikke for andre medlemmer i katalogen eller på havnekartet. Administratorer ser fortsatt detaljene dine for havnedrift.",
+      "privacyAgreePrefix": "Jeg har lest og godtar",
+      "privacyAgreeLink": "personvernerklæringen"
     },
     "boats": {
       "title": "Mine båter",
@@ -1240,6 +1251,8 @@
   "gdpr": {
     "title": "Personvern og data",
     "subtitle": "Administrer dine personopplysninger og personverninnstillinger",
+    "privacyPolicyTitle": "Personvernerklæring",
+    "privacyPolicyDescription": "Les hvordan klubben samler inn, bruker og oppbevarer dine personopplysninger",
     "exportTitle": "Last ned mine data",
     "exportDescription": "Last ned alle dine personopplysninger i JSON-format",
     "exportButton": "Last ned",

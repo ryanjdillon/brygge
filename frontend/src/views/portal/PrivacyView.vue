@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Download, Trash2, ShieldCheck } from 'lucide-vue-next'
+import { Download, Trash2, ShieldCheck, FileText } from 'lucide-vue-next'
+import { RouterLink } from 'vue-router'
 import { useDataExport, useDeletionStatus, useRequestDeletion, useCancelDeletion, useMyConsents } from '@/composables/useGdpr'
 
 const { t } = useI18n()
@@ -30,6 +31,21 @@ function formatDate(d: string) {
       <h2 class="text-xl font-semibold text-gray-900">{{ t('gdpr.title') }}</h2>
       <p class="mt-1 text-sm text-gray-600">{{ t('gdpr.subtitle') }}</p>
     </div>
+
+    <!-- Privacy Policy link -->
+    <RouterLink
+      to="/portal/privacy-policy"
+      class="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-4 transition hover:border-blue-300 hover:shadow-sm"
+    >
+      <div class="flex items-center gap-3">
+        <FileText class="h-5 w-5 text-blue-600" />
+        <div>
+          <p class="font-medium text-gray-900">{{ t('gdpr.privacyPolicyTitle') }}</p>
+          <p class="text-sm text-gray-500">{{ t('gdpr.privacyPolicyDescription') }}</p>
+        </div>
+      </div>
+      <span class="text-sm text-blue-600">{{ t('common.view') }} &rarr;</span>
+    </RouterLink>
 
     <!-- Data Export -->
     <div class="rounded-lg border border-gray-200 bg-white p-4">

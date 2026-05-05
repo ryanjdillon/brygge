@@ -63,6 +63,28 @@ export function useMyConsents() {
   return { ...query, consents }
 }
 
+export function useLegalDocument(docType: 'terms' | 'privacy') {
+  const client = useApiClient()
+  return useQuery({
+    queryKey: ['legal-document', docType],
+    queryFn: async () =>
+      unwrap(await client.GET('/api/v1/legal/{docType}', {
+        params: { path: { docType } },
+      })),
+    retry: false,
+  })
+}
+
+export function useRecordConsent() {
+  const client = useApiClient()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (payload: { consent_type: string; version: string }) =>
+      unwrap(await client.POST('/api/v1/members/me/consent', { body: payload as any })),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['my-consents'] }),
+  })
+}
+
 export function useAdminDeletionRequests() {
   const client = useApiClient()
   const query = useQuery({
