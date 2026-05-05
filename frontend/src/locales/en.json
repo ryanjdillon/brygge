@@ -1360,8 +1360,8 @@
   },
   "totpExpiring": {
     "title": "Still working?",
-    "body": "Your sensitive-action session is about to expire. Verify again to keep going, or dismiss to let it lapse.",
+    "body": "Your sensitive-action session is about to expire. Choose \"Yes, keep going\" to dismiss this notice — you'll be prompted to re-verify on your next sensitive action. Choose \"Re-verify now\" to extend the session immediately.",
     "keepWorking": "Yes, keep going",
-    "dismiss": "Dismiss"
+    "reauth": "Re-verify now"
   }
 }

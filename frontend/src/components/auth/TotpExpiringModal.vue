@@ -8,11 +8,11 @@ const gate = useTotpGateStore()
 
 function keepWorking() {
   gate.dismissExpiringWarning()
-  gate.open()
 }
 
-function dismiss() {
+function reauth() {
   gate.dismissExpiringWarning()
+  gate.open()
 }
 </script>
 
@@ -22,7 +22,7 @@ function dismiss() {
     class="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4"
     role="dialog"
     aria-modal="true"
-    @keydown.esc="dismiss"
+    @keydown.esc="keepWorking"
   >
     <div class="w-full max-w-sm rounded-lg bg-white p-5 shadow-xl">
       <div class="flex items-center gap-2 border-b border-gray-100 pb-3">
@@ -38,9 +38,9 @@ function dismiss() {
         <button
           type="button"
           class="flex-1 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-700 ring-1 ring-gray-300 hover:bg-gray-50"
-          @click="dismiss"
+          @click="reauth"
         >
-          {{ t('totpExpiring.dismiss') }}
+          {{ t('totpExpiring.reauth') }}
         </button>
         <button
           type="button"

@@ -1356,8 +1356,8 @@
   },
   "totpExpiring": {
     "title": "Jobber du fortsatt?",
-    "body": "Den sensitive økten din utløper snart. Bekreft på nytt for å fortsette, eller avvis for å la den utløpe.",
+    "body": "Den sensitive økten din utløper snart. Velg «Ja, fortsett» for å lukke varselet — du blir bedt om å bekrefte på nytt ved neste sensitive handling. Velg «Bekreft nå» for å forlenge økten umiddelbart.",
     "keepWorking": "Ja, fortsett",
-    "dismiss": "Avvis"
+    "reauth": "Bekreft nå"
   }
 }
