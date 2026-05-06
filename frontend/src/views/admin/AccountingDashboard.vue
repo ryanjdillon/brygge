@@ -139,7 +139,7 @@ const postedCount = computed(() => entries.value?.filter(e => e.status === 'post
 
       <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <RouterLink
-          to="/admin/accounting/invoice-drafts"
+          to="/admin/accounting/faktura"
           class="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-5 transition hover:border-blue-300 hover:shadow-sm"
         >
           <Mail class="h-8 w-8 text-blue-600" />

@@ -480,6 +480,7 @@
       "documents": "Dokumenter",
       "pricing": "Priser",
       "invoiceDrafts": "Fakturakladder",
+      "faktura": "Faktura",
       "financialSettings": "Faktura­innstillinger",
       "settings": "Innstillinger",
       "products": "Produkter",
@@ -530,6 +531,8 @@
       "selectedCount": "{n} valgt",
       "sendSelected": "Send valgte",
       "deleteSelected": "Slett valgte",
+      "voidSelected": "Annuller valgte",
+      "voidBulkBody": "Annuller {n} fakturaer. Annullerte fakturaer kan utstedes på nytt for samme kategori og år.",
       "sendConfirmTitle": "Sende fakturaer?",
       "sendOneBody": "Send fakturaen på e-post til {name} og marker som sendt. Dette kan ikke angres.",
       "sendBulkBody": "Send {n} fakturaer på e-post og marker dem som sendt. Dette kan ikke angres.",
@@ -554,6 +557,80 @@
       "void": "Annuller",
       "voidConfirm": "Annullere denne fakturaen? Den fjernes fra dedup-sjekken slik at en ny kan utstedes for samme kategori og år.",
       "empty": "Ingen usendte fakturaer."
+    },
+    "faktura": {
+      "title": "Faktura",
+      "subtitle": "Opprett nye fakturaer og se kladder, sendte og annullerte.",
+      "tabsAria": "Fakturafaner",
+      "tabs": {
+        "create": "Opprett",
+        "drafts": "Kladder",
+        "voided": "Annullerte",
+        "sent": "Sendt"
+      },
+      "create": {
+        "singleTitle": "Enkeltfaktura",
+        "singleDesc": "Fakturer ett medlem. Medlemssøk fyller inn mottakerinfo automatisk.",
+        "groupTitle": "Gruppefaktura",
+        "groupDesc": "Velg en gruppe medlemmer fra en filterbar tabell og opprett fakturaer i bulk.",
+        "back": "Tilbake"
+      },
+      "draft": {
+        "subtitle": "Usendte fakturaer. Send for å e-poste PDF, eller annuller for å tillate ny utstedelse.",
+        "empty": "Ingen fakturakladder."
+      },
+      "voided": {
+        "subtitle": "Annullerte fakturaer. De teller ikke i dedup-sjekken, så ny faktura kan utstedes for samme kategori og år.",
+        "empty": "Ingen annullerte fakturaer."
+      },
+      "sent": {
+        "subtitle": "Fakturaer som er sendt. Sendte fakturaer kan kun annulleres — ikke slettes.",
+        "empty": "Ingen sendte fakturaer ennå.",
+        "sentAt": "Sendt"
+      }
+    },
+    "memberSearch": {
+      "placeholder": "Søk etter navn eller e-post…"
+    },
+    "singleFaktura": {
+      "title": "Opprett faktura",
+      "member": "Mottaker",
+      "memberPlaceholder": "Søk etter medlem…",
+      "memberRequired": "Velg et medlem før du sender.",
+      "fiscalPeriod": "Regnskapsår",
+      "fiscalPeriodNone": "(ingen)",
+      "dueDate": "Forfallsdato",
+      "lines": "Linjer",
+      "addLine": "Legg til linje",
+      "addCustomLine": "Tilpasset linje",
+      "addFromPriceList": "Fra prisliste",
+      "applyPickerSelection": "Legg til valgte linjer",
+      "descriptionPlaceholder": "Beskrivelse (f.eks. Plassleie 2026)",
+      "subDescriptionPlaceholder": "Underlinje (valgfri, f.eks. Plass C18, Contrast 33)",
+      "quantity": "Antall",
+      "unitPrice": "Enhetspris",
+      "accountPlaceholder": "Velg konto…",
+      "accountRequired": "Hver linje må ha en konto.",
+      "boatPlaceholder": "Velg båt…",
+      "boatRequired": "Trinnpriste linjer og linjer som krever båtvalg må ha en båt.",
+      "fromPriceList": "Fra prisliste",
+      "tierResolved": "Beregnes ut fra båt",
+      "tierExcluded": "trinnpriser ikke inkludert",
+      "noBoatsForMember": "Dette medlemmet har ingen registrerte båter — legg dem til først.",
+      "linesInvalid": "Hver linje må ha beskrivelse, antall ≥ 1 og positiv enhetspris.",
+      "total": "Totalt",
+      "create": "Opprett faktura"
+    },
+    "groupFaktura": {
+      "searchPlaceholder": "Søk medlemmer…",
+      "slipOnly": "Kun medlemmer med aktiv plass",
+      "summary": "{n} medlemmer · {sel} valgt",
+      "selectedCount": "{n} valgt",
+      "create": "Opprett fakturaer",
+      "member": "Medlem",
+      "email": "E-post",
+      "slip": "Plass",
+      "empty": "Ingen medlemmer matcher filterne."
     },
     "financials": {
       "title": "Økonomi",
@@ -709,6 +786,21 @@
       "beamMin": "Fra (min bredde)",
       "beamMax": "Til (maks bredde)",
       "beam": "Bredde",
+      "length": "Lengde",
+      "pricingKind": "Prismodell",
+      "kindFlat": "Fast pris",
+      "kindTiered": "Trinnpriset (etter båtmål)",
+      "kindHint": "Trinnpriset betyr at flere prisposter i samme kategori velges automatisk basert på båtens bredde eller lengde.",
+      "tierDimension": "Mål brukt for trinning",
+      "dimensionBeam": "Båtbredde",
+      "dimensionLength": "Båtlengde",
+      "tierMin": "Fra (min)",
+      "tierMax": "Til (maks)",
+      "applicability": "Bruksområde",
+      "showInSingle": "Vis i enkeltfaktura",
+      "showInBatch": "Vis i batchfaktura",
+      "requiresBoatSelection": "Krever valg av båt",
+      "applicabilityHint": "Batchfaktura henter båt fra medlemmets faste plass og kan derfor ikke kombineres med båtvalg. Krever valg av båt brukes når linjen knyttes til en spesifikk båt på enkeltfaktura.",
       "activeCheckbox": "Aktiv (synlig på prissiden)",
       "active": "Aktiv",
       "inactive": "Inaktiv",
@@ -731,8 +823,16 @@
       "unitDay": "Per døgn",
       "unitNight": "Per natt",
       "unitHour": "Per time",
+      "unitKwh": "Per kWh",
       "categoryHarborMembership": "Moloandel",
-      "categoryMotorhome": "Bobilparkering"
+      "categoryMotorhome": "Bobilparkering",
+      "categoryMembership": "Medlemskap",
+      "categoryElectricity": "Strøm",
+      "audience": "Målgruppe",
+      "audienceAll": "Alle",
+      "audienceMember": "Kun medlemmer",
+      "audienceNonMember": "Kun ikke-medlemmer",
+      "audienceHint": "Bruk \"Kun medlemmer\" / \"Kun ikke-medlemmer\" for å vise samme tjeneste med to priser ved siden av hverandre på prissiden."
     },
     "users": {
       "name": "Navn",
@@ -1373,23 +1473,42 @@
       "invalidRecovery": "Ugyldig eller allerede brukt gjenopprettingskode"
     }
   },
+  "lineItemPicker": {
+    "flatTitle": "Fast pris",
+    "flatSubtitle": "Samme prispost gjelder alle valgte medlemmer.",
+    "flatSearch": "Søk prisposter…",
+    "flatEmpty": "Ingen aktive prisposter",
+    "tierTitle": "Trinnpris",
+    "tierSubtitle": "Velges per medlems registrerte båtmål.",
+    "tierSearch": "Søk kategorier…",
+    "tierEmpty": "Ingen kategorier med trinnpriser",
+    "byBeam": "etter bredde",
+    "byLength": "etter lengde",
+    "tiersCount": "{n} trinn"
+  },
   "bulkInvoices": {
     "title": "Generer fakturaer for {n} medlemmer",
     "fiscalPeriod": "Regnskapsår",
-    "mode": "Pris",
-    "modeFlat": "Fast beløp — samme for alle",
-    "modeBeamTier": "Plassleie — velges per registrert båtbredde",
-    "priceItem": "Prispost",
-    "beamCategory": "Prispostkategori",
-    "beamCategoryHint": "Hvert medlem faktureres med prisposten i denne kategorien hvis breddeintervall dekker båten på medlemmets aktive faste plass.",
+    "flatPaneTitle": "Fast beløp",
+    "flatPaneSubtitle": "Samme prispost for alle valgte medlemmer.",
+    "flatSearchPlaceholder": "Søk prisposter…",
+    "flatEmpty": "Ingen aktive prisposter",
+    "beamPaneTitle": "Plassleie",
+    "beamPaneSubtitle": "Velges per medlems registrerte båtbredde.",
+    "beamSearchPlaceholder": "Søk kategorier…",
+    "beamEmpty": "Ingen kategorier med breddeintervall",
+    "selectionSummary": "{flat} fast • {beam} plassleie",
+    "noLinesSelected": "Velg minst én linje fra panelene over.",
     "dueDate": "Forfallsdato",
     "submit": "Opprett kladder",
     "resultSummary": "Opprettet {created} fakturakladder, hoppet over {skipped}.",
     "member": "Medlem",
     "amount": "Beløp",
+    "lines": "Linjer",
     "skipReason": "Årsak",
     "errors": {
-      "fiscalPeriodRequired": "Velg et regnskapsår"
+      "fiscalPeriodRequired": "Velg et regnskapsår",
+      "noSelection": "Velg minst én prispost eller plassleiekategori"
     }
   },
   "totpExpiring": {

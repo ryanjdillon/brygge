@@ -320,9 +320,18 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/JournalEntryForm.vue'),
       },
       {
+        path: 'accounting/faktura',
+        name: 'admin-faktura',
+        component: () => import('@/views/admin/FakturaView.vue'),
+      },
+      {
+        path: 'faktura',
+        redirect: (to) => ({ path: '/admin/accounting/faktura', query: to.query }),
+      },
+      {
         path: 'accounting/invoice-drafts',
         name: 'admin-invoice-drafts',
-        component: () => import('@/views/admin/InvoiceDraftsView.vue'),
+        redirect: () => ({ path: '/admin/accounting/faktura', query: { tab: 'drafts' } }),
       },
       {
         path: 'accounting/settings',

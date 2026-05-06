@@ -6,6 +6,8 @@ import { ArrowLeft, FilePlus, Users, Receipt, Send, Ban, Inbox, ArrowLeft as Bac
 import FakturaList from '@/components/admin/FakturaList.vue'
 import SingleFakturaModal from '@/components/admin/SingleFakturaModal.vue'
 import GroupFakturaTab from '@/components/admin/GroupFakturaTab.vue'
+import { useTotpGateStore } from '@/stores/totpGate'
+import { useAuthStore } from '@/stores/auth'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -46,11 +48,24 @@ watch(activeTab, (t) => {
   }
 })
 
-function openSingle() {
+const auth = useAuthStore()
+const totpGate = useTotpGateStore()
+
+async function ensureFreshTotp(): Promise<boolean> {
+  if (auth.hasFreshTotp) return true
+  return totpGate.open()
+}
+
+// TOTP prompt fires at action-button click time so the user re-verifies
+// before the form opens, not when they hit Submit. The backend
+// RequireFreshTOTP middleware is the hard gate either way.
+async function openSingle() {
+  if (!(await ensureFreshTotp())) return
   createMode.value = 'single'
   singleOpen.value = true
 }
-function openGroup() {
+async function openGroup() {
+  if (!(await ensureFreshTotp())) return
   createMode.value = 'group'
 }
 function backToCreate() {

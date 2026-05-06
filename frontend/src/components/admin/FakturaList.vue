@@ -2,9 +2,8 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { FileDown, Send, Trash2, Ban, RefreshCw } from 'lucide-vue-next'
-import { useTotpGateStore } from '@/stores/totpGate'
-import { useAuthStore } from '@/stores/auth'
 import { useConfirm } from '@/stores/confirm'
+import { useFreshTotp } from '@/composables/useFreshTotp'
 
 interface Row {
   id: string
@@ -29,9 +28,8 @@ const props = defineProps<{
 }>()
 
 const { t } = useI18n()
-const auth = useAuthStore()
-const totpGate = useTotpGateStore()
 const confirm = useConfirm()
+const { ensureFreshTotp, totpAwareFetch } = useFreshTotp()
 
 const rows = ref<Row[]>([])
 const loading = ref(true)
@@ -41,11 +39,6 @@ const selected = ref<Set<string>>(new Set())
 const filterMember = ref('')
 const filterPriceItem = ref('')
 const filterYear = ref<number | ''>('')
-
-async function ensureFreshTotp(): Promise<boolean> {
-  if (auth.hasFreshTotp) return true
-  return totpGate.open()
-}
 
 async function load() {
   loading.value = true
@@ -116,7 +109,7 @@ function rowLabel(d: Row): string {
 async function doSend(id: string) {
   busyIds.value.add(id)
   try {
-    const res = await fetch(`/api/v1/admin/financials/invoices/${id}/send`, { method: 'POST', credentials: 'include' })
+    const res = await totpAwareFetch(`/api/v1/admin/financials/invoices/${id}/send`, { method: 'POST' })
     if (!res.ok) {
       const txt = await res.text().catch(() => '')
       error.value = `${res.status} ${txt}`
@@ -132,7 +125,7 @@ async function doSend(id: string) {
 async function doDelete(id: string) {
   busyIds.value.add(id)
   try {
-    const res = await fetch(`/api/v1/admin/financials/invoices/${id}`, { method: 'DELETE', credentials: 'include' })
+    const res = await totpAwareFetch(`/api/v1/admin/financials/invoices/${id}`, { method: 'DELETE' })
     if (!res.ok && res.status !== 204) {
       const txt = await res.text().catch(() => '')
       error.value = `${res.status} ${txt}`
@@ -148,7 +141,7 @@ async function doDelete(id: string) {
 async function doVoid(id: string) {
   busyIds.value.add(id)
   try {
-    const res = await fetch(`/api/v1/admin/financials/invoices/${id}/void`, { method: 'POST', credentials: 'include' })
+    const res = await totpAwareFetch(`/api/v1/admin/financials/invoices/${id}/void`, { method: 'POST' })
     if (!res.ok && res.status !== 204) {
       const txt = await res.text().catch(() => '')
       error.value = `${res.status} ${txt}`
@@ -162,6 +155,7 @@ async function doVoid(id: string) {
 }
 
 async function sendOne(d: Row) {
+  if (!(await ensureFreshTotp())) return
   const ok = await confirm({
     title: t('admin.invoiceDrafts.sendConfirmTitle'),
     body: t('admin.invoiceDrafts.sendOneBody', { name: d.member_name }),
@@ -169,10 +163,10 @@ async function sendOne(d: Row) {
     tone: 'info',
   })
   if (!ok) return
-  if (!(await ensureFreshTotp())) return
   await doSend(d.id)
 }
 async function deleteOne(d: Row) {
+  if (!(await ensureFreshTotp())) return
   const ok = await confirm({
     title: t('admin.invoiceDrafts.deleteConfirmTitle'),
     body: t('admin.invoiceDrafts.deleteOneBody', { name: d.member_name }),
@@ -180,10 +174,10 @@ async function deleteOne(d: Row) {
     tone: 'danger',
   })
   if (!ok) return
-  if (!(await ensureFreshTotp())) return
   await doDelete(d.id)
 }
 async function voidOne(d: Row) {
+  if (!(await ensureFreshTotp())) return
   const ok = await confirm({
     title: t('admin.invoiceDrafts.voidConfirmTitle'),
     body: t('admin.invoiceDrafts.voidOneBody', { name: d.member_name }),
@@ -191,12 +185,12 @@ async function voidOne(d: Row) {
     tone: 'warning',
   })
   if (!ok) return
-  if (!(await ensureFreshTotp())) return
   await doVoid(d.id)
 }
 
 async function sendSelected() {
   if (selected.value.size === 0) return
+  if (!(await ensureFreshTotp())) return
   const items = rows.value.filter((d) => selected.value.has(d.id))
   const ok = await confirm({
     title: t('admin.invoiceDrafts.sendConfirmTitle'),
@@ -206,12 +200,12 @@ async function sendSelected() {
     tone: 'info',
   })
   if (!ok) return
-  if (!(await ensureFreshTotp())) return
   for (const id of items.map((d) => d.id)) await doSend(id)
 }
 
 async function deleteSelected() {
   if (selected.value.size === 0) return
+  if (!(await ensureFreshTotp())) return
   const items = rows.value.filter((d) => selected.value.has(d.id))
   const ok = await confirm({
     title: t('admin.invoiceDrafts.deleteConfirmTitle'),
@@ -221,12 +215,12 @@ async function deleteSelected() {
     tone: 'danger',
   })
   if (!ok) return
-  if (!(await ensureFreshTotp())) return
   for (const id of items.map((d) => d.id)) await doDelete(id)
 }
 
 async function voidSelected() {
   if (selected.value.size === 0) return
+  if (!(await ensureFreshTotp())) return
   const items = rows.value.filter((d) => selected.value.has(d.id))
   const ok = await confirm({
     title: t('admin.invoiceDrafts.voidConfirmTitle'),
@@ -236,7 +230,6 @@ async function voidSelected() {
     tone: 'warning',
   })
   if (!ok) return
-  if (!(await ensureFreshTotp())) return
   for (const id of items.map((d) => d.id)) await doVoid(id)
 }
 

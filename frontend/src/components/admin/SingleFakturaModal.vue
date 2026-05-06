@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { X, Plus, Trash2 } from 'lucide-vue-next'
-import { useTotpGateStore } from '@/stores/totpGate'
-import { useAuthStore } from '@/stores/auth'
-import { useAccountsList } from '@/composables/useAccounting'
+import { X, Plus, Trash2, ListPlus } from 'lucide-vue-next'
+import { useAccountsList, useFiscalPeriods } from '@/composables/useAccounting'
 import MemberSearch, { type MemberHit } from '@/components/members/MemberSearch.vue'
+import LineItemPicker from '@/components/admin/LineItemPicker.vue'
 
 defineProps<{
   open: boolean
@@ -16,29 +15,86 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const auth = useAuthStore()
-const totpGate = useTotpGateStore()
 
 const { data: accounts } = useAccountsList()
 const revenueAccounts = computed(() =>
   (accounts.value ?? []).filter((a) => a.is_active && (a.account_type === 'revenue' || a.account_type === 'liability')),
 )
 
+const { data: periods } = useFiscalPeriods()
+const openPeriods = computed(() =>
+  (periods.value ?? []).filter((p) => p.status === 'open').sort((a, b) => b.year - a.year),
+)
+const fiscalPeriodId = ref('')
+watch(openPeriods, (list) => {
+  if (!fiscalPeriodId.value && list.length > 0) {
+    fiscalPeriodId.value = list[0].id
+  }
+}, { immediate: true })
+
+interface PriceItem {
+  id: string
+  category: string
+  name: string
+  amount: number
+  unit: string
+  is_active: boolean
+  pricing_kind?: 'flat' | 'tiered'
+  tier_dimension?: 'beam' | 'length' | null
+  show_in_single?: boolean
+  requires_boat_selection?: boolean
+}
+
+interface Boat {
+  id: string
+  name: string
+  manufacturer?: string
+  model?: string
+  beam_m?: number
+  length_m?: number
+}
+
+// Each line tracks its origin so the submit step knows whether to send
+// it as a custom line (account_id required), a flat price_item_id
+// line, or a tier_category line that the server resolves from boat_id.
 interface LineDraft {
+  kind: 'custom' | 'flat' | 'tier'
   description: string
   sub_description: string
   quantity: number
   unit_price: number
   account_id: string
+  price_item_id?: string
+  tier_category?: string
+  boat_id: string
+  requires_boat_selection: boolean
 }
 
 const member = ref<MemberHit | null>(null)
 const dueDate = ref(defaultDueDate())
-const lines = ref<LineDraft[]>([
-  { description: '', sub_description: '', quantity: 1, unit_price: 0, account_id: '' },
-])
+const lines = ref<LineDraft[]>([emptyCustomLine()])
 const submitting = ref(false)
 const error = ref<string | null>(null)
+
+const showPicker = ref(false)
+const pickerFlatIds = ref<string[]>([])
+const pickerTierCategories = ref<string[]>([])
+const knownItems = ref<PriceItem[]>([])
+const boats = ref<Boat[]>([])
+
+watch(member, async (m) => {
+  boats.value = []
+  if (!m) return
+  try {
+    const res = await fetch(`/api/v1/admin/users/${m.id}/boats`, { credentials: 'include' })
+    if (res.ok) {
+      const body = await res.json()
+      boats.value = (body.boats ?? []) as Boat[]
+    }
+  } catch {
+    // boats list is best-effort; absence just disables boat-tied lines
+  }
+})
 
 function defaultDueDate(): string {
   const d = new Date()
@@ -46,39 +102,104 @@ function defaultDueDate(): string {
   return d.toISOString().slice(0, 10)
 }
 
-function addLine() {
-  const last = lines.value[lines.value.length - 1]
-  lines.value.push({
-    description: last?.description ?? '',
+function emptyCustomLine(): LineDraft {
+  return {
+    kind: 'custom',
+    description: '',
     sub_description: '',
     quantity: 1,
-    unit_price: last?.unit_price ?? 0,
-    account_id: last?.account_id ?? '',
+    unit_price: 0,
+    account_id: '',
+    boat_id: '',
+    requires_boat_selection: false,
+  }
+}
+
+function addCustomLine() {
+  const last = lines.value[lines.value.length - 1]
+  lines.value.push({
+    ...emptyCustomLine(),
+    description: last?.kind === 'custom' ? last.description : '',
+    unit_price: last?.kind === 'custom' ? last.unit_price : 0,
+    account_id: last?.kind === 'custom' ? last.account_id : '',
   })
 }
 
 function removeLine(i: number) {
-  if (lines.value.length === 1) return
+  if (lines.value.length === 1) {
+    lines.value = [emptyCustomLine()]
+    return
+  }
   lines.value.splice(i, 1)
 }
 
+function applyPickerSelection() {
+  // Convert picker selection into draft lines, then drop the trailing
+  // empty custom line if the only line was the placeholder.
+  const newLines: LineDraft[] = []
+  for (const id of pickerFlatIds.value) {
+    const item = knownItems.value.find((i) => i.id === id)
+    if (!item) continue
+    newLines.push({
+      kind: 'flat',
+      description: item.name,
+      sub_description: '',
+      quantity: 1,
+      unit_price: item.amount,
+      account_id: '',
+      price_item_id: item.id,
+      boat_id: '',
+      requires_boat_selection: item.requires_boat_selection === true,
+    })
+  }
+  for (const cat of pickerTierCategories.value) {
+    newLines.push({
+      kind: 'tier',
+      description: cat,
+      sub_description: '',
+      quantity: 1,
+      unit_price: 0,
+      account_id: '',
+      tier_category: cat,
+      boat_id: '',
+      requires_boat_selection: true,
+    })
+  }
+  if (newLines.length === 0) return
+  // Replace placeholder if it's still empty.
+  if (
+    lines.value.length === 1 &&
+    lines.value[0].kind === 'custom' &&
+    !lines.value[0].description &&
+    lines.value[0].unit_price === 0
+  ) {
+    lines.value = newLines
+  } else {
+    lines.value = [...lines.value, ...newLines]
+  }
+  pickerFlatIds.value = []
+  pickerTierCategories.value = []
+  showPicker.value = false
+}
+
 const total = computed(() =>
-  lines.value.reduce((s, l) => s + Number(l.quantity || 0) * Number(l.unit_price || 0), 0),
+  lines.value.reduce((s, l) => {
+    if (l.kind === 'tier') return s
+    return s + Number(l.quantity || 0) * Number(l.unit_price || 0)
+  }, 0),
 )
 
 function formatNOK(n: number): string {
   return new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK' }).format(n)
 }
 
-async function ensureFreshTotp(): Promise<boolean> {
-  if (auth.hasFreshTotp) return true
-  return totpGate.open()
-}
-
 function reset() {
   member.value = null
   dueDate.value = defaultDueDate()
-  lines.value = [{ description: '', sub_description: '', quantity: 1, unit_price: 0, account_id: '' }]
+  lines.value = [emptyCustomLine()]
+  pickerFlatIds.value = []
+  pickerTierCategories.value = []
+  showPicker.value = false
   error.value = null
 }
 
@@ -88,15 +209,31 @@ async function submit() {
     error.value = t('admin.singleFaktura.memberRequired')
     return
   }
-  if (lines.value.some((l) => !l.description.trim() || l.quantity < 1 || l.unit_price <= 0)) {
-    error.value = t('admin.singleFaktura.linesInvalid')
-    return
+  for (const l of lines.value) {
+    if (!l.description.trim() || l.quantity < 1) {
+      error.value = t('admin.singleFaktura.linesInvalid')
+      return
+    }
+    if (l.kind === 'custom') {
+      if (l.unit_price <= 0) {
+        error.value = t('admin.singleFaktura.linesInvalid')
+        return
+      }
+      if (!l.account_id) {
+        error.value = t('admin.singleFaktura.accountRequired')
+        return
+      }
+    }
+    if (l.kind === 'tier' && !l.boat_id) {
+      error.value = t('admin.singleFaktura.boatRequired')
+      return
+    }
+    if (l.kind === 'flat' && l.requires_boat_selection && !l.boat_id) {
+      error.value = t('admin.singleFaktura.boatRequired')
+      return
+    }
   }
-  if (lines.value.some((l) => !l.account_id)) {
-    error.value = t('admin.singleFaktura.accountRequired')
-    return
-  }
-  if (!(await ensureFreshTotp())) return
+
   submitting.value = true
   try {
     const res = await fetch('/api/v1/admin/financials/invoices/full', {
@@ -106,12 +243,16 @@ async function submit() {
       body: JSON.stringify({
         user_id: member.value.id,
         due_date: dueDate.value,
+        fiscal_period_id: fiscalPeriodId.value || undefined,
         lines: lines.value.map((l) => ({
           description: l.description.trim(),
           sub_description: l.sub_description.trim() || undefined,
           quantity: Number(l.quantity),
-          unit_price: Number(l.unit_price),
-          account_id: l.account_id,
+          unit_price: l.kind === 'tier' ? 0 : Number(l.unit_price),
+          account_id: l.kind === 'custom' ? l.account_id : undefined,
+          price_item_id: l.kind === 'flat' ? l.price_item_id : undefined,
+          tier_category: l.kind === 'tier' ? l.tier_category : undefined,
+          boat_id: l.boat_id || undefined,
         })),
       }),
     })
@@ -127,6 +268,14 @@ async function submit() {
   } finally {
     submitting.value = false
   }
+}
+
+function boatLabel(b: Boat): string {
+  const make = [b.manufacturer, b.model].filter(Boolean).join(' ')
+  const dims: string[] = []
+  if (b.length_m) dims.push(`${b.length_m}m`)
+  if (b.beam_m) dims.push(`${b.beam_m}m b`)
+  return [b.name, make].filter(Boolean).join(' — ') + (dims.length ? ` (${dims.join(', ')})` : '')
 }
 </script>
 
@@ -152,27 +301,74 @@ async function submit() {
           <MemberSearch v-model="member" :placeholder="t('admin.singleFaktura.memberPlaceholder')" class="mt-1" />
         </div>
 
-        <div>
-          <label class="block text-xs font-medium text-gray-700">{{ t('admin.singleFaktura.dueDate') }}</label>
-          <input
-            v-model="dueDate"
-            type="date"
-            required
-            class="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm"
-          />
+        <div class="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label class="block text-xs font-medium text-gray-700">{{ t('admin.singleFaktura.fiscalPeriod') }}</label>
+            <select v-model="fiscalPeriodId" class="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm">
+              <option value="">{{ t('admin.singleFaktura.fiscalPeriodNone') }}</option>
+              <option v-for="p in openPeriods" :key="p.id" :value="p.id">{{ p.year }}</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-700">{{ t('admin.singleFaktura.dueDate') }}</label>
+            <input
+              v-model="dueDate"
+              type="date"
+              required
+              class="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm"
+            />
+          </div>
         </div>
 
         <div>
           <div class="flex items-center justify-between">
             <label class="text-xs font-medium text-gray-700">{{ t('admin.singleFaktura.lines') }}</label>
-            <button
-              type="button"
-              class="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-2 py-1 text-xs hover:bg-gray-50"
-              @click="addLine"
-            >
-              <Plus class="h-3.5 w-3.5" /> {{ t('admin.singleFaktura.addLine') }}
-            </button>
+            <div class="flex gap-2">
+              <button
+                type="button"
+                class="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-2 py-1 text-xs hover:bg-gray-50"
+                @click="showPicker = !showPicker"
+              >
+                <ListPlus class="h-3.5 w-3.5" /> {{ t('admin.singleFaktura.addFromPriceList') }}
+              </button>
+              <button
+                type="button"
+                class="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-2 py-1 text-xs hover:bg-gray-50"
+                @click="addCustomLine"
+              >
+                <Plus class="h-3.5 w-3.5" /> {{ t('admin.singleFaktura.addCustomLine') }}
+              </button>
+            </div>
           </div>
+
+          <div v-if="showPicker" class="mt-2 rounded-md border border-blue-200 bg-blue-50/30 p-3">
+            <LineItemPicker
+              mode="single"
+              :flat-ids="pickerFlatIds"
+              :tier-categories="pickerTierCategories"
+              @update:flat-ids="(v) => (pickerFlatIds = v)"
+              @update:tier-categories="(v) => (pickerTierCategories = v)"
+              @loaded="(items) => (knownItems = items)"
+            />
+            <div class="mt-2 flex justify-end gap-2">
+              <button
+                type="button"
+                class="rounded-md px-2 py-1 text-xs text-gray-600 hover:bg-gray-100"
+                @click="showPicker = false"
+              >
+                {{ t('common.cancel') }}
+              </button>
+              <button
+                type="button"
+                :disabled="pickerFlatIds.length === 0 && pickerTierCategories.length === 0"
+                class="rounded-md bg-blue-600 px-2 py-1 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                @click="applyPickerSelection"
+              >
+                {{ t('admin.singleFaktura.applyPickerSelection') }}
+              </button>
+            </div>
+          </div>
+
           <div class="mt-2 space-y-3">
             <div v-for="(l, i) in lines" :key="i" class="rounded-md border border-gray-200 p-3">
               <div class="grid grid-cols-12 gap-2">
@@ -180,6 +376,7 @@ async function submit() {
                   v-model="l.description"
                   type="text"
                   :placeholder="t('admin.singleFaktura.descriptionPlaceholder')"
+                  :readonly="l.kind === 'tier'"
                   class="col-span-7 rounded-md border border-gray-300 px-2 py-1 text-sm"
                 />
                 <input
@@ -194,13 +391,14 @@ async function submit() {
                   type="number"
                   min="0"
                   step="0.01"
+                  :readonly="l.kind === 'tier'"
+                  :placeholder="l.kind === 'tier' ? t('admin.singleFaktura.tierResolved') : ''"
                   class="col-span-2 rounded-md border border-gray-300 px-2 py-1 text-sm tabular-nums"
                   :title="t('admin.singleFaktura.unitPrice')"
                 />
                 <button
                   type="button"
-                  class="col-span-1 text-red-500 hover:text-red-700 disabled:opacity-30"
-                  :disabled="lines.length === 1"
+                  class="col-span-1 text-red-500 hover:text-red-700"
                   :title="t('common.delete')"
                   @click="removeLine(i)"
                 >
@@ -215,6 +413,7 @@ async function submit() {
                   class="col-span-7 rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-700"
                 />
                 <select
+                  v-if="l.kind === 'custom'"
                   v-model="l.account_id"
                   required
                   class="col-span-5 rounded-md border border-gray-300 px-2 py-1 text-xs"
@@ -224,11 +423,31 @@ async function submit() {
                     {{ a.code }} — {{ a.name }}
                   </option>
                 </select>
+                <select
+                  v-else-if="l.kind === 'tier' || l.requires_boat_selection"
+                  v-model="l.boat_id"
+                  required
+                  class="col-span-5 rounded-md border border-gray-300 px-2 py-1 text-xs"
+                >
+                  <option value="">{{ t('admin.singleFaktura.boatPlaceholder') }}</option>
+                  <option v-for="b in boats" :key="b.id" :value="b.id">
+                    {{ boatLabel(b) }}
+                  </option>
+                </select>
+                <span v-else class="col-span-5 self-center text-xs text-gray-400">
+                  {{ t('admin.singleFaktura.fromPriceList') }}
+                </span>
               </div>
+              <p v-if="l.kind === 'tier' && !boats.length && member" class="mt-1 text-xs text-amber-600">
+                {{ t('admin.singleFaktura.noBoatsForMember') }}
+              </p>
             </div>
           </div>
           <p class="mt-2 text-right text-sm font-semibold text-gray-700">
             {{ t('admin.singleFaktura.total') }}: {{ formatNOK(total) }}
+            <span v-if="lines.some((l) => l.kind === 'tier')" class="ml-1 text-xs font-normal text-gray-500">
+              ({{ t('admin.singleFaktura.tierExcluded') }})
+            </span>
           </p>
         </div>
 

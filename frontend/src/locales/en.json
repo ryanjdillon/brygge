@@ -484,6 +484,7 @@
       "documents": "Documents",
       "pricing": "Pricing",
       "invoiceDrafts": "Faktura drafts",
+      "faktura": "Faktura",
       "financialSettings": "Faktura settings",
       "settings": "Settings",
       "communication": "Communication",
@@ -534,6 +535,8 @@
       "selectedCount": "{n} selected",
       "sendSelected": "Send selected",
       "deleteSelected": "Delete selected",
+      "voidSelected": "Void selected",
+      "voidBulkBody": "Void {n} fakturas. Voided fakturas can be re-issued under the same category and year.",
       "sendConfirmTitle": "Send fakturas?",
       "sendOneBody": "Email the faktura to {name} and stamp it as sent. This cannot be undone.",
       "sendBulkBody": "Email {n} fakturas to their recipients and stamp them as sent. This cannot be undone.",
@@ -558,6 +561,80 @@
       "void": "Void",
       "voidConfirm": "Void this faktura? It will fall out of dedup so a re-issue under the same category and year is allowed.",
       "empty": "No unsent fakturas."
+    },
+    "faktura": {
+      "title": "Faktura",
+      "subtitle": "Create new fakturas and review drafts, sent, and voided.",
+      "tabsAria": "Faktura tabs",
+      "tabs": {
+        "create": "Create",
+        "drafts": "Drafts",
+        "voided": "Voided",
+        "sent": "Sent"
+      },
+      "create": {
+        "singleTitle": "Single faktura",
+        "singleDesc": "Bill one member. Member search auto-fills the recipient details.",
+        "groupTitle": "Group faktura",
+        "groupDesc": "Pick a group of members from a filterable table and issue fakturas in bulk.",
+        "back": "Back to create"
+      },
+      "draft": {
+        "subtitle": "Unsent fakturas. Send to email the PDF or void to allow re-issue.",
+        "empty": "No draft fakturas."
+      },
+      "voided": {
+        "subtitle": "Cancelled fakturas. They no longer count toward dedup, so a new faktura can be issued under the same category and year.",
+        "empty": "No voided fakturas."
+      },
+      "sent": {
+        "subtitle": "Fakturas already emailed to recipients. Sent fakturas can only be voided — not deleted.",
+        "empty": "No sent fakturas yet.",
+        "sentAt": "Sent"
+      }
+    },
+    "memberSearch": {
+      "placeholder": "Search by name or email…"
+    },
+    "singleFaktura": {
+      "title": "Create faktura",
+      "member": "Recipient",
+      "memberPlaceholder": "Search for a member…",
+      "memberRequired": "Select a member before submitting.",
+      "fiscalPeriod": "Fiscal period",
+      "fiscalPeriodNone": "(none)",
+      "dueDate": "Due date",
+      "lines": "Line items",
+      "addLine": "Add line",
+      "addCustomLine": "Custom line",
+      "addFromPriceList": "From price list",
+      "applyPickerSelection": "Add selected lines",
+      "descriptionPlaceholder": "Description (e.g. Slip rental 2026)",
+      "subDescriptionPlaceholder": "Sub-line (optional, e.g. Plass C18, Contrast 33)",
+      "quantity": "Quantity",
+      "unitPrice": "Unit price",
+      "accountPlaceholder": "Select account…",
+      "accountRequired": "Each line requires an account.",
+      "boatPlaceholder": "Select boat…",
+      "boatRequired": "Tiered lines and boat-required lines need a boat selection.",
+      "fromPriceList": "From price list",
+      "tierResolved": "Resolved from boat",
+      "tierExcluded": "tiered lines not included",
+      "noBoatsForMember": "This member has no boats registered — add one first.",
+      "linesInvalid": "Each line needs a description, quantity ≥ 1, and a positive unit price.",
+      "total": "Total",
+      "create": "Create faktura"
+    },
+    "groupFaktura": {
+      "searchPlaceholder": "Search members…",
+      "slipOnly": "Only members with an active slip",
+      "summary": "{n} members · {sel} selected",
+      "selectedCount": "{n} selected",
+      "create": "Create fakturas",
+      "member": "Member",
+      "email": "Email",
+      "slip": "Slip",
+      "empty": "No members match the current filters."
     },
     "financials": {
       "title": "Financials",
@@ -713,6 +790,21 @@
       "beamMin": "From (min beam)",
       "beamMax": "To (max beam)",
       "beam": "Beam",
+      "length": "Length",
+      "pricingKind": "Pricing model",
+      "kindFlat": "Flat price",
+      "kindTiered": "Tiered (by boat dimension)",
+      "kindHint": "Tiered groups multiple price items in the same category and picks the row whose range covers the boat's beam or length.",
+      "tierDimension": "Tier dimension",
+      "dimensionBeam": "Boat beam",
+      "dimensionLength": "Boat length",
+      "tierMin": "From (min)",
+      "tierMax": "To (max)",
+      "applicability": "Where it applies",
+      "showInSingle": "Show in single faktura",
+      "showInBatch": "Show in batch faktura",
+      "requiresBoatSelection": "Requires boat selection",
+      "applicabilityHint": "Batch faktura auto-resolves the boat from the member's slip assignment, so it cannot be combined with explicit boat selection. Use \"Requires boat selection\" when the line should always be tied to a specific boat the admin picks.",
       "activeCheckbox": "Active (visible on pricing page)",
       "active": "Active",
       "inactive": "Inactive",
@@ -735,8 +827,16 @@
       "unitDay": "Per day",
       "unitNight": "Per night",
       "unitHour": "Per hour",
+      "unitKwh": "Per kWh",
       "categoryHarborMembership": "Breakwater share",
-      "categoryMotorhome": "Motorhome parking"
+      "categoryMotorhome": "Motorhome parking",
+      "categoryMembership": "Membership",
+      "categoryElectricity": "Electricity",
+      "audience": "Audience",
+      "audienceAll": "Everyone",
+      "audienceMember": "Members only",
+      "audienceNonMember": "Non-members only",
+      "audienceHint": "Use \"Members only\" / \"Non-members only\" to show the same service with two prices side-by-side on the public pricing page."
     },
     "users": {
       "name": "Name",
@@ -1377,23 +1477,42 @@
       "invalidRecovery": "Invalid or already-used recovery code"
     }
   },
+  "lineItemPicker": {
+    "flatTitle": "Flat fee",
+    "flatSubtitle": "Same price item billed to every selected member.",
+    "flatSearch": "Search price items…",
+    "flatEmpty": "No active price items",
+    "tierTitle": "Tiered",
+    "tierSubtitle": "Picked per member from their registered boat dimensions.",
+    "tierSearch": "Search categories…",
+    "tierEmpty": "No categories with tier ranges",
+    "byBeam": "by beam",
+    "byLength": "by length",
+    "tiersCount": "{n} tiers"
+  },
   "bulkInvoices": {
     "title": "Generate fakturas for {n} members",
     "fiscalPeriod": "Fiscal year",
-    "mode": "Pricing",
-    "modeFlat": "Flat fee — same amount for everyone",
-    "modeBeamTier": "Beam-based slip rental — pick by registered boat width",
-    "priceItem": "Price item",
-    "beamCategory": "Price item category",
-    "beamCategoryHint": "Each member is billed using the price item in this category whose beam range covers the boat on their active permanent slip.",
+    "flatPaneTitle": "Flat fee",
+    "flatPaneSubtitle": "Same price item billed to every selected member.",
+    "flatSearchPlaceholder": "Search price items…",
+    "flatEmpty": "No active price items",
+    "beamPaneTitle": "Slip rental (beam-tiered)",
+    "beamPaneSubtitle": "Picked per member from their registered boat width.",
+    "beamSearchPlaceholder": "Search categories…",
+    "beamEmpty": "No categories with beam ranges",
+    "selectionSummary": "{flat} flat • {beam} slip-rental",
+    "noLinesSelected": "Pick at least one line from the panes above.",
     "dueDate": "Due date",
     "submit": "Create drafts",
     "resultSummary": "Created {created} draft fakturas, skipped {skipped}.",
     "member": "Member",
     "amount": "Amount",
+    "lines": "Lines",
     "skipReason": "Reason",
     "errors": {
-      "fiscalPeriodRequired": "Pick a fiscal year"
+      "fiscalPeriodRequired": "Pick a fiscal year",
+      "noSelection": "Pick at least one price item or slip-rental category"
     }
   },
   "totpExpiring": {
