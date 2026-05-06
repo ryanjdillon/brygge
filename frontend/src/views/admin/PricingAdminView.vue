@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useApiClient, unwrap } from '@/lib/apiClient'
@@ -20,8 +20,10 @@ const { data: response, isLoading } = useQuery({
 })
 
 const categories = computed(() => [
+  { value: 'membership', label: t('admin.pricing.categoryMembership') },
   { value: 'harbor_membership', label: t('admin.pricing.categoryHarborMembership') },
   { value: 'slip_fee', label: t('admin.pricing.categorySlipFee') },
+  { value: 'electricity', label: t('admin.pricing.categoryElectricity') },
   { value: 'seasonal_rental', label: t('admin.pricing.categorySeasonalRental') },
   { value: 'guest', label: t('admin.pricing.categoryGuest') },
   { value: 'motorhome', label: t('admin.pricing.categoryMotorhome') },
@@ -37,6 +39,13 @@ const units = computed(() => [
   { value: 'day', label: t('admin.pricing.unitDay') },
   { value: 'night', label: t('admin.pricing.unitNight') },
   { value: 'hour', label: t('admin.pricing.unitHour') },
+  { value: 'kwh', label: t('admin.pricing.unitKwh') },
+])
+
+const audiences = computed(() => [
+  { value: 'all', label: t('admin.pricing.audienceAll') },
+  { value: 'member', label: t('admin.pricing.audienceMember') },
+  { value: 'non_member', label: t('admin.pricing.audienceNonMember') },
 ])
 
 interface FormData {
@@ -53,8 +62,14 @@ interface FormData {
   season: string
   period_start: string
   period_end: string
-  beam_min: string
-  beam_max: string
+  pricing_kind: 'flat' | 'tiered'
+  tier_dimension: 'beam' | 'length'
+  tier_min: string
+  tier_max: string
+  show_in_batch: boolean
+  show_in_single: boolean
+  requires_boat_selection: boolean
+  audience: 'all' | 'member' | 'non_member'
 }
 
 const emptyForm: FormData = {
@@ -70,12 +85,34 @@ const emptyForm: FormData = {
   season: '',
   period_start: '',
   period_end: '',
-  beam_min: '',
-  beam_max: '',
+  pricing_kind: 'flat',
+  tier_dimension: 'beam',
+  tier_min: '',
+  tier_max: '',
+  show_in_batch: false,
+  show_in_single: true,
+  requires_boat_selection: true,
+  audience: 'all',
 }
 
 const showForm = ref(false)
 const form = ref<FormData>({ ...emptyForm })
+
+// show_in_batch and requires_boat_selection are mutually exclusive: the
+// batch flow auto-resolves the boat from the user's slip assignment, so
+// it can't co-exist with "admin must pick a boat".
+watch(
+  () => form.value.show_in_batch,
+  (v) => {
+    if (v) form.value.requires_boat_selection = false
+  },
+)
+watch(
+  () => form.value.requires_boat_selection,
+  (v) => {
+    if (v) form.value.show_in_batch = false
+  },
+)
 const toast = ref<{ type: 'success' | 'error'; message: string } | null>(null)
 
 function openCreate() {
@@ -85,6 +122,19 @@ function openCreate() {
 
 function openEdit(item: PriceItem) {
   const meta = (item.metadata ?? {}) as Record<string, string>
+  const it = item as PriceItem & {
+    pricing_kind?: 'flat' | 'tiered'
+    tier_dimension?: 'beam' | 'length' | null
+    show_in_batch?: boolean
+    show_in_single?: boolean
+    requires_boat_selection?: boolean
+    audience?: 'all' | 'member' | 'non_member'
+  }
+  const dim: 'beam' | 'length' = it.tier_dimension === 'length' ? 'length' : 'beam'
+  const tierMin =
+    dim === 'length' ? (meta.length_min ?? '') : (meta.beam_min ?? '')
+  const tierMax =
+    dim === 'length' ? (meta.length_max ?? '') : (meta.beam_max ?? '')
   form.value = {
     id: item.id,
     category: item.category,
@@ -99,8 +149,14 @@ function openEdit(item: PriceItem) {
     season: meta.season ?? '',
     period_start: meta.period_start ?? '',
     period_end: meta.period_end ?? '',
-    beam_min: meta.beam_min ?? '',
-    beam_max: meta.beam_max ?? '',
+    pricing_kind: it.pricing_kind ?? 'flat',
+    tier_dimension: dim,
+    tier_min: tierMin,
+    tier_max: tierMax,
+    show_in_batch: it.show_in_batch ?? false,
+    show_in_single: it.show_in_single ?? true,
+    requires_boat_selection: it.requires_boat_selection ?? true,
+    audience: it.audience ?? 'all',
   }
   showForm.value = true
 }
@@ -110,9 +166,11 @@ function buildPayload() {
   if (form.value.season) metadata.season = form.value.season
   if (form.value.period_start) metadata.period_start = form.value.period_start
   if (form.value.period_end) metadata.period_end = form.value.period_end
-  if (form.value.category === 'slip_fee') {
-    if (form.value.beam_min) metadata.beam_min = form.value.beam_min
-    if (form.value.beam_max) metadata.beam_max = form.value.beam_max
+  if (form.value.pricing_kind === 'tiered') {
+    const minKey = form.value.tier_dimension === 'length' ? 'length_min' : 'beam_min'
+    const maxKey = form.value.tier_dimension === 'length' ? 'length_max' : 'beam_max'
+    if (form.value.tier_min) metadata[minKey] = form.value.tier_min
+    if (form.value.tier_max) metadata[maxKey] = form.value.tier_max
   }
 
   return {
@@ -126,6 +184,12 @@ function buildPayload() {
     sort_order: parseInt(form.value.sort_order) || 0,
     is_active: form.value.is_active,
     metadata,
+    pricing_kind: form.value.pricing_kind,
+    tier_dimension: form.value.pricing_kind === 'tiered' ? form.value.tier_dimension : null,
+    show_in_batch: form.value.show_in_batch,
+    show_in_single: form.value.show_in_single,
+    requires_boat_selection: form.value.requires_boat_selection,
+    audience: form.value.audience,
   }
 }
 
@@ -335,33 +399,98 @@ function unitLabel(value: string): string {
         </div>
       </div>
 
-      <!-- Beam range for slip_fee -->
-      <div v-if="form.category === 'slip_fee'" class="rounded-md border border-gray-100 bg-gray-50 p-4">
-        <p class="mb-3 text-sm font-medium text-gray-700">{{ t('admin.pricing.beamRange') }}</p>
-        <div class="grid grid-cols-2 gap-3">
+      <!-- Pricing kind + tier range -->
+      <div class="rounded-md border border-gray-100 bg-gray-50 p-4">
+        <p class="mb-2 text-sm font-medium text-gray-700">{{ t('admin.pricing.pricingKind') }}</p>
+        <div class="flex gap-4 text-sm">
+          <label class="flex items-center gap-1.5">
+            <input v-model="form.pricing_kind" type="radio" value="flat" />
+            {{ t('admin.pricing.kindFlat') }}
+          </label>
+          <label class="flex items-center gap-1.5">
+            <input v-model="form.pricing_kind" type="radio" value="tiered" />
+            {{ t('admin.pricing.kindTiered') }}
+          </label>
+        </div>
+        <p class="mt-1 text-xs text-gray-500">{{ t('admin.pricing.kindHint') }}</p>
+
+        <div v-if="form.pricing_kind === 'tiered'" class="mt-3 space-y-3">
           <div>
-            <label class="block text-xs text-gray-500">{{ t('admin.pricing.beamMin') }}</label>
-            <input
-              v-model="form.beam_min"
-              type="number"
-              step="0.1"
-              min="0"
-              placeholder="0"
-              class="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
-            />
+            <p class="mb-1.5 text-xs font-medium text-gray-600">
+              {{ t('admin.pricing.tierDimension') }}
+            </p>
+            <div class="flex gap-4 text-sm">
+              <label class="flex items-center gap-1.5">
+                <input v-model="form.tier_dimension" type="radio" value="beam" />
+                {{ t('admin.pricing.dimensionBeam') }}
+              </label>
+              <label class="flex items-center gap-1.5">
+                <input v-model="form.tier_dimension" type="radio" value="length" />
+                {{ t('admin.pricing.dimensionLength') }}
+              </label>
+            </div>
           </div>
-          <div>
-            <label class="block text-xs text-gray-500">{{ t('admin.pricing.beamMax') }}</label>
-            <input
-              v-model="form.beam_max"
-              type="number"
-              step="0.1"
-              min="0"
-              placeholder="99"
-              class="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
-            />
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs text-gray-500">{{ t('admin.pricing.tierMin') }}</label>
+              <input
+                v-model="form.tier_min"
+                type="number"
+                step="0.1"
+                min="0"
+                placeholder="0"
+                class="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+              />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-500">{{ t('admin.pricing.tierMax') }}</label>
+              <input
+                v-model="form.tier_max"
+                type="number"
+                step="0.1"
+                min="0"
+                placeholder="99"
+                class="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+              />
+            </div>
           </div>
         </div>
+      </div>
+
+      <!-- Applicability -->
+      <div class="rounded-md border border-gray-100 bg-gray-50 p-4 space-y-2">
+        <p class="text-sm font-medium text-gray-700">{{ t('admin.pricing.applicability') }}</p>
+        <div class="flex flex-wrap gap-x-6 gap-y-2 text-sm text-gray-700">
+          <label class="flex items-center gap-2">
+            <input v-model="form.show_in_single" type="checkbox" class="rounded border-gray-300" />
+            {{ t('admin.pricing.showInSingle') }}
+          </label>
+          <label class="flex items-center gap-2">
+            <input v-model="form.show_in_batch" type="checkbox" class="rounded border-gray-300" />
+            {{ t('admin.pricing.showInBatch') }}
+          </label>
+          <label class="flex items-center gap-2">
+            <input
+              v-model="form.requires_boat_selection"
+              type="checkbox"
+              class="rounded border-gray-300"
+            />
+            {{ t('admin.pricing.requiresBoatSelection') }}
+          </label>
+        </div>
+        <p class="text-xs text-gray-500">{{ t('admin.pricing.applicabilityHint') }}</p>
+      </div>
+
+      <!-- Audience -->
+      <div class="rounded-md border border-gray-100 bg-gray-50 p-4 space-y-2">
+        <p class="text-sm font-medium text-gray-700">{{ t('admin.pricing.audience') }}</p>
+        <div class="flex flex-wrap gap-4 text-sm">
+          <label v-for="a in audiences" :key="a.value" class="flex items-center gap-1.5">
+            <input v-model="form.audience" type="radio" :value="a.value" />
+            {{ a.label }}
+          </label>
+        </div>
+        <p class="text-xs text-gray-500">{{ t('admin.pricing.audienceHint') }}</p>
       </div>
 
       <div class="flex items-center gap-4">
@@ -412,13 +541,32 @@ function unitLabel(value: string): string {
             <td class="px-4 py-3 text-sm">
               <div class="font-medium text-gray-900">{{ item.name }}</div>
               <div v-if="item.description" class="text-xs text-gray-500">{{ item.description }}</div>
-              <div v-if="item.category === 'slip_fee' && (meta(item).beam_min || meta(item).beam_max)" class="text-xs text-blue-600">
+              <div
+                v-if="meta(item).beam_min || meta(item).beam_max"
+                class="text-xs text-blue-600"
+              >
                 {{ t('admin.pricing.beam') }}: {{ meta(item).beam_min || '0' }}–{{ meta(item).beam_max || '∞' }} m
+              </div>
+              <div
+                v-if="meta(item).length_min || meta(item).length_max"
+                class="text-xs text-blue-600"
+              >
+                {{ t('admin.pricing.length') }}: {{ meta(item).length_min || '0' }}–{{ meta(item).length_max || '∞' }} m
               </div>
             </td>
             <td class="whitespace-nowrap px-4 py-3 text-sm">
               <span class="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">
                 {{ categoryLabel(item.category) }}
+              </span>
+              <span
+                v-if="(item as any).audience && (item as any).audience !== 'all'"
+                class="ml-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700"
+              >
+                {{
+                  (item as any).audience === 'member'
+                    ? t('admin.pricing.audienceMember')
+                    : t('admin.pricing.audienceNonMember')
+                }}
               </span>
             </td>
             <td class="whitespace-nowrap px-4 py-3 text-right text-sm font-medium text-gray-900">
