@@ -92,6 +92,7 @@ Spec generation (`backend/cmd/openapi/main.go`) → `just api-types` → `fronte
 - **After schema changes**: `just generate` to update sqlc code in `backend/gen/`
 - **After OpenAPI changes**: `just api-types` to regenerate types. Register new endpoints in `backend/internal/openapi/register.go`, add wrapper types in `openapi/types.go`
 - **API calls in views**: `const client = useApiClient()` + `unwrap(await client.GET(...))`. Only use `fetchApi` for endpoints not in OpenAPI spec
+- **TOTP gating (frontend UX)**: action buttons that trigger sensitive operations (anything behind `RequireFreshTOTP` middleware on the server) must call `ensureFreshTotp()` at **click time**, not on form submit. Pattern: prompt the step-up first, then show the confirm dialog (or open the form modal), then run the action. The backend middleware is the hard gate; the frontend prompt is just so users re-verify before they fill in a form, not after
 
 ## CI Pipeline
 
