@@ -50,10 +50,26 @@ const { data: slipsResponse, isLoading, isError } = useQuery({
 
 const dockFilter = ref<string>('')
 const notesOnly = ref(false)
-const slipSortDir = ref<'asc' | 'desc'>('asc')
 
-function toggleSlipSort() {
-  slipSortDir.value = slipSortDir.value === 'asc' ? 'desc' : 'asc'
+type SortField = 'slip' | 'status' | 'assignee' | 'boat'
+const sortField = ref<SortField>('slip')
+const sortDir = ref<'asc' | 'desc'>('asc')
+
+function setSort(field: SortField) {
+  if (sortField.value === field) {
+    sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc'
+  } else {
+    sortField.value = field
+    sortDir.value = 'asc'
+  }
+}
+
+// Status sort puts vacant first ascending so admins scanning for free
+// slips see them at the top — flipping to desc shows occupied first.
+const statusOrder: Record<string, number> = { vacant: 0, occupied: 1, reserved: 2, retired: 3 }
+
+function boatLabel(s: Slip): string {
+  return [s.boat_manufacturer, s.boat_model].filter(Boolean).join(' ') || s.boat_name || ''
 }
 
 const allDocks = computed<string[]>(() => {
@@ -71,7 +87,43 @@ const slips = computed<Slip[]>(() => {
     if (notesOnly.value && !(s.notes && s.notes.trim())) return false
     return true
   })
-  return sortBySlip(filtered, slipSortDir.value)
+  if (sortField.value === 'slip') {
+    return sortBySlip(filtered, sortDir.value)
+  }
+  // Stable secondary sort on slip identity so otherwise-equal rows
+  // don't shuffle on rerender.
+  const tieBreak = sortBySlip(filtered, 'asc')
+  const idxByID = new Map(tieBreak.map((s, i) => [s.id, i]))
+  const direction = sortDir.value === 'asc' ? 1 : -1
+  const sorted = filtered.slice().sort((a, b) => {
+    let primary = 0
+    switch (sortField.value) {
+      case 'status':
+        primary = (statusOrder[a.status] ?? 99) - (statusOrder[b.status] ?? 99)
+        if (primary === 0) primary = a.status.localeCompare(b.status)
+        break
+      case 'assignee': {
+        const ax = (a.occupant_name ?? '').toLocaleLowerCase()
+        const bx = (b.occupant_name ?? '').toLocaleLowerCase()
+        // Empty assignees sink to the bottom regardless of direction.
+        if (!ax && bx) return 1
+        if (ax && !bx) return -1
+        primary = ax.localeCompare(bx)
+        break
+      }
+      case 'boat': {
+        const ax = boatLabel(a).toLocaleLowerCase()
+        const bx = boatLabel(b).toLocaleLowerCase()
+        if (!ax && bx) return 1
+        if (ax && !bx) return -1
+        primary = ax.localeCompare(bx)
+        break
+      }
+    }
+    if (primary !== 0) return primary * direction
+    return (idxByID.get(a.id) ?? 0) - (idxByID.get(b.id) ?? 0)
+  })
+  return sorted
 })
 
 const showCreateForm = ref(false)
@@ -259,11 +311,11 @@ function closeDelete() {
       <table class="min-w-full divide-y divide-gray-200">
         <thead class="bg-gray-50">
           <tr>
-            <SortableTh :active="true" :dir="slipSortDir" @click="toggleSlipSort">{{ t('admin.slips.slip') }}</SortableTh>
+            <SortableTh :active="sortField === 'slip'" :dir="sortDir" @click="setSort('slip')">{{ t('admin.slips.slip') }}</SortableTh>
             <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.slips.size') }}</th>
-            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.slips.status') }}</th>
-            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.slips.assignee') }}</th>
-            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.slips.boat') }}</th>
+            <SortableTh :active="sortField === 'status'" :dir="sortDir" @click="setSort('status')">{{ t('admin.slips.status') }}</SortableTh>
+            <SortableTh :active="sortField === 'assignee'" :dir="sortDir" @click="setSort('assignee')">{{ t('admin.slips.assignee') }}</SortableTh>
+            <SortableTh :active="sortField === 'boat'" :dir="sortDir" @click="setSort('boat')">{{ t('admin.slips.boat') }}</SortableTh>
             <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.slips.notes') }}</th>
             <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('common.actions') }}</th>
           </tr>

@@ -33,7 +33,7 @@ async function ensureFreshTotp(): Promise<boolean> {
   return totpGate.open()
 }
 
-type SortField = 'first_name' | 'last_name' | 'email' | 'slip'
+type SortField = 'first_name' | 'last_name' | 'email' | 'phone' | 'slip'
 const sortField = ref<SortField>('last_name')
 const sortDir = ref<'asc' | 'desc'>('asc')
 const sortParam = computed(() => (sortDir.value === 'desc' ? '-' : '') + sortField.value)
@@ -357,13 +357,15 @@ async function loadUserBoats(userId: string) {
   }
 }
 
-function startEditBoat(b: UserBoat) {
+async function startEditBoat(b: UserBoat) {
+  if (!(await ensureFreshTotp())) return
   editingBoatId.value = b.id
   editingBoat.value = b
   boatError.value = null
 }
 
-function startAddBoat() {
+async function startAddBoat() {
+  if (!(await ensureFreshTotp())) return
   editingBoatId.value = 'new'
   editingBoat.value = null
   boatError.value = null
@@ -852,7 +854,7 @@ async function submitImport() {
             <SortableTh :active="sortField === 'first_name'" :dir="sortDir" @click="setSort('first_name')">{{ t('admin.users.firstName') }}</SortableTh>
             <SortableTh :active="sortField === 'last_name'" :dir="sortDir" @click="setSort('last_name')">{{ t('admin.users.lastName') }}</SortableTh>
             <SortableTh :active="sortField === 'email'" :dir="sortDir" @click="setSort('email')">{{ t('admin.users.email') }}</SortableTh>
-            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.users.phone') }}</th>
+            <SortableTh :active="sortField === 'phone'" :dir="sortDir" @click="setSort('phone')">{{ t('admin.users.phone') }}</SortableTh>
             <SortableTh :active="sortField === 'slip'" :dir="sortDir" @click="setSort('slip')">{{ t('admin.users.spot') }}</SortableTh>
             <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.users.roles') }}</th>
             <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('common.actions') }}</th>
