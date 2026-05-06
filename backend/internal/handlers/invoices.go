@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -44,16 +45,30 @@ func NewInvoiceHandler(
 }
 
 type createInvoiceFullRequest struct {
-	UserID    string              `json:"user_id"`
-	DueDate   string              `json:"due_date"`
-	Lines     []invoiceLineInput  `json:"lines"`
-	SendEmail bool                `json:"send_email"`
+	UserID         string             `json:"user_id"`
+	DueDate        string             `json:"due_date"`
+	FiscalPeriodID *string            `json:"fiscal_period_id,omitempty"`
+	Lines          []invoiceLineInput `json:"lines"`
+	SendEmail      bool               `json:"send_email"`
 }
 
 type invoiceLineInput struct {
-	Description string  `json:"description"`
-	Quantity    int     `json:"quantity"`
-	UnitPrice   float64 `json:"unit_price"`
+	Description    string  `json:"description"`
+	SubDescription string  `json:"sub_description,omitempty"`
+	Quantity       int     `json:"quantity"`
+	UnitPrice      float64 `json:"unit_price"`
+	// AccountID is required for custom lines (lines without a price_item)
+	// so journal postings can attribute revenue correctly. Optional for
+	// price-item lines because the price_item carries its own account.
+	AccountID   *string `json:"account_id,omitempty"`
+	PriceItemID *string `json:"price_item_id,omitempty"`
+	// TierCategory selects a tiered price set by category — the server
+	// then looks up the matching tier slab for the chosen boat. Mutually
+	// exclusive with PriceItemID; one must be set for non-custom lines.
+	TierCategory *string `json:"tier_category,omitempty"`
+	// BoatID is required for tiered lines (drives tier resolution) and
+	// for items with requires_boat_selection=true.
+	BoatID *string `json:"boat_id,omitempty"`
 }
 
 type invoiceResponse struct {
@@ -111,7 +126,14 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Calculate total
+	// Resolve and validate every line. Custom lines (no price_item_id
+	// and no tier_category) must carry an account_id. Tiered lines
+	// resolve to a specific price_items row matching the chosen boat's
+	// beam/length on the tier_dimension. Lines whose price item flags
+	// requires_boat_selection=true must include a boat_id; the server
+	// auto-fills sub_description with the boat detail to mirror the
+	// bulk flow's PDF output.
+	resolvedLines := make([]invoiceLineInput, len(req.Lines))
 	var total float64
 	pdfLines := make([]finance.InvoiceLine, len(req.Lines))
 	for i, line := range req.Lines {
@@ -119,12 +141,86 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 			Error(w, http.StatusBadRequest, "quantity must be at least 1")
 			return
 		}
-		pdfLines[i] = finance.InvoiceLine{
-			Description: line.Description,
-			Quantity:    line.Quantity,
-			UnitPrice:   line.UnitPrice,
+		if line.PriceItemID != nil && line.TierCategory != nil {
+			Error(w, http.StatusBadRequest, "line cannot specify both price_item_id and tier_category")
+			return
 		}
-		total += float64(line.Quantity) * line.UnitPrice
+		isCustom := line.PriceItemID == nil && line.TierCategory == nil
+		if isCustom && (line.AccountID == nil || *line.AccountID == "") {
+			Error(w, http.StatusBadRequest, "custom line items require an account_id")
+			return
+		}
+
+		resolved := line // copy
+
+		switch {
+		case line.PriceItemID != nil:
+			var pricingKind string
+			var requiresBoat bool
+			if err := h.db.QueryRow(ctx,
+				`SELECT pricing_kind, requires_boat_selection
+				   FROM price_items WHERE id = $1 AND club_id = $2 AND is_active`,
+				*line.PriceItemID, claims.ClubID,
+			).Scan(&pricingKind, &requiresBoat); err != nil {
+				Error(w, http.StatusBadRequest, "price item not found or inactive")
+				return
+			}
+			if pricingKind == "tiered" {
+				Error(w, http.StatusBadRequest, "tiered price items must be selected via tier_category, not price_item_id")
+				return
+			}
+			if requiresBoat && (line.BoatID == nil || *line.BoatID == "") {
+				Error(w, http.StatusBadRequest, "this price item requires a boat selection")
+				return
+			}
+			if line.BoatID != nil && *line.BoatID != "" {
+				info, err := h.boatInfo(ctx, claims.ClubID, req.UserID, *line.BoatID)
+				if err != "" {
+					Error(w, http.StatusBadRequest, err)
+					return
+				}
+				if resolved.SubDescription == "" {
+					resolved.SubDescription = describeSlipBoat(info)
+				}
+			}
+
+		case line.TierCategory != nil:
+			if line.BoatID == nil || *line.BoatID == "" {
+				Error(w, http.StatusBadRequest, "tiered line items require a boat_id")
+				return
+			}
+			info, errMsg := h.boatInfo(ctx, claims.ClubID, req.UserID, *line.BoatID)
+			if errMsg != "" {
+				Error(w, http.StatusBadRequest, errMsg)
+				return
+			}
+			tier, dim, errMsg := h.resolveTier(ctx, claims.ClubID, *line.TierCategory, info)
+			if errMsg != "" {
+				Error(w, http.StatusBadRequest, errMsg)
+				return
+			}
+			// Server-side resolution wins over whatever amount the client
+			// computed — keeps prices canonical.
+			resolved.PriceItemID = &tier.id
+			resolved.TierCategory = nil
+			resolved.UnitPrice = tier.amount
+			if resolved.Description == "" {
+				resolved.Description = tier.desc
+			}
+			if resolved.SubDescription == "" {
+				resolved.SubDescription = describeSlipBoat(info)
+			}
+			_ = dim
+		}
+
+		resolvedLines[i] = resolved
+		pdfLines[i] = finance.InvoiceLine{
+			Description:    resolved.Description,
+			SubDescription: resolved.SubDescription,
+			Quantity:       resolved.Quantity,
+			UnitPrice:      resolved.UnitPrice,
+		}
+		total += float64(resolved.Quantity) * resolved.UnitPrice
 	}
 
 	// Get next invoice sequence for KID
@@ -187,10 +283,10 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 	var invoiceID string
 	var createdAt time.Time
 	err = h.db.QueryRow(ctx,
-		`INSERT INTO invoices (club_id, user_id, invoice_number, kid_number, due_date, total_amount, pdf_data)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7)
+		`INSERT INTO invoices (club_id, user_id, invoice_number, kid_number, due_date, total_amount, pdf_data, fiscal_period_id)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		 RETURNING id, created_at`,
-		claims.ClubID, req.UserID, invoiceSeq, kid, dueDate, total, pdfData,
+		claims.ClubID, req.UserID, invoiceSeq, kid, dueDate, total, pdfData, req.FiscalPeriodID,
 	).Scan(&invoiceID, &createdAt)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to store invoice")
@@ -198,13 +294,17 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Store line items
-	for _, line := range req.Lines {
+	// Store line items, including account_id and price_item_id so the
+	// journal posting can attribute revenue and the dedup index can
+	// see which price item drove the line.
+	for _, line := range resolvedLines {
 		lineTotal := float64(line.Quantity) * line.UnitPrice
 		_, err = h.db.Exec(ctx,
-			`INSERT INTO invoice_lines (invoice_id, description, quantity, unit_price, line_total)
-			 VALUES ($1, $2, $3, $4, $5)`,
-			invoiceID, line.Description, line.Quantity, line.UnitPrice, lineTotal,
+			`INSERT INTO invoice_lines (invoice_id, description, sub_description, quantity,
+			                            unit_price, line_total, account_id, price_item_id)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+			invoiceID, line.Description, line.SubDescription, line.Quantity,
+			line.UnitPrice, lineTotal, line.AccountID, line.PriceItemID,
 		)
 		if err != nil {
 			h.log.Error().Err(err).Msg("failed to store invoice line")
@@ -251,6 +351,128 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 		SentAt:        sentAt,
 		CreatedAt:     createdAt,
 	})
+}
+
+// boatInfo loads the boat + matching slip context (if any) for a
+// boat_id chosen on a single-faktura line. Verifies the boat belongs
+// to the user and club. Falls back to slipBoatInfo so describeSlipBoat
+// can render a unified sub-description.
+func (h *InvoiceHandler) boatInfo(ctx context.Context, clubID, userID, boatID string) (*slipBoatInfo, string) {
+	var (
+		ownerID     *string
+		beam        *float64
+		length      *float64
+		boatName    *string
+		mfg         *string
+		model       *string
+		slipSection *string
+		slipNumber  *string
+	)
+	err := h.db.QueryRow(ctx,
+		`SELECT b.user_id, b.beam_m, b.length_m, b.name, b.manufacturer, b.model,
+		        s.section, s.number
+		   FROM boats b
+		   LEFT JOIN slip_assignments sa ON sa.boat_id = b.id AND sa.released_at IS NULL
+		   LEFT JOIN slips s ON s.id = sa.slip_id
+		  WHERE b.id = $1 AND b.club_id = $2`,
+		boatID, clubID,
+	).Scan(&ownerID, &beam, &length, &boatName, &mfg, &model, &slipSection, &slipNumber)
+	if err == pgx.ErrNoRows {
+		return nil, "boat not found"
+	}
+	if err != nil {
+		h.log.Error().Err(err).Msg("boat lookup failed")
+		return nil, "boat lookup failed"
+	}
+	if ownerID == nil || *ownerID != userID {
+		return nil, "boat does not belong to selected member"
+	}
+	info := &slipBoatInfo{beam: beam, length: length}
+	if boatName != nil {
+		info.boatName = *boatName
+	}
+	if mfg != nil {
+		info.mfg = *mfg
+	}
+	if model != nil {
+		info.model = *model
+	}
+	if slipSection != nil && slipNumber != nil {
+		if len(*slipNumber) > 0 && len(*slipSection) > 0 && string((*slipNumber)[0]) != *slipSection {
+			info.slipLbl = *slipSection + *slipNumber
+		} else {
+			info.slipLbl = *slipNumber
+		}
+	}
+	return info, ""
+}
+
+// resolveTier picks the tier slab in `category` whose min/max range
+// covers the boat's beam or length per the category's tier_dimension.
+// Returns the chosen priceTier and the dimension actually used, or an
+// error message if no tier matched / the dimension data is missing.
+func (h *InvoiceHandler) resolveTier(ctx context.Context, clubID, category string, info *slipBoatInfo) (priceTier, string, string) {
+	rows, err := h.db.Query(ctx,
+		`SELECT id, category, amount, description, metadata, tier_dimension
+		   FROM price_items
+		  WHERE club_id = $1 AND category = $2 AND is_active
+		    AND pricing_kind = 'tiered'`,
+		clubID, category,
+	)
+	if err != nil {
+		h.log.Error().Err(err).Msg("tier lookup failed")
+		return priceTier{}, "", "tier lookup failed"
+	}
+	defer rows.Close()
+	var dimension string
+	var tiers []priceTier
+	for rows.Next() {
+		var t priceTier
+		var meta json.RawMessage
+		var dim *string
+		if err := rows.Scan(&t.id, &t.category, &t.amount, &t.desc, &meta, &dim); err != nil {
+			return priceTier{}, "", "tier scan failed"
+		}
+		var m struct {
+			BeamMin   *float64 `json:"beam_min"`
+			BeamMax   *float64 `json:"beam_max"`
+			LengthMin *float64 `json:"length_min"`
+			LengthMax *float64 `json:"length_max"`
+		}
+		_ = json.Unmarshal(meta, &m)
+		if dim != nil && *dim == "length" {
+			t.tierMin = m.LengthMin
+			t.tierMax = m.LengthMax
+			dimension = "length"
+		} else {
+			t.tierMin = m.BeamMin
+			t.tierMax = m.BeamMax
+			dimension = "beam"
+		}
+		tiers = append(tiers, t)
+	}
+	if len(tiers) == 0 {
+		return priceTier{}, "", "no tiered items in category " + category
+	}
+	var measure *float64
+	if dimension == "length" {
+		measure = info.length
+	} else {
+		measure = info.beam
+	}
+	if measure == nil {
+		return priceTier{}, dimension, "boat has no " + dimension + " recorded"
+	}
+	for i := range tiers {
+		t := &tiers[i]
+		if t.tierMin == nil || t.tierMax == nil {
+			continue
+		}
+		if *measure >= *t.tierMin && *measure < *t.tierMax {
+			return *t, dimension, ""
+		}
+	}
+	return priceTier{}, dimension, dimension + " has no matching tier"
 }
 
 // HandleGetInvoicePDF returns the stored PDF for an invoice.
@@ -361,14 +583,35 @@ type draftInvoiceRow struct {
 	CreatedAt     time.Time `json:"created_at"`
 }
 
-// HandleListDraftInvoices returns every unsent invoice (sent_at IS
-// NULL) for the club, joined to user/price_item/fiscal_period for
-// display in the regnskap drafts review page.
-func (h *InvoiceHandler) HandleListDraftInvoices(w http.ResponseWriter, r *http.Request) {
+// HandleListInvoices returns invoices for the club filtered by a
+// lifecycle status passed via ?status=. Supported values:
+//
+//   - "draft" (default): unsent open invoices (sent_at IS NULL AND status='open')
+//   - "sent":             sent open invoices  (sent_at IS NOT NULL AND status='open')
+//   - "voided":           any voided invoice  (status='voided')
+//
+// Used by the tabbed Faktura page (DIL-257). The legacy
+// "/invoices/drafts" route maps to status=draft for back-compat.
+func (h *InvoiceHandler) HandleListInvoices(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
 	if claims == nil {
 		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	status := r.URL.Query().Get("status")
+	var where string
+	switch status {
+	case "", "draft":
+		where = "i.sent_at IS NULL AND i.status = 'open'"
+		status = "draft"
+	case "sent":
+		where = "i.sent_at IS NOT NULL AND i.status = 'open'"
+	case "voided":
+		where = "i.status = 'voided'"
+	default:
+		Error(w, http.StatusBadRequest, "status must be one of: draft, sent, voided")
 		return
 	}
 
@@ -379,31 +622,37 @@ func (h *InvoiceHandler) HandleListDraftInvoices(w http.ResponseWriter, r *http.
 		        i.total_amount, i.issue_date, i.due_date,
 		        COALESCE(pi.name, ''), fp.year,
 		        COALESCE((SELECT description FROM invoice_lines WHERE invoice_id = i.id LIMIT 1), ''),
-		        i.created_at
+		        i.created_at, i.sent_at, i.status
 		   FROM invoices i
 		   JOIN users u ON u.id = i.user_id
 		   LEFT JOIN price_items pi ON pi.id = i.price_item_id
 		   LEFT JOIN fiscal_periods fp ON fp.id = i.fiscal_period_id
-		  WHERE i.club_id = $1 AND i.sent_at IS NULL AND i.status = 'open'
+		  WHERE i.club_id = $1 AND `+where+`
 		  ORDER BY i.created_at DESC`,
 		claims.ClubID,
 	)
 	if err != nil {
-		h.log.Error().Err(err).Msg("list draft invoices")
+		h.log.Error().Err(err).Msg("list invoices")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	defer rows.Close()
 
-	out := make([]draftInvoiceRow, 0)
+	type listRow struct {
+		draftInvoiceRow
+		SentAt *time.Time `json:"sent_at"`
+		Status string     `json:"status"`
+	}
+	out := make([]listRow, 0)
 	for rows.Next() {
-		var d draftInvoiceRow
+		var d listRow
 		var issue, due time.Time
 		if err := rows.Scan(&d.ID, &d.InvoiceNumber, &d.UserID,
 			&d.MemberName, &d.MemberEmail,
 			&d.TotalAmount, &issue, &due,
-			&d.PriceItemName, &d.FiscalYear, &d.Description, &d.CreatedAt); err != nil {
-			h.log.Error().Err(err).Msg("scan draft row")
+			&d.PriceItemName, &d.FiscalYear, &d.Description, &d.CreatedAt,
+			&d.SentAt, &d.Status); err != nil {
+			h.log.Error().Err(err).Msg("scan invoice row")
 			Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
@@ -412,7 +661,17 @@ func (h *InvoiceHandler) HandleListDraftInvoices(w http.ResponseWriter, r *http.
 		out = append(out, d)
 	}
 
-	JSON(w, http.StatusOK, map[string]any{"items": out})
+	JSON(w, http.StatusOK, map[string]any{"items": out, "status": status})
+}
+
+// HandleListDraftInvoices is preserved as a thin wrapper around
+// HandleListInvoices defaulting to status=draft, so the legacy
+// /invoices/drafts route keeps working until callers migrate.
+func (h *InvoiceHandler) HandleListDraftInvoices(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	q.Set("status", "draft")
+	r.URL.RawQuery = q.Encode()
+	h.HandleListInvoices(w, r)
 }
 
 // HandleSendInvoice emails the stored PDF to the member and stamps

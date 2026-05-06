@@ -89,6 +89,10 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 		sortCol = "u.email"
 	case "-email":
 		sortCol = "u.email DESC"
+	case "phone":
+		sortCol = "u.phone NULLS LAST, u.last_name"
+	case "-phone":
+		sortCol = "u.phone DESC NULLS LAST, u.last_name DESC"
 	case "created_at":
 		sortCol = "u.created_at"
 	case "-created_at":
@@ -1650,6 +1654,74 @@ type adminBoatCreateRequest struct {
 type adminBoatUpdateRequest struct {
 	updateBoatRequest
 	Approve bool `json:"approve"`
+}
+
+// HandleListUserBoats returns the boats owned by a target user, with
+// the same shape as /members/me/boats. Used by the admin single-
+// faktura modal so a per-line boat picker can show only the chosen
+// member's boats.
+func (h *AdminUsersHandler) HandleListUserBoats(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	userID := chi.URLParam(r, "userID")
+	if userID == "" {
+		Error(w, http.StatusBadRequest, "user ID is required")
+		return
+	}
+
+	rows, err := h.db.Query(ctx,
+		`SELECT b.id, b.user_id, b.club_id, b.name, b.type, b.manufacturer, b.model,
+		        b.length_m, b.beam_m, b.draft_m, b.weight_kg, b.registration_number,
+		        b.mmsi, b.call_sign,
+		        b.boat_model_id, b.measurements_confirmed, b.confirmed_by, b.confirmed_at,
+		        b.created_at, b.updated_at,
+		        sa.slip_id, s.section, s.number, sa.assignment_type::text
+		 FROM boats b
+		 LEFT JOIN slip_assignments sa
+		        ON sa.boat_id = b.id AND sa.released_at IS NULL
+		 LEFT JOIN slips s ON s.id = sa.slip_id
+		 WHERE b.user_id = $1 AND b.club_id = $2
+		 ORDER BY b.name`,
+		userID, claims.ClubID,
+	)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to list user boats")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	defer rows.Close()
+
+	boats := make([]boat, 0)
+	for rows.Next() {
+		var b boat
+		var slipID, slipSection, slipNumber, slipType *string
+		if err := rows.Scan(
+			&b.ID, &b.UserID, &b.ClubID, &b.Name, &b.Type, &b.Manufacturer, &b.Model,
+			&b.LengthM, &b.BeamM, &b.DraftM, &b.WeightKg, &b.RegistrationNumber,
+			&b.MMSI, &b.CallSign,
+			&b.BoatModelID, &b.MeasurementsConfirmed, &b.ConfirmedBy, &b.ConfirmedAt,
+			&b.CreatedAt, &b.UpdatedAt,
+			&slipID, &slipSection, &slipNumber, &slipType,
+		); err != nil {
+			h.log.Error().Err(err).Msg("failed to scan user boat")
+			Error(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		if slipID != nil {
+			b.Slip = &boatSlip{
+				SlipID:         *slipID,
+				Section:        deref(slipSection),
+				Number:         deref(slipNumber),
+				AssignmentType: deref(slipType),
+			}
+		}
+		boats = append(boats, b)
+	}
+	JSON(w, http.StatusOK, map[string]any{"boats": boats})
 }
 
 // HandleCreateUserBoat creates a boat for a target user via the shared

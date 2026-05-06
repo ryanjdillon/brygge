@@ -136,6 +136,7 @@ func GeneratePDF(inv Invoice) ([]byte, error) {
 	}
 	const infoPad = 3.0
 	const infoRowH = 6.0
+	const infoLabelW = 38.0
 	type row struct {
 		k, v string
 		bold bool
@@ -148,9 +149,21 @@ func GeneratePDF(inv Invoice) ([]byte, error) {
 		{tr("Beløp å betale:"), tr(formatNOK(total)), true},
 		{tr("Forfallsdato:"), inv.DueDate.Format("02.01.2006"), true},
 	}
+
+	// Box width = label column + the widest value rendered + symmetric
+	// padding on both sides. fpdf's GetStringWidth measures the current
+	// font, so switch to bold first (the wider face) for the worst-case
+	// measurement.
+	pdf.SetFont("Helvetica", "B", 10)
+	maxValW := 0.0
+	for _, r := range rs {
+		if w := pdf.GetStringWidth(r.v); w > maxValW {
+			maxValW = w
+		}
+	}
 	infoX := leftMargin
 	infoY := pdf.GetY()
-	infoW := pageW
+	infoW := infoPad*2 + infoLabelW + maxValW + 2 // tiny slack for cursor placement
 	infoH := infoPad*2 + float64(len(rs))*infoRowH
 
 	pdf.SetFillColor(255, 251, 220) // light yellow
@@ -164,8 +177,8 @@ func GeneratePDF(inv Invoice) ([]byte, error) {
 		} else {
 			pdf.SetFont("Helvetica", "", 10)
 		}
-		pdf.CellFormat(45, infoRowH, r.k, "", 0, "L", false, 0, "")
-		pdf.CellFormat(infoW-2*infoPad-45, infoRowH, r.v, "", 0, "L", false, 0, "")
+		pdf.CellFormat(infoLabelW, infoRowH, r.k, "", 0, "L", false, 0, "")
+		pdf.CellFormat(infoW-2*infoPad-infoLabelW, infoRowH, r.v, "", 0, "L", false, 0, "")
 	}
 
 	pdf.SetXY(leftMargin, infoY+infoH+8)
@@ -180,11 +193,11 @@ func GeneratePDF(inv Invoice) ([]byte, error) {
 	const cSum = 27.5
 
 	pdf.SetFont("Helvetica", "B", 9)
-	pdf.CellFormat(cNum, 7, "#", "1", 0, "C", false, 0, "")
-	pdf.CellFormat(cDesc, 7, tr("Beskrivelse"), "1", 0, "L", false, 0, "")
-	pdf.CellFormat(cQty, 7, tr("Antall"), "1", 0, "C", false, 0, "")
-	pdf.CellFormat(cUnit, 7, tr("Enhetspris"), "1", 0, "R", false, 0, "")
-	pdf.CellFormat(cSum, 7, "Sum", "1", 0, "R", false, 0, "")
+	pdf.CellFormat(cNum, 7, "#", "", 0, "C", false, 0, "")
+	pdf.CellFormat(cDesc, 7, tr("Beskrivelse"), "", 0, "L", false, 0, "")
+	pdf.CellFormat(cQty, 7, tr("Antall"), "", 0, "C", false, 0, "")
+	pdf.CellFormat(cUnit, 7, tr("Enhetspris"), "", 0, "R", false, 0, "")
+	pdf.CellFormat(cSum, 7, "Sum", "", 0, "R", false, 0, "")
 	pdf.Ln(7)
 
 	pdf.SetFont("Helvetica", "", 9)
@@ -223,10 +236,11 @@ func GeneratePDF(inv Invoice) ([]byte, error) {
 		pdf.Ln(rowH)
 	}
 
-	// Total row: fully framed, no fill.
+	// Total row: borderless, no fill — only the line items themselves
+	// are framed.
 	pdf.SetFont("Helvetica", "B", 10)
-	pdf.CellFormat(cNum+cDesc+cQty+cUnit, 8, tr("Totalt"), "1", 0, "R", false, 0, "")
-	pdf.CellFormat(cSum, 8, tr(formatNOK(total)), "1", 0, "R", false, 0, "")
+	pdf.CellFormat(cNum+cDesc+cQty+cUnit, 8, tr("Totalt"), "", 0, "R", false, 0, "")
+	pdf.CellFormat(cSum, 8, tr(formatNOK(total)), "", 0, "R", false, 0, "")
 	pdf.Ln(14)
 
 	// Payment instruction

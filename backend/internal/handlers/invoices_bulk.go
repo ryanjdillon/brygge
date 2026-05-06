@@ -15,32 +15,34 @@ import (
 	"github.com/brygge-klubb/brygge/internal/middleware"
 )
 
-// bulkInvoiceRequest drives POST /api/v1/admin/invoices/bulk.
+// bulkInvoiceRequest drives POST /api/v1/admin/financials/invoices/bulk.
 //
-// Mode "flat" — every selected user gets an invoice for the same
-// price_item_id with that item's amount.
+// Each selected user gets one invoice with one line per resolved
+// selection:
+//   - price_item_ids: flat items applied verbatim to every user
+//   - beam_categories: each user's slip-boat beam is matched against
+//     active price_items in that category to pick the right tier; users
+//     with no matching tier are skipped *for that line*, not the whole
+//     invoice.
 //
-// Mode "beam_tier" — for every selected user, look at the boat
-// occupying their active permanent slip assignment and select the
-// price_item from `category` whose metadata.beam_min ≤ boat.beam_m <
-// metadata.beam_max. Users with no active slip, no boat on their
-// active slip, or no matching tier are skipped (returned in
-// `skipped` so the admin sees what to fix).
+// Per-line idempotency: if a non-voided invoice for the same user +
+// category + fiscal_period already exists, that line is dropped. If
+// every requested line is dropped this way, the user is fully skipped.
 type bulkInvoiceRequest struct {
 	UserIDs        []string `json:"user_ids"`
 	FiscalPeriodID string   `json:"fiscal_period_id"`
-	Mode           string   `json:"mode"`
-	PriceItemID    string   `json:"price_item_id,omitempty"`
-	Category       string   `json:"category,omitempty"`
+	PriceItemIDs   []string `json:"price_item_ids,omitempty"`
+	BeamCategories []string `json:"beam_categories,omitempty"`
 	DueDate        string   `json:"due_date"`
 }
 
 type bulkInvoiceCreated struct {
-	UserID        string  `json:"user_id"`
-	InvoiceID     string  `json:"invoice_id"`
-	InvoiceNumber int     `json:"invoice_number"`
-	Amount        float64 `json:"amount"`
-	PriceItemID   string  `json:"price_item_id"`
+	UserID        string   `json:"user_id"`
+	InvoiceID     string   `json:"invoice_id"`
+	InvoiceNumber int      `json:"invoice_number"`
+	Amount        float64  `json:"amount"`
+	LineCount     int      `json:"line_count"`
+	DroppedLines  []string `json:"dropped_lines,omitempty"`
 }
 
 type bulkInvoiceSkipped struct {
@@ -53,10 +55,14 @@ type bulkInvoiceResponse struct {
 	Skipped []bulkInvoiceSkipped `json:"skipped"`
 }
 
-// HandleBulkCreateInvoices generates draft invoices (sent_at NULL) for
-// every selected user. Idempotent on (price_item_id, fiscal_period_id):
-// re-running with the same selection skips users who already have an
-// invoice for the same line.
+// bulkResolvedLine binds a chosen price tier to optional slip context.
+// For flat items slipInfo stays nil; for beam_tier lines slipInfo
+// carries the boat/slip detail used in the rendered sub-description.
+type bulkResolvedLine struct {
+	tier     priceTier
+	slipInfo *slipBoatInfo
+}
+
 func (h *InvoiceHandler) HandleBulkCreateInvoices(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
@@ -78,16 +84,8 @@ func (h *InvoiceHandler) HandleBulkCreateInvoices(w http.ResponseWriter, r *http
 		Error(w, http.StatusBadRequest, "fiscal_period_id is required")
 		return
 	}
-	if req.Mode != "flat" && req.Mode != "beam_tier" {
-		Error(w, http.StatusBadRequest, "mode must be 'flat' or 'beam_tier'")
-		return
-	}
-	if req.Mode == "flat" && req.PriceItemID == "" {
-		Error(w, http.StatusBadRequest, "price_item_id is required for flat mode")
-		return
-	}
-	if req.Mode == "beam_tier" && req.Category == "" {
-		Error(w, http.StatusBadRequest, "category is required for beam_tier mode")
+	if len(req.PriceItemIDs) == 0 && len(req.BeamCategories) == 0 {
+		Error(w, http.StatusBadRequest, "at least one price_item_id or beam_category is required")
 		return
 	}
 	dueDate, err := time.Parse("2006-01-02", req.DueDate)
@@ -96,8 +94,6 @@ func (h *InvoiceHandler) HandleBulkCreateInvoices(w http.ResponseWriter, r *http
 		return
 	}
 
-	// Fiscal period must belong to this club. Use end_date in the
-	// invoice description so members see the year clearly.
 	var fiscalYear int
 	if err := h.db.QueryRow(ctx,
 		`SELECT year FROM fiscal_periods WHERE id = $1 AND club_id = $2`,
@@ -107,61 +103,86 @@ func (h *InvoiceHandler) HandleBulkCreateInvoices(w http.ResponseWriter, r *http
 		return
 	}
 
-	// Load all candidate price items up-front. For flat mode, exactly
-	// one row by id; for beam_tier mode, every active item in the
-	// category so we can match per user without an N+1 lookup.
-	var flatItem *priceTier
-	tiers := make([]priceTier, 0)
-	if req.Mode == "flat" {
+	flatItems := make([]priceTier, 0, len(req.PriceItemIDs))
+	for _, id := range req.PriceItemIDs {
 		var t priceTier
 		var meta json.RawMessage
+		var pricingKind string
+		var showInBatch bool
 		if err := h.db.QueryRow(ctx,
-			`SELECT id, category, amount, description, metadata
+			`SELECT id, category, amount, description, metadata, pricing_kind, show_in_batch
 			   FROM price_items
 			  WHERE id = $1 AND club_id = $2 AND is_active`,
-			req.PriceItemID, claims.ClubID,
-		).Scan(&t.id, &t.category, &t.amount, &t.desc, &meta); err != nil {
-			Error(w, http.StatusBadRequest, "price item not found or inactive")
+			id, claims.ClubID,
+		).Scan(&t.id, &t.category, &t.amount, &t.desc, &meta, &pricingKind, &showInBatch); err != nil {
+			Error(w, http.StatusBadRequest, fmt.Sprintf("price item %s not found or inactive", id))
 			return
 		}
-		flatItem = &t
-	} else {
+		if !showInBatch {
+			Error(w, http.StatusBadRequest, fmt.Sprintf("price item %q is not enabled for batch fakturas", t.desc))
+			return
+		}
+		if pricingKind == "tiered" {
+			Error(w, http.StatusBadRequest, fmt.Sprintf("price item %q is tiered — pick the category instead", t.desc))
+			return
+		}
+		flatItems = append(flatItems, t)
+	}
+
+	tierDimensionByCategory := make(map[string]string, len(req.BeamCategories))
+	tiersByCategory := make(map[string][]priceTier, len(req.BeamCategories))
+	for _, cat := range req.BeamCategories {
 		rows, err := h.db.Query(ctx,
-			`SELECT id, category, amount, description, metadata
+			`SELECT id, category, amount, description, metadata, tier_dimension
 			   FROM price_items
-			  WHERE club_id = $1 AND category = $2 AND is_active`,
-			claims.ClubID, req.Category,
+			  WHERE club_id = $1 AND category = $2 AND is_active
+			    AND pricing_kind = 'tiered' AND show_in_batch = TRUE`,
+			claims.ClubID, cat,
 		)
 		if err != nil {
 			h.log.Error().Err(err).Msg("failed to load price tiers")
 			Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
-		defer rows.Close()
+		var list []priceTier
+		var dimension string
 		for rows.Next() {
 			var t priceTier
 			var meta json.RawMessage
-			if err := rows.Scan(&t.id, &t.category, &t.amount, &t.desc, &meta); err != nil {
+			var dim *string
+			if err := rows.Scan(&t.id, &t.category, &t.amount, &t.desc, &meta, &dim); err != nil {
+				rows.Close()
 				h.log.Error().Err(err).Msg("failed to scan price tier")
 				Error(w, http.StatusInternalServerError, "internal error")
 				return
 			}
 			var m struct {
-				BeamMin *float64 `json:"beam_min"`
-				BeamMax *float64 `json:"beam_max"`
+				BeamMin   *float64 `json:"beam_min"`
+				BeamMax   *float64 `json:"beam_max"`
+				LengthMin *float64 `json:"length_min"`
+				LengthMax *float64 `json:"length_max"`
 			}
 			_ = json.Unmarshal(meta, &m)
-			t.beamMin = m.BeamMin
-			t.beamMax = m.BeamMax
-			tiers = append(tiers, t)
+			if dim != nil && *dim == "length" {
+				t.tierMin = m.LengthMin
+				t.tierMax = m.LengthMax
+				dimension = "length"
+			} else {
+				t.tierMin = m.BeamMin
+				t.tierMax = m.BeamMax
+				dimension = "beam"
+			}
+			list = append(list, t)
 		}
-		if len(tiers) == 0 {
-			Error(w, http.StatusBadRequest, fmt.Sprintf("no active price items in category %q", req.Category))
+		rows.Close()
+		if len(list) == 0 {
+			Error(w, http.StatusBadRequest, fmt.Sprintf("no active tiered items in category %q for batch", cat))
 			return
 		}
+		tierDimensionByCategory[cat] = dimension
+		tiersByCategory[cat] = list
 	}
 
-	// Club details for PDF rendering.
 	var clubName, orgNumber, clubAddress, bankAccount, website, treasurerEmail, logoMIME string
 	var logoData []byte
 	if err := h.db.QueryRow(ctx,
@@ -177,64 +198,104 @@ func (h *InvoiceHandler) HandleBulkCreateInvoices(w http.ResponseWriter, r *http
 	}
 
 	resp := bulkInvoiceResponse{Created: []bulkInvoiceCreated{}, Skipped: []bulkInvoiceSkipped{}}
+
 	for _, userID := range req.UserIDs {
 		userID := userID
-		// Resolve which price_item applies to this user, plus boat/slip
-		// context to enrich the line description.
-		var chosen *priceTier
+		var lines []bulkResolvedLine
+		var dropReasons []string
+
+		for i := range flatItems {
+			lines = append(lines, bulkResolvedLine{tier: flatItems[i]})
+		}
+
 		var slipInfo *slipBoatInfo
-		var skipReason string
-		if flatItem != nil {
-			chosen = flatItem
-		} else {
-			info, lookupErr := h.slipBoatForUser(ctx, claims.ClubID, userID)
-			if lookupErr != "" {
-				skipReason = lookupErr
+		var slipErr string
+		if len(req.BeamCategories) > 0 {
+			slipInfo, slipErr = h.slipBoatForUser(ctx, claims.ClubID, userID)
+		}
+		for _, cat := range req.BeamCategories {
+			if slipInfo == nil {
+				dropReasons = append(dropReasons, fmt.Sprintf("%s: %s", cat, slipErr))
+				continue
+			}
+			dim := tierDimensionByCategory[cat]
+			var measure *float64
+			var measureLabel string
+			if dim == "length" {
+				measure = slipInfo.length
+				measureLabel = "length"
 			} else {
-				slipInfo = info
-				for i := range tiers {
-					t := &tiers[i]
-					if t.beamMin == nil || t.beamMax == nil {
-						continue
-					}
-					if *info.beam >= *t.beamMin && *info.beam < *t.beamMax {
-						chosen = t
-						break
-					}
+				measure = slipInfo.beam
+				measureLabel = "beam"
+			}
+			if measure == nil {
+				dropReasons = append(dropReasons, fmt.Sprintf("%s: boat has no %s recorded", cat, measureLabel))
+				continue
+			}
+			tiers := tiersByCategory[cat]
+			var chosen *priceTier
+			for i := range tiers {
+				t := &tiers[i]
+				if t.tierMin == nil || t.tierMax == nil {
+					continue
 				}
-				if chosen == nil {
-					skipReason = fmt.Sprintf("beam %.2fm has no matching tier", *info.beam)
+				if *measure >= *t.tierMin && *measure < *t.tierMax {
+					chosen = t
+					break
 				}
 			}
+			if chosen == nil {
+				dropReasons = append(dropReasons, fmt.Sprintf("%s: %s %.2fm has no matching tier", cat, measureLabel, *measure))
+				continue
+			}
+			lines = append(lines, bulkResolvedLine{tier: *chosen, slipInfo: slipInfo})
 		}
-		if chosen == nil {
-			resp.Skipped = append(resp.Skipped, bulkInvoiceSkipped{UserID: userID, Reason: skipReason})
+
+		// Per-line idempotency: drop any line whose specific price_item_id
+		// is already on a non-voided invoice for this user/period. This
+		// is keyed by price_item_id (via invoice_lines) so two distinct
+		// items in the same category don't collide. The line-level check
+		// is what actually keeps multi-line invoices from double-billing
+		// — invoices.category is NULL for multi-line rows, so the partial
+		// unique index on (club, user, category, period) doesn't fire.
+		kept := make([]bulkResolvedLine, 0, len(lines))
+		for _, l := range lines {
+			var existing string
+			err := h.db.QueryRow(ctx,
+				`SELECT il.id
+				   FROM invoice_lines il
+				   JOIN invoices i ON i.id = il.invoice_id
+				  WHERE i.club_id = $1 AND i.user_id = $2
+				    AND il.price_item_id = $3
+				    AND i.fiscal_period_id = $4
+				    AND i.status <> 'voided'
+				  LIMIT 1`,
+				claims.ClubID, userID, l.tier.id, req.FiscalPeriodID,
+			).Scan(&existing)
+			if err == nil {
+				dropReasons = append(dropReasons, fmt.Sprintf("%s already invoiced", l.tier.desc))
+				continue
+			}
+			if err != pgx.ErrNoRows {
+				h.log.Error().Err(err).Str("user_id", userID).Str("price_item_id", l.tier.id).Msg("idempotency check failed")
+				dropReasons = append(dropReasons, fmt.Sprintf("%s: idempotency check error", l.tier.desc))
+				continue
+			}
+			kept = append(kept, l)
+		}
+		lines = kept
+
+		if len(lines) == 0 {
+			reason := "no lines applicable"
+			if len(dropReasons) > 0 {
+				reason = strings.Join(dropReasons, "; ")
+			}
+			resp.Skipped = append(resp.Skipped, bulkInvoiceSkipped{UserID: userID, Reason: reason})
 			continue
 		}
 
-		// Idempotency: skip if a non-voided invoice for this
-		// (user, category, fiscal_period) already exists. Voided rows
-		// fall out so a re-issue after voiding is permitted.
-		var existing string
-		err := h.db.QueryRow(ctx,
-			`SELECT id FROM invoices
-			  WHERE club_id = $1 AND user_id = $2
-			    AND category = $3 AND fiscal_period_id = $4
-			    AND status <> 'voided'`,
-			claims.ClubID, userID, chosen.category, req.FiscalPeriodID,
-		).Scan(&existing)
-		if err == nil {
-			resp.Skipped = append(resp.Skipped, bulkInvoiceSkipped{UserID: userID, Reason: "already invoiced in this category for this period"})
-			continue
-		}
-		if err != pgx.ErrNoRows {
-			h.log.Error().Err(err).Str("user_id", userID).Msg("idempotency check failed")
-			resp.Skipped = append(resp.Skipped, bulkInvoiceSkipped{UserID: userID, Reason: "internal error"})
-			continue
-		}
-
-		invID, invNum, amount, err := h.createBulkInvoice(ctx,
-			claims.ClubID, claims.UserID, userID, chosen, slipInfo,
+		invID, invNum, total, err := h.createBulkInvoice(ctx,
+			claims.ClubID, claims.UserID, userID, lines,
 			req.FiscalPeriodID, fiscalYear, dueDate,
 			clubName, orgNumber, clubAddress, bankAccount, website, treasurerEmail, logoData, logoMIME)
 		if err != nil {
@@ -244,7 +305,8 @@ func (h *InvoiceHandler) HandleBulkCreateInvoices(w http.ResponseWriter, r *http
 		}
 		resp.Created = append(resp.Created, bulkInvoiceCreated{
 			UserID: userID, InvoiceID: invID, InvoiceNumber: invNum,
-			Amount: amount, PriceItemID: chosen.id,
+			Amount: total, LineCount: len(lines),
+			DroppedLines: dropReasons,
 		})
 	}
 
@@ -255,9 +317,8 @@ func (h *InvoiceHandler) HandleBulkCreateInvoices(w http.ResponseWriter, r *http
 				"created_count":    len(resp.Created),
 				"skipped_count":    len(resp.Skipped),
 				"fiscal_period_id": req.FiscalPeriodID,
-				"mode":             req.Mode,
-				"price_item_id":    req.PriceItemID,
-				"category":         req.Category,
+				"price_item_ids":   req.PriceItemIDs,
+				"beam_categories":  req.BeamCategories,
 			})
 	}
 
@@ -266,30 +327,27 @@ func (h *InvoiceHandler) HandleBulkCreateInvoices(w http.ResponseWriter, r *http
 
 type slipBoatInfo struct {
 	beam     *float64
+	length   *float64
 	boatName string
 	mfg      string
 	model    string
 	slipLbl  string
 }
 
-// slipBoatForUser returns the boat + slip on the user's active slip
-// assignment, plus a distinguishable human-readable reason when the
-// lookup can't yield a usable beam. Distinguishing between "no slip",
-// "no boat on slip", and "boat has no beam recorded" matters for the
-// bulk-faktura skip list.
 func (h *InvoiceHandler) slipBoatForUser(ctx context.Context, clubID, userID string) (*slipBoatInfo, string) {
 	var (
-		hasAssignment   bool
-		boatID          *string
-		beam            *float64
-		boatName        *string
-		mfg             *string
-		model           *string
-		slipSection     *string
-		slipNumber      *string
+		hasAssignment bool
+		boatID        *string
+		beam          *float64
+		length        *float64
+		boatName      *string
+		mfg           *string
+		model         *string
+		slipSection   *string
+		slipNumber    *string
 	)
 	err := h.db.QueryRow(ctx,
-		`SELECT TRUE, sa.boat_id, b.beam_m, b.name, b.manufacturer, b.model,
+		`SELECT TRUE, sa.boat_id, b.beam_m, b.length_m, b.name, b.manufacturer, b.model,
 		        s.section, s.number
 		   FROM slip_assignments sa
 		   LEFT JOIN boats b ON b.id = sa.boat_id
@@ -299,7 +357,7 @@ func (h *InvoiceHandler) slipBoatForUser(ctx context.Context, clubID, userID str
 		  ORDER BY sa.assigned_at
 		  LIMIT 1`,
 		userID, clubID,
-	).Scan(&hasAssignment, &boatID, &beam, &boatName, &mfg, &model, &slipSection, &slipNumber)
+	).Scan(&hasAssignment, &boatID, &beam, &length, &boatName, &mfg, &model, &slipSection, &slipNumber)
 	if err == pgx.ErrNoRows {
 		return nil, "no active slip assignment"
 	}
@@ -309,10 +367,7 @@ func (h *InvoiceHandler) slipBoatForUser(ctx context.Context, clubID, userID str
 	if boatID == nil {
 		return nil, "active slip has no boat_id set"
 	}
-	if beam == nil {
-		return nil, "boat on slip has no beam recorded — set boat.beam_m"
-	}
-	info := &slipBoatInfo{beam: beam}
+	info := &slipBoatInfo{beam: beam, length: length}
 	if boatName != nil {
 		info.boatName = *boatName
 	}
@@ -323,7 +378,6 @@ func (h *InvoiceHandler) slipBoatForUser(ctx context.Context, clubID, userID str
 		info.model = *model
 	}
 	if slipSection != nil && slipNumber != nil {
-		// "A1" if number doesn't already start with section, else just number.
 		if len(*slipNumber) > 0 && len(*slipSection) > 0 && string((*slipNumber)[0]) != *slipSection {
 			info.slipLbl = *slipSection + *slipNumber
 		} else {
@@ -333,20 +387,24 @@ func (h *InvoiceHandler) slipBoatForUser(ctx context.Context, clubID, userID str
 	return info, ""
 }
 
+// priceTier is a single tier slab loaded for the bulk flow. tierMin
+// and tierMax are taken from metadata.beam_* or metadata.length_*
+// depending on the tier_dimension on the parent item — this struct
+// stores the abstract range so the matching loop doesn't need to
+// re-decide which dimension to use.
 type priceTier struct {
 	id       string
 	category string
 	amount   float64
 	desc     string
-	beamMin  *float64
-	beamMax  *float64
+	tierMin  *float64
+	tierMax  *float64
 }
 
 func (h *InvoiceHandler) createBulkInvoice(
 	ctx context.Context,
 	clubID, actorID, userID string,
-	t *priceTier,
-	slipInfo *slipBoatInfo,
+	lines []bulkResolvedLine,
 	fiscalPeriodID string,
 	fiscalYear int,
 	dueDate time.Time,
@@ -371,50 +429,55 @@ func (h *InvoiceHandler) createBulkInvoice(
 	}
 
 	kid := finance.GenerateKID("000", invoiceSeq, 1)
-	desc := fmt.Sprintf("%s %d", t.desc, fiscalYear)
-	subDesc := ""
-	if slipInfo != nil {
-		// Render boat/slip detail on a sub-line under the main description
-		// so the line item stays compact.
-		boatLabel := slipInfo.boatName
-		if boatLabel == "" {
-			boatLabel = strings.TrimSpace(slipInfo.mfg + " " + slipInfo.model)
+
+	pdfLines := make([]finance.InvoiceLine, 0, len(lines))
+	var total float64
+	for _, l := range lines {
+		desc := fmt.Sprintf("%s %d", l.tier.desc, fiscalYear)
+		subDesc := ""
+		if l.slipInfo != nil {
+			subDesc = describeSlipBoat(l.slipInfo)
 		}
-		extras := []string{}
-		if slipInfo.slipLbl != "" {
-			extras = append(extras, "Plass "+slipInfo.slipLbl)
-		}
-		if boatLabel != "" {
-			extras = append(extras, boatLabel)
-		}
-		if slipInfo.beam != nil {
-			extras = append(extras, fmt.Sprintf("bredde %.2f m", *slipInfo.beam))
-		}
-		if len(extras) > 0 {
-			subDesc = strings.Join(extras, ", ")
-		}
+		pdfLines = append(pdfLines, finance.InvoiceLine{
+			Description: desc, SubDescription: subDesc, Quantity: 1, UnitPrice: l.tier.amount,
+		})
+		total += l.tier.amount
 	}
-	pdfLines := []finance.InvoiceLine{{Description: desc, SubDescription: subDesc, Quantity: 1, UnitPrice: t.amount}}
+
 	inv := finance.Invoice{
-		ClubName:      clubName,
-		OrgNumber:     orgNumber,
+		ClubName:       clubName,
+		OrgNumber:      orgNumber,
 		ClubAddress:    clubAddress,
 		Website:        website,
 		TreasurerEmail: treasurerEmail,
 		LogoData:       logoData,
 		LogoMIME:       logoMIME,
 		MemberName:     memberName,
-		MemberAddress: memberAddress,
-		InvoiceNumber: invoiceSeq,
-		IssueDate:     time.Now(),
-		DueDate:       dueDate,
-		KID:           kid,
-		BankAccount:   bankAccount,
-		Lines:         pdfLines,
+		MemberAddress:  memberAddress,
+		InvoiceNumber:  invoiceSeq,
+		IssueDate:      time.Now(),
+		DueDate:        dueDate,
+		KID:            kid,
+		BankAccount:    bankAccount,
+		Lines:          pdfLines,
 	}
 	pdfData, err := finance.GeneratePDF(inv)
 	if err != nil {
 		return "", 0, 0, err
+	}
+
+	// invoices.category stays NULL when an invoice covers multiple
+	// categories so the (user, category, period) unique partial index
+	// only constrains single-category invoices. The per-line idempotency
+	// check above is what prevents double-billing in the multi-line
+	// case.
+	var invoiceCategory *string
+	var invoicePriceItem *string
+	if len(lines) == 1 {
+		c := lines[0].tier.category
+		invoiceCategory = &c
+		id := lines[0].tier.id
+		invoicePriceItem = &id
 	}
 
 	var invoiceID string
@@ -424,16 +487,46 @@ func (h *InvoiceHandler) createBulkInvoice(
 		                       category, status)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'open')
 		 RETURNING id`,
-		clubID, userID, invoiceSeq, kid, dueDate, t.amount, pdfData, t.id, fiscalPeriodID, t.category,
+		clubID, userID, invoiceSeq, kid, dueDate, total, pdfData, invoicePriceItem, fiscalPeriodID, invoiceCategory,
 	).Scan(&invoiceID); err != nil {
 		return "", 0, 0, err
 	}
-	if _, err := h.db.Exec(ctx,
-		`INSERT INTO invoice_lines (invoice_id, description, quantity, unit_price, line_total)
-		 VALUES ($1, $2, 1, $3, $3)`,
-		invoiceID, desc, t.amount,
-	); err != nil {
-		h.log.Error().Err(err).Msg("failed to insert invoice line for bulk invoice")
+	for i, l := range lines {
+		if _, err := h.db.Exec(ctx,
+			`INSERT INTO invoice_lines (invoice_id, description, sub_description, quantity,
+			                            unit_price, line_total, price_item_id)
+			 VALUES ($1, $2, $3, 1, $4, $4, $5)`,
+			invoiceID, pdfLines[i].Description, pdfLines[i].SubDescription, l.tier.amount, l.tier.id,
+		); err != nil {
+			h.log.Error().Err(err).Msg("failed to insert invoice line for bulk invoice")
+		}
 	}
-	return invoiceID, invoiceSeq, t.amount, nil
+	_ = memberEmail
+	_ = actorID
+	return invoiceID, invoiceSeq, total, nil
+}
+
+// describeSlipBoat builds the sub-line "Plass A12, Contrast 33, bredde
+// 3.40 m" describing the boat/slip context behind a tiered line. Used
+// by both the bulk flow and the single-faktura tier resolution so PDF
+// output is identical regardless of entry point.
+func describeSlipBoat(info *slipBoatInfo) string {
+	boatLabel := info.boatName
+	if boatLabel == "" {
+		boatLabel = strings.TrimSpace(info.mfg + " " + info.model)
+	}
+	extras := []string{}
+	if info.slipLbl != "" {
+		extras = append(extras, "Plass "+info.slipLbl)
+	}
+	if boatLabel != "" {
+		extras = append(extras, boatLabel)
+	}
+	if info.beam != nil {
+		extras = append(extras, fmt.Sprintf("bredde %.2f m", *info.beam))
+	}
+	if info.length != nil {
+		extras = append(extras, fmt.Sprintf("lengde %.2f m", *info.length))
+	}
+	return strings.Join(extras, ", ")
 }
