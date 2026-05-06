@@ -514,18 +514,36 @@ func main() {
 					})
 				}
 
-				if cfg.Features.Commerce {
-					r.Route("/financials", func(r chi.Router) {
-						r.Use(middleware.RequireRole("treasurer", "board", "admin"))
+				// One /financials block. Sub-paths are gated by the right
+				// feature flag inline. Splitting into two r.Route calls
+				// with the same prefix causes chi to register only one,
+				// shadowing the other (this is what produced the 404 on
+				// the invoice PDF endpoint).
+				r.Route("/financials", func(r chi.Router) {
+					r.Use(middleware.RequireRole("treasurer", "board", "admin"))
+
+					if cfg.Features.Commerce {
+						// Commerce-side reporting: payments, overdue,
+						// summary, CSV exports, and "generate from payment".
 						r.Get("/summary", financialsHandler.HandleGetFinancialSummary)
 						r.Get("/payments", financialsHandler.HandleListPayments)
 						r.Get("/payments/{paymentID}", financialsHandler.HandleGetPaymentDetails)
 						r.Get("/export", financialsHandler.HandleExportCSV)
 						r.Post("/invoices", financialsHandler.HandleGenerateInvoice)
-						r.Post("/invoices/full", invoiceHandler.HandleCreateInvoice)
-						r.Get("/invoices/{invoiceID}/pdf", invoiceHandler.HandleGetInvoicePDF)
 						r.Get("/overdue", financialsHandler.HandleListOverdue)
+					}
+
+					if cfg.Features.Accounting {
+						// Faktura lifecycle: PDF download, list (by status),
+						// single create, bulk create, send, void, delete.
+						// All gated on the accounting feature flag so the
+						// whole faktura workflow can be toggled together.
+						r.Get("/invoices/{invoiceID}/pdf", invoiceHandler.HandleGetInvoicePDF)
+						r.With(middleware.RequireRole("treasurer", "admin"),
+							middleware.RequireFreshTOTP(10*time.Minute)).
+							Post("/invoices/full", invoiceHandler.HandleCreateInvoice)
 						r.Get("/invoices/drafts", invoiceHandler.HandleListDraftInvoices)
+						r.Get("/invoices", invoiceHandler.HandleListInvoices)
 						r.With(middleware.RequireRole("treasurer", "admin"),
 							middleware.RequireFreshTOTP(10*time.Minute)).
 							Post("/invoices/bulk", invoiceHandler.HandleBulkCreateInvoices)
@@ -538,13 +556,14 @@ func main() {
 						r.With(middleware.RequireRole("treasurer", "admin"),
 							middleware.RequireFreshTOTP(10*time.Minute)).
 							Delete("/invoices/{invoiceID}", invoiceHandler.HandleDeleteInvoice)
-					})
-				}
+					}
+				})
 
 				r.Route("/users", func(r chi.Router) {
 					r.Use(middleware.RequireRole("board", "admin"))
 					r.Get("/", adminUsersHandler.HandleListUsers)
 					r.Get("/{userID}", adminUsersHandler.HandleGetUser)
+					r.Get("/{userID}/boats", adminUsersHandler.HandleListUserBoats)
 
 					// CSV bulk import/export — site admin only. Export is a
 					// read endpoint but emits PII for the entire club, so
@@ -614,26 +633,28 @@ func main() {
 					})
 				}
 
-				// Financial settings are not gated on the bookings feature
-				// flag — fakturas always need org/address/bank/logo.
-				// Registered as flat paths (not r.Route) so chi matches
-				// requests with no trailing slash.
-				r.With(middleware.RequireRole("treasurer", "admin")).
-					Get("/settings/financials", clubSettingsHandler.HandleGetFinancialSettings)
-				r.With(
-					middleware.RequireRole("treasurer", "admin"),
-					middleware.RequireFreshTOTP(10*time.Minute),
-				).Patch("/settings/financials", clubSettingsHandler.HandleUpdateFinancialSettings)
-				r.With(middleware.RequireRole("treasurer", "admin")).
-					Get("/settings/financials/logo", clubSettingsHandler.HandleGetClubLogo)
-				r.With(
-					middleware.RequireRole("treasurer", "admin"),
-					middleware.RequireFreshTOTP(10*time.Minute),
-				).Post("/settings/financials/logo", clubSettingsHandler.HandleUploadClubLogo)
-				r.With(
-					middleware.RequireRole("treasurer", "admin"),
-					middleware.RequireFreshTOTP(10*time.Minute),
-				).Delete("/settings/financials/logo", clubSettingsHandler.HandleDeleteClubLogo)
+				// Faktura branding settings (org no, address, bank, logo,
+				// website, board emails). Gated on the accounting feature
+				// flag alongside the rest of the faktura lifecycle. Flat
+				// paths (not r.Route) so chi matches with no trailing slash.
+				if cfg.Features.Accounting {
+					r.With(middleware.RequireRole("treasurer", "admin")).
+						Get("/settings/financials", clubSettingsHandler.HandleGetFinancialSettings)
+					r.With(
+						middleware.RequireRole("treasurer", "admin"),
+						middleware.RequireFreshTOTP(10*time.Minute),
+					).Patch("/settings/financials", clubSettingsHandler.HandleUpdateFinancialSettings)
+					r.With(middleware.RequireRole("treasurer", "admin")).
+						Get("/settings/financials/logo", clubSettingsHandler.HandleGetClubLogo)
+					r.With(
+						middleware.RequireRole("treasurer", "admin"),
+						middleware.RequireFreshTOTP(10*time.Minute),
+					).Post("/settings/financials/logo", clubSettingsHandler.HandleUploadClubLogo)
+					r.With(
+						middleware.RequireRole("treasurer", "admin"),
+						middleware.RequireFreshTOTP(10*time.Minute),
+					).Delete("/settings/financials/logo", clubSettingsHandler.HandleDeleteClubLogo)
+				}
 
 				r.Route("/slip-shares", func(r chi.Router) {
 					r.Use(middleware.RequireRole("board", "harbor_master"))
