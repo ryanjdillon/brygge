@@ -6,9 +6,12 @@ Welcome to the Brygge documentation. Brygge is an open-source harbour club manag
 
 | Document | Audience | Description |
 |----------|----------|-------------|
+| [quickstart.md](quickstart.md) | Developers | Local dev environment in five minutes |
+| [architecture.md](architecture.md) | All | How the pieces fit together |
+| [tech-stack.md](tech-stack.md) | All | What the moving parts are |
 | [deploy.md](deploy.md) | Operators | Step-by-step deployment guide with provider-specific instructions |
 | [setup.md](setup.md) | Club admins | Non-developer guide for initial server setup and configuration |
-| [contributing.md](contributing.md) | Developers | Development environment, code style, testing, and PR workflow |
+| [../CONTRIBUTING.md](../CONTRIBUTING.md) | Developers | Development environment, code style, testing, and PR workflow |
 | [configuration.md](configuration.md) | Operators | Environment variables and feature flags |
 | [database.md](database.md) | Operators | Postgres ops: connecting, running scripts, migrations, backups |
 | [mail/setup.md](mail/setup.md) | Operators | Self-hosted mail (Stalwart + Bulwark): deploy, DKIM, role mailboxes, webmail |

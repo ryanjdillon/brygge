@@ -43,7 +43,7 @@ curl -sSf https://atlasgo.sh | sh
 ## 2. Getting started
 
 ```bash
-git clone https://github.com/YOUR_ORG/brygge.git
+git clone https://github.com/ryanjdillon/brygge.git
 cd brygge
 
 # Enter the dev shell (provides all tools)

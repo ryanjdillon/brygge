@@ -10,7 +10,7 @@ Docs are organized by topic so you can read just the section you need without lo
 |-------|-------------|
 | Architecture overview | [docs/index.md](docs/index.md) |
 | Local setup | [docs/setup.md](docs/setup.md) |
-| Contributing workflow | [docs/contributing.md](docs/contributing.md) |
+| Contributing workflow | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | Configuration / env vars | [docs/configuration.md](docs/configuration.md) |
 | Production deploy | [docs/deploy.md](docs/deploy.md) |
 | Troubleshooting | [docs/troubleshooting.md](docs/troubleshooting.md) |
@@ -53,7 +53,7 @@ All `just` commands run from the repo root (`/home/ryan/code/personal/brygge`). 
 | `just deploy` | SSH deploy: pull, build, migrate, restart |
 | `just security` | Run all security scans (gosec, govulncheck, npm audit) |
 
-For single-test examples and full dev workflow, see [docs/contributing.md](docs/contributing.md).
+For single-test examples and full dev workflow, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Architecture
 

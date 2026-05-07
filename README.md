@@ -1,144 +1,51 @@
+<p align="center">
+  <img src="docs/assets/logo.svg" alt="Brygge" width="120" />
+</p>
+
 <h1 align="center">Brygge</h1>
 
 <p align="center">
-  Open-source harbour club management platform
+  Self-hosted management for harbour clubs, boat associations, and small marinas.
 </p>
 
 <p align="center">
-  <a href="#features">Features</a> &middot;
-  <a href="#quick-start">Quick Start</a> &middot;
-  <a href="docs/index.md">Documentation</a> &middot;
-  <a href="docs/deploy.md">Deploy</a> &middot;
-  <a href="docs/contributing.md">Contributing</a>
-</p>
-
-<p align="center">
-  <a href="https://github.com/brygge-klubb/brygge/actions/workflows/ci.yml">
-    <img src="https://github.com/brygge-klubb/brygge/actions/workflows/ci.yml/badge.svg" alt="CI" />
+  <a href="https://github.com/ryanjdillon/brygge/actions/workflows/ci.yml">
+    <img src="https://github.com/ryanjdillon/brygge/actions/workflows/ci.yml/badge.svg" alt="CI" />
   </a>
 </p>
 
 ---
 
-Brygge (Norwegian for *dock*) is a self-hosted management platform for harbour clubs, boat associations, and marina cooperatives. It ships as a single Docker container with an embedded SPA frontend, backed by PostgreSQL and Redis.
+*Brygge* is Norwegian for "dock". It runs the unglamorous side of a club — the membership roll, the waiting list, the slip assignments, the invoices, the dugnad sign-up sheet — so volunteer boards can spend less time in spreadsheets and more time on the water.
 
-## Features
+It's one Go binary with an embedded Vue SPA, backed by Postgres and Redis. A single Hetzner CAX11 (ARM64, 2 vCPU, 4 GB) runs the whole thing comfortably for a few hundred members.
 
-| Area              | Highlights                                                                                                      |
-|------             |-----------                                                                                                      |
-| **Member portal** | Profile, boat registry, slip management, waiting list, document archive, directory, GDPR data export & deletion |
-| **Bookings**      | Guest slips, motorhome spots, club rooms, hoist scheduling with calendar availability                           |
-| **Finances**      | Dues & invoices, Vipps payments, merchandise shop, overdue tracking, financial reports (CSV export)             |
-| **Communication** | Broadcast email, web push notifications, integrated forum (Matrix/Dendrite)                                     |
-| **Projects**      | Dugnad (working day) tracking, task boards with kanban view, shopping lists                                     |
-| **Calendar**      | Events with iCal export, RSVP, regatta & social event management                                                |
-| **Admin**         | Role-based access (7 roles), audit log, slip & waiting list management, feature flags                           |
-| **Harbour map**   | Interactive MapLibre GL map with configurable markers and harbour chart overlay                                 |
-| **i18n**          | 7 languages: Norwegian, English, German, French, Italian, Dutch, Polish                                         |
+## Get started
 
-## Tech Stack
+- **Run it locally** → [docs/quickstart.md](docs/quickstart.md)
+- **Deploy it** → [docs/deploy.md](docs/deploy.md)
+- **Set it up as a club admin** → [docs/setup.md](docs/setup.md)
 
-| Layer          | Technology                                                               |
-|-------         |-----------                                                               |
-| Backend        | Go 1.25, chi/v5, pgx/v5, Redis 7, Huma (OpenAPI 3.1)                     |
-| Frontend       | Vue 3.5, TanStack Query, Pinia, Shadcn-vue, TailwindCSS 4, MapLibre GL   |
-| API client     | openapi-fetch with generated TypeScript types                            |
-| Auth           | JWT + Vipps Login (Norwegian payment provider)                           |
-| Database       | PostgreSQL 16 (raw SQL + sqlc code generation)                           |
-| Infrastructure | Docker Compose, Traefik v2.11 (TLS via Let's Encrypt), Distroless runtime |
-| CI             | GitHub Actions (lint, test, security scan, build, deploy)                |
+## What's inside
 
-## Quick Start
+A guided tour of the architecture lives in [docs/architecture.md](docs/architecture.md). The short version: member portal, slip + waiting list management, faktura/KID invoicing, bookings (guest slips, hoist, rooms), an integrated Matrix-powered forum, dugnad tracking, harbour map, and a calendar — all gated by feature flags so you only run what you use.
 
-### Prerequisites
+The pieces that hold it together are listed in [docs/tech-stack.md](docs/tech-stack.md).
 
-- [Docker](https://docs.docker.com/get-docker/) with Compose plugin
-- [Nix](https://nixos.org/) (recommended) or Go 1.25+, Node.js 22+, and [just](https://just.systems/)
+## Contributing
 
-### Development
+I'd genuinely love help. Whether it's a translation, a bug report, a small fix, or a whole new module — clubs everywhere have weirdly specific needs and the only way Brygge gets better is if more of them get represented in the code. See [CONTRIBUTING.md](CONTRIBUTING.md) for how the dev loop works.
 
-```bash
-git clone https://github.com/brygge-klubb/brygge.git
-cd brygge
-
-# Enter the Nix dev shell (provides all tools at pinned versions)
-nix develop
-
-# Install frontend dependencies
-cd frontend && npm install && cd ..
-
-# Start PostgreSQL, Redis, Go API (with hot reload), and Vite dev server
-just up
-```
-
-The app is available at `http://localhost:5173` (frontend) and `http://localhost:8080` (API). Captured emails (magic links, invoices, broadcasts) appear at `http://localhost:8025` — the MailPit web UI. No mail ever leaves the host in dev.
-
-### Running Tests
-
-```bash
-just test-go            # Go unit tests
-just test-go-integration # Go tests with real DB/Redis
-just test-vue           # Vitest component tests
-just test-e2e           # Playwright E2E tests
-just lint               # golangci-lint + ESLint
-```
-
-### Production Build
-
-```bash
-just build              # Go binary with embedded SPA
-just docker-build       # Docker image (ARM64)
-```
-
-## Architecture
-
-<p align="center">
-  <picture>
-    <img src="docs/assets/architecture.svg" alt="Architecture diagram" width="700" />
-  </picture>
-</p>
-
-The Go binary embeds the Vue production build via `go:embed` and serves both the API (`/api/v1/*`) and SPA from a single process. For Kubernetes deployments, a `noembed` build tag separates the frontend. See [docs/k8s.md](docs/k8s.md).
-
-## Configuration
-
-Copy `deploy/.env.example` to `deploy/.env` and configure:
-
-| Variable         | Purpose                                                                         |
-|----------        |---------                                                                        |
-| `DOMAIN`         | Your club's domain                                                              |
-| `DATABASE_URL`   | PostgreSQL connection string                                                    |
-| `REDIS_URL`      | Redis connection string                                                         |
-| `JWT_SECRET`     | Token signing secret                                                            |
-| `VIPPS_*`        | Vipps payment & login credentials                                               |
-| `S3_*`           | Object storage for documents                                                    |
-| `SMTP_*`         | Transactional email via self-hosted Stalwart                                    |
-| `FEATURE_*`      | Toggle feature modules (bookings, projects, calendar, commerce, communications) |
-
-See [deploy/.env.example](deploy/.env.example) for the full list with inline documentation.
-
-## Deployment
-
-Brygge runs on a single VPS with Docker Compose. The recommended target is a **Hetzner CAX11** (ARM64, 2 vCPU, 4 GB RAM).
-
-See the [deployment guide](docs/deploy.md) for step-by-step instructions, including provider-specific guides for Hetzner.
-
-```bash
-# Deploy to production
-./scripts/brygge.sh setup    # First time
-./scripts/brygge.sh update   # Subsequent updates
-```
+If you're running Brygge for your own club and want to share what you've changed, that's the most welcome contribution of all.
 
 ## Documentation
 
-Full documentation is in the [`docs/`](docs/index.md) directory:
+Everything else is in [docs/](docs/index.md) — deployment, configuration, mail, observability, 2FA, troubleshooting, and the Kubernetes notes for when one VPS isn't enough.
 
-- [Documentation index](docs/index.md)
-- [Deployment guide](docs/deploy.md) with provider-specific instructions
-- [Setup guide](docs/setup.md) for non-developer club administrators
-- [Contributing guide](docs/contributing.md) for developers
-- [Kubernetes migration](docs/k8s.md) for scaling beyond a single server
+## Status
 
-## Project Status
+Used in production. The roadmap and known gaps live in [TODO.md](TODO.md).
 
-Brygge is in active development and used in production. See [TODO.md](TODO.md) for the roadmap.
+## License
+
+MIT.

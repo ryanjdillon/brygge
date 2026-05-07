@@ -179,4 +179,4 @@ docker compose -f deploy/docker-compose.yml up -d
 
 ---
 
-See also: [deploy.md](deploy.md) | [contributing.md](contributing.md) | [setup.md](setup.md)
+See also: [deploy.md](deploy.md) | [CONTRIBUTING.md](../CONTRIBUTING.md) | [setup.md](setup.md)
