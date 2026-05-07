@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -151,17 +152,38 @@ func (h *ClubSettingsHandler) HandleUpdateBookingSettings(w http.ResponseWriter,
 }
 
 type clubFinancialSettings struct {
-	Name              string `json:"name"`
-	OrgNumber         string `json:"org_number"`
-	Address           string `json:"address"`
-	BankAccount       string `json:"bank_account"`
-	WebsiteURL        string `json:"website_url"`
-	ChairmanEmail     string `json:"chairman_email"`
-	TreasurerEmail    string `json:"treasurer_email"`
-	SecretaryEmail    string `json:"secretary_email"`
-	HarborMasterEmail string `json:"harbor_master_email"`
-	HasLogo           bool   `json:"has_logo"`
-	LogoMIME          string `json:"logo_mime"`
+	Name              string   `json:"name"`
+	OrgNumber         string   `json:"org_number"`
+	Address           string   `json:"address"`
+	Phone             string   `json:"phone"`
+	VHFChannel        string   `json:"vhf_channel"`
+	Latitude          *float64 `json:"latitude"`
+	Longitude         *float64 `json:"longitude"`
+	BankAccount       string   `json:"bank_account"`
+	WebsiteURL        string   `json:"website_url"`
+	ChairmanEmail     string   `json:"chairman_email"`
+	ViceChairmanEmail string   `json:"vice_chairman_email"`
+	TreasurerEmail    string   `json:"treasurer_email"`
+	SecretaryEmail    string   `json:"secretary_email"`
+	HarborMasterEmail string   `json:"harbor_master_email"`
+	HasFakturaLogo  bool   `json:"has_faktura_logo"`
+	FakturaLogoMIME string `json:"faktura_logo_mime"`
+	HasSiteLogo     bool   `json:"has_site_logo"`
+	SiteLogoMIME    string `json:"site_logo_mime"`
+	// Public site content — empty string means "use the frontend's
+	// i18n fallback so the page reads sensibly even before any admin
+	// has visited settings".
+	HarborApproach          string `json:"harbor_approach"`
+	HarborDepth             string `json:"harbor_depth"`
+	HarborVHF               string `json:"harbor_vhf"`
+	HarborCTATitle          string `json:"harbor_cta_title"`
+	HarborCTADescription    string `json:"harbor_cta_description"`
+	MotorhomePower          string `json:"motorhome_power"`
+	MotorhomeFacilities     string `json:"motorhome_facilities"`
+	MotorhomeCheckin        string `json:"motorhome_checkin"`
+	MotorhomeRules          string `json:"motorhome_rules"`
+	MotorhomeCTATitle       string `json:"motorhome_cta_title"`
+	MotorhomeCTADescription string `json:"motorhome_cta_description"`
 }
 
 // HandleGetFinancialSettings returns the club's invoice-relevant
@@ -176,18 +198,40 @@ func (h *ClubSettingsHandler) HandleGetFinancialSettings(w http.ResponseWriter, 
 	}
 	var s clubFinancialSettings
 	if err := h.db.QueryRow(ctx,
-		`SELECT name, COALESCE(org_number, ''), COALESCE(address, ''), COALESCE(bank_account, ''),
+		`SELECT name, COALESCE(org_number, ''), COALESCE(address, ''),
+		        COALESCE(phone, ''), COALESCE(vhf_channel, ''),
+		        latitude, longitude,
+		        COALESCE(bank_account, ''),
 		        COALESCE(website_url, ''),
-		        COALESCE(chairman_email, ''), COALESCE(treasurer_email, ''),
+		        COALESCE(chairman_email, ''), COALESCE(vice_chairman_email, ''),
+		        COALESCE(treasurer_email, ''),
 		        COALESCE(secretary_email, ''), COALESCE(harbor_master_email, ''),
-		        (logo_data IS NOT NULL), COALESCE(logo_mime, '')
+		        (faktura_logo_data IS NOT NULL), COALESCE(faktura_logo_mime, ''),
+		        (site_logo_data IS NOT NULL), COALESCE(site_logo_mime, ''),
+		        COALESCE(harbor_approach, ''), COALESCE(harbor_depth, ''),
+		        COALESCE(harbor_vhf, ''),
+		        COALESCE(harbor_cta_title, ''), COALESCE(harbor_cta_description, ''),
+		        COALESCE(motorhome_power, ''), COALESCE(motorhome_facilities, ''),
+		        COALESCE(motorhome_checkin, ''), COALESCE(motorhome_rules, ''),
+		        COALESCE(motorhome_cta_title, ''), COALESCE(motorhome_cta_description, '')
 		   FROM clubs WHERE id = $1`,
 		claims.ClubID,
-	).Scan(&s.Name, &s.OrgNumber, &s.Address, &s.BankAccount,
+	).Scan(&s.Name, &s.OrgNumber, &s.Address,
+		&s.Phone, &s.VHFChannel,
+		&s.Latitude, &s.Longitude,
+		&s.BankAccount,
 		&s.WebsiteURL,
-		&s.ChairmanEmail, &s.TreasurerEmail,
+		&s.ChairmanEmail, &s.ViceChairmanEmail,
+		&s.TreasurerEmail,
 		&s.SecretaryEmail, &s.HarborMasterEmail,
-		&s.HasLogo, &s.LogoMIME); err != nil {
+		&s.HasFakturaLogo, &s.FakturaLogoMIME,
+		&s.HasSiteLogo, &s.SiteLogoMIME,
+		&s.HarborApproach, &s.HarborDepth,
+		&s.HarborVHF,
+		&s.HarborCTATitle, &s.HarborCTADescription,
+		&s.MotorhomePower, &s.MotorhomeFacilities,
+		&s.MotorhomeCheckin, &s.MotorhomeRules,
+		&s.MotorhomeCTATitle, &s.MotorhomeCTADescription); err != nil {
 		h.log.Error().Err(err).Msg("load financial settings")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
@@ -196,14 +240,30 @@ func (h *ClubSettingsHandler) HandleGetFinancialSettings(w http.ResponseWriter, 
 }
 
 type updateFinancialSettingsRequest struct {
-	OrgNumber         *string `json:"org_number,omitempty"`
-	Address           *string `json:"address,omitempty"`
-	BankAccount       *string `json:"bank_account,omitempty"`
-	WebsiteURL        *string `json:"website_url,omitempty"`
-	ChairmanEmail     *string `json:"chairman_email,omitempty"`
-	TreasurerEmail    *string `json:"treasurer_email,omitempty"`
-	SecretaryEmail    *string `json:"secretary_email,omitempty"`
-	HarborMasterEmail *string `json:"harbor_master_email,omitempty"`
+	OrgNumber               *string  `json:"org_number,omitempty"`
+	Address                 *string  `json:"address,omitempty"`
+	Phone                   *string  `json:"phone,omitempty"`
+	VHFChannel              *string  `json:"vhf_channel,omitempty"`
+	Latitude                *float64 `json:"latitude,omitempty"`
+	Longitude               *float64 `json:"longitude,omitempty"`
+	BankAccount             *string  `json:"bank_account,omitempty"`
+	WebsiteURL              *string  `json:"website_url,omitempty"`
+	ChairmanEmail           *string  `json:"chairman_email,omitempty"`
+	ViceChairmanEmail       *string  `json:"vice_chairman_email,omitempty"`
+	TreasurerEmail          *string  `json:"treasurer_email,omitempty"`
+	SecretaryEmail          *string  `json:"secretary_email,omitempty"`
+	HarborMasterEmail       *string  `json:"harbor_master_email,omitempty"`
+	HarborApproach          *string  `json:"harbor_approach,omitempty"`
+	HarborDepth             *string  `json:"harbor_depth,omitempty"`
+	HarborVHF               *string  `json:"harbor_vhf,omitempty"`
+	HarborCTATitle          *string  `json:"harbor_cta_title,omitempty"`
+	HarborCTADescription    *string  `json:"harbor_cta_description,omitempty"`
+	MotorhomePower          *string  `json:"motorhome_power,omitempty"`
+	MotorhomeFacilities     *string  `json:"motorhome_facilities,omitempty"`
+	MotorhomeCheckin        *string  `json:"motorhome_checkin,omitempty"`
+	MotorhomeRules          *string  `json:"motorhome_rules,omitempty"`
+	MotorhomeCTATitle       *string  `json:"motorhome_cta_title,omitempty"`
+	MotorhomeCTADescription *string  `json:"motorhome_cta_description,omitempty"`
 }
 
 // HandleUpdateFinancialSettings updates org_number, address, and
@@ -221,27 +281,46 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if req.OrgNumber == nil && req.Address == nil && req.BankAccount == nil &&
-		req.WebsiteURL == nil && req.ChairmanEmail == nil && req.TreasurerEmail == nil &&
-		req.SecretaryEmail == nil && req.HarborMasterEmail == nil {
-		Error(w, http.StatusBadRequest, "no fields supplied")
-		return
-	}
 	// Build COALESCE-style update so unspecified fields stay as-is.
+	// Empty-fields check is intentionally relaxed: with this many
+	// optional knobs an admin saving a single tweak is still valid.
 	if _, err := h.db.Exec(ctx,
 		`UPDATE clubs SET
-		   org_number          = COALESCE($2, org_number),
-		   address             = COALESCE($3, address),
-		   bank_account        = COALESCE($4, bank_account),
-		   website_url         = COALESCE($5, website_url),
-		   chairman_email      = COALESCE($6, chairman_email),
-		   treasurer_email     = COALESCE($7, treasurer_email),
-		   secretary_email     = COALESCE($8, secretary_email),
-		   harbor_master_email = COALESCE($9, harbor_master_email)
+		   org_number                = COALESCE($2,  org_number),
+		   address                   = COALESCE($3,  address),
+		   phone                     = COALESCE($4,  phone),
+		   vhf_channel               = COALESCE($5,  vhf_channel),
+		   latitude                  = COALESCE($6,  latitude),
+		   longitude                 = COALESCE($7,  longitude),
+		   bank_account              = COALESCE($8,  bank_account),
+		   website_url               = COALESCE($9,  website_url),
+		   chairman_email            = COALESCE($10, chairman_email),
+		   vice_chairman_email       = COALESCE($11, vice_chairman_email),
+		   treasurer_email           = COALESCE($12, treasurer_email),
+		   secretary_email           = COALESCE($13, secretary_email),
+		   harbor_master_email       = COALESCE($14, harbor_master_email),
+		   harbor_approach           = COALESCE($15, harbor_approach),
+		   harbor_depth              = COALESCE($16, harbor_depth),
+		   harbor_vhf                = COALESCE($17, harbor_vhf),
+		   harbor_cta_title          = COALESCE($18, harbor_cta_title),
+		   harbor_cta_description    = COALESCE($19, harbor_cta_description),
+		   motorhome_power           = COALESCE($20, motorhome_power),
+		   motorhome_facilities      = COALESCE($21, motorhome_facilities),
+		   motorhome_checkin         = COALESCE($22, motorhome_checkin),
+		   motorhome_rules           = COALESCE($23, motorhome_rules),
+		   motorhome_cta_title       = COALESCE($24, motorhome_cta_title),
+		   motorhome_cta_description = COALESCE($25, motorhome_cta_description)
 		 WHERE id = $1`,
-		claims.ClubID, req.OrgNumber, req.Address, req.BankAccount,
-		req.WebsiteURL, req.ChairmanEmail, req.TreasurerEmail,
+		claims.ClubID, req.OrgNumber, req.Address, req.Phone, req.VHFChannel,
+		req.Latitude, req.Longitude,
+		req.BankAccount,
+		req.WebsiteURL, req.ChairmanEmail, req.ViceChairmanEmail, req.TreasurerEmail,
 		req.SecretaryEmail, req.HarborMasterEmail,
+		req.HarborApproach, req.HarborDepth, req.HarborVHF,
+		req.HarborCTATitle, req.HarborCTADescription,
+		req.MotorhomePower, req.MotorhomeFacilities,
+		req.MotorhomeCheckin, req.MotorhomeRules,
+		req.MotorhomeCTATitle, req.MotorhomeCTADescription,
 	); err != nil {
 		h.log.Error().Err(err).Msg("update financial settings")
 		Error(w, http.StatusInternalServerError, "internal error")
@@ -255,10 +334,12 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 
 const maxLogoBytes = 2 * 1024 * 1024
 
-// HandleUploadClubLogo accepts a multipart upload (field name "logo").
-// Only PNG and JPEG are accepted; SVG is rejected because the PDF
-// renderer can't rasterize vector formats.
-func (h *ClubSettingsHandler) HandleUploadClubLogo(w http.ResponseWriter, r *http.Request) {
+// uploadLogo is the shared body of the two upload endpoints. kind
+// drives both the column pair being written and the accepted MIME
+// types — faktura logo is raster-only because the PDF library can't
+// rasterize vector formats; site logo is SVG-only so it scales
+// crisply in the navbar regardless of viewport size.
+func (h *ClubSettingsHandler) uploadLogo(w http.ResponseWriter, r *http.Request, kind string) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
 	if claims == nil {
@@ -285,27 +366,96 @@ func (h *ClubSettingsHandler) HandleUploadClubLogo(w http.ResponseWriter, r *htt
 		return
 	}
 	mime := http.DetectContentType(data)
-	if mime != "image/png" && mime != "image/jpeg" {
-		Error(w, http.StatusUnsupportedMediaType, "logo must be PNG or JPEG; SVG and other formats are not supported")
+	var dataCol, mimeCol string
+	switch kind {
+	case "faktura":
+		if mime != "image/png" && mime != "image/jpeg" {
+			Error(w, http.StatusUnsupportedMediaType, "faktura logo must be PNG or JPEG")
+			return
+		}
+		dataCol, mimeCol = "faktura_logo_data", "faktura_logo_mime"
+	case "site":
+		// http.DetectContentType returns "text/xml; charset=utf-8" for
+		// SVG so we sniff for the SVG signature explicitly. Reject
+		// anything else outright.
+		if !looksLikeSVG(data) {
+			Error(w, http.StatusUnsupportedMediaType, "site logo must be SVG")
+			return
+		}
+		mime = "image/svg+xml"
+		dataCol, mimeCol = "site_logo_data", "site_logo_mime"
+	default:
+		Error(w, http.StatusBadRequest, "unknown logo kind")
 		return
 	}
 	if _, err := h.db.Exec(ctx,
-		`UPDATE clubs SET logo_data = $2, logo_mime = $3 WHERE id = $1`,
+		`UPDATE clubs SET `+dataCol+` = $2, `+mimeCol+` = $3 WHERE id = $1`,
 		claims.ClubID, data, mime,
 	); err != nil {
 		h.log.Error().Err(err).Msg("save club logo")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	if auditErr := LogAudit(ctx, h.db, claims.ClubID, claims.UserID, "upload_club_logo", "clubs", claims.ClubID, nil, map[string]any{"mime": mime, "size": len(data)}); auditErr != nil {
+	if auditErr := LogAudit(ctx, h.db, claims.ClubID, claims.UserID, "upload_"+kind+"_logo", "clubs", claims.ClubID, nil, map[string]any{"mime": mime, "size": len(data)}); auditErr != nil {
 		h.log.Error().Err(auditErr).Msg("audit club logo upload")
 	}
 	JSON(w, http.StatusOK, map[string]any{"status": "updated", "mime": mime, "size": len(data)})
 }
 
-// HandleGetClubLogo streams the stored logo bytes for the caller's
-// club. Auth required, scoped to claim's club.
-func (h *ClubSettingsHandler) HandleGetClubLogo(w http.ResponseWriter, r *http.Request) {
+// looksLikeSVG sniffs an upload buffer for an SVG root element.
+// We ignore an XML declaration and DOCTYPE, accept whitespace, and
+// require the first non-trivial element to be `<svg`.
+func looksLikeSVG(data []byte) bool {
+	s := strings.TrimSpace(string(data))
+	if strings.HasPrefix(s, "<?xml") {
+		if i := strings.Index(s, "?>"); i != -1 {
+			s = strings.TrimSpace(s[i+2:])
+		}
+	}
+	if strings.HasPrefix(strings.ToLower(s), "<!doctype") {
+		if i := strings.Index(s, ">"); i != -1 {
+			s = strings.TrimSpace(s[i+1:])
+		}
+	}
+	return strings.HasPrefix(strings.ToLower(s), "<svg")
+}
+
+func (h *ClubSettingsHandler) HandleUploadFakturaLogo(w http.ResponseWriter, r *http.Request) {
+	h.uploadLogo(w, r, "faktura")
+}
+func (h *ClubSettingsHandler) HandleUploadSiteLogo(w http.ResponseWriter, r *http.Request) {
+	h.uploadLogo(w, r, "site")
+}
+
+// HandleGetPublicClubLogo streams the stored *site* logo without
+// auth — that's the one consumed by the navbar and other public
+// pages. Returns 404 when no site logo is set so the frontend falls
+// back to clubname-only.
+func (h *ClubSettingsHandler) HandleGetPublicClubLogo(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	var data []byte
+	var mime string
+	err := h.db.QueryRow(ctx,
+		`SELECT site_logo_data, COALESCE(site_logo_mime, '') FROM clubs WHERE slug = $1`,
+		h.config.ClubSlug,
+	).Scan(&data, &mime)
+	if err == pgx.ErrNoRows || len(data) == 0 {
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		h.log.Error().Err(err).Msg("load public site logo")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	w.Header().Set("Content-Type", mime)
+	w.Header().Set("Cache-Control", "public, max-age=300")
+	_, _ = io.Copy(w, bytes.NewReader(data))
+}
+
+// streamLogo is the shared GET handler for the admin-side logo
+// endpoints. dataCol/mimeCol pick which column pair to read.
+func (h *ClubSettingsHandler) streamLogo(w http.ResponseWriter, r *http.Request, dataCol, mimeCol string) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
 	if claims == nil {
@@ -315,7 +465,7 @@ func (h *ClubSettingsHandler) HandleGetClubLogo(w http.ResponseWriter, r *http.R
 	var data []byte
 	var mime string
 	err := h.db.QueryRow(ctx,
-		`SELECT logo_data, COALESCE(logo_mime, '') FROM clubs WHERE id = $1`,
+		`SELECT `+dataCol+`, COALESCE(`+mimeCol+`, '') FROM clubs WHERE id = $1`,
 		claims.ClubID,
 	).Scan(&data, &mime)
 	if err == pgx.ErrNoRows || len(data) == 0 {
@@ -332,8 +482,24 @@ func (h *ClubSettingsHandler) HandleGetClubLogo(w http.ResponseWriter, r *http.R
 	_, _ = io.Copy(w, bytes.NewReader(data))
 }
 
-// HandleDeleteClubLogo clears the stored logo.
-func (h *ClubSettingsHandler) HandleDeleteClubLogo(w http.ResponseWriter, r *http.Request) {
+func (h *ClubSettingsHandler) HandleGetFakturaLogo(w http.ResponseWriter, r *http.Request) {
+	h.streamLogo(w, r, "faktura_logo_data", "faktura_logo_mime")
+}
+func (h *ClubSettingsHandler) HandleGetSiteLogo(w http.ResponseWriter, r *http.Request) {
+	h.streamLogo(w, r, "site_logo_data", "site_logo_mime")
+}
+
+// HandleDeleteFakturaLogo clears the stored faktura logo.
+func (h *ClubSettingsHandler) HandleDeleteFakturaLogo(w http.ResponseWriter, r *http.Request) {
+	h.deleteLogo(w, r, "faktura_logo_data", "faktura_logo_mime", "delete_faktura_logo")
+}
+
+// HandleDeleteSiteLogo clears the stored site logo.
+func (h *ClubSettingsHandler) HandleDeleteSiteLogo(w http.ResponseWriter, r *http.Request) {
+	h.deleteLogo(w, r, "site_logo_data", "site_logo_mime", "delete_site_logo")
+}
+
+func (h *ClubSettingsHandler) deleteLogo(w http.ResponseWriter, r *http.Request, dataCol, mimeCol, action string) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
 	if claims == nil {
@@ -341,14 +507,14 @@ func (h *ClubSettingsHandler) HandleDeleteClubLogo(w http.ResponseWriter, r *htt
 		return
 	}
 	if _, err := h.db.Exec(ctx,
-		`UPDATE clubs SET logo_data = NULL, logo_mime = '' WHERE id = $1`,
+		`UPDATE clubs SET `+dataCol+` = NULL, `+mimeCol+` = '' WHERE id = $1`,
 		claims.ClubID,
 	); err != nil {
 		h.log.Error().Err(err).Msg("clear club logo")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	if auditErr := LogAudit(ctx, h.db, claims.ClubID, claims.UserID, "delete_club_logo", "clubs", claims.ClubID, nil, nil); auditErr != nil {
+	if auditErr := LogAudit(ctx, h.db, claims.ClubID, claims.UserID, action, "clubs", claims.ClubID, nil, nil); auditErr != nil {
 		h.log.Error().Err(auditErr).Msg("audit club logo delete")
 	}
 	JSON(w, http.StatusOK, map[string]string{"status": "deleted"})
