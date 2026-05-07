@@ -59,7 +59,7 @@ function tagColor(tag: string): string {
     case 'volunteer': return 'bg-orange-100 text-orange-800'
     case 'social': return 'bg-green-100 text-green-800'
     case 'agm': return 'bg-purple-100 text-purple-800'
-    default: return 'bg-gray-100 text-gray-800'
+    default: return 'bg-slate-100 text-slate-800'
   }
 }
 
@@ -78,8 +78,8 @@ function tagLabel(tag: string): string {
   <div class="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <h1 class="text-3xl font-bold text-gray-900">{{ t('calendar.title') }}</h1>
-        <p class="mt-1 text-gray-600">{{ t('calendar.description') }}</p>
+        <h1 class="text-3xl font-bold text-slate-900">{{ t('calendar.title') }}</h1>
+        <p class="mt-1 text-slate-600">{{ t('calendar.description') }}</p>
       </div>
       <div class="flex gap-2">
         <button
@@ -108,7 +108,7 @@ function tagLabel(tag: string): string {
           'rounded-full px-3 py-1 text-sm font-medium transition',
           activeTags.has(tag.key)
             ? 'bg-blue-600 text-white'
-            : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
+            : 'bg-slate-100 text-slate-600 hover:bg-slate-200',
         ]"
         @click="toggleTag(tag.key)"
       >
@@ -116,11 +116,11 @@ function tagLabel(tag: string): string {
       </button>
     </div>
 
-    <div v-if="isLoading" class="mt-8 text-center text-gray-500">
+    <div v-if="isLoading" class="mt-8 text-center text-slate-500">
       {{ t('common.loading') }}...
     </div>
 
-    <div v-else-if="filteredEvents.length === 0" class="mt-8 text-center text-gray-400">
+    <div v-else-if="filteredEvents.length === 0" class="mt-8 text-center text-slate-400">
       {{ t('common.noResults') }}
     </div>
 
@@ -128,23 +128,23 @@ function tagLabel(tag: string): string {
       <div
         v-for="event in filteredEvents"
         :key="event.id"
-        class="rounded-lg border border-gray-200 bg-white p-4 shadow-sm"
+        class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
       >
         <div class="flex items-start justify-between">
           <div>
             <div class="flex items-center gap-2">
-              <h3 class="text-lg font-semibold text-gray-900">{{ event.title }}</h3>
+              <h3 class="text-lg font-semibold text-slate-900">{{ event.title }}</h3>
               <span
                 :class="['inline-flex rounded-full px-2 py-0.5 text-xs font-medium', tagColor(event.tag)]"
               >
                 {{ tagLabel(event.tag) }}
               </span>
             </div>
-            <p class="mt-1 text-sm text-gray-500">{{ formatDate(event.start_time) }}</p>
-            <p v-if="event.location" class="mt-1 text-sm text-gray-500">{{ event.location }}</p>
+            <p class="mt-1 text-sm text-slate-500">{{ formatDate(event.start_time) }}</p>
+            <p v-if="event.location" class="mt-1 text-sm text-slate-500">{{ event.location }}</p>
           </div>
         </div>
-        <p v-if="event.description" class="mt-2 text-sm text-gray-600">{{ event.description }}</p>
+        <p v-if="event.description" class="mt-2 text-sm text-slate-600">{{ event.description }}</p>
       </div>
     </div>
 
@@ -156,55 +156,55 @@ function tagLabel(tag: string): string {
       >
         <div class="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl">
           <div class="flex items-center justify-between">
-            <h2 class="text-lg font-semibold text-gray-900">{{ t('calendar.proposeEvent') }}</h2>
-            <button class="text-gray-400 hover:text-gray-600" @click="showProposeModal = false">
+            <h2 class="text-lg font-semibold text-slate-900">{{ t('calendar.proposeEvent') }}</h2>
+            <button class="text-slate-400 hover:text-slate-600" @click="showProposeModal = false">
               <X class="h-5 w-5" />
             </button>
           </div>
-          <p class="mt-1 text-sm text-gray-500">{{ t('calendar.proposeDescription') }}</p>
+          <p class="mt-1 text-sm text-slate-500">{{ t('calendar.proposeDescription') }}</p>
 
           <form class="mt-4 space-y-4" @submit.prevent="showProposeModal = false">
             <div>
-              <label class="block text-sm font-medium text-gray-700">{{ t('admin.events.eventTitle') }}</label>
+              <label class="block text-sm font-medium text-slate-700">{{ t('admin.events.eventTitle') }}</label>
               <input
                 v-model="proposeForm.title"
                 type="text"
                 required
-                class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700">{{ t('admin.events.description') }}</label>
+              <label class="block text-sm font-medium text-slate-700">{{ t('admin.events.description') }}</label>
               <textarea
                 v-model="proposeForm.description"
                 rows="3"
-                class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
             <div class="grid grid-cols-2 gap-4">
               <div>
-                <label class="block text-sm font-medium text-gray-700">{{ t('admin.events.startTime') }}</label>
+                <label class="block text-sm font-medium text-slate-700">{{ t('admin.events.startTime') }}</label>
                 <input
                   v-model="proposeForm.start_time"
                   type="datetime-local"
                   required
-                  class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
               </div>
               <div>
-                <label class="block text-sm font-medium text-gray-700">{{ t('admin.events.endTime') }}</label>
+                <label class="block text-sm font-medium text-slate-700">{{ t('admin.events.endTime') }}</label>
                 <input
                   v-model="proposeForm.end_time"
                   type="datetime-local"
                   required
-                  class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
               </div>
             </div>
             <div class="flex justify-end gap-3 pt-2">
               <button
                 type="button"
-                class="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                class="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
                 @click="showProposeModal = false"
               >
                 {{ t('common.cancel') }}

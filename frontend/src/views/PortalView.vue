@@ -43,18 +43,18 @@ const navItems = computed<NavItem[]>(() => {
   const items: NavItem[] = [
     { to: '/portal', icon: LayoutDashboard, label: t('portal.sidebar.dashboard') },
     { to: '/portal/profile', icon: User, label: t('portal.sidebar.profile') },
-    { to: '/portal/boats', icon: Ship, label: t('portal.sidebar.boats') },
+    { to: '/portal/boats', icon: Ship, label: t('portal.sidebar.myBoats') },
+    { to: '/portal/harbor-map', icon: Map, label: t('portal.sidebar.harborMap') },
+    { to: '/portal/feature-requests', icon: Lightbulb, label: t('portal.sidebar.featureRequests'), roles: ['member', 'slip_holder', 'board', 'admin'] },
     { to: '/portal/directory', icon: Users, label: t('portal.sidebar.directory'), roles: ['member', 'slip_holder', 'board', 'admin'] },
     { to: '/portal/documents', icon: FileText, label: t('portal.sidebar.documents') },
     { to: '/portal/waiting-list', icon: ListOrdered, label: t('portal.sidebar.waitingList') },
     { to: '/portal/slip', icon: Anchor, label: t('portal.sidebar.slip'), roles: ['slip_holder'] },
-    { to: '/portal/harbor-map', icon: Map, label: t('portal.sidebar.harborMap') },
     { to: '/portal/bookings', icon: CalendarDays, label: t('portal.sidebar.bookings'), feature: 'bookings' },
     { to: '/portal/volunteer', icon: BrushCleaning, label: t('volunteer.title'), feature: 'projects' },
     { to: '/portal/notifications', icon: Bell, label: t('notifications.title'), feature: 'communications' },
     { to: '/portal/security', icon: ShieldCheck, label: t('security.title') },
     { to: '/portal/privacy', icon: ShieldCheck, label: t('gdpr.title') },
-    { to: '/portal/feature-requests', icon: Lightbulb, label: t('portal.sidebar.featureRequests'), roles: ['member', 'slip_holder', 'board', 'admin'] },
     { to: '/portal/forum', icon: MessageCircle, label: t('portal.sidebar.forum'), roles: ['member', 'slip_holder', 'board', 'admin'], feature: 'communications' },
   ]
 
@@ -126,7 +126,7 @@ function closeSidebar() {
         <span class="ml-3 text-lg font-semibold text-gray-900">{{ t('portal.title') }}</span>
       </div>
 
-      <main class="p-6 lg:p-8">
+      <main class="px-6 pb-6 pt-8 lg:px-8 lg:pb-8 lg:pt-10">
         <ErrorBoundary>
           <RouterView />
         </ErrorBoundary>

@@ -165,19 +165,19 @@ function startOver() {
 
 <template>
   <div class="mx-auto max-w-2xl px-4 py-12 sm:px-6 lg:px-8">
-    <h1 class="text-3xl font-bold text-gray-900">{{ t('booking.title') }}</h1>
-    <p class="mt-1 text-gray-600">{{ t('booking.subtitle') }}</p>
+    <h1 class="text-3xl font-bold text-slate-900">{{ t('booking.title') }}</h1>
+    <p class="mt-1 text-slate-600">{{ t('booking.subtitle') }}</p>
 
     <!-- Step indicator -->
-    <div v-if="step < 5" class="mt-6 flex items-center gap-2 text-sm text-gray-500">
+    <div v-if="step < 5" class="mt-6 flex items-center gap-2 text-sm text-slate-500">
       <span v-for="s in 4" :key="s" class="flex items-center gap-1">
         <span
           class="flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold"
-          :class="s <= step ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-500'"
+          :class="s <= step ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-500'"
         >
           {{ s }}
         </span>
-        <span v-if="s < 4" class="h-px w-6 bg-gray-300" />
+        <span v-if="s < 4" class="h-px w-6 bg-slate-300" />
       </span>
     </div>
 
@@ -187,17 +187,17 @@ function startOver() {
         v-for="rt in resourceTypes"
         :key="rt.key"
         type="button"
-        class="flex items-center gap-4 rounded-lg border border-gray-200 bg-white p-5 text-left transition hover:border-blue-400 hover:shadow-md"
+        class="flex items-center gap-4 rounded-lg border border-slate-200 bg-white p-5 text-left transition hover:border-blue-400 hover:shadow-md"
         @click="selectType(rt.key)"
       >
         <component :is="rt.icon" class="h-8 w-8 text-blue-600" />
-        <span class="font-semibold text-gray-900">{{ t(rt.label) }}</span>
+        <span class="font-semibold text-slate-900">{{ t(rt.label) }}</span>
       </button>
     </div>
 
     <!-- Step 2: Boat dimensions (slip types only) -->
     <div v-else-if="step === 2" class="mt-8">
-      <h2 class="text-lg font-semibold text-gray-900">{{ t('booking.boatDimensions') }}</h2>
+      <h2 class="text-lg font-semibold text-slate-900">{{ t('booking.boatDimensions') }}</h2>
       <div class="mt-4">
         <BoatDimensionsForm v-model="boatDimensions" />
       </div>
@@ -218,8 +218,8 @@ function startOver() {
 
     <!-- Step 3: Select dates -->
     <div v-else-if="step === 3" class="mt-8">
-      <h2 class="text-lg font-semibold text-gray-900">{{ t('booking.selectDates') }}</h2>
-      <div class="mt-4 rounded-lg border border-gray-200 bg-white p-4">
+      <h2 class="text-lg font-semibold text-slate-900">{{ t('booking.selectDates') }}</h2>
+      <div class="mt-4 rounded-lg border border-slate-200 bg-white p-4">
         <BookingCalendar
           :resource-type="selectedType"
           :dimensions="needsDimensions ? boatDimensions : undefined"
@@ -227,7 +227,7 @@ function startOver() {
           v-model:end-date="endDate"
         />
       </div>
-      <div v-if="startDate && endDate" class="mt-3 text-sm text-gray-600">
+      <div v-if="startDate && endDate" class="mt-3 text-sm text-slate-600">
         {{ startDate }} — {{ endDate }}
       </div>
       <div class="mt-6 flex gap-3">
@@ -247,68 +247,68 @@ function startOver() {
 
     <!-- Step 4: Guest details & confirm -->
     <div v-else-if="step === 4" class="mt-8 space-y-6">
-      <h2 class="text-lg font-semibold text-gray-900">{{ t('booking.details') }}</h2>
+      <h2 class="text-lg font-semibold text-slate-900">{{ t('booking.details') }}</h2>
 
       <div v-if="!auth.isAuthenticated" class="space-y-4">
         <div>
-          <label class="block text-sm font-medium text-gray-700">{{ t('booking.guestNameLabel') }}</label>
+          <label class="block text-sm font-medium text-slate-700">{{ t('booking.guestNameLabel') }}</label>
           <input
             v-model="guestName"
             type="text"
             class="mt-1 block w-full rounded-md text-sm focus:border-blue-500 focus:ring-blue-500"
-            :class="fieldErrors.name ? 'border-red-400' : 'border-gray-300'"
+            :class="fieldErrors.name ? 'border-red-400' : 'border-slate-300'"
             @blur="validateField('name')"
           />
           <p v-if="fieldErrors.name" class="mt-1 text-sm text-red-600">{{ fieldErrors.name }}</p>
         </div>
         <div>
-          <label class="block text-sm font-medium text-gray-700">{{ t('booking.guestEmail') }}</label>
+          <label class="block text-sm font-medium text-slate-700">{{ t('booking.guestEmail') }}</label>
           <input
             v-model="guestEmail"
             type="email"
             class="mt-1 block w-full rounded-md text-sm focus:border-blue-500 focus:ring-blue-500"
-            :class="fieldErrors.email ? 'border-red-400' : 'border-gray-300'"
+            :class="fieldErrors.email ? 'border-red-400' : 'border-slate-300'"
             @blur="validateField('email')"
           />
           <p v-if="fieldErrors.email" class="mt-1 text-sm text-red-600">{{ fieldErrors.email }}</p>
         </div>
         <div>
-          <label class="block text-sm font-medium text-gray-700">{{ t('booking.guestPhone') }}</label>
+          <label class="block text-sm font-medium text-slate-700">{{ t('booking.guestPhone') }}</label>
           <PhoneInput v-model="guestPhone" :has-error="!!fieldErrors.phone" @blur="validateField('phone')" />
           <p v-if="fieldErrors.phone" class="mt-1 text-sm text-red-600">{{ fieldErrors.phone }}</p>
         </div>
       </div>
 
       <div>
-        <label class="block text-sm font-medium text-gray-700">{{ t('booking.notes') }}</label>
+        <label class="block text-sm font-medium text-slate-700">{{ t('booking.notes') }}</label>
         <textarea
           v-model="notes"
           rows="2"
-          class="mt-1 block w-full rounded-md border-gray-300 text-sm focus:border-blue-500 focus:ring-blue-500"
+          class="mt-1 block w-full rounded-md border-slate-300 text-sm focus:border-blue-500 focus:ring-blue-500"
         />
       </div>
 
-      <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm">
-        <h3 class="font-semibold text-gray-900">{{ t('booking.summary') }}</h3>
+      <div class="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm">
+        <h3 class="font-semibold text-slate-900">{{ t('booking.summary') }}</h3>
         <dl class="mt-2 space-y-1">
           <div class="flex justify-between">
-            <dt class="text-gray-500">{{ t('booking.type') }}</dt>
+            <dt class="text-slate-500">{{ t('booking.type') }}</dt>
             <dd>{{ t(`booking.${selectedType === 'guest_slip' ? 'guestSlip' : selectedType === 'bobil_spot' ? 'motorhomeSpot' : selectedType === 'club_room' ? 'clubRoom' : 'slipHoist'}`) }}</dd>
           </div>
           <div class="flex justify-between">
-            <dt class="text-gray-500">{{ t('booking.dates') }}</dt>
+            <dt class="text-slate-500">{{ t('booking.dates') }}</dt>
             <dd>{{ startDate }} — {{ endDate }}</dd>
           </div>
           <div v-if="boatDimensions.length" class="flex justify-between">
-            <dt class="text-gray-500">{{ t('booking.boatDimensions') }}</dt>
+            <dt class="text-slate-500">{{ t('booking.boatDimensions') }}</dt>
             <dd>{{ boatDimensions.length }}m × {{ boatDimensions.beam }}m × {{ boatDimensions.draft }}m</dd>
           </div>
           <template v-if="priceEstimate">
             <div class="flex justify-between">
-              <dt class="text-gray-500">{{ t('booking.unitPrice') }}</dt>
+              <dt class="text-slate-500">{{ t('booking.unitPrice') }}</dt>
               <dd>{{ priceEstimate.perUnit }} NOK{{ unitLabel(priceEstimate.unit) }}</dd>
             </div>
-            <div class="flex justify-between border-t border-gray-200 pt-1 font-semibold text-gray-900">
+            <div class="flex justify-between border-t border-slate-200 pt-1 font-semibold text-slate-900">
               <dt>{{ t('booking.estimatedTotal') }}</dt>
               <dd>{{ priceEstimate.total }} NOK</dd>
             </div>

@@ -34,21 +34,21 @@ onMounted(async () => {
   <div class="mx-auto max-w-lg px-4 py-16 text-center sm:px-6">
     <div v-if="status === 'loading'" class="space-y-4">
       <Loader2 class="mx-auto h-12 w-12 animate-spin text-blue-600" />
-      <p class="text-gray-500">{{ t('merchandise.processingPayment') }}</p>
+      <p class="text-slate-500">{{ t('merchandise.processingPayment') }}</p>
     </div>
 
     <div v-else-if="status === 'success'" class="space-y-4">
       <CheckCircle class="mx-auto h-16 w-16 text-green-600" />
-      <h1 class="text-2xl font-bold text-gray-900">{{ t('merchandise.paymentReceived') }}</h1>
-      <p class="text-gray-500">
+      <h1 class="text-2xl font-bold text-slate-900">{{ t('merchandise.paymentReceived') }}</h1>
+      <p class="text-slate-500">
         {{ t('merchandise.orderConfirmed', { id: orderData?.id?.slice(0, 8) }) }}
       </p>
-      <div v-if="orderData?.lines?.length" class="mx-auto mt-6 max-w-sm rounded-lg border border-gray-200 bg-white p-4 text-left">
-        <div v-for="line in orderData.lines" :key="line.id" class="flex justify-between border-b border-gray-100 py-2 last:border-0">
-          <span class="text-sm text-gray-700">{{ line.name }} x{{ line.quantity }}</span>
-          <span class="text-sm font-medium text-gray-900">{{ line.total_price }} kr</span>
+      <div v-if="orderData?.lines?.length" class="mx-auto mt-6 max-w-sm rounded-lg border border-slate-200 bg-white p-4 text-left">
+        <div v-for="line in orderData.lines" :key="line.id" class="flex justify-between border-b border-slate-100 py-2 last:border-0">
+          <span class="text-sm text-slate-700">{{ line.name }} x{{ line.quantity }}</span>
+          <span class="text-sm font-medium text-slate-900">{{ line.total_price }} kr</span>
         </div>
-        <div class="mt-2 flex justify-between border-t border-gray-200 pt-2 font-bold text-gray-900">
+        <div class="mt-2 flex justify-between border-t border-slate-200 pt-2 font-bold text-slate-900">
           <span>{{ t('merchandise.total') }}</span>
           <span>{{ orderData.total_amount }} kr</span>
         </div>
@@ -63,8 +63,8 @@ onMounted(async () => {
 
     <div v-else class="space-y-4">
       <XCircle class="mx-auto h-16 w-16 text-red-500" />
-      <h1 class="text-2xl font-bold text-gray-900">{{ t('merchandise.somethingWentWrong') }}</h1>
-      <p class="text-gray-500">{{ t('merchandise.paymentError') }}</p>
+      <h1 class="text-2xl font-bold text-slate-900">{{ t('merchandise.somethingWentWrong') }}</h1>
+      <p class="text-slate-500">{{ t('merchandise.paymentError') }}</p>
       <router-link
         to="/merchandise"
         class="mt-4 inline-block rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"

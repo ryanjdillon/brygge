@@ -44,24 +44,26 @@ async function handleSubmit() {
 
 <template>
   <div class="mx-auto max-w-2xl px-4 py-12 sm:px-6">
-    <h1 class="text-3xl font-bold text-gray-900">{{ t('join.title') }}</h1>
-    <p class="mt-2 text-gray-600">{{ t('join.subtitle') }}</p>
+    <h1 class="text-3xl font-bold text-slate-900">{{ t('join.title') }}</h1>
+    <p class="mt-2 text-slate-600">{{ t('join.subtitle') }}</p>
 
     <div v-if="submitted && queuePosition" class="mt-8 rounded-lg border border-green-200 bg-green-50 p-6 text-center">
       <p class="text-lg font-semibold text-green-800">{{ t('join.submitted') }}</p>
       <p class="mt-2 text-green-700">{{ t('join.queueMessage', { position: queuePosition }) }}</p>
-      <a
-        href="#"
-        class="mt-4 inline-block rounded-md bg-orange-500 px-6 py-3 text-sm font-semibold text-white hover:bg-orange-600"
+      <button
+        type="button"
+        disabled
+        class="mt-4 inline-block cursor-not-allowed rounded-md bg-slate-300 px-6 py-3 text-sm font-semibold text-slate-600"
+        :aria-label="t('join.payComingSoon')"
       >
-        {{ t('join.payWithVipps') }}
-      </a>
+        {{ t('join.payComingSoon') }}
+      </button>
     </div>
 
     <form v-else class="mt-8 space-y-6" @submit.prevent="handleSubmit">
       <div class="space-y-4">
         <div>
-          <label for="join-name" class="block text-sm font-medium text-gray-700">
+          <label for="join-name" class="block text-sm font-medium text-slate-700">
             {{ t('join.fullName') }}
           </label>
           <input
@@ -69,12 +71,12 @@ async function handleSubmit() {
             v-model="form.fullName"
             type="text"
             required
-            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>
 
         <div>
-          <label for="join-email" class="block text-sm font-medium text-gray-700">
+          <label for="join-email" class="block text-sm font-medium text-slate-700">
             {{ t('join.email') }}
           </label>
           <input
@@ -82,12 +84,12 @@ async function handleSubmit() {
             v-model="form.email"
             type="email"
             required
-            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>
 
         <div>
-          <label for="join-phone" class="block text-sm font-medium text-gray-700">
+          <label for="join-phone" class="block text-sm font-medium text-slate-700">
             {{ t('join.phone') }}
           </label>
           <input
@@ -95,43 +97,43 @@ async function handleSubmit() {
             v-model="form.phone"
             type="tel"
             required
-            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>
       </div>
 
-      <fieldset class="space-y-4 rounded-lg border border-gray-200 p-4">
-        <legend class="px-2 text-sm font-semibold text-gray-900">
+      <fieldset class="space-y-4 rounded-lg border border-slate-200 p-4">
+        <legend class="px-2 text-sm font-semibold text-slate-900">
           {{ t('join.boatDetails') }}
         </legend>
 
         <div class="grid gap-4 sm:grid-cols-2">
           <div>
-            <label for="join-boat-name" class="block text-sm font-medium text-gray-700">
+            <label for="join-boat-name" class="block text-sm font-medium text-slate-700">
               {{ t('join.boatName') }}
             </label>
             <input
               id="join-boat-name"
               v-model="form.boatName"
               type="text"
-              class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </div>
 
           <div>
-            <label for="join-boat-type" class="block text-sm font-medium text-gray-700">
+            <label for="join-boat-type" class="block text-sm font-medium text-slate-700">
               {{ t('join.boatType') }}
             </label>
             <input
               id="join-boat-type"
               v-model="form.boatType"
               type="text"
-              class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </div>
 
           <div>
-            <label for="join-boat-length" class="block text-sm font-medium text-gray-700">
+            <label for="join-boat-length" class="block text-sm font-medium text-slate-700">
               {{ t('join.boatLength') }}
             </label>
             <input
@@ -140,12 +142,12 @@ async function handleSubmit() {
               type="number"
               step="0.1"
               min="0"
-              class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </div>
 
           <div>
-            <label for="join-boat-beam" class="block text-sm font-medium text-gray-700">
+            <label for="join-boat-beam" class="block text-sm font-medium text-slate-700">
               {{ t('join.boatBeam') }}
             </label>
             <input
@@ -154,12 +156,12 @@ async function handleSubmit() {
               type="number"
               step="0.1"
               min="0"
-              class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </div>
 
           <div>
-            <label for="join-boat-draft" class="block text-sm font-medium text-gray-700">
+            <label for="join-boat-draft" class="block text-sm font-medium text-slate-700">
               {{ t('join.boatDraft') }}
             </label>
             <input
@@ -168,7 +170,7 @@ async function handleSubmit() {
               type="number"
               step="0.1"
               min="0"
-              class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </div>
         </div>
@@ -183,7 +185,7 @@ async function handleSubmit() {
         :disabled="submitting"
         class="w-full rounded-md bg-blue-600 px-4 py-3 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
       >
-        {{ submitting ? t('join.submitting') : t('join.payWithVipps') }}
+        {{ submitting ? t('join.submitting') : t('join.submit') }}
       </button>
     </form>
   </div>

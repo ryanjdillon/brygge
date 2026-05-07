@@ -44,7 +44,10 @@ export function useAggregateAvailability(
   })
 }
 
-export function useTodayAvailability(type: string) {
+export function useTodayAvailability(
+  type: string,
+  enabled?: Ref<boolean> | { value: boolean },
+) {
   const client = useApiClient()
 
   return useQuery({
@@ -53,6 +56,9 @@ export function useTodayAvailability(type: string) {
       unwrap(await client.GET('/api/v1/bookings/availability/today', {
         params: { query: { type } },
       })),
+    enabled: enabled
+      ? computed(() => (enabled as { value: boolean }).value)
+      : undefined,
     staleTime: 60 * 1000,
   })
 }

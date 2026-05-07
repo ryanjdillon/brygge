@@ -150,7 +150,7 @@ const tabs: { id: Tab; icon: typeof FilePlus; labelKey: string }[] = [
           >
             <Back class="h-4 w-4" /> {{ t('admin.faktura.create.back') }}
           </button>
-          <GroupFakturaTab />
+          <GroupFakturaTab @completed="onCreated" />
         </div>
 
         <SingleFakturaModal

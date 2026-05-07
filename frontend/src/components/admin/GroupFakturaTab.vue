@@ -89,9 +89,13 @@ function openBulk() {
   showBulkModal.value = true
 }
 
+// Re-emit so the parent FakturaView can switch to the drafts tab.
+const emit = defineEmits<{ (e: 'completed'): void }>()
+
 function onBulkCompleted() {
   showBulkModal.value = false
   selected.value = new Set()
+  emit('completed')
 }
 </script>
 

@@ -46,11 +46,11 @@ async function checkout() {
 
 <template>
   <div class="mx-auto max-w-3xl px-4 py-12 sm:px-6 lg:px-8">
-    <h1 class="text-3xl font-bold text-gray-900">{{ t('merchandise.cart') }}</h1>
+    <h1 class="text-3xl font-bold text-slate-900">{{ t('merchandise.cart') }}</h1>
 
     <div v-if="cart.items.length === 0" class="mt-10 text-center">
-      <ShoppingCart class="mx-auto h-16 w-16 text-gray-300" />
-      <p class="mt-4 text-gray-500">{{ t('merchandise.cartEmpty') }}</p>
+      <ShoppingCart class="mx-auto h-16 w-16 text-slate-300" />
+      <p class="mt-4 text-slate-500">{{ t('merchandise.cartEmpty') }}</p>
       <router-link
         to="/merchandise"
         class="mt-4 inline-block rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
@@ -63,47 +63,47 @@ async function checkout() {
       <div
         v-for="item in cart.items"
         :key="item.id"
-        class="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-4"
+        class="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-4"
       >
         <div class="flex-1">
-          <h3 class="font-medium text-gray-900">{{ item.name }}</h3>
-          <p v-if="item.size || item.color" class="text-xs text-gray-400">
+          <h3 class="font-medium text-slate-900">{{ item.name }}</h3>
+          <p v-if="item.size || item.color" class="text-xs text-slate-400">
             <span v-if="item.size">{{ item.size }}</span>
             <span v-if="item.size && item.color"> / </span>
             <span v-if="item.color">{{ item.color }}</span>
           </p>
-          <p class="text-sm text-gray-500">{{ item.unitPrice }} kr {{ t('merchandise.each') }}</p>
+          <p class="text-sm text-slate-500">{{ item.unitPrice }} kr {{ t('merchandise.each') }}</p>
         </div>
 
         <div class="flex items-center gap-3">
-          <div class="flex items-center gap-1 rounded-md border border-gray-200">
+          <div class="flex items-center gap-1 rounded-md border border-slate-200">
             <button
-              class="px-2 py-1 text-gray-500 hover:text-gray-700"
+              class="px-2 py-1 text-slate-500 hover:text-slate-700"
               @click="cart.updateQuantity(item.id, item.quantity - 1)"
             >
               <Minus class="h-4 w-4" />
             </button>
             <span class="w-8 text-center text-sm font-medium">{{ item.quantity }}</span>
             <button
-              class="px-2 py-1 text-gray-500 hover:text-gray-700"
+              class="px-2 py-1 text-slate-500 hover:text-slate-700"
               @click="cart.updateQuantity(item.id, item.quantity + 1)"
             >
               <Plus class="h-4 w-4" />
             </button>
           </div>
 
-          <span class="w-24 text-right font-semibold text-gray-900">
+          <span class="w-24 text-right font-semibold text-slate-900">
             {{ (item.unitPrice * item.quantity).toLocaleString('nb-NO') }} kr
           </span>
 
-          <button class="text-gray-400 hover:text-red-600" @click="cart.removeItem(item.id)">
+          <button class="text-slate-400 hover:text-red-600" @click="cart.removeItem(item.id)">
             <Trash2 class="h-4 w-4" />
           </button>
         </div>
       </div>
 
-      <div class="rounded-lg border border-gray-200 bg-gray-50 p-4">
-        <div class="flex items-center justify-between text-lg font-bold text-gray-900">
+      <div class="rounded-lg border border-slate-200 bg-slate-50 p-4">
+        <div class="flex items-center justify-between text-lg font-bold text-slate-900">
           <span>{{ t('merchandise.total') }}</span>
           <span>{{ cart.totalAmount.toLocaleString('nb-NO') }} kr</span>
         </div>
@@ -116,7 +116,7 @@ async function checkout() {
       <div class="flex justify-end gap-3">
         <router-link
           to="/merchandise"
-          class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+          class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
         >
           {{ t('merchandise.continueShopping') }}
         </router-link>
