@@ -1,0 +1,11 @@
+ALTER TABLE clubs DROP COLUMN IF EXISTS motorhome_cta_description;
+ALTER TABLE clubs DROP COLUMN IF EXISTS motorhome_cta_title;
+ALTER TABLE clubs DROP COLUMN IF EXISTS motorhome_rules;
+ALTER TABLE clubs DROP COLUMN IF EXISTS motorhome_checkin;
+ALTER TABLE clubs DROP COLUMN IF EXISTS motorhome_facilities;
+ALTER TABLE clubs DROP COLUMN IF EXISTS motorhome_power;
+ALTER TABLE clubs DROP COLUMN IF EXISTS harbor_cta_description;
+ALTER TABLE clubs DROP COLUMN IF EXISTS harbor_cta_title;
+ALTER TABLE clubs DROP COLUMN IF EXISTS harbor_vhf;
+ALTER TABLE clubs DROP COLUMN IF EXISTS harbor_depth;
+ALTER TABLE clubs DROP COLUMN IF EXISTS harbor_approach;
