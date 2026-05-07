@@ -228,65 +228,136 @@ var magicLinkHTMLTpl = template.Must(template.New("magic_link").Parse(`<!DOCTYPE
 </html>`))
 
 // --- Invoice email ---
+//
+// Visually mirrors the magic-link template (same card chrome, same
+// header/body/footer rhythm) so members get a consistent look from the
+// club. Norwegian only for now — the locale arg is accepted and
+// ignored so existing callers don't need to change. Localization will
+// be added back when translations are ready.
 
-// InvoiceSubject returns a localized Subject for invoice-delivery emails.
-func InvoiceSubject(locale, clubName string, invoiceNumber int) string {
-	tpl, ok := invoiceTemplates[locale]
-	if !ok {
-		tpl = invoiceTemplates[defaultLocale]
+// InvoiceSubject returns the Subject header for invoice-delivery emails.
+// Pattern: "Du har mottatt en ny faktura fra <Klubb> [Faktura 123]".
+// The bracketed token at the end gives Gmail/Apple Mail something to
+// thread on if multiple fakturas land in the same conversation.
+func InvoiceSubject(_, clubName string, invoiceNumber int) string {
+	if clubName == "" {
+		clubName = "klubben"
 	}
-	return fmt.Sprintf(tpl.subject, invoiceNumber, clubName)
+	return fmt.Sprintf("Du har mottatt en ny faktura fra %s [Faktura %d]", clubName, invoiceNumber)
 }
 
-// InvoiceBody returns a localized HTML body for invoice-delivery emails.
-func InvoiceBody(locale, memberName, clubName string, invoiceNumber int, dueDate time.Time, total float64, kid, bankAccount string) string {
-	tpl, ok := invoiceTemplates[locale]
-	if !ok {
-		tpl = invoiceTemplates[defaultLocale]
+// InvoiceBody returns the HTML body for invoice-delivery emails.
+// memberName, dueDate, total, kid and bankAccount are interpolated
+// into the Norwegian copy below. The PDF is attached separately by
+// the caller.
+func InvoiceBody(_ /*locale*/, memberName, clubName string, invoiceNumber int, dueDate time.Time, total float64, kid, bankAccount string) string {
+	if clubName == "" {
+		clubName = "klubben"
 	}
-	return fmt.Sprintf(tpl.body,
-		memberName,
-		invoiceNumber,
-		dueDate.Format("02.01.2006"),
-		total,
-		kid,
-		bankAccount,
-		clubName,
-	)
+	if memberName == "" {
+		memberName = "medlem"
+	}
+	data := struct {
+		Club          string
+		Member        string
+		InvoiceNumber int
+		DueDate       string
+		Amount        string
+		KID           string
+		BankAccount   string
+	}{
+		Club:          clubName,
+		Member:        memberName,
+		InvoiceNumber: invoiceNumber,
+		DueDate:       dueDate.Format("02.01.2006"),
+		Amount:        formatNOK(total),
+		KID:           kid,
+		BankAccount:   bankAccount,
+	}
+	var buf bytes.Buffer
+	if err := invoiceHTMLTpl.Execute(&buf, data); err != nil {
+		// Template bug — fall back to a flat readable summary so the
+		// member still has the payment details.
+		return fmt.Sprintf(
+			`<p>Hei %s,</p><p>Du har mottatt en ny faktura (#%d) fra %s.</p><p>Forfall: %s · Beløp: %s · KID: %s · Konto: %s</p>`,
+			memberName, invoiceNumber, clubName, data.DueDate, data.Amount, kid, bankAccount,
+		)
+	}
+	return buf.String()
 }
 
-type invoiceTpl struct {
-	subject string
-	body    string
+// formatNOK renders a money amount as "kr 1 234,50" with Norwegian
+// thousands grouping and decimal comma.
+func formatNOK(amount float64) string {
+	whole := int64(amount)
+	cents := int64((amount-float64(whole))*100 + 0.5)
+	if cents < 0 {
+		cents = -cents
+	}
+	wholeStr := fmt.Sprintf("%d", whole)
+	// Insert non-breaking spaces every 3 digits from the right.
+	var grouped strings.Builder
+	for i, r := range wholeStr {
+		if i > 0 && (len(wholeStr)-i)%3 == 0 {
+			grouped.WriteRune(' ')
+		}
+		grouped.WriteRune(r)
+	}
+	return fmt.Sprintf("kr %s,%02d", grouped.String(), cents)
 }
 
-var invoiceTemplates = map[string]invoiceTpl{
-	"nb": {
-		subject: "Faktura #%d fra %s",
-		body:    `<p>Hei %s,</p><p>Vedlagt finner du faktura #%d.</p><p>Forfallsdato: %s<br>Beløp: kr %.2f<br>KID: %s<br>Kontonummer: %s</p><p>Med vennlig hilsen,<br>%s</p>`,
-	},
-	"en": {
-		subject: "Invoice #%d from %s",
-		body:    `<p>Hi %s,</p><p>Attached is invoice #%d.</p><p>Due date: %s<br>Amount: NOK %.2f<br>KID: %s<br>Account: %s</p><p>Kind regards,<br>%s</p>`,
-	},
-	"de": {
-		subject: "Rechnung #%d von %s",
-		body:    `<p>Hallo %s,</p><p>Im Anhang findest du die Rechnung #%d.</p><p>Fälligkeitsdatum: %s<br>Betrag: NOK %.2f<br>KID: %s<br>Konto: %s</p><p>Mit freundlichen Grüßen,<br>%s</p>`,
-	},
-	"fr": {
-		subject: "Facture n° %d de %s",
-		body:    `<p>Bonjour %s,</p><p>Vous trouverez en pièce jointe la facture n° %d.</p><p>Date d'échéance : %s<br>Montant : %.2f NOK<br>KID : %s<br>Compte : %s</p><p>Cordialement,<br>%s</p>`,
-	},
-	"it": {
-		subject: "Fattura #%d da %s",
-		body:    `<p>Ciao %s,</p><p>In allegato la fattura #%d.</p><p>Scadenza: %s<br>Importo: NOK %.2f<br>KID: %s<br>Conto: %s</p><p>Cordiali saluti,<br>%s</p>`,
-	},
-	"nl": {
-		subject: "Factuur #%d van %s",
-		body:    `<p>Hallo %s,</p><p>In de bijlage vind je factuur #%d.</p><p>Vervaldatum: %s<br>Bedrag: NOK %.2f<br>KID: %s<br>Rekening: %s</p><p>Met vriendelijke groet,<br>%s</p>`,
-	},
-	"pl": {
-		subject: "Faktura #%d od %s",
-		body:    `<p>Witaj %s,</p><p>W załączniku znajdziesz fakturę #%d.</p><p>Termin płatności: %s<br>Kwota: %.2f NOK<br>KID: %s<br>Konto: %s</p><p>Z poważaniem,<br>%s</p>`,
-	},
-}
+var invoiceHTMLTpl = template.Must(template.New("invoice").Parse(`<!DOCTYPE html>
+<html>
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f5f5f5;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:560px;background:#ffffff;border:1px solid #e5e7eb;border-radius:6px;">
+          <tr>
+            <td style="padding:32px 32px 16px 32px;border-bottom:1px solid #e5e7eb;">
+              <h1 style="margin:0;font-size:20px;color:#0f172a;font-weight:600;">{{.Club}}</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:24px 32px;color:#1f2937;font-size:15px;line-height:1.55;">
+              <p style="margin:0 0 16px 0;">Hei {{.Member}},</p>
+              <p style="margin:0 0 20px 0;">Du har mottatt en ny faktura fra {{.Club}}. Den fullstendige fakturaen ligger som PDF-vedlegg til denne e-posten.</p>
+
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 24px 0;background:#f8fafc;border-radius:6px;">
+                <tr>
+                  <td style="padding:14px 16px;font-size:14px;color:#64748b;width:40%;">Fakturanummer</td>
+                  <td style="padding:14px 16px;font-size:14px;color:#0f172a;font-family:ui-monospace,Menlo,Consolas,monospace;">#{{.InvoiceNumber}}</td>
+                </tr>
+                <tr>
+                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#64748b;">Forfallsdato</td>
+                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#0f172a;font-weight:600;">{{.DueDate}}</td>
+                </tr>
+                <tr>
+                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#64748b;">Beløp å betale</td>
+                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#0f172a;font-weight:600;">{{.Amount}}</td>
+                </tr>
+                <tr>
+                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#64748b;">KID</td>
+                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#0f172a;font-family:ui-monospace,Menlo,Consolas,monospace;">{{.KID}}</td>
+                </tr>
+                <tr>
+                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#64748b;">Kontonummer</td>
+                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#0f172a;font-family:ui-monospace,Menlo,Consolas,monospace;">{{.BankAccount}}</td>
+                </tr>
+              </table>
+
+              <p style="margin:0 0 8px 0;font-size:13px;color:#64748b;">Bruk KID-nummeret når du betaler i nettbanken slik at innbetalingen registreres automatisk.</p>
+              <p style="margin:0;font-size:13px;color:#64748b;">Spørsmål om fakturaen kan sendes til kasserer ved å svare på denne e-posten.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 32px;border-top:1px solid #e5e7eb;background:#f8fafc;color:#64748b;font-size:12px;line-height:1.5;border-radius:0 0 6px 6px;">
+              <p style="margin:0;"><strong style="color:#334155;">{{.Club}}</strong></p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`))
