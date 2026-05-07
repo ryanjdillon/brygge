@@ -320,6 +320,12 @@ func main() {
 				})
 			})
 			r.Get("/club/logo", clubSettingsHandler.HandleGetPublicClubLogo)
+			// BIMI validators (and many receivers) want the indicator
+			// URL to end with `.svg` so they can short-circuit on
+			// extension before fetching. Same handler, just a path
+			// alias so we can publish the friendlier URL in the BIMI
+			// DNS record.
+			r.Get("/club/logo.svg", clubSettingsHandler.HandleGetPublicClubLogo)
 		})
 
 		r.Get("/legal/{docType}", gdprHandler.HandleGetLegalDocument)
