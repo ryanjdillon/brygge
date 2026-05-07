@@ -86,6 +86,30 @@
       ttl     = 300;
       records = [{ value = "\"v=DMARC1; p=\${var.dmarc_policy}; rua=mailto:\${var.admin_email}; fo=1\""; }];
     };
+
+    # BIMI — points receiving MTAs at the SVG to display next to
+    # outbound mail. The SVG is served by the brygge API at
+    # /api/v1/club/logo (the same site logo used in the navbar). Two
+    # caveats worth noting:
+    #
+    # 1. The SVG must comply with BIMI's SVG Tiny 1.2 Portable/Secure
+    #    profile (square viewBox, no scripts, no external refs,
+    #    ≤32 kB). Validate with https://bimigroup.org/svg-validator/
+    #    before publishing — receivers will reject a non-compliant
+    #    SVG and your logo just won't render.
+    #
+    # 2. Gmail requires a Verified Mark Certificate (VMC) for actual
+    #    inbox rendering — `a=` parameter would point at a .pem file
+    #    if you ever buy one (~$1500/year, requires registered
+    #    trademark). Yahoo / Apple Mail / Fastmail render without
+    #    VMC; the record below is enough for them.
+    bimi = {
+      zone    = "\${var.domain}";
+      name    = "default._bimi";
+      type    = "TXT";
+      ttl     = 300;
+      records = [{ value = "\"v=BIMI1; l=https://\${var.domain}/api/v1/club/logo.svg\""; }];
+    };
     autoconfig = {
       zone    = "\${var.domain}";
       name    = "autoconfig";
