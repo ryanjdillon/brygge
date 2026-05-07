@@ -25,9 +25,19 @@
   resource.hcloud_firewall.brygge = {
     name = "\${var.server_name}-firewall";
     rule = [
-      { direction = "in"; protocol = "tcp"; port = "22";  source_ips = [ "0.0.0.0/0" "::/0" ]; description = "SSH";   }
-      { direction = "in"; protocol = "tcp"; port = "80";  source_ips = [ "0.0.0.0/0" "::/0" ]; description = "HTTP";  }
-      { direction = "in"; protocol = "tcp"; port = "443"; source_ips = [ "0.0.0.0/0" "::/0" ]; description = "HTTPS"; }
+      { direction = "in"; protocol = "tcp"; port = "22";  source_ips = [ "0.0.0.0/0" "::/0" ]; description = "SSH";        }
+      { direction = "in"; protocol = "tcp"; port = "80";  source_ips = [ "0.0.0.0/0" "::/0" ]; description = "HTTP";       }
+      { direction = "in"; protocol = "tcp"; port = "443"; source_ips = [ "0.0.0.0/0" "::/0" ]; description = "HTTPS";      }
+      # Mail server (Stalwart). The host firewall already opens these
+      # in nix/host.nix, but Hetzner's cloud firewall sits in front and
+      # silently drops un-listed ports — so external MTAs (Gmail etc.)
+      # get a TCP timeout when delivering to mail.<domain>:25, mail
+      # piles up in their deferred queue, and no bounce comes back for
+      # ~3 days. Mirror the host firewall here.
+      { direction = "in"; protocol = "tcp"; port = "25";  source_ips = [ "0.0.0.0/0" "::/0" ]; description = "SMTP";       }
+      { direction = "in"; protocol = "tcp"; port = "465"; source_ips = [ "0.0.0.0/0" "::/0" ]; description = "SMTPS";      }
+      { direction = "in"; protocol = "tcp"; port = "587"; source_ips = [ "0.0.0.0/0" "::/0" ]; description = "Submission"; }
+      { direction = "in"; protocol = "tcp"; port = "993"; source_ips = [ "0.0.0.0/0" "::/0" ]; description = "IMAPS";      }
     ];
   };
 
