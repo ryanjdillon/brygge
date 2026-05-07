@@ -1,135 +1,123 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
-import { RouterLink, useRouter } from 'vue-router'
+import { computed } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useClubStore } from '@/stores/club'
-import { Menu, X, LogIn, LogOut, User, Shield, ShieldAlert, ChevronDown } from 'lucide-vue-next'
+import { LogIn, LogOut, User, Shield, ShieldAlert } from 'lucide-vue-next'
 import LanguageSwitcher from '@/components/layout/LanguageSwitcher.vue'
+
+// Bind dynamically so Vite's asset plugin doesn't try to resolve the
+// API path as a build-time import.
+const clubLogoUrl = '/api/v1/club/logo'
 
 const { t } = useI18n()
 const router = useRouter()
+const route = useRoute()
 const auth = useAuthStore()
 const club = useClubStore()
 club.ensureLoaded()
-const mobileOpen = ref(false)
-const clubOpen = ref(false)
-const clubDropdownRef = ref<HTMLElement>()
+
+// On the landing page the hero photo extends up behind the navbar, so
+// the bar itself goes transparent and the controls invert to read on
+// the dark image. Every other route keeps the white opaque chrome.
+const isHero = computed(() => route.path === '/' || route.path === '')
+
+const navClass = computed(() =>
+  isHero.value
+    ? 'absolute inset-x-0 top-0 z-30 bg-transparent'
+    : 'sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur',
+)
+
+const brandClass = computed(() =>
+  isHero.value
+    ? 'flex min-w-0 items-center gap-2 text-white drop-shadow'
+    : 'flex min-w-0 items-center gap-2 text-slate-800',
+)
+
+// Pill controls — present on every route, but the dark variant is used
+// on the hero so they read against the photo. The light variant uses
+// slate to match the rest of the (non-hero) chrome on the site.
+const pillBase = 'inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-medium transition'
+
+const portalClass = computed(() =>
+  isHero.value
+    ? `${pillBase} text-white/90 ring-1 ring-white/30 hover:bg-white/10 hover:text-white`
+    : `${pillBase} text-slate-600 hover:bg-slate-100 hover:text-slate-900`,
+)
+const adminClass = computed(() =>
+  isHero.value
+    ? `${pillBase} hidden text-white/90 ring-1 ring-white/30 hover:bg-white/10 hover:text-white sm:inline-flex`
+    : `${pillBase} hidden text-slate-600 hover:bg-slate-100 hover:text-slate-900 sm:inline-flex`,
+)
+const enable2faClass = computed(() =>
+  isHero.value
+    ? `${pillBase} hidden text-amber-200 ring-1 ring-amber-300/50 hover:bg-amber-300/10 sm:inline-flex`
+    : `${pillBase} hidden text-amber-700 hover:bg-amber-50 sm:inline-flex`,
+)
+const logoutClass = computed(() =>
+  isHero.value
+    ? 'inline-flex items-center rounded-full p-2 text-white/80 ring-1 ring-white/30 hover:bg-white/10 hover:text-white'
+    : 'inline-flex items-center rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700',
+)
+const loginClass = computed(() =>
+  isHero.value
+    ? `${pillBase} bg-white text-blue-900 shadow hover:bg-blue-50`
+    : `${pillBase} bg-blue-600 text-white hover:bg-blue-700`,
+)
 
 async function handleLogout() {
   await auth.logout()
   router.push('/')
 }
-
-const navLinks = [
-  { to: '/', label: 'nav.home' },
-  { to: '/harbor', label: 'nav.harbor' },
-  { to: '/motorhome', label: 'nav.motorhome' },
-  { to: '/weather', label: 'nav.weather' },
-  { to: '/merchandise', label: 'nav.merchandise' },
-  { to: '/contact', label: 'nav.contact' },
-]
-
-const clubLinks = [
-  { to: '/calendar', label: 'nav.calendar' },
-  { to: '/pricing', label: 'nav.pricing' },
-  { to: '/join', label: 'nav.join' },
-  { to: '/history', label: 'nav.history' },
-]
-
-function handleClickOutside(event: MouseEvent) {
-  if (clubDropdownRef.value && !clubDropdownRef.value.contains(event.target as Node)) {
-    clubOpen.value = false
-  }
-}
-
-onMounted(() => document.addEventListener('click', handleClickOutside))
-onUnmounted(() => document.removeEventListener('click', handleClickOutside))
 </script>
 
 <template>
-  <nav class="sticky top-0 z-50 bg-white shadow-sm" :aria-label="t('nav.ariaMainNav')">
+  <nav :class="navClass" :aria-label="t('nav.ariaMainNav')">
     <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-      <div class="flex h-16 items-center justify-between">
-        <RouterLink to="/" class="flex items-center gap-2 text-xl font-bold text-blue-900">
-          {{ club.name || 'Brygge' }}
+      <!-- On the landing page the brand is presented as a featured logo
+           lower on the page, so the top-left slot is left empty for a
+           cleaner hero. justify-end keeps the controls flush right. -->
+      <div :class="['flex h-14 items-center gap-3', isHero ? 'justify-end' : 'justify-between']">
+        <RouterLink v-if="!isHero" to="/" :class="brandClass">
+          <img
+            v-if="club.hasLogo"
+            :src="clubLogoUrl"
+            :alt="club.name || 'Brygge'"
+            class="h-7 w-auto flex-none sm:h-8"
+          />
+          <span class="truncate text-base font-semibold sm:text-lg">
+            {{ club.name || 'Brygge' }}
+          </span>
         </RouterLink>
 
-        <div class="hidden items-center gap-1 md:flex">
-          <RouterLink
-            v-for="link in navLinks"
-            :key="link.to"
-            :to="link.to"
-            class="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-blue-900"
-          >
-            {{ t(link.label) }}
-          </RouterLink>
-
-          <!-- Club dropdown -->
-          <div ref="clubDropdownRef" class="relative">
-            <button
-              class="flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-blue-900"
-              @click.stop="clubOpen = !clubOpen"
-            >
-              {{ t('nav.club') }}
-              <ChevronDown
-                class="h-3 w-3 transition-transform"
-                :class="{ 'rotate-180': clubOpen }"
-                aria-hidden="true"
-              />
-            </button>
-            <div
-              v-if="clubOpen"
-              class="absolute left-0 top-full z-50 mt-1 w-48 rounded-md bg-white py-1 shadow-lg ring-1 ring-black/5"
-            >
-              <RouterLink
-                v-for="link in clubLinks"
-                :key="link.to"
-                :to="link.to"
-                class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-blue-900"
-                @click="clubOpen = false"
-              >
-                {{ t(link.label) }}
-              </RouterLink>
-            </div>
-          </div>
-        </div>
-
-        <div class="hidden items-center gap-2 md:flex">
-          <LanguageSwitcher />
+        <div class="flex flex-none items-center gap-1 sm:gap-2">
+          <LanguageSwitcher :theme="isHero ? 'dark' : 'light'" />
           <template v-if="auth.isAuthenticated">
             <RouterLink
               v-if="auth.hasAdminRole && auth.user?.totpEnabled"
               to="/admin"
-              class="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
+              :class="adminClass"
             >
-              <span class="flex items-center gap-1">
-                <Shield class="h-4 w-4" />
-                {{ t('nav.admin') }}
-              </span>
+              <Shield class="h-4 w-4" />
+              <span class="hidden md:inline">{{ t('nav.admin') }}</span>
             </RouterLink>
             <RouterLink
               v-else-if="auth.hasAdminRole && auth.user && !auth.user.totpEnabled"
               to="/portal/security"
-              class="rounded-md px-3 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50"
+              :class="enable2faClass"
               :title="t('nav.enable2faTooltip')"
             >
-              <span class="flex items-center gap-1">
-                <ShieldAlert class="h-4 w-4" />
-                {{ t('nav.enable2fa') }}
-              </span>
+              <ShieldAlert class="h-4 w-4" />
+              <span class="hidden md:inline">{{ t('nav.enable2fa') }}</span>
             </RouterLink>
-            <RouterLink
-              to="/portal"
-              class="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
-            >
-              <span class="flex items-center gap-1">
-                <User class="h-4 w-4" />
-                {{ t('nav.portal') }}
-              </span>
+            <RouterLink to="/portal" :class="portalClass">
+              <User class="h-4 w-4" />
+              <span class="hidden sm:inline">{{ t('nav.portal') }}</span>
             </RouterLink>
             <button
-              class="inline-flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+              type="button"
+              :class="logoutClass"
               :aria-label="t('nav.ariaLogout')"
               @click="handleLogout"
             >
@@ -137,98 +125,9 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
             </button>
           </template>
           <template v-else>
-            <RouterLink
-              to="/login"
-              class="inline-flex items-center gap-1 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-            >
+            <RouterLink to="/login" :class="loginClass">
               <LogIn class="h-4 w-4" />
-              {{ t('nav.login') }}
-            </RouterLink>
-          </template>
-        </div>
-
-        <button
-          class="inline-flex items-center justify-center rounded-md p-2 text-gray-700 hover:bg-gray-100 md:hidden"
-          :aria-expanded="mobileOpen"
-          :aria-label="t('nav.ariaMenu')"
-          @click="mobileOpen = !mobileOpen"
-        >
-          <X v-if="mobileOpen" class="h-6 w-6" aria-hidden="true" />
-          <Menu v-else class="h-6 w-6" aria-hidden="true" />
-        </button>
-      </div>
-    </div>
-
-    <div v-if="mobileOpen" class="border-t border-gray-200 md:hidden">
-      <div class="space-y-1 px-4 pb-3 pt-2">
-        <RouterLink
-          v-for="link in navLinks"
-          :key="link.to"
-          :to="link.to"
-          class="block rounded-md px-3 py-2 text-base font-medium text-gray-700 hover:bg-gray-100"
-          @click="mobileOpen = false"
-        >
-          {{ t(link.label) }}
-        </RouterLink>
-
-        <div class="border-t border-gray-100 pt-1">
-          <span class="block px-3 py-1 text-xs font-semibold uppercase tracking-wider text-gray-400">
-            {{ t('nav.club') }}
-          </span>
-          <RouterLink
-            v-for="link in clubLinks"
-            :key="link.to"
-            :to="link.to"
-            class="block rounded-md px-3 py-2 text-base font-medium text-gray-700 hover:bg-gray-100"
-            @click="mobileOpen = false"
-          >
-            {{ t(link.label) }}
-          </RouterLink>
-        </div>
-
-        <div class="border-t border-gray-100 pt-2 px-3">
-          <LanguageSwitcher />
-        </div>
-
-        <div class="border-t border-gray-200 pt-2">
-          <template v-if="auth.isAuthenticated">
-            <RouterLink
-              v-if="auth.hasAdminRole && auth.user?.totpEnabled"
-              to="/admin"
-              class="block rounded-md px-3 py-2 text-base font-medium text-gray-700 hover:bg-gray-100"
-              @click="mobileOpen = false"
-            >
-              {{ t('nav.admin') }}
-            </RouterLink>
-            <RouterLink
-              v-else-if="auth.hasAdminRole && auth.user && !auth.user.totpEnabled"
-              to="/portal/security"
-              class="block rounded-md px-3 py-2 text-base font-medium text-amber-700 hover:bg-amber-50"
-              @click="mobileOpen = false"
-            >
-              {{ t('nav.enable2fa') }}
-            </RouterLink>
-            <RouterLink
-              to="/portal"
-              class="block rounded-md px-3 py-2 text-base font-medium text-gray-700 hover:bg-gray-100"
-              @click="mobileOpen = false"
-            >
-              {{ t('nav.portal') }}
-            </RouterLink>
-            <button
-              class="block w-full rounded-md px-3 py-2 text-left text-base font-medium text-gray-500 hover:bg-gray-100"
-              @click="handleLogout(); mobileOpen = false"
-            >
-              {{ t('nav.logout') }}
-            </button>
-          </template>
-          <template v-else>
-            <RouterLink
-              to="/login"
-              class="block rounded-md px-3 py-2 text-base font-medium text-blue-600 hover:bg-gray-100"
-              @click="mobileOpen = false"
-            >
-              {{ t('nav.login') }}
+              <span class="hidden sm:inline">{{ t('nav.login') }}</span>
             </RouterLink>
           </template>
         </div>

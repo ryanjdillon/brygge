@@ -1,7 +1,12 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ChevronDown } from 'lucide-vue-next'
+
+const props = defineProps<{
+  /** 'dark' inverts colors so the switcher reads on a dark photo. */
+  theme?: 'light' | 'dark'
+}>()
 
 const { locale } = useI18n()
 const open = ref(false)
@@ -18,6 +23,12 @@ const languages = [
 ]
 
 const currentLabel = () => languages.find((l) => l.code === locale.value)?.label ?? locale.value
+
+const triggerClass = computed(() =>
+  props.theme === 'dark'
+    ? 'flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-medium text-white/90 ring-1 ring-white/30 hover:bg-white/10 hover:text-white'
+    : 'flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+)
 
 function select(code: string) {
   locale.value = code
@@ -39,7 +50,7 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
   <div ref="dropdownRef" class="relative">
     <button
       type="button"
-      class="flex items-center gap-1 rounded-md px-2 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+      :class="triggerClass"
       @click.stop="open = !open"
     >
       {{ currentLabel() }}
