@@ -50,6 +50,20 @@ type createInvoiceFullRequest struct {
 	FiscalPeriodID *string            `json:"fiscal_period_id,omitempty"`
 	Lines          []invoiceLineInput `json:"lines"`
 	SendEmail      bool               `json:"send_email"`
+
+	// Optional organisation recipient. When RecipientKind is "organization"
+	// the OrgName is required and the rest are optional overrides; the
+	// PDF "Til:" block, address, and email destination use these fields
+	// instead of the linked User's personal details. The User row is
+	// still recorded as the contact owner so the invoice appears in
+	// their member portal.
+	RecipientKind          string  `json:"recipient_kind,omitempty"`
+	RecipientOrgName       *string `json:"recipient_org_name,omitempty"`
+	RecipientOrgNumber     *string `json:"recipient_org_number,omitempty"`
+	RecipientOrgAddress    *string `json:"recipient_org_address,omitempty"`
+	RecipientContactPerson *string `json:"recipient_contact_person,omitempty"`
+	RecipientTheirRef      *string `json:"recipient_their_ref,omitempty"`
+	RecipientEmail         *string `json:"recipient_email,omitempty"`
 }
 
 type invoiceLineInput struct {
@@ -98,8 +112,8 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if req.UserID == "" || req.DueDate == "" || len(req.Lines) == 0 {
-		Error(w, http.StatusBadRequest, "user_id, due_date, and at least one line item are required")
+	if req.DueDate == "" || len(req.Lines) == 0 {
+		Error(w, http.StatusBadRequest, "due_date and at least one line item are required")
 		return
 	}
 
@@ -109,21 +123,26 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Look up member
+	// Look up member if a UserID was supplied. Member-less single
+	// fakturas are valid (e.g. invoicing an external org with no
+	// internal contact) — in that case the recipient name and address
+	// have to come from the recipient_* override fields.
 	var memberName, memberEmail, memberAddress string
-	err = h.db.QueryRow(ctx,
-		`SELECT full_name, email, COALESCE(address_line || ', ' || postal_code || ' ' || city, '')
-		 FROM users WHERE id = $1 AND club_id = $2`,
-		req.UserID, claims.ClubID,
-	).Scan(&memberName, &memberEmail, &memberAddress)
-	if err == pgx.ErrNoRows {
-		Error(w, http.StatusNotFound, "user not found")
-		return
-	}
-	if err != nil {
-		h.log.Error().Err(err).Msg("failed to look up member for invoice")
-		Error(w, http.StatusInternalServerError, "internal error")
-		return
+	if req.UserID != "" {
+		err = h.db.QueryRow(ctx,
+			`SELECT full_name, email, COALESCE(address_line || ', ' || postal_code || ' ' || city, '')
+			 FROM users WHERE id = $1 AND club_id = $2`,
+			req.UserID, claims.ClubID,
+		).Scan(&memberName, &memberEmail, &memberAddress)
+		if err == pgx.ErrNoRows {
+			Error(w, http.StatusNotFound, "user not found")
+			return
+		}
+		if err != nil {
+			h.log.Error().Err(err).Msg("failed to look up member for invoice")
+			Error(w, http.StatusInternalServerError, "internal error")
+			return
+		}
 	}
 
 	// Resolve and validate every line. Custom lines (no price_item_id
@@ -241,7 +260,7 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 	err = h.db.QueryRow(ctx,
 		`SELECT name, COALESCE(org_number, ''), COALESCE(address, ''), COALESCE(bank_account, ''),
 		        COALESCE(website_url, ''), COALESCE(treasurer_email, ''),
-		        logo_data, COALESCE(logo_mime, '')
+		        faktura_logo_data, COALESCE(faktura_logo_mime, '')
 		 FROM clubs WHERE id = $1`,
 		claims.ClubID,
 	).Scan(&clubName, &orgNumber, &clubAddress, &bankAccount, &website, &treasurerEmail, &logoData, &logoMIME)
@@ -253,6 +272,56 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 
 	kid := finance.GenerateKID("000", invoiceSeq, 1)
 
+	// Resolve recipient overrides. recipient_org_name doubles as the
+	// canonical recipient name in *both* private and organisation modes
+	// — when private, it's the person's name; when organisation, it's
+	// the legal entity's name. recipient_org_address is the analogous
+	// address override. The org-only extras (org number, Att:, deres
+	// ref.) are only consulted when recipient_kind = 'organization'.
+	deref := func(p *string) string {
+		if p == nil {
+			return ""
+		}
+		return strings.TrimSpace(*p)
+	}
+	overrideName := deref(req.RecipientOrgName)
+	overrideAddress := deref(req.RecipientOrgAddress)
+
+	// Pick the buyer name + address used by the PDF for the private
+	// path. Override > member name. Without either we can't issue an
+	// invoice — the PDF needs *some* "Til:" line.
+	pdfMemberName := overrideName
+	if pdfMemberName == "" {
+		pdfMemberName = memberName
+	}
+	pdfMemberAddress := overrideAddress
+	if pdfMemberAddress == "" {
+		pdfMemberAddress = memberAddress
+	}
+	if pdfMemberName == "" && req.RecipientKind != "organization" {
+		Error(w, http.StatusBadRequest, "recipient name is required (select a member or fill the recipient field)")
+		return
+	}
+
+	var orgRecipient *finance.OrgRecipient
+	if req.RecipientKind == "organization" {
+		if overrideName == "" {
+			Error(w, http.StatusBadRequest, "recipient_org_name is required when recipient_kind=organization")
+			return
+		}
+		contact := deref(req.RecipientContactPerson)
+		if contact == "" {
+			contact = memberName
+		}
+		orgRecipient = &finance.OrgRecipient{
+			Name:          overrideName,
+			OrgNumber:     deref(req.RecipientOrgNumber),
+			Address:       overrideAddress,
+			ContactPerson: contact,
+			TheirRef:      deref(req.RecipientTheirRef),
+		}
+	}
+
 	// Generate PDF
 	inv := finance.Invoice{
 		ClubName:      clubName,
@@ -262,8 +331,9 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 		TreasurerEmail: treasurerEmail,
 		LogoData:       logoData,
 		LogoMIME:       logoMIME,
-		MemberName:     memberName,
-		MemberAddress: memberAddress,
+		MemberName:     pdfMemberName,
+		MemberAddress: pdfMemberAddress,
+		OrgRecipient:  orgRecipient,
 		InvoiceNumber: invoiceSeq,
 		IssueDate:     time.Now(),
 		DueDate:       dueDate,
@@ -279,14 +349,35 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Store invoice
+	// Store invoice. Recipient overrides (org_name, org_number, etc.)
+	// are persisted alongside the linked user_id so the contact still
+	// sees the invoice in their portal but reissues / PDF regenerations
+	// will faithfully reproduce the org-addressed version.
+	recipientKind := req.RecipientKind
+	if recipientKind == "" {
+		recipientKind = "private"
+	}
+	// user_id is now nullable — pass NULL when not supplied so the FK
+	// stays satisfied for member-less invoices.
+	var userIDArg any
+	if req.UserID != "" {
+		userIDArg = req.UserID
+	}
 	var invoiceID string
 	var createdAt time.Time
 	err = h.db.QueryRow(ctx,
-		`INSERT INTO invoices (club_id, user_id, invoice_number, kid_number, due_date, total_amount, pdf_data, fiscal_period_id)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		`INSERT INTO invoices (club_id, user_id, invoice_number, kid_number, due_date,
+		                       total_amount, pdf_data, fiscal_period_id,
+		                       recipient_kind, recipient_org_name, recipient_org_number,
+		                       recipient_org_address, recipient_contact_person,
+		                       recipient_their_ref, recipient_email)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 		 RETURNING id, created_at`,
-		claims.ClubID, req.UserID, invoiceSeq, kid, dueDate, total, pdfData, req.FiscalPeriodID,
+		claims.ClubID, userIDArg, invoiceSeq, kid, dueDate, total, pdfData, req.FiscalPeriodID,
+		recipientKind,
+		req.RecipientOrgName, req.RecipientOrgNumber,
+		req.RecipientOrgAddress, req.RecipientContactPerson,
+		req.RecipientTheirRef, req.RecipientEmail,
 	).Scan(&invoiceID, &createdAt)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to store invoice")
@@ -311,17 +402,28 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
-	// Send email if requested
+	// Send email if requested. Org fakturas commonly have a shared
+	// invoicing inbox (e.g. faktura@org.no); when the admin supplied
+	// a recipient_email override we use that, otherwise fall back to
+	// the contact person's personal email.
 	var sentAt *string
-	if req.SendEmail && h.email != nil && memberEmail != "" {
+	deliverTo := memberEmail
+	deliverName := memberName
+	if req.RecipientEmail != nil && strings.TrimSpace(*req.RecipientEmail) != "" {
+		deliverTo = strings.TrimSpace(*req.RecipientEmail)
+	}
+	if orgRecipient != nil {
+		deliverName = orgRecipient.Name
+	}
+	if req.SendEmail && h.email != nil && deliverTo != "" {
 		filename := fmt.Sprintf("faktura-%d.pdf", invoiceSeq)
 		// Invoice locale follows the requesting admin's UI language for now.
 		// DIL-185 (users.preferred_locale) will swap this for per-member.
 		locale := email.DetectLocale(r)
 		subject := email.InvoiceSubject(locale, clubName, invoiceSeq)
-		htmlBody := email.InvoiceBody(locale, memberName, clubName, invoiceSeq, dueDate, total, kid, bankAccount)
-		if err := h.email.SendWithAttachment(ctx, memberEmail, subject, htmlBody, filename, pdfData); err != nil {
-			h.log.Error().Err(err).Str("email", memberEmail).Msg("failed to send invoice email")
+		htmlBody := email.InvoiceBody(locale, deliverName, clubName, invoiceSeq, dueDate, total, kid, bankAccount)
+		if err := h.email.SendWithAttachment(ctx, deliverTo, subject, htmlBody, filename, pdfData); err != nil {
+			h.log.Error().Err(err).Str("email", deliverTo).Msg("failed to send invoice email")
 		} else {
 			now := time.Now().Format(time.RFC3339)
 			sentAt = &now
@@ -329,7 +431,7 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 			if h.audit != nil {
 				h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,
 					audit.ActionInvoiceEmailed, "invoice", invoiceID,
-					map[string]any{"email": memberEmail, "invoice_number": invoiceSeq})
+					map[string]any{"email": deliverTo, "invoice_number": invoiceSeq})
 			}
 		}
 	}
@@ -499,7 +601,7 @@ func (h *InvoiceHandler) HandleGetInvoicePDF(w http.ResponseWriter, r *http.Requ
 		        COALESCE(u.last_name, ''), COALESCE(u.first_name, ''),
 		        fp.year
 		   FROM invoices i
-		   JOIN users u ON u.id = i.user_id
+		   LEFT JOIN users u ON u.id = i.user_id
 		   LEFT JOIN fiscal_periods fp ON fp.id = i.fiscal_period_id
 		  WHERE i.id = $1 AND i.club_id = $2`,
 		invoiceID, claims.ClubID,
@@ -571,7 +673,7 @@ func slugify(s string) string {
 type draftInvoiceRow struct {
 	ID            string    `json:"id"`
 	InvoiceNumber int       `json:"invoice_number"`
-	UserID        string    `json:"user_id"`
+	UserID        *string   `json:"user_id"`
 	MemberName    string    `json:"member_name"`
 	MemberEmail   string    `json:"member_email"`
 	TotalAmount   float64   `json:"total_amount"`
@@ -615,16 +717,24 @@ func (h *InvoiceHandler) HandleListInvoices(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// LEFT JOIN users so member-less (org-only) invoices still appear
+	// in the list. The recipient name is taken from recipient_org_name
+	// when no user is linked, and the email column similarly falls
+	// back to recipient_email so the list-row "to" field is always
+	// populated.
 	rows, err := h.db.Query(ctx,
 		`SELECT i.id, i.invoice_number, i.user_id,
-		        COALESCE(u.full_name, u.first_name || ' ' || u.last_name),
-		        u.email,
+		        COALESCE(NULLIF(i.recipient_org_name, ''),
+		                 u.full_name,
+		                 u.first_name || ' ' || u.last_name,
+		                 ''),
+		        COALESCE(NULLIF(i.recipient_email, ''), u.email, ''),
 		        i.total_amount, i.issue_date, i.due_date,
 		        COALESCE(pi.name, ''), fp.year,
 		        COALESCE((SELECT description FROM invoice_lines WHERE invoice_id = i.id LIMIT 1), ''),
 		        i.created_at, i.sent_at, i.status
 		   FROM invoices i
-		   JOIN users u ON u.id = i.user_id
+		   LEFT JOIN users u ON u.id = i.user_id
 		   LEFT JOIN price_items pi ON pi.id = i.price_item_id
 		   LEFT JOIN fiscal_periods fp ON fp.id = i.fiscal_period_id
 		  WHERE i.club_id = $1 AND `+where+`
@@ -691,11 +801,12 @@ func (h *InvoiceHandler) HandleSendInvoice(w http.ResponseWriter, r *http.Reques
 
 	var (
 		invoiceNumber int
-		userID        string
+		userID        *string
 		memberName    string
 		memberLast    string
 		memberFirst   string
 		memberEmail   string
+		recipientEmail string
 		fiscalYear    *int
 		total         float64
 		dueDate       time.Time
@@ -705,16 +816,20 @@ func (h *InvoiceHandler) HandleSendInvoice(w http.ResponseWriter, r *http.Reques
 	)
 	if err := h.db.QueryRow(ctx,
 		`SELECT i.invoice_number, i.user_id,
-		        COALESCE(u.full_name, u.first_name || ' ' || u.last_name),
+		        COALESCE(NULLIF(i.recipient_org_name, ''),
+		                 u.full_name,
+		                 u.first_name || ' ' || u.last_name,
+		                 ''),
 		        COALESCE(u.last_name, ''), COALESCE(u.first_name, ''),
-		        u.email, fp.year, i.total_amount, i.due_date, i.kid_number,
+		        COALESCE(u.email, ''), COALESCE(i.recipient_email, ''),
+		        fp.year, i.total_amount, i.due_date, i.kid_number,
 		        i.pdf_data, i.sent_at
 		   FROM invoices i
-		   JOIN users u ON u.id = i.user_id
+		   LEFT JOIN users u ON u.id = i.user_id
 		   LEFT JOIN fiscal_periods fp ON fp.id = i.fiscal_period_id
 		  WHERE i.id = $1 AND i.club_id = $2`,
 		invoiceID, claims.ClubID,
-	).Scan(&invoiceNumber, &userID, &memberName, &memberLast, &memberFirst, &memberEmail,
+	).Scan(&invoiceNumber, &userID, &memberName, &memberLast, &memberFirst, &memberEmail, &recipientEmail,
 		&fiscalYear, &total, &dueDate, &kid, &pdfData, &alreadySent); err != nil {
 		if err == pgx.ErrNoRows {
 			Error(w, http.StatusNotFound, "invoice not found")
@@ -732,8 +847,15 @@ func (h *InvoiceHandler) HandleSendInvoice(w http.ResponseWriter, r *http.Reques
 		Error(w, http.StatusServiceUnavailable, "email delivery not configured")
 		return
 	}
-	if memberEmail == "" {
-		Error(w, http.StatusBadRequest, "member has no email address on file")
+	// Prefer the per-invoice recipient email override (e.g. an org's
+	// shared faktura@ inbox) when it was set at creation time; fall
+	// back to the linked member's address otherwise.
+	deliverTo := recipientEmail
+	if deliverTo == "" {
+		deliverTo = memberEmail
+	}
+	if deliverTo == "" {
+		Error(w, http.StatusBadRequest, "no recipient email on this invoice (set recipient_email or link to a user with an email)")
 		return
 	}
 	if pdfData == nil {
@@ -751,8 +873,8 @@ func (h *InvoiceHandler) HandleSendInvoice(w http.ResponseWriter, r *http.Reques
 	subject := email.InvoiceSubject(locale, clubName, invoiceNumber)
 	htmlBody := email.InvoiceBody(locale, memberName, clubName, invoiceNumber, dueDate, total, kid, bankAccount)
 	filename := buildInvoiceFilename(invoiceNumber, memberLast, memberFirst, fiscalYear)
-	if err := h.email.SendWithAttachment(ctx, memberEmail, subject, htmlBody, filename, pdfData); err != nil {
-		h.log.Error().Err(err).Str("email", memberEmail).Msg("send invoice email")
+	if err := h.email.SendWithAttachment(ctx, deliverTo, subject, htmlBody, filename, pdfData); err != nil {
+		h.log.Error().Err(err).Str("email", deliverTo).Msg("send invoice email")
 		Error(w, http.StatusBadGateway, "failed to send email")
 		return
 	}
@@ -765,8 +887,9 @@ func (h *InvoiceHandler) HandleSendInvoice(w http.ResponseWriter, r *http.Reques
 	if h.audit != nil {
 		h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,
 			audit.ActionInvoiceEmailed, "invoice", invoiceID,
-			map[string]any{"email": memberEmail, "invoice_number": invoiceNumber})
+			map[string]any{"email": deliverTo, "invoice_number": invoiceNumber})
 	}
+	_ = userID
 
 	JSON(w, http.StatusOK, map[string]any{"id": invoiceID, "sent": true})
 }

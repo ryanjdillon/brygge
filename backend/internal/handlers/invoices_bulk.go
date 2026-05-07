@@ -188,7 +188,7 @@ func (h *InvoiceHandler) HandleBulkCreateInvoices(w http.ResponseWriter, r *http
 	if err := h.db.QueryRow(ctx,
 		`SELECT name, COALESCE(org_number, ''), COALESCE(address, ''), COALESCE(bank_account, ''),
 		        COALESCE(website_url, ''), COALESCE(treasurer_email, ''),
-		        logo_data, COALESCE(logo_mime, '')
+		        faktura_logo_data, COALESCE(faktura_logo_mime, '')
 		   FROM clubs WHERE id = $1`,
 		claims.ClubID,
 	).Scan(&clubName, &orgNumber, &clubAddress, &bankAccount, &website, &treasurerEmail, &logoData, &logoMIME); err != nil {

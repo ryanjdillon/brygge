@@ -21,9 +21,19 @@ type Invoice struct {
 	LogoData []byte
 	LogoMIME string
 
-	// Buyer
+	// Buyer (private). When OrgRecipient is non-nil the PDF renders
+	// the organisation block in place of the member's personal name +
+	// address, but MemberName / MemberAddress are kept around so the
+	// fallback case (private fakturas) still works without an extra
+	// nil check on every render path.
 	MemberName    string
 	MemberAddress string
+
+	// OrgRecipient, when set, addresses the faktura to an external
+	// organisation (frivillig org or bedrift). The contact person
+	// renders as "Att: <name>" under the org name; TheirRef shows up
+	// in the yellow info box as "Deres ref." when present.
+	OrgRecipient *OrgRecipient
 
 	// Invoice details
 	InvoiceNumber int
@@ -34,6 +44,14 @@ type Invoice struct {
 
 	// Line items
 	Lines []InvoiceLine
+}
+
+type OrgRecipient struct {
+	Name          string
+	OrgNumber     string
+	Address       string
+	ContactPerson string
+	TheirRef      string
 }
 
 type InvoiceLine struct {
@@ -103,17 +121,43 @@ func GeneratePDF(inv Invoice) ([]byte, error) {
 		pdf.Ln(4.5)
 	}
 
-	// Buyer block — top-right of page header
+	// Buyer block — top-right of page header. For organisation
+	// fakturas the org name replaces the personal name and an
+	// "Att: <contact>" line routes the invoice to the right desk
+	// inside the recipient's accounting flow. Org number and address
+	// follow if set.
 	buyerY := logoBottomY
 	pdf.SetXY(110, buyerY)
-	pdf.SetFont("Helvetica", "B", 11)
-	pdf.CellFormat(90, 5, tr(inv.MemberName), "", 0, "R", false, 0, "")
-	pdf.Ln(5)
-	if inv.MemberAddress != "" {
-		pdf.SetX(110)
+	if inv.OrgRecipient != nil {
+		pdf.SetFont("Helvetica", "B", 11)
+		pdf.CellFormat(90, 5, tr(inv.OrgRecipient.Name), "", 0, "R", false, 0, "")
+		pdf.Ln(5)
 		pdf.SetFont("Helvetica", "", 9)
-		pdf.CellFormat(90, 4.5, tr(inv.MemberAddress), "", 0, "R", false, 0, "")
-		pdf.Ln(4.5)
+		if inv.OrgRecipient.ContactPerson != "" {
+			pdf.SetX(110)
+			pdf.CellFormat(90, 4.5, tr("Att: "+inv.OrgRecipient.ContactPerson), "", 0, "R", false, 0, "")
+			pdf.Ln(4.5)
+		}
+		if inv.OrgRecipient.OrgNumber != "" {
+			pdf.SetX(110)
+			pdf.CellFormat(90, 4.5, tr("Org.nr: "+inv.OrgRecipient.OrgNumber), "", 0, "R", false, 0, "")
+			pdf.Ln(4.5)
+		}
+		if inv.OrgRecipient.Address != "" {
+			pdf.SetX(110)
+			pdf.CellFormat(90, 4.5, tr(inv.OrgRecipient.Address), "", 0, "R", false, 0, "")
+			pdf.Ln(4.5)
+		}
+	} else {
+		pdf.SetFont("Helvetica", "B", 11)
+		pdf.CellFormat(90, 5, tr(inv.MemberName), "", 0, "R", false, 0, "")
+		pdf.Ln(5)
+		if inv.MemberAddress != "" {
+			pdf.SetX(110)
+			pdf.SetFont("Helvetica", "", 9)
+			pdf.CellFormat(90, 4.5, tr(inv.MemberAddress), "", 0, "R", false, 0, "")
+			pdf.Ln(4.5)
+		}
 	}
 
 	// Move below the taller of seller/buyer blocks
@@ -144,11 +188,19 @@ func GeneratePDF(inv Invoice) ([]byte, error) {
 	rs := []row{
 		{tr("Fakturanummer:"), fmt.Sprintf("%d", inv.InvoiceNumber), false},
 		{tr("Fakturadato:"), inv.IssueDate.Format("02.01.2006"), false},
-		{tr("Kontonummer:"), tr(inv.BankAccount), true},
-		{"KID:", inv.KID, true},
-		{tr("Beløp å betale:"), tr(formatNOK(total)), true},
-		{tr("Forfallsdato:"), inv.DueDate.Format("02.01.2006"), true},
 	}
+	// "Deres ref." sits between the dates and the payment block when
+	// the recipient supplied one — that's where Norwegian B2B
+	// recipients expect to see their PO/internal reference.
+	if inv.OrgRecipient != nil && inv.OrgRecipient.TheirRef != "" {
+		rs = append(rs, row{tr("Deres ref.:"), tr(inv.OrgRecipient.TheirRef), false})
+	}
+	rs = append(rs,
+		row{tr("Kontonummer:"), tr(inv.BankAccount), true},
+		row{"KID:", inv.KID, true},
+		row{tr("Beløp å betale:"), tr(formatNOK(total)), true},
+		row{tr("Forfallsdato:"), inv.DueDate.Format("02.01.2006"), true},
+	)
 
 	// Box width = label column + the widest value rendered + symmetric
 	// padding on both sides. fpdf's GetStringWidth measures the current
