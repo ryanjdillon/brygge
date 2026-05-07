@@ -215,20 +215,111 @@ func main() {
 
 		r.Group(func(r chi.Router) {
 			r.Use(standardRL)
-			if cfg.Features.Commerce {
+			// Pricing belongs to the Accounting module (membership dues,
+			// slip fees, electricity per kWh, etc.) — Commerce is just
+			// the merchandise shop now.
+			if cfg.Features.Accounting {
 				r.Get("/pricing", priceItemsHandler.HandleListPublic)
+			}
+			if cfg.Features.Commerce {
 				r.Get("/products", productsHandler.HandleListPublic)
 			}
 			r.Get("/boat-models", boatModelsHandler.HandleSearch)
 			r.Get("/weather", weatherHandler.HandleGetWeather)
 			r.Post("/contact", contactHandler.HandleContactForm)
 			r.Get("/club", func(w http.ResponseWriter, r *http.Request) {
-				handlers.JSON(w, http.StatusOK, map[string]string{
-					"name":   cfg.ClubName,
-					"slug":   cfg.ClubSlug,
-					"domain": cfg.Domain,
+				// Public club info — name/slug/domain come from the static
+				// deploy config so the response is available even before any
+				// admin has opened the settings page; contact channels and
+				// the logo flag come from the DB (filled via /admin/settings/
+				// financials in the admin UI) so they can be edited without
+				// a redeploy.
+				var (
+					address                  string
+					phone                    string
+					vhf                      string
+					lat                      *float64
+					lon                      *float64
+					website                  string
+					chairman                 string
+					viceChairman             string
+					treasurer                string
+					secretary                string
+					harborMaster             string
+					hasLogo                  bool
+					harborApproach           string
+					harborDepth              string
+					harborVHF                string
+					harborCTATitle           string
+					harborCTADescription     string
+					motorhomePower           string
+					motorhomeFacilities      string
+					motorhomeCheckin         string
+					motorhomeRules           string
+					motorhomeCTATitle        string
+					motorhomeCTADescription  string
+				)
+				_ = db.QueryRow(r.Context(),
+					`SELECT COALESCE(address, ''),
+					        COALESCE(phone, ''),
+					        COALESCE(vhf_channel, ''),
+					        latitude, longitude,
+					        COALESCE(website_url, ''),
+					        COALESCE(chairman_email, ''),
+					        COALESCE(vice_chairman_email, ''),
+					        COALESCE(treasurer_email, ''),
+					        COALESCE(secretary_email, ''),
+					        COALESCE(harbor_master_email, ''),
+					        (site_logo_data IS NOT NULL AND octet_length(site_logo_data) > 0),
+					        COALESCE(harbor_approach, ''),
+					        COALESCE(harbor_depth, ''),
+					        COALESCE(harbor_vhf, ''),
+					        COALESCE(harbor_cta_title, ''),
+					        COALESCE(harbor_cta_description, ''),
+					        COALESCE(motorhome_power, ''),
+					        COALESCE(motorhome_facilities, ''),
+					        COALESCE(motorhome_checkin, ''),
+					        COALESCE(motorhome_rules, ''),
+					        COALESCE(motorhome_cta_title, ''),
+					        COALESCE(motorhome_cta_description, '')
+					   FROM clubs WHERE slug = $1`,
+					cfg.ClubSlug,
+				).Scan(&address, &phone, &vhf, &lat, &lon,
+					&website, &chairman, &viceChairman, &treasurer, &secretary, &harborMaster, &hasLogo,
+					&harborApproach, &harborDepth, &harborVHF, &harborCTATitle, &harborCTADescription,
+					&motorhomePower, &motorhomeFacilities, &motorhomeCheckin, &motorhomeRules,
+					&motorhomeCTATitle, &motorhomeCTADescription)
+				handlers.JSON(w, http.StatusOK, map[string]any{
+					"name":                       cfg.ClubName,
+					"slug":                       cfg.ClubSlug,
+					"domain":                     cfg.Domain,
+					"address":                    address,
+					"phone":                      phone,
+					"vhf_channel":                vhf,
+					"latitude":                   lat,
+					"longitude":                  lon,
+					"website_url":                website,
+					"chairman_email":             chairman,
+					"vice_chairman_email":        viceChairman,
+					"treasurer_email":            treasurer,
+					"secretary_email":            secretary,
+					"harbor_master_email":        harborMaster,
+					"has_logo":                   hasLogo, // legacy alias for has_site_logo
+					"has_site_logo":              hasLogo,
+					"harbor_approach":            harborApproach,
+					"harbor_depth":               harborDepth,
+					"harbor_vhf":                 harborVHF,
+					"harbor_cta_title":           harborCTATitle,
+					"harbor_cta_description":     harborCTADescription,
+					"motorhome_power":            motorhomePower,
+					"motorhome_facilities":       motorhomeFacilities,
+					"motorhome_checkin":          motorhomeCheckin,
+					"motorhome_rules":            motorhomeRules,
+					"motorhome_cta_title":        motorhomeCTATitle,
+					"motorhome_cta_description":  motorhomeCTADescription,
 				})
 			})
+			r.Get("/club/logo", clubSettingsHandler.HandleGetPublicClubLogo)
 		})
 
 		r.Get("/legal/{docType}", gdprHandler.HandleGetLegalDocument)
@@ -645,16 +736,29 @@ func main() {
 						middleware.RequireFreshTOTP(10*time.Minute),
 					).Patch("/settings/financials", clubSettingsHandler.HandleUpdateFinancialSettings)
 					r.With(middleware.RequireRole("treasurer", "admin")).
-						Get("/settings/financials/logo", clubSettingsHandler.HandleGetClubLogo)
+						Get("/settings/financials/faktura-logo", clubSettingsHandler.HandleGetFakturaLogo)
 					r.With(
 						middleware.RequireRole("treasurer", "admin"),
 						middleware.RequireFreshTOTP(10*time.Minute),
-					).Post("/settings/financials/logo", clubSettingsHandler.HandleUploadClubLogo)
+					).Post("/settings/financials/faktura-logo", clubSettingsHandler.HandleUploadFakturaLogo)
 					r.With(
 						middleware.RequireRole("treasurer", "admin"),
 						middleware.RequireFreshTOTP(10*time.Minute),
-					).Delete("/settings/financials/logo", clubSettingsHandler.HandleDeleteClubLogo)
+					).Delete("/settings/financials/faktura-logo", clubSettingsHandler.HandleDeleteFakturaLogo)
 				}
+
+				// Site logo lives outside the Accounting feature gate
+				// because the navbar relies on it on every public page.
+				r.With(middleware.RequireRole("treasurer", "admin")).
+					Get("/settings/site-logo", clubSettingsHandler.HandleGetSiteLogo)
+				r.With(
+					middleware.RequireRole("treasurer", "admin"),
+					middleware.RequireFreshTOTP(10*time.Minute),
+				).Post("/settings/site-logo", clubSettingsHandler.HandleUploadSiteLogo)
+				r.With(
+					middleware.RequireRole("treasurer", "admin"),
+					middleware.RequireFreshTOTP(10*time.Minute),
+				).Delete("/settings/site-logo", clubSettingsHandler.HandleDeleteSiteLogo)
 
 				r.Route("/slip-shares", func(r chi.Router) {
 					r.Use(middleware.RequireRole("board", "harbor_master"))
@@ -663,7 +767,7 @@ func main() {
 					r.Put("/rebates/{rebateID}", slipSharesHandler.HandleUpdateRebateStatus)
 				})
 
-				if cfg.Features.Commerce {
+				if cfg.Features.Accounting {
 					r.Route("/pricing", func(r chi.Router) {
 						r.Use(middleware.RequireRole("admin", "treasurer"))
 						r.Get("/", priceItemsHandler.HandleListAdmin)
@@ -671,7 +775,9 @@ func main() {
 						r.Put("/{itemID}", priceItemsHandler.HandleUpdate)
 						r.Delete("/{itemID}", priceItemsHandler.HandleDelete)
 					})
+				}
 
+				if cfg.Features.Commerce {
 					r.Route("/products", func(r chi.Router) {
 						r.Use(middleware.RequireRole("board", "admin"))
 						r.Get("/", productsHandler.HandleListAdmin)

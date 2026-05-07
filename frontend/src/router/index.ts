@@ -27,10 +27,6 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/DirectionsView.vue'),
   },
   {
-    path: '/history',
-    component: () => import('@/views/HistoryView.vue'),
-  },
-  {
     path: '/book',
     component: () => import('@/views/BookView.vue'),
   },
