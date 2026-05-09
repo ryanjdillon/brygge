@@ -179,10 +179,63 @@ The PEM file is hosted on the same server at any path you like; nothing else cha
 
 ---
 
+## DKIM provisioning (declarative)
+
+Stalwart's `dkimManagement = Automatic` default rotates DKIM keys monthly under selectors like `YYYYMMr` / `YYYYMMe`. Those keys never reach DNS, so Gmail / Yahoo / Apple all see `dkim=permerror` — DMARC then passes only via SPF, which is the weaker leg and weighs against both BIMI eligibility and inbox placement.
+
+The fix is to switch the domain to **Manual** DKIM management and pin a single fixed signature with selector `mail`, whose public key is published at `mail._domainkey.<domain>` (already wired in `terraform/dns.nix`). Both halves are managed declaratively:
+
+- **DNS side (already in place).** `terraform/dns.nix` → `mail_dkim` publishes `tfvars.dkim_public_value` at `mail._domainkey.<domain>`.
+- **Stalwart side.** `nix/host.nix` → `systemd.services.stalwart-dkim-config` runs after every boot. It looks up the Domain's ID, switches it to Manual, deletes any auto-rotated `YYYYMM[re]` signatures, drops + recreates the fixed `mail` signature using the operator-supplied private key. Idempotent — converges on every deploy.
+
+### One-time operator setup per club
+
+The keypair stays out of `/nix/store`, the same way `relay@`'s password and the existing `mail-private.pem` already do. On first deploy of a new club:
+
+```bash
+# 1. Generate the keypair locally.
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 \
+  -out dkim-mail-private.pem
+
+# 2. Place the private key on the server.
+scp dkim-mail-private.pem root@mail.<domain>:/tmp/
+ssh root@mail.<domain> 'install -m 0400 -o root /tmp/dkim-mail-private.pem \
+  /etc/stalwart/dkim-mail-private.pem && rm /tmp/dkim-mail-private.pem'
+
+# 3. Derive the DNS TXT value and paste into tfvars.dkim_public_value.
+openssl rsa -in dkim-mail-private.pem -pubout -outform DER 2>/dev/null \
+  | base64 -w0 \
+  | awk '{print "v=DKIM1; k=rsa; p="$0}'
+
+# 4. Apply.
+nix run .#tf-apply   # publishes the public key at mail._domainkey.<domain>
+nix run .#deploy     # systemd unit converges Stalwart's DKIM state
+```
+
+After the first successful run the unit's destroys are no-ops; the create reapplies the same key. Subsequent club deploys (re-installs, machine moves) repeat the keypair/scp/tfvars trio once and from then on `nix run .#deploy` keeps everything in sync.
+
+### Verification after deploy
+
+```bash
+ssh root@mail.<domain> -- systemctl status stalwart-dkim-config
+ssh root@mail.<domain> -- journalctl -u stalwart-dkim-config -n 50 --no-pager
+```
+
+The journal should show `Done: 0–2 destroyed, 1 updated, 1 created`. Send a test message and check the recipient's `Authentication-Results` header — both DKIM lines should now read `dkim=pass header.s=mail`.
+
+If the service fails on first run, the most likely causes (in rough order of likelihood):
+
+- `/etc/stalwart/dkim-mail-private.pem` missing or unreadable → re-run step 2 above.
+- `stalwart-cli` rejects the `STALWART_USER` / `STALWART_PASSWORD` / `STALWART_URL` env-var names — check `stalwart-cli --help` for the version on the box and adjust the unit. The CLI's auth conventions have shifted between Stalwart 0.10/0.11/0.12 releases.
+- Domain ID lookup fails because the domain hasn't been created in Stalwart yet → log into the admin UI, add the domain, redeploy.
+
+---
+
 ## Reference
 
 - BIMI Group: <https://bimigroup.org/>
 - DMARC walkthrough: [docs/mail/setup.md](setup.md)
 - Backend route: `backend/cmd/api/main.go` — `r.Get("/club/logo.svg", …)`
 - DNS record: `terraform/dns.nix` — `bimi`
+- DKIM systemd unit: `nix/host.nix` — `systemd.services.stalwart-dkim-config`
 - SVG storage column: migration `000032_split_club_logos`

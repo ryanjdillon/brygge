@@ -35,11 +35,11 @@ Used for magic link login, invoice delivery, and broadcasts. Brygge talks SMTP t
 
 | Variable        | Required  | Default     | Description                                               |
 |-----------------|-----------|-------------|-----------------------------------------------------------|
-| `SMTP_HOST`     | For email | —           | SMTP server (usually `localhost`)                         |
-| `SMTP_PORT`     | No        | `587`       | Submission (STARTTLS) or `465` for SMTPS                  |
-| `SMTP_USERNAME` | For email | —           | Mailbox used for auth (usually `noreply@<domain>`)        |
-| `SMTP_PASSWORD` | For email | —           | Password for that mailbox (set in Stalwart admin UI)      |
-| `EMAIL_FROM`    | For email | —           | From-address on outgoing mail (usually matches username)  |
+| `SMTP_HOST`     | For email | —           | SMTP server (usually `mail.<domain>`)                     |
+| `SMTP_PORT`     | No        | `587`       | `465` (SMTPS) recommended; `587` (Submission/STARTTLS) supported |
+| `SMTP_USERNAME` | For email | —           | Stalwart principal name — `relay` (no `@<domain>` suffix) |
+| `SMTP_PASSWORD` | For email | —           | Same value as `/etc/stalwart/relay-password` on the server (provisioned via `stalwart-relay-account` systemd unit) |
+| `EMAIL_FROM`    | For email | —           | From-address on outgoing mail (e.g. `<Club Name> <relay@<domain>>`) |
 | `EMAIL_REPLY_TO`| No        | —           | Reply-To header (e.g. `info@<domain>`) — routes replies to a human-read mailbox when the From address is sending-only |
 
 If `SMTP_HOST` is not set, the app starts in degraded mode — magic link auth and invoice emails will not work.

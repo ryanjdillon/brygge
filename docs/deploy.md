@@ -174,13 +174,15 @@ VIPPS_SUBSCRIPTION_KEY=
 VIPPS_MSN=
 
 # Mail (self-hosted Stalwart; see docs/mail/setup.md).
-# Fill in after the mail server is set up and a noreply@<domain>
-# mailbox has been created in Stalwart's admin UI.
-SMTP_HOST=localhost
-SMTP_PORT=587
-SMTP_USERNAME=noreply@<domain>
+# The relay@ principal is provisioned declaratively from
+# /etc/stalwart/relay-password by the stalwart-relay-account
+# systemd unit; SMTP_PASSWORD here must match that file.
+SMTP_HOST=mail.<domain>
+SMTP_PORT=465
+SMTP_USERNAME=relay
 SMTP_PASSWORD=
-EMAIL_FROM=noreply@<domain>
+EMAIL_FROM=<Club Name> <relay@<domain>>
+EMAIL_REPLY_TO=info@<domain>
 
 # S3-compatible object storage (documents, chart tiles, etc.)
 S3_ENDPOINT=https://nbg1.your-objectstorage.com
@@ -219,7 +221,7 @@ Follow [docs/mail/setup.md](mail/setup.md) for:
 
 - Stalwart admin bootstrap (first password, DKIM generation)
 - DNS DKIM record publishing
-- Creating `noreply@<domain>` for brygge outbound + role mailboxes for board members
+- Setting the `relay@<domain>` password (auto-provisioned via `stalwart-relay-account` systemd unit) + creating role mailboxes for board members
 - Bulwark webmail first login
 
 Once `SMTP_HOST`/`SMTP_PASSWORD` are filled in `/etc/brygge/env` and `brygge.service` is restarted, magic-link login via self-hosted mail works end-to-end.

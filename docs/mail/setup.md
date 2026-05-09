@@ -91,42 +91,69 @@ ssh root@<server-ip> 'ls /run/credentials/stalwart.service/'
 
 Open `https://mail.<domain>/` and log in as `admin` + the password from step 2.
 
-First actions in the admin UI:
+First action in the admin UI:
 
-1. **Configuration → Authentication → Principals** → create a real admin user with a new password. Optionally delete/rotate the bootstrap `admin` fallback afterwards.
-2. **Configuration → Outbound → DKIM** → click "Create signature":
-   - Domain: `<your-domain>`
-   - Selector: `mail`
-   - Algorithm: RSA-SHA256
-   - Key size: **1024 bits** (Hetzner Cloud DNS won't accept TXT records over 255 bytes — 2048-bit DKIM public keys exceed this; 1024-bit is still universally accepted)
-   - Canonicalization: relaxed/relaxed
-   - Save & generate key
-3. **Configuration → Outbound → DKIM → mail selector** → copy the public-key TXT value shown in the "DNS Record" section.
+**Configuration → Authentication → Principals** → create a real admin user with a new password. Optionally delete/rotate the bootstrap `admin` fallback afterwards.
 
-### 4. Publish the DKIM record
+DKIM is **not** configured through the UI — it's provisioned declaratively by the `stalwart-dkim-config` systemd service (defined in `nix/host.nix`). See the next two steps for the keypair-and-tfvars side of that flow.
 
-Paste the DKIM public key into `terraform/terraform.tfvars.json`:
+### 4. Provision DKIM (declarative)
+
+Stalwart's default `dkimManagement = Automatic` rotates DKIM keys monthly under selectors like `YYYYMMr` / `YYYYMMe`. Those keys never reach DNS, so receivers see `dkim=permerror` and DMARC passes only via the weaker SPF leg — which weighs into spam scores at every major receiver and disqualifies the message from BIMI rendering on stricter providers (Yahoo / Apple).
+
+The fix is to switch the domain to `Manual` mode and pin a single fixed signature with selector `mail`. Both halves are managed declaratively:
+
+- **DNS side**: `terraform/dns.nix` → `mail_dkim` publishes the public key at `mail._domainkey.<domain>`, sourced from `tfvars.dkim_public_value`.
+- **Stalwart side**: `nix/host.nix` → `systemd.services.stalwart-dkim-config` runs after every boot. It looks up the Domain's ID, switches it to Manual, deletes any auto-rotated `YYYYMM[re]` signatures, drops + recreates the fixed `mail` signature using the operator-supplied private key. Idempotent across re-runs.
+
+Operator one-time setup per club:
 
 ```bash
-# Build the TXT record value (Hetzner wants single-line, outer-quoted form)
-PUBLIC_KEY='...paste from Stalwart admin UI...'
+# 1. Generate the keypair locally. 1024-bit RSA so the resulting TXT
+#    value fits Hetzner Cloud DNS's 255-byte limit on TXT substrings —
+#    2048-bit public keys exceed it. 1024-bit is still universally
+#    accepted by major MTAs.
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:1024 \
+  -out dkim-mail-private.pem
+
+# 2. Place the private key on the server (root:root 0400, outside the
+#    Nix store).
+scp dkim-mail-private.pem root@mail.<domain>:/tmp/
+ssh root@mail.<domain> 'install -m 0400 -o root /tmp/dkim-mail-private.pem \
+  /etc/stalwart/dkim-mail-private.pem && rm /tmp/dkim-mail-private.pem'
+
+# 3. Derive the DNS TXT value and paste into tfvars.dkim_public_value.
+PUBLIC_KEY=$(openssl rsa -in dkim-mail-private.pem -pubout -outform DER 2>/dev/null \
+  | base64 -w0)
 jq --arg v "\"v=DKIM1; k=rsa; p=${PUBLIC_KEY}\"" \
   '.dkim_public_value = $v' \
   terraform/terraform.tfvars.json > /tmp/t && mv /tmp/t terraform/terraform.tfvars.json
 
-# Sanity-check the total length is ≤ ~255 bytes
+# Sanity-check the total length is ≤ 255 bytes
 jq -r .dkim_public_value terraform/terraform.tfvars.json | wc -c
 
-# Publish
+# 4. Publish the public key in DNS first, then deploy so the systemd
+#    unit converges Stalwart's stored signature against the same key.
 nix run .#tf-apply
+nix run .#deploy
 ```
 
-Verify:
+Verify the DNS record:
 
 ```bash
 dig TXT mail._domainkey.<domain> @hydrogen.ns.hetzner.com +short
 # expect: "v=DKIM1; k=rsa; p=MIG..."
 ```
+
+Verify the systemd unit converged Stalwart's DB:
+
+```bash
+ssh root@<server-ip> -- systemctl status stalwart-dkim-config
+ssh root@<server-ip> -- journalctl -u stalwart-dkim-config -n 50 --no-pager
+# Expect: "Done: 0–2 destroyed, 1 updated, 1 created"
+```
+
+End-to-end check: send a test message and look at the recipient's `Authentication-Results`. Both DKIM lines should read `dkim=pass header.s=mail`. If they show `header.s=YYYYMMr` / `YYYYMMe` instead, the systemd unit didn't converge — see [BIMI guide § DKIM provisioning](bimi.md#dkim-provisioning-declarative) for troubleshooting.
 
 ### 5. Create human role mailboxes
 
@@ -220,6 +247,38 @@ ssh root@<server-ip> 'systemctl restart stalwart-relay-account brygge'
 ```
 
 The systemd unit re-bcrypts the new plaintext and PATCHes Stalwart's stored secret on every restart, so the principal stays in sync with the file. brygge picks up the new `SMTP_PASSWORD` from `/etc/brygge/env` on its restart.
+
+### Rotating the DKIM keypair
+
+The fixed `mail` selector key is stored as `/etc/stalwart/dkim-mail-private.pem` on the server (the source of truth) and as `tfvars.dkim_public_value` in `terraform/terraform.tfvars.json` (mirrored into DNS). To rotate:
+
+```bash
+# 1. Generate a fresh keypair.
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:1024 \
+  -out dkim-mail-private.pem
+
+# 2. Replace the server-side private key.
+scp dkim-mail-private.pem root@mail.<domain>:/tmp/
+ssh root@mail.<domain> 'install -m 0400 -o root /tmp/dkim-mail-private.pem \
+  /etc/stalwart/dkim-mail-private.pem && rm /tmp/dkim-mail-private.pem'
+
+# 3. Update tfvars with the new public key.
+PUBLIC_KEY=$(openssl rsa -in dkim-mail-private.pem -pubout -outform DER 2>/dev/null \
+  | base64 -w0)
+jq --arg v "\"v=DKIM1; k=rsa; p=${PUBLIC_KEY}\"" \
+  '.dkim_public_value = $v' \
+  terraform/terraform.tfvars.json > /tmp/t && mv /tmp/t terraform/terraform.tfvars.json
+
+# 4. Push DNS first so receivers can validate before the server starts
+#    signing with the new key.
+nix run .#tf-apply
+sleep 60   # let Hetzner's nameservers refresh
+nix run .#deploy
+```
+
+The `stalwart-dkim-config` unit picks up the new private key on its next run (triggered by the deploy), drops the old signature, and creates a fresh one with the same `mail` selector. No Stalwart admin UI clicks needed.
+
+If you change selector names (rare — you'd usually keep `mail`), update both the unit and `terraform/dns.nix` to publish under the new selector name.
 
 ### Replacing the bootstrap admin password
 
@@ -366,7 +425,8 @@ Don't enable `mailserver.localDnsResolver` (knot-resolver). It breaks upstream D
 |---|---|---|
 | Server, firewall, DNS records | Terranix | `nix run .#tf-apply` |
 | NixOS config (Stalwart, Caddy, Bulwark) | Nix flake | `nix run .#deploy -- <host>` |
-| Stalwart admin settings (DKIM, spam, TLS) | Stalwart RocksDB | Admin UI at `https://mail.<domain>/` |
+| Stalwart admin settings (spam, TLS) | Stalwart RocksDB | Admin UI at `https://mail.<domain>/` |
+| DKIM signature (`mail` selector) | `nix/host.nix` `stalwart-dkim-config` unit + `/etc/stalwart/dkim-mail-private.pem` + `tfvars.dkim_public_value` | Generate keypair, scp + tfvars + `tf-apply` + `deploy` (see § 4) |
 | Mailbox accounts + passwords | Stalwart RocksDB | Admin UI |
 | Mail contents | Stalwart RocksDB | IMAP / JMAP clients |
 | Bootstrap admin password | `/etc/stalwart/admin-password` on the server | `install` + `systemctl restart stalwart` |
@@ -377,5 +437,6 @@ Don't enable `mailserver.localDnsResolver` (knot-resolver). It breaks upstream D
 ## Related
 
 - [docs/deploy.md](../deploy.md) — overall deploy guide
+- [docs/mail/bimi.md](bimi.md) — publishing the club logo for inbox rendering (DMARC + DKIM prerequisites covered there in detail)
 - [DIL-141](https://linear.app/dillonteknisk/issue/DIL-141) — parent feature (self-host mail)
 - [DIL-166](https://linear.app/dillonteknisk/issue/DIL-166) — first-deploy workflow simplification
