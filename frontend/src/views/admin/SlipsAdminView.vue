@@ -30,6 +30,7 @@ type Slip = {
   depth_m?: number | null
   status: string
   notes?: string | null
+  occupant_id?: string | null
   occupant_name?: string | null
   boat_id?: string | null
   boat_name?: string | null
@@ -185,6 +186,34 @@ const { mutate: updateSlip, isPending: isUpdating } = useMutation({
   },
 })
 
+const unassignError = ref<string | null>(null)
+const { mutate: unassignSlip, isPending: isUnassigning } = useMutation({
+  mutationFn: async () => {
+    const slip = editingSlip.value
+    if (!slip) throw new Error('no slip selected')
+    if (!slip.occupant_id || !slip.boat_id) throw new Error('slip is not assigned')
+    return unwrap(await client.PUT('/api/v1/admin/users/{userID}/boats/{boatID}/slip' as any, {
+      params: { path: { userID: slip.occupant_id, boatID: slip.boat_id } },
+      body: { slip_id: null } as any,
+    }))
+  },
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ['admin', 'slips'] })
+    editingSlip.value = null
+    unassignError.value = null
+  },
+  onError: (err: unknown) => {
+    unassignError.value = err instanceof Error ? err.message : String(err)
+  },
+})
+
+async function confirmUnassign() {
+  const slip = editingSlip.value
+  if (!slip) return
+  if (!confirm(t('admin.slips.unassignConfirm', { number: (slip.section ? slip.section + ' ' : '') + slip.number }))) return
+  unassignSlip()
+}
+
 const { mutate: deleteSlip, isPending: isDeleting } = useMutation({
   mutationFn: async () => {
     const slip = deletingSlip.value
@@ -224,11 +253,13 @@ async function openEdit(slip: Slip) {
     notes: slip.notes ?? '',
   }
   submitError.value = null
+  unassignError.value = null
 }
 
 function closeEdit() {
   editingSlip.value = null
   submitError.value = null
+  unassignError.value = null
 }
 
 async function openDelete(slip: Slip) {
@@ -417,9 +448,22 @@ function closeDelete() {
           <textarea v-model="editForm.notes" rows="3" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
         </div>
         <div v-if="submitError" class="rounded-md bg-red-50 p-3 text-sm text-red-800">{{ submitError }}</div>
-        <div class="flex justify-end gap-3">
-          <button type="button" class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50" @click="closeEdit">{{ t('common.cancel') }}</button>
-          <button type="submit" :disabled="isUpdating" class="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50">{{ t('common.save') }}</button>
+        <div v-if="unassignError" class="rounded-md bg-red-50 p-3 text-sm text-red-800">{{ unassignError }}</div>
+        <div class="flex items-center justify-between gap-3">
+          <button
+            v-if="editingSlip.occupant_id && editingSlip.boat_id"
+            type="button"
+            :disabled="isUnassigning"
+            class="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800 shadow-sm hover:bg-amber-100 disabled:opacity-50"
+            @click="confirmUnassign"
+          >
+            {{ t('admin.slips.unassign') }}
+          </button>
+          <span v-else />
+          <div class="flex gap-3">
+            <button type="button" class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50" @click="closeEdit">{{ t('common.cancel') }}</button>
+            <button type="submit" :disabled="isUpdating" class="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50">{{ t('common.save') }}</button>
+          </div>
         </div>
       </form>
     </div>

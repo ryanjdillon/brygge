@@ -970,6 +970,7 @@
       "notesOnlyHint": "Vis kun medlemmer med adminnotater",
       "spots": "Båtplasser",
       "addSlip": "Legg til plass…",
+      "unassignedSlip": "— Ingen plass —",
       "boats": "Båter",
       "addBoat": "Legg til båt",
       "noBoats": "Ingen båter registrert.",
@@ -1090,7 +1091,10 @@
       "dockFilterAll": "Alle",
       "notes": "Notater",
       "notesOnly": "Bare med notater",
-      "slip": "Båtplass"
+      "slip": "Båtplass",
+      "unassign": "Frigjør plass",
+      "unassignConfirm": "Fjern båten fra plass {number}?",
+      "unassignError": "Kunne ikke frigjøre båten"
     },
     "boats": {
       "description": "Båter som trenger godkjenning av mål fra styret eller havnesjefen.",

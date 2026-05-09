@@ -1181,7 +1181,7 @@ async function submitImport() {
                       :disabled="slipsLoading"
                       @change="setBoatSlipId(b.id, ($event.target as HTMLSelectElement).value)"
                     >
-                      <option value="">{{ t('admin.users.addSlip') }}</option>
+                      <option value="">{{ getBoatSlip(b.id).slip_id ? t('admin.users.unassignedSlip') : t('admin.users.addSlip') }}</option>
                       <option v-for="s in pickerFor(b.id)" :key="s.id" :value="s.id">
                         {{ (s.section ? s.section + ' ' : '') + s.number }}
                       </option>

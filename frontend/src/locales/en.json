@@ -974,6 +974,7 @@
       "notesOnlyHint": "Show only members with admin notes",
       "spots": "Slips",
       "addSlip": "Add slip…",
+      "unassignedSlip": "— Unassigned —",
       "boats": "Boats",
       "addBoat": "Add boat",
       "noBoats": "No boats on file.",
@@ -1094,7 +1095,10 @@
       "dockFilterAll": "All",
       "notes": "Notes",
       "notesOnly": "Notes only",
-      "slip": "Slip"
+      "slip": "Slip",
+      "unassign": "Unassign boat",
+      "unassignConfirm": "Remove the current boat from slip {number}?",
+      "unassignError": "Could not unassign boat"
     },
     "boats": {
       "description": "Boats that need dimension approval from the board or harbour master.",
