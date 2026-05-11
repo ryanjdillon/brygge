@@ -115,30 +115,39 @@ Operator one-time setup per club:
 #    is no flag to choose another size.
 nix run .#deploy
 
-# 2. Pull the generated public key out of Stalwart.
-KEY=$(ssh root@mail.<domain> -- stalwart-cli dkim get-public-key mail \
-        | sed -n 's/.*Public DKIM key for signature mail: "\(.*\)"/\1/p')
+# 2. Derive the chunked TXT value on the server and save it locally.
+#    Two non-obvious bits inside the SSH script:
+#      a) `stalwart-cli` prints the public key to stderr, hence 2>&1.
+#      b) The CLI has no default URL/credentials — they must be passed
+#         explicitly. We read the admin password from the on-disk
+#         bootstrap file.
+#    The awk one-liner chunks the full DNS value into ≤255-byte quoted
+#    substrings (Hetzner DNS enforces RFC 1035's per-string limit;
+#    a 2048-bit RSA pubkey base64-encodes to ~392 bytes — exceeds the
+#    limit as a single string).
+ssh root@mail.<domain> '
+  ADMIN_PW=$(cat /etc/stalwart/admin-password)
+  KEY=$(stalwart-cli --url http://127.0.0.1:8088 --credentials admin:"$ADMIN_PW" \
+          dkim get-public-key mail 2>&1 \
+          | sed -n "s/.*Public DKIM key for signature mail: \"\(.*\)\"/\1/p")
+  printf "v=DKIM1; k=rsa; p=%s" "$KEY" \
+    | awk "{s=\$0;o=\"\";while(length(s)>0){c=substr(s,1,255);s=substr(s,256);o=o (o==\"\"?\"\":\" \") \"\\\"\" c \"\\\"\"}print o}"
+' > /tmp/dkim-value.txt
 
-# 3. Chunk into ≤255-byte quoted substrings (Hetzner DNS enforces RFC
-#    1035's 255-byte-per-string limit; Stalwart 0.15 generates 2048-bit
-#    RSA keypairs whose base64 form is ~392 bytes — exceeds the limit
-#    as a single string).
-FULL="v=DKIM1; k=rsa; p=${KEY}"
-TXT_VALUE=$(printf '%s' "$FULL" | awk '
-  { s = $0; out = "";
-    while (length(s) > 0) {
-      chunk = substr(s, 1, 255); s = substr(s, 256);
-      out = out (out=="" ? "" : " ") "\"" chunk "\"";
-    } print out }')
+# Sanity-check: one line, ~414 bytes for a 2048-bit key.
+wc -c /tmp/dkim-value.txt
 
-# 4. Paste into tfvars.dkim_public_value. The value already contains
-#    space-separated quoted substrings; just JSON-escape it.
-jq --arg v "$TXT_VALUE" '.dkim_public_value = $v' \
+# 3. Inject into tfvars via jq --rawfile (avoids any long-string
+#    pasting through the terminal, which gets mangled by line-wrap).
+jq --rawfile v /tmp/dkim-value.txt \
+  '.dkim_public_value = ($v | rtrimstr("\n"))' \
   terraform/terraform.tfvars.json > /tmp/t && mv /tmp/t terraform/terraform.tfvars.json
 
 # 4. Publish the public key in DNS.
 nix run .#tf-apply
 ```
+
+If `tf-apply` rejects with `a TXT string exceeds 255 characters`, the chunking didn't happen — re-run step 2 and inspect `/tmp/dkim-value.txt` (must contain `"chunk1" "chunk2"` with the space-separated quoted form). If `jq` errors with `control characters from U+0000 through U+001F`, the tfvars file got line-wrapped by a previous attempt — `git restore terraform/terraform.tfvars.json` and start over from step 3.
 
 Verify the DNS record matches what Stalwart is signing with:
 
