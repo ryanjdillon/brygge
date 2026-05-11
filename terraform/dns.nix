@@ -84,7 +84,12 @@
       name    = "_dmarc";
       type    = "TXT";
       ttl     = 300;
-      records = [{ value = "\"v=DMARC1; p=\${var.dmarc_policy}; rua=mailto:\${var.admin_email}; fo=1\""; }];
+      # rua must be on the sending domain so receivers don't have to
+      # publish a cross-domain authorization (`_report._dmarc` TXT) on
+      # their side. `postmaster@<domain>` is the RFC 5321 well-known
+      # mailbox; provision it as a forwarder in Stalwart so reports
+      # reach the operator without surfacing the human address in DNS.
+      records = [{ value = "\"v=DMARC1; p=\${var.dmarc_policy}; rua=mailto:postmaster@\${var.domain}; fo=1\""; }];
     };
 
     # BIMI — points receiving MTAs at the SVG to display next to
