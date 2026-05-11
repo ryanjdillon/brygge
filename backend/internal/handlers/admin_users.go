@@ -146,12 +146,15 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 		nextArg++
 	}
 
-	// Optional ?notes_only=true filter restricts to users with non-empty
-	// admin_notes (an admin-only convenience for review backlogs).
+	// Optional ?notes=with|without filter for admin-notes presence. Any
+	// other value (or missing) returns all users. Admin-only convenience
+	// for triaging review backlogs vs. confirming nothing's been flagged.
 	notesClause := ""
-	if v := r.URL.Query().Get("notes_only"); v != "" &&
-		(strings.EqualFold(v, "true") || v == "1" || strings.EqualFold(v, "yes")) {
+	switch strings.ToLower(r.URL.Query().Get("notes")) {
+	case "with":
 		notesClause = " AND COALESCE(u.admin_notes, '') <> ''"
+	case "without":
+		notesClause = " AND COALESCE(u.admin_notes, '') = ''"
 	}
 
 	// Optional ?q= fuzzy search across first_name, last_name, email.

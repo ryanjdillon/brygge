@@ -17,6 +17,8 @@ const { t } = useI18n()
 const search = ref('')
 const debouncedSearch = ref('')
 const slipOnly = ref(false)
+type NotesFilter = '' | 'with' | 'without'
+const notesFilter = ref<NotesFilter>('')
 const rows = ref<Row[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
@@ -31,7 +33,7 @@ watch(search, (v) => {
   }, 250)
 })
 
-watch([debouncedSearch, slipOnly], load, { immediate: false })
+watch([debouncedSearch, slipOnly, notesFilter], load, { immediate: false })
 
 async function load() {
   loading.value = true
@@ -40,6 +42,7 @@ async function load() {
     const params = new URLSearchParams()
     if (debouncedSearch.value) params.set('q', debouncedSearch.value)
     if (slipOnly.value) params.set('spot', 'with-spot')
+    if (notesFilter.value) params.set('notes', notesFilter.value)
     params.set('limit', '200')
     const res = await fetch(`/api/v1/admin/users?${params.toString()}`, { credentials: 'include' })
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
@@ -115,6 +118,15 @@ function onBulkCompleted() {
         <input v-model="slipOnly" type="checkbox" class="rounded border-gray-300" />
         {{ t('admin.groupFaktura.slipOnly') }}
       </label>
+      <select
+        v-model="notesFilter"
+        class="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm"
+        :title="t('admin.users.notesFilterLabel')"
+      >
+        <option value="">{{ t('admin.users.notesFilterLabel') }}: {{ t('admin.users.notesFilterAny') }}</option>
+        <option value="with">{{ t('admin.users.notesFilterLabel') }}: {{ t('admin.users.notesFilterWith') }}</option>
+        <option value="without">{{ t('admin.users.notesFilterLabel') }}: {{ t('admin.users.notesFilterWithout') }}</option>
+      </select>
       <span class="ml-auto text-xs text-gray-500">
         {{ t('admin.groupFaktura.summary', { n: rows.length, sel: selected.size }) }}
       </span>

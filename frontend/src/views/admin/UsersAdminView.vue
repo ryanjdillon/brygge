@@ -41,7 +41,8 @@ const sortParam = computed(() => (sortDir.value === 'desc' ? '-' : '') + sortFie
 type SpotFilter = '' | 'permanent' | 'seasonal' | 'none'
 const spotFilter = ref<SpotFilter>('')
 const dockFilter = ref<string>('')
-const notesOnly = ref(false)
+type NotesFilter = '' | 'with' | 'without'
+const notesFilter = ref<NotesFilter>('')
 
 const PAGE_SIZE = 100
 const offset = ref(0)
@@ -61,7 +62,7 @@ function onSearchInput() {
 }
 
 const { data: usersResponse, isLoading, isError } = useQuery({
-  queryKey: ['admin', 'users', sortParam, spotFilter, dockFilter, notesOnly, searchQuery, offset],
+  queryKey: ['admin', 'users', sortParam, spotFilter, dockFilter, notesFilter, searchQuery, offset],
   queryFn: async () =>
     unwrap(
       await client.GET('/api/v1/admin/users', {
@@ -72,7 +73,7 @@ const { data: usersResponse, isLoading, isError } = useQuery({
             sort: sortParam.value,
             ...(spotFilter.value ? { spot: spotFilter.value } : {}),
             ...(dockFilter.value ? { dock: dockFilter.value } : {}),
-            ...(notesOnly.value ? { notes_only: 'true' } : {}),
+            ...(notesFilter.value ? { notes: notesFilter.value } : {}),
             ...(searchQuery.value ? { q: searchQuery.value } : {}),
           } as any,
         },
@@ -88,7 +89,7 @@ function onDockFilterChange() {
   offset.value = 0
 }
 
-function onNotesOnlyChange() {
+function onNotesFilterChange() {
   offset.value = 0
 }
 
@@ -237,7 +238,7 @@ async function selectAllFiltered() {
         sort: sortParam.value,
         ...(spotFilter.value ? { spot: spotFilter.value } : {}),
         ...(dockFilter.value ? { dock: dockFilter.value } : {}),
-        ...(notesOnly.value ? { notes_only: 'true' } : {}),
+        ...(notesFilter.value ? { notes: notesFilter.value } : {}),
         ...(searchQuery.value ? { q: searchQuery.value } : {}),
       } as any,
     },
@@ -760,19 +761,19 @@ async function submitImport() {
           <option value="seasonal">{{ t('admin.users.spotFilterLabel') }}: {{ t('admin.users.spotSeasonal') }}</option>
           <option value="none">{{ t('admin.users.spotFilterLabel') }}: {{ t('admin.users.spotNone') }}</option>
         </select>
-        <label
+        <label v-if="auth.hasRole('admin')" class="sr-only" for="notes-filter">{{ t('admin.users.notesFilterLabel') }}</label>
+        <select
           v-if="auth.hasRole('admin')"
-          class="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-700"
-          :title="t('admin.users.notesOnlyHint')"
+          id="notes-filter"
+          v-model="notesFilter"
+          class="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm"
+          :title="t('admin.users.notesFilterLabel')"
+          @change="onNotesFilterChange"
         >
-          <input
-            v-model="notesOnly"
-            type="checkbox"
-            class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-            @change="onNotesOnlyChange"
-          />
-          <span>{{ t('admin.users.notesOnly') }}</span>
-        </label>
+          <option value="">{{ t('admin.users.notesFilterLabel') }}: {{ t('admin.users.notesFilterAny') }}</option>
+          <option value="with">{{ t('admin.users.notesFilterLabel') }}: {{ t('admin.users.notesFilterWith') }}</option>
+          <option value="without">{{ t('admin.users.notesFilterLabel') }}: {{ t('admin.users.notesFilterWithout') }}</option>
+        </select>
         <button
           class="inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"
           @click="openCreateModal"
