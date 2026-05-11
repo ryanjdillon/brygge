@@ -179,40 +179,38 @@ The PEM file is hosted on the same server at any path you like; nothing else cha
 
 ---
 
-## DKIM provisioning (declarative)
+## DKIM provisioning
 
-Stalwart's `dkimManagement = Automatic` default rotates DKIM keys monthly under selectors like `YYYYMMr` / `YYYYMMe`. Those keys never reach DNS, so Gmail / Yahoo / Apple all see `dkim=permerror` — DMARC then passes only via SPF, which is the weaker leg and weighs against both BIMI eligibility and inbox placement.
+Without a fixed-selector DKIM signature pinned in DNS, Stalwart can sign outbound mail with a selector that has no DNS counterpart. Gmail / Yahoo / Apple then see `dkim=permerror`, DMARC passes only via SPF (the weaker leg), and inbox placement plus BIMI eligibility both suffer.
 
-The fix is to switch the domain to **Manual** DKIM management and pin a single fixed signature with selector `mail`, whose public key is published at `mail._domainkey.<domain>` (already wired in `terraform/dns.nix`). Both halves are managed declaratively:
+The fix pins a single fixed signature with selector `mail`, whose public key is published at `mail._domainkey.<domain>` (wired in `terraform/dns.nix`).
 
-- **DNS side (already in place).** `terraform/dns.nix` → `mail_dkim` publishes `tfvars.dkim_public_value` at `mail._domainkey.<domain>`.
-- **Stalwart side.** `nix/host.nix` → `systemd.services.stalwart-dkim-config` runs after every boot. It looks up the Domain's ID, switches it to Manual, deletes any auto-rotated `YYYYMM[re]` signatures, drops + recreates the fixed `mail` signature using the operator-supplied private key. Idempotent — converges on every deploy.
+Under **Stalwart 0.15.x** the 0.15 CLI has no way to import an externally-managed private key — `stalwart-cli dkim create` always generates and stores a fresh keypair internally. So the data flow inverts from a typical IaC pattern:
+
+- **Stalwart owns the keypair.** `nix/host.nix` → `systemd.services.stalwart-dkim-config` runs after every boot and idempotently calls `stalwart-cli dkim create rsa <domain> mail mail`. The "already exists" failure on subsequent boots is swallowed.
+- **DNS mirrors the public half.** The operator copies the generated public key out of Stalwart and pastes it into `tfvars.dkim_public_value`, which `terraform/dns.nix` publishes at `mail._domainkey.<domain>`.
 
 ### One-time operator setup per club
 
-The keypair stays out of `/nix/store`, the same way `relay@`'s password and the existing `mail-private.pem` already do. On first deploy of a new club:
-
 ```bash
-# 1. Generate the keypair locally.
-openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 \
-  -out dkim-mail-private.pem
+# 1. Deploy. The unit creates the DKIM signature in Stalwart on first
+#    run. 1024-bit RSA by default (fits Hetzner DNS's 255-byte TXT
+#    limit; 2048-bit would not).
+nix run .#deploy
 
-# 2. Place the private key on the server.
-scp dkim-mail-private.pem root@mail.<domain>:/tmp/
-ssh root@mail.<domain> 'install -m 0400 -o root /tmp/dkim-mail-private.pem \
-  /etc/stalwart/dkim-mail-private.pem && rm /tmp/dkim-mail-private.pem'
+# 2. Pull the generated public key.
+ssh root@mail.<domain> -- stalwart-cli dkim get-public-key mail
+# → v=DKIM1; k=rsa; p=MIG...
 
-# 3. Derive the DNS TXT value and paste into tfvars.dkim_public_value.
-openssl rsa -in dkim-mail-private.pem -pubout -outform DER 2>/dev/null \
-  | base64 -w0 \
-  | awk '{print "v=DKIM1; k=rsa; p="$0}'
+# 3. Paste into tfvars.dkim_public_value, JSON-quoted:
+#      "dkim_public_value": "\"v=DKIM1; k=rsa; p=...\""
+$EDITOR terraform/terraform.tfvars.json
 
-# 4. Apply.
-nix run .#tf-apply   # publishes the public key at mail._domainkey.<domain>
-nix run .#deploy     # systemd unit converges Stalwart's DKIM state
+# 4. Publish.
+nix run .#tf-apply
 ```
 
-After the first successful run the unit's destroys are no-ops; the create reapplies the same key. Subsequent club deploys (re-installs, machine moves) repeat the keypair/scp/tfvars trio once and from then on `nix run .#deploy` keeps everything in sync.
+On any subsequent re-install / machine move, repeating step 1 is enough — the DB carries the signature with the host. Step 2 lets you confirm the public key matches what's in DNS.
 
 ### Verification after deploy
 
@@ -221,13 +219,23 @@ ssh root@mail.<domain> -- systemctl status stalwart-dkim-config
 ssh root@mail.<domain> -- journalctl -u stalwart-dkim-config -n 50 --no-pager
 ```
 
-The journal should show `Done: 0–2 destroyed, 1 updated, 1 created`. Send a test message and check the recipient's `Authentication-Results` header — both DKIM lines should now read `dkim=pass header.s=mail`.
+First run: `stalwart-cli dkim create rsa ... mail mail` exits 0. Subsequent runs log `DKIM signature already present — nothing to do.`
+
+Cross-check the keypair halves agree:
+
+```bash
+ssh root@mail.<domain> -- stalwart-cli dkim get-public-key mail
+dig +short TXT mail._domainkey.<domain> @hydrogen.ns.hetzner.com
+# The p= value in DNS must contain the bare base64 the CLI returned.
+```
+
+Send a test message and check the recipient's `Authentication-Results` header — both DKIM lines should read `dkim=pass header.s=mail`.
 
 If the service fails on first run, the most likely causes (in rough order of likelihood):
 
-- `/etc/stalwart/dkim-mail-private.pem` missing or unreadable → re-run step 2 above.
-- `stalwart-cli` rejects the `STALWART_USER` / `STALWART_PASSWORD` / `STALWART_URL` env-var names — check `stalwart-cli --help` for the version on the box and adjust the unit. The CLI's auth conventions have shifted between Stalwart 0.10/0.11/0.12 releases.
-- Domain ID lookup fails because the domain hasn't been created in Stalwart yet → log into the admin UI, add the domain, redeploy.
+- `/etc/stalwart/admin-password` missing → finish § 2 admin bootstrap in `setup.md`.
+- `stalwart-cli` rejects the `--credentials admin:<pw>` syntax — check `stalwart-cli --help` for the version on the box and adjust the unit. The CLI's auth conventions have shifted between Stalwart 0.10 / 0.11 / 0.12 / 0.15 releases.
+- Domain not yet created in Stalwart → log into the admin UI, add the domain, redeploy.
 
 ---
 

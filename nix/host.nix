@@ -536,27 +536,37 @@ in
   # Provision a fixed-selector DKIM signature in Stalwart so outbound
   # mail signs with the `mail._domainkey.<domain>` key whose public
   # part is published by terraform/dns.nix. Without this, Stalwart's
-  # default `dkimManagement = Automatic` rotates keys monthly under
-  # selectors like `YYYYMMr` / `YYYYMMe` that DNS doesn't know about,
-  # so receivers see DKIM=permerror and DMARC passes only on the
-  # weaker SPF leg — disqualifying the message from BIMI rendering on
-  # stricter providers (Yahoo / Apple) and weighing into spam scores
-  # at every major receiver.
+  # default behaviour can rotate keys under selectors DNS doesn't know
+  # about, so receivers see DKIM=permerror and DMARC passes only on
+  # the weaker SPF leg — disqualifying the message from BIMI rendering
+  # on stricter providers (Yahoo / Apple) and weighing into spam
+  # scores at every major receiver.
+  #
+  # Implementation note (Stalwart 0.15.x):
+  #   The 0.15 CLI's `dkim create` subcommand generates its own
+  #   keypair and stores it inside Stalwart's DB. There is no way to
+  #   import an externally-managed private key via the CLI in this
+  #   release. So the flow inverts compared to a typical IaC pattern:
+  #   Stalwart owns the keypair, and the operator copies the public
+  #   half out to DNS via tfvars.
   #
   # Operator one-time setup per club instance:
-  #   1. Generate the keypair locally:
-  #        openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 \
-  #          -out dkim-mail-private.pem
-  #   2. Place the private key on the server:
-  #        scp dkim-mail-private.pem root@mail.<domain>:/tmp/
-  #        ssh root@mail.<domain> 'install -m 0400 -o root /tmp/dkim-mail-private.pem \
-  #          /etc/stalwart/dkim-mail-private.pem && rm /tmp/dkim-mail-private.pem'
-  #   3. Derive the DNS TXT value and put it in tfvars.dkim_public_value:
-  #        openssl rsa -in dkim-mail-private.pem -pubout -outform DER 2>/dev/null \
-  #          | base64 -w0 | awk '{print "v=DKIM1; k=rsa; p="$0}'
-  #   4. tf-apply, then deploy. This service converges on every boot.
+  #   1. Deploy this host config. The unit runs `stalwart-cli dkim
+  #      create rsa <domain> mail mail`, which is idempotent — the
+  #      "already exists" failure on subsequent boots is swallowed.
+  #   2. Pull the generated public key out of Stalwart:
+  #        ssh root@mail.<domain> -- stalwart-cli dkim get-public-key mail
+  #      The output is the bare DNS-ready string starting with
+  #      `v=DKIM1; k=rsa; p=...` (1024-bit by default in 0.15.x — fits
+  #      inside Hetzner DNS's 255-byte TXT-string limit).
+  #   3. Paste that value into terraform/terraform.tfvars.json as
+  #      `dkim_public_value`, JSON-quoted:
+  #        "dkim_public_value": "\"v=DKIM1; k=rsa; p=...\""
+  #   4. `nix run .#tf-apply` to publish the public key at
+  #      mail._domainkey.<domain>.
   #
-  # See docs/mail/bimi.md for the rationale and verification flow.
+  # See docs/mail/setup.md and docs/mail/bimi.md for the operator
+  # walkthrough and verification flow.
   systemd.services.stalwart-dkim-config = {
     description = "Provision a fixed-selector DKIM signature in Stalwart";
     after = [ "stalwart.service" "stalwart-relay-account.service" ];
@@ -571,17 +581,13 @@ in
       set -eu
 
       ADMIN_FILE=/etc/stalwart/admin-password
-      PRIV_FILE=/etc/stalwart/dkim-mail-private.pem
-
-      for f in "$ADMIN_FILE" "$PRIV_FILE"; do
-        if [ ! -s "$f" ]; then
-          echo "WARN: required file missing or empty: $f" >&2
-          echo "  Skipping DKIM convergence. Once you scp the key into place" >&2
-          echo "  (see nix/host.nix comment block above stalwart-dkim-config)" >&2
-          echo "  run: systemctl restart stalwart-dkim-config" >&2
-          exit 0
-        fi
-      done
+      if [ ! -s "$ADMIN_FILE" ]; then
+        echo "WARN: required file missing or empty: $ADMIN_FILE" >&2
+        echo "  Skipping DKIM convergence — admin bootstrap not complete." >&2
+        echo "  Set the admin password (see docs/mail/setup.md) and run:" >&2
+        echo "    systemctl restart stalwart-dkim-config" >&2
+        exit 0
+      fi
 
       ADMIN_PW=$(cat "$ADMIN_FILE")
       DOMAIN="${cfg.domain}"
@@ -596,47 +602,25 @@ in
         sleep 1
       done
 
-      # Resolve the Domain object's ID. We try the dedicated /domain
-      # endpoint first; if that 404s on the running version, fall back
-      # to the principal endpoint where domains historically lived.
-      DOMAIN_ID=$(curl -fsS -u "admin:$ADMIN_PW" "$API/domain/$DOMAIN" 2>/dev/null \
-        | jq -r '.data.id // empty' 2>/dev/null || true)
-      if [ -z "$DOMAIN_ID" ]; then
-        DOMAIN_ID=$(curl -fsS -u "admin:$ADMIN_PW" "$API/principal/$DOMAIN" 2>/dev/null \
-          | jq -r 'if .data.type == "domain" then .data.id else empty end' 2>/dev/null || true)
+      # Idempotent create. The CLI exits non-zero on "already exists";
+      # we treat that as success so the unit converges across reboots.
+      # First-time runs return 0 and Stalwart generates a fresh 1024-bit
+      # RSA keypair under signature id `mail`, selector `mail`.
+      if ! stalwart-cli \
+            --url "$API" \
+            --credentials "admin:$ADMIN_PW" \
+            dkim create rsa "$DOMAIN" mail mail 2>&1 | tee /tmp/dkim-create.out
+      then
+        if grep -qiE 'already exists|duplicate' /tmp/dkim-create.out; then
+          echo "DKIM signature already present — nothing to do."
+        else
+          echo "ERROR: stalwart-cli dkim create failed unexpectedly." >&2
+          cat /tmp/dkim-create.out >&2
+          rm -f /tmp/dkim-create.out
+          exit 1
+        fi
       fi
-      if [ -z "$DOMAIN_ID" ]; then
-        echo "ERROR: cannot resolve Domain ID for $DOMAIN via Stalwart admin API." >&2
-        echo "  Verify the domain has been created in Stalwart (it is normally" >&2
-        echo "  auto-created on first inbound mail or via the admin UI)." >&2
-        exit 1
-      fi
-
-      # Build the apply plan. Embed the PEM as a JSON-quoted string so
-      # newlines survive transport correctly. Three operations:
-      #   1. Switch the domain to manual DKIM (idempotent).
-      #   2. Drop any auto-rotated YYYYMM[re] signatures (idempotent;
-      #      destroy is a no-op when the filter matches nothing).
-      #   3. Drop and recreate the fixed `mail` signature so re-runs
-      #      converge whether the row already exists or not.
-      PEM_JSON=$(jq -Rs . < "$PRIV_FILE")
-      PLAN=$(mktemp)
-      trap 'rm -f "$PLAN"' EXIT
-      {
-        printf '{"@type":"update","object":"Domain","id":"%s","value":{"dkimManagement":{"@type":"Manual"}}}\n' "$DOMAIN_ID"
-        printf '{"@type":"destroy","object":"DkimSignature","value":{"selector":{"@regex":"^[0-9]{6}[re]$"}}}\n'
-        printf '{"@type":"destroy","object":"DkimSignature","value":{"selector":"mail"}}\n'
-        printf '{"@type":"create","object":"DkimSignature","value":{"sig-mail":{"@type":"Dkim1RsaSha256","domainId":"%s","selector":"mail","privateKey":{"@type":"Text","secret":%s}}}}\n' \
-          "$DOMAIN_ID" "$PEM_JSON"
-      } > "$PLAN"
-
-      # The CLI reads admin credentials from STALWART_USER /
-      # STALWART_PASSWORD env vars; URL likewise from STALWART_URL.
-      # See `stalwart-cli --help` if a future release renames these.
-      STALWART_URL="$API" \
-      STALWART_USER="admin" \
-      STALWART_PASSWORD="$ADMIN_PW" \
-      stalwart-cli apply --file "$PLAN" --continue-on-error
+      rm -f /tmp/dkim-create.out
     '';
   };
 
