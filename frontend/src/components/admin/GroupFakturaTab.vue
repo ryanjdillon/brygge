@@ -3,6 +3,9 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Search, Receipt } from 'lucide-vue-next'
 import BulkInvoicesModal from '@/components/admin/BulkInvoicesModal.vue'
+import DockFilter from '@/components/admin/DockFilter.vue'
+import SpotFilter, { type SpotFilterValue } from '@/components/admin/SpotFilter.vue'
+import NotesFilter, { type NotesFilterValue } from '@/components/admin/NotesFilter.vue'
 
 interface Row {
   id: string
@@ -16,14 +19,15 @@ const { t } = useI18n()
 
 const search = ref('')
 const debouncedSearch = ref('')
-const slipOnly = ref(false)
-type NotesFilter = '' | 'with' | 'without'
-const notesFilter = ref<NotesFilter>('')
+const spotFilter = ref<SpotFilterValue>('')
+const dockFilter = ref<string>('')
+const notesFilter = ref<NotesFilterValue>('')
 const rows = ref<Row[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
 const selected = ref<Set<string>>(new Set())
 const showBulkModal = ref(false)
+const dockOptions = ref<string[]>([])
 
 let debounceHandle: ReturnType<typeof setTimeout> | null = null
 watch(search, (v) => {
@@ -33,7 +37,7 @@ watch(search, (v) => {
   }, 250)
 })
 
-watch([debouncedSearch, slipOnly, notesFilter], load, { immediate: false })
+watch([debouncedSearch, spotFilter, dockFilter, notesFilter], load, { immediate: false })
 
 async function load() {
   loading.value = true
@@ -41,7 +45,8 @@ async function load() {
   try {
     const params = new URLSearchParams()
     if (debouncedSearch.value) params.set('q', debouncedSearch.value)
-    if (slipOnly.value) params.set('spot', 'with-spot')
+    if (spotFilter.value) params.set('spot', spotFilter.value)
+    if (dockFilter.value) params.set('dock', dockFilter.value)
     if (notesFilter.value) params.set('notes', notesFilter.value)
     params.set('limit', '200')
     const res = await fetch(`/api/v1/admin/users?${params.toString()}`, { credentials: 'include' })
@@ -62,7 +67,25 @@ async function load() {
   }
 }
 
-onMounted(load)
+async function loadDockOptions() {
+  try {
+    const res = await fetch('/api/v1/admin/slips?limit=500', { credentials: 'include' })
+    if (!res.ok) return
+    const body = await res.json()
+    const sections = new Set<string>()
+    for (const s of (body.items ?? body.data ?? [])) {
+      if (s.section) sections.add(String(s.section))
+    }
+    dockOptions.value = [...sections].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+  } catch {
+    // Silent — the dock filter just stays empty if slips can't load.
+  }
+}
+
+onMounted(() => {
+  load()
+  loadDockOptions()
+})
 
 const allSelected = computed(() => rows.value.length > 0 && rows.value.every((r) => selected.value.has(r.id)))
 
@@ -92,7 +115,6 @@ function openBulk() {
   showBulkModal.value = true
 }
 
-// Re-emit so the parent FakturaView can switch to the drafts tab.
 const emit = defineEmits<{ (e: 'completed'): void }>()
 
 function onBulkCompleted() {
@@ -114,19 +136,9 @@ function onBulkCompleted() {
           class="rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
         />
       </div>
-      <label class="inline-flex items-center gap-2 text-sm">
-        <input v-model="slipOnly" type="checkbox" class="rounded border-gray-300" />
-        {{ t('admin.groupFaktura.slipOnly') }}
-      </label>
-      <select
-        v-model="notesFilter"
-        class="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm"
-        :title="t('admin.users.notesFilterLabel')"
-      >
-        <option value="">{{ t('admin.users.notesFilterLabel') }}: {{ t('admin.users.notesFilterAny') }}</option>
-        <option value="with">{{ t('admin.users.notesFilterLabel') }}: {{ t('admin.users.notesFilterWith') }}</option>
-        <option value="without">{{ t('admin.users.notesFilterLabel') }}: {{ t('admin.users.notesFilterWithout') }}</option>
-      </select>
+      <DockFilter id="group-faktura-dock-filter" v-model="dockFilter" :options="dockOptions" />
+      <SpotFilter id="group-faktura-spot-filter" v-model="spotFilter" />
+      <NotesFilter id="group-faktura-notes-filter" v-model="notesFilter" />
       <span class="ml-auto text-xs text-gray-500">
         {{ t('admin.groupFaktura.summary', { n: rows.length, sel: selected.size }) }}
       </span>

@@ -714,7 +714,6 @@
     },
     "groupFaktura": {
       "searchPlaceholder": "Search members…",
-      "slipOnly": "Only members with an active slip",
       "summary": "{n} members · {sel} selected",
       "selectedCount": "{n} selected",
       "create": "Create fakturas",

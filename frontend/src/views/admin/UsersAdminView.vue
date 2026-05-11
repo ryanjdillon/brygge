@@ -5,6 +5,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useApiClient, unwrap } from '@/lib/apiClient'
 import { sortBySlip } from '@/lib/slipSort'
 import DockFilter from '@/components/admin/DockFilter.vue'
+import SpotFilter, { type SpotFilterValue } from '@/components/admin/SpotFilter.vue'
+import NotesFilter, { type NotesFilterValue } from '@/components/admin/NotesFilter.vue'
 import SortableTh from '@/components/admin/SortableTh.vue'
 import SlipCell from '@/components/admin/SlipCell.vue'
 import { Trash2, UserPlus, Upload, Download, X, Pencil } from 'lucide-vue-next'
@@ -38,11 +40,9 @@ const sortField = ref<SortField>('last_name')
 const sortDir = ref<'asc' | 'desc'>('asc')
 const sortParam = computed(() => (sortDir.value === 'desc' ? '-' : '') + sortField.value)
 
-type SpotFilter = '' | 'permanent' | 'seasonal' | 'none'
-const spotFilter = ref<SpotFilter>('')
+const spotFilter = ref<SpotFilterValue>('')
 const dockFilter = ref<string>('')
-type NotesFilter = '' | 'with' | 'without'
-const notesFilter = ref<NotesFilter>('')
+const notesFilter = ref<NotesFilterValue>('')
 
 const PAGE_SIZE = 100
 const offset = ref(0)
@@ -748,32 +748,17 @@ async function submitImport() {
           :options="dockOptions"
           @update:model-value="onDockFilterChange"
         />
-        <label class="sr-only" for="spot-filter">{{ t('admin.users.spotFilterLabel') }}</label>
-        <select
-          id="spot-filter"
+        <SpotFilter
+          id="member-spot-filter"
           v-model="spotFilter"
-          class="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm"
-          :title="t('admin.users.spotFilterLabel')"
-          @change="onSpotFilterChange"
-        >
-          <option value="">{{ t('admin.users.spotFilterLabel') }}: {{ t('admin.users.spotFilterAll') }}</option>
-          <option value="permanent">{{ t('admin.users.spotFilterLabel') }}: {{ t('admin.users.spotPermanent') }}</option>
-          <option value="seasonal">{{ t('admin.users.spotFilterLabel') }}: {{ t('admin.users.spotSeasonal') }}</option>
-          <option value="none">{{ t('admin.users.spotFilterLabel') }}: {{ t('admin.users.spotNone') }}</option>
-        </select>
-        <label v-if="auth.hasRole('admin')" class="sr-only" for="notes-filter">{{ t('admin.users.notesFilterLabel') }}</label>
-        <select
+          @update:model-value="onSpotFilterChange"
+        />
+        <NotesFilter
           v-if="auth.hasRole('admin')"
-          id="notes-filter"
+          id="member-notes-filter"
           v-model="notesFilter"
-          class="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm"
-          :title="t('admin.users.notesFilterLabel')"
-          @change="onNotesFilterChange"
-        >
-          <option value="">{{ t('admin.users.notesFilterLabel') }}: {{ t('admin.users.notesFilterAny') }}</option>
-          <option value="with">{{ t('admin.users.notesFilterLabel') }}: {{ t('admin.users.notesFilterWith') }}</option>
-          <option value="without">{{ t('admin.users.notesFilterLabel') }}: {{ t('admin.users.notesFilterWithout') }}</option>
-        </select>
+          @update:model-value="onNotesFilterChange"
+        />
         <button
           class="inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"
           @click="openCreateModal"

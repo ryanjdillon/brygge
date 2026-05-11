@@ -710,7 +710,6 @@
     },
     "groupFaktura": {
       "searchPlaceholder": "Søk medlemmer…",
-      "slipOnly": "Kun medlemmer med aktiv plass",
       "summary": "{n} medlemmer · {sel} valgt",
       "selectedCount": "{n} valgt",
       "create": "Opprett fakturaer",
