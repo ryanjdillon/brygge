@@ -575,10 +575,11 @@ in
 
       for f in "$ADMIN_FILE" "$PRIV_FILE"; do
         if [ ! -s "$f" ]; then
-          echo "ERROR: required file missing or empty: $f" >&2
-          echo "  See nix/host.nix comment block above stalwart-dkim-config" >&2
-          echo "  for the one-time DKIM key provisioning steps." >&2
-          exit 1
+          echo "WARN: required file missing or empty: $f" >&2
+          echo "  Skipping DKIM convergence. Once you scp the key into place" >&2
+          echo "  (see nix/host.nix comment block above stalwart-dkim-config)" >&2
+          echo "  run: systemctl restart stalwart-dkim-config" >&2
+          exit 0
         fi
       done
 
