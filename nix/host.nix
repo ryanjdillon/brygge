@@ -612,18 +612,25 @@ in
       # converges across reboots. Capture output to a variable instead
       # of piping to tee — `cmd | tee` masks cmd's exit code with
       # tee's, hiding real CLI failures behind a green "Finished".
+      #
+      # NOTE: the CLI's "already exists" error payload contains the
+      # existing signature including the private-key PEM. We must NOT
+      # log $OUT unconditionally — that would leak the private key
+      # into journald. Only log a sanitised summary or the first
+      # short line in the error path.
       OUT=$(stalwart-cli \
               --url "$BASE_URL" \
               --credentials "admin:$ADMIN_PW" \
               dkim create rsa "$DOMAIN" mail mail 2>&1) && RC=0 || RC=$?
-      printf '%s\n' "$OUT"
-      if [ "$RC" -ne 0 ]; then
-        if printf '%s' "$OUT" | grep -qiE 'already exists|duplicate'; then
-          echo "DKIM signature already present — nothing to do."
-        else
-          echo "ERROR: stalwart-cli dkim create failed (exit $RC)." >&2
-          exit 1
-        fi
+      if [ "$RC" -eq 0 ]; then
+        echo "DKIM signature created."
+      elif printf '%s' "$OUT" | grep -qiE 'already exists|duplicate'; then
+        echo "DKIM signature already present — nothing to do."
+      else
+        echo "ERROR: stalwart-cli dkim create failed (exit $RC)." >&2
+        # First line only — enough to diagnose without spilling a PEM.
+        printf '%s' "$OUT" | head -n 1 >&2
+        exit 1
       fi
     '';
   };
