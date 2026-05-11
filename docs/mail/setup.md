@@ -111,21 +111,30 @@ Operator one-time setup per club:
 ```bash
 # 1. Deploy. The systemd unit creates the DKIM signature inside
 #    Stalwart on first run (idempotent — repeat runs are no-ops).
+#    Stalwart 0.15 generates a 2048-bit RSA keypair internally; there
+#    is no flag to choose another size.
 nix run .#deploy
 
-# 2. Pull the generated public key out of Stalwart. The output is the
-#    DNS-ready string: `v=DKIM1; k=rsa; p=MIG...`. 0.15.x defaults to
-#    1024-bit RSA, which fits Hetzner Cloud DNS's 255-byte limit on
-#    TXT substrings (2048-bit public keys exceed it).
-ssh root@mail.<domain> -- stalwart-cli dkim get-public-key mail
+# 2. Pull the generated public key out of Stalwart.
+KEY=$(ssh root@mail.<domain> -- stalwart-cli dkim get-public-key mail \
+        | sed -n 's/.*Public DKIM key for signature mail: "\(.*\)"/\1/p')
 
-# 3. Paste the value into tfvars.dkim_public_value, JSON-quoted. The
-#    outer JSON string must itself contain a quoted DNS record:
-#      "dkim_public_value": "\"v=DKIM1; k=rsa; p=MIG...\""
-$EDITOR terraform/terraform.tfvars.json
+# 3. Chunk into ≤255-byte quoted substrings (Hetzner DNS enforces RFC
+#    1035's 255-byte-per-string limit; Stalwart 0.15 generates 2048-bit
+#    RSA keypairs whose base64 form is ~392 bytes — exceeds the limit
+#    as a single string).
+FULL="v=DKIM1; k=rsa; p=${KEY}"
+TXT_VALUE=$(printf '%s' "$FULL" | awk '
+  { s = $0; out = "";
+    while (length(s) > 0) {
+      chunk = substr(s, 1, 255); s = substr(s, 256);
+      out = out (out=="" ? "" : " ") "\"" chunk "\"";
+    } print out }')
 
-# Sanity-check the total length is ≤ 257 (255-byte DNS limit + 2 quotes)
-jq -r .dkim_public_value terraform/terraform.tfvars.json | wc -c
+# 4. Paste into tfvars.dkim_public_value. The value already contains
+#    space-separated quoted substrings; just JSON-escape it.
+jq --arg v "$TXT_VALUE" '.dkim_public_value = $v' \
+  terraform/terraform.tfvars.json > /tmp/t && mv /tmp/t terraform/terraform.tfvars.json
 
 # 4. Publish the public key in DNS.
 nix run .#tf-apply

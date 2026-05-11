@@ -591,36 +591,40 @@ in
 
       ADMIN_PW=$(cat "$ADMIN_FILE")
       DOMAIN="${cfg.domain}"
-      API="http://127.0.0.1:8088/api"
+
+      # The 0.15 CLI wants the bare base URL (no /api suffix). The raw
+      # admin REST API used by the readiness probe still lives under
+      # /api/principal — so we keep two forms.
+      BASE_URL="http://127.0.0.1:8088"
+      ADMIN_URL="$BASE_URL/api"
 
       # Wait up to 30 s for Stalwart's admin API to come up. Same
       # pattern as stalwart-relay-account above.
       for _ in $(seq 1 30); do
-        if curl -fsS -o /dev/null -u "admin:$ADMIN_PW" "$API/principal" 2>/dev/null; then
+        if curl -fsS -o /dev/null -u "admin:$ADMIN_PW" "$ADMIN_URL/principal" 2>/dev/null; then
           break
         fi
         sleep 1
       done
 
-      # Idempotent create. The CLI exits non-zero on "already exists";
-      # we treat that as success so the unit converges across reboots.
-      # First-time runs return 0 and Stalwart generates a fresh 1024-bit
-      # RSA keypair under signature id `mail`, selector `mail`.
-      if ! stalwart-cli \
-            --url "$API" \
-            --credentials "admin:$ADMIN_PW" \
-            dkim create rsa "$DOMAIN" mail mail 2>&1 | tee /tmp/dkim-create.out
-      then
-        if grep -qiE 'already exists|duplicate' /tmp/dkim-create.out; then
+      # Idempotent create. The CLI exits non-zero when a signature with
+      # the given id already exists; we swallow that so the unit
+      # converges across reboots. Capture output to a variable instead
+      # of piping to tee — `cmd | tee` masks cmd's exit code with
+      # tee's, hiding real CLI failures behind a green "Finished".
+      OUT=$(stalwart-cli \
+              --url "$BASE_URL" \
+              --credentials "admin:$ADMIN_PW" \
+              dkim create rsa "$DOMAIN" mail mail 2>&1) && RC=0 || RC=$?
+      printf '%s\n' "$OUT"
+      if [ "$RC" -ne 0 ]; then
+        if printf '%s' "$OUT" | grep -qiE 'already exists|duplicate'; then
           echo "DKIM signature already present — nothing to do."
         else
-          echo "ERROR: stalwart-cli dkim create failed unexpectedly." >&2
-          cat /tmp/dkim-create.out >&2
-          rm -f /tmp/dkim-create.out
+          echo "ERROR: stalwart-cli dkim create failed (exit $RC)." >&2
           exit 1
         fi
       fi
-      rm -f /tmp/dkim-create.out
     '';
   };
 
