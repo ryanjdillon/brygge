@@ -103,6 +103,16 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 		sortCol = "primary_sa.section NULLS LAST, NULLIF(regexp_replace(primary_sa.number, '\\D', '', 'g'), '')::int NULLS LAST, primary_sa.number"
 	case "-slip":
 		sortCol = "primary_sa.section DESC NULLS LAST, NULLIF(regexp_replace(primary_sa.number, '\\D', '', 'g'), '')::int DESC NULLS LAST, primary_sa.number DESC"
+	case "membership":
+		// Rank: paid=3, sent=2, draft=1, NULL=0 — so "sorting by
+		// membership" surfaces "still missing" rows first.
+		sortCol = "(CASE membership_status.state WHEN 'paid' THEN 3 WHEN 'sent' THEN 2 WHEN 'draft' THEN 1 ELSE 0 END), u.last_name"
+	case "-membership":
+		sortCol = "(CASE membership_status.state WHEN 'paid' THEN 3 WHEN 'sent' THEN 2 WHEN 'draft' THEN 1 ELSE 0 END) DESC, u.last_name"
+	case "slip_fee":
+		sortCol = "(CASE slip_status.state WHEN 'paid' THEN 3 WHEN 'sent' THEN 2 WHEN 'draft' THEN 1 ELSE 0 END), u.last_name"
+	case "-slip_fee":
+		sortCol = "(CASE slip_status.state WHEN 'paid' THEN 3 WHEN 'sent' THEN 2 WHEN 'draft' THEN 1 ELSE 0 END) DESC, u.last_name"
 	}
 
 	// Optional ?spot=permanent|seasonal|none filter. Anything else is
@@ -198,7 +208,10 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 		        COALESCE(primary_sa.number, ''),
 		        COALESCE(primary_sa.section, ''),
 		        COALESCE(primary_sa.assignment_type, ''),
-		        COALESCE(all_slips.slips, '[]'::jsonb)
+		        COALESCE(all_slips.slips, '[]'::jsonb),
+		        COALESCE(membership_status.state, ''),
+		        COALESCE(slip_status.state, ''),
+		        COALESCE(boat_summary.boats, '[]'::jsonb)
 		 FROM users u
 		 LEFT JOIN user_roles ur ON ur.user_id = u.id AND ur.club_id = u.club_id
 		 LEFT JOIN LATERAL (
@@ -222,8 +235,71 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 		       JOIN slips s ON s.id = sa.slip_id
 		      WHERE sa.user_id = u.id AND sa.club_id = u.club_id AND sa.released_at IS NULL
 		 ) all_slips ON true
+		 LEFT JOIN LATERAL (
+		     -- Current-period status for any "harbor_membership" price item.
+		     -- "paid" wins over "sent" wins over "draft"; NULL means no
+		     -- such line on a non-voided invoice for the active period.
+		     -- Active period = the one where now() falls inside the date
+		     -- range (or the most-recent open one as a fallback).
+		     SELECT CASE
+		              WHEN bool_or(i.payment_id IS NOT NULL) THEN 'paid'
+		              WHEN bool_or(i.sent_at IS NOT NULL) THEN 'sent'
+		              WHEN COUNT(*) > 0 THEN 'draft'
+		            END AS state
+		       FROM invoice_lines il
+		       JOIN invoices i ON i.id = il.invoice_id
+		       JOIN price_items pi ON pi.id = il.price_item_id
+		      WHERE i.user_id = u.id
+		        AND i.club_id = u.club_id
+		        AND i.status <> 'voided'
+		        AND pi.category = 'harbor_membership'
+		        AND i.fiscal_period_id = (
+		          SELECT id FROM fiscal_periods
+		           WHERE club_id = u.club_id
+		             AND start_date <= CURRENT_DATE AND end_date >= CURRENT_DATE
+		           ORDER BY start_date DESC
+		           LIMIT 1
+		        )
+		 ) membership_status ON true
+		 LEFT JOIN LATERAL (
+		     SELECT CASE
+		              WHEN bool_or(i.payment_id IS NOT NULL) THEN 'paid'
+		              WHEN bool_or(i.sent_at IS NOT NULL) THEN 'sent'
+		              WHEN COUNT(*) > 0 THEN 'draft'
+		            END AS state
+		       FROM invoice_lines il
+		       JOIN invoices i ON i.id = il.invoice_id
+		       JOIN price_items pi ON pi.id = il.price_item_id
+		      WHERE i.user_id = u.id
+		        AND i.club_id = u.club_id
+		        AND i.status <> 'voided'
+		        AND pi.category = 'slip_fee'
+		        AND i.fiscal_period_id = (
+		          SELECT id FROM fiscal_periods
+		           WHERE club_id = u.club_id
+		             AND start_date <= CURRENT_DATE AND end_date >= CURRENT_DATE
+		           ORDER BY start_date DESC
+		           LIMIT 1
+		        )
+		 ) slip_status ON true
+		 LEFT JOIN LATERAL (
+		     -- Lightweight boat summary for the column in the admin table.
+		     -- Includes only boats currently linked to an active slip
+		     -- assignment to keep the payload small.
+		     SELECT jsonb_agg(jsonb_build_object(
+		                'name', b.name,
+		                'manufacturer', b.manufacturer,
+		                'model', b.model,
+		                'length_m', b.length_m,
+		                'beam_m', b.beam_m
+		            )) AS boats
+		       FROM slip_assignments sa
+		       JOIN boats b ON b.id = sa.boat_id
+		      WHERE sa.user_id = u.id AND sa.club_id = u.club_id AND sa.released_at IS NULL
+		 ) boat_summary ON true
 		 WHERE u.club_id = $1 `+spotFilter+dockClause+notesClause+searchClause+`
-		 GROUP BY u.id, primary_sa.slip_id, primary_sa.assignment_type, primary_sa.number, primary_sa.section, all_slips.slips
+		 GROUP BY u.id, primary_sa.slip_id, primary_sa.assignment_type, primary_sa.number, primary_sa.section,
+		          all_slips.slips, membership_status.state, slip_status.state, boat_summary.boats
 		 ORDER BY `+sortCol+`
 		 LIMIT $`+strconv.Itoa(limitArg)+` OFFSET $`+strconv.Itoa(offsetArg),
 		append(args, limit, offset)...,
@@ -255,12 +331,15 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 		SlipSection        string          `json:"slip_section"`
 		SlipAssignmentType string          `json:"slip_assignment_type"`
 		Slips              json.RawMessage `json:"slips"`
+		MembershipStatus   string          `json:"membership_status"`
+		SlipFeeStatus      string          `json:"slip_fee_status"`
+		Boats              json.RawMessage `json:"boats"`
 	}
 
 	var users []userRow
 	for rows.Next() {
 		var u userRow
-		if err := rows.Scan(&u.ID, &u.Email, &u.FirstName, &u.LastName, &u.FullName, &u.Phone, &u.AddressLine, &u.PostalCode, &u.City, &u.IsLocal, &u.AdminNotes, &u.CreatedAt, &u.UpdatedAt, &u.Roles, &u.SlipID, &u.SlipNumber, &u.SlipSection, &u.SlipAssignmentType, &u.Slips); err != nil {
+		if err := rows.Scan(&u.ID, &u.Email, &u.FirstName, &u.LastName, &u.FullName, &u.Phone, &u.AddressLine, &u.PostalCode, &u.City, &u.IsLocal, &u.AdminNotes, &u.CreatedAt, &u.UpdatedAt, &u.Roles, &u.SlipID, &u.SlipNumber, &u.SlipSection, &u.SlipAssignmentType, &u.Slips, &u.MembershipStatus, &u.SlipFeeStatus, &u.Boats); err != nil {
 			h.log.Error().Err(err).Msg("failed to scan user row")
 			Error(w, http.StatusInternalServerError, "internal error")
 			return
