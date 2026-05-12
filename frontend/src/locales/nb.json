@@ -1594,6 +1594,8 @@
     "dueDate": "Forfallsdato",
     "submit": "Opprett kladder",
     "resultSummary": "Opprettet {created} fakturakladder, hoppet over {skipped}.",
+    "droppedHeader": "{n} linje(r) droppet på {members} faktura(er)",
+    "droppedHint": "Se gjennom hver berørte faktura nedenfor — som regel ligger båtens bredde/lengde utenfor de konfigurerte prisnivåene.",
     "member": "Medlem",
     "amount": "Beløp",
     "lines": "Linjer",

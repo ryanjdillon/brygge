@@ -81,6 +81,16 @@ const hasSelection = computed(
   () => selectedFlatIds.value.length > 0 || selectedBeamCategories.value.length > 0,
 )
 
+const droppedLineCount = computed(() => {
+  if (!result.value) return 0
+  return result.value.created.reduce((acc, r) => acc + (r.dropped_lines?.length ?? 0), 0)
+})
+
+const invoicesWithDrops = computed(() => {
+  if (!result.value) return 0
+  return result.value.created.reduce((acc, r) => acc + ((r.dropped_lines?.length ?? 0) > 0 ? 1 : 0), 0)
+})
+
 onMounted(async () => {
   try {
     const periodsRes = await fetch('/api/v1/admin/accounting/periods', { credentials: 'include' })
@@ -254,6 +264,14 @@ function nameFor(id: string): string {
               })
             }}
           </p>
+
+          <div
+            v-if="droppedLineCount > 0"
+            class="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+          >
+            <p class="font-semibold">{{ t('bulkInvoices.droppedHeader', { n: droppedLineCount, members: invoicesWithDrops }) }}</p>
+            <p class="mt-0.5 text-xs">{{ t('bulkInvoices.droppedHint') }}</p>
+          </div>
 
           <div
             v-if="result.created.length"

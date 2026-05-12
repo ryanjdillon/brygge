@@ -1598,6 +1598,8 @@
     "dueDate": "Due date",
     "submit": "Create drafts",
     "resultSummary": "Created {created} draft fakturas, skipped {skipped}.",
+    "droppedHeader": "{n} line(s) dropped across {members} faktura(s)",
+    "droppedHint": "Review each affected faktura below — most often the boat's beam/length falls outside any configured price tier.",
     "member": "Member",
     "amount": "Amount",
     "lines": "Lines",
