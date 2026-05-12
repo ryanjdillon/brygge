@@ -162,15 +162,15 @@ function openEdit(item: PriceItem) {
 }
 
 function buildPayload() {
-  const metadata: Record<string, string> = {}
+  const metadata: Record<string, string | number> = {}
   if (form.value.season) metadata.season = form.value.season
   if (form.value.period_start) metadata.period_start = form.value.period_start
   if (form.value.period_end) metadata.period_end = form.value.period_end
   if (form.value.pricing_kind === 'tiered') {
     const minKey = form.value.tier_dimension === 'length' ? 'length_min' : 'beam_min'
     const maxKey = form.value.tier_dimension === 'length' ? 'length_max' : 'beam_max'
-    if (form.value.tier_min) metadata[minKey] = form.value.tier_min
-    if (form.value.tier_max) metadata[maxKey] = form.value.tier_max
+    if (form.value.tier_min !== '') metadata[minKey] = parseFloat(form.value.tier_min)
+    if (form.value.tier_max !== '') metadata[maxKey] = parseFloat(form.value.tier_max)
   }
 
   return {
