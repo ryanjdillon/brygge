@@ -873,15 +873,37 @@ func (h *InvoiceHandler) HandleSendInvoice(w http.ResponseWriter, r *http.Reques
 	subject := email.InvoiceSubject(locale, clubName, invoiceNumber)
 	htmlBody := email.InvoiceBody(locale, memberName, clubName, invoiceNumber, dueDate, total, kid, bankAccount)
 	filename := buildInvoiceFilename(invoiceNumber, memberLast, memberFirst, fiscalYear)
-	if err := h.email.SendWithAttachment(ctx, deliverTo, subject, htmlBody, filename, pdfData); err != nil {
-		h.log.Error().Err(err).Str("email", deliverTo).Msg("send invoice email")
-		Error(w, http.StatusBadGateway, "failed to send email")
-		return
-	}
+
+	// Stamp sent_at BEFORE handing the message to the mail server, then
+	// roll back to NULL if the SMTP submission fails. The reverse order
+	// (send then stamp) opens a narrow race where the email succeeds but
+	// the post-send UPDATE fails (DB blip, ctx cancellation), leaving an
+	// invoice on disk as "draft" that the recipient already received.
+	// Re-clicking send would then double-deliver. Stamping first flips
+	// that failure mode to the safer one: a DB-stamped invoice whose
+	// email never actually went out, which the operator can spot via
+	// "no Authentication-Results" on the receiver side and recover by
+	// nulling sent_at manually.
 	if _, err := h.db.Exec(ctx,
 		`UPDATE invoices SET sent_at = now() WHERE id = $1`, invoiceID,
 	); err != nil {
-		h.log.Error().Err(err).Msg("stamp sent_at")
+		h.log.Error().Err(err).Msg("stamp sent_at pre-send")
+		Error(w, http.StatusInternalServerError, "failed to mark invoice as sending")
+		return
+	}
+	if err := h.email.SendWithAttachment(ctx, deliverTo, subject, htmlBody, filename, pdfData); err != nil {
+		h.log.Error().Err(err).Str("email", deliverTo).Msg("send invoice email — rolling back sent_at")
+		// Best-effort rollback. If this also fails we log loudly so the
+		// operator can spot the stuck row; the alternative (leaving it
+		// stamped) is acceptable because the recipient definitely did
+		// not get the message.
+		if _, rbErr := h.db.Exec(context.Background(),
+			`UPDATE invoices SET sent_at = NULL WHERE id = $1`, invoiceID,
+		); rbErr != nil {
+			h.log.Error().Err(rbErr).Str("invoice_id", invoiceID).Msg("CRITICAL: failed to roll back sent_at after email error — manual reset required")
+		}
+		Error(w, http.StatusBadGateway, "failed to send email")
+		return
 	}
 
 	if h.audit != nil {

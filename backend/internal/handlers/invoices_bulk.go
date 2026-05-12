@@ -34,6 +34,12 @@ type bulkInvoiceRequest struct {
 	PriceItemIDs   []string `json:"price_item_ids,omitempty"`
 	BeamCategories []string `json:"beam_categories,omitempty"`
 	DueDate        string   `json:"due_date"`
+	// AllowDuplicateLines bypasses the per-line idempotency check. Off
+	// by default. The check protects against accidentally re-billing
+	// the same yearly item to a member who already has it on a sent
+	// (or draft) invoice this fiscal period. Set to true only when the
+	// operator has explicitly confirmed a re-bill in the UI.
+	AllowDuplicateLines bool `json:"allow_duplicate_lines,omitempty"`
 }
 
 type bulkInvoiceCreated struct {
@@ -258,32 +264,37 @@ func (h *InvoiceHandler) HandleBulkCreateInvoices(w http.ResponseWriter, r *http
 		// is what actually keeps multi-line invoices from double-billing
 		// — invoices.category is NULL for multi-line rows, so the partial
 		// unique index on (club, user, category, period) doesn't fire.
-		kept := make([]bulkResolvedLine, 0, len(lines))
-		for _, l := range lines {
-			var existing string
-			err := h.db.QueryRow(ctx,
-				`SELECT il.id
-				   FROM invoice_lines il
-				   JOIN invoices i ON i.id = il.invoice_id
-				  WHERE i.club_id = $1 AND i.user_id = $2
-				    AND il.price_item_id = $3
-				    AND i.fiscal_period_id = $4
-				    AND i.status <> 'voided'
-				  LIMIT 1`,
-				claims.ClubID, userID, l.tier.id, req.FiscalPeriodID,
-			).Scan(&existing)
-			if err == nil {
-				dropReasons = append(dropReasons, fmt.Sprintf("%s already invoiced", l.tier.desc))
-				continue
+		//
+		// Skipped entirely when allow_duplicate_lines=true; the operator
+		// has explicitly opted into a re-bill at that point.
+		if !req.AllowDuplicateLines {
+			kept := make([]bulkResolvedLine, 0, len(lines))
+			for _, l := range lines {
+				var existing string
+				err := h.db.QueryRow(ctx,
+					`SELECT il.id
+					   FROM invoice_lines il
+					   JOIN invoices i ON i.id = il.invoice_id
+					  WHERE i.club_id = $1 AND i.user_id = $2
+					    AND il.price_item_id = $3
+					    AND i.fiscal_period_id = $4
+					    AND i.status <> 'voided'
+					  LIMIT 1`,
+					claims.ClubID, userID, l.tier.id, req.FiscalPeriodID,
+				).Scan(&existing)
+				if err == nil {
+					dropReasons = append(dropReasons, fmt.Sprintf("%s already invoiced (override available)", l.tier.desc))
+					continue
+				}
+				if err != pgx.ErrNoRows {
+					h.log.Error().Err(err).Str("user_id", userID).Str("price_item_id", l.tier.id).Msg("idempotency check failed")
+					dropReasons = append(dropReasons, fmt.Sprintf("%s: idempotency check error", l.tier.desc))
+					continue
+				}
+				kept = append(kept, l)
 			}
-			if err != pgx.ErrNoRows {
-				h.log.Error().Err(err).Str("user_id", userID).Str("price_item_id", l.tier.id).Msg("idempotency check failed")
-				dropReasons = append(dropReasons, fmt.Sprintf("%s: idempotency check error", l.tier.desc))
-				continue
-			}
-			kept = append(kept, l)
+			lines = kept
 		}
-		lines = kept
 
 		if len(lines) == 0 {
 			reason := "no lines applicable"

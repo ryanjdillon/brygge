@@ -53,6 +53,7 @@ const fiscalPeriodId = ref('')
 const selectedFlatIds = ref<string[]>([])
 const selectedBeamCategories = ref<string[]>([])
 const dueDate = ref(defaultDueDate())
+const allowDuplicateLines = ref(false)
 
 function defaultDueDate(): string {
   const d = new Date()
@@ -129,6 +130,7 @@ async function submit() {
       price_item_ids: selectedFlatIds.value,
       beam_categories: selectedBeamCategories.value,
       due_date: dueDate.value,
+      allow_duplicate_lines: allowDuplicateLines.value,
     }
     const res = await fetch('/api/v1/admin/financials/invoices/bulk', {
       method: 'POST',
@@ -232,6 +234,21 @@ function nameFor(id: string): string {
               </span>
             </span>
           </div>
+
+          <details class="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-xs">
+            <summary class="cursor-pointer text-gray-600">{{ t('bulkInvoices.advanced') }}</summary>
+            <label class="mt-2 flex items-start gap-2">
+              <input
+                v-model="allowDuplicateLines"
+                type="checkbox"
+                class="mt-0.5 h-3.5 w-3.5 rounded border-gray-300 text-red-600 focus:ring-red-500"
+              />
+              <span>
+                <span class="font-semibold text-red-700">{{ t('bulkInvoices.allowDuplicates') }}</span>
+                <span class="block text-gray-600">{{ t('bulkInvoices.allowDuplicatesHint') }}</span>
+              </span>
+            </label>
+          </details>
 
           <p v-if="error" class="rounded-md bg-red-50 px-2 py-1 text-xs text-red-700">{{ error }}</p>
 
