@@ -23,6 +23,45 @@ export interface ExportFilters {
   end?: string
 }
 
+export interface PriceItemSummaryRow {
+  price_item_id: string
+  description: string
+  category: string
+  billed: number
+  received: number
+  overdue: number
+  outstanding: number
+  invoice_count: number
+  paid_count: number
+  overdue_count: number
+}
+
+export interface PriceItemSummaryResponse {
+  year?: number
+  items: PriceItemSummaryRow[]
+  totals: {
+    billed: number
+    received: number
+    overdue: number
+    outstanding: number
+  }
+}
+
+export function usePriceItemSummary(year?: Ref<number | undefined>) {
+  return useQuery({
+    queryKey: computed(() => ['financials', 'price-item-summary', year?.value]),
+    queryFn: async () => {
+      const qs = year?.value ? `?year=${year.value}` : ''
+      const res = await fetch(`/api/v1/admin/financials/price-item-summary${qs}`, {
+        credentials: 'include',
+      })
+      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+      return (await res.json()) as PriceItemSummaryResponse
+    },
+    staleTime: 2 * 60 * 1000,
+  })
+}
+
 export function useFinancialSummary(year?: Ref<number | undefined>) {
   const client = useApiClient()
 

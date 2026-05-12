@@ -2,7 +2,7 @@
 import { ref, computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useFinancialSummary } from '@/composables/useFinancials'
+import { useFinancialSummary, usePriceItemSummary, type PriceItemSummaryRow } from '@/composables/useFinancials'
 import {
   BookOpen,
   FileText,
@@ -14,6 +14,7 @@ import {
   FileDown,
   FilePlus,
   Mail,
+  Receipt,
   Settings,
 } from 'lucide-vue-next'
 import {
@@ -35,6 +36,26 @@ const yearOptions = computed(() => {
   return years
 })
 const { data: summary, isLoading: summaryLoading } = useFinancialSummary(selectedYear)
+const { data: priceItemSummary, isLoading: priceItemLoading } = usePriceItemSummary(selectedYear)
+
+type CategoryGroup = { category: string; items: PriceItemSummaryRow[]; subtotals: { billed: number; received: number; overdue: number; outstanding: number } }
+const priceItemGroups = computed<CategoryGroup[]>(() => {
+  const items = priceItemSummary.value?.items ?? []
+  const byCat = new Map<string, CategoryGroup>()
+  for (const it of items) {
+    let g = byCat.get(it.category)
+    if (!g) {
+      g = { category: it.category, items: [], subtotals: { billed: 0, received: 0, overdue: 0, outstanding: 0 } }
+      byCat.set(it.category, g)
+    }
+    g.items.push(it)
+    g.subtotals.billed += it.billed
+    g.subtotals.received += it.received
+    g.subtotals.overdue += it.overdue
+    g.subtotals.outstanding += it.outstanding
+  }
+  return [...byCat.values()]
+})
 
 function formatNOK(amount: number): string {
   return new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK' }).format(amount)
@@ -76,22 +97,107 @@ const postedCount = computed(() => entries.value?.filter(e => e.status === 'post
         </select>
       </div>
 
-      <div v-if="summaryLoading" class="mt-4 text-sm text-gray-500">{{ t('common.loading') }}...</div>
-      <div v-else-if="financeCards.length" class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-        <div
-          v-for="card in financeCards"
-          :key="card.label"
-          class="rounded-lg border border-gray-200 bg-white p-5"
-        >
-          <div class="flex items-center gap-2">
-            <div :class="['rounded-md p-1.5', card.bg]">
-              <component :is="card.icon" :class="['h-4 w-4', card.color]" />
+      <!-- Per-price-item totals (faktura side — works even without Vipps) -->
+      <div class="mt-4">
+        <p v-if="priceItemLoading" class="text-sm text-gray-500">{{ t('common.loading') }}...</p>
+        <template v-else-if="priceItemSummary && priceItemSummary.items.length">
+          <!-- Headline totals across all price items -->
+          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div class="rounded-lg border border-gray-200 bg-white p-5">
+              <div class="flex items-center gap-2">
+                <div class="rounded-md bg-blue-50 p-1.5"><Receipt class="h-4 w-4 text-blue-600" /></div>
+                <p class="text-xs font-medium text-gray-500">{{ t('admin.financials.totalBilled') }}</p>
+              </div>
+              <p class="mt-2 text-lg font-semibold text-gray-900">{{ formatNOK(priceItemSummary.totals.billed) }}</p>
             </div>
-            <p class="text-xs font-medium text-gray-500">{{ card.label }}</p>
+            <div class="rounded-lg border border-gray-200 bg-white p-5">
+              <div class="flex items-center gap-2">
+                <div class="rounded-md bg-green-50 p-1.5"><Banknote class="h-4 w-4 text-green-600" /></div>
+                <p class="text-xs font-medium text-gray-500">{{ t('admin.financials.totalReceived') }}</p>
+              </div>
+              <p class="mt-2 text-lg font-semibold text-gray-900">{{ formatNOK(priceItemSummary.totals.received) }}</p>
+            </div>
+            <div class="rounded-lg border border-gray-200 bg-white p-5">
+              <div class="flex items-center gap-2">
+                <div class="rounded-md bg-yellow-50 p-1.5"><Clock class="h-4 w-4 text-yellow-600" /></div>
+                <p class="text-xs font-medium text-gray-500">{{ t('admin.financials.totalOutstanding') }}</p>
+              </div>
+              <p class="mt-2 text-lg font-semibold text-gray-900">{{ formatNOK(priceItemSummary.totals.outstanding) }}</p>
+            </div>
+            <div class="rounded-lg border border-gray-200 bg-white p-5">
+              <div class="flex items-center gap-2">
+                <div class="rounded-md bg-red-50 p-1.5"><AlertTriangle class="h-4 w-4 text-red-600" /></div>
+                <p class="text-xs font-medium text-gray-500">{{ t('admin.financials.totalForfall') }}</p>
+              </div>
+              <p class="mt-2 text-lg font-semibold text-gray-900">{{ formatNOK(priceItemSummary.totals.overdue) }}</p>
+            </div>
           </div>
-          <p class="mt-2 text-lg font-semibold text-gray-900">{{ card.value }}</p>
-        </div>
+
+          <!-- Per-item breakdown, grouped by category -->
+          <div class="mt-4 overflow-x-auto rounded-lg border border-gray-200 bg-white">
+            <table class="min-w-full divide-y divide-gray-200 text-sm">
+              <thead class="bg-gray-50 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
+                <tr>
+                  <th class="px-4 py-2">{{ t('admin.financials.priceItem') }}</th>
+                  <th class="px-4 py-2 text-right">{{ t('admin.financials.invoices') }}</th>
+                  <th class="px-4 py-2 text-right">{{ t('admin.financials.billed') }}</th>
+                  <th class="px-4 py-2 text-right">{{ t('admin.financials.received') }}</th>
+                  <th class="px-4 py-2 text-right">{{ t('admin.financials.outstanding') }}</th>
+                  <th class="px-4 py-2 text-right">{{ t('admin.financials.forfall') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <template v-for="g in priceItemGroups" :key="g.category">
+                  <tr class="bg-gray-50/50">
+                    <td colspan="6" class="px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-gray-600">{{ g.category }}</td>
+                  </tr>
+                  <tr v-for="row in g.items" :key="row.price_item_id" class="border-t border-gray-100">
+                    <td class="px-4 py-2 text-gray-900">{{ row.description }}</td>
+                    <td class="px-4 py-2 text-right tabular-nums text-gray-600">{{ row.invoice_count }}</td>
+                    <td class="px-4 py-2 text-right tabular-nums">{{ formatNOK(row.billed) }}</td>
+                    <td class="px-4 py-2 text-right tabular-nums text-green-700">{{ formatNOK(row.received) }}</td>
+                    <td class="px-4 py-2 text-right tabular-nums text-yellow-700">{{ formatNOK(row.outstanding) }}</td>
+                    <td class="px-4 py-2 text-right tabular-nums" :class="row.overdue > 0 ? 'text-red-700 font-medium' : 'text-gray-400'">{{ formatNOK(row.overdue) }}</td>
+                  </tr>
+                  <tr v-if="priceItemGroups.length > 1" class="border-t border-gray-200 bg-gray-50/30 text-xs font-medium text-gray-700">
+                    <td class="px-4 py-1.5">{{ t('admin.financials.subtotal') }}</td>
+                    <td />
+                    <td class="px-4 py-1.5 text-right tabular-nums">{{ formatNOK(g.subtotals.billed) }}</td>
+                    <td class="px-4 py-1.5 text-right tabular-nums">{{ formatNOK(g.subtotals.received) }}</td>
+                    <td class="px-4 py-1.5 text-right tabular-nums">{{ formatNOK(g.subtotals.outstanding) }}</td>
+                    <td class="px-4 py-1.5 text-right tabular-nums">{{ formatNOK(g.subtotals.overdue) }}</td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </template>
+        <p v-else class="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
+          {{ t('admin.financials.noPriceItemActivity') }}
+        </p>
       </div>
+
+      <!-- Legacy commerce-side cards (Vipps payments table). Kept for clubs
+           that use Vipps integration; will read zero otherwise. -->
+      <div v-if="summaryLoading" class="mt-4 text-sm text-gray-500">{{ t('common.loading') }}...</div>
+      <details v-else-if="financeCards.length" class="mt-6">
+        <summary class="cursor-pointer text-xs uppercase tracking-wide text-gray-500">{{ t('admin.financials.vippsBreakdown') }}</summary>
+        <div class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          <div
+            v-for="card in financeCards"
+            :key="card.label"
+            class="rounded-lg border border-gray-200 bg-white p-5"
+          >
+            <div class="flex items-center gap-2">
+              <div :class="['rounded-md p-1.5', card.bg]">
+                <component :is="card.icon" :class="['h-4 w-4', card.color]" />
+              </div>
+              <p class="text-xs font-medium text-gray-500">{{ card.label }}</p>
+            </div>
+            <p class="mt-2 text-lg font-semibold text-gray-900">{{ card.value }}</p>
+          </div>
+        </div>
+      </details>
 
       <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <RouterLink
