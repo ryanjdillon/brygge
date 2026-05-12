@@ -57,6 +57,7 @@ const navGroups = computed<NavGroup[]>(() => {
         { to: '/admin/events', icon: CalendarDays, label: t('admin.sidebar.events') },
         { to: '/admin/users', icon: Users, label: t('admin.sidebar.users') },
         { to: '/admin/waiting-list', icon: ListOrdered, label: t('admin.sidebar.waitingList'), roles: ['board', 'admin'] },
+        { to: '/admin/pricing', icon: DollarSign, label: t('admin.sidebar.pricing'), roles: ['admin', 'treasurer'] },
       ],
     },
     {
@@ -75,7 +76,6 @@ const navGroups = computed<NavGroup[]>(() => {
       items: [
         { to: '/admin/accounting', icon: Calculator, label: t('admin.sidebar.accountingOverview'), roles: ['treasurer', 'board', 'admin'], feature: 'accounting' },
         { to: '/admin/accounting/faktura', icon: Receipt, label: t('admin.sidebar.faktura'), roles: ['treasurer', 'admin'], feature: 'accounting' },
-        { to: '/admin/pricing', icon: DollarSign, label: t('admin.sidebar.pricing'), roles: ['admin', 'treasurer'], feature: 'commerce' },
         { to: '/admin/accounting/accounts', icon: BookOpen, label: t('admin.sidebar.accounts'), roles: ['treasurer', 'board', 'admin'], feature: 'accounting' },
         { to: '/admin/accounting/journal', icon: FileText, label: t('admin.sidebar.journal'), roles: ['treasurer', 'board', 'admin'], feature: 'accounting' },
       ],
