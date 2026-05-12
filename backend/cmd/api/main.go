@@ -619,6 +619,11 @@ func main() {
 				r.Route("/financials", func(r chi.Router) {
 					r.Use(middleware.RequireRole("treasurer", "board", "admin"))
 
+					// Per-price-item aggregates over invoice_lines — independent
+					// of the commerce module (which aggregates the Vipps
+					// payments table). Available wherever faktura is enabled.
+					r.Get("/price-item-summary", financialsHandler.HandleGetPriceItemSummary)
+
 					if cfg.Features.Commerce {
 						// Commerce-side reporting: payments, overdue,
 						// summary, CSV exports, and "generate from payment".

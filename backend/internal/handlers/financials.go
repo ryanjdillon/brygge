@@ -43,6 +43,119 @@ type financialSummary struct {
 	Year               *int    `json:"year,omitempty"`
 }
 
+type priceItemSummaryRow struct {
+	PriceItemID  string  `json:"price_item_id"`
+	Description  string  `json:"description"`
+	Category     string  `json:"category"`
+	Billed       float64 `json:"billed"`
+	Received     float64 `json:"received"`
+	Overdue      float64 `json:"overdue"`
+	Outstanding  float64 `json:"outstanding"`
+	InvoiceCount int     `json:"invoice_count"`
+	PaidCount    int     `json:"paid_count"`
+	OverdueCount int     `json:"overdue_count"`
+}
+
+type priceItemSummaryResponse struct {
+	Year  *int                   `json:"year,omitempty"`
+	Items []priceItemSummaryRow  `json:"items"`
+	// Totals across every price item in the response — convenient for
+	// the dashboard's headline numbers without re-summing client-side.
+	Totals struct {
+		Billed      float64 `json:"billed"`
+		Received    float64 `json:"received"`
+		Overdue     float64 `json:"overdue"`
+		Outstanding float64 `json:"outstanding"`
+	} `json:"totals"`
+}
+
+// HandleGetPriceItemSummary aggregates invoice_lines by price_item for a
+// fiscal year. Unlike HandleGetFinancialSummary (which reads the
+// payments table — primarily Vipps), this reads from the faktura side
+// so clubs that only send manual invoices see real numbers.
+//
+// "Received" is currently a coarse proxy: an invoice counts as received
+// when invoices.payment_id is non-NULL (i.e. linked to a payment row,
+// regardless of that payment's status). When/if we add bank-reconciled
+// receipts, this should narrow to payments.status='completed'.
+func (h *FinancialsHandler) HandleGetPriceItemSummary(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	var yearFilter *int
+	if y := r.URL.Query().Get("year"); y != "" {
+		yi, err := strconv.Atoi(y)
+		if err != nil {
+			Error(w, http.StatusBadRequest, "invalid year parameter")
+			return
+		}
+		yearFilter = &yi
+	}
+
+	args := []any{claims.ClubID}
+	periodClause := ""
+	if yearFilter != nil {
+		periodClause = ` AND i.fiscal_period_id IN (
+			SELECT id FROM fiscal_periods WHERE club_id = $1 AND year = $2
+		)`
+		args = append(args, *yearFilter)
+	}
+
+	rows, err := h.db.Query(ctx, `
+		SELECT pi.id,
+		       COALESCE(NULLIF(pi.description, ''), pi.name) AS description,
+		       pi.category,
+		       COALESCE(SUM(il.line_total), 0) AS billed,
+		       COALESCE(SUM(CASE WHEN i.payment_id IS NOT NULL THEN il.line_total ELSE 0 END), 0) AS received,
+		       COALESCE(SUM(CASE WHEN i.payment_id IS NULL AND i.due_date < CURRENT_DATE THEN il.line_total ELSE 0 END), 0) AS overdue,
+		       COUNT(DISTINCT i.id) AS invoice_count,
+		       COUNT(DISTINCT CASE WHEN i.payment_id IS NOT NULL THEN i.id END) AS paid_count,
+		       COUNT(DISTINCT CASE WHEN i.payment_id IS NULL AND i.due_date < CURRENT_DATE THEN i.id END) AS overdue_count
+		  FROM price_items pi
+		  LEFT JOIN invoice_lines il ON il.price_item_id = pi.id
+		  LEFT JOIN invoices i ON i.id = il.invoice_id
+		   AND i.club_id = $1
+		   AND i.status <> 'voided'`+periodClause+`
+		 WHERE pi.club_id = $1
+		 GROUP BY pi.id, pi.description, pi.name, pi.category, pi.sort_order
+		HAVING COALESCE(SUM(il.line_total), 0) > 0
+		 ORDER BY pi.category, pi.sort_order, description`,
+		args...,
+	)
+	if err != nil {
+		h.log.Error().Err(err).Msg("price-item summary query")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	defer rows.Close()
+
+	resp := priceItemSummaryResponse{Year: yearFilter, Items: []priceItemSummaryRow{}}
+	for rows.Next() {
+		var row priceItemSummaryRow
+		if err := rows.Scan(
+			&row.PriceItemID, &row.Description, &row.Category,
+			&row.Billed, &row.Received, &row.Overdue,
+			&row.InvoiceCount, &row.PaidCount, &row.OverdueCount,
+		); err != nil {
+			h.log.Error().Err(err).Msg("price-item summary scan")
+			Error(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		row.Outstanding = row.Billed - row.Received
+		resp.Items = append(resp.Items, row)
+		resp.Totals.Billed += row.Billed
+		resp.Totals.Received += row.Received
+		resp.Totals.Overdue += row.Overdue
+		resp.Totals.Outstanding += row.Outstanding
+	}
+
+	JSON(w, http.StatusOK, resp)
+}
+
 type paymentRow struct {
 	ID          string     `json:"id"`
 	UserID      string     `json:"user_id"`
