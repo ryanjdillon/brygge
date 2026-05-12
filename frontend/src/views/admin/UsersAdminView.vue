@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, reactive, onMounted } from 'vue'
+import { ref, computed, reactive, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useApiClient, unwrap } from '@/lib/apiClient'
@@ -9,6 +9,8 @@ import SpotFilter, { type SpotFilterValue } from '@/components/admin/SpotFilter.
 import NotesFilter, { type NotesFilterValue } from '@/components/admin/NotesFilter.vue'
 import SortableTh from '@/components/admin/SortableTh.vue'
 import SlipCell from '@/components/admin/SlipCell.vue'
+import ColumnSelector, { type ColumnDef } from '@/components/admin/ColumnSelector.vue'
+import InvoiceStatusChip, { type InvoiceState } from '@/components/admin/InvoiceStatusChip.vue'
 import { Trash2, UserPlus, Upload, Download, X, Pencil } from 'lucide-vue-next'
 import BoatForm, { type BoatFormValue } from '@/components/boats/BoatForm.vue'
 import BoatCard from '@/components/boats/BoatCard.vue'
@@ -35,7 +37,7 @@ async function ensureFreshTotp(): Promise<boolean> {
   return totpGate.open()
 }
 
-type SortField = 'first_name' | 'last_name' | 'email' | 'phone' | 'slip'
+type SortField = 'first_name' | 'last_name' | 'email' | 'phone' | 'slip' | 'membership' | 'slip_fee'
 const sortField = ref<SortField>('last_name')
 const sortDir = ref<'asc' | 'desc'>('asc')
 const sortParam = computed(() => (sortDir.value === 'desc' ? '-' : '') + sortField.value)
@@ -43,6 +45,44 @@ const sortParam = computed(() => (sortDir.value === 'desc' ? '-' : '') + sortFie
 const spotFilter = ref<SpotFilterValue>('')
 const dockFilter = ref<string>('')
 const notesFilter = ref<NotesFilterValue>('')
+
+// Member-table column visibility. Persisted per-browser in localStorage
+// so a club admin's preferred view survives reloads. The two flagged
+// columns (`#`, selection checkbox, actions) are always visible; only
+// the data-bearing columns toggle.
+const ALL_COLUMNS: ColumnDef[] = [
+  { key: 'first_name', labelKey: 'admin.users.firstName' },
+  { key: 'last_name',  labelKey: 'admin.users.lastName' },
+  { key: 'email',      labelKey: 'admin.users.email' },
+  { key: 'phone',      labelKey: 'admin.users.phone' },
+  { key: 'slip',       labelKey: 'admin.users.spot' },
+  { key: 'boat',       labelKey: 'admin.columns.boat' },
+  { key: 'membership', labelKey: 'admin.columns.membership' },
+  { key: 'slip_fee',   labelKey: 'admin.columns.slipFee' },
+  { key: 'notes',      labelKey: 'admin.columns.notes' },
+  { key: 'roles',      labelKey: 'admin.users.roles' },
+]
+const DEFAULT_VISIBLE = ['first_name', 'last_name', 'email', 'phone', 'slip', 'roles']
+const COLUMNS_STORAGE_KEY = 'brygge.admin.users.columns'
+
+function loadVisibleColumns(): string[] {
+  try {
+    const raw = localStorage.getItem(COLUMNS_STORAGE_KEY)
+    if (!raw) return DEFAULT_VISIBLE
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return DEFAULT_VISIBLE
+    const valid = new Set(ALL_COLUMNS.map((c) => c.key))
+    return (parsed as string[]).filter((k) => valid.has(k))
+  } catch {
+    return DEFAULT_VISIBLE
+  }
+}
+
+const visibleColumns = ref<string[]>(loadVisibleColumns())
+watch(visibleColumns, (next) => {
+  try { localStorage.setItem(COLUMNS_STORAGE_KEY, JSON.stringify(next)) } catch { /* ignore */ }
+}, { deep: true })
+const visible = computed(() => new Set(visibleColumns.value))
 
 const PAGE_SIZE = 100
 const offset = ref(0)
@@ -759,6 +799,10 @@ async function submitImport() {
           v-model="notesFilter"
           @update:model-value="onNotesFilterChange"
         />
+        <ColumnSelector
+          :columns="ALL_COLUMNS"
+          v-model="visibleColumns"
+        />
         <button
           class="inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"
           @click="openCreateModal"
@@ -837,12 +881,16 @@ async function submitImport() {
               />
             </th>
             <th scope="col" class="w-12 px-3 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">#</th>
-            <SortableTh :active="sortField === 'first_name'" :dir="sortDir" @click="setSort('first_name')">{{ t('admin.users.firstName') }}</SortableTh>
-            <SortableTh :active="sortField === 'last_name'" :dir="sortDir" @click="setSort('last_name')">{{ t('admin.users.lastName') }}</SortableTh>
-            <SortableTh :active="sortField === 'email'" :dir="sortDir" @click="setSort('email')">{{ t('admin.users.email') }}</SortableTh>
-            <SortableTh :active="sortField === 'phone'" :dir="sortDir" @click="setSort('phone')">{{ t('admin.users.phone') }}</SortableTh>
-            <SortableTh :active="sortField === 'slip'" :dir="sortDir" @click="setSort('slip')">{{ t('admin.users.spot') }}</SortableTh>
-            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.users.roles') }}</th>
+            <SortableTh v-if="visible.has('first_name')" :active="sortField === 'first_name'" :dir="sortDir" @click="setSort('first_name')">{{ t('admin.users.firstName') }}</SortableTh>
+            <SortableTh v-if="visible.has('last_name')" :active="sortField === 'last_name'" :dir="sortDir" @click="setSort('last_name')">{{ t('admin.users.lastName') }}</SortableTh>
+            <SortableTh v-if="visible.has('email')" :active="sortField === 'email'" :dir="sortDir" @click="setSort('email')">{{ t('admin.users.email') }}</SortableTh>
+            <SortableTh v-if="visible.has('phone')" :active="sortField === 'phone'" :dir="sortDir" @click="setSort('phone')">{{ t('admin.users.phone') }}</SortableTh>
+            <SortableTh v-if="visible.has('slip')" :active="sortField === 'slip'" :dir="sortDir" @click="setSort('slip')">{{ t('admin.users.spot') }}</SortableTh>
+            <th v-if="visible.has('boat')" scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.columns.boat') }}</th>
+            <SortableTh v-if="visible.has('membership')" :active="sortField === 'membership'" :dir="sortDir" @click="setSort('membership')">{{ t('admin.columns.membership') }}</SortableTh>
+            <SortableTh v-if="visible.has('slip_fee')" :active="sortField === 'slip_fee'" :dir="sortDir" @click="setSort('slip_fee')">{{ t('admin.columns.slipFee') }}</SortableTh>
+            <th v-if="visible.has('notes')" scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.columns.notes') }}</th>
+            <th v-if="visible.has('roles')" scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.users.roles') }}</th>
             <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('common.actions') }}</th>
           </tr>
         </thead>
@@ -863,11 +911,11 @@ async function submitImport() {
               />
             </td>
             <td class="whitespace-nowrap px-3 py-3 text-right text-xs text-gray-400 tabular-nums">{{ offset + index + 1 }}</td>
-            <td class="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">{{ user.first_name || formatName(user) }}</td>
-            <td class="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">{{ user.last_name }}</td>
-            <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ user.email }}</td>
-            <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ user.phone }}</td>
-            <td class="whitespace-nowrap px-4 py-3 text-sm">
+            <td v-if="visible.has('first_name')" class="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">{{ user.first_name || formatName(user) }}</td>
+            <td v-if="visible.has('last_name')" class="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">{{ user.last_name }}</td>
+            <td v-if="visible.has('email')" class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ user.email }}</td>
+            <td v-if="visible.has('phone')" class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ user.phone }}</td>
+            <td v-if="visible.has('slip')" class="whitespace-nowrap px-4 py-3 text-sm">
               <template v-if="user.slip_id">
                 <SlipCell :section="user.slip_section" :number="user.slip_number" />
                 <span
@@ -886,7 +934,42 @@ async function submitImport() {
               </template>
               <SlipCell v-else />
             </td>
-            <td class="px-4 py-3 text-sm" @click.stop>
+            <td v-if="visible.has('boat')" class="whitespace-nowrap px-4 py-3 text-sm text-gray-700">
+              <template v-if="((user as any).boats?.length ?? 0) > 0">
+                <span
+                  v-for="(b, bi) in ((user as any).boats as Array<{ name?: string; manufacturer?: string; model?: string; length_m?: number; beam_m?: number }>)"
+                  :key="bi"
+                  class="block leading-tight"
+                >
+                  <span class="font-medium">{{ [b.manufacturer, b.model].filter(Boolean).join(' ') || b.name || '—' }}</span>
+                  <span v-if="b.length_m || b.beam_m" class="ml-1 text-[11px] text-gray-500">
+                    {{ b.length_m ? b.length_m + 'm' : '' }}{{ b.length_m && b.beam_m ? ' × ' : '' }}{{ b.beam_m ? b.beam_m + 'm' : '' }}
+                  </span>
+                </span>
+              </template>
+              <span v-else class="text-xs text-gray-300">—</span>
+            </td>
+            <td v-if="visible.has('membership')" class="whitespace-nowrap px-4 py-3 text-sm">
+              <InvoiceStatusChip
+                :state="((user as any).membership_status ?? '') as InvoiceState"
+                :label="t('admin.columns.membership')"
+              />
+            </td>
+            <td v-if="visible.has('slip_fee')" class="whitespace-nowrap px-4 py-3 text-sm">
+              <InvoiceStatusChip
+                :state="((user as any).slip_fee_status ?? '') as InvoiceState"
+                :label="t('admin.columns.slipFee')"
+              />
+            </td>
+            <td v-if="visible.has('notes')" class="px-4 py-3 text-sm text-gray-700">
+              <span
+                v-if="user.admin_notes"
+                class="block max-w-[14rem] truncate"
+                :title="user.admin_notes"
+              >{{ user.admin_notes }}</span>
+              <span v-else class="text-xs text-gray-300">—</span>
+            </td>
+            <td v-if="visible.has('roles')" class="px-4 py-3 text-sm" @click.stop>
               <template v-if="editingRoles[user.id]">
                 <div class="flex flex-wrap gap-1">
                   <button

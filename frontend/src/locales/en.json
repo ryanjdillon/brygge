@@ -924,6 +924,18 @@
       "audienceNonMember": "Non-members only",
       "audienceHint": "Use \"Members only\" / \"Non-members only\" to show the same service with two prices side-by-side on the public pricing page."
     },
+    "columns": {
+      "menuTitle": "Columns",
+      "boat": "Boat",
+      "notes": "Notes",
+      "membership": "Membership",
+      "slipFee": "Slip rental"
+    },
+    "invoiceStatus": {
+      "draft": "Draft",
+      "sent": "Sent",
+      "paid": "Paid"
+    },
     "users": {
       "name": "Name",
       "email": "Email",
@@ -1600,6 +1612,9 @@
     "resultSummary": "Created {created} draft fakturas, skipped {skipped}.",
     "droppedHeader": "{n} line(s) dropped across {members} faktura(s)",
     "droppedHint": "Review each affected faktura below — most often the boat's beam/length falls outside any configured price tier.",
+    "advanced": "Advanced",
+    "allowDuplicates": "Allow re-billing of already-invoiced lines",
+    "allowDuplicatesHint": "By default the system skips price-item lines that already appear on a non-voided faktura for the same member and fiscal period. Enable only when you intentionally want to bill the same yearly item a second time.",
     "member": "Member",
     "amount": "Amount",
     "lines": "Lines",

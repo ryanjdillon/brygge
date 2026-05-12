@@ -920,6 +920,18 @@
       "audienceNonMember": "Kun ikke-medlemmer",
       "audienceHint": "Bruk \"Kun medlemmer\" / \"Kun ikke-medlemmer\" for å vise samme tjeneste med to priser ved siden av hverandre på prissiden."
     },
+    "columns": {
+      "menuTitle": "Kolonner",
+      "boat": "Båt",
+      "notes": "Notater",
+      "membership": "Medlemskap",
+      "slipFee": "Plassleie"
+    },
+    "invoiceStatus": {
+      "draft": "Kladd",
+      "sent": "Sendt",
+      "paid": "Betalt"
+    },
     "users": {
       "name": "Navn",
       "email": "E-post",
@@ -1596,6 +1608,9 @@
     "resultSummary": "Opprettet {created} fakturakladder, hoppet over {skipped}.",
     "droppedHeader": "{n} linje(r) droppet på {members} faktura(er)",
     "droppedHint": "Se gjennom hver berørte faktura nedenfor — som regel ligger båtens bredde/lengde utenfor de konfigurerte prisnivåene.",
+    "advanced": "Avansert",
+    "allowDuplicates": "Tillat dobbeltfakturering av allerede fakturerte linjer",
+    "allowDuplicatesHint": "Som standard hoppes prislinjer som allerede finnes på en ikke-kreditert faktura for samme medlem og regnskapsperiode over. Slå på kun når du bevisst vil fakturere samme årlige linje på nytt.",
     "member": "Medlem",
     "amount": "Beløp",
     "lines": "Linjer",
