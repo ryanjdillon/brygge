@@ -22,6 +22,15 @@ func TestReconcileVippsPreviewBalances(t *testing.T) {
 		t.Fatalf("seed kontoplan: %v", err)
 	}
 
+	var periodID string
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO fiscal_periods (club_id, year, start_date, end_date, status)
+		 VALUES ($1, 2026, '2026-01-01', '2026-12-31', 'open') RETURNING id`,
+		clubID,
+	).Scan(&periodID); err != nil {
+		t.Fatalf("create fiscal period: %v", err)
+	}
+
 	// Vipps side
 	csv := `Salgssted,MSN/Vippsnummer,Land,Betalingsløsning,Tidspunkt,Bokføringsdato,Type,Beløp,Balanse,Gebyr,Nettobeløp,Valuta,Kundens navn,Kundens telefonnummer,Melding,Kategori,PSP-referanse,Ordre-ID/Referanse,Utbetalingsnummer,Bankkonto for utbetaling,Planlagt utbetalingsdato
 Klokkarvik Båtlag,548005,Norge,Valgfritt beløp,2026-03-23 14:24:30,2026-03-23,Belastning,2700.00,2700.00,-47.25,2652.75,NOK,Geir Magne Ellingsen,+47 xxxx 5202,Sv 1234,,35859820875,13120637102,,,
@@ -86,5 +95,33 @@ Klokkarvik Båtlag,548005,Norge,,2026-03-24 00:23:17,2026-03-23,Utbetaling planl
 	}
 	if len(preview.Lines) != 3 {
 		t.Errorf("expected 3 lines (bank, clearing, fee), got %d", len(preview.Lines))
+	}
+
+	// Confirm — should create a balanced draft entry under the 'vipps' source.
+	entryID, err := svc.ReconcileVippsConfirm(ctx, clubID, bankRowID, periodID, userID, preview.Lines)
+	if err != nil {
+		t.Fatalf("confirm: %v", err)
+	}
+	var (
+		source string
+		status string
+		dr, cr float64
+	)
+	if err := pool.QueryRow(ctx,
+		`SELECT je.source::text, je.status::text, COALESCE(SUM(jl.debit),0), COALESCE(SUM(jl.credit),0)
+		 FROM journal_entries je LEFT JOIN journal_lines jl ON jl.journal_entry_id = je.id
+		 WHERE je.id = $1 GROUP BY je.source, je.status`,
+		entryID,
+	).Scan(&source, &status, &dr, &cr); err != nil {
+		t.Fatalf("read entry: %v", err)
+	}
+	if source != "vipps" {
+		t.Errorf("source = %q, want vipps", source)
+	}
+	if status != "draft" {
+		t.Errorf("status = %q, want draft", status)
+	}
+	if dr != cr || dr == 0 {
+		t.Errorf("entry not balanced: dr=%.2f cr=%.2f", dr, cr)
 	}
 }

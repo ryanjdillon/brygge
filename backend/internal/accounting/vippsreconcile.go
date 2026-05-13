@@ -81,11 +81,29 @@ func (s *Service) ReconcileVippsPreview(ctx context.Context, clubID, bankRowID s
 	settlement := matches[1]
 	msn := matches[2]
 
+	// Only the "Utbetaling planlagt" row in Vipps' CSV carries the
+	// settlement_number. The belastning + fee rows for the same payout
+	// are linked by sharing the payout's booking_date and MSN.
 	rows, err := s.db.Query(ctx,
-		`SELECT id, row_type, amount, fee, net_amount, customer_name, message
-		 FROM vipps_import_rows
-		 WHERE club_id = $1 AND settlement_number = $2 AND msn = $3
-		 ORDER BY tx_at NULLS LAST, id`,
+		`WITH payout AS (
+		   SELECT booking_date
+		   FROM vipps_import_rows
+		   WHERE club_id = $1 AND msn = $3 AND row_type = 'payout' AND settlement_number = $2
+		   LIMIT 1
+		 )
+		 SELECT vir.id, vir.row_type, vir.amount, vir.fee, vir.net_amount, vir.customer_name, vir.message
+		 FROM vipps_import_rows vir, payout p
+		 WHERE vir.club_id = $1 AND vir.msn = $3
+		   AND (
+		     (vir.row_type = 'payout' AND vir.settlement_number = $2)
+		     OR (vir.row_type IN ('belastning', 'fee') AND vir.booking_date = p.booking_date)
+		   )
+		 ORDER BY CASE vir.row_type
+		   WHEN 'belastning' THEN 1
+		   WHEN 'fee' THEN 2
+		   WHEN 'payout' THEN 3
+		   ELSE 4
+		 END, vir.tx_at NULLS LAST, vir.id`,
 		clubID, settlement, msn,
 	)
 	if err != nil {
@@ -233,7 +251,7 @@ func (s *Service) ReconcileVippsConfirm(ctx context.Context, clubID, bankRowID, 
 		FiscalPeriodID: periodID,
 		EntryDate:      bankDate.Format("2006-01-02"),
 		Description:    fmt.Sprintf("Vipps reconciliation: %s", description),
-		Source:         "vipps_reconcile",
+		Source:         "vipps",
 		SourceID:       &sourceID,
 		SourceTable:    &sourceTable,
 		CreatedBy:      createdBy,
