@@ -25,8 +25,14 @@ const { data: formats } = useBankFormats()
 const { data: vippsImports } = useVippsImports()
 const { data: accounts } = useAccountsList()
 
+// NS 4102 reserves codes 1920–1949 for bank deposits. 1900 is physical
+// cash (kasse), not a bank account, so it must not appear here.
 const bankAccounts = computed(() =>
-  (accounts.value ?? []).filter((a) => a.is_active && a.code.startsWith('19')),
+  (accounts.value ?? []).filter((a) => {
+    if (!a.is_active) return false
+    const n = Number(a.code)
+    return n >= 1920 && n <= 1949
+  }),
 )
 
 const selectedPeriod = computed<string>(() => {
