@@ -236,11 +236,23 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 		      WHERE sa.user_id = u.id AND sa.club_id = u.club_id AND sa.released_at IS NULL
 		 ) all_slips ON true
 		 LEFT JOIN LATERAL (
-		     -- Current-period status for any "harbor_membership" price item.
-		     -- "paid" wins over "sent" wins over "draft"; NULL means no
-		     -- such line on a non-voided invoice for the active period.
-		     -- Active period = the one where now() falls inside the date
-		     -- range (or the most-recent open one as a fallback).
+		     -- Active fiscal period: the one containing today, falling back
+		     -- to the most recent by year so the chips still light up when
+		     -- the club hasn't created a period covering CURRENT_DATE yet.
+		     SELECT id, start_date, end_date
+		       FROM fiscal_periods
+		      WHERE club_id = u.club_id
+		      ORDER BY (start_date <= CURRENT_DATE AND end_date >= CURRENT_DATE) DESC,
+		               year DESC
+		      LIMIT 1
+		 ) active_period ON true
+		 LEFT JOIN LATERAL (
+		     -- Per-category status for the active period. "paid" > "sent" >
+		     -- "draft"; NULL means no matching line on a non-voided invoice.
+		     -- Matches invoices by fiscal_period_id when set, or by
+		     -- issue_date inside the active period's range as a fallback so
+		     -- historical/legacy invoices without fiscal_period_id still
+		     -- count.
 		     SELECT CASE
 		              WHEN bool_or(i.payment_id IS NOT NULL) THEN 'paid'
 		              WHEN bool_or(i.sent_at IS NOT NULL) THEN 'sent'
@@ -253,12 +265,10 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 		        AND i.club_id = u.club_id
 		        AND i.status <> 'voided'
 		        AND pi.category = 'harbor_membership'
-		        AND i.fiscal_period_id = (
-		          SELECT id FROM fiscal_periods
-		           WHERE club_id = u.club_id
-		             AND start_date <= CURRENT_DATE AND end_date >= CURRENT_DATE
-		           ORDER BY start_date DESC
-		           LIMIT 1
+		        AND (
+		              i.fiscal_period_id = active_period.id
+		           OR (i.fiscal_period_id IS NULL
+		               AND i.issue_date BETWEEN active_period.start_date AND active_period.end_date)
 		        )
 		 ) membership_status ON true
 		 LEFT JOIN LATERAL (
@@ -274,12 +284,10 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 		        AND i.club_id = u.club_id
 		        AND i.status <> 'voided'
 		        AND pi.category = 'slip_fee'
-		        AND i.fiscal_period_id = (
-		          SELECT id FROM fiscal_periods
-		           WHERE club_id = u.club_id
-		             AND start_date <= CURRENT_DATE AND end_date >= CURRENT_DATE
-		           ORDER BY start_date DESC
-		           LIMIT 1
+		        AND (
+		              i.fiscal_period_id = active_period.id
+		           OR (i.fiscal_period_id IS NULL
+		               AND i.issue_date BETWEEN active_period.start_date AND active_period.end_date)
 		        )
 		 ) slip_status ON true
 		 LEFT JOIN LATERAL (
