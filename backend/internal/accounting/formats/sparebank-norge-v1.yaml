@@ -1,0 +1,14 @@
+code: sparebank-norge-v1
+name: Sparebank Norge
+delimiter: ";"
+date_column: Bokført
+date_format: "02.01.2006"
+description_columns:
+  - Beskrivelse
+  - Melding
+amount_column: "Beløp (NOK)"
+amount_sign: positive_in
+ref_column: "Arkivref."
+counterpart_columns:
+  - Kreditornavn
+  - Debitornavn

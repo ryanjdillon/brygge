@@ -187,6 +187,66 @@ func TestListBankFormats(t *testing.T) {
 	}
 }
 
+func TestCSVParserSparebankNorge(t *testing.T) {
+	csv := "\ufeffBokført;Transaksjonsdato;Rentedato;Kategori;Type;Beskrivelse;Melding;Beløp (NOK);Beløp (valuta);Valuta;Vekslingskurs;Arkivref.;Fra konto;Til konto;Kreditornavn;Debitornavn\n" +
+		"04.05.2026;;04.05.2026;Innbetaling;OVERF;Overførsel;;3281,55;3281,55;NOK;1;273196130;;34700502793;;\n" +
+		"30.04.2026;;30.04.2026;Gebyr;GEBYR;Avtalegiro;;-6;-6;NOK;1;0;34700502793;;;\n" +
+		"30.04.2026;;30.04.2026;Innbetaling;OVERFØRSEL;Utb. 2000591 Vippsnr 698382;;1572;1572;NOK;1;272437290;15200281214;34700502793;;Vipps Mobilepay As\n"
+
+	parser := &CSVParser{Format: BankFormats["sparebank-norge-v1"]}
+	rows, err := parser.Parse(strings.NewReader(csv))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if len(rows) != 3 {
+		t.Fatalf("expected 3 rows, got %d", len(rows))
+	}
+
+	if rows[0].Amount != 3281.55 {
+		t.Errorf("row 0 amount = %f, want 3281.55", rows[0].Amount)
+	}
+	if rows[0].Description != "Overførsel" {
+		t.Errorf("row 0 description = %q", rows[0].Description)
+	}
+	if rows[0].Reference != "273196130" {
+		t.Errorf("row 0 reference = %q", rows[0].Reference)
+	}
+
+	if rows[1].Amount != -6 {
+		t.Errorf("row 1 amount = %f, want -6", rows[1].Amount)
+	}
+
+	if rows[2].Amount != 1572 {
+		t.Errorf("row 2 amount = %f, want 1572", rows[2].Amount)
+	}
+	if rows[2].Description != "Utb. 2000591 Vippsnr 698382" {
+		t.Errorf("row 2 description = %q", rows[2].Description)
+	}
+	if rows[2].Counterpart != "Vipps Mobilepay As" {
+		t.Errorf("row 2 counterpart = %q (expected Debitornavn fallback)", rows[2].Counterpart)
+	}
+}
+
+func TestCSVParserSparebankNorgeDescriptionJoin(t *testing.T) {
+	csv := "Bokført;Beskrivelse;Melding;Beløp (NOK);Arkivref.;Kreditornavn;Debitornavn\n" +
+		"15.03.2026;Overførsel;Faktura 2026-001;500,00;REF1;;Ola Nordmann\n"
+
+	parser := &CSVParser{Format: BankFormats["sparebank-norge-v1"]}
+	rows, err := parser.Parse(strings.NewReader(csv))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(rows))
+	}
+	if rows[0].Description != "Overførsel · Faktura 2026-001" {
+		t.Errorf("description = %q, want joined", rows[0].Description)
+	}
+	if rows[0].Counterpart != "Ola Nordmann" {
+		t.Errorf("counterpart = %q, want Debitornavn fallback", rows[0].Counterpart)
+	}
+}
+
 func TestBankRowDateParsing(t *testing.T) {
 	csv := `Dato;Forklaring;Beløp;KID;Motpart
 01.01.2026;New Year;-100,00;;

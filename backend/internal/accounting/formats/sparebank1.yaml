@@ -1,0 +1,11 @@
+code: sparebank1
+name: SpareBank 1
+delimiter: ";"
+date_column: "Bokført dato"
+date_format: "02.01.2006"
+description_columns:
+  - Beskrivelse
+debit_column: Ut
+credit_column: Inn
+balance_column: Saldo
+kid_column: KID

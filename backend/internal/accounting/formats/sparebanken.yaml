@@ -1,0 +1,11 @@
+code: sparebanken
+name: Sparebanken
+delimiter: ";"
+date_column: Dato
+date_format: "02.01.2006"
+description_columns:
+  - Forklaring
+debit_column: "Ut av konto"
+credit_column: "Inn på konto"
+kid_column: KID
+ref_column: Arkivref

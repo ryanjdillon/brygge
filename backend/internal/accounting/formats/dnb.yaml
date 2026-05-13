@@ -1,0 +1,12 @@
+code: dnb
+name: DNB
+delimiter: ";"
+date_column: Dato
+date_format: "02.01.2006"
+description_columns:
+  - Forklaring
+amount_column: "Beløp"
+amount_sign: positive_in
+kid_column: KID
+counterpart_columns:
+  - Motpart

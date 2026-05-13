@@ -2,12 +2,17 @@ package accounting
 
 import (
 	"context"
+	"embed"
 	"encoding/csv"
 	"fmt"
 	"io"
+	"io/fs"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 // BankRow is the internal normalized representation of a bank transaction.
@@ -23,63 +28,71 @@ type BankRow struct {
 }
 
 // BankFormat defines how to parse a specific bank's CSV format.
-// Each bank has different column names and ordering.
+// Loaded from YAML manifests in formats/*.yaml.
 type BankFormat struct {
-	Name          string
-	Delimiter     rune
-	DateColumn    string
-	DateFormat    string
-	DescColumn    string
-	AmountColumn  string   // single amount column (positive/negative)
-	DebitColumn   string   // "out" column (alternative to single amount)
-	CreditColumn  string   // "in" column (alternative to single amount)
-	BalanceColumn string
-	KIDColumn     string
-	RefColumn     string
-	CounterColumn string
-	SkipRows      int // header rows to skip before the column header
+	Code               string   `yaml:"code"`
+	Name               string   `yaml:"name"`
+	Delimiter          string   `yaml:"delimiter"`
+	DateColumn         string   `yaml:"date_column"`
+	DateFormat         string   `yaml:"date_format"`
+	DescriptionColumns []string `yaml:"description_columns"`
+	AmountColumn       string   `yaml:"amount_column"`
+	AmountSign         string   `yaml:"amount_sign"` // positive_in (default) | negated_out
+	DebitColumn        string   `yaml:"debit_column"`
+	CreditColumn       string   `yaml:"credit_column"`
+	BalanceColumn      string   `yaml:"balance_column"`
+	KIDColumn          string   `yaml:"kid_column"`
+	RefColumn          string   `yaml:"ref_column"`
+	CounterpartColumns []string `yaml:"counterpart_columns"`
+	SkipRows           int      `yaml:"skip_rows"`
 }
 
-// Registered bank formats. Clubs select which format to use when uploading.
-var BankFormats = map[string]BankFormat{
-	"sparebanken": {
-		Name:          "Sparebanken",
-		Delimiter:     ';',
-		DateColumn:    "Dato",
-		DateFormat:    "02.01.2006",
-		DescColumn:    "Forklaring",
-		DebitColumn:   "Ut av konto",
-		CreditColumn:  "Inn på konto",
-		BalanceColumn: "",
-		KIDColumn:     "KID",
-		RefColumn:     "Arkivref",
-		CounterColumn: "",
-	},
-	"dnb": {
-		Name:          "DNB",
-		Delimiter:     ';',
-		DateColumn:    "Dato",
-		DateFormat:    "02.01.2006",
-		DescColumn:    "Forklaring",
-		AmountColumn:  "Beløp",
-		BalanceColumn: "",
-		KIDColumn:     "KID",
-		RefColumn:     "",
-		CounterColumn: "Motpart",
-	},
-	"sparebank1": {
-		Name:          "SpareBank 1",
-		Delimiter:     ';',
-		DateColumn:    "Bokført dato",
-		DateFormat:    "02.01.2006",
-		DescColumn:    "Beskrivelse",
-		DebitColumn:   "Ut",
-		CreditColumn:  "Inn",
-		BalanceColumn: "Saldo",
-		KIDColumn:     "KID",
-		RefColumn:     "",
-		CounterColumn: "",
-	},
+func (f BankFormat) delimRune() rune {
+	if f.Delimiter == "" {
+		return ';'
+	}
+	return rune(f.Delimiter[0])
+}
+
+//go:embed formats/*.yaml
+var formatFiles embed.FS
+
+// BankFormats is the registry of available bank formats, keyed by code.
+// Populated at init from embedded YAML manifests.
+var BankFormats = map[string]BankFormat{}
+
+func init() {
+	if err := loadFormats(formatFiles, "formats"); err != nil {
+		panic(fmt.Errorf("loading bank formats: %w", err))
+	}
+}
+
+func loadFormats(fsys fs.FS, dir string) error {
+	entries, err := fs.ReadDir(fsys, dir)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".yaml") {
+			continue
+		}
+		data, err := fs.ReadFile(fsys, dir+"/"+e.Name())
+		if err != nil {
+			return fmt.Errorf("%s: %w", e.Name(), err)
+		}
+		var f BankFormat
+		if err := yaml.Unmarshal(data, &f); err != nil {
+			return fmt.Errorf("%s: %w", e.Name(), err)
+		}
+		if f.Code == "" {
+			return fmt.Errorf("%s: missing code", e.Name())
+		}
+		if _, dup := BankFormats[f.Code]; dup {
+			return fmt.Errorf("duplicate bank format code: %s", f.Code)
+		}
+		BankFormats[f.Code] = f
+	}
+	return nil
 }
 
 // CSVParser parses a bank CSV file using a specific BankFormat configuration.
@@ -90,19 +103,17 @@ type CSVParser struct {
 // Parse reads a CSV and returns normalized BankRows.
 func (p *CSVParser) Parse(reader io.Reader) ([]BankRow, error) {
 	r := csv.NewReader(reader)
-	r.Comma = p.Format.Delimiter
+	r.Comma = p.Format.delimRune()
 	r.LazyQuotes = true
 	r.TrimLeadingSpace = true
-	r.FieldsPerRecord = -1 // allow variable field count (bank CSVs are inconsistent)
+	r.FieldsPerRecord = -1
 
-	// Skip header rows
 	for i := 0; i < p.Format.SkipRows; i++ {
 		if _, err := r.Read(); err != nil {
 			return nil, fmt.Errorf("skipping header row %d: %w", i, err)
 		}
 	}
 
-	// Read column header
 	header, err := r.Read()
 	if err != nil {
 		return nil, fmt.Errorf("reading header: %w", err)
@@ -110,66 +121,65 @@ func (p *CSVParser) Parse(reader io.Reader) ([]BankRow, error) {
 
 	colIdx := make(map[string]int)
 	for i, col := range header {
-		colIdx[strings.TrimSpace(col)] = i
+		colIdx[strings.TrimSpace(stripBOM(col))] = i
 	}
 
-	// Resolve column indices
 	dateIdx := findCol(colIdx, p.Format.DateColumn)
-	descIdx := findCol(colIdx, p.Format.DescColumn)
+	descIdxs := findCols(colIdx, p.Format.DescriptionColumns)
 	amountIdx := findCol(colIdx, p.Format.AmountColumn)
 	debitIdx := findCol(colIdx, p.Format.DebitColumn)
 	creditIdx := findCol(colIdx, p.Format.CreditColumn)
 	balanceIdx := findCol(colIdx, p.Format.BalanceColumn)
 	kidIdx := findCol(colIdx, p.Format.KIDColumn)
 	refIdx := findCol(colIdx, p.Format.RefColumn)
-	counterIdx := findCol(colIdx, p.Format.CounterColumn)
+	counterIdxs := findCols(colIdx, p.Format.CounterpartColumns)
 
 	if dateIdx < 0 {
 		return nil, fmt.Errorf("date column %q not found in header", p.Format.DateColumn)
 	}
-	if descIdx < 0 {
-		return nil, fmt.Errorf("description column %q not found in header", p.Format.DescColumn)
+	if len(descIdxs) == 0 {
+		return nil, fmt.Errorf("no description columns matched in header: %v", p.Format.DescriptionColumns)
 	}
 
 	var rows []BankRow
-	lineNum := 1 + p.Format.SkipRows
-
 	for {
-		lineNum++
 		record, err := r.Read()
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
-			continue // skip malformed rows
+			continue
 		}
 
 		date, err := time.Parse(p.Format.DateFormat, strings.TrimSpace(safeGet(record, dateIdx)))
 		if err != nil {
-			continue // skip rows with unparseable dates
+			continue
 		}
 
 		var amount float64
-		if amountIdx >= 0 {
+		switch {
+		case amountIdx >= 0:
 			amount = parseNorwegianNumber(safeGet(record, amountIdx))
-		} else {
-			// Separate debit/credit columns
+			if p.Format.AmountSign == "negated_out" {
+				amount = -amount
+			}
+		default:
 			debitVal := parseNorwegianNumber(safeGet(record, debitIdx))
 			creditVal := parseNorwegianNumber(safeGet(record, creditIdx))
 			if debitVal != 0 {
-				amount = -debitVal // outflow is negative
+				amount = -debitVal
 			} else {
-				amount = creditVal // inflow is positive
+				amount = creditVal
 			}
 		}
 
 		row := BankRow{
 			Date:        date,
-			Description: strings.TrimSpace(safeGet(record, descIdx)),
+			Description: joinNonEmpty(record, descIdxs, " · "),
 			Amount:      amount,
 			Reference:   strings.TrimSpace(safeGet(record, refIdx)),
 			KID:         strings.TrimSpace(safeGet(record, kidIdx)),
-			Counterpart: strings.TrimSpace(safeGet(record, counterIdx)),
+			Counterpart: firstNonEmpty(record, counterIdxs),
 		}
 
 		if balanceIdx >= 0 {
@@ -186,12 +196,13 @@ func (p *CSVParser) Parse(reader io.Reader) ([]BankRow, error) {
 	return rows, nil
 }
 
-// ListBankFormats returns the available bank format names.
+// ListBankFormats returns the available bank format codes, sorted for stable output.
 func ListBankFormats() []string {
 	names := make([]string, 0, len(BankFormats))
 	for k := range BankFormats {
 		names = append(names, k)
 	}
+	sort.Strings(names)
 	return names
 }
 
@@ -201,7 +212,6 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodID
 		var journalEntryID *string
 		autoMatched := false
 
-		// KID auto-match: check if this KID matches an outstanding invoice
 		if row.KID != "" && row.Amount > 0 {
 			var invoiceID string
 			err := s.db.QueryRow(ctx,
@@ -216,7 +226,6 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodID
 			).Scan(&invoiceID)
 
 			if err == nil {
-				// Found matching invoice — create settlement entry
 				sourceID := importID
 				sourceTable := "bank_import"
 				entry, createErr := s.CreateJournalEntry(ctx, CreateJournalEntryInput{
@@ -226,7 +235,7 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodID
 					Source:         "bank_import",
 					SourceID:       &sourceID,
 					SourceTable:    &sourceTable,
-					CreatedBy:      clubID, // system-generated
+					CreatedBy:      clubID,
 					ClubID:         clubID,
 					Lines: []CreateJournalLineInput{
 						{AccountCode: bankAccountCode, Debit: row.Amount, Credit: 0},
@@ -282,12 +291,11 @@ func (s *Service) MatchBankRow(ctx context.Context, clubID, periodID, rowID, deb
 		return fmt.Errorf("row already matched")
 	}
 
-	// For outflows (negative amount), swap debit/credit
 	debit := amount
 	credit := amount
 	if amount < 0 {
-		debit = -amount // expense: debit the expense account
-		credit = -amount // credit the bank account
+		debit = -amount
+		credit = -amount
 	}
 
 	sourceID := rowID
@@ -317,16 +325,13 @@ func (s *Service) MatchBankRow(ctx context.Context, clubID, periodID, rowID, deb
 	return err
 }
 
-// parseNorwegianNumber converts "1 234,56" or "1234.56" to float64.
 func parseNorwegianNumber(s string) float64 {
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return 0
 	}
-	// Remove thousand separators (space, non-breaking space, period used as thousands)
 	s = strings.ReplaceAll(s, " ", "")
-	s = strings.ReplaceAll(s, "\u00a0", "") // non-breaking space
-	// Replace comma decimal with period
+	s = strings.ReplaceAll(s, " ", "")
 	s = strings.ReplaceAll(s, ",", ".")
 	f, _ := strconv.ParseFloat(s, 64)
 	return f
@@ -342,9 +347,43 @@ func findCol(idx map[string]int, name string) int {
 	return -1
 }
 
+func findCols(idx map[string]int, names []string) []int {
+	out := make([]int, 0, len(names))
+	for _, n := range names {
+		if i := findCol(idx, n); i >= 0 {
+			out = append(out, i)
+		}
+	}
+	return out
+}
+
 func safeGet(record []string, idx int) string {
 	if idx < 0 || idx >= len(record) {
 		return ""
 	}
 	return record[idx]
+}
+
+func joinNonEmpty(record []string, idxs []int, sep string) string {
+	parts := make([]string, 0, len(idxs))
+	for _, i := range idxs {
+		v := strings.TrimSpace(safeGet(record, i))
+		if v != "" {
+			parts = append(parts, v)
+		}
+	}
+	return strings.Join(parts, sep)
+}
+
+func firstNonEmpty(record []string, idxs []int) string {
+	for _, i := range idxs {
+		if v := strings.TrimSpace(safeGet(record, i)); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+func stripBOM(s string) string {
+	return strings.TrimPrefix(s, "\ufeff")
 }
