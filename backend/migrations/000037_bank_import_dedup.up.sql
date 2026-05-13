@@ -17,7 +17,7 @@ WHERE bir.bank_import_id = bi.id;
 -- Recipe: sha256(lower(date || '|' || amount || '|' || reference || '|' || description || '|' || counterpart))
 UPDATE bank_import_rows
 SET row_hash = encode(
-    digest(
+    public.digest(
         lower(
             to_char(row_date, 'YYYY-MM-DD') || '|' ||
             trim(to_char(amount, 'FM999999999990.00')) || '|' ||
