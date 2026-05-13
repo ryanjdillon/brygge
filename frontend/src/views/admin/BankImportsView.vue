@@ -16,6 +16,7 @@ import {
   type VippsReconcilePreview,
 } from '@/composables/useBankImports'
 import { useFiscalPeriods, useAccountsList } from '@/composables/useAccounting'
+import AccountSelect from '@/components/ui/AccountSelect.vue'
 
 const { t } = useI18n()
 const queryClient = useQueryClient()
@@ -172,15 +173,9 @@ function nok(n: number): string {
 
         <div class="mt-3 space-y-2">
           <label class="block text-xs font-medium text-gray-700">{{ t('admin.bankImports.bankAccount') }}</label>
-          <select
-            v-model="bankAccountCode"
-            class="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm"
-            data-testid="bank-account-select"
-          >
-            <option v-for="a in bankAccounts" :key="a.code" :value="a.code">
-              {{ a.code }} — {{ a.name }}
-            </option>
-          </select>
+          <div data-testid="bank-account-select">
+            <AccountSelect v-model="bankAccountCode" :options="bankAccounts" />
+          </div>
 
           <label class="mt-2 block text-xs font-medium text-gray-700">{{ t('admin.bankImports.format') }}</label>
           <select v-model="bankFormat" class="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm">
