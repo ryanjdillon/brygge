@@ -1319,7 +1319,8 @@
       "confirmBilag": "Create bilag",
       "navCardTitle": "Bank & Vipps imports",
       "navCardDesc": "Upload CSV and reconcile Vipps payouts",
-      "bankAccount": "Bank account"
+      "bankAccount": "Bank account",
+      "transfers": "Transfers"
     }
   },
   "projects": {

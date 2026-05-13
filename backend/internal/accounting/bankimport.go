@@ -28,6 +28,8 @@ type BankRow struct {
 	Reference   string
 	KID         string
 	Counterpart string
+	FromAccount string // sender bank account number (for intra-bank transfer detection)
+	ToAccount   string // receiver bank account number
 }
 
 // BankFormat defines how to parse a specific bank's CSV format.
@@ -47,6 +49,8 @@ type BankFormat struct {
 	KIDColumn          string   `yaml:"kid_column"`
 	RefColumn          string   `yaml:"ref_column"`
 	CounterpartColumns []string `yaml:"counterpart_columns"`
+	FromAccountColumn  string   `yaml:"from_account_column"`
+	ToAccountColumn    string   `yaml:"to_account_column"`
 	SkipRows           int      `yaml:"skip_rows"`
 }
 
@@ -136,6 +140,8 @@ func (p *CSVParser) Parse(reader io.Reader) ([]BankRow, error) {
 	kidIdx := findCol(colIdx, p.Format.KIDColumn)
 	refIdx := findCol(colIdx, p.Format.RefColumn)
 	counterIdxs := findCols(colIdx, p.Format.CounterpartColumns)
+	fromAcctIdx := findCol(colIdx, p.Format.FromAccountColumn)
+	toAcctIdx := findCol(colIdx, p.Format.ToAccountColumn)
 
 	if dateIdx < 0 {
 		return nil, fmt.Errorf("date column %q not found in header", p.Format.DateColumn)
@@ -183,6 +189,8 @@ func (p *CSVParser) Parse(reader io.Reader) ([]BankRow, error) {
 			Reference:   strings.TrimSpace(safeGet(record, refIdx)),
 			KID:         strings.TrimSpace(safeGet(record, kidIdx)),
 			Counterpart: firstNonEmpty(record, counterIdxs),
+			FromAccount: strings.TrimSpace(safeGet(record, fromAcctIdx)),
+			ToAccount:   strings.TrimSpace(safeGet(record, toAcctIdx)),
 		}
 
 		if balanceIdx >= 0 {
@@ -214,6 +222,7 @@ type ImportResult struct {
 	Imported   int
 	SkippedDup int
 	Matched    int
+	Transfers  int // intra-bank transfer pairs auto-linked
 }
 
 // BankRowHash computes the dedup hash for a normalized bank row, scoped per club.
@@ -238,10 +247,11 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodID
 	var res ImportResult
 
 	bankAccount := bankAccountCode
+	var importedBy string
 	if err := s.db.QueryRow(ctx,
-		`SELECT bank_account_code FROM bank_imports WHERE id = $1 AND club_id = $2`,
+		`SELECT bank_account_code, imported_by FROM bank_imports WHERE id = $1 AND club_id = $2`,
 		importID, clubID,
-	).Scan(&bankAccount); err != nil {
+	).Scan(&bankAccount, &importedBy); err != nil {
 		// Fall back to default if the column isn't readable (pre-migration data).
 		bankAccount = bankAccountCode
 	}
@@ -257,12 +267,12 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodID
 		var rowID string
 		err := s.db.QueryRow(ctx,
 			`INSERT INTO bank_import_rows
-			   (bank_import_id, club_id, row_date, description, amount, balance, reference, kid_number, counterpart, row_hash)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			   (bank_import_id, club_id, row_date, description, amount, balance, reference, kid_number, counterpart, row_hash, from_account, to_account)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 			 ON CONFLICT (club_id, row_hash) DO NOTHING
 			 RETURNING id`,
 			importID, clubID, row.Date, row.Description, row.Amount, balance,
-			row.Reference, row.KID, row.Counterpart, hash,
+			row.Reference, row.KID, row.Counterpart, hash, row.FromAccount, row.ToAccount,
 		).Scan(&rowID)
 		if err == pgx.ErrNoRows {
 			res.SkippedDup++
@@ -301,7 +311,7 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodID
 			Source:         "bank_import",
 			SourceID:       &sourceID,
 			SourceTable:    &sourceTable,
-			CreatedBy:      clubID,
+			CreatedBy:      importedBy,
 			ClubID:         clubID,
 			Lines: []CreateJournalLineInput{
 				{AccountCode: bankAccount, Debit: row.Amount, Credit: 0},
@@ -322,7 +332,155 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodID
 		}
 	}
 
+	// Infer this import's own bank account number from the imported rows
+	// (it's the value that appears across many rows' from/to columns) and
+	// persist it on bank_imports so the transfer detector can use it.
+	if num := inferOwnAccountNumber(rows); num != "" {
+		_, _ = s.db.Exec(ctx,
+			`UPDATE bank_imports SET bank_account_number = $1 WHERE id = $2 AND bank_account_number = ''`,
+			num, importID,
+		)
+	}
+
+	// Detect intra-bank transfers: rows on this import that match an
+	// unmatched row on another of the club's bank imports (different
+	// bank_account_code), same date, opposite amounts, account numbers
+	// crossing. Auto-link both rows to a single draft entry.
+	if periodID != "" && importedBy != "" {
+		transfers, derr := s.detectIntraBankTransfers(ctx, clubID, importID, periodID, importedBy)
+		if derr != nil {
+			return res, fmt.Errorf("intra-bank transfer detection: %w", derr)
+		}
+		res.Transfers = transfers
+	}
+
 	return res, nil
+}
+
+// inferOwnAccountNumber picks the bank account number that this CSV
+// represents by counting which value appears most often across the
+// from_account and to_account columns of all rows. The bank itself
+// always sits on one side of every transaction it lists.
+func inferOwnAccountNumber(rows []BankRow) string {
+	counts := map[string]int{}
+	for _, r := range rows {
+		if r.FromAccount != "" {
+			counts[r.FromAccount]++
+		}
+		if r.ToAccount != "" {
+			counts[r.ToAccount]++
+		}
+	}
+	var best string
+	var bestN int
+	for k, n := range counts {
+		if n > bestN {
+			best = k
+			bestN = n
+		}
+	}
+	return best
+}
+
+// detectIntraBankTransfers pairs unmatched rows on this import with
+// unmatched rows on another import (different bank_account_code) where:
+//   - dates match
+//   - amounts sum to zero (opposite signs)
+//   - the two rows' from_account/to_account references identify the
+//     other import's bank account number
+//
+// For each pair, create one draft journal entry crediting the sending
+// account and debiting the receiving account, then link both rows.
+func (s *Service) detectIntraBankTransfers(ctx context.Context, clubID, importID, periodID, createdBy string) (int, error) {
+	rows, err := s.db.Query(ctx,
+		`WITH this_import AS (
+		   SELECT bank_account_code, bank_account_number FROM bank_imports WHERE id = $1
+		 )
+		 SELECT
+		   r1.id, r1.row_date, r1.amount, ti.bank_account_code, ti.bank_account_number,
+		   r2.id, bi2.bank_account_code, bi2.bank_account_number, r1.description
+		 FROM bank_import_rows r1
+		 CROSS JOIN this_import ti
+		 JOIN bank_import_rows r2 ON r2.club_id = r1.club_id
+		   AND r2.row_date  = r1.row_date
+		   AND r2.amount    = -r1.amount
+		   AND r2.journal_entry_id IS NULL
+		   AND r2.id <> r1.id
+		 JOIN bank_imports bi2 ON bi2.id = r2.bank_import_id
+		   AND bi2.bank_account_code <> ti.bank_account_code
+		   AND (bi2.bank_account_number = '' OR ti.bank_account_number = '' OR (
+		         (r1.from_account = bi2.bank_account_number OR r1.to_account = bi2.bank_account_number)
+		         AND (r2.from_account = ti.bank_account_number OR r2.to_account = ti.bank_account_number)
+		       ))
+		 WHERE r1.bank_import_id = $1
+		   AND r1.club_id        = $2
+		   AND r1.journal_entry_id IS NULL`,
+		importID, clubID,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("querying transfer candidates: %w", err)
+	}
+	defer rows.Close()
+
+	type pair struct {
+		r1ID, r2ID, codeA, numA, codeB, numB, desc string
+		date                                       time.Time
+		amount                                     float64
+	}
+	var pairs []pair
+	for rows.Next() {
+		var p pair
+		if err := rows.Scan(&p.r1ID, &p.date, &p.amount, &p.codeA, &p.numA, &p.r2ID, &p.codeB, &p.numB, &p.desc); err != nil {
+			s.log.Warn().Err(err).Msg("transfer detect scan error")
+			continue
+		}
+		pairs = append(pairs, p)
+	}
+	rows.Close()
+
+	matched := 0
+	used := map[string]bool{}
+	for _, p := range pairs {
+		if used[p.r1ID] || used[p.r2ID] {
+			continue
+		}
+		debitCode, creditCode := p.codeB, p.codeA
+		if p.amount > 0 {
+			debitCode, creditCode = p.codeA, p.codeB
+		}
+		amount := p.amount
+		if amount < 0 {
+			amount = -amount
+		}
+		sourceID := p.r1ID
+		sourceTable := "bank_import_rows"
+		entry, err := s.CreateJournalEntry(ctx, CreateJournalEntryInput{
+			FiscalPeriodID: periodID,
+			EntryDate:      p.date.Format("2006-01-02"),
+			Description:    fmt.Sprintf("Intra-bank transfer: %s", p.desc),
+			Source:         "bank_import",
+			SourceID:       &sourceID,
+			SourceTable:    &sourceTable,
+			CreatedBy:      createdBy,
+			ClubID:         clubID,
+			Lines: []CreateJournalLineInput{
+				{AccountCode: debitCode, Debit: amount, Credit: 0},
+				{AccountCode: creditCode, Debit: 0, Credit: amount},
+			},
+		})
+		if err != nil {
+			continue
+		}
+		if _, err := s.db.Exec(ctx,
+			`UPDATE bank_import_rows SET journal_entry_id = $1, auto_matched = true WHERE id = ANY($2::uuid[])`,
+			entry.ID, []string{p.r1ID, p.r2ID},
+		); err == nil {
+			used[p.r1ID] = true
+			used[p.r2ID] = true
+			matched++
+		}
+	}
+	return matched, nil
 }
 
 // MatchBankRow manually creates a journal entry for an unmatched bank import row.
