@@ -514,7 +514,8 @@
       "accountingOverview": "Overview",
       "accounts": "Chart of Accounts",
       "periods": "Periods",
-      "journal": "Journal entries"
+      "journal": "Journal entries",
+      "bankImports": "Bank/Vipps imports"
     },
     "financialSettings": {
       "title": "Settings",

@@ -510,7 +510,8 @@
       "accountingOverview": "Oversikt",
       "accounts": "Kontoplan",
       "periods": "Perioder",
-      "journal": "Bilag"
+      "journal": "Bilag",
+      "bankImports": "Bank/Vipps import"
     },
     "financialSettings": {
       "title": "Innstillinger",
