@@ -1276,6 +1276,61 @@ func (h *AccountingHandler) HandleUpdateMomskompStatus(w http.ResponseWriter, r 
 	JSON(w, http.StatusOK, map[string]string{"message": "status updated"})
 }
 
+// ── Vipps Reconciliation ────────────────────────────────────
+
+func (h *AccountingHandler) HandleVippsReconcilePreview(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	rowID := chi.URLParam(r, "rowID")
+	preview, err := h.svc.ReconcileVippsPreview(r.Context(), claims.ClubID, rowID)
+	if err != nil {
+		Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	JSON(w, http.StatusOK, preview)
+}
+
+type vippsReconcileConfirmRequest struct {
+	PeriodID string                            `json:"period_id"`
+	Lines    []accounting.VippsReconcileLine   `json:"lines"`
+}
+
+func (h *AccountingHandler) HandleVippsReconcileConfirm(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	rowID := chi.URLParam(r, "rowID")
+
+	var req vippsReconcileConfirmRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.PeriodID == "" {
+		Error(w, http.StatusBadRequest, "period_id is required")
+		return
+	}
+
+	entryID, err := h.svc.ReconcileVippsConfirm(r.Context(), claims.ClubID, rowID, req.PeriodID, claims.UserID, req.Lines)
+	if err != nil {
+		Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if h.audit != nil {
+		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,
+			"accounting.vipps_reconciled", "bank_import_row", rowID,
+			map[string]any{"journal_entry_id": entryID, "lines": len(req.Lines)})
+	}
+
+	JSON(w, http.StatusCreated, map[string]any{"journal_entry_id": entryID})
+}
+
 // ── Vipps Import ────────────────────────────────────────────
 
 func (h *AccountingHandler) HandleImportVippsSettlement(w http.ResponseWriter, r *http.Request) {

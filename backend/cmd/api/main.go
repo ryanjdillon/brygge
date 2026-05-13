@@ -872,6 +872,11 @@ func main() {
 							r.Get("/{importID}", accountingHandler.HandleGetVippsImport)
 						})
 
+						r.Route("/bank-rows/{rowID}/reconcile-vipps", func(r chi.Router) {
+							r.Get("/", accountingHandler.HandleVippsReconcilePreview)
+							r.Post("/confirm", accountingHandler.HandleVippsReconcileConfirm)
+						})
+
 						r.Route("/rules", func(r chi.Router) {
 							r.Get("/", accountingHandler.HandleListRules)
 							r.Post("/", accountingHandler.HandleCreateRule)
