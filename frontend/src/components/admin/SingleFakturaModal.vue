@@ -3,6 +3,7 @@ import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { X, Plus, Trash2, ListPlus } from 'lucide-vue-next'
 import { useAccountsList, useFiscalPeriods } from '@/composables/useAccounting'
+import { usePricing } from '@/composables/usePricing'
 import MemberSearch, { type MemberHit } from '@/components/members/MemberSearch.vue'
 import LineItemPicker from '@/components/admin/LineItemPicker.vue'
 import AccountSelect from '@/components/admin/AccountSelect.vue'
@@ -23,6 +24,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
+const { categoryLabel } = usePricing()
 const { data: accounts } = useAccountsList()
 // A faktura is money owed *to* the club, so the line's bookkeeping
 // counterpart should be revenue (or, occasionally, a liability —
@@ -145,6 +147,10 @@ watch(member, (m) => {
   if (!recipientName.value) recipientName.value = m.full_name ?? ''
   if (!recipientEmail.value) recipientEmail.value = m.email ?? ''
   if (!contactPerson.value) contactPerson.value = m.full_name ?? ''
+  if (!recipientAddress.value) {
+    const cityLine = [m.postal_code, m.city].filter(Boolean).join(' ').trim()
+    recipientAddress.value = [m.address_line, cityLine].filter(Boolean).join(', ')
+  }
 })
 
 // --- Brønnøysund (BRREG) integration ---
@@ -334,7 +340,7 @@ function applyPickerSelection() {
   for (const cat of pickerTierCategories.value) {
     newLines.push({
       kind: 'tier',
-      description: cat,
+      description: categoryLabel(cat),
       sub_description: '',
       quantity: 1,
       unit_price: 0,
