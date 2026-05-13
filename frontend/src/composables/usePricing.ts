@@ -67,5 +67,5 @@ export function usePricing() {
     }))
   })
 
-  return { ...query, items, categories, unitLabel }
+  return { ...query, items, categories, categoryLabel, unitLabel }
 }
