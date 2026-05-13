@@ -1275,3 +1275,186 @@ func (h *AccountingHandler) HandleUpdateMomskompStatus(w http.ResponseWriter, r 
 
 	JSON(w, http.StatusOK, map[string]string{"message": "status updated"})
 }
+
+// ── Vipps Import ────────────────────────────────────────────
+
+func (h *AccountingHandler) HandleImportVippsSettlement(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		Error(w, http.StatusBadRequest, "file too large or invalid multipart form")
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		Error(w, http.StatusBadRequest, "file is required")
+		return
+	}
+	defer file.Close()
+
+	rows, err := accounting.ParseVippsCSV(file)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to parse Vipps CSV")
+		Error(w, http.StatusBadRequest, "failed to parse CSV: "+err.Error())
+		return
+	}
+
+	msn := ""
+	for _, row := range rows {
+		if row.MSN != "" {
+			msn = row.MSN
+			break
+		}
+	}
+
+	var importID string
+	err = h.svc.DB().QueryRow(r.Context(),
+		`INSERT INTO vipps_imports (club_id, filename, msn, imported_by, row_count)
+		 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+		claims.ClubID, header.Filename, msn, claims.UserID, len(rows),
+	).Scan(&importID)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to create vipps_imports row")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	result, err := h.svc.ImportVippsRows(r.Context(), claims.ClubID, importID, rows)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to insert vipps rows")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	h.svc.DB().Exec(r.Context(),
+		`UPDATE vipps_imports SET row_count = $1 WHERE id = $2`,
+		result.Imported, importID)
+
+	if h.audit != nil {
+		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,
+			"accounting.vipps_imported", "vipps_import", importID,
+			map[string]any{
+				"filename":    header.Filename,
+				"msn":         msn,
+				"rows_total":  len(rows),
+				"imported":    result.Imported,
+				"skipped_dup": result.SkippedDup,
+			})
+	}
+
+	JSON(w, http.StatusCreated, map[string]any{
+		"id":          importID,
+		"filename":    header.Filename,
+		"msn":         msn,
+		"rows_total":  len(rows),
+		"imported":    result.Imported,
+		"skipped_dup": result.SkippedDup,
+	})
+}
+
+func (h *AccountingHandler) HandleListVippsImports(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	rows, err := h.svc.DB().Query(r.Context(),
+		`SELECT id, filename, msn, row_count, created_at
+		 FROM vipps_imports WHERE club_id = $1 ORDER BY created_at DESC LIMIT 100`,
+		claims.ClubID,
+	)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to list vipps imports")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	defer rows.Close()
+
+	type item struct {
+		ID        string `json:"id"`
+		Filename  string `json:"filename"`
+		MSN       string `json:"msn"`
+		RowCount  int    `json:"row_count"`
+		CreatedAt string `json:"created_at"`
+	}
+	out := []item{}
+	for rows.Next() {
+		var it item
+		if err := rows.Scan(&it.ID, &it.Filename, &it.MSN, &it.RowCount, &it.CreatedAt); err == nil {
+			out = append(out, it)
+		}
+	}
+	JSON(w, http.StatusOK, out)
+}
+
+func (h *AccountingHandler) HandleGetVippsImport(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	importID := chi.URLParam(r, "importID")
+	rows, err := h.svc.DB().Query(r.Context(),
+		`SELECT vir.id, vir.row_type, vir.tx_at, vir.booking_date, vir.amount, vir.fee, vir.net_amount,
+		        vir.customer_name, vir.customer_phone_masked, vir.message, vir.psp_ref, vir.order_id,
+		        vir.settlement_number, vir.payout_account, vir.scheduled_payout_date, vir.journal_entry_id
+		 FROM vipps_import_rows vir
+		 JOIN vipps_imports vi ON vi.id = vir.vipps_import_id
+		 WHERE vi.id = $1 AND vi.club_id = $2
+		 ORDER BY vir.tx_at NULLS LAST, vir.id`,
+		importID, claims.ClubID,
+	)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to get vipps import")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	defer rows.Close()
+
+	type row struct {
+		ID                  string  `json:"id"`
+		RowType             string  `json:"row_type"`
+		TxAt                *string `json:"tx_at"`
+		BookingDate         *string `json:"booking_date"`
+		Amount              float64 `json:"amount"`
+		Fee                 float64 `json:"fee"`
+		NetAmount           float64 `json:"net_amount"`
+		CustomerName        string  `json:"customer_name"`
+		CustomerPhoneMasked string  `json:"customer_phone_masked"`
+		Message             string  `json:"message"`
+		PSPRef              string  `json:"psp_ref"`
+		OrderID             string  `json:"order_id"`
+		SettlementNumber    string  `json:"settlement_number"`
+		PayoutAccount       string  `json:"payout_account"`
+		ScheduledPayoutDate *string `json:"scheduled_payout_date"`
+		JournalEntryID      *string `json:"journal_entry_id"`
+	}
+
+	out := []row{}
+	for rows.Next() {
+		var (
+			r                            row
+			txAt, bookingDate, scheduled *string
+		)
+		if err := rows.Scan(&r.ID, &r.RowType, &txAt, &bookingDate,
+			&r.Amount, &r.Fee, &r.NetAmount,
+			&r.CustomerName, &r.CustomerPhoneMasked, &r.Message,
+			&r.PSPRef, &r.OrderID, &r.SettlementNumber, &r.PayoutAccount,
+			&scheduled, &r.JournalEntryID); err != nil {
+			continue
+		}
+		r.TxAt = txAt
+		r.BookingDate = bookingDate
+		r.ScheduledPayoutDate = scheduled
+		out = append(out, r)
+	}
+	JSON(w, http.StatusOK, out)
+}
+

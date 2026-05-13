@@ -866,6 +866,12 @@ func main() {
 							r.Post("/{importID}/auto-match", accountingHandler.HandleAutoMatchImport)
 						})
 
+						r.Route("/vipps-imports", func(r chi.Router) {
+							r.Post("/", accountingHandler.HandleImportVippsSettlement)
+							r.Get("/", accountingHandler.HandleListVippsImports)
+							r.Get("/{importID}", accountingHandler.HandleGetVippsImport)
+						})
+
 						r.Route("/rules", func(r chi.Router) {
 							r.Get("/", accountingHandler.HandleListRules)
 							r.Post("/", accountingHandler.HandleCreateRule)
