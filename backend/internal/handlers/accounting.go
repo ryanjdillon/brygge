@@ -631,6 +631,7 @@ func (h *AccountingHandler) HandleImportBankStatement(w http.ResponseWriter, r *
 				"imported":    result.Imported,
 				"skipped_dup": result.SkippedDup,
 				"matched":     result.Matched,
+				"transfers":   result.Transfers,
 			})
 	}
 
@@ -642,6 +643,7 @@ func (h *AccountingHandler) HandleImportBankStatement(w http.ResponseWriter, r *
 		"imported":    result.Imported,
 		"skipped_dup": result.SkippedDup,
 		"matched":     result.Matched,
+		"transfers":   result.Transfers,
 	})
 }
 

@@ -12,3 +12,5 @@ ref_column: "Arkivref."
 counterpart_columns:
   - Kreditornavn
   - Debitornavn
+from_account_column: "Fra konto"
+to_account_column: "Til konto"

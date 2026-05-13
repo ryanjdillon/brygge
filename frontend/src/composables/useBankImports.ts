@@ -37,6 +37,7 @@ export interface BankImportResult {
   imported: number
   skipped_dup: number
   matched: number
+  transfers: number
 }
 
 export interface VippsImportSummary {

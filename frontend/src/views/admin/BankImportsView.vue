@@ -209,6 +209,7 @@ function nok(n: number): string {
           — {{ t('admin.bankImports.imported') }}: {{ bankResult.imported }}
           · {{ t('admin.bankImports.skipped') }}: {{ bankResult.skipped_dup }}
           · {{ t('admin.bankImports.matched') }}: {{ bankResult.matched }}
+          · {{ t('admin.bankImports.transfers') }}: {{ bankResult.transfers }}
         </div>
       </section>
 
