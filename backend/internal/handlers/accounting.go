@@ -577,9 +577,13 @@ func (h *AccountingHandler) HandleImportBankStatement(w http.ResponseWriter, r *
 
 	formatName := r.FormValue("format")
 	periodID := r.FormValue("period_id")
+	bankAccountCode := r.FormValue("bank_account_code")
 	if formatName == "" || periodID == "" {
 		Error(w, http.StatusBadRequest, "format and period_id are required")
 		return
+	}
+	if bankAccountCode == "" {
+		bankAccountCode = "1920"
 	}
 
 	bankFormat, ok := accounting.BankFormats[formatName]
@@ -598,9 +602,9 @@ func (h *AccountingHandler) HandleImportBankStatement(w http.ResponseWriter, r *
 
 	var importID string
 	err = h.svc.DB().QueryRow(r.Context(),
-		`INSERT INTO bank_imports (club_id, filename, format, imported_by, row_count)
-		 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-		claims.ClubID, header.Filename, formatName, claims.UserID, len(rows),
+		`INSERT INTO bank_imports (club_id, filename, format, bank_account_code, imported_by, row_count)
+		 VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+		claims.ClubID, header.Filename, formatName, bankAccountCode, claims.UserID, len(rows),
 	).Scan(&importID)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to create import record")

@@ -231,9 +231,20 @@ func BankRowHash(clubID string, row BankRow) string {
 }
 
 // ImportBankRows stores parsed bank rows (dedup by club_id + row_hash) and runs
-// KID auto-matching on newly inserted rows.
+// KID auto-matching on newly inserted rows. The KID-match journal entries
+// debit the bank account associated with the import (bank_imports.bank_account_code),
+// not a hard-coded constant.
 func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodID string, rows []BankRow) (ImportResult, error) {
 	var res ImportResult
+
+	bankAccount := bankAccountCode
+	if err := s.db.QueryRow(ctx,
+		`SELECT bank_account_code FROM bank_imports WHERE id = $1 AND club_id = $2`,
+		importID, clubID,
+	).Scan(&bankAccount); err != nil {
+		// Fall back to default if the column isn't readable (pre-migration data).
+		bankAccount = bankAccountCode
+	}
 
 	for _, row := range rows {
 		var balance *float64
@@ -293,7 +304,7 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodID
 			CreatedBy:      clubID,
 			ClubID:         clubID,
 			Lines: []CreateJournalLineInput{
-				{AccountCode: bankAccountCode, Debit: row.Amount, Credit: 0},
+				{AccountCode: bankAccount, Debit: row.Amount, Credit: 0},
 				{AccountCode: receivablesAccountCode, Debit: 0, Credit: row.Amount},
 			},
 		})

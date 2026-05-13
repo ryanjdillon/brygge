@@ -56,14 +56,16 @@ func (s *Service) ReconcileVippsPreview(ctx context.Context, clubID, bankRowID s
 		bankDate    time.Time
 		description string
 		bankAmount  float64
+		bankAccount string
 		existing    *string
 	)
 	err := s.db.QueryRow(ctx,
-		`SELECT bir.row_date, bir.description, bir.amount, bir.journal_entry_id
+		`SELECT bir.row_date, bir.description, bir.amount, bi.bank_account_code, bir.journal_entry_id
 		 FROM bank_import_rows bir
+		 JOIN bank_imports bi ON bi.id = bir.bank_import_id
 		 WHERE bir.id = $1 AND bir.club_id = $2`,
 		bankRowID, clubID,
-	).Scan(&bankDate, &description, &bankAmount, &existing)
+	).Scan(&bankDate, &description, &bankAmount, &bankAccount, &existing)
 	if err == pgx.ErrNoRows {
 		return nil, fmt.Errorf("bank row not found")
 	}
@@ -137,10 +139,14 @@ func (s *Service) ReconcileVippsPreview(ctx context.Context, clubID, bankRowID s
 		Lines:            []VippsReconcileLine{},
 	}
 
+	if bankAccount == "" {
+		bankAccount = bankAccountCode
+	}
+
 	// DR bank
 	preview.Lines = append(preview.Lines, VippsReconcileLine{
 		Kind:        "bank_in",
-		AccountCode: bankAccountCode,
+		AccountCode: bankAccount,
 		Debit:       bankAmount,
 		Description: fmt.Sprintf("Vipps utbetaling %s (Vippsnr %s)", settlement, msn),
 	})

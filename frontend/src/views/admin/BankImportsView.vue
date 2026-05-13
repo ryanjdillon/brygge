@@ -15,7 +15,7 @@ import {
   type VippsImportResult,
   type VippsReconcilePreview,
 } from '@/composables/useBankImports'
-import { useFiscalPeriods } from '@/composables/useAccounting'
+import { useFiscalPeriods, useAccountsList } from '@/composables/useAccounting'
 
 const { t } = useI18n()
 const queryClient = useQueryClient()
@@ -23,6 +23,11 @@ const queryClient = useQueryClient()
 const { data: periods } = useFiscalPeriods()
 const { data: formats } = useBankFormats()
 const { data: vippsImports } = useVippsImports()
+const { data: accounts } = useAccountsList()
+
+const bankAccounts = computed(() =>
+  (accounts.value ?? []).filter((a) => a.is_active && a.code.startsWith('19')),
+)
 
 const selectedPeriod = computed<string>(() => {
   const open = periods.value?.find((p) => p.status === 'open')
@@ -32,6 +37,7 @@ const selectedPeriod = computed<string>(() => {
 // ── Bank upload ──────────────────────────────────────────────
 const bankFile = ref<File | null>(null)
 const bankFormat = ref<string>('sparebank-norge-v1')
+const bankAccountCode = ref<string>('1920')
 const bankError = ref<string | null>(null)
 const bankBusy = ref(false)
 const bankResult = ref<BankImportResult | null>(null)
@@ -43,11 +49,16 @@ function onBankFile(e: Event) {
 }
 
 async function submitBank() {
-  if (!bankFile.value || !selectedPeriod.value) return
+  if (!bankFile.value || !selectedPeriod.value || !bankAccountCode.value) return
   bankError.value = null
   bankBusy.value = true
   try {
-    const res = await uploadBankCSV(bankFile.value, bankFormat.value, selectedPeriod.value)
+    const res = await uploadBankCSV(
+      bankFile.value,
+      bankFormat.value,
+      selectedPeriod.value,
+      bankAccountCode.value,
+    )
     bankResult.value = res
     currentBankImportId.value = res.id
   } catch (e: any) {
@@ -154,7 +165,18 @@ function nok(n: number): string {
         <p class="mt-1 text-xs text-gray-500">{{ t('admin.bankImports.bankCardDesc') }}</p>
 
         <div class="mt-3 space-y-2">
-          <label class="block text-xs font-medium text-gray-700">{{ t('admin.bankImports.format') }}</label>
+          <label class="block text-xs font-medium text-gray-700">{{ t('admin.bankImports.bankAccount') }}</label>
+          <select
+            v-model="bankAccountCode"
+            class="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm"
+            data-testid="bank-account-select"
+          >
+            <option v-for="a in bankAccounts" :key="a.code" :value="a.code">
+              {{ a.code }} — {{ a.name }}
+            </option>
+          </select>
+
+          <label class="mt-2 block text-xs font-medium text-gray-700">{{ t('admin.bankImports.format') }}</label>
           <select v-model="bankFormat" class="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm">
             <option v-for="f in formats ?? []" :key="f" :value="f">{{ f }}</option>
           </select>
@@ -173,7 +195,7 @@ function nok(n: number): string {
         <div class="mt-3 flex justify-end">
           <button
             type="button"
-            :disabled="!bankFile || !selectedPeriod || bankBusy"
+            :disabled="!bankFile || !selectedPeriod || !bankAccountCode || bankBusy"
             class="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
             data-testid="bank-upload-submit"
             @click="submitBank"

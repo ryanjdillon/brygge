@@ -1318,7 +1318,8 @@
       "unresolvedNotice": "{n} customer(s) could not be matched to a member — posted to clearing account.",
       "confirmBilag": "Create bilag",
       "navCardTitle": "Bank & Vipps imports",
-      "navCardDesc": "Upload CSV and reconcile Vipps payouts"
+      "navCardDesc": "Upload CSV and reconcile Vipps payouts",
+      "bankAccount": "Bank account"
     }
   },
   "projects": {
