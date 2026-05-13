@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import MultiSelectList from '@/components/ui/MultiSelectList.vue'
+import { usePricing } from '@/composables/usePricing'
 
 // LineItemPicker is the shared two-pane picker used by both the batch
 // faktura flow and the single faktura flow. It loads /admin/pricing
@@ -50,6 +51,7 @@ const emit = defineEmits<{
 }>()
 
 const { t, n } = useI18n()
+const { categoryLabel } = usePricing()
 
 const items = ref<PriceItem[]>([])
 const loading = ref(true)
@@ -109,7 +111,7 @@ const tierCategoryOptions = computed(() => {
         .join(' · ')
       return {
         value: cat,
-        label: cat,
+        label: categoryLabel(cat),
         hint: `[${dim === 'length' ? t('lineItemPicker.byLength') : t('lineItemPicker.byBeam')}] ${ranges}`,
         meta: t('lineItemPicker.tiersCount', { n: tiers.length }),
       }
