@@ -1,0 +1,164 @@
+import { computed, type Ref } from 'vue'
+import { useQuery } from '@tanstack/vue-query'
+
+const BASE = '/api/v1/admin/accounting'
+
+async function fetchJSON<T>(path: string, opts?: RequestInit): Promise<T> {
+  const res = await fetch(path, { credentials: 'include', ...opts })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error ?? body.detail ?? res.statusText)
+  }
+  return res.json()
+}
+
+export interface BankFormat {
+  code: string
+}
+
+export interface BankImportRow {
+  id: string
+  date: string
+  description: string
+  amount: number
+  balance: number | null
+  reference: string
+  kid_number: string
+  counterpart: string
+  journal_entry_id: string | null
+  auto_matched: boolean
+}
+
+export interface BankImportResult {
+  id: string
+  filename: string
+  format: string
+  rows_total: number
+  imported: number
+  skipped_dup: number
+  matched: number
+}
+
+export interface VippsImportSummary {
+  id: string
+  filename: string
+  msn: string
+  row_count: number
+  created_at: string
+}
+
+export interface VippsImportRow {
+  id: string
+  row_type: 'belastning' | 'fee' | 'payout' | 'other'
+  tx_at: string | null
+  booking_date: string | null
+  amount: number
+  fee: number
+  net_amount: number
+  customer_name: string
+  customer_phone_masked: string
+  message: string
+  psp_ref: string
+  order_id: string
+  settlement_number: string
+  payout_account: string
+  scheduled_payout_date: string | null
+  journal_entry_id: string | null
+}
+
+export interface VippsImportResult {
+  id: string
+  filename: string
+  msn: string
+  rows_total: number
+  imported: number
+  skipped_dup: number
+}
+
+export interface VippsReconcileLine {
+  vipps_row_id?: string
+  kind: 'bank_in' | 'receivable' | 'revenue' | 'fee' | 'clearing'
+  account_code: string
+  debit: number
+  credit: number
+  description: string
+  customer_name?: string
+  resolved_member_id?: string
+  resolved: boolean
+}
+
+export interface VippsReconcilePreview {
+  bank_row_id: string
+  bank_amount: number
+  bank_date: string
+  settlement_number: string
+  msn: string
+  payout_amount: number
+  total_charges: number
+  total_fees: number
+  unresolved_count: number
+  balanced: boolean
+  reason?: string
+  lines: VippsReconcileLine[]
+}
+
+export function useBankFormats() {
+  return useQuery({
+    queryKey: ['accounting', 'bank-formats'],
+    queryFn: () => fetchJSON<string[]>(`${BASE}/bank-formats`),
+    staleTime: 60 * 60 * 1000,
+  })
+}
+
+export function useBankImport(importID: Ref<string | undefined>) {
+  return useQuery({
+    queryKey: computed(() => ['accounting', 'bank-import', importID.value]),
+    enabled: computed(() => !!importID.value),
+    queryFn: () => fetchJSON<BankImportRow[]>(`${BASE}/bank-import/${importID.value}`),
+  })
+}
+
+export function useVippsImports() {
+  return useQuery({
+    queryKey: ['accounting', 'vipps-imports'],
+    queryFn: () => fetchJSON<VippsImportSummary[]>(`${BASE}/vipps-imports`),
+  })
+}
+
+export function useVippsImport(importID: Ref<string | undefined>) {
+  return useQuery({
+    queryKey: computed(() => ['accounting', 'vipps-import', importID.value]),
+    enabled: computed(() => !!importID.value),
+    queryFn: () => fetchJSON<VippsImportRow[]>(`${BASE}/vipps-imports/${importID.value}`),
+  })
+}
+
+export async function uploadBankCSV(file: File, format: string, periodId: string): Promise<BankImportResult> {
+  const fd = new FormData()
+  fd.append('file', file)
+  fd.append('format', format)
+  fd.append('period_id', periodId)
+  return fetchJSON<BankImportResult>(`${BASE}/bank-import/`, { method: 'POST', body: fd })
+}
+
+export async function uploadVippsCSV(file: File): Promise<VippsImportResult> {
+  const fd = new FormData()
+  fd.append('file', file)
+  return fetchJSON<VippsImportResult>(`${BASE}/vipps-imports/`, { method: 'POST', body: fd })
+}
+
+export async function previewVippsReconcile(rowID: string): Promise<VippsReconcilePreview> {
+  return fetchJSON<VippsReconcilePreview>(`${BASE}/bank-rows/${rowID}/reconcile-vipps/`)
+}
+
+export async function confirmVippsReconcile(
+  rowID: string,
+  periodID: string,
+  lines: VippsReconcileLine[],
+): Promise<{ journal_entry_id: string }> {
+  return fetchJSON(`${BASE}/bank-rows/${rowID}/reconcile-vipps/confirm`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ period_id: periodID, lines }),
+  })
+}

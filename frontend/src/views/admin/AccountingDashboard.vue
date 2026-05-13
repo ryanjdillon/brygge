@@ -16,6 +16,7 @@ import {
   Mail,
   Receipt,
   Settings,
+  Upload,
 } from 'lucide-vue-next'
 import {
   useAccountsList,
@@ -282,6 +283,17 @@ const postedCount = computed(() => entries.value?.filter(e => e.status === 'post
           <div>
             <p class="font-medium text-gray-900">{{ t('admin.financialSettings.title') }}</p>
             <p class="text-sm text-gray-500">{{ t('admin.financialSettings.cardDesc') }}</p>
+          </div>
+        </RouterLink>
+        <RouterLink
+          to="/admin/accounting/bank-imports"
+          class="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-5 transition hover:border-blue-300 hover:shadow-sm"
+          data-testid="bank-imports-tile"
+        >
+          <Upload class="h-8 w-8 text-blue-600" />
+          <div>
+            <p class="font-medium text-gray-900">{{ t('admin.bankImports.navCardTitle') }}</p>
+            <p class="text-sm text-gray-500">{{ t('admin.bankImports.navCardDesc') }}</p>
           </div>
         </RouterLink>
       </div>
