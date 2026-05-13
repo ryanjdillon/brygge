@@ -1314,7 +1314,8 @@
       "unresolvedNotice": "{n} kunde(r) kunne ikke kobles til medlem — bokføres på klaringskonto.",
       "confirmBilag": "Opprett bilag",
       "navCardTitle": "Bank- og Vipps-import",
-      "navCardDesc": "Last opp CSV og avstem Vipps-utbetalinger"
+      "navCardDesc": "Last opp CSV og avstem Vipps-utbetalinger",
+      "bankAccount": "Bankkonto"
     }
   },
   "projects": {

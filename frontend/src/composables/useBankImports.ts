@@ -133,11 +133,17 @@ export function useVippsImport(importID: Ref<string | undefined>) {
   })
 }
 
-export async function uploadBankCSV(file: File, format: string, periodId: string): Promise<BankImportResult> {
+export async function uploadBankCSV(
+  file: File,
+  format: string,
+  periodId: string,
+  bankAccountCode: string,
+): Promise<BankImportResult> {
   const fd = new FormData()
   fd.append('file', file)
   fd.append('format', format)
   fd.append('period_id', periodId)
+  fd.append('bank_account_code', bankAccountCode)
   return fetchJSON<BankImportResult>(`${BASE}/bank-import/`, { method: 'POST', body: fd })
 }
 
