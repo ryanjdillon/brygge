@@ -33,7 +33,7 @@ buildGoModule rec {
   src = repoRoot;
   modRoot = "backend";
 
-  vendorHash = "sha256-dtxe8l4o1YVsfnP4sf3J8xAQmTt+lerWijGtD3mQdUQ=";
+  vendorHash = "sha256-7Jw/JuOJA71bfP+ja4pwsfKIgcO2tW2JaQpF5dL00FI=";
 
   subPackages = [
     "cmd/api"
