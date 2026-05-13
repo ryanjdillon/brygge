@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Lock, Plus, Check, X, ChevronUp, ChevronDown } from 'lucide-vue-next'
+import { Plus, Check, X, ChevronUp, ChevronDown } from 'lucide-vue-next'
 import {
   useAccountsList,
   useSeedAccounts,
@@ -9,6 +9,7 @@ import {
   useUpdateAccount,
   type Account,
 } from '@/composables/useAccounting'
+import AccountCodeChip from '@/components/ui/AccountCodeChip.vue'
 
 const { t } = useI18n()
 
@@ -32,13 +33,6 @@ const mvaLabels = computed<Record<string, string>>(() => ({
   partial: t('admin.accounting.accounts.mvaPartial'),
   not_applicable: t('admin.accounting.accounts.mvaNA'),
 }))
-
-const typeColors: Record<string, string> = {
-  asset: 'bg-blue-100 text-blue-800',
-  liability: 'bg-amber-100 text-amber-800',
-  revenue: 'bg-green-100 text-green-800',
-  expense: 'bg-red-100 text-red-800',
-}
 
 const typeFilterOptions = ['all', 'asset', 'liability', 'revenue', 'expense']
 const typeFilter = ref('all')
@@ -285,9 +279,7 @@ function handleAddAccount() {
             >
               <template v-if="editingId === account.id">
                 <td class="whitespace-nowrap px-4 py-3">
-                  <span :class="['inline-flex rounded px-2 py-0.5 font-mono text-sm font-semibold', typeColors[account.account_type]]">
-                    {{ account.code }}
-                  </span>
+                  <AccountCodeChip :code="account.code" :account-type="account.account_type" />
                 </td>
                 <td class="px-4 py-3">
                   <input v-model="editForm.name" class="w-full rounded border border-gray-300 px-2 py-1 text-sm" @click.stop />
@@ -317,10 +309,7 @@ function handleAddAccount() {
               </template>
               <template v-else>
                 <td class="whitespace-nowrap px-4 py-3">
-                  <span :class="['inline-flex items-center gap-1 rounded px-2 py-0.5 font-mono text-sm font-semibold', typeColors[account.account_type]]">
-                    {{ account.code }}
-                    <Lock v-if="account.is_system" class="h-3 w-3 opacity-50" />
-                  </span>
+                  <AccountCodeChip :code="account.code" :account-type="account.account_type" :is-system="account.is_system" />
                 </td>
                 <td class="px-4 py-3 text-sm text-gray-900">{{ account.name }}</td>
                 <td class="px-4 py-3 text-sm text-gray-500">{{ typeLabels[account.account_type] }}</td>
