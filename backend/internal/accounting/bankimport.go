@@ -2,8 +2,10 @@ package accounting
 
 import (
 	"context"
+	"crypto/sha256"
 	"embed"
 	"encoding/csv"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"io/fs"
@@ -12,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"gopkg.in/yaml.v3"
 )
 
@@ -206,68 +209,109 @@ func ListBankFormats() []string {
 	return names
 }
 
-// ImportRows stores parsed bank rows and runs KID auto-matching.
-func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodID string, rows []BankRow) (matched int, err error) {
+// ImportResult summarizes one bank-import call.
+type ImportResult struct {
+	Imported   int
+	SkippedDup int
+	Matched    int
+}
+
+// BankRowHash computes the dedup hash for a normalized bank row, scoped per club.
+// Recipe must stay in sync with the SQL backfill in the dedup migration.
+func BankRowHash(clubID string, row BankRow) string {
+	parts := []string{
+		row.Date.Format("2006-01-02"),
+		strconv.FormatFloat(row.Amount, 'f', 2, 64),
+		row.Reference,
+		row.Description,
+		row.Counterpart,
+	}
+	h := sha256.Sum256([]byte(strings.ToLower(strings.Join(parts, "|"))))
+	return hex.EncodeToString(h[:])
+}
+
+// ImportBankRows stores parsed bank rows (dedup by club_id + row_hash) and runs
+// KID auto-matching on newly inserted rows.
+func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodID string, rows []BankRow) (ImportResult, error) {
+	var res ImportResult
+
 	for _, row := range rows {
-		var journalEntryID *string
-		autoMatched := false
-
-		if row.KID != "" && row.Amount > 0 {
-			var invoiceID string
-			err := s.db.QueryRow(ctx,
-				`SELECT i.id FROM invoices i
-				 WHERE i.club_id = $1 AND i.kid_number = $2
-				 AND NOT EXISTS (
-				   SELECT 1 FROM bank_import_rows bir
-				   WHERE bir.kid_number = $2 AND bir.journal_entry_id IS NOT NULL
-				 )
-				 LIMIT 1`,
-				clubID, row.KID,
-			).Scan(&invoiceID)
-
-			if err == nil {
-				sourceID := importID
-				sourceTable := "bank_import"
-				entry, createErr := s.CreateJournalEntry(ctx, CreateJournalEntryInput{
-					FiscalPeriodID: periodID,
-					EntryDate:      row.Date.Format("2006-01-02"),
-					Description:    fmt.Sprintf("Innbetaling KID %s: %s", row.KID, row.Description),
-					Source:         "bank_import",
-					SourceID:       &sourceID,
-					SourceTable:    &sourceTable,
-					CreatedBy:      clubID,
-					ClubID:         clubID,
-					Lines: []CreateJournalLineInput{
-						{AccountCode: bankAccountCode, Debit: row.Amount, Credit: 0},
-						{AccountCode: receivablesAccountCode, Debit: 0, Credit: row.Amount},
-					},
-				})
-				if createErr == nil {
-					if postErr := s.PostJournalEntry(ctx, entry.ID, clubID); postErr == nil {
-						journalEntryID = &entry.ID
-						autoMatched = true
-						matched++
-					}
-				}
-			}
-		}
-
 		var balance *float64
 		if row.Balance != nil {
 			balance = row.Balance
 		}
 
-		_, err = s.db.Exec(ctx,
-			`INSERT INTO bank_import_rows (bank_import_id, row_date, description, amount, balance, reference, kid_number, counterpart, journal_entry_id, auto_matched)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-			importID, row.Date, row.Description, row.Amount, balance, row.Reference, row.KID, row.Counterpart, journalEntryID, autoMatched,
-		)
+		hash := BankRowHash(clubID, row)
+
+		var rowID string
+		err := s.db.QueryRow(ctx,
+			`INSERT INTO bank_import_rows
+			   (bank_import_id, club_id, row_date, description, amount, balance, reference, kid_number, counterpart, row_hash)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			 ON CONFLICT (club_id, row_hash) DO NOTHING
+			 RETURNING id`,
+			importID, clubID, row.Date, row.Description, row.Amount, balance,
+			row.Reference, row.KID, row.Counterpart, hash,
+		).Scan(&rowID)
+		if err == pgx.ErrNoRows {
+			res.SkippedDup++
+			continue
+		}
 		if err != nil {
-			return matched, fmt.Errorf("inserting bank row: %w", err)
+			return res, fmt.Errorf("inserting bank row: %w", err)
+		}
+		res.Imported++
+
+		if row.KID == "" || row.Amount <= 0 {
+			continue
+		}
+
+		var invoiceID string
+		err = s.db.QueryRow(ctx,
+			`SELECT i.id FROM invoices i
+			 WHERE i.club_id = $1 AND i.kid_number = $2
+			 AND NOT EXISTS (
+			   SELECT 1 FROM bank_import_rows bir
+			   WHERE bir.kid_number = $2 AND bir.journal_entry_id IS NOT NULL
+			 )
+			 LIMIT 1`,
+			clubID, row.KID,
+		).Scan(&invoiceID)
+		if err != nil {
+			continue
+		}
+
+		sourceID := importID
+		sourceTable := "bank_import"
+		entry, createErr := s.CreateJournalEntry(ctx, CreateJournalEntryInput{
+			FiscalPeriodID: periodID,
+			EntryDate:      row.Date.Format("2006-01-02"),
+			Description:    fmt.Sprintf("Innbetaling KID %s: %s", row.KID, row.Description),
+			Source:         "bank_import",
+			SourceID:       &sourceID,
+			SourceTable:    &sourceTable,
+			CreatedBy:      clubID,
+			ClubID:         clubID,
+			Lines: []CreateJournalLineInput{
+				{AccountCode: bankAccountCode, Debit: row.Amount, Credit: 0},
+				{AccountCode: receivablesAccountCode, Debit: 0, Credit: row.Amount},
+			},
+		})
+		if createErr != nil {
+			continue
+		}
+		if postErr := s.PostJournalEntry(ctx, entry.ID, clubID); postErr != nil {
+			continue
+		}
+		if _, err := s.db.Exec(ctx,
+			`UPDATE bank_import_rows SET journal_entry_id = $1, auto_matched = true WHERE id = $2`,
+			entry.ID, rowID,
+		); err == nil {
+			res.Matched++
 		}
 	}
 
-	return matched, nil
+	return res, nil
 }
 
 // MatchBankRow manually creates a journal entry for an unmatched bank import row.

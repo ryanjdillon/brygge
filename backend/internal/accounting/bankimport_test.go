@@ -1,8 +1,11 @@
 package accounting
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestParseNorwegianNumber(t *testing.T) {
@@ -244,6 +247,71 @@ func TestCSVParserSparebankNorgeDescriptionJoin(t *testing.T) {
 	}
 	if rows[0].Counterpart != "Ola Nordmann" {
 		t.Errorf("counterpart = %q, want Debitornavn fallback", rows[0].Counterpart)
+	}
+}
+
+func TestBankRowHashStableAndDistinct(t *testing.T) {
+	clubA := "00000000-0000-0000-0000-00000000000a"
+	d := time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC)
+	row := BankRow{
+		Date:        d,
+		Description: "Overførsel",
+		Amount:      1572.00,
+		Reference:   "272437290",
+		Counterpart: "Vipps Mobilepay As",
+	}
+
+	h1 := BankRowHash(clubA, row)
+	h2 := BankRowHash(clubA, row)
+	if h1 != h2 {
+		t.Errorf("hash is not stable: %q vs %q", h1, h2)
+	}
+	if len(h1) != 64 {
+		t.Errorf("expected 64-char hex hash, got %d", len(h1))
+	}
+
+	row2 := row
+	row2.Amount = 1573.00
+	if BankRowHash(clubA, row2) == h1 {
+		t.Errorf("hash collision across distinct amounts")
+	}
+
+	row3 := row
+	row3.Date = d.AddDate(0, 0, 1)
+	if BankRowHash(clubA, row3) == h1 {
+		t.Errorf("hash collision across distinct dates")
+	}
+
+	row4 := row
+	row4.Reference = "OTHER"
+	if BankRowHash(clubA, row4) == h1 {
+		t.Errorf("hash collision across distinct references")
+	}
+}
+
+func TestBankRowHashMatchesSQLBackfill(t *testing.T) {
+	// This recipe must match the SQL backfill in 000037_bank_import_dedup.up.sql.
+	// If you change either side, change both.
+	row := BankRow{
+		Date:        time.Date(2026, 3, 15, 0, 0, 0, 0, time.UTC),
+		Description: "Strømregning",
+		Amount:      -2500.00,
+		Reference:   "REF001",
+		Counterpart: "",
+	}
+	got := BankRowHash("club", row)
+
+	expectedInput := strings.ToLower(strings.Join([]string{
+		"2026-03-15",
+		"-2500.00",
+		"REF001",
+		"Strømregning",
+		"",
+	}, "|"))
+	sum := sha256.Sum256([]byte(expectedInput))
+	want := hex.EncodeToString(sum[:])
+	if got != want {
+		t.Errorf("hash recipe mismatch:\n got  %s\n want %s", got, want)
 	}
 }
 

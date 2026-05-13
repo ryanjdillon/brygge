@@ -608,24 +608,36 @@ func (h *AccountingHandler) HandleImportBankStatement(w http.ResponseWriter, r *
 		return
 	}
 
-	matched, err := h.svc.ImportBankRows(r.Context(), claims.ClubID, importID, periodID, rows)
+	result, err := h.svc.ImportBankRows(r.Context(), claims.ClubID, importID, periodID, rows)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to import bank rows")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
-	h.svc.DB().Exec(r.Context(), `UPDATE bank_imports SET matched_count = $1 WHERE id = $2`, matched, importID)
+	h.svc.DB().Exec(r.Context(), `UPDATE bank_imports SET matched_count = $1, row_count = $2 WHERE id = $3`, result.Matched, result.Imported, importID)
 
 	if h.audit != nil {
 		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,
 			"accounting.bank_imported", "bank_import", importID,
-			map[string]any{"filename": header.Filename, "format": formatName, "rows": len(rows), "matched": matched})
+			map[string]any{
+				"filename":    header.Filename,
+				"format":      formatName,
+				"rows_total":  len(rows),
+				"imported":    result.Imported,
+				"skipped_dup": result.SkippedDup,
+				"matched":     result.Matched,
+			})
 	}
 
 	JSON(w, http.StatusCreated, map[string]any{
-		"id": importID, "filename": header.Filename, "format": formatName,
-		"rows": len(rows), "matched": matched,
+		"id":          importID,
+		"filename":    header.Filename,
+		"format":      formatName,
+		"rows_total":  len(rows),
+		"imported":    result.Imported,
+		"skipped_dup": result.SkippedDup,
+		"matched":     result.Matched,
 	})
 }
 
