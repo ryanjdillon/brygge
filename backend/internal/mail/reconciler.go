@@ -61,12 +61,20 @@ func LoadSpec(path string) ([]MailboxSpec, error) {
 	return specs, nil
 }
 
-// Reconciler converges per-mailbox ACLs in Stalwart with the set of
-// users currently holding the mailbox's mapped role. Idempotent:
-// `desired_hash == applied_hash` short-circuits the Stalwart call.
+// Reconciler converges per-mailbox sharing in Stalwart with the set
+// of users currently holding the mailbox's mapped role. Idempotent:
+// `desired_hash == applied_hash` short-circuits the JMAP call.
+//
+// Mechanism: for each shared principal (e.g. `kasserar@`), the
+// reconciler finds its Inbox via JMAP `Mailbox/get` and sets the
+// folder's `shareWith` via JMAP `Mailbox/set` so every Brygge user
+// currently holding the mapped role gets `mayRead | maySetSeen |
+// mayAddItems | mayRemoveItems`. Stalwart 0.15 exposes no admin REST
+// surface for ACLs — sharing is RFC 8621 §2.5 only.
 type Reconciler struct {
 	db    *pgxpool.Pool
 	admin *AdminClient
+	jmap  *JMAPClient
 	audit *audit.Service
 	spec  []MailboxSpec
 	dry   bool
@@ -75,10 +83,11 @@ type Reconciler struct {
 
 // NewReconciler. `dryRun` mirrors the BRYGGE_RECONCILER_DRY_RUN env
 // flag and short-circuits the write path so cutovers can be staged.
-func NewReconciler(db *pgxpool.Pool, admin *AdminClient, auditSvc *audit.Service, spec []MailboxSpec, dryRun bool, log zerolog.Logger) *Reconciler {
+func NewReconciler(db *pgxpool.Pool, admin *AdminClient, jmap *JMAPClient, auditSvc *audit.Service, spec []MailboxSpec, dryRun bool, log zerolog.Logger) *Reconciler {
 	return &Reconciler{
 		db:    db,
 		admin: admin,
+		jmap:  jmap,
 		audit: auditSvc,
 		spec:  spec,
 		dry:   dryRun,
@@ -113,7 +122,7 @@ func (r *Reconciler) ReconcileAll(ctx context.Context) {
 }
 
 // Reconcile a single address. Idempotent. Returns nil even when the
-// Stalwart call was skipped due to hash match.
+// JMAP call was skipped due to hash match.
 func (r *Reconciler) Reconcile(ctx context.Context, address string) error {
 	spec, ok := r.findSpec(address)
 	if !ok {
@@ -127,7 +136,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, address string) error {
 	if err != nil {
 		return fmt.Errorf("compute desired: %w", err)
 	}
-	desiredHash := hashACLs(desired)
+	desiredHash := hashShareWith(desired)
 
 	priorApplied, _, err := r.loadState(ctx, address)
 	if err != nil {
@@ -151,14 +160,45 @@ func (r *Reconciler) Reconcile(ctx context.Context, address string) error {
 		return r.persistState(ctx, address, desiredHash, &priorApplied, nil)
 	}
 
-	if err := r.admin.SetMailboxACLs(ctx, address, desired); err != nil {
+	ownerID, inboxID, err := r.resolveInbox(ctx, address)
+	if err != nil {
+		_ = r.persistState(ctx, address, desiredHash, &priorApplied, err)
+		r.logACLFailed(ctx, address, err)
+		return fmt.Errorf("resolve inbox: %w", err)
+	}
+
+	if err := r.jmap.SetMailboxShareWith(ctx, ownerID, inboxID, desired); err != nil {
 		_ = r.persistState(ctx, address, desiredHash, &priorApplied, err)
 		r.logACLFailed(ctx, address, err)
 		return fmt.Errorf("apply: %w", err)
 	}
 
-	r.logACLChanged(ctx, address, priorApplied, desiredHash, desired)
+	r.logACLChanged(ctx, address, priorApplied, desiredHash, len(desired))
 	return r.persistState(ctx, address, desiredHash, &desiredHash, nil)
+}
+
+// resolveInbox looks up the principal id for a shared mailbox
+// address and finds its Inbox folder. Stalwart auto-creates the
+// Inbox on principal create, so we just have to enumerate the
+// account's mailboxes and pick role=="inbox".
+func (r *Reconciler) resolveInbox(ctx context.Context, address string) (ownerID, mailboxID string, err error) {
+	ownerID, err = r.admin.LookupPrincipal(ctx, address)
+	if err != nil {
+		return "", "", err
+	}
+	if ownerID == "" {
+		return "", "", fmt.Errorf("principal not found: %s", address)
+	}
+	mboxes, err := r.jmap.ListMailboxes(ctx, ownerID)
+	if err != nil {
+		return "", "", err
+	}
+	for _, m := range mboxes {
+		if strings.EqualFold(m.Role, "inbox") {
+			return ownerID, m.ID, nil
+		}
+	}
+	return "", "", fmt.Errorf("inbox folder not found on %s", address)
 }
 
 // OnRoleChanged is called by the user-roles mutation path (insert /
@@ -189,10 +229,11 @@ func (r *Reconciler) findSpec(address string) (MailboxSpec, bool) {
 	return MailboxSpec{}, false
 }
 
-// computeDesired builds the ACL set for a mailbox from the current
-// user_roles view: every active user with the mapped role gets
-// `read|append` (and `send_as` when the spec allows).
-func (r *Reconciler) computeDesired(ctx context.Context, spec MailboxSpec) ([]MailboxACL, error) {
+// computeDesired builds the shareWith set for a shared mailbox from
+// the current user_roles view: every active user with the mapped
+// role gets the standard reader/contributor rights. Keyed by the
+// receiving user's Stalwart principal id.
+func (r *Reconciler) computeDesired(ctx context.Context, spec MailboxSpec) (map[string]ShareRights, error) {
 	rows, err := r.db.Query(ctx, `
 		SELECT u.id::text, u.email
 		FROM users u
@@ -206,7 +247,7 @@ func (r *Reconciler) computeDesired(ctx context.Context, spec MailboxSpec) ([]Ma
 	}
 	defer rows.Close()
 
-	var acls []MailboxACL
+	shares := make(map[string]ShareRights)
 	for rows.Next() {
 		var uid, email string
 		if err := rows.Scan(&uid, &email); err != nil {
@@ -215,7 +256,7 @@ func (r *Reconciler) computeDesired(ctx context.Context, spec MailboxSpec) ([]Ma
 		principal, err := r.admin.LookupPrincipal(ctx, email)
 		if err != nil {
 			// Skip this user but keep going — a single missing
-			// principal shouldn't strand the rest of the ACL.
+			// principal shouldn't strand the rest of the share set.
 			r.log.Warn().Err(err).Str("email", email).Msg("principal lookup failed")
 			continue
 		}
@@ -225,28 +266,31 @@ func (r *Reconciler) computeDesired(ctx context.Context, spec MailboxSpec) ([]Ma
 			// them up once the account is provisioned.
 			continue
 		}
-		rights := []string{"read", "append"}
-		if spec.SendAs {
-			rights = append(rights, "send_as")
+		shares[principal] = ShareRights{
+			MayRead:        true,
+			MaySetSeen:     true,
+			MaySetKeywords: true,
+			MayAddItems:    true,
+			MayRemoveItems: true,
 		}
-		acls = append(acls, MailboxACL{PrincipalID: principal, Rights: rights})
+		// `send_as` is account-level delegation, not a per-mailbox
+		// right in RFC 8621. Skipped here; the compose surface
+		// (DIL-278) will need to gate it separately.
+		_ = spec.SendAs
 	}
-	return acls, rows.Err()
+	return shares, rows.Err()
 }
 
-// hashACLs produces a canonical-form fingerprint of an ACL list so
-// reconciler short-circuits work when nothing has changed since the
-// last apply.
-func hashACLs(acls []MailboxACL) string {
+// hashShareWith produces a canonical-form fingerprint of a shareWith
+// map so the reconciler short-circuits when nothing has changed.
+func hashShareWith(m map[string]ShareRights) string {
 	type entry struct {
-		ID     string   `json:"id"`
-		Rights []string `json:"rights"`
+		ID     string      `json:"id"`
+		Rights ShareRights `json:"rights"`
 	}
-	canon := make([]entry, len(acls))
-	for i, a := range acls {
-		rights := append([]string(nil), a.Rights...)
-		sort.Strings(rights)
-		canon[i] = entry{ID: a.PrincipalID, Rights: rights}
+	canon := make([]entry, 0, len(m))
+	for id, r := range m {
+		canon = append(canon, entry{ID: id, Rights: r})
 	}
 	sort.Slice(canon, func(i, j int) bool { return canon[i].ID < canon[j].ID })
 	b, _ := json.Marshal(canon)
@@ -291,7 +335,7 @@ func (r *Reconciler) persistState(ctx context.Context, address, desired string, 
 	return err
 }
 
-func (r *Reconciler) logACLChanged(ctx context.Context, address, before, after string, acls []MailboxACL) {
+func (r *Reconciler) logACLChanged(ctx context.Context, address, before, after string, memberCount int) {
 	if r.audit == nil {
 		return
 	}
@@ -302,7 +346,7 @@ func (r *Reconciler) logACLChanged(ctx context.Context, address, before, after s
 		Details: map[string]any{
 			"before_hash":  before,
 			"after_hash":   after,
-			"member_count": len(acls),
+			"member_count": memberCount,
 		},
 	})
 }

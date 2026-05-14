@@ -24,14 +24,6 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// MailboxACL is one entry in a shared mailbox's reader/contributor list.
-// Rights map to Stalwart's IMAP/JMAP ACL letters; the reconciler uses
-// the symbolic names so callers don't depend on the wire format.
-type MailboxACL struct {
-	PrincipalID string   `json:"account"`
-	Rights      []string `json:"rights"`
-}
-
 // AdminClient is a thin HTTP wrapper around Stalwart's admin REST API.
 // Authentication is HTTP Basic — Stalwart 0.15 does not expose a
 // separate bearer surface for the management endpoints we need here.
@@ -123,66 +115,6 @@ func (c *AdminClient) LookupPrincipal(ctx context.Context, email string) (string
 		return "", nil
 	}
 	return fmt.Sprint(env.Data.ID), nil
-}
-
-// GetMailboxACLs returns the current ACL list for a shared mailbox.
-// The exact endpoint shape (`/api/principal/:name/acl`) is the
-// best-known guess for Stalwart 0.15; failures here are propagated so
-// the reconciler can mark the mailbox as drifted and retry.
-func (c *AdminClient) GetMailboxACLs(ctx context.Context, address string) ([]MailboxACL, error) {
-	name := principalName(address)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
-		c.baseURL+"/api/principal/"+name+"/acl", nil)
-	if err != nil {
-		return nil, err
-	}
-	c.auth(req)
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("stalwart get acl %s: %s: %s", name, resp.Status, truncate(body, 200))
-	}
-	var env struct {
-		Data []MailboxACL `json:"data"`
-	}
-	if err := json.Unmarshal(body, &env); err != nil {
-		return nil, fmt.Errorf("stalwart get acl %s: decode: %w", name, err)
-	}
-	return env.Data, nil
-}
-
-// SetMailboxACLs replaces the full ACL list on a shared mailbox.
-// Idempotent: the reconciler hashes its desired state and skips this
-// call when applied_hash already matches.
-func (c *AdminClient) SetMailboxACLs(ctx context.Context, address string, acls []MailboxACL) error {
-	name := principalName(address)
-	payload, err := json.Marshal(struct {
-		ACLs []MailboxACL `json:"acls"`
-	}{ACLs: acls})
-	if err != nil {
-		return err
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut,
-		c.baseURL+"/api/principal/"+name+"/acl", bytes.NewReader(payload))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	c.auth(req)
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("stalwart set acl %s: %s: %s", name, resp.Status, truncate(body, 200))
-	}
-	return nil
 }
 
 // MintJMAPToken asks Stalwart for a short-TTL JMAP bearer token bound
