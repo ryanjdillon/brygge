@@ -60,6 +60,14 @@ const selectedThread = computed(() => (route.query.thread as string) || '')
 
 const totalUnread = computed(() => mailboxes.value.reduce((s, m) => s + m.unread, 0))
 
+// reportError stores a friendly i18n message in `error.value` and
+// logs the raw API error to the console for debugging. Keeps user-
+// visible text out of API-string territory.
+function reportError(key: string, e: unknown) {
+  console.error('[inbox]', key, e)
+  error.value = t(key)
+}
+
 async function loadMailboxes() {
   loadingMailboxes.value = true
   try {
@@ -68,8 +76,8 @@ async function loadMailboxes() {
     if (!selectedAddress.value && mailboxes.value[0]) {
       selectAddress(mailboxes.value[0].address)
     }
-  } catch (e: unknown) {
-    error.value = (e as Error).message
+  } catch (e) {
+    reportError('admin.inbox.error.loadMailboxes', e)
   } finally {
     loadingMailboxes.value = false
   }
@@ -88,8 +96,8 @@ async function loadThreads() {
     const url = `/api/v1/admin/inbox/${encodeURIComponent(selectedAddress.value)}/threads${q.size ? '?' + q : ''}`
     const res = await fetchApi<{ threads: ThreadRow[]; total: number }>(url)
     threads.value = res.threads ?? []
-  } catch (e: unknown) {
-    error.value = (e as Error).message
+  } catch (e) {
+    reportError('admin.inbox.error.loadThreads', e)
     threads.value = []
   } finally {
     loadingThreads.value = false
@@ -106,8 +114,8 @@ async function loadThread() {
     const url = `/api/v1/admin/inbox/${encodeURIComponent(selectedAddress.value)}/threads/${encodeURIComponent(selectedThread.value)}`
     const res = await fetchApi<{ thread_id: string; emails: EmailFull[] }>(url)
     thread.value = res
-  } catch (e: unknown) {
-    error.value = (e as Error).message
+  } catch (e) {
+    reportError('admin.inbox.error.loadThread', e)
     thread.value = null
   } finally {
     loadingThread.value = false
@@ -128,17 +136,25 @@ function selectThread(id: string) {
 async function markRead(read: boolean) {
   if (!selectedAddress.value || !selectedThread.value) return
   const url = `/api/v1/admin/inbox/${encodeURIComponent(selectedAddress.value)}/threads/${encodeURIComponent(selectedThread.value)}/mark_read?read=${read}`
-  await fetchApi(url, { method: 'POST' })
-  await loadThreads()
+  try {
+    await fetchApi(url, { method: 'POST' })
+    await loadThreads()
+  } catch (e) {
+    reportError('admin.inbox.error.markRead', e)
+  }
 }
 
 async function archiveCurrent() {
   if (!selectedAddress.value || !selectedThread.value) return
   const url = `/api/v1/admin/inbox/${encodeURIComponent(selectedAddress.value)}/threads/${encodeURIComponent(selectedThread.value)}/archive`
-  await fetchApi(url, { method: 'POST' })
-  router.replace({ query: { ...route.query, thread: undefined } })
-  await loadThreads()
-  await loadMailboxes()
+  try {
+    await fetchApi(url, { method: 'POST' })
+    router.replace({ query: { ...route.query, thread: undefined } })
+    await loadThreads()
+    await loadMailboxes()
+  } catch (e) {
+    reportError('admin.inbox.error.archive', e)
+  }
 }
 
 function renderBody(email: EmailFull): string {
@@ -203,7 +219,7 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
       <input
         v-model="search"
         type="search"
-        :placeholder="t('inbox.searchPlaceholder')"
+        :placeholder="t('admin.inbox.searchPlaceholder')"
         class="w-64 rounded border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
       />
     </header>
@@ -232,7 +248,7 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
             </button>
           </li>
         </ul>
-        <div v-else class="p-4 text-sm text-gray-500">{{ t('inbox.empty.mailboxes') }}</div>
+        <div v-else class="p-4 text-sm text-gray-500">{{ t('admin.inbox.empty.mailboxes') }}</div>
       </aside>
 
       <!-- Pane 2: thread list -->
@@ -254,12 +270,12 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
                 <span class="truncate">{{ formatFrom(row.from) }}</span>
                 <span class="ml-2 shrink-0 text-xs text-gray-500">{{ formatDate(row.received_at) }}</span>
               </div>
-              <div class="truncate text-sm">{{ row.subject || t('inbox.noSubject') }}</div>
+              <div class="truncate text-sm">{{ row.subject || t('admin.inbox.noSubject') }}</div>
               <div class="truncate text-xs text-gray-500">{{ row.preview }}</div>
             </button>
           </li>
         </ul>
-        <div v-else class="p-4 text-sm text-gray-500">{{ t('inbox.empty.threads') }}</div>
+        <div v-else class="p-4 text-sm text-gray-500">{{ t('admin.inbox.empty.threads') }}</div>
       </section>
 
       <!-- Pane 3: reader -->
@@ -267,11 +283,11 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
         <div v-if="loadingThread" class="p-6 text-sm text-gray-500">{{ t('common.loading') }}</div>
         <div v-else-if="!thread" class="flex h-full items-center justify-center text-sm text-gray-400">
           <Mail class="mr-2 h-5 w-5" />
-          {{ t('inbox.empty.reader') }}
+          {{ t('admin.inbox.empty.reader') }}
         </div>
         <article v-else>
           <header class="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-white px-6 py-3">
-            <h2 class="text-base font-semibold">{{ thread.emails[0]?.subject || t('inbox.noSubject') }}</h2>
+            <h2 class="text-base font-semibold">{{ thread.emails[0]?.subject || t('admin.inbox.noSubject') }}</h2>
             <div class="flex items-center gap-2">
               <button
                 type="button"
@@ -279,21 +295,21 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
                 @click="showImages = !showImages"
               >
                 <component :is="showImages ? ImageIcon : ImageOff" class="h-4 w-4" />
-                {{ showImages ? t('inbox.imagesOn') : t('inbox.imagesOff') }}
+                {{ showImages ? t('admin.inbox.imagesOn') : t('admin.inbox.imagesOff') }}
               </button>
               <button
                 type="button"
                 class="inline-flex items-center gap-1 rounded border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50"
                 @click="markRead(false)"
               >
-                <Check class="h-4 w-4" /> {{ t('inbox.markUnread') }}
+                <Check class="h-4 w-4" /> {{ t('admin.inbox.markUnread') }}
               </button>
               <button
                 type="button"
                 class="inline-flex items-center gap-1 rounded border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50"
                 @click="archiveCurrent"
               >
-                <Archive class="h-4 w-4" /> {{ t('inbox.archive') }}
+                <Archive class="h-4 w-4" /> {{ t('admin.inbox.archive') }}
               </button>
             </div>
           </header>

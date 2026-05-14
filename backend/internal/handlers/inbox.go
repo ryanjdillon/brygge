@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -308,8 +309,15 @@ func (h *InboxHandler) HandleProxyImage(w http.ResponseWriter, r *http.Request) 
 }
 
 // authorize resolves :address, verifies the caller has the mapped role.
+// chi v5 returns the raw URL segment; the `@` in email addresses is
+// percent-encoded by the SPA (kasserar%40…), so we decode before
+// comparing against the spec.
 func (h *InboxHandler) authorize(w http.ResponseWriter, r *http.Request) (mail.MailboxSpec, bool) {
-	address := chi.URLParam(r, "address")
+	raw := chi.URLParam(r, "address")
+	address, derr := url.PathUnescape(raw)
+	if derr != nil {
+		address = raw
+	}
 	for _, s := range h.spec {
 		if !strings.EqualFold(s.Address, address) {
 			continue

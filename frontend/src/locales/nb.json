@@ -843,6 +843,13 @@
         "mailboxes": "Du har ikkje tilgang til nokon delt innboks.",
         "threads": "Ingen meldingar.",
         "reader": "Vel ei melding"
+      },
+      "error": {
+        "loadMailboxes": "Klarte ikkje laste innboksar.",
+        "loadThreads": "Klarte ikkje laste meldingar.",
+        "loadThread": "Klarte ikkje opne meldinga.",
+        "markRead": "Klarte ikkje endre lesestatus.",
+        "archive": "Klarte ikkje arkivere tråden."
       }
     },
     "communication": {

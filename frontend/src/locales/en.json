@@ -847,6 +847,13 @@
         "mailboxes": "You don't have access to any shared mailbox.",
         "threads": "No messages.",
         "reader": "Select a message"
+      },
+      "error": {
+        "loadMailboxes": "Couldn't load mailboxes.",
+        "loadThreads": "Couldn't load messages.",
+        "loadThread": "Couldn't open this message.",
+        "markRead": "Couldn't update read state.",
+        "archive": "Couldn't archive this thread."
       }
     },
     "communication": {
