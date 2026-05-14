@@ -1236,7 +1236,13 @@
         "tooltipDescription": "Hva dette bilaget gjelder",
         "tooltipStatus": "Kladd = ikke ferdigstilt, Postert = ferdigstilt, Annullert = reversert",
         "tooltipSource": "Hvordan bilaget ble opprettet (manuelt, synkronisert, bankimport)",
-        "tooltipAccounts": "Hvilke kontoer som er berørt"
+        "tooltipAccounts": "Hvilke kontoer som er berørt",
+        "rebuildInvoiceBilags": "Gjenoppbygg fakturabilag",
+        "rebuildInvoiceBilagsTooltip": "Slett eksisterende fakturabilag for valgt periode og opprett dem på nytt med oppdatert kontosplitt per varekategori.",
+        "rebuildInvoiceBilagsTitle": "Gjenoppbygg fakturabilag for {year}?",
+        "rebuildInvoiceBilagsBody": "Sletter alle eksisterende fakturabilag (source = invoice_sync) for regnskapsperioden {year}, og oppretter dem på nytt med oppdatert kontosplitt per varekategori. Andre bilag (KID-treff, Vipps-avstemming, betalinger) berøres ikke. Operasjonen kan ikke angres uten å kjøre den på nytt.",
+        "rebuildInvoiceBilagsConfirm": "Slett og gjenoppbygg",
+        "rebuildInvoiceBilagsDone": "Gjenoppbygd: {deleted} slettet, {resynced} opprettet, {skipped} hoppet over."
       },
       "journalForm": {
         "title": "Nytt bilag",
