@@ -57,8 +57,9 @@ type Config struct {
 	StalwartAdminUser     string
 	StalwartAdminPassword string
 	StalwartAdminToken    string // pre-encoded "Basic …" (alternative to user+pass)
-	BoardMailboxesPath    string
-	ReconcilerDryRun      bool
+	BoardMailboxesPath           string
+	StalwartMailboxPasswordsPath string
+	ReconcilerDryRun             bool
 
 	// Database pool
 	DBMaxConns          int32
@@ -128,8 +129,9 @@ func Load() Config {
 		StalwartAdminUser:     envStr("STALWART_ADMIN_USER", "admin"),
 		StalwartAdminPassword: envStr("STALWART_ADMIN_PASSWORD", ""),
 		StalwartAdminToken:    envStr("STALWART_ADMIN_TOKEN", ""),
-		BoardMailboxesPath:    envStr("BRYGGE_MAILBOXES_PATH", ""),
-		ReconcilerDryRun:      envBool("BRYGGE_RECONCILER_DRY_RUN", false),
+		BoardMailboxesPath:           envStr("BRYGGE_MAILBOXES_PATH", ""),
+		StalwartMailboxPasswordsPath: envStr("STALWART_MAILBOX_PASSWORDS_PATH", ""),
+		ReconcilerDryRun:             envBool("BRYGGE_RECONCILER_DRY_RUN", false),
 
 		Features: Features{
 			Bookings:       envBool("FEATURE_BOOKINGS", true),

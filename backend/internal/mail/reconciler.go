@@ -10,6 +10,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -72,27 +73,61 @@ func LoadSpec(path string) ([]MailboxSpec, error) {
 // mayAddItems | mayRemoveItems`. Stalwart 0.15 exposes no admin REST
 // surface for ACLs — sharing is RFC 8621 §2.5 only.
 type Reconciler struct {
-	db    *pgxpool.Pool
-	admin *AdminClient
-	jmap  *JMAPClient
-	audit *audit.Service
-	spec  []MailboxSpec
-	dry   bool
-	log   zerolog.Logger
+	db        *pgxpool.Pool
+	adminJMAP *JMAPClient // admin's own client, used only for Principal/get
+	jmapFact  *JMAPFactory
+	passwords PrincipalPasswords
+	audit     *audit.Service
+	spec      []MailboxSpec
+	dry       bool
+	log       zerolog.Logger
+
+	indexCache  sync.Mutex
+	cachedIndex map[string]string // shared between Reconcile() calls during a ReconcileAll loop
 }
 
 // NewReconciler. `dryRun` mirrors the BRYGGE_RECONCILER_DRY_RUN env
 // flag and short-circuits the write path so cutovers can be staged.
-func NewReconciler(db *pgxpool.Pool, admin *AdminClient, jmap *JMAPClient, auditSvc *audit.Service, spec []MailboxSpec, dryRun bool, log zerolog.Logger) *Reconciler {
+// `passwords` maps each shared principal's address to its service
+// password (set by stalwart-mailbox-config.service); an entry must
+// exist for every spec address with `type=shared` before the write
+// path can run.
+func NewReconciler(db *pgxpool.Pool, adminJMAP *JMAPClient, jmapFact *JMAPFactory, passwords PrincipalPasswords, auditSvc *audit.Service, spec []MailboxSpec, dryRun bool, log zerolog.Logger) *Reconciler {
 	return &Reconciler{
-		db:    db,
-		admin: admin,
-		jmap:  jmap,
-		audit: auditSvc,
-		spec:  spec,
-		dry:   dryRun,
-		log:   log.With().Str("component", "inbox-reconciler").Logger(),
+		db:        db,
+		adminJMAP: adminJMAP,
+		jmapFact:  jmapFact,
+		passwords: passwords,
+		audit:     auditSvc,
+		spec:      spec,
+		dry:       dryRun,
+		log:       log.With().Str("component", "inbox-reconciler").Logger(),
 	}
+}
+
+// principalIndex builds {email: jmap_id} from admin's JMAP
+// Principal/get. Cheap (single call returning everyone). Cached
+// per-ReconcileAll cycle in `index`; pass nil to force a fresh fetch.
+func (r *Reconciler) principalIndex(ctx context.Context) (map[string]string, error) {
+	adminAccounts, err := r.adminJMAP.SessionAccounts(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("admin session: %w", err)
+	}
+	if len(adminAccounts) == 0 {
+		return nil, errors.New("admin JMAP session has no accounts")
+	}
+	principals, err := r.adminJMAP.ListPrincipals(ctx, adminAccounts[0])
+	if err != nil {
+		return nil, fmt.Errorf("list principals: %w", err)
+	}
+	idx := make(map[string]string, len(principals))
+	for _, p := range principals {
+		if p.Email == "" {
+			continue
+		}
+		idx[strings.ToLower(p.Email)] = p.ID
+	}
+	return idx, nil
 }
 
 // HasMailboxes reports whether anything is configured. Callers should
@@ -110,7 +145,25 @@ func (r *Reconciler) HasMailboxes() bool {
 // ReconcileAll iterates every managed shared mailbox. Errors on
 // individual mailboxes are logged and recorded in mailbox_sync_state
 // but do not abort the loop — partial drift recovery is the goal.
+//
+// The principal index (email→jmap_id) is fetched once and cached on
+// the receiver for the duration of this call so per-mailbox
+// Reconcile() doesn't repeat the call.
 func (r *Reconciler) ReconcileAll(ctx context.Context) {
+	idx, err := r.principalIndex(ctx)
+	if err != nil {
+		r.log.Warn().Err(err).Msg("principal index fetch failed; per-mailbox calls will refetch")
+		idx = nil
+	}
+	r.indexCache.Lock()
+	r.cachedIndex = idx
+	r.indexCache.Unlock()
+	defer func() {
+		r.indexCache.Lock()
+		r.cachedIndex = nil
+		r.indexCache.Unlock()
+	}()
+
 	for _, m := range r.spec {
 		if !m.managed() || !strings.EqualFold(m.Type, "shared") {
 			continue
@@ -119,6 +172,19 @@ func (r *Reconciler) ReconcileAll(ctx context.Context) {
 			r.log.Warn().Err(err).Str("address", m.Address).Msg("reconcile failed")
 		}
 	}
+}
+
+// currentIndex returns the cached principal index for the duration
+// of a ReconcileAll loop, or fetches a fresh one for a stand-alone
+// Reconcile() call.
+func (r *Reconciler) currentIndex(ctx context.Context) (map[string]string, error) {
+	r.indexCache.Lock()
+	idx := r.cachedIndex
+	r.indexCache.Unlock()
+	if idx != nil {
+		return idx, nil
+	}
+	return r.principalIndex(ctx)
 }
 
 // Reconcile a single address. Idempotent. Returns nil even when the
@@ -132,7 +198,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, address string) error {
 		return nil
 	}
 
-	desired, err := r.computeDesired(ctx, spec)
+	idx, err := r.currentIndex(ctx)
+	if err != nil {
+		return fmt.Errorf("principal index: %w", err)
+	}
+
+	desired, err := r.computeDesired(ctx, spec, idx)
 	if err != nil {
 		return fmt.Errorf("compute desired: %w", err)
 	}
@@ -160,14 +231,23 @@ func (r *Reconciler) Reconcile(ctx context.Context, address string) error {
 		return r.persistState(ctx, address, desiredHash, &priorApplied, nil)
 	}
 
-	ownerID, inboxID, err := r.resolveInbox(ctx, address)
+	pw := r.passwords.Get(address)
+	if pw == "" {
+		err := fmt.Errorf("no service password for %s — has stalwart-mailbox-config run?", address)
+		_ = r.persistState(ctx, address, desiredHash, &priorApplied, err)
+		r.logACLFailed(ctx, address, err)
+		return err
+	}
+	jmap := r.jmapFact.AsPrincipal(principalName(address), pw)
+
+	ownerID, inboxID, err := r.resolveInbox(ctx, jmap, address)
 	if err != nil {
 		_ = r.persistState(ctx, address, desiredHash, &priorApplied, err)
 		r.logACLFailed(ctx, address, err)
 		return fmt.Errorf("resolve inbox: %w", err)
 	}
 
-	if err := r.jmap.SetMailboxShareWith(ctx, ownerID, inboxID, desired); err != nil {
+	if err := jmap.SetMailboxShareWith(ctx, ownerID, inboxID, desired); err != nil {
 		_ = r.persistState(ctx, address, desiredHash, &priorApplied, err)
 		r.logACLFailed(ctx, address, err)
 		return fmt.Errorf("apply: %w", err)
@@ -177,19 +257,21 @@ func (r *Reconciler) Reconcile(ctx context.Context, address string) error {
 	return r.persistState(ctx, address, desiredHash, &desiredHash, nil)
 }
 
-// resolveInbox looks up the principal id for a shared mailbox
-// address and finds its Inbox folder. Stalwart auto-creates the
-// Inbox on principal create, so we just have to enumerate the
-// account's mailboxes and pick role=="inbox".
-func (r *Reconciler) resolveInbox(ctx context.Context, address string) (ownerID, mailboxID string, err error) {
-	ownerID, err = r.admin.LookupPrincipal(ctx, address)
+// resolveInbox finds the principal's account id (from JMAP's session
+// — Stalwart's JMAP IDs are alphabetic and differ from the admin REST
+// API's numeric ids) and the Inbox folder's mailbox id. Both are
+// scoped to the principal we're authenticated as.
+func (r *Reconciler) resolveInbox(ctx context.Context, jmap *JMAPClient, address string) (ownerID, mailboxID string, err error) {
+	accounts, err := jmap.SessionAccounts(ctx)
 	if err != nil {
-		return "", "", err
+		return "", "", fmt.Errorf("session: %w", err)
 	}
-	if ownerID == "" {
-		return "", "", fmt.Errorf("principal not found: %s", address)
+	if len(accounts) == 0 {
+		return "", "", fmt.Errorf("no JMAP account for %s", address)
 	}
-	mboxes, err := r.jmap.ListMailboxes(ctx, ownerID)
+	// A shared principal sees only its own account in its session.
+	ownerID = accounts[0]
+	mboxes, err := jmap.ListMailboxes(ctx, ownerID)
 	if err != nil {
 		return "", "", err
 	}
@@ -232,8 +314,9 @@ func (r *Reconciler) findSpec(address string) (MailboxSpec, bool) {
 // computeDesired builds the shareWith set for a shared mailbox from
 // the current user_roles view: every active user with the mapped
 // role gets the standard reader/contributor rights. Keyed by the
-// receiving user's Stalwart principal id.
-func (r *Reconciler) computeDesired(ctx context.Context, spec MailboxSpec) (map[string]ShareRights, error) {
+// receiving user's Stalwart JMAP account ID (resolved via the
+// email→jmap_id index built from admin's Principal/get).
+func (r *Reconciler) computeDesired(ctx context.Context, spec MailboxSpec, idx map[string]string) (map[string]ShareRights, error) {
 	rows, err := r.db.Query(ctx, `
 		SELECT u.id::text, u.email
 		FROM users u
@@ -253,20 +336,15 @@ func (r *Reconciler) computeDesired(ctx context.Context, spec MailboxSpec) (map[
 		if err := rows.Scan(&uid, &email); err != nil {
 			return nil, err
 		}
-		principal, err := r.admin.LookupPrincipal(ctx, email)
-		if err != nil {
-			// Skip this user but keep going — a single missing
-			// principal shouldn't strand the rest of the share set.
-			r.log.Warn().Err(err).Str("email", email).Msg("principal lookup failed")
+		jmapID, ok := idx[strings.ToLower(email)]
+		if !ok || jmapID == "" {
+			// User has the role but no Stalwart account yet —
+			// common during onboarding before per-user Stalwart
+			// provisioning lands. Skip silently; reconciler will
+			// pick them up once the account exists.
 			continue
 		}
-		if principal == "" {
-			// User has the role but no Stalwart account yet.
-			// Common during onboarding; reconciler will pick
-			// them up once the account is provisioned.
-			continue
-		}
-		shares[principal] = ShareRights{
+		shares[jmapID] = ShareRights{
 			MayReadItems:   true,
 			MaySetSeen:     true,
 			MaySetKeywords: true,
