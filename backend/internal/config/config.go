@@ -51,6 +51,15 @@ type Config struct {
 	EmailReplyTo string
 	AnthropicAPIKey   string
 
+	// Stalwart admin (DIL-275/276). Empty values disable the shared-inbox
+	// reconciler; the rest of the app keeps working unaffected.
+	StalwartAdminURL      string
+	StalwartAdminUser     string
+	StalwartAdminPassword string
+	StalwartAdminToken    string // pre-encoded "Basic …" (alternative to user+pass)
+	BoardMailboxesPath    string
+	ReconcilerDryRun      bool
+
 	// Database pool
 	DBMaxConns          int32
 	DBMinConns          int32
@@ -114,6 +123,13 @@ func Load() Config {
 		EmailFrom:    envStr("EMAIL_FROM", ""),
 		EmailReplyTo: envStr("EMAIL_REPLY_TO", ""),
 		AnthropicAPIKey:   envStr("ANTHROPIC_API_KEY", ""),
+
+		StalwartAdminURL:      envStr("STALWART_ADMIN_URL", ""),
+		StalwartAdminUser:     envStr("STALWART_ADMIN_USER", "admin"),
+		StalwartAdminPassword: envStr("STALWART_ADMIN_PASSWORD", ""),
+		StalwartAdminToken:    envStr("STALWART_ADMIN_TOKEN", ""),
+		BoardMailboxesPath:    envStr("BRYGGE_MAILBOXES_PATH", ""),
+		ReconcilerDryRun:      envBool("BRYGGE_RECONCILER_DRY_RUN", false),
 
 		Features: Features{
 			Bookings:       envBool("FEATURE_BOOKINGS", true),

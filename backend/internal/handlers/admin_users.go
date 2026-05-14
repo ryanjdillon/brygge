@@ -36,6 +36,12 @@ type AdminUsersHandler struct {
 	db     *pgxpool.Pool
 	config *config.Config
 	log    zerolog.Logger
+
+	// RoleChangeHook, when set, is invoked (in a detached goroutine
+	// by the callee) whenever a user's role set is mutated. Wired in
+	// main.go to the shared-inbox ACL reconciler (DIL-275/276) — nil
+	// when the feature isn't configured.
+	RoleChangeHook func(userID string)
 }
 
 func NewAdminUsersHandler(db *pgxpool.Pool, cfg *config.Config, log zerolog.Logger) *AdminUsersHandler {
@@ -671,6 +677,10 @@ func (h *AdminUsersHandler) HandleUpdateUserRoles(w http.ResponseWriter, r *http
 		Strs("new_roles", req.Roles).
 		Msg("user roles updated")
 
+	if h.RoleChangeHook != nil {
+		h.RoleChangeHook(userID)
+	}
+
 	JSON(w, http.StatusOK, map[string]any{
 		"user_id": userID,
 		"roles":   req.Roles,
@@ -938,6 +948,9 @@ func (h *AdminUsersHandler) createUser(ctx context.Context, clubID, actorID stri
 
 	if err := tx.Commit(ctx); err != nil {
 		return "", fmt.Errorf("commit tx: %w", err)
+	}
+	if h.RoleChangeHook != nil && len(req.Roles) > 0 {
+		h.RoleChangeHook(id)
 	}
 	return id, nil
 }
