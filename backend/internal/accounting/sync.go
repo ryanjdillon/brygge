@@ -8,9 +8,17 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// paymentTypeAccountMap maps Brygge payment_type values to kontoplan account codes.
+// paymentTypeAccountMap maps Brygge payment_type values AND price-item
+// category strings to kontoplan account codes. The two vocabularies
+// overlap on `harbor_membership` and `slip_fee` but diverge elsewhere:
+// `payment_type` (enum on payments.type) uses `dues` for annual
+// membership, while `price_items.category` (the text used at invoice
+// time and now denormalized onto invoice_lines.category) uses
+// `membership`. Both keys point at the same account so a lookup with
+// either vocabulary resolves correctly.
 var paymentTypeAccountMap = map[string]string{
-	"dues":              "3100", // Medlemskontingent
+	"dues":              "3100", // Medlemskontingent (payment_type)
+	"membership":        "3100", // Medlemskontingent (price_items.category)
 	"harbor_membership": "3110", // Havneavgift
 	"slip_fee":          "3120", // Plassleie
 	"booking":           "3200", // Gjestehavninntekter

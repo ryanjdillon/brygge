@@ -253,6 +253,11 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 		     -- issue_date inside the active period's range as a fallback so
 		     -- historical/legacy invoices without fiscal_period_id still
 		     -- count.
+		     -- Membership chip covers both the annual dues ('dues') and the
+		     -- one-time harbor-equity payment ('harbor_membership') since
+		     -- the column is labelled "Medlemskap" / "Membership". Lines
+		     -- written before migration 000043 may have il.category NULL,
+		     -- so fall back to price_items.category via LEFT JOIN.
 		     SELECT CASE
 		              WHEN bool_or(i.payment_id IS NOT NULL) THEN 'paid'
 		              WHEN bool_or(i.sent_at IS NOT NULL) THEN 'sent'
@@ -260,11 +265,11 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 		            END AS state
 		       FROM invoice_lines il
 		       JOIN invoices i ON i.id = il.invoice_id
-		       JOIN price_items pi ON pi.id = il.price_item_id
+		       LEFT JOIN price_items pi ON pi.id = il.price_item_id
 		      WHERE i.user_id = u.id
 		        AND i.club_id = u.club_id
 		        AND i.status <> 'voided'
-		        AND pi.category = 'harbor_membership'
+		        AND COALESCE(il.category, pi.category) IN ('membership', 'harbor_membership')
 		        AND (
 		              i.fiscal_period_id = active_period.id
 		           OR (i.fiscal_period_id IS NULL
@@ -279,11 +284,11 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 		            END AS state
 		       FROM invoice_lines il
 		       JOIN invoices i ON i.id = il.invoice_id
-		       JOIN price_items pi ON pi.id = il.price_item_id
+		       LEFT JOIN price_items pi ON pi.id = il.price_item_id
 		      WHERE i.user_id = u.id
 		        AND i.club_id = u.club_id
 		        AND i.status <> 'voided'
-		        AND pi.category = 'slip_fee'
+		        AND COALESCE(il.category, pi.category) = 'slip_fee'
 		        AND (
 		              i.fiscal_period_id = active_period.id
 		           OR (i.fiscal_period_id IS NULL
