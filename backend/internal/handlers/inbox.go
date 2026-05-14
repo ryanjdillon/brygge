@@ -399,11 +399,13 @@ func (h *InboxHandler) HandleSend(w http.ResponseWriter, r *http.Request) {
 
 	emailID, messageID, err := jmap.SendEmail(ctx, accountID, draftsID, sentID, sendReq)
 	if err != nil {
+		// Stalwart-side error detail stays in journald (Warn line
+		// just below). The 502 response carries only a generic
+		// message — the user can't act on JMAP internals, and the
+		// browser console log + server log together give us the
+		// diagnostic chain when needed.
 		h.log.Warn().Err(err).Str("address", spec.Address).Msg("send failed")
-		// Propagate the JMAP error to the SPA so the composer's
-		// red pill shows the underlying cause (the route is TOTP-
-		// gated and admin-only, so this isn't a privacy concern).
-		Error(w, http.StatusBadGateway, "send failed: "+err.Error())
+		Error(w, http.StatusBadGateway, "send failed")
 		return
 	}
 

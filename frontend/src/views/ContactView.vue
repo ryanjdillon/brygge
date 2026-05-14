@@ -72,6 +72,17 @@ async function handleSubmit() {
   <div class="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
     <h1 class="text-3xl font-bold text-slate-900">{{ t('contact.title') }}</h1>
 
+    <!-- Club logo, presented under the title. ~30% bigger than the
+         old sidebar render (180px → 234px) since this is the
+         primary identity surface for visitors. -->
+    <img
+      v-if="club.hasLogo"
+      src="/api/v1/club/logo"
+      :alt="club.name || 'Brygge'"
+      class="mt-6 block"
+      style="width: 234px; height: auto;"
+    />
+
     <div class="mt-10 grid gap-10 lg:grid-cols-2">
       <div class="space-y-6">
         <div v-if="club.address" class="flex items-start gap-3">
