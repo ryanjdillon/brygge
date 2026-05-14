@@ -610,24 +610,23 @@ func (c *JMAPClient) SendEmail(ctx context.Context, accountID, draftsID, sentID 
 		htmlBody = []map[string]any{{"partId": "html", "type": "text/html"}}
 	}
 
-	headers := []map[string]any{
-		{"name": "X-Brygge-Actor", "value": req.ActorID},
+	// JMAP doesn't use a generic `headers` array on Email/set. Per
+	// RFC 8621 §4.1.2.3, well-known headers have their own typed
+	// properties (replyTo, inReplyTo, references); arbitrary headers
+	// are written via the property-name patch syntax
+	// `header:<Name>:asText`. Stalwart 0.15 returns
+	// invalidProperties if you POST a `headers` array on create.
+	email := map[string]any{
+		"mailboxIds":                map[string]bool{draftsID: true},
+		"from":                      from,
+		"to":                        to,
+		"subject":                   req.Subject,
+		"textBody":                  textBody,
+		"bodyValues":                bodyValues,
+		"header:X-Brygge-Actor:asText": req.ActorID,
 	}
 	if req.ReplyTo != "" {
-		headers = append(headers, map[string]any{
-			"name":  "Reply-To",
-			"value": req.ReplyTo,
-		})
-	}
-
-	email := map[string]any{
-		"mailboxIds": map[string]bool{draftsID: true},
-		"from":       from,
-		"to":         to,
-		"subject":    req.Subject,
-		"textBody":   textBody,
-		"bodyValues": bodyValues,
-		"headers":    headers,
+		email["replyTo"] = []map[string]any{{"email": req.ReplyTo}}
 	}
 	if cc != nil {
 		email["cc"] = cc
