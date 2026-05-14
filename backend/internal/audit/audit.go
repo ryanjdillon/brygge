@@ -54,6 +54,11 @@ const (
 	ActionInboxACLChanged    = "inbox.acl_changed"
 	ActionInboxACLSyncFailed = "inbox.acl_sync_failed"
 
+	// Shared-inbox read path (DIL-277)
+	ActionInboxThreadViewed   = "inbox.thread_viewed"
+	ActionInboxThreadArchived = "inbox.thread_archived"
+	ActionInboxMarkRead       = "inbox.mark_read"
+
 	// GDPR operations
 	ActionGDPRExportRequested       = "gdpr.export_requested"
 	ActionGDPRDeletionRequested     = "gdpr.deletion_requested"
