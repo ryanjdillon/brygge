@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { Inbox, Mail, Archive, Check, ImageOff, Image as ImageIcon, AlertTriangle } from 'lucide-vue-next'
+import { Inbox, Mail, Archive, Check, ImageOff, Image as ImageIcon, AlertTriangle, Reply, Send, X } from 'lucide-vue-next'
 import { useApi } from '@/composables/useApi'
 import { sanitizeEmail } from '@/lib/sanitizeHtml'
 
@@ -34,6 +34,7 @@ interface EmailFull {
   preview: string
   receivedAt: string
   hasAttachment: boolean
+  messageId?: string[]
   htmlBody: { partId: string; type: string }[]
   textBody: { partId: string; type: string }[]
   bodyValues: Record<string, { value: string }>
@@ -141,6 +142,69 @@ async function markRead(read: boolean) {
     await loadThreads()
   } catch (e) {
     reportError('admin.inbox.error.markRead', e)
+  }
+}
+
+// --- Reply composer (DIL-278) ---------------------------------------------
+
+const composing = ref(false)
+const replyTo = ref('')
+const replyCc = ref('')
+const replySubject = ref('')
+const replyBody = ref('')
+const sending = ref(false)
+
+function openReply() {
+  if (!thread.value || thread.value.emails.length === 0) return
+  const latest = thread.value.emails[thread.value.emails.length - 1]
+  // Default recipient: whoever sent the latest message.
+  replyTo.value = (latest.from?.[0]?.email) ?? ''
+  replyCc.value = ''
+  const subj = latest.subject || ''
+  replySubject.value = /^re:\s/i.test(subj) ? subj : (subj ? `Re: ${subj}` : '')
+  replyBody.value = ''
+  composing.value = true
+}
+
+function cancelReply() {
+  composing.value = false
+}
+
+function parseAddresses(raw: string): { email: string }[] {
+  return raw
+    .split(/[,;\n]/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((email) => ({ email }))
+}
+
+async function submitReply() {
+  if (!selectedAddress.value || !thread.value || sending.value) return
+  const to = parseAddresses(replyTo.value)
+  if (to.length === 0) {
+    error.value = t('admin.inbox.error.toRequired')
+    return
+  }
+  sending.value = true
+  try {
+    const latest = thread.value.emails[thread.value.emails.length - 1]
+    const inReplyTo = latest.messageId?.[0] ?? ''
+    const payload = {
+      to,
+      cc: parseAddresses(replyCc.value),
+      subject: replySubject.value,
+      body_text: replyBody.value,
+      in_reply_to: inReplyTo,
+    }
+    const url = `/api/v1/admin/inbox/${encodeURIComponent(selectedAddress.value)}/send`
+    await fetchApi(url, { method: 'POST', body: JSON.stringify(payload) })
+    composing.value = false
+    await loadThreads()
+    await loadThread()
+  } catch (e) {
+    reportError('admin.inbox.error.send', e)
+  } finally {
+    sending.value = false
   }
 }
 
@@ -291,6 +355,13 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
             <div class="flex items-center gap-2">
               <button
                 type="button"
+                class="inline-flex items-center gap-1 rounded border border-blue-300 bg-blue-50 px-2 py-1 text-xs text-blue-700 hover:bg-blue-100"
+                @click="openReply"
+              >
+                <Reply class="h-4 w-4" /> {{ t('admin.inbox.reply.button') }}
+              </button>
+              <button
+                type="button"
                 class="inline-flex items-center gap-1 rounded border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50"
                 @click="showImages = !showImages"
               >
@@ -313,6 +384,58 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
               </button>
             </div>
           </header>
+          <!-- Reply composer (DIL-278). Inline panel; submitting
+               sends as the shared principal with X-Brygge-Actor
+               header set to the logged-in user. POST is gated by
+               RequireFreshTOTP on the backend. -->
+          <section v-if="composing" class="border-b border-gray-200 bg-gray-50 px-6 py-4">
+            <header class="mb-2 flex items-center justify-between">
+              <h3 class="text-sm font-semibold">{{ t('admin.inbox.reply.heading') }}</h3>
+              <button type="button" class="text-gray-500 hover:text-gray-700" @click="cancelReply" :aria-label="t('admin.inbox.reply.cancel')">
+                <X class="h-4 w-4" />
+              </button>
+            </header>
+            <div class="space-y-2 text-sm">
+              <label class="flex items-center gap-2">
+                <span class="w-16 text-xs text-gray-600">{{ t('admin.inbox.reply.to') }}</span>
+                <input v-model="replyTo" type="text" class="flex-1 rounded border border-gray-300 px-2 py-1" />
+              </label>
+              <label class="flex items-center gap-2">
+                <span class="w-16 text-xs text-gray-600">{{ t('admin.inbox.reply.cc') }}</span>
+                <input v-model="replyCc" type="text" class="flex-1 rounded border border-gray-300 px-2 py-1" />
+              </label>
+              <label class="flex items-center gap-2">
+                <span class="w-16 text-xs text-gray-600">{{ t('admin.inbox.reply.subject') }}</span>
+                <input v-model="replySubject" type="text" class="flex-1 rounded border border-gray-300 px-2 py-1" />
+              </label>
+              <textarea
+                v-model="replyBody"
+                rows="6"
+                class="w-full rounded border border-gray-300 px-2 py-1 font-mono text-sm"
+                :placeholder="t('admin.inbox.reply.bodyPlaceholder')"
+              />
+              <div class="flex justify-end gap-2">
+                <button
+                  type="button"
+                  class="rounded border border-gray-300 px-3 py-1 text-xs hover:bg-gray-100"
+                  @click="cancelReply"
+                  :disabled="sending"
+                >
+                  {{ t('admin.inbox.reply.cancel') }}
+                </button>
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-1 rounded bg-blue-600 px-3 py-1 text-xs text-white hover:bg-blue-700 disabled:opacity-50"
+                  :disabled="sending"
+                  @click="submitReply"
+                >
+                  <Send class="h-4 w-4" />
+                  {{ sending ? t('admin.inbox.reply.sending') : t('admin.inbox.reply.send') }}
+                </button>
+              </div>
+            </div>
+          </section>
+
           <div class="space-y-4 px-6 py-4">
             <section v-for="email in thread.emails" :key="email.id" class="rounded border border-gray-200 p-4">
               <header class="mb-2 flex items-center justify-between text-sm text-gray-600">

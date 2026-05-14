@@ -853,7 +853,20 @@
         "loadThreads": "Couldn't load messages.",
         "loadThread": "Couldn't open this message.",
         "markRead": "Couldn't update read state.",
-        "archive": "Couldn't archive this thread."
+        "archive": "Couldn't archive this thread.",
+        "send": "Couldn't send the message.",
+        "toRequired": "Add at least one recipient before sending."
+      },
+      "reply": {
+        "button": "Reply",
+        "heading": "Reply",
+        "to": "To",
+        "cc": "Cc",
+        "subject": "Subject",
+        "bodyPlaceholder": "Write your reply…",
+        "send": "Send",
+        "sending": "Sending…",
+        "cancel": "Cancel"
       }
     },
     "communication": {
