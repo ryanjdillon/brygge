@@ -5,6 +5,11 @@ import { useI18n } from 'vue-i18n'
 import { ArrowLeft, Save } from 'lucide-vue-next'
 import { useTotpGateStore } from '@/stores/totpGate'
 import { useAuthStore } from '@/stores/auth'
+import FileInput from '@/components/ui/form/FileInput.vue'
+import FormField from '@/components/ui/form/FormField.vue'
+import Input from '@/components/ui/form/Input.vue'
+import NumberInput from '@/components/ui/form/NumberInput.vue'
+import Textarea from '@/components/ui/form/Textarea.vue'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -15,8 +20,8 @@ const orgNumber = ref('')
 const address = ref('')
 const phone = ref('')
 const vhfChannel = ref('')
-const latitude = ref<string>('')
-const longitude = ref<string>('')
+const latitude = ref<number | null>(null)
+const longitude = ref<number | null>(null)
 const bankAccount = ref('')
 
 const harborApproach = ref('')
@@ -67,8 +72,8 @@ async function load() {
     address.value = body.address ?? ''
     phone.value = body.phone ?? ''
     vhfChannel.value = body.vhf_channel ?? ''
-    latitude.value = body.latitude != null ? String(body.latitude) : ''
-    longitude.value = body.longitude != null ? String(body.longitude) : ''
+    latitude.value = body.latitude != null ? Number(body.latitude) : null
+    longitude.value = body.longitude != null ? Number(body.longitude) : null
     harborApproach.value = body.harbor_approach ?? ''
     harborDepth.value = body.harbor_depth ?? ''
     harborVhf.value = body.harbor_vhf ?? ''
@@ -105,15 +110,13 @@ onMounted(load)
 // uploadLogoFile is shared between the faktura and site logo widgets.
 // `kind` selects the endpoint, accepted MIME types, and which reactive
 // state slots get updated on success.
-async function uploadLogoFile(e: Event, kind: 'faktura' | 'site') {
-  const input = e.target as HTMLInputElement
-  const file = input.files?.[0]
+async function uploadLogoFile(files: FileList | null, kind: 'faktura' | 'site') {
+  const file = files?.[0]
   if (!file) return
   const isFaktura = kind === 'faktura'
   if (isFaktura) {
     if (file.type !== 'image/png' && file.type !== 'image/jpeg') {
       error.value = t('admin.financialSettings.logoMimeError')
-      input.value = ''
       return
     }
   } else {
@@ -121,17 +124,14 @@ async function uploadLogoFile(e: Event, kind: 'faktura' | 'site') {
     // best guess plus an empty type (some browsers omit it for SVG).
     if (file.type && file.type !== 'image/svg+xml') {
       error.value = t('admin.financialSettings.siteLogoMimeError')
-      input.value = ''
       return
     }
   }
   if (file.size > 2 * 1024 * 1024) {
     error.value = t('admin.financialSettings.logoSizeError')
-    input.value = ''
     return
   }
   if (!(await ensureFreshTotp())) {
-    input.value = ''
     return
   }
   if (isFaktura) fakturaLogoUploading.value = true
@@ -163,12 +163,11 @@ async function uploadLogoFile(e: Event, kind: 'faktura' | 'site') {
   } finally {
     if (isFaktura) fakturaLogoUploading.value = false
     else siteLogoUploading.value = false
-    input.value = ''
   }
 }
 
-async function uploadFakturaLogo(e: Event) { return uploadLogoFile(e, 'faktura') }
-async function uploadSiteLogo(e: Event) { return uploadLogoFile(e, 'site') }
+async function uploadFakturaLogo(files: FileList | null) { return uploadLogoFile(files, 'faktura') }
+async function uploadSiteLogo(files: FileList | null) { return uploadLogoFile(files, 'site') }
 
 async function deleteLogoFile(kind: 'faktura' | 'site') {
   if (!confirm(t('admin.financialSettings.logoDeleteConfirm'))) return
@@ -211,8 +210,8 @@ async function save() {
         address: address.value,
         phone: phone.value,
         vhf_channel: vhfChannel.value,
-        latitude: latitude.value === '' ? null : Number(latitude.value),
-        longitude: longitude.value === '' ? null : Number(longitude.value),
+        latitude: latitude.value,
+        longitude: longitude.value,
         harbor_approach: harborApproach.value,
         harbor_depth: harborDepth.value,
         harbor_vhf: harborVhf.value,
@@ -262,59 +261,27 @@ async function save() {
     <form v-else class="mt-6 max-w-xl space-y-4" @submit.prevent="save">
       <fieldset class="rounded-md border border-slate-200 bg-slate-50 p-3 space-y-3">
         <legend class="px-1 text-xs font-semibold text-slate-700">{{ t('admin.financialSettings.identityGroup') }}</legend>
-      <div>
-        <label class="block text-xs font-medium text-gray-700">{{ t('admin.financialSettings.clubName') }}</label>
-        <input
-          :value="clubName"
-          disabled
-          class="mt-1 w-full rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-sm text-gray-500"
-        />
-        <p class="mt-1 text-xs text-gray-500">{{ t('admin.financialSettings.clubNameHint') }}</p>
-      </div>
+      <FormField :label="t('admin.financialSettings.clubName')" :helper-text="t('admin.financialSettings.clubNameHint')">
+        <Input :model-value="clubName" disabled />
+      </FormField>
 
-      <div>
-        <label class="block text-xs font-medium text-gray-700">{{ t('admin.financialSettings.orgNumber') }}</label>
-        <input
-          v-model="orgNumber"
-          type="text"
-          class="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-sm"
-          placeholder="999 999 999"
-        />
-      </div>
+      <FormField :label="t('admin.financialSettings.orgNumber')">
+        <Input v-model="orgNumber" placeholder="999 999 999" />
+      </FormField>
       </fieldset>
 
       <fieldset class="rounded-md border border-slate-200 bg-slate-50 p-3 space-y-3">
         <legend class="px-1 text-xs font-semibold text-slate-700">{{ t('admin.financialSettings.contactGroup') }}</legend>
-        <div>
-          <label class="block text-xs font-medium text-slate-700">{{ t('admin.financialSettings.address') }}</label>
-          <textarea
-            v-model="address"
-            rows="2"
-            class="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-sm"
-            placeholder="Brygga 1, 5378 Klokkarvik"
-          />
-        </div>
+        <FormField :label="t('admin.financialSettings.address')">
+          <Textarea v-model="address" :rows="2" placeholder="Brygga 1, 5378 Klokkarvik" />
+        </FormField>
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <label class="block text-xs font-medium text-slate-700">{{ t('admin.financialSettings.phone') }}</label>
-            <input
-              v-model="phone"
-              type="tel"
-              class="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-sm"
-              placeholder="+47 22 00 00 00"
-            />
-            <p class="mt-1 text-xs text-slate-500">{{ t('admin.financialSettings.phoneHint') }}</p>
-          </div>
-          <div>
-            <label class="block text-xs font-medium text-slate-700">{{ t('admin.financialSettings.vhfChannel') }}</label>
-            <input
-              v-model="vhfChannel"
-              type="text"
-              class="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-sm"
-              placeholder="Ch 73"
-            />
-            <p class="mt-1 text-xs text-slate-500">{{ t('admin.financialSettings.vhfChannelHint') }}</p>
-          </div>
+          <FormField :label="t('admin.financialSettings.phone')" :helper-text="t('admin.financialSettings.phoneHint')">
+            <Input v-model="phone" type="tel" placeholder="+47 22 00 00 00" />
+          </FormField>
+          <FormField :label="t('admin.financialSettings.vhfChannel')" :helper-text="t('admin.financialSettings.vhfChannelHint')">
+            <Input v-model="vhfChannel" placeholder="Ch 73" />
+          </FormField>
         </div>
       </fieldset>
 
@@ -333,16 +300,23 @@ async function save() {
           <span v-else class="text-xs italic text-gray-400">{{ t('admin.financialSettings.logoNone') }}</span>
         </div>
         <div class="mt-2 flex items-center gap-2">
-          <label class="inline-flex cursor-pointer items-center gap-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
-            <input
-              type="file"
-              accept="image/png,image/jpeg"
-              class="hidden"
-              :disabled="fakturaLogoUploading"
-              @change="uploadFakturaLogo"
-            />
-            {{ fakturaLogoUploading ? t('common.loading') : (hasFakturaLogo ? t('admin.financialSettings.logoReplace') : t('admin.financialSettings.logoUpload')) }}
-          </label>
+          <FileInput
+            accept="image/png,image/jpeg"
+            :dropzone="false"
+            :disabled="fakturaLogoUploading"
+            @change="uploadFakturaLogo"
+          >
+            <template #trigger="{ open }">
+              <button
+                type="button"
+                class="inline-flex cursor-pointer items-center gap-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                :disabled="fakturaLogoUploading"
+                @click="open"
+              >
+                {{ fakturaLogoUploading ? t('common.loading') : (hasFakturaLogo ? t('admin.financialSettings.logoReplace') : t('admin.financialSettings.logoUpload')) }}
+              </button>
+            </template>
+          </FileInput>
           <button
             v-if="hasFakturaLogo"
             type="button"
@@ -367,16 +341,23 @@ async function save() {
           <span v-else class="text-xs italic text-gray-400">{{ t('admin.financialSettings.logoNone') }}</span>
         </div>
         <div class="mt-2 flex items-center gap-2">
-          <label class="inline-flex cursor-pointer items-center gap-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">
-            <input
-              type="file"
-              accept="image/svg+xml,.svg"
-              class="hidden"
-              :disabled="siteLogoUploading"
-              @change="uploadSiteLogo"
-            />
-            {{ siteLogoUploading ? t('common.loading') : (hasSiteLogo ? t('admin.financialSettings.logoReplace') : t('admin.financialSettings.logoUpload')) }}
-          </label>
+          <FileInput
+            accept="image/svg+xml,.svg"
+            :dropzone="false"
+            :disabled="siteLogoUploading"
+            @change="uploadSiteLogo"
+          >
+            <template #trigger="{ open }">
+              <button
+                type="button"
+                class="inline-flex cursor-pointer items-center gap-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                :disabled="siteLogoUploading"
+                @click="open"
+              >
+                {{ siteLogoUploading ? t('common.loading') : (hasSiteLogo ? t('admin.financialSettings.logoReplace') : t('admin.financialSettings.logoUpload')) }}
+              </button>
+            </template>
+          </FileInput>
           <button
             v-if="hasSiteLogo"
             type="button"
@@ -392,27 +373,13 @@ async function save() {
 
       <fieldset class="rounded-md border border-slate-200 bg-slate-50 p-3 space-y-3">
         <legend class="px-1 text-xs font-semibold text-slate-700">{{ t('admin.financialSettings.bankingGroup') }}</legend>
-      <div>
-        <label class="block text-xs font-medium text-slate-700">{{ t('admin.financialSettings.bankAccount') }}</label>
-        <input
-          v-model="bankAccount"
-          type="text"
-          class="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-sm font-mono"
-          placeholder="1234.56.78901"
-        />
-        <p class="mt-1 text-xs text-slate-500">{{ t('admin.financialSettings.bankAccountHint') }}</p>
-      </div>
+      <FormField :label="t('admin.financialSettings.bankAccount')" :helper-text="t('admin.financialSettings.bankAccountHint')">
+        <Input v-model="bankAccount" placeholder="1234.56.78901" input-class="font-mono" />
+      </FormField>
 
-      <div>
-        <label class="block text-xs font-medium text-slate-700">{{ t('admin.financialSettings.websiteUrl') }}</label>
-        <input
-          v-model="websiteUrl"
-          type="url"
-          class="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-sm"
-          placeholder="https://klokkarvikbaatlag.no"
-        />
-        <p class="mt-1 text-xs text-slate-500">{{ t('admin.financialSettings.websiteUrlHint') }}</p>
-      </div>
+      <FormField :label="t('admin.financialSettings.websiteUrl')" :helper-text="t('admin.financialSettings.websiteUrlHint')">
+        <Input v-model="websiteUrl" type="url" placeholder="https://klokkarvikbaatlag.no" />
+      </FormField>
       </fieldset>
 
       <fieldset class="rounded-md border border-slate-200 bg-slate-50 p-3">
@@ -422,27 +389,21 @@ async function save() {
              Mirrors the contact page so admins reading the two side by
              side see the same hierarchy. -->
         <div class="grid gap-3 sm:grid-cols-2">
-          <div>
-            <label class="block text-xs font-medium text-slate-700">{{ t('admin.financialSettings.chairmanEmail') }}</label>
-            <input v-model="chairmanEmail" type="email" class="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-sm" placeholder="leder@klubb.no" />
-          </div>
-          <div>
-            <label class="block text-xs font-medium text-slate-700">{{ t('admin.financialSettings.viceChairmanEmail') }}</label>
-            <input v-model="viceChairmanEmail" type="email" class="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-sm" placeholder="nestleder@klubb.no" />
-          </div>
-          <div>
-            <label class="block text-xs font-medium text-slate-700">{{ t('admin.financialSettings.harborMasterEmail') }}</label>
-            <input v-model="harborMasterEmail" type="email" class="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-sm" placeholder="havnesjef@klubb.no" />
-          </div>
-          <div>
-            <label class="block text-xs font-medium text-slate-700">{{ t('admin.financialSettings.secretaryEmail') }}</label>
-            <input v-model="secretaryEmail" type="email" class="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-sm" placeholder="sekretaer@klubb.no" />
-          </div>
-          <div>
-            <label class="block text-xs font-medium text-slate-700">{{ t('admin.financialSettings.treasurerEmail') }}</label>
-            <input v-model="treasurerEmail" type="email" class="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-sm" placeholder="kasserer@klubb.no" />
-            <p class="mt-1 text-xs text-slate-500">{{ t('admin.financialSettings.treasurerEmailHint') }}</p>
-          </div>
+          <FormField :label="t('admin.financialSettings.chairmanEmail')">
+            <Input v-model="chairmanEmail" type="email" placeholder="leder@klubb.no" />
+          </FormField>
+          <FormField :label="t('admin.financialSettings.viceChairmanEmail')">
+            <Input v-model="viceChairmanEmail" type="email" placeholder="nestleder@klubb.no" />
+          </FormField>
+          <FormField :label="t('admin.financialSettings.harborMasterEmail')">
+            <Input v-model="harborMasterEmail" type="email" placeholder="havnesjef@klubb.no" />
+          </FormField>
+          <FormField :label="t('admin.financialSettings.secretaryEmail')">
+            <Input v-model="secretaryEmail" type="email" placeholder="sekretaer@klubb.no" />
+          </FormField>
+          <FormField :label="t('admin.financialSettings.treasurerEmail')" :helper-text="t('admin.financialSettings.treasurerEmailHint')">
+            <Input v-model="treasurerEmail" type="email" placeholder="kasserer@klubb.no" />
+          </FormField>
         </div>
       </fieldset>
 
@@ -450,26 +411,12 @@ async function save() {
         <legend class="px-1 text-xs font-semibold text-gray-700">{{ t('admin.financialSettings.coordinates') }}</legend>
         <p class="mb-2 text-xs text-gray-500">{{ t('admin.financialSettings.coordinatesHint') }}</p>
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <label class="block text-xs font-medium text-gray-700">{{ t('admin.financialSettings.latitude') }}</label>
-            <input
-              v-model="latitude"
-              type="number"
-              step="0.000001"
-              class="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm font-mono"
-              placeholder="60.2334"
-            />
-          </div>
-          <div>
-            <label class="block text-xs font-medium text-gray-700">{{ t('admin.financialSettings.longitude') }}</label>
-            <input
-              v-model="longitude"
-              type="number"
-              step="0.000001"
-              class="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm font-mono"
-              placeholder="5.1245"
-            />
-          </div>
+          <FormField :label="t('admin.financialSettings.latitude')">
+            <NumberInput v-model="latitude" :step="0.000001" placeholder="60.2334" />
+          </FormField>
+          <FormField :label="t('admin.financialSettings.longitude')">
+            <NumberInput v-model="longitude" :step="0.000001" placeholder="5.1245" />
+          </FormField>
         </div>
       </fieldset>
 
@@ -477,29 +424,24 @@ async function save() {
         <legend class="px-1 text-xs font-semibold text-gray-700">{{ t('admin.financialSettings.harborContent') }}</legend>
         <p class="mb-2 text-xs text-gray-500">{{ t('admin.financialSettings.harborContentHint') }}</p>
         <div class="space-y-3">
-          <div>
-            <label class="block text-xs font-medium text-gray-700">{{ t('admin.financialSettings.harborApproach') }}</label>
-            <textarea v-model="harborApproach" rows="2" class="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm" />
+          <FormField :label="t('admin.financialSettings.harborApproach')">
+            <Textarea v-model="harborApproach" :rows="2" />
+          </FormField>
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <FormField :label="t('admin.financialSettings.harborDepth')">
+              <Input v-model="harborDepth" />
+            </FormField>
+            <FormField :label="t('admin.financialSettings.harborVhf')">
+              <Input v-model="harborVhf" placeholder="Ch 16 / Ch 73" />
+            </FormField>
           </div>
           <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div>
-              <label class="block text-xs font-medium text-gray-700">{{ t('admin.financialSettings.harborDepth') }}</label>
-              <input v-model="harborDepth" type="text" class="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm" />
-            </div>
-            <div>
-              <label class="block text-xs font-medium text-gray-700">{{ t('admin.financialSettings.harborVhf') }}</label>
-              <input v-model="harborVhf" type="text" class="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm" placeholder="Ch 16 / Ch 73" />
-            </div>
-          </div>
-          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div>
-              <label class="block text-xs font-medium text-gray-700">{{ t('admin.financialSettings.ctaTitle') }}</label>
-              <input v-model="harborCtaTitle" type="text" class="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm" />
-            </div>
-            <div>
-              <label class="block text-xs font-medium text-gray-700">{{ t('admin.financialSettings.ctaDescription') }}</label>
-              <input v-model="harborCtaDescription" type="text" class="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm" />
-            </div>
+            <FormField :label="t('admin.financialSettings.ctaTitle')">
+              <Input v-model="harborCtaTitle" />
+            </FormField>
+            <FormField :label="t('admin.financialSettings.ctaDescription')">
+              <Input v-model="harborCtaDescription" />
+            </FormField>
           </div>
         </div>
       </fieldset>
@@ -509,32 +451,26 @@ async function save() {
         <p class="mb-2 text-xs text-gray-500">{{ t('admin.financialSettings.motorhomeContentHint') }}</p>
         <div class="space-y-3">
           <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div>
-              <label class="block text-xs font-medium text-gray-700">{{ t('admin.financialSettings.motorhomePower') }}</label>
-              <textarea v-model="motorhomePower" rows="2" class="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm" />
-            </div>
-            <div>
-              <label class="block text-xs font-medium text-gray-700">{{ t('admin.financialSettings.motorhomeFacilities') }}</label>
-              <textarea v-model="motorhomeFacilities" rows="2" class="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm" />
-            </div>
-            <div>
-              <label class="block text-xs font-medium text-gray-700">{{ t('admin.financialSettings.motorhomeCheckin') }}</label>
-              <textarea v-model="motorhomeCheckin" rows="2" class="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm" />
-            </div>
-            <div>
-              <label class="block text-xs font-medium text-gray-700">{{ t('admin.financialSettings.motorhomeRules') }}</label>
-              <textarea v-model="motorhomeRules" rows="2" class="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm" />
-            </div>
+            <FormField :label="t('admin.financialSettings.motorhomePower')">
+              <Textarea v-model="motorhomePower" :rows="2" />
+            </FormField>
+            <FormField :label="t('admin.financialSettings.motorhomeFacilities')">
+              <Textarea v-model="motorhomeFacilities" :rows="2" />
+            </FormField>
+            <FormField :label="t('admin.financialSettings.motorhomeCheckin')">
+              <Textarea v-model="motorhomeCheckin" :rows="2" />
+            </FormField>
+            <FormField :label="t('admin.financialSettings.motorhomeRules')">
+              <Textarea v-model="motorhomeRules" :rows="2" />
+            </FormField>
           </div>
           <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div>
-              <label class="block text-xs font-medium text-gray-700">{{ t('admin.financialSettings.ctaTitle') }}</label>
-              <input v-model="motorhomeCtaTitle" type="text" class="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm" />
-            </div>
-            <div>
-              <label class="block text-xs font-medium text-gray-700">{{ t('admin.financialSettings.ctaDescription') }}</label>
-              <input v-model="motorhomeCtaDescription" type="text" class="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm" />
-            </div>
+            <FormField :label="t('admin.financialSettings.ctaTitle')">
+              <Input v-model="motorhomeCtaTitle" />
+            </FormField>
+            <FormField :label="t('admin.financialSettings.ctaDescription')">
+              <Input v-model="motorhomeCtaDescription" />
+            </FormField>
           </div>
         </div>
       </fieldset>
