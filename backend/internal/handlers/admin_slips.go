@@ -54,7 +54,7 @@ func (h *AdminSlipsHandler) HandleListSlips(w http.ResponseWriter, r *http.Reque
 	query := `
 		SELECT s.id, s.number, s.section, s.length_m, s.width_m, s.depth_m,
 		       s.status, s.notes, s.map_x, s.map_y, s.created_at, s.updated_at,
-		       sa.user_id, u.full_name, u.email,
+		       sa.user_id, u.full_name, u.email, sa.assignment_type::text,
 		       b.id, b.name, b.manufacturer, b.model, b.length_m, b.beam_m, b.weight_kg
 		FROM slips s
 		LEFT JOIN slip_assignments sa ON sa.slip_id = s.id AND sa.released_at IS NULL
@@ -103,6 +103,7 @@ func (h *AdminSlipsHandler) HandleListSlips(w http.ResponseWriter, r *http.Reque
 		OccupantID    *string  `json:"occupant_id"`
 		OccupantName  *string  `json:"occupant_name"`
 		OccupantEmail *string  `json:"occupant_email"`
+		AssignmentType *string `json:"assignment_type"`
 		BoatID            *string  `json:"boat_id"`
 		BoatName          *string  `json:"boat_name"`
 		BoatManufacturer  *string  `json:"boat_manufacturer"`
@@ -118,7 +119,7 @@ func (h *AdminSlipsHandler) HandleListSlips(w http.ResponseWriter, r *http.Reque
 		if err := rows.Scan(
 			&s.ID, &s.Number, &s.Section, &s.LengthM, &s.WidthM, &s.DepthM,
 			&s.Status, &s.Notes, &s.MapX, &s.MapY, &s.CreatedAt, &s.UpdatedAt,
-			&s.OccupantID, &s.OccupantName, &s.OccupantEmail,
+			&s.OccupantID, &s.OccupantName, &s.OccupantEmail, &s.AssignmentType,
 			&s.BoatID, &s.BoatName, &s.BoatManufacturer, &s.BoatModel,
 			&s.BoatLengthM, &s.BoatBeamM, &s.BoatWeightKg,
 		); err != nil {
@@ -396,6 +397,59 @@ func (h *AdminSlipsHandler) HandleDeleteSlip(w http.ResponseWriter, r *http.Requ
 
 	h.log.Info().Str("slip_id", slipID).Msg("slip deleted")
 	JSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+// HandleSetSlipAssignmentType flips the assignment_type on the active
+// (un-released) slip_assignment for a given slip. No-op if no active
+// assignment exists. Useful from the slip-page edit form so an admin
+// can switch permanent ↔ seasonal without going through the user
+// modal.
+func (h *AdminSlipsHandler) HandleSetSlipAssignmentType(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	clubID, _, err := h.clubID(r)
+	if err != nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	slipID := chi.URLParam(r, "slipID")
+	if slipID == "" {
+		Error(w, http.StatusBadRequest, "slip ID is required")
+		return
+	}
+
+	var req struct {
+		AssignmentType string `json:"assignment_type"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.AssignmentType != "permanent" && req.AssignmentType != "seasonal" {
+		Error(w, http.StatusBadRequest, "assignment_type must be 'permanent' or 'seasonal'")
+		return
+	}
+
+	tag, err := h.db.Exec(ctx,
+		`UPDATE slip_assignments
+		    SET assignment_type = $1
+		  WHERE slip_id = $2 AND club_id = $3 AND released_at IS NULL`,
+		req.AssignmentType, slipID, clubID,
+	)
+	if err != nil {
+		h.log.Error().Err(err).Msg("update slip_assignment type")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if tag.RowsAffected() == 0 {
+		Error(w, http.StatusNotFound, "no active assignment for this slip")
+		return
+	}
+
+	JSON(w, http.StatusOK, map[string]any{
+		"slip_id":         slipID,
+		"assignment_type": req.AssignmentType,
+	})
 }
 
 func (h *AdminSlipsHandler) HandleAssignSlip(w http.ResponseWriter, r *http.Request) {

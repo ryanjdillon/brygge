@@ -14,6 +14,7 @@ import Input from '@/components/ui/form/Input.vue'
 import Textarea from '@/components/ui/form/Textarea.vue'
 import NumberInput from '@/components/ui/form/NumberInput.vue'
 import Checkbox from '@/components/ui/form/Checkbox.vue'
+import Select from '@/components/ui/form/Select.vue'
 const { t } = useI18n()
 const client = useApiClient()
 const queryClient = useQueryClient()
@@ -36,6 +37,7 @@ type Slip = {
   notes?: string | null
   occupant_id?: string | null
   occupant_name?: string | null
+  assignment_type?: 'permanent' | 'seasonal' | null
   boat_id?: string | null
   boat_name?: string | null
   boat_manufacturer?: string | null
@@ -145,6 +147,12 @@ type SlipForm = {
 }
 const createForm = ref<SlipForm>({ number: '', section: '', length_m: null, width_m: null, depth_m: null, notes: '' })
 const editForm = ref<SlipForm>({ number: '', section: '', length_m: null, width_m: null, depth_m: null, notes: '' })
+const editAssignmentType = ref<'permanent' | 'seasonal'>('permanent')
+const initialAssignmentType = ref<'permanent' | 'seasonal' | null>(null)
+const assignmentTypeOptions = computed(() => [
+  { value: 'permanent', label: t('admin.users.spotPermanent') },
+  { value: 'seasonal', label: t('admin.users.spotSeasonal') },
+])
 
 const submitError = ref<string | null>(null)
 const deleteError = ref<string | null>(null)
@@ -176,7 +184,7 @@ const { mutate: updateSlip, isPending: isUpdating } = useMutation({
   mutationFn: async () => {
     const slip = editingSlip.value
     if (!slip) throw new Error('no slip selected')
-    return unwrap(await client.PUT('/api/v1/admin/slips/{slipID}', {
+    await unwrap(await client.PUT('/api/v1/admin/slips/{slipID}', {
       params: { path: { slipID: slip.id } },
       body: {
         number: editForm.value.number,
@@ -187,9 +195,22 @@ const { mutate: updateSlip, isPending: isUpdating } = useMutation({
         notes: editForm.value.notes,
       } as any,
     }))
+    // Flip the active assignment's type if it changed AND a current
+    // assignment exists. No-op for vacant slips.
+    if (
+      slip.occupant_id &&
+      initialAssignmentType.value &&
+      editAssignmentType.value !== initialAssignmentType.value
+    ) {
+      await unwrap(await client.PUT('/api/v1/admin/slips/{slipID}/assignment-type' as any, {
+        params: { path: { slipID: slip.id } },
+        body: { assignment_type: editAssignmentType.value } as any,
+      }))
+    }
   },
   onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: ['admin', 'slips'] })
+    queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
     editingSlip.value = null
     submitError.value = null
   },
@@ -264,6 +285,9 @@ async function openEdit(slip: Slip) {
     depth_m: slip.depth_m ?? null,
     notes: slip.notes ?? '',
   }
+  const t0 = slip.assignment_type === 'seasonal' ? 'seasonal' : 'permanent'
+  editAssignmentType.value = t0
+  initialAssignmentType.value = slip.assignment_type ?? null
   submitError.value = null
   unassignError.value = null
 }
@@ -453,6 +477,15 @@ function closeDelete() {
             <label class="block text-sm font-medium text-gray-700">{{ t('admin.slips.depth') }} <span class="text-xs font-normal text-gray-400">({{ t('common.optional') }})</span></label>
             <NumberInput v-model="editForm.depth_m" :step="0.1" class="mt-1" />
           </div>
+        </div>
+        <div v-if="editingSlip.occupant_id">
+          <label class="block text-sm font-medium text-gray-700">{{ t('admin.users.spots') }}</label>
+          <Select
+            v-model="editAssignmentType"
+            :options="assignmentTypeOptions"
+            width="content"
+            class="mt-1"
+          />
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700">{{ t('admin.slips.notes') }} <span class="text-xs font-normal text-gray-400">({{ t('common.optional') }})</span></label>
