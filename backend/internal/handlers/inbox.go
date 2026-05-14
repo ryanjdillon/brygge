@@ -34,6 +34,7 @@ type InboxHandler struct {
 	adminUser   string
 	adminPass   string
 	passwords   mail.PrincipalPasswords // shared-principal service passwords (DIL-278 send path)
+	clubAbbrev  string                  // uppercased club slug, e.g. "KBL" — prepended to From names
 	audit       *audit.Service
 	spec        []mail.MailboxSpec
 	log         zerolog.Logger
@@ -46,7 +47,7 @@ type InboxHandler struct {
 	sharedIDs map[string]string
 }
 
-func NewInboxHandler(db *pgxpool.Pool, jmapFact *mail.JMAPFactory, provisioner *mail.UserProvisioner, adminUser, adminPass string, passwords mail.PrincipalPasswords, auditSvc *audit.Service, spec []mail.MailboxSpec, log zerolog.Logger) *InboxHandler {
+func NewInboxHandler(db *pgxpool.Pool, jmapFact *mail.JMAPFactory, provisioner *mail.UserProvisioner, adminUser, adminPass string, passwords mail.PrincipalPasswords, clubSlug string, auditSvc *audit.Service, spec []mail.MailboxSpec, log zerolog.Logger) *InboxHandler {
 	return &InboxHandler{
 		db:          db,
 		jmapFact:    jmapFact,
@@ -54,6 +55,7 @@ func NewInboxHandler(db *pgxpool.Pool, jmapFact *mail.JMAPFactory, provisioner *
 		adminUser:   adminUser,
 		adminPass:   adminPass,
 		passwords:   passwords,
+		clubAbbrev:  strings.ToUpper(clubSlug),
 		audit:       auditSvc,
 		spec:        spec,
 		log:         log.With().Str("handler", "inbox").Logger(),
@@ -387,9 +389,19 @@ func (h *InboxHandler) HandleSend(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// From name combines the club abbreviation (uppercase slug,
+	// e.g. "KBL") with the spec's role display name (e.g.
+	// "Kasserar") so recipients see "KBL Kasserar" at the top of
+	// the message. Gmail's column override then surfaces the
+	// club's contact-card name ("Klokkarvik Båtlag") in inbox
+	// listings.
+	fromName := spec.DisplayName
+	if h.clubAbbrev != "" {
+		fromName = h.clubAbbrev + " " + spec.DisplayName
+	}
 	sendReq := mail.SendEmailRequest{
 		FromAddress: spec.Address,
-		FromName:    spec.DisplayName,
+		FromName:    fromName,
 		ReplyTo:     spec.Address,
 		To:          toMailAddrs(req.To),
 		Cc:          toMailAddrs(req.Cc),

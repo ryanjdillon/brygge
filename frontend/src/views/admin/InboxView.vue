@@ -5,6 +5,8 @@ import { useI18n } from 'vue-i18n'
 import { Inbox, Mail, Archive, Check, ImageOff, Image as ImageIcon, AlertTriangle, Reply, Send, X } from 'lucide-vue-next'
 import { useApi } from '@/composables/useApi'
 import { sanitizeEmail } from '@/lib/sanitizeHtml'
+import { useInboxUnreadStore } from '@/stores/inboxUnread'
+import { storeToRefs } from 'pinia'
 
 interface MailboxView {
   address: string
@@ -46,8 +48,14 @@ const route = useRoute()
 const router = useRouter()
 const { fetchApi } = useApi()
 
-const mailboxes = ref<MailboxView[]>([])
+const inboxUnread = useInboxUnreadStore()
+const { mailboxes: storeMailboxes, totalUnread: storeTotalUnread } = storeToRefs(inboxUnread)
+const mailboxes = computed(() => storeMailboxes.value as unknown as MailboxView[])
+
 const threads = ref<ThreadRow[]>([])
+// mailboxes is bound to the Pinia store above; this comment marks
+// the seam so future edits don't accidentally reintroduce a local
+// ref and break NavBar-vs-InboxView sync.
 const thread = ref<{ thread_id: string; emails: EmailFull[] } | null>(null)
 // Initial-load spinner only — the 30s background poll doesn't flip
 // this, so the sidebar list doesn't flash empty between refreshes.
@@ -63,7 +71,7 @@ const search = ref('')
 const selectedAddress = computed(() => (route.query.address as string) || mailboxes.value[0]?.address || '')
 const selectedThread = computed(() => (route.query.thread as string) || '')
 
-const totalUnread = computed(() => mailboxes.value.reduce((s, m) => s + m.unread, 0))
+const totalUnread = computed(() => storeTotalUnread.value)
 
 // reportError stores a friendly i18n message in `error.value` and
 // logs the raw API error to the console for debugging. Keeps user-
@@ -76,8 +84,7 @@ function reportError(key: string, e: unknown) {
 async function loadMailboxes(opts: { background?: boolean } = {}) {
   if (!opts.background) loadingMailboxes.value = true
   try {
-    const res = await fetchApi<{ mailboxes: MailboxView[] }>('/api/v1/admin/inbox/mailboxes')
-    mailboxes.value = res.mailboxes ?? []
+    await inboxUnread.refresh({ silent: !!opts.background })
     if (!selectedAddress.value && mailboxes.value[0]) {
       selectAddress(mailboxes.value[0].address)
     }
@@ -143,7 +150,10 @@ async function markRead(read: boolean) {
   const url = `/api/v1/admin/inbox/${encodeURIComponent(selectedAddress.value)}/threads/${encodeURIComponent(selectedThread.value)}/mark_read?read=${read}`
   try {
     await fetchApi(url, { method: 'POST' })
-    await loadThreads()
+    // Refresh both panes + the global counter; the NavBar
+    // InboxIndicator subscribes to the same store so the badge
+    // updates in lockstep without waiting for its 60s poll.
+    await Promise.all([loadThreads(), inboxUnread.refresh({ silent: true })])
   } catch (e) {
     reportError('admin.inbox.error.markRead', e)
   }
@@ -232,8 +242,7 @@ async function archiveCurrent() {
   try {
     await fetchApi(url, { method: 'POST' })
     router.replace({ query: { ...route.query, thread: undefined } })
-    await loadThreads()
-    await loadMailboxes()
+    await Promise.all([loadThreads(), inboxUnread.refresh({ silent: true })])
   } catch (e) {
     reportError('admin.inbox.error.archive', e)
   }
