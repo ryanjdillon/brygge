@@ -5,8 +5,11 @@ import { useQueryClient } from '@tanstack/vue-query'
 import {
   useBankFormats,
   useBankImport,
+  useBankImportsList,
+  useBankRowsByAccount,
   useVippsImports,
   useVippsImport,
+  useVippsRowsByMSN,
   uploadBankCSV,
   uploadVippsCSV,
   previewVippsReconcile,
@@ -17,8 +20,10 @@ import {
 } from '@/composables/useBankImports'
 import { useAccountsList } from '@/composables/useAccounting'
 import AccountSelect from '@/components/ui/AccountSelect.vue'
-import AccountCodeChip from '@/components/ui/AccountCodeChip.vue'
 import Tabs from '@/components/ui/Tabs.vue'
+import BankRowsTable from '@/components/admin/BankRowsTable.vue'
+import VippsRowsTable from '@/components/admin/VippsRowsTable.vue'
+import type { BankImportRow } from '@/composables/useBankImports'
 import { runBankSync, type BankSyncResult } from '@/composables/useBankImports'
 
 const { t } = useI18n()
@@ -60,6 +65,7 @@ async function submitBank() {
     const res = await uploadBankCSV(bankFile.value, bankFormat.value, bankAccountCode.value)
     bankResult.value = res
     currentBankImportId.value = res.id
+    queryClient.invalidateQueries({ queryKey: ['accounting', 'bank-imports'] })
   } catch (e: any) {
     bankError.value = e?.message ?? 'Upload failed'
   } finally {
@@ -101,11 +107,7 @@ const reconcileError = ref<string | null>(null)
 const reconcileBusy = ref(false)
 const reconcileTarget = ref<{ id: string; description: string } | null>(null)
 
-function vippsPattern(desc: string): boolean {
-  return /Utb\.\s*\d+\s+Vippsnr\s+\d+/i.test(desc)
-}
-
-async function openReconcile(row: { id: string; description: string }) {
+async function openReconcile(row: { id: string; description: string } | BankImportRow) {
   reconcileError.value = null
   reconcilePreview.value = null
   reconcileTarget.value = row
@@ -171,6 +173,54 @@ const vippsMSNs = computed(() => {
   }
   return [...seen].sort()
 })
+
+type AccountFilter = { kind: 'bank' | 'vipps' | 'none'; value: string }
+const accountFilter = ref<AccountFilter>({ kind: 'none', value: '' })
+const filterYear = ref<number>(new Date().getFullYear())
+const filterMonth = ref<number | null>(null) // 1–12, null = whole year
+
+const yearOptions = computed(() => {
+  const current = new Date().getFullYear()
+  return Array.from({ length: 6 }, (_, i) => current - i)
+})
+
+const periodRange = computed(() => {
+  const y = filterYear.value
+  const m = filterMonth.value
+  if (m) {
+    const from = `${y}-${String(m).padStart(2, '0')}-01`
+    const lastDay = new Date(y, m, 0).getDate()
+    const to = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+    return { from, to }
+  }
+  return { from: `${y}-01-01`, to: `${y}-12-31` }
+})
+
+const filterBankAccount = computed(() =>
+  accountFilter.value.kind === 'bank' ? accountFilter.value.value : undefined,
+)
+const filterVippsMSN = computed(() =>
+  accountFilter.value.kind === 'vipps' ? accountFilter.value.value : undefined,
+)
+const filterFrom = computed(() => periodRange.value.from)
+const filterTo = computed(() => periodRange.value.to)
+
+const { data: accountsBankRows } = useBankRowsByAccount(filterBankAccount, filterFrom, filterTo)
+const { data: accountsVippsRows } = useVippsRowsByMSN(filterVippsMSN, filterFrom, filterTo)
+
+function selectBankAccount(code: string) {
+  accountFilter.value = code ? { kind: 'bank', value: code } : { kind: 'none', value: '' }
+}
+function selectVippsMSN(msn: string) {
+  accountFilter.value = msn ? { kind: 'vipps', value: msn } : { kind: 'none', value: '' }
+}
+
+// ── Bank imports list ──────────────────────────────────────
+const { data: bankImportsList } = useBankImportsList()
+
+function selectBankImport(id: string) {
+  currentBankImportId.value = id
+}
 </script>
 
 <template>
@@ -210,30 +260,71 @@ const vippsMSNs = computed(() => {
     </div>
 
     <!-- Accounts tab -->
-    <div v-if="activeTab === 'accounts'" class="mt-6 grid gap-4 lg:grid-cols-2">
+    <div v-if="activeTab === 'accounts'" class="mt-6 space-y-4">
       <section class="rounded-lg border border-gray-200 bg-white p-5">
-        <h2 class="text-base font-semibold text-gray-900">{{ t('admin.bankImports.bankAccountsTitle') }}</h2>
-        <p class="mt-1 text-xs text-gray-500">{{ t('admin.bankImports.bankAccountsDesc') }}</p>
-        <ul class="mt-3 divide-y divide-gray-100 text-sm">
-          <li v-for="a in bankAccounts" :key="a.code" class="flex items-center gap-3 py-2">
-            <AccountCodeChip :code="a.code" :account-type="a.account_type" :is-system="a.is_system" size="sm" />
-            <span class="text-gray-800">{{ a.name }}</span>
-          </li>
-          <li v-if="!bankAccounts.length" class="py-2 text-xs text-gray-500">
-            {{ t('admin.bankImports.noBankAccounts') }}
-          </li>
-        </ul>
+        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div>
+            <label class="block text-xs font-medium text-gray-700">{{ t('admin.bankImports.selectBankAccount') }}</label>
+            <div data-testid="accounts-bank-select">
+              <AccountSelect
+                :model-value="filterBankAccount ?? ''"
+                :options="bankAccounts"
+                @update:model-value="(v) => selectBankAccount(v as string)"
+              />
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-700">{{ t('admin.bankImports.selectVippsMSN') }}</label>
+            <select
+              class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm"
+              :value="filterVippsMSN ?? ''"
+              data-testid="accounts-vipps-select"
+              @change="selectVippsMSN(($event.target as HTMLSelectElement).value)"
+            >
+              <option value="">—</option>
+              <option v-for="msn in vippsMSNs" :key="msn" :value="msn">{{ msn }}</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-700">{{ t('admin.bankImports.selectYear') }}</label>
+            <select
+              v-model.number="filterYear"
+              class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm"
+              data-testid="accounts-year-select"
+            >
+              <option v-for="y in yearOptions" :key="y" :value="y">{{ y }}</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-700">{{ t('admin.bankImports.selectMonth') }}</label>
+            <select
+              :value="filterMonth ?? ''"
+              class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm"
+              data-testid="accounts-month-select"
+              @change="filterMonth = ($event.target as HTMLSelectElement).value ? Number(($event.target as HTMLSelectElement).value) : null"
+            >
+              <option value="">{{ t('admin.bankImports.allMonths') }}</option>
+              <option v-for="m in 12" :key="m" :value="m">{{ m }}</option>
+            </select>
+          </div>
+        </div>
       </section>
-      <section class="rounded-lg border border-gray-200 bg-white p-5">
-        <h2 class="text-base font-semibold text-gray-900">{{ t('admin.bankImports.vippsAccountsTitle') }}</h2>
-        <p class="mt-1 text-xs text-gray-500">{{ t('admin.bankImports.vippsAccountsDesc') }}</p>
-        <ul class="mt-3 divide-y divide-gray-100 text-sm">
-          <li v-for="msn in vippsMSNs" :key="msn" class="py-2 font-mono text-gray-800">{{ msn }}</li>
-          <li v-if="!vippsMSNs.length" class="py-2 text-xs text-gray-500">
-            {{ t('admin.bankImports.noVippsAccounts') }}
-          </li>
-        </ul>
-      </section>
+
+      <div v-if="accountFilter.kind === 'bank'">
+        <BankRowsTable :rows="accountsBankRows ?? []" :show-reconcile="false" />
+        <p v-if="!(accountsBankRows && accountsBankRows.length)" class="mt-3 text-xs text-gray-500">
+          {{ t('admin.bankImports.noRowsInPeriod') }}
+        </p>
+      </div>
+      <div v-else-if="accountFilter.kind === 'vipps'">
+        <VippsRowsTable :rows="accountsVippsRows ?? []" />
+        <p v-if="!(accountsVippsRows && accountsVippsRows.length)" class="mt-3 text-xs text-gray-500">
+          {{ t('admin.bankImports.noRowsInPeriod') }}
+        </p>
+      </div>
+      <p v-else class="text-xs text-gray-500">
+        {{ t('admin.bankImports.noAccountSelected') }}
+      </p>
     </div>
 
     <!-- Imports tab -->
@@ -324,50 +415,31 @@ const vippsMSNs = computed(() => {
       </section>
     </div>
 
-    <!-- Bank rows from current upload -->
-    <section v-if="activeTab === 'imports' && bankRows && bankRows.length" class="mt-8">
+    <!-- Recent bank imports list -->
+    <section v-if="activeTab === 'imports' && bankImportsList && bankImportsList.length" class="mt-8" data-testid="bank-imports-list">
+      <h2 class="text-base font-semibold text-gray-900">{{ t('admin.bankImports.bankImportsListTitle') }}</h2>
+      <ul class="mt-3 divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white">
+        <li
+          v-for="b in bankImportsList"
+          :key="b.id"
+          class="flex cursor-pointer items-center justify-between px-3 py-2 text-sm hover:bg-gray-50"
+          :class="{ 'bg-blue-50': b.id === currentBankImportId }"
+          @click="selectBankImport(b.id)"
+        >
+          <span>
+            {{ b.filename }}
+            <span class="ml-2 text-xs text-gray-500">{{ b.account_code }}</span>
+          </span>
+          <span class="text-xs text-gray-500">{{ b.row_count }} {{ t('admin.bankImports.rows') }}</span>
+        </li>
+      </ul>
+    </section>
+
+    <!-- Bank rows from selected/uploaded import -->
+    <section v-if="activeTab === 'imports' && bankRows && bankRows.length" class="mt-4">
       <h2 class="text-base font-semibold text-gray-900">{{ t('admin.bankImports.rowsTitle') }}</h2>
-      <div class="mt-3 overflow-x-auto rounded-lg border border-gray-200 bg-white">
-        <table class="min-w-full divide-y divide-gray-200 text-sm">
-          <thead class="bg-gray-50 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
-            <tr>
-              <th class="px-3 py-2">{{ t('admin.bankImports.colDate') }}</th>
-              <th class="px-3 py-2">{{ t('admin.bankImports.colDescription') }}</th>
-              <th class="px-3 py-2 text-right">{{ t('admin.bankImports.colAmount') }}</th>
-              <th class="px-3 py-2">{{ t('admin.bankImports.colCounterpart') }}</th>
-              <th class="px-3 py-2 text-right" />
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="row in bankRows"
-              :key="row.id"
-              class="border-t border-gray-100"
-              :data-testid="vippsPattern(row.description) ? 'bank-row-vipps' : 'bank-row'"
-            >
-              <td class="whitespace-nowrap px-3 py-2 text-gray-700 tabular-nums">{{ row.date }}</td>
-              <td class="max-w-md truncate px-3 py-2" :title="row.description">{{ row.description }}</td>
-              <td class="whitespace-nowrap px-3 py-2 text-right tabular-nums" :class="row.amount < 0 ? 'text-red-700' : 'text-green-700'">
-                {{ nok(row.amount) }}
-              </td>
-              <td class="max-w-xs truncate px-3 py-2 text-gray-600" :title="row.counterpart">{{ row.counterpart }}</td>
-              <td class="px-3 py-2 text-right">
-                <button
-                  v-if="vippsPattern(row.description) && !row.journal_entry_id"
-                  type="button"
-                  class="rounded-md bg-purple-600 px-2 py-1 text-xs font-semibold text-white hover:bg-purple-700"
-                  data-testid="reconcile-btn"
-                  @click="openReconcile(row)"
-                >
-                  {{ t('admin.bankImports.reconcile') }}
-                </button>
-                <span v-else-if="row.journal_entry_id" class="text-xs text-green-700">
-                  {{ t('admin.bankImports.bilagCreated') }}
-                </span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+      <div class="mt-3">
+        <BankRowsTable :rows="bankRows" :show-reconcile="true" @reconcile="openReconcile" />
       </div>
     </section>
 
@@ -390,30 +462,7 @@ const vippsMSNs = computed(() => {
 
     <!-- Vipps rows expanded -->
     <section v-if="activeTab === 'imports' && vippsRows && vippsRows.length" class="mt-4">
-      <div class="overflow-x-auto rounded-lg border border-gray-200 bg-white">
-        <table class="min-w-full divide-y divide-gray-200 text-xs">
-          <thead class="bg-gray-50 text-left font-medium uppercase tracking-wide text-gray-500">
-            <tr>
-              <th class="px-3 py-2">{{ t('admin.bankImports.colType') }}</th>
-              <th class="px-3 py-2">{{ t('admin.bankImports.colWhen') }}</th>
-              <th class="px-3 py-2">{{ t('admin.bankImports.colCustomer') }}</th>
-              <th class="px-3 py-2 text-right">{{ t('admin.bankImports.colAmount') }}</th>
-              <th class="px-3 py-2 text-right">{{ t('admin.bankImports.colFee') }}</th>
-              <th class="px-3 py-2">{{ t('admin.bankImports.colSettlement') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="row in vippsRows" :key="row.id" class="border-t border-gray-100">
-              <td class="whitespace-nowrap px-3 py-2">{{ row.row_type }}</td>
-              <td class="whitespace-nowrap px-3 py-2 tabular-nums text-gray-600">{{ row.tx_at ?? row.booking_date ?? '' }}</td>
-              <td class="max-w-xs truncate px-3 py-2" :title="row.customer_name">{{ row.customer_name }}</td>
-              <td class="whitespace-nowrap px-3 py-2 text-right tabular-nums">{{ nok(row.amount) }}</td>
-              <td class="whitespace-nowrap px-3 py-2 text-right tabular-nums text-gray-500">{{ nok(row.fee) }}</td>
-              <td class="max-w-xs truncate px-3 py-2 text-xs text-gray-500" :title="row.order_id || row.settlement_number">{{ row.order_id || row.settlement_number }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <VippsRowsTable :rows="vippsRows" />
     </section>
 
     <!-- Reconcile preview modal -->

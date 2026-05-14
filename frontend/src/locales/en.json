@@ -515,7 +515,7 @@
       "accounts": "Chart of Accounts",
       "periods": "Periods",
       "journal": "Journal entries",
-      "bankImports": "Bank/Vipps imports"
+      "bankImports": "Bank & Vipps"
     },
     "financialSettings": {
       "title": "Settings",
@@ -1280,8 +1280,8 @@
     "groupShop": "Shop",
     "groupSite": "Site",
     "bankImports": {
-      "title": "Bank & Vipps imports",
-      "subtitle": "Upload bank statements and Vipps settlement reports, and reconcile them.",
+      "title": "Bank & Vipps",
+      "subtitle": "Bank accounts and Vipps merchant numbers — view transactions by period, upload statements, and reconcile.",
       "bankCardTitle": "Bank statement",
       "bankCardDesc": "CSV from your bank (semicolon-separated). Duplicate rows are skipped.",
       "vippsCardTitle": "Vipps settlement report",
@@ -1316,8 +1316,8 @@
       "balanced": "Balanced — debit = credit",
       "unresolvedNotice": "{n} customer(s) could not be matched to a member — posted to clearing account.",
       "confirmBilag": "Create bilag",
-      "navCardTitle": "Bank & Vipps imports",
-      "navCardDesc": "Upload CSV and reconcile Vipps payouts",
+      "navCardTitle": "Bank & Vipps",
+      "navCardDesc": "View account transactions, upload CSV, reconcile Vipps payouts",
       "bankAccount": "Bank account",
       "transfers": "Transfers",
       "closedPeriodsNotice": "Rows from the following closed period(s) were not auto-matched: {years}. Reopen those periods if you want to book them.",
@@ -1332,7 +1332,16 @@
       "vippsAccountsTitle": "Vipps MSNs",
       "vippsAccountsDesc": "Vipps numbers seen in imported settlement reports.",
       "noBankAccounts": "No bank accounts configured in kontoplan.",
-      "noVippsAccounts": "No Vipps numbers imported yet."
+      "noVippsAccounts": "No Vipps numbers imported yet.",
+      "selectBankAccount": "Bank account",
+      "selectVippsMSN": "Vipps MSN",
+      "selectYear": "Year",
+      "selectMonth": "Month",
+      "allMonths": "All months",
+      "noRowsInPeriod": "No transactions in the selected period.",
+      "noAccountSelected": "Pick a bank account or Vipps MSN to view transactions.",
+      "bankImportsListTitle": "Previous bank imports",
+      "noBankImports": "No bank imports yet."
     }
   },
   "projects": {

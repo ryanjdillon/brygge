@@ -855,6 +855,7 @@ func main() {
 						r.Route("/sync", func(r chi.Router) {
 							r.Post("/payments", accountingHandler.HandleSyncPayments)
 							r.Post("/invoices", accountingHandler.HandleSyncInvoices)
+							r.Post("/invoices/rebuild", accountingHandler.HandleRebuildInvoiceBilags)
 						})
 
 						r.Get("/bank-formats", accountingHandler.HandleListBankFormats)
@@ -872,6 +873,9 @@ func main() {
 							r.Get("/{importID}", accountingHandler.HandleGetVippsImport)
 						})
 
+						r.Get("/bank-imports", accountingHandler.HandleListBankImports)
+						r.Get("/bank-rows", accountingHandler.HandleListBankRowsByAccount)
+						r.Get("/vipps-rows", accountingHandler.HandleListVippsRowsByMSN)
 						r.Post("/bank-sync", accountingHandler.HandleBankSync)
 
 						r.Route("/bank-rows/{rowID}/reconcile-vipps", func(r chi.Router) {

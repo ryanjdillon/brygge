@@ -511,7 +511,7 @@
       "accounts": "Kontoplan",
       "periods": "Perioder",
       "journal": "Bilag",
-      "bankImports": "Bank/Vipps import"
+      "bankImports": "Bank og Vipps"
     },
     "financialSettings": {
       "title": "Innstillinger",
@@ -1276,8 +1276,8 @@
     "groupShop": "Butikk",
     "groupSite": "Nettsted",
     "bankImports": {
-      "title": "Bank- og Vipps-import",
-      "subtitle": "Last opp bankkontoutskrifter og Vipps-oppgjørsrapporter, og avstem dem mot hverandre.",
+      "title": "Bank og Vipps",
+      "subtitle": "Bankkontoer og Vipps-salgssteder — vis transaksjoner per periode, last opp utskrifter og avstem.",
       "bankCardTitle": "Bankkontoutskrift",
       "bankCardDesc": "CSV fra nettbanken (semikolon-separert). Duplikatrader hoppes over.",
       "vippsCardTitle": "Vipps-oppgjørsrapport",
@@ -1312,8 +1312,8 @@
       "balanced": "Avstemt — debet = kredit",
       "unresolvedNotice": "{n} kunde(r) kunne ikke kobles til medlem — bokføres på klaringskonto.",
       "confirmBilag": "Opprett bilag",
-      "navCardTitle": "Bank- og Vipps-import",
-      "navCardDesc": "Last opp CSV og avstem Vipps-utbetalinger",
+      "navCardTitle": "Bank og Vipps",
+      "navCardDesc": "Se transaksjoner per konto, last opp CSV, avstem Vipps-utbetalinger",
       "bankAccount": "Bankkonto",
       "transfers": "Interne overføringer",
       "closedPeriodsNotice": "Rader fra følgende lukkede perioder ble ikke avstemt automatisk: {years}. Gjenåpne periodene om du vil bokføre dem.",
@@ -1328,7 +1328,16 @@
       "vippsAccountsTitle": "Vipps-numre",
       "vippsAccountsDesc": "Vipps-numre sett i importerte oppgjørsrapporter.",
       "noBankAccounts": "Ingen bankkontoer er konfigurert i kontoplan.",
-      "noVippsAccounts": "Ingen Vipps-numre er importert ennå."
+      "noVippsAccounts": "Ingen Vipps-numre er importert ennå.",
+      "selectBankAccount": "Bankkonto",
+      "selectVippsMSN": "Vipps MSN",
+      "selectYear": "År",
+      "selectMonth": "Måned",
+      "allMonths": "Alle måneder",
+      "noRowsInPeriod": "Ingen transaksjoner i valgt periode.",
+      "noAccountSelected": "Velg en bankkonto eller Vipps MSN for å se transaksjoner.",
+      "bankImportsListTitle": "Tidligere bankimporter",
+      "noBankImports": "Ingen bankimporter ennå."
     }
   },
   "projects": {
