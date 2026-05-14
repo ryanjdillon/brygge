@@ -133,15 +133,13 @@ func main() {
 		if err != nil {
 			log.Warn().Err(err).Str("path", cfg.BoardMailboxesPath).Msg("failed to load board-mailbox spec")
 		} else if len(spec) > 0 {
-			adminClient := mail.NewAdminClient(
-				cfg.StalwartAdminURL,
-				cfg.StalwartAdminUser,
-				cfg.StalwartAdminPassword,
-				cfg.StalwartAdminToken,
-				log,
-			)
-			jmapClient := mail.NewJMAPClient(cfg.StalwartAdminURL, adminClient)
-			inboxReconciler = mail.NewReconciler(db, adminClient, jmapClient, auditService, spec, cfg.ReconcilerDryRun, log)
+			passwords, err := mail.LoadPasswordMap(cfg.StalwartMailboxPasswordsPath)
+			if err != nil {
+				log.Warn().Err(err).Str("path", cfg.StalwartMailboxPasswordsPath).Msg("failed to load mailbox passwords")
+			}
+			jmapFactory := mail.NewJMAPFactory(cfg.StalwartAdminURL)
+			adminJMAP := jmapFactory.AsPrincipal(cfg.StalwartAdminUser, cfg.StalwartAdminPassword)
+			inboxReconciler = mail.NewReconciler(db, adminJMAP, jmapFactory, passwords, auditService, spec, cfg.ReconcilerDryRun, log)
 		}
 	}
 
@@ -736,7 +734,13 @@ func main() {
 						cfg.StalwartAdminToken,
 						log,
 					)
-					jmapClient := mail.NewJMAPClient(cfg.StalwartAdminURL, adminClient)
+					// NOTE: DIL-277 read path is provisional. JMAP sessions
+					// for admin only show admin's own account, so calls
+					// scoped to a shared principal's accountId will not
+					// work with these credentials. Tracked for the per-user
+					// auth migration.
+					jmapClient := mail.NewJMAPClient(cfg.StalwartAdminURL,
+						cfg.StalwartAdminUser, cfg.StalwartAdminPassword, nil)
 					spec, _ := mail.LoadSpec(cfg.BoardMailboxesPath)
 					inboxHandler := handlers.NewInboxHandler(db, adminClient, jmapClient, auditService, spec, log)
 					r.Route("/inbox", func(r chi.Router) {

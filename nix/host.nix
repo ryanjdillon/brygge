@@ -815,7 +815,18 @@ in
     # operator when rotating.
     STALWART_ADMIN_URL = "http://127.0.0.1:8088";
     BRYGGE_MAILBOXES_PATH = "/etc/brygge/board-mailboxes.json";
+    # Service-password map per shared principal (DIL-276). Generated
+    # by stalwart-mailbox-config.service. The brygge user must be
+    # able to read this — see the systemd unit's tmpfiles rule.
+    STALWART_MAILBOX_PASSWORDS_PATH = "/etc/stalwart/board-mailbox-passwords.json";
   };
+
+  # Pre-create the password-map file so the systemd unit can write to
+  # it with predictable ownership (root:brygge 0640). brygge needs
+  # group-read; nobody else needs anything.
+  systemd.tmpfiles.rules = [
+    "f /etc/stalwart/board-mailbox-passwords.json 0640 root brygge -"
+  ];
 
   # Source of truth for role→mailbox mapping. Pure data from tfvars;
   # consumed by both stalwart-mailbox-config.service (principal upsert)
@@ -834,7 +845,7 @@ in
     after = [ "stalwart.service" "stalwart-relay-account.service" ];
     wants = [ "stalwart.service" ];
     wantedBy = [ "multi-user.target" ];
-    path = with pkgs; [ curl jq coreutils ];
+    path = with pkgs; [ curl jq coreutils openssl ];
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
@@ -844,6 +855,7 @@ in
 
       SPEC=/etc/brygge/board-mailboxes.json
       ADMIN_FILE=/etc/stalwart/admin-password
+      PWFILE=/etc/stalwart/board-mailbox-passwords.json
 
       if [ ! -s "$SPEC" ]; then
         echo "No board mailboxes declared in $SPEC — nothing to do."
@@ -856,6 +868,15 @@ in
 
       ADMIN=$(cat "$ADMIN_FILE")
       API="http://127.0.0.1:8088/api/principal"
+
+      # Initialise the password map if missing or empty. The
+      # tmpfiles rule creates the file with the right perms; we just
+      # need to seed it with valid JSON.
+      if [ ! -s "$PWFILE" ]; then
+        echo '{}' > "$PWFILE"
+        chmod 0640 "$PWFILE"
+        chown root:brygge "$PWFILE"
+      fi
 
       # Soft-fail (per DIL-276) if Stalwart isn't responsive yet — the
       # 5-min cron in the backend reconciler will retry.
@@ -920,6 +941,29 @@ in
                -H 'Content-Type: application/json' -d "$BODY" >/dev/null \
             || echo "WARN: failed to refresh $ADDR description" >&2
           echo "ensured principal: $ADDR ($STYPE)"
+        fi
+
+        # Service password for the JMAP reconciler (DIL-276). Generated
+        # once per principal, stored alongside in $PWFILE. Stalwart
+        # 0.15 doesn't expose an OAuth grant we can use for
+        # admin-as-other-principal, so the reconciler authenticates
+        # directly as each shared principal — same approach as the
+        # SMTP relay@ account.
+        CUR=$(jq -r --arg a "$ADDR" '.[$a] // ""' "$PWFILE")
+        if [ -z "$CUR" ]; then
+          PLAIN=$(openssl rand -base64 24 | tr -d '=+/' | head -c 32)
+          BODY=$(jq -nc --arg pw "$PLAIN" \
+            '[{action:"set",field:"secrets",value:[$pw]}]')
+          if curl -fsS -u "admin:$ADMIN" -X PATCH "$API/$NAME" \
+                  -H 'Content-Type: application/json' -d "$BODY" >/dev/null; then
+            TMP=$(mktemp)
+            jq --arg a "$ADDR" --arg p "$PLAIN" '. + {($a): $p}' "$PWFILE" > "$TMP"
+            install -m 0640 -o root -g brygge "$TMP" "$PWFILE"
+            rm -f "$TMP"
+            echo "generated service password: $ADDR"
+          else
+            echo "WARN: failed to set service password for $ADDR" >&2
+          fi
         fi
       done
     '';

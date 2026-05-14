@@ -1,12 +1,21 @@
 package mail
 
-// Minimal JMAP client (RFC 8620 / RFC 8621) used by the read-only
-// shared-inbox surface (DIL-277). The Brygge backend acts as a
-// server-side JMAP client on behalf of a member, authenticating to
-// Stalwart with admin Basic auth and scoping per-call to the shared
-// principal's accountId. This avoids the per-user JMAP token-mint
-// dance until Stalwart 0.15's exact token endpoint is verified
-// (still an open item from DIL-276).
+// Minimal JMAP client (RFC 8620 / RFC 8621) for the shared-inbox
+// surface (DIL-275/276/277). Stalwart 0.15's JMAP requires
+// authenticating AS the account whose mailboxes you operate on —
+// admin Basic auth sees only the admin's own account in the session
+// resource and cannot scope calls to other accountIds. So the
+// reconciler (and the user-facing read path) constructs one client
+// per principal it acts as.
+//
+// Stalwart 0.15 also doesn't support standard OAuth password-grant
+// or token-exchange on /auth/token (verified against the running
+// 0.15.x build — both return invalid_grant). So per-principal Basic
+// auth using a service password is the practical path; the password
+// for each shared principal lives in
+// /etc/stalwart/board-mailbox-passwords.json, root-owned + brygge-
+// readable, written by stalwart-mailbox-config.service. Real users
+// (DIL-277 read path) authenticate with their own Stalwart password.
 
 import (
 	"bytes"
@@ -16,24 +25,55 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 )
 
-// JMAPClient talks to Stalwart's JMAP endpoint. The session
-// discovery step in vanilla JMAP returns the per-account API URL;
-// Stalwart serves a single API URL for all accounts at /jmap so we
-// hardcode it. If a future Stalwart version moves it, the only
-// affected method is Call().
+// JMAPClient talks to Stalwart's JMAP endpoint as a single
+// authenticated principal. Cheap to construct; share the http.Client
+// across instances so connection pooling actually pools.
 type JMAPClient struct {
 	baseURL string
-	admin   *AdminClient
+	user    string
+	pass    string
 	http    *http.Client
 }
 
-func NewJMAPClient(baseURL string, admin *AdminClient) *JMAPClient {
+// NewJMAPClient builds a client authenticating as `user`/`pass`. The
+// caller is expected to reuse `httpClient` across instances; pass nil
+// to get a sensible default (10s timeout).
+func NewJMAPClient(baseURL, user, pass string, httpClient *http.Client) *JMAPClient {
+	if httpClient == nil {
+		httpClient = &http.Client{Timeout: 10 * time.Second}
+	}
 	return &JMAPClient{
 		baseURL: strings.TrimRight(baseURL, "/"),
-		admin:   admin,
-		http:    admin.http,
+		user:    user,
+		pass:    pass,
+		http:    httpClient,
+	}
+}
+
+// JMAPFactory mints per-principal JMAPClients backed by a shared
+// http.Client. Convenient for the reconciler loop where we change
+// principals each iteration.
+type JMAPFactory struct {
+	baseURL string
+	http    *http.Client
+}
+
+func NewJMAPFactory(baseURL string) *JMAPFactory {
+	return &JMAPFactory{
+		baseURL: strings.TrimRight(baseURL, "/"),
+		http:    &http.Client{Timeout: 10 * time.Second},
+	}
+}
+
+func (f *JMAPFactory) AsPrincipal(user, pass string) *JMAPClient {
+	return &JMAPClient{
+		baseURL: f.baseURL,
+		user:    user,
+		pass:    pass,
+		http:    f.http,
 	}
 }
 
@@ -67,7 +107,7 @@ func (c *JMAPClient) Call(ctx context.Context, using []string, calls []invocatio
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	c.admin.auth(req)
+	req.SetBasicAuth(c.user, c.pass)
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return nil, err
@@ -84,6 +124,78 @@ func (c *JMAPClient) Call(ctx context.Context, using []string, calls []invocatio
 		return nil, fmt.Errorf("jmap decode: %w", err)
 	}
 	return env.MethodResponses, nil
+}
+
+// SessionAccounts returns the JMAP account IDs the authenticated
+// principal has access to. Stalwart 0.15 shows just the principal's
+// own account here (admin sees admin's id; leiar sees leiar's id).
+func (c *JMAPClient) SessionAccounts(ctx context.Context) ([]string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		c.baseURL+"/jmap/session", nil)
+	if err != nil {
+		return nil, err
+	}
+	req.SetBasicAuth(c.user, c.pass)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("jmap session %s: %s", resp.Status, truncate(body, 200))
+	}
+	var env struct {
+		Accounts map[string]any `json:"accounts"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&env); err != nil {
+		return nil, fmt.Errorf("jmap session: decode: %w", err)
+	}
+	ids := make([]string, 0, len(env.Accounts))
+	for id := range env.Accounts {
+		ids = append(ids, id)
+	}
+	return ids, nil
+}
+
+// Principal is the slim Principal/get projection used by the
+// reconciler to map emails to JMAP account IDs. The JMAP id (e.g.
+// "f") is distinct from the admin REST API's numeric id (e.g. 5).
+// shareWith and most JMAP operations require the JMAP id.
+type Principal struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
+	Type  string `json:"type"`
+}
+
+// ListPrincipals enumerates every principal visible to the calling
+// account (admin sees all). Requires the JMAP Principals capability
+// (`urn:ietf:params:jmap:principals`).
+func (c *JMAPClient) ListPrincipals(ctx context.Context, accountID string) ([]Principal, error) {
+	resp, err := c.Call(ctx, []string{
+		"urn:ietf:params:jmap:core",
+		"urn:ietf:params:jmap:principals",
+	}, []invocation{
+		{"Principal/get", map[string]any{
+			"accountId":  accountID,
+			"ids":        nil,
+			"properties": []string{"id", "name", "email", "type"},
+		}, "0"},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(resp) == 0 {
+		return nil, fmt.Errorf("Principal/get: empty response")
+	}
+	var args struct {
+		List []Principal `json:"list"`
+	}
+	if err := decodeArgs(resp[0], &args); err != nil {
+		return nil, err
+	}
+	return args.List, nil
 }
 
 // Mailbox is the slim projection of JMAP Mailbox/get we need.
