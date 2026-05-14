@@ -350,6 +350,10 @@ function nok(n: number): string {
             {{ reconcilePreview.balanced ? t('admin.bankImports.balanced') : reconcilePreview.reason }}
           </div>
 
+          <div v-if="reconcilePreview.period_closed" class="rounded-md bg-red-50 px-3 py-2 text-xs text-red-800" data-testid="reconcile-period-closed">
+            {{ t('admin.bankImports.periodClosedNotice', { year: reconcilePreview.period_year }) }}
+          </div>
+
           <div v-if="reconcilePreview.unresolved_count > 0" class="rounded-md bg-yellow-50 px-3 py-2 text-xs text-yellow-800">
             {{ t('admin.bankImports.unresolvedNotice', { n: reconcilePreview.unresolved_count }) }}
           </div>
@@ -384,7 +388,7 @@ function nok(n: number): string {
           </button>
           <button
             type="button"
-            :disabled="!reconcilePreview?.balanced || reconcileBusy"
+            :disabled="!reconcilePreview?.balanced || reconcilePreview?.period_closed || reconcileBusy"
             class="rounded-md bg-green-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
             data-testid="reconcile-confirm"
             @click="confirmReconcile"

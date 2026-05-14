@@ -87,6 +87,34 @@ Klokkarvik Båtlag,548005,Norge,,2026-03-24 00:23:17,2026-03-23,Utbetaling planl
 	if !preview.Balanced {
 		t.Errorf("expected balanced preview; reason=%q lines=%+v", preview.Reason, preview.Lines)
 	}
+	if preview.PeriodYear != 2026 {
+		t.Errorf("period_year = %d, want 2026", preview.PeriodYear)
+	}
+	if preview.PeriodClosed {
+		t.Errorf("period_closed should be false when period is open")
+	}
+
+	// Closing the period should flip the flag.
+	if _, err := pool.Exec(ctx,
+		`UPDATE fiscal_periods SET status = 'closed', closed_at = now(), closed_by = $2 WHERE id = $1`,
+		periodID, userID,
+	); err != nil {
+		t.Fatalf("close period: %v", err)
+	}
+	closedPreview, err := svc.ReconcileVippsPreview(ctx, clubID, bankRowID)
+	if err != nil {
+		t.Fatalf("preview after close: %v", err)
+	}
+	if !closedPreview.PeriodClosed {
+		t.Errorf("period_closed should be true after closing the period")
+	}
+	// Re-open for the rest of the test.
+	if _, err := pool.Exec(ctx,
+		`UPDATE fiscal_periods SET status = 'open', closed_at = NULL, closed_by = NULL WHERE id = $1`,
+		periodID,
+	); err != nil {
+		t.Fatalf("reopen period: %v", err)
+	}
 	if preview.SettlementNumber != "2000167" || preview.MSN != "548005" {
 		t.Errorf("settlement/msn = (%q, %q)", preview.SettlementNumber, preview.MSN)
 	}
