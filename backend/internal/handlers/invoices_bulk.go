@@ -214,47 +214,51 @@ func (h *InvoiceHandler) HandleBulkCreateInvoices(w http.ResponseWriter, r *http
 			lines = append(lines, bulkResolvedLine{tier: flatItems[i]})
 		}
 
-		var slipInfo *slipBoatInfo
+		var slipBoats []*slipBoatInfo
 		var slipErr string
 		if len(req.BeamCategories) > 0 {
-			slipInfo, slipErr = h.slipBoatForUser(ctx, claims.ClubID, userID)
+			slipBoats, slipErr = h.slipBoatsForUser(ctx, claims.ClubID, userID)
 		}
 		for _, cat := range req.BeamCategories {
-			if slipInfo == nil {
+			if len(slipBoats) == 0 {
 				dropReasons = append(dropReasons, fmt.Sprintf("%s: %s", cat, slipErr))
 				continue
 			}
 			dim := tierDimensionByCategory[cat]
-			var measure *float64
-			var measureLabel string
-			if dim == "length" {
-				measure = slipInfo.length
-				measureLabel = "length"
-			} else {
-				measure = slipInfo.beam
-				measureLabel = "beam"
-			}
-			if measure == nil {
-				dropReasons = append(dropReasons, fmt.Sprintf("%s: boat has no %s recorded", cat, measureLabel))
-				continue
-			}
-			tiers := tiersByCategory[cat]
-			var chosen *priceTier
-			for i := range tiers {
-				t := &tiers[i]
-				if t.tierMin == nil || t.tierMax == nil {
+			// Emit one line per (boat × matching tier) pair. Multi-boat
+			// slip-holders previously got only the first boat's line.
+			for _, sb := range slipBoats {
+				var measure *float64
+				var measureLabel string
+				if dim == "length" {
+					measure = sb.length
+					measureLabel = "length"
+				} else {
+					measure = sb.beam
+					measureLabel = "beam"
+				}
+				if measure == nil {
+					dropReasons = append(dropReasons, fmt.Sprintf("%s (%s): boat has no %s recorded", cat, sb.slipLbl, measureLabel))
 					continue
 				}
-				if *measure >= *t.tierMin && *measure < *t.tierMax {
-					chosen = t
-					break
+				tiers := tiersByCategory[cat]
+				var chosen *priceTier
+				for i := range tiers {
+					t := &tiers[i]
+					if t.tierMin == nil || t.tierMax == nil {
+						continue
+					}
+					if *measure >= *t.tierMin && *measure < *t.tierMax {
+						chosen = t
+						break
+					}
 				}
+				if chosen == nil {
+					dropReasons = append(dropReasons, fmt.Sprintf("%s (%s): %s %.2fm has no matching tier", cat, sb.slipLbl, measureLabel, *measure))
+					continue
+				}
+				lines = append(lines, bulkResolvedLine{tier: *chosen, slipInfo: sb})
 			}
-			if chosen == nil {
-				dropReasons = append(dropReasons, fmt.Sprintf("%s: %s %.2fm has no matching tier", cat, measureLabel, *measure))
-				continue
-			}
-			lines = append(lines, bulkResolvedLine{tier: *chosen, slipInfo: slipInfo})
 		}
 
 		// Per-line idempotency: drop any line whose category is already
@@ -275,20 +279,45 @@ func (h *InvoiceHandler) HandleBulkCreateInvoices(w http.ResponseWriter, r *http
 					kept = append(kept, l)
 					continue
 				}
+				// Match dedup to the dimension that distinguishes the line:
+				// category-only for non-boat lines (dues, harbor_membership),
+				// category + boat_id for boat-bearing lines (slip_fee), so
+				// two boats on the same invoice don't collide.
 				var existing string
-				err := h.db.QueryRow(ctx,
-					`SELECT il.id
-					   FROM invoice_lines il
-					   JOIN invoices i ON i.id = il.invoice_id
-					  WHERE i.club_id = $1 AND i.user_id = $2
-					    AND il.category = $3
-					    AND i.fiscal_period_id = $4
-					    AND i.status <> 'voided'
-					  LIMIT 1`,
-					claims.ClubID, userID, l.tier.category, req.FiscalPeriodID,
-				).Scan(&existing)
+				var err error
+				if l.slipInfo != nil && l.slipInfo.boatID != "" {
+					err = h.db.QueryRow(ctx,
+						`SELECT il.id
+						   FROM invoice_lines il
+						   JOIN invoices i ON i.id = il.invoice_id
+						  WHERE i.club_id = $1 AND i.user_id = $2
+						    AND il.category = $3
+						    AND il.boat_id = $4
+						    AND i.fiscal_period_id = $5
+						    AND i.status <> 'voided'
+						  LIMIT 1`,
+						claims.ClubID, userID, l.tier.category, l.slipInfo.boatID, req.FiscalPeriodID,
+					).Scan(&existing)
+				} else {
+					err = h.db.QueryRow(ctx,
+						`SELECT il.id
+						   FROM invoice_lines il
+						   JOIN invoices i ON i.id = il.invoice_id
+						  WHERE i.club_id = $1 AND i.user_id = $2
+						    AND il.category = $3
+						    AND il.boat_id IS NULL
+						    AND i.fiscal_period_id = $4
+						    AND i.status <> 'voided'
+						  LIMIT 1`,
+						claims.ClubID, userID, l.tier.category, req.FiscalPeriodID,
+					).Scan(&existing)
+				}
 				if err == nil {
-					dropReasons = append(dropReasons, fmt.Sprintf("%s already invoiced (override available)", l.tier.desc))
+					label := l.tier.desc
+					if l.slipInfo != nil && l.slipInfo.slipLbl != "" {
+						label = fmt.Sprintf("%s (%s)", l.tier.desc, l.slipInfo.slipLbl)
+					}
+					dropReasons = append(dropReasons, fmt.Sprintf("%s already invoiced (override available)", label))
 					continue
 				}
 				if err != pgx.ErrNoRows {
@@ -342,6 +371,7 @@ func (h *InvoiceHandler) HandleBulkCreateInvoices(w http.ResponseWriter, r *http
 }
 
 type slipBoatInfo struct {
+	boatID   string
 	beam     *float64
 	length   *float64
 	boatName string
@@ -350,57 +380,66 @@ type slipBoatInfo struct {
 	slipLbl  string
 }
 
-func (h *InvoiceHandler) slipBoatForUser(ctx context.Context, clubID, userID string) (*slipBoatInfo, string) {
-	var (
-		hasAssignment bool
-		boatID        *string
-		beam          *float64
-		length        *float64
-		boatName      *string
-		mfg           *string
-		model         *string
-		slipSection   *string
-		slipNumber    *string
-	)
-	err := h.db.QueryRow(ctx,
-		`SELECT TRUE, sa.boat_id, b.beam_m, b.length_m, b.name, b.manufacturer, b.model,
+// slipBoatsForUser returns every active slip assignment a user owns
+// (one entry per (slip, boat) pair). Multi-boat slip-holders previously
+// lost lines because the prior helper used LIMIT 1.
+func (h *InvoiceHandler) slipBoatsForUser(ctx context.Context, clubID, userID string) ([]*slipBoatInfo, string) {
+	rows, err := h.db.Query(ctx,
+		`SELECT sa.boat_id, b.beam_m, b.length_m, b.name, b.manufacturer, b.model,
 		        s.section, s.number
 		   FROM slip_assignments sa
 		   LEFT JOIN boats b ON b.id = sa.boat_id
 		   JOIN slips s ON s.id = sa.slip_id
 		  WHERE sa.user_id = $1 AND sa.club_id = $2
 		    AND sa.released_at IS NULL
-		  ORDER BY sa.assigned_at
-		  LIMIT 1`,
+		  ORDER BY sa.assigned_at`,
 		userID, clubID,
-	).Scan(&hasAssignment, &boatID, &beam, &length, &boatName, &mfg, &model, &slipSection, &slipNumber)
-	if err == pgx.ErrNoRows {
-		return nil, "no active slip assignment"
-	}
+	)
 	if err != nil {
 		return nil, "lookup failed"
 	}
-	if boatID == nil {
-		return nil, "active slip has no boat_id set"
-	}
-	info := &slipBoatInfo{beam: beam, length: length}
-	if boatName != nil {
-		info.boatName = *boatName
-	}
-	if mfg != nil {
-		info.mfg = *mfg
-	}
-	if model != nil {
-		info.model = *model
-	}
-	if slipSection != nil && slipNumber != nil {
-		if len(*slipNumber) > 0 && len(*slipSection) > 0 && string((*slipNumber)[0]) != *slipSection {
-			info.slipLbl = *slipSection + *slipNumber
-		} else {
-			info.slipLbl = *slipNumber
+	defer rows.Close()
+	var out []*slipBoatInfo
+	for rows.Next() {
+		var (
+			boatID      *string
+			beam        *float64
+			length      *float64
+			boatName    *string
+			mfg         *string
+			model       *string
+			slipSection *string
+			slipNumber  *string
+		)
+		if err := rows.Scan(&boatID, &beam, &length, &boatName, &mfg, &model, &slipSection, &slipNumber); err != nil {
+			return nil, "scan failed"
 		}
+		if boatID == nil {
+			continue
+		}
+		info := &slipBoatInfo{boatID: *boatID, beam: beam, length: length}
+		if boatName != nil {
+			info.boatName = *boatName
+		}
+		if mfg != nil {
+			info.mfg = *mfg
+		}
+		if model != nil {
+			info.model = *model
+		}
+		if slipSection != nil && slipNumber != nil {
+			if len(*slipNumber) > 0 && len(*slipSection) > 0 && string((*slipNumber)[0]) != *slipSection {
+				info.slipLbl = *slipSection + *slipNumber
+			} else {
+				info.slipLbl = *slipNumber
+			}
+		}
+		out = append(out, info)
 	}
-	return info, ""
+	if len(out) == 0 {
+		return nil, "no active slip assignment"
+	}
+	return out, ""
 }
 
 // priceTier is a single tier slab loaded for the bulk flow. tierMin
@@ -513,11 +552,16 @@ func (h *InvoiceHandler) createBulkInvoice(
 			c := l.tier.category
 			lineCategory = &c
 		}
+		var lineBoatID *string
+		if l.slipInfo != nil && l.slipInfo.boatID != "" {
+			b := l.slipInfo.boatID
+			lineBoatID = &b
+		}
 		if _, err := h.db.Exec(ctx,
 			`INSERT INTO invoice_lines (invoice_id, description, sub_description, quantity,
-			                            unit_price, line_total, price_item_id, category)
-			 VALUES ($1, $2, $3, 1, $4, $4, $5, $6)`,
-			invoiceID, pdfLines[i].Description, pdfLines[i].SubDescription, l.tier.amount, l.tier.id, lineCategory,
+			                            unit_price, line_total, price_item_id, category, boat_id)
+			 VALUES ($1, $2, $3, 1, $4, $4, $5, $6, $7)`,
+			invoiceID, pdfLines[i].Description, pdfLines[i].SubDescription, l.tier.amount, l.tier.id, lineCategory, lineBoatID,
 		); err != nil {
 			h.log.Error().Err(err).Msg("failed to insert invoice line for bulk invoice")
 		}
