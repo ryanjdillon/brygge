@@ -1,7 +1,11 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAdminDeletionRequests, useProcessDeletion, useAdminLegalDocuments, useCreateLegalDocument } from '@/composables/useGdpr'
+import Select from '@/components/ui/form/Select.vue'
+import Input from '@/components/ui/form/Input.vue'
+import Textarea from '@/components/ui/form/Textarea.vue'
+import Checkbox from '@/components/ui/form/Checkbox.vue'
 
 const { t } = useI18n()
 const { requests, isLoading: requestsLoading } = useAdminDeletionRequests()
@@ -24,6 +28,11 @@ function isGraceExpired(graceEnd: string): boolean {
 function formatDate(d: string) {
   return new Date(d).toLocaleDateString()
 }
+
+const docTypeOptions = computed(() => [
+  { value: 'terms', label: t('gdpr.consentType.terms') },
+  { value: 'privacy_policy', label: t('gdpr.consentType.privacy_policy') },
+])
 
 function handleCreate() {
   createDocument(
@@ -117,39 +126,18 @@ function handleCreate() {
       <div v-if="showForm" class="rounded-lg border border-gray-200 bg-white p-4 mb-4 space-y-4">
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">{{ t('gdpr.admin.docType') }}</label>
-          <select
-            v-model="form.doc_type"
-            class="w-full rounded-md border-gray-300 text-sm"
-          >
-            <option value="terms">{{ t('gdpr.consentType.terms') }}</option>
-            <option value="privacy_policy">{{ t('gdpr.consentType.privacy_policy') }}</option>
-          </select>
+          <Select v-model="form.doc_type" :options="docTypeOptions" width="full" />
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">{{ t('gdpr.admin.version') }}</label>
-          <input
-            v-model="form.version"
-            type="text"
-            class="w-full rounded-md border-gray-300 text-sm"
-            placeholder="1.0"
-          />
+          <Input v-model="form.version" type="text" placeholder="1.0" />
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">{{ t('gdpr.admin.content') }}</label>
-          <textarea
-            v-model="form.content"
-            rows="6"
-            class="w-full rounded-md border-gray-300 text-sm"
-          />
+          <Textarea v-model="form.content" :rows="6" />
         </div>
-        <div class="flex items-center gap-2">
-          <input
-            id="publish"
-            v-model="form.publish"
-            type="checkbox"
-            class="rounded border-gray-300 text-blue-600"
-          />
-          <label for="publish" class="text-sm text-gray-700">{{ t('gdpr.admin.publish') }}</label>
+        <div>
+          <Checkbox v-model="form.publish">{{ t('gdpr.admin.publish') }}</Checkbox>
         </div>
         <button
           :disabled="creating || !form.version || !form.content"

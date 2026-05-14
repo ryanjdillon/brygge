@@ -4,6 +4,9 @@ import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useApiClient, unwrap } from '@/lib/apiClient'
 import { Send, Eye, History } from 'lucide-vue-next'
+import Select from '@/components/ui/form/Select.vue'
+import Input from '@/components/ui/form/Input.vue'
+import Textarea from '@/components/ui/form/Textarea.vue'
 
 const { t } = useI18n()
 const client = useApiClient()
@@ -48,6 +51,10 @@ const sendMutation = useMutation({
 })
 
 const canSend = computed(() => subject.value.trim() && body.value.trim())
+
+const recipientSelectOptions = computed(() =>
+  recipientOptions.map((o) => ({ value: o.value, label: t(o.labelKey) })),
+)
 
 function recipientLabel(value: string): string {
   const opt = recipientOptions.find((o) => o.value === value)
@@ -102,34 +109,23 @@ function formatDateTime(iso: string): string {
       <div v-if="!showPreview" class="space-y-4">
         <div>
           <label class="block text-sm font-medium text-gray-700">{{ t('admin.communication.recipients') }}</label>
-          <select
-            v-model="recipients"
-            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          >
-            <option v-for="opt in recipientOptions" :key="opt.value" :value="opt.value">
-              {{ t(opt.labelKey) }}
-            </option>
-          </select>
+          <div class="mt-1">
+            <Select v-model="recipients" :options="recipientSelectOptions" width="full" />
+          </div>
         </div>
 
         <div>
           <label class="block text-sm font-medium text-gray-700">{{ t('admin.communication.subject') }}</label>
-          <input
-            v-model="subject"
-            type="text"
-            required
-            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
+          <div class="mt-1">
+            <Input v-model="subject" type="text" />
+          </div>
         </div>
 
         <div>
           <label class="block text-sm font-medium text-gray-700">{{ t('admin.communication.body') }}</label>
-          <textarea
-            v-model="body"
-            rows="8"
-            required
-            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
+          <div class="mt-1">
+            <Textarea v-model="body" :rows="8" />
+          </div>
         </div>
 
         <div class="flex justify-end">

@@ -5,6 +5,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useApiClient, unwrap } from '@/lib/apiClient'
 import { ShieldCheck, ChevronDown, ChevronUp } from 'lucide-vue-next'
 import type { components } from '@/types/api'
+import NumberInput from '@/components/ui/form/NumberInput.vue'
+import Checkbox from '@/components/ui/form/Checkbox.vue'
 
 type UnconfirmedBoat = components['schemas']['UnconfirmedBoat']
 
@@ -123,47 +125,32 @@ const { mutate: confirmBoat, isPending: isConfirming } = useMutation({
           <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div>
               <label class="block text-xs font-medium text-gray-500">{{ t('admin.boats.length') }}</label>
-              <input
-                v-model.number="adjusting[boat.id].length_m"
-                type="number"
-                step="0.01"
-                class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
+              <div class="mt-1">
+                <NumberInput v-model="adjusting[boat.id].length_m" :step="0.01" />
+              </div>
             </div>
             <div>
               <label class="block text-xs font-medium text-gray-500">{{ t('admin.boats.beam') }}</label>
-              <input
-                v-model.number="adjusting[boat.id].beam_m"
-                type="number"
-                step="0.01"
-                class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
+              <div class="mt-1">
+                <NumberInput v-model="adjusting[boat.id].beam_m" :step="0.01" />
+              </div>
             </div>
             <div>
               <label class="block text-xs font-medium text-gray-500">{{ t('admin.boats.draft') }}</label>
-              <input
-                v-model.number="adjusting[boat.id].draft_m"
-                type="number"
-                step="0.01"
-                class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
+              <div class="mt-1">
+                <NumberInput v-model="adjusting[boat.id].draft_m" :step="0.01" />
+              </div>
             </div>
             <div>
               <label class="block text-xs font-medium text-gray-500">{{ t('admin.boats.weight') }}</label>
-              <input
-                v-model.number="adjusting[boat.id].weight_kg"
-                type="number"
-                step="1"
-                class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
+              <div class="mt-1">
+                <NumberInput v-model="adjusting[boat.id].weight_kg" :step="1" />
+              </div>
             </div>
           </div>
 
           <div v-if="!boat.boat_model_id" class="mt-3">
-            <label class="flex items-center gap-2 text-sm text-gray-700">
-              <input v-model="addToModels[boat.id]" type="checkbox" class="rounded border-gray-300" />
-              {{ t('admin.boats.addToModels') }}
-            </label>
+            <Checkbox v-model="addToModels[boat.id]">{{ t('admin.boats.addToModels') }}</Checkbox>
           </div>
 
           <div class="mt-4 flex gap-3">
