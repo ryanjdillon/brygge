@@ -175,6 +175,29 @@ func (s *Service) SyncInvoices(ctx context.Context, clubID, periodID, syncedBy s
 			description = fmt.Sprintf("Faktura #%d: %s", invoiceNumber, *memberName)
 		}
 
+		// Per-category revenue split: sum invoice_lines by price-item
+		// category, mapped through paymentTypeAccountMap. Lines without
+		// a price_item or with an unmapped category fall through to
+		// defaultRevenueCode.
+		creditsByAccount, err := s.invoiceRevenueCredits(ctx, invoiceID, amount)
+		if err != nil {
+			s.log.Error().Err(err).Str("invoice_id", invoiceID).Msg("failed to aggregate invoice lines")
+			result.Skipped++
+			continue
+		}
+
+		journalLines := []CreateJournalLineInput{
+			{AccountCode: receivablesAccountCode, Debit: amount, Credit: 0, Description: ""},
+		}
+		for code, credit := range creditsByAccount {
+			journalLines = append(journalLines, CreateJournalLineInput{
+				AccountCode: code,
+				Debit:       0,
+				Credit:      credit,
+				Description: "",
+			})
+		}
+
 		sourceID := invoiceID
 		sourceTable := "invoices"
 
@@ -187,10 +210,7 @@ func (s *Service) SyncInvoices(ctx context.Context, clubID, periodID, syncedBy s
 			SourceTable:    &sourceTable,
 			CreatedBy:      syncedBy,
 			ClubID:         clubID,
-			Lines: []CreateJournalLineInput{
-				{AccountCode: receivablesAccountCode, Debit: amount, Credit: 0, Description: ""},
-				{AccountCode: defaultRevenueCode, Debit: 0, Credit: amount, Description: ""},
-			},
+			Lines:          journalLines,
 		})
 		if err != nil {
 			s.log.Error().Err(err).Str("invoice_id", invoiceID).Msg("failed to sync invoice")
@@ -209,4 +229,54 @@ func (s *Service) SyncInvoices(ctx context.Context, clubID, periodID, syncedBy s
 	}
 
 	return result, rows.Err()
+}
+
+// invoiceRevenueCredits computes per-account credit amounts for an
+// invoice by walking its line items, mapping each line price item
+// category to a revenue account, and summing line_total per account.
+// Lines without a price_item or with an unmapped category fall through
+// to defaultRevenueCode. If the line-level sum diverges from the
+// invoice total (rounding or missing lines), the residual is assigned
+// to defaultRevenueCode so the bilag still balances.
+func (s *Service) invoiceRevenueCredits(ctx context.Context, invoiceID string, invoiceTotal float64) (map[string]float64, error) {
+	rows, err := s.db.Query(ctx,
+		`SELECT il.line_total, pi.category
+		 FROM invoice_lines il
+		 LEFT JOIN price_items pi ON pi.id = il.price_item_id
+		 WHERE il.invoice_id = $1`,
+		invoiceID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("querying invoice lines: %w", err)
+	}
+	defer rows.Close()
+
+	credits := map[string]float64{}
+	var lineSum float64
+	for rows.Next() {
+		var lineTotal float64
+		var category *string
+		if err := rows.Scan(&lineTotal, &category); err != nil {
+			return nil, fmt.Errorf("scanning line: %w", err)
+		}
+		code := defaultRevenueCode
+		if category != nil {
+			if c, ok := paymentTypeAccountMap[*category]; ok {
+				code = c
+			}
+		}
+		credits[code] += lineTotal
+		lineSum += lineTotal
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if residual := invoiceTotal - lineSum; residual != 0 {
+		credits[defaultRevenueCode] += residual
+	}
+	if len(credits) == 0 {
+		credits[defaultRevenueCode] = invoiceTotal
+	}
+	return credits, nil
 }
