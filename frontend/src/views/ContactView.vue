@@ -13,6 +13,10 @@ const { t } = useI18n()
 const club = useClubStore()
 club.ensureLoaded()
 
+// Bind via JS const so Vite's import-analysis plugin doesn't try to
+// resolve the API path as a build-time asset and fail the rollup.
+const clubLogoUrl = '/api/v1/club/logo'
+
 const { isEnabled } = useFeatures()
 // Matrix room is part of the Communications module — drop the row when
 // the module is off so the page doesn't promise a chat that isn't
@@ -77,7 +81,7 @@ async function handleSubmit() {
          primary identity surface for visitors. -->
     <img
       v-if="club.hasLogo"
-      src="/api/v1/club/logo"
+      :src="clubLogoUrl"
       :alt="club.name || 'Brygge'"
       class="mt-6 block"
       style="width: 234px; height: auto;"
