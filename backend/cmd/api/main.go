@@ -134,12 +134,23 @@ func main() {
 			log.Warn().Err(err).Str("path", cfg.BoardMailboxesPath).Msg("failed to load board-mailbox spec")
 		} else if len(spec) > 0 {
 			passwords, err := mail.LoadPasswordMap(cfg.StalwartMailboxPasswordsPath)
-			if err != nil {
-				log.Warn().Err(err).Str("path", cfg.StalwartMailboxPasswordsPath).Msg("failed to load mailbox passwords")
+			switch {
+			case err != nil:
+				// Loud failure: an unreadable password file would
+				// leave the reconciler thrashing every 5 minutes.
+				// Disable the feature entirely until the file is
+				// readable; the operator sees the error in journald
+				// and re-deploys after fixing perms.
+				log.Error().Err(err).Str("path", cfg.StalwartMailboxPasswordsPath).
+					Msg("mailbox passwords unreadable — reconciler disabled")
+			case len(passwords) == 0:
+				log.Info().Str("path", cfg.StalwartMailboxPasswordsPath).
+					Msg("mailbox passwords empty — reconciler disabled (waiting for stalwart-mailbox-config to populate)")
+			default:
+				jmapFactory := mail.NewJMAPFactory(cfg.StalwartAdminURL)
+				adminJMAP := jmapFactory.AsPrincipal(cfg.StalwartAdminUser, cfg.StalwartAdminPassword)
+				inboxReconciler = mail.NewReconciler(db, adminJMAP, jmapFactory, passwords, auditService, spec, cfg.ReconcilerDryRun, log)
 			}
-			jmapFactory := mail.NewJMAPFactory(cfg.StalwartAdminURL)
-			adminJMAP := jmapFactory.AsPrincipal(cfg.StalwartAdminUser, cfg.StalwartAdminPassword)
-			inboxReconciler = mail.NewReconciler(db, adminJMAP, jmapFactory, passwords, auditService, spec, cfg.ReconcilerDryRun, log)
 		}
 	}
 
