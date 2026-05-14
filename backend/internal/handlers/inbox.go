@@ -400,7 +400,10 @@ func (h *InboxHandler) HandleSend(w http.ResponseWriter, r *http.Request) {
 	emailID, messageID, err := jmap.SendEmail(ctx, accountID, draftsID, sentID, sendReq)
 	if err != nil {
 		h.log.Warn().Err(err).Str("address", spec.Address).Msg("send failed")
-		Error(w, http.StatusBadGateway, "send failed")
+		// Propagate the JMAP error to the SPA so the composer's
+		// red pill shows the underlying cause (the route is TOTP-
+		// gated and admin-only, so this isn't a privacy concern).
+		Error(w, http.StatusBadGateway, "send failed: "+err.Error())
 		return
 	}
 
