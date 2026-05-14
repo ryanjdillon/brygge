@@ -230,6 +230,46 @@ func TestCSVParserSparebankNorge(t *testing.T) {
 	}
 }
 
+func TestCollapseWhitespace(t *testing.T) {
+	cases := map[string]string{
+		"":                                              "",
+		"plain":                                         "plain",
+		"  trim me  ":                                   "trim me",
+		"line1\nline2":                                  "line1 line2",
+		"tab\there":                                     "tab here",
+		"multi   spaces":                                "multi spaces",
+		"FAKTURANUMMER\n----\n996066430125 1898,69 0":   "FAKTURANUMMER ---- 996066430125 1898,69 0",
+		"a\r\nb":                                        "a b",
+	}
+	for in, want := range cases {
+		if got := collapseWhitespace(in); got != want {
+			t.Errorf("collapseWhitespace(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestCSVParserDescriptionStripsNewlines(t *testing.T) {
+	// A multi-line Melding field (matches the Norsk Tipping invoice
+	// rows the user reported) should be flattened into one line.
+	csv := "Bokført;Beskrivelse;Melding;Beløp (NOK);Arkivref.;Kreditornavn;Debitornavn\n" +
+		"07.01.2026;Innbetaling;\"FAKTURANUMMER  BELØP  FAKTURADATO\n----------------  ------\n996066430125 1898,69 0\";1898.69;R1;Norsk Tipping As;\n"
+
+	parser := &CSVParser{Format: BankFormats["sparebank-norge-v1"]}
+	rows, err := parser.Parse(strings.NewReader(csv))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(rows))
+	}
+	if strings.Contains(rows[0].Description, "\n") {
+		t.Errorf("description still contains newlines: %q", rows[0].Description)
+	}
+	if !strings.Contains(rows[0].Description, "Innbetaling · FAKTURANUMMER") {
+		t.Errorf("description does not look flattened: %q", rows[0].Description)
+	}
+}
+
 func TestCSVParserSparebankNorgeDescriptionJoin(t *testing.T) {
 	csv := "Bokført;Beskrivelse;Melding;Beløp (NOK);Arkivref.;Kreditornavn;Debitornavn\n" +
 		"15.03.2026;Overførsel;Faktura 2026-001;500,00;REF1;;Ola Nordmann\n"

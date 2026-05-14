@@ -249,12 +249,12 @@ function nok(n: number): string {
               class="border-t border-gray-100"
               :data-testid="vippsPattern(row.description) ? 'bank-row-vipps' : 'bank-row'"
             >
-              <td class="px-3 py-2 text-gray-700 tabular-nums">{{ row.date }}</td>
-              <td class="px-3 py-2">{{ row.description }}</td>
-              <td class="px-3 py-2 text-right tabular-nums" :class="row.amount < 0 ? 'text-red-700' : 'text-green-700'">
+              <td class="whitespace-nowrap px-3 py-2 text-gray-700 tabular-nums">{{ row.date }}</td>
+              <td class="max-w-md truncate px-3 py-2" :title="row.description">{{ row.description }}</td>
+              <td class="whitespace-nowrap px-3 py-2 text-right tabular-nums" :class="row.amount < 0 ? 'text-red-700' : 'text-green-700'">
                 {{ nok(row.amount) }}
               </td>
-              <td class="px-3 py-2 text-gray-600">{{ row.counterpart }}</td>
+              <td class="max-w-xs truncate px-3 py-2 text-gray-600" :title="row.counterpart">{{ row.counterpart }}</td>
               <td class="px-3 py-2 text-right">
                 <button
                   v-if="vippsPattern(row.description) && !row.journal_entry_id"
@@ -308,12 +308,12 @@ function nok(n: number): string {
           </thead>
           <tbody>
             <tr v-for="row in vippsRows" :key="row.id" class="border-t border-gray-100">
-              <td class="px-3 py-2">{{ row.row_type }}</td>
-              <td class="px-3 py-2 tabular-nums text-gray-600">{{ row.tx_at ?? row.booking_date ?? '' }}</td>
-              <td class="px-3 py-2">{{ row.customer_name }}</td>
-              <td class="px-3 py-2 text-right tabular-nums">{{ nok(row.amount) }}</td>
-              <td class="px-3 py-2 text-right tabular-nums text-gray-500">{{ nok(row.fee) }}</td>
-              <td class="px-3 py-2 text-xs text-gray-500">{{ row.order_id || row.settlement_number }}</td>
+              <td class="whitespace-nowrap px-3 py-2">{{ row.row_type }}</td>
+              <td class="whitespace-nowrap px-3 py-2 tabular-nums text-gray-600">{{ row.tx_at ?? row.booking_date ?? '' }}</td>
+              <td class="max-w-xs truncate px-3 py-2" :title="row.customer_name">{{ row.customer_name }}</td>
+              <td class="whitespace-nowrap px-3 py-2 text-right tabular-nums">{{ nok(row.amount) }}</td>
+              <td class="whitespace-nowrap px-3 py-2 text-right tabular-nums text-gray-500">{{ nok(row.fee) }}</td>
+              <td class="max-w-xs truncate px-3 py-2 text-xs text-gray-500" :title="row.order_id || row.settlement_number">{{ row.order_id || row.settlement_number }}</td>
             </tr>
           </tbody>
         </table>
