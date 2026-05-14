@@ -76,6 +76,50 @@ func principalName(address string) string {
 	return address
 }
 
+// doJSON is a small helper for non-LookupPrincipal admin REST calls:
+// it marshals `body` (or sends nil) and decodes the response into
+// `out` if non-nil. Returns the wrapped HTTP error when the server
+// responds 4xx/5xx.
+func (c *AdminClient) doJSON(ctx context.Context, method, path string, body any, out any) error {
+	var reader *bytes.Reader
+	if body != nil {
+		buf, err := json.Marshal(body)
+		if err != nil {
+			return err
+		}
+		reader = bytes.NewReader(buf)
+	}
+	var req *http.Request
+	var err error
+	if reader == nil {
+		req, err = http.NewRequestWithContext(ctx, method, c.baseURL+path, nil)
+	} else {
+		req, err = http.NewRequestWithContext(ctx, method, c.baseURL+path, reader)
+	}
+	if err != nil {
+		return err
+	}
+	if reader != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	c.auth(req)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("stalwart %s %s: %s: %s", method, path, resp.Status, truncate(raw, 200))
+	}
+	if out != nil && len(raw) > 0 {
+		if err := json.Unmarshal(raw, out); err != nil {
+			return fmt.Errorf("stalwart %s %s: decode: %w", method, path, err)
+		}
+	}
+	return nil
+}
+
 // LookupPrincipal returns the Stalwart account id for a given email
 // address. Returns "" with no error when the principal does not exist.
 func (c *AdminClient) LookupPrincipal(ctx context.Context, email string) (string, error) {
