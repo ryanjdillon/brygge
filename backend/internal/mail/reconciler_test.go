@@ -7,7 +7,7 @@ import (
 )
 
 func TestHashShareWithIsKeyOrderIndependent(t *testing.T) {
-	rights := ShareRights{MayRead: true, MaySetSeen: true, MayAddItems: true}
+	rights := ShareRights{MayReadItems: true, MaySetSeen: true, MayAddItems: true}
 	a := map[string]ShareRights{"u2": rights, "u1": rights}
 	b := map[string]ShareRights{"u1": rights, "u2": rights}
 	if hashShareWith(a) != hashShareWith(b) {
@@ -16,7 +16,7 @@ func TestHashShareWithIsKeyOrderIndependent(t *testing.T) {
 }
 
 func TestHashShareWithDetectsMembershipChange(t *testing.T) {
-	rights := ShareRights{MayRead: true}
+	rights := ShareRights{MayReadItems: true}
 	base := map[string]ShareRights{"u1": rights}
 	extra := map[string]ShareRights{"u1": rights, "u2": rights}
 	if hashShareWith(base) == hashShareWith(extra) {
@@ -25,8 +25,8 @@ func TestHashShareWithDetectsMembershipChange(t *testing.T) {
 }
 
 func TestHashShareWithDetectsRightsChange(t *testing.T) {
-	r1 := map[string]ShareRights{"u1": {MayRead: true}}
-	r2 := map[string]ShareRights{"u1": {MayRead: true, MayAddItems: true}}
+	r1 := map[string]ShareRights{"u1": {MayReadItems: true}}
+	r2 := map[string]ShareRights{"u1": {MayReadItems: true, MayAddItems: true}}
 	if hashShareWith(r1) == hashShareWith(r2) {
 		t.Fatalf("expected different hashes when rights change")
 	}
