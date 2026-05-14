@@ -1278,7 +1278,6 @@
     "bankImports": {
       "title": "Bank- og Vipps-import",
       "subtitle": "Last opp bankkontoutskrifter og Vipps-oppgjørsrapporter, og avstem dem mot hverandre.",
-      "period": "Regnskapsperiode",
       "bankCardTitle": "Bankkontoutskrift",
       "bankCardDesc": "CSV fra nettbanken (semikolon-separert). Duplikatrader hoppes over.",
       "vippsCardTitle": "Vipps-oppgjørsrapport",
@@ -1316,7 +1315,8 @@
       "navCardTitle": "Bank- og Vipps-import",
       "navCardDesc": "Last opp CSV og avstem Vipps-utbetalinger",
       "bankAccount": "Bankkonto",
-      "transfers": "Interne overføringer"
+      "transfers": "Interne overføringer",
+      "closedPeriodsNotice": "Rader fra følgende lukkede perioder ble ikke avstemt automatisk: {years}. Gjenåpne periodene om du vil bokføre dem."
     }
   },
   "projects": {

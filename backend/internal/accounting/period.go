@@ -39,6 +39,32 @@ func (s *Service) CreatePeriod(ctx context.Context, clubID string, year int) (*F
 	return &p, nil
 }
 
+// ResolvePeriodForDate returns the fiscal period whose date range contains
+// the given date. If none exists, it auto-creates a calendar-year period.
+// Returns (id, status, error). Status is "open" or "closed"; callers should
+// refuse to book new entries into a closed period.
+func (s *Service) ResolvePeriodForDate(ctx context.Context, clubID string, date time.Time) (id, status string, err error) {
+	err = s.db.QueryRow(ctx,
+		`SELECT id, status FROM fiscal_periods
+		 WHERE club_id = $1 AND $2::date BETWEEN start_date AND end_date
+		 LIMIT 1`,
+		clubID, date.Format("2006-01-02"),
+	).Scan(&id, &status)
+	if err == nil {
+		return id, status, nil
+	}
+	if err != pgx.ErrNoRows {
+		return "", "", fmt.Errorf("looking up period: %w", err)
+	}
+
+	// Auto-create as a calendar-year period.
+	p, cerr := s.CreatePeriod(ctx, clubID, date.Year())
+	if cerr != nil {
+		return "", "", cerr
+	}
+	return p.ID, p.Status, nil
+}
+
 // ListPeriods returns all fiscal periods for a club, newest first.
 func (s *Service) ListPeriods(ctx context.Context, clubID string) ([]FiscalPeriod, error) {
 	rows, err := s.db.Query(ctx,

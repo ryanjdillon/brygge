@@ -219,10 +219,11 @@ func ListBankFormats() []string {
 
 // ImportResult summarizes one bank-import call.
 type ImportResult struct {
-	Imported   int
-	SkippedDup int
-	Matched    int
-	Transfers  int // intra-bank transfer pairs auto-linked
+	Imported       int
+	SkippedDup     int
+	Matched        int
+	Transfers      int      // intra-bank transfer pairs auto-linked
+	ClosedPeriods  []string // labels of closed periods that prevented auto-match (e.g. "2025")
 }
 
 // BankRowHash computes the dedup hash for a normalized bank row, scoped per club.
@@ -240,11 +241,17 @@ func BankRowHash(clubID string, row BankRow) string {
 }
 
 // ImportBankRows stores parsed bank rows (dedup by club_id + row_hash) and runs
-// KID auto-matching on newly inserted rows. The KID-match journal entries
-// debit the bank account associated with the import (bank_imports.bank_account_code),
-// not a hard-coded constant.
-func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodID string, rows []BankRow) (ImportResult, error) {
+// KID auto-matching on newly inserted rows. Each created journal entry is
+// posted to the fiscal period whose date range contains the row's date
+// (auto-created as calendar-year if missing). Rows whose target period is
+// closed are stored but not auto-matched.
+//
+// The optional periodOverride argument, if non-empty, forces every row to
+// land in that one period regardless of date — kept for migration / special
+// cases where the treasurer needs to consolidate.
+func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOverride string, rows []BankRow) (ImportResult, error) {
 	var res ImportResult
+	closedYears := map[int]bool{}
 
 	bankAccount := bankAccountCode
 	var importedBy string
@@ -302,6 +309,15 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodID
 			continue
 		}
 
+		periodID, periodStatus, perr := s.resolvePeriod(ctx, clubID, row.Date, periodOverride)
+		if perr != nil {
+			continue
+		}
+		if periodStatus == "closed" {
+			closedYears[row.Date.Year()] = true
+			continue
+		}
+
 		sourceID := importID
 		sourceTable := "bank_import"
 		entry, createErr := s.CreateJournalEntry(ctx, CreateJournalEntryInput{
@@ -346,15 +362,40 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodID
 	// unmatched row on another of the club's bank imports (different
 	// bank_account_code), same date, opposite amounts, account numbers
 	// crossing. Auto-link both rows to a single draft entry.
-	if periodID != "" && importedBy != "" {
-		transfers, derr := s.detectIntraBankTransfers(ctx, clubID, importID, periodID, importedBy)
+	if importedBy != "" {
+		transfers, skipped, derr := s.detectIntraBankTransfers(ctx, clubID, importID, periodOverride, importedBy)
 		if derr != nil {
 			return res, fmt.Errorf("intra-bank transfer detection: %w", derr)
 		}
 		res.Transfers = transfers
+		for _, y := range skipped {
+			closedYears[y] = true
+		}
 	}
 
+	for y := range closedYears {
+		res.ClosedPeriods = append(res.ClosedPeriods, fmt.Sprintf("%d", y))
+	}
+	sort.Strings(res.ClosedPeriods)
+
 	return res, nil
+}
+
+// resolvePeriod returns the fiscal period that should hold an entry for the
+// given row date. If override is non-empty, it's used verbatim. Otherwise
+// the period containing the date is found-or-created.
+func (s *Service) resolvePeriod(ctx context.Context, clubID string, date time.Time, override string) (id, status string, err error) {
+	if override != "" {
+		err = s.db.QueryRow(ctx,
+			`SELECT id, status FROM fiscal_periods WHERE id = $1 AND club_id = $2`,
+			override, clubID,
+		).Scan(&id, &status)
+		if err != nil {
+			return "", "", fmt.Errorf("loading override period: %w", err)
+		}
+		return id, status, nil
+	}
+	return s.ResolvePeriodForDate(ctx, clubID, date)
 }
 
 // inferOwnAccountNumber picks the bank account number that this CSV
@@ -391,7 +432,7 @@ func inferOwnAccountNumber(rows []BankRow) string {
 //
 // For each pair, create one draft journal entry crediting the sending
 // account and debiting the receiving account, then link both rows.
-func (s *Service) detectIntraBankTransfers(ctx context.Context, clubID, importID, periodID, createdBy string) (int, error) {
+func (s *Service) detectIntraBankTransfers(ctx context.Context, clubID, importID, periodOverride, createdBy string) (matched int, skippedClosedYears []int, _ error) {
 	rows, err := s.db.Query(ctx,
 		`WITH this_import AS (
 		   SELECT bank_account_code, bank_account_number FROM bank_imports WHERE id = $1
@@ -418,7 +459,7 @@ func (s *Service) detectIntraBankTransfers(ctx context.Context, clubID, importID
 		importID, clubID,
 	)
 	if err != nil {
-		return 0, fmt.Errorf("querying transfer candidates: %w", err)
+		return 0, nil, fmt.Errorf("querying transfer candidates: %w", err)
 	}
 	defer rows.Close()
 
@@ -438,10 +479,18 @@ func (s *Service) detectIntraBankTransfers(ctx context.Context, clubID, importID
 	}
 	rows.Close()
 
-	matched := 0
+	closedYearSet := map[int]bool{}
 	used := map[string]bool{}
 	for _, p := range pairs {
 		if used[p.r1ID] || used[p.r2ID] {
+			continue
+		}
+		periodID, periodStatus, perr := s.resolvePeriod(ctx, clubID, p.date, periodOverride)
+		if perr != nil {
+			continue
+		}
+		if periodStatus == "closed" {
+			closedYearSet[p.date.Year()] = true
 			continue
 		}
 		debitCode, creditCode := p.codeB, p.codeA
@@ -480,7 +529,10 @@ func (s *Service) detectIntraBankTransfers(ctx context.Context, clubID, importID
 			matched++
 		}
 	}
-	return matched, nil
+	for y := range closedYearSet {
+		skippedClosedYears = append(skippedClosedYears, y)
+	}
+	return matched, skippedClosedYears, nil
 }
 
 // MatchBankRow manually creates a journal entry for an unmatched bank import row.

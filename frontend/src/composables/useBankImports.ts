@@ -38,6 +38,7 @@ export interface BankImportResult {
   skipped_dup: number
   matched: number
   transfers: number
+  closed_periods?: string[]
 }
 
 export interface VippsImportSummary {
@@ -137,13 +138,11 @@ export function useVippsImport(importID: Ref<string | undefined>) {
 export async function uploadBankCSV(
   file: File,
   format: string,
-  periodId: string,
   bankAccountCode: string,
 ): Promise<BankImportResult> {
   const fd = new FormData()
   fd.append('file', file)
   fd.append('format', format)
-  fd.append('period_id', periodId)
   fd.append('bank_account_code', bankAccountCode)
   return fetchJSON<BankImportResult>(`${BASE}/bank-import/`, { method: 'POST', body: fd })
 }
@@ -160,12 +159,11 @@ export async function previewVippsReconcile(rowID: string): Promise<VippsReconci
 
 export async function confirmVippsReconcile(
   rowID: string,
-  periodID: string,
   lines: VippsReconcileLine[],
 ): Promise<{ journal_entry_id: string }> {
   return fetchJSON(`${BASE}/bank-rows/${rowID}/reconcile-vipps/confirm`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ period_id: periodID, lines }),
+    body: JSON.stringify({ lines }),
   })
 }

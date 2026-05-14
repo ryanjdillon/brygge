@@ -15,13 +15,12 @@ import {
   type VippsImportResult,
   type VippsReconcilePreview,
 } from '@/composables/useBankImports'
-import { useFiscalPeriods, useAccountsList } from '@/composables/useAccounting'
+import { useAccountsList } from '@/composables/useAccounting'
 import AccountSelect from '@/components/ui/AccountSelect.vue'
 
 const { t } = useI18n()
 const queryClient = useQueryClient()
 
-const { data: periods } = useFiscalPeriods()
 const { data: formats } = useBankFormats()
 const { data: vippsImports } = useVippsImports()
 const { data: accounts } = useAccountsList()
@@ -35,11 +34,6 @@ const bankAccounts = computed(() =>
     return n >= 1920 && n <= 1949
   }),
 )
-
-const selectedPeriod = computed<string>(() => {
-  const open = periods.value?.find((p) => p.status === 'open')
-  return open?.id ?? periods.value?.[0]?.id ?? ''
-})
 
 // ── Bank upload ──────────────────────────────────────────────
 const bankFile = ref<File | null>(null)
@@ -56,16 +50,11 @@ function onBankFile(e: Event) {
 }
 
 async function submitBank() {
-  if (!bankFile.value || !selectedPeriod.value || !bankAccountCode.value) return
+  if (!bankFile.value || !bankAccountCode.value) return
   bankError.value = null
   bankBusy.value = true
   try {
-    const res = await uploadBankCSV(
-      bankFile.value,
-      bankFormat.value,
-      selectedPeriod.value,
-      bankAccountCode.value,
-    )
+    const res = await uploadBankCSV(bankFile.value, bankFormat.value, bankAccountCode.value)
     bankResult.value = res
     currentBankImportId.value = res.id
   } catch (e: any) {
@@ -128,10 +117,10 @@ async function openReconcile(row: { id: string; description: string }) {
 }
 
 async function confirmReconcile() {
-  if (!reconcilePreview.value || !reconcileTarget.value || !selectedPeriod.value) return
+  if (!reconcilePreview.value || !reconcileTarget.value) return
   reconcileBusy.value = true
   try {
-    await confirmVippsReconcile(reconcileTarget.value.id, selectedPeriod.value, reconcilePreview.value.lines)
+    await confirmVippsReconcile(reconcileTarget.value.id, reconcilePreview.value.lines)
     reconcileTarget.value = null
     reconcilePreview.value = null
     queryClient.invalidateQueries({ queryKey: ['accounting', 'bank-import', currentBankImportId.value] })
@@ -151,19 +140,6 @@ function nok(n: number): string {
   <div>
     <h1 class="text-2xl font-bold text-gray-900">{{ t('admin.bankImports.title') }}</h1>
     <p class="mt-1 text-sm text-gray-500">{{ t('admin.bankImports.subtitle') }}</p>
-
-    <div class="mt-4 flex items-center gap-3 text-sm">
-      <label class="font-medium text-gray-700">{{ t('admin.bankImports.period') }}</label>
-      <select
-        :value="selectedPeriod"
-        class="rounded-md border border-gray-300 px-3 py-1.5"
-        disabled
-      >
-        <option v-for="p in periods ?? []" :key="p.id" :value="p.id">
-          {{ p.year }} ({{ p.status }})
-        </option>
-      </select>
-    </div>
 
     <div class="mt-6 grid gap-4 lg:grid-cols-2">
       <!-- Bank upload card -->
@@ -196,7 +172,7 @@ function nok(n: number): string {
         <div class="mt-3 flex justify-end">
           <button
             type="button"
-            :disabled="!bankFile || !selectedPeriod || !bankAccountCode || bankBusy"
+            :disabled="!bankFile || !bankAccountCode || bankBusy"
             class="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
             data-testid="bank-upload-submit"
             @click="submitBank"
@@ -211,6 +187,9 @@ function nok(n: number): string {
           · {{ t('admin.bankImports.skipped') }}: {{ bankResult.skipped_dup }}
           · {{ t('admin.bankImports.matched') }}: {{ bankResult.matched }}
           · {{ t('admin.bankImports.transfers') }}: {{ bankResult.transfers }}
+          <p v-if="bankResult.closed_periods?.length" class="mt-2 rounded bg-yellow-50 px-2 py-1 text-yellow-800">
+            {{ t('admin.bankImports.closedPeriodsNotice', { years: bankResult.closed_periods.join(', ') }) }}
+          </p>
         </div>
       </section>
 

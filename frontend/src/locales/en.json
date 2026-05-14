@@ -1282,7 +1282,6 @@
     "bankImports": {
       "title": "Bank & Vipps imports",
       "subtitle": "Upload bank statements and Vipps settlement reports, and reconcile them.",
-      "period": "Fiscal period",
       "bankCardTitle": "Bank statement",
       "bankCardDesc": "CSV from your bank (semicolon-separated). Duplicate rows are skipped.",
       "vippsCardTitle": "Vipps settlement report",
@@ -1320,7 +1319,8 @@
       "navCardTitle": "Bank & Vipps imports",
       "navCardDesc": "Upload CSV and reconcile Vipps payouts",
       "bankAccount": "Bank account",
-      "transfers": "Transfers"
+      "transfers": "Transfers",
+      "closedPeriodsNotice": "Rows from the following closed period(s) were not auto-matched: {years}. Reopen those periods if you want to book them."
     }
   },
   "projects": {

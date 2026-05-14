@@ -576,10 +576,13 @@ func (h *AccountingHandler) HandleImportBankStatement(w http.ResponseWriter, r *
 	defer file.Close()
 
 	formatName := r.FormValue("format")
+	// period_id is optional now — when blank each entry's period is
+	// resolved from the row's date (auto-created as calendar year if
+	// missing). A value here forces every row into that one period.
 	periodID := r.FormValue("period_id")
 	bankAccountCode := r.FormValue("bank_account_code")
-	if formatName == "" || periodID == "" {
-		Error(w, http.StatusBadRequest, "format and period_id are required")
+	if formatName == "" {
+		Error(w, http.StatusBadRequest, "format is required")
 		return
 	}
 	if bankAccountCode == "" {
@@ -636,14 +639,15 @@ func (h *AccountingHandler) HandleImportBankStatement(w http.ResponseWriter, r *
 	}
 
 	JSON(w, http.StatusCreated, map[string]any{
-		"id":          importID,
-		"filename":    header.Filename,
-		"format":      formatName,
-		"rows_total":  len(rows),
-		"imported":    result.Imported,
-		"skipped_dup": result.SkippedDup,
-		"matched":     result.Matched,
-		"transfers":   result.Transfers,
+		"id":              importID,
+		"filename":        header.Filename,
+		"format":          formatName,
+		"rows_total":      len(rows),
+		"imported":        result.Imported,
+		"skipped_dup":     result.SkippedDup,
+		"matched":         result.Matched,
+		"transfers":       result.Transfers,
+		"closed_periods":  result.ClosedPeriods,
 	})
 }
 
@@ -1300,8 +1304,10 @@ func (h *AccountingHandler) HandleVippsReconcilePreview(w http.ResponseWriter, r
 }
 
 type vippsReconcileConfirmRequest struct {
-	PeriodID string                            `json:"period_id"`
-	Lines    []accounting.VippsReconcileLine   `json:"lines"`
+	// PeriodID is optional. When blank the period is auto-resolved from
+	// the bank row's date.
+	PeriodID string                          `json:"period_id"`
+	Lines    []accounting.VippsReconcileLine `json:"lines"`
 }
 
 func (h *AccountingHandler) HandleVippsReconcileConfirm(w http.ResponseWriter, r *http.Request) {
@@ -1315,10 +1321,6 @@ func (h *AccountingHandler) HandleVippsReconcileConfirm(w http.ResponseWriter, r
 	var req vippsReconcileConfirmRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		Error(w, http.StatusBadRequest, "invalid request body")
-		return
-	}
-	if req.PeriodID == "" {
-		Error(w, http.StatusBadRequest, "period_id is required")
 		return
 	}
 
