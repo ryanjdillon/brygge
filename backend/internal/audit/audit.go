@@ -61,6 +61,9 @@ const (
 	ActionInboxThreadArchived = "inbox.thread_archived"
 	ActionInboxMarkRead       = "inbox.mark_read"
 
+	// Shared-inbox compose path (DIL-278)
+	ActionInboxMessageSent = "inbox.message_sent"
+
 	// GDPR operations
 	ActionGDPRExportRequested       = "gdpr.export_requested"
 	ActionGDPRDeletionRequested     = "gdpr.deletion_requested"

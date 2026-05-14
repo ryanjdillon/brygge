@@ -773,10 +773,14 @@ func main() {
 					// shared mailbox's address to its JMAP account id.
 					inboxFactory := mail.NewJMAPFactory(cfg.StalwartAdminURL)
 					inboxSpec, _ := mail.LoadSpec(cfg.BoardMailboxesPath)
+					// PrincipalPasswords is reused from the reconciler's
+					// load step above. Send (DIL-278) needs to auth as
+					// the shared principal; reads (DIL-277) don't.
+					inboxPasswords, _ := mail.LoadPasswordMap(cfg.StalwartMailboxPasswordsPath)
 					inboxHandler := handlers.NewInboxHandler(
 						db, inboxFactory, userProvisioner,
 						cfg.StalwartAdminUser, cfg.StalwartAdminPassword,
-						auditService, inboxSpec, log,
+						inboxPasswords, auditService, inboxSpec, log,
 					)
 					r.Route("/inbox", func(r chi.Router) {
 						// Read-only surface gated on having ANY board-mailbox
@@ -794,6 +798,11 @@ func main() {
 							r.Post("/{thread_id}/mark_read", inboxHandler.HandleMarkRead)
 							r.Post("/{thread_id}/archive", inboxHandler.HandleArchiveThread)
 						})
+						// Outbound mail is irreversible; gate sends on a
+						// fresh TOTP re-verify (10-min window), same
+						// posture as void-invoice / delete-user.
+						r.With(middleware.RequireFreshTOTP(10 * time.Minute)).
+							Post("/{address}/send", inboxHandler.HandleSend)
 					})
 				}
 
