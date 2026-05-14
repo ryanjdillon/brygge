@@ -7,10 +7,6 @@ import { useClubStore } from '@/stores/club'
 import { LogIn, LogOut, User, Shield, ShieldAlert } from 'lucide-vue-next'
 import LanguageSwitcher from '@/components/layout/LanguageSwitcher.vue'
 
-// Bind dynamically so Vite's asset plugin doesn't try to resolve the
-// API path as a build-time import.
-const clubLogoUrl = '/api/v1/club/logo'
-
 const { t } = useI18n()
 const router = useRouter()
 const route = useRoute()
@@ -74,18 +70,12 @@ async function handleLogout() {
 
 <template>
   <nav :class="navClass" :aria-label="t('nav.ariaMainNav')">
-    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <div class="w-full px-4 sm:px-6 lg:px-8">
       <!-- On the landing page the brand is presented as a featured logo
            lower on the page, so the top-left slot is left empty for a
            cleaner hero. justify-end keeps the controls flush right. -->
       <div :class="['flex h-14 items-center gap-3', isHero ? 'justify-end' : 'justify-between']">
         <RouterLink v-if="!isHero" to="/" :class="brandClass">
-          <img
-            v-if="club.hasLogo"
-            :src="clubLogoUrl"
-            :alt="club.name || 'Brygge'"
-            class="h-7 w-auto flex-none sm:h-8"
-          />
           <span class="truncate text-base font-semibold sm:text-lg">
             {{ club.name || 'Brygge' }}
           </span>

@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
+import { useClubStore } from '@/stores/club'
 import { useFeatures } from '@/composables/useFeatures'
 import ErrorBoundary from '@/components/ui/ErrorBoundary.vue'
 import {
@@ -34,6 +35,12 @@ import {
 
 const { t } = useI18n()
 const auth = useAuthStore()
+const club = useClubStore()
+club.ensureLoaded()
+
+// Bind via JS const so Vite's import-analysis plugin doesn't try to
+// resolve the API path as a build-time asset.
+const clubLogoUrl = '/api/v1/club/logo'
 const { isEnabled } = useFeatures()
 const route = useRoute()
 
@@ -138,7 +145,7 @@ function closeSidebar() {
 
     <aside
       :class="[
-        'fixed inset-y-0 left-0 z-40 w-64 transform border-r border-gray-200 bg-white pt-16 transition-transform lg:static lg:z-auto lg:translate-x-0 lg:pt-0',
+        'fixed inset-y-0 left-0 z-40 flex w-64 transform flex-col border-r border-gray-200 bg-white pt-16 transition-transform lg:static lg:z-auto lg:translate-x-0 lg:pt-0',
         sidebarOpen ? 'translate-x-0' : '-translate-x-full',
       ]"
     >
@@ -149,7 +156,7 @@ function closeSidebar() {
         </button>
       </div>
 
-      <nav class="px-3 py-4" :aria-label="t('admin.ariaNav')">
+      <nav class="flex-1 overflow-y-auto px-3 py-4" :aria-label="t('admin.ariaNav')">
         <div v-for="(group, gi) in navGroups" :key="gi" :class="gi > 0 ? 'mt-4' : ''">
           <div
             v-if="group.titleKey"
@@ -179,6 +186,18 @@ function closeSidebar() {
           </div>
         </div>
       </nav>
+
+      <div
+        v-if="club.hasLogo"
+        class="hidden shrink-0 lg:sticky lg:bottom-0 lg:flex lg:justify-center lg:bg-white lg:px-4 lg:pb-6 lg:pt-4"
+      >
+        <img
+          :src="clubLogoUrl"
+          :alt="club.name || 'Brygge'"
+          class="block"
+          style="width: 180px; height: auto;"
+        />
+      </div>
     </aside>
 
     <div class="flex-1">
