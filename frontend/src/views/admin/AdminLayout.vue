@@ -39,9 +39,6 @@ const auth = useAuthStore()
 const club = useClubStore()
 club.ensureLoaded()
 
-// Bind via JS const so Vite's import-analysis plugin doesn't try to
-// resolve the API path as a build-time asset.
-const clubLogoUrl = '/api/v1/club/logo'
 const { isEnabled } = useFeatures()
 const route = useRoute()
 
@@ -197,17 +194,6 @@ function closeSidebar() {
         </div>
       </nav>
 
-      <div
-        v-if="club.hasLogo"
-        class="hidden shrink-0 lg:sticky lg:bottom-0 lg:flex lg:justify-center lg:bg-white lg:px-4 lg:pb-6 lg:pt-4"
-      >
-        <img
-          :src="clubLogoUrl"
-          :alt="club.name || 'Brygge'"
-          class="block"
-          style="width: 180px; height: auto;"
-        />
-      </div>
     </aside>
 
     <div class="flex-1">
