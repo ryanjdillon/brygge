@@ -765,22 +765,19 @@ func main() {
 				})
 
 				if inboxReconciler != nil && inboxReconciler.HasMailboxes() {
-					adminClient := mail.NewAdminClient(
-						cfg.StalwartAdminURL,
-						cfg.StalwartAdminUser,
-						cfg.StalwartAdminPassword,
-						cfg.StalwartAdminToken,
-						log,
+					// DIL-277 + DIL-321: per-user JMAP auth. Users
+					// authenticate as themselves (creds from
+					// user_mail_credentials, decrypted via the
+					// provisioner); admin creds are used only for the
+					// one-time Principal/get lookup that maps each
+					// shared mailbox's address to its JMAP account id.
+					inboxFactory := mail.NewJMAPFactory(cfg.StalwartAdminURL)
+					inboxSpec, _ := mail.LoadSpec(cfg.BoardMailboxesPath)
+					inboxHandler := handlers.NewInboxHandler(
+						db, inboxFactory, userProvisioner,
+						cfg.StalwartAdminUser, cfg.StalwartAdminPassword,
+						auditService, inboxSpec, log,
 					)
-					// NOTE: DIL-277 read path is provisional. JMAP sessions
-					// for admin only show admin's own account, so calls
-					// scoped to a shared principal's accountId will not
-					// work with these credentials. Tracked for the per-user
-					// auth migration.
-					jmapClient := mail.NewJMAPClient(cfg.StalwartAdminURL,
-						cfg.StalwartAdminUser, cfg.StalwartAdminPassword, nil)
-					spec, _ := mail.LoadSpec(cfg.BoardMailboxesPath)
-					inboxHandler := handlers.NewInboxHandler(db, adminClient, jmapClient, auditService, spec, log)
 					r.Route("/inbox", func(r chi.Router) {
 						// Read-only surface gated on having ANY board-mailbox
 						// role; the per-address check (matching the spec's

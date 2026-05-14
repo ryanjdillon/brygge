@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -16,33 +17,47 @@ import (
 )
 
 // InboxHandler exposes the read-only surface for the role-gated
-// shared inbox (DIL-277). Mounted under /api/v1/admin/inbox with
-// TOTP-gated admin auth applied at the router level. The handler
-// re-checks the caller's role against the address spec on every
-// request — defence-in-depth in case Stalwart's ACLs ever drift.
+// shared inbox (DIL-277). Each request authenticates to JMAP AS THE
+// LOGGED-IN USER using credentials provisioned by DIL-321 — admin
+// Basic auth wouldn't work because Stalwart's JMAP session only
+// exposes the authenticated principal's own account plus accounts
+// the user has been granted shareWith on. The user's session
+// surfaces both their own mailbox AND the shared board mailbox via
+// the same `accounts` map.
 type InboxHandler struct {
-	db    *pgxpool.Pool
-	admin *mail.AdminClient
-	jmap  *mail.JMAPClient
-	audit *audit.Service
-	spec  []mail.MailboxSpec
-	log   zerolog.Logger
+	db          *pgxpool.Pool
+	jmapFact    *mail.JMAPFactory
+	provisioner *mail.UserProvisioner
+	adminUser   string
+	adminPass   string
+	audit       *audit.Service
+	spec        []mail.MailboxSpec
+	log         zerolog.Logger
+
+	// Cache: shared-mailbox address → JMAP account ID (e.g.
+	// "kasserar@..." → "i"). Populated lazily on first lookup. The
+	// JMAP id is stable across Stalwart restarts for an existing
+	// principal, so this cache lives for the process lifetime.
+	mu        sync.RWMutex
+	sharedIDs map[string]string
 }
 
-func NewInboxHandler(db *pgxpool.Pool, admin *mail.AdminClient, jmap *mail.JMAPClient, auditSvc *audit.Service, spec []mail.MailboxSpec, log zerolog.Logger) *InboxHandler {
+func NewInboxHandler(db *pgxpool.Pool, jmapFact *mail.JMAPFactory, provisioner *mail.UserProvisioner, adminUser, adminPass string, auditSvc *audit.Service, spec []mail.MailboxSpec, log zerolog.Logger) *InboxHandler {
 	return &InboxHandler{
-		db:    db,
-		admin: admin,
-		jmap:  jmap,
-		audit: auditSvc,
-		spec:  spec,
-		log:   log.With().Str("handler", "inbox").Logger(),
+		db:          db,
+		jmapFact:    jmapFact,
+		provisioner: provisioner,
+		adminUser:   adminUser,
+		adminPass:   adminPass,
+		audit:       auditSvc,
+		spec:        spec,
+		log:         log.With().Str("handler", "inbox").Logger(),
+		sharedIDs:   make(map[string]string),
 	}
 }
 
 // MailboxView is the projection returned by GET /mailboxes. Only the
-// fields the SPA needs — JMAP IDs stay server-side so a stale token
-// in the browser can't be replayed against Stalwart.
+// fields the SPA needs — JMAP IDs stay server-side.
 type MailboxView struct {
 	Address     string `json:"address"`
 	Role        string `json:"role"`
@@ -64,6 +79,15 @@ func (h *InboxHandler) HandleListMailboxes(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	userJMAP, err := h.userJMAP(ctx, claims.UserID)
+	if err != nil {
+		// User has no Stalwart principal yet — they can still see
+		// the empty list; sidebar entry gates on roles only.
+		h.log.Debug().Err(err).Str("user_id", claims.UserID).Msg("no user JMAP credentials")
+		JSON(w, http.StatusOK, map[string]any{"mailboxes": []MailboxView{}})
+		return
+	}
+
 	views := make([]MailboxView, 0)
 	for _, s := range h.spec {
 		if !strings.EqualFold(s.Type, "shared") {
@@ -78,7 +102,7 @@ func (h *InboxHandler) HandleListMailboxes(w http.ResponseWriter, r *http.Reques
 			DisplayName: s.DisplayName,
 			CanSendAs:   s.SendAs,
 		}
-		if total, unread, err := h.mailboxCounts(ctx, s.Address); err == nil {
+		if total, unread, err := h.mailboxCounts(ctx, userJMAP, s.Address); err == nil {
 			mv.Total = total
 			mv.Unread = unread
 		} else {
@@ -89,14 +113,19 @@ func (h *InboxHandler) HandleListMailboxes(w http.ResponseWriter, r *http.Reques
 	JSON(w, http.StatusOK, map[string]any{"mailboxes": views})
 }
 
-// HandleListThreads paginates the inbox/archive thread list for a
-// single shared mailbox.
+// HandleListThreads paginates the thread list for a shared mailbox.
 //
 //	GET /inbox/:address/threads?cursor=&q=&limit=
 func (h *InboxHandler) HandleListThreads(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	spec, ok := h.authorize(w, r)
 	if !ok {
+		return
+	}
+	claims := middleware.GetClaims(ctx)
+	userJMAP, err := h.userJMAP(ctx, claims.UserID)
+	if err != nil {
+		Error(w, http.StatusForbidden, "user not provisioned for mail")
 		return
 	}
 
@@ -111,36 +140,34 @@ func (h *InboxHandler) HandleListThreads(w http.ResponseWriter, r *http.Request)
 	}
 	text := strings.TrimSpace(q.Get("q"))
 
-	accountID, inboxID, err := h.resolveInbox(ctx, spec.Address)
+	accountID, inboxID, err := h.resolveInbox(ctx, userJMAP, spec.Address)
 	if err != nil {
 		h.log.Warn().Err(err).Str("address", spec.Address).Msg("inbox resolve failed")
 		Error(w, http.StatusBadGateway, "mail backend unavailable")
 		return
 	}
 
-	ids, total, err := h.jmap.QueryEmails(ctx, accountID, inboxID, text, cursor, limit)
+	ids, total, err := userJMAP.QueryEmails(ctx, accountID, inboxID, text, cursor, limit)
 	if err != nil {
 		h.log.Warn().Err(err).Msg("Email/query failed")
 		Error(w, http.StatusBadGateway, "mail backend error")
 		return
 	}
-	summaries, err := h.jmap.GetEmailSummaries(ctx, accountID, ids)
+	summaries, err := userJMAP.GetEmailSummaries(ctx, accountID, ids)
 	if err != nil {
 		h.log.Warn().Err(err).Msg("Email/get failed")
 		Error(w, http.StatusBadGateway, "mail backend error")
 		return
 	}
 
-	// Reduce to one row per thread: keep the newest message we saw
-	// in the page, mark unread if any of its emails lack $seen.
 	type threadRow struct {
-		ThreadID   string                `json:"thread_id"`
-		Subject    string                `json:"subject"`
-		From       []mail.EmailAddress   `json:"from"`
-		Preview    string                `json:"preview"`
-		ReceivedAt string                `json:"received_at"`
-		Unread     bool                  `json:"unread"`
-		HasAttach  bool                  `json:"has_attachment"`
+		ThreadID   string              `json:"thread_id"`
+		Subject    string              `json:"subject"`
+		From       []mail.EmailAddress `json:"from"`
+		Preview    string              `json:"preview"`
+		ReceivedAt string              `json:"received_at"`
+		Unread     bool                `json:"unread"`
+		HasAttach  bool                `json:"has_attachment"`
 	}
 	threads := make([]threadRow, 0, len(summaries))
 	byThread := map[string]int{}
@@ -179,32 +206,34 @@ func (h *InboxHandler) HandleGetThread(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	claims := middleware.GetClaims(ctx)
+	userJMAP, err := h.userJMAP(ctx, claims.UserID)
+	if err != nil {
+		Error(w, http.StatusForbidden, "user not provisioned for mail")
+		return
+	}
 	threadID := chi.URLParam(r, "thread_id")
 	if threadID == "" {
 		Error(w, http.StatusBadRequest, "thread_id required")
 		return
 	}
 
-	accountID, _, err := h.resolveInbox(ctx, spec.Address)
+	accountID, err := h.sharedAccountID(ctx, spec.Address)
 	if err != nil {
 		Error(w, http.StatusBadGateway, "mail backend unavailable")
 		return
 	}
-	ids, err := h.jmap.GetThreadEmailIDs(ctx, accountID, threadID)
+	ids, err := userJMAP.GetThreadEmailIDs(ctx, accountID, threadID)
 	if err != nil {
 		Error(w, http.StatusNotFound, "thread not found")
 		return
 	}
-	emails, err := h.jmap.GetEmailsFull(ctx, accountID, ids)
+	emails, err := userJMAP.GetEmailsFull(ctx, accountID, ids)
 	if err != nil {
 		Error(w, http.StatusBadGateway, "mail backend error")
 		return
 	}
 
-	// HTML rendering and sanitisation happen in the SPA via
-	// DOMPurify. We expose only the raw body string + the part list
-	// so the client controls rendering; this also keeps the backend
-	// dependency-free of an HTML parser.
 	h.auditMailboxAction(ctx, audit.ActionInboxThreadViewed, spec.Address, threadID)
 	JSON(w, http.StatusOK, map[string]any{
 		"thread_id": threadID,
@@ -221,15 +250,21 @@ func (h *InboxHandler) HandleMarkRead(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	claims := middleware.GetClaims(ctx)
+	userJMAP, err := h.userJMAP(ctx, claims.UserID)
+	if err != nil {
+		Error(w, http.StatusForbidden, "user not provisioned for mail")
+		return
+	}
 	threadID := chi.URLParam(r, "thread_id")
-	read := r.URL.Query().Get("read") != "false" // default true
+	read := r.URL.Query().Get("read") != "false"
 
-	accountID, _, err := h.resolveInbox(ctx, spec.Address)
+	accountID, err := h.sharedAccountID(ctx, spec.Address)
 	if err != nil {
 		Error(w, http.StatusBadGateway, "mail backend unavailable")
 		return
 	}
-	n, err := h.jmap.SetKeywordOnThread(ctx, accountID, threadID, "$seen", read)
+	n, err := userJMAP.SetKeywordOnThread(ctx, accountID, threadID, "$seen", read)
 	if err != nil {
 		Error(w, http.StatusBadGateway, "mail backend error")
 		return
@@ -239,22 +274,26 @@ func (h *InboxHandler) HandleMarkRead(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleArchiveThread moves a thread from Inbox to Archive.
-//
-//	POST /inbox/:address/threads/:thread_id/archive
 func (h *InboxHandler) HandleArchiveThread(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	spec, ok := h.authorize(w, r)
 	if !ok {
 		return
 	}
+	claims := middleware.GetClaims(ctx)
+	userJMAP, err := h.userJMAP(ctx, claims.UserID)
+	if err != nil {
+		Error(w, http.StatusForbidden, "user not provisioned for mail")
+		return
+	}
 	threadID := chi.URLParam(r, "thread_id")
 
-	accountID, archiveID, err := h.resolveArchive(ctx, spec.Address)
+	accountID, archiveID, err := h.resolveArchive(ctx, userJMAP, spec.Address)
 	if err != nil {
 		Error(w, http.StatusBadGateway, "mail backend unavailable")
 		return
 	}
-	n, err := h.jmap.MoveThreadToMailbox(ctx, accountID, threadID, archiveID)
+	n, err := userJMAP.MoveThreadToMailbox(ctx, accountID, threadID, archiveID)
 	if err != nil {
 		Error(w, http.StatusBadGateway, "mail backend error")
 		return
@@ -263,17 +302,12 @@ func (h *InboxHandler) HandleArchiveThread(w http.ResponseWriter, r *http.Reques
 	JSON(w, http.StatusOK, map[string]any{"moved": n})
 }
 
-// HandleProxyImage is a stub for the show-images opt-in. Phase-2
-// landed without a working implementation — the SPA defaults images
-// off, and turning them on without this endpoint just leaves them
-// broken (no remote fetch happens). Tracked as a phase-2 follow-up.
+// HandleProxyImage stub — see DIL-279.
 func (h *InboxHandler) HandleProxyImage(w http.ResponseWriter, r *http.Request) {
 	Error(w, http.StatusNotImplemented, "image proxy not implemented; remote images are off in v1")
 }
 
-// authorize resolves :address from the URL, looks it up in the spec,
-// and verifies the caller has the mapped role. On failure writes the
-// HTTP error and returns ok=false.
+// authorize resolves :address, verifies the caller has the mapped role.
 func (h *InboxHandler) authorize(w http.ResponseWriter, r *http.Request) (mail.MailboxSpec, bool) {
 	address := chi.URLParam(r, "address")
 	for _, s := range h.spec {
@@ -299,12 +333,66 @@ func (h *InboxHandler) authorize(w http.ResponseWriter, r *http.Request) (mail.M
 	return mail.MailboxSpec{}, false
 }
 
-func (h *InboxHandler) resolveInbox(ctx context.Context, address string) (accountID, mailboxID string, err error) {
-	accountID, err = h.admin.LookupPrincipal(ctx, address)
+// userJMAP builds a JMAPClient authenticated as the calling user.
+// Returns an error if the user has no provisioned credentials yet.
+func (h *InboxHandler) userJMAP(ctx context.Context, userID string) (*mail.JMAPClient, error) {
+	user, pass, ok, err := h.provisioner.Credentials(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, errUserNotProvisioned
+	}
+	return h.jmapFact.AsPrincipal(user, pass), nil
+}
+
+// sharedAccountID returns the JMAP id of the shared mailbox's owner
+// principal. Lazily populated via admin's Principal/get; cached for
+// the process lifetime since JMAP ids are stable on Stalwart 0.15.
+func (h *InboxHandler) sharedAccountID(ctx context.Context, address string) (string, error) {
+	key := strings.ToLower(address)
+	h.mu.RLock()
+	if id, ok := h.sharedIDs[key]; ok {
+		h.mu.RUnlock()
+		return id, nil
+	}
+	h.mu.RUnlock()
+
+	admin := h.jmapFact.AsPrincipal(h.adminUser, h.adminPass)
+	accounts, err := admin.SessionAccounts(ctx)
+	if err != nil {
+		return "", err
+	}
+	if len(accounts) == 0 {
+		return "", errInboxNotFound
+	}
+	principals, err := admin.ListPrincipals(ctx, accounts[0])
+	if err != nil {
+		return "", err
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for _, p := range principals {
+		if p.Email != "" {
+			h.sharedIDs[strings.ToLower(p.Email)] = p.ID
+		}
+	}
+	if id, ok := h.sharedIDs[key]; ok {
+		return id, nil
+	}
+	return "", errInboxNotFound
+}
+
+// resolveInbox finds the Inbox folder of a shared mailbox, scoped by
+// the user's JMAP session. Stalwart honors shareWith on cross-account
+// Mailbox/get calls — the user can enumerate the shared owner's
+// folders even though the owner is a different principal.
+func (h *InboxHandler) resolveInbox(ctx context.Context, userJMAP *mail.JMAPClient, address string) (accountID, mailboxID string, err error) {
+	accountID, err = h.sharedAccountID(ctx, address)
 	if err != nil {
 		return "", "", err
 	}
-	mboxes, err := h.jmap.ListMailboxes(ctx, accountID)
+	mboxes, err := userJMAP.ListMailboxes(ctx, accountID)
 	if err != nil {
 		return "", "", err
 	}
@@ -316,12 +404,12 @@ func (h *InboxHandler) resolveInbox(ctx context.Context, address string) (accoun
 	return "", "", errInboxNotFound
 }
 
-func (h *InboxHandler) resolveArchive(ctx context.Context, address string) (accountID, mailboxID string, err error) {
-	accountID, err = h.admin.LookupPrincipal(ctx, address)
+func (h *InboxHandler) resolveArchive(ctx context.Context, userJMAP *mail.JMAPClient, address string) (accountID, mailboxID string, err error) {
+	accountID, err = h.sharedAccountID(ctx, address)
 	if err != nil {
 		return "", "", err
 	}
-	mboxes, err := h.jmap.ListMailboxes(ctx, accountID)
+	mboxes, err := userJMAP.ListMailboxes(ctx, accountID)
 	if err != nil {
 		return "", "", err
 	}
@@ -333,15 +421,15 @@ func (h *InboxHandler) resolveArchive(ctx context.Context, address string) (acco
 	return "", "", errArchiveNotFound
 }
 
-// mailboxCounts returns (total, unread) for the inbox folder of an
-// address. Failures here are non-fatal — they just degrade the
-// sidebar unread-count badge.
-func (h *InboxHandler) mailboxCounts(ctx context.Context, address string) (int, int, error) {
-	accountID, err := h.admin.LookupPrincipal(ctx, address)
-	if err != nil || accountID == "" {
+// mailboxCounts returns (totalThreads, unreadThreads) for the inbox
+// folder of an address. Failures here are non-fatal — they degrade
+// the sidebar badge but don't fail the page load.
+func (h *InboxHandler) mailboxCounts(ctx context.Context, userJMAP *mail.JMAPClient, address string) (int, int, error) {
+	accountID, err := h.sharedAccountID(ctx, address)
+	if err != nil {
 		return 0, 0, err
 	}
-	mboxes, err := h.jmap.ListMailboxes(ctx, accountID)
+	mboxes, err := userJMAP.ListMailboxes(ctx, accountID)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -371,8 +459,9 @@ func hasInboxRole(roles []string, want string) bool {
 }
 
 var (
-	errInboxNotFound   = inboxFolderErr("inbox folder not found on shared mailbox")
-	errArchiveNotFound = inboxFolderErr("archive folder not found on shared mailbox")
+	errInboxNotFound      = inboxFolderErr("inbox folder not found on shared mailbox")
+	errArchiveNotFound    = inboxFolderErr("archive folder not found on shared mailbox")
+	errUserNotProvisioned = inboxFolderErr("user has no JMAP credentials provisioned")
 )
 
 type inboxFolderErr string
