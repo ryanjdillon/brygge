@@ -267,7 +267,7 @@ func (r *Reconciler) computeDesired(ctx context.Context, spec MailboxSpec) (map[
 			continue
 		}
 		shares[principal] = ShareRights{
-			MayRead:        true,
+			MayReadItems:   true,
 			MaySetSeen:     true,
 			MaySetKeywords: true,
 			MayAddItems:    true,

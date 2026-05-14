@@ -317,16 +317,20 @@ func (c *JMAPClient) SetKeywordOnThread(ctx context.Context, accountID, threadID
 // Stalwart 0.15 implements RFC 8621 §2.5 (`shareWith`); no admin REST
 // surface exists for ACL CRUD — sharing is set on the mailbox itself,
 // via JMAP, as the mailbox's owner principal.
+//
+// Field names match the RFC 8621 §2.5 vocabulary exactly. Stalwart
+// rejects deviations with `invalidProperties` and the offending name
+// in `notUpdated.<id>.description` (verified 2026-05-14).
 type ShareRights struct {
-	MayRead         bool `json:"mayRead"`
-	MayAddItems     bool `json:"mayAddItems"`
-	MayRemoveItems  bool `json:"mayRemoveItems"`
-	MaySetSeen      bool `json:"maySetSeen"`
-	MaySetKeywords  bool `json:"maySetKeywords"`
-	MayCreateChild  bool `json:"mayCreateChild"`
-	MayRename       bool `json:"mayRename"`
-	MayDelete       bool `json:"mayDelete"`
-	MaySubmit       bool `json:"maySubmit"`
+	MayReadItems   bool `json:"mayReadItems"`
+	MayAddItems    bool `json:"mayAddItems"`
+	MayRemoveItems bool `json:"mayRemoveItems"`
+	MaySetSeen     bool `json:"maySetSeen"`
+	MaySetKeywords bool `json:"maySetKeywords"`
+	MayCreateChild bool `json:"mayCreateChild"`
+	MayRename      bool `json:"mayRename"`
+	MayDelete      bool `json:"mayDelete"`
+	MaySubmit      bool `json:"maySubmit"`
 }
 
 // SetMailboxShareWith replaces the `shareWith` map on a single
