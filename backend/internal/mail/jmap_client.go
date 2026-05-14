@@ -57,8 +57,12 @@ func (c *JMAPClient) Call(ctx context.Context, using []string, calls []invocatio
 	if err != nil {
 		return nil, err
 	}
+	// Stalwart 0.15 serves JMAP at /jmap/ (verified against the
+	// session resource at /jmap/session). The standard RFC 8620
+	// discovery endpoint is /.well-known/jmap, but it returns the
+	// same apiUrl, so we skip the round-trip and hardcode.
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		c.baseURL+"/jmap/api", bytes.NewReader(buf))
+		c.baseURL+"/jmap/", bytes.NewReader(buf))
 	if err != nil {
 		return nil, err
 	}
