@@ -122,10 +122,65 @@ export function useBankImport(importID: Ref<string | undefined>) {
   })
 }
 
+export interface BankImportSummary {
+  id: string
+  filename: string
+  format: string
+  account_code: string
+  row_count: number
+  matched_count: number
+  created_at: string
+}
+
+export function useBankImportsList() {
+  return useQuery({
+    queryKey: ['accounting', 'bank-imports'],
+    queryFn: () => fetchJSON<BankImportSummary[]>(`${BASE}/bank-imports`),
+  })
+}
+
+export function useBankRowsByAccount(
+  accountCode: Ref<string | undefined>,
+  from: Ref<string | undefined>,
+  to: Ref<string | undefined>,
+) {
+  return useQuery({
+    queryKey: computed(() => ['accounting', 'bank-rows', accountCode.value, from.value, to.value]),
+    enabled: computed(() => !!accountCode.value && !!from.value && !!to.value),
+    queryFn: () => {
+      const params = new URLSearchParams({
+        account_code: accountCode.value!,
+        from: from.value!,
+        to: to.value!,
+      })
+      return fetchJSON<BankImportRow[]>(`${BASE}/bank-rows?${params.toString()}`)
+    },
+  })
+}
+
 export function useVippsImports() {
   return useQuery({
     queryKey: ['accounting', 'vipps-imports'],
     queryFn: () => fetchJSON<VippsImportSummary[]>(`${BASE}/vipps-imports`),
+  })
+}
+
+export function useVippsRowsByMSN(
+  msn: Ref<string | undefined>,
+  from: Ref<string | undefined>,
+  to: Ref<string | undefined>,
+) {
+  return useQuery({
+    queryKey: computed(() => ['accounting', 'vipps-rows', msn.value, from.value, to.value]),
+    enabled: computed(() => !!msn.value && !!from.value && !!to.value),
+    queryFn: () => {
+      const params = new URLSearchParams({
+        msn: msn.value!,
+        from: from.value!,
+        to: to.value!,
+      })
+      return fetchJSON<VippsImportRow[]>(`${BASE}/vipps-rows?${params.toString()}`)
+    },
   })
 }
 

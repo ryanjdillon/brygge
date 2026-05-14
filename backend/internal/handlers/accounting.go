@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
@@ -700,6 +702,164 @@ func (h *AccountingHandler) HandleGetBankImport(w http.ResponseWriter, r *http.R
 	JSON(w, http.StatusOK, importRows)
 }
 
+func (h *AccountingHandler) HandleListBankRowsByAccount(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	q := r.URL.Query()
+	accountCode := strings.TrimSpace(q.Get("account_code"))
+	fromStr := strings.TrimSpace(q.Get("from"))
+	toStr := strings.TrimSpace(q.Get("to"))
+	if accountCode == "" || fromStr == "" || toStr == "" {
+		Error(w, http.StatusBadRequest, "account_code, from, to required")
+		return
+	}
+
+	dbRows, err := h.svc.DB().Query(r.Context(),
+		`SELECT bir.id, bir.row_date::text, bir.description, bir.amount, bir.balance, bir.reference,
+		        bir.kid_number, bir.counterpart, bir.journal_entry_id, bir.auto_matched
+		 FROM bank_import_rows bir JOIN bank_imports bi ON bi.id = bir.bank_import_id
+		 WHERE bi.club_id = $1 AND bi.bank_account_code = $2
+		   AND bir.row_date >= $3::date AND bir.row_date <= $4::date
+		 ORDER BY bir.row_date, bir.created_at`,
+		claims.ClubID, accountCode, fromStr, toStr,
+	)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to query bank rows by account")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	defer dbRows.Close()
+
+	type importRow struct {
+		ID             string   `json:"id"`
+		Date           string   `json:"date"`
+		Description    string   `json:"description"`
+		Amount         float64  `json:"amount"`
+		Balance        *float64 `json:"balance"`
+		Reference      string   `json:"reference"`
+		KID            string   `json:"kid_number"`
+		Counterpart    string   `json:"counterpart"`
+		JournalEntryID *string  `json:"journal_entry_id"`
+		AutoMatched    bool     `json:"auto_matched"`
+	}
+	importRows := []importRow{}
+	for dbRows.Next() {
+		var row importRow
+		if err := dbRows.Scan(&row.ID, &row.Date, &row.Description, &row.Amount, &row.Balance,
+			&row.Reference, &row.KID, &row.Counterpart, &row.JournalEntryID, &row.AutoMatched); err != nil {
+			continue
+		}
+		importRows = append(importRows, row)
+	}
+	JSON(w, http.StatusOK, importRows)
+}
+
+func (h *AccountingHandler) HandleListVippsRowsByMSN(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	q := r.URL.Query()
+	msn := strings.TrimSpace(q.Get("msn"))
+	fromStr := strings.TrimSpace(q.Get("from"))
+	toStr := strings.TrimSpace(q.Get("to"))
+	if msn == "" || fromStr == "" || toStr == "" {
+		Error(w, http.StatusBadRequest, "msn, from, to required")
+		return
+	}
+
+	dbRows, err := h.svc.DB().Query(r.Context(),
+		`SELECT vir.id, vir.row_type, vir.tx_at, vir.booking_date, vir.amount, vir.fee, vir.net_amount,
+		        vir.customer_name, vir.customer_phone_masked, vir.message, vir.psp_ref, vir.order_id,
+		        vir.settlement_number, vir.payout_account, vir.scheduled_payout_date, vir.journal_entry_id
+		 FROM vipps_import_rows vir
+		 WHERE vir.club_id = $1 AND vir.msn = $2
+		   AND COALESCE(vir.booking_date, vir.tx_at::date) >= $3::date
+		   AND COALESCE(vir.booking_date, vir.tx_at::date) <= $4::date
+		 ORDER BY COALESCE(vir.booking_date, vir.tx_at::date), vir.created_at`,
+		claims.ClubID, msn, fromStr, toStr,
+	)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to list vipps rows by msn")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	defer dbRows.Close()
+
+	type item struct {
+		ID                  string     `json:"id"`
+		RowType             string     `json:"row_type"`
+		TxAt                *time.Time `json:"tx_at"`
+		BookingDate         *string    `json:"booking_date"`
+		Amount              float64    `json:"amount"`
+		Fee                 float64    `json:"fee"`
+		NetAmount           float64    `json:"net_amount"`
+		CustomerName        string     `json:"customer_name"`
+		CustomerPhoneMasked string     `json:"customer_phone_masked"`
+		Message             string     `json:"message"`
+		PspRef              string     `json:"psp_ref"`
+		OrderID             string     `json:"order_id"`
+		SettlementNumber    string     `json:"settlement_number"`
+		PayoutAccount       string     `json:"payout_account"`
+		ScheduledPayoutDate *string    `json:"scheduled_payout_date"`
+		JournalEntryID      *string    `json:"journal_entry_id"`
+	}
+	out := []item{}
+	for dbRows.Next() {
+		var it item
+		if err := dbRows.Scan(&it.ID, &it.RowType, &it.TxAt, &it.BookingDate, &it.Amount, &it.Fee, &it.NetAmount,
+			&it.CustomerName, &it.CustomerPhoneMasked, &it.Message, &it.PspRef, &it.OrderID,
+			&it.SettlementNumber, &it.PayoutAccount, &it.ScheduledPayoutDate, &it.JournalEntryID); err == nil {
+			out = append(out, it)
+		}
+	}
+	JSON(w, http.StatusOK, out)
+}
+
+func (h *AccountingHandler) HandleListBankImports(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	rows, err := h.svc.DB().Query(r.Context(),
+		`SELECT id, filename, format, bank_account_code, row_count, matched_count, created_at::text
+		 FROM bank_imports WHERE club_id = $1 ORDER BY created_at DESC LIMIT 100`,
+		claims.ClubID,
+	)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to list bank imports")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	defer rows.Close()
+
+	type item struct {
+		ID           string `json:"id"`
+		Filename     string `json:"filename"`
+		Format       string `json:"format"`
+		AccountCode  string `json:"account_code"`
+		RowCount     int    `json:"row_count"`
+		MatchedCount int    `json:"matched_count"`
+		CreatedAt    string `json:"created_at"`
+	}
+	out := []item{}
+	for rows.Next() {
+		var it item
+		if err := rows.Scan(&it.ID, &it.Filename, &it.Format, &it.AccountCode, &it.RowCount, &it.MatchedCount, &it.CreatedAt); err == nil {
+			out = append(out, it)
+		}
+	}
+	JSON(w, http.StatusOK, out)
+}
+
 func (h *AccountingHandler) HandleListUnmatchedRows(w http.ResponseWriter, r *http.Request) {
 	claims := middleware.GetClaims(r.Context())
 	if claims == nil {
@@ -1284,6 +1444,43 @@ func (h *AccountingHandler) HandleUpdateMomskompStatus(w http.ResponseWriter, r 
 	}
 
 	JSON(w, http.StatusOK, map[string]string{"message": "status updated"})
+}
+
+// ── Rebuild invoice bilags ──────────────────────────────────
+
+func (h *AccountingHandler) HandleRebuildInvoiceBilags(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	var req syncRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.PeriodID == "" {
+		Error(w, http.StatusBadRequest, "period_id is required")
+		return
+	}
+
+	result, deleted, err := h.svc.RebuildInvoiceBilags(r.Context(), claims.ClubID, req.PeriodID, claims.UserID)
+	if err != nil {
+		Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if h.audit != nil {
+		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,
+			"accounting.invoice_bilags_rebuilt", "fiscal_period", req.PeriodID,
+			map[string]any{"deleted": deleted, "resynced": result.Synced, "skipped": result.Skipped})
+	}
+
+	JSON(w, http.StatusOK, map[string]any{
+		"deleted":  deleted,
+		"resynced": result.Synced,
+		"skipped":  result.Skipped,
+	})
 }
 
 // ── Full bank sync ──────────────────────────────────────────
