@@ -4,6 +4,10 @@ import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useEvents } from '@/composables/useEvents'
 import { Download, Plus, X } from 'lucide-vue-next'
+import Input from '@/components/ui/form/Input.vue'
+import Textarea from '@/components/ui/form/Textarea.vue'
+import FormField from '@/components/ui/form/FormField.vue'
+import DateTimeInput from '@/components/ui/form/DateTimeInput.vue'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -164,41 +168,20 @@ function tagLabel(tag: string): string {
           <p class="mt-1 text-sm text-slate-500">{{ t('calendar.proposeDescription') }}</p>
 
           <form class="mt-4 space-y-4" @submit.prevent="showProposeModal = false">
-            <div>
-              <label class="block text-sm font-medium text-slate-700">{{ t('admin.events.eventTitle') }}</label>
-              <input
-                v-model="proposeForm.title"
-                type="text"
-                required
-                class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-slate-700">{{ t('admin.events.description') }}</label>
-              <textarea
-                v-model="proposeForm.description"
-                rows="3"
-                class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-            </div>
+            <FormField :label="t('admin.events.eventTitle')" required>
+              <Input v-model="proposeForm.title" type="text" required />
+            </FormField>
+            <FormField :label="t('admin.events.description')">
+              <Textarea v-model="proposeForm.description" :rows="3" />
+            </FormField>
             <div class="grid grid-cols-2 gap-4">
               <div>
                 <label class="block text-sm font-medium text-slate-700">{{ t('admin.events.startTime') }}</label>
-                <input
-                  v-model="proposeForm.start_time"
-                  type="datetime-local"
-                  required
-                  class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
+                <DateTimeInput v-model="proposeForm.start_time" required class="mt-1" />
               </div>
               <div>
                 <label class="block text-sm font-medium text-slate-700">{{ t('admin.events.endTime') }}</label>
-                <input
-                  v-model="proposeForm.end_time"
-                  type="datetime-local"
-                  required
-                  class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
+                <DateTimeInput v-model="proposeForm.end_time" required class="mt-1" />
               </div>
             </div>
             <div class="flex justify-end gap-3 pt-2">

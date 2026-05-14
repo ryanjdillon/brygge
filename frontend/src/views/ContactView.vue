@@ -5,6 +5,9 @@ import { MapPin, Phone, Radio, Mail, MessageCircle } from 'lucide-vue-next'
 import { useClubStore } from '@/stores/club'
 import { useFeatures } from '@/composables/useFeatures'
 import EmailLink from '@/components/EmailLink.vue'
+import Input from '@/components/ui/form/Input.vue'
+import Textarea from '@/components/ui/form/Textarea.vue'
+import FormField from '@/components/ui/form/FormField.vue'
 
 const { t } = useI18n()
 const club = useClubStore()
@@ -131,57 +134,21 @@ async function handleSubmit() {
       </div>
 
       <form class="space-y-4" @submit.prevent="handleSubmit">
-        <div>
-          <label for="contact-name" class="block text-sm font-medium text-slate-700">
-            {{ t('contact.formName') }}
-          </label>
-          <input
-            id="contact-name"
-            v-model="form.name"
-            type="text"
-            required
-            class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
-        </div>
+        <FormField :label="t('contact.formName')" for="contact-name" required>
+          <Input id="contact-name" v-model="form.name" type="text" required />
+        </FormField>
 
-        <div>
-          <label for="contact-email" class="block text-sm font-medium text-slate-700">
-            {{ t('contact.formEmail') }}
-          </label>
-          <input
-            id="contact-email"
-            v-model="form.email"
-            type="email"
-            required
-            class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
-        </div>
+        <FormField :label="t('contact.formEmail')" for="contact-email" required>
+          <Input id="contact-email" v-model="form.email" type="email" required />
+        </FormField>
 
-        <div>
-          <label for="contact-subject" class="block text-sm font-medium text-slate-700">
-            {{ t('contact.formSubject') }}
-          </label>
-          <input
-            id="contact-subject"
-            v-model="form.subject"
-            type="text"
-            required
-            class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
-        </div>
+        <FormField :label="t('contact.formSubject')" for="contact-subject" required>
+          <Input id="contact-subject" v-model="form.subject" type="text" required />
+        </FormField>
 
-        <div>
-          <label for="contact-message" class="block text-sm font-medium text-slate-700">
-            {{ t('contact.formMessage') }}
-          </label>
-          <textarea
-            id="contact-message"
-            v-model="form.message"
-            rows="5"
-            required
-            class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
-        </div>
+        <FormField :label="t('contact.formMessage')" for="contact-message" required>
+          <Textarea id="contact-message" v-model="form.message" :rows="5" required />
+        </FormField>
 
         <div v-if="sent" class="rounded-md bg-green-50 p-3 text-sm text-green-700">
           {{ t('contact.sent') }}

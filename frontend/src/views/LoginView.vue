@@ -4,6 +4,8 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { LogIn, Users } from 'lucide-vue-next'
+import Input from '@/components/ui/form/Input.vue'
+import FormField from '@/components/ui/form/FormField.vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -144,20 +146,16 @@ function roleColor(role: string): string {
           class="space-y-5"
           @submit.prevent="handleSubmit"
         >
-          <div>
-            <label for="email" class="block text-sm font-medium text-gray-700">
-              {{ t('login.email') }}
-            </label>
-            <input
+          <FormField :label="t('login.email')" for="email" required>
+            <Input
               id="email"
               v-model="email"
               type="email"
-              required
               autocomplete="email"
               :placeholder="t('login.emailPlaceholder')"
-              class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              required
             />
-          </div>
+          </FormField>
 
           <button
             type="submit"

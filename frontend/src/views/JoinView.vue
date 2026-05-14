@@ -1,18 +1,30 @@
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
 import { useI18n } from 'vue-i18n'
+import Input from '@/components/ui/form/Input.vue'
+import NumberInput from '@/components/ui/form/NumberInput.vue'
+import FormField from '@/components/ui/form/FormField.vue'
 
 const { t } = useI18n()
 
-const form = reactive({
+const form = reactive<{
+  fullName: string
+  email: string
+  phone: string
+  boatName: string
+  boatType: string
+  boatLength: number | null
+  boatBeam: number | null
+  boatDraft: number | null
+}>({
   fullName: '',
   email: '',
   phone: '',
   boatName: '',
   boatType: '',
-  boatLength: '',
-  boatBeam: '',
-  boatDraft: '',
+  boatLength: null,
+  boatBeam: null,
+  boatDraft: null,
 })
 
 const submitting = ref(false)
@@ -62,44 +74,17 @@ async function handleSubmit() {
 
     <form v-else class="mt-8 space-y-6" @submit.prevent="handleSubmit">
       <div class="space-y-4">
-        <div>
-          <label for="join-name" class="block text-sm font-medium text-slate-700">
-            {{ t('join.fullName') }}
-          </label>
-          <input
-            id="join-name"
-            v-model="form.fullName"
-            type="text"
-            required
-            class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
-        </div>
+        <FormField :label="t('join.fullName')" for="join-name" required>
+          <Input id="join-name" v-model="form.fullName" type="text" required />
+        </FormField>
 
-        <div>
-          <label for="join-email" class="block text-sm font-medium text-slate-700">
-            {{ t('join.email') }}
-          </label>
-          <input
-            id="join-email"
-            v-model="form.email"
-            type="email"
-            required
-            class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
-        </div>
+        <FormField :label="t('join.email')" for="join-email" required>
+          <Input id="join-email" v-model="form.email" type="email" required />
+        </FormField>
 
-        <div>
-          <label for="join-phone" class="block text-sm font-medium text-slate-700">
-            {{ t('join.phone') }}
-          </label>
-          <input
-            id="join-phone"
-            v-model="form.phone"
-            type="tel"
-            required
-            class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
-        </div>
+        <FormField :label="t('join.phone')" for="join-phone" required>
+          <Input id="join-phone" v-model="form.phone" type="tel" required />
+        </FormField>
       </div>
 
       <fieldset class="space-y-4 rounded-lg border border-slate-200 p-4">
@@ -108,71 +93,25 @@ async function handleSubmit() {
         </legend>
 
         <div class="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label for="join-boat-name" class="block text-sm font-medium text-slate-700">
-              {{ t('join.boatName') }}
-            </label>
-            <input
-              id="join-boat-name"
-              v-model="form.boatName"
-              type="text"
-              class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-          </div>
+          <FormField :label="t('join.boatName')" for="join-boat-name">
+            <Input id="join-boat-name" v-model="form.boatName" type="text" />
+          </FormField>
 
-          <div>
-            <label for="join-boat-type" class="block text-sm font-medium text-slate-700">
-              {{ t('join.boatType') }}
-            </label>
-            <input
-              id="join-boat-type"
-              v-model="form.boatType"
-              type="text"
-              class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-          </div>
+          <FormField :label="t('join.boatType')" for="join-boat-type">
+            <Input id="join-boat-type" v-model="form.boatType" type="text" />
+          </FormField>
 
-          <div>
-            <label for="join-boat-length" class="block text-sm font-medium text-slate-700">
-              {{ t('join.boatLength') }}
-            </label>
-            <input
-              id="join-boat-length"
-              v-model="form.boatLength"
-              type="number"
-              step="0.1"
-              min="0"
-              class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-          </div>
+          <FormField :label="t('join.boatLength')" for="join-boat-length">
+            <NumberInput id="join-boat-length" v-model="form.boatLength" :step="0.1" :min="0" />
+          </FormField>
 
-          <div>
-            <label for="join-boat-beam" class="block text-sm font-medium text-slate-700">
-              {{ t('join.boatBeam') }}
-            </label>
-            <input
-              id="join-boat-beam"
-              v-model="form.boatBeam"
-              type="number"
-              step="0.1"
-              min="0"
-              class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-          </div>
+          <FormField :label="t('join.boatBeam')" for="join-boat-beam">
+            <NumberInput id="join-boat-beam" v-model="form.boatBeam" :step="0.1" :min="0" />
+          </FormField>
 
-          <div>
-            <label for="join-boat-draft" class="block text-sm font-medium text-slate-700">
-              {{ t('join.boatDraft') }}
-            </label>
-            <input
-              id="join-boat-draft"
-              v-model="form.boatDraft"
-              type="number"
-              step="0.1"
-              min="0"
-              class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-          </div>
+          <FormField :label="t('join.boatDraft')" for="join-boat-draft">
+            <NumberInput id="join-boat-draft" v-model="form.boatDraft" :step="0.1" :min="0" />
+          </FormField>
         </div>
       </fieldset>
 

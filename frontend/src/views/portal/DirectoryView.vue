@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 import { useApiClient, unwrap } from '@/lib/apiClient'
 import { Search } from 'lucide-vue-next'
+import Input from '@/components/ui/form/Input.vue'
 const { t } = useI18n()
 const client = useApiClient()
 
@@ -29,15 +30,17 @@ const filteredMembers = computed(() => {
   <div>
     <h1 class="text-2xl font-bold text-gray-900">{{ t('portal.directory.title') }}</h1>
 
-    <div class="mt-6 relative max-w-sm">
-      <Search class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-      <input
+    <div class="mt-6 max-w-sm">
+      <Input
         v-model="searchQuery"
+        type="search"
         :aria-label="t('portal.directory.searchAriaLabel')"
-        type="text"
         :placeholder="t('portal.directory.searchPlaceholder')"
-        class="block w-full rounded-md border border-gray-300 py-2 pl-10 pr-3 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-      />
+      >
+        <template #prefix>
+          <Search class="h-4 w-4" />
+        </template>
+      </Input>
     </div>
 
     <div v-if="isLoading" class="mt-6 text-gray-500">{{ t('common.loading') }}...</div>
