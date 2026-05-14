@@ -632,12 +632,38 @@ func safeGet(record []string, idx int) string {
 func joinNonEmpty(record []string, idxs []int, sep string) string {
 	parts := make([]string, 0, len(idxs))
 	for _, i := range idxs {
-		v := strings.TrimSpace(safeGet(record, i))
+		v := collapseWhitespace(safeGet(record, i))
 		if v != "" {
 			parts = append(parts, v)
 		}
 	}
 	return strings.Join(parts, sep)
+}
+
+// collapseWhitespace trims and replaces any run of whitespace
+// (incl. newlines and tabs) with a single space. Bank CSV "Melding"
+// fields sometimes embed multi-line tabular blocks (e.g. Norsk
+// Tipping invoice details) that look like garbage in the row table.
+func collapseWhitespace(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	prevSpace := false
+	for _, r := range s {
+		if r == ' ' || r == '\t' || r == '\n' || r == '\r' {
+			if !prevSpace {
+				b.WriteByte(' ')
+				prevSpace = true
+			}
+			continue
+		}
+		b.WriteRune(r)
+		prevSpace = false
+	}
+	return b.String()
 }
 
 func firstNonEmpty(record []string, idxs []int) string {
