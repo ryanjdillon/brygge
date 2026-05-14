@@ -22,14 +22,22 @@ import {
   useAccountsList,
   useJournalEntries,
 } from '@/composables/useAccounting'
+import Select from '@/components/ui/form/Select.vue'
 
 const { t } = useI18n()
 
 const currentYear = new Date().getFullYear()
 const selectedYear = ref<number | undefined>(undefined)
+const ALL_YEARS = 0
+const selectedYearValue = computed<number>({
+  get: () => selectedYear.value ?? ALL_YEARS,
+  set: (v) => {
+    selectedYear.value = v === ALL_YEARS ? undefined : v
+  },
+})
 const yearOptions = computed(() => {
-  const years: { label: string; value: number | undefined }[] = [
-    { label: t('admin.financials.allYears'), value: undefined },
+  const years: { label: string; value: number }[] = [
+    { label: t('admin.financials.allYears'), value: ALL_YEARS },
   ]
   for (let y = currentYear; y >= currentYear - 5; y--) {
     years.push({ label: String(y), value: y })
@@ -90,12 +98,7 @@ const postedCount = computed(() => entries.value?.filter(e => e.status === 'post
     <div class="mt-6">
       <div class="flex items-center justify-between">
         <h2 class="text-lg font-semibold text-gray-700">{{ t('admin.financials.title') }}</h2>
-        <select
-          v-model="selectedYear"
-          class="rounded-md border border-gray-300 px-3 py-1.5 text-sm"
-        >
-          <option v-for="opt in yearOptions" :key="String(opt.value)" :value="opt.value">{{ opt.label }}</option>
-        </select>
+        <Select v-model="selectedYearValue" :options="yearOptions" width="content" />
       </div>
 
       <!-- Per-price-item totals (faktura side — works even without Vipps) -->

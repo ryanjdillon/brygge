@@ -8,6 +8,7 @@ import {
   useClosePeriod,
   useReopenPeriod,
 } from '@/composables/useAccounting'
+import NumberInput from '@/components/ui/form/NumberInput.vue'
 
 const { t } = useI18n()
 
@@ -16,10 +17,11 @@ const createMutation = useCreatePeriod()
 const closeMutation = useClosePeriod()
 const reopenMutation = useReopenPeriod()
 
-const newYear = ref(new Date().getFullYear())
+const newYear = ref<number | null>(new Date().getFullYear())
 const showCreateForm = ref(false)
 
 function handleCreate() {
+  if (newYear.value == null) return
   createMutation.mutate({ year: newYear.value }, {
     onSuccess: () => {
       showCreateForm.value = false
@@ -59,13 +61,9 @@ function formatDate(d: string | null): string {
     <div v-if="showCreateForm" class="mt-4 flex items-end gap-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
       <div>
         <label class="mb-1 block text-sm font-medium text-gray-700">{{ t('admin.accounting.periods.year') }}</label>
-        <input
-          v-model.number="newYear"
-          type="number"
-          min="2000"
-          max="2100"
-          class="w-28 rounded-md border border-gray-300 px-3 py-2 text-sm"
-        />
+        <div class="w-28">
+          <NumberInput v-model="newYear" :min="2000" :max="2100" />
+        </div>
       </div>
       <button
         class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"

@@ -12,15 +12,23 @@ import {
   FileDown,
   FilePlus,
 } from 'lucide-vue-next'
+import Select from '@/components/ui/form/Select.vue'
 
 const { t } = useI18n()
 
 const currentYear = new Date().getFullYear()
 const selectedYear = ref<number | undefined>(undefined)
 
+const ALL_YEARS = 0
+const selectedYearValue = computed<number>({
+  get: () => selectedYear.value ?? ALL_YEARS,
+  set: (v) => {
+    selectedYear.value = v === ALL_YEARS ? undefined : v
+  },
+})
 const yearOptions = computed(() => {
-  const years: { label: string; value: number | undefined }[] = [
-    { label: t('admin.financials.allYears'), value: undefined },
+  const years: { label: string; value: number }[] = [
+    { label: t('admin.financials.allYears'), value: ALL_YEARS },
   ]
   for (let y = currentYear; y >= currentYear - 5; y--) {
     years.push({ label: String(y), value: y })
@@ -80,14 +88,7 @@ const cards = computed(() => {
   <div>
     <div class="flex items-center justify-between">
       <h1 class="text-2xl font-bold text-gray-900">{{ t('admin.financials.title') }}</h1>
-      <select
-        v-model="selectedYear"
-        class="rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-      >
-        <option v-for="opt in yearOptions" :key="String(opt.value)" :value="opt.value">
-          {{ opt.label }}
-        </option>
-      </select>
+      <Select v-model="selectedYearValue" :options="yearOptions" width="content" />
     </div>
 
     <div v-if="isLoading" class="mt-8 text-center text-gray-500">

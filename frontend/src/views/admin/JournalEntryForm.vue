@@ -17,6 +17,10 @@ import {
   usePostEntry,
   type Account,
 } from '@/composables/useAccounting'
+import Select from '@/components/ui/form/Select.vue'
+import Input from '@/components/ui/form/Input.vue'
+import NumberInput from '@/components/ui/form/NumberInput.vue'
+import DateInput from '@/components/ui/form/DateInput.vue'
 
 const router = useRouter()
 const { t } = useI18n()
@@ -142,6 +146,15 @@ function formatNOK(amount: number): string {
 function accountLabel(a: Account): string {
   return `${a.code} – ${a.name}`
 }
+
+const periodOptions = computed(() =>
+  openPeriods.value.map((p) => ({ value: p.id, label: String(p.year) })),
+)
+
+const accountOptions = computed(() => [
+  { value: '', label: t('admin.accounting.journalForm.selectAccount') },
+  ...(accounts.value ?? []).map((a) => ({ value: a.code, label: accountLabel(a) })),
+])
 </script>
 
 <template>
@@ -162,12 +175,7 @@ function accountLabel(a: Account): string {
           {{ t('admin.accounting.journalForm.period') }}
           <Info class="h-3.5 w-3.5 text-gray-400" :title="t('admin.accounting.journalForm.tooltipPeriod')" />
         </label>
-        <select
-          v-model="selectedPeriodId"
-          class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-        >
-          <option v-for="p in openPeriods" :key="p.id" :value="p.id">{{ p.year }}</option>
-        </select>
+        <Select v-model="selectedPeriodId" :options="periodOptions" />
         <p v-if="!openPeriods.length" class="mt-1 text-xs text-red-600">{{ t('admin.accounting.periods.noPeriods') }}</p>
       </div>
       <div>
@@ -175,22 +183,16 @@ function accountLabel(a: Account): string {
           {{ t('admin.accounting.journalForm.date') }}
           <Info class="h-3.5 w-3.5 text-gray-400" :title="t('admin.accounting.journalForm.tooltipDate')" />
         </label>
-        <input
-          v-model="entryDate"
-          type="date"
-          class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-        />
+        <DateInput v-model="entryDate" />
       </div>
       <div>
         <label class="mb-1 flex items-center gap-1 text-sm font-medium text-gray-700">
           {{ t('admin.accounting.journalForm.description') }}
           <Info class="h-3.5 w-3.5 text-gray-400" :title="t('admin.accounting.journalForm.tooltipDescription')" />
         </label>
-        <input
+        <Input
           v-model="description"
-          type="text"
           :placeholder="t('admin.accounting.journalForm.descriptionPlaceholder')"
-          class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
         />
       </div>
     </div>
@@ -222,55 +224,33 @@ function accountLabel(a: Account): string {
           <tbody>
             <tr v-for="(line, idx) in lines" :key="idx" class="border-t border-gray-200">
               <td class="py-2 pr-3">
-                <select
-                  v-model="line.account_code"
-                  class="w-full min-w-[200px] rounded-md border border-gray-300 px-2 py-1.5 text-sm"
-                >
-                  <option value="">{{ t('admin.accounting.journalForm.selectAccount') }}</option>
-                  <option v-for="a in accounts" :key="a.id" :value="a.code">
-                    {{ accountLabel(a) }}
-                  </option>
-                </select>
+                <div class="min-w-[200px]">
+                  <Select v-model="line.account_code" :options="accountOptions" />
+                </div>
               </td>
               <td class="py-2 pr-3">
-                <input
-                  v-model.number="line.debit"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  placeholder="0.00"
-                  class="w-28 rounded-md border border-gray-300 px-2 py-1.5 text-right text-sm"
-                />
+                <div class="w-28">
+                  <NumberInput v-model="line.debit" :min="0" :step="0.01" placeholder="0.00" />
+                </div>
               </td>
               <td class="py-2 pr-3">
-                <input
-                  v-model.number="line.credit"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  placeholder="0.00"
-                  class="w-28 rounded-md border border-gray-300 px-2 py-1.5 text-right text-sm"
-                />
+                <div class="w-28">
+                  <NumberInput v-model="line.credit" :min="0" :step="0.01" placeholder="0.00" />
+                </div>
               </td>
               <td class="py-2 pr-3">
-                <input
-                  v-if="isExpenseAccount(line.account_code)"
-                  v-model.number="line.mva_amount"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  placeholder="0.00"
-                  class="w-24 rounded-md border border-gray-300 px-2 py-1.5 text-right text-sm"
-                />
+                <div v-if="isExpenseAccount(line.account_code)" class="w-24">
+                  <NumberInput v-model="line.mva_amount" :min="0" :step="0.01" placeholder="0.00" />
+                </div>
                 <span v-else class="block w-24 text-right text-sm text-gray-400">-</span>
               </td>
               <td class="py-2 pr-3">
-                <input
-                  v-model="line.description"
-                  type="text"
-                  :placeholder="t('admin.accounting.journalForm.optional')"
-                  class="w-full min-w-[150px] rounded-md border border-gray-300 px-2 py-1.5 text-sm"
-                />
+                <div class="min-w-[150px]">
+                  <Input
+                    v-model="line.description"
+                    :placeholder="t('admin.accounting.journalForm.optional')"
+                  />
+                </div>
               </td>
               <td class="py-2">
                 <button
