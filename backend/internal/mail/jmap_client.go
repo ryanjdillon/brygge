@@ -600,18 +600,18 @@ func (c *JMAPClient) SendEmail(ctx context.Context, accountID, draftsID, sentID 
 	cc := mapAddrs(req.Cc)
 	bcc := mapAddrs(req.Bcc)
 
-	// RFC 8621: `charset` belongs on the EmailBodyPart, not on the
-	// EmailBodyValue. bodyValues entries hold only {value,
-	// isEncodingProblem, isTruncated}; anything else trips
-	// invalidProperties on Stalwart 0.15.
+	// RFC 8621: inline body parts (those using `partId` →
+	// `bodyValues`) MUST NOT carry `charset` — it's only valid on
+	// parts that reference a `blobId`. The charset is implicit
+	// UTF-8 from the JSON-string value in bodyValues.
 	bodyValues := map[string]any{
 		"text": map[string]any{"value": req.BodyText},
 	}
-	textBody := []map[string]any{{"partId": "text", "type": "text/plain", "charset": "utf-8"}}
+	textBody := []map[string]any{{"partId": "text", "type": "text/plain"}}
 	htmlBody := []map[string]any(nil)
 	if req.BodyHTML != "" {
 		bodyValues["html"] = map[string]any{"value": req.BodyHTML}
-		htmlBody = []map[string]any{{"partId": "html", "type": "text/html", "charset": "utf-8"}}
+		htmlBody = []map[string]any{{"partId": "html", "type": "text/html"}}
 	}
 
 	// JMAP doesn't use a generic `headers` array on Email/set. Per
