@@ -10,6 +10,9 @@ import PhoneInput from '@/components/booking/PhoneInput.vue'
 import { useCreateBooking, type Booking } from '@/composables/useBookings'
 import { usePricing } from '@/composables/usePricing'
 import { useAuthStore } from '@/stores/auth'
+import Input from '@/components/ui/form/Input.vue'
+import Textarea from '@/components/ui/form/Textarea.vue'
+import FormField from '@/components/ui/form/FormField.vue'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -250,28 +253,22 @@ function startOver() {
       <h2 class="text-lg font-semibold text-slate-900">{{ t('booking.details') }}</h2>
 
       <div v-if="!auth.isAuthenticated" class="space-y-4">
-        <div>
-          <label class="block text-sm font-medium text-slate-700">{{ t('booking.guestNameLabel') }}</label>
-          <input
+        <FormField :label="t('booking.guestNameLabel')">
+          <Input
             v-model="guestName"
             type="text"
-            class="mt-1 block w-full rounded-md text-sm focus:border-blue-500 focus:ring-blue-500"
-            :class="fieldErrors.name ? 'border-red-400' : 'border-slate-300'"
+            :error="fieldErrors.name"
             @blur="validateField('name')"
           />
-          <p v-if="fieldErrors.name" class="mt-1 text-sm text-red-600">{{ fieldErrors.name }}</p>
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-slate-700">{{ t('booking.guestEmail') }}</label>
-          <input
+        </FormField>
+        <FormField :label="t('booking.guestEmail')">
+          <Input
             v-model="guestEmail"
             type="email"
-            class="mt-1 block w-full rounded-md text-sm focus:border-blue-500 focus:ring-blue-500"
-            :class="fieldErrors.email ? 'border-red-400' : 'border-slate-300'"
+            :error="fieldErrors.email"
             @blur="validateField('email')"
           />
-          <p v-if="fieldErrors.email" class="mt-1 text-sm text-red-600">{{ fieldErrors.email }}</p>
-        </div>
+        </FormField>
         <div>
           <label class="block text-sm font-medium text-slate-700">{{ t('booking.guestPhone') }}</label>
           <PhoneInput v-model="guestPhone" :has-error="!!fieldErrors.phone" @blur="validateField('phone')" />
@@ -279,14 +276,9 @@ function startOver() {
         </div>
       </div>
 
-      <div>
-        <label class="block text-sm font-medium text-slate-700">{{ t('booking.notes') }}</label>
-        <textarea
-          v-model="notes"
-          rows="2"
-          class="mt-1 block w-full rounded-md border-slate-300 text-sm focus:border-blue-500 focus:ring-blue-500"
-        />
-      </div>
+      <FormField :label="t('booking.notes')">
+        <Textarea v-model="notes" :rows="2" />
+      </FormField>
 
       <div class="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm">
         <h3 class="font-semibold text-slate-900">{{ t('booking.summary') }}</h3>

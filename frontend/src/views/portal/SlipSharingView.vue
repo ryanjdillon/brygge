@@ -2,6 +2,9 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plus, Trash2, DollarSign } from 'lucide-vue-next'
+import Input from '@/components/ui/form/Input.vue'
+import DateInput from '@/components/ui/form/DateInput.vue'
+import FormField from '@/components/ui/form/FormField.vue'
 import { useMySlipShares, useMyRebates, useCreateSlipShare, useDeleteSlipShare } from '@/composables/useSlipShares'
 
 const { t } = useI18n()
@@ -65,19 +68,16 @@ async function remove(id: string) {
     <!-- Add form -->
     <form v-if="showForm" class="rounded-lg border border-gray-200 bg-white p-4 space-y-4" @submit.prevent="submit">
       <div class="grid grid-cols-2 gap-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-700">{{ t('booking.dates') }} (fra)</label>
-          <input v-model="fromDate" type="date" required class="mt-1 block w-full rounded-md border-gray-300 text-sm" />
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700">{{ t('booking.dates') }} (til)</label>
-          <input v-model="toDate" type="date" required class="mt-1 block w-full rounded-md border-gray-300 text-sm" />
-        </div>
+        <FormField :label="`${t('booking.dates')} (fra)`" required>
+          <DateInput v-model="fromDate" required />
+        </FormField>
+        <FormField :label="`${t('booking.dates')} (til)`" required>
+          <DateInput v-model="toDate" required />
+        </FormField>
       </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-700">{{ t('booking.notes') }}</label>
-        <input v-model="notes" type="text" class="mt-1 block w-full rounded-md border-gray-300 text-sm" :placeholder="'F.eks. ferie'" />
-      </div>
+      <FormField :label="t('booking.notes')">
+        <Input v-model="notes" type="text" placeholder="F.eks. ferie" />
+      </FormField>
       <div v-if="errorMsg" class="text-sm text-red-600">{{ errorMsg }}</div>
       <button
         type="submit"

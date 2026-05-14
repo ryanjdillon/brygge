@@ -2,6 +2,8 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Wrench } from 'lucide-vue-next'
+import DateInput from '@/components/ui/form/DateInput.vue'
+import FormField from '@/components/ui/form/FormField.vue'
 import { useHoistSlots, useCreateBooking } from '@/composables/useBookings'
 
 const { t } = useI18n()
@@ -74,15 +76,9 @@ async function submit() {
       <p class="mt-1 text-sm text-gray-600">{{ t('booking.hoistSubtitle') }}</p>
     </div>
 
-    <div>
-      <label class="block text-sm font-medium text-gray-700">{{ t('booking.dates') }}</label>
-      <input
-        v-model="selectedDate"
-        type="date"
-        :min="today"
-        class="mt-1 rounded-md border-gray-300 text-sm"
-      />
-    </div>
+    <FormField :label="t('booking.dates')">
+      <DateInput v-model="selectedDate" :min="today" />
+    </FormField>
 
     <div v-if="isLoading" class="animate-pulse space-y-2">
       <div v-for="i in 6" :key="i" class="h-12 rounded bg-gray-100" />

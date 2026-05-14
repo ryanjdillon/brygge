@@ -5,6 +5,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { RouterLink } from 'vue-router'
 import { useApiClient, unwrap } from '@/lib/apiClient'
 import { useLegalDocument, useMyConsents, useRecordConsent } from '@/composables/useGdpr'
+import Input from '@/components/ui/form/Input.vue'
+import Checkbox from '@/components/ui/form/Checkbox.vue'
+import FormField from '@/components/ui/form/FormField.vue'
 
 const { t } = useI18n()
 const client = useApiClient()
@@ -108,68 +111,39 @@ const { mutate: saveProfile, isPending: isSaving } = useMutation({
     <div v-if="isLoading" class="mt-6 text-gray-500">{{ t('common.loading') }}...</div>
 
     <form v-else class="mt-6 max-w-lg space-y-5" @submit.prevent="saveProfile()">
-      <div>
-        <label for="profile-name" class="block text-sm font-medium text-gray-700">
-          {{ t('portal.profile.fullName') }}
-        </label>
-        <input
-          id="profile-name"
-          v-model="form.name"
-          type="text"
-          required
-          class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-        />
-      </div>
+      <FormField :label="t('portal.profile.fullName')" for="profile-name" required>
+        <Input id="profile-name" v-model="form.name" type="text" required />
+      </FormField>
 
-      <div>
-        <label for="profile-email" class="block text-sm font-medium text-gray-700">
-          {{ t('portal.profile.email') }}
-        </label>
-        <input
-          id="profile-email"
-          v-model="form.email"
-          type="email"
-          required
-          class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-        />
-      </div>
+      <FormField :label="t('portal.profile.email')" for="profile-email" required>
+        <Input id="profile-email" v-model="form.email" type="email" required />
+      </FormField>
 
-      <div>
-        <label for="profile-phone" class="block text-sm font-medium text-gray-700">
-          {{ t('portal.profile.phone') }}
-        </label>
-        <input
-          id="profile-phone"
-          v-model="form.phone"
-          type="tel"
-          class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-        />
-      </div>
+      <FormField :label="t('portal.profile.phone')" for="profile-phone">
+        <Input id="profile-phone" v-model="form.phone" type="tel" />
+      </FormField>
 
       <fieldset>
         <legend class="text-sm font-medium text-gray-700">{{ t('portal.profile.address') }}</legend>
         <div class="mt-2 space-y-3">
-          <input
+          <Input
             v-model="form.address.street"
             type="text"
             :aria-label="t('portal.profile.street')"
             :placeholder="t('portal.profile.street')"
-            class="block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
           <div class="grid grid-cols-2 gap-3">
-            <input
+            <Input
               v-model="form.address.postalCode"
               type="text"
               :aria-label="t('portal.profile.postalCode')"
               :placeholder="t('portal.profile.postalCode')"
-              class="block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
-            <input
+            <Input
               v-model="form.address.city"
               type="text"
               :aria-label="t('portal.profile.city')"
               :placeholder="t('portal.profile.city')"
-              class="block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           </div>
         </div>
@@ -189,27 +163,16 @@ const { mutate: saveProfile, isPending: isSaving } = useMutation({
 
       <fieldset class="rounded-md border border-gray-200 bg-gray-50 p-3">
         <legend class="px-1 text-sm font-semibold text-gray-700">{{ t('portal.profile.privacyTitle') }}</legend>
-        <label class="flex items-start gap-3 text-sm">
-          <input
-            v-model="form.hideInDirectory"
-            type="checkbox"
-            class="mt-0.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-          />
+        <Checkbox v-model="form.hideInDirectory">
           <span>
             <span class="font-medium text-gray-800">{{ t('portal.profile.hideInDirectoryLabel') }}</span>
             <span class="block text-xs text-gray-500">{{ t('portal.profile.hideInDirectoryHint') }}</span>
           </span>
-        </label>
+        </Checkbox>
       </fieldset>
 
       <div v-if="privacyConsentNeeded" class="rounded-md border border-amber-200 bg-amber-50 p-3">
-        <label class="flex items-start gap-3 text-sm">
-          <input
-            v-model="privacyAgreed"
-            type="checkbox"
-            required
-            class="mt-0.5 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
-          />
+        <Checkbox v-model="privacyAgreed">
           <span class="text-amber-900">
             {{ t('portal.profile.privacyAgreePrefix') }}
             <RouterLink to="/portal/privacy-policy" class="font-semibold underline">
@@ -217,7 +180,7 @@ const { mutate: saveProfile, isPending: isSaving } = useMutation({
             </RouterLink>
             <span v-if="privacyDoc?.version"> (v{{ privacyDoc.version }})</span>
           </span>
-        </label>
+        </Checkbox>
       </div>
 
       <button

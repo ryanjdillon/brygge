@@ -7,6 +7,8 @@ import QRCode from 'qrcode'
 
 import { useAuthStore } from '@/stores/auth'
 import { useTotp, TotpError } from '@/composables/useTotp'
+import Checkbox from '@/components/ui/form/Checkbox.vue'
+import Input from '@/components/ui/form/Input.vue'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -119,6 +121,10 @@ function dismissCodes() {
   }
 }
 
+function handleTotpKeyup(e: KeyboardEvent) {
+  if (e.key === 'Enter') submitConfirm()
+}
+
 function formatError(e: unknown, fallback: string): string {
   if (e instanceof TotpError && e.message) return e.message
   if (e instanceof Error && e.message) return e.message
@@ -169,10 +175,9 @@ function formatError(e: unknown, fallback: string): string {
           <Download class="h-4 w-4" /> {{ t('security.downloadCodes') }}
         </button>
       </div>
-      <label class="mt-4 flex items-center gap-2 text-sm text-amber-900">
-        <input v-model="codesAcknowledged" type="checkbox" class="rounded border-amber-400" />
-        {{ t('security.acknowledgeSaved') }}
-      </label>
+      <div class="mt-4 text-amber-900">
+        <Checkbox v-model="codesAcknowledged">{{ t('security.acknowledgeSaved') }}</Checkbox>
+      </div>
       <button
         class="mt-3 inline-flex items-center gap-1 rounded-md bg-green-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
         :disabled="!codesAcknowledged"
@@ -210,15 +215,19 @@ function formatError(e: unknown, fallback: string): string {
         <label class="block text-sm font-medium text-gray-700" for="totp-code">
           {{ t('security.codeLabel') }}
         </label>
-        <input
-          id="totp-code"
-          v-model="codeInput"
-          inputmode="numeric"
-          autocomplete="one-time-code"
-          maxlength="6"
-          class="mt-1 w-32 rounded-md border border-gray-300 px-3 py-1.5 font-mono text-lg tracking-widest focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          @keyup.enter="submitConfirm"
-        />
+        <div class="mt-1 inline-block w-32">
+          <Input
+            id="totp-code"
+            v-model="codeInput"
+            type="text"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            :maxlength="6"
+            text-align="center"
+            input-class="font-mono tracking-widest text-lg"
+            @keyup="handleTotpKeyup"
+          />
+        </div>
         <button
           class="ml-3 inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
           :disabled="busy"

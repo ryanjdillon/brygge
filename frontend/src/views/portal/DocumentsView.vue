@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useApiClient, unwrap } from '@/lib/apiClient'
 import { useApi } from '@/composables/useApi'
 import { Download, MessageSquare, ChevronDown, ChevronUp } from 'lucide-vue-next'
+import Input from '@/components/ui/form/Input.vue'
 
 const { t } = useI18n()
 const { fetchApi } = useApi()
@@ -169,13 +170,14 @@ function submitComment(docId: string) {
           </ul>
 
           <form class="mt-4 flex gap-2" @submit.prevent="submitComment(doc.id)">
-            <input
-              v-model="commentText"
-              type="text"
-              :aria-label="t('portal.documents.addComment')"
-              :placeholder="t('portal.documents.commentPlaceholder')"
-              class="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
+            <div class="flex-1">
+              <Input
+                v-model="commentText"
+                type="text"
+                :aria-label="t('portal.documents.addComment')"
+                :placeholder="t('portal.documents.commentPlaceholder')"
+              />
+            </div>
             <button
               type="submit"
               :disabled="isAddingComment || !commentText.trim()"

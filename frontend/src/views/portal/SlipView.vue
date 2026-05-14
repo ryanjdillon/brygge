@@ -1,9 +1,13 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation } from '@tanstack/vue-query'
 import { useApiClient, unwrap } from '@/lib/apiClient'
 import { AlertTriangle } from 'lucide-vue-next'
+import Input from '@/components/ui/form/Input.vue'
+import Textarea from '@/components/ui/form/Textarea.vue'
+import Select from '@/components/ui/form/Select.vue'
+import FormField from '@/components/ui/form/FormField.vue'
 
 const { t } = useI18n()
 const client = useApiClient()
@@ -15,6 +19,12 @@ const { data: slip, isLoading, isError } = useQuery({
 
 const showIssueForm = ref(false)
 const issueForm = ref({ title: '', description: '', priority: 'medium' })
+
+const priorityOptions = computed(() => [
+  { value: 'low', label: t('portal.slip.priorityLow') },
+  { value: 'medium', label: t('portal.slip.priorityMedium') },
+  { value: 'high', label: t('portal.slip.priorityHigh') },
+])
 const toast = ref<{ type: 'success' | 'error'; message: string } | null>(null)
 
 function showToast(type: 'success' | 'error', message: string) {
@@ -110,40 +120,17 @@ const { mutate: reportIssue, isPending: isReporting } = useMutation({
         >
           <h3 class="text-lg font-semibold text-gray-900">{{ t('portal.slip.reportIssue') }}</h3>
 
-          <div>
-            <label for="issue-title" class="block text-sm font-medium text-gray-700">{{ t('portal.slip.issueTitle') }}</label>
-            <input
-              id="issue-title"
-              v-model="issueForm.title"
-              type="text"
-              required
-              class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-          </div>
+          <FormField :label="t('portal.slip.issueTitle')" for="issue-title" required>
+            <Input id="issue-title" v-model="issueForm.title" type="text" required />
+          </FormField>
 
-          <div>
-            <label for="issue-desc" class="block text-sm font-medium text-gray-700">{{ t('portal.slip.issueDescription') }}</label>
-            <textarea
-              id="issue-desc"
-              v-model="issueForm.description"
-              rows="3"
-              required
-              class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-          </div>
+          <FormField :label="t('portal.slip.issueDescription')" for="issue-desc" required>
+            <Textarea id="issue-desc" v-model="issueForm.description" :rows="3" required />
+          </FormField>
 
-          <div>
-            <label for="issue-priority" class="block text-sm font-medium text-gray-700">{{ t('portal.slip.issuePriority') }}</label>
-            <select
-              id="issue-priority"
-              v-model="issueForm.priority"
-              class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            >
-              <option value="low">{{ t('portal.slip.priorityLow') }}</option>
-              <option value="medium">{{ t('portal.slip.priorityMedium') }}</option>
-              <option value="high">{{ t('portal.slip.priorityHigh') }}</option>
-            </select>
-          </div>
+          <FormField :label="t('portal.slip.issuePriority')">
+            <Select v-model="issueForm.priority" :options="priorityOptions" />
+          </FormField>
 
           <div class="flex gap-3">
             <button

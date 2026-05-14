@@ -3,6 +3,7 @@ import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useMatrix, type MatrixMessage } from '@/composables/useMatrix'
+import Textarea from '@/components/ui/form/Textarea.vue'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -195,15 +196,16 @@ function formatTime(timestamp: string): string {
     <!-- Message input -->
     <div class="shrink-0 border-t border-gray-200 bg-white p-4">
       <div class="flex gap-2">
-        <textarea
-          v-model="messageInput"
-          :aria-label="t('forum.messagePlaceholder')"
-          class="flex-1 resize-none rounded-md border border-gray-300 px-3 py-2 text-sm placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          rows="1"
-          :placeholder="t('forum.messagePlaceholder')"
-          :disabled="isSending"
-          @keydown="handleKeydown"
-        />
+        <div class="flex-1">
+          <Textarea
+            v-model="messageInput"
+            :aria-label="t('forum.messagePlaceholder')"
+            :rows="1"
+            :placeholder="t('forum.messagePlaceholder')"
+            :disabled="isSending"
+            @keydown="handleKeydown"
+          />
+        </div>
         <button
           class="shrink-0 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
           :disabled="!messageInput.trim() || isSending"

@@ -8,6 +8,9 @@ import {
   type FeatureRequest,
 } from '@/composables/useFeatureRequests'
 import { ThumbsUp, ThumbsDown, Plus, X } from 'lucide-vue-next'
+import Input from '@/components/ui/form/Input.vue'
+import Textarea from '@/components/ui/form/Textarea.vue'
+import FormField from '@/components/ui/form/FormField.vue'
 
 const { t } = useI18n()
 
@@ -180,24 +183,16 @@ function handleVote(request: FeatureRequest, value: 1 | -1) {
           </button>
         </div>
         <form class="mt-4 space-y-4" @submit.prevent="handleSubmit">
-          <div>
-            <label class="block text-sm font-medium text-gray-700">{{ t('featureRequests.requestTitle') }}</label>
-            <input
-              v-model="newTitle"
-              type="text"
-              required
-              class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700">{{ t('featureRequests.requestDescription') }}</label>
-            <textarea
+          <FormField :label="t('featureRequests.requestTitle')" required>
+            <Input v-model="newTitle" type="text" required />
+          </FormField>
+          <FormField :label="t('featureRequests.requestDescription')">
+            <Textarea
               v-model="newDescription"
-              rows="4"
-              class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              :rows="4"
               :placeholder="t('featureRequests.descriptionPlaceholder')"
             />
-          </div>
+          </FormField>
           <div class="flex justify-end gap-3">
             <button
               type="button"
