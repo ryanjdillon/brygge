@@ -23,8 +23,10 @@ const (
 	ActionTOTPAdminDisabled    = "admin.totp_disabled_by_admin"
 
 	// Admin user operations
-	ActionUserRoleUpdated = "user.role_updated"
-	ActionUserDeleted     = "user.deleted"
+	ActionUserRoleUpdated       = "user.role_updated"
+	ActionUserDeleted           = "user.deleted"
+	ActionUserMailProvisioned   = "user.mail_provisioned"
+	ActionUserMailDeprovisioned = "user.mail_deprovisioned"
 
 	// Admin slip operations
 	ActionSlipCreated  = "slip.created"
