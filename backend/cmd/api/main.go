@@ -26,6 +26,7 @@ import (
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/email"
 	"github.com/brygge-klubb/brygge/internal/handlers"
+	"github.com/brygge-klubb/brygge/internal/mail"
 	"github.com/brygge-klubb/brygge/internal/middleware"
 	oa "github.com/brygge-klubb/brygge/internal/openapi"
 	"github.com/brygge-klubb/brygge/internal/telemetry"
@@ -124,6 +125,25 @@ func main() {
 	auditService := audit.NewService(db, log)
 	sessionService := auth.NewSessionService(db)
 
+	// Shared-inbox ACL reconciler (DIL-275/276). Nil when Stalwart
+	// admin creds aren't configured — feature is fully optional.
+	var inboxReconciler *mail.Reconciler
+	if cfg.StalwartAdminURL != "" && cfg.BoardMailboxesPath != "" {
+		spec, err := mail.LoadSpec(cfg.BoardMailboxesPath)
+		if err != nil {
+			log.Warn().Err(err).Str("path", cfg.BoardMailboxesPath).Msg("failed to load board-mailbox spec")
+		} else if len(spec) > 0 {
+			adminClient := mail.NewAdminClient(
+				cfg.StalwartAdminURL,
+				cfg.StalwartAdminUser,
+				cfg.StalwartAdminPassword,
+				cfg.StalwartAdminToken,
+				log,
+			)
+			inboxReconciler = mail.NewReconciler(db, adminClient, auditService, spec, cfg.ReconcilerDryRun, log)
+		}
+	}
+
 	featuresHandler := handlers.NewFeaturesHandler(&cfg)
 	healthHandler := handlers.NewHealthHandler(db, rdb)
 	auditHandler := handlers.NewAuditHandler(db, auditService, &cfg, log)
@@ -133,6 +153,9 @@ func main() {
 	demoAuthHandler := handlers.NewDemoAuthHandler(db, &cfg, sessionService, log)
 	waitingListHandler := handlers.NewWaitingListHandler(db, rdb, &cfg, log)
 	adminUsersHandler := handlers.NewAdminUsersHandler(db, &cfg, log)
+	if inboxReconciler != nil && inboxReconciler.HasMailboxes() {
+		adminUsersHandler.RoleChangeHook = inboxReconciler.OnRoleChanged
+	}
 	adminSlipsHandler := handlers.NewAdminSlipsHandler(db, &cfg, log)
 	adminDocumentsHandler := handlers.NewAdminDocumentsHandler(db, &cfg, log)
 	aiDocumentsHandler := handlers.NewAIDocumentsHandler(db, claudeClient, &cfg, log)
@@ -941,6 +964,31 @@ func main() {
 			log.Fatal().Err(err).Msg("server failed")
 		}
 	}()
+
+	// Shared-inbox ACL reconciler (DIL-275/276): one pass at boot to
+	// recover from out-of-band drift, then every 5 min as the
+	// self-healing safety net behind the role-change webhook.
+	if inboxReconciler != nil && inboxReconciler.HasMailboxes() {
+		go func() {
+			bootCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+			defer cancel()
+			inboxReconciler.ReconcileAll(bootCtx)
+		}()
+		go func() {
+			ticker := time.NewTicker(5 * time.Minute)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					tickCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+					inboxReconciler.ReconcileAll(tickCtx)
+					cancel()
+				}
+			}
+		}()
+	}
 
 	// Hourly background sweep of expired sessions. Cookies expire on the
 	// client after 30 days; the row stays until something deletes it,
