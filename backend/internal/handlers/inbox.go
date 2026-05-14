@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -31,6 +32,7 @@ type InboxHandler struct {
 	provisioner *mail.UserProvisioner
 	adminUser   string
 	adminPass   string
+	passwords   mail.PrincipalPasswords // shared-principal service passwords (DIL-278 send path)
 	audit       *audit.Service
 	spec        []mail.MailboxSpec
 	log         zerolog.Logger
@@ -43,13 +45,14 @@ type InboxHandler struct {
 	sharedIDs map[string]string
 }
 
-func NewInboxHandler(db *pgxpool.Pool, jmapFact *mail.JMAPFactory, provisioner *mail.UserProvisioner, adminUser, adminPass string, auditSvc *audit.Service, spec []mail.MailboxSpec, log zerolog.Logger) *InboxHandler {
+func NewInboxHandler(db *pgxpool.Pool, jmapFact *mail.JMAPFactory, provisioner *mail.UserProvisioner, adminUser, adminPass string, passwords mail.PrincipalPasswords, auditSvc *audit.Service, spec []mail.MailboxSpec, log zerolog.Logger) *InboxHandler {
 	return &InboxHandler{
 		db:          db,
 		jmapFact:    jmapFact,
 		provisioner: provisioner,
 		adminUser:   adminUser,
 		adminPass:   adminPass,
+		passwords:   passwords,
 		audit:       auditSvc,
 		spec:        spec,
 		log:         log.With().Str("handler", "inbox").Logger(),
@@ -301,6 +304,200 @@ func (h *InboxHandler) HandleArchiveThread(w http.ResponseWriter, r *http.Reques
 	}
 	h.auditMailboxAction(ctx, audit.ActionInboxThreadArchived, spec.Address, threadID)
 	JSON(w, http.StatusOK, map[string]any{"moved": n})
+}
+
+// SendRequest is the SPA-facing payload for POST /:address/send.
+type SendRequest struct {
+	To        []emailAddr `json:"to"`
+	Cc        []emailAddr `json:"cc,omitempty"`
+	Subject   string      `json:"subject"`
+	BodyText  string      `json:"body_text"`
+	BodyHTML  string      `json:"body_html,omitempty"`
+	InReplyTo string      `json:"in_reply_to,omitempty"`
+}
+
+type emailAddr struct {
+	Name  string `json:"name,omitempty"`
+	Email string `json:"email"`
+}
+
+// HandleSend composes and submits a message AS the shared principal.
+// Auth: caller must hold the address's mapped role (authorize()) AND
+// have re-verified TOTP within the last 10 minutes (RequireFreshTOTP,
+// applied at the route level). Backend authenticates JMAP as the
+// shared principal using the service password from the password map.
+//
+//	POST /inbox/:address/send
+func (h *InboxHandler) HandleSend(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	spec, ok := h.authorize(w, r)
+	if !ok {
+		return
+	}
+	claims := middleware.GetClaims(ctx)
+
+	var req SendRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if len(req.To) == 0 {
+		Error(w, http.StatusBadRequest, "at least one recipient required")
+		return
+	}
+	if strings.TrimSpace(req.Subject) == "" && strings.TrimSpace(req.BodyText) == "" && strings.TrimSpace(req.BodyHTML) == "" {
+		Error(w, http.StatusBadRequest, "subject or body required")
+		return
+	}
+
+	pw := h.passwords.Get(spec.Address)
+	if pw == "" {
+		h.log.Error().Str("address", spec.Address).Msg("no service password for shared principal — send disabled")
+		Error(w, http.StatusServiceUnavailable, "mail backend not configured for sending")
+		return
+	}
+	jmap := h.jmapFact.AsPrincipal(principalLocalPart(spec.Address), pw)
+
+	accountID, draftsID, sentID, err := h.resolveSendMailboxes(ctx, jmap)
+	if err != nil {
+		h.log.Warn().Err(err).Str("address", spec.Address).Msg("resolve send mailboxes failed")
+		Error(w, http.StatusBadGateway, "mail backend unavailable")
+		return
+	}
+
+	// bcc_members: when the spec opts in, fan out to every user
+	// holding the mapped role so they also get a personal copy.
+	var bcc []mail.EmailAddress
+	if spec.BccMembers {
+		members, err := h.roleMemberEmails(ctx, spec.Role, claims.ClubID)
+		if err != nil {
+			h.log.Warn().Err(err).Msg("bcc_members lookup failed; sending without bcc")
+		} else {
+			for _, e := range members {
+				bcc = append(bcc, mail.EmailAddress{Email: e})
+			}
+		}
+	}
+
+	sendReq := mail.SendEmailRequest{
+		FromAddress: spec.Address,
+		FromName:    spec.DisplayName,
+		ReplyTo:     spec.Address,
+		To:          toMailAddrs(req.To),
+		Cc:          toMailAddrs(req.Cc),
+		Bcc:         bcc,
+		Subject:     req.Subject,
+		BodyText:    req.BodyText,
+		BodyHTML:    req.BodyHTML,
+		InReplyTo:   req.InReplyTo,
+		ActorID:     claims.UserID,
+	}
+	if req.InReplyTo != "" {
+		sendReq.References = []string{req.InReplyTo}
+	}
+
+	emailID, messageID, err := jmap.SendEmail(ctx, accountID, draftsID, sentID, sendReq)
+	if err != nil {
+		h.log.Warn().Err(err).Str("address", spec.Address).Msg("send failed")
+		Error(w, http.StatusBadGateway, "send failed")
+		return
+	}
+
+	h.audit.Log(ctx, audit.Entry{
+		ClubID:     strPtrIfSet(claims.ClubID),
+		ActorID:    strPtrIfSet(claims.UserID),
+		Action:     audit.ActionInboxMessageSent,
+		Resource:   "mailbox_thread",
+		ResourceID: spec.Address + "/" + emailID,
+		Details: map[string]any{
+			"target_address":  spec.Address,
+			"recipient_count": len(req.To) + len(req.Cc) + len(bcc),
+			"in_reply_to":     req.InReplyTo,
+			"message_id":      messageID,
+			"bcc_members":     spec.BccMembers,
+		},
+	})
+
+	JSON(w, http.StatusOK, map[string]any{
+		"email_id":   emailID,
+		"message_id": messageID,
+	})
+}
+
+func toMailAddrs(in []emailAddr) []mail.EmailAddress {
+	out := make([]mail.EmailAddress, 0, len(in))
+	for _, a := range in {
+		out = append(out, mail.EmailAddress{Name: a.Name, Email: a.Email})
+	}
+	return out
+}
+
+func principalLocalPart(addr string) string {
+	if i := strings.IndexByte(addr, '@'); i >= 0 {
+		return addr[:i]
+	}
+	return addr
+}
+
+func strPtrIfSet(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+// resolveSendMailboxes finds the JMAP accountId for the shared
+// principal (from the principal's own session, which only contains
+// its own account) plus the Drafts/Sent folder ids. Stalwart creates
+// these on principal init so we don't need to fall back.
+func (h *InboxHandler) resolveSendMailboxes(ctx context.Context, jmap *mail.JMAPClient) (accountID, draftsID, sentID string, err error) {
+	accounts, err := jmap.SessionAccounts(ctx)
+	if err != nil {
+		return "", "", "", err
+	}
+	if len(accounts) == 0 {
+		return "", "", "", errInboxNotFound
+	}
+	accountID = accounts[0]
+	mboxes, err := jmap.ListMailboxes(ctx, accountID)
+	if err != nil {
+		return "", "", "", err
+	}
+	for _, m := range mboxes {
+		switch strings.ToLower(m.Role) {
+		case "drafts":
+			draftsID = m.ID
+		case "sent":
+			sentID = m.ID
+		}
+	}
+	if draftsID == "" || sentID == "" {
+		return "", "", "", errInboxNotFound
+	}
+	return accountID, draftsID, sentID, nil
+}
+
+func (h *InboxHandler) roleMemberEmails(ctx context.Context, role, clubID string) ([]string, error) {
+	rows, err := h.db.Query(ctx, `
+		SELECT u.email
+		FROM users u
+		JOIN user_roles ur ON ur.user_id = u.id AND ur.club_id = u.club_id
+		WHERE ur.role = $1::user_role AND u.club_id = $2
+		GROUP BY u.email
+	`, role, clubID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var e string
+		if err := rows.Scan(&e); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
 }
 
 // HandleProxyImage stub — see DIL-279.

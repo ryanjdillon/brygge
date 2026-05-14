@@ -239,16 +239,17 @@ func (c *JMAPClient) ListMailboxes(ctx context.Context, accountID string) ([]Mai
 
 // EmailSummary is the slim Email/get projection used by thread lists.
 type EmailSummary struct {
-	ID          string         `json:"id"`
-	ThreadID    string         `json:"threadId"`
-	MailboxIDs  map[string]any `json:"mailboxIds"`
-	Keywords    map[string]any `json:"keywords"`
-	Subject     string         `json:"subject"`
-	From        []EmailAddress `json:"from"`
-	To          []EmailAddress `json:"to"`
-	Preview     string         `json:"preview"`
-	ReceivedAt  string         `json:"receivedAt"`
-	HasAttach   bool           `json:"hasAttachment"`
+	ID         string         `json:"id"`
+	ThreadID   string         `json:"threadId"`
+	MailboxIDs map[string]any `json:"mailboxIds"`
+	Keywords   map[string]any `json:"keywords"`
+	Subject    string         `json:"subject"`
+	From       []EmailAddress `json:"from"`
+	To         []EmailAddress `json:"to"`
+	Preview    string         `json:"preview"`
+	ReceivedAt string         `json:"receivedAt"`
+	HasAttach  bool           `json:"hasAttachment"`
+	MessageID  []string       `json:"messageId,omitempty"` // RFC 5322 Message-ID, for reply threading
 }
 
 type EmailAddress struct {
@@ -300,7 +301,7 @@ func (c *JMAPClient) GetEmailSummaries(ctx context.Context, accountID string, id
 			"ids":       ids,
 			"properties": []string{
 				"id", "threadId", "mailboxIds", "keywords",
-				"subject", "from", "to", "preview", "receivedAt", "hasAttachment",
+				"subject", "from", "to", "preview", "receivedAt", "hasAttachment", "messageId",
 			},
 		}, "0"},
 	})
@@ -351,7 +352,7 @@ func (c *JMAPClient) GetEmailsFull(ctx context.Context, accountID string, ids []
 			"maxBodyValueBytes":    256 * 1024,
 			"properties": []string{
 				"id", "threadId", "mailboxIds", "keywords",
-				"subject", "from", "to", "preview", "receivedAt", "hasAttachment",
+				"subject", "from", "to", "preview", "receivedAt", "hasAttachment", "messageId",
 				"htmlBody", "textBody", "bodyValues", "attachments",
 			},
 		}, "0"},
@@ -509,6 +510,197 @@ func (c *JMAPClient) MoveThreadToMailbox(ctx context.Context, accountID, threadI
 		return 0, err
 	}
 	return len(emailIDs), nil
+}
+
+// SendEmailRequest captures the fields the InboxHandler turns into a
+// JMAP Email/set + EmailSubmission/set pair (DIL-278). Body is
+// supplied as plaintext; HTML composition is left to a later phase.
+type SendEmailRequest struct {
+	FromAddress string         // e.g. kasserar@klokkarvikbaatlag.no
+	FromName    string         // e.g. Kasserer
+	ReplyTo     string         // usually same as FromAddress
+	To          []EmailAddress // required, ≥1
+	Cc          []EmailAddress // optional
+	Bcc         []EmailAddress // optional (resolved members on bcc_members)
+	Subject     string
+	BodyText    string // required for v1
+	BodyHTML    string // optional
+	InReplyTo   string // RFC 5322 Message-ID being replied to; empty for new threads
+	References  []string
+	ActorID     string // Brygge user id → X-Brygge-Actor
+}
+
+// SendEmail submits a message through JMAP. Two calls:
+//   - `Email/set { create: {tmp: ...} }`: stores the message in the
+//     account's Drafts folder (resolved by role) with a synthetic
+//     client-side id `"tmp"`.
+//   - `EmailSubmission/set { create: {sub: {emailId: "#tmp", ...}},
+//     onSuccessUpdateEmail: { "#sub": { mailboxIds: { Sent: true,
+//     Drafts: null } } } }`: queues delivery and atomically moves
+//     the message from Drafts to Sent on success.
+//
+// Returns the server-assigned Email id and Message-ID header.
+func (c *JMAPClient) SendEmail(ctx context.Context, accountID, draftsID, sentID string, req SendEmailRequest) (emailID, messageID string, err error) {
+	if accountID == "" {
+		return "", "", fmt.Errorf("SendEmail: accountID required")
+	}
+	if draftsID == "" || sentID == "" {
+		return "", "", fmt.Errorf("SendEmail: drafts/sent mailbox ids required")
+	}
+	if len(req.To) == 0 {
+		return "", "", fmt.Errorf("SendEmail: at least one To recipient required")
+	}
+
+	from := []map[string]any{{"name": req.FromName, "email": req.FromAddress}}
+	to := mapAddrs(req.To)
+	cc := mapAddrs(req.Cc)
+	bcc := mapAddrs(req.Bcc)
+
+	bodyValues := map[string]any{
+		"text": map[string]any{"value": req.BodyText, "charset": "utf-8"},
+	}
+	textBody := []map[string]any{{"partId": "text", "type": "text/plain"}}
+	htmlBody := []map[string]any(nil)
+	if req.BodyHTML != "" {
+		bodyValues["html"] = map[string]any{"value": req.BodyHTML, "charset": "utf-8"}
+		htmlBody = []map[string]any{{"partId": "html", "type": "text/html"}}
+	}
+
+	headers := []map[string]any{
+		{"name": "X-Brygge-Actor", "value": req.ActorID},
+	}
+	if req.ReplyTo != "" {
+		headers = append(headers, map[string]any{
+			"name":  "Reply-To",
+			"value": req.ReplyTo,
+		})
+	}
+
+	email := map[string]any{
+		"mailboxIds": map[string]bool{draftsID: true},
+		"from":       from,
+		"to":         to,
+		"subject":    req.Subject,
+		"textBody":   textBody,
+		"bodyValues": bodyValues,
+		"headers":    headers,
+	}
+	if cc != nil {
+		email["cc"] = cc
+	}
+	if bcc != nil {
+		email["bcc"] = bcc
+	}
+	if htmlBody != nil {
+		email["htmlBody"] = htmlBody
+	}
+	if req.InReplyTo != "" {
+		email["inReplyTo"] = []string{req.InReplyTo}
+	}
+	if len(req.References) > 0 {
+		email["references"] = req.References
+	}
+
+	envelope := map[string]any{
+		"mailFrom":   map[string]any{"email": req.FromAddress},
+		"rcptTo":     rcptList(req.To, req.Cc, req.Bcc),
+	}
+
+	resp, err := c.Call(ctx, []string{
+		"urn:ietf:params:jmap:core",
+		"urn:ietf:params:jmap:mail",
+		"urn:ietf:params:jmap:submission",
+	}, []invocation{
+		{"Email/set", map[string]any{
+			"accountId": accountID,
+			"create":    map[string]any{"tmp": email},
+		}, "0"},
+		{"EmailSubmission/set", map[string]any{
+			"accountId": accountID,
+			"create": map[string]any{
+				"sub": map[string]any{
+					"emailId":  "#tmp",
+					"envelope": envelope,
+				},
+			},
+			"onSuccessUpdateEmail": map[string]any{
+				"#sub": map[string]any{
+					"mailboxIds/" + draftsID: nil,
+					"mailboxIds/" + sentID:   true,
+				},
+			},
+		}, "1"},
+	})
+	if err != nil {
+		return "", "", err
+	}
+	if len(resp) < 2 {
+		return "", "", fmt.Errorf("SendEmail: short response (%d)", len(resp))
+	}
+
+	// First response is Email/set.
+	var emailSet struct {
+		Created    map[string]map[string]any `json:"created"`
+		NotCreated map[string]struct {
+			Type        string `json:"type"`
+			Description string `json:"description"`
+		} `json:"notCreated"`
+	}
+	if err := decodeArgs(resp[0], &emailSet); err != nil {
+		return "", "", err
+	}
+	if e, bad := emailSet.NotCreated["tmp"]; bad {
+		return "", "", fmt.Errorf("Email/set: %s: %s", e.Type, e.Description)
+	}
+	created := emailSet.Created["tmp"]
+	if id, ok := created["id"].(string); ok {
+		emailID = id
+	}
+	if mid, ok := created["messageId"].([]any); ok && len(mid) > 0 {
+		if s, ok := mid[0].(string); ok {
+			messageID = s
+		}
+	}
+
+	// Second response is EmailSubmission/set.
+	var subSet struct {
+		NotCreated map[string]struct {
+			Type        string `json:"type"`
+			Description string `json:"description"`
+		} `json:"notCreated"`
+	}
+	if err := decodeArgs(resp[1], &subSet); err != nil {
+		return "", "", err
+	}
+	if e, bad := subSet.NotCreated["sub"]; bad {
+		return emailID, messageID, fmt.Errorf("EmailSubmission/set: %s: %s", e.Type, e.Description)
+	}
+	return emailID, messageID, nil
+}
+
+func mapAddrs(in []EmailAddress) []map[string]any {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]map[string]any, 0, len(in))
+	for _, a := range in {
+		entry := map[string]any{"email": a.Email}
+		if a.Name != "" {
+			entry["name"] = a.Name
+		}
+		out = append(out, entry)
+	}
+	return out
+}
+
+func rcptList(groups ...[]EmailAddress) []map[string]any {
+	out := []map[string]any{}
+	for _, g := range groups {
+		for _, a := range g {
+			out = append(out, map[string]any{"email": a.Email})
+		}
+	}
+	return out
 }
 
 // decodeArgs pulls the args object (index 1) out of a JMAP invocation
