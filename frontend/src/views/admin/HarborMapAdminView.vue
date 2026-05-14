@@ -18,6 +18,9 @@ import {
 import { compareSlip } from '@/lib/slipSort'
 import HarborMap from '@/components/map/HarborMap.vue'
 import SlipDetailPanel from '@/components/map/SlipDetailPanel.vue'
+import Input from '@/components/ui/form/Input.vue'
+import Textarea from '@/components/ui/form/Textarea.vue'
+import RangeInput from '@/components/ui/form/RangeInput.vue'
 import {
   Trash2,
   MousePointer2,
@@ -575,12 +578,12 @@ onUnmounted(() => {
             {{ t('admin.harborMap.labelSize') }}
           </p>
           <div class="flex items-center gap-2">
-            <input
-              v-model.number="labelScale"
-              type="range"
-              min="0.6"
-              max="2"
-              step="0.1"
+            <RangeInput
+              v-model="labelScale"
+              :min="0.6"
+              :max="2"
+              :step="0.1"
+              :show-value="false"
               class="flex-1"
             />
             <span class="w-10 text-right font-mono text-[11px] text-gray-700">
@@ -619,11 +622,7 @@ onUnmounted(() => {
             <label class="mt-1.5 block text-[10px] text-gray-500">
               {{ t('admin.harborMap.dockName') }}
             </label>
-            <input
-              v-model="editingDock.name"
-              class="block w-full rounded border border-gray-300 px-2 py-1 text-xs"
-              @input="scheduleSave"
-            />
+            <Input v-model="editingDock.name" @update:modelValue="scheduleSave" />
             <div class="mt-2 flex gap-1.5">
               <button
                 type="button"
@@ -771,12 +770,12 @@ onUnmounted(() => {
               <label class="mt-1.5 block text-[10px] font-medium uppercase tracking-wide text-gray-500">
                 {{ t('admin.harborMap.notes') }}
               </label>
-              <textarea
-                :value="selectedFinger.properties.notes ?? ''"
-                rows="2"
-                class="mt-0.5 block w-full rounded border border-gray-300 px-2 py-1 text-xs"
+              <Textarea
+                :model-value="selectedFinger.properties.notes ?? ''"
+                :rows="2"
+                class="mt-0.5"
                 :placeholder="t('admin.harborMap.notesPlaceholder')"
-                @input="onNotesInput(($event.target as HTMLTextAreaElement).value)"
+                @update:modelValue="onNotesInput"
               />
             </div>
           </div>

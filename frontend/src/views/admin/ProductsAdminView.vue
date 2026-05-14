@@ -4,6 +4,10 @@ import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useApiClient, unwrap } from '@/lib/apiClient'
 import { Plus, Pencil, Trash2, X } from 'lucide-vue-next'
+import Input from '@/components/ui/form/Input.vue'
+import Textarea from '@/components/ui/form/Textarea.vue'
+import NumberInput from '@/components/ui/form/NumberInput.vue'
+import Checkbox from '@/components/ui/form/Checkbox.vue'
 
 const { t } = useI18n()
 const client = useApiClient()
@@ -22,20 +26,20 @@ interface FormData {
   id?: string
   name: string
   description: string
-  price: string
+  price: number | null
   image_url: string
-  stock: string
-  sort_order: string
+  stock: number | null
+  sort_order: number | null
   is_active: boolean
 }
 
 const emptyForm: FormData = {
   name: '',
   description: '',
-  price: '',
+  price: null,
   image_url: '',
-  stock: '0',
-  sort_order: '0',
+  stock: 0,
+  sort_order: 0,
   is_active: true,
 }
 
@@ -52,10 +56,10 @@ function openEdit(p: Product) {
     id: p.id,
     name: p.name,
     description: p.description,
-    price: String(p.price),
+    price: p.price,
     image_url: p.image_url,
-    stock: String(p.stock),
-    sort_order: String(p.sort_order),
+    stock: p.stock,
+    sort_order: p.sort_order,
     is_active: p.is_active,
   }
   showForm.value = true
@@ -66,10 +70,10 @@ const { mutate: saveProduct, isPending: isSaving } = useMutation({
     const payload = {
       name: form.value.name,
       description: form.value.description,
-      price: parseFloat(form.value.price) || 0,
+      price: form.value.price ?? 0,
       image_url: form.value.image_url,
-      stock: parseInt(form.value.stock) || 0,
-      sort_order: parseInt(form.value.sort_order) || 0,
+      stock: form.value.stock ?? 0,
+      sort_order: form.value.sort_order ?? 0,
       is_active: form.value.is_active,
     }
     if (form.value.id) {
@@ -135,68 +139,37 @@ function confirmDelete(id: string) {
 
       <div>
         <label class="block text-sm font-medium text-gray-700">{{ t('admin.products.name') }}</label>
-        <input
-          v-model="form.name"
-          type="text"
-          required
-          class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-        />
+        <Input v-model="form.name" class="mt-1" />
       </div>
 
       <div>
         <label class="block text-sm font-medium text-gray-700">{{ t('admin.products.description') }}</label>
-        <textarea
-          v-model="form.description"
-          rows="2"
-          class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-        />
+        <Textarea v-model="form.description" :rows="2" class="mt-1" />
       </div>
 
       <div class="grid grid-cols-3 gap-4">
         <div>
           <label class="block text-sm font-medium text-gray-700">{{ t('admin.products.price') }}</label>
-          <input
-            v-model="form.price"
-            type="number"
-            step="1"
-            min="0"
-            required
-            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
+          <NumberInput v-model="form.price" :step="1" :min="0" class="mt-1" />
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700">{{ t('admin.products.stock') }}</label>
-          <input
-            v-model="form.stock"
-            type="number"
-            min="0"
-            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
+          <NumberInput v-model="form.stock" :min="0" class="mt-1" />
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700">{{ t('admin.products.sortOrder') }}</label>
-          <input
-            v-model="form.sort_order"
-            type="number"
-            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
+          <NumberInput v-model="form.sort_order" class="mt-1" />
         </div>
       </div>
 
       <div>
         <label class="block text-sm font-medium text-gray-700">{{ t('admin.products.imageUrl') }}</label>
-        <input
-          v-model="form.image_url"
-          type="text"
-          placeholder="https://..."
-          class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-        />
+        <Input v-model="form.image_url" placeholder="https://..." class="mt-1" />
       </div>
 
-      <label class="flex items-center gap-2 text-sm text-gray-700">
-        <input v-model="form.is_active" type="checkbox" class="rounded border-gray-300" />
+      <Checkbox v-model="form.is_active">
         {{ t('admin.products.activeCheckbox') }}
-      </label>
+      </Checkbox>
 
       <div class="flex gap-3 pt-2">
         <button

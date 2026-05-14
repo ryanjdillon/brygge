@@ -3,6 +3,7 @@ import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useApiClient, unwrap } from '@/lib/apiClient'
+import NumberInput from '@/components/ui/form/NumberInput.vue'
 
 const { t } = useI18n()
 const client = useApiClient()
@@ -13,7 +14,13 @@ const { data: settings, isLoading } = useQuery({
   queryFn: async () => unwrap(await client.GET('/api/v1/admin/settings/booking')),
 })
 
-const form = ref({
+const form = ref<{
+  hoist_slot_duration_minutes: number | null
+  hoist_open_hour: number | null
+  hoist_close_hour: number | null
+  hoist_max_consecutive_slots: number | null
+  slip_share_rebate_pct: number | null
+}>({
   hoist_slot_duration_minutes: 120,
   hoist_open_hour: 8,
   hoist_close_hour: 20,
@@ -63,27 +70,23 @@ const { mutateAsync: save, isPending: saving } = useMutation({
 
         <div>
           <label class="block text-sm font-medium text-gray-700">{{ t('admin.bookingSettings.slotDuration') }}</label>
-          <input v-model.number="form.hoist_slot_duration_minutes" type="number" min="30" step="30"
-            class="mt-1 block w-full rounded-md border-gray-300 text-sm" />
+          <NumberInput v-model="form.hoist_slot_duration_minutes" :min="30" :step="30" class="mt-1" />
         </div>
 
         <div class="grid grid-cols-2 gap-4">
           <div>
             <label class="block text-sm font-medium text-gray-700">{{ t('admin.bookingSettings.openHour') }}</label>
-            <input v-model.number="form.hoist_open_hour" type="number" min="0" max="23"
-              class="mt-1 block w-full rounded-md border-gray-300 text-sm" />
+            <NumberInput v-model="form.hoist_open_hour" :min="0" :max="23" class="mt-1" />
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700">{{ t('admin.bookingSettings.closeHour') }}</label>
-            <input v-model.number="form.hoist_close_hour" type="number" min="1" max="24"
-              class="mt-1 block w-full rounded-md border-gray-300 text-sm" />
+            <NumberInput v-model="form.hoist_close_hour" :min="1" :max="24" class="mt-1" />
           </div>
         </div>
 
         <div>
           <label class="block text-sm font-medium text-gray-700">{{ t('admin.bookingSettings.maxConsecutiveSlots') }}</label>
-          <input v-model.number="form.hoist_max_consecutive_slots" type="number" min="1" max="10"
-            class="mt-1 block w-full rounded-md border-gray-300 text-sm" />
+          <NumberInput v-model="form.hoist_max_consecutive_slots" :min="1" :max="10" class="mt-1" />
         </div>
       </fieldset>
 
@@ -92,8 +95,7 @@ const { mutateAsync: save, isPending: saving } = useMutation({
 
         <div>
           <label class="block text-sm font-medium text-gray-700">{{ t('admin.bookingSettings.rebatePct') }}</label>
-          <input v-model.number="form.slip_share_rebate_pct" type="number" min="0" max="100"
-            class="mt-1 block w-full rounded-md border-gray-300 text-sm" />
+          <NumberInput v-model="form.slip_share_rebate_pct" :min="0" :max="100" class="mt-1" />
         </div>
       </fieldset>
 
