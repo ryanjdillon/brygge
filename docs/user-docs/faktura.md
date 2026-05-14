@@ -149,7 +149,7 @@ Do **not** click "Send" again — that would double-deliver.
 
 ### "Membership column is empty even though I sent a faktura"
 
-The chip is keyed on `price_items.category = 'harbor_membership'`. If your membership fee is set up under a different category (e.g. `dues`), the chip won't pick it up. Fix by editing the price item's category to `harbor_membership` and the chip will appear on the next reload.
+The chip is keyed on `price_items.category IN ('membership', 'harbor_membership')`. Annual dues should use `membership`; the one-time harbor-equity payment uses `harbor_membership`. If your membership fee is set up under a different category, the chip won't pick it up — edit the price item's category to `membership` and the chip will appear on the next reload.
 
 ### "Slip rental chip is empty for a member who got a plassleie line"
 

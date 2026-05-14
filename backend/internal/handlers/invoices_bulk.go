@@ -257,37 +257,42 @@ func (h *InvoiceHandler) HandleBulkCreateInvoices(w http.ResponseWriter, r *http
 			lines = append(lines, bulkResolvedLine{tier: *chosen, slipInfo: slipInfo})
 		}
 
-		// Per-line idempotency: drop any line whose specific price_item_id
-		// is already on a non-voided invoice for this user/period. This
-		// is keyed by price_item_id (via invoice_lines) so two distinct
-		// items in the same category don't collide. The line-level check
-		// is what actually keeps multi-line invoices from double-billing
-		// — invoices.category is NULL for multi-line rows, so the partial
-		// unique index on (club, user, category, period) doesn't fire.
+		// Per-line idempotency: drop any line whose category is already
+		// on a non-voided invoice line for this user/period. Keyed by
+		// invoice_lines.category (denormalized from price_items at
+		// insert time, see migration 000043), so a re-bill is blocked
+		// even when the price_item_id differs across years/tiers and
+		// even when the prior invoice was multi-line — invoices.category
+		// is NULL for multi-line rows, so the partial unique index on
+		// (club, user, category, period) doesn't fire on its own.
 		//
 		// Skipped entirely when allow_duplicate_lines=true; the operator
 		// has explicitly opted into a re-bill at that point.
 		if !req.AllowDuplicateLines {
 			kept := make([]bulkResolvedLine, 0, len(lines))
 			for _, l := range lines {
+				if l.tier.category == "" {
+					kept = append(kept, l)
+					continue
+				}
 				var existing string
 				err := h.db.QueryRow(ctx,
 					`SELECT il.id
 					   FROM invoice_lines il
 					   JOIN invoices i ON i.id = il.invoice_id
 					  WHERE i.club_id = $1 AND i.user_id = $2
-					    AND il.price_item_id = $3
+					    AND il.category = $3
 					    AND i.fiscal_period_id = $4
 					    AND i.status <> 'voided'
 					  LIMIT 1`,
-					claims.ClubID, userID, l.tier.id, req.FiscalPeriodID,
+					claims.ClubID, userID, l.tier.category, req.FiscalPeriodID,
 				).Scan(&existing)
 				if err == nil {
 					dropReasons = append(dropReasons, fmt.Sprintf("%s already invoiced (override available)", l.tier.desc))
 					continue
 				}
 				if err != pgx.ErrNoRows {
-					h.log.Error().Err(err).Str("user_id", userID).Str("price_item_id", l.tier.id).Msg("idempotency check failed")
+					h.log.Error().Err(err).Str("user_id", userID).Str("category", l.tier.category).Msg("idempotency check failed")
 					dropReasons = append(dropReasons, fmt.Sprintf("%s: idempotency check error", l.tier.desc))
 					continue
 				}
@@ -503,11 +508,16 @@ func (h *InvoiceHandler) createBulkInvoice(
 		return "", 0, 0, err
 	}
 	for i, l := range lines {
+		var lineCategory *string
+		if l.tier.category != "" {
+			c := l.tier.category
+			lineCategory = &c
+		}
 		if _, err := h.db.Exec(ctx,
 			`INSERT INTO invoice_lines (invoice_id, description, sub_description, quantity,
-			                            unit_price, line_total, price_item_id)
-			 VALUES ($1, $2, $3, 1, $4, $4, $5)`,
-			invoiceID, pdfLines[i].Description, pdfLines[i].SubDescription, l.tier.amount, l.tier.id,
+			                            unit_price, line_total, price_item_id, category)
+			 VALUES ($1, $2, $3, 1, $4, $4, $5, $6)`,
+			invoiceID, pdfLines[i].Description, pdfLines[i].SubDescription, l.tier.amount, l.tier.id, lineCategory,
 		); err != nil {
 			h.log.Error().Err(err).Msg("failed to insert invoice line for bulk invoice")
 		}

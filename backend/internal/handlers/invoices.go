@@ -390,12 +390,23 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 	// see which price item drove the line.
 	for _, line := range resolvedLines {
 		lineTotal := float64(line.Quantity) * line.UnitPrice
+		// Denormalize price_items.category onto the line so dedup and
+		// the admin chip query work per-line on multi-category invoices.
+		var lineCategory *string
+		if line.PriceItemID != nil {
+			var c string
+			if err := h.db.QueryRow(ctx,
+				`SELECT category FROM price_items WHERE id = $1`, *line.PriceItemID,
+			).Scan(&c); err == nil && c != "" {
+				lineCategory = &c
+			}
+		}
 		_, err = h.db.Exec(ctx,
 			`INSERT INTO invoice_lines (invoice_id, description, sub_description, quantity,
-			                            unit_price, line_total, account_id, price_item_id)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+			                            unit_price, line_total, account_id, price_item_id, category)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
 			invoiceID, line.Description, line.SubDescription, line.Quantity,
-			line.UnitPrice, lineTotal, line.AccountID, line.PriceItemID,
+			line.UnitPrice, lineTotal, line.AccountID, line.PriceItemID, lineCategory,
 		)
 		if err != nil {
 			h.log.Error().Err(err).Msg("failed to store invoice line")
