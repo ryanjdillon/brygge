@@ -6,25 +6,29 @@ import (
 	"testing"
 )
 
-func TestHashACLsCanonicalisesOrderAndRights(t *testing.T) {
-	a := []MailboxACL{
-		{PrincipalID: "u2", Rights: []string{"append", "read"}},
-		{PrincipalID: "u1", Rights: []string{"read", "append", "send_as"}},
-	}
-	b := []MailboxACL{
-		{PrincipalID: "u1", Rights: []string{"send_as", "append", "read"}},
-		{PrincipalID: "u2", Rights: []string{"read", "append"}},
-	}
-	if hashACLs(a) != hashACLs(b) {
-		t.Fatalf("expected equal hashes for reordered ACLs")
+func TestHashShareWithIsKeyOrderIndependent(t *testing.T) {
+	rights := ShareRights{MayRead: true, MaySetSeen: true, MayAddItems: true}
+	a := map[string]ShareRights{"u2": rights, "u1": rights}
+	b := map[string]ShareRights{"u1": rights, "u2": rights}
+	if hashShareWith(a) != hashShareWith(b) {
+		t.Fatalf("expected equal hashes regardless of map insertion order")
 	}
 }
 
-func TestHashACLsDetectsChange(t *testing.T) {
-	base := []MailboxACL{{PrincipalID: "u1", Rights: []string{"read"}}}
-	extra := append(base, MailboxACL{PrincipalID: "u2", Rights: []string{"read"}})
-	if hashACLs(base) == hashACLs(extra) {
+func TestHashShareWithDetectsMembershipChange(t *testing.T) {
+	rights := ShareRights{MayRead: true}
+	base := map[string]ShareRights{"u1": rights}
+	extra := map[string]ShareRights{"u1": rights, "u2": rights}
+	if hashShareWith(base) == hashShareWith(extra) {
 		t.Fatalf("expected different hashes when membership changes")
+	}
+}
+
+func TestHashShareWithDetectsRightsChange(t *testing.T) {
+	r1 := map[string]ShareRights{"u1": {MayRead: true}}
+	r2 := map[string]ShareRights{"u1": {MayRead: true, MayAddItems: true}}
+	if hashShareWith(r1) == hashShareWith(r2) {
+		t.Fatalf("expected different hashes when rights change")
 	}
 }
 

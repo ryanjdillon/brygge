@@ -140,7 +140,8 @@ func main() {
 				cfg.StalwartAdminToken,
 				log,
 			)
-			inboxReconciler = mail.NewReconciler(db, adminClient, auditService, spec, cfg.ReconcilerDryRun, log)
+			jmapClient := mail.NewJMAPClient(cfg.StalwartAdminURL, adminClient)
+			inboxReconciler = mail.NewReconciler(db, adminClient, jmapClient, auditService, spec, cfg.ReconcilerDryRun, log)
 		}
 	}
 

@@ -309,6 +309,59 @@ func (c *JMAPClient) SetKeywordOnThread(ctx context.Context, accountID, threadID
 	return len(emailIDs), nil
 }
 
+// ShareRights is the per-principal grant set on a JMAP Mailbox.
+// Stalwart 0.15 implements RFC 8621 §2.5 (`shareWith`); no admin REST
+// surface exists for ACL CRUD — sharing is set on the mailbox itself,
+// via JMAP, as the mailbox's owner principal.
+type ShareRights struct {
+	MayRead         bool `json:"mayRead"`
+	MayAddItems     bool `json:"mayAddItems"`
+	MayRemoveItems  bool `json:"mayRemoveItems"`
+	MaySetSeen      bool `json:"maySetSeen"`
+	MaySetKeywords  bool `json:"maySetKeywords"`
+	MayCreateChild  bool `json:"mayCreateChild"`
+	MayRename       bool `json:"mayRename"`
+	MayDelete       bool `json:"mayDelete"`
+	MaySubmit       bool `json:"maySubmit"`
+}
+
+// SetMailboxShareWith replaces the `shareWith` map on a single
+// mailbox (typically the Inbox of a shared principal). `accountID` is
+// the owner — the same principal id used to scope every other call
+// in this client. `shareWith` is keyed by the receiving principal's
+// id; an empty map clears all shares.
+func (c *JMAPClient) SetMailboxShareWith(ctx context.Context, accountID, mailboxID string, shareWith map[string]ShareRights) error {
+	resp, err := c.Call(ctx, nil, []invocation{
+		{"Mailbox/set", map[string]any{
+			"accountId": accountID,
+			"update": map[string]any{
+				mailboxID: map[string]any{
+					"shareWith": shareWith,
+				},
+			},
+		}, "0"},
+	})
+	if err != nil {
+		return err
+	}
+	if len(resp) == 0 {
+		return fmt.Errorf("Mailbox/set: empty response")
+	}
+	var args struct {
+		NotUpdated map[string]struct {
+			Type        string `json:"type"`
+			Description string `json:"description"`
+		} `json:"notUpdated"`
+	}
+	if err := decodeArgs(resp[0], &args); err != nil {
+		return err
+	}
+	if e, bad := args.NotUpdated[mailboxID]; bad {
+		return fmt.Errorf("Mailbox/set %s: %s: %s", mailboxID, e.Type, e.Description)
+	}
+	return nil
+}
+
 // MoveThreadToMailbox moves every email in a thread to a single
 // destination mailbox (used for archive). JMAP idiom for "move" is
 // to overwrite mailboxIds with the destination set.
