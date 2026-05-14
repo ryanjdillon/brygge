@@ -1240,7 +1240,13 @@
         "tooltipDescription": "What this entry is for",
         "tooltipStatus": "Draft = not finalized, Posted = finalized, Voided = reversed",
         "tooltipSource": "How this entry was created (manual, payment sync, bank import)",
-        "tooltipAccounts": "Which accounts are affected"
+        "tooltipAccounts": "Which accounts are affected",
+        "rebuildInvoiceBilags": "Rebuild invoice bilags",
+        "rebuildInvoiceBilagsTooltip": "Delete existing invoice bilags for the selected period and rebuild them with the updated per-category split.",
+        "rebuildInvoiceBilagsTitle": "Rebuild invoice bilags for {year}?",
+        "rebuildInvoiceBilagsBody": "Deletes every invoice bilag (source = invoice_sync) in fiscal period {year}, then recreates them using the current per-category split. Other entries (KID matches, Vipps reconciliations, payments) are not affected. The operation can only be undone by running it again.",
+        "rebuildInvoiceBilagsConfirm": "Delete and rebuild",
+        "rebuildInvoiceBilagsDone": "Rebuilt: {deleted} deleted, {resynced} created, {skipped} skipped."
       },
       "journalForm": {
         "title": "New entry",

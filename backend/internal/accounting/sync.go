@@ -124,6 +124,45 @@ func (s *Service) SyncPayments(ctx context.Context, clubID, periodID, syncedBy s
 	return result, rows.Err()
 }
 
+// RebuildInvoiceBilags deletes all existing invoice_sync journal entries
+// for the given fiscal period (cascading to their journal_lines) and
+// re-runs SyncInvoices so they're re-created with the current logic.
+// Useful after schema/code changes that change how the entries are shaped
+// (e.g. the per-category CR split introduced by DIL-290).
+//
+// Refuses to operate on a closed period — the caller must reopen it first.
+func (s *Service) RebuildInvoiceBilags(ctx context.Context, clubID, periodID, syncedBy string) (*SyncResult, int, error) {
+	var status string
+	if err := s.db.QueryRow(ctx,
+		`SELECT status FROM fiscal_periods WHERE id = $1 AND club_id = $2`,
+		periodID, clubID,
+	).Scan(&status); err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, 0, fmt.Errorf("fiscal period not found")
+		}
+		return nil, 0, fmt.Errorf("loading period: %w", err)
+	}
+	if status != "open" {
+		return nil, 0, fmt.Errorf("fiscal period is %s — reopen it before rebuilding bilags", status)
+	}
+
+	tag, err := s.db.Exec(ctx,
+		`DELETE FROM journal_entries
+		 WHERE club_id = $1 AND fiscal_period_id = $2 AND source = 'invoice_sync'`,
+		clubID, periodID,
+	)
+	if err != nil {
+		return nil, 0, fmt.Errorf("deleting existing invoice bilags: %w", err)
+	}
+	deleted := int(tag.RowsAffected())
+
+	result, err := s.SyncInvoices(ctx, clubID, periodID, syncedBy)
+	if err != nil {
+		return nil, deleted, fmt.Errorf("re-syncing invoices: %w", err)
+	}
+	return result, deleted, nil
+}
+
 // SyncInvoices creates receivable journal entries from invoices that haven't been synced yet.
 // Each entry debits Kundefordringer (1500) and credits the appropriate revenue account.
 func (s *Service) SyncInvoices(ctx context.Context, clubID, periodID, syncedBy string) (*SyncResult, error) {

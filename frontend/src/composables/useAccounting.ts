@@ -280,3 +280,24 @@ export function useSyncInvoices() {
     },
   })
 }
+
+export interface RebuildInvoiceBilagsResult {
+  deleted: number
+  resynced: number
+  skipped: number
+}
+
+export function useRebuildInvoiceBilags() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { period_id: string }) =>
+      apiFetch<RebuildInvoiceBilagsResult>(`${BASE}/sync/invoices/rebuild`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['accounting', 'journal'] })
+    },
+  })
+}

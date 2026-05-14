@@ -2,6 +2,7 @@
 import { ref, computed, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { useConfirm } from '@/stores/confirm'
 import {
   Plus,
   ChevronDown,
@@ -23,6 +24,7 @@ import {
   useReopenPeriod,
   useSyncPayments,
   useSyncInvoices,
+  useRebuildInvoiceBilags,
   type JournalEntry,
 } from '@/composables/useAccounting'
 
@@ -68,6 +70,8 @@ const closePeriodMutation = useClosePeriod()
 const reopenPeriodMutation = useReopenPeriod()
 const syncPaymentsMutation = useSyncPayments()
 const syncInvoicesMutation = useSyncInvoices()
+const rebuildInvoicesMutation = useRebuildInvoiceBilags()
+const askConfirm = useConfirm()
 
 const statusLabels = computed<Record<string, string>>(() => ({
   draft: t('admin.accounting.journal.draft'),
@@ -134,6 +138,40 @@ async function handleSync() {
     syncMessage.value = `${t('common.error')}: ${(err as Error).message}`
   } finally {
     syncing.value = false
+  }
+}
+
+const rebuilding = ref(false)
+async function handleRebuildInvoiceBilags() {
+  if (!selectedPeriodId.value) return
+  const periodLabel = periods.value?.find((p) => p.id === selectedPeriodId.value)?.year ?? ''
+  const ok = await askConfirm({
+    title: t('admin.accounting.journal.rebuildInvoiceBilagsTitle'),
+    body: t('admin.accounting.journal.rebuildInvoiceBilagsBody', { year: periodLabel }),
+    confirmLabel: t('admin.accounting.journal.rebuildInvoiceBilagsConfirm'),
+    cancelLabel: t('common.cancel'),
+    tone: 'danger',
+  })
+  if (!ok) return
+
+  rebuilding.value = true
+  syncMessage.value = ''
+  try {
+    const result = await new Promise<{ deleted: number; resynced: number; skipped: number }>((resolve, reject) => {
+      rebuildInvoicesMutation.mutate(
+        { period_id: selectedPeriodId.value },
+        { onSuccess: resolve, onError: reject },
+      )
+    })
+    syncMessage.value = t('admin.accounting.journal.rebuildInvoiceBilagsDone', {
+      deleted: result.deleted,
+      resynced: result.resynced,
+      skipped: result.skipped,
+    })
+  } catch (err) {
+    syncMessage.value = `${t('common.error')}: ${(err as Error).message}`
+  } finally {
+    rebuilding.value = false
   }
 }
 
@@ -260,6 +298,16 @@ function formatNOK(amount: number): string {
           >
             <RefreshCw class="h-4 w-4" :class="{ 'animate-spin': syncing }" />
             {{ syncing ? t('admin.accounting.journal.updating') : t('admin.accounting.journal.updatePeriod') }}
+          </button>
+          <button
+            class="inline-flex items-center gap-1.5 rounded-md border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+            :disabled="rebuilding || !selectedPeriodId"
+            :title="t('admin.accounting.journal.rebuildInvoiceBilagsTooltip')"
+            data-testid="rebuild-invoice-bilags"
+            @click="handleRebuildInvoiceBilags"
+          >
+            <RefreshCw class="h-4 w-4" :class="{ 'animate-spin': rebuilding }" />
+            {{ rebuilding ? t('admin.accounting.journal.updating') : t('admin.accounting.journal.rebuildInvoiceBilags') }}
           </button>
         </div>
       </div>
