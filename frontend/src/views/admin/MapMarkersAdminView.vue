@@ -5,6 +5,9 @@ import { useQueryClient } from '@tanstack/vue-query'
 import { Plus, Pencil, Trash2 } from 'lucide-vue-next'
 import { useMapMarkers, type MapMarker } from '@/composables/useMap'
 import { useApiClient, unwrap } from '@/lib/apiClient'
+import Input from '@/components/ui/form/Input.vue'
+import NumberInput from '@/components/ui/form/NumberInput.vue'
+import Select from '@/components/ui/form/Select.vue'
 
 const { t } = useI18n()
 const client = useApiClient()
@@ -14,7 +17,16 @@ const { data: markers, isLoading } = useMapMarkers()
 const showModal = ref(false)
 const editing = ref<MapMarker | null>(null)
 
-const form = ref({
+const markerTypes = ['waypoint', 'buoy', 'hazard', 'anchorage', 'harbor'] as const
+type MarkerType = (typeof markerTypes)[number]
+
+const form = ref<{
+  marker_type: MarkerType
+  label: string
+  lat: number | null
+  lng: number | null
+  sort_order: number | null
+}>({
   marker_type: 'waypoint',
   label: '',
   lat: 0,
@@ -22,7 +34,9 @@ const form = ref({
   sort_order: 0,
 })
 
-const markerTypes = ['waypoint', 'buoy', 'hazard', 'anchorage', 'harbor'] as const
+const markerTypeOptions = computed(() =>
+  markerTypes.map((mt) => ({ value: mt, label: t(`mapAdmin.types.${mt}`) })),
+)
 
 function openCreate() {
   editing.value = null
@@ -33,7 +47,7 @@ function openCreate() {
 function openEdit(m: MapMarker) {
   editing.value = m
   form.value = {
-    marker_type: m.marker_type,
+    marker_type: m.marker_type as MarkerType,
     label: m.label,
     lat: m.lat,
     lng: m.lng,
@@ -152,32 +166,28 @@ const sortedMarkers = computed(() =>
         <form class="mt-4 space-y-4" @submit.prevent="save">
           <div>
             <label class="block text-sm font-medium text-gray-700">{{ t('mapAdmin.markerType') }}</label>
-            <select v-model="form.marker_type" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm">
-              <option v-for="mt in markerTypes" :key="mt" :value="mt">
-                {{ t(`mapAdmin.types.${mt}`) }}
-              </option>
-            </select>
+            <Select v-model="form.marker_type" :options="markerTypeOptions" class="mt-1" />
           </div>
 
           <div>
             <label class="block text-sm font-medium text-gray-700">{{ t('mapAdmin.label') }}</label>
-            <input v-model="form.label" type="text" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm" />
+            <Input v-model="form.label" class="mt-1" />
           </div>
 
           <div class="grid grid-cols-2 gap-4">
             <div>
               <label class="block text-sm font-medium text-gray-700">{{ t('mapAdmin.lat') }}</label>
-              <input v-model.number="form.lat" type="number" step="any" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm" />
+              <NumberInput v-model="form.lat" step="any" class="mt-1" />
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700">{{ t('mapAdmin.lng') }}</label>
-              <input v-model.number="form.lng" type="number" step="any" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm" />
+              <NumberInput v-model="form.lng" step="any" class="mt-1" />
             </div>
           </div>
 
           <div>
             <label class="block text-sm font-medium text-gray-700">{{ t('mapAdmin.sortOrder') }}</label>
-            <input v-model.number="form.sort_order" type="number" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm" />
+            <NumberInput v-model="form.sort_order" class="mt-1" />
           </div>
 
           <div class="flex justify-end gap-3 pt-2">

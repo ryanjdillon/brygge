@@ -4,6 +4,8 @@ import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useApiClient, unwrap } from '@/lib/apiClient'
 import { Check, XCircle } from 'lucide-vue-next'
+import Select from '@/components/ui/form/Select.vue'
+import DateInput from '@/components/ui/form/DateInput.vue'
 const { t } = useI18n()
 const client = useApiClient()
 const queryClient = useQueryClient()
@@ -12,6 +14,21 @@ const statusFilter = ref('')
 const resourceTypeFilter = ref('')
 const dateFrom = ref('')
 const dateTo = ref('')
+
+const statusOptions = computed(() => [
+  { value: '', label: t('admin.bookings.allStatuses') },
+  { value: 'pending', label: t('portal.bookings.pending') },
+  { value: 'confirmed', label: t('portal.bookings.confirmed') },
+  { value: 'cancelled', label: t('portal.bookings.cancelled') },
+])
+
+const resourceTypeOptions = computed(() => [
+  { value: '', label: t('admin.bookings.allTypes') },
+  { value: 'guest_slip', label: t('admin.bookings.guestSlip') },
+  { value: 'bobil_spot', label: t('admin.bookings.motorhomeSpot') },
+  { value: 'club_room', label: t('admin.bookings.clubRoom') },
+  { value: 'other', label: t('admin.events.tagOther') },
+])
 
 const queryKey = computed(() => [
   'admin-bookings',
@@ -78,44 +95,19 @@ function statusClass(status: string): string {
     <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <div>
         <label class="block text-sm font-medium text-gray-700">{{ t('common.status') }}</label>
-        <select
-          v-model="statusFilter"
-          class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-        >
-          <option value="">{{ t('admin.bookings.allStatuses') }}</option>
-          <option value="pending">{{ t('portal.bookings.pending') }}</option>
-          <option value="confirmed">{{ t('portal.bookings.confirmed') }}</option>
-          <option value="cancelled">{{ t('portal.bookings.cancelled') }}</option>
-        </select>
+        <Select v-model="statusFilter" :options="statusOptions" class="mt-1" />
       </div>
       <div>
         <label class="block text-sm font-medium text-gray-700">{{ t('admin.bookings.resourceType') }}</label>
-        <select
-          v-model="resourceTypeFilter"
-          class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-        >
-          <option value="">{{ t('admin.bookings.allTypes') }}</option>
-          <option value="guest_slip">{{ t('admin.bookings.guestSlip') }}</option>
-          <option value="bobil_spot">{{ t('admin.bookings.motorhomeSpot') }}</option>
-          <option value="club_room">{{ t('admin.bookings.clubRoom') }}</option>
-          <option value="other">{{ t('admin.events.tagOther') }}</option>
-        </select>
+        <Select v-model="resourceTypeFilter" :options="resourceTypeOptions" class="mt-1" />
       </div>
       <div>
         <label class="block text-sm font-medium text-gray-700">{{ t('admin.bookings.dateFrom') }}</label>
-        <input
-          v-model="dateFrom"
-          type="date"
-          class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-        />
+        <DateInput v-model="dateFrom" class="mt-1" />
       </div>
       <div>
         <label class="block text-sm font-medium text-gray-700">{{ t('admin.bookings.dateTo') }}</label>
-        <input
-          v-model="dateTo"
-          type="date"
-          class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-        />
+        <DateInput v-model="dateTo" class="mt-1" />
       </div>
     </div>
 

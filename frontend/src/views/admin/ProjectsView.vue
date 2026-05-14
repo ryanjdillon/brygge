@@ -4,6 +4,8 @@ import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useProjects, useCreateProject } from '@/composables/useProjects'
 import { Plus, FolderKanban, X } from 'lucide-vue-next'
+import Input from '@/components/ui/form/Input.vue'
+import Textarea from '@/components/ui/form/Textarea.vue'
 
 const { t } = useI18n()
 
@@ -122,20 +124,11 @@ function handleCreate() {
         <form class="mt-4 space-y-4" @submit.prevent="handleCreate">
           <div>
             <label class="block text-sm font-medium text-gray-700">{{ t('projects.name') }}</label>
-            <input
-              v-model="newName"
-              type="text"
-              required
-              class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
+            <Input v-model="newName" class="mt-1" />
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700">{{ t('projects.description') }}</label>
-            <textarea
-              v-model="newDescription"
-              rows="3"
-              class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
+            <Textarea v-model="newDescription" :rows="3" class="mt-1" />
           </div>
           <div class="flex justify-end gap-3">
             <button

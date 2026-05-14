@@ -3,13 +3,14 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAllVolunteerHours, useSetRequiredHours } from '@/composables/useVolunteer'
 import { Settings } from 'lucide-vue-next'
+import NumberInput from '@/components/ui/form/NumberInput.vue'
 
 const { t } = useI18n()
 const { data: allHours, isLoading } = useAllVolunteerHours()
 const setRequired = useSetRequiredHours()
 
 const showSettings = ref(false)
-const requiredInput = ref('')
+const requiredInput = ref<number | null>(0)
 const toast = ref<{ type: 'success' | 'error'; message: string } | null>(null)
 
 function showToast(type: 'success' | 'error', message: string) {
@@ -18,7 +19,7 @@ function showToast(type: 'success' | 'error', message: string) {
 }
 
 function openSettings() {
-  requiredInput.value = allHours.value?.[0]?.required_hours?.toString() ?? '0'
+  requiredInput.value = allHours.value?.[0]?.required_hours ?? 0
   showSettings.value = true
 }
 
@@ -93,13 +94,7 @@ function handleSetRequired() {
         <form class="mt-4 space-y-4" @submit.prevent="handleSetRequired">
           <div>
             <label class="block text-sm font-medium text-gray-700">{{ t('volunteer.requiredHoursPerYear') }}</label>
-            <input
-              v-model="requiredInput"
-              type="number"
-              min="0"
-              step="1"
-              class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
+            <NumberInput v-model="requiredInput" :min="0" :step="1" class="mt-1" />
           </div>
           <div class="flex justify-end gap-3">
             <button

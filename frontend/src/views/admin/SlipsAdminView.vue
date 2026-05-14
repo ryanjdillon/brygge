@@ -10,6 +10,10 @@ import DockFilter from '@/components/admin/DockFilter.vue'
 import SortableTh from '@/components/admin/SortableTh.vue'
 import SlipCell from '@/components/admin/SlipCell.vue'
 import { Plus, Pencil, Trash2 } from 'lucide-vue-next'
+import Input from '@/components/ui/form/Input.vue'
+import Textarea from '@/components/ui/form/Textarea.vue'
+import NumberInput from '@/components/ui/form/NumberInput.vue'
+import Checkbox from '@/components/ui/form/Checkbox.vue'
 const { t } = useI18n()
 const client = useApiClient()
 const queryClient = useQueryClient()
@@ -131,8 +135,16 @@ const showCreateForm = ref(false)
 const editingSlip = ref<Slip | null>(null)
 const deletingSlip = ref<Slip | null>(null)
 
-const createForm = ref({ number: '', section: '', length_m: '', width_m: '', depth_m: '', notes: '' })
-const editForm = ref({ number: '', section: '', length_m: '', width_m: '', depth_m: '', notes: '' })
+type SlipForm = {
+  number: string
+  section: string
+  length_m: number | null
+  width_m: number | null
+  depth_m: number | null
+  notes: string
+}
+const createForm = ref<SlipForm>({ number: '', section: '', length_m: null, width_m: null, depth_m: null, notes: '' })
+const editForm = ref<SlipForm>({ number: '', section: '', length_m: null, width_m: null, depth_m: null, notes: '' })
 
 const submitError = ref<string | null>(null)
 const deleteError = ref<string | null>(null)
@@ -143,9 +155,9 @@ const { mutate: createSlip, isPending: isCreating } = useMutation({
       body: {
         number: createForm.value.number,
         section: createForm.value.section,
-        length_m: createForm.value.length_m ? parseFloat(createForm.value.length_m) : null,
-        width_m: createForm.value.width_m ? parseFloat(createForm.value.width_m) : null,
-        depth_m: createForm.value.depth_m ? parseFloat(createForm.value.depth_m) : null,
+        length_m: createForm.value.length_m,
+        width_m: createForm.value.width_m,
+        depth_m: createForm.value.depth_m,
         notes: createForm.value.notes,
       } as any,
     })),
@@ -153,7 +165,7 @@ const { mutate: createSlip, isPending: isCreating } = useMutation({
     queryClient.invalidateQueries({ queryKey: ['admin', 'slips'] })
     showCreateForm.value = false
     submitError.value = null
-    createForm.value = { number: '', section: '', length_m: '', width_m: '', depth_m: '', notes: '' }
+    createForm.value = { number: '', section: '', length_m: null, width_m: null, depth_m: null, notes: '' }
   },
   onError: (err: unknown) => {
     submitError.value = err instanceof Error ? err.message : String(err)
@@ -169,9 +181,9 @@ const { mutate: updateSlip, isPending: isUpdating } = useMutation({
       body: {
         number: editForm.value.number,
         section: editForm.value.section,
-        length_m: editForm.value.length_m ? parseFloat(editForm.value.length_m) : null,
-        width_m: editForm.value.width_m ? parseFloat(editForm.value.width_m) : null,
-        depth_m: editForm.value.depth_m ? parseFloat(editForm.value.depth_m) : null,
+        length_m: editForm.value.length_m,
+        width_m: editForm.value.width_m,
+        depth_m: editForm.value.depth_m,
         notes: editForm.value.notes,
       } as any,
     }))
@@ -247,9 +259,9 @@ async function openEdit(slip: Slip) {
   editForm.value = {
     number: slip.number ?? '',
     section: slip.section ?? '',
-    length_m: slip.length_m != null ? String(slip.length_m) : '',
-    width_m: slip.width_m != null ? String(slip.width_m) : '',
-    depth_m: slip.depth_m != null ? String(slip.depth_m) : '',
+    length_m: slip.length_m ?? null,
+    width_m: slip.width_m ?? null,
+    depth_m: slip.depth_m ?? null,
     notes: slip.notes ?? '',
   }
   submitError.value = null
@@ -279,10 +291,9 @@ function closeDelete() {
     <div class="flex flex-wrap items-center justify-between gap-3">
       <h1 class="text-2xl font-bold text-gray-900">{{ t('admin.sidebar.slips') }}</h1>
       <div class="flex flex-wrap items-center gap-3">
-        <label class="inline-flex cursor-pointer items-center gap-2 text-sm text-gray-700">
-          <input v-model="notesOnly" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-          <span>{{ t('admin.slips.notesOnly') }}</span>
-        </label>
+        <Checkbox v-model="notesOnly">
+          {{ t('admin.slips.notesOnly') }}
+        </Checkbox>
         <DockFilter id="slips-dock-filter" v-model="dockFilter" :options="allDocks" />
         <button
           v-if="!showCreateForm"
@@ -303,30 +314,30 @@ function closeDelete() {
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="block text-sm font-medium text-gray-700">{{ t('admin.slips.section') }}</label>
-          <input v-model="createForm.section" type="text" required class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          <Input v-model="createForm.section" class="mt-1" />
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700">{{ t('admin.slips.number') }}</label>
-          <input v-model="createForm.number" type="text" required class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          <Input v-model="createForm.number" class="mt-1" />
         </div>
       </div>
       <div class="grid grid-cols-3 gap-3">
         <div>
           <label class="block text-sm font-medium text-gray-700">{{ t('admin.slips.length') }} <span class="text-xs font-normal text-gray-400">({{ t('common.optional') }})</span></label>
-          <input v-model="createForm.length_m" type="number" step="0.1" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          <NumberInput v-model="createForm.length_m" :step="0.1" class="mt-1" />
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700">{{ t('admin.slips.width') }} <span class="text-xs font-normal text-gray-400">({{ t('common.optional') }})</span></label>
-          <input v-model="createForm.width_m" type="number" step="0.1" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          <NumberInput v-model="createForm.width_m" :step="0.1" class="mt-1" />
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700">{{ t('admin.slips.depth') }} <span class="text-xs font-normal text-gray-400">({{ t('common.optional') }})</span></label>
-          <input v-model="createForm.depth_m" type="number" step="0.1" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          <NumberInput v-model="createForm.depth_m" :step="0.1" class="mt-1" />
         </div>
       </div>
       <div>
         <label class="block text-sm font-medium text-gray-700">{{ t('admin.slips.notes') }} <span class="text-xs font-normal text-gray-400">({{ t('common.optional') }})</span></label>
-        <textarea v-model="createForm.notes" rows="3" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+        <Textarea v-model="createForm.notes" :rows="3" class="mt-1" />
       </div>
       <div v-if="submitError" class="rounded-md bg-red-50 p-3 text-sm text-red-800">{{ submitError }}</div>
       <div class="flex gap-3">
@@ -422,30 +433,30 @@ function closeDelete() {
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="block text-sm font-medium text-gray-700">{{ t('admin.slips.section') }}</label>
-            <input v-model="editForm.section" type="text" required class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+            <Input v-model="editForm.section" class="mt-1" />
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700">{{ t('admin.slips.number') }}</label>
-            <input v-model="editForm.number" type="text" required class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+            <Input v-model="editForm.number" class="mt-1" />
           </div>
         </div>
         <div class="grid grid-cols-3 gap-3">
           <div>
             <label class="block text-sm font-medium text-gray-700">{{ t('admin.slips.length') }} <span class="text-xs font-normal text-gray-400">({{ t('common.optional') }})</span></label>
-            <input v-model="editForm.length_m" type="number" step="0.1" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+            <NumberInput v-model="editForm.length_m" :step="0.1" class="mt-1" />
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700">{{ t('admin.slips.width') }} <span class="text-xs font-normal text-gray-400">({{ t('common.optional') }})</span></label>
-            <input v-model="editForm.width_m" type="number" step="0.1" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+            <NumberInput v-model="editForm.width_m" :step="0.1" class="mt-1" />
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700">{{ t('admin.slips.depth') }} <span class="text-xs font-normal text-gray-400">({{ t('common.optional') }})</span></label>
-            <input v-model="editForm.depth_m" type="number" step="0.1" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+            <NumberInput v-model="editForm.depth_m" :step="0.1" class="mt-1" />
           </div>
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700">{{ t('admin.slips.notes') }} <span class="text-xs font-normal text-gray-400">({{ t('common.optional') }})</span></label>
-          <textarea v-model="editForm.notes" rows="3" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          <Textarea v-model="editForm.notes" :rows="3" class="mt-1" />
         </div>
         <div v-if="submitError" class="rounded-md bg-red-50 p-3 text-sm text-red-800">{{ submitError }}</div>
         <div v-if="unassignError" class="rounded-md bg-red-50 p-3 text-sm text-red-800">{{ unassignError }}</div>

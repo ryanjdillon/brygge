@@ -10,6 +10,11 @@ import {
   type CalendarEvent,
   type CreateEventPayload,
 } from '@/composables/useEvents'
+import Input from '@/components/ui/form/Input.vue'
+import Textarea from '@/components/ui/form/Textarea.vue'
+import Select from '@/components/ui/form/Select.vue'
+import Checkbox from '@/components/ui/form/Checkbox.vue'
+import DateTimeInput from '@/components/ui/form/DateTimeInput.vue'
 
 const { t } = useI18n()
 
@@ -22,6 +27,10 @@ const showModal = ref(false)
 const editingEvent = ref<CalendarEvent | null>(null)
 
 const tagOptions = ['regatta', 'volunteer', 'social', 'agm', 'other'] as const
+
+const tagSelectOptions = computed(() =>
+  tagOptions.map((tag) => ({ value: tag, label: tagLabel(tag) })),
+)
 
 const form = ref<CreateEventPayload>({
   title: '',
@@ -215,74 +224,39 @@ function tagLabel(tag: string): string {
           <form class="mt-4 space-y-4" @submit.prevent="handleSubmit">
             <div>
               <label class="block text-sm font-medium text-gray-700">{{ t('admin.events.eventTitle') }}</label>
-              <input
-                v-model="form.title"
-                type="text"
-                required
-                class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
+              <Input v-model="form.title" class="mt-1" />
             </div>
 
             <div>
               <label class="block text-sm font-medium text-gray-700">{{ t('admin.events.description') }}</label>
-              <textarea
-                v-model="form.description"
-                rows="3"
-                class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
+              <Textarea v-model="form.description" :rows="3" class="mt-1" />
             </div>
 
             <div>
               <label class="block text-sm font-medium text-gray-700">{{ t('admin.events.location') }}</label>
-              <input
-                v-model="form.location"
-                type="text"
-                class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
+              <Input v-model="form.location" class="mt-1" />
             </div>
 
             <div class="grid grid-cols-2 gap-4">
               <div>
                 <label class="block text-sm font-medium text-gray-700">{{ t('admin.events.startTime') }}</label>
-                <input
-                  v-model="form.start_time"
-                  type="datetime-local"
-                  required
-                  class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
+                <DateTimeInput v-model="form.start_time" required class="mt-1" />
               </div>
               <div>
                 <label class="block text-sm font-medium text-gray-700">{{ t('admin.events.endTime') }}</label>
-                <input
-                  v-model="form.end_time"
-                  type="datetime-local"
-                  required
-                  class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
+                <DateTimeInput v-model="form.end_time" required class="mt-1" />
               </div>
             </div>
 
             <div class="grid grid-cols-2 gap-4">
               <div>
                 <label class="block text-sm font-medium text-gray-700">{{ t('admin.events.tag') }}</label>
-                <select
-                  v-model="form.tag"
-                  class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                >
-                  <option v-for="tag in tagOptions" :key="tag" :value="tag">
-                    {{ tagLabel(tag) }}
-                  </option>
-                </select>
+                <Select v-model="form.tag" :options="tagSelectOptions" class="mt-1" />
               </div>
               <div class="flex items-end">
-                <label class="flex items-center gap-2 text-sm font-medium text-gray-700">
-                  <input
-                    v-model="form.is_public"
-                    type="checkbox"
-                    class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
+                <Checkbox v-model="form.is_public" class="text-sm font-medium text-gray-700">
                   {{ t('admin.events.isPublic') }}
-                </label>
+                </Checkbox>
               </div>
             </div>
 

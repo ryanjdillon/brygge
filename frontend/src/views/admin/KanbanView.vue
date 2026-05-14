@@ -13,6 +13,11 @@ import {
 } from '@/composables/useProjects'
 import { useJoinTask, useLeaveTask } from '@/composables/useVolunteer'
 import { ArrowLeft, ArrowRight, Plus, X, Trash2, Users, Clock, Package } from 'lucide-vue-next'
+import Input from '@/components/ui/form/Input.vue'
+import Textarea from '@/components/ui/form/Textarea.vue'
+import NumberInput from '@/components/ui/form/NumberInput.vue'
+import Select from '@/components/ui/form/Select.vue'
+import DateInput from '@/components/ui/form/DateInput.vue'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -38,17 +43,23 @@ const newDescription = ref('')
 const newPriority = ref('medium')
 const newAssigneeId = ref('')
 const newDueDate = ref('')
-const newEstimatedHours = ref<string>('')
-const newMaxCollaborators = ref('5')
+const newEstimatedHours = ref<number | null>(null)
+const newMaxCollaborators = ref<number | null>(5)
 
 const editTitle = ref('')
 const editDescription = ref('')
 const editPriority = ref('')
 const editAssigneeId = ref('')
 const editDueDate = ref('')
-const editEstimatedHours = ref<string>('')
-const editMaxCollaborators = ref('5')
+const editEstimatedHours = ref<number | null>(null)
+const editMaxCollaborators = ref<number | null>(5)
 const editMaterials = ref<MaterialItem[]>([])
+
+const priorityOptions = computed(() => [
+  { value: 'low', label: t('projects.priorityLow') },
+  { value: 'medium', label: t('projects.priorityMedium') },
+  { value: 'high', label: t('projects.priorityHigh') },
+])
 
 function showToast(type: 'success' | 'error', message: string) {
   toast.value = { type, message }
@@ -82,8 +93,8 @@ function openCreateModal(status: 'todo' | 'in_progress' | 'done') {
   newPriority.value = 'medium'
   newAssigneeId.value = ''
   newDueDate.value = ''
-  newEstimatedHours.value = ''
-  newMaxCollaborators.value = '5'
+  newEstimatedHours.value = null
+  newMaxCollaborators.value = 5
   showCreateModal.value = true
 }
 
@@ -96,8 +107,8 @@ function handleCreate() {
       priority: newPriority.value,
       assignee_id: newAssigneeId.value || undefined,
       due_date: newDueDate.value || undefined,
-      estimated_hours: newEstimatedHours.value ? Number(newEstimatedHours.value) : undefined,
-      max_collaborators: newMaxCollaborators.value ? Number(newMaxCollaborators.value) : undefined,
+      estimated_hours: newEstimatedHours.value ?? undefined,
+      max_collaborators: newMaxCollaborators.value ?? undefined,
     },
     {
       onSuccess: (task) => {
@@ -124,8 +135,8 @@ function openDetail(task: Task) {
   editPriority.value = task.priority
   editAssigneeId.value = task.assignee_id ?? ''
   editDueDate.value = task.due_date ?? ''
-  editEstimatedHours.value = task.estimated_hours != null ? String(task.estimated_hours) : ''
-  editMaxCollaborators.value = String(task.max_collaborators)
+  editEstimatedHours.value = task.estimated_hours ?? null
+  editMaxCollaborators.value = task.max_collaborators
   editMaterials.value = task.materials ? [...task.materials] : []
   showDetailModal.value = true
 }
@@ -155,8 +166,8 @@ function handleSaveDetail() {
         priority: editPriority.value,
         assignee_id: editAssigneeId.value || '',
         due_date: editDueDate.value || '',
-        estimated_hours: editEstimatedHours.value ? Number(editEstimatedHours.value) : undefined,
-        max_collaborators: editMaxCollaborators.value ? Number(editMaxCollaborators.value) : undefined,
+        estimated_hours: editEstimatedHours.value ?? undefined,
+        max_collaborators: editMaxCollaborators.value ?? undefined,
         materials: editMaterials.value.length ? editMaterials.value : undefined,
       },
     },
@@ -317,61 +328,30 @@ function moveTask(task: Task, direction: 'prev' | 'next') {
         <form class="mt-4 space-y-4" @submit.prevent="handleCreate">
           <div>
             <label class="block text-sm font-medium text-gray-700">{{ t('projects.taskTitle') }}</label>
-            <input
-              v-model="newTitle"
-              type="text"
-              required
-              class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
+            <Input v-model="newTitle" class="mt-1" />
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700">{{ t('projects.taskDescription') }}</label>
-            <textarea
-              v-model="newDescription"
-              rows="3"
-              class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
+            <Textarea v-model="newDescription" :rows="3" class="mt-1" />
           </div>
           <div class="grid grid-cols-2 gap-4">
             <div>
               <label class="block text-sm font-medium text-gray-700">{{ t('projects.taskPriority') }}</label>
-              <select
-                v-model="newPriority"
-                class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                <option value="low">{{ t('projects.priorityLow') }}</option>
-                <option value="medium">{{ t('projects.priorityMedium') }}</option>
-                <option value="high">{{ t('projects.priorityHigh') }}</option>
-              </select>
+              <Select v-model="newPriority" :options="priorityOptions" class="mt-1" />
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700">{{ t('projects.taskDueDate') }}</label>
-              <input
-                v-model="newDueDate"
-                type="date"
-                class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
+              <DateInput v-model="newDueDate" class="mt-1" />
             </div>
           </div>
           <div class="grid grid-cols-2 gap-4">
             <div>
               <label class="block text-sm font-medium text-gray-700">{{ t('volunteer.estimatedHours') }}</label>
-              <input
-                v-model="newEstimatedHours"
-                type="number"
-                min="0"
-                step="0.5"
-                class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
+              <NumberInput v-model="newEstimatedHours" :min="0" :step="0.5" class="mt-1" />
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700">{{ t('volunteer.maxParticipants') }}</label>
-              <input
-                v-model="newMaxCollaborators"
-                type="number"
-                min="1"
-                class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
+              <NumberInput v-model="newMaxCollaborators" :min="1" class="mt-1" />
             </div>
           </div>
           <div class="flex justify-end gap-3">
@@ -418,61 +398,30 @@ function moveTask(task: Task, direction: 'prev' | 'next') {
         <form class="mt-4 space-y-4" @submit.prevent="handleSaveDetail">
           <div>
             <label class="block text-sm font-medium text-gray-700">{{ t('projects.taskTitle') }}</label>
-            <input
-              v-model="editTitle"
-              type="text"
-              required
-              class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
+            <Input v-model="editTitle" class="mt-1" />
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700">{{ t('projects.taskDescription') }}</label>
-            <textarea
-              v-model="editDescription"
-              rows="3"
-              class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
+            <Textarea v-model="editDescription" :rows="3" class="mt-1" />
           </div>
           <div class="grid grid-cols-2 gap-4">
             <div>
               <label class="block text-sm font-medium text-gray-700">{{ t('projects.taskPriority') }}</label>
-              <select
-                v-model="editPriority"
-                class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                <option value="low">{{ t('projects.priorityLow') }}</option>
-                <option value="medium">{{ t('projects.priorityMedium') }}</option>
-                <option value="high">{{ t('projects.priorityHigh') }}</option>
-              </select>
+              <Select v-model="editPriority" :options="priorityOptions" class="mt-1" />
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700">{{ t('projects.taskDueDate') }}</label>
-              <input
-                v-model="editDueDate"
-                type="date"
-                class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
+              <DateInput v-model="editDueDate" class="mt-1" />
             </div>
           </div>
           <div class="grid grid-cols-2 gap-4">
             <div>
               <label class="block text-sm font-medium text-gray-700">{{ t('volunteer.estimatedHours') }}</label>
-              <input
-                v-model="editEstimatedHours"
-                type="number"
-                min="0"
-                step="0.5"
-                class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
+              <NumberInput v-model="editEstimatedHours" :min="0" :step="0.5" class="mt-1" />
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700">{{ t('volunteer.maxParticipants') }}</label>
-              <input
-                v-model="editMaxCollaborators"
-                type="number"
-                min="1"
-                class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
+              <NumberInput v-model="editMaxCollaborators" :min="1" class="mt-1" />
             </div>
           </div>
           <div v-if="selectedTask && selectedTask.status !== 'done'" class="flex gap-2">
