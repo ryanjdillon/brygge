@@ -169,3 +169,15 @@ export async function confirmVippsReconcile(
     body: JSON.stringify({ lines }),
   })
 }
+
+export interface BankSyncResult {
+  kid_matched: number
+  vipps_reconciled: number
+  vipps_unbalanced: number
+  transfers_linked: number
+  closed_periods: string[]
+}
+
+export async function runBankSync(): Promise<BankSyncResult> {
+  return fetchJSON<BankSyncResult>(`${BASE}/bank-sync`, { method: 'POST' })
+}

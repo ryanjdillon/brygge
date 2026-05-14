@@ -1317,7 +1317,18 @@
       "bankAccount": "Bankkonto",
       "transfers": "Interne overføringer",
       "closedPeriodsNotice": "Rader fra følgende lukkede perioder ble ikke avstemt automatisk: {years}. Gjenåpne periodene om du vil bokføre dem.",
-      "periodClosedNotice": "Regnskapsperiode {year} er lukket — gjenåpne den før du oppretter bilaget."
+      "periodClosedNotice": "Regnskapsperiode {year} er lukket — gjenåpne den før du oppretter bilaget.",
+      "tabImports": "Import",
+      "tabAccounts": "Kontoer",
+      "runSync": "Synkroniser",
+      "runSyncResult": "KID-treff: {kid} · Vipps-avstemt: {vipps} · Interne overføringer: {transfers}",
+      "runSyncClosed": "Lukkede perioder: {years}",
+      "bankAccountsTitle": "Bankkontoer",
+      "bankAccountsDesc": "Kontoer fra kontoplan (1920–1949).",
+      "vippsAccountsTitle": "Vipps-numre",
+      "vippsAccountsDesc": "Vipps-numre sett i importerte oppgjørsrapporter.",
+      "noBankAccounts": "Ingen bankkontoer er konfigurert i kontoplan.",
+      "noVippsAccounts": "Ingen Vipps-numre er importert ennå."
     }
   },
   "projects": {

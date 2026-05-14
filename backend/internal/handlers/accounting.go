@@ -1286,6 +1286,33 @@ func (h *AccountingHandler) HandleUpdateMomskompStatus(w http.ResponseWriter, r 
 	JSON(w, http.StatusOK, map[string]string{"message": "status updated"})
 }
 
+// ── Full bank sync ──────────────────────────────────────────
+
+func (h *AccountingHandler) HandleBankSync(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	result, err := h.svc.BankSync(r.Context(), claims.ClubID, claims.UserID)
+	if err != nil {
+		h.log.Error().Err(err).Msg("bank sync failed")
+		Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if h.audit != nil {
+		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,
+			"accounting.bank_synced", "bank", "",
+			map[string]any{
+				"kid_matched":      result.KIDMatched,
+				"vipps_reconciled": result.VippsReconciled,
+				"transfers_linked": result.TransfersLinked,
+				"closed_periods":   result.ClosedPeriods,
+			})
+	}
+	JSON(w, http.StatusOK, result)
+}
+
 // ── Vipps Reconciliation ────────────────────────────────────
 
 func (h *AccountingHandler) HandleVippsReconcilePreview(w http.ResponseWriter, r *http.Request) {
@@ -1428,7 +1455,7 @@ func (h *AccountingHandler) HandleListVippsImports(w http.ResponseWriter, r *htt
 	}
 
 	rows, err := h.svc.DB().Query(r.Context(),
-		`SELECT id, filename, msn, row_count, created_at
+		`SELECT id, filename, msn, row_count, created_at::text
 		 FROM vipps_imports WHERE club_id = $1 ORDER BY created_at DESC LIMIT 100`,
 		claims.ClubID,
 	)
