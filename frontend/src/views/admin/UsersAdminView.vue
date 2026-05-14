@@ -20,6 +20,11 @@ import type { components } from '@/types/api'
 import { formatName } from '@/lib/format'
 import { useAuthStore } from '@/stores/auth'
 import { useTotpGateStore } from '@/stores/totpGate'
+import Input from '@/components/ui/form/Input.vue'
+import Textarea from '@/components/ui/form/Textarea.vue'
+import Checkbox from '@/components/ui/form/Checkbox.vue'
+import Select from '@/components/ui/form/Select.vue'
+import FileInput from '@/components/ui/form/FileInput.vue'
 
 type User = components['schemas']['AdminUser']
 type CreateBody = components['schemas']['AdminUserCreate']
@@ -637,6 +642,23 @@ function pickerFor(boatId: string) {
   )
 }
 
+function slipOptionsFor(boatId: string) {
+  const current = getBoatSlip(boatId).slip_id
+  const firstLabel = current ? t('admin.users.unassignedSlip') : t('admin.users.addSlip')
+  return [
+    { value: '', label: firstLabel },
+    ...pickerFor(boatId).map((s) => ({
+      value: s.id,
+      label: (s.section ? s.section + ' ' : '') + s.number,
+    })),
+  ]
+}
+
+const assignmentTypeOptions = computed(() => [
+  { value: 'permanent', label: t('admin.users.spotPermanent') },
+  { value: 'seasonal', label: t('admin.users.spotSeasonal') },
+])
+
 // --- Create user modal ---
 const showCreateModal = ref(false)
 const createError = ref<string | null>(null)
@@ -725,9 +747,8 @@ async function openImportModal() {
   showImportModal.value = true
 }
 
-function handleFileChange(e: Event) {
-  const target = e.target as HTMLInputElement
-  importFile.value = target.files?.[0] ?? null
+function handleFileChange(files: FileList | null) {
+  importFile.value = files?.[0] ?? null
 }
 
 async function submitImport() {
@@ -774,13 +795,12 @@ async function submitImport() {
       <h1 class="text-2xl font-bold text-gray-900">{{ t('admin.sidebar.users') }}</h1>
       <div class="flex flex-wrap items-center gap-2">
         <label class="sr-only" for="user-search">{{ t('admin.users.searchPlaceholder') }}</label>
-        <input
+        <Input
           id="user-search"
           v-model="searchInput"
           type="search"
           :placeholder="t('admin.users.searchPlaceholder')"
-          class="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          @input="onSearchInput"
+          @update:model-value="onSearchInput"
         />
         <DockFilter
           id="member-dock-filter"
@@ -872,12 +892,10 @@ async function submitImport() {
         <thead class="bg-gray-50">
           <tr>
             <th scope="col" class="w-8 px-2 py-3 text-center">
-              <input
-                type="checkbox"
-                :checked="allOnPageSelected"
-                :indeterminate.prop="someOnPageSelected"
-                class="rounded border-gray-300"
-                @change="togglePage"
+              <Checkbox
+                :model-value="allOnPageSelected"
+                :indeterminate="someOnPageSelected"
+                @update:model-value="togglePage"
               />
             </th>
             <th scope="col" class="w-12 px-3 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">#</th>
@@ -903,11 +921,9 @@ async function submitImport() {
             @click="openDetail(user)"
           >
             <td class="px-2 py-3 text-center" @click.stop>
-              <input
-                type="checkbox"
-                :checked="selectedIds.has(user.id)"
-                class="rounded border-gray-300"
-                @change="toggleUser(user.id)"
+              <Checkbox
+                :model-value="selectedIds.has(user.id)"
+                @update:model-value="toggleUser(user.id)"
               />
             </td>
             <td class="whitespace-nowrap px-3 py-3 text-right text-xs text-gray-400 tabular-nums">{{ offset + index + 1 }}</td>
@@ -1132,42 +1148,53 @@ async function submitImport() {
         <form v-else class="space-y-3" @submit.prevent="submitEdit">
           <div>
             <label class="block text-xs font-medium text-gray-700" for="ed-email">{{ t('admin.users.email') }}</label>
-            <input id="ed-email" v-model="editForm.email" type="email" required class="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm" />
+            <div class="mt-1">
+              <Input id="ed-email" v-model="editForm.email" type="email" />
+            </div>
           </div>
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="block text-xs font-medium text-gray-700" for="ed-first">{{ t('admin.users.firstName') }}</label>
-              <input id="ed-first" v-model="editForm.first_name" type="text" class="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm" />
+              <div class="mt-1">
+                <Input id="ed-first" v-model="editForm.first_name" type="text" />
+              </div>
             </div>
             <div>
               <label class="block text-xs font-medium text-gray-700" for="ed-last">{{ t('admin.users.lastName') }}</label>
-              <input id="ed-last" v-model="editForm.last_name" type="text" class="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm" />
+              <div class="mt-1">
+                <Input id="ed-last" v-model="editForm.last_name" type="text" />
+              </div>
             </div>
           </div>
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="block text-xs font-medium text-gray-700" for="ed-phone">{{ t('admin.users.phone') }}</label>
-              <input id="ed-phone" v-model="editForm.phone" type="tel" class="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm" />
+              <div class="mt-1">
+                <Input id="ed-phone" v-model="editForm.phone" type="tel" />
+              </div>
             </div>
             <div class="flex items-end gap-1 pb-1">
-              <label class="inline-flex items-center gap-1 text-sm text-gray-700">
-                <input v-model="editForm.is_local" type="checkbox" class="rounded border-gray-300" />
-                {{ t('admin.users.isLocal') }}
-              </label>
+              <Checkbox v-model="editForm.is_local">{{ t('admin.users.isLocal') }}</Checkbox>
             </div>
           </div>
           <div>
             <label class="block text-xs font-medium text-gray-700" for="ed-addr">{{ t('admin.users.address') }}</label>
-            <input id="ed-addr" v-model="editForm.address_line" type="text" class="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm" />
+            <div class="mt-1">
+              <Input id="ed-addr" v-model="editForm.address_line" type="text" />
+            </div>
           </div>
           <div class="grid grid-cols-3 gap-2">
             <div class="col-span-1">
               <label class="block text-xs font-medium text-gray-700" for="ed-postal">{{ t('admin.users.postal') }}</label>
-              <input id="ed-postal" v-model="editForm.postal_code" type="text" class="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm" />
+              <div class="mt-1">
+                <Input id="ed-postal" v-model="editForm.postal_code" type="text" />
+              </div>
             </div>
             <div class="col-span-2">
               <label class="block text-xs font-medium text-gray-700" for="ed-city">{{ t('admin.users.city') }}</label>
-              <input id="ed-city" v-model="editForm.city" type="text" class="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm" />
+              <div class="mt-1">
+                <Input id="ed-city" v-model="editForm.city" type="text" />
+              </div>
             </div>
           </div>
           <div>
@@ -1192,13 +1219,14 @@ async function submitImport() {
               {{ t('admin.users.adminNotes') }}
               <span class="ml-1 font-normal text-gray-400">({{ t('admin.users.adminNotesHint') }})</span>
             </label>
-            <textarea
-              id="ed-notes"
-              v-model="editForm.admin_notes"
-              rows="3"
-              class="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm"
-              :placeholder="t('admin.users.adminNotesPlaceholder')"
-            />
+            <div class="mt-1">
+              <Textarea
+                id="ed-notes"
+                v-model="editForm.admin_notes"
+                :rows="3"
+                :placeholder="t('admin.users.adminNotesPlaceholder')"
+              />
+            </div>
           </div>
           <!-- Boats (admin-only) — uses the same BoatForm/BoatCard as the
                member portal so the UI is mirrored. The admin variant
@@ -1244,26 +1272,22 @@ async function submitImport() {
                 <template #slip>
                   <div class="mt-2 flex items-center gap-1.5 border-t border-gray-100 pt-1.5">
                     <span class="text-xs font-medium text-gray-500">{{ t('admin.users.spots') }}:</span>
-                    <select
-                      :value="getBoatSlip(b.id).slip_id"
-                      class="flex-1 rounded-md border border-gray-300 px-1.5 py-0.5 text-xs"
-                      :disabled="slipsLoading"
-                      @change="setBoatSlipId(b.id, ($event.target as HTMLSelectElement).value)"
-                    >
-                      <option value="">{{ getBoatSlip(b.id).slip_id ? t('admin.users.unassignedSlip') : t('admin.users.addSlip') }}</option>
-                      <option v-for="s in pickerFor(b.id)" :key="s.id" :value="s.id">
-                        {{ (s.section ? s.section + ' ' : '') + s.number }}
-                      </option>
-                    </select>
-                    <select
-                      :value="getBoatSlip(b.id).assignment_type"
-                      class="rounded-md border border-gray-300 px-1.5 py-0.5 text-xs"
+                    <div class="flex-1">
+                      <Select
+                        :model-value="getBoatSlip(b.id).slip_id"
+                        :options="slipOptionsFor(b.id)"
+                        :disabled="slipsLoading"
+                        width="full"
+                        @update:model-value="(v: string | null) => setBoatSlipId(b.id, v ?? '')"
+                      />
+                    </div>
+                    <Select
+                      :model-value="getBoatSlip(b.id).assignment_type"
+                      :options="assignmentTypeOptions"
                       :disabled="!getBoatSlip(b.id).slip_id"
-                      @change="setBoatSlipType(b.id, ($event.target as HTMLSelectElement).value as 'permanent' | 'seasonal')"
-                    >
-                      <option value="permanent">{{ t('admin.users.spotPermanent') }}</option>
-                      <option value="seasonal">{{ t('admin.users.spotSeasonal') }}</option>
-                    </select>
+                      width="content"
+                      @update:model-value="(v: string | null) => setBoatSlipType(b.id, (v ?? 'permanent') as 'permanent' | 'seasonal')"
+                    />
                   </div>
                 </template>
               </BoatCard>
@@ -1298,42 +1322,53 @@ async function submitImport() {
         <form class="space-y-3" @submit.prevent="submitCreate">
           <div>
             <label class="block text-xs font-medium text-gray-700" for="cu-email">{{ t('admin.users.email') }} *</label>
-            <input id="cu-email" v-model="createForm.email" type="email" required class="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm" />
+            <div class="mt-1">
+              <Input id="cu-email" v-model="createForm.email" type="email" />
+            </div>
           </div>
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="block text-xs font-medium text-gray-700" for="cu-first">{{ t('admin.users.firstName') }} *</label>
-              <input id="cu-first" v-model="createForm.first_name" type="text" required class="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm" />
+              <div class="mt-1">
+                <Input id="cu-first" v-model="createForm.first_name" type="text" />
+              </div>
             </div>
             <div>
               <label class="block text-xs font-medium text-gray-700" for="cu-last">{{ t('admin.users.lastName') }}</label>
-              <input id="cu-last" v-model="createForm.last_name" type="text" class="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm" />
+              <div class="mt-1">
+                <Input id="cu-last" v-model="createForm.last_name" type="text" />
+              </div>
             </div>
           </div>
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="block text-xs font-medium text-gray-700" for="cu-phone">{{ t('admin.users.phone') }}</label>
-              <input id="cu-phone" v-model="createForm.phone" type="tel" class="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm" />
+              <div class="mt-1">
+                <Input id="cu-phone" v-model="createForm.phone" type="tel" />
+              </div>
             </div>
             <div class="flex items-end gap-1 pb-1">
-              <label class="inline-flex items-center gap-1 text-sm text-gray-700">
-                <input v-model="createForm.is_local" type="checkbox" class="rounded border-gray-300" />
-                {{ t('admin.users.isLocal') }}
-              </label>
+              <Checkbox v-model="createForm.is_local">{{ t('admin.users.isLocal') }}</Checkbox>
             </div>
           </div>
           <div>
             <label class="block text-xs font-medium text-gray-700" for="cu-addr">{{ t('admin.users.address') }}</label>
-            <input id="cu-addr" v-model="createForm.address_line" type="text" class="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm" />
+            <div class="mt-1">
+              <Input id="cu-addr" v-model="createForm.address_line" type="text" />
+            </div>
           </div>
           <div class="grid grid-cols-3 gap-2">
             <div class="col-span-1">
               <label class="block text-xs font-medium text-gray-700" for="cu-postal">{{ t('admin.users.postal') }}</label>
-              <input id="cu-postal" v-model="createForm.postal_code" type="text" class="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm" />
+              <div class="mt-1">
+                <Input id="cu-postal" v-model="createForm.postal_code" type="text" />
+              </div>
             </div>
             <div class="col-span-2">
               <label class="block text-xs font-medium text-gray-700" for="cu-city">{{ t('admin.users.city') }}</label>
-              <input id="cu-city" v-model="createForm.city" type="text" class="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm" />
+              <div class="mt-1">
+                <Input id="cu-city" v-model="createForm.city" type="text" />
+              </div>
             </div>
           </div>
           <div>
@@ -1385,7 +1420,7 @@ async function submitImport() {
           <pre class="mt-2 overflow-x-auto rounded bg-gray-50 p-2 text-xs text-gray-700">email,first_name,last_name,phone,address_line,postal_code,city,is_local,roles
 ada@example.com,Ada,Lovelace,,,,,,member;board
 grace@example.com,Grace,Hopper,+47 555 1234,,,,true,member</pre>
-          <input type="file" accept=".csv,text/csv" class="mt-3 block text-sm" @change="handleFileChange" />
+          <FileInput accept=".csv,text/csv" class="mt-3 block text-sm" @change="handleFileChange" />
           <p v-if="importError" class="mt-2 rounded-md bg-red-50 px-2 py-1 text-xs text-red-700">{{ importError }}</p>
           <div class="mt-3 flex justify-end gap-2">
             <button type="button" class="rounded-md px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100" @click="showImportModal = false">{{ t('common.cancel') }}</button>

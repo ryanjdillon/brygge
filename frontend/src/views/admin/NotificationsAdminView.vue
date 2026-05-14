@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useNotificationConfig, useUpdateNotificationConfig, useTestPush } from '@/composables/useNotifications'
+import NumberInput from '@/components/ui/form/NumberInput.vue'
 
 const { t } = useI18n()
 const { categories, isLoading } = useNotificationConfig()
@@ -14,9 +15,8 @@ function toggleRequired(category: string, currentRequired: boolean) {
   updateConfig({ category, required: !currentRequired })
 }
 
-function updateLeadDays(category: string, event: Event) {
-  const value = Number((event.target as HTMLInputElement).value)
-  updateConfig({ category, required: categories.value.find((c) => c.category === category)?.required ?? false, lead_days: value })
+function updateLeadDays(category: string, value: number | null) {
+  updateConfig({ category, required: categories.value.find((c) => c.category === category)?.required ?? false, lead_days: value ?? 0 })
 }
 
 function handleTestPush() {
@@ -98,15 +98,14 @@ function handleTestPush() {
               </button>
             </td>
             <td class="px-4 py-3">
-              <input
-                v-if="cat.lead_days !== null"
-                type="number"
-                min="0"
-                max="30"
-                :value="cat.lead_days"
-                class="w-20 rounded-md border-gray-300 text-sm"
-                @change="updateLeadDays(cat.category, $event)"
-              />
+              <div v-if="cat.lead_days !== null" class="w-20">
+                <NumberInput
+                  :model-value="cat.lead_days"
+                  :min="0"
+                  :max="30"
+                  @change="(v) => updateLeadDays(cat.category, v)"
+                />
+              </div>
               <span v-else class="text-sm text-gray-400">--</span>
             </td>
           </tr>
