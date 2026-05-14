@@ -10,6 +10,8 @@ import {
   type Account,
 } from '@/composables/useAccounting'
 import AccountCodeChip from '@/components/ui/AccountCodeChip.vue'
+import Input from '@/components/ui/form/Input.vue'
+import Select from '@/components/ui/form/Select.vue'
 
 const { t } = useI18n()
 
@@ -124,6 +126,27 @@ function resetNewAccount() {
   }
 }
 
+const accountTypeOptions = computed(() => [
+  { value: 'asset', label: t('admin.accounting.accounts.typeAsset') },
+  { value: 'liability', label: t('admin.accounting.accounts.typeLiability') },
+  { value: 'revenue', label: t('admin.accounting.accounts.typeRevenue') },
+  { value: 'expense', label: t('admin.accounting.accounts.typeExpense') },
+])
+
+const mvaOptions = computed(() => [
+  { value: 'not_applicable', label: t('admin.accounting.accounts.mvaNA') },
+  { value: 'eligible', label: t('admin.accounting.accounts.mvaEligible') },
+  { value: 'ineligible', label: t('admin.accounting.accounts.mvaIneligible') },
+  { value: 'partial', label: t('admin.accounting.accounts.mvaPartial') },
+])
+
+const typeFilterSelectOptions = computed(() =>
+  typeFilterOptions.map((opt) => ({
+    value: opt,
+    label: opt === 'all' ? t('admin.accounting.journal.allStatuses') : typeLabels.value[opt],
+  })),
+)
+
 function handleAddAccount() {
   createMutation.mutate(newAccount.value, {
     onSuccess: () => {
@@ -170,21 +193,13 @@ function handleAddAccount() {
       <div v-if="showAddForm" class="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
         <h3 class="mb-3 text-sm font-semibold text-gray-700">{{ t('admin.accounting.accounts.addAccount') }}</h3>
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-6">
-          <input v-model="newAccount.code" :placeholder="t('admin.accounting.accounts.code')" class="rounded-md border border-gray-300 px-3 py-2 text-sm" />
-          <input v-model="newAccount.name" :placeholder="t('admin.accounting.accounts.name')" class="rounded-md border border-gray-300 px-3 py-2 text-sm sm:col-span-2" />
-          <select v-model="newAccount.account_type" class="rounded-md border border-gray-300 px-3 py-2 text-sm">
-            <option value="asset">{{ t('admin.accounting.accounts.typeAsset') }}</option>
-            <option value="liability">{{ t('admin.accounting.accounts.typeLiability') }}</option>
-            <option value="revenue">{{ t('admin.accounting.accounts.typeRevenue') }}</option>
-            <option value="expense">{{ t('admin.accounting.accounts.typeExpense') }}</option>
-          </select>
-          <select v-model="newAccount.mva_eligible" class="rounded-md border border-gray-300 px-3 py-2 text-sm">
-            <option value="not_applicable">{{ t('admin.accounting.accounts.mvaNA') }}</option>
-            <option value="eligible">{{ t('admin.accounting.accounts.mvaEligible') }}</option>
-            <option value="ineligible">{{ t('admin.accounting.accounts.mvaIneligible') }}</option>
-            <option value="partial">{{ t('admin.accounting.accounts.mvaPartial') }}</option>
-          </select>
-          <input v-model="newAccount.description" :placeholder="t('admin.accounting.accounts.description')" class="rounded-md border border-gray-300 px-3 py-2 text-sm" />
+          <Input v-model="newAccount.code" :placeholder="t('admin.accounting.accounts.code')" />
+          <div class="sm:col-span-2">
+            <Input v-model="newAccount.name" :placeholder="t('admin.accounting.accounts.name')" />
+          </div>
+          <Select v-model="newAccount.account_type" :options="accountTypeOptions" />
+          <Select v-model="newAccount.mva_eligible" :options="mvaOptions" />
+          <Input v-model="newAccount.description" :placeholder="t('admin.accounting.accounts.description')" />
         </div>
         <div class="mt-3 flex gap-2">
           <button
@@ -205,17 +220,14 @@ function handleAddAccount() {
 
       <!-- Filters -->
       <div class="mt-4 flex flex-wrap items-center gap-3">
-        <input
-          v-model="searchQuery"
-          type="text"
-          :placeholder="t('admin.accounting.accounts.search')"
-          class="w-64 rounded-md border border-gray-300 px-3 py-2 text-sm"
-        />
-        <select v-model="typeFilter" class="rounded-md border border-gray-300 px-3 py-2 text-sm">
-          <option v-for="opt in typeFilterOptions" :key="opt" :value="opt">
-            {{ opt === 'all' ? t('admin.accounting.journal.allStatuses') : typeLabels[opt] }}
-          </option>
-        </select>
+        <div class="w-64">
+          <Input
+            v-model="searchQuery"
+            type="search"
+            :placeholder="t('admin.accounting.accounts.search')"
+          />
+        </div>
+        <Select v-model="typeFilter" :options="typeFilterSelectOptions" width="content" />
         <span class="text-sm text-gray-500">
           {{ filteredAccounts.length }} / {{ accounts?.length ?? 0 }}
         </span>
@@ -281,20 +293,15 @@ function handleAddAccount() {
                 <td class="whitespace-nowrap px-4 py-3">
                   <AccountCodeChip :code="account.code" :account-type="account.account_type" />
                 </td>
-                <td class="px-4 py-3">
-                  <input v-model="editForm.name" class="w-full rounded border border-gray-300 px-2 py-1 text-sm" @click.stop />
+                <td class="px-4 py-3" @click.stop>
+                  <Input v-model="editForm.name" />
                 </td>
                 <td class="px-4 py-3 text-sm text-gray-500">{{ typeLabels[account.account_type] }}</td>
-                <td class="px-4 py-3">
-                  <select v-model="editForm.mva_eligible" class="rounded border border-gray-300 px-2 py-1 text-sm" @click.stop>
-                    <option value="not_applicable">{{ t('admin.accounting.accounts.mvaNA') }}</option>
-                    <option value="eligible">{{ t('admin.accounting.accounts.mvaEligible') }}</option>
-                    <option value="ineligible">{{ t('admin.accounting.accounts.mvaIneligible') }}</option>
-                    <option value="partial">{{ t('admin.accounting.accounts.mvaPartial') }}</option>
-                  </select>
+                <td class="px-4 py-3" @click.stop>
+                  <Select v-model="editForm.mva_eligible" :options="mvaOptions" width="content" />
                 </td>
-                <td class="px-4 py-3">
-                  <input v-model="editForm.description" class="w-full rounded border border-gray-300 px-2 py-1 text-sm" @click.stop />
+                <td class="px-4 py-3" @click.stop>
+                  <Input v-model="editForm.description" />
                 </td>
                 <td class="whitespace-nowrap px-4 py-3">
                   <div class="flex gap-1">

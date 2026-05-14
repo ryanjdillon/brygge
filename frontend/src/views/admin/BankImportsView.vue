@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQueryClient } from '@tanstack/vue-query'
 import {
@@ -23,10 +23,13 @@ import AccountSelect from '@/components/ui/AccountSelect.vue'
 import Tabs from '@/components/ui/Tabs.vue'
 import BankRowsTable from '@/components/admin/BankRowsTable.vue'
 import VippsRowsTable from '@/components/admin/VippsRowsTable.vue'
+import Select from '@/components/ui/form/Select.vue'
+import FileInput from '@/components/ui/form/FileInput.vue'
+import { monthOptions } from '@/utils/month'
 import type { BankImportRow } from '@/composables/useBankImports'
 import { runBankSync, type BankSyncResult } from '@/composables/useBankImports'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const queryClient = useQueryClient()
 
 const { data: formats } = useBankFormats()
@@ -53,8 +56,8 @@ const bankResult = ref<BankImportResult | null>(null)
 const currentBankImportId = ref<string | undefined>(undefined)
 const { data: bankRows } = useBankImport(currentBankImportId)
 
-function onBankFile(e: Event) {
-  bankFile.value = (e.target as HTMLInputElement).files?.[0] ?? null
+function onBankFile(files: FileList | null) {
+  bankFile.value = files?.[0] ?? null
 }
 
 async function submitBank() {
@@ -81,8 +84,8 @@ const vippsResult = ref<VippsImportResult | null>(null)
 const currentVippsImportId = ref<string | undefined>(undefined)
 const { data: vippsRows } = useVippsImport(currentVippsImportId)
 
-function onVippsFile(e: Event) {
-  vippsFile.value = (e.target as HTMLInputElement).files?.[0] ?? null
+function onVippsFile(files: FileList | null) {
+  vippsFile.value = files?.[0] ?? null
 }
 
 async function submitVipps() {
@@ -165,6 +168,13 @@ async function runSync() {
   }
 }
 
+// ── Bank imports list ──────────────────────────────────────
+const { data: bankImportsList } = useBankImportsList()
+
+function selectBankImport(id: string) {
+  currentBankImportId.value = id
+}
+
 // ── Accounts tab data ───────────────────────────────────────
 const vippsMSNs = computed(() => {
   const seen = new Set<string>()
@@ -178,10 +188,21 @@ type AccountFilter = { kind: 'bank' | 'vipps' | 'none'; value: string }
 const accountFilter = ref<AccountFilter>({ kind: 'none', value: '' })
 const filterYear = ref<number>(new Date().getFullYear())
 const filterMonth = ref<number | null>(null) // 1–12, null = whole year
+const yearAutoSet = ref(false)
+const userTouchedYear = ref(false)
 
 const yearOptions = computed(() => {
   const current = new Date().getFullYear()
-  return Array.from({ length: 6 }, (_, i) => current - i)
+  const years = new Set<number>(Array.from({ length: 6 }, (_, i) => current - i))
+  for (const v of vippsImports.value ?? []) {
+    const y = Number(v.created_at?.slice(0, 4))
+    if (Number.isFinite(y)) years.add(y)
+  }
+  for (const b of bankImportsList.value ?? []) {
+    const y = Number(b.created_at?.slice(0, 4))
+    if (Number.isFinite(y)) years.add(y)
+  }
+  return [...years].sort((a, b) => b - a)
 })
 
 const periodRange = computed(() => {
@@ -215,12 +236,47 @@ function selectVippsMSN(msn: string) {
   accountFilter.value = msn ? { kind: 'vipps', value: msn } : { kind: 'none', value: '' }
 }
 
-// ── Bank imports list ──────────────────────────────────────
-const { data: bankImportsList } = useBankImportsList()
-
-function selectBankImport(id: string) {
-  currentBankImportId.value = id
+function onUserYearChange(y: number) {
+  userTouchedYear.value = true
+  filterYear.value = y
 }
+
+watch(
+  [vippsImports, bankImportsList],
+  () => {
+    if (userTouchedYear.value || yearAutoSet.value) return
+    const years = yearOptions.value
+    if (years.length === 0) return
+    filterYear.value = years[0]
+    yearAutoSet.value = true
+  },
+  { immediate: true },
+)
+
+const yearSelectOptions = computed(() =>
+  yearOptions.value.map((y) => ({ value: y, label: String(y) })),
+)
+const vippsMSNOptions = computed(() => [
+  { value: '', label: '—' },
+  ...vippsMSNs.value.map((msn) => ({ value: msn, label: msn })),
+])
+const monthSelectOptions = computed(() => [
+  { value: 0, label: t('admin.bankImports.allMonths') },
+  ...monthOptions(locale.value, 'long').map((o) => ({
+    ...o,
+    label: o.label.charAt(0).toUpperCase() + o.label.slice(1),
+  })),
+])
+const bankFormatOptions = computed(() =>
+  (formats.value ?? []).map((f) => ({ value: f, label: f })),
+)
+
+const filterMonthValue = computed<number>({
+  get: () => filterMonth.value ?? 0,
+  set: (v) => {
+    filterMonth.value = v === 0 ? null : v
+  },
+})
 </script>
 
 <template>
@@ -275,37 +331,37 @@ function selectBankImport(id: string) {
           </div>
           <div>
             <label class="block text-xs font-medium text-gray-700">{{ t('admin.bankImports.selectVippsMSN') }}</label>
-            <select
-              class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm"
-              :value="filterVippsMSN ?? ''"
-              data-testid="accounts-vipps-select"
-              @change="selectVippsMSN(($event.target as HTMLSelectElement).value)"
-            >
-              <option value="">—</option>
-              <option v-for="msn in vippsMSNs" :key="msn" :value="msn">{{ msn }}</option>
-            </select>
+            <div class="mt-1" data-testid="accounts-vipps-select">
+              <Select
+                :model-value="filterVippsMSN ?? ''"
+                :options="vippsMSNOptions"
+                :aria-label="t('admin.bankImports.selectVippsMSN')"
+                @update:model-value="(v) => selectVippsMSN(v as string)"
+              />
+            </div>
           </div>
           <div>
             <label class="block text-xs font-medium text-gray-700">{{ t('admin.bankImports.selectYear') }}</label>
-            <select
-              v-model.number="filterYear"
-              class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm"
-              data-testid="accounts-year-select"
-            >
-              <option v-for="y in yearOptions" :key="y" :value="y">{{ y }}</option>
-            </select>
+            <div class="mt-1" data-testid="accounts-year-select">
+              <Select
+                :model-value="filterYear"
+                :options="yearSelectOptions"
+                width="content"
+                :aria-label="t('admin.bankImports.selectYear')"
+                @update:model-value="(v) => onUserYearChange(v as number)"
+              />
+            </div>
           </div>
           <div>
             <label class="block text-xs font-medium text-gray-700">{{ t('admin.bankImports.selectMonth') }}</label>
-            <select
-              :value="filterMonth ?? ''"
-              class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm"
-              data-testid="accounts-month-select"
-              @change="filterMonth = ($event.target as HTMLSelectElement).value ? Number(($event.target as HTMLSelectElement).value) : null"
-            >
-              <option value="">{{ t('admin.bankImports.allMonths') }}</option>
-              <option v-for="m in 12" :key="m" :value="m">{{ m }}</option>
-            </select>
+            <div class="mt-1" data-testid="accounts-month-select">
+              <Select
+                v-model="filterMonthValue"
+                :options="monthSelectOptions"
+                width="content"
+                :aria-label="t('admin.bankImports.selectMonth')"
+              />
+            </div>
           </div>
         </div>
       </section>
@@ -341,12 +397,9 @@ function selectBankImport(id: string) {
           </div>
 
           <label class="mt-2 block text-xs font-medium text-gray-700">{{ t('admin.bankImports.format') }}</label>
-          <select v-model="bankFormat" class="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm">
-            <option v-for="f in formats ?? []" :key="f" :value="f">{{ f }}</option>
-          </select>
+          <Select v-model="bankFormat" :options="bankFormatOptions" />
 
-          <input
-            type="file"
+          <FileInput
             accept=".csv,text/csv"
             class="mt-2 block text-sm"
             data-testid="bank-file-input"
@@ -385,8 +438,7 @@ function selectBankImport(id: string) {
         <h2 class="text-base font-semibold text-gray-900">{{ t('admin.bankImports.vippsCardTitle') }}</h2>
         <p class="mt-1 text-xs text-gray-500">{{ t('admin.bankImports.vippsCardDesc') }}</p>
 
-        <input
-          type="file"
+        <FileInput
           accept=".csv,text/csv"
           class="mt-3 block text-sm"
           data-testid="vipps-file-input"

@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePaymentsList, useExportCSV, type PaymentsFilters, type Payment } from '@/composables/useFinancials'
 import { Download } from 'lucide-vue-next'
+import Select from '@/components/ui/form/Select.vue'
 
 const { t } = useI18n()
 
@@ -26,15 +27,39 @@ const { data, isLoading, error } = usePaymentsList(filters)
 const { downloadCSV } = useExportCSV()
 
 const currentYear = new Date().getFullYear()
+const ALL_YEARS = 0
+const yearFilterValue = computed<number>({
+  get: () => yearFilter.value ?? ALL_YEARS,
+  set: (v) => {
+    yearFilter.value = v === ALL_YEARS ? undefined : v
+  },
+})
 const yearOptions = computed(() => {
-  const years: { label: string; value: number | undefined }[] = [
-    { label: t('admin.financials.allYears'), value: undefined },
+  const years: { label: string; value: number }[] = [
+    { label: t('admin.financials.allYears'), value: ALL_YEARS },
   ]
   for (let y = currentYear; y >= currentYear - 5; y--) {
     years.push({ label: String(y), value: y })
   }
   return years
 })
+
+const typeFilterOptions = computed(() => [
+  { value: '', label: t('admin.financials.allTypes') },
+  { value: 'dues', label: t('admin.financials.typeDues') },
+  { value: 'harbor_membership', label: t('admin.financials.typeHarborMembership') },
+  { value: 'slip_fee', label: t('admin.financials.typeSlipFee') },
+  { value: 'booking', label: t('admin.financials.typeBooking') },
+  { value: 'merchandise', label: t('admin.financials.typeMerchandise') },
+])
+
+const statusFilterOptions = computed(() => [
+  { value: '', label: t('admin.financials.allStatuses') },
+  { value: 'pending', label: t('admin.financials.statusPending') },
+  { value: 'completed', label: t('admin.financials.statusCompleted') },
+  { value: 'failed', label: t('admin.financials.statusFailed') },
+  { value: 'refunded', label: t('admin.financials.statusRefunded') },
+])
 
 const totalPages = computed(() => {
   if (!data.value) return 1
@@ -123,41 +148,21 @@ function handleExport() {
     <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
       <div>
         <label class="block text-sm font-medium text-gray-700">{{ t('admin.financials.paymentType') }}</label>
-        <select
-          v-model="typeFilter"
-          class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-        >
-          <option value="">{{ t('admin.financials.allTypes') }}</option>
-          <option value="dues">{{ t('admin.financials.typeDues') }}</option>
-          <option value="harbor_membership">{{ t('admin.financials.typeHarborMembership') }}</option>
-          <option value="slip_fee">{{ t('admin.financials.typeSlipFee') }}</option>
-          <option value="booking">{{ t('admin.financials.typeBooking') }}</option>
-          <option value="merchandise">{{ t('admin.financials.typeMerchandise') }}</option>
-        </select>
+        <div class="mt-1">
+          <Select v-model="typeFilter" :options="typeFilterOptions" />
+        </div>
       </div>
       <div>
         <label class="block text-sm font-medium text-gray-700">{{ t('common.status') }}</label>
-        <select
-          v-model="statusFilter"
-          class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-        >
-          <option value="">{{ t('admin.financials.allStatuses') }}</option>
-          <option value="pending">{{ t('admin.financials.statusPending') }}</option>
-          <option value="completed">{{ t('admin.financials.statusCompleted') }}</option>
-          <option value="failed">{{ t('admin.financials.statusFailed') }}</option>
-          <option value="refunded">{{ t('admin.financials.statusRefunded') }}</option>
-        </select>
+        <div class="mt-1">
+          <Select v-model="statusFilter" :options="statusFilterOptions" />
+        </div>
       </div>
       <div>
         <label class="block text-sm font-medium text-gray-700">{{ t('admin.financials.year') }}</label>
-        <select
-          v-model="yearFilter"
-          class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-        >
-          <option v-for="opt in yearOptions" :key="String(opt.value)" :value="opt.value">
-            {{ opt.label }}
-          </option>
-        </select>
+        <div class="mt-1">
+          <Select v-model="yearFilterValue" :options="yearOptions" />
+        </div>
       </div>
     </div>
 

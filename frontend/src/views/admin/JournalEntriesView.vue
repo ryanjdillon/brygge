@@ -27,6 +27,8 @@ import {
   useRebuildInvoiceBilags,
   type JournalEntry,
 } from '@/composables/useAccounting'
+import Select from '@/components/ui/form/Select.vue'
+import NumberInput from '@/components/ui/form/NumberInput.vue'
 
 const { t } = useI18n()
 
@@ -44,7 +46,7 @@ const nextYear = computed(() => {
   const maxYear = Math.max(...periods.value.map(p => p.year))
   return maxYear + 1
 })
-const newYear = ref(0)
+const newYear = ref<number | null>(0)
 watch(nextYear, (val) => { newYear.value = val }, { immediate: true })
 
 watch(periods, (val) => {
@@ -176,6 +178,7 @@ async function handleRebuildInvoiceBilags() {
 }
 
 function handleCreatePeriod() {
+  if (newYear.value == null) return
   createPeriodMutation.mutate({ year: newYear.value }, {
     onSuccess: (period) => {
       selectedPeriodId.value = period.id
@@ -197,6 +200,17 @@ function handleReopenPeriod() {
 }
 
 
+const periodOptions = computed(() =>
+  (periods.value ?? []).map((p) => ({ value: p.id, label: String(p.year) })),
+)
+
+const statusFilterOptions = computed(() => [
+  { value: 'all', label: t('admin.accounting.journal.allStatuses') },
+  { value: 'draft', label: t('admin.accounting.journal.draft') },
+  { value: 'posted', label: t('admin.accounting.journal.posted') },
+  { value: 'voided', label: t('admin.accounting.journal.voided') },
+])
+
 function formatNOK(amount: number): string {
   if (!amount) return '-'
   return new Intl.NumberFormat('nb-NO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount)
@@ -211,13 +225,9 @@ function formatNOK(amount: number): string {
     <div class="mt-4 rounded-lg border border-gray-200 bg-white p-4">
       <div v-if="!hasPeriods" class="flex flex-wrap items-center gap-3">
         <p class="text-sm text-gray-500">{{ t('admin.accounting.journal.noPeriods') }}</p>
-        <input
-          v-model.number="newYear"
-          type="number"
-          min="2000"
-          max="2100"
-          class="w-24 rounded-md border border-gray-300 px-3 py-2 text-sm"
-        />
+        <div class="w-24">
+          <NumberInput v-model="newYear" :min="2000" :max="2100" />
+        </div>
         <button
           class="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
           :disabled="createPeriodMutation.isPending.value"
@@ -231,9 +241,7 @@ function formatNOK(amount: number): string {
       <div v-else class="flex flex-wrap items-center gap-3">
         <div class="flex items-center gap-2">
           <label class="text-sm font-medium text-gray-700">{{ t('admin.accounting.journal.period') }}:</label>
-          <select v-model="selectedPeriodId" class="rounded-md border border-gray-300 px-3 py-2 text-sm">
-            <option v-for="p in periods" :key="p.id" :value="p.id">{{ p.year }}</option>
-          </select>
+          <Select v-model="selectedPeriodId" :options="periodOptions" width="content" />
         </div>
 
         <span
@@ -268,14 +276,9 @@ function formatNOK(amount: number): string {
         </button>
 
         <div class="ml-auto flex items-center gap-2">
-          <input
-            v-if="showCreateYear"
-            v-model.number="newYear"
-            type="number"
-            min="2000"
-            max="2100"
-            class="w-20 rounded-md border border-gray-300 px-2 py-2 text-sm"
-          />
+          <div v-if="showCreateYear" class="w-20">
+            <NumberInput v-model="newYear" :min="2000" :max="2100" />
+          </div>
           <button
             :class="[
               'inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium disabled:opacity-50',
@@ -334,12 +337,7 @@ function formatNOK(amount: number): string {
 
       <div class="flex items-center gap-2">
         <label class="text-sm font-medium text-gray-700">{{ t('admin.accounting.journal.status') }}:</label>
-        <select v-model="statusFilter" class="rounded-md border border-gray-300 px-3 py-2 text-sm">
-          <option value="all">{{ t('admin.accounting.journal.allStatuses') }}</option>
-          <option value="draft">{{ t('admin.accounting.journal.draft') }}</option>
-          <option value="posted">{{ t('admin.accounting.journal.posted') }}</option>
-          <option value="voided">{{ t('admin.accounting.journal.voided') }}</option>
-        </select>
+        <Select v-model="statusFilter" :options="statusFilterOptions" width="content" />
       </div>
     </div>
 

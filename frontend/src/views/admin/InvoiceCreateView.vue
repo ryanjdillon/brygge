@@ -6,6 +6,11 @@ import { useQuery } from '@tanstack/vue-query'
 import { useApiClient, unwrap } from '@/lib/apiClient'
 import { useCreateInvoice } from '@/composables/useFinancials'
 import { FilePlus, Search } from 'lucide-vue-next'
+import Input from '@/components/ui/form/Input.vue'
+import NumberInput from '@/components/ui/form/NumberInput.vue'
+import DateInput from '@/components/ui/form/DateInput.vue'
+import Textarea from '@/components/ui/form/Textarea.vue'
+import Select from '@/components/ui/form/Select.vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -21,7 +26,7 @@ const searchQuery = ref('')
 const selectedUserId = ref('')
 const selectedUserName = ref('')
 const invoiceType = ref('dues')
-const amount = ref<number | undefined>(undefined)
+const amount = ref<number | null>(null)
 const description = ref('')
 const dueDate = ref('')
 const showUserSearch = ref(false)
@@ -43,6 +48,14 @@ const filteredUsers = computed(() => {
 })
 
 const { mutate: createInvoice, isPending } = useCreateInvoice()
+
+const invoiceTypeOptions = computed(() => [
+  { value: 'dues', label: t('admin.financials.typeDues') },
+  { value: 'harbor_membership', label: t('admin.financials.typeHarborMembership') },
+  { value: 'slip_fee', label: t('admin.financials.typeSlipFee') },
+  { value: 'booking', label: t('admin.financials.typeBooking') },
+  { value: 'merchandise', label: t('admin.financials.typeMerchandise') },
+])
 
 function selectUser(user: UserOption) {
   selectedUserId.value = user.id
@@ -96,15 +109,17 @@ function handleSubmit() {
       <div class="relative">
         <label class="block text-sm font-medium text-gray-700">{{ t('admin.financials.selectMember') }}</label>
         <div class="relative mt-1">
-          <Search class="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-          <input
+          <Input
             v-model="searchQuery"
             type="text"
             :placeholder="t('admin.financials.searchMember')"
-            class="block w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             @focus="showUserSearch = true"
             @input="showUserSearch = true"
-          />
+          >
+            <template #prefix>
+              <Search class="h-4 w-4" />
+            </template>
+          </Input>
         </div>
         <ul
           v-if="showUserSearch && filteredUsers.length > 0"
@@ -124,45 +139,30 @@ function handleSubmit() {
 
       <div>
         <label class="block text-sm font-medium text-gray-700">{{ t('admin.financials.paymentType') }}</label>
-        <select
-          v-model="invoiceType"
-          class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-        >
-          <option value="dues">{{ t('admin.financials.typeDues') }}</option>
-          <option value="harbor_membership">{{ t('admin.financials.typeHarborMembership') }}</option>
-          <option value="slip_fee">{{ t('admin.financials.typeSlipFee') }}</option>
-          <option value="booking">{{ t('admin.financials.typeBooking') }}</option>
-          <option value="merchandise">{{ t('admin.financials.typeMerchandise') }}</option>
-        </select>
+        <div class="mt-1">
+          <Select v-model="invoiceType" :options="invoiceTypeOptions" />
+        </div>
       </div>
 
       <div>
         <label class="block text-sm font-medium text-gray-700">{{ t('admin.financials.amount') }} (NOK)</label>
-        <input
-          v-model.number="amount"
-          type="number"
-          min="1"
-          step="0.01"
-          class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-        />
+        <div class="mt-1">
+          <NumberInput v-model="amount" :min="1" :step="0.01" />
+        </div>
       </div>
 
       <div>
         <label class="block text-sm font-medium text-gray-700">{{ t('admin.financials.description') }}</label>
-        <textarea
-          v-model="description"
-          rows="3"
-          class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-        />
+        <div class="mt-1">
+          <Textarea v-model="description" :rows="3" />
+        </div>
       </div>
 
       <div>
         <label class="block text-sm font-medium text-gray-700">{{ t('admin.financials.dueDate') }}</label>
-        <input
-          v-model="dueDate"
-          type="date"
-          class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-        />
+        <div class="mt-1">
+          <DateInput v-model="dueDate" />
+        </div>
       </div>
 
       <div v-if="selectedUserId" class="rounded-md bg-blue-50 p-3 text-sm text-blue-800">
