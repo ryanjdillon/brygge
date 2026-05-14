@@ -20,6 +20,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/brygge-klubb/brygge/internal/config"
+	brmail "github.com/brygge-klubb/brygge/internal/mail"
 	"github.com/brygge-klubb/brygge/internal/middleware"
 )
 
@@ -42,6 +43,33 @@ type AdminUsersHandler struct {
 	// main.go to the shared-inbox ACL reconciler (DIL-275/276) — nil
 	// when the feature isn't configured.
 	RoleChangeHook func(userID string)
+
+	// MailProvisioner, when set, eagerly provisions / deprovisions a
+	// Stalwart principal on board-mailbox-role grant and user
+	// deletion (DIL-321). Nil when the feature isn't configured.
+	MailProvisioner *brmail.UserProvisioner
+}
+
+// boardMailboxRoles are the user_role values whose holders need a
+// Stalwart principal (so the shared-inbox reconciler can grant them
+// shareWith on the matching mailbox). Kept in sync with the
+// `role` fields in terraform.board_mailboxes.
+var boardMailboxRoles = map[string]bool{
+	"chair":         true,
+	"vice_chair":    true,
+	"treasurer":     true,
+	"harbor_master": true,
+	"secretary":     true,
+	"board":         true,
+}
+
+func grantsBoardMailboxRole(roles []string) bool {
+	for _, r := range roles {
+		if boardMailboxRoles[r] {
+			return true
+		}
+	}
+	return false
 }
 
 func NewAdminUsersHandler(db *pgxpool.Pool, cfg *config.Config, log zerolog.Logger) *AdminUsersHandler {
@@ -677,6 +705,21 @@ func (h *AdminUsersHandler) HandleUpdateUserRoles(w http.ResponseWriter, r *http
 		Strs("new_roles", req.Roles).
 		Msg("user roles updated")
 
+	// Eager Stalwart provisioning (DIL-321). Only when a
+	// board-mailbox role was actually granted, to keep non-board
+	// users out of Stalwart. Idempotent — a no-op if the user was
+	// already provisioned by the magic-link lazy hook.
+	if h.MailProvisioner != nil && grantsBoardMailboxRole(req.Roles) {
+		var userEmail string
+		if err := h.db.QueryRow(ctx,
+			`SELECT email FROM users WHERE id = $1`, userID,
+		).Scan(&userEmail); err != nil {
+			h.log.Warn().Err(err).Str("user_id", userID).Msg("could not load email for mail provisioning")
+		} else if _, err := h.MailProvisioner.EnsureUserPrincipal(ctx, userID, userEmail); err != nil {
+			h.log.Warn().Err(err).Str("user_id", userID).Msg("stalwart provisioning failed")
+		}
+	}
+
 	if h.RoleChangeHook != nil {
 		h.RoleChangeHook(userID)
 	}
@@ -770,6 +813,18 @@ func (h *AdminUsersHandler) HandleDeleteUser(w http.ResponseWriter, r *http.Requ
 		h.log.Error().Err(err).Msg("failed to commit transaction")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
+	}
+
+	// Deprovision the Stalwart principal (DIL-321). On soft-delete
+	// this prevents the (now-disabled) account from authenticating
+	// to JMAP. On erasure the cascade already removed our DB row;
+	// this call removes the Stalwart side. Best-effort: a Stalwart
+	// outage here leaves an orphan principal, which we surface via
+	// audit but don't block the deletion response on.
+	if h.MailProvisioner != nil {
+		if err := h.MailProvisioner.DeleteUserPrincipal(ctx, userID); err != nil {
+			h.log.Warn().Err(err).Str("user_id", userID).Msg("stalwart deprovisioning failed")
+		}
 	}
 
 	action := "soft_deleted"
@@ -948,6 +1003,13 @@ func (h *AdminUsersHandler) createUser(ctx context.Context, clubID, actorID stri
 
 	if err := tx.Commit(ctx); err != nil {
 		return "", fmt.Errorf("commit tx: %w", err)
+	}
+	// Eager provisioning when admin creates a user that already
+	// holds a board-mailbox role (DIL-321).
+	if h.MailProvisioner != nil && grantsBoardMailboxRole(req.Roles) {
+		if _, err := h.MailProvisioner.EnsureUserPrincipal(ctx, id, email); err != nil {
+			h.log.Warn().Err(err).Str("user_id", id).Msg("stalwart provisioning failed")
+		}
 	}
 	if h.RoleChangeHook != nil && len(req.Roles) > 0 {
 		h.RoleChangeHook(id)

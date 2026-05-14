@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
@@ -15,6 +16,7 @@ import (
 	"github.com/brygge-klubb/brygge/internal/auth"
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/email"
+	"github.com/brygge-klubb/brygge/internal/mail"
 	"github.com/brygge-klubb/brygge/internal/middleware"
 )
 
@@ -26,6 +28,11 @@ type MagicLinkHandler struct {
 	email    email.Sender
 	sessions *auth.SessionService
 	log      zerolog.Logger
+
+	// MailProvisioner, when set, lazily ensures a Stalwart principal
+	// exists for the user on first successful login (DIL-321).
+	// Detached goroutine — failures are logged but don't block login.
+	MailProvisioner *mail.UserProvisioner
 }
 
 func NewMagicLinkHandler(
@@ -186,6 +193,20 @@ func (h *MagicLinkHandler) HandleVerifyMagicLink(w http.ResponseWriter, r *http.
 
 	secure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
 	middleware.SetSessionCookie(w, sessionID, secure)
+
+	// Lazy Stalwart provisioning (DIL-321). Detached so login
+	// latency isn't affected; reconciler picks up the new principal
+	// at most 5 min later if it was needed before this goroutine
+	// finished.
+	if h.MailProvisioner != nil {
+		go func(uid, email string) {
+			bg, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			if _, err := h.MailProvisioner.EnsureUserPrincipal(bg, uid, email); err != nil {
+				h.log.Warn().Err(err).Str("user_id", uid).Msg("stalwart provisioning failed")
+			}
+		}(userID, linkEmail)
+	}
 
 	// Redirect to frontend
 	http.Redirect(w, r, h.config.FrontendURL+"/portal", http.StatusFound)
