@@ -17,6 +17,9 @@ import {
 } from '@/composables/useBankImports'
 import { useAccountsList } from '@/composables/useAccounting'
 import AccountSelect from '@/components/ui/AccountSelect.vue'
+import AccountCodeChip from '@/components/ui/AccountCodeChip.vue'
+import Tabs from '@/components/ui/Tabs.vue'
+import { runBankSync, type BankSyncResult } from '@/composables/useBankImports'
 
 const { t } = useI18n()
 const queryClient = useQueryClient()
@@ -134,14 +137,107 @@ async function confirmReconcile() {
 function nok(n: number): string {
   return new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK' }).format(n)
 }
+
+// ── Tabs ────────────────────────────────────────────────────
+const activeTab = ref<'imports' | 'accounts'>('imports')
+const tabs = computed(() => [
+  { value: 'imports', label: t('admin.bankImports.tabImports') },
+  { value: 'accounts', label: t('admin.bankImports.tabAccounts') },
+])
+
+// ── Sync action ─────────────────────────────────────────────
+const syncBusy = ref(false)
+const syncResult = ref<BankSyncResult | null>(null)
+const syncError = ref<string | null>(null)
+
+async function runSync() {
+  syncBusy.value = true
+  syncError.value = null
+  try {
+    syncResult.value = await runBankSync()
+    queryClient.invalidateQueries({ queryKey: ['accounting'] })
+  } catch (e: any) {
+    syncError.value = e?.message ?? 'Sync failed'
+  } finally {
+    syncBusy.value = false
+  }
+}
+
+// ── Accounts tab data ───────────────────────────────────────
+const vippsMSNs = computed(() => {
+  const seen = new Set<string>()
+  for (const v of vippsImports.value ?? []) {
+    if (v.msn) seen.add(v.msn)
+  }
+  return [...seen].sort()
+})
 </script>
 
 <template>
   <div>
-    <h1 class="text-2xl font-bold text-gray-900">{{ t('admin.bankImports.title') }}</h1>
-    <p class="mt-1 text-sm text-gray-500">{{ t('admin.bankImports.subtitle') }}</p>
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-900">{{ t('admin.bankImports.title') }}</h1>
+        <p class="mt-1 text-sm text-gray-500">{{ t('admin.bankImports.subtitle') }}</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <button
+          type="button"
+          :disabled="syncBusy"
+          class="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+          data-testid="bank-sync-btn"
+          @click="runSync"
+        >
+          {{ syncBusy ? t('common.loading') : t('admin.bankImports.runSync') }}
+        </button>
+      </div>
+    </div>
 
-    <div class="mt-6 grid gap-4 lg:grid-cols-2">
+    <div v-if="syncResult" class="mt-3 rounded-md bg-blue-50 px-3 py-2 text-xs text-blue-900" data-testid="bank-sync-result">
+      {{ t('admin.bankImports.runSyncResult', {
+        kid: syncResult.kid_matched,
+        vipps: syncResult.vipps_reconciled,
+        transfers: syncResult.transfers_linked,
+      }) }}
+      <span v-if="syncResult.closed_periods?.length" class="ml-2 text-yellow-800">
+        ({{ t('admin.bankImports.runSyncClosed', { years: syncResult.closed_periods.join(', ') }) }})
+      </span>
+    </div>
+    <div v-if="syncError" class="mt-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">{{ syncError }}</div>
+
+    <div class="mt-6">
+      <Tabs v-model="activeTab" :tabs="tabs" />
+    </div>
+
+    <!-- Accounts tab -->
+    <div v-if="activeTab === 'accounts'" class="mt-6 grid gap-4 lg:grid-cols-2">
+      <section class="rounded-lg border border-gray-200 bg-white p-5">
+        <h2 class="text-base font-semibold text-gray-900">{{ t('admin.bankImports.bankAccountsTitle') }}</h2>
+        <p class="mt-1 text-xs text-gray-500">{{ t('admin.bankImports.bankAccountsDesc') }}</p>
+        <ul class="mt-3 divide-y divide-gray-100 text-sm">
+          <li v-for="a in bankAccounts" :key="a.code" class="flex items-center gap-3 py-2">
+            <AccountCodeChip :code="a.code" :account-type="a.account_type" :is-system="a.is_system" size="sm" />
+            <span class="text-gray-800">{{ a.name }}</span>
+          </li>
+          <li v-if="!bankAccounts.length" class="py-2 text-xs text-gray-500">
+            {{ t('admin.bankImports.noBankAccounts') }}
+          </li>
+        </ul>
+      </section>
+      <section class="rounded-lg border border-gray-200 bg-white p-5">
+        <h2 class="text-base font-semibold text-gray-900">{{ t('admin.bankImports.vippsAccountsTitle') }}</h2>
+        <p class="mt-1 text-xs text-gray-500">{{ t('admin.bankImports.vippsAccountsDesc') }}</p>
+        <ul class="mt-3 divide-y divide-gray-100 text-sm">
+          <li v-for="msn in vippsMSNs" :key="msn" class="py-2 font-mono text-gray-800">{{ msn }}</li>
+          <li v-if="!vippsMSNs.length" class="py-2 text-xs text-gray-500">
+            {{ t('admin.bankImports.noVippsAccounts') }}
+          </li>
+        </ul>
+      </section>
+    </div>
+
+    <!-- Imports tab -->
+    <div v-if="activeTab === 'imports'" class="mt-6 grid gap-4 lg:grid-cols-2">
       <!-- Bank upload card -->
       <section class="rounded-lg border border-gray-200 bg-white p-5" data-testid="bank-upload-card">
         <h2 class="text-base font-semibold text-gray-900">{{ t('admin.bankImports.bankCardTitle') }}</h2>
@@ -229,7 +325,7 @@ function nok(n: number): string {
     </div>
 
     <!-- Bank rows from current upload -->
-    <section v-if="bankRows && bankRows.length" class="mt-8">
+    <section v-if="activeTab === 'imports' && bankRows && bankRows.length" class="mt-8">
       <h2 class="text-base font-semibold text-gray-900">{{ t('admin.bankImports.rowsTitle') }}</h2>
       <div class="mt-3 overflow-x-auto rounded-lg border border-gray-200 bg-white">
         <table class="min-w-full divide-y divide-gray-200 text-sm">
@@ -276,7 +372,7 @@ function nok(n: number): string {
     </section>
 
     <!-- Recent Vipps imports list -->
-    <section v-if="vippsImports && vippsImports.length" class="mt-8">
+    <section v-if="activeTab === 'imports' && vippsImports && vippsImports.length" class="mt-8">
       <h2 class="text-base font-semibold text-gray-900">{{ t('admin.bankImports.vippsListTitle') }}</h2>
       <ul class="mt-3 divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white">
         <li
@@ -293,7 +389,7 @@ function nok(n: number): string {
     </section>
 
     <!-- Vipps rows expanded -->
-    <section v-if="vippsRows && vippsRows.length" class="mt-4">
+    <section v-if="activeTab === 'imports' && vippsRows && vippsRows.length" class="mt-4">
       <div class="overflow-x-auto rounded-lg border border-gray-200 bg-white">
         <table class="min-w-full divide-y divide-gray-200 text-xs">
           <thead class="bg-gray-50 text-left font-medium uppercase tracking-wide text-gray-500">

@@ -1321,7 +1321,18 @@
       "bankAccount": "Bank account",
       "transfers": "Transfers",
       "closedPeriodsNotice": "Rows from the following closed period(s) were not auto-matched: {years}. Reopen those periods if you want to book them.",
-      "periodClosedNotice": "Fiscal period {year} is closed — reopen it before creating the bilag."
+      "periodClosedNotice": "Fiscal period {year} is closed — reopen it before creating the bilag.",
+      "tabImports": "Imports",
+      "tabAccounts": "Accounts",
+      "runSync": "Run sync",
+      "runSyncResult": "KID-matched: {kid} · Vipps-reconciled: {vipps} · Transfers: {transfers}",
+      "runSyncClosed": "Closed periods: {years}",
+      "bankAccountsTitle": "Bank accounts",
+      "bankAccountsDesc": "Accounts from kontoplan (1920–1949).",
+      "vippsAccountsTitle": "Vipps MSNs",
+      "vippsAccountsDesc": "Vipps numbers seen in imported settlement reports.",
+      "noBankAccounts": "No bank accounts configured in kontoplan.",
+      "noVippsAccounts": "No Vipps numbers imported yet."
     }
   },
   "projects": {
