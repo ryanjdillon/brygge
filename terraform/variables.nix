@@ -78,5 +78,23 @@
       default     = "quarantine";
       description = "DMARC policy: none | quarantine | reject. Start with quarantine; tighten to reject once deliverability is proven.";
     };
+
+    # Shared role-mapped board mailboxes (DIL-275/276). Reader ACLs are
+    # reconciled from `user_roles` by the Brygge backend; this variable
+    # only declares the principals and role mapping.
+    board_mailboxes = {
+      type = "list(object({"
+        + "address = string,"
+        + "role = string,"
+        + "display_name = string,"
+        + "type = string,"
+        + "send_as = optional(bool, false),"
+        + "bcc_members = optional(bool, false),"
+        + "retention_days = optional(number),"
+        + "managed = optional(bool, true)"
+        + "}))";
+      default     = [];
+      description = "Role-mapped board mailboxes (e.g. kasserar@, styre@). `type=shared` participates in role-gated ACL reconciliation; `type=list` is a pure alias.";
+    };
   };
 }

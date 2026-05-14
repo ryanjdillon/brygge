@@ -54,6 +54,11 @@
       # submodule with per-flag defaults), so this can be empty {} or
       # a partial override like {accounting = true;}.
       features     = tfvars.features or { };
+      # Shared role-mapped board mailboxes (DIL-275/276). Pure data;
+      # rendered to /etc/brygge/board-mailboxes.json by host.nix and
+      # consumed by both stalwart-mailbox-config.service and the
+      # Brygge backend reconciler.
+      boardMailboxes = tfvars.board_mailboxes or [];
     };
 
     overlay = final: prev: {

@@ -806,5 +806,121 @@ in
     # (missing CLUB_NAME → NavBar shows "Brygge", emails say "your club").
     CLUB_SLUG = clubConfig.slug;
     CLUB_NAME = clubConfig.name;
+
+    # Role-gated shared inbox (DIL-275/276). Backend's mail.Reconciler
+    # reads the spec from this JSON file and talks to Stalwart's admin
+    # API on the loopback. The admin credentials themselves (Basic-auth
+    # password) live in /etc/brygge/env as STALWART_ADMIN_PASSWORD —
+    # mirror of /etc/stalwart/admin-password, kept in sync by the
+    # operator when rotating.
+    STALWART_ADMIN_URL = "http://127.0.0.1:8088";
+    BRYGGE_MAILBOXES_PATH = "/etc/brygge/board-mailboxes.json";
+  };
+
+  # Source of truth for role→mailbox mapping. Pure data from tfvars;
+  # consumed by both stalwart-mailbox-config.service (principal upsert)
+  # and brygge backend (ACL reconciler).
+  environment.etc."brygge/board-mailboxes.json" = {
+    mode = "0444";
+    text = builtins.toJSON clubConfig.boardMailboxes;
+  };
+
+  # Provision role-mapped board mailboxes (kasserar@, styre@, …) as
+  # Stalwart principals. Reader ACLs are *not* touched here — they
+  # converge from Brygge's user_roles table via the backend reconciler.
+  # See DIL-275/276 for the full design.
+  systemd.services.stalwart-mailbox-config = {
+    description = "Provision role-mapped board mailboxes in Stalwart (DIL-276)";
+    after = [ "stalwart.service" "stalwart-relay-account.service" ];
+    wants = [ "stalwart.service" ];
+    wantedBy = [ "multi-user.target" ];
+    path = with pkgs; [ curl jq coreutils ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
+    script = ''
+      set -eu
+
+      SPEC=/etc/brygge/board-mailboxes.json
+      ADMIN_FILE=/etc/stalwart/admin-password
+
+      if [ ! -s "$SPEC" ]; then
+        echo "No board mailboxes declared in $SPEC — nothing to do."
+        exit 0
+      fi
+      if [ ! -s "$ADMIN_FILE" ]; then
+        echo "WARN: $ADMIN_FILE missing — skipping mailbox provisioning." >&2
+        exit 0
+      fi
+
+      ADMIN=$(cat "$ADMIN_FILE")
+      API="http://127.0.0.1:8088/api/principal"
+
+      # Soft-fail (per DIL-276) if Stalwart isn't responsive yet — the
+      # 5-min cron in the backend reconciler will retry.
+      READY=no
+      for _ in $(seq 1 30); do
+        if curl -fsS -o /dev/null -u "admin:$ADMIN" "$API" 2>/dev/null; then
+          READY=yes; break
+        fi
+        sleep 1
+      done
+      if [ "$READY" != "yes" ]; then
+        echo "WARN: stalwart admin API unreachable after 30s — skipping." >&2
+        exit 0
+      fi
+
+      jq -c '.[]' "$SPEC" | while read -r ENTRY; do
+        ADDR=$(printf '%s' "$ENTRY"      | jq -r '.address')
+        DISP=$(printf '%s' "$ENTRY"      | jq -r '.display_name // .role')
+        KIND=$(printf '%s' "$ENTRY"      | jq -r '.type // "shared"')
+        MANAGED=$(printf '%s' "$ENTRY"   | jq -r '.managed // true')
+
+        if [ "$MANAGED" != "true" ]; then
+          echo "skip unmanaged: $ADDR"
+          continue
+        fi
+
+        # Local part of the email is the Stalwart principal name.
+        NAME=$(printf '%s' "$ADDR" | awk -F@ '{print $1}')
+
+        # Stalwart 0.15: type="group" for shared mailboxes, "list" for aliases.
+        case "$KIND" in
+          shared) STYPE="group" ;;
+          list)   STYPE="list" ;;
+          *)      echo "WARN: unknown type '$KIND' for $ADDR — skipping." >&2; continue ;;
+        esac
+
+        EXISTS=$(curl -fsS -u "admin:$ADMIN" "$API/$NAME" \
+                   | jq -r 'if (.data.id // null) != null then "yes" else "no" end')
+
+        if [ "$EXISTS" = "no" ]; then
+          BODY=$(jq -nc \
+            --arg name "$NAME" \
+            --arg type "$STYPE" \
+            --arg email "$ADDR" \
+            --arg desc "$DISP (managed_by=brygge-tf)" \
+            '{type:$type, name:$name, emails:[$email], description:$desc, quota:0}')
+          if curl -fsS -u "admin:$ADMIN" -X POST "$API" \
+                  -H 'Content-Type: application/json' -d "$BODY" >/dev/null; then
+            echo "created principal: $ADDR ($STYPE)"
+          else
+            echo "WARN: failed to create $ADDR" >&2
+          fi
+        else
+          # Idempotent: refresh description so the managed_by marker
+          # survives manual edits. Member ACLs are NOT touched here —
+          # that's the backend reconciler's job.
+          BODY=$(jq -nc \
+            --arg desc "$DISP (managed_by=brygge-tf)" \
+            '[{action:"set",field:"description",value:$desc}]')
+          curl -fsS -u "admin:$ADMIN" -X PATCH "$API/$NAME" \
+               -H 'Content-Type: application/json' -d "$BODY" >/dev/null \
+            || echo "WARN: failed to refresh $ADDR description" >&2
+          echo "ensured principal: $ADDR ($STYPE)"
+        fi
+      done
+    '';
   };
 }
