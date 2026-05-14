@@ -823,8 +823,13 @@ in
 
   # Pre-create the password-map file so the systemd unit can write to
   # it with predictable ownership (root:brygge 0640). brygge needs
-  # group-read; nobody else needs anything.
+  # group-read; nobody else needs anything. The dir line widens
+  # /etc/stalwart traversal to the brygge group — required, otherwise
+  # group-read on the file inside is unreachable. Stalwart's own files
+  # (admin-password, relay-password, dkim/) keep their own
+  # mode-0400/0700 root-only perms; the dir only grants traverse.
   systemd.tmpfiles.rules = [
+    "d /etc/stalwart 0750 root brygge -"
     "f /etc/stalwart/board-mailbox-passwords.json 0640 root brygge -"
   ];
 
