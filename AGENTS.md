@@ -175,7 +175,6 @@ Vipps mock test users: `admin@test.com` (admin), `slip@test.com` (slip-member), 
 Real issues that have been encountered in passing but are deliberately out of scope for whatever feature work is in flight. Don't re-discover them; fix them when they become the work, then remove the entry.
 
 - **ESLint v9 config missing** (DIL-319). `npm run lint` fails with "ESLint couldn't find an `eslint.config.(js|mjs|cjs)` file." Repo predates the v9 flat-config migration. Skip lint; rely on `vue-tsc --noEmit` and prettier for now.
-- **DOMPurify swap owed** (DIL-320). `frontend/src/lib/sanitizeHtml.ts` (DIL-277) is a minimal allowlist sanitiser placeholder. Swap to DOMPurify (`npm i dompurify`) when a frontend dep bump goes through; the util signature is stable so it's a one-file change.
 
 ## Testing Tips
 

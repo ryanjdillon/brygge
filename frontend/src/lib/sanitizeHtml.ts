@@ -1,78 +1,67 @@
-// Minimal allowlist HTML sanitiser for the shared-inbox reader
-// (DIL-277). v1 strips structural injection vectors and removes JS
-// event handlers + javascript: URLs. Remote `<img>` src is rewritten
-// to a data-URI 1x1 transparent gif unless `showImages` is true, in
-// which case the original URL is wrapped via the (not-yet-implemented)
-// `/api/v1/admin/inbox/proxy-image` endpoint.
+// HTML sanitiser for the shared-inbox reader (DIL-277/320). Thin
+// wrapper over DOMPurify so call sites don't have to know about the
+// underlying library; the {showImages, proxyBase} contract stays
+// stable across future library swaps.
 //
-// TODO(DIL-279): swap this for DOMPurify (`npm i dompurify`) once the
-// frontend dep bump goes through. The Browser DOMPurify config is
-// the same shape: forbid script/iframe/object/embed/form/base, strip
-// on* attrs, normalise URLs, and re-target relative URLs through the
-// image proxy. This util keeps the call sites stable so the swap is
-// one-file-change.
+// Policy:
+// - Drop tags: script, iframe, object, embed, form, base, meta, link
+//   (FORBID_TAGS below).
+// - Drop attributes starting with `on` (event handlers).
+// - Rewrite `javascript:` / `data:` (non-image) URLs to about:blank.
+// - <img>: src is replaced with a 1x1 transparent gif unless
+//   `showImages` is true, in which case http(s) URLs are routed
+//   through the (still-unimplemented) image proxy. See DIL-279.
 
-const VOID_TAGS = new Set(['br', 'hr', 'img'])
-const ALLOWED_TAGS = new Set([
-  'a', 'b', 'blockquote', 'br', 'code', 'div', 'em', 'h1', 'h2', 'h3',
-  'h4', 'h5', 'h6', 'hr', 'i', 'img', 'li', 'ol', 'p', 'pre', 's',
-  'span', 'strong', 'table', 'tbody', 'td', 'th', 'thead', 'tr', 'u',
-  'ul',
-])
-const ALLOWED_ATTRS = new Set([
-  'href', 'src', 'alt', 'title', 'colspan', 'rowspan', 'align',
-])
+import DOMPurify from 'dompurify'
 
 const PIXEL =
   'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='
+
+const FORBID_TAGS = ['script', 'iframe', 'object', 'embed', 'form', 'base', 'meta', 'link']
 
 export interface SanitizeOptions {
   showImages?: boolean
   proxyBase?: string // e.g. '/api/v1/admin/inbox/proxy-image'
 }
 
+// Module-scoped state for the uponSanitizeAttribute hook. DOMPurify's
+// hooks don't get a per-call context, so we stash the active options
+// in a closure-visible ref that sanitizeEmail sets before each call.
+let activeOptions: SanitizeOptions = {}
+
+DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+  // Force opener-isolation on links.
+  if (node.tagName === 'A' && node.hasAttribute('href')) {
+    node.setAttribute('rel', 'noopener nofollow noreferrer')
+    node.setAttribute('target', '_blank')
+  }
+
+  // Image policy: block by default; opt-in routes through the proxy.
+  if (node.tagName === 'IMG') {
+    const src = node.getAttribute('src') || ''
+    if (!activeOptions.showImages || !/^https?:/i.test(src)) {
+      node.setAttribute('src', PIXEL)
+      return
+    }
+    if (activeOptions.proxyBase) {
+      node.setAttribute('src', `${activeOptions.proxyBase}?url=${encodeURIComponent(src)}`)
+      node.setAttribute('referrerpolicy', 'no-referrer')
+    }
+  }
+})
+
 export function sanitizeEmail(html: string, opts: SanitizeOptions = {}): string {
   if (typeof window === 'undefined' || !html) return ''
-  const doc = new DOMParser().parseFromString(html, 'text/html')
-  walk(doc.body, opts)
-  return doc.body.innerHTML
-}
-
-function walk(node: Element, opts: SanitizeOptions): void {
-  // Iterate over a snapshot — we mutate children during the walk.
-  const children = Array.from(node.children)
-  for (const el of children) {
-    const tag = el.tagName.toLowerCase()
-    if (!ALLOWED_TAGS.has(tag)) {
-      el.remove()
-      continue
-    }
-    // Drop unsafe attributes.
-    for (const a of Array.from(el.attributes)) {
-      const name = a.name.toLowerCase()
-      const value = a.value
-      if (name.startsWith('on') || !ALLOWED_ATTRS.has(name)) {
-        el.removeAttribute(a.name)
-        continue
-      }
-      if ((name === 'href' || name === 'src') && /^\s*javascript:/i.test(value)) {
-        el.removeAttribute(a.name)
-        continue
-      }
-    }
-    if (tag === 'a') {
-      el.setAttribute('rel', 'noopener nofollow noreferrer')
-      el.setAttribute('target', '_blank')
-    }
-    if (tag === 'img') {
-      const src = el.getAttribute('src') || ''
-      if (!opts.showImages || !/^https?:/i.test(src)) {
-        el.setAttribute('src', PIXEL)
-      } else if (opts.proxyBase) {
-        el.setAttribute('src', `${opts.proxyBase}?url=${encodeURIComponent(src)}`)
-        el.setAttribute('referrerpolicy', 'no-referrer')
-      }
-    }
-    if (!VOID_TAGS.has(tag)) walk(el, opts)
+  activeOptions = opts
+  try {
+    return DOMPurify.sanitize(html, {
+      FORBID_TAGS,
+      // Strip JS / inline-handler attributes; keep the standard
+      // safe set otherwise (href, src, alt, title, table layout,
+      // text styling are allowed by DOMPurify's defaults).
+      FORBID_ATTR: ['style'],
+    }) as unknown as string
+  } finally {
+    activeOptions = {}
   }
 }
