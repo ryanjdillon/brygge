@@ -503,6 +503,7 @@
       "settings": "Innstillinger",
       "products": "Produkter",
       "communication": "Kommunikasjon",
+      "inbox": "Delt innboks",
       "projects": "Prosjekter",
       "financials": "Regnskap",
       "boats": "Båtgodkjenning",
@@ -829,6 +830,20 @@
       "rebatePct": "Rabatt %",
       "amount": "Beløp",
       "markCredited": "Marker kreditert"
+    },
+    "inbox": {
+      "title": "Delt innboks",
+      "searchPlaceholder": "Søk i meldingar",
+      "noSubject": "(utan emne)",
+      "markUnread": "Merk som ulest",
+      "archive": "Arkiver",
+      "imagesOn": "Vis bilete",
+      "imagesOff": "Skjul bilete",
+      "empty": {
+        "mailboxes": "Du har ikkje tilgang til nokon delt innboks.",
+        "threads": "Ingen meldingar.",
+        "reader": "Vel ei melding"
+      }
     },
     "communication": {
       "title": "Kommunikasjon",
