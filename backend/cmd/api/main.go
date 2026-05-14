@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -125,6 +126,26 @@ func main() {
 	auditService := audit.NewService(db, log)
 	sessionService := auth.NewSessionService(db)
 
+	// Per-user Stalwart provisioning (DIL-321). Nil when admin creds
+	// aren't configured. Decoded once so handlers share it.
+	var userProvisioner *mail.UserProvisioner
+	if cfg.StalwartAdminURL != "" && cfg.TOTPEncryptionKey != "" {
+		encKey, kerr := hex.DecodeString(cfg.TOTPEncryptionKey)
+		switch {
+		case kerr != nil || len(encKey) != 32:
+			log.Warn().Err(kerr).Msg("TOTP_ENCRYPTION_KEY invalid; user mail provisioning disabled")
+		default:
+			adminClient := mail.NewAdminClient(
+				cfg.StalwartAdminURL,
+				cfg.StalwartAdminUser,
+				cfg.StalwartAdminPassword,
+				cfg.StalwartAdminToken,
+				log,
+			)
+			userProvisioner = mail.NewUserProvisioner(db, adminClient, auditService, encKey, log)
+		}
+	}
+
 	// Shared-inbox ACL reconciler (DIL-275/276). Nil when Stalwart
 	// admin creds aren't configured — feature is fully optional.
 	var inboxReconciler *mail.Reconciler
@@ -159,12 +180,18 @@ func main() {
 	auditHandler := handlers.NewAuditHandler(db, auditService, &cfg, log)
 	authHandler := handlers.NewAuthHandler(db, &cfg, log)
 	magicLinkHandler := handlers.NewMagicLinkHandler(db, &cfg, emailClient, sessionService, log)
+	if userProvisioner != nil {
+		magicLinkHandler.MailProvisioner = userProvisioner
+	}
 	totpHandler := handlers.NewTOTPHandler(db, &cfg, sessionService, auditService, log)
 	demoAuthHandler := handlers.NewDemoAuthHandler(db, &cfg, sessionService, log)
 	waitingListHandler := handlers.NewWaitingListHandler(db, rdb, &cfg, log)
 	adminUsersHandler := handlers.NewAdminUsersHandler(db, &cfg, log)
 	if inboxReconciler != nil && inboxReconciler.HasMailboxes() {
 		adminUsersHandler.RoleChangeHook = inboxReconciler.OnRoleChanged
+	}
+	if userProvisioner != nil {
+		adminUsersHandler.MailProvisioner = userProvisioner
 	}
 	adminSlipsHandler := handlers.NewAdminSlipsHandler(db, &cfg, log)
 	adminDocumentsHandler := handlers.NewAdminDocumentsHandler(db, &cfg, log)
