@@ -426,6 +426,50 @@ func (c *JMAPClient) SetKeywordOnThread(ctx context.Context, accountID, threadID
 	return len(emailIDs), nil
 }
 
+// CreateMailbox creates a folder with the given name + role. Stalwart
+// 0.15 only auto-creates Inbox on principal init — Drafts/Sent/etc.
+// have to be created explicitly the first time we need them. Returns
+// the new mailbox id.
+func (c *JMAPClient) CreateMailbox(ctx context.Context, accountID, name, role string) (string, error) {
+	payload := map[string]any{
+		"name": name,
+	}
+	if role != "" {
+		payload["role"] = role
+	}
+	resp, err := c.Call(ctx, nil, []invocation{
+		{"Mailbox/set", map[string]any{
+			"accountId": accountID,
+			"create":    map[string]any{"m1": payload},
+		}, "0"},
+	})
+	if err != nil {
+		return "", err
+	}
+	if len(resp) == 0 {
+		return "", fmt.Errorf("Mailbox/set: empty response")
+	}
+	var args struct {
+		Created    map[string]map[string]any `json:"created"`
+		NotCreated map[string]struct {
+			Type        string `json:"type"`
+			Description string `json:"description"`
+		} `json:"notCreated"`
+	}
+	if err := decodeArgs(resp[0], &args); err != nil {
+		return "", err
+	}
+	if e, bad := args.NotCreated["m1"]; bad {
+		return "", fmt.Errorf("Mailbox/set create %s: %s: %s", name, e.Type, e.Description)
+	}
+	if m, ok := args.Created["m1"]; ok {
+		if id, ok := m["id"].(string); ok {
+			return id, nil
+		}
+	}
+	return "", fmt.Errorf("Mailbox/set: no id in response")
+}
+
 // ShareRights is the per-principal grant set on a JMAP Mailbox.
 // Stalwart 0.15 implements RFC 8621 §2.5 (`shareWith`); no admin REST
 // surface exists for ACL CRUD — sharing is set on the mailbox itself,

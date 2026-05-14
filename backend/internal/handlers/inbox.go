@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -448,8 +449,11 @@ func strPtrIfSet(s string) *string {
 
 // resolveSendMailboxes finds the JMAP accountId for the shared
 // principal (from the principal's own session, which only contains
-// its own account) plus the Drafts/Sent folder ids. Stalwart creates
-// these on principal init so we don't need to fall back.
+// its own account) plus the Drafts/Sent folder ids. Stalwart 0.15
+// only auto-creates Inbox on principal init, so the first time we
+// send from a shared mailbox we create the Drafts/Sent folders
+// ourselves via Mailbox/set — idempotent because we enumerate
+// first.
 func (h *InboxHandler) resolveSendMailboxes(ctx context.Context, jmap *mail.JMAPClient) (accountID, draftsID, sentID string, err error) {
 	accounts, err := jmap.SessionAccounts(ctx)
 	if err != nil {
@@ -471,8 +475,21 @@ func (h *InboxHandler) resolveSendMailboxes(ctx context.Context, jmap *mail.JMAP
 			sentID = m.ID
 		}
 	}
-	if draftsID == "" || sentID == "" {
-		return "", "", "", errInboxNotFound
+	if draftsID == "" {
+		id, cerr := jmap.CreateMailbox(ctx, accountID, "Drafts", "drafts")
+		if cerr != nil {
+			return "", "", "", fmt.Errorf("create Drafts: %w", cerr)
+		}
+		draftsID = id
+		h.log.Info().Str("account", accountID).Str("mailbox", id).Msg("created Drafts folder on demand")
+	}
+	if sentID == "" {
+		id, cerr := jmap.CreateMailbox(ctx, accountID, "Sent", "sent")
+		if cerr != nil {
+			return "", "", "", fmt.Errorf("create Sent: %w", cerr)
+		}
+		sentID = id
+		h.log.Info().Str("account", accountID).Str("mailbox", id).Msg("created Sent folder on demand")
 	}
 	return accountID, draftsID, sentID, nil
 }
