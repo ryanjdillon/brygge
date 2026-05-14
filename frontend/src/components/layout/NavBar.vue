@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useClubStore } from '@/stores/club'
 import { LogIn, LogOut, User, Shield, ShieldAlert } from 'lucide-vue-next'
 import LanguageSwitcher from '@/components/layout/LanguageSwitcher.vue'
+import InboxIndicator from '@/components/layout/InboxIndicator.vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -82,6 +83,7 @@ async function handleLogout() {
         </RouterLink>
 
         <div class="flex flex-none items-center gap-1 sm:gap-2">
+          <InboxIndicator v-if="auth.isAuthenticated && !isHero" />
           <LanguageSwitcher :theme="isHero ? 'dark' : 'light'" />
           <template v-if="auth.isAuthenticated">
             <RouterLink

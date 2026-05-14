@@ -31,7 +31,7 @@ import {
   Landmark,
   Receipt,
   Settings,
-  Mail,
+  Inbox as InboxIcon,
 } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -64,6 +64,15 @@ const navGroups = computed<NavGroup[]>(() => {
   const groups: NavGroup[] = [
     {
       items: [
+        // Shared inbox at the top of the sidebar (DIL-275). Filtered
+        // out when the user holds no board-mailbox role; the per-
+        // address gate happens server-side on /mailboxes.
+        {
+          to: '/admin/inbox',
+          icon: InboxIcon,
+          label: t('admin.sidebar.inbox'),
+          roles: ['chair', 'vice_chair', 'treasurer', 'harbor_master', 'secretary', 'board', 'admin'],
+        },
         { to: '/admin/events', icon: CalendarDays, label: t('admin.sidebar.events') },
         { to: '/admin/users', icon: Users, label: t('admin.sidebar.users') },
         { to: '/admin/waiting-list', icon: ListOrdered, label: t('admin.sidebar.waitingList'), roles: ['board', 'admin'] },
@@ -102,16 +111,6 @@ const navGroups = computed<NavGroup[]>(() => {
       items: [
         { to: '/admin/documents', icon: FileText, label: t('admin.sidebar.documents') },
         { to: '/admin/communication', icon: Megaphone, label: t('admin.sidebar.communication'), feature: 'communications' },
-        // Role-gated shared inbox (DIL-275/277). Visible when the
-        // caller holds any role mapped to a board mailbox in
-        // terraform.board_mailboxes — the per-mailbox filter happens
-        // server-side in /api/v1/admin/inbox/mailboxes.
-        {
-          to: '/admin/inbox',
-          icon: Mail,
-          label: t('admin.sidebar.inbox'),
-          roles: ['chair', 'vice_chair', 'treasurer', 'harbor_master', 'secretary', 'board', 'admin'],
-        },
       ],
     },
     {
