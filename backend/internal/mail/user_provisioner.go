@@ -24,6 +24,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
+	"golang.org/x/crypto/bcrypt"
 
 	"github.com/brygge-klubb/brygge/internal/audit"
 	"github.com/brygge-klubb/brygge/internal/auth"
@@ -218,12 +219,22 @@ func (p *UserProvisioner) createPrincipal(ctx context.Context, slug, realEmail, 
 	// `<slug>@<club_domain>`. The user authenticates JMAP by `name`
 	// (slug) + password; their real email plays no role on the
 	// Stalwart side.
+	//
+	// Pre-hash with bcrypt before POSTing (DIL-322). Stalwart's
+	// admin REST POST persists `secrets` verbatim — it does NOT
+	// auto-hash on principal create, only on later PATCHes. Passing
+	// a bcrypt hash explicitly avoids storing the plaintext in
+	// Stalwart's RocksDB as well as our encrypted DB row.
+	hashed, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("bcrypt: %w", err)
+	}
 	synthetic := slug + "@" + p.clubDomain
 	body := map[string]any{
 		"type":        "individual",
 		"name":        slug,
 		"emails":      []string{synthetic},
-		"secrets":     []string{password},
+		"secrets":     []string{string(hashed)},
 		"description": fmt.Sprintf("Brygge user %s (managed_by=brygge-user)", realEmail),
 		"roles":       []string{"user"},
 		"quota":       0,
@@ -232,8 +243,12 @@ func (p *UserProvisioner) createPrincipal(ctx context.Context, slug, realEmail, 
 }
 
 func (p *UserProvisioner) setSecret(ctx context.Context, slug, password string) error {
+	hashed, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("bcrypt: %w", err)
+	}
 	body := []map[string]any{
-		{"action": "set", "field": "secrets", "value": []string{password}},
+		{"action": "set", "field": "secrets", "value": []string{string(hashed)}},
 	}
 	return p.admin.doJSON(ctx, "PATCH", "/api/principal/"+slug, body, nil)
 }
