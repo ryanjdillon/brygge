@@ -46,7 +46,14 @@ type VippsReconcilePreview struct {
 	UnresolvedCount  int                  `json:"unresolved_count"`
 	Balanced         bool                 `json:"balanced"`
 	Reason           string               `json:"reason,omitempty"`
-	Lines            []VippsReconcileLine `json:"lines"`
+	// PeriodYear is the year of the resolved fiscal period (or the bank row's
+	// year if the period would be auto-created).
+	PeriodYear int `json:"period_year"`
+	// PeriodClosed is true when the target fiscal period exists and is
+	// closed — confirming the bilag will fail. The UI uses this to disable
+	// the confirm button.
+	PeriodClosed bool                 `json:"period_closed"`
+	Lines        []VippsReconcileLine `json:"lines"`
 }
 
 // ReconcileVippsPreview reads a bank row, extracts the Utb./Vippsnr key from its
@@ -136,7 +143,22 @@ func (s *Service) ReconcileVippsPreview(ctx context.Context, clubID, bankRowID s
 		BankDate:         bankDate.Format("2006-01-02"),
 		SettlementNumber: settlement,
 		MSN:              msn,
+		PeriodYear:       bankDate.Year(),
 		Lines:            []VippsReconcileLine{},
+	}
+
+	// Check the target period without auto-creating it (preview shouldn't
+	// have side effects). If a closed period covers the bank-row date,
+	// flag it so the UI can disable confirm.
+	var periodStatus string
+	perr := s.db.QueryRow(ctx,
+		`SELECT status FROM fiscal_periods
+		 WHERE club_id = $1 AND $2::date BETWEEN start_date AND end_date
+		 LIMIT 1`,
+		clubID, bankDate.Format("2006-01-02"),
+	).Scan(&periodStatus)
+	if perr == nil && periodStatus == "closed" {
+		preview.PeriodClosed = true
 	}
 
 	if bankAccount == "" {

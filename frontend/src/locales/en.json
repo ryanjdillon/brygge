@@ -1320,7 +1320,8 @@
       "navCardDesc": "Upload CSV and reconcile Vipps payouts",
       "bankAccount": "Bank account",
       "transfers": "Transfers",
-      "closedPeriodsNotice": "Rows from the following closed period(s) were not auto-matched: {years}. Reopen those periods if you want to book them."
+      "closedPeriodsNotice": "Rows from the following closed period(s) were not auto-matched: {years}. Reopen those periods if you want to book them.",
+      "periodClosedNotice": "Fiscal period {year} is closed — reopen it before creating the bilag."
     }
   },
   "projects": {

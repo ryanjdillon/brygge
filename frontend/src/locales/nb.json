@@ -1316,7 +1316,8 @@
       "navCardDesc": "Last opp CSV og avstem Vipps-utbetalinger",
       "bankAccount": "Bankkonto",
       "transfers": "Interne overføringer",
-      "closedPeriodsNotice": "Rader fra følgende lukkede perioder ble ikke avstemt automatisk: {years}. Gjenåpne periodene om du vil bokføre dem."
+      "closedPeriodsNotice": "Rader fra følgende lukkede perioder ble ikke avstemt automatisk: {years}. Gjenåpne periodene om du vil bokføre dem.",
+      "periodClosedNotice": "Regnskapsperiode {year} er lukket — gjenåpne den før du oppretter bilaget."
     }
   },
   "projects": {

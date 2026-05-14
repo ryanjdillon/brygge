@@ -101,6 +101,8 @@ export interface VippsReconcilePreview {
   unresolved_count: number
   balanced: boolean
   reason?: string
+  period_year: number
+  period_closed: boolean
   lines: VippsReconcileLine[]
 }
 
