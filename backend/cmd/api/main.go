@@ -727,6 +727,36 @@ func main() {
 					})
 				})
 
+				if inboxReconciler != nil && inboxReconciler.HasMailboxes() {
+					adminClient := mail.NewAdminClient(
+						cfg.StalwartAdminURL,
+						cfg.StalwartAdminUser,
+						cfg.StalwartAdminPassword,
+						cfg.StalwartAdminToken,
+						log,
+					)
+					jmapClient := mail.NewJMAPClient(cfg.StalwartAdminURL, adminClient)
+					spec, _ := mail.LoadSpec(cfg.BoardMailboxesPath)
+					inboxHandler := handlers.NewInboxHandler(db, adminClient, jmapClient, auditService, spec, log)
+					r.Route("/inbox", func(r chi.Router) {
+						// Read-only surface gated on having ANY board-mailbox
+						// role; the per-address check (matching the spec's
+						// `role`) lives inside each handler.
+						r.Use(middleware.RequireRole(
+							"chair", "vice_chair", "treasurer",
+							"harbor_master", "secretary", "board", "admin",
+						))
+						r.Get("/mailboxes", inboxHandler.HandleListMailboxes)
+						r.Get("/proxy-image", inboxHandler.HandleProxyImage)
+						r.Route("/{address}/threads", func(r chi.Router) {
+							r.Get("/", inboxHandler.HandleListThreads)
+							r.Get("/{thread_id}", inboxHandler.HandleGetThread)
+							r.Post("/{thread_id}/mark_read", inboxHandler.HandleMarkRead)
+							r.Post("/{thread_id}/archive", inboxHandler.HandleArchiveThread)
+						})
+					})
+				}
+
 				r.Route("/slips", func(r chi.Router) {
 					r.Use(middleware.RequireRole("board", "harbor_master", "admin"))
 					r.Get("/", adminSlipsHandler.HandleListSlips)
