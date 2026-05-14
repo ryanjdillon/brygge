@@ -49,10 +49,14 @@ const { fetchApi } = useApi()
 const mailboxes = ref<MailboxView[]>([])
 const threads = ref<ThreadRow[]>([])
 const thread = ref<{ thread_id: string; emails: EmailFull[] } | null>(null)
+// Initial-load spinner only — the 30s background poll doesn't flip
+// this, so the sidebar list doesn't flash empty between refreshes.
 const loadingMailboxes = ref(false)
 const loadingThreads = ref(false)
 const loadingThread = ref(false)
 const error = ref<string | null>(null)
+const sendError = ref<string | null>(null) // composer-scoped error, separate from page-level
+const sendSuccess = ref(false)
 const showImages = ref(false)
 const search = ref('')
 
@@ -69,8 +73,8 @@ function reportError(key: string, e: unknown) {
   error.value = t(key)
 }
 
-async function loadMailboxes() {
-  loadingMailboxes.value = true
+async function loadMailboxes(opts: { background?: boolean } = {}) {
+  if (!opts.background) loadingMailboxes.value = true
   try {
     const res = await fetchApi<{ mailboxes: MailboxView[] }>('/api/v1/admin/inbox/mailboxes')
     mailboxes.value = res.mailboxes ?? []
@@ -78,9 +82,9 @@ async function loadMailboxes() {
       selectAddress(mailboxes.value[0].address)
     }
   } catch (e) {
-    reportError('admin.inbox.error.loadMailboxes', e)
+    if (!opts.background) reportError('admin.inbox.error.loadMailboxes', e)
   } finally {
-    loadingMailboxes.value = false
+    if (!opts.background) loadingMailboxes.value = false
   }
 }
 
@@ -182,10 +186,12 @@ async function submitReply() {
   if (!selectedAddress.value || !thread.value || sending.value) return
   const to = parseAddresses(replyTo.value)
   if (to.length === 0) {
-    error.value = t('admin.inbox.error.toRequired')
+    sendError.value = t('admin.inbox.error.toRequired')
     return
   }
   sending.value = true
+  sendError.value = null
+  sendSuccess.value = false
   try {
     const latest = thread.value.emails[thread.value.emails.length - 1]
     const inReplyTo = latest.messageId?.[0] ?? ''
@@ -197,12 +203,24 @@ async function submitReply() {
       in_reply_to: inReplyTo,
     }
     const url = `/api/v1/admin/inbox/${encodeURIComponent(selectedAddress.value)}/send`
-    await fetchApi(url, { method: 'POST', body: JSON.stringify(payload) })
-    composing.value = false
+    console.log('[inbox] submitting reply', { url, to: to.length, subject: payload.subject })
+    const res = await fetchApi<{ email_id: string; message_id: string }>(url, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+    console.log('[inbox] reply sent', res)
+    sendSuccess.value = true
+    // Keep the composer visible briefly so the user sees the
+    // success indicator; then collapse and refresh.
+    setTimeout(() => {
+      composing.value = false
+      sendSuccess.value = false
+    }, 1200)
     await loadThreads()
     await loadThread()
   } catch (e) {
-    reportError('admin.inbox.error.send', e)
+    console.error('[inbox] reply failed', e)
+    sendError.value = (e as Error)?.message || t('admin.inbox.error.send')
   } finally {
     sending.value = false
   }
@@ -265,7 +283,9 @@ onMounted(async () => {
   await loadMailboxes()
   await loadThreads()
   await loadThread()
-  pollTimer = setInterval(loadMailboxes, 30_000)
+  // Background poll — pass {background:true} so the loading state
+  // doesn't flip and the sidebar doesn't flicker.
+  pollTimer = setInterval(() => loadMailboxes({ background: true }), 30_000)
 })
 onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
 </script>
@@ -414,6 +434,18 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
                 class="w-full rounded border border-gray-300 px-2 py-1 font-mono text-sm"
                 :placeholder="t('admin.inbox.reply.bodyPlaceholder')"
               />
+              <div
+                v-if="sendError"
+                class="rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-700"
+              >
+                {{ sendError }}
+              </div>
+              <div
+                v-else-if="sendSuccess"
+                class="rounded border border-green-300 bg-green-50 px-2 py-1 text-xs text-green-700"
+              >
+                {{ t('admin.inbox.reply.sent') }}
+              </div>
               <div class="flex justify-end gap-2">
                 <button
                   type="button"

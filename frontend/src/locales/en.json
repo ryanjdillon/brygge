@@ -506,7 +506,7 @@
       "financialSettings": "Faktura settings",
       "settings": "Settings",
       "communication": "Communication",
-      "inbox": "Shared inbox",
+      "inbox": "Inbox",
       "projects": "Projects",
       "financials": "Financials",
       "products": "Products",
@@ -836,7 +836,7 @@
       "markCredited": "Mark credited"
     },
     "inbox": {
-      "title": "Shared inbox",
+      "title": "Inbox",
       "searchPlaceholder": "Search messages",
       "noSubject": "(no subject)",
       "markUnread": "Mark unread",
@@ -866,6 +866,7 @@
         "bodyPlaceholder": "Write your reply…",
         "send": "Send",
         "sending": "Sending…",
+        "sent": "Reply sent.",
         "cancel": "Cancel"
       }
     },

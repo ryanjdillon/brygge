@@ -503,7 +503,7 @@
       "settings": "Innstillinger",
       "products": "Produkter",
       "communication": "Kommunikasjon",
-      "inbox": "Delt innboks",
+      "inbox": "Innboks",
       "projects": "Prosjekter",
       "financials": "Regnskap",
       "boats": "Båtgodkjenning",
@@ -832,7 +832,7 @@
       "markCredited": "Marker kreditert"
     },
     "inbox": {
-      "title": "Delt innboks",
+      "title": "Innboks",
       "searchPlaceholder": "Søk i meldingar",
       "noSubject": "(utan emne)",
       "markUnread": "Merk som ulest",
@@ -862,6 +862,7 @@
         "bodyPlaceholder": "Skriv svaret ditt…",
         "send": "Send",
         "sending": "Sender…",
+        "sent": "Svaret er sendt.",
         "cancel": "Avbryt"
       }
     },
