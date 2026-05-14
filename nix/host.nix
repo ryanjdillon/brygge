@@ -883,7 +883,8 @@ in
         fi
 
         # Local part of the email is the Stalwart principal name.
-        NAME=$(printf '%s' "$ADDR" | awk -F@ '{print $1}')
+        # Bash parameter expansion — avoids pulling awk into the unit path.
+        NAME="''${ADDR%%@*}"
 
         # Stalwart 0.15: type="group" for shared mailboxes, "list" for aliases.
         case "$KIND" in
