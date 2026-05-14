@@ -366,6 +366,13 @@ func (h *InboxHandler) HandleSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	identityID, err := h.resolveIdentity(ctx, jmap, accountID, spec.Address)
+	if err != nil {
+		h.log.Warn().Err(err).Str("address", spec.Address).Msg("resolve identity failed")
+		Error(w, http.StatusBadGateway, "mail backend unavailable")
+		return
+	}
+
 	// bcc_members: when the spec opts in, fan out to every user
 	// holding the mapped role so they also get a personal copy.
 	var bcc []mail.EmailAddress
@@ -397,7 +404,7 @@ func (h *InboxHandler) HandleSend(w http.ResponseWriter, r *http.Request) {
 		sendReq.References = []string{req.InReplyTo}
 	}
 
-	emailID, messageID, err := jmap.SendEmail(ctx, accountID, draftsID, sentID, sendReq)
+	emailID, messageID, err := jmap.SendEmail(ctx, accountID, identityID, draftsID, sentID, sendReq)
 	if err != nil {
 		// Stalwart-side error detail stays in journald (Warn line
 		// just below). The 502 response carries only a generic
@@ -450,6 +457,26 @@ func strPtrIfSet(s string) *string {
 		return nil
 	}
 	return &s
+}
+
+// resolveIdentity finds the JMAP Identity id for the From address.
+// Stalwart 0.15 auto-creates a default identity per principal —
+// we prefer the one whose email matches `address` and fall back to
+// the first available if no exact match exists.
+func (h *InboxHandler) resolveIdentity(ctx context.Context, jmap *mail.JMAPClient, accountID, address string) (string, error) {
+	identities, err := jmap.ListIdentities(ctx, accountID)
+	if err != nil {
+		return "", err
+	}
+	if len(identities) == 0 {
+		return "", fmt.Errorf("no JMAP identities for %s", address)
+	}
+	for _, i := range identities {
+		if strings.EqualFold(i.Email, address) {
+			return i.ID, nil
+		}
+	}
+	return identities[0].ID, nil
 }
 
 // resolveSendMailboxes finds the JMAP accountId for the shared
