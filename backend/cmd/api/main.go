@@ -142,7 +142,7 @@ func main() {
 				cfg.StalwartAdminToken,
 				log,
 			)
-			userProvisioner = mail.NewUserProvisioner(db, adminClient, auditService, encKey, log)
+			userProvisioner = mail.NewUserProvisioner(db, adminClient, auditService, encKey, cfg.Domain, log)
 		}
 	}
 

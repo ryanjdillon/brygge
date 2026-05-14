@@ -105,9 +105,12 @@ func NewReconciler(db *pgxpool.Pool, adminJMAP *JMAPClient, jmapFact *JMAPFactor
 	}
 }
 
-// principalIndex builds {email: jmap_id} from admin's JMAP
-// Principal/get. Cheap (single call returning everyone). Cached
-// per-ReconcileAll cycle in `index`; pass nil to force a fresh fetch.
+// principalIndex builds {name: jmap_id} from admin's JMAP
+// Principal/get. We index by `name` (Stalwart's login slug) rather
+// than `email` because users carry their real email in users.email
+// (e.g. gmail.com) while their Stalwart principal carries a
+// synthetic `<slug>@<club_domain>` — see DIL-321 / UserProvisioner.
+// computeDesired then resolves email→slug via user_mail_credentials.
 func (r *Reconciler) principalIndex(ctx context.Context) (map[string]string, error) {
 	adminAccounts, err := r.adminJMAP.SessionAccounts(ctx)
 	if err != nil {
@@ -122,10 +125,10 @@ func (r *Reconciler) principalIndex(ctx context.Context) (map[string]string, err
 	}
 	idx := make(map[string]string, len(principals))
 	for _, p := range principals {
-		if p.Email == "" {
+		if p.Name == "" {
 			continue
 		}
-		idx[strings.ToLower(p.Email)] = p.ID
+		idx[strings.ToLower(p.Name)] = p.ID
 	}
 	return idx, nil
 }
@@ -313,17 +316,19 @@ func (r *Reconciler) findSpec(address string) (MailboxSpec, bool) {
 
 // computeDesired builds the shareWith set for a shared mailbox from
 // the current user_roles view: every active user with the mapped
-// role gets the standard reader/contributor rights. Keyed by the
-// receiving user's Stalwart JMAP account ID (resolved via the
-// email→jmap_id index built from admin's Principal/get).
+// role AND a provisioned Stalwart principal gets the standard
+// reader/contributor rights. Keyed by the receiving user's JMAP
+// account ID, resolved by joining user_mail_credentials (which
+// holds the Stalwart slug) against the name→jmap_id index.
 func (r *Reconciler) computeDesired(ctx context.Context, spec MailboxSpec, idx map[string]string) (map[string]ShareRights, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT u.id::text, u.email
+		SELECT umc.jmap_user
 		FROM users u
 		JOIN user_roles ur ON ur.user_id = u.id AND ur.club_id = u.club_id
+		JOIN user_mail_credentials umc ON umc.user_id = u.id
 		WHERE ur.role = $1::user_role
-		GROUP BY u.id, u.email
-		ORDER BY u.email
+		GROUP BY umc.jmap_user
+		ORDER BY umc.jmap_user
 	`, spec.Role)
 	if err != nil {
 		return nil, err
@@ -332,16 +337,16 @@ func (r *Reconciler) computeDesired(ctx context.Context, spec MailboxSpec, idx m
 
 	shares := make(map[string]ShareRights)
 	for rows.Next() {
-		var uid, email string
-		if err := rows.Scan(&uid, &email); err != nil {
+		var slug string
+		if err := rows.Scan(&slug); err != nil {
 			return nil, err
 		}
-		jmapID, ok := idx[strings.ToLower(email)]
+		jmapID, ok := idx[strings.ToLower(slug)]
 		if !ok || jmapID == "" {
-			// User has the role but no Stalwart account yet —
-			// common during onboarding before per-user Stalwart
-			// provisioning lands. Skip silently; reconciler will
-			// pick them up once the account exists.
+			// User is in our DB but their Stalwart principal
+			// vanished — skip silently. The next provisioning
+			// pass (lazy on login or eager on role grant) will
+			// recreate it; reconciler picks them up next cycle.
 			continue
 		}
 		shares[jmapID] = ShareRights{

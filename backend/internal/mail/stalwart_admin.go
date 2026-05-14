@@ -78,8 +78,10 @@ func principalName(address string) string {
 
 // doJSON is a small helper for non-LookupPrincipal admin REST calls:
 // it marshals `body` (or sends nil) and decodes the response into
-// `out` if non-nil. Returns the wrapped HTTP error when the server
-// responds 4xx/5xx.
+// `out` if non-nil. Returns an error when Stalwart responds 4xx/5xx
+// OR when the response body carries an `{"error": ...}` envelope at
+// status 200 (which Stalwart 0.15 does for rejected operations —
+// e.g. an email at an unknown domain).
 func (c *AdminClient) doJSON(ctx context.Context, method, path string, body any, out any) error {
 	var reader *bytes.Reader
 	if body != nil {
@@ -111,6 +113,21 @@ func (c *AdminClient) doJSON(ctx context.Context, method, path string, body any,
 	raw, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("stalwart %s %s: %s: %s", method, path, resp.Status, truncate(raw, 200))
+	}
+	// Stalwart's envelope sometimes carries an in-body error at
+	// status 200 (e.g. `{"error":"notFound","item":"example.invalid"}`
+	// when creating a principal with a foreign email domain).
+	if len(raw) > 0 {
+		var env struct {
+			Error string `json:"error"`
+			Item  string `json:"item"`
+		}
+		if json.Unmarshal(raw, &env) == nil && env.Error != "" {
+			if env.Item != "" {
+				return fmt.Errorf("stalwart %s %s: %s (%s)", method, path, env.Error, env.Item)
+			}
+			return fmt.Errorf("stalwart %s %s: %s", method, path, env.Error)
+		}
 	}
 	if out != nil && len(raw) > 0 {
 		if err := json.Unmarshal(raw, out); err != nil {
