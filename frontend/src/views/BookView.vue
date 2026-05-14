@@ -87,7 +87,7 @@ function validateField(field: 'name' | 'email' | 'phone') {
       fieldErrors.email = ''
     }
   } else if (field === 'phone') {
-    const digits = guestPhone.value.replace(/[\s+\-]/g, '')
+    const digits = guestPhone.value.replace(/[\s+-]/g, '')
     if (digits && digits.length < 6) {
       fieldErrors.phone = t('booking.validation.phoneInvalid')
     } else {
