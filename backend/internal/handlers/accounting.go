@@ -780,9 +780,9 @@ func (h *AccountingHandler) HandleListVippsRowsByMSN(w http.ResponseWriter, r *h
 		        vir.settlement_number, vir.payout_account, vir.scheduled_payout_date, vir.journal_entry_id
 		 FROM vipps_import_rows vir
 		 WHERE vir.club_id = $1 AND vir.msn = $2
-		   AND COALESCE(vir.booking_date, vir.tx_at::date) >= $3::date
-		   AND COALESCE(vir.booking_date, vir.tx_at::date) <= $4::date
-		 ORDER BY COALESCE(vir.booking_date, vir.tx_at::date), vir.created_at`,
+		   AND COALESCE(vir.booking_date, vir.tx_at::date, vir.scheduled_payout_date) >= $3::date
+		   AND COALESCE(vir.booking_date, vir.tx_at::date, vir.scheduled_payout_date) <= $4::date
+		 ORDER BY COALESCE(vir.booking_date, vir.tx_at::date, vir.scheduled_payout_date), vir.created_at`,
 		claims.ClubID, msn, fromStr, toStr,
 	)
 	if err != nil {
