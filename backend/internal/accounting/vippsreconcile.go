@@ -213,7 +213,9 @@ func (s *Service) ReconcileVippsPreview(ctx context.Context, clubID, bankRowID s
 
 // ReconcileVippsConfirm creates a draft journal entry from a (possibly edited)
 // preview. The caller is responsible for passing the final line set.
-func (s *Service) ReconcileVippsConfirm(ctx context.Context, clubID, bankRowID, periodID, createdBy string, lines []VippsReconcileLine) (string, error) {
+// If periodOverride is empty, the period is auto-resolved from the bank row's
+// date (and auto-created as calendar-year if missing).
+func (s *Service) ReconcileVippsConfirm(ctx context.Context, clubID, bankRowID, periodOverride, createdBy string, lines []VippsReconcileLine) (string, error) {
 	if len(lines) == 0 {
 		return "", fmt.Errorf("at least one line is required")
 	}
@@ -233,6 +235,14 @@ func (s *Service) ReconcileVippsConfirm(ctx context.Context, clubID, bankRowID, 
 	}
 	if existing != nil {
 		return "", fmt.Errorf("bank row already linked to journal entry")
+	}
+
+	periodID, periodStatus, perr := s.resolvePeriod(ctx, clubID, bankDate, periodOverride)
+	if perr != nil {
+		return "", fmt.Errorf("resolving fiscal period: %w", perr)
+	}
+	if periodStatus == "closed" {
+		return "", fmt.Errorf("fiscal period %d is closed — reopen it or pick a different period", bankDate.Year())
 	}
 
 	var dr, cr float64
