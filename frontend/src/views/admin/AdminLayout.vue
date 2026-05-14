@@ -31,6 +31,7 @@ import {
   Landmark,
   Receipt,
   Settings,
+  Mail,
 } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -101,6 +102,16 @@ const navGroups = computed<NavGroup[]>(() => {
       items: [
         { to: '/admin/documents', icon: FileText, label: t('admin.sidebar.documents') },
         { to: '/admin/communication', icon: Megaphone, label: t('admin.sidebar.communication'), feature: 'communications' },
+        // Role-gated shared inbox (DIL-275/277). Visible when the
+        // caller holds any role mapped to a board mailbox in
+        // terraform.board_mailboxes — the per-mailbox filter happens
+        // server-side in /api/v1/admin/inbox/mailboxes.
+        {
+          to: '/admin/inbox',
+          icon: Mail,
+          label: t('admin.sidebar.inbox'),
+          roles: ['chair', 'vice_chair', 'treasurer', 'harbor_master', 'secretary', 'board', 'admin'],
+        },
       ],
     },
     {

@@ -231,6 +231,15 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/CommunicationView.vue'),
       },
       {
+        // Three-pane layout. Mailbox + thread selection is carried
+        // in the query string (?address=…&thread=…) so the URL is
+        // shareable and back/forward inside the view doesn't remount
+        // the component tree.
+        path: 'inbox',
+        name: 'admin-inbox',
+        component: () => import('@/views/admin/InboxView.vue'),
+      },
+      {
         path: 'notifications',
         name: 'admin-notifications',
         component: () => import('@/views/admin/NotificationsAdminView.vue'),

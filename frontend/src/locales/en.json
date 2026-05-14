@@ -506,6 +506,7 @@
       "financialSettings": "Faktura settings",
       "settings": "Settings",
       "communication": "Communication",
+      "inbox": "Shared inbox",
       "projects": "Projects",
       "financials": "Financials",
       "products": "Products",
@@ -833,6 +834,20 @@
       "rebatePct": "Rebate %",
       "amount": "Amount",
       "markCredited": "Mark credited"
+    },
+    "inbox": {
+      "title": "Shared inbox",
+      "searchPlaceholder": "Search messages",
+      "noSubject": "(no subject)",
+      "markUnread": "Mark unread",
+      "archive": "Archive",
+      "imagesOn": "Images on",
+      "imagesOff": "Images off",
+      "empty": {
+        "mailboxes": "You don't have access to any shared mailbox.",
+        "threads": "No messages.",
+        "reader": "Select a message"
+      }
     },
     "communication": {
       "title": "Communication",
