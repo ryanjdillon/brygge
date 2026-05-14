@@ -7,14 +7,25 @@ import (
 
 func TestPrincipalSlugIsStable(t *testing.T) {
 	id := "ed5aa164-9977-41e9-b63f-f0a5c832e435"
-	want := "bu-ed5aa1649977"
-	if got := principalSlug(id); got != want {
+	want := "buedy5aa1649977"
+	got := principalSlug(id)
+	if got != "bu"+"ed5aa1649977" {
 		t.Errorf("principalSlug(%q) = %q, want %q", id, got, want)
 	}
 }
 
+func TestPrincipalSlugIsAlphanumericOnly(t *testing.T) {
+	got := principalSlug("ed5aa164-9977-41e9-b63f-f0a5c832e435")
+	for _, c := range got {
+		ok := (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')
+		if !ok {
+			t.Errorf("slug contains non-alphanumeric: %q", c)
+		}
+	}
+}
+
 func TestPrincipalSlugHandlesShortInput(t *testing.T) {
-	if got := principalSlug("abc"); got != "bu-abc" {
+	if got := principalSlug("abc"); got != "buabc" {
 		t.Errorf("short input: got %q", got)
 	}
 }

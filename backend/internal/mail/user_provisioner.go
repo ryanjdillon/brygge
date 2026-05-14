@@ -30,34 +30,37 @@ import (
 )
 
 type UserProvisioner struct {
-	db     *pgxpool.Pool
-	admin  *AdminClient
-	audit  *audit.Service
-	encKey []byte // 32-byte AES key (TOTP_ENCRYPTION_KEY)
-	log    zerolog.Logger
+	db         *pgxpool.Pool
+	admin      *AdminClient
+	audit      *audit.Service
+	encKey     []byte // 32-byte AES key (TOTP_ENCRYPTION_KEY)
+	clubDomain string // local domain Stalwart serves (e.g. klokkarvikbaatlag.no)
+	log        zerolog.Logger
 }
 
-func NewUserProvisioner(db *pgxpool.Pool, admin *AdminClient, auditSvc *audit.Service, encKey []byte, log zerolog.Logger) *UserProvisioner {
+func NewUserProvisioner(db *pgxpool.Pool, admin *AdminClient, auditSvc *audit.Service, encKey []byte, clubDomain string, log zerolog.Logger) *UserProvisioner {
 	return &UserProvisioner{
-		db:     db,
-		admin:  admin,
-		audit:  auditSvc,
-		encKey: encKey,
-		log:    log.With().Str("component", "user-provisioner").Logger(),
+		db:         db,
+		admin:      admin,
+		audit:      auditSvc,
+		encKey:     encKey,
+		clubDomain: clubDomain,
+		log:        log.With().Str("component", "user-provisioner").Logger(),
 	}
 }
 
 // principalSlug derives a stable Stalwart principal name from a
 // Brygge user UUID. We don't use the email local-part because (a)
 // collisions across clubs are easy and (b) email rebinds shouldn't
-// rotate the JMAP id. Format: `bu-<12 hex>` — fits in 15 chars,
-// URL-safe, virtually collision-free given UUIDv4 input.
+// rotate the JMAP id. Format: `bu<12 hex>` — 14 chars, lowercase
+// alphanumeric only (Stalwart's principal-name validator is strict
+// about non-alphanumerics — verified by probe).
 func principalSlug(userID string) string {
 	clean := strings.ReplaceAll(strings.ReplaceAll(userID, "-", ""), "_", "")
 	if len(clean) > 12 {
 		clean = clean[:12]
 	}
-	return "bu-" + strings.ToLower(clean)
+	return "bu" + strings.ToLower(clean)
 }
 
 // EnsureUserPrincipal is idempotent. If the user already has a row
@@ -208,15 +211,22 @@ func (p *UserProvisioner) principalExists(ctx context.Context, slug string) (boo
 	return id != "", nil
 }
 
-func (p *UserProvisioner) createPrincipal(ctx context.Context, slug, email, password string) error {
+func (p *UserProvisioner) createPrincipal(ctx context.Context, slug, realEmail, password string) error {
+	// Stalwart only accepts emails on a domain it serves. The user's
+	// real email (e.g. gmail.com) lives in users.email for Brygge
+	// auth — Stalwart's principal carries a synthetic local address
+	// `<slug>@<club_domain>`. The user authenticates JMAP by `name`
+	// (slug) + password; their real email plays no role on the
+	// Stalwart side.
+	synthetic := slug + "@" + p.clubDomain
 	body := map[string]any{
 		"type":        "individual",
 		"name":        slug,
-		"emails":      []string{email},
+		"emails":      []string{synthetic},
 		"secrets":     []string{password},
-		"description": fmt.Sprintf("Brygge user %s (managed_by=brygge-user)", email),
+		"description": fmt.Sprintf("Brygge user %s (managed_by=brygge-user)", realEmail),
 		"roles":       []string{"user"},
-		"quota":       1024 * 1024 * 1024, // 1 GiB cap; review later
+		"quota":       0,
 	}
 	return p.admin.doJSON(ctx, "POST", "/api/principal", body, nil)
 }
