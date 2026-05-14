@@ -841,6 +841,80 @@ in
     text = builtins.toJSON clubConfig.boardMailboxes;
   };
 
+  # Hard-gate brygge.service on the inbox prerequisites. If the
+  # validate unit below fails, brygge fails to start, the activation
+  # script exits non-zero, and deploy-rs rolls back to the previous
+  # generation. No silent half-working state.
+  systemd.services.brygge = {
+    after = [ "brygge-inbox-validate.service" ];
+    requires = [ "brygge-inbox-validate.service" ];
+  };
+
+  # Validates that the brygge user can read the service-password map
+  # produced by stalwart-mailbox-config.service AND that every
+  # managed shared mailbox in the spec has a password entry. Runs as
+  # the brygge user so a perms regression on /etc/stalwart/ is
+  # caught here rather than surfacing as a runtime warning. Fails
+  # the deploy if anything is off.
+  systemd.services.brygge-inbox-validate = {
+    description = "Validate brygge shared-inbox prerequisites (DIL-276)";
+    after = [ "stalwart-mailbox-config.service" ];
+    requires = [ "stalwart-mailbox-config.service" ];
+    before = [ "brygge.service" ];
+    wantedBy = [ "brygge.service" ];
+    path = with pkgs; [ jq coreutils ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      User = "brygge";
+      Group = "brygge";
+    };
+    script = ''
+      set -eu
+      SPEC=/etc/brygge/board-mailboxes.json
+      PWFILE=/etc/stalwart/board-mailbox-passwords.json
+
+      if [ ! -s "$SPEC" ]; then
+        echo "OK: no board mailboxes declared — feature off, nothing to validate."
+        exit 0
+      fi
+
+      SHARED=$(jq -r \
+        '[.[] | select((.type // "shared") == "shared" and (.managed // true)) | .address] | .[]' \
+        "$SPEC")
+      if [ -z "$SHARED" ]; then
+        echo "OK: no managed shared mailboxes — nothing to validate."
+        exit 0
+      fi
+
+      if [ ! -r "$PWFILE" ]; then
+        echo "ERROR: $PWFILE is not readable as $(id -un)." >&2
+        echo "  Check /etc/stalwart traversal perms (need 0750 root:brygge or wider)." >&2
+        ls -la "$PWFILE" >&2 2>/dev/null || true
+        ls -ld /etc/stalwart >&2 || true
+        exit 1
+      fi
+
+      MISSING=""
+      while IFS= read -r ADDR; do
+        [ -z "$ADDR" ] && continue
+        PW=$(jq -r --arg a "$ADDR" '.[$a] // ""' "$PWFILE")
+        if [ -z "$PW" ]; then
+          MISSING="''${MISSING:+$MISSING }$ADDR"
+        fi
+      done <<<"$SHARED"
+
+      if [ -n "$MISSING" ]; then
+        echo "ERROR: missing service passwords for: $MISSING" >&2
+        echo "  Run: systemctl restart stalwart-mailbox-config" >&2
+        echo "  Or check the unit's journal for the underlying failure." >&2
+        exit 1
+      fi
+
+      echo "OK: validated $(echo "$SHARED" | wc -l) shared mailbox(es) have passwords readable by $(id -un)."
+    '';
+  };
+
   # Provision role-mapped board mailboxes (kasserar@, styre@, …) as
   # Stalwart principals. Reader ACLs are *not* touched here — they
   # converge from Brygge's user_roles table via the backend reconciler.
@@ -883,18 +957,22 @@ in
         chown root:brygge "$PWFILE"
       fi
 
-      # Soft-fail (per DIL-276) if Stalwart isn't responsive yet — the
-      # 5-min cron in the backend reconciler will retry.
+      # Hard-fail if Stalwart isn't responsive within 60s. The
+      # brygge-inbox-validate.service below also depends on this
+      # unit, so a failure here propagates through to brygge.service
+      # and ultimately to the deploy-rs activation step (rolling back
+      # rather than soft-degrading to a half-working inbox).
       READY=no
-      for _ in $(seq 1 30); do
+      for _ in $(seq 1 60); do
         if curl -fsS -o /dev/null -u "admin:$ADMIN" "$API" 2>/dev/null; then
           READY=yes; break
         fi
         sleep 1
       done
       if [ "$READY" != "yes" ]; then
-        echo "WARN: stalwart admin API unreachable after 30s — skipping." >&2
-        exit 0
+        echo "ERROR: stalwart admin API unreachable after 60s." >&2
+        echo "  Service stalwart.service must be running and authenticated." >&2
+        exit 1
       fi
 
       jq -c '.[]' "$SPEC" | while read -r ENTRY; do
