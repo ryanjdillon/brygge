@@ -394,8 +394,9 @@ func (c *JMAPClient) GetThreadEmailIDs(ctx context.Context, accountID, threadID 
 	return args.List[0].EmailIDs, nil
 }
 
-// SetKeywordOnThread toggles a keyword (e.g. "$seen") on every email
-// in a thread. Returns the number of emails updated.
+// SetKeywordOnThread toggles a keyword (e.g. "$seen") on the LATEST
+// email of a thread (Gmail-style: thread-level read state acts only
+// on the newest message). Returns the number of emails updated (0 or 1).
 func (c *JMAPClient) SetKeywordOnThread(ctx context.Context, accountID, threadID, keyword string, value bool) (int, error) {
 	emailIDs, err := c.GetThreadEmailIDs(ctx, accountID, threadID)
 	if err != nil {
@@ -404,26 +405,27 @@ func (c *JMAPClient) SetKeywordOnThread(ctx context.Context, accountID, threadID
 	if len(emailIDs) == 0 {
 		return 0, nil
 	}
-	update := make(map[string]any, len(emailIDs))
-	for _, id := range emailIDs {
-		// JMAP patch syntax: setting a keyword pointer to true sets
-		// it; setting it to null removes it.
-		var v any
-		if value {
-			v = true
-		}
-		update[id] = map[string]any{"keywords/" + keyword: v}
+	// Thread/get returns email ids in chronological order;
+	// last entry is the newest message.
+	target := emailIDs[len(emailIDs)-1]
+	// JMAP patch syntax: setting a keyword pointer to true sets
+	// it; setting it to null removes it.
+	var v any
+	if value {
+		v = true
 	}
 	_, err = c.Call(ctx, nil, []invocation{
 		{"Email/set", map[string]any{
 			"accountId": accountID,
-			"update":    update,
+			"update": map[string]any{
+				target: map[string]any{"keywords/" + keyword: v},
+			},
 		}, "0"},
 	})
 	if err != nil {
 		return 0, err
 	}
-	return len(emailIDs), nil
+	return 1, nil
 }
 
 // Identity is the slim Identity/get projection JMAP uses for the

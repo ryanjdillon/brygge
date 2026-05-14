@@ -780,7 +780,7 @@ func main() {
 					inboxHandler := handlers.NewInboxHandler(
 						db, inboxFactory, userProvisioner,
 						cfg.StalwartAdminUser, cfg.StalwartAdminPassword,
-						inboxPasswords, auditService, inboxSpec, log,
+						inboxPasswords, cfg.ClubSlug, auditService, inboxSpec, log,
 					)
 					r.Route("/inbox", func(r chi.Router) {
 						// Read-only surface gated on having ANY board-mailbox

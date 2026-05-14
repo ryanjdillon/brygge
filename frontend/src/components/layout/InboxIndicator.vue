@@ -1,51 +1,32 @@
 <script setup lang="ts">
-// Inbox indicator with unread badge (DIL-275 polish). Polls
-// /admin/inbox/mailboxes every 60s for the signed-in user; renders
-// nothing when the user has no board-mailbox role (the endpoint
-// returns an empty list, which we treat as "no chrome shown"). The
-// badge counts unread *threads* across all accessible mailboxes,
-// gmail-style capping at 99+.
+// Inbox indicator with unread badge (DIL-275 polish). Reads from
+// the shared inboxUnread Pinia store, which both this component
+// and the InboxView refresh — so the count updates instantly when
+// the user marks/archives in-page, not only on the 60s poll.
 
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Inbox } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
-import { useApi } from '@/composables/useApi'
-
-interface MailboxView {
-  address: string
-  unread: number
-}
+import { useInboxUnreadStore } from '@/stores/inboxUnread'
+import { storeToRefs } from 'pinia'
 
 const { t } = useI18n()
 const auth = useAuthStore()
-const { fetchApi } = useApi()
-
-const totalUnread = ref(0)
-const visible = ref(false)
+const inbox = useInboxUnreadStore()
+const { accessible, totalUnread } = storeToRefs(inbox)
 
 const display = computed(() => (totalUnread.value > 99 ? '99+' : String(totalUnread.value)))
-
-async function refresh() {
-  if (!auth.isAuthenticated) return
-  try {
-    const res = await fetchApi<{ mailboxes: MailboxView[] }>('/api/v1/admin/inbox/mailboxes')
-    const boxes = res.mailboxes ?? []
-    visible.value = boxes.length > 0
-    totalUnread.value = boxes.reduce((s, m) => s + (m.unread || 0), 0)
-  } catch {
-    // Backend may be unconfigured (no Stalwart) or the user lacks
-    // any board-mailbox role — both render as "hide the chrome".
-    visible.value = false
-  }
-}
 
 let timer: ReturnType<typeof setInterval> | null = null
 
 onMounted(() => {
-  refresh()
-  timer = setInterval(refresh, 60_000)
+  if (auth.isAuthenticated) inbox.refresh({ silent: true })
+  // Background floor: 60s catches drift if no in-page action triggered a refresh.
+  timer = setInterval(() => {
+    if (auth.isAuthenticated) inbox.refresh({ silent: true })
+  }, 60_000)
 })
 onUnmounted(() => {
   if (timer) clearInterval(timer)
@@ -54,7 +35,7 @@ onUnmounted(() => {
 
 <template>
   <RouterLink
-    v-if="visible"
+    v-if="accessible"
     to="/admin/inbox"
     class="relative inline-flex items-center rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
     :title="t('admin.sidebar.inbox')"
