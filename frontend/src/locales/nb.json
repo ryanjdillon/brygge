@@ -849,7 +849,20 @@
         "loadThreads": "Klarte ikkje laste meldingar.",
         "loadThread": "Klarte ikkje opne meldinga.",
         "markRead": "Klarte ikkje endre lesestatus.",
-        "archive": "Klarte ikkje arkivere tråden."
+        "archive": "Klarte ikkje arkivere tråden.",
+        "send": "Klarte ikkje sende meldinga.",
+        "toRequired": "Legg til minst éin mottakar før du sender."
+      },
+      "reply": {
+        "button": "Svar",
+        "heading": "Svar",
+        "to": "Til",
+        "cc": "Kopi",
+        "subject": "Emne",
+        "bodyPlaceholder": "Skriv svaret ditt…",
+        "send": "Send",
+        "sending": "Sender…",
+        "cancel": "Avbryt"
       }
     },
     "communication": {
