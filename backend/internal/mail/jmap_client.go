@@ -600,14 +600,18 @@ func (c *JMAPClient) SendEmail(ctx context.Context, accountID, draftsID, sentID 
 	cc := mapAddrs(req.Cc)
 	bcc := mapAddrs(req.Bcc)
 
+	// RFC 8621: `charset` belongs on the EmailBodyPart, not on the
+	// EmailBodyValue. bodyValues entries hold only {value,
+	// isEncodingProblem, isTruncated}; anything else trips
+	// invalidProperties on Stalwart 0.15.
 	bodyValues := map[string]any{
-		"text": map[string]any{"value": req.BodyText, "charset": "utf-8"},
+		"text": map[string]any{"value": req.BodyText},
 	}
-	textBody := []map[string]any{{"partId": "text", "type": "text/plain"}}
+	textBody := []map[string]any{{"partId": "text", "type": "text/plain", "charset": "utf-8"}}
 	htmlBody := []map[string]any(nil)
 	if req.BodyHTML != "" {
-		bodyValues["html"] = map[string]any{"value": req.BodyHTML, "charset": "utf-8"}
-		htmlBody = []map[string]any{{"partId": "html", "type": "text/html"}}
+		bodyValues["html"] = map[string]any{"value": req.BodyHTML}
+		htmlBody = []map[string]any{{"partId": "html", "type": "text/html", "charset": "utf-8"}}
 	}
 
 	// JMAP doesn't use a generic `headers` array on Email/set. Per
@@ -685,15 +689,20 @@ func (c *JMAPClient) SendEmail(ctx context.Context, accountID, draftsID, sentID 
 	var emailSet struct {
 		Created    map[string]map[string]any `json:"created"`
 		NotCreated map[string]struct {
-			Type        string `json:"type"`
-			Description string `json:"description"`
+			Type        string   `json:"type"`
+			Description string   `json:"description"`
+			Properties  []string `json:"properties"`
 		} `json:"notCreated"`
 	}
 	if err := decodeArgs(resp[0], &emailSet); err != nil {
 		return "", "", err
 	}
 	if e, bad := emailSet.NotCreated["tmp"]; bad {
-		return "", "", fmt.Errorf("Email/set: %s: %s", e.Type, e.Description)
+		props := ""
+		if len(e.Properties) > 0 {
+			props = " [" + strings.Join(e.Properties, ", ") + "]"
+		}
+		return "", "", fmt.Errorf("Email/set: %s: %s%s", e.Type, e.Description, props)
 	}
 	created := emailSet.Created["tmp"]
 	if id, ok := created["id"].(string); ok {
@@ -708,15 +717,20 @@ func (c *JMAPClient) SendEmail(ctx context.Context, accountID, draftsID, sentID 
 	// Second response is EmailSubmission/set.
 	var subSet struct {
 		NotCreated map[string]struct {
-			Type        string `json:"type"`
-			Description string `json:"description"`
+			Type        string   `json:"type"`
+			Description string   `json:"description"`
+			Properties  []string `json:"properties"`
 		} `json:"notCreated"`
 	}
 	if err := decodeArgs(resp[1], &subSet); err != nil {
 		return "", "", err
 	}
 	if e, bad := subSet.NotCreated["sub"]; bad {
-		return emailID, messageID, fmt.Errorf("EmailSubmission/set: %s: %s", e.Type, e.Description)
+		props := ""
+		if len(e.Properties) > 0 {
+			props = " [" + strings.Join(e.Properties, ", ") + "]"
+		}
+		return emailID, messageID, fmt.Errorf("EmailSubmission/set: %s: %s%s", e.Type, e.Description, props)
 	}
 	return emailID, messageID, nil
 }
