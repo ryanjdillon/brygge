@@ -426,6 +426,44 @@ func (c *JMAPClient) SetKeywordOnThread(ctx context.Context, accountID, threadID
 	return len(emailIDs), nil
 }
 
+// Identity is the slim Identity/get projection JMAP uses for the
+// EmailSubmission flow. Every account needs at least one Identity
+// (RFC 8621 §6) — Stalwart auto-creates a default one matching the
+// principal's primary email.
+type Identity struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
+// ListIdentities enumerates the account's Identities. Requires the
+// JMAP submission capability.
+func (c *JMAPClient) ListIdentities(ctx context.Context, accountID string) ([]Identity, error) {
+	resp, err := c.Call(ctx, []string{
+		"urn:ietf:params:jmap:core",
+		"urn:ietf:params:jmap:submission",
+	}, []invocation{
+		{"Identity/get", map[string]any{
+			"accountId":  accountID,
+			"ids":        nil,
+			"properties": []string{"id", "name", "email"},
+		}, "0"},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(resp) == 0 {
+		return nil, fmt.Errorf("Identity/get: empty response")
+	}
+	var args struct {
+		List []Identity `json:"list"`
+	}
+	if err := decodeArgs(resp[0], &args); err != nil {
+		return nil, err
+	}
+	return args.List, nil
+}
+
 // CreateMailbox creates a folder with the given name + role. Stalwart
 // 0.15 only auto-creates Inbox on principal init — Drafts/Sent/etc.
 // have to be created explicitly the first time we need them. Returns
@@ -578,15 +616,22 @@ type SendEmailRequest struct {
 //   - `Email/set { create: {tmp: ...} }`: stores the message in the
 //     account's Drafts folder (resolved by role) with a synthetic
 //     client-side id `"tmp"`.
-//   - `EmailSubmission/set { create: {sub: {emailId: "#tmp", ...}},
-//     onSuccessUpdateEmail: { "#sub": { mailboxIds: { Sent: true,
-//     Drafts: null } } } }`: queues delivery and atomically moves
-//     the message from Drafts to Sent on success.
+//   - `EmailSubmission/set { create: {sub: {emailId: "#tmp",
+//     identityId, ...}}, onSuccessUpdateEmail: { "#sub": {
+//     mailboxIds: { Sent: true, Drafts: null } } } }`: queues
+//     delivery and atomically moves the message from Drafts to
+//     Sent on success.
+//
+// `identityId` references a JMAP Identity (RFC 8621 §6) — fetch via
+// ListIdentities; Stalwart auto-creates a default one per account.
 //
 // Returns the server-assigned Email id and Message-ID header.
-func (c *JMAPClient) SendEmail(ctx context.Context, accountID, draftsID, sentID string, req SendEmailRequest) (emailID, messageID string, err error) {
+func (c *JMAPClient) SendEmail(ctx context.Context, accountID, identityID, draftsID, sentID string, req SendEmailRequest) (emailID, messageID string, err error) {
 	if accountID == "" {
 		return "", "", fmt.Errorf("SendEmail: accountID required")
+	}
+	if identityID == "" {
+		return "", "", fmt.Errorf("SendEmail: identityID required")
 	}
 	if draftsID == "" || sentID == "" {
 		return "", "", fmt.Errorf("SendEmail: drafts/sent mailbox ids required")
@@ -666,8 +711,9 @@ func (c *JMAPClient) SendEmail(ctx context.Context, accountID, draftsID, sentID 
 			"accountId": accountID,
 			"create": map[string]any{
 				"sub": map[string]any{
-					"emailId":  "#tmp",
-					"envelope": envelope,
+					"emailId":    "#tmp",
+					"identityId": identityID,
+					"envelope":   envelope,
 				},
 			},
 			"onSuccessUpdateEmail": map[string]any{
