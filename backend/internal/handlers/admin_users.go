@@ -227,6 +227,7 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 		 LEFT JOIN LATERAL (
 		     SELECT jsonb_agg(jsonb_build_object(
 		                'slip_id', sa.slip_id,
+		                'boat_id', sa.boat_id,
 		                'slip_number', s.number,
 		                'slip_section', s.section,
 		                'assignment_type', sa.assignment_type::text
