@@ -50,6 +50,10 @@ const (
 	// Booking operations
 	ActionBookingConfirmed = "booking.confirmed"
 
+	// Shared-inbox ACL reconciler (DIL-275/276)
+	ActionInboxACLChanged    = "inbox.acl_changed"
+	ActionInboxACLSyncFailed = "inbox.acl_sync_failed"
+
 	// GDPR operations
 	ActionGDPRExportRequested       = "gdpr.export_requested"
 	ActionGDPRDeletionRequested     = "gdpr.deletion_requested"
