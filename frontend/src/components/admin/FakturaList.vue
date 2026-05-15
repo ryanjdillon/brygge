@@ -86,6 +86,7 @@ const allFilteredSelected = computed(() =>
 )
 
 const showSend = computed(() => props.status === 'draft')
+const showResend = computed(() => props.status === 'sent')
 const showDelete = computed(() => props.status !== 'sent') // backend rejects DELETE on sent open invoices
 const showVoid = computed(() => props.status !== 'voided')
 
@@ -117,6 +118,22 @@ async function doSend(id: string) {
     }
     rows.value = rows.value.filter((d) => d.id !== id)
     selected.value.delete(id)
+  } finally {
+    busyIds.value.delete(id)
+  }
+}
+
+async function doResend(id: string) {
+  // Unlike doSend, the row STAYS in the sent list — the original
+  // sent_at is preserved server-side and the resend is recorded
+  // only via the audit log (action=invoice.emailed, resend=true).
+  busyIds.value.add(id)
+  try {
+    const res = await totpAwareFetch(`/api/v1/admin/financials/invoices/${id}/resend`, { method: 'POST' })
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '')
+      error.value = `${res.status} ${txt}`
+    }
   } finally {
     busyIds.value.delete(id)
   }
@@ -164,6 +181,21 @@ async function sendOne(d: Row) {
   })
   if (!ok) return
   await doSend(d.id)
+}
+
+async function resendOne(d: Row) {
+  if (!(await ensureFreshTotp())) return
+  const ok = await confirm({
+    title: t('admin.faktura.sent.resendConfirmTitle'),
+    body: t('admin.faktura.sent.resendBody', {
+      name: d.member_name,
+      email: d.member_email || '',
+    }),
+    confirmLabel: t('admin.faktura.sent.resendAction'),
+    tone: 'info',
+  })
+  if (!ok) return
+  await doResend(d.id)
 }
 async function deleteOne(d: Row) {
   if (!(await ensureFreshTotp())) return
@@ -371,6 +403,15 @@ defineExpose({ load })
                     :disabled="busyIds.has(d.id)"
                     :title="t('admin.invoiceDrafts.send')"
                     @click="sendOne(d)"
+                  >
+                    <Send class="h-4 w-4" />
+                  </button>
+                  <button
+                    v-if="showResend"
+                    class="text-emerald-600 hover:text-emerald-800 disabled:opacity-50"
+                    :disabled="busyIds.has(d.id)"
+                    :title="t('admin.faktura.sent.resend')"
+                    @click="resendOne(d)"
                   >
                     <Send class="h-4 w-4" />
                   </button>

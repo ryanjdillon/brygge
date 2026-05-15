@@ -641,7 +641,11 @@
       "sent": {
         "subtitle": "Fakturas already emailed to recipients. Sent fakturas can only be voided — not deleted.",
         "empty": "No sent fakturas yet.",
-        "sentAt": "Sent"
+        "sentAt": "Sent",
+        "resend": "Resend email",
+        "resendAction": "Resend",
+        "resendConfirmTitle": "Resend invoice email?",
+        "resendBody": "Resend the original PDF to {name} <{email}>? Useful when the recipient never received the message or it landed in spam. The original sent date is preserved."
       }
     },
     "memberSearch": {
