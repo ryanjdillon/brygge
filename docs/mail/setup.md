@@ -52,7 +52,7 @@ All config lives in `nix/host.nix` under `services.stalwart` and the Caddy/oci-c
 
 Prerequisites:
 
-- Base [deploy flow](../deploy.md) completed up through the NixOS bootstrap and brygge itself running
+- Base [deploy flow](../developer/deploy.md) completed up through the NixOS bootstrap and brygge itself running
 - `mail.<domain>` and `webmail.<domain>` A records published (handled by `nix run .#tf-apply` — included in the standard deploy DNS set)
 - Port 25 outbound unblocked by Hetzner (see [below](#hetzner-port-25))
 
@@ -443,7 +443,7 @@ Don't enable `mailserver.localDnsResolver` (knot-resolver). It breaks upstream D
 
 ## Related
 
-- [docs/deploy.md](../deploy.md) — overall deploy guide
+- [docs/developer/deploy.md](../developer/deploy.md) — overall deploy guide
 - [inbox.md](inbox.md) — role-gated shared inbox in the admin portal (`/admin/inbox`): how it works, spec format, verification recipes
 - [stalwart-internals.md](stalwart-internals.md) — Stalwart 0.15-specific protocol quirks (admin REST, JMAP, password hashing). Reference for when something at the protocol layer fails.
 - [bimi.md](bimi.md) — publishing the club logo for inbox rendering (DMARC + DKIM prerequisites covered there in detail)

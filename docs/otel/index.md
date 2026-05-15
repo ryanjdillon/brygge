@@ -17,4 +17,4 @@ Brygge exports metrics, traces, and logs via OTLP. The SDK lives in the Go API; 
 - **Local dev:** spin up the docker-compose collector from [docker-collector.md](docker-collector.md), point `OTEL_EXPORTER_OTLP_ENDPOINT` at it.
 - **Production:** the NixOS VM already runs a collector on `127.0.0.1:4317` (see [local-collector.md](local-collector.md)). The Brygge API is wired to it via `services.brygge.extraEnvironment` in `nix/host.nix`. Forwarding to the home cluster requires `/etc/otel/env` and Tailscale (see [upstream-contract.md](upstream-contract.md)).
 
-See also: [../configuration.md](../configuration.md) · [../deploy.md](../deploy.md)
+See also: [../developer/configuration.md](../developer/configuration.md) · [../developer/deploy.md](../developer/deploy.md)

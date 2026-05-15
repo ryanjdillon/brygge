@@ -22,9 +22,9 @@ It's one Go binary with an embedded Vue SPA, backed by Postgres and Redis. A sin
 
 ## Get started
 
-- **Run it locally** → [docs/quickstart.md](docs/quickstart.md)
-- **Deploy it** → [docs/deploy.md](docs/deploy.md)
-- **Set it up as a club admin** → [docs/setup.md](docs/setup.md)
+- **Run it locally** → [docs/developer/quickstart.md](docs/developer/quickstart.md)
+- **Deploy it** → [docs/developer/deploy.md](docs/developer/deploy.md)
+- **Set it up as a club admin** → [docs/developer/setup.md](docs/developer/setup.md)
 
 ## What's inside
 

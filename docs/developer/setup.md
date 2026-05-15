@@ -79,7 +79,7 @@ cp deploy/.env.example deploy/.env
 
 Open `deploy/.env` in a text editor (e.g. `nano deploy/.env`) and fill in each section. The file contains inline comments explaining every setting.
 
-> **Where do these values come from?** On NixOS deploys most non-secret values are injected by `services.brygge` from `clubConfig` and don't need to be in the env file. On docker-compose deploys, `deploy/.env` carries everything. The full layering rule (clubConfig vs nix-injected vs env file) is in [AGENTS.md → Env var layering](../AGENTS.md#env-var-layering). `[nix-injected]` tags in `.env.example` flag the lines docker-compose deploys still need.
+> **Where do these values come from?** On NixOS deploys most non-secret values are injected by `services.brygge` from `clubConfig` and don't need to be in the env file. On docker-compose deploys, `deploy/.env` carries everything. The full layering rule (clubConfig vs nix-injected vs env file) is in [AGENTS.md → Env var layering](../../AGENTS.md#env-var-layering). `[nix-injected]` tags in `.env.example` flag the lines docker-compose deploys still need.
 
 ### Domain
 
@@ -166,7 +166,7 @@ EMAIL_FROM=login@mitt-klubb.no
 EMAIL_REPLY_TO=info@mitt-klubb.no
 ```
 
-Brygge talks SMTP to the Stalwart mail server running on the same VM as `relay@<domain>` — provisioned automatically by the `stalwart-relay-account` systemd unit. See [mail/setup.md](mail/setup.md) for the one-time server setup: setting the `relay@` password, provisioning the DKIM keypair, and publishing DNS records.
+Brygge talks SMTP to the Stalwart mail server running on the same VM as `relay@<domain>` — provisioned automatically by the `stalwart-relay-account` systemd unit. See [../mail/setup.md](../mail/setup.md) for the one-time server setup: setting the `relay@` password, provisioning the DKIM keypair, and publishing DNS records.
 
 ### Club configuration
 

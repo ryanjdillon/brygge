@@ -58,4 +58,4 @@ just docker-build      # ARM64 image
 - `scripts/brygge.sh` — deploy CLI used in production
 - `docs/` — everything you're reading
 
-For the deeper tour see [architecture.md](architecture.md) and [contributing](../CONTRIBUTING.md).
+For the deeper tour see [../architecture.md](../architecture.md) and [contributing](../../CONTRIBUTING.md).

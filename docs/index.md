@@ -2,26 +2,63 @@
 
 Welcome to the Brygge documentation. Brygge is an open-source harbour club management platform built with Go and Vue.
 
-## Guides
+Docs are split by audience. Load just the section you need rather than all of it — each entry below is a self-contained module per the deep-module rule in [AGENTS.md](../AGENTS.md).
+
+## Top-level (cross-audience)
+
+| Document | Description |
+|----------|-------------|
+| [architecture.md](architecture.md) | How the pieces fit together |
+| [tech-stack.md](tech-stack.md) | What the moving parts are |
+| [../CONTRIBUTING.md](../CONTRIBUTING.md) | Development environment, code style, testing, and PR workflow |
+
+## User docs ([user/](user/))
+
+Audience: site admins (in-app club setup, config, data correction), board members, and members. Operating the running app from the frontend — not deploying or coding it.
+
+| Document | Description |
+|----------|-------------|
+| [user/faktura.md](user/faktura.md) | Treasurer's guide to the invoicing module (price catalogue, send, reconcile) |
+
+## Developer docs ([developer/](developer/))
+
+Audience: deployers, contributors, and anyone troubleshooting at the OS/protocol/database layer.
+
+| Document | Description |
+|----------|-------------|
+| [developer/quickstart.md](developer/quickstart.md) | Local dev environment in five minutes |
+| [developer/setup.md](developer/setup.md) | Single-VPS deployment walkthrough (DNS, SSH, Hetzner) |
+| [developer/deploy.md](developer/deploy.md) | Production deploy: Nix flake, deploy-rs, magic-rollback |
+| [developer/configuration.md](developer/configuration.md) | Environment variables and feature flags |
+| [developer/database.md](developer/database.md) | Postgres ops: connecting, scripts, migrations, backups |
+| [developer/rescue-recover-ssh-access.md](developer/rescue-recover-ssh-access.md) | Recovering SSH access when locked out |
+| [developer/troubleshooting.md](developer/troubleshooting.md) | Common dev + deploy issues |
+| [developer/k8s.md](developer/k8s.md) | Kubernetes migration notes for scaling beyond a single VPS |
+
+## Domain modules
+
+Each subdirectory is a self-contained module covering one subject in depth. Per the deep-module rule, load the whole subdir when you need that subject; entries within it cross-link as needed and don't duplicate content from sibling subjects.
+
+### [mail/](mail/) — self-hosted Stalwart + Bulwark
 
 | Document | Audience | Description |
 |----------|----------|-------------|
-| [quickstart.md](quickstart.md) | Developers | Local dev environment in five minutes |
-| [architecture.md](architecture.md) | All | How the pieces fit together |
-| [tech-stack.md](tech-stack.md) | All | What the moving parts are |
-| [deploy.md](deploy.md) | Operators | Step-by-step deployment guide with provider-specific instructions |
-| [setup.md](setup.md) | Club admins | Non-developer guide for initial server setup and configuration |
-| [../CONTRIBUTING.md](../CONTRIBUTING.md) | Developers | Development environment, code style, testing, and PR workflow |
-| [configuration.md](configuration.md) | Operators | Environment variables and feature flags |
-| [database.md](database.md) | Operators | Postgres ops: connecting, running scripts, migrations, backups |
-| [mail/setup.md](mail/setup.md) | Operators | Self-hosted mail (Stalwart + Bulwark): deploy, DKIM, role mailboxes, webmail |
-| [mail/inbox.md](mail/inbox.md) | Operators + Developers | Role-gated shared inbox at `/admin/inbox`: design, spec format, reconciler, per-user provisioning, send path, verification recipes |
+| [mail/setup.md](mail/setup.md) | Operators | Initial deploy, DKIM provisioning, role mailboxes, deliverability, day-2 ops |
+| [mail/inbox.md](mail/inbox.md) | Operators + Developers | Role-gated shared inbox at `/admin/inbox`: spec format, reconciler, per-user provisioning, send path, verification recipes |
 | [mail/stalwart-internals.md](mail/stalwart-internals.md) | Developers | Stalwart 0.15 protocol quirks (admin REST, JMAP, password hashing). Reference for when something at the protocol layer breaks. |
 | [mail/bimi.md](mail/bimi.md) | Operators | BIMI: publishing the club logo so it renders next to outbound mail |
-| [otel/index.md](otel/index.md) | Operators | OpenTelemetry: instrumentation, app config, local + upstream collectors |
+
+### [otel/](otel/) — OpenTelemetry
+
+| Document | Audience | Description |
+|----------|----------|-------------|
+| [otel/index.md](otel/index.md) | Operators | Instrumentation, app config, local + upstream collectors |
+
+### [security/](security/)
+
+| Document | Audience | Description |
+|----------|----------|-------------|
 | [security/2fa.md](security/2fa.md) | Board members + Operators | Two-factor authentication: enrollment, recovery codes, admin reset |
-| [troubleshooting.md](troubleshooting.md) | All | Common issues and solutions for dev and deployment |
-| [k8s.md](k8s.md) | DevOps | Kubernetes migration notes for scaling beyond a single VPS |
 
 ## Architecture Overview
 
@@ -71,6 +108,7 @@ Key variable groups:
 - **Auth** — `JWT_SECRET`, `VIPPS_*`
 - **Storage** — `S3_*` (documents, charts)
 - **Email** — `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `EMAIL_FROM` (self-hosted Stalwart; see [mail/setup.md](mail/setup.md))
+- **Inbox / shared mailboxes** — `STALWART_ADMIN_*`, `BRYGGE_MAILBOXES_PATH`, `STALWART_MAILBOX_PASSWORDS_PATH` (see [mail/inbox.md](mail/inbox.md))
 - **Features** — `FEATURE_BOOKINGS`, `FEATURE_PROJECTS`, `FEATURE_CALENDAR`, `FEATURE_COMMERCE`, `FEATURE_COMMUNICATIONS`
 
 ## Common Tasks

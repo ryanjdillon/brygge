@@ -9,15 +9,16 @@ Docs are organized by topic so you can read just the section you need without lo
 | Topic | Entry point |
 |-------|-------------|
 | Architecture overview | [docs/index.md](docs/index.md) |
-| Local setup | [docs/setup.md](docs/setup.md) |
+| Local setup | [docs/developer/setup.md](docs/developer/setup.md) |
 | Contributing workflow | [CONTRIBUTING.md](CONTRIBUTING.md) |
-| Configuration / env vars | [docs/configuration.md](docs/configuration.md) |
-| Production deploy | [docs/deploy.md](docs/deploy.md) |
-| Troubleshooting | [docs/troubleshooting.md](docs/troubleshooting.md) |
-| Mail (Stalwart + Bulwark) | [docs/mail/setup.md](docs/mail/setup.md) |
+| Configuration / env vars | [docs/developer/configuration.md](docs/developer/configuration.md) |
+| Production deploy | [docs/developer/deploy.md](docs/developer/deploy.md) |
+| Troubleshooting | [docs/developer/troubleshooting.md](docs/developer/troubleshooting.md) |
+| Mail (Stalwart + Bulwark) | [docs/mail/setup.md](docs/mail/setup.md) — base setup; [docs/mail/inbox.md](docs/mail/inbox.md) for the role-gated shared inbox; [docs/mail/stalwart-internals.md](docs/mail/stalwart-internals.md) for protocol quirks |
 | OpenTelemetry | [docs/otel/index.md](docs/otel/index.md) — instrumentation, app config, local collector, upstream contract, standalone collector |
 | 2FA (TOTP) | [docs/security/2fa.md](docs/security/2fa.md) — enrollment, recovery codes, admin reset, all-admins-lost recovery |
-| Kubernetes notes | [docs/k8s.md](docs/k8s.md) |
+| Kubernetes notes | [docs/developer/k8s.md](docs/developer/k8s.md) |
+| Faktura / invoicing (in-app) | [docs/user/faktura.md](docs/user/faktura.md) — treasurer + admin guide |
 
 ## Dev Environment
 
@@ -114,7 +115,7 @@ Production stack via `deploy/docker-compose.yml` on Hetzner CAX11 (ARM64):
 | element | vectorim/element-web | Matrix web client |
 | uptime-kuma | louislam/uptime-kuma:1 | Status page |
 
-Multi-stage Dockerfile: build frontend → embed in Go binary → distroless runtime. The Go binary serves the SPA with an `index.html` fallback for unmatched routes. CSP headers allow MapLibre, Kartverket, OSM, and Yr.no. See [docs/deploy.md](docs/deploy.md) for full guide.
+Multi-stage Dockerfile: build frontend → embed in Go binary → distroless runtime. The Go binary serves the SPA with an `index.html` fallback for unmatched routes. CSP headers allow MapLibre, Kartverket, OSM, and Yr.no. See [docs/developer/deploy.md](docs/developer/deploy.md) for full guide.
 
 ## Secrets in `terraform/terraform.tfvars.json`
 
