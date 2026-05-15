@@ -927,6 +927,120 @@ func (h *InvoiceHandler) HandleSendInvoice(w http.ResponseWriter, r *http.Reques
 	JSON(w, http.StatusOK, map[string]any{"id": invoiceID, "sent": true})
 }
 
+// HandleResendInvoice resends the stored PDF to the recipient AFTER
+// a previous successful send. Unlike HandleSendInvoice this is not
+// gated on sent_at being NULL — the whole point is to recover from
+// delivery failures (recipient claims they never got it, spam-
+// filter ate it, etc.). The original sent_at is preserved so the
+// audit trail of the FIRST send isn't overwritten; the resend is
+// recorded only via the audit log with resend=true.
+func (h *InvoiceHandler) HandleResendInvoice(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	invoiceID := chi.URLParam(r, "invoiceID")
+	if invoiceID == "" {
+		Error(w, http.StatusBadRequest, "invoice ID is required")
+		return
+	}
+
+	var (
+		invoiceNumber  int
+		memberName     string
+		memberLast     string
+		memberFirst    string
+		memberEmail    string
+		recipientEmail string
+		fiscalYear     *int
+		total          float64
+		dueDate        time.Time
+		kid            string
+		pdfData        []byte
+		sentAt         *time.Time
+	)
+	if err := h.db.QueryRow(ctx,
+		`SELECT i.invoice_number,
+		        COALESCE(NULLIF(i.recipient_org_name, ''),
+		                 u.full_name,
+		                 u.first_name || ' ' || u.last_name,
+		                 ''),
+		        COALESCE(u.last_name, ''), COALESCE(u.first_name, ''),
+		        COALESCE(u.email, ''), COALESCE(i.recipient_email, ''),
+		        fp.year, i.total_amount, i.due_date, i.kid_number,
+		        i.pdf_data, i.sent_at
+		   FROM invoices i
+		   LEFT JOIN users u ON u.id = i.user_id
+		   LEFT JOIN fiscal_periods fp ON fp.id = i.fiscal_period_id
+		  WHERE i.id = $1 AND i.club_id = $2`,
+		invoiceID, claims.ClubID,
+	).Scan(&invoiceNumber, &memberName, &memberLast, &memberFirst, &memberEmail, &recipientEmail,
+		&fiscalYear, &total, &dueDate, &kid, &pdfData, &sentAt); err != nil {
+		if err == pgx.ErrNoRows {
+			Error(w, http.StatusNotFound, "invoice not found")
+			return
+		}
+		h.log.Error().Err(err).Msg("load invoice for resend")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if sentAt == nil {
+		// Resend only makes sense after a successful first send;
+		// otherwise the operator wants the regular Send action so
+		// sent_at gets stamped.
+		Error(w, http.StatusBadRequest, "invoice has not been sent yet — use Send, not Resend")
+		return
+	}
+	if h.email == nil {
+		Error(w, http.StatusServiceUnavailable, "email delivery not configured")
+		return
+	}
+	deliverTo := recipientEmail
+	if deliverTo == "" {
+		deliverTo = memberEmail
+	}
+	if deliverTo == "" {
+		Error(w, http.StatusBadRequest, "no recipient email on this invoice")
+		return
+	}
+	if pdfData == nil {
+		Error(w, http.StatusInternalServerError, "invoice has no stored PDF")
+		return
+	}
+
+	var clubName, bankAccount string
+	_ = h.db.QueryRow(ctx,
+		`SELECT name, COALESCE(bank_account, '') FROM clubs WHERE id = $1`,
+		claims.ClubID,
+	).Scan(&clubName, &bankAccount)
+
+	locale := email.DetectLocale(r)
+	subject := email.InvoiceSubject(locale, clubName, invoiceNumber)
+	htmlBody := email.InvoiceBody(locale, memberName, clubName, invoiceNumber, dueDate, total, kid, bankAccount)
+	filename := buildInvoiceFilename(invoiceNumber, memberLast, memberFirst, fiscalYear)
+
+	if err := h.email.SendWithAttachment(ctx, deliverTo, subject, htmlBody, filename, pdfData); err != nil {
+		h.log.Error().Err(err).Str("email", deliverTo).Msg("resend invoice email failed")
+		Error(w, http.StatusBadGateway, "failed to send email")
+		return
+	}
+
+	if h.audit != nil {
+		h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,
+			audit.ActionInvoiceEmailed, "invoice", invoiceID,
+			map[string]any{
+				"email":          deliverTo,
+				"invoice_number": invoiceNumber,
+				"resend":         true,
+				"original_sent_at": sentAt.Format(time.RFC3339),
+			})
+	}
+
+	JSON(w, http.StatusOK, map[string]any{"id": invoiceID, "resent": true})
+}
+
 // HandleDeleteInvoice permanently removes an invoice. Allowed for
 // drafts (sent_at IS NULL) and for voided invoices — sent+open
 // invoices must be voided first so an audit trail of the original

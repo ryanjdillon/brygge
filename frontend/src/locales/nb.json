@@ -637,7 +637,11 @@
       "sent": {
         "subtitle": "Fakturaer som er sendt. Sendte fakturaer kan kun annulleres — ikke slettes.",
         "empty": "Ingen sendte fakturaer ennå.",
-        "sentAt": "Sendt"
+        "sentAt": "Sendt",
+        "resend": "Send på nytt",
+        "resendAction": "Send på nytt",
+        "resendConfirmTitle": "Send faktura på nytt?",
+        "resendBody": "Send originalfakturaen til {name} <{email}> på nytt? Nyttig når mottakaren ikkje fekk meldinga eller ho hamna i spam. Den opphavlege sendedatoen er teken vare på."
       }
     },
     "memberSearch": {
