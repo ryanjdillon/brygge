@@ -170,16 +170,15 @@ ssh root@<server-ip> -- journalctl -u stalwart-dkim-config -n 50 --no-pager
 
 End-to-end check: send a test message and look at the recipient's `Authentication-Results`. Both DKIM lines should read `dkim=pass header.s=mail`. If they show `header.s=YYYYMMr` / `YYYYMMe` instead, the unit didn't converge — see [BIMI guide § DKIM provisioning](bimi.md#dkim-provisioning-declarative) for troubleshooting.
 
-### 5. Create human role mailboxes
+### 5. Role mailboxes (board addresses)
 
-In the admin UI → **Management → Accounts → New**:
+Brygge provisions board-role mailboxes (`kasserar@`, `leiar@`, `hamnesjef@`, etc.) **declaratively** via the `stalwart-mailbox-config.service` systemd unit, sourced from `terraform/terraform.tfvars.json` → `board_mailboxes`. The same unit also generates a service password per shared principal at `/etc/stalwart/board-mailbox-passwords.json` so the brygge backend can authenticate JMAP calls on behalf of the role.
 
-- `info@<domain>` — a real inbox monitored by a board member (or rotating role). Set a password for the current officeholder.
-- `treasurer@<domain>`, `secretary@<domain>`, `admin@<domain>`, etc. — shared role mailboxes for board members. Password per role.
+Operator workflow: edit `board_mailboxes` in tfvars, `nix run .#deploy`, done. **Do NOT create board mailboxes through the Stalwart admin UI** — they'd be unmanaged and the reconciler won't apply ACL converge to them.
 
-Aliases: each mailbox can have multiple aliases configured in the same screen (e.g. `kasserer@<domain>` → treasurer).
+For everything else (single-user accounts that aren't role-mapped, like a person's personal mailbox if you choose to host one), the UI flow still works: **Management → Accounts → New**. These are unmanaged from Brygge's perspective.
 
-These are the mailboxes humans log into via Bulwark webmail or any IMAP client.
+The role-gated shared-inbox feature that lets board members read + reply to these mailboxes from `/admin/inbox` is documented separately in [inbox.md](inbox.md). It depends on `board_mailboxes` being populated.
 
 ### 6. Provision the brygge SMTP relay account
 
@@ -445,6 +444,9 @@ Don't enable `mailserver.localDnsResolver` (knot-resolver). It breaks upstream D
 ## Related
 
 - [docs/deploy.md](../deploy.md) — overall deploy guide
-- [docs/mail/bimi.md](bimi.md) — publishing the club logo for inbox rendering (DMARC + DKIM prerequisites covered there in detail)
+- [inbox.md](inbox.md) — role-gated shared inbox in the admin portal (`/admin/inbox`): how it works, spec format, verification recipes
+- [stalwart-internals.md](stalwart-internals.md) — Stalwart 0.15-specific protocol quirks (admin REST, JMAP, password hashing). Reference for when something at the protocol layer fails.
+- [bimi.md](bimi.md) — publishing the club logo for inbox rendering (DMARC + DKIM prerequisites covered there in detail)
 - [DIL-141](https://linear.app/dillonteknisk/issue/DIL-141) — parent feature (self-host mail)
 - [DIL-166](https://linear.app/dillonteknisk/issue/DIL-166) — first-deploy workflow simplification
+- [DIL-275](https://linear.app/dillonteknisk/issue/DIL-275) — shared-inbox saga (DIL-276/277/278/321 sub-issues)
