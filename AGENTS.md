@@ -95,6 +95,14 @@ Spec generation (`backend/cmd/openapi/main.go`) → `just api-types` → `fronte
 - **API calls in views**: `const client = useApiClient()` + `unwrap(await client.GET(...))`. Only use `fetchApi` for endpoints not in OpenAPI spec
 - **TOTP gating (frontend UX)**: action buttons that trigger sensitive operations (anything behind `RequireFreshTOTP` middleware on the server) must call `ensureFreshTotp()` at **click time**, not on form submit. Pattern: prompt the step-up first, then show the confirm dialog (or open the form modal), then run the action. The backend middleware is the hard gate; the frontend prompt is just so users re-verify before they fill in a form, not after
 
+### Module organisation (Ousterhout's deep-module principle)
+
+Both source and docs follow the same shape: **small, narrow interface → as much depth behind it as the domain actually has**. The goal is that another contributor (or agent) can load exactly one module to do exactly one job, without dragging in unrelated context.
+
+- **Source modules** — one handler struct per domain in `backend/internal/handlers/<domain>.go`; one composable / view-domain in `frontend/src/composables/use<Domain>.ts` + `frontend/src/views/<area>/<Domain>View.vue`. The struct/composable is the narrow door; the internals can be as deep as the feature requires. Don't spread a single domain across many files until the file becomes the bottleneck.
+- **Docs modules** — one topic per file in `docs/<category>/<topic>.md`. Each file stands alone: clear entry sentence stating audience + scope, full coverage of the topic, cross-links to siblings where genuinely helpful but NO duplication of content. An agent looking up a single subject should be able to load that one file and have everything they need; opening five files to assemble one answer is the failure mode this rule prevents. When a topic outgrows one file, split it into a coherent subdirectory module (e.g. `docs/mail/`) with its own `index.md`-or-equivalent entry, not into ad-hoc cross-references scattered across the tree.
+- **Categorisation**: docs split by audience under `docs/user/` (in-app site admins, board, members), `docs/developer/` (deploy, contribute, low-level troubleshoot), and topic subdirs that cross both (`docs/mail/`, `docs/otel/`, `docs/security/`). When adding a doc, pick the audience-narrowest home; only top-level/cross-audience material (`architecture.md`, `tech-stack.md`) lives at `docs/`.
+
 ## CI Pipeline
 
 GitHub Actions on push/PR to main: lint (nix + golangci-lint + eslint), test-go (with coverage profiling), test-vue, api-types (spec freshness), build, nix flake check. Security scans: `govulncheck` and `npm audit` block merges; `gosec` and `trivy` run as `continue-on-error`. Dependabot updates Go modules, npm deps, GitHub Actions, and Docker images weekly/monthly.
