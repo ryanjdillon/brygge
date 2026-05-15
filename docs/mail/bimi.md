@@ -243,6 +243,8 @@ If the service fails on first run, the most likely causes (in rough order of lik
 
 - BIMI Group: <https://bimigroup.org/>
 - DMARC walkthrough: [docs/mail/setup.md](setup.md)
+- Stalwart 0.15 protocol quirks: [stalwart-internals.md](stalwart-internals.md)
+- Role-gated shared inbox: [inbox.md](inbox.md)
 - Backend route: `backend/cmd/api/main.go` — `r.Get("/club/logo.svg", …)`
 - DNS record: `terraform/dns.nix` — `bimi`
 - DKIM systemd unit: `nix/host.nix` — `systemd.services.stalwart-dkim-config`
