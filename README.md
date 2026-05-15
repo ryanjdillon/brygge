@@ -31,6 +31,26 @@ It replaces the spreadsheets, the shared mailbox, and the manual bank reconcilia
 
 One Go binary with an embedded web app, backed by PostgreSQL and Redis. Every feature is behind a flag, so a club runs only what it needs.
 
+## What it does
+
+- **Members & slips** — member roll, boat register, slip assignments, waiting list, GDPR export and deletion.
+- **Billing** — Norwegian faktura with KID, bulk invoicing, automatic bank and Vipps reconciliation, accounting reports.
+- **Payments** — Vipps for dues and bookings, overdue tracking.
+- **Bookings** — guest slips, motorhome/RV spots, the club room, and the hoist; member slip rental; a waiting list that offers and expires places automatically.
+- **Mail** — a self-hosted mail server; role mailboxes (treasurer, harbour master, …) are readable from the admin portal by whoever holds the role.
+- **Communications** — member broadcasts and web push notifications.
+- **Operations** — volunteer-day tracking, an interactive harbour map, and a club calendar.
+
+### What each styre role gets
+
+| Role | Day-to-day in Brygge |
+| --- | --- |
+| **Leder** (chair) | Whole-club overview, member broadcasts, events and the calendar. |
+| **Kasserer** (treasurer) | Bulk faktura with KID, automatic bank/Vipps reconciliation, accounting reports. |
+| **Havnesjef** (harbour master) | Slip assignments, the waiting list, bookings, and the harbour map. |
+| **Sekretær** (secretary) | Shared role mailbox, document archive, meeting and event records. |
+| **Dugnadsansvarlig** (volunteer coordinator) | Volunteer-day sign-up and attendance tracking. |
+
 ## Screenshots
 
 **Public — what members and visitors see**
@@ -59,16 +79,6 @@ One Go binary with an embedded web app, backed by PostgreSQL and Redis. Every fe
 <p align="center">
   <img src="docs/assets/screenshots/faktura-batch.png" alt="Bulk faktura — group member selection" width="100%" />
 </p>
-
-## What it does
-
-- **Members & slips** — member roll, boat register, slip assignments, waiting list, GDPR export and deletion.
-- **Billing** — Norwegian faktura with KID, bulk invoicing, automatic bank and Vipps reconciliation, accounting reports.
-- **Payments** — Vipps for dues and bookings, overdue tracking.
-- **Bookings** — guest slips, motorhome/RV spots, the club room, and the hoist; member slip rental; a waiting list that offers and expires places automatically.
-- **Mail** — a self-hosted mail server; role mailboxes (treasurer, harbour master, …) are readable from the admin portal by whoever holds the role.
-- **Communications** — member broadcasts and web push notifications.
-- **Operations** — volunteer-day tracking, an interactive harbour map, and a club calendar.
 
 ## Documentation
 
