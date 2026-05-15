@@ -8,9 +8,20 @@ description_columns:
   - Melding
 amount_column: "Beløp (NOK)"
 amount_sign: positive_in
+# Melding carries the payment reference (KID or "Fakturanummer NN")
+# for incoming wires. Stored verbatim; downstream Luhn validation
+# in the auto-match path filters non-KID strings ("Fakturanummer 51")
+# so they fall through to the invoice-number lookup instead of
+# corrupting the kid_number column.
+kid_column: Melding
 ref_column: "Arkivref."
+# Debitornavn before Kreditornavn: for inbound wires Debitornavn is
+# the payer (what we want as counterpart) while Kreditornavn is the
+# receiving account's own label ("Klokkarvik Båtlag - Høyrent").
+# For outbound wires Debitornavn is blank so firstNonEmpty falls
+# back to Kreditornavn (the recipient).
 counterpart_columns:
-  - Kreditornavn
   - Debitornavn
+  - Kreditornavn
 from_account_column: "Fra konto"
 to_account_column: "Til konto"
