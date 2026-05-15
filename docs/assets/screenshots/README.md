@@ -8,7 +8,11 @@ local seeded stack at 1440×900, demo-auth enabled.
 | `landing.png` | Public club landing (`/`) | none |
 | `harbor-map.png` | Public guest-harbour + chart (`/harbor`) | none |
 | `dashboard.png` | Admin overview / event management (`/admin`) | demo-login + real TOTP verify |
-| `slips.png` | Slip register (`/admin/slips`) | demo-login + real TOTP verify |
+| `faktura-create.png` | Faktura Create — single vs group choice (`/admin/accounting/faktura`) | demo-login + real TOTP verify |
+| `faktura-single.png` | Single faktura form (`/admin/accounting/faktura` → Single faktura) | demo-login + real TOTP verify |
+| `faktura-batch.png` | Bulk faktura — group member picker (`/admin/accounting/faktura` → Group faktura) | demo-login + real TOTP verify |
+
+The README groups these one-per-row under brief headings (Public / Admin / Invoicing) for legibility without opening each file.
 
 ## How admin pages are captured (no bypass)
 
@@ -31,8 +35,10 @@ Bring the stack up and seed (`just setup` / `just up`), then:
 #   http://localhost:5173/harbor  → harbor-map.png
 #
 # admin (demo-login admin@brygge.local, then /admin/verify-totp with `just totp`):
-#   http://localhost:5173/admin        → dashboard.png
-#   http://localhost:5173/admin/slips  → slips.png
+#   http://localhost:5173/admin                      → dashboard.png
+#   http://localhost:5173/admin/accounting/faktura   → faktura-create.png
+#     → click "Single faktura"             → faktura-single.png
+#     → click "Group faktura", select rows → faktura-batch.png
 ```
 
 Capture at 1440×900, keep each under ~500 KB. Full automation (the GitHub

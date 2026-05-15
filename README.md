@@ -16,26 +16,48 @@
 
 ---
 
-Brygge runs the administrative side of a club — the membership roll, the waiting list, slip assignments, invoicing, bookings, the volunteer-day sign-up, the harbour map, and the calendar. It replaces the spreadsheets, the shared mailbox, and the manual bank reconciliation that volunteer boards juggle every season.
+Brygge runs the back office of a boat club — the membership roll and waiting list, slip assignments, invoicing, bookings, volunteer days, the harbour map, and the calendar.
 
-Four goals shape the project:
+It replaces the spreadsheets, the shared mailbox, and the manual bank reconciliation that volunteer boards juggle every season.
 
-- **Low running cost.** The whole platform — app, database, mail server — runs on one small VPS for roughly the price of a coffee per month. There is no per-member pricing and no SaaS subscription.
-- **Fully integrated operations.** Membership, billing, payments, and mail are one system, not five tools stitched together. An invoice knows who it is for; a bank payment reconciles itself against it; a board mailbox is readable by whoever currently holds the role.
-- **An intuitive interface.** Board members are volunteers, not operators. Day-to-day tasks — sending invoices, approving a slip, posting an announcement — are meant to be obvious without training.
-- **Clubs that talk to each other.** Each club runs its own copy, but they don't have to be islands. A shared directory of boat models and clubs means less data entry; nearby clubs can discover each other's free guest berths, coordinate visiting boats, and arrange joint events — so a member sailing down the coast finds a spot at the next harbour as easily as at home.
+## Why Brygge
 
-It is one Go binary with an embedded web app, backed by PostgreSQL and Redis. Every feature is behind a flag, so a club runs only what it needs.
+| Goal | What it means |
+| --- | --- |
+| **Low running cost** | The whole platform — app, database, mail — runs on one small VPS, about the price of a coffee a month. No per-member fees, no SaaS subscription. |
+| **Fully integrated** | Membership, billing, payments, and mail are one system. An invoice knows who it's for, a bank payment reconciles itself against it, and role mailboxes follow whoever holds the role. |
+| **Built for volunteers** | Board members aren't operators. Sending an invoice, approving a slip, posting a notice — meant to be obvious without training. |
+| **Clubs, not islands** | A shared directory of boats and clubs cuts data entry, and nearby harbours can discover each other's free guest berths and coordinate visiting boats. |
+
+One Go binary with an embedded web app, backed by PostgreSQL and Redis. Every feature is behind a flag, so a club runs only what it needs.
 
 ## Screenshots
 
+**Public — what members and visitors see**
+
 <p align="center">
-  <img src="docs/assets/screenshots/landing.png" alt="Public club page" width="48%" />
-  <img src="docs/assets/screenshots/harbor-map.png" alt="Guest harbour & chart" width="48%" />
+  <img src="docs/assets/screenshots/landing.png" alt="Public club landing page" width="100%" />
 </p>
 <p align="center">
-  <img src="docs/assets/screenshots/dashboard.png" alt="Admin event management" width="48%" />
-  <img src="docs/assets/screenshots/slips.png" alt="Slip register" width="48%" />
+  <img src="docs/assets/screenshots/harbor-map.png" alt="Guest harbour and nautical chart" width="100%" />
+</p>
+
+**Admin — running the club**
+
+<p align="center">
+  <img src="docs/assets/screenshots/dashboard.png" alt="Admin dashboard" width="100%" />
+</p>
+
+**Invoicing — single and bulk faktura**
+
+<p align="center">
+  <img src="docs/assets/screenshots/faktura-create.png" alt="Choosing between a single or group faktura" width="100%" />
+</p>
+<p align="center">
+  <img src="docs/assets/screenshots/faktura-single.png" alt="Single faktura form" width="100%" />
+</p>
+<p align="center">
+  <img src="docs/assets/screenshots/faktura-batch.png" alt="Bulk faktura — group member selection" width="100%" />
 </p>
 
 ## What it does
@@ -50,31 +72,23 @@ It is one Go binary with an embedded web app, backed by PostgreSQL and Redis. Ev
 
 ## Documentation
 
-### Users
+### For club operators
 
-For club admins, board members, and members operating the running system.
+| Guide | What it covers |
+| --- | --- |
+| [Invoicing](docs/user/faktura.md) | Creating and sending faktura, KID payment matching, reconciliation |
 
-- [Invoicing guide](docs/user/faktura.md)
+### For developers
 
-### Developers
-
-For deploying, contributing, and low-level operations.
-
-- [Quickstart](docs/developer/quickstart.md)
-- [Deployment](docs/developer/deploy.md)
-- [Server setup](docs/developer/setup.md)
-- [Configuration](docs/developer/configuration.md)
-- [Database operations](docs/developer/database.md)
-- [Troubleshooting](docs/developer/troubleshooting.md)
-- [SSH recovery](docs/developer/rescue-recover-ssh-access.md)
-- [Kubernetes notes](docs/developer/k8s.md)
-- [Architecture](docs/architecture.md)
-- [Technology stack](docs/tech-stack.md)
-- [Mail server](docs/mail/setup.md)
-- [Shared inbox](docs/mail/inbox.md)
-- [Observability](docs/otel/index.md)
-- [Two-factor authentication](docs/security/2fa.md)
-- [Contributing](CONTRIBUTING.md)
+| Topic | What it covers |
+| --- | --- |
+| [Quickstart](docs/developer/quickstart.md) | Run the full stack locally |
+| [Deployment](docs/developer/deploy.md) | Provision and deploy to a VPS — server setup, configuration, database operations |
+| [Architecture](docs/architecture.md) | System design and the technology stack |
+| [Mail server](docs/mail/setup.md) | Self-hosted Stalwart and the shared inbox |
+| [Operations](docs/developer/troubleshooting.md) | Troubleshooting, SSH recovery, and observability |
+| [Security](docs/security/2fa.md) | Two-factor authentication |
+| [Contributing](CONTRIBUTING.md) | Development workflow and how to help |
 
 ## Contributing
 
