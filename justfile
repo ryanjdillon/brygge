@@ -82,6 +82,10 @@ generate:
 seed:
     cd backend && go run ./cmd/seed
 
+# Print the current TOTP code for the seeded admin (paste into /admin/verify-totp)
+totp:
+    cd backend && go run ./cmd/totp
+
 # Build Go binary with embedded Vue dist
 build: build-frontend
     cp -r frontend/dist/* backend/internal/web/dist/

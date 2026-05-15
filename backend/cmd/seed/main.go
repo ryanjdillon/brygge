@@ -2,15 +2,77 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/pquerna/otp/totp"
 
+	"github.com/brygge-klubb/brygge/internal/auth"
 	"github.com/brygge-klubb/brygge/internal/config"
 )
+
+// seedTOTPSecretFile holds the plaintext base32 TOTP secret for the
+// enrolled demo admin. It is gitignored and reused across re-seeds so a
+// developer can scan it into an authenticator once; CI runners start
+// without it and get a fresh secret each run.
+const seedTOTPSecretFile = ".seed-totp-secret"
+
+// ensureSeedTOTPSecret returns the persisted base32 secret, generating
+// and writing one if the file is absent.
+func ensureSeedTOTPSecret() (string, error) {
+	if b, err := os.ReadFile(seedTOTPSecretFile); err == nil {
+		if s := strings.TrimSpace(string(b)); s != "" {
+			return s, nil
+		}
+	}
+	key, err := totp.Generate(totp.GenerateOpts{Issuer: "Brygge", AccountName: "admin@brygge.local"})
+	if err != nil {
+		return "", err
+	}
+	secret := key.Secret()
+	if err := os.WriteFile(seedTOTPSecretFile, []byte(secret+"\n"), 0o600); err != nil {
+		return "", err
+	}
+	return secret, nil
+}
+
+// enrollAdminTOTP enrolls the given user in TOTP using the real
+// encryption path (AES-256-GCM via TOTP_ENCRYPTION_KEY), so automated
+// screenshot/e2e runs pass the genuine /admin/verify-totp gate without
+// any middleware bypass. No-op when the key is unset (e.g. prod seed).
+func enrollAdminTOTP(ctx context.Context, db *pgxpool.Pool, cfg config.Config, userID string) {
+	if cfg.TOTPEncryptionKey == "" {
+		fmt.Println("  totp: TOTP_ENCRYPTION_KEY unset — skipping admin enrollment")
+		return
+	}
+	encKey, err := hex.DecodeString(cfg.TOTPEncryptionKey)
+	if err != nil || len(encKey) != 32 {
+		fmt.Fprintf(os.Stderr, "  totp: TOTP_ENCRYPTION_KEY must be 64 hex chars — skipping enrollment\n")
+		return
+	}
+	secret, err := ensureSeedTOTPSecret()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "  totp: failed to obtain seed secret: %v\n", err)
+		return
+	}
+	encrypted, err := auth.Encrypt(encKey, []byte(secret))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "  totp: failed to encrypt secret: %v\n", err)
+		return
+	}
+	if _, err := db.Exec(ctx,
+		`UPDATE users SET totp_secret_encrypted = $1, totp_enabled = true WHERE id = $2`,
+		encrypted, userID,
+	); err != nil {
+		fmt.Fprintf(os.Stderr, "  totp: failed to enroll admin: %v\n", err)
+		return
+	}
+	fmt.Printf("  totp: admin enrolled (secret in backend/%s — `just totp` prints the current code)\n", seedTOTPSecretFile)
+}
 
 type seedUser struct {
 	email, name, phone string
@@ -124,6 +186,8 @@ func main() {
 			}
 		}
 	}
+
+	enrollAdminTOTP(ctx, db, cfg, userIDs["admin@brygge.local"])
 
 	// Create waiting list filler users (data only)
 	for _, u := range waitingListUsers {
