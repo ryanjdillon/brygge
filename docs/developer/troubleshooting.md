@@ -139,7 +139,7 @@ Common causes:
 
 **Symptom**: User can sign in via magic link but can't pass the 2FA gate at all.
 
-**Fix**: Another admin (with `admin` role specifically, not just `board`) hits `POST /api/v1/admin/users/{userID}/totp/disable` from a fresh-TOTP-verified session. Full procedure in [security/2fa.md → Admin reset](security/2fa.md#admin-reset-lost-authenticator-and-recovery-codes).
+**Fix**: Another admin (with `admin` role specifically, not just `board`) hits `POST /api/v1/admin/users/{userID}/totp/disable` from a fresh-TOTP-verified session. Full procedure in [../security/2fa.md → Admin reset](../security/2fa.md#admin-reset-lost-authenticator-and-recovery-codes).
 
 ### All admins lost their devices simultaneously
 
@@ -147,7 +147,7 @@ Common causes:
 
 **Cause**: The chicken-and-egg case the admin-reset endpoint can't solve.
 
-**Fix**: Manual DB intervention on the production VM. Full SQL in [security/2fa.md → What if all admins lose their devices](security/2fa.md#what-if-all-admins-lose-their-devices). After unlocking yourself, use the admin-reset endpoint for any other locked-out admins.
+**Fix**: Manual DB intervention on the production VM. Full SQL in [../security/2fa.md → What if all admins lose their devices](../security/2fa.md#what-if-all-admins-lose-their-devices). After unlocking yourself, use the admin-reset endpoint for any other locked-out admins.
 
 ### `503 TOTP not configured` errors after a deploy
 
@@ -179,4 +179,4 @@ docker compose -f deploy/docker-compose.yml up -d
 
 ---
 
-See also: [deploy.md](deploy.md) | [CONTRIBUTING.md](../CONTRIBUTING.md) | [setup.md](setup.md)
+See also: [deploy.md](deploy.md) | [CONTRIBUTING.md](../../CONTRIBUTING.md) | [setup.md](setup.md)
