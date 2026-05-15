@@ -269,7 +269,30 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOv
 			balance = row.Balance
 		}
 
+		// Compute the dedup hash on the RAW CSV row state — the
+		// recipe is documented to stay in lockstep with the
+		// migration that backfilled hashes for existing data.
+		// Enrichment (KID + payer extraction below) happens after
+		// so re-imports of the same CSV still dedup correctly.
 		hash := BankRowHash(clubID, row)
+
+		// Norwegian banks often leave the KID column empty for
+		// rows whose payer typed the reference into the
+		// description ("Forklaring") instead. Recover the KID and
+		// payer identity from the description string here so the
+		// inserted row and the auto-match path both benefit.
+		if row.KID == "" {
+			if extracted := ExtractKIDFromDescription(row.Description); extracted != "" {
+				row.KID = extracted
+			}
+		}
+		// The Motpart column for inbound transfers often carries
+		// our own account label ("Klokkarvik Båtlag") rather than
+		// the payer's name. When the description carries
+		// "Fra: <Name> Betalt:", prefer that as the counterpart.
+		if payer := ExtractPayerFromDescription(row.Description); payer != "" {
+			row.Counterpart = payer
+		}
 
 		var rowID string
 		err := s.db.QueryRow(ctx,
@@ -290,22 +313,48 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOv
 		}
 		res.Imported++
 
-		if row.KID == "" || row.Amount <= 0 {
+		if row.Amount <= 0 {
 			continue
 		}
 
+		// Resolve invoice id: prefer KID match, fall back to
+		// "Fakturanummer NN" lookup by invoice_number for rows
+		// where the payer typed the human-readable number through
+		// a mobile bank or wire interface.
 		var invoiceID string
-		err = s.db.QueryRow(ctx,
-			`SELECT i.id FROM invoices i
-			 WHERE i.club_id = $1 AND i.kid_number = $2
-			 AND NOT EXISTS (
-			   SELECT 1 FROM bank_import_rows bir
-			   WHERE bir.kid_number = $2 AND bir.journal_entry_id IS NOT NULL
-			 )
-			 LIMIT 1`,
-			clubID, row.KID,
-		).Scan(&invoiceID)
-		if err != nil {
+		if row.KID != "" {
+			_ = s.db.QueryRow(ctx,
+				`SELECT i.id FROM invoices i
+				 WHERE i.club_id = $1 AND i.kid_number = $2
+				 AND NOT EXISTS (
+				   SELECT 1 FROM bank_import_rows bir
+				   WHERE bir.kid_number = $2 AND bir.journal_entry_id IS NOT NULL
+				 )
+				 LIMIT 1`,
+				clubID, row.KID,
+			).Scan(&invoiceID)
+		}
+		if invoiceID == "" {
+			if num := ExtractInvoiceNumberFromDescription(row.Description); num != "" {
+				// Match by invoice_number, but only when the
+				// amount matches the invoice total — otherwise
+				// a payer paying part of a multi-line invoice
+				// could land on the wrong row.
+				_ = s.db.QueryRow(ctx,
+					`SELECT i.id FROM invoices i
+					 WHERE i.club_id = $1 AND i.invoice_number::text = $2
+					   AND ABS(i.total_amount - $3) < 0.005
+					   AND NOT EXISTS (
+					     SELECT 1 FROM bank_import_rows bir
+					     WHERE bir.journal_entry_id IS NOT NULL
+					       AND bir.kid_number = i.kid_number
+					   )
+					 LIMIT 1`,
+					clubID, num, row.Amount,
+				).Scan(&invoiceID)
+			}
+		}
+		if invoiceID == "" {
 			continue
 		}
 
@@ -320,10 +369,14 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOv
 
 		sourceID := importID
 		sourceTable := "bank_import"
+		descLabel := fmt.Sprintf("Innbetaling KID %s: %s", row.KID, row.Description)
+		if row.KID == "" {
+			descLabel = fmt.Sprintf("Innbetaling: %s", row.Description)
+		}
 		entry, createErr := s.CreateJournalEntry(ctx, CreateJournalEntryInput{
 			FiscalPeriodID: periodID,
 			EntryDate:      row.Date.Format("2006-01-02"),
-			Description:    fmt.Sprintf("Innbetaling KID %s: %s", row.KID, row.Description),
+			Description:    descLabel,
 			Source:         "bank_import",
 			SourceID:       &sourceID,
 			SourceTable:    &sourceTable,
