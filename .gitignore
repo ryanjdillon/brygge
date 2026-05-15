@@ -62,7 +62,7 @@ dev/vipps-mock/vipps-mock
 
 # Playwright MCP
 .playwright-mcp/
-screenshots/
+/screenshots/
 
 # Live-reload
 backend/.air.toml
