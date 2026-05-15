@@ -16,25 +16,26 @@
 
 ---
 
-Brygge runs the administrative side of a club — the membership roll, the waiting list, slip assignments, invoicing, the volunteer-day sign-up, the harbour map, the calendar, and an integrated members' forum. It replaces the spreadsheets, the shared mailbox, and the manual bank reconciliation that volunteer boards juggle every season.
+Brygge runs the administrative side of a club — the membership roll, the waiting list, slip assignments, invoicing, bookings, the volunteer-day sign-up, the harbour map, and the calendar. It replaces the spreadsheets, the shared mailbox, and the manual bank reconciliation that volunteer boards juggle every season.
 
-Three goals shape the project:
+Four goals shape the project:
 
-- **Low running cost.** The whole platform — app, database, mail server, forum — runs on one small VPS for roughly the price of a coffee per month. There is no per-member pricing and no SaaS subscription.
-- **Fully integrated operations.** Membership, billing, payments, mail, and the forum are one system, not five tools stitched together. An invoice knows who it is for; a bank payment reconciles itself against it; a board mailbox is readable by whoever currently holds the role.
+- **Low running cost.** The whole platform — app, database, mail server — runs on one small VPS for roughly the price of a coffee per month. There is no per-member pricing and no SaaS subscription.
+- **Fully integrated operations.** Membership, billing, payments, and mail are one system, not five tools stitched together. An invoice knows who it is for; a bank payment reconciles itself against it; a board mailbox is readable by whoever currently holds the role.
 - **An intuitive interface.** Board members are volunteers, not operators. Day-to-day tasks — sending invoices, approving a slip, posting an announcement — are meant to be obvious without training.
+- **Clubs that talk to each other.** Each club runs its own copy, but they don't have to be islands. A shared directory of boat models and clubs means less data entry; nearby clubs can discover each other's free guest berths, coordinate visiting boats, and arrange joint events — so a member sailing down the coast finds a spot at the next harbour as easily as at home.
 
 It is one Go binary with an embedded web app, backed by PostgreSQL and Redis. Every feature is behind a flag, so a club runs only what it needs.
 
 ## Screenshots
 
 <p align="center">
-  <img src="docs/assets/screenshots/dashboard.png" alt="Admin dashboard" width="48%" />
-  <img src="docs/assets/screenshots/faktura.png" alt="Invoicing" width="48%" />
+  <img src="docs/assets/screenshots/landing.png" alt="Public club page" width="48%" />
+  <img src="docs/assets/screenshots/harbor-map.png" alt="Guest harbour & chart" width="48%" />
 </p>
 <p align="center">
-  <img src="docs/assets/screenshots/harbor-map.png" alt="Harbour map" width="48%" />
-  <img src="docs/assets/screenshots/inbox.png" alt="Shared inbox" width="48%" />
+  <img src="docs/assets/screenshots/dashboard.png" alt="Admin event management" width="48%" />
+  <img src="docs/assets/screenshots/slips.png" alt="Slip register" width="48%" />
 </p>
 
 ## What it does
@@ -42,9 +43,10 @@ It is one Go binary with an embedded web app, backed by PostgreSQL and Redis. Ev
 - **Members & slips** — member roll, boat register, slip assignments, waiting list, GDPR export and deletion.
 - **Billing** — Norwegian faktura with KID, bulk invoicing, automatic bank and Vipps reconciliation, accounting reports.
 - **Payments** — Vipps for dues and bookings, overdue tracking.
+- **Bookings** — guest slips, motorhome/RV spots, the club room, and the hoist; member slip rental; a waiting list that offers and expires places automatically.
 - **Mail** — a self-hosted mail server; role mailboxes (treasurer, harbour master, …) are readable from the admin portal by whoever holds the role.
-- **Communications** — member broadcasts, web push, and an integrated Matrix-powered forum.
-- **Operations** — bookings for guest slips and the hoist, volunteer-day tracking, an interactive harbour map, and a club calendar.
+- **Communications** — member broadcasts and web push notifications.
+- **Operations** — volunteer-day tracking, an interactive harbour map, and a club calendar.
 
 ## Documentation
 
