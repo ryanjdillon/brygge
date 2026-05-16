@@ -353,6 +353,9 @@
       "localStatus": "Local/non-local status",
       "local": "Local",
       "nonLocal": "Non-local",
+      "language": "Language",
+      "languageHelp": "Your preferred language for this site. Leave on the club default to follow the club's choice.",
+      "languageDefault": "Club default",
       "saveSuccess": "Profile updated",
       "saveError": "Could not save profile",
       "saving": "Saving...",
@@ -516,6 +519,7 @@
       "products": "Products",
       "boats": "Boat Approval",
       "mapMarkers": "Chart Markers",
+      "generalSettings": "General",
       "accountingOverview": "Overview",
       "accounts": "Chart of Accounts",
       "periods": "Periods",
@@ -820,6 +824,11 @@
       "dateFrom": "From",
       "dateTo": "To",
       "motorhomeSpot": "Motorhome spot"
+    },
+    "generalSettings": {
+      "title": "General settings",
+      "defaultLanguage": "Club default language",
+      "defaultLanguageHelp": "The language shown to visitors and to members who haven't picked their own. Members can override this on their profile."
     },
     "bookingSettings": {
       "title": "Booking Settings",

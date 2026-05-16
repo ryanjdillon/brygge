@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ChevronDown } from 'lucide-vue-next'
+import { LOCALE_OPTIONS, setLocale } from '@/i18n'
 
 const props = defineProps<{
   /** 'dark' inverts colors so the switcher reads on a dark photo. */
@@ -12,15 +13,7 @@ const { locale } = useI18n()
 const open = ref(false)
 const dropdownRef = ref<HTMLElement>()
 
-const languages = [
-  { code: 'nb', label: 'Norsk' },
-  { code: 'en', label: 'English' },
-  { code: 'de', label: 'Deutsch' },
-  { code: 'fr', label: 'Français' },
-  { code: 'nl', label: 'Nederlands' },
-  { code: 'it', label: 'Italiano' },
-  { code: 'pl', label: 'Polski' },
-]
+const languages = LOCALE_OPTIONS
 
 const currentLabel = () => languages.find((l) => l.code === locale.value)?.label ?? locale.value
 
@@ -31,8 +24,7 @@ const triggerClass = computed(() =>
 )
 
 function select(code: string) {
-  locale.value = code
-  localStorage.setItem('brygge-locale', code)
+  setLocale(code, { persist: true })
   open.value = false
 }
 

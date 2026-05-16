@@ -1,6 +1,7 @@
 import { ref, computed, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { useTotpGateStore } from '@/stores/totpGate'
+import { setLocale, hasExplicitLocale } from '@/i18n'
 
 interface User {
   id: string
@@ -12,6 +13,8 @@ interface User {
   roles: string[]
   totpEnabled: boolean
   totpVerifiedAt: Date | null
+  preferredLanguage: string | null
+  clubDefaultLanguage: string
 }
 
 interface MeResponse {
@@ -24,6 +27,8 @@ interface MeResponse {
   email: string
   totp_enabled: boolean
   totp_verified_at?: string | null
+  preferred_language?: string | null
+  club_default_language?: string
 }
 
 // Mirrors the 12-hour step-up window enforced by the backend's
@@ -77,6 +82,8 @@ export const useAuthStore = defineStore('auth', () => {
       const data: MeResponse = await res.json()
       const first = data.first_name ?? ''
       const last = data.last_name ?? ''
+      const clubDefaultLanguage = data.club_default_language || 'nb'
+      const preferredLanguage = data.preferred_language ?? null
       user.value = {
         id: data.user_id,
         firstName: first,
@@ -87,6 +94,17 @@ export const useAuthStore = defineStore('auth', () => {
         roles: data.roles,
         totpEnabled: !!data.totp_enabled,
         totpVerifiedAt: data.totp_verified_at ? new Date(data.totp_verified_at) : null,
+        preferredLanguage,
+        clubDefaultLanguage,
+      }
+      // Locale precedence: explicit member preference wins (persisted so
+      // it survives logout); otherwise, if the user has made no explicit
+      // in-app choice, follow the club default without persisting so
+      // they keep tracking it if it later changes.
+      if (preferredLanguage) {
+        setLocale(preferredLanguage, { persist: true })
+      } else if (!hasExplicitLocale()) {
+        setLocale(clubDefaultLanguage)
       }
     } catch {
       user.value = null

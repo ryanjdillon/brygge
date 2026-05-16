@@ -8,8 +8,12 @@ import { useLegalDocument, useMyConsents, useRecordConsent } from '@/composables
 import Input from '@/components/ui/form/Input.vue'
 import Checkbox from '@/components/ui/form/Checkbox.vue'
 import FormField from '@/components/ui/form/FormField.vue'
+import { LOCALE_OPTIONS, setLocale } from '@/i18n'
+import { useAuthStore } from '@/stores/auth'
 
 const { t } = useI18n()
+const auth = useAuthStore()
+const localeOptions = LOCALE_OPTIONS
 const client = useApiClient()
 const queryClient = useQueryClient()
 
@@ -20,6 +24,7 @@ interface ProfileForm {
   address: { street: string; postalCode: string; city: string }
   isLocal: boolean
   hideInDirectory: boolean
+  language: string
 }
 
 const form = ref<ProfileForm>({
@@ -29,6 +34,7 @@ const form = ref<ProfileForm>({
   address: { street: '', postalCode: '', city: '' },
   isLocal: false,
   hideInDirectory: false,
+  language: '',
 })
 
 const toast = ref<{ type: 'success' | 'error'; message: string } | null>(null)
@@ -62,6 +68,7 @@ watch(profile, (p) => {
       address: { street: p.address_line, postalCode: p.postal_code, city: p.city },
       isLocal: p.is_local,
       hideInDirectory: p.hide_in_directory ?? false,
+      language: (p as { preferred_language?: string | null }).preferred_language ?? '',
     }
   }
 }, { immediate: true })
@@ -79,11 +86,20 @@ const { mutate: saveProfile, isPending: isSaving } = useMutation({
         postal_code: form.value.address.postalCode,
         city: form.value.address.city,
         hide_in_directory: form.value.hideInDirectory,
+        preferred_language: form.value.language,
       } as any,
     }))
   },
   onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: ['portal', 'profile'] })
+    // Apply immediately. A chosen language is the durable explicit
+    // preference (persist); clearing it reverts to the club default
+    // (don't persist so it keeps tracking the club).
+    if (form.value.language) {
+      setLocale(form.value.language, { persist: true })
+    } else {
+      setLocale(auth.user?.clubDefaultLanguage ?? 'nb')
+    }
     toast.value = { type: 'success', message: t('portal.profile.saveSuccess') }
     setTimeout(() => (toast.value = null), 3000)
   },
@@ -160,6 +176,20 @@ const { mutate: saveProfile, isPending: isSaving } = useMutation({
           {{ form.isLocal ? t('portal.profile.local') : t('portal.profile.nonLocal') }}
         </span>
       </div>
+
+      <FormField :label="t('portal.profile.language')" for="profile-language">
+        <select
+          id="profile-language"
+          v-model="form.language"
+          class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        >
+          <option value="">{{ t('portal.profile.languageDefault') }}</option>
+          <option v-for="opt in localeOptions" :key="opt.code" :value="opt.code">
+            {{ opt.label }}
+          </option>
+        </select>
+        <p class="mt-1 text-xs text-gray-500">{{ t('portal.profile.languageHelp') }}</p>
+      </FormField>
 
       <fieldset class="rounded-md border border-gray-200 bg-gray-50 p-3">
         <legend class="px-1 text-sm font-semibold text-gray-700">{{ t('portal.profile.privacyTitle') }}</legend>

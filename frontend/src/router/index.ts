@@ -305,6 +305,11 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/BookingSettingsView.vue'),
       },
       {
+        path: 'settings/general',
+        name: 'admin-general-settings',
+        component: () => import('@/views/admin/GeneralSettingsView.vue'),
+      },
+      {
         path: 'accounting',
         name: 'admin-accounting',
         component: () => import('@/views/admin/AccountingDashboard.vue'),
