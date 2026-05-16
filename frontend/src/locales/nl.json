@@ -215,6 +215,10 @@
     "modernisationDesc": "Uitgebreide opwaardering van steigers, elektrische systemen en digitale infrastructuur voor moderne bedrijfsvoering."
   },
   "login": {
+    "magicLinkSent": "We hebben een inloglink naar je e-mail gestuurd. Controleer je inbox.",
+    "sending": "Verzenden...",
+    "sendLink": "Inloglink versturen",
+    "emailPlaceholder": "jij@voorbeeld.nl",
     "title": "Inloggen",
     "email": "E-mail",
     "password": "Wachtwoord",

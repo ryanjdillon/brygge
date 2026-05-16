@@ -266,6 +266,10 @@
     "paymentError": "Betalingen kunne ikke behandles. Kontakt oss for hjelp."
   },
   "login": {
+    "magicLinkSent": "Vi har sendt en innloggingslenke til e-posten din. Sjekk innboksen.",
+    "sending": "Sender...",
+    "sendLink": "Send innloggingslenke",
+    "emailPlaceholder": "din@epost.no",
     "title": "Logg inn",
     "email": "E-post",
     "password": "Passord",
