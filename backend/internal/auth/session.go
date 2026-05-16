@@ -13,7 +13,20 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-const sessionExpiry = 30 * 24 * time.Hour
+const (
+	// sessionIdleWindow is how long a session stays valid without
+	// activity. Each validated request slides it forward (throttled by
+	// sessionExtendThreshold), but never past sessionAbsoluteCap.
+	sessionIdleWindow = 12 * time.Hour
+	// sessionAbsoluteCap is the hard ceiling measured from login: even
+	// a continuously-active session must re-authenticate after this,
+	// so a stolen session cookie cannot be kept alive indefinitely.
+	sessionAbsoluteCap = 7 * 24 * time.Hour
+	// sessionExtendThreshold throttles the sliding-window write so an
+	// active session updates expires_at at most ~once per minute
+	// instead of on every request.
+	sessionExtendThreshold = time.Minute
+)
 
 var ErrSessionNotFound = errors.New("session not found or expired")
 
@@ -39,7 +52,7 @@ func (s *SessionService) CreateSession(ctx context.Context, userID, clubID, ip, 
 		host = ip
 	}
 
-	expiresAt := time.Now().Add(sessionExpiry)
+	expiresAt := time.Now().Add(sessionIdleWindow)
 	_, err = s.db.Exec(ctx,
 		`INSERT INTO sessions (id, user_id, club_id, expires_at, ip_address, user_agent)
 		 VALUES ($1, $2, $3, $4, $5::inet, $6)`,
@@ -68,17 +81,42 @@ type SessionInfo struct {
 func (s *SessionService) ValidateSession(ctx context.Context, sessionID string) (*Claims, *SessionInfo, error) {
 	var userID, clubID string
 	var info SessionInfo
+	var createdAt, expiresAt time.Time
 	err := s.db.QueryRow(ctx,
-		`SELECT s.user_id, s.club_id, s.totp_verified_at, COALESCE(u.totp_enabled, false)
+		`SELECT s.user_id, s.club_id, s.totp_verified_at, COALESCE(u.totp_enabled, false),
+		        s.created_at, s.expires_at
 		 FROM sessions s JOIN users u ON u.id = s.user_id
-		 WHERE s.id = $1 AND s.expires_at > NOW()`,
+		 WHERE s.id = $1`,
 		sessionID,
-	).Scan(&userID, &clubID, &info.TOTPVerifiedAt, &info.TOTPEnabled)
+	).Scan(&userID, &clubID, &info.TOTPVerifiedAt, &info.TOTPEnabled, &createdAt, &expiresAt)
 	if err == pgx.ErrNoRows {
 		return nil, nil, ErrSessionNotFound
 	}
 	if err != nil {
 		return nil, nil, fmt.Errorf("querying session: %w", err)
+	}
+
+	// Two independent bounds: the idle window (expires_at, slides
+	// forward on activity) and the absolute cap (created_at + cap,
+	// fixed at login). Either lapsing ends the session.
+	now := time.Now()
+	absoluteDeadline := createdAt.Add(sessionAbsoluteCap)
+	if !now.Before(expiresAt) || !now.Before(absoluteDeadline) {
+		return nil, nil, ErrSessionNotFound
+	}
+
+	// Slide the idle window forward, clamped to the absolute cap.
+	// Best-effort + throttled: a failed or skipped write doesn't
+	// invalidate the still-valid session for this request.
+	newExpiry := now.Add(sessionIdleWindow)
+	if newExpiry.After(absoluteDeadline) {
+		newExpiry = absoluteDeadline
+	}
+	if newExpiry.Sub(expiresAt) > sessionExtendThreshold {
+		_, _ = s.db.Exec(ctx,
+			`UPDATE sessions SET expires_at = $2 WHERE id = $1`,
+			sessionID, newExpiry,
+		)
 	}
 
 	// Fetch user roles
@@ -134,7 +172,10 @@ func (s *SessionService) StampTOTP(ctx context.Context, sessionID string) error 
 
 // PurgeExpired removes all expired sessions.
 func (s *SessionService) PurgeExpired(ctx context.Context) (int64, error) {
-	tag, err := s.db.Exec(ctx, `DELETE FROM sessions WHERE expires_at < NOW()`)
+	tag, err := s.db.Exec(ctx,
+		`DELETE FROM sessions WHERE expires_at < NOW() OR created_at < $1`,
+		time.Now().Add(-sessionAbsoluteCap),
+	)
 	if err != nil {
 		return 0, err
 	}

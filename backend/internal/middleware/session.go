@@ -214,7 +214,7 @@ func SetSessionCookie(w http.ResponseWriter, sessionID string, secure bool) {
 		Name:     sessionCookieName,
 		Value:    sessionID,
 		Path:     "/",
-		MaxAge:   30 * 24 * 60 * 60, // 30 days
+		MaxAge:   7 * 24 * 60 * 60, // matches auth.sessionAbsoluteCap (7d); server still enforces the real expiry
 		HttpOnly: true,
 		Secure:   secure,
 		SameSite: http.SameSiteLaxMode,
