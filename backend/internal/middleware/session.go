@@ -3,7 +3,9 @@ package middleware
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/brygge-klubb/brygge/internal/auth"
@@ -95,11 +97,11 @@ func RequireAdminTOTP(sessionService *auth.SessionService) func(http.Handler) ht
 			}
 
 			if !info.TOTPEnabled {
-				writeTOTPRequired(w, "totp_not_enrolled")
+				writeTOTPRequired(w, r, "totp_not_enrolled")
 				return
 			}
 			if info.TOTPVerifiedAt == nil || time.Since(*info.TOTPVerifiedAt) > totpWindow {
-				writeTOTPRequired(w, "totp_required")
+				writeTOTPRequired(w, r, "totp_required")
 				return
 			}
 
@@ -119,7 +121,7 @@ func RequireFreshTOTP(window time.Duration) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if !IsFreshTOTP(r.Context(), window) {
-				writeTOTPFreshRequired(w, window)
+				writeTOTPFreshRequired(w, r, window)
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -139,17 +141,53 @@ func IsFreshTOTP(ctx context.Context, window time.Duration) bool {
 	return time.Since(*info.TOTPVerifiedAt) <= window
 }
 
+// isBrowserNavigation reports whether the request is a top-level
+// browser navigation (a new tab / address bar / anchor click) rather
+// than an XHR/fetch from the SPA. Such requests aren't intercepted by
+// the SPA's HTTP client, so a JSON 403 would just render as raw text
+// in the tab (e.g. opening an inline faktura PDF on a lapsed step-up).
+func isBrowserNavigation(r *http.Request) bool {
+	if r.Method != http.MethodGet {
+		return false
+	}
+	if r.Header.Get("Sec-Fetch-Mode") == "navigate" {
+		return true
+	}
+	accept := r.Header.Get("Accept")
+	return strings.Contains(accept, "text/html") && !strings.Contains(accept, "application/json")
+}
+
+// redirectToVerify sends a browser navigation to the TOTP verify page,
+// preserving the original URL in ?next= so the user lands back on it
+// after verifying.
+func redirectToVerify(w http.ResponseWriter, r *http.Request) {
+	dest := "/admin/verify-totp?next=" + url.QueryEscape(r.URL.RequestURI())
+	http.Redirect(w, r, dest, http.StatusFound)
+}
+
 // writeTOTPRequired emits a 403 with a stable JSON shape the SPA reads
-// to choose between "redirect to enrollment" and "prompt for code".
-func writeTOTPRequired(w http.ResponseWriter, reason string) {
+// to choose between "redirect to enrollment" and "prompt for code". For
+// a top-level browser navigation (no SPA interceptor) it instead 302s
+// to the verify page so the user doesn't see raw JSON.
+func writeTOTPRequired(w http.ResponseWriter, r *http.Request, reason string) {
+	if isBrowserNavigation(r) {
+		redirectToVerify(w, r)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusForbidden)
 	w.Write([]byte(`{"error":"` + reason + `","verify_url":"/admin/verify-totp"}`))
 }
 
 // writeTOTPFreshRequired emits a 403 the SPA decodes to mount the
-// in-context per-action modal (instead of full-page redirecting).
-func writeTOTPFreshRequired(w http.ResponseWriter, window time.Duration) {
+// in-context per-action modal (instead of full-page redirecting). A
+// top-level browser navigation gets the full-page verify redirect
+// instead, for the same reason as writeTOTPRequired.
+func writeTOTPFreshRequired(w http.ResponseWriter, r *http.Request, window time.Duration) {
+	if isBrowserNavigation(r) {
+		redirectToVerify(w, r)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusForbidden)
 	body := `{"error":"totp_fresh_required","window_seconds":` +
