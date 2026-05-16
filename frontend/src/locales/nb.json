@@ -1747,9 +1747,10 @@
     "poweredBy": "drevet av"
   },
   "totpExpiring": {
-    "title": "Jobber du fortsatt?",
-    "body": "Den sensitive økten din utløper snart. Velg «Ja, fortsett» for å lukke varselet — du blir bedt om å bekrefte på nytt ved neste sensitive handling. Velg «Bekreft nå» for å forlenge økten umiddelbart.",
-    "keepWorking": "Ja, fortsett",
+    "title": "Bekreftelse utløper",
+    "body": "Bekreft nå for å være klar for sensitive handlinger — ellers blir du spurt igjen neste gang.",
+    "countdown": "Utløper om {time}",
+    "keepWorking": "Lukk",
     "reauth": "Bekreft nå"
   }
 }

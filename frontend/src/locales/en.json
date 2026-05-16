@@ -1751,9 +1751,10 @@
     "poweredBy": "powered by"
   },
   "totpExpiring": {
-    "title": "Still working?",
-    "body": "Your sensitive-action session is about to expire. Choose \"Yes, keep going\" to dismiss this notice — you'll be prompted to re-verify on your next sensitive action. Choose \"Re-verify now\" to extend the session immediately.",
-    "keepWorking": "Yes, keep going",
+    "title": "Verification expiring",
+    "body": "Re-verify now to stay ready for sensitive actions — otherwise you'll be asked again next time.",
+    "countdown": "Expires in {time}",
+    "keepWorking": "Dismiss",
     "reauth": "Re-verify now"
   }
 }
