@@ -33,20 +33,27 @@ func (h *AuthHandler) HandleMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var firstName, lastName, fullName, email string
+	var preferredLanguage *string
+	clubDefaultLanguage := "nb"
 	if h.db != nil {
 		_ = h.db.QueryRow(r.Context(),
-			`SELECT first_name, last_name, COALESCE(full_name, ''), email FROM users WHERE id = $1`, claims.UserID,
-		).Scan(&firstName, &lastName, &fullName, &email)
+			`SELECT u.first_name, u.last_name, COALESCE(u.full_name, ''), u.email,
+			        u.preferred_language, c.default_language
+			   FROM users u JOIN clubs c ON c.id = u.club_id
+			  WHERE u.id = $1`, claims.UserID,
+		).Scan(&firstName, &lastName, &fullName, &email, &preferredLanguage, &clubDefaultLanguage)
 	}
 
 	resp := meResponse{
-		UserID:    claims.UserID,
-		ClubID:    claims.ClubID,
-		Roles:     claims.Roles,
-		FirstName: firstName,
-		LastName:  lastName,
-		FullName:  fullName,
-		Email:     email,
+		UserID:              claims.UserID,
+		ClubID:              claims.ClubID,
+		Roles:               claims.Roles,
+		FirstName:           firstName,
+		LastName:            lastName,
+		FullName:            fullName,
+		Email:               email,
+		PreferredLanguage:   preferredLanguage,
+		ClubDefaultLanguage: clubDefaultLanguage,
 	}
 	if info := middleware.GetSessionInfo(r.Context()); info != nil {
 		resp.TOTPEnabled = info.TOTPEnabled
@@ -66,4 +73,8 @@ type meResponse struct {
 	Email          string     `json:"email"`
 	TOTPEnabled    bool       `json:"totp_enabled"`
 	TOTPVerifiedAt *time.Time `json:"totp_verified_at,omitempty"`
+	// PreferredLanguage is the member's explicit UI language, or nil
+	// when they've made no choice (→ fall back to the club default).
+	PreferredLanguage   *string `json:"preferred_language"`
+	ClubDefaultLanguage string  `json:"club_default_language"`
 }

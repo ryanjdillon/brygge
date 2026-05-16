@@ -12,7 +12,7 @@ import (
 // supportedLocales is the set of locale codes brygge has UI translations for.
 // Keep aligned with frontend/src/locales/*.json.
 var supportedLocales = map[string]bool{
-	"nb": true, "en": true, "de": true, "fr": true,
+	"nb": true, "nn": true, "en": true, "de": true, "fr": true,
 	"it": true, "nl": true, "pl": true,
 }
 

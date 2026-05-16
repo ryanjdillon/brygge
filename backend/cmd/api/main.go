@@ -841,6 +841,14 @@ func main() {
 					})
 				}
 
+				// General club settings (default language). Not
+				// feature-gated — language applies platform-wide.
+				r.Route("/settings/general", func(r chi.Router) {
+					r.Use(middleware.RequireRole("board", "admin"))
+					r.Get("/", clubSettingsHandler.HandleGetGeneralSettings)
+					r.Put("/", clubSettingsHandler.HandleUpdateGeneralSettings)
+				})
+
 				// Faktura branding settings (org no, address, bank, logo,
 				// website, board emails). Gated on the accounting feature
 				// flag alongside the rest of the faktura lifecycle. Flat

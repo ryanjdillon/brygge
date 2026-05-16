@@ -40,6 +40,76 @@ type updateSettingsRequest struct {
 	Settings map[string]json.RawMessage `json:"settings"`
 }
 
+type generalSettings struct {
+	DefaultLanguage string `json:"default_language"`
+}
+
+// HandleGetGeneralSettings returns club-wide general settings
+// (currently just the default UI/content language).
+func (h *ClubSettingsHandler) HandleGetGeneralSettings(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	var s generalSettings
+	err := h.db.QueryRow(ctx,
+		`SELECT default_language FROM clubs WHERE id = $1`, claims.ClubID,
+	).Scan(&s.DefaultLanguage)
+	if err == pgx.ErrNoRows {
+		Error(w, http.StatusNotFound, "club not found")
+		return
+	}
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to fetch general settings")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	JSON(w, http.StatusOK, s)
+}
+
+// HandleUpdateGeneralSettings sets the club default language. The value
+// is the fallback for members with no explicit preference and drives
+// AI/anonymous-facing copy (DIL-329).
+func (h *ClubSettingsHandler) HandleUpdateGeneralSettings(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	var req generalSettings
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	lang := strings.TrimSpace(req.DefaultLanguage)
+	if !supportedUILocales[lang] {
+		Error(w, http.StatusBadRequest, "unsupported language")
+		return
+	}
+
+	tag, err := h.db.Exec(ctx,
+		`UPDATE clubs SET default_language = $2 WHERE id = $1`,
+		claims.ClubID, lang,
+	)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to update default language")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if tag.RowsAffected() == 0 {
+		Error(w, http.StatusNotFound, "club not found")
+		return
+	}
+
+	JSON(w, http.StatusOK, generalSettings{DefaultLanguage: lang})
+}
+
 func (h *ClubSettingsHandler) HandleGetBookingSettings(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)

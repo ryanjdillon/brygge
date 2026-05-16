@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -34,6 +35,14 @@ func NewMembersHandler(
 	}
 }
 
+// supportedUILocales is the set of UI language codes a member may pick.
+// Keep aligned with the clubs/users CHECK constraints (migration 000047)
+// and frontend/src/locales/*.json.
+var supportedUILocales = map[string]bool{
+	"nb": true, "nn": true, "en": true, "de": true,
+	"fr": true, "it": true, "nl": true, "pl": true,
+}
+
 type memberProfile struct {
 	ID         string    `json:"id"`
 	ClubID     string    `json:"club_id"`
@@ -45,8 +54,11 @@ type memberProfile struct {
 	City       string    `json:"city"`
 	IsLocal    bool      `json:"is_local"`
 	HideInDirectory bool `json:"hide_in_directory"`
-	CreatedAt  time.Time `json:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
+	// PreferredLanguage is nil when the member hasn't chosen one
+	// (→ the UI follows the club default).
+	PreferredLanguage *string   `json:"preferred_language"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
 }
 
 type updateProfileRequest struct {
@@ -56,6 +68,9 @@ type updateProfileRequest struct {
 	PostalCode      *string `json:"postal_code,omitempty"`
 	City            *string `json:"city,omitempty"`
 	HideInDirectory *bool   `json:"hide_in_directory,omitempty"`
+	// PreferredLanguage: a supported code sets it; "" clears it
+	// (revert to club default); omitted leaves it unchanged.
+	PreferredLanguage *string `json:"preferred_language,omitempty"`
 }
 
 type boat struct {
@@ -152,13 +167,13 @@ func (h *MembersHandler) HandleGetMe(w http.ResponseWriter, r *http.Request) {
 
 	var p memberProfile
 	err := h.db.QueryRow(ctx,
-		`SELECT id, club_id, email, full_name, phone, address_line, postal_code, city, is_local, hide_in_directory, created_at, updated_at
+		`SELECT id, club_id, email, full_name, phone, address_line, postal_code, city, is_local, hide_in_directory, preferred_language, created_at, updated_at
 		 FROM users WHERE id = $1 AND club_id = $2`,
 		claims.UserID, claims.ClubID,
 	).Scan(
 		&p.ID, &p.ClubID, &p.Email, &p.FullName, &p.Phone,
 		&p.Address, &p.PostalCode, &p.City, &p.IsLocal, &p.HideInDirectory,
-		&p.CreatedAt, &p.UpdatedAt,
+		&p.PreferredLanguage, &p.CreatedAt, &p.UpdatedAt,
 	)
 	if err == pgx.ErrNoRows {
 		Error(w, http.StatusNotFound, "user not found")
@@ -189,13 +204,13 @@ func (h *MembersHandler) HandleUpdateMe(w http.ResponseWriter, r *http.Request) 
 
 	var current memberProfile
 	err := h.db.QueryRow(ctx,
-		`SELECT id, club_id, email, full_name, phone, address_line, postal_code, city, is_local, hide_in_directory, created_at, updated_at
+		`SELECT id, club_id, email, full_name, phone, address_line, postal_code, city, is_local, hide_in_directory, preferred_language, created_at, updated_at
 		 FROM users WHERE id = $1 AND club_id = $2`,
 		claims.UserID, claims.ClubID,
 	).Scan(
 		&current.ID, &current.ClubID, &current.Email, &current.FullName, &current.Phone,
 		&current.Address, &current.PostalCode, &current.City, &current.IsLocal, &current.HideInDirectory,
-		&current.CreatedAt, &current.UpdatedAt,
+		&current.PreferredLanguage, &current.CreatedAt, &current.UpdatedAt,
 	)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to fetch current profile for update")
@@ -221,6 +236,18 @@ func (h *MembersHandler) HandleUpdateMe(w http.ResponseWriter, r *http.Request) 
 	if req.HideInDirectory != nil {
 		current.HideInDirectory = *req.HideInDirectory
 	}
+	if req.PreferredLanguage != nil {
+		v := strings.TrimSpace(*req.PreferredLanguage)
+		switch {
+		case v == "":
+			current.PreferredLanguage = nil // clear → follow club default
+		case !supportedUILocales[v]:
+			Error(w, http.StatusBadRequest, "unsupported language")
+			return
+		default:
+			current.PreferredLanguage = &v
+		}
+	}
 
 	// full_name became a generated column in DIL-228; we now write
 	// first/last directly. Until /me starts shipping these fields
@@ -231,15 +258,15 @@ func (h *MembersHandler) HandleUpdateMe(w http.ResponseWriter, r *http.Request) 
 	var p memberProfile
 	err = h.db.QueryRow(ctx,
 		`UPDATE users
-		 SET first_name = $3, last_name = $4, phone = $5, address_line = $6, postal_code = $7, city = $8, hide_in_directory = $9, updated_at = now()
+		 SET first_name = $3, last_name = $4, phone = $5, address_line = $6, postal_code = $7, city = $8, hide_in_directory = $9, preferred_language = $10, updated_at = now()
 		 WHERE id = $1 AND club_id = $2
-		 RETURNING id, club_id, email, full_name, phone, address_line, postal_code, city, is_local, hide_in_directory, created_at, updated_at`,
+		 RETURNING id, club_id, email, full_name, phone, address_line, postal_code, city, is_local, hide_in_directory, preferred_language, created_at, updated_at`,
 		claims.UserID, claims.ClubID,
-		first, last, current.Phone, current.Address, current.PostalCode, current.City, current.HideInDirectory,
+		first, last, current.Phone, current.Address, current.PostalCode, current.City, current.HideInDirectory, current.PreferredLanguage,
 	).Scan(
 		&p.ID, &p.ClubID, &p.Email, &p.FullName, &p.Phone,
 		&p.Address, &p.PostalCode, &p.City, &p.IsLocal, &p.HideInDirectory,
-		&p.CreatedAt, &p.UpdatedAt,
+		&p.PreferredLanguage, &p.CreatedAt, &p.UpdatedAt,
 	)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to update member profile")
