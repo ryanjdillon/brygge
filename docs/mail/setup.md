@@ -235,19 +235,75 @@ Bulwark connects via JMAP to `https://mail.<domain>` and presents the inbox.
 
 ## Day 2 operations
 
-### Rotating a role mailbox password
+### Role mailbox passwords (managed mailboxes)
 
-When a board member changes role (e.g. new treasurer):
+**Do not set or rotate a managed board mailbox's password in the Stalwart
+admin UI.** Managed mailboxes are those declared in tfvars `board_mailboxes`
+with `managed=true` (the default). For those, `stalwart-mailbox-config.service`
+owns a machine-generated service password stored in
+`/etc/stalwart/board-mailbox-passwords.json` (root:brygge 0640). The Brygge
+backend authenticates JMAP as the mailbox using that file's value to drive the
+role-gated shared inbox (`/admin/inbox`).
 
-1. Stalwart admin UI → **Management → Accounts → `treasurer@<domain>`** → set new password
-2. Hand the new password to the incoming officeholder
-3. Archive is preserved — they see full mail history on first login
+**Lifecycle — when does the JSON password change?** Never automatically.
+It is **not** rotated on a schedule, per deploy, or per boot. The unit is
+create-if-absent: a value is written exactly once, the first time that
+address has no entry in the JSON, and is then stable indefinitely. It
+changes only when:
 
-No NixOS deploy needed. Stalwart writes to its RocksDB immediately.
+1. **The JSON entry is missing** — a brand-new mailbox, or the file was
+   reset/lost. The next run of `stalwart-mailbox-config.service` mints a
+   fresh random password and `PATCH`es it into Stalwart.
+2. **You deliberately rotate it** — delete the address's key from the JSON
+   and restart the unit (procedure below).
+
+There is no expiry and no background rotation. A given officeholder can
+keep the same mailbox password until you choose to rotate it.
+
+The unit is **create-if-absent**: it only generates/sets a password when the
+JSON has no entry for that address. Consequences:
+
+- Setting a password in the admin UI does **not** get overwritten on the next
+  deploy (the JSON entry still exists, so the unit leaves it). Instead Stalwart's
+  RocksDB and the JSON file **diverge**: Bulwark/IMAP login uses the UI value,
+  but Brygge's shared inbox still uses the stale JSON value and silently breaks.
+- The unit only re-PATCHes a fresh random password if the JSON entry is
+  **missing** (file reset, or a brand-new mailbox).
+
+To hand a managed mailbox to an incoming officeholder, read the current
+password out of the file rather than setting one in the UI:
+
+```bash
+ssh root@<server-ip> 'jq -r ".\"treasurer@<domain>\"" /etc/stalwart/board-mailbox-passwords.json'
+```
+
+To **rotate** a managed mailbox password (keeps Brygge in sync):
+
+```bash
+# Drop the entry, then let the provisioning unit regenerate + re-PATCH it.
+ssh root@<server-ip> '
+  jq "del(.\"treasurer@<domain>\")" /etc/stalwart/board-mailbox-passwords.json > /tmp/p \
+    && install -m 0640 -o root -g brygge /tmp/p /etc/stalwart/board-mailbox-passwords.json && rm /tmp/p
+  systemctl restart stalwart-mailbox-config
+  systemctl restart brygge-inbox-validate brygge'
+# Then read the new value back out of the JSON file (command above) and
+# hand it to the officeholder.
+```
+
+Archive is preserved across rotation — they see full mail history on first
+login. No NixOS deploy needed; the unit writes to RocksDB immediately.
+
+For a **genuinely unmanaged account** (a personal mailbox, or an entry with
+`managed=false` — not in `board_mailboxes`), the admin UI flow is correct and
+the password persists: **Management → Accounts → set new password**.
 
 ### Adding a new role
 
-Same flow as step 5 — Stalwart admin UI handles everything. No code change.
+Edit `board_mailboxes` in `terraform/terraform.tfvars.json` and
+`nix run .#deploy` — same as [step 5](#5-role-mailboxes-board-addresses). The
+`stalwart-mailbox-config.service` unit creates the principal and seeds its
+service password. **Do not add board mailboxes through the Stalwart admin UI** —
+they'd be unmanaged and the role-gated shared inbox won't see them.
 
 ### Rotating the brygge SMTP relay password
 
@@ -434,7 +490,8 @@ Don't enable `mailserver.localDnsResolver` (knot-resolver). It breaks upstream D
 | NixOS config (Stalwart, Caddy, Bulwark) | Nix flake | `nix run .#deploy -- <host>` |
 | Stalwart admin settings (spam, TLS) | Stalwart RocksDB | Admin UI at `https://mail.<domain>/` |
 | DKIM signature (`mail` selector) | Stalwart RocksDB (Stalwart owns the keypair) + `tfvars.dkim_public_value` mirrored to DNS | `deploy` creates the signature, then `stalwart-cli dkim get-public-key mail` → paste to tfvars → `tf-apply` (see § 4) |
-| Mailbox accounts + passwords | Stalwart RocksDB | Admin UI |
+| Managed board/role mailboxes + their passwords | `stalwart-mailbox-config.service` from `tfvars.board_mailboxes`; service password generated into `/etc/stalwart/board-mailbox-passwords.json` (root:brygge 0640) | Edit `board_mailboxes` + `nix run .#deploy`; read/rotate the password via the JSON file (see § Day 2 → Role mailbox passwords). **Not** the admin UI. |
+| Unmanaged personal accounts + passwords | Stalwart RocksDB | Admin UI (Management → Accounts) |
 | Mail contents | Stalwart RocksDB | IMAP / JMAP clients |
 | Bootstrap admin password | `/etc/stalwart/admin-password` on the server | `install` + `systemctl restart stalwart` |
 | brygge's SMTP credentials | `/etc/brygge/env` on the server | Edit + `systemctl restart brygge` |
