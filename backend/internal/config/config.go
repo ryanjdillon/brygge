@@ -4,6 +4,7 @@ import (
 	"math"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -102,7 +103,7 @@ func Load() Config {
 		DBMaxConnIdleTime:  envDuration("DB_MAX_CONN_IDLE_TIME", 5*time.Minute),
 		DBStatementTimeout: envStr("DB_STATEMENT_TIMEOUT", "30000"),
 
-		FrontendURL: envStr("FRONTEND_URL", "http://localhost:5173"),
+		FrontendURL: cleanBaseURL(envStr("FRONTEND_URL", "http://localhost:5173")),
 
 		S3Endpoint:  envStr("S3_ENDPOINT", ""),
 		S3Bucket:    envStr("S3_BUCKET", "brygge"),
@@ -163,6 +164,19 @@ func (c *Config) VippsBrowserURL() string {
 		return envStr("VIPPS_MOCK_BROWSER_URL", "http://localhost:8090")
 	}
 	return c.VippsBaseURL()
+}
+
+// cleanBaseURL strips stray surrounding quotes, whitespace, and a
+// trailing slash from a configured base URL. Env layering (systemd
+// EnvironmentFile, tfvars-derived values) can leave a literal quote on
+// the value; FrontendURL is string-concatenated with paths in several
+// places (magic-link URL, post-login redirect), so a stray quote or
+// trailing slash silently breaks login.
+func cleanBaseURL(s string) string {
+	s = strings.TrimSpace(s)
+	s = strings.Trim(s, `"'`)
+	s = strings.TrimSpace(s)
+	return strings.TrimRight(s, "/")
 }
 
 func envStr(key, fallback string) string {

@@ -62,6 +62,34 @@ func TestLoadFromEnv(t *testing.T) {
 	}
 }
 
+func TestCleanBaseURL(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{"https://klokkarvikbaatlag.no", "https://klokkarvikbaatlag.no"},
+		{`https://klokkarvikbaatlag.no"`, "https://klokkarvikbaatlag.no"},
+		{`"https://klokkarvikbaatlag.no"`, "https://klokkarvikbaatlag.no"},
+		{"https://klokkarvikbaatlag.no/", "https://klokkarvikbaatlag.no"},
+		{`  https://x.no"  `, "https://x.no"},
+		{"http://localhost:5173", "http://localhost:5173"},
+	}
+	for _, tt := range tests {
+		if got := cleanBaseURL(tt.in); got != tt.want {
+			t.Errorf("cleanBaseURL(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
+
+func TestLoadFrontendURLSanitised(t *testing.T) {
+	// Env layering can leave a literal trailing quote on the value;
+	// it must not leak into magic-link URLs or the post-login redirect.
+	t.Setenv("FRONTEND_URL", `https://klokkarvikbaatlag.no"`)
+	if got := Load().FrontendURL; got != "https://klokkarvikbaatlag.no" {
+		t.Errorf("FrontendURL = %q, want %q", got, "https://klokkarvikbaatlag.no")
+	}
+}
+
 func TestLoadDBPoolDuration(t *testing.T) {
 	t.Setenv("DB_MAX_CONN_LIFETIME", "20m")
 
