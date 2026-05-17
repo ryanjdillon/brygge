@@ -218,7 +218,7 @@
     "magicLinkSent": "Wysłaliśmy link do logowania na Twój e-mail. Sprawdź skrzynkę odbiorczą.",
     "sending": "Wysyłanie...",
     "sendLink": "Wyślij link do logowania",
-    "emailPlaceholder": "ty@przyklad.pl",
+    "emailPlaceholder": "ty{'@'}przyklad.pl",
     "title": "Zaloguj się",
     "email": "E-mail",
     "password": "Hasło",

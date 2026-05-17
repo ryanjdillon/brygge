@@ -273,7 +273,7 @@
     "magicLinkSent": "We've sent a login link to your email. Check your inbox.",
     "sending": "Sending...",
     "sendLink": "Send login link",
-    "emailPlaceholder": "you@example.com",
+    "emailPlaceholder": "you{'@'}example.com",
     "title": "Log in",
     "email": "Email",
     "password": "Password",

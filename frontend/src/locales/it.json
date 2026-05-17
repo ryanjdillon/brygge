@@ -218,7 +218,7 @@
     "magicLinkSent": "Abbiamo inviato un link di accesso alla tua e-mail. Controlla la posta in arrivo.",
     "sending": "Invio...",
     "sendLink": "Invia link di accesso",
-    "emailPlaceholder": "tu@esempio.it",
+    "emailPlaceholder": "tu{'@'}esempio.it",
     "title": "Accedi",
     "email": "Email",
     "password": "Password",

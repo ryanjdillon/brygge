@@ -218,7 +218,7 @@
     "magicLinkSent": "Nous avons envoyé un lien de connexion à votre e-mail. Vérifiez votre boîte de réception.",
     "sending": "Envoi...",
     "sendLink": "Envoyer le lien de connexion",
-    "emailPlaceholder": "vous@exemple.fr",
+    "emailPlaceholder": "vous{'@'}exemple.fr",
     "title": "Se connecter",
     "email": "E-mail",
     "password": "Mot de passe",

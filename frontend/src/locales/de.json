@@ -218,7 +218,7 @@
     "magicLinkSent": "Wir haben einen Anmeldelink an deine E-Mail gesendet. Prüfe deinen Posteingang.",
     "sending": "Senden...",
     "sendLink": "Anmeldelink senden",
-    "emailPlaceholder": "du@beispiel.de",
+    "emailPlaceholder": "du{'@'}beispiel.de",
     "title": "Anmelden",
     "email": "E-Mail",
     "password": "Passwort",

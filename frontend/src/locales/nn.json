@@ -269,7 +269,7 @@
     "magicLinkSent": "Vi har sendt ei innloggingslenke til e-posten din. Sjekk innboksen.",
     "sending": "Sender...",
     "sendLink": "Send innloggingslenke",
-    "emailPlaceholder": "din@epost.no",
+    "emailPlaceholder": "din{'@'}epost.no",
     "title": "Logg inn",
     "email": "E-post",
     "password": "Passord",
