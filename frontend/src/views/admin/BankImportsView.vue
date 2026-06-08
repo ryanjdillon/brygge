@@ -12,6 +12,7 @@ import {
   useVippsRowsByMSN,
   uploadBankCSV,
   uploadVippsCSV,
+  reassignBankImport,
   previewVippsReconcile,
   confirmVippsReconcile,
   type BankImportResult,
@@ -173,6 +174,40 @@ const { data: bankImportsList } = useBankImportsList()
 
 function selectBankImport(id: string) {
   currentBankImportId.value = id
+}
+
+// ── Reassign misuploaded import ────────────────────────────
+const reassignImportId = ref<string | null>(null)
+const reassignFrom = ref('')
+const reassignTo = ref('')
+const reassignError = ref<string | null>(null)
+const reassignBusy = ref(false)
+
+function openReassign(id: string, currentCode: string) {
+  reassignImportId.value = id
+  reassignFrom.value = currentCode
+  reassignTo.value = currentCode
+  reassignError.value = null
+}
+
+function cancelReassign() {
+  reassignImportId.value = null
+}
+
+async function submitReassign() {
+  if (!reassignImportId.value || !reassignTo.value || reassignTo.value === reassignFrom.value) return
+  reassignError.value = null
+  reassignBusy.value = true
+  try {
+    await reassignBankImport(reassignImportId.value, reassignTo.value)
+    queryClient.invalidateQueries({ queryKey: ['accounting', 'bank-imports'] })
+    queryClient.invalidateQueries({ queryKey: ['accounting', 'bank-import', reassignImportId.value] })
+    reassignImportId.value = null
+  } catch (e: any) {
+    reassignError.value = e?.message ?? 'Reassign failed'
+  } finally {
+    reassignBusy.value = false
+  }
 }
 
 // ── Accounts tab data ───────────────────────────────────────
@@ -485,7 +520,16 @@ const filterMonthValue = computed<number>({
             {{ b.filename }}
             <span class="ml-2 text-xs text-gray-500">{{ b.account_code }}</span>
           </span>
-          <span class="text-xs text-gray-500">{{ b.row_count }} {{ t('admin.bankImports.rows') }}</span>
+          <span class="flex items-center gap-3 text-xs text-gray-500">
+            {{ b.row_count }} {{ t('admin.bankImports.rows') }}
+            <button
+              type="button"
+              class="font-semibold text-blue-700 hover:underline"
+              @click.stop="openReassign(b.id, b.account_code)"
+            >
+              {{ t('admin.bankImports.reassign') }}
+            </button>
+          </span>
         </li>
       </ul>
     </section>
@@ -594,6 +638,45 @@ const filterMonthValue = computed<number>({
             @click="confirmReconcile"
           >
             {{ reconcileBusy ? t('common.loading') : t('admin.bankImports.confirmBilag') }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Reassign import modal (DIL-343) -->
+    <div
+      v-if="reassignImportId"
+      class="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4"
+      role="dialog"
+      aria-modal="true"
+      @click.self="cancelReassign"
+    >
+      <div class="w-full max-w-md rounded-lg bg-white p-5 shadow-xl">
+        <h2 class="text-base font-semibold text-gray-900">{{ t('admin.bankImports.reassignTitle') }}</h2>
+        <p class="mt-2 text-sm text-gray-600">{{ t('admin.bankImports.reassignBody', { code: reassignFrom }) }}</p>
+
+        <label class="mt-4 block text-sm font-medium text-gray-700">
+          {{ t('admin.bankImports.reassignTo') }}
+        </label>
+        <Select v-model="reassignTo" :options="bankAccounts.map((a) => ({ value: a.code, label: `${a.code} — ${a.name}` }))" />
+
+        <p v-if="reassignError" class="mt-3 rounded bg-red-50 px-3 py-2 text-xs text-red-700">{{ reassignError }}</p>
+
+        <div class="mt-4 flex justify-end gap-2">
+          <button
+            type="button"
+            class="rounded-md bg-white px-4 py-2 text-sm font-semibold text-gray-700 ring-1 ring-gray-300 hover:bg-gray-50"
+            @click="cancelReassign"
+          >
+            {{ t('common.cancel') }}
+          </button>
+          <button
+            type="button"
+            :disabled="reassignBusy || reassignTo === reassignFrom"
+            class="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+            @click="submitReassign"
+          >
+            {{ reassignBusy ? t('common.loading') : t('admin.bankImports.reassign') }}
           </button>
         </div>
       </div>

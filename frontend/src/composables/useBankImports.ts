@@ -206,6 +206,17 @@ export async function uploadBankCSV(
   return fetchJSON<BankImportResult>(`${BASE}/bank-import/`, { method: 'POST', body: fd })
 }
 
+export async function reassignBankImport(
+  importID: string,
+  bankAccountCode: string,
+): Promise<{ status: string; from?: string; to?: string }> {
+  return fetchJSON(`${BASE}/bank-import/${importID}/account`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ bank_account_code: bankAccountCode }),
+  })
+}
+
 export async function uploadVippsCSV(file: File): Promise<VippsImportResult> {
   const fd = new FormData()
   fd.append('file', file)

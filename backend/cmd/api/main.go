@@ -991,6 +991,8 @@ func main() {
 							r.Get("/{importID}/unmatched", accountingHandler.HandleListUnmatchedRows)
 							r.Post("/{importID}/rows/{rowID}/match", accountingHandler.HandleMatchBankRow)
 							r.Post("/{importID}/auto-match", accountingHandler.HandleAutoMatchImport)
+							r.With(middleware.RequireFreshTOTP(10 * time.Minute)).
+								Patch("/{importID}/account", accountingHandler.HandleReassignBankImport)
 						})
 
 						r.Route("/vipps-imports", func(r chi.Router) {

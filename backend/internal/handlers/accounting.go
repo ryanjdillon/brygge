@@ -1147,6 +1147,77 @@ func (h *AccountingHandler) HandleAutoMatchImport(w http.ResponseWriter, r *http
 	JSON(w, http.StatusOK, map[string]any{"matched": matched})
 }
 
+type reassignBankImportRequest struct {
+	BankAccountCode string `json:"bank_account_code"`
+}
+
+// HandleReassignBankImport changes which GL bank account an existing
+// import belongs to. Refuses if any of the import's rows have already
+// been booked (journal_entry_id IS NOT NULL) — the operator must
+// unmatch first, otherwise the journal would reference a different
+// account than the row it came from. See DIL-343.
+func (h *AccountingHandler) HandleReassignBankImport(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	importID := chi.URLParam(r, "importID")
+	var req reassignBankImportRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.BankAccountCode == "" {
+		Error(w, http.StatusBadRequest, "bank_account_code is required")
+		return
+	}
+
+	var oldCode string
+	if err := h.svc.DB().QueryRow(r.Context(),
+		`SELECT bank_account_code FROM bank_imports WHERE id = $1 AND club_id = $2`,
+		importID, claims.ClubID,
+	).Scan(&oldCode); err != nil {
+		Error(w, http.StatusNotFound, "bank import not found")
+		return
+	}
+	if oldCode == req.BankAccountCode {
+		JSON(w, http.StatusOK, map[string]any{"status": "unchanged"})
+		return
+	}
+
+	var bookedRows int
+	if err := h.svc.DB().QueryRow(r.Context(),
+		`SELECT COUNT(*) FROM bank_import_rows
+		  WHERE bank_import_id = $1 AND journal_entry_id IS NOT NULL`,
+		importID,
+	).Scan(&bookedRows); err != nil {
+		h.log.Error().Err(err).Msg("count booked rows")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if bookedRows > 0 {
+		Error(w, http.StatusConflict, "cannot reassign: some rows have been booked to a journal — unmatch them first")
+		return
+	}
+
+	if _, err := h.svc.DB().Exec(r.Context(),
+		`UPDATE bank_imports SET bank_account_code = $1 WHERE id = $2 AND club_id = $3`,
+		req.BankAccountCode, importID, claims.ClubID,
+	); err != nil {
+		h.log.Error().Err(err).Msg("reassign bank import")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	if h.audit != nil {
+		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,
+			"accounting.bank_import_reassigned", "bank_import", importID,
+			map[string]any{"from": oldCode, "to": req.BankAccountCode})
+	}
+	JSON(w, http.StatusOK, map[string]any{"status": "reassigned", "from": oldCode, "to": req.BankAccountCode})
+}
+
 // ── Reports ─────────────────────────────────────────────────
 
 func (h *AccountingHandler) HandleIncomeStatement(w http.ResponseWriter, r *http.Request) {
