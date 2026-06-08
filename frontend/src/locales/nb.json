@@ -1761,9 +1761,8 @@
   },
   "totpExpiring": {
     "title": "Bekreftelse utløper",
-    "body": "Bekreft nå for å være klar for sensitive handlinger — ellers blir du spurt igjen neste gang.",
+    "body": "Bekreftelsen for sensitive handlinger er i ferd med å utløpe. Du blir spurt om kode neste gang du utfører en.",
     "countdown": "Utløper om {time}",
-    "keepWorking": "Lukk",
-    "reauth": "Bekreft nå"
+    "continue": "Fortsett"
   }
 }

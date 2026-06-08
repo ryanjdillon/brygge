@@ -1765,9 +1765,8 @@
   },
   "totpExpiring": {
     "title": "Verification expiring",
-    "body": "Re-verify now to stay ready for sensitive actions — otherwise you'll be asked again next time.",
+    "body": "Your sensitive-action verification is about to expire. You'll be asked for a code again next time you do one.",
     "countdown": "Expires in {time}",
-    "keepWorking": "Dismiss",
-    "reauth": "Re-verify now"
+    "continue": "Continue"
   }
 }

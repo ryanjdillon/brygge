@@ -1761,9 +1761,8 @@
   },
   "totpExpiring": {
     "title": "Stadfesting går ut",
-    "body": "Stadfest no for å vere klar for sensitive handlingar — elles blir du spurd igjen neste gong.",
+    "body": "Stadfestinga for sensitive handlingar er i ferd med å gå ut. Du blir spurd om kode neste gong du utfører ei.",
     "countdown": "Går ut om {time}",
-    "keepWorking": "Lukk",
-    "reauth": "Stadfest no"
+    "continue": "Hald fram"
   }
 }
