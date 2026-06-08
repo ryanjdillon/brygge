@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 	"github.com/rs/zerolog"
 
 	"github.com/brygge-klubb/brygge/internal/accounting"
@@ -1152,12 +1153,18 @@ type reassignBankImportRequest struct {
 }
 
 // HandleReassignBankImport changes which GL bank account an existing
-// import belongs to. Refuses if any of the import's rows have already
-// been booked (journal_entry_id IS NOT NULL) — the operator must
-// unmatch first, otherwise the journal would reference a different
-// account than the row it came from. See DIL-343.
+// import belongs to and cascades the change through every journal
+// line that was matched against rows of this import. The bank-side
+// line on each entry (the leg that referenced the old account) gets
+// rewritten to point at the new account; counter-legs (revenue,
+// expense, etc.) are untouched.
+//
+// Refuses only when the cascade would touch a journal entry whose
+// fiscal period is closed or locked, or that has been voided — those
+// are immutable accounting state. See DIL-343.
 func (h *AccountingHandler) HandleReassignBankImport(w http.ResponseWriter, r *http.Request) {
-	claims := middleware.GetClaims(r.Context())
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
 	if claims == nil {
 		Error(w, http.StatusUnauthorized, "authentication required")
 		return
@@ -1174,7 +1181,7 @@ func (h *AccountingHandler) HandleReassignBankImport(w http.ResponseWriter, r *h
 	}
 
 	var oldCode string
-	if err := h.svc.DB().QueryRow(r.Context(),
+	if err := h.svc.DB().QueryRow(ctx,
 		`SELECT bank_account_code FROM bank_imports WHERE id = $1 AND club_id = $2`,
 		importID, claims.ClubID,
 	).Scan(&oldCode); err != nil {
@@ -1186,22 +1193,85 @@ func (h *AccountingHandler) HandleReassignBankImport(w http.ResponseWriter, r *h
 		return
 	}
 
-	var bookedRows int
-	if err := h.svc.DB().QueryRow(r.Context(),
-		`SELECT COUNT(*) FROM bank_import_rows
-		  WHERE bank_import_id = $1 AND journal_entry_id IS NOT NULL`,
-		importID,
-	).Scan(&bookedRows); err != nil {
-		h.log.Error().Err(err).Msg("count booked rows")
+	tx, err := h.svc.DB().BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		h.log.Error().Err(err).Msg("begin tx")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	if bookedRows > 0 {
-		Error(w, http.StatusConflict, "cannot reassign: some rows have been booked to a journal — unmatch them first")
+	defer tx.Rollback(ctx)
+
+	// Resolve both account ids (old + new) for this club.
+	var oldAccountID, newAccountID string
+	if err := tx.QueryRow(ctx,
+		`SELECT id FROM accounts WHERE club_id = $1 AND code = $2`,
+		claims.ClubID, oldCode,
+	).Scan(&oldAccountID); err != nil {
+		Error(w, http.StatusInternalServerError, "old account not found in chart of accounts")
+		return
+	}
+	if err := tx.QueryRow(ctx,
+		`SELECT id FROM accounts WHERE club_id = $1 AND code = $2`,
+		claims.ClubID, req.BankAccountCode,
+	).Scan(&newAccountID); err != nil {
+		Error(w, http.StatusBadRequest, "target account not found in chart of accounts")
 		return
 	}
 
-	if _, err := h.svc.DB().Exec(r.Context(),
+	// Refuse if any affected journal entry is in a closed/locked period
+	// or has been voided — those are accounting facts we can't rewrite.
+	var blockedPeriods []string
+	rows, err := tx.Query(ctx,
+		`SELECT DISTINCT fp.year::text
+		   FROM bank_import_rows bir
+		   JOIN journal_entries je ON je.id = bir.journal_entry_id
+		   JOIN fiscal_periods fp ON fp.id = je.fiscal_period_id
+		  WHERE bir.bank_import_id = $1
+		    AND (fp.status IN ('closed','locked') OR je.status = 'voided')`,
+		importID,
+	)
+	if err != nil {
+		h.log.Error().Err(err).Msg("scan closed periods")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	for rows.Next() {
+		var label string
+		if err := rows.Scan(&label); err == nil {
+			blockedPeriods = append(blockedPeriods, label)
+		}
+	}
+	rows.Close()
+	if len(blockedPeriods) > 0 {
+		Error(w, http.StatusConflict,
+			"cannot reassign: some matched rows live in closed/locked or voided journals ("+strings.Join(blockedPeriods, ", ")+") — reopen them first or void the entries manually")
+		return
+	}
+
+	// Cascade: rewrite the bank-side line of every affected journal
+	// entry from the old account to the new account. There is exactly
+	// one such line per entry (created by MatchBankRow), so this is a
+	// straight account_id swap, not a re-balance.
+	cascadeTag, err := tx.Exec(ctx,
+		`UPDATE journal_lines
+		    SET account_id = $1
+		  WHERE account_id = $2
+		    AND journal_entry_id IN (
+		      SELECT bir.journal_entry_id
+		        FROM bank_import_rows bir
+		       WHERE bir.bank_import_id = $3
+		         AND bir.journal_entry_id IS NOT NULL
+		    )`,
+		newAccountID, oldAccountID, importID,
+	)
+	if err != nil {
+		h.log.Error().Err(err).Msg("cascade journal lines")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	cascaded := cascadeTag.RowsAffected()
+
+	if _, err := tx.Exec(ctx,
 		`UPDATE bank_imports SET bank_account_code = $1 WHERE id = $2 AND club_id = $3`,
 		req.BankAccountCode, importID, claims.ClubID,
 	); err != nil {
@@ -1210,12 +1280,27 @@ func (h *AccountingHandler) HandleReassignBankImport(w http.ResponseWriter, r *h
 		return
 	}
 
-	if h.audit != nil {
-		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,
-			"accounting.bank_import_reassigned", "bank_import", importID,
-			map[string]any{"from": oldCode, "to": req.BankAccountCode})
+	if err := tx.Commit(ctx); err != nil {
+		h.log.Error().Err(err).Msg("commit reassign")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
 	}
-	JSON(w, http.StatusOK, map[string]any{"status": "reassigned", "from": oldCode, "to": req.BankAccountCode})
+
+	if h.audit != nil {
+		h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,
+			"accounting.bank_import_reassigned", "bank_import", importID,
+			map[string]any{
+				"from":              oldCode,
+				"to":                req.BankAccountCode,
+				"cascaded_journals": cascaded,
+			})
+	}
+	JSON(w, http.StatusOK, map[string]any{
+		"status":            "reassigned",
+		"from":              oldCode,
+		"to":                req.BankAccountCode,
+		"cascaded_journals": cascaded,
+	})
 }
 
 // ── Reports ─────────────────────────────────────────────────

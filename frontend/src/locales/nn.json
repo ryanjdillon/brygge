@@ -1404,7 +1404,7 @@
       "autoMatchedNotice": "Automatisk kopla til den registrerte bankkontoen (hovudbokskode {code}) basert på utskrifta sitt eige kontonummer — valet ditt vart overstyrt for å hindre feilopplasting.",
       "reassign": "Flytt",
       "reassignTitle": "Flytt importen til ein annan bankkonto",
-      "reassignBody": "Importen er merka med hovudbokskode {code}. Han kan berre flyttast om ingen av radene er bokførte — løys eventuelle koplingar fyrst.",
+      "reassignBody": "Importen er merka med hovudbokskode {code}. Bokførte rader vert flytta automatisk — bilagslinjene vert skrivne om til den nye kontoen. Berre bilag i lukka/låste periodar eller annullerte bilag vert avviste.",
       "reassignTo": "Ny bankkonto",
       "periodClosedNotice": "Rekneskapsperiode {year} er lukka — opne han att før du opprettar bilaget.",
       "tabImports": "Import",

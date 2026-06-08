@@ -1408,7 +1408,7 @@
       "autoMatchedNotice": "Auto-matched to the registered bank account (GL code {code}) based on the statement's own account number — your selection was overridden to prevent a misuploaded statement.",
       "reassign": "Reassign",
       "reassignTitle": "Reassign import to a different bank account",
-      "reassignBody": "This import is currently tagged as GL code {code}. Reassigning is only allowed if none of its rows have been booked to a journal — otherwise unmatch the booked rows first.",
+      "reassignBody": "This import is currently tagged as GL code {code}. Booked rows are migrated automatically — their journal lines are rewritten to point at the new account. Only entries in closed/locked periods or voided entries are refused.",
       "reassignTo": "New bank account",
       "periodClosedNotice": "Fiscal period {year} is closed — reopen it before creating the bilag.",
       "tabImports": "Imports",
