@@ -41,6 +41,11 @@ type Config struct {
 
 	// TOTP
 	TOTPEncryptionKey string // 32-byte hex-encoded key for encrypting TOTP secrets
+	// Per-action freshness window for RequireFreshTOTP gates. Default
+	// 10m. Tunable via AUTH_FRESH_TOTP_WINDOW (e.g. 5m, 15m). Surfaced
+	// to the SPA via /session/me so the in-context countdown stays in
+	// sync.
+	FreshTOTPWindow time.Duration
 
 	// Optional integrations
 	// SMTP (self-hosted mail).
@@ -117,6 +122,7 @@ func Load() Config {
 		VAPIDPrivateKey: envStr("VAPID_PRIVATE_KEY", ""),
 
 		TOTPEncryptionKey: envStr("TOTP_ENCRYPTION_KEY", ""),
+		FreshTOTPWindow:   envDuration("AUTH_FRESH_TOTP_WINDOW", 10*time.Minute),
 
 		SMTPHost:     envStr("SMTP_HOST", ""),
 		SMTPPort:     envInt("SMTP_PORT", 587),

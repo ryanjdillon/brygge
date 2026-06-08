@@ -35,6 +35,7 @@ import (
 
 func main() {
 	cfg := config.Load()
+	middleware.SetFreshTOTPWindow(cfg.FreshTOTPWindow)
 
 	log := zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339}).
 		With().
@@ -621,7 +622,7 @@ func main() {
 				// with only a stale session cookie must not be able
 				// to lock the legitimate owner out.
 				r.Group(func(r chi.Router) {
-					r.Use(middleware.RequireFreshTOTP(10 * time.Minute))
+					r.Use(middleware.RequireFreshTOTPDefault())
 					r.Post("/regenerate-codes", totpHandler.HandleRegenerateCodes)
 				})
 			})
@@ -703,24 +704,24 @@ func main() {
 						// whole faktura workflow can be toggled together.
 						r.Get("/invoices/{invoiceID}/pdf", invoiceHandler.HandleGetInvoicePDF)
 						r.With(middleware.RequireRole("treasurer", "admin"),
-							middleware.RequireFreshTOTP(10*time.Minute)).
+							middleware.RequireFreshTOTPDefault()).
 							Post("/invoices/full", invoiceHandler.HandleCreateInvoice)
 						r.Get("/invoices/drafts", invoiceHandler.HandleListDraftInvoices)
 						r.Get("/invoices", invoiceHandler.HandleListInvoices)
 						r.With(middleware.RequireRole("treasurer", "admin"),
-							middleware.RequireFreshTOTP(10*time.Minute)).
+							middleware.RequireFreshTOTPDefault()).
 							Post("/invoices/bulk", invoiceHandler.HandleBulkCreateInvoices)
 						r.With(middleware.RequireRole("treasurer", "admin"),
-							middleware.RequireFreshTOTP(10*time.Minute)).
+							middleware.RequireFreshTOTPDefault()).
 							Post("/invoices/{invoiceID}/send", invoiceHandler.HandleSendInvoice)
 						r.With(middleware.RequireRole("treasurer", "admin"),
-							middleware.RequireFreshTOTP(10*time.Minute)).
+							middleware.RequireFreshTOTPDefault()).
 							Post("/invoices/{invoiceID}/resend", invoiceHandler.HandleResendInvoice)
 						r.With(middleware.RequireRole("treasurer", "admin"),
-							middleware.RequireFreshTOTP(10*time.Minute)).
+							middleware.RequireFreshTOTPDefault()).
 							Post("/invoices/{invoiceID}/void", invoiceHandler.HandleVoidInvoice)
 						r.With(middleware.RequireRole("treasurer", "admin"),
-							middleware.RequireFreshTOTP(10*time.Minute)).
+							middleware.RequireFreshTOTPDefault()).
 							Delete("/invoices/{invoiceID}", invoiceHandler.HandleDeleteInvoice)
 					}
 				})
@@ -737,14 +738,14 @@ func main() {
 					r.Group(func(r chi.Router) {
 						r.Use(middleware.RequireRole("admin"))
 						r.Get("/export.csv", adminUsersHandler.HandleExportUsersCSV)
-						r.With(middleware.RequireFreshTOTP(10 * time.Minute)).
+						r.With(middleware.RequireFreshTOTPDefault()).
 							Post("/import", adminUsersHandler.HandleImportUsersCSV)
 					})
 
 					// High-blast-radius mutations — re-prompt for TOTP
 					// each time, regardless of the 12h step-up window.
 					r.Group(func(r chi.Router) {
-						r.Use(middleware.RequireFreshTOTP(10 * time.Minute))
+						r.Use(middleware.RequireFreshTOTPDefault())
 						r.Post("/", adminUsersHandler.HandleCreateUser)
 						r.Patch("/{userID}", adminUsersHandler.HandleUpdateUser)
 						r.Put("/{userID}/roles", adminUsersHandler.HandleUpdateUserRoles)
@@ -805,7 +806,7 @@ func main() {
 						// Outbound mail is irreversible; gate sends on a
 						// fresh TOTP re-verify (10-min window), same
 						// posture as void-invoice / delete-user.
-						r.With(middleware.RequireFreshTOTP(10 * time.Minute)).
+						r.With(middleware.RequireFreshTOTPDefault()).
 							Post("/{address}/send", inboxHandler.HandleSend)
 					})
 				}
@@ -819,7 +820,7 @@ func main() {
 					// window, matching the admin-users UX so the SPA can
 					// surface the in-context modal instead of failing silently.
 					r.Group(func(r chi.Router) {
-						r.Use(middleware.RequireFreshTOTP(10 * time.Minute))
+						r.Use(middleware.RequireFreshTOTPDefault())
 						r.Post("/", adminSlipsHandler.HandleCreateSlip)
 						r.Put("/{slipID}", adminSlipsHandler.HandleUpdateSlip)
 						r.Delete("/{slipID}", adminSlipsHandler.HandleDeleteSlip)
@@ -859,17 +860,17 @@ func main() {
 						Get("/settings/financials", clubSettingsHandler.HandleGetFinancialSettings)
 					r.With(
 						middleware.RequireRole("treasurer", "admin"),
-						middleware.RequireFreshTOTP(10*time.Minute),
+						middleware.RequireFreshTOTPDefault(),
 					).Patch("/settings/financials", clubSettingsHandler.HandleUpdateFinancialSettings)
 					r.With(middleware.RequireRole("treasurer", "admin")).
 						Get("/settings/financials/faktura-logo", clubSettingsHandler.HandleGetFakturaLogo)
 					r.With(
 						middleware.RequireRole("treasurer", "admin"),
-						middleware.RequireFreshTOTP(10*time.Minute),
+						middleware.RequireFreshTOTPDefault(),
 					).Post("/settings/financials/faktura-logo", clubSettingsHandler.HandleUploadFakturaLogo)
 					r.With(
 						middleware.RequireRole("treasurer", "admin"),
-						middleware.RequireFreshTOTP(10*time.Minute),
+						middleware.RequireFreshTOTPDefault(),
 					).Delete("/settings/financials/faktura-logo", clubSettingsHandler.HandleDeleteFakturaLogo)
 
 					// Multi-account bank registry (drift/høyrente/other).
@@ -878,9 +879,9 @@ func main() {
 					r.Route("/settings/bank-accounts", func(r chi.Router) {
 						r.Use(middleware.RequireRole("treasurer", "admin"))
 						r.Get("/", bankAccountsHandler.HandleList)
-						r.With(middleware.RequireFreshTOTP(10*time.Minute)).Post("/", bankAccountsHandler.HandleCreate)
-						r.With(middleware.RequireFreshTOTP(10*time.Minute)).Put("/{accountID}", bankAccountsHandler.HandleUpdate)
-						r.With(middleware.RequireFreshTOTP(10*time.Minute)).Delete("/{accountID}", bankAccountsHandler.HandleArchive)
+						r.With(middleware.RequireFreshTOTPDefault()).Post("/", bankAccountsHandler.HandleCreate)
+						r.With(middleware.RequireFreshTOTPDefault()).Put("/{accountID}", bankAccountsHandler.HandleUpdate)
+						r.With(middleware.RequireFreshTOTPDefault()).Delete("/{accountID}", bankAccountsHandler.HandleArchive)
 					})
 				}
 
@@ -890,11 +891,11 @@ func main() {
 					Get("/settings/site-logo", clubSettingsHandler.HandleGetSiteLogo)
 				r.With(
 					middleware.RequireRole("treasurer", "admin"),
-					middleware.RequireFreshTOTP(10*time.Minute),
+					middleware.RequireFreshTOTPDefault(),
 				).Post("/settings/site-logo", clubSettingsHandler.HandleUploadSiteLogo)
 				r.With(
 					middleware.RequireRole("treasurer", "admin"),
-					middleware.RequireFreshTOTP(10*time.Minute),
+					middleware.RequireFreshTOTPDefault(),
 				).Delete("/settings/site-logo", clubSettingsHandler.HandleDeleteSiteLogo)
 
 				r.Route("/slip-shares", func(r chi.Router) {
@@ -991,7 +992,7 @@ func main() {
 							r.Get("/{importID}/unmatched", accountingHandler.HandleListUnmatchedRows)
 							r.Post("/{importID}/rows/{rowID}/match", accountingHandler.HandleMatchBankRow)
 							r.Post("/{importID}/auto-match", accountingHandler.HandleAutoMatchImport)
-							r.With(middleware.RequireFreshTOTP(10 * time.Minute)).
+							r.With(middleware.RequireFreshTOTPDefault()).
 								Patch("/{importID}/account", accountingHandler.HandleReassignBankImport)
 						})
 

@@ -3,7 +3,7 @@ import { computed, ref, watch, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Clock } from 'lucide-vue-next'
 import { useTotpGateStore } from '@/stores/totpGate'
-import { useAuthStore, TOTP_ACTION_FRESH_MS } from '@/stores/auth'
+import { useAuthStore, totpActionFreshMs } from '@/stores/auth'
 
 const { t } = useI18n()
 const gate = useTotpGateStore()
@@ -14,7 +14,7 @@ const visible = computed(() => gate.warnExpiring && !gate.pending)
 // Absolute moment the per-action freshness window lapses.
 const expiresAtMs = computed(() => {
   const v = auth.user?.totpVerifiedAt
-  return v ? v.getTime() + TOTP_ACTION_FRESH_MS : null
+  return v ? v.getTime() + totpActionFreshMs.value : null
 })
 
 const remainingMs = ref(0)

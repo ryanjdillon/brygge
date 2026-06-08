@@ -29,6 +29,7 @@ interface MeResponse {
   totp_verified_at?: string | null
   preferred_language?: string | null
   club_default_language?: string
+  fresh_totp_window_ms?: number
 }
 
 // Mirrors the 12-hour step-up window enforced by the backend's
@@ -36,12 +37,17 @@ interface MeResponse {
 // nav links when the gate would 403 anyway).
 const TOTP_FRESH_MS = 12 * 60 * 60 * 1000
 
-// Mirrors the per-action freshness window enforced by RequireFreshTOTP
-// on mutating admin endpoints. Used to prompt the step-up modal on
-// button click instead of after form submit.
-export const TOTP_ACTION_FRESH_MS = 10 * 60 * 1000
-// Show a "still working?" warning this many ms before expiry.
-export const TOTP_ACTION_WARN_MS = 60 * 1000
+// Per-action freshness window enforced by RequireFreshTOTP on mutating
+// admin endpoints. The default tracks the backend's compiled default
+// but is overridden at session-load time by the server-configured
+// value surfaced on /session/me — that's the source of truth.
+export const totpActionFreshMs = ref(10 * 60 * 1000)
+
+// Lead time for the "still working?" warning. Capped at 1/10 of the
+// fresh window so silly warnings don't fire when the window is short.
+export const totpActionWarnMs = computed(() =>
+  Math.min(60 * 1000, Math.floor(totpActionFreshMs.value / 10)),
+)
 
 const ADMIN_ROLES = ['admin', 'board', 'treasurer', 'harbor_master']
 
@@ -67,7 +73,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   const hasFreshTotp = computed(() => {
     if (!user.value?.totpEnabled || !user.value.totpVerifiedAt) return false
-    return Date.now() - user.value.totpVerifiedAt.getTime() < TOTP_ACTION_FRESH_MS
+    return Date.now() - user.value.totpVerifiedAt.getTime() < totpActionFreshMs.value
   })
 
   async function checkSession() {
@@ -80,6 +86,9 @@ export const useAuthStore = defineStore('auth', () => {
         return
       }
       const data: MeResponse = await res.json()
+      if (typeof data.fresh_totp_window_ms === 'number' && data.fresh_totp_window_ms > 0) {
+        totpActionFreshMs.value = data.fresh_totp_window_ms
+      }
       const first = data.first_name ?? ''
       const last = data.last_name ?? ''
       const clubDefaultLanguage = data.club_default_language || 'nb'
@@ -160,7 +169,7 @@ export const useAuthStore = defineStore('auth', () => {
         warnTimer = null
       }
       if (!verifiedAt || !user.value?.totpEnabled) return
-      const warnAt = verifiedAt.getTime() + TOTP_ACTION_FRESH_MS - TOTP_ACTION_WARN_MS
+      const warnAt = verifiedAt.getTime() + totpActionFreshMs.value - totpActionWarnMs.value
       const delay = warnAt - Date.now()
       if (delay <= 0) return
       warnTimer = setTimeout(() => {

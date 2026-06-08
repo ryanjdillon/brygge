@@ -110,8 +110,35 @@ func RequireAdminTOTP(sessionService *auth.SessionService) func(http.Handler) ht
 	}
 }
 
+// freshTOTPWindow is the package-level default that RequireFreshTOTP
+// (no-arg form) falls back to. It's set once at server startup via
+// SetFreshTOTPWindow so route registration doesn't need to pass the
+// duration at every call site. See DIL-344.
+var freshTOTPWindow = 10 * time.Minute
+
+// SetFreshTOTPWindow installs the configured default. Call once during
+// server startup; safe to read concurrently afterward because no other
+// code path mutates the value.
+func SetFreshTOTPWindow(window time.Duration) {
+	if window > 0 {
+		freshTOTPWindow = window
+	}
+}
+
+// FreshTOTPWindow returns the configured default — useful for surfacing
+// the value to the SPA on /session/me so the countdown stays in sync.
+func FreshTOTPWindow() time.Duration { return freshTOTPWindow }
+
+// RequireFreshTOTPDefault gates a route on the package default window,
+// avoiding the duplicated `10 * time.Minute` literal at every call
+// site. Prefer this for production routes; use RequireFreshTOTP only
+// when a specific route genuinely needs a different window.
+func RequireFreshTOTPDefault() func(http.Handler) http.Handler {
+	return RequireFreshTOTP(freshTOTPWindow)
+}
+
 // RequireFreshTOTP gates a route on a TOTP verification within a short
-// (per-action) window — typically 5 minutes for high-blast-radius
+// (per-action) window — typically 5–15 minutes for high-blast-radius
 // operations like role grants, account deletion, or bank-account
 // changes. Returns `403 totp_fresh_required` distinct from
 // RequireAdminTOTP's `totp_required`, so the SPA can render an

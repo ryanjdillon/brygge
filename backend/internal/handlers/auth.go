@@ -54,6 +54,7 @@ func (h *AuthHandler) HandleMe(w http.ResponseWriter, r *http.Request) {
 		Email:               email,
 		PreferredLanguage:   preferredLanguage,
 		ClubDefaultLanguage: clubDefaultLanguage,
+		FreshTOTPWindowMs:   middleware.FreshTOTPWindow().Milliseconds(),
 	}
 	if info := middleware.GetSessionInfo(r.Context()); info != nil {
 		resp.TOTPEnabled = info.TOTPEnabled
@@ -77,4 +78,8 @@ type meResponse struct {
 	// when they've made no choice (→ fall back to the club default).
 	PreferredLanguage   *string `json:"preferred_language"`
 	ClubDefaultLanguage string  `json:"club_default_language"`
+	// FreshTOTPWindowMs is the server's configured per-action TOTP
+	// freshness window in milliseconds. The SPA reads it so the
+	// in-context countdown matches the backend gate.
+	FreshTOTPWindowMs int64 `json:"fresh_totp_window_ms"`
 }
