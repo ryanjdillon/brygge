@@ -1401,6 +1401,7 @@
       "bankAccount": "Bankkonto",
       "transfers": "Interne overføringer",
       "closedPeriodsNotice": "Rader fra følgende lukkede perioder ble ikke avstemt automatisk: {years}. Gjenåpne periodene om du vil bokføre dem.",
+      "autoMatchedNotice": "Automatisk koblet til den registrerte bankkontoen (hovedbokskode {code}) basert på utskriftens eget kontonummer — valget ditt ble overstyrt for å hindre feilopplasting.",
       "periodClosedNotice": "Regnskapsperiode {year} er lukket — gjenåpne den før du oppretter bilaget.",
       "tabImports": "Import",
       "tabAccounts": "Kontoer",

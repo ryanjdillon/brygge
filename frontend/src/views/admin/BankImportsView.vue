@@ -427,6 +427,9 @@ const filterMonthValue = computed<number>({
           · {{ t('admin.bankImports.skipped') }}: {{ bankResult.skipped_dup }}
           · {{ t('admin.bankImports.matched') }}: {{ bankResult.matched }}
           · {{ t('admin.bankImports.transfers') }}: {{ bankResult.transfers }}
+          <p v-if="bankResult.auto_matched" class="mt-2 rounded bg-blue-50 px-2 py-1 text-blue-800">
+            {{ t('admin.bankImports.autoMatchedNotice', { code: bankResult.bank_account_code }) }}
+          </p>
           <p v-if="bankResult.closed_periods?.length" class="mt-2 rounded bg-yellow-50 px-2 py-1 text-yellow-800">
             {{ t('admin.bankImports.closedPeriodsNotice', { years: bankResult.closed_periods.join(', ') }) }}
           </p>

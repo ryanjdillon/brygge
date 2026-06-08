@@ -451,10 +451,14 @@ func (s *Service) resolvePeriod(ctx context.Context, clubID string, date time.Ti
 	return s.ResolvePeriodForDate(ctx, clubID, date)
 }
 
-// inferOwnAccountNumber picks the bank account number that this CSV
+// InferOwnAccountNumber picks the bank account number that this CSV
 // represents by counting which value appears most often across the
 // from_account and to_account columns of all rows. The bank itself
 // always sits on one side of every transaction it lists.
+func InferOwnAccountNumber(rows []BankRow) string {
+	return inferOwnAccountNumber(rows)
+}
+
 func inferOwnAccountNumber(rows []BankRow) string {
 	counts := map[string]int{}
 	for _, r := range rows {

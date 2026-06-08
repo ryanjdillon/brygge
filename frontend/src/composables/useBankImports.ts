@@ -39,6 +39,8 @@ export interface BankImportResult {
   matched: number
   transfers: number
   closed_periods?: string[]
+  bank_account_code: string
+  auto_matched: boolean
 }
 
 export interface VippsImportSummary {

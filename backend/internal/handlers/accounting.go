@@ -605,6 +605,34 @@ func (h *AccountingHandler) HandleImportBankStatement(w http.ResponseWriter, r *
 		return
 	}
 
+	// Auto-match the statement's own account number against the club's
+	// registered bank accounts. When the user-selected GL code doesn't
+	// match what the file actually contains, we trust the file —
+	// uploading a høyrente statement with GL code 1920 (drift) was a
+	// real incident this guards against. See DIL-342.
+	inferred := accounting.InferOwnAccountNumber(rows)
+	autoMatched := false
+	if inferred != "" {
+		var matchedGL string
+		err := h.svc.DB().QueryRow(r.Context(),
+			`SELECT gl_code FROM club_bank_accounts
+			  WHERE club_id = $1
+			    AND archived_at IS NULL
+			    AND regexp_replace(account_number, '\D', '', 'g')
+			      = regexp_replace($2, '\D', '', 'g')`,
+			claims.ClubID, inferred,
+		).Scan(&matchedGL)
+		if err == nil && matchedGL != "" && matchedGL != bankAccountCode {
+			h.log.Info().
+				Str("user_selected", bankAccountCode).
+				Str("matched", matchedGL).
+				Str("account_number", inferred).
+				Msg("bank_import: auto-matched statement to registered account")
+			bankAccountCode = matchedGL
+			autoMatched = true
+		}
+	}
+
 	var importID string
 	err = h.svc.DB().QueryRow(r.Context(),
 		`INSERT INTO bank_imports (club_id, filename, format, bank_account_code, imported_by, row_count)
@@ -641,15 +669,17 @@ func (h *AccountingHandler) HandleImportBankStatement(w http.ResponseWriter, r *
 	}
 
 	JSON(w, http.StatusCreated, map[string]any{
-		"id":              importID,
-		"filename":        header.Filename,
-		"format":          formatName,
-		"rows_total":      len(rows),
-		"imported":        result.Imported,
-		"skipped_dup":     result.SkippedDup,
-		"matched":         result.Matched,
-		"transfers":       result.Transfers,
-		"closed_periods":  result.ClosedPeriods,
+		"id":                importID,
+		"filename":          header.Filename,
+		"format":            formatName,
+		"rows_total":        len(rows),
+		"imported":          result.Imported,
+		"skipped_dup":       result.SkippedDup,
+		"matched":           result.Matched,
+		"transfers":         result.Transfers,
+		"closed_periods":    result.ClosedPeriods,
+		"bank_account_code": bankAccountCode,
+		"auto_matched":      autoMatched,
 	})
 }
 

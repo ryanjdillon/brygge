@@ -1405,6 +1405,7 @@
       "bankAccount": "Bank account",
       "transfers": "Transfers",
       "closedPeriodsNotice": "Rows from the following closed period(s) were not auto-matched: {years}. Reopen those periods if you want to book them.",
+      "autoMatchedNotice": "Auto-matched to the registered bank account (GL code {code}) based on the statement's own account number — your selection was overridden to prevent a misuploaded statement.",
       "periodClosedNotice": "Fiscal period {year} is closed — reopen it before creating the bilag.",
       "tabImports": "Imports",
       "tabAccounts": "Accounts",

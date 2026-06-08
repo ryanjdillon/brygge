@@ -1401,6 +1401,7 @@
       "bankAccount": "Bankkonto",
       "transfers": "Interne overføringar",
       "closedPeriodsNotice": "Rader frå følgjande lukka periodar vart ikkje avstemte automatisk: {years}. Opne periodane att om du vil bokføre dei.",
+      "autoMatchedNotice": "Automatisk kopla til den registrerte bankkontoen (hovudbokskode {code}) basert på utskrifta sitt eige kontonummer — valet ditt vart overstyrt for å hindre feilopplasting.",
       "periodClosedNotice": "Rekneskapsperiode {year} er lukka — opne han att før du opprettar bilaget.",
       "tabImports": "Import",
       "tabAccounts": "Kontoar",
