@@ -524,12 +524,14 @@
       "accounts": "Chart of Accounts",
       "periods": "Periods",
       "journal": "Journal entries",
-      "bankImports": "Bank & Vipps"
+      "bankImports": "Bank & Vipps",
+      "bankAccounts": "Bank accounts"
     },
     "financialSettings": {
       "title": "Settings",
       "subtitle": "These values are used by the faktura function and appear on every PDF the club issues.",
       "cardDesc": "Org.nr, address, bank account, logo",
+      "bankAccountMoved": "Multiple accounts (drift, høyrente) and choosing which one prints on fakturas is now managed in",
       "identityGroup": "Club identity",
       "contactGroup": "Contact information",
       "logosGroup": "Logos",
@@ -1338,6 +1340,29 @@
     "groupEconomy": "Economy",
     "groupShop": "Shop",
     "groupSite": "Site",
+    "bankAccounts": {
+      "title": "Bank accounts",
+      "intro": "Register the club's bank accounts. The account flagged as faktura default is the one printed on every member invoice — change it here if payments need to land in a different account.",
+      "add": "Add account",
+      "addTitle": "Add bank account",
+      "editTitle": "Edit bank account",
+      "empty": "No bank accounts registered yet.",
+      "accountNumber": "Account number",
+      "roleLabel": "Role",
+      "role": {
+        "drift": "Drift (operating)",
+        "hoyrente": "Høyrente (savings)",
+        "other": "Other"
+      },
+      "glCode": "GL code",
+      "labelOptional": "Label (optional)",
+      "labelPlaceholder": "e.g. Sparebank Vest",
+      "useForFakturas": "Use this account on member invoices",
+      "fakturaDefault": "Faktura default",
+      "archive": "Archive",
+      "cannotArchiveDefault": "Promote another account to faktura default first",
+      "confirmArchive": "Archive account {account}? It will no longer appear in selectors but history is preserved."
+    },
     "bankImports": {
       "title": "Bank & Vipps",
       "subtitle": "Bank accounts and Vipps merchant numbers — view transactions by period, upload statements, and reconcile.",

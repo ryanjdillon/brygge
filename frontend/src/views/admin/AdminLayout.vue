@@ -94,6 +94,7 @@ const navGroups = computed<NavGroup[]>(() => {
         { to: '/admin/accounting/faktura', icon: Receipt, label: t('admin.sidebar.faktura'), roles: ['treasurer', 'admin'], feature: 'accounting' },
         { to: '/admin/accounting/accounts', icon: ClipboardList, label: t('admin.sidebar.accounts'), roles: ['treasurer', 'board', 'admin'], feature: 'accounting' },
         { to: '/admin/accounting/journal', icon: BookOpen, label: t('admin.sidebar.journal'), roles: ['treasurer', 'board', 'admin'], feature: 'accounting' },
+        { to: '/admin/accounting/bank-accounts', icon: Landmark, label: t('admin.sidebar.bankAccounts'), roles: ['treasurer', 'admin'], feature: 'accounting' },
         { to: '/admin/accounting/bank-imports', icon: Landmark, label: t('admin.sidebar.bankImports'), roles: ['treasurer', 'admin'], feature: 'accounting' },
       ],
     },

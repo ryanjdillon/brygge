@@ -375,6 +375,12 @@ async function save() {
         <legend class="px-1 text-xs font-semibold text-slate-700">{{ t('admin.financialSettings.bankingGroup') }}</legend>
       <FormField :label="t('admin.financialSettings.bankAccount')" :helper-text="t('admin.financialSettings.bankAccountHint')">
         <Input v-model="bankAccount" placeholder="1234.56.78901" input-class="font-mono" />
+        <p class="mt-2 text-xs text-slate-600">
+          {{ t('admin.financialSettings.bankAccountMoved') }}
+          <RouterLink to="/admin/accounting/bank-accounts" class="font-semibold text-blue-700 hover:underline">
+            {{ t('admin.sidebar.bankAccounts') }}
+          </RouterLink>.
+        </p>
       </FormField>
 
       <FormField :label="t('admin.financialSettings.websiteUrl')" :helper-text="t('admin.financialSettings.websiteUrlHint')">

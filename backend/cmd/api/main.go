@@ -218,6 +218,7 @@ func main() {
 	mapHandler := handlers.NewMapHandler(db, &cfg, log)
 	harborHandler := handlers.NewHarborHandler(db, &cfg, log)
 	clubSettingsHandler := handlers.NewClubSettingsHandler(db, &cfg, log)
+	bankAccountsHandler := handlers.NewBankAccountsHandler(db, log)
 	slipSharesHandler := handlers.NewSlipSharesHandler(db, &cfg, log)
 	notificationsHandler := handlers.NewNotificationsHandler(db, &cfg, log)
 	gdprHandler := handlers.NewGDPRHandler(db, &cfg, log)
@@ -870,6 +871,17 @@ func main() {
 						middleware.RequireRole("treasurer", "admin"),
 						middleware.RequireFreshTOTP(10*time.Minute),
 					).Delete("/settings/financials/faktura-logo", clubSettingsHandler.HandleDeleteFakturaLogo)
+
+					// Multi-account bank registry (drift/høyrente/other).
+					// Faktura PDFs read the row flagged is_default_for_invoices;
+					// statement uploads will match against account_number.
+					r.Route("/settings/bank-accounts", func(r chi.Router) {
+						r.Use(middleware.RequireRole("treasurer", "admin"))
+						r.Get("/", bankAccountsHandler.HandleList)
+						r.With(middleware.RequireFreshTOTP(10*time.Minute)).Post("/", bankAccountsHandler.HandleCreate)
+						r.With(middleware.RequireFreshTOTP(10*time.Minute)).Put("/{accountID}", bankAccountsHandler.HandleUpdate)
+						r.With(middleware.RequireFreshTOTP(10*time.Minute)).Delete("/{accountID}", bankAccountsHandler.HandleArchive)
+					})
 				}
 
 				// Site logo lives outside the Accounting feature gate

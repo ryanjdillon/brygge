@@ -520,12 +520,14 @@
       "accounts": "Kontoplan",
       "periods": "Periodar",
       "journal": "Bilag",
-      "bankImports": "Bank og Vipps"
+      "bankImports": "Bank og Vipps",
+      "bankAccounts": "Bankkontoar"
     },
     "financialSettings": {
       "title": "Innstillingar",
       "subtitle": "Desse verdiane blir brukte av fakturafunksjonen og blir viste på kvar PDF klubben sender.",
       "cardDesc": "Org.nr, adresse, kontonummer, logo",
+      "bankAccountMoved": "Fleire kontoar (drift, høgrente) og val av kva for ein som vert skriven på fakturaer vert no styrt i",
       "identityGroup": "Klubbidentitet",
       "contactGroup": "Kontaktinformasjon",
       "logosGroup": "Logoar",
@@ -1334,6 +1336,29 @@
     "groupEconomy": "Økonomi",
     "groupShop": "Butikk",
     "groupSite": "Nettstad",
+    "bankAccounts": {
+      "title": "Bankkontoar",
+      "intro": "Registrer bankkontoane til klubben. Kontoen som er merka som faktura-standard er den som vert skriven på kvar medlemsfaktura — byt ho her dersom innbetalingar skal til ein annan konto.",
+      "add": "Legg til konto",
+      "addTitle": "Legg til bankkonto",
+      "editTitle": "Rediger bankkonto",
+      "empty": "Ingen bankkontoar registrerte enno.",
+      "accountNumber": "Kontonummer",
+      "roleLabel": "Rolle",
+      "role": {
+        "drift": "Drift",
+        "hoyrente": "Høgrente",
+        "other": "Anna"
+      },
+      "glCode": "Hovudbokskode",
+      "labelOptional": "Etikett (valfritt)",
+      "labelPlaceholder": "t.d. Sparebank Vest",
+      "useForFakturas": "Bruk denne kontoen på medlemsfakturaer",
+      "fakturaDefault": "Faktura-standard",
+      "archive": "Arkiver",
+      "cannotArchiveDefault": "Set ein annan konto som faktura-standard fyrst",
+      "confirmArchive": "Arkivere konto {account}? Han vert ikkje synleg i veljarane lenger, men historikken er teken vare på."
+    },
     "bankImports": {
       "title": "Bank og Vipps",
       "subtitle": "Bankkontoar og Vipps-salsstader — vis transaksjonar per periode, last opp utskrifter og avstem.",

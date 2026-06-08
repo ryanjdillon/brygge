@@ -520,12 +520,14 @@
       "accounts": "Kontoplan",
       "periods": "Perioder",
       "journal": "Bilag",
-      "bankImports": "Bank og Vipps"
+      "bankImports": "Bank og Vipps",
+      "bankAccounts": "Bankkontoer"
     },
     "financialSettings": {
       "title": "Innstillinger",
       "subtitle": "Disse verdiene brukes av fakturafunksjonen og vises på hver PDF klubben sender.",
       "cardDesc": "Org.nr, adresse, kontonummer, logo",
+      "bankAccountMoved": "Flere kontoer (drift, høyrente) og valg av hvilken som skrives på fakturaer styres nå i",
       "identityGroup": "Klubbidentitet",
       "contactGroup": "Kontaktinformasjon",
       "logosGroup": "Logoer",
@@ -1334,6 +1336,29 @@
     "groupEconomy": "Økonomi",
     "groupShop": "Butikk",
     "groupSite": "Nettsted",
+    "bankAccounts": {
+      "title": "Bankkontoer",
+      "intro": "Registrer klubbens bankkontoer. Kontoen som er merket som faktura-standard er den som skrives på hver medlemsfaktura — bytt den her hvis innbetalinger skal til en annen konto.",
+      "add": "Legg til konto",
+      "addTitle": "Legg til bankkonto",
+      "editTitle": "Rediger bankkonto",
+      "empty": "Ingen bankkontoer registrert ennå.",
+      "accountNumber": "Kontonummer",
+      "roleLabel": "Rolle",
+      "role": {
+        "drift": "Drift",
+        "hoyrente": "Høyrente",
+        "other": "Annet"
+      },
+      "glCode": "Hovedbokskode",
+      "labelOptional": "Etikett (valgfritt)",
+      "labelPlaceholder": "f.eks. Sparebank Vest",
+      "useForFakturas": "Bruk denne kontoen på medlemsfakturaer",
+      "fakturaDefault": "Faktura-standard",
+      "archive": "Arkiver",
+      "cannotArchiveDefault": "Sett en annen konto som faktura-standard først",
+      "confirmArchive": "Arkivere konto {account}? Den vises ikke i velgere lenger, men historikken er bevart."
+    },
     "bankImports": {
       "title": "Bank og Vipps",
       "subtitle": "Bankkontoer og Vipps-salgssteder — vis transaksjoner per periode, last opp utskrifter og avstem.",

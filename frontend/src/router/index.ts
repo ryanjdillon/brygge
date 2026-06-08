@@ -353,6 +353,11 @@ const routes: RouteRecordRaw[] = [
         name: 'admin-bank-imports',
         component: () => import('@/views/admin/BankImportsView.vue'),
       },
+      {
+        path: 'accounting/bank-accounts',
+        name: 'admin-bank-accounts',
+        component: () => import('@/views/admin/BankAccountsView.vue'),
+      },
     ],
   },
 ]
