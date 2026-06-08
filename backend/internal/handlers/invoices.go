@@ -254,11 +254,19 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Get club settings for PDF
+	// Get club settings for PDF. bank_account resolution prefers the
+	// row flagged is_default_for_invoices in club_bank_accounts; the
+	// clubs.bank_account column is the fallback for the deprecation
+	// window. See DIL-338/341.
 	var clubName, orgNumber, clubAddress, bankAccount, website, treasurerEmail, logoMIME string
 	var logoData []byte
 	err = h.db.QueryRow(ctx,
-		`SELECT name, COALESCE(org_number, ''), COALESCE(address, ''), COALESCE(bank_account, ''),
+		`SELECT name, COALESCE(org_number, ''), COALESCE(address, ''),
+		        COALESCE(
+		          (SELECT account_number FROM club_bank_accounts
+		            WHERE club_id = clubs.id AND is_default_for_invoices AND archived_at IS NULL
+		            LIMIT 1),
+		          bank_account, ''),
 		        COALESCE(website_url, ''), COALESCE(treasurer_email, ''),
 		        faktura_logo_data, COALESCE(faktura_logo_mime, '')
 		 FROM clubs WHERE id = $1`,
