@@ -254,6 +254,14 @@ type clubFinancialSettings struct {
 	MotorhomeRules          string `json:"motorhome_rules"`
 	MotorhomeCTATitle       string `json:"motorhome_cta_title"`
 	MotorhomeCTADescription string `json:"motorhome_cta_description"`
+	// Per-club module toggles. Admins flip these from Site settings;
+	// the public /api/v1/features endpoint reads them too.
+	FeatureBookings       bool `json:"feature_bookings"`
+	FeatureProjects       bool `json:"feature_projects"`
+	FeatureCalendar       bool `json:"feature_calendar"`
+	FeatureCommerce       bool `json:"feature_commerce"`
+	FeatureCommunications bool `json:"feature_communications"`
+	FeatureAccounting     bool `json:"feature_accounting"`
 }
 
 // HandleGetFinancialSettings returns the club's invoice-relevant
@@ -283,7 +291,9 @@ func (h *ClubSettingsHandler) HandleGetFinancialSettings(w http.ResponseWriter, 
 		        COALESCE(harbor_cta_title, ''), COALESCE(harbor_cta_description, ''),
 		        COALESCE(motorhome_power, ''), COALESCE(motorhome_facilities, ''),
 		        COALESCE(motorhome_checkin, ''), COALESCE(motorhome_rules, ''),
-		        COALESCE(motorhome_cta_title, ''), COALESCE(motorhome_cta_description, '')
+		        COALESCE(motorhome_cta_title, ''), COALESCE(motorhome_cta_description, ''),
+		        feature_bookings, feature_projects, feature_calendar,
+		        feature_commerce, feature_communications, feature_accounting
 		   FROM clubs WHERE id = $1`,
 		claims.ClubID,
 	).Scan(&s.Name, &s.OrgNumber, &s.Address,
@@ -301,7 +311,9 @@ func (h *ClubSettingsHandler) HandleGetFinancialSettings(w http.ResponseWriter, 
 		&s.HarborCTATitle, &s.HarborCTADescription,
 		&s.MotorhomePower, &s.MotorhomeFacilities,
 		&s.MotorhomeCheckin, &s.MotorhomeRules,
-		&s.MotorhomeCTATitle, &s.MotorhomeCTADescription); err != nil {
+		&s.MotorhomeCTATitle, &s.MotorhomeCTADescription,
+		&s.FeatureBookings, &s.FeatureProjects, &s.FeatureCalendar,
+		&s.FeatureCommerce, &s.FeatureCommunications, &s.FeatureAccounting); err != nil {
 		h.log.Error().Err(err).Msg("load financial settings")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
@@ -334,6 +346,12 @@ type updateFinancialSettingsRequest struct {
 	MotorhomeRules          *string  `json:"motorhome_rules,omitempty"`
 	MotorhomeCTATitle       *string  `json:"motorhome_cta_title,omitempty"`
 	MotorhomeCTADescription *string  `json:"motorhome_cta_description,omitempty"`
+	FeatureBookings         *bool    `json:"feature_bookings,omitempty"`
+	FeatureProjects         *bool    `json:"feature_projects,omitempty"`
+	FeatureCalendar         *bool    `json:"feature_calendar,omitempty"`
+	FeatureCommerce         *bool    `json:"feature_commerce,omitempty"`
+	FeatureCommunications   *bool    `json:"feature_communications,omitempty"`
+	FeatureAccounting       *bool    `json:"feature_accounting,omitempty"`
 }
 
 // HandleUpdateFinancialSettings updates org_number, address, and
@@ -379,7 +397,13 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		   motorhome_checkin         = COALESCE($22, motorhome_checkin),
 		   motorhome_rules           = COALESCE($23, motorhome_rules),
 		   motorhome_cta_title       = COALESCE($24, motorhome_cta_title),
-		   motorhome_cta_description = COALESCE($25, motorhome_cta_description)
+		   motorhome_cta_description = COALESCE($25, motorhome_cta_description),
+		   feature_bookings          = COALESCE($26, feature_bookings),
+		   feature_projects          = COALESCE($27, feature_projects),
+		   feature_calendar          = COALESCE($28, feature_calendar),
+		   feature_commerce          = COALESCE($29, feature_commerce),
+		   feature_communications    = COALESCE($30, feature_communications),
+		   feature_accounting        = COALESCE($31, feature_accounting)
 		 WHERE id = $1`,
 		claims.ClubID, req.OrgNumber, req.Address, req.Phone, req.VHFChannel,
 		req.Latitude, req.Longitude,
@@ -391,6 +415,8 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		req.MotorhomePower, req.MotorhomeFacilities,
 		req.MotorhomeCheckin, req.MotorhomeRules,
 		req.MotorhomeCTATitle, req.MotorhomeCTADescription,
+		req.FeatureBookings, req.FeatureProjects, req.FeatureCalendar,
+		req.FeatureCommerce, req.FeatureCommunications, req.FeatureAccounting,
 	); err != nil {
 		h.log.Error().Err(err).Msg("update financial settings")
 		Error(w, http.StatusInternalServerError, "internal error")

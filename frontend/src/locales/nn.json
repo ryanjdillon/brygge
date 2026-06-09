@@ -1313,7 +1313,17 @@
       "treasurerEmailHint": "Blir skrive ut på kvar faktura: «Spørsmål kan sendast til kasserar på …».",
       "secretaryEmail": "Sekretær",
       "harborMasterEmail": "Hamnesjef",
-      "saved": "Lagra"
+      "saved": "Lagra",
+      "modulesGroup": "Modular",
+      "modulesHint": "Slå av ein modul for å skjule han frå det offentlege nettstaden, medlemsportalen og admin-sidemenyen. Eksisterande data blir tekne vare på og dukkar opp att så snart du slår modulen på att.",
+      "modules": {
+        "bookings": "Booking (båtplass, bubil, klubblokale)",
+        "projects": "Prosjekt og dugnad",
+        "calendar": "Kalender",
+        "commerce": "Medlemsbutikk",
+        "communications": "Kommunikasjon og forum",
+        "accounting": "Rekneskap og faktura"
+      }
     },
     "harborSettings": {
       "title": "Hamneinformasjon",

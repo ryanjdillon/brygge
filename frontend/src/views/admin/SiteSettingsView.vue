@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { reactive, ref, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { useQueryClient } from '@tanstack/vue-query'
 import { ArrowLeft, Save } from 'lucide-vue-next'
 import { useTotpGateStore } from '@/stores/totpGate'
 import { useAuthStore } from '@/stores/auth'
@@ -9,6 +10,7 @@ import FileInput from '@/components/ui/form/FileInput.vue'
 import FormField from '@/components/ui/form/FormField.vue'
 import Input from '@/components/ui/form/Input.vue'
 import NumberInput from '@/components/ui/form/NumberInput.vue'
+import Switch from '@/components/ui/form/Switch.vue'
 import Textarea from '@/components/ui/form/Textarea.vue'
 
 const { t } = useI18n()
@@ -38,6 +40,17 @@ const saving = ref(false)
 const error = ref<string | null>(null)
 const savedAt = ref<Date | null>(null)
 
+const queryClient = useQueryClient()
+
+const features = reactive({
+  bookings: true,
+  projects: true,
+  calendar: true,
+  commerce: true,
+  communications: true,
+  accounting: true,
+})
+
 async function ensureFreshTotp(): Promise<boolean> {
   if (auth.hasFreshTotp) return true
   return totpGate.open()
@@ -66,6 +79,12 @@ async function load() {
     hasSiteLogo.value = !!body.has_site_logo
     siteLogoMime.value = body.site_logo_mime ?? ''
     siteLogoCacheBust.value = Date.now()
+    features.bookings = body.feature_bookings ?? true
+    features.projects = body.feature_projects ?? true
+    features.calendar = body.feature_calendar ?? true
+    features.commerce = body.feature_commerce ?? true
+    features.communications = body.feature_communications ?? true
+    features.accounting = body.feature_accounting ?? true
   } catch (e) {
     error.value = (e as Error).message
   } finally {
@@ -155,6 +174,12 @@ async function save() {
         treasurer_email: treasurerEmail.value,
         secretary_email: secretaryEmail.value,
         harbor_master_email: harborMasterEmail.value,
+        feature_bookings: features.bookings,
+        feature_projects: features.projects,
+        feature_calendar: features.calendar,
+        feature_commerce: features.commerce,
+        feature_communications: features.communications,
+        feature_accounting: features.accounting,
       }),
     })
     if (!res.ok) {
@@ -162,6 +187,9 @@ async function save() {
       throw new Error(`${res.status} ${txt}`)
     }
     savedAt.value = new Date()
+    // Refresh the public features cache so the sidebar updates
+    // without a full reload after a module is toggled.
+    queryClient.invalidateQueries({ queryKey: ['features'] })
   } catch (e) {
     error.value = (e as Error).message
   } finally {
@@ -184,6 +212,19 @@ async function save() {
     <p v-if="loading" class="mt-6 text-sm text-gray-500">{{ t('common.loading') }}…</p>
 
     <form v-else class="mt-6 max-w-xl space-y-4" @submit.prevent="save">
+      <fieldset class="rounded-md border border-slate-200 bg-slate-50 p-3 space-y-3">
+        <legend class="px-1 text-xs font-semibold text-slate-700">{{ t('admin.siteSettings.modulesGroup') }}</legend>
+        <p class="text-xs text-slate-600">{{ t('admin.siteSettings.modulesHint') }}</p>
+        <div class="space-y-2 pt-1">
+          <Switch v-model="features.bookings">{{ t('admin.siteSettings.modules.bookings') }}</Switch>
+          <Switch v-model="features.projects">{{ t('admin.siteSettings.modules.projects') }}</Switch>
+          <Switch v-model="features.calendar">{{ t('admin.siteSettings.modules.calendar') }}</Switch>
+          <Switch v-model="features.commerce">{{ t('admin.siteSettings.modules.commerce') }}</Switch>
+          <Switch v-model="features.communications">{{ t('admin.siteSettings.modules.communications') }}</Switch>
+          <Switch v-model="features.accounting">{{ t('admin.siteSettings.modules.accounting') }}</Switch>
+        </div>
+      </fieldset>
+
       <fieldset class="rounded-md border border-slate-200 bg-slate-50 p-3 space-y-3">
         <legend class="px-1 text-xs font-semibold text-slate-700">{{ t('admin.siteSettings.identityGroup') }}</legend>
       <FormField :label="t('admin.siteSettings.clubName')" :helper-text="t('admin.siteSettings.clubNameHint')">

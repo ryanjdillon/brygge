@@ -176,7 +176,7 @@ func main() {
 		}
 	}
 
-	featuresHandler := handlers.NewFeaturesHandler(&cfg)
+	featuresHandler := handlers.NewFeaturesHandler(&cfg, db)
 	healthHandler := handlers.NewHealthHandler(db, rdb)
 	auditHandler := handlers.NewAuditHandler(db, auditService, &cfg, log)
 	authHandler := handlers.NewAuthHandler(db, &cfg, log)

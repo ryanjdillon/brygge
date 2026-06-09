@@ -1317,7 +1317,17 @@
       "treasurerEmailHint": "Printed on every faktura: \"Spørsmål kan sendes til kasserer på …\".",
       "secretaryEmail": "Sekretær (secretary)",
       "harborMasterEmail": "Havnesjef (harbor master)",
-      "saved": "Saved"
+      "saved": "Saved",
+      "modulesGroup": "Modules",
+      "modulesHint": "Switch a module off to hide it from the public site, member portal, and admin sidebar. Existing data is preserved and reappears the moment you switch it back on.",
+      "modules": {
+        "bookings": "Bookings (slips, motorhome, club room)",
+        "projects": "Projects & volunteer dugnad",
+        "calendar": "Calendar",
+        "commerce": "Member shop & merchandise",
+        "communications": "Communications & forum",
+        "accounting": "Accounting & faktura"
+      }
     },
     "harborSettings": {
       "title": "Harbor info",
