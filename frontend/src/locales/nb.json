@@ -743,7 +743,12 @@
       "reservationsHint": "Gjestebrygge- og bobil-bookinger per måned ({year}).",
       "reservationsTotal": "reservasjoner",
       "guestSlip": "Gjestebrygge",
-      "motorhome": "Bobil"
+      "motorhome": "Bobil",
+      "cashFlowTitle": "Kontantstrøm",
+      "cashFlowHint": "Inntekt vs kostnad per måned ({year}).",
+      "cashFlowIncome": "Inntekt",
+      "cashFlowExpense": "Kostnad",
+      "cashFlowNet": "netto"
     },
     "events": {
       "title": "Arrangementer",

@@ -686,6 +686,7 @@ func main() {
 					// payments table). Available wherever faktura is enabled.
 					r.Get("/price-item-summary", financialsHandler.HandleGetPriceItemSummary)
 					r.Get("/reservations-by-month", financialsHandler.HandleGetReservationsByMonth)
+					r.Get("/cash-flow", financialsHandler.HandleGetCashFlow)
 
 					if cfg.Features.Commerce {
 						// Commerce-side reporting: payments, overdue,

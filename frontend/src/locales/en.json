@@ -747,7 +747,12 @@
       "reservationsHint": "Guest slip and motorhome bookings per month ({year}).",
       "reservationsTotal": "reservations",
       "guestSlip": "Guest slip",
-      "motorhome": "Motorhome"
+      "motorhome": "Motorhome",
+      "cashFlowTitle": "Cash flow",
+      "cashFlowHint": "Income (revenue) vs expense by month ({year}).",
+      "cashFlowIncome": "Income",
+      "cashFlowExpense": "Expense",
+      "cashFlowNet": "net"
     },
     "events": {
       "title": "Event Management",

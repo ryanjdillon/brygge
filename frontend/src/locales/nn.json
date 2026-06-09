@@ -743,7 +743,12 @@
       "reservationsHint": "Gjestebrygge- og bubil-bookingar per månad ({year}).",
       "reservationsTotal": "reservasjonar",
       "guestSlip": "Gjestebrygge",
-      "motorhome": "Bubil"
+      "motorhome": "Bubil",
+      "cashFlowTitle": "Kontantstraum",
+      "cashFlowHint": "Inntekt vs kostnad per månad ({year}).",
+      "cashFlowIncome": "Inntekt",
+      "cashFlowExpense": "Kostnad",
+      "cashFlowNet": "netto"
     },
     "events": {
       "title": "Arrangement",

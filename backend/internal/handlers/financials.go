@@ -240,6 +240,82 @@ func (h *FinancialsHandler) HandleGetReservationsByMonth(w http.ResponseWriter, 
 	JSON(w, http.StatusOK, map[string]any{"year": year, "buckets": buckets})
 }
 
+type cashFlowMonthRow struct {
+	Month   int     `json:"month"`
+	Income  float64 `json:"income"`
+	Expense float64 `json:"expense"`
+}
+
+// HandleGetCashFlow returns a 12-row per-month income/expense series
+// derived from journal entries booked in the given fiscal year.
+// Income is summed from credits to revenue accounts and expense from
+// debits to expense accounts — using account_type rather than code
+// ranges sidesteps intra-bank transfers (asset↔asset moves never touch
+// either side). Voided entries are excluded. Used by the accounting
+// dashboard's cash-flow chart. See DIL-362.
+func (h *FinancialsHandler) HandleGetCashFlow(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	year := time.Now().Year()
+	if y := r.URL.Query().Get("year"); y != "" {
+		yi, err := strconv.Atoi(y)
+		if err != nil {
+			Error(w, http.StatusBadRequest, "invalid year parameter")
+			return
+		}
+		year = yi
+	}
+
+	rows, err := h.db.Query(ctx, `
+		SELECT EXTRACT(MONTH FROM je.entry_date)::int AS month,
+		       COALESCE(SUM(CASE WHEN a.account_type = 'revenue' THEN jl.credit ELSE 0 END), 0) AS income,
+		       COALESCE(SUM(CASE WHEN a.account_type = 'expense' THEN jl.debit  ELSE 0 END), 0) AS expense
+		  FROM journal_entries je
+		  JOIN journal_lines jl ON jl.journal_entry_id = je.id
+		  JOIN accounts a ON a.id = jl.account_id
+		 WHERE je.club_id = $1
+		   AND je.status <> 'voided'
+		   AND EXTRACT(YEAR FROM je.entry_date) = $2
+		   AND a.account_type IN ('revenue','expense')
+		 GROUP BY month
+		 ORDER BY month`,
+		claims.ClubID, year,
+	)
+	if err != nil {
+		h.log.Error().Err(err).Msg("cash-flow query")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	defer rows.Close()
+
+	buckets := make([]cashFlowMonthRow, 12)
+	for i := range buckets {
+		buckets[i].Month = i + 1
+	}
+	for rows.Next() {
+		var month int
+		var income, expense float64
+		if err := rows.Scan(&month, &income, &expense); err != nil {
+			h.log.Error().Err(err).Msg("cash-flow scan")
+			Error(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		idx := month - 1
+		if idx < 0 || idx > 11 {
+			continue
+		}
+		buckets[idx].Income += income
+		buckets[idx].Expense += expense
+	}
+
+	JSON(w, http.StatusOK, map[string]any{"year": year, "buckets": buckets})
+}
+
 type paymentRow struct {
 	ID          string     `json:"id"`
 	UserID      string     `json:"user_id"`

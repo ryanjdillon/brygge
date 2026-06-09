@@ -34,6 +34,17 @@ export interface ReservationsByMonth {
   buckets: ReservationsMonthBucket[]
 }
 
+export interface CashFlowMonthBucket {
+  month: number
+  income: number
+  expense: number
+}
+
+export interface CashFlowByMonth {
+  year: number
+  buckets: CashFlowMonthBucket[]
+}
+
 export interface PriceItemSummaryRow {
   price_item_id: string
   name: string
@@ -86,6 +97,21 @@ export function useReservationsByMonth(year?: Ref<number | undefined>) {
       })
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
       return (await res.json()) as ReservationsByMonth
+    },
+    staleTime: 2 * 60 * 1000,
+  })
+}
+
+export function useCashFlow(year?: Ref<number | undefined>) {
+  return useQuery({
+    queryKey: computed(() => ['financials', 'cash-flow', year?.value]),
+    queryFn: async () => {
+      const qs = year?.value ? `?year=${year.value}` : ''
+      const res = await fetch(`/api/v1/admin/financials/cash-flow${qs}`, {
+        credentials: 'include',
+      })
+      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+      return (await res.json()) as CashFlowByMonth
     },
     staleTime: 2 * 60 * 1000,
   })

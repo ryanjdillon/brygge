@@ -2,7 +2,7 @@
 import { ref, computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useFinancialSummary, usePriceItemSummary, useReservationsByMonth, type PriceItemSummaryRow } from '@/composables/useFinancials'
+import { useCashFlow, useFinancialSummary, usePriceItemSummary, useReservationsByMonth, type PriceItemSummaryRow } from '@/composables/useFinancials'
 import DonutChart from '@/components/charts/DonutChart.vue'
 import BarChart from '@/components/charts/BarChart.vue'
 import {
@@ -56,6 +56,7 @@ const { data: priceItemSummary, isLoading: priceItemLoading } = usePriceItemSumm
 const reservationsYear = computed(() => selectedYear.value ?? currentYear)
 const reservationsYearRef = computed({ get: () => reservationsYear.value, set: () => {} })
 const { data: reservations } = useReservationsByMonth(reservationsYearRef)
+const { data: cashFlow } = useCashFlow(reservationsYearRef)
 
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Des']
 
@@ -73,6 +74,22 @@ const reservationTotals = computed(() => {
   }
   return acc
 })
+
+const cashFlowBuckets = computed(() =>
+  (cashFlow.value?.buckets ?? []).map((b) => ({
+    label: MONTH_LABELS[b.month - 1] ?? String(b.month),
+    values: { income: b.income, expense: b.expense },
+  })),
+)
+const cashFlowTotals = computed(() => {
+  const acc = { income: 0, expense: 0 }
+  for (const b of cashFlow.value?.buckets ?? []) {
+    acc.income += b.income
+    acc.expense += b.expense
+  }
+  return acc
+})
+const cashFlowNet = computed(() => cashFlowTotals.value.income - cashFlowTotals.value.expense)
 
 const fakturaDonutSlices = computed(() => {
   const totals = priceItemSummary.value?.totals
@@ -191,7 +208,7 @@ const postedCount = computed(() => entries.value?.filter(e => e.status === 'post
           </div>
 
           <!-- Visualizations -->
-          <div class="mt-4 grid gap-4 lg:grid-cols-2">
+          <div class="mt-4 grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
             <div class="rounded-lg border border-gray-200 bg-white p-5">
               <h3 class="text-sm font-semibold text-gray-700">{{ t('admin.financials.fakturaStatusTitle') }}</h3>
               <p class="mt-0.5 text-xs text-gray-500">{{ t('admin.financials.fakturaStatusHint') }}</p>
@@ -222,6 +239,29 @@ const postedCount = computed(() => entries.value?.filter(e => e.status === 'post
                     { key: 'motorhome', label: t('admin.financials.motorhome'), color: '#a855f7' },
                   ]"
                   :height="180"
+                />
+              </div>
+            </div>
+            <div class="rounded-lg border border-gray-200 bg-white p-5">
+              <div class="flex items-start justify-between gap-3">
+                <div>
+                  <h3 class="text-sm font-semibold text-gray-700">{{ t('admin.financials.cashFlowTitle') }}</h3>
+                  <p class="mt-0.5 text-xs text-gray-500">{{ t('admin.financials.cashFlowHint', { year: reservationsYear }) }}</p>
+                </div>
+                <div class="text-right text-xs text-gray-500">
+                  <p :class="cashFlowNet >= 0 ? 'text-green-700' : 'text-red-700'" class="block text-sm font-semibold tabular-nums">{{ formatNOK(cashFlowNet) }}</p>
+                  {{ t('admin.financials.cashFlowNet') }}
+                </div>
+              </div>
+              <div class="mt-4">
+                <BarChart
+                  :buckets="cashFlowBuckets"
+                  :series="[
+                    { key: 'income', label: t('admin.financials.cashFlowIncome'), color: '#16a34a' },
+                    { key: 'expense', label: t('admin.financials.cashFlowExpense'), color: '#dc2626' },
+                  ]"
+                  :height="180"
+                  :value-formatter="formatNOK"
                 />
               </div>
             </div>
