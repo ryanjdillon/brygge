@@ -363,6 +363,11 @@ const routes: RouteRecordRaw[] = [
         name: 'admin-economy-settings',
         component: () => import('@/views/admin/EconomySettingsView.vue'),
       },
+      {
+        path: 'harbor/settings',
+        name: 'admin-harbor-settings',
+        component: () => import('@/views/admin/HarborSettingsView.vue'),
+      },
     ],
   },
 ]

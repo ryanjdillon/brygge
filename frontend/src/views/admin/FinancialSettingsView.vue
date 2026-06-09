@@ -23,12 +23,6 @@ const vhfChannel = ref('')
 const latitude = ref<number | null>(null)
 const longitude = ref<number | null>(null)
 
-const harborApproach = ref('')
-const harborDepth = ref('')
-const harborVhf = ref('')
-const harborCtaTitle = ref('')
-const harborCtaDescription = ref('')
-
 const motorhomePower = ref('')
 const motorhomeFacilities = ref('')
 const motorhomeCheckin = ref('')
@@ -69,11 +63,6 @@ async function load() {
     vhfChannel.value = body.vhf_channel ?? ''
     latitude.value = body.latitude != null ? Number(body.latitude) : null
     longitude.value = body.longitude != null ? Number(body.longitude) : null
-    harborApproach.value = body.harbor_approach ?? ''
-    harborDepth.value = body.harbor_depth ?? ''
-    harborVhf.value = body.harbor_vhf ?? ''
-    harborCtaTitle.value = body.harbor_cta_title ?? ''
-    harborCtaDescription.value = body.harbor_cta_description ?? ''
     motorhomePower.value = body.motorhome_power ?? ''
     motorhomeFacilities.value = body.motorhome_facilities ?? ''
     motorhomeCheckin.value = body.motorhome_checkin ?? ''
@@ -172,11 +161,6 @@ async function save() {
         vhf_channel: vhfChannel.value,
         latitude: latitude.value,
         longitude: longitude.value,
-        harbor_approach: harborApproach.value,
-        harbor_depth: harborDepth.value,
-        harbor_vhf: harborVhf.value,
-        harbor_cta_title: harborCtaTitle.value,
-        harbor_cta_description: harborCtaDescription.value,
         motorhome_power: motorhomePower.value,
         motorhome_facilities: motorhomeFacilities.value,
         motorhome_checkin: motorhomeCheckin.value,
@@ -331,32 +315,6 @@ async function save() {
           <FormField :label="t('admin.financialSettings.longitude')">
             <NumberInput v-model="longitude" :step="0.000001" placeholder="5.1245" />
           </FormField>
-        </div>
-      </fieldset>
-
-      <fieldset class="rounded-md border border-slate-200 bg-slate-50 p-3">
-        <legend class="px-1 text-xs font-semibold text-gray-700">{{ t('admin.financialSettings.harborContent') }}</legend>
-        <p class="mb-2 text-xs text-gray-500">{{ t('admin.financialSettings.harborContentHint') }}</p>
-        <div class="space-y-3">
-          <FormField :label="t('admin.financialSettings.harborApproach')">
-            <Textarea v-model="harborApproach" :rows="2" />
-          </FormField>
-          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <FormField :label="t('admin.financialSettings.harborDepth')">
-              <Input v-model="harborDepth" />
-            </FormField>
-            <FormField :label="t('admin.financialSettings.harborVhf')">
-              <Input v-model="harborVhf" placeholder="Ch 16 / Ch 73" />
-            </FormField>
-          </div>
-          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <FormField :label="t('admin.financialSettings.ctaTitle')">
-              <Input v-model="harborCtaTitle" />
-            </FormField>
-            <FormField :label="t('admin.financialSettings.ctaDescription')">
-              <Input v-model="harborCtaDescription" />
-            </FormField>
-          </div>
         </div>
       </fieldset>
 

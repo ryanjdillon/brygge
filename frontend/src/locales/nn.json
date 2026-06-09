@@ -523,7 +523,8 @@
       "bankImports": "Bank og Vipps",
       "bankAccounts": "Bankkontoar",
       "economySettings": "Innstillingar",
-      "siteSettings": "Nettstadsinnhald"
+      "siteSettings": "Nettstadsinnhald",
+      "harborSettings": "Hamneinformasjon"
     },
     "financialSettings": {
       "title": "Innstillingar",
@@ -1338,6 +1339,11 @@
     "groupEconomy": "Økonomi",
     "groupShop": "Butikk",
     "groupSite": "Nettstad",
+    "harborSettings": {
+      "title": "Hamneinformasjon",
+      "subtitle": "Innhald vist på den offentlege hamnesida — innsegling, djupne, VHF-kanal og handlingsknappen.",
+      "ctaGroup": "Handlingsknapp"
+    },
     "economySettings": {
       "title": "Økonomi-innstillingar",
       "subtitle": "Faktura-standardar, registrerte bankkontoar og (snart) Vipps-merchant — alt rekneskapsmodulen treng på éin stad.",

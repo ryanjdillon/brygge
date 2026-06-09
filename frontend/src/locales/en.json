@@ -527,7 +527,8 @@
       "bankImports": "Bank & Vipps",
       "bankAccounts": "Bank accounts",
       "economySettings": "Settings",
-      "siteSettings": "Site content"
+      "siteSettings": "Site content",
+      "harborSettings": "Harbor info"
     },
     "financialSettings": {
       "title": "Settings",
@@ -1342,6 +1343,11 @@
     "groupEconomy": "Economy",
     "groupShop": "Shop",
     "groupSite": "Site",
+    "harborSettings": {
+      "title": "Harbor info",
+      "subtitle": "Content shown on the public harbor page — approach, depth, VHF channel, and the call-to-action banner.",
+      "ctaGroup": "Call-to-action banner"
+    },
     "economySettings": {
       "title": "Economy settings",
       "subtitle": "Faktura defaults, registered bank accounts, and (soon) Vipps merchant configuration — everything the accounting module needs in one place.",
