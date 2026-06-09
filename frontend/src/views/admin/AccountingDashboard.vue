@@ -156,40 +156,44 @@ const postedCount = computed(() => entries.value?.filter(e => e.status === 'post
 
           <!-- Per-item breakdown, grouped by category -->
           <div class="mt-4 overflow-x-auto rounded-lg border border-gray-200 bg-white">
-            <table class="min-w-full divide-y divide-gray-200 text-sm">
-              <thead class="bg-gray-50 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
+            <table class="min-w-full text-sm">
+              <thead class="border-b border-gray-200 text-left text-xs font-medium text-gray-600">
                 <tr>
-                  <th class="px-4 py-2">{{ t('admin.financials.priceItem') }}</th>
-                  <th class="px-4 py-2 text-right">{{ t('admin.financials.invoices') }}</th>
-                  <th class="px-4 py-2 text-right">{{ t('admin.financials.billed') }}</th>
-                  <th class="px-4 py-2 text-right">{{ t('admin.financials.received') }}</th>
-                  <th class="px-4 py-2 text-right">{{ t('admin.financials.outstanding') }}</th>
-                  <th class="px-4 py-2 text-right">{{ t('admin.financials.forfall') }}</th>
+                  <th class="px-4 py-3 font-medium">{{ t('admin.financials.priceItem') }}</th>
+                  <th class="px-4 py-3 text-right font-medium">{{ t('admin.financials.invoices') }}</th>
+                  <th class="px-4 py-3 text-right font-medium">{{ t('admin.financials.billed') }}</th>
+                  <th class="px-4 py-3 text-right font-medium">{{ t('admin.financials.received') }}</th>
+                  <th class="px-4 py-3 text-right font-medium">{{ t('admin.financials.outstanding') }}</th>
+                  <th class="px-4 py-3 text-right font-medium">{{ t('admin.financials.forfall') }}</th>
                 </tr>
               </thead>
               <tbody>
                 <template v-for="g in priceItemGroups" :key="g.category">
-                  <tr class="bg-gray-50/50">
-                    <td colspan="6" class="px-4 py-1.5 text-xs font-semibold tracking-wide text-gray-700">{{ categoryLabel(g.category) }}</td>
+                  <tr class="border-t border-gray-200 bg-blue-50/40">
+                    <td class="px-4 py-2 text-sm font-semibold text-gray-900">
+                      {{ categoryLabel(g.category) }}
+                      <span class="ml-2 text-xs font-normal text-gray-500">{{ g.items.length }}</span>
+                    </td>
+                    <td colspan="5" />
                   </tr>
                   <tr v-for="row in g.items" :key="row.price_item_id" class="border-t border-gray-100">
                     <td class="px-4 py-2 text-gray-900">
                       <div>{{ row.description }}</div>
                       <div v-if="rowSubLabel(row)" class="mt-0.5 text-xs text-gray-500">{{ rowSubLabel(row) }}</div>
                     </td>
-                    <td class="px-4 py-2 text-right tabular-nums text-gray-600">{{ row.invoice_count }}</td>
-                    <td class="px-4 py-2 text-right tabular-nums">{{ formatNOK(row.billed) }}</td>
-                    <td class="px-4 py-2 text-right tabular-nums text-green-700">{{ formatNOK(row.received) }}</td>
-                    <td class="px-4 py-2 text-right tabular-nums text-yellow-700">{{ formatNOK(row.outstanding) }}</td>
-                    <td class="px-4 py-2 text-right tabular-nums" :class="row.overdue > 0 ? 'text-red-700 font-medium' : 'text-gray-400'">{{ formatNOK(row.overdue) }}</td>
+                    <td class="px-4 py-2 text-right tabular-nums" :class="row.invoice_count === 0 ? 'text-gray-300' : 'text-gray-600'">{{ row.invoice_count }}</td>
+                    <td class="px-4 py-2 text-right tabular-nums" :class="row.billed === 0 ? 'text-gray-300' : 'text-gray-900'">{{ formatNOK(row.billed) }}</td>
+                    <td class="px-4 py-2 text-right tabular-nums" :class="row.received === 0 ? 'text-gray-300' : 'text-green-700'">{{ formatNOK(row.received) }}</td>
+                    <td class="px-4 py-2 text-right tabular-nums" :class="row.outstanding === 0 ? 'text-gray-300' : 'text-yellow-700'">{{ formatNOK(row.outstanding) }}</td>
+                    <td class="px-4 py-2 text-right tabular-nums" :class="row.overdue === 0 ? 'text-gray-300' : 'text-red-700 font-medium'">{{ formatNOK(row.overdue) }}</td>
                   </tr>
-                  <tr v-if="priceItemGroups.length > 1" class="border-t border-gray-200 bg-gray-50/30 text-xs font-medium text-gray-700">
-                    <td class="px-4 py-1.5">{{ t('admin.financials.subtotal') }}</td>
+                  <tr v-if="priceItemGroups.length > 1" class="border-t border-gray-200 bg-gray-50 text-xs">
+                    <td class="px-4 py-2 italic font-medium text-gray-700">{{ t('admin.financials.subtotal') }}</td>
                     <td />
-                    <td class="px-4 py-1.5 text-right tabular-nums">{{ formatNOK(g.subtotals.billed) }}</td>
-                    <td class="px-4 py-1.5 text-right tabular-nums">{{ formatNOK(g.subtotals.received) }}</td>
-                    <td class="px-4 py-1.5 text-right tabular-nums">{{ formatNOK(g.subtotals.outstanding) }}</td>
-                    <td class="px-4 py-1.5 text-right tabular-nums">{{ formatNOK(g.subtotals.overdue) }}</td>
+                    <td class="px-4 py-2 text-right font-semibold tabular-nums text-gray-900">{{ formatNOK(g.subtotals.billed) }}</td>
+                    <td class="px-4 py-2 text-right font-semibold tabular-nums" :class="g.subtotals.received === 0 ? 'text-gray-400' : 'text-green-700'">{{ formatNOK(g.subtotals.received) }}</td>
+                    <td class="px-4 py-2 text-right font-semibold tabular-nums" :class="g.subtotals.outstanding === 0 ? 'text-gray-400' : 'text-yellow-700'">{{ formatNOK(g.subtotals.outstanding) }}</td>
+                    <td class="px-4 py-2 text-right font-semibold tabular-nums" :class="g.subtotals.overdue === 0 ? 'text-gray-400' : 'text-red-700'">{{ formatNOK(g.subtotals.overdue) }}</td>
                   </tr>
                 </template>
               </tbody>
