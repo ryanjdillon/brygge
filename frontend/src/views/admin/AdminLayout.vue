@@ -94,8 +94,8 @@ const navGroups = computed<NavGroup[]>(() => {
         { to: '/admin/accounting/faktura', icon: Receipt, label: t('admin.sidebar.faktura'), roles: ['treasurer', 'admin'], feature: 'accounting' },
         { to: '/admin/accounting/accounts', icon: ClipboardList, label: t('admin.sidebar.accounts'), roles: ['treasurer', 'board', 'admin'], feature: 'accounting' },
         { to: '/admin/accounting/journal', icon: BookOpen, label: t('admin.sidebar.journal'), roles: ['treasurer', 'board', 'admin'], feature: 'accounting' },
-        { to: '/admin/accounting/bank-accounts', icon: Landmark, label: t('admin.sidebar.bankAccounts'), roles: ['treasurer', 'admin'], feature: 'accounting' },
         { to: '/admin/accounting/bank-imports', icon: Landmark, label: t('admin.sidebar.bankImports'), roles: ['treasurer', 'admin'], feature: 'accounting' },
+        { to: '/admin/economy/settings', icon: Settings, label: t('admin.sidebar.economySettings'), roles: ['treasurer', 'admin'], feature: 'accounting' },
       ],
     },
     {
@@ -118,7 +118,7 @@ const navGroups = computed<NavGroup[]>(() => {
         { to: '/admin/map', icon: MapPin, label: t('admin.sidebar.mapMarkers') },
         { to: '/admin/notifications', icon: Bell, label: t('notifications.admin.title'), feature: 'communications' },
         { to: '/admin/gdpr', icon: ShieldCheck, label: t('gdpr.admin.title') },
-        { to: '/admin/accounting/settings', icon: Settings, label: t('admin.sidebar.settings'), roles: ['treasurer', 'admin'], feature: 'accounting' },
+        { to: '/admin/accounting/settings', icon: Settings, label: t('admin.sidebar.siteSettings'), roles: ['board', 'admin'] },
       ],
     },
   ]

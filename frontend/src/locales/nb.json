@@ -521,7 +521,9 @@
       "periods": "Perioder",
       "journal": "Bilag",
       "bankImports": "Bank og Vipps",
-      "bankAccounts": "Bankkontoer"
+      "bankAccounts": "Bankkontoer",
+      "economySettings": "Innstillinger",
+      "siteSettings": "Nettstedsinnhold"
     },
     "financialSettings": {
       "title": "Innstillinger",
@@ -1336,6 +1338,13 @@
     "groupEconomy": "Økonomi",
     "groupShop": "Butikk",
     "groupSite": "Nettsted",
+    "economySettings": {
+      "title": "Økonomi-innstillinger",
+      "subtitle": "Faktura-standarder, registrerte bankkontoer og (snart) Vipps-merchant — alt regnskapsmodulen trenger på ett sted.",
+      "fakturaTab": "Faktura",
+      "bankAccountsTab": "Bankkontoer",
+      "fakturaLogoLabel": "Faktura-logo"
+    },
     "bankAccounts": {
       "title": "Bankkontoer",
       "intro": "Registrer klubbens bankkontoer. Kontoen som er merket som faktura-standard er den som skrives på hver medlemsfaktura — bytt den her hvis innbetalinger skal til en annen konto.",

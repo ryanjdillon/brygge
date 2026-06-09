@@ -22,7 +22,6 @@ const phone = ref('')
 const vhfChannel = ref('')
 const latitude = ref<number | null>(null)
 const longitude = ref<number | null>(null)
-const bankAccount = ref('')
 
 const harborApproach = ref('')
 const harborDepth = ref('')
@@ -42,10 +41,6 @@ const viceChairmanEmail = ref('')
 const treasurerEmail = ref('')
 const secretaryEmail = ref('')
 const harborMasterEmail = ref('')
-const hasFakturaLogo = ref(false)
-const fakturaLogoMime = ref('')
-const fakturaLogoCacheBust = ref(0)
-const fakturaLogoUploading = ref(false)
 const hasSiteLogo = ref(false)
 const siteLogoMime = ref('')
 const siteLogoCacheBust = ref(0)
@@ -85,16 +80,12 @@ async function load() {
     motorhomeRules.value = body.motorhome_rules ?? ''
     motorhomeCtaTitle.value = body.motorhome_cta_title ?? ''
     motorhomeCtaDescription.value = body.motorhome_cta_description ?? ''
-    bankAccount.value = body.bank_account ?? ''
     websiteUrl.value = body.website_url ?? ''
     chairmanEmail.value = body.chairman_email ?? ''
     viceChairmanEmail.value = body.vice_chairman_email ?? ''
     treasurerEmail.value = body.treasurer_email ?? ''
     secretaryEmail.value = body.secretary_email ?? ''
     harborMasterEmail.value = body.harbor_master_email ?? ''
-    hasFakturaLogo.value = !!body.has_faktura_logo
-    fakturaLogoMime.value = body.faktura_logo_mime ?? ''
-    fakturaLogoCacheBust.value = Date.now()
     hasSiteLogo.value = !!body.has_site_logo
     siteLogoMime.value = body.site_logo_mime ?? ''
     siteLogoCacheBust.value = Date.now()
@@ -107,90 +98,59 @@ async function load() {
 
 onMounted(load)
 
-// uploadLogoFile is shared between the faktura and site logo widgets.
-// `kind` selects the endpoint, accepted MIME types, and which reactive
-// state slots get updated on success.
-async function uploadLogoFile(files: FileList | null, kind: 'faktura' | 'site') {
+async function uploadSiteLogo(files: FileList | null) {
   const file = files?.[0]
   if (!file) return
-  const isFaktura = kind === 'faktura'
-  if (isFaktura) {
-    if (file.type !== 'image/png' && file.type !== 'image/jpeg') {
-      error.value = t('admin.financialSettings.logoMimeError')
-      return
-    }
-  } else {
-    // SVG is sniffed server-side; client-side we accept the browser's
-    // best guess plus an empty type (some browsers omit it for SVG).
-    if (file.type && file.type !== 'image/svg+xml') {
-      error.value = t('admin.financialSettings.siteLogoMimeError')
-      return
-    }
+  if (file.type && file.type !== 'image/svg+xml') {
+    error.value = t('admin.financialSettings.siteLogoMimeError')
+    return
   }
   if (file.size > 2 * 1024 * 1024) {
     error.value = t('admin.financialSettings.logoSizeError')
     return
   }
-  if (!(await ensureFreshTotp())) {
-    return
-  }
-  if (isFaktura) fakturaLogoUploading.value = true
-  else siteLogoUploading.value = true
+  if (!(await ensureFreshTotp())) return
+  siteLogoUploading.value = true
   error.value = null
   try {
     const fd = new FormData()
     fd.append('logo', file)
-    const url = isFaktura
-      ? '/api/v1/admin/settings/financials/faktura-logo'
-      : '/api/v1/admin/settings/site-logo'
-    const res = await fetch(url, { method: 'POST', credentials: 'include', body: fd })
+    const res = await fetch('/api/v1/admin/settings/site-logo', {
+      method: 'POST',
+      credentials: 'include',
+      body: fd,
+    })
     if (!res.ok) {
       const txt = await res.text().catch(() => '')
       throw new Error(`${res.status} ${txt}`)
     }
     const body = await res.json()
-    if (isFaktura) {
-      hasFakturaLogo.value = true
-      fakturaLogoMime.value = body.mime ?? ''
-      fakturaLogoCacheBust.value = Date.now()
-    } else {
-      hasSiteLogo.value = true
-      siteLogoMime.value = body.mime ?? ''
-      siteLogoCacheBust.value = Date.now()
-    }
+    hasSiteLogo.value = true
+    siteLogoMime.value = body.mime ?? ''
+    siteLogoCacheBust.value = Date.now()
   } catch (err) {
     error.value = (err as Error).message
   } finally {
-    if (isFaktura) fakturaLogoUploading.value = false
-    else siteLogoUploading.value = false
+    siteLogoUploading.value = false
   }
 }
 
-async function uploadFakturaLogo(files: FileList | null) { return uploadLogoFile(files, 'faktura') }
-async function uploadSiteLogo(files: FileList | null) { return uploadLogoFile(files, 'site') }
-
-async function deleteLogoFile(kind: 'faktura' | 'site') {
+async function deleteSiteLogo() {
   if (!confirm(t('admin.financialSettings.logoDeleteConfirm'))) return
   if (!(await ensureFreshTotp())) return
   error.value = null
   try {
-    const url = kind === 'faktura'
-      ? '/api/v1/admin/settings/financials/faktura-logo'
-      : '/api/v1/admin/settings/site-logo'
-    const res = await fetch(url, { method: 'DELETE', credentials: 'include' })
+    const res = await fetch('/api/v1/admin/settings/site-logo', {
+      method: 'DELETE',
+      credentials: 'include',
+    })
     if (!res.ok) {
       const txt = await res.text().catch(() => '')
       throw new Error(`${res.status} ${txt}`)
     }
-    if (kind === 'faktura') {
-      hasFakturaLogo.value = false
-      fakturaLogoMime.value = ''
-      fakturaLogoCacheBust.value = Date.now()
-    } else {
-      hasSiteLogo.value = false
-      siteLogoMime.value = ''
-      siteLogoCacheBust.value = Date.now()
-    }
+    hasSiteLogo.value = false
+    siteLogoMime.value = ''
+    siteLogoCacheBust.value = Date.now()
   } catch (err) {
     error.value = (err as Error).message
   }
@@ -223,7 +183,6 @@ async function save() {
         motorhome_rules: motorhomeRules.value,
         motorhome_cta_title: motorhomeCtaTitle.value,
         motorhome_cta_description: motorhomeCtaDescription.value,
-        bank_account: bankAccount.value,
         website_url: websiteUrl.value,
         chairman_email: chairmanEmail.value,
         vice_chairman_email: viceChairmanEmail.value,
@@ -288,47 +247,6 @@ async function save() {
       <fieldset class="rounded-md border border-slate-200 bg-slate-50 p-3 space-y-4">
         <legend class="px-1 text-xs font-semibold text-slate-700">{{ t('admin.financialSettings.logosGroup') }}</legend>
       <div>
-        <label class="block text-xs font-medium text-gray-700">{{ t('admin.financialSettings.fakturaLogo') }}</label>
-        <p class="mt-1 text-xs text-gray-500">{{ t('admin.financialSettings.fakturaLogoHint') }}</p>
-        <div class="mt-2 flex items-center gap-3">
-          <img
-            v-if="hasFakturaLogo"
-            :src="`/api/v1/admin/settings/financials/faktura-logo?v=${fakturaLogoCacheBust}`"
-            alt="Faktura logo"
-            class="h-16 rounded border border-gray-200 bg-white p-1 object-contain"
-          />
-          <span v-else class="text-xs italic text-gray-400">{{ t('admin.financialSettings.logoNone') }}</span>
-        </div>
-        <div class="mt-2 flex items-center gap-2">
-          <FileInput
-            accept="image/png,image/jpeg"
-            :dropzone="false"
-            :disabled="fakturaLogoUploading"
-            @change="uploadFakturaLogo"
-          >
-            <template #trigger="{ open }">
-              <button
-                type="button"
-                class="inline-flex cursor-pointer items-center gap-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-                :disabled="fakturaLogoUploading"
-                @click="open"
-              >
-                {{ fakturaLogoUploading ? t('common.loading') : (hasFakturaLogo ? t('admin.financialSettings.logoReplace') : t('admin.financialSettings.logoUpload')) }}
-              </button>
-            </template>
-          </FileInput>
-          <button
-            v-if="hasFakturaLogo"
-            type="button"
-            class="rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm text-red-700 hover:bg-red-50"
-            @click="deleteLogoFile('faktura')"
-          >
-            {{ t('common.delete') }}
-          </button>
-        </div>
-      </div>
-
-      <div>
         <label class="block text-xs font-medium text-gray-700">{{ t('admin.financialSettings.siteLogo') }}</label>
         <p class="mt-1 text-xs text-gray-500">{{ t('admin.financialSettings.siteLogoHint') }}</p>
         <div class="mt-2 flex items-center gap-3">
@@ -362,7 +280,7 @@ async function save() {
             v-if="hasSiteLogo"
             type="button"
             class="rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm text-red-700 hover:bg-red-50"
-            @click="deleteLogoFile('site')"
+            @click="deleteSiteLogo"
           >
             {{ t('common.delete') }}
           </button>
@@ -372,20 +290,10 @@ async function save() {
       </fieldset>
 
       <fieldset class="rounded-md border border-slate-200 bg-slate-50 p-3 space-y-3">
-        <legend class="px-1 text-xs font-semibold text-slate-700">{{ t('admin.financialSettings.bankingGroup') }}</legend>
-      <FormField :label="t('admin.financialSettings.bankAccount')" :helper-text="t('admin.financialSettings.bankAccountHint')">
-        <Input v-model="bankAccount" placeholder="1234.56.78901" input-class="font-mono" />
-        <p class="mt-2 text-xs text-slate-600">
-          {{ t('admin.financialSettings.bankAccountMoved') }}
-          <RouterLink to="/admin/accounting/bank-accounts" class="font-semibold text-blue-700 hover:underline">
-            {{ t('admin.sidebar.bankAccounts') }}
-          </RouterLink>.
-        </p>
-      </FormField>
-
-      <FormField :label="t('admin.financialSettings.websiteUrl')" :helper-text="t('admin.financialSettings.websiteUrlHint')">
-        <Input v-model="websiteUrl" type="url" placeholder="https://klokkarvikbaatlag.no" />
-      </FormField>
+        <legend class="px-1 text-xs font-semibold text-slate-700">{{ t('admin.financialSettings.websiteUrl') }}</legend>
+        <FormField :label="t('admin.financialSettings.websiteUrl')" :helper-text="t('admin.financialSettings.websiteUrlHint')">
+          <Input v-model="websiteUrl" type="url" placeholder="https://klokkarvikbaatlag.no" />
+        </FormField>
       </fieldset>
 
       <fieldset class="rounded-md border border-slate-200 bg-slate-50 p-3">

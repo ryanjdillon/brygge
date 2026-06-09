@@ -525,7 +525,9 @@
       "periods": "Periods",
       "journal": "Journal entries",
       "bankImports": "Bank & Vipps",
-      "bankAccounts": "Bank accounts"
+      "bankAccounts": "Bank accounts",
+      "economySettings": "Settings",
+      "siteSettings": "Site content"
     },
     "financialSettings": {
       "title": "Settings",
@@ -1340,6 +1342,13 @@
     "groupEconomy": "Economy",
     "groupShop": "Shop",
     "groupSite": "Site",
+    "economySettings": {
+      "title": "Economy settings",
+      "subtitle": "Faktura defaults, registered bank accounts, and (soon) Vipps merchant configuration — everything the accounting module needs in one place.",
+      "fakturaTab": "Faktura",
+      "bankAccountsTab": "Bank accounts",
+      "fakturaLogoLabel": "Faktura logo"
+    },
     "bankAccounts": {
       "title": "Bank accounts",
       "intro": "Register the club's bank accounts. The account flagged as faktura default is the one printed on every member invoice — change it here if payments need to land in a different account.",
