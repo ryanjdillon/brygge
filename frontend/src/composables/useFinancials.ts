@@ -25,8 +25,11 @@ export interface ExportFilters {
 
 export interface PriceItemSummaryRow {
   price_item_id: string
+  name: string
   description: string
   category: string
+  amount: number
+  unit: string
   billed: number
   received: number
   overdue: number

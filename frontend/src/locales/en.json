@@ -1141,6 +1141,7 @@
       "title": "Accounting",
       "dashboard": {
         "title": "Accounting",
+        "toolsHeading": "Tools & records",
         "noPeriods": "No fiscal periods",
         "noPeriodsDesc": "Create your first fiscal year to get started.",
         "createYear": "Create fiscal year",

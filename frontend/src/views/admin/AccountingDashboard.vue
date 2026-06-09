@@ -22,9 +22,11 @@ import {
   useAccountsList,
   useJournalEntries,
 } from '@/composables/useAccounting'
+import { usePricing } from '@/composables/usePricing'
 import Select from '@/components/ui/form/Select.vue'
 
 const { t } = useI18n()
+const { categoryLabel, unitLabel } = usePricing()
 
 const currentYear = new Date().getFullYear()
 const selectedYear = ref<number | undefined>(undefined)
@@ -68,6 +70,21 @@ const priceItemGroups = computed<CategoryGroup[]>(() => {
 
 function formatNOK(amount: number): string {
   return new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK' }).format(amount)
+}
+
+// Renders a small secondary label distinguishing rows that share the
+// same description in the same category — e.g. five SLIP_FEE rows all
+// titled "Årlig plassleie basert på båtbredde". Falls back to the
+// row's name when the name differs from the description; otherwise
+// shows the unit price so the operator can still tell rows apart.
+function rowSubLabel(row: PriceItemSummaryRow): string {
+  if (row.name && row.name !== row.description) {
+    return row.name
+  }
+  if (row.amount > 0) {
+    return `${formatNOK(row.amount)} ${unitLabel(row.unit)}`
+  }
+  return ''
 }
 
 const financeCards = computed(() => {
@@ -153,10 +170,13 @@ const postedCount = computed(() => entries.value?.filter(e => e.status === 'post
               <tbody>
                 <template v-for="g in priceItemGroups" :key="g.category">
                   <tr class="bg-gray-50/50">
-                    <td colspan="6" class="px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-gray-600">{{ g.category }}</td>
+                    <td colspan="6" class="px-4 py-1.5 text-xs font-semibold tracking-wide text-gray-700">{{ categoryLabel(g.category) }}</td>
                   </tr>
                   <tr v-for="row in g.items" :key="row.price_item_id" class="border-t border-gray-100">
-                    <td class="px-4 py-2 text-gray-900">{{ row.description }}</td>
+                    <td class="px-4 py-2 text-gray-900">
+                      <div>{{ row.description }}</div>
+                      <div v-if="rowSubLabel(row)" class="mt-0.5 text-xs text-gray-500">{{ rowSubLabel(row) }}</div>
+                    </td>
                     <td class="px-4 py-2 text-right tabular-nums text-gray-600">{{ row.invoice_count }}</td>
                     <td class="px-4 py-2 text-right tabular-nums">{{ formatNOK(row.billed) }}</td>
                     <td class="px-4 py-2 text-right tabular-nums text-green-700">{{ formatNOK(row.received) }}</td>
@@ -240,7 +260,7 @@ const postedCount = computed(() => entries.value?.filter(e => e.status === 'post
 
     <!-- Accounting quick stats -->
     <div>
-      <h2 class="text-lg font-semibold text-gray-700">{{ t('admin.accounting.title') }}</h2>
+      <h2 class="text-lg font-semibold text-gray-700">{{ t('admin.accounting.dashboard.toolsHeading') }}</h2>
       <p class="mt-2 text-sm text-gray-500">
         {{ totalAccounts }} {{ t('admin.accounting.dashboard.accounts').toLowerCase() }}
         &bull; {{ totalEntries }} {{ t('admin.accounting.dashboard.totalEntries').toLowerCase() }}

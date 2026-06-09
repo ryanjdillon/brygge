@@ -14,6 +14,7 @@ export interface PricingCategory {
 
 const categoryKeys: Record<string, string> = {
   harbor_membership: 'admin.pricing.categoryHarborMembership',
+  membership: 'admin.pricing.categoryMembership',
   slip_fee: 'admin.pricing.categorySlipFee',
   seasonal_rental: 'admin.pricing.categorySeasonalRental',
   guest: 'admin.pricing.categoryGuest',

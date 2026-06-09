@@ -1137,6 +1137,7 @@
       "title": "Rekneskap",
       "dashboard": {
         "title": "Rekneskap",
+        "toolsHeading": "Verktøy og register",
         "noPeriods": "Ingen rekneskapsperiodar",
         "noPeriodsDesc": "Opprett det første rekneskapsåret ditt for å komme i gang.",
         "createYear": "Opprett rekneskapsår",

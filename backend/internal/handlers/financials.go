@@ -45,8 +45,11 @@ type financialSummary struct {
 
 type priceItemSummaryRow struct {
 	PriceItemID  string  `json:"price_item_id"`
+	Name         string  `json:"name"`
 	Description  string  `json:"description"`
 	Category     string  `json:"category"`
+	Amount       float64 `json:"amount"`
+	Unit         string  `json:"unit"`
 	Billed       float64 `json:"billed"`
 	Received     float64 `json:"received"`
 	Overdue      float64 `json:"overdue"`
@@ -107,8 +110,11 @@ func (h *FinancialsHandler) HandleGetPriceItemSummary(w http.ResponseWriter, r *
 
 	rows, err := h.db.Query(ctx, `
 		SELECT pi.id,
+		       pi.name,
 		       COALESCE(NULLIF(pi.description, ''), pi.name) AS description,
 		       pi.category,
+		       pi.amount,
+		       pi.unit,
 		       COALESCE(SUM(il.line_total), 0) AS billed,
 		       COALESCE(SUM(CASE WHEN i.payment_id IS NOT NULL THEN il.line_total ELSE 0 END), 0) AS received,
 		       COALESCE(SUM(CASE WHEN i.payment_id IS NULL AND i.due_date < CURRENT_DATE THEN il.line_total ELSE 0 END), 0) AS overdue,
@@ -121,9 +127,9 @@ func (h *FinancialsHandler) HandleGetPriceItemSummary(w http.ResponseWriter, r *
 		   AND i.club_id = $1
 		   AND i.status <> 'voided'`+periodClause+`
 		 WHERE pi.club_id = $1
-		 GROUP BY pi.id, pi.description, pi.name, pi.category, pi.sort_order
+		 GROUP BY pi.id, pi.name, pi.description, pi.category, pi.amount, pi.unit, pi.sort_order
 		HAVING COALESCE(SUM(il.line_total), 0) > 0
-		 ORDER BY pi.category, pi.sort_order, description`,
+		 ORDER BY pi.category, pi.sort_order, pi.name`,
 		args...,
 	)
 	if err != nil {
@@ -137,7 +143,8 @@ func (h *FinancialsHandler) HandleGetPriceItemSummary(w http.ResponseWriter, r *
 	for rows.Next() {
 		var row priceItemSummaryRow
 		if err := rows.Scan(
-			&row.PriceItemID, &row.Description, &row.Category,
+			&row.PriceItemID, &row.Name, &row.Description, &row.Category,
+			&row.Amount, &row.Unit,
 			&row.Billed, &row.Received, &row.Overdue,
 			&row.InvoiceCount, &row.PaidCount, &row.OverdueCount,
 		); err != nil {
