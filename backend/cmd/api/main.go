@@ -297,6 +297,7 @@ func main() {
 				// financials in the admin UI) so they can be edited without
 				// a redeploy.
 				var (
+					orgNumber                string
 					address                  string
 					phone                    string
 					vhf                      string
@@ -322,7 +323,8 @@ func main() {
 					motorhomeCTADescription  string
 				)
 				_ = db.QueryRow(r.Context(),
-					`SELECT COALESCE(address, ''),
+					`SELECT COALESCE(org_number, ''),
+					        COALESCE(address, ''),
 					        COALESCE(phone, ''),
 					        COALESCE(vhf_channel, ''),
 					        latitude, longitude,
@@ -346,7 +348,7 @@ func main() {
 					        COALESCE(motorhome_cta_description, '')
 					   FROM clubs WHERE slug = $1`,
 					cfg.ClubSlug,
-				).Scan(&address, &phone, &vhf, &lat, &lon,
+				).Scan(&orgNumber, &address, &phone, &vhf, &lat, &lon,
 					&website, &chairman, &viceChairman, &treasurer, &secretary, &harborMaster, &hasLogo,
 					&harborApproach, &harborDepth, &harborVHF, &harborCTATitle, &harborCTADescription,
 					&motorhomePower, &motorhomeFacilities, &motorhomeCheckin, &motorhomeRules,
@@ -355,6 +357,7 @@ func main() {
 					"name":                       cfg.ClubName,
 					"slug":                       cfg.ClubSlug,
 					"domain":                     cfg.Domain,
+					"org_number":                 orgNumber,
 					"address":                    address,
 					"phone":                      phone,
 					"vhf_channel":                vhf,

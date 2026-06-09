@@ -1841,12 +1841,62 @@
     }
   },
   "footer": {
-    "poweredBy": "drevet av"
+    "poweredBy": "drevet av",
+    "contactHeading": "Kontakt",
+    "orgNumber": "Org.nr.",
+    "address": "Adresse",
+    "reach": "Kontakt oss",
+    "legal": "Informasjon",
+    "terms": "Salgsvilkår",
+    "privacy": "Personvern"
   },
   "totpExpiring": {
     "title": "Bekreftelse utløper",
     "body": "Bekreftelsen for sensitive handlinger er i ferd med å utløpe. Du blir spurt om kode neste gang du utfører en.",
     "countdown": "Utløper om {time}",
     "continue": "Fortsett"
+  },
+  "salgsvilkar": {
+    "eyebrow": "Juridisk",
+    "title": "Salgsvilkår",
+    "intro": "Disse salgsvilkårene gjelder for kjøp og tjenester som tilbys av {club}, inkludert medlemskap, plassleie, gjestehavn, bobilopphold, billetter til arrangementer og varekjøp.",
+    "lastUpdated": "Sist oppdatert: {date}",
+    "toc": "På denne siden",
+    "contactHeading": "Kontaktinformasjon",
+    "fields": {
+      "name": "Navn",
+      "orgNumber": "Org.nr.",
+      "address": "Adresse",
+      "phone": "Telefon",
+      "email": "E-post"
+    },
+    "parter": {
+      "title": "Parter",
+      "body": "Disse vilkårene gjelder mellom {club} («klubben», «vi», «oss»), org.nr. {orgNumber}, som selger, og kjøperen («du», «kjøperen») som plasserer en bestilling gjennom klubbens nettjenester eller personlig."
+    },
+    "betaling": {
+      "title": "Betaling",
+      "body": "Betaling skjer via de kanalene vi tilbyr — typisk Vipps, bankoverføring med KID eller faktura. Beløp, forfall og KID-nummer fremgår av fakturaen/bestillingsbekreftelsen. Ved forsinket betaling påløper purregebyr og forsinkelsesrente etter forsinkelsesrenteloven."
+    },
+    "levering": {
+      "title": "Levering",
+      "body": "Digitale ytelser (medlemskap, plasstildelinger, gjestehavn) trer i kraft umiddelbart ved registrert betaling. Fysiske varer leveres med post eller for henting ved havnesjefens kontor etter avtale ved bestilling. Forventet leveringstid fremgår av hver enkelt vare."
+    },
+    "angrerett": {
+      "title": "Angrerett",
+      "body": "For digitale tjenester som starter umiddelbart etter ditt ønske (f.eks. en gjesteplass-booking for samme dag, en bekreftet medlemsregistrering) bortfaller angreretten når leveringen er påbegynt, jf. angrerettloven §22. For fysiske varer har du 14 dager fra mottak til å gå fra avtalen uten å oppgi grunn. Kontakt kassereren for å benytte angreretten."
+    },
+    "retur": {
+      "title": "Retur",
+      "body": "Returnerte varer skal være ubrukte og i original stand. Du dekker selv returfrakten med mindre varen er mangelfull. Tilbakebetaling skjer til samme betalingsmiddel som ble brukt ved kjøpet, normalt innen 14 dager etter at vi har mottatt varen i retur."
+    },
+    "reklamasjon": {
+      "title": "Reklamasjonshåndtering",
+      "body": "Hvis det er noe galt med varen eller tjenesten, ta kontakt med oss så snart som mulig — og senest innen rimelig tid etter at feilen ble eller burde ha blitt oppdaget. Reklamasjonsfristen er to år fra mottak, fem år for varer som er ment å vare vesentlig lenger. Reklamasjoner sendes til kassereren, eller for havnerelaterte forhold til havnesjefen."
+    },
+    "konflikt": {
+      "title": "Konfliktløsning",
+      "body": "Vi ønsker å løse eventuelle uenigheter i minnelighet. Hvis vi ikke blir enige, kan kjøper bringe saken inn for Forbrukertilsynet eller Forbrukerklageutvalget. Forbrukere i EU kan også bruke EU-kommisjonens nettbaserte tvisteløsningsplattform på ec.europa.eu/odr. Norsk lov gjelder, og norske domstoler er verneting."
+    }
   }
 }

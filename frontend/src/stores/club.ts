@@ -5,6 +5,7 @@ interface ClubInfo {
   name: string
   slug: string
   domain: string
+  org_number?: string
   address?: string
   phone?: string
   vhf_channel?: string
@@ -36,6 +37,7 @@ export const useClubStore = defineStore('club', () => {
   const name = ref<string>('')
   const slug = ref<string>('')
   const domain = ref<string>('')
+  const orgNumber = ref<string>('')
   const address = ref<string>('')
   const phone = ref<string>('')
   const vhfChannel = ref<string>('')
@@ -73,6 +75,7 @@ export const useClubStore = defineStore('club', () => {
         name.value = info.name || ''
         slug.value = info.slug || ''
         domain.value = info.domain || ''
+        orgNumber.value = info.org_number || ''
         address.value = info.address || ''
         phone.value = info.phone || ''
         vhfChannel.value = info.vhf_channel || ''
@@ -112,6 +115,7 @@ export const useClubStore = defineStore('club', () => {
     name,
     slug,
     domain,
+    orgNumber,
     address,
     phone,
     vhfChannel,

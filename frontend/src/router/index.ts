@@ -35,6 +35,13 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/ContactView.vue'),
   },
   {
+    // Norwegian sales-terms page required by Vipps (and good practice
+    // for any club taking online payments). Linked from the footer
+    // and from every checkout step. See DIL-346.
+    path: '/salgsvilkar',
+    component: () => import('@/views/SalgsvilkarView.vue'),
+  },
+  {
     path: '/pricing',
     component: () => import('@/views/PricingView.vue'),
   },

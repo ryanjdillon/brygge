@@ -1845,12 +1845,62 @@
     }
   },
   "footer": {
-    "poweredBy": "powered by"
+    "poweredBy": "powered by",
+    "contactHeading": "Contact",
+    "orgNumber": "Org.no.",
+    "address": "Address",
+    "reach": "Reach us",
+    "legal": "Information",
+    "terms": "Sales terms",
+    "privacy": "Privacy"
   },
   "totpExpiring": {
     "title": "Verification expiring",
     "body": "Your sensitive-action verification is about to expire. You'll be asked for a code again next time you do one.",
     "countdown": "Expires in {time}",
     "continue": "Continue"
+  },
+  "salgsvilkar": {
+    "eyebrow": "Legal",
+    "title": "Sales terms",
+    "intro": "These sales terms govern purchases and services offered by {club}, including memberships, berth rentals, guest harbor and motorhome stays, event tickets, and merchandise.",
+    "lastUpdated": "Last updated: {date}",
+    "toc": "On this page",
+    "contactHeading": "Contact information",
+    "fields": {
+      "name": "Name",
+      "orgNumber": "Org.no.",
+      "address": "Address",
+      "phone": "Phone",
+      "email": "Email"
+    },
+    "parter": {
+      "title": "Parties",
+      "body": "These terms apply between {club} (\"the club\", \"we\", \"us\"), org.no. {orgNumber}, as seller, and the buyer (\"you\", \"the buyer\") who places an order through the club's online services or in person."
+    },
+    "betaling": {
+      "title": "Payment",
+      "body": "Payment is made via the channels we offer — typically Vipps, bank transfer with KID, or invoice. The amount due, payment deadline, and KID number are stated on the invoice/order confirmation. Late payment may incur reminder fees and interest in accordance with the Late Payment Interest Act (forsinkelsesrenteloven)."
+    },
+    "levering": {
+      "title": "Delivery",
+      "body": "Digital goods (memberships, berth assignments, guest harbor stays) take effect immediately upon registered payment. Physical merchandise is delivered by post or for pickup at the harbor master's hut as agreed at checkout. Expected delivery time is stated for each product."
+    },
+    "angrerett": {
+      "title": "Right of withdrawal",
+      "body": "For digital services that begin immediately at your request (e.g. a guest slip booking for the same day, a confirmed member registration), the right of withdrawal lapses once delivery has started, in accordance with the Norwegian Right of Withdrawal Act (angrerettloven) §22. For physical merchandise you have 14 days from receipt to cancel without giving a reason. Contact the treasurer to use your right of withdrawal."
+    },
+    "retur": {
+      "title": "Returns",
+      "body": "Returned merchandise must be unused and in its original condition. You cover the return shipping unless the goods are defective. Refunds are paid back to the same payment method used for the purchase, normally within 14 days of receipt of the returned goods."
+    },
+    "reklamasjon": {
+      "title": "Complaints handling",
+      "body": "If something is wrong with the product or service, contact us as soon as possible — and at the latest within reasonable time after the defect was or should have been discovered. The deadline for complaints is two years from receipt, or five years for items intended for significantly longer use. Send complaints to the treasurer or, for harbor-related matters, the harbor master."
+    },
+    "konflikt": {
+      "title": "Dispute resolution",
+      "body": "We aim to resolve any disagreement amicably. If we cannot agree, the buyer can bring the matter before the Consumer Council (Forbrukertilsynet) or the Consumer Disputes Commission (Forbrukerklageutvalget). EU consumers can use the European Commission's online dispute resolution platform at ec.europa.eu/odr. Norwegian law applies and Norwegian courts are the venue."
+    }
   }
 }
