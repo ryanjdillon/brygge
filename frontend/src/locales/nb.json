@@ -592,7 +592,19 @@
         "resend": "Send på nytt",
         "resendAction": "Send på nytt",
         "resendConfirmTitle": "Send faktura på nytt?",
-        "resendBody": "Send originalfakturaen til {name} <{email}> på nytt? Nyttig når mottakaren ikkje fekk meldinga eller ho hamna i spam. Den opphavlege sendedatoen er teken vare på."
+        "resendBody": "Send originalfakturaen til {name} <{email}> på nytt? Nyttig når mottakaren ikkje fekk meldinga eller ho hamna i spam. Den opphavlege sendedatoen er teken vare på.",
+        "filterPaid": "Betalt",
+        "filterWaiting": "Venter",
+        "filterPastDue": "Forfalt",
+        "reminderSelected": "Send purring",
+        "reminderConfirmTitle": "Send purringer?",
+        "reminderBulkBody": "Send e-postpurring for {n} faktura(er). Allerede betalte rader hoppes automatisk over.",
+        "reminderAction": "Send purringer",
+        "reminderNoneEligible": "Ingen valgte fakturaer er aktuelle — alle er allerede markert som betalt.",
+        "regenSelected": "Regenerer PDF",
+        "regenConfirmTitle": "Regenerer fakturaer?",
+        "regenBulkBody": "Bygg PDF-en på nytt for {n} faktura(er) med klubbens nåværende bankkonto. Fakturanummer, KID, datoer og linjer er uendret. Ingen e-post sendes — bruk «Send purring» etterpå.",
+        "regenAction": "Regenerer"
       }
     },
     "memberSearch": {

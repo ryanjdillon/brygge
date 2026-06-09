@@ -286,6 +286,56 @@ func InvoiceBody(_ /*locale*/, memberName, clubName string, invoiceNumber int, d
 	return buf.String()
 }
 
+// InvoiceReminderSubject returns the Subject header for purring
+// (reminder) emails referencing the original faktura.
+func InvoiceReminderSubject(_, clubName string, invoiceNumber int) string {
+	if clubName == "" {
+		clubName = "klubben"
+	}
+	return fmt.Sprintf("Påminnelse om ubetalt faktura fra %s [Faktura %d]", clubName, invoiceNumber)
+}
+
+// InvoiceReminderBody renders a Norwegian purring email that explains
+// the invoice is past due (or pending), restates the payment details,
+// and notes the PDF copy is attached. The PDF is attached separately
+// by the caller — same as InvoiceBody.
+func InvoiceReminderBody(_ /*locale*/, memberName, clubName string, invoiceNumber int, dueDate time.Time, total float64, kid, bankAccount string) string {
+	if clubName == "" {
+		clubName = "klubben"
+	}
+	if memberName == "" {
+		memberName = "medlem"
+	}
+	overdue := time.Now().After(dueDate)
+	data := struct {
+		Club          string
+		Member        string
+		InvoiceNumber int
+		DueDate       string
+		Amount        string
+		KID           string
+		BankAccount   string
+		Overdue       bool
+	}{
+		Club:          clubName,
+		Member:        memberName,
+		InvoiceNumber: invoiceNumber,
+		DueDate:       dueDate.Format("02.01.2006"),
+		Amount:        formatNOK(total),
+		KID:           kid,
+		BankAccount:   bankAccount,
+		Overdue:       overdue,
+	}
+	var buf bytes.Buffer
+	if err := reminderHTMLTpl.Execute(&buf, data); err != nil {
+		return fmt.Sprintf(
+			`<p>Hei %s,</p><p>Påminnelse om ubetalt faktura (#%d) fra %s.</p><p>Forfall: %s · Beløp: %s · KID: %s · Konto: %s</p>`,
+			memberName, invoiceNumber, clubName, data.DueDate, data.Amount, kid, bankAccount,
+		)
+	}
+	return buf.String()
+}
+
 // formatNOK renders a money amount as "kr 1 234,50" with Norwegian
 // thousands grouping and decimal comma.
 func formatNOK(amount float64) string {
@@ -305,6 +355,68 @@ func formatNOK(amount float64) string {
 	}
 	return fmt.Sprintf("kr %s,%02d", grouped.String(), cents)
 }
+
+var reminderHTMLTpl = template.Must(template.New("reminder").Parse(`<!DOCTYPE html>
+<html>
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f5f5f5;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:560px;background:#ffffff;border:1px solid #e5e7eb;border-radius:6px;">
+          <tr>
+            <td style="padding:32px 32px 16px 32px;border-bottom:1px solid #e5e7eb;">
+              <h1 style="margin:0;font-size:20px;color:#0f172a;font-weight:600;">{{.Club}}</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:24px 32px;color:#1f2937;font-size:15px;line-height:1.55;">
+              <p style="margin:0 0 16px 0;">Hei {{.Member}},</p>
+              {{if .Overdue}}
+              <p style="margin:0 0 8px 0;color:#b91c1c;font-weight:600;">Påminnelse: faktura #{{.InvoiceNumber}} er forfalt.</p>
+              <p style="margin:0 0 20px 0;">Vi minner om at fakturaen ikke er registrert som betalt. PDF-kopi følger som vedlegg.</p>
+              {{else}}
+              <p style="margin:0 0 8px 0;color:#b45309;font-weight:600;">Påminnelse om ubetalt faktura #{{.InvoiceNumber}}.</p>
+              <p style="margin:0 0 20px 0;">Vi minner om forfallet under. PDF-kopi følger som vedlegg.</p>
+              {{end}}
+
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 24px 0;background:#f8fafc;border-radius:6px;">
+                <tr>
+                  <td style="padding:14px 16px;font-size:14px;color:#64748b;width:40%;">Fakturanummer</td>
+                  <td style="padding:14px 16px;font-size:14px;color:#0f172a;font-family:ui-monospace,Menlo,Consolas,monospace;">#{{.InvoiceNumber}}</td>
+                </tr>
+                <tr>
+                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#64748b;">Forfallsdato</td>
+                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#0f172a;font-weight:600;">{{.DueDate}}</td>
+                </tr>
+                <tr>
+                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#64748b;">Beløp å betale</td>
+                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#0f172a;font-weight:600;">{{.Amount}}</td>
+                </tr>
+                <tr>
+                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#64748b;">KID</td>
+                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#0f172a;font-family:ui-monospace,Menlo,Consolas,monospace;">{{.KID}}</td>
+                </tr>
+                <tr>
+                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#64748b;">Kontonummer</td>
+                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#0f172a;font-family:ui-monospace,Menlo,Consolas,monospace;">{{.BankAccount}}</td>
+                </tr>
+              </table>
+
+              <p style="margin:0 0 8px 0;font-size:13px;color:#64748b;">Hvis betalingen allerede er sendt, kan du se bort fra denne påminnelsen.</p>
+              <p style="margin:0;font-size:13px;color:#64748b;">Spørsmål kan sendes til kasserer ved å svare på denne e-posten.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 32px;border-top:1px solid #e5e7eb;background:#f8fafc;color:#64748b;font-size:12px;line-height:1.5;border-radius:0 0 6px 6px;">
+              <p style="margin:0;"><strong style="color:#334155;">{{.Club}}</strong></p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`))
 
 var invoiceHTMLTpl = template.Must(template.New("invoice").Parse(`<!DOCTYPE html>
 <html>

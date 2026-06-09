@@ -725,6 +725,12 @@ func main() {
 						r.With(middleware.RequireRole("treasurer", "admin"),
 							middleware.RequireFreshTOTPDefault()).
 							Delete("/invoices/{invoiceID}", invoiceHandler.HandleDeleteInvoice)
+						r.With(middleware.RequireRole("treasurer", "admin"),
+							middleware.RequireFreshTOTPDefault()).
+							Post("/invoices/bulk-reminder", invoiceHandler.HandleBulkSendReminder)
+						r.With(middleware.RequireRole("treasurer", "admin"),
+							middleware.RequireFreshTOTPDefault()).
+							Post("/invoices/bulk-regenerate-pdf", invoiceHandler.HandleBulkRegeneratePDF)
 					}
 				})
 

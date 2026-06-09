@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { FileDown, Send, Trash2, Ban, RefreshCw } from 'lucide-vue-next'
+import { FileDown, Send, Trash2, Ban, Bell, RefreshCw } from 'lucide-vue-next'
 import { useConfirm } from '@/stores/confirm'
 import { useFreshTotp } from '@/composables/useFreshTotp'
 
@@ -20,7 +20,10 @@ interface Row {
   created_at: string
   sent_at: string | null
   status: string
+  paid: boolean
 }
+
+type PaidStatus = 'paid' | 'waiting' | 'past_due'
 
 const props = defineProps<{
   /** Backend filter — drives which rows are listed and which actions are shown. */
@@ -39,6 +42,18 @@ const selected = ref<Set<string>>(new Set())
 const filterMember = ref('')
 const filterPriceItem = ref('')
 const filterYear = ref<number | ''>('')
+const paidStatusFilter = ref<Set<PaidStatus>>(new Set())
+
+function rowPaidStatus(d: Row): PaidStatus {
+  if (d.paid) return 'paid'
+  return new Date(d.due_date) < new Date(new Date().toDateString()) ? 'past_due' : 'waiting'
+}
+function togglePaidStatus(s: PaidStatus) {
+  const next = new Set(paidStatusFilter.value)
+  if (next.has(s)) next.delete(s)
+  else next.add(s)
+  paidStatusFilter.value = next
+}
 
 async function load() {
   loading.value = true
@@ -66,6 +81,7 @@ const filtered = computed(() => rows.value.filter((d) => {
   }
   if (filterPriceItem.value && d.price_item_name !== filterPriceItem.value) return false
   if (filterYear.value !== '' && d.fiscal_year !== filterYear.value) return false
+  if (paidStatusFilter.value.size > 0 && !paidStatusFilter.value.has(rowPaidStatus(d))) return false
   return true
 }))
 
@@ -89,6 +105,8 @@ const showSend = computed(() => props.status === 'draft')
 const showResend = computed(() => props.status === 'sent')
 const showDelete = computed(() => props.status !== 'sent') // backend rejects DELETE on sent open invoices
 const showVoid = computed(() => props.status !== 'voided')
+const showReminder = computed(() => props.status === 'sent')
+const showRegenerate = computed(() => props.status === 'sent')
 
 function toggle(id: string) {
   const next = new Set(selected.value)
@@ -250,6 +268,64 @@ async function deleteSelected() {
   for (const id of items.map((d) => d.id)) await doDelete(id)
 }
 
+async function sendRemindersSelected() {
+  if (selected.value.size === 0) return
+  if (!(await ensureFreshTotp())) return
+  const items = rows.value.filter((d) => selected.value.has(d.id) && !d.paid)
+  if (items.length === 0) {
+    error.value = t('admin.faktura.sent.reminderNoneEligible')
+    return
+  }
+  const ok = await confirm({
+    title: t('admin.faktura.sent.reminderConfirmTitle'),
+    body: t('admin.faktura.sent.reminderBulkBody', { n: items.length }),
+    details: items.map(rowLabel),
+    confirmLabel: t('admin.faktura.sent.reminderAction'),
+    tone: 'info',
+  })
+  if (!ok) return
+  const ids = items.map((d) => d.id)
+  const res = await totpAwareFetch(`/api/v1/admin/financials/invoices/bulk-reminder`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids }),
+  })
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '')
+    error.value = `${res.status} ${txt}`
+    return
+  }
+  selected.value = new Set()
+  await load()
+}
+
+async function regeneratePdfSelected() {
+  if (selected.value.size === 0) return
+  if (!(await ensureFreshTotp())) return
+  const items = rows.value.filter((d) => selected.value.has(d.id))
+  const ok = await confirm({
+    title: t('admin.faktura.sent.regenConfirmTitle'),
+    body: t('admin.faktura.sent.regenBulkBody', { n: items.length }),
+    details: items.map(rowLabel),
+    confirmLabel: t('admin.faktura.sent.regenAction'),
+    tone: 'warning',
+  })
+  if (!ok) return
+  const ids = items.map((d) => d.id)
+  const res = await totpAwareFetch(`/api/v1/admin/financials/invoices/bulk-regenerate-pdf`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids }),
+  })
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '')
+    error.value = `${res.status} ${txt}`
+    return
+  }
+  selected.value = new Set()
+  await load()
+}
+
 async function voidSelected() {
   if (selected.value.size === 0) return
   if (!(await ensureFreshTotp())) return
@@ -305,6 +381,35 @@ defineExpose({ load })
           <option value="">{{ t('admin.invoiceDrafts.filterAllYears') }}</option>
           <option v-for="y in yearOptions" :key="y" :value="y">{{ y }}</option>
         </select>
+        <div v-if="status === 'sent'" class="flex flex-wrap gap-1.5">
+          <button
+            type="button"
+            class="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition"
+            :class="paidStatusFilter.has('paid') ? 'border-green-300 bg-green-50 text-green-800' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'"
+            @click="togglePaidStatus('paid')"
+          >
+            <span class="inline-block h-1.5 w-1.5 rounded-full bg-green-500" />
+            {{ t('admin.faktura.sent.filterPaid') }}
+          </button>
+          <button
+            type="button"
+            class="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition"
+            :class="paidStatusFilter.has('waiting') ? 'border-yellow-300 bg-yellow-50 text-yellow-800' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'"
+            @click="togglePaidStatus('waiting')"
+          >
+            <span class="inline-block h-1.5 w-1.5 rounded-full bg-yellow-500" />
+            {{ t('admin.faktura.sent.filterWaiting') }}
+          </button>
+          <button
+            type="button"
+            class="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition"
+            :class="paidStatusFilter.has('past_due') ? 'border-red-300 bg-red-50 text-red-800' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'"
+            @click="togglePaidStatus('past_due')"
+          >
+            <span class="inline-block h-1.5 w-1.5 rounded-full bg-red-500" />
+            {{ t('admin.faktura.sent.filterPastDue') }}
+          </button>
+        </div>
         <span class="ml-auto text-xs text-gray-500">
           {{ t('admin.invoiceDrafts.summary', { n: filtered.length, total: formatNOK(totalAmount) }) }}
         </span>
@@ -324,6 +429,20 @@ defineExpose({ load })
             @click="sendSelected"
           >
             <Send class="h-3.5 w-3.5" /> {{ t('admin.invoiceDrafts.sendSelected') }}
+          </button>
+          <button
+            v-if="showReminder"
+            class="inline-flex items-center gap-1 rounded-md bg-amber-600 px-3 py-1 text-xs font-semibold text-white hover:bg-amber-700"
+            @click="sendRemindersSelected"
+          >
+            <Bell class="h-3.5 w-3.5" /> {{ t('admin.faktura.sent.reminderSelected') }}
+          </button>
+          <button
+            v-if="showRegenerate"
+            class="inline-flex items-center gap-1 rounded-md border border-blue-300 bg-white px-3 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+            @click="regeneratePdfSelected"
+          >
+            <RefreshCw class="h-3.5 w-3.5" /> {{ t('admin.faktura.sent.regenSelected') }}
           </button>
           <button
             v-if="showVoid"

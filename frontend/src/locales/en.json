@@ -596,7 +596,19 @@
         "resend": "Resend email",
         "resendAction": "Resend",
         "resendConfirmTitle": "Resend invoice email?",
-        "resendBody": "Resend the original PDF to {name} <{email}>? Useful when the recipient never received the message or it landed in spam. The original sent date is preserved."
+        "resendBody": "Resend the original PDF to {name} <{email}>? Useful when the recipient never received the message or it landed in spam. The original sent date is preserved.",
+        "filterPaid": "Paid",
+        "filterWaiting": "Waiting",
+        "filterPastDue": "Past due",
+        "reminderSelected": "Send reminder",
+        "reminderConfirmTitle": "Send payment reminders?",
+        "reminderBulkBody": "Email a payment reminder for {n} invoice(s). Already-paid rows in the selection are skipped automatically.",
+        "reminderAction": "Send reminders",
+        "reminderNoneEligible": "No selected invoices are eligible — all are already marked as paid.",
+        "regenSelected": "Regenerate PDF",
+        "regenConfirmTitle": "Regenerate PDFs?",
+        "regenBulkBody": "Rebuild the stored PDF for {n} invoice(s) using the current club bank account. Invoice number, KID, dates, and lines stay identical. No email is sent — use \"Send reminder\" afterwards.",
+        "regenAction": "Regenerate"
       }
     },
     "memberSearch": {

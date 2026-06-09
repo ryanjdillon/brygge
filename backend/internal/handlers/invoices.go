@@ -751,7 +751,8 @@ func (h *InvoiceHandler) HandleListInvoices(w http.ResponseWriter, r *http.Reque
 		        i.total_amount, i.issue_date, i.due_date,
 		        COALESCE(pi.name, ''), fp.year,
 		        COALESCE((SELECT description FROM invoice_lines WHERE invoice_id = i.id LIMIT 1), ''),
-		        i.created_at, i.sent_at, i.status
+		        i.created_at, i.sent_at, i.status,
+		        (i.payment_id IS NOT NULL) AS paid
 		   FROM invoices i
 		   LEFT JOIN users u ON u.id = i.user_id
 		   LEFT JOIN price_items pi ON pi.id = i.price_item_id
@@ -771,6 +772,7 @@ func (h *InvoiceHandler) HandleListInvoices(w http.ResponseWriter, r *http.Reque
 		draftInvoiceRow
 		SentAt *time.Time `json:"sent_at"`
 		Status string     `json:"status"`
+		Paid   bool       `json:"paid"`
 	}
 	out := make([]listRow, 0)
 	for rows.Next() {
@@ -780,7 +782,7 @@ func (h *InvoiceHandler) HandleListInvoices(w http.ResponseWriter, r *http.Reque
 			&d.MemberName, &d.MemberEmail,
 			&d.TotalAmount, &issue, &due,
 			&d.PriceItemName, &d.FiscalYear, &d.Description, &d.CreatedAt,
-			&d.SentAt, &d.Status); err != nil {
+			&d.SentAt, &d.Status, &d.Paid); err != nil {
 			h.log.Error().Err(err).Msg("scan invoice row")
 			Error(w, http.StatusInternalServerError, "internal error")
 			return
