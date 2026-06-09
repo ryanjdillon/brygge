@@ -120,7 +120,7 @@ const navGroups = computed<NavGroup[]>(() => {
         { to: '/admin/map', icon: MapPin, label: t('admin.sidebar.mapMarkers') },
         { to: '/admin/notifications', icon: Bell, label: t('notifications.admin.title'), feature: 'communications' },
         { to: '/admin/gdpr', icon: ShieldCheck, label: t('gdpr.admin.title') },
-        { to: '/admin/accounting/settings', icon: Settings, label: t('admin.sidebar.siteSettings'), roles: ['board', 'admin'] },
+        { to: '/admin/settings/site', icon: Settings, label: t('admin.sidebar.siteSettings'), roles: ['board', 'admin'] },
       ],
     },
   ]

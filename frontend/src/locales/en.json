@@ -1344,6 +1344,10 @@
     "groupEconomy": "Economy",
     "groupShop": "Shop",
     "groupSite": "Site",
+    "siteSettings": {
+      "title": "Site settings",
+      "subtitle": "Club identity, board contact emails, coordinates, website URL, and the public site logo — cross-module settings used everywhere the club appears."
+    },
     "harborSettings": {
       "title": "Harbor info",
       "subtitle": "Content shown on the public harbor page — approach, depth, VHF channel, and the call-to-action banner.",

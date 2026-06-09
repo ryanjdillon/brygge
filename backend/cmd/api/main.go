@@ -851,27 +851,31 @@ func main() {
 					r.Put("/", clubSettingsHandler.HandleUpdateGeneralSettings)
 				})
 
-				// Faktura branding settings (org no, address, bank, logo,
-				// website, board emails). Gated on the accounting feature
-				// flag alongside the rest of the faktura lifecycle. Flat
-				// paths (not r.Route) so chi matches with no trailing slash.
+				// Site-wide settings (identity, board emails, harbor &
+				// motorhome content). Flat paths so chi matches with no
+				// trailing slash. The same handler still serves every
+				// field in the clubs row — module-specific views consume
+				// only the subset they care about. See DIL-358.
+				r.With(middleware.RequireRole("treasurer", "admin")).
+					Get("/settings/site", clubSettingsHandler.HandleGetFinancialSettings)
+				r.With(
+					middleware.RequireRole("treasurer", "admin"),
+					middleware.RequireFreshTOTPDefault(),
+				).Patch("/settings/site", clubSettingsHandler.HandleUpdateFinancialSettings)
+
+				// Economy-specific assets (faktura logo). Gated on the
+				// accounting feature flag.
 				if cfg.Features.Accounting {
 					r.With(middleware.RequireRole("treasurer", "admin")).
-						Get("/settings/financials", clubSettingsHandler.HandleGetFinancialSettings)
+						Get("/settings/economy/faktura-logo", clubSettingsHandler.HandleGetFakturaLogo)
 					r.With(
 						middleware.RequireRole("treasurer", "admin"),
 						middleware.RequireFreshTOTPDefault(),
-					).Patch("/settings/financials", clubSettingsHandler.HandleUpdateFinancialSettings)
-					r.With(middleware.RequireRole("treasurer", "admin")).
-						Get("/settings/financials/faktura-logo", clubSettingsHandler.HandleGetFakturaLogo)
+					).Post("/settings/economy/faktura-logo", clubSettingsHandler.HandleUploadFakturaLogo)
 					r.With(
 						middleware.RequireRole("treasurer", "admin"),
 						middleware.RequireFreshTOTPDefault(),
-					).Post("/settings/financials/faktura-logo", clubSettingsHandler.HandleUploadFakturaLogo)
-					r.With(
-						middleware.RequireRole("treasurer", "admin"),
-						middleware.RequireFreshTOTPDefault(),
-					).Delete("/settings/financials/faktura-logo", clubSettingsHandler.HandleDeleteFakturaLogo)
+					).Delete("/settings/economy/faktura-logo", clubSettingsHandler.HandleDeleteFakturaLogo)
 
 					// Multi-account bank registry (drift/høyrente/other).
 					// Faktura PDFs read the row flagged is_default_for_invoices;

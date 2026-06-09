@@ -1340,6 +1340,10 @@
     "groupEconomy": "Økonomi",
     "groupShop": "Butikk",
     "groupSite": "Nettstad",
+    "siteSettings": {
+      "title": "Nettstadsinnstillingar",
+      "subtitle": "Klubbidentitet, kontakt-e-postar, koordinatar, nettadresse og logo — innstillingar som vert brukte på tvers av modular."
+    },
     "harborSettings": {
       "title": "Hamneinformasjon",
       "subtitle": "Innhald vist på den offentlege hamnesida — innsegling, djupne, VHF-kanal og handlingsknappen.",

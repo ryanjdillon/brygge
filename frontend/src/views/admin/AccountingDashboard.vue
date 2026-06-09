@@ -279,13 +279,13 @@ const postedCount = computed(() => entries.value?.filter(e => e.status === 'post
           </div>
         </RouterLink>
         <RouterLink
-          to="/admin/accounting/settings"
+          to="/admin/economy/settings"
           class="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-5 transition hover:border-blue-300 hover:shadow-sm"
         >
           <Settings class="h-8 w-8 text-blue-600" />
           <div>
-            <p class="font-medium text-gray-900">{{ t('admin.financialSettings.title') }}</p>
-            <p class="text-sm text-gray-500">{{ t('admin.financialSettings.cardDesc') }}</p>
+            <p class="font-medium text-gray-900">{{ t('admin.economySettings.title') }}</p>
+            <p class="text-sm text-gray-500">{{ t('admin.economySettings.subtitle') }}</p>
           </div>
         </RouterLink>
         <RouterLink

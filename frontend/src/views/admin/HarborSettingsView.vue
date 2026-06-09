@@ -32,7 +32,7 @@ async function load() {
   loading.value = true
   error.value = null
   try {
-    const res = await fetch('/api/v1/admin/settings/financials', { credentials: 'include' })
+    const res = await fetch('/api/v1/admin/settings/site', { credentials: 'include' })
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
     const body = await res.json()
     harborApproach.value = body.harbor_approach ?? ''
@@ -52,7 +52,7 @@ async function save() {
   saving.value = true
   error.value = null
   try {
-    const res = await fetch('/api/v1/admin/settings/financials', {
+    const res = await fetch('/api/v1/admin/settings/site', {
       method: 'PATCH',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },

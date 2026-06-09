@@ -344,9 +344,16 @@ const routes: RouteRecordRaw[] = [
         redirect: () => ({ path: '/admin/accounting/faktura', query: { tab: 'drafts' } }),
       },
       {
+        path: 'settings/site',
+        name: 'admin-site-settings',
+        component: () => import('@/views/admin/SiteSettingsView.vue'),
+      },
+      {
+        // Legacy URL — older bookmarks land here. Redirects to the
+        // canonical /admin/settings/site path. Safe to delete after
+        // a release or two. See DIL-358.
         path: 'accounting/settings',
-        name: 'admin-financial-settings',
-        component: () => import('@/views/admin/FinancialSettingsView.vue'),
+        redirect: '/admin/settings/site',
       },
       {
         path: 'accounting/bank-imports',

@@ -28,7 +28,7 @@ async function load() {
   loading.value = true
   error.value = null
   try {
-    const res = await fetch('/api/v1/admin/settings/financials', { credentials: 'include' })
+    const res = await fetch('/api/v1/admin/settings/site', { credentials: 'include' })
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
     const body = await res.json()
     hasFakturaLogo.value = !!body.has_faktura_logo
@@ -53,7 +53,7 @@ async function uploadFakturaLogo(files: FileList | null) {
   try {
     const fd = new FormData()
     fd.append('logo', file)
-    const res = await fetch('/api/v1/admin/settings/financials/faktura-logo', {
+    const res = await fetch('/api/v1/admin/settings/economy/faktura-logo', {
       method: 'POST',
       credentials: 'include',
       body: fd,
@@ -77,7 +77,7 @@ async function deleteFakturaLogo() {
   if (!(await ensureFreshTotp())) return
   error.value = null
   try {
-    const res = await fetch('/api/v1/admin/settings/financials/faktura-logo', {
+    const res = await fetch('/api/v1/admin/settings/economy/faktura-logo', {
       method: 'DELETE',
       credentials: 'include',
     })
@@ -118,7 +118,7 @@ onMounted(load)
         <p class="text-xs text-slate-600">{{ t('admin.financialSettings.fakturaLogoHint') }}</p>
         <div v-if="hasFakturaLogo" class="flex items-center gap-4">
           <img
-            :src="`/api/v1/admin/settings/financials/faktura-logo?v=${fakturaLogoCacheBust}`"
+            :src="`/api/v1/admin/settings/economy/faktura-logo?v=${fakturaLogoCacheBust}`"
             alt=""
             class="h-16 w-auto rounded border border-slate-200 bg-white p-1"
           />

@@ -1340,6 +1340,10 @@
     "groupEconomy": "Økonomi",
     "groupShop": "Butikk",
     "groupSite": "Nettsted",
+    "siteSettings": {
+      "title": "Nettstedsinnstillinger",
+      "subtitle": "Klubbidentitet, kontakt-e-poster, koordinater, nettadresse og logo — innstillinger som brukes på tvers av moduler."
+    },
     "harborSettings": {
       "title": "Havneinformasjon",
       "subtitle": "Innhold vist på den offentlige havnesiden — innseiling, dybde, VHF-kanal og handlingsknappen.",

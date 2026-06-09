@@ -47,7 +47,7 @@ async function load() {
   loading.value = true
   error.value = null
   try {
-    const res = await fetch('/api/v1/admin/settings/financials', { credentials: 'include' })
+    const res = await fetch('/api/v1/admin/settings/site', { credentials: 'include' })
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
     const body = await res.json()
     clubName.value = body.name ?? ''
@@ -138,7 +138,7 @@ async function save() {
   saving.value = true
   error.value = null
   try {
-    const res = await fetch('/api/v1/admin/settings/financials', {
+    const res = await fetch('/api/v1/admin/settings/site', {
       method: 'PATCH',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -178,8 +178,8 @@ async function save() {
       </RouterLink>
     </div>
 
-    <h1 class="text-2xl font-bold text-gray-900">{{ t('admin.financialSettings.title') }}</h1>
-    <p class="mt-1 text-sm text-gray-600">{{ t('admin.financialSettings.subtitle') }}</p>
+    <h1 class="text-2xl font-bold text-gray-900">{{ t('admin.siteSettings.title') }}</h1>
+    <p class="mt-1 text-sm text-gray-600">{{ t('admin.siteSettings.subtitle') }}</p>
 
     <p v-if="loading" class="mt-6 text-sm text-gray-500">{{ t('common.loading') }}…</p>
 
