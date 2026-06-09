@@ -23,6 +23,17 @@ export interface ExportFilters {
   end?: string
 }
 
+export interface ReservationsMonthBucket {
+  month: number
+  guest_slip: number
+  motorhome: number
+}
+
+export interface ReservationsByMonth {
+  year: number
+  buckets: ReservationsMonthBucket[]
+}
+
 export interface PriceItemSummaryRow {
   price_item_id: string
   name: string
@@ -60,6 +71,21 @@ export function usePriceItemSummary(year?: Ref<number | undefined>) {
       })
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
       return (await res.json()) as PriceItemSummaryResponse
+    },
+    staleTime: 2 * 60 * 1000,
+  })
+}
+
+export function useReservationsByMonth(year?: Ref<number | undefined>) {
+  return useQuery({
+    queryKey: computed(() => ['financials', 'reservations-by-month', year?.value]),
+    queryFn: async () => {
+      const qs = year?.value ? `?year=${year.value}` : ''
+      const res = await fetch(`/api/v1/admin/financials/reservations-by-month${qs}`, {
+        credentials: 'include',
+      })
+      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+      return (await res.json()) as ReservationsByMonth
     },
     staleTime: 2 * 60 * 1000,
   })

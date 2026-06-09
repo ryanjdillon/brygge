@@ -2,7 +2,9 @@
 import { ref, computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useFinancialSummary, usePriceItemSummary, type PriceItemSummaryRow } from '@/composables/useFinancials'
+import { useFinancialSummary, usePriceItemSummary, useReservationsByMonth, type PriceItemSummaryRow } from '@/composables/useFinancials'
+import DonutChart from '@/components/charts/DonutChart.vue'
+import BarChart from '@/components/charts/BarChart.vue'
 import {
   BookOpen,
   FileText,
@@ -48,6 +50,40 @@ const yearOptions = computed(() => {
 })
 const { data: summary, isLoading: summaryLoading } = useFinancialSummary(selectedYear)
 const { data: priceItemSummary, isLoading: priceItemLoading } = usePriceItemSummary(selectedYear)
+// Reservations chart always wants a concrete year; "all years" still
+// renders the current calendar year — historic stacking can be a
+// follow-up if anyone asks.
+const reservationsYear = computed(() => selectedYear.value ?? currentYear)
+const reservationsYearRef = computed({ get: () => reservationsYear.value, set: () => {} })
+const { data: reservations } = useReservationsByMonth(reservationsYearRef)
+
+const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Des']
+
+const reservationBuckets = computed(() =>
+  (reservations.value?.buckets ?? []).map((b) => ({
+    label: MONTH_LABELS[b.month - 1] ?? String(b.month),
+    values: { guest_slip: b.guest_slip, motorhome: b.motorhome },
+  })),
+)
+const reservationTotals = computed(() => {
+  const acc = { guest_slip: 0, motorhome: 0 }
+  for (const b of reservations.value?.buckets ?? []) {
+    acc.guest_slip += b.guest_slip
+    acc.motorhome += b.motorhome
+  }
+  return acc
+})
+
+const fakturaDonutSlices = computed(() => {
+  const totals = priceItemSummary.value?.totals
+  if (!totals) return []
+  const waiting = Math.max(0, totals.outstanding - totals.overdue)
+  return [
+    { label: t('admin.financials.statusPaid'), value: totals.received, color: '#16a34a' },
+    { label: t('admin.financials.statusWaiting'), value: waiting, color: '#eab308' },
+    { label: t('admin.financials.statusOverdue'), value: totals.overdue, color: '#dc2626' },
+  ]
+})
 
 type CategoryGroup = { category: string; items: PriceItemSummaryRow[]; subtotals: { billed: number; received: number; overdue: number; outstanding: number } }
 const priceItemGroups = computed<CategoryGroup[]>(() => {
@@ -151,6 +187,43 @@ const postedCount = computed(() => entries.value?.filter(e => e.status === 'post
                 <p class="text-xs font-medium text-gray-500">{{ t('admin.financials.totalForfall') }}</p>
               </div>
               <p class="mt-2 text-lg font-semibold text-gray-900">{{ formatNOK(priceItemSummary.totals.overdue) }}</p>
+            </div>
+          </div>
+
+          <!-- Visualizations -->
+          <div class="mt-4 grid gap-4 lg:grid-cols-2">
+            <div class="rounded-lg border border-gray-200 bg-white p-5">
+              <h3 class="text-sm font-semibold text-gray-700">{{ t('admin.financials.fakturaStatusTitle') }}</h3>
+              <p class="mt-0.5 text-xs text-gray-500">{{ t('admin.financials.fakturaStatusHint') }}</p>
+              <div class="mt-4">
+                <DonutChart
+                  :slices="fakturaDonutSlices"
+                  :center-value="formatNOK(priceItemSummary.totals.billed)"
+                  :center-label="t('admin.financials.totalBilled')"
+                />
+              </div>
+            </div>
+            <div class="rounded-lg border border-gray-200 bg-white p-5">
+              <div class="flex items-center justify-between">
+                <div>
+                  <h3 class="text-sm font-semibold text-gray-700">{{ t('admin.financials.reservationsTitle') }}</h3>
+                  <p class="mt-0.5 text-xs text-gray-500">{{ t('admin.financials.reservationsHint', { year: reservationsYear }) }}</p>
+                </div>
+                <p class="text-right text-xs text-gray-500">
+                  <span class="block tabular-nums text-gray-900 font-semibold">{{ reservationTotals.guest_slip + reservationTotals.motorhome }}</span>
+                  {{ t('admin.financials.reservationsTotal') }}
+                </p>
+              </div>
+              <div class="mt-4">
+                <BarChart
+                  :buckets="reservationBuckets"
+                  :series="[
+                    { key: 'guest_slip', label: t('admin.financials.guestSlip'), color: '#2563eb' },
+                    { key: 'motorhome', label: t('admin.financials.motorhome'), color: '#a855f7' },
+                  ]"
+                  :height="180"
+                />
+              </div>
             </div>
           </div>
 

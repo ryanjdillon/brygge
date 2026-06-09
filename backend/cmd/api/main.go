@@ -685,6 +685,7 @@ func main() {
 					// of the commerce module (which aggregates the Vipps
 					// payments table). Available wherever faktura is enabled.
 					r.Get("/price-item-summary", financialsHandler.HandleGetPriceItemSummary)
+					r.Get("/reservations-by-month", financialsHandler.HandleGetReservationsByMonth)
 
 					if cfg.Features.Commerce {
 						// Commerce-side reporting: payments, overdue,

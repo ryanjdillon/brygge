@@ -737,7 +737,17 @@
       "invoicePreview": "Invoice for {name}: {type}, {amount} NOK, due {due}",
       "invoiceCreated": "Invoice created",
       "harborMembershipCollected": "Andel collected",
-      "typeHarborMembership": "Harbor Membership"
+      "typeHarborMembership": "Harbor Membership",
+      "statusPaid": "Paid",
+      "statusWaiting": "Waiting",
+      "statusOverdue": "Overdue",
+      "fakturaStatusTitle": "Faktura status",
+      "fakturaStatusHint": "How much of what was invoiced has been paid, is waiting, or is overdue.",
+      "reservationsTitle": "Reservations",
+      "reservationsHint": "Guest slip and motorhome bookings per month ({year}).",
+      "reservationsTotal": "reservations",
+      "guestSlip": "Guest slip",
+      "motorhome": "Motorhome"
     },
     "events": {
       "title": "Event Management",

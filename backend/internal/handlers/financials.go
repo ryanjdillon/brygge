@@ -163,6 +163,83 @@ func (h *FinancialsHandler) HandleGetPriceItemSummary(w http.ResponseWriter, r *
 	JSON(w, http.StatusOK, resp)
 }
 
+type reservationsMonthRow struct {
+	Month     int `json:"month"`
+	GuestSlip int `json:"guest_slip"`
+	Motorhome int `json:"motorhome"`
+}
+
+// HandleGetReservationsByMonth returns a 12-row series of guest-slip
+// and motorhome booking counts per calendar month for the given year
+// (defaults to the current year). Used by the accounting dashboard's
+// reservation chart. See DIL-362.
+func (h *FinancialsHandler) HandleGetReservationsByMonth(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	year := time.Now().Year()
+	if y := r.URL.Query().Get("year"); y != "" {
+		yi, err := strconv.Atoi(y)
+		if err != nil {
+			Error(w, http.StatusBadRequest, "invalid year parameter")
+			return
+		}
+		year = yi
+	}
+
+	rows, err := h.db.Query(ctx, `
+		SELECT EXTRACT(MONTH FROM b.start_date)::int AS month,
+		       r.type,
+		       COUNT(*) AS n
+		  FROM bookings b
+		  JOIN resources r ON r.id = b.resource_id
+		 WHERE b.club_id = $1
+		   AND b.status NOT IN ('cancelled')
+		   AND EXTRACT(YEAR FROM b.start_date) = $2
+		   AND r.type IN ('guest_slip','bobil_spot')
+		 GROUP BY month, r.type
+		 ORDER BY month`,
+		claims.ClubID, year,
+	)
+	if err != nil {
+		h.log.Error().Err(err).Msg("reservations-by-month query")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	defer rows.Close()
+
+	buckets := make([]reservationsMonthRow, 12)
+	for i := range buckets {
+		buckets[i].Month = i + 1
+	}
+	for rows.Next() {
+		var month int
+		var rtype string
+		var n int
+		if err := rows.Scan(&month, &rtype, &n); err != nil {
+			h.log.Error().Err(err).Msg("reservations-by-month scan")
+			Error(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		idx := month - 1
+		if idx < 0 || idx > 11 {
+			continue
+		}
+		switch rtype {
+		case "guest_slip":
+			buckets[idx].GuestSlip += n
+		case "bobil_spot":
+			buckets[idx].Motorhome += n
+		}
+	}
+
+	JSON(w, http.StatusOK, map[string]any{"year": year, "buckets": buckets})
+}
+
 type paymentRow struct {
 	ID          string     `json:"id"`
 	UserID      string     `json:"user_id"`

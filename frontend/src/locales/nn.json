@@ -733,7 +733,17 @@
       "invoicePreview": "Faktura til {name}: {type}, {amount} NOK, forfall {due}",
       "invoiceCreated": "Faktura oppretta",
       "harborMembershipCollected": "Andel innkravd",
-      "typeHarborMembership": "Andel"
+      "typeHarborMembership": "Andel",
+      "statusPaid": "Betalt",
+      "statusWaiting": "Ventar",
+      "statusOverdue": "Forfalle",
+      "fakturaStatusTitle": "Faktura-status",
+      "fakturaStatusHint": "Kor mykje av det fakturerte som er betalt, ventar eller er forfalle.",
+      "reservationsTitle": "Reservasjonar",
+      "reservationsHint": "Gjestebrygge- og bubil-bookingar per månad ({year}).",
+      "reservationsTotal": "reservasjonar",
+      "guestSlip": "Gjestebrygge",
+      "motorhome": "Bubil"
     },
     "events": {
       "title": "Arrangement",
