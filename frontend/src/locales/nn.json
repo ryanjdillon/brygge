@@ -524,7 +524,8 @@
       "bankAccounts": "Bankkontoar",
       "economySettings": "Innstillingar",
       "siteSettings": "Nettstadsinnhald",
-      "harborSettings": "Hamneinformasjon"
+      "harborSettings": "Hamneinformasjon",
+      "motorhomeSettings": "Bubilinformasjon"
     },
     "financialSettings": {
       "title": "Innstillingar",
@@ -1342,6 +1343,11 @@
     "harborSettings": {
       "title": "Hamneinformasjon",
       "subtitle": "Innhald vist på den offentlege hamnesida — innsegling, djupne, VHF-kanal og handlingsknappen.",
+      "ctaGroup": "Handlingsknapp"
+    },
+    "motorhomeSettings": {
+      "title": "Bubilinformasjon",
+      "subtitle": "Innhald vist på den offentlege bubilsida — straum, fasilitetar, innsjekk, reglar og handlingsknappen.",
       "ctaGroup": "Handlingsknapp"
     },
     "economySettings": {

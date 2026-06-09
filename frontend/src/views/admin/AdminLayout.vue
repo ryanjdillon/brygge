@@ -86,6 +86,7 @@ const navGroups = computed<NavGroup[]>(() => {
         { to: '/admin/projects', icon: FolderKanban, label: t('admin.sidebar.projects'), feature: 'projects' },
         { to: '/admin/volunteer', icon: BrushCleaning, label: t('volunteer.title'), feature: 'projects' },
         { to: '/admin/harbor/settings', icon: Settings, label: t('admin.sidebar.harborSettings'), roles: ['board', 'harbor_master', 'admin'] },
+        { to: '/admin/motorhome/settings', icon: Settings, label: t('admin.sidebar.motorhomeSettings'), roles: ['board', 'harbor_master', 'admin'] },
       ],
     },
     {

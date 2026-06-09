@@ -368,6 +368,11 @@ const routes: RouteRecordRaw[] = [
         name: 'admin-harbor-settings',
         component: () => import('@/views/admin/HarborSettingsView.vue'),
       },
+      {
+        path: 'motorhome/settings',
+        name: 'admin-motorhome-settings',
+        component: () => import('@/views/admin/MotorhomeSettingsView.vue'),
+      },
     ],
   },
 ]

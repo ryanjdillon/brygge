@@ -23,12 +23,6 @@ const vhfChannel = ref('')
 const latitude = ref<number | null>(null)
 const longitude = ref<number | null>(null)
 
-const motorhomePower = ref('')
-const motorhomeFacilities = ref('')
-const motorhomeCheckin = ref('')
-const motorhomeRules = ref('')
-const motorhomeCtaTitle = ref('')
-const motorhomeCtaDescription = ref('')
 const websiteUrl = ref('')
 const chairmanEmail = ref('')
 const viceChairmanEmail = ref('')
@@ -63,12 +57,6 @@ async function load() {
     vhfChannel.value = body.vhf_channel ?? ''
     latitude.value = body.latitude != null ? Number(body.latitude) : null
     longitude.value = body.longitude != null ? Number(body.longitude) : null
-    motorhomePower.value = body.motorhome_power ?? ''
-    motorhomeFacilities.value = body.motorhome_facilities ?? ''
-    motorhomeCheckin.value = body.motorhome_checkin ?? ''
-    motorhomeRules.value = body.motorhome_rules ?? ''
-    motorhomeCtaTitle.value = body.motorhome_cta_title ?? ''
-    motorhomeCtaDescription.value = body.motorhome_cta_description ?? ''
     websiteUrl.value = body.website_url ?? ''
     chairmanEmail.value = body.chairman_email ?? ''
     viceChairmanEmail.value = body.vice_chairman_email ?? ''
@@ -161,12 +149,6 @@ async function save() {
         vhf_channel: vhfChannel.value,
         latitude: latitude.value,
         longitude: longitude.value,
-        motorhome_power: motorhomePower.value,
-        motorhome_facilities: motorhomeFacilities.value,
-        motorhome_checkin: motorhomeCheckin.value,
-        motorhome_rules: motorhomeRules.value,
-        motorhome_cta_title: motorhomeCtaTitle.value,
-        motorhome_cta_description: motorhomeCtaDescription.value,
         website_url: websiteUrl.value,
         chairman_email: chairmanEmail.value,
         vice_chairman_email: viceChairmanEmail.value,
@@ -315,35 +297,6 @@ async function save() {
           <FormField :label="t('admin.financialSettings.longitude')">
             <NumberInput v-model="longitude" :step="0.000001" placeholder="5.1245" />
           </FormField>
-        </div>
-      </fieldset>
-
-      <fieldset class="rounded-md border border-slate-200 bg-slate-50 p-3">
-        <legend class="px-1 text-xs font-semibold text-gray-700">{{ t('admin.financialSettings.motorhomeContent') }}</legend>
-        <p class="mb-2 text-xs text-gray-500">{{ t('admin.financialSettings.motorhomeContentHint') }}</p>
-        <div class="space-y-3">
-          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <FormField :label="t('admin.financialSettings.motorhomePower')">
-              <Textarea v-model="motorhomePower" :rows="2" />
-            </FormField>
-            <FormField :label="t('admin.financialSettings.motorhomeFacilities')">
-              <Textarea v-model="motorhomeFacilities" :rows="2" />
-            </FormField>
-            <FormField :label="t('admin.financialSettings.motorhomeCheckin')">
-              <Textarea v-model="motorhomeCheckin" :rows="2" />
-            </FormField>
-            <FormField :label="t('admin.financialSettings.motorhomeRules')">
-              <Textarea v-model="motorhomeRules" :rows="2" />
-            </FormField>
-          </div>
-          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <FormField :label="t('admin.financialSettings.ctaTitle')">
-              <Input v-model="motorhomeCtaTitle" />
-            </FormField>
-            <FormField :label="t('admin.financialSettings.ctaDescription')">
-              <Input v-model="motorhomeCtaDescription" />
-            </FormField>
-          </div>
         </div>
       </fieldset>
 

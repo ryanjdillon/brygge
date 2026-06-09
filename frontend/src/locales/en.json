@@ -528,7 +528,8 @@
       "bankAccounts": "Bank accounts",
       "economySettings": "Settings",
       "siteSettings": "Site content",
-      "harborSettings": "Harbor info"
+      "harborSettings": "Harbor info",
+      "motorhomeSettings": "Motorhome info"
     },
     "financialSettings": {
       "title": "Settings",
@@ -1346,6 +1347,11 @@
     "harborSettings": {
       "title": "Harbor info",
       "subtitle": "Content shown on the public harbor page — approach, depth, VHF channel, and the call-to-action banner.",
+      "ctaGroup": "Call-to-action banner"
+    },
+    "motorhomeSettings": {
+      "title": "Motorhome info",
+      "subtitle": "Content shown on the public motorhome page — power, facilities, check-in instructions, rules, and the call-to-action banner.",
       "ctaGroup": "Call-to-action banner"
     },
     "economySettings": {
