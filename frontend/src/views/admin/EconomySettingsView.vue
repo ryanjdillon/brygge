@@ -44,7 +44,7 @@ async function uploadFakturaLogo(files: FileList | null) {
   const file = files?.[0]
   if (!file) return
   if (file.size > 2 * 1024 * 1024) {
-    error.value = t('admin.financialSettings.logoSizeError')
+    error.value = t('admin.economySettings.logoSizeError')
     return
   }
   if (!(await ensureFreshTotp())) return
@@ -73,7 +73,7 @@ async function uploadFakturaLogo(files: FileList | null) {
 }
 
 async function deleteFakturaLogo() {
-  if (!confirm(t('admin.financialSettings.logoDeleteConfirm'))) return
+  if (!confirm(t('admin.economySettings.logoDeleteConfirm'))) return
   if (!(await ensureFreshTotp())) return
   error.value = null
   try {
@@ -115,7 +115,7 @@ onMounted(load)
         <legend class="px-1 text-xs font-semibold text-slate-700">
           {{ t('admin.economySettings.fakturaLogoLabel') }}
         </legend>
-        <p class="text-xs text-slate-600">{{ t('admin.financialSettings.fakturaLogoHint') }}</p>
+        <p class="text-xs text-slate-600">{{ t('admin.economySettings.fakturaLogoHint') }}</p>
         <div v-if="hasFakturaLogo" class="flex items-center gap-4">
           <img
             :src="`/api/v1/admin/settings/economy/faktura-logo?v=${fakturaLogoCacheBust}`"

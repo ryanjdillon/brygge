@@ -85,15 +85,15 @@ onMounted(load)
     <p class="text-sm text-gray-600">{{ t('admin.harborSettings.subtitle') }}</p>
 
     <form class="space-y-5" @submit.prevent="save">
-      <FormField :label="t('admin.financialSettings.harborApproach')">
+      <FormField :label="t('admin.harborSettings.harborApproach')">
         <Textarea v-model="harborApproach" :rows="3" :disabled="loading" />
       </FormField>
 
       <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <FormField :label="t('admin.financialSettings.harborDepth')">
+        <FormField :label="t('admin.harborSettings.harborDepth')">
           <Input v-model="harborDepth" :disabled="loading" />
         </FormField>
-        <FormField :label="t('admin.financialSettings.harborVhf')">
+        <FormField :label="t('admin.harborSettings.harborVhf')">
           <Input v-model="harborVhf" placeholder="Ch 16 / Ch 73" :disabled="loading" />
         </FormField>
       </div>
@@ -103,10 +103,10 @@ onMounted(load)
           {{ t('admin.harborSettings.ctaGroup') }}
         </legend>
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <FormField :label="t('admin.financialSettings.ctaTitle')">
+          <FormField :label="t('admin.harborSettings.ctaTitle')">
             <Input v-model="harborCtaTitle" :disabled="loading" />
           </FormField>
-          <FormField :label="t('admin.financialSettings.ctaDescription')">
+          <FormField :label="t('admin.harborSettings.ctaDescription')">
             <Input v-model="harborCtaDescription" :disabled="loading" />
           </FormField>
         </div>
@@ -114,7 +114,7 @@ onMounted(load)
 
       <p v-if="error" class="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{{ error }}</p>
       <p v-else-if="savedAt" class="rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">
-        {{ t('admin.financialSettings.saved') }} ({{ savedAt.toLocaleTimeString() }})
+        {{ t('admin.harborSettings.saved') }} ({{ savedAt.toLocaleTimeString() }})
       </p>
 
       <div class="flex justify-end pt-2">

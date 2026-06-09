@@ -89,16 +89,16 @@ onMounted(load)
 
     <form class="space-y-5" @submit.prevent="save">
       <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <FormField :label="t('admin.financialSettings.motorhomePower')">
+        <FormField :label="t('admin.motorhomeSettings.motorhomePower')">
           <Textarea v-model="motorhomePower" :rows="3" :disabled="loading" />
         </FormField>
-        <FormField :label="t('admin.financialSettings.motorhomeFacilities')">
+        <FormField :label="t('admin.motorhomeSettings.motorhomeFacilities')">
           <Textarea v-model="motorhomeFacilities" :rows="3" :disabled="loading" />
         </FormField>
-        <FormField :label="t('admin.financialSettings.motorhomeCheckin')">
+        <FormField :label="t('admin.motorhomeSettings.motorhomeCheckin')">
           <Textarea v-model="motorhomeCheckin" :rows="3" :disabled="loading" />
         </FormField>
-        <FormField :label="t('admin.financialSettings.motorhomeRules')">
+        <FormField :label="t('admin.motorhomeSettings.motorhomeRules')">
           <Textarea v-model="motorhomeRules" :rows="3" :disabled="loading" />
         </FormField>
       </div>
@@ -108,10 +108,10 @@ onMounted(load)
           {{ t('admin.motorhomeSettings.ctaGroup') }}
         </legend>
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <FormField :label="t('admin.financialSettings.ctaTitle')">
+          <FormField :label="t('admin.motorhomeSettings.ctaTitle')">
             <Input v-model="motorhomeCtaTitle" :disabled="loading" />
           </FormField>
-          <FormField :label="t('admin.financialSettings.ctaDescription')">
+          <FormField :label="t('admin.motorhomeSettings.ctaDescription')">
             <Input v-model="motorhomeCtaDescription" :disabled="loading" />
           </FormField>
         </div>
@@ -119,7 +119,7 @@ onMounted(load)
 
       <p v-if="error" class="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{{ error }}</p>
       <p v-else-if="savedAt" class="rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">
-        {{ t('admin.financialSettings.saved') }} ({{ savedAt.toLocaleTimeString() }})
+        {{ t('admin.motorhomeSettings.saved') }} ({{ savedAt.toLocaleTimeString() }})
       </p>
 
       <div class="flex justify-end pt-2">
