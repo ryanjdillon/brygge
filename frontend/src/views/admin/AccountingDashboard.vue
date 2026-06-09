@@ -125,15 +125,19 @@ function formatNOK(amount: number): string {
   return new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK' }).format(amount)
 }
 
-// Renders a small secondary label distinguishing rows that share the
-// same description in the same category — e.g. five SLIP_FEE rows all
-// titled "Årlig plassleie basert på båtbredde". Falls back to the
-// row's name when the name differs from the description; otherwise
-// shows the unit price so the operator can still tell rows apart.
-function rowSubLabel(row: PriceItemSummaryRow): string {
-  if (row.name && row.name !== row.description) {
-    return row.name
-  }
+// Primary row label: prefer the concise per-tier name (e.g. "Plassleie
+// 2.0–2.5m bredde") over the long generic description ("Årlig
+// plassleie basert på båtbredde") that's identical across rows in the
+// same category. Falls back to the description on legacy rows that
+// never set a distinguishing name.
+function rowLabel(row: PriceItemSummaryRow): string {
+  return row.name?.trim() || row.description
+}
+
+// Right-aligned tertiary label showing the unit price — small enough
+// to feel like metadata, but useful when the operator wants to check
+// a tier rate without leaving the dashboard.
+function rowUnitPrice(row: PriceItemSummaryRow): string {
   if (row.amount > 0) {
     return `${formatNOK(row.amount)} ${unitLabel(row.unit)}`
   }
@@ -291,8 +295,10 @@ const postedCount = computed(() => entries.value?.filter(e => e.status === 'post
                   </tr>
                   <tr v-for="row in g.items" :key="row.price_item_id" class="border-t border-gray-100">
                     <td class="px-4 py-2 text-gray-900">
-                      <div>{{ row.description }}</div>
-                      <div v-if="rowSubLabel(row)" class="mt-0.5 text-xs text-gray-500">{{ rowSubLabel(row) }}</div>
+                      <div class="flex items-baseline gap-3">
+                        <span>{{ rowLabel(row) }}</span>
+                        <span v-if="rowUnitPrice(row)" class="text-xs text-gray-400 tabular-nums">{{ rowUnitPrice(row) }}</span>
+                      </div>
                     </td>
                     <td class="px-4 py-2 text-right tabular-nums" :class="row.invoice_count === 0 ? 'text-gray-300' : 'text-gray-600'">{{ row.invoice_count }}</td>
                     <td class="px-4 py-2 text-right tabular-nums" :class="row.billed === 0 ? 'text-gray-300' : 'text-gray-900'">{{ formatNOK(row.billed) }}</td>
