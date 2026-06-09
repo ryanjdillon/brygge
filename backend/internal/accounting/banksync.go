@@ -226,6 +226,17 @@ func (s *Service) syncKIDMatches(ctx context.Context, clubID, createdBy string) 
 			entry.ID, p.rowID,
 		); uerr == nil {
 			matched++
+			// Mirror the GL credit-to-receivables side onto the
+			// invoice flag so the dashboard, faktura list, and
+			// priceItemSummary reflect the payment. Best-effort —
+			// failures here don't roll back the journal because
+			// the GL itself is already correct.
+			if lerr := s.linkInvoicePayment(ctx, clubID, invoiceID, p.date); lerr != nil {
+				s.log.Warn().Err(lerr).
+					Str("invoice_id", invoiceID).
+					Str("bank_row_id", p.rowID).
+					Msg("KID match journal posted but invoice payment back-link failed")
+			}
 		}
 	}
 

@@ -398,6 +398,17 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOv
 			entry.ID, rowID,
 		); err == nil {
 			res.Matched++
+			// Mirror the GL credit-to-receivables side onto the
+			// invoice flag so the dashboard, faktura list, and
+			// priceItemSummary reflect the payment. Best-effort —
+			// failures here don't roll back the journal because
+			// the GL itself is already correct.
+			if lerr := s.linkInvoicePayment(ctx, clubID, invoiceID, row.Date); lerr != nil {
+				s.log.Warn().Err(lerr).
+					Str("invoice_id", invoiceID).
+					Str("bank_row_id", rowID).
+					Msg("import-time KID match journal posted but invoice payment back-link failed")
+			}
 		}
 	}
 
