@@ -3,7 +3,7 @@ import { reactive, ref, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQueryClient } from '@tanstack/vue-query'
-import { ArrowLeft, Save } from 'lucide-vue-next'
+import { ArrowLeft, Calculator, Calendar, CalendarCheck, FolderKanban, Megaphone, Save, ShoppingBag } from 'lucide-vue-next'
 import { useTotpGateStore } from '@/stores/totpGate'
 import { useAuthStore } from '@/stores/auth'
 import FileInput from '@/components/ui/form/FileInput.vue'
@@ -50,6 +50,16 @@ const features = reactive({
   communications: true,
   accounting: true,
 })
+
+type ModuleKey = keyof typeof features
+const moduleRows: { key: ModuleKey; icon: typeof Calculator; descriptionKey?: string }[] = [
+  { key: 'bookings', icon: CalendarCheck },
+  { key: 'projects', icon: FolderKanban },
+  { key: 'calendar', icon: Calendar },
+  { key: 'commerce', icon: ShoppingBag },
+  { key: 'communications', icon: Megaphone },
+  { key: 'accounting', icon: Calculator },
+]
 
 async function ensureFreshTotp(): Promise<boolean> {
   if (auth.hasFreshTotp) return true
@@ -212,18 +222,22 @@ async function save() {
     <p v-if="loading" class="mt-6 text-sm text-gray-500">{{ t('common.loading') }}…</p>
 
     <form v-else class="mt-6 max-w-xl space-y-4" @submit.prevent="save">
-      <fieldset class="rounded-md border border-slate-200 bg-slate-50 p-3 space-y-3">
-        <legend class="px-1 text-xs font-semibold text-slate-700">{{ t('admin.siteSettings.modulesGroup') }}</legend>
-        <p class="text-xs text-slate-600">{{ t('admin.siteSettings.modulesHint') }}</p>
-        <div class="space-y-2 pt-1">
-          <Switch v-model="features.bookings">{{ t('admin.siteSettings.modules.bookings') }}</Switch>
-          <Switch v-model="features.projects">{{ t('admin.siteSettings.modules.projects') }}</Switch>
-          <Switch v-model="features.calendar">{{ t('admin.siteSettings.modules.calendar') }}</Switch>
-          <Switch v-model="features.commerce">{{ t('admin.siteSettings.modules.commerce') }}</Switch>
-          <Switch v-model="features.communications">{{ t('admin.siteSettings.modules.communications') }}</Switch>
-          <Switch v-model="features.accounting">{{ t('admin.siteSettings.modules.accounting') }}</Switch>
-        </div>
-      </fieldset>
+      <section class="rounded-lg border border-slate-200 bg-white">
+        <header class="border-b border-slate-100 px-4 py-3">
+          <h3 class="text-sm font-semibold text-slate-900">{{ t('admin.siteSettings.modulesGroup') }}</h3>
+          <p class="mt-1 text-xs text-slate-500">{{ t('admin.siteSettings.modulesHint') }}</p>
+        </header>
+        <ul class="divide-y divide-slate-100">
+          <li v-for="m in moduleRows" :key="m.key" class="flex items-center gap-3 px-4 py-3">
+            <component :is="m.icon" class="h-5 w-5 shrink-0 text-slate-500" />
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-medium text-slate-900">{{ t(`admin.siteSettings.modules.${m.key}`) }}</p>
+              <p v-if="m.descriptionKey" class="text-xs text-slate-500">{{ t(m.descriptionKey) }}</p>
+            </div>
+            <Switch :model-value="features[m.key]" @update:model-value="features[m.key] = $event" :aria-label="t(`admin.siteSettings.modules.${m.key}`)" />
+          </li>
+        </ul>
+      </section>
 
       <fieldset class="rounded-md border border-slate-200 bg-slate-50 p-3 space-y-3">
         <legend class="px-1 text-xs font-semibold text-slate-700">{{ t('admin.siteSettings.identityGroup') }}</legend>
