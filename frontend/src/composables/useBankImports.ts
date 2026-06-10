@@ -249,3 +249,14 @@ export interface BankSyncResult {
 export async function runBankSync(): Promise<BankSyncResult> {
   return fetchJSON<BankSyncResult>(`${BASE}/bank-sync`, { method: 'POST' })
 }
+
+export interface VippsResyncResult {
+  scanned: number
+  resynced: number
+  skipped: number
+  failed: string[]
+}
+
+export async function runVippsResync(): Promise<VippsResyncResult> {
+  return fetchJSON<VippsResyncResult>(`${BASE}/vipps-resync`, { method: 'POST' })
+}

@@ -1021,6 +1021,7 @@ func main() {
 						r.Get("/bank-rows", accountingHandler.HandleListBankRowsByAccount)
 						r.Get("/vipps-rows", accountingHandler.HandleListVippsRowsByMSN)
 						r.Post("/bank-sync", accountingHandler.HandleBankSync)
+					r.Post("/vipps-resync", accountingHandler.HandleResyncVipps)
 
 						r.Route("/bank-rows/{rowID}/reconcile-vipps", func(r chi.Router) {
 							r.Get("/", accountingHandler.HandleVippsReconcilePreview)

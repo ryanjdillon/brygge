@@ -1480,7 +1480,9 @@
       "noRowsInPeriod": "Ingen transaksjonar i vald periode.",
       "noAccountSelected": "Vel ein bankkonto eller Vipps MSN for å sjå transaksjonar.",
       "bankImportsListTitle": "Tidlegare bankimportar",
-      "noBankImports": "Ingen bankimportar enno."
+      "noBankImports": "Ingen bankimportar enno.",
+      "runVippsResync": "Synk Vipps",
+      "vippsResyncResult": "Vipps-resync: {resynced}/{scanned} omklassifiserte · {skipped} hoppa over · {failed} feila."
     }
   },
   "projects": {

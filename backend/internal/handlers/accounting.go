@@ -1671,6 +1671,36 @@ func (h *AccountingHandler) HandleRebuildInvoiceBilags(w http.ResponseWriter, r 
 
 // ── Full bank sync ──────────────────────────────────────────
 
+// HandleResyncVipps re-runs the Vipps classification cascade on every
+// draft bilag whose lines still credit 2900 or 3900 — useful after
+// shipping new matchers (price-article, fuzzy member resolution) so
+// retroactively-imported data picks up the improvements without
+// manual rework. See DIL-367.
+func (h *AccountingHandler) HandleResyncVipps(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	result, err := h.svc.ResyncVippsBilags(r.Context(), claims.ClubID, claims.UserID)
+	if err != nil {
+		h.log.Error().Err(err).Msg("vipps resync failed")
+		Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if h.audit != nil {
+		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,
+			"accounting.vipps_resynced", "vipps", "",
+			map[string]any{
+				"scanned":  result.Scanned,
+				"resynced": result.Resynced,
+				"skipped":  result.Skipped,
+				"failed":   len(result.Failed),
+			})
+	}
+	JSON(w, http.StatusOK, result)
+}
+
 func (h *AccountingHandler) HandleBankSync(w http.ResponseWriter, r *http.Request) {
 	claims := middleware.GetClaims(r.Context())
 	if claims == nil {

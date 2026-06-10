@@ -28,7 +28,7 @@ import Select from '@/components/ui/form/Select.vue'
 import FileInput from '@/components/ui/form/FileInput.vue'
 import { monthOptions } from '@/utils/month'
 import type { BankImportRow } from '@/composables/useBankImports'
-import { runBankSync, type BankSyncResult } from '@/composables/useBankImports'
+import { runBankSync, runVippsResync, type BankSyncResult, type VippsResyncResult } from '@/composables/useBankImports'
 
 const { t, locale } = useI18n()
 const queryClient = useQueryClient()
@@ -153,6 +153,21 @@ const tabs = computed(() => [
 
 // ── Sync action ─────────────────────────────────────────────
 const syncBusy = ref(false)
+const vippsResyncBusy = ref(false)
+const vippsResyncResult = ref<VippsResyncResult | null>(null)
+const vippsResyncError = ref<string | null>(null)
+
+async function runVippsResyncAction() {
+  vippsResyncBusy.value = true
+  vippsResyncError.value = null
+  try {
+    vippsResyncResult.value = await runVippsResync()
+  } catch (e: any) {
+    vippsResyncError.value = e?.message ?? 'Failed'
+  } finally {
+    vippsResyncBusy.value = false
+  }
+}
 const syncResult = ref<BankSyncResult | null>(null)
 const syncError = ref<string | null>(null)
 
@@ -321,7 +336,7 @@ const filterMonthValue = computed<number>({
         <h1 class="text-2xl font-bold text-gray-900">{{ t('admin.bankImports.title') }}</h1>
         <p class="mt-1 text-sm text-gray-500">{{ t('admin.bankImports.subtitle') }}</p>
       </div>
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2">
         <button
           type="button"
           :disabled="syncBusy"
@@ -330,6 +345,15 @@ const filterMonthValue = computed<number>({
           @click="runSync"
         >
           {{ syncBusy ? t('common.loading') : t('admin.bankImports.runSync') }}
+        </button>
+        <button
+          type="button"
+          :disabled="vippsResyncBusy"
+          class="rounded-md border border-blue-300 bg-white px-3 py-1.5 text-sm font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+          data-testid="vipps-resync-btn"
+          @click="runVippsResyncAction"
+        >
+          {{ vippsResyncBusy ? t('common.loading') : t('admin.bankImports.runVippsResync') }}
         </button>
       </div>
     </div>
@@ -344,7 +368,16 @@ const filterMonthValue = computed<number>({
         ({{ t('admin.bankImports.runSyncClosed', { years: syncResult.closed_periods.join(', ') }) }})
       </span>
     </div>
+    <div v-if="vippsResyncResult" class="mt-3 rounded-md bg-blue-50 px-3 py-2 text-xs text-blue-900" data-testid="vipps-resync-result">
+      {{ t('admin.bankImports.vippsResyncResult', {
+        resynced: vippsResyncResult.resynced,
+        scanned: vippsResyncResult.scanned,
+        skipped: vippsResyncResult.skipped,
+        failed: vippsResyncResult.failed.length,
+      }) }}
+    </div>
     <div v-if="syncError" class="mt-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">{{ syncError }}</div>
+    <div v-if="vippsResyncError" class="mt-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">{{ vippsResyncError }}</div>
 
     <div class="mt-6">
       <Tabs v-model="activeTab" :tabs="tabs" />

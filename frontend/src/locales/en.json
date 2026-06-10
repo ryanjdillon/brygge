@@ -1484,7 +1484,9 @@
       "noRowsInPeriod": "No transactions in the selected period.",
       "noAccountSelected": "Pick a bank account or Vipps MSN to view transactions.",
       "bankImportsListTitle": "Previous bank imports",
-      "noBankImports": "No bank imports yet."
+      "noBankImports": "No bank imports yet.",
+      "runVippsResync": "Resync Vipps",
+      "vippsResyncResult": "Vipps resync: {resynced}/{scanned} reclassified · {skipped} skipped · {failed} failed."
     }
   },
   "projects": {
