@@ -178,12 +178,21 @@ func (s *Service) ReconcileVippsPreview(ctx context.Context, clubID, bankRowID s
 		case VippsRowBelastning:
 			preview.TotalCharges += v.Amount
 			memberID, _ := s.resolveCustomerToMember(ctx, clubID, v.CustomerName, v.Message)
+			// Include the payer's free-form Vipps message when it adds
+			// signal beyond the customer name — that's usually where
+			// the harbor master / walk-up payer typed the purpose
+			// ("Gjest A12 5.juli", "Sesong sommer", invoice number).
+			// See DIL-367.
+			desc := fmt.Sprintf("Vipps innbetaling: %s", v.CustomerName)
+			if msg := strings.TrimSpace(v.Message); msg != "" {
+				desc = fmt.Sprintf("Vipps innbetaling: %s — %s", v.CustomerName, msg)
+			}
 			line := VippsReconcileLine{
 				VippsRowID:   v.ID,
 				Kind:         "receivable",
 				AccountCode:  receivablesAccountCode,
 				Credit:       v.Amount,
-				Description:  fmt.Sprintf("Vipps innbetaling: %s", v.CustomerName),
+				Description:  desc,
 				CustomerName: v.CustomerName,
 			}
 			if memberID != "" {
