@@ -52,14 +52,19 @@ var VippsSettlementPattern = regexp.MustCompile(`(?i)Utb\.\s*(\d+)\s+Vippsnr\s+(
 // VippsReconcileLine is one proposed line in the draft journal entry.
 type VippsReconcileLine struct {
 	VippsRowID       string  `json:"vipps_row_id,omitempty"`
-	Kind             string  `json:"kind"` // bank_in | receivable | revenue | fee | clearing
+	Kind             string  `json:"kind"` // bank_in | receivable | revenue | fee | clearing | fallback_revenue
 	AccountCode      string  `json:"account_code"`
 	Debit            float64 `json:"debit"`
 	Credit           float64 `json:"credit"`
 	Description      string  `json:"description"`
 	CustomerName     string  `json:"customer_name,omitempty"`
 	ResolvedMemberID string  `json:"resolved_member_id,omitempty"`
-	Resolved         bool    `json:"resolved"`
+	// LinkedInvoiceID, when set, tells ReconcileVippsConfirm to also
+	// insert a payments row and back-link invoices.payment_id after
+	// posting the journal entry — so dashboard faktura widgets reflect
+	// the Vipps-paid invoice. See DIL-367 sub 4.
+	LinkedInvoiceID string `json:"linked_invoice_id,omitempty"`
+	Resolved        bool   `json:"resolved"`
 }
 
 // VippsReconcilePreview is the response of the preview endpoint.
@@ -222,30 +227,56 @@ func (s *Service) ReconcileVippsPreview(ctx context.Context, clubID, bankRowID s
 				CustomerName: v.CustomerName,
 			}
 
-			// Classification cascade — priority order matters here.
-			// (1) amount → price-article (the workhorse: Vipps is
-			// mostly guest slips, motorhomes, and slipping where
-			// payer is non-member but amount is a clean multiple of
-			// a published price). (2) customer → member (only useful
-			// for the small slice of Vipps traffic that's members
-			// paying invoices). (3) fallback to 3900 so the queue
-			// has somewhere honest to land. See DIL-367.
-			if account, name := s.matchVippsAmountToPriceArticle(ctx, clubID, v.Amount); account != "" {
-				line.Kind = "revenue"
-				line.AccountCode = account
-				line.Resolved = true
-				if name != "" {
-					line.Description = fmt.Sprintf("%s (%s)", desc, name)
-				}
-			} else if memberID, _ := s.resolveCustomerToMember(ctx, clubID, v.CustomerName, v.Message); memberID != "" {
+			// Classification cascade — order matters here.
+			//
+			// (1) Member + matching open invoice → CR 1500, mark
+			//     LinkedInvoiceID so confirm back-links payment_id.
+			//     This must beat the price-article matcher because
+			//     a member paying their medlemskap by Vipps has both
+			//     a member match AND a matching price-article; the
+			//     invoice link is the more useful answer.
+			// (2) amount → price-article (the workhorse: Vipps is
+			//     mostly guest slips, motorhomes, slipping where the
+			//     payer is non-member but the amount is a clean
+			//     multiple of a published price).
+			// (3) Member resolved but no matching invoice or
+			//     price-article → CR 1500 so the treasurer can
+			//     match it manually.
+			// (4) Nothing matched → fallback 3900 so the balance
+			//     sheet stays honest. See DIL-367.
+			memberID, _ := s.resolveCustomerToMember(ctx, clubID, v.CustomerName, v.Message)
+			var invoiceID string
+			if memberID != "" {
+				invoiceID = s.findOpenInvoiceForMember(ctx, clubID, memberID, v.Amount)
+			}
+			switch {
+			case invoiceID != "":
 				line.Kind = "receivable"
 				line.AccountCode = receivablesAccountCode
 				line.ResolvedMemberID = memberID
+				line.LinkedInvoiceID = invoiceID
 				line.Resolved = true
-			} else {
-				line.Kind = "fallback_revenue"
-				line.AccountCode = vippsFallbackRevenueCode
-				preview.UnresolvedCount++
+			default:
+				if account, name := s.matchVippsAmountToPriceArticle(ctx, clubID, v.Amount); account != "" {
+					line.Kind = "revenue"
+					line.AccountCode = account
+					line.Resolved = true
+					if name != "" {
+						line.Description = fmt.Sprintf("%s (%s)", desc, name)
+					}
+				} else if memberID != "" {
+					// Known member, no matching invoice/article —
+					// park in receivables so the treasurer can
+					// reconcile to whatever they owe.
+					line.Kind = "receivable"
+					line.AccountCode = receivablesAccountCode
+					line.ResolvedMemberID = memberID
+					line.Resolved = true
+				} else {
+					line.Kind = "fallback_revenue"
+					line.AccountCode = vippsFallbackRevenueCode
+					preview.UnresolvedCount++
+				}
 			}
 			preview.Lines = append(preview.Lines, line)
 		case VippsRowFee:
@@ -370,6 +401,21 @@ func (s *Service) ReconcileVippsConfirm(ctx context.Context, clubID, bankRowID, 
 		)
 	}
 
+	// Back-link any invoice that this reconciliation paid off so the
+	// dashboard's faktura-status widgets reflect the payment. Best-
+	// effort: the GL is already correct if this fails. See DIL-367.
+	for _, l := range lines {
+		if l.LinkedInvoiceID == "" {
+			continue
+		}
+		if err := s.linkInvoicePayment(ctx, clubID, l.LinkedInvoiceID, bankDate); err != nil {
+			s.log.Warn().Err(err).
+				Str("invoice_id", l.LinkedInvoiceID).
+				Str("journal_entry_id", entry.ID).
+				Msg("vipps reconciliation: invoice payment back-link failed")
+		}
+	}
+
 	return entry.ID, nil
 }
 
@@ -447,9 +493,18 @@ func (s *Service) matchVippsAmountToPriceArticle(ctx context.Context, clubID str
 	return code, m.name
 }
 
-// resolveCustomerToMember tries to map a Vipps customer to a member by (1) KID
-// embedded in the message and (2) exact case-insensitive name match. Returns
-// "" if no resolution.
+// resolveCustomerToMember tries to map a Vipps customer to a member.
+// Resolution cascade:
+//
+//  1. KID in the free-form message → invoice.user_id
+//  2. Normalized exact match on users.full_name
+//  3. Normalized exact match on first_name + ' ' + last_name
+//  4. Last-name-only when exactly one member in the club has that
+//     normalized last name (catches "Per Hansen" when the Vipps CSV
+//     dropped the first name and only "Per Hansen" exists)
+//
+// Normalization handles æøå / accents / hyphens / case so common
+// Norwegian spelling variants don't block the match. See DIL-367.
 func (s *Service) resolveCustomerToMember(ctx context.Context, clubID, customerName, message string) (string, error) {
 	if kid := extractKID(message); kid != "" {
 		var memberID string
@@ -464,22 +519,122 @@ func (s *Service) resolveCustomerToMember(ctx context.Context, clubID, customerN
 		}
 	}
 
-	name := strings.TrimSpace(customerName)
-	if name == "" {
+	needle := normalizeName(customerName)
+	if needle == "" {
 		return "", nil
 	}
-	var memberID string
-	err := s.db.QueryRow(ctx,
-		`SELECT id FROM users
-		 WHERE club_id = $1
-		   AND lower(trim(coalesce(first_name, '') || ' ' || coalesce(last_name, ''))) = lower($2)
-		 LIMIT 1`,
-		clubID, name,
-	).Scan(&memberID)
-	if err == nil {
-		return memberID, nil
+
+	// Load all members (small set per club) and match in Go so we can
+	// run the cascade without three round-trips and without depending
+	// on a Postgres fuzzy-string extension.
+	rows, err := s.db.Query(ctx,
+		`SELECT id, COALESCE(full_name, ''), COALESCE(first_name, ''), COALESCE(last_name, '')
+		   FROM users WHERE club_id = $1`,
+		clubID,
+	)
+	if err != nil {
+		return "", err
+	}
+	defer rows.Close()
+
+	type cand struct {
+		id, fullN, firstLastN, lastN string
+	}
+	var cands []cand
+	for rows.Next() {
+		var c cand
+		var fullName, firstName, lastName string
+		if err := rows.Scan(&c.id, &fullName, &firstName, &lastName); err != nil {
+			continue
+		}
+		c.fullN = normalizeName(fullName)
+		c.firstLastN = normalizeName(firstName + " " + lastName)
+		c.lastN = normalizeName(lastName)
+		cands = append(cands, c)
+	}
+
+	// Pass 1: exact normalized full_name
+	for _, c := range cands {
+		if c.fullN != "" && c.fullN == needle {
+			return c.id, nil
+		}
+	}
+	// Pass 2: exact normalized first+last
+	for _, c := range cands {
+		if c.firstLastN != "" && c.firstLastN != " " && c.firstLastN == needle {
+			return c.id, nil
+		}
+	}
+	// Pass 3: last name only when unique
+	matches := 0
+	var matchedID string
+	for _, c := range cands {
+		if c.lastN != "" && c.lastN == needle {
+			matches++
+			matchedID = c.id
+		}
+	}
+	if matches == 1 {
+		return matchedID, nil
 	}
 	return "", nil
+}
+
+// normalizeName lowercases, replaces Norwegian/Swedish/Danish accented
+// characters with their ASCII equivalents, swaps hyphens for spaces,
+// and collapses whitespace. Used by the Vipps customer-to-member
+// matcher so spelling variants don't block the link. See DIL-367.
+func normalizeName(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	r := strings.NewReplacer(
+		"æ", "ae", "ø", "o", "å", "a",
+		"ä", "a", "ö", "o", "ü", "u",
+		"é", "e", "è", "e", "ê", "e",
+		"á", "a", "à", "a", "â", "a",
+		"í", "i", "ì", "i",
+		"ó", "o", "ò", "o", "ô", "o",
+		"ú", "u", "ù", "u",
+		"ñ", "n", "ç", "c",
+		"-", " ", "_", " ",
+		".", "", ",", "",
+	)
+	s = r.Replace(s)
+	return strings.Join(strings.Fields(s), " ")
+}
+
+// findOpenInvoiceForMember returns the single open invoice for the
+// supplied member whose total matches the Vipps payment amount within
+// ±1.00 NOK and was issued in the last 90 days. Returns "" when zero
+// or multiple matches — ambiguity is left for the next pass in the
+// cascade or the review queue.
+func (s *Service) findOpenInvoiceForMember(ctx context.Context, clubID, memberID string, amount float64) string {
+	rows, err := s.db.Query(ctx,
+		`SELECT id FROM invoices
+		  WHERE club_id = $1
+		    AND user_id = $2
+		    AND payment_id IS NULL
+		    AND status <> 'voided'
+		    AND ABS(total_amount - $3) < 1.00
+		    AND issue_date > CURRENT_DATE - INTERVAL '90 days'
+		  ORDER BY issue_date DESC
+		  LIMIT 2`,
+		clubID, memberID, amount,
+	)
+	if err != nil {
+		return ""
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err == nil {
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) != 1 {
+		return ""
+	}
+	return ids[0]
 }
 
 var kidPattern = regexp.MustCompile(`\b(\d{6,25})\b`)

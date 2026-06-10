@@ -50,6 +50,39 @@ func TestExtractKID(t *testing.T) {
 	}
 }
 
+func TestNormalizeName(t *testing.T) {
+	cases := []struct {
+		in, want string
+	}{
+		{"Per Hansen", "per hansen"},
+		{"PER HANSEN", "per hansen"},
+		{"  per  hansen  ", "per hansen"},
+		{"Sølveig Kallestad", "solveig kallestad"},
+		{"Mette-Lise Larsen", "mette lise larsen"},
+		{"Per E. Hansen", "per e hansen"},
+		{"Ærlig Øystein Ågnes", "aerlig oystein agnes"},
+		{"Käthe Müller", "kathe muller"},
+		{"José", "jose"},
+		{"", ""},
+		{"   ", ""},
+	}
+	for _, c := range cases {
+		if got := normalizeName(c.in); got != c.want {
+			t.Errorf("normalizeName(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+func TestNormalizeNameIdempotent(t *testing.T) {
+	for _, s := range []string{"Per Hansen", "Sølveig", "Mette-Lise"} {
+		first := normalizeName(s)
+		second := normalizeName(first)
+		if first != second {
+			t.Errorf("not idempotent: %q -> %q -> %q", s, first, second)
+		}
+	}
+}
+
 func TestFloatNear(t *testing.T) {
 	if !floatNear(2652.75, 2652.75, 0.005) {
 		t.Errorf("equal floats not near")
