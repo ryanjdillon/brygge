@@ -12,9 +12,38 @@ import (
 
 // Account codes used by the Vipps reconciliation draft bilag.
 const (
-	vippsFeeAccountCode      = "7700" // Bankgebyrer
-	vippsClearingAccountCode = "2900" // Annen kortsiktig gjeld (holding for unresolved customers)
+	vippsFeeAccountCode = "7700" // Bankgebyrer
+	// vippsFallbackRevenueCode is where unmatchable Vipps belastning
+	// lines land when neither the amount-to-price-article matcher nor
+	// the customer-to-member matcher finds anything. Previously these
+	// landed in 2900 (Annen kortsiktig gjeld), which is wrong: 2900
+	// implies we owe the payer money. Vipps walk-up payments are
+	// genuine revenue we just haven't classified yet; surfacing them
+	// in a review queue starts from 3900 (Andre inntekter) so the
+	// balance sheet doesn't lie while we sort categorization out.
+	// See DIL-367.
+	vippsFallbackRevenueCode = "3900"
+	// vippsClearingAccountCode is the legacy account name kept for
+	// backwards-compat with any operator-written reports that still
+	// reference 2900. New lines route to the fallback above.
+	vippsClearingAccountCode = "2900"
 )
+
+// vippsCategoryAccountMap mirrors `paymentTypeAccountMap` in sync.go
+// but is duplicated here intentionally so a future refactor can adjust
+// vipps-specific mapping (e.g. all Vipps gjestehavn always goes to
+// 3200 regardless of price_items.category quirks) without disturbing
+// invoice-side bookkeeping.
+var vippsCategoryAccountMap = map[string]string{
+	"membership":        "3100",
+	"harbor_membership": "3110",
+	"slip_fee":          "3120",
+	"seasonal_rental":   "3120",
+	"guest":             "3200",
+	"motorhome":         "3200",
+	"room_hire":         "3200",
+	"merchandise":       "3300",
+}
 
 // VippsSettlementPattern extracts (settlement_number, msn) from a bank row description.
 // Bank rows for Vipps payouts look like: "Utb. 2000591 Vippsnr 698382".
@@ -177,31 +206,46 @@ func (s *Service) ReconcileVippsPreview(ctx context.Context, clubID, bankRowID s
 		switch VippsRowType(v.RowType) {
 		case VippsRowBelastning:
 			preview.TotalCharges += v.Amount
-			memberID, _ := s.resolveCustomerToMember(ctx, clubID, v.CustomerName, v.Message)
-			// Include the payer's free-form Vipps message when it adds
-			// signal beyond the customer name — that's usually where
-			// the harbor master / walk-up payer typed the purpose
-			// ("Gjest A12 5.juli", "Sesong sommer", invoice number).
-			// See DIL-367.
+			// Include the payer's free-form Vipps message when it
+			// adds signal beyond the customer name — that's usually
+			// where the harbor master / walk-up payer typed the
+			// purpose ("Gjest A12 5.juli", "Sesong sommer", invoice
+			// number). See DIL-367.
 			desc := fmt.Sprintf("Vipps innbetaling: %s", v.CustomerName)
 			if msg := strings.TrimSpace(v.Message); msg != "" {
 				desc = fmt.Sprintf("Vipps innbetaling: %s — %s", v.CustomerName, msg)
 			}
 			line := VippsReconcileLine{
 				VippsRowID:   v.ID,
-				Kind:         "receivable",
-				AccountCode:  receivablesAccountCode,
 				Credit:       v.Amount,
 				Description:  desc,
 				CustomerName: v.CustomerName,
 			}
-			if memberID != "" {
+
+			// Classification cascade — priority order matters here.
+			// (1) amount → price-article (the workhorse: Vipps is
+			// mostly guest slips, motorhomes, and slipping where
+			// payer is non-member but amount is a clean multiple of
+			// a published price). (2) customer → member (only useful
+			// for the small slice of Vipps traffic that's members
+			// paying invoices). (3) fallback to 3900 so the queue
+			// has somewhere honest to land. See DIL-367.
+			if account, name := s.matchVippsAmountToPriceArticle(ctx, clubID, v.Amount); account != "" {
+				line.Kind = "revenue"
+				line.AccountCode = account
+				line.Resolved = true
+				if name != "" {
+					line.Description = fmt.Sprintf("%s (%s)", desc, name)
+				}
+			} else if memberID, _ := s.resolveCustomerToMember(ctx, clubID, v.CustomerName, v.Message); memberID != "" {
+				line.Kind = "receivable"
+				line.AccountCode = receivablesAccountCode
 				line.ResolvedMemberID = memberID
 				line.Resolved = true
 			} else {
+				line.Kind = "fallback_revenue"
+				line.AccountCode = vippsFallbackRevenueCode
 				preview.UnresolvedCount++
-				line.Kind = "clearing"
-				line.AccountCode = vippsClearingAccountCode
 			}
 			preview.Lines = append(preview.Lines, line)
 		case VippsRowFee:
@@ -327,6 +371,80 @@ func (s *Service) ReconcileVippsConfirm(ctx context.Context, clubID, bankRowID, 
 	}
 
 	return entry.ID, nil
+}
+
+// matchVippsAmountToPriceArticle returns the GL revenue account and a
+// human-readable price-item name when exactly ONE active price_items
+// row produces the supplied amount. Two flavours of match are
+// considered:
+//
+//   - exact match against `amount` (covers once / year / season units)
+//   - integer multiple match against per-time units (`night`, `day`,
+//     `hour`) — guest slip @ 250/night fits a payment of 750 as
+//     "3 nights × 250". Multiplier capped at 60 to avoid silly false
+//     positives.
+//
+// If zero or more than one price_item produces the amount, returns
+// "" so the caller falls through to the next pass in the cascade.
+// See DIL-367.
+func (s *Service) matchVippsAmountToPriceArticle(ctx context.Context, clubID string, amount float64) (accountCode, name string) {
+	if amount <= 0 {
+		return "", ""
+	}
+	rows, err := s.db.Query(ctx,
+		`SELECT name, category, amount, unit
+		   FROM price_items
+		  WHERE club_id = $1 AND is_active = TRUE AND amount > 0`,
+		clubID,
+	)
+	if err != nil {
+		return "", ""
+	}
+	defer rows.Close()
+
+	type candidate struct {
+		name, category string
+		multiplier     int
+	}
+	var matches []candidate
+	for rows.Next() {
+		var n, cat, unit string
+		var unitAmount float64
+		if err := rows.Scan(&n, &cat, &unitAmount, &unit); err != nil {
+			continue
+		}
+		if floatNear(unitAmount, amount, 0.005) {
+			matches = append(matches, candidate{name: n, category: cat, multiplier: 1})
+			continue
+		}
+		// Per-time-unit price items support multiplied matches —
+		// guest slip @ 250/night fits 250, 500, 750, 1000, …
+		if unit == "night" || unit == "day" || unit == "hour" {
+			if unitAmount <= 0 {
+				continue
+			}
+			ratio := amount / unitAmount
+			mult := int(ratio + 0.0001)
+			if mult < 2 || mult > 60 {
+				continue
+			}
+			if floatNear(float64(mult)*unitAmount, amount, 0.005) {
+				matches = append(matches, candidate{name: n, category: cat, multiplier: mult})
+			}
+		}
+	}
+	if len(matches) != 1 {
+		return "", ""
+	}
+	m := matches[0]
+	code, ok := vippsCategoryAccountMap[m.category]
+	if !ok {
+		code = vippsFallbackRevenueCode
+	}
+	if m.multiplier > 1 {
+		return code, fmt.Sprintf("%dx %s", m.multiplier, m.name)
+	}
+	return code, m.name
 }
 
 // resolveCustomerToMember tries to map a Vipps customer to a member by (1) KID
