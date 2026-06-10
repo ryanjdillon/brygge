@@ -94,9 +94,16 @@ const renderedSlices = computed<RenderedSlice[]>(() => {
           <title>{{ s.label }}: {{ Math.round(s.pct * 100) }}%</title>
         </path>
       </svg>
-      <div v-if="centerLabel || centerValue" class="absolute inset-0 flex flex-col items-center justify-center text-center">
-        <p v-if="centerValue" class="text-lg font-semibold text-gray-900 tabular-nums">{{ centerValue }}</p>
-        <p v-if="centerLabel" class="text-xs text-gray-500">{{ centerLabel }}</p>
+      <!-- Center label is constrained to the donut's inner ring so a
+           wide number like "303 000 kr" can't bleed past the slices.
+           padding = thickness keeps the text well inside the hole. -->
+      <div
+        v-if="centerLabel || centerValue"
+        class="absolute inset-0 flex flex-col items-center justify-center text-center leading-tight"
+        :style="{ padding: `${thickness + 4}px` }"
+      >
+        <p v-if="centerValue" class="text-sm font-semibold text-gray-900 tabular-nums tracking-tight">{{ centerValue }}</p>
+        <p v-if="centerLabel" class="mt-0.5 text-xs text-gray-500">{{ centerLabel }}</p>
       </div>
     </div>
     <ul class="space-y-1.5 text-sm">
