@@ -200,7 +200,7 @@ func (h *FinancialsHandler) HandleGetReservationsByMonth(w http.ResponseWriter, 
 		 WHERE b.club_id = $1
 		   AND b.status NOT IN ('cancelled')
 		   AND EXTRACT(YEAR FROM b.start_date) = $2
-		   AND r.type IN ('guest_slip','bobil_spot')
+		   AND r.type IN ('guest_slip','motorhome_spot')
 		 GROUP BY month, r.type
 		 ORDER BY month`,
 		claims.ClubID, year,
@@ -232,7 +232,7 @@ func (h *FinancialsHandler) HandleGetReservationsByMonth(w http.ResponseWriter, 
 		switch rtype {
 		case "guest_slip":
 			buckets[idx].GuestSlip += n
-		case "bobil_spot":
+		case "motorhome_spot":
 			buckets[idx].Motorhome += n
 		}
 	}

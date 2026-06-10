@@ -123,11 +123,20 @@ export function useFinancialSummary(year?: Ref<number | undefined>) {
   return useQuery({
     queryKey: computed(() => ['financials', 'summary', year?.value]),
     queryFn: async () => {
+      // The /summary endpoint is gated on Features.Commerce server-
+      // side; if the club has commerce off, the route doesn't exist
+      // and the SPA gets a 404. That's expected — the dashboard's
+      // Vipps-breakdown card just stays hidden in that case. Return
+      // null instead of throwing so vue-query doesn't retry-storm
+      // and the dashboard renders cleanly.
       const query = year?.value ? { year: year.value } : {}
-      return unwrap(await client.GET('/api/v1/admin/financials/summary', {
+      const res = await client.GET('/api/v1/admin/financials/summary', {
         params: { query } as any,
-      }))
+      })
+      if (res.response.status === 404) return null
+      return unwrap(res)
     },
+    retry: false,
     staleTime: 2 * 60 * 1000,
   })
 }

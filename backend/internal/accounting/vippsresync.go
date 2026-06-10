@@ -34,7 +34,10 @@ type VippsResyncResult struct {
 //   3. Re-run ReconcileVippsPreview against the freed bank row and
 //      ReconcileVippsConfirm to post the new draft.
 func (s *Service) ResyncVippsBilags(ctx context.Context, clubID, createdBy string) (*VippsResyncResult, error) {
-	res := &VippsResyncResult{}
+	// Initialize Failed as an empty (not nil) slice so JSON
+	// serializes to [] rather than null — frontend templates that
+	// touch `.length` shouldn't have to be null-safe.
+	res := &VippsResyncResult{Failed: []string{}}
 
 	rows, err := s.db.Query(ctx,
 		`SELECT DISTINCT je.id, je.source_id
