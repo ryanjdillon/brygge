@@ -53,7 +53,8 @@
     "optional": "optional",
     "view": "View",
     "dock": "Dock",
-    "dockAll": "All"
+    "dockAll": "All",
+    "clearSelection": "Clear selection"
   },
   "privacyPolicy": {
     "title": "Privacy policy",

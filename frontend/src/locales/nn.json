@@ -53,7 +53,8 @@
     "optional": "valfri",
     "view": "Vis",
     "dock": "Brygge",
-    "dockAll": "Alle"
+    "dockAll": "Alle",
+    "clearSelection": "Tøm utval"
   },
   "privacyPolicy": {
     "title": "Personvernerklæring",

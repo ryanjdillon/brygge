@@ -48,7 +48,8 @@
     "previous": "Vorige",
     "optional": "optioneel",
     "dock": "Steiger",
-    "dockAll": "Alle"
+    "dockAll": "Alle",
+    "clearSelection": "Selectie wissen"
   },
   "home": {
     "welcome": "Welkom bij Brygge",

@@ -48,7 +48,8 @@
     "previous": "Vorherige",
     "optional": "optional",
     "dock": "Steg",
-    "dockAll": "Alle"
+    "dockAll": "Alle",
+    "clearSelection": "Auswahl aufheben"
   },
   "home": {
     "welcome": "Willkommen bei Brygge",

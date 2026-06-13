@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Search, Receipt } from 'lucide-vue-next'
+import { Search, Receipt, X } from 'lucide-vue-next'
 import BulkInvoicesModal from '@/components/admin/BulkInvoicesModal.vue'
+import { useRangeSelect } from '@/composables/useRangeSelect'
 import DockFilter from '@/components/admin/DockFilter.vue'
 import SpotFilter, { type SpotFilterValue } from '@/components/admin/SpotFilter.vue'
 import NotesFilter, { type NotesFilterValue } from '@/components/admin/NotesFilter.vue'
@@ -89,18 +90,18 @@ onMounted(() => {
 
 const allSelected = computed(() => rows.value.length > 0 && rows.value.every((r) => selected.value.has(r.id)))
 
-function toggle(id: string) {
-  const next = new Set(selected.value)
-  if (next.has(id)) next.delete(id)
-  else next.add(id)
-  selected.value = next
-}
+const { onCheckboxClick: onRowClick, resetAnchor } = useRangeSelect(selected, () => rows.value)
 
 function toggleAll() {
   const next = new Set(selected.value)
   if (allSelected.value) for (const r of rows.value) next.delete(r.id)
   else for (const r of rows.value) next.add(r.id)
   selected.value = next
+  resetAnchor()
+}
+function clearSelection() {
+  selected.value = new Set()
+  resetAnchor()
 }
 
 const selectedIds = computed(() => [...selected.value])
@@ -152,6 +153,15 @@ function onBulkCompleted() {
         {{ t('admin.groupFaktura.selectedCount', { n: selected.size }) }}
       </span>
       <button
+        type="button"
+        class="inline-flex items-center gap-1 rounded text-xs text-blue-700 hover:text-blue-900 hover:underline"
+        :title="t('common.clearSelection')"
+        @click="clearSelection"
+      >
+        <X class="h-3 w-3" />
+        {{ t('common.clearSelection') }}
+      </button>
+      <button
         class="ml-auto inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700"
         @click="openBulk"
       >
@@ -175,9 +185,9 @@ function onBulkCompleted() {
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-200 bg-white">
-          <tr v-for="r in rows" :key="r.id" :class="{ 'bg-blue-50/50': selected.has(r.id) }">
+          <tr v-for="(r, idx) in rows" :key="r.id" :class="{ 'bg-blue-50/50': selected.has(r.id) }">
             <td class="px-2 py-2 text-center">
-              <input type="checkbox" :checked="selected.has(r.id)" class="rounded border-gray-300" @change="toggle(r.id)" />
+              <input type="checkbox" :checked="selected.has(r.id)" class="rounded border-gray-300" @click="onRowClick(idx, $event)" />
             </td>
             <td class="px-3 py-2 text-sm font-medium text-gray-900">{{ r.full_name }}</td>
             <td class="px-3 py-2 text-sm text-gray-700">{{ r.email }}</td>

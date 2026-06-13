@@ -48,7 +48,8 @@
     "previous": "Precedente",
     "optional": "opzionale",
     "dock": "Pontile",
-    "dockAll": "Tutti"
+    "dockAll": "Tutti",
+    "clearSelection": "Cancella selezione"
   },
   "home": {
     "welcome": "Benvenuti a Brygge",

@@ -18,6 +18,7 @@ import BulkInvoicesModal from '@/components/admin/BulkInvoicesModal.vue'
 import { Receipt } from 'lucide-vue-next'
 import type { components } from '@/types/api'
 import { formatName } from '@/lib/format'
+import { useRangeSelect } from '@/composables/useRangeSelect'
 import { useAuthStore } from '@/stores/auth'
 import { useTotpGateStore } from '@/stores/totpGate'
 import Input from '@/components/ui/form/Input.vue'
@@ -254,12 +255,10 @@ const someOnPageSelected = computed(() =>
   users.value.some((u) => selectedIds.value.has(u.id)) && !allOnPageSelected.value,
 )
 
-function toggleUser(id: string) {
-  const next = new Set(selectedIds.value)
-  if (next.has(id)) next.delete(id)
-  else next.add(id)
-  selectedIds.value = next
-}
+const { onCheckboxClick: onUserCheckboxClick, resetAnchor } = useRangeSelect(
+  selectedIds,
+  () => users.value as { id: string }[],
+)
 function togglePage() {
   const next = new Set(selectedIds.value)
   if (allOnPageSelected.value) {
@@ -268,9 +267,11 @@ function togglePage() {
     for (const u of users.value) next.add(u.id)
   }
   selectedIds.value = next
+  resetAnchor()
 }
 function clearSelection() {
   selectedIds.value = new Set()
+  resetAnchor()
 }
 
 async function selectAllFiltered() {
@@ -920,11 +921,8 @@ async function submitImport() {
             :class="{ 'bg-blue-50/50': selectedIds.has(user.id) }"
             @click="openDetail(user)"
           >
-            <td class="px-2 py-3 text-center" @click.stop>
-              <Checkbox
-                :model-value="selectedIds.has(user.id)"
-                @update:model-value="toggleUser(user.id)"
-              />
+            <td class="px-2 py-3 text-center" @click.stop="onUserCheckboxClick(index, $event)">
+              <Checkbox :model-value="selectedIds.has(user.id)" />
             </td>
             <td class="whitespace-nowrap px-3 py-3 text-right text-xs text-gray-400 tabular-nums">{{ offset + index + 1 }}</td>
             <td v-if="visible.has('first_name')" class="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">{{ user.first_name || formatName(user) }}</td>

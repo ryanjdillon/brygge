@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { FileDown, Send, Trash2, Ban, Bell, RefreshCw, Copy, Check, ChevronUp, ChevronDown } from 'lucide-vue-next'
+import { FileDown, Send, Trash2, Ban, Bell, RefreshCw, Copy, Check, ChevronUp, ChevronDown, X } from 'lucide-vue-next'
 import FakturaArchiveButton from '@/components/admin/FakturaArchiveButton.vue'
 import DeliveryLogButton from '@/components/admin/DeliveryLogButton.vue'
 import { useConfirm } from '@/stores/confirm'
 import { useFreshTotp } from '@/composables/useFreshTotp'
+import { useRangeSelect } from '@/composables/useRangeSelect'
 
 interface Row {
   id: string
@@ -169,17 +170,17 @@ const showVoid = computed(() => props.status !== 'voided')
 const showReminder = computed(() => props.status === 'sent')
 const showRegenerate = computed(() => props.status === 'sent')
 
-function toggle(id: string) {
-  const next = new Set(selected.value)
-  if (next.has(id)) next.delete(id)
-  else next.add(id)
-  selected.value = next
-}
+const { onCheckboxClick: onRowClick, resetAnchor } = useRangeSelect(selected, () => sorted.value)
 function toggleAll() {
   const next = new Set(selected.value)
   if (allFilteredSelected.value) for (const d of filtered.value) next.delete(d.id)
   else for (const d of filtered.value) next.add(d.id)
   selected.value = next
+  resetAnchor()
+}
+function clearSelection() {
+  selected.value = new Set()
+  resetAnchor()
 }
 
 function rowLabel(d: Row): string {
@@ -526,6 +527,15 @@ defineExpose({ load })
         <span class="font-medium text-blue-900">
           {{ t('admin.invoiceDrafts.selectedCount', { n: selected.size }) }}
         </span>
+        <button
+          type="button"
+          class="inline-flex items-center gap-1 rounded text-xs text-blue-700 hover:text-blue-900 hover:underline"
+          :title="t('common.clearSelection')"
+          @click="clearSelection"
+        >
+          <X class="h-3 w-3" />
+          {{ t('common.clearSelection') }}
+        </button>
         <div class="ml-auto flex flex-wrap gap-2">
           <button
             type="button"
@@ -616,13 +626,13 @@ defineExpose({ load })
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-200 bg-white">
-            <tr v-for="d in sorted" :key="d.id" :class="{ 'bg-blue-50/50': selected.has(d.id) }">
+            <tr v-for="(d, idx) in sorted" :key="d.id" :class="{ 'bg-blue-50/50': selected.has(d.id) }">
               <td class="px-2 py-2 text-center">
                 <input
                   type="checkbox"
                   :checked="selected.has(d.id)"
                   class="rounded border-gray-300"
-                  @change="toggle(d.id)"
+                  @click="onRowClick(idx, $event)"
                 />
               </td>
               <td class="whitespace-nowrap px-3 py-2 font-mono text-xs text-gray-500">{{ d.invoice_number }}</td>
