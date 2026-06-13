@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { X } from 'lucide-vue-next'
+import Modal from '@/components/ui/Modal.vue'
 import LineItemPicker from '@/components/admin/LineItemPicker.vue'
 
 interface PriceItem {
@@ -157,26 +157,15 @@ function nameFor(id: string): string {
 </script>
 
 <template>
-  <div
-    class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-    role="dialog"
-    aria-modal="true"
-    v-backdrop-close="() => emit('close')"
-    @keydown.esc="emit('close')"
+  <Modal
+    open
+    size="3xl"
+    :title="t('bulkInvoices.title', { n: userIds.length })"
+    @close="emit('close')"
   >
-    <div class="w-full max-w-3xl rounded-lg bg-white p-5 shadow-xl">
-      <div class="mb-3 flex items-center justify-between">
-        <h2 class="text-lg font-semibold text-gray-900">
-          {{ t('bulkInvoices.title', { n: userIds.length }) }}
-        </h2>
-        <button class="text-gray-400 hover:text-gray-600" @click="emit('close')">
-          <X class="h-5 w-5" />
-        </button>
-      </div>
+    <p v-if="loading" class="text-sm text-gray-500">{{ t('common.loading') }}…</p>
 
-      <p v-if="loading" class="text-sm text-gray-500">{{ t('common.loading') }}…</p>
-
-      <template v-else-if="!result">
+    <template v-else-if="!result">
         <form class="space-y-4" @submit.prevent="submit">
           <div class="grid gap-3 sm:grid-cols-2">
             <div>
@@ -351,6 +340,5 @@ function nameFor(id: string): string {
           </div>
         </div>
       </template>
-    </div>
-  </div>
+  </Modal>
 </template>

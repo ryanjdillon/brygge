@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { X, Plus, Trash2, ListPlus } from 'lucide-vue-next'
+import { Plus, Trash2, ListPlus } from 'lucide-vue-next'
+import Modal from '@/components/ui/Modal.vue'
 import { useAccountsList, useFiscalPeriods } from '@/composables/useAccounting'
 import { usePricing } from '@/composables/usePricing'
 import MemberSearch, { type MemberHit } from '@/components/members/MemberSearch.vue'
@@ -508,22 +509,15 @@ function boatLabel(b: Boat): string {
 </script>
 
 <template>
-  <div
-    v-if="open"
-    class="fixed inset-0 z-40 flex items-center justify-center bg-black/50 p-4"
-    role="dialog"
-    aria-modal="true"
-    @keydown.esc="emit('close')"
+  <Modal
+    :open="open"
+    size="2xl"
+    :z-index="40"
+    :close-on-backdrop="false"
+    :title="t('admin.singleFaktura.title')"
+    @close="emit('close')"
   >
-    <div class="w-full max-w-2xl rounded-lg bg-white p-5 shadow-xl">
-      <div class="flex items-center justify-between border-b border-gray-100 pb-3">
-        <h2 class="text-lg font-semibold text-gray-900">{{ t('admin.singleFaktura.title') }}</h2>
-        <button type="button" class="text-gray-400 hover:text-gray-600" @click="emit('close')">
-          <X class="h-5 w-5" />
-        </button>
-      </div>
-
-      <form class="mt-4 space-y-4" @submit.prevent="submit">
+    <form class="mt-4 space-y-4" @submit.prevent="submit">
         <!-- Payee block — wrapped in a soft slate card so it reads as
              one logical group separate from the line-item editor. -->
         <div class="space-y-3 rounded-lg bg-slate-50 p-4">
@@ -891,6 +885,5 @@ function boatLabel(b: Boat): string {
           </button>
         </div>
       </form>
-    </div>
-  </div>
+  </Modal>
 </template>

@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { AlertTriangle, AlertCircle, Info } from 'lucide-vue-next'
 import { useConfirmStore } from '@/stores/confirm'
+import Modal from '@/components/ui/Modal.vue'
 
 const { t } = useI18n()
 const store = useConfirmStore()
@@ -48,41 +49,45 @@ function onCancel() {
 </script>
 
 <template>
-  <div
-    v-if="store.current"
-    class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-    role="dialog"
-    aria-modal="true"
-    @keydown.esc="onCancel"
+  <Modal
+    :open="!!store.current"
+    size="md"
+    :close-on-backdrop="false"
+    :show-close-button="false"
+    @close="onCancel"
   >
-    <div class="w-full max-w-md rounded-lg bg-white p-5 shadow-xl">
-      <div class="flex items-start gap-3 border-b border-gray-100 pb-3">
+    <template #header>
+      <div class="flex items-start gap-3">
         <component :is="Icon" :class="['mt-0.5 h-5 w-5', iconColor]" />
-        <h2 class="text-base font-semibold text-gray-900">{{ store.current.title }}</h2>
+        <h2 class="text-base font-semibold text-gray-900">{{ store.current?.title }}</h2>
       </div>
-      <p class="mt-3 whitespace-pre-line text-sm text-gray-700">{{ store.current.body }}</p>
-      <ul
-        v-if="store.current.details && store.current.details.length"
-        class="mt-3 max-h-40 overflow-y-auto rounded-md bg-gray-50 p-2 text-xs text-gray-700"
-      >
-        <li v-for="(d, i) in store.current.details" :key="i" class="truncate">{{ d }}</li>
-      </ul>
-      <div class="mt-5 flex justify-end gap-2">
+    </template>
+
+    <p class="whitespace-pre-line text-sm text-gray-700">{{ store.current?.body }}</p>
+    <ul
+      v-if="store.current?.details && store.current.details.length"
+      class="mt-3 max-h-40 overflow-y-auto rounded-md bg-gray-50 p-2 text-xs text-gray-700"
+    >
+      <li v-for="(d, i) in store.current.details" :key="i" class="truncate">{{ d }}</li>
+    </ul>
+
+    <template #footer>
+      <div class="flex justify-end gap-2">
         <button
           type="button"
           class="rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-700 ring-1 ring-gray-300 hover:bg-gray-50"
           @click="onCancel"
         >
-          {{ store.current.cancelLabel ?? t('common.cancel') }}
+          {{ store.current?.cancelLabel ?? t('common.cancel') }}
         </button>
         <button
           type="button"
           :class="['rounded-md px-3 py-2 text-sm font-semibold text-white focus:outline-none focus:ring-2 focus:ring-offset-2', confirmBtnClass]"
           @click="onConfirm"
         >
-          {{ store.current.confirmLabel ?? t('common.confirm') }}
+          {{ store.current?.confirmLabel ?? t('common.confirm') }}
         </button>
       </div>
-    </div>
-  </div>
+    </template>
+  </Modal>
 </template>
