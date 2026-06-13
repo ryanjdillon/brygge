@@ -887,7 +887,13 @@
         "archive": "Archiv"
       },
       "sent": {
-        "lastNotified": "Zuletzt benachrichtigt"
+        "lastNotified": "Zuletzt benachrichtigt",
+        "deliveryLog": {
+          "title": "Zustellungsprotokoll",
+          "empty": "Keine Zustellversuche im Stalwart-Log der letzten 60 Tage.",
+          "noRecipient": "Diese Rechnung hat keine hinterlegte Empfänger-E-Mail.",
+          "helpText": "Zeigt, was Stalwart zuzustellen versucht hat und was der Mailserver des Empfängers geantwortet hat. 2xx = akzeptiert (kann beim Empfänger trotzdem im Spam landen); 4xx = vorübergehend; 5xx = abgelehnt."
+        }
       }
     }
   },

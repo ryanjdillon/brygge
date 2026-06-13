@@ -726,6 +726,9 @@ func main() {
 							Post("/invoices/{invoiceID}/resend", invoiceHandler.HandleResendInvoice)
 						r.With(middleware.RequireRole("treasurer", "admin"),
 							middleware.RequireFreshTOTPDefault()).
+							Get("/invoices/{invoiceID}/delivery-log", invoiceHandler.HandleGetDeliveryLog)
+						r.With(middleware.RequireRole("treasurer", "admin"),
+							middleware.RequireFreshTOTPDefault()).
 							Post("/invoices/{invoiceID}/void", invoiceHandler.HandleVoidInvoice)
 						r.With(middleware.RequireRole("treasurer", "admin"),
 							middleware.RequireFreshTOTPDefault()).

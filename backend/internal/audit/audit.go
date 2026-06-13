@@ -47,6 +47,7 @@ const (
 	ActionInvoiceEmailed      = "invoice.emailed"
 	ActionInvoiceReminded     = "invoice.reminded"
 	ActionInvoiceRegenerated  = "invoice.pdf_regenerated"
+	ActionInvoiceDeliveryLogViewed = "invoice.delivery_log_viewed"
 	ActionFinanceCSVExported  = "finance.csv_exported"
 	ActionPaymentCreated      = "payment.created"
 	ActionPaymentViewed       = "finance.payment_viewed"

@@ -887,7 +887,13 @@
         "archive": "Archivio"
       },
       "sent": {
-        "lastNotified": "Ultima notifica"
+        "lastNotified": "Ultima notifica",
+        "deliveryLog": {
+          "title": "Registro consegne",
+          "empty": "Nessun tentativo di consegna trovato nel log di Stalwart negli ultimi 60 giorni.",
+          "noRecipient": "Questa fattura non ha un'email destinatario registrata.",
+          "helpText": "Mostra cosa Stalwart ha tentato di consegnare e la risposta del server del destinatario. 2xx = accettato (può comunque finire nello spam); 4xx = transitorio; 5xx = rifiutato."
+        }
       }
     }
   },
