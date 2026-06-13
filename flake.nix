@@ -189,6 +189,7 @@
             ${tfInit}
             ${pkgs.opentofu}/bin/tofu plan "$@"
           '');
+          meta.description = "Run `tofu plan` against terraform/ with init pre-handled";
         };
 
         apps.tf-apply = {
@@ -198,6 +199,7 @@
             ${tfInit}
             ${pkgs.opentofu}/bin/tofu apply "$@"
           '');
+          meta.description = "Run `tofu apply` against terraform/ with init pre-handled";
         };
 
         apps.install = {
@@ -228,6 +230,7 @@
               --store-paths "$DISKO" "$TOPLEVEL" \
               "$TARGET"
           '');
+          meta.description = "Bootstrap a fresh Hetzner VM (rescue mode) into NixOS via nixos-anywhere";
         };
 
         apps.deploy = {
@@ -284,6 +287,7 @@
               "$@" \
               .#brygge
           '');
+          meta.description = "Deploy brygge to a running host via deploy-rs (auto-stages untracked source)";
         };
 
         # Generates a fresh P-256 VAPID key pair for Web Push and prints
@@ -327,6 +331,7 @@
             VAPID_PRIVATE_KEY=$priv
             EOF
           '');
+          meta.description = "Generate a fresh P-256 VAPID key pair for Web Push as env-var lines";
         };
 
         # Provisions a Dendrite "service account" user on a deployed
@@ -427,6 +432,7 @@
             DENDRITE_SERVICE_TOKEN=$TOKEN
             EOF
           '');
+          meta.description = "Provision a brygge service account on a deployed Dendrite and print DENDRITE_SERVICE_TOKEN";
         };
       }
     );

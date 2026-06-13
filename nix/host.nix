@@ -572,7 +572,7 @@ in
     after = [ "stalwart.service" "stalwart-relay-account.service" ];
     wants = [ "stalwart.service" ];
     wantedBy = [ "multi-user.target" ];
-    path = with pkgs; [ stalwart-mail curl jq coreutils ];
+    path = with pkgs; [ stalwart curl jq coreutils ];
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
