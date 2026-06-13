@@ -22,6 +22,7 @@ Brygge is configured entirely via environment variables. In production, set thes
 | `JWT_REFRESH_EXPIRY`  | No       | `168h`  | Refresh token lifetime (Go duration)                               |
 | `TOTP_ENCRYPTION_KEY` | For TOTP | —       | 64 hex chars (32 bytes) for AES-256-GCM encryption of TOTP secrets |
 | `AUTH_FRESH_TOTP_WINDOW` | No    | `10m`   | Per-action TOTP freshness window for sensitive operations (Go duration; surfaced to the SPA on `/session/me` as `fresh_totp_window_ms` so the in-context countdown stays in sync) |
+| `BULK_SEND_THROTTLE`     | No    | `1s`    | Sleep between consecutive sends in the bulk-reminder worker (Go duration). Lower = faster drain, higher = friendlier to Stalwart submission limits and destination MX rate limits. Set `0s` to disable in tests. See [invariants.md](reference/invariants.md#bulk-reminder-queue-is-in-process-not-persistent). |
 
 *JWT variables are required while JWT auth remains active. They will be removed once the session migration is complete.
 

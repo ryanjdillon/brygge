@@ -27,12 +27,20 @@ type bulkInvoiceResult struct {
 	Failures  []string `json:"failures"`
 }
 
-// HandleBulkSendReminder emails a Norwegian purring (reminder) for
-// each supplied invoice that is still unpaid (payment_id IS NULL) and
-// has been sent at least once (sent_at IS NOT NULL). The reminder
-// reuses the stored PDF attachment. Already-paid or never-sent rows
-// are silently skipped — counted toward `skipped` so the UI can
-// report "32 sent, 6 skipped (already paid)". See DIL-364.
+// HandleBulkSendReminder validates each supplied invoice and enqueues
+// a reminder send for the eligible ones. Eligible = was originally
+// sent (sent_at IS NOT NULL), still unpaid (payment_id IS NULL), has a
+// recipient email and stored PDF. The actual SMTP submission happens
+// asynchronously in the worker started by NewInvoiceHandler — one
+// send at a time, throttled by cfg.BulkSendThrottle (default 1s)
+// — so this handler can return immediately and the HTTP request
+// doesn't run into the response timeout on large batches.
+//
+// Operator-visible progress: each successful async send writes an
+// `invoice.reminded` audit row, which the Sent tab's "Sist purring"
+// column reflects. Operators see rows tick forward as the worker
+// drains. See DIL-364 and DIL-387's follow-up ticket for the queue
+// design.
 func (h *InvoiceHandler) HandleBulkSendReminder(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
@@ -61,17 +69,77 @@ func (h *InvoiceHandler) HandleBulkSendReminder(w http.ResponseWriter, r *http.R
 	).Scan(&clubName, &defaultBank)
 	locale := email.DetectLocale(r)
 
+	// Pre-flight: load eligibility fields in one batched query so we
+	// can give the operator immediate "X enqueued, Y skipped" feedback
+	// without making them wait for the worker.
+	rows, err := h.db.Query(ctx,
+		`SELECT i.id, i.sent_at, i.payment_id,
+		        COALESCE(NULLIF(i.recipient_email, ''), u.email, '') AS recipient,
+		        (i.pdf_data IS NOT NULL) AS has_pdf
+		   FROM invoices i
+		   LEFT JOIN users u ON u.id = i.user_id
+		  WHERE i.club_id = $1 AND i.id = ANY($2)`,
+		claims.ClubID, req.IDs,
+	)
+	if err != nil {
+		h.log.Error().Err(err).Msg("bulk reminder preflight")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	defer rows.Close()
+
+	type pre struct {
+		id        string
+		sentAt    *time.Time
+		paymentID *string
+		recipient string
+		hasPDF    bool
+	}
+	seen := make(map[string]pre, len(req.IDs))
+	for rows.Next() {
+		var p pre
+		if err := rows.Scan(&p.id, &p.sentAt, &p.paymentID, &p.recipient, &p.hasPDF); err != nil {
+			h.log.Error().Err(err).Msg("bulk reminder preflight scan")
+			Error(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		seen[p.id] = p
+	}
+
 	res := bulkInvoiceResult{}
 	for _, id := range req.IDs {
-		err := h.sendOneReminder(ctx, claims.ClubID, claims.UserID, r.RemoteAddr, id, clubName, defaultBank, locale)
-		switch {
-		case err == nil:
-			res.Processed++
-		case errors.Is(err, errSkip):
+		p, ok := seen[id]
+		if !ok {
+			res.Failures = append(res.Failures, id+": not found")
+			continue
+		}
+		if p.sentAt == nil || p.paymentID != nil {
 			res.Skipped++
+			continue
+		}
+		if p.recipient == "" {
+			res.Failures = append(res.Failures, id+": no recipient email")
+			continue
+		}
+		if !p.hasPDF {
+			res.Failures = append(res.Failures, id+": invoice has no stored PDF")
+			continue
+		}
+		job := reminderJob{
+			clubID:      claims.ClubID,
+			actorID:     claims.UserID,
+			remoteAddr:  r.RemoteAddr,
+			invoiceID:   id,
+			clubName:    clubName,
+			defaultBank: defaultBank,
+			locale:      locale,
+		}
+		select {
+		case h.reminderQueue <- job:
+			res.Processed++
 		default:
-			res.Failures = append(res.Failures, id+": "+err.Error())
-			h.log.Warn().Err(err).Str("invoice_id", id).Msg("bulk reminder failed for invoice")
+			res.Failures = append(res.Failures, id+": reminder queue full")
+			h.log.Warn().Str("invoice_id", id).Msg("reminder queue full — dropping")
 		}
 	}
 	JSON(w, http.StatusOK, res)

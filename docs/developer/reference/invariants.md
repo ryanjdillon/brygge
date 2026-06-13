@@ -106,6 +106,12 @@ Each invariant lists the **rule**, then the **failure mode** it prevents. When p
 
 **Failure mode:** a price-list correction silently changes amounts on already-issued invoices. Treasurer's totals start drifting.
 
+### Bulk-reminder queue is in-process, not persistent
+
+**Rule:** `HandleBulkSendReminder` validates rows synchronously and enqueues each eligible job onto an in-memory channel on the `InvoiceHandler`. A single background goroutine drains the queue at `cfg.BulkSendThrottle` (default 1s) per send. The queue is **not persisted** — on an API restart, every pending reminder is lost. Operators choosing to redeploy mid-batch must accept that the in-flight reminders won't resume; re-running the bulk action is the recover path (already-sent rows skip themselves via the `payment_id IS NOT NULL` / audit-driven dedup logic on retry).
+
+**Failure mode:** a deploy or crash during a 100-row send loses the un-drained tail. Per-row audit rows show which made it through, so the operator can re-select the rest on the Sent tab and click "Send purring" again. DIL-388 captures the Phase 2 plan (persistent queue) if this becomes a real pain point.
+
 ---
 
 ## Sessions

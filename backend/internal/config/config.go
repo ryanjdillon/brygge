@@ -47,6 +47,12 @@ type Config struct {
 	// sync.
 	FreshTOTPWindow time.Duration
 
+	// Throttle between bulk-reminder sends (per recipient). The bulk
+	// handler enqueues jobs; a single in-process worker drains the
+	// queue with this sleep between iterations. Tunable via
+	// BULK_SEND_THROTTLE. Set to 0 to disable (mostly for tests).
+	BulkSendThrottle time.Duration
+
 	// Optional integrations
 	// SMTP (self-hosted mail).
 	SMTPHost     string
@@ -123,6 +129,7 @@ func Load() Config {
 
 		TOTPEncryptionKey: envStr("TOTP_ENCRYPTION_KEY", ""),
 		FreshTOTPWindow:   envDuration("AUTH_FRESH_TOTP_WINDOW", 10*time.Minute),
+		BulkSendThrottle:  envDuration("BULK_SEND_THROTTLE", 1*time.Second),
 
 		SMTPHost:     envStr("SMTP_HOST", ""),
 		SMTPPort:     envInt("SMTP_PORT", 587),

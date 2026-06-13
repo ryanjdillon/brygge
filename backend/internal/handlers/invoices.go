@@ -26,6 +26,12 @@ type InvoiceHandler struct {
 	email  email.Sender
 	audit  *audit.Service
 	log    zerolog.Logger
+
+	// In-process queue for async bulk-reminder sends. Buffer of 1000
+	// is generous for the operator-triggered batch shape (typically
+	// ≤100 rows). Drained by a single goroutine started in
+	// NewInvoiceHandler; not persisted across API restarts.
+	reminderQueue chan reminderJob
 }
 
 func NewInvoiceHandler(
@@ -35,13 +41,16 @@ func NewInvoiceHandler(
 	auditService *audit.Service,
 	log zerolog.Logger,
 ) *InvoiceHandler {
-	return &InvoiceHandler{
-		db:     db,
-		config: cfg,
-		email:  emailClient,
-		audit:  auditService,
-		log:    log.With().Str("handler", "invoices").Logger(),
+	h := &InvoiceHandler{
+		db:            db,
+		config:        cfg,
+		email:         emailClient,
+		audit:         auditService,
+		log:           log.With().Str("handler", "invoices").Logger(),
+		reminderQueue: make(chan reminderJob, 1000),
 	}
+	h.startReminderWorker()
+	return h
 }
 
 type createInvoiceFullRequest struct {
