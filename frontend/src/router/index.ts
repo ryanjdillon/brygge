@@ -370,7 +370,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'accounting/pdf-archive',
         name: 'admin-pdf-archive',
-        component: () => import('@/views/admin/PdfArkivView.vue'),
+        redirect: '/admin/accounting/faktura?tab=archive',
       },
       {
         path: 'accounting/bank-accounts',

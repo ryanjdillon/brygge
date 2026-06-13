@@ -569,7 +569,8 @@
         "create": "Opprett",
         "drafts": "Kladder",
         "voided": "Annullerte",
-        "sent": "Sendt"
+        "sent": "Sendt",
+        "archive": "Arkiv"
       },
       "create": {
         "singleTitle": "Enkeltfaktura",

@@ -4,6 +4,8 @@ import { useI18n } from 'vue-i18n'
 import { Search, AlertCircle } from 'lucide-vue-next'
 import FakturaArchiveButton from '@/components/admin/FakturaArchiveButton.vue'
 
+defineProps<{ embedded?: boolean }>()
+
 interface LookupResult {
   id: string
   invoice_number: number
@@ -91,10 +93,12 @@ function formatNOK(n: number): string {
 
 <template>
   <div>
-    <h1 class="text-2xl font-bold text-gray-900">{{ t('admin.pdfArchive.title') }}</h1>
-    <p class="mt-1 text-sm text-gray-600">{{ t('admin.pdfArchive.subtitle') }}</p>
+    <template v-if="!embedded">
+      <h1 class="text-2xl font-bold text-gray-900">{{ t('admin.pdfArchive.title') }}</h1>
+      <p class="mt-1 text-sm text-gray-600">{{ t('admin.pdfArchive.subtitle') }}</p>
+    </template>
 
-    <form class="mt-6 flex max-w-md items-center gap-2" @submit.prevent="lookup">
+    <form :class="['flex max-w-md items-center gap-2', embedded ? 'mt-0' : 'mt-6']" @submit.prevent="lookup">
       <div class="relative flex-1">
         <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
         <input

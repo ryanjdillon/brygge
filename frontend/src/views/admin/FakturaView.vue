@@ -2,10 +2,11 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, FilePlus, Users, Receipt, Send, Ban, Inbox, ArrowLeft as Back } from 'lucide-vue-next'
+import { ArrowLeft, FilePlus, Users, Receipt, Send, Ban, Inbox, Archive, ArrowLeft as Back } from 'lucide-vue-next'
 import FakturaList from '@/components/admin/FakturaList.vue'
 import SingleFakturaModal from '@/components/admin/SingleFakturaModal.vue'
 import GroupFakturaTab from '@/components/admin/GroupFakturaTab.vue'
+import PdfArkivView from '@/views/admin/PdfArkivView.vue'
 import { useTotpGateStore } from '@/stores/totpGate'
 import { useAuthStore } from '@/stores/auth'
 
@@ -13,8 +14,8 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 
-type Tab = 'create' | 'drafts' | 'voided' | 'sent'
-const validTabs: Tab[] = ['create', 'drafts', 'voided', 'sent']
+type Tab = 'create' | 'drafts' | 'voided' | 'sent' | 'archive'
+const validTabs: Tab[] = ['create', 'drafts', 'voided', 'sent', 'archive']
 
 const activeTab = computed<Tab>(() => {
   const q = route.query.tab
@@ -81,6 +82,7 @@ const tabs: { id: Tab; icon: typeof FilePlus; labelKey: string }[] = [
   { id: 'drafts', icon: Inbox, labelKey: 'admin.faktura.tabs.drafts' },
   { id: 'voided', icon: Ban, labelKey: 'admin.faktura.tabs.voided' },
   { id: 'sent', icon: Send, labelKey: 'admin.faktura.tabs.sent' },
+  { id: 'archive', icon: Archive, labelKey: 'admin.faktura.tabs.archive' },
 ]
 </script>
 
@@ -164,6 +166,7 @@ const tabs: { id: Tab; icon: typeof FilePlus; labelKey: string }[] = [
       <FakturaList v-else-if="activeTab === 'drafts'" status="draft" />
       <FakturaList v-else-if="activeTab === 'sent'" status="sent" />
       <FakturaList v-else-if="activeTab === 'voided'" status="voided" />
+      <PdfArkivView v-else-if="activeTab === 'archive'" embedded />
     </div>
   </div>
 </template>

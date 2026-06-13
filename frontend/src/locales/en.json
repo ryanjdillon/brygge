@@ -573,7 +573,8 @@
         "create": "Create",
         "drafts": "Drafts",
         "voided": "Voided",
-        "sent": "Sent"
+        "sent": "Sent",
+        "archive": "Archive"
       },
       "create": {
         "singleTitle": "Single faktura",

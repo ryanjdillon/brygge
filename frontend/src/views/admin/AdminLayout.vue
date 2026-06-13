@@ -98,7 +98,6 @@ const navGroups = computed<NavGroup[]>(() => {
         { to: '/admin/accounting/accounts', icon: ClipboardList, label: t('admin.sidebar.accounts'), roles: ['treasurer', 'board', 'admin'], feature: 'accounting' },
         { to: '/admin/accounting/journal', icon: BookOpen, label: t('admin.sidebar.journal'), roles: ['treasurer', 'board', 'admin'], feature: 'accounting' },
         { to: '/admin/accounting/bank-imports', icon: Landmark, label: t('admin.sidebar.bankImports'), roles: ['treasurer', 'admin'], feature: 'accounting' },
-        { to: '/admin/accounting/pdf-archive', icon: FileText, label: t('admin.sidebar.pdfArchive'), roles: ['treasurer', 'admin'], feature: 'accounting' },
         { to: '/admin/economy/settings', icon: Settings, label: t('admin.sidebar.economySettings'), roles: ['treasurer', 'admin'], feature: 'accounting' },
       ],
     },

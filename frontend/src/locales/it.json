@@ -881,7 +881,12 @@
     },
     "groupEconomy": "Economy",
     "groupShop": "Shop",
-    "groupSite": "Site"
+    "groupSite": "Site",
+    "faktura": {
+      "tabs": {
+        "archive": "Archivio"
+      }
+    }
   },
   "projects": {
     "title": "Progetti",
