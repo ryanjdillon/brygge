@@ -132,6 +132,12 @@ Each invariant lists the **rule**, then the **failure mode** it prevents. When p
 
 **Failure mode:** every admin gets locked out of 2FA. Manual DB intervention required to recover.
 
+### `audit_log.resource_id` is TEXT, not UUID
+
+**Rule:** `audit_log.resource_id` is a `TEXT` column even though every callsite passes a UUID. When joining `audit_log` against a UUID column (e.g. `invoices.id`), explicitly cast — `resource_id = invoices.id::text` — or Postgres returns `ERROR: operator does not exist: text = uuid`.
+
+**Failure mode:** the query throws 500 the first time it runs against a non-empty audit log. The `last_notified_at` subquery on `HandleListInvoices` got bitten by this in commit `b8573c4`; fix in the follow-up.
+
 ---
 
 ## Developer tokens (DIL-365 — pending)

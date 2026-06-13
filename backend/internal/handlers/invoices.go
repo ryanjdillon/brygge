@@ -758,7 +758,7 @@ func (h *InvoiceHandler) HandleListInvoices(w http.ResponseWriter, r *http.Reque
 		          (SELECT MAX(created_at) FROM audit_log
 		             WHERE club_id = i.club_id
 		               AND resource  = 'invoice'
-		               AND resource_id = i.id
+		               AND resource_id = i.id::text
 		               AND action IN ('invoice.reminded', 'invoice.emailed'))
 		        ) AS last_notified_at
 		   FROM invoices i
