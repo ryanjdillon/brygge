@@ -55,6 +55,16 @@ function togglePaidStatus(s: PaidStatus) {
   paidStatusFilter.value = next
 }
 
+// Per-status counts across the full row set (independent of the
+// paid-status chip filter itself) so the chips show "what would my
+// filter become if I toggled this on" and the operator can answer
+// "how many past-due fakturas are there" at a glance.
+const paidStatusCounts = computed(() => {
+  const acc = { paid: 0, waiting: 0, past_due: 0 } as Record<PaidStatus, number>
+  for (const d of rows.value) acc[rowPaidStatus(d)]++
+  return acc
+})
+
 async function load() {
   loading.value = true
   error.value = null
@@ -384,30 +394,33 @@ defineExpose({ load })
         <div v-if="status === 'sent'" class="flex flex-wrap gap-1.5">
           <button
             type="button"
-            class="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition"
+            class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition"
             :class="paidStatusFilter.has('paid') ? 'border-green-300 bg-green-50 text-green-800' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'"
             @click="togglePaidStatus('paid')"
           >
             <span class="inline-block h-1.5 w-1.5 rounded-full bg-green-500" />
             {{ t('admin.faktura.sent.filterPaid') }}
+            <span class="rounded-full bg-white/60 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-gray-700">{{ paidStatusCounts.paid }}</span>
           </button>
           <button
             type="button"
-            class="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition"
+            class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition"
             :class="paidStatusFilter.has('waiting') ? 'border-yellow-300 bg-yellow-50 text-yellow-800' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'"
             @click="togglePaidStatus('waiting')"
           >
             <span class="inline-block h-1.5 w-1.5 rounded-full bg-yellow-500" />
             {{ t('admin.faktura.sent.filterWaiting') }}
+            <span class="rounded-full bg-white/60 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-gray-700">{{ paidStatusCounts.waiting }}</span>
           </button>
           <button
             type="button"
-            class="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition"
+            class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition"
             :class="paidStatusFilter.has('past_due') ? 'border-red-300 bg-red-50 text-red-800' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'"
             @click="togglePaidStatus('past_due')"
           >
             <span class="inline-block h-1.5 w-1.5 rounded-full bg-red-500" />
             {{ t('admin.faktura.sent.filterPastDue') }}
+            <span class="rounded-full bg-white/60 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-gray-700">{{ paidStatusCounts.past_due }}</span>
           </button>
         </div>
         <span class="ml-auto text-xs text-gray-500">

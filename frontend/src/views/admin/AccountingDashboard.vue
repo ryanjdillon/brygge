@@ -102,14 +102,27 @@ const fakturaDonutSlices = computed(() => {
   ]
 })
 
-type CategoryGroup = { category: string; items: PriceItemSummaryRow[]; subtotals: { billed: number; received: number; overdue: number; outstanding: number } }
+type CategorySubtotals = {
+  billed: number
+  received: number
+  overdue: number
+  outstanding: number
+  invoice_count: number
+  paid_count: number
+  overdue_count: number
+}
+type CategoryGroup = { category: string; items: PriceItemSummaryRow[]; subtotals: CategorySubtotals }
 const priceItemGroups = computed<CategoryGroup[]>(() => {
   const items = priceItemSummary.value?.items ?? []
   const byCat = new Map<string, CategoryGroup>()
   for (const it of items) {
     let g = byCat.get(it.category)
     if (!g) {
-      g = { category: it.category, items: [], subtotals: { billed: 0, received: 0, overdue: 0, outstanding: 0 } }
+      g = {
+        category: it.category,
+        items: [],
+        subtotals: { billed: 0, received: 0, overdue: 0, outstanding: 0, invoice_count: 0, paid_count: 0, overdue_count: 0 },
+      }
       byCat.set(it.category, g)
     }
     g.items.push(it)
@@ -117,8 +130,32 @@ const priceItemGroups = computed<CategoryGroup[]>(() => {
     g.subtotals.received += it.received
     g.subtotals.overdue += it.overdue
     g.subtotals.outstanding += it.outstanding
+    g.subtotals.invoice_count += it.invoice_count
+    g.subtotals.paid_count += it.paid_count
+    g.subtotals.overdue_count += it.overdue_count
   }
   return [...byCat.values()]
+})
+
+// Aggregate counts across every price-item — paired with the four
+// headline cards (Fakturert / Motteke / Utestående / Forfalle) so the
+// operator gets a "how many" answer right beside the kroner amount.
+const totalCounts = computed(() => {
+  const items = priceItemSummary.value?.items ?? []
+  let invoiceCount = 0
+  let paidCount = 0
+  let overdueCount = 0
+  for (const it of items) {
+    invoiceCount += it.invoice_count
+    paidCount += it.paid_count
+    overdueCount += it.overdue_count
+  }
+  return {
+    invoiceCount,
+    paidCount,
+    outstandingCount: Math.max(0, invoiceCount - paidCount),
+    overdueCount,
+  }
 })
 
 function formatNOK(amount: number): string {
@@ -186,28 +223,40 @@ const postedCount = computed(() => entries.value?.filter(e => e.status === 'post
                 <div class="rounded-md bg-blue-50 p-1.5"><Receipt class="h-4 w-4 text-blue-600" /></div>
                 <p class="text-xs font-medium text-gray-500">{{ t('admin.financials.totalBilled') }}</p>
               </div>
-              <p class="mt-2 text-lg font-semibold text-gray-900">{{ formatNOK(priceItemSummary.totals.billed) }}</p>
+              <div class="mt-2 flex items-baseline gap-2">
+                <p class="text-lg font-semibold text-gray-900">{{ formatNOK(priceItemSummary.totals.billed) }}</p>
+                <p class="text-xs text-gray-500 tabular-nums">{{ t('admin.financials.countSuffix', { n: totalCounts.invoiceCount }) }}</p>
+              </div>
             </div>
             <div class="rounded-lg border border-gray-200 bg-white p-5">
               <div class="flex items-center gap-2">
                 <div class="rounded-md bg-green-50 p-1.5"><Banknote class="h-4 w-4 text-green-600" /></div>
                 <p class="text-xs font-medium text-gray-500">{{ t('admin.financials.totalReceived') }}</p>
               </div>
-              <p class="mt-2 text-lg font-semibold text-gray-900">{{ formatNOK(priceItemSummary.totals.received) }}</p>
+              <div class="mt-2 flex items-baseline gap-2">
+                <p class="text-lg font-semibold text-gray-900">{{ formatNOK(priceItemSummary.totals.received) }}</p>
+                <p class="text-xs text-gray-500 tabular-nums">{{ t('admin.financials.countSuffix', { n: totalCounts.paidCount }) }}</p>
+              </div>
             </div>
             <div class="rounded-lg border border-gray-200 bg-white p-5">
               <div class="flex items-center gap-2">
                 <div class="rounded-md bg-yellow-50 p-1.5"><Clock class="h-4 w-4 text-yellow-600" /></div>
                 <p class="text-xs font-medium text-gray-500">{{ t('admin.financials.totalOutstanding') }}</p>
               </div>
-              <p class="mt-2 text-lg font-semibold text-gray-900">{{ formatNOK(priceItemSummary.totals.outstanding) }}</p>
+              <div class="mt-2 flex items-baseline gap-2">
+                <p class="text-lg font-semibold text-gray-900">{{ formatNOK(priceItemSummary.totals.outstanding) }}</p>
+                <p class="text-xs text-gray-500 tabular-nums">{{ t('admin.financials.countSuffix', { n: totalCounts.outstandingCount }) }}</p>
+              </div>
             </div>
             <div class="rounded-lg border border-gray-200 bg-white p-5">
               <div class="flex items-center gap-2">
                 <div class="rounded-md bg-red-50 p-1.5"><AlertTriangle class="h-4 w-4 text-red-600" /></div>
                 <p class="text-xs font-medium text-gray-500">{{ t('admin.financials.totalForfall') }}</p>
               </div>
-              <p class="mt-2 text-lg font-semibold text-gray-900">{{ formatNOK(priceItemSummary.totals.overdue) }}</p>
+              <div class="mt-2 flex items-baseline gap-2">
+                <p class="text-lg font-semibold text-gray-900">{{ formatNOK(priceItemSummary.totals.overdue) }}</p>
+                <p class="text-xs text-gray-500 tabular-nums">{{ t('admin.financials.countSuffix', { n: totalCounts.overdueCount }) }}</p>
+              </div>
             </div>
           </div>
 
@@ -308,11 +357,20 @@ const postedCount = computed(() => entries.value?.filter(e => e.status === 'post
                   </tr>
                   <tr v-if="priceItemGroups.length > 1" class="border-t border-gray-200 bg-gray-50 text-xs">
                     <td class="px-4 py-2 italic font-medium text-gray-700">{{ t('admin.financials.subtotal') }}</td>
-                    <td />
+                    <td class="px-4 py-2 text-right font-semibold tabular-nums text-gray-700">{{ g.subtotals.invoice_count }}</td>
                     <td class="px-4 py-2 text-right font-semibold tabular-nums text-gray-900">{{ formatNOK(g.subtotals.billed) }}</td>
-                    <td class="px-4 py-2 text-right font-semibold tabular-nums" :class="g.subtotals.received === 0 ? 'text-gray-400' : 'text-green-700'">{{ formatNOK(g.subtotals.received) }}</td>
-                    <td class="px-4 py-2 text-right font-semibold tabular-nums" :class="g.subtotals.outstanding === 0 ? 'text-gray-400' : 'text-yellow-700'">{{ formatNOK(g.subtotals.outstanding) }}</td>
-                    <td class="px-4 py-2 text-right font-semibold tabular-nums" :class="g.subtotals.overdue === 0 ? 'text-gray-400' : 'text-red-700'">{{ formatNOK(g.subtotals.overdue) }}</td>
+                    <td class="px-4 py-2 text-right font-semibold tabular-nums" :class="g.subtotals.received === 0 ? 'text-gray-400' : 'text-green-700'">
+                      <div>{{ formatNOK(g.subtotals.received) }}</div>
+                      <div class="text-[10px] font-normal text-gray-500">{{ t('admin.financials.countSuffix', { n: g.subtotals.paid_count }) }}</div>
+                    </td>
+                    <td class="px-4 py-2 text-right font-semibold tabular-nums" :class="g.subtotals.outstanding === 0 ? 'text-gray-400' : 'text-yellow-700'">
+                      <div>{{ formatNOK(g.subtotals.outstanding) }}</div>
+                      <div class="text-[10px] font-normal text-gray-500">{{ t('admin.financials.countSuffix', { n: g.subtotals.invoice_count - g.subtotals.paid_count }) }}</div>
+                    </td>
+                    <td class="px-4 py-2 text-right font-semibold tabular-nums" :class="g.subtotals.overdue === 0 ? 'text-gray-400' : 'text-red-700'">
+                      <div>{{ formatNOK(g.subtotals.overdue) }}</div>
+                      <div class="text-[10px] font-normal text-gray-500">{{ t('admin.financials.countSuffix', { n: g.subtotals.overdue_count }) }}</div>
+                    </td>
                   </tr>
                 </template>
               </tbody>

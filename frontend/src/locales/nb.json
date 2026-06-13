@@ -760,7 +760,8 @@
       "cashFlowHint": "Inntekt vs kostnad per måned ({year}).",
       "cashFlowIncome": "Inntekt",
       "cashFlowExpense": "Kostnad",
-      "cashFlowNet": "netto"
+      "cashFlowNet": "netto",
+      "countSuffix": "({n} stk)"
     },
     "events": {
       "title": "Arrangementer",

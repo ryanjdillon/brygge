@@ -4,6 +4,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useClubStore } from '@/stores/club'
+import { useNavGate } from '@/composables/useNavGate'
 import { LogIn, LogOut, User, Shield, ShieldAlert } from 'lucide-vue-next'
 import LanguageSwitcher from '@/components/layout/LanguageSwitcher.vue'
 import InboxIndicator from '@/components/layout/InboxIndicator.vue'
@@ -12,6 +13,19 @@ const { t } = useI18n()
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
+const { gateToAdmin } = useNavGate()
+
+// Intercept the admin-button click so the 12-hour step-up modal opens
+// before navigation. If the user has TOTP enrolled but the step-up
+// window has lapsed, this avoids the jarring "navigate then bounce"
+// flow. If they have no TOTP enrollment yet, gateToAdmin redirects
+// them to /portal/security?next=/admin. See DIL-369.
+async function handleAdminClick(e: MouseEvent) {
+  e.preventDefault()
+  if (await gateToAdmin('/admin')) {
+    router.push('/admin')
+  }
+}
 const club = useClubStore()
 club.ensureLoaded()
 
@@ -90,6 +104,7 @@ async function handleLogout() {
               v-if="auth.hasAdminRole && auth.user?.totpEnabled"
               to="/admin"
               :class="adminClass"
+              @click="handleAdminClick"
             >
               <Shield class="h-4 w-4" />
               <span class="hidden md:inline">{{ t('nav.admin') }}</span>

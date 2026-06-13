@@ -764,7 +764,8 @@
       "cashFlowHint": "Income (revenue) vs expense by month ({year}).",
       "cashFlowIncome": "Income",
       "cashFlowExpense": "Expense",
-      "cashFlowNet": "net"
+      "cashFlowNet": "net",
+      "countSuffix": "({n} pcs)"
     },
     "events": {
       "title": "Event Management",

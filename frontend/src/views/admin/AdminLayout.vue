@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { RouterLink, RouterView, useRoute } from 'vue-router'
+import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useClubStore } from '@/stores/club'
 import { useFeatures } from '@/composables/useFeatures'
+import { useNavGate } from '@/composables/useNavGate'
 import ErrorBoundary from '@/components/ui/ErrorBoundary.vue'
 import {
   Users,
@@ -144,6 +145,26 @@ function isActive(to: string): boolean {
 function closeSidebar() {
   sidebarOpen.value = false
 }
+
+// Economy sidebar items gate on fresh-TOTP (10-min window). Anything
+// under /admin/accounting or /admin/economy hits this. See DIL-369.
+const router = useRouter()
+const { gateToFresh } = useNavGate()
+
+function requiresFreshTotp(path: string): boolean {
+  return path.startsWith('/admin/accounting') || path.startsWith('/admin/economy')
+}
+
+async function handleNavClick(e: MouseEvent, to: string) {
+  if (!requiresFreshTotp(to)) {
+    closeSidebar()
+    return
+  }
+  e.preventDefault()
+  const ok = await gateToFresh(to)
+  closeSidebar()
+  if (ok) router.push(to)
+}
 </script>
 
 <template>
@@ -186,7 +207,7 @@ function closeSidebar() {
                   ? 'bg-blue-50 text-blue-700'
                   : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900',
               ]"
-              @click="closeSidebar"
+              @click="(e: MouseEvent) => handleNavClick(e, item.to)"
             >
               <component
                 :is="item.icon"
