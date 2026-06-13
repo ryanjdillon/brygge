@@ -32,7 +32,7 @@ openssl rand -hex 32
 
 ## Email (SMTP)
 
-Used for magic link login, invoice delivery, and broadcasts. Brygge talks SMTP to the self-hosted Stalwart mail server on the same host. See [../mail/setup.md](../mail/setup.md) for the server-side setup.
+Used for magic link login, invoice delivery, and broadcasts. Brygge talks SMTP to the self-hosted Stalwart mail server on the same host. See [mail/setup.md](mail/setup.md) for the server-side setup.
 
 | Variable        | Required  | Default     | Description                                               |
 |-----------------|-----------|-------------|-----------------------------------------------------------|
@@ -97,7 +97,7 @@ npx web-push generate-vapid-keys
 
 ## OpenTelemetry
 
-Metrics and traces are exported via OTLP gRPC. See [../otel/index.md](../otel/index.md) for collector setup.
+Metrics and traces are exported via OTLP gRPC. See [otel/index.md](otel/index.md) for collector setup.
 
 Configuration uses standard OTEL environment variables — no Brygge-specific vars needed:
 
@@ -132,4 +132,4 @@ Feature flags have two layers since migration 000049: env-var defaults (set at d
 
 ---
 
-See also: [deploy.md](deploy.md) | [../mail/setup.md](../mail/setup.md) | [../otel/index.md](../otel/index.md) | [setup.md](setup.md)
+See also: [deploy.md](deploy.md) | [mail/setup.md](mail/setup.md) | [otel/index.md](otel/index.md) | [setup.md](setup.md)

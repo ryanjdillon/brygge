@@ -65,7 +65,7 @@ Required values:
 | `domain` | terraform, NixOS | Primary domain for the club (e.g. `klubb.no`) |
 | `server_name` | terraform, NixOS | Hetzner server name + NixOS hostname |
 | `server_type`, `location`, `timezone` | terraform, NixOS | Defaults: `cx23`, `nbg1`, `Europe/Oslo` |
-| `dkim_public_value`, `dmarc_policy` | terraform | Mail DNS records (see [../mail/setup.md](../mail/setup.md)) |
+| `dkim_public_value`, `dmarc_policy` | terraform | Mail DNS records (see [mail/setup.md](mail/setup.md)) |
 
 **Protection against committing secrets**: a pre-commit hook at `.githooks/pre-commit` rejects any attempt to stage `terraform/terraform.tfvars.json`. The dev shell's `shellHook` auto-installs it by setting `core.hooksPath` the first time you `nix develop`. If you accept the hook, `git status` will still show the file as modified, but `git commit` (with or without `-a`) will fail:
 
@@ -173,7 +173,7 @@ VIPPS_CLIENT_SECRET=
 VIPPS_SUBSCRIPTION_KEY=
 VIPPS_MSN=
 
-# Mail (self-hosted Stalwart; see docs/mail/setup.md).
+# Mail (self-hosted Stalwart; see docs/developer/mail/setup.md).
 # The relay@ principal is provisioned declaratively from
 # /etc/stalwart/relay-password by the stalwart-relay-account
 # systemd unit; SMTP_PASSWORD here must match that file.
@@ -217,7 +217,7 @@ ssh root@<server-ip> 'journalctl -u caddy -f'
 
 ### 8. Set up the mail server
 
-Follow [../mail/setup.md](../mail/setup.md) for:
+Follow [mail/setup.md](mail/setup.md) for:
 
 - Stalwart admin bootstrap (first password, DKIM generation)
 - DNS DKIM record publishing
@@ -304,7 +304,7 @@ All point to the brygge server's IPv4:
 
 The server also has a PTR (rDNS) record pointing at `mail.<domain>`, managed via `hcloud_rdns` in `terraform/server.nix`.
 
-Mail-specific DNS setup is covered in [../mail/setup.md](../mail/setup.md).
+Mail-specific DNS setup is covered in [mail/setup.md](mail/setup.md).
 
 ---
 
@@ -326,7 +326,7 @@ Mail-specific DNS setup is covered in [../mail/setup.md](../mail/setup.md).
 
 Caddy is the sole internet-facing HTTP service and terminates TLS for each HTTPS virtualhost using the ACME email from `clubConfig.adminEmail` (→ `admin_email` in tfvars). Stalwart terminates TLS itself for SMTPS/IMAPS, reading the same Let's Encrypt cert files that security.acme issues for `mail.<domain>`.
 
-For mail-specific configuration, admin bootstrap, DKIM, and troubleshooting, see [../mail/setup.md](../mail/setup.md).
+For mail-specific configuration, admin bootstrap, DKIM, and troubleshooting, see [mail/setup.md](mail/setup.md).
 
 ---
 

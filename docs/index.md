@@ -31,9 +31,9 @@ Audience: deployers, contributors, and anyone troubleshooting at the OS/protocol
 | [developer/deploy.md](developer/deploy.md) | Production deploy: Nix flake, deploy-rs, magic-rollback |
 | [developer/configuration.md](developer/configuration.md) | Environment variables and feature flags |
 | [developer/database.md](developer/database.md) | Postgres ops: connecting, scripts, migrations, backups |
-| [developer/enums.md](developer/enums.md) | Postgres enums, TEXT vocabularies, payment / Vipps category → GL maps |
-| [developer/invariants.md](developer/invariants.md) | Append-only list of rules other code must respect |
-| [developer/audit-actions.md](developer/audit-actions.md) | Every `audit.Action*` constant: string, resource, when, `extra` fields |
+| [developer/reference/enums.md](developer/reference/enums.md) | Postgres enums, TEXT vocabularies, payment / Vipps category → GL maps |
+| [developer/reference/invariants.md](developer/reference/invariants.md) | Append-only list of rules other code must respect |
+| [developer/reference/audit-actions.md](developer/reference/audit-actions.md) | Every `audit.Action*` constant: string, resource, when, `extra` fields |
 | [developer/checklists/](developer/checklists/) | Per-change-type recipes (add route, migration, bulk action, audit action, feature flag) |
 | [developer/rescue-recover-ssh-access.md](developer/rescue-recover-ssh-access.md) | Recovering SSH access when locked out |
 | [developer/troubleshooting.md](developer/troubleshooting.md) | Common dev + deploy issues |
@@ -50,30 +50,30 @@ Colocated with the code they describe; load when you enter the package:
 - [`../backend/internal/finance/README.md`](../backend/internal/finance/README.md) — invoice data contract, KID generation
 - [`../frontend/src/views/admin/README.md`](../frontend/src/views/admin/README.md) — admin sidebar, click-time TOTP gating, `useNavGate`
 
-## Domain modules
+### Subject subdirs under [developer/](developer/)
 
-Each subdirectory is a self-contained module covering one subject in depth. Per the deep-module rule, load the whole subdir when you need that subject; entries within it cross-link as needed and don't duplicate content from sibling subjects.
+Each is a self-contained module covering one subject in depth. Per the deep-module rule, load the whole subdir when you need that subject; entries within it cross-link as needed and don't duplicate content from sibling subjects.
 
-### [mail/](mail/) — self-hosted Stalwart + Bulwark
-
-| Document | Audience | Description |
-|----------|----------|-------------|
-| [mail/setup.md](mail/setup.md) | Operators | Initial deploy, DKIM provisioning, role mailboxes, deliverability, day-2 ops |
-| [mail/inbox.md](mail/inbox.md) | Operators + Developers | Role-gated shared inbox at `/admin/inbox`: spec format, reconciler, per-user provisioning, send path, verification recipes |
-| [mail/stalwart-internals.md](mail/stalwart-internals.md) | Developers | Stalwart 0.15 protocol quirks (admin REST, JMAP, password hashing). Reference for when something at the protocol layer breaks. |
-| [mail/bimi.md](mail/bimi.md) | Operators | BIMI: publishing the club logo so it renders next to outbound mail |
-
-### [otel/](otel/) — OpenTelemetry
+#### [developer/mail/](developer/mail/) — self-hosted Stalwart + Bulwark
 
 | Document | Audience | Description |
 |----------|----------|-------------|
-| [otel/index.md](otel/index.md) | Operators | Instrumentation, app config, local + upstream collectors |
+| [developer/mail/setup.md](developer/mail/setup.md) | Operators | Initial deploy, DKIM provisioning, role mailboxes, deliverability, day-2 ops |
+| [developer/mail/inbox.md](developer/mail/inbox.md) | Operators + Developers | Role-gated shared inbox at `/admin/inbox`: spec format, reconciler, per-user provisioning, send path, verification recipes |
+| [developer/mail/stalwart-internals.md](developer/mail/stalwart-internals.md) | Developers | Stalwart 0.15 protocol quirks (admin REST, JMAP, password hashing). Reference for when something at the protocol layer breaks. |
+| [developer/mail/bimi.md](developer/mail/bimi.md) | Operators | BIMI: publishing the club logo so it renders next to outbound mail |
 
-### [security/](security/)
+#### [developer/otel/](developer/otel/) — OpenTelemetry
 
 | Document | Audience | Description |
 |----------|----------|-------------|
-| [security/2fa.md](security/2fa.md) | Board members + Operators | Two-factor authentication: enrollment, recovery codes, admin reset |
+| [developer/otel/index.md](developer/otel/index.md) | Operators | Instrumentation, app config, local + upstream collectors |
+
+#### [developer/security/](developer/security/)
+
+| Document | Audience | Description |
+|----------|----------|-------------|
+| [developer/security/2fa.md](developer/security/2fa.md) | Board members + Operators | Two-factor authentication: enrollment, recovery codes, admin reset |
 
 ## Architecture Overview
 
@@ -122,8 +122,8 @@ Key variable groups:
 - **Database** — `DATABASE_URL`, `POSTGRES_*`
 - **Auth** — `JWT_SECRET`, `VIPPS_*`
 - **Storage** — `S3_*` (documents, charts)
-- **Email** — `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `EMAIL_FROM` (self-hosted Stalwart; see [mail/setup.md](mail/setup.md))
-- **Inbox / shared mailboxes** — `STALWART_ADMIN_*`, `BRYGGE_MAILBOXES_PATH`, `STALWART_MAILBOX_PASSWORDS_PATH` (see [mail/inbox.md](mail/inbox.md))
+- **Email** — `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `EMAIL_FROM` (self-hosted Stalwart; see [developer/mail/setup.md](developer/mail/setup.md))
+- **Inbox / shared mailboxes** — `STALWART_ADMIN_*`, `BRYGGE_MAILBOXES_PATH`, `STALWART_MAILBOX_PASSWORDS_PATH` (see [developer/mail/inbox.md](developer/mail/inbox.md))
 - **Features** — `FEATURE_BOOKINGS`, `FEATURE_PROJECTS`, `FEATURE_CALENDAR`, `FEATURE_COMMERCE`, `FEATURE_COMMUNICATIONS`
 
 ## Common Tasks

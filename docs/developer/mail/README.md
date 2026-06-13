@@ -1,6 +1,6 @@
 # Mail docs — self-hosted Stalwart + Bulwark
 
-Cross-audience navigation: see [`../index.md`](../index.md).
+Cross-audience navigation: see [`../../index.md`](../../index.md).
 
 | Document | Audience | Description |
 |----------|----------|-------------|
@@ -11,4 +11,4 @@ Cross-audience navigation: see [`../index.md`](../index.md).
 
 Related:
 
-- [`../../backend/internal/email/README.md`](../../backend/internal/email/README.md) — outbound senders + Norwegian-localized templates
+- [`../../../backend/internal/email/README.md`](../../../backend/internal/email/README.md) — outbound senders + Norwegian-localized templates

@@ -14,9 +14,9 @@ Each checklist is small enough to load at the top of an agent's context for the 
 
 ## Companion docs
 
-- [`../enums.md`](../enums.md) — when the change touches an enum value
-- [`../invariants.md`](../invariants.md) — when the change brushes against an invariant
-- [`../audit-actions.md`](../audit-actions.md) — when adding an action to the audit log
+- [`../reference/enums.md`](../reference/enums.md) — when the change touches an enum value
+- [`../reference/invariants.md`](../reference/invariants.md) — when the change brushes against an invariant
+- [`../reference/audit-actions.md`](../reference/audit-actions.md) — when adding an action to the audit log
 - [`../database.md`](../database.md) — when adding a table or column
 
 ## When in doubt

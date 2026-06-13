@@ -150,5 +150,5 @@ Per [`../../../../docs/developer/checklists/add-route.md`](../../../../docs/deve
 
 - [`../../composables/useNavGate.ts`](../../composables/useNavGate.ts) — gate composable
 - [`../../composables/useFreshTotp.ts`](../../composables/useFreshTotp.ts) — per-action TOTP helpers
-- [`../../../../docs/security/2fa.md`](../../../../docs/security/2fa.md) — TOTP windows and the recovery flow
-- [`../../../../docs/developer/invariants.md`](../../../../docs/developer/invariants.md) — TOTP middleware ordering
+- [`../../../../docs/developer/security/2fa.md`](../../../../docs/developer/security/2fa.md) — TOTP windows and the recovery flow
+- [`../../../../docs/developer/reference/invariants.md`](../../../../docs/developer/reference/invariants.md) — TOTP middleware ordering

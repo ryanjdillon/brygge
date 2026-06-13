@@ -57,7 +57,7 @@ Update `docs/developer/database.md` Schema overview to mention the new table or 
 
 ## 5. Enums
 
-If the migration adds an enum value (`ALTER TYPE ... ADD VALUE 'xyz'`), update [`../enums.md`](../enums.md). New enum values can't be removed via down.sql — that's a Postgres limitation. Plan accordingly.
+If the migration adds an enum value (`ALTER TYPE ... ADD VALUE 'xyz'`), update [`../reference/enums.md`](../reference/enums.md). New enum values can't be removed via down.sql — that's a Postgres limitation. Plan accordingly.
 
 ## 6. Config touch points
 
@@ -65,11 +65,11 @@ If the migration adds a column that affects how operators configure the system:
 
 - A new env-var-driven column (e.g. a new feature flag): update [`configuration.md`](../configuration.md) Feature Flags section
 - A new admin-editable column: update the relevant user doc, or open a tracking issue if user docs lag
-- A new audit-relevant column: usually not required, but mention in [`audit-actions.md`](../audit-actions.md) if relevant
+- A new audit-relevant column: usually not required, but mention in [`audit-actions.md`](../reference/audit-actions.md) if relevant
 
 ## 7. Invariants
 
-If the new table or column introduces a rule (e.g. "this column must never be NULL once invoice is sent"), add it to [`invariants.md`](../invariants.md) with the failure mode.
+If the new table or column introduces a rule (e.g. "this column must never be NULL once invoice is sent"), add it to [`invariants.md`](../reference/invariants.md) with the failure mode.
 
 ## 8. Code wiring
 
@@ -86,5 +86,5 @@ Most migrations need matching Go changes:
 - **Forgot the down.sql** — migration is irreversible in dev, painful to test
 - **Down deletes data the up created** — fine for new tables, dangerous for backfills. If the up backfilled an existing column, the down should restore to nil/zero, not silently re-derive
 - **Forgot the index** — sequential scans appear in slow query logs on first heavy use
-- **Enum value mismatch with Go switch statement** — silent fallthrough to default. The [DIL-376 enums doc](../enums.md) is meant to surface these.
+- **Enum value mismatch with Go switch statement** — silent fallthrough to default. The [DIL-376 enums doc](../reference/enums.md) is meant to surface these.
 - **Forgot to update Schema overview** — the next person grepping for the table doesn't find it in docs and assumes it doesn't exist

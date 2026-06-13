@@ -17,14 +17,14 @@ Audience: deployers, contributors, and anyone troubleshooting at the OS / protoc
 |----------|-------------|
 | [configuration.md](configuration.md) | Environment variables, feature flags, env-layer rules |
 | [database.md](database.md) | Postgres ops: connecting, scripts, migrations, backups |
-| [enums.md](enums.md) | Postgres enums, TEXT vocabularies, payment / Vipps category → GL maps |
+| [reference/enums.md](reference/enums.md) | Postgres enums, TEXT vocabularies, payment / Vipps category → GL maps |
 
 ## Cross-cutting invariants & audit
 
 | Document | Description |
 |----------|-------------|
-| [invariants.md](invariants.md) | Append-only list of rules other code must respect (auth, accounting, invoicing, sessions, config) |
-| [audit-actions.md](audit-actions.md) | Every `audit.Action*` constant: string, resource, when, `extra` fields |
+| [reference/invariants.md](reference/invariants.md) | Append-only list of rules other code must respect (auth, accounting, invoicing, sessions, config) |
+| [reference/audit-actions.md](reference/audit-actions.md) | Every `audit.Action*` constant: string, resource, when, `extra` fields |
 
 ## Change checklists
 
@@ -36,6 +36,14 @@ Audience: deployers, contributors, and anyone troubleshooting at the OS / protoc
 |----------|-------------|
 | [troubleshooting.md](troubleshooting.md) | Common dev + deploy issues |
 | [rescue-recover-ssh-access.md](rescue-recover-ssh-access.md) | Recovering SSH access when locked out |
+
+## Subject subdirs
+
+| Subdir | Description |
+|--------|-------------|
+| [security/](security/) | TOTP / 2FA — enrollment, recovery, admin reset |
+| [mail/](mail/) | Self-hosted Stalwart + Bulwark — setup, shared inbox, internals, BIMI |
+| [otel/](otel/) | OpenTelemetry — instrumentation, collectors |
 
 ## Subsystem READMEs (colocated with code)
 

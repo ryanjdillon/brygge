@@ -224,7 +224,7 @@ Source: `vippsCategoryAccountMap` in `backend/internal/accounting/vippsreconcile
 | `room_hire` | 3200 |
 | `merchandise` | 3300 |
 
-Fallback: `vippsFallbackRevenueCode = "3900"` (Andre inntekter). **Not 2900** — see `developer/invariants.md`.
+Fallback: `vippsFallbackRevenueCode = "3900"` (Andre inntekter). **Not 2900** — see `invariants.md`.
 
 ### Fixed GL account constants
 

@@ -72,7 +72,7 @@ if h.audit != nil {
 
 - Always behind `if h.audit != nil`
 - Use existing `audit.Action*` constants; never inline literals
-- See [`../../../docs/developer/audit-actions.md`](../../../docs/developer/audit-actions.md) for the full list
+- See [`../../../docs/developer/reference/audit-actions.md`](../../../docs/developer/reference/audit-actions.md) for the full list
 - Never let the audit error bubble — the operation succeeded, log the failure and move on
 
 ## TOTP gating

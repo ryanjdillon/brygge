@@ -6,11 +6,8 @@ This file provides guidance to AI coding agents (Claude Code, Cursor, etc.) when
 
 All docs are indexed at **[docs/index.md](docs/index.md)**. Each subdirectory has its own README — start at the relevant subdir index, not at the leaves:
 
-- [docs/developer/README.md](docs/developer/README.md) — setup, deploy, configuration, database, enums, invariants, audit actions, change checklists
+- [docs/developer/README.md](docs/developer/README.md) — setup, deploy, configuration, database, enums, invariants, audit actions, change checklists, mail / otel / security subject subdirs
 - [docs/user/README.md](docs/user/README.md) — in-app guides (faktura today)
-- [docs/security/README.md](docs/security/README.md) — TOTP / 2FA
-- [docs/mail/README.md](docs/mail/README.md) — Stalwart + Bulwark setup, shared inbox, BIMI
-- [docs/otel/index.md](docs/otel/index.md) — OpenTelemetry
 - [docs/developer/checklists/README.md](docs/developer/checklists/README.md) — per-change-type recipes
 
 Source-tree subsystems also carry colocated READMEs that cross-link up:
@@ -24,11 +21,11 @@ When you make one of these changes, update the listed doc in the **same commit**
 | When you | Update |
 |----------|--------|
 | Add an HTTP route | [docs/developer/checklists/add-route.md](docs/developer/checklists/add-route.md) recipe; add `audit-actions.md` row if it logs a new action |
-| Add a migration | [docs/developer/checklists/add-migration.md](docs/developer/checklists/add-migration.md); [docs/developer/database.md](docs/developer/database.md); [docs/developer/enums.md](docs/developer/enums.md) if a new enum / TEXT vocabulary value |
+| Add a migration | [docs/developer/checklists/add-migration.md](docs/developer/checklists/add-migration.md); [docs/developer/database.md](docs/developer/database.md); [docs/developer/reference/enums.md](docs/developer/reference/enums.md) if a new enum / TEXT vocabulary value |
 | Add a bulk action | [docs/developer/checklists/add-bulk-action.md](docs/developer/checklists/add-bulk-action.md) |
 | Add a feature flag | [docs/developer/checklists/add-feature-flag.md](docs/developer/checklists/add-feature-flag.md); [docs/developer/configuration.md](docs/developer/configuration.md) |
-| Add an `audit.Action*` constant | [docs/developer/checklists/add-audit-action.md](docs/developer/checklists/add-audit-action.md); [docs/developer/audit-actions.md](docs/developer/audit-actions.md) row |
-| Touch an invariant (auth ordering, accounting cascade, retention rules, etc.) | [docs/developer/invariants.md](docs/developer/invariants.md) |
+| Add an `audit.Action*` constant | [docs/developer/checklists/add-audit-action.md](docs/developer/checklists/add-audit-action.md); [docs/developer/reference/audit-actions.md](docs/developer/reference/audit-actions.md) row |
+| Touch an invariant (auth ordering, accounting cascade, retention rules, etc.) | [docs/developer/reference/invariants.md](docs/developer/reference/invariants.md) |
 | Change the Vipps reconciliation cascade or KID matching | [backend/internal/accounting/README.md](backend/internal/accounting/README.md) |
 | Change handler conventions (response shape, audit pattern, gating) | [backend/internal/handlers/README.md](backend/internal/handlers/README.md) |
 | Add an admin nav item / new TOTP-gated path | [frontend/src/views/admin/README.md](frontend/src/views/admin/README.md) |
@@ -37,7 +34,7 @@ When you make one of these changes, update the listed doc in the **same commit**
 
 When you (or the user) hit a non-obvious gotcha worth not re-discovering — a hidden constraint, a surprising failure mode, a workaround for a known issue — capture it in the **relevant** doc the same session:
 
-- A rule that other code must obey → [docs/developer/invariants.md](docs/developer/invariants.md)
+- A rule that other code must obey → [docs/developer/reference/invariants.md](docs/developer/reference/invariants.md)
 - A subsystem-specific footgun → the "Common misses" section of that subsystem's README
 - A change-type-specific trap → the matching checklist's "Common misses"
 - A non-blocking issue parked for later → the "Known issues" section below
@@ -124,8 +121,8 @@ Spec generation (`backend/cmd/openapi/main.go`) → `just api-types` → `fronte
 Both source and docs follow the same shape: **small, narrow interface → as much depth behind it as the domain actually has**. The goal is that another contributor (or agent) can load exactly one module to do exactly one job, without dragging in unrelated context.
 
 - **Source modules** — one handler struct per domain in `backend/internal/handlers/<domain>.go`; one composable / view-domain in `frontend/src/composables/use<Domain>.ts` + `frontend/src/views/<area>/<Domain>View.vue`. The struct/composable is the narrow door; the internals can be as deep as the feature requires. Don't spread a single domain across many files until the file becomes the bottleneck.
-- **Docs modules** — one topic per file in `docs/<category>/<topic>.md`. Each file stands alone: clear entry sentence stating audience + scope, full coverage of the topic, cross-links to siblings where genuinely helpful but NO duplication of content. An agent looking up a single subject should be able to load that one file and have everything they need; opening five files to assemble one answer is the failure mode this rule prevents. When a topic outgrows one file, split it into a coherent subdirectory module (e.g. `docs/mail/`) with its own `index.md`-or-equivalent entry, not into ad-hoc cross-references scattered across the tree.
-- **Categorisation**: docs split by audience under `docs/user/` (in-app site admins, board, members), `docs/developer/` (deploy, contribute, low-level troubleshoot), and topic subdirs that cross both (`docs/mail/`, `docs/otel/`, `docs/security/`). When adding a doc, pick the audience-narrowest home; only top-level/cross-audience material (`architecture.md`, `tech-stack.md`) lives at `docs/`.
+- **Docs modules** — one topic per file in `docs/<category>/<topic>.md`. Each file stands alone: clear entry sentence stating audience + scope, full coverage of the topic, cross-links to siblings where genuinely helpful but NO duplication of content. An agent looking up a single subject should be able to load that one file and have everything they need; opening five files to assemble one answer is the failure mode this rule prevents. When a topic outgrows one file, split it into a coherent subdirectory module (e.g. `docs/developer/mail/`) with its own `index.md`-or-equivalent entry, not into ad-hoc cross-references scattered across the tree.
+- **Categorisation**: docs split by audience — `docs/user/` (in-app site admins, board, members) and `docs/developer/` (everything else: deploy, contribute, low-level troubleshoot, subject subdirs like `mail/`, `otel/`, `security/`). When adding a doc, pick the audience-narrowest home; only top-level/cross-audience material (`architecture.md`, `tech-stack.md`) lives at `docs/`.
 
 ## CI Pipeline
 

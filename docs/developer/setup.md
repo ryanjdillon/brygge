@@ -166,7 +166,7 @@ EMAIL_FROM=login@mitt-klubb.no
 EMAIL_REPLY_TO=info@mitt-klubb.no
 ```
 
-Brygge talks SMTP to the Stalwart mail server running on the same VM as `relay@<domain>` — provisioned automatically by the `stalwart-relay-account` systemd unit. See [../mail/setup.md](../mail/setup.md) for the one-time server setup: setting the `relay@` password, provisioning the DKIM keypair, and publishing DNS records.
+Brygge talks SMTP to the Stalwart mail server running on the same VM as `relay@<domain>` — provisioned automatically by the `stalwart-relay-account` systemd unit. See [mail/setup.md](mail/setup.md) for the one-time server setup: setting the `relay@` password, provisioning the DKIM keypair, and publishing DNS records.
 
 ### Club configuration
 

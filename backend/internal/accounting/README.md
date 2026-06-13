@@ -31,7 +31,7 @@ When a bank row matching `Utb. NNN Vippsnr MMM` arrives, the reconciliation pull
 3. **Member resolved, no clear classification** → CR 1500 receivables (treasurer reconciles manually)
 4. **Fallback** → CR 3900 `vippsFallbackRevenueCode` (Andre inntekter)
 
-⚠️ **Never route to 2900.** The `vippsClearingAccountCode = "2900"` constant exists only for backwards-compat with legacy reports. New lines must land on 3900 — see [`../../../docs/developer/invariants.md`](../../../docs/developer/invariants.md).
+⚠️ **Never route to 2900.** The `vippsClearingAccountCode = "2900"` constant exists only for backwards-compat with legacy reports. New lines must land on 3900 — see [`../../../docs/developer/reference/invariants.md`](../../../docs/developer/reference/invariants.md).
 
 ## The bank-row KID matching cascade
 
@@ -60,7 +60,7 @@ When a bank import lands or `BankSync` runs:
 | `vippsFeeAccountCode` | 7700 | Bankgebyrer |
 | `vippsClearingAccountCode` | 2900 | **Legacy** — kept for report compat, no new lines route here |
 
-See [`../../../docs/developer/enums.md`](../../../docs/developer/enums.md) for the full mapping tables.
+See [`../../../docs/developer/reference/enums.md`](../../../docs/developer/reference/enums.md) for the full mapping tables.
 
 ## Invariants
 
@@ -69,11 +69,11 @@ See [`../../../docs/developer/enums.md`](../../../docs/developer/enums.md) for t
 - Vipps belastning amounts are positive; fees are negative
 - Bank rows with `journal_entry_id IS NOT NULL` cannot be reassigned without cascading `journal_lines`
 
-Full list: [`../../../docs/developer/invariants.md`](../../../docs/developer/invariants.md).
+Full list: [`../../../docs/developer/reference/invariants.md`](../../../docs/developer/reference/invariants.md).
 
 ## Common changes
 
-- Adding a new Vipps category mapping → edit `vippsCategoryAccountMap` + `paymentTypeAccountMap` + `frontend/src/composables/usePricing.ts categoryKeys` + [`enums.md`](../../../docs/developer/enums.md)
+- Adding a new Vipps category mapping → edit `vippsCategoryAccountMap` + `paymentTypeAccountMap` + `frontend/src/composables/usePricing.ts categoryKeys` + [`enums.md`](../../../docs/developer/reference/enums.md)
 - Adding a new bank format → new YAML in `bankformats/`, no Go changes needed
 - Adding a new audit action → see [`../../../docs/developer/checklists/add-audit-action.md`](../../../docs/developer/checklists/add-audit-action.md)
 - Adding a new migration → see [`../../../docs/developer/checklists/add-migration.md`](../../../docs/developer/checklists/add-migration.md)

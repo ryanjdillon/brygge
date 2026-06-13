@@ -82,7 +82,7 @@ r.With(
 
 ## 7. Docs
 
-If the bulk action introduces a new audit action, update [`../audit-actions.md`](../audit-actions.md). If it touches an invariant (e.g. bulk-regenerate now archives PDFs per bokføringsloven), update [`../invariants.md`](../invariants.md). If you wrote a tricky pattern that future bulk actions should follow, update `backend/internal/handlers/README.md`.
+If the bulk action introduces a new audit action, update [`../reference/audit-actions.md`](../reference/audit-actions.md). If it touches an invariant (e.g. bulk-regenerate now archives PDFs per bokføringsloven), update [`../reference/invariants.md`](../reference/invariants.md). If you wrote a tricky pattern that future bulk actions should follow, update `backend/internal/handlers/README.md`.
 
 ## Common misses
 

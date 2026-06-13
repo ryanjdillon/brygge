@@ -111,6 +111,6 @@ The encryption key for the TOTP secret comes from `TOTP_ENCRYPTION_KEY` in `/etc
 
 ## Related
 
-- [setup.md](../developer/setup.md) — first-time deploy
-- [configuration.md](../developer/configuration.md) — env var reference (search `TOTP_ENCRYPTION_KEY`)
-- [troubleshooting.md](../developer/troubleshooting.md) — TOTP-specific entries
+- [setup.md](../setup.md) — first-time deploy
+- [configuration.md](../configuration.md) — env var reference (search `TOTP_ENCRYPTION_KEY`)
+- [troubleshooting.md](../troubleshooting.md) — TOTP-specific entries

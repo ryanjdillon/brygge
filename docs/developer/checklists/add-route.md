@@ -63,7 +63,7 @@ If the SPA calls this endpoint:
 
 ## 6. Docs
 
-Update the subsystem README in `backend/internal/<pkg>/README.md` if the new route changes the package's public surface. If the route adds a new audit action, also update [`../audit-actions.md`](../audit-actions.md). If it touches an invariant, [`../invariants.md`](../invariants.md).
+Update the subsystem README in `backend/internal/<pkg>/README.md` if the new route changes the package's public surface. If the route adds a new audit action, also update [`../reference/audit-actions.md`](../reference/audit-actions.md). If it touches an invariant, [`../reference/invariants.md`](../reference/invariants.md).
 
 ## Common misses
 

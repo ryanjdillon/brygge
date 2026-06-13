@@ -94,7 +94,7 @@ These helpers are unexported (`finance/invoice.go`). When generating user-facing
 
 - Invoice line snapshots are denormalized — once an invoice is created, updating the underlying `price_items.amount` does NOT change historical `invoice_lines`. The PDF reflects the prices at issue time.
 - KIDs are unique per club (`idx_invoices_kid`). Sequence generation reserves the next number atomically.
-- The PDF stored in `invoices.pdf_data` is the authoritative record sent to the recipient. Regeneration archives the prior bytes before overwriting (bokføringsloven §13). See [`../../../docs/developer/invariants.md`](../../../docs/developer/invariants.md).
+- The PDF stored in `invoices.pdf_data` is the authoritative record sent to the recipient. Regeneration archives the prior bytes before overwriting (bokføringsloven §13). See [`../../../docs/developer/reference/invariants.md`](../../../docs/developer/reference/invariants.md).
 
 ## Common changes
 

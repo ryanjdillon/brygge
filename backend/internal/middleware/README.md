@@ -24,7 +24,7 @@ r.Use(middleware.AuthenticateSession(...))  // populates ctx
 r.With(middleware.RequireRole(...)).With(middleware.RequireFreshTOTPDefault()).Post(...)
 ```
 
-⚠️ **Don't reorder TOTP gates and `AuthenticateSession`.** `RequireFreshTOTP` and `RequireAdminTOTP` both read `SessionInfo` from the context that `AuthenticateSession` populates. Reversing the order produces nil-pointer dereferences in dev and silent admin-bypass in prod. This is listed in [`../../../docs/developer/invariants.md`](../../../docs/developer/invariants.md).
+⚠️ **Don't reorder TOTP gates and `AuthenticateSession`.** `RequireFreshTOTP` and `RequireAdminTOTP` both read `SessionInfo` from the context that `AuthenticateSession` populates. Reversing the order produces nil-pointer dereferences in dev and silent admin-bypass in prod. This is listed in [`../../../docs/developer/reference/invariants.md`](../../../docs/developer/reference/invariants.md).
 
 ## TOTP gating
 
@@ -53,7 +53,7 @@ If you need a gate that doesn't fit the three flavors above:
 1. Write a new `func RequireXyz(...) func(http.Handler) http.Handler` in `session.go`
 2. Mirror the structure of `RequireFreshTOTP`: read `SessionInfo` from ctx, decide pass/fail, write the appropriate error shape
 3. If the gate has a configurable window, surface it on `/session/me` so the SPA can render countdowns
-4. Add to [`../../../docs/developer/invariants.md`](../../../docs/developer/invariants.md) the "always after AuthenticateSession" rule
+4. Add to [`../../../docs/developer/reference/invariants.md`](../../../docs/developer/reference/invariants.md) the "always after AuthenticateSession" rule
 
 ## Browser-navigation detection
 
@@ -74,4 +74,4 @@ Read with `middleware.GetClaims(ctx)` and `middleware.GetSessionInfo(ctx)`. Both
 - `totp_verified_at` is the source of truth — never trust client timers
 - TOTP middleware never returns 200 silently; failure paths always return 401 or 403 with a JSON error code the SPA can parse
 
-Full list: [`../../../docs/developer/invariants.md`](../../../docs/developer/invariants.md).
+Full list: [`../../../docs/developer/reference/invariants.md`](../../../docs/developer/reference/invariants.md).

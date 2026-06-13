@@ -39,7 +39,7 @@ if h.audit != nil {
 
 ## 3. Reference doc
 
-Add a row to [`../audit-actions.md`](../audit-actions.md):
+Add a row to [`../reference/audit-actions.md`](../reference/audit-actions.md):
 
 | Constant | String | Resource | When it fires | Notable `extra` fields |
 |---|---|---|---|---|

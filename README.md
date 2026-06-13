@@ -95,9 +95,9 @@ One Go binary with an embedded web app, backed by PostgreSQL and Redis. Every fe
 | [Quickstart](docs/developer/quickstart.md) | Run the full stack locally |
 | [Deployment](docs/developer/deploy.md) | Provision and deploy to a VPS — server setup, configuration, database operations |
 | [Architecture](docs/architecture.md) | System design and the technology stack |
-| [Mail server](docs/mail/setup.md) | Self-hosted Stalwart and the shared inbox |
+| [Mail server](docs/developer/mail/setup.md) | Self-hosted Stalwart and the shared inbox |
 | [Operations](docs/developer/troubleshooting.md) | Troubleshooting, SSH recovery, and observability |
-| [Security](docs/security/2fa.md) | Two-factor authentication |
+| [Security](docs/developer/security/2fa.md) | Two-factor authentication |
 | [Contributing](CONTRIBUTING.md) | Development workflow and how to help |
 
 ## Contributing
