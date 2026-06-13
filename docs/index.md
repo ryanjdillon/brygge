@@ -22,7 +22,7 @@ Audience: site admins (in-app club setup, config, data correction), board member
 
 ## Developer docs ([developer/](developer/))
 
-Audience: deployers, contributors, and anyone troubleshooting at the OS/protocol/database layer.
+Audience: deployers, contributors, and anyone troubleshooting at the OS/protocol/database layer. Full index at [developer/README.md](developer/README.md).
 
 | Document | Description |
 |----------|-------------|
@@ -31,9 +31,24 @@ Audience: deployers, contributors, and anyone troubleshooting at the OS/protocol
 | [developer/deploy.md](developer/deploy.md) | Production deploy: Nix flake, deploy-rs, magic-rollback |
 | [developer/configuration.md](developer/configuration.md) | Environment variables and feature flags |
 | [developer/database.md](developer/database.md) | Postgres ops: connecting, scripts, migrations, backups |
+| [developer/enums.md](developer/enums.md) | Postgres enums, TEXT vocabularies, payment / Vipps category → GL maps |
+| [developer/invariants.md](developer/invariants.md) | Append-only list of rules other code must respect |
+| [developer/audit-actions.md](developer/audit-actions.md) | Every `audit.Action*` constant: string, resource, when, `extra` fields |
+| [developer/checklists/](developer/checklists/) | Per-change-type recipes (add route, migration, bulk action, audit action, feature flag) |
 | [developer/rescue-recover-ssh-access.md](developer/rescue-recover-ssh-access.md) | Recovering SSH access when locked out |
 | [developer/troubleshooting.md](developer/troubleshooting.md) | Common dev + deploy issues |
 | [developer/k8s.md](developer/k8s.md) | Kubernetes migration notes for scaling beyond a single VPS |
+
+### Source-tree subsystem READMEs
+
+Colocated with the code they describe; load when you enter the package:
+
+- [`../backend/internal/accounting/README.md`](../backend/internal/accounting/README.md) — Vipps cascade, KID matching, GL constants
+- [`../backend/internal/handlers/README.md`](../backend/internal/handlers/README.md) — handler conventions, response shapes, audit pattern, TOTP gating
+- [`../backend/internal/email/README.md`](../backend/internal/email/README.md) — outbound senders, templates, `formatNOK`
+- [`../backend/internal/middleware/README.md`](../backend/internal/middleware/README.md) — middleware ordering, TOTP gating flavors
+- [`../backend/internal/finance/README.md`](../backend/internal/finance/README.md) — invoice data contract, KID generation
+- [`../frontend/src/views/admin/README.md`](../frontend/src/views/admin/README.md) — admin sidebar, click-time TOTP gating, `useNavGate`
 
 ## Domain modules
 

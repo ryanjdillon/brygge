@@ -2,23 +2,47 @@
 
 This file provides guidance to AI coding agents (Claude Code, Cursor, etc.) when working with code in this repository.
 
-## Documentation map
+## Documentation
 
-Docs are organized by topic so you can read just the section you need without loading everything:
+All docs are indexed at **[docs/index.md](docs/index.md)**. Each subdirectory has its own README — start at the relevant subdir index, not at the leaves:
 
-| Topic | Entry point |
-|-------|-------------|
-| Architecture overview | [docs/index.md](docs/index.md) |
-| Local setup | [docs/developer/setup.md](docs/developer/setup.md) |
-| Contributing workflow | [CONTRIBUTING.md](CONTRIBUTING.md) |
-| Configuration / env vars | [docs/developer/configuration.md](docs/developer/configuration.md) |
-| Production deploy | [docs/developer/deploy.md](docs/developer/deploy.md) |
-| Troubleshooting | [docs/developer/troubleshooting.md](docs/developer/troubleshooting.md) |
-| Mail (Stalwart + Bulwark) | [docs/mail/setup.md](docs/mail/setup.md) — base setup; [docs/mail/inbox.md](docs/mail/inbox.md) for the role-gated shared inbox; [docs/mail/stalwart-internals.md](docs/mail/stalwart-internals.md) for protocol quirks |
-| OpenTelemetry | [docs/otel/index.md](docs/otel/index.md) — instrumentation, app config, local collector, upstream contract, standalone collector |
-| 2FA (TOTP) | [docs/security/2fa.md](docs/security/2fa.md) — enrollment, recovery codes, admin reset, all-admins-lost recovery |
-| Kubernetes notes | [docs/developer/k8s.md](docs/developer/k8s.md) |
-| Faktura / invoicing (in-app) | [docs/user/faktura.md](docs/user/faktura.md) — treasurer + admin guide |
+- [docs/developer/README.md](docs/developer/README.md) — setup, deploy, configuration, database, enums, invariants, audit actions, change checklists
+- [docs/user/README.md](docs/user/README.md) — in-app guides (faktura today)
+- [docs/security/README.md](docs/security/README.md) — TOTP / 2FA
+- [docs/mail/README.md](docs/mail/README.md) — Stalwart + Bulwark setup, shared inbox, BIMI
+- [docs/otel/index.md](docs/otel/index.md) — OpenTelemetry
+- [docs/developer/checklists/README.md](docs/developer/checklists/README.md) — per-change-type recipes
+
+Source-tree subsystems also carry colocated READMEs that cross-link up:
+- `backend/internal/{accounting,handlers,email,middleware,finance}/README.md`
+- `frontend/src/views/admin/README.md`
+
+### Drift discipline — update docs alongside code
+
+When you make one of these changes, update the listed doc in the **same commit**:
+
+| When you | Update |
+|----------|--------|
+| Add an HTTP route | [docs/developer/checklists/add-route.md](docs/developer/checklists/add-route.md) recipe; add `audit-actions.md` row if it logs a new action |
+| Add a migration | [docs/developer/checklists/add-migration.md](docs/developer/checklists/add-migration.md); [docs/developer/database.md](docs/developer/database.md); [docs/developer/enums.md](docs/developer/enums.md) if a new enum / TEXT vocabulary value |
+| Add a bulk action | [docs/developer/checklists/add-bulk-action.md](docs/developer/checklists/add-bulk-action.md) |
+| Add a feature flag | [docs/developer/checklists/add-feature-flag.md](docs/developer/checklists/add-feature-flag.md); [docs/developer/configuration.md](docs/developer/configuration.md) |
+| Add an `audit.Action*` constant | [docs/developer/checklists/add-audit-action.md](docs/developer/checklists/add-audit-action.md); [docs/developer/audit-actions.md](docs/developer/audit-actions.md) row |
+| Touch an invariant (auth ordering, accounting cascade, retention rules, etc.) | [docs/developer/invariants.md](docs/developer/invariants.md) |
+| Change the Vipps reconciliation cascade or KID matching | [backend/internal/accounting/README.md](backend/internal/accounting/README.md) |
+| Change handler conventions (response shape, audit pattern, gating) | [backend/internal/handlers/README.md](backend/internal/handlers/README.md) |
+| Add an admin nav item / new TOTP-gated path | [frontend/src/views/admin/README.md](frontend/src/views/admin/README.md) |
+
+### Write back what you learn
+
+When you (or the user) hit a non-obvious gotcha worth not re-discovering — a hidden constraint, a surprising failure mode, a workaround for a known issue — capture it in the **relevant** doc the same session:
+
+- A rule that other code must obey → [docs/developer/invariants.md](docs/developer/invariants.md)
+- A subsystem-specific footgun → the "Common misses" section of that subsystem's README
+- A change-type-specific trap → the matching checklist's "Common misses"
+- A non-blocking issue parked for later → the "Known issues" section below
+
+Call it out in the commit message so a reviewer can verify the doc capture is in the right place.
 
 ## Dev Environment
 
