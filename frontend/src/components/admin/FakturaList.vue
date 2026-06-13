@@ -2,6 +2,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { FileDown, Send, Trash2, Ban, Bell, RefreshCw } from 'lucide-vue-next'
+import FakturaArchiveButton from '@/components/admin/FakturaArchiveButton.vue'
 import { useConfirm } from '@/stores/confirm'
 import { useFreshTotp } from '@/composables/useFreshTotp'
 
@@ -529,6 +530,7 @@ defineExpose({ load })
                   >
                     <FileDown class="h-4 w-4" />
                   </a>
+                  <FakturaArchiveButton :invoice-id="d.id" />
                   <button
                     v-if="showSend"
                     class="text-blue-600 hover:text-blue-800 disabled:opacity-50"

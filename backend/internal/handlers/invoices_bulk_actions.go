@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/brygge-klubb/brygge/internal/audit"
@@ -252,6 +253,9 @@ func (h *InvoiceHandler) regenerateOnePDF(
 		issueDate      time.Time
 		dueDate        time.Time
 		kid            string
+		// Existing PDF bytes — archived before the overwrite so
+		// bokføringsloven §13 retention is honored. See DIL-374.
+		existingPDF []byte
 	)
 	err := h.db.QueryRow(ctx,
 		`SELECT i.invoice_number, i.user_id,
@@ -263,14 +267,15 @@ func (h *InvoiceHandler) regenerateOnePDF(
 		        COALESCE(i.recipient_org_address, ''),
 		        COALESCE(i.recipient_contact_person, ''),
 		        COALESCE(i.recipient_their_ref, ''),
-		        i.issue_date, i.due_date, i.kid_number
+		        i.issue_date, i.due_date, i.kid_number,
+		        i.pdf_data
 		   FROM invoices i
 		   LEFT JOIN users u ON u.id = i.user_id
 		  WHERE i.id = $1 AND i.club_id = $2`,
 		invoiceID, clubID,
 	).Scan(&invoiceNumber, &userID, &memberName, &memberAddress,
 		&recipientKind, &orgName, &orgNumber, &orgAddress, &orgContact, &orgTheirRef,
-		&issueDate, &dueDate, &kid)
+		&issueDate, &dueDate, &kid, &existingPDF)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return errors.New("not found")
@@ -326,10 +331,38 @@ func (h *InvoiceHandler) regenerateOnePDF(
 	if err != nil {
 		return err
 	}
-	if _, err := h.db.Exec(ctx,
+
+	// Archive the prior PDF and overwrite in the same transaction so
+	// a failure mid-flight leaves the original PDF in place. If the
+	// invoice had no stored PDF yet (first regenerate run before the
+	// archive feature, or a row whose pdf_data was already wiped),
+	// skip the archive INSERT — there's nothing legally preservable.
+	tx, err := h.db.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	if len(existingPDF) > 0 {
+		var archivedBy any
+		if actorID != "" {
+			archivedBy = actorID
+		}
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO invoice_pdf_archive (invoice_id, pdf_data, archived_by, reason)
+			 VALUES ($1, $2, $3, 'regenerate')`,
+			invoiceID, existingPDF, archivedBy,
+		); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.Exec(ctx,
 		`UPDATE invoices SET pdf_data = $1 WHERE id = $2 AND club_id = $3`,
 		pdfData, invoiceID, clubID,
 	); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
 		return err
 	}
 
@@ -337,11 +370,141 @@ func (h *InvoiceHandler) regenerateOnePDF(
 		h.audit.LogAction(ctx, clubID, actorID, remoteAddr,
 			audit.ActionInvoiceRegenerated, "invoice", invoiceID,
 			map[string]any{
-				"invoice_number": invoiceNumber,
-				"bank_account":   club.BankAccount,
+				"invoice_number":   invoiceNumber,
+				"bank_account":     club.BankAccount,
+				"prior_pdf_bytes":  len(existingPDF),
 			})
 	}
 	return nil
+}
+
+// HandleListInvoicePDFArchive returns the archived prior PDFs for an
+// invoice in newest-first order. Each entry carries metadata only —
+// the bytes are streamed by HandleGetInvoicePDFArchiveBytes. Used
+// from the invoice detail UI's "Tidligere versjoner" panel. See
+// DIL-374.
+func (h *InvoiceHandler) HandleListInvoicePDFArchive(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	invoiceID := chi.URLParam(r, "invoiceID")
+	if invoiceID == "" {
+		Error(w, http.StatusBadRequest, "invoice ID is required")
+		return
+	}
+
+	// Confirm the invoice is owned by the caller's club before
+	// listing archive — same scoping as HandleGetInvoicePDF.
+	var ok bool
+	if err := h.db.QueryRow(ctx,
+		`SELECT TRUE FROM invoices WHERE id = $1 AND club_id = $2`,
+		invoiceID, claims.ClubID,
+	).Scan(&ok); err != nil {
+		Error(w, http.StatusNotFound, "invoice not found")
+		return
+	}
+
+	rows, err := h.db.Query(ctx,
+		`SELECT a.id, a.archived_at, a.reason,
+		        COALESCE(u.full_name, u.first_name || ' ' || u.last_name, ''),
+		        octet_length(a.pdf_data)
+		   FROM invoice_pdf_archive a
+		   LEFT JOIN users u ON u.id = a.archived_by
+		  WHERE a.invoice_id = $1
+		  ORDER BY a.archived_at DESC`,
+		invoiceID,
+	)
+	if err != nil {
+		h.log.Error().Err(err).Msg("list invoice pdf archive")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	defer rows.Close()
+
+	type archiveRow struct {
+		ID         string    `json:"id"`
+		ArchivedAt time.Time `json:"archived_at"`
+		Reason     string    `json:"reason"`
+		ArchivedBy string    `json:"archived_by"`
+		Bytes      int       `json:"bytes"`
+	}
+	out := make([]archiveRow, 0)
+	for rows.Next() {
+		var a archiveRow
+		if err := rows.Scan(&a.ID, &a.ArchivedAt, &a.Reason, &a.ArchivedBy, &a.Bytes); err != nil {
+			h.log.Error().Err(err).Msg("scan archive row")
+			Error(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		out = append(out, a)
+	}
+	JSON(w, http.StatusOK, map[string]any{"items": out})
+}
+
+// HandleGetInvoicePDFArchiveBytes streams an archived PDF version.
+// Defaults to inline (`download=1` forces a save dialog), and the
+// filename embeds the archive timestamp so a folder of downloaded
+// archives sorts sensibly.
+func (h *InvoiceHandler) HandleGetInvoicePDFArchiveBytes(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	invoiceID := chi.URLParam(r, "invoiceID")
+	archiveID := chi.URLParam(r, "archiveID")
+	if invoiceID == "" || archiveID == "" {
+		Error(w, http.StatusBadRequest, "invoice ID and archive ID are required")
+		return
+	}
+
+	var (
+		pdfData       []byte
+		archivedAt    time.Time
+		invoiceNumber int
+		memberLast    string
+		memberFirst   string
+		fiscalYear    *int
+	)
+	err := h.db.QueryRow(ctx,
+		`SELECT a.pdf_data, a.archived_at, i.invoice_number,
+		        COALESCE(u.last_name, ''), COALESCE(u.first_name, ''),
+		        fp.year
+		   FROM invoice_pdf_archive a
+		   JOIN invoices i ON i.id = a.invoice_id
+		   LEFT JOIN users u ON u.id = i.user_id
+		   LEFT JOIN fiscal_periods fp ON fp.id = i.fiscal_period_id
+		  WHERE a.id = $1 AND a.invoice_id = $2 AND i.club_id = $3`,
+		archiveID, invoiceID, claims.ClubID,
+	).Scan(&pdfData, &archivedAt, &invoiceNumber, &memberLast, &memberFirst, &fiscalYear)
+	if err == pgx.ErrNoRows {
+		Error(w, http.StatusNotFound, "archived PDF not found")
+		return
+	}
+	if err != nil {
+		h.log.Error().Err(err).Msg("fetch archived invoice pdf")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	disposition := "inline"
+	if r.URL.Query().Get("download") != "" {
+		disposition = "attachment"
+	}
+	base := buildInvoiceFilename(invoiceNumber, memberLast, memberFirst, fiscalYear)
+	// Inject the archive timestamp before the .pdf extension so the
+	// recipient and version are both visible in the saved filename.
+	filename := base
+	if len(base) >= 4 && base[len(base)-4:] == ".pdf" {
+		filename = base[:len(base)-4] + "-" + archivedAt.UTC().Format("20060102-150405") + ".pdf"
+	}
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`%s; filename="%s"`, disposition, filename))
+	w.Write(pdfData)
 }
 
 func (h *InvoiceHandler) loadInvoiceLinesForPDF(ctx context.Context, invoiceID string) ([]finance.InvoiceLine, error) {

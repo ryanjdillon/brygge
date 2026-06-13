@@ -605,6 +605,15 @@
         "regenConfirmTitle": "Regenerer fakturaer?",
         "regenBulkBody": "Bygg PDF-en på nytt for {n} faktura(er) med klubbens nåværende bankkonto. Fakturanummer, KID, datoer og linjer er uendret. Ingen e-post sendes — bruk «Send purring» etterpå.",
         "regenAction": "Regenerer"
+      },
+      "archive": {
+        "title": "Tidligere PDF-versjoner",
+        "empty": "Ingen tidligere versjoner arkivert for denne fakturaen.",
+        "view": "Vis",
+        "download": "Last ned",
+        "reason": {
+          "regenerate": "Erstattet ved regenerering"
+        }
       }
     },
     "memberSearch": {

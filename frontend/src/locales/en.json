@@ -609,6 +609,15 @@
         "regenConfirmTitle": "Regenerate PDFs?",
         "regenBulkBody": "Rebuild the stored PDF for {n} invoice(s) using the current club bank account. Invoice number, KID, dates, and lines stay identical. No email is sent — use \"Send reminder\" afterwards.",
         "regenAction": "Regenerate"
+      },
+      "archive": {
+        "title": "Previous PDF versions",
+        "empty": "No prior versions archived for this invoice.",
+        "view": "View",
+        "download": "Download",
+        "reason": {
+          "regenerate": "Replaced by regeneration"
+        }
       }
     },
     "memberSearch": {

@@ -708,6 +708,8 @@ func main() {
 						// All gated on the accounting feature flag so the
 						// whole faktura workflow can be toggled together.
 						r.Get("/invoices/{invoiceID}/pdf", invoiceHandler.HandleGetInvoicePDF)
+						r.Get("/invoices/{invoiceID}/pdf-archive", invoiceHandler.HandleListInvoicePDFArchive)
+						r.Get("/invoices/{invoiceID}/pdf-archive/{archiveID}", invoiceHandler.HandleGetInvoicePDFArchiveBytes)
 						r.With(middleware.RequireRole("treasurer", "admin"),
 							middleware.RequireFreshTOTPDefault()).
 							Post("/invoices/full", invoiceHandler.HandleCreateInvoice)
