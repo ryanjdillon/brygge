@@ -19,7 +19,7 @@ Audience: site admins (in-app club setup, config, data correction), board member
 | Document | Description |
 |----------|-------------|
 | [user/faktura.md](user/faktura.md) | Treasurer's guide to the invoicing module (price catalogue, send, reconcile) |
-| [user/email-in-gmail.md](user/email-in-gmail.md) | Member + board guide to reading and sending club mail via Gmail |
+| [user/setting-up-email.md](user/setting-up-email.md) | Member + board guide to reading and sending club mail in Apple Mail, Outlook, Gmail, Thunderbird, etc. |
 
 ## Developer docs ([developer/](developer/))
 

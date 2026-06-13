@@ -7,4 +7,4 @@ Cross-audience navigation: see [`../index.md`](../index.md).
 | Document | Description |
 |----------|-------------|
 | [faktura.md](faktura.md) | Treasurer's guide to the invoicing module (price catalogue, send, reconcile) |
-| [email-in-gmail.md](email-in-gmail.md) | Member + board guide to reading and sending club mail via Gmail (forwarding, send-as, mobile IMAP) |
+| [setting-up-email.md](setting-up-email.md) | Member + board guide to reading and sending club mail in Apple Mail, Outlook, Gmail, Thunderbird, etc. |
