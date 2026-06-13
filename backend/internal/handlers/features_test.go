@@ -20,7 +20,7 @@ func TestHandleGetFeatures(t *testing.T) {
 		},
 	}
 
-	h := NewFeaturesHandler(cfg)
+	h := NewFeaturesHandler(cfg, nil)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/features", nil)
 	rec := httptest.NewRecorder()
 
@@ -68,7 +68,7 @@ func TestHandleGetFeaturesAllEnabled(t *testing.T) {
 		},
 	}
 
-	h := NewFeaturesHandler(cfg)
+	h := NewFeaturesHandler(cfg, nil)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/features", nil)
 	rec := httptest.NewRecorder()
 
