@@ -1,15 +1,16 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { CheckCircle2, Plus, Trash2 } from 'lucide-vue-next'
-import { useTotpGateStore } from '@/stores/totpGate'
-import { useAuthStore } from '@/stores/auth'
+import { useFreshTotp } from '@/composables/useFreshTotp'
+
+type BankAccountRole = 'drift' | 'hoyrente' | 'other'
 
 interface BankAccount {
   id: string
   account_number: string
-  role: 'drift' | 'hoyrente' | 'other'
+  role: BankAccountRole
   gl_code: string
   label: string
   is_default_for_invoices: boolean
@@ -18,15 +19,20 @@ interface BankAccount {
 
 interface BankAccountForm {
   account_number: string
-  role: 'drift' | 'hoyrente' | 'other'
+  role: BankAccountRole
   gl_code: string
   label: string
   is_default_for_invoices: boolean
 }
 
+const ROLE_GL_DEFAULTS: Record<BankAccountRole, string> = {
+  drift: '1920',
+  hoyrente: '1930',
+  other: '1940',
+}
+
 const { t } = useI18n()
-const auth = useAuthStore()
-const totpGate = useTotpGateStore()
+const { totpAwareFetch } = useFreshTotp()
 const queryClient = useQueryClient()
 
 const error = ref<string | null>(null)
@@ -38,16 +44,21 @@ function blankForm(): BankAccountForm {
   return {
     account_number: '',
     role: 'drift',
-    gl_code: '1920',
+    gl_code: ROLE_GL_DEFAULTS.drift,
     label: '',
     is_default_for_invoices: false,
   }
 }
 
-async function ensureFreshTotp(): Promise<boolean> {
-  if (auth.hasFreshTotp) return true
-  return totpGate.open()
-}
+watch(
+  () => form.value.role,
+  (newRole, oldRole) => {
+    if (newRole === oldRole) return
+    if (form.value.gl_code === ROLE_GL_DEFAULTS[oldRole]) {
+      form.value.gl_code = ROLE_GL_DEFAULTS[newRole]
+    }
+  },
+)
 
 const { data: accounts, isLoading } = useQuery<BankAccount[]>({
   queryKey: ['admin-bank-accounts'],
@@ -88,14 +99,12 @@ function cancel() {
 
 const { mutateAsync: save, isPending: saving } = useMutation({
   mutationFn: async () => {
-    if (!(await ensureFreshTotp())) throw new Error('totp_required')
     const url = editingId.value
       ? `/api/v1/admin/settings/bank-accounts/${editingId.value}`
       : '/api/v1/admin/settings/bank-accounts'
     const method = editingId.value ? 'PUT' : 'POST'
-    const res = await fetch(url, {
+    const res = await totpAwareFetch(url, {
       method,
-      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(form.value),
     })
@@ -111,16 +120,14 @@ const { mutateAsync: save, isPending: saving } = useMutation({
     editingId.value = null
   },
   onError: (e: Error) => {
-    if (e.message !== 'totp_required') error.value = e.message
+    error.value = e.message
   },
 })
 
 const { mutateAsync: archive } = useMutation({
   mutationFn: async (id: string) => {
-    if (!(await ensureFreshTotp())) throw new Error('totp_required')
-    const res = await fetch(`/api/v1/admin/settings/bank-accounts/${id}`, {
+    const res = await totpAwareFetch(`/api/v1/admin/settings/bank-accounts/${id}`, {
       method: 'DELETE',
-      credentials: 'include',
     })
     if (!res.ok) {
       const body = await res.json().catch(() => ({ error: res.statusText }))
@@ -129,7 +136,7 @@ const { mutateAsync: archive } = useMutation({
   },
   onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-bank-accounts'] }),
   onError: (e: Error) => {
-    if (e.message !== 'totp_required') error.value = e.message
+    error.value = e.message
   },
 })
 
