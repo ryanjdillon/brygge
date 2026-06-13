@@ -887,13 +887,13 @@
         "archive": "Archief"
       },
       "sent": {
-        "lastNotified": "Laatst gemeld",
         "deliveryLog": {
           "title": "Bezorglogboek",
           "empty": "Geen bezorgpogingen gevonden in het Stalwart-logboek van de afgelopen 60 dagen.",
           "noRecipient": "Deze factuur heeft geen ontvanger-e-mail vastgelegd.",
           "helpText": "Toont wat Stalwart probeerde te bezorgen en wat de mailserver van de ontvanger antwoordde. 2xx = geaccepteerd (kan alsnog in spam belanden); 4xx = tijdelijk; 5xx = geweigerd."
-        }
+        },
+        "lastReminder": "Laatste herinnering"
       }
     }
   },

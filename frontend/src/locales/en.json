@@ -611,13 +611,13 @@
         "regenConfirmTitle": "Regenerate PDFs?",
         "regenBulkBody": "Rebuild the stored PDF for {n} invoice(s) using the current club bank account. Invoice number, KID, dates, and lines stay identical. No email is sent — use \"Send reminder\" afterwards.",
         "regenAction": "Regenerate",
-        "lastNotified": "Last notified",
         "deliveryLog": {
           "title": "Delivery log",
           "empty": "No delivery attempts found in the Stalwart log for the past 60 days.",
           "noRecipient": "This invoice has no recipient email on file.",
           "helpText": "Shows what Stalwart attempted to deliver and what the recipient's mail server returned. 2xx = accepted (may still land in spam at the recipient); 4xx = transient; 5xx = rejected."
-        }
+        },
+        "lastReminder": "Last reminder"
       },
       "archive": {
         "title": "Previous PDF versions",

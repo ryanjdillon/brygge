@@ -887,13 +887,13 @@
         "archive": "Archiwum"
       },
       "sent": {
-        "lastNotified": "Ostatnio powiadomiono",
         "deliveryLog": {
           "title": "Dziennik dostaw",
           "empty": "Brak prób dostarczenia w dzienniku Stalwart z ostatnich 60 dni.",
           "noRecipient": "Ta faktura nie ma zapisanego adresu e-mail odbiorcy.",
           "helpText": "Pokazuje, co Stalwart próbował dostarczyć i co odpowiedział serwer odbiorcy. 2xx = przyjęte (może i tak trafić do spamu); 4xx = tymczasowe; 5xx = odrzucone."
-        }
+        },
+        "lastReminder": "Ostatnie przypomnienie"
       }
     }
   },

@@ -607,13 +607,13 @@
         "regenConfirmTitle": "Regenerer fakturaar?",
         "regenBulkBody": "Byggjer PDF-en på nytt for {n} faktura(ar) med klubben sin noverande bankkonto. Fakturanummer, KID, datoar og linjer er uendra. Ingen e-post vert send — bruk «Send purring» etterpå.",
         "regenAction": "Regenerer",
-        "lastNotified": "Sist varsla",
         "deliveryLog": {
           "title": "Leveringslogg",
           "empty": "Ingen leveringsforsøk funne i Stalwart-loggen dei siste 60 dagane.",
           "noRecipient": "Fakturaen har ingen registrert mottakar-e-post.",
           "helpText": "Syner kva Stalwart prøvde å levere og kva svar mottakaren sin e-postserver gav. 2xx = godteke (men kan likevel hamne i spam hos mottakaren); 4xx = forbigåande; 5xx = avvist."
-        }
+        },
+        "lastReminder": "Sist purring"
       },
       "archive": {
         "title": "Tidlegare PDF-versjonar",

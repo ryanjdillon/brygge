@@ -753,14 +753,11 @@ func (h *InvoiceHandler) HandleListInvoices(w http.ResponseWriter, r *http.Reque
 		        COALESCE((SELECT description FROM invoice_lines WHERE invoice_id = i.id LIMIT 1), ''),
 		        i.created_at, i.sent_at, i.status,
 		        (i.payment_id IS NOT NULL) AS paid,
-		        GREATEST(
-		          i.sent_at,
-		          (SELECT MAX(created_at) FROM audit_log
-		             WHERE club_id = i.club_id
-		               AND resource  = 'invoice'
-		               AND resource_id = i.id::text
-		               AND action IN ('invoice.reminded', 'invoice.emailed'))
-		        ) AS last_notified_at
+		        (SELECT MAX(created_at) FROM audit_log
+		           WHERE club_id = i.club_id
+		             AND resource  = 'invoice'
+		             AND resource_id = i.id::text
+		             AND action = 'invoice.reminded') AS last_reminder_at
 		   FROM invoices i
 		   LEFT JOIN users u ON u.id = i.user_id
 		   LEFT JOIN price_items pi ON pi.id = i.price_item_id
@@ -781,7 +778,7 @@ func (h *InvoiceHandler) HandleListInvoices(w http.ResponseWriter, r *http.Reque
 		SentAt         *time.Time `json:"sent_at"`
 		Status         string     `json:"status"`
 		Paid           bool       `json:"paid"`
-		LastNotifiedAt *time.Time `json:"last_notified_at"`
+		LastReminderAt *time.Time `json:"last_reminder_at"`
 	}
 	out := make([]listRow, 0)
 	for rows.Next() {
@@ -791,7 +788,7 @@ func (h *InvoiceHandler) HandleListInvoices(w http.ResponseWriter, r *http.Reque
 			&d.MemberName, &d.MemberEmail,
 			&d.TotalAmount, &issue, &due,
 			&d.PriceItemName, &d.FiscalYear, &d.Description, &d.CreatedAt,
-			&d.SentAt, &d.Status, &d.Paid, &d.LastNotifiedAt); err != nil {
+			&d.SentAt, &d.Status, &d.Paid, &d.LastReminderAt); err != nil {
 			h.log.Error().Err(err).Msg("scan invoice row")
 			Error(w, http.StatusInternalServerError, "internal error")
 			return

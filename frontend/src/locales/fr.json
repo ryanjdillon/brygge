@@ -887,13 +887,13 @@
         "archive": "Archives"
       },
       "sent": {
-        "lastNotified": "Dernière notification",
         "deliveryLog": {
           "title": "Journal de livraison",
           "empty": "Aucune tentative de livraison trouvée dans le journal Stalwart pour les 60 derniers jours.",
           "noRecipient": "Cette facture n'a pas d'e-mail destinataire enregistré.",
           "helpText": "Affiche ce que Stalwart a tenté de livrer et la réponse du serveur du destinataire. 2xx = accepté (peut tout de même atterrir dans le spam) ; 4xx = transitoire ; 5xx = rejeté."
-        }
+        },
+        "lastReminder": "Dernier rappel"
       }
     }
   },
