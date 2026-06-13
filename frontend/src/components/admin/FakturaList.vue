@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { FileDown, Send, Trash2, Ban, Bell, RefreshCw, Copy, Check } from 'lucide-vue-next'
+import { FileDown, Send, Trash2, Ban, Bell, RefreshCw, Copy, Check, ChevronUp, ChevronDown } from 'lucide-vue-next'
 import FakturaArchiveButton from '@/components/admin/FakturaArchiveButton.vue'
 import DeliveryLogButton from '@/components/admin/DeliveryLogButton.vue'
 import { useConfirm } from '@/stores/confirm'
@@ -97,6 +97,54 @@ const filtered = computed(() => rows.value.filter((d) => {
   if (paidStatusFilter.value.size > 0 && !paidStatusFilter.value.has(rowPaidStatus(d))) return false
   return true
 }))
+
+// Click-to-sort: first click → asc, second → desc, third → off (revert
+// to backend ORDER BY created_at DESC). Nulls always sort last.
+type SortKey = 'invoice_number' | 'member_name' | 'price_item_name' | 'fiscal_year'
+  | 'total_amount' | 'due_date' | 'sent_at' | 'last_reminder_at'
+const sortKey = ref<SortKey | null>(null)
+const sortDir = ref<'asc' | 'desc'>('asc')
+
+function setSort(key: SortKey) {
+  if (sortKey.value !== key) {
+    sortKey.value = key
+    sortDir.value = 'asc'
+  } else if (sortDir.value === 'asc') {
+    sortDir.value = 'desc'
+  } else {
+    sortKey.value = null
+  }
+}
+
+function sortVal(d: Row, key: SortKey): string | number | null {
+  switch (key) {
+    case 'invoice_number': return d.invoice_number
+    case 'member_name': return d.member_name.toLowerCase()
+    case 'price_item_name': return (d.price_item_name || d.description || '').toLowerCase()
+    case 'fiscal_year': return d.fiscal_year
+    case 'total_amount': return Number(d.total_amount)
+    case 'due_date': return d.due_date
+    case 'sent_at': return d.sent_at
+    case 'last_reminder_at': return d.last_reminder_at
+  }
+}
+
+const sorted = computed<Row[]>(() => {
+  if (sortKey.value === null) return filtered.value
+  const key = sortKey.value
+  const dir = sortDir.value === 'asc' ? 1 : -1
+  return [...filtered.value].sort((a, b) => {
+    const va = sortVal(a, key)
+    const vb = sortVal(b, key)
+    // Null/undefined always last regardless of direction.
+    if (va == null && vb == null) return 0
+    if (va == null) return 1
+    if (vb == null) return -1
+    if (va < vb) return -1 * dir
+    if (va > vb) return 1 * dir
+    return 0
+  })
+})
 
 const priceItemOptions = computed(() => {
   const set = new Set<string>()
@@ -540,19 +588,35 @@ defineExpose({ load })
                   @change="toggleAll"
                 />
               </th>
-              <th class="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500">#</th>
-              <th class="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.invoiceDrafts.member') }}</th>
-              <th class="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.invoiceDrafts.priceItem') }}</th>
-              <th class="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.invoiceDrafts.year') }}</th>
-              <th class="px-3 py-2 text-right text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.invoiceDrafts.amount') }}</th>
-              <th class="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.invoiceDrafts.dueDate') }}</th>
-              <th v-if="status === 'sent'" class="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.faktura.sent.sentAt') }}</th>
-              <th v-if="status === 'sent'" class="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.faktura.sent.lastReminder') }}</th>
+              <th class="cursor-pointer select-none px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500 hover:text-gray-900" @click="setSort('invoice_number')">
+                <span class="inline-flex items-center gap-1">#<ChevronUp v-if="sortKey === 'invoice_number' && sortDir === 'asc'" class="h-3 w-3" /><ChevronDown v-else-if="sortKey === 'invoice_number'" class="h-3 w-3" /></span>
+              </th>
+              <th class="cursor-pointer select-none px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500 hover:text-gray-900" @click="setSort('member_name')">
+                <span class="inline-flex items-center gap-1">{{ t('admin.invoiceDrafts.member') }}<ChevronUp v-if="sortKey === 'member_name' && sortDir === 'asc'" class="h-3 w-3" /><ChevronDown v-else-if="sortKey === 'member_name'" class="h-3 w-3" /></span>
+              </th>
+              <th class="cursor-pointer select-none px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500 hover:text-gray-900" @click="setSort('price_item_name')">
+                <span class="inline-flex items-center gap-1">{{ t('admin.invoiceDrafts.priceItem') }}<ChevronUp v-if="sortKey === 'price_item_name' && sortDir === 'asc'" class="h-3 w-3" /><ChevronDown v-else-if="sortKey === 'price_item_name'" class="h-3 w-3" /></span>
+              </th>
+              <th class="cursor-pointer select-none px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500 hover:text-gray-900" @click="setSort('fiscal_year')">
+                <span class="inline-flex items-center gap-1">{{ t('admin.invoiceDrafts.year') }}<ChevronUp v-if="sortKey === 'fiscal_year' && sortDir === 'asc'" class="h-3 w-3" /><ChevronDown v-else-if="sortKey === 'fiscal_year'" class="h-3 w-3" /></span>
+              </th>
+              <th class="cursor-pointer select-none px-3 py-2 text-right text-xs font-medium uppercase tracking-wider text-gray-500 hover:text-gray-900" @click="setSort('total_amount')">
+                <span class="inline-flex items-center justify-end gap-1">{{ t('admin.invoiceDrafts.amount') }}<ChevronUp v-if="sortKey === 'total_amount' && sortDir === 'asc'" class="h-3 w-3" /><ChevronDown v-else-if="sortKey === 'total_amount'" class="h-3 w-3" /></span>
+              </th>
+              <th class="cursor-pointer select-none px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500 hover:text-gray-900" @click="setSort('due_date')">
+                <span class="inline-flex items-center gap-1">{{ t('admin.invoiceDrafts.dueDate') }}<ChevronUp v-if="sortKey === 'due_date' && sortDir === 'asc'" class="h-3 w-3" /><ChevronDown v-else-if="sortKey === 'due_date'" class="h-3 w-3" /></span>
+              </th>
+              <th v-if="status === 'sent'" class="cursor-pointer select-none px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500 hover:text-gray-900" @click="setSort('sent_at')">
+                <span class="inline-flex items-center gap-1">{{ t('admin.faktura.sent.sentAt') }}<ChevronUp v-if="sortKey === 'sent_at' && sortDir === 'asc'" class="h-3 w-3" /><ChevronDown v-else-if="sortKey === 'sent_at'" class="h-3 w-3" /></span>
+              </th>
+              <th v-if="status === 'sent'" class="cursor-pointer select-none px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500 hover:text-gray-900" @click="setSort('last_reminder_at')">
+                <span class="inline-flex items-center gap-1">{{ t('admin.faktura.sent.lastReminder') }}<ChevronUp v-if="sortKey === 'last_reminder_at' && sortDir === 'asc'" class="h-3 w-3" /><ChevronDown v-else-if="sortKey === 'last_reminder_at'" class="h-3 w-3" /></span>
+              </th>
               <th class="px-3 py-2 text-right text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('common.actions') }}</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-200 bg-white">
-            <tr v-for="d in filtered" :key="d.id" :class="{ 'bg-blue-50/50': selected.has(d.id) }">
+            <tr v-for="d in sorted" :key="d.id" :class="{ 'bg-blue-50/50': selected.has(d.id) }">
               <td class="px-2 py-2 text-center">
                 <input
                   type="checkbox"
