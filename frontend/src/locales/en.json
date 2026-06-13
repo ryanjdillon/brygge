@@ -527,7 +527,8 @@
       "economySettings": "Settings",
       "siteSettings": "Site content",
       "harborSettings": "Harbor info",
-      "motorhomeSettings": "Motorhome info"
+      "motorhomeSettings": "Motorhome info",
+      "pdfArchive": "PDF archive"
     },
     "invoiceDrafts": {
       "title": "Faktura drafts",
@@ -1503,6 +1504,19 @@
       "noBankImports": "No bank imports yet.",
       "runVippsResync": "Resync Vipps",
       "vippsResyncResult": "Vipps resync: {resynced}/{scanned} reclassified · {skipped} skipped · {failed} failed."
+    },
+    "pdfArchive": {
+      "title": "PDF archive",
+      "subtitle": "Look up an invoice by number to view the current PDF and every previously archived version.",
+      "placeholder": "Invoice number",
+      "lookup": "Look up",
+      "queryRequired": "Enter an invoice number.",
+      "notFound": "No invoice with number {n} found.",
+      "invoice": "Invoice",
+      "amount": "Amount",
+      "issueDate": "Issued",
+      "viewCurrent": "View current PDF",
+      "archiveCount": "{n} archived version(s)"
     }
   },
   "projects": {

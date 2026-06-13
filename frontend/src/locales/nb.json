@@ -523,7 +523,8 @@
       "economySettings": "Innstillinger",
       "siteSettings": "Nettstedsinnhold",
       "harborSettings": "Havneinformasjon",
-      "motorhomeSettings": "Bobilinformasjon"
+      "motorhomeSettings": "Bobilinformasjon",
+      "pdfArchive": "PDF-arkiv"
     },
     "invoiceDrafts": {
       "title": "Fakturakladder",
@@ -1499,6 +1500,19 @@
       "noBankImports": "Ingen bankimporter ennå.",
       "runVippsResync": "Synk Vipps",
       "vippsResyncResult": "Vipps-resync: {resynced}/{scanned} omklassifisert · {skipped} hoppet over · {failed} feilet."
+    },
+    "pdfArchive": {
+      "title": "PDF-arkiv",
+      "subtitle": "Slå opp en faktura med nummer for å se gjeldende PDF og alle tidligere arkiverte versjoner.",
+      "placeholder": "Fakturanummer",
+      "lookup": "Slå opp",
+      "queryRequired": "Skriv inn et fakturanummer.",
+      "notFound": "Ingen faktura med nummer {n} funnet.",
+      "invoice": "Faktura",
+      "amount": "Beløp",
+      "issueDate": "Utstedt",
+      "viewCurrent": "Vis gjeldende PDF",
+      "archiveCount": "{n} arkivert versjon(er)"
     }
   },
   "projects": {

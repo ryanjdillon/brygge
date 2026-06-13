@@ -368,6 +368,11 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/BankImportsView.vue'),
       },
       {
+        path: 'accounting/pdf-archive',
+        name: 'admin-pdf-archive',
+        component: () => import('@/views/admin/PdfArkivView.vue'),
+      },
+      {
         path: 'accounting/bank-accounts',
         name: 'admin-bank-accounts',
         component: () => import('@/views/admin/BankAccountsView.vue'),
