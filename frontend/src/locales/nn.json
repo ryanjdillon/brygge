@@ -614,6 +614,12 @@
         "reason": {
           "regenerate": "Erstatta ved regenerering"
         }
+      },
+      "copyEmails": {
+        "label": "Kopier e-postar",
+        "copied": "{n} kopiert",
+        "tooltip": "Kopier mottakarane sine e-postar til utklippstavla (komma-separerte)",
+        "noneFound": "Ingen mottakar-e-postar funne i utvalet."
       }
     },
     "memberSearch": {

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { FileDown, Send, Trash2, Ban, Bell, RefreshCw } from 'lucide-vue-next'
+import { FileDown, Send, Trash2, Ban, Bell, RefreshCw, Copy, Check } from 'lucide-vue-next'
 import FakturaArchiveButton from '@/components/admin/FakturaArchiveButton.vue'
 import { useConfirm } from '@/stores/confirm'
 import { useFreshTotp } from '@/composables/useFreshTotp'
@@ -249,6 +249,46 @@ async function voidOne(d: Row) {
   await doVoid(d.id)
 }
 
+// Copies the deduplicated email addresses of every selected (or, if
+// nothing's selected, every filtered) faktura recipient to the
+// clipboard. Use case: deliverability fallback — Gmail/Outlook
+// sometimes route the automated faktura email to spam, so the
+// treasurer wants to send a personal heads-up from their own
+// account ("you just got a purring, check spam if you can't see it"
+// kind of thing). Comma separator works for Gmail; semicolon users
+// can replace it themselves.
+const copyEmailsState = ref<{ count: number; total: number } | null>(null)
+let copyEmailsResetTimer: ReturnType<typeof setTimeout> | null = null
+
+async function copyEmailsSelected() {
+  const source = selected.value.size > 0
+    ? rows.value.filter((d) => selected.value.has(d.id))
+    : filtered.value
+  const seen = new Set<string>()
+  const emails: string[] = []
+  for (const d of source) {
+    const e = (d.member_email || '').trim()
+    if (e && !seen.has(e.toLowerCase())) {
+      seen.add(e.toLowerCase())
+      emails.push(e)
+    }
+  }
+  if (emails.length === 0) {
+    error.value = t('admin.faktura.copyEmails.noneFound')
+    return
+  }
+  try {
+    await navigator.clipboard.writeText(emails.join(', '))
+    copyEmailsState.value = { count: emails.length, total: source.length }
+    if (copyEmailsResetTimer) clearTimeout(copyEmailsResetTimer)
+    copyEmailsResetTimer = setTimeout(() => {
+      copyEmailsState.value = null
+    }, 4000)
+  } catch (e: any) {
+    error.value = e?.message ?? 'Clipboard write failed'
+  }
+}
+
 async function sendSelected() {
   if (selected.value.size === 0) return
   if (!(await ensureFreshTotp())) return
@@ -436,7 +476,18 @@ defineExpose({ load })
         <span class="font-medium text-blue-900">
           {{ t('admin.invoiceDrafts.selectedCount', { n: selected.size }) }}
         </span>
-        <div class="ml-auto flex gap-2">
+        <div class="ml-auto flex flex-wrap gap-2">
+          <button
+            type="button"
+            class="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-3 py-1 text-xs font-semibold transition"
+            :class="copyEmailsState ? 'text-green-700' : 'text-gray-700 hover:bg-gray-50'"
+            :title="t('admin.faktura.copyEmails.tooltip')"
+            @click="copyEmailsSelected"
+          >
+            <component :is="copyEmailsState ? Check : Copy" class="h-3.5 w-3.5" />
+            <template v-if="copyEmailsState">{{ t('admin.faktura.copyEmails.copied', { n: copyEmailsState.count }) }}</template>
+            <template v-else>{{ t('admin.faktura.copyEmails.label') }}</template>
+          </button>
           <button
             v-if="showSend"
             class="inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700"

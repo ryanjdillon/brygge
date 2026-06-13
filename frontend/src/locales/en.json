@@ -618,6 +618,12 @@
         "reason": {
           "regenerate": "Replaced by regeneration"
         }
+      },
+      "copyEmails": {
+        "label": "Copy emails",
+        "copied": "{n} copied",
+        "tooltip": "Copy recipient emails to clipboard (comma-separated)",
+        "noneFound": "No recipient emails found in the selection."
       }
     },
     "memberSearch": {
