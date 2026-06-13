@@ -95,9 +95,22 @@ A yellow **warning banner** at the top appears if any *individual lines* (not wh
 
 Fakturas land in **draft** state — generated but not yet sent.
 
+## Bank account setup — once per club
+
+Before issuing any fakturas, register the club's bank accounts under `Admin → Economy → Settings → Bank accounts` (migration 000048 introduced this; the legacy single-field `Bank account` field in Site settings is kept as a deprecated fallback for one release).
+
+Each account has:
+
+- **Kontonummer** — Norwegian `xxxx.xx.xxxxx` format.
+- **Role** — `drift` (operating), `hoyrente` (savings), or `other`. Semantic-only so far; future Vipps integration uses this to pick the merchant settlement account.
+- **GL code** — the NS 4102 chart-of-accounts code (default 1920). Statement uploads bind to this.
+- **Faktura default** — exactly one account per club can hold this flag. The faktura PDF prints this account's kontonummer.
+
+Switching the faktura default takes effect on the next faktura issuance. **Already-sent fakturas keep the kontonummer that was printed at issue time** — that's the bokføringsloven §13 requirement for retaining what the recipient saw. If you need to correct an already-sent batch, use the bulk regenerate + purring flow described below.
+
 ## Reviewing and sending — Admin → Faktura
 
-Open `Admin → Faktura`. Three tabs:
+Open `Admin → Faktura`. Four tabs: **New**, **Drafts**, **Sent**, **Voided**.
 
 ### Drafts
 
@@ -107,21 +120,48 @@ Newly created fakturas. You can:
 - **Edit** — open the row, change line amounts/descriptions, save.
 - **Delete** — drafts only; gone forever, including the assigned invoice number.
 - **Send** — emails the PDF to the member, stamps `sent_at`, moves the row to the Sent tab. The send is idempotent — clicking send on an already-sent faktura returns a 409 from the server, so accidental double-clicks don't double-deliver.
+- **Copy emails** — comma-separated, deduplicated recipient emails land on the clipboard. Use when you want to paste into a personal Gmail/Outlook draft (e.g. heads-up that an automated message is on its way).
 
 You can also tick multiple rows and use the **Send selected** button. The bulk-send loop is sequential and continues past any single failure, so a partial run will leave the failed rows still in Drafts where you can retry them.
 
 ### Sent
 
-Fakturas that have been emailed. Two further sub-states:
+Fakturas that have been emailed. Filter chips at the top of the toolbar show **paid / waiting / past-due** counts so you can answer "how many fakturas in forfall?" at a glance.
 
-- **Unpaid** — member hasn't paid yet. Wait, or send a reminder by clicking the row → "Resend".
-- **Paid** — `payment_id` is linked; shown with a green badge.
+Per-row actions:
 
-You can **void** a sent faktura from this tab if it turns out to be wrong — voiding moves it to the Voided tab without deleting it, so the audit trail stays intact. The voided line frees up for re-billing.
+- **Preview PDF** — current version.
+- **Resend** — re-emails the stored PDF (no re-generation; just delivery).
+- **History** (clock icon) — opens the **Previous PDF versions** popover. Every PDF that was overwritten by a regenerate is archived here with timestamp, who did it, and view/download links. See [PDF archive](#pdf-archive).
+- **Void** — moves the row to Voided without deletion (audit trail preserved).
+
+Bulk actions on the selection:
+
+- **Copy emails** — same as Drafts; useful when emails are routing to spam and you want to send a personal heads-up before/after the automated send.
+- **Send purring** — bulk reminder email. Skips already-paid rows automatically; uses the stored PDF as attachment. The reminder copy automatically shifts between "ubetalt" and "forfalt" tone based on the due date.
+- **Regenerer PDF** — rebuilds `invoices.pdf_data` in place using the **current** club bank-account default. Invoice number, KID, dates, recipient, and lines stay identical. No email is sent. Each regenerate archives the prior PDF under [bokføringsloven §13](https://lovdata.no/lov/2004-11-19-73/§13) so the original is still retrievable.
+- **Void** — same as per-row but for the selection.
+
+**Typical incident recovery flow** (we built this for the operator who issued a batch of fakturas with the wrong bank account):
+
+1. Set the correct account as faktura-default under `Admin → Economy → Settings → Bank accounts`.
+2. Sent tab → filter `Past due` and/or `Waiting` → select all.
+3. **Regenerer PDF** — stored PDFs now carry the correct kontonummer; the prior PDFs are archived for the legal record.
+4. **Send purring** — members receive the corrected PDF as a reminder.
+5. **Copy emails** → paste into personal email → send a "heads-up, the reminder isn't spam" note.
 
 ### Voided
 
 Read-only history of voided fakturas. Cannot be un-voided; create a new one if you need a corrected version.
+
+## PDF archive
+
+Every regenerate inserts the prior PDF bytes into `invoice_pdf_archive` inside the same transaction as the overwrite, so a failure mid-flight leaves the original PDF in place. Two ways to access an archived version:
+
+1. **From the FakturaList row** — click the history (clock) icon next to the PDF download icon. Opens a popover with every archived version.
+2. **From `Admin → Accounting → PDF arkiv`** — search by invoice number. Shows the current PDF link plus every archived version. Use this when you only know the invoice number (e.g. a member dispute).
+
+The audit log records every regenerate with the `prior_pdf_bytes` field so the trail confirms what was preserved.
 
 ## What can go wrong — and how to spot it
 
@@ -167,9 +207,24 @@ Single fakturas go through the same draft → send → paid flow.
 
 ## Reconciliation tips
 
-- **End of year:** run `Admin → Accounting` to view the income summary for the period. Compare against bank statements. Voided fakturas don't appear in the income totals.
-- **Recurring members who never pay:** use the member list with `Membership=Sent` filter (sortable column) to surface unpaid invoices. A "red dashed" chip means sent-but-not-paid.
+- **End of year:** run `Admin → Accounting` to view the income summary for the period. The faktura-status donut and headline cards (Fakturert / Motteke / Utestående / Forfalle) show counts beside amounts. Compare against bank statements. Voided fakturas don't appear in the income totals.
+- **Recurring members who never pay:** Sent tab → filter `Past due` chip → bulk **Send purring** to nudge.
 - **Closing the period:** once everything is reconciled, mark the fiscal period as closed in `Admin → Accounting`. After that, no new fakturas can be issued against that period — protects historical balance sheets.
+
+### Bank statement → invoice reconciliation
+
+When you upload a bank statement (`Admin → Accounting → Bank & Vipps`), the KID auto-matcher links each incoming row to the corresponding invoice and back-links `invoices.payment_id` so the faktura-status widgets update. After deploying improvements to the matcher, click **Synk Vipps** (Vipps drafts) or **Synk bank** (KID matches) to retroactively re-run the cascade over already-imported rows.
+
+### Vipps reconciliation cascade
+
+For Vipps payouts (the consolidated daily Utb. row in the bank statement), the reconciliation builds a draft bilag per payer using this cascade (DIL-367):
+
+1. **Member + matching open invoice** → CR 1500 receivables + back-link `invoices.payment_id`. The faktura-status donut reflects the payment immediately.
+2. **Amount → price-article match** → CR the mapped revenue account (3120 plassleie, 3200 gjestehavn, etc.). Handles guest-slip × N nights, motorhome × N nights, sesongplass, slipping fees — the typical non-member walk-up payments. Exact amount match for once/year/season units; integer-multiple match (2–60×) for per-night/day/hour units.
+3. **Member resolved but no clear classification** → CR 1500 receivables for manual reconciliation.
+4. **Fallback** → CR 3900 Andre inntekter. (Previously this was 2900, which implied "we owe the payer money" — wrong for revenue.)
+
+Member resolution uses fuzzy normalization (æøå/diacritics, hyphens, case, whitespace) plus a full-name → first+last → unique-last-name cascade. Most recurring members resolve without operator intervention.
 
 ## Reference
 

@@ -21,6 +21,7 @@ Brygge is configured entirely via environment variables. In production, set thes
 | `JWT_ACCESS_EXPIRY`   | No       | `15m`   | Access token lifetime (Go duration)                                |
 | `JWT_REFRESH_EXPIRY`  | No       | `168h`  | Refresh token lifetime (Go duration)                               |
 | `TOTP_ENCRYPTION_KEY` | For TOTP | —       | 64 hex chars (32 bytes) for AES-256-GCM encryption of TOTP secrets |
+| `AUTH_FRESH_TOTP_WINDOW` | No    | `10m`   | Per-action TOTP freshness window for sensitive operations (Go duration; surfaced to the SPA on `/session/me` as `fresh_totp_window_ms` so the in-context countdown stays in sync) |
 
 *JWT variables are required while JWT auth remains active. They will be removed once the session migration is complete.
 
@@ -110,13 +111,18 @@ If the collector is unreachable, the app starts normally with a warning log.
 
 ## Feature Flags
 
-| Variable                 | Default | Description                         |
-|----------                |---------|-------------                        |
-| `FEATURE_BOOKINGS`       | `true`  | Enable harbor/hoist booking system  |
-| `FEATURE_PROJECTS`       | `true`  | Enable project/task management      |
-| `FEATURE_CALENDAR`       | `true`  | Enable club calendar                |
-| `FEATURE_COMMERCE`       | `true`  | Enable product catalog and orders   |
-| `FEATURE_COMMUNICATIONS` | `true`  | Enable broadcasts and notifications |
+Feature flags have two layers since migration 000049: env-var defaults (set at deploy time) and per-club DB overrides (toggled at runtime from `Admin → Site → Site content → Modules`). The public `/api/v1/features` endpoint reads the DB row first, falling back to the env default when no row exists or the lookup fails.
+
+| Variable                 | Default | Description                                                                                                                                |
+|----------                |---------|--------------------------------------------------------------------------------------------------------------------------------------------|
+| `FEATURE_BOOKINGS`       | `true`  | Enable harbor/hoist booking system                                                                                                         |
+| `FEATURE_PROJECTS`       | `true`  | Enable project/task management                                                                                                             |
+| `FEATURE_CALENDAR`       | `true`  | Enable club calendar                                                                                                                       |
+| `FEATURE_COMMERCE`       | `true`  | Enable product catalog and orders                                                                                                          |
+| `FEATURE_COMMUNICATIONS` | `true`  | Enable broadcasts and notifications                                                                                                        |
+| `FEATURE_ACCOUNTING`     | `true`  | Enable faktura + GL + bank-imports + Vipps reconciliation. NOTE: this still gates *route registration* in `main.go` — the DB toggle controls UI visibility, the env toggle controls whether the routes exist at all |
+
+**Asymmetry to be aware of**: for everything except accounting, the DB toggle is fully bidirectional. For accounting, the env value gates whether the routes exist; the DB value gates UI visibility. A deploy with `FEATURE_ACCOUNTING=true` (the default) lets admins freely flip the UI on/off; a deploy with `FEATURE_ACCOUNTING=false` means the DB switch can be flipped but the routes are unreachable. Tracked for symmetric handling as a follow-up.
 
 ## AI (Optional)
 

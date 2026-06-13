@@ -197,7 +197,11 @@ zcat brygge-only-YYYYMMDD.sql.gz | \
 The full schema is the union of every applied migration; read the files
 in `backend/migrations/` for the source of truth. The high-level shape:
 
-- `clubs` — top-level tenant. Every other table FK'd to `club_id`.
+- `clubs` — top-level tenant. Every other table FK'd to `club_id`. Carries
+  per-club content (harbor / motorhome blocks, board contact emails),
+  default-language, the legacy `bank_account` text column (read-only mirror
+  pending removal), and six `feature_*` BOOLEAN columns added in migration
+  000049 that override env-var defaults at runtime.
 - `users`, `user_roles` — accounts and RBAC.
 - `slips`, `dock_fingers`, `docks` — harbor map geometry + metadata.
 - `slip_assignments` — joins `users` ↔ `slips` (a user can hold multiple
@@ -207,6 +211,27 @@ in `backend/migrations/` for the source of truth. The high-level shape:
 - `price_items`, `slip_fees` — pricing catalog and per-year billing.
 - `resources`, `bookings` — guest slips, bobil spots, klubbhus, etc.
 - `events`, `documents`, `audit_log`, `notifications`, …
+- `invoices`, `invoice_lines`, `payments` — faktura issuance and payment
+  back-link. `invoices.payment_id` is set by the bank-row KID matcher and
+  the Vipps reconciliation cascade; the dashboard's faktura-status widgets
+  read from this flag.
+- `invoice_pdf_archive` (migration 000050) — preserves prior PDF bytes when
+  `invoices.pdf_data` is regenerated, so Norwegian bokføringsloven §13's
+  5-year retention requirement is satisfied.
+- `club_bank_accounts` (migration 000048) — multi-account registry per club
+  with semantic `role` (`drift` / `hoyrente` / `other`), GL `gl_code`, and
+  an `is_default_for_invoices` flag. The faktura PDF picks the
+  default-for-invoices account; bank-statement upload auto-matches
+  against `account_number`. Replaces the legacy single `clubs.bank_account`
+  column (kept as fallback for one release).
+- `bank_imports`, `bank_import_rows` — statement uploads + per-row tagging
+  (KID auto-match writes `journal_entry_id`; reassign endpoint cascades
+  to journal_lines).
+- `vipps_import_rows` — Vipps payout CSV ingestion. `journal_entry_id` is
+  set by `ReconcileVippsConfirm` after the cascade resolves; unresolved
+  belastning lines land in 3900 (Andre inntekter) rather than 2900.
+- `journal_entries`, `journal_lines`, `accounts`, `fiscal_periods` —
+  double-entry GL with NS 4102 chart of accounts.
 
 Every table has `created_at` / `updated_at` `TIMESTAMPTZ` columns and a
 `gen_random_uuid()` primary key.

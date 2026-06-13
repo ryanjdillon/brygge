@@ -11,7 +11,9 @@ Two layers, both implemented in `backend/internal/middleware/session.go`:
 | Layer | Window | When it triggers | What the user sees |
 |-------|--------|------------------|--------------------|
 | Session-level (`RequireAdminTOTP`) | 12 hours | Every `/admin/*` route | Full-page redirect to `/admin/verify-totp` |
-| Per-action (`RequireFreshTOTP`) | 5 minutes | Role grants/revokes, member deletion, recovery-code rotation, admin TOTP reset | In-context modal that replays the failed request after success |
+| Per-action (`RequireFreshTOTP`) | 10 minutes (configurable via `AUTH_FRESH_TOTP_WINDOW`) | Role grants/revokes, member deletion, recovery-code rotation, admin TOTP reset, every economy sidebar navigation, bank-account changes, faktura send/regen/purring | In-context modal that replays the failed request after success |
+
+The per-action window defaults to 10 minutes but is configurable per deployment via the `AUTH_FRESH_TOTP_WINDOW` environment variable (e.g. `5m`, `15m`). The value is surfaced to the SPA on `/api/v1/session/me` as `fresh_totp_window_ms`, so the countdown modal and the warning lead-time stay in sync with the backend gate.
 
 A user with admin-tier role (`admin`, `board`, `treasurer`, or `harbor_master`) who hasn't enrolled TOTP simply cannot reach the admin area — the nav link is replaced with an "Enable 2FA" prompt that links to the enrollment page.
 
@@ -26,7 +28,7 @@ Anyone with an admin-tier role enrolls themselves at `/portal/security`. No SQL,
 5. Type the **6-digit code** from the authenticator into the form and click **"Confirm"**.
 6. **Save your 10 recovery codes.** They appear once and never again. Use **Copy all** or **Download** and store them in your password manager. Tick **"I've saved the codes"** before continuing.
 
-That's it. The next time you click "Admin", you'll be asked for a TOTP code (12-hour step-up window). For sensitive actions like changing roles or deleting members, you'll be asked again (5-minute window).
+That's it. The next time you click "Admin", you'll be asked for a TOTP code (12-hour step-up window). For sensitive actions like changing roles, deleting members, navigating into the economy section, or running faktura/bank operations, you'll be asked again (10-minute window by default).
 
 ### What if I want to re-enroll?
 
@@ -50,7 +52,7 @@ A board member is locked out completely — phone wiped, password manager lost. 
 
 **Prerequisites:**
 - The acting admin has the `admin` role (not just `board`).
-- The acting admin is themselves fresh-TOTP-verified within the last 5 minutes.
+- The acting admin is themselves fresh-TOTP-verified within the configured per-action window (default 10 minutes).
 
 **Procedure** (currently via API, until the admin UI lands):
 

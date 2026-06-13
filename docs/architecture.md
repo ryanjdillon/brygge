@@ -20,7 +20,7 @@ Paginated endpoints return `{ items, limit, offset, has_more }`. Composables str
 
 ## Modules
 
-Brygge is organised around feature modules, each gated by a flag in `deploy/.env`:
+Brygge is organised around feature modules, each gated by a two-layer flag system since migration 000049: env vars (`FEATURE_*` in `deploy/.env`) set the deploy-time default; per-club `clubs.feature_*` BOOLEAN columns (toggleable at runtime from `Admin → Site → Site content → Modules`) override at runtime. The public `/api/v1/features` reads the DB first, falls back to env if no row. See [developer/configuration.md](developer/configuration.md) for the asymmetry around the accounting flag (which still gates route registration server-side).
 
 | Module           | What it covers                                                                       |
 |------------------|--------------------------------------------------------------------------------------|
