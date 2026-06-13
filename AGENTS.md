@@ -41,6 +41,26 @@ When you (or the user) hit a non-obvious gotcha worth not re-discovering — a h
 
 Call it out in the commit message so a reviewer can verify the doc capture is in the right place.
 
+### Linear lifecycle — file work, ship it, close it
+
+Brygge tracks work in Linear (project: `brygge`, team: `software`, prefix `DIL-`). Use the Linear MCP tools (`mcp__linear__save_issue`, `get_issue`, `list_issues`) — never tell the user to open Linear in a browser unless the action genuinely requires the web UI.
+
+**Default policy: auto-close on ship.** When a piece of work is implemented and committed, mark its Linear issue **Done** in the same turn. Do not leave issues in "In Review" indefinitely — that's what produced the drift the user had to clean up by hand. The exception is when the user explicitly says some variation of "leave open for review" / "I want to look first" / "don't close yet" — then leave it In Review and let the user close it.
+
+**Workflow per change:**
+
+1. **Before starting** non-trivial work (≥3 distinct steps, or anything that touches more than one subsystem), file a Linear issue with `mcp__linear__save_issue` — `project: "brygge"`, `team: "software"`, descriptive title, `description` covering Why / Scope / Acceptance. Track multi-step work as **parent + sub-issues** up front; do not one-shot. (See [[feedback_linear_tracking]].)
+2. **When starting**, transition the issue to **In Progress** (`state: "In Progress"`).
+3. **When the commit lands**, transition to **Done** (`state: "Done"`) — unless the user has asked you to leave it for review.
+4. **Parent lifecycle**: do not mark a parent Done while any sub is still open. Close every sub first, then the parent. (See [[feedback_parent_issue_lifecycle]].)
+5. **Operator/external work** (DNS changes, Vipps onboarding, RBL delisting, manual prod SQL backfills) stays in **In Progress** until the user confirms it's been done out-of-band — repo grep can't verify it.
+
+**Drift detection — when picking up a session:** scan `In Review` and `In Progress` first; an issue that's been in either state for >7 days without commit activity is suspect and may already be shipped. Verify by repo grep against the issue's named files/symbols, then close.
+
+**What goes in the commit message:** for any commit that resolves one or more issues, include `(DIL-NNN)` or `Closes DIL-NNN` in the subject so the link is obvious in `git log`. The status transition still happens via Linear MCP — Linear doesn't auto-close from commit messages here.
+
+**Don't invent issues to inflate the trail.** A one-line typo fix, a trailing-whitespace cleanup, an obvious doc tweak — just commit. Linear is for work that benefits from being trackable, not for every commit.
+
 ## Dev Environment
 
 Go, just, golangci-lint, and other tools are provided by the Nix flake. They are **not** in PATH by default. Use `nix develop` to enter the shell, or wrap commands:
