@@ -20,6 +20,7 @@ interface Row {
   description: string
   created_at: string
   sent_at: string | null
+  last_notified_at: string | null
   status: string
   paid: boolean
 }
@@ -545,6 +546,7 @@ defineExpose({ load })
               <th class="px-3 py-2 text-right text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.invoiceDrafts.amount') }}</th>
               <th class="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.invoiceDrafts.dueDate') }}</th>
               <th v-if="status === 'sent'" class="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.faktura.sent.sentAt') }}</th>
+              <th v-if="status === 'sent'" class="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.faktura.sent.lastNotified') }}</th>
               <th class="px-3 py-2 text-right text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('common.actions') }}</th>
             </tr>
           </thead>
@@ -569,6 +571,9 @@ defineExpose({ load })
               <td class="whitespace-nowrap px-3 py-2 text-sm text-gray-600">{{ d.due_date }}</td>
               <td v-if="status === 'sent'" class="whitespace-nowrap px-3 py-2 text-sm text-gray-600">
                 {{ d.sent_at ? new Date(d.sent_at).toLocaleDateString() : '—' }}
+              </td>
+              <td v-if="status === 'sent'" class="whitespace-nowrap px-3 py-2 text-sm text-gray-600">
+                {{ d.last_notified_at ? new Date(d.last_notified_at).toLocaleString() : '—' }}
               </td>
               <td class="whitespace-nowrap px-3 py-2 text-right text-sm">
                 <div class="flex justify-end gap-2">

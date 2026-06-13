@@ -606,7 +606,8 @@
         "regenSelected": "Regenerer PDF",
         "regenConfirmTitle": "Regenerer fakturaer?",
         "regenBulkBody": "Bygg PDF-en på nytt for {n} faktura(er) med klubbens nåværende bankkonto. Fakturanummer, KID, datoer og linjer er uendret. Ingen e-post sendes — bruk «Send purring» etterpå.",
-        "regenAction": "Regenerer"
+        "regenAction": "Regenerer",
+        "lastNotified": "Sist varslet"
       },
       "archive": {
         "title": "Tidligere PDF-versjoner",

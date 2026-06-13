@@ -885,6 +885,9 @@
     "faktura": {
       "tabs": {
         "archive": "Archivio"
+      },
+      "sent": {
+        "lastNotified": "Ultima notifica"
       }
     }
   },
