@@ -454,7 +454,8 @@
       "accountingOverview": "Overview",
       "accounts": "Chart of Accounts",
       "periods": "Periods",
-      "journal": "Journal entries"
+      "journal": "Journal entries",
+      "devQuery": "Datenbankabfrage"
     },
     "financials": {
       "title": "Finanzen",
@@ -895,6 +896,24 @@
           "helpText": "Zeigt, was Stalwart zuzustellen versucht hat und was der Mailserver des Empfängers geantwortet hat. 2xx = akzeptiert (kann beim Empfänger trotzdem im Spam landen); 4xx = vorübergehend; 5xx = abgelehnt."
         },
         "lastReminder": "Letzte Mahnung"
+      }
+    },
+    "devQuery": {
+      "title": "Datenbankabfrage",
+      "subtitle": "Read-only SELECT/WITH/EXPLAIN gegen die Produktions-DB für Fehlersuche.",
+      "warning": "Schreibzugriff ist auf DB-Rollenebene gesperrt. Jede Abfrage wird mit SHA-256 des SQL auditiert (Rohtext wird nicht gespeichert). Laufzeit max. 15 Sekunden.",
+      "sqlLabel": "SQL",
+      "placeholder": "SELECT ... FROM ... WHERE ...",
+      "run": "Ausführen",
+      "resultMeta": "{rows} Zeilen · {ms} ms",
+      "truncated": "(gekürzt)",
+      "empty": "Keine Zeilen",
+      "copyTsv": "Als TSV kopieren",
+      "copied": "Kopiert",
+      "examples": {
+        "invoiceByNumber": "Rechnung nach Nummer",
+        "kidMatch": "Bankzeilen für eine KID",
+        "unpaidWithBankRow": "Unbezahlt mit passender Bankzeile"
       }
     }
   },

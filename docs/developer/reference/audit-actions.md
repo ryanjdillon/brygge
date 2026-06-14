@@ -69,6 +69,7 @@ The action string is the JSON wire format (`row.action`); the constant is the Go
 | `ActionInvoiceRegenerated` | `invoice.pdf_regenerated` | invoice | Per row inside `HandleBulkRegeneratePDF` after archive+overwrite succeeds | `invoice_number`, `bank_account`, `prior_pdf_bytes` |
 | `ActionInvoiceDeliveryLogViewed` | `invoice.delivery_log_viewed` | invoice | Treasurer opens the Stalwart delivery-log popover for a sent invoice (PII visibility audit — recipient email is exposed in the response) | `recipient_email`, `matches_returned` |
 | `ActionFinanceCSVExported` | `finance.csv_exported` | finance | Treasurer downloads a payments/invoices CSV | `format`, `rows` |
+| `ActionDeveloperQuery` | `developer.db_query` | developer_query | Admin runs a SQL query through `/admin/dev/query` (DIL-365). PII risk via WHERE/result rows — raw SQL is NOT logged, only `sql_sha256` | `sql_sha256`, `row_count`, `elapsed_ms`, `truncated`, `error` (if any) |
 | `ActionPaymentCreated` | `payment.created` | payment | Direct payment row insert (not invoice-paid back-link, which is internal) | `type`, `amount` |
 | `ActionPaymentViewed` | `finance.payment_viewed` | payment | Admin opens a payment detail (PII visibility audit) | — |
 

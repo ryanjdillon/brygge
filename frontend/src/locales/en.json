@@ -529,7 +529,8 @@
       "siteSettings": "Site content",
       "harborSettings": "Harbor info",
       "motorhomeSettings": "Motorhome info",
-      "pdfArchive": "PDF archive"
+      "pdfArchive": "PDF archive",
+      "devQuery": "Database query"
     },
     "invoiceDrafts": {
       "title": "Faktura drafts",
@@ -1526,6 +1527,24 @@
       "issueDate": "Issued",
       "viewCurrent": "View current PDF",
       "archiveCount": "{n} archived version(s)"
+    },
+    "devQuery": {
+      "title": "Database query",
+      "subtitle": "Run read-only SELECT/WITH/EXPLAIN against the production database for troubleshooting.",
+      "warning": "Write access is disabled at the database-role level. Every query is audit-logged with a SHA-256 of the SQL (raw text is not stored). Query runtime is capped at 15 seconds.",
+      "sqlLabel": "SQL",
+      "placeholder": "SELECT ... FROM ... WHERE ...",
+      "run": "Run",
+      "resultMeta": "{rows} rows · {ms} ms",
+      "truncated": "(truncated)",
+      "empty": "No rows",
+      "copyTsv": "Copy as TSV",
+      "copied": "Copied",
+      "examples": {
+        "invoiceByNumber": "Invoice by number",
+        "kidMatch": "Bank rows for a KID",
+        "unpaidWithBankRow": "Unpaid with matching bank row"
+      }
     }
   },
   "projects": {

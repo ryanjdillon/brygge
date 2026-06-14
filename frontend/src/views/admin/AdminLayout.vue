@@ -33,6 +33,7 @@ import {
   Receipt,
   Settings,
   Inbox as InboxIcon,
+  TerminalSquare,
 } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -122,6 +123,7 @@ const navGroups = computed<NavGroup[]>(() => {
         { to: '/admin/notifications', icon: Bell, label: t('notifications.admin.title'), feature: 'communications' },
         { to: '/admin/gdpr', icon: ShieldCheck, label: t('gdpr.admin.title') },
         { to: '/admin/settings/site', icon: Settings, label: t('admin.sidebar.siteSettings'), roles: ['board', 'admin'] },
+        { to: '/admin/dev/query', icon: TerminalSquare, label: t('admin.sidebar.devQuery'), roles: ['admin'] },
       ],
     },
   ]
@@ -152,7 +154,9 @@ const router = useRouter()
 const { gateToFresh } = useNavGate()
 
 function requiresFreshTotp(path: string): boolean {
-  return path.startsWith('/admin/accounting') || path.startsWith('/admin/economy')
+  return path.startsWith('/admin/accounting')
+    || path.startsWith('/admin/economy')
+    || path.startsWith('/admin/dev')
 }
 
 async function handleNavClick(e: MouseEvent, to: string) {

@@ -146,11 +146,11 @@ Each invariant lists the **rule**, then the **failure mode** it prevents. When p
 
 ---
 
-## Developer tokens (DIL-365 — pending)
+## Developer DB query (DIL-365)
 
-### Token DB role cannot SELECT its own evidence
+### Query role cannot SELECT its own evidence
 
-**Rule:** `brygge_dev_ro` Postgres role gets `SELECT` on `public.*` EXCEPT `audit_log` and `developer_tokens`. A leaked token must not be able to enumerate or erase its own audit trail.
+**Rule:** `brygge_dev_ro` Postgres role gets `SELECT` on `public.*` EXCEPT `audit_log`. (DIL-389 Phase 1b will also revoke `developer_tokens` when that table lands.) A leaked admin session or token must not be able to enumerate or erase its own audit trail. Migration `000051_developer_query_role` establishes the role + grants.
 
 **Failure mode:** leaked token covers its tracks, blast radius becomes unbounded.
 

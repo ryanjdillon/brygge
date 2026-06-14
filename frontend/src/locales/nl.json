@@ -454,7 +454,8 @@
       "accountingOverview": "Overview",
       "accounts": "Chart of Accounts",
       "periods": "Periods",
-      "journal": "Journal entries"
+      "journal": "Journal entries",
+      "devQuery": "Database-query"
     },
     "financials": {
       "title": "Financiën",
@@ -895,6 +896,24 @@
           "helpText": "Toont wat Stalwart probeerde te bezorgen en wat de mailserver van de ontvanger antwoordde. 2xx = geaccepteerd (kan alsnog in spam belanden); 4xx = tijdelijk; 5xx = geweigerd."
         },
         "lastReminder": "Laatste herinnering"
+      }
+    },
+    "devQuery": {
+      "title": "Database-query",
+      "subtitle": "Voer alleen-lezen SELECT/WITH/EXPLAIN uit op de productie-DB voor probleemoplossing.",
+      "warning": "Schrijftoegang is geblokkeerd op DB-rolniveau. Elke query wordt geaudit met SHA-256 van de SQL (ruwe tekst wordt niet opgeslagen). Looptijd max. 15 seconden.",
+      "sqlLabel": "SQL",
+      "placeholder": "SELECT ... FROM ... WHERE ...",
+      "run": "Uitvoeren",
+      "resultMeta": "{rows} rijen · {ms} ms",
+      "truncated": "(afgekapt)",
+      "empty": "Geen rijen",
+      "copyTsv": "Kopiëren als TSV",
+      "copied": "Gekopieerd",
+      "examples": {
+        "invoiceByNumber": "Factuur op nummer",
+        "kidMatch": "Bankregels voor een KID",
+        "unpaidWithBankRow": "Onbetaald met overeenkomende bankregel"
       }
     }
   },

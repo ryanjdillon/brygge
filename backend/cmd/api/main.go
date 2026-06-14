@@ -210,6 +210,7 @@ func main() {
 	invoiceHandler := handlers.NewInvoiceHandler(db, &cfg, emailClient, auditService, log)
 	accountingSvc := accounting.NewService(db, auditService, log)
 	accountingHandler := handlers.NewAccountingHandler(accountingSvc, auditService, log)
+	devQueryHandler := handlers.NewDevQueryHandler(db, auditService, log)
 	priceItemsHandler := handlers.NewPriceItemsHandler(db, &cfg, log)
 	productsHandler := handlers.NewProductsHandler(db, &cfg, log)
 	ordersHandler := handlers.NewOrdersHandler(db, &cfg, log)
@@ -638,6 +639,15 @@ func main() {
 				r.Group(func(r chi.Router) {
 					r.Use(middleware.RequireRole("board", "admin"))
 					r.Get("/audit", auditHandler.HandleListAuditLog)
+				})
+
+				// DIL-365: read-only SQL query endpoint for operator
+				// debugging. Admin-only + fresh TOTP. SQL must be
+				// SELECT/WITH/EXPLAIN; runs under brygge_dev_ro role.
+				r.Group(func(r chi.Router) {
+					r.Use(middleware.RequireRole("admin"))
+					r.Use(middleware.RequireFreshTOTPDefault())
+					r.Post("/dev/query", devQueryHandler.HandleQuery)
 				})
 
 				if cfg.Features.Projects {

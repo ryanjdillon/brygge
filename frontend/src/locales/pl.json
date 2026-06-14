@@ -454,7 +454,8 @@
       "accountingOverview": "Overview",
       "accounts": "Chart of Accounts",
       "periods": "Periods",
-      "journal": "Journal entries"
+      "journal": "Journal entries",
+      "devQuery": "Zapytanie do bazy"
     },
     "financials": {
       "title": "Finanse",
@@ -895,6 +896,24 @@
           "helpText": "Pokazuje, co Stalwart próbował dostarczyć i co odpowiedział serwer odbiorcy. 2xx = przyjęte (może i tak trafić do spamu); 4xx = tymczasowe; 5xx = odrzucone."
         },
         "lastReminder": "Ostatnie przypomnienie"
+      }
+    },
+    "devQuery": {
+      "title": "Zapytanie do bazy danych",
+      "subtitle": "Uruchom zapytania SELECT/WITH/EXPLAIN tylko do odczytu na bazie produkcyjnej.",
+      "warning": "Zapis jest zablokowany na poziomie roli bazy. Każde zapytanie jest audytowane z SHA-256 SQL (surowy tekst nie jest zapisywany). Czas wykonania ograniczony do 15 sekund.",
+      "sqlLabel": "SQL",
+      "placeholder": "SELECT ... FROM ... WHERE ...",
+      "run": "Uruchom",
+      "resultMeta": "{rows} wierszy · {ms} ms",
+      "truncated": "(obcięte)",
+      "empty": "Brak wierszy",
+      "copyTsv": "Skopiuj jako TSV",
+      "copied": "Skopiowano",
+      "examples": {
+        "invoiceByNumber": "Faktura po numerze",
+        "kidMatch": "Wiersze bankowe dla KID",
+        "unpaidWithBankRow": "Nieopłacone z pasującym wierszem bankowym"
       }
     }
   },

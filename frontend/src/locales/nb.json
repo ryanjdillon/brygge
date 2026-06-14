@@ -525,7 +525,8 @@
       "siteSettings": "Nettstedsinnhold",
       "harborSettings": "Havneinformasjon",
       "motorhomeSettings": "Bobilinformasjon",
-      "pdfArchive": "PDF-arkiv"
+      "pdfArchive": "PDF-arkiv",
+      "devQuery": "Database-spørring"
     },
     "invoiceDrafts": {
       "title": "Fakturakladder",
@@ -1522,6 +1523,24 @@
       "issueDate": "Utstedt",
       "viewCurrent": "Vis gjeldende PDF",
       "archiveCount": "{n} arkivert versjon(er)"
+    },
+    "devQuery": {
+      "title": "Database-spørring",
+      "subtitle": "Køyr read-only SELECT/WITH/EXPLAIN mot produksjonsdatabasen for feilsøking.",
+      "warning": "Skrivetilgang er sperra på databaserolla. Alle spørringar vert audit-logga med ein SHA-256-sjekksum av SQL-en (rå tekst vert ikkje lagra). Kjøretid er kappa til 15 sekund.",
+      "sqlLabel": "SQL",
+      "placeholder": "SELECT ... FROM ... WHERE ...",
+      "run": "Kjør",
+      "resultMeta": "{rows} rader · {ms} ms",
+      "truncated": "(avkorta)",
+      "empty": "Ingen rader",
+      "copyTsv": "Kopier som TSV",
+      "copied": "Kopiert",
+      "examples": {
+        "invoiceByNumber": "Faktura etter nummer",
+        "kidMatch": "Bank-rader for ein KID",
+        "unpaidWithBankRow": "Ubetalte med matchande bank-rad"
+      }
     }
   },
   "projects": {

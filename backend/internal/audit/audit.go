@@ -52,6 +52,9 @@ const (
 	ActionPaymentCreated      = "payment.created"
 	ActionPaymentViewed       = "finance.payment_viewed"
 
+	// Developer / DB inspection (DIL-365)
+	ActionDeveloperQuery = "developer.db_query"
+
 	// Booking operations
 	ActionBookingConfirmed = "booking.confirmed"
 

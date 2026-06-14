@@ -454,7 +454,8 @@
       "accountingOverview": "Overview",
       "accounts": "Chart of Accounts",
       "periods": "Periods",
-      "journal": "Journal entries"
+      "journal": "Journal entries",
+      "devQuery": "Query database"
     },
     "financials": {
       "title": "Finanze",
@@ -895,6 +896,24 @@
           "helpText": "Mostra cosa Stalwart ha tentato di consegnare e la risposta del server del destinatario. 2xx = accettato (può comunque finire nello spam); 4xx = transitorio; 5xx = rifiutato."
         },
         "lastReminder": "Ultimo sollecito"
+      }
+    },
+    "devQuery": {
+      "title": "Query database",
+      "subtitle": "Esegui SELECT/WITH/EXPLAIN in sola lettura sul DB di produzione.",
+      "warning": "L'accesso in scrittura è bloccato a livello di ruolo DB. Ogni query è registrata con SHA-256 dell'SQL (il testo non viene archiviato). Tempo massimo 15 secondi.",
+      "sqlLabel": "SQL",
+      "placeholder": "SELECT ... FROM ... WHERE ...",
+      "run": "Esegui",
+      "resultMeta": "{rows} righe · {ms} ms",
+      "truncated": "(troncato)",
+      "empty": "Nessuna riga",
+      "copyTsv": "Copia come TSV",
+      "copied": "Copiato",
+      "examples": {
+        "invoiceByNumber": "Fattura per numero",
+        "kidMatch": "Righe banca per un KID",
+        "unpaidWithBankRow": "Non pagate con riga banca corrispondente"
       }
     }
   },
