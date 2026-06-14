@@ -11,11 +11,11 @@ SELECT DISTINCT
     bi.club_id,
     '1930',
     'Bankkonto annet',
-    'asset',
+    'asset'::account_type,
     '1000',
     true,
     true,
-    'not_applicable',
+    'not_applicable'::mva_eligibility,
     '',
     37
 FROM bank_imports bi
