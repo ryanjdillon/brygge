@@ -1,12 +1,11 @@
--- Reverses 000051_developer_query_role.up.sql.
+-- Reverses the table-level grants from the .up migration.
+-- Role-membership and ALTER DEFAULT PRIVILEGES are owned by the
+-- brygge-dev-query-role NixOS unit and are not touched here.
 
--- Default-privilege grants must be revoked in matching shape before
--- the role can be dropped.
-ALTER DEFAULT PRIVILEGES FOR ROLE brygge IN SCHEMA public
-    REVOKE SELECT ON TABLES FROM brygge_dev_ro;
-
-REVOKE ALL ON ALL TABLES IN SCHEMA public FROM brygge_dev_ro;
-REVOKE USAGE ON SCHEMA public FROM brygge_dev_ro;
-REVOKE brygge_dev_ro FROM brygge;
-
-DROP ROLE IF EXISTS brygge_dev_ro;
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'brygge_dev_ro') THEN
+        EXECUTE 'REVOKE SELECT ON ALL TABLES IN SCHEMA public FROM brygge_dev_ro';
+    END IF;
+END
+$$;

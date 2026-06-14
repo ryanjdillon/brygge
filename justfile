@@ -31,9 +31,17 @@ setup:
     {{compose}} up -d db redis
     @echo "waiting for postgres to be ready..."
     @sleep 3
+    just dev-role-bootstrap
     just migrate
     just seed
     @echo "\nsetup complete! run 'just up' to start the full stack"
+
+# Provision the brygge_dev_ro Postgres role used by /admin/dev/query (DIL-365).
+# Idempotent. In prod this is handled by the brygge-dev-query-role systemd unit;
+# this recipe mirrors it for local dev against the docker-compose postgres.
+dev-role-bootstrap:
+    {{compose}} exec -T db psql -U postgres -d brygge -v ON_ERROR_STOP=1 -c "DO \$\$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'brygge_dev_ro') THEN CREATE ROLE brygge_dev_ro NOLOGIN; END IF; END \$\$;"
+    {{compose}} exec -T db psql -U postgres -d brygge -v ON_ERROR_STOP=1 -c "GRANT USAGE ON SCHEMA public TO brygge_dev_ro; GRANT brygge_dev_ro TO brygge; ALTER DEFAULT PRIVILEGES FOR ROLE brygge IN SCHEMA public GRANT SELECT ON TABLES TO brygge_dev_ro; GRANT SELECT ON ALL TABLES IN SCHEMA public TO brygge_dev_ro; REVOKE ALL ON TABLE audit_log FROM brygge_dev_ro;"
 
 # Run all tests (Go unit + Vue + Playwright)
 test: test-go test-vue test-e2e

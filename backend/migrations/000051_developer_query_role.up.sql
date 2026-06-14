@@ -1,40 +1,33 @@
--- DIL-365 Phase 1a: read-only Postgres role used by the dev-query
--- endpoint. The endpoint does `SET LOCAL ROLE brygge_dev_ro` inside a
--- transaction so that even if an injection slips past the Go-side
--- syntactic validator, Postgres itself enforces SELECT-only and only
--- against tables we've explicitly granted.
+-- DIL-365 Phase 1a: read-only role used by the /admin/dev/query endpoint.
 --
--- Two tables are NOT grantable to this role:
---   * audit_log         — the role mustn't be able to enumerate or
---                         erase its own evidence. See
---                         docs/developer/reference/invariants.md
---                         "Token DB role cannot SELECT its own evidence".
---   * developer_tokens  — reserved for Phase 1b (DIL-365 sub-issue).
---                         When that table lands its migration must
---                         REVOKE SELECT from brygge_dev_ro.
+-- Role creation + role-membership grant + ALTER DEFAULT PRIVILEGES require
+-- CREATEROLE / superuser privileges that the `brygge` app role does NOT
+-- have. Those operations live in:
+--   - prod:    nix/host.nix systemd.services.brygge-dev-query-role
+--              (runs as the `postgres` user via peer auth, before
+--              brygge-migrate.service)
+--   - local:   `just dev-role-bootstrap`
+--
+-- This migration only does table-level grants — which `brygge` CAN do
+-- because it owns the tables. The grants are guarded by an IF EXISTS
+-- check so the migration still succeeds on a fresh DB where the role
+-- hasn't been bootstrapped yet (the dev-query feature simply won't
+-- work until bootstrap runs).
+--
+-- Sensitive table: audit_log is REVOKE'd so the role can't enumerate
+-- or erase its own evidence (see docs/developer/reference/invariants.md
+-- "Query role cannot SELECT its own evidence").
 
 DO $$
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'brygge_dev_ro') THEN
-        CREATE ROLE brygge_dev_ro NOLOGIN;
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'brygge_dev_ro') THEN
+        EXECUTE 'GRANT SELECT ON ALL TABLES IN SCHEMA public TO brygge_dev_ro';
+        EXECUTE 'REVOKE ALL ON TABLE audit_log FROM brygge_dev_ro';
+    ELSE
+        RAISE NOTICE 'brygge_dev_ro role missing — skipping dev-query grants. '
+                     'Provision via brygge-dev-query-role.service (prod) or '
+                     '"just dev-role-bootstrap" (local). The dev-query feature '
+                     'will return 500 until the role exists.';
     END IF;
 END
 $$;
-
-GRANT USAGE ON SCHEMA public TO brygge_dev_ro;
-GRANT SELECT ON ALL TABLES IN SCHEMA public TO brygge_dev_ro;
-
--- Strip the sensitive tables. audit_log lives in public; if no
--- developer_tokens exists yet, the REVOKE on it is a harmless no-op.
-REVOKE ALL ON TABLE audit_log FROM brygge_dev_ro;
-
--- Default privileges so future tables auto-grant SELECT to the role
--- (one less foot-gun for future migrations). Must be issued by the
--- role that will own those tables; brygge is the app role per
--- DATABASE_URL.
-ALTER DEFAULT PRIVILEGES FOR ROLE brygge IN SCHEMA public
-    GRANT SELECT ON TABLES TO brygge_dev_ro;
-
--- The app role must be allowed to SET LOCAL ROLE brygge_dev_ro inside
--- a transaction. GRANTing the role membership achieves this.
-GRANT brygge_dev_ro TO brygge;

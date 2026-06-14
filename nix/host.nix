@@ -917,6 +917,46 @@ in
 
   # Provision role-mapped board mailboxes (kasserar@, styre@, …) as
   # Stalwart principals. Reader ACLs are *not* touched here — they
+  # Provision the brygge_dev_ro Postgres role used by the /admin/dev/query
+  # endpoint (DIL-365). Runs as the postgres superuser via peer auth
+  # because role creation / role-membership grants / ALTER DEFAULT
+  # PRIVILEGES are out of reach for the brygge app user. Ordered before
+  # brygge-migrate so the migration's table-level grants find the role.
+  # Idempotent — re-runs on every activation are cheap no-ops.
+  systemd.services.brygge-dev-query-role = {
+    description = "Provision brygge_dev_ro Postgres role for /admin/dev/query (DIL-365)";
+    after = [ "postgresql.service" ];
+    requires = [ "postgresql.service" ];
+    wantedBy = [ "brygge-migrate.service" ];
+    before = [ "brygge-migrate.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      User = "postgres";
+    };
+    script = ''
+      set -eu
+      ${pkgs.postgresql_16}/bin/psql -d brygge <<'SQL'
+        DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'brygge_dev_ro') THEN
+                CREATE ROLE brygge_dev_ro NOLOGIN;
+            END IF;
+        END
+        $$;
+
+        GRANT USAGE ON SCHEMA public TO brygge_dev_ro;
+        GRANT brygge_dev_ro TO brygge;
+
+        -- Default privileges so future migrations auto-grant SELECT to
+        -- the read-only role. Must be issued FOR ROLE brygge so the
+        -- default applies to tables brygge creates (= all of them).
+        ALTER DEFAULT PRIVILEGES FOR ROLE brygge IN SCHEMA public
+            GRANT SELECT ON TABLES TO brygge_dev_ro;
+SQL
+    '';
+  };
+
   # converge from Brygge's user_roles table via the backend reconciler.
   # See DIL-275/276 for the full design.
   systemd.services.stalwart-mailbox-config = {
