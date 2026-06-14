@@ -260,6 +260,10 @@ func (s *Service) syncKIDMatches(ctx context.Context, clubID, createdBy string) 
 
 		periodID, periodStatus, perr := s.resolvePeriod(ctx, clubID, p.date, "")
 		if perr != nil {
+			s.log.Warn().Err(perr).
+				Str("bank_row_id", p.rowID).
+				Time("row_date", p.date).
+				Msg("KID match: resolvePeriod failed; row stays unmatched")
 			continue
 		}
 		if periodStatus == "closed" {
@@ -288,9 +292,23 @@ func (s *Service) syncKIDMatches(ctx context.Context, clubID, createdBy string) 
 			},
 		})
 		if cerr != nil {
+			// Most common cause: bank_account_code not present in the
+			// club's chart of accounts (typically a new bank role
+			// added via DIL-340 with a gl_code that was never seeded).
+			// Surface this loudly so the operator/agent can fix the
+			// chart instead of staring at a silently-unmatched row.
+			s.log.Warn().Err(cerr).
+				Str("bank_row_id", p.rowID).
+				Str("bank_account_code", p.bankAccount).
+				Str("kid", p.kid).
+				Msg("KID match: CreateJournalEntry failed; row stays unmatched")
 			continue
 		}
 		if perr := s.PostJournalEntry(ctx, entry.ID, createdBy); perr != nil {
+			s.log.Warn().Err(perr).
+				Str("bank_row_id", p.rowID).
+				Str("entry_id", entry.ID).
+				Msg("KID match: PostJournalEntry failed; row stays unmatched")
 			continue
 		}
 		if _, uerr := s.db.Exec(ctx,
