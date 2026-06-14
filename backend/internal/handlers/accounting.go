@@ -1720,6 +1720,7 @@ func (h *AccountingHandler) HandleBankSync(w http.ResponseWriter, r *http.Reques
 				"kid_matched":      result.KIDMatched,
 				"vipps_reconciled": result.VippsReconciled,
 				"transfers_linked": result.TransfersLinked,
+				"payments_linked":  result.PaymentsLinked,
 				"closed_periods":   result.ClosedPeriods,
 			})
 	}

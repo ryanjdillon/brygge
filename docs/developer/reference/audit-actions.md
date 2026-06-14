@@ -79,7 +79,7 @@ These don't have constants in `audit.go` — they're inlined as strings because 
 
 | String | Resource | When | `extra` |
 |---|---|---|---|
-| `accounting.bank_synced` | `bank` | `HandleBankSync` completes | `kid_matched`, `vipps_reconciled`, `transfers_linked`, `closed_periods` |
+| `accounting.bank_synced` | `bank` | `HandleBankSync` completes | `kid_matched`, `vipps_reconciled`, `transfers_linked`, `payments_linked`, `closed_periods` |
 | `accounting.vipps_resynced` | `vipps` | `HandleResyncVipps` completes | `scanned`, `resynced`, `skipped`, `failed` |
 | `accounting.bank_import_reassigned` | `bank_import` | `HandleReassignBankImport` succeeds (cascades through journal_lines) | `from`, `to`, `cascaded_journals` |
 | `accounting.bank_imported` | `bank_import` | `HandleImportBankStatement` after rows ingested | `format`, `rows_total`, `imported`, `skipped_dup`, `matched`, `transfers` |

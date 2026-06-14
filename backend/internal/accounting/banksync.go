@@ -14,6 +14,7 @@ type BankSyncResult struct {
 	VippsReconciled  int      `json:"vipps_reconciled"`
 	VippsUnbalanced  int      `json:"vipps_unbalanced"`
 	TransfersLinked  int      `json:"transfers_linked"`
+	PaymentsLinked   int      `json:"payments_linked"`
 	ClosedPeriods    []string `json:"closed_periods"`
 }
 
@@ -81,10 +82,81 @@ func (s *Service) BankSync(ctx context.Context, clubID, createdBy string) (*Bank
 		}
 	}
 
+	// Pass 4: backfill payment back-links for invoices whose bank row
+	// was KID-matched at the GL level but never got the
+	// `linkInvoicePayment` step — typically because the row was
+	// imported before DIL-363 shipped. Self-healing: "Run sync" now
+	// also retroactively reconciles these legacy mismatches.
+	backfilled, berr := s.backfillUnlinkedPayments(ctx, clubID)
+	if berr != nil {
+		s.log.Warn().Err(berr).Msg("backfill unlinked payments failed")
+	}
+	res.PaymentsLinked = backfilled
+
 	for y := range closedYears {
 		res.ClosedPeriods = append(res.ClosedPeriods, fmt.Sprintf("%d", y))
 	}
 	return res, nil
+}
+
+// backfillUnlinkedPayments fixes up invoices whose KID-matching bank
+// row already has a journal entry (so the GL is correct) but whose
+// `invoices.payment_id` was never set — leaving the dashboard,
+// FakturaList "paid" filter, and priceItemSummary all reading them as
+// unpaid. The common cause is bank rows imported before DIL-363
+// wired `linkInvoicePayment` into the per-row match.
+//
+// Only full-amount matches are backfilled (bir.amount = i.total_amount).
+// Partial payments would require a "partial" status on the payments
+// table that doesn't exist yet, so those rows are left alone.
+func (s *Service) backfillUnlinkedPayments(ctx context.Context, clubID string) (int, error) {
+	rows, err := s.db.Query(ctx,
+		`SELECT DISTINCT ON (i.id) i.id, bir.row_date
+		   FROM invoices i
+		   JOIN bank_import_rows bir ON bir.kid_number = i.kid_number
+		   JOIN bank_imports bi      ON bi.id = bir.bank_import_id
+		  WHERE bi.club_id = $1
+		    AND i.club_id  = $1
+		    AND i.payment_id IS NULL
+		    AND i.status = 'open'
+		    AND bir.amount > 0
+		    AND bir.amount = i.total_amount
+		    AND bir.journal_entry_id IS NOT NULL
+		  ORDER BY i.id, bir.row_date ASC`,
+		clubID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	type pending struct {
+		invoiceID string
+		paidAt    time.Time
+	}
+	var pendings []pending
+	for rows.Next() {
+		var p pending
+		if err := rows.Scan(&p.invoiceID, &p.paidAt); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		pendings = append(pendings, p)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+
+	n := 0
+	for _, p := range pendings {
+		if err := s.linkInvoicePayment(ctx, clubID, p.invoiceID, p.paidAt); err != nil {
+			s.log.Warn().Err(err).
+				Str("invoice_id", p.invoiceID).
+				Msg("backfill linkInvoicePayment failed")
+			continue
+		}
+		n++
+	}
+	return n, nil
 }
 
 func (s *Service) syncKIDMatches(ctx context.Context, clubID, createdBy string) (int, []int, error) {
