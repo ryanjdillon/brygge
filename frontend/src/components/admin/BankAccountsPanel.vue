@@ -25,9 +25,14 @@ interface BankAccountForm {
   is_default_for_invoices: boolean
 }
 
+// Defaults align with the NS 4102 chart of accounts as seeded by
+// kontoplan.DefaultKontoplan(): 1920 = Bankkonto drift,
+// 1925 = Bankkonto høyrente. "other" stays at 1940 (Andre
+// bankinnskudd) as a generic fallback — operators using a different
+// code can override.
 const ROLE_GL_DEFAULTS: Record<BankAccountRole, string> = {
   drift: '1920',
-  hoyrente: '1930',
+  hoyrente: '1925',
   other: '1940',
 }
 

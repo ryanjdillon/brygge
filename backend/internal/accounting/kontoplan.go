@@ -42,7 +42,6 @@ func DefaultKontoplan() []AccountDef {
 		{Code: "1900", Name: "Kontanter/kasse", Type: AccountTypeAsset, ParentCode: "1000", MVAEligible: MVANotApplicable, SortOrder: 20},
 		{Code: "1920", Name: "Bankkonto drift", Type: AccountTypeAsset, ParentCode: "1000", MVAEligible: MVANotApplicable, SortOrder: 30},
 		{Code: "1925", Name: "Bankkonto høyrente", Type: AccountTypeAsset, ParentCode: "1000", MVAEligible: MVANotApplicable, SortOrder: 35},
-		{Code: "1930", Name: "Bankkonto annet", Type: AccountTypeAsset, ParentCode: "1000", MVAEligible: MVANotApplicable, SortOrder: 37},
 
 		// Liabilities & Equity (Gjeld og egenkapital)
 		{Code: "2000", Name: "Egenkapital", Type: AccountTypeLiability, ParentCode: "2000", MVAEligible: MVANotApplicable, SortOrder: 40},
