@@ -921,8 +921,13 @@ async function submitImport() {
             :class="{ 'bg-blue-50/50': selectedIds.has(user.id) }"
             @click="openDetail(user)"
           >
-            <td class="px-2 py-3 text-center" @click.stop="onUserCheckboxClick(index, $event)">
-              <Checkbox :model-value="selectedIds.has(user.id)" />
+            <td class="px-2 py-3 text-center" @click.stop>
+              <input
+                type="checkbox"
+                :checked="selectedIds.has(user.id)"
+                class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-1 focus:ring-blue-500"
+                @click="onUserCheckboxClick(index, $event)"
+              />
             </td>
             <td class="whitespace-nowrap px-3 py-3 text-right text-xs text-gray-400 tabular-nums">{{ offset + index + 1 }}</td>
             <td v-if="visible.has('first_name')" class="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">{{ user.first_name || formatName(user) }}</td>
