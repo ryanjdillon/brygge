@@ -239,6 +239,11 @@ docker compose -f deploy/docker-compose.yml run --rm --entrypoint /brygge-seed a
 # Force-fix dirty migration state (e.g. stuck at version 1 dirty)
 docker compose -f deploy/docker-compose.yml run --rm migrate -path=/migrations -database "$DATABASE_URL" force 1
 
+# Direct psql on a NixOS production host (peer auth — must run as the brygge OS service user)
+# DATABASE_URL uses a Unix socket; connecting as root → "Peer authentication failed for user root"
+# 'brygge' is both the database name and the OS service user on any NixOS deployment
+sudo -u brygge psql "postgres:///brygge?host=/run/postgresql&sslmode=disable" -c "<SQL>"
+
 # Nuke DB and re-seed (destructive)
 docker compose -f deploy/docker-compose.yml down -v && docker compose -f deploy/docker-compose.yml up -d db redis && docker compose -f deploy/docker-compose.yml run --rm migrate && docker compose -f deploy/docker-compose.yml run --rm --entrypoint /brygge-seed api
 ```
