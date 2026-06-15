@@ -185,7 +185,7 @@ func (s *Service) AssignBankRowToInvoice(
 //
 // Returns the new journal entry ID.
 func (s *Service) AssignBankRowToAccount(
-	ctx context.Context, clubID, actorID, bankRowID, accountCode, kind string,
+	ctx context.Context, clubID, actorID, bankRowID, accountCode, kind, description string,
 ) (string, error) {
 	if kind != "expense" && kind != "revenue" {
 		return "", errors.New("kind must be 'expense' or 'revenue'")
@@ -272,6 +272,9 @@ func (s *Service) AssignBankRowToAccount(
 	sourceID := bankRowID
 	sourceTable := "bank_import_rows"
 	desc := fmt.Sprintf("Manuell tildeling: %s", truncate(rowDesc, 200))
+	if description != "" {
+		desc = truncate(description, 220)
+	}
 	entry, cerr := s.CreateJournalEntry(ctx, CreateJournalEntryInput{
 		FiscalPeriodID: periodID,
 		EntryDate:      rowDate.Format("2006-01-02"),

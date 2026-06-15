@@ -137,11 +137,11 @@ export function useReconcileMutations() {
   })
 
   const assignAccount = useMutation({
-    mutationFn: async ({ rowId, accountCode, kind }: { rowId: string; accountCode: string; kind: 'expense' | 'revenue' }) => {
+    mutationFn: async ({ rowId, accountCode, kind, description }: { rowId: string; accountCode: string; kind: 'expense' | 'revenue'; description?: string }) => {
       const res = await totpAwareFetch(`${BASE}/${rowId}/assign-account`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ account_code: accountCode, kind }),
+        body: JSON.stringify({ account_code: accountCode, kind, description }),
       })
       if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error ?? res.statusText)
       return res.json()

@@ -120,18 +120,20 @@ async function loadPotential() {
   }
 }
 
-// ── Account picker modal ─────────────────────────────────────
+// ── Account picker / Lag bilag modal ─────────────────────────
 const accountPickerOpen = ref(false)
 const accountPickerRowId = ref<string | null>(null)
 const accountPickerKind = ref<'expense' | 'revenue'>('expense')
 const accountPickerSuggestions = ref<AccountSuggestion[]>([])
 const accountPickerSearch = ref('')
+const bilagDescription = ref('')
 
 function openAccountPicker(row: BankRowSummary) {
   accountPickerRowId.value = row.id
   accountPickerKind.value = row.amount < 0 ? 'expense' : 'revenue'
   accountPickerSuggestions.value = suggestions.value?.accounts ?? []
   accountPickerSearch.value = ''
+  bilagDescription.value = row.description ?? ''
   accountPickerOpen.value = true
 }
 const filteredAccounts = computed(() => {
@@ -166,7 +168,7 @@ async function doAssignInvoice(rowId: string, invoiceId: string) {
   potentialOpen.value = false
 }
 async function doAssignAccount(rowId: string, accountCode: string, k: 'expense' | 'revenue') {
-  await assignAccount.mutateAsync({ rowId, accountCode, kind: k })
+  await assignAccount.mutateAsync({ rowId, accountCode, kind: k, description: bilagDescription.value || undefined })
   accountPickerOpen.value = false
 }
 async function doUnassign(rowId: string) {
@@ -343,7 +345,7 @@ async function doUnassign(rowId: string) {
                 @click="openAccountPicker(row)"
               >
                 <FileText class="h-3 w-3" />
-                {{ t('admin.bankReconcile.assignAccount') }}
+                {{ t('admin.bankReconcile.lagBilag') }}
               </button>
               <button
                 v-if="!row.dismissed_at"
@@ -400,13 +402,20 @@ async function doUnassign(rowId: string) {
       <p v-else class="mt-3 text-xs text-gray-500">{{ t('admin.bankReconcile.noPotential') }}</p>
     </Modal>
 
-    <!-- Account picker modal -->
+    <!-- Lag bilag modal -->
     <Modal v-model:open="accountPickerOpen" size="lg" :title="t('admin.bankReconcile.accountPickerTitle')">
+      <label class="block text-xs font-semibold text-gray-700">{{ t('admin.bankReconcile.bilagDescriptionLabel') }}</label>
+      <textarea
+        v-model="bilagDescription"
+        rows="2"
+        :placeholder="t('admin.bankReconcile.bilagDescriptionPlaceholder')"
+        class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+      />
       <input
         v-model="accountPickerSearch"
         type="search"
         :placeholder="t('admin.bankReconcile.searchAccountPlaceholder')"
-        class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+        class="mt-3 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
       />
       <div v-if="accountPickerSuggestions.length" class="mt-3">
         <p class="text-xs font-semibold uppercase text-gray-500">{{ t('admin.bankReconcile.accountSuggestions') }}</p>

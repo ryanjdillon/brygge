@@ -164,6 +164,7 @@ func (h *BankRowsHandler) HandleAssignInvoice(w http.ResponseWriter, r *http.Req
 type assignAccountReq struct {
 	AccountCode string `json:"account_code"`
 	Kind        string `json:"kind"`
+	Description string `json:"description"`
 }
 
 func (h *BankRowsHandler) HandleAssignAccount(w http.ResponseWriter, r *http.Request) {
@@ -179,7 +180,7 @@ func (h *BankRowsHandler) HandleAssignAccount(w http.ResponseWriter, r *http.Req
 		Error(w, http.StatusBadRequest, "account_code and kind required")
 		return
 	}
-	journalID, err := h.svc.AssignBankRowToAccount(ctx, claims.ClubID, claims.UserID, rowID, req.AccountCode, req.Kind)
+	journalID, err := h.svc.AssignBankRowToAccount(ctx, claims.ClubID, claims.UserID, rowID, req.AccountCode, req.Kind, req.Description)
 	if err != nil {
 		h.log.Warn().Err(err).Str("row_id", rowID).Msg("assign account")
 		Error(w, http.StatusBadRequest, err.Error())
@@ -191,6 +192,7 @@ func (h *BankRowsHandler) HandleAssignAccount(w http.ResponseWriter, r *http.Req
 			map[string]any{
 				"account_code":     req.AccountCode,
 				"kind":             req.Kind,
+				"description":      req.Description,
 				"journal_entry_id": journalID,
 			})
 	}
