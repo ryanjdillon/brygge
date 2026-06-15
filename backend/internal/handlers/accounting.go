@@ -811,9 +811,9 @@ func (h *AccountingHandler) HandleListVippsRowsByMSN(w http.ResponseWriter, r *h
 	}
 
 	dbRows, err := h.svc.DB().Query(r.Context(),
-		`SELECT vir.id, vir.row_type, vir.tx_at, vir.booking_date, vir.amount, vir.fee, vir.net_amount,
+		`SELECT vir.id, vir.row_type, vir.tx_at, vir.booking_date::text, vir.amount, vir.fee, vir.net_amount,
 		        vir.customer_name, vir.customer_phone_masked, vir.message, vir.psp_ref, vir.order_id,
-		        vir.settlement_number, vir.payout_account, vir.scheduled_payout_date, vir.journal_entry_id
+		        vir.settlement_number, vir.payout_account, vir.scheduled_payout_date::text, vir.journal_entry_id
 		 FROM vipps_import_rows vir
 		 WHERE vir.club_id = $1 AND vir.msn = $2
 		   AND COALESCE(vir.booking_date, vir.tx_at::date, vir.scheduled_payout_date) >= $3::date
@@ -851,9 +851,11 @@ func (h *AccountingHandler) HandleListVippsRowsByMSN(w http.ResponseWriter, r *h
 		var it item
 		if err := dbRows.Scan(&it.ID, &it.RowType, &it.TxAt, &it.BookingDate, &it.Amount, &it.Fee, &it.NetAmount,
 			&it.CustomerName, &it.CustomerPhoneMasked, &it.Message, &it.PspRef, &it.OrderID,
-			&it.SettlementNumber, &it.PayoutAccount, &it.ScheduledPayoutDate, &it.JournalEntryID); err == nil {
-			out = append(out, it)
+			&it.SettlementNumber, &it.PayoutAccount, &it.ScheduledPayoutDate, &it.JournalEntryID); err != nil {
+			h.log.Error().Err(err).Msg("scan vipps row by msn")
+			continue
 		}
+		out = append(out, it)
 	}
 	JSON(w, http.StatusOK, out)
 }
@@ -1911,9 +1913,9 @@ func (h *AccountingHandler) HandleGetVippsImport(w http.ResponseWriter, r *http.
 
 	importID := chi.URLParam(r, "importID")
 	rows, err := h.svc.DB().Query(r.Context(),
-		`SELECT vir.id, vir.row_type, vir.tx_at, vir.booking_date, vir.amount, vir.fee, vir.net_amount,
+		`SELECT vir.id, vir.row_type, vir.tx_at::text, vir.booking_date::text, vir.amount, vir.fee, vir.net_amount,
 		        vir.customer_name, vir.customer_phone_masked, vir.message, vir.psp_ref, vir.order_id,
-		        vir.settlement_number, vir.payout_account, vir.scheduled_payout_date, vir.journal_entry_id
+		        vir.settlement_number, vir.payout_account, vir.scheduled_payout_date::text, vir.journal_entry_id
 		 FROM vipps_import_rows vir
 		 JOIN vipps_imports vi ON vi.id = vir.vipps_import_id
 		 WHERE vi.id = $1 AND vi.club_id = $2
@@ -1957,6 +1959,7 @@ func (h *AccountingHandler) HandleGetVippsImport(w http.ResponseWriter, r *http.
 			&r.CustomerName, &r.CustomerPhoneMasked, &r.Message,
 			&r.PSPRef, &r.OrderID, &r.SettlementNumber, &r.PayoutAccount,
 			&scheduled, &r.JournalEntryID); err != nil {
+			h.log.Error().Err(err).Msg("scan vipps import row")
 			continue
 		}
 		r.TxAt = txAt
