@@ -15,8 +15,9 @@ const props = withDefaults(
     ariaLabel?: string
     paste?: boolean
     dropzone?: boolean
+    compact?: boolean
   }>(),
-  { dropzone: true, paste: false },
+  { dropzone: true, paste: false, compact: false },
 )
 
 const emit = defineEmits<{
@@ -128,8 +129,9 @@ onBeforeUnmount(() => {
 
     <div
       v-if="dropzone"
-      class="flex flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed px-4 py-6 transition-colors"
+      class="flex flex-col items-center justify-center rounded-md border-2 border-dashed px-4 transition-colors"
       :class="[
+        compact ? 'gap-1.5 py-3' : 'gap-2 py-6',
         isDragOver
           ? 'border-blue-500 bg-blue-50'
           : 'border-gray-300 bg-white hover:border-gray-400',

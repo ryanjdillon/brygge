@@ -493,32 +493,37 @@ const filterMonthValue = computed<number>({
     </div>
 
     <!-- Imports tab -->
-    <div v-if="activeTab === 'imports'" class="mt-6 grid gap-4 lg:grid-cols-2">
+    <div v-if="activeTab === 'imports'" class="mt-6 grid items-start gap-4 lg:grid-cols-3">
       <!-- Bank upload card -->
-      <section class="rounded-lg border border-gray-200 bg-white p-5" data-testid="bank-upload-card">
+      <section class="flex flex-col rounded-lg border border-gray-200 bg-white p-5" data-testid="bank-upload-card">
         <h2 class="text-base font-semibold text-gray-900">{{ t('admin.bankImports.bankCardTitle') }}</h2>
         <p class="mt-1 text-xs text-gray-500">{{ t('admin.bankImports.bankCardDesc') }}</p>
 
-        <div class="mt-3 space-y-2">
-          <label class="block text-xs font-medium text-gray-700">{{ t('admin.bankImports.bankAccount') }}</label>
-          <div data-testid="bank-account-select">
-            <AccountSelect v-model="bankAccountCode" :options="bankAccounts" />
+        <div class="mt-4 space-y-3">
+          <div>
+            <label class="mb-1 block text-xs font-medium text-gray-700">{{ t('admin.bankImports.bankAccount') }}</label>
+            <div data-testid="bank-account-select">
+              <AccountSelect v-model="bankAccountCode" :options="bankAccounts" />
+            </div>
           </div>
 
-          <label class="mt-2 block text-xs font-medium text-gray-700">{{ t('admin.bankImports.format') }}</label>
-          <Select v-model="bankFormat" :options="bankFormatOptions" />
+          <div>
+            <label class="mb-1 block text-xs font-medium text-gray-700">{{ t('admin.bankImports.format') }}</label>
+            <Select v-model="bankFormat" :options="bankFormatOptions" />
+          </div>
 
           <FileInput
             accept=".csv,text/csv"
-            class="mt-2 block text-sm"
+            compact
+            class="block text-sm"
             data-testid="bank-file-input"
             @change="onBankFile"
           />
         </div>
 
-        <p v-if="bankError" class="mt-2 rounded-md bg-red-50 px-2 py-1 text-xs text-red-700">{{ bankError }}</p>
+        <p v-if="bankError" class="mt-3 rounded-md bg-red-50 px-2 py-1 text-xs text-red-700">{{ bankError }}</p>
 
-        <div class="mt-3 flex justify-end">
+        <div class="mt-4 flex justify-end">
           <button
             type="button"
             :disabled="!bankFile || !bankAccountCode || bankBusy"
@@ -546,20 +551,21 @@ const filterMonthValue = computed<number>({
       </section>
 
       <!-- Vipps upload card -->
-      <section class="rounded-lg border border-gray-200 bg-white p-5" data-testid="vipps-upload-card">
+      <section class="flex flex-col rounded-lg border border-gray-200 bg-white p-5" data-testid="vipps-upload-card">
         <h2 class="text-base font-semibold text-gray-900">{{ t('admin.bankImports.vippsCardTitle') }}</h2>
         <p class="mt-1 text-xs text-gray-500">{{ t('admin.bankImports.vippsCardDesc') }}</p>
 
         <FileInput
           accept=".csv,text/csv"
-          class="mt-3 block text-sm"
+          compact
+          class="mt-4 block text-sm"
           data-testid="vipps-file-input"
           @change="onVippsFile"
         />
 
-        <p v-if="vippsError" class="mt-2 rounded-md bg-red-50 px-2 py-1 text-xs text-red-700">{{ vippsError }}</p>
+        <p v-if="vippsError" class="mt-3 rounded-md bg-red-50 px-2 py-1 text-xs text-red-700">{{ vippsError }}</p>
 
-        <div class="mt-3 flex justify-end">
+        <div class="mt-4 flex justify-end">
           <button
             type="button"
             :disabled="!vippsFile || vippsBusy"
@@ -579,41 +585,42 @@ const filterMonthValue = computed<number>({
       </section>
 
       <!-- Uni24 import card -->
-      <section class="col-span-full rounded-lg border border-gray-200 bg-white p-5" data-testid="uni24-upload-card">
+      <section class="flex flex-col rounded-lg border border-gray-200 bg-white p-5" data-testid="uni24-upload-card">
         <h2 class="text-base font-semibold text-gray-900">{{ t('admin.financials.importUni24Title') }}</h2>
         <p class="mt-1 text-xs text-gray-500">{{ t('admin.financials.importUni24Desc') }}</p>
 
-        <div class="mt-3 grid gap-3 sm:grid-cols-3">
-          <div>
-            <label class="block text-xs font-medium text-gray-700">{{ t('admin.financials.importFile') }}</label>
-            <FileInput
-              accept=".csv,text/csv"
-              class="mt-1 block text-sm"
-              data-testid="uni24-file-input"
-              @change="onUni24File"
-            />
+        <div class="mt-4 space-y-3">
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="mb-1 block text-xs font-medium text-gray-700">{{ t('admin.financials.importDateFrom') }}</label>
+              <input
+                v-model="uni24DateFrom"
+                type="date"
+                class="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label class="mb-1 block text-xs font-medium text-gray-700">{{ t('admin.financials.importDateTo') }}</label>
+              <input
+                v-model="uni24DateTo"
+                type="date"
+                class="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
           </div>
-          <div>
-            <label class="block text-xs font-medium text-gray-700">{{ t('admin.financials.importDateFrom') }}</label>
-            <input
-              v-model="uni24DateFrom"
-              type="date"
-              class="mt-1 w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-          </div>
-          <div>
-            <label class="block text-xs font-medium text-gray-700">{{ t('admin.financials.importDateTo') }}</label>
-            <input
-              v-model="uni24DateTo"
-              type="date"
-              class="mt-1 w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-          </div>
+
+          <FileInput
+            accept=".csv,text/csv"
+            compact
+            class="block text-sm"
+            data-testid="uni24-file-input"
+            @change="onUni24File"
+          />
         </div>
 
-        <p v-if="uni24Error" class="mt-2 rounded-md bg-red-50 px-2 py-1 text-xs text-red-700">{{ uni24Error }}</p>
+        <p v-if="uni24Error" class="mt-3 rounded-md bg-red-50 px-2 py-1 text-xs text-red-700">{{ uni24Error }}</p>
 
-        <div class="mt-3 flex justify-end">
+        <div class="mt-4 flex justify-end">
           <button
             type="button"
             :disabled="!uni24File || uni24Busy"
@@ -631,24 +638,26 @@ const filterMonthValue = computed<number>({
             <summary class="cursor-pointer text-gray-500 hover:text-gray-700">
               {{ t('admin.financials.importColStatus') }} ({{ uni24Result.rows.length }})
             </summary>
-            <table class="mt-2 w-full text-xs">
-              <thead class="text-left text-gray-500">
-                <tr>
-                  <th class="py-1 pr-3">{{ t('admin.financials.importColId') }}</th>
-                  <th class="py-1 pr-3">{{ t('admin.financials.importColName') }}</th>
-                  <th class="py-1 pr-3">{{ t('admin.financials.importColStatus') }}</th>
-                  <th class="py-1">{{ t('admin.financials.importColError') }}</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-gray-100">
-                <tr v-for="row in uni24Result.rows" :key="row.row" :class="row.status === 'error' ? 'bg-red-50' : ''">
-                  <td class="py-1 pr-3 font-mono">{{ row.external_id }}</td>
-                  <td class="py-1 pr-3">{{ row.name }}</td>
-                  <td class="py-1 pr-3">{{ row.status }}</td>
-                  <td class="py-1 text-red-600">{{ row.error }}</td>
-                </tr>
-              </tbody>
-            </table>
+            <div class="mt-2 overflow-x-auto">
+              <table class="w-full text-xs">
+                <thead class="text-left text-gray-500">
+                  <tr>
+                    <th class="py-1 pr-3">{{ t('admin.financials.importColId') }}</th>
+                    <th class="py-1 pr-3">{{ t('admin.financials.importColName') }}</th>
+                    <th class="py-1 pr-3">{{ t('admin.financials.importColStatus') }}</th>
+                    <th class="py-1">{{ t('admin.financials.importColError') }}</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                  <tr v-for="row in uni24Result.rows" :key="row.row" :class="row.status === 'error' ? 'bg-red-50' : ''">
+                    <td class="py-1 pr-3 font-mono">{{ row.external_id }}</td>
+                    <td class="py-1 pr-3">{{ row.name }}</td>
+                    <td class="py-1 pr-3">{{ row.status }}</td>
+                    <td class="py-1 text-red-600">{{ row.error }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </details>
         </div>
       </section>
