@@ -25,6 +25,7 @@ export interface InvoiceSuggestion {
   issue_date: string
   due_date: string
   total_amount: number
+  kid_number: string
   score: number
   confidence_label: 'sterk' | 'sannsynleg' | 'svak' | 'potensiell'
   why_tooltip: string

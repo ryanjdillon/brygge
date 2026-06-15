@@ -191,6 +191,7 @@ type InvoiceSuggestion struct {
 	IssueDate       string  `json:"issue_date"`
 	DueDate         string  `json:"due_date"`
 	TotalAmount     float64 `json:"total_amount"`
+	KIDNumber       string  `json:"kid_number"`
 	Score           int     `json:"score"`
 	ConfidenceLabel string  `json:"confidence_label"`
 	WhyTooltip      string  `json:"why_tooltip"`
@@ -291,6 +292,7 @@ func (s *Service) rankIncomingInvoices(
 		IssueDate     time.Time
 		DueDate       time.Time
 		TotalAmount   float64
+		KIDNumber     string
 		UserFullName  string
 		UserFirstName string
 		UserLastName  string
@@ -301,7 +303,7 @@ func (s *Service) rankIncomingInvoices(
 		        COALESCE(u.full_name, ''),
 		        COALESCE(u.email, ''),
 		        COALESCE(pi.name, ''),
-		        i.issue_date, i.due_date, i.total_amount,
+		        i.issue_date, i.due_date, i.total_amount, i.kid_number,
 		        COALESCE(u.full_name, ''),
 		        COALESCE(u.first_name, ''),
 		        COALESCE(u.last_name, '')
@@ -326,7 +328,7 @@ func (s *Service) rankIncomingInvoices(
 	for rows.Next() {
 		var c candidate
 		if err := rows.Scan(&c.ID, &c.Number, &c.MemberName, &c.MemberEmail,
-			&c.PriceItemName, &c.IssueDate, &c.DueDate, &c.TotalAmount,
+			&c.PriceItemName, &c.IssueDate, &c.DueDate, &c.TotalAmount, &c.KIDNumber,
 			&c.UserFullName, &c.UserFirstName, &c.UserLastName); err != nil {
 			continue
 		}
@@ -359,6 +361,7 @@ func (s *Service) rankIncomingInvoices(
 			IssueDate:       c.IssueDate.Format("2006-01-02"),
 			DueDate:         c.DueDate.Format("2006-01-02"),
 			TotalAmount:     c.TotalAmount,
+			KIDNumber:       c.KIDNumber,
 			Score:           score,
 			ConfidenceLabel: conf,
 			WhyTooltip:      strings.Join(why, " · "),
@@ -499,7 +502,7 @@ func (s *Service) PotentialInvoicesForRow(
 		       COALESCE(u.full_name, ''),
 		       COALESCE(u.email, ''),
 		       COALESCE(pi.name, ''),
-		       i.issue_date, i.due_date, i.total_amount
+		       i.issue_date, i.due_date, i.total_amount, i.kid_number
 		  FROM invoices i
 		  LEFT JOIN users u ON u.id = i.user_id
 		  LEFT JOIN price_items pi ON pi.id = i.price_item_id
@@ -517,7 +520,7 @@ func (s *Service) PotentialInvoicesForRow(
 		var s InvoiceSuggestion
 		var issue, due time.Time
 		if err := rows.Scan(&s.InvoiceID, &s.InvoiceNumber, &s.MemberName, &s.MemberEmail,
-			&s.PriceItemName, &issue, &due, &s.TotalAmount); err != nil {
+			&s.PriceItemName, &issue, &due, &s.TotalAmount, &s.KIDNumber); err != nil {
 			continue
 		}
 		s.IssueDate = issue.Format("2006-01-02")

@@ -236,9 +236,11 @@ async function doUnassign(rowId: string) {
                 <span class="font-semibold">#{{ sug.invoice_number }}</span>
                 <span class="text-gray-700">{{ sug.member_name }}</span>
                 <span class="text-xs text-gray-500">· {{ sug.price_item_name || '—' }}</span>
+                <span class="text-xs font-semibold text-gray-800">{{ formatNOK(sug.total_amount) }}</span>
               </p>
               <p class="text-xs text-gray-500" :title="sug.why_tooltip">
                 {{ t('admin.bankReconcile.confidence.' + sug.confidence_label) }} · {{ sug.why_tooltip }}
+                <span v-if="sug.kid_number" class="ml-1 font-mono">KID: {{ sug.kid_number }}</span>
               </p>
             </div>
             <button
@@ -307,8 +309,8 @@ async function doUnassign(rowId: string) {
       <ul v-else-if="potentialItems.length" class="mt-3 max-h-96 divide-y divide-gray-100 overflow-y-auto">
         <li v-for="inv in potentialItems" :key="inv.invoice_id" class="flex items-center justify-between gap-3 py-2 text-sm">
           <div>
-            <p class="font-semibold">#{{ inv.invoice_number }} <span class="font-normal text-gray-700">— {{ inv.member_name }}</span></p>
-            <p class="text-xs text-gray-500">{{ inv.price_item_name || '—' }} · {{ inv.member_email || '—' }} · {{ formatDate(inv.issue_date) }}</p>
+            <p class="font-semibold">#{{ inv.invoice_number }} <span class="font-normal text-gray-700">— {{ inv.member_name }}</span> <span class="text-sm font-semibold text-gray-800">{{ formatNOK(inv.total_amount) }}</span></p>
+            <p class="text-xs text-gray-500">{{ inv.price_item_name || '—' }} · {{ inv.member_email || '—' }} · {{ formatDate(inv.issue_date) }}<span v-if="inv.kid_number" class="ml-1 font-mono">· KID: {{ inv.kid_number }}</span></p>
           </div>
           <button
             type="button"
