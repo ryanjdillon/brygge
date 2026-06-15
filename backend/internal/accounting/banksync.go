@@ -3,10 +3,86 @@ package accounting
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"github.com/brygge-klubb/brygge/internal/finance"
 )
+
+// isBryggeKID is `true` only for strings that match Brygge's own KID
+// shape: exactly 12 ASCII digits with a valid Luhn check digit. This
+// is intentionally narrower than `finance.ValidateKID` (which only
+// asserts the Luhn) because the bank's Melding column carries lots
+// of free-text garbage that happens to fail length but might fluke
+// the Luhn — easier to reject the whole class.
+func isBryggeKID(s string) bool {
+	if len(s) != 12 {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return finance.ValidateKID(s)
+}
+
+// findInvoiceByCounterpartAndAmount is the tertiary auto-match path
+// for the bank-sync loop: when neither KID nor invoice-number caught
+// the row, look up the open unpaid invoice that belongs to the
+// member whose normalized full name equals the bank counterpart and
+// whose total matches the bank-row amount within 0.5 NOK. Returns
+// "" when the lookup is ambiguous (2+ candidates) or finds no match
+// — both cases leave the row for manual review.
+func (s *Service) findInvoiceByCounterpartAndAmount(ctx context.Context, clubID, counterpart string, amount float64) string {
+	needle := normalizeName(counterpart)
+	if needle == "" {
+		return ""
+	}
+	rows, err := s.db.Query(ctx,
+		`SELECT i.id, u.full_name
+		   FROM invoices i
+		   JOIN users u ON u.id = i.user_id
+		  WHERE i.club_id = $1
+		    AND i.status = 'open'
+		    AND i.payment_id IS NULL
+		    AND ABS(i.total_amount - $2) < 0.005
+		    AND NOT EXISTS (
+		      SELECT 1 FROM bank_import_rows bir
+		      WHERE bir.kid_number = i.kid_number
+		        AND bir.journal_entry_id IS NOT NULL
+		    )`,
+		clubID, amount,
+	)
+	if err != nil {
+		return ""
+	}
+	defer rows.Close()
+	var firstMatch string
+	matches := 0
+	for rows.Next() {
+		var id, fullName string
+		if err := rows.Scan(&id, &fullName); err != nil {
+			continue
+		}
+		if normalizeName(fullName) != needle {
+			continue
+		}
+		matches++
+		if matches == 1 {
+			firstMatch = id
+		}
+		if matches > 1 {
+			return "" // ambiguous — bail
+		}
+	}
+	if matches == 1 {
+		return firstMatch
+	}
+	return ""
+}
 
 // BankSyncResult summarizes one full-scope bank sync run.
 type BankSyncResult struct {
@@ -203,11 +279,26 @@ func (s *Service) syncKIDMatches(ctx context.Context, clubID, createdBy string) 
 	matched := 0
 	closedYears := map[int]bool{}
 	for _, p := range work {
-		// Recover KID + payer from description if missing. Persist
-		// whichever pieces actually changed so the row's stored
-		// state reflects reality and the next pass / a manual
-		// review sees the right values.
-		newKID := p.kid
+		// Rejected-on-receiving-account rows ("KID … ble ikke
+		// akseptert på denne kontoen") are notification rows the bank
+		// posts when a transfer to a savings/høyrente account bounces
+		// at the inbound-cap. The substance is "money never arrived;
+		// payer still owes." Skip entirely — neither auto-match nor
+		// journal.
+		if IsRejectedKIDDescription(p.desc) {
+			continue
+		}
+
+		// Recover KID + payer from description if missing. The
+		// Melding column from the bank carries free text for many
+		// rows ("Medlemskontingent Olav Alpen", "Faktura 44", ".")
+		// which is NOT a KID. Drop anything that isn't our exact
+		// shape (12 digits + Luhn) and let the description-extractor
+		// have a try.
+		newKID := strings.TrimSpace(p.kid)
+		if newKID != "" && !isBryggeKID(newKID) {
+			newKID = ""
+		}
 		if newKID == "" {
 			newKID = ExtractKIDFromDescription(p.desc)
 		}
@@ -224,7 +315,8 @@ func (s *Service) syncKIDMatches(ctx context.Context, clubID, createdBy string) 
 			p.counterpart = newCounterpart
 		}
 
-		// Match: KID first, then "Fakturanummer NN" + amount.
+		// Match cascade: KID → "Fakturanummer NN" + amount →
+		// unique counterpart-name + amount.
 		var invoiceID string
 		if p.kid != "" {
 			_ = s.db.QueryRow(ctx,
@@ -253,6 +345,14 @@ func (s *Service) syncKIDMatches(ctx context.Context, clubID, createdBy string) 
 					clubID, num, p.amount,
 				).Scan(&invoiceID)
 			}
+		}
+		if invoiceID == "" && p.counterpart != "" {
+			// Tertiary: counterpart name (the bank's Debitornavn /
+			// Fra-prefix payer) + amount. Only auto-match when the
+			// (normalized name, amount) pair maps to EXACTLY one open
+			// unpaid invoice. Ambiguity (2+ candidates) falls through
+			// and the row stays unmatched for manual review.
+			invoiceID = s.findInvoiceByCounterpartAndAmount(ctx, clubID, p.counterpart, p.amount)
 		}
 		if invoiceID == "" {
 			continue

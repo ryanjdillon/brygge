@@ -36,6 +36,24 @@ var invoiceRef = regexp.MustCompile(`(?i)\bfaktura(?:nummer|nr\.?|\snr\.?)?\s*[:
 // segment between "Fra:" and "Betalt:".
 var payerFromPrefix = regexp.MustCompile(`^Fra:\s*(.+?)\s+Betalt:`)
 
+// rejectedKIDNote matches the Sparebank notice the bank embeds in
+// the Melding column when a KID-keyed transfer is bounced back —
+// typically because the receiving account is a savings/høyrente
+// account that has hit its inbound-transfer cap and refuses further
+// transfers for the period. The row appears in the statement with a
+// positive amount (the failed inbound) but the substance is "money
+// did not arrive; the payer still owes." Auto-match must NOT treat
+// these as successful payments.
+var rejectedKIDNote = regexp.MustCompile(`ble ikke akseptert`)
+
+// IsRejectedKIDDescription returns true when the row's description
+// indicates the payment was bounced back at the receiving account.
+// Callers should skip these rows during auto-correlation; the payer
+// has to re-send to the correct account.
+func IsRejectedKIDDescription(desc string) bool {
+	return rejectedKIDNote.MatchString(desc)
+}
+
 // ExtractKIDFromDescription pulls a KID out of the description tail
 // when the CSV's KID column was empty. Validates with the Norwegian
 // mod-10 (Luhn) check so we don't false-match arbitrary digit runs
