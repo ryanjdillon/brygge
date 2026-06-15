@@ -41,7 +41,9 @@ When you (or the user) hit a non-obvious gotcha worth not re-discovering — a h
 
 Call it out in the commit message so a reviewer can verify the doc capture is in the right place.
 
-### Migrations — dry-run before deploy
+### Migrations — applied automatically on deploy
+
+Migrations run automatically as part of every deploy — `brygge-migrate.service` fires before the API starts, so no manual migration step is needed after merging. Do not tell the user to run migrations manually.
 
 `brygge-migrate.service` runs as the `brygge` DB role inside a chain of separate `BEGIN/COMMIT` blocks (golang-migrate's pgx driver splits the file at `;` boundaries). A partially-applied migration that fails on statement N leaves statements 1..N-1 committed — so retries hit "already exists" errors unless every DDL statement is guarded with `IF NOT EXISTS` / `pg_constraint` checks.
 
