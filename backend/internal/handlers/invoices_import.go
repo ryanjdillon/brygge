@@ -201,7 +201,7 @@ func (h *InvoiceHandler) HandleImportUni24Invoices(w http.ResponseWriter, r *htt
 			     status, import_source, external_id,
 			     recipient_kind, recipient_org_name)
 			 VALUES
-			    ($1, $2, $3, NULL,
+			    ($1, $2, $3, '',
 			     $4, $5, $6,
 			     $7, $8, $9,
 			     'private', $10)
