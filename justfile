@@ -166,8 +166,13 @@ fmt:
 install host:
     nix run .#install -- {{host}}
 
-# Deploy the current flake state to the server (builds locally, activates remotely).
+# Deploy the current flake state to the server (builds locally, activates
+# remotely). Gated on `just migrate-check` — every migration in
+# backend/migrations/ must apply end-to-end against a fresh DB before we
+# ship. Skip via `nix run .#deploy -- {{host}}` directly if you have a
+# good reason (e.g. the DB service isn't running locally).
 deploy host="brygge":
+    just migrate-check
     nix run .#deploy -- {{host}}
 
 # Roll back to the previous system generation on the server.

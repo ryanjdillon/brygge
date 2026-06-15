@@ -45,11 +45,13 @@ Call it out in the commit message so a reviewer can verify the doc capture is in
 
 `brygge-migrate.service` runs as the `brygge` DB role inside a chain of separate `BEGIN/COMMIT` blocks (golang-migrate's pgx driver splits the file at `;` boundaries). A partially-applied migration that fails on statement N leaves statements 1..N-1 committed — so retries hit "already exists" errors unless every DDL statement is guarded with `IF NOT EXISTS` / `pg_constraint` checks.
 
-**Before every `nix run .#deploy`:**
+**Before every deploy** — use `just deploy <host>`, which now gates on `just migrate-check`:
 
 ```bash
-just migrate-check
+just deploy klokkarvikbaatlag.no    # runs migrate-check first; then nix run .#deploy
 ```
+
+Run `just migrate-check` standalone when you just want to validate a migration in isolation.
 
 The recipe spins up a fresh `brygge_migrate_check` DB, applies every migration in `backend/migrations/` end-to-end as the `brygge` role, then drops it. Failures here are deploy-blocking — fix the migration before shipping. Catches:
 
