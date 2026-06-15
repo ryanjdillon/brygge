@@ -41,6 +41,29 @@ When you (or the user) hit a non-obvious gotcha worth not re-discovering — a h
 
 Call it out in the commit message so a reviewer can verify the doc capture is in the right place.
 
+### Migrations — dry-run before deploy
+
+`brygge-migrate.service` runs as the `brygge` DB role inside a chain of separate `BEGIN/COMMIT` blocks (golang-migrate's pgx driver splits the file at `;` boundaries). A partially-applied migration that fails on statement N leaves statements 1..N-1 committed — so retries hit "already exists" errors unless every DDL statement is guarded with `IF NOT EXISTS` / `pg_constraint` checks.
+
+**Before every `nix run .#deploy`:**
+
+```bash
+just migrate-check
+```
+
+The recipe spins up a fresh `brygge_migrate_check` DB, applies every migration in `backend/migrations/` end-to-end as the `brygge` role, then drops it. Failures here are deploy-blocking — fix the migration before shipping. Catches:
+
+- Enum casts (PG rejects implicit `text → enum` in INSERT/SELECT)
+- Privilege mismatches (e.g. `CREATEROLE` not held by `brygge`)
+- Missing `IF NOT EXISTS` guards on `CREATE INDEX` / `ADD COLUMN`
+- Schema drift between the migrations and the seed.
+
+When writing a new migration, always:
+
+- Use `CREATE INDEX IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`, and wrap `ADD CONSTRAINT` in a `DO` block that queries `pg_constraint`.
+- Cast enum literals explicitly (`'asset'::account_type`, `'completed'::payment_status`).
+- Run as the `brygge` role's actual privilege level — anything needing `CREATEROLE` or superuser goes in a NixOS systemd-oneshot bootstrap (see `brygge-dev-query-role.service` for the pattern).
+
 ### Linear lifecycle — file work, ship it, close it
 
 Brygge tracks work in Linear (project: `brygge`, team: `software`, prefix `DIL-`). Use the Linear MCP tools (`mcp__linear__save_issue`, `get_issue`, `list_issues`) — never tell the user to open Linear in a browser unless the action genuinely requires the web UI.

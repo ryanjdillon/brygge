@@ -14,31 +14,55 @@
 -- box for "other" would let operators write `sldkjfgsldkjjs` into the
 -- audit log).
 
-ALTER TABLE bank_import_rows
-  ADD COLUMN dismissed_at      TIMESTAMPTZ,
-  ADD COLUMN dismissed_by      UUID REFERENCES users(id),
-  ADD COLUMN dismissed_reason  TEXT
-    CHECK (dismissed_reason IS NULL OR dismissed_reason IN (
-        'bounced',
-        'internal_transfer',
-        'duplicate',
-        'bank_fee',
-        'refund_or_credit',
-        'overpayment',
-        'unidentifiable',
-        'test_transaction'
-    ));
+-- Every DDL statement here is idempotent (IF NOT EXISTS / pg_constraint
+-- guard) so the migration is safe to retry after a partial failure.
+-- golang-migrate's pgx driver runs each ";" as its own transaction —
+-- so a retry must not error on already-applied steps.
 
--- All three columns travel together: either none set (still pending),
--- or all three set (dismissed). Saves a state-shape bug down the line.
 ALTER TABLE bank_import_rows
-  ADD CONSTRAINT bank_import_rows_dismissal_consistency CHECK (
-    (dismissed_at IS NULL AND dismissed_by IS NULL AND dismissed_reason IS NULL)
-    OR
-    (dismissed_at IS NOT NULL AND dismissed_by IS NOT NULL AND dismissed_reason IS NOT NULL)
-  );
+  ADD COLUMN IF NOT EXISTS dismissed_at      TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS dismissed_by      UUID REFERENCES users(id),
+  ADD COLUMN IF NOT EXISTS dismissed_reason  TEXT;
 
-CREATE INDEX idx_bank_import_rows_unmatched
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+         WHERE conname = 'bank_import_rows_dismissed_reason_check'
+    ) THEN
+        ALTER TABLE bank_import_rows
+          ADD CONSTRAINT bank_import_rows_dismissed_reason_check
+          CHECK (dismissed_reason IS NULL OR dismissed_reason IN (
+              'bounced',
+              'internal_transfer',
+              'duplicate',
+              'bank_fee',
+              'refund_or_credit',
+              'overpayment',
+              'unidentifiable',
+              'test_transaction'
+          ));
+    END IF;
+END
+$$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+         WHERE conname = 'bank_import_rows_dismissal_consistency'
+    ) THEN
+        ALTER TABLE bank_import_rows
+          ADD CONSTRAINT bank_import_rows_dismissal_consistency CHECK (
+            (dismissed_at IS NULL AND dismissed_by IS NULL AND dismissed_reason IS NULL)
+            OR
+            (dismissed_at IS NOT NULL AND dismissed_by IS NOT NULL AND dismissed_reason IS NOT NULL)
+          );
+    END IF;
+END
+$$;
+
+CREATE INDEX IF NOT EXISTS idx_bank_import_rows_unmatched
   ON bank_import_rows (club_id, row_date DESC)
   WHERE journal_entry_id IS NULL AND dismissed_at IS NULL;
 
