@@ -927,6 +927,7 @@
       "filterDismissed": "Dismissed",
       "confirmedDuplicatesHeader": "Bevestigde duplicaten ({count} rijen)",
       "confirmedDuplicatesHint": "Arkivref. al geboekt — deze rijen komen uit overlappende CSV-imports. Afwijzen als duplicaat.",
+      "notADuplicateHint": "Geen duplicaat? Zoek de factuur en wijs direct toe.",
       "filterBank": "Bank",
       "filterVipps": "Vipps",
       "filterDuplicate": "Duplicaat",

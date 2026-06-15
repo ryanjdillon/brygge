@@ -1551,6 +1551,7 @@
       "filterDismissed": "Avvising",
       "confirmedDuplicatesHeader": "Stadfesta duplikat ({count} rad)",
       "confirmedDuplicatesHint": "Arkivref. er allereie journalførd. Desse betalingane kjem frå overlappande CSV-import. Avvis som duplikat.",
+      "notADuplicateHint": "Ser ikkje ut som ein duplikat? Søk opp fakturaen og tildel direkte.",
       "filterBank": "Bank",
       "filterVipps": "Vipps",
       "filterDuplicate": "Duplikat",

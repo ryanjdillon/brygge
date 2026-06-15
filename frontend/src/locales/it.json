@@ -927,6 +927,7 @@
       "filterDismissed": "Dismissed",
       "confirmedDuplicatesHeader": "Duplicati confermati ({count} righe)",
       "confirmedDuplicatesHint": "Arkivref. già contabilizzato — queste righe provengono da importazioni CSV sovrapposte. Rifiuta come duplicato.",
+      "notADuplicateHint": "Non sembra un duplicato? Cerca la fattura e assegna direttamente.",
       "filterBank": "Banca",
       "filterVipps": "Vipps",
       "filterDuplicate": "Duplicato",

@@ -294,14 +294,25 @@ async function doUnassign(rowId: string) {
                 <p class="mt-0.5 truncate text-xs text-gray-500" :title="row.description">{{ row.description || '—' }}</p>
               </div>
             </div>
-            <button
-              type="button"
-              class="inline-flex shrink-0 items-center gap-1 rounded-md border border-amber-300 bg-white px-3 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-50"
-              @click="openDismiss(row)"
-            >
-              <Ban class="h-3 w-3" />
-              {{ t('admin.bankReconcile.dismiss') }}
-            </button>
+            <div class="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                class="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-3 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                :title="t('admin.bankReconcile.notADuplicateHint')"
+                @click="openPotential(row)"
+              >
+                <Search class="h-3 w-3" />
+                {{ t('admin.bankReconcile.searchInvoice') }}
+              </button>
+              <button
+                type="button"
+                class="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-white px-3 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-50"
+                @click="openDismiss(row)"
+              >
+                <Ban class="h-3 w-3" />
+                {{ t('admin.bankReconcile.dismiss') }}
+              </button>
+            </div>
           </li>
         </ul>
       </div>

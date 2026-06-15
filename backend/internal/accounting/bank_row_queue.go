@@ -139,14 +139,16 @@ func (s *Service) ListUnmatchedBankRows(
 		       COALESCE(bir.description, ''),
 		       bi.bank_account_code,
 		       bir.dismissed_at, bir.dismissed_reason,
-		       -- TRUE duplicate: same Arkivref. (bank-guaranteed unique
-		       -- per booking) on a journaled sibling row. Same physical
-		       -- transaction surfaced twice.
+		       -- TRUE duplicate: same Arkivref AND same counterpart on a
+		       -- journaled sibling row. Requiring counterpart prevents
+		       -- false-positives when two different payers coincidentally
+		       -- use the same short free-text reference.
 		       (bir.reference <> '' AND EXISTS (
 		         SELECT 1 FROM bank_import_rows other
 		          WHERE other.id <> bir.id
 		            AND other.club_id = bir.club_id
 		            AND other.reference = bir.reference
+		            AND LOWER(COALESCE(other.counterpart, '')) = LOWER(COALESCE(bir.counterpart, ''))
 		            AND other.journal_entry_id IS NOT NULL
 		       )) AS likely_duplicate,
 		       -- POSSIBLE double payment: same date+amount+KID matches a

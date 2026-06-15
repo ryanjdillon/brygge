@@ -926,6 +926,7 @@
       "filterDismissed": "Dismissed",
       "confirmedDuplicatesHeader": "Doublons confirmés ({count} lignes)",
       "confirmedDuplicatesHint": "Arkivref. déjà comptabilisé — ces lignes proviennent d'imports CSV chevauchants. Rejeter comme doublon.",
+      "notADuplicateHint": "Pas un doublon ? Cherchez la facture et affectez directement.",
       "filterBank": "Banque",
       "filterVipps": "Vipps",
       "filterDuplicate": "Doublon",
