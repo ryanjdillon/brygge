@@ -276,6 +276,22 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOv
 		// so re-imports of the same CSV still dedup correctly.
 		hash := BankRowHash(clubID, row)
 
+		// Arkivref (bank's canonical booking ID) is stable across
+		// re-exports even when Sparebank reformats the description
+		// text. Check it before the hash insert so overlapping CSV
+		// date ranges never create a second row for the same booking.
+		if row.Reference != "" {
+			var exists bool
+			_ = s.db.QueryRow(ctx,
+				`SELECT EXISTS(SELECT 1 FROM bank_import_rows WHERE club_id = $1 AND reference = $2)`,
+				clubID, row.Reference,
+			).Scan(&exists)
+			if exists {
+				res.SkippedDup++
+				continue
+			}
+		}
+
 		// Norwegian banks often leave the KID column empty for
 		// rows whose payer typed the reference into the
 		// description ("Forklaring") instead. Recover the KID and
