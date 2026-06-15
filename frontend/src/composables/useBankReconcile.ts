@@ -13,6 +13,7 @@ export interface BankRowSummary {
   dismissed_at?: string | null
   dismissed_reason?: string | null
   likely_duplicate_of_matched: boolean
+  possible_double_payment: boolean
 }
 
 export interface InvoiceSuggestion {
@@ -164,6 +165,7 @@ export const DISMISS_REASONS = [
   'bounced',
   'internal_transfer',
   'duplicate',
+  'double_payment',
   'bank_fee',
   'refund_or_credit',
   'overpayment',

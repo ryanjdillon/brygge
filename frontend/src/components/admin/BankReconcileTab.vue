@@ -115,7 +115,9 @@ const dismissReason = ref<DismissReason | null>(null)
 
 function openDismiss(row: BankRowSummary) {
   dismissRowId.value = row.id
-  dismissReason.value = row.likely_duplicate_of_matched ? 'duplicate' : null
+  if (row.likely_duplicate_of_matched) dismissReason.value = 'duplicate'
+  else if (row.possible_double_payment) dismissReason.value = 'double_payment'
+  else dismissReason.value = null
   dismissOpen.value = true
 }
 
@@ -205,6 +207,9 @@ async function doUnassign(rowId: string) {
               </p>
               <p v-if="row.likely_duplicate_of_matched && !row.dismissed_at" class="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
                 ⚠ {{ t('admin.bankReconcile.likelyDuplicate') }}
+              </p>
+              <p v-if="row.possible_double_payment && !row.likely_duplicate_of_matched && !row.dismissed_at" class="mt-1 inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-800">
+                ⚠ {{ t('admin.bankReconcile.possibleDoublePayment') }}
               </p>
             </div>
           </div>

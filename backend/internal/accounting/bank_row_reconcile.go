@@ -33,6 +33,7 @@ var allowedDismissReasons = map[string]bool{
 	"bounced":          true,
 	"internal_transfer": true,
 	"duplicate":        true,
+	"double_payment":   true,
 	"bank_fee":         true,
 	"refund_or_credit": true,
 	"overpayment":      true,

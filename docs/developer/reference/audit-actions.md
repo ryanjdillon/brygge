@@ -82,7 +82,7 @@ These don't have constants in `audit.go` — they're inlined as strings because 
 | `accounting.bank_synced` | `bank` | `HandleBankSync` completes | `kid_matched`, `vipps_reconciled`, `transfers_linked`, `payments_linked`, `closed_periods` |
 | `ActionBankRowAssignedInvoice` | `bank_row.assigned_invoice` | bank_import_row | Operator assigns a row to an open invoice via the Tildel tab (DIL-392). Creates the GL journal + `linkInvoicePayment` | `invoice_id`, `journal_entry_id` |
 | `ActionBankRowAssignedAccount` | `bank_row.assigned_account` | bank_import_row | Operator assigns a row to a GL account (DIL-392). `kind` = `expense` (outgoing) or `revenue` (incoming, not a faktura) | `account_code`, `kind`, `journal_entry_id` |
-| `ActionBankRowDismissed` | `bank_row.dismissed` | bank_import_row | Operator marks a row not-actionable. `reason` is one of the eight enum values; no free text (DIL-392) | `reason` |
+| `ActionBankRowDismissed` | `bank_row.dismissed` | bank_import_row | Operator marks a row not-actionable. `reason` is one of the nine enum values; no free text (DIL-392 + DIL-394 follow-up) | `reason` |
 | `ActionBankRowUnassigned` | `bank_row.unassigned` | bank_import_row | Operator reverses a prior assignment: voids the journal, removes the payments row, resets `journal_entry_id` (DIL-392) | `prior_invoice_id`, `prior_journal_entry_id` |
 | `accounting.vipps_resynced` | `vipps` | `HandleResyncVipps` completes | `scanned`, `resynced`, `skipped`, `failed` |
 | `accounting.bank_import_reassigned` | `bank_import` | `HandleReassignBankImport` succeeds (cascades through journal_lines) | `from`, `to`, `cascaded_journals` |

@@ -1586,7 +1586,8 @@
         "refund_or_credit": "Refund or credit",
         "overpayment": "Overpayment",
         "unidentifiable": "Unidentifiable",
-        "test_transaction": "Test transaction"
+        "test_transaction": "Test transaction",
+        "double_payment": "Double payment"
       },
       "reasonHints": {
         "bounced": "Payment was rejected at the bank (e.g. savings cap). Member still owes.",
@@ -1596,11 +1597,13 @@
         "refund_or_credit": "Club refunded a member; offsetting row.",
         "overpayment": "Amount exceeds the open invoice total; tracked manually.",
         "unidentifiable": "No way to determine who paid. Revisit if more info surfaces.",
-        "test_transaction": "Bank-side test row from system setup."
+        "test_transaction": "Bank-side test row from system setup.",
+        "double_payment": "Member paid the same invoice twice. The club must send the money back (refund workflow tracked separately)."
       },
       "year": "Year",
       "yearAll": "All years",
-      "likelyDuplicate": "Likely duplicate — another row already matched"
+      "likelyDuplicate": "Likely duplicate — another row already matched",
+      "possibleDoublePayment": "Possible double payment — refund needed"
     }
   },
   "projects": {

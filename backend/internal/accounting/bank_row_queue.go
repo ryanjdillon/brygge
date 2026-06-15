@@ -14,6 +14,25 @@ import (
 
 // BankRowSummary is the per-row payload rendered in the Tildel tab
 // queue. Fields that the UI surfaces directly only — no GL ids etc.
+//
+// Two narrow auto-detection signals are derived per row:
+//
+//   - LikelyDuplicateOfMatched: another bank row with the SAME
+//     `reference` (bank Arkivref. — guaranteed unique per bank
+//     booking) is already journaled. Same physical transaction
+//     re-exported. Safe to dismiss as `duplicate`.
+//
+//   - PossibleDoublePayment: another bank row with the same
+//     (row_date, amount, kid_number) is already journaled BUT a
+//     different non-empty `reference`. Two distinct bank operations
+//     hit the same KID — the member paid twice. Money has to go back;
+//     do NOT just dismiss as duplicate. UI surfaces this with a red
+//     badge so the operator initiates a refund.
+//
+// When both `reference` and `kid_number` are empty (anonymous rows
+// like "Overførsel") NEITHER signal fires — we can't reliably tell
+// duplicates from coincident-amount payments without an identifier.
+// Operator handles those manually.
 type BankRowSummary struct {
 	ID                       string     `json:"id"`
 	RowDate                  time.Time  `json:"row_date"`
@@ -25,6 +44,7 @@ type BankRowSummary struct {
 	DismissedAt              *time.Time `json:"dismissed_at,omitempty"`
 	DismissedReason          *string    `json:"dismissed_reason,omitempty"`
 	LikelyDuplicateOfMatched bool       `json:"likely_duplicate_of_matched"`
+	PossibleDoublePayment    bool       `json:"possible_double_payment"`
 }
 
 // ListUnmatchedBankRows returns the paginated set of rows that still
@@ -93,15 +113,32 @@ func (s *Service) ListUnmatchedBankRows(
 		       COALESCE(bir.description, ''),
 		       bi.bank_account_code,
 		       bir.dismissed_at, bir.dismissed_reason,
-		       EXISTS (
+		       -- TRUE duplicate: same Arkivref. (bank-guaranteed unique
+		       -- per booking) on a journaled sibling row. Same physical
+		       -- transaction surfaced twice.
+		       (bir.reference <> '' AND EXISTS (
+		         SELECT 1 FROM bank_import_rows other
+		          WHERE other.id <> bir.id
+		            AND other.club_id = bir.club_id
+		            AND other.reference = bir.reference
+		            AND other.journal_entry_id IS NOT NULL
+		       )) AS likely_duplicate,
+		       -- POSSIBLE double payment: same date+amount+KID matches a
+		       -- journaled sibling, but a different reference (or both
+		       -- references empty). Two distinct bank bookings hit the
+		       -- same KID — refund required, not safe to just dismiss.
+		       -- KID must be non-empty so anonymous "Overførsel" rows
+		       -- don't false-fire on coincident 450-kr membership fees.
+		       (bir.kid_number <> '' AND EXISTS (
 		         SELECT 1 FROM bank_import_rows other
 		          WHERE other.id <> bir.id
 		            AND other.club_id = bir.club_id
 		            AND other.row_date = bir.row_date
 		            AND other.amount = bir.amount
-		            AND COALESCE(other.kid_number, '') = COALESCE(bir.kid_number, '')
+		            AND other.kid_number = bir.kid_number
+		            AND COALESCE(other.reference, '') <> COALESCE(bir.reference, '')
 		            AND other.journal_entry_id IS NOT NULL
-		       ) AS likely_duplicate
+		       )) AS possible_double_payment
 		  FROM bank_import_rows bir
 		  JOIN bank_imports bi ON bi.id = bir.bank_import_id
 		 WHERE ` + strings.Join(where, " AND ") + `
@@ -119,7 +156,8 @@ func (s *Service) ListUnmatchedBankRows(
 		var r BankRowSummary
 		if err := rows.Scan(&r.ID, &r.RowDate, &r.Amount, &r.KIDNumber,
 			&r.Counterpart, &r.Description, &r.BankAccountCode,
-			&r.DismissedAt, &r.DismissedReason, &r.LikelyDuplicateOfMatched); err != nil {
+			&r.DismissedAt, &r.DismissedReason, &r.LikelyDuplicateOfMatched,
+			&r.PossibleDoublePayment); err != nil {
 			return nil, fmt.Errorf("scan: %w", err)
 		}
 		out = append(out, r)
