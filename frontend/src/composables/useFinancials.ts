@@ -203,7 +203,7 @@ export async function importUni24CSV(
   if (dateTo) params.set('date_to', dateTo)
   const fd = new FormData()
   fd.append('file', file)
-  const res = await fetch(`/api/v1/admin/invoices/import/uni24?${params}`, {
+  const res = await fetch(`/api/v1/admin/financials/invoices/import/uni24?${params}`, {
     method: 'POST',
     credentials: 'include',
     body: fd,
