@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ArrowDownLeft, ArrowUpRight, Sparkles, Search, FileText, Ban, Undo2 } from 'lucide-vue-next'
+import { ArrowDownLeft, ArrowUpRight, Sparkles, Search, FileText, Ban, Undo2, CheckSquare } from 'lucide-vue-next'
 import Modal from '@/components/ui/Modal.vue'
 import Select from '@/components/ui/form/Select.vue'
 import {
@@ -9,6 +9,7 @@ import {
   useBankRowSuggestions,
   useBankUnmatchedCountsByYear,
   useReconcileMutations,
+  useAssignMultiInvoiceMutation,
   fetchPotentialInvoices,
   DISMISS_REASONS,
   type BankRowSummary,
@@ -60,6 +61,24 @@ const focusedRowId = ref<string | null>(null)
 const { data: suggestions } = useBankRowSuggestions(focusedRowId)
 
 const { assignInvoice, assignAccount, dismiss, unassign } = useReconcileMutations()
+const assignMultiInvoice = useAssignMultiInvoiceMutation()
+
+// ── Multi-select ─────────────────────────────────────────────
+const selectedIds = ref<Set<string>>(new Set())
+const selectedRows = computed(() =>
+  (rows.value ?? []).filter((r) => selectedIds.value.has(r.id) && !r.dismissed_at),
+)
+const selectedTotal = computed(() => selectedRows.value.reduce((s, r) => s + r.amount, 0))
+
+function toggleSelect(id: string) {
+  const next = new Set(selectedIds.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  selectedIds.value = next
+}
+function clearSelection() {
+  selectedIds.value = new Set()
+}
 
 function focusRow(id: string) {
   focusedRowId.value = focusedRowId.value === id ? null : id
@@ -162,14 +181,44 @@ async function submitDismiss() {
   dismissOpen.value = false
 }
 
+// ── Multi-invoice modal ──────────────────────────────────────
+const multiInvoiceOpen = ref(false)
+const multiInvoiceQuery = ref('')
+const multiInvoiceItems = ref<InvoiceSuggestion[]>([])
+const multiInvoiceLoading = ref(false)
+
+async function openMultiInvoice() {
+  multiInvoiceQuery.value = ''
+  multiInvoiceOpen.value = true
+  await loadMultiInvoice()
+}
+async function loadMultiInvoice() {
+  if (!selectedRows.value.length) return
+  multiInvoiceLoading.value = true
+  try {
+    multiInvoiceItems.value = await fetchPotentialInvoices(selectedRows.value[0].id, multiInvoiceQuery.value)
+  } finally {
+    multiInvoiceLoading.value = false
+  }
+}
+async function doAssignMultiInvoice(invoiceId: string) {
+  await assignMultiInvoice.mutateAsync({ rowIds: [...selectedIds.value], invoiceId })
+  multiInvoiceOpen.value = false
+  clearSelection()
+}
+
 // ── Actions ──────────────────────────────────────────────────
 async function doAssignInvoice(rowId: string, invoiceId: string) {
   await assignInvoice.mutateAsync({ rowId, invoiceId })
   potentialOpen.value = false
 }
 async function doAssignAccount(rowId: string, accountCode: string, k: 'expense' | 'revenue') {
-  await assignAccount.mutateAsync({ rowId, accountCode, kind: k, description: bilagDescription.value || undefined })
+  const targetIds = selectedIds.value.size > 1 ? [...selectedIds.value] : [rowId]
+  for (const id of targetIds) {
+    await assignAccount.mutateAsync({ rowId: id, accountCode, kind: k, description: bilagDescription.value || undefined })
+  }
   accountPickerOpen.value = false
+  clearSelection()
 }
 async function doUnassign(rowId: string) {
   if (!window.confirm(t('admin.bankReconcile.unassignConfirm'))) return
@@ -262,12 +311,27 @@ async function doUnassign(rowId: string) {
         <li
           v-for="row in mainRows"
           :key="row.id"
-          class="rounded-md border border-gray-200 bg-white p-4"
+          class="rounded-md border bg-white p-4 transition-colors"
+          :class="selectedIds.has(row.id) ? 'border-blue-400 ring-1 ring-blue-300' : 'border-gray-200'"
         >
           <!-- Bank row info -->
           <div class="flex items-start justify-between gap-4">
             <div class="flex items-start gap-3">
+              <input
+                v-if="!row.dismissed_at"
+                type="checkbox"
+                :checked="selectedIds.has(row.id)"
+                class="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300 text-blue-600"
+                @change="toggleSelect(row.id)"
+              />
               <component
+                v-else
+                :is="row.amount >= 0 ? ArrowDownLeft : ArrowUpRight"
+                :class="row.amount >= 0 ? 'text-emerald-600' : 'text-gray-500'"
+                class="mt-0.5 h-5 w-5 shrink-0"
+              />
+              <component
+                v-if="!row.dismissed_at"
                 :is="row.amount >= 0 ? ArrowDownLeft : ArrowUpRight"
                 :class="row.amount >= 0 ? 'text-emerald-600' : 'text-gray-500'"
                 class="mt-0.5 h-5 w-5 shrink-0"
@@ -371,6 +435,50 @@ async function doUnassign(rowId: string) {
       </ul>
     </template>
 
+    <!-- Multi-select action bar -->
+    <Transition
+      enter-active-class="transition duration-150 ease-out"
+      enter-from-class="translate-y-4 opacity-0"
+      leave-active-class="transition duration-100 ease-in"
+      leave-to-class="translate-y-4 opacity-0"
+    >
+      <div
+        v-if="selectedRows.length > 0"
+        class="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-5 py-3 shadow-xl"
+      >
+        <CheckSquare class="h-4 w-4 text-blue-600" />
+        <span class="text-sm font-semibold text-gray-800">
+          {{ selectedRows.length }} {{ selectedRows.length === 1 ? t('admin.bankReconcile.rowSingular') : t('admin.bankReconcile.rowPlural') }}
+          · {{ formatNOK(selectedTotal) }}
+        </span>
+        <span class="h-4 w-px bg-gray-300" />
+        <button
+          type="button"
+          class="inline-flex items-center gap-1.5 rounded-md bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-200"
+          @click="openAccountPicker(selectedRows[0])"
+        >
+          <FileText class="h-3.5 w-3.5" />
+          {{ t('admin.bankReconcile.lagBilag') }}
+        </button>
+        <button
+          v-if="selectedRows.length >= 2"
+          type="button"
+          class="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
+          @click="openMultiInvoice()"
+        >
+          <Search class="h-3.5 w-3.5" />
+          {{ t('admin.bankReconcile.assignInvoice') }}
+        </button>
+        <button
+          type="button"
+          class="text-xs text-gray-400 hover:text-gray-600"
+          @click="clearSelection()"
+        >
+          ✕
+        </button>
+      </div>
+    </Transition>
+
     <!-- Potential invoices modal -->
     <Modal v-model:open="potentialOpen" size="2xl" :title="t('admin.bankReconcile.potentialTitle')">
       <div class="rounded-md bg-blue-50 px-3 py-2 text-xs text-blue-900">
@@ -460,6 +568,39 @@ async function doUnassign(rowId: string) {
           </button>
         </div>
       </template>
+    </Modal>
+    <!-- Multi-row assign invoice modal -->
+    <Modal v-model:open="multiInvoiceOpen" size="2xl" :title="t('admin.bankReconcile.multiInvoiceTitle')">
+      <div class="rounded-md bg-blue-50 px-3 py-2 text-xs text-blue-900">
+        {{ t('admin.bankReconcile.multiInvoiceBanner', { total: formatNOK(selectedTotal), count: selectedRows.length }) }}
+      </div>
+      <input
+        v-model="multiInvoiceQuery"
+        type="search"
+        :placeholder="t('admin.bankReconcile.searchInvoicePlaceholder')"
+        class="mt-3 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+        @input="loadMultiInvoice"
+      />
+      <p v-if="multiInvoiceLoading" class="mt-3 text-xs text-gray-500">{{ t('common.loading') }}…</p>
+      <ul v-else-if="multiInvoiceItems.length" class="mt-3 max-h-96 divide-y divide-gray-100 overflow-y-auto">
+        <li v-for="inv in multiInvoiceItems" :key="inv.invoice_id" class="flex items-center justify-between gap-3 py-2 text-sm">
+          <div class="min-w-0 flex-1">
+            <p class="font-semibold">#{{ inv.invoice_number }} <span class="font-normal text-gray-700">— {{ inv.member_name }}</span> <span class="text-sm font-semibold text-gray-800">{{ formatNOK(inv.total_amount) }}</span></p>
+            <p class="text-xs text-gray-500">{{ inv.price_item_name || '—' }} · {{ formatDate(inv.issue_date) }}<span v-if="inv.kid_number" class="ml-1 font-mono">· KID: {{ inv.kid_number }}</span></p>
+          </div>
+          <button
+            type="button"
+            :disabled="Math.round(selectedTotal * 100) !== Math.round(inv.total_amount * 100)"
+            class="rounded-md px-3 py-1 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+            :class="Math.round(selectedTotal * 100) === Math.round(inv.total_amount * 100) ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-400'"
+            :title="Math.round(selectedTotal * 100) !== Math.round(inv.total_amount * 100) ? t('admin.bankReconcile.multiInvoiceMismatch', { inv: formatNOK(inv.total_amount), sel: formatNOK(selectedTotal) }) : ''"
+            @click="doAssignMultiInvoice(inv.invoice_id)"
+          >
+            {{ t('admin.bankReconcile.assign') }}
+          </button>
+        </li>
+      </ul>
+      <p v-else class="mt-3 text-xs text-gray-500">{{ t('admin.bankReconcile.noPotential') }}</p>
     </Modal>
   </div>
 </template>

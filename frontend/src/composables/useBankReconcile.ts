@@ -178,6 +178,23 @@ export function useReconcileMutations() {
   return { assignInvoice, assignAccount, dismiss, unassign }
 }
 
+export function useAssignMultiInvoiceMutation() {
+  const qc = useQueryClient()
+  const { totpAwareFetch } = useFreshTotp()
+  return useMutation({
+    mutationFn: async ({ rowIds, invoiceId }: { rowIds: string[]; invoiceId: string }) => {
+      const res = await totpAwareFetch(`${BASE}/assign-invoice-multi`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ row_ids: rowIds, invoice_id: invoiceId }),
+      })
+      if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error ?? res.statusText)
+      return res.json()
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['bank-rows'] }),
+  })
+}
+
 export const DISMISS_REASONS = [
   'bounced',
   'internal_transfer',
