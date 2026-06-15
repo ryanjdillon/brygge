@@ -53,6 +53,13 @@ const filterChips: { value: BankRowKind; labelKey: string }[] = [
   { value: 'dismissed', labelKey: 'admin.bankReconcile.filterDismissed' },
 ]
 
+const sourceChips: { value: BankRowKind; labelKey: string }[] = [
+  { value: 'bank', labelKey: 'admin.bankReconcile.filterBank' },
+  { value: 'vipps', labelKey: 'admin.bankReconcile.filterVipps' },
+  { value: 'duplicate', labelKey: 'admin.bankReconcile.filterDuplicate' },
+  { value: 'double_payment', labelKey: 'admin.bankReconcile.filterDoublePayment' },
+]
+
 const confidenceClass: Record<string, string> = {
   sterk: 'border-emerald-300 bg-emerald-50',
   sannsynleg: 'border-amber-300 bg-amber-50',
@@ -152,6 +159,17 @@ async function doUnassign(rowId: string) {
         type="button"
         class="rounded-full px-3 py-1 text-xs font-semibold"
         :class="kind === chip.value ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'"
+        @click="kind = chip.value"
+      >
+        {{ t(chip.labelKey) }}
+      </button>
+      <span class="h-4 w-px bg-gray-300" aria-hidden="true" />
+      <button
+        v-for="chip in sourceChips"
+        :key="chip.value"
+        type="button"
+        class="rounded-full px-3 py-1 text-xs font-semibold"
+        :class="kind === chip.value ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'"
         @click="kind = chip.value"
       >
         {{ t(chip.labelKey) }}

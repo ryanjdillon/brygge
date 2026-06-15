@@ -47,7 +47,7 @@ export interface BankRowSuggestions {
 
 const BASE = '/api/v1/admin/accounting/bank-rows'
 
-export type BankRowKind = 'all' | 'incoming' | 'outgoing' | 'dismissed'
+export type BankRowKind = 'all' | 'incoming' | 'outgoing' | 'dismissed' | 'bank' | 'vipps' | 'duplicate' | 'double_payment'
 
 export function useBankUnmatchedRows(kind: Ref<BankRowKind>, q: Ref<string>, year: Ref<number | null>) {
   return useQuery({

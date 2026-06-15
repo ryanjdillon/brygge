@@ -75,6 +75,7 @@ func (s *Service) ListUnmatchedBankRows(
 	args := []any{clubID}
 	next := 2
 
+	const vippsClause = `(bir.counterpart ILIKE '%vipps%' OR bir.description ~* 'Utb\.\s*\d+\s+Vippsnr\s+\d+')`
 	switch kind {
 	case "", "all":
 		where = append(where, "bir.dismissed_at IS NULL")
@@ -84,6 +85,31 @@ func (s *Service) ListUnmatchedBankRows(
 		where = append(where, "bir.dismissed_at IS NULL", "bir.amount < 0")
 	case "dismissed":
 		where = append(where, "bir.dismissed_at IS NOT NULL")
+	case "vipps":
+		where = append(where, "bir.dismissed_at IS NULL", vippsClause)
+	case "bank":
+		where = append(where, "bir.dismissed_at IS NULL", "NOT "+vippsClause)
+	case "duplicate":
+		where = append(where, "bir.dismissed_at IS NULL",
+			`bir.reference <> '' AND EXISTS (
+			   SELECT 1 FROM bank_import_rows other
+			    WHERE other.id <> bir.id
+			      AND other.club_id = bir.club_id
+			      AND other.reference = bir.reference
+			      AND other.journal_entry_id IS NOT NULL
+			 )`)
+	case "double_payment":
+		where = append(where, "bir.dismissed_at IS NULL",
+			`bir.kid_number <> '' AND EXISTS (
+			   SELECT 1 FROM bank_import_rows other
+			    WHERE other.id <> bir.id
+			      AND other.club_id = bir.club_id
+			      AND other.row_date = bir.row_date
+			      AND other.amount = bir.amount
+			      AND other.kid_number = bir.kid_number
+			      AND COALESCE(other.reference, '') <> COALESCE(bir.reference, '')
+			      AND other.journal_entry_id IS NOT NULL
+			 )`)
 	default:
 		return nil, fmt.Errorf("invalid kind %q", kind)
 	}
