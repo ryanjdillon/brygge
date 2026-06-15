@@ -31,8 +31,11 @@ import FileInput from '@/components/ui/form/FileInput.vue'
 import { monthOptions } from '@/utils/month'
 import type { BankImportRow } from '@/composables/useBankImports'
 import { runBankSync, runVippsResync, type BankSyncResult, type VippsResyncResult } from '@/composables/useBankImports'
+import { importUni24CSV, type Uni24ImportResult } from '@/composables/useFinancials'
+import { useFreshTotp } from '@/composables/useFreshTotp'
 
 const { t, locale } = useI18n()
+const { ensureFreshTotp } = useFreshTotp()
 const queryClient = useQueryClient()
 
 const { data: formats } = useBankFormats()
@@ -104,6 +107,35 @@ async function submitVipps() {
     vippsError.value = e?.message ?? 'Upload failed'
   } finally {
     vippsBusy.value = false
+  }
+}
+
+// ── Uni24 import ────────────────────────────────────────────
+const thisYear = new Date().getFullYear()
+const uni24File = ref<File | null>(null)
+const uni24DateFrom = ref(`${thisYear - 1}-01-01`)
+const uni24DateTo = ref(`${thisYear}-12-31`)
+const uni24Error = ref<string | null>(null)
+const uni24Busy = ref(false)
+const uni24Result = ref<Uni24ImportResult | null>(null)
+
+function onUni24File(files: FileList | null) {
+  uni24File.value = files?.[0] ?? null
+  uni24Result.value = null
+}
+
+async function submitUni24() {
+  if (!uni24File.value) return
+  const ok = await ensureFreshTotp()
+  if (!ok) return
+  uni24Error.value = null
+  uni24Busy.value = true
+  try {
+    uni24Result.value = await importUni24CSV(uni24File.value, uni24DateFrom.value, uni24DateTo.value)
+  } catch (e: any) {
+    uni24Error.value = e?.message ?? 'Import failed'
+  } finally {
+    uni24Busy.value = false
   }
 }
 
@@ -543,6 +575,81 @@ const filterMonthValue = computed<number>({
           <span class="font-medium">{{ vippsResult.filename }}</span>
           — {{ t('admin.bankImports.imported') }}: {{ vippsResult.imported }}
           · {{ t('admin.bankImports.skipped') }}: {{ vippsResult.skipped_dup }}
+        </div>
+      </section>
+
+      <!-- Uni24 import card -->
+      <section class="col-span-full rounded-lg border border-gray-200 bg-white p-5" data-testid="uni24-upload-card">
+        <h2 class="text-base font-semibold text-gray-900">{{ t('admin.financials.importUni24Title') }}</h2>
+        <p class="mt-1 text-xs text-gray-500">{{ t('admin.financials.importUni24Desc') }}</p>
+
+        <div class="mt-3 grid gap-3 sm:grid-cols-3">
+          <div>
+            <label class="block text-xs font-medium text-gray-700">{{ t('admin.financials.importFile') }}</label>
+            <FileInput
+              accept=".csv,text/csv"
+              class="mt-1 block text-sm"
+              data-testid="uni24-file-input"
+              @change="onUni24File"
+            />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-700">{{ t('admin.financials.importDateFrom') }}</label>
+            <input
+              v-model="uni24DateFrom"
+              type="date"
+              class="mt-1 w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-700">{{ t('admin.financials.importDateTo') }}</label>
+            <input
+              v-model="uni24DateTo"
+              type="date"
+              class="mt-1 w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+
+        <p v-if="uni24Error" class="mt-2 rounded-md bg-red-50 px-2 py-1 text-xs text-red-700">{{ uni24Error }}</p>
+
+        <div class="mt-3 flex justify-end">
+          <button
+            type="button"
+            :disabled="!uni24File || uni24Busy"
+            class="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+            data-testid="uni24-upload-submit"
+            @click="submitUni24"
+          >
+            {{ uni24Busy ? t('common.loading') : t('admin.financials.importRun') }}
+          </button>
+        </div>
+
+        <div v-if="uni24Result" class="mt-3 rounded-md bg-gray-50 px-3 py-2 text-xs text-gray-700" data-testid="uni24-result">
+          {{ t('admin.financials.importDone', { imported: uni24Result.imported, skipped: uni24Result.skipped }) }}
+          <details v-if="uni24Result.rows.length" class="mt-2">
+            <summary class="cursor-pointer text-gray-500 hover:text-gray-700">
+              {{ t('admin.financials.importColStatus') }} ({{ uni24Result.rows.length }})
+            </summary>
+            <table class="mt-2 w-full text-xs">
+              <thead class="text-left text-gray-500">
+                <tr>
+                  <th class="py-1 pr-3">{{ t('admin.financials.importColId') }}</th>
+                  <th class="py-1 pr-3">{{ t('admin.financials.importColName') }}</th>
+                  <th class="py-1 pr-3">{{ t('admin.financials.importColStatus') }}</th>
+                  <th class="py-1">{{ t('admin.financials.importColError') }}</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100">
+                <tr v-for="row in uni24Result.rows" :key="row.row" :class="row.status === 'error' ? 'bg-red-50' : ''">
+                  <td class="py-1 pr-3 font-mono">{{ row.external_id }}</td>
+                  <td class="py-1 pr-3">{{ row.name }}</td>
+                  <td class="py-1 pr-3">{{ row.status }}</td>
+                  <td class="py-1 text-red-600">{{ row.error }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </details>
         </div>
       </section>
     </div>

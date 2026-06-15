@@ -267,11 +267,6 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/KanbanView.vue'),
       },
       {
-        path: 'financials',
-        name: 'admin-financials',
-        component: () => import('@/views/admin/FinancialsView.vue'),
-      },
-      {
         path: 'financials/payments',
         name: 'admin-payments',
         component: () => import('@/views/admin/PaymentsListView.vue'),
