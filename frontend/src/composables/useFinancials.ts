@@ -178,6 +178,43 @@ export function useCreateInvoice() {
   })
 }
 
+export interface Uni24ImportRow {
+  row: number
+  external_id: string
+  name: string
+  status: string
+  error?: string
+}
+
+export interface Uni24ImportResult {
+  imported: number
+  skipped: number
+  total: number
+  rows: Uni24ImportRow[]
+}
+
+export async function importUni24CSV(
+  file: File,
+  dateFrom: string,
+  dateTo: string,
+): Promise<Uni24ImportResult> {
+  const params = new URLSearchParams()
+  if (dateFrom) params.set('date_from', dateFrom)
+  if (dateTo) params.set('date_to', dateTo)
+  const fd = new FormData()
+  fd.append('file', file)
+  const res = await fetch(`/api/v1/admin/invoices/import/uni24?${params}`, {
+    method: 'POST',
+    credentials: 'include',
+    body: fd,
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }))
+    throw new Error(err.error ?? 'Import failed')
+  }
+  return res.json()
+}
+
 export function useExportCSV() {
   async function downloadCSV(filters: ExportFilters = {}) {
     const query = new URLSearchParams()
