@@ -1509,7 +1509,8 @@
       "bankImportsListTitle": "Tidligere bankimporter",
       "noBankImports": "Ingen bankimporter ennå.",
       "runVippsResync": "Synk Vipps",
-      "vippsResyncResult": "Vipps-resync: {resynced}/{scanned} omklassifisert · {skipped} hoppet over · {failed} feilet."
+      "vippsResyncResult": "Vipps-resync: {resynced}/{scanned} omklassifisert · {skipped} hoppet over · {failed} feilet.",
+      "tabReconcile": "Tildel"
     },
     "pdfArchive": {
       "title": "PDF-arkiv",
@@ -1540,6 +1541,58 @@
         "invoiceByNumber": "Faktura etter nummer",
         "kidMatch": "Bank-rader for ein KID",
         "unpaidWithBankRow": "Ubetalte med matchande bank-rad"
+      }
+    },
+    "bankReconcile": {
+      "filterAll": "Alle",
+      "filterIncoming": "Inngåande",
+      "filterOutgoing": "Utgåande",
+      "filterDismissed": "Avvising",
+      "searchPlaceholder": "Søk på skildring, motpart eller beløp",
+      "empty": "Ingenting å tildele. Bra.",
+      "showSuggestions": "Vis forslag",
+      "hideSuggestions": "Skjul",
+      "assign": "Tildel",
+      "searchInvoice": "Søk faktura",
+      "assignAccount": "Tildel konto",
+      "dismiss": "Avvis",
+      "unassign": "Angre tildeling",
+      "unassignConfirm": "Annuller bilaget og legg raden tilbake i køen?",
+      "dismissedAs": "Avvist: {reason}",
+      "potentialTitle": "Potensielle fakturaer",
+      "potentialBanner": "Berre potensielle treff — sjekk informasjon før tildeling.",
+      "searchInvoicePlaceholder": "Søk fakturanummer eller medlem",
+      "noPotential": "Ingen opne fakturaer med dette beløpet.",
+      "accountPickerTitle": "Tildel til konto",
+      "searchAccountPlaceholder": "Søk kontokode eller namn",
+      "accountSuggestions": "Foreslåtte",
+      "dismissTitle": "Avvis denne raden",
+      "dismissHint": "Vel ein grunn. Raden vert fjerna frå køen men ligg igjen i revisjonsloggen.",
+      "confidence": {
+        "sterk": "Sterk",
+        "sannsynleg": "Sannsynleg",
+        "svak": "Svak",
+        "potensiell": "Potensiell"
+      },
+      "reasons": {
+        "bounced": "Avvist av bank",
+        "internal_transfer": "Intern overføring",
+        "duplicate": "Duplikat",
+        "bank_fee": "Bankgebyr",
+        "refund_or_credit": "Refusjon eller kreditering",
+        "overpayment": "Overbetaling",
+        "unidentifiable": "Ikkje identifiserbar",
+        "test_transaction": "Testtransaksjon"
+      },
+      "reasonHints": {
+        "bounced": "Betalinga vart avvist (t.d. høyrente-tak nådd). Medlemen skuldar framleis.",
+        "internal_transfer": "Overføring mellom to av klubben sine kontoar.",
+        "duplicate": "Same rad ligg i ein anna import (overlappande periode).",
+        "bank_fee": "Servicegebyr / bankkostnad, ikkje fakturabetaling.",
+        "refund_or_credit": "Klubben refunderte ein medlem; motrekneskap.",
+        "overpayment": "Beløp større enn open fakturasum; spora manuelt.",
+        "unidentifiable": "Ingen måte å finne ut kven som betalte. Sjå att seinare om meir info dukkar opp.",
+        "test_transaction": "Test-rad frå banken under systemoppsett."
       }
     }
   },

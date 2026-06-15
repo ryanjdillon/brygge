@@ -22,6 +22,8 @@ import {
 import { useAccountsList } from '@/composables/useAccounting'
 import AccountSelect from '@/components/ui/AccountSelect.vue'
 import Tabs from '@/components/ui/Tabs.vue'
+import BankReconcileTab from '@/components/admin/BankReconcileTab.vue'
+import { useBankUnmatchedCount } from '@/composables/useBankReconcile'
 import BankRowsTable from '@/components/admin/BankRowsTable.vue'
 import VippsRowsTable from '@/components/admin/VippsRowsTable.vue'
 import Select from '@/components/ui/form/Select.vue'
@@ -145,10 +147,12 @@ function nok(n: number): string {
 }
 
 // ── Tabs ────────────────────────────────────────────────────
-const activeTab = ref<'imports' | 'accounts'>('imports')
+const activeTab = ref<'imports' | 'accounts' | 'reconcile'>('imports')
+const { data: unmatchedCount } = useBankUnmatchedCount()
 const tabs = computed(() => [
   { value: 'imports', label: t('admin.bankImports.tabImports') },
   { value: 'accounts', label: t('admin.bankImports.tabAccounts') },
+  { value: 'reconcile', label: t('admin.bankImports.tabReconcile'), badge: unmatchedCount.value ?? 0 },
 ])
 
 // ── Sync action ─────────────────────────────────────────────
@@ -384,6 +388,10 @@ const filterMonthValue = computed<number>({
     </div>
 
     <!-- Accounts tab -->
+    <div v-if="activeTab === 'reconcile'" class="mt-6">
+      <BankReconcileTab />
+    </div>
+
     <div v-if="activeTab === 'accounts'" class="mt-6 space-y-4">
       <section class="rounded-lg border border-gray-200 bg-white p-5">
         <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

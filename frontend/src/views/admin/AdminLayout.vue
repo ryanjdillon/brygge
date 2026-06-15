@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useClubStore } from '@/stores/club'
 import { useFeatures } from '@/composables/useFeatures'
 import { useNavGate } from '@/composables/useNavGate'
+import { useBankUnmatchedCount } from '@/composables/useBankReconcile'
 import ErrorBoundary from '@/components/ui/ErrorBoundary.vue'
 import {
   Users,
@@ -43,6 +44,7 @@ club.ensureLoaded()
 
 const { isEnabled } = useFeatures()
 const route = useRoute()
+const { data: bankUnmatchedCount } = useBankUnmatchedCount()
 
 const sidebarOpen = ref(false)
 
@@ -52,6 +54,7 @@ interface NavItem {
   label: string
   roles?: string[]
   feature?: 'bookings' | 'projects' | 'calendar' | 'commerce' | 'communications' | 'accounting'
+  badge?: number
 }
 
 interface NavGroup {
@@ -98,7 +101,7 @@ const navGroups = computed<NavGroup[]>(() => {
         { to: '/admin/accounting/faktura', icon: Receipt, label: t('admin.sidebar.faktura'), roles: ['treasurer', 'admin'], feature: 'accounting' },
         { to: '/admin/accounting/accounts', icon: ClipboardList, label: t('admin.sidebar.accounts'), roles: ['treasurer', 'board', 'admin'], feature: 'accounting' },
         { to: '/admin/accounting/journal', icon: BookOpen, label: t('admin.sidebar.journal'), roles: ['treasurer', 'board', 'admin'], feature: 'accounting' },
-        { to: '/admin/accounting/bank-imports', icon: Landmark, label: t('admin.sidebar.bankImports'), roles: ['treasurer', 'admin'], feature: 'accounting' },
+        { to: '/admin/accounting/bank-imports', icon: Landmark, label: t('admin.sidebar.bankImports'), roles: ['treasurer', 'admin'], feature: 'accounting', badge: bankUnmatchedCount.value ?? 0 },
         { to: '/admin/economy/settings', icon: Settings, label: t('admin.sidebar.economySettings'), roles: ['treasurer', 'admin'], feature: 'accounting' },
       ],
     },
@@ -217,7 +220,13 @@ async function handleNavClick(e: MouseEvent, to: string) {
                 :is="item.icon"
                 :class="['h-5 w-5', isActive(item.to) ? 'text-blue-600' : 'text-gray-400']"
               />
-              {{ item.label }}
+              <span class="flex-1">{{ item.label }}</span>
+              <span
+                v-if="item.badge && item.badge > 0"
+                class="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-semibold text-white"
+              >
+                {{ item.badge }}
+              </span>
             </RouterLink>
           </div>
         </div>

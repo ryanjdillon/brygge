@@ -915,6 +915,61 @@
         "kidMatch": "Lignes bancaires pour un KID",
         "unpaidWithBankRow": "Impayés avec ligne bancaire correspondante"
       }
+    },
+    "bankImports": {
+      "tabReconcile": "Tildel"
+    },
+    "bankReconcile": {
+      "filterAll": "All",
+      "filterIncoming": "Incoming",
+      "filterOutgoing": "Outgoing",
+      "filterDismissed": "Dismissed",
+      "searchPlaceholder": "Search description, payer or amount",
+      "empty": "Nothing to assign. Great.",
+      "showSuggestions": "Show suggestions",
+      "hideSuggestions": "Hide",
+      "assign": "Assign",
+      "searchInvoice": "Search invoice",
+      "assignAccount": "Assign account",
+      "dismiss": "Dismiss",
+      "unassign": "Undo assignment",
+      "unassignConfirm": "Void the journal entry and put the row back in the queue?",
+      "dismissedAs": "Dismissed: {reason}",
+      "potentialTitle": "Potential invoices",
+      "potentialBanner": "Only matched by amount. Verify before assigning.",
+      "searchInvoicePlaceholder": "Search invoice number or member name",
+      "noPotential": "No matching open invoices.",
+      "accountPickerTitle": "Assign to account",
+      "searchAccountPlaceholder": "Search account code or name",
+      "accountSuggestions": "Suggested",
+      "dismissTitle": "Dismiss this row",
+      "dismissHint": "Pick a reason. The row drops out of the queue but stays in the audit log.",
+      "confidence": {
+        "sterk": "Strong match",
+        "sannsynleg": "Likely",
+        "svak": "Weak",
+        "potensiell": "Potential"
+      },
+      "reasons": {
+        "bounced": "Bounced",
+        "internal_transfer": "Internal transfer",
+        "duplicate": "Duplicate",
+        "bank_fee": "Bank fee",
+        "refund_or_credit": "Refund or credit",
+        "overpayment": "Overpayment",
+        "unidentifiable": "Unidentifiable",
+        "test_transaction": "Test transaction"
+      },
+      "reasonHints": {
+        "bounced": "Payment was rejected at the bank (e.g. savings cap). Member still owes.",
+        "internal_transfer": "Transfer between two of the club’s own accounts.",
+        "duplicate": "Same row appears in another import (overlapping period).",
+        "bank_fee": "Service charge / bank cost, not a faktura payment.",
+        "refund_or_credit": "Club refunded a member; offsetting row.",
+        "overpayment": "Amount exceeds the open invoice total; tracked manually.",
+        "unidentifiable": "No way to determine who paid. Revisit if more info surfaces.",
+        "test_transaction": "Bank-side test row from system setup."
+      }
     }
   },
   "projects": {

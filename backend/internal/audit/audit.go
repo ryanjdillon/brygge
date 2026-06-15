@@ -52,6 +52,12 @@ const (
 	ActionPaymentCreated      = "payment.created"
 	ActionPaymentViewed       = "finance.payment_viewed"
 
+	// Bank row reconciliation (DIL-392)
+	ActionBankRowAssignedInvoice = "bank_row.assigned_invoice"
+	ActionBankRowAssignedAccount = "bank_row.assigned_account"
+	ActionBankRowDismissed       = "bank_row.dismissed"
+	ActionBankRowUnassigned      = "bank_row.unassigned"
+
 	// Developer / DB inspection (DIL-365)
 	ActionDeveloperQuery = "developer.db_query"
 

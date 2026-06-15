@@ -210,6 +210,7 @@ func main() {
 	invoiceHandler := handlers.NewInvoiceHandler(db, &cfg, emailClient, auditService, log)
 	accountingSvc := accounting.NewService(db, auditService, log)
 	accountingHandler := handlers.NewAccountingHandler(accountingSvc, auditService, log)
+	bankRowsHandler := handlers.NewBankRowsHandler(accountingSvc, auditService, log)
 	devQueryHandler := handlers.NewDevQueryHandler(db, auditService, log)
 	priceItemsHandler := handlers.NewPriceItemsHandler(db, &cfg, log)
 	productsHandler := handlers.NewProductsHandler(db, &cfg, log)
@@ -1042,6 +1043,27 @@ func main() {
 							r.Get("/", accountingHandler.HandleVippsReconcilePreview)
 							r.Post("/confirm", accountingHandler.HandleVippsReconcileConfirm)
 						})
+
+						// DIL-392 Tildel tab — per-row manual
+						// reconciliation. Static "unmatched" paths
+						// must register before the parameterised
+						// {rowID} block so chi routes them right.
+						r.Get("/bank-rows/unmatched", bankRowsHandler.HandleListUnmatched)
+						r.Get("/bank-rows/unmatched/count", bankRowsHandler.HandleCountUnmatched)
+						r.Get("/bank-rows/{rowID}/suggestions", bankRowsHandler.HandleSuggestions)
+						r.Get("/bank-rows/{rowID}/potential-invoices", bankRowsHandler.HandlePotentialInvoices)
+						r.With(middleware.RequireRole("treasurer", "admin"),
+							middleware.RequireFreshTOTPDefault()).
+							Post("/bank-rows/{rowID}/assign-invoice", bankRowsHandler.HandleAssignInvoice)
+						r.With(middleware.RequireRole("treasurer", "admin"),
+							middleware.RequireFreshTOTPDefault()).
+							Post("/bank-rows/{rowID}/assign-account", bankRowsHandler.HandleAssignAccount)
+						r.With(middleware.RequireRole("treasurer", "admin"),
+							middleware.RequireFreshTOTPDefault()).
+							Post("/bank-rows/{rowID}/dismiss", bankRowsHandler.HandleDismiss)
+						r.With(middleware.RequireRole("treasurer", "admin"),
+							middleware.RequireFreshTOTPDefault()).
+							Post("/bank-rows/{rowID}/unassign", bankRowsHandler.HandleUnassign)
 
 						r.Route("/rules", func(r chi.Router) {
 							r.Get("/", accountingHandler.HandleListRules)
