@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQueryClient } from '@tanstack/vue-query'
 import {
@@ -278,6 +278,24 @@ const filterMonth = ref<number | null>(null) // 1–12, null = whole year
 const yearAutoSet = ref(false)
 const userTouchedYear = ref(false)
 
+// Pre-select the club's default faktura bank account so the Accounts tab
+// shows transactions without requiring a manual pick first.
+const defaultBankGlCode = ref('')
+const accountAutoSet = ref(false)
+const userTouchedAccount = ref(false)
+
+onMounted(async () => {
+  try {
+    const res = await fetch('/api/v1/admin/settings/bank-accounts', { credentials: 'include' })
+    if (!res.ok) return
+    const list: { gl_code?: string; is_default_for_invoices?: boolean }[] = await res.json()
+    const def = (list ?? []).find((a) => a.is_default_for_invoices)
+    if (def?.gl_code) defaultBankGlCode.value = def.gl_code
+  } catch {
+    // Non-fatal: the user can still pick an account manually.
+  }
+})
+
 const yearOptions = computed(() => {
   const current = new Date().getFullYear()
   const years = new Set<number>(Array.from({ length: 6 }, (_, i) => current - i))
@@ -317,11 +335,28 @@ const { data: accountsBankRows } = useBankRowsByAccount(filterBankAccount, filte
 const { data: accountsVippsRows } = useVippsRowsByMSN(filterVippsMSN, filterFrom, filterTo)
 
 function selectBankAccount(code: string) {
+  userTouchedAccount.value = true
   accountFilter.value = code ? { kind: 'bank', value: code } : { kind: 'none', value: '' }
 }
 function selectVippsMSN(msn: string) {
+  userTouchedAccount.value = true
   accountFilter.value = msn ? { kind: 'vipps', value: msn } : { kind: 'none', value: '' }
 }
+
+// Default to the faktura bank account once both its gl_code and the
+// account list are loaded, unless the user has already chosen one.
+watch(
+  [defaultBankGlCode, bankAccounts],
+  () => {
+    if (accountAutoSet.value || userTouchedAccount.value) return
+    if (accountFilter.value.kind !== 'none') return
+    const code = defaultBankGlCode.value
+    if (!code || !bankAccounts.value.some((a) => a.code === code)) return
+    accountFilter.value = { kind: 'bank', value: code }
+    accountAutoSet.value = true
+  },
+  { immediate: true },
+)
 
 function onUserYearChange(y: number) {
   userTouchedYear.value = true
