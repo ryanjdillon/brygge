@@ -123,12 +123,12 @@ func (h *FinancialsHandler) HandleGetPriceItemSummary(w http.ResponseWriter, r *
 		       COUNT(DISTINCT CASE WHEN i.payment_id IS NULL AND i.due_date < CURRENT_DATE THEN i.id END) AS overdue_count
 		  FROM price_items pi
 		  LEFT JOIN invoice_lines il ON il.price_item_id = pi.id
-		  LEFT JOIN invoices i ON i.id = il.invoice_id
+		  JOIN invoices i ON i.id = il.invoice_id
 		   AND i.club_id = $1
 		   AND i.status <> 'voided'`+periodClause+`
 		 WHERE pi.club_id = $1
 		 GROUP BY pi.id, pi.name, pi.description, pi.category, pi.amount, pi.unit, pi.sort_order
-		HAVING COALESCE(SUM(il.line_total), 0) > 0
+		HAVING COUNT(i.id) > 0
 		 ORDER BY pi.category, pi.sort_order, pi.name`,
 		args...,
 	)
