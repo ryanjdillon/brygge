@@ -88,7 +88,7 @@ function friendlyError(backendCode: string): string {
 <template>
   <div
     v-if="gate.pending"
-    class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+    class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4"
     role="dialog"
     aria-modal="true"
     @keydown.esc="cancel"
