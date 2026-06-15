@@ -969,7 +969,10 @@
         "overpayment": "Amount exceeds the open invoice total; tracked manually.",
         "unidentifiable": "No way to determine who paid. Revisit if more info surfaces.",
         "test_transaction": "Bank-side test row from system setup."
-      }
+      },
+      "year": "Anno",
+      "yearAll": "Tutti gli anni",
+      "likelyDuplicate": "Probabile duplicato — altra riga già abbinata"
     }
   },
   "projects": {

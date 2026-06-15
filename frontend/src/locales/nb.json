@@ -1593,7 +1593,10 @@
         "overpayment": "Beløp større enn open fakturasum; spora manuelt.",
         "unidentifiable": "Ingen måte å finne ut kven som betalte. Sjå att seinare om meir info dukkar opp.",
         "test_transaction": "Test-rad frå banken under systemoppsett."
-      }
+      },
+      "year": "År",
+      "yearAll": "Alle år",
+      "likelyDuplicate": "Truleg duplikat — anna rad er allereie matcha"
     }
   },
   "projects": {

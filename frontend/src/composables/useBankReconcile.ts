@@ -12,6 +12,7 @@ export interface BankRowSummary {
   bank_account_code: string
   dismissed_at?: string | null
   dismissed_reason?: string | null
+  likely_duplicate_of_matched: boolean
 }
 
 export interface InvoiceSuggestion {
@@ -46,13 +47,14 @@ const BASE = '/api/v1/admin/accounting/bank-rows'
 
 export type BankRowKind = 'all' | 'incoming' | 'outgoing' | 'dismissed'
 
-export function useBankUnmatchedRows(kind: Ref<BankRowKind>, q: Ref<string>) {
+export function useBankUnmatchedRows(kind: Ref<BankRowKind>, q: Ref<string>, year: Ref<number | null>) {
   return useQuery({
-    queryKey: computed(() => ['bank-rows', 'unmatched', kind.value, q.value]),
+    queryKey: computed(() => ['bank-rows', 'unmatched', kind.value, q.value, year.value]),
     queryFn: async () => {
       const url = new URL(`${BASE}/unmatched`, window.location.origin)
       if (kind.value && kind.value !== 'all') url.searchParams.set('kind', kind.value)
       if (q.value) url.searchParams.set('q', q.value)
+      if (year.value) url.searchParams.set('year', String(year.value))
       const res = await fetch(url.toString(), { credentials: 'include' })
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
       const body = await res.json()

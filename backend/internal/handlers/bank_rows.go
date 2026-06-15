@@ -40,8 +40,9 @@ func (h *BankRowsHandler) HandleListUnmatched(w http.ResponseWriter, r *http.Req
 	q := r.URL.Query()
 	limit, _ := strconv.Atoi(q.Get("limit"))
 	offset, _ := strconv.Atoi(q.Get("offset"))
+	year, _ := strconv.Atoi(q.Get("year"))
 	kind := q.Get("kind")
-	rows, err := h.svc.ListUnmatchedBankRows(ctx, claims.ClubID, kind, q.Get("q"), limit, offset)
+	rows, err := h.svc.ListUnmatchedBankRows(ctx, claims.ClubID, kind, q.Get("q"), year, limit, offset)
 	if err != nil {
 		h.log.Error().Err(err).Msg("list unmatched bank rows")
 		Error(w, http.StatusInternalServerError, "internal error")

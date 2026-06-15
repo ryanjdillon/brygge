@@ -21,7 +21,14 @@ const { t, locale } = useI18n()
 
 const kind = ref<BankRowKind>('all')
 const q = ref('')
-const { data: rows, isLoading } = useBankUnmatchedRows(kind, q)
+const currentYear = new Date().getFullYear()
+const year = ref<number | null>(currentYear)
+const yearOptions = computed(() => {
+  const ys: (number | null)[] = [null]
+  for (let i = 0; i < 5; i++) ys.push(currentYear - i)
+  return ys
+})
+const { data: rows, isLoading } = useBankUnmatchedRows(kind, q, year)
 
 const focusedRowId = ref<string | null>(null)
 const { data: suggestions } = useBankRowSuggestions(focusedRowId)
@@ -108,7 +115,7 @@ const dismissReason = ref<DismissReason | null>(null)
 
 function openDismiss(row: BankRowSummary) {
   dismissRowId.value = row.id
-  dismissReason.value = null
+  dismissReason.value = row.likely_duplicate_of_matched ? 'duplicate' : null
   dismissOpen.value = true
 }
 
@@ -148,6 +155,12 @@ async function doUnassign(rowId: string) {
         {{ t(chip.labelKey) }}
       </button>
       <div class="ml-auto flex items-center gap-2">
+        <label class="text-xs text-gray-600">{{ t('admin.bankReconcile.year') }}</label>
+        <select v-model="year" class="rounded-md border border-gray-300 px-2 py-1 text-sm">
+          <option v-for="y in yearOptions" :key="y ?? 'all'" :value="y">
+            {{ y === null ? t('admin.bankReconcile.yearAll') : y }}
+          </option>
+        </select>
         <Search class="h-4 w-4 text-gray-400" />
         <input
           v-model="q"
@@ -189,6 +202,9 @@ async function doUnassign(rowId: string) {
               <p class="mt-0.5 truncate text-xs text-gray-500" :title="row.description">{{ row.description || '—' }}</p>
               <p v-if="row.dismissed_at" class="mt-1 text-xs text-amber-700">
                 {{ t('admin.bankReconcile.dismissedAs', { reason: t('admin.bankReconcile.reasons.' + (row.dismissed_reason ?? '')) }) }}
+              </p>
+              <p v-if="row.likely_duplicate_of_matched && !row.dismissed_at" class="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+                ⚠ {{ t('admin.bankReconcile.likelyDuplicate') }}
               </p>
             </div>
           </div>

@@ -15,23 +15,31 @@ import (
 // BankRowSummary is the per-row payload rendered in the Tildel tab
 // queue. Fields that the UI surfaces directly only — no GL ids etc.
 type BankRowSummary struct {
-	ID              string     `json:"id"`
-	RowDate         time.Time  `json:"row_date"`
-	Amount          float64    `json:"amount"`
-	KIDNumber       string     `json:"kid_number"`
-	Counterpart     string     `json:"counterpart"`
-	Description     string     `json:"description"`
-	BankAccountCode string     `json:"bank_account_code"`
-	DismissedAt     *time.Time `json:"dismissed_at,omitempty"`
-	DismissedReason *string    `json:"dismissed_reason,omitempty"`
+	ID                       string     `json:"id"`
+	RowDate                  time.Time  `json:"row_date"`
+	Amount                   float64    `json:"amount"`
+	KIDNumber                string     `json:"kid_number"`
+	Counterpart              string     `json:"counterpart"`
+	Description              string     `json:"description"`
+	BankAccountCode          string     `json:"bank_account_code"`
+	DismissedAt              *time.Time `json:"dismissed_at,omitempty"`
+	DismissedReason          *string    `json:"dismissed_reason,omitempty"`
+	LikelyDuplicateOfMatched bool       `json:"likely_duplicate_of_matched"`
 }
 
 // ListUnmatchedBankRows returns the paginated set of rows that still
 // need operator attention. kind = "all" | "incoming" | "outgoing" |
 // "dismissed". q filters substrings against description + counterpart
-// or matches the raw amount.
+// or matches the raw amount. year (0 = no filter) restricts to rows
+// whose row_date falls in that calendar year.
+//
+// Each returned row carries `likely_duplicate_of_matched` — true when
+// another bank row in the same club has identical (row_date, amount,
+// kid_number) AND is already journaled. The UI uses this to badge
+// duplicates so the operator dismisses them as `duplicate` instead of
+// re-matching the same payment.
 func (s *Service) ListUnmatchedBankRows(
-	ctx context.Context, clubID, kind, q string, limit, offset int,
+	ctx context.Context, clubID, kind, q string, year, limit, offset int,
 ) ([]BankRowSummary, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
@@ -68,6 +76,12 @@ func (s *Service) ListUnmatchedBankRows(
 		next += 2
 	}
 
+	if year > 0 {
+		where = append(where, fmt.Sprintf("EXTRACT(YEAR FROM bir.row_date)::int = $%d", next))
+		args = append(args, year)
+		next++
+	}
+
 	args = append(args, limit, offset)
 	limitPh := fmt.Sprintf("$%d", next)
 	offsetPh := fmt.Sprintf("$%d", next+1)
@@ -78,7 +92,16 @@ func (s *Service) ListUnmatchedBankRows(
 		       COALESCE(bir.counterpart, ''),
 		       COALESCE(bir.description, ''),
 		       bi.bank_account_code,
-		       bir.dismissed_at, bir.dismissed_reason
+		       bir.dismissed_at, bir.dismissed_reason,
+		       EXISTS (
+		         SELECT 1 FROM bank_import_rows other
+		          WHERE other.id <> bir.id
+		            AND other.club_id = bir.club_id
+		            AND other.row_date = bir.row_date
+		            AND other.amount = bir.amount
+		            AND COALESCE(other.kid_number, '') = COALESCE(bir.kid_number, '')
+		            AND other.journal_entry_id IS NOT NULL
+		       ) AS likely_duplicate
 		  FROM bank_import_rows bir
 		  JOIN bank_imports bi ON bi.id = bir.bank_import_id
 		 WHERE ` + strings.Join(where, " AND ") + `
@@ -96,7 +119,7 @@ func (s *Service) ListUnmatchedBankRows(
 		var r BankRowSummary
 		if err := rows.Scan(&r.ID, &r.RowDate, &r.Amount, &r.KIDNumber,
 			&r.Counterpart, &r.Description, &r.BankAccountCode,
-			&r.DismissedAt, &r.DismissedReason); err != nil {
+			&r.DismissedAt, &r.DismissedReason, &r.LikelyDuplicateOfMatched); err != nil {
 			return nil, fmt.Errorf("scan: %w", err)
 		}
 		out = append(out, r)
