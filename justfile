@@ -55,13 +55,13 @@ dev-role-bootstrap:
 # Requires `just up` (docker compose db + redis) to be running.
 migrate-check:
     @echo "▶ Setting up clean test DB brygge_migrate_check..."
-    {{compose}} exec -T db psql -U postgres -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS brygge_migrate_check;" >/dev/null
-    {{compose}} exec -T db psql -U postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE brygge_migrate_check OWNER brygge;" >/dev/null
-    {{compose}} exec -T db psql -U postgres -d brygge_migrate_check -v ON_ERROR_STOP=1 -c "DO \$\$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'brygge_dev_ro') THEN CREATE ROLE brygge_dev_ro NOLOGIN; END IF; END \$\$; GRANT USAGE ON SCHEMA public TO brygge_dev_ro; GRANT brygge_dev_ro TO brygge; ALTER DEFAULT PRIVILEGES FOR ROLE brygge IN SCHEMA public GRANT SELECT ON TABLES TO brygge_dev_ro;" >/dev/null
+    {{compose}} exec -T db psql -U brygge -d postgres -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS brygge_migrate_check;" >/dev/null
+    {{compose}} exec -T db psql -U brygge -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE brygge_migrate_check OWNER brygge;" >/dev/null
+    {{compose}} exec -T db psql -U brygge -d brygge_migrate_check -v ON_ERROR_STOP=1 -c "DO \$\$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'brygge_dev_ro') THEN CREATE ROLE brygge_dev_ro NOLOGIN; END IF; END \$\$; GRANT USAGE ON SCHEMA public TO brygge_dev_ro; GRANT brygge_dev_ro TO brygge; ALTER DEFAULT PRIVILEGES FOR ROLE brygge IN SCHEMA public GRANT SELECT ON TABLES TO brygge_dev_ro;" >/dev/null
     @echo "▶ Applying all migrations to brygge_migrate_check..."
     nix develop --command bash -c 'migrate -path backend/migrations -database "postgres://brygge:brygge@localhost:5432/brygge_migrate_check?sslmode=disable" up'
     @echo "▶ Migrations applied cleanly. Cleaning up..."
-    {{compose}} exec -T db psql -U postgres -v ON_ERROR_STOP=1 -c "DROP DATABASE brygge_migrate_check;" >/dev/null
+    {{compose}} exec -T db psql -U brygge -d postgres -v ON_ERROR_STOP=1 -c "DROP DATABASE brygge_migrate_check;" >/dev/null
     @echo "✓ migrate-check passed."
 
 # Run all tests (Go unit + Vue + Playwright)
