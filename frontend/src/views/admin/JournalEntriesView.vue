@@ -6,13 +6,14 @@ import { useConfirm } from '@/stores/confirm'
 import {
   Plus,
   ChevronDown,
+  ChevronUp,
   ChevronRight,
   Send,
   Ban,
   RefreshCw,
   Lock,
   Unlock,
-  Info,
+  Search,
 } from 'lucide-vue-next'
 import {
   useFiscalPeriods,
@@ -36,10 +37,23 @@ const { data: periods } = useFiscalPeriods()
 
 const selectedPeriodId = ref('')
 const statusFilter = ref('all')
+const sourceFilter = ref('all')
+const searchQ = ref('')
+const sortBy = ref('entry_number')
+const sortDir = ref<'asc' | 'desc'>('desc')
 const expandedId = ref<string | null>(null)
 const syncing = ref(false)
 const syncMessage = ref('')
 const showCreateYear = ref(false)
+
+function toggleSort(col: string) {
+  if (sortBy.value === col) {
+    sortDir.value = sortDir.value === 'desc' ? 'asc' : 'desc'
+  } else {
+    sortBy.value = col
+    sortDir.value = 'desc'
+  }
+}
 
 const nextYear = computed(() => {
   if (!periods.value?.length) return new Date().getFullYear()
@@ -62,8 +76,13 @@ const selectedPeriod = computed(() =>
 
 const hasPeriods = computed(() => (periods.value?.length ?? 0) > 0)
 
-const statusRef = computed(() => statusFilter.value)
-const { data: entries, isLoading } = useJournalEntries(selectedPeriodId, statusRef)
+const { data: entries, isLoading } = useJournalEntries(selectedPeriodId, {
+  status: statusFilter,
+  source: sourceFilter,
+  q: searchQ,
+  sortBy,
+  sortDir,
+})
 
 const postMutation = usePostEntry()
 const voidMutation = useVoidEntry()
@@ -211,6 +230,14 @@ const statusFilterOptions = computed(() => [
   { value: 'voided', label: t('admin.accounting.journal.voided') },
 ])
 
+const sourceFilterOptions = computed(() => [
+  { value: 'all', label: t('admin.accounting.journal.allSources') },
+  { value: 'manual', label: t('admin.accounting.journal.sourceManual') },
+  { value: 'sync_payment', label: t('admin.accounting.journal.sourcePaymentSync') },
+  { value: 'sync_invoice', label: t('admin.accounting.journal.sourceInvoiceSync') },
+  { value: 'bank_import', label: t('admin.accounting.journal.sourceBankImport') },
+])
+
 function formatNOK(amount: number): string {
   if (!amount) return '-'
   return new Intl.NumberFormat('nb-NO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount)
@@ -326,7 +353,7 @@ function formatNOK(amount: number): string {
     </div>
 
     <!-- Action bar -->
-    <div class="mt-4 flex flex-wrap items-center gap-4">
+    <div class="mt-4 flex flex-wrap items-center gap-3">
       <RouterLink
         to="/admin/accounting/journal/new"
         class="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
@@ -335,9 +362,24 @@ function formatNOK(amount: number): string {
         {{ t('admin.accounting.journal.newEntry') }}
       </RouterLink>
 
+      <div class="relative">
+        <Search class="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+        <input
+          v-model="searchQ"
+          type="search"
+          class="rounded-md border border-gray-300 py-2 pl-8 pr-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          :placeholder="t('common.search')"
+        />
+      </div>
+
       <div class="flex items-center gap-2">
         <label class="text-sm font-medium text-gray-700">{{ t('admin.accounting.journal.status') }}:</label>
         <Select v-model="statusFilter" :options="statusFilterOptions" width="content" />
+      </div>
+
+      <div class="flex items-center gap-2">
+        <label class="text-sm font-medium text-gray-700">{{ t('admin.accounting.journal.source') }}:</label>
+        <Select v-model="sourceFilter" :options="sourceFilterOptions" width="content" />
       </div>
     </div>
 
@@ -350,22 +392,42 @@ function formatNOK(amount: number): string {
           <tr>
             <th class="w-8 px-2 py-3"></th>
             <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-              <span class="inline-flex items-center gap-1">{{ t('admin.accounting.journal.entryNumber') }}<Info class="h-3.5 w-3.5 text-gray-400" :title="t('admin.accounting.journal.tooltipEntryNumber')" /></span>
+              <button class="inline-flex items-center gap-1 hover:text-gray-800" :title="t('admin.accounting.journal.tooltipEntryNumber')" @click="toggleSort('entry_number')">
+                {{ t('admin.accounting.journal.entryNumber') }}
+                <ChevronUp v-if="sortBy === 'entry_number' && sortDir === 'asc'" class="h-3 w-3" />
+                <ChevronDown v-else-if="sortBy === 'entry_number'" class="h-3 w-3" />
+              </button>
             </th>
             <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-              <span class="inline-flex items-center gap-1">{{ t('admin.accounting.journal.date') }}<Info class="h-3.5 w-3.5 text-gray-400" :title="t('admin.accounting.journal.tooltipDate')" /></span>
+              <button class="inline-flex items-center gap-1 hover:text-gray-800" :title="t('admin.accounting.journal.tooltipDate')" @click="toggleSort('entry_date')">
+                {{ t('admin.accounting.journal.date') }}
+                <ChevronUp v-if="sortBy === 'entry_date' && sortDir === 'asc'" class="h-3 w-3" />
+                <ChevronDown v-else-if="sortBy === 'entry_date'" class="h-3 w-3" />
+              </button>
             </th>
             <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-              <span class="inline-flex items-center gap-1">{{ t('admin.accounting.journal.description') }}<Info class="h-3.5 w-3.5 text-gray-400" :title="t('admin.accounting.journal.tooltipDescription')" /></span>
+              <button class="inline-flex items-center gap-1 hover:text-gray-800" :title="t('admin.accounting.journal.tooltipDescription')" @click="toggleSort('description')">
+                {{ t('admin.accounting.journal.description') }}
+                <ChevronUp v-if="sortBy === 'description' && sortDir === 'asc'" class="h-3 w-3" />
+                <ChevronDown v-else-if="sortBy === 'description'" class="h-3 w-3" />
+              </button>
             </th>
             <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-              <span class="inline-flex items-center gap-1">{{ t('admin.accounting.accounts.code') }}</span>
+              <span class="inline-flex items-center gap-1" :title="t('admin.accounting.journal.tooltipAccounts')">{{ t('admin.accounting.accounts.code') }}</span>
             </th>
             <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-              <span class="inline-flex items-center gap-1">{{ t('admin.accounting.journal.status') }}<Info class="h-3.5 w-3.5 text-gray-400" :title="t('admin.accounting.journal.tooltipStatus')" /></span>
+              <button class="inline-flex items-center gap-1 hover:text-gray-800" :title="t('admin.accounting.journal.tooltipStatus')" @click="toggleSort('status')">
+                {{ t('admin.accounting.journal.status') }}
+                <ChevronUp v-if="sortBy === 'status' && sortDir === 'asc'" class="h-3 w-3" />
+                <ChevronDown v-else-if="sortBy === 'status'" class="h-3 w-3" />
+              </button>
             </th>
             <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-              <span class="inline-flex items-center gap-1">{{ t('admin.accounting.journal.source') }}<Info class="h-3.5 w-3.5 text-gray-400" :title="t('admin.accounting.journal.tooltipSource')" /></span>
+              <button class="inline-flex items-center gap-1 hover:text-gray-800" :title="t('admin.accounting.journal.tooltipSource')" @click="toggleSort('source')">
+                {{ t('admin.accounting.journal.source') }}
+                <ChevronUp v-if="sortBy === 'source' && sortDir === 'asc'" class="h-3 w-3" />
+                <ChevronDown v-else-if="sortBy === 'source'" class="h-3 w-3" />
+              </button>
             </th>
             <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.accounting.journal.actions') }}</th>
           </tr>
@@ -405,24 +467,26 @@ function formatNOK(amount: number): string {
                 {{ sourceLabels[entry.source] ?? entry.source }}
               </td>
               <td class="whitespace-nowrap px-4 py-3" @click.stop>
-                <button
-                  v-if="entry.status === 'draft'"
-                  class="inline-flex items-center gap-1 rounded-md bg-green-50 px-2.5 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100"
-                  :disabled="postMutation.isPending.value"
-                  @click="handlePost(entry.id)"
-                >
-                  <Send class="h-3.5 w-3.5" />
-                  {{ t('admin.accounting.journal.post') }}
-                </button>
-                <button
-                  v-if="entry.status === 'posted'"
-                  class="inline-flex items-center gap-1 rounded-md bg-red-50 px-2.5 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100"
-                  :disabled="voidMutation.isPending.value"
-                  @click="handleVoid(entry.id)"
-                >
-                  <Ban class="h-3.5 w-3.5" />
-                  {{ t('admin.accounting.journal.void') }}
-                </button>
+                <div class="flex items-center gap-2">
+                  <button
+                    v-if="entry.status === 'draft'"
+                    class="text-green-600 hover:text-green-800 disabled:opacity-50"
+                    :disabled="postMutation.isPending.value"
+                    :title="t('admin.accounting.journal.post')"
+                    @click="handlePost(entry.id)"
+                  >
+                    <Send class="h-4 w-4" />
+                  </button>
+                  <button
+                    v-if="entry.status === 'posted'"
+                    class="text-red-600 hover:text-red-800 disabled:opacity-50"
+                    :disabled="voidMutation.isPending.value"
+                    :title="t('admin.accounting.journal.void')"
+                    @click="handleVoid(entry.id)"
+                  >
+                    <Ban class="h-4 w-4" />
+                  </button>
+                </div>
               </td>
             </tr>
             <tr v-if="expandedId === entry.id">

@@ -410,6 +410,18 @@ type JournalFilters struct {
 	Status    string
 	StartDate string
 	EndDate   string
+	Q         string
+	Source    string
+	SortBy    string
+	SortDir   string
+}
+
+var journalSortCols = map[string]string{
+	"entry_number": "entry_number",
+	"entry_date":   "entry_date",
+	"description":  "description",
+	"status":       "status",
+	"source":       "source",
 }
 
 // ListJournalEntries returns journal entries for a club with optional filters.
@@ -430,6 +442,11 @@ func (s *Service) ListJournalEntries(ctx context.Context, clubID string, filters
 		args = append(args, filters.Status)
 		argIdx++
 	}
+	if filters.Source != "" {
+		query += fmt.Sprintf(` AND source = $%d`, argIdx)
+		args = append(args, filters.Source)
+		argIdx++
+	}
 	if filters.StartDate != "" {
 		query += fmt.Sprintf(` AND entry_date >= $%d`, argIdx)
 		args = append(args, filters.StartDate)
@@ -438,8 +455,22 @@ func (s *Service) ListJournalEntries(ctx context.Context, clubID string, filters
 	if filters.EndDate != "" {
 		query += fmt.Sprintf(` AND entry_date <= $%d`, argIdx)
 		args = append(args, filters.EndDate)
+		argIdx++
 	}
-	query += ` ORDER BY entry_number DESC LIMIT 100`
+	if filters.Q != "" {
+		query += fmt.Sprintf(` AND description ILIKE $%d`, argIdx)
+		args = append(args, "%"+filters.Q+"%")
+	}
+
+	col := journalSortCols[filters.SortBy]
+	if col == "" {
+		col = "entry_number"
+	}
+	dir := "DESC"
+	if filters.SortDir == "asc" {
+		dir = "ASC"
+	}
+	query += fmt.Sprintf(` ORDER BY %s %s LIMIT 500`, col, dir)
 
 	rows, err := s.db.Query(ctx, query, args...)
 	if err != nil {

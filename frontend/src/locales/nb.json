@@ -1264,6 +1264,7 @@
         "noEntries": "Ingen bilag i denne perioden.",
         "period": "Periode",
         "allStatuses": "Alle",
+        "allSources": "Alle kilder",
         "sourceManual": "Manuell",
         "sourcePaymentSync": "Betalingssynk",
         "sourceInvoiceSync": "Fakturasynk",

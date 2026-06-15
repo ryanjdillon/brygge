@@ -309,11 +309,16 @@ func (h *AccountingHandler) HandleListJournalEntries(w http.ResponseWriter, r *h
 		return
 	}
 
+	q := r.URL.Query()
 	filters := accounting.JournalFilters{
-		PeriodID:  r.URL.Query().Get("period_id"),
-		Status:    r.URL.Query().Get("status"),
-		StartDate: r.URL.Query().Get("start_date"),
-		EndDate:   r.URL.Query().Get("end_date"),
+		PeriodID:  q.Get("period_id"),
+		Status:    q.Get("status"),
+		StartDate: q.Get("start_date"),
+		EndDate:   q.Get("end_date"),
+		Q:         q.Get("q"),
+		Source:    q.Get("source"),
+		SortBy:    q.Get("sort_by"),
+		SortDir:   q.Get("sort_dir"),
 	}
 
 	entries, err := h.svc.ListJournalEntries(r.Context(), claims.ClubID, filters)

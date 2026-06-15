@@ -822,6 +822,7 @@
         "noEntries": "No entries in this period.",
         "period": "Period",
         "allStatuses": "All",
+        "allSources": "All sources",
         "sourceManual": "Manual",
         "sourcePaymentSync": "Payment sync",
         "sourceInvoiceSync": "Invoice sync",

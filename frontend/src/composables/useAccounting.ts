@@ -193,14 +193,30 @@ export function useReopenPeriod() {
   })
 }
 
-export function useJournalEntries(periodId: Ref<string>, status?: Ref<string>) {
+export interface JournalListParams {
+  status?: Ref<string>
+  source?: Ref<string>
+  q?: Ref<string>
+  sortBy?: Ref<string>
+  sortDir?: Ref<string>
+}
+
+export function useJournalEntries(periodId: Ref<string>, listParams?: JournalListParams) {
   return useQuery({
-    queryKey: ['accounting', 'journal', periodId, status],
+    queryKey: computed(() => [
+      'accounting', 'journal', periodId.value,
+      listParams?.status?.value, listParams?.source?.value,
+      listParams?.q?.value, listParams?.sortBy?.value, listParams?.sortDir?.value,
+    ]),
     queryFn: () => {
-      const params = new URLSearchParams()
-      if (periodId.value) params.set('period_id', periodId.value)
-      if (status?.value && status.value !== 'all') params.set('status', status.value)
-      return apiFetch<JournalEntry[]>(`${BASE}/journal?${params}`)
+      const p = new URLSearchParams()
+      if (periodId.value) p.set('period_id', periodId.value)
+      if (listParams?.status?.value && listParams.status.value !== 'all') p.set('status', listParams.status.value)
+      if (listParams?.source?.value && listParams.source.value !== 'all') p.set('source', listParams.source.value)
+      if (listParams?.q?.value) p.set('q', listParams.q.value)
+      if (listParams?.sortBy?.value) p.set('sort_by', listParams.sortBy.value)
+      if (listParams?.sortDir?.value) p.set('sort_dir', listParams.sortDir.value)
+      return apiFetch<JournalEntry[]>(`${BASE}/journal?${p}`)
     },
     enabled: computed(() => !!periodId.value),
   })
