@@ -1,1 +1,1 @@
-DROP INDEX IF EXISTS idx_bank_import_rows_arkivref;
+-- no-op: the DELETE in the up migration is not reversible

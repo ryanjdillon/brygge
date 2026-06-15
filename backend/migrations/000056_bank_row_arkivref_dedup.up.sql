@@ -16,9 +16,3 @@ WITH ranked AS (
 DELETE FROM bank_import_rows
 WHERE id IN (SELECT id FROM ranked WHERE rn > 1)
   AND journal_entry_id IS NULL;
-
--- Enforce Arkivref uniqueness at the DB level so description-reformatted
--- re-imports can never create a second row for the same booking.
-CREATE UNIQUE INDEX IF NOT EXISTS idx_bank_import_rows_arkivref
-    ON bank_import_rows (club_id, reference)
-    WHERE reference <> '';
