@@ -65,14 +65,30 @@ export function useBankUnmatchedRows(kind: Ref<BankRowKind>, q: Ref<string>, yea
   })
 }
 
-export function useBankUnmatchedCount() {
+export function useBankUnmatchedCount(year?: Ref<number | null>) {
   return useQuery({
-    queryKey: ['bank-rows', 'unmatched', 'count'],
+    queryKey: computed(() => ['bank-rows', 'unmatched', 'count', year?.value ?? null]),
     queryFn: async () => {
-      const res = await fetch(`${BASE}/unmatched/count`, { credentials: 'include' })
+      const url = new URL(`${BASE}/unmatched/count`, window.location.origin)
+      if (year?.value) url.searchParams.set('year', String(year.value))
+      const res = await fetch(url.toString(), { credentials: 'include' })
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
       const body = await res.json()
       return body.count as number
+    },
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+  })
+}
+
+export function useBankUnmatchedCountsByYear() {
+  return useQuery({
+    queryKey: ['bank-rows', 'unmatched', 'count-by-year'],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}/unmatched/count-by-year`, { credentials: 'include' })
+      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+      const body = await res.json()
+      return body.by_year as Record<string, number>
     },
     refetchInterval: 30_000,
     refetchOnWindowFocus: true,

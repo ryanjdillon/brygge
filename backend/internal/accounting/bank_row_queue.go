@@ -191,18 +191,50 @@ func (s *Service) ListUnmatchedBankRows(
 	return out, rows.Err()
 }
 
-// CountUnmatchedBankRows backs the bubble badge: how many rows still
-// need a decision (live + dismissed, since per the user spec liberal
-// counting is still "actionable" — operator can clear dismissed-but-
-// not-truly-dismissed rows later).
-func (s *Service) CountUnmatchedBankRows(ctx context.Context, clubID string) (int, error) {
+// CountUnmatchedBankRows backs the bubble badge. year=0 counts all years.
+func (s *Service) CountUnmatchedBankRows(ctx context.Context, clubID string, year int) (int, error) {
 	var n int
-	err := s.db.QueryRow(ctx,
-		`SELECT count(*) FROM bank_import_rows
-		  WHERE club_id = $1 AND journal_entry_id IS NULL`,
-		clubID,
-	).Scan(&n)
+	var err error
+	if year > 0 {
+		err = s.db.QueryRow(ctx,
+			`SELECT count(*) FROM bank_import_rows
+			  WHERE club_id = $1 AND journal_entry_id IS NULL
+			    AND EXTRACT(YEAR FROM row_date)::int = $2`,
+			clubID, year,
+		).Scan(&n)
+	} else {
+		err = s.db.QueryRow(ctx,
+			`SELECT count(*) FROM bank_import_rows
+			  WHERE club_id = $1 AND journal_entry_id IS NULL`,
+			clubID,
+		).Scan(&n)
+	}
 	return n, err
+}
+
+// CountUnmatchedBankRowsByYear returns unmatched row counts per calendar year,
+// used to populate badges on each year option in the Tildel dropdown.
+func (s *Service) CountUnmatchedBankRowsByYear(ctx context.Context, clubID string) (map[int]int, error) {
+	rows, err := s.db.Query(ctx,
+		`SELECT EXTRACT(YEAR FROM row_date)::int, count(*)
+		   FROM bank_import_rows
+		  WHERE club_id = $1 AND journal_entry_id IS NULL
+		  GROUP BY 1`,
+		clubID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int]int{}
+	for rows.Next() {
+		var yr, cnt int
+		if err := rows.Scan(&yr, &cnt); err != nil {
+			continue
+		}
+		out[yr] = cnt
+	}
+	return out, rows.Err()
 }
 
 // InvoiceSuggestion is one ranked candidate returned by the

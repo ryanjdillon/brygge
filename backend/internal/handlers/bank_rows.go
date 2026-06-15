@@ -58,13 +58,30 @@ func (h *BankRowsHandler) HandleCountUnmatched(w http.ResponseWriter, r *http.Re
 		Error(w, http.StatusUnauthorized, "authentication required")
 		return
 	}
-	n, err := h.svc.CountUnmatchedBankRows(ctx, claims.ClubID)
+	year, _ := strconv.Atoi(r.URL.Query().Get("year"))
+	n, err := h.svc.CountUnmatchedBankRows(ctx, claims.ClubID, year)
 	if err != nil {
 		h.log.Error().Err(err).Msg("count unmatched bank rows")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	JSON(w, http.StatusOK, map[string]any{"count": n})
+}
+
+func (h *BankRowsHandler) HandleCountUnmatchedByYear(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	counts, err := h.svc.CountUnmatchedBankRowsByYear(ctx, claims.ClubID)
+	if err != nil {
+		h.log.Error().Err(err).Msg("count unmatched bank rows by year")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	JSON(w, http.StatusOK, map[string]any{"by_year": counts})
 }
 
 func (h *BankRowsHandler) HandleSuggestions(w http.ResponseWriter, r *http.Request) {

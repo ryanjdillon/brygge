@@ -3,9 +3,11 @@ import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ArrowDownLeft, ArrowUpRight, Sparkles, Search, FileText, Ban, Undo2 } from 'lucide-vue-next'
 import Modal from '@/components/ui/Modal.vue'
+import Select from '@/components/ui/form/Select.vue'
 import {
   useBankUnmatchedRows,
   useBankRowSuggestions,
+  useBankUnmatchedCountsByYear,
   useReconcileMutations,
   fetchPotentialInvoices,
   DISMISS_REASONS,
@@ -22,12 +24,29 @@ const { t, locale } = useI18n()
 const kind = ref<BankRowKind>('all')
 const q = ref('')
 const currentYear = new Date().getFullYear()
-const year = ref<number | null>(currentYear)
+
+const { data: countsByYear } = useBankUnmatchedCountsByYear()
+
+// 0 = "all years" sentinel for the Select component (which requires string|number values).
+// Converted to null for API calls where 0 means no year filter.
+const yearSelectValue = ref<number>(currentYear)
+const year = computed(() => yearSelectValue.value === 0 ? null : yearSelectValue.value)
+
 const yearOptions = computed(() => {
-  const ys: (number | null)[] = [null]
-  for (let i = 0; i < 5; i++) ys.push(currentYear - i)
-  return ys
+  const years = [0, ...Array.from({ length: 5 }, (_, i) => currentYear - i)]
+  return years.map((y) => {
+    const count = y === 0
+      ? Object.values(countsByYear.value ?? {}).reduce((a, b) => a + b, 0)
+      : (countsByYear.value?.[y] ?? 0)
+    return {
+      value: y,
+      label: y === 0
+        ? `${t('admin.bankReconcile.yearAll')}${count > 0 ? ` (${count})` : ''}`
+        : `${y}${count > 0 ? ` (${count})` : ''}`,
+    }
+  })
 })
+
 const { data: rows, isLoading } = useBankUnmatchedRows(kind, q, year)
 
 const duplicateRows = computed(() =>
@@ -183,11 +202,7 @@ async function doUnassign(rowId: string) {
       </button>
       <div class="ml-auto flex items-center gap-2">
         <label class="text-xs text-gray-600">{{ t('admin.bankReconcile.year') }}</label>
-        <select v-model="year" class="rounded-md border border-gray-300 px-2 py-1 text-sm">
-          <option v-for="y in yearOptions" :key="y ?? 'all'" :value="y">
-            {{ y === null ? t('admin.bankReconcile.yearAll') : y }}
-          </option>
-        </select>
+        <Select v-model="yearSelectValue" :options="yearOptions" width="content" />
         <Search class="h-4 w-4 text-gray-400" />
         <input
           v-model="q"

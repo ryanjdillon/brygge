@@ -148,7 +148,8 @@ function nok(n: number): string {
 
 // ── Tabs ────────────────────────────────────────────────────
 const activeTab = ref<'imports' | 'accounts' | 'reconcile'>('imports')
-const { data: unmatchedCount } = useBankUnmatchedCount()
+const currentYear = ref(new Date().getFullYear())
+const { data: unmatchedCount } = useBankUnmatchedCount(currentYear)
 const tabs = computed(() => [
   { value: 'imports', label: t('admin.bankImports.tabImports') },
   { value: 'accounts', label: t('admin.bankImports.tabAccounts') },

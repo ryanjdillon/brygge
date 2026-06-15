@@ -1050,6 +1050,7 @@ func main() {
 						// {rowID} block so chi routes them right.
 						r.Get("/bank-rows/unmatched", bankRowsHandler.HandleListUnmatched)
 						r.Get("/bank-rows/unmatched/count", bankRowsHandler.HandleCountUnmatched)
+						r.Get("/bank-rows/unmatched/count-by-year", bankRowsHandler.HandleCountUnmatchedByYear)
 						r.Get("/bank-rows/{rowID}/suggestions", bankRowsHandler.HandleSuggestions)
 						r.Get("/bank-rows/{rowID}/potential-invoices", bankRowsHandler.HandlePotentialInvoices)
 						r.With(middleware.RequireRole("treasurer", "admin"),

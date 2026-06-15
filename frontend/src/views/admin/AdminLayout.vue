@@ -44,7 +44,8 @@ club.ensureLoaded()
 
 const { isEnabled } = useFeatures()
 const route = useRoute()
-const { data: bankUnmatchedCount } = useBankUnmatchedCount()
+const currentYear = ref(new Date().getFullYear())
+const { data: bankUnmatchedCount } = useBankUnmatchedCount(currentYear)
 
 const sidebarOpen = ref(false)
 
