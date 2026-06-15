@@ -1552,6 +1552,8 @@
       "filterIncoming": "Incoming",
       "filterOutgoing": "Outgoing",
       "filterDismissed": "Dismissed",
+      "confirmedDuplicatesHeader": "Confirmed duplicates ({count} rows)",
+      "confirmedDuplicatesHint": "Arkivref. already journalled — these rows came from overlapping CSV imports. Dismiss as duplicate.",
       "filterBank": "Bank",
       "filterVipps": "Vipps",
       "filterDuplicate": "Duplicate",

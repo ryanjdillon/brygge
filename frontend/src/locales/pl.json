@@ -924,6 +924,8 @@
       "filterIncoming": "Incoming",
       "filterOutgoing": "Outgoing",
       "filterDismissed": "Dismissed",
+      "confirmedDuplicatesHeader": "Potwierdzone duplikaty ({count} wierszy)",
+      "confirmedDuplicatesHint": "Arkivref. już zaksięgowany — te wiersze pochodzą z nakładających się importów CSV. Odrzuć jako duplikat.",
       "filterBank": "Bank",
       "filterVipps": "Vipps",
       "filterDuplicate": "Duplikat",

@@ -30,6 +30,13 @@ const yearOptions = computed(() => {
 })
 const { data: rows, isLoading } = useBankUnmatchedRows(kind, q, year)
 
+const duplicateRows = computed(() =>
+  (rows.value ?? []).filter((r) => r.likely_duplicate_of_matched && !r.dismissed_at),
+)
+const mainRows = computed(() =>
+  (rows.value ?? []).filter((r) => !r.likely_duplicate_of_matched || r.dismissed_at),
+)
+
 const focusedRowId = ref<string | null>(null)
 const { data: suggestions } = useBankRowSuggestions(focusedRowId)
 
@@ -196,120 +203,156 @@ async function doUnassign(rowId: string) {
       {{ t('admin.bankReconcile.empty') }}
     </p>
 
-    <ul v-else class="mt-4 space-y-3">
-      <li
-        v-for="row in rows"
-        :key="row.id"
-        class="rounded-md border border-gray-200 bg-white p-4"
-      >
-        <!-- Bank row info -->
-        <div class="flex items-start justify-between gap-4">
-          <div class="flex items-start gap-3">
-            <component
-              :is="row.amount >= 0 ? ArrowDownLeft : ArrowUpRight"
-              :class="row.amount >= 0 ? 'text-emerald-600' : 'text-gray-500'"
-              class="mt-0.5 h-5 w-5 shrink-0"
-            />
-            <div>
-              <p class="text-sm">
-                <span class="font-semibold tabular-nums" :class="row.amount >= 0 ? 'text-emerald-700' : 'text-gray-700'">
-                  {{ formatNOK(row.amount) }}
-                </span>
-                <span class="ml-2 text-gray-500">{{ formatDate(row.row_date) }}</span>
-                <span class="ml-2 rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[10px] text-gray-600">{{ row.bank_account_code }}</span>
-              </p>
-              <p v-if="row.counterpart" class="mt-0.5 text-sm font-medium text-gray-900">{{ row.counterpart }}</p>
-              <p class="mt-0.5 truncate text-xs text-gray-500" :title="row.description">{{ row.description || '—' }}</p>
-              <p v-if="row.dismissed_at" class="mt-1 text-xs text-amber-700">
-                {{ t('admin.bankReconcile.dismissedAs', { reason: t('admin.bankReconcile.reasons.' + (row.dismissed_reason ?? '')) }) }}
-              </p>
-              <p v-if="row.likely_duplicate_of_matched && !row.dismissed_at" class="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
-                ⚠ {{ t('admin.bankReconcile.likelyDuplicate') }}
-              </p>
-              <p v-if="row.possible_double_payment && !row.likely_duplicate_of_matched && !row.dismissed_at" class="mt-1 inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-800">
-                ⚠ {{ t('admin.bankReconcile.possibleDoublePayment') }}
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            class="text-xs text-blue-700 hover:underline"
-            @click="focusRow(row.id)"
+    <template v-else>
+      <!-- Confirmed Arkivref duplicates — grouped at top for quick dismissal -->
+      <div v-if="duplicateRows.length" class="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3">
+        <p class="mb-1 text-xs font-semibold text-amber-900">
+          ⚠ {{ t('admin.bankReconcile.confirmedDuplicatesHeader', { count: duplicateRows.length }) }}
+        </p>
+        <p class="mb-3 text-xs text-amber-700">{{ t('admin.bankReconcile.confirmedDuplicatesHint') }}</p>
+        <ul class="space-y-2">
+          <li
+            v-for="row in duplicateRows"
+            :key="row.id"
+            class="flex items-center justify-between gap-4 rounded-md border border-amber-200 bg-white px-4 py-3"
           >
-            {{ focusedRowId === row.id ? t('admin.bankReconcile.hideSuggestions') : t('admin.bankReconcile.showSuggestions') }}
-          </button>
-        </div>
-
-        <!-- Suggestions, only when focused -->
-        <div v-if="focusedRowId === row.id && suggestions" class="mt-3 space-y-2">
-          <div
-            v-for="sug in suggestions.invoices.slice(0, 3)"
-            :key="sug.invoice_id"
-            class="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm"
-            :class="confidenceClass[sug.confidence_label]"
-          >
-            <div class="min-w-0 flex-1">
-              <p class="flex items-center gap-2">
-                <Sparkles class="h-3.5 w-3.5" />
-                <span class="font-semibold">#{{ sug.invoice_number }}</span>
-                <span class="text-gray-700">{{ sug.member_name }}</span>
-                <span class="text-xs text-gray-500">· {{ sug.price_item_name || '—' }}</span>
-                <span class="text-xs font-semibold text-gray-800">{{ formatNOK(sug.total_amount) }}</span>
-              </p>
-              <p class="text-xs text-gray-500" :title="sug.why_tooltip">
-                {{ t('admin.bankReconcile.confidence.' + sug.confidence_label) }} · {{ sug.why_tooltip }}
-                <span v-if="sug.kid_number" class="ml-1 font-mono">KID: {{ sug.kid_number }}</span>
-              </p>
+            <div class="flex items-start gap-3">
+              <ArrowDownLeft class="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
+              <div>
+                <p class="text-sm">
+                  <span class="font-semibold tabular-nums text-emerald-700">{{ formatNOK(row.amount) }}</span>
+                  <span class="ml-2 text-gray-500">{{ formatDate(row.row_date) }}</span>
+                  <span class="ml-2 rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[10px] text-gray-600">{{ row.bank_account_code }}</span>
+                </p>
+                <p v-if="row.counterpart" class="mt-0.5 text-sm font-medium text-gray-900">{{ row.counterpart }}</p>
+                <p class="mt-0.5 truncate text-xs text-gray-500" :title="row.description">{{ row.description || '—' }}</p>
+              </div>
             </div>
             <button
               type="button"
-              class="rounded-md bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700"
-              @click="doAssignInvoice(row.id, sug.invoice_id)"
-            >
-              {{ t('admin.bankReconcile.assign') }}
-            </button>
-          </div>
-
-          <!-- Footer actions -->
-          <div class="flex flex-wrap gap-2">
-            <button
-              type="button"
-              class="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-3 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-              @click="openPotential(row)"
-            >
-              <Search class="h-3 w-3" />
-              {{ t('admin.bankReconcile.searchInvoice') }}
-            </button>
-            <button
-              type="button"
-              class="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-3 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-              @click="openAccountPicker(row)"
-            >
-              <FileText class="h-3 w-3" />
-              {{ t('admin.bankReconcile.assignAccount') }}
-            </button>
-            <button
-              v-if="!row.dismissed_at"
-              type="button"
-              class="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-white px-3 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-50"
+              class="inline-flex shrink-0 items-center gap-1 rounded-md border border-amber-300 bg-white px-3 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-50"
               @click="openDismiss(row)"
             >
               <Ban class="h-3 w-3" />
               {{ t('admin.bankReconcile.dismiss') }}
             </button>
+          </li>
+        </ul>
+      </div>
+
+      <!-- Main unmatched rows -->
+      <ul v-if="mainRows.length" class="mt-4 space-y-3">
+        <li
+          v-for="row in mainRows"
+          :key="row.id"
+          class="rounded-md border border-gray-200 bg-white p-4"
+        >
+          <!-- Bank row info -->
+          <div class="flex items-start justify-between gap-4">
+            <div class="flex items-start gap-3">
+              <component
+                :is="row.amount >= 0 ? ArrowDownLeft : ArrowUpRight"
+                :class="row.amount >= 0 ? 'text-emerald-600' : 'text-gray-500'"
+                class="mt-0.5 h-5 w-5 shrink-0"
+              />
+              <div>
+                <p class="text-sm">
+                  <span class="font-semibold tabular-nums" :class="row.amount >= 0 ? 'text-emerald-700' : 'text-gray-700'">
+                    {{ formatNOK(row.amount) }}
+                  </span>
+                  <span class="ml-2 text-gray-500">{{ formatDate(row.row_date) }}</span>
+                  <span class="ml-2 rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[10px] text-gray-600">{{ row.bank_account_code }}</span>
+                </p>
+                <p v-if="row.counterpart" class="mt-0.5 text-sm font-medium text-gray-900">{{ row.counterpart }}</p>
+                <p class="mt-0.5 truncate text-xs text-gray-500" :title="row.description">{{ row.description || '—' }}</p>
+                <p v-if="row.dismissed_at" class="mt-1 text-xs text-amber-700">
+                  {{ t('admin.bankReconcile.dismissedAs', { reason: t('admin.bankReconcile.reasons.' + (row.dismissed_reason ?? '')) }) }}
+                </p>
+                <p v-if="row.possible_double_payment && !row.dismissed_at" class="mt-1 inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-800">
+                  ⚠ {{ t('admin.bankReconcile.possibleDoublePayment') }}
+                </p>
+              </div>
+            </div>
             <button
-              v-if="row.dismissed_at"
               type="button"
-              class="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-3 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-              @click="doUnassign(row.id)"
+              class="text-xs text-blue-700 hover:underline"
+              @click="focusRow(row.id)"
             >
-              <Undo2 class="h-3 w-3" />
-              {{ t('admin.bankReconcile.unassign') }}
+              {{ focusedRowId === row.id ? t('admin.bankReconcile.hideSuggestions') : t('admin.bankReconcile.showSuggestions') }}
             </button>
           </div>
-        </div>
-      </li>
-    </ul>
+
+          <!-- Suggestions, only when focused -->
+          <div v-if="focusedRowId === row.id && suggestions" class="mt-3 space-y-2">
+            <div
+              v-for="sug in suggestions.invoices.slice(0, 3)"
+              :key="sug.invoice_id"
+              class="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm"
+              :class="confidenceClass[sug.confidence_label]"
+            >
+              <div class="min-w-0 flex-1">
+                <p class="flex items-center gap-2">
+                  <Sparkles class="h-3.5 w-3.5" />
+                  <span class="font-semibold">#{{ sug.invoice_number }}</span>
+                  <span class="text-gray-700">{{ sug.member_name }}</span>
+                  <span class="text-xs text-gray-500">· {{ sug.price_item_name || '—' }}</span>
+                  <span class="text-xs font-semibold text-gray-800">{{ formatNOK(sug.total_amount) }}</span>
+                </p>
+                <p class="text-xs text-gray-500" :title="sug.why_tooltip">
+                  {{ t('admin.bankReconcile.confidence.' + sug.confidence_label) }} · {{ sug.why_tooltip }}
+                  <span v-if="sug.kid_number" class="ml-1 font-mono">KID: {{ sug.kid_number }}</span>
+                </p>
+              </div>
+              <button
+                type="button"
+                class="rounded-md bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700"
+                @click="doAssignInvoice(row.id, sug.invoice_id)"
+              >
+                {{ t('admin.bankReconcile.assign') }}
+              </button>
+            </div>
+
+            <!-- Footer actions -->
+            <div class="flex flex-wrap gap-2">
+              <button
+                type="button"
+                class="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-3 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                @click="openPotential(row)"
+              >
+                <Search class="h-3 w-3" />
+                {{ t('admin.bankReconcile.searchInvoice') }}
+              </button>
+              <button
+                type="button"
+                class="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-3 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                @click="openAccountPicker(row)"
+              >
+                <FileText class="h-3 w-3" />
+                {{ t('admin.bankReconcile.assignAccount') }}
+              </button>
+              <button
+                v-if="!row.dismissed_at"
+                type="button"
+                class="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-white px-3 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-50"
+                @click="openDismiss(row)"
+              >
+                <Ban class="h-3 w-3" />
+                {{ t('admin.bankReconcile.dismiss') }}
+              </button>
+              <button
+                v-if="row.dismissed_at"
+                type="button"
+                class="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-3 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                @click="doUnassign(row.id)"
+              >
+                <Undo2 class="h-3 w-3" />
+                {{ t('admin.bankReconcile.unassign') }}
+              </button>
+            </div>
+          </div>
+        </li>
+      </ul>
+    </template>
 
     <!-- Potential invoices modal -->
     <Modal v-model:open="potentialOpen" size="2xl" :title="t('admin.bankReconcile.potentialTitle')">

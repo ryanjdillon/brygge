@@ -924,6 +924,8 @@
       "filterIncoming": "Incoming",
       "filterOutgoing": "Outgoing",
       "filterDismissed": "Dismissed",
+      "confirmedDuplicatesHeader": "Bestätigte Duplikate ({count} Zeilen)",
+      "confirmedDuplicatesHint": "Arkivref. bereits verbucht — diese Zeilen stammen aus überlappenden CSV-Importen. Als Duplikat abweisen.",
       "filterBank": "Bank",
       "filterVipps": "Vipps",
       "filterDuplicate": "Duplikat",

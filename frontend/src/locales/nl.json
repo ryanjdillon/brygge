@@ -924,6 +924,8 @@
       "filterIncoming": "Incoming",
       "filterOutgoing": "Outgoing",
       "filterDismissed": "Dismissed",
+      "confirmedDuplicatesHeader": "Bevestigde duplicaten ({count} rijen)",
+      "confirmedDuplicatesHint": "Arkivref. al geboekt — deze rijen komen uit overlappende CSV-imports. Afwijzen als duplicaat.",
       "filterBank": "Bank",
       "filterVipps": "Vipps",
       "filterDuplicate": "Duplicaat",

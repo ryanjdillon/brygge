@@ -1548,6 +1548,8 @@
       "filterIncoming": "Inngåande",
       "filterOutgoing": "Utgåande",
       "filterDismissed": "Avvising",
+      "confirmedDuplicatesHeader": "Stadfesta duplikat ({count} rad)",
+      "confirmedDuplicatesHint": "Arkivref. er allereie journalførd. Desse betalingane kjem frå overlappande CSV-import. Avvis som duplikat.",
       "filterBank": "Bank",
       "filterVipps": "Vipps",
       "filterDuplicate": "Duplikat",
