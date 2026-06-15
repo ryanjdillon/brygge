@@ -151,8 +151,8 @@ func (s *Service) AssignBankRowToInvoice(
 		return "", fmt.Errorf("post journal: %w", err)
 	}
 	if _, err := tx.Exec(ctx,
-		`UPDATE bank_import_rows SET journal_entry_id = $1, auto_matched = false WHERE id = $2`,
-		entry.ID, bankRowID,
+		`UPDATE bank_import_rows SET journal_entry_id = $1, invoice_id = $2, auto_matched = false WHERE id = $3`,
+		entry.ID, invoiceID, bankRowID,
 	); err != nil {
 		return "", fmt.Errorf("mark row matched: %w", err)
 	}
@@ -346,12 +346,13 @@ func (s *Service) UnassignBankRow(
 	}
 	defer tx.Rollback(ctx)
 
+	var invoiceIDPtr *string
 	if err := tx.QueryRow(ctx,
-		`SELECT COALESCE(journal_entry_id::text, '')
+		`SELECT COALESCE(journal_entry_id::text, ''), invoice_id
 		   FROM bank_import_rows
 		  WHERE id = $1 AND club_id = $2`,
 		bankRowID, clubID,
-	).Scan(&priorJournalID); err != nil {
+	).Scan(&priorJournalID, &invoiceIDPtr); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "", "", errors.New("bank row not found")
 		}
@@ -360,39 +361,76 @@ func (s *Service) UnassignBankRow(
 	if priorJournalID == "" {
 		return "", "", errors.New("bank row not assigned")
 	}
+	if invoiceIDPtr != nil {
+		priorInvoiceID = *invoiceIDPtr
+	}
 
-	// Identify any invoice that was linked via this bank row's
-	// journal (the payments row carries the source via paid_at +
-	// user_id + amount — see linkInvoicePayment — so we look it up
-	// via the journal's source instead, which is more reliable).
-	_ = tx.QueryRow(ctx,
-		`SELECT i.id
-		   FROM invoices i
-		   JOIN payments p ON p.id = i.payment_id
-		   JOIN journal_entries je
-		     ON je.club_id = i.club_id
-		    AND je.id::text = $1
-		    AND je.entry_date = p.paid_at::date
-		  WHERE i.club_id = $2
-		    AND i.user_id = p.user_id
-		    AND i.total_amount = p.amount
-		  LIMIT 1`,
-		priorJournalID, clubID,
-	).Scan(&priorInvoiceID)
+	// Collect all journal entry IDs to void. For multi-row invoice
+	// assignments every sibling row shares the same invoice_id and
+	// must be unassigned atomically with this one.
+	journalIDsToVoid := []string{priorJournalID}
+	if priorInvoiceID != "" {
+		rows, rerr := tx.Query(ctx,
+			`SELECT COALESCE(journal_entry_id::text, '')
+			   FROM bank_import_rows
+			  WHERE invoice_id = $1 AND club_id = $2 AND id != $3
+			    AND journal_entry_id IS NOT NULL`,
+			priorInvoiceID, clubID, bankRowID,
+		)
+		if rerr != nil {
+			return "", "", fmt.Errorf("load siblings: %w", rerr)
+		}
+		for rows.Next() {
+			var jid string
+			if err := rows.Scan(&jid); err != nil {
+				rows.Close()
+				return "", "", fmt.Errorf("scan sibling: %w", err)
+			}
+			journalIDsToVoid = append(journalIDsToVoid, jid)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return "", "", fmt.Errorf("siblings: %w", err)
+		}
 
-	// Void the journal entry (creates a balanced reversal). Must
-	// commit our outer tx first since VoidJournalEntry opens its own.
-	if _, err := tx.Exec(ctx,
-		`UPDATE bank_import_rows SET journal_entry_id = NULL, auto_matched = false WHERE id = $1`,
-		bankRowID,
-	); err != nil {
-		return "", "", fmt.Errorf("clear row: %w", err)
+		// Clear all sibling rows.
+		if _, err := tx.Exec(ctx,
+			`UPDATE bank_import_rows
+			    SET journal_entry_id = NULL, invoice_id = NULL, auto_matched = false
+			  WHERE invoice_id = $1 AND club_id = $2`,
+			priorInvoiceID, clubID,
+		); err != nil {
+			return "", "", fmt.Errorf("clear sibling rows: %w", err)
+		}
+	} else {
+		// Single-row case: no invoice back-link. Use legacy lookup via
+		// payments table for rows assigned before migration 000057.
+		_ = tx.QueryRow(ctx,
+			`SELECT i.id
+			   FROM invoices i
+			   JOIN payments p ON p.id = i.payment_id
+			   JOIN journal_entries je
+			     ON je.club_id = i.club_id
+			    AND je.id::text = $1
+			    AND je.entry_date = p.paid_at::date
+			  WHERE i.club_id = $2
+			    AND i.user_id = p.user_id
+			    AND i.total_amount = p.amount
+			  LIMIT 1`,
+			priorJournalID, clubID,
+		).Scan(&priorInvoiceID)
+
+		if _, err := tx.Exec(ctx,
+			`UPDATE bank_import_rows
+			    SET journal_entry_id = NULL, invoice_id = NULL, auto_matched = false
+			  WHERE id = $1`,
+			bankRowID,
+		); err != nil {
+			return "", "", fmt.Errorf("clear row: %w", err)
+		}
 	}
 
 	if priorInvoiceID != "" {
-		// Clear the payment back-link + delete the payments row so
-		// the dashboard returns to "unpaid" state and the row can be
-		// re-assigned cleanly.
 		var paymentID *string
 		if err := tx.QueryRow(ctx,
 			`SELECT payment_id FROM invoices WHERE id = $1`,
@@ -419,13 +457,160 @@ func (s *Service) UnassignBankRow(
 		return "", "", fmt.Errorf("commit: %w", err)
 	}
 
-	if _, verr := s.VoidJournalEntry(ctx, priorJournalID, actorID); verr != nil {
-		s.log.Warn().Err(verr).
-			Str("journal_entry_id", priorJournalID).
-			Str("bank_row_id", bankRowID).
-			Msg("UnassignBankRow: void journal failed; row cleared but GL still posted to original")
+	for _, jid := range journalIDsToVoid {
+		if _, verr := s.VoidJournalEntry(ctx, jid, actorID); verr != nil {
+			s.log.Warn().Err(verr).
+				Str("journal_entry_id", jid).
+				Str("bank_row_id", bankRowID).
+				Msg("UnassignBankRow: void journal failed; row cleared but GL still posted to original")
+		}
 	}
 	return priorJournalID, priorInvoiceID, nil
+}
+
+// AssignMultipleBankRowsToInvoice assigns N bank rows to a single
+// invoice in one atomic transaction. The sum of the row amounts must
+// equal invoice.total_amount exactly (compared in integer cents to
+// avoid float rounding). All rows get their own journal entry; the
+// invoice is marked paid via linkInvoicePayment using the latest row
+// date. Unassigning any one of the resulting rows reverses all of them.
+func (s *Service) AssignMultipleBankRowsToInvoice(
+	ctx context.Context, clubID, actorID string, rowIDs []string, invoiceID string,
+) ([]string, error) {
+	if len(rowIDs) < 2 {
+		return nil, errors.New("use assign-invoice for single rows")
+	}
+
+	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	type rowData struct {
+		id       string
+		date     time.Time
+		amount   float64
+		desc     string
+		bankAcct string
+	}
+	loaded := make([]rowData, 0, len(rowIDs))
+	for _, rid := range rowIDs {
+		var rd rowData
+		rd.id = rid
+		var alreadyJrnl, dismissed bool
+		if err := tx.QueryRow(ctx,
+			`SELECT bir.row_date, bir.amount, bir.description,
+			        bi.bank_account_code,
+			        bir.journal_entry_id IS NOT NULL,
+			        bir.dismissed_at IS NOT NULL
+			   FROM bank_import_rows bir
+			   JOIN bank_imports bi ON bi.id = bir.bank_import_id
+			  WHERE bir.id = $1 AND bir.club_id = $2`,
+			rid, clubID,
+		).Scan(&rd.date, &rd.amount, &rd.desc, &rd.bankAcct, &alreadyJrnl, &dismissed); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return nil, fmt.Errorf("bank row %s not found", rid)
+			}
+			return nil, fmt.Errorf("load bank row %s: %w", rid, err)
+		}
+		if alreadyJrnl {
+			return nil, fmt.Errorf("bank row %s is already reconciled", rid)
+		}
+		if dismissed {
+			return nil, fmt.Errorf("bank row %s is dismissed", rid)
+		}
+		if rd.amount <= 0 {
+			return nil, fmt.Errorf("bank row %s has non-positive amount", rid)
+		}
+		loaded = append(loaded, rd)
+	}
+
+	var invoiceTotal float64
+	var paymentID *string
+	var invoiceStatus string
+	if err := tx.QueryRow(ctx,
+		`SELECT total_amount, payment_id, status FROM invoices WHERE id = $1 AND club_id = $2`,
+		invoiceID, clubID,
+	).Scan(&invoiceTotal, &paymentID, &invoiceStatus); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, errors.New("invoice not found")
+		}
+		return nil, fmt.Errorf("load invoice: %w", err)
+	}
+	if invoiceStatus == "voided" {
+		return nil, errors.New("invoice is voided")
+	}
+	if paymentID != nil {
+		return nil, errors.New("invoice is already paid")
+	}
+
+	var sumAmount float64
+	var latestDate time.Time
+	for _, rd := range loaded {
+		sumAmount += rd.amount
+		if rd.date.After(latestDate) {
+			latestDate = rd.date
+		}
+	}
+	if sumCents, invCents := int64(sumAmount*100+0.5), int64(invoiceTotal*100+0.5); sumCents != invCents {
+		return nil, fmt.Errorf("row sum %.2f does not match invoice total %.2f", sumAmount, invoiceTotal)
+	}
+
+	periodID, periodStatus, perr := s.resolvePeriod(ctx, clubID, latestDate, "")
+	if perr != nil {
+		return nil, fmt.Errorf("resolve period: %w", perr)
+	}
+	if periodStatus == "closed" {
+		return nil, fmt.Errorf("fiscal period for %s is closed; reopen first", latestDate.Format("2006-01-02"))
+	}
+
+	journalIDs := make([]string, 0, len(loaded))
+	for _, rd := range loaded {
+		srcID := rd.id
+		srcTable := "bank_import_rows"
+		desc := fmt.Sprintf("Manuell tildeling: %s", truncate(rd.desc, 200))
+		entry, cerr := s.CreateJournalEntry(ctx, CreateJournalEntryInput{
+			FiscalPeriodID: periodID,
+			EntryDate:      rd.date.Format("2006-01-02"),
+			Description:    desc,
+			Source:         "bank_import",
+			SourceID:       &srcID,
+			SourceTable:    &srcTable,
+			CreatedBy:      actorID,
+			ClubID:         clubID,
+			Lines: []CreateJournalLineInput{
+				{AccountCode: rd.bankAcct, Debit: rd.amount, Credit: 0},
+				{AccountCode: receivablesAccountCode, Debit: 0, Credit: rd.amount},
+			},
+		})
+		if cerr != nil {
+			return nil, fmt.Errorf("create journal for row %s: %w", rd.id, cerr)
+		}
+		if err := s.PostJournalEntry(ctx, entry.ID, actorID); err != nil {
+			return nil, fmt.Errorf("post journal for row %s: %w", rd.id, err)
+		}
+		if _, err := tx.Exec(ctx,
+			`UPDATE bank_import_rows
+			    SET journal_entry_id = $1, invoice_id = $2, auto_matched = false
+			  WHERE id = $3`,
+			entry.ID, invoiceID, rd.id,
+		); err != nil {
+			return nil, fmt.Errorf("mark row %s matched: %w", rd.id, err)
+		}
+		journalIDs = append(journalIDs, entry.ID)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit: %w", err)
+	}
+
+	if err := s.linkInvoicePayment(ctx, clubID, invoiceID, latestDate); err != nil {
+		s.log.Warn().Err(err).
+			Str("invoice_id", invoiceID).
+			Msg("AssignMultipleBankRowsToInvoice: linkInvoicePayment failed; GL posted but dashboard back-link missing")
+	}
+	return journalIDs, nil
 }
 
 func truncate(s string, n int) string {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
@@ -159,6 +160,41 @@ func (h *BankRowsHandler) HandleAssignInvoice(w http.ResponseWriter, r *http.Req
 			})
 	}
 	JSON(w, http.StatusOK, map[string]any{"journal_entry_id": journalID})
+}
+
+type assignInvoiceMultiReq struct {
+	RowIDs    []string `json:"row_ids"`
+	InvoiceID string   `json:"invoice_id"`
+}
+
+func (h *BankRowsHandler) HandleAssignInvoiceMulti(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	var req assignInvoiceMultiReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.InvoiceID == "" || len(req.RowIDs) < 2 {
+		Error(w, http.StatusBadRequest, "invoice_id and at least two row_ids required")
+		return
+	}
+	journalIDs, err := h.svc.AssignMultipleBankRowsToInvoice(ctx, claims.ClubID, claims.UserID, req.RowIDs, req.InvoiceID)
+	if err != nil {
+		h.log.Warn().Err(err).Strs("row_ids", req.RowIDs).Msg("assign invoice multi")
+		Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if h.audit != nil {
+		h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,
+			audit.ActionBankRowAssignedInvoice, "bank_import_rows", strings.Join(req.RowIDs, ","),
+			map[string]any{
+				"invoice_id":        req.InvoiceID,
+				"row_ids":           req.RowIDs,
+				"journal_entry_ids": journalIDs,
+			})
+	}
+	JSON(w, http.StatusOK, map[string]any{"journal_entry_ids": journalIDs})
 }
 
 type assignAccountReq struct {

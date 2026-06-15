@@ -1055,6 +1055,9 @@ func main() {
 						r.Get("/bank-rows/{rowID}/potential-invoices", bankRowsHandler.HandlePotentialInvoices)
 						r.With(middleware.RequireRole("treasurer", "admin"),
 							middleware.RequireFreshTOTPDefault()).
+							Post("/bank-rows/assign-invoice-multi", bankRowsHandler.HandleAssignInvoiceMulti)
+						r.With(middleware.RequireRole("treasurer", "admin"),
+							middleware.RequireFreshTOTPDefault()).
 							Post("/bank-rows/{rowID}/assign-invoice", bankRowsHandler.HandleAssignInvoice)
 						r.With(middleware.RequireRole("treasurer", "admin"),
 							middleware.RequireFreshTOTPDefault()).
