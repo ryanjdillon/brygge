@@ -107,9 +107,10 @@ export function useBankRowSuggestions(rowId: Ref<string | null>) {
   })
 }
 
-export async function fetchPotentialInvoices(rowId: string, q: string): Promise<InvoiceSuggestion[]> {
+export async function fetchPotentialInvoices(rowId: string, q: string, amount?: number): Promise<InvoiceSuggestion[]> {
   const url = new URL(`${BASE}/${rowId}/potential-invoices`, window.location.origin)
   if (q) url.searchParams.set('q', q)
+  if (amount != null && amount > 0) url.searchParams.set('amount', String(amount))
   const res = await fetch(url.toString(), { credentials: 'include' })
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
   const body = await res.json()

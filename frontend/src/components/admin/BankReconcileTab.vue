@@ -196,7 +196,7 @@ async function loadMultiInvoice() {
   if (!selectedRows.value.length) return
   multiInvoiceLoading.value = true
   try {
-    multiInvoiceItems.value = await fetchPotentialInvoices(selectedRows.value[0].id, multiInvoiceQuery.value)
+    multiInvoiceItems.value = await fetchPotentialInvoices(selectedRows.value[0].id, multiInvoiceQuery.value, selectedTotal.value)
   } finally {
     multiInvoiceLoading.value = false
   }

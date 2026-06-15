@@ -119,7 +119,8 @@ func (h *BankRowsHandler) HandlePotentialInvoices(w http.ResponseWriter, r *http
 		return
 	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	res, err := h.svc.PotentialInvoicesForRow(ctx, claims.ClubID, rowID, r.URL.Query().Get("q"), limit)
+	amountOverride, _ := strconv.ParseFloat(r.URL.Query().Get("amount"), 64)
+	res, err := h.svc.PotentialInvoicesForRow(ctx, claims.ClubID, rowID, r.URL.Query().Get("q"), limit, amountOverride)
 	if err != nil {
 		h.log.Warn().Err(err).Str("row_id", rowID).Msg("potential invoices")
 		Error(w, http.StatusBadRequest, err.Error())

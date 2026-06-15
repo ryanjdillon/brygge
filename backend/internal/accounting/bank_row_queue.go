@@ -525,20 +525,22 @@ func (s *Service) rankAccountSuggestions(
 // confirmation" path. q narrows further by invoice number or member
 // name. UI banners these as unverified.
 func (s *Service) PotentialInvoicesForRow(
-	ctx context.Context, clubID, bankRowID, q string, limit int,
+	ctx context.Context, clubID, bankRowID, q string, limit int, amountOverride float64,
 ) ([]InvoiceSuggestion, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 25
 	}
-	var amount float64
-	if err := s.db.QueryRow(ctx,
-		`SELECT amount FROM bank_import_rows WHERE id = $1 AND club_id = $2`,
-		bankRowID, clubID,
-	).Scan(&amount); err != nil {
-		return nil, fmt.Errorf("load row: %w", err)
-	}
+	amount := amountOverride
 	if amount <= 0 {
-		return nil, fmt.Errorf("potential-invoices only applies to incoming rows")
+		if err := s.db.QueryRow(ctx,
+			`SELECT amount FROM bank_import_rows WHERE id = $1 AND club_id = $2`,
+			bankRowID, clubID,
+		).Scan(&amount); err != nil {
+			return nil, fmt.Errorf("load row: %w", err)
+		}
+		if amount <= 0 {
+			return nil, fmt.Errorf("potential-invoices only applies to incoming rows")
+		}
 	}
 
 	where := []string{
