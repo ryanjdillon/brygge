@@ -413,3 +413,26 @@ router.beforeEach(async (to) => {
     return { path: '/' }
   }
 })
+
+// A deploy replaces the hashed route chunks, so a tab opened before the
+// deploy fails to lazy-load a route ("Failed to fetch dynamically imported
+// module"). Reload once to pull the fresh index.html with the new hashes.
+// The sessionStorage flag prevents a reload loop if the chunk is genuinely
+// gone; it's cleared on the next successful navigation.
+const CHUNK_RELOAD_KEY = 'chunk-reload'
+
+function reloadOnStaleChunk(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+  const isChunkError =
+    /failed to fetch dynamically imported module|error loading dynamically imported module|importing a module script failed/i.test(
+      message,
+    )
+  if (!isChunkError) return
+  if (sessionStorage.getItem(CHUNK_RELOAD_KEY)) return
+  sessionStorage.setItem(CHUNK_RELOAD_KEY, '1')
+  window.location.reload()
+}
+
+router.onError(reloadOnStaleChunk)
+router.afterEach(() => sessionStorage.removeItem(CHUNK_RELOAD_KEY))
+window.addEventListener('vite:preloadError', (event) => reloadOnStaleChunk(event))

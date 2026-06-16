@@ -1234,17 +1234,43 @@ func securityHeaders(next http.Handler) http.Handler {
 func serveFrontend(r chi.Router, frontendFS fs.FS) {
 	fileServer := http.FileServer(http.FS(frontendFS))
 	r.Get("/*", func(w http.ResponseWriter, req *http.Request) {
-		// Try to serve the static file; fall back to index.html for SPA routes
 		path := strings.TrimPrefix(req.URL.Path, "/")
 		if path == "" {
 			path = "index.html"
 		}
+
+		// A request whose final segment has an extension (e.g. an /assets/
+		// chunk, favicon, source map) is a file request, not an SPA route.
+		base := path
+		if i := strings.LastIndex(base, "/"); i >= 0 {
+			base = base[i+1:]
+		}
+		isFileRequest := strings.Contains(base, ".")
+
 		if _, err := fs.Stat(frontendFS, path); err != nil {
-			// File not found — serve index.html so the SPA router handles it
+			// A missing file request is almost always a stale hashed chunk
+			// from a previous deploy. Return a real 404 so the browser gets
+			// a clean error instead of index.html served as text/html (which
+			// fails strict MIME checking for module scripts). Only SPA
+			// navigation routes fall through to index.html.
+			if isFileRequest {
+				http.NotFound(w, req)
+				return
+			}
 			indexFile, _ := fs.ReadFile(frontendFS, "index.html")
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.Header().Set("Cache-Control", "no-cache")
 			w.Write(indexFile)
 			return
+		}
+
+		// index.html must always revalidate so clients pick up new asset
+		// hashes immediately after a deploy; content-hashed assets are
+		// immutable and safe to cache for a year.
+		if path == "index.html" {
+			w.Header().Set("Cache-Control", "no-cache")
+		} else if strings.HasPrefix(path, "assets/") {
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		}
 		fileServer.ServeHTTP(w, req)
 	})
