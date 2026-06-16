@@ -1,15 +1,13 @@
 import { computed, type Ref } from 'vue'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
+import { useApi } from '@/composables/useApi'
 
 const BASE = '/api/v1/admin/accounting'
 
+// Delegate to the shared step-up-aware client so TOTP-expiry 403s drive
+// the verify redirect / re-prompt instead of surfacing a bare 403.
 async function apiFetch<T>(path: string, opts?: RequestInit): Promise<T> {
-  const res = await fetch(path, { credentials: 'include', ...opts })
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    throw new Error(body.detail ?? body.message ?? res.statusText)
-  }
-  return res.json()
+  return useApi().fetchApi<T>(path, opts)
 }
 
 export interface Account {

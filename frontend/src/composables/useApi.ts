@@ -20,7 +20,9 @@ export function useApi() {
   ): Promise<T> {
     const headers = new Headers(options.headers)
 
-    if (options.body && !headers.has('Content-Type')) {
+    // Let the browser set the multipart boundary for FormData uploads;
+    // only default to JSON for other bodies.
+    if (options.body && !(options.body instanceof FormData) && !headers.has('Content-Type')) {
       headers.set('Content-Type', 'application/json')
     }
 

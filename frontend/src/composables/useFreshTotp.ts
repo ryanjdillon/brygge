@@ -26,6 +26,15 @@ export function useFreshTotp() {
     } catch {
       return res
     }
+    // Admin-TOTP window expired entirely — send the user to the verify
+    // page, preserving where they were.
+    if (body.error === 'totp_required') {
+      if (auth.isAuthenticated && typeof window !== 'undefined') {
+        const next = window.location.pathname + window.location.search
+        window.location.href = '/admin/verify-totp?next=' + encodeURIComponent(next)
+      }
+      return res
+    }
     if (body.error !== 'totp_fresh_required') return res
     const ok = await gate.open()
     if (!ok) return res

@@ -1,15 +1,15 @@
 import { computed, type Ref } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
+import { useApi } from '@/composables/useApi'
 
 const BASE = '/api/v1/admin/accounting'
 
+// Delegate to the shared step-up-aware client so an expired admin-TOTP
+// window (403 totp_required) redirects to the verify page and a stale
+// fresh-TOTP window (403 totp_fresh_required) re-prompts and retries,
+// instead of surfacing a bare 403.
 async function fetchJSON<T>(path: string, opts?: RequestInit): Promise<T> {
-  const res = await fetch(path, { credentials: 'include', ...opts })
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    throw new Error(body.error ?? body.detail ?? res.statusText)
-  }
-  return res.json()
+  return useApi().fetchApi<T>(path, opts)
 }
 
 export interface BankFormat {

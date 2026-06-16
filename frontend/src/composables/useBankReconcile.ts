@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { computed, type Ref } from 'vue'
-import { useFreshTotp } from '@/composables/useFreshTotp'
+import { useApi } from '@/composables/useApi'
 
 export interface BankRowSummary {
   id: string
@@ -57,10 +57,8 @@ export function useBankUnmatchedRows(kind: Ref<BankRowKind>, q: Ref<string>, yea
       if (kind.value && kind.value !== 'all') url.searchParams.set('kind', kind.value)
       if (q.value) url.searchParams.set('q', q.value)
       if (year.value) url.searchParams.set('year', String(year.value))
-      const res = await fetch(url.toString(), { credentials: 'include' })
-      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
-      const body = await res.json()
-      return body.items as BankRowSummary[]
+      const body = await useApi().fetchApi<{ items: BankRowSummary[] }>(url.toString())
+      return body.items
     },
   })
 }
@@ -71,10 +69,8 @@ export function useBankUnmatchedCount(year?: Ref<number | null>) {
     queryFn: async () => {
       const url = new URL(`${BASE}/unmatched/count`, window.location.origin)
       if (year?.value) url.searchParams.set('year', String(year.value))
-      const res = await fetch(url.toString(), { credentials: 'include' })
-      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
-      const body = await res.json()
-      return body.count as number
+      const body = await useApi().fetchApi<{ count: number }>(url.toString())
+      return body.count
     },
     refetchInterval: 30_000,
     refetchOnWindowFocus: true,
@@ -85,10 +81,10 @@ export function useBankUnmatchedCountsByYear() {
   return useQuery({
     queryKey: ['bank-rows', 'unmatched', 'count-by-year'],
     queryFn: async () => {
-      const res = await fetch(`${BASE}/unmatched/count-by-year`, { credentials: 'include' })
-      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
-      const body = await res.json()
-      return body.by_year as Record<string, number>
+      const body = await useApi().fetchApi<{ by_year: Record<string, number> }>(
+        `${BASE}/unmatched/count-by-year`,
+      )
+      return body.by_year
     },
     refetchInterval: 30_000,
     refetchOnWindowFocus: true,
@@ -100,9 +96,7 @@ export function useBankRowSuggestions(rowId: Ref<string | null>) {
     queryKey: computed(() => ['bank-rows', 'suggestions', rowId.value]),
     enabled: computed(() => !!rowId.value),
     queryFn: async () => {
-      const res = await fetch(`${BASE}/${rowId.value}/suggestions`, { credentials: 'include' })
-      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
-      return (await res.json()) as BankRowSuggestions
+      return useApi().fetchApi<BankRowSuggestions>(`${BASE}/${rowId.value}/suggestions`)
     },
   })
 }
@@ -111,68 +105,49 @@ export async function fetchPotentialInvoices(rowId: string, q: string, amount?: 
   const url = new URL(`${BASE}/${rowId}/potential-invoices`, window.location.origin)
   if (q) url.searchParams.set('q', q)
   if (amount != null && amount > 0) url.searchParams.set('amount', String(amount))
-  const res = await fetch(url.toString(), { credentials: 'include' })
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
-  const body = await res.json()
-  return body.items as InvoiceSuggestion[]
+  const body = await useApi().fetchApi<{ items: InvoiceSuggestion[] }>(url.toString())
+  return body.items
 }
 
 export function useReconcileMutations() {
   const qc = useQueryClient()
-  const { totpAwareFetch } = useFreshTotp()
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['bank-rows'] })
   }
 
   const assignInvoice = useMutation({
-    mutationFn: async ({ rowId, invoiceId }: { rowId: string; invoiceId: string }) => {
-      const res = await totpAwareFetch(`${BASE}/${rowId}/assign-invoice`, {
+    mutationFn: ({ rowId, invoiceId }: { rowId: string; invoiceId: string }) =>
+      useApi().fetchApi(`${BASE}/${rowId}/assign-invoice`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ invoice_id: invoiceId }),
-      })
-      if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error ?? res.statusText)
-      return res.json()
-    },
+      }),
     onSuccess: invalidate,
   })
 
   const assignAccount = useMutation({
-    mutationFn: async ({ rowId, accountCode, kind, description }: { rowId: string; accountCode: string; kind: 'expense' | 'revenue'; description?: string }) => {
-      const res = await totpAwareFetch(`${BASE}/${rowId}/assign-account`, {
+    mutationFn: ({ rowId, accountCode, kind, description }: { rowId: string; accountCode: string; kind: 'expense' | 'revenue'; description?: string }) =>
+      useApi().fetchApi(`${BASE}/${rowId}/assign-account`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ account_code: accountCode, kind, description }),
-      })
-      if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error ?? res.statusText)
-      return res.json()
-    },
+      }),
     onSuccess: invalidate,
   })
 
   const dismiss = useMutation({
-    mutationFn: async ({ rowId, reason }: { rowId: string; reason: string }) => {
-      const res = await totpAwareFetch(`${BASE}/${rowId}/dismiss`, {
+    mutationFn: ({ rowId, reason }: { rowId: string; reason: string }) =>
+      useApi().fetchApi(`${BASE}/${rowId}/dismiss`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reason }),
-      })
-      if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error ?? res.statusText)
-      return res.json()
-    },
+      }),
     onSuccess: invalidate,
   })
 
   const unassign = useMutation({
-    mutationFn: async ({ rowId }: { rowId: string }) => {
-      const res = await totpAwareFetch(`${BASE}/${rowId}/unassign`, {
+    mutationFn: ({ rowId }: { rowId: string }) =>
+      useApi().fetchApi(`${BASE}/${rowId}/unassign`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ confirm: true }),
-      })
-      if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error ?? res.statusText)
-      return res.json()
-    },
+      }),
     onSuccess: invalidate,
   })
 
@@ -181,17 +156,12 @@ export function useReconcileMutations() {
 
 export function useAssignMultiInvoiceMutation() {
   const qc = useQueryClient()
-  const { totpAwareFetch } = useFreshTotp()
   return useMutation({
-    mutationFn: async ({ rowIds, invoiceId }: { rowIds: string[]; invoiceId: string }) => {
-      const res = await totpAwareFetch(`${BASE}/assign-invoice-multi`, {
+    mutationFn: ({ rowIds, invoiceId }: { rowIds: string[]; invoiceId: string }) =>
+      useApi().fetchApi(`${BASE}/assign-invoice-multi`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ row_ids: rowIds, invoice_id: invoiceId }),
-      })
-      if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error ?? res.statusText)
-      return res.json()
-    },
+      }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['bank-rows'] }),
   })
 }
