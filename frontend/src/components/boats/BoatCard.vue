@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import { Pencil, Trash2, ShieldCheck, AlertTriangle } from 'lucide-vue-next'
+import { formatSlip } from '@/lib/slipSort'
 
 export interface BoatCardBoat {
   id: string
@@ -113,7 +114,7 @@ const fmtDim = (v?: number | null): string => (v != null ? `${v} m` : '—')
       :class="['text-gray-700', compact ? 'mt-0.5 text-xs' : 'mt-1 text-sm']"
     >
       <span class="text-gray-500">{{ t('admin.users.spots') }}:</span>
-      <span class="ml-1 font-mono">{{ (boat.slip.section ? boat.slip.section + ' ' : '') + boat.slip.number }}</span>
+      <span class="ml-1 font-mono">{{ formatSlip(boat.slip) }}</span>
       <span class="ml-1 text-xs text-gray-500">
         ({{ t('admin.users.spot' + (boat.slip.assignment_type === 'seasonal' ? 'Seasonal' : 'Permanent')) }})
       </span>

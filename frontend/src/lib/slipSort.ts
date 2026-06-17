@@ -22,6 +22,19 @@ export function compareSlip(a: SlipLike, b: SlipLike, dir: 'asc' | 'desc' = 'asc
 }
 
 /**
+ * Render a slip as a compact dock-prefixed label, e.g. section "C" +
+ * number "18" -> "C18". Used wherever a member's berth is shown so the
+ * format stays consistent (never "#18 — C"). Falls back gracefully when
+ * either part is missing.
+ */
+export function formatSlip(slip: SlipLike | null | undefined): string {
+  if (!slip) return ''
+  const section = (slip.section ?? '').trim()
+  const number = (slip.number ?? '').trim()
+  return `${section}${number}`
+}
+
+/**
  * In-place-style sort returning a new array, ascending or descending.
  */
 export function sortBySlip<T extends SlipLike>(items: readonly T[], dir: 'asc' | 'desc' = 'asc'): T[] {

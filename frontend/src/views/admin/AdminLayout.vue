@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
+import { RouterView, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useClubStore } from '@/stores/club'
@@ -8,6 +8,8 @@ import { useFeatures } from '@/composables/useFeatures'
 import { useNavGate } from '@/composables/useNavGate'
 import { useBankUnmatchedCount } from '@/composables/useBankReconcile'
 import ErrorBoundary from '@/components/ui/ErrorBoundary.vue'
+import SidebarNav from '@/components/layout/SidebarNav.vue'
+import type { NavGroup } from '@/components/layout/navTypes'
 import {
   Users,
   Anchor,
@@ -26,7 +28,6 @@ import {
   Bell,
   ShieldCheck,
   Menu,
-  X,
   Calculator,
   BookOpen,
   ClipboardList,
@@ -43,25 +44,10 @@ const club = useClubStore()
 club.ensureLoaded()
 
 const { isEnabled } = useFeatures()
-const route = useRoute()
 const currentYear = ref(new Date().getFullYear())
 const { data: bankUnmatchedCount } = useBankUnmatchedCount(currentYear)
 
 const sidebarOpen = ref(false)
-
-interface NavItem {
-  to: string
-  icon: typeof Users
-  label: string
-  roles?: string[]
-  feature?: 'bookings' | 'projects' | 'calendar' | 'commerce' | 'communications' | 'accounting'
-  badge?: number
-}
-
-interface NavGroup {
-  titleKey?: string
-  items: NavItem[]
-}
 
 const navGroups = computed<NavGroup[]>(() => {
   const groups: NavGroup[] = [
@@ -144,10 +130,6 @@ const navGroups = computed<NavGroup[]>(() => {
     .filter((group) => group.items.length > 0)
 })
 
-function isActive(to: string): boolean {
-  return route.path.startsWith(to)
-}
-
 function closeSidebar() {
   sidebarOpen.value = false
 }
@@ -189,50 +171,13 @@ async function handleNavClick(e: MouseEvent, to: string) {
         sidebarOpen ? 'translate-x-0' : '-translate-x-full',
       ]"
     >
-      <div class="flex items-center justify-between border-b border-gray-200 px-4 py-4 lg:hidden">
-        <span class="text-lg font-semibold text-gray-900">{{ t('admin.title') }}</span>
-        <button class="text-gray-500 hover:text-gray-700" @click="closeSidebar">
-          <X class="h-5 w-5" />
-        </button>
-      </div>
-
-      <nav class="flex-1 overflow-y-auto px-3 py-4" :aria-label="t('admin.ariaNav')">
-        <div v-for="(group, gi) in navGroups" :key="gi" :class="gi > 0 ? 'mt-4' : ''">
-          <div
-            v-if="group.titleKey"
-            class="mb-1 px-3 text-xs font-semibold uppercase tracking-wider text-gray-400"
-          >
-            {{ t(group.titleKey) }}
-          </div>
-          <div class="space-y-0.5">
-            <RouterLink
-              v-for="item in group.items"
-              :key="item.to"
-              :to="item.to"
-              :class="[
-                'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition',
-                isActive(item.to)
-                  ? 'bg-blue-50 text-blue-700'
-                  : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900',
-              ]"
-              @click="(e: MouseEvent) => handleNavClick(e, item.to)"
-            >
-              <component
-                :is="item.icon"
-                :class="['h-5 w-5', isActive(item.to) ? 'text-blue-600' : 'text-gray-400']"
-              />
-              <span class="flex-1">{{ item.label }}</span>
-              <span
-                v-if="item.badge && item.badge > 0"
-                class="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-semibold text-white"
-              >
-                {{ item.badge }}
-              </span>
-            </RouterLink>
-          </div>
-        </div>
-      </nav>
-
+      <SidebarNav
+        :title="t('admin.sidebarTitle')"
+        :groups="navGroups"
+        :ariaLabel="t('admin.ariaNav')"
+        @navigate="handleNavClick"
+        @close="closeSidebar"
+      />
     </aside>
 
     <div class="flex-1">
@@ -240,7 +185,7 @@ async function handleNavClick(e: MouseEvent, to: string) {
         <button class="text-gray-500 hover:text-gray-700" :aria-expanded="sidebarOpen" :aria-label="t('nav.ariaMenu')" @click="sidebarOpen = true">
           <Menu class="h-5 w-5" aria-hidden="true" />
         </button>
-        <span class="ml-3 text-lg font-semibold text-gray-900">{{ t('admin.title') }}</span>
+        <span class="ml-3 text-lg font-semibold text-gray-900">{{ t('admin.sidebarTitle') }}</span>
       </div>
 
       <main class="p-6 lg:p-8">

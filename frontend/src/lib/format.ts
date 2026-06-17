@@ -11,3 +11,19 @@ export function formatName(u: {
   if (first || last) return `${first} ${last}`.trim()
   return (u.full_name ?? '').trim()
 }
+
+// Norwegian krone money formatting, shared so every view renders amounts
+// identically. Mirrors the inline Intl.NumberFormat used across the admin
+// faktura/bank screens.
+export function formatNOK(amount: number, locale = 'nb-NO'): string {
+  return new Intl.NumberFormat(locale, { style: 'currency', currency: 'NOK' }).format(amount)
+}
+
+// Locale-aware short date from an ISO string (YYYY-MM-DD or RFC3339).
+// Returns the raw input unchanged if it can't be parsed.
+export function formatDate(iso: string | null | undefined, locale = 'nb-NO'): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleDateString(locale)
+}
