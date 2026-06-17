@@ -273,7 +273,8 @@
       "slip": "Miejsce cumownicze",
       "bookings": "Rezerwacje",
       "featureRequests": "Propozycje funkcji",
-      "forum": "Forum"
+      "forum": "Forum",
+      "invoices": "Faktury"
     },
     "dashboard": {
       "welcome": "Witaj, {name}",
@@ -291,7 +292,12 @@
       },
       "noSlip": "Brak przypisanego miejsca",
       "noBookings": "Brak nadchodzących rezerwacji",
-      "bookingsCount": "{count} nadchodząca rezerwacja | {count} nadchodzących rezerwacji"
+      "bookingsCount": "{count} nadchodząca rezerwacja | {count} nadchodzących rezerwacji",
+      "viewAll": "Zobacz wszystkie",
+      "myBoats": "Moje łodzie",
+      "manageBoats": "Zarządzaj",
+      "noBoats": "Brak zarejestrowanych łodzi.",
+      "addBoat": "Dodaj łódź"
     },
     "profile": {
       "title": "Mój profil",
@@ -431,6 +437,25 @@
       "cancelSuccess": "Rezerwacja anulowana",
       "cancelError": "Nie udało się anulować rezerwacji",
       "loadError": "Nie udało się załadować rezerwacji"
+    },
+    "sidebarTitle": "Portal użytkownika",
+    "groupHarbor": "Przystań",
+    "groupEconomy": "Finanse",
+    "groupCommunity": "Społeczność",
+    "groupAccount": "Konto",
+    "invoices": {
+      "title": "Faktury",
+      "subtitle": "Twoje faktury",
+      "due": "Termin",
+      "none": "Brak faktur",
+      "unpaidHeading": "Nieopłacone",
+      "recentPaidHeading": "Niedawno opłacone",
+      "paidHeading": "Opłacone",
+      "status": {
+        "paid": "Opłacona",
+        "unpaid": "Nieopłacona",
+        "overdue": "Zaległa"
+      }
     }
   },
   "admin": {
@@ -1005,7 +1030,8 @@
       "yearAll": "Wszystkie lata",
       "likelyDuplicate": "Prawdopodobny duplikat — inny wiersz już dopasowany",
       "possibleDoublePayment": "Możliwa podwójna płatność — wymagany zwrot"
-    }
+    },
+    "sidebarTitle": "Portal administratora"
   },
   "projects": {
     "title": "Projekty",

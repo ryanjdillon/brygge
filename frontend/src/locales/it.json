@@ -273,7 +273,8 @@
       "slip": "Ormeggio",
       "bookings": "Prenotazioni",
       "featureRequests": "Richieste funzionalità",
-      "forum": "Forum"
+      "forum": "Forum",
+      "invoices": "Fatture"
     },
     "dashboard": {
       "welcome": "Benvenuto, {name}",
@@ -291,7 +292,12 @@
       },
       "noSlip": "Nessun ormeggio assegnato",
       "noBookings": "Nessuna prenotazione in programma",
-      "bookingsCount": "{count} prenotazione in programma | {count} prenotazioni in programma"
+      "bookingsCount": "{count} prenotazione in programma | {count} prenotazioni in programma",
+      "viewAll": "Vedi tutte",
+      "myBoats": "Le mie barche",
+      "manageBoats": "Gestisci",
+      "noBoats": "Nessuna barca registrata.",
+      "addBoat": "Aggiungi una barca"
     },
     "profile": {
       "title": "Il mio profilo",
@@ -431,6 +437,25 @@
       "cancelSuccess": "Prenotazione annullata",
       "cancelError": "Impossibile annullare la prenotazione",
       "loadError": "Impossibile caricare le prenotazioni"
+    },
+    "sidebarTitle": "Portale utente",
+    "groupHarbor": "Porto",
+    "groupEconomy": "Economia",
+    "groupCommunity": "Comunità",
+    "groupAccount": "Account",
+    "invoices": {
+      "title": "Fatture",
+      "subtitle": "Le tue fatture",
+      "due": "Scadenza",
+      "none": "Nessuna fattura",
+      "unpaidHeading": "Non pagate",
+      "recentPaidHeading": "Pagate di recente",
+      "paidHeading": "Pagate",
+      "status": {
+        "paid": "Pagata",
+        "unpaid": "Non pagata",
+        "overdue": "Scaduta"
+      }
     }
   },
   "admin": {
@@ -1005,7 +1030,8 @@
       "yearAll": "Tutti gli anni",
       "likelyDuplicate": "Probabile duplicato — altra riga già abbinata",
       "possibleDoublePayment": "Possibile doppio pagamento — rimborso necessario"
-    }
+    },
+    "sidebarTitle": "Portale admin"
   },
   "projects": {
     "title": "Progetti",

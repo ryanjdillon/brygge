@@ -298,7 +298,8 @@
       "harborMap": "Havnekart",
       "bookings": "Bestillinger",
       "featureRequests": "Forslag og ønsker",
-      "forum": "Forum"
+      "forum": "Forum",
+      "invoices": "Fakturaer"
     },
     "harborMap": {
       "title": "Havnekart",
@@ -336,7 +337,12 @@
       },
       "noSlip": "Ingen tildelt plass",
       "noBookings": "Ingen kommende bestillinger",
-      "bookingsCount": "{count} kommende bestilling | {count} kommende bestillinger"
+      "bookingsCount": "{count} kommende bestilling | {count} kommende bestillinger",
+      "viewAll": "Se alle",
+      "myBoats": "Mine båter",
+      "manageBoats": "Administrer",
+      "noBoats": "Ingen båter registrert.",
+      "addBoat": "Legg til båt"
     },
     "profile": {
       "title": "Min profil",
@@ -490,6 +496,25 @@
       "cancelSuccess": "Bestillingen er kansellert",
       "cancelError": "Kunne ikke kansellere bestillingen",
       "loadError": "Kunne ikke hente bestillinger"
+    },
+    "sidebarTitle": "Brukerportal",
+    "groupHarbor": "Havn",
+    "groupEconomy": "Økonomi",
+    "groupCommunity": "Fellesskap",
+    "groupAccount": "Min konto",
+    "invoices": {
+      "title": "Fakturaer",
+      "subtitle": "Dine fakturaer",
+      "due": "Forfall",
+      "none": "Ingen fakturaer",
+      "unpaidHeading": "Ubetalte",
+      "recentPaidHeading": "Nylig betalt",
+      "paidHeading": "Betalte",
+      "status": {
+        "paid": "Betalt",
+        "unpaid": "Ubetalt",
+        "overdue": "Forfalt"
+      }
     }
   },
   "admin": {
@@ -1629,7 +1654,8 @@
       "yearAll": "Alle år",
       "likelyDuplicate": "Truleg duplikat — anna rad er allereie matcha",
       "possibleDoublePayment": "Mogleg dobbeltbetaling — krev tilbakebetaling"
-    }
+    },
+    "sidebarTitle": "Adminportal"
   },
   "projects": {
     "title": "Prosjekter",

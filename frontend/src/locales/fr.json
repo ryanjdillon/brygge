@@ -273,7 +273,8 @@
       "slip": "Poste d'amarrage",
       "bookings": "Réservations",
       "featureRequests": "Demandes de fonctionnalités",
-      "forum": "Forum"
+      "forum": "Forum",
+      "invoices": "Factures"
     },
     "dashboard": {
       "welcome": "Bienvenue, {name}",
@@ -291,7 +292,12 @@
       },
       "noSlip": "Aucun poste attribué",
       "noBookings": "Aucune réservation à venir",
-      "bookingsCount": "{count} réservation à venir | {count} réservations à venir"
+      "bookingsCount": "{count} réservation à venir | {count} réservations à venir",
+      "viewAll": "Tout voir",
+      "myBoats": "Mes bateaux",
+      "manageBoats": "Gérer",
+      "noBoats": "Aucun bateau enregistré.",
+      "addBoat": "Ajouter un bateau"
     },
     "profile": {
       "title": "Mon profil",
@@ -431,6 +437,25 @@
       "cancelSuccess": "Réservation annulée",
       "cancelError": "Impossible d'annuler la réservation",
       "loadError": "Impossible de charger les réservations"
+    },
+    "sidebarTitle": "Portail membre",
+    "groupHarbor": "Port",
+    "groupEconomy": "Économie",
+    "groupCommunity": "Communauté",
+    "groupAccount": "Compte",
+    "invoices": {
+      "title": "Factures",
+      "subtitle": "Vos factures",
+      "due": "Échéance",
+      "none": "Aucune facture",
+      "unpaidHeading": "Impayées",
+      "recentPaidHeading": "Payées récemment",
+      "paidHeading": "Payées",
+      "status": {
+        "paid": "Payée",
+        "unpaid": "Impayée",
+        "overdue": "En retard"
+      }
     }
   },
   "admin": {
@@ -1004,7 +1029,8 @@
       "yearAll": "Toutes les années",
       "likelyDuplicate": "Probable doublon — autre ligne déjà rapprochée",
       "possibleDoublePayment": "Possible double paiement — remboursement nécessaire"
-    }
+    },
+    "sidebarTitle": "Portail admin"
   },
   "projects": {
     "title": "Projets",

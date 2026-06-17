@@ -298,7 +298,8 @@
       "harborMap": "Hamnekart",
       "bookings": "Bestillingar",
       "featureRequests": "Framlegg og ønske",
-      "forum": "Forum"
+      "forum": "Forum",
+      "invoices": "Fakturaar"
     },
     "harborMap": {
       "title": "Hamnekart",
@@ -336,7 +337,12 @@
       },
       "noSlip": "Ingen tildelt plass",
       "noBookings": "Ingen komande bestillingar",
-      "bookingsCount": "{count} komande bestilling | {count} komande bestillingar"
+      "bookingsCount": "{count} komande bestilling | {count} komande bestillingar",
+      "viewAll": "Sjå alle",
+      "myBoats": "Båtane mine",
+      "manageBoats": "Administrer",
+      "noBoats": "Ingen båtar registrerte.",
+      "addBoat": "Legg til båt"
     },
     "profile": {
       "title": "Profilen min",
@@ -490,6 +496,25 @@
       "cancelSuccess": "Bestillinga er kansellert",
       "cancelError": "Kunne ikkje kansellere bestillinga",
       "loadError": "Kunne ikkje hente bestillingar"
+    },
+    "sidebarTitle": "Brukarportal",
+    "groupHarbor": "Hamn",
+    "groupEconomy": "Økonomi",
+    "groupCommunity": "Fellesskap",
+    "groupAccount": "Min konto",
+    "invoices": {
+      "title": "Fakturaar",
+      "subtitle": "Fakturaane dine",
+      "due": "Forfall",
+      "none": "Ingen fakturaar",
+      "unpaidHeading": "Ubetalte",
+      "recentPaidHeading": "Nyleg betalt",
+      "paidHeading": "Betalte",
+      "status": {
+        "paid": "Betalt",
+        "unpaid": "Ubetalt",
+        "overdue": "Forfalle"
+      }
     }
   },
   "admin": {
@@ -1629,7 +1654,8 @@
       "yearAll": "Alle år",
       "likelyDuplicate": "Truleg duplikat — anna rad er allereie matcha",
       "possibleDoublePayment": "Mogleg dobbeltbetaling — krev tilbakebetaling"
-    }
+    },
+    "sidebarTitle": "Adminportal"
   },
   "projects": {
     "title": "Prosjekt",

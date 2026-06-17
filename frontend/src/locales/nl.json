@@ -273,7 +273,8 @@
       "slip": "Ligplaats",
       "bookings": "Reserveringen",
       "featureRequests": "Functieverzoeken",
-      "forum": "Forum"
+      "forum": "Forum",
+      "invoices": "Facturen"
     },
     "dashboard": {
       "welcome": "Welkom, {name}",
@@ -291,7 +292,12 @@
       },
       "noSlip": "Geen toegewezen ligplaats",
       "noBookings": "Geen aankomende reserveringen",
-      "bookingsCount": "{count} aankomende reservering | {count} aankomende reserveringen"
+      "bookingsCount": "{count} aankomende reservering | {count} aankomende reserveringen",
+      "viewAll": "Alles bekijken",
+      "myBoats": "Mijn boten",
+      "manageBoats": "Beheren",
+      "noBoats": "Geen boten geregistreerd.",
+      "addBoat": "Boot toevoegen"
     },
     "profile": {
       "title": "Mijn profiel",
@@ -431,6 +437,25 @@
       "cancelSuccess": "Reservering geannuleerd",
       "cancelError": "Kon reservering niet annuleren",
       "loadError": "Kon reserveringen niet laden"
+    },
+    "sidebarTitle": "Gebruikersportaal",
+    "groupHarbor": "Haven",
+    "groupEconomy": "Financiën",
+    "groupCommunity": "Gemeenschap",
+    "groupAccount": "Account",
+    "invoices": {
+      "title": "Facturen",
+      "subtitle": "Uw facturen",
+      "due": "Vervaldatum",
+      "none": "Geen facturen",
+      "unpaidHeading": "Onbetaald",
+      "recentPaidHeading": "Recent betaald",
+      "paidHeading": "Betaald",
+      "status": {
+        "paid": "Betaald",
+        "unpaid": "Onbetaald",
+        "overdue": "Achterstallig"
+      }
     }
   },
   "admin": {
@@ -1005,7 +1030,8 @@
       "yearAll": "Alle jaren",
       "likelyDuplicate": "Waarschijnlijk duplicaat — andere regel reeds gekoppeld",
       "possibleDoublePayment": "Mogelijke dubbele betaling — terugbetaling nodig"
-    }
+    },
+    "sidebarTitle": "Beheerportaal"
   },
   "projects": {
     "title": "Projecten",

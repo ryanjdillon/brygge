@@ -273,7 +273,8 @@
       "slip": "Liegeplatz",
       "bookings": "Buchungen",
       "featureRequests": "Funktionswünsche",
-      "forum": "Forum"
+      "forum": "Forum",
+      "invoices": "Rechnungen"
     },
     "dashboard": {
       "welcome": "Willkommen, {name}",
@@ -291,7 +292,12 @@
       },
       "noSlip": "Kein zugewiesener Liegeplatz",
       "noBookings": "Keine kommenden Buchungen",
-      "bookingsCount": "{count} kommende Buchung | {count} kommende Buchungen"
+      "bookingsCount": "{count} kommende Buchung | {count} kommende Buchungen",
+      "viewAll": "Alle anzeigen",
+      "myBoats": "Meine Boote",
+      "manageBoats": "Verwalten",
+      "noBoats": "Keine Boote registriert.",
+      "addBoat": "Boot hinzufügen"
     },
     "profile": {
       "title": "Mein Profil",
@@ -431,6 +437,25 @@
       "cancelSuccess": "Buchung storniert",
       "cancelError": "Buchung konnte nicht storniert werden",
       "loadError": "Buchungen konnten nicht geladen werden"
+    },
+    "sidebarTitle": "Benutzerportal",
+    "groupHarbor": "Hafen",
+    "groupEconomy": "Finanzen",
+    "groupCommunity": "Gemeinschaft",
+    "groupAccount": "Konto",
+    "invoices": {
+      "title": "Rechnungen",
+      "subtitle": "Ihre Rechnungen",
+      "due": "Fällig",
+      "none": "Keine Rechnungen",
+      "unpaidHeading": "Unbezahlt",
+      "recentPaidHeading": "Kürzlich bezahlt",
+      "paidHeading": "Bezahlt",
+      "status": {
+        "paid": "Bezahlt",
+        "unpaid": "Unbezahlt",
+        "overdue": "Überfällig"
+      }
     }
   },
   "admin": {
@@ -1005,7 +1030,8 @@
       "yearAll": "Alle Jahre",
       "likelyDuplicate": "Wahrscheinlich Duplikat — andere Zeile bereits zugeordnet",
       "possibleDoublePayment": "Möglicherweise Doppelzahlung — Rückerstattung nötig"
-    }
+    },
+    "sidebarTitle": "Admin-Portal"
   },
   "projects": {
     "title": "Projekte",

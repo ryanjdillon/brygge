@@ -302,7 +302,8 @@
       "harborMap": "Harbor Map",
       "bookings": "Bookings",
       "featureRequests": "Feature Requests",
-      "forum": "Forum"
+      "forum": "Forum",
+      "invoices": "Invoices"
     },
     "harborMap": {
       "title": "Harbor Map",
@@ -340,7 +341,12 @@
       },
       "noSlip": "No assigned slip",
       "noBookings": "No upcoming bookings",
-      "bookingsCount": "{count} upcoming booking | {count} upcoming bookings"
+      "bookingsCount": "{count} upcoming booking | {count} upcoming bookings",
+      "viewAll": "View all",
+      "myBoats": "My boats",
+      "manageBoats": "Manage",
+      "noBoats": "No boats registered.",
+      "addBoat": "Add a boat"
     },
     "profile": {
       "title": "My Profile",
@@ -494,6 +500,25 @@
       "cancelSuccess": "Booking cancelled",
       "cancelError": "Could not cancel booking",
       "loadError": "Could not load bookings"
+    },
+    "sidebarTitle": "User portal",
+    "groupHarbor": "Harbour",
+    "groupEconomy": "Economy",
+    "groupCommunity": "Community",
+    "groupAccount": "Account",
+    "invoices": {
+      "title": "Invoices",
+      "subtitle": "Your invoices",
+      "due": "Due",
+      "none": "No invoices",
+      "unpaidHeading": "Unpaid",
+      "recentPaidHeading": "Recently paid",
+      "paidHeading": "Paid",
+      "status": {
+        "paid": "Paid",
+        "unpaid": "Unpaid",
+        "overdue": "Overdue"
+      }
     }
   },
   "admin": {
@@ -1633,7 +1658,8 @@
       "yearAll": "All years",
       "likelyDuplicate": "Likely duplicate — another row already matched",
       "possibleDoublePayment": "Possible double payment — refund needed"
-    }
+    },
+    "sidebarTitle": "Admin portal"
   },
   "projects": {
     "title": "Projects",
