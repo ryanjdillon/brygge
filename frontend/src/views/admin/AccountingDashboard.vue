@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { useCashFlow, useFinancialSummary, usePriceItemSummary, useReservationsByMonth, type PriceItemSummaryRow } from '@/composables/useFinancials'
 import DonutChart from '@/components/charts/DonutChart.vue'
 import BarChart from '@/components/charts/BarChart.vue'
+import { formatNOK } from '@/lib/format'
 import {
   BookOpen,
   FileText,
@@ -157,10 +158,6 @@ const totalCounts = computed(() => {
     overdueCount,
   }
 })
-
-function formatNOK(amount: number): string {
-  return new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK' }).format(amount)
-}
 
 // Primary row label: prefer the concise per-tier name (e.g. "Plassleie
 // 2.0–2.5m bredde") over the long generic description ("Årlig

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import type { BankImportRow } from '@/composables/useBankImports'
+import { formatNOK as nok } from '@/lib/format'
 
 defineProps<{
   rows: BankImportRow[]
@@ -12,10 +13,6 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-
-function nok(n: number): string {
-  return new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK' }).format(n)
-}
 
 function vippsPattern(desc: string): boolean {
   return /Utb\.\s*\d+\s+Vippsnr\s+\d+/i.test(desc)

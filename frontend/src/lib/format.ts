@@ -13,10 +13,17 @@ export function formatName(u: {
 }
 
 // Norwegian krone money formatting, shared so every view renders amounts
-// identically. Mirrors the inline Intl.NumberFormat used across the admin
-// faktura/bank screens.
-export function formatNOK(amount: number, locale = 'nb-NO'): string {
-  return new Intl.NumberFormat(locale, { style: 'currency', currency: 'NOK' }).format(amount)
+// identically. `signed` forces a leading +/- (used by the bank
+// reconciliation views to distinguish incoming from outgoing rows).
+export function formatNOK(
+  amount: number,
+  opts: { signed?: boolean; locale?: string } = {},
+): string {
+  return new Intl.NumberFormat(opts.locale ?? 'nb-NO', {
+    style: 'currency',
+    currency: 'NOK',
+    ...(opts.signed ? { signDisplay: 'always' as const } : {}),
+  }).format(amount)
 }
 
 // Locale-aware short date from an ISO string (YYYY-MM-DD or RFC3339).

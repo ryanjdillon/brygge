@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { usePaymentsList, useExportCSV, type PaymentsFilters, type Payment } from '@/composables/useFinancials'
 import { Download } from 'lucide-vue-next'
 import Select from '@/components/ui/form/Select.vue'
+import { formatNOK } from '@/lib/format'
 
 const { t } = useI18n()
 
@@ -72,10 +73,6 @@ function formatDate(iso: string): string {
     month: 'short',
     day: 'numeric',
   })
-}
-
-function formatNOK(amount: number): string {
-  return new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK' }).format(amount)
 }
 
 function statusClass(status: string): string {

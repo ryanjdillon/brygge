@@ -7,6 +7,7 @@ import DeliveryLogButton from '@/components/admin/DeliveryLogButton.vue'
 import { useConfirm } from '@/stores/confirm'
 import { useFreshTotp } from '@/composables/useFreshTotp'
 import { useRangeSelect } from '@/composables/useRangeSelect'
+import { formatNOK } from '@/lib/format'
 
 interface Row {
   id: string
@@ -441,10 +442,6 @@ async function voidSelected() {
   })
   if (!ok) return
   for (const id of items.map((d) => d.id)) await doVoid(id)
-}
-
-function formatNOK(n: number): string {
-  return new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK' }).format(n)
 }
 
 defineExpose({ load })

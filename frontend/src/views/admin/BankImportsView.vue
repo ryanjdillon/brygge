@@ -32,6 +32,7 @@ import { monthOptions } from '@/utils/month'
 import type { BankImportRow } from '@/composables/useBankImports'
 import { runBankSync, runVippsResync, type BankSyncResult, type VippsResyncResult } from '@/composables/useBankImports'
 import { importUni24CSV, type Uni24ImportResult } from '@/composables/useFinancials'
+import { formatNOK as nok } from '@/lib/format'
 import { useFreshTotp } from '@/composables/useFreshTotp'
 
 const { t, locale } = useI18n()
@@ -172,10 +173,6 @@ async function confirmReconcile() {
   } finally {
     reconcileBusy.value = false
   }
-}
-
-function nok(n: number): string {
-  return new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK' }).format(n)
 }
 
 // ── Tabs ────────────────────────────────────────────────────

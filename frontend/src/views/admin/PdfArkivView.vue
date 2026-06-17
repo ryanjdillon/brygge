@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Search, AlertCircle } from 'lucide-vue-next'
 import FakturaArchiveButton from '@/components/admin/FakturaArchiveButton.vue'
+import { formatNOK } from '@/lib/format'
 
 defineProps<{ embedded?: boolean }>()
 
@@ -86,9 +87,6 @@ function formatBytes(n: number): string {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`
 }
 
-function formatNOK(n: number): string {
-  return new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK' }).format(n)
-}
 </script>
 
 <template>

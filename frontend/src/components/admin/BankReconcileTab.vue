@@ -18,6 +18,7 @@ import {
   type AccountSuggestion,
   type DismissReason,
 } from '@/composables/useBankReconcile'
+import { formatNOK as formatNOKBase } from '@/lib/format'
 import { useAccountsList } from '@/composables/useAccounting'
 
 const { t, locale } = useI18n()
@@ -85,7 +86,7 @@ function focusRow(id: string) {
 }
 
 function formatNOK(n: number): string {
-  return new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK', signDisplay: 'always' }).format(n)
+  return formatNOKBase(n, { signed: true })
 }
 function formatDate(s: string): string {
   return new Date(s).toLocaleDateString(locale.value || 'nb-NO')

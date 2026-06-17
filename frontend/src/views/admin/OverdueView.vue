@@ -2,17 +2,12 @@
 import { useI18n } from 'vue-i18n'
 import { useOverduePayments, useExportCSV } from '@/composables/useFinancials'
 import { AlertTriangle, Download, Mail } from 'lucide-vue-next'
+import { formatNOK } from '@/lib/format'
 
 const { t } = useI18n()
 
 const { data: overdue, isLoading, error } = useOverduePayments()
 const { downloadCSV } = useExportCSV()
-
-function formatNOK(amount: number): string {
-  return new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK' }).format(amount)
-}
-
-
 
 function handleExportOverdue() {
   downloadCSV({ status: 'pending' })

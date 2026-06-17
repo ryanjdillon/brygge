@@ -8,6 +8,7 @@ import { usePricing } from '@/composables/usePricing'
 import MemberSearch, { type MemberHit } from '@/components/members/MemberSearch.vue'
 import LineItemPicker from '@/components/admin/LineItemPicker.vue'
 import AccountSelect from '@/components/admin/AccountSelect.vue'
+import { formatNOK } from '@/lib/format'
 import {
   lookupByOrgNumber,
   searchByName,
@@ -374,10 +375,6 @@ const total = computed(() =>
     return s + Number(l.quantity || 0) * Number(l.unit_price || 0)
   }, 0),
 )
-
-function formatNOK(n: number): string {
-  return new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK' }).format(n)
-}
 
 function reset() {
   member.value = null
