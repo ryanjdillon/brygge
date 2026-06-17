@@ -373,6 +373,18 @@ func registerMemberOps(api huma.API) {
 	}, stub[struct{}, struct{ Body DashboardResponse }]())
 
 	huma.Register(api, huma.Operation{
+		OperationID: "list-my-invoices",
+		Method:      http.MethodGet,
+		Path:        "/api/v1/members/me/invoices",
+		Tags:        []string{"Members"},
+		Summary:     "List my invoices",
+		Security:    BearerSecurity,
+	}, stub[struct {
+		Status string `query:"status" enum:"paid,unpaid,all" doc:"Filter by payment status"`
+		Limit  int    `query:"limit" doc:"Max rows to return (0 = no limit)"`
+	}, struct{ Body []MemberInvoice }]())
+
+	huma.Register(api, huma.Operation{
 		OperationID: "list-my-boats",
 		Method:      http.MethodGet,
 		Path:        "/api/v1/members/me/boats",

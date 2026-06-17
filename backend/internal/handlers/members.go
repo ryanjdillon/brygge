@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -641,6 +642,19 @@ type dashSlip struct {
 	Location string `json:"location"`
 }
 
+type memberInvoice struct {
+	ID            string  `json:"id"`
+	InvoiceNumber int     `json:"invoice_number"`
+	KID           string  `json:"kid_number"`
+	TotalAmount   float64 `json:"total_amount"`
+	IssueDate     string  `json:"issue_date"`
+	DueDate       string  `json:"due_date"`
+	SentAt        *string `json:"sent_at"`
+	Paid          bool    `json:"paid"`
+	PriceItemName string  `json:"price_item_name"`
+	Description   string  `json:"description"`
+}
+
 func (h *MembersHandler) HandleDashboard(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
@@ -701,6 +715,96 @@ func (h *MembersHandler) HandleDashboard(w http.ResponseWriter, r *http.Request)
 	resp.UpcomingBookingCount = bookingCount
 
 	JSON(w, http.StatusOK, resp)
+}
+
+// HandleListMyInvoices returns the authenticated member's own invoices
+// only — scoped to their user_id and club. Drafts the treasurer has not
+// issued yet are excluded (sent_at IS NULL and not imported), as are
+// voided invoices. Paid is derived from a linked payment.
+func (h *MembersHandler) HandleListMyInvoices(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	where := ""
+	switch r.URL.Query().Get("status") {
+	case "paid":
+		where = " AND i.payment_id IS NOT NULL"
+	case "unpaid":
+		where = " AND i.payment_id IS NULL"
+	case "", "all":
+		// no extra filter
+	default:
+		Error(w, http.StatusBadRequest, "status must be one of: paid, unpaid, all")
+		return
+	}
+
+	limit := 0
+	if v := r.URL.Query().Get("limit"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 {
+			Error(w, http.StatusBadRequest, "limit must be a non-negative integer")
+			return
+		}
+		limit = n
+	}
+
+	q := `SELECT i.id, i.invoice_number, i.kid_number, i.total_amount,
+	             i.issue_date, i.due_date, i.sent_at,
+	             (i.payment_id IS NOT NULL) AS paid,
+	             COALESCE(pi.name, ''),
+	             COALESCE((SELECT description FROM invoice_lines WHERE invoice_id = i.id LIMIT 1), '')
+	        FROM invoices i
+	        LEFT JOIN price_items pi ON pi.id = i.price_item_id
+	       WHERE i.user_id = $1 AND i.club_id = $2
+	         AND i.status = 'open'
+	         AND (i.sent_at IS NOT NULL OR i.import_source IS NOT NULL)` + where + `
+	       ORDER BY (i.payment_id IS NULL) DESC,
+	                CASE WHEN i.payment_id IS NULL THEN i.due_date END ASC,
+	                i.issue_date DESC`
+	args := []any{claims.UserID, claims.ClubID}
+	if limit > 0 {
+		q += " LIMIT $3"
+		args = append(args, limit)
+	}
+
+	rows, err := h.db.Query(ctx, q, args...)
+	if err != nil {
+		h.log.Error().Err(err).Msg("list my invoices")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	defer rows.Close()
+
+	out := make([]memberInvoice, 0)
+	for rows.Next() {
+		var mi memberInvoice
+		var issue, due time.Time
+		var sentAt *time.Time
+		if err := rows.Scan(&mi.ID, &mi.InvoiceNumber, &mi.KID, &mi.TotalAmount,
+			&issue, &due, &sentAt, &mi.Paid, &mi.PriceItemName, &mi.Description); err != nil {
+			h.log.Error().Err(err).Msg("scan my invoice row")
+			Error(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		mi.IssueDate = issue.Format("2006-01-02")
+		mi.DueDate = due.Format("2006-01-02")
+		if sentAt != nil {
+			s := sentAt.Format(time.RFC3339)
+			mi.SentAt = &s
+		}
+		out = append(out, mi)
+	}
+	if err := rows.Err(); err != nil {
+		h.log.Error().Err(err).Msg("iterate my invoices")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	JSON(w, http.StatusOK, out)
 }
 
 func dimsMatch(a, b *float64) bool {

@@ -499,6 +499,7 @@ func main() {
 			r.Post("/me/boats", membersHandler.HandleCreateBoat)
 			r.Put("/me/boats/{boatID}", membersHandler.HandleUpdateBoat)
 			r.Delete("/me/boats/{boatID}", membersHandler.HandleDeleteBoat)
+			r.Get("/me/invoices", membersHandler.HandleListMyInvoices)
 			r.Get("/me/slip", membersHandler.HandleGetMySlip)
 			r.Post("/me/slip/issues", membersHandler.HandleReportIssue)
 			r.Get("/me/volunteer-hours", volunteerHandler.HandleGetMyVolunteerHours)

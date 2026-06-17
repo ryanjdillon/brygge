@@ -1605,6 +1605,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/members/me/invoices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List my invoices */
+        get: operations["list-my-invoices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/members/me/notifications": {
         parameters: {
             query?: never;
@@ -3612,6 +3629,34 @@ export interface components {
             quantity?: number;
             /** @description Unit of measurement */
             unit?: string;
+        };
+        MemberInvoice: {
+            /** @description First invoice-line description */
+            description: string;
+            /** @description Due date (YYYY-MM-DD) */
+            due_date: string;
+            /** @description Invoice UUID */
+            id: string;
+            /**
+             * Format: int64
+             * @description Sequential invoice number
+             */
+            invoice_number: number;
+            /** @description Issue date (YYYY-MM-DD) */
+            issue_date: string;
+            /** @description KID payment reference */
+            kid_number: string;
+            /** @description Whether a payment is linked to the invoice */
+            paid: boolean;
+            /** @description Price item name, if any */
+            price_item_name: string;
+            /** @description When the invoice was sent */
+            sent_at?: string;
+            /**
+             * Format: double
+             * @description Total amount due
+             */
+            total_amount: number;
         };
         MemberProfile: {
             /**
@@ -8486,6 +8531,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StatusResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-my-invoices": {
+        parameters: {
+            query?: {
+                /** @description Filter by payment status */
+                status?: "paid" | "unpaid" | "all";
+                /** @description Max rows to return (0 = no limit) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberInvoice"][] | null;
                 };
             };
             /** @description Error */

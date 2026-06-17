@@ -292,6 +292,19 @@ type DashboardResponse struct {
 	UpcomingBookingsCount int            `json:"upcomingBookingsCount" doc:"Number of upcoming bookings"`
 }
 
+type MemberInvoice struct {
+	ID            string  `json:"id" doc:"Invoice UUID"`
+	InvoiceNumber int     `json:"invoice_number" doc:"Sequential invoice number"`
+	KID           string  `json:"kid_number" doc:"KID payment reference"`
+	TotalAmount   float64 `json:"total_amount" doc:"Total amount due"`
+	IssueDate     string  `json:"issue_date" doc:"Issue date (YYYY-MM-DD)"`
+	DueDate       string  `json:"due_date" doc:"Due date (YYYY-MM-DD)"`
+	SentAt        *string `json:"sent_at,omitempty" doc:"When the invoice was sent"`
+	Paid          bool    `json:"paid" doc:"Whether a payment is linked to the invoice"`
+	PriceItemName string  `json:"price_item_name" doc:"Price item name, if any"`
+	Description   string  `json:"description" doc:"First invoice-line description"`
+}
+
 // --- Boats ---
 
 type BoatModel struct {
