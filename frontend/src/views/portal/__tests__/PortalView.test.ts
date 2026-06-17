@@ -16,6 +16,7 @@ vi.mock('lucide-vue-next', () => ({
   BrushCleaning: { template: '<span data-icon="brush-cleaning" />' },
   Bell: { template: '<span data-icon="bell" />' },
   ShieldCheck: { template: '<span data-icon="shield-check" />' },
+  Receipt: { template: '<span data-icon="receipt" />' },
   Map: { template: '<span data-icon="map" />' },
   Menu: { template: '<span data-icon="menu" />' },
   X: { template: '<span data-icon="x" />' },
@@ -29,14 +30,14 @@ describe('PortalView', () => {
 
   it('renders portal title', () => {
     const wrapper = mountWithPlugins(PortalView)
-    expect(wrapper.text()).toContain('portal.title')
+    expect(wrapper.text()).toContain('portal.sidebarTitle')
   })
 
   it('renders sidebar navigation links', () => {
     const wrapper = mountWithPlugins(PortalView)
     expect(wrapper.text()).toContain('portal.sidebar.dashboard')
     expect(wrapper.text()).toContain('portal.sidebar.profile')
-    expect(wrapper.text()).toContain('portal.sidebar.boats')
+    expect(wrapper.text()).toContain('portal.sidebar.myBoats')
     expect(wrapper.text()).toContain('portal.sidebar.documents')
     expect(wrapper.text()).toContain('portal.sidebar.bookings')
   })
