@@ -16,7 +16,7 @@ let
 
     nodejs = nodejs_22;
 
-    npmDepsHash = "sha256-XiwZuAiLPefENtlDAbzt4D+IfodsMHLCaugcTNz32tQ=";
+    npmDepsHash = "sha256-jdVTSZQ3ozQiLxqq023zepAhWjqdZMWpYMyqQVtkiek=";
 
     installPhase = ''
       runHook preInstall
@@ -33,7 +33,7 @@ buildGoModule rec {
   src = repoRoot;
   modRoot = "backend";
 
-  vendorHash = "sha256-7Jw/JuOJA71bfP+ja4pwsfKIgcO2tW2JaQpF5dL00FI=";
+  vendorHash = "sha256-VGgl6p/KUJmYtotLSRu3XaHfzHURbTpdwsAsPoomRAo=";
 
   subPackages = [
     "cmd/api"

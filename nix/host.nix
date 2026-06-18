@@ -976,10 +976,6 @@ SQL
       ADMIN_FILE=/etc/stalwart/admin-password
       PWFILE=/etc/stalwart/board-mailbox-passwords.json
 
-      if [ ! -s "$SPEC" ]; then
-        echo "No board mailboxes declared in $SPEC — nothing to do."
-        exit 0
-      fi
       if [ ! -s "$ADMIN_FILE" ]; then
         echo "WARN: $ADMIN_FILE missing — skipping mailbox provisioning." >&2
         exit 0
@@ -1013,6 +1009,33 @@ SQL
         echo "ERROR: stalwart admin API unreachable after 60s." >&2
         echo "  Service stalwart.service must be running and authenticated." >&2
         exit 1
+      fi
+
+      # System alias: postmaster@ → operator email (admin_email in tfvars).
+      # Created on every deploy regardless of board_mailboxes config.
+      # Members are always synced so admin_email changes propagate on redeploy.
+      POSTMASTER_ADDR="postmaster@${clubConfig.domain}"
+      ADMIN_EMAIL="${clubConfig.adminEmail}"
+      EXISTS=$(curl -fsS -u "admin:$ADMIN" "$API/postmaster" \
+                 | jq -r 'if (.data.id // null) != null then "yes" else "no" end')
+      if [ "$EXISTS" = "no" ]; then
+        BODY=$(jq -nc \
+          --arg email "$POSTMASTER_ADDR" \
+          '{type:"list", name:"postmaster", emails:[$email], description:"System postmaster (managed_by=brygge-tf)", quota:0}')
+        curl -fsS -u "admin:$ADMIN" -X POST "$API" \
+             -H 'Content-Type: application/json' -d "$BODY" >/dev/null \
+          && echo "created postmaster list" \
+          || echo "WARN: failed to create postmaster" >&2
+      fi
+      BODY=$(jq -nc --arg m "$ADMIN_EMAIL" '[{action:"set",field:"members",value:[$m]}]')
+      curl -fsS -u "admin:$ADMIN" -X PATCH "$API/postmaster" \
+           -H 'Content-Type: application/json' -d "$BODY" >/dev/null \
+        && echo "synced postmaster → $ADMIN_EMAIL" \
+        || echo "WARN: failed to sync postmaster members" >&2
+
+      if [ ! -s "$SPEC" ]; then
+        echo "No board mailboxes declared in $SPEC — done."
+        exit 0
       fi
 
       jq -c '.[]' "$SPEC" | while read -r ENTRY; do
@@ -1071,7 +1094,11 @@ SQL
         # 0.15 doesn't expose an OAuth grant we can use for
         # admin-as-other-principal, so the reconciler authenticates
         # directly as each shared principal — same approach as the
-        # SMTP relay@ account.
+        # SMTP relay@ account. List principals are pure forwarders —
+        # no JMAP access needed, no password generated.
+        if [ "$KIND" = "list" ]; then
+          continue
+        fi
         CUR=$(jq -r --arg a "$ADDR" '.[$a] // ""' "$PWFILE")
         if [ -z "$CUR" ]; then
           PLAIN=$(openssl rand -base64 24 | tr -d '=+/' | head -c 32)

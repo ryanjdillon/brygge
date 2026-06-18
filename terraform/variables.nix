@@ -85,7 +85,7 @@
     board_mailboxes = {
       type = "list(object({"
         + "address = string,"
-        + "role = string,"
+        + "role = optional(string, \"\"),"
         + "display_name = string,"
         + "type = string,"
         + "send_as = optional(bool, false),"
