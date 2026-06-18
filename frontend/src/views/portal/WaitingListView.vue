@@ -1,14 +1,12 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
-import { useApi } from '@/composables/useApi'
 import { useApiClient, unwrap } from '@/lib/apiClient'
 import { formatDate } from '@/lib/format'
 import { ref, computed } from 'vue'
 import { CheckCircle, XCircle, LogOut, MapPin } from 'lucide-vue-next'
 
 const { t } = useI18n()
-const { fetchApi } = useApi()
 const client = useApiClient()
 const queryClient = useQueryClient()
 
@@ -42,8 +40,8 @@ const { mutate: acceptOffer, isPending: isAccepting } = useMutation({
 })
 
 const { mutate: declineOffer, isPending: isDeclining } = useMutation({
-  mutationFn: () =>
-    fetchApi(`/api/v1/waiting-list/${entry.value!.id}/decline`, { method: 'POST' }),
+  mutationFn: async () =>
+    unwrap(await client.POST('/api/v1/waiting-list/{entryID}/decline', { params: { path: { entryID: entry.value!.id } } })),
   onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: ['portal', 'waiting-list'] })
     showToast('success', t('portal.waitingList.declineSuccess'))

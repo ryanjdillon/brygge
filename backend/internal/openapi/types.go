@@ -591,6 +591,14 @@ type Document struct {
 	UploadedBy  string `json:"uploaded_by" doc:"Uploader user UUID"`
 }
 
+// DocumentComment is a single member comment on a document.
+type DocumentComment struct {
+	ID        string    `json:"id" doc:"Comment UUID"`
+	Author    string    `json:"author" doc:"Display name of the comment author"`
+	Body      string    `json:"body" doc:"Comment text"`
+	CreatedAt time.Time `json:"created_at" doc:"Creation timestamp"`
+}
+
 // --- Financials ---
 
 type FinancialSummary struct {

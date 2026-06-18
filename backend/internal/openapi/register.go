@@ -539,6 +539,17 @@ func registerWaitingListOps(api huma.API) {
 	}, struct{ Body StatusResponse }]())
 
 	huma.Register(api, huma.Operation{
+		OperationID: "decline-waiting-list-offer",
+		Method:      http.MethodPost,
+		Path:        "/api/v1/waiting-list/{entryID}/decline",
+		Tags:        []string{"Waiting List"},
+		Summary:     "Decline slip offer (returns to active queue)",
+		Security:    BearerSecurity,
+	}, stub[struct {
+		EntryID string `path:"entryID" doc:"Entry UUID"`
+	}, struct{ Body WaitingListEntry }]())
+
+	huma.Register(api, huma.Operation{
 		OperationID: "admin-list-waiting-list",
 		Method:      http.MethodGet,
 		Path:        "/api/v1/waiting-list",
@@ -1166,6 +1177,31 @@ func registerAdminOps(api huma.API) {
 	}, stub[struct {
 		DocID string `path:"docID" doc:"Document UUID"`
 	}, struct{ Body Document }]())
+
+	huma.Register(api, huma.Operation{
+		OperationID: "list-document-comments",
+		Method:      http.MethodGet,
+		Path:        "/api/v1/documents/{docID}/comments",
+		Tags:        []string{"Documents"},
+		Summary:     "List comments on a document",
+		Security:    BearerSecurity,
+	}, stub[struct {
+		DocID string `path:"docID" doc:"Document UUID"`
+	}, struct{ Body []DocumentComment }]())
+
+	huma.Register(api, huma.Operation{
+		OperationID: "create-document-comment",
+		Method:      http.MethodPost,
+		Path:        "/api/v1/documents/{docID}/comments",
+		Tags:        []string{"Documents"},
+		Summary:     "Add a comment to a document",
+		Security:    BearerSecurity,
+	}, stub[struct {
+		DocID string `path:"docID" doc:"Document UUID"`
+		Body  struct {
+			Body string `json:"body" doc:"Comment text"`
+		}
+	}, struct{ Body DocumentComment }]())
 
 	// Audit
 	huma.Register(api, huma.Operation{

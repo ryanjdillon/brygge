@@ -1198,6 +1198,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/documents/{docID}/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List comments on a document */
+        get: operations["list-document-comments"];
+        put?: never;
+        /** Add a comment to a document */
+        post: operations["create-document-comment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/feature-requests": {
         parameters: {
             query?: never;
@@ -2245,6 +2263,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/waiting-list/{entryID}/decline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Decline slip offer (returns to active queue) */
+        post: operations["decline-waiting-list-offer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/waiting-list/{entryID}/offer": {
         parameters: {
             query?: never;
@@ -2986,6 +3021,16 @@ export interface components {
             /** @description Subject line */
             subject: string;
         };
+        "Create-document-commentRequest": {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/Create-document-commentRequest.json
+             */
+            readonly $schema?: string;
+            /** @description Comment text */
+            body: string;
+        };
         "Create-feature-requestRequest": {
             /**
              * Format: uri
@@ -3217,6 +3262,25 @@ export interface components {
             uploaded_by: string;
             /** @description Visibility level */
             visibility: string;
+        };
+        DocumentComment: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/DocumentComment.json
+             */
+            readonly $schema?: string;
+            /** @description Display name of the comment author */
+            author: string;
+            /** @description Comment text */
+            body: string;
+            /**
+             * Format: date-time
+             * @description Creation timestamp
+             */
+            created_at: string;
+            /** @description Comment UUID */
+            id: string;
         };
         DocumentsResponse: {
             /**
@@ -7604,6 +7668,74 @@ export interface operations {
             };
         };
     };
+    "list-document-comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Document UUID */
+                docID: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentComment"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-document-comment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Document UUID */
+                docID: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Create-document-commentRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentComment"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "list-feature-requests": {
         parameters: {
             query?: never;
@@ -10083,6 +10215,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StatusResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "decline-waiting-list-offer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Entry UUID */
+                entryID: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WaitingListEntry"];
                 };
             };
             /** @description Error */

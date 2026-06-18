@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
@@ -14,6 +16,16 @@ import (
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/middleware"
 )
+
+// documentComment is the API representation of a single comment on a document.
+type documentComment struct {
+	ID        string    `json:"id"`
+	Author    string    `json:"author"`
+	Body      string    `json:"body"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+const commentAuthorExpr = `COALESCE(NULLIF(u.full_name, ''), u.first_name || ' ' || u.last_name, u.email)`
 
 const maxUploadSize = 50 << 20 // 50 MB
 
@@ -326,4 +338,106 @@ func (h *AdminDocumentsHandler) HandleDeleteDocument(w http.ResponseWriter, r *h
 		Msg("document deleted")
 
 	JSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+func (h *AdminDocumentsHandler) HandleListComments(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	docID := chi.URLParam(r, "docID")
+	if docID == "" {
+		Error(w, http.StatusBadRequest, "document ID is required")
+		return
+	}
+
+	rows, err := h.db.Query(ctx,
+		`SELECT dc.id, `+commentAuthorExpr+`, dc.body, dc.created_at
+		 FROM document_comments dc
+		 JOIN users u ON u.id = dc.user_id
+		 WHERE dc.document_id = $1 AND dc.club_id = $2
+		 ORDER BY dc.created_at`,
+		docID, claims.ClubID,
+	)
+	if err != nil {
+		h.log.Error().Err(err).Str("doc_id", docID).Msg("failed to query document comments")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	defer rows.Close()
+
+	comments := []documentComment{}
+	for rows.Next() {
+		var c documentComment
+		if err := rows.Scan(&c.ID, &c.Author, &c.Body, &c.CreatedAt); err != nil {
+			h.log.Error().Err(err).Msg("failed to scan document comment")
+			Error(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		comments = append(comments, c)
+	}
+	if err := rows.Err(); err != nil {
+		h.log.Error().Err(err).Msg("document comment rows iteration error")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	JSON(w, http.StatusOK, comments)
+}
+
+func (h *AdminDocumentsHandler) HandleCreateComment(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	docID := chi.URLParam(r, "docID")
+	if docID == "" {
+		Error(w, http.StatusBadRequest, "document ID is required")
+		return
+	}
+
+	var req struct {
+		Body string `json:"body"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	req.Body = strings.TrimSpace(req.Body)
+	if req.Body == "" {
+		Error(w, http.StatusBadRequest, "comment body is required")
+		return
+	}
+
+	var c documentComment
+	err := h.db.QueryRow(ctx,
+		`INSERT INTO document_comments (document_id, user_id, club_id, body)
+		 VALUES ($1, $2, $3, $4)
+		 RETURNING id, created_at`,
+		docID, claims.UserID, claims.ClubID, req.Body,
+	).Scan(&c.ID, &c.CreatedAt)
+	if err != nil {
+		h.log.Error().Err(err).Str("doc_id", docID).Msg("failed to insert document comment")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	err = h.db.QueryRow(ctx,
+		`SELECT `+commentAuthorExpr+` FROM users u WHERE u.id = $1`,
+		claims.UserID,
+	).Scan(&c.Author)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to fetch comment author name")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	c.Body = req.Body
+	JSON(w, http.StatusCreated, c)
 }

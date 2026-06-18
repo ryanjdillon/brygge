@@ -3,22 +3,13 @@ import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useApiClient, unwrap } from '@/lib/apiClient'
-import { useApi } from '@/composables/useApi'
 import { formatDate } from '@/lib/format'
 import { Download, MessageSquare, ChevronDown, ChevronUp } from 'lucide-vue-next'
 import Input from '@/components/ui/form/Input.vue'
 
 const { t } = useI18n()
-const { fetchApi } = useApi()
 const client = useApiClient()
 const queryClient = useQueryClient()
-
-interface Comment {
-  id: string
-  author: string
-  body: string
-  created_at: string
-}
 
 const activeFilter = ref('all')
 const expandedDoc = ref<string | null>(null)
@@ -51,16 +42,23 @@ const {
   isLoading: commentsLoading,
 } = useQuery({
   queryKey: ['portal', 'documents', expandedDocId, 'comments'],
-  queryFn: () => fetchApi<Comment[]>(`/api/v1/documents/${expandedDocId.value}/comments`),
+  queryFn: async () =>
+    unwrap(
+      await client.GET('/api/v1/documents/{docID}/comments', {
+        params: { path: { docID: expandedDocId.value! } },
+      }),
+    ),
   enabled: () => expandedDocId.value !== null,
 })
 
 const { mutate: addComment, isPending: isAddingComment } = useMutation({
-  mutationFn: (docId: string) =>
-    fetchApi<Comment>(`/api/v1/documents/${docId}/comments`, {
-      method: 'POST',
-      body: JSON.stringify({ body: commentText.value }),
-    }),
+  mutationFn: async (docId: string) =>
+    unwrap(
+      await client.POST('/api/v1/documents/{docID}/comments', {
+        params: { path: { docID: docId } },
+        body: { body: commentText.value },
+      }),
+    ),
   onSuccess: (_, docId) => {
     queryClient.invalidateQueries({ queryKey: ['portal', 'documents', docId, 'comments'] })
     commentText.value = ''

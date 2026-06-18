@@ -426,6 +426,8 @@ func main() {
 			r.Use(middleware.AuthenticateSession(sessionService))
 			r.Get("/documents", adminDocumentsHandler.HandleListDocuments)
 			r.Get("/documents/{docID}", adminDocumentsHandler.HandleGetDocument)
+			r.Get("/documents/{docID}/comments", adminDocumentsHandler.HandleListComments)
+			r.Post("/documents/{docID}/comments", adminDocumentsHandler.HandleCreateComment)
 		})
 
 		r.Route("/waiting-list", func(r chi.Router) {
@@ -437,6 +439,7 @@ func main() {
 			r.Put("/me/boat", waitingListHandler.HandleUpdateMyBoat)
 			r.Post("/withdraw", waitingListHandler.HandleWithdraw)
 			r.Post("/{entryID}/accept", waitingListHandler.HandleAcceptOffer)
+			r.Post("/{entryID}/decline", waitingListHandler.HandleDeclineOffer)
 
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.RequireRole("board"))

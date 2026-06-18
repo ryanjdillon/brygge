@@ -629,6 +629,73 @@ func (h *WaitingListHandler) HandleAcceptOffer(w http.ResponseWriter, r *http.Re
 	JSON(w, http.StatusOK, entry)
 }
 
+func (h *WaitingListHandler) HandleDeclineOffer(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	entryID := chi.URLParam(r, "entryID")
+	if entryID == "" {
+		Error(w, http.StatusBadRequest, "missing entry ID")
+		return
+	}
+
+	var currentStatus, ownerID string
+	err := h.db.QueryRow(ctx,
+		`SELECT status, user_id FROM waiting_list_entries WHERE id = $1 AND club_id = $2`,
+		entryID, claims.ClubID,
+	).Scan(&currentStatus, &ownerID)
+	if err == pgx.ErrNoRows {
+		Error(w, http.StatusNotFound, "entry not found")
+		return
+	}
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to fetch entry for decline")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	if ownerID != claims.UserID {
+		Error(w, http.StatusForbidden, "you can only decline your own offer")
+		return
+	}
+
+	if currentStatus != "offered" {
+		Error(w, http.StatusConflict, fmt.Sprintf("entry status is '%s', expected 'offered'", currentStatus))
+		return
+	}
+
+	var entry waitingListEntry
+	err = h.db.QueryRow(ctx,
+		`UPDATE waiting_list_entries
+		 SET status = 'active', offer_deadline = NULL, updated_at = now()
+		 WHERE id = $1 AND club_id = $2
+		 RETURNING id, user_id, club_id, position, is_local, status, offer_deadline, created_at, updated_at`,
+		entryID, claims.ClubID,
+	).Scan(
+		&entry.ID, &entry.UserID, &entry.ClubID, &entry.Position,
+		&entry.IsLocal, &entry.Status, &entry.OfferDeadline,
+		&entry.CreatedAt, &entry.UpdatedAt,
+	)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to decline offer")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	if auditErr := LogAudit(ctx, h.db, claims.ClubID, claims.UserID, "decline_offer", "waiting_list_entry", entryID,
+		map[string]string{"status": "offered"},
+		map[string]string{"status": "active"},
+	); auditErr != nil {
+		h.log.Error().Err(auditErr).Msg("failed to write audit log")
+	}
+
+	JSON(w, http.StatusOK, entry)
+}
+
 func (h *WaitingListHandler) HandleWithdraw(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
