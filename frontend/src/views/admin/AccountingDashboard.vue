@@ -32,7 +32,7 @@ const { t } = useI18n()
 const { categoryLabel, unitLabel } = usePricing()
 
 const currentYear = new Date().getFullYear()
-const selectedYear = ref<number | undefined>(undefined)
+const selectedYear = ref<number | undefined>(currentYear)
 const ALL_YEARS = 0
 const selectedYearValue = computed<number>({
   get: () => selectedYear.value ?? ALL_YEARS,
