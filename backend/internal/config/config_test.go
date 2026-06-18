@@ -6,6 +6,15 @@ import (
 )
 
 func TestLoadDefaults(t *testing.T) {
+	// Clear any ambient config env (CI sets DATABASE_URL/REDIS_URL job-wide
+	// for the integration tests) so the defaults are exercised hermetically.
+	for _, k := range []string{
+		"PORT", "DATABASE_URL", "REDIS_URL", "CLUB_SLUG",
+		"VIPPS_TEST_MODE", "S3_BUCKET", "DENDRITE_INTERNAL_URL",
+	} {
+		t.Setenv(k, "")
+	}
+
 	cfg := Load()
 
 	tests := []struct {

@@ -438,7 +438,7 @@ func TestIntegration_AdminUsersListAndRoles(t *testing.T) {
 	var auditCount int
 	err := env.db.QueryRow(context.Background(),
 		`SELECT COUNT(*) FROM audit_log
-		 WHERE club_id = $1 AND entity_type = 'user' AND entity_id = $2 AND action = 'update_roles'`,
+		 WHERE club_id = $1 AND resource = 'user' AND resource_id = $2 AND action = 'update_roles'`,
 		env.clubID, targetID,
 	).Scan(&auditCount)
 	if err != nil {
@@ -472,6 +472,16 @@ func TestIntegration_BookingsFullFlow(t *testing.T) {
 	).Scan(&resourceID)
 	if err != nil {
 		t.Fatalf("seeding resource: %v", err)
+	}
+
+	// Availability is counted from resource_units, not resources.capacity,
+	// so the resource needs at least one active unit to be bookable.
+	if _, err := env.db.Exec(ctx,
+		`INSERT INTO resource_units (resource_id, label, is_active)
+		 VALUES ($1, 'Unit 1', true)`,
+		resourceID,
+	); err != nil {
+		t.Fatalf("seeding resource unit: %v", err)
 	}
 
 	r := chi.NewRouter()
