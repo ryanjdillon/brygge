@@ -313,52 +313,10 @@ func main() {
 	}
 	fmt.Printf("  slips: %d created\n", len(slips))
 
-	// Assign slip A1 to Kari Sjømann (slip-member) with harbor membership
-	slipMemberID := userIDs["slip-member@brygge.local"]
-	slipA1 := slipIDs["A1"]
-	if slipMemberID != "" && slipA1 != "" {
-		// Mark slip as occupied
-		_, _ = db.Exec(ctx, `UPDATE slips SET status = 'occupied' WHERE id = $1`, slipA1)
-
-		// Release any existing assignment first
-		_, _ = db.Exec(ctx, `
-			UPDATE slip_assignments SET released_at = now()
-			WHERE slip_id = $1 AND released_at IS NULL
-		`, slipA1)
-
-		now := time.Now()
-		_, err = db.Exec(ctx, `
-			INSERT INTO slip_assignments (slip_id, user_id, club_id, harbor_membership_amount, harbor_membership_paid_at, assigned_at, assignment_type)
-			VALUES ($1, $2, $3, 50000, $4, $4, 'permanent')
-		`, slipA1, slipMemberID, clubID, now)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "  failed to assign slip to Kari: %v\n", err)
-		} else {
-			fmt.Println("  slip A1 assigned to Kari Sjømann (harbor membership paid)")
-		}
-	}
-
-	// Assign slip B2 as a seasonal rental to Medlem Hansen so the
-	// harbor map demo includes a second occupied slip with a different
-	// color (permanent vs seasonal).
-	memberID := userIDs["member@brygge.local"]
-	slipB2 := slipIDs["B2"]
-	if memberID != "" && slipB2 != "" {
-		_, _ = db.Exec(ctx, `UPDATE slips SET status = 'occupied' WHERE id = $1`, slipB2)
-		_, _ = db.Exec(ctx, `
-			UPDATE slip_assignments SET released_at = now()
-			WHERE slip_id = $1 AND released_at IS NULL
-		`, slipB2)
-		now := time.Now()
-		if _, err := db.Exec(ctx, `
-			INSERT INTO slip_assignments (slip_id, user_id, club_id, assigned_at, assignment_type)
-			VALUES ($1, $2, $3, $4, 'seasonal')
-		`, slipB2, memberID, clubID, now); err != nil {
-			fmt.Fprintf(os.Stderr, "  failed to assign slip B2: %v\n", err)
-		} else {
-			fmt.Println("  slip B2 assigned to Medlem Hansen (seasonal)")
-		}
-	}
+	// Boats must exist before slip assignments: migration 000020 enforces
+	// active_assignment_has_boat (released_at IS NOT NULL OR boat_id IS NOT
+	// NULL), so every active assignment INSERT has to carry a boat_id. We
+	// therefore seed boat models, then each holder's boat, then assign slips.
 
 	// Seed boat models
 	for _, bm := range seedBoatModels {
@@ -375,14 +333,16 @@ func main() {
 	}
 	fmt.Printf("  boat models: %d seeded\n", len(seedBoatModels))
 
-	// Give Kari a boat (linked to her slip) — Askeladden C61 Center from the model DB
-	var kariModelID string
-	_ = db.QueryRow(ctx,
-		`SELECT id FROM boat_models WHERE manufacturer = 'Askeladden' AND model = 'C61 Center' LIMIT 1`,
-	).Scan(&kariModelID)
-
+	// Give Kari a boat — Askeladden C61 Center from the model DB. Her slip
+	// assignment (A1) links to this boat below.
+	slipMemberID := userIDs["slip-member@brygge.local"]
+	var kariBoatID string
 	if slipMemberID != "" {
-		var kariBoatID string
+		var kariModelID string
+		_ = db.QueryRow(ctx,
+			`SELECT id FROM boat_models WHERE manufacturer = 'Askeladden' AND model = 'C61 Center' LIMIT 1`,
+		).Scan(&kariModelID)
+
 		err = db.QueryRow(ctx, `
 			INSERT INTO boats (user_id, club_id, name, type, manufacturer, model,
 			                   length_m, beam_m, draft_m, weight_kg, registration_number,
@@ -393,13 +353,81 @@ func main() {
 			ON CONFLICT DO NOTHING
 			RETURNING id
 		`, slipMemberID, clubID, kariModelID).Scan(&kariBoatID)
-		if err == nil && kariBoatID != "" {
-			// Link boat to slip assignment
-			_, _ = db.Exec(ctx,
-				`UPDATE slip_assignments SET boat_id = $1
-				 WHERE user_id = $2 AND club_id = $3 AND released_at IS NULL`,
-				kariBoatID, slipMemberID, clubID)
-			fmt.Println("  boat: Sjøsprøyt (Askeladden C61) for Kari, linked to slip A1")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "  failed to seed Kari's boat: %v\n", err)
+		}
+	}
+
+	// Give Hansen a boat — Nordkapp Enduro 605 from the model DB. His slip
+	// assignment (B2) links to this boat below.
+	memberID := userIDs["member@brygge.local"]
+	var hansenBoatID string
+	if memberID != "" {
+		var hansenModelID string
+		_ = db.QueryRow(ctx,
+			`SELECT id FROM boat_models WHERE manufacturer = 'Nordkapp' AND model = 'Enduro 605' LIMIT 1`,
+		).Scan(&hansenModelID)
+
+		err = db.QueryRow(ctx, `
+			INSERT INTO boats (user_id, club_id, name, type, manufacturer, model,
+			                   length_m, beam_m, draft_m, weight_kg, registration_number,
+			                   boat_model_id, measurements_confirmed)
+			VALUES ($1, $2, 'Havglimt', 'motorboat', 'Nordkapp', 'Enduro 605',
+			        6.05, 2.34, 0.45, 1180, 'NO-54321',
+			        $3, true)
+			ON CONFLICT DO NOTHING
+			RETURNING id
+		`, memberID, clubID, hansenModelID).Scan(&hansenBoatID)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "  failed to seed Hansen's boat: %v\n", err)
+		}
+	}
+
+	// Assign slip A1 to Kari Sjømann (slip-member) with harbor membership.
+	// The BEFORE INSERT trigger sync_slip_assignment_user overwrites user_id
+	// from the boat's owner, so we pass Kari's own boat (owner = slip-member).
+	slipA1 := slipIDs["A1"]
+	if slipMemberID != "" && slipA1 != "" && kariBoatID != "" {
+		// Mark slip as occupied
+		_, _ = db.Exec(ctx, `UPDATE slips SET status = 'occupied' WHERE id = $1`, slipA1)
+
+		// Release any existing assignment first
+		_, _ = db.Exec(ctx, `
+			UPDATE slip_assignments SET released_at = now()
+			WHERE slip_id = $1 AND released_at IS NULL
+		`, slipA1)
+
+		now := time.Now()
+		_, err = db.Exec(ctx, `
+			INSERT INTO slip_assignments (slip_id, user_id, boat_id, club_id, harbor_membership_amount, harbor_membership_paid_at, assigned_at, assignment_type)
+			VALUES ($1, $2, $3, $4, 50000, $5, $5, 'permanent')
+		`, slipA1, slipMemberID, kariBoatID, clubID, now)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "  failed to assign slip to Kari: %v\n", err)
+		} else {
+			fmt.Println("  slip A1 assigned to Kari Sjømann (harbor membership paid, boat Sjøsprøyt linked)")
+		}
+	}
+
+	// Assign slip B2 as a seasonal rental to Medlem Hansen so the harbor map
+	// demo includes a second occupied slip with a different color (permanent
+	// vs seasonal). Hansen's own boat (owner = member) satisfies the
+	// active_assignment_has_boat constraint and the sync trigger.
+	slipB2 := slipIDs["B2"]
+	if memberID != "" && slipB2 != "" && hansenBoatID != "" {
+		_, _ = db.Exec(ctx, `UPDATE slips SET status = 'occupied' WHERE id = $1`, slipB2)
+		_, _ = db.Exec(ctx, `
+			UPDATE slip_assignments SET released_at = now()
+			WHERE slip_id = $1 AND released_at IS NULL
+		`, slipB2)
+		now := time.Now()
+		if _, err := db.Exec(ctx, `
+			INSERT INTO slip_assignments (slip_id, user_id, boat_id, club_id, assigned_at, assignment_type)
+			VALUES ($1, $2, $3, $4, $5, 'seasonal')
+		`, slipB2, memberID, hansenBoatID, clubID, now); err != nil {
+			fmt.Fprintf(os.Stderr, "  failed to assign slip B2: %v\n", err)
+		} else {
+			fmt.Println("  slip B2 assigned to Medlem Hansen (seasonal, boat Havglimt linked)")
 		}
 	}
 
