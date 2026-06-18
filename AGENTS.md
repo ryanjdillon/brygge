@@ -55,6 +55,11 @@ just deploy klokkarvikbaatlag.no    # runs migrate-check first; then nix run .#d
 
 Run `just migrate-check` standalone when you just want to validate a migration in isolation.
 
+Two gates, cheapest first:
+
+- **`just migrate-check`** — applies every migration to an *empty* DB. Fast, catches ~80% of breakage (syntax, ordering, non-idempotent DDL). This is the default `just deploy` gate.
+- **`just migrate-check-prod`** — restores the latest prod snapshot (from the DIL-328 S3 backup) and applies *pending* migrations against that real data, then drops it. Catches data-shape failures that only surface on populated tables — e.g. a TEXT/UUID cast on a non-empty column (DIL-363), a `NOT NULL` / `CHECK` addition on existing rows. Needs `just up` running + `BACKUP_S3_*` env; pass a local `*.dump` to work offline. **Run this before any migration that changes a column type, adds a `NOT NULL`/`CHECK`, or otherwise depends on existing row contents.** The snapshot is fetched to a tmpdir and shredded on exit (carries member PII).
+
 The recipe spins up a fresh `brygge_migrate_check` DB, applies every migration in `backend/migrations/` end-to-end as the `brygge` role, then drops it. Failures here are deploy-blocking — fix the migration before shipping. Catches:
 
 - Enum casts (PG rejects implicit `text → enum` in INSERT/SELECT)

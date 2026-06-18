@@ -64,6 +64,14 @@ migrate-check:
     {{compose}} exec -T db psql -U brygge -d postgres -v ON_ERROR_STOP=1 -c "DROP DATABASE brygge_migrate_check;" >/dev/null
     @echo "✓ migrate-check passed."
 
+# Thorough variant: restore the latest prod snapshot, then apply pending
+# migrations against that real data — catches data-shape breakage the
+# empty-DB migrate-check misses (e.g. a TEXT/UUID cast on a populated
+# column). Needs `just up` running + BACKUP_S3_* env (same as the backup
+# job). Pass a local *.dump to skip the S3 fetch / work offline. See DIL-393.
+migrate-check-prod *snapshot:
+    nix develop --command bash scripts/migrate-check-prod.sh {{snapshot}}
+
 # Run all tests (Go unit + Vue + Playwright)
 test: test-go test-vue test-e2e
 

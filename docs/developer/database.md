@@ -332,6 +332,26 @@ in `backend/migrations/` for the source of truth. The high-level shape:
 Every table has `created_at` / `updated_at` `TIMESTAMPTZ` columns and a
 `gen_random_uuid()` primary key.
 
+## Migration dry-run against prod data
+
+`just migrate-check` applies every migration to an empty DB. `just
+migrate-check-prod` is the thorough variant: it restores the **latest
+daily snapshot** (from the automated S3 backup — `<bucket>/daily/`, GFS
+retention daily×7 / weekly×4 / monthly×12) into a throwaway
+`brygge_migrate_check_prod` DB, applies the *pending* migrations against
+that real data, then drops it. Use it before any migration that changes a
+column type or adds a `NOT NULL` / `CHECK` to a populated table.
+
+```bash
+just up                              # compose db must be running
+just migrate-check-prod              # newest snapshot from S3
+just migrate-check-prod ./some.dump  # a local dump (offline)
+```
+
+Needs `BACKUP_S3_*` env (same vars as the backup job). The snapshot
+carries member PII — it is fetched to a tmpdir and `shred`-ded on exit,
+never persisted in clear.
+
 ## See also
 
 - [deploy.md](deploy.md) — the broader deploy / VM lifecycle
