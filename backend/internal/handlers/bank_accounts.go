@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -127,6 +128,23 @@ func validateBankAccountWrite(req bankAccountWrite) (bankAccountWrite, error) {
 	return req, nil
 }
 
+// ensureGLAccount guarantees the bank account's GL code exists in the
+// chart of accounts. A bank account whose gl_code is not in `accounts`
+// saves fine but then makes every subsequent KID auto-match silently
+// fail — the journal_lines.account_code → accounts(club_id, code) FK
+// rejects the entry and the payment shows as unpaid with no clue why.
+// Auto-seeding the missing asset account here keeps the bank accounts and
+// the chart consistent regardless of how the chart was set up. See DIL-390.
+func ensureGLAccount(ctx context.Context, tx pgx.Tx, clubID, code string) error {
+	_, err := tx.Exec(ctx,
+		`INSERT INTO accounts (club_id, code, name, account_type)
+		 VALUES ($1, $2, $3, 'asset'::account_type)
+		 ON CONFLICT (club_id, code) DO NOTHING`,
+		clubID, code, "Bankkonto "+code,
+	)
+	return err
+}
+
 // HandleCreate adds a new bank account. If is_default_for_invoices is
 // true, any existing default is unset in the same transaction so the
 // partial unique index holds.
@@ -154,6 +172,11 @@ func (h *BankAccountsHandler) HandleCreate(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	defer tx.Rollback(ctx)
+	if err := ensureGLAccount(ctx, tx, claims.ClubID, req.GLCode); err != nil {
+		h.log.Error().Err(err).Msg("ensure gl account")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
 	if req.IsDefaultForInvoices {
 		if _, err := tx.Exec(ctx,
 			`UPDATE club_bank_accounts SET is_default_for_invoices = FALSE
@@ -220,6 +243,11 @@ func (h *BankAccountsHandler) HandleUpdate(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	defer tx.Rollback(ctx)
+	if err := ensureGLAccount(ctx, tx, claims.ClubID, req.GLCode); err != nil {
+		h.log.Error().Err(err).Msg("ensure gl account")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
 	if req.IsDefaultForInvoices {
 		if _, err := tx.Exec(ctx,
 			`UPDATE club_bank_accounts SET is_default_for_invoices = FALSE
