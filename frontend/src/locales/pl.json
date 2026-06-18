@@ -1018,7 +1018,8 @@
         "overpayment": "Overpayment",
         "unidentifiable": "Unidentifiable",
         "test_transaction": "Test transaction",
-        "double_payment": "Podwójna płatność"
+        "double_payment": "Podwójna płatność",
+        "superseded": "Zastąpiony rozliczonym wierszem"
       },
       "reasonHints": {
         "bounced": "Payment was rejected at the bank (e.g. savings cap). Member still owes.",

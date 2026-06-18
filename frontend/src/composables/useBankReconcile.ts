@@ -176,5 +176,6 @@ export const DISMISS_REASONS = [
   'overpayment',
   'unidentifiable',
   'test_transaction',
+  'superseded',
 ] as const
 export type DismissReason = (typeof DISMISS_REASONS)[number]

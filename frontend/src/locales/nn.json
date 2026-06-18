@@ -1642,7 +1642,8 @@
         "overpayment": "Overbetaling",
         "unidentifiable": "Ikkje identifiserbar",
         "test_transaction": "Testtransaksjon",
-        "double_payment": "Dobbeltbetaling"
+        "double_payment": "Dobbeltbetaling",
+        "superseded": "Erstatta av oppgjord rad"
       },
       "reasonHints": {
         "bounced": "Betalinga vart avvist (t.d. høyrente-tak nådd). Medlemen skuldar framleis.",

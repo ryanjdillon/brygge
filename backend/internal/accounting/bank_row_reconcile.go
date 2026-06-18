@@ -30,20 +30,25 @@ import (
 // bank_import_rows.dismissed_reason. Validated in handler input
 // parsing too — defense in depth.
 var allowedDismissReasons = map[string]bool{
-	"bounced":          true,
+	"bounced":           true,
 	"internal_transfer": true,
-	"duplicate":        true,
-	"double_payment":   true,
-	"bank_fee":         true,
-	"refund_or_credit": true,
-	"overpayment":      true,
-	"unidentifiable":   true,
-	"test_transaction": true,
+	"duplicate":         true,
+	"double_payment":    true,
+	"bank_fee":          true,
+	"refund_or_credit":  true,
+	"overpayment":       true,
+	"unidentifiable":    true,
+	"test_transaction":  true,
+	// superseded: a provisional "Bokført på vei" placeholder row that
+	// the bank later replaced with a fully-attributed settled row
+	// (DIL-325). Lets the treasurer clear the stale placeholder without
+	// touching journal entries.
+	"superseded": true,
 }
 
-// IsValidDismissReason returns true when r is one of the eight values
-// allowed by the bank_row_dismissal CHECK. Handlers use this to reject
-// invalid input before the DB does.
+// IsValidDismissReason returns true when r is one of the values allowed
+// by the bank_row_dismissal CHECK. Handlers use this to reject invalid
+// input before the DB does.
 func IsValidDismissReason(r string) bool {
 	return allowedDismissReasons[r]
 }
