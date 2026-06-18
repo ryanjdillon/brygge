@@ -540,7 +540,8 @@
       "invoicePreview": "Fattura per {name}: {type}, {amount} NOK, scadenza {due}",
       "invoiceCreated": "Fattura creata",
       "harborMembershipCollected": "Andel raccolte",
-      "typeHarborMembership": "Quota portuale"
+      "typeHarborMembership": "Quota portuale",
+      "unmappedLines": "Senza voce di prezzo"
     },
     "events": {
       "title": "Gestione eventi",

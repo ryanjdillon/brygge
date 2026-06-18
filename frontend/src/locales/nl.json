@@ -540,7 +540,8 @@
       "invoicePreview": "Factuur voor {name}: {type}, {amount} NOK, vervalt op {due}",
       "invoiceCreated": "Factuur aangemaakt",
       "harborMembershipCollected": "Geïnd andelgeld",
-      "typeHarborMembership": "Havenlidmaatschap"
+      "typeHarborMembership": "Havenlidmaatschap",
+      "unmappedLines": "Zonder prijsartikel"
     },
     "events": {
       "title": "Evenementenbeheer",

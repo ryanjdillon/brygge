@@ -540,7 +540,8 @@
       "invoicePreview": "Rechnung für {name}: {type}, {amount} NOK, fällig am {due}",
       "invoiceCreated": "Rechnung erstellt",
       "harborMembershipCollected": "Eingezogene Anteile",
-      "typeHarborMembership": "Anteil"
+      "typeHarborMembership": "Anteil",
+      "unmappedLines": "Ohne Preisposition"
     },
     "events": {
       "title": "Veranstaltungsverwaltung",

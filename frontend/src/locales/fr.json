@@ -540,7 +540,8 @@
       "invoicePreview": "Facture pour {name} : {type}, {amount} NOK, échéance {due}",
       "invoiceCreated": "Facture créée",
       "harborMembershipCollected": "Parts collectées",
-      "typeHarborMembership": "Part portuaire"
+      "typeHarborMembership": "Part portuaire",
+      "unmappedLines": "Sans article tarifaire"
     },
     "events": {
       "title": "Gestion des événements",

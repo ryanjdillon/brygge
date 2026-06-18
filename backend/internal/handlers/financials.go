@@ -108,6 +108,11 @@ func (h *FinancialsHandler) HandleGetPriceItemSummary(w http.ResponseWriter, r *
 		args = append(args, *yearFilter)
 	}
 
+	// Drive from invoice_lines (via invoices) and LEFT JOIN price_items so
+	// no line is ever dropped. Lines whose price_item_id is NULL or points
+	// to a deleted/cross-club price item collapse into a single catch-all
+	// group (pi.id IS NULL) instead of vanishing from the totals. See
+	// DIL-399.
 	rows, err := h.db.Query(ctx, `
 		SELECT pi.id,
 		       pi.name,
@@ -121,15 +126,13 @@ func (h *FinancialsHandler) HandleGetPriceItemSummary(w http.ResponseWriter, r *
 		       COUNT(DISTINCT i.id) AS invoice_count,
 		       COUNT(DISTINCT CASE WHEN i.payment_id IS NOT NULL THEN i.id END) AS paid_count,
 		       COUNT(DISTINCT CASE WHEN i.payment_id IS NULL AND i.due_date < CURRENT_DATE THEN i.id END) AS overdue_count
-		  FROM price_items pi
-		  LEFT JOIN invoice_lines il ON il.price_item_id = pi.id
-		  JOIN invoices i ON i.id = il.invoice_id
-		   AND i.club_id = $1
+		  FROM invoices i
+		  JOIN invoice_lines il ON il.invoice_id = i.id
+		  LEFT JOIN price_items pi ON pi.id = il.price_item_id AND pi.club_id = i.club_id
+		 WHERE i.club_id = $1
 		   AND i.status <> 'voided'`+periodClause+`
-		 WHERE pi.club_id = $1
 		 GROUP BY pi.id, pi.name, pi.description, pi.category, pi.amount, pi.unit, pi.sort_order
-		HAVING COUNT(i.id) > 0
-		 ORDER BY pi.category, pi.sort_order, pi.name`,
+		 ORDER BY (pi.id IS NULL), pi.category, pi.sort_order, pi.name`,
 		args...,
 	)
 	if err != nil {
@@ -142,15 +145,29 @@ func (h *FinancialsHandler) HandleGetPriceItemSummary(w http.ResponseWriter, r *
 	resp := priceItemSummaryResponse{Year: yearFilter, Items: []priceItemSummaryRow{}}
 	for rows.Next() {
 		var row priceItemSummaryRow
+		// The catch-all group has NULL price-item columns, so scan the
+		// identity/label fields through nullable holders and leave them as
+		// zero values (empty id/name/category) for the orphaned bucket —
+		// the frontend renders it under a localized "no price item" label.
+		var piID, piName, piDesc, piCategory, piUnit *string
+		var piAmount *float64
 		if err := rows.Scan(
-			&row.PriceItemID, &row.Name, &row.Description, &row.Category,
-			&row.Amount, &row.Unit,
+			&piID, &piName, &piDesc, &piCategory,
+			&piAmount, &piUnit,
 			&row.Billed, &row.Received, &row.Overdue,
 			&row.InvoiceCount, &row.PaidCount, &row.OverdueCount,
 		); err != nil {
 			h.log.Error().Err(err).Msg("price-item summary scan")
 			Error(w, http.StatusInternalServerError, "internal error")
 			return
+		}
+		row.PriceItemID = deref(piID)
+		row.Name = deref(piName)
+		row.Description = deref(piDesc)
+		row.Category = deref(piCategory)
+		row.Unit = deref(piUnit)
+		if piAmount != nil {
+			row.Amount = *piAmount
 		}
 		row.Outstanding = row.Billed - row.Received
 		resp.Items = append(resp.Items, row)

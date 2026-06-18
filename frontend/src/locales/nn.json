@@ -824,7 +824,8 @@
       "cashFlowIncome": "Inntekt",
       "cashFlowExpense": "Kostnad",
       "cashFlowNet": "netto",
-      "countSuffix": "({n} stk)"
+      "countSuffix": "({n} stk)",
+      "unmappedLines": "Linjer utan prisvare"
     },
     "events": {
       "title": "Arrangement",

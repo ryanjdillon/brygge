@@ -828,7 +828,8 @@
       "cashFlowIncome": "Income",
       "cashFlowExpense": "Expense",
       "cashFlowNet": "net",
-      "countSuffix": "({n} pcs)"
+      "countSuffix": "({n} pcs)",
+      "unmappedLines": "No price item"
     },
     "events": {
       "title": "Event Management",

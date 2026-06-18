@@ -540,7 +540,8 @@
       "invoicePreview": "Faktura dla {name}: {type}, {amount} NOK, termin {due}",
       "invoiceCreated": "Faktura wystawiona",
       "harborMembershipCollected": "Zebrane udziały",
-      "typeHarborMembership": "Udział"
+      "typeHarborMembership": "Udział",
+      "unmappedLines": "Bez pozycji cennika"
     },
     "events": {
       "title": "Zarządzanie wydarzeniami",

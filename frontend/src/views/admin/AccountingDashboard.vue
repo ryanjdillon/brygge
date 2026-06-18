@@ -165,6 +165,9 @@ const totalCounts = computed(() => {
 // same category. Falls back to the description on legacy rows that
 // never set a distinguishing name.
 function rowLabel(row: PriceItemSummaryRow): string {
+  // The catch-all bucket (lines with no/deleted price item) has an empty
+  // id and name — surface it under a clear localized label. See DIL-399.
+  if (!row.price_item_id) return t('admin.financials.unmappedLines')
   return row.name?.trim() || row.description
 }
 
@@ -334,7 +337,7 @@ const postedCount = computed(() => entries.value?.filter(e => e.status === 'post
                 <template v-for="g in priceItemGroups" :key="g.category">
                   <tr class="border-t border-gray-200 bg-blue-50/40">
                     <td class="px-4 py-2 text-sm font-semibold text-gray-900">
-                      {{ categoryLabel(g.category) }}
+                      {{ g.category ? categoryLabel(g.category) : t('admin.financials.unmappedLines') }}
                       <span class="ml-2 text-xs font-normal text-gray-500">{{ g.items.length }}</span>
                     </td>
                     <td colspan="5" />
