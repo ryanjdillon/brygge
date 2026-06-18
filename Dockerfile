@@ -3,7 +3,7 @@
 # Target platform: linux/arm64 (Hetzner CAX11)
 
 # ── Stage 1: Build frontend ─────────────────────────────────
-FROM node:22-alpine AS frontend
+FROM node:24-alpine AS frontend
 WORKDIR /frontend
 COPY frontend/package*.json ./
 RUN npm ci
@@ -11,7 +11,7 @@ COPY frontend/ .
 RUN npm run build
 
 # ── Stage 2: Build Go binary (with embedded frontend) ───────
-FROM golang:1.25-alpine AS builder
+FROM golang:1.26-alpine AS builder
 RUN apk add --no-cache gcc musl-dev
 WORKDIR /app
 COPY backend/go.* ./
@@ -33,7 +33,7 @@ EXPOSE 8080
 ENTRYPOINT ["/brygge"]
 
 # ── Dev target: Go with live reload ─────────────────────────
-FROM golang:1.25-alpine AS dev
+FROM golang:1.26-alpine AS dev
 RUN go install github.com/air-verse/air@latest
 WORKDIR /app
 COPY backend/go.* ./
