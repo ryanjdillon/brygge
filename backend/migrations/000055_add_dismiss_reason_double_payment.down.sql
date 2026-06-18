@@ -13,6 +13,7 @@ BEGIN
     IF EXISTS (
         SELECT 1 FROM pg_constraint
          WHERE conname = 'bank_import_rows_dismissed_reason_check'
+           AND conrelid = 'bank_import_rows'::regclass
     ) THEN
         ALTER TABLE bank_import_rows
           DROP CONSTRAINT bank_import_rows_dismissed_reason_check;
