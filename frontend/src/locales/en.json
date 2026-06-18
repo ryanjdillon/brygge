@@ -1553,7 +1553,11 @@
       "noBankImports": "No bank imports yet.",
       "runVippsResync": "Resync Vipps",
       "vippsResyncResult": "Vipps resync: {resynced}/{scanned} reclassified · {skipped} skipped · {failed} failed.",
-      "tabReconcile": "Tildel"
+      "tabReconcile": "Tildel",
+      "dataFreshness": "Data freshness per bank",
+      "dataFreshnessHint": "When each account last received imported transactions.",
+      "lastUpdated": "Last updated",
+      "neverImported": "No imports yet"
     },
     "pdfArchive": {
       "title": "PDF archive",

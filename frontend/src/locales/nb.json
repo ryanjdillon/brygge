@@ -1549,7 +1549,11 @@
       "noBankImports": "Ingen bankimporter ennå.",
       "runVippsResync": "Synk Vipps",
       "vippsResyncResult": "Vipps-resync: {resynced}/{scanned} omklassifisert · {skipped} hoppet over · {failed} feilet.",
-      "tabReconcile": "Tildel"
+      "tabReconcile": "Tildel",
+      "dataFreshness": "Sist oppdatert per bank",
+      "dataFreshnessHint": "Når hver konto sist fikk importerte transaksjoner.",
+      "lastUpdated": "Sist oppdatert",
+      "neverImported": "Ingen import ennå"
     },
     "pdfArchive": {
       "title": "PDF-arkiv",

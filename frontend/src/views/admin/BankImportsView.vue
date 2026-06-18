@@ -32,7 +32,7 @@ import { monthOptions } from '@/utils/month'
 import type { BankImportRow } from '@/composables/useBankImports'
 import { runBankSync, runVippsResync, type BankSyncResult, type VippsResyncResult } from '@/composables/useBankImports'
 import { importUni24CSV, type Uni24ImportResult } from '@/composables/useFinancials'
-import { formatNOK as nok } from '@/lib/format'
+import { formatNOK as nok, formatDate } from '@/lib/format'
 import { useFreshTotp } from '@/composables/useFreshTotp'
 
 const { t, locale } = useI18n()
@@ -220,6 +220,27 @@ async function runSync() {
 
 // ── Bank imports list ──────────────────────────────────────
 const { data: bankImportsList } = useBankImportsList()
+
+// ── Per-bank data freshness (DIL-371) ──────────────────────
+// Most-recent import timestamp per bank account / Vipps MSN, so the
+// operator can see at a glance how current each bank's data is.
+// created_at is ISO 8601, so lexical max == chronological max.
+const bankLastImport = computed(() => {
+  const m = new Map<string, string>()
+  for (const b of bankImportsList.value ?? []) {
+    const cur = m.get(b.account_code)
+    if (!cur || b.created_at > cur) m.set(b.account_code, b.created_at)
+  }
+  return m
+})
+const vippsFreshness = computed(() => {
+  const m = new Map<string, string>()
+  for (const v of vippsImports.value ?? []) {
+    const cur = m.get(v.msn)
+    if (!cur || v.created_at > cur) m.set(v.msn, v.created_at)
+  }
+  return [...m.entries()].map(([msn, lastUpdated]) => ({ msn, lastUpdated }))
+})
 
 function selectBankImport(id: string) {
   currentBankImportId.value = id
@@ -507,6 +528,26 @@ const filterMonthValue = computed<number>({
         </div>
       </section>
 
+      <section class="rounded-lg border border-gray-200 bg-white p-5" data-testid="bank-freshness">
+        <h3 class="text-sm font-semibold text-gray-900">{{ t('admin.bankImports.dataFreshness') }}</h3>
+        <p class="mt-0.5 text-xs text-gray-500">{{ t('admin.bankImports.dataFreshnessHint') }}</p>
+        <ul class="mt-3 divide-y divide-gray-100 text-sm">
+          <li v-for="a in bankAccounts" :key="a.code" class="flex items-center justify-between py-1.5">
+            <span class="text-gray-700">{{ a.code }} — {{ a.name }}</span>
+            <span v-if="bankLastImport.get(a.code)" class="text-xs tabular-nums text-gray-600">
+              {{ t('admin.bankImports.lastUpdated') }}: {{ formatDate(bankLastImport.get(a.code)) }}
+            </span>
+            <span v-else class="text-xs text-gray-400">{{ t('admin.bankImports.neverImported') }}</span>
+          </li>
+          <li v-for="v in vippsFreshness" :key="'vipps-' + v.msn" class="flex items-center justify-between py-1.5">
+            <span class="text-gray-700">Vipps · msn {{ v.msn }}</span>
+            <span class="text-xs tabular-nums text-gray-600">
+              {{ t('admin.bankImports.lastUpdated') }}: {{ formatDate(v.lastUpdated) }}
+            </span>
+          </li>
+        </ul>
+      </section>
+
       <div v-if="accountFilter.kind === 'bank'">
         <BankRowsTable :rows="accountsBankRows ?? []" :show-reconcile="false" />
         <p v-if="!(accountsBankRows && accountsBankRows.length)" class="mt-3 text-xs text-gray-500">
@@ -711,6 +752,7 @@ const filterMonthValue = computed<number>({
             <span class="ml-2 text-xs text-gray-500">{{ b.account_code }}</span>
           </span>
           <span class="flex items-center gap-3 text-xs text-gray-500">
+            <span class="tabular-nums">{{ formatDate(b.created_at) }}</span>
             {{ b.row_count }} {{ t('admin.bankImports.rows') }}
             <button
               type="button"
@@ -744,7 +786,10 @@ const filterMonthValue = computed<number>({
           @click="currentVippsImportId = v.id"
         >
           <span>{{ v.filename }} <span class="ml-2 text-xs text-gray-500">msn {{ v.msn }}</span></span>
-          <span class="text-xs text-gray-500">{{ v.row_count }} {{ t('admin.bankImports.rows') }}</span>
+          <span class="flex items-center gap-3 text-xs text-gray-500">
+            <span class="tabular-nums">{{ formatDate(v.created_at) }}</span>
+            {{ v.row_count }} {{ t('admin.bankImports.rows') }}
+          </span>
         </li>
       </ul>
     </section>

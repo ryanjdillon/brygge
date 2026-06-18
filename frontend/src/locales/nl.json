@@ -956,7 +956,11 @@
       }
     },
     "bankImports": {
-      "tabReconcile": "Tildel"
+      "tabReconcile": "Tildel",
+      "dataFreshness": "Gegevensactualiteit per bank",
+      "dataFreshnessHint": "Wanneer elke rekening voor het laatst geïmporteerde transacties ontving.",
+      "lastUpdated": "Laatst bijgewerkt",
+      "neverImported": "Nog geen imports"
     },
     "bankReconcile": {
       "filterAll": "All",

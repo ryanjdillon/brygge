@@ -955,7 +955,11 @@
       }
     },
     "bankImports": {
-      "tabReconcile": "Tildel"
+      "tabReconcile": "Tildel",
+      "dataFreshness": "Fraîcheur des données par banque",
+      "dataFreshnessHint": "Quand chaque compte a reçu des transactions importées pour la dernière fois.",
+      "lastUpdated": "Dernière mise à jour",
+      "neverImported": "Aucun import"
     },
     "bankReconcile": {
       "filterAll": "All",
