@@ -3,7 +3,7 @@
 # Target platform: linux/arm64 (Hetzner CAX11)
 
 # ── Stage 1: Build frontend ─────────────────────────────────
-FROM node:24-alpine AS frontend
+FROM node:lts-alpine AS frontend
 WORKDIR /frontend
 COPY frontend/package*.json ./
 RUN npm ci
