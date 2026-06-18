@@ -158,9 +158,121 @@ sudo -u postgres psql brygge -c "UPDATE schema_migrations SET dirty = false;"
 systemctl restart brygge-migrate
 ```
 
-## Backups
+## Automated backups
 
-The deploy provisions a nightly `pg_dumpall` cron. Manual on-demand:
+The `services.brygge.backup` NixOS module (implemented in `nix/backup.nix`)
+runs `systemd.timers.brygge-backup` on a configurable schedule (default
+**02:30 UTC daily**). It uses `pg_dump --format=custom --compress=9` and
+uploads to any S3-compatible store via the MinIO client (`mc`).
+
+### GFS retention model
+
+Each successful run writes a **daily** object. On **Monday** it also writes
+a **weekly** object. On the **1st of the month** it also writes a **monthly**
+object. After uploading, the script prunes each tier to its configured count
+(defaults: 7 daily, 4 weekly, 12 monthly).
+
+Object key layout inside the bucket:
+
+```
+<bucket>/daily/brygge-YYYYMMDD-HHMMSS.dump
+<bucket>/weekly/brygge-YYYYMMDD-HHMMSS.dump
+<bucket>/monthly/brygge-YYYYMMDD-HHMMSS.dump
+```
+
+### Enabling in host configuration
+
+```nix
+services.brygge.backup = {
+  enable      = true;
+  s3Endpoint  = "https://s3.eu-central-003.backblazeb2.com";
+  s3Bucket    = "brygge-backups";
+
+  # Optional: override schedule (systemd OnCalendar syntax)
+  schedule    = "*-*-* 02:30:00";
+
+  # Optional: Uptime-Kuma push URL — pinged on success; missed ping = alert
+  healthPingUrl = "https://uptime.example.com/api/push/abc123";
+
+  # Optional: tune GFS retention
+  retention = {
+    daily   = 7;
+    weekly  = 4;
+    monthly = 12;
+  };
+};
+```
+
+### Required environment-file keys
+
+Add these to `/etc/brygge/env` (the same file used by `services.brygge.environmentFile`,
+or a separate path set via `services.brygge.backup.environmentFile`).
+The file must be `chmod 0400` and owned by root.
+
+```sh
+# Backup bucket credentials — kept separate from app S3 creds
+BACKUP_S3_ACCESS_KEY=<your-key-id>
+BACKUP_S3_SECRET_KEY=<your-secret-key>
+
+# Optional: override the non-secret options from Nix at runtime
+# BACKUP_S3_ENDPOINT=https://...
+# BACKUP_S3_BUCKET=brygge-backups
+```
+
+### Monitoring
+
+- `systemctl status brygge-backup` — last run result and exit code.
+- `journalctl -u brygge-backup -e` — full log of the most recent run.
+- If `healthPingUrl` is configured, a missed Uptime-Kuma ping within the
+  expected interval means the backup job did not complete successfully.
+- A failed run sets the unit to `failed` state; systemd will **not** retry
+  automatically (this is intentional — a stuck backup should alert, not loop).
+
+### Restore recipe
+
+Download the desired dump from S3 using `mc`, then restore with `pg_restore`.
+
+```sh
+# 1. Configure the mc alias (same credentials as environmentFile)
+mc alias set bryggebackup \
+    https://s3.eu-central-003.backblazeb2.com \
+    <BACKUP_S3_ACCESS_KEY> \
+    <BACKUP_S3_SECRET_KEY>
+
+# 2. List available dumps (example: daily tier)
+mc ls bryggebackup/brygge-backups/daily/
+
+# 3. Download the chosen dump
+mc cp bryggebackup/brygge-backups/daily/brygge-YYYYMMDD-HHMMSS.dump ./brygge-YYYYMMDD.dump
+
+# 4. Restore — stop the app first, then restore
+ssh -i <key> -o IdentitiesOnly=yes root@<host-ip> 'systemctl stop brygge'
+
+pg_restore \
+    --clean \
+    --if-exists \
+    --no-owner \
+    --no-privileges \
+    -d "postgres:///brygge?host=/run/postgresql&sslmode=disable" \
+    brygge-YYYYMMDD.dump
+
+# 5. Restart
+ssh -i <key> -o IdentitiesOnly=yes root@<host-ip> 'systemctl start brygge'
+```
+
+The `--clean --if-exists` flags drop and recreate all objects before
+restoring, which is safe for a full-database restore onto an existing
+cluster. Omit `--clean` if you are restoring into a brand-new empty
+database.
+
+> **Note:** these are brygge-specific application backups (custom-format
+> pg_dump of the `brygge` database only). They are distinct from the
+> mailbox-level RocksDB snapshots described in DIL-149 for Stalwart.
+
+## Manual on-demand backup
+
+For a quick cluster-wide dump (all databases + roles) before a risky
+operation:
 
 ```sh
 ssh -i <key> -o IdentitiesOnly=yes root@<host-ip> \
@@ -168,28 +280,12 @@ ssh -i <key> -o IdentitiesOnly=yes root@<host-ip> \
     > backup-$(date +%Y%m%d).sql.gz
 ```
 
-This dumps the **whole cluster** (brygge + dendrite + roles) — handy
-before risky migrations, before promoting a staging snapshot, or before
-swapping hosts.
-
 Restore onto a fresh host:
 
 ```sh
 zcat backup-YYYYMMDD.sql.gz | \
     ssh -i <key> -o IdentitiesOnly=yes root@<new-host-ip> \
     'sudo -u postgres psql'
-```
-
-A single-database restore (useful when only `brygge` is corrupted):
-
-```sh
-ssh -i <key> -o IdentitiesOnly=yes root@<host-ip> \
-    'sudo -u postgres pg_dump brygge | gzip' \
-    > brygge-only-$(date +%Y%m%d).sql.gz
-
-zcat brygge-only-YYYYMMDD.sql.gz | \
-    ssh -i <key> -o IdentitiesOnly=yes root@<host-ip> \
-    'sudo -u postgres psql brygge'
 ```
 
 ## Schema overview

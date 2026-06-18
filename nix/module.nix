@@ -9,6 +9,8 @@ let
   cfg = config.services.brygge;
 in
 {
+  imports = [ ./backup.nix ];
+
   options.services.brygge = {
     enable = lib.mkEnableOption "brygge harbor club platform";
 
