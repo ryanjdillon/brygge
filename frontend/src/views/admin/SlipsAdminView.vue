@@ -4,8 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useApiClient, unwrap } from '@/lib/apiClient'
 import { sortBySlip } from '@/lib/slipSort'
-import { useAuthStore } from '@/stores/auth'
-import { useTotpGateStore } from '@/stores/totpGate'
+import { useFreshTotp } from '@/composables/useFreshTotp'
 import DockFilter from '@/components/admin/DockFilter.vue'
 import SortableTh from '@/components/admin/SortableTh.vue'
 import SlipCell from '@/components/admin/SlipCell.vue'
@@ -18,13 +17,7 @@ import Select from '@/components/ui/form/Select.vue'
 const { t } = useI18n()
 const client = useApiClient()
 const queryClient = useQueryClient()
-const auth = useAuthStore()
-const totpGate = useTotpGateStore()
-
-async function ensureFreshTotp(): Promise<boolean> {
-  if (auth.hasFreshTotp) return true
-  return totpGate.open()
-}
+const { ensureFreshTotp } = useFreshTotp()
 
 type Slip = {
   id: string

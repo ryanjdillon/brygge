@@ -4,8 +4,7 @@ import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQueryClient } from '@tanstack/vue-query'
 import { ArrowLeft, Calculator, Calendar, CalendarCheck, FolderKanban, Megaphone, Save, ShoppingBag } from 'lucide-vue-next'
-import { useTotpGateStore } from '@/stores/totpGate'
-import { useAuthStore } from '@/stores/auth'
+import { useFreshTotp } from '@/composables/useFreshTotp'
 import FileInput from '@/components/ui/form/FileInput.vue'
 import FormField from '@/components/ui/form/FormField.vue'
 import Input from '@/components/ui/form/Input.vue'
@@ -14,8 +13,7 @@ import Switch from '@/components/ui/form/Switch.vue'
 import Textarea from '@/components/ui/form/Textarea.vue'
 
 const { t } = useI18n()
-const auth = useAuthStore()
-const totpGate = useTotpGateStore()
+const { ensureFreshTotp, totpAwareFetch } = useFreshTotp()
 
 const clubName = ref('')
 const orgNumber = ref('')
@@ -60,11 +58,6 @@ const moduleRows: { key: ModuleKey; icon: typeof Calculator; descriptionKey?: st
   { key: 'communications', icon: Megaphone },
   { key: 'accounting', icon: Calculator },
 ]
-
-async function ensureFreshTotp(): Promise<boolean> {
-  if (auth.hasFreshTotp) return true
-  return totpGate.open()
-}
 
 async function load() {
   loading.value = true
@@ -121,7 +114,7 @@ async function uploadSiteLogo(files: FileList | null) {
   try {
     const fd = new FormData()
     fd.append('logo', file)
-    const res = await fetch('/api/v1/admin/settings/site-logo', {
+    const res = await totpAwareFetch('/api/v1/admin/settings/site-logo', {
       method: 'POST',
       credentials: 'include',
       body: fd,
@@ -142,11 +135,11 @@ async function uploadSiteLogo(files: FileList | null) {
 }
 
 async function deleteSiteLogo() {
-  if (!confirm(t('admin.siteSettings.logoDeleteConfirm'))) return
   if (!(await ensureFreshTotp())) return
+  if (!confirm(t('admin.siteSettings.logoDeleteConfirm'))) return
   error.value = null
   try {
-    const res = await fetch('/api/v1/admin/settings/site-logo', {
+    const res = await totpAwareFetch('/api/v1/admin/settings/site-logo', {
       method: 'DELETE',
       credentials: 'include',
     })
@@ -167,7 +160,7 @@ async function save() {
   saving.value = true
   error.value = null
   try {
-    const res = await fetch('/api/v1/admin/settings/site', {
+    const res = await totpAwareFetch('/api/v1/admin/settings/site', {
       method: 'PATCH',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },

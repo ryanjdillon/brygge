@@ -2,15 +2,13 @@
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Save } from 'lucide-vue-next'
-import { useTotpGateStore } from '@/stores/totpGate'
-import { useAuthStore } from '@/stores/auth'
+import { useFreshTotp } from '@/composables/useFreshTotp'
 import FormField from '@/components/ui/form/FormField.vue'
 import Input from '@/components/ui/form/Input.vue'
 import Textarea from '@/components/ui/form/Textarea.vue'
 
 const { t } = useI18n()
-const auth = useAuthStore()
-const totpGate = useTotpGateStore()
+const { ensureFreshTotp, totpAwareFetch } = useFreshTotp()
 
 const harborApproach = ref('')
 const harborDepth = ref('')
@@ -22,11 +20,6 @@ const loading = ref(true)
 const saving = ref(false)
 const error = ref<string | null>(null)
 const savedAt = ref<Date | null>(null)
-
-async function ensureFreshTotp(): Promise<boolean> {
-  if (auth.hasFreshTotp) return true
-  return totpGate.open()
-}
 
 async function load() {
   loading.value = true
@@ -52,7 +45,7 @@ async function save() {
   saving.value = true
   error.value = null
   try {
-    const res = await fetch('/api/v1/admin/settings/site', {
+    const res = await totpAwareFetch('/api/v1/admin/settings/site', {
       method: 'PATCH',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },

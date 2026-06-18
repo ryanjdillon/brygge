@@ -7,8 +7,7 @@ import FakturaList from '@/components/admin/FakturaList.vue'
 import SingleFakturaModal from '@/components/admin/SingleFakturaModal.vue'
 import GroupFakturaTab from '@/components/admin/GroupFakturaTab.vue'
 import PdfArkivView from '@/views/admin/PdfArkivView.vue'
-import { useTotpGateStore } from '@/stores/totpGate'
-import { useAuthStore } from '@/stores/auth'
+import { useFreshTotp } from '@/composables/useFreshTotp'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -49,13 +48,7 @@ watch(activeTab, (t) => {
   }
 })
 
-const auth = useAuthStore()
-const totpGate = useTotpGateStore()
-
-async function ensureFreshTotp(): Promise<boolean> {
-  if (auth.hasFreshTotp) return true
-  return totpGate.open()
-}
+const { ensureFreshTotp } = useFreshTotp()
 
 // TOTP prompt fires at action-button click time so the user re-verifies
 // before the form opens, not when they hit Submit. The backend

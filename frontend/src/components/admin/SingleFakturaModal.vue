@@ -9,6 +9,7 @@ import MemberSearch, { type MemberHit } from '@/components/members/MemberSearch.
 import LineItemPicker from '@/components/admin/LineItemPicker.vue'
 import AccountSelect from '@/components/admin/AccountSelect.vue'
 import { formatNOK } from '@/lib/format'
+import { useFreshTotp } from '@/composables/useFreshTotp'
 import {
   lookupByOrgNumber,
   searchByName,
@@ -25,6 +26,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const { totpAwareFetch } = useFreshTotp()
 
 const { categoryLabel } = usePricing()
 const { data: accounts } = useAccountsList()
@@ -446,7 +448,7 @@ async function submit() {
 
   submitting.value = true
   try {
-    const res = await fetch('/api/v1/admin/financials/invoices/full', {
+    const res = await totpAwareFetch('/api/v1/admin/financials/invoices/full', {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },

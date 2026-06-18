@@ -20,7 +20,7 @@ import type { components } from '@/types/api'
 import { formatName } from '@/lib/format'
 import { useRangeSelect } from '@/composables/useRangeSelect'
 import { useAuthStore } from '@/stores/auth'
-import { useTotpGateStore } from '@/stores/totpGate'
+import { useFreshTotp } from '@/composables/useFreshTotp'
 import Input from '@/components/ui/form/Input.vue'
 import Textarea from '@/components/ui/form/Textarea.vue'
 import Checkbox from '@/components/ui/form/Checkbox.vue'
@@ -36,12 +36,7 @@ const { t } = useI18n()
 const client = useApiClient()
 const queryClient = useQueryClient()
 const auth = useAuthStore()
-const totpGate = useTotpGateStore()
-
-async function ensureFreshTotp(): Promise<boolean> {
-  if (auth.hasFreshTotp) return true
-  return totpGate.open()
-}
+const { ensureFreshTotp, totpAwareFetch } = useFreshTotp()
 
 type SortField = 'first_name' | 'last_name' | 'email' | 'phone' | 'slip' | 'membership' | 'slip_fee'
 const sortField = ref<SortField>('last_name')
@@ -435,7 +430,7 @@ async function saveBoat(value: BoatFormValue & { approve?: boolean }) {
     const url = isNew
       ? `/api/v1/admin/users/${userId}/boats`
       : `/api/v1/admin/users/${userId}/boats/${editingBoatId.value}`
-    const res = await fetch(url, {
+    const res = await totpAwareFetch(url, {
       method: isNew ? 'POST' : 'PUT',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -460,7 +455,7 @@ async function deleteBoat(boatId: string) {
   if (!(await ensureFreshTotp())) return
   if (!confirm(t('admin.users.boatDeleteConfirm'))) return
   const userId = detailUser.value.id
-  const res = await fetch(`/api/v1/admin/users/${userId}/boats/${boatId}`, {
+  const res = await totpAwareFetch(`/api/v1/admin/users/${userId}/boats/${boatId}`, {
     method: 'DELETE',
     credentials: 'include',
   })
@@ -759,22 +754,17 @@ async function submitImport() {
   try {
     const fd = new FormData()
     fd.append('file', importFile.value)
-    const res = await fetch('/api/v1/admin/users/import', {
+    const res = await totpAwareFetch('/api/v1/admin/users/import', {
       method: 'POST',
       credentials: 'include',
       body: fd,
     })
+    // totpAwareFetch already redirected on a lapsed admin window and
+    // re-prompted + retried on a stale step-up; a lingering 403 means
+    // the user dismissed the re-prompt.
     if (res.status === 403) {
-      const body = await res.json().catch(() => null)
-      if (body?.error === 'totp_required') {
-        const next = window.location.pathname
-        window.location.href = '/admin/verify-totp?next=' + encodeURIComponent(next)
-        return
-      }
-      if (body?.error === 'totp_fresh_required') {
-        importError.value = t('admin.users.importFreshRequired')
-        return
-      }
+      importError.value = t('admin.users.importFreshRequired')
+      return
     }
     if (!res.ok) {
       const body = await res.json().catch(() => null)

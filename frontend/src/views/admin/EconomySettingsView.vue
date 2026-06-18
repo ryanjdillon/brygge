@@ -1,15 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useTotpGateStore } from '@/stores/totpGate'
-import { useAuthStore } from '@/stores/auth'
+import { useFreshTotp } from '@/composables/useFreshTotp'
 import FileInput from '@/components/ui/form/FileInput.vue'
 import Tabs from '@/components/ui/Tabs.vue'
 import BankAccountsPanel from '@/components/admin/BankAccountsPanel.vue'
 
 const { t } = useI18n()
-const auth = useAuthStore()
-const totpGate = useTotpGateStore()
+const { ensureFreshTotp, totpAwareFetch } = useFreshTotp()
 
 const activeTab = ref<'faktura' | 'bank-accounts'>('faktura')
 
@@ -18,11 +16,6 @@ const fakturaLogoCacheBust = ref(0)
 const fakturaLogoUploading = ref(false)
 const loading = ref(true)
 const error = ref<string | null>(null)
-
-async function ensureFreshTotp(): Promise<boolean> {
-  if (auth.hasFreshTotp) return true
-  return totpGate.open()
-}
 
 async function load() {
   loading.value = true
@@ -53,7 +46,7 @@ async function uploadFakturaLogo(files: FileList | null) {
   try {
     const fd = new FormData()
     fd.append('logo', file)
-    const res = await fetch('/api/v1/admin/settings/economy/faktura-logo', {
+    const res = await totpAwareFetch('/api/v1/admin/settings/economy/faktura-logo', {
       method: 'POST',
       credentials: 'include',
       body: fd,
@@ -73,11 +66,11 @@ async function uploadFakturaLogo(files: FileList | null) {
 }
 
 async function deleteFakturaLogo() {
-  if (!confirm(t('admin.economySettings.logoDeleteConfirm'))) return
   if (!(await ensureFreshTotp())) return
+  if (!confirm(t('admin.economySettings.logoDeleteConfirm'))) return
   error.value = null
   try {
-    const res = await fetch('/api/v1/admin/settings/economy/faktura-logo', {
+    const res = await totpAwareFetch('/api/v1/admin/settings/economy/faktura-logo', {
       method: 'DELETE',
       credentials: 'include',
     })

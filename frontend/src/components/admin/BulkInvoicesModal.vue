@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Modal from '@/components/ui/Modal.vue'
 import LineItemPicker from '@/components/admin/LineItemPicker.vue'
+import { useFreshTotp } from '@/composables/useFreshTotp'
 
 interface PriceItem {
   id: string
@@ -41,6 +42,7 @@ const emit = defineEmits<{
 }>()
 
 const { t, n } = useI18n()
+const { totpAwareFetch } = useFreshTotp()
 
 const periods = ref<FiscalPeriod[]>([])
 const items = ref<PriceItem[]>([])
@@ -132,7 +134,7 @@ async function submit() {
       due_date: dueDate.value,
       allow_duplicate_lines: allowDuplicateLines.value,
     }
-    const res = await fetch('/api/v1/admin/financials/invoices/bulk', {
+    const res = await totpAwareFetch('/api/v1/admin/financials/invoices/bulk', {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
