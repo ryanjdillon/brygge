@@ -50,7 +50,7 @@ const displayRole = computed(() => {
 </script>
 
 <template>
-  <div>
+  <div class="max-w-4xl">
     <h1 class="text-2xl font-bold text-gray-900">
       {{ t('portal.dashboard.welcome', { name: userName }) }}
     </h1>
@@ -59,31 +59,31 @@ const displayRole = computed(() => {
 
     <template v-else>
       <!-- At-a-glance status -->
-      <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <div class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-          <p class="text-sm font-medium text-gray-500">{{ t('portal.dashboard.membershipStatus') }}</p>
-          <p class="mt-1 text-lg font-semibold text-gray-900">{{ displayRole }}</p>
+      <div class="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div class="rounded-lg border border-gray-200 bg-white px-4 py-3.5 shadow-sm">
+          <p class="text-xs font-medium uppercase tracking-wide text-gray-400">{{ t('portal.dashboard.membershipStatus') }}</p>
+          <p class="mt-1 font-semibold text-gray-900">{{ displayRole }}</p>
         </div>
 
-        <div class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-          <p class="text-sm font-medium text-gray-500">{{ t('portal.dashboard.slipInfo') }}</p>
-          <p class="mt-1 text-lg font-semibold text-gray-900">{{ slipLabel }}</p>
+        <div class="rounded-lg border border-gray-200 bg-white px-4 py-3.5 shadow-sm">
+          <p class="text-xs font-medium uppercase tracking-wide text-gray-400">{{ t('portal.dashboard.slipInfo') }}</p>
+          <p class="mt-1 font-semibold text-gray-900">{{ slipLabel }}</p>
         </div>
 
         <RouterLink
           v-if="dashboard?.queuePosition"
           to="/portal/waiting-list"
-          class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm transition hover:border-blue-300 hover:shadow"
+          class="rounded-lg border border-gray-200 bg-white px-4 py-3.5 shadow-sm transition hover:border-blue-300 hover:shadow"
         >
-          <p class="text-sm font-medium text-gray-500">{{ t('portal.dashboard.queuePosition') }}</p>
-          <p class="mt-1 text-lg font-semibold text-gray-900">
+          <p class="text-xs font-medium uppercase tracking-wide text-gray-400">{{ t('portal.dashboard.queuePosition') }}</p>
+          <p class="mt-1 font-semibold text-gray-900">
             {{ t('portal.waitingList.positionOf', { position: dashboard.queuePosition, total: dashboard.queueTotal }) }}
           </p>
         </RouterLink>
 
-        <div class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-          <p class="text-sm font-medium text-gray-500">{{ t('portal.dashboard.upcomingBookings') }}</p>
-          <p class="mt-1 text-lg font-semibold text-gray-900">
+        <div class="rounded-lg border border-gray-200 bg-white px-4 py-3.5 shadow-sm">
+          <p class="text-xs font-medium uppercase tracking-wide text-gray-400">{{ t('portal.dashboard.upcomingBookings') }}</p>
+          <p class="mt-1 font-semibold text-gray-900">
             {{ dashboard?.upcomingBookingsCount
               ? t('portal.dashboard.bookingsCount', { count: dashboard.upcomingBookingsCount }, dashboard.upcomingBookingsCount)
               : t('portal.dashboard.noBookings') }}
@@ -92,13 +92,13 @@ const displayRole = computed(() => {
       </div>
 
       <!-- Fakturas + boats -->
-      <div class="mt-8 grid gap-6 lg:grid-cols-3">
+      <div class="mt-6 grid gap-4 lg:grid-cols-3">
         <section
           v-if="showInvoices"
           class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm lg:col-span-2"
         >
           <div class="flex items-center justify-between">
-            <h2 class="text-lg font-semibold text-gray-900">{{ t('portal.invoices.title') }}</h2>
+            <h2 class="font-semibold text-gray-900">{{ t('portal.invoices.title') }}</h2>
             <RouterLink to="/portal/invoices" class="text-sm font-medium text-blue-600 hover:text-blue-700">
               {{ t('portal.dashboard.viewAll') }}
             </RouterLink>
@@ -129,7 +129,7 @@ const displayRole = computed(() => {
           :class="showInvoices ? '' : 'lg:col-span-3'"
         >
           <div class="flex items-center justify-between">
-            <h2 class="text-lg font-semibold text-gray-900">{{ t('portal.dashboard.myBoats') }}</h2>
+            <h2 class="font-semibold text-gray-900">{{ t('portal.dashboard.myBoats') }}</h2>
             <RouterLink to="/portal/boats" class="text-sm font-medium text-blue-600 hover:text-blue-700">
               {{ t('portal.dashboard.manageBoats') }}
             </RouterLink>
