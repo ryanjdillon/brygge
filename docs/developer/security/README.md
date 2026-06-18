@@ -5,6 +5,7 @@ Cross-audience navigation: see [`../../index.md`](../../index.md).
 | Document | Audience | Description |
 |----------|----------|-------------|
 | [2fa.md](2fa.md) | Board members + Operators | Two-factor authentication: enrollment, recovery codes, admin reset, all-admins-lost recovery, configurable step-up window |
+| [auth-middleware-matrix.md](auth-middleware-matrix.md) | Developers | Route × role × TOTP-gate coverage map for every registered API surface (DIL-245) |
 
 Related:
 

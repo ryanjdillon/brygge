@@ -994,27 +994,39 @@ func main() {
 					r.Route("/accounting", func(r chi.Router) {
 						r.Use(middleware.RequireRole("treasurer", "board", "admin"))
 
+						// Ledger mutations re-prompt for a fresh TOTP within
+						// the per-action window — same posture as invoice
+						// void/delete and the bank-row assign endpoints below.
+						// Deleting a GL account, closing/reopening a period,
+						// and creating/posting/voiding journal entries are all
+						// high-blast-radius financial movements (DIL-245).
 						r.Route("/accounts", func(r chi.Router) {
 							r.Get("/", accountingHandler.HandleListAccounts)
 							r.Post("/", accountingHandler.HandleCreateAccount)
 							r.Put("/{accountID}", accountingHandler.HandleUpdateAccount)
-							r.Delete("/{accountID}", accountingHandler.HandleDeleteAccount)
+							r.With(middleware.RequireFreshTOTPDefault()).
+								Delete("/{accountID}", accountingHandler.HandleDeleteAccount)
 							r.Post("/seed", accountingHandler.HandleSeedAccounts)
 						})
 
 						r.Route("/periods", func(r chi.Router) {
 							r.Get("/", accountingHandler.HandleListPeriods)
 							r.Post("/", accountingHandler.HandleCreatePeriod)
-							r.Post("/{periodID}/close", accountingHandler.HandleClosePeriod)
-							r.Post("/{periodID}/reopen", accountingHandler.HandleReopenPeriod)
+							r.With(middleware.RequireFreshTOTPDefault()).
+								Post("/{periodID}/close", accountingHandler.HandleClosePeriod)
+							r.With(middleware.RequireFreshTOTPDefault()).
+								Post("/{periodID}/reopen", accountingHandler.HandleReopenPeriod)
 						})
 
 						r.Route("/journal", func(r chi.Router) {
 							r.Get("/", accountingHandler.HandleListJournalEntries)
-							r.Post("/", accountingHandler.HandleCreateJournalEntry)
+							r.With(middleware.RequireFreshTOTPDefault()).
+								Post("/", accountingHandler.HandleCreateJournalEntry)
 							r.Get("/{entryID}", accountingHandler.HandleGetJournalEntry)
-							r.Post("/{entryID}/post", accountingHandler.HandlePostJournalEntry)
-							r.Post("/{entryID}/void", accountingHandler.HandleVoidJournalEntry)
+							r.With(middleware.RequireFreshTOTPDefault()).
+								Post("/{entryID}/post", accountingHandler.HandlePostJournalEntry)
+							r.With(middleware.RequireFreshTOTPDefault()).
+								Post("/{entryID}/void", accountingHandler.HandleVoidJournalEntry)
 						})
 
 						r.Route("/sync", func(r chi.Router) {
