@@ -528,7 +528,7 @@ func (s *Service) resolveCustomerToMember(ctx context.Context, clubID, customerN
 	// run the cascade without three round-trips and without depending
 	// on a Postgres fuzzy-string extension.
 	rows, err := s.db.Query(ctx,
-		`SELECT id, COALESCE(full_name, ''), COALESCE(first_name, ''), COALESCE(last_name, '')
+		`SELECT id, COALESCE(full_name, ''), COALESCE(first_name, ''), COALESCE(last_name, ''), COALESCE(email, '')
 		   FROM users WHERE club_id = $1`,
 		clubID,
 	)
@@ -538,18 +538,21 @@ func (s *Service) resolveCustomerToMember(ctx context.Context, clubID, customerN
 	defer rows.Close()
 
 	type cand struct {
-		id, fullN, firstLastN, lastN string
+		id, fullN, firstLastN, lastN, emailLocal string
 	}
 	var cands []cand
 	for rows.Next() {
 		var c cand
-		var fullName, firstName, lastName string
-		if err := rows.Scan(&c.id, &fullName, &firstName, &lastName); err != nil {
+		var fullName, firstName, lastName, email string
+		if err := rows.Scan(&c.id, &fullName, &firstName, &lastName, &email); err != nil {
 			continue
 		}
 		c.fullN = normalizeName(fullName)
 		c.firstLastN = normalizeName(firstName + " " + lastName)
 		c.lastN = normalizeName(lastName)
+		if at := strings.IndexByte(email, '@'); at > 0 {
+			c.emailLocal = normalizeName(email[:at])
+		}
 		cands = append(cands, c)
 	}
 
@@ -577,7 +580,80 @@ func (s *Service) resolveCustomerToMember(ctx context.Context, clubID, customerN
 	if matches == 1 {
 		return matchedID, nil
 	}
+	// Pass 4: Levenshtein-1 on full name / first+last — catches typos and
+	// diacritic/spacing variants normalizeName missed — when exactly one
+	// candidate is that close. See DIL-367.
+	matches, matchedID = 0, ""
+	for _, c := range cands {
+		if (c.fullN != "" && levenshteinWithin1(c.fullN, needle)) ||
+			(c.firstLastN != "" && c.firstLastN != " " && levenshteinWithin1(c.firstLastN, needle)) {
+			matches++
+			matchedID = c.id
+		}
+	}
+	if matches == 1 {
+		return matchedID, nil
+	}
+	// Pass 5: email local-part (the Vipps name matches the part before @
+	// in the member's email) when unique. Compare with separators removed
+	// so "kari.berg" (email) matches "Kari Berg" (Vipps name).
+	needleTight := strings.ReplaceAll(needle, " ", "")
+	matches, matchedID = 0, ""
+	for _, c := range cands {
+		if c.emailLocal != "" && strings.ReplaceAll(c.emailLocal, " ", "") == needleTight {
+			matches++
+			matchedID = c.id
+		}
+	}
+	if matches == 1 {
+		return matchedID, nil
+	}
+	// Pass 6 (phone) is intentionally absent: the Vipps export only exposes
+	// a MASKED customer phone, so there is nothing to match against
+	// users.phone. See DIL-367.
 	return "", nil
+}
+
+// levenshteinWithin1 reports whether a and b are within Levenshtein
+// distance 1 (equal, or one insertion/deletion/substitution apart).
+// normalizeName has already folded both to ASCII, so byte comparison is
+// safe. Cheap early-outs keep it O(len) for the common near-equal case.
+func levenshteinWithin1(a, b string) bool {
+	la, lb := len(a), len(b)
+	if la == lb {
+		diff := 0
+		for i := 0; i < la; i++ {
+			if a[i] != b[i] {
+				if diff == 1 {
+					return false
+				}
+				diff++
+			}
+		}
+		return true
+	}
+	if la > lb {
+		a, b = b, a
+		la, lb = lb, la
+	}
+	if lb-la != 1 {
+		return false
+	}
+	// b is one char longer: allow a single skip in b.
+	i, j, skipped := 0, 0, false
+	for i < la && j < lb {
+		if a[i] == b[j] {
+			i++
+			j++
+			continue
+		}
+		if skipped {
+			return false
+		}
+		skipped = true
+		j++
+	}
+	return true
 }
 
 // normalizeName lowercases, replaces Norwegian/Swedish/Danish accented
