@@ -6,8 +6,9 @@ import Select from '@/components/ui/form/Select.vue'
 import Input from '@/components/ui/form/Input.vue'
 import Textarea from '@/components/ui/form/Textarea.vue'
 import Checkbox from '@/components/ui/form/Checkbox.vue'
+import { formatDate as fmtDate } from '@/lib/format'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const { requests, isLoading: requestsLoading } = useAdminDeletionRequests()
 const { mutate: processDeletion, isPending: processing } = useProcessDeletion()
 const { documents, isLoading: docsLoading } = useAdminLegalDocuments()
@@ -25,8 +26,8 @@ function isGraceExpired(graceEnd: string): boolean {
   return new Date(graceEnd) <= new Date()
 }
 
-function formatDate(d: string) {
-  return new Date(d).toLocaleDateString()
+function formatDate(d: string): string {
+  return fmtDate(d, locale.value)
 }
 
 const docTypeOptions = computed(() => [

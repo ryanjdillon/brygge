@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { History, X } from 'lucide-vue-next'
+import { formatDateTime as fmtDateTime } from '@/lib/format'
 
 const props = defineProps<{ invoiceId: string }>()
 
@@ -51,8 +52,7 @@ function close() {
 }
 
 function formatDate(iso: string): string {
-  const d = new Date(iso)
-  return d.toLocaleString(locale.value || 'nb-NO')
+  return fmtDateTime(iso, locale.value)
 }
 
 function formatBytes(n: number): string {

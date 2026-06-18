@@ -7,6 +7,7 @@ import { useApi } from '@/composables/useApi'
 import { sanitizeEmail } from '@/lib/sanitizeHtml'
 import { useInboxUnreadStore } from '@/stores/inboxUnread'
 import { storeToRefs } from 'pinia'
+import { formatDateTime as fmtDateTime } from '@/lib/format'
 
 interface MailboxView {
   address: string
@@ -43,7 +44,7 @@ interface EmailFull {
   attachments: { blobId: string; name: string; size: number; type: string }[]
 }
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const { fetchApi } = useApi()
@@ -276,9 +277,7 @@ function formatFrom(addrs: { name: string; email: string }[]): string {
 }
 
 function formatDate(iso: string): string {
-  if (!iso) return ''
-  const d = new Date(iso)
-  return d.toLocaleString()
+  return fmtDateTime(iso, locale.value)
 }
 
 // Reactive refetch on URL changes.

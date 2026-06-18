@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { MailSearch } from 'lucide-vue-next'
 import { useFreshTotp } from '@/composables/useFreshTotp'
 import Modal from '@/components/ui/Modal.vue'
+import { formatDateTime as fmtDateTime } from '@/lib/format'
 
 const props = defineProps<{ invoiceId: string }>()
 
@@ -50,7 +51,7 @@ async function activate() {
 }
 
 function formatTime(iso: string): string {
-  return new Date(iso).toLocaleString(locale.value || 'nb-NO')
+  return fmtDateTime(iso, locale.value)
 }
 
 function codeClass(code: number | undefined): string {

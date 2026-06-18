@@ -7,6 +7,7 @@ import {
   useVote,
   type FeatureRequest,
 } from '@/composables/useFeatureRequests'
+import { formatDate } from '@/lib/format'
 import { ThumbsUp, ThumbsDown, Plus, X } from 'lucide-vue-next'
 import Input from '@/components/ui/form/Input.vue'
 import Textarea from '@/components/ui/form/Textarea.vue'
@@ -162,7 +163,7 @@ function handleVote(request: FeatureRequest, value: 1 | -1) {
               {{ request.description }}
             </p>
             <p class="mt-2 text-xs text-gray-400">
-              {{ new Date(request.created_at).toLocaleDateString() }}
+              {{ formatDate(request.created_at) }}
             </p>
           </div>
         </div>

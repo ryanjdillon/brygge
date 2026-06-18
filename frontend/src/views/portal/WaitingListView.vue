@@ -3,6 +3,7 @@ import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useApi } from '@/composables/useApi'
 import { useApiClient, unwrap } from '@/lib/apiClient'
+import { formatDate } from '@/lib/format'
 import { ref, computed } from 'vue'
 import { CheckCircle, XCircle, LogOut, MapPin } from 'lucide-vue-next'
 
@@ -116,7 +117,7 @@ function confirmWithdraw() {
         >
           <h2 class="text-lg font-bold text-blue-900">{{ t('portal.waitingList.slipOffer') }}</h2>
           <p class="mt-2 text-sm text-blue-800">
-            <strong>Deadline:</strong> {{ new Date(entry.offer_deadline).toLocaleDateString() }}
+            <strong>Deadline:</strong> {{ formatDate(entry.offer_deadline) }}
           </p>
 
           <div class="mt-5 flex gap-3">

@@ -6,6 +6,7 @@ import { useApiClient, unwrap } from '@/lib/apiClient'
 import { Check, XCircle } from 'lucide-vue-next'
 import Select from '@/components/ui/form/Select.vue'
 import DateInput from '@/components/ui/form/DateInput.vue'
+import { formatDateMedium as formatDate } from '@/lib/format'
 const { t } = useI18n()
 const client = useApiClient()
 const queryClient = useQueryClient()
@@ -67,14 +68,6 @@ const cancelMutation = useMutation({
     queryClient.invalidateQueries({ queryKey: ['admin-bookings'] })
   },
 })
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('nb-NO', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
-}
 
 function statusClass(status: string): string {
   switch (status) {

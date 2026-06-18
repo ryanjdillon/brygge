@@ -26,11 +26,49 @@ export function formatNOK(
   }).format(amount)
 }
 
-// Locale-aware short date from an ISO string (YYYY-MM-DD or RFC3339).
-// Returns the raw input unchanged if it can't be parsed.
-export function formatDate(iso: string | null | undefined, locale = 'nb-NO'): string {
-  if (!iso) return ''
+// Locale-aware date/time formatting from an ISO string (YYYY-MM-DD or
+// RFC3339). Empty input → empty string; an unparseable value is returned
+// unchanged. `locale` accepts the active i18n locale and falls back to
+// nb-NO when empty, so callers can pass `locale.value` directly.
+//
+// formatDate     — date only            (e.g. 17.06.2026)
+// formatDateMedium — date with short month (e.g. 17. jun. 2026)
+// formatDateTime — date + time          (e.g. 17.06.2026, 14:30)
+
+function parseDate(iso: string | null | undefined): Date | null {
+  if (!iso) return null
   const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso
-  return d.toLocaleDateString(locale)
+  return Number.isNaN(d.getTime()) ? null : d
+}
+
+export function formatDate(iso: string | null | undefined, locale?: string): string {
+  const d = parseDate(iso)
+  if (!d) return iso ?? ''
+  return d.toLocaleDateString(locale || 'nb-NO')
+}
+
+export function formatDateMedium(iso: string | null | undefined, locale?: string): string {
+  const d = parseDate(iso)
+  if (!d) return iso ?? ''
+  return d.toLocaleDateString(locale || 'nb-NO', { year: 'numeric', month: 'short', day: 'numeric' })
+}
+
+export function formatDateTime(iso: string | null | undefined, locale?: string): string {
+  const d = parseDate(iso)
+  if (!d) return iso ?? ''
+  return d.toLocaleString(locale || 'nb-NO')
+}
+
+// Medium date + time, e.g. "17. juni 2026, 16:30" — used by the events
+// and communication admin lists.
+export function formatDateTimeMedium(iso: string | null | undefined, locale?: string): string {
+  const d = parseDate(iso)
+  if (!d) return iso ?? ''
+  return d.toLocaleString(locale || 'nb-NO', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }

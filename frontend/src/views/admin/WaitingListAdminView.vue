@@ -2,6 +2,7 @@
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 import { useApiClient, unwrap } from '@/lib/apiClient'
+import { formatDate } from '@/lib/format'
 
 const { t } = useI18n()
 const client = useApiClient()
@@ -56,7 +57,7 @@ const { data: entries, isLoading, isError } = useQuery({
               {{ entry.boat_beam ? `${entry.boat_beam} m` : '—' }}
             </td>
             <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ entry.status }}</td>
-            <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ new Date(entry.created_at).toLocaleDateString() }}</td>
+            <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ formatDate(entry.created_at) }}</td>
           </tr>
         </tbody>
       </table>

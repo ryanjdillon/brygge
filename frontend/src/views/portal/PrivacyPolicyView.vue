@@ -3,13 +3,14 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ShieldCheck } from 'lucide-vue-next'
 import { useLegalDocument } from '@/composables/useGdpr'
+import { formatDate } from '@/lib/format'
 
 const { t } = useI18n()
 const { data: doc, isLoading, isError } = useLegalDocument('privacy')
 
 const publishedAt = computed(() => {
   const v = doc.value?.published_at
-  return v ? new Date(v).toLocaleDateString() : ''
+  return formatDate(v)
 })
 </script>
 

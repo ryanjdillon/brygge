@@ -9,6 +9,7 @@ import {
   useReopenPeriod,
 } from '@/composables/useAccounting'
 import NumberInput from '@/components/ui/form/NumberInput.vue'
+import { formatDate as fmtDate } from '@/lib/format'
 
 const { t } = useI18n()
 
@@ -40,8 +41,7 @@ function handleReopen(periodId: string) {
 }
 
 function formatDate(d: string | null): string {
-  if (!d) return '-'
-  return new Date(d).toLocaleDateString('nb-NO')
+  return d ? fmtDate(d) : '-'
 }
 </script>
 

@@ -4,8 +4,9 @@ import { useI18n } from 'vue-i18n'
 import { Download, Trash2, ShieldCheck, FileText } from 'lucide-vue-next'
 import { RouterLink } from 'vue-router'
 import { useDataExport, useDeletionStatus, useRequestDeletion, useCancelDeletion, useMyConsents } from '@/composables/useGdpr'
+import { formatDate as fmtDate } from '@/lib/format'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const { data: deletionRequest, isLoading: deletionLoading } = useDeletionStatus()
 const { mutate: requestDeletion, isPending: requesting } = useRequestDeletion()
 const { mutate: cancelDeletion, isPending: cancelling } = useCancelDeletion()
@@ -20,8 +21,8 @@ function confirmDelete() {
   }
 }
 
-function formatDate(d: string) {
-  return new Date(d).toLocaleDateString()
+function formatDate(d: string): string {
+  return fmtDate(d, locale.value)
 }
 </script>
 

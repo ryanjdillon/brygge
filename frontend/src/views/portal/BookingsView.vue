@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useApiClient, unwrap } from '@/lib/apiClient'
+import { formatDate } from '@/lib/format'
 import { Plus, X } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -94,8 +95,8 @@ const statusClasses: Record<string, string> = {
         <tbody class="divide-y divide-gray-200 bg-white">
           <tr v-for="booking in bookings" :key="booking.id">
             <td class="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">{{ booking.resource_id }}</td>
-            <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ new Date(booking.start_date).toLocaleDateString() }}</td>
-            <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ new Date(booking.end_date).toLocaleDateString() }}</td>
+            <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ formatDate(booking.start_date) }}</td>
+            <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ formatDate(booking.end_date) }}</td>
             <td class="whitespace-nowrap px-4 py-3 text-sm">
               <span :class="['rounded-full px-2.5 py-0.5 text-xs font-medium', statusClasses[booking.status]]">
                 {{ t(`portal.bookings.${booking.status}`) }}

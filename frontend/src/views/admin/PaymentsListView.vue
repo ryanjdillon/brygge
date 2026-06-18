@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { usePaymentsList, useExportCSV, type PaymentsFilters, type Payment } from '@/composables/useFinancials'
 import { Download } from 'lucide-vue-next'
 import Select from '@/components/ui/form/Select.vue'
-import { formatNOK } from '@/lib/format'
+import { formatNOK, formatDateMedium as formatDate } from '@/lib/format'
 
 const { t } = useI18n()
 
@@ -66,14 +66,6 @@ const totalPages = computed(() => {
   if (!data.value) return 1
   return Math.max(1, Math.ceil(data.value.total / perPage))
 })
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('nb-NO', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
-}
 
 function statusClass(status: string): string {
   switch (status) {

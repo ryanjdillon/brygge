@@ -3,7 +3,7 @@ import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Search, AlertCircle } from 'lucide-vue-next'
 import FakturaArchiveButton from '@/components/admin/FakturaArchiveButton.vue'
-import { formatNOK } from '@/lib/format'
+import { formatNOK, formatDateTime as fmtDateTime } from '@/lib/format'
 
 defineProps<{ embedded?: boolean }>()
 
@@ -78,7 +78,7 @@ async function lookup() {
 }
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString(locale.value || 'nb-NO')
+  return fmtDateTime(iso, locale.value)
 }
 
 function formatBytes(n: number): string {

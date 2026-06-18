@@ -7,7 +7,7 @@ import DeliveryLogButton from '@/components/admin/DeliveryLogButton.vue'
 import { useConfirm } from '@/stores/confirm'
 import { useFreshTotp } from '@/composables/useFreshTotp'
 import { useRangeSelect } from '@/composables/useRangeSelect'
-import { formatNOK } from '@/lib/format'
+import { formatNOK, formatDate, formatDateTime } from '@/lib/format'
 
 interface Row {
   id: string
@@ -642,10 +642,10 @@ defineExpose({ load })
               <td class="whitespace-nowrap px-3 py-2 text-right text-sm tabular-nums">{{ formatNOK(Number(d.total_amount)) }}</td>
               <td class="whitespace-nowrap px-3 py-2 text-sm text-gray-600">{{ d.due_date }}</td>
               <td v-if="status === 'sent'" class="whitespace-nowrap px-3 py-2 text-sm text-gray-600">
-                {{ d.sent_at ? new Date(d.sent_at).toLocaleDateString() : '—' }}
+                {{ d.sent_at ? formatDate(d.sent_at) : '—' }}
               </td>
               <td v-if="status === 'sent'" class="whitespace-nowrap px-3 py-2 text-sm text-gray-600">
-                {{ d.last_reminder_at ? new Date(d.last_reminder_at).toLocaleString() : '—' }}
+                {{ d.last_reminder_at ? formatDateTime(d.last_reminder_at) : '—' }}
               </td>
               <td class="whitespace-nowrap px-3 py-2 text-right text-sm">
                 <div class="flex justify-end gap-2">

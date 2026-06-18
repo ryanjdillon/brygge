@@ -15,6 +15,7 @@ import Textarea from '@/components/ui/form/Textarea.vue'
 import Select from '@/components/ui/form/Select.vue'
 import Checkbox from '@/components/ui/form/Checkbox.vue'
 import DateTimeInput from '@/components/ui/form/DateTimeInput.vue'
+import { formatDateTimeMedium as formatDate } from '@/lib/format'
 
 const { t } = useI18n()
 
@@ -97,16 +98,6 @@ async function handleSubmit() {
 async function handleDelete(id: string) {
   if (!confirm(t('common.confirm'))) return
   await deleteMutation.mutateAsync(id)
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('nb-NO', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
 }
 
 function tagLabel(tag: string): string {

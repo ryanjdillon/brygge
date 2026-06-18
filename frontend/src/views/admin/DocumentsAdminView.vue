@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 import { useApiClient, unwrap } from '@/lib/apiClient'
+import { formatDate } from '@/lib/format'
 
 const { t } = useI18n()
 const client = useApiClient()
@@ -41,7 +42,7 @@ const documents = computed(() => response.value?.documents ?? [])
             <td class="whitespace-nowrap px-4 py-3 text-sm">
               <span class="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-700">{{ doc.visibility }}</span>
             </td>
-            <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ new Date(doc.created_at).toLocaleDateString() }}</td>
+            <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ formatDate(doc.created_at) }}</td>
           </tr>
         </tbody>
       </table>

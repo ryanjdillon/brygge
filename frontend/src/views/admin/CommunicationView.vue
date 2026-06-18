@@ -7,6 +7,7 @@ import { Send, Eye, History } from 'lucide-vue-next'
 import Select from '@/components/ui/form/Select.vue'
 import Input from '@/components/ui/form/Input.vue'
 import Textarea from '@/components/ui/form/Textarea.vue'
+import { formatDateTimeMedium as formatDateTime } from '@/lib/format'
 
 const { t } = useI18n()
 const client = useApiClient()
@@ -61,15 +62,6 @@ function recipientLabel(value: string): string {
   return opt ? t(opt.labelKey) : value
 }
 
-function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString('nb-NO', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
 </script>
 
 <template>

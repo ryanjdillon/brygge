@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useApiClient, unwrap } from '@/lib/apiClient'
 import { useApi } from '@/composables/useApi'
+import { formatDate } from '@/lib/format'
 import { Download, MessageSquare, ChevronDown, ChevronUp } from 'lucide-vue-next'
 import Input from '@/components/ui/form/Input.vue'
 
@@ -128,7 +129,7 @@ function submitComment(docId: string) {
           <div>
             <p class="text-sm font-medium text-gray-900">{{ doc.title }}</p>
             <p class="mt-0.5 text-xs text-gray-500">
-              {{ new Date(doc.created_at).toLocaleDateString() }}
+              {{ formatDate(doc.created_at) }}
               <span class="ml-2 rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600">{{ doc.visibility }}</span>
             </p>
           </div>
@@ -163,7 +164,7 @@ function submitComment(docId: string) {
             <li v-for="comment in comments" :key="comment.id" class="rounded-md bg-white p-3 text-sm">
               <div class="flex justify-between">
                 <span class="font-medium text-gray-900">{{ comment.author }}</span>
-                <span class="text-xs text-gray-400">{{ new Date(comment.created_at).toLocaleDateString() }}</span>
+                <span class="text-xs text-gray-400">{{ formatDate(comment.created_at) }}</span>
               </div>
               <p class="mt-1 text-gray-700">{{ comment.body }}</p>
             </li>

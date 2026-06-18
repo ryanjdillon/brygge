@@ -18,7 +18,7 @@ import {
   type AccountSuggestion,
   type DismissReason,
 } from '@/composables/useBankReconcile'
-import { formatNOK as formatNOKBase } from '@/lib/format'
+import { formatNOK as formatNOKBase, formatDate as fmtDate } from '@/lib/format'
 import { useAccountsList } from '@/composables/useAccounting'
 
 const { t, locale } = useI18n()
@@ -89,7 +89,7 @@ function formatNOK(n: number): string {
   return formatNOKBase(n, { signed: true })
 }
 function formatDate(s: string): string {
-  return new Date(s).toLocaleDateString(locale.value || 'nb-NO')
+  return fmtDate(s, locale.value)
 }
 
 const filterChips: { value: BankRowKind; labelKey: string }[] = [

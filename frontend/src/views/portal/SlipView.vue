@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation } from '@tanstack/vue-query'
 import { useApiClient, unwrap } from '@/lib/apiClient'
+import { formatDate } from '@/lib/format'
 import { AlertTriangle } from 'lucide-vue-next'
 import Input from '@/components/ui/form/Input.vue'
 import Textarea from '@/components/ui/form/Textarea.vue'
@@ -99,7 +100,7 @@ const { mutate: reportIssue, isPending: isReporting } = useMutation({
 
       <div class="mt-8 rounded-lg border border-gray-200 bg-white p-5">
         <p class="text-sm text-gray-500">
-          {{ t('portal.slip.assignedAt') }}: {{ new Date(slip.assigned_at).toLocaleDateString() }}
+          {{ t('portal.slip.assignedAt') }}: {{ formatDate(slip.assigned_at) }}
         </p>
       </div>
 
