@@ -164,10 +164,7 @@ Even after every check passes, **the logo may not render immediately on a brand-
 
 Gmail's BIMI implementation gates inbox rendering on a **Verified Mark Certificate (VMC)**, issued by DigiCert or Entrust. A VMC requires a registered trademark plus annual renewal at roughly USD 1,500/year. Without one, Gmail will validate the BIMI record and quietly *not* display the logo — no error, no fallback.
 
-For most small clubs the math doesn't work. The pragmatic stance is:
-
-- Accept that Gmail recipients won't see the logo.
-- The BIMI record is still worthwhile because Yahoo, Apple Mail, and Fastmail render without VMC, and any future shift in Gmail policy automatically picks up the existing record.
+For small clubs the math doesn't work. **This is the accepted state:** Gmail recipients won't see the logo, and that's expected — not a bug. The BIMI record is still worthwhile because Yahoo, Apple Mail, and Fastmail render without VMC, and any future shift in Gmail policy automatically picks up the existing record.
 
 If the club later acquires a trademark and decides to pursue a VMC, the additional record format is:
 
