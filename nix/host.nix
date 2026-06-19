@@ -63,6 +63,7 @@ in
   networking = {
     hostName = clubConfig.hostname;
     useDHCP = lib.mkDefault true;
+    nameservers = [ "127.0.0.1" ];
 
     firewall = {
       enable = true;
@@ -666,6 +667,14 @@ in
   # Tailscale — used as the network path for forwarding telemetry to the
   # home cluster's OTel stack. Run `tailscale up` once on first deploy
   # to authenticate the node into the tailnet.
+  services.unbound = {
+    enable = true;
+    settings.server = {
+      interface = [ "127.0.0.1" "::1" ];
+      access-control = [ "127.0.0.0/8 allow" "::1/128 allow" ];
+    };
+  };
+
   services.tailscale = {
     enable = true;
     openFirewall = true;
