@@ -43,10 +43,10 @@ const TOTP_FRESH_MS = 12 * 60 * 60 * 1000
 // value surfaced on /session/me — that's the source of truth.
 export const totpActionFreshMs = ref(10 * 60 * 1000)
 
-// Lead time for the "still working?" warning. Capped at 1/10 of the
-// fresh window so silly warnings don't fire when the window is short.
+// Lead time for the "still working?" warning. Capped at 3 minutes so
+// users have time to react before the window lapses.
 export const totpActionWarnMs = computed(() =>
-  Math.min(60 * 1000, Math.floor(totpActionFreshMs.value / 10)),
+  Math.min(3 * 60 * 1000, Math.floor(totpActionFreshMs.value / 10)),
 )
 
 const ADMIN_ROLES = ['admin', 'board', 'treasurer', 'harbor_master']
