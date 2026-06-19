@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -269,12 +270,12 @@ func (c *JMAPClient) QueryEmails(ctx context.Context, accountID, mailboxID, text
 	}
 	resp, err := c.Call(ctx, nil, []invocation{
 		{"Email/query", map[string]any{
-			"accountId":        accountID,
-			"filter":           filter,
-			"sort":             []any{map[string]any{"property": "receivedAt", "isAscending": false}},
-			"position":         position,
-			"limit":            limit,
-			"calculateTotal":   true,
+			"accountId":      accountID,
+			"filter":         filter,
+			"sort":           []any{map[string]any{"property": "receivedAt", "isAscending": false}},
+			"position":       position,
+			"limit":          limit,
+			"calculateTotal": true,
 		}, "0"},
 	})
 	if err != nil {
@@ -345,11 +346,11 @@ func (c *JMAPClient) GetEmailsFull(ctx context.Context, accountID string, ids []
 	}
 	resp, err := c.Call(ctx, nil, []invocation{
 		{"Email/get", map[string]any{
-			"accountId":            accountID,
-			"ids":                  ids,
-			"fetchHTMLBodyValues":  true,
-			"fetchTextBodyValues":  true,
-			"maxBodyValueBytes":    256 * 1024,
+			"accountId":           accountID,
+			"ids":                 ids,
+			"fetchHTMLBodyValues": true,
+			"fetchTextBodyValues": true,
+			"maxBodyValueBytes":   256 * 1024,
 			"properties": []string{
 				"id", "threadId", "mailboxIds", "keywords",
 				"subject", "from", "to", "preview", "receivedAt", "hasAttachment", "messageId",
@@ -600,18 +601,19 @@ func (c *JMAPClient) MoveThreadToMailbox(ctx context.Context, accountID, threadI
 // JMAP Email/set + EmailSubmission/set pair (DIL-278). Body is
 // supplied as plaintext; HTML composition is left to a later phase.
 type SendEmailRequest struct {
-	FromAddress string         // e.g. kasserar@klokkarvikbaatlag.no
-	FromName    string         // e.g. Kasserer
-	ReplyTo     string         // usually same as FromAddress
-	To          []EmailAddress // required, ≥1
-	Cc          []EmailAddress // optional
-	Bcc         []EmailAddress // optional (resolved members on bcc_members)
-	Subject     string
-	BodyText    string // required for v1
-	BodyHTML    string // optional
-	InReplyTo   string // RFC 5322 Message-ID being replied to; empty for new threads
-	References  []string
-	ActorID     string // Brygge user id → X-Brygge-Actor
+	FromAddress     string               // e.g. kasserar@klokkarvikbaatlag.no
+	FromName        string               // e.g. Kasserer
+	ReplyTo         string               // usually same as FromAddress
+	To              []EmailAddress       // required, ≥1
+	Cc              []EmailAddress       // optional
+	Bcc             []EmailAddress       // optional (resolved members on bcc_members)
+	Subject         string
+	BodyText        string               // required for v1
+	BodyHTML        string               // optional
+	InReplyTo       string               // RFC 5322 Message-ID being replied to; empty for new threads
+	References      []string
+	ActorID         string               // Brygge user id → X-Brygge-Actor
+	AttachBodyParts []map[string]any     // pre-uploaded blob attachment parts (blobId, type, name, disposition)
 }
 
 // SendEmail submits a message through JMAP. Two calls:
@@ -668,12 +670,12 @@ func (c *JMAPClient) SendEmail(ctx context.Context, accountID, identityID, draft
 	// `header:<Name>:asText`. Stalwart 0.15 returns
 	// invalidProperties if you POST a `headers` array on create.
 	email := map[string]any{
-		"mailboxIds":                map[string]bool{draftsID: true},
-		"from":                      from,
-		"to":                        to,
-		"subject":                   req.Subject,
-		"textBody":                  textBody,
-		"bodyValues":                bodyValues,
+		"mailboxIds":                   map[string]bool{draftsID: true},
+		"from":                         from,
+		"to":                           to,
+		"subject":                      req.Subject,
+		"textBody":                     textBody,
+		"bodyValues":                   bodyValues,
 		"header:X-Brygge-Actor:asText": req.ActorID,
 	}
 	if req.ReplyTo != "" {
@@ -694,10 +696,13 @@ func (c *JMAPClient) SendEmail(ctx context.Context, accountID, identityID, draft
 	if len(req.References) > 0 {
 		email["references"] = req.References
 	}
+	if len(req.AttachBodyParts) > 0 {
+		email["attachments"] = req.AttachBodyParts
+	}
 
 	envelope := map[string]any{
-		"mailFrom":   map[string]any{"email": req.FromAddress},
-		"rcptTo":     rcptList(req.To, req.Cc, req.Bcc),
+		"mailFrom": map[string]any{"email": req.FromAddress},
+		"rcptTo":   rcptList(req.To, req.Cc, req.Bcc),
 	}
 
 	resp, err := c.Call(ctx, []string{
@@ -808,6 +813,62 @@ func rcptList(groups ...[]EmailAddress) []map[string]any {
 	return out
 }
 
+// DownloadBlob fetches a blob from Stalwart's JMAP download endpoint.
+// Returns the Content-Type and a ReadCloser. Caller must close the body.
+func (c *JMAPClient) DownloadBlob(ctx context.Context, accountID, blobID, name string) (contentType string, body io.ReadCloser, err error) {
+	u := fmt.Sprintf("%s/jmap/download/%s/%s/%s",
+		c.baseURL,
+		url.PathEscape(accountID),
+		url.PathEscape(blobID),
+		url.PathEscape(name),
+	)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return "", nil, err
+	}
+	req.SetBasicAuth(c.user, c.pass)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return "", nil, err
+	}
+	if resp.StatusCode >= 400 {
+		resp.Body.Close()
+		return "", nil, fmt.Errorf("jmap download %s: %s", blobID, resp.Status)
+	}
+	ct := resp.Header.Get("Content-Type")
+	if ct == "" {
+		ct = "application/octet-stream"
+	}
+	return ct, resp.Body, nil
+}
+
+// UploadBlob uploads bytes to Stalwart's JMAP blob store and returns the blobId.
+func (c *JMAPClient) UploadBlob(ctx context.Context, accountID, contentType string, body io.Reader) (string, error) {
+	u := fmt.Sprintf("%s/jmap/upload/%s/", c.baseURL, url.PathEscape(accountID))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, body)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", contentType)
+	req.SetBasicAuth(c.user, c.pass)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 400 {
+		return "", fmt.Errorf("jmap upload %s: %s", resp.Status, truncate(raw, 200))
+	}
+	var result struct {
+		BlobID string `json:"blobId"`
+	}
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return "", fmt.Errorf("jmap upload decode: %w", err)
+	}
+	return result.BlobID, nil
+}
+
 // decodeArgs pulls the args object (index 1) out of a JMAP invocation
 // triple and decodes it into out.
 func decodeArgs(inv invocation, out any) error {
@@ -820,4 +881,3 @@ func decodeArgs(inv invocation, out any) error {
 	}
 	return json.Unmarshal(raw, out)
 }
-

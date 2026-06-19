@@ -837,11 +837,14 @@ func main() {
 							r.Post("/{thread_id}/mark_read", inboxHandler.HandleMarkRead)
 							r.Post("/{thread_id}/archive", inboxHandler.HandleArchiveThread)
 						})
+						r.Get("/{address}/blob/{blobId}", inboxHandler.HandleBlobDownload)
 						// Outbound mail is irreversible; gate sends on a
 						// fresh TOTP re-verify (10-min window), same
 						// posture as void-invoice / delete-user.
 						r.With(middleware.RequireFreshTOTPDefault()).
 							Post("/{address}/send", inboxHandler.HandleSend)
+						r.With(middleware.RequireFreshTOTPDefault()).
+							Post("/{address}/blob", inboxHandler.HandleBlobUpload)
 					})
 				}
 

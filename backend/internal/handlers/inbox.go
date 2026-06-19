@@ -4,11 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -309,16 +312,25 @@ func (h *InboxHandler) HandleArchiveThread(w http.ResponseWriter, r *http.Reques
 	JSON(w, http.StatusOK, map[string]any{"moved": n})
 }
 
+// sendAttachment is the attachment reference included in a send payload.
+type sendAttachment struct {
+	BlobID string `json:"blobId"`
+	Name   string `json:"name"`
+	Type   string `json:"type"`
+	Size   int64  `json:"size"`
+}
+
 // SendRequest is the SPA-facing payload for POST /:address/send.
 type SendRequest struct {
-	To        []emailAddr `json:"to"`
-	Cc        []emailAddr `json:"cc,omitempty"`
-	Bcc       []emailAddr `json:"bcc,omitempty"`        // individually addressed BCC (compose UI)
-	BccGroups []string    `json:"bcc_groups,omitempty"` // named groups expanded server-side
-	Subject   string      `json:"subject"`
-	BodyText  string      `json:"body_text"`
-	BodyHTML  string      `json:"body_html,omitempty"`
-	InReplyTo string      `json:"in_reply_to,omitempty"`
+	To          []emailAddr      `json:"to"`
+	Cc          []emailAddr      `json:"cc,omitempty"`
+	Bcc         []emailAddr      `json:"bcc,omitempty"`        // individually addressed BCC (compose UI)
+	BccGroups   []string         `json:"bcc_groups,omitempty"` // named groups expanded server-side
+	Subject     string           `json:"subject"`
+	BodyText    string           `json:"body_text"`
+	BodyHTML    string           `json:"body_html,omitempty"`
+	InReplyTo   string           `json:"in_reply_to,omitempty"`
+	Attachments []sendAttachment `json:"attachments,omitempty"`
 }
 
 type emailAddr struct {
@@ -461,18 +473,31 @@ func (h *InboxHandler) HandleSend(w http.ResponseWriter, r *http.Request) {
 	if h.clubAbbrev != "" {
 		fromName = h.clubAbbrev + " " + spec.DisplayName
 	}
+
+	// Build attachment body parts for JMAP Email/set.
+	var attachBodyParts []map[string]any
+	for _, att := range req.Attachments {
+		attachBodyParts = append(attachBodyParts, map[string]any{
+			"blobId":      att.BlobID,
+			"type":        att.Type,
+			"name":        att.Name,
+			"disposition": "attachment",
+		})
+	}
+
 	sendReq := mail.SendEmailRequest{
-		FromAddress: spec.Address,
-		FromName:    fromName,
-		ReplyTo:     spec.Address,
-		To:          toMailAddrs(req.To),
-		Cc:          toMailAddrs(req.Cc),
-		Bcc:         bcc,
-		Subject:     req.Subject,
-		BodyText:    req.BodyText,
-		BodyHTML:    req.BodyHTML,
-		InReplyTo:   req.InReplyTo,
-		ActorID:     claims.UserID,
+		FromAddress:     spec.Address,
+		FromName:        fromName,
+		ReplyTo:         spec.Address,
+		To:              toMailAddrs(req.To),
+		Cc:              toMailAddrs(req.Cc),
+		Bcc:             bcc,
+		Subject:         req.Subject,
+		BodyText:        req.BodyText,
+		BodyHTML:        req.BodyHTML,
+		InReplyTo:       req.InReplyTo,
+		ActorID:         claims.UserID,
+		AttachBodyParts: attachBodyParts,
 	}
 	if req.InReplyTo != "" {
 		sendReq.References = []string{req.InReplyTo}
@@ -503,6 +528,7 @@ func (h *InboxHandler) HandleSend(w http.ResponseWriter, r *http.Request) {
 			"message_id":      messageID,
 			"bcc_members":     spec.BccMembers,
 			"bcc_groups":      req.BccGroups,
+			"attachment_count": len(req.Attachments),
 		},
 	})
 
@@ -649,9 +675,292 @@ func (h *InboxHandler) waitingListEmails(ctx context.Context, clubID string) ([]
 	return out, rows.Err()
 }
 
-// HandleProxyImage stub — see DIL-279.
+// sharedJMAP returns a JMAPClient authenticated as the shared principal
+// for the given address, using the service password from the password map.
+func (h *InboxHandler) sharedJMAP(address string) (*mail.JMAPClient, error) {
+	pw := h.passwords.Get(address)
+	if pw == "" {
+		return nil, fmt.Errorf("no service password for %s", address)
+	}
+	return h.jmapFact.AsPrincipal(principalLocalPart(address), pw), nil
+}
+
+// resolveSharedAccountID returns the JMAP account ID for a shared principal
+// by calling SessionAccounts on the shared principal's own JMAP session.
+func (h *InboxHandler) resolveSharedAccountID(ctx context.Context, jmap *mail.JMAPClient, address string) (string, error) {
+	accounts, err := jmap.SessionAccounts(ctx)
+	if err != nil {
+		return "", fmt.Errorf("sharedAccountID %s: %w", address, err)
+	}
+	if len(accounts) == 0 {
+		return "", fmt.Errorf("sharedAccountID %s: no accounts in session", address)
+	}
+	return accounts[0], nil
+}
+
+// HandleBlobDownload proxies a JMAP blob to the browser as a download.
+// GET /api/v1/admin/inbox/{address}/blob/{blobId}?name=<filename>
+func (h *InboxHandler) HandleBlobDownload(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	spec, ok := h.authorize(w, r)
+	if !ok {
+		return
+	}
+
+	blobID := chi.URLParam(r, "blobId")
+	if blobID == "" {
+		Error(w, http.StatusBadRequest, "missing blobId")
+		return
+	}
+	name := r.URL.Query().Get("name")
+	if name == "" {
+		name = "attachment"
+	}
+
+	sharedJMAP, err := h.sharedJMAP(spec.Address)
+	if err != nil {
+		h.log.Warn().Err(err).Str("address", spec.Address).Msg("sharedJMAP unavailable")
+		Error(w, http.StatusBadGateway, "mail backend unavailable")
+		return
+	}
+
+	accountID, err := h.resolveSharedAccountID(ctx, sharedJMAP, spec.Address)
+	if err != nil {
+		Error(w, http.StatusBadGateway, "mail backend unavailable")
+		return
+	}
+
+	ct, body, err := sharedJMAP.DownloadBlob(ctx, accountID, blobID, name)
+	if err != nil {
+		h.log.Warn().Err(err).Str("blobId", blobID).Msg("blob download failed")
+		Error(w, http.StatusBadGateway, "blob unavailable")
+		return
+	}
+	defer body.Close()
+
+	w.Header().Set("Content-Type", ct)
+	w.Header().Set("Content-Disposition", `attachment; filename="`+sanitizeFilename(name)+`"`)
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(http.StatusOK)
+	io.Copy(w, body) //nolint:errcheck
+}
+
+func sanitizeFilename(name string) string {
+	r := strings.NewReplacer(`"`, "", `\`, "", "\n", "", "\r", "")
+	return r.Replace(name)
+}
+
+var allowedMIMETypes = map[string]bool{
+	"image/jpeg": true, "image/png": true, "image/gif": true,
+	"image/webp": true, "image/svg+xml": true,
+	"application/pdf":    true,
+	"application/msword": true,
+	"application/vnd.openxmlformats-officedocument.wordprocessingml.document": true,
+	"application/vnd.ms-excel": true,
+	"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": true,
+	"text/plain": true, "text/csv": true,
+}
+
+const maxUploadBytes = 10 * 1024 * 1024 // 10 MB
+
+// HandleBlobUpload receives a multipart file upload, validates the MIME type,
+// and stores it in the JMAP blob store under the shared principal's account.
+// POST /api/v1/admin/inbox/{address}/blob
+func (h *InboxHandler) HandleBlobUpload(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	spec, ok := h.authorize(w, r)
+	if !ok {
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadBytes+1024)
+	if err := r.ParseMultipartForm(4 * 1024 * 1024); err != nil {
+		Error(w, http.StatusBadRequest, "file too large or bad form")
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		Error(w, http.StatusBadRequest, "missing file field")
+		return
+	}
+	defer file.Close()
+
+	if header.Size > maxUploadBytes {
+		Error(w, http.StatusRequestEntityTooLarge, "file too large (max 10 MB)")
+		return
+	}
+
+	// Sniff MIME type from the first 512 bytes.
+	buf := make([]byte, 512)
+	n, _ := file.Read(buf)
+	detectedType := http.DetectContentType(buf[:n])
+	// Seek back so we can stream the full file.
+	if seeker, ok := file.(io.Seeker); ok {
+		seeker.Seek(0, io.SeekStart) //nolint:errcheck
+	}
+
+	// Use declared Content-Type as canonical; fall back to detected.
+	ct := header.Header.Get("Content-Type")
+	if ct == "" {
+		ct = detectedType
+	}
+	// Strip parameters (e.g. charset).
+	if idx := strings.Index(ct, ";"); idx >= 0 {
+		ct = strings.TrimSpace(ct[:idx])
+	}
+	if !allowedMIMETypes[ct] {
+		Error(w, http.StatusUnsupportedMediaType, "file type not allowed")
+		return
+	}
+
+	sharedJMAP, err := h.sharedJMAP(spec.Address)
+	if err != nil {
+		Error(w, http.StatusBadGateway, "mail backend unavailable")
+		return
+	}
+	accountID, err := h.resolveSharedAccountID(ctx, sharedJMAP, spec.Address)
+	if err != nil {
+		Error(w, http.StatusBadGateway, "mail backend unavailable")
+		return
+	}
+
+	blobID, err := sharedJMAP.UploadBlob(ctx, accountID, ct, file)
+	if err != nil {
+		h.log.Warn().Err(err).Msg("blob upload failed")
+		Error(w, http.StatusBadGateway, "upload failed")
+		return
+	}
+
+	JSON(w, http.StatusOK, map[string]any{
+		"blobId": blobID,
+		"name":   header.Filename,
+		"size":   header.Size,
+		"type":   ct,
+	})
+}
+
+// HandleProxyImage proxies remote images through the server with SSRF guards.
+// GET /api/v1/admin/inbox/proxy-image?url=<encoded>
 func (h *InboxHandler) HandleProxyImage(w http.ResponseWriter, r *http.Request) {
-	Error(w, http.StatusNotImplemented, "image proxy not implemented; remote images are off in v1")
+	raw := r.URL.Query().Get("url")
+	if raw == "" {
+		Error(w, http.StatusBadRequest, "missing url")
+		return
+	}
+
+	parsed, err := url.Parse(raw)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		Error(w, http.StatusBadRequest, "invalid url")
+		return
+	}
+
+	host := parsed.Hostname()
+	addrs, err := net.LookupHost(host)
+	if err != nil || len(addrs) == 0 {
+		Error(w, http.StatusBadGateway, "could not resolve host")
+		return
+	}
+	for _, a := range addrs {
+		if isPrivateIP(a) {
+			Error(w, http.StatusForbidden, "forbidden host")
+			return
+		}
+	}
+
+	// Custom dialer that re-validates the IP after DNS resolution
+	// to guard against DNS rebinding.
+	dialer := &net.Dialer{Timeout: 5 * time.Second}
+	transport := &http.Transport{
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			connHost, _, _ := net.SplitHostPort(addr)
+			if isPrivateIP(connHost) {
+				return nil, fmt.Errorf("forbidden: private IP %s", connHost)
+			}
+			return dialer.DialContext(ctx, network, addr)
+		},
+	}
+	client := &http.Client{
+		Timeout:   10 * time.Second,
+		Transport: transport,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 1 {
+				return http.ErrUseLastResponse
+			}
+			rHost := req.URL.Hostname()
+			rAddrs, rerr := net.LookupHost(rHost)
+			if rerr != nil {
+				return fmt.Errorf("redirect host unresolvable")
+			}
+			for _, a := range rAddrs {
+				if isPrivateIP(a) {
+					return fmt.Errorf("redirect to private IP forbidden")
+				}
+			}
+			return nil
+		},
+	}
+
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, raw, nil)
+	if err != nil {
+		Error(w, http.StatusBadRequest, "invalid url")
+		return
+	}
+	req.Header.Set("User-Agent", "Brygge-ImageProxy/1.0")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		Error(w, http.StatusBadGateway, "upstream error")
+		return
+	}
+	defer resp.Body.Close()
+
+	ct := resp.Header.Get("Content-Type")
+	if !strings.HasPrefix(ct, "image/") {
+		Error(w, http.StatusBadGateway, "not an image")
+		return
+	}
+
+	w.Header().Set("Content-Type", ct)
+	if cl := resp.Header.Get("Content-Length"); cl != "" {
+		w.Header().Set("Content-Length", cl)
+	}
+	w.Header().Set("Content-Security-Policy", "default-src 'none'")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Cache-Control", "max-age=3600")
+	w.WriteHeader(http.StatusOK)
+	io.Copy(w, io.LimitReader(resp.Body, 5*1024*1024)) //nolint:errcheck
+}
+
+// isPrivateIP returns true for loopback, RFC1918, link-local, and
+// IPv6 private ranges. Input is a string IP (from net.LookupHost or
+// net.SplitHostPort).
+func isPrivateIP(addr string) bool {
+	ip := net.ParseIP(addr)
+	if ip == nil {
+		return true // unparseable → treat as private
+	}
+	private := []string{
+		"127.0.0.0/8",
+		"10.0.0.0/8",
+		"172.16.0.0/12",
+		"192.168.0.0/16",
+		"169.254.0.0/16",
+		"::1/128",
+		"fc00::/7",
+		"fe80::/10",
+		"100.64.0.0/10", // Tailscale/CGNAT
+	}
+	for _, cidr := range private {
+		_, network, err := net.ParseCIDR(cidr)
+		if err != nil {
+			continue
+		}
+		if network.Contains(ip) {
+			return true
+		}
+	}
+	return false
 }
 
 // authorize resolves :address, verifies the caller has the mapped role.
