@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onBeforeUnmount } from 'vue'
+import { ref, watch, onBeforeUnmount, nextTick } from 'vue'
 import { useEditor, EditorContent } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
@@ -41,15 +41,30 @@ watch(
 
 onBeforeUnmount(() => editor.value?.destroy())
 
-function setLink() {
-  const prev = editor.value?.getAttributes('link').href as string | undefined
-  const url = prompt('URL:', prev ?? 'https://')
-  if (url === null) return
-  if (url === '') {
+// ── Link popover ─────────────────────────────────────────────────────────────
+const showLinkPopover = ref(false)
+const linkUrl = ref('')
+const linkInput = ref<HTMLInputElement | null>(null)
+
+function openLinkPopover() {
+  linkUrl.value = (editor.value?.getAttributes('link').href as string | undefined) ?? ''
+  showLinkPopover.value = true
+  nextTick(() => linkInput.value?.focus())
+}
+
+function applyLink() {
+  const url = linkUrl.value.trim()
+  if (!url) {
     editor.value?.chain().focus().unsetLink().run()
-    return
+  } else {
+    editor.value?.chain().focus().setLink({ href: url }).run()
   }
-  editor.value?.chain().focus().setLink({ href: url }).run()
+  showLinkPopover.value = false
+}
+
+function removeLink() {
+  editor.value?.chain().focus().unsetLink().run()
+  showLinkPopover.value = false
 }
 
 // --- Attachment upload ---------------------------------------------------
@@ -152,7 +167,7 @@ const toolbar: Btn[] = [
   },
   {
     type: 'button', label: 'Lenkje', icon: Link2,
-    action: setLink,
+    action: openLinkPopover,
     isActive: () => editor.value?.isActive('link') ?? false,
   },
   { type: 'sep' },
@@ -188,6 +203,44 @@ const toolbar: Btn[] = [
           <component :is="btn.icon" class="h-4 w-4" />
         </button>
       </template>
+    </div>
+    <!-- Link popover -->
+    <div
+      v-if="showLinkPopover"
+      class="flex items-center gap-2 border-b border-blue-100 bg-blue-50 px-3 py-2"
+    >
+      <Link2 class="h-4 w-4 shrink-0 text-blue-500" />
+      <input
+        ref="linkInput"
+        v-model="linkUrl"
+        type="url"
+        placeholder="https://"
+        class="min-w-0 flex-1 rounded border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        @keydown.enter.prevent="applyLink"
+        @keydown.esc.prevent="showLinkPopover = false"
+      />
+      <button
+        type="button"
+        class="rounded bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-700"
+        @click="applyLink"
+      >
+        Bruk
+      </button>
+      <button
+        v-if="editor?.isActive('link')"
+        type="button"
+        class="rounded border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100"
+        @click="removeLink"
+      >
+        Fjern
+      </button>
+      <button
+        type="button"
+        class="rounded p-0.5 text-gray-400 hover:text-gray-700"
+        @click="showLinkPopover = false"
+      >
+        <XIcon class="h-4 w-4" />
+      </button>
     </div>
     <!-- Editor area -->
     <EditorContent :editor="editor" />
