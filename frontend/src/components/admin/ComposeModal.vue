@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
-import { Send, X } from 'lucide-vue-next'
+import { Send, X, Trash2 } from 'lucide-vue-next'
 import RichEditor from '@/components/ui/RichEditor.vue'
 import RecipientPicker, { type RecipientValue } from './RecipientPicker.vue'
 import { useApi } from '@/composables/useApi'
@@ -96,10 +96,18 @@ async function send() {
   }
 }
 
+const confirmingDiscard = ref(false)
+
 function tryClose() {
   if (subject.value.trim() || body.value.trim()) {
-    if (!confirm('Forkast kladden?')) return
+    confirmingDiscard.value = true
+    return
   }
+  emit('close')
+}
+
+function discardDraft() {
+  confirmingDiscard.value = false
   emit('close')
 }
 
@@ -150,7 +158,7 @@ onBeforeUnmount(() => {
       role="dialog"
       aria-modal="true"
       aria-label="Ny melding"
-      @keydown.esc="tryClose"
+      @keydown.esc="confirmingDiscard ? (confirmingDiscard = false) : tryClose()"
     >
       <!-- Drag handle / header -->
       <header
@@ -167,6 +175,29 @@ onBeforeUnmount(() => {
           <X class="h-4 w-4" />
         </button>
       </header>
+
+      <!-- Discard confirmation banner -->
+      <div
+        v-if="confirmingDiscard"
+        class="flex shrink-0 items-center gap-3 border-b border-red-200 bg-red-50 px-4 py-2.5"
+      >
+        <span class="flex-1 text-sm text-red-800">Forkast kladden?</span>
+        <button
+          type="button"
+          class="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
+          @click="discardDraft"
+        >
+          <Trash2 class="h-3.5 w-3.5" />
+          Forkast
+        </button>
+        <button
+          type="button"
+          class="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+          @click="confirmingDiscard = false"
+        >
+          Hald fram
+        </button>
+      </div>
 
       <!-- Body -->
       <div class="min-h-0 flex-1 overflow-hidden p-5">
