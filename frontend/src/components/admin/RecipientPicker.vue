@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 import { X } from 'lucide-vue-next'
 import { useApiClient, unwrap } from '@/lib/apiClient'
 import type { components } from '@/types/api.d.ts'
@@ -55,6 +55,8 @@ function removeIndividual(email: string) {
   })
 }
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
 function addIndividual(user: AdminUser) {
   if (!user.email) return
   if (props.modelValue.individuals.some((i) => i.email === user.email)) return
@@ -69,6 +71,21 @@ function addIndividual(user: AdminUser) {
   searchResults.value = []
   showDropdown.value = false
 }
+
+function addEmail(email: string) {
+  const trimmed = email.trim()
+  if (!EMAIL_RE.test(trimmed)) return
+  if (props.modelValue.individuals.some((i) => i.email === trimmed)) return
+  emit('update:modelValue', {
+    ...props.modelValue,
+    individuals: [...props.modelValue.individuals, { name: '', email: trimmed }],
+  })
+  searchTerm.value = ''
+  searchResults.value = []
+  showDropdown.value = false
+}
+
+const canAddRaw = computed(() => EMAIL_RE.test(searchTerm.value.trim()))
 
 watch(searchTerm, (val) => {
   if (debounceTimer) clearTimeout(debounceTimer)
@@ -144,12 +161,13 @@ function onSearchBlur() {
       <input
         v-model="searchTerm"
         type="text"
-        placeholder="Søk enkeltpersonar…"
+        placeholder="Søk medlem eller skriv e-postadresse…"
         class="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        @keydown.enter.prevent="canAddRaw ? addEmail(searchTerm) : (searchResults[0] && addIndividual(searchResults[0]))"
         @blur="onSearchBlur"
       />
       <ul
-        v-if="showDropdown"
+        v-if="showDropdown || canAddRaw"
         class="absolute z-20 mt-1 w-full rounded-md border border-gray-200 bg-white py-1 shadow-lg"
       >
         <li
@@ -160,6 +178,14 @@ function onSearchBlur() {
         >
           <span class="text-sm font-medium text-gray-900">{{ user.full_name }}</span>
           <span class="text-xs text-gray-500">{{ user.email }}</span>
+        </li>
+        <li
+          v-if="canAddRaw"
+          class="flex cursor-pointer items-center gap-2 px-3 py-2 hover:bg-blue-50"
+          @mousedown.prevent="addEmail(searchTerm)"
+        >
+          <span class="text-sm text-blue-700">Legg til <strong>{{ searchTerm.trim() }}</strong></span>
+          <span class="ml-auto text-xs text-gray-400">Enter</span>
         </li>
       </ul>
     </div>
