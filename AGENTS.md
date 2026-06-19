@@ -53,6 +53,8 @@ Migrations run automatically as part of every deploy — `brygge-migrate.service
 just deploy klokkarvikbaatlag.no    # runs migrate-check first; then nix run .#deploy
 ```
 
+The deploy target is always `klokkarvikbaatlag.no`. Never ask the user which host to deploy to.
+
 Run `just migrate-check` standalone when you just want to validate a migration in isolation.
 
 Two gates, cheapest first:
@@ -92,6 +94,8 @@ Brygge tracks work in Linear (project: `brygge`, team: `software`, prefix `DIL-`
 **What goes in the commit message:** for any commit that resolves one or more issues, include `(DIL-NNN)` or `Closes DIL-NNN` in the subject so the link is obvious in `git log`. The status transition still happens via Linear MCP — Linear doesn't auto-close from commit messages here.
 
 **Don't invent issues to inflate the trail.** A one-line typo fix, a trailing-whitespace cleanup, an obvious doc tweak — just commit. Linear is for work that benefits from being trackable, not for every commit.
+
+**Processing a batch of issues at once** (e.g. "ship the 6 best backlog tasks"): drive them through a self-paced queue loop — one issue per branch, verify + commit each, leave them for batch review, then merge least-conflict-first. Full recipe (queue-file format, the `/loop` prompt, the merge script, when to block instead of guess) in [docs/developer/batch-loop.md](docs/developer/batch-loop.md).
 
 ## Dev Environment
 
