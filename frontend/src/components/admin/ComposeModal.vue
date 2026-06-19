@@ -260,14 +260,14 @@ onBeforeUnmount(() => {
               <span class="font-medium text-gray-700">Til (BCC):</span> {{ recipientSummary }}
             </div>
             <h3 class="text-base font-semibold text-gray-900">{{ subject }}</h3>
-            <p class="mt-3 whitespace-pre-wrap text-gray-700">{{ body }}</p>
+            <div class="prose prose-sm mt-3 max-w-none text-gray-700" v-html="body" />
           </div>
 
           <div v-if="error" class="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
             {{ error }}
           </div>
 
-          <div class="flex justify-end gap-3">
+          <div class="mt-auto flex justify-end gap-3">
             <button
               type="button"
               class="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
