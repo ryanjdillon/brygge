@@ -3,9 +3,11 @@ import { ref, watch, onBeforeUnmount, nextTick } from 'vue'
 import { useEditor, EditorContent } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
+import Image from '@tiptap/extension-image'
 import {
   Bold, Italic, Strikethrough, List, ListOrdered, Heading2, Heading3,
-  Quote, Minus, Link2, Undo2, Redo2, Paperclip, X as XIcon, RemoveFormatting,
+  Quote, Minus, Link2, Undo2, Redo2, Paperclip, Image as ImageIcon,
+  X as XIcon, RemoveFormatting,
 } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -14,11 +16,83 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ (e: 'update:modelValue', v: string): void }>()
 
+// ── Upload helpers ────────────────────────────────────────────────────────────
+
+interface UploadedFile { blobId: string; name: string; size: number; type: string }
+interface PendingFile { id: string; name: string; status: 'uploading' | 'error'; error?: string }
+
+const attachments = ref<UploadedFile[]>([])
+const pending = ref<PendingFile[]>([])
+const fileInput = ref<HTMLInputElement | null>(null)
+const imageInput = ref<HTMLInputElement | null>(null)
+
+let nextId = 0
+
+async function uploadBlob(file: File): Promise<UploadedFile> {
+  const form = new FormData()
+  form.append('file', file)
+  const res = await fetch(
+    `/api/v1/admin/inbox/${encodeURIComponent(props.address!)}/blob`,
+    { method: 'POST', body: form },
+  )
+  if (!res.ok) {
+    let msg = `Feil ${res.status}`
+    try { const j = await res.json(); msg = j?.error ?? j?.message ?? msg } catch { /* ignore */ }
+    throw new Error(msg)
+  }
+  return res.json()
+}
+
+function blobSrc(blobId: string, name: string) {
+  return `/api/v1/admin/inbox/${encodeURIComponent(props.address!)}/blob/${encodeURIComponent(blobId)}?name=${encodeURIComponent(name)}`
+}
+
+async function uploadAttachments(files: File[]) {
+  await Promise.all(files.map(async (file) => {
+    const id = String(nextId++)
+    pending.value.push({ id, name: file.name, status: 'uploading' })
+    try {
+      const data = await uploadBlob(file)
+      attachments.value.push(data)
+      pending.value = pending.value.filter(p => p.id !== id)
+    } catch (e) {
+      const idx = pending.value.findIndex(p => p.id === id)
+      if (idx >= 0) pending.value[idx] = { id, name: file.name, status: 'error', error: (e as Error).message }
+    }
+  }))
+}
+
+async function uploadAndInsertImage(file: File) {
+  if (!props.address) return
+  const id = String(nextId++)
+  pending.value.push({ id, name: file.name, status: 'uploading' })
+  try {
+    const data = await uploadBlob(file)
+    const src = blobSrc(data.blobId, data.name || file.name)
+    editor.value?.chain().focus().setImage({ src, alt: data.name || file.name }).run()
+    pending.value = pending.value.filter(p => p.id !== id)
+  } catch (e) {
+    const idx = pending.value.findIndex(p => p.id === id)
+    if (idx >= 0) pending.value[idx] = { id, name: file.name, status: 'error', error: (e as Error).message }
+  }
+}
+
+function removeAttachment(blobId: string) {
+  attachments.value = attachments.value.filter(a => a.blobId !== blobId)
+}
+
+function dismissPending(id: string) {
+  pending.value = pending.value.filter(p => p.id !== id)
+}
+
+// ── Editor ───────────────────────────────────────────────────────────────────
+
 const editor = useEditor({
   content: props.modelValue,
   extensions: [
     StarterKit,
     Link.configure({ openOnClick: false }),
+    Image.configure({ allowBase64: false }),
   ],
   onUpdate: ({ editor }) => {
     emit('update:modelValue', editor.getHTML())
@@ -26,6 +100,25 @@ const editor = useEditor({
   editorProps: {
     attributes: {
       class: 'rich-editor-content px-3 py-2 focus:outline-none',
+    },
+    handlePaste(_, event) {
+      if (!props.address) return false
+      const items = Array.from(event.clipboardData?.items ?? [])
+      const images = items.filter(i => i.kind === 'file' && i.type.startsWith('image/'))
+      if (!images.length) return false
+      images.forEach(item => {
+        const file = item.getAsFile()
+        if (file) uploadAndInsertImage(file)
+      })
+      return true
+    },
+    handleDrop(_, event) {
+      if (!props.address) return false
+      const files = Array.from((event as DragEvent).dataTransfer?.files ?? [])
+        .filter(f => f.type.startsWith('image/'))
+      if (!files.length) return false
+      files.forEach(f => uploadAndInsertImage(f))
+      return true
     },
   },
 })
@@ -42,6 +135,7 @@ watch(
 onBeforeUnmount(() => editor.value?.destroy())
 
 // ── Link popover ─────────────────────────────────────────────────────────────
+
 const showLinkPopover = ref(false)
 const linkUrl = ref('')
 const linkInput = ref<HTMLInputElement | null>(null)
@@ -67,59 +161,27 @@ function removeLink() {
   showLinkPopover.value = false
 }
 
-// --- Attachment upload ---------------------------------------------------
-
-interface UploadedFile { blobId: string; name: string; size: number; type: string }
-interface PendingFile { id: string; name: string; status: 'uploading' | 'error'; error?: string }
-
-const attachments = ref<UploadedFile[]>([])
-const pending = ref<PendingFile[]>([])
-const fileInput = ref<HTMLInputElement | null>(null)
-
-let nextId = 0
+// ── File input handlers ───────────────────────────────────────────────────────
 
 async function handleFiles(event: Event) {
   const input = event.target as HTMLInputElement
   if (!input.files?.length || !props.address) return
   const files = Array.from(input.files)
   input.value = ''
-
-  await Promise.all(files.map(async (file) => {
-    const id = String(nextId++)
-    pending.value.push({ id, name: file.name, status: 'uploading' })
-    try {
-      const form = new FormData()
-      form.append('file', file)
-      const res = await fetch(
-        `/api/v1/admin/inbox/${encodeURIComponent(props.address!)}/blob`,
-        { method: 'POST', body: form },
-      )
-      if (!res.ok) {
-        let msg = `Feil ${res.status}`
-        try { const j = await res.json(); msg = j?.error ?? j?.message ?? msg } catch { /* ignore */ }
-        throw new Error(msg)
-      }
-      const data = await res.json()
-      attachments.value.push(data)
-      pending.value = pending.value.filter(p => p.id !== id)
-    } catch (e) {
-      const idx = pending.value.findIndex(p => p.id === id)
-      if (idx >= 0) pending.value[idx] = { id, name: file.name, status: 'error', error: (e as Error).message }
-    }
-  }))
+  await uploadAttachments(files)
 }
 
-function removeAttachment(blobId: string) {
-  attachments.value = attachments.value.filter(a => a.blobId !== blobId)
-}
-
-function dismissPending(id: string) {
-  pending.value = pending.value.filter(p => p.id !== id)
+async function handleImageFiles(event: Event) {
+  const input = event.target as HTMLInputElement
+  if (!input.files?.length || !props.address) return
+  const files = Array.from(input.files)
+  input.value = ''
+  await Promise.all(files.map(uploadAndInsertImage))
 }
 
 defineExpose({ attachments, pending })
 
-// --- Toolbar ------------------------------------------------------------
+// ── Toolbar ───────────────────────────────────────────────────────────────────
 
 type Btn =
   | { type: 'button'; icon: unknown; action: () => void; isActive: () => boolean; label: string; disabled?: () => boolean }
@@ -197,6 +259,12 @@ const toolbar: Btn[] = [
   },
   { type: 'sep' },
   {
+    type: 'button', label: 'Set inn bilete', icon: ImageIcon,
+    action: () => { if (props.address) imageInput.value?.click() },
+    isActive: () => false,
+    disabled: () => !props.address,
+  },
+  {
     type: 'button', label: 'Vedlegg', icon: Paperclip,
     action: () => { if (props.address) fileInput.value?.click() },
     isActive: () => pending.value.some(p => p.status === 'uploading'),
@@ -271,7 +339,16 @@ const toolbar: Btn[] = [
     <div class="min-h-[8rem] flex-1 overflow-y-auto">
       <EditorContent :editor="editor" />
     </div>
-    <!-- Hidden file input -->
+    <!-- Hidden file inputs -->
+    <input
+      v-if="address"
+      ref="imageInput"
+      type="file"
+      accept="image/*"
+      multiple
+      class="sr-only"
+      @change="handleImageFiles"
+    />
     <input
       v-if="address"
       ref="fileInput"
@@ -306,7 +383,6 @@ const toolbar: Btn[] = [
         ]"
         :title="p.status === 'error' ? p.error : undefined"
       >
-        <!-- Spinner -->
         <svg
           v-if="p.status === 'uploading'"
           class="h-3 w-3 animate-spin text-blue-500"
@@ -350,6 +426,18 @@ const toolbar: Btn[] = [
   strong { font-weight: 600; }
   em { font-style: italic; }
   s, del { text-decoration: line-through; }
+  img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 0.25rem;
+    display: block;
+    margin: 0.5rem 0;
+    cursor: default;
+  }
+  img.ProseMirror-selectednode {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+  }
 }
 :deep(.rich-editor-content p.is-editor-empty:first-child::before) {
   content: attr(data-placeholder);

@@ -17,6 +17,7 @@
   "dependencies": {
     "@tailwindcss/vite": "^4",
     "@tanstack/vue-query": "^5",
+    "@tiptap/extension-image": "^3.27.1",
     "@tiptap/extension-link": "^3.27.1",
     "@tiptap/starter-kit": "^3.27.1",
     "@tiptap/vue-3": "^3.27.1",
