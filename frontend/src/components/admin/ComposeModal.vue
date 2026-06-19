@@ -64,9 +64,31 @@ const recipientSummary = computed(() => {
   return parts.join(', ')
 })
 
+const selectedMailbox = computed(
+  () => sendableMailboxes.value.find((m) => m.address === fromAddress.value) ?? null,
+)
+
 const selectedFromLabel = computed(() => {
-  const m = sendableMailboxes.value.find((m) => m.address === fromAddress.value)
+  const m = selectedMailbox.value
   return m ? `${m.display_name} <${m.address}>` : fromAddress.value
+})
+
+const signatureHtml = computed(() => {
+  const m = selectedMailbox.value
+  if (!m) return ''
+  return [
+    '<br>',
+    '<hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0 8px">',
+    `<p style="margin:0;font-size:14px;color:#374151">Med venleg helsing,</p>`,
+    `<p style="margin:4px 0 0;font-weight:600;color:#111827">${m.display_name}</p>`,
+    `<p style="margin:2px 0 0;font-size:13px;color:#6b7280"><a href="mailto:${m.address}" style="color:#2563eb;text-decoration:none">${m.address}</a></p>`,
+  ].join('')
+})
+
+const signatureText = computed(() => {
+  const m = selectedMailbox.value
+  if (!m) return ''
+  return `\n\n--\nMed venleg helsing,\n${m.display_name}\n${m.address}`
 })
 
 async function send() {
@@ -82,8 +104,8 @@ async function send() {
           bcc_groups: recipients.value.groups,
           bcc: recipients.value.individuals.map((i) => ({ name: i.name, email: i.email })),
           subject: subject.value,
-          body_html: body.value,
-          body_text: htmlToText(body.value),
+          body_html: body.value + signatureHtml.value,
+          body_text: htmlToText(body.value) + signatureText.value,
           attachments: editorRef.value?.attachments ?? [],
         }),
       },
@@ -233,8 +255,17 @@ onBeforeUnmount(() => {
 
           <div class="flex min-h-0 flex-1 flex-col">
             <label class="block text-xs font-medium uppercase tracking-wide text-gray-500">Melding</label>
-            <div class="mt-1 flex min-h-0 flex-1 flex-col">
+            <div class="mt-1 flex min-h-0 flex-1 flex-col gap-0">
               <RichEditor ref="editorRef" v-model="body" :address="fromAddress" class="flex-1" />
+              <div
+                v-if="selectedMailbox"
+                class="shrink-0 cursor-default select-none rounded-b-md border border-t-0 border-dashed border-gray-300 bg-gray-50 px-3 py-2.5 text-xs text-gray-500"
+              >
+                <p class="mb-1 font-medium uppercase tracking-wide text-gray-400" style="font-size:10px">Signatur (automatisk)</p>
+                <p>Med venleg helsing,</p>
+                <p class="mt-0.5 font-medium text-gray-700">{{ selectedMailbox.display_name }}</p>
+                <p class="text-gray-500">{{ selectedMailbox.address }}</p>
+              </div>
             </div>
           </div>
 
@@ -261,6 +292,7 @@ onBeforeUnmount(() => {
             </div>
             <h3 class="text-base font-semibold text-gray-900">{{ subject }}</h3>
             <div class="prose prose-sm mt-3 max-w-none text-gray-700" v-html="body" />
+            <div v-if="selectedMailbox" v-html="signatureHtml" class="text-sm" />
           </div>
 
           <div v-if="error" class="shrink-0 rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
