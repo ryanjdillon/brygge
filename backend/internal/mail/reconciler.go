@@ -321,6 +321,10 @@ func (r *Reconciler) findSpec(address string) (MailboxSpec, bool) {
 // account ID, resolved by joining user_mail_credentials (which
 // holds the Stalwart slug) against the name→jmap_id index.
 func (r *Reconciler) computeDesired(ctx context.Context, spec MailboxSpec, idx map[string]string) (map[string]ShareRights, error) {
+	// No role means no automatic role-based shares for this mailbox.
+	if spec.Role == "" {
+		return make(map[string]ShareRights), nil
+	}
 	rows, err := r.db.Query(ctx, `
 		SELECT umc.jmap_user
 		FROM users u
