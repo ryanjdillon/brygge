@@ -70,39 +70,54 @@ function removeLink() {
 // --- Attachment upload ---------------------------------------------------
 
 interface UploadedFile { blobId: string; name: string; size: number; type: string }
+interface PendingFile { id: string; name: string; status: 'uploading' | 'error'; error?: string }
+
 const attachments = ref<UploadedFile[]>([])
-const uploading = ref(false)
+const pending = ref<PendingFile[]>([])
 const fileInput = ref<HTMLInputElement | null>(null)
+
+let nextId = 0
 
 async function handleFiles(event: Event) {
   const input = event.target as HTMLInputElement
   if (!input.files?.length || !props.address) return
-  uploading.value = true
-  try {
-    for (const file of Array.from(input.files)) {
+  const files = Array.from(input.files)
+  input.value = ''
+
+  await Promise.all(files.map(async (file) => {
+    const id = String(nextId++)
+    pending.value.push({ id, name: file.name, status: 'uploading' })
+    try {
       const form = new FormData()
       form.append('file', file)
       const res = await fetch(
-        `/api/v1/admin/inbox/${encodeURIComponent(props.address)}/blob`,
+        `/api/v1/admin/inbox/${encodeURIComponent(props.address!)}/blob`,
         { method: 'POST', body: form },
       )
-      if (!res.ok) throw new Error(await res.text())
+      if (!res.ok) {
+        let msg = `Feil ${res.status}`
+        try { const j = await res.json(); msg = j?.error ?? j?.message ?? msg } catch { /* ignore */ }
+        throw new Error(msg)
+      }
       const data = await res.json()
       attachments.value.push(data)
+      pending.value = pending.value.filter(p => p.id !== id)
+    } catch (e) {
+      const idx = pending.value.findIndex(p => p.id === id)
+      if (idx >= 0) pending.value[idx] = { id, name: file.name, status: 'error', error: (e as Error).message }
     }
-  } catch (e) {
-    console.error('upload failed', e)
-  } finally {
-    uploading.value = false
-    input.value = ''
-  }
+  }))
 }
 
 function removeAttachment(blobId: string) {
   attachments.value = attachments.value.filter(a => a.blobId !== blobId)
 }
 
-defineExpose({ attachments })
+function dismissPending(id: string) {
+  pending.value = pending.value.filter(p => p.id !== id)
+}
+
+defineExpose({ attachments, pending })
 
 // --- Toolbar ------------------------------------------------------------
 
@@ -174,7 +189,7 @@ const toolbar: Btn[] = [
   {
     type: 'button', label: 'Vedlegg', icon: Paperclip,
     action: () => { if (props.address) fileInput.value?.click() },
-    isActive: () => uploading.value,
+    isActive: () => pending.value.some(p => p.status === 'uploading'),
     disabled: () => !props.address,
   },
 ]
@@ -256,7 +271,8 @@ const toolbar: Btn[] = [
       @change="handleFiles"
     />
     <!-- Attachment chips -->
-    <div v-if="attachments.length || uploading" class="flex flex-wrap gap-1.5 border-t border-gray-200 px-3 py-2">
+    <div v-if="attachments.length || pending.length" class="flex flex-wrap gap-1.5 border-t border-gray-200 px-3 py-2">
+      <!-- Uploaded -->
       <span
         v-for="a in attachments"
         :key="a.blobId"
@@ -268,7 +284,40 @@ const toolbar: Btn[] = [
           <XIcon class="h-3 w-3" />
         </button>
       </span>
-      <span v-if="uploading" class="text-xs text-gray-400 italic">Lastar opp…</span>
+      <!-- Pending: uploading or error -->
+      <span
+        v-for="p in pending"
+        :key="p.id"
+        :class="[
+          'inline-flex items-center gap-1.5 rounded-full pl-2.5 pr-1.5 py-0.5 text-xs',
+          p.status === 'error'
+            ? 'bg-red-50 text-red-700 ring-1 ring-red-200'
+            : 'bg-blue-50 text-blue-700',
+        ]"
+        :title="p.status === 'error' ? p.error : undefined"
+      >
+        <!-- Spinner -->
+        <svg
+          v-if="p.status === 'uploading'"
+          class="h-3 w-3 animate-spin text-blue-500"
+          viewBox="0 0 24 24"
+          fill="none"
+        >
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+        </svg>
+        <XIcon v-else class="h-3 w-3 text-red-400" />
+        <span class="max-w-[160px] truncate">{{ p.name }}</span>
+        <span v-if="p.status === 'error'" class="truncate text-red-500">— {{ p.error }}</span>
+        <button
+          v-if="p.status === 'error'"
+          type="button"
+          class="rounded-full p-0.5 hover:bg-red-100"
+          @click="dismissPending(p.id)"
+        >
+          <XIcon class="h-3 w-3" />
+        </button>
+      </span>
     </div>
   </div>
 </template>
