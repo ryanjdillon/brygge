@@ -177,6 +177,7 @@ const replyCc = ref('')
 const replySubject = ref('')
 const replyBody = ref('')
 const sending = ref(false)
+const replyEditorRef = ref<InstanceType<typeof RichEditor> | null>(null)
 
 function openReply() {
   if (!thread.value || thread.value.emails.length === 0) return
@@ -222,6 +223,7 @@ async function submitReply() {
       body_html: replyBody.value,
       body_text: htmlToText(replyBody.value),
       in_reply_to: inReplyTo,
+      attachments: replyEditorRef.value?.attachments ?? [],
     }
     const url = `/api/v1/admin/inbox/${encodeURIComponent(selectedAddress.value)}/send`
     console.log('[inbox] submitting reply', { url, to: to.length, subject: payload.subject })
@@ -288,6 +290,12 @@ function formatFrom(addrs: { name: string; email: string }[]): string {
 
 function formatDate(iso: string): string {
   return fmtDateTime(iso, locale.value)
+}
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`
 }
 
 // Reactive refetch on URL changes.
@@ -462,7 +470,7 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
                 <span class="w-16 text-xs text-gray-600">{{ t('admin.inbox.reply.subject') }}</span>
                 <input v-model="replySubject" type="text" class="flex-1 rounded border border-gray-300 px-2 py-1" />
               </label>
-              <RichEditor v-model="replyBody" />
+              <RichEditor v-model="replyBody" :address="selectedAddress" ref="replyEditorRef" />
               <div
                 v-if="sendError"
                 class="rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-700"
@@ -508,9 +516,17 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
               </header>
               <div class="prose prose-sm max-w-none break-words" v-html="renderBody(email)" />
               <footer v-if="email.attachments?.length" class="mt-3 flex flex-wrap gap-2 border-t border-gray-100 pt-2 text-xs text-gray-500">
-                <span v-for="a in email.attachments" :key="a.blobId" class="rounded bg-gray-100 px-2 py-1">
+                <a
+                  v-for="a in email.attachments"
+                  :key="a.blobId"
+                  :href="`/api/v1/admin/inbox/${encodeURIComponent(selectedAddress)}/blob/${encodeURIComponent(a.blobId)}?name=${encodeURIComponent(a.name || 'attachment')}`"
+                  :download="a.name || 'attachment'"
+                  class="inline-flex items-center gap-1 rounded bg-gray-100 px-2 py-1 text-blue-700 hover:bg-gray-200"
+                >
+                  <Paperclip class="h-3 w-3" />
                   {{ a.name || a.type }}
-                </span>
+                  <span v-if="a.size" class="text-gray-400">({{ formatBytes(a.size) }})</span>
+                </a>
               </footer>
             </section>
           </div>

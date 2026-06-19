@@ -1,14 +1,17 @@
 <script setup lang="ts">
-import { watch, onBeforeUnmount } from 'vue'
+import { ref, watch, onBeforeUnmount } from 'vue'
 import { useEditor, EditorContent } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
 import {
   Bold, Italic, List, ListOrdered, Heading2, Heading3,
-  Quote, Minus, Link2, Undo2, Redo2,
+  Quote, Minus, Link2, Undo2, Redo2, Paperclip, X as XIcon,
 } from 'lucide-vue-next'
 
-const props = defineProps<{ modelValue: string }>()
+const props = defineProps<{
+  modelValue: string
+  address?: string
+}>()
 const emit = defineEmits<{ (e: 'update:modelValue', v: string): void }>()
 
 const editor = useEditor({
@@ -49,8 +52,47 @@ function setLink() {
   editor.value?.chain().focus().setLink({ href: url }).run()
 }
 
+// --- Attachment upload ---------------------------------------------------
+
+interface UploadedFile { blobId: string; name: string; size: number; type: string }
+const attachments = ref<UploadedFile[]>([])
+const uploading = ref(false)
+const fileInput = ref<HTMLInputElement | null>(null)
+
+async function handleFiles(event: Event) {
+  const input = event.target as HTMLInputElement
+  if (!input.files?.length || !props.address) return
+  uploading.value = true
+  try {
+    for (const file of Array.from(input.files)) {
+      const form = new FormData()
+      form.append('file', file)
+      const res = await fetch(
+        `/api/v1/admin/inbox/${encodeURIComponent(props.address)}/blob`,
+        { method: 'POST', body: form },
+      )
+      if (!res.ok) throw new Error(await res.text())
+      const data = await res.json()
+      attachments.value.push(data)
+    }
+  } catch (e) {
+    console.error('upload failed', e)
+  } finally {
+    uploading.value = false
+    input.value = ''
+  }
+}
+
+function removeAttachment(blobId: string) {
+  attachments.value = attachments.value.filter(a => a.blobId !== blobId)
+}
+
+defineExpose({ attachments })
+
+// --- Toolbar ------------------------------------------------------------
+
 type Btn =
-  | { type: 'button'; icon: unknown; action: () => void; isActive: () => boolean; label: string }
+  | { type: 'button'; icon: unknown; action: () => void; isActive: () => boolean; label: string; disabled?: () => boolean }
   | { type: 'sep' }
 
 const toolbar: Btn[] = [
@@ -113,6 +155,13 @@ const toolbar: Btn[] = [
     action: setLink,
     isActive: () => editor.value?.isActive('link') ?? false,
   },
+  { type: 'sep' },
+  {
+    type: 'button', label: 'Vedlegg', icon: Paperclip,
+    action: () => { if (props.address) fileInput.value?.click() },
+    isActive: () => uploading.value,
+    disabled: () => !props.address,
+  },
 ]
 </script>
 
@@ -126,11 +175,13 @@ const toolbar: Btn[] = [
           v-else
           type="button"
           :title="btn.label"
+          :disabled="btn.disabled?.()"
           :class="[
             'rounded p-1 transition',
             btn.isActive()
               ? 'bg-blue-100 text-blue-700'
               : 'text-gray-600 hover:bg-gray-200 hover:text-gray-900',
+            btn.disabled?.() ? 'cursor-not-allowed opacity-40' : '',
           ]"
           @click="btn.action()"
         >
@@ -140,6 +191,30 @@ const toolbar: Btn[] = [
     </div>
     <!-- Editor area -->
     <EditorContent :editor="editor" />
+    <!-- Hidden file input -->
+    <input
+      v-if="address"
+      ref="fileInput"
+      type="file"
+      multiple
+      class="sr-only"
+      @change="handleFiles"
+    />
+    <!-- Attachment chips -->
+    <div v-if="attachments.length || uploading" class="flex flex-wrap gap-1.5 border-t border-gray-200 px-3 py-2">
+      <span
+        v-for="a in attachments"
+        :key="a.blobId"
+        class="inline-flex items-center gap-1 rounded-full bg-gray-100 pl-2.5 pr-1.5 py-0.5 text-xs text-gray-700"
+      >
+        <Paperclip class="h-3 w-3 text-gray-400" />
+        {{ a.name }}
+        <button type="button" class="rounded-full p-0.5 hover:bg-gray-300" @click="removeAttachment(a.blobId)">
+          <XIcon class="h-3 w-3" />
+        </button>
+      </span>
+      <span v-if="uploading" class="text-xs text-gray-400 italic">Lastar opp…</span>
+    </div>
   </div>
 </template>
 

@@ -34,6 +34,7 @@ const error = ref<string | null>(null)
 const subject = ref('')
 const body = ref('')
 const recipients = ref<RecipientValue>({ groups: [], individuals: [] })
+const editorRef = ref<InstanceType<typeof RichEditor> | null>(null)
 
 const sendableMailboxes = computed(() => props.mailboxes.filter((m) => m.can_send_as))
 
@@ -85,6 +86,7 @@ async function send() {
           subject: subject.value,
           body_html: body.value,
           body_text: htmlToText(body.value),
+          attachments: editorRef.value?.attachments ?? [],
         }),
       },
     )
@@ -157,7 +159,7 @@ function tryClose() {
       <div>
         <label class="block text-xs font-medium uppercase tracking-wide text-gray-500">Melding</label>
         <div class="mt-1">
-          <RichEditor v-model="body" />
+          <RichEditor v-model="body" :address="fromAddress" ref="editorRef" />
         </div>
       </div>
 
