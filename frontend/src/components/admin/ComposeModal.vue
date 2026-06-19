@@ -96,6 +96,11 @@ async function send() {
   sending.value = true
   error.value = null
   try {
+    const inlineImages = editorRef.value?.inlineImages ?? []
+    let bodyHtml = body.value
+    for (const img of inlineImages) {
+      bodyHtml = bodyHtml.replaceAll(img.src, `cid:${img.cid}`)
+    }
     await fetchApi(
       `/api/v1/admin/inbox/${encodeURIComponent(fromAddress.value)}/send`,
       {
@@ -104,9 +109,15 @@ async function send() {
           bcc_groups: recipients.value.groups,
           bcc: recipients.value.individuals.map((i) => ({ name: i.name, email: i.email })),
           subject: subject.value,
-          body_html: body.value + signatureHtml.value,
+          body_html: bodyHtml + signatureHtml.value,
           body_text: htmlToText(body.value) + signatureText.value,
           attachments: editorRef.value?.attachments ?? [],
+          inline_images: inlineImages.map((img) => ({
+            cid: img.cid,
+            blob_id: img.blobId,
+            name: img.name,
+            type: img.type,
+          })),
         }),
       },
     )

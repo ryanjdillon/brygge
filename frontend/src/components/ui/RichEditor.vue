@@ -21,9 +21,11 @@ const emit = defineEmits<{ (e: 'update:modelValue', v: string): void }>()
 
 interface UploadedFile { blobId: string; name: string; size: number; type: string }
 interface PendingFile { id: string; name: string; status: 'uploading' | 'error'; error?: string }
+interface InlineImage { cid: string; blobId: string; name: string; type: string; src: string }
 
 const attachments = ref<UploadedFile[]>([])
 const pending = ref<PendingFile[]>([])
+const inlineImages = ref<InlineImage[]>([])
 const fileInput = ref<HTMLInputElement | null>(null)
 const imageInput = ref<HTMLInputElement | null>(null)
 
@@ -72,6 +74,8 @@ async function uploadAndInsertImage(file: File) {
   try {
     const data = await uploadBlob(file)
     const src = blobSrc(data.blobId, data.name || file.name)
+    const cid = `img-${data.blobId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 32)}@klokkarvikbaatlag.no`
+    inlineImages.value.push({ cid, blobId: data.blobId, name: data.name || file.name, type: data.type, src })
     editor.value?.chain().focus().setImage({ src, alt: data.name || file.name }).run()
     pending.value = pending.value.filter(p => p.id !== id)
   } catch (e) {
@@ -182,7 +186,7 @@ async function handleImageFiles(event: Event) {
   await Promise.all(files.map(uploadAndInsertImage))
 }
 
-defineExpose({ attachments, pending })
+defineExpose({ attachments, pending, inlineImages })
 
 // ── Toolbar ───────────────────────────────────────────────────────────────────
 

@@ -320,17 +320,26 @@ type sendAttachment struct {
 	Size   int64  `json:"size"`
 }
 
+// sendInlineImage is an image embedded inline in the HTML body, referenced via cid:.
+type sendInlineImage struct {
+	CID    string `json:"cid"`
+	BlobID string `json:"blob_id"`
+	Name   string `json:"name"`
+	Type   string `json:"type"`
+}
+
 // SendRequest is the SPA-facing payload for POST /:address/send.
 type SendRequest struct {
-	To          []emailAddr      `json:"to"`
-	Cc          []emailAddr      `json:"cc,omitempty"`
-	Bcc         []emailAddr      `json:"bcc,omitempty"`        // individually addressed BCC (compose UI)
-	BccGroups   []string         `json:"bcc_groups,omitempty"` // named groups expanded server-side
-	Subject     string           `json:"subject"`
-	BodyText    string           `json:"body_text"`
-	BodyHTML    string           `json:"body_html,omitempty"`
-	InReplyTo   string           `json:"in_reply_to,omitempty"`
-	Attachments []sendAttachment `json:"attachments,omitempty"`
+	To           []emailAddr       `json:"to"`
+	Cc           []emailAddr       `json:"cc,omitempty"`
+	Bcc          []emailAddr       `json:"bcc,omitempty"`        // individually addressed BCC (compose UI)
+	BccGroups    []string          `json:"bcc_groups,omitempty"` // named groups expanded server-side
+	Subject      string            `json:"subject"`
+	BodyText     string            `json:"body_text"`
+	BodyHTML     string            `json:"body_html,omitempty"`
+	InReplyTo    string            `json:"in_reply_to,omitempty"`
+	Attachments  []sendAttachment  `json:"attachments,omitempty"`
+	InlineImages []sendInlineImage `json:"inline_images,omitempty"`
 }
 
 type emailAddr struct {
@@ -482,6 +491,15 @@ func (h *InboxHandler) HandleSend(w http.ResponseWriter, r *http.Request) {
 			"type":        att.Type,
 			"name":        att.Name,
 			"disposition": "attachment",
+		})
+	}
+	for _, img := range req.InlineImages {
+		attachBodyParts = append(attachBodyParts, map[string]any{
+			"blobId":      img.BlobID,
+			"type":        img.Type,
+			"name":        img.Name,
+			"disposition": "inline",
+			"cid":         img.CID,
 		})
 	}
 
