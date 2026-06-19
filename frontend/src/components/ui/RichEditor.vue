@@ -4,6 +4,7 @@ import { useEditor, EditorContent } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
 import Image from '@tiptap/extension-image'
+import { useFreshTotp } from '@/composables/useFreshTotp'
 import {
   Bold, Italic, Strikethrough, List, ListOrdered, Heading2, Heading3,
   Quote, Minus, Link2, Undo2, Redo2, Paperclip, Image as ImageIcon,
@@ -28,10 +29,12 @@ const imageInput = ref<HTMLInputElement | null>(null)
 
 let nextId = 0
 
+const { totpAwareFetch } = useFreshTotp()
+
 async function uploadBlob(file: File): Promise<UploadedFile> {
   const form = new FormData()
   form.append('file', file)
-  const res = await fetch(
+  const res = await totpAwareFetch(
     `/api/v1/admin/inbox/${encodeURIComponent(props.address!)}/blob`,
     { method: 'POST', body: form },
   )
@@ -392,7 +395,6 @@ const toolbar: Btn[] = [
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
         </svg>
-        <XIcon v-else class="h-3 w-3 text-red-400" />
         <span class="max-w-[160px] truncate">{{ p.name }}</span>
         <span v-if="p.status === 'error'" class="truncate text-red-500">— {{ p.error }}</span>
         <button

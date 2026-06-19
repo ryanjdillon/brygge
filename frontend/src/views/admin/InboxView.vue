@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Inbox, Mail, Archive, Check, ImageOff, Image as ImageIcon, AlertTriangle, Reply, Send, X, SquarePen } from 'lucide-vue-next'
 import { useApi } from '@/composables/useApi'
+import { useFreshTotp } from '@/composables/useFreshTotp'
 import { sanitizeEmail } from '@/lib/sanitizeHtml'
 import { useInboxUnreadStore } from '@/stores/inboxUnread'
 import { storeToRefs } from 'pinia'
@@ -77,6 +78,12 @@ const sendSuccess = ref(false)
 const showImages = ref(false)
 const search = ref('')
 const showCompose = ref(false)
+const { ensureFreshTotp } = useFreshTotp()
+
+async function openCompose() {
+  if (!await ensureFreshTotp()) return
+  showCompose.value = true
+}
 
 const selectedAddress = computed(() => (route.query.address as string) || mailboxes.value[0]?.address || '')
 const selectedThread = computed(() => (route.query.thread as string) || '')
@@ -330,7 +337,7 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
         <button
           type="button"
           class="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
-          @click="showCompose = true"
+          @click="openCompose"
         >
           <SquarePen class="h-4 w-4" />
           Ny melding
