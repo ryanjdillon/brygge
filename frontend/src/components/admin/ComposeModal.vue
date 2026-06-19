@@ -2,7 +2,7 @@
 import { ref, computed } from 'vue'
 import { Send } from 'lucide-vue-next'
 import Modal from '@/components/ui/Modal.vue'
-import Textarea from '@/components/ui/form/Textarea.vue'
+import RichEditor from '@/components/ui/RichEditor.vue'
 import RecipientPicker, { type RecipientValue } from './RecipientPicker.vue'
 import { useApi } from '@/composables/useApi'
 
@@ -21,6 +21,12 @@ const emit = defineEmits<{
 }>()
 
 const { fetchApi } = useApi()
+
+function htmlToText(html: string): string {
+  const el = document.createElement('div')
+  el.innerHTML = html
+  return el.innerText
+}
 
 const step = ref<'compose' | 'preview'>('compose')
 const sending = ref(false)
@@ -77,7 +83,8 @@ async function send() {
           bcc_groups: recipients.value.groups,
           bcc: recipients.value.individuals.map((i) => ({ name: i.name, email: i.email })),
           subject: subject.value,
-          body_text: body.value,
+          body_html: body.value,
+          body_text: htmlToText(body.value),
         }),
       },
     )
@@ -98,7 +105,7 @@ function tryClose() {
 </script>
 
 <template>
-  <Modal :open="true" size="xl" :show-close-button="false" @close="tryClose">
+  <Modal :open="true" size="3xl" :show-close-button="false" @close="tryClose">
     <template #header>
       <h2 class="text-base font-semibold text-gray-900">Ny melding</h2>
       <button
@@ -150,7 +157,7 @@ function tryClose() {
       <div>
         <label class="block text-xs font-medium uppercase tracking-wide text-gray-500">Melding</label>
         <div class="mt-1">
-          <Textarea v-model="body" :rows="9" />
+          <RichEditor v-model="body" />
         </div>
       </div>
 

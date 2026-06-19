@@ -9,6 +9,7 @@ import { useInboxUnreadStore } from '@/stores/inboxUnread'
 import { storeToRefs } from 'pinia'
 import { formatDateTime as fmtDateTime } from '@/lib/format'
 import ComposeModal from '@/components/admin/ComposeModal.vue'
+import RichEditor from '@/components/ui/RichEditor.vue'
 
 interface MailboxView {
   address: string
@@ -43,6 +44,12 @@ interface EmailFull {
   textBody: { partId: string; type: string }[]
   bodyValues: Record<string, { value: string }>
   attachments: { blobId: string; name: string; size: number; type: string }[]
+}
+
+function htmlToText(html: string): string {
+  const el = document.createElement('div')
+  el.innerHTML = html
+  return el.innerText
 }
 
 const { t, locale } = useI18n()
@@ -212,7 +219,8 @@ async function submitReply() {
       to,
       cc: parseAddresses(replyCc.value),
       subject: replySubject.value,
-      body_text: replyBody.value,
+      body_html: replyBody.value,
+      body_text: htmlToText(replyBody.value),
       in_reply_to: inReplyTo,
     }
     const url = `/api/v1/admin/inbox/${encodeURIComponent(selectedAddress.value)}/send`
@@ -454,12 +462,7 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
                 <span class="w-16 text-xs text-gray-600">{{ t('admin.inbox.reply.subject') }}</span>
                 <input v-model="replySubject" type="text" class="flex-1 rounded border border-gray-300 px-2 py-1" />
               </label>
-              <textarea
-                v-model="replyBody"
-                rows="6"
-                class="w-full rounded border border-gray-300 px-2 py-1 font-mono text-sm"
-                :placeholder="t('admin.inbox.reply.bodyPlaceholder')"
-              />
+              <RichEditor v-model="replyBody" />
               <div
                 v-if="sendError"
                 class="rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-700"
