@@ -251,8 +251,8 @@ onBeforeUnmount(() => {
         </div>
 
         <!-- Preview step -->
-        <div v-else class="flex h-full flex-col gap-4 overflow-y-auto">
-          <div class="rounded-lg border border-gray-200 bg-gray-50 p-5 text-sm">
+        <div v-else class="flex h-full flex-col gap-4">
+          <div class="flex-1 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 p-5 text-sm">
             <div class="mb-1 text-gray-500">
               <span class="font-medium text-gray-700">Fra:</span> {{ selectedFromLabel }}
             </div>
@@ -263,11 +263,11 @@ onBeforeUnmount(() => {
             <div class="prose prose-sm mt-3 max-w-none text-gray-700" v-html="body" />
           </div>
 
-          <div v-if="error" class="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
+          <div v-if="error" class="shrink-0 rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
             {{ error }}
           </div>
 
-          <div class="mt-auto flex justify-end gap-3">
+          <div class="flex shrink-0 justify-end gap-3">
             <button
               type="button"
               class="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
