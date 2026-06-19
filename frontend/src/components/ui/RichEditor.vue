@@ -25,7 +25,7 @@ const editor = useEditor({
   },
   editorProps: {
     attributes: {
-      class: 'rich-editor-content min-h-[9rem] px-3 py-2 focus:outline-none',
+      class: 'rich-editor-content px-3 py-2 focus:outline-none',
     },
   },
 })
@@ -181,7 +181,7 @@ const toolbar: Btn[] = [
 </script>
 
 <template>
-  <div class="overflow-hidden rounded-md border border-gray-300 bg-white focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500">
+  <div class="flex flex-col overflow-hidden rounded-md border border-gray-300 bg-white focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500">
     <!-- Toolbar -->
     <div class="flex flex-wrap items-center gap-0.5 border-b border-gray-200 bg-gray-50 px-2 py-1.5">
       <template v-for="(btn, i) in toolbar" :key="i">
@@ -243,7 +243,9 @@ const toolbar: Btn[] = [
       </button>
     </div>
     <!-- Editor area -->
-    <EditorContent :editor="editor" />
+    <div class="min-h-[8rem] flex-1 overflow-y-auto">
+      <EditorContent :editor="editor" />
+    </div>
     <!-- Hidden file input -->
     <input
       v-if="address"

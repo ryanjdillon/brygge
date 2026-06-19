@@ -168,10 +168,10 @@ onBeforeUnmount(() => {
         </button>
       </header>
 
-      <!-- Scrollable body -->
-      <div class="min-h-0 flex-1 overflow-y-auto p-5">
+      <!-- Body -->
+      <div class="min-h-0 flex-1 overflow-hidden p-5">
         <!-- Compose step -->
-        <div v-if="step === 'compose'" class="space-y-4">
+        <div v-if="step === 'compose'" class="flex h-full flex-col gap-4">
           <div>
             <label class="block text-xs font-medium uppercase tracking-wide text-gray-500">Fra</label>
             <select
@@ -200,14 +200,14 @@ onBeforeUnmount(() => {
             />
           </div>
 
-          <div>
+          <div class="flex min-h-0 flex-1 flex-col">
             <label class="block text-xs font-medium uppercase tracking-wide text-gray-500">Melding</label>
-            <div class="mt-1">
-              <RichEditor ref="editorRef" v-model="body" :address="fromAddress" />
+            <div class="mt-1 flex min-h-0 flex-1 flex-col">
+              <RichEditor ref="editorRef" v-model="body" :address="fromAddress" class="flex-1" />
             </div>
           </div>
 
-          <div class="flex justify-end">
+          <div class="flex shrink-0 justify-end">
             <button
               type="button"
               :disabled="!canPreview"
@@ -220,7 +220,7 @@ onBeforeUnmount(() => {
         </div>
 
         <!-- Preview step -->
-        <div v-else class="space-y-4">
+        <div v-else class="flex h-full flex-col gap-4 overflow-y-auto">
           <div class="rounded-lg border border-gray-200 bg-gray-50 p-5 text-sm">
             <div class="mb-1 text-gray-500">
               <span class="font-medium text-gray-700">Fra:</span> {{ selectedFromLabel }}
