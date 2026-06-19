@@ -816,11 +816,13 @@ func (h *InboxHandler) HandleBlobUpload(w http.ResponseWriter, r *http.Request) 
 
 	sharedJMAP, err := h.sharedJMAP(spec.Address)
 	if err != nil {
+		h.log.Warn().Err(err).Str("address", spec.Address).Msg("sharedJMAP unavailable for blob upload")
 		Error(w, http.StatusBadGateway, "mail backend unavailable")
 		return
 	}
 	accountID, err := h.resolveSharedAccountID(ctx, sharedJMAP, spec.Address)
 	if err != nil {
+		h.log.Warn().Err(err).Str("address", spec.Address).Msg("resolveSharedAccountID failed for blob upload")
 		Error(w, http.StatusBadGateway, "mail backend unavailable")
 		return
 	}
