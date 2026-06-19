@@ -1066,7 +1066,13 @@ func (h *InboxHandler) resolveInbox(ctx context.Context, userJMAP *mail.JMAPClie
 			return accountID, m.ID, nil
 		}
 	}
-	return "", "", errInboxNotFound
+	// Stalwart creates Inbox on first login; create it explicitly if missing.
+	id, cerr := userJMAP.CreateMailbox(ctx, accountID, "Inbox", "inbox")
+	if cerr != nil {
+		return "", "", fmt.Errorf("create Inbox for %s: %w", address, cerr)
+	}
+	h.log.Info().Str("address", address).Str("mailbox", id).Msg("created Inbox folder on demand")
+	return accountID, id, nil
 }
 
 func (h *InboxHandler) resolveArchive(ctx context.Context, userJMAP *mail.JMAPClient, address string) (accountID, mailboxID string, err error) {
