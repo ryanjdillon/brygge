@@ -4,8 +4,8 @@ import { useEditor, EditorContent } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
 import {
-  Bold, Italic, List, ListOrdered, Heading2, Heading3,
-  Quote, Minus, Link2, Undo2, Redo2, Paperclip, X as XIcon,
+  Bold, Italic, Strikethrough, List, ListOrdered, Heading2, Heading3,
+  Quote, Minus, Link2, Undo2, Redo2, Paperclip, X as XIcon, RemoveFormatting,
 } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -146,6 +146,16 @@ const toolbar: Btn[] = [
     type: 'button', label: 'Kursiv', icon: Italic,
     action: () => editor.value?.chain().focus().toggleItalic().run(),
     isActive: () => editor.value?.isActive('italic') ?? false,
+  },
+  {
+    type: 'button', label: 'Gjennomstrek', icon: Strikethrough,
+    action: () => editor.value?.chain().focus().toggleStrike().run(),
+    isActive: () => editor.value?.isActive('strike') ?? false,
+  },
+  {
+    type: 'button', label: 'Fjern formatering', icon: RemoveFormatting,
+    action: () => editor.value?.chain().focus().unsetAllMarks().clearNodes().run(),
+    isActive: () => false,
   },
   { type: 'sep' },
   {
@@ -339,6 +349,7 @@ const toolbar: Btn[] = [
   a { color: #2563eb; text-decoration: underline; }
   strong { font-weight: 600; }
   em { font-style: italic; }
+  s, del { text-decoration: line-through; }
 }
 :deep(.rich-editor-content p.is-editor-empty:first-child::before) {
   content: attr(data-placeholder);
