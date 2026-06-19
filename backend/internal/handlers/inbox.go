@@ -313,6 +313,8 @@ func (h *InboxHandler) HandleArchiveThread(w http.ResponseWriter, r *http.Reques
 type SendRequest struct {
 	To        []emailAddr `json:"to"`
 	Cc        []emailAddr `json:"cc,omitempty"`
+	Bcc       []emailAddr `json:"bcc,omitempty"`        // individually addressed BCC (compose UI)
+	BccGroups []string    `json:"bcc_groups,omitempty"` // named groups expanded server-side
 	Subject   string      `json:"subject"`
 	BodyText  string      `json:"body_text"`
 	BodyHTML  string      `json:"body_html,omitempty"`
@@ -344,7 +346,7 @@ func (h *InboxHandler) HandleSend(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if len(req.To) == 0 {
+	if len(req.To) == 0 && len(req.Bcc) == 0 && len(req.BccGroups) == 0 {
 		Error(w, http.StatusBadRequest, "at least one recipient required")
 		return
 	}
@@ -375,18 +377,78 @@ func (h *InboxHandler) HandleSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// bcc_members: when the spec opts in, fan out to every user
-	// holding the mapped role so they also get a personal copy.
+	// Build BCC list from three sources, deduplicated by lowercase email:
+	// 1. spec.BccMembers — existing auto-BCC on certain shared mailboxes
+	// 2. req.BccGroups  — named groups from the compose UI
+	// 3. req.Bcc        — individually searched members from the compose UI
 	var bcc []mail.EmailAddress
+	bccSeen := map[string]bool{}
+	addBCC := func(name, email string) {
+		key := strings.ToLower(email)
+		if !bccSeen[key] {
+			bccSeen[key] = true
+			bcc = append(bcc, mail.EmailAddress{Name: name, Email: email})
+		}
+	}
+
 	if spec.BccMembers {
 		members, err := h.roleMemberEmails(ctx, spec.Role, claims.ClubID)
 		if err != nil {
 			h.log.Warn().Err(err).Msg("bcc_members lookup failed; sending without bcc")
 		} else {
 			for _, e := range members {
-				bcc = append(bcc, mail.EmailAddress{Email: e})
+				addBCC("", e)
 			}
 		}
+	}
+
+	if len(req.BccGroups) > 0 {
+		validGroups := map[string]bool{
+			"all": true, "members": true, "board": true,
+			"slip_holders": true, "waiting_list": true,
+		}
+		roleMap := map[string]string{
+			"members": "member", "board": "board", "slip_holders": "slip_holder",
+		}
+		for _, g := range req.BccGroups {
+			if !validGroups[g] {
+				Error(w, http.StatusBadRequest, "unknown bcc_group: "+g)
+				return
+			}
+			var emails []string
+			var gerr error
+			switch g {
+			case "waiting_list":
+				emails, gerr = h.waitingListEmails(ctx, claims.ClubID)
+			case "all":
+				for _, role := range []string{"member", "board", "slip_holder"} {
+					re, rerr := h.roleMemberEmails(ctx, role, claims.ClubID)
+					if rerr != nil {
+						h.log.Warn().Err(rerr).Str("role", role).Msg("bcc_groups all-role lookup failed")
+						continue
+					}
+					emails = append(emails, re...)
+				}
+			default:
+				emails, gerr = h.roleMemberEmails(ctx, roleMap[g], claims.ClubID)
+			}
+			if gerr != nil {
+				h.log.Warn().Err(gerr).Str("group", g).Msg("bcc_groups lookup failed")
+			}
+			for _, e := range emails {
+				addBCC("", e)
+			}
+		}
+	}
+
+	for _, a := range req.Bcc {
+		addBCC(a.Name, a.Email)
+	}
+
+	// Group-only compose: no explicit To → use the sending mailbox as the
+	// visible recipient so the message is well-formed; real recipients receive via BCC.
+	if len(req.To) == 0 {
+		req.To = []emailAddr{{Email: spec.Address}}
 	}
 
 	// From name combines the club abbreviation (uppercase slug,
@@ -440,6 +502,7 @@ func (h *InboxHandler) HandleSend(w http.ResponseWriter, r *http.Request) {
 			"in_reply_to":     req.InReplyTo,
 			"message_id":      messageID,
 			"bcc_members":     spec.BccMembers,
+			"bcc_groups":      req.BccGroups,
 		},
 	})
 
@@ -546,6 +609,31 @@ func (h *InboxHandler) roleMemberEmails(ctx context.Context, role, clubID string
 		WHERE ur.role = $1::user_role AND u.club_id = $2
 		GROUP BY u.email
 	`, role, clubID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var e string
+		if err := rows.Scan(&e); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+func (h *InboxHandler) waitingListEmails(ctx context.Context, clubID string) ([]string, error) {
+	rows, err := h.db.Query(ctx, `
+		SELECT DISTINCT u.email
+		FROM waiting_list_entries wle
+		JOIN users u ON u.id = wle.user_id
+		WHERE wle.club_id = $1
+		  AND wle.status NOT IN ('offered_accepted', 'cancelled')
+		  AND u.email IS NOT NULL
+		  AND u.email <> ''
+	`, clubID)
 	if err != nil {
 		return nil, err
 	}
@@ -716,6 +804,15 @@ func (h *InboxHandler) auditMailboxAction(ctx context.Context, action, address, 
 }
 
 func hasInboxRole(roles []string, want string) bool {
+	// Empty role means the mailbox is accessible to any board or admin user.
+	if want == "" {
+		for _, r := range roles {
+			if strings.EqualFold(r, "admin") || strings.EqualFold(r, "board") {
+				return true
+			}
+		}
+		return false
+	}
 	for _, r := range roles {
 		if strings.EqualFold(r, want) {
 			return true

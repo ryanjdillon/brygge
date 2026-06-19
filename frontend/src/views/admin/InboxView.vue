@@ -2,12 +2,13 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { Inbox, Mail, Archive, Check, ImageOff, Image as ImageIcon, AlertTriangle, Reply, Send, X } from 'lucide-vue-next'
+import { Inbox, Mail, Archive, Check, ImageOff, Image as ImageIcon, AlertTriangle, Reply, Send, X, SquarePen } from 'lucide-vue-next'
 import { useApi } from '@/composables/useApi'
 import { sanitizeEmail } from '@/lib/sanitizeHtml'
 import { useInboxUnreadStore } from '@/stores/inboxUnread'
 import { storeToRefs } from 'pinia'
 import { formatDateTime as fmtDateTime } from '@/lib/format'
+import ComposeModal from '@/components/admin/ComposeModal.vue'
 
 interface MailboxView {
   address: string
@@ -68,6 +69,7 @@ const sendError = ref<string | null>(null) // composer-scoped error, separate fr
 const sendSuccess = ref(false)
 const showImages = ref(false)
 const search = ref('')
+const showCompose = ref(false)
 
 const selectedAddress = computed(() => (route.query.address as string) || mailboxes.value[0]?.address || '')
 const selectedThread = computed(() => (route.query.thread as string) || '')
@@ -308,13 +310,29 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
           {{ totalUnread }}
         </span>
       </h1>
-      <input
-        v-model="search"
-        type="search"
-        :placeholder="t('admin.inbox.searchPlaceholder')"
-        class="w-64 rounded border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
-      />
+      <div class="flex items-center gap-3">
+        <button
+          type="button"
+          class="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+          @click="showCompose = true"
+        >
+          <SquarePen class="h-4 w-4" />
+          Ny melding
+        </button>
+        <input
+          v-model="search"
+          type="search"
+          :placeholder="t('admin.inbox.searchPlaceholder')"
+          class="w-64 rounded border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+        />
+      </div>
     </header>
+
+    <ComposeModal
+      v-if="showCompose"
+      :mailboxes="(mailboxes as any)"
+      @close="showCompose = false"
+    />
 
     <div v-if="error" class="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
       <AlertTriangle class="mr-1 inline h-4 w-4" />
