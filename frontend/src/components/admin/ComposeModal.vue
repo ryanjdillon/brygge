@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { Send } from 'lucide-vue-next'
-import Modal from '@/components/ui/Modal.vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { Send, X } from 'lucide-vue-next'
 import RichEditor from '@/components/ui/RichEditor.vue'
 import RecipientPicker, { type RecipientValue } from './RecipientPicker.vue'
 import { useApi } from '@/composables/useApi'
@@ -37,7 +36,6 @@ const recipients = ref<RecipientValue>({ groups: [], individuals: [] })
 const editorRef = ref<InstanceType<typeof RichEditor> | null>(null)
 
 const sendableMailboxes = computed(() => props.mailboxes.filter((m) => m.can_send_as))
-
 const defaultFrom = computed(
   () =>
     sendableMailboxes.value.find((m) => m.address.startsWith('post@')) ??
@@ -104,113 +102,172 @@ function tryClose() {
   }
   emit('close')
 }
+
+// ── Drag ────────────────────────────────────────────────────────────────────
+const pos = ref({ x: 0, y: 0 })
+const isDragging = ref(false)
+let dragOffset = { x: 0, y: 0 }
+
+onMounted(() => {
+  // Center the window in the viewport on open.
+  const w = Math.min(Math.max(window.innerWidth * 0.62, 640), 1020)
+  const h = Math.min(Math.max(window.innerHeight * 0.82, 520), 940)
+  pos.value = {
+    x: (window.innerWidth - w) / 2,
+    y: (window.innerHeight - h) / 2,
+  }
+})
+
+function startDrag(e: MouseEvent) {
+  if ((e.target as HTMLElement).closest('button')) return
+  isDragging.value = true
+  dragOffset = { x: e.clientX - pos.value.x, y: e.clientY - pos.value.y }
+  window.addEventListener('mousemove', onDrag)
+  window.addEventListener('mouseup', stopDrag)
+}
+
+function onDrag(e: MouseEvent) {
+  pos.value = { x: e.clientX - dragOffset.x, y: e.clientY - dragOffset.y }
+}
+
+function stopDrag() {
+  isDragging.value = false
+  window.removeEventListener('mousemove', onDrag)
+  window.removeEventListener('mouseup', stopDrag)
+}
+
+onBeforeUnmount(() => {
+  window.removeEventListener('mousemove', onDrag)
+  window.removeEventListener('mouseup', stopDrag)
+})
 </script>
 
 <template>
-  <Modal :open="true" size="3xl" :show-close-button="false" @close="tryClose">
-    <template #header>
-      <h2 class="text-base font-semibold text-gray-900">Ny melding</h2>
-      <button
-        type="button"
-        class="ml-auto text-gray-400 hover:text-gray-700"
-        @click="tryClose"
+  <Teleport to="body">
+    <div
+      class="compose-window fixed z-50 flex flex-col rounded-xl border border-gray-200 bg-white shadow-2xl"
+      :style="{ left: pos.x + 'px', top: pos.y + 'px' }"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Ny melding"
+      @keydown.esc="tryClose"
+    >
+      <!-- Drag handle / header -->
+      <header
+        class="flex shrink-0 cursor-grab items-center gap-2 border-b border-gray-200 px-4 py-3 select-none active:cursor-grabbing"
+        :class="{ 'cursor-grabbing': isDragging }"
+        @mousedown="startDrag"
       >
-        <span class="sr-only">Lukk</span>
-        <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-          <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
-        </svg>
-      </button>
-    </template>
-
-    <!-- Compose step -->
-    <div v-if="step === 'compose'" class="space-y-4">
-      <!-- Fra -->
-      <div>
-        <label class="block text-xs font-medium uppercase tracking-wide text-gray-500">Fra</label>
-        <select
-          v-model="fromAddress"
-          class="mt-1 w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-        >
-          <option v-for="m in sendableMailboxes" :key="m.address" :value="m.address">
-            {{ m.display_name }} &lt;{{ m.address }}&gt;
-          </option>
-        </select>
-      </div>
-
-      <!-- Mottakarar -->
-      <div>
-        <label class="block text-xs font-medium uppercase tracking-wide text-gray-500">Mottakarar</label>
-        <div class="mt-1">
-          <RecipientPicker v-model="recipients" />
-        </div>
-      </div>
-
-      <!-- Emne -->
-      <div>
-        <label class="block text-xs font-medium uppercase tracking-wide text-gray-500">Emne</label>
-        <input
-          v-model="subject"
-          type="text"
-          class="mt-1 w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-        />
-      </div>
-
-      <!-- Melding -->
-      <div>
-        <label class="block text-xs font-medium uppercase tracking-wide text-gray-500">Melding</label>
-        <div class="mt-1">
-          <RichEditor v-model="body" :address="fromAddress" ref="editorRef" />
-        </div>
-      </div>
-
-      <div class="flex justify-end">
+        <h2 class="text-sm font-semibold text-gray-900">Ny melding</h2>
         <button
           type="button"
-          :disabled="!canPreview"
-          class="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-40"
-          @click="step = 'preview'"
+          class="ml-auto rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+          @click="tryClose"
         >
-          Førehandsvis
+          <X class="h-4 w-4" />
         </button>
+      </header>
+
+      <!-- Scrollable body -->
+      <div class="min-h-0 flex-1 overflow-y-auto p-5">
+        <!-- Compose step -->
+        <div v-if="step === 'compose'" class="space-y-4">
+          <div>
+            <label class="block text-xs font-medium uppercase tracking-wide text-gray-500">Fra</label>
+            <select
+              v-model="fromAddress"
+              class="mt-1 w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              <option v-for="m in sendableMailboxes" :key="m.address" :value="m.address">
+                {{ m.display_name }} &lt;{{ m.address }}&gt;
+              </option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium uppercase tracking-wide text-gray-500">Mottakarar</label>
+            <div class="mt-1">
+              <RecipientPicker v-model="recipients" />
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium uppercase tracking-wide text-gray-500">Emne</label>
+            <input
+              v-model="subject"
+              type="text"
+              class="mt-1 w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium uppercase tracking-wide text-gray-500">Melding</label>
+            <div class="mt-1">
+              <RichEditor ref="editorRef" v-model="body" :address="fromAddress" />
+            </div>
+          </div>
+
+          <div class="flex justify-end">
+            <button
+              type="button"
+              :disabled="!canPreview"
+              class="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-40"
+              @click="step = 'preview'"
+            >
+              Førehandsvis
+            </button>
+          </div>
+        </div>
+
+        <!-- Preview step -->
+        <div v-else class="space-y-4">
+          <div class="rounded-lg border border-gray-200 bg-gray-50 p-5 text-sm">
+            <div class="mb-1 text-gray-500">
+              <span class="font-medium text-gray-700">Fra:</span> {{ selectedFromLabel }}
+            </div>
+            <div class="mb-3 text-gray-500">
+              <span class="font-medium text-gray-700">Til (BCC):</span> {{ recipientSummary }}
+            </div>
+            <h3 class="text-base font-semibold text-gray-900">{{ subject }}</h3>
+            <p class="mt-3 whitespace-pre-wrap text-gray-700">{{ body }}</p>
+          </div>
+
+          <div v-if="error" class="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
+            {{ error }}
+          </div>
+
+          <div class="flex justify-end gap-3">
+            <button
+              type="button"
+              class="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              :disabled="sending"
+              @click="step = 'compose'"
+            >
+              Rediger
+            </button>
+            <button
+              type="button"
+              :disabled="sending"
+              class="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              @click="send"
+            >
+              <Send class="h-4 w-4" />
+              {{ sending ? 'Sender…' : 'Send' }}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
-
-    <!-- Preview step -->
-    <div v-else class="space-y-4">
-      <div class="rounded-lg border border-gray-200 bg-gray-50 p-5 text-sm">
-        <div class="mb-1 text-gray-500">
-          <span class="font-medium text-gray-700">Fra:</span> {{ selectedFromLabel }}
-        </div>
-        <div class="mb-3 text-gray-500">
-          <span class="font-medium text-gray-700">Til (BCC):</span> {{ recipientSummary }}
-        </div>
-        <h3 class="text-base font-semibold text-gray-900">{{ subject }}</h3>
-        <p class="mt-3 whitespace-pre-wrap text-gray-700">{{ body }}</p>
-      </div>
-
-      <div v-if="error" class="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
-        {{ error }}
-      </div>
-
-      <div class="flex justify-end gap-3">
-        <button
-          type="button"
-          class="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-          :disabled="sending"
-          @click="step = 'compose'"
-        >
-          Rediger
-        </button>
-        <button
-          type="button"
-          :disabled="sending"
-          class="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-          @click="send"
-        >
-          <Send class="h-4 w-4" />
-          {{ sending ? 'Sender…' : 'Send' }}
-        </button>
-      </div>
-    </div>
-  </Modal>
+  </Teleport>
 </template>
+
+<style scoped>
+.compose-window {
+  width: clamp(640px, 62vw, 1020px);
+  height: clamp(520px, 82vh, 940px);
+  min-width: 480px;
+  min-height: 380px;
+  resize: both;
+  overflow: hidden;
+}
+</style>
