@@ -5,6 +5,9 @@ import RichEditor from '@/components/ui/RichEditor.vue'
 import RecipientPicker, { type RecipientValue } from './RecipientPicker.vue'
 import { useApi } from '@/composables/useApi'
 
+interface UploadedFile { blobId: string; name: string; size: number; type: string }
+interface InlineImage { cid: string; blobId: string; name: string; type: string; src: string }
+
 interface MailboxView {
   address: string
   display_name: string
@@ -34,6 +37,16 @@ const subject = ref('')
 const body = ref('')
 const recipients = ref<RecipientValue>({ groups: [], individuals: [] })
 const editorRef = ref<InstanceType<typeof RichEditor> | null>(null)
+
+// Snapshotted before switching to preview (RichEditor unmounts on v-if step change).
+const snapshotAttachments = ref<UploadedFile[]>([])
+const snapshotInlineImages = ref<InlineImage[]>([])
+
+function goToPreview() {
+  snapshotAttachments.value = editorRef.value?.attachments ?? []
+  snapshotInlineImages.value = editorRef.value?.inlineImages ?? []
+  step.value = 'preview'
+}
 
 const sendableMailboxes = computed(() => props.mailboxes.filter((m) => m.can_send_as))
 const defaultFrom = computed(
@@ -96,9 +109,8 @@ async function send() {
   sending.value = true
   error.value = null
   try {
-    const inlineImages = editorRef.value?.inlineImages ?? []
     let bodyHtml = body.value
-    for (const img of inlineImages) {
+    for (const img of snapshotInlineImages.value) {
       bodyHtml = bodyHtml.replaceAll(img.src, `cid:${img.cid}`)
     }
     await fetchApi(
@@ -111,8 +123,8 @@ async function send() {
           subject: subject.value,
           body_html: bodyHtml + signatureHtml.value,
           body_text: htmlToText(body.value) + signatureText.value,
-          attachments: editorRef.value?.attachments ?? [],
-          inline_images: inlineImages.map((img) => ({
+          attachments: snapshotAttachments.value,
+          inline_images: snapshotInlineImages.value.map((img) => ({
             cid: img.cid,
             blob_id: img.blobId,
             name: img.name,
@@ -285,7 +297,7 @@ onBeforeUnmount(() => {
               type="button"
               :disabled="!canPreview"
               class="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-40"
-              @click="step = 'preview'"
+              @click="goToPreview"
             >
               Førehandsvis
             </button>
