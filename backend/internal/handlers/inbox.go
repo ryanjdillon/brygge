@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -48,6 +49,12 @@ type InboxHandler struct {
 	// principal, so this cache lives for the process lifetime.
 	mu        sync.RWMutex
 	sharedIDs map[string]string
+
+	// Cache: shared-mailbox address → resolved send ids (account /
+	// Drafts / Sent / identity). Same stability assumption as
+	// sharedIDs; avoids re-resolving once per recipient on a bulk send.
+	sendMu      sync.RWMutex
+	sendTargets map[string]sendTarget
 }
 
 func NewInboxHandler(db *pgxpool.Pool, jmapFact *mail.JMAPFactory, provisioner *mail.UserProvisioner, adminUser, adminPass string, passwords mail.PrincipalPasswords, clubSlug string, auditSvc *audit.Service, spec []mail.MailboxSpec, log zerolog.Logger) *InboxHandler {
@@ -63,6 +70,7 @@ func NewInboxHandler(db *pgxpool.Pool, jmapFact *mail.JMAPFactory, provisioner *
 		spec:        spec,
 		log:         log.With().Str("handler", "inbox").Logger(),
 		sharedIDs:   make(map[string]string),
+		sendTargets: make(map[string]sendTarget),
 	}
 }
 
@@ -376,28 +384,6 @@ func (h *InboxHandler) HandleSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pw := h.passwords.Get(spec.Address)
-	if pw == "" {
-		h.log.Error().Str("address", spec.Address).Msg("no service password for shared principal — send disabled")
-		Error(w, http.StatusServiceUnavailable, "mail backend not configured for sending")
-		return
-	}
-	jmap := h.jmapFact.AsPrincipal(principalLocalPart(spec.Address), pw)
-
-	accountID, draftsID, sentID, err := h.resolveSendMailboxes(ctx, jmap)
-	if err != nil {
-		h.log.Warn().Err(err).Str("address", spec.Address).Msg("resolve send mailboxes failed")
-		Error(w, http.StatusBadGateway, "mail backend unavailable")
-		return
-	}
-
-	identityID, err := h.resolveIdentity(ctx, jmap, accountID, spec.Address)
-	if err != nil {
-		h.log.Warn().Err(err).Str("address", spec.Address).Msg("resolve identity failed")
-		Error(w, http.StatusBadGateway, "mail backend unavailable")
-		return
-	}
-
 	// Build BCC list from three sources, deduplicated by lowercase email:
 	// 1. spec.BccMembers — existing auto-BCC on certain shared mailboxes
 	// 2. req.BccGroups  — named groups from the compose UI
@@ -472,17 +458,6 @@ func (h *InboxHandler) HandleSend(w http.ResponseWriter, r *http.Request) {
 		req.To = []emailAddr{{Email: spec.Address}}
 	}
 
-	// From name combines the club abbreviation (uppercase slug,
-	// e.g. "KBL") with the spec's role display name (e.g.
-	// "Kasserar") so recipients see "KBL Kasserar" at the top of
-	// the message. Gmail's column override then surfaces the
-	// club's contact-card name ("Klokkarvik Båtlag") in inbox
-	// listings.
-	fromName := spec.DisplayName
-	if h.clubAbbrev != "" {
-		fromName = h.clubAbbrev + " " + spec.DisplayName
-	}
-
 	// Build attachment body parts for JMAP Email/set.
 	var attachBodyParts []map[string]any
 	for _, att := range req.Attachments {
@@ -504,9 +479,6 @@ func (h *InboxHandler) HandleSend(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sendReq := mail.SendEmailRequest{
-		FromAddress:     spec.Address,
-		FromName:        fromName,
-		ReplyTo:         spec.Address,
 		To:              toMailAddrs(req.To),
 		Cc:              toMailAddrs(req.Cc),
 		Bcc:             bcc,
@@ -521,8 +493,13 @@ func (h *InboxHandler) HandleSend(w http.ResponseWriter, r *http.Request) {
 		sendReq.References = []string{req.InReplyTo}
 	}
 
-	emailID, messageID, err := jmap.SendEmail(ctx, accountID, identityID, draftsID, sentID, sendReq)
+	emailID, messageID, err := h.sendAsPrincipal(ctx, spec, sendReq)
 	if err != nil {
+		if errors.Is(err, errSendNotConfigured) {
+			h.log.Error().Str("address", spec.Address).Msg("no service password for shared principal — send disabled")
+			Error(w, http.StatusServiceUnavailable, "mail backend not configured for sending")
+			return
+		}
 		// Stalwart-side error detail stays in journald (Warn line
 		// just below). The 502 response carries only a generic
 		// message — the user can't act on JMAP internals, and the
@@ -540,12 +517,12 @@ func (h *InboxHandler) HandleSend(w http.ResponseWriter, r *http.Request) {
 		Resource:   "mailbox_thread",
 		ResourceID: spec.Address + "/" + emailID,
 		Details: map[string]any{
-			"target_address":  spec.Address,
-			"recipient_count": len(req.To) + len(req.Cc) + len(bcc),
-			"in_reply_to":     req.InReplyTo,
-			"message_id":      messageID,
-			"bcc_members":     spec.BccMembers,
-			"bcc_groups":      req.BccGroups,
+			"target_address":   spec.Address,
+			"recipient_count":  len(req.To) + len(req.Cc) + len(bcc),
+			"in_reply_to":      req.InReplyTo,
+			"message_id":       messageID,
+			"bcc_members":      spec.BccMembers,
+			"bcc_groups":       req.BccGroups,
 			"attachment_count": len(req.Attachments),
 		},
 	})
@@ -596,6 +573,80 @@ func (h *InboxHandler) resolveIdentity(ctx context.Context, jmap *mail.JMAPClien
 		}
 	}
 	return identities[0].ID, nil
+}
+
+// sendTarget holds the resolved JMAP ids needed to submit as a shared
+// principal. Cached per address for the process lifetime — Stalwart 0.15
+// keeps these ids stable, and a bulk send must not re-resolve them once
+// per recipient.
+type sendTarget struct {
+	accountID  string
+	draftsID   string
+	sentID     string
+	identityID string
+}
+
+// errSendNotConfigured signals that a shared mailbox has no service
+// password, so sending as it is disabled (mapped to 503 by callers).
+var errSendNotConfigured = inboxFolderErr("mail backend not configured for sending")
+
+// resolveSendTarget returns a JMAP client authenticated as the shared
+// principal for spec plus its account / Drafts / Sent / identity ids,
+// resolving (and caching) them on first use.
+func (h *InboxHandler) resolveSendTarget(ctx context.Context, spec mail.MailboxSpec) (sendTarget, *mail.JMAPClient, error) {
+	pw := h.passwords.Get(spec.Address)
+	if pw == "" {
+		return sendTarget{}, nil, errSendNotConfigured
+	}
+	jmap := h.jmapFact.AsPrincipal(principalLocalPart(spec.Address), pw)
+
+	key := strings.ToLower(spec.Address)
+	h.sendMu.RLock()
+	t, ok := h.sendTargets[key]
+	h.sendMu.RUnlock()
+	if ok {
+		return t, jmap, nil
+	}
+
+	accountID, draftsID, sentID, err := h.resolveSendMailboxes(ctx, jmap)
+	if err != nil {
+		return sendTarget{}, nil, fmt.Errorf("resolve send mailboxes: %w", err)
+	}
+	identityID, err := h.resolveIdentity(ctx, jmap, accountID, spec.Address)
+	if err != nil {
+		return sendTarget{}, nil, fmt.Errorf("resolve identity: %w", err)
+	}
+
+	t = sendTarget{accountID: accountID, draftsID: draftsID, sentID: sentID, identityID: identityID}
+	h.sendMu.Lock()
+	h.sendTargets[key] = t
+	h.sendMu.Unlock()
+	return t, jmap, nil
+}
+
+// sendAsPrincipal submits one message as the shared principal for spec.
+// It fills the From identity (club abbreviation + role display name, e.g.
+// "KBL Kasserar") and Reply-To from spec, then submits via JMAP. Shared by
+// the interactive single-send path (HandleSend) and the bulk delivery
+// worker, so the From/identity logic lives in exactly one place.
+func (h *InboxHandler) sendAsPrincipal(ctx context.Context, spec mail.MailboxSpec, req mail.SendEmailRequest) (emailID, messageID string, err error) {
+	// From name combines the club abbreviation (uppercase slug, e.g.
+	// "KBL") with the spec's role display name (e.g. "Kasserar") so
+	// recipients see "KBL Kasserar". Gmail's column override then
+	// surfaces the club's contact-card name in inbox listings.
+	fromName := spec.DisplayName
+	if h.clubAbbrev != "" {
+		fromName = h.clubAbbrev + " " + spec.DisplayName
+	}
+	req.FromAddress = spec.Address
+	req.FromName = fromName
+	req.ReplyTo = spec.Address
+
+	t, jmap, err := h.resolveSendTarget(ctx, spec)
+	if err != nil {
+		return "", "", err
+	}
+	return jmap.SendEmail(ctx, t.accountID, t.identityID, t.draftsID, t.sentID, req)
 }
 
 // resolveSendMailboxes finds the JMAP accountId for the shared
