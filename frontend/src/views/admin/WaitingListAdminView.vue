@@ -6,10 +6,12 @@ import { useApiClient, unwrap } from '@/lib/apiClient'
 import { formatDate } from '@/lib/format'
 import SortableTh from '@/components/admin/SortableTh.vue'
 import { UserPlus, GripVertical, X } from 'lucide-vue-next'
+import { useApi } from '@/composables/useApi'
 
 const { t } = useI18n()
 const client = useApiClient()
 const queryClient = useQueryClient()
+const { fetchApi } = useApi()
 
 type SortField = 'position' | 'name' | 'registered'
 const sortField = ref<SortField>('position')
@@ -141,9 +143,7 @@ watch(memberSearch, (q) => {
   searchTimer = setTimeout(async () => {
     searchLoading.value = true
     try {
-      const res = await fetch(`/api/v1/admin/users?q=${encodeURIComponent(q.trim())}&limit=20`, { credentials: 'include' })
-      if (!res.ok) throw new Error(`${res.status}`)
-      const data = await res.json()
+      const data = await fetchApi(`/api/v1/admin/users?q=${encodeURIComponent(q.trim())}&limit=20`) as any
       searchResults.value = data.items ?? []
     } catch {
       searchResults.value = []
