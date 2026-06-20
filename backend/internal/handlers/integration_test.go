@@ -558,7 +558,7 @@ func TestIntegration_BookingsFullFlow(t *testing.T) {
 
 func (e *integrationEnv) accountingHandler() *AccountingHandler {
 	svc := accounting.NewService(e.db, nil, e.log)
-	return NewAccountingHandler(svc, nil, e.log)
+	return NewAccountingHandler(svc, nil, nil, nil, e.log)
 }
 
 func TestIntegration_AccountingSeedAndCRUD(t *testing.T) {

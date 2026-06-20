@@ -80,6 +80,12 @@ func TestHandleGetFeaturesAllEnabled(t *testing.T) {
 	}
 
 	for key, val := range result {
+		// `feedback` is not a config.Features flag — it's a per-club
+		// DB setting (feature_feedback) read via the pool, which is nil
+		// here, so it's legitimately false in this config-only test.
+		if key == "feedback" {
+			continue
+		}
 		if !val {
 			t.Errorf("expected feature %q to be true", key)
 		}

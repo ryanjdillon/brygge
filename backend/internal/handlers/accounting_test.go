@@ -17,7 +17,7 @@ func newTestAccountingHandler(t *testing.T) *AccountingHandler {
 	t.Helper()
 	log := zerolog.Nop()
 	svc := accounting.NewService(nil, nil, log)
-	return NewAccountingHandler(svc, nil, log)
+	return NewAccountingHandler(svc, nil, nil, nil, log)
 }
 
 func TestHandleListAccountsUnauthenticated(t *testing.T) {
