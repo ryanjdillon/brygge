@@ -217,6 +217,7 @@ func main() {
 	}
 	adminSlipsHandler := handlers.NewAdminSlipsHandler(db, &cfg, log)
 	adminDocumentsHandler := handlers.NewAdminDocumentsHandler(db, &cfg, s3Client, log)
+	contentDocumentsHandler := handlers.NewContentDocumentsHandler(db, log)
 	aiDocumentsHandler := handlers.NewAIDocumentsHandler(db, claudeClient, &cfg, log)
 	forumHandler := handlers.NewForumHandler(db, &cfg, log)
 	bookingsHandler := handlers.NewBookingsHandler(db, rdb, &cfg, log)
@@ -452,6 +453,8 @@ func main() {
 			r.Get("/documents/{docID}", adminDocumentsHandler.HandleGetDocument)
 			r.Get("/documents/{docID}/comments", adminDocumentsHandler.HandleListComments)
 			r.Post("/documents/{docID}/comments", adminDocumentsHandler.HandleCreateComment)
+			r.Get("/portal/documents", contentDocumentsHandler.HandlePortalList)
+			r.Get("/portal/content-documents/{docID}", contentDocumentsHandler.HandlePortalGetContentDoc)
 		})
 
 		r.Route("/waiting-list", func(r chi.Router) {
@@ -1009,6 +1012,14 @@ func main() {
 					r.Delete("/{docID}", adminDocumentsHandler.HandleDeleteDocument)
 					r.Post("/{docID}/summarize", aiDocumentsHandler.HandleSummarizeComments)
 					r.Post("/{docID}/agenda", aiDocumentsHandler.HandleGenerateAgenda)
+				})
+
+				r.Route("/content-documents", func(r chi.Router) {
+					r.Use(middleware.RequireRole("board"))
+					r.Get("/", contentDocumentsHandler.HandleAdminList)
+					r.Post("/", contentDocumentsHandler.HandleAdminCreate)
+					r.Put("/{docID}", contentDocumentsHandler.HandleAdminUpdate)
+					r.Delete("/{docID}", contentDocumentsHandler.HandleAdminDelete)
 				})
 
 				if cfg.Features.Communications {

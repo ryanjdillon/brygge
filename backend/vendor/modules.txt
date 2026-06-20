@@ -12,6 +12,10 @@ github.com/alicebob/miniredis/v2/metro
 github.com/alicebob/miniredis/v2/proto
 github.com/alicebob/miniredis/v2/server
 github.com/alicebob/miniredis/v2/size
+# github.com/aymerick/douceur v0.2.0
+## explicit
+github.com/aymerick/douceur/css
+github.com/aymerick/douceur/parser
 # github.com/boombuler/barcode v1.0.1
 ## explicit
 github.com/boombuler/barcode
@@ -61,6 +65,9 @@ github.com/golang-jwt/jwt/v5
 # github.com/google/uuid v1.6.0
 ## explicit
 github.com/google/uuid
+# github.com/gorilla/css v1.0.1
+## explicit; go 1.20
+github.com/gorilla/css/scanner
 # github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0
 ## explicit; go 1.24.0
 github.com/grpc-ecosystem/grpc-gateway/v2/internal/httprule
@@ -106,6 +113,10 @@ github.com/mattn/go-colorable
 # github.com/mattn/go-isatty v0.0.21
 ## explicit; go 1.21
 github.com/mattn/go-isatty
+# github.com/microcosm-cc/bluemonday v1.0.27
+## explicit; go 1.19
+github.com/microcosm-cc/bluemonday
+github.com/microcosm-cc/bluemonday/css
 # github.com/minio/crc64nvme v1.1.1
 ## explicit; go 1.22
 github.com/minio/crc64nvme
@@ -276,6 +287,8 @@ golang.org/x/crypto/blowfish
 golang.org/x/crypto/hkdf
 # golang.org/x/net v0.53.0
 ## explicit; go 1.25.0
+golang.org/x/net/html
+golang.org/x/net/html/atom
 golang.org/x/net/http/httpguts
 golang.org/x/net/http2
 golang.org/x/net/http2/hpack
