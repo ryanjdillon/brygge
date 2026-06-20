@@ -1481,7 +1481,9 @@
       "fakturaDefault": "Faktura default",
       "archive": "Archive",
       "cannotArchiveDefault": "Promote another account to faktura default first",
-      "confirmArchive": "Archive account {account}? It will no longer appear in selectors but history is preserved."
+      "confirmArchive": "Archive account {account}? It will no longer appear in selectors but history is preserved.",
+      "confirmArchiveTitle": "Archive account?",
+      "archiveAction": "Archive"
     },
     "bankImports": {
       "title": "Bank & Vipps",
@@ -1631,6 +1633,8 @@
       "multiInvoiceMismatch": "Sum {sel} does not match invoice {inv}",
       "dismiss": "Dismiss",
       "unassign": "Undo assignment",
+      "unassignTitle": "Undo assignment?",
+      "unassignAction": "Undo",
       "unassignConfirm": "Void the journal entry and put the row back in the queue?",
       "dismissedAs": "Dismissed: {reason}",
       "potentialTitle": "Potential invoices",

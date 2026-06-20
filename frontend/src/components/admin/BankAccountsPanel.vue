@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { CheckCircle2, Plus, Trash2 } from 'lucide-vue-next'
 import { useFreshTotp } from '@/composables/useFreshTotp'
+import { useConfirm } from '@/stores/confirm'
 
 type BankAccountRole = 'drift' | 'hoyrente' | 'other'
 
@@ -38,6 +39,7 @@ const ROLE_GL_DEFAULTS: Record<BankAccountRole, string> = {
 
 const { t } = useI18n()
 const { totpAwareFetch } = useFreshTotp()
+const askConfirm = useConfirm()
 const queryClient = useQueryClient()
 
 const error = ref<string | null>(null)
@@ -146,7 +148,13 @@ const { mutateAsync: archive } = useMutation({
 })
 
 async function confirmArchive(a: BankAccount) {
-  if (!window.confirm(t('admin.bankAccounts.confirmArchive', { account: a.account_number }))) return
+  const ok = await askConfirm({
+    title: t('admin.bankAccounts.confirmArchiveTitle'),
+    body: t('admin.bankAccounts.confirmArchive', { account: a.account_number }),
+    confirmLabel: t('admin.bankAccounts.archiveAction'),
+    tone: 'danger',
+  })
+  if (!ok) return
   await archive(a.id)
 }
 </script>

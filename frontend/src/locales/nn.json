@@ -1477,7 +1477,9 @@
       "fakturaDefault": "Faktura-standard",
       "archive": "Arkiver",
       "cannotArchiveDefault": "Set ein annan konto som faktura-standard fyrst",
-      "confirmArchive": "Arkivere konto {account}? Han vert ikkje synleg i veljarane lenger, men historikken er teken vare på."
+      "confirmArchive": "Arkivere konto {account}? Han vert ikkje synleg i veljarane lenger, men historikken er teken vare på.",
+      "confirmArchiveTitle": "Arkiver konto?",
+      "archiveAction": "Arkiver"
     },
     "bankImports": {
       "title": "Bank og Vipps",
@@ -1627,7 +1629,9 @@
       "multiInvoiceMismatch": "Sum {sel} matchar ikkje faktura {inv}",
       "dismiss": "Avvis",
       "unassign": "Angre tildeling",
+      "unassignTitle": "Angre tildeling?",
       "unassignConfirm": "Annuller bilaget og legg raden tilbake i køen?",
+      "unassignAction": "Angre",
       "dismissedAs": "Avvist: {reason}",
       "potentialTitle": "Potensielle fakturaer",
       "potentialBanner": "Berre potensielle treff — sjekk informasjon før tildeling.",

@@ -20,8 +20,10 @@ import {
 } from '@/composables/useBankReconcile'
 import { formatNOK as formatNOKBase, formatDate as fmtDate } from '@/lib/format'
 import { useAccountsList } from '@/composables/useAccounting'
+import { useConfirm } from '@/stores/confirm'
 
 const { t, locale } = useI18n()
+const askConfirm = useConfirm()
 
 const kind = ref<BankRowKind>('all')
 const q = ref('')
@@ -222,7 +224,13 @@ async function doAssignAccount(rowId: string, accountCode: string, k: 'expense' 
   clearSelection()
 }
 async function doUnassign(rowId: string) {
-  if (!window.confirm(t('admin.bankReconcile.unassignConfirm'))) return
+  const ok = await askConfirm({
+    title: t('admin.bankReconcile.unassignTitle'),
+    body: t('admin.bankReconcile.unassignConfirm'),
+    confirmLabel: t('admin.bankReconcile.unassignAction'),
+    tone: 'danger',
+  })
+  if (!ok) return
   await unassign.mutateAsync({ rowId })
 }
 </script>
