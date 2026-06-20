@@ -17,7 +17,9 @@ import {
   useCreateJournalEntry,
   usePostEntry,
   useUploadJournalAttachment,
+  useParseReceipt,
   type Account,
+  type ReceiptData,
 } from '@/composables/useAccounting'
 import Select from '@/components/ui/form/Select.vue'
 import Input from '@/components/ui/form/Input.vue'
@@ -32,14 +34,32 @@ const { data: periods } = useFiscalPeriods()
 const createMutation = useCreateJournalEntry()
 const postMutation = usePostEntry()
 const uploadMutation = useUploadJournalAttachment()
+const parseMutation = useParseReceipt()
 
 const receiptFile = ref<File | null>(null)
 const uploadError = ref('')
+const parsedReceipt = ref<ReceiptData | null>(null)
 
 function handleFileChange(e: Event) {
   const input = e.target as HTMLInputElement
-  receiptFile.value = input.files?.[0] ?? null
+  const file = input.files?.[0] ?? null
+  receiptFile.value = file
   uploadError.value = ''
+  parsedReceipt.value = null
+
+  if (!file) return
+
+  parseMutation.mutate(file, {
+    onSuccess: (data) => {
+      parsedReceipt.value = data
+      if (!description.value.trim() && data.description) {
+        description.value = data.description
+      }
+      if (data.date) {
+        entryDate.value = data.date
+      }
+    },
+  })
 }
 
 async function uploadReceiptIfSelected(entryId: string): Promise<void> {
@@ -243,6 +263,16 @@ const accountOptions = computed(() => [
         class="block text-sm text-gray-600 file:mr-3 file:rounded file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200"
         @change="handleFileChange"
       />
+      <p v-if="parseMutation.isPending.value" class="mt-1 text-xs text-blue-600">{{ t('admin.accounting.journalForm.receiptParsing') }}</p>
+      <div
+        v-if="parsedReceipt && !parseMutation.isPending.value"
+        class="mt-2 rounded border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800"
+      >
+        <span class="font-medium">{{ parsedReceipt.vendor || t('admin.accounting.journalForm.receiptUnknownVendor') }}</span>
+        <span v-if="parsedReceipt.total_amount"> · {{ formatNOK(parsedReceipt.total_amount) }} kr</span>
+        <span v-if="parsedReceipt.mva_amount"> · {{ t('admin.accounting.journalForm.mva') }} {{ formatNOK(parsedReceipt.mva_amount) }} kr</span>
+        <span v-if="parsedReceipt.date"> · {{ parsedReceipt.date }}</span>
+      </div>
       <p v-if="uploadError" class="mt-1 text-xs text-red-600">{{ uploadError }}</p>
       <p v-if="uploadMutation.isPending.value" class="mt-1 text-xs text-blue-600">{{ t('admin.accounting.journalForm.receiptUploading') }}</p>
     </div>

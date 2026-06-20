@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -15,24 +16,27 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/brygge-klubb/brygge/internal/accounting"
+	"github.com/brygge-klubb/brygge/internal/ai"
 	"github.com/brygge-klubb/brygge/internal/audit"
 	"github.com/brygge-klubb/brygge/internal/middleware"
 	"github.com/brygge-klubb/brygge/internal/storage"
 )
 
 type AccountingHandler struct {
-	svc   *accounting.Service
-	audit *audit.Service
-	s3    *storage.Client
-	log   zerolog.Logger
+	svc    *accounting.Service
+	audit  *audit.Service
+	s3     *storage.Client
+	claude *ai.ClaudeClient
+	log    zerolog.Logger
 }
 
-func NewAccountingHandler(svc *accounting.Service, auditService *audit.Service, s3 *storage.Client, log zerolog.Logger) *AccountingHandler {
+func NewAccountingHandler(svc *accounting.Service, auditService *audit.Service, s3 *storage.Client, claude *ai.ClaudeClient, log zerolog.Logger) *AccountingHandler {
 	return &AccountingHandler{
-		svc:   svc,
-		audit: auditService,
-		s3:    s3,
-		log:   log.With().Str("handler", "accounting").Logger(),
+		svc:    svc,
+		audit:  auditService,
+		s3:     s3,
+		claude: claude,
+		log:    log.With().Str("handler", "accounting").Logger(),
 	}
 }
 
@@ -580,6 +584,51 @@ func (h *AccountingHandler) HandleGetJournalAttachment(w http.ResponseWriter, r 
 	}
 
 	JSON(w, http.StatusOK, map[string]string{"url": url})
+}
+
+func (h *AccountingHandler) HandleParseReceipt(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	if h.claude == nil {
+		Error(w, http.StatusServiceUnavailable, "AI parsing not configured")
+		return
+	}
+
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		Error(w, http.StatusBadRequest, "file too large or invalid multipart form")
+		return
+	}
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		Error(w, http.StatusBadRequest, "file field is required")
+		return
+	}
+	defer file.Close()
+
+	contentType := header.Header.Get("Content-Type")
+	if !strings.HasPrefix(contentType, "image/") && contentType != "application/pdf" {
+		Error(w, http.StatusBadRequest, "only image and PDF files are accepted")
+		return
+	}
+
+	imageBytes, err := io.ReadAll(file)
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "failed to read file")
+		return
+	}
+
+	data, err := h.claude.ParseReceipt(r.Context(), imageBytes, contentType)
+	if err != nil {
+		h.log.Error().Err(err).Msg("receipt OCR failed")
+		Error(w, http.StatusInternalServerError, "receipt parsing failed")
+		return
+	}
+
+	JSON(w, http.StatusOK, data)
 }
 
 // ── Sync ────────────────────────────────────────────────────

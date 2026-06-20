@@ -1496,9 +1496,11 @@
         "tooltipMva": "VAT portion of this expense (for momskompensasjon)",
         "tooltipLineDesc": "Optional note for this line",
         "receipt": "Bilag / Receipt",
-        "receiptTooltip": "Attach a photo or PDF of the receipt as supporting documentation (bilag) for this entry",
+        "receiptTooltip": "Attach a photo or PDF of the receipt as supporting documentation (bilag) for this entry. Claude will extract the amount, VAT, and date automatically.",
+        "receiptParsing": "Parsing receipt…",
         "receiptUploading": "Uploading receipt…",
-        "receiptUploadFailed": "Receipt upload failed — entry saved, please retry the upload"
+        "receiptUploadFailed": "Receipt upload failed — entry saved, please retry the upload",
+        "receiptUnknownVendor": "Unknown vendor"
       }
     },
     "groupEconomy": "Economy",

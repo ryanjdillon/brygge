@@ -232,7 +232,7 @@ func main() {
 	financialsHandler := handlers.NewFinancialsHandler(db, &cfg, auditService, log)
 	invoiceHandler := handlers.NewInvoiceHandler(db, &cfg, emailClient, auditService, s3LegalClient, log)
 	accountingSvc := accounting.NewService(db, auditService, log)
-	accountingHandler := handlers.NewAccountingHandler(accountingSvc, auditService, s3Client, log)
+	accountingHandler := handlers.NewAccountingHandler(accountingSvc, auditService, s3LegalClient, claudeClient, log)
 	bankRowsHandler := handlers.NewBankRowsHandler(accountingSvc, auditService, log)
 	devQueryHandler := handlers.NewDevQueryHandler(db, auditService, log)
 	priceItemsHandler := handlers.NewPriceItemsHandler(db, &cfg, log)
@@ -1081,6 +1081,7 @@ func main() {
 							r.Get("/", accountingHandler.HandleListJournalEntries)
 							r.With(middleware.RequireFreshTOTPDefault()).
 								Post("/", accountingHandler.HandleCreateJournalEntry)
+							r.Post("/parse-receipt", accountingHandler.HandleParseReceipt)
 							r.Get("/{entryID}", accountingHandler.HandleGetJournalEntry)
 							r.With(middleware.RequireFreshTOTPDefault()).
 								Post("/{entryID}/post", accountingHandler.HandlePostJournalEntry)

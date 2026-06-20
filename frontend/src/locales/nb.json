@@ -1492,9 +1492,11 @@
         "tooltipMva": "MVA-andel av denne kostnaden (for momskompensasjon)",
         "tooltipLineDesc": "Valgfri merknad for denne linjen",
         "receipt": "Bilag / Kvittering",
-        "receiptTooltip": "Legg ved bilde eller PDF av kvitteringen som bilagsdokumentasjon for dette bilaget",
+        "receiptTooltip": "Legg ved bilde eller PDF av kvitteringen som bilagsdokumentasjon. Claude trekker ut beløp, MVA og dato automatisk.",
+        "receiptParsing": "Analyserer kvittering…",
         "receiptUploading": "Laster opp kvittering…",
-        "receiptUploadFailed": "Opplasting av kvittering feilet — bilaget er lagret, prøv opplastingen på nytt"
+        "receiptUploadFailed": "Opplasting av kvittering feilet — bilaget er lagret, prøv opplastingen på nytt",
+        "receiptUnknownVendor": "Ukjent leverandør"
       }
     },
     "groupEconomy": "Økonomi",

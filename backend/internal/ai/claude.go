@@ -3,6 +3,7 @@ package ai
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -82,14 +83,37 @@ type messageContent struct {
 	Content string `json:"content"`
 }
 
-type messagesResponse struct {
+// imageMessagesRequest is used for vision calls where content is a block array.
+type imageMessagesRequest struct {
+	Model     string                `json:"model"`
+	MaxTokens int                   `json:"max_tokens"`
+	System    string                `json:"system"`
+	Messages  []imageMessageContent `json:"messages"`
+}
+
+type imageMessageContent struct {
+	Role    string         `json:"role"`
 	Content []contentBlock `json:"content"`
-	Error   *apiErrorBody  `json:"error,omitempty"`
 }
 
 type contentBlock struct {
-	Type string `json:"type"`
-	Text string `json:"text"`
+	Type   string         `json:"type"`
+	Text   string         `json:"text,omitempty"`
+	Source *imageSource   `json:"source,omitempty"`
+}
+
+type imageSource struct {
+	Type      string `json:"type"`       // "base64"
+	MediaType string `json:"media_type"` // "image/jpeg" etc.
+	Data      string `json:"data"`       // base64-encoded bytes
+}
+
+type messagesResponse struct {
+	Content []struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
+	} `json:"content"`
+	Error *apiErrorBody `json:"error,omitempty"`
 }
 
 type apiErrorBody struct {
@@ -236,4 +260,133 @@ func (c *ClaudeClient) GenerateAgenda(ctx context.Context, documentTitle string,
 	}
 
 	return agenda, nil
+}
+
+// ReceiptData holds structured values extracted from a receipt image or PDF.
+type ReceiptData struct {
+	TotalAmount float64 `json:"total_amount"` // total paid incl. VAT
+	NetAmount   float64 `json:"net_amount"`   // amount excl. VAT
+	MVAAmount   float64 `json:"mva_amount"`   // VAT portion
+	Vendor      string  `json:"vendor"`
+	Date        string  `json:"date"`        // YYYY-MM-DD, or "" if not found
+	Description string  `json:"description"` // one-line summary
+}
+
+func (c *ClaudeClient) sendImageMessage(ctx context.Context, systemPrompt string, imageBytes []byte, mediaType, textPrompt string) (string, error) {
+	var imageBlock contentBlock
+	if mediaType == "application/pdf" {
+		imageBlock = contentBlock{
+			Type: "document",
+			Source: &imageSource{
+				Type:      "base64",
+				MediaType: mediaType,
+				Data:      base64.StdEncoding.EncodeToString(imageBytes),
+			},
+		}
+	} else {
+		imageBlock = contentBlock{
+			Type: "image",
+			Source: &imageSource{
+				Type:      "base64",
+				MediaType: mediaType,
+				Data:      base64.StdEncoding.EncodeToString(imageBytes),
+			},
+		}
+	}
+
+	reqBody := imageMessagesRequest{
+		Model:     anthropicModel,
+		MaxTokens: defaultMaxTokens,
+		System:    systemPrompt,
+		Messages: []imageMessageContent{
+			{
+				Role: "user",
+				Content: []contentBlock{
+					imageBlock,
+					{Type: "text", Text: textPrompt},
+				},
+			},
+		},
+	}
+
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		return "", fmt.Errorf("marshalling request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, anthropicAPIURL, bytes.NewReader(body))
+	if err != nil {
+		return "", fmt.Errorf("creating request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-api-key", c.APIKey)
+	req.Header.Set("anthropic-version", anthropicVersion)
+	if mediaType == "application/pdf" {
+		req.Header.Set("anthropic-beta", "pdfs-2024-09-25")
+	}
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("sending request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("reading response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		var errResp messagesResponse
+		if jsonErr := json.Unmarshal(respBody, &errResp); jsonErr == nil && errResp.Error != nil {
+			return "", &APIError{StatusCode: resp.StatusCode, Type: errResp.Error.Type, Message: errResp.Error.Message}
+		}
+		return "", &APIError{StatusCode: resp.StatusCode, Type: "unknown", Message: string(respBody)}
+	}
+
+	var msgResp messagesResponse
+	if err := json.Unmarshal(respBody, &msgResp); err != nil {
+		return "", fmt.Errorf("unmarshalling response: %w", err)
+	}
+
+	var texts []string
+	for _, block := range msgResp.Content {
+		if block.Type == "text" {
+			texts = append(texts, block.Text)
+		}
+	}
+	return strings.Join(texts, "\n"), nil
+}
+
+func (c *ClaudeClient) ParseReceipt(ctx context.Context, imageBytes []byte, mediaType string) (*ReceiptData, error) {
+	systemPrompt := "You are an accounting assistant for a Norwegian harbor club. " +
+		"Extract financial data from receipt images or PDFs. " +
+		"Return ONLY a JSON object with these exact keys: " +
+		"total_amount (number, total paid incl. VAT), " +
+		"net_amount (number, amount excl. VAT, 0 if unknown), " +
+		"mva_amount (number, VAT amount, 0 if not shown), " +
+		"vendor (string, merchant name), " +
+		"date (string, YYYY-MM-DD format, empty string if not found), " +
+		"description (string, one-line summary of what was purchased in Norwegian). " +
+		"Use 0 for numeric fields you cannot determine. Do not include markdown or explanation."
+
+	rawText, err := c.sendImageMessage(ctx, systemPrompt, imageBytes, mediaType,
+		"Extract the financial data from this receipt and return it as JSON.")
+	if err != nil {
+		return nil, fmt.Errorf("parsing receipt: %w", err)
+	}
+
+	cleaned := rawText
+	if start := strings.Index(cleaned, "{"); start >= 0 {
+		if end := strings.LastIndex(cleaned, "}"); end >= start {
+			cleaned = cleaned[start : end+1]
+		}
+	}
+
+	var data ReceiptData
+	if err := json.Unmarshal([]byte(cleaned), &data); err != nil {
+		return nil, fmt.Errorf("unmarshalling receipt data: %w", err)
+	}
+	return &data, nil
 }

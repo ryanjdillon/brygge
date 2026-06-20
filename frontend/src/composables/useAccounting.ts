@@ -235,6 +235,28 @@ export function useCreateJournalEntry() {
   })
 }
 
+export interface ReceiptData {
+  total_amount: number
+  net_amount: number
+  mva_amount: number
+  vendor: string
+  date: string
+  description: string
+}
+
+export function useParseReceipt() {
+  return useMutation({
+    mutationFn: (file: File) => {
+      const form = new FormData()
+      form.append('file', file)
+      return apiFetch<ReceiptData>(`${BASE}/journal/parse-receipt`, {
+        method: 'POST',
+        body: form,
+      })
+    },
+  })
+}
+
 export function useUploadJournalAttachment() {
   const qc = useQueryClient()
   return useMutation({
