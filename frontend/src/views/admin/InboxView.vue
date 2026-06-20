@@ -370,6 +370,7 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
       v-if="showCompose"
       :mailboxes="(mailboxes as any)"
       @close="showCompose = false"
+      @view-broadcasts="showCompose = false; activeTab = 'broadcasts'"
     />
 
     <div v-show="activeTab === 'inbox'" class="flex items-center gap-2 border-b border-blue-100 bg-blue-50 px-4 py-2 text-sm text-blue-800">

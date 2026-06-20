@@ -20,7 +20,12 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'close'): void
+  (e: 'view-broadcasts'): void
 }>()
+
+function viewBroadcasts() {
+  emit('view-broadcasts')
+}
 
 const { fetchApi } = useApi()
 
@@ -33,6 +38,9 @@ function htmlToText(html: string): string {
 const step = ref<'compose' | 'preview'>('compose')
 const sending = ref(false)
 const error = ref<string | null>(null)
+// Set once the send is accepted and queued (202 from the bulk path).
+const queued = ref(false)
+const queuedCount = ref(0)
 const subject = ref('')
 const body = ref('')
 const recipients = ref<RecipientValue>({ groups: [], individuals: [] })
@@ -77,6 +85,18 @@ const recipientSummary = computed(() => {
   return parts.join(', ')
 })
 
+// A new compose always addresses groups/individuals (never plain To), so it
+// goes out as individual, tracked sends rather than one BCC blast. Surface
+// that in the preview so the sender knows what will happen.
+const hasGroups = computed(() => recipients.value.groups.length > 0)
+const individualCount = computed(() => recipients.value.individuals.length)
+const bulkNotice = computed(() => {
+  if (hasGroups.value) {
+    return `Sendt som individuelle e-postar til kvar mottakar i: ${recipientSummary.value}. Følg leveringa under «Utsendingar».`
+  }
+  return `Sendt som ${individualCount.value} individuelle e-postar (éin per mottakar). Følg leveringa under «Utsendingar».`
+})
+
 const selectedMailbox = computed(
   () => sendableMailboxes.value.find((m) => m.address === fromAddress.value) ?? null,
 )
@@ -113,7 +133,7 @@ async function send() {
     for (const img of snapshotInlineImages.value) {
       bodyHtml = bodyHtml.replaceAll(img.src, `cid:${img.cid}`)
     }
-    await fetchApi(
+    const res = await fetchApi<{ broadcast_id?: string; recipient_count?: number }>(
       `/api/v1/admin/inbox/${encodeURIComponent(fromAddress.value)}/send`,
       {
         method: 'POST',
@@ -133,7 +153,14 @@ async function send() {
         }),
       },
     )
-    emit('close')
+    // Bulk path returns 202 with a broadcast id — show the queued state and
+    // point at the history tab instead of silently closing.
+    if (res && res.broadcast_id) {
+      queuedCount.value = res.recipient_count ?? 0
+      queued.value = true
+    } else {
+      emit('close')
+    }
   } catch (e) {
     error.value = (e as Error)?.message ?? 'Sending feila. Prøv igjen.'
   } finally {
@@ -306,41 +333,77 @@ onBeforeUnmount(() => {
 
         <!-- Preview step -->
         <div v-else class="flex h-full flex-col gap-4">
-          <div class="flex-1 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 p-5 text-sm">
-            <div class="mb-1 text-gray-500">
-              <span class="font-medium text-gray-700">Fra:</span> {{ selectedFromLabel }}
+          <!-- Queued confirmation: the bulk send was accepted (202). -->
+          <div v-if="queued" class="flex h-full flex-col items-center justify-center gap-4 text-center">
+            <div class="rounded-full bg-green-100 p-3">
+              <Send class="h-6 w-6 text-green-600" />
             </div>
-            <div class="mb-3 text-gray-500">
-              <span class="font-medium text-gray-700">Til (BCC):</span> {{ recipientSummary }}
+            <div>
+              <p class="text-base font-semibold text-gray-900">Meldinga er sett i kø</p>
+              <p class="mt-1 text-sm text-gray-500">
+                {{ queuedCount }} mottakarar — sendt som individuelle e-postar. Følg leveringa under «Utsendingar».
+              </p>
             </div>
-            <h3 class="text-base font-semibold text-gray-900">{{ subject }}</h3>
-            <div class="prose prose-sm mt-3 max-w-none text-gray-700" v-html="body" />
-            <div v-if="selectedMailbox" v-html="signatureHtml" class="text-sm" />
+            <div class="flex gap-3">
+              <button
+                type="button"
+                class="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                @click="viewBroadcasts"
+              >
+                Sjå utsendingar
+              </button>
+              <button
+                type="button"
+                class="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                @click="$emit('close')"
+              >
+                Lukk
+              </button>
+            </div>
           </div>
 
-          <div v-if="error" class="shrink-0 rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
-            {{ error }}
-          </div>
+          <template v-else>
+            <div class="flex-1 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 p-5 text-sm">
+              <div class="mb-1 text-gray-500">
+                <span class="font-medium text-gray-700">Fra:</span> {{ selectedFromLabel }}
+              </div>
+              <div class="mb-3 text-gray-500">
+                <span class="font-medium text-gray-700">Til:</span> {{ recipientSummary }}
+              </div>
+              <h3 class="text-base font-semibold text-gray-900">{{ subject }}</h3>
+              <div class="prose prose-sm mt-3 max-w-none text-gray-700" v-html="body" />
+              <div v-if="selectedMailbox" v-html="signatureHtml" class="text-sm" />
+            </div>
 
-          <div class="flex shrink-0 justify-end gap-3">
-            <button
-              type="button"
-              class="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-              :disabled="sending"
-              @click="step = 'compose'"
-            >
-              Rediger
-            </button>
-            <button
-              type="button"
-              :disabled="sending"
-              class="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-              @click="send"
-            >
-              <Send class="h-4 w-4" />
-              {{ sending ? 'Sender…' : 'Send' }}
-            </button>
-          </div>
+            <!-- Individual-send notice: groups/BCC fan out to one email each. -->
+            <div class="shrink-0 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
+              {{ bulkNotice }}
+            </div>
+
+            <div v-if="error" class="shrink-0 rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {{ error }}
+            </div>
+
+            <div class="flex shrink-0 justify-end gap-3">
+              <button
+                type="button"
+                class="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                :disabled="sending"
+                @click="step = 'compose'"
+              >
+                Rediger
+              </button>
+              <button
+                type="button"
+                :disabled="sending"
+                class="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                @click="send"
+              >
+                <Send class="h-4 w-4" />
+                {{ sending ? 'Sender…' : 'Send' }}
+              </button>
+            </div>
+          </template>
         </div>
       </div>
     </div>
