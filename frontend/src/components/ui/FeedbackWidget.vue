@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { MessageSquare, Bug, Lightbulb, Camera, X, Send, Loader2, CheckCircle } from 'lucide-vue-next'
+import { MessageSquare, Bug, Lightbulb, Camera, X, Send, Loader2, CheckCircle, GripHorizontal } from 'lucide-vue-next'
 import { useApi } from '@/composables/useApi'
 
 const { t } = useI18n()
@@ -18,6 +18,9 @@ const submitting = ref(false)
 const submitted = ref(false)
 const error = ref('')
 
+const panelHeight = ref(0)
+const panelRef = ref<HTMLElement | null>(null)
+
 const canSubmit = computed(() => description.value.trim().length > 0 && !submitting.value)
 
 function toggle() {
@@ -26,6 +29,7 @@ function toggle() {
     pageURL.value = window.location.href
     submitted.value = false
     error.value = ''
+    panelHeight.value = 0
   }
 }
 
@@ -40,27 +44,52 @@ function reset() {
   screenshot.value = null
   error.value = ''
   submitted.value = false
+  panelHeight.value = 0
 }
+
+// Resize handle — drag up from top-right corner to expand panel upward.
+let resizeStartY = 0
+let resizeStartH = 0
+
+function startResize(e: MouseEvent) {
+  e.preventDefault()
+  resizeStartY = e.clientY
+  resizeStartH = panelRef.value?.offsetHeight ?? 420
+  document.addEventListener('mousemove', onResizeMove)
+  document.addEventListener('mouseup', stopResize)
+}
+
+function onResizeMove(e: MouseEvent) {
+  const dy = e.clientY - resizeStartY
+  panelHeight.value = Math.max(300, resizeStartH - dy)
+}
+
+function stopResize() {
+  document.removeEventListener('mousemove', onResizeMove)
+  document.removeEventListener('mouseup', stopResize)
+}
+
+onBeforeUnmount(() => {
+  document.removeEventListener('mousemove', onResizeMove)
+  document.removeEventListener('mouseup', stopResize)
+})
 
 async function captureScreenshot() {
   capturing.value = true
-  open.value = false
-  await new Promise(r => setTimeout(r, 80))
-
   try {
     const html2canvas = (await import('html2canvas')).default
     const canvas = await html2canvas(document.body, {
       useCORS: true,
       allowTaint: false,
-      scale: Math.min(window.devicePixelRatio, 2),
+      scale: Math.min(window.devicePixelRatio, 1.5),
       logging: false,
+      ignoreElements: (el: Element) => el.classList.contains('feedback-widget'),
     })
     screenshot.value = canvas.toDataURL('image/png')
   } catch {
-    // silently skip — not all pages are capturable
+    // not all pages are capturable; skip silently
   } finally {
     capturing.value = false
-    open.value = true
   }
 }
 
@@ -107,7 +136,19 @@ async function submit() {
     </button>
 
     <Transition name="feedback-panel">
-      <div v-if="open" class="feedback-panel" role="dialog" :aria-label="t('feedback.panelLabel')">
+      <div
+        v-if="open"
+        ref="panelRef"
+        class="feedback-panel"
+        :style="panelHeight ? { height: panelHeight + 'px' } : {}"
+        role="dialog"
+        :aria-label="t('feedback.panelLabel')"
+      >
+        <!-- resize handle — top-right corner, drag up to expand -->
+        <div class="resize-handle" @mousedown="startResize">
+          <GripHorizontal class="h-3 w-3 text-gray-400" aria-hidden="true" />
+        </div>
+
         <div class="feedback-header">
           <span class="text-sm font-semibold text-gray-900">{{ t('feedback.title') }}</span>
           <button class="text-gray-400 hover:text-gray-600 transition-colors" :aria-label="t('common.close')" @click="close">
@@ -165,7 +206,7 @@ async function submit() {
                 {{ capturing ? t('feedback.capturing') : t('feedback.captureScreenshot') }}
               </button>
               <div v-else class="screenshot-preview-wrap">
-                <img :src="screenshot" class="screenshot-preview" alt="Screenshot preview" />
+                <img :src="screenshot" class="screenshot-preview" :alt="t('feedback.screenshotAlt')" />
                 <button class="screenshot-remove" :aria-label="t('feedback.removeScreenshot')" @click="removeScreenshot">
                   <X class="h-3 w-3" aria-hidden="true" />
                 </button>
@@ -224,7 +265,11 @@ async function submit() {
 }
 
 .feedback-panel {
+  position: relative;
   width: 320px;
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
   border-radius: 0.75rem;
   background: #fff;
   box-shadow: 0 8px 32px rgba(0,0,0,0.14);
@@ -232,16 +277,44 @@ async function submit() {
   overflow: hidden;
 }
 
+.resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 28px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: n-resize;
+  z-index: 1;
+  border-bottom-left-radius: 0.375rem;
+  background: #f9fafb;
+  border-bottom: 1px solid #f3f4f6;
+  border-left: 1px solid #f3f4f6;
+  border-top-right-radius: 0.75rem;
+}
+.resize-handle:hover {
+  background: #f3f4f6;
+}
+
 .feedback-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0.75rem 1rem;
+  padding-right: 2.25rem;
   border-bottom: 1px solid #f3f4f6;
+  flex-shrink: 0;
 }
 
 .feedback-success {
   padding: 2rem 1rem;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 
 .feedback-body {
@@ -249,10 +322,14 @@ async function submit() {
   display: flex;
   flex-direction: column;
   gap: 0.625rem;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .feedback-footer {
   padding: 0.625rem 1rem 0.875rem;
+  flex-shrink: 0;
 }
 
 .type-toggle {
@@ -296,6 +373,7 @@ async function submit() {
   outline: none;
   box-sizing: border-box;
   transition: border-color 0.12s;
+  flex-shrink: 0;
 }
 .feedback-input:focus {
   border-color: #1d4ed8;
@@ -309,8 +387,9 @@ async function submit() {
   font-size: 0.8125rem;
   color: #111827;
   outline: none;
-  resize: vertical;
+  resize: none;
   min-height: 80px;
+  flex: 1;
   box-sizing: border-box;
   font-family: inherit;
   transition: border-color 0.12s;
@@ -323,6 +402,7 @@ async function submit() {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  flex-shrink: 0;
 }
 
 .screenshot-btn {

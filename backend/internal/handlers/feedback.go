@@ -17,6 +17,9 @@ import (
 	"github.com/brygge-klubb/brygge/internal/middleware"
 )
 
+// stdEncoding accepts both padded and unpadded base64 from canvas.toDataURL.
+var b64Enc = base64.StdEncoding
+
 const (
 	linearTeamID       = "3d3356f2-2475-4101-8e4a-76a5cfba68f2"
 	linearStateTriageID = "0485eda7-5b5c-4dc3-a589-351af3ba5f1b"
@@ -189,9 +192,14 @@ func (h *FeedbackHandler) uploadScreenshot(dataURL string) (string, error) {
 		b64 = dataURL[idx+1:]
 	}
 
-	imgBytes, err := base64.StdEncoding.DecodeString(b64)
+	b64 = strings.TrimSpace(b64)
+	imgBytes, err := b64Enc.DecodeString(b64)
 	if err != nil {
-		return "", fmt.Errorf("decode base64: %w", err)
+		// Canvas may omit padding — retry without strict padding.
+		imgBytes, err = base64.RawStdEncoding.DecodeString(b64)
+		if err != nil {
+			return "", fmt.Errorf("decode base64: %w", err)
+		}
 	}
 
 	size := int64(len(imgBytes))

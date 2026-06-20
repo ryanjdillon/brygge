@@ -2160,6 +2160,7 @@
     "removeScreenshot": "Fjern skjermbilde",
     "submit": "Send inn",
     "successMessage": "Takk! Tilbakemeldingen din er sendt.",
+    "screenshotAlt": "Forhåndsvisning av skjermbilde",
     "errorGeneric": "Noe gikk galt. Prøv igjen."
   }
 }

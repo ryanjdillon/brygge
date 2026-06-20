@@ -2164,6 +2164,7 @@
     "removeScreenshot": "Remove screenshot",
     "submit": "Submit",
     "successMessage": "Thanks! Your feedback has been submitted.",
+    "screenshotAlt": "Screenshot preview",
     "errorGeneric": "Something went wrong. Please try again."
   }
 }
