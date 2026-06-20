@@ -31,6 +31,14 @@
       type        = "string";
       description = "S3 bucket name for Terraform state.";
     };
+    s3_bucket_docs = {
+      type        = "string";
+      description = "S3 bucket name for document uploads (used by the brygge app as S3_BUCKET_DOCS).";
+    };
+    s3_bucket_backups = {
+      type        = "string";
+      description = "S3 bucket name for automated database backups.";
+    };
     s3_endpoint = {
       type        = "string";
       description = "S3-compatible endpoint URL (e.g. https://nbg1.your-objectstorage.com).";

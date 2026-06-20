@@ -59,6 +59,11 @@
       # consumed by both stalwart-mailbox-config.service and the
       # Brygge backend reconciler.
       boardMailboxes = tfvars.board_mailboxes or [];
+      # Hetzner Object Storage — credentials shared across buckets.
+      s3AccessKey      = tfvars.hetzner_s3_access_key or "";
+      s3SecretKey      = tfvars.hetzner_s3_secret_key or "";
+      s3BucketDocs     = tfvars.s3_bucket_docs or "";
+      s3BucketBackups  = tfvars.s3_bucket_backups or "";
     };
 
     overlay = final: prev: {
@@ -281,6 +286,46 @@
               echo "deploy: please commit and push these so the deployed state matches HEAD."
               echo "deploy: continuing in 5s — Ctrl-C to abort."
               sleep 5
+            fi
+
+            # ── Pre-deploy database snapshot ─────────────────────────────
+            # Take a quiesced dump before migration runs so there is always
+            # a local rollback point. Also pulls a copy to ~/brygge-backups/
+            # on the deployer's machine (last 10 kept).
+            #
+            # Skip with SKIP_BACKUP=1 nix run .#deploy -- <host> if the
+            # backup service is not yet configured on the target host.
+            if [[ "''${SKIP_BACKUP:-0}" != "1" ]]; then
+              echo "deploy: triggering pre-deploy backup on ''${HOSTNAME}…"
+              ssh "root@''${HOSTNAME}" \
+                "systemctl start brygge-pre-deploy-backup.service"
+
+              LOCAL_BACKUP_DIR="''${HOME}/brygge-backups"
+              mkdir -p "''${LOCAL_BACKUP_DIR}"
+
+              LATEST=$(ssh "root@''${HOSTNAME}" \
+                "ls -t /var/lib/brygge/backups/pre-deploy/brygge-predeploy-*.dump 2>/dev/null | head -1")
+              if [[ -n "''${LATEST}" ]]; then
+                DEST="''${LOCAL_BACKUP_DIR}/$(basename "''${LATEST}")"
+                echo "deploy: pulling ''${LATEST} → ''${DEST}…"
+                ${pkgs.openssh}/bin/scp \
+                  "root@''${HOSTNAME}:''${LATEST}" \
+                  "''${DEST}"
+                echo "deploy: local backup saved to ''${DEST}"
+
+                # Prune local copies to last 10.
+                mapfile -t LOCAL_ALL < <(ls -t "''${LOCAL_BACKUP_DIR}"/brygge-predeploy-*.dump 2>/dev/null || true)
+                LOCAL_TOTAL="''${#LOCAL_ALL[@]}"
+                if [[ "''${LOCAL_TOTAL}" -gt 10 ]]; then
+                  echo "deploy: pruning local backup dir (keep=10)…"
+                  for (( i=10; i<LOCAL_TOTAL; i++ )); do
+                    rm -f "''${LOCAL_ALL[''${i}]}"
+                    echo "deploy: removed ''${LOCAL_ALL[''${i}]}"
+                  done
+                fi
+              else
+                echo "deploy: WARNING — no pre-deploy dump found on host, continuing without local backup"
+              fi
             fi
 
             ${deploy-rs.packages.${system}.default}/bin/deploy \
