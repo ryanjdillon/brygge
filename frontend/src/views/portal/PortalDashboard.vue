@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
@@ -9,6 +9,7 @@ import { useFeatures } from '@/composables/useFeatures'
 import { useMyInvoices, isOverdue, type MemberInvoice } from '@/composables/useMyInvoices'
 import { formatSlip } from '@/lib/slipSort'
 import { formatNOK, formatDate } from '@/lib/format'
+import { Download, FileText, FileType, X, ChevronUp, ChevronDown, Search } from 'lucide-vue-next'
 import BoatCard from '@/components/boats/BoatCard.vue'
 
 const { t } = useI18n()
@@ -65,6 +66,141 @@ function chipBadgeLabel(inv: MemberInvoice): string {
   if (isOverdue(inv)) return t('portal.invoices.status.overdue')
   return t('portal.invoices.status.unpaid')
 }
+
+// ── Documents section ─────────────────────────────────────────────────────────
+
+interface FileDoc {
+  id: string
+  kind: 'file'
+  title: string
+  filename: string
+  content_type: string
+  size_bytes: number
+  visibility: string
+  created_at: string
+}
+
+interface AuthoredDoc {
+  id: string
+  kind: 'authored'
+  title: string
+  body_html: string
+  visibility: string
+  created_at: string
+  updated_at: string
+}
+
+const { data: docsData, isLoading: docsLoading } = useQuery({
+  queryKey: ['portal', 'documents-section'],
+  queryFn: async () => {
+    const res = await fetch('/api/v1/portal/documents', { credentials: 'include' })
+    if (!res.ok) throw new Error('failed')
+    return res.json() as Promise<{ files: FileDoc[]; authored: AuthoredDoc[] }>
+  },
+})
+
+const fileDocs = computed(() => docsData.value?.files ?? [])
+const authoredDocs = computed(() => docsData.value?.authored ?? [])
+const hasAnyDoc = computed(() => fileDocs.value.length > 0 || authoredDocs.value.length > 0)
+
+// ── Authored doc modal ────────────────────────────────────────────────────────
+
+const openDoc = ref<AuthoredDoc | null>(null)
+const docSearch = ref('')
+const matchIndex = ref(0)
+const matchCount = ref(0)
+const docContentRef = ref<HTMLElement | null>(null)
+
+function openAuthoredDoc(doc: AuthoredDoc) {
+  openDoc.value = doc
+  docSearch.value = ''
+  matchIndex.value = 0
+  matchCount.value = 0
+  nextTick(() => applyHighlights())
+}
+
+function closeDoc() {
+  openDoc.value = null
+  docSearch.value = ''
+}
+
+function applyHighlights() {
+  const el = docContentRef.value
+  if (!el) return
+
+  el.querySelectorAll('mark.doc-search-hit').forEach(m => {
+    const parent = m.parentNode!
+    parent.replaceChild(document.createTextNode(m.textContent ?? ''), m)
+    parent.normalize()
+  })
+
+  const query = docSearch.value.trim().toLowerCase()
+  if (!query) {
+    matchCount.value = 0
+    matchIndex.value = 0
+    return
+  }
+
+  let count = 0
+  highlightNode(el, query, () => count++)
+  matchCount.value = count
+  matchIndex.value = count > 0 ? 1 : 0
+  scrollToMatch(0)
+}
+
+function highlightNode(node: Node, query: string, onMatch: () => void) {
+  if (node.nodeType === Node.TEXT_NODE) {
+    const text = node.textContent ?? ''
+    const lower = text.toLowerCase()
+    let pos = 0
+    const frag = document.createDocumentFragment()
+    let found = false
+    while (true) {
+      const idx = lower.indexOf(query, pos)
+      if (idx === -1) {
+        frag.appendChild(document.createTextNode(text.slice(pos)))
+        break
+      }
+      frag.appendChild(document.createTextNode(text.slice(pos, idx)))
+      const mark = document.createElement('mark')
+      mark.className = 'doc-search-hit bg-yellow-200 rounded px-0.5'
+      mark.textContent = text.slice(idx, idx + query.length)
+      frag.appendChild(mark)
+      onMatch()
+      pos = idx + query.length
+      found = true
+    }
+    if (found) node.parentNode!.replaceChild(frag, node)
+  } else if (node.nodeType === Node.ELEMENT_NODE && node.nodeName !== 'MARK') {
+    Array.from(node.childNodes).forEach(child => highlightNode(child, query, onMatch))
+  }
+}
+
+function scrollToMatch(targetIndex: number) {
+  const el = docContentRef.value
+  if (!el) return
+  const marks = el.querySelectorAll<HTMLElement>('mark.doc-search-hit')
+  marks.forEach((m, i) => {
+    m.className = `doc-search-hit rounded px-0.5 ${i === targetIndex ? 'bg-orange-300' : 'bg-yellow-200'}`
+  })
+  if (marks[targetIndex]) {
+    marks[targetIndex].scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }
+}
+
+function nextMatch() {
+  if (matchCount.value === 0) return
+  matchIndex.value = (matchIndex.value % matchCount.value) + 1
+  scrollToMatch(matchIndex.value - 1)
+}
+
+function prevMatch() {
+  if (matchCount.value === 0) return
+  matchIndex.value = matchIndex.value === 1 ? matchCount.value : matchIndex.value - 1
+  scrollToMatch(matchIndex.value - 1)
+}
+
+watch(docSearch, () => nextTick(() => applyHighlights()))
 </script>
 
 <template>
@@ -218,6 +354,113 @@ function chipBadgeLabel(inv: MemberInvoice): string {
           </RouterLink>
         </p>
       </section>
+      <!-- Documents -->
+      <section v-if="hasAnyDoc || docsLoading" class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+        <h2 class="text-sm font-semibold text-gray-900">{{ t('portal.documents.title') }}</h2>
+        <div v-if="docsLoading" class="mt-3 text-sm text-gray-500">{{ t('common.loading') }}...</div>
+        <template v-else>
+          <ul class="mt-3 divide-y divide-gray-100">
+            <li
+              v-for="doc in fileDocs"
+              :key="doc.id"
+              class="flex items-center justify-between py-2.5"
+            >
+              <div class="flex min-w-0 items-center gap-2">
+                <FileType class="h-4 w-4 shrink-0 text-gray-400" />
+                <span class="truncate text-sm font-medium text-gray-900">{{ doc.title }}</span>
+                <span class="shrink-0 text-xs text-gray-400">{{ formatDate(doc.created_at) }}</span>
+              </div>
+              <a
+                :href="`/api/v1/documents/${doc.id}`"
+                target="_blank"
+                class="ml-3 flex shrink-0 items-center gap-1 rounded-md border border-gray-300 bg-white px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+              >
+                <Download class="h-3.5 w-3.5" />
+                {{ t('portal.documents.download') }}
+              </a>
+            </li>
+            <li
+              v-for="doc in authoredDocs"
+              :key="doc.id"
+              class="flex items-center justify-between py-2.5"
+            >
+              <div class="flex min-w-0 items-center gap-2">
+                <FileText class="h-4 w-4 shrink-0 text-blue-400" />
+                <span class="truncate text-sm font-medium text-gray-900">{{ doc.title }}</span>
+                <span class="shrink-0 text-xs text-gray-400">{{ formatDate(doc.created_at) }}</span>
+              </div>
+              <button
+                type="button"
+                class="ml-3 shrink-0 rounded-md border border-gray-300 bg-white px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                @click="openAuthoredDoc(doc)"
+              >
+                {{ t('portal.documents.open') }}
+              </button>
+            </li>
+          </ul>
+        </template>
+      </section>
     </template>
   </div>
+
+  <!-- Authored document modal -->
+  <Teleport to="body">
+    <div
+      v-if="openDoc"
+      class="fixed inset-0 z-50 flex flex-col bg-black/40"
+      @click.self="closeDoc"
+    >
+      <div class="mx-auto mt-12 flex w-full max-w-3xl flex-1 flex-col overflow-hidden rounded-t-xl bg-white shadow-xl">
+        <!-- Header -->
+        <div class="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+          <h2 class="text-lg font-semibold text-gray-900">{{ openDoc.title }}</h2>
+          <button type="button" class="rounded p-1 text-gray-400 hover:text-gray-700" @click="closeDoc">
+            <X class="h-5 w-5" />
+          </button>
+        </div>
+        <!-- Search bar -->
+        <div class="flex items-center gap-2 border-b border-gray-100 bg-gray-50 px-6 py-2">
+          <Search class="h-4 w-4 shrink-0 text-gray-400" />
+          <input
+            v-model="docSearch"
+            type="search"
+            :placeholder="t('portal.documents.searchPlaceholder')"
+            class="min-w-0 flex-1 bg-transparent text-sm focus:outline-none"
+            @keydown.enter.prevent="nextMatch"
+            @keydown.shift.enter.prevent="prevMatch"
+          />
+          <span v-if="docSearch && matchCount > 0" class="shrink-0 text-xs text-gray-500">
+            {{ matchIndex }} / {{ matchCount }}
+          </span>
+          <span v-else-if="docSearch && matchCount === 0" class="shrink-0 text-xs text-red-400">
+            {{ t('portal.documents.noMatches') }}
+          </span>
+          <button
+            v-if="docSearch"
+            type="button"
+            class="shrink-0 rounded p-0.5 text-gray-400 hover:text-gray-700"
+            @click="prevMatch"
+          >
+            <ChevronUp class="h-4 w-4" />
+          </button>
+          <button
+            v-if="docSearch"
+            type="button"
+            class="shrink-0 rounded p-0.5 text-gray-400 hover:text-gray-700"
+            @click="nextMatch"
+          >
+            <ChevronDown class="h-4 w-4" />
+          </button>
+        </div>
+        <!-- Content -->
+        <div class="flex-1 overflow-y-auto px-6 py-5">
+          <div
+            ref="docContentRef"
+            class="prose prose-sm max-w-none"
+            v-html="openDoc.body_html"
+          />
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>

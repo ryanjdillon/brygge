@@ -12,7 +12,6 @@ import {
   User,
   Ship,
   Users,
-  FileText,
   Anchor,
   CalendarDays,
   BrushCleaning,
@@ -58,7 +57,6 @@ const navGroups = computed<NavGroup[]>(() => {
       titleKey: 'portal.groupCommunity',
       items: [
         { to: '/portal/directory', icon: Users, label: t('portal.sidebar.directory'), roles: ['member', 'slip_holder', 'board', 'admin'] },
-        { to: '/portal/documents', icon: FileText, label: t('portal.sidebar.documents') },
       ],
     },
     {
