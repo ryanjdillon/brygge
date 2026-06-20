@@ -366,7 +366,12 @@
       "hideInDirectoryLabel": "Skjul meg i medlemskatalogen",
       "hideInDirectoryHint": "Navn, telefon og e-post vises ikke for andre medlemmer i katalogen eller på havnekartet. Administratorer ser fortsatt detaljene dine for havnedrift.",
       "privacyAgreePrefix": "Jeg har lest og godtar",
-      "privacyAgreeLink": "personvernerklæringen"
+      "privacyAgreeLink": "personvernerklæringen",
+      "emailPrefsTitle": "E-postvarsler",
+      "emailPrefsHint": "Påkrevde meldinger (fakturaer, innloggingskoder) sendes alltid uansett.",
+      "emailPrefBroadcast": "Nyheter og kunngjøringer fra klubben",
+      "emailPrefEnabled": "Aktivert",
+      "emailPrefDisabled": "Deaktivert"
     },
     "boats": {
       "title": "Mine båter",

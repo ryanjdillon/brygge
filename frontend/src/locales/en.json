@@ -370,7 +370,12 @@
       "hideInDirectoryLabel": "Hide me from the member directory",
       "hideInDirectoryHint": "Your name, phone, and email will not be shown to other members in the directory or on the harbor map. Admins still see your details for harbour operations.",
       "privacyAgreePrefix": "I have read and accept the",
-      "privacyAgreeLink": "privacy policy"
+      "privacyAgreeLink": "privacy policy",
+      "emailPrefsTitle": "Email notifications",
+      "emailPrefsHint": "Required messages (invoices, login codes) are always sent regardless.",
+      "emailPrefBroadcast": "News and announcements from the club",
+      "emailPrefEnabled": "Enabled",
+      "emailPrefDisabled": "Disabled"
     },
     "boats": {
       "title": "My Boats",

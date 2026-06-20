@@ -1,7 +1,10 @@
 package handlers
 
 import (
+	"context"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -11,6 +14,7 @@ import (
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/email"
 	"github.com/brygge-klubb/brygge/internal/middleware"
+	"github.com/brygge-klubb/brygge/internal/unsubscribe"
 )
 
 type BroadcastHandler struct {
@@ -18,6 +22,7 @@ type BroadcastHandler struct {
 	config *config.Config
 	email  email.Sender
 	log    zerolog.Logger
+	secret []byte
 }
 
 func NewBroadcastHandler(
@@ -26,11 +31,13 @@ func NewBroadcastHandler(
 	emailClient email.Sender,
 	log zerolog.Logger,
 ) *BroadcastHandler {
+	secret, _ := hex.DecodeString(cfg.TOTPEncryptionKey)
 	return &BroadcastHandler{
 		db:     db,
 		config: cfg,
 		email:  emailClient,
 		log:    log.With().Str("handler", "broadcast").Logger(),
+		secret: secret,
 	}
 }
 
@@ -81,12 +88,6 @@ func (h *BroadcastHandler) HandleSendBroadcast(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	h.log.Info().
-		Str("subject", req.Subject).
-		Str("recipients", req.Recipients).
-		Str("sent_by", claims.UserID).
-		Msg("broadcast sent (stub — mail delivery pending)")
-
 	var b broadcast
 	err := h.db.QueryRow(ctx,
 		`INSERT INTO broadcasts (club_id, subject, body, recipients, sent_by)
@@ -101,6 +102,10 @@ func (h *BroadcastHandler) HandleSendBroadcast(w http.ResponseWriter, r *http.Re
 		h.log.Error().Err(err).Msg("failed to store broadcast")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
+	}
+
+	if h.email != nil {
+		go h.deliverBroadcast(b, claims.ClubID)
 	}
 
 	JSON(w, http.StatusCreated, b)
@@ -148,4 +153,86 @@ func (h *BroadcastHandler) HandleListBroadcasts(w http.ResponseWriter, r *http.R
 	}
 
 	JSON(w, http.StatusOK, broadcasts)
+}
+
+type broadcastRecipient struct {
+	UserID string
+	Email  string
+}
+
+// deliverBroadcast sends the broadcast to all eligible recipients in the
+// background. It respects per-user email opt-outs for the "broadcast"
+// category and attaches RFC 8058 List-Unsubscribe headers.
+func (h *BroadcastHandler) deliverBroadcast(b broadcast, clubID string) {
+	ctx := context.Background()
+
+	recipientQuery := `
+		SELECT u.id, u.email
+		FROM users u
+		LEFT JOIN communication_preferences cp
+			ON cp.user_id = u.id AND cp.club_id = u.club_id AND cp.category = 'broadcast'
+		WHERE u.club_id = $1
+		  AND (cp.email_enabled IS NULL OR cp.email_enabled = true)`
+
+	switch b.Recipients {
+	case "members":
+		recipientQuery += ` AND EXISTS (SELECT 1 FROM slips s WHERE s.member_id = u.id AND s.club_id = u.club_id)`
+	case "board":
+		recipientQuery += ` AND EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = u.id AND ur.club_id = u.club_id AND ur.role IN ('board', 'admin'))`
+	case "slip_holders":
+		recipientQuery += ` AND EXISTS (SELECT 1 FROM slips s WHERE s.member_id = u.id AND s.club_id = u.club_id)`
+	}
+
+	rows, err := h.db.Query(ctx, recipientQuery, clubID)
+	if err != nil {
+		h.log.Error().Err(err).Str("broadcast_id", b.ID).Msg("failed to query broadcast recipients")
+		return
+	}
+	defer rows.Close()
+
+	var recipients []broadcastRecipient
+	for rows.Next() {
+		var rec broadcastRecipient
+		if err := rows.Scan(&rec.UserID, &rec.Email); err != nil {
+			h.log.Error().Err(err).Msg("failed to scan broadcast recipient")
+			return
+		}
+		recipients = append(recipients, rec)
+	}
+	if err := rows.Err(); err != nil {
+		h.log.Error().Err(err).Msg("broadcast recipient rows error")
+		return
+	}
+
+	baseURL := fmt.Sprintf("https://%s/api/v1/unsubscribe", h.config.Domain)
+	throttle := h.config.BulkSendThrottle
+
+	sent, failed := 0, 0
+	for _, rec := range recipients {
+		tok := unsubscribe.GenerateToken(rec.UserID, "broadcast", h.secret)
+		unsubURL := baseURL + "?token=" + tok + "&category=broadcast"
+
+		headers := map[string]string{
+			"List-Unsubscribe":      "<" + unsubURL + ">",
+			"List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+		}
+
+		if err := h.email.SendWithHeaders(ctx, rec.Email, b.Subject, b.Body, headers); err != nil {
+			h.log.Error().Err(err).Str("to", rec.Email).Str("broadcast_id", b.ID).Msg("broadcast send failed")
+			failed++
+		} else {
+			sent++
+		}
+
+		if throttle > 0 {
+			time.Sleep(throttle)
+		}
+	}
+
+	h.log.Info().
+		Str("broadcast_id", b.ID).
+		Int("sent", sent).
+		Int("failed", failed).
+		Int("total", len(recipients)).
+		Msg("broadcast delivery complete")
 }

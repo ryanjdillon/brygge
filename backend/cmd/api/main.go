@@ -204,6 +204,7 @@ func main() {
 	weatherHandler := handlers.NewWeatherHandler(db, rdb, &cfg, log)
 	contactHandler := handlers.NewContactHandler(&cfg, log)
 	broadcastHandler := handlers.NewBroadcastHandler(db, &cfg, emailClient, log)
+	emailPrefsHandler := handlers.NewEmailPrefsHandler(db, &cfg, log)
 	projectsHandler := handlers.NewProjectsHandler(db, &cfg, log)
 	featureRequestsHandler := handlers.NewFeatureRequestsHandler(db, &cfg, log)
 	financialsHandler := handlers.NewFinancialsHandler(db, &cfg, auditService, log)
@@ -291,6 +292,8 @@ func main() {
 			r.Get("/boat-models", boatModelsHandler.HandleSearch)
 			r.Get("/weather", weatherHandler.HandleGetWeather)
 			r.Post("/contact", contactHandler.HandleContactForm)
+			r.Get("/unsubscribe", emailPrefsHandler.HandleUnsubscribeRedirect)
+			r.Post("/unsubscribe", emailPrefsHandler.HandleUnsubscribeOneClick)
 			r.Get("/club", func(w http.ResponseWriter, r *http.Request) {
 				// Public club info — name/slug/domain come from the static
 				// deploy config so the response is available even before any
@@ -512,6 +515,8 @@ func main() {
 			r.Get("/me/delete-request", gdprHandler.HandleGetDeletionStatus)
 			r.Post("/me/consent", gdprHandler.HandleRecordConsent)
 			r.Get("/me/consents", gdprHandler.HandleGetMyConsents)
+			r.Get("/me/email-preferences", emailPrefsHandler.HandleGetEmailPrefs)
+			r.Put("/me/email-preferences", emailPrefsHandler.HandleUpdateEmailPref)
 			r.Get("/directory", membersHandler.HandleGetDirectory)
 		})
 

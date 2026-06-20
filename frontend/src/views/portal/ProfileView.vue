@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue'
+import { ref, watch, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 import { useApiClient, unwrap } from '@/lib/apiClient'
 import { useLegalDocument, useMyConsents, useRecordConsent } from '@/composables/useGdpr'
 import Input from '@/components/ui/form/Input.vue'
@@ -13,6 +13,7 @@ import { useAuthStore } from '@/stores/auth'
 
 const { t } = useI18n()
 const auth = useAuthStore()
+const route = useRoute()
 const localeOptions = LOCALE_OPTIONS
 const client = useApiClient()
 const queryClient = useQueryClient()
@@ -108,6 +109,42 @@ const { mutate: saveProfile, isPending: isSaving } = useMutation({
     setTimeout(() => (toast.value = null), 3000)
   },
 })
+
+interface EmailPref {
+  category: string
+  email_enabled: boolean
+  can_opt_out: boolean
+}
+
+const { data: emailPrefs } = useQuery<EmailPref[]>({
+  queryKey: ['portal', 'email-preferences'],
+  queryFn: async () => {
+    const res = await fetch('/api/v1/members/me/email-preferences', { credentials: 'include' })
+    if (!res.ok) throw new Error(`${res.status}`)
+    return res.json() as Promise<EmailPref[]>
+  },
+})
+
+const { mutate: updateEmailPref } = useMutation({
+  mutationFn: async (payload: { category: string; email_enabled: boolean }) => {
+    const res = await fetch('/api/v1/members/me/email-preferences', {
+      method: 'PUT',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) throw new Error(`${res.status}`)
+    return res.json()
+  },
+  onSuccess: () => queryClient.invalidateQueries({ queryKey: ['portal', 'email-preferences'] }),
+})
+
+const emailPrefsRef = ref<HTMLElement | null>(null)
+onMounted(() => {
+  if (route.query.unsubscribe) {
+    emailPrefsRef.value?.scrollIntoView({ behavior: 'smooth' })
+  }
+})
 </script>
 
 <template>
@@ -199,6 +236,40 @@ const { mutate: saveProfile, isPending: isSaving } = useMutation({
             <span class="block text-xs text-gray-500">{{ t('portal.profile.hideInDirectoryHint') }}</span>
           </span>
         </Checkbox>
+      </fieldset>
+
+      <fieldset ref="emailPrefsRef" class="rounded-md border border-gray-200 bg-gray-50 p-3">
+        <legend class="px-1 text-sm font-semibold text-gray-700">{{ t('portal.profile.emailPrefsTitle') }}</legend>
+        <p class="mb-3 text-xs text-gray-500">{{ t('portal.profile.emailPrefsHint') }}</p>
+        <div v-if="emailPrefs" class="space-y-2">
+          <label
+            v-for="pref in emailPrefs"
+            :key="pref.category"
+            class="flex items-center justify-between gap-3"
+          >
+            <span class="text-sm text-gray-700">
+              {{ pref.category === 'broadcast' ? t('portal.profile.emailPrefBroadcast') : pref.category }}
+            </span>
+            <button
+              type="button"
+              :class="[
+                'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2',
+                pref.email_enabled ? 'bg-blue-600' : 'bg-gray-200',
+              ]"
+              :aria-checked="pref.email_enabled"
+              role="switch"
+              :aria-label="pref.category === 'broadcast' ? t('portal.profile.emailPrefBroadcast') : pref.category"
+              @click="updateEmailPref({ category: pref.category, email_enabled: !pref.email_enabled })"
+            >
+              <span
+                :class="[
+                  'pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow ring-0 transition-transform',
+                  pref.email_enabled ? 'translate-x-5' : 'translate-x-0',
+                ]"
+              />
+            </button>
+          </label>
+        </div>
       </fieldset>
 
       <div v-if="privacyConsentNeeded" class="rounded-md border border-amber-200 bg-amber-50 p-3">

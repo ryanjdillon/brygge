@@ -26,5 +26,10 @@ func (m *MockSender) SendWithAttachment(_ context.Context, to, subject, html, fi
 	return m.Err
 }
 
+func (m *MockSender) SendWithHeaders(_ context.Context, to, subject, html string, _ map[string]string) error {
+	m.Calls = append(m.Calls, MockCall{To: to, Subject: subject, HTML: html})
+	return m.Err
+}
+
 // Compile-time check.
 var _ Sender = (*MockSender)(nil)

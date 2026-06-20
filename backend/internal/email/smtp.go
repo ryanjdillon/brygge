@@ -54,15 +54,19 @@ func NewSMTPClient(host string, port int, username, password, fromAddress, reply
 }
 
 func (c *SMTPClient) Send(ctx context.Context, to, subject, htmlBody string) error {
-	return c.send(ctx, to, subject, htmlBody, "", nil)
+	return c.send(ctx, to, subject, htmlBody, "", nil, nil)
 }
 
 func (c *SMTPClient) SendWithAttachment(ctx context.Context, to, subject, htmlBody, filename string, attachment []byte) error {
-	return c.send(ctx, to, subject, htmlBody, filename, attachment)
+	return c.send(ctx, to, subject, htmlBody, filename, attachment, nil)
 }
 
-func (c *SMTPClient) send(ctx context.Context, to, subject, htmlBody, filename string, attachment []byte) error {
-	msg, err := c.buildMessage(to, subject, htmlBody, filename, attachment)
+func (c *SMTPClient) SendWithHeaders(ctx context.Context, to, subject, htmlBody string, extraHeaders map[string]string) error {
+	return c.send(ctx, to, subject, htmlBody, "", nil, extraHeaders)
+}
+
+func (c *SMTPClient) send(ctx context.Context, to, subject, htmlBody, filename string, attachment []byte, extraHeaders map[string]string) error {
+	msg, err := c.buildMessage(to, subject, htmlBody, filename, attachment, extraHeaders)
 	if err != nil {
 		return fmt.Errorf("build message: %w", err)
 	}
@@ -135,7 +139,7 @@ func (c *SMTPClient) send(ctx context.Context, to, subject, htmlBody, filename s
 	return client.Quit()
 }
 
-func (c *SMTPClient) buildMessage(to, subject, htmlBody, filename string, attachment []byte) ([]byte, error) {
+func (c *SMTPClient) buildMessage(to, subject, htmlBody, filename string, attachment []byte, extraHeaders map[string]string) ([]byte, error) {
 	var buf bytes.Buffer
 	header := textproto.MIMEHeader{}
 	header.Set("From", c.fromAddress)
@@ -146,6 +150,9 @@ func (c *SMTPClient) buildMessage(to, subject, htmlBody, filename string, attach
 	header.Set("Subject", mime.QEncoding.Encode("utf-8", subject))
 	header.Set("MIME-Version", "1.0")
 	header.Set("Date", time.Now().UTC().Format(time.RFC1123Z))
+	for k, v := range extraHeaders {
+		header.Set(k, v)
+	}
 
 	if len(attachment) == 0 {
 		header.Set("Content-Type", "text/html; charset=UTF-8")
