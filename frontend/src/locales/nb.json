@@ -347,6 +347,8 @@
     "profile": {
       "title": "Min profil",
       "fullName": "Fullt navn",
+      "firstName": "Fornavn",
+      "lastName": "Etternavn",
       "email": "E-post",
       "phone": "Telefon",
       "address": "Adresse",

@@ -19,7 +19,8 @@ const client = useApiClient()
 const queryClient = useQueryClient()
 
 interface ProfileForm {
-  name: string
+  firstName: string
+  lastName: string
   email: string
   phone: string
   address: { street: string; postalCode: string; city: string }
@@ -29,7 +30,8 @@ interface ProfileForm {
 }
 
 const form = ref<ProfileForm>({
-  name: '',
+  firstName: '',
+  lastName: '',
   email: '',
   phone: '',
   address: { street: '', postalCode: '', city: '' },
@@ -63,7 +65,8 @@ const { data: profile, isLoading } = useQuery({
 watch(profile, (p) => {
   if (p) {
     form.value = {
-      name: p.full_name,
+      firstName: (p as { first_name?: string }).first_name ?? '',
+      lastName: (p as { last_name?: string }).last_name ?? '',
       email: p.email,
       phone: p.phone,
       address: { street: p.address_line, postalCode: p.postal_code, city: p.city },
@@ -81,7 +84,8 @@ const { mutate: saveProfile, isPending: isSaving } = useMutation({
     }
     return unwrap(await client.PUT('/api/v1/members/me', {
       body: {
-        full_name: form.value.name,
+        first_name: form.value.firstName,
+        last_name: form.value.lastName,
         phone: form.value.phone,
         address_line: form.value.address.street,
         postal_code: form.value.address.postalCode,
@@ -164,9 +168,14 @@ onMounted(() => {
     <div v-if="isLoading" class="mt-6 text-gray-500">{{ t('common.loading') }}...</div>
 
     <form v-else class="mt-6 max-w-lg space-y-5" @submit.prevent="saveProfile()">
-      <FormField :label="t('portal.profile.fullName')" for="profile-name" required>
-        <Input id="profile-name" v-model="form.name" type="text" required />
-      </FormField>
+      <div class="grid grid-cols-2 gap-3">
+        <FormField :label="t('portal.profile.firstName')" for="profile-first-name" required>
+          <Input id="profile-first-name" v-model="form.firstName" type="text" required />
+        </FormField>
+        <FormField :label="t('portal.profile.lastName')" for="profile-last-name" required>
+          <Input id="profile-last-name" v-model="form.lastName" type="text" required />
+        </FormField>
+      </div>
 
       <FormField :label="t('portal.profile.email')" for="profile-email" required>
         <Input id="profile-email" v-model="form.email" type="email" required />

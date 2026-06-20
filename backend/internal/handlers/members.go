@@ -45,16 +45,18 @@ var supportedUILocales = map[string]bool{
 }
 
 type memberProfile struct {
-	ID         string    `json:"id"`
-	ClubID     string    `json:"club_id"`
-	Email      string    `json:"email"`
-	FullName   string    `json:"full_name"`
-	Phone      string    `json:"phone"`
-	Address    string    `json:"address_line"`
-	PostalCode string    `json:"postal_code"`
-	City       string    `json:"city"`
-	IsLocal    bool      `json:"is_local"`
-	HideInDirectory bool `json:"hide_in_directory"`
+	ID              string    `json:"id"`
+	ClubID          string    `json:"club_id"`
+	Email           string    `json:"email"`
+	FirstName       string    `json:"first_name"`
+	LastName        string    `json:"last_name"`
+	FullName        string    `json:"full_name"`
+	Phone           string    `json:"phone"`
+	Address         string    `json:"address_line"`
+	PostalCode      string    `json:"postal_code"`
+	City            string    `json:"city"`
+	IsLocal         bool      `json:"is_local"`
+	HideInDirectory bool      `json:"hide_in_directory"`
 	// PreferredLanguage is nil when the member hasn't chosen one
 	// (→ the UI follows the club default).
 	PreferredLanguage *string   `json:"preferred_language"`
@@ -63,7 +65,9 @@ type memberProfile struct {
 }
 
 type updateProfileRequest struct {
-	FullName        *string `json:"full_name,omitempty"`
+	FirstName       *string `json:"first_name,omitempty"`
+	LastName        *string `json:"last_name,omitempty"`
+	FullName        *string `json:"full_name,omitempty"` // kept for backward compat; split on last space if first/last absent
 	Phone           *string `json:"phone,omitempty"`
 	Address         *string `json:"address_line,omitempty"`
 	PostalCode      *string `json:"postal_code,omitempty"`
@@ -153,9 +157,11 @@ type reportIssueRequest struct {
 }
 
 type directoryEntry struct {
-	FullName string  `json:"full_name"`
-	Phone    *string `json:"phone,omitempty"`
-	Email    *string `json:"email,omitempty"`
+	FirstName string  `json:"first_name"`
+	LastName  string  `json:"last_name"`
+	FullName  string  `json:"full_name"`
+	Phone     *string `json:"phone,omitempty"`
+	Email     *string `json:"email,omitempty"`
 }
 
 func (h *MembersHandler) HandleGetMe(w http.ResponseWriter, r *http.Request) {
@@ -168,11 +174,11 @@ func (h *MembersHandler) HandleGetMe(w http.ResponseWriter, r *http.Request) {
 
 	var p memberProfile
 	err := h.db.QueryRow(ctx,
-		`SELECT id, club_id, email, full_name, phone, address_line, postal_code, city, is_local, hide_in_directory, preferred_language, created_at, updated_at
+		`SELECT id, club_id, email, first_name, last_name, full_name, phone, address_line, postal_code, city, is_local, hide_in_directory, preferred_language, created_at, updated_at
 		 FROM users WHERE id = $1 AND club_id = $2`,
 		claims.UserID, claims.ClubID,
 	).Scan(
-		&p.ID, &p.ClubID, &p.Email, &p.FullName, &p.Phone,
+		&p.ID, &p.ClubID, &p.Email, &p.FirstName, &p.LastName, &p.FullName, &p.Phone,
 		&p.Address, &p.PostalCode, &p.City, &p.IsLocal, &p.HideInDirectory,
 		&p.PreferredLanguage, &p.CreatedAt, &p.UpdatedAt,
 	)
@@ -205,11 +211,11 @@ func (h *MembersHandler) HandleUpdateMe(w http.ResponseWriter, r *http.Request) 
 
 	var current memberProfile
 	err := h.db.QueryRow(ctx,
-		`SELECT id, club_id, email, full_name, phone, address_line, postal_code, city, is_local, hide_in_directory, preferred_language, created_at, updated_at
+		`SELECT id, club_id, email, first_name, last_name, full_name, phone, address_line, postal_code, city, is_local, hide_in_directory, preferred_language, created_at, updated_at
 		 FROM users WHERE id = $1 AND club_id = $2`,
 		claims.UserID, claims.ClubID,
 	).Scan(
-		&current.ID, &current.ClubID, &current.Email, &current.FullName, &current.Phone,
+		&current.ID, &current.ClubID, &current.Email, &current.FirstName, &current.LastName, &current.FullName, &current.Phone,
 		&current.Address, &current.PostalCode, &current.City, &current.IsLocal, &current.HideInDirectory,
 		&current.PreferredLanguage, &current.CreatedAt, &current.UpdatedAt,
 	)
@@ -219,8 +225,15 @@ func (h *MembersHandler) HandleUpdateMe(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if req.FullName != nil {
-		current.FullName = *req.FullName
+	if req.FirstName != nil {
+		current.FirstName = strings.TrimSpace(*req.FirstName)
+	}
+	if req.LastName != nil {
+		current.LastName = strings.TrimSpace(*req.LastName)
+	}
+	// Backward compat: if only full_name is sent, split on last space.
+	if req.FirstName == nil && req.LastName == nil && req.FullName != nil {
+		current.FirstName, current.LastName = splitFullName(*req.FullName)
 	}
 	if req.Phone != nil {
 		current.Phone = *req.Phone
@@ -250,22 +263,16 @@ func (h *MembersHandler) HandleUpdateMe(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	// full_name became a generated column in DIL-228; we now write
-	// first/last directly. Until /me starts shipping these fields
-	// (DIL-229), the request still arrives as a single full_name and
-	// we split on the last space to populate both columns.
-	first, last := splitFullName(current.FullName)
-
 	var p memberProfile
 	err = h.db.QueryRow(ctx,
 		`UPDATE users
 		 SET first_name = $3, last_name = $4, phone = $5, address_line = $6, postal_code = $7, city = $8, hide_in_directory = $9, preferred_language = $10, updated_at = now()
 		 WHERE id = $1 AND club_id = $2
-		 RETURNING id, club_id, email, full_name, phone, address_line, postal_code, city, is_local, hide_in_directory, preferred_language, created_at, updated_at`,
+		 RETURNING id, club_id, email, first_name, last_name, full_name, phone, address_line, postal_code, city, is_local, hide_in_directory, preferred_language, created_at, updated_at`,
 		claims.UserID, claims.ClubID,
-		first, last, current.Phone, current.Address, current.PostalCode, current.City, current.HideInDirectory, current.PreferredLanguage,
+		current.FirstName, current.LastName, current.Phone, current.Address, current.PostalCode, current.City, current.HideInDirectory, current.PreferredLanguage,
 	).Scan(
-		&p.ID, &p.ClubID, &p.Email, &p.FullName, &p.Phone,
+		&p.ID, &p.ClubID, &p.Email, &p.FirstName, &p.LastName, &p.FullName, &p.Phone,
 		&p.Address, &p.PostalCode, &p.City, &p.IsLocal, &p.HideInDirectory,
 		&p.PreferredLanguage, &p.CreatedAt, &p.UpdatedAt,
 	)
@@ -585,14 +592,14 @@ func (h *MembersHandler) HandleGetDirectory(w http.ResponseWriter, r *http.Reque
 	pg := shared.ParsePagination(r, 100, 500)
 
 	rows, err := h.db.Query(ctx,
-		`SELECT u.full_name, u.phone, u.email
+		`SELECT u.first_name, u.last_name, u.full_name, u.phone, u.email
 		 FROM users u
 		 JOIN user_roles ur ON ur.user_id = u.id AND ur.club_id = u.club_id
 		 WHERE u.club_id = $1
 		 AND u.hide_in_directory = FALSE
 		 AND ur.role IN ('member', 'slip_holder', 'board', 'harbor_master', 'treasurer', 'admin')
-		 GROUP BY u.id, u.full_name, u.phone, u.email
-		 ORDER BY u.full_name
+		 GROUP BY u.id, u.first_name, u.last_name, u.full_name, u.phone, u.email
+		 ORDER BY u.last_name, u.first_name
 		 LIMIT $2 OFFSET $3`,
 		claims.ClubID, pg.Limit, pg.Offset,
 	)
@@ -607,7 +614,7 @@ func (h *MembersHandler) HandleGetDirectory(w http.ResponseWriter, r *http.Reque
 	for rows.Next() {
 		var e directoryEntry
 		var phone, email string
-		if err := rows.Scan(&e.FullName, &phone, &email); err != nil {
+		if err := rows.Scan(&e.FirstName, &e.LastName, &e.FullName, &phone, &email); err != nil {
 			h.log.Error().Err(err).Msg("failed to scan directory entry")
 			Error(w, http.StatusInternalServerError, "internal error")
 			return

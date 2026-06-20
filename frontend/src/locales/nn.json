@@ -347,6 +347,8 @@
     "profile": {
       "title": "Profilen min",
       "fullName": "Fullt namn",
+      "firstName": "Førenamn",
+      "lastName": "Etternamn",
       "email": "E-post",
       "phone": "Telefon",
       "address": "Adresse",
