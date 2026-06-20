@@ -58,6 +58,9 @@ func (h *FeedbackHandler) HandleSubmit(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	apiKey = strings.TrimSpace(apiKey)
+	teamID = strings.TrimSpace(teamID)
+	triageID = strings.TrimSpace(triageID)
 	if !enabled || apiKey == "" || teamID == "" || triageID == "" {
 		Error(w, http.StatusServiceUnavailable, "feedback not configured")
 		return
@@ -124,10 +127,10 @@ func (h *FeedbackHandler) HandleSubmit(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	issueID, err := createLinearIssue(req.Title, body, labelIDs, teamID, triageID, apiKey)
+	issueID, err := createLinearIssue(req.Title, body, labelIDs, teamID, triageID, apiKey, h.log)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to create Linear issue")
-		Error(w, http.StatusInternalServerError, "failed to submit feedback")
+		Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -135,7 +138,7 @@ func (h *FeedbackHandler) HandleSubmit(w http.ResponseWriter, r *http.Request) {
 	JSON(w, http.StatusCreated, map[string]string{"id": issueID})
 }
 
-func createLinearIssue(title, description string, labelIDs []string, teamID, triageID, apiKey string) (string, error) {
+func createLinearIssue(title, description string, labelIDs []string, teamID, triageID, apiKey string, log zerolog.Logger) (string, error) {
 	labelsJSON, _ := json.Marshal(labelIDs)
 
 	query := fmt.Sprintf(`mutation {
@@ -151,9 +154,14 @@ func createLinearIssue(title, description string, labelIDs []string, teamID, tri
 		}
 	}`, teamID, triageID, jsonStr(title), jsonStr(description), string(labelsJSON))
 
-	resp, err := linearGraphQL(query, apiKey)
+	resp, statusCode, err := linearGraphQL(query, apiKey)
 	if err != nil {
 		return "", err
+	}
+
+	if statusCode != http.StatusOK {
+		log.Error().Int("status", statusCode).Str("body", string(resp)).Msg("linear API returned non-200")
+		return "", fmt.Errorf("linear API error (HTTP %d): %s", statusCode, truncate(string(resp), 200))
 	}
 
 	var result struct {
@@ -171,15 +179,24 @@ func createLinearIssue(title, description string, labelIDs []string, teamID, tri
 		} `json:"errors"`
 	}
 	if err := json.Unmarshal(resp, &result); err != nil {
-		return "", fmt.Errorf("parse response: %w", err)
+		log.Error().Str("body", string(resp)).Msg("linear response parse failed")
+		return "", fmt.Errorf("parse linear response: %w", err)
 	}
 	if len(result.Errors) > 0 {
 		return "", fmt.Errorf("linear error: %s", result.Errors[0].Message)
 	}
 	if !result.Data.IssueCreate.Success {
-		return "", fmt.Errorf("issue creation returned success=false")
+		log.Error().Str("body", string(resp)).Msg("linear issueCreate success=false")
+		return "", fmt.Errorf("linear issue creation failed (success=false)")
 	}
 	return result.Data.IssueCreate.Issue.Identifier, nil
+}
+
+func truncate(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	return s[:max] + "…"
 }
 
 func uploadScreenshot(dataURL, apiKey string) (string, error) {
@@ -211,7 +228,7 @@ func uploadScreenshot(dataURL, apiKey string) (string, error) {
 		}
 	}`, jsonStr(filename), size, jsonStr(contentType))
 
-	prepResp, err := linearGraphQL(prepQuery, apiKey)
+	prepResp, _, err := linearGraphQL(prepQuery, apiKey)
 	if err != nil {
 		return "", fmt.Errorf("prepare upload: %w", err)
 	}
@@ -266,21 +283,22 @@ func uploadScreenshot(dataURL, apiKey string) (string, error) {
 	return uf.AssetURL, nil
 }
 
-func linearGraphQL(query, apiKey string) ([]byte, error) {
+func linearGraphQL(query, apiKey string) ([]byte, int, error) {
 	payload, _ := json.Marshal(map[string]string{"query": query})
 	req, err := http.NewRequest(http.MethodPost, linearGraphQLURL, bytes.NewReader(payload))
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", apiKey)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer resp.Body.Close()
-	return io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	return body, resp.StatusCode, err
 }
 
 func jsonStr(s string) string {
