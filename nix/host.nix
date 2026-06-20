@@ -815,6 +815,9 @@ in
     # (missing CLUB_NAME → NavBar shows "Brygge", emails say "your club").
     CLUB_SLUG = clubConfig.slug;
     CLUB_NAME = clubConfig.name;
+    S3_ENDPOINT    = clubConfig.s3Endpoint;
+    S3_ACCESS_KEY  = clubConfig.s3AccessKey;
+    S3_SECRET_KEY  = clubConfig.s3SecretKey;
     S3_BUCKET_DOCS = clubConfig.s3BucketDocs;
 
     # Role-gated shared inbox (DIL-275/276). Backend's mail.Reconciler
