@@ -11,17 +11,18 @@ So in short: **almost any mail app on any device can connect.** The only excepti
 
 ## Connection settings — same for every client
 
-Throughout this guide, replace `yourclub.no` with your club's actual domain (the part after `@` in your club email address).
+> [!NOTE]
+> The server addresses below use `<yourclub.no>` as a placeholder — angle brackets mean "replace this with your own value." Substitute your club's actual domain everywhere you see `<yourclub.no>`. For example, if your club email is `kari@klokkarvikbaatlag.no`, enter `mail.klokkarvikbaatlag.no` — not `mail.yourclub.no` or `mail.<yourclub.no>` literally.
 
 Whatever app you use, these are the values you'll enter:
 
 | Setting | Value |
 |---|---|
-| Incoming (IMAP) server | `mail.yourclub.no` |
+| Incoming (IMAP) server | `mail.<yourclub.no>` |
 | Incoming port | **`993`** (SSL/TLS required) |
-| Outgoing (SMTP) server | `mail.yourclub.no` |
+| Outgoing (SMTP) server | `mail.<yourclub.no>` |
 | Outgoing port | **`465`** (SSL/TLS required) |
-| Username (both servers) | your full club address (e.g. `kari@yourclub.no`) |
+| Username (both servers) | your full club address (e.g. `kari@<yourclub.no>`) |
 | Password (both servers) | your club mailbox password (the one you log in to webmail with) |
 | Authentication | Normal password |
 
@@ -47,11 +48,11 @@ If your app asks for "STARTTLS" vs "SSL/TLS": always pick **SSL/TLS** for both s
 4. Name: your full name. Email: your club address. Password: your club mailbox password. Description: e.g. "Club mail".
 5. Pick **IMAP** at the top.
 6. **Incoming Mail Server**:
-   - Host Name: `mail.yourclub.no`
+   - Host Name: `mail.<yourclub.no>`
    - User Name: your full club address
    - Password: your club mailbox password
 7. **Outgoing Mail Server**:
-   - Host Name: `mail.yourclub.no`
+   - Host Name: `mail.<yourclub.no>`
    - User Name: your full club address
    - Password: your club mailbox password
 8. Tap **Next** — iOS verifies the connection. Tap **Save**.
@@ -65,8 +66,8 @@ If iOS asks about security ("cannot verify server identity"), tap **Continue** t
 3. Name: your full name. Email: your club address. Password: your club mailbox password. Click **Sign In**.
 4. Mail can't auto-detect — you'll see manual fields. Fill in:
    - Account Type: **IMAP**
-   - Incoming Mail Server: `mail.yourclub.no`
-   - Outgoing Mail Server: `mail.yourclub.no`
+   - Incoming Mail Server: `mail.<yourclub.no>`
+   - Outgoing Mail Server: `mail.<yourclub.no>`
    - User Name: your full club address
    - Password: your club mailbox password
 5. Click **Sign In**. If macOS complains it can't verify, that's normal once — accept the certificate.
@@ -85,11 +86,11 @@ After it appears in the sidebar, **Mail → Settings → Accounts → [your club
 2. Enter your club address. Outlook may attempt auto-discovery and fail — that's expected; pick **Advanced options → Let me set up my account manually** and continue.
 3. Pick **IMAP**.
 4. **Incoming server**:
-   - Server: `mail.yourclub.no`
+   - Server: `mail.<yourclub.no>`
    - Port: `993`
    - Encryption method: **SSL/TLS**
 5. **Outgoing server**:
-   - Server: `mail.yourclub.no`
+   - Server: `mail.<yourclub.no>`
    - Port: `465`
    - Encryption method: **SSL/TLS**
    - Require sign-in: **on** (username + password — same credentials as incoming).
@@ -114,11 +115,11 @@ The Gmail mobile app (Android and iOS) **does** support adding an external IMAP 
 5. Password: your club mailbox password.
 6. **Incoming server**:
    - Username: your full club address
-   - Server: `mail.yourclub.no`
+   - Server: `mail.<yourclub.no>`
    - Port: `993`, Security: **SSL/TLS**
 7. **Outgoing server**:
    - Username: your full club address
-   - Server: `mail.yourclub.no`
+   - Server: `mail.<yourclub.no>`
    - Port: `465`, Security: **SSL/TLS**
 8. Finish.
 
@@ -128,8 +129,8 @@ The Gmail mobile app (Android and iOS) **does** support adding an external IMAP 
 2. Pick **Other**.
 3. Enter your club address → **Manual setup** → **Personal (IMAP)**.
 4. Password: your club mailbox password.
-5. **Incoming server**: `mail.yourclub.no`, port `993`, security **SSL/TLS**.
-6. **Outgoing server**: `mail.yourclub.no`, port `465`, security **SSL/TLS**, Require sign-in: **on**.
+5. **Incoming server**: `mail.<yourclub.no>`, port `993`, security **SSL/TLS**.
+6. **Outgoing server**: `mail.<yourclub.no>`, port `465`, security **SSL/TLS**, Require sign-in: **on**.
 7. Finish.
 
 > Tip: on newer Gmail for Android, after the account is added, you can pick **Gmailify** in the account settings, which folds the external inbox into the main Gmail view. Not available on iOS.
@@ -145,11 +146,11 @@ Google removed the option to fetch external mail via IMAP from the web interface
 
 > ⚠️ **Not the preferred solution.** Forwarding sends club mail to a personal account outside the club's control. Copies of club correspondence then live on a third-party service (Google, Microsoft) rather than on the club's own server. Prefer the [IMAP setup](#pick-your-client) or the [Gmail mobile app](#gmail-mobile-app) if at all possible.
 
-This works for Gmail web and Outlook.com — any web-only mailbox that won't accept an IMAP connection. **Only do this for a personal club mailbox** (e.g. `kari@yourclub.no`); for a shared role mailbox like `kasserar@`, see ["Recommended setup for board roles"](#recommended-setup-for-board-roles) below.
+This works for Gmail web and Outlook.com — any web-only mailbox that won't accept an IMAP connection. **Only do this for a personal club mailbox** (e.g. `kari@<yourclub.no>`); for a shared role mailbox like `kasserar@`, see ["Recommended setup for board roles"](#recommended-setup-for-board-roles) below.
 
 #### Step 1 — forward incoming mail
 
-1. Log in to **webmail** at `https://webmail.yourclub.no` with your club address.
+1. Log in to **webmail** at `https://webmail.<yourclub.no>` with your club address.
 2. Open **Settings** → **Filters** (or **Forwarding**).
 3. Add a rule: **forward all incoming mail to your Gmail/Outlook address**.
 4. Tick **keep a copy on the server** so you don't lose mail if the destination rejects a forward.
@@ -159,13 +160,13 @@ Send yourself a test mail to confirm it lands in your Gmail/Outlook inbox.
 
 #### Step 2 — let your web mail app send "from" your club address
 
-So replies don't show `<your-personal>@gmail.com` and confuse recipients:
+So replies don't show `<your-personal-address>@gmail.com` and confuse recipients:
 
 **Gmail web:**
 
 1. **Settings → Accounts and Import → Send mail as → Add another email address**.
 2. Name: your full name. Email: your club address. **Untick** "Treat as an alias".
-3. SMTP Server: `mail.yourclub.no`, Port: `465`, Username: your full club address, Password: your club mailbox password, secure connection **SSL/TLS**.
+3. SMTP Server: `mail.<yourclub.no>`, Port: `465`, Username: your full club address, Password: your club mailbox password, secure connection **SSL/TLS**.
 4. Click **Add Account**. Gmail sends a verification email to your club address — because of Step 1 it forwards back. Open the email, click the link.
 5. Optional: in the same settings, set **When replying to a message, reply from the address it was sent to**.
 
@@ -173,7 +174,7 @@ So replies don't show `<your-personal>@gmail.com` and confuse recipients:
 
 1. **Settings → Mail → Sync email → Connected accounts → Other email accounts**.
 2. Email address: your club address. Display name: your full name. Password: your club mailbox password.
-3. Pick **Advanced options** → set incoming/outgoing server names and ports (`mail.yourclub.no`, `993` and `465`, SSL on both).
+3. Pick **Advanced options** → set incoming/outgoing server names and ports (`mail.<yourclub.no>`, `993` and `465`, SSL on both).
 4. Outlook.com's "Send mail as" flow is similar to Gmail's — once added you can pick the From address per message.
 
 ## Mozilla Thunderbird
@@ -185,13 +186,13 @@ Thunderbird auto-detects most settings, but our server uses non-standard naming 
 3. Click **Configure manually**.
 4. **Incoming**:
    - Protocol: **IMAP**
-   - Server: `mail.yourclub.no`
+   - Server: `mail.<yourclub.no>`
    - Port: `993`
    - SSL: **SSL/TLS**
    - Authentication: **Normal password**
    - Username: your full club address
 5. **Outgoing**:
-   - Server: `mail.yourclub.no`
+   - Server: `mail.<yourclub.no>`
    - Port: `465`
    - SSL: **SSL/TLS**
    - Authentication: **Normal password**
@@ -221,7 +222,7 @@ This way the desktop view stays authoritative and the mobile app is the "quick g
 - **App offers STARTTLS or "TLS (start)"** — don't pick that. Always pick **SSL/TLS** (also called "implicit TLS").
 - **Gmail web "Check mail from other accounts" only offers POP3** — correct, this is by design from Google's side. Use the [forwarding workaround](#forwarding-workaround-for-web-only-mailboxes) or the [Gmail mobile app](#gmail-mobile-app).
 - **Forwarded test email never arrives** — check that **forwarding is enabled** in webmail's Filters/Forwarding settings, and that the destination address is correct. Some providers (especially Outlook.com) silently spam-filter forwarded mail from new servers; check the spam folder.
-- **Sent mail shows the wrong "From:"** — in your client's account settings, make sure the outgoing identity uses your club address and that the SMTP server (`mail.yourclub.no`) is being used to send.
+- **Sent mail shows the wrong "From:"** — in your client's account settings, make sure the outgoing identity uses your club address and that the SMTP server (`mail.<yourclub.no>`) is being used to send.
 - **"Mail from this account is going to spam at the recipient"** — that's a deliverability issue at the receiving server, separate from setup here. Ask your treasurer/admin to check the delivery log in Brygge (Faktura → Sent → mail-search icon).
 
 ## Related
