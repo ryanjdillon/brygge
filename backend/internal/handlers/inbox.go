@@ -19,6 +19,9 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/brygge-klubb/brygge/internal/audit"
+	// Aliased: the legacy broadcast handler in this package declares a
+	// type named `broadcast`, which would shadow the package name.
+	bcast "github.com/brygge-klubb/brygge/internal/broadcast"
 	"github.com/brygge-klubb/brygge/internal/mail"
 	"github.com/brygge-klubb/brygge/internal/middleware"
 )
@@ -42,6 +45,14 @@ type InboxHandler struct {
 	audit       *audit.Service
 	spec        []mail.MailboxSpec
 	log         zerolog.Logger
+
+	// broadcasts persists bulk (group/BCC) sends as a parent row plus
+	// one pending delivery per recipient; the worker drains them.
+	broadcasts *bcast.Store
+	// kickWorker, when set by the worker wiring, nudges the delivery
+	// worker to process a freshly-enqueued broadcast without waiting for
+	// its next tick. nil until wired (BRY-164).
+	kickWorker func()
 
 	// Cache: shared-mailbox address → JMAP account ID (e.g.
 	// "kasserar@..." → "i"). Populated lazily on first lookup. The
@@ -69,9 +80,16 @@ func NewInboxHandler(db *pgxpool.Pool, jmapFact *mail.JMAPFactory, provisioner *
 		audit:       auditSvc,
 		spec:        spec,
 		log:         log.With().Str("handler", "inbox").Logger(),
+		broadcasts:  bcast.NewStore(db),
 		sharedIDs:   make(map[string]string),
 		sendTargets: make(map[string]sendTarget),
 	}
+}
+
+// SetBroadcastKick wires the delivery-worker nudge so an enqueued bulk
+// send starts draining immediately instead of on the next worker tick.
+func (h *InboxHandler) SetBroadcastKick(kick func()) {
+	h.kickWorker = kick
 }
 
 // MailboxView is the projection returned by GET /mailboxes. Only the
@@ -384,78 +402,14 @@ func (h *InboxHandler) HandleSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Build BCC list from three sources, deduplicated by lowercase email:
-	// 1. spec.BccMembers — existing auto-BCC on certain shared mailboxes
-	// 2. req.BccGroups  — named groups from the compose UI
-	// 3. req.Bcc        — individually searched members from the compose UI
-	var bcc []mail.EmailAddress
-	bccSeen := map[string]bool{}
-	addBCC := func(name, email string) {
-		key := strings.ToLower(email)
-		if !bccSeen[key] {
-			bccSeen[key] = true
-			bcc = append(bcc, mail.EmailAddress{Name: name, Email: email})
-		}
-	}
-
-	if spec.BccMembers {
-		members, err := h.roleMemberEmails(ctx, spec.Role, claims.ClubID)
-		if err != nil {
-			h.log.Warn().Err(err).Msg("bcc_members lookup failed; sending without bcc")
-		} else {
-			for _, e := range members {
-				addBCC("", e)
-			}
-		}
-	}
-
-	if len(req.BccGroups) > 0 {
-		validGroups := map[string]bool{
-			"all": true, "members": true, "board": true,
-			"slip_holders": true, "waiting_list": true,
-		}
-		roleMap := map[string]string{
-			"members": "member", "board": "board", "slip_holders": "slip_holder",
-		}
-		for _, g := range req.BccGroups {
-			if !validGroups[g] {
-				Error(w, http.StatusBadRequest, "unknown bcc_group: "+g)
-				return
-			}
-			var emails []string
-			var gerr error
-			switch g {
-			case "waiting_list":
-				emails, gerr = h.waitingListEmails(ctx, claims.ClubID)
-			case "all":
-				for _, role := range []string{"member", "board", "slip_holder"} {
-					re, rerr := h.roleMemberEmails(ctx, role, claims.ClubID)
-					if rerr != nil {
-						h.log.Warn().Err(rerr).Str("role", role).Msg("bcc_groups all-role lookup failed")
-						continue
-					}
-					emails = append(emails, re...)
-				}
-			default:
-				emails, gerr = h.roleMemberEmails(ctx, roleMap[g], claims.ClubID)
-			}
-			if gerr != nil {
-				h.log.Warn().Err(gerr).Str("group", g).Msg("bcc_groups lookup failed")
-			}
-			for _, e := range emails {
-				addBCC("", e)
-			}
-		}
-	}
-
-	for _, a := range req.Bcc {
-		addBCC(a.Name, a.Email)
-	}
-
-	// Group-only compose: no explicit To → use the sending mailbox as the
-	// visible recipient so the message is well-formed; real recipients receive via BCC.
-	if len(req.To) == 0 {
-		req.To = []emailAddr{{Email: spec.Address}}
+	// Send-path fork (BRY-163): a plain To/Cc message goes out as a
+	// single standard email; any BCC, named group, or auto-bcc-members
+	// fans out into individual, throttled, tracked deliveries via the
+	// broadcast queue, so the mail lands in each recipient's priority
+	// inbox (not "Other") and every send is recorded.
+	if isBulkSend(req, spec) {
+		h.handleBulkSend(w, r, spec, req)
+		return
 	}
 
 	// Build attachment body parts for JMAP Email/set.
@@ -481,7 +435,6 @@ func (h *InboxHandler) HandleSend(w http.ResponseWriter, r *http.Request) {
 	sendReq := mail.SendEmailRequest{
 		To:              toMailAddrs(req.To),
 		Cc:              toMailAddrs(req.Cc),
-		Bcc:             bcc,
 		Subject:         req.Subject,
 		BodyText:        req.BodyText,
 		BodyHTML:        req.BodyHTML,
@@ -518,11 +471,9 @@ func (h *InboxHandler) HandleSend(w http.ResponseWriter, r *http.Request) {
 		ResourceID: spec.Address + "/" + emailID,
 		Details: map[string]any{
 			"target_address":   spec.Address,
-			"recipient_count":  len(req.To) + len(req.Cc) + len(bcc),
+			"recipient_count":  len(req.To) + len(req.Cc),
 			"in_reply_to":      req.InReplyTo,
 			"message_id":       messageID,
-			"bcc_members":      spec.BccMembers,
-			"bcc_groups":       req.BccGroups,
 			"attachment_count": len(req.Attachments),
 		},
 	})
@@ -531,6 +482,245 @@ func (h *InboxHandler) HandleSend(w http.ResponseWriter, r *http.Request) {
 		"email_id":   emailID,
 		"message_id": messageID,
 	})
+}
+
+// isBulkSend decides the send-path fork: a plain To/Cc message is a single
+// standard email; any BCC, named group, or a mailbox configured to
+// auto-bcc its members makes it a tracked, fanned-out bulk send.
+func isBulkSend(req SendRequest, spec mail.MailboxSpec) bool {
+	return len(req.Bcc) > 0 || len(req.BccGroups) > 0 || spec.BccMembers
+}
+
+var errUnknownGroup = inboxFolderErr("unknown bcc_group")
+
+// handleBulkSend resolves every addressee of a group/BCC send, enqueues a
+// broadcast plus one pending delivery per recipient, and returns 202
+// Accepted. The background delivery worker (BRY-164) performs the actual
+// per-recipient, throttled sends; nothing is sent inline here.
+func (h *InboxHandler) handleBulkSend(w http.ResponseWriter, r *http.Request, spec mail.MailboxSpec, req SendRequest) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+
+	// Fail fast if this mailbox can't send — otherwise we'd queue work
+	// that can never drain.
+	if h.passwords.Get(spec.Address) == "" {
+		h.log.Error().Str("address", spec.Address).Msg("no service password for shared principal — send disabled")
+		Error(w, http.StatusServiceUnavailable, "mail backend not configured for sending")
+		return
+	}
+
+	recipients, summary, err := h.resolveBulkRecipients(ctx, spec, req, claims.ClubID)
+	if err != nil {
+		if errors.Is(err, errUnknownGroup) {
+			Error(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		h.log.Warn().Err(err).Str("address", spec.Address).Msg("resolve bulk recipients failed")
+		Error(w, http.StatusBadGateway, "recipient lookup failed")
+		return
+	}
+	if len(recipients) == 0 {
+		Error(w, http.StatusBadRequest, "no recipients resolved")
+		return
+	}
+
+	if len(req.Attachments) > 0 || len(req.InlineImages) > 0 {
+		// Bulk sends carry text/HTML only for now — attachments aren't
+		// persisted in the delivery queue yet. Surfaced to the user via
+		// the compose UX (BRY-167); logged here so it isn't silent.
+		h.log.Warn().Str("address", spec.Address).Int("attachments", len(req.Attachments)+len(req.InlineImages)).
+			Msg("bulk send dropping attachments (not yet supported)")
+	}
+
+	id, err := h.broadcasts.Enqueue(ctx, bcast.New{
+		ClubID:        claims.ClubID,
+		SentBy:        claims.UserID,
+		SourceAddress: spec.Address,
+		Subject:       req.Subject,
+		BodyText:      req.BodyText,
+		BodyHTML:      req.BodyHTML,
+		Recipients:    summary,
+	}, recipients)
+	if err != nil {
+		h.log.Error().Err(err).Str("address", spec.Address).Msg("enqueue broadcast failed")
+		Error(w, http.StatusInternalServerError, "could not queue broadcast")
+		return
+	}
+
+	h.audit.Log(ctx, audit.Entry{
+		ClubID:     strPtrIfSet(claims.ClubID),
+		ActorID:    strPtrIfSet(claims.UserID),
+		Action:     audit.ActionInboxMessageSent,
+		Resource:   "broadcast",
+		ResourceID: id,
+		Details: map[string]any{
+			"target_address":  spec.Address,
+			"recipient_count": len(recipients),
+			"recipients":      summary,
+			"bcc_groups":      req.BccGroups,
+			"bcc_members":     spec.BccMembers,
+		},
+	})
+
+	if h.kickWorker != nil {
+		h.kickWorker()
+	}
+
+	JSON(w, http.StatusAccepted, map[string]any{
+		"broadcast_id":    id,
+		"recipient_count": len(recipients),
+	})
+}
+
+// resolveBulkRecipients expands every addressee of a bulk send — explicit
+// To/Cc/Bcc plus named groups plus auto-bcc-members — into a deduplicated
+// recipient list (preferring entries that map to a known member) and a
+// human-readable summary label for the broadcast row.
+func (h *InboxHandler) resolveBulkRecipients(ctx context.Context, spec mail.MailboxSpec, req SendRequest, clubID string) ([]bcast.Recipient, string, error) {
+	var out []bcast.Recipient
+	seen := map[string]int{} // lowercase email → index in out
+	add := func(rec bcast.Recipient) {
+		if rec.Email == "" {
+			return
+		}
+		key := strings.ToLower(rec.Email)
+		if idx, ok := seen[key]; ok {
+			// Prefer a member-mapped entry over an ad-hoc one.
+			if out[idx].UserID == nil && rec.UserID != nil {
+				out[idx].UserID = rec.UserID
+			}
+			return
+		}
+		seen[key] = len(out)
+		out = append(out, rec)
+	}
+
+	// Explicit addressees from the compose UI carry no member mapping.
+	for _, a := range req.To {
+		add(bcast.Recipient{Email: a.Email})
+	}
+	for _, a := range req.Cc {
+		add(bcast.Recipient{Email: a.Email})
+	}
+	for _, a := range req.Bcc {
+		add(bcast.Recipient{Email: a.Email})
+	}
+
+	if spec.BccMembers {
+		members, err := h.roleMembers(ctx, spec.Role, clubID)
+		if err != nil {
+			return nil, "", fmt.Errorf("bcc_members lookup: %w", err)
+		}
+		for _, m := range members {
+			add(m)
+		}
+	}
+
+	validGroups := map[string]bool{
+		"all": true, "members": true, "board": true,
+		"slip_holders": true, "waiting_list": true,
+	}
+	roleMap := map[string]string{
+		"members": "member", "board": "board", "slip_holders": "slip_holder",
+	}
+	for _, g := range req.BccGroups {
+		if !validGroups[g] {
+			return nil, "", fmt.Errorf("%w: %s", errUnknownGroup, g)
+		}
+		var members []bcast.Recipient
+		var err error
+		switch g {
+		case "waiting_list":
+			members, err = h.waitingListMembers(ctx, clubID)
+		case "all":
+			for _, role := range []string{"member", "board", "slip_holder"} {
+				rm, rerr := h.roleMembers(ctx, role, clubID)
+				if rerr != nil {
+					return nil, "", fmt.Errorf("all-group %s lookup: %w", role, rerr)
+				}
+				members = append(members, rm...)
+			}
+		default:
+			members, err = h.roleMembers(ctx, roleMap[g], clubID)
+		}
+		if err != nil {
+			return nil, "", fmt.Errorf("group %s lookup: %w", g, err)
+		}
+		for _, m := range members {
+			add(m)
+		}
+	}
+
+	return out, bulkSummary(spec, req), nil
+}
+
+// bulkSummary builds the human-readable recipient label stored on the
+// broadcast row (e.g. "members, board, 2 individual").
+func bulkSummary(spec mail.MailboxSpec, req SendRequest) string {
+	var parts []string
+	parts = append(parts, req.BccGroups...)
+	if spec.BccMembers {
+		parts = append(parts, spec.Role+" (auto)")
+	}
+	if n := len(req.To) + len(req.Cc) + len(req.Bcc); n > 0 {
+		parts = append(parts, fmt.Sprintf("%d individual", n))
+	}
+	if len(parts) == 0 {
+		return "recipients"
+	}
+	return strings.Join(parts, ", ")
+}
+
+// roleMembers returns club members holding role as broadcast recipients
+// (deduped by user). Skips users without a usable email.
+func (h *InboxHandler) roleMembers(ctx context.Context, role, clubID string) ([]bcast.Recipient, error) {
+	rows, err := h.db.Query(ctx, `
+		SELECT u.id, u.email
+		FROM users u
+		JOIN user_roles ur ON ur.user_id = u.id AND ur.club_id = u.club_id
+		WHERE ur.role = $1::user_role AND u.club_id = $2
+		  AND u.email IS NOT NULL AND u.email <> ''
+		GROUP BY u.id, u.email`, role, clubID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []bcast.Recipient
+	for rows.Next() {
+		var id, email string
+		if err := rows.Scan(&id, &email); err != nil {
+			return nil, err
+		}
+		uid := id
+		out = append(out, bcast.Recipient{UserID: &uid, Email: email})
+	}
+	return out, rows.Err()
+}
+
+// waitingListMembers returns active waiting-list users as broadcast
+// recipients.
+func (h *InboxHandler) waitingListMembers(ctx context.Context, clubID string) ([]bcast.Recipient, error) {
+	rows, err := h.db.Query(ctx, `
+		SELECT DISTINCT u.id, u.email
+		FROM waiting_list_entries wle
+		JOIN users u ON u.id = wle.user_id
+		WHERE wle.club_id = $1
+		  AND wle.status NOT IN ('offered_accepted', 'cancelled')
+		  AND u.email IS NOT NULL AND u.email <> ''`, clubID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []bcast.Recipient
+	for rows.Next() {
+		var id, email string
+		if err := rows.Scan(&id, &email); err != nil {
+			return nil, err
+		}
+		uid := id
+		out = append(out, bcast.Recipient{UserID: &uid, Email: email})
+	}
+	return out, rows.Err()
 }
 
 func toMailAddrs(in []emailAddr) []mail.EmailAddress {
@@ -694,54 +884,6 @@ func (h *InboxHandler) resolveSendMailboxes(ctx context.Context, jmap *mail.JMAP
 		h.log.Info().Str("account", accountID).Str("mailbox", id).Msg("created Sent folder on demand")
 	}
 	return accountID, draftsID, sentID, nil
-}
-
-func (h *InboxHandler) roleMemberEmails(ctx context.Context, role, clubID string) ([]string, error) {
-	rows, err := h.db.Query(ctx, `
-		SELECT u.email
-		FROM users u
-		JOIN user_roles ur ON ur.user_id = u.id AND ur.club_id = u.club_id
-		WHERE ur.role = $1::user_role AND u.club_id = $2
-		GROUP BY u.email
-	`, role, clubID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []string
-	for rows.Next() {
-		var e string
-		if err := rows.Scan(&e); err != nil {
-			return nil, err
-		}
-		out = append(out, e)
-	}
-	return out, rows.Err()
-}
-
-func (h *InboxHandler) waitingListEmails(ctx context.Context, clubID string) ([]string, error) {
-	rows, err := h.db.Query(ctx, `
-		SELECT DISTINCT u.email
-		FROM waiting_list_entries wle
-		JOIN users u ON u.id = wle.user_id
-		WHERE wle.club_id = $1
-		  AND wle.status NOT IN ('offered_accepted', 'cancelled')
-		  AND u.email IS NOT NULL
-		  AND u.email <> ''
-	`, clubID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []string
-	for rows.Next() {
-		var e string
-		if err := rows.Scan(&e); err != nil {
-			return nil, err
-		}
-		out = append(out, e)
-	}
-	return out, rows.Err()
 }
 
 // sharedJMAP returns a JMAPClient authenticated as the shared principal
