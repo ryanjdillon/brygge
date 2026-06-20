@@ -581,6 +581,7 @@
       "periods": "Periods",
       "journal": "Journal entries",
       "bankImports": "Bank & Vipps",
+      "vippsQueue": "Vipps queue",
       "bankAccounts": "Bank accounts",
       "reports": "Reports",
       "economySettings": "Settings",
