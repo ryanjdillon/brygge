@@ -30,15 +30,17 @@ func NewContentDocumentsHandler(db *pgxpool.Pool, log zerolog.Logger) *ContentDo
 }
 
 type contentDocRow struct {
-	ID         string    `json:"id"`
-	Title      string    `json:"title"`
-	BodyHTML   string    `json:"body_html"`
-	Visibility string    `json:"visibility"`
-	Published  bool      `json:"published"`
-	CreatedBy  string    `json:"created_by"`
-	UpdatedBy  string    `json:"updated_by"`
-	CreatedAt  time.Time `json:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
+	ID          string     `json:"id"`
+	Title       string     `json:"title"`
+	BodyHTML    string     `json:"body_html"`
+	Visibility  string     `json:"visibility"`
+	Published   bool       `json:"published"`
+	Revision    int        `json:"revision"`
+	PublishedAt *time.Time `json:"published_at,omitempty"`
+	CreatedBy   string     `json:"created_by"`
+	UpdatedBy   string     `json:"updated_by"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
 }
 
 func (h *ContentDocumentsHandler) HandleAdminList(w http.ResponseWriter, r *http.Request) {
@@ -51,12 +53,12 @@ func (h *ContentDocumentsHandler) HandleAdminList(w http.ResponseWriter, r *http
 
 	rows, err := h.db.Query(ctx,
 		`SELECT cd.id, cd.title, cd.body_html, cd.visibility, cd.published,
+		        cd.revision, cd.published_at,
 		        cu.full_name, uu.full_name, cd.created_at, cd.updated_at
 		 FROM content_documents cd
-		 JOIN clubs c  ON c.id = cd.club_id
 		 JOIN users cu ON cu.id = cd.created_by
 		 JOIN users uu ON uu.id = cd.updated_by
-		 WHERE c.slug = $1
+		 WHERE cd.club_id = $1
 		 ORDER BY cd.created_at DESC`,
 		claims.ClubID,
 	)
@@ -71,6 +73,7 @@ func (h *ContentDocumentsHandler) HandleAdminList(w http.ResponseWriter, r *http
 	for rows.Next() {
 		var d contentDocRow
 		if err := rows.Scan(&d.ID, &d.Title, &d.BodyHTML, &d.Visibility, &d.Published,
+			&d.Revision, &d.PublishedAt,
 			&d.CreatedBy, &d.UpdatedBy, &d.CreatedAt, &d.UpdatedAt); err != nil {
 			h.log.Error().Err(err).Msg("failed to scan content document")
 			Error(w, http.StatusInternalServerError, "internal error")
@@ -118,9 +121,12 @@ func (h *ContentDocumentsHandler) HandleAdminCreate(w http.ResponseWriter, r *ht
 
 	var docID string
 	err := h.db.QueryRow(ctx,
-		`INSERT INTO content_documents (club_id, title, body_html, visibility, published, created_by, updated_by)
-		 SELECT c.id, $2, $3, $4, $5, $6, $6
-		 FROM clubs c WHERE c.slug = $1
+		`INSERT INTO content_documents
+		        (club_id, title, body_html, visibility, published, revision, published_at, created_by, updated_by)
+		 VALUES ($1, $2, $3, $4, $5,
+		         CASE WHEN $5 THEN 1 ELSE 0 END,
+		         CASE WHEN $5 THEN now() ELSE NULL END,
+		         $6, $6)
 		 RETURNING id`,
 		claims.ClubID, req.Title, safe, req.Visibility, req.Published, claims.UserID,
 	).Scan(&docID)
@@ -170,11 +176,23 @@ func (h *ContentDocumentsHandler) HandleAdminUpdate(w http.ResponseWriter, r *ht
 	safe := htmlPolicy.Sanitize(req.BodyHTML)
 
 	tag, err := h.db.Exec(ctx,
-		`UPDATE content_documents cd
-		 SET title = $3, body_html = $4, visibility = $5, published = $6,
-		     updated_by = $7, updated_at = now()
-		 FROM clubs c
-		 WHERE cd.id = $1 AND c.id = cd.club_id AND c.slug = $2`,
+		`UPDATE content_documents
+		 SET title      = $3,
+		     body_html  = $4,
+		     visibility = $5,
+		     published  = $6,
+		     revision   = CASE
+		                    WHEN $6 AND NOT published THEN 1
+		                    WHEN $6 AND published     THEN revision + 1
+		                    ELSE revision
+		                  END,
+		     published_at = CASE
+		                      WHEN $6 AND published_at IS NULL THEN now()
+		                      ELSE published_at
+		                    END,
+		     updated_by = $7,
+		     updated_at = now()
+		 WHERE id = $1 AND club_id = $2`,
 		docID, claims.ClubID, req.Title, safe, req.Visibility, req.Published, claims.UserID,
 	)
 	if err != nil {
@@ -206,9 +224,7 @@ func (h *ContentDocumentsHandler) HandleAdminDelete(w http.ResponseWriter, r *ht
 	}
 
 	tag, err := h.db.Exec(ctx,
-		`DELETE FROM content_documents cd
-		 USING clubs c
-		 WHERE cd.id = $1 AND c.id = cd.club_id AND c.slug = $2`,
+		`DELETE FROM content_documents WHERE id = $1 AND club_id = $2`,
 		docID, claims.ClubID,
 	)
 	if err != nil {
@@ -226,7 +242,7 @@ func (h *ContentDocumentsHandler) HandleAdminDelete(w http.ResponseWriter, r *ht
 }
 
 // HandlePortalList returns the combined portal documents view: published file
-// uploads + published content documents, filtered by the caller's roles.
+// uploads and published content documents, filtered by the caller's roles.
 func (h *ContentDocumentsHandler) HandlePortalList(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
@@ -249,20 +265,21 @@ func (h *ContentDocumentsHandler) HandlePortalList(w http.ResponseWriter, r *htt
 	}
 
 	type contentDoc struct {
-		ID         string    `json:"id"`
-		Kind       string    `json:"kind"`
-		Title      string    `json:"title"`
-		BodyHTML   string    `json:"body_html"`
-		Visibility string    `json:"visibility"`
-		CreatedAt  time.Time `json:"created_at"`
-		UpdatedAt  time.Time `json:"updated_at"`
+		ID          string     `json:"id"`
+		Kind        string     `json:"kind"`
+		Title       string     `json:"title"`
+		BodyHTML    string     `json:"body_html"`
+		Visibility  string     `json:"visibility"`
+		Revision    int        `json:"revision"`
+		PublishedAt *time.Time `json:"published_at,omitempty"`
+		CreatedAt   time.Time  `json:"created_at"`
+		UpdatedAt   time.Time  `json:"updated_at"`
 	}
 
 	fileRows, err := h.db.Query(ctx,
 		`SELECT d.id, d.title, d.filename, d.content_type, d.size_bytes, d.visibility, d.created_at
 		 FROM documents d
-		 JOIN clubs c ON c.id = d.club_id
-		 WHERE c.slug = $1 AND d.visibility = ANY($2)
+		 WHERE d.club_id = $1 AND d.visibility = ANY($2)
 		 ORDER BY d.created_at DESC`,
 		claims.ClubID, visibilities,
 	)
@@ -292,10 +309,9 @@ func (h *ContentDocumentsHandler) HandlePortalList(w http.ResponseWriter, r *htt
 	}
 
 	contentRows, err := h.db.Query(ctx,
-		`SELECT cd.id, cd.title, cd.body_html, cd.visibility, cd.created_at, cd.updated_at
+		`SELECT cd.id, cd.title, cd.body_html, cd.visibility, cd.revision, cd.published_at, cd.created_at, cd.updated_at
 		 FROM content_documents cd
-		 JOIN clubs c ON c.id = cd.club_id
-		 WHERE c.slug = $1 AND cd.published = true AND cd.visibility = ANY($2)
+		 WHERE cd.club_id = $1 AND cd.published = true AND cd.visibility = ANY($2)
 		 ORDER BY cd.created_at DESC`,
 		claims.ClubID, visibilities,
 	)
@@ -311,7 +327,7 @@ func (h *ContentDocumentsHandler) HandlePortalList(w http.ResponseWriter, r *htt
 		var d contentDoc
 		d.Kind = "authored"
 		if err := contentRows.Scan(&d.ID, &d.Title, &d.BodyHTML, &d.Visibility,
-			&d.CreatedAt, &d.UpdatedAt); err != nil {
+			&d.Revision, &d.PublishedAt, &d.CreatedAt, &d.UpdatedAt); err != nil {
 			h.log.Error().Err(err).Msg("failed to scan content document")
 			Error(w, http.StatusInternalServerError, "internal error")
 			return
@@ -352,9 +368,6 @@ func portalVisibilities(roles []string) []string {
 	return vis
 }
 
-// HandlePortalGetFile issues a redirect to the S3 presigned URL for a file doc.
-// Kept here for the combined portal handler; presigning is done by the existing
-// AdminDocumentsHandler.HandleGetDocument since both share the same s3Client.
 func (h *ContentDocumentsHandler) HandlePortalGetContentDoc(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
@@ -374,14 +387,15 @@ func (h *ContentDocumentsHandler) HandlePortalGetContentDoc(w http.ResponseWrite
 	var d contentDocRow
 	err := h.db.QueryRow(ctx,
 		`SELECT cd.id, cd.title, cd.body_html, cd.visibility, cd.published,
+		        cd.revision, cd.published_at,
 		        cu.full_name, uu.full_name, cd.created_at, cd.updated_at
 		 FROM content_documents cd
-		 JOIN clubs c  ON c.id = cd.club_id
 		 JOIN users cu ON cu.id = cd.created_by
 		 JOIN users uu ON uu.id = cd.updated_by
-		 WHERE cd.id = $1 AND c.slug = $2 AND cd.published = true AND cd.visibility = ANY($3)`,
+		 WHERE cd.id = $1 AND cd.club_id = $2 AND cd.published = true AND cd.visibility = ANY($3)`,
 		docID, claims.ClubID, visibilities,
 	).Scan(&d.ID, &d.Title, &d.BodyHTML, &d.Visibility, &d.Published,
+		&d.Revision, &d.PublishedAt,
 		&d.CreatedBy, &d.UpdatedBy, &d.CreatedAt, &d.UpdatedAt)
 	if err == pgx.ErrNoRows {
 		Error(w, http.StatusNotFound, "document not found")
