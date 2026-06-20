@@ -230,6 +230,14 @@ func main() {
 	weatherHandler := handlers.NewWeatherHandler(db, rdb, &cfg, log)
 	contactHandler := handlers.NewContactHandler(&cfg, log)
 	broadcastHandler := handlers.NewBroadcastHandler(db, &cfg, emailClient, log)
+	// History/retry surface for bulk sends (BRY-165). The retry kick is a
+	// lazy closure because broadcastWorker is assigned later, when the
+	// inbox/mail stack is wired; by the time a retry fires at runtime it's set.
+	broadcastsHandler := handlers.NewBroadcastsHandler(db, func() {
+		if broadcastWorker != nil {
+			broadcastWorker.Kick()
+		}
+	}, log)
 	emailPrefsHandler := handlers.NewEmailPrefsHandler(db, &cfg, log)
 	projectsHandler := handlers.NewProjectsHandler(db, &cfg, log)
 	featureRequestsHandler := handlers.NewFeatureRequestsHandler(db, &cfg, log)
@@ -329,30 +337,30 @@ func main() {
 				// financials in the admin UI) so they can be edited without
 				// a redeploy.
 				var (
-					orgNumber                string
-					address                  string
-					phone                    string
-					vhf                      string
-					lat                      *float64
-					lon                      *float64
-					website                  string
-					chairman                 string
-					viceChairman             string
-					treasurer                string
-					secretary                string
-					harborMaster             string
-					hasLogo                  bool
-					harborApproach           string
-					harborDepth              string
-					harborVHF                string
-					harborCTATitle           string
-					harborCTADescription     string
-					motorhomePower           string
-					motorhomeFacilities      string
-					motorhomeCheckin         string
-					motorhomeRules           string
-					motorhomeCTATitle        string
-					motorhomeCTADescription  string
+					orgNumber               string
+					address                 string
+					phone                   string
+					vhf                     string
+					lat                     *float64
+					lon                     *float64
+					website                 string
+					chairman                string
+					viceChairman            string
+					treasurer               string
+					secretary               string
+					harborMaster            string
+					hasLogo                 bool
+					harborApproach          string
+					harborDepth             string
+					harborVHF               string
+					harborCTATitle          string
+					harborCTADescription    string
+					motorhomePower          string
+					motorhomeFacilities     string
+					motorhomeCheckin        string
+					motorhomeRules          string
+					motorhomeCTATitle       string
+					motorhomeCTADescription string
 				)
 				_ = db.QueryRow(r.Context(),
 					`SELECT COALESCE(org_number, ''),
@@ -386,34 +394,34 @@ func main() {
 					&motorhomePower, &motorhomeFacilities, &motorhomeCheckin, &motorhomeRules,
 					&motorhomeCTATitle, &motorhomeCTADescription)
 				handlers.JSON(w, http.StatusOK, map[string]any{
-					"name":                       cfg.ClubName,
-					"slug":                       cfg.ClubSlug,
-					"domain":                     cfg.Domain,
-					"org_number":                 orgNumber,
-					"address":                    address,
-					"phone":                      phone,
-					"vhf_channel":                vhf,
-					"latitude":                   lat,
-					"longitude":                  lon,
-					"website_url":                website,
-					"chairman_email":             chairman,
-					"vice_chairman_email":        viceChairman,
-					"treasurer_email":            treasurer,
-					"secretary_email":            secretary,
-					"harbor_master_email":        harborMaster,
-					"has_logo":                   hasLogo, // legacy alias for has_site_logo
-					"has_site_logo":              hasLogo,
-					"harbor_approach":            harborApproach,
-					"harbor_depth":               harborDepth,
-					"harbor_vhf":                 harborVHF,
-					"harbor_cta_title":           harborCTATitle,
-					"harbor_cta_description":     harborCTADescription,
-					"motorhome_power":            motorhomePower,
-					"motorhome_facilities":       motorhomeFacilities,
-					"motorhome_checkin":          motorhomeCheckin,
-					"motorhome_rules":            motorhomeRules,
-					"motorhome_cta_title":        motorhomeCTATitle,
-					"motorhome_cta_description":  motorhomeCTADescription,
+					"name":                      cfg.ClubName,
+					"slug":                      cfg.ClubSlug,
+					"domain":                    cfg.Domain,
+					"org_number":                orgNumber,
+					"address":                   address,
+					"phone":                     phone,
+					"vhf_channel":               vhf,
+					"latitude":                  lat,
+					"longitude":                 lon,
+					"website_url":               website,
+					"chairman_email":            chairman,
+					"vice_chairman_email":       viceChairman,
+					"treasurer_email":           treasurer,
+					"secretary_email":           secretary,
+					"harbor_master_email":       harborMaster,
+					"has_logo":                  hasLogo, // legacy alias for has_site_logo
+					"has_site_logo":             hasLogo,
+					"harbor_approach":           harborApproach,
+					"harbor_depth":              harborDepth,
+					"harbor_vhf":                harborVHF,
+					"harbor_cta_title":          harborCTATitle,
+					"harbor_cta_description":    harborCTADescription,
+					"motorhome_power":           motorhomePower,
+					"motorhome_facilities":      motorhomeFacilities,
+					"motorhome_checkin":         motorhomeCheckin,
+					"motorhome_rules":           motorhomeRules,
+					"motorhome_cta_title":       motorhomeCTATitle,
+					"motorhome_cta_description": motorhomeCTADescription,
 				})
 			})
 			r.Get("/club/logo", clubSettingsHandler.HandleGetPublicClubLogo)
@@ -723,7 +731,12 @@ func main() {
 
 					r.Route("/broadcasts", func(r chi.Router) {
 						r.Use(middleware.RequireRole("board", "admin"))
-						r.Get("/", broadcastHandler.HandleListBroadcasts)
+						r.Get("/", broadcastsHandler.HandleList)
+						r.Get("/{id}", broadcastsHandler.HandleGet)
+						// Retry re-sends mail; gate on a fresh TOTP re-verify,
+						// same posture as the inbox send path.
+						r.With(middleware.RequireFreshTOTPDefault()).
+							Post("/{id}/retry", broadcastsHandler.HandleRetry)
 					})
 				}
 
@@ -1129,7 +1142,7 @@ func main() {
 						r.Get("/bank-rows", accountingHandler.HandleListBankRowsByAccount)
 						r.Get("/vipps-rows", accountingHandler.HandleListVippsRowsByMSN)
 						r.Post("/bank-sync", accountingHandler.HandleBankSync)
-					r.Post("/vipps-resync", accountingHandler.HandleResyncVipps)
+						r.Post("/vipps-resync", accountingHandler.HandleResyncVipps)
 
 						r.Route("/bank-rows/{rowID}/reconcile-vipps", func(r chi.Router) {
 							r.Get("/", accountingHandler.HandleVippsReconcilePreview)
