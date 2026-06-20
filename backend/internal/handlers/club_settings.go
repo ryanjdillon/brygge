@@ -263,6 +263,7 @@ type clubFinancialSettings struct {
 	FeatureCommerce       bool `json:"feature_commerce"`
 	FeatureCommunications bool `json:"feature_communications"`
 	FeatureAccounting     bool `json:"feature_accounting"`
+	HasAnthropicKey       bool `json:"has_anthropic_key"`
 }
 
 // HandleGetFinancialSettings returns the club's invoice-relevant
@@ -294,7 +295,8 @@ func (h *ClubSettingsHandler) HandleGetFinancialSettings(w http.ResponseWriter, 
 		        COALESCE(motorhome_checkin, ''), COALESCE(motorhome_rules, ''),
 		        COALESCE(motorhome_cta_title, ''), COALESCE(motorhome_cta_description, ''),
 		        feature_bookings, feature_projects, feature_calendar,
-		        feature_commerce, feature_communications, feature_accounting
+		        feature_commerce, feature_communications, feature_accounting,
+		        (anthropic_api_key IS NOT NULL AND anthropic_api_key != '')
 		   FROM clubs WHERE id = $1`,
 		claims.ClubID,
 	).Scan(&s.Name, &s.OrgNumber, &s.Address,
@@ -314,7 +316,8 @@ func (h *ClubSettingsHandler) HandleGetFinancialSettings(w http.ResponseWriter, 
 		&s.MotorhomeCheckin, &s.MotorhomeRules,
 		&s.MotorhomeCTATitle, &s.MotorhomeCTADescription,
 		&s.FeatureBookings, &s.FeatureProjects, &s.FeatureCalendar,
-		&s.FeatureCommerce, &s.FeatureCommunications, &s.FeatureAccounting); err != nil {
+		&s.FeatureCommerce, &s.FeatureCommunications, &s.FeatureAccounting,
+		&s.HasAnthropicKey); err != nil {
 		h.log.Error().Err(err).Msg("load financial settings")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
@@ -353,6 +356,7 @@ type updateFinancialSettingsRequest struct {
 	FeatureCommerce         *bool    `json:"feature_commerce,omitempty"`
 	FeatureCommunications   *bool    `json:"feature_communications,omitempty"`
 	FeatureAccounting       *bool    `json:"feature_accounting,omitempty"`
+	AnthropicAPIKey         *string  `json:"anthropic_api_key,omitempty"`
 }
 
 // HandleUpdateFinancialSettings updates org_number, address, and
@@ -370,6 +374,12 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+	// Treat empty anthropic key as nil so we don't overwrite an existing key with "".
+	anthropicKey := req.AnthropicAPIKey
+	if anthropicKey != nil && *anthropicKey == "" {
+		anthropicKey = nil
+	}
+
 	// Build COALESCE-style update so unspecified fields stay as-is.
 	// Empty-fields check is intentionally relaxed: with this many
 	// optional knobs an admin saving a single tweak is still valid.
@@ -404,7 +414,8 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		   feature_calendar          = COALESCE($28, feature_calendar),
 		   feature_commerce          = COALESCE($29, feature_commerce),
 		   feature_communications    = COALESCE($30, feature_communications),
-		   feature_accounting        = COALESCE($31, feature_accounting)
+		   feature_accounting        = COALESCE($31, feature_accounting),
+		   anthropic_api_key         = COALESCE($32, anthropic_api_key)
 		 WHERE id = $1`,
 		claims.ClubID, req.OrgNumber, req.Address, req.Phone, req.VHFChannel,
 		req.Latitude, req.Longitude,
@@ -418,6 +429,7 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		req.MotorhomeCTATitle, req.MotorhomeCTADescription,
 		req.FeatureBookings, req.FeatureProjects, req.FeatureCalendar,
 		req.FeatureCommerce, req.FeatureCommunications, req.FeatureAccounting,
+		anthropicKey,
 	); err != nil {
 		h.log.Error().Err(err).Msg("update financial settings")
 		Error(w, http.StatusInternalServerError, "internal error")

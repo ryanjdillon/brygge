@@ -1497,7 +1497,9 @@
         "tooltipLineDesc": "Optional note for this line",
         "receipt": "Bilag / Receipt",
         "receiptTooltip": "Attach a photo or PDF of the receipt as supporting documentation (bilag) for this entry. Claude will extract the amount, VAT, and date automatically.",
-        "receiptParsing": "Parsing receipt…",
+        "receiptParsing": "Scanning receipt with Claude…",
+        "receiptParsedOk": "Receipt scanned — please review the pre-filled fields below",
+        "receiptParseFailed": "Could not read the receipt — please fill in the amount and description manually",
         "receiptUploading": "Uploading receipt…",
         "receiptUploadFailed": "Receipt upload failed — entry saved, please retry the upload",
         "receiptUnknownVendor": "Unknown vendor"
@@ -1552,6 +1554,16 @@
         "commerce": "Member shop & merchandise",
         "communications": "Communications & forum",
         "accounting": "Accounting & faktura"
+      },
+      "feedbackGroup": "Feedback widget (Linear)",
+      "anthropic": {
+        "group": "Anthropic AI",
+        "help": "The Anthropic API key enables Claude-powered features: receipt OCR on journal entries, document summarization, and meeting agenda generation.",
+        "keyLabel": "API key",
+        "keyHelp": "Starts with sk-ant-. Leave blank to keep the existing key.",
+        "keyPlaceholder": "sk-ant-…",
+        "keySet": "API key is set — enter a new value to replace it",
+        "keyActive": "Active"
       }
     },
     "harborSettings": {

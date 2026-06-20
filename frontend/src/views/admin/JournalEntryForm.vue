@@ -39,6 +39,7 @@ const parseMutation = useParseReceipt()
 const receiptFile = ref<File | null>(null)
 const uploadError = ref('')
 const parsedReceipt = ref<ReceiptData | null>(null)
+const parseStatus = ref<'idle' | 'parsing' | 'ok' | 'failed'>('idle')
 
 function handleFileChange(e: Event) {
   const input = e.target as HTMLInputElement
@@ -46,18 +47,24 @@ function handleFileChange(e: Event) {
   receiptFile.value = file
   uploadError.value = ''
   parsedReceipt.value = null
+  parseStatus.value = 'idle'
 
   if (!file) return
 
+  parseStatus.value = 'parsing'
   parseMutation.mutate(file, {
     onSuccess: (data) => {
       parsedReceipt.value = data
+      parseStatus.value = 'ok'
       if (!description.value.trim() && data.description) {
         description.value = data.description
       }
       if (data.date) {
         entryDate.value = data.date
       }
+    },
+    onError: () => {
+      parseStatus.value = 'failed'
     },
   })
 }
@@ -129,6 +136,7 @@ const difference = computed(() => Math.abs(totalDebit.value - totalCredit.value)
 const isBalanced = computed(() => difference.value < 0.01 && totalDebit.value > 0)
 
 const canSave = computed(() =>
+  parseStatus.value !== 'parsing' &&
   selectedPeriodId.value &&
   entryDate.value &&
   description.value.trim() &&
@@ -263,15 +271,25 @@ const accountOptions = computed(() => [
         class="block text-sm text-gray-600 file:mr-3 file:rounded file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200"
         @change="handleFileChange"
       />
-      <p v-if="parseMutation.isPending.value" class="mt-1 text-xs text-blue-600">{{ t('admin.accounting.journalForm.receiptParsing') }}</p>
-      <div
-        v-if="parsedReceipt && !parseMutation.isPending.value"
-        class="mt-2 rounded border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800"
-      >
-        <span class="font-medium">{{ parsedReceipt.vendor || t('admin.accounting.journalForm.receiptUnknownVendor') }}</span>
-        <span v-if="parsedReceipt.total_amount"> · {{ formatNOK(parsedReceipt.total_amount) }} kr</span>
-        <span v-if="parsedReceipt.mva_amount"> · {{ t('admin.accounting.journalForm.mva') }} {{ formatNOK(parsedReceipt.mva_amount) }} kr</span>
-        <span v-if="parsedReceipt.date"> · {{ parsedReceipt.date }}</span>
+      <!-- parsing state feedback -->
+      <div v-if="parseStatus === 'parsing'" class="mt-2 flex items-center gap-2 text-sm text-blue-700">
+        <svg class="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+        </svg>
+        {{ t('admin.accounting.journalForm.receiptParsing') }}
+      </div>
+      <div v-else-if="parseStatus === 'ok' && parsedReceipt" class="mt-2 rounded border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-800">
+        <p class="font-medium">{{ t('admin.accounting.journalForm.receiptParsedOk') }}</p>
+        <p class="mt-0.5">
+          <span class="font-medium">{{ parsedReceipt.vendor || t('admin.accounting.journalForm.receiptUnknownVendor') }}</span>
+          <span v-if="parsedReceipt.total_amount"> · {{ formatNOK(parsedReceipt.total_amount) }} kr</span>
+          <span v-if="parsedReceipt.mva_amount"> · {{ t('admin.accounting.journalForm.mva') }} {{ formatNOK(parsedReceipt.mva_amount) }} kr</span>
+          <span v-if="parsedReceipt.date"> · {{ parsedReceipt.date }}</span>
+        </p>
+      </div>
+      <div v-else-if="parseStatus === 'failed'" class="mt-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+        {{ t('admin.accounting.journalForm.receiptParseFailed') }}
       </div>
       <p v-if="uploadError" class="mt-1 text-xs text-red-600">{{ uploadError }}</p>
       <p v-if="uploadMutation.isPending.value" class="mt-1 text-xs text-blue-600">{{ t('admin.accounting.journalForm.receiptUploading') }}</p>

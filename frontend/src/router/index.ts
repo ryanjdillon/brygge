@@ -323,8 +323,7 @@ const routes: RouteRecordRaw[] = [
       },
       {
         path: 'settings/feedback',
-        name: 'admin-feedback-settings',
-        component: () => import('@/views/admin/FeedbackSettingsView.vue'),
+        redirect: '/admin/settings/site',
       },
       {
         path: 'accounting',

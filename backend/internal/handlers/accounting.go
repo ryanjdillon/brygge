@@ -494,6 +494,22 @@ func (h *AccountingHandler) HandleVoidJournalEntry(w http.ResponseWriter, r *htt
 	JSON(w, http.StatusOK, reversal)
 }
 
+// getClaudeClient returns the configured Claude client. If no client was
+// initialised from the environment at startup, it looks up anthropic_api_key
+// from the club row and creates a short-lived client for this request.
+func (h *AccountingHandler) getClaudeClient(ctx context.Context, clubID string) *ai.ClaudeClient {
+	if h.claude != nil {
+		return h.claude
+	}
+	var key *string
+	if err := h.svc.DB().QueryRow(ctx,
+		`SELECT anthropic_api_key FROM clubs WHERE id = $1`, clubID,
+	).Scan(&key); err != nil || key == nil || *key == "" {
+		return nil
+	}
+	return ai.NewClaudeClient(*key)
+}
+
 // ── Attachments ─────────────────────────────────────────────
 
 func (h *AccountingHandler) HandleUploadJournalAttachment(w http.ResponseWriter, r *http.Request) {
@@ -593,7 +609,8 @@ func (h *AccountingHandler) HandleParseReceipt(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if h.claude == nil {
+	claude := h.getClaudeClient(r.Context(), claims.ClubID)
+	if claude == nil {
 		Error(w, http.StatusServiceUnavailable, "AI parsing not configured")
 		return
 	}
@@ -621,7 +638,7 @@ func (h *AccountingHandler) HandleParseReceipt(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	data, err := h.claude.ParseReceipt(r.Context(), imageBytes, contentType)
+	data, err := claude.ParseReceipt(r.Context(), imageBytes, contentType)
 	if err != nil {
 		h.log.Error().Err(err).Msg("receipt OCR failed")
 		Error(w, http.StatusInternalServerError, "receipt parsing failed")

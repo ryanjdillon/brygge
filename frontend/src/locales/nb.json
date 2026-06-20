@@ -1493,7 +1493,9 @@
         "tooltipLineDesc": "Valgfri merknad for denne linjen",
         "receipt": "Bilag / Kvittering",
         "receiptTooltip": "Legg ved bilde eller PDF av kvitteringen som bilagsdokumentasjon. Claude trekker ut beløp, MVA og dato automatisk.",
-        "receiptParsing": "Analyserer kvittering…",
+        "receiptParsing": "Skanner kvittering med Claude…",
+        "receiptParsedOk": "Kvittering skannet — gjennomgå de forhåndsutfylte feltene nedenfor",
+        "receiptParseFailed": "Kunne ikke lese kvitteringen — fyll inn beløp og beskrivelse manuelt",
         "receiptUploading": "Laster opp kvittering…",
         "receiptUploadFailed": "Opplasting av kvittering feilet — bilaget er lagret, prøv opplastingen på nytt",
         "receiptUnknownVendor": "Ukjent leverandør"
@@ -1548,6 +1550,16 @@
         "commerce": "Medlemsbutikk",
         "communications": "Kommunikasjon og forum",
         "accounting": "Regnskap og faktura"
+      },
+      "feedbackGroup": "Tilbakemeldingswidget (Linear)",
+      "anthropic": {
+        "group": "Anthropic AI",
+        "help": "Anthropic API-nøkkelen aktiverer Claude-funksjoner: kvitteringsskanning på bilag, dokumentoppsummering og møteagendagenerering.",
+        "keyLabel": "API-nøkkel",
+        "keyHelp": "Begynner med sk-ant-. La feltet stå tomt for å beholde eksisterende nøkkel.",
+        "keyPlaceholder": "sk-ant-…",
+        "keySet": "API-nøkkel er satt — skriv en ny verdi for å erstatte den",
+        "keyActive": "Aktiv"
       }
     },
     "harborSettings": {

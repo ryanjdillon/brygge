@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { reactive, ref, onMounted } from 'vue'
+import { reactive, ref, computed, watch, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useQueryClient } from '@tanstack/vue-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { ArrowLeft, Calculator, Calendar, CalendarCheck, FolderKanban, Megaphone, Save, ShoppingBag } from 'lucide-vue-next'
 import { useFreshTotp } from '@/composables/useFreshTotp'
+import { useFeatures } from '@/composables/useFeatures'
 import FileInput from '@/components/ui/form/FileInput.vue'
 import FormField from '@/components/ui/form/FormField.vue'
 import Input from '@/components/ui/form/Input.vue'
@@ -39,6 +40,119 @@ const error = ref<string | null>(null)
 const savedAt = ref<Date | null>(null)
 
 const queryClient = useQueryClient()
+const { features: featureFlags } = useFeatures()
+
+// ── Feedback / Linear ──────────────────────────────────────
+type FeedbackSettings = { enabled: boolean; has_api_key: boolean; linear_team_id: string; linear_triage_state_id: string }
+
+const { data: feedbackData } = useQuery({
+  queryKey: ['admin-feedback-settings'],
+  queryFn: async () => {
+    const res = await fetch('/api/v1/admin/settings/feedback', { credentials: 'include' })
+    if (!res.ok) throw new Error(`${res.status}`)
+    return res.json() as Promise<FeedbackSettings>
+  },
+})
+
+const fbEnabled = ref(false)
+const fbApiKey = ref('')
+const fbTeamID = ref('')
+const fbTriageStateID = ref('')
+const fbHasExistingKey = ref(false)
+const fbSaved = ref(false)
+const fbSaveError = ref<string | null>(null)
+
+watch(feedbackData, (s) => {
+  if (!s) return
+  fbEnabled.value = s.enabled
+  fbHasExistingKey.value = s.has_api_key
+  fbTeamID.value = s.linear_team_id
+  fbTriageStateID.value = s.linear_triage_state_id
+}, { immediate: true })
+
+const fbApiKeyPlaceholder = computed(() =>
+  fbHasExistingKey.value ? t('admin.feedbackSettings.apiKeySet') : t('admin.feedbackSettings.apiKeyPlaceholder'),
+)
+
+const fbApiKeyFormatError = computed(() => {
+  const k = fbApiKey.value.trim()
+  if (!k) return null
+  return k.startsWith('lin_api_') ? null : t('admin.feedbackSettings.apiKeyInvalid')
+})
+
+const fbCanSave = computed(() => {
+  if (fbApiKeyFormatError.value) return false
+  if (!fbEnabled.value) return true
+  return (fbApiKey.value.trim() !== '' || fbHasExistingKey.value) &&
+    fbTeamID.value.trim() !== '' && fbTriageStateID.value.trim() !== ''
+})
+
+const { mutateAsync: saveFeedback, isPending: savingFeedback } = useMutation({
+  mutationFn: async () => {
+    const body: Record<string, unknown> = {
+      enabled: fbEnabled.value,
+      linear_team_id: fbTeamID.value.trim(),
+      linear_triage_state_id: fbTriageStateID.value.trim(),
+    }
+    if (fbApiKey.value.trim()) body.linear_api_key = fbApiKey.value.trim()
+    const res = await fetch('/api/v1/admin/settings/feedback', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      credentials: 'include', body: JSON.stringify(body),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => null)
+      throw new Error(err?.error ?? `${res.status}`)
+    }
+    return res.json()
+  },
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ['admin-feedback-settings'] })
+    queryClient.invalidateQueries({ queryKey: ['features'] })
+    fbApiKey.value = ''
+    fbSaved.value = true
+    fbSaveError.value = null
+    setTimeout(() => (fbSaved.value = false), 3000)
+  },
+  onError: (err: unknown) => { fbSaveError.value = err instanceof Error ? err.message : String(err) },
+})
+
+async function handleSaveFeedback() {
+  if (!(await ensureFreshTotp())) return
+  await saveFeedback()
+}
+
+// ── Anthropic AI ──────────────────────────────────────────
+const anthropicApiKey = ref('')
+const hasAnthropicKey = ref(false)
+const anthropicSaved = ref(false)
+const anthropicSaveError = ref<string | null>(null)
+const anthropicSaving = ref(false)
+
+const anthropicKeyPlaceholder = computed(() =>
+  hasAnthropicKey.value ? t('admin.siteSettings.anthropic.keySet') : t('admin.siteSettings.anthropic.keyPlaceholder'),
+)
+
+async function handleSaveAnthropicKey() {
+  if (!(await ensureFreshTotp())) return
+  anthropicSaving.value = true
+  anthropicSaveError.value = null
+  try {
+    const res = await totpAwareFetch('/api/v1/admin/settings/site', {
+      method: 'PATCH', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ anthropic_api_key: anthropicApiKey.value.trim() }),
+    })
+    if (!res.ok) throw new Error(`${res.status}`)
+    hasAnthropicKey.value = true
+    anthropicApiKey.value = ''
+    anthropicSaved.value = true
+    setTimeout(() => (anthropicSaved.value = false), 3000)
+  } catch (e) {
+    anthropicSaveError.value = (e as Error).message
+  } finally {
+    anthropicSaving.value = false
+  }
+}
 
 const features = reactive({
   bookings: true,
@@ -88,6 +202,7 @@ async function load() {
     features.commerce = body.feature_commerce ?? true
     features.communications = body.feature_communications ?? true
     features.accounting = body.feature_accounting ?? true
+    hasAnthropicKey.value = !!body.has_anthropic_key
   } catch (e) {
     error.value = (e as Error).message
   } finally {
@@ -345,6 +460,82 @@ async function save() {
           <FormField :label="t('admin.siteSettings.longitude')">
             <NumberInput v-model="longitude" :step="0.000001" placeholder="5.1245" />
           </FormField>
+        </div>
+      </fieldset>
+
+      <!-- ── Feedback / Linear ──────────────────────────────── -->
+      <fieldset class="rounded-md border border-slate-200 bg-slate-50 p-3 space-y-4">
+        <legend class="px-1 text-xs font-semibold text-slate-700">{{ t('admin.siteSettings.feedbackGroup') }}</legend>
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <p class="text-sm font-medium text-slate-900">{{ t('admin.feedbackSettings.enableLabel') }}</p>
+            <p class="mt-0.5 text-xs text-slate-500">{{ t('admin.feedbackSettings.enableHelp') }}</p>
+          </div>
+          <Switch v-model="fbEnabled" />
+        </div>
+
+        <div v-if="fbEnabled || featureFlags.feedback" class="space-y-4">
+          <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500">{{ t('admin.feedbackSettings.linearSection') }}</h3>
+          <FormField :label="t('admin.feedbackSettings.apiKeyLabel')" :helper-text="fbApiKeyFormatError ?? t('admin.feedbackSettings.apiKeyHelp')">
+            <Input
+              v-model="fbApiKey"
+              type="password"
+              autocomplete="new-password"
+              :placeholder="fbApiKeyPlaceholder"
+              :class="fbApiKeyFormatError ? 'border-red-400' : ''"
+            />
+          </FormField>
+          <FormField :label="t('admin.feedbackSettings.teamIdLabel')" :helper-text="t('admin.feedbackSettings.teamIdHelp')">
+            <Input v-model="fbTeamID" class="font-mono" :placeholder="t('admin.feedbackSettings.teamIdPlaceholder')" />
+          </FormField>
+          <FormField :label="t('admin.feedbackSettings.triageIdLabel')" :helper-text="t('admin.feedbackSettings.triageIdHelp')">
+            <Input v-model="fbTriageStateID" class="font-mono" :placeholder="t('admin.feedbackSettings.triageIdPlaceholder')" />
+          </FormField>
+          <div v-if="fbEnabled && !fbCanSave" class="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+            {{ t('admin.feedbackSettings.incompleteWarning') }}
+          </div>
+        </div>
+
+        <div v-if="fbSaveError" class="rounded-md bg-red-50 p-2 text-xs text-red-700">{{ fbSaveError }}</div>
+        <div class="flex items-center gap-3">
+          <button
+            type="button"
+            :disabled="savingFeedback || !fbCanSave"
+            class="inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+            @click="handleSaveFeedback"
+          >
+            <Save class="h-4 w-4" />
+            {{ savingFeedback ? t('common.loading') : t('common.save') }}
+          </button>
+          <span v-if="fbSaved" class="text-sm text-green-600">{{ t('common.success') }}</span>
+        </div>
+      </fieldset>
+
+      <!-- ── Anthropic AI ───────────────────────────────────── -->
+      <fieldset class="rounded-md border border-slate-200 bg-slate-50 p-3 space-y-4">
+        <legend class="px-1 text-xs font-semibold text-slate-700">{{ t('admin.siteSettings.anthropic.group') }}</legend>
+        <p class="text-xs text-slate-500">{{ t('admin.siteSettings.anthropic.help') }}</p>
+        <FormField :label="t('admin.siteSettings.anthropic.keyLabel')" :helper-text="t('admin.siteSettings.anthropic.keyHelp')">
+          <Input
+            v-model="anthropicApiKey"
+            type="password"
+            autocomplete="new-password"
+            :placeholder="anthropicKeyPlaceholder"
+          />
+        </FormField>
+        <div v-if="anthropicSaveError" class="rounded-md bg-red-50 p-2 text-xs text-red-700">{{ anthropicSaveError }}</div>
+        <div class="flex items-center gap-3">
+          <button
+            type="button"
+            :disabled="anthropicSaving || !anthropicApiKey.trim()"
+            class="inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+            @click="handleSaveAnthropicKey"
+          >
+            <Save class="h-4 w-4" />
+            {{ anthropicSaving ? t('common.loading') : t('common.save') }}
+          </button>
+          <span v-if="anthropicSaved" class="text-sm text-green-600">{{ t('common.success') }}</span>
+          <span v-if="hasAnthropicKey && !anthropicSaved" class="text-xs text-slate-500">{{ t('admin.siteSettings.anthropic.keyActive') }}</span>
         </div>
       </fieldset>
 
