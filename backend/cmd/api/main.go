@@ -248,7 +248,7 @@ func main() {
 	slipSharesHandler := handlers.NewSlipSharesHandler(db, &cfg, log)
 	notificationsHandler := handlers.NewNotificationsHandler(db, &cfg, log)
 	gdprHandler := handlers.NewGDPRHandler(db, &cfg, log)
-	feedbackHandler := handlers.NewFeedbackHandler(&cfg, log)
+	feedbackHandler := handlers.NewFeedbackHandler(db, &cfg, log)
 
 	r := chi.NewRouter()
 

@@ -6,10 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"mime/multipart"
 	"net/http"
 	"strings"
+	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 
 	"github.com/brygge-klubb/brygge/internal/config"
@@ -17,20 +18,23 @@ import (
 )
 
 const (
-	linearTeamID        = "3d3356f2-2475-4101-8e4a-76a5cfba68f2"
-	linearLabelBug      = "4ebcd87f-49b5-42e7-96f2-2ea50a0ddf2d"
-	linearLabelFeature  = "5b21a454-f831-4b28-9c44-13c42e2123de"
-	linearLabelKBL      = "4d2f6d8e-857c-4d66-b7f8-b2dd0c54974a"
-	linearGraphQLURL = "https://api.linear.app/graphql"
+	linearTeamID       = "3d3356f2-2475-4101-8e4a-76a5cfba68f2"
+	linearStateTriageID = "0485eda7-5b5c-4dc3-a589-351af3ba5f1b"
+	linearLabelBug     = "4ebcd87f-49b5-42e7-96f2-2ea50a0ddf2d"
+	linearLabelFeature = "5b21a454-f831-4b28-9c44-13c42e2123de"
+	linearLabelKBL     = "4d2f6d8e-857c-4d66-b7f8-b2dd0c54974a"
+	linearGraphQLURL   = "https://api.linear.app/graphql"
 )
 
 type FeedbackHandler struct {
+	db     *pgxpool.Pool
 	config *config.Config
 	log    zerolog.Logger
 }
 
-func NewFeedbackHandler(cfg *config.Config, log zerolog.Logger) *FeedbackHandler {
+func NewFeedbackHandler(db *pgxpool.Pool, cfg *config.Config, log zerolog.Logger) *FeedbackHandler {
 	return &FeedbackHandler{
+		db:     db,
 		config: cfg,
 		log:    log.With().Str("handler", "feedback").Logger(),
 	}
@@ -80,16 +84,29 @@ func (h *FeedbackHandler) HandleSubmit(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	var submitterName, submitterEmail string
+	_ = h.db.QueryRow(ctx,
+		`SELECT COALESCE(NULLIF(full_name, ''), first_name || ' ' || last_name, email), email
+		 FROM users WHERE id = $1`,
+		claims.UserID,
+	).Scan(&submitterName, &submitterEmail)
+
 	labelID := linearLabelFeature
 	if req.Type == "bug" {
 		labelID = linearLabelBug
 	}
 	labelIDs := []string{labelID, linearLabelKBL}
 
+	now := time.Now().UTC()
 	body := req.Description
-	if req.PageURL != "" {
-		body += fmt.Sprintf("\n\n**Page:** %s", req.PageURL)
-	}
+
+	meta := fmt.Sprintf("\n\n---\n**Submitted:** %s  \n**Submitted by:** %s (%s)  \n**Page:** %s",
+		now.Format("2006-01-02 15:04 UTC"),
+		submitterName,
+		submitterEmail,
+		req.PageURL,
+	)
+	body += meta
 
 	var attachmentURL string
 	if req.Screenshot != "" {
@@ -111,7 +128,7 @@ func (h *FeedbackHandler) HandleSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.log.Info().Str("issue_id", issueID).Str("type", req.Type).Msg("feedback submitted")
+	h.log.Info().Str("issue_id", issueID).Str("type", req.Type).Str("user", claims.UserID).Msg("feedback submitted")
 	JSON(w, http.StatusCreated, map[string]string{"id": issueID})
 }
 
@@ -121,6 +138,7 @@ func (h *FeedbackHandler) createLinearIssue(title, description string, labelIDs 
 	query := fmt.Sprintf(`mutation {
 		issueCreate(input: {
 			teamId: "%s",
+			stateId: "%s",
 			title: %s,
 			description: %s,
 			labelIds: %s
@@ -128,7 +146,7 @@ func (h *FeedbackHandler) createLinearIssue(title, description string, labelIDs 
 			success
 			issue { id identifier }
 		}
-	}`, linearTeamID, jsonStr(title), jsonStr(description), string(labelsJSON))
+	}`, linearTeamID, linearStateTriageID, jsonStr(title), jsonStr(description), string(labelsJSON))
 
 	resp, err := h.linearGraphQL(query)
 	if err != nil {
@@ -219,17 +237,6 @@ func (h *FeedbackHandler) uploadScreenshot(dataURL string) (string, error) {
 	if uf.UploadURL == "" {
 		return "", fmt.Errorf("empty upload URL from Linear")
 	}
-
-	var body bytes.Buffer
-	mw := multipart.NewWriter(&body)
-	fw, err := mw.CreateFormFile("file", filename)
-	if err != nil {
-		return "", err
-	}
-	if _, err := io.Copy(fw, bytes.NewReader(imgBytes)); err != nil {
-		return "", err
-	}
-	mw.Close()
 
 	uploadReq, err := http.NewRequest(http.MethodPut, uf.UploadURL, bytes.NewReader(imgBytes))
 	if err != nil {
