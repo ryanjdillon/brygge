@@ -165,13 +165,13 @@ function formatAmount(amount: number): string {
             </div>
             <ul class="mt-3 space-y-2">
               <li
-                v-for="item in cat.items"
+                v-for="item in cat.rows"
                 :key="item.id"
                 class="flex items-baseline justify-between border-b border-slate-100 pb-2 last:border-0 last:pb-0"
               >
                 <span class="text-sm text-slate-700">{{ item.name }}</span>
                 <span class="text-sm font-semibold text-slate-900">
-                  {{ formatAmount(item.amount) }} kr
+                  {{ formatAmount(item.allAmount ?? item.memberAmount ?? 0) }} kr
                   <span class="font-normal text-slate-500">{{ unitLabel(item.unit) }}</span>
                 </span>
               </li>

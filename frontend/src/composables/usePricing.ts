@@ -4,12 +4,29 @@ import { useI18n } from 'vue-i18n'
 import { useApiClient, unwrap } from '@/lib/apiClient'
 import type { components } from '@/types/api'
 
-export type PriceItem = components['schemas']['PriceItem']
+export type PriceItem = components['schemas']['PriceItem'] & { audience?: string }
+
+export interface PricingRow {
+  id: string
+  name: string
+  description: string
+  unit: string
+  metadata: unknown
+  installments_allowed: boolean
+  max_installments: number
+  // audience === 'all': only allAmount is set
+  // audience paired: memberAmount and/or nonMemberAmount are set
+  allAmount?: number
+  memberAmount?: number
+  nonMemberAmount?: number
+}
 
 export interface PricingCategory {
   key: string
   label: string
-  items: PriceItem[]
+  rows: PricingRow[]
+  /** true when any row has member/non-member split */
+  hasSplit: boolean
 }
 
 const categoryKeys: Record<string, string> = {
@@ -52,20 +69,47 @@ export function usePricing() {
     staleTime: 10 * 60 * 1000,
   })
 
-  const items = computed(() => query.data.value?.items ?? [])
+  const items = computed(() => (query.data.value?.items ?? []) as PriceItem[])
 
   const categories = computed<PricingCategory[]>(() => {
-    const grouped = new Map<string, PriceItem[]>()
+    // Group by category first
+    const byCat = new Map<string, PriceItem[]>()
     for (const item of items.value) {
-      const list = grouped.get(item.category) ?? []
+      const list = byCat.get(item.category) ?? []
       list.push(item)
-      grouped.set(item.category, list)
+      byCat.set(item.category, list)
     }
-    return Array.from(grouped.entries()).map(([key, items]) => ({
-      key,
-      label: categoryLabel(key),
-      items,
-    }))
+
+    return Array.from(byCat.entries()).map(([key, catItems]) => {
+      // Within a category, pair items with the same name that differ only by audience
+      const rowMap = new Map<string, PricingRow>()
+      for (const item of catItems) {
+        const existing = rowMap.get(item.name)
+        if (existing) {
+          if (item.audience === 'member') existing.memberAmount = item.amount
+          else if (item.audience === 'non_member') existing.nonMemberAmount = item.amount
+          else existing.allAmount = item.amount
+        } else {
+          const row: PricingRow = {
+            id: item.id,
+            name: item.name,
+            description: item.description,
+            unit: item.unit,
+            metadata: item.metadata,
+            installments_allowed: item.installments_allowed,
+            max_installments: item.max_installments,
+          }
+          if (item.audience === 'member') row.memberAmount = item.amount
+          else if (item.audience === 'non_member') row.nonMemberAmount = item.amount
+          else row.allAmount = item.amount
+          rowMap.set(item.name, row)
+        }
+      }
+
+      const rows = Array.from(rowMap.values())
+      const hasSplit = rows.some(r => r.memberAmount !== undefined || r.nonMemberAmount !== undefined)
+      return { key, label: categoryLabel(key), rows, hasSplit }
+    })
   })
 
   return { ...query, items, categories, categoryLabel, unitLabel }

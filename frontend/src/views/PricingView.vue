@@ -50,28 +50,59 @@ function seasonLabel(metadata: Record<string, string> | unknown): string | null 
         class="rounded-2xl border border-slate-200 bg-white p-6"
       >
         <h2 class="text-lg font-semibold text-slate-900">{{ cat.label }}</h2>
-        <ul class="mt-4 space-y-3">
+
+        <!-- Split header when at least one row has member/non-member prices -->
+        <div v-if="cat.hasSplit" class="mt-3 flex justify-end gap-4 text-xs font-semibold uppercase tracking-wide text-slate-400">
+          <span class="w-20 text-right">{{ t('pricing.member') }}</span>
+          <span class="w-20 text-right">{{ t('pricing.nonMember') }}</span>
+        </div>
+
+        <ul class="mt-2 space-y-3">
           <li
-            v-for="item in cat.items"
-            :key="item.id"
+            v-for="row in cat.rows"
+            :key="row.id"
             class="border-b border-slate-100 pb-3 last:border-0 last:pb-0"
           >
-            <div class="flex items-baseline justify-between">
-              <span class="text-slate-700">{{ item.name }}</span>
-              <span class="font-semibold text-slate-900">
-                {{ formatAmount(item.amount) }} kr
-                <span class="text-sm font-normal text-slate-500">{{ unitLabel(item.unit) }}</span>
-              </span>
-            </div>
-            <p v-if="item.description" class="mt-0.5 text-sm text-slate-500">
-              {{ item.description }}
-            </p>
-            <p v-if="seasonLabel(item.metadata)" class="mt-0.5 text-xs text-slate-400">
-              {{ t('pricing.period') }}: {{ seasonLabel(item.metadata) }}
-            </p>
-            <p v-if="item.installments_allowed" class="mt-0.5 text-xs text-blue-600">
-              {{ t('pricing.installments', { max: item.max_installments }) }}
-            </p>
+            <!-- Paired member/non-member row -->
+            <template v-if="row.memberAmount !== undefined || row.nonMemberAmount !== undefined">
+              <div class="flex items-baseline justify-between gap-2">
+                <span class="flex-1 text-slate-700">{{ row.name }}</span>
+                <span class="w-20 text-right font-semibold text-slate-900">
+                  <template v-if="row.memberAmount !== undefined">
+                    {{ formatAmount(row.memberAmount) }} kr
+                  </template>
+                  <span v-else class="text-slate-300">—</span>
+                </span>
+                <span class="w-20 text-right font-semibold text-slate-900">
+                  <template v-if="row.nonMemberAmount !== undefined">
+                    {{ formatAmount(row.nonMemberAmount) }} kr
+                  </template>
+                  <span v-else class="text-slate-300">—</span>
+                </span>
+              </div>
+              <p v-if="row.description" class="mt-0.5 text-sm text-slate-500">{{ row.description }}</p>
+              <p v-if="unitLabel(row.unit)" class="mt-0.5 text-xs text-slate-400">{{ unitLabel(row.unit) }}</p>
+            </template>
+
+            <!-- Standard single-price row -->
+            <template v-else>
+              <div class="flex items-baseline justify-between">
+                <span class="text-slate-700">{{ row.name }}</span>
+                <span class="font-semibold text-slate-900">
+                  {{ formatAmount(row.allAmount ?? 0) }} kr
+                  <span class="text-sm font-normal text-slate-500">{{ unitLabel(row.unit) }}</span>
+                </span>
+              </div>
+              <p v-if="row.description" class="mt-0.5 text-sm text-slate-500">
+                {{ row.description }}
+              </p>
+              <p v-if="seasonLabel(row.metadata)" class="mt-0.5 text-xs text-slate-400">
+                {{ t('pricing.period') }}: {{ seasonLabel(row.metadata) }}
+              </p>
+              <p v-if="row.installments_allowed" class="mt-0.5 text-xs text-blue-600">
+                {{ t('pricing.installments', { max: row.max_installments }) }}
+              </p>
+            </template>
           </li>
         </ul>
       </div>
