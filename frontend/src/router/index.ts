@@ -373,6 +373,11 @@ const routes: RouteRecordRaw[] = [
         redirect: '/admin/settings/site',
       },
       {
+        path: 'accounting/reports',
+        name: 'admin-accounting-reports',
+        component: () => import('@/views/admin/AccountingReportsView.vue'),
+      },
+      {
         path: 'accounting/bank-imports',
         name: 'admin-bank-imports',
         component: () => import('@/views/admin/BankImportsView.vue'),

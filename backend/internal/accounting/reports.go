@@ -78,14 +78,32 @@ type GeneralLedger struct {
 
 // ── Queries ─────────────────────────────────────────────────
 
+// cashWhereClause is appended to report queries when cash-basis view is
+// requested. It restricts entries to those that touch a bank/cash account
+// (1900 or 1920–1949), which approximates cash recognition: an invoice
+// line only appears once payment has actually hit the bank.
+const cashWhereClause = `
+  AND EXISTS (
+    SELECT 1 FROM journal_lines jl2
+    JOIN accounts a2 ON a2.id = jl2.account_id
+    WHERE jl2.journal_entry_id = je.id
+      AND (a2.code = '1900' OR (a2.code >= '1920' AND a2.code <= '1949'))
+  )`
+
 // IncomeStatement generates the resultatregnskap for a fiscal period.
 // Revenue = sum of credits - debits for revenue accounts.
 // Expenses = sum of debits - credits for expense accounts.
-func (s *Service) IncomeStatement(ctx context.Context, clubID, periodID string) (*IncomeStatement, error) {
+// When cashFilter is true only entries that touch a cash/bank account are included.
+func (s *Service) IncomeStatement(ctx context.Context, clubID, periodID string, cashFilter bool) (*IncomeStatement, error) {
 	var year int
 	err := s.db.QueryRow(ctx, `SELECT year FROM fiscal_periods WHERE id = $1 AND club_id = $2`, periodID, clubID).Scan(&year)
 	if err != nil {
 		return nil, fmt.Errorf("getting period: %w", err)
+	}
+
+	extra := ""
+	if cashFilter {
+		extra = cashWhereClause
 	}
 
 	rows, err := s.db.Query(ctx,
@@ -98,7 +116,7 @@ func (s *Service) IncomeStatement(ctx context.Context, clubID, periodID string) 
 		 WHERE je.club_id = $1
 		   AND je.fiscal_period_id = $2
 		   AND je.status = 'posted'
-		   AND a.account_type IN ('revenue', 'expense')
+		   AND a.account_type IN ('revenue', 'expense')`+extra+`
 		 GROUP BY a.code, a.name, a.account_type, a.sort_order
 		 ORDER BY a.sort_order, a.code`,
 		clubID, periodID,
@@ -145,7 +163,9 @@ func (s *Service) IncomeStatement(ctx context.Context, clubID, periodID string) 
 }
 
 // BalanceSheet generates the balanse — cumulative through the selected period.
-func (s *Service) BalanceSheet(ctx context.Context, clubID, periodID string) (*BalanceSheet, error) {
+// When cashFilter is true only entries that touch a cash/bank account are included,
+// which hides receivables/payables that haven't been settled yet.
+func (s *Service) BalanceSheet(ctx context.Context, clubID, periodID string, cashFilter bool) (*BalanceSheet, error) {
 	var year int
 	var endDate string
 	err := s.db.QueryRow(ctx,
@@ -154,6 +174,11 @@ func (s *Service) BalanceSheet(ctx context.Context, clubID, periodID string) (*B
 	).Scan(&year, &endDate)
 	if err != nil {
 		return nil, fmt.Errorf("getting period: %w", err)
+	}
+
+	extra := ""
+	if cashFilter {
+		extra = cashWhereClause
 	}
 
 	// Sum all posted entries up to and including this period's end date
@@ -168,7 +193,7 @@ func (s *Service) BalanceSheet(ctx context.Context, clubID, periodID string) (*B
 		 WHERE je.club_id = $1
 		   AND je.status = 'posted'
 		   AND fp.end_date <= $2
-		   AND a.account_type IN ('asset', 'liability')
+		   AND a.account_type IN ('asset', 'liability')`+extra+`
 		 GROUP BY a.code, a.name, a.account_type, a.sort_order
 		 ORDER BY a.sort_order, a.code`,
 		clubID, endDate,
@@ -215,11 +240,17 @@ func (s *Service) BalanceSheet(ctx context.Context, clubID, periodID string) (*B
 }
 
 // TrialBalance generates the saldobalanse for a fiscal period.
-func (s *Service) TrialBalance(ctx context.Context, clubID, periodID string) (*TrialBalance, error) {
+// When cashFilter is true only entries that touch a cash/bank account are included.
+func (s *Service) TrialBalance(ctx context.Context, clubID, periodID string, cashFilter bool) (*TrialBalance, error) {
 	var year int
 	err := s.db.QueryRow(ctx, `SELECT year FROM fiscal_periods WHERE id = $1 AND club_id = $2`, periodID, clubID).Scan(&year)
 	if err != nil {
 		return nil, fmt.Errorf("getting period: %w", err)
+	}
+
+	extra := ""
+	if cashFilter {
+		extra = cashWhereClause
 	}
 
 	rows, err := s.db.Query(ctx,
@@ -231,7 +262,7 @@ func (s *Service) TrialBalance(ctx context.Context, clubID, periodID string) (*T
 		 JOIN accounts a ON a.id = jl.account_id
 		 WHERE je.club_id = $1
 		   AND je.fiscal_period_id = $2
-		   AND je.status = 'posted'
+		   AND je.status = 'posted'`+extra+`
 		 GROUP BY a.code, a.name, a.sort_order
 		 ORDER BY a.sort_order, a.code`,
 		clubID, periodID,

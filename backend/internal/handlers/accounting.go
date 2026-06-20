@@ -1324,8 +1324,9 @@ func (h *AccountingHandler) HandleIncomeStatement(w http.ResponseWriter, r *http
 		Error(w, http.StatusBadRequest, "period_id is required")
 		return
 	}
+	cashFilter := r.URL.Query().Get("view") == "cash"
 
-	stmt, err := h.svc.IncomeStatement(r.Context(), claims.ClubID, periodID)
+	stmt, err := h.svc.IncomeStatement(r.Context(), claims.ClubID, periodID, cashFilter)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to generate income statement")
 		Error(w, http.StatusInternalServerError, "internal error")
@@ -1347,8 +1348,9 @@ func (h *AccountingHandler) HandleIncomeStatementPDF(w http.ResponseWriter, r *h
 		Error(w, http.StatusBadRequest, "period_id is required")
 		return
 	}
+	cashFilter := r.URL.Query().Get("view") == "cash"
 
-	stmt, err := h.svc.IncomeStatement(r.Context(), claims.ClubID, periodID)
+	stmt, err := h.svc.IncomeStatement(r.Context(), claims.ClubID, periodID, cashFilter)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to generate income statement")
 		Error(w, http.StatusInternalServerError, "internal error")
@@ -1380,8 +1382,9 @@ func (h *AccountingHandler) HandleBalanceSheet(w http.ResponseWriter, r *http.Re
 		Error(w, http.StatusBadRequest, "period_id is required")
 		return
 	}
+	cashFilter := r.URL.Query().Get("view") == "cash"
 
-	bs, err := h.svc.BalanceSheet(r.Context(), claims.ClubID, periodID)
+	bs, err := h.svc.BalanceSheet(r.Context(), claims.ClubID, periodID, cashFilter)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to generate balance sheet")
 		Error(w, http.StatusInternalServerError, "internal error")
@@ -1403,8 +1406,9 @@ func (h *AccountingHandler) HandleBalanceSheetPDF(w http.ResponseWriter, r *http
 		Error(w, http.StatusBadRequest, "period_id is required")
 		return
 	}
+	cashFilter := r.URL.Query().Get("view") == "cash"
 
-	bs, err := h.svc.BalanceSheet(r.Context(), claims.ClubID, periodID)
+	bs, err := h.svc.BalanceSheet(r.Context(), claims.ClubID, periodID, cashFilter)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to generate balance sheet")
 		Error(w, http.StatusInternalServerError, "internal error")
@@ -1436,8 +1440,9 @@ func (h *AccountingHandler) HandleTrialBalance(w http.ResponseWriter, r *http.Re
 		Error(w, http.StatusBadRequest, "period_id is required")
 		return
 	}
+	cashFilter := r.URL.Query().Get("view") == "cash"
 
-	tb, err := h.svc.TrialBalance(r.Context(), claims.ClubID, periodID)
+	tb, err := h.svc.TrialBalance(r.Context(), claims.ClubID, periodID, cashFilter)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to generate trial balance")
 		Error(w, http.StatusInternalServerError, "internal error")
