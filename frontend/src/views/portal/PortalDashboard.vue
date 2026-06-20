@@ -86,6 +86,8 @@ interface AuthoredDoc {
   title: string
   body_html: string
   visibility: string
+  revision: number
+  published_at: string | null
   created_at: string
   updated_at: string
 }
@@ -412,9 +414,17 @@ watch(docSearch, () => nextTick(() => applyHighlights()))
     >
       <div class="mx-auto mt-12 flex w-full max-w-3xl flex-1 flex-col overflow-hidden rounded-t-xl bg-white shadow-xl">
         <!-- Header -->
-        <div class="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-          <h2 class="text-lg font-semibold text-gray-900">{{ openDoc.title }}</h2>
-          <button type="button" class="rounded p-1 text-gray-400 hover:text-gray-700" @click="closeDoc">
+        <div class="flex items-center gap-3 border-b border-gray-200 px-6 py-4">
+          <div class="min-w-0 flex-1">
+            <h2 class="text-lg font-semibold text-gray-900">{{ openDoc.title }}</h2>
+            <p v-if="openDoc.revision > 0" class="mt-0.5 text-xs text-gray-400">
+              {{ t('admin.documents.revisionN', { n: openDoc.revision }) }}
+              <template v-if="openDoc.published_at">
+                · {{ formatDate(openDoc.published_at) }}
+              </template>
+            </p>
+          </div>
+          <button type="button" class="shrink-0 rounded p-1 text-gray-400 hover:text-gray-700" @click="closeDoc">
             <X class="h-5 w-5" />
           </button>
         </div>

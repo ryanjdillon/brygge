@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useApiClient, unwrap } from '@/lib/apiClient'
@@ -136,7 +136,7 @@ function confirmDeleteFile(docID: string) {
   if (confirm(t('admin.documents.deleteConfirm'))) deleteFileDoc(docID)
 }
 
-// ── Authored doc modal ────────────────────────────────────────────────────────
+// ── Authored doc compose window ───────────────────────────────────────────────
 
 const showAuthoredModal = ref(false)
 const editingDocID = ref<string | null>(null)
@@ -145,6 +145,43 @@ const authoredBody = ref('')
 const authoredVisibility = ref('member')
 const authoredPublished = ref(false)
 const authoredError = ref('')
+
+// Drag
+const composePos = ref({ x: 0, y: 0 })
+const isDragging = ref(false)
+let dragOffset = { x: 0, y: 0 }
+
+onMounted(() => {
+  const w = Math.min(Math.max(window.innerWidth * 0.72, 720), 1100)
+  const h = Math.min(Math.max(window.innerHeight * 0.86, 580), 960)
+  composePos.value = {
+    x: (window.innerWidth - w) / 2,
+    y: (window.innerHeight - h) / 2,
+  }
+})
+
+function startDrag(e: MouseEvent) {
+  if ((e.target as HTMLElement).closest('button, input, select, label')) return
+  isDragging.value = true
+  dragOffset = { x: e.clientX - composePos.value.x, y: e.clientY - composePos.value.y }
+  window.addEventListener('mousemove', onDragMove)
+  window.addEventListener('mouseup', stopDrag)
+}
+
+function onDragMove(e: MouseEvent) {
+  composePos.value = { x: e.clientX - dragOffset.x, y: e.clientY - dragOffset.y }
+}
+
+function stopDrag() {
+  isDragging.value = false
+  window.removeEventListener('mousemove', onDragMove)
+  window.removeEventListener('mouseup', stopDrag)
+}
+
+onBeforeUnmount(() => {
+  window.removeEventListener('mousemove', onDragMove)
+  window.removeEventListener('mouseup', stopDrag)
+})
 
 function openCreateAuthoredModal() {
   editingDocID.value = null
@@ -156,7 +193,10 @@ function openCreateAuthoredModal() {
   showAuthoredModal.value = true
 }
 
-function openEditAuthoredModal(doc: { id: string; title: string; body_html: string; visibility: string; published: boolean }) {
+function openEditAuthoredModal(doc: {
+  id: string; title: string; body_html: string
+  visibility: string; published: boolean
+}) {
   editingDocID.value = doc.id
   authoredTitle.value = doc.title
   authoredBody.value = doc.body_html
@@ -321,6 +361,7 @@ function confirmDeleteContent(docID: string) {
                 <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.documents.title') }}</th>
                 <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.documents.visibility') }}</th>
                 <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.documents.status') }}</th>
+                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.documents.revision') }}</th>
                 <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.documents.date') }}</th>
                 <th class="px-4 py-3" />
               </tr>
@@ -347,6 +388,13 @@ function confirmDeleteContent(docID: string) {
                   >
                     {{ doc.published ? t('admin.documents.published') : t('admin.documents.draft') }}
                   </span>
+                </td>
+                <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">
+                  <template v-if="doc.published && doc.revision > 0">
+                    {{ t('admin.documents.revisionN', { n: doc.revision }) }}
+                    <span class="ml-1 text-xs text-gray-400">{{ doc.published_at ? formatDate(doc.published_at) : '' }}</span>
+                  </template>
+                  <span v-else class="text-gray-300">—</span>
                 </td>
                 <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ formatDate(doc.created_at) }}</td>
                 <td class="whitespace-nowrap px-4 py-3 text-right">
@@ -376,7 +424,7 @@ function confirmDeleteContent(docID: string) {
       </section>
     </template>
 
-    <!-- Upload file modal -->
+    <!-- Upload file modal (standard centered overlay) -->
     <div v-if="showUploadModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div class="w-full max-w-md rounded-xl bg-white shadow-xl">
         <div class="flex items-center justify-between border-b border-gray-200 px-6 py-4">
@@ -432,68 +480,100 @@ function confirmDeleteContent(docID: string) {
         </div>
       </div>
     </div>
+  </div>
 
-    <!-- Authored document modal -->
-    <div v-if="showAuthoredModal" class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 pt-12">
-      <div class="w-full max-w-3xl rounded-xl bg-white shadow-xl">
-        <div class="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-          <h2 class="text-lg font-semibold text-gray-900">
-            {{ editingDocID ? t('admin.documents.editDocument') : t('admin.documents.createDocument') }}
-          </h2>
-          <button type="button" class="rounded p-1 text-gray-400 hover:text-gray-700" @click="showAuthoredModal = false">
-            <X class="h-5 w-5" />
-          </button>
-        </div>
-        <div class="space-y-4 px-6 py-5">
-          <div>
-            <label class="block text-sm font-medium text-gray-700">{{ t('admin.documents.title') }}</label>
-            <input
-              v-model="authoredTitle"
-              type="text"
-              class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-          </div>
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <label class="block text-sm font-medium text-gray-700">{{ t('admin.documents.visibility') }}</label>
-              <select
-                v-model="authoredVisibility"
-                class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                <option v-for="opt in visibilityOptions" :key="opt.value" :value="opt.value">{{ t(opt.labelKey) }}</option>
-              </select>
-            </div>
-            <div class="flex items-end pb-1">
-              <label class="flex items-center gap-2 text-sm font-medium text-gray-700">
-                <input v-model="authoredPublished" type="checkbox" class="rounded border-gray-300" />
-                {{ t('admin.documents.publishNow') }}
-              </label>
-            </div>
-          </div>
-          <div>
-            <label class="mb-1 block text-sm font-medium text-gray-700">{{ t('admin.documents.content') }}</label>
-            <RichEditor v-model="authoredBody" />
-          </div>
-          <p v-if="authoredError" class="text-sm text-red-600">{{ authoredError }}</p>
-        </div>
-        <div class="flex justify-end gap-2 border-t border-gray-200 px-6 py-4">
+  <!-- Authored document compose window (draggable + resizable like ComposeModal) -->
+  <Teleport to="body">
+    <div
+      v-if="showAuthoredModal"
+      class="doc-compose-window fixed z-50 flex flex-col rounded-xl border border-gray-200 bg-white shadow-2xl"
+      :style="{ left: composePos.x + 'px', top: composePos.y + 'px' }"
+      role="dialog"
+      aria-modal="true"
+    >
+      <!-- Drag handle / header -->
+      <header
+        class="flex shrink-0 cursor-grab items-center gap-3 border-b border-gray-200 bg-gray-50 px-5 py-3.5 select-none active:cursor-grabbing"
+        :class="{ 'cursor-grabbing': isDragging }"
+        @mousedown="startDrag"
+      >
+        <FileText class="h-4 w-4 shrink-0 text-gray-400" />
+        <h2 class="text-sm font-semibold text-gray-900">
+          {{ editingDocID ? t('admin.documents.editDocument') : t('admin.documents.createDocument') }}
+        </h2>
+        <div class="ml-auto flex items-center gap-3">
+          <label class="flex cursor-pointer items-center gap-1.5 text-sm text-gray-600" @mousedown.stop>
+            <input v-model="authoredPublished" type="checkbox" class="rounded border-gray-300" />
+            {{ t('admin.documents.publishNow') }}
+          </label>
           <button
             type="button"
-            class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            class="rounded p-0.5 text-gray-400 hover:bg-gray-200 hover:text-gray-700"
             @click="showAuthoredModal = false"
           >
-            {{ t('common.cancel') }}
-          </button>
-          <button
-            type="button"
-            :disabled="!authoredTitle.trim() || savingAuthored"
-            class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
-            @click="saveAuthoredDoc()"
-          >
-            {{ savingAuthored ? t('common.saving') : t('common.save') }}
+            <X class="h-4 w-4" />
           </button>
         </div>
+      </header>
+
+      <!-- Meta row: title + visibility -->
+      <div class="flex shrink-0 items-center gap-3 border-b border-gray-100 px-5 py-3" @mousedown.stop>
+        <input
+          v-model="authoredTitle"
+          type="text"
+          :placeholder="t('admin.documents.titlePlaceholder')"
+          class="min-w-0 flex-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        />
+        <select
+          v-model="authoredVisibility"
+          class="rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        >
+          <option v-for="opt in visibilityOptions" :key="opt.value" :value="opt.value">{{ t(opt.labelKey) }}</option>
+        </select>
+      </div>
+
+      <!-- Error banner -->
+      <div
+        v-if="authoredError"
+        class="shrink-0 border-b border-red-200 bg-red-50 px-5 py-2 text-sm text-red-700"
+      >
+        {{ authoredError }}
+      </div>
+
+      <!-- Editor — fills remaining space -->
+      <div class="min-h-0 flex-1 overflow-hidden" @mousedown.stop>
+        <RichEditor v-model="authoredBody" class="h-full" />
+      </div>
+
+      <!-- Footer -->
+      <div class="flex shrink-0 justify-end gap-2 border-t border-gray-200 bg-gray-50 px-5 py-3" @mousedown.stop>
+        <button
+          type="button"
+          class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          @click="showAuthoredModal = false"
+        >
+          {{ t('common.cancel') }}
+        </button>
+        <button
+          type="button"
+          :disabled="!authoredTitle.trim() || savingAuthored"
+          class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
+          @click="saveAuthoredDoc()"
+        >
+          {{ savingAuthored ? t('common.saving') : t('common.save') }}
+        </button>
       </div>
     </div>
-  </div>
+  </Teleport>
 </template>
+
+<style scoped>
+.doc-compose-window {
+  width: clamp(720px, 72vw, 1100px);
+  height: clamp(580px, 86vh, 960px);
+  min-width: 560px;
+  min-height: 440px;
+  resize: both;
+  overflow: hidden;
+}
+</style>

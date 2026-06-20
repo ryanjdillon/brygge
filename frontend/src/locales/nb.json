@@ -1185,7 +1185,9 @@
       "deleteSuccess": "Dokument sletta",
       "deleteError": "Kunne ikkje slette dokument",
       "deleteConfirm": "Slette dette dokumentet?",
-      "saveSuccess": "Dokument lagra"
+      "saveSuccess": "Dokument lagra",
+      "revisionN": "Rev. {n}",
+      "titlePlaceholder": "Dokumenttittel…"
     },
     "harborMap": {
       "title": "Havnekart-redigering",
