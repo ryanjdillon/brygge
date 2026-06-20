@@ -1176,7 +1176,13 @@
       "beam": "Bredde",
       "status": "Status",
       "registered": "Registrert",
-      "unconfirmed": "(ubekreftet)"
+      "unconfirmed": "(ubekreftet)",
+      "addMember": "Legg til medlem",
+      "addMemberTitle": "Legg til medlem på ventelisten",
+      "addMemberSearch": "Søk på navn eller e-post…",
+      "addMemberNoResults": "Ingen medlemmer funnet",
+      "addMemberAlreadyEnrolled": "Allerede påmeldt",
+      "dragHint": "Dra rader for å endre rekkefølge"
     },
     "documents": {
       "loadError": "Kunne ikke hente dokumenter",

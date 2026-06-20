@@ -1180,7 +1180,13 @@
       "beam": "Beam",
       "status": "Status",
       "registered": "Registered",
-      "unconfirmed": "(unconfirmed)"
+      "unconfirmed": "(unconfirmed)",
+      "addMember": "Add member",
+      "addMemberTitle": "Add member to waiting list",
+      "addMemberSearch": "Search by name or email…",
+      "addMemberNoResults": "No members found",
+      "addMemberAlreadyEnrolled": "Already enrolled",
+      "dragHint": "Drag rows to reorder"
     },
     "documents": {
       "loadError": "Could not load documents",
