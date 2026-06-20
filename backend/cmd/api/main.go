@@ -266,6 +266,7 @@ func main() {
 	faqsHandler := handlers.NewFaqsHandler(db, &cfg, log)
 	productsHandler := handlers.NewProductsHandler(db, &cfg, log)
 	ordersHandler := handlers.NewOrdersHandler(db, &cfg, log)
+	vippsWebhookHandler := handlers.NewVippsWebhookHandler(db, &cfg, log)
 	boatModelsHandler := handlers.NewBoatModelsHandler(db, log)
 	volunteerHandler := handlers.NewVolunteerHandler(db, &cfg, log)
 	shoppingListsHandler := handlers.NewShoppingListsHandler(db, &cfg, log)
@@ -476,6 +477,9 @@ func main() {
 				r.Post("/{orderID}/confirm", ordersHandler.HandleConfirmOrder)
 			})
 		}
+
+		// Vipps webhook — public endpoint, authenticated by Authorization header secret.
+		r.Post("/vipps/webhooks", vippsWebhookHandler.Handle)
 
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.AuthenticateSession(sessionService))
