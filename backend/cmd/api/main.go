@@ -473,6 +473,7 @@ func main() {
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.RequireRole("board"))
 				r.Get("/", waitingListHandler.HandleListWaitingList)
+				r.Post("/enroll", waitingListHandler.HandleAdminEnrollMember)
 				r.Post("/{entryID}/offer", waitingListHandler.HandleOfferSlip)
 				r.Put("/{entryID}/position", waitingListHandler.HandleReorderEntry)
 			})

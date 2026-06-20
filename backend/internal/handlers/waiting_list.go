@@ -86,6 +86,110 @@ type reorderRequest struct {
 	NewPosition int `json:"new_position"`
 }
 
+type adminEnrollRequest struct {
+	UserID string `json:"user_id"`
+}
+
+func (h *WaitingListHandler) HandleAdminEnrollMember(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	var req adminEnrollRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.UserID == "" {
+		Error(w, http.StatusBadRequest, "user_id required")
+		return
+	}
+
+	tx, err := h.db.Begin(ctx)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to begin transaction")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	defer tx.Rollback(ctx)
+
+	var isLocal bool
+	err = tx.QueryRow(ctx,
+		`SELECT is_local FROM users WHERE id = $1 AND club_id = $2`,
+		req.UserID, claims.ClubID,
+	).Scan(&isLocal)
+	if err == pgx.ErrNoRows {
+		Error(w, http.StatusNotFound, "user not found")
+		return
+	}
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to fetch user for enroll")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	var existing string
+	err = tx.QueryRow(ctx,
+		`SELECT id FROM waiting_list_entries
+		 WHERE user_id = $1 AND club_id = $2 AND status IN ('active', 'offered')`,
+		req.UserID, claims.ClubID,
+	).Scan(&existing)
+	if err == nil {
+		Error(w, http.StatusConflict, "already on waiting list")
+		return
+	}
+	if err != pgx.ErrNoRows {
+		h.log.Error().Err(err).Msg("failed to check existing entry for enroll")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	var nextPos int
+	err = tx.QueryRow(ctx,
+		`SELECT COALESCE(MAX(position), 0) + 1 FROM waiting_list_entries WHERE club_id = $1`,
+		claims.ClubID,
+	).Scan(&nextPos)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to determine next position for enroll")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	var entry waitingListEntry
+	err = tx.QueryRow(ctx,
+		`INSERT INTO waiting_list_entries (user_id, club_id, position, is_local, status)
+		 VALUES ($1, $2, $3, $4, 'active')
+		 RETURNING id, user_id, club_id, position, is_local, status, offer_deadline, created_at, updated_at`,
+		req.UserID, claims.ClubID, nextPos, isLocal,
+	).Scan(
+		&entry.ID, &entry.UserID, &entry.ClubID, &entry.Position,
+		&entry.IsLocal, &entry.Status, &entry.OfferDeadline,
+		&entry.CreatedAt, &entry.UpdatedAt,
+	)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to insert waiting list entry for enroll")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		h.log.Error().Err(err).Msg("failed to commit enroll transaction")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	if auditErr := LogAudit(ctx, h.db, claims.ClubID, claims.UserID, "admin_enroll", "waiting_list_entry", entry.ID,
+		nil,
+		map[string]any{"user_id": req.UserID, "position": nextPos},
+	); auditErr != nil {
+		h.log.Error().Err(auditErr).Msg("failed to write audit log for enroll")
+	}
+
+	JSON(w, http.StatusCreated, joinResponse{
+		Position: entry.Position,
+		Entry:    entry,
+	})
+}
+
 func (h *WaitingListHandler) HandleJoinWaitingList(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
