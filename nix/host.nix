@@ -815,6 +815,7 @@ in
     # (missing CLUB_NAME → NavBar shows "Brygge", emails say "your club").
     CLUB_SLUG = clubConfig.slug;
     CLUB_NAME = clubConfig.name;
+    S3_BUCKET_DOCS = clubConfig.s3BucketDocs;
 
     # Role-gated shared inbox (DIL-275/276). Backend's mail.Reconciler
     # reads the spec from this JSON file and talks to Stalwart's admin
