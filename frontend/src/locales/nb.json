@@ -49,6 +49,7 @@
     "noResults": "Ingen resultater",
     "next": "Neste",
     "previous": "Forrige",
+    "showingFrom": "Viser {from}–{to}",
     "skipToContent": "Hopp til hovedinnhold",
     "optional": "valgfri",
     "view": "Vis",

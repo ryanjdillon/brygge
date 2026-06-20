@@ -75,7 +75,21 @@ func (h *AdminSlipsHandler) HandleListSlips(w http.ResponseWriter, r *http.Reque
 		args = append(args, section)
 		argIdx++
 	}
-	query += ` ORDER BY s.section, s.number`
+	sortOrders := map[string]string{
+		"slip":       "s.section, s.number",
+		"-slip":      "s.section DESC, s.number DESC",
+		"status":     "s.status",
+		"-status":    "s.status DESC",
+		"assignee":   "u.full_name NULLS LAST",
+		"-assignee":  "u.full_name DESC NULLS LAST",
+		"boat":       "b.name NULLS LAST",
+		"-boat":      "b.name DESC NULLS LAST",
+	}
+	orderExpr := "s.section, s.number"
+	if expr, ok := sortOrders[r.URL.Query().Get("sort")]; ok {
+		orderExpr = expr
+	}
+	query += ` ORDER BY ` + orderExpr
 	query += ` LIMIT $` + itoa(argIdx) + ` OFFSET $` + itoa(argIdx+1)
 	args = append(args, pg.Limit, pg.Offset)
 

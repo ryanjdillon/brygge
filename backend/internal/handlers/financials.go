@@ -16,6 +16,7 @@ import (
 	"github.com/brygge-klubb/brygge/internal/audit"
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/middleware"
+	"github.com/brygge-klubb/brygge/internal/shared"
 )
 
 type FinancialsHandler struct {
@@ -781,14 +782,17 @@ func (h *FinancialsHandler) HandleListOverdue(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	pg := shared.ParsePagination(r, 100, 500)
+
 	rows, err := h.db.Query(ctx,
 		`SELECT p.id, p.user_id, u.full_name, u.email, u.phone, p.type, p.amount, p.currency,
 		        p.description, p.due_date, EXTRACT(DAY FROM now() - p.due_date)::int
 		 FROM payments p
 		 JOIN users u ON u.id = p.user_id
 		 WHERE p.club_id = $1 AND p.status = 'pending' AND p.due_date < now()
-		 ORDER BY p.due_date ASC`,
-		claims.ClubID,
+		 ORDER BY p.due_date ASC
+		 LIMIT $2 OFFSET $3`,
+		claims.ClubID, pg.Limit, pg.Offset,
 	)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to query overdue payments")
@@ -818,5 +822,5 @@ func (h *FinancialsHandler) HandleListOverdue(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	JSON(w, http.StatusOK, overdue)
+	JSON(w, http.StatusOK, shared.NewPaginatedResponse(overdue, len(overdue), pg))
 }

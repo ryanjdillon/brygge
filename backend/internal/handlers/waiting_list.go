@@ -14,6 +14,7 @@ import (
 
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/middleware"
+	"github.com/brygge-klubb/brygge/internal/shared"
 )
 
 const defaultOfferDeadlineDays = 14
@@ -208,25 +209,30 @@ func (h *WaitingListHandler) HandleListWaitingList(w http.ResponseWriter, r *htt
 		return
 	}
 
+	pg := shared.ParsePagination(r, 100, 500)
 	statusFilter := r.URL.Query().Get("status")
 
-	query := `SELECT wle.id, wle.user_id, wle.club_id, wle.position, wle.is_local,
-	                 wle.status, wle.offer_deadline, wle.created_at, wle.updated_at,
-	                 u.full_name, u.email, u.phone,
-	                 b.id, b.name, b.beam_m, b.measurements_confirmed
-	          FROM waiting_list_entries wle
+	baseWhere := `FROM waiting_list_entries wle
 	          JOIN users u ON u.id = wle.user_id
 	          LEFT JOIN boats b ON b.id = wle.boat_id
 	          WHERE wle.club_id = $1`
 	args := []any{claims.ClubID}
 
 	if statusFilter != "" {
-		query += ` AND wle.status = $2`
+		baseWhere += ` AND wle.status = $2`
 		args = append(args, statusFilter)
 	}
-	query += ` ORDER BY wle.position`
 
-	rows, err := h.db.Query(ctx, query, args...)
+	rows, err := h.db.Query(ctx,
+		`SELECT wle.id, wle.user_id, wle.club_id, wle.position, wle.is_local,
+		        wle.status, wle.offer_deadline, wle.created_at, wle.updated_at,
+		        u.full_name, u.email, u.phone,
+		        b.id, b.name, b.beam_m, b.measurements_confirmed
+		 `+baseWhere+`
+		 ORDER BY wle.position
+		 LIMIT $`+itoa(len(args)+1)+` OFFSET $`+itoa(len(args)+2),
+		append(args, pg.Limit, pg.Offset)...,
+	)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to list waiting list")
 		Error(w, http.StatusInternalServerError, "internal error")
@@ -255,7 +261,7 @@ func (h *WaitingListHandler) HandleListWaitingList(w http.ResponseWriter, r *htt
 		return
 	}
 
-	JSON(w, http.StatusOK, entries)
+	JSON(w, http.StatusOK, shared.NewPaginatedResponse(entries, len(entries), pg))
 }
 
 func (h *WaitingListHandler) HandlePortalWaitingList(w http.ResponseWriter, r *http.Request) {

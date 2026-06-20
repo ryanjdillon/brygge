@@ -43,7 +43,9 @@ type Slip = {
 const { data: slipsResponse, isLoading, isError } = useQuery({
   queryKey: ['admin', 'slips'],
   queryFn: async () => {
-    const res = unwrap(await client.GET('/api/v1/admin/slips'))
+    const res = unwrap(await client.GET('/api/v1/admin/slips', {
+      params: { query: { limit: 500 } as any },
+    }))
     return (res.items ?? []) as Slip[]
   },
 })
@@ -370,6 +372,7 @@ function closeDelete() {
       <table class="min-w-full divide-y divide-gray-200">
         <thead class="bg-gray-50">
           <tr>
+            <th scope="col" class="w-10 px-3 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-400">#</th>
             <SortableTh :active="sortField === 'slip'" :dir="sortDir" @click="setSort('slip')">{{ t('admin.slips.slip') }}</SortableTh>
             <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.slips.size') }}</th>
             <SortableTh :active="sortField === 'status'" :dir="sortDir" @click="setSort('status')">{{ t('admin.slips.status') }}</SortableTh>
@@ -380,7 +383,8 @@ function closeDelete() {
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-200 bg-white">
-          <tr v-for="slip in slips" :key="slip.id">
+          <tr v-for="(slip, index) in slips" :key="slip.id">
+            <td class="whitespace-nowrap px-3 py-3 text-right text-xs text-gray-400 tabular-nums">{{ index + 1 }}</td>
             <td class="whitespace-nowrap px-4 py-3 text-sm">
               <SlipCell :section="slip.section" :number="slip.number" />
             </td>

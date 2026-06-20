@@ -49,6 +49,7 @@
     "noResults": "Ingen resultat",
     "next": "Neste",
     "previous": "Førre",
+    "showingFrom": "Viser {from}–{to}",
     "skipToContent": "Hopp til hovudinnhald",
     "optional": "valfri",
     "view": "Vis",

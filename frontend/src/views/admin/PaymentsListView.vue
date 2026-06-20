@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { usePaymentsList, useExportCSV, type PaymentsFilters, type Payment } from '@/composables/useFinancials'
 import { Download } from 'lucide-vue-next'
 import Select from '@/components/ui/form/Select.vue'
+import SortableTh from '@/components/admin/SortableTh.vue'
 import { formatNOK, formatDateMedium as formatDate } from '@/lib/format'
 
 const { t } = useI18n()
@@ -15,6 +16,19 @@ const currentPage = ref(1)
 const perPage = 50
 
 const selectedPayment = ref<Payment | null>(null)
+
+type SortField = 'date' | 'member' | 'amount' | 'status'
+const sortField = ref<SortField>('date')
+const sortDir = ref<'asc' | 'desc'>('desc')
+
+function setSort(field: SortField) {
+  if (sortField.value === field) {
+    sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc'
+  } else {
+    sortField.value = field
+    sortDir.value = field === 'amount' ? 'desc' : 'asc'
+  }
+}
 
 const filters = computed<PaymentsFilters>(() => ({
   type: typeFilter.value || undefined,
@@ -112,6 +126,19 @@ function typeClass(type: string): string {
   }
 }
 
+const sortedPayments = computed(() => {
+  const list = [...(data.value?.payments ?? [])]
+  list.sort((a, b) => {
+    let cmp = 0
+    if (sortField.value === 'date') cmp = (a.created_at ?? '') < (b.created_at ?? '') ? -1 : 1
+    else if (sortField.value === 'member') cmp = (a.user_name ?? '').localeCompare(b.user_name ?? '')
+    else if (sortField.value === 'amount') cmp = (a.amount ?? 0) - (b.amount ?? 0)
+    else if (sortField.value === 'status') cmp = (a.status ?? '').localeCompare(b.status ?? '')
+    return sortDir.value === 'asc' ? cmp : -cmp
+  })
+  return list
+})
+
 function handleExport() {
   downloadCSV({
     type: typeFilter.value || undefined,
@@ -167,38 +194,40 @@ function handleExport() {
       <table class="min-w-full divide-y divide-gray-200">
         <thead class="bg-gray-50">
           <tr>
-            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+            <th scope="col" class="w-10 px-3 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-400">#</th>
+            <SortableTh :active="sortField === 'date'" :dir="sortDir" @click="setSort('date')">
               {{ t('admin.financials.date') }}
-            </th>
-            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+            </SortableTh>
+            <SortableTh :active="sortField === 'member'" :dir="sortDir" @click="setSort('member')">
               {{ t('admin.financials.member') }}
-            </th>
+            </SortableTh>
             <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
               {{ t('admin.financials.paymentType') }}
             </th>
-            <th scope="col" class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
+            <SortableTh :active="sortField === 'amount'" :dir="sortDir" class="text-right" @click="setSort('amount')">
               {{ t('admin.financials.amount') }}
-            </th>
-            <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+            </SortableTh>
+            <SortableTh :active="sortField === 'status'" :dir="sortDir" @click="setSort('status')">
               {{ t('common.status') }}
-            </th>
+            </SortableTh>
             <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
               {{ t('admin.financials.reference') }}
             </th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-200 bg-white">
-          <tr v-if="!data?.payments?.length">
-            <td colspan="6" class="px-4 py-8 text-center text-gray-500">
+          <tr v-if="!sortedPayments.length">
+            <td colspan="7" class="px-4 py-8 text-center text-gray-500">
               {{ t('common.noResults') }}
             </td>
           </tr>
           <tr
-            v-for="payment in data?.payments"
+            v-for="(payment, index) in sortedPayments"
             :key="payment.id"
             class="cursor-pointer hover:bg-gray-50"
             @click="selectedPayment = payment"
           >
+            <td class="whitespace-nowrap px-3 py-3 text-right text-xs text-gray-400 tabular-nums">{{ (currentPage - 1) * perPage + index + 1 }}</td>
             <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-600">
               {{ formatDate(payment.created_at) }}
             </td>
