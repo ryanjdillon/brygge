@@ -238,9 +238,11 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/ProductsAdminView.vue'),
       },
       {
+        // Standalone broadcast page retired — member announcements now live
+        // in the inbox compose flow + Broadcasts tab (BRY-168). Old bookmarks
+        // land on the inbox.
         path: 'communication',
-        name: 'admin-communication',
-        component: () => import('@/views/admin/CommunicationView.vue'),
+        redirect: '/admin/inbox',
       },
       {
         // Three-pane layout. Mailbox + thread selection is carried

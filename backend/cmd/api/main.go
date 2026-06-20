@@ -229,7 +229,6 @@ func main() {
 	membersHandler := handlers.NewMembersHandler(db, &cfg, log)
 	weatherHandler := handlers.NewWeatherHandler(db, rdb, &cfg, log)
 	contactHandler := handlers.NewContactHandler(&cfg, log)
-	broadcastHandler := handlers.NewBroadcastHandler(db, &cfg, emailClient, log)
 	// History/retry surface for bulk sends (BRY-165). The retry kick is a
 	// lazy closure because broadcastWorker is assigned later, when the
 	// inbox/mail stack is wired; by the time a retry fires at runtime it's set.
@@ -724,11 +723,6 @@ func main() {
 				})
 
 				if cfg.Features.Communications {
-					r.Route("/broadcast", func(r chi.Router) {
-						r.Use(middleware.RequireRole("board", "admin"))
-						r.Post("/", broadcastHandler.HandleSendBroadcast)
-					})
-
 					r.Route("/broadcasts", func(r chi.Router) {
 						r.Use(middleware.RequireRole("board", "admin"))
 						r.Get("/", broadcastsHandler.HandleList)

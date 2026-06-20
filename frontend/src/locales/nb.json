@@ -547,7 +547,6 @@
       "invoiceDrafts": "Fakturakladder",
       "faktura": "Faktura",
       "products": "Produkter",
-      "communication": "Kommunikasjon",
       "inbox": "Innboks",
       "projects": "Prosjekter",
       "financials": "Regnskap",
@@ -998,21 +997,6 @@
         "sent": "Svaret er sendt.",
         "cancel": "Avbryt"
       }
-    },
-    "communication": {
-      "title": "Kommunikasjon",
-      "compose": "Skriv melding",
-      "history": "Historikk",
-      "subject": "Emne",
-      "body": "Melding",
-      "recipients": "Mottakere",
-      "recipientAll": "Alle medlemmer",
-      "recipientMembers": "Kun medlemmer",
-      "preview": "Forhåndsvis",
-      "send": "Send utsending",
-      "noHistory": "Ingen utsendinger ennå",
-      "recipientBoard": "Styremedlemmer",
-      "recipientSlipHolders": "Plasseiere"
     },
     "products": {
       "title": "Produkter",

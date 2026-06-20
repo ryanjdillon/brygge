@@ -550,7 +550,6 @@
       "pricing": "Pricing",
       "invoiceDrafts": "Faktura drafts",
       "faktura": "Faktura",
-      "communication": "Communication",
       "inbox": "Inbox",
       "projects": "Projects",
       "financials": "Financials",
@@ -1002,21 +1001,6 @@
         "sent": "Reply sent.",
         "cancel": "Cancel"
       }
-    },
-    "communication": {
-      "title": "Communication",
-      "compose": "Compose",
-      "history": "History",
-      "subject": "Subject",
-      "body": "Message",
-      "recipients": "Recipients",
-      "recipientAll": "All members",
-      "recipientMembers": "Members only",
-      "preview": "Preview",
-      "send": "Send broadcast",
-      "noHistory": "No broadcasts sent yet",
-      "recipientBoard": "Board members",
-      "recipientSlipHolders": "Slip owners"
     },
     "products": {
       "title": "Products",
