@@ -190,6 +190,22 @@ Semantic only — used by the operator to label accounts and (future) to pick th
 db_query   mcp
 ```
 
+### `broadcasts.status` (migration 000069)
+
+```
+pending   complete
+```
+
+Lifecycle of a bulk send. Set to `pending` on enqueue; the delivery worker flips it to `complete` once no delivery remains `pending`/`sending`. Per-recipient failures stay visible on the delivery rows — the parent still completes. Constants in `backend/internal/broadcast/store.go` (`BroadcastPending`, `BroadcastComplete`).
+
+### `broadcast_deliveries.status` (migration 000069)
+
+```
+pending   sending   sent   failed
+```
+
+Per-recipient delivery state. `pending` → claimed by the worker (`sending`) → `sent` or, after the retry cap, `failed`. A transient failure goes back to `pending` for reclaim. Constants in `backend/internal/broadcast/store.go` (`DeliveryPending`, `DeliverySending`, `DeliverySent`, `DeliveryFailed`).
+
 ---
 
 ## Mapping tables

@@ -328,6 +328,12 @@ in `backend/migrations/` for the source of truth. The high-level shape:
   belastning lines land in 3900 (Andre inntekter) rather than 2900.
 - `journal_entries`, `journal_lines`, `accounts`, `fiscal_periods` —
   double-entry GL with NS 4102 chart of accounts.
+- `broadcasts`, `broadcast_deliveries` (migration 000069) — bulk member
+  sends. A `broadcasts` row is the parent announcement (subject/body, the
+  originating shared-mailbox `source_address`, a `status`); each recipient
+  gets a `broadcast_deliveries` row the background worker drains (`status`,
+  `attempts`, `error`, `sent_at`). Enqueued by the inbox send path when a
+  send fans out to a group/BCC; see `backend/internal/broadcast/`.
 
 Every table has `created_at` / `updated_at` `TIMESTAMPTZ` columns and a
 `gen_random_uuid()` primary key.
