@@ -55,7 +55,8 @@
     "view": "View",
     "dock": "Dock",
     "dockAll": "All",
-    "clearSelection": "Clear selection"
+    "clearSelection": "Clear selection",
+    "uploading": "Uploading…"
   },
   "privacyPolicy": {
     "title": "Privacy policy",
@@ -434,7 +435,10 @@
       "commentSuccess": "Comment added",
       "commentError": "Could not add comment",
       "loadError": "Could not load documents",
-      "filterBoard": "Board"
+      "filterBoard": "Board",
+      "open": "Open",
+      "searchPlaceholder": "Search in document…",
+      "noMatches": "No matches"
     },
     "waitingList": {
       "title": "Waiting List",
@@ -1165,7 +1169,27 @@
       "title": "Title",
       "file": "File",
       "visibility": "Visibility",
-      "date": "Date"
+      "date": "Date",
+      "uploadFile": "Upload file",
+      "createDocument": "Create document",
+      "editDocument": "Edit document",
+      "sectionFiles": "Uploaded files",
+      "sectionAuthored": "Authored documents",
+      "noAuthoredDocuments": "No authored documents yet",
+      "visibilityMember": "All members",
+      "visibilityBoard": "Board only",
+      "visibilitySlipHolder": "Slip holders",
+      "published": "Published",
+      "draft": "Draft",
+      "publishNow": "Publish now",
+      "content": "Content",
+      "status": "Status",
+      "selectFile": "Select file",
+      "uploadSuccess": "File uploaded",
+      "deleteSuccess": "Document deleted",
+      "deleteError": "Could not delete document",
+      "deleteConfirm": "Delete this document?",
+      "saveSuccess": "Document saved"
     },
     "harborMap": {
       "title": "Harbor Map Editor",

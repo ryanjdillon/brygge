@@ -55,7 +55,8 @@
     "view": "Vis",
     "dock": "Brygge",
     "dockAll": "Alle",
-    "clearSelection": "Tøm utval"
+    "clearSelection": "Tøm utval",
+    "uploading": "Lastar opp…"
   },
   "privacyPolicy": {
     "title": "Personvernerklæring",
@@ -430,7 +431,10 @@
       "commentSuccess": "Kommentar lagt til",
       "commentError": "Kunne ikke legge til kommentar",
       "loadError": "Kunne ikke hente dokumenter",
-      "filterBoard": "Styre"
+      "filterBoard": "Styre",
+      "open": "Opna",
+      "searchPlaceholder": "Søk i dokument…",
+      "noMatches": "Ingen treff"
     },
     "waitingList": {
       "title": "Venteliste",
@@ -1161,7 +1165,27 @@
       "title": "Tittel",
       "file": "Fil",
       "visibility": "Synlighet",
-      "date": "Dato"
+      "date": "Dato",
+      "uploadFile": "Last opp fil",
+      "createDocument": "Lag dokument",
+      "editDocument": "Rediger dokument",
+      "sectionFiles": "Opplasta filer",
+      "sectionAuthored": "Redigerte dokument",
+      "noAuthoredDocuments": "Ingen redigerte dokument endå",
+      "visibilityMember": "Alle medlemmar",
+      "visibilityBoard": "Berre styret",
+      "visibilitySlipHolder": "Bryggeplasseigarar",
+      "published": "Publisert",
+      "draft": "Utkast",
+      "publishNow": "Publiser no",
+      "content": "Innhald",
+      "status": "Status",
+      "selectFile": "Vel fil",
+      "uploadSuccess": "Fil lasta opp",
+      "deleteSuccess": "Dokument sletta",
+      "deleteError": "Kunne ikkje slette dokument",
+      "deleteConfirm": "Slette dette dokumentet?",
+      "saveSuccess": "Dokument lagra"
     },
     "harborMap": {
       "title": "Havnekart-redigering",
