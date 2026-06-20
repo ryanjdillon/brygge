@@ -1,7 +1,12 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -257,4 +262,115 @@ func bytesEqual(a, b []byte) bool {
 		}
 	}
 	return true
+}
+
+// seedPriceItem inserts a flat, batch-enabled price item and returns its ID.
+func seedPriceItem(t *testing.T, db *pgxpool.Pool, clubID, category, name string, amount float64) string {
+	t.Helper()
+	var id string
+	if err := db.QueryRow(context.Background(),
+		`INSERT INTO price_items
+		   (club_id, category, name, description, amount, currency, unit,
+		    is_active, show_in_batch, pricing_kind, sort_order,
+		    audience, metadata, installments_allowed, max_installments)
+		 VALUES ($1, $2, $3, $4, $5, 'NOK', 'year',
+		    true, true, 'flat', 0,
+		    'all', '{}', false, 1)
+		 RETURNING id`,
+		clubID, category, name, name, amount,
+	).Scan(&id); err != nil {
+		t.Fatalf("seeding price item %q: %v", name, err)
+	}
+	return id
+}
+
+// doBulkRequest calls HandleBulkCreateInvoices and returns the parsed response.
+func doBulkRequest(t *testing.T, h *InvoiceHandler, userID, clubID, periodID string, priceItemIDs []string, dueDate string) bulkInvoiceResponse {
+	t.Helper()
+	body, _ := json.Marshal(map[string]any{
+		"user_ids":        []string{userID},
+		"fiscal_period_id": periodID,
+		"price_item_ids":  priceItemIDs,
+		"due_date":        dueDate,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/admin/financials/invoices/bulk", bytes.NewReader(body))
+	req = req.WithContext(withTestClaims(req.Context(), "board-user", clubID, []string{"board"}))
+	rec := httptest.NewRecorder()
+	h.HandleBulkCreateInvoices(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("bulk create returned %d: %s", rec.Code, rec.Body.String())
+	}
+	var resp bulkInvoiceResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decoding bulk response: %v", err)
+	}
+	return resp
+}
+
+// TestBulkCreateInvoicesDedup exercises the per-line idempotency check
+// that prevents double-billing a member for the same category within one
+// fiscal period.
+//
+// Case A — same tier: re-submitting the identical price item for the same
+// user + period must produce zero new invoices; the user lands in Skipped.
+//
+// Case B — changed tier: submitting a different price item that shares the
+// same category (simulating a tier upgrade where the old item is still
+// recorded) also produces zero new invoices, because dedup is keyed on
+// (user, category, period), not on price_item_id.
+func TestBulkCreateInvoicesDedup(t *testing.T) {
+	testutil.SkipIfNoDB(t)
+	db := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	clubID := testutil.SeedClub(t, db)
+	userID, _ := testutil.SeedUser(t, db, clubID, []string{"member"})
+
+	if _, err := db.Exec(ctx,
+		`UPDATE clubs SET name = 'Test Båtlag', org_number = '999999999',
+		                  address = 'Brygga 1', bank_account = '1234.56.78901'
+		   WHERE id = $1`, clubID,
+	); err != nil {
+		t.Fatalf("updating club: %v", err)
+	}
+
+	periodID := seedFiscalPeriod(t, db, clubID, 2026)
+	dueDate := fmt.Sprintf("%d-06-01", 2026)
+
+	h := &InvoiceHandler{
+		db:     db,
+		config: &config.Config{},
+		audit:  audit.NewService(db, zerolog.Nop()),
+		log:    zerolog.Nop(),
+	}
+
+	tierA := seedPriceItem(t, db, clubID, "membership", "Kontingent standard", 450)
+	tierB := seedPriceItem(t, db, clubID, "membership", "Kontingent senior", 300)
+
+	// ── Case A: same tier re-submitted ────────────────────────────────────
+	r1 := doBulkRequest(t, h, userID, clubID, periodID, []string{tierA}, dueDate)
+	if len(r1.Created) != 1 {
+		t.Fatalf("case A first call: expected 1 created, got %d (skipped: %v)", len(r1.Created), r1.Skipped)
+	}
+	if len(r1.Skipped) != 0 {
+		t.Errorf("case A first call: expected 0 skipped, got %d", len(r1.Skipped))
+	}
+
+	r2 := doBulkRequest(t, h, userID, clubID, periodID, []string{tierA}, dueDate)
+	if len(r2.Created) != 0 {
+		t.Errorf("case A second call: expected 0 created, got %d", len(r2.Created))
+	}
+	if len(r2.Skipped) != 1 {
+		t.Errorf("case A second call: expected 1 skipped, got %d", len(r2.Skipped))
+	}
+
+	// ── Case B: different tier, same category ─────────────────────────────
+	// Tier B shares category "membership" with tier A which was already billed.
+	r3 := doBulkRequest(t, h, userID, clubID, periodID, []string{tierB}, dueDate)
+	if len(r3.Created) != 0 {
+		t.Errorf("case B (changed tier): expected 0 created, got %d", len(r3.Created))
+	}
+	if len(r3.Skipped) != 1 {
+		t.Errorf("case B (changed tier): expected 1 skipped, got %d", len(r3.Skipped))
+	}
 }
