@@ -16,6 +16,7 @@ let
     pkgs.postgresql
     pkgs.minio-client
     pkgs.coreutils
+    pkgs.gawk
     pkgs.curl
   ];
 
