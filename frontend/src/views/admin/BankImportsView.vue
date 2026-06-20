@@ -23,7 +23,8 @@ import { useAccountsList } from '@/composables/useAccounting'
 import AccountSelect from '@/components/ui/AccountSelect.vue'
 import Tabs from '@/components/ui/Tabs.vue'
 import BankReconcileTab from '@/components/admin/BankReconcileTab.vue'
-import { useBankUnmatchedCount } from '@/composables/useBankReconcile'
+import BankRefundTab from '@/components/admin/BankRefundTab.vue'
+import { useBankUnmatchedCount, usePendingRefundCount } from '@/composables/useBankReconcile'
 import BankRowsTable from '@/components/admin/BankRowsTable.vue'
 import VippsRowsTable from '@/components/admin/VippsRowsTable.vue'
 import Select from '@/components/ui/form/Select.vue'
@@ -176,13 +177,15 @@ async function confirmReconcile() {
 }
 
 // ── Tabs ────────────────────────────────────────────────────
-const activeTab = ref<'imports' | 'accounts' | 'reconcile'>('imports')
+const activeTab = ref<'imports' | 'accounts' | 'reconcile' | 'refunds'>('imports')
 const currentYear = ref(new Date().getFullYear())
 const { data: unmatchedCount } = useBankUnmatchedCount(currentYear)
+const { data: pendingRefundCount } = usePendingRefundCount()
 const tabs = computed(() => [
   { value: 'imports', label: t('admin.bankImports.tabImports') },
   { value: 'accounts', label: t('admin.bankImports.tabAccounts') },
   { value: 'reconcile', label: t('admin.bankImports.tabReconcile'), badge: unmatchedCount.value ?? 0 },
+  { value: 'refunds', label: t('admin.bankImports.tabRefunds'), badge: pendingRefundCount.value ?? 0 },
 ])
 
 // ── Sync action ─────────────────────────────────────────────
@@ -473,9 +476,14 @@ const filterMonthValue = computed<number>({
       <Tabs v-model="activeTab" :tabs="tabs" />
     </div>
 
-    <!-- Accounts tab -->
+    <!-- Reconcile tab -->
     <div v-if="activeTab === 'reconcile'" class="mt-6">
       <BankReconcileTab />
+    </div>
+
+    <!-- Refunds tab -->
+    <div v-if="activeTab === 'refunds'" class="mt-6">
+      <BankRefundTab />
     </div>
 
     <div v-if="activeTab === 'accounts'" class="mt-6 space-y-4">

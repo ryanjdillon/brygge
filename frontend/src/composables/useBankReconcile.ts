@@ -166,6 +166,78 @@ export function useAssignMultiInvoiceMutation() {
   })
 }
 
+export interface RefundPendingRow {
+  id: string
+  row_date: string
+  amount: number
+  counterpart: string
+  description: string
+  kid_number: string
+  dismissed_reason: string
+  dismissed_at: string
+  bank_account_code: string
+  import_id: string
+}
+
+export interface RefundOutboundCandidate {
+  id: string
+  row_date: string
+  amount: number
+  counterpart: string
+  description: string
+}
+
+export function usePendingRefunds() {
+  return useQuery({
+    queryKey: ['bank-rows', 'pending-refunds'],
+    queryFn: async () => {
+      const body = await useApi().fetchApi<{ items: RefundPendingRow[] }>(`${BASE}/pending-refunds`)
+      return body.items
+    },
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+  })
+}
+
+export function usePendingRefundCount() {
+  return useQuery({
+    queryKey: ['bank-rows', 'pending-refunds', 'count'],
+    queryFn: async () => {
+      const body = await useApi().fetchApi<{ count: number }>(`${BASE}/pending-refunds/count`)
+      return body.count
+    },
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+  })
+}
+
+export function useSuggestRefundOutbound(rowId: Ref<string | null>) {
+  return useQuery({
+    queryKey: computed(() => ['bank-rows', 'suggest-refund-outbound', rowId.value]),
+    enabled: computed(() => !!rowId.value),
+    queryFn: async () => {
+      const body = await useApi().fetchApi<{ items: RefundOutboundCandidate[] }>(
+        `${BASE}/${rowId.value}/suggest-refund-outbound`,
+      )
+      return body.items
+    },
+  })
+}
+
+export function usePairRefundMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ rowId, outboundRowId }: { rowId: string; outboundRowId: string }) =>
+      useApi().fetchApi(`${BASE}/${rowId}/pair-refund`, {
+        method: 'POST',
+        body: JSON.stringify({ outbound_row_id: outboundRowId }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['bank-rows'] })
+    },
+  })
+}
+
 export const DISMISS_REASONS = [
   'bounced',
   'internal_transfer',

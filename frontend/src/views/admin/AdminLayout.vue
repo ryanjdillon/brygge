@@ -6,7 +6,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useClubStore } from '@/stores/club'
 import { useFeatures } from '@/composables/useFeatures'
 import { useNavGate } from '@/composables/useNavGate'
-import { useBankUnmatchedCount } from '@/composables/useBankReconcile'
+import { useBankUnmatchedCount, usePendingRefundCount } from '@/composables/useBankReconcile'
 import ErrorBoundary from '@/components/ui/ErrorBoundary.vue'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import type { NavGroup } from '@/components/layout/navTypes'
@@ -46,6 +46,7 @@ club.ensureLoaded()
 const { isEnabled } = useFeatures()
 const currentYear = ref(new Date().getFullYear())
 const { data: bankUnmatchedCount } = useBankUnmatchedCount(currentYear)
+const { data: pendingRefundCount } = usePendingRefundCount()
 
 const sidebarOpen = ref(false)
 
@@ -88,7 +89,7 @@ const navGroups = computed<NavGroup[]>(() => {
         { to: '/admin/accounting/faktura', icon: Receipt, label: t('admin.sidebar.faktura'), roles: ['treasurer', 'admin'], feature: 'accounting' },
         { to: '/admin/accounting/accounts', icon: ClipboardList, label: t('admin.sidebar.accounts'), roles: ['treasurer', 'board', 'admin'], feature: 'accounting' },
         { to: '/admin/accounting/journal', icon: BookOpen, label: t('admin.sidebar.journal'), roles: ['treasurer', 'board', 'admin'], feature: 'accounting' },
-        { to: '/admin/accounting/bank-imports', icon: Landmark, label: t('admin.sidebar.bankImports'), roles: ['treasurer', 'admin'], feature: 'accounting', badge: bankUnmatchedCount.value ?? 0 },
+        { to: '/admin/accounting/bank-imports', icon: Landmark, label: t('admin.sidebar.bankImports'), roles: ['treasurer', 'admin'], feature: 'accounting', badge: (bankUnmatchedCount.value ?? 0) + (pendingRefundCount.value ?? 0) },
         { to: '/admin/economy/settings', icon: Settings, label: t('admin.sidebar.economySettings'), roles: ['treasurer', 'admin'], feature: 'accounting' },
       ],
     },
