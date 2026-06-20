@@ -11,6 +11,8 @@ import { storeToRefs } from 'pinia'
 import { formatDateTime as fmtDateTime } from '@/lib/format'
 import ComposeModal from '@/components/admin/ComposeModal.vue'
 import RichEditor from '@/components/ui/RichEditor.vue'
+import Tabs from '@/components/ui/Tabs.vue'
+import BroadcastHistory from '@/components/admin/BroadcastHistory.vue'
 
 interface MailboxView {
   address: string
@@ -79,6 +81,15 @@ const showImages = ref(false)
 const search = ref('')
 const showCompose = ref(false)
 const { ensureFreshTotp } = useFreshTotp()
+
+// Inbox vs sent-broadcasts history. Local state — the three-pane inbox
+// keeps its own ?address/?thread URL sync; the tab just toggles which
+// surface is shown.
+const activeTab = ref<'inbox' | 'broadcasts'>('inbox')
+const inboxTabs = computed(() => [
+  { value: 'inbox', label: t('admin.inbox.tabInbox') },
+  { value: 'broadcasts', label: t('admin.inbox.tabBroadcasts') },
+])
 
 async function openCompose() {
   if (!await ensureFreshTotp()) return
@@ -333,7 +344,7 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
           {{ totalUnread }}
         </span>
       </h1>
-      <div class="flex items-center gap-3">
+      <div v-show="activeTab === 'inbox'" class="flex items-center gap-3">
         <button
           type="button"
           class="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
@@ -351,13 +362,17 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
       </div>
     </header>
 
+    <div class="border-b border-gray-200 bg-white px-4">
+      <Tabs v-model="activeTab" :tabs="inboxTabs" />
+    </div>
+
     <ComposeModal
       v-if="showCompose"
       :mailboxes="(mailboxes as any)"
       @close="showCompose = false"
     />
 
-    <div class="flex items-center gap-2 border-b border-blue-100 bg-blue-50 px-4 py-2 text-sm text-blue-800">
+    <div v-show="activeTab === 'inbox'" class="flex items-center gap-2 border-b border-blue-100 bg-blue-50 px-4 py-2 text-sm text-blue-800">
       <Mail class="h-4 w-4 shrink-0 text-blue-500" />
       <span>{{ t('admin.inbox.clientNotice') }}</span>
       <a
@@ -373,7 +388,9 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
       {{ error }}
     </div>
 
-    <div class="flex min-h-0 flex-1">
+    <BroadcastHistory v-if="activeTab === 'broadcasts'" />
+
+    <div v-show="activeTab === 'inbox'" class="flex min-h-0 flex-1">
       <!-- Pane 1: mailbox list -->
       <aside class="w-56 shrink-0 border-r border-gray-200 bg-white">
         <div v-if="loadingMailboxes" class="p-4 text-sm text-gray-500">{{ t('common.loading') }}</div>
