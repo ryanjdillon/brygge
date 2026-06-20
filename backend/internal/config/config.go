@@ -26,10 +26,11 @@ type Config struct {
 	FrontendURL string
 
 	// Object storage
-	S3Endpoint   string
-	S3BucketDocs string
-	S3AccessKey  string
-	S3SecretKey  string
+	S3Endpoint    string
+	S3BucketDocs  string
+	S3BucketLegal string
+	S3AccessKey   string
+	S3SecretKey   string
 
 	// Dendrite (Matrix)
 	DendriteInternalURL  string
@@ -116,10 +117,11 @@ func Load() Config {
 
 		FrontendURL: cleanBaseURL(envStr("FRONTEND_URL", "http://localhost:5173")),
 
-		S3Endpoint:  envStr("S3_ENDPOINT", ""),
-		S3BucketDocs: envStr("S3_BUCKET_DOCS", "brygge"),
-		S3AccessKey: envStr("S3_ACCESS_KEY", ""),
-		S3SecretKey: envStr("S3_SECRET_KEY", ""),
+		S3Endpoint:    envStr("S3_ENDPOINT", ""),
+		S3BucketDocs:  envStr("S3_BUCKET_DOCS", "brygge"),
+		S3BucketLegal: envStr("S3_BUCKET_LEGAL", ""),
+		S3AccessKey:   envStr("S3_ACCESS_KEY", ""),
+		S3SecretKey:   envStr("S3_SECRET_KEY", ""),
 
 		DendriteInternalURL:  envStr("DENDRITE_INTERNAL_URL", "http://dendrite:8008"),
 		DendriteServiceToken: envStr("DENDRITE_SERVICE_TOKEN", ""),
