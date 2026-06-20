@@ -357,6 +357,17 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
       @close="showCompose = false"
     />
 
+    <div class="flex items-center gap-2 border-b border-blue-100 bg-blue-50 px-4 py-2 text-sm text-blue-800">
+      <Mail class="h-4 w-4 shrink-0 text-blue-500" />
+      <span>{{ t('admin.inbox.clientNotice') }}</span>
+      <a
+        href="https://github.com/ryanjdillon/brygge/blob/main/docs/user/setting-up-email.md"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="ml-1 font-medium underline hover:text-blue-900"
+      >{{ t('admin.inbox.clientNoticeLink') }}</a>
+    </div>
+
     <div v-if="error" class="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
       <AlertTriangle class="mr-1 inline h-4 w-4" />
       {{ error }}

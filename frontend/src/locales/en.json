@@ -912,6 +912,8 @@
     },
     "inbox": {
       "title": "Inbox",
+      "clientNotice": "Did you know you can read and send club mail from Apple Mail, Outlook, Gmail, or Thunderbird?",
+      "clientNoticeLink": "See how to set up your mail client →",
       "searchPlaceholder": "Search messages",
       "noSubject": "(no subject)",
       "markUnread": "Mark unread",

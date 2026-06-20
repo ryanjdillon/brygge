@@ -908,6 +908,8 @@
     },
     "inbox": {
       "title": "Innboks",
+      "clientNotice": "Visste du at du kan lese og sende klubbpost frå Apple Mail, Outlook, Gmail eller Thunderbird?",
+      "clientNoticeLink": "Sjå korleis du set opp e-postklienten din →",
       "searchPlaceholder": "Søk i meldingar",
       "noSubject": "(utan emne)",
       "markUnread": "Merk som ulest",
