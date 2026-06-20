@@ -548,6 +548,7 @@
       "boats": "Båtgodkjenning",
       "mapMarkers": "Sjøkart-markørar",
       "generalSettings": "Generelt",
+      "securitySettings": "Tryggleik",
       "accountingOverview": "Oversikt",
       "accounts": "Kontoplan",
       "periods": "Periodar",
@@ -868,6 +869,20 @@
       "title": "Generelle innstillingar",
       "defaultLanguage": "Standardspråket til klubben",
       "defaultLanguageHelp": "Språket som blir vist til besøkande og til medlemmer som ikkje har valt sitt eige. Medlemmer kan overstyre dette på profilen sin."
+    },
+    "securitySettings": {
+      "title": "Tryggingskonfigurasjon",
+      "subtitle": "Styr øktvarigheit og TOTP-vindauget for klubben. Endringar krev fersk TOTP-stadfesting og gjeld nye sesjonar.",
+      "sessionSection": "Sesjonstidsavbrot",
+      "totpSection": "TOTP-vindauge",
+      "idleWindow": "Inaktivitetsvindauge",
+      "idleWindowHelp": "Kor lenge ein sesjon held seg aktiv utan aktivitet. Gyldig: 30–43 200 min (30 min – 30 dagar). Standard: 720 min (12 t).",
+      "absoluteCap": "Absolutt makstid",
+      "absoluteCapHelp": "Hardkoda grense frå innloggingstidspunktet. Må vere ≥ inaktivitetsvindauget. Gyldig: inntil 129 600 min (90 dagar). Standard: 10 080 min (7 dagar).",
+      "adminTotpWindow": "Admin-TOTP-vindauge",
+      "adminTotpWindowHelp": "Kor lenge eit TOTP-trinn held seg ope for administrasjonshandlingar. Gyldig: 5–1 440 min. Standard: 720 min (12 t).",
+      "minutes": "min",
+      "newSessionsNote": "Sesjonstidsavbrot påverkar nye sesjonar og neste forlenging av eksisterande sesjonar. TOTP-vindauget gjeld straks for alle sesjonar."
     },
     "bookingSettings": {
       "title": "Bestillingsinnstillingar",

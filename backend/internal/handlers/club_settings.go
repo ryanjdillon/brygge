@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 
+	"github.com/brygge-klubb/brygge/internal/auth"
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/middleware"
 )
@@ -614,4 +615,144 @@ func (h *ClubSettingsHandler) deleteLogo(w http.ResponseWriter, r *http.Request,
 		h.log.Error().Err(auditErr).Msg("audit club logo delete")
 	}
 	JSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+// sessionSecuritySettings holds per-club session and TOTP timeout overrides.
+// Zero values mean "use the server default". Minutes are used for storage
+// to keep the JSON human-readable in club_settings.value.
+type sessionSecuritySettings struct {
+	// IdleMinutes: how long a session stays valid without activity.
+	// Default: 720 (12h). Clamp: [30, 43200].
+	IdleMinutes int `json:"idle_minutes"`
+	// CapMinutes: hard ceiling from session creation time.
+	// Default: 10080 (7d). Clamp: [idle_minutes, 129600].
+	CapMinutes int `json:"cap_minutes"`
+	// AdminTOTPMinutes: how long the admin TOTP step-up gate stays open.
+	// Default: 720 (12h). Clamp: [5, 1440].
+	AdminTOTPMinutes int `json:"admin_totp_minutes"`
+}
+
+// HandleGetSessionSettings returns the current per-club session timeout settings.
+// Unset values are returned as the server defaults.
+func (h *ClubSettingsHandler) HandleGetSessionSettings(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	rows, err := h.db.Query(ctx,
+		`SELECT key, (value::text)::int FROM club_settings
+		 WHERE club_id = $1 AND key IN ('session_idle_minutes', 'session_absolute_cap_minutes', 'admin_totp_minutes')`,
+		claims.ClubID,
+	)
+	if err != nil {
+		h.log.Error().Err(err).Msg("load session settings")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	defer rows.Close()
+
+	// Defaults matching code constants.
+	out := sessionSecuritySettings{
+		IdleMinutes:      int(auth.SessionIdleWindowDefault.Minutes()),
+		CapMinutes:       int(auth.SessionAbsoluteCapDefault.Minutes()),
+		AdminTOTPMinutes: int(auth.AdminTOTPWindowDefault.Minutes()),
+	}
+	for rows.Next() {
+		var key string
+		var minutes int
+		if err := rows.Scan(&key, &minutes); err != nil {
+			continue
+		}
+		switch key {
+		case "session_idle_minutes":
+			out.IdleMinutes = minutes
+		case "session_absolute_cap_minutes":
+			out.CapMinutes = minutes
+		case "admin_totp_minutes":
+			out.AdminTOTPMinutes = minutes
+		}
+	}
+	if err := rows.Err(); err != nil {
+		h.log.Error().Err(err).Msg("iterate session settings")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	JSON(w, http.StatusOK, out)
+}
+
+// HandleUpdateSessionSettings persists per-club session timeout overrides.
+// Must be called after RequireFreshTOTP — changing security policy is gated
+// on recent TOTP proof.
+func (h *ClubSettingsHandler) HandleUpdateSessionSettings(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	var req sessionSecuritySettings
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	// Server-side clamp (defence-in-depth — save handler is the last gate).
+	req.IdleMinutes = clampMinutes(req.IdleMinutes, 30, 43200)
+	req.CapMinutes = clampMinutes(req.CapMinutes, req.IdleMinutes, 129600)
+	req.AdminTOTPMinutes = clampMinutes(req.AdminTOTPMinutes, 5, 1440)
+	if req.CapMinutes < req.IdleMinutes {
+		Error(w, http.StatusBadRequest, "cap_minutes must be ≥ idle_minutes")
+		return
+	}
+
+	tx, err := h.db.Begin(ctx)
+	if err != nil {
+		h.log.Error().Err(err).Msg("begin session settings tx")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	defer tx.Rollback(ctx)
+
+	for key, val := range map[string]int{
+		"session_idle_minutes":         req.IdleMinutes,
+		"session_absolute_cap_minutes": req.CapMinutes,
+		"admin_totp_minutes":           req.AdminTOTPMinutes,
+	} {
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO club_settings (club_id, key, value, updated_at)
+			 VALUES ($1, $2, to_jsonb($3::int), now())
+			 ON CONFLICT (club_id, key) DO UPDATE SET value = to_jsonb($3::int), updated_at = now()`,
+			claims.ClubID, key, val,
+		); err != nil {
+			h.log.Error().Err(err).Str("key", key).Msg("upsert session setting")
+			Error(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		h.log.Error().Err(err).Msg("commit session settings")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	if auditErr := LogAudit(ctx, h.db, claims.ClubID, claims.UserID,
+		"update_session_settings", "club_settings", claims.ClubID, nil, req); auditErr != nil {
+		h.log.Error().Err(auditErr).Msg("audit session settings")
+	}
+
+	JSON(w, http.StatusOK, req)
+}
+
+func clampMinutes(v, min, max int) int {
+	if v < min {
+		return min
+	}
+	if v > max {
+		return max
+	}
+	return v
 }

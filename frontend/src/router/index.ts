@@ -317,6 +317,11 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/GeneralSettingsView.vue'),
       },
       {
+        path: 'settings/security',
+        name: 'admin-security-settings',
+        component: () => import('@/views/admin/SecuritySettingsView.vue'),
+      },
+      {
         path: 'accounting',
         name: 'admin-accounting',
         component: () => import('@/views/admin/AccountingDashboard.vue'),

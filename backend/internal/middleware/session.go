@@ -100,7 +100,11 @@ func RequireAdminTOTP(sessionService *auth.SessionService) func(http.Handler) ht
 				writeTOTPRequired(w, r, "totp_not_enrolled")
 				return
 			}
-			if info.TOTPVerifiedAt == nil || time.Since(*info.TOTPVerifiedAt) > totpWindow {
+			window := totpWindow
+			if info.AdminTOTPWindow > 0 {
+				window = info.AdminTOTPWindow
+			}
+			if info.TOTPVerifiedAt == nil || time.Since(*info.TOTPVerifiedAt) > window {
 				writeTOTPRequired(w, r, "totp_required")
 				return
 			}

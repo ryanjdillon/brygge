@@ -552,6 +552,7 @@
       "boats": "Boat Approval",
       "mapMarkers": "Chart Markers",
       "generalSettings": "General",
+      "securitySettings": "Security",
       "accountingOverview": "Overview",
       "accounts": "Chart of Accounts",
       "periods": "Periods",
@@ -872,6 +873,20 @@
       "title": "General settings",
       "defaultLanguage": "Club default language",
       "defaultLanguageHelp": "The language shown to visitors and to members who haven't picked their own. Members can override this on their profile."
+    },
+    "securitySettings": {
+      "title": "Security configuration",
+      "subtitle": "Control session lifetime and TOTP window for the club. Changes require fresh TOTP confirmation and apply to new sessions.",
+      "sessionSection": "Session timeouts",
+      "totpSection": "TOTP window",
+      "idleWindow": "Idle window",
+      "idleWindowHelp": "How long a session stays active without any request. Valid: 30–43,200 min (30 min – 30 days). Default: 720 min (12 h).",
+      "absoluteCap": "Absolute cap",
+      "absoluteCapHelp": "Hard ceiling from login time. Must be ≥ idle window. Valid: up to 129,600 min (90 days). Default: 10,080 min (7 days).",
+      "adminTotpWindow": "Admin TOTP window",
+      "adminTotpWindowHelp": "How long an admin TOTP step-up stays open. Valid: 5–1,440 min. Default: 720 min (12 h).",
+      "minutes": "min",
+      "newSessionsNote": "Session timeouts affect new sessions and the next extension of existing ones. The TOTP window takes effect immediately for all sessions."
     },
     "bookingSettings": {
       "title": "Booking Settings",

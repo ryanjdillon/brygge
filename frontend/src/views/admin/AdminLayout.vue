@@ -110,6 +110,7 @@ const navGroups = computed<NavGroup[]>(() => {
       titleKey: 'admin.groupSite',
       items: [
         { to: '/admin/settings/general', icon: Settings, label: t('admin.sidebar.generalSettings'), roles: ['board', 'admin'] },
+        { to: '/admin/settings/security', icon: ShieldCheck, label: t('admin.sidebar.securitySettings'), roles: ['board', 'admin'] },
         { to: '/admin/map', icon: MapPin, label: t('admin.sidebar.mapMarkers') },
         { to: '/admin/notifications', icon: Bell, label: t('notifications.admin.title'), feature: 'communications' },
         { to: '/admin/gdpr', icon: ShieldCheck, label: t('gdpr.admin.title') },

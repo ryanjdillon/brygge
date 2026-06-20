@@ -893,6 +893,15 @@ func main() {
 					r.Put("/", clubSettingsHandler.HandleUpdateGeneralSettings)
 				})
 
+				// Session & security settings (idle window, absolute cap,
+				// admin TOTP window). Gated on fresh TOTP proof.
+				r.With(middleware.RequireRole("board", "admin")).
+					Get("/settings/security", clubSettingsHandler.HandleGetSessionSettings)
+				r.With(
+					middleware.RequireRole("board", "admin"),
+					middleware.RequireFreshTOTPDefault(),
+				).Put("/settings/security", clubSettingsHandler.HandleUpdateSessionSettings)
+
 				// Site-wide settings (identity, board emails, harbor &
 				// motorhome content). Flat paths so chi matches with no
 				// trailing slash. The same handler still serves every
