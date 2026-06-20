@@ -257,7 +257,11 @@ func (s *Service) ReconcileVippsPreview(ctx context.Context, clubID, bankRowID s
 				line.LinkedInvoiceID = invoiceID
 				line.Resolved = true
 			default:
-				if account, name := s.matchVippsAmountToPriceArticle(ctx, clubID, v.Amount); account != "" {
+				if account := s.matchVippsMessageRule(ctx, clubID, v.Message); account != "" {
+					line.Kind = "revenue"
+					line.AccountCode = account
+					line.Resolved = true
+				} else if account, name := s.matchVippsAmountToPriceArticle(ctx, clubID, v.Amount); account != "" {
 					line.Kind = "revenue"
 					line.AccountCode = account
 					line.Resolved = true
@@ -496,16 +500,31 @@ func (s *Service) matchVippsAmountToPriceArticle(ctx context.Context, clubID str
 // resolveCustomerToMember tries to map a Vipps customer to a member.
 // Resolution cascade:
 //
+//  0. Exact match in vipps_customer_aliases (treasurer-taught, checked first)
 //  1. KID in the free-form message → invoice.user_id
 //  2. Normalized exact match on users.full_name
 //  3. Normalized exact match on first_name + ' ' + last_name
 //  4. Last-name-only when exactly one member in the club has that
 //     normalized last name (catches "Per Hansen" when the Vipps CSV
 //     dropped the first name and only "Per Hansen" exists)
+//  5. Levenshtein-1 on full name / first+last
+//  6. Email local-part
 //
 // Normalization handles æøå / accents / hyphens / case so common
 // Norwegian spelling variants don't block the match. See DIL-367.
 func (s *Service) resolveCustomerToMember(ctx context.Context, clubID, customerName, message string) (string, error) {
+	// Pass 0: check treasurer-taught aliases first — skip all fuzzy work.
+	var aliasUserID string
+	aerr := s.db.QueryRow(ctx,
+		`SELECT user_id FROM vipps_customer_aliases
+		 WHERE club_id = $1 AND lower(customer_name) = lower($2)
+		 LIMIT 1`,
+		clubID, customerName,
+	).Scan(&aliasUserID)
+	if aerr == nil && aliasUserID != "" {
+		return aliasUserID, nil
+	}
+
 	if kid := extractKID(message); kid != "" {
 		var memberID string
 		err := s.db.QueryRow(ctx,

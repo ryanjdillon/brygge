@@ -1251,6 +1251,20 @@ func main() {
 							middleware.RequireFreshTOTPDefault()).
 							Post("/bank-rows/{rowID}/clear-vipps-payout", accountingHandler.HandleClearVippsPayout)
 
+						// BRY-11 sub 5: learned aliases & message rules
+						// for aggressive Vipps auto-classification.
+						r.Get("/vipps/queue", accountingHandler.HandleListVippsQueue)
+						r.Route("/vipps/customer-aliases", func(r chi.Router) {
+							r.Get("/", accountingHandler.HandleListCustomerAliases)
+							r.Post("/", accountingHandler.HandleUpsertCustomerAlias)
+							r.Delete("/{aliasID}", accountingHandler.HandleDeleteCustomerAlias)
+						})
+						r.Route("/vipps/message-rules", func(r chi.Router) {
+							r.Get("/", accountingHandler.HandleListMessageRules)
+							r.Post("/", accountingHandler.HandleUpsertMessageRule)
+							r.Delete("/{ruleID}", accountingHandler.HandleDeleteMessageRule)
+						})
+
 						// DIL-392 Tildel tab — per-row manual
 						// reconciliation. Static "unmatched" paths
 						// must register before the parameterised
