@@ -11,6 +11,7 @@ import (
 
 	"github.com/rs/zerolog"
 
+	"github.com/brygge-klubb/brygge/internal/storage"
 	"github.com/brygge-klubb/brygge/internal/testutil"
 )
 
@@ -35,7 +36,8 @@ func TestDocumentCommentsCreateAndList(t *testing.T) {
 		t.Fatalf("seeding document: %v", err)
 	}
 
-	h := NewAdminDocumentsHandler(db, testConfig(), zerolog.Nop())
+	s3, _ := storage.NewClient("", "", "", "")
+	h := NewAdminDocumentsHandler(db, testConfig(), s3, zerolog.Nop())
 	token := generateTestToken(userID, clubID, []string{"member"})
 
 	// POST a comment.

@@ -9,12 +9,14 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/middleware"
+	"github.com/brygge-klubb/brygge/internal/storage"
 )
 
 // documentComment is the API representation of a single comment on a document.
@@ -32,13 +34,15 @@ const maxUploadSize = 50 << 20 // 50 MB
 type AdminDocumentsHandler struct {
 	db     *pgxpool.Pool
 	config *config.Config
+	s3     *storage.Client
 	log    zerolog.Logger
 }
 
-func NewAdminDocumentsHandler(db *pgxpool.Pool, cfg *config.Config, log zerolog.Logger) *AdminDocumentsHandler {
+func NewAdminDocumentsHandler(db *pgxpool.Pool, cfg *config.Config, s3 *storage.Client, log zerolog.Logger) *AdminDocumentsHandler {
 	return &AdminDocumentsHandler{
 		db:     db,
 		config: cfg,
+		s3:     s3,
 		log:    log.With().Str("handler", "admin_documents").Logger(),
 	}
 }
@@ -189,7 +193,16 @@ func (h *AdminDocumentsHandler) HandleGetDocument(w http.ResponseWriter, r *http
 		return
 	}
 
-	JSON(w, http.StatusOK, map[string]any{"document": d})
+	resp := map[string]any{"document": d}
+	if h.s3.IsConfigured() && d.S3Key != "" {
+		if downloadURL, err := h.s3.PresignedURL(ctx, d.S3Key, time.Hour); err != nil {
+			h.log.Warn().Err(err).Str("s3_key", d.S3Key).Msg("failed to presign download URL")
+		} else {
+			resp["download_url"] = downloadURL
+		}
+	}
+
+	JSON(w, http.StatusOK, resp)
 }
 
 func (h *AdminDocumentsHandler) HandleUploadDocument(w http.ResponseWriter, r *http.Request) {
@@ -223,34 +236,43 @@ func (h *AdminDocumentsHandler) HandleUploadDocument(w http.ResponseWriter, r *h
 		visibility = "member"
 	}
 
-	clubID := claims.ClubID
+	if !h.s3.IsConfigured() {
+		Error(w, http.StatusServiceUnavailable, "object storage not configured")
+		return
+	}
 
-	s3Key := fmt.Sprintf("documents/%s/%s", clubID, filepath.Base(header.Filename))
+	clubID := claims.ClubID
+	s3Key := fmt.Sprintf("clubs/%s/documents/%s/%s", clubID, uuid.New().String(), filepath.Base(header.Filename))
+
+	contentType := header.Header.Get("Content-Type")
+	if err := h.s3.Upload(ctx, s3Key, file, header.Size, contentType); err != nil {
+		h.log.Error().Err(err).Str("s3_key", s3Key).Msg("failed to upload document to S3")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
 
 	var docID string
 	err = h.db.QueryRow(ctx,
 		`INSERT INTO documents (club_id, title, filename, s3_key, content_type, size_bytes, visibility, uploaded_by)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		 RETURNING id`,
-		clubID, title, header.Filename, s3Key, header.Header.Get("Content-Type"),
+		clubID, title, header.Filename, s3Key, contentType,
 		header.Size, visibility, claims.UserID,
 	).Scan(&docID)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to insert document record")
+		// Best-effort S3 cleanup — DB insert failed so the S3 object is orphaned.
+		if delErr := h.s3.Delete(ctx, s3Key); delErr != nil {
+			h.log.Warn().Err(delErr).Str("s3_key", s3Key).Msg("failed to clean up orphaned S3 object after DB error")
+		}
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
-	// TODO: upload file to S3-compatible storage using s3Key
-	h.log.Warn().
-		Str("doc_id", docID).
-		Str("s3_key", s3Key).
-		Int64("size", header.Size).
-		Msg("S3 upload stub - file metadata saved but file not uploaded")
-
 	h.log.Info().
 		Str("doc_id", docID).
 		Str("filename", header.Filename).
+		Str("s3_key", s3Key).
 		Str("visibility", visibility).
 		Msg("document uploaded")
 
@@ -329,8 +351,13 @@ func (h *AdminDocumentsHandler) HandleDeleteDocument(w http.ResponseWriter, r *h
 		return
 	}
 
-	// TODO: delete file from S3 using s3Key
-	h.log.Warn().Str("s3_key", s3Key).Msg("S3 delete stub - file not deleted from storage")
+	// S3 delete is best-effort after DB commit. If it fails the object is
+	// orphaned but the document is already removed from the app.
+	if h.s3.IsConfigured() && s3Key != "" {
+		if err := h.s3.Delete(ctx, s3Key); err != nil {
+			h.log.Warn().Err(err).Str("s3_key", s3Key).Msg("failed to delete S3 object; orphaned")
+		}
+	}
 
 	h.log.Info().
 		Str("doc_id", docID).

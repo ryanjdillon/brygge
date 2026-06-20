@@ -30,6 +30,7 @@ import (
 	"github.com/brygge-klubb/brygge/internal/mail"
 	"github.com/brygge-klubb/brygge/internal/middleware"
 	oa "github.com/brygge-klubb/brygge/internal/openapi"
+	"github.com/brygge-klubb/brygge/internal/storage"
 	"github.com/brygge-klubb/brygge/internal/telemetry"
 )
 
@@ -124,6 +125,16 @@ func main() {
 		log.Info().Msg("AI document processing disabled (no ANTHROPIC_API_KEY)")
 	}
 
+	s3Client, err := storage.NewClient(cfg.S3Endpoint, cfg.S3BucketDocs, cfg.S3AccessKey, cfg.S3SecretKey)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to initialise S3 client")
+	}
+	if s3Client.IsConfigured() {
+		log.Info().Str("bucket", cfg.S3BucketDocs).Msg("S3 object storage enabled")
+	} else {
+		log.Warn().Msg("S3 object storage not configured — document uploads disabled")
+	}
+
 	auditService := audit.NewService(db, log)
 	sessionService := auth.NewSessionService(db)
 
@@ -195,7 +206,7 @@ func main() {
 		adminUsersHandler.MailProvisioner = userProvisioner
 	}
 	adminSlipsHandler := handlers.NewAdminSlipsHandler(db, &cfg, log)
-	adminDocumentsHandler := handlers.NewAdminDocumentsHandler(db, &cfg, log)
+	adminDocumentsHandler := handlers.NewAdminDocumentsHandler(db, &cfg, s3Client, log)
 	aiDocumentsHandler := handlers.NewAIDocumentsHandler(db, claudeClient, &cfg, log)
 	forumHandler := handlers.NewForumHandler(db, &cfg, log)
 	bookingsHandler := handlers.NewBookingsHandler(db, rdb, &cfg, log)
