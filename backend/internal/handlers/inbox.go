@@ -839,6 +839,34 @@ func (h *InboxHandler) sendAsPrincipal(ctx context.Context, spec mail.MailboxSpe
 	return jmap.SendEmail(ctx, t.accountID, t.identityID, t.draftsID, t.sentID, req)
 }
 
+// SendBroadcast implements broadcast.MessageSender: it delivers one
+// message to a single recipient as the shared principal for sourceAddress.
+// The delivery worker calls this once per recipient (individual sends, no
+// BCC) so each lands in the recipient's priority inbox.
+func (h *InboxHandler) SendBroadcast(ctx context.Context, sourceAddress string, msg bcast.OutgoingMessage) error {
+	spec, ok := h.specByAddress(sourceAddress)
+	if !ok {
+		return fmt.Errorf("no shared mailbox spec for %s", sourceAddress)
+	}
+	_, _, err := h.sendAsPrincipal(ctx, spec, mail.SendEmailRequest{
+		To:       []mail.EmailAddress{{Email: msg.To}},
+		Subject:  msg.Subject,
+		BodyText: msg.BodyText,
+		BodyHTML: msg.BodyHTML,
+	})
+	return err
+}
+
+// specByAddress returns the shared-mailbox spec for an address.
+func (h *InboxHandler) specByAddress(address string) (mail.MailboxSpec, bool) {
+	for _, s := range h.spec {
+		if strings.EqualFold(s.Address, address) && strings.EqualFold(s.Type, "shared") {
+			return s, true
+		}
+	}
+	return mail.MailboxSpec{}, false
+}
+
 // resolveSendMailboxes finds the JMAP accountId for the shared
 // principal (from the principal's own session, which only contains
 // its own account) plus the Drafts/Sent folder ids. Stalwart 0.15

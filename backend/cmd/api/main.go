@@ -24,6 +24,7 @@ import (
 	"github.com/brygge-klubb/brygge/internal/ai"
 	"github.com/brygge-klubb/brygge/internal/audit"
 	"github.com/brygge-klubb/brygge/internal/auth"
+	"github.com/brygge-klubb/brygge/internal/broadcast"
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/email"
 	"github.com/brygge-klubb/brygge/internal/handlers"
@@ -171,6 +172,9 @@ func main() {
 	// Shared-inbox ACL reconciler (DIL-275/276). Nil when Stalwart
 	// admin creds aren't configured — feature is fully optional.
 	var inboxReconciler *mail.Reconciler
+	// Broadcast delivery worker (BRY-164). Created alongside the inbox
+	// handler when the mail stack is configured; started below.
+	var broadcastWorker *broadcast.Worker
 	if cfg.StalwartAdminURL != "" && cfg.BoardMailboxesPath != "" {
 		spec, err := mail.LoadSpec(cfg.BoardMailboxesPath)
 		if err != nil {
@@ -853,6 +857,13 @@ func main() {
 						cfg.StalwartAdminUser, cfg.StalwartAdminPassword,
 						inboxPasswords, cfg.ClubSlug, auditService, inboxSpec, log,
 					)
+					// Bulk (group/BCC) sends are enqueued by the inbox
+					// handler and drained by this worker, which sends each
+					// recipient individually through the same principal
+					// send path. The kick lets an enqueue start delivery
+					// immediately instead of waiting for the next tick.
+					broadcastWorker = broadcast.NewWorker(broadcast.NewStore(db), inboxHandler, cfg.BulkSendThrottle, log)
+					inboxHandler.SetBroadcastKick(broadcastWorker.Kick)
 					r.Route("/inbox", func(r chi.Router) {
 						// Read-only surface gated on having ANY board-mailbox
 						// role; the per-address check (matching the spec's
@@ -1237,6 +1248,14 @@ func main() {
 				}
 			}
 		}()
+	}
+
+	// Broadcast delivery worker (BRY-164): drains the bulk-send queue on a
+	// background context (survives request lifecycles and restarts). The
+	// boot sweep inside Run re-claims any deliveries orphaned by a crash;
+	// the ticker is a safety net behind the per-enqueue kick.
+	if broadcastWorker != nil {
+		go broadcastWorker.Run(ctx, time.Minute)
 	}
 
 	// Hourly background sweep of expired sessions. Cookies expire on the
