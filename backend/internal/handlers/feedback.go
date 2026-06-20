@@ -119,11 +119,13 @@ func (h *FeedbackHandler) HandleSubmit(w http.ResponseWriter, r *http.Request) {
 		req.PageURL,
 	)
 
+	screenshotAttached := false
 	if req.Screenshot != "" {
-		if attachmentURL, err := uploadScreenshot(req.Screenshot, apiKey); err != nil {
-			h.log.Warn().Err(err).Msg("failed to upload screenshot to Linear; continuing without it")
+		if attachmentURL, err := uploadScreenshot(req.Screenshot, apiKey, h.log); err != nil {
+			h.log.Warn().Err(err).Msg("screenshot upload failed; submitting without it")
 		} else if attachmentURL != "" {
 			body += fmt.Sprintf("\n\n![Screenshot](%s)", attachmentURL)
+			screenshotAttached = true
 		}
 	}
 
@@ -134,8 +136,8 @@ func (h *FeedbackHandler) HandleSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.log.Info().Str("issue_id", issueID).Str("type", req.Type).Str("user", claims.UserID).Msg("feedback submitted")
-	JSON(w, http.StatusCreated, map[string]string{"id": issueID})
+	h.log.Info().Str("issue_id", issueID).Str("type", req.Type).Bool("screenshot", screenshotAttached).Str("user", claims.UserID).Msg("feedback submitted")
+	JSON(w, http.StatusCreated, map[string]any{"id": issueID, "screenshot_attached": screenshotAttached})
 }
 
 func createLinearIssue(title, description string, labelIDs []string, teamID, triageID, apiKey string, log zerolog.Logger) (string, error) {
@@ -199,7 +201,7 @@ func truncate(s string, max int) string {
 	return s[:max] + "…"
 }
 
-func uploadScreenshot(dataURL, apiKey string) (string, error) {
+func uploadScreenshot(dataURL, apiKey string, log zerolog.Logger) (string, error) {
 	b64 := dataURL
 	if strings.HasPrefix(dataURL, "data:") {
 		idx := strings.Index(dataURL, ",")
@@ -228,9 +230,13 @@ func uploadScreenshot(dataURL, apiKey string) (string, error) {
 		}
 	}`, jsonStr(filename), size, jsonStr(contentType))
 
-	prepResp, _, err := linearGraphQL(prepQuery, apiKey)
+	prepResp, prepStatus, err := linearGraphQL(prepQuery, apiKey)
 	if err != nil {
 		return "", fmt.Errorf("prepare upload: %w", err)
+	}
+	if prepStatus != http.StatusOK {
+		log.Warn().Int("status", prepStatus).Str("body", truncate(string(prepResp), 200)).Msg("linear fileUpload prep returned non-200")
+		return "", fmt.Errorf("linear fileUpload error (HTTP %d): %s", prepStatus, truncate(string(prepResp), 200))
 	}
 
 	var prepResult struct {
@@ -251,9 +257,11 @@ func uploadScreenshot(dataURL, apiKey string) (string, error) {
 		} `json:"errors"`
 	}
 	if err := json.Unmarshal(prepResp, &prepResult); err != nil {
+		log.Warn().Str("body", truncate(string(prepResp), 200)).Msg("linear fileUpload prep parse failed")
 		return "", fmt.Errorf("parse upload prep: %w", err)
 	}
 	if len(prepResult.Errors) > 0 {
+		log.Warn().Str("error", prepResult.Errors[0].Message).Msg("linear fileUpload prep error")
 		return "", fmt.Errorf("linear upload prep error: %s", prepResult.Errors[0].Message)
 	}
 

@@ -899,6 +899,7 @@
       "apiKeySet": "••••••• (nøkkel er satt — la feltet stå tomt for å beholde den)",
       "apiKeyPlaceholder": "lin_api_••••••••••••••••••••••",
       "apiKeyHelp": "Personlig eller arbeidsområde-API-nøkkel fra Linear-innstillinger. Lagres kryptert. Returneres aldri etter lagring.",
+      "apiKeyInvalid": "API-nøkkelen må starte med «lin_api_».",
       "teamIdLabel": "Team-ID",
       "teamIdPlaceholder": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
       "teamIdHelp": "UUID for Linear-teamet saker skal opprettes under. Finn det i URL-en til teamets innstillinger i Linear.",
@@ -2185,6 +2186,8 @@
     "removeScreenshot": "Fjern skjermbilde",
     "submit": "Send inn",
     "successMessage": "Takk! Tilbakemeldingen din er sendt.",
+    "screenshotReady": "Skjermbilde klart",
+    "screenshotDropped": "Skjermbildet ble ikke vedlagt (sendt uten det).",
     "screenshotAlt": "Forhåndsvisning av skjermbilde",
     "errorGeneric": "Noe gikk galt. Prøv igjen."
   }

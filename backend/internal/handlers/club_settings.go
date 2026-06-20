@@ -811,7 +811,12 @@ func (h *ClubSettingsHandler) HandleUpdateFeedbackSettings(w http.ResponseWriter
 
 	newAPIKey := currentAPIKey
 	if req.APIKey != "" {
-		newAPIKey = req.APIKey
+		trimmed := strings.TrimSpace(req.APIKey)
+		if !strings.HasPrefix(trimmed, "lin_api_") {
+			Error(w, http.StatusBadRequest, "linear_api_key must start with lin_api_")
+			return
+		}
+		newAPIKey = trimmed
 	}
 
 	if req.Enabled {

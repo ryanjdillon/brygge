@@ -45,7 +45,14 @@ const apiKeyPlaceholder = computed(() =>
   hasExistingKey.value ? t('admin.feedbackSettings.apiKeySet') : t('admin.feedbackSettings.apiKeyPlaceholder'),
 )
 
+const apiKeyFormatError = computed(() => {
+  const k = apiKey.value.trim()
+  if (!k) return null
+  return k.startsWith('lin_api_') ? null : t('admin.feedbackSettings.apiKeyInvalid')
+})
+
 const canSave = computed(() => {
+  if (apiKeyFormatError.value) return false
   if (!enabled.value) return true
   const keyOk = apiKey.value.trim() !== '' || hasExistingKey.value
   return keyOk && teamID.value.trim() !== '' && triageStateID.value.trim() !== ''
@@ -137,7 +144,8 @@ async function handleSubmit() {
             class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             :placeholder="apiKeyPlaceholder"
           />
-          <p class="mt-1 text-xs text-gray-500">{{ t('admin.feedbackSettings.apiKeyHelp') }}</p>
+          <p v-if="apiKeyFormatError" class="mt-1 text-xs text-red-600">{{ apiKeyFormatError }}</p>
+          <p v-else class="mt-1 text-xs text-gray-500">{{ t('admin.feedbackSettings.apiKeyHelp') }}</p>
         </div>
 
         <div>

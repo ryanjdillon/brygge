@@ -18,6 +18,7 @@ const screenshot = ref<string | null>(null)
 const capturing = ref(false)
 const submitting = ref(false)
 const submitted = ref(false)
+const screenshotDropped = ref(false)
 const error = ref('')
 
 const panelHeight = ref(0)
@@ -46,6 +47,7 @@ function reset() {
   screenshot.value = null
   error.value = ''
   submitted.value = false
+  screenshotDropped.value = false
   panelHeight.value = 0
 }
 
@@ -104,7 +106,7 @@ async function submit() {
   submitting.value = true
   error.value = ''
   try {
-    await fetchApi('/api/v1/feedback', {
+    const result = await fetchApi('/api/v1/feedback', {
       method: 'POST',
       body: JSON.stringify({
         type: type.value,
@@ -113,7 +115,10 @@ async function submit() {
         page_url: pageURL.value,
         screenshot: screenshot.value ?? undefined,
       }),
-    })
+    }) as any
+    if (screenshot.value && result?.screenshot_attached === false) {
+      screenshotDropped.value = true
+    }
     submitted.value = true
     setTimeout(() => {
       open.value = false
@@ -161,6 +166,7 @@ async function submit() {
         <div v-if="submitted" class="feedback-success">
           <CheckCircle class="h-8 w-8 text-green-500 mx-auto mb-2" aria-hidden="true" />
           <p class="text-sm text-gray-700 font-medium text-center">{{ t('feedback.successMessage') }}</p>
+          <p v-if="screenshotDropped" class="mt-2 text-xs text-amber-700 text-center">{{ t('feedback.screenshotDropped') }}</p>
         </div>
 
         <template v-else>
@@ -212,6 +218,7 @@ async function submit() {
                 <button class="screenshot-remove" :aria-label="t('feedback.removeScreenshot')" @click="removeScreenshot">
                   <X class="h-3 w-3" aria-hidden="true" />
                 </button>
+                <span class="screenshot-label">{{ t('feedback.screenshotReady') }}</span>
               </div>
             </div>
 
@@ -440,6 +447,15 @@ async function submit() {
   border: 1px solid #e5e7eb;
   object-fit: cover;
 }
+.screenshot-label {
+  position: absolute;
+  bottom: -16px;
+  left: 0;
+  font-size: 0.65rem;
+  color: #16a34a;
+  white-space: nowrap;
+}
+
 .screenshot-remove {
   position: absolute;
   top: -6px;

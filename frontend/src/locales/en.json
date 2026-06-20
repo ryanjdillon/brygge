@@ -903,6 +903,7 @@
       "apiKeySet": "••••••• (key already set — leave blank to keep)",
       "apiKeyPlaceholder": "lin_api_••••••••••••••••••••••",
       "apiKeyHelp": "Personal or workspace API key from Linear settings. Stored encrypted. Never returned after save.",
+      "apiKeyInvalid": "Key must start with lin_api_",
       "teamIdLabel": "Team ID",
       "teamIdPlaceholder": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
       "teamIdHelp": "UUID of the Linear team issues should be filed under. Find it in your Linear team settings URL.",
@@ -2189,6 +2190,8 @@
     "removeScreenshot": "Remove screenshot",
     "submit": "Submit",
     "successMessage": "Thanks! Your feedback has been submitted.",
+    "screenshotReady": "Screenshot ready",
+    "screenshotDropped": "Screenshot couldn't be attached (submitted without it).",
     "screenshotAlt": "Screenshot preview",
     "errorGeneric": "Something went wrong. Please try again."
   }
