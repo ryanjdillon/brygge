@@ -8,21 +8,28 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// paymentTypeAccountMap maps Brygge payment_type values AND price-item
-// category strings to kontoplan account codes. The two vocabularies
-// overlap on `harbor_membership` and `slip_fee` but diverge elsewhere:
-// `payment_type` (enum on payments.type) uses `dues` for annual
-// membership, while `price_items.category` (the text used at invoice
-// time and now denormalized onto invoice_lines.category) uses
-// `membership`. Both keys point at the same account so a lookup with
-// either vocabulary resolves correctly.
+// paymentTypeAccountMap maps both Brygge payment_type enum values and
+// price_items.category strings to kontoplan account codes so that either
+// vocabulary resolves to the correct revenue account. The two sets share
+// harbor_membership and slip_fee verbatim; membership↔dues and the
+// booking/guest/motorhome group diverge in name only.
 var paymentTypeAccountMap = map[string]string{
-	"dues":              "3100", // Medlemskontingent (payment_type)
-	"membership":        "3100", // Medlemskontingent (price_items.category)
+	// payment_type enum values
+	"dues":        "3100", // Medlemskontingent
+	"booking":     "3200", // Gjestehavninntekter
+	"merchandise": "3300", // Salgsinntekter
+
+	// price_items.category values
+	"membership":        "3100", // Medlemskontingent
 	"harbor_membership": "3110", // Havneavgift
 	"slip_fee":          "3120", // Plassleie
-	"booking":           "3200", // Gjestehavninntekter
-	"merchandise":       "3300", // Salgsinntekter
+	"electricity":       "3130", // Strøm
+	"seasonal_rental":   "3200", // Sesongutleie
+	"guest":             "3200", // Gjestehavninntekter
+	"motorhome":         "3210", // Bobil/campingplass
+	"room_hire":         "3220", // Lokalleie
+	"service":           "3300", // Tjenesteinntekter
+	"other":             "3900", // Andre inntekter
 }
 
 const (

@@ -46,6 +46,8 @@ func (s *Service) linkInvoicePayment(ctx context.Context, clubID, invoiceID stri
 		return nil
 	}
 
+	// Map price_items.category → payment_type enum. Categories without a
+	// direct enum match fall back to the closest semantic equivalent.
 	paymentType := "dues"
 	if category != nil {
 		switch *category {
@@ -53,6 +55,10 @@ func (s *Service) linkInvoicePayment(ctx context.Context, clubID, invoiceID stri
 			paymentType = "harbor_membership"
 		case "slip_fee":
 			paymentType = "slip_fee"
+		case "guest", "seasonal_rental", "motorhome", "room_hire":
+			paymentType = "booking"
+		case "service", "electricity", "other":
+			paymentType = "merchandise"
 		}
 	}
 
