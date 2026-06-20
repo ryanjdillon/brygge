@@ -59,7 +59,8 @@
       # consumed by both stalwart-mailbox-config.service and the
       # Brygge backend reconciler.
       boardMailboxes = tfvars.board_mailboxes or [];
-      # Hetzner Object Storage — credentials shared across buckets.
+      # Hetzner Object Storage — credentials and endpoint shared across buckets.
+      s3Endpoint       = tfvars.s3_endpoint or "";
       s3AccessKey      = tfvars.hetzner_s3_access_key or "";
       s3SecretKey      = tfvars.hetzner_s3_secret_key or "";
       s3BucketDocs     = tfvars.s3_bucket_docs or "";
