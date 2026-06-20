@@ -77,13 +77,20 @@ When writing a new migration, always:
 
 ### Linear lifecycle — file work, ship it, close it
 
-Brygge tracks work in Linear (project: `brygge`, team: `software`, prefix `DIL-`). Use the Linear MCP tools (`mcp__linear__save_issue`, `get_issue`, `list_issues`) — never tell the user to open Linear in a browser unless the action genuinely requires the web UI.
+Brygge tracks work in Linear (workspace `dillonteknisk`, team `brygge`, prefix `BRY-`). Use the Linear MCP tools (`mcp__linear__save_issue`, `get_issue`, `list_issues`, `save_project`) — never tell the user to open Linear in a browser unless the action genuinely requires the web UI.
+
+**Pick the tracking tier by size:**
+
+- **Trivial** (typo, whitespace, one-line doc tweak) — just commit, no issue.
+- **Single change** (≥3 steps or one subsystem) — one issue. Follow the per-change workflow below.
+- **Multi-step within one subsystem** — a parent issue + task sub-issues.
+- **Larger body of work** (spans backend + frontend + migration, or more than a handful of sub-issues) — a **Linear project**. See "Larger bodies of work" below.
 
 **Default policy: auto-close on ship.** When a piece of work is implemented and committed, mark its Linear issue **Done** in the same turn. Do not leave issues in "In Review" indefinitely — that's what produced the drift the user had to clean up by hand. The exception is when the user explicitly says some variation of "leave open for review" / "I want to look first" / "don't close yet" — then leave it In Review and let the user close it.
 
 **Workflow per change:**
 
-1. **Before starting** non-trivial work (≥3 distinct steps, or anything that touches more than one subsystem), file a Linear issue with `mcp__linear__save_issue` — `project: "brygge"`, `team: "software"`, descriptive title, `description` covering Why / Scope / Acceptance. Track multi-step work as **parent + sub-issues** up front; do not one-shot. (See [[feedback_linear_tracking]].)
+1. **Before starting** non-trivial work (≥3 distinct steps, or anything that touches more than one subsystem), file a Linear issue with `mcp__linear__save_issue` — `team: "brygge"`, descriptive title, `description` covering Why / Scope / Acceptance. Track multi-step work as **parent + sub-issues** up front; do not one-shot. (See [[feedback_linear_tracking]].)
 2. **When starting**, transition the issue to **In Progress** (`state: "In Progress"`).
 3. **When the commit lands**, transition to **Done** (`state: "Done"`) — unless the user has asked you to leave it for review.
 4. **Parent lifecycle**: do not mark a parent Done while any sub is still open. Close every sub first, then the parent. (See [[feedback_parent_issue_lifecycle]].)
@@ -91,11 +98,26 @@ Brygge tracks work in Linear (project: `brygge`, team: `software`, prefix `DIL-`
 
 **Drift detection — when picking up a session:** scan `In Review` and `In Progress` first; an issue that's been in either state for >7 days without commit activity is suspect and may already be shipped. Verify by repo grep against the issue's named files/symbols, then close.
 
-**What goes in the commit message:** for any commit that resolves one or more issues, include `(DIL-NNN)` or `Closes DIL-NNN` in the subject so the link is obvious in `git log`. The status transition still happens via Linear MCP — Linear doesn't auto-close from commit messages here.
+**What goes in the commit message:** for any commit that resolves one or more issues, include `(BRY-NNN)` or `Closes BRY-NNN` in the subject so the link is obvious in `git log`. The status transition still happens via Linear MCP — Linear doesn't auto-close from commit messages here.
 
 **Don't invent issues to inflate the trail.** A one-line typo fix, a trailing-whitespace cleanup, an obvious doc tweak — just commit. Linear is for work that benefits from being trackable, not for every commit.
 
 **Processing a batch of issues at once** (e.g. "ship the 6 best backlog tasks"): drive them through a self-paced queue loop — one issue per branch, verify + commit each, leave them for batch review, then merge least-conflict-first. Full recipe (queue-file format, the `/loop` prompt, the merge script, when to block instead of guess) in [docs/developer/batch-loop.md](docs/developer/batch-loop.md).
+
+### Larger bodies of work — Linear project + dependency graph
+
+For a body of work that spans multiple subsystems (e.g. backend + frontend + migration) or decomposes into more than a handful of sub-issues, map it out as a **Linear project** *before writing code*, so the critical path and the work that can run in parallel are explicit. Do not one-shot a large feature, and do not hide the structure in prose.
+
+1. **Create the project** (`mcp__linear__save_project`, `addTeams: ["brygge"]`). The `description` is the source of truth: settled design decisions, an explicit **critical path**, what's **out of scope / deferred** (link the issues), and the **definition of done** (see step 5). Set `priority`.
+2. **Feature parent issues** — one per shippable slice (a coherent backend or frontend capability). Each carries Scope + Definition of Done. Label `Feature`.
+3. **Task sub-issues** — implementation units under each parent (`parentId`). Keep them small enough to land in one commit; split the tests into their own sub-issue when that keeps the slice reviewable.
+4. **Priorities + dependencies make the graph legible:**
+   - Set `priority` so the critical path reads as High and leaf/cleanup work as Low.
+   - Encode **real edges** with `blocks` / `blockedBy` on `save_issue` — not just sentences. This is what lets anyone (you, next session, the user) see the critical path and the parallelizable branches at a glance. A feature that "parallels X once the data model lands" must show that as a dependency edge, not only a note.
+5. **Tests are the definition of done.** Every feature states "tests written, run, and **passing** before close" — backend `go test ./...` for touched packages, frontend Vitest for touched components. Do not close a parent until its sub-tasks are done *and* its tests are green. (Parent-before-subs rule from step 4 of the per-change workflow still applies.)
+6. **Record the project** in auto-memory (`type: project`) with the issue range and critical path, so later sessions pick it up without re-deriving it.
+
+Worked example: the **Inbox Broadcast & Bulk Send** project (BRY-162 → BRY-183) — 7 feature parents, 15 task sub-issues, `blocks` edges from the data-model root through enqueue/worker to the frontend and decommission, tests as DoD on each feature.
 
 ## Dev Environment
 
