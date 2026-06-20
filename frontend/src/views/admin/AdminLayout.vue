@@ -19,7 +19,6 @@ import {
   CalendarCheck,
   FileText,
   DollarSign,
-  Megaphone,
   ShoppingBag,
   FolderKanban,
   Ship,
@@ -65,10 +64,11 @@ const navGroups = computed<NavGroup[]>(() => {
           label: t('admin.sidebar.inbox'),
           roles: ['chair', 'vice_chair', 'treasurer', 'harbor_master', 'secretary', 'board', 'admin'],
         },
-        { to: '/admin/events', icon: CalendarDays, label: t('admin.sidebar.events') },
         { to: '/admin/users', icon: Users, label: t('admin.sidebar.users') },
-        { to: '/admin/waiting-list', icon: ListOrdered, label: t('admin.sidebar.waitingList'), roles: ['board', 'admin'] },
+        { to: '/admin/events', icon: CalendarDays, label: t('admin.sidebar.events') },
+        { to: '/admin/documents', icon: FileText, label: t('admin.sidebar.documents') },
         { to: '/admin/pricing', icon: DollarSign, label: t('admin.sidebar.pricing'), roles: ['admin', 'treasurer'] },
+        { to: '/admin/waiting-list', icon: ListOrdered, label: t('admin.sidebar.waitingList'), roles: ['board', 'admin'] },
       ],
     },
     {
@@ -88,10 +88,10 @@ const navGroups = computed<NavGroup[]>(() => {
       titleKey: 'admin.groupEconomy',
       items: [
         { to: '/admin/accounting', icon: Calculator, label: t('admin.sidebar.accountingOverview'), roles: ['treasurer', 'board', 'admin'], feature: 'accounting' },
+        { to: '/admin/accounting/reports', icon: BarChart2, label: t('admin.sidebar.reports'), roles: ['treasurer', 'board', 'admin'], feature: 'accounting' },
         { to: '/admin/accounting/faktura', icon: Receipt, label: t('admin.sidebar.faktura'), roles: ['treasurer', 'admin'], feature: 'accounting' },
         { to: '/admin/accounting/accounts', icon: ClipboardList, label: t('admin.sidebar.accounts'), roles: ['treasurer', 'board', 'admin'], feature: 'accounting' },
         { to: '/admin/accounting/journal', icon: BookOpen, label: t('admin.sidebar.journal'), roles: ['treasurer', 'board', 'admin'], feature: 'accounting' },
-        { to: '/admin/accounting/reports', icon: BarChart2, label: t('admin.sidebar.reports'), roles: ['treasurer', 'board', 'admin'], feature: 'accounting' },
         { to: '/admin/accounting/bank-imports', icon: Landmark, label: t('admin.sidebar.bankImports'), roles: ['treasurer', 'admin'], feature: 'accounting', badge: (bankUnmatchedCount.value ?? 0) + (pendingRefundCount.value ?? 0) },
         { to: '/admin/economy/settings', icon: Settings, label: t('admin.sidebar.economySettings'), roles: ['treasurer', 'admin'], feature: 'accounting' },
       ],
@@ -100,13 +100,6 @@ const navGroups = computed<NavGroup[]>(() => {
       titleKey: 'admin.groupShop',
       items: [
         { to: '/admin/products', icon: ShoppingBag, label: t('admin.sidebar.products'), roles: ['board', 'admin'], feature: 'commerce' },
-      ],
-    },
-    {
-      titleKey: 'admin.groupArchive',
-      items: [
-        { to: '/admin/documents', icon: FileText, label: t('admin.sidebar.documents') },
-        { to: '/admin/communication', icon: Megaphone, label: t('admin.sidebar.communication'), feature: 'communications' },
       ],
     },
     {
