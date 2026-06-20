@@ -557,6 +557,7 @@
       "mapMarkers": "Chart Markers",
       "generalSettings": "General",
       "securitySettings": "Security",
+      "feedbackSettings": "Feedback widget",
       "accountingOverview": "Overview",
       "accounts": "Chart of Accounts",
       "periods": "Periods",
@@ -891,6 +892,24 @@
       "adminTotpWindowHelp": "How long an admin TOTP step-up stays open. Valid: 5–1,440 min. Default: 720 min (12 h).",
       "minutes": "min",
       "newSessionsNote": "Session timeouts affect new sessions and the next extension of existing ones. The TOTP window takes effect immediately for all sessions."
+    },
+    "feedbackSettings": {
+      "title": "Feedback widget",
+      "subtitle": "Enable the in-app feedback button and connect it to a Linear workspace.",
+      "enableLabel": "Enable feedback widget",
+      "enableHelp": "Shows a floating button in the portal and admin area that lets members submit bug reports and feature requests directly to Linear.",
+      "linearSection": "Linear connection",
+      "apiKeyLabel": "Linear API key",
+      "apiKeySet": "••••••• (key already set — leave blank to keep)",
+      "apiKeyPlaceholder": "lin_api_••••••••••••••••••••••",
+      "apiKeyHelp": "Personal or workspace API key from Linear settings. Stored encrypted. Never returned after save.",
+      "teamIdLabel": "Team ID",
+      "teamIdPlaceholder": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+      "teamIdHelp": "UUID of the Linear team issues should be filed under. Find it in your Linear team settings URL.",
+      "triageIdLabel": "Triage state ID",
+      "triageIdPlaceholder": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+      "triageIdHelp": "UUID of the workflow state new feedback issues should land in (e.g. Triage). Find it via the Linear API or team workflow settings.",
+      "incompleteWarning": "Fill in all three fields before enabling. The widget will show a 'not configured' error otherwise."
     },
     "bookingSettings": {
       "title": "Booking Settings",

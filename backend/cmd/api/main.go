@@ -248,7 +248,7 @@ func main() {
 	slipSharesHandler := handlers.NewSlipSharesHandler(db, &cfg, log)
 	notificationsHandler := handlers.NewNotificationsHandler(db, &cfg, log)
 	gdprHandler := handlers.NewGDPRHandler(db, &cfg, log)
-	feedbackHandler := handlers.NewFeedbackHandler(db, &cfg, log)
+	feedbackHandler := handlers.NewFeedbackHandler(db, log)
 
 	r := chi.NewRouter()
 
@@ -927,6 +927,13 @@ func main() {
 					middleware.RequireRole("board", "admin"),
 					middleware.RequireFreshTOTPDefault(),
 				).Put("/settings/security", clubSettingsHandler.HandleUpdateSessionSettings)
+
+				r.With(middleware.RequireRole("board", "admin")).
+					Get("/settings/feedback", clubSettingsHandler.HandleGetFeedbackSettings)
+				r.With(
+					middleware.RequireRole("board", "admin"),
+					middleware.RequireFreshTOTPDefault(),
+				).Put("/settings/feedback", clubSettingsHandler.HandleUpdateFeedbackSettings)
 
 				// Site-wide settings (identity, board emails, harbor &
 				// motorhome content). Flat paths so chi matches with no

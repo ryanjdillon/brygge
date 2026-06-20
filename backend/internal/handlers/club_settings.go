@@ -747,6 +747,99 @@ func (h *ClubSettingsHandler) HandleUpdateSessionSettings(w http.ResponseWriter,
 	JSON(w, http.StatusOK, req)
 }
 
+type feedbackSettings struct {
+	Enabled   bool   `json:"enabled"`
+	HasAPIKey bool   `json:"has_api_key"`
+	TeamID    string `json:"linear_team_id"`
+	TriageID  string `json:"linear_triage_state_id"`
+}
+
+func (h *ClubSettingsHandler) HandleGetFeedbackSettings(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	var s feedbackSettings
+	var apiKey string
+	if err := h.db.QueryRow(ctx,
+		`SELECT feature_feedback, feedback_linear_api_key,
+		        feedback_linear_team_id, feedback_linear_triage_id
+		 FROM clubs WHERE id = $1`,
+		claims.ClubID,
+	).Scan(&s.Enabled, &apiKey, &s.TeamID, &s.TriageID); err != nil {
+		h.log.Error().Err(err).Msg("failed to get feedback settings")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	s.HasAPIKey = apiKey != ""
+	JSON(w, http.StatusOK, s)
+}
+
+type updateFeedbackSettingsReq struct {
+	Enabled  bool   `json:"enabled"`
+	APIKey   string `json:"linear_api_key"`
+	TeamID   string `json:"linear_team_id"`
+	TriageID string `json:"linear_triage_state_id"`
+}
+
+func (h *ClubSettingsHandler) HandleUpdateFeedbackSettings(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	var req updateFeedbackSettingsReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	// Fetch the current API key so a blank submission doesn't wipe it.
+	var currentAPIKey string
+	if err := h.db.QueryRow(ctx,
+		`SELECT feedback_linear_api_key FROM clubs WHERE id = $1`, claims.ClubID,
+	).Scan(&currentAPIKey); err != nil {
+		h.log.Error().Err(err).Msg("failed to fetch current feedback api key")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	newAPIKey := currentAPIKey
+	if req.APIKey != "" {
+		newAPIKey = req.APIKey
+	}
+
+	if req.Enabled {
+		if newAPIKey == "" || req.TeamID == "" || req.TriageID == "" {
+			Error(w, http.StatusBadRequest, "linear_api_key, linear_team_id, and linear_triage_state_id are required to enable feedback")
+			return
+		}
+	}
+
+	if _, err := h.db.Exec(ctx,
+		`UPDATE clubs
+		 SET feature_feedback          = $2,
+		     feedback_linear_api_key   = $3,
+		     feedback_linear_team_id   = $4,
+		     feedback_linear_triage_id = $5,
+		     updated_at = now()
+		 WHERE id = $1`,
+		claims.ClubID, req.Enabled, newAPIKey, req.TeamID, req.TriageID,
+	); err != nil {
+		h.log.Error().Err(err).Msg("failed to update feedback settings")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	h.log.Info().Str("actor", claims.UserID).Bool("enabled", req.Enabled).Msg("feedback settings updated")
+	JSON(w, http.StatusOK, map[string]string{"status": "updated"})
+}
+
 func clampMinutes(v, min, max int) int {
 	if v < min {
 		return min

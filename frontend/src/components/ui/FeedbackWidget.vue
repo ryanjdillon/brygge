@@ -3,9 +3,11 @@ import { ref, computed, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { MessageSquare, Bug, Lightbulb, Camera, X, Send, Loader2, CheckCircle, GripHorizontal } from 'lucide-vue-next'
 import { useApi } from '@/composables/useApi'
+import { useFeatures } from '@/composables/useFeatures'
 
 const { t } = useI18n()
 const { fetchApi } = useApi()
+const { isEnabled } = useFeatures()
 
 const open = ref(false)
 const type = ref<'bug' | 'feature'>('bug')
@@ -126,7 +128,7 @@ async function submit() {
 </script>
 
 <template>
-  <div class="feedback-widget">
+  <div v-if="isEnabled('feedback')" class="feedback-widget">
     <button
       class="feedback-trigger"
       :aria-label="t('feedback.triggerLabel')"

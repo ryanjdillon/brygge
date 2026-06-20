@@ -553,6 +553,7 @@
       "mapMarkers": "Sjøkart-markører",
       "generalSettings": "Generelt",
       "securitySettings": "Sikkerhet",
+      "feedbackSettings": "Tilbakemeldingswidget",
       "accountingOverview": "Oversikt",
       "accounts": "Kontoplan",
       "periods": "Perioder",
@@ -887,6 +888,24 @@
       "adminTotpWindowHelp": "Hvor lenge et TOTP-trinn holder seg åpent for administrasjonshandlinger. Gyldig: 5–1 440 min. Standard: 720 min (12 t).",
       "minutes": "min",
       "newSessionsNote": "Sesjonstidsavbrudd påvirker nye sesjoner og neste forlengelse av eksisterende sesjoner. TOTP-vinduet gjelder umiddelbart for alle sesjoner."
+    },
+    "feedbackSettings": {
+      "title": "Tilbakemeldingswidget",
+      "subtitle": "Aktiver den innebygde tilbakemeldingsknappen og koble den til et Linear-arbeidsområde.",
+      "enableLabel": "Aktiver tilbakemeldingswidget",
+      "enableHelp": "Viser en flytende knapp i portalen og administratorområdet som lar medlemmer sende inn feilrapporter og funksjonsønsker direkte til Linear.",
+      "linearSection": "Linear-tilkobling",
+      "apiKeyLabel": "Linear API-nøkkel",
+      "apiKeySet": "••••••• (nøkkel er satt — la feltet stå tomt for å beholde den)",
+      "apiKeyPlaceholder": "lin_api_••••••••••••••••••••••",
+      "apiKeyHelp": "Personlig eller arbeidsområde-API-nøkkel fra Linear-innstillinger. Lagres kryptert. Returneres aldri etter lagring.",
+      "teamIdLabel": "Team-ID",
+      "teamIdPlaceholder": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+      "teamIdHelp": "UUID for Linear-teamet saker skal opprettes under. Finn det i URL-en til teamets innstillinger i Linear.",
+      "triageIdLabel": "Triage-tilstands-ID",
+      "triageIdPlaceholder": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+      "triageIdHelp": "UUID for arbeidsflyttilstanden nye tilbakemeldingssaker skal havne i (f.eks. Triage). Finn det via Linear-API-et eller teamets arbeidsflytinnstillinger.",
+      "incompleteWarning": "Fyll inn alle tre feltene før du aktiverer. Widgeten vil ellers vise en «ikke konfigurert»-feil."
     },
     "bookingSettings": {
       "title": "Bestillingsinnstillinger",
