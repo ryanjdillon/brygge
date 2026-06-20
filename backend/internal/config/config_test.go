@@ -10,7 +10,7 @@ func TestLoadDefaults(t *testing.T) {
 	// for the integration tests) so the defaults are exercised hermetically.
 	for _, k := range []string{
 		"PORT", "DATABASE_URL", "REDIS_URL", "CLUB_SLUG",
-		"VIPPS_TEST_MODE", "S3_BUCKET", "DENDRITE_INTERNAL_URL",
+		"VIPPS_TEST_MODE", "S3_BUCKET_DOCS", "DENDRITE_INTERNAL_URL",
 	} {
 		t.Setenv(k, "")
 	}
@@ -27,7 +27,7 @@ func TestLoadDefaults(t *testing.T) {
 		{"RedisURL", cfg.RedisURL, "redis://localhost:6379/0"},
 		{"ClubSlug", cfg.ClubSlug, "brygge"},
 		{"VippsTestMode", cfg.VippsTestMode, true},
-		{"S3Bucket", cfg.S3Bucket, "brygge"},
+		{"S3BucketDocs", cfg.S3BucketDocs, "brygge"},
 		{"DendriteInternalURL", cfg.DendriteInternalURL, "http://dendrite:8008"},
 	}
 
@@ -44,7 +44,7 @@ func TestLoadFromEnv(t *testing.T) {
 	t.Setenv("PORT", "9090")
 	t.Setenv("DATABASE_URL", "postgres://custom:custom@db:5432/custom")
 	t.Setenv("VIPPS_TEST_MODE", "false")
-	t.Setenv("S3_BUCKET", "custom-bucket")
+	t.Setenv("S3_BUCKET_DOCS", "custom-bucket")
 	t.Setenv("ANTHROPIC_API_KEY", "sk-ant-test")
 
 	cfg := Load()
@@ -58,7 +58,7 @@ func TestLoadFromEnv(t *testing.T) {
 		{"DatabaseURL", cfg.DatabaseURL, "postgres://custom:custom@db:5432/custom"},
 		{"ClubSlug", cfg.ClubSlug, "brygge"},
 		{"VippsTestMode", cfg.VippsTestMode, false},
-		{"S3Bucket", cfg.S3Bucket, "custom-bucket"},
+		{"S3BucketDocs", cfg.S3BucketDocs, "custom-bucket"},
 		{"AnthropicAPIKey", cfg.AnthropicAPIKey, "sk-ant-test"},
 	}
 

@@ -205,7 +205,7 @@ func TestConfig() config.Config {
 		RedisURL:      redisURL,
 		ClubSlug:      "test-club",
 		VippsTestMode: true,
-		S3Bucket:      "brygge-test",
+		S3BucketDocs:  "brygge-test",
 	}
 }
 
