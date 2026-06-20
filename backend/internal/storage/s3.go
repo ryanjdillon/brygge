@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/url"
 	"strings"
 	"time"
@@ -78,6 +79,23 @@ func (c *Client) Delete(ctx context.Context, key string) error {
 		return fmt.Errorf("s3: delete %q: %w", key, err)
 	}
 	return nil
+}
+
+// Get downloads key and returns its bytes.
+func (c *Client) Get(ctx context.Context, key string) ([]byte, error) {
+	if c.disabled {
+		return nil, fmt.Errorf("s3: not configured")
+	}
+	obj, err := c.mc.GetObject(ctx, c.bucket, key, minio.GetObjectOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("s3: get %q: %w", key, err)
+	}
+	defer obj.Close()
+	data, err := io.ReadAll(obj)
+	if err != nil {
+		return nil, fmt.Errorf("s3: read %q: %w", key, err)
+	}
+	return data, nil
 }
 
 // PresignedURL returns a time-limited GET URL for key.
