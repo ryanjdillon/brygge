@@ -2150,5 +2150,20 @@
       "title": "Dispute resolution",
       "body": "We aim to resolve any disagreement amicably. If we cannot agree, the buyer can bring the matter before the Consumer Council (Forbrukertilsynet) or the Consumer Disputes Commission (Forbrukerklageutvalget). EU consumers can use the European Commission's online dispute resolution platform at ec.europa.eu/odr. Norwegian law applies and Norwegian courts are the venue."
     }
+  },
+  "feedback": {
+    "triggerLabel": "Send feedback",
+    "panelLabel": "Feedback panel",
+    "title": "Send feedback",
+    "typeBug": "Bug report",
+    "typeFeature": "Feature request",
+    "titlePlaceholder": "Short title (optional)",
+    "descriptionPlaceholder": "Describe the issue or idea…",
+    "captureScreenshot": "Capture screenshot",
+    "capturing": "Capturing…",
+    "removeScreenshot": "Remove screenshot",
+    "submit": "Submit",
+    "successMessage": "Thanks! Your feedback has been submitted.",
+    "errorGeneric": "Something went wrong. Please try again."
   }
 }

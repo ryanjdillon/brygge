@@ -63,6 +63,7 @@ type Config struct {
 	EmailFrom    string
 	EmailReplyTo string
 	AnthropicAPIKey   string
+	LinearAPIKey      string
 
 	// Stalwart admin (DIL-275/276). Empty values disable the shared-inbox
 	// reconciler; the rest of the app keeps working unaffected.
@@ -140,6 +141,7 @@ func Load() Config {
 		EmailFrom:    envStr("EMAIL_FROM", ""),
 		EmailReplyTo: envStr("EMAIL_REPLY_TO", ""),
 		AnthropicAPIKey:   envStr("ANTHROPIC_API_KEY", ""),
+		LinearAPIKey:      envStr("LINEAR_API_KEY", ""),
 
 		StalwartAdminURL:      envStr("STALWART_ADMIN_URL", ""),
 		StalwartAdminUser:     envStr("STALWART_ADMIN_USER", "admin"),

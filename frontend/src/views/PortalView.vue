@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useFeatures } from '@/composables/useFeatures'
 import ErrorBoundary from '@/components/ui/ErrorBoundary.vue'
+import FeedbackWidget from '@/components/ui/FeedbackWidget.vue'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import type { NavGroup } from '@/components/layout/navTypes'
 import {
@@ -125,4 +126,5 @@ function closeSidebar() {
       </main>
     </div>
   </div>
+  <FeedbackWidget />
 </template>

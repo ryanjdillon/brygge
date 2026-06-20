@@ -248,6 +248,7 @@ func main() {
 	slipSharesHandler := handlers.NewSlipSharesHandler(db, &cfg, log)
 	notificationsHandler := handlers.NewNotificationsHandler(db, &cfg, log)
 	gdprHandler := handlers.NewGDPRHandler(db, &cfg, log)
+	feedbackHandler := handlers.NewFeedbackHandler(&cfg, log)
 
 	r := chi.NewRouter()
 
@@ -455,6 +456,7 @@ func main() {
 			r.Post("/documents/{docID}/comments", adminDocumentsHandler.HandleCreateComment)
 			r.Get("/portal/documents", contentDocumentsHandler.HandlePortalList)
 			r.Get("/portal/content-documents/{docID}", contentDocumentsHandler.HandlePortalGetContentDoc)
+			r.Post("/feedback", feedbackHandler.HandleSubmit)
 		})
 
 		r.Route("/waiting-list", func(r chi.Router) {

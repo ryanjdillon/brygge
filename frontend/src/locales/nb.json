@@ -2146,5 +2146,20 @@
       "title": "Konfliktløsning",
       "body": "Vi ønsker å løse eventuelle uenigheter i minnelighet. Hvis vi ikke blir enige, kan kjøper bringe saken inn for Forbrukertilsynet eller Forbrukerklageutvalget. Forbrukere i EU kan også bruke EU-kommisjonens nettbaserte tvisteløsningsplattform på ec.europa.eu/odr. Norsk lov gjelder, og norske domstoler er verneting."
     }
+  },
+  "feedback": {
+    "triggerLabel": "Send tilbakemelding",
+    "panelLabel": "Tilbakemeldingspanel",
+    "title": "Send tilbakemelding",
+    "typeBug": "Feilrapport",
+    "typeFeature": "Funksjonsønske",
+    "titlePlaceholder": "Kort tittel (valgfritt)",
+    "descriptionPlaceholder": "Beskriv problemet eller ideen…",
+    "captureScreenshot": "Ta skjermbilde",
+    "capturing": "Tar skjermbilde…",
+    "removeScreenshot": "Fjern skjermbilde",
+    "submit": "Send inn",
+    "successMessage": "Takk! Tilbakemeldingen din er sendt.",
+    "errorGeneric": "Noe gikk galt. Prøv igjen."
   }
 }

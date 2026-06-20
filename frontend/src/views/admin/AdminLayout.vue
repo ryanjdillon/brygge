@@ -8,6 +8,7 @@ import { useFeatures } from '@/composables/useFeatures'
 import { useNavGate } from '@/composables/useNavGate'
 import { useBankUnmatchedCount, usePendingRefundCount } from '@/composables/useBankReconcile'
 import ErrorBoundary from '@/components/ui/ErrorBoundary.vue'
+import FeedbackWidget from '@/components/ui/FeedbackWidget.vue'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import type { NavGroup } from '@/components/layout/navTypes'
 import {
@@ -197,4 +198,5 @@ async function handleNavClick(e: MouseEvent, to: string) {
       </main>
     </div>
   </div>
+  <FeedbackWidget />
 </template>
