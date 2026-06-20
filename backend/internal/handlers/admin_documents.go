@@ -71,9 +71,8 @@ func (h *AdminDocumentsHandler) HandleListDocuments(w http.ResponseWriter, r *ht
 			`SELECT d.id, d.title, d.filename, d.content_type, d.size_bytes,
 			        d.visibility, d.created_at, d.updated_at, u.full_name
 			 FROM documents d
-			 JOIN clubs c ON c.id = d.club_id
 			 JOIN users u ON u.id = d.uploaded_by
-			 WHERE c.slug = $1
+			 WHERE d.club_id = $1
 			 ORDER BY d.created_at DESC`,
 			claims.ClubID,
 		)
@@ -82,9 +81,8 @@ func (h *AdminDocumentsHandler) HandleListDocuments(w http.ResponseWriter, r *ht
 			`SELECT d.id, d.title, d.filename, d.content_type, d.size_bytes,
 			        d.visibility, d.created_at, d.updated_at, u.full_name
 			 FROM documents d
-			 JOIN clubs c ON c.id = d.club_id
 			 JOIN users u ON u.id = d.uploaded_by
-			 WHERE c.slug = $1 AND d.visibility = 'member'
+			 WHERE d.club_id = $1 AND d.visibility = 'member'
 			 ORDER BY d.created_at DESC`,
 			claims.ClubID,
 		)
@@ -172,9 +170,8 @@ func (h *AdminDocumentsHandler) HandleGetDocument(w http.ResponseWriter, r *http
 		`SELECT d.id, d.title, d.filename, d.s3_key, d.content_type, d.size_bytes,
 		        d.visibility, d.created_at, d.updated_at, u.full_name
 		 FROM documents d
-		 JOIN clubs c ON c.id = d.club_id
 		 JOIN users u ON u.id = d.uploaded_by
-		 WHERE d.id = $1 AND c.slug = $2`,
+		 WHERE d.id = $1 AND d.club_id = $2`,
 		docID, claims.ClubID,
 	).Scan(&d.ID, &d.Title, &d.Filename, &d.S3Key, &d.ContentType, &d.SizeBytes,
 		&d.Visibility, &d.CreatedAt, &d.UpdatedAt, &d.UploadedBy)
@@ -308,8 +305,7 @@ func (h *AdminDocumentsHandler) HandleDeleteDocument(w http.ResponseWriter, r *h
 	err = tx.QueryRow(ctx,
 		`SELECT d.club_id, d.title, d.filename, d.s3_key
 		 FROM documents d
-		 JOIN clubs c ON c.id = d.club_id
-		 WHERE d.id = $1 AND c.slug = $2`,
+		 WHERE d.id = $1 AND d.club_id = $2`,
 		docID, claims.ClubID,
 	).Scan(&clubID, &title, &filename, &s3Key)
 	if err == pgx.ErrNoRows {
