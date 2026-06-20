@@ -306,7 +306,7 @@ func (h *AdminDocumentsHandler) HandleDeleteDocument(w http.ResponseWriter, r *h
 		"s3_key":   s3Key,
 	})
 	_, err = tx.Exec(ctx,
-		`INSERT INTO audit_log (club_id, user_id, action, entity_type, entity_id, old_data)
+		`INSERT INTO audit_log (club_id, actor_id, action, resource, resource_id, details)
 		 VALUES ($1, $2, 'delete_document', 'document', $3, $4)`,
 		clubID, claims.UserID, docID, oldData,
 	)

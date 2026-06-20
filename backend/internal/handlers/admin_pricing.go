@@ -102,10 +102,11 @@ func (h *AdminPricingHandler) HandleUpdatePricing(w http.ResponseWriter, r *http
 		return
 	}
 
+	auditDetails, _ := json.Marshal(map[string]any{"before": oldConfig, "after": pricing})
 	_, err = tx.Exec(ctx,
-		`INSERT INTO audit_log (club_id, user_id, action, entity_type, entity_id, old_data, new_data)
-		 VALUES ($1, $2, 'update_pricing', 'club', $1, $3, $4)`,
-		clubID, claims.UserID, oldConfig, pricing,
+		`INSERT INTO audit_log (club_id, actor_id, action, resource, resource_id, details)
+		 VALUES ($1, $2, 'update_pricing', 'club', $1, $3)`,
+		clubID, claims.UserID, auditDetails,
 	)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to write audit log")

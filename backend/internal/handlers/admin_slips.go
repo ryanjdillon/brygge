@@ -536,7 +536,7 @@ func (h *AdminSlipsHandler) HandleAssignSlip(w http.ResponseWriter, r *http.Requ
 		"assignment_id": assignmentID,
 	})
 	_, err = tx.Exec(ctx,
-		`INSERT INTO audit_log (club_id, user_id, action, entity_type, entity_id, new_data)
+		`INSERT INTO audit_log (club_id, actor_id, action, resource, resource_id, details)
 		 VALUES ($1, $2, 'assign_slip', 'slip', $3, $4)`,
 		clubID, actorID, slipID, newData,
 	)
@@ -619,7 +619,7 @@ func (h *AdminSlipsHandler) HandleReleaseSlip(w http.ResponseWriter, r *http.Req
 		"assignment_id": assignmentID,
 	})
 	_, err = tx.Exec(ctx,
-		`INSERT INTO audit_log (club_id, user_id, action, entity_type, entity_id, old_data)
+		`INSERT INTO audit_log (club_id, actor_id, action, resource, resource_id, details)
 		 VALUES ($1, $2, 'release_slip', 'slip', $3, $4)`,
 		clubID, actorID, slipID, oldData,
 	)
