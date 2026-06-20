@@ -57,6 +57,7 @@ const (
 	ActionBankRowAssignedAccount = "bank_row.assigned_account"
 	ActionBankRowDismissed       = "bank_row.dismissed"
 	ActionBankRowUnassigned      = "bank_row.unassigned"
+	ActionBankRowRefundPaired    = "bank_row.refund_paired"
 
 	// Developer / DB inspection (DIL-365)
 	ActionDeveloperQuery = "developer.db_query"

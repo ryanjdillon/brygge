@@ -301,3 +301,96 @@ func (h *BankRowsHandler) HandleUnassign(w http.ResponseWriter, r *http.Request)
 	}
 	JSON(w, http.StatusOK, map[string]string{"status": "unassigned"})
 }
+
+func (h *BankRowsHandler) HandleListPendingRefunds(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	rows, err := h.svc.ListPendingRefunds(ctx, claims.ClubID)
+	if err != nil {
+		h.log.Error().Err(err).Msg("list pending refunds")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if rows == nil {
+		rows = []accounting.RefundPendingRow{}
+	}
+	JSON(w, http.StatusOK, map[string]any{"items": rows})
+}
+
+func (h *BankRowsHandler) HandleCountPendingRefunds(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	n, err := h.svc.CountPendingRefunds(ctx, claims.ClubID)
+	if err != nil {
+		h.log.Error().Err(err).Msg("count pending refunds")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	JSON(w, http.StatusOK, map[string]any{"count": n})
+}
+
+func (h *BankRowsHandler) HandleSuggestRefundOutbound(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	rowID := chi.URLParam(r, "rowID")
+	candidates, err := h.svc.SuggestRefundOutbound(ctx, claims.ClubID, rowID)
+	if err != nil {
+		h.log.Warn().Err(err).Str("row_id", rowID).Msg("suggest refund outbound")
+		Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if candidates == nil {
+		candidates = []accounting.RefundOutboundCandidate{}
+	}
+	JSON(w, http.StatusOK, map[string]any{"items": candidates})
+}
+
+type pairRefundReq struct {
+	OutboundRowID string `json:"outbound_row_id"`
+}
+
+func (h *BankRowsHandler) HandlePairRefund(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	rowID := chi.URLParam(r, "rowID")
+	var req pairRefundReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.OutboundRowID == "" {
+		Error(w, http.StatusBadRequest, "outbound_row_id required")
+		return
+	}
+	inboundJournal, outboundJournal, err := h.svc.PairRefund(ctx, claims.ClubID, claims.UserID, rowID, req.OutboundRowID)
+	if err != nil {
+		h.log.Warn().Err(err).Str("inbound_row_id", rowID).Str("outbound_row_id", req.OutboundRowID).Msg("pair refund")
+		Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if h.audit != nil {
+		h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,
+			audit.ActionBankRowRefundPaired, "bank_import_row", rowID,
+			map[string]any{
+				"outbound_row_id":        req.OutboundRowID,
+				"inbound_journal_id":     inboundJournal,
+				"outbound_journal_id":    outboundJournal,
+			})
+	}
+	JSON(w, http.StatusOK, map[string]any{
+		"inbound_journal_entry_id":  inboundJournal,
+		"outbound_journal_entry_id": outboundJournal,
+	})
+}

@@ -1090,6 +1090,12 @@ func main() {
 						r.With(middleware.RequireRole("treasurer", "admin"),
 							middleware.RequireFreshTOTPDefault()).
 							Post("/bank-rows/{rowID}/unassign", bankRowsHandler.HandleUnassign)
+						r.Get("/bank-rows/pending-refunds", bankRowsHandler.HandleListPendingRefunds)
+						r.Get("/bank-rows/pending-refunds/count", bankRowsHandler.HandleCountPendingRefunds)
+						r.Get("/bank-rows/{rowID}/suggest-refund-outbound", bankRowsHandler.HandleSuggestRefundOutbound)
+						r.With(middleware.RequireRole("treasurer", "admin"),
+							middleware.RequireFreshTOTPDefault()).
+							Post("/bank-rows/{rowID}/pair-refund", bankRowsHandler.HandlePairRefund)
 
 						r.Route("/rules", func(r chi.Router) {
 							r.Get("/", accountingHandler.HandleListRules)
