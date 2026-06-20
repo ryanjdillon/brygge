@@ -31,15 +31,17 @@ func (h *FeaturesHandler) HandleGetFeatures(w http.ResponseWriter, r *http.Reque
 	commerce := h.config.Features.Commerce
 	communications := h.config.Features.Communications
 	accounting := h.config.Features.Accounting
+	feedback := false
 
 	if h.db != nil {
-		var b, p, c, co, cm, a *bool
+		var b, p, c, co, cm, a, fb *bool
 		err := h.db.QueryRow(r.Context(),
 			`SELECT feature_bookings, feature_projects, feature_calendar,
-			        feature_commerce, feature_communications, feature_accounting
+			        feature_commerce, feature_communications, feature_accounting,
+			        feature_feedback
 			   FROM clubs WHERE slug = $1`,
 			h.config.ClubSlug,
-		).Scan(&b, &p, &c, &co, &cm, &a)
+		).Scan(&b, &p, &c, &co, &cm, &a, &fb)
 		if err == nil {
 			if b != nil {
 				bookings = *b
@@ -59,6 +61,9 @@ func (h *FeaturesHandler) HandleGetFeatures(w http.ResponseWriter, r *http.Reque
 			if a != nil {
 				accounting = *a
 			}
+			if fb != nil {
+				feedback = *fb
+			}
 		} else if err != pgx.ErrNoRows {
 			// Don't fail the public features endpoint on a transient DB
 			// blip — fall through to env defaults so the SPA renders.
@@ -72,6 +77,7 @@ func (h *FeaturesHandler) HandleGetFeatures(w http.ResponseWriter, r *http.Reque
 		"commerce":       commerce,
 		"communications": communications,
 		"accounting":     accounting,
+		"feedback":       feedback,
 		"demo_auth":      h.config.Features.DemoAuth,
 	})
 }

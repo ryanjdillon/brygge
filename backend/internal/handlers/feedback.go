@@ -13,16 +13,13 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 
-	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/middleware"
 )
 
-// stdEncoding accepts both padded and unpadded base64 from canvas.toDataURL.
+// b64Enc accepts padded base64; RawStdEncoding used as fallback when canvas omits padding.
 var b64Enc = base64.StdEncoding
 
 const (
-	linearTeamID       = "3d3356f2-2475-4101-8e4a-76a5cfba68f2"
-	linearStateTriageID = "0485eda7-5b5c-4dc3-a589-351af3ba5f1b"
 	linearLabelBug     = "4ebcd87f-49b5-42e7-96f2-2ea50a0ddf2d"
 	linearLabelFeature = "5b21a454-f831-4b28-9c44-13c42e2123de"
 	linearLabelKBL     = "4d2f6d8e-857c-4d66-b7f8-b2dd0c54974a"
@@ -30,29 +27,39 @@ const (
 )
 
 type FeedbackHandler struct {
-	db     *pgxpool.Pool
-	config *config.Config
-	log    zerolog.Logger
+	db  *pgxpool.Pool
+	log zerolog.Logger
 }
 
-func NewFeedbackHandler(db *pgxpool.Pool, cfg *config.Config, log zerolog.Logger) *FeedbackHandler {
+func NewFeedbackHandler(db *pgxpool.Pool, log zerolog.Logger) *FeedbackHandler {
 	return &FeedbackHandler{
-		db:     db,
-		config: cfg,
-		log:    log.With().Str("handler", "feedback").Logger(),
+		db:  db,
+		log: log.With().Str("handler", "feedback").Logger(),
 	}
 }
 
 func (h *FeedbackHandler) HandleSubmit(w http.ResponseWriter, r *http.Request) {
-	if h.config.LinearAPIKey == "" {
-		Error(w, http.StatusServiceUnavailable, "feedback not configured")
-		return
-	}
-
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
 	if claims == nil {
 		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	var enabled bool
+	var apiKey, teamID, triageID string
+	if err := h.db.QueryRow(ctx,
+		`SELECT feature_feedback, feedback_linear_api_key,
+		        feedback_linear_team_id, feedback_linear_triage_id
+		 FROM clubs WHERE id = $1`,
+		claims.ClubID,
+	).Scan(&enabled, &apiKey, &teamID, &triageID); err != nil {
+		h.log.Error().Err(err).Msg("failed to load feedback config")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if !enabled || apiKey == "" || teamID == "" || triageID == "" {
+		Error(w, http.StatusServiceUnavailable, "feedback not configured")
 		return
 	}
 
@@ -102,29 +109,22 @@ func (h *FeedbackHandler) HandleSubmit(w http.ResponseWriter, r *http.Request) {
 
 	now := time.Now().UTC()
 	body := req.Description
-
-	meta := fmt.Sprintf("\n\n---\n**Submitted:** %s  \n**Submitted by:** %s (%s)  \n**Page:** %s",
+	body += fmt.Sprintf("\n\n---\n**Submitted:** %s  \n**Submitted by:** %s (%s)  \n**Page:** %s",
 		now.Format("2006-01-02 15:04 UTC"),
 		submitterName,
 		submitterEmail,
 		req.PageURL,
 	)
-	body += meta
 
-	var attachmentURL string
 	if req.Screenshot != "" {
-		var err error
-		attachmentURL, err = h.uploadScreenshot(req.Screenshot)
-		if err != nil {
+		if attachmentURL, err := uploadScreenshot(req.Screenshot, apiKey); err != nil {
 			h.log.Warn().Err(err).Msg("failed to upload screenshot to Linear; continuing without it")
+		} else if attachmentURL != "" {
+			body += fmt.Sprintf("\n\n![Screenshot](%s)", attachmentURL)
 		}
 	}
 
-	if attachmentURL != "" {
-		body += fmt.Sprintf("\n\n![Screenshot](%s)", attachmentURL)
-	}
-
-	issueID, err := h.createLinearIssue(req.Title, body, labelIDs)
+	issueID, err := createLinearIssue(req.Title, body, labelIDs, teamID, triageID, apiKey)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to create Linear issue")
 		Error(w, http.StatusInternalServerError, "failed to submit feedback")
@@ -135,7 +135,7 @@ func (h *FeedbackHandler) HandleSubmit(w http.ResponseWriter, r *http.Request) {
 	JSON(w, http.StatusCreated, map[string]string{"id": issueID})
 }
 
-func (h *FeedbackHandler) createLinearIssue(title, description string, labelIDs []string) (string, error) {
+func createLinearIssue(title, description string, labelIDs []string, teamID, triageID, apiKey string) (string, error) {
 	labelsJSON, _ := json.Marshal(labelIDs)
 
 	query := fmt.Sprintf(`mutation {
@@ -149,9 +149,9 @@ func (h *FeedbackHandler) createLinearIssue(title, description string, labelIDs 
 			success
 			issue { id identifier }
 		}
-	}`, linearTeamID, linearStateTriageID, jsonStr(title), jsonStr(description), string(labelsJSON))
+	}`, teamID, triageID, jsonStr(title), jsonStr(description), string(labelsJSON))
 
-	resp, err := h.linearGraphQL(query)
+	resp, err := linearGraphQL(query, apiKey)
 	if err != nil {
 		return "", err
 	}
@@ -182,7 +182,7 @@ func (h *FeedbackHandler) createLinearIssue(title, description string, labelIDs 
 	return result.Data.IssueCreate.Issue.Identifier, nil
 }
 
-func (h *FeedbackHandler) uploadScreenshot(dataURL string) (string, error) {
+func uploadScreenshot(dataURL, apiKey string) (string, error) {
 	b64 := dataURL
 	if strings.HasPrefix(dataURL, "data:") {
 		idx := strings.Index(dataURL, ",")
@@ -195,7 +195,6 @@ func (h *FeedbackHandler) uploadScreenshot(dataURL string) (string, error) {
 	b64 = strings.TrimSpace(b64)
 	imgBytes, err := b64Enc.DecodeString(b64)
 	if err != nil {
-		// Canvas may omit padding — retry without strict padding.
 		imgBytes, err = base64.RawStdEncoding.DecodeString(b64)
 		if err != nil {
 			return "", fmt.Errorf("decode base64: %w", err)
@@ -212,7 +211,7 @@ func (h *FeedbackHandler) uploadScreenshot(dataURL string) (string, error) {
 		}
 	}`, jsonStr(filename), size, jsonStr(contentType))
 
-	prepResp, err := h.linearGraphQL(prepQuery)
+	prepResp, err := linearGraphQL(prepQuery, apiKey)
 	if err != nil {
 		return "", fmt.Errorf("prepare upload: %w", err)
 	}
@@ -267,14 +266,14 @@ func (h *FeedbackHandler) uploadScreenshot(dataURL string) (string, error) {
 	return uf.AssetURL, nil
 }
 
-func (h *FeedbackHandler) linearGraphQL(query string) ([]byte, error) {
+func linearGraphQL(query, apiKey string) ([]byte, error) {
 	payload, _ := json.Marshal(map[string]string{"query": query})
 	req, err := http.NewRequest(http.MethodPost, linearGraphQLURL, bytes.NewReader(payload))
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", h.config.LinearAPIKey)
+	req.Header.Set("Authorization", apiKey)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
