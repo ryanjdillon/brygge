@@ -9,12 +9,14 @@ import {
   Check,
   X,
   Info,
+  Paperclip,
 } from 'lucide-vue-next'
 import {
   useAccountsList,
   useFiscalPeriods,
   useCreateJournalEntry,
   usePostEntry,
+  useUploadJournalAttachment,
   type Account,
 } from '@/composables/useAccounting'
 import Select from '@/components/ui/form/Select.vue'
@@ -29,6 +31,26 @@ const { data: accounts } = useAccountsList()
 const { data: periods } = useFiscalPeriods()
 const createMutation = useCreateJournalEntry()
 const postMutation = usePostEntry()
+const uploadMutation = useUploadJournalAttachment()
+
+const receiptFile = ref<File | null>(null)
+const uploadError = ref('')
+
+function handleFileChange(e: Event) {
+  const input = e.target as HTMLInputElement
+  receiptFile.value = input.files?.[0] ?? null
+  uploadError.value = ''
+}
+
+async function uploadReceiptIfSelected(entryId: string): Promise<void> {
+  if (!receiptFile.value) return
+  await new Promise<void>((resolve, reject) => {
+    uploadMutation.mutate(
+      { entryId, file: receiptFile.value! },
+      { onSuccess: () => resolve(), onError: reject },
+    )
+  })
+}
 
 const selectedPeriodId = ref('')
 const entryDate = ref(new Date().toISOString().slice(0, 10))
@@ -110,8 +132,14 @@ function buildPayload() {
 
 function handleSaveDraft() {
   errorMessage.value = ''
+  uploadError.value = ''
   createMutation.mutate(buildPayload(), {
-    onSuccess: () => {
+    onSuccess: async (entry) => {
+      try {
+        await uploadReceiptIfSelected(entry.id)
+      } catch {
+        uploadError.value = t('admin.accounting.journalForm.receiptUploadFailed')
+      }
       router.push('/admin/accounting/journal')
     },
     onError: (err) => {
@@ -122,8 +150,14 @@ function handleSaveDraft() {
 
 function handlePost() {
   errorMessage.value = ''
+  uploadError.value = ''
   createMutation.mutate(buildPayload(), {
-    onSuccess: (entry) => {
+    onSuccess: async (entry) => {
+      try {
+        await uploadReceiptIfSelected(entry.id)
+      } catch {
+        uploadError.value = t('admin.accounting.journalForm.receiptUploadFailed')
+      }
       postMutation.mutate(entry.id, {
         onSuccess: () => {
           router.push('/admin/accounting/journal')
@@ -195,6 +229,22 @@ const accountOptions = computed(() => [
           :placeholder="t('admin.accounting.journalForm.descriptionPlaceholder')"
         />
       </div>
+    </div>
+
+    <div class="mt-4">
+      <label class="mb-1 flex items-center gap-1 text-sm font-medium text-gray-700">
+        <Paperclip class="h-3.5 w-3.5" />
+        {{ t('admin.accounting.journalForm.receipt') }}
+        <Info class="h-3.5 w-3.5 text-gray-400" :title="t('admin.accounting.journalForm.receiptTooltip')" />
+      </label>
+      <input
+        type="file"
+        accept="image/*,application/pdf"
+        class="block text-sm text-gray-600 file:mr-3 file:rounded file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200"
+        @change="handleFileChange"
+      />
+      <p v-if="uploadError" class="mt-1 text-xs text-red-600">{{ uploadError }}</p>
+      <p v-if="uploadMutation.isPending.value" class="mt-1 text-xs text-blue-600">{{ t('admin.accounting.journalForm.receiptUploading') }}</p>
     </div>
 
     <div class="mt-6">

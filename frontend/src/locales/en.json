@@ -1427,6 +1427,7 @@
         "voided": "Voided",
         "post": "Post",
         "void": "Void",
+        "viewBilag": "View bilag / receipt",
         "noEntries": "No entries in this period.",
         "period": "Period",
         "allStatuses": "All",
@@ -1493,7 +1494,11 @@
         "tooltipDebit": "Amount to debit (increase assets/expenses)",
         "tooltipCredit": "Amount to credit (increase revenue/liabilities)",
         "tooltipMva": "VAT portion of this expense (for momskompensasjon)",
-        "tooltipLineDesc": "Optional note for this line"
+        "tooltipLineDesc": "Optional note for this line",
+        "receipt": "Bilag / Receipt",
+        "receiptTooltip": "Attach a photo or PDF of the receipt as supporting documentation (bilag) for this entry",
+        "receiptUploading": "Uploading receipt…",
+        "receiptUploadFailed": "Receipt upload failed — entry saved, please retry the upload"
       }
     },
     "groupEconomy": "Economy",

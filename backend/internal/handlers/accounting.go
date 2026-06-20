@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -16,18 +17,21 @@ import (
 	"github.com/brygge-klubb/brygge/internal/accounting"
 	"github.com/brygge-klubb/brygge/internal/audit"
 	"github.com/brygge-klubb/brygge/internal/middleware"
+	"github.com/brygge-klubb/brygge/internal/storage"
 )
 
 type AccountingHandler struct {
 	svc   *accounting.Service
 	audit *audit.Service
+	s3    *storage.Client
 	log   zerolog.Logger
 }
 
-func NewAccountingHandler(svc *accounting.Service, auditService *audit.Service, log zerolog.Logger) *AccountingHandler {
+func NewAccountingHandler(svc *accounting.Service, auditService *audit.Service, s3 *storage.Client, log zerolog.Logger) *AccountingHandler {
 	return &AccountingHandler{
 		svc:   svc,
 		audit: auditService,
+		s3:    s3,
 		log:   log.With().Str("handler", "accounting").Logger(),
 	}
 }
@@ -484,6 +488,98 @@ func (h *AccountingHandler) HandleVoidJournalEntry(w http.ResponseWriter, r *htt
 	}
 
 	JSON(w, http.StatusOK, reversal)
+}
+
+// ── Attachments ─────────────────────────────────────────────
+
+func (h *AccountingHandler) HandleUploadJournalAttachment(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	if !h.s3.IsConfigured() {
+		Error(w, http.StatusServiceUnavailable, "object storage not configured")
+		return
+	}
+
+	entryID := chi.URLParam(r, "entryID")
+
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		Error(w, http.StatusBadRequest, "file too large or invalid multipart form")
+		return
+	}
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		Error(w, http.StatusBadRequest, "file field is required")
+		return
+	}
+	defer file.Close()
+
+	contentType := header.Header.Get("Content-Type")
+	if !strings.HasPrefix(contentType, "image/") && contentType != "application/pdf" {
+		Error(w, http.StatusBadRequest, "only image and PDF files are accepted")
+		return
+	}
+
+	s3Key := fmt.Sprintf("clubs/%s/receipts/%s/%s", claims.ClubID, entryID, filepath.Base(header.Filename))
+	if err := h.s3.Upload(r.Context(), s3Key, file, header.Size, contentType); err != nil {
+		h.log.Error().Err(err).Str("s3_key", s3Key).Msg("failed to upload receipt to S3")
+		Error(w, http.StatusInternalServerError, "upload failed")
+		return
+	}
+
+	_, err = h.svc.DB().Exec(r.Context(),
+		`UPDATE journal_entries SET attachment_url = $1, updated_at = now()
+		 WHERE id = $2 AND club_id = $3`,
+		s3Key, entryID, claims.ClubID,
+	)
+	if err != nil {
+		h.log.Error().Err(err).Str("entry_id", entryID).Msg("failed to save attachment_url")
+		_ = h.s3.Delete(r.Context(), s3Key)
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	JSON(w, http.StatusOK, map[string]string{"attachment_url": s3Key})
+}
+
+func (h *AccountingHandler) HandleGetJournalAttachment(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	entryID := chi.URLParam(r, "entryID")
+
+	var s3Key *string
+	err := h.svc.DB().QueryRow(r.Context(),
+		`SELECT attachment_url FROM journal_entries WHERE id = $1 AND club_id = $2`,
+		entryID, claims.ClubID,
+	).Scan(&s3Key)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			Error(w, http.StatusNotFound, "journal entry not found")
+		} else {
+			Error(w, http.StatusInternalServerError, "internal error")
+		}
+		return
+	}
+	if s3Key == nil || *s3Key == "" {
+		Error(w, http.StatusNotFound, "no attachment")
+		return
+	}
+
+	url, err := h.s3.PresignedURL(r.Context(), *s3Key, time.Hour)
+	if err != nil || url == "" {
+		h.log.Error().Err(err).Str("s3_key", *s3Key).Msg("failed to presign receipt URL")
+		Error(w, http.StatusInternalServerError, "failed to generate download URL")
+		return
+	}
+
+	JSON(w, http.StatusOK, map[string]string{"url": url})
 }
 
 // ── Sync ────────────────────────────────────────────────────

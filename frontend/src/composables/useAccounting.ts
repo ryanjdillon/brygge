@@ -235,6 +235,27 @@ export function useCreateJournalEntry() {
   })
 }
 
+export function useUploadJournalAttachment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ entryId, file }: { entryId: string; file: File }) => {
+      const form = new FormData()
+      form.append('file', file)
+      return apiFetch<{ attachment_url: string }>(`${BASE}/journal/${entryId}/attachment`, {
+        method: 'POST',
+        body: form,
+      })
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['accounting', 'journal'] })
+    },
+  })
+}
+
+export function fetchJournalAttachmentUrl(entryId: string): Promise<string> {
+  return apiFetch<{ url: string }>(`${BASE}/journal/${entryId}/attachment`).then(r => r.url)
+}
+
 export function useGetJournalEntry(entryId: Ref<string>) {
   return useQuery({
     queryKey: ['accounting', 'journal', 'detail', entryId],

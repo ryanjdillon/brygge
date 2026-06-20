@@ -1423,6 +1423,7 @@
         "voided": "Annullert",
         "post": "Poster",
         "void": "Annuller",
+        "viewBilag": "Vis bilag / kvittering",
         "noEntries": "Ingen bilag i denne perioden.",
         "period": "Periode",
         "allStatuses": "Alle",
@@ -1489,7 +1490,11 @@
         "tooltipDebit": "Beløp å debitere (øker eiendeler/kostnader)",
         "tooltipCredit": "Beløp å kreditere (øker inntekter/gjeld)",
         "tooltipMva": "MVA-andel av denne kostnaden (for momskompensasjon)",
-        "tooltipLineDesc": "Valgfri merknad for denne linjen"
+        "tooltipLineDesc": "Valgfri merknad for denne linjen",
+        "receipt": "Bilag / Kvittering",
+        "receiptTooltip": "Legg ved bilde eller PDF av kvitteringen som bilagsdokumentasjon for dette bilaget",
+        "receiptUploading": "Laster opp kvittering…",
+        "receiptUploadFailed": "Opplasting av kvittering feilet — bilaget er lagret, prøv opplastingen på nytt"
       }
     },
     "groupEconomy": "Økonomi",

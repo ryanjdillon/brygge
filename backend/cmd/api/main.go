@@ -232,7 +232,7 @@ func main() {
 	financialsHandler := handlers.NewFinancialsHandler(db, &cfg, auditService, log)
 	invoiceHandler := handlers.NewInvoiceHandler(db, &cfg, emailClient, auditService, s3LegalClient, log)
 	accountingSvc := accounting.NewService(db, auditService, log)
-	accountingHandler := handlers.NewAccountingHandler(accountingSvc, auditService, log)
+	accountingHandler := handlers.NewAccountingHandler(accountingSvc, auditService, s3Client, log)
 	bankRowsHandler := handlers.NewBankRowsHandler(accountingSvc, auditService, log)
 	devQueryHandler := handlers.NewDevQueryHandler(db, auditService, log)
 	priceItemsHandler := handlers.NewPriceItemsHandler(db, &cfg, log)
@@ -1086,6 +1086,8 @@ func main() {
 								Post("/{entryID}/post", accountingHandler.HandlePostJournalEntry)
 							r.With(middleware.RequireFreshTOTPDefault()).
 								Post("/{entryID}/void", accountingHandler.HandleVoidJournalEntry)
+							r.Post("/{entryID}/attachment", accountingHandler.HandleUploadJournalAttachment)
+							r.Get("/{entryID}/attachment", accountingHandler.HandleGetJournalAttachment)
 						})
 
 						r.Route("/sync", func(r chi.Router) {

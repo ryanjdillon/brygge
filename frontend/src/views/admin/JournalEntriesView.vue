@@ -14,6 +14,7 @@ import {
   Lock,
   Unlock,
   Search,
+  Paperclip,
 } from 'lucide-vue-next'
 import {
   useFiscalPeriods,
@@ -26,6 +27,7 @@ import {
   useSyncPayments,
   useSyncInvoices,
   useRebuildInvoiceBilags,
+  fetchJournalAttachmentUrl,
   type JournalEntry,
 } from '@/composables/useAccounting'
 import Select from '@/components/ui/form/Select.vue'
@@ -131,6 +133,15 @@ function handlePost(entryId: string) {
 function handleVoid(entryId: string) {
   if (confirm(t('admin.accounting.journal.confirmVoid'))) {
     voidMutation.mutate(entryId)
+  }
+}
+
+async function openAttachment(entryId: string) {
+  try {
+    const url = await fetchJournalAttachmentUrl(entryId)
+    window.open(url, '_blank', 'noopener,noreferrer')
+  } catch {
+    // silently ignore — attachment may not be accessible
   }
 }
 
@@ -429,6 +440,7 @@ function formatNOK(amount: number): string {
                 <ChevronDown v-else-if="sortBy === 'source'" class="h-3 w-3" />
               </button>
             </th>
+            <th class="w-8 px-2 py-3"></th>
             <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.accounting.journal.actions') }}</th>
           </tr>
         </thead>
@@ -466,6 +478,16 @@ function formatNOK(amount: number): string {
               <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">
                 {{ sourceLabels[entry.source] ?? entry.source }}
               </td>
+              <td class="px-2 py-3" @click.stop>
+                <button
+                  v-if="entry.attachment_url"
+                  class="text-gray-400 hover:text-blue-600"
+                  :title="t('admin.accounting.journal.viewBilag')"
+                  @click="openAttachment(entry.id)"
+                >
+                  <Paperclip class="h-4 w-4" />
+                </button>
+              </td>
               <td class="whitespace-nowrap px-4 py-3" @click.stop>
                 <div class="flex items-center gap-2">
                   <button
@@ -490,7 +512,7 @@ function formatNOK(amount: number): string {
               </td>
             </tr>
             <tr v-if="expandedId === entry.id">
-              <td colspan="8" class="bg-gray-50 px-8 py-4">
+              <td colspan="9" class="bg-gray-50 px-8 py-4">
                 <div v-if="entry.lines?.length">
                   <table class="min-w-full text-sm">
                     <thead>
