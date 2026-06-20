@@ -551,6 +551,9 @@ func (h *InvoiceHandler) createBulkInvoice(
 	).Scan(&invoiceID); err != nil {
 		return "", 0, 0, err
 	}
+
+	// Upload PDF to S3 and wipe pdf_data from DB (non-fatal).
+	h.uploadInvoicePDFToS3(ctx, invoiceID, clubID, pdfData)
 	for i, l := range lines {
 		var lineCategory *string
 		if l.tier.category != "" {

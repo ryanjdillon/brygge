@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -18,14 +19,16 @@ import (
 	"github.com/brygge-klubb/brygge/internal/email"
 	"github.com/brygge-klubb/brygge/internal/finance"
 	"github.com/brygge-klubb/brygge/internal/middleware"
+	"github.com/brygge-klubb/brygge/internal/storage"
 )
 
 type InvoiceHandler struct {
-	db     *pgxpool.Pool
-	config *config.Config
-	email  email.Sender
-	audit  *audit.Service
-	log    zerolog.Logger
+	db      *pgxpool.Pool
+	config  *config.Config
+	email   email.Sender
+	audit   *audit.Service
+	s3Legal *storage.Client
+	log     zerolog.Logger
 
 	// In-process queue for async bulk-reminder sends. Buffer of 1000
 	// is generous for the operator-triggered batch shape (typically
@@ -39,6 +42,7 @@ func NewInvoiceHandler(
 	cfg *config.Config,
 	emailClient email.Sender,
 	auditService *audit.Service,
+	s3Legal *storage.Client,
 	log zerolog.Logger,
 ) *InvoiceHandler {
 	h := &InvoiceHandler{
@@ -46,6 +50,7 @@ func NewInvoiceHandler(
 		config:        cfg,
 		email:         emailClient,
 		audit:         auditService,
+		s3Legal:       s3Legal,
 		log:           log.With().Str("handler", "invoices").Logger(),
 		reminderQueue: make(chan reminderJob, 1000),
 	}
@@ -402,6 +407,10 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Upload PDF to S3 and wipe pdf_data from DB to save storage.
+	// Non-fatal: if S3 upload fails the PDF stays in the DB (fallback).
+	h.uploadInvoicePDFToS3(ctx, invoiceID, claims.ClubID, pdfData)
+
 	// Store line items, including account_id and price_item_id so the
 	// journal posting can attribute revenue and the dedup index can
 	// see which price item drove the line.
@@ -621,11 +630,12 @@ func (h *InvoiceHandler) HandleGetInvoicePDF(w http.ResponseWriter, r *http.Requ
 	}
 
 	var pdfData []byte
+	var s3Key string
 	var invoiceNumber int
 	var memberLast, memberFirst string
 	var fiscalYear *int
 	err := h.db.QueryRow(ctx,
-		`SELECT i.pdf_data, i.invoice_number,
+		`SELECT COALESCE(i.s3_key, ''), i.pdf_data, i.invoice_number,
 		        COALESCE(u.last_name, ''), COALESCE(u.first_name, ''),
 		        fp.year
 		   FROM invoices i
@@ -633,7 +643,7 @@ func (h *InvoiceHandler) HandleGetInvoicePDF(w http.ResponseWriter, r *http.Requ
 		   LEFT JOIN fiscal_periods fp ON fp.id = i.fiscal_period_id
 		  WHERE i.id = $1 AND i.club_id = $2`,
 		invoiceID, claims.ClubID,
-	).Scan(&pdfData, &invoiceNumber, &memberLast, &memberFirst, &fiscalYear)
+	).Scan(&s3Key, &pdfData, &invoiceNumber, &memberLast, &memberFirst, &fiscalYear)
 	if err == pgx.ErrNoRows {
 		Error(w, http.StatusNotFound, "invoice not found")
 		return
@@ -644,7 +654,8 @@ func (h *InvoiceHandler) HandleGetInvoicePDF(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if pdfData == nil {
+	pdfBytes, fetchErr := h.fetchInvoicePDFBytes(ctx, s3Key, pdfData)
+	if fetchErr != nil || pdfBytes == nil {
 		Error(w, http.StatusNotFound, "PDF not available for this invoice")
 		return
 	}
@@ -658,7 +669,7 @@ func (h *InvoiceHandler) HandleGetInvoicePDF(w http.ResponseWriter, r *http.Requ
 	filename := buildInvoiceFilename(invoiceNumber, memberLast, memberFirst, fiscalYear)
 	w.Header().Set("Content-Type", "application/pdf")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`%s; filename="%s"`, disposition, filename))
-	w.Write(pdfData)
+	w.Write(pdfBytes)
 }
 
 // buildInvoiceFilename produces a descriptive, ASCII-safe filename
@@ -676,6 +687,52 @@ func buildInvoiceFilename(num int, last, first string, year *int) string {
 		parts = append(parts, fmt.Sprintf("%d", *year))
 	}
 	return strings.Join(parts, "-") + ".pdf"
+}
+
+// nilIfEmpty returns nil when s is empty, otherwise s. Useful for
+// nullable TEXT columns that should be NULL rather than an empty string.
+func nilIfEmpty(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
+}
+
+// invoicePDFKey returns the S3 key for a live invoice PDF.
+func invoicePDFKey(clubID, invoiceID string) string {
+	return fmt.Sprintf("clubs/%s/invoices/%s.pdf", clubID, invoiceID)
+}
+
+// uploadInvoicePDFToS3 uploads pdfData to S3 and nulls invoices.pdf_data.
+// Non-fatal: logs on failure and leaves pdf_data intact as a fallback.
+func (h *InvoiceHandler) uploadInvoicePDFToS3(ctx context.Context, invoiceID, clubID string, pdfData []byte) {
+	if h.s3Legal == nil || !h.s3Legal.IsConfigured() {
+		return
+	}
+	key := invoicePDFKey(clubID, invoiceID)
+	if err := h.s3Legal.Upload(ctx, key, bytes.NewReader(pdfData), int64(len(pdfData)), "application/pdf"); err != nil {
+		h.log.Warn().Err(err).Str("invoice_id", invoiceID).Msg("S3 upload failed; PDF retained in DB")
+		return
+	}
+	if _, err := h.db.Exec(ctx,
+		`UPDATE invoices SET pdf_data = NULL, s3_key = $1 WHERE id = $2`,
+		key, invoiceID,
+	); err != nil {
+		h.log.Warn().Err(err).Str("invoice_id", invoiceID).Msg("failed to wipe pdf_data after S3 upload")
+	}
+}
+
+// fetchInvoicePDFBytes returns the PDF bytes for an invoice, preferring S3
+// over the legacy pdf_data column.
+func (h *InvoiceHandler) fetchInvoicePDFBytes(ctx context.Context, s3Key string, pdfData []byte) ([]byte, error) {
+	if s3Key != "" && h.s3Legal != nil && h.s3Legal.IsConfigured() {
+		data, err := h.s3Legal.Get(ctx, s3Key)
+		if err == nil {
+			return data, nil
+		}
+		h.log.Warn().Err(err).Str("key", s3Key).Msg("S3 get failed; falling back to DB")
+	}
+	return pdfData, nil
 }
 
 func slugify(s string) string {
@@ -836,19 +893,20 @@ func (h *InvoiceHandler) HandleSendInvoice(w http.ResponseWriter, r *http.Reques
 	}
 
 	var (
-		invoiceNumber int
-		userID        *string
-		memberName    string
-		memberLast    string
-		memberFirst   string
-		memberEmail   string
+		invoiceNumber  int
+		userID         *string
+		memberName     string
+		memberLast     string
+		memberFirst    string
+		memberEmail    string
 		recipientEmail string
-		fiscalYear    *int
-		total         float64
-		dueDate       time.Time
-		kid           string
-		pdfData       []byte
-		alreadySent   *time.Time
+		fiscalYear     *int
+		total          float64
+		dueDate        time.Time
+		kid            string
+		pdfData        []byte
+		s3Key          string
+		alreadySent    *time.Time
 	)
 	if err := h.db.QueryRow(ctx,
 		`SELECT i.invoice_number, i.user_id,
@@ -859,14 +917,14 @@ func (h *InvoiceHandler) HandleSendInvoice(w http.ResponseWriter, r *http.Reques
 		        COALESCE(u.last_name, ''), COALESCE(u.first_name, ''),
 		        COALESCE(u.email, ''), COALESCE(i.recipient_email, ''),
 		        fp.year, i.total_amount, i.due_date, i.kid_number,
-		        i.pdf_data, i.sent_at
+		        i.pdf_data, COALESCE(i.s3_key, ''), i.sent_at
 		   FROM invoices i
 		   LEFT JOIN users u ON u.id = i.user_id
 		   LEFT JOIN fiscal_periods fp ON fp.id = i.fiscal_period_id
 		  WHERE i.id = $1 AND i.club_id = $2`,
 		invoiceID, claims.ClubID,
 	).Scan(&invoiceNumber, &userID, &memberName, &memberLast, &memberFirst, &memberEmail, &recipientEmail,
-		&fiscalYear, &total, &dueDate, &kid, &pdfData, &alreadySent); err != nil {
+		&fiscalYear, &total, &dueDate, &kid, &pdfData, &s3Key, &alreadySent); err != nil {
 		if err == pgx.ErrNoRows {
 			Error(w, http.StatusNotFound, "invoice not found")
 			return
@@ -894,7 +952,8 @@ func (h *InvoiceHandler) HandleSendInvoice(w http.ResponseWriter, r *http.Reques
 		Error(w, http.StatusBadRequest, "no recipient email on this invoice (set recipient_email or link to a user with an email)")
 		return
 	}
-	if pdfData == nil {
+	pdfBytes, _ := h.fetchInvoicePDFBytes(ctx, s3Key, pdfData)
+	if pdfBytes == nil {
 		Error(w, http.StatusInternalServerError, "invoice has no stored PDF")
 		return
 	}
@@ -927,7 +986,7 @@ func (h *InvoiceHandler) HandleSendInvoice(w http.ResponseWriter, r *http.Reques
 		Error(w, http.StatusInternalServerError, "failed to mark invoice as sending")
 		return
 	}
-	if err := h.email.SendWithAttachment(ctx, deliverTo, subject, htmlBody, filename, pdfData); err != nil {
+	if err := h.email.SendWithAttachment(ctx, deliverTo, subject, htmlBody, filename, pdfBytes); err != nil {
 		h.log.Error().Err(err).Str("email", deliverTo).Msg("send invoice email — rolling back sent_at")
 		// Best-effort rollback. If this also fails we log loudly so the
 		// operator can spot the stuck row; the alternative (leaving it
@@ -984,6 +1043,7 @@ func (h *InvoiceHandler) HandleResendInvoice(w http.ResponseWriter, r *http.Requ
 		dueDate        time.Time
 		kid            string
 		pdfData        []byte
+		s3KeyResend    string
 		sentAt         *time.Time
 	)
 	if err := h.db.QueryRow(ctx,
@@ -995,14 +1055,14 @@ func (h *InvoiceHandler) HandleResendInvoice(w http.ResponseWriter, r *http.Requ
 		        COALESCE(u.last_name, ''), COALESCE(u.first_name, ''),
 		        COALESCE(u.email, ''), COALESCE(i.recipient_email, ''),
 		        fp.year, i.total_amount, i.due_date, i.kid_number,
-		        i.pdf_data, i.sent_at
+		        i.pdf_data, COALESCE(i.s3_key, ''), i.sent_at
 		   FROM invoices i
 		   LEFT JOIN users u ON u.id = i.user_id
 		   LEFT JOIN fiscal_periods fp ON fp.id = i.fiscal_period_id
 		  WHERE i.id = $1 AND i.club_id = $2`,
 		invoiceID, claims.ClubID,
 	).Scan(&invoiceNumber, &memberName, &memberLast, &memberFirst, &memberEmail, &recipientEmail,
-		&fiscalYear, &total, &dueDate, &kid, &pdfData, &sentAt); err != nil {
+		&fiscalYear, &total, &dueDate, &kid, &pdfData, &s3KeyResend, &sentAt); err != nil {
 		if err == pgx.ErrNoRows {
 			Error(w, http.StatusNotFound, "invoice not found")
 			return
@@ -1030,7 +1090,8 @@ func (h *InvoiceHandler) HandleResendInvoice(w http.ResponseWriter, r *http.Requ
 		Error(w, http.StatusBadRequest, "no recipient email on this invoice")
 		return
 	}
-	if pdfData == nil {
+	pdfBytesResend, _ := h.fetchInvoicePDFBytes(ctx, s3KeyResend, pdfData)
+	if pdfBytesResend == nil {
 		Error(w, http.StatusInternalServerError, "invoice has no stored PDF")
 		return
 	}
@@ -1046,7 +1107,7 @@ func (h *InvoiceHandler) HandleResendInvoice(w http.ResponseWriter, r *http.Requ
 	htmlBody := email.InvoiceBody(locale, memberName, clubName, invoiceNumber, dueDate, total, kid, bankAccount)
 	filename := buildInvoiceFilename(invoiceNumber, memberLast, memberFirst, fiscalYear)
 
-	if err := h.email.SendWithAttachment(ctx, deliverTo, subject, htmlBody, filename, pdfData); err != nil {
+	if err := h.email.SendWithAttachment(ctx, deliverTo, subject, htmlBody, filename, pdfBytesResend); err != nil {
 		h.log.Error().Err(err).Str("email", deliverTo).Msg("resend invoice email failed")
 		Error(w, http.StatusBadGateway, "failed to send email")
 		return

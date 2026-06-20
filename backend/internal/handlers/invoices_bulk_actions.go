@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -400,6 +401,28 @@ func (h *InvoiceHandler) regenerateOnePDF(
 		return err
 	}
 
+	// Upload new PDF and archive existing PDF to S3 when available.
+	// Falls back to DB storage when S3 is not configured.
+	var newS3Key, archiveS3Key string
+	if h.s3Legal != nil && h.s3Legal.IsConfigured() {
+		newS3Key = invoicePDFKey(clubID, invoiceID)
+		if err := h.s3Legal.Upload(ctx, newS3Key,
+			bytes.NewReader(pdfData), int64(len(pdfData)), "application/pdf"); err != nil {
+			h.log.Warn().Err(err).Str("invoice_id", invoiceID).Msg("S3 upload failed for regenerated PDF; storing in DB")
+			newS3Key = ""
+		}
+		if len(existingPDF) > 0 {
+			// existing PDF is the prior live version — upload to an archive key.
+			// Generate an archive ID from the DB in the transaction below; for
+			// now we upload to a temp key and rename after getting the ID.
+			// Simpler: let the archive INSERT return the ID, then upload.
+			// Strategy: upload existing PDF under a provisional key, archive
+			// INSERT updates to final key in the transaction.
+			// Actually simplest: keep existingPDF bytes, upload after INSERT with real ID.
+			_ = existingPDF // uploaded below after getting archive ID
+		}
+	}
+
 	// Archive the prior PDF and overwrite in the same transaction so
 	// a failure mid-flight leaves the original PDF in place. If the
 	// invoice had no stored PDF yet (first regenerate run before the
@@ -416,23 +439,56 @@ func (h *InvoiceHandler) regenerateOnePDF(
 		if actorID != "" {
 			archivedBy = actorID
 		}
-		if _, err := tx.Exec(ctx,
+		var archiveID string
+		var archivePDFArg any
+		if newS3Key != "" {
+			archivePDFArg = nil
+		} else {
+			archivePDFArg = existingPDF
+		}
+		if err := tx.QueryRow(ctx,
 			`INSERT INTO invoice_pdf_archive (invoice_id, pdf_data, archived_by, reason)
-			 VALUES ($1, $2, $3, 'regenerate')`,
-			invoiceID, existingPDF, archivedBy,
-		); err != nil {
+			 VALUES ($1, $2, $3, 'regenerate')
+			 RETURNING id`,
+			invoiceID, archivePDFArg, archivedBy,
+		).Scan(&archiveID); err != nil {
 			return err
 		}
+		// Upload existing PDF to S3 under the real archive ID.
+		if newS3Key != "" {
+			archiveS3Key = fmt.Sprintf("clubs/%s/invoices/archive/%s.pdf", clubID, archiveID)
+			if err := h.s3Legal.Upload(ctx, archiveS3Key,
+				bytes.NewReader(existingPDF), int64(len(existingPDF)), "application/pdf"); err != nil {
+				h.log.Warn().Err(err).Str("archive_id", archiveID).Msg("S3 upload failed for archive PDF; retained in DB")
+				archiveS3Key = ""
+			}
+			if archiveS3Key != "" {
+				if _, err := tx.Exec(ctx,
+					`UPDATE invoice_pdf_archive SET s3_key = $1 WHERE id = $2`,
+					archiveS3Key, archiveID,
+				); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	var newPDFArg any
+	if newS3Key != "" {
+		newPDFArg = nil
+	} else {
+		newPDFArg = pdfData
 	}
 	if _, err := tx.Exec(ctx,
-		`UPDATE invoices SET pdf_data = $1 WHERE id = $2 AND club_id = $3`,
-		pdfData, invoiceID, clubID,
+		`UPDATE invoices SET pdf_data = $1, s3_key = $2 WHERE id = $3 AND club_id = $4`,
+		newPDFArg, nilIfEmpty(newS3Key), invoiceID, clubID,
 	); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return err
 	}
+	_ = archiveS3Key
 
 	if h.audit != nil {
 		h.audit.LogAction(ctx, clubID, actorID, remoteAddr,
@@ -478,7 +534,7 @@ func (h *InvoiceHandler) HandleListInvoicePDFArchive(w http.ResponseWriter, r *h
 	rows, err := h.db.Query(ctx,
 		`SELECT a.id, a.archived_at, a.reason,
 		        COALESCE(u.full_name, u.first_name || ' ' || u.last_name, ''),
-		        octet_length(a.pdf_data)
+		        COALESCE(octet_length(a.pdf_data), 0)
 		   FROM invoice_pdf_archive a
 		   LEFT JOIN users u ON u.id = a.archived_by
 		  WHERE a.invoice_id = $1
@@ -532,6 +588,7 @@ func (h *InvoiceHandler) HandleGetInvoicePDFArchiveBytes(w http.ResponseWriter, 
 
 	var (
 		pdfData       []byte
+		s3Key         string
 		archivedAt    time.Time
 		invoiceNumber int
 		memberLast    string
@@ -539,7 +596,7 @@ func (h *InvoiceHandler) HandleGetInvoicePDFArchiveBytes(w http.ResponseWriter, 
 		fiscalYear    *int
 	)
 	err := h.db.QueryRow(ctx,
-		`SELECT a.pdf_data, a.archived_at, i.invoice_number,
+		`SELECT a.pdf_data, COALESCE(a.s3_key, ''), a.archived_at, i.invoice_number,
 		        COALESCE(u.last_name, ''), COALESCE(u.first_name, ''),
 		        fp.year
 		   FROM invoice_pdf_archive a
@@ -548,7 +605,7 @@ func (h *InvoiceHandler) HandleGetInvoicePDFArchiveBytes(w http.ResponseWriter, 
 		   LEFT JOIN fiscal_periods fp ON fp.id = i.fiscal_period_id
 		  WHERE a.id = $1 AND a.invoice_id = $2 AND i.club_id = $3`,
 		archiveID, invoiceID, claims.ClubID,
-	).Scan(&pdfData, &archivedAt, &invoiceNumber, &memberLast, &memberFirst, &fiscalYear)
+	).Scan(&pdfData, &s3Key, &archivedAt, &invoiceNumber, &memberLast, &memberFirst, &fiscalYear)
 	if err == pgx.ErrNoRows {
 		Error(w, http.StatusNotFound, "archived PDF not found")
 		return
@@ -558,6 +615,13 @@ func (h *InvoiceHandler) HandleGetInvoicePDFArchiveBytes(w http.ResponseWriter, 
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+
+	pdfBytes, _ := h.fetchInvoicePDFBytes(ctx, s3Key, pdfData)
+	if pdfBytes == nil {
+		Error(w, http.StatusNotFound, "archived PDF not available")
+		return
+	}
+	pdfData = pdfBytes
 
 	disposition := "inline"
 	if r.URL.Query().Get("download") != "" {

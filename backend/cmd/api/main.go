@@ -135,6 +135,16 @@ func main() {
 		log.Warn().Msg("S3 object storage not configured — document uploads disabled")
 	}
 
+	s3LegalClient, err := storage.NewClient(cfg.S3Endpoint, cfg.S3BucketLegal, cfg.S3AccessKey, cfg.S3SecretKey)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to initialise legal S3 client")
+	}
+	if s3LegalClient.IsConfigured() {
+		log.Info().Str("bucket", cfg.S3BucketLegal).Msg("legal S3 storage enabled (invoices)")
+	} else {
+		log.Warn().Msg("S3_BUCKET_LEGAL not configured — invoice PDFs stored in DB only")
+	}
+
 	auditService := audit.NewService(db, log)
 	sessionService := auth.NewSessionService(db)
 
@@ -219,7 +229,7 @@ func main() {
 	projectsHandler := handlers.NewProjectsHandler(db, &cfg, log)
 	featureRequestsHandler := handlers.NewFeatureRequestsHandler(db, &cfg, log)
 	financialsHandler := handlers.NewFinancialsHandler(db, &cfg, auditService, log)
-	invoiceHandler := handlers.NewInvoiceHandler(db, &cfg, emailClient, auditService, log)
+	invoiceHandler := handlers.NewInvoiceHandler(db, &cfg, emailClient, auditService, s3LegalClient, log)
 	accountingSvc := accounting.NewService(db, auditService, log)
 	accountingHandler := handlers.NewAccountingHandler(accountingSvc, auditService, log)
 	bankRowsHandler := handlers.NewBankRowsHandler(accountingSvc, auditService, log)
