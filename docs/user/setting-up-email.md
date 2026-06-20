@@ -12,7 +12,7 @@ So in short: **almost any mail app on any device can connect.** The only excepti
 ## Connection settings — same for every client
 
 > [!NOTE]
-> The server addresses below use `<yourclub.no>` as a placeholder — angle brackets mean "replace this with your own value." Substitute your club's actual domain everywhere you see `<yourclub.no>`. For example, if your club email is `kari@klokkarvikbaatlag.no`, enter `mail.klokkarvikbaatlag.no` — not `mail.yourclub.no` or `mail.<yourclub.no>` literally.
+> The server addresses below use `<yourclub.no>` as a placeholder — angle brackets mean "replace this with your own value." Substitute your club's actual domain everywhere you see `<yourclub.no>`. For example, if your club email is `kari@havnelagets.no`, enter `mail.havnelagets.no` — not `mail.yourclub.no` or `mail.<yourclub.no>` literally.
 
 Whatever app you use, these are the values you'll enter:
 
