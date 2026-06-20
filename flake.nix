@@ -65,6 +65,7 @@
       s3SecretKey      = tfvars.hetzner_s3_secret_key or "";
       s3BucketDocs     = tfvars.s3_bucket_docs or "";
       s3BucketBackups  = tfvars.s3_bucket_backups or "";
+      s3BucketLegal    = tfvars.s3_bucket_legal or "";
     };
 
     overlay = final: prev: {
@@ -298,8 +299,10 @@
             # backup service is not yet configured on the target host.
             if [[ "''${SKIP_BACKUP:-0}" != "1" ]]; then
               echo "deploy: triggering pre-deploy backup on ''${HOSTNAME}…"
-              ssh "root@''${HOSTNAME}" \
-                "systemctl start brygge-pre-deploy-backup.service"
+              if ! ssh "root@''${HOSTNAME}" \
+                "systemctl start brygge-pre-deploy-backup.service" 2>/dev/null; then
+                echo "deploy: WARNING — pre-deploy backup skipped (service not found on host)"
+              fi
 
               LOCAL_BACKUP_DIR="''${HOME}/brygge-backups"
               mkdir -p "''${LOCAL_BACKUP_DIR}"

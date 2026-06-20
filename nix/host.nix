@@ -802,6 +802,21 @@ in
   # (club.slug, club.domain) is set by brygge itself from /etc/brygge/env;
   # see telemetry.Options. Sampler arg overrides the in-code default (0.1) —
   # bump during incident debugging if needed.
+  # Nightly GFS backup → Hetzner S3 (s3_bucket_backups in tfvars).
+  # Credentials and bucket name come from clubConfig (tfvars) — no
+  # separate env file entry needed.
+  # Pre-deploy snapshots are kept locally on the server; the deploy script
+  # also pulls the latest to ~/brygge-backups/ on the deployer's machine.
+  services.brygge.backup = {
+    enable = true;
+    s3Endpoint = "https://nbg1.your-objectstorage.com";
+    s3Bucket = clubConfig.s3BucketBackups;
+    s3Prefix = "brygge/backups";
+    s3AccessKey = clubConfig.s3AccessKey;
+    s3SecretKey = clubConfig.s3SecretKey;
+    preDeployBackup.enable = true;
+  };
+
   services.brygge.extraEnvironment = {
     OTEL_EXPORTER_OTLP_ENDPOINT = "http://127.0.0.1:4317";
     OTEL_EXPORTER_OTLP_PROTOCOL = "grpc";
@@ -818,7 +833,8 @@ in
     S3_ENDPOINT    = clubConfig.s3Endpoint;
     S3_ACCESS_KEY  = clubConfig.s3AccessKey;
     S3_SECRET_KEY  = clubConfig.s3SecretKey;
-    S3_BUCKET_DOCS = clubConfig.s3BucketDocs;
+    S3_BUCKET_DOCS  = clubConfig.s3BucketDocs;
+    S3_BUCKET_LEGAL = clubConfig.s3BucketLegal;
 
     # Role-gated shared inbox (DIL-275/276). Backend's mail.Reconciler
     # reads the spec from this JSON file and talks to Stalwart's admin

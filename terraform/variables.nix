@@ -39,6 +39,10 @@
       type        = "string";
       description = "S3 bucket name for automated database backups.";
     };
+    s3_bucket_legal = {
+      type        = "string";
+      description = "S3 bucket name for legal/financial documents (invoices, receipts). Norwegian bokføringsloven §13 requires 5-year retention.";
+    };
     s3_endpoint = {
       type        = "string";
       description = "S3-compatible endpoint URL (e.g. https://nbg1.your-objectstorage.com).";
