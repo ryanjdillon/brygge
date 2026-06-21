@@ -558,7 +558,7 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
       </section>
 
       <!-- Pane 3: reader -->
-      <main class="reader-bg flex-1 overflow-y-auto">
+      <main class="wave-bg flex-1 overflow-y-auto">
         <div v-if="loadingThread" class="p-6 text-sm text-gray-500">{{ t('common.loading') }}</div>
         <div v-else-if="!thread" class="flex h-full items-center justify-center">
           <div class="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-5 py-3 text-sm text-gray-400 shadow-sm">
@@ -691,14 +691,3 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
     </div>
   </div>
 </template>
-
-<style scoped>
-/* Reader backdrop: a light grey (~25% lighter than the gray-200 borders)
-   with a subtle repeating maritime wave, so the white message cards read
-   as raised panels against it. */
-.reader-bg {
-  background-color: #edeff2;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='16'%3E%3Cpath d='M0 8 Q10 3 20 8 T40 8' fill='none' stroke='%23d7dce3' stroke-width='1.5'/%3E%3C/svg%3E");
-  background-size: 40px 16px;
-}
-</style>

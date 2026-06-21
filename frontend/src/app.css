@@ -32,3 +32,12 @@
 .skip-nav:focus {
   left: 0;
 }
+
+/* Maritime wave backdrop: a light grey with a subtle repeating wave.
+   Shared by the inbox reader pane and the landing "Bli medlem" section so
+   white cards/panels read as raised against it. */
+.wave-bg {
+  background-color: #edeff2;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='16'%3E%3Cpath d='M0 8 Q10 3 20 8 T40 8' fill='none' stroke='%23d7dce3' stroke-width='1.5'/%3E%3C/svg%3E");
+  background-size: 40px 16px;
+}
