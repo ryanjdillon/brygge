@@ -514,6 +514,7 @@
       "title": "Fakturaar",
       "subtitle": "Fakturaane dine",
       "due": "Forfall",
+      "open": "Opne PDF",
       "none": "Ingen fakturaar",
       "unpaidHeading": "Ubetalte",
       "recentPaidHeading": "Nyleg betalt",

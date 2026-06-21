@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
+import { ExternalLink } from 'lucide-vue-next'
 import { formatNOK, formatDate } from '@/lib/format'
 import { isOverdue, type MemberInvoice } from '@/composables/useMyInvoices'
 
@@ -54,6 +55,16 @@ function statusLabel(inv: MemberInvoice): string {
           >
             {{ statusLabel(inv) }}
           </span>
+          <a
+            :href="`/api/v1/members/me/invoices/${inv.id}/pdf`"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+            :title="t('portal.invoices.open')"
+          >
+            <ExternalLink class="h-3.5 w-3.5" />
+            {{ t('portal.invoices.open') }}
+          </a>
         </div>
       </li>
     </ul>

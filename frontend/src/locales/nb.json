@@ -520,6 +520,7 @@
       "title": "Fakturaer",
       "subtitle": "Dine fakturaer",
       "due": "Forfall",
+      "open": "Opne PDF",
       "none": "Ingen fakturaer",
       "unpaidHeading": "Ubetalte",
       "recentPaidHeading": "Nylig betalt",

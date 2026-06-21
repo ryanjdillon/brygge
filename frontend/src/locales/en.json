@@ -524,6 +524,7 @@
       "title": "Invoices",
       "subtitle": "Your invoices",
       "due": "Due",
+      "open": "Open PDF",
       "none": "No invoices",
       "unpaidHeading": "Unpaid",
       "recentPaidHeading": "Recently paid",

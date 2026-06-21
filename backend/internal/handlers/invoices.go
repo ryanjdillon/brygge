@@ -672,6 +672,69 @@ func (h *InvoiceHandler) HandleGetInvoicePDF(w http.ResponseWriter, r *http.Requ
 	w.Write(pdfBytes)
 }
 
+// HandleGetMyInvoicePDF serves a member their own invoice PDF, inline by
+// default. Scoped to the authenticated user (and to sent/imported open
+// invoices, mirroring HandleListMyInvoices) so a member can only open
+// fakturas that are actually theirs and visible to them.
+//
+//	GET /members/me/invoices/{invoiceID}/pdf
+func (h *InvoiceHandler) HandleGetMyInvoicePDF(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	invoiceID := chi.URLParam(r, "invoiceID")
+	if invoiceID == "" {
+		Error(w, http.StatusBadRequest, "invoice ID is required")
+		return
+	}
+
+	var pdfData []byte
+	var s3Key string
+	var invoiceNumber int
+	var memberLast, memberFirst string
+	var fiscalYear *int
+	err := h.db.QueryRow(ctx,
+		`SELECT COALESCE(i.s3_key, ''), i.pdf_data, i.invoice_number,
+		        COALESCE(u.last_name, ''), COALESCE(u.first_name, ''),
+		        fp.year
+		   FROM invoices i
+		   LEFT JOIN users u ON u.id = i.user_id
+		   LEFT JOIN fiscal_periods fp ON fp.id = i.fiscal_period_id
+		  WHERE i.id = $1 AND i.club_id = $2 AND i.user_id = $3
+		    AND i.status = 'open'
+		    AND (i.sent_at IS NOT NULL OR i.import_source IS NOT NULL)`,
+		invoiceID, claims.ClubID, claims.UserID,
+	).Scan(&s3Key, &pdfData, &invoiceNumber, &memberLast, &memberFirst, &fiscalYear)
+	if err == pgx.ErrNoRows {
+		Error(w, http.StatusNotFound, "invoice not found")
+		return
+	}
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to fetch my invoice PDF")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	pdfBytes, fetchErr := h.fetchInvoicePDFBytes(ctx, s3Key, pdfData)
+	if fetchErr != nil || pdfBytes == nil {
+		Error(w, http.StatusNotFound, "PDF not available for this invoice")
+		return
+	}
+
+	disposition := "inline"
+	if r.URL.Query().Get("download") != "" {
+		disposition = "attachment"
+	}
+	filename := buildInvoiceFilename(invoiceNumber, memberLast, memberFirst, fiscalYear)
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`%s; filename="%s"`, disposition, filename))
+	w.Write(pdfBytes)
+}
+
 // buildInvoiceFilename produces a descriptive, ASCII-safe filename
 // such as "faktura-0001-dillon-ryan-2026.pdf" so a folder of saved
 // invoices sorts and searches sensibly.
