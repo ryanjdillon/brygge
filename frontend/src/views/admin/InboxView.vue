@@ -167,22 +167,34 @@ function selectAddress(addr: string) {
 }
 
 function selectThread(id: string) {
-  router.replace({ query: { ...route.query, thread: id } })
-  // Optimistically mark this row read so the next list refresh isn't required.
   const row = threads.value.find((t) => t.thread_id === id)
-  if (row) row.unread = false
+  const wasUnread = row?.unread ?? false
+  router.replace({ query: { ...route.query, thread: id } })
+  // Opening a thread marks it read. The server previously only audited
+  // the view and never set $seen, so reads never stuck — this persists it.
+  if (wasUnread) markRead(true, id)
 }
 
-async function markRead(read: boolean) {
-  if (!selectedAddress.value || !selectedThread.value) return
-  const url = `/api/v1/admin/inbox/${encodeURIComponent(selectedAddress.value)}/threads/${encodeURIComponent(selectedThread.value)}/mark_read?read=${read}`
+// Read state of the currently open thread — drives the toggle button.
+const currentThreadUnread = computed(
+  () => threads.value.find((t) => t.thread_id === selectedThread.value)?.unread ?? false,
+)
+
+async function markRead(read: boolean, threadId: string = selectedThread.value) {
+  if (!selectedAddress.value || !threadId) return
+  // Optimistic: flip the row + refresh the badge store, without a full
+  // list reload (which would reorder/flicker the list). The NavBar
+  // InboxIndicator subscribes to the same store, so the badge updates
+  // in lockstep without waiting for its poll.
+  const row = threads.value.find((t) => t.thread_id === threadId)
+  const prev = row?.unread
+  if (row) row.unread = !read
+  const url = `/api/v1/admin/inbox/${encodeURIComponent(selectedAddress.value)}/threads/${encodeURIComponent(threadId)}/mark_read?read=${read}`
   try {
     await fetchApi(url, { method: 'POST' })
-    // Refresh both panes + the global counter; the NavBar
-    // InboxIndicator subscribes to the same store so the badge
-    // updates in lockstep without waiting for its 60s poll.
-    await Promise.all([loadThreads(), inboxUnread.refresh({ silent: true })])
+    await inboxUnread.refresh({ silent: true })
   } catch (e) {
+    if (row && prev !== undefined) row.unread = prev
     reportError('admin.inbox.error.markRead', e)
   }
 }
@@ -469,9 +481,10 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
               <button
                 type="button"
                 class="inline-flex items-center gap-1 rounded border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50"
-                @click="markRead(false)"
+                @click="markRead(currentThreadUnread)"
               >
-                <Check class="h-4 w-4" /> {{ t('admin.inbox.markUnread') }}
+                <component :is="currentThreadUnread ? Check : Mail" class="h-4 w-4" />
+                {{ currentThreadUnread ? t('admin.inbox.markAsRead') : t('admin.inbox.markAsUnread') }}
               </button>
               <button
                 type="button"
