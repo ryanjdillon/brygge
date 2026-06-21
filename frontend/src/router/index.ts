@@ -190,7 +190,7 @@ const routes: RouteRecordRaw[] = [
     children: [
       {
         path: '',
-        redirect: '/admin/events',
+        redirect: '/admin/inbox',
       },
       {
         path: 'users',

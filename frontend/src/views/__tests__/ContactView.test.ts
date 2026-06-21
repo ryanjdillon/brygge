@@ -28,7 +28,11 @@ describe('ContactView', () => {
   it('renders contact info section', () => {
     const wrapper = mountWithPlugins(ContactView)
     expect(wrapper.text()).toContain('contact.title')
-    expect(wrapper.text()).toContain('contact.matrixRoom')
+  })
+
+  it('hides the Matrix room row while the forum is disabled (BRY-191)', () => {
+    const wrapper = mountWithPlugins(ContactView)
+    expect(wrapper.text()).not.toContain('contact.matrixRoom')
   })
 
   it('form fields have required attribute', () => {
