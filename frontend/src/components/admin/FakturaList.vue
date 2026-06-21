@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { FileDown, Send, Trash2, Ban, Bell, RefreshCw, Copy, Check, ChevronUp, ChevronDown, X } from 'lucide-vue-next'
 import FakturaArchiveButton from '@/components/admin/FakturaArchiveButton.vue'
 import DeliveryLogButton from '@/components/admin/DeliveryLogButton.vue'
+import InvoiceNumberChip from '@/components/ui/InvoiceNumberChip.vue'
 import { useConfirm } from '@/stores/confirm'
 import { useFreshTotp } from '@/composables/useFreshTotp'
 import { useRangeSelect } from '@/composables/useRangeSelect'
@@ -52,6 +53,14 @@ const paidStatusFilter = ref<Set<PaidStatus>>(new Set())
 function rowPaidStatus(d: Row): PaidStatus {
   if (d.paid) return 'paid'
   return new Date(d.due_date) < new Date(new Date().toDateString()) ? 'past_due' : 'waiting'
+}
+function paidStatusTitle(d: Row): string {
+  const labels: Record<PaidStatus, string> = {
+    paid: t('admin.faktura.sent.filterPaid'),
+    waiting: t('admin.faktura.sent.filterWaiting'),
+    past_due: t('admin.faktura.sent.filterPastDue'),
+  }
+  return labels[rowPaidStatus(d)]
 }
 function togglePaidStatus(s: PaidStatus) {
   const next = new Set(paidStatusFilter.value)
@@ -632,7 +641,15 @@ defineExpose({ load })
                   @click="onRowClick(idx, $event)"
                 />
               </td>
-              <td class="whitespace-nowrap px-3 py-2 font-mono text-xs text-gray-500">{{ d.invoice_number }}</td>
+              <td class="whitespace-nowrap px-3 py-2">
+                <InvoiceNumberChip
+                  v-if="status === 'sent'"
+                  :number="d.invoice_number"
+                  :status="rowPaidStatus(d)"
+                  :title="paidStatusTitle(d)"
+                />
+                <span v-else class="font-mono text-xs text-gray-500">{{ d.invoice_number }}</span>
+              </td>
               <td class="px-3 py-2 text-sm">
                 <div class="font-medium text-gray-900">{{ d.member_name }}</div>
                 <div class="text-xs text-gray-500">{{ d.member_email }}</div>
