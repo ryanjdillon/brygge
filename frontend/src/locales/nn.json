@@ -908,6 +908,18 @@
     },
     "inbox": {
       "title": "Innboks",
+      "folders": {
+        "expand": "Vis mapper",
+        "collapse": "Skjul mapper"
+      },
+      "folder": {
+        "inbox": "Innboks",
+        "archive": "Arkiv",
+        "sent": "Sendt",
+        "drafts": "Kladd",
+        "junk": "Søppelpost",
+        "trash": "Papirkurv"
+      },
       "clientNotice": "Visste du at du kan lese og sende klubbpost frå Apple Mail, Outlook, Gmail eller Thunderbird?",
       "clientNoticeLink": "Sjå korleis du set opp e-postklienten din →",
       "searchPlaceholder": "Søk i meldingar",

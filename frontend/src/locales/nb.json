@@ -945,6 +945,18 @@
       "title": "Innboks",
       "tabInbox": "Innboks",
       "tabBroadcasts": "Utsendingar",
+      "folders": {
+        "expand": "Vis mapper",
+        "collapse": "Skjul mapper"
+      },
+      "folder": {
+        "inbox": "Innboks",
+        "archive": "Arkiv",
+        "sent": "Sendt",
+        "drafts": "Kladd",
+        "junk": "Søppelpost",
+        "trash": "Papirkurv"
+      },
       "broadcasts": {
         "empty": "Ingen utsendingar enno.",
         "error": "Kunne ikkje laste utsendingar.",

@@ -949,6 +949,18 @@
       "title": "Inbox",
       "tabInbox": "Inbox",
       "tabBroadcasts": "Broadcasts",
+      "folders": {
+        "expand": "Expand folders",
+        "collapse": "Collapse folders"
+      },
+      "folder": {
+        "inbox": "Inbox",
+        "archive": "Archive",
+        "sent": "Sent",
+        "drafts": "Drafts",
+        "junk": "Junk",
+        "trash": "Trash"
+      },
       "broadcasts": {
         "empty": "No broadcasts sent yet.",
         "error": "Couldn't load broadcasts.",

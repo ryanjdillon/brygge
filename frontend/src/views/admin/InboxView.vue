@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { Inbox, Mail, Archive, Check, ImageOff, Image as ImageIcon, AlertTriangle, Reply, Send, X, SquarePen } from 'lucide-vue-next'
+import { Inbox, Mail, Archive, Check, ImageOff, Image as ImageIcon, AlertTriangle, Reply, Send, X, SquarePen, ChevronRight, ChevronDown, Paperclip } from 'lucide-vue-next'
 import { useApi } from '@/composables/useApi'
 import { useFreshTotp } from '@/composables/useFreshTotp'
 import { sanitizeEmail } from '@/lib/sanitizeHtml'
@@ -21,6 +21,13 @@ interface MailboxView {
   unread: number
   total: number
   can_send_as: boolean
+}
+
+interface Folder {
+  name: string
+  role: string
+  unread: number
+  total: number
 }
 
 interface ThreadRow {
@@ -55,7 +62,7 @@ function htmlToText(html: string): string {
   return el.innerText
 }
 
-const { t, locale } = useI18n()
+const { t, te, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const { fetchApi } = useApi()
@@ -98,6 +105,53 @@ async function openCompose() {
 
 const selectedAddress = computed(() => (route.query.address as string) || mailboxes.value[0]?.address || '')
 const selectedThread = computed(() => (route.query.thread as string) || '')
+// Empty string means the Inbox folder (the default); any other value is
+// a folder role or name passed straight to the threads endpoint.
+const selectedFolder = computed(() => (route.query.folder as string) || '')
+
+// Folder navigation (BRY-190). Each shared mailbox expands to show the
+// JMAP folders that actually exist for it; selecting one lists that
+// folder's threads. Folders are fetched lazily per mailbox and cached.
+const expanded = ref<Record<string, boolean>>({})
+const foldersByAddress = ref<Record<string, Folder[]>>({})
+
+async function loadFolders(addr: string, force = false) {
+  if (!addr || (foldersByAddress.value[addr] && !force)) return
+  try {
+    const res = await fetchApi<{ folders: Folder[] }>(
+      `/api/v1/admin/inbox/${encodeURIComponent(addr)}/folders`,
+    )
+    foldersByAddress.value = { ...foldersByAddress.value, [addr]: res.folders ?? [] }
+  } catch (e) {
+    console.error('[inbox] loadFolders', e)
+  }
+}
+
+function toggleExpand(addr: string) {
+  const next = !expanded.value[addr]
+  expanded.value = { ...expanded.value, [addr]: next }
+  if (next) loadFolders(addr)
+}
+
+// A folder's URL selector: Inbox carries no param; folders with a role
+// use the role; custom folders fall back to their name.
+function folderSelector(f: Folder): string {
+  if (f.role && f.role.toLowerCase() === 'inbox') return ''
+  return f.role || f.name
+}
+
+function folderLabel(f: Folder): string {
+  const key = `admin.inbox.folder.${f.role}`
+  return f.role && te(key) ? t(key) : f.name
+}
+
+function isFolderActive(addr: string, f: Folder): boolean {
+  return addr === selectedAddress.value && selectedFolder.value === folderSelector(f)
+}
+
+function selectFolder(addr: string, sel: string) {
+  router.replace({ query: { ...route.query, address: addr, folder: sel || undefined, thread: undefined } })
+}
 
 const totalUnread = computed(() => storeTotalUnread.value)
 
@@ -133,6 +187,7 @@ async function loadThreads() {
   try {
     const q = new URLSearchParams()
     if (search.value.trim()) q.set('q', search.value.trim())
+    if (selectedFolder.value) q.set('folder', selectedFolder.value)
     const url = `/api/v1/admin/inbox/${encodeURIComponent(selectedAddress.value)}/threads${q.size ? '?' + q : ''}`
     const res = await fetchApi<{ threads: ThreadRow[]; total: number }>(url)
     threads.value = res.threads ?? []
@@ -163,7 +218,11 @@ async function loadThread() {
 }
 
 function selectAddress(addr: string) {
-  router.replace({ query: { ...route.query, address: addr, thread: undefined } })
+  // Selecting a mailbox shows its Inbox: clear any folder/thread, expand
+  // the row, and load its folder list.
+  router.replace({ query: { ...route.query, address: addr, folder: undefined, thread: undefined } })
+  expanded.value = { ...expanded.value, [addr]: true }
+  loadFolders(addr)
 }
 
 function selectThread(id: string) {
@@ -286,6 +345,8 @@ async function archiveCurrent() {
     await fetchApi(url, { method: 'POST' })
     router.replace({ query: { ...route.query, thread: undefined } })
     await Promise.all([loadThreads(), inboxUnread.refresh({ silent: true })])
+    // Archiving moves the thread between folders — refresh per-folder counts.
+    loadFolders(selectedAddress.value, true)
   } catch (e) {
     reportError('admin.inbox.error.archive', e)
   }
@@ -329,7 +390,12 @@ function formatBytes(n: number): string {
 }
 
 // Reactive refetch on URL changes.
-watch(() => route.query.address, () => { thread.value = null; loadThreads() })
+watch(() => route.query.address, (addr) => {
+  thread.value = null
+  if (addr) { expanded.value = { ...expanded.value, [addr as string]: true }; loadFolders(addr as string) }
+  loadThreads()
+})
+watch(() => route.query.folder, () => { thread.value = null; loadThreads() })
 watch(() => route.query.thread, () => loadThread())
 watch(search, () => loadThreads())
 
@@ -337,6 +403,10 @@ watch(search, () => loadThreads())
 let pollTimer: ReturnType<typeof setInterval> | null = null
 onMounted(async () => {
   await loadMailboxes()
+  if (selectedAddress.value) {
+    expanded.value = { ...expanded.value, [selectedAddress.value]: true }
+    loadFolders(selectedAddress.value)
+  }
   await loadThreads()
   await loadThread()
   // Background poll — pass {background:true} so the loading state
@@ -409,17 +479,48 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
         <div v-if="loadingMailboxes" class="p-4 text-sm text-gray-500">{{ t('common.loading') }}</div>
         <ul v-else-if="mailboxes.length" class="divide-y divide-gray-100">
           <li v-for="m in mailboxes" :key="m.address">
-            <button
-              type="button"
-              class="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-gray-50"
-              :class="{ 'bg-blue-50 font-semibold text-blue-900': m.address === selectedAddress }"
-              @click="selectAddress(m.address)"
+            <div
+              class="flex items-center text-sm hover:bg-gray-50"
+              :class="{ 'bg-blue-50 font-semibold text-blue-900': m.address === selectedAddress && !selectedFolder }"
             >
-              <span class="truncate">{{ m.display_name }}</span>
-              <span v-if="m.unread" class="ml-2 rounded bg-blue-600 px-1.5 py-0.5 text-xs font-medium text-white">
-                {{ m.unread }}
-              </span>
-            </button>
+              <button
+                type="button"
+                class="flex shrink-0 items-center justify-center py-2 pl-2 pr-1 text-gray-400 hover:text-gray-600"
+                :aria-label="expanded[m.address] ? t('admin.inbox.folders.collapse') : t('admin.inbox.folders.expand')"
+                @click="toggleExpand(m.address)"
+              >
+                <component :is="expanded[m.address] ? ChevronDown : ChevronRight" class="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                class="flex flex-1 items-center justify-between py-2 pr-3 text-left"
+                @click="selectAddress(m.address)"
+              >
+                <span class="truncate">{{ m.display_name }}</span>
+                <span v-if="m.unread" class="ml-2 rounded bg-blue-600 px-1.5 py-0.5 text-xs font-medium text-white">
+                  {{ m.unread }}
+                </span>
+              </button>
+            </div>
+            <!-- Folder subrows (BRY-190): the JMAP folders that exist for
+                 this mailbox. Selecting one lists that folder's threads. -->
+            <ul v-if="expanded[m.address] && foldersByAddress[m.address]?.length" class="bg-gray-50/50">
+              <li v-for="f in foldersByAddress[m.address]" :key="f.role + ':' + f.name">
+                <button
+                  type="button"
+                  class="flex w-full items-center justify-between py-1.5 pl-9 pr-3 text-left text-sm hover:bg-gray-100"
+                  :class="isFolderActive(m.address, f)
+                    ? 'bg-blue-50 font-medium text-blue-900'
+                    : 'text-gray-600'"
+                  @click="selectFolder(m.address, folderSelector(f))"
+                >
+                  <span class="truncate">{{ folderLabel(f) }}</span>
+                  <span v-if="f.unread" class="ml-2 rounded bg-blue-500 px-1.5 py-0.5 text-xs font-medium text-white">
+                    {{ f.unread }}
+                  </span>
+                </button>
+              </li>
+            </ul>
           </li>
         </ul>
         <div v-else class="p-4 text-sm text-gray-500">{{ t('admin.inbox.empty.mailboxes') }}</div>
