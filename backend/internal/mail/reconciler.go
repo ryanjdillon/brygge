@@ -210,7 +210,29 @@ func (r *Reconciler) Reconcile(ctx context.Context, address string) error {
 	if err != nil {
 		return fmt.Errorf("compute desired: %w", err)
 	}
-	desiredHash := hashShareWith(desired)
+
+	// Authenticate as the principal up front: we need its live folder
+	// list both to share every folder — not just the Inbox, otherwise
+	// users can't see Sent/Drafts/Archive/Junk/custom folders or the
+	// replies that land in Sent — and to fold that folder set into the
+	// change hash so a newly created folder triggers a re-share.
+	pw := r.passwords.Get(address)
+	if pw == "" {
+		err := fmt.Errorf("no service password for %s — has stalwart-mailbox-config run?", address)
+		_ = r.persistState(ctx, address, "", nil, err)
+		r.logACLFailed(ctx, address, err)
+		return err
+	}
+	jmap := r.jmapFact.AsPrincipal(principalName(address), pw)
+
+	ownerID, mailboxIDs, err := r.resolveOwnerMailboxes(ctx, jmap, address)
+	if err != nil {
+		_ = r.persistState(ctx, address, "", nil, err)
+		r.logACLFailed(ctx, address, err)
+		return fmt.Errorf("resolve mailboxes: %w", err)
+	}
+
+	desiredHash := hashShareTargets(mailboxIDs, desired)
 
 	priorApplied, _, err := r.loadState(ctx, address)
 	if err != nil {
@@ -218,9 +240,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, address string) error {
 	}
 
 	if priorApplied != "" && priorApplied == desiredHash {
-		// No-op: hash check covers the steady state where nothing
-		// changed since the last successful apply. Still bump
-		// last_synced so operators see liveness.
+		// No-op: hash check covers the steady state where neither the
+		// member set nor the folder set changed since the last apply.
+		// Still bump last_synced so operators see liveness.
 		return r.persistState(ctx, address, desiredHash, &desiredHash, nil)
 	}
 
@@ -230,60 +252,52 @@ func (r *Reconciler) Reconcile(ctx context.Context, address string) error {
 			Str("desired_hash", desiredHash).
 			Str("applied_hash", priorApplied).
 			Int("members", len(desired)).
-			Msg("dry-run: would apply ACLs")
+			Int("folders", len(mailboxIDs)).
+			Msg("dry-run: would apply ACLs to all folders")
 		return r.persistState(ctx, address, desiredHash, &priorApplied, nil)
 	}
 
-	pw := r.passwords.Get(address)
-	if pw == "" {
-		err := fmt.Errorf("no service password for %s — has stalwart-mailbox-config run?", address)
-		_ = r.persistState(ctx, address, desiredHash, &priorApplied, err)
-		r.logACLFailed(ctx, address, err)
-		return err
-	}
-	jmap := r.jmapFact.AsPrincipal(principalName(address), pw)
-
-	ownerID, inboxID, err := r.resolveInbox(ctx, jmap, address)
-	if err != nil {
-		_ = r.persistState(ctx, address, desiredHash, &priorApplied, err)
-		r.logACLFailed(ctx, address, err)
-		return fmt.Errorf("resolve inbox: %w", err)
-	}
-
-	if err := jmap.SetMailboxShareWith(ctx, ownerID, inboxID, desired); err != nil {
-		_ = r.persistState(ctx, address, desiredHash, &priorApplied, err)
-		r.logACLFailed(ctx, address, err)
-		return fmt.Errorf("apply: %w", err)
+	for _, mid := range mailboxIDs {
+		if err := jmap.SetMailboxShareWith(ctx, ownerID, mid, desired); err != nil {
+			_ = r.persistState(ctx, address, desiredHash, &priorApplied, err)
+			r.logACLFailed(ctx, address, err)
+			return fmt.Errorf("apply share on mailbox %s: %w", mid, err)
+		}
 	}
 
 	r.logACLChanged(ctx, address, priorApplied, desiredHash, len(desired))
 	return r.persistState(ctx, address, desiredHash, &desiredHash, nil)
 }
 
-// resolveInbox finds the principal's account id (from JMAP's session
-// — Stalwart's JMAP IDs are alphabetic and differ from the admin REST
-// API's numeric ids) and the Inbox folder's mailbox id. Both are
-// scoped to the principal we're authenticated as.
-func (r *Reconciler) resolveInbox(ctx context.Context, jmap *JMAPClient, address string) (ownerID, mailboxID string, err error) {
+// resolveOwnerMailboxes returns the principal's JMAP account id (from
+// JMAP's session — Stalwart's JMAP IDs are alphabetic and differ from
+// the admin REST API's numeric ids) and the ids of every folder in that
+// account. Sharing is applied to all of them so Brygge users see the
+// same folders (Inbox, Sent, Drafts, Archive, Junk, Trash, plus any
+// custom folders) the principal owns — and, critically, the replies
+// that land in Sent.
+func (r *Reconciler) resolveOwnerMailboxes(ctx context.Context, jmap *JMAPClient, address string) (ownerID string, mailboxIDs []string, err error) {
 	accounts, err := jmap.SessionAccounts(ctx)
 	if err != nil {
-		return "", "", fmt.Errorf("session: %w", err)
+		return "", nil, fmt.Errorf("session: %w", err)
 	}
 	if len(accounts) == 0 {
-		return "", "", fmt.Errorf("no JMAP account for %s", address)
+		return "", nil, fmt.Errorf("no JMAP account for %s", address)
 	}
 	// A shared principal sees only its own account in its session.
 	ownerID = accounts[0]
 	mboxes, err := jmap.ListMailboxes(ctx, ownerID)
 	if err != nil {
-		return "", "", err
+		return "", nil, err
 	}
+	ids := make([]string, 0, len(mboxes))
 	for _, m := range mboxes {
-		if strings.EqualFold(m.Role, "inbox") {
-			return ownerID, m.ID, nil
-		}
+		ids = append(ids, m.ID)
 	}
-	return "", "", fmt.Errorf("inbox folder not found on %s", address)
+	if len(ids) == 0 {
+		return "", nil, fmt.Errorf("no folders found on %s", address)
+	}
+	return ownerID, ids, nil
 }
 
 // OnRoleChanged is called by the user-roles mutation path (insert /
@@ -368,19 +382,32 @@ func (r *Reconciler) computeDesired(ctx context.Context, spec MailboxSpec, idx m
 	return shares, rows.Err()
 }
 
-// hashShareWith produces a canonical-form fingerprint of a shareWith
-// map so the reconciler short-circuits when nothing has changed.
-func hashShareWith(m map[string]ShareRights) string {
+// hashShareTargets fingerprints the full sharing intent — the set of
+// folders being shared plus the shareWith map — so the reconciler
+// short-circuits when nothing changed and re-applies when either the
+// member set OR the folder set changes. The scheme tag also forces a
+// one-time re-apply for deployments whose stored hash predates
+// all-folder sharing.
+func hashShareTargets(mailboxIDs []string, m map[string]ShareRights) string {
 	type entry struct {
 		ID     string      `json:"id"`
 		Rights ShareRights `json:"rights"`
 	}
-	canon := make([]entry, 0, len(m))
+	shares := make([]entry, 0, len(m))
 	for id, r := range m {
-		canon = append(canon, entry{ID: id, Rights: r})
+		shares = append(shares, entry{ID: id, Rights: r})
 	}
-	sort.Slice(canon, func(i, j int) bool { return canon[i].ID < canon[j].ID })
-	b, _ := json.Marshal(canon)
+	sort.Slice(shares, func(i, j int) bool { return shares[i].ID < shares[j].ID })
+
+	ids := append([]string(nil), mailboxIDs...)
+	sort.Strings(ids)
+
+	payload := struct {
+		Scheme    string   `json:"scheme"`
+		Mailboxes []string `json:"mailboxes"`
+		Shares    []entry  `json:"shares"`
+	}{Scheme: "all-folders-v1", Mailboxes: ids, Shares: shares}
+	b, _ := json.Marshal(payload)
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:])
 }

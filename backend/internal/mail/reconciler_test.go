@@ -6,29 +6,41 @@ import (
 	"testing"
 )
 
-func TestHashShareWithIsKeyOrderIndependent(t *testing.T) {
+func TestHashShareTargetsIsOrderIndependent(t *testing.T) {
 	rights := ShareRights{MayReadItems: true, MaySetSeen: true, MayAddItems: true}
 	a := map[string]ShareRights{"u2": rights, "u1": rights}
 	b := map[string]ShareRights{"u1": rights, "u2": rights}
-	if hashShareWith(a) != hashShareWith(b) {
-		t.Fatalf("expected equal hashes regardless of map insertion order")
+	// Member map order and folder slice order must not affect the hash.
+	if hashShareTargets([]string{"f2", "f1"}, a) != hashShareTargets([]string{"f1", "f2"}, b) {
+		t.Fatalf("expected equal hashes regardless of map/slice order")
 	}
 }
 
-func TestHashShareWithDetectsMembershipChange(t *testing.T) {
+func TestHashShareTargetsDetectsMembershipChange(t *testing.T) {
 	rights := ShareRights{MayReadItems: true}
 	base := map[string]ShareRights{"u1": rights}
 	extra := map[string]ShareRights{"u1": rights, "u2": rights}
-	if hashShareWith(base) == hashShareWith(extra) {
+	ids := []string{"f1"}
+	if hashShareTargets(ids, base) == hashShareTargets(ids, extra) {
 		t.Fatalf("expected different hashes when membership changes")
 	}
 }
 
-func TestHashShareWithDetectsRightsChange(t *testing.T) {
+func TestHashShareTargetsDetectsRightsChange(t *testing.T) {
 	r1 := map[string]ShareRights{"u1": {MayReadItems: true}}
 	r2 := map[string]ShareRights{"u1": {MayReadItems: true, MayAddItems: true}}
-	if hashShareWith(r1) == hashShareWith(r2) {
+	ids := []string{"f1"}
+	if hashShareTargets(ids, r1) == hashShareTargets(ids, r2) {
 		t.Fatalf("expected different hashes when rights change")
+	}
+}
+
+func TestHashShareTargetsDetectsFolderChange(t *testing.T) {
+	shares := map[string]ShareRights{"u1": {MayReadItems: true}}
+	// Adding a folder to the shared set must change the hash so the
+	// reconciler re-applies the ACL to the new folder.
+	if hashShareTargets([]string{"f1"}, shares) == hashShareTargets([]string{"f1", "f2"}, shares) {
+		t.Fatalf("expected different hashes when the folder set changes")
 	}
 }
 
