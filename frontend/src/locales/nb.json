@@ -944,7 +944,7 @@
     },
     "inbox": {
       "title": "Innboks",
-      "tabInbox": "Innboks",
+      "tabInbox": "E-post",
       "tabBroadcasts": "Utsendingar",
       "folders": {
         "expand": "Vis mapper",

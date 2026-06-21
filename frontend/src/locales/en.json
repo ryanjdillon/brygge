@@ -948,7 +948,7 @@
     },
     "inbox": {
       "title": "Inbox",
-      "tabInbox": "Inbox",
+      "tabInbox": "Email",
       "tabBroadcasts": "Broadcasts",
       "folders": {
         "expand": "Expand folders",
