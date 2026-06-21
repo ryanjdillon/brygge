@@ -68,6 +68,13 @@
     "welcomeWith": "Velkommen til {club}",
     "tagline": "Din havneklubb, digitalt",
     "ctaJoin": "Bli medlem",
+    "ctaLogin": "Logg inn",
+    "join": {
+      "title": "Bli medlem",
+      "comingSoon": "Automatisk registrering kommer snart.",
+      "contactPrefix": "I mellomtiden kan du skrive til",
+      "contactSuffix": "for å be om medlemskap."
+    },
     "sectionVisit": "Besøk havna",
     "sectionClub": "Klubbinformasjon",
     "featureHarbor": "Gjestehavn",

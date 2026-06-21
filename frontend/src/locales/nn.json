@@ -67,6 +67,13 @@
     "welcomeWith": "Velkomen til {club}",
     "tagline": "Hamneklubben din, digitalt",
     "ctaJoin": "Bli medlem",
+    "ctaLogin": "Logg inn",
+    "join": {
+      "title": "Bli medlem",
+      "comingSoon": "Automatisk registrering kjem snart.",
+      "contactPrefix": "I mellomtida kan du skrive til",
+      "contactSuffix": "for å be om medlemskap."
+    },
     "sectionVisit": "Besøk hamna",
     "sectionClub": "Klubbinformasjon",
     "featureHarbor": "Gjestehamn",

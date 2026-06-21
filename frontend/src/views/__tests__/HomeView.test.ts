@@ -23,10 +23,16 @@ describe('HomeView', () => {
     expect(wrapper.text()).toContain('home.featureCalendarDesc')
   })
 
-  it('renders CTA button linking to /join', () => {
+  it('renders the hero CTA as a login button', () => {
     const wrapper = mountWithPlugins(HomeView)
-    const ctaLink = wrapper.find('a[href="/join"]')
+    const ctaLink = wrapper.find('a[href="/login"]')
     expect(ctaLink.exists()).toBe(true)
-    expect(ctaLink.text()).toBe('home.ctaJoin')
+    expect(ctaLink.text()).toContain('home.ctaLogin')
+  })
+
+  it('renders the Bli medlem section pointing at the club mailbox', () => {
+    const wrapper = mountWithPlugins(HomeView)
+    expect(wrapper.text()).toContain('home.join.title')
+    expect(wrapper.find('a[href^="mailto:post@"]').exists()).toBe(true)
   })
 })

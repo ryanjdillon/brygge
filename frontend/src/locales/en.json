@@ -68,6 +68,13 @@
     "welcomeWith": "Welcome to {club}",
     "tagline": "Your harbour club, digitally",
     "ctaJoin": "Join the club",
+    "ctaLogin": "Log in",
+    "join": {
+      "title": "Become a member",
+      "comingSoon": "Automatic registration is coming soon.",
+      "contactPrefix": "In the meantime, write to",
+      "contactSuffix": "to request membership."
+    },
     "sectionVisit": "Visit the harbour",
     "sectionClub": "Club information",
     "featureHarbor": "Guest harbour",

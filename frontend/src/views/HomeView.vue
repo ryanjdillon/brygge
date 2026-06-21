@@ -11,6 +11,7 @@ import {
   Tag,
   ShoppingBag,
   ArrowRight,
+  LogIn,
 } from 'lucide-vue-next'
 import { useFeatures } from '@/composables/useFeatures'
 import { useClubStore } from '@/stores/club'
@@ -22,6 +23,7 @@ const club = useClubStore()
 club.ensureLoaded()
 
 const clubName = computed(() => club.name || 'Brygge')
+const postEmail = computed(() => (club.domain ? `post@${club.domain}` : 'post@klokkarvikbaatlag.no'))
 
 type FeatureFlag = 'bookings' | 'projects' | 'calendar' | 'commerce' | 'accounting'
 
@@ -97,11 +99,11 @@ const sections = computed<Section[]>(() => {
           {{ t('home.tagline') }}
         </p>
         <RouterLink
-          to="/join"
+          to="/login"
           class="mt-8 inline-flex items-center gap-2 rounded-full bg-white px-7 py-3 text-sm font-semibold text-slate-900 shadow-lg shadow-black/30 transition hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-xl"
         >
-          {{ t('home.ctaJoin') }}
-          <ArrowRight class="h-4 w-4" aria-hidden="true" />
+          <LogIn class="h-4 w-4" aria-hidden="true" />
+          {{ t('home.ctaLogin') }}
         </RouterLink>
       </div>
     </section>
@@ -140,5 +142,21 @@ const sections = computed<Section[]>(() => {
         </div>
       </section>
     </div>
+
+    <!-- Bli medlem: self-service registration isn't wired up yet, so point
+         prospective members at the club mailbox. The wave backdrop sets off
+         a high-contrast card. -->
+    <section class="wave-bg px-4 py-14 sm:py-20">
+      <div class="mx-auto max-w-2xl rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+        <Anchor class="mx-auto h-8 w-8 text-slate-400" aria-hidden="true" />
+        <h2 class="mt-3 text-2xl font-bold text-slate-900">{{ t('home.join.title') }}</h2>
+        <p class="mt-3 text-slate-600">{{ t('home.join.comingSoon') }}</p>
+        <p class="mt-2 text-slate-600">
+          {{ t('home.join.contactPrefix') }}
+          <a :href="`mailto:${postEmail}`" class="font-semibold text-blue-700 underline hover:text-blue-900">{{ postEmail }}</a>
+          {{ t('home.join.contactSuffix') }}
+        </p>
+      </div>
+    </section>
   </div>
 </template>
