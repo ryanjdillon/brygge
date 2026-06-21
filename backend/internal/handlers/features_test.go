@@ -12,11 +12,10 @@ import (
 func TestHandleGetFeatures(t *testing.T) {
 	cfg := &config.Config{
 		Features: config.Features{
-			Bookings:       true,
-			Projects:       false,
-			Calendar:       true,
-			Commerce:       false,
-			Communications: true,
+			Bookings: true,
+			Projects: false,
+			Calendar: true,
+			Commerce: false,
 		},
 	}
 
@@ -36,11 +35,10 @@ func TestHandleGetFeatures(t *testing.T) {
 	}
 
 	expected := map[string]bool{
-		"bookings":       true,
-		"projects":       false,
-		"calendar":       true,
-		"commerce":       false,
-		"communications": true,
+		"bookings": true,
+		"projects": false,
+		"calendar": true,
+		"commerce": false,
 	}
 
 	for key, want := range expected {
@@ -58,13 +56,12 @@ func TestHandleGetFeatures(t *testing.T) {
 func TestHandleGetFeaturesAllEnabled(t *testing.T) {
 	cfg := &config.Config{
 		Features: config.Features{
-			Bookings:       true,
-			Projects:       true,
-			Calendar:       true,
-			Commerce:       true,
-			Communications: true,
-			Accounting:     true,
-			DemoAuth:       true,
+			Bookings:   true,
+			Projects:   true,
+			Calendar:   true,
+			Commerce:   true,
+			Accounting: true,
+			DemoAuth:   true,
 		},
 	}
 

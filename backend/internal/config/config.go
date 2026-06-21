@@ -56,43 +56,42 @@ type Config struct {
 
 	// Optional integrations
 	// SMTP (self-hosted mail).
-	SMTPHost     string
-	SMTPPort     int
-	SMTPUsername string
-	SMTPPassword string
-	EmailFrom    string
-	EmailReplyTo string
+	SMTPHost        string
+	SMTPPort        int
+	SMTPUsername    string
+	SMTPPassword    string
+	EmailFrom       string
+	EmailReplyTo    string
 	AnthropicAPIKey string
 
 	// Stalwart admin (DIL-275/276). Empty values disable the shared-inbox
 	// reconciler; the rest of the app keeps working unaffected.
-	StalwartAdminURL      string
-	StalwartAdminUser     string
-	StalwartAdminPassword string
-	StalwartAdminToken    string // pre-encoded "Basic …" (alternative to user+pass)
+	StalwartAdminURL             string
+	StalwartAdminUser            string
+	StalwartAdminPassword        string
+	StalwartAdminToken           string // pre-encoded "Basic …" (alternative to user+pass)
 	BoardMailboxesPath           string
 	StalwartMailboxPasswordsPath string
 	ReconcilerDryRun             bool
 
 	// Database pool
-	DBMaxConns          int32
-	DBMinConns          int32
-	DBMaxConnLifetime   time.Duration
-	DBMaxConnIdleTime   time.Duration
-	DBStatementTimeout  string
+	DBMaxConns         int32
+	DBMinConns         int32
+	DBMaxConnLifetime  time.Duration
+	DBMaxConnIdleTime  time.Duration
+	DBStatementTimeout string
 
 	// Feature flags
 	Features Features
 }
 
 type Features struct {
-	Bookings       bool
-	Projects       bool
-	Calendar       bool
-	Commerce       bool
-	Communications bool
-	Accounting     bool
-	DemoAuth       bool
+	Bookings   bool
+	Projects   bool
+	Calendar   bool
+	Commerce   bool
+	Accounting bool
+	DemoAuth   bool
 }
 
 func Load() Config {
@@ -100,9 +99,9 @@ func Load() Config {
 		Port:        envInt("PORT", 8080),
 		DatabaseURL: envStr("DATABASE_URL", "postgres://brygge:brygge@localhost:5432/brygge?sslmode=disable"),
 		RedisURL:    envStr("REDIS_URL", "redis://localhost:6379/0"),
-		ClubSlug: envStr("CLUB_SLUG", "brygge"),
-		ClubName: envStr("CLUB_NAME", ""),
-		Domain:   envStr("DOMAIN", "localhost"),
+		ClubSlug:    envStr("CLUB_SLUG", "brygge"),
+		ClubName:    envStr("CLUB_NAME", ""),
+		Domain:      envStr("DOMAIN", "localhost"),
 
 		VippsTestMode:        envBool("VIPPS_TEST_MODE", true),
 		VippsMSN:             envStr("VIPPS_MSN", ""),
@@ -133,30 +132,29 @@ func Load() Config {
 		FreshTOTPWindow:   envDuration("AUTH_FRESH_TOTP_WINDOW", 10*time.Minute),
 		BulkSendThrottle:  envDuration("BULK_SEND_THROTTLE", 1*time.Second),
 
-		SMTPHost:     envStr("SMTP_HOST", ""),
-		SMTPPort:     envInt("SMTP_PORT", 587),
-		SMTPUsername: envStr("SMTP_USERNAME", ""),
-		SMTPPassword: envStr("SMTP_PASSWORD", ""),
-		EmailFrom:    envStr("EMAIL_FROM", ""),
-		EmailReplyTo: envStr("EMAIL_REPLY_TO", ""),
+		SMTPHost:        envStr("SMTP_HOST", ""),
+		SMTPPort:        envInt("SMTP_PORT", 587),
+		SMTPUsername:    envStr("SMTP_USERNAME", ""),
+		SMTPPassword:    envStr("SMTP_PASSWORD", ""),
+		EmailFrom:       envStr("EMAIL_FROM", ""),
+		EmailReplyTo:    envStr("EMAIL_REPLY_TO", ""),
 		AnthropicAPIKey: envStr("ANTHROPIC_API_KEY", ""),
 
-		StalwartAdminURL:      envStr("STALWART_ADMIN_URL", ""),
-		StalwartAdminUser:     envStr("STALWART_ADMIN_USER", "admin"),
-		StalwartAdminPassword: envStr("STALWART_ADMIN_PASSWORD", ""),
-		StalwartAdminToken:    envStr("STALWART_ADMIN_TOKEN", ""),
+		StalwartAdminURL:             envStr("STALWART_ADMIN_URL", ""),
+		StalwartAdminUser:            envStr("STALWART_ADMIN_USER", "admin"),
+		StalwartAdminPassword:        envStr("STALWART_ADMIN_PASSWORD", ""),
+		StalwartAdminToken:           envStr("STALWART_ADMIN_TOKEN", ""),
 		BoardMailboxesPath:           envStr("BRYGGE_MAILBOXES_PATH", ""),
 		StalwartMailboxPasswordsPath: envStr("STALWART_MAILBOX_PASSWORDS_PATH", ""),
 		ReconcilerDryRun:             envBool("BRYGGE_RECONCILER_DRY_RUN", false),
 
 		Features: Features{
-			Bookings:       envBool("FEATURE_BOOKINGS", true),
-			Projects:       envBool("FEATURE_PROJECTS", true),
-			Calendar:       envBool("FEATURE_CALENDAR", true),
-			Commerce:       envBool("FEATURE_COMMERCE", true),
-			Communications: envBool("FEATURE_COMMUNICATIONS", true),
-			Accounting:     envBool("FEATURE_ACCOUNTING", false),
-			DemoAuth:       envBool("FEATURE_DEMO_AUTH", false),
+			Bookings:   envBool("FEATURE_BOOKINGS", true),
+			Projects:   envBool("FEATURE_PROJECTS", true),
+			Calendar:   envBool("FEATURE_CALENDAR", true),
+			Commerce:   envBool("FEATURE_COMMERCE", true),
+			Accounting: envBool("FEATURE_ACCOUNTING", false),
+			DemoAuth:   envBool("FEATURE_DEMO_AUTH", false),
 		},
 	}
 }

@@ -7,7 +7,7 @@ export interface NavItem {
   icon: Component
   label: string
   roles?: string[]
-  feature?: 'bookings' | 'projects' | 'calendar' | 'commerce' | 'communications' | 'accounting'
+  feature?: 'bookings' | 'projects' | 'calendar' | 'commerce' | 'accounting'
   badge?: number
 }
 

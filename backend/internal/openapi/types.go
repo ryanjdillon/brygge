@@ -77,11 +77,10 @@ type HealthResponse struct {
 // --- Features ---
 
 type FeaturesResponse struct {
-	Bookings       bool `json:"bookings" doc:"Bookings module enabled"`
-	Projects       bool `json:"projects" doc:"Projects module enabled"`
-	Calendar       bool `json:"calendar" doc:"Calendar module enabled"`
-	Commerce       bool `json:"commerce" doc:"Commerce module enabled"`
-	Communications bool `json:"communications" doc:"Communications module enabled"`
+	Bookings bool `json:"bookings" doc:"Bookings module enabled"`
+	Projects bool `json:"projects" doc:"Projects module enabled"`
+	Calendar bool `json:"calendar" doc:"Calendar module enabled"`
+	Commerce bool `json:"commerce" doc:"Commerce module enabled"`
 }
 
 // --- Weather ---
@@ -152,24 +151,24 @@ type BookingResource struct {
 }
 
 type Booking struct {
-	ID             string     `json:"id" doc:"Booking UUID"`
-	ResourceID     string     `json:"resource_id" doc:"Resource UUID"`
-	ResourceUnitID *string    `json:"resource_unit_id,omitempty" doc:"Resource unit UUID"`
-	UserID         *string    `json:"user_id,omitempty" doc:"Booking member UUID"`
-	ClubID         string     `json:"club_id" doc:"Club UUID"`
-	StartDate      time.Time  `json:"start_date" doc:"Start date (ISO 8601)"`
-	EndDate        time.Time  `json:"end_date" doc:"End date (ISO 8601)"`
-	Status         string     `json:"status" enum:"pending,confirmed,cancelled,completed,no_show" doc:"Booking status"`
-	GuestName      *string    `json:"guest_name,omitempty" doc:"Guest name"`
-	GuestEmail     *string    `json:"guest_email,omitempty" doc:"Guest email"`
-	GuestPhone     *string    `json:"guest_phone,omitempty" doc:"Guest phone"`
-	PaymentID      *string    `json:"payment_id,omitempty" doc:"Payment UUID"`
-	BoatLengthM    *float64   `json:"boat_length_m,omitempty" doc:"Boat length in metres"`
-	BoatBeamM      *float64   `json:"boat_beam_m,omitempty" doc:"Boat beam in metres"`
-	BoatDraftM     *float64   `json:"boat_draft_m,omitempty" doc:"Boat draft in metres"`
-	Notes          string     `json:"notes" doc:"Optional notes"`
-	CreatedAt      time.Time  `json:"created_at" doc:"Creation timestamp"`
-	UpdatedAt      time.Time  `json:"updated_at" doc:"Last update timestamp"`
+	ID             string    `json:"id" doc:"Booking UUID"`
+	ResourceID     string    `json:"resource_id" doc:"Resource UUID"`
+	ResourceUnitID *string   `json:"resource_unit_id,omitempty" doc:"Resource unit UUID"`
+	UserID         *string   `json:"user_id,omitempty" doc:"Booking member UUID"`
+	ClubID         string    `json:"club_id" doc:"Club UUID"`
+	StartDate      time.Time `json:"start_date" doc:"Start date (ISO 8601)"`
+	EndDate        time.Time `json:"end_date" doc:"End date (ISO 8601)"`
+	Status         string    `json:"status" enum:"pending,confirmed,cancelled,completed,no_show" doc:"Booking status"`
+	GuestName      *string   `json:"guest_name,omitempty" doc:"Guest name"`
+	GuestEmail     *string   `json:"guest_email,omitempty" doc:"Guest email"`
+	GuestPhone     *string   `json:"guest_phone,omitempty" doc:"Guest phone"`
+	PaymentID      *string   `json:"payment_id,omitempty" doc:"Payment UUID"`
+	BoatLengthM    *float64  `json:"boat_length_m,omitempty" doc:"Boat length in metres"`
+	BoatBeamM      *float64  `json:"boat_beam_m,omitempty" doc:"Boat beam in metres"`
+	BoatDraftM     *float64  `json:"boat_draft_m,omitempty" doc:"Boat draft in metres"`
+	Notes          string    `json:"notes" doc:"Optional notes"`
+	CreatedAt      time.Time `json:"created_at" doc:"Creation timestamp"`
+	UpdatedAt      time.Time `json:"updated_at" doc:"Last update timestamp"`
 }
 
 type BookingAdmin struct {
@@ -254,29 +253,29 @@ type DirectoryMember struct {
 }
 
 type MemberProfile struct {
-	ID          string    `json:"id" doc:"Member UUID"`
-	ClubID      string    `json:"club_id" doc:"Club UUID"`
-	Email       string    `json:"email" doc:"Email address"`
-	FullName    string    `json:"full_name" doc:"Full name"`
-	Phone       string    `json:"phone" doc:"Phone number"`
-	AddressLine string    `json:"address_line" doc:"Street address"`
-	PostalCode  string    `json:"postal_code" doc:"Postal code"`
-	City        string    `json:"city" doc:"City"`
-	IsLocal     bool      `json:"is_local" doc:"Whether member is a local resident"`
-	HideInDirectory bool  `json:"hide_in_directory" doc:"Hide email/phone from member directory and harbor map"`
-	CreatedAt   time.Time `json:"created_at" doc:"Creation timestamp"`
-	UpdatedAt   time.Time `json:"updated_at" doc:"Last update timestamp"`
+	ID              string    `json:"id" doc:"Member UUID"`
+	ClubID          string    `json:"club_id" doc:"Club UUID"`
+	Email           string    `json:"email" doc:"Email address"`
+	FullName        string    `json:"full_name" doc:"Full name"`
+	Phone           string    `json:"phone" doc:"Phone number"`
+	AddressLine     string    `json:"address_line" doc:"Street address"`
+	PostalCode      string    `json:"postal_code" doc:"Postal code"`
+	City            string    `json:"city" doc:"City"`
+	IsLocal         bool      `json:"is_local" doc:"Whether member is a local resident"`
+	HideInDirectory bool      `json:"hide_in_directory" doc:"Hide email/phone from member directory and harbor map"`
+	CreatedAt       time.Time `json:"created_at" doc:"Creation timestamp"`
+	UpdatedAt       time.Time `json:"updated_at" doc:"Last update timestamp"`
 }
 
 type MemberSlip struct {
-	SlipID   string   `json:"slip_id" doc:"Slip UUID"`
-	Number   string   `json:"number" doc:"Slip number"`
-	Section  string   `json:"section" doc:"Harbor section"`
-	LengthM  *float64 `json:"length_m,omitempty" doc:"Length in metres"`
-	WidthM   *float64 `json:"width_m,omitempty" doc:"Width in metres"`
-	DepthM   *float64 `json:"depth_m,omitempty" doc:"Depth in metres"`
-	Status   string   `json:"status" doc:"Slip status"`
-	AssignedAt string `json:"assigned_at" doc:"Assignment date"`
+	SlipID     string   `json:"slip_id" doc:"Slip UUID"`
+	Number     string   `json:"number" doc:"Slip number"`
+	Section    string   `json:"section" doc:"Harbor section"`
+	LengthM    *float64 `json:"length_m,omitempty" doc:"Length in metres"`
+	WidthM     *float64 `json:"width_m,omitempty" doc:"Width in metres"`
+	DepthM     *float64 `json:"depth_m,omitempty" doc:"Depth in metres"`
+	Status     string   `json:"status" doc:"Slip status"`
+	AssignedAt string   `json:"assigned_at" doc:"Assignment date"`
 }
 
 type DashboardSlip struct {
@@ -494,24 +493,24 @@ type MaterialItem struct {
 }
 
 type Task struct {
-	ID               string        `json:"id" doc:"Task UUID"`
-	ProjectID        string        `json:"project_id" doc:"Project UUID"`
-	ClubID           string        `json:"club_id" doc:"Club UUID"`
-	Title            string        `json:"title" doc:"Task title"`
-	Description      string        `json:"description" doc:"Task description"`
-	AssigneeID       *string       `json:"assignee_id" doc:"Assignee user UUID"`
-	Status           string        `json:"status" doc:"Task status"`
-	Priority         string        `json:"priority" doc:"Task priority"`
-	DueDate          *string       `json:"due_date,omitempty" doc:"Due date"`
-	CreatedBy        string        `json:"created_by" doc:"Creator user UUID"`
-	CreatedAt        time.Time     `json:"created_at" doc:"Creation timestamp"`
-	UpdatedAt        time.Time     `json:"updated_at" doc:"Last update timestamp"`
-	EstimatedHours   *float64      `json:"estimated_hours" doc:"Estimated hours"`
-	ActualHours      *float64      `json:"actual_hours" doc:"Actual hours spent"`
-	ResponsibleID    *string       `json:"responsible_id" doc:"Responsible person UUID"`
-	MaxCollaborators int           `json:"max_collaborators" doc:"Maximum collaborators"`
+	ID               string         `json:"id" doc:"Task UUID"`
+	ProjectID        string         `json:"project_id" doc:"Project UUID"`
+	ClubID           string         `json:"club_id" doc:"Club UUID"`
+	Title            string         `json:"title" doc:"Task title"`
+	Description      string         `json:"description" doc:"Task description"`
+	AssigneeID       *string        `json:"assignee_id" doc:"Assignee user UUID"`
+	Status           string         `json:"status" doc:"Task status"`
+	Priority         string         `json:"priority" doc:"Task priority"`
+	DueDate          *string        `json:"due_date,omitempty" doc:"Due date"`
+	CreatedBy        string         `json:"created_by" doc:"Creator user UUID"`
+	CreatedAt        time.Time      `json:"created_at" doc:"Creation timestamp"`
+	UpdatedAt        time.Time      `json:"updated_at" doc:"Last update timestamp"`
+	EstimatedHours   *float64       `json:"estimated_hours" doc:"Estimated hours"`
+	ActualHours      *float64       `json:"actual_hours" doc:"Actual hours spent"`
+	ResponsibleID    *string        `json:"responsible_id" doc:"Responsible person UUID"`
+	MaxCollaborators int            `json:"max_collaborators" doc:"Maximum collaborators"`
 	Materials        []MaterialItem `json:"materials" doc:"Required materials"`
-	ParticipantCount int           `json:"participant_count" doc:"Number of participants"`
+	ParticipantCount int            `json:"participant_count" doc:"Number of participants"`
 }
 
 type GroupedTasks struct {
@@ -602,12 +601,12 @@ type DocumentComment struct {
 // --- Financials ---
 
 type FinancialSummary struct {
-	TotalDuesReceived   float64 `json:"total_dues_received" doc:"Total dues received"`
-	TotalOutstanding    float64 `json:"total_outstanding" doc:"Total outstanding amount"`
-	TotalOverdue        float64 `json:"total_overdue" doc:"Total overdue amount"`
+	TotalDuesReceived              float64 `json:"total_dues_received" doc:"Total dues received"`
+	TotalOutstanding               float64 `json:"total_outstanding" doc:"Total outstanding amount"`
+	TotalOverdue                   float64 `json:"total_overdue" doc:"Total overdue amount"`
 	TotalHarborMembershipCollected float64 `json:"total_harbor_membership_collected" doc:"Total harbor membership collected"`
-	TotalBookingRevenue float64 `json:"total_booking_revenue" doc:"Total booking revenue"`
-	Year                *int    `json:"year,omitempty" doc:"Financial year"`
+	TotalBookingRevenue            float64 `json:"total_booking_revenue" doc:"Total booking revenue"`
+	Year                           *int    `json:"year,omitempty" doc:"Financial year"`
 }
 
 type Payment struct {
@@ -704,24 +703,24 @@ type LegalDocument struct {
 // --- Admin Users ---
 
 type AdminUser struct {
-	ID                 string    `json:"id" doc:"User UUID"`
-	FirstName          string    `json:"first_name" doc:"Given name"`
-	LastName           string    `json:"last_name" doc:"Family name"`
-	FullName           string    `json:"full_name" doc:"Computed: first_name + ' ' + last_name (kept for backwards compat — DIL-230 will drop)"`
-	Email              string    `json:"email" doc:"Email address"`
-	Phone              string    `json:"phone" doc:"Phone number"`
-	AddressLine        string    `json:"address_line" doc:"Street address"`
-	PostalCode         string    `json:"postal_code" doc:"Postal code"`
-	City               string    `json:"city" doc:"City"`
-	IsLocal            bool      `json:"is_local" doc:"Local-resident rate eligible"`
-	AdminNotes         string    `json:"admin_notes" doc:"Free-text admin notes (admin-only)"`
+	ID                 string                `json:"id" doc:"User UUID"`
+	FirstName          string                `json:"first_name" doc:"Given name"`
+	LastName           string                `json:"last_name" doc:"Family name"`
+	FullName           string                `json:"full_name" doc:"Computed: first_name + ' ' + last_name (kept for backwards compat — DIL-230 will drop)"`
+	Email              string                `json:"email" doc:"Email address"`
+	Phone              string                `json:"phone" doc:"Phone number"`
+	AddressLine        string                `json:"address_line" doc:"Street address"`
+	PostalCode         string                `json:"postal_code" doc:"Postal code"`
+	City               string                `json:"city" doc:"City"`
+	IsLocal            bool                  `json:"is_local" doc:"Local-resident rate eligible"`
+	AdminNotes         string                `json:"admin_notes" doc:"Free-text admin notes (admin-only)"`
 	Slips              []AdminUserSlipDetail `json:"slips" doc:"All active slip assignments for the user"`
-	Roles              []string  `json:"roles" doc:"Assigned roles"`
-	SlipID             *string   `json:"slip_id,omitempty" doc:"Active slip assignment slip UUID, if any"`
-	SlipNumber         string    `json:"slip_number" doc:"Active slip number (empty when unassigned)"`
-	SlipSection        string    `json:"slip_section" doc:"Active slip section (empty when unassigned)"`
-	SlipAssignmentType string    `json:"slip_assignment_type" doc:"permanent | seasonal | '' when unassigned"`
-	CreatedAt          time.Time `json:"created_at" doc:"Creation timestamp"`
+	Roles              []string              `json:"roles" doc:"Assigned roles"`
+	SlipID             *string               `json:"slip_id,omitempty" doc:"Active slip assignment slip UUID, if any"`
+	SlipNumber         string                `json:"slip_number" doc:"Active slip number (empty when unassigned)"`
+	SlipSection        string                `json:"slip_section" doc:"Active slip section (empty when unassigned)"`
+	SlipAssignmentType string                `json:"slip_assignment_type" doc:"permanent | seasonal | '' when unassigned"`
+	CreatedAt          time.Time             `json:"created_at" doc:"Creation timestamp"`
 }
 
 // AdminUserSlipDetail is one row of AdminUser.Slips — the read-side

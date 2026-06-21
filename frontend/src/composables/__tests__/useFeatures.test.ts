@@ -14,7 +14,6 @@ describe('useFeatures', () => {
     expect(isEnabled('projects')).toBe(true)
     expect(isEnabled('calendar')).toBe(true)
     expect(isEnabled('commerce')).toBe(true)
-    expect(isEnabled('communications')).toBe(true)
   })
 
   it('features ref contains all feature keys', () => {
@@ -24,7 +23,6 @@ describe('useFeatures', () => {
       projects: true,
       calendar: true,
       commerce: true,
-      communications: true,
       // DB-driven per-club flag; defaults off until loaded from the API.
       feedback: false,
     })

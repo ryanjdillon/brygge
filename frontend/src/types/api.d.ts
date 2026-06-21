@@ -3392,8 +3392,6 @@ export interface components {
             calendar: boolean;
             /** @description Commerce module enabled */
             commerce: boolean;
-            /** @description Communications module enabled */
-            communications: boolean;
             /** @description Projects module enabled */
             projects: boolean;
         };

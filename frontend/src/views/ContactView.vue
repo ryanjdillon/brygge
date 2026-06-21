@@ -3,7 +3,6 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { MapPin, Phone, Radio, Mail, MessageCircle } from 'lucide-vue-next'
 import { useClubStore } from '@/stores/club'
-import { useFeatures } from '@/composables/useFeatures'
 import EmailLink from '@/components/EmailLink.vue'
 import Input from '@/components/ui/form/Input.vue'
 import Textarea from '@/components/ui/form/Textarea.vue'
@@ -17,11 +16,9 @@ club.ensureLoaded()
 // resolve the API path as a build-time asset and fail the rollup.
 const clubLogoUrl = '/api/v1/club/logo'
 
-const { isEnabled } = useFeatures()
-// Matrix room is part of the Communications module — drop the row when
-// the module is off so the page doesn't promise a chat that isn't
-// running.
-const showMatrix = computed(() => isEnabled('communications'))
+// Matrix/forum chat is momentarily disabled (BRY-191); hide the row so
+// the page doesn't promise a chat that isn't running.
+const showMatrix = false
 
 interface BoardContact {
   roleKey: string

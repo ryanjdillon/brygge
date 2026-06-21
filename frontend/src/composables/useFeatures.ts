@@ -9,7 +9,6 @@ const features = ref<FeaturesMap>({
   projects: true,
   calendar: true,
   commerce: true,
-  communications: true,
   feedback: false,
 })
 

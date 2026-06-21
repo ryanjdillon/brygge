@@ -257,13 +257,12 @@ type clubFinancialSettings struct {
 	MotorhomeCTADescription string `json:"motorhome_cta_description"`
 	// Per-club module toggles. Admins flip these from Site settings;
 	// the public /api/v1/features endpoint reads them too.
-	FeatureBookings       bool `json:"feature_bookings"`
-	FeatureProjects       bool `json:"feature_projects"`
-	FeatureCalendar       bool `json:"feature_calendar"`
-	FeatureCommerce       bool `json:"feature_commerce"`
-	FeatureCommunications bool `json:"feature_communications"`
-	FeatureAccounting     bool `json:"feature_accounting"`
-	HasAnthropicKey       bool `json:"has_anthropic_key"`
+	FeatureBookings   bool `json:"feature_bookings"`
+	FeatureProjects   bool `json:"feature_projects"`
+	FeatureCalendar   bool `json:"feature_calendar"`
+	FeatureCommerce   bool `json:"feature_commerce"`
+	FeatureAccounting bool `json:"feature_accounting"`
+	HasAnthropicKey   bool `json:"has_anthropic_key"`
 }
 
 // HandleGetFinancialSettings returns the club's invoice-relevant
@@ -295,7 +294,7 @@ func (h *ClubSettingsHandler) HandleGetFinancialSettings(w http.ResponseWriter, 
 		        COALESCE(motorhome_checkin, ''), COALESCE(motorhome_rules, ''),
 		        COALESCE(motorhome_cta_title, ''), COALESCE(motorhome_cta_description, ''),
 		        feature_bookings, feature_projects, feature_calendar,
-		        feature_commerce, feature_communications, feature_accounting,
+		        feature_commerce, feature_accounting,
 		        (anthropic_api_key IS NOT NULL AND anthropic_api_key != '')
 		   FROM clubs WHERE id = $1`,
 		claims.ClubID,
@@ -316,7 +315,7 @@ func (h *ClubSettingsHandler) HandleGetFinancialSettings(w http.ResponseWriter, 
 		&s.MotorhomeCheckin, &s.MotorhomeRules,
 		&s.MotorhomeCTATitle, &s.MotorhomeCTADescription,
 		&s.FeatureBookings, &s.FeatureProjects, &s.FeatureCalendar,
-		&s.FeatureCommerce, &s.FeatureCommunications, &s.FeatureAccounting,
+		&s.FeatureCommerce, &s.FeatureAccounting,
 		&s.HasAnthropicKey); err != nil {
 		h.log.Error().Err(err).Msg("load financial settings")
 		Error(w, http.StatusInternalServerError, "internal error")
@@ -354,7 +353,6 @@ type updateFinancialSettingsRequest struct {
 	FeatureProjects         *bool    `json:"feature_projects,omitempty"`
 	FeatureCalendar         *bool    `json:"feature_calendar,omitempty"`
 	FeatureCommerce         *bool    `json:"feature_commerce,omitempty"`
-	FeatureCommunications   *bool    `json:"feature_communications,omitempty"`
 	FeatureAccounting       *bool    `json:"feature_accounting,omitempty"`
 	AnthropicAPIKey         *string  `json:"anthropic_api_key,omitempty"`
 }
@@ -413,9 +411,8 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		   feature_projects          = COALESCE($27, feature_projects),
 		   feature_calendar          = COALESCE($28, feature_calendar),
 		   feature_commerce          = COALESCE($29, feature_commerce),
-		   feature_communications    = COALESCE($30, feature_communications),
-		   feature_accounting        = COALESCE($31, feature_accounting),
-		   anthropic_api_key         = COALESCE($32, anthropic_api_key)
+		   feature_accounting        = COALESCE($30, feature_accounting),
+		   anthropic_api_key         = COALESCE($31, anthropic_api_key)
 		 WHERE id = $1`,
 		claims.ClubID, req.OrgNumber, req.Address, req.Phone, req.VHFChannel,
 		req.Latitude, req.Longitude,
@@ -428,7 +425,7 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		req.MotorhomeCheckin, req.MotorhomeRules,
 		req.MotorhomeCTATitle, req.MotorhomeCTADescription,
 		req.FeatureBookings, req.FeatureProjects, req.FeatureCalendar,
-		req.FeatureCommerce, req.FeatureCommunications, req.FeatureAccounting,
+		req.FeatureCommerce, req.FeatureAccounting,
 		anthropicKey,
 	); err != nil {
 		h.log.Error().Err(err).Msg("update financial settings")

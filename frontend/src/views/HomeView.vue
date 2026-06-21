@@ -23,7 +23,7 @@ club.ensureLoaded()
 
 const clubName = computed(() => club.name || 'Brygge')
 
-type FeatureFlag = 'bookings' | 'projects' | 'calendar' | 'commerce' | 'communications' | 'accounting'
+type FeatureFlag = 'bookings' | 'projects' | 'calendar' | 'commerce' | 'accounting'
 
 interface Tile {
   icon: typeof Anchor

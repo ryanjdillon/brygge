@@ -3,7 +3,7 @@ import { reactive, ref, computed, watch, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
-import { ArrowLeft, Calculator, Calendar, CalendarCheck, FolderKanban, Megaphone, Save, ShoppingBag } from 'lucide-vue-next'
+import { ArrowLeft, Calculator, Calendar, CalendarCheck, FolderKanban, Save, ShoppingBag } from 'lucide-vue-next'
 import { useFreshTotp } from '@/composables/useFreshTotp'
 import { useFeatures } from '@/composables/useFeatures'
 import FileInput from '@/components/ui/form/FileInput.vue'
@@ -159,7 +159,6 @@ const features = reactive({
   projects: true,
   calendar: true,
   commerce: true,
-  communications: true,
   accounting: true,
 })
 
@@ -169,7 +168,6 @@ const moduleRows: { key: ModuleKey; icon: typeof Calculator; descriptionKey?: st
   { key: 'projects', icon: FolderKanban },
   { key: 'calendar', icon: Calendar },
   { key: 'commerce', icon: ShoppingBag },
-  { key: 'communications', icon: Megaphone },
   { key: 'accounting', icon: Calculator },
 ]
 
@@ -200,7 +198,6 @@ async function load() {
     features.projects = body.feature_projects ?? true
     features.calendar = body.feature_calendar ?? true
     features.commerce = body.feature_commerce ?? true
-    features.communications = body.feature_communications ?? true
     features.accounting = body.feature_accounting ?? true
     hasAnthropicKey.value = !!body.has_anthropic_key
   } catch (e) {
@@ -296,7 +293,6 @@ async function save() {
         feature_projects: features.projects,
         feature_calendar: features.calendar,
         feature_commerce: features.commerce,
-        feature_communications: features.communications,
         feature_accounting: features.accounting,
       }),
     })

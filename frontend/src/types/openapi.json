@@ -1820,10 +1820,6 @@
             "description": "Commerce module enabled",
             "type": "boolean"
           },
-          "communications": {
-            "description": "Communications module enabled",
-            "type": "boolean"
-          },
           "projects": {
             "description": "Projects module enabled",
             "type": "boolean"
@@ -1833,8 +1829,7 @@
           "bookings",
           "projects",
           "calendar",
-          "commerce",
-          "communications"
+          "commerce"
         ],
         "type": "object"
       },

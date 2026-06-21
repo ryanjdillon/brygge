@@ -64,7 +64,7 @@ const navGroups = computed<NavGroup[]>(() => {
       titleKey: 'portal.groupAccount',
       items: [
         { to: '/portal/profile', icon: User, label: t('portal.sidebar.profile') },
-        { to: '/portal/notifications', icon: Bell, label: t('notifications.title'), feature: 'communications' },
+        { to: '/portal/notifications', icon: Bell, label: t('notifications.title') },
         { to: '/portal/security', icon: ShieldCheck, label: t('security.title') },
         { to: '/portal/privacy', icon: ShieldCheck, label: t('gdpr.title') },
       ],

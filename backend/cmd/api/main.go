@@ -223,7 +223,9 @@ func main() {
 	adminDocumentsHandler := handlers.NewAdminDocumentsHandler(db, &cfg, s3Client, log)
 	contentDocumentsHandler := handlers.NewContentDocumentsHandler(db, log)
 	aiDocumentsHandler := handlers.NewAIDocumentsHandler(db, claudeClient, &cfg, log)
-	forumHandler := handlers.NewForumHandler(db, &cfg, log)
+	// Forum momentarily disabled — see BRY-191. Handler retained in
+	// internal/handlers/forum.go; re-instantiate here to re-enable.
+	// forumHandler := handlers.NewForumHandler(db, &cfg, log)
 	bookingsHandler := handlers.NewBookingsHandler(db, rdb, &cfg, log)
 	calendarHandler := handlers.NewCalendarHandler(db, &cfg, log)
 	membersHandler := handlers.NewMembersHandler(db, &cfg, log)
@@ -572,28 +574,28 @@ func main() {
 			r.Get("/rebates", slipSharesHandler.HandleListMyRebates)
 		})
 
-		if cfg.Features.Communications {
-			r.Route("/push", func(r chi.Router) {
-				r.Use(middleware.AuthenticateSession(sessionService))
-				r.Get("/vapid-key", notificationsHandler.HandleGetVAPIDKey)
-				r.Post("/subscribe", notificationsHandler.HandleSubscribe)
-				r.Delete("/subscribe", notificationsHandler.HandleUnsubscribe)
-			})
+		r.Route("/push", func(r chi.Router) {
+			r.Use(middleware.AuthenticateSession(sessionService))
+			r.Get("/vapid-key", notificationsHandler.HandleGetVAPIDKey)
+			r.Post("/subscribe", notificationsHandler.HandleSubscribe)
+			r.Delete("/subscribe", notificationsHandler.HandleUnsubscribe)
+		})
 
-			r.Route("/members/me/notifications", func(r chi.Router) {
-				r.Use(middleware.AuthenticateSession(sessionService))
-				r.Get("/", notificationsHandler.HandleGetPreferences)
-				r.Put("/", notificationsHandler.HandleUpdatePreferences)
-			})
+		r.Route("/members/me/notifications", func(r chi.Router) {
+			r.Use(middleware.AuthenticateSession(sessionService))
+			r.Get("/", notificationsHandler.HandleGetPreferences)
+			r.Put("/", notificationsHandler.HandleUpdatePreferences)
+		})
 
-			r.Route("/forum", func(r chi.Router) {
-				r.Use(middleware.AuthenticateSession(sessionService))
-				r.Get("/rooms", forumHandler.HandleListRooms)
-				r.Get("/rooms/{roomID}/messages", forumHandler.HandleGetRoomMessages)
-				r.Post("/rooms/{roomID}/messages", forumHandler.HandleSendMessage)
-				r.Get("/rooms/{roomID}/members", forumHandler.HandleGetRoomMembers)
-			})
-		}
+		// Forum momentarily disabled — see BRY-191. Uncomment (and the
+		// forumHandler instantiation above) to re-enable.
+		// r.Route("/forum", func(r chi.Router) {
+		// 	r.Use(middleware.AuthenticateSession(sessionService))
+		// 	r.Get("/rooms", forumHandler.HandleListRooms)
+		// 	r.Get("/rooms/{roomID}/messages", forumHandler.HandleGetRoomMessages)
+		// 	r.Post("/rooms/{roomID}/messages", forumHandler.HandleSendMessage)
+		// 	r.Get("/rooms/{roomID}/members", forumHandler.HandleGetRoomMembers)
+		// })
 
 		if cfg.Features.Projects {
 			r.Route("/projects", func(r chi.Router) {
@@ -722,17 +724,15 @@ func main() {
 					r.Post("/{boatID}/confirm", boatModelsHandler.HandleConfirmBoat)
 				})
 
-				if cfg.Features.Communications {
-					r.Route("/broadcasts", func(r chi.Router) {
-						r.Use(middleware.RequireRole("board", "admin"))
-						r.Get("/", broadcastsHandler.HandleList)
-						r.Get("/{id}", broadcastsHandler.HandleGet)
-						// Retry re-sends mail; gate on a fresh TOTP re-verify,
-						// same posture as the inbox send path.
-						r.With(middleware.RequireFreshTOTPDefault()).
-							Post("/{id}/retry", broadcastsHandler.HandleRetry)
-					})
-				}
+				r.Route("/broadcasts", func(r chi.Router) {
+					r.Use(middleware.RequireRole("board", "admin"))
+					r.Get("/", broadcastsHandler.HandleList)
+					r.Get("/{id}", broadcastsHandler.HandleGet)
+					// Retry re-sends mail; gate on a fresh TOTP re-verify,
+					// same posture as the inbox send path.
+					r.With(middleware.RequireFreshTOTPDefault()).
+						Post("/{id}/retry", broadcastsHandler.HandleRetry)
+				})
 
 				// One /financials block. Sub-paths are gated by the right
 				// feature flag inline. Splitting into two r.Route calls
@@ -1051,14 +1051,12 @@ func main() {
 					r.Delete("/{docID}", contentDocumentsHandler.HandleAdminDelete)
 				})
 
-				if cfg.Features.Communications {
-					r.Route("/notifications", func(r chi.Router) {
-						r.Use(middleware.RequireRole("board", "admin"))
-						r.Get("/config", notificationsHandler.HandleGetConfig)
-						r.Put("/config", notificationsHandler.HandleUpdateConfig)
-						r.Post("/test", notificationsHandler.HandleTestPush)
-					})
-				}
+				r.Route("/notifications", func(r chi.Router) {
+					r.Use(middleware.RequireRole("board", "admin"))
+					r.Get("/config", notificationsHandler.HandleGetConfig)
+					r.Put("/config", notificationsHandler.HandleUpdateConfig)
+					r.Post("/test", notificationsHandler.HandleTestPush)
+				})
 
 				r.Route("/gdpr", func(r chi.Router) {
 					r.Use(middleware.RequireRole("board", "admin"))

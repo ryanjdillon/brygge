@@ -29,19 +29,18 @@ func (h *FeaturesHandler) HandleGetFeatures(w http.ResponseWriter, r *http.Reque
 	projects := h.config.Features.Projects
 	calendar := h.config.Features.Calendar
 	commerce := h.config.Features.Commerce
-	communications := h.config.Features.Communications
 	accounting := h.config.Features.Accounting
 	feedback := false
 
 	if h.db != nil {
-		var b, p, c, co, cm, a, fb *bool
+		var b, p, c, co, a, fb *bool
 		err := h.db.QueryRow(r.Context(),
 			`SELECT feature_bookings, feature_projects, feature_calendar,
-			        feature_commerce, feature_communications, feature_accounting,
+			        feature_commerce, feature_accounting,
 			        feature_feedback
 			   FROM clubs WHERE slug = $1`,
 			h.config.ClubSlug,
-		).Scan(&b, &p, &c, &co, &cm, &a, &fb)
+		).Scan(&b, &p, &c, &co, &a, &fb)
 		if err == nil {
 			if b != nil {
 				bookings = *b
@@ -54,9 +53,6 @@ func (h *FeaturesHandler) HandleGetFeatures(w http.ResponseWriter, r *http.Reque
 			}
 			if co != nil {
 				commerce = *co
-			}
-			if cm != nil {
-				communications = *cm
 			}
 			if a != nil {
 				accounting = *a
@@ -71,13 +67,12 @@ func (h *FeaturesHandler) HandleGetFeatures(w http.ResponseWriter, r *http.Reque
 	}
 
 	JSON(w, http.StatusOK, map[string]bool{
-		"bookings":       bookings,
-		"projects":       projects,
-		"calendar":       calendar,
-		"commerce":       commerce,
-		"communications": communications,
-		"accounting":     accounting,
-		"feedback":       feedback,
-		"demo_auth":      h.config.Features.DemoAuth,
+		"bookings":   bookings,
+		"projects":   projects,
+		"calendar":   calendar,
+		"commerce":   commerce,
+		"accounting": accounting,
+		"feedback":   feedback,
+		"demo_auth":  h.config.Features.DemoAuth,
 	})
 }
