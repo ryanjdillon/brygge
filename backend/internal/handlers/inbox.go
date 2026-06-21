@@ -478,6 +478,14 @@ func (h *InboxHandler) HandleSend(w http.ResponseWriter, r *http.Request) {
 // standard email; any BCC, named group, or a mailbox configured to
 // auto-bcc its members makes it a tracked, fanned-out bulk send.
 func isBulkSend(req SendRequest, spec mail.MailboxSpec) bool {
+	// A threaded reply is always a direct, one-to-one send: it carries an
+	// In-Reply-To and must land in the original thread. Routing it through
+	// the bulk path would drop the threading reference and fan the reply out
+	// to every role member (the spec.BccMembers auto-bcc), so a reply from a
+	// bcc_members mailbox must stay on the single-send path.
+	if req.InReplyTo != "" {
+		return false
+	}
 	return len(req.Bcc) > 0 || len(req.BccGroups) > 0 || spec.BccMembers
 }
 

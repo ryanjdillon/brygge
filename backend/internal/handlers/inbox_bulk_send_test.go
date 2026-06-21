@@ -81,6 +81,12 @@ func TestIsBulkSend(t *testing.T) {
 		{"explicit bcc", SendRequest{Bcc: []emailAddr{{Email: "a@x.no"}}}, plain, true},
 		{"group", SendRequest{BccGroups: []string{"members"}}, plain, true},
 		{"auto bcc members mailbox", SendRequest{To: []emailAddr{{Email: "a@x.no"}}}, autoBcc, true},
+		// A threaded reply (carries In-Reply-To) is always a direct send,
+		// even from an auto-bcc mailbox: routing it through the bulk path
+		// would drop the threading reference and fan it out to every
+		// member instead of replying to the one sender.
+		{"reply from auto bcc mailbox", SendRequest{To: []emailAddr{{Email: "a@x.no"}}, InReplyTo: "<m1@x.no>"}, autoBcc, false},
+		{"reply from plain mailbox", SendRequest{To: []emailAddr{{Email: "a@x.no"}}, InReplyTo: "<m1@x.no>"}, plain, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
