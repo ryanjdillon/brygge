@@ -6,6 +6,7 @@ package broadcast
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -47,6 +48,9 @@ type New struct {
 	BodyHTML      string
 	// Recipients is a human-readable summary label (e.g. "Members, Board").
 	Recipients string
+	// Attachments is the combined JMAP attach body parts (attachments +
+	// inline images) re-attached to every fanned-out delivery. Nil if none.
+	Attachments []map[string]any
 }
 
 // Recipient is one resolved target for a bulk send. UserID is nil for
@@ -65,12 +69,20 @@ func (s *Store) Enqueue(ctx context.Context, n New, recipients []Recipient) (str
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck // no-op after commit
 
+	var attachmentsJSON []byte
+	if len(n.Attachments) > 0 {
+		attachmentsJSON, err = json.Marshal(n.Attachments)
+		if err != nil {
+			return "", fmt.Errorf("marshal attachments: %w", err)
+		}
+	}
+
 	var id string
 	if err := tx.QueryRow(ctx, `
-		INSERT INTO broadcasts (club_id, subject, body, body_html, recipients, source_address, sent_by, status)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO broadcasts (club_id, subject, body, body_html, recipients, source_address, sent_by, status, attachments)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING id`,
-		n.ClubID, n.Subject, n.BodyText, n.BodyHTML, n.Recipients, n.SourceAddress, n.SentBy, BroadcastPending,
+		n.ClubID, n.Subject, n.BodyText, n.BodyHTML, n.Recipients, n.SourceAddress, n.SentBy, BroadcastPending, attachmentsJSON,
 	).Scan(&id); err != nil {
 		return "", fmt.Errorf("insert broadcast: %w", err)
 	}
@@ -111,6 +123,7 @@ type Claimed struct {
 	BodyHTML      string
 	Email         string
 	Attempts      int
+	Attachments   []map[string]any
 }
 
 // ClaimPending atomically claims up to limit pending deliveries, flipping
@@ -133,7 +146,7 @@ func (s *Store) ClaimPending(ctx context.Context, limit int) ([]Claimed, error) 
 			RETURNING bd.id, bd.broadcast_id, bd.club_id, bd.email, bd.attempts
 		)
 		SELECT upd.id, upd.broadcast_id, upd.club_id, upd.email, upd.attempts,
-		       COALESCE(b.source_address, ''), b.subject, b.body, COALESCE(b.body_html, '')
+		       COALESCE(b.source_address, ''), b.subject, b.body, COALESCE(b.body_html, ''), b.attachments
 		FROM upd
 		JOIN broadcasts b ON b.id = upd.broadcast_id`,
 		DeliveryPending, limit, DeliverySending,
@@ -146,9 +159,15 @@ func (s *Store) ClaimPending(ctx context.Context, limit int) ([]Claimed, error) 
 	var out []Claimed
 	for rows.Next() {
 		var c Claimed
+		var attachmentsJSON []byte
 		if err := rows.Scan(&c.DeliveryID, &c.BroadcastID, &c.ClubID, &c.Email, &c.Attempts,
-			&c.SourceAddress, &c.Subject, &c.BodyText, &c.BodyHTML); err != nil {
+			&c.SourceAddress, &c.Subject, &c.BodyText, &c.BodyHTML, &attachmentsJSON); err != nil {
 			return nil, fmt.Errorf("scan claimed: %w", err)
+		}
+		if len(attachmentsJSON) > 0 {
+			if err := json.Unmarshal(attachmentsJSON, &c.Attachments); err != nil {
+				return nil, fmt.Errorf("unmarshal attachments: %w", err)
+			}
 		}
 		out = append(out, c)
 	}

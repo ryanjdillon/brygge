@@ -10,10 +10,11 @@ import (
 // OutgoingMessage is one rendered broadcast message bound for a single
 // recipient.
 type OutgoingMessage struct {
-	To       string
-	Subject  string
-	BodyText string
-	BodyHTML string
+	To              string
+	Subject         string
+	BodyText        string
+	BodyHTML        string
+	AttachBodyParts []map[string]any
 }
 
 // MessageSender delivers one broadcast message as the shared mailbox
@@ -137,10 +138,11 @@ func (w *Worker) drain(ctx context.Context) {
 // cap it becomes terminally 'failed'.
 func (w *Worker) process(ctx context.Context, c Claimed) {
 	err := w.sender.SendBroadcast(ctx, c.SourceAddress, OutgoingMessage{
-		To:       c.Email,
-		Subject:  c.Subject,
-		BodyText: c.BodyText,
-		BodyHTML: c.BodyHTML,
+		To:              c.Email,
+		Subject:         c.Subject,
+		BodyText:        c.BodyText,
+		BodyHTML:        c.BodyHTML,
+		AttachBodyParts: c.Attachments,
 	})
 	if err == nil {
 		if merr := w.store.Mark(ctx, c.DeliveryID, DeliverySent, ""); merr != nil {

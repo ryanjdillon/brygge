@@ -412,26 +412,6 @@ func (h *InboxHandler) HandleSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Build attachment body parts for JMAP Email/set.
-	var attachBodyParts []map[string]any
-	for _, att := range req.Attachments {
-		attachBodyParts = append(attachBodyParts, map[string]any{
-			"blobId":      att.BlobID,
-			"type":        att.Type,
-			"name":        att.Name,
-			"disposition": "attachment",
-		})
-	}
-	for _, img := range req.InlineImages {
-		attachBodyParts = append(attachBodyParts, map[string]any{
-			"blobId":      img.BlobID,
-			"type":        img.Type,
-			"name":        img.Name,
-			"disposition": "inline",
-			"cid":         img.CID,
-		})
-	}
-
 	sendReq := mail.SendEmailRequest{
 		To:              toMailAddrs(req.To),
 		Cc:              toMailAddrs(req.Cc),
@@ -440,7 +420,7 @@ func (h *InboxHandler) HandleSend(w http.ResponseWriter, r *http.Request) {
 		BodyHTML:        req.BodyHTML,
 		InReplyTo:       req.InReplyTo,
 		ActorID:         claims.UserID,
-		AttachBodyParts: attachBodyParts,
+		AttachBodyParts: buildAttachBodyParts(req),
 	}
 	if req.InReplyTo != "" {
 		sendReq.References = []string{req.InReplyTo}
@@ -524,14 +504,6 @@ func (h *InboxHandler) handleBulkSend(w http.ResponseWriter, r *http.Request, sp
 		return
 	}
 
-	if len(req.Attachments) > 0 || len(req.InlineImages) > 0 {
-		// Bulk sends carry text/HTML only for now — attachments aren't
-		// persisted in the delivery queue yet. Surfaced to the user via
-		// the compose UX (BRY-167); logged here so it isn't silent.
-		h.log.Warn().Str("address", spec.Address).Int("attachments", len(req.Attachments)+len(req.InlineImages)).
-			Msg("bulk send dropping attachments (not yet supported)")
-	}
-
 	id, err := h.broadcasts.Enqueue(ctx, bcast.New{
 		ClubID:        claims.ClubID,
 		SentBy:        claims.UserID,
@@ -540,6 +512,7 @@ func (h *InboxHandler) handleBulkSend(w http.ResponseWriter, r *http.Request, sp
 		BodyText:      req.BodyText,
 		BodyHTML:      req.BodyHTML,
 		Recipients:    summary,
+		Attachments:   buildAttachBodyParts(req),
 	}, recipients)
 	if err != nil {
 		h.log.Error().Err(err).Str("address", spec.Address).Msg("enqueue broadcast failed")
@@ -652,6 +625,32 @@ func (h *InboxHandler) resolveBulkRecipients(ctx context.Context, spec mail.Mail
 	}
 
 	return out, bulkSummary(spec, req), nil
+}
+
+// buildAttachBodyParts builds the JMAP attach body parts for a send,
+// merging file attachments (disposition attachment) and inline images
+// (disposition inline, referenced by cid in the HTML body). Shared by the
+// single-send path and the bulk enqueue so both carry the same parts.
+func buildAttachBodyParts(req SendRequest) []map[string]any {
+	var parts []map[string]any
+	for _, att := range req.Attachments {
+		parts = append(parts, map[string]any{
+			"blobId":      att.BlobID,
+			"type":        att.Type,
+			"name":        att.Name,
+			"disposition": "attachment",
+		})
+	}
+	for _, img := range req.InlineImages {
+		parts = append(parts, map[string]any{
+			"blobId":      img.BlobID,
+			"type":        img.Type,
+			"name":        img.Name,
+			"disposition": "inline",
+			"cid":         img.CID,
+		})
+	}
+	return parts
 }
 
 // bulkSummary builds the human-readable recipient label stored on the
@@ -849,10 +848,11 @@ func (h *InboxHandler) SendBroadcast(ctx context.Context, sourceAddress string, 
 		return fmt.Errorf("no shared mailbox spec for %s", sourceAddress)
 	}
 	_, _, err := h.sendAsPrincipal(ctx, spec, mail.SendEmailRequest{
-		To:       []mail.EmailAddress{{Email: msg.To}},
-		Subject:  msg.Subject,
-		BodyText: msg.BodyText,
-		BodyHTML: msg.BodyHTML,
+		To:              []mail.EmailAddress{{Email: msg.To}},
+		Subject:         msg.Subject,
+		BodyText:        msg.BodyText,
+		BodyHTML:        msg.BodyHTML,
+		AttachBodyParts: msg.AttachBodyParts,
 	})
 	return err
 }

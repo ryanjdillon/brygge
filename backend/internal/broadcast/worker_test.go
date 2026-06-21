@@ -15,7 +15,8 @@ import (
 // fakeSender records calls and fails according to a per-email policy.
 type fakeSender struct {
 	mu      sync.Mutex
-	calls   []string       // emails, in order
+	calls   []string // emails, in order
+	msgs    []OutgoingMessage
 	failFor map[string]int // email → number of leading attempts to fail
 	failAll bool
 	sentAt  []time.Time
@@ -29,6 +30,7 @@ func (f *fakeSender) SendBroadcast(_ context.Context, _ string, msg OutgoingMess
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls = append(f.calls, msg.To)
+	f.msgs = append(f.msgs, msg)
 	f.sentAt = append(f.sentAt, time.Now())
 	if f.failAll {
 		return fmt.Errorf("permanent failure")
@@ -169,6 +171,54 @@ func TestWorkerRespectsThrottle(t *testing.T) {
 	if elapsed < 2*throttle {
 		t.Errorf("elapsed %v, want >= %v (throttle respected)", elapsed, 2*throttle)
 	}
+}
+
+func TestWorkerForwardsAttachments(t *testing.T) {
+	s, clubID, userID := workerStore(t)
+	ctx := context.Background()
+	parts := []map[string]any{
+		{"blobId": "blob-1", "type": "application/pdf", "name": "agenda.pdf", "disposition": "attachment"},
+		{"blobId": "blob-2", "type": "image/png", "name": "logo.png", "disposition": "inline", "cid": "logo@x"},
+	}
+	id, err := s.Enqueue(ctx, New{
+		ClubID: clubID, SentBy: userID, SourceAddress: "kasserar@x.no",
+		Subject: "S", BodyText: "B", Recipients: "test", Attachments: parts,
+	}, []Recipient{{Email: "a@x.no"}})
+	if err != nil {
+		t.Fatalf("Enqueue: %v", err)
+	}
+
+	// Claim round-trips the attachments out of JSONB.
+	claimed, err := s.ClaimPending(ctx, 10)
+	if err != nil || len(claimed) != 1 {
+		t.Fatalf("ClaimPending: %v (n=%d)", err, len(claimed))
+	}
+	if len(claimed[0].Attachments) != 2 {
+		t.Fatalf("claimed attachments = %d, want 2", len(claimed[0].Attachments))
+	}
+	if claimed[0].Attachments[0]["blobId"] != "blob-1" {
+		t.Errorf("first blobId = %v, want blob-1", claimed[0].Attachments[0]["blobId"])
+	}
+
+	// Re-queue and let the worker drain so we assert the sender receives them.
+	if _, err := s.ResetOrphanedSending(ctx); err != nil {
+		t.Fatalf("reset: %v", err)
+	}
+	sender := newFakeSender()
+	w := NewWorker(s, sender, 0, zerolog.Nop())
+	w.drain(ctx)
+
+	if len(sender.msgs) != 1 {
+		t.Fatalf("sends = %d, want 1", len(sender.msgs))
+	}
+	got := sender.msgs[0].AttachBodyParts
+	if len(got) != 2 {
+		t.Fatalf("forwarded attachments = %d, want 2", len(got))
+	}
+	if got[1]["cid"] != "logo@x" || got[1]["disposition"] != "inline" {
+		t.Errorf("inline part not forwarded intact: %+v", got[1])
+	}
+	_ = id
 }
 
 func TestWorkerBootSweepReclaimsOrphans(t *testing.T) {
