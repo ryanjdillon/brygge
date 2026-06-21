@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
-import { Send, X, Trash2 } from 'lucide-vue-next'
+import { Send, X, Trash2, Megaphone } from 'lucide-vue-next'
 import RichEditor from '@/components/ui/RichEditor.vue'
 import RecipientPicker, { type RecipientValue } from './RecipientPicker.vue'
 import { useApi } from '@/composables/useApi'
@@ -65,11 +65,13 @@ const defaultFrom = computed(
 )
 const fromAddress = ref<string>(defaultFrom.value?.address ?? '')
 
-const canPreview = computed(() => {
-  const hasRecipient =
-    recipients.value.groups.length > 0 || recipients.value.individuals.length > 0
-  return hasRecipient && (subject.value.trim() || body.value.trim())
-})
+const hasRecipients = computed(
+  () => recipients.value.groups.length > 0 || recipients.value.individuals.length > 0,
+)
+
+const canPreview = computed(
+  () => hasRecipients.value && Boolean(subject.value.trim() || body.value.trim()),
+)
 
 const recipientSummary = computed(() => {
   const parts: string[] = []
@@ -291,6 +293,22 @@ onBeforeUnmount(() => {
             <label class="block text-xs font-medium uppercase tracking-wide text-gray-500">Mottakarar</label>
             <div class="mt-1">
               <RecipientPicker v-model="recipients" />
+            </div>
+          </div>
+
+          <!-- Broadcast indicator: a new message fans out to one tracked,
+               individual email per recipient. Make that unmistakable before
+               the sender hits send. -->
+          <div
+            v-if="hasRecipients"
+            class="flex items-start gap-2.5 rounded-md border-2 border-amber-400 bg-amber-50 px-3 py-2.5 text-sm text-amber-900"
+          >
+            <Megaphone class="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+            <div>
+              <p class="font-semibold">Dette blir sendt som ei utsending (broadcast)</p>
+              <p class="mt-0.5 text-amber-800">
+                Éin individuell e-post til kvar mottakar i: {{ recipientSummary }}. Følg leveringa under «Utsendingar».
+              </p>
             </div>
           </div>
 
