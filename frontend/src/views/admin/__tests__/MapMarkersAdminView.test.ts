@@ -3,12 +3,6 @@ import { ref } from 'vue'
 import { mountWithPlugins } from '@/test/test-utils'
 import MapMarkersAdminView from '@/views/admin/MapMarkersAdminView.vue'
 
-vi.mock('lucide-vue-next', () => ({
-  Plus: { template: '<span data-icon="plus" />' },
-  Pencil: { template: '<span data-icon="pencil" />' },
-  Trash2: { template: '<span data-icon="trash" />' },
-}))
-
 const mockMarkers = [
   {
     id: '1',

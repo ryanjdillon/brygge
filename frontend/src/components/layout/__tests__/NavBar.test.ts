@@ -1,98 +1,50 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
+import { flushPromises } from '@vue/test-utils'
 import { mountWithPlugins } from '@/test/test-utils'
+import { useAuthStore } from '@/stores/auth'
 import NavBar from '@/components/layout/NavBar.vue'
 
-vi.mock('lucide-vue-next', () => ({
-  Menu: { template: '<span data-icon="menu" />' },
-  X: { template: '<span data-icon="x" />' },
-  LogIn: { template: '<span data-icon="login" />' },
-  LogOut: { template: '<span data-icon="logout" />' },
-  User: { template: '<span data-icon="user" />' },
-  Shield: { template: '<span data-icon="shield" />' },
-  ChevronDown: { template: '<span data-icon="chevron-down" />' },
-}))
+// NavBar is a slim top bar: brand (on non-hero routes) + language switcher
+// + auth controls (login, or portal/admin/logout). The old site-nav links,
+// club dropdown, and mobile menu were moved out of this component, so the
+// tests cover only what NavBar still renders. Mount on a non-hero route so
+// the brand/standard variant renders rather than the bare hero variant.
+async function mountNav(piniaOptions?: { initialState?: Record<string, unknown> }) {
+  const wrapper = mountWithPlugins(NavBar, {
+    initialRoute: '/contact',
+    piniaOptions,
+    global: { stubs: { InboxIndicator: true } },
+  })
+  await flushPromises()
+  return wrapper
+}
 
 describe('NavBar', () => {
-  it('renders club name', () => {
-    const wrapper = mountWithPlugins(NavBar)
+  it('renders the club brand on non-hero routes', async () => {
+    const wrapper = await mountNav()
     expect(wrapper.text()).toContain('Brygge')
   })
 
-  it('renders top-level nav links', () => {
-    const wrapper = mountWithPlugins(NavBar)
-    const expectedLinks = [
-      'nav.home',
-      'nav.harbor',
-      'nav.motorhome',
-      'nav.weather',
-      'nav.merchandise',
-      'nav.contact',
-    ]
-
-    for (const label of expectedLinks) {
-      expect(wrapper.text()).toContain(label)
-    }
-  })
-
-  it('renders club dropdown trigger', () => {
-    const wrapper = mountWithPlugins(NavBar)
-    expect(wrapper.text()).toContain('nav.club')
-  })
-
-  it('shows club dropdown items on click', async () => {
-    const wrapper = mountWithPlugins(NavBar)
-    const dropdownBtn = wrapper.findAll('button').find((b) => b.text().includes('nav.club'))
-    await dropdownBtn!.trigger('click')
-
-    expect(wrapper.text()).toContain('nav.calendar')
-    expect(wrapper.text()).toContain('nav.pricing')
-    expect(wrapper.text()).toContain('nav.join')
-    expect(wrapper.text()).toContain('nav.history')
-  })
-
-  it('shows login button when unauthenticated', () => {
-    const wrapper = mountWithPlugins(NavBar)
+  it('shows the login link when unauthenticated', async () => {
+    const wrapper = await mountNav()
     expect(wrapper.text()).toContain('nav.login')
     expect(wrapper.text()).not.toContain('nav.portal')
   })
 
-  it('shows portal link when authenticated', () => {
-    const wrapper = mountWithPlugins(NavBar, {
-      piniaOptions: {
-        initialState: {
-          auth: {
-            user: { id: '1', name: 'Test', email: 'test@example.com', roles: ['member'] },
-          },
-        },
-      },
-    })
+  it('shows the portal link (and no login) when authenticated', async () => {
+    // initialState patching is unreliable for setup stores, so set the
+    // store directly after the testing-pinia is installed by mount.
+    const wrapper = await mountNav()
+    const auth = useAuthStore()
+    auth.user = {
+      id: '1',
+      name: 'Test',
+      email: 'test@example.com',
+      roles: ['member'],
+    } as unknown as typeof auth.user
+    await flushPromises()
 
     expect(wrapper.text()).toContain('nav.portal')
-  })
-
-  it('mobile menu toggle works', async () => {
-    const wrapper = mountWithPlugins(NavBar)
-
-    const mobileMenu = () => wrapper.find('.md\\:hidden.border-t')
-    expect(mobileMenu().exists()).toBe(false)
-
-    const hamburger = wrapper.find('button.md\\:hidden')
-    await hamburger.trigger('click')
-
-    expect(mobileMenu().exists()).toBe(true)
-
-    await hamburger.trigger('click')
-    expect(mobileMenu().exists()).toBe(false)
-  })
-
-  it('mobile menu shows club links under section header', async () => {
-    const wrapper = mountWithPlugins(NavBar)
-    const hamburger = wrapper.find('button.md\\:hidden')
-    await hamburger.trigger('click')
-
-    const mobileMenu = wrapper.find('.md\\:hidden.border-t')
-    expect(mobileMenu.text()).toContain('nav.club')
-    expect(mobileMenu.text()).toContain('nav.calendar')
-    expect(mobileMenu.text()).toContain('nav.history')
+    expect(wrapper.text()).not.toContain('nav.login')
   })
 })

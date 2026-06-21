@@ -25,6 +25,8 @@ describe('useFeatures', () => {
       calendar: true,
       commerce: true,
       communications: true,
+      // DB-driven per-club flag; defaults off until loaded from the API.
+      feedback: false,
     })
   })
 })

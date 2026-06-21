@@ -20,25 +20,27 @@ const routes = [
   { path: '/admin', component: { template: '<div>Admin</div>' }, meta: { requiresAuth: true, requiresAdmin: true } },
 ]
 
-export function createTestRouter() {
-  return createRouter({
-    history: createMemoryHistory(),
-    routes,
-  })
+export function createTestRouter(initialRoute?: string) {
+  const history = createMemoryHistory()
+  // Seed the initial location before the router navigates, so components
+  // that branch on the route (e.g. NavBar's hero vs standard nav on '/')
+  // render the right variant from the first paint.
+  if (initialRoute) history.replace(initialRoute)
+  return createRouter({ history, routes })
 }
 
 export function mountWithPlugins<T extends Component>(
   component: T,
-  options: ComponentMountingOptions<T> & { piniaOptions?: TestingOptions } = {},
+  options: ComponentMountingOptions<T> & { piniaOptions?: TestingOptions; initialRoute?: string } = {},
 ) {
-  const { piniaOptions, ...mountOptions } = options
-  const router = createTestRouter()
+  const { piniaOptions, initialRoute, ...mountOptions } = options
+  const router = createTestRouter(initialRoute)
   const pinia = createTestingPinia({
     createSpy: () => vi.fn(),
     ...piniaOptions,
   })
 
-  return mount(component, {
+  const wrapper = mount(component, {
     ...mountOptions,
     global: {
       plugins: [pinia, router, ...(mountOptions.global?.plugins ?? [])],
@@ -48,6 +50,8 @@ export function mountWithPlugins<T extends Component>(
       ...mountOptions.global,
     },
   })
+
+  return wrapper
 }
 
 export function createMockAuthStore(overrides: {

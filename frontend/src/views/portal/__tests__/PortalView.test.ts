@@ -38,7 +38,7 @@ describe('PortalView', () => {
     expect(wrapper.text()).toContain('portal.sidebar.dashboard')
     expect(wrapper.text()).toContain('portal.sidebar.profile')
     expect(wrapper.text()).toContain('portal.sidebar.myBoats')
-    expect(wrapper.text()).toContain('portal.sidebar.documents')
+    expect(wrapper.text()).toContain('portal.sidebar.invoices')
     expect(wrapper.text()).toContain('portal.sidebar.bookings')
   })
 

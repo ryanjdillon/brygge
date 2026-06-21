@@ -3,12 +3,6 @@ import { ref } from 'vue'
 import { mountWithPlugins } from '@/test/test-utils'
 import PrivacyView from '@/views/portal/PrivacyView.vue'
 
-vi.mock('lucide-vue-next', () => ({
-  Download: { template: '<span data-icon="download" />' },
-  Trash2: { template: '<span data-icon="trash" />' },
-  ShieldCheck: { template: '<span data-icon="shield-check" />' },
-}))
-
 vi.mock('@/composables/useGdpr', () => ({
   useDeletionStatus: () => ({
     data: ref(null),
@@ -54,8 +48,8 @@ describe('PrivacyView', () => {
 
   it('renders delete account section', () => {
     const wrapper = mountWithPlugins(PrivacyView)
-    const icons = wrapper.findAll('[data-icon="trash"]')
-    expect(icons.length).toBe(1)
+    expect(wrapper.text()).toContain('gdpr.deleteTitle')
+    expect(wrapper.text()).toContain('gdpr.deleteButton')
   })
 
   it('renders consent history', () => {

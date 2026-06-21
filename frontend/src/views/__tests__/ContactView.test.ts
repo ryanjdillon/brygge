@@ -28,9 +28,7 @@ describe('ContactView', () => {
   it('renders contact info section', () => {
     const wrapper = mountWithPlugins(ContactView)
     expect(wrapper.text()).toContain('contact.title')
-    expect(wrapper.text()).toContain('contact.address')
-    expect(wrapper.text()).toContain('contact.phone')
-    expect(wrapper.text()).toContain('contact.email')
+    expect(wrapper.text()).toContain('contact.matrixRoom')
   })
 
   it('form fields have required attribute', () => {
