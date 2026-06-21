@@ -119,6 +119,31 @@ func TestClaimPendingFlipsToSendingAndJoinsParent(t *testing.T) {
 	}
 }
 
+func TestClaimPendingReturnsUserID(t *testing.T) {
+	s, _, clubID, userID := newStore(t)
+	ctx := context.Background()
+	uid := userID
+	enqueueSample(t, s, clubID, userID, []broadcast.Recipient{
+		{UserID: &uid, Email: "member@example.com"},
+		{UserID: nil, Email: "adhoc@example.com"},
+	})
+
+	claimed, err := s.ClaimPending(ctx, 10)
+	if err != nil {
+		t.Fatalf("ClaimPending: %v", err)
+	}
+	byEmail := map[string]*string{}
+	for _, c := range claimed {
+		byEmail[c.Email] = c.UserID
+	}
+	if got := byEmail["member@example.com"]; got == nil || *got != uid {
+		t.Errorf("member UserID = %v, want %s", got, uid)
+	}
+	if byEmail["adhoc@example.com"] != nil {
+		t.Errorf("ad-hoc UserID = %v, want nil", *byEmail["adhoc@example.com"])
+	}
+}
+
 func TestClaimPendingRespectsLimit(t *testing.T) {
 	s, _, clubID, userID := newStore(t)
 	ctx := context.Background()

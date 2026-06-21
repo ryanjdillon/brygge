@@ -862,7 +862,8 @@ func main() {
 					inboxHandler := handlers.NewInboxHandler(
 						db, inboxFactory, userProvisioner,
 						cfg.StalwartAdminUser, cfg.StalwartAdminPassword,
-						inboxPasswords, cfg.ClubSlug, auditService, inboxSpec, log,
+						inboxPasswords, cfg.ClubSlug, auditService, inboxSpec,
+						cfg.FrontendURL, cfg.TOTPEncryptionKey, log,
 					)
 					// Bulk (group/BCC) sends are enqueued by the inbox
 					// handler and drained by this worker, which sends each

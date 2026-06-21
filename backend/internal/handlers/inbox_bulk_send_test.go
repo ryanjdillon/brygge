@@ -195,6 +195,51 @@ func TestHandleBulkSend_DedupAndPrefersMember(t *testing.T) {
 	}
 }
 
+func TestHandleBulkSend_ExcludesOptedOutMembers(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	clubID := testutil.SeedClub(t, pool)
+	actor, _ := testutil.SeedUser(t, pool, clubID, []string{"treasurer"})
+	inUser, inEmail := testutil.SeedUser(t, pool, clubID, []string{"member"})
+	outUser, _ := testutil.SeedUser(t, pool, clubID, []string{"member"})
+
+	// outUser opts out of the broadcast category in their notification
+	// settings — they must be excluded from group sends.
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO communication_preferences (user_id, club_id, category, email_enabled)
+		 VALUES ($1, $2, 'broadcast', false)`, outUser, clubID); err != nil {
+		t.Fatalf("seed opt-out: %v", err)
+	}
+
+	h := newBulkHandler(t, pool, true)
+	rec := bulkRequest(t, h, clubID, actor, SendRequest{
+		Subject:   "Notice",
+		BodyText:  "x",
+		BccGroups: []string{"members"},
+	})
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202; body=%s", rec.Code, rec.Body.String())
+	}
+	var resp struct {
+		BroadcastID    string `json:"broadcast_id"`
+		RecipientCount int    `json:"recipient_count"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+	if resp.RecipientCount != 1 {
+		t.Fatalf("recipient_count = %d, want 1 (opted-out member excluded)", resp.RecipientCount)
+	}
+
+	var gotUser, gotEmail string
+	if err := pool.QueryRow(ctx,
+		`SELECT user_id, email FROM broadcast_deliveries WHERE broadcast_id = $1`, resp.BroadcastID,
+	).Scan(&gotUser, &gotEmail); err != nil {
+		t.Fatalf("read delivery: %v", err)
+	}
+	if gotUser != inUser || gotEmail != inEmail {
+		t.Errorf("delivery = %s/%s, want opted-in %s/%s", gotUser, gotEmail, inUser, inEmail)
+	}
+}
+
 func TestHandleBulkSend_UnknownGroup400(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	clubID := testutil.SeedClub(t, pool)

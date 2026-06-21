@@ -15,6 +15,9 @@ type OutgoingMessage struct {
 	BodyText        string
 	BodyHTML        string
 	AttachBodyParts []map[string]any
+	// UserID is the recipient's member id (nil for ad-hoc addresses), so
+	// the sender can attach a per-recipient unsubscribe link.
+	UserID *string
 }
 
 // MessageSender delivers one broadcast message as the shared mailbox
@@ -143,6 +146,7 @@ func (w *Worker) process(ctx context.Context, c Claimed) {
 		BodyText:        c.BodyText,
 		BodyHTML:        c.BodyHTML,
 		AttachBodyParts: c.Attachments,
+		UserID:          c.UserID,
 	})
 	if err == nil {
 		if merr := w.store.Mark(ctx, c.DeliveryID, DeliverySent, ""); merr != nil {

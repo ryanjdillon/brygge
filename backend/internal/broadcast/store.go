@@ -124,6 +124,9 @@ type Claimed struct {
 	Email         string
 	Attempts      int
 	Attachments   []map[string]any
+	// UserID is the recipient's member id, nil for ad-hoc addresses.
+	// Used to build a per-recipient unsubscribe token.
+	UserID *string
 }
 
 // ClaimPending atomically claims up to limit pending deliveries, flipping
@@ -143,9 +146,9 @@ func (s *Store) ClaimPending(ctx context.Context, limit int) ([]Claimed, error) 
 			SET status = $3, updated_at = now()
 			FROM claimed
 			WHERE bd.id = claimed.id
-			RETURNING bd.id, bd.broadcast_id, bd.club_id, bd.email, bd.attempts
+			RETURNING bd.id, bd.broadcast_id, bd.club_id, bd.user_id, bd.email, bd.attempts
 		)
-		SELECT upd.id, upd.broadcast_id, upd.club_id, upd.email, upd.attempts,
+		SELECT upd.id, upd.broadcast_id, upd.club_id, upd.user_id, upd.email, upd.attempts,
 		       COALESCE(b.source_address, ''), b.subject, b.body, COALESCE(b.body_html, ''), b.attachments
 		FROM upd
 		JOIN broadcasts b ON b.id = upd.broadcast_id`,
@@ -160,7 +163,7 @@ func (s *Store) ClaimPending(ctx context.Context, limit int) ([]Claimed, error) 
 	for rows.Next() {
 		var c Claimed
 		var attachmentsJSON []byte
-		if err := rows.Scan(&c.DeliveryID, &c.BroadcastID, &c.ClubID, &c.Email, &c.Attempts,
+		if err := rows.Scan(&c.DeliveryID, &c.BroadcastID, &c.ClubID, &c.UserID, &c.Email, &c.Attempts,
 			&c.SourceAddress, &c.Subject, &c.BodyText, &c.BodyHTML, &attachmentsJSON); err != nil {
 			return nil, fmt.Errorf("scan claimed: %w", err)
 		}

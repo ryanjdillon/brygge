@@ -601,19 +601,23 @@ func (c *JMAPClient) MoveThreadToMailbox(ctx context.Context, accountID, threadI
 // JMAP Email/set + EmailSubmission/set pair (DIL-278). Body is
 // supplied as plaintext; HTML composition is left to a later phase.
 type SendEmailRequest struct {
-	FromAddress     string               // e.g. kasserar@klokkarvikbaatlag.no
-	FromName        string               // e.g. Kasserer
-	ReplyTo         string               // usually same as FromAddress
-	To              []EmailAddress       // required, ≥1
-	Cc              []EmailAddress       // optional
-	Bcc             []EmailAddress       // optional (resolved members on bcc_members)
+	FromAddress     string         // e.g. kasserar@klokkarvikbaatlag.no
+	FromName        string         // e.g. Kasserer
+	ReplyTo         string         // usually same as FromAddress
+	To              []EmailAddress // required, ≥1
+	Cc              []EmailAddress // optional
+	Bcc             []EmailAddress // optional (resolved members on bcc_members)
 	Subject         string
-	BodyText        string               // required for v1
-	BodyHTML        string               // optional
-	InReplyTo       string               // RFC 5322 Message-ID being replied to; empty for new threads
+	BodyText        string // required for v1
+	BodyHTML        string // optional
+	InReplyTo       string // RFC 5322 Message-ID being replied to; empty for new threads
 	References      []string
-	ActorID         string               // Brygge user id → X-Brygge-Actor
-	AttachBodyParts []map[string]any     // pre-uploaded blob attachment parts (blobId, type, name, disposition)
+	ActorID         string           // Brygge user id → X-Brygge-Actor
+	AttachBodyParts []map[string]any // pre-uploaded blob attachment parts (blobId, type, name, disposition)
+	// UnsubscribeURL, when set, adds RFC 8058 List-Unsubscribe +
+	// List-Unsubscribe-Post (one-click) headers — used on bulk broadcast
+	// mail so clients show an unsubscribe affordance.
+	UnsubscribeURL string
 }
 
 // SendEmail submits a message through JMAP. Two calls:
@@ -698,6 +702,13 @@ func (c *JMAPClient) SendEmail(ctx context.Context, accountID, identityID, draft
 	}
 	if len(req.AttachBodyParts) > 0 {
 		email["attachments"] = req.AttachBodyParts
+	}
+	if req.UnsubscribeURL != "" {
+		// RFC 8058: the List-Unsubscribe-Post header signals one-click
+		// support so Gmail/Apple Mail offer an inline unsubscribe chip
+		// that POSTs to the URL without a confirmation round-trip.
+		email["header:List-Unsubscribe:asText"] = "<" + req.UnsubscribeURL + ">"
+		email["header:List-Unsubscribe-Post:asText"] = "List-Unsubscribe=One-Click"
 	}
 
 	envelope := map[string]any{

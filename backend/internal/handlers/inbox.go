@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -24,6 +25,7 @@ import (
 	bcast "github.com/brygge-klubb/brygge/internal/broadcast"
 	"github.com/brygge-klubb/brygge/internal/mail"
 	"github.com/brygge-klubb/brygge/internal/middleware"
+	"github.com/brygge-klubb/brygge/internal/unsubscribe"
 )
 
 // InboxHandler exposes the read-only surface for the role-gated
@@ -45,6 +47,11 @@ type InboxHandler struct {
 	audit       *audit.Service
 	spec        []mail.MailboxSpec
 	log         zerolog.Logger
+
+	// frontendURL + unsubscribeSecret build per-recipient RFC 8058
+	// List-Unsubscribe links on bulk broadcast mail (BRY-61).
+	frontendURL       string
+	unsubscribeSecret []byte
 
 	// broadcasts persists bulk (group/BCC) sends as a parent row plus
 	// one pending delivery per recipient; the worker drains them.
@@ -68,21 +75,24 @@ type InboxHandler struct {
 	sendTargets map[string]sendTarget
 }
 
-func NewInboxHandler(db *pgxpool.Pool, jmapFact *mail.JMAPFactory, provisioner *mail.UserProvisioner, adminUser, adminPass string, passwords mail.PrincipalPasswords, clubSlug string, auditSvc *audit.Service, spec []mail.MailboxSpec, log zerolog.Logger) *InboxHandler {
+func NewInboxHandler(db *pgxpool.Pool, jmapFact *mail.JMAPFactory, provisioner *mail.UserProvisioner, adminUser, adminPass string, passwords mail.PrincipalPasswords, clubSlug string, auditSvc *audit.Service, spec []mail.MailboxSpec, frontendURL, totpEncryptionKey string, log zerolog.Logger) *InboxHandler {
+	secret, _ := hex.DecodeString(totpEncryptionKey)
 	return &InboxHandler{
-		db:          db,
-		jmapFact:    jmapFact,
-		provisioner: provisioner,
-		adminUser:   adminUser,
-		adminPass:   adminPass,
-		passwords:   passwords,
-		clubAbbrev:  strings.ToUpper(clubSlug),
-		audit:       auditSvc,
-		spec:        spec,
-		log:         log.With().Str("handler", "inbox").Logger(),
-		broadcasts:  bcast.NewStore(db),
-		sharedIDs:   make(map[string]string),
-		sendTargets: make(map[string]sendTarget),
+		db:                db,
+		jmapFact:          jmapFact,
+		provisioner:       provisioner,
+		adminUser:         adminUser,
+		adminPass:         adminPass,
+		passwords:         passwords,
+		clubAbbrev:        strings.ToUpper(clubSlug),
+		audit:             auditSvc,
+		spec:              spec,
+		frontendURL:       frontendURL,
+		unsubscribeSecret: secret,
+		log:               log.With().Str("handler", "inbox").Logger(),
+		broadcasts:        bcast.NewStore(db),
+		sharedIDs:         make(map[string]string),
+		sendTargets:       make(map[string]sendTarget),
 	}
 }
 
@@ -671,14 +681,19 @@ func bulkSummary(spec mail.MailboxSpec, req SendRequest) string {
 }
 
 // roleMembers returns club members holding role as broadcast recipients
-// (deduped by user). Skips users without a usable email.
+// (deduped by user). Skips users without a usable email and those who have
+// opted out of the 'broadcast' category in their notification settings
+// (BRY-61) — a missing preference row means opted in.
 func (h *InboxHandler) roleMembers(ctx context.Context, role, clubID string) ([]bcast.Recipient, error) {
 	rows, err := h.db.Query(ctx, `
 		SELECT u.id, u.email
 		FROM users u
 		JOIN user_roles ur ON ur.user_id = u.id AND ur.club_id = u.club_id
+		LEFT JOIN communication_preferences cp
+		  ON cp.user_id = u.id AND cp.club_id = u.club_id AND cp.category = 'broadcast'
 		WHERE ur.role = $1::user_role AND u.club_id = $2
 		  AND u.email IS NOT NULL AND u.email <> ''
+		  AND (cp.email_enabled IS NULL OR cp.email_enabled = true)
 		GROUP BY u.id, u.email`, role, clubID)
 	if err != nil {
 		return nil, err
@@ -703,9 +718,12 @@ func (h *InboxHandler) waitingListMembers(ctx context.Context, clubID string) ([
 		SELECT DISTINCT u.id, u.email
 		FROM waiting_list_entries wle
 		JOIN users u ON u.id = wle.user_id
+		LEFT JOIN communication_preferences cp
+		  ON cp.user_id = u.id AND cp.club_id = wle.club_id AND cp.category = 'broadcast'
 		WHERE wle.club_id = $1
 		  AND wle.status NOT IN ('offered_accepted', 'cancelled')
-		  AND u.email IS NOT NULL AND u.email <> ''`, clubID)
+		  AND u.email IS NOT NULL AND u.email <> ''
+		  AND (cp.email_enabled IS NULL OR cp.email_enabled = true)`, clubID)
 	if err != nil {
 		return nil, err
 	}
@@ -847,14 +865,28 @@ func (h *InboxHandler) SendBroadcast(ctx context.Context, sourceAddress string, 
 	if !ok {
 		return fmt.Errorf("no shared mailbox spec for %s", sourceAddress)
 	}
-	_, _, err := h.sendAsPrincipal(ctx, spec, mail.SendEmailRequest{
+	sendReq := mail.SendEmailRequest{
 		To:              []mail.EmailAddress{{Email: msg.To}},
 		Subject:         msg.Subject,
 		BodyText:        msg.BodyText,
 		BodyHTML:        msg.BodyHTML,
 		AttachBodyParts: msg.AttachBodyParts,
-	})
+		UnsubscribeURL:  h.unsubscribeURL(msg.UserID),
+	}
+	_, _, err := h.sendAsPrincipal(ctx, spec, sendReq)
 	return err
+}
+
+// unsubscribeURL builds the RFC 8058 one-click List-Unsubscribe URL for a
+// member recipient — a signed token (no DB lookup) the public
+// /api/v1/unsubscribe endpoint verifies. Returns "" for ad-hoc recipients
+// (no member id) or when unsubscribe isn't configured.
+func (h *InboxHandler) unsubscribeURL(userID *string) string {
+	if userID == nil || h.frontendURL == "" || len(h.unsubscribeSecret) == 0 {
+		return ""
+	}
+	tok := unsubscribe.GenerateToken(*userID, "broadcast", h.unsubscribeSecret)
+	return h.frontendURL + "/api/v1/unsubscribe?token=" + tok
 }
 
 // specByAddress returns the shared-mailbox spec for an address.
