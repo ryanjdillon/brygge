@@ -182,7 +182,7 @@ SMTP_PORT=465
 SMTP_USERNAME=relay
 SMTP_PASSWORD=
 EMAIL_FROM=<Club Name> <relay@<domain>>
-EMAIL_REPLY_TO=info@<domain>
+EMAIL_REPLY_TO=post@<domain>
 
 # S3-compatible object storage (documents, chart tiles, etc.)
 S3_ENDPOINT=https://nbg1.your-objectstorage.com

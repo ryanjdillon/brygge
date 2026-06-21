@@ -203,7 +203,7 @@ SMTP_PORT=465
 SMTP_USERNAME=relay
 SMTP_PASSWORD=<same value as /etc/stalwart/relay-password>
 EMAIL_FROM=<Club Name> <relay@<domain>>
-EMAIL_REPLY_TO=info@<domain>
+EMAIL_REPLY_TO=post@<domain>
 ```
 
 Notes:
@@ -211,7 +211,7 @@ Notes:
 - **Port 465 (implicit TLS)**, not 587. Brygge's SMTP client supports both; 465 sidesteps an intermittent STARTTLS hang in current Stalwart.
 - **`SMTP_USERNAME=relay`** — the bare principal name, not the email address. Stalwart's auth lookup uses the principal slug.
 - **`SMTP_HOST=mail.<domain>`** — use the public hostname so the TLS SNI matches the cert. Don't use `localhost` or `127.0.0.1`.
-- **`EMAIL_REPLY_TO`** sets the `Reply-To:` header so member replies land in the monitored `info@` inbox instead of the send-only `relay@` account.
+- **`EMAIL_REPLY_TO`** sets the `Reply-To:` header so member replies land in the monitored `post@` shared inbox instead of the send-only `relay@` account.
 - **`SMTP_PASSWORD` must equal the contents of `/etc/stalwart/relay-password`.** When rotating, update both files and restart `stalwart-relay-account.service` and `brygge.service`.
 
 Restart brygge:

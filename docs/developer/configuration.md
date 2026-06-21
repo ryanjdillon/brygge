@@ -42,7 +42,7 @@ Used for magic link login, invoice delivery, and broadcasts. Brygge talks SMTP t
 | `SMTP_USERNAME` | For email | —           | Stalwart principal name — `relay` (no `@<domain>` suffix) |
 | `SMTP_PASSWORD` | For email | —           | Same value as `/etc/stalwart/relay-password` on the server (provisioned via `stalwart-relay-account` systemd unit) |
 | `EMAIL_FROM`    | For email | —           | From-address on outgoing mail (e.g. `<Club Name> <relay@<domain>>`) |
-| `EMAIL_REPLY_TO`| No        | —           | Reply-To header (e.g. `info@<domain>`) — routes replies to a human-read mailbox when the From address is sending-only |
+| `EMAIL_REPLY_TO`| No        | —           | Reply-To header (e.g. `post@<domain>`) — routes replies to a human-read mailbox when the From address is sending-only |
 
 If `SMTP_HOST` is not set, the app starts in degraded mode — magic link auth and invoice emails will not work.
 

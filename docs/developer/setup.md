@@ -163,7 +163,7 @@ SMTP_PORT=587
 SMTP_USERNAME=login@mitt-klubb.no
 SMTP_PASSWORD=<set in Stalwart admin UI>
 EMAIL_FROM=login@mitt-klubb.no
-EMAIL_REPLY_TO=info@mitt-klubb.no
+EMAIL_REPLY_TO=post@mitt-klubb.no
 ```
 
 Brygge talks SMTP to the Stalwart mail server running on the same VM as `relay@<domain>` — provisioned automatically by the `stalwart-relay-account` systemd unit. See [mail/setup.md](mail/setup.md) for the one-time server setup: setting the `relay@` password, provisioning the DKIM keypair, and publishing DNS records.

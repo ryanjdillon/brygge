@@ -34,7 +34,7 @@ type SMTPClient struct {
 // or fromAddress is empty. Default port is 587 (Submission with STARTTLS);
 // port 465 is treated as implicit TLS (SMTPS). replyTo is optional; when
 // set it's added as the Reply-To header so recipients' mail clients
-// direct replies at a monitored address (e.g. info@) even when the
+// direct replies at a monitored address (e.g. post@) even when the
 // From address is a sending-only identity (e.g. login@).
 func NewSMTPClient(host string, port int, username, password, fromAddress, replyTo string) *SMTPClient {
 	if host == "" || fromAddress == "" {
