@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -185,15 +186,16 @@ func (h *InboxHandler) HandleListThreads(w http.ResponseWriter, r *http.Request)
 		cursor = 0
 	}
 	text := strings.TrimSpace(q.Get("q"))
+	folder := strings.TrimSpace(q.Get("folder"))
 
-	accountID, inboxID, err := h.resolveInbox(ctx, userJMAP, spec.Address)
+	accountID, folderID, err := h.resolveFolder(ctx, userJMAP, spec.Address, folder)
 	if err != nil {
-		h.log.Warn().Err(err).Str("address", spec.Address).Msg("inbox resolve failed")
+		h.log.Warn().Err(err).Str("address", spec.Address).Str("folder", folder).Msg("folder resolve failed")
 		Error(w, http.StatusBadGateway, "mail backend unavailable")
 		return
 	}
 
-	ids, total, err := userJMAP.QueryEmails(ctx, accountID, inboxID, text, cursor, limit)
+	ids, total, err := userJMAP.QueryEmails(ctx, accountID, folderID, text, cursor, limit)
 	if err != nil {
 		h.log.Warn().Err(err).Msg("Email/query failed")
 		Error(w, http.StatusBadGateway, "mail backend error")
@@ -346,6 +348,84 @@ func (h *InboxHandler) HandleArchiveThread(w http.ResponseWriter, r *http.Reques
 	}
 	h.auditMailboxAction(ctx, audit.ActionInboxThreadArchived, spec.Address, threadID)
 	JSON(w, http.StatusOK, map[string]any{"moved": n})
+}
+
+// folderSortRank orders folders for the left-pane tree: Inbox first,
+// then the standard system folders in a familiar order, then any custom
+// folders (rank 99) sorted alphabetically by the caller.
+func folderSortRank(role string) int {
+	switch strings.ToLower(role) {
+	case "inbox":
+		return 0
+	case "archive":
+		return 1
+	case "sent":
+		return 2
+	case "drafts":
+		return 3
+	case "junk":
+		return 4
+	case "trash":
+		return 5
+	default:
+		return 99
+	}
+}
+
+// HandleListFolders returns the folders that actually exist on a shared
+// mailbox (BRY-190), id-less: just name, role, and per-folder unread/
+// total thread counts. The client passes a folder's role (or name) back
+// as the `folder` param on the threads endpoint to list that folder.
+//
+//	GET /inbox/:address/folders
+func (h *InboxHandler) HandleListFolders(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	spec, ok := h.authorize(w, r)
+	if !ok {
+		return
+	}
+	claims := middleware.GetClaims(ctx)
+	userJMAP, err := h.userJMAP(ctx, claims.UserID)
+	if err != nil {
+		Error(w, http.StatusForbidden, "user not provisioned for mail")
+		return
+	}
+	accountID, err := h.sharedAccountID(ctx, spec.Address)
+	if err != nil {
+		Error(w, http.StatusBadGateway, "mail backend unavailable")
+		return
+	}
+	mboxes, err := userJMAP.ListMailboxes(ctx, accountID)
+	if err != nil {
+		h.log.Warn().Err(err).Str("address", spec.Address).Msg("list folders failed")
+		Error(w, http.StatusBadGateway, "mail backend error")
+		return
+	}
+
+	type folderRow struct {
+		Name   string `json:"name"`
+		Role   string `json:"role"`
+		Unread int    `json:"unread"`
+		Total  int    `json:"total"`
+	}
+	folders := make([]folderRow, 0, len(mboxes))
+	for _, m := range mboxes {
+		folders = append(folders, folderRow{
+			Name:   m.Name,
+			Role:   m.Role,
+			Unread: m.UnreadThreads,
+			Total:  m.TotalThreads,
+		})
+	}
+	sort.SliceStable(folders, func(i, j int) bool {
+		ri, rj := folderSortRank(folders[i].Role), folderSortRank(folders[j].Role)
+		if ri != rj {
+			return ri < rj
+		}
+		return strings.ToLower(folders[i].Name) < strings.ToLower(folders[j].Name)
+	})
+
+	JSON(w, http.StatusOK, map[string]any{"folders": folders})
 }
 
 // sendAttachment is the attachment reference included in a send payload.
@@ -1327,11 +1407,17 @@ func (h *InboxHandler) sharedAccountID(ctx context.Context, address string) (str
 	return "", errInboxNotFound
 }
 
-// resolveInbox finds the Inbox folder of a shared mailbox, scoped by
-// the user's JMAP session. Stalwart honors shareWith on cross-account
-// Mailbox/get calls — the user can enumerate the shared owner's
-// folders even though the owner is a different principal.
-func (h *InboxHandler) resolveInbox(ctx context.Context, userJMAP *mail.JMAPClient, address string) (accountID, mailboxID string, err error) {
+// resolveFolder finds a folder of a shared mailbox by selector, scoped
+// by the user's JMAP session. Stalwart honors shareWith on cross-account
+// Mailbox/get calls — the user can enumerate the shared owner's folders
+// even though the owner is a different principal.
+//
+// An empty or "inbox" selector resolves the Inbox, creating it on demand
+// (Stalwart only auto-creates Inbox on first login, so a never-visited
+// principal may still be missing it). Any other selector matches a
+// folder by role first, then case-insensitively by name; an unmatched
+// selector falls back to the Inbox so a stale ?folder= URL never 404s.
+func (h *InboxHandler) resolveFolder(ctx context.Context, userJMAP *mail.JMAPClient, address, folder string) (accountID, mailboxID string, err error) {
 	accountID, err = h.sharedAccountID(ctx, address)
 	if err != nil {
 		return "", "", err
@@ -1340,12 +1426,9 @@ func (h *InboxHandler) resolveInbox(ctx context.Context, userJMAP *mail.JMAPClie
 	if err != nil {
 		return "", "", err
 	}
-	for _, m := range mboxes {
-		if strings.EqualFold(m.Role, "inbox") {
-			return accountID, m.ID, nil
-		}
+	if m, ok := pickFolder(mboxes, folder); ok {
+		return accountID, m.ID, nil
 	}
-	// Stalwart creates Inbox on first login; create it explicitly if missing.
 	id, cerr := userJMAP.CreateMailbox(ctx, accountID, "Inbox", "inbox")
 	if cerr != nil {
 		return "", "", fmt.Errorf("create Inbox for %s: %w", address, cerr)
@@ -1354,6 +1437,32 @@ func (h *InboxHandler) resolveInbox(ctx context.Context, userJMAP *mail.JMAPClie
 	return accountID, id, nil
 }
 
+// pickFolder resolves a folder selector against a mailbox's folders.
+// A non-empty, non-"inbox" selector matches by role first, then
+// case-insensitively by name. An empty/"inbox"/unmatched selector falls
+// back to the Inbox so a stale ?folder= URL never errors. ok is false
+// only when no Inbox folder exists (caller creates it on demand).
+func pickFolder(mboxes []mail.Mailbox, selector string) (mail.Mailbox, bool) {
+	if sel := strings.TrimSpace(selector); sel != "" && !strings.EqualFold(sel, "inbox") {
+		for _, m := range mboxes {
+			if strings.EqualFold(m.Role, sel) || strings.EqualFold(m.Name, sel) {
+				return m, true
+			}
+		}
+		// Unknown selector — fall through to the Inbox.
+	}
+	for _, m := range mboxes {
+		if strings.EqualFold(m.Role, "inbox") {
+			return m, true
+		}
+	}
+	return mail.Mailbox{}, false
+}
+
+// resolveArchive finds the Archive folder of a shared mailbox, creating
+// it on demand. Stalwart only auto-creates Inbox on principal init, so
+// the first archive from a mailbox has to create Archive itself — the
+// same on-demand pattern the send path uses for Drafts/Sent.
 func (h *InboxHandler) resolveArchive(ctx context.Context, userJMAP *mail.JMAPClient, address string) (accountID, mailboxID string, err error) {
 	accountID, err = h.sharedAccountID(ctx, address)
 	if err != nil {
@@ -1368,7 +1477,12 @@ func (h *InboxHandler) resolveArchive(ctx context.Context, userJMAP *mail.JMAPCl
 			return accountID, m.ID, nil
 		}
 	}
-	return "", "", errArchiveNotFound
+	id, cerr := userJMAP.CreateMailbox(ctx, accountID, "Archive", "archive")
+	if cerr != nil {
+		return "", "", fmt.Errorf("create Archive for %s: %w", address, cerr)
+	}
+	h.log.Info().Str("address", address).Str("mailbox", id).Msg("created Archive folder on demand")
+	return accountID, id, nil
 }
 
 // mailboxCounts returns (totalThreads, unreadThreads) for the inbox
@@ -1419,7 +1533,6 @@ func hasInboxRole(roles []string, want string) bool {
 
 var (
 	errInboxNotFound      = inboxFolderErr("inbox folder not found on shared mailbox")
-	errArchiveNotFound    = inboxFolderErr("archive folder not found on shared mailbox")
 	errUserNotProvisioned = inboxFolderErr("user has no JMAP credentials provisioned")
 )
 

@@ -882,6 +882,7 @@ func main() {
 						))
 						r.Get("/mailboxes", inboxHandler.HandleListMailboxes)
 						r.Get("/proxy-image", inboxHandler.HandleProxyImage)
+						r.Get("/{address}/folders", inboxHandler.HandleListFolders)
 						r.Route("/{address}/threads", func(r chi.Router) {
 							r.Get("/", inboxHandler.HandleListThreads)
 							r.Get("/{thread_id}", inboxHandler.HandleGetThread)

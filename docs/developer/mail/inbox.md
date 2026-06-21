@@ -163,10 +163,11 @@ Deletion (`DeleteUserPrincipal`) fires from `HandleDeleteUser` (both soft-delete
 **File**: `backend/internal/handlers/inbox.go`. **Routes**: under `/api/v1/admin/inbox/...`, role-gated to `{chair, vice_chair, treasurer, harbor_master, secretary, board, admin}` + the standard admin TOTP 12 h step-up.
 
 - `GET /mailboxes` — lists shared mailboxes the caller has access to, with unread counts. The handler iterates the spec, filters by `auth.hasRole(spec.role)`, fetches counts via JMAP `Mailbox/get` on each shared account using the user's session.
-- `GET /:address/threads?cursor=&q=` — paginated thread list. `Email/query` with `inMailbox` filter; reduces to one row per `threadId`.
+- `GET /:address/folders` — lists the JMAP folders that actually exist on the mailbox (id-less: `name`, `role`, `unread`, `total`), reusing `ListMailboxes`. Sorted Inbox-first then by the standard system order (BRY-190). The SPA renders these as expandable subrows under each mailbox; selecting one passes its role (or name) back as the `folder` param below.
+- `GET /:address/threads?cursor=&q=&folder=` — paginated thread list. `Email/query` with `inMailbox` filter; reduces to one row per `threadId`. `folder` is a role or name resolved by `resolveFolder` (`pickFolder` matches role first, then name); an empty/`inbox`/unknown selector falls back to the Inbox so a stale URL never 404s.
 - `GET /:address/threads/:thread_id` — full message list. `Thread/get` → `Email/get` with `bodyValues`. Body HTML is sent raw; the SPA sanitises with DOMPurify on render.
 - `POST /:address/threads/:thread_id/mark_read?read=true|false` — toggles `$seen` on the *latest* email only (Gmail-style thread semantics).
-- `POST /:address/threads/:thread_id/archive` — moves every email in the thread to the Archive folder via `Mailbox/set`.
+- `POST /:address/threads/:thread_id/archive` — moves every email in the thread to the Archive folder via `Mailbox/set`. `resolveArchive` creates the Archive folder on demand (Stalwart only auto-creates Inbox on principal init, so the first archive from a mailbox has to create it — same on-demand pattern as Drafts/Sent on first send).
 
 Per-address auth re-check: `authorize()` reads `claims.Roles` from the session and matches against `spec.role` on every request. URL-decodes `:address` via `url.PathUnescape` (chi v5 doesn't auto-decode percent-encoded `@`).
 
