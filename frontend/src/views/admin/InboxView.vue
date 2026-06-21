@@ -455,15 +455,19 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
       @view-broadcasts="showCompose = false; activeTab = 'broadcasts'"
     />
 
-    <div v-show="activeTab === 'inbox'" class="flex items-center gap-2 border-b border-blue-100 bg-blue-50 px-4 py-2 text-sm text-blue-800">
-      <Mail class="h-4 w-4 shrink-0 text-blue-500" />
-      <span>{{ t('admin.inbox.clientNotice') }}</span>
-      <a
-        href="https://github.com/ryanjdillon/brygge/blob/main/docs/user/setting-up-email.md"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="ml-1 font-medium underline hover:text-blue-900"
-      >{{ t('admin.inbox.clientNoticeLink') }}</a>
+    <!-- White gap above/below the notice gives a visual break between the
+         tab row and the inbox panes. -->
+    <div v-show="activeTab === 'inbox'" class="bg-white py-2">
+      <div class="flex items-center gap-2 border-y border-blue-100 bg-blue-50 px-4 py-2 text-sm text-blue-800">
+        <Mail class="h-4 w-4 shrink-0 text-blue-500" />
+        <span>{{ t('admin.inbox.clientNotice') }}</span>
+        <a
+          href="https://github.com/ryanjdillon/brygge/blob/main/docs/user/setting-up-email.md"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="ml-1 font-medium underline hover:text-blue-900"
+        >{{ t('admin.inbox.clientNoticeLink') }}</a>
+      </div>
     </div>
 
     <div v-if="error" class="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
@@ -554,11 +558,13 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
       </section>
 
       <!-- Pane 3: reader -->
-      <main class="flex-1 overflow-y-auto bg-gray-200">
+      <main class="reader-bg flex-1 overflow-y-auto">
         <div v-if="loadingThread" class="p-6 text-sm text-gray-500">{{ t('common.loading') }}</div>
-        <div v-else-if="!thread" class="flex h-full items-center justify-center text-sm text-gray-400">
-          <Mail class="mr-2 h-5 w-5" />
-          {{ t('admin.inbox.empty.reader') }}
+        <div v-else-if="!thread" class="flex h-full items-center justify-center">
+          <div class="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-5 py-3 text-sm text-gray-400 shadow-sm">
+            <Mail class="h-5 w-5" />
+            {{ t('admin.inbox.empty.reader') }}
+          </div>
         </div>
         <article v-else>
           <header class="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-white px-6 py-3">
@@ -685,3 +691,14 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
     </div>
   </div>
 </template>
+
+<style scoped>
+/* Reader backdrop: a light grey (~25% lighter than the gray-200 borders)
+   with a subtle repeating maritime wave, so the white message cards read
+   as raised panels against it. */
+.reader-bg {
+  background-color: #edeff2;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='16'%3E%3Cpath d='M0 8 Q10 3 20 8 T40 8' fill='none' stroke='%23d7dce3' stroke-width='1.5'/%3E%3C/svg%3E");
+  background-size: 40px 16px;
+}
+</style>
