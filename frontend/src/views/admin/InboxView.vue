@@ -428,7 +428,7 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
       <!-- Pane 2: thread list -->
       <section class="w-96 shrink-0 overflow-y-auto border-r border-gray-200 bg-white">
         <div v-if="loadingThreads" class="p-4 text-sm text-gray-500">{{ t('common.loading') }}</div>
-        <ul v-else-if="threads.length" class="divide-y divide-gray-100">
+        <ul v-else-if="threads.length" class="divide-y-2 divide-gray-200">
           <li v-for="row in threads" :key="row.thread_id">
             <button
               type="button"
@@ -453,7 +453,7 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
       </section>
 
       <!-- Pane 3: reader -->
-      <main class="flex-1 overflow-y-auto bg-white">
+      <main class="flex-1 overflow-y-auto bg-gray-200">
         <div v-if="loadingThread" class="p-6 text-sm text-gray-500">{{ t('common.loading') }}</div>
         <div v-else-if="!thread" class="flex h-full items-center justify-center text-sm text-gray-400">
           <Mail class="mr-2 h-5 w-5" />
@@ -555,7 +555,7 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
           </section>
 
           <div class="space-y-4 px-6 py-4">
-            <section v-for="email in thread.emails" :key="email.id" class="rounded border border-gray-200 p-4">
+            <section v-for="email in thread.emails" :key="email.id" class="rounded border border-gray-200 bg-white p-4">
               <header class="mb-2 flex items-center justify-between text-sm text-gray-600">
                 <div>
                   <span class="font-medium text-gray-900">{{ formatFrom(email.from) }}</span>
