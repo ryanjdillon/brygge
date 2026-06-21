@@ -122,8 +122,19 @@ func SetupTestDB(t *testing.T) *pgxpool.Pool {
 	return pool
 }
 
+// migrationLockKey serializes concurrent test-schema migration runs (BRY-184).
+const migrationLockKey int64 = 0x42525947 // "BRYG"
+
 // runMigrations reads all *.up.sql files from the migrations directory,
 // sorts them by name, and executes each one inside the given schema.
+//
+// The whole run is guarded by a session-level Postgres advisory lock on a
+// single connection. Parallel tests (`t.Parallel()`) each migrate their own
+// schema concurrently, but some migrations touch cluster-global objects —
+// e.g. 000051 GRANTs on the shared `brygge_dev_ro` role — and concurrent
+// role-privilege DDL races with "tuple concurrently updated" (XX000). The
+// lock makes migration runs mutually exclusive without changing any
+// migration SQL.
 func runMigrations(ctx context.Context, pool *pgxpool.Pool, schema string) error {
 	dir := migrationsDir()
 	entries, err := os.ReadDir(dir)
@@ -139,6 +150,17 @@ func runMigrations(ctx context.Context, pool *pgxpool.Pool, schema string) error
 	}
 	sort.Strings(upFiles)
 
+	conn, err := pool.Acquire(ctx)
+	if err != nil {
+		return fmt.Errorf("acquiring migration connection: %w", err)
+	}
+	defer conn.Release()
+
+	if _, err := conn.Exec(ctx, "SELECT pg_advisory_lock($1)", migrationLockKey); err != nil {
+		return fmt.Errorf("acquiring migration advisory lock: %w", err)
+	}
+	defer conn.Exec(ctx, "SELECT pg_advisory_unlock($1)", migrationLockKey) //nolint:errcheck // best-effort; conn release drops it anyway
+
 	for _, name := range upFiles {
 		sql, err := os.ReadFile(filepath.Join(dir, name)) // #nosec G304 -- test-only, dir is hardcoded migrations path
 		if err != nil {
@@ -146,7 +168,7 @@ func runMigrations(ctx context.Context, pool *pgxpool.Pool, schema string) error
 		}
 
 		wrapped := fmt.Sprintf("SET search_path TO %s;\n%s", schema, string(sql))
-		if _, err := pool.Exec(ctx, wrapped); err != nil {
+		if _, err := conn.Exec(ctx, wrapped); err != nil {
 			return fmt.Errorf("executing migration %s: %w", name, err)
 		}
 	}
