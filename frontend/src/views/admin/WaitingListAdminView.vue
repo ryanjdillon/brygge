@@ -144,7 +144,8 @@ watch(memberSearch, (q) => {
     searchLoading.value = true
     try {
       const data = await fetchApi(`/api/v1/admin/users?q=${encodeURIComponent(q.trim())}&limit=20`) as any
-      searchResults.value = data.items ?? []
+      // The admin users endpoint returns { users: [...] }, not { items }.
+      searchResults.value = data.users ?? data.items ?? []
     } catch {
       searchResults.value = []
     } finally {
