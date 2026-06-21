@@ -45,18 +45,18 @@ var supportedUILocales = map[string]bool{
 }
 
 type memberProfile struct {
-	ID              string    `json:"id"`
-	ClubID          string    `json:"club_id"`
-	Email           string    `json:"email"`
-	FirstName       string    `json:"first_name"`
-	LastName        string    `json:"last_name"`
-	FullName        string    `json:"full_name"`
-	Phone           string    `json:"phone"`
-	Address         string    `json:"address_line"`
-	PostalCode      string    `json:"postal_code"`
-	City            string    `json:"city"`
-	IsLocal         bool      `json:"is_local"`
-	HideInDirectory bool      `json:"hide_in_directory"`
+	ID              string `json:"id"`
+	ClubID          string `json:"club_id"`
+	Email           string `json:"email"`
+	FirstName       string `json:"first_name"`
+	LastName        string `json:"last_name"`
+	FullName        string `json:"full_name"`
+	Phone           string `json:"phone"`
+	Address         string `json:"address_line"`
+	PostalCode      string `json:"postal_code"`
+	City            string `json:"city"`
+	IsLocal         bool   `json:"is_local"`
+	HideInDirectory bool   `json:"hide_in_directory"`
 	// PreferredLanguage is nil when the member hasn't chosen one
 	// (→ the UI follows the club default).
 	PreferredLanguage *string   `json:"preferred_language"`
@@ -411,7 +411,6 @@ func applyBoatUpdates(current *boat, req updateBoatRequest) {
 		current.BoatModelID = req.BoatModelID
 	}
 }
-
 
 func (h *MembersHandler) HandleUpdateBoat(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()

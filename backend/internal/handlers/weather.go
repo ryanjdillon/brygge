@@ -149,10 +149,10 @@ func parseYrResponse(body []byte) (*weatherResponse, error) {
 				Data struct {
 					Instant struct {
 						Details struct {
-							AirTemperature      *float64 `json:"air_temperature"`
-							WindSpeed           *float64 `json:"wind_speed"`
-							WindFromDirection   *float64 `json:"wind_from_direction"`
-							RelativeHumidity    *float64 `json:"relative_humidity"`
+							AirTemperature    *float64 `json:"air_temperature"`
+							WindSpeed         *float64 `json:"wind_speed"`
+							WindFromDirection *float64 `json:"wind_from_direction"`
+							RelativeHumidity  *float64 `json:"relative_humidity"`
 						} `json:"details"`
 					} `json:"instant"`
 					Next1Hours *struct {

@@ -85,7 +85,7 @@ func TestNormalizeRecoveryCode(t *testing.T) {
 		{"ABCDEFGH", "ABCD-EFGH"},
 		{" ABCD-EFGH ", "ABCD-EFGH"},
 		{"abcd efgh", "ABCD-EFGH"},
-		{"ABCD-EFG", ""},  // too short
+		{"ABCD-EFG", ""},   // too short
 		{"ABCD-EFGHI", ""}, // too long
 		{"", ""},
 	}

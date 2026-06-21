@@ -342,7 +342,7 @@ func TestDefaultCategories(t *testing.T) {
 		"payment_reminder":   true,
 		"slip_offer":         true,
 		"booking_confirm":    true,
-		"volunteer_reminder":    true,
+		"volunteer_reminder": true,
 		"board_announcement": true,
 		"waiting_list":       true,
 		"new_document":       false,

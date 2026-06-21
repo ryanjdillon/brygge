@@ -83,13 +83,13 @@ func (h *AccountingHandler) HandleSeedAccounts(w http.ResponseWriter, r *http.Re
 }
 
 type createAccountRequest struct {
-	Code        string                   `json:"code"`
-	Name        string                   `json:"name"`
-	AccountType accounting.AccountType   `json:"account_type"`
-	ParentCode  string                   `json:"parent_code"`
+	Code        string                    `json:"code"`
+	Name        string                    `json:"name"`
+	AccountType accounting.AccountType    `json:"account_type"`
+	ParentCode  string                    `json:"parent_code"`
 	MVAEligible accounting.MVAEligibility `json:"mva_eligible"`
-	Description string                   `json:"description"`
-	SortOrder   int                      `json:"sort_order"`
+	Description string                    `json:"description"`
+	SortOrder   int                       `json:"sort_order"`
 }
 
 func (h *AccountingHandler) HandleCreateAccount(w http.ResponseWriter, r *http.Request) {
@@ -135,8 +135,8 @@ func (h *AccountingHandler) HandleCreateAccount(w http.ResponseWriter, r *http.R
 }
 
 type updateAccountRequest struct {
-	Name        string                   `json:"name"`
-	Description string                   `json:"description"`
+	Name        string                    `json:"name"`
+	Description string                    `json:"description"`
 	MVAEligible accounting.MVAEligibility `json:"mva_eligible"`
 }
 
@@ -342,10 +342,10 @@ func (h *AccountingHandler) HandleListJournalEntries(w http.ResponseWriter, r *h
 }
 
 type createJournalEntryRequest struct {
-	FiscalPeriodID string                    `json:"fiscal_period_id"`
-	EntryDate      string                    `json:"entry_date"`
-	Description    string                    `json:"description"`
-	AttachmentURL  *string                   `json:"attachment_url"`
+	FiscalPeriodID string                     `json:"fiscal_period_id"`
+	EntryDate      string                     `json:"entry_date"`
+	Description    string                     `json:"description"`
+	AttachmentURL  *string                    `json:"attachment_url"`
 	Lines          []createJournalLineRequest `json:"lines"`
 }
 
@@ -2136,4 +2136,3 @@ func (h *AccountingHandler) HandleGetVippsImport(w http.ResponseWriter, r *http.
 	}
 	JSON(w, http.StatusOK, out)
 }
-

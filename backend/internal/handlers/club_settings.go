@@ -237,10 +237,10 @@ type clubFinancialSettings struct {
 	TreasurerEmail    string   `json:"treasurer_email"`
 	SecretaryEmail    string   `json:"secretary_email"`
 	HarborMasterEmail string   `json:"harbor_master_email"`
-	HasFakturaLogo  bool   `json:"has_faktura_logo"`
-	FakturaLogoMIME string `json:"faktura_logo_mime"`
-	HasSiteLogo     bool   `json:"has_site_logo"`
-	SiteLogoMIME    string `json:"site_logo_mime"`
+	HasFakturaLogo    bool     `json:"has_faktura_logo"`
+	FakturaLogoMIME   string   `json:"faktura_logo_mime"`
+	HasSiteLogo       bool     `json:"has_site_logo"`
+	SiteLogoMIME      string   `json:"site_logo_mime"`
 	// Public site content — empty string means "use the frontend's
 	// i18n fallback so the page reads sensibly even before any admin
 	// has visited settings".

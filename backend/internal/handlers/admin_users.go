@@ -360,20 +360,20 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 	defer rows.Close()
 
 	type userRow struct {
-		ID                 string    `json:"id"`
-		Email              string    `json:"email"`
-		FirstName          string    `json:"first_name"`
-		LastName           string    `json:"last_name"`
-		FullName           string    `json:"full_name"`
-		Phone              string    `json:"phone"`
-		AddressLine        string    `json:"address_line"`
-		PostalCode         string    `json:"postal_code"`
-		City               string    `json:"city"`
-		IsLocal            bool      `json:"is_local"`
-		AdminNotes         string    `json:"admin_notes"`
-		CreatedAt          time.Time `json:"created_at"`
-		UpdatedAt          time.Time `json:"updated_at"`
-		Roles              []string  `json:"roles"`
+		ID                 string          `json:"id"`
+		Email              string          `json:"email"`
+		FirstName          string          `json:"first_name"`
+		LastName           string          `json:"last_name"`
+		FullName           string          `json:"full_name"`
+		Phone              string          `json:"phone"`
+		AddressLine        string          `json:"address_line"`
+		PostalCode         string          `json:"postal_code"`
+		City               string          `json:"city"`
+		IsLocal            bool            `json:"is_local"`
+		AdminNotes         string          `json:"admin_notes"`
+		CreatedAt          time.Time       `json:"created_at"`
+		UpdatedAt          time.Time       `json:"updated_at"`
+		Roles              []string        `json:"roles"`
 		SlipID             *string         `json:"slip_id,omitempty"`
 		SlipNumber         string          `json:"slip_number"`
 		SlipSection        string          `json:"slip_section"`
@@ -493,15 +493,15 @@ func (h *AdminUsersHandler) HandleGetUser(w http.ResponseWriter, r *http.Request
 	}
 
 	type boatRow struct {
-		ID                 string   `json:"id"`
-		Name               string   `json:"name"`
-		Type               string   `json:"type"`
-		Manufacturer       string   `json:"manufacturer"`
-		Model              string   `json:"model"`
-		LengthM            *float64 `json:"length_m"`
-		BeamM              *float64 `json:"beam_m"`
-		DraftM             *float64 `json:"draft_m"`
-		WeightKg           *float64 `json:"weight_kg"`
+		ID                    string   `json:"id"`
+		Name                  string   `json:"name"`
+		Type                  string   `json:"type"`
+		Manufacturer          string   `json:"manufacturer"`
+		Model                 string   `json:"model"`
+		LengthM               *float64 `json:"length_m"`
+		BeamM                 *float64 `json:"beam_m"`
+		DraftM                *float64 `json:"draft_m"`
+		WeightKg              *float64 `json:"weight_kg"`
 		RegistrationNumber    string   `json:"registration_number"`
 		MMSI                  string   `json:"mmsi"`
 		CallSign              string   `json:"call_sign"`
@@ -543,11 +543,11 @@ func (h *AdminUsersHandler) HandleGetUser(w http.ResponseWriter, r *http.Request
 	}
 
 	type paymentRow struct {
-		ID        string  `json:"id"`
-		Type      string  `json:"type"`
-		Amount    float64 `json:"amount"`
-		Currency  string  `json:"currency"`
-		Status    string  `json:"status"`
+		ID        string     `json:"id"`
+		Type      string     `json:"type"`
+		Amount    float64    `json:"amount"`
+		Currency  string     `json:"currency"`
+		Status    string     `json:"status"`
 		PaidAt    *time.Time `json:"paid_at"`
 		CreatedAt time.Time  `json:"created_at"`
 	}
@@ -923,7 +923,9 @@ func (e *validationError) Error() string { return e.msg }
 
 type duplicateError struct{ email string }
 
-func (e *duplicateError) Error() string { return fmt.Sprintf("user with email %q already exists", e.email) }
+func (e *duplicateError) Error() string {
+	return fmt.Sprintf("user with email %q already exists", e.email)
+}
 
 // createUser inserts a single user + roles inside a transaction. Returns
 // the new user's ID. Errors are typed (validationError / duplicateError)
@@ -1514,7 +1516,6 @@ func (h *AdminUsersHandler) HandleSetUserBoatSlip(w http.ResponseWriter, r *http
 		"assignment_id":   newAssignmentID,
 	})
 }
-
 
 type slipAssignmentRow struct {
 	SlipID         string  `json:"slip_id"`

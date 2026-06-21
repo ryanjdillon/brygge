@@ -29,13 +29,13 @@ func NewBankAccountsHandler(db *pgxpool.Pool, log zerolog.Logger) *BankAccountsH
 }
 
 type bankAccount struct {
-	ID                    string    `json:"id"`
-	AccountNumber         string    `json:"account_number"`
-	Role                  string    `json:"role"`
-	GLCode                string    `json:"gl_code"`
-	Label                 string    `json:"label"`
-	IsDefaultForInvoices  bool      `json:"is_default_for_invoices"`
-	CreatedAt             time.Time `json:"created_at"`
+	ID                   string    `json:"id"`
+	AccountNumber        string    `json:"account_number"`
+	Role                 string    `json:"role"`
+	GLCode               string    `json:"gl_code"`
+	Label                string    `json:"label"`
+	IsDefaultForInvoices bool      `json:"is_default_for_invoices"`
+	CreatedAt            time.Time `json:"created_at"`
 }
 
 var validRoles = map[string]struct{}{

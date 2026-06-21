@@ -54,13 +54,13 @@ type waitingListEntry struct {
 
 type waitingListEntryWithUser struct {
 	waitingListEntry
-	FullName string  `json:"full_name"`
-	Email    string  `json:"email"`
-	Phone    string  `json:"phone"`
-	BoatID   *string `json:"boat_id,omitempty"`
-	BoatName *string `json:"boat_name,omitempty"`
-	BoatBeam *float64 `json:"boat_beam,omitempty"`
-	BoatConfirmed *bool `json:"boat_confirmed,omitempty"`
+	FullName      string   `json:"full_name"`
+	Email         string   `json:"email"`
+	Phone         string   `json:"phone"`
+	BoatID        *string  `json:"boat_id,omitempty"`
+	BoatName      *string  `json:"boat_name,omitempty"`
+	BoatBeam      *float64 `json:"boat_beam,omitempty"`
+	BoatConfirmed *bool    `json:"boat_confirmed,omitempty"`
 }
 
 type portalWaitingListEntry struct {

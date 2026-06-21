@@ -50,24 +50,24 @@ type projectWithCounts struct {
 }
 
 type task struct {
-	ID               string           `json:"id"`
-	ProjectID        string           `json:"project_id"`
-	ClubID           string           `json:"club_id"`
-	Title            string           `json:"title"`
-	Description      string           `json:"description"`
-	AssigneeID       *string          `json:"assignee_id"`
-	Status           string           `json:"status"`
-	Priority         string           `json:"priority"`
-	DueDate          *string          `json:"due_date"`
-	CreatedBy        string           `json:"created_by"`
-	CreatedAt        time.Time        `json:"created_at"`
-	UpdatedAt        time.Time        `json:"updated_at"`
-	EstimatedHours   *float64         `json:"estimated_hours"`
-	ActualHours      *float64         `json:"actual_hours"`
-	ResponsibleID    *string          `json:"responsible_id"`
-	MaxCollaborators int              `json:"max_collaborators"`
-	Materials        json.RawMessage  `json:"materials"`
-	ParticipantCount int              `json:"participant_count"`
+	ID               string          `json:"id"`
+	ProjectID        string          `json:"project_id"`
+	ClubID           string          `json:"club_id"`
+	Title            string          `json:"title"`
+	Description      string          `json:"description"`
+	AssigneeID       *string         `json:"assignee_id"`
+	Status           string          `json:"status"`
+	Priority         string          `json:"priority"`
+	DueDate          *string         `json:"due_date"`
+	CreatedBy        string          `json:"created_by"`
+	CreatedAt        time.Time       `json:"created_at"`
+	UpdatedAt        time.Time       `json:"updated_at"`
+	EstimatedHours   *float64        `json:"estimated_hours"`
+	ActualHours      *float64        `json:"actual_hours"`
+	ResponsibleID    *string         `json:"responsible_id"`
+	MaxCollaborators int             `json:"max_collaborators"`
+	Materials        json.RawMessage `json:"materials"`
+	ParticipantCount int             `json:"participant_count"`
 }
 
 type groupedTasks struct {

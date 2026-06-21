@@ -29,7 +29,6 @@ func newTestWaitingListHandler(t *testing.T) *WaitingListHandler {
 func waitingListRouter(t *testing.T, h *WaitingListHandler) *chi.Mux {
 	t.Helper()
 	r := chi.NewRouter()
-	
 
 	r.Route("/waiting-list", func(r chi.Router) {
 		r.Use(testAuthMiddleware)

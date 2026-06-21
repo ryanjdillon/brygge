@@ -93,7 +93,7 @@ func TestHandleCancelBookingUnauthorized(t *testing.T) {
 	h := newTestBookingsHandler(t)
 
 	r := chi.NewRouter()
-	
+
 	r.Group(func(r chi.Router) {
 		r.Use(testAuthMiddleware)
 		r.Post("/bookings/{bookingID}/cancel", h.HandleCancelBooking)
@@ -113,7 +113,7 @@ func TestHandleConfirmBookingRequiresStyre(t *testing.T) {
 	h := newTestBookingsHandler(t)
 
 	r := chi.NewRouter()
-	
+
 	r.Group(func(r chi.Router) {
 		r.Use(testAuthMiddleware)
 		r.Use(middleware.RequireRole("board", "harbor_master"))
@@ -140,4 +140,3 @@ func TestHandleConfirmBookingRequiresStyre(t *testing.T) {
 		t.Errorf("expected insufficient permissions error, got %q", resp.Error)
 	}
 }
-

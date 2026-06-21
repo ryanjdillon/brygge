@@ -121,7 +121,7 @@ func TestHandleTOTPVerifyMissingCode(t *testing.T) {
 	h := NewTOTPHandler(nil, cfg, nil, nil, log)
 
 	r := chi.NewRouter()
-	
+
 	r.Group(func(r chi.Router) {
 		r.Use(testAuthMiddleware)
 		r.Post("/totp/verify", h.HandleVerify)

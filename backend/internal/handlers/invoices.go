@@ -346,22 +346,22 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 
 	// Generate PDF
 	inv := finance.Invoice{
-		ClubName:      clubName,
-		OrgNumber:     orgNumber,
+		ClubName:       clubName,
+		OrgNumber:      orgNumber,
 		ClubAddress:    clubAddress,
 		Website:        website,
 		TreasurerEmail: treasurerEmail,
 		LogoData:       logoData,
 		LogoMIME:       logoMIME,
 		MemberName:     pdfMemberName,
-		MemberAddress: pdfMemberAddress,
-		OrgRecipient:  orgRecipient,
-		InvoiceNumber: invoiceSeq,
-		IssueDate:     time.Now(),
-		DueDate:       dueDate,
-		KID:           kid,
-		BankAccount:   bankAccount,
-		Lines:         pdfLines,
+		MemberAddress:  pdfMemberAddress,
+		OrgRecipient:   orgRecipient,
+		InvoiceNumber:  invoiceSeq,
+		IssueDate:      time.Now(),
+		DueDate:        dueDate,
+		KID:            kid,
+		BankAccount:    bankAccount,
+		Lines:          pdfLines,
 	}
 
 	pdfData, err := finance.GeneratePDF(inv)
@@ -1117,9 +1117,9 @@ func (h *InvoiceHandler) HandleResendInvoice(w http.ResponseWriter, r *http.Requ
 		h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,
 			audit.ActionInvoiceEmailed, "invoice", invoiceID,
 			map[string]any{
-				"email":          deliverTo,
-				"invoice_number": invoiceNumber,
-				"resend":         true,
+				"email":            deliverTo,
+				"invoice_number":   invoiceNumber,
+				"resend":           true,
 				"original_sent_at": sentAt.Format(time.RFC3339),
 			})
 	}

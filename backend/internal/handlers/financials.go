@@ -36,12 +36,12 @@ func NewFinancialsHandler(db *pgxpool.Pool, cfg *config.Config, auditService *au
 }
 
 type financialSummary struct {
-	TotalDuesReceived  float64 `json:"total_dues_received"`
-	TotalOutstanding   float64 `json:"total_outstanding"`
-	TotalOverdue       float64 `json:"total_overdue"`
+	TotalDuesReceived              float64 `json:"total_dues_received"`
+	TotalOutstanding               float64 `json:"total_outstanding"`
+	TotalOverdue                   float64 `json:"total_overdue"`
 	TotalHarborMembershipCollected float64 `json:"total_harbor_membership_collected"`
-	TotalBookingRevenue float64 `json:"total_booking_revenue"`
-	Year               *int    `json:"year,omitempty"`
+	TotalBookingRevenue            float64 `json:"total_booking_revenue"`
+	Year                           *int    `json:"year,omitempty"`
 }
 
 type priceItemSummaryRow struct {
@@ -61,8 +61,8 @@ type priceItemSummaryRow struct {
 }
 
 type priceItemSummaryResponse struct {
-	Year  *int                   `json:"year,omitempty"`
-	Items []priceItemSummaryRow  `json:"items"`
+	Year  *int                  `json:"year,omitempty"`
+	Items []priceItemSummaryRow `json:"items"`
 	// Totals across every price item in the response — convenient for
 	// the dashboard's headline numbers without re-summing client-side.
 	Totals struct {

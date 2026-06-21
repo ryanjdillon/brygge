@@ -24,7 +24,7 @@ func TestHandleCreateEventUnauthorized(t *testing.T) {
 	h := newTestCalendarHandler(t)
 
 	r := chi.NewRouter()
-	
+
 	r.Group(func(r chi.Router) {
 		r.Use(testAuthMiddleware)
 		r.Use(middleware.RequireRole("board"))
@@ -45,7 +45,7 @@ func TestHandleCreateEventForbiddenForMember(t *testing.T) {
 	h := newTestCalendarHandler(t)
 
 	r := chi.NewRouter()
-	
+
 	r.Group(func(r chi.Router) {
 		r.Use(testAuthMiddleware)
 		r.Use(middleware.RequireRole("board"))
@@ -121,7 +121,7 @@ func TestHandleCreateEventMissingFields(t *testing.T) {
 	h := newTestCalendarHandler(t)
 
 	r := chi.NewRouter()
-	
+
 	r.Group(func(r chi.Router) {
 		r.Use(testAuthMiddleware)
 		r.Post("/calendar", h.HandleCreateEvent)
@@ -184,7 +184,7 @@ func TestHandleCreateEventInvalidTimestamps(t *testing.T) {
 	h := newTestCalendarHandler(t)
 
 	r := chi.NewRouter()
-	
+
 	r.Group(func(r chi.Router) {
 		r.Use(testAuthMiddleware)
 		r.Post("/calendar", h.HandleCreateEvent)
@@ -237,7 +237,7 @@ func TestHandleCreateEventEndBeforeStart(t *testing.T) {
 	h := newTestCalendarHandler(t)
 
 	r := chi.NewRouter()
-	
+
 	r.Group(func(r chi.Router) {
 		r.Use(testAuthMiddleware)
 		r.Post("/calendar", h.HandleCreateEvent)

@@ -326,10 +326,10 @@ func (h *HarborHandler) HandlePutLayout(w http.ResponseWriter, r *http.Request) 
 	}
 
 	type putRequest struct {
-		Type              string    `json:"type"`
-		Features          []feature `json:"features"`
-		DeletedFingerIDs  []string  `json:"deleted_finger_ids"`
-		Docks             []dock    `json:"docks"`
+		Type             string    `json:"type"`
+		Features         []feature `json:"features"`
+		DeletedFingerIDs []string  `json:"deleted_finger_ids"`
+		Docks            []dock    `json:"docks"`
 	}
 	var req putRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

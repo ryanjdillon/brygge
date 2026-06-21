@@ -405,4 +405,3 @@ func (h *FeatureRequestsHandler) HandlePromoteToTask(w http.ResponseWriter, r *h
 
 	JSON(w, http.StatusCreated, t)
 }
-

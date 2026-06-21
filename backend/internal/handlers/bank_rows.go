@@ -384,9 +384,9 @@ func (h *BankRowsHandler) HandlePairRefund(w http.ResponseWriter, r *http.Reques
 		h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,
 			audit.ActionBankRowRefundPaired, "bank_import_row", rowID,
 			map[string]any{
-				"outbound_row_id":        req.OutboundRowID,
-				"inbound_journal_id":     inboundJournal,
-				"outbound_journal_id":    outboundJournal,
+				"outbound_row_id":     req.OutboundRowID,
+				"inbound_journal_id":  inboundJournal,
+				"outbound_journal_id": outboundJournal,
 			})
 	}
 	JSON(w, http.StatusOK, map[string]any{

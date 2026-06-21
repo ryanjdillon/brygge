@@ -15,4 +15,3 @@ func JSON(w http.ResponseWriter, status int, data any) {
 func Error(w http.ResponseWriter, status int, message string) {
 	shared.Error(w, status, message)
 }
-

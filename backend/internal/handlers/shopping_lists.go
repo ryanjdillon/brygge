@@ -79,9 +79,9 @@ type addItemRequest struct {
 }
 
 type fromTasksRequest struct {
-	TaskIDs    []string `json:"task_ids"`
-	ProjectID  *string  `json:"project_id"`
-	EventID    *string  `json:"event_id"`
+	TaskIDs   []string `json:"task_ids"`
+	ProjectID *string  `json:"project_id"`
+	EventID   *string  `json:"event_id"`
 }
 
 func (h *ShoppingListsHandler) HandleListShoppingLists(w http.ResponseWriter, r *http.Request) {

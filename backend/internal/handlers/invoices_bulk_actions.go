@@ -152,16 +152,16 @@ func (h *InvoiceHandler) sendOneReminder(
 	ctx context.Context, clubID, actorID, remoteAddr, invoiceID, clubName, defaultBank, locale string,
 ) error {
 	var (
-		invoiceNumber int
-		memberName    string
-		memberEmail   string
+		invoiceNumber  int
+		memberName     string
+		memberEmail    string
 		recipientEmail string
-		dueDate       time.Time
-		total         float64
-		kid           string
-		pdfData       []byte
-		sentAt        *time.Time
-		paymentID     *string
+		dueDate        time.Time
+		total          float64
+		kid            string
+		pdfData        []byte
+		sentAt         *time.Time
+		paymentID      *string
 	)
 	err := h.db.QueryRow(ctx,
 		`SELECT i.invoice_number,
@@ -309,19 +309,19 @@ func (h *InvoiceHandler) regenerateOnePDF(
 	ctx context.Context, clubID, actorID, remoteAddr, invoiceID string, club *clubInvoiceFields,
 ) error {
 	var (
-		invoiceNumber  int
-		userID         *string
-		memberName     string
-		memberAddress  string
-		recipientKind  string
-		orgName        string
-		orgNumber      string
-		orgAddress     string
-		orgContact     string
-		orgTheirRef    string
-		issueDate      time.Time
-		dueDate        time.Time
-		kid            string
+		invoiceNumber int
+		userID        *string
+		memberName    string
+		memberAddress string
+		recipientKind string
+		orgName       string
+		orgNumber     string
+		orgAddress    string
+		orgContact    string
+		orgTheirRef   string
+		issueDate     time.Time
+		dueDate       time.Time
+		kid           string
 		// Existing PDF bytes — archived before the overwrite so
 		// bokføringsloven §13 retention is honored. See DIL-374.
 		existingPDF []byte
@@ -494,9 +494,9 @@ func (h *InvoiceHandler) regenerateOnePDF(
 		h.audit.LogAction(ctx, clubID, actorID, remoteAddr,
 			audit.ActionInvoiceRegenerated, "invoice", invoiceID,
 			map[string]any{
-				"invoice_number":   invoiceNumber,
-				"bank_account":     club.BankAccount,
-				"prior_pdf_bytes":  len(existingPDF),
+				"invoice_number":  invoiceNumber,
+				"bank_account":    club.BankAccount,
+				"prior_pdf_bytes": len(existingPDF),
 			})
 	}
 	return nil
@@ -661,4 +661,3 @@ func (h *InvoiceHandler) loadInvoiceLinesForPDF(ctx context.Context, invoiceID s
 	}
 	return out, nil
 }
-

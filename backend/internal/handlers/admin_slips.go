@@ -76,14 +76,14 @@ func (h *AdminSlipsHandler) HandleListSlips(w http.ResponseWriter, r *http.Reque
 		argIdx++
 	}
 	sortOrders := map[string]string{
-		"slip":       "s.section, s.number",
-		"-slip":      "s.section DESC, s.number DESC",
-		"status":     "s.status",
-		"-status":    "s.status DESC",
-		"assignee":   "u.full_name NULLS LAST",
-		"-assignee":  "u.full_name DESC NULLS LAST",
-		"boat":       "b.name NULLS LAST",
-		"-boat":      "b.name DESC NULLS LAST",
+		"slip":      "s.section, s.number",
+		"-slip":     "s.section DESC, s.number DESC",
+		"status":    "s.status",
+		"-status":   "s.status DESC",
+		"assignee":  "u.full_name NULLS LAST",
+		"-assignee": "u.full_name DESC NULLS LAST",
+		"boat":      "b.name NULLS LAST",
+		"-boat":     "b.name DESC NULLS LAST",
 	}
 	orderExpr := "s.section, s.number"
 	if expr, ok := sortOrders[r.URL.Query().Get("sort")]; ok {
@@ -102,29 +102,29 @@ func (h *AdminSlipsHandler) HandleListSlips(w http.ResponseWriter, r *http.Reque
 	defer rows.Close()
 
 	type slipRow struct {
-		ID            string   `json:"id"`
-		Number        string   `json:"number"`
-		Section       string   `json:"section"`
-		LengthM       *float64 `json:"length_m"`
-		WidthM        *float64 `json:"width_m"`
-		DepthM        *float64 `json:"depth_m"`
-		Status        string   `json:"status"`
-		Notes         string   `json:"notes"`
-		MapX          *float64 `json:"map_x"`
-		MapY          *float64 `json:"map_y"`
-		CreatedAt     time.Time `json:"created_at"`
-		UpdatedAt     time.Time `json:"updated_at"`
-		OccupantID    *string  `json:"occupant_id"`
-		OccupantName  *string  `json:"occupant_name"`
-		OccupantEmail *string  `json:"occupant_email"`
-		AssignmentType *string `json:"assignment_type"`
-		BoatID            *string  `json:"boat_id"`
-		BoatName          *string  `json:"boat_name"`
-		BoatManufacturer  *string  `json:"boat_manufacturer"`
-		BoatModel         *string  `json:"boat_model"`
-		BoatLengthM       *float64 `json:"boat_length_m"`
-		BoatBeamM         *float64 `json:"boat_beam_m"`
-		BoatWeightKg      *float64 `json:"boat_weight_kg"`
+		ID               string    `json:"id"`
+		Number           string    `json:"number"`
+		Section          string    `json:"section"`
+		LengthM          *float64  `json:"length_m"`
+		WidthM           *float64  `json:"width_m"`
+		DepthM           *float64  `json:"depth_m"`
+		Status           string    `json:"status"`
+		Notes            string    `json:"notes"`
+		MapX             *float64  `json:"map_x"`
+		MapY             *float64  `json:"map_y"`
+		CreatedAt        time.Time `json:"created_at"`
+		UpdatedAt        time.Time `json:"updated_at"`
+		OccupantID       *string   `json:"occupant_id"`
+		OccupantName     *string   `json:"occupant_name"`
+		OccupantEmail    *string   `json:"occupant_email"`
+		AssignmentType   *string   `json:"assignment_type"`
+		BoatID           *string   `json:"boat_id"`
+		BoatName         *string   `json:"boat_name"`
+		BoatManufacturer *string   `json:"boat_manufacturer"`
+		BoatModel        *string   `json:"boat_model"`
+		BoatLengthM      *float64  `json:"boat_length_m"`
+		BoatBeamM        *float64  `json:"boat_beam_m"`
+		BoatWeightKg     *float64  `json:"boat_weight_kg"`
 	}
 
 	var slips []slipRow
@@ -205,9 +205,9 @@ func (h *AdminSlipsHandler) HandleGetSlip(w http.ResponseWriter, r *http.Request
 	}
 
 	type assignmentRow struct {
-		ID          string   `json:"id"`
-		UserID      string   `json:"user_id"`
-		UserName    string   `json:"user_name"`
+		ID                     string   `json:"id"`
+		UserID                 string   `json:"user_id"`
+		UserName               string   `json:"user_name"`
 		HarborMembershipAmount *float64 `json:"harbor_membership_amount"`
 		AssignedAt             string   `json:"assigned_at"`
 		ReleasedAt             *string  `json:"released_at"`
@@ -481,7 +481,7 @@ func (h *AdminSlipsHandler) HandleAssignSlip(w http.ResponseWriter, r *http.Requ
 	}
 
 	var req struct {
-		UserID      string   `json:"user_id"`
+		UserID                 string   `json:"user_id"`
 		HarborMembershipAmount *float64 `json:"harbor_membership_amount"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -547,7 +547,7 @@ func (h *AdminSlipsHandler) HandleAssignSlip(w http.ResponseWriter, r *http.Requ
 	newData, _ := json.Marshal(map[string]any{
 		"user_id":                  req.UserID,
 		"harbor_membership_amount": req.HarborMembershipAmount,
-		"assignment_id": assignmentID,
+		"assignment_id":            assignmentID,
 	})
 	_, err = tx.Exec(ctx,
 		`INSERT INTO audit_log (club_id, actor_id, action, resource, resource_id, details)

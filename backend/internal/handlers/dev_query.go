@@ -52,11 +52,11 @@ type devQueryRequest struct {
 }
 
 type devQueryResponse struct {
-	Columns   []string  `json:"columns"`
-	Rows      [][]any   `json:"rows"`
-	RowCount  int       `json:"row_count"`
-	ElapsedMs int64     `json:"elapsed_ms"`
-	Truncated bool      `json:"truncated"`
+	Columns   []string `json:"columns"`
+	Rows      [][]any  `json:"rows"`
+	RowCount  int      `json:"row_count"`
+	ElapsedMs int64    `json:"elapsed_ms"`
+	Truncated bool     `json:"truncated"`
 }
 
 const (

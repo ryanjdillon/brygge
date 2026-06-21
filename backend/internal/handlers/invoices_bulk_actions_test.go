@@ -288,10 +288,10 @@ func seedPriceItem(t *testing.T, db *pgxpool.Pool, clubID, category, name string
 func doBulkRequest(t *testing.T, h *InvoiceHandler, userID, clubID, periodID string, priceItemIDs []string, dueDate string) bulkInvoiceResponse {
 	t.Helper()
 	body, _ := json.Marshal(map[string]any{
-		"user_ids":        []string{userID},
+		"user_ids":         []string{userID},
 		"fiscal_period_id": periodID,
-		"price_item_ids":  priceItemIDs,
-		"due_date":        dueDate,
+		"price_item_ids":   priceItemIDs,
+		"due_date":         dueDate,
 	})
 	req := httptest.NewRequest(http.MethodPost, "/admin/financials/invoices/bulk", bytes.NewReader(body))
 	req = req.WithContext(withTestClaims(req.Context(), "board-user", clubID, []string{"board"}))
