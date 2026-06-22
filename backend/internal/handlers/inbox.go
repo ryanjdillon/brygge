@@ -44,7 +44,8 @@ type InboxHandler struct {
 	adminUser   string
 	adminPass   string
 	passwords   mail.PrincipalPasswords // shared-principal service passwords (DIL-278 send path)
-	clubAbbrev  string                  // uppercased club slug, e.g. "KBL" — prepended to From names
+	clubAbbrev  string                  // uppercased club slug, e.g. "KBL" — fallback brand when clubName is unset
+	clubName    string                  // human-readable club name, e.g. "Klokkarvik Båtlag" — brand in From names
 	audit       *audit.Service
 	spec        []mail.MailboxSpec
 	log         zerolog.Logger
@@ -76,7 +77,7 @@ type InboxHandler struct {
 	sendTargets map[string]sendTarget
 }
 
-func NewInboxHandler(db *pgxpool.Pool, jmapFact *mail.JMAPFactory, provisioner *mail.UserProvisioner, adminUser, adminPass string, passwords mail.PrincipalPasswords, clubSlug string, auditSvc *audit.Service, spec []mail.MailboxSpec, frontendURL, totpEncryptionKey string, log zerolog.Logger) *InboxHandler {
+func NewInboxHandler(db *pgxpool.Pool, jmapFact *mail.JMAPFactory, provisioner *mail.UserProvisioner, adminUser, adminPass string, passwords mail.PrincipalPasswords, clubSlug, clubName string, auditSvc *audit.Service, spec []mail.MailboxSpec, frontendURL, totpEncryptionKey string, log zerolog.Logger) *InboxHandler {
 	secret, _ := hex.DecodeString(totpEncryptionKey)
 	return &InboxHandler{
 		db:                db,
@@ -86,6 +87,7 @@ func NewInboxHandler(db *pgxpool.Pool, jmapFact *mail.JMAPFactory, provisioner *
 		adminPass:         adminPass,
 		passwords:         passwords,
 		clubAbbrev:        strings.ToUpper(clubSlug),
+		clubName:          clubName,
 		audit:             auditSvc,
 		spec:              spec,
 		frontendURL:       frontendURL,
@@ -109,9 +111,13 @@ type MailboxView struct {
 	Address     string `json:"address"`
 	Role        string `json:"role"`
 	DisplayName string `json:"display_name"`
-	Unread      int    `json:"unread"`
-	Total       int    `json:"total"`
-	CanSendAs   bool   `json:"can_send_as"`
+	// FromName is the outward sender/signature name (brand-first, e.g.
+	// "Klokkarvik Båtlag – Kasserar"); display_name stays the short
+	// sidebar label.
+	FromName  string `json:"from_name"`
+	Unread    int    `json:"unread"`
+	Total     int    `json:"total"`
+	CanSendAs bool   `json:"can_send_as"`
 }
 
 // HandleListMailboxes returns mailboxes the caller can read, with
@@ -147,6 +153,7 @@ func (h *InboxHandler) HandleListMailboxes(w http.ResponseWriter, r *http.Reques
 			Address:     s.Address,
 			Role:        s.Role,
 			DisplayName: s.DisplayName,
+			FromName:    h.fromName(s),
 			CanSendAs:   s.SendAs,
 		}
 		if total, unread, err := h.mailboxCounts(ctx, userJMAP, s.Address); err == nil {
@@ -919,22 +926,36 @@ func (h *InboxHandler) resolveSendTarget(ctx context.Context, spec mail.MailboxS
 	return t, jmap, nil
 }
 
+// fromName builds the outward sender/signature name for a shared mailbox.
+// It leads with the full club name as the brand and appends the mailbox's
+// role label (e.g. "Klokkarvik Båtlag – Kasserar") so recipients recognise
+// the club first and the function second. The general mailbox (FromBrandOnly,
+// or one with no display name) shows the bare club name. Falls back to the
+// uppercased slug when the club name is unset. This is the single source of
+// truth for both the From header and the SPA's auto-signature.
+func (h *InboxHandler) fromName(spec mail.MailboxSpec) string {
+	brand := h.clubName
+	if brand == "" {
+		brand = h.clubAbbrev
+	}
+	switch {
+	case brand == "":
+		return spec.DisplayName
+	case spec.FromBrandOnly || spec.DisplayName == "":
+		return brand
+	default:
+		return brand + " – " + spec.DisplayName
+	}
+}
+
 // sendAsPrincipal submits one message as the shared principal for spec.
 // It fills the From identity (club abbreviation + role display name, e.g.
 // "KBL Kasserar") and Reply-To from spec, then submits via JMAP. Shared by
 // the interactive single-send path (HandleSend) and the bulk delivery
 // worker, so the From/identity logic lives in exactly one place.
 func (h *InboxHandler) sendAsPrincipal(ctx context.Context, spec mail.MailboxSpec, req mail.SendEmailRequest) (emailID, messageID string, err error) {
-	// From name combines the club abbreviation (uppercase slug, e.g.
-	// "KBL") with the spec's role display name (e.g. "Kasserar") so
-	// recipients see "KBL Kasserar". Gmail's column override then
-	// surfaces the club's contact-card name in inbox listings.
-	fromName := spec.DisplayName
-	if h.clubAbbrev != "" {
-		fromName = h.clubAbbrev + " " + spec.DisplayName
-	}
 	req.FromAddress = spec.Address
-	req.FromName = fromName
+	req.FromName = h.fromName(spec)
 	req.ReplyTo = spec.Address
 
 	t, jmap, err := h.resolveSendTarget(ctx, spec)

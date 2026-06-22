@@ -8,7 +8,7 @@ vi.mock('@/composables/useApi', () => ({
   useApi: () => ({ fetchApi }),
 }))
 
-const mailboxes = [{ address: 'styret@x.no', display_name: 'Styret', can_send_as: true }]
+const mailboxes = [{ address: 'styret@x.no', display_name: 'Styret', from_name: 'Klokkarvik Båtlag – Styret', can_send_as: true }]
 
 function mountModal() {
   return mountWithPlugins(ComposeModal, {
@@ -20,14 +20,16 @@ function mountModal() {
 describe('ComposeModal bulk UX', () => {
   beforeEach(() => fetchApi.mockReset())
 
-  it('shows the individual-send notice in the preview for a group send', async () => {
+  it('shows the individual-send notice in the broadcast preview', async () => {
     const wrapper = mountModal()
     const vm = wrapper.vm as unknown as {
+      mode: string
       recipients: { groups: string[]; individuals: unknown[] }
       subject: string
       body: string
       step: string
     }
+    vm.mode = 'broadcast'
     vm.recipients = { groups: ['members'], individuals: [] }
     vm.subject = 'Hei'
     vm.body = 'Body'
@@ -37,16 +39,37 @@ describe('ComposeModal bulk UX', () => {
     expect(wrapper.text()).toContain('individuelle e-postar')
   })
 
+  it('shows the everyone-visible notice in the standard preview', async () => {
+    const wrapper = mountModal()
+    const vm = wrapper.vm as unknown as {
+      recipients: { groups: string[]; individuals: { name: string; email: string }[] }
+      subject: string
+      body: string
+      step: string
+    }
+    // mode defaults to 'standard'
+    vm.recipients = { groups: [], individuals: [{ name: 'A', email: 'a@x.no' }] }
+    vm.subject = 'Hei'
+    vm.body = 'Body'
+    vm.step = 'preview'
+    await nextTick()
+
+    expect(wrapper.text()).toContain('ser kvarandre')
+    expect(wrapper.text()).not.toContain('individuelle e-postar')
+  })
+
   it('renders the queued state and emits view-broadcasts after a 202 response', async () => {
     fetchApi.mockResolvedValue({ broadcast_id: 'b1', recipient_count: 5 })
     const wrapper = mountModal()
     const vm = wrapper.vm as unknown as {
+      mode: string
       recipients: { groups: string[]; individuals: unknown[] }
       subject: string
       body: string
       step: string
       send: () => Promise<void>
     }
+    vm.mode = 'broadcast'
     vm.recipients = { groups: ['members'], individuals: [] }
     vm.subject = 'Hei'
     vm.body = 'Body'

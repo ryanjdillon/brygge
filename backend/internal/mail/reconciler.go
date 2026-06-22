@@ -32,6 +32,10 @@ type MailboxSpec struct {
 	BccMembers    bool   `json:"bcc_members"`
 	RetentionDays *int   `json:"retention_days,omitempty"`
 	Managed       *bool  `json:"managed,omitempty"`
+	// FromBrandOnly makes outgoing mail from this mailbox use the bare
+	// club name as the From/signature name (e.g. "Klokkarvik Båtlag")
+	// instead of appending the role label. For the general post@ mailbox.
+	FromBrandOnly bool `json:"from_brand_only,omitempty"`
 }
 
 func (s MailboxSpec) managed() bool {

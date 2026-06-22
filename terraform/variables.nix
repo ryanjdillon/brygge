@@ -102,6 +102,7 @@
         + "type = string,"
         + "send_as = optional(bool, false),"
         + "bcc_members = optional(bool, false),"
+        + "from_brand_only = optional(bool, false),"
         + "retention_days = optional(number),"
         + "managed = optional(bool, true)"
         + "}))";

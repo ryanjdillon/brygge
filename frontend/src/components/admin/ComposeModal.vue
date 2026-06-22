@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
-import { Send, X, Trash2, Megaphone } from 'lucide-vue-next'
+import { Send, X, Trash2, Megaphone, Users } from 'lucide-vue-next'
 import RichEditor from '@/components/ui/RichEditor.vue'
 import RecipientPicker, { type RecipientValue } from './RecipientPicker.vue'
 import { useApi } from '@/composables/useApi'
@@ -11,6 +11,7 @@ interface InlineImage { cid: string; blobId: string; name: string; type: string;
 interface MailboxView {
   address: string
   display_name: string
+  from_name: string
   can_send_as: boolean
 }
 
@@ -45,6 +46,21 @@ const subject = ref('')
 const body = ref('')
 const recipients = ref<RecipientValue>({ groups: [], individuals: [] })
 const editorRef = ref<InstanceType<typeof RichEditor> | null>(null)
+
+// Compose mode (BRY): "standard" puts everyone in the To field (one email,
+// recipients see each other); "broadcast" fans out to one individual,
+// tracked email per recipient and unlocks group selection. Colour-coded
+// blue (standard) / amber (broadcast) throughout.
+const mode = ref<'standard' | 'broadcast'>('standard')
+function setMode(m: 'standard' | 'broadcast') {
+  if (mode.value === m) return
+  // Groups are broadcast-only — drop them when leaving broadcast.
+  if (m === 'standard' && recipients.value.groups.length) {
+    recipients.value = { ...recipients.value, groups: [] }
+  }
+  mode.value = m
+}
+const isBroadcast = computed(() => mode.value === 'broadcast')
 
 // Snapshotted before switching to preview (RichEditor unmounts on v-if step change).
 const snapshotAttachments = ref<UploadedFile[]>([])
@@ -115,7 +131,7 @@ const signatureHtml = computed(() => {
     '<br>',
     '<hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0 8px">',
     `<p style="margin:0;font-size:14px;color:#374151">Med venleg helsing,</p>`,
-    `<p style="margin:4px 0 0;font-weight:600;color:#111827">${m.display_name}</p>`,
+    `<p style="margin:4px 0 0;font-weight:600;color:#111827">${m.from_name}</p>`,
     `<p style="margin:2px 0 0;font-size:13px;color:#6b7280"><a href="mailto:${m.address}" style="color:#2563eb;text-decoration:none">${m.address}</a></p>`,
   ].join('')
 })
@@ -123,7 +139,7 @@ const signatureHtml = computed(() => {
 const signatureText = computed(() => {
   const m = selectedMailbox.value
   if (!m) return ''
-  return `\n\n--\nMed venleg helsing,\n${m.display_name}\n${m.address}`
+  return `\n\n--\nMed venleg helsing,\n${m.from_name}\n${m.address}`
 })
 
 async function send() {
@@ -135,13 +151,18 @@ async function send() {
     for (const img of snapshotInlineImages.value) {
       bodyHtml = bodyHtml.replaceAll(img.src, `cid:${img.cid}`)
     }
+    const indiv = recipients.value.individuals.map((i) => ({ name: i.name, email: i.email }))
+    // Standard: everyone in To (one shared email). Broadcast: groups + BCC
+    // fan out to individual, tracked sends.
+    const recipientFields = isBroadcast.value
+      ? { bcc_groups: recipients.value.groups, bcc: indiv }
+      : { to: indiv }
     const res = await fetchApi<{ broadcast_id?: string; recipient_count?: number }>(
       `/api/v1/admin/inbox/${encodeURIComponent(fromAddress.value)}/send`,
       {
         method: 'POST',
         body: JSON.stringify({
-          bcc_groups: recipients.value.groups,
-          bcc: recipients.value.individuals.map((i) => ({ name: i.name, email: i.email })),
+          ...recipientFields,
           subject: subject.value,
           body_html: bodyHtml + signatureHtml.value,
           body_text: htmlToText(body.value) + signatureText.value,
@@ -277,6 +298,29 @@ onBeforeUnmount(() => {
       <div class="min-h-0 flex-1 overflow-hidden p-5">
         <!-- Compose step -->
         <div v-if="step === 'compose'" class="flex h-full flex-col gap-4">
+          <!-- Mode tabs: colour-coded blue (standard) / amber (broadcast)
+               to match the notice below. -->
+          <div class="flex gap-2 rounded-lg border border-gray-200 bg-gray-50 p-1">
+            <button
+              type="button"
+              class="flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition"
+              :class="!isBroadcast ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'"
+              @click="setMode('standard')"
+            >
+              <Users class="h-4 w-4" />
+              Standard
+            </button>
+            <button
+              type="button"
+              class="flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition"
+              :class="isBroadcast ? 'bg-amber-500 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'"
+              @click="setMode('broadcast')"
+            >
+              <Megaphone class="h-4 w-4" />
+              Utsending
+            </button>
+          </div>
+
           <div>
             <label class="block text-xs font-medium uppercase tracking-wide text-gray-500">Fra</label>
             <select
@@ -292,22 +336,34 @@ onBeforeUnmount(() => {
           <div>
             <label class="block text-xs font-medium uppercase tracking-wide text-gray-500">Mottakarar</label>
             <div class="mt-1">
-              <RecipientPicker v-model="recipients" />
+              <RecipientPicker v-model="recipients" :allow-groups="isBroadcast" />
             </div>
           </div>
 
-          <!-- Broadcast indicator: a new message fans out to one tracked,
-               individual email per recipient. Make that unmistakable before
-               the sender hits send. -->
+          <!-- Standard notice (blue): one shared email, recipients visible. -->
           <div
-            v-if="hasRecipients"
+            v-if="hasRecipients && !isBroadcast"
+            class="flex items-start gap-2.5 rounded-md border-2 border-blue-300 bg-blue-50 px-3 py-2.5 text-sm text-blue-900"
+          >
+            <Users class="mt-0.5 h-5 w-5 shrink-0 text-blue-600" />
+            <div>
+              <p class="font-semibold">Vanleg e-post — alle mottakarane ser kvarandre</p>
+              <p class="mt-0.5 text-blue-800">
+                Sendt som éi melding der alle mottakarane står i To-feltet og ser kvarandre sine e-postadresser.
+              </p>
+            </div>
+          </div>
+
+          <!-- Broadcast notice (amber): individual, tracked sends. -->
+          <div
+            v-if="hasRecipients && isBroadcast"
             class="flex items-start gap-2.5 rounded-md border-2 border-amber-400 bg-amber-50 px-3 py-2.5 text-sm text-amber-900"
           >
             <Megaphone class="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
             <div>
               <p class="font-semibold">Dette blir sendt som ei utsending (broadcast)</p>
               <p class="mt-0.5 text-amber-800">
-                Éin individuell e-post til kvar mottakar i: {{ recipientSummary }}. Følg leveringa under «Utsendingar».
+                Éin individuell e-post til kvar mottakar i: {{ recipientSummary }}. Mottakarane ser ikkje kvarandre, og leveringa kan følgjast under «Utsendingar».
               </p>
             </div>
           </div>
@@ -331,7 +387,7 @@ onBeforeUnmount(() => {
               >
                 <p class="mb-1 font-medium uppercase tracking-wide text-gray-400" style="font-size:10px">Signatur (automatisk)</p>
                 <p>Med venleg helsing,</p>
-                <p class="mt-0.5 font-medium text-gray-700">{{ selectedMailbox.display_name }}</p>
+                <p class="mt-0.5 font-medium text-gray-700">{{ selectedMailbox.from_name }}</p>
                 <p class="text-gray-500">{{ selectedMailbox.address }}</p>
               </div>
             </div>
@@ -393,9 +449,18 @@ onBeforeUnmount(() => {
               <div v-if="selectedMailbox" v-html="signatureHtml" class="text-sm" />
             </div>
 
-            <!-- Individual-send notice: groups/BCC fan out to one email each. -->
-            <div class="shrink-0 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
+            <!-- Send-mode notice, colour-coded to match the compose tabs. -->
+            <div
+              v-if="isBroadcast"
+              class="shrink-0 rounded-md border-2 border-amber-400 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+            >
               {{ bulkNotice }}
+            </div>
+            <div
+              v-else
+              class="shrink-0 rounded-md border-2 border-blue-300 bg-blue-50 px-3 py-2 text-sm text-blue-900"
+            >
+              Sendt som éi melding — alle mottakarane står i To-feltet og ser kvarandre.
             </div>
 
             <div v-if="error" class="shrink-0 rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
