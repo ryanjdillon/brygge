@@ -9,9 +9,15 @@ export interface RecipientValue {
   individuals: { name: string; email: string }[]
 }
 
-const props = defineProps<{
-  modelValue: RecipientValue
-}>()
+const props = withDefaults(
+  defineProps<{
+    modelValue: RecipientValue
+    // Group chips (Alle/Medlemar/…) only make sense for broadcasts; the
+    // standard (everyone-in-To) flow hides them.
+    allowGroups?: boolean
+  }>(),
+  { allowGroups: true },
+)
 
 const emit = defineEmits<{
   (e: 'update:modelValue', v: RecipientValue): void
@@ -23,8 +29,6 @@ type AdminUser = components['schemas']['AdminUser']
 
 const GROUP_OPTS = [
   { value: 'all',          label: 'Alle' },
-  { value: 'members',      label: 'Medlemar' },
-  { value: 'board',        label: 'Styremedlemar' },
   { value: 'slip_holders', label: 'Plasseigarar' },
   { value: 'waiting_list', label: 'Venteliste' },
 ]
@@ -120,8 +124,8 @@ function onSearchBlur() {
 
 <template>
   <div class="space-y-3">
-    <!-- Group toggle chips -->
-    <div class="flex flex-wrap gap-2">
+    <!-- Group toggle chips (broadcast only) -->
+    <div v-if="allowGroups" class="flex flex-wrap gap-2">
       <button
         v-for="opt in GROUP_OPTS"
         :key="opt.value"
