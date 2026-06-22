@@ -1,16 +1,20 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import { useMyInvoices } from '@/composables/useMyInvoices'
+import { usePaymentDataUpdatedAt } from '@/composables/usePaymentDataUpdatedAt'
 import InvoiceList from '@/components/portal/InvoiceList.vue'
+import LastUpdated from '@/components/ui/LastUpdated.vue'
 
 const { t } = useI18n()
 const { unpaid, paid, invoices, isLoading } = useMyInvoices()
+const { updatedAt: paymentsUpdatedAt } = usePaymentDataUpdatedAt()
 </script>
 
 <template>
   <div>
     <h1 class="text-2xl font-bold text-gray-900">{{ t('portal.invoices.title') }}</h1>
     <p class="mt-1 text-sm text-gray-500">{{ t('portal.invoices.subtitle') }}</p>
+    <LastUpdated :at="paymentsUpdatedAt" class="mt-1" />
 
     <div v-if="isLoading" class="mt-6 text-gray-500">{{ t('common.loading') }}...</div>
 

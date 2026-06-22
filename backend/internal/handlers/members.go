@@ -818,6 +818,33 @@ func (h *MembersHandler) HandleListMyInvoices(w http.ResponseWriter, r *http.Req
 	JSON(w, http.StatusOK, out)
 }
 
+// HandlePaymentDataUpdatedAt returns when invoice/payment data was last
+// refreshed from the bank for the caller's club — i.e. the timestamp of the
+// most recent bank-statement import. Invoice paid/unpaid status only changes
+// when a bank import is reconciled, so this is the freshness signal shown on
+// the faktura and economy surfaces. Auth-only (no role gate) so both the
+// member portal and the admin views can read it. Null when no import exists.
+func (h *MembersHandler) HandlePaymentDataUpdatedAt(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	var updatedAt *time.Time
+	if err := h.db.QueryRow(ctx,
+		`SELECT MAX(created_at) FROM bank_imports WHERE club_id = $1`,
+		claims.ClubID,
+	).Scan(&updatedAt); err != nil {
+		h.log.Error().Err(err).Msg("query last bank import")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	JSON(w, http.StatusOK, map[string]any{"updated_at": updatedAt})
+}
+
 func dimsMatch(a, b *float64) bool {
 	if a == nil && b == nil {
 		return true

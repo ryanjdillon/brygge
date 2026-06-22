@@ -547,6 +547,7 @@ func main() {
 			r.Put("/me/boats/{boatID}", membersHandler.HandleUpdateBoat)
 			r.Delete("/me/boats/{boatID}", membersHandler.HandleDeleteBoat)
 			r.Get("/me/invoices", membersHandler.HandleListMyInvoices)
+			r.Get("/me/invoices/updated-at", membersHandler.HandlePaymentDataUpdatedAt)
 			r.Get("/me/invoices/{invoiceID}/pdf", invoiceHandler.HandleGetMyInvoicePDF)
 			r.Get("/me/slip", membersHandler.HandleGetMySlip)
 			r.Post("/me/slip/issues", membersHandler.HandleReportIssue)

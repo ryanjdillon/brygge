@@ -26,10 +26,13 @@ import {
   useJournalEntries,
 } from '@/composables/useAccounting'
 import { usePricing } from '@/composables/usePricing'
+import { usePaymentDataUpdatedAt } from '@/composables/usePaymentDataUpdatedAt'
 import Select from '@/components/ui/form/Select.vue'
+import LastUpdated from '@/components/ui/LastUpdated.vue'
 
 const { t } = useI18n()
 const { categoryLabel, unitLabel } = usePricing()
+const { updatedAt: paymentsUpdatedAt } = usePaymentDataUpdatedAt()
 
 const currentYear = new Date().getFullYear()
 const selectedYear = ref<number | undefined>(currentYear)
@@ -204,6 +207,7 @@ const postedCount = computed(() => entries.value?.filter(e => e.status === 'post
 <template>
   <div>
     <h1 class="text-2xl font-bold text-gray-900">{{ t('admin.accounting.dashboard.title') }}</h1>
+    <LastUpdated :at="paymentsUpdatedAt" class="mt-1" />
 
     <!-- Financial Summary -->
     <div class="mt-6">

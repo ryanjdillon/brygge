@@ -7,6 +7,8 @@ import { useAuthStore } from '@/stores/auth'
 import { useApiClient, unwrap } from '@/lib/apiClient'
 import { useFeatures } from '@/composables/useFeatures'
 import { useMyInvoices, isOverdue, type MemberInvoice } from '@/composables/useMyInvoices'
+import { usePaymentDataUpdatedAt } from '@/composables/usePaymentDataUpdatedAt'
+import LastUpdated from '@/components/ui/LastUpdated.vue'
 import { formatSlip } from '@/lib/slipSort'
 import { formatNOK, formatDate } from '@/lib/format'
 import { Download, FileText, FileType, X, ChevronUp, ChevronDown, Search } from 'lucide-vue-next'
@@ -29,6 +31,7 @@ const { data: boats, isLoading: boatsLoading } = useQuery({
 
 const showInvoices = computed(() => isEnabled('accounting'))
 const { unpaid, paid, isLoading: invoicesLoading } = useMyInvoices()
+const { updatedAt: paymentsUpdatedAt } = usePaymentDataUpdatedAt()
 const recentPaid = computed(() => paid.value.slice(0, 3))
 
 const userName = computed(() => auth.user?.name ?? '')
@@ -288,6 +291,7 @@ watch(docSearch, () => nextTick(() => applyHighlights()))
             {{ t('portal.dashboard.viewAll') }}
           </RouterLink>
         </div>
+        <LastUpdated :at="paymentsUpdatedAt" class="mt-0.5" />
 
         <div v-if="invoicesLoading" class="mt-3 text-sm text-gray-500">{{ t('common.loading') }}...</div>
         <template v-else>

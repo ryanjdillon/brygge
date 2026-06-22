@@ -26,6 +26,7 @@
   "common": {
     "select": "Vel…",
     "refresh": "Oppdater",
+    "lastUpdated": "Sist oppdatert",
     "loading": "Lastar",
     "error": "Feil",
     "save": "Lagre",

@@ -7,9 +7,12 @@ import FakturaList from '@/components/admin/FakturaList.vue'
 import SingleFakturaModal from '@/components/admin/SingleFakturaModal.vue'
 import GroupFakturaTab from '@/components/admin/GroupFakturaTab.vue'
 import PdfArkivView from '@/views/admin/PdfArkivView.vue'
+import LastUpdated from '@/components/ui/LastUpdated.vue'
 import { useFreshTotp } from '@/composables/useFreshTotp'
+import { usePaymentDataUpdatedAt } from '@/composables/usePaymentDataUpdatedAt'
 
 const { t } = useI18n()
+const { updatedAt: paymentsUpdatedAt } = usePaymentDataUpdatedAt()
 const route = useRoute()
 const router = useRouter()
 
@@ -89,6 +92,7 @@ const tabs: { id: Tab; icon: typeof FilePlus; labelKey: string }[] = [
 
     <h1 class="text-2xl font-bold text-gray-900">{{ t('admin.faktura.title') }}</h1>
     <p class="mt-1 text-sm text-gray-600">{{ t('admin.faktura.subtitle') }}</p>
+    <LastUpdated :at="paymentsUpdatedAt" class="mt-1" />
 
     <div class="mt-4 border-b border-gray-200">
       <nav class="-mb-px flex gap-2 overflow-x-auto" :aria-label="t('admin.faktura.tabsAria')">

@@ -26,6 +26,7 @@
   "common": {
     "select": "Select…",
     "refresh": "Refresh",
+    "lastUpdated": "Last updated",
     "loading": "Loading",
     "error": "Error",
     "save": "Save",
