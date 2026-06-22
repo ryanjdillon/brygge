@@ -437,7 +437,10 @@
       "commentSuccess": "Kommentar lagt til",
       "commentError": "Kunne ikkje legge til kommentar",
       "loadError": "Kunne ikkje hente dokument",
-      "filterBoard": "Styre"
+      "filterBoard": "Styre",
+      "open": "Opne",
+      "searchPlaceholder": "Søk i dokument…",
+      "noMatches": "Ingen treff"
     },
     "waitingList": {
       "title": "Venteliste",
@@ -2141,5 +2144,23 @@
       "title": "Konfliktløysing",
       "body": "Vi ynskjer å løyse eventuelle ueinigheiter i minneleg. Om vi ikkje blir samde, kan kjøparen bringe saka inn for Forbrukartilsynet eller Forbrukarklageutvalet. Forbrukarar i EU kan også bruke EU-kommisjonen si nettbaserte tvisteløysingsplattform på ec.europa.eu/odr. Norsk lov gjeld, og norske domstolar er verneting."
     }
+  },
+  "feedback": {
+    "triggerLabel": "Send tilbakemelding",
+    "panelLabel": "Tilbakemeldingspanel",
+    "title": "Send tilbakemelding",
+    "typeBug": "Feilrapport",
+    "typeFeature": "Funksjonsønske",
+    "titlePlaceholder": "Kort tittel (valfritt)",
+    "descriptionPlaceholder": "Skildre problemet eller idéen…",
+    "attachImage": "Legg ved bilete",
+    "attachHint": "eller lim inn (Ctrl/⌘+V) eller slepp eit bilete",
+    "removeScreenshot": "Fjern skjermbilete",
+    "submit": "Send inn",
+    "successMessage": "Takk! Tilbakemeldinga di er sendt.",
+    "screenshotReady": "Skjermbilete klart",
+    "screenshotDropped": "Skjermbiletet vart ikkje lagt ved (sendt utan det).",
+    "screenshotAlt": "Førehandsvising av skjermbilete",
+    "errorGeneric": "Noko gjekk gale. Prøv igjen."
   }
 }
