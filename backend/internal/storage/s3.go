@@ -109,3 +109,18 @@ func (c *Client) PresignedURL(ctx context.Context, key string, expiry time.Durat
 	}
 	return u.String(), nil
 }
+
+// PresignedDownloadURL returns a time-limited GET URL for key that forces the
+// browser to download the object as filename rather than render it inline.
+func (c *Client) PresignedDownloadURL(ctx context.Context, key, filename string, expiry time.Duration) (string, error) {
+	if c.disabled {
+		return "", fmt.Errorf("s3: not configured")
+	}
+	params := url.Values{}
+	params.Set("response-content-disposition", fmt.Sprintf("attachment; filename=%q", filename))
+	u, err := c.mc.PresignedGetObject(ctx, c.bucket, key, expiry, params)
+	if err != nil {
+		return "", fmt.Errorf("s3: presign %q: %w", key, err)
+	}
+	return u.String(), nil
+}

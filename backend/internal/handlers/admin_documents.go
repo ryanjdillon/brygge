@@ -202,6 +202,73 @@ func (h *AdminDocumentsHandler) HandleGetDocument(w http.ResponseWriter, r *http
 	JSON(w, http.StatusOK, resp)
 }
 
+// HandleDocumentContent redirects to a short-lived presigned URL for the
+// document's stored file. By default the object is served inline (so images
+// and PDFs preview in the browser); ?download=1 forces a download.
+func (h *AdminDocumentsHandler) HandleDocumentContent(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	docID := chi.URLParam(r, "docID")
+	if docID == "" {
+		Error(w, http.StatusBadRequest, "document ID is required")
+		return
+	}
+
+	hasBoard := false
+	for _, role := range claims.Roles {
+		if role == "board" || role == "admin" || role == "harbor_master" || role == "treasurer" {
+			hasBoard = true
+			break
+		}
+	}
+
+	var s3Key, filename, visibility string
+	err := h.db.QueryRow(ctx,
+		`SELECT d.s3_key, d.filename, d.visibility
+		 FROM documents d
+		 WHERE d.id = $1 AND d.club_id = $2`,
+		docID, claims.ClubID,
+	).Scan(&s3Key, &filename, &visibility)
+	if err == pgx.ErrNoRows {
+		Error(w, http.StatusNotFound, "document not found")
+		return
+	}
+	if err != nil {
+		h.log.Error().Err(err).Str("doc_id", docID).Msg("failed to query document for content")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	if visibility == "board" && !hasBoard {
+		Error(w, http.StatusForbidden, "insufficient permissions")
+		return
+	}
+
+	if !h.s3.IsConfigured() || s3Key == "" {
+		Error(w, http.StatusServiceUnavailable, "object storage not configured")
+		return
+	}
+
+	var url string
+	if r.URL.Query().Get("download") == "1" {
+		url, err = h.s3.PresignedDownloadURL(ctx, s3Key, filename, time.Hour)
+	} else {
+		url, err = h.s3.PresignedURL(ctx, s3Key, time.Hour)
+	}
+	if err != nil {
+		h.log.Error().Err(err).Str("s3_key", s3Key).Msg("failed to presign document URL")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	http.Redirect(w, r, url, http.StatusFound)
+}
+
 func (h *AdminDocumentsHandler) HandleUploadDocument(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)

@@ -465,6 +465,7 @@ func main() {
 			r.Use(middleware.AuthenticateSession(sessionService))
 			r.Get("/documents", adminDocumentsHandler.HandleListDocuments)
 			r.Get("/documents/{docID}", adminDocumentsHandler.HandleGetDocument)
+			r.Get("/documents/{docID}/content", adminDocumentsHandler.HandleDocumentContent)
 			r.Get("/documents/{docID}/comments", adminDocumentsHandler.HandleListComments)
 			r.Post("/documents/{docID}/comments", adminDocumentsHandler.HandleCreateComment)
 			r.Get("/portal/documents", contentDocumentsHandler.HandlePortalList)
