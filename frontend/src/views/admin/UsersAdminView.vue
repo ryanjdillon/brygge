@@ -320,6 +320,19 @@ function roleLabel(role: string): string {
   return label === key ? role : label
 }
 
+// roleBadgeClass colors a role chip so color carries meaning: ordinary
+// members stay quiet gray, board/officer roles read as teal (the club
+// officer/info color), and admins get the deep brand navy. Mirrors the
+// brand-refresh role mapping.
+const officerRoles = new Set([
+  'board', 'chair', 'vice_chair', 'deputy', 'secretary', 'treasurer', 'harbor_master',
+])
+function roleBadgeClass(role: string): string {
+  if (role === 'admin') return 'bg-[#04142a] text-white'
+  if (officerRoles.has(role)) return 'bg-brand-100 text-brand-800'
+  return 'bg-gray-100 text-gray-700'
+}
+
 function toggleRole(userId: string, role: string) {
   const roles = editingRoles.value[userId]
   if (!roles) return
@@ -815,7 +828,7 @@ async function submitImport() {
           v-model="visibleColumns"
         />
         <button
-          class="inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"
+          class="inline-flex items-center gap-1 rounded-md bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-700"
           @click="openCreateModal"
         >
           <UserPlus class="h-4 w-4" /> {{ t('admin.users.addButton') }}
@@ -847,15 +860,15 @@ async function submitImport() {
       </p>
       <div
         v-if="selectedIds.size > 0"
-        class="mb-2 flex flex-wrap items-center gap-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm"
+        class="mb-2 flex flex-wrap items-center gap-3 rounded-md border border-brand-200 bg-brand-50 px-3 py-2 text-sm"
       >
-        <span class="font-medium text-blue-900">
+        <span class="font-medium text-brand-900">
           {{ t('admin.users.selectedCount', { n: selectedIds.size }) }}
         </span>
         <button
           v-if="totalCount > selectedIds.size && totalCount > users.length"
           type="button"
-          class="text-xs text-blue-700 underline hover:text-blue-900"
+          class="text-xs text-brand-700 underline hover:text-brand-900"
           @click="selectAllFiltered"
         >
           {{ t('admin.users.selectAllFiltered', { total: totalCount }) }}
@@ -871,7 +884,7 @@ async function submitImport() {
           <button
             v-if="auth.hasRole('admin') || auth.hasRole('treasurer')"
             type="button"
-            class="inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700"
+            class="inline-flex items-center gap-1 rounded-md bg-brand-600 px-3 py-1 text-xs font-semibold text-white hover:bg-brand-700"
             @click="openBulkInvoices"
           >
             <Receipt class="h-3.5 w-3.5" />
@@ -908,14 +921,14 @@ async function submitImport() {
             v-for="(user, index) in users"
             :key="user.id"
             class="cursor-pointer hover:bg-gray-50"
-            :class="{ 'bg-blue-50/50': selectedIds.has(user.id) }"
+            :class="{ 'bg-brand-50/50': selectedIds.has(user.id) }"
             @click="openDetail(user)"
           >
             <td class="px-2 py-3 text-center" @click.stop>
               <input
                 type="checkbox"
                 :checked="selectedIds.has(user.id)"
-                class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-1 focus:ring-blue-500"
+                class="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-1 focus:ring-brand-500"
                 @click="onUserCheckboxClick(index, $event)"
               />
             </td>
@@ -987,7 +1000,7 @@ async function submitImport() {
                     :class="[
                       'rounded-full px-2 py-0.5 text-xs font-medium transition',
                       editingRoles[user.id].includes(role)
-                        ? 'bg-blue-600 text-white'
+                        ? 'bg-brand-600 text-white'
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
                     ]"
                     @click="toggleRole(user.id, role)"
@@ -996,7 +1009,7 @@ async function submitImport() {
                   </button>
                 </div>
                 <div class="mt-1 flex gap-1">
-                  <button class="text-xs text-blue-600 hover:underline" @click="updateRoles({ userId: user.id, roles: editingRoles[user.id] })">{{ t('common.save') }}</button>
+                  <button class="text-xs text-brand-600 hover:underline" @click="updateRoles({ userId: user.id, roles: editingRoles[user.id] })">{{ t('common.save') }}</button>
                   <button class="text-xs text-gray-500 hover:underline" @click="cancelEditRoles(user.id)">{{ t('common.cancel') }}</button>
                 </div>
               </template>
@@ -1005,7 +1018,7 @@ async function submitImport() {
                   <span
                     v-for="role in user.roles"
                     :key="role"
-                    class="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700 cursor-pointer hover:bg-gray-200"
+                    :class="['rounded-full px-2 py-0.5 text-xs font-medium cursor-pointer', roleBadgeClass(role)]"
                     @click="startEditRoles(user)"
                   >
                     {{ roleLabel(role) }}
@@ -1015,7 +1028,7 @@ async function submitImport() {
             </td>
             <td class="whitespace-nowrap px-4 py-3 text-sm" @click.stop>
               <div class="flex items-center gap-3">
-                <button class="text-gray-500 hover:text-blue-700" :title="t('common.edit')" @click="openEditDirect(user)">
+                <button class="text-gray-500 hover:text-brand-700" :title="t('common.edit')" @click="openEditDirect(user)">
                   <Pencil class="h-4 w-4" />
                 </button>
                 <button class="text-red-600 hover:text-red-800" :title="t('common.delete')" @click="confirmDelete(user.id)">
@@ -1103,7 +1116,7 @@ async function submitImport() {
             </dd>
             <dt class="text-xs font-medium text-gray-500">{{ t('admin.users.roles') }}</dt>
             <dd class="col-span-2 flex flex-wrap gap-1">
-              <span v-for="role in detailUser.roles" :key="role" class="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">{{ roleLabel(role) }}</span>
+              <span v-for="role in detailUser.roles" :key="role" :class="['rounded-full px-2 py-0.5 text-xs font-medium', roleBadgeClass(role)]">{{ roleLabel(role) }}</span>
               <span v-if="!detailUser.roles?.length" class="text-gray-500">—</span>
             </dd>
           </dl>
@@ -1129,7 +1142,7 @@ async function submitImport() {
           <div class="flex justify-end gap-2 pt-3">
             <button class="rounded-md px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100" @click="closeDetail">{{ t('common.close') }}</button>
             <button
-              class="inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"
+              class="inline-flex items-center gap-1 rounded-md bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-700"
               @click="startDetailEdit"
             >
               <Pencil class="h-4 w-4" /> {{ t('common.edit') }}
@@ -1200,7 +1213,7 @@ async function submitImport() {
                 :class="[
                   'rounded-full px-2 py-0.5 text-xs font-medium transition',
                   editRoles.includes(role)
-                    ? 'bg-blue-600 text-white'
+                    ? 'bg-brand-600 text-white'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
                 ]"
                 @click="toggleEditRole(role)"
@@ -1231,14 +1244,14 @@ async function submitImport() {
               <button
                 v-if="editingBoatId === null"
                 type="button"
-                class="text-xs font-medium text-blue-600 hover:underline"
+                class="text-xs font-medium text-brand-600 hover:underline"
                 @click="startAddBoat"
               >
                 + {{ t('admin.users.addBoat') }}
               </button>
             </div>
 
-            <div v-if="editingBoatId" class="rounded-md border border-blue-200 bg-blue-50/40 p-3">
+            <div v-if="editingBoatId" class="rounded-md border border-brand-200 bg-brand-50/40 p-3">
               <BoatForm
                 :initial="editingBoat ?? undefined"
                 :editing="editingBoatId !== 'new'"
@@ -1291,7 +1304,7 @@ async function submitImport() {
           <p v-if="detailError" class="rounded-md bg-red-50 px-2 py-1 text-xs text-red-700">{{ detailError }}</p>
           <div class="flex justify-end gap-2 pt-1">
             <button type="button" class="rounded-md px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100" @click="detailEditing = false">{{ t('common.cancel') }}</button>
-            <button type="submit" :disabled="savingEdit" class="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
+            <button type="submit" :disabled="savingEdit" class="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">
               {{ savingEdit ? t('common.loading') : t('common.save') }}
             </button>
           </div>
@@ -1374,7 +1387,7 @@ async function submitImport() {
                 :class="[
                   'rounded-full px-2 py-0.5 text-xs font-medium transition',
                   createForm.roles.includes(role)
-                    ? 'bg-blue-600 text-white'
+                    ? 'bg-brand-600 text-white'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
                 ]"
                 @click="toggleCreateRole(role)"
@@ -1386,7 +1399,7 @@ async function submitImport() {
           <p v-if="createError" class="rounded-md bg-red-50 px-2 py-1 text-xs text-red-700">{{ createError }}</p>
           <div class="flex justify-end gap-2 pt-1">
             <button type="button" class="rounded-md px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100" @click="showCreateModal = false">{{ t('common.cancel') }}</button>
-            <button type="submit" :disabled="creating" class="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
+            <button type="submit" :disabled="creating" class="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">
               {{ creating ? t('common.loading') : t('admin.users.addSubmit') }}
             </button>
           </div>
@@ -1417,7 +1430,7 @@ grace@example.com,Grace,Hopper,+47 555 1234,,,,true,member</pre>
           <p v-if="importError" class="mt-2 rounded-md bg-red-50 px-2 py-1 text-xs text-red-700">{{ importError }}</p>
           <div class="mt-3 flex justify-end gap-2">
             <button type="button" class="rounded-md px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100" @click="showImportModal = false">{{ t('common.cancel') }}</button>
-            <button type="button" :disabled="!importFile || importing" class="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50" @click="submitImport">
+            <button type="button" :disabled="!importFile || importing" class="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50" @click="submitImport">
               {{ importing ? t('common.loading') : t('admin.users.importSubmit') }}
             </button>
           </div>
@@ -1454,7 +1467,7 @@ grace@example.com,Grace,Hopper,+47 555 1234,,,,true,member</pre>
             </table>
           </div>
           <div class="mt-3 flex justify-end">
-            <button type="button" class="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700" @click="showImportModal = false">{{ t('common.close') }}</button>
+            <button type="button" class="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-700" @click="showImportModal = false">{{ t('common.close') }}</button>
           </div>
         </div>
       </div>
