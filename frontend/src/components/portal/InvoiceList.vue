@@ -56,6 +56,7 @@ function statusLabel(inv: MemberInvoice): string {
             {{ statusLabel(inv) }}
           </span>
           <a
+            v-if="inv.has_pdf"
             :href="`/api/v1/members/me/invoices/${inv.id}/pdf`"
             target="_blank"
             rel="noopener noreferrer"

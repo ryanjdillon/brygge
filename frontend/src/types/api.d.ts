@@ -3697,6 +3697,8 @@ export interface components {
             description: string;
             /** @description Due date (YYYY-MM-DD) */
             due_date: string;
+            /** @description Whether a downloadable PDF exists for this invoice */
+            has_pdf: boolean;
             /** @description Invoice UUID */
             id: string;
             /**

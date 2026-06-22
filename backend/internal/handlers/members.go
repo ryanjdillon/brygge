@@ -659,6 +659,10 @@ type memberInvoice struct {
 	Paid          bool    `json:"paid"`
 	PriceItemName string  `json:"price_item_name"`
 	Description   string  `json:"description"`
+	// HasPDF gates the portal "Open PDF" action — imported invoices (and
+	// any not yet rendered) have no retrievable PDF, so the button is
+	// hidden rather than leading to a "PDF not available" error.
+	HasPDF bool `json:"has_pdf"`
 }
 
 func (h *MembersHandler) HandleDashboard(w http.ResponseWriter, r *http.Request) {
@@ -762,7 +766,8 @@ func (h *MembersHandler) HandleListMyInvoices(w http.ResponseWriter, r *http.Req
 	             i.issue_date, i.due_date, i.sent_at,
 	             (i.payment_id IS NOT NULL) AS paid,
 	             COALESCE(pi.name, ''),
-	             COALESCE((SELECT description FROM invoice_lines WHERE invoice_id = i.id LIMIT 1), '')
+	             COALESCE((SELECT description FROM invoice_lines WHERE invoice_id = i.id LIMIT 1), ''),
+	             (i.pdf_data IS NOT NULL OR COALESCE(i.s3_key, '') <> '')
 	        FROM invoices i
 	        LEFT JOIN price_items pi ON pi.id = i.price_item_id
 	       WHERE i.user_id = $1 AND i.club_id = $2
@@ -791,7 +796,7 @@ func (h *MembersHandler) HandleListMyInvoices(w http.ResponseWriter, r *http.Req
 		var issue, due time.Time
 		var sentAt *time.Time
 		if err := rows.Scan(&mi.ID, &mi.InvoiceNumber, &mi.KID, &mi.TotalAmount,
-			&issue, &due, &sentAt, &mi.Paid, &mi.PriceItemName, &mi.Description); err != nil {
+			&issue, &due, &sentAt, &mi.Paid, &mi.PriceItemName, &mi.Description, &mi.HasPDF); err != nil {
 			h.log.Error().Err(err).Msg("scan my invoice row")
 			Error(w, http.StatusInternalServerError, "internal error")
 			return

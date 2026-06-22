@@ -302,6 +302,7 @@ type MemberInvoice struct {
 	Paid          bool    `json:"paid" doc:"Whether a payment is linked to the invoice"`
 	PriceItemName string  `json:"price_item_name" doc:"Price item name, if any"`
 	Description   string  `json:"description" doc:"First invoice-line description"`
+	HasPDF        bool    `json:"has_pdf" doc:"Whether a downloadable PDF exists for this invoice"`
 }
 
 // --- Boats ---
