@@ -67,7 +67,7 @@ const sections = computed<Section[]>(() => {
 </script>
 
 <template>
-  <div>
+  <div class="flex min-h-full flex-col">
     <!-- Hero — the photo extends up behind the (transparent) navbar.
          A full-bleed dark gradient overlay lifts contrast on the upper
          half so the welcome text and CTA stay readable regardless of
@@ -144,9 +144,9 @@ const sections = computed<Section[]>(() => {
     </div>
 
     <!-- Bli medlem: self-service registration isn't wired up yet, so point
-         prospective members at the club mailbox. The wave backdrop sets off
-         a high-contrast card. -->
-    <section class="wave-bg px-4 py-14 sm:py-20">
+         prospective members at the club mailbox. The wave backdrop grows to
+         fill the page down to the footer and sets off a high-contrast card. -->
+    <section class="wave-bg flex flex-1 items-center px-4 py-14 sm:py-20">
       <div class="mx-auto max-w-2xl rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
         <Anchor class="mx-auto h-8 w-8 text-slate-400" aria-hidden="true" />
         <h2 class="mt-3 text-2xl font-bold text-slate-900">{{ t('home.join.title') }}</h2>
