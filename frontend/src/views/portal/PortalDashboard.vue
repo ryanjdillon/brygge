@@ -105,6 +105,30 @@ const fileDocs = computed(() => docsData.value?.files ?? [])
 const authoredDocs = computed(() => docsData.value?.authored ?? [])
 const hasAnyDoc = computed(() => fileDocs.value.length > 0 || authoredDocs.value.length > 0)
 
+// ── File doc preview ──────────────────────────────────────────────────────────
+
+const previewDoc = ref<FileDoc | null>(null)
+
+function isPreviewable(doc: FileDoc): boolean {
+  return doc.content_type.startsWith('image/') || doc.content_type === 'application/pdf'
+}
+
+function fileContentUrl(doc: FileDoc, download = false): string {
+  return `/api/v1/documents/${doc.id}/content${download ? '?download=1' : ''}`
+}
+
+function openFileDoc(doc: FileDoc) {
+  if (isPreviewable(doc)) {
+    previewDoc.value = doc
+  } else {
+    window.open(fileContentUrl(doc, true), '_blank')
+  }
+}
+
+function closePreview() {
+  previewDoc.value = null
+}
+
 // ── Authored doc modal ────────────────────────────────────────────────────────
 
 const openDoc = ref<AuthoredDoc | null>(null)
@@ -372,14 +396,23 @@ watch(docSearch, () => nextTick(() => applyHighlights()))
                 <span class="truncate text-sm font-medium text-gray-900">{{ doc.title }}</span>
                 <span class="shrink-0 text-xs text-gray-400">{{ formatDate(doc.created_at) }}</span>
               </div>
-              <a
-                :href="`/api/v1/documents/${doc.id}`"
-                target="_blank"
-                class="ml-3 flex shrink-0 items-center gap-1 rounded-md border border-gray-300 bg-white px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
-              >
-                <Download class="h-3.5 w-3.5" />
-                {{ t('portal.documents.download') }}
-              </a>
+              <div class="ml-3 flex shrink-0 items-center gap-2">
+                <button
+                  v-if="isPreviewable(doc)"
+                  type="button"
+                  class="rounded-md border border-gray-300 bg-white px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                  @click="openFileDoc(doc)"
+                >
+                  {{ t('portal.documents.open') }}
+                </button>
+                <a
+                  :href="fileContentUrl(doc, true)"
+                  class="flex items-center gap-1 rounded-md border border-gray-300 bg-white px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                >
+                  <Download class="h-3.5 w-3.5" />
+                  {{ t('portal.documents.download') }}
+                </a>
+              </div>
             </li>
             <li
               v-for="doc in authoredDocs"
@@ -409,10 +442,10 @@ watch(docSearch, () => nextTick(() => applyHighlights()))
   <Teleport to="body">
     <div
       v-if="openDoc"
-      class="fixed inset-0 z-50 flex flex-col bg-black/40"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 sm:p-6"
       @click.self="closeDoc"
     >
-      <div class="mx-auto mt-12 flex w-full max-w-3xl flex-1 flex-col overflow-hidden rounded-t-xl bg-white shadow-xl">
+      <div class="flex max-h-[85vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
         <!-- Header -->
         <div class="flex items-center gap-3 border-b border-gray-200 px-6 py-4">
           <div class="min-w-0 flex-1">
@@ -468,6 +501,45 @@ watch(docSearch, () => nextTick(() => applyHighlights()))
             ref="docContentRef"
             class="prose prose-sm max-w-none"
             v-html="openDoc.body_html"
+          />
+        </div>
+      </div>
+    </div>
+  </Teleport>
+
+  <!-- File document preview modal -->
+  <Teleport to="body">
+    <div
+      v-if="previewDoc"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 sm:p-6"
+      @click.self="closePreview"
+    >
+      <div class="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+        <div class="flex items-center gap-3 border-b border-gray-200 px-5 py-3">
+          <span class="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900">{{ previewDoc.title }}</span>
+          <a
+            :href="fileContentUrl(previewDoc, true)"
+            class="flex shrink-0 items-center gap-1 rounded-md border border-gray-300 bg-white px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"
+          >
+            <Download class="h-3.5 w-3.5" />
+            {{ t('portal.documents.download') }}
+          </a>
+          <button type="button" class="shrink-0 rounded p-1 text-gray-400 hover:text-gray-700" @click="closePreview">
+            <X class="h-5 w-5" />
+          </button>
+        </div>
+        <div class="flex flex-1 items-center justify-center overflow-auto bg-gray-50 p-4">
+          <img
+            v-if="previewDoc.content_type.startsWith('image/')"
+            :src="fileContentUrl(previewDoc)"
+            :alt="previewDoc.title"
+            class="max-h-full max-w-full object-contain"
+          />
+          <iframe
+            v-else
+            :src="fileContentUrl(previewDoc)"
+            :title="previewDoc.title"
+            class="h-[80vh] w-full border-0"
           />
         </div>
       </div>
