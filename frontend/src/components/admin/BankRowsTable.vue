@@ -51,7 +51,7 @@ function vippsPattern(desc: string): boolean {
             <button
               v-if="vippsPattern(row.description) && !row.journal_entry_id"
               type="button"
-              class="rounded-md bg-purple-600 px-2 py-1 text-xs font-semibold text-white hover:bg-purple-700"
+              class="rounded-md bg-brand-600 px-2 py-1 text-xs font-semibold text-white hover:bg-brand-700"
               data-testid="reconcile-btn"
               @click="emit('reconcile', row)"
             >

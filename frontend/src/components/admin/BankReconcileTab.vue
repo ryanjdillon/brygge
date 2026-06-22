@@ -112,7 +112,7 @@ const confidenceClass: Record<string, string> = {
   sterk: 'border-emerald-300 bg-emerald-50',
   sannsynleg: 'border-amber-300 bg-amber-50',
   svak: 'border-gray-300 bg-gray-50',
-  potensiell: 'border-blue-200 bg-blue-50',
+  potensiell: 'border-brand-200 bg-brand-50',
 }
 
 const { data: accounts } = useAccountsList()
@@ -244,7 +244,7 @@ async function doUnassign(rowId: string) {
         :key="chip.value"
         type="button"
         class="rounded-full px-3 py-1 text-xs font-semibold"
-        :class="kind === chip.value ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'"
+        :class="kind === chip.value ? 'bg-brand-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'"
         @click="kind = chip.value"
       >
         {{ t(chip.labelKey) }}
@@ -255,7 +255,7 @@ async function doUnassign(rowId: string) {
         :key="chip.value"
         type="button"
         class="rounded-full px-3 py-1 text-xs font-semibold"
-        :class="kind === chip.value ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'"
+        :class="kind === chip.value ? 'bg-brand-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'"
         @click="kind = chip.value"
       >
         {{ t(chip.labelKey) }}
@@ -332,7 +332,7 @@ async function doUnassign(rowId: string) {
           v-for="row in mainRows"
           :key="row.id"
           class="rounded-md border bg-white p-4 transition-colors"
-          :class="selectedIds.has(row.id) ? 'border-blue-400 ring-1 ring-blue-300' : 'border-gray-200'"
+          :class="selectedIds.has(row.id) ? 'border-brand-400 ring-1 ring-brand-300' : 'border-gray-200'"
         >
           <!-- Bank row info -->
           <div class="flex items-start justify-between gap-4">
@@ -341,7 +341,7 @@ async function doUnassign(rowId: string) {
                 v-if="!row.dismissed_at"
                 type="checkbox"
                 :checked="selectedIds.has(row.id)"
-                class="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300 text-blue-600"
+                class="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300 text-brand-600"
                 @change="toggleSelect(row.id)"
               />
               <component
@@ -376,7 +376,7 @@ async function doUnassign(rowId: string) {
             </div>
             <button
               type="button"
-              class="text-xs text-blue-700 hover:underline"
+              class="text-xs text-brand-700 hover:underline"
               @click="focusRow(row.id)"
             >
               {{ focusedRowId === row.id ? t('admin.bankReconcile.hideSuggestions') : t('admin.bankReconcile.showSuggestions') }}
@@ -406,7 +406,7 @@ async function doUnassign(rowId: string) {
               </div>
               <button
                 type="button"
-                class="rounded-md bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700"
+                class="rounded-md bg-brand-600 px-3 py-1 text-xs font-semibold text-white hover:bg-brand-700"
                 @click="doAssignInvoice(row.id, sug.invoice_id)"
               >
                 {{ t('admin.bankReconcile.assign') }}
@@ -466,7 +466,7 @@ async function doUnassign(rowId: string) {
         v-if="selectedRows.length > 0"
         class="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-5 py-3 shadow-xl"
       >
-        <CheckSquare class="h-4 w-4 text-blue-600" />
+        <CheckSquare class="h-4 w-4 text-brand-600" />
         <span class="text-sm font-semibold text-gray-800">
           {{ selectedRows.length }} {{ selectedRows.length === 1 ? t('admin.bankReconcile.rowSingular') : t('admin.bankReconcile.rowPlural') }}
           · {{ formatNOK(selectedTotal) }}
@@ -483,7 +483,7 @@ async function doUnassign(rowId: string) {
         <button
           v-if="selectedRows.length >= 2"
           type="button"
-          class="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
+          class="inline-flex items-center gap-1.5 rounded-md bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700"
           @click="openMultiInvoice()"
         >
           <Search class="h-3.5 w-3.5" />
@@ -501,7 +501,7 @@ async function doUnassign(rowId: string) {
 
     <!-- Potential invoices modal -->
     <Modal v-model:open="potentialOpen" size="2xl" :title="t('admin.bankReconcile.potentialTitle')">
-      <div class="rounded-md bg-blue-50 px-3 py-2 text-xs text-blue-900">
+      <div class="rounded-md bg-brand-50 px-3 py-2 text-xs text-brand-900">
         {{ t('admin.bankReconcile.potentialBanner') }}
       </div>
       <input
@@ -520,7 +520,7 @@ async function doUnassign(rowId: string) {
           </div>
           <button
             type="button"
-            class="rounded-md bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700"
+            class="rounded-md bg-brand-600 px-3 py-1 text-xs font-semibold text-white hover:bg-brand-700"
             @click="potentialRowId && doAssignInvoice(potentialRowId, inv.invoice_id)"
           >
             {{ t('admin.bankReconcile.assign') }}
@@ -550,7 +550,7 @@ async function doUnassign(rowId: string) {
         <ul class="mt-1 space-y-1">
           <li v-for="sug in accountPickerSuggestions" :key="sug.code" class="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm" :class="confidenceClass[sug.confidence_label]">
             <span class="font-mono">{{ sug.code }} — {{ sug.name }}</span>
-            <button type="button" class="rounded-md bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700" @click="accountPickerRowId && doAssignAccount(accountPickerRowId, sug.code, accountPickerKind)">
+            <button type="button" class="rounded-md bg-brand-600 px-3 py-1 text-xs font-semibold text-white hover:bg-brand-700" @click="accountPickerRowId && doAssignAccount(accountPickerRowId, sug.code, accountPickerKind)">
               {{ t('admin.bankReconcile.assign') }}
             </button>
           </li>
@@ -559,7 +559,7 @@ async function doUnassign(rowId: string) {
       <ul class="mt-3 max-h-72 divide-y divide-gray-100 overflow-y-auto">
         <li v-for="a in filteredAccounts" :key="a.code" class="flex items-center justify-between gap-3 py-2 text-sm">
           <span class="font-mono">{{ a.code }} — {{ a.name }}</span>
-          <button type="button" class="rounded-md bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700" @click="accountPickerRowId && doAssignAccount(accountPickerRowId, a.code, accountPickerKind)">
+          <button type="button" class="rounded-md bg-brand-600 px-3 py-1 text-xs font-semibold text-white hover:bg-brand-700" @click="accountPickerRowId && doAssignAccount(accountPickerRowId, a.code, accountPickerKind)">
             {{ t('admin.bankReconcile.assign') }}
           </button>
         </li>
@@ -591,7 +591,7 @@ async function doUnassign(rowId: string) {
     </Modal>
     <!-- Multi-row assign invoice modal -->
     <Modal v-model:open="multiInvoiceOpen" size="2xl" :title="t('admin.bankReconcile.multiInvoiceTitle')">
-      <div class="rounded-md bg-blue-50 px-3 py-2 text-xs text-blue-900">
+      <div class="rounded-md bg-brand-50 px-3 py-2 text-xs text-brand-900">
         {{ t('admin.bankReconcile.multiInvoiceBanner', { total: formatNOK(selectedTotal), count: selectedRows.length }) }}
       </div>
       <input
@@ -612,7 +612,7 @@ async function doUnassign(rowId: string) {
             type="button"
             :disabled="Math.round(selectedTotal * 100) !== Math.round(inv.total_amount * 100)"
             class="rounded-md px-3 py-1 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
-            :class="Math.round(selectedTotal * 100) === Math.round(inv.total_amount * 100) ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-400'"
+            :class="Math.round(selectedTotal * 100) === Math.round(inv.total_amount * 100) ? 'bg-brand-600 hover:bg-brand-700' : 'bg-gray-400'"
             :title="Math.round(selectedTotal * 100) !== Math.round(inv.total_amount * 100) ? t('admin.bankReconcile.multiInvoiceMismatch', { inv: formatNOK(inv.total_amount), sel: formatNOK(selectedTotal) }) : ''"
             @click="doAssignMultiInvoice(inv.invoice_id)"
           >
