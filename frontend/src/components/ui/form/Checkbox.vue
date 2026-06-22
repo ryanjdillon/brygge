@@ -30,7 +30,7 @@ watch(
       :id="id"
       ref="inputRef"
       type="checkbox"
-      class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-1 focus:ring-blue-500"
+      class="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-1 focus:ring-brand-500"
       :checked="!!modelValue"
       :disabled="disabled"
       :aria-label="ariaLabel"

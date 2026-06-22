@@ -497,7 +497,7 @@ async function save() {
           <button
             type="button"
             :disabled="savingFeedback || !fbCanSave"
-            class="inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+            class="inline-flex items-center gap-1 rounded-md bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
             @click="handleSaveFeedback"
           >
             <Save class="h-4 w-4" />
@@ -524,7 +524,7 @@ async function save() {
           <button
             type="button"
             :disabled="anthropicSaving || !anthropicApiKey.trim()"
-            class="inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+            class="inline-flex items-center gap-1 rounded-md bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
             @click="handleSaveAnthropicKey"
           >
             <Save class="h-4 w-4" />
@@ -544,7 +544,7 @@ async function save() {
         <button
           type="submit"
           :disabled="saving"
-          class="inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+          class="inline-flex items-center gap-1 rounded-md bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
         >
           <Save class="h-4 w-4" />
           {{ saving ? t('common.loading') : t('common.save') }}

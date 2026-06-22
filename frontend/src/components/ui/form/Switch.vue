@@ -23,8 +23,8 @@ defineEmits<{
       :aria-label="ariaLabel"
       :id="id"
       :disabled="disabled"
-      class="relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
-      :class="modelValue ? 'bg-blue-600' : 'bg-gray-300'"
+      class="relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1"
+      :class="modelValue ? 'bg-brand-600' : 'bg-gray-300'"
       @click="$emit('update:modelValue', !modelValue)"
     >
       <span

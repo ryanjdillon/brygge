@@ -116,7 +116,7 @@ function handleCreate() {
       <div class="flex items-center justify-between mb-3">
         <h2 class="text-lg font-semibold text-gray-900">{{ t('gdpr.admin.legalDocuments') }}</h2>
         <button
-          class="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+          class="rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
           @click="showForm = !showForm"
         >
           {{ t('gdpr.admin.createDocument') }}
@@ -142,7 +142,7 @@ function handleCreate() {
         </div>
         <button
           :disabled="creating || !form.version || !form.content"
-          class="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+          class="rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
           @click="handleCreate"
         >
           {{ creating ? t('common.loading') : t('gdpr.admin.save') }}

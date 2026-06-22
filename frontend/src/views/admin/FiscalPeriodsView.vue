@@ -50,7 +50,7 @@ function formatDate(d: string | null): string {
     <div class="flex items-center justify-between">
       <h1 class="text-2xl font-bold text-gray-900">{{ t('admin.accounting.periods.title') }}</h1>
       <button
-        class="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+        class="inline-flex items-center gap-1.5 rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
         @click="showCreateForm = !showCreateForm"
       >
         <Plus class="h-4 w-4" />
@@ -66,7 +66,7 @@ function formatDate(d: string | null): string {
         </div>
       </div>
       <button
-        class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+        class="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
         :disabled="createMutation.isPending.value"
         @click="handleCreate"
       >
@@ -101,7 +101,7 @@ function formatDate(d: string | null): string {
           <tr
             v-for="period in periods"
             :key="period.id"
-            :class="{ 'bg-blue-50': period.status === 'open' }"
+            :class="{ 'bg-brand-50': period.status === 'open' }"
           >
             <td class="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">{{ period.year }}</td>
             <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ period.start_date }} – {{ period.end_date }}</td>

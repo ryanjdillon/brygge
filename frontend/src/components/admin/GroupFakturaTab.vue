@@ -134,7 +134,7 @@ function onBulkCompleted() {
           v-model="search"
           type="search"
           :placeholder="t('admin.groupFaktura.searchPlaceholder')"
-          class="rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          class="rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
         />
       </div>
       <DockFilter id="group-faktura-dock-filter" v-model="dockFilter" :options="dockOptions" />
@@ -147,14 +147,14 @@ function onBulkCompleted() {
 
     <div
       v-if="selected.size > 0"
-      class="mt-3 flex items-center gap-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm"
+      class="mt-3 flex items-center gap-3 rounded-md border border-brand-200 bg-brand-50 px-3 py-2 text-sm"
     >
-      <span class="font-medium text-blue-900">
+      <span class="font-medium text-brand-900">
         {{ t('admin.groupFaktura.selectedCount', { n: selected.size }) }}
       </span>
       <button
         type="button"
-        class="inline-flex items-center gap-1 rounded text-xs text-blue-700 hover:text-blue-900 hover:underline"
+        class="inline-flex items-center gap-1 rounded text-xs text-brand-700 hover:text-brand-900 hover:underline"
         :title="t('common.clearSelection')"
         @click="clearSelection"
       >
@@ -162,7 +162,7 @@ function onBulkCompleted() {
         {{ t('common.clearSelection') }}
       </button>
       <button
-        class="ml-auto inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700"
+        class="ml-auto inline-flex items-center gap-1 rounded-md bg-brand-600 px-3 py-1 text-xs font-semibold text-white hover:bg-brand-700"
         @click="openBulk"
       >
         <Receipt class="h-3.5 w-3.5" /> {{ t('admin.groupFaktura.create') }}
@@ -185,7 +185,7 @@ function onBulkCompleted() {
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-200 bg-white">
-          <tr v-for="(r, idx) in rows" :key="r.id" :class="{ 'bg-blue-50/50': selected.has(r.id) }">
+          <tr v-for="(r, idx) in rows" :key="r.id" :class="{ 'bg-brand-50/50': selected.has(r.id) }">
             <td class="px-2 py-2 text-center">
               <input type="checkbox" :checked="selected.has(r.id)" class="rounded border-gray-300" @click="onRowClick(idx, $event)" />
             </td>

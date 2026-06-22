@@ -79,12 +79,12 @@ function delayHide() {
 
 <template>
   <div class="relative">
-    <div v-if="props.modelValue" class="flex items-center justify-between rounded-md border border-gray-300 bg-blue-50 px-3 py-2">
+    <div v-if="props.modelValue" class="flex items-center justify-between rounded-md border border-gray-300 bg-brand-50 px-3 py-2">
       <div>
-        <p class="text-sm font-medium text-blue-900">{{ props.modelValue.full_name }}</p>
-        <p class="text-xs text-blue-700">{{ props.modelValue.email }}</p>
+        <p class="text-sm font-medium text-brand-900">{{ props.modelValue.full_name }}</p>
+        <p class="text-xs text-brand-700">{{ props.modelValue.email }}</p>
       </div>
-      <button type="button" class="text-blue-700 hover:text-blue-900" :title="t('common.cancel')" @click="clearSelection">
+      <button type="button" class="text-brand-700 hover:text-brand-900" :title="t('common.cancel')" @click="clearSelection">
         <X class="h-4 w-4" />
       </button>
     </div>
@@ -95,7 +95,7 @@ function delayHide() {
           v-model="query"
           type="search"
           :placeholder="props.placeholder ?? t('admin.memberSearch.placeholder')"
-          class="block w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          class="block w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
           @focus="showResults = results.length > 0"
           @blur="delayHide"
         />
@@ -108,7 +108,7 @@ function delayHide() {
           v-for="m in results"
           :key="m.id"
           type="button"
-          class="block w-full px-4 py-2 text-left text-sm hover:bg-blue-50"
+          class="block w-full px-4 py-2 text-left text-sm hover:bg-brand-50"
           @mousedown.prevent="pick(m)"
         >
           <span class="block font-medium text-gray-900">{{ m.full_name }}</span>

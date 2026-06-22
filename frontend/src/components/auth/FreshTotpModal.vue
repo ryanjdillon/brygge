@@ -96,7 +96,7 @@ function friendlyError(backendCode: string): string {
     <div class="w-full max-w-sm rounded-lg bg-white p-5 shadow-xl">
       <div class="flex items-start justify-between border-b border-gray-100 pb-3">
         <div class="flex items-center gap-2">
-          <ShieldCheck class="h-5 w-5 text-blue-600" />
+          <ShieldCheck class="h-5 w-5 text-brand-600" />
           <h2 class="text-base font-semibold text-gray-900">{{ t('totpVerify.modalTitle') }}</h2>
         </div>
         <button class="text-gray-400 hover:text-gray-600" :aria-label="t('common.close')" @click="cancel">
@@ -115,7 +115,7 @@ function friendlyError(backendCode: string): string {
           inputmode="numeric"
           autocomplete="one-time-code"
           maxlength="6"
-          class="w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-lg tracking-widest focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          class="w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-lg tracking-widest focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
         />
         <input
           v-else
@@ -125,7 +125,7 @@ function friendlyError(backendCode: string): string {
           autocomplete="off"
           maxlength="9"
           placeholder="XXXX-XXXX"
-          class="w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-lg tracking-widest focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          class="w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-lg tracking-widest focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
         />
 
         <p v-if="error" class="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{{ error }}</p>
@@ -140,7 +140,7 @@ function friendlyError(backendCode: string): string {
           </button>
           <button
             type="submit"
-            class="flex-1 rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+            class="flex-1 rounded-md bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
             :disabled="busy"
           >
             {{ busy ? t('common.loading') : t('totpVerify.submitButton') }}

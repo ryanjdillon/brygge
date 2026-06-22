@@ -1,5 +1,21 @@
 @import "tailwindcss";
 
+/* Harbour teal — the single signature/action color across the product.
+   Replaces Tailwind's generic blue for every primary action, link, active
+   nav/tab, and focus state. (Brand refresh — see design handoff.) */
+@theme {
+  --color-brand-50:  #ecfbf9;
+  --color-brand-100: #cff4ef;
+  --color-brand-200: #9fe7df;
+  --color-brand-300: #65d2c8;
+  --color-brand-400: #2fb3a8;
+  --color-brand-500: #149389; /* focus ring */
+  --color-brand-600: #0e7c7b; /* primary */
+  --color-brand-700: #0b6463; /* hover, active text */
+  --color-brand-800: #0a4f4f;
+  --color-brand-900: #0a3e3e;
+}
+
 @layer base {
   /* WCAG 2.4.7 — visible focus indicators on all interactive elements */
   a:focus-visible,
@@ -8,7 +24,7 @@
   select:focus-visible,
   textarea:focus-visible,
   [tabindex]:focus-visible {
-    outline: 2px solid var(--color-blue-500, #3b82f6);
+    outline: 2px solid var(--color-brand-500, #149389);
     outline-offset: 2px;
     border-radius: 2px;
   }

@@ -35,7 +35,7 @@ function onInput(e: Event) {
       :step="step"
       :disabled="disabled"
       :aria-label="ariaLabel"
-      class="h-2 flex-1 cursor-pointer appearance-none rounded-lg bg-gray-200 accent-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
+      class="h-2 flex-1 cursor-pointer appearance-none rounded-lg bg-gray-200 accent-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
       @input="onInput"
     />
     <span v-if="showValue" class="w-12 text-right text-sm tabular-nums text-gray-700">{{ modelValue ?? '—' }}</span>

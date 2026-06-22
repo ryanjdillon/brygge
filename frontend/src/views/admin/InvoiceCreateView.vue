@@ -128,7 +128,7 @@ function handleSubmit() {
           <li
             v-for="user in filteredUsers"
             :key="user.id"
-            class="cursor-pointer px-4 py-2 text-sm hover:bg-blue-50"
+            class="cursor-pointer px-4 py-2 text-sm hover:bg-brand-50"
             @mousedown="selectUser(user)"
           >
             <span class="font-medium text-gray-900">{{ user.full_name }}</span>
@@ -165,7 +165,7 @@ function handleSubmit() {
         </div>
       </div>
 
-      <div v-if="selectedUserId" class="rounded-md bg-blue-50 p-3 text-sm text-blue-800">
+      <div v-if="selectedUserId" class="rounded-md bg-brand-50 p-3 text-sm text-brand-800">
         {{ t('admin.financials.invoicePreview', { name: selectedUserName, type: invoiceType, amount: amount ?? 0, due: dueDate }) }}
       </div>
 
@@ -173,7 +173,7 @@ function handleSubmit() {
         <button
           type="submit"
           :disabled="!canSubmit || isPending"
-          class="flex-1 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+          class="flex-1 rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
         >
           {{ isPending ? t('common.loading') + '...' : t('admin.financials.createInvoice') }}
         </button>

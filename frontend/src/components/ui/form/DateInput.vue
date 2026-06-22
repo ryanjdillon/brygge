@@ -23,7 +23,7 @@ const cls = computed(() => [
   'block w-full rounded-md border bg-white px-3 py-1.5 text-sm focus:outline-none focus:ring-1 disabled:cursor-not-allowed disabled:bg-gray-50',
   props.error
     ? 'border-red-400 focus:border-red-500 focus:ring-red-500'
-    : 'border-gray-300 hover:border-gray-400 focus:border-blue-500 focus:ring-blue-500',
+    : 'border-gray-300 hover:border-gray-400 focus:border-brand-500 focus:ring-brand-500',
 ])
 </script>
 

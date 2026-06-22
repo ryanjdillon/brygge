@@ -96,7 +96,7 @@ function clearSearch() {
       <button
         v-if="filtered.length"
         type="button"
-        class="ml-1 whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] font-medium text-blue-700 hover:bg-blue-50"
+        class="ml-1 whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] font-medium text-brand-700 hover:bg-brand-50"
         @click="toggleAll"
       >
         {{ allFilteredSelected ? 'Clear' : 'All' }}
@@ -111,13 +111,13 @@ function clearSearch() {
         <label
           :class="[
             'flex cursor-pointer items-start gap-2 px-3 py-2 text-sm',
-            o.disabled ? 'cursor-not-allowed opacity-50' : 'hover:bg-blue-50/50',
-            selectedSet.has(o.value) && !o.disabled ? 'bg-blue-50/40' : '',
+            o.disabled ? 'cursor-not-allowed opacity-50' : 'hover:bg-brand-50/50',
+            selectedSet.has(o.value) && !o.disabled ? 'bg-brand-50/40' : '',
           ]"
         >
           <input
             type="checkbox"
-            class="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            class="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
             :checked="selectedSet.has(o.value)"
             :disabled="o.disabled"
             @change="toggle(o.value, o.disabled)"

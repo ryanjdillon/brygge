@@ -126,7 +126,7 @@ function fmtDate(d: string): string {
             </td>
             <td class="px-3 py-2">
               <button
-                class="inline-flex items-center gap-1.5 rounded-md border border-blue-300 bg-white px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50"
+                class="inline-flex items-center gap-1.5 rounded-md border border-brand-300 bg-white px-2.5 py-1 text-xs font-medium text-brand-700 hover:bg-brand-50"
                 @click="openPairing(row)"
               >
                 <ArrowLeftRight class="h-3.5 w-3.5" />
@@ -184,7 +184,7 @@ function fmtDate(d: string): string {
               <button
                 v-for="c in suggestions"
                 :key="c.id"
-                class="w-full rounded-lg border border-gray-200 px-3 py-2 text-left text-sm hover:border-blue-300 hover:bg-blue-50"
+                class="w-full rounded-lg border border-gray-200 px-3 py-2 text-left text-sm hover:border-brand-300 hover:bg-brand-50"
                 :disabled="pairMutation.isPending.value"
                 @click="confirmPairing(c.id)"
               >
@@ -207,11 +207,11 @@ function fmtDate(d: string): string {
                 v-model="manualOutboundId"
                 type="text"
                 :placeholder="t('admin.bankImports.manualOutboundPlaceholder')"
-                class="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                class="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
               />
               <button
                 :disabled="!manualOutboundId.trim() || pairMutation.isPending.value"
-                class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-40"
+                class="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-40"
                 @click="confirmManual"
               >
                 {{ t('admin.bankImports.confirmPair') }}

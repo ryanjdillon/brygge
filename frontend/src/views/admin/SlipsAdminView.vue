@@ -316,7 +316,7 @@ function closeDelete() {
         <DockFilter id="slips-dock-filter" v-model="dockFilter" :options="allDocks" />
         <button
           v-if="!showCreateForm"
-          class="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+          class="flex items-center gap-1.5 rounded-md bg-brand-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700"
           @click="openCreate"
         >
           <Plus class="h-4 w-4" />
@@ -360,7 +360,7 @@ function closeDelete() {
       </div>
       <div v-if="submitError" class="rounded-md bg-red-50 p-3 text-sm text-red-800">{{ submitError }}</div>
       <div class="flex gap-3">
-        <button type="submit" :disabled="isCreating" class="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50">{{ t('common.save') }}</button>
+        <button type="submit" :disabled="isCreating" class="rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-50">{{ t('common.save') }}</button>
         <button type="button" class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50" @click="showCreateForm = false">{{ t('common.cancel') }}</button>
       </div>
     </form>
@@ -390,7 +390,7 @@ function closeDelete() {
             </td>
             <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ slip.length_m ?? '—' }} × {{ slip.width_m ?? '—' }} m</td>
             <td class="whitespace-nowrap px-4 py-3 text-sm">
-              <span :class="['rounded-full px-2.5 py-0.5 text-xs font-medium', slip.status === 'vacant' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800']">
+              <span :class="['rounded-full px-2.5 py-0.5 text-xs font-medium', slip.status === 'vacant' ? 'bg-green-100 text-green-800' : 'bg-brand-100 text-brand-800']">
                 {{ slip.status }}
               </span>
             </td>
@@ -503,7 +503,7 @@ function closeDelete() {
           <span v-else />
           <div class="flex gap-3">
             <button type="button" class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50" @click="closeEdit">{{ t('common.cancel') }}</button>
-            <button type="submit" :disabled="isUpdating" class="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50">{{ t('common.save') }}</button>
+            <button type="submit" :disabled="isUpdating" class="rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-50">{{ t('common.save') }}</button>
           </div>
         </div>
       </form>

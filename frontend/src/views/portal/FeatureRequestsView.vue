@@ -38,7 +38,7 @@ const statusClasses: Record<string, string> = {
   reviewing: 'bg-yellow-100 text-yellow-800',
   accepted: 'bg-green-100 text-green-800',
   rejected: 'bg-red-100 text-red-700',
-  done: 'bg-blue-100 text-blue-700',
+  done: 'bg-brand-100 text-brand-700',
 }
 
 function openModal() {
@@ -73,7 +73,7 @@ function handleVote(request: FeatureRequest, value: 1 | -1) {
     <div class="flex items-center justify-between">
       <h1 class="text-2xl font-bold text-gray-900">{{ t('featureRequests.title') }}</h1>
       <button
-        class="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+        class="flex items-center gap-1.5 rounded-md bg-brand-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700"
         @click="openModal"
       >
         <Plus class="h-4 w-4" />
@@ -88,7 +88,7 @@ function handleVote(request: FeatureRequest, value: 1 | -1) {
         :class="[
           'rounded-full px-3 py-1 text-sm font-medium transition',
           statusFilter === status
-            ? 'bg-blue-600 text-white'
+            ? 'bg-brand-600 text-white'
             : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
         ]"
         @click="statusFilter = status"
@@ -129,14 +129,14 @@ function handleVote(request: FeatureRequest, value: 1 | -1) {
               :class="[
                 'rounded p-1 transition',
                 request.user_vote === 1
-                  ? 'text-blue-600 bg-blue-50'
-                  : 'text-gray-400 hover:text-blue-600 hover:bg-blue-50',
+                  ? 'text-brand-600 bg-brand-50'
+                  : 'text-gray-400 hover:text-brand-600 hover:bg-brand-50',
               ]"
               @click="handleVote(request, 1)"
             >
               <ThumbsUp class="h-4 w-4" />
             </button>
-            <span class="text-sm font-semibold" :class="request.vote_count > 0 ? 'text-blue-600' : request.vote_count < 0 ? 'text-red-600' : 'text-gray-500'">
+            <span class="text-sm font-semibold" :class="request.vote_count > 0 ? 'text-brand-600' : request.vote_count < 0 ? 'text-red-600' : 'text-gray-500'">
               {{ request.vote_count }}
             </span>
             <button
@@ -205,7 +205,7 @@ function handleVote(request: FeatureRequest, value: 1 | -1) {
             <button
               type="submit"
               :disabled="createRequest.isPending.value"
-              class="rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
+              class="rounded-md bg-brand-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-50"
             >
               {{ t('common.submit') }}
             </button>

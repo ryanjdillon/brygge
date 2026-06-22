@@ -227,7 +227,7 @@ onMounted(() => {
         <select
           id="profile-language"
           v-model="form.language"
-          class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
         >
           <option value="">{{ t('portal.profile.languageDefault') }}</option>
           <option v-for="opt in localeOptions" :key="opt.code" :value="opt.code">
@@ -262,8 +262,8 @@ onMounted(() => {
             <button
               type="button"
               :class="[
-                'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2',
-                pref.email_enabled ? 'bg-blue-600' : 'bg-gray-200',
+                'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2',
+                pref.email_enabled ? 'bg-brand-600' : 'bg-gray-200',
               ]"
               :aria-checked="pref.email_enabled"
               role="switch"
@@ -296,7 +296,7 @@ onMounted(() => {
       <button
         type="submit"
         :disabled="isSaving || !canSubmit"
-        class="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
+        class="rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-50"
       >
         {{ isSaving ? t('portal.profile.saving') : t('common.save') }}
       </button>

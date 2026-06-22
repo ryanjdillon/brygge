@@ -104,7 +104,7 @@ const triggerWidthClass = computed(() => (props.width === 'content' ? 'w-auto' :
   <div ref="root" :class="['relative', widthClass]">
     <button
       type="button"
-      class="flex items-center justify-between gap-2 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-left text-sm hover:border-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-gray-50"
+      class="flex items-center justify-between gap-2 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-left text-sm hover:border-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 disabled:cursor-not-allowed disabled:bg-gray-50"
       :class="triggerWidthClass"
       :disabled="disabled"
       :aria-expanded="open"
@@ -128,8 +128,8 @@ const triggerWidthClass = computed(() => (props.width === 'content' ? 'w-auto' :
         v-for="(o, i) in options"
         :key="String(o.value)"
         type="button"
-        class="flex w-full items-center gap-2 whitespace-nowrap px-3 py-1.5 text-left text-sm hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
-        :class="{ 'bg-blue-50': o.value === modelValue, 'bg-gray-50': i === activeIndex && o.value !== modelValue }"
+        class="flex w-full items-center gap-2 whitespace-nowrap px-3 py-1.5 text-left text-sm hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-50"
+        :class="{ 'bg-brand-50': o.value === modelValue, 'bg-gray-50': i === activeIndex && o.value !== modelValue }"
         :disabled="o.disabled"
         role="option"
         :aria-selected="o.value === modelValue"

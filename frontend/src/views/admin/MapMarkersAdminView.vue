@@ -94,7 +94,7 @@ const sortedMarkers = computed(() =>
     <div class="flex items-center justify-between">
       <h1 class="text-2xl font-bold text-gray-900">{{ t('mapAdmin.title') }}</h1>
       <button
-        class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+        class="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
         @click="openCreate"
       >
         <Plus class="h-4 w-4" aria-hidden="true" />
@@ -122,7 +122,7 @@ const sortedMarkers = computed(() =>
       <tbody class="divide-y divide-gray-100">
         <tr v-for="m in sortedMarkers" :key="m.id">
           <td class="py-3">
-            <span class="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">
+            <span class="rounded-full bg-brand-100 px-2 py-0.5 text-xs font-medium text-brand-800">
               {{ t(`mapAdmin.types.${m.marker_type}`, m.marker_type) }}
             </span>
           </td>
@@ -201,7 +201,7 @@ const sortedMarkers = computed(() =>
             <button
               type="submit"
               :disabled="saving"
-              class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              class="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
             >
               {{ t('common.save') }}
             </button>

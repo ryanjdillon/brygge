@@ -36,23 +36,23 @@ function formatDate(d: string): string {
     <!-- Privacy Policy link -->
     <RouterLink
       to="/portal/privacy-policy"
-      class="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-4 transition hover:border-blue-300 hover:shadow-sm"
+      class="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-4 transition hover:border-brand-300 hover:shadow-sm"
     >
       <div class="flex items-center gap-3">
-        <FileText class="h-5 w-5 text-blue-600" />
+        <FileText class="h-5 w-5 text-brand-600" />
         <div>
           <p class="font-medium text-gray-900">{{ t('gdpr.privacyPolicyTitle') }}</p>
           <p class="text-sm text-gray-500">{{ t('gdpr.privacyPolicyDescription') }}</p>
         </div>
       </div>
-      <span class="text-sm text-blue-600">{{ t('common.view') }} &rarr;</span>
+      <span class="text-sm text-brand-600">{{ t('common.view') }} &rarr;</span>
     </RouterLink>
 
     <!-- Data Export -->
     <div class="rounded-lg border border-gray-200 bg-white p-4">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-3">
-          <Download class="h-5 w-5 text-blue-600" />
+          <Download class="h-5 w-5 text-brand-600" />
           <div>
             <p class="font-medium text-gray-900">{{ t('gdpr.exportTitle') }}</p>
             <p class="text-sm text-gray-500">{{ t('gdpr.exportDescription') }}</p>
@@ -60,7 +60,7 @@ function formatDate(d: string): string {
         </div>
         <button
           :disabled="exporting"
-          class="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+          class="rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
           @click="exportData()"
         >
           {{ exporting ? t('common.loading') : t('gdpr.exportButton') }}

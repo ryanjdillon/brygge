@@ -63,7 +63,7 @@ const { mutateAsync: save, isPending: saving } = useMutation({
         <select
           id="club-default-language"
           v-model="form.default_language"
-          class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
         >
           <option v-for="opt in localeOptions" :key="opt.code" :value="opt.code">
             {{ opt.label }}
@@ -76,7 +76,7 @@ const { mutateAsync: save, isPending: saving } = useMutation({
         <button
           type="submit"
           :disabled="saving"
-          class="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+          class="rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
         >
           {{ saving ? t('common.loading') : t('common.save') }}
         </button>

@@ -103,7 +103,7 @@ function onKeyDown(e: KeyboardEvent) {
       <textarea
         v-model="sql"
         rows="8"
-        class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
         :placeholder="t('admin.devQuery.placeholder')"
         @keydown="onKeyDown"
       ></textarea>
@@ -122,7 +122,7 @@ function onKeyDown(e: KeyboardEvent) {
         <button
           type="button"
           :disabled="running || !sql.trim()"
-          class="inline-flex items-center gap-1 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+          class="inline-flex items-center gap-1 rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
           @click="run"
         >
           <Play class="h-4 w-4" />

@@ -176,7 +176,7 @@ function startOver() {
       <span v-for="s in 4" :key="s" class="flex items-center gap-1">
         <span
           class="flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold"
-          :class="s <= step ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-500'"
+          :class="s <= step ? 'bg-brand-600 text-white' : 'bg-slate-200 text-slate-500'"
         >
           {{ s }}
         </span>
@@ -190,10 +190,10 @@ function startOver() {
         v-for="rt in resourceTypes"
         :key="rt.key"
         type="button"
-        class="flex items-center gap-4 rounded-lg border border-slate-200 bg-white p-5 text-left transition hover:border-blue-400 hover:shadow-md"
+        class="flex items-center gap-4 rounded-lg border border-slate-200 bg-white p-5 text-left transition hover:border-brand-400 hover:shadow-md"
         @click="selectType(rt.key)"
       >
-        <component :is="rt.icon" class="h-8 w-8 text-blue-600" />
+        <component :is="rt.icon" class="h-8 w-8 text-brand-600" />
         <span class="font-semibold text-slate-900">{{ t(rt.label) }}</span>
       </button>
     </div>
@@ -210,7 +210,7 @@ function startOver() {
         </button>
         <button
           type="button"
-          class="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+          class="rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
           :disabled="!boatDimensions.length || !boatDimensions.beam || !boatDimensions.draft"
           @click="onDimensionsNext"
         >
@@ -239,7 +239,7 @@ function startOver() {
         </button>
         <button
           type="button"
-          class="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+          class="rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
           :disabled="!startDate || !endDate"
           @click="onDatesNext"
         >
@@ -318,7 +318,7 @@ function startOver() {
         </button>
         <button
           type="button"
-          class="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+          class="rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
           :disabled="isSubmitting || (!auth.isAuthenticated && (!guestName || !guestEmail))"
           @click="submitBooking"
         >
@@ -333,7 +333,7 @@ function startOver() {
       <div class="mt-6 text-center">
         <button
           type="button"
-          class="text-sm font-medium text-blue-600 hover:text-blue-700"
+          class="text-sm font-medium text-brand-600 hover:text-brand-700"
           @click="startOver"
         >
           {{ t('booking.bookAnother') }}

@@ -80,7 +80,7 @@ const priorityClasses: Record<string, string> = {
 
 const columnHeaderClasses: Record<string, string> = {
   gray: 'bg-gray-100 text-gray-700',
-  blue: 'bg-blue-100 text-blue-700',
+  blue: 'bg-brand-100 text-brand-700',
   green: 'bg-green-100 text-green-700',
 }
 
@@ -365,7 +365,7 @@ function moveTask(task: Task, direction: 'prev' | 'next') {
             <button
               type="submit"
               :disabled="createTask.isPending.value"
-              class="rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
+              class="rounded-md bg-brand-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-50"
             >
               {{ t('common.save') }}
             </button>
@@ -455,7 +455,7 @@ function moveTask(task: Task, direction: 'prev' | 'next') {
             <button
               type="submit"
               :disabled="updateTask.isPending.value"
-              class="rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
+              class="rounded-md bg-brand-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-50"
             >
               {{ t('common.save') }}
             </button>

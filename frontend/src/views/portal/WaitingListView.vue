@@ -103,7 +103,7 @@ function confirmWithdraw() {
 
           <div class="rounded-lg border border-gray-200 bg-white p-5">
             <p class="text-sm font-medium text-gray-500">{{ t('portal.waitingList.status') }}</p>
-            <span class="mt-1 inline-block rounded-full bg-blue-100 px-3 py-1 text-sm font-medium text-blue-800">
+            <span class="mt-1 inline-block rounded-full bg-brand-100 px-3 py-1 text-sm font-medium text-brand-800">
               {{ entry.status }}
             </span>
           </div>
@@ -111,10 +111,10 @@ function confirmWithdraw() {
 
         <div
           v-if="entry.status === 'offered' && entry.offer_deadline"
-          class="mt-6 rounded-lg border-2 border-blue-300 bg-blue-50 p-6"
+          class="mt-6 rounded-lg border-2 border-brand-300 bg-brand-50 p-6"
         >
-          <h2 class="text-lg font-bold text-blue-900">{{ t('portal.waitingList.slipOffer') }}</h2>
-          <p class="mt-2 text-sm text-blue-800">
+          <h2 class="text-lg font-bold text-brand-900">{{ t('portal.waitingList.slipOffer') }}</h2>
+          <p class="mt-2 text-sm text-brand-800">
             <strong>Deadline:</strong> {{ formatDate(entry.offer_deadline) }}
           </p>
 
@@ -169,15 +169,15 @@ function confirmWithdraw() {
               <tr
                 v-for="item in listEntries"
                 :key="item.position"
-                :class="item.is_you ? 'bg-blue-50' : ''"
+                :class="item.is_you ? 'bg-brand-50' : ''"
               >
                 <td class="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">
                   {{ item.position }}
                 </td>
                 <td class="whitespace-nowrap px-4 py-3 text-sm">
-                  <span v-if="item.is_you" class="font-semibold text-blue-700">
+                  <span v-if="item.is_you" class="font-semibold text-brand-700">
                     {{ item.name }}
-                    <span class="ml-1 text-xs text-blue-500">({{ t('portal.waitingList.you') }})</span>
+                    <span class="ml-1 text-xs text-brand-500">({{ t('portal.waitingList.you') }})</span>
                   </span>
                   <span v-else class="text-gray-500">{{ item.name }}</span>
                 </td>

@@ -61,7 +61,7 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
         :key="lang.code"
         type="button"
         class="block w-full px-4 py-2 text-left text-sm hover:bg-gray-100"
-        :class="lang.code === locale ? 'font-semibold text-blue-600' : 'text-gray-700'"
+        :class="lang.code === locale ? 'font-semibold text-brand-600' : 'text-gray-700'"
         @click="select(lang.code)"
       >
         {{ lang.label }}

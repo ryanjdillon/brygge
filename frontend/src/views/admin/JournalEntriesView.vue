@@ -116,7 +116,7 @@ const sourceLabels = computed<Record<string, string>>(() => ({
 }))
 
 const accountTypeColors: Record<string, string> = {
-  asset: 'bg-blue-100 text-blue-800',
+  asset: 'bg-brand-100 text-brand-800',
   liability: 'bg-amber-100 text-amber-800',
   revenue: 'bg-green-100 text-green-800',
   expense: 'bg-red-100 text-red-800',
@@ -267,7 +267,7 @@ function formatNOK(amount: number): string {
           <NumberInput v-model="newYear" :min="2000" :max="2100" />
         </div>
         <button
-          class="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+          class="inline-flex items-center gap-1.5 rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
           :disabled="createPeriodMutation.isPending.value"
           @click="handleCreatePeriod"
         >
@@ -321,7 +321,7 @@ function formatNOK(amount: number): string {
             :class="[
               'inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium disabled:opacity-50',
               showCreateYear
-                ? 'bg-blue-600 text-white hover:bg-blue-700'
+                ? 'bg-brand-600 text-white hover:bg-brand-700'
                 : 'border border-gray-300 text-gray-700 hover:bg-gray-50',
             ]"
             :title="t('admin.accounting.journal.createPeriodTooltip')"
@@ -332,7 +332,7 @@ function formatNOK(amount: number): string {
             {{ t('admin.accounting.journal.createPeriod') }}
           </button>
           <button
-            class="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            class="inline-flex items-center gap-1.5 rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
             :disabled="syncing || !selectedPeriodId"
             :title="t('admin.accounting.journal.updatePeriodTooltip')"
             @click="handleSync"
@@ -367,7 +367,7 @@ function formatNOK(amount: number): string {
     <div class="mt-4 flex flex-wrap items-center gap-3">
       <RouterLink
         to="/admin/accounting/journal/new"
-        class="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+        class="inline-flex items-center gap-1.5 rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
       >
         <Plus class="h-4 w-4" />
         {{ t('admin.accounting.journal.newEntry') }}
@@ -378,7 +378,7 @@ function formatNOK(amount: number): string {
         <input
           v-model="searchQ"
           type="search"
-          class="rounded-md border border-gray-300 py-2 pl-8 pr-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          class="rounded-md border border-gray-300 py-2 pl-8 pr-3 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
           :placeholder="t('common.search')"
         />
       </div>
@@ -481,7 +481,7 @@ function formatNOK(amount: number): string {
               <td class="px-2 py-3" @click.stop>
                 <button
                   v-if="entry.attachment_url"
-                  class="text-gray-400 hover:text-blue-600"
+                  class="text-gray-400 hover:text-brand-600"
                   :title="t('admin.accounting.journal.viewBilag')"
                   @click="openAttachment(entry.id)"
                 >

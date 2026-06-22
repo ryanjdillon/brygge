@@ -422,14 +422,14 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
       <h1 class="flex items-center gap-2 text-lg font-semibold">
         <Inbox class="h-5 w-5 text-gray-500" />
         {{ t('admin.sidebar.inbox') }}
-        <span v-if="totalUnread" class="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-sm font-medium text-blue-700">
+        <span v-if="totalUnread" class="ml-2 rounded-full bg-brand-100 px-2 py-0.5 text-sm font-medium text-brand-700">
           {{ totalUnread }}
         </span>
       </h1>
       <div v-show="activeTab === 'inbox'" class="flex items-center gap-3">
         <button
           type="button"
-          class="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+          class="inline-flex items-center gap-1.5 rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700"
           @click="openCompose"
         >
           <SquarePen class="h-4 w-4" />
@@ -439,7 +439,7 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
           v-model="search"
           type="search"
           :placeholder="t('admin.inbox.searchPlaceholder')"
-          class="w-64 rounded border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+          class="w-64 rounded border border-gray-300 px-3 py-1.5 text-sm focus:border-brand-500 focus:outline-none"
         />
       </div>
     </header>
@@ -458,14 +458,14 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
     <!-- White gap above/below the notice gives a visual break between the
          tab row and the inbox panes. -->
     <div v-show="activeTab === 'inbox'" class="bg-white py-2">
-      <div class="flex items-center gap-2 border-y border-blue-100 bg-blue-50 px-4 py-2 text-sm text-blue-800">
-        <Mail class="h-4 w-4 shrink-0 text-blue-500" />
+      <div class="flex items-center gap-2 border-y border-brand-100 bg-brand-50 px-4 py-2 text-sm text-brand-800">
+        <Mail class="h-4 w-4 shrink-0 text-brand-500" />
         <span>{{ t('admin.inbox.clientNotice') }}</span>
         <a
           href="https://github.com/ryanjdillon/brygge/blob/main/docs/user/setting-up-email.md"
           target="_blank"
           rel="noopener noreferrer"
-          class="ml-1 font-medium underline hover:text-blue-900"
+          class="ml-1 font-medium underline hover:text-brand-900"
         >{{ t('admin.inbox.clientNoticeLink') }}</a>
       </div>
     </div>
@@ -485,7 +485,7 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
           <li v-for="m in mailboxes" :key="m.address">
             <div
               class="flex items-center text-sm hover:bg-gray-50"
-              :class="{ 'bg-blue-50 font-semibold text-blue-900': m.address === selectedAddress && !selectedFolder }"
+              :class="{ 'bg-brand-50 font-semibold text-brand-900': m.address === selectedAddress && !selectedFolder }"
             >
               <button
                 type="button"
@@ -501,7 +501,7 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
                 @click="selectAddress(m.address)"
               >
                 <span class="truncate">{{ m.display_name }}</span>
-                <span v-if="m.unread" class="ml-2 rounded bg-blue-600 px-1.5 py-0.5 text-xs font-medium text-white">
+                <span v-if="m.unread" class="ml-2 rounded bg-brand-600 px-1.5 py-0.5 text-xs font-medium text-white">
                   {{ m.unread }}
                 </span>
               </button>
@@ -514,12 +514,12 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
                   type="button"
                   class="flex w-full items-center justify-between py-1.5 pl-9 pr-3 text-left text-sm hover:bg-gray-100"
                   :class="isFolderActive(m.address, f)
-                    ? 'bg-blue-50 font-medium text-blue-900'
+                    ? 'bg-brand-50 font-medium text-brand-900'
                     : 'text-gray-600'"
                   @click="selectFolder(m.address, folderSelector(f))"
                 >
                   <span class="truncate">{{ folderLabel(f) }}</span>
-                  <span v-if="f.unread" class="ml-2 rounded bg-blue-500 px-1.5 py-0.5 text-xs font-medium text-white">
+                  <span v-if="f.unread" class="ml-2 rounded bg-brand-500 px-1.5 py-0.5 text-xs font-medium text-white">
                     {{ f.unread }}
                   </span>
                 </button>
@@ -539,7 +539,7 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
               type="button"
               class="flex w-full flex-col gap-1 px-3 py-2 text-left hover:bg-gray-50"
               :class="{
-                'bg-blue-50': row.thread_id === selectedThread,
+                'bg-brand-50': row.thread_id === selectedThread,
                 'font-semibold text-gray-900': row.unread,
                 'text-gray-700': !row.unread,
               }"
@@ -572,7 +572,7 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
             <div class="flex items-center gap-2">
               <button
                 type="button"
-                class="inline-flex items-center gap-1 rounded border border-blue-300 bg-blue-50 px-2 py-1 text-xs text-blue-700 hover:bg-blue-100"
+                class="inline-flex items-center gap-1 rounded border border-brand-300 bg-brand-50 px-2 py-1 text-xs text-brand-700 hover:bg-brand-100"
                 @click="openReply"
               >
                 <Reply class="h-4 w-4" /> {{ t('admin.inbox.reply.button') }}
@@ -650,7 +650,7 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
                 </button>
                 <button
                   type="button"
-                  class="inline-flex items-center gap-1 rounded bg-blue-600 px-3 py-1 text-xs text-white hover:bg-blue-700 disabled:opacity-50"
+                  class="inline-flex items-center gap-1 rounded bg-brand-600 px-3 py-1 text-xs text-white hover:bg-brand-700 disabled:opacity-50"
                   :disabled="sending"
                   @click="submitReply"
                 >
@@ -677,7 +677,7 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
                   :key="a.blobId"
                   :href="`/api/v1/admin/inbox/${encodeURIComponent(selectedAddress)}/blob/${encodeURIComponent(a.blobId)}?name=${encodeURIComponent(a.name || 'attachment')}`"
                   :download="a.name || 'attachment'"
-                  class="inline-flex items-center gap-1 rounded bg-gray-100 px-2 py-1 text-blue-700 hover:bg-gray-200"
+                  class="inline-flex items-center gap-1 rounded bg-gray-100 px-2 py-1 text-brand-700 hover:bg-gray-200"
                 >
                   <Paperclip class="h-3 w-3" />
                   {{ a.name || a.type }}

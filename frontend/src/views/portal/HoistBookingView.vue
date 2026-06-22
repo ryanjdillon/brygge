@@ -70,7 +70,7 @@ async function submit() {
   <div class="space-y-6">
     <div>
       <h2 class="flex items-center gap-2 text-xl font-semibold text-gray-900">
-        <Wrench class="h-5 w-5 text-blue-600" />
+        <Wrench class="h-5 w-5 text-brand-600" />
         {{ t('booking.hoistTitle') }}
       </h2>
       <p class="mt-1 text-sm text-gray-600">{{ t('booking.hoistSubtitle') }}</p>
@@ -92,14 +92,14 @@ async function submit() {
         class="flex items-center justify-between rounded-lg border px-4 py-3 text-sm transition"
         :class="[
           !slot.available ? 'border-gray-200 bg-gray-50 text-gray-400' : '',
-          slot.available && selectedSlots.includes(i) ? 'border-blue-500 bg-blue-50 text-blue-900' : '',
-          slot.available && !selectedSlots.includes(i) ? 'border-gray-200 bg-white cursor-pointer hover:border-blue-300' : '',
+          slot.available && selectedSlots.includes(i) ? 'border-brand-500 bg-brand-50 text-brand-900' : '',
+          slot.available && !selectedSlots.includes(i) ? 'border-gray-200 bg-white cursor-pointer hover:border-brand-300' : '',
         ]"
         @click="toggleSlot(i)"
       >
         <span class="font-mono">{{ slot.start }} — {{ slot.end }}</span>
         <span v-if="!slot.available" class="text-xs">{{ slot.booked_by || t('booking.hoistBooked') }}</span>
-        <span v-else-if="selectedSlots.includes(i)" class="text-xs font-semibold text-blue-600">{{ t('booking.selectSlot') }}</span>
+        <span v-else-if="selectedSlots.includes(i)" class="text-xs font-semibold text-brand-600">{{ t('booking.selectSlot') }}</span>
       </div>
     </div>
 
@@ -109,7 +109,7 @@ async function submit() {
       v-if="selectedSlots.length > 0"
       type="button"
       :disabled="!canBook || booking"
-      class="rounded-md bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+      class="rounded-md bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
       @click="submit"
     >
       {{ booking ? t('common.loading') : t('booking.confirm') }}

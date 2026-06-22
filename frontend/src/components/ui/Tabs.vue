@@ -20,7 +20,7 @@ defineEmits<{
         class="inline-flex items-center gap-2 border-b-2 px-3 py-2 text-sm font-medium transition-colors"
         :class="
           tab.value === modelValue
-            ? 'border-blue-600 text-blue-700'
+            ? 'border-brand-600 text-brand-700'
             : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
         "
         @click="$emit('update:modelValue', tab.value)"

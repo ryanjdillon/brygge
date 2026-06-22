@@ -254,7 +254,7 @@ function nameFor(id: string): string {
             <button
               type="submit"
               :disabled="submitting || !hasSelection"
-              class="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+              class="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
             >
               {{ submitting ? t('common.loading') : t('bulkInvoices.submit') }}
             </button>
@@ -334,7 +334,7 @@ function nameFor(id: string): string {
 
           <div class="flex justify-end pt-2">
             <button
-              class="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"
+              class="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-700"
               @click="emit('close')"
             >
               {{ t('common.close') }}

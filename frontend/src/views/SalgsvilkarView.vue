@@ -35,7 +35,7 @@ const sections = computed(() => [
 
     <nav class="mt-6 rounded-md border border-gray-200 bg-gray-50 p-4 text-sm" aria-label="Table of contents">
       <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">{{ t('salgsvilkar.toc') }}</p>
-      <ol class="grid grid-cols-1 gap-y-1 text-blue-700 sm:grid-cols-2">
+      <ol class="grid grid-cols-1 gap-y-1 text-brand-700 sm:grid-cols-2">
         <li v-for="(s, idx) in sections" :key="s.id">
           <a :href="`#${s.id}`" class="hover:underline">{{ idx + 1 }}. {{ s.title }}</a>
         </li>

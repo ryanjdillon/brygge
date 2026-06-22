@@ -72,7 +72,7 @@ const filteredMembers = computed(() => {
             <td class="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">{{ memberFullName(member) }}</td>
             <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ member.phone ?? '—' }}</td>
             <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">
-              <a v-if="member.email" :href="`mailto:${member.email}`" class="text-blue-600 hover:text-blue-800">
+              <a v-if="member.email" :href="`mailto:${member.email}`" class="text-brand-600 hover:text-brand-800">
                 {{ member.email }}
               </a>
               <span v-else>—</span>

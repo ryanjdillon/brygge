@@ -528,14 +528,14 @@ defineExpose({ load })
 
       <div
         v-if="selected.size > 0"
-        class="mt-3 flex flex-wrap items-center gap-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm"
+        class="mt-3 flex flex-wrap items-center gap-3 rounded-md border border-brand-200 bg-brand-50 px-3 py-2 text-sm"
       >
-        <span class="font-medium text-blue-900">
+        <span class="font-medium text-brand-900">
           {{ t('admin.invoiceDrafts.selectedCount', { n: selected.size }) }}
         </span>
         <button
           type="button"
-          class="inline-flex items-center gap-1 rounded text-xs text-blue-700 hover:text-blue-900 hover:underline"
+          class="inline-flex items-center gap-1 rounded text-xs text-brand-700 hover:text-brand-900 hover:underline"
           :title="t('common.clearSelection')"
           @click="clearSelection"
         >
@@ -556,7 +556,7 @@ defineExpose({ load })
           </button>
           <button
             v-if="showSend"
-            class="inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700"
+            class="inline-flex items-center gap-1 rounded-md bg-brand-600 px-3 py-1 text-xs font-semibold text-white hover:bg-brand-700"
             @click="sendSelected"
           >
             <Send class="h-3.5 w-3.5" /> {{ t('admin.invoiceDrafts.sendSelected') }}
@@ -570,7 +570,7 @@ defineExpose({ load })
           </button>
           <button
             v-if="showRegenerate"
-            class="inline-flex items-center gap-1 rounded-md border border-blue-300 bg-white px-3 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+            class="inline-flex items-center gap-1 rounded-md border border-brand-300 bg-white px-3 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-50"
             @click="regeneratePdfSelected"
           >
             <RefreshCw class="h-3.5 w-3.5" /> {{ t('admin.faktura.sent.regenSelected') }}
@@ -632,7 +632,7 @@ defineExpose({ load })
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-200 bg-white">
-            <tr v-for="(d, idx) in sorted" :key="d.id" :class="{ 'bg-blue-50/50': selected.has(d.id) }">
+            <tr v-for="(d, idx) in sorted" :key="d.id" :class="{ 'bg-brand-50/50': selected.has(d.id) }">
               <td class="px-2 py-2 text-center">
                 <input
                   type="checkbox"
@@ -679,7 +679,7 @@ defineExpose({ load })
                   <DeliveryLogButton v-if="status === 'sent'" :invoice-id="d.id" />
                   <button
                     v-if="showSend"
-                    class="text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                    class="text-brand-600 hover:text-brand-800 disabled:opacity-50"
                     :disabled="busyIds.has(d.id)"
                     :title="t('admin.invoiceDrafts.send')"
                     @click="sendOne(d)"

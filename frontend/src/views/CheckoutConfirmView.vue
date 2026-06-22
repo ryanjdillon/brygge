@@ -33,7 +33,7 @@ onMounted(async () => {
 <template>
   <div class="mx-auto max-w-lg px-4 py-16 text-center sm:px-6">
     <div v-if="status === 'loading'" class="space-y-4">
-      <Loader2 class="mx-auto h-12 w-12 animate-spin text-blue-600" />
+      <Loader2 class="mx-auto h-12 w-12 animate-spin text-brand-600" />
       <p class="text-slate-500">{{ t('merchandise.processingPayment') }}</p>
     </div>
 
@@ -55,7 +55,7 @@ onMounted(async () => {
       </div>
       <router-link
         to="/"
-        class="mt-6 inline-block rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+        class="mt-6 inline-block rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
       >
         {{ t('merchandise.backToHome') }}
       </router-link>
@@ -67,7 +67,7 @@ onMounted(async () => {
       <p class="text-slate-500">{{ t('merchandise.paymentError') }}</p>
       <router-link
         to="/merchandise"
-        class="mt-4 inline-block rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+        class="mt-4 inline-block rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
       >
         {{ t('merchandise.backToShop') }}
       </router-link>

@@ -143,17 +143,17 @@ function dayClass(day: CalendarDay) {
   const inRange = isInRange(day.date)
   const disabled = isDayDisabled(day)
 
-  if (isStart || isEnd) return 'bg-blue-600 text-white font-semibold'
-  if (inRange) return 'bg-blue-100 text-blue-900'
+  if (isStart || isEnd) return 'bg-brand-600 text-white font-semibold'
+  if (inRange) return 'bg-brand-100 text-brand-900'
   if (disabled) return 'bg-gray-100 text-gray-300 cursor-not-allowed'
 
   if (day.total != null && day.available != null) {
     const pct = day.available / day.total
-    if (pct > 0.5) return 'bg-green-50 text-green-800 hover:ring-2 hover:ring-blue-400'
-    if (pct > 0) return 'bg-yellow-50 text-yellow-800 hover:ring-2 hover:ring-blue-400'
+    if (pct > 0.5) return 'bg-green-50 text-green-800 hover:ring-2 hover:ring-brand-400'
+    if (pct > 0) return 'bg-yellow-50 text-yellow-800 hover:ring-2 hover:ring-brand-400'
   }
 
-  return 'hover:ring-2 hover:ring-blue-400'
+  return 'hover:ring-2 hover:ring-brand-400'
 }
 
 const weekdays = computed(() => [

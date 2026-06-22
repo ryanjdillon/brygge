@@ -102,7 +102,7 @@ function submitComment(docId: string) {
         :class="[
           'rounded-md px-3 py-1.5 text-sm font-medium transition',
           activeFilter === filter.value
-            ? 'bg-blue-600 text-white'
+            ? 'bg-brand-600 text-white'
             : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
         ]"
         @click="activeFilter = filter.value"
@@ -180,7 +180,7 @@ function submitComment(docId: string) {
             <button
               type="submit"
               :disabled="isAddingComment || !commentText.trim()"
-              class="rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
+              class="rounded-md bg-brand-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-50"
             >
               {{ t('portal.documents.addComment') }}
             </button>

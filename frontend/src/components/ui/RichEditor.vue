@@ -281,7 +281,7 @@ const toolbar: Btn[] = [
 </script>
 
 <template>
-  <div class="flex flex-col overflow-hidden rounded-md border border-gray-300 bg-white focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500">
+  <div class="flex flex-col overflow-hidden rounded-md border border-gray-300 bg-white focus-within:border-brand-500 focus-within:ring-1 focus-within:ring-brand-500">
     <!-- Toolbar -->
     <div class="flex flex-wrap items-center gap-0.5 border-b border-gray-200 bg-gray-50 px-2 py-1.5">
       <template v-for="(btn, i) in toolbar" :key="i">
@@ -294,7 +294,7 @@ const toolbar: Btn[] = [
           :class="[
             'rounded p-1 transition',
             btn.isActive()
-              ? 'bg-blue-100 text-blue-700'
+              ? 'bg-brand-100 text-brand-700'
               : 'text-gray-600 hover:bg-gray-200 hover:text-gray-900',
             btn.disabled?.() ? 'cursor-not-allowed opacity-40' : '',
           ]"
@@ -307,21 +307,21 @@ const toolbar: Btn[] = [
     <!-- Link popover -->
     <div
       v-if="showLinkPopover"
-      class="flex items-center gap-2 border-b border-blue-100 bg-blue-50 px-3 py-2"
+      class="flex items-center gap-2 border-b border-brand-100 bg-brand-50 px-3 py-2"
     >
-      <Link2 class="h-4 w-4 shrink-0 text-blue-500" />
+      <Link2 class="h-4 w-4 shrink-0 text-brand-500" />
       <input
         ref="linkInput"
         v-model="linkUrl"
         type="url"
         placeholder="https://"
-        class="min-w-0 flex-1 rounded border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        class="min-w-0 flex-1 rounded border border-gray-300 px-2 py-1 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
         @keydown.enter.prevent="applyLink"
         @keydown.esc.prevent="showLinkPopover = false"
       />
       <button
         type="button"
-        class="rounded bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-700"
+        class="rounded bg-brand-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-brand-700"
         @click="applyLink"
       >
         Bruk
@@ -386,13 +386,13 @@ const toolbar: Btn[] = [
           'inline-flex items-center gap-1.5 rounded-full pl-2.5 pr-1.5 py-0.5 text-xs',
           p.status === 'error'
             ? 'bg-red-50 text-red-700 ring-1 ring-red-200'
-            : 'bg-blue-50 text-blue-700',
+            : 'bg-brand-50 text-brand-700',
         ]"
         :title="p.status === 'error' ? p.error : undefined"
       >
         <svg
           v-if="p.status === 'uploading'"
-          class="h-3 w-3 animate-spin text-blue-500"
+          class="h-3 w-3 animate-spin text-brand-500"
           viewBox="0 0 24 24"
           fill="none"
         >

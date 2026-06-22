@@ -103,7 +103,7 @@ const tabs: { id: Tab; icon: typeof FilePlus; labelKey: string }[] = [
           :class="[
             'inline-flex items-center gap-2 whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium',
             activeTab === tab.id
-              ? 'border-blue-600 text-blue-700'
+              ? 'border-brand-600 text-brand-700'
               : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700',
           ]"
           @click="setTab(tab.id)"
@@ -119,10 +119,10 @@ const tabs: { id: Tab; icon: typeof FilePlus; labelKey: string }[] = [
         <div v-if="createMode === ''" class="grid gap-4 sm:grid-cols-2">
           <button
             type="button"
-            class="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-5 text-left transition hover:border-blue-300 hover:shadow-sm"
+            class="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-5 text-left transition hover:border-brand-300 hover:shadow-sm"
             @click="openSingle"
           >
-            <Receipt class="h-8 w-8 text-blue-600" />
+            <Receipt class="h-8 w-8 text-brand-600" />
             <div>
               <p class="font-semibold text-gray-900">{{ t('admin.faktura.create.singleTitle') }}</p>
               <p class="text-sm text-gray-500">{{ t('admin.faktura.create.singleDesc') }}</p>
@@ -130,10 +130,10 @@ const tabs: { id: Tab; icon: typeof FilePlus; labelKey: string }[] = [
           </button>
           <button
             type="button"
-            class="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-5 text-left transition hover:border-blue-300 hover:shadow-sm"
+            class="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-5 text-left transition hover:border-brand-300 hover:shadow-sm"
             @click="openGroup"
           >
-            <Users class="h-8 w-8 text-blue-600" />
+            <Users class="h-8 w-8 text-brand-600" />
             <div>
               <p class="font-semibold text-gray-900">{{ t('admin.faktura.create.groupTitle') }}</p>
               <p class="text-sm text-gray-500">{{ t('admin.faktura.create.groupDesc') }}</p>

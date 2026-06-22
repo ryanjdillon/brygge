@@ -32,7 +32,7 @@ function open() {
 <template>
   <button
     type="button"
-    :class="className || 'text-blue-600 hover:underline'"
+    :class="className || 'text-brand-600 hover:underline'"
     @click="open"
   >
     <span>{{ parts.user }}</span><span v-html="'&#64;'" /><span>{{ parts.domain }}</span>

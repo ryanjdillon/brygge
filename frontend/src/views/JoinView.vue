@@ -122,7 +122,7 @@ async function handleSubmit() {
       <button
         type="submit"
         :disabled="submitting"
-        class="w-full rounded-md bg-blue-600 px-4 py-3 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+        class="w-full rounded-md bg-brand-600 px-4 py-3 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
       >
         {{ submitting ? t('join.submitting') : t('join.submit') }}
       </button>

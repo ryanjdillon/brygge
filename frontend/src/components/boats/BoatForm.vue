@@ -158,7 +158,7 @@ function submit() {
           v-model="modelQuery"
           type="text"
           :placeholder="t('portal.boats.searchModelPlaceholder')"
-          class="block w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          class="block w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
           @focus="showModelResults = modelResults.length > 0"
           @blur="delayHideResults()"
         />
@@ -171,7 +171,7 @@ function submit() {
           v-for="m in modelResults"
           :key="m.id"
           type="button"
-          class="flex w-full items-center justify-between px-4 py-2.5 text-left text-sm hover:bg-blue-50"
+          class="flex w-full items-center justify-between px-4 py-2.5 text-left text-sm hover:bg-brand-50"
           @mousedown.prevent="selectModel(m)"
         >
           <div>
@@ -190,11 +190,11 @@ function submit() {
     <div class="grid grid-cols-2 gap-3">
       <div>
         <label for="bf-mfg" class="block text-sm font-medium text-gray-700">{{ t('portal.boats.manufacturer') }}</label>
-        <input id="bf-mfg" v-model="form.manufacturer" type="text" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+        <input id="bf-mfg" v-model="form.manufacturer" type="text" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
       </div>
       <div>
         <label for="bf-model" class="block text-sm font-medium text-gray-700">{{ t('portal.boats.model') }}</label>
-        <input id="bf-model" v-model="form.model" type="text" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+        <input id="bf-model" v-model="form.model" type="text" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
       </div>
     </div>
 
@@ -203,25 +203,25 @@ function submit() {
         {{ t('portal.boats.name') }}
         <span class="text-xs font-normal text-gray-400">{{ t('common.optional') }}</span>
       </label>
-      <input id="bf-name" v-model="form.name" type="text" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+      <input id="bf-name" v-model="form.name" type="text" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
     </div>
 
     <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
       <div>
         <label for="bf-length" class="block text-sm font-medium text-gray-700">{{ t('portal.boats.length') }}</label>
-        <input id="bf-length" v-model.number="form.length_m" type="number" step="0.01" min="0" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+        <input id="bf-length" v-model.number="form.length_m" type="number" step="0.01" min="0" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
       </div>
       <div>
         <label for="bf-beam" class="block text-sm font-medium text-gray-700">{{ t('portal.boats.beam') }}</label>
-        <input id="bf-beam" v-model.number="form.beam_m" type="number" step="0.01" min="0" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+        <input id="bf-beam" v-model.number="form.beam_m" type="number" step="0.01" min="0" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
       </div>
       <div>
         <label for="bf-draft" class="block text-sm font-medium text-gray-700">{{ t('portal.boats.draft') }}</label>
-        <input id="bf-draft" v-model.number="form.draft_m" type="number" step="0.01" min="0" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+        <input id="bf-draft" v-model.number="form.draft_m" type="number" step="0.01" min="0" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
       </div>
       <div>
         <label for="bf-weight" class="block text-sm font-medium text-gray-700">{{ t('portal.boats.weight') }}</label>
-        <input id="bf-weight" v-model.number="form.weight_kg" type="number" step="1" min="0" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+        <input id="bf-weight" v-model.number="form.weight_kg" type="number" step="1" min="0" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
       </div>
     </div>
 
@@ -231,15 +231,15 @@ function submit() {
       <div class="grid gap-3 sm:grid-cols-3">
         <div>
           <label for="bf-reg" class="block text-sm font-medium text-gray-700">{{ t('portal.boats.registrationNumber') }}</label>
-          <input id="bf-reg" v-model="form.registration_number" type="text" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          <input id="bf-reg" v-model="form.registration_number" type="text" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
         </div>
         <div>
           <label for="bf-mmsi" class="block text-sm font-medium text-gray-700">{{ t('portal.boats.mmsi') }}</label>
-          <input id="bf-mmsi" v-model="form.mmsi" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="9" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          <input id="bf-mmsi" v-model="form.mmsi" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="9" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
         </div>
         <div>
           <label for="bf-callsign" class="block text-sm font-medium text-gray-700">{{ t('portal.boats.callSign') }}</label>
-          <input id="bf-callsign" v-model="form.call_sign" type="text" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          <input id="bf-callsign" v-model="form.call_sign" type="text" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
         </div>
       </div>
     </fieldset>
@@ -256,7 +256,7 @@ function submit() {
       <button
         type="submit"
         :disabled="saving"
-        class="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
+        class="rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-50"
       >
         {{ saving ? t('common.loading') : t('common.save') }}
       </button>

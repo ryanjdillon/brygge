@@ -304,7 +304,7 @@ onBeforeUnmount(() => {
             <button
               type="button"
               class="flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition"
-              :class="!isBroadcast ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'"
+              :class="!isBroadcast ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'"
               @click="setMode('standard')"
             >
               <Users class="h-4 w-4" />
@@ -325,7 +325,7 @@ onBeforeUnmount(() => {
             <label class="block text-xs font-medium uppercase tracking-wide text-gray-500">Fra</label>
             <select
               v-model="fromAddress"
-              class="mt-1 w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              class="mt-1 w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             >
               <option v-for="m in sendableMailboxes" :key="m.address" :value="m.address">
                 {{ m.display_name }} &lt;{{ m.address }}&gt;
@@ -343,12 +343,12 @@ onBeforeUnmount(() => {
           <!-- Standard notice (blue): one shared email, recipients visible. -->
           <div
             v-if="hasRecipients && !isBroadcast"
-            class="flex items-start gap-2.5 rounded-md border-2 border-blue-300 bg-blue-50 px-3 py-2.5 text-sm text-blue-900"
+            class="flex items-start gap-2.5 rounded-md border-2 border-brand-300 bg-brand-50 px-3 py-2.5 text-sm text-brand-900"
           >
-            <Users class="mt-0.5 h-5 w-5 shrink-0 text-blue-600" />
+            <Users class="mt-0.5 h-5 w-5 shrink-0 text-brand-600" />
             <div>
               <p class="font-semibold">Vanleg e-post — alle mottakarane ser kvarandre</p>
-              <p class="mt-0.5 text-blue-800">
+              <p class="mt-0.5 text-brand-800">
                 Sendt som éi melding der alle mottakarane står i To-feltet og ser kvarandre sine e-postadresser.
               </p>
             </div>
@@ -373,7 +373,7 @@ onBeforeUnmount(() => {
             <input
               v-model="subject"
               type="text"
-              class="mt-1 w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              class="mt-1 w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             />
           </div>
 
@@ -397,7 +397,7 @@ onBeforeUnmount(() => {
             <button
               type="button"
               :disabled="!canPreview"
-              class="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-40"
+              class="inline-flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-40"
               @click="goToPreview"
             >
               Førehandsvis
@@ -421,7 +421,7 @@ onBeforeUnmount(() => {
             <div class="flex gap-3">
               <button
                 type="button"
-                class="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                class="inline-flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
                 @click="viewBroadcasts"
               >
                 Sjå utsendingar
@@ -458,7 +458,7 @@ onBeforeUnmount(() => {
             </div>
             <div
               v-else
-              class="shrink-0 rounded-md border-2 border-blue-300 bg-blue-50 px-3 py-2 text-sm text-blue-900"
+              class="shrink-0 rounded-md border-2 border-brand-300 bg-brand-50 px-3 py-2 text-sm text-brand-900"
             >
               Sendt som éi melding — alle mottakarane står i To-feltet og ser kvarandre.
             </div>
@@ -479,7 +479,7 @@ onBeforeUnmount(() => {
               <button
                 type="button"
                 :disabled="sending"
-                class="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                class="inline-flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
                 @click="send"
               >
                 <Send class="h-4 w-4" />

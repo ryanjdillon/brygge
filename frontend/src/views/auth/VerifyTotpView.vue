@@ -93,7 +93,7 @@ function friendlyError(backendCode: string): string {
   <div class="min-h-screen bg-gray-50 px-4 py-12">
     <div class="mx-auto max-w-md rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
       <div class="flex items-center gap-3 border-b border-gray-100 pb-4">
-        <ShieldCheck class="h-7 w-7 text-blue-600" />
+        <ShieldCheck class="h-7 w-7 text-brand-600" />
         <div>
           <h1 class="text-lg font-semibold text-gray-900">{{ t('totpVerify.title') }}</h1>
           <p class="text-sm text-gray-500">{{ t('totpVerify.subtitle') }}</p>
@@ -114,7 +114,7 @@ function friendlyError(backendCode: string): string {
             autocomplete="one-time-code"
             maxlength="6"
             autofocus
-            class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-lg tracking-widest focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-lg tracking-widest focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
           />
           <input
             v-else
@@ -125,7 +125,7 @@ function friendlyError(backendCode: string): string {
             maxlength="9"
             placeholder="XXXX-XXXX"
             autofocus
-            class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-lg tracking-widest focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-lg tracking-widest focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
           />
         </div>
 
@@ -133,7 +133,7 @@ function friendlyError(backendCode: string): string {
 
         <button
           type="submit"
-          class="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+          class="w-full rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
           :disabled="busy"
         >
           {{ busy ? t('common.loading') : t('totpVerify.submitButton') }}

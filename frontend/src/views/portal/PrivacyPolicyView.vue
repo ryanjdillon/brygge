@@ -17,7 +17,7 @@ const publishedAt = computed(() => {
 <template>
   <div class="mx-auto max-w-3xl space-y-4">
     <div class="flex items-center gap-3">
-      <ShieldCheck class="h-6 w-6 text-blue-600" />
+      <ShieldCheck class="h-6 w-6 text-brand-600" />
       <h1 class="text-2xl font-bold text-gray-900">{{ t('privacyPolicy.title') }}</h1>
     </div>
 

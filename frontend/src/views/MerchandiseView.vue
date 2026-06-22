@@ -169,7 +169,7 @@ function addToCart() {
       <router-link
         v-if="cart.totalItems > 0"
         to="/checkout"
-        class="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+        class="flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700"
       >
         <ShoppingCart class="h-4 w-4" aria-hidden="true" />
         {{ t('merchandise.cart') }} ({{ cart.totalItems }})
@@ -265,7 +265,7 @@ function addToCart() {
                 :class="[
                   'rounded-lg border px-4 py-2 text-sm font-medium transition',
                   selectedSize === size
-                    ? 'border-blue-600 bg-blue-50 text-blue-700'
+                    ? 'border-brand-600 bg-brand-50 text-brand-700'
                     : isSizeAvailable(size)
                       ? 'border-slate-200 text-slate-700 hover:border-slate-300'
                       : 'cursor-not-allowed border-slate-100 text-slate-300 line-through',
@@ -288,7 +288,7 @@ function addToCart() {
                 :class="[
                   'rounded-lg border px-4 py-2 text-sm font-medium transition',
                   selectedColor === color
-                    ? 'border-blue-600 bg-blue-50 text-blue-700'
+                    ? 'border-brand-600 bg-brand-50 text-brand-700'
                     : isColorAvailable(color)
                       ? 'border-slate-200 text-slate-700 hover:border-slate-300'
                       : 'cursor-not-allowed border-slate-100 text-slate-300 line-through',
@@ -317,7 +317,7 @@ function addToCart() {
               justAdded
                 ? 'bg-green-600 text-white'
                 : canAddToCart
-                  ? 'bg-blue-600 text-white hover:bg-blue-700'
+                  ? 'bg-brand-600 text-white hover:bg-brand-700'
                   : 'cursor-not-allowed bg-slate-100 text-slate-400',
             ]"
             @click="addToCart"

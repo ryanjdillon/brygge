@@ -133,7 +133,7 @@ onBeforeUnmount(() => {
       :class="[
         compact ? 'gap-1.5 py-3' : 'gap-2 py-6',
         isDragOver
-          ? 'border-blue-500 bg-blue-50'
+          ? 'border-brand-500 bg-brand-50'
           : 'border-gray-300 bg-white hover:border-gray-400',
         disabled && 'cursor-not-allowed opacity-60',
       ]"
@@ -146,7 +146,7 @@ onBeforeUnmount(() => {
         <Upload class="h-5 w-5 text-gray-400" />
         <button
           type="button"
-          class="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:border-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-gray-50"
+          class="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:border-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 disabled:cursor-not-allowed disabled:bg-gray-50"
           :disabled="disabled"
           @click="open"
         >
@@ -163,7 +163,7 @@ onBeforeUnmount(() => {
       <slot name="trigger" :open="open" :selected-name="selectedName">
         <button
           type="button"
-          class="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:border-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-gray-50"
+          class="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:border-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 disabled:cursor-not-allowed disabled:bg-gray-50"
           :disabled="disabled"
           @click="open"
         >

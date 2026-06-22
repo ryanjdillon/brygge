@@ -46,7 +46,7 @@ async function markCredited(id: string) {
       <button
         type="button"
         class="rounded-md px-3 py-1.5 text-sm font-medium"
-        :class="tab === 'shares' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'"
+        :class="tab === 'shares' ? 'bg-brand-600 text-white' : 'bg-gray-100 text-gray-700'"
         @click="tab = 'shares'"
       >
         {{ t('admin.slipShares.shares') }}
@@ -54,7 +54,7 @@ async function markCredited(id: string) {
       <button
         type="button"
         class="rounded-md px-3 py-1.5 text-sm font-medium"
-        :class="tab === 'rebates' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'"
+        :class="tab === 'rebates' ? 'bg-brand-600 text-white' : 'bg-gray-100 text-gray-700'"
         @click="tab = 'rebates'"
       >
         {{ t('booking.rebates') }}
@@ -121,7 +121,7 @@ async function markCredited(id: string) {
               <button
                 v-if="r.status === 'pending'"
                 type="button"
-                class="text-xs text-blue-600 hover:underline"
+                class="text-xs text-brand-600 hover:underline"
                 @click="markCredited(r.id)"
               >
                 {{ t('admin.slipShares.markCredited') }}

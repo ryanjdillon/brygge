@@ -141,7 +141,7 @@ async function handleSubmit() {
             v-model="apiKey"
             type="password"
             autocomplete="new-password"
-            class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             :placeholder="apiKeyPlaceholder"
           />
           <p v-if="apiKeyFormatError" class="mt-1 text-xs text-red-600">{{ apiKeyFormatError }}</p>
@@ -156,7 +156,7 @@ async function handleSubmit() {
             id="fb-team-id"
             v-model="teamID"
             type="text"
-            class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             :placeholder="t('admin.feedbackSettings.teamIdPlaceholder')"
           />
           <p class="mt-1 text-xs text-gray-500">{{ t('admin.feedbackSettings.teamIdHelp') }}</p>
@@ -170,7 +170,7 @@ async function handleSubmit() {
             id="fb-triage-id"
             v-model="triageStateID"
             type="text"
-            class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             :placeholder="t('admin.feedbackSettings.triageIdPlaceholder')"
           />
           <p class="mt-1 text-xs text-gray-500">{{ t('admin.feedbackSettings.triageIdHelp') }}</p>
@@ -187,7 +187,7 @@ async function handleSubmit() {
         <button
           type="submit"
           :disabled="saving || !canSave"
-          class="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+          class="rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
         >
           {{ saving ? t('common.loading') : t('common.save') }}
         </button>

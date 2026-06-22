@@ -59,7 +59,7 @@ function visibilityLabel(v: string) {
 
 function visibilityClass(v: string) {
   if (v === 'board') return 'bg-purple-100 text-purple-700'
-  if (v === 'slip_holder') return 'bg-blue-100 text-blue-700'
+  if (v === 'slip_holder') return 'bg-indigo-100 text-indigo-700'
   return 'bg-gray-100 text-gray-700'
 }
 
@@ -276,7 +276,7 @@ function confirmDeleteContent(docID: string) {
         </button>
         <button
           type="button"
-          class="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700"
+          class="inline-flex items-center gap-1.5 rounded-md bg-brand-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-brand-700"
           @click="openCreateAuthoredModal"
         >
           <FilePen class="h-4 w-4" />
@@ -447,14 +447,14 @@ function confirmDeleteContent(docID: string) {
             <input
               v-model="uploadTitle"
               type="text"
-              class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             />
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700">{{ t('admin.documents.visibility') }}</label>
             <select
               v-model="uploadVisibility"
-              class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             >
               <option v-for="opt in visibilityOptions" :key="opt.value" :value="opt.value">{{ t(opt.labelKey) }}</option>
             </select>
@@ -472,7 +472,7 @@ function confirmDeleteContent(docID: string) {
           <button
             type="button"
             :disabled="!uploadFile || uploading"
-            class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
+            class="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-brand-700 disabled:opacity-50"
             @click="uploadDocument()"
           >
             {{ uploading ? t('common.uploading') : t('admin.documents.uploadFile') }}
@@ -522,11 +522,11 @@ function confirmDeleteContent(docID: string) {
           v-model="authoredTitle"
           type="text"
           :placeholder="t('admin.documents.titlePlaceholder')"
-          class="min-w-0 flex-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          class="min-w-0 flex-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
         />
         <select
           v-model="authoredVisibility"
-          class="rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          class="rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
         >
           <option v-for="opt in visibilityOptions" :key="opt.value" :value="opt.value">{{ t(opt.labelKey) }}</option>
         </select>
@@ -557,7 +557,7 @@ function confirmDeleteContent(docID: string) {
         <button
           type="button"
           :disabled="!authoredTitle.trim() || savingAuthored"
-          class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
+          class="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-brand-700 disabled:opacity-50"
           @click="saveAuthoredDoc()"
         >
           {{ savingAuthored ? t('common.saving') : t('common.save') }}

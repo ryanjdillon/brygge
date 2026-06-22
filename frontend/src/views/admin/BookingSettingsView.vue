@@ -103,7 +103,7 @@ const { mutateAsync: save, isPending: saving } = useMutation({
         <button
           type="submit"
           :disabled="saving"
-          class="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+          class="rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
         >
           {{ saving ? t('common.loading') : t('common.save') }}
         </button>

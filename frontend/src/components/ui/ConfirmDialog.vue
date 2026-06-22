@@ -24,7 +24,7 @@ const iconColor = computed(() => {
     case 'danger':
       return 'text-red-600'
     case 'info':
-      return 'text-blue-600'
+      return 'text-brand-600'
     default:
       return 'text-amber-600'
   }
@@ -34,7 +34,7 @@ const confirmBtnClass = computed(() => {
     case 'danger':
       return 'bg-red-600 hover:bg-red-700 focus:ring-red-500'
     case 'info':
-      return 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500'
+      return 'bg-brand-600 hover:bg-brand-700 focus:ring-brand-500'
     default:
       return 'bg-amber-600 hover:bg-amber-700 focus:ring-amber-500'
   }

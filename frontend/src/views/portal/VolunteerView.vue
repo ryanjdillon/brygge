@@ -19,7 +19,7 @@ const { data: projects, isLoading: projectsLoading } = useProjects()
     <div v-else-if="hours" class="mt-6 grid gap-4 sm:grid-cols-4">
       <div class="rounded-lg border border-gray-200 bg-white p-4">
         <div class="text-sm text-gray-500">{{ t('volunteer.signedUpHours') }}</div>
-        <div class="mt-1 text-2xl font-bold text-blue-600">{{ hours.signed_up_hours }}{{ t('volunteer.hoursUnit') }}</div>
+        <div class="mt-1 text-2xl font-bold text-brand-600">{{ hours.signed_up_hours }}{{ t('volunteer.hoursUnit') }}</div>
       </div>
       <div class="rounded-lg border border-gray-200 bg-white p-4">
         <div class="text-sm text-gray-500">{{ t('volunteer.completedHours') }}</div>
@@ -53,7 +53,7 @@ const { data: projects, isLoading: projectsLoading } = useProjects()
         class="block rounded-lg border border-gray-200 bg-white p-5 shadow-sm transition hover:shadow-md"
       >
         <div class="flex items-start gap-3">
-          <FolderKanban class="mt-0.5 h-5 w-5 text-blue-600" />
+          <FolderKanban class="mt-0.5 h-5 w-5 text-brand-600" />
           <div class="flex-1">
             <h3 class="font-semibold text-gray-900">{{ project.name }}</h3>
             <p v-if="project.description" class="mt-1 text-sm text-gray-500 line-clamp-2">
@@ -65,7 +65,7 @@ const { data: projects, isLoading: projectsLoading } = useProjects()
           <span class="rounded-full bg-gray-100 px-2 py-0.5 text-gray-600">
             {{ t('projects.statusTodo') }}: {{ project.todo_count }}
           </span>
-          <span class="rounded-full bg-blue-100 px-2 py-0.5 text-blue-700">
+          <span class="rounded-full bg-brand-100 px-2 py-0.5 text-brand-700">
             {{ t('projects.statusInProgress') }}: {{ project.in_progress_count }}
           </span>
           <span class="rounded-full bg-green-100 px-2 py-0.5 text-green-700">

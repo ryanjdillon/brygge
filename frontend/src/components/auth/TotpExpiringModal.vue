@@ -99,7 +99,7 @@ function dismiss() {
       <div class="mt-4 flex justify-end">
         <button
           type="button"
-          class="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+          class="rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
           @click="dismiss"
         >
           {{ t('totpExpiring.continue') }}

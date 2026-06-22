@@ -53,7 +53,7 @@ const accountTypesPresent = computed(() => {
 
 function chipClass(type: string): string {
   switch (type) {
-    case 'asset': return 'bg-blue-100 text-blue-800'
+    case 'asset': return 'bg-brand-100 text-brand-800'
     case 'liability': return 'bg-amber-100 text-amber-800'
     case 'revenue': return 'bg-green-100 text-green-800'
     case 'expense': return 'bg-red-100 text-red-800'
@@ -739,7 +739,7 @@ function boatLabel(b: Boat): string {
             </div>
           </div>
 
-          <div v-if="showPicker" class="mt-2 rounded-md border border-blue-200 bg-blue-50/30 p-3">
+          <div v-if="showPicker" class="mt-2 rounded-md border border-brand-200 bg-brand-50/30 p-3">
             <LineItemPicker
               mode="single"
               :flat-ids="pickerFlatIds"
@@ -759,7 +759,7 @@ function boatLabel(b: Boat): string {
               <button
                 type="button"
                 :disabled="pickerFlatIds.length === 0 && pickerTierCategories.length === 0"
-                class="rounded-md bg-blue-600 px-2 py-1 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                class="rounded-md bg-brand-600 px-2 py-1 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
                 @click="applyPickerSelection"
               >
                 {{ t('admin.singleFaktura.applyPickerSelection') }}
@@ -878,7 +878,7 @@ function boatLabel(b: Boat): string {
           <button
             type="submit"
             :disabled="submitting"
-            class="rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+            class="rounded-md bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
           >
             {{ submitting ? t('common.loading') : t('admin.singleFaktura.create') }}
           </button>

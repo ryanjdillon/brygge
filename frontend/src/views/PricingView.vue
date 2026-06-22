@@ -99,7 +99,7 @@ function seasonLabel(metadata: Record<string, string> | unknown): string | null 
               <p v-if="seasonLabel(row.metadata)" class="mt-0.5 text-xs text-slate-400">
                 {{ t('pricing.period') }}: {{ seasonLabel(row.metadata) }}
               </p>
-              <p v-if="row.installments_allowed" class="mt-0.5 text-xs text-blue-600">
+              <p v-if="row.installments_allowed" class="mt-0.5 text-xs text-brand-600">
                 {{ t('pricing.installments', { max: row.max_installments }) }}
               </p>
             </template>

@@ -42,7 +42,7 @@ function handleTestPush() {
       </div>
       <button
         :disabled="testSending"
-        class="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+        class="rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
         @click="handleTestPush"
       >
         {{ testSending ? t('common.loading') : t('notifications.admin.testPush') }}
@@ -85,8 +85,8 @@ function handleTestPush() {
             </td>
             <td class="px-4 py-3">
               <button
-                class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                :class="cat.required ? 'bg-blue-600' : 'bg-gray-200'"
+                class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2"
+                :class="cat.required ? 'bg-brand-600' : 'bg-gray-200'"
                 role="switch"
                 :aria-checked="cat.required"
                 @click="toggleRequired(cat.category, cat.required)"

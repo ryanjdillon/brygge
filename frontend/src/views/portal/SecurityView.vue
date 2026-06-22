@@ -192,7 +192,7 @@ function formatError(e: unknown, fallback: string): string {
       <h3 class="font-medium text-gray-900">{{ t('security.enableTitle') }}</h3>
       <p class="mt-1 text-sm text-gray-600">{{ t('security.enableDescription') }}</p>
       <button
-        class="mt-3 inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+        class="mt-3 inline-flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
         :disabled="busy"
         @click="beginEnrollment"
       >
@@ -229,7 +229,7 @@ function formatError(e: unknown, fallback: string): string {
           />
         </div>
         <button
-          class="ml-3 inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+          class="ml-3 inline-flex items-center rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
           :disabled="busy"
           @click="submitConfirm"
         >

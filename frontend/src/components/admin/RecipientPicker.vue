@@ -133,7 +133,7 @@ function onSearchBlur() {
         :class="[
           'rounded-full border px-3 py-1 text-sm font-medium transition',
           modelValue.groups.includes(opt.value)
-            ? 'border-blue-600 bg-blue-600 text-white'
+            ? 'border-brand-600 bg-brand-600 text-white'
             : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400',
         ]"
         @click="toggleGroup(opt.value)"
@@ -166,7 +166,7 @@ function onSearchBlur() {
         v-model="searchTerm"
         type="text"
         placeholder="Søk medlem eller skriv e-postadresse…"
-        class="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        class="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm placeholder-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
         @keydown.enter.prevent="canAddRaw ? addEmail(searchTerm) : (searchResults[0] && addIndividual(searchResults[0]))"
         @blur="onSearchBlur"
       />
@@ -177,7 +177,7 @@ function onSearchBlur() {
         <li
           v-for="user in searchResults"
           :key="user.id"
-          class="flex cursor-pointer flex-col px-3 py-2 hover:bg-blue-50"
+          class="flex cursor-pointer flex-col px-3 py-2 hover:bg-brand-50"
           @mousedown.prevent="addIndividual(user)"
         >
           <span class="text-sm font-medium text-gray-900">{{ user.full_name }}</span>
@@ -185,10 +185,10 @@ function onSearchBlur() {
         </li>
         <li
           v-if="canAddRaw"
-          class="flex cursor-pointer items-center gap-2 px-3 py-2 hover:bg-blue-50"
+          class="flex cursor-pointer items-center gap-2 px-3 py-2 hover:bg-brand-50"
           @mousedown.prevent="addEmail(searchTerm)"
         >
-          <span class="text-sm text-blue-700">Legg til <strong>{{ searchTerm.trim() }}</strong></span>
+          <span class="text-sm text-brand-700">Legg til <strong>{{ searchTerm.trim() }}</strong></span>
           <span class="ml-auto text-xs text-gray-400">Enter</span>
         </li>
       </ul>

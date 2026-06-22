@@ -21,7 +21,7 @@ defineEmits<{
       :value="value"
       :checked="modelValue === value"
       :disabled="disabled"
-      class="h-4 w-4 border-gray-300 text-blue-600 focus:ring-1 focus:ring-blue-500"
+      class="h-4 w-4 border-gray-300 text-brand-600 focus:ring-1 focus:ring-brand-500"
       @change="$emit('update:modelValue', value)"
     />
     <span v-if="$slots.default"><slot /></span>

@@ -117,7 +117,7 @@ describe('FeatureRequestsView', () => {
     expect(proposedBtn).toBeDefined()
     await proposedBtn!.trigger('click')
 
-    expect(proposedBtn!.classes()).toContain('bg-blue-600')
+    expect(proposedBtn!.classes()).toContain('bg-brand-600')
   })
 
   it('create request modal opens on button click', async () => {
@@ -125,7 +125,7 @@ describe('FeatureRequestsView', () => {
 
     expect(wrapper.find('.fixed').exists()).toBe(false)
 
-    const submitButton = wrapper.find('button.bg-blue-600')
+    const submitButton = wrapper.find('button.bg-brand-600')
     await submitButton.trigger('click')
 
     expect(wrapper.find('.fixed').exists()).toBe(true)
@@ -135,7 +135,7 @@ describe('FeatureRequestsView', () => {
   it('modal form triggers create mutation on submit', async () => {
     const wrapper = mountWithPlugins(FeatureRequestsView)
 
-    const submitButton = wrapper.find('button.bg-blue-600')
+    const submitButton = wrapper.find('button.bg-brand-600')
     await submitButton.trigger('click')
 
     const modal = wrapper.find('.fixed')

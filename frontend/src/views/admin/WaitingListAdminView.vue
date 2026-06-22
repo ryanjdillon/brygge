@@ -199,7 +199,7 @@ function selectMember(user: any) {
     <div class="flex items-center justify-between">
       <h1 class="text-2xl font-bold text-gray-900">{{ t('admin.sidebar.waitingList') }}</h1>
       <button
-        class="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+        class="inline-flex items-center gap-1.5 rounded-md bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700"
         @click="openAddModal"
       >
         <UserPlus class="h-4 w-4" aria-hidden="true" />
@@ -236,7 +236,7 @@ function selectMember(user: any) {
             :class="[
               'transition-colors',
               draggingId === entry.id && 'opacity-40',
-              dragOverId === entry.id && 'bg-blue-50 ring-inset ring-1 ring-blue-300',
+              dragOverId === entry.id && 'bg-brand-50 ring-inset ring-1 ring-brand-300',
               reorderingId === entry.id && 'bg-yellow-50',
               sortField === 'position' && 'cursor-default',
             ]"
@@ -303,7 +303,7 @@ function selectMember(user: any) {
             v-model="memberSearch"
             type="search"
             autofocus
-            class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             :placeholder="t('admin.waitingList.addMemberSearch')"
           />
 

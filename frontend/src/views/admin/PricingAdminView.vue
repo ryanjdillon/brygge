@@ -273,7 +273,7 @@ function unitLabel(value: string): string {
       <h1 class="text-2xl font-bold text-gray-900">{{ t('admin.sidebar.pricing') }}</h1>
       <button
         v-if="!showForm"
-        class="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+        class="flex items-center gap-1.5 rounded-md bg-brand-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700"
         @click="openCreate"
       >
         <Plus class="h-4 w-4" />
@@ -424,7 +424,7 @@ function unitLabel(value: string): string {
         <button
           type="submit"
           :disabled="isSaving"
-          class="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
+          class="rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-50"
         >
           {{ t('common.save') }}
         </button>
@@ -463,13 +463,13 @@ function unitLabel(value: string): string {
               <div v-if="item.description" class="text-xs text-gray-500">{{ item.description }}</div>
               <div
                 v-if="meta(item).beam_min || meta(item).beam_max"
-                class="text-xs text-blue-600"
+                class="text-xs text-brand-600"
               >
                 {{ t('admin.pricing.beam') }}: {{ meta(item).beam_min || '0' }}–{{ meta(item).beam_max || '∞' }} m
               </div>
               <div
                 v-if="meta(item).length_min || meta(item).length_max"
-                class="text-xs text-blue-600"
+                class="text-xs text-brand-600"
               >
                 {{ t('admin.pricing.length') }}: {{ meta(item).length_min || '0' }}–{{ meta(item).length_max || '∞' }} m
               </div>
@@ -480,7 +480,7 @@ function unitLabel(value: string): string {
               </span>
               <span
                 v-if="(item as any).audience && (item as any).audience !== 'all'"
-                class="ml-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700"
+                class="ml-1 rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-medium text-brand-700"
               >
                 {{
                   (item as any).audience === 'member'
@@ -506,7 +506,7 @@ function unitLabel(value: string): string {
               </span>
             </td>
             <td class="whitespace-nowrap px-4 py-3 text-right text-sm">
-              <button class="mr-2 text-gray-500 hover:text-blue-600" @click="openEdit(item)">
+              <button class="mr-2 text-gray-500 hover:text-brand-600" @click="openEdit(item)">
                 <Pencil class="h-4 w-4" />
               </button>
               <button class="text-gray-500 hover:text-red-600" @click="confirmDelete(item.id)">

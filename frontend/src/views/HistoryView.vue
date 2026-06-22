@@ -23,11 +23,11 @@ const milestones = [
 
       <div class="space-y-12">
         <div v-for="milestone in milestones" :key="milestone.year" class="relative flex gap-6">
-          <div class="relative z-10 flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-2 border-blue-600 bg-white">
-            <component :is="milestone.icon" class="h-6 w-6 text-blue-600" aria-hidden="true" />
+          <div class="relative z-10 flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-2 border-brand-600 bg-white">
+            <component :is="milestone.icon" class="h-6 w-6 text-brand-600" aria-hidden="true" />
           </div>
           <div class="pt-2">
-            <span class="text-sm font-semibold text-blue-600">{{ milestone.year }}</span>
+            <span class="text-sm font-semibold text-brand-600">{{ milestone.year }}</span>
             <h2 class="mt-1 text-lg font-semibold text-gray-900">{{ t(milestone.titleKey) }}</h2>
             <p class="mt-1 text-gray-600">{{ t(milestone.descKey) }}</p>
           </div>

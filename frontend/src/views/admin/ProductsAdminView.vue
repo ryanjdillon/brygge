@@ -115,7 +115,7 @@ function confirmDelete(id: string) {
       <h1 class="text-2xl font-bold text-gray-900">{{ t('admin.products.title') }}</h1>
       <button
         v-if="!showForm"
-        class="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+        class="flex items-center gap-1.5 rounded-md bg-brand-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700"
         @click="openCreate"
       >
         <Plus class="h-4 w-4" />
@@ -175,7 +175,7 @@ function confirmDelete(id: string) {
         <button
           type="submit"
           :disabled="isSaving"
-          class="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
+          class="rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-50"
         >
           {{ t('common.save') }}
         </button>
@@ -230,7 +230,7 @@ function confirmDelete(id: string) {
               </span>
             </td>
             <td class="whitespace-nowrap px-4 py-3 text-right text-sm">
-              <button class="mr-2 text-gray-500 hover:text-blue-600" @click="openEdit(p)">
+              <button class="mr-2 text-gray-500 hover:text-brand-600" @click="openEdit(p)">
                 <Pencil class="h-4 w-4" />
               </button>
               <button class="text-gray-500 hover:text-red-600" @click="confirmDelete(p.id)">

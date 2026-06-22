@@ -119,13 +119,13 @@ function formatBytes(n: number): string {
                     :href="`/api/v1/admin/financials/invoices/${invoiceId}/pdf-archive/${entry.id}`"
                     target="_blank"
                     rel="noopener"
-                    class="font-semibold text-blue-700 hover:underline"
+                    class="font-semibold text-brand-700 hover:underline"
                   >
                     {{ t('admin.faktura.archive.view') }}
                   </a>
                   <a
                     :href="`/api/v1/admin/financials/invoices/${invoiceId}/pdf-archive/${entry.id}?download=1`"
-                    class="font-semibold text-blue-700 hover:underline"
+                    class="font-semibold text-brand-700 hover:underline"
                   >
                     {{ t('admin.faktura.archive.download') }}
                   </a>

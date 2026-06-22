@@ -20,7 +20,7 @@ const { t } = useI18n()
             type="number"
             step="0.1"
             min="0"
-            class="block w-full rounded-md border-gray-300 text-sm focus:border-blue-500 focus:ring-blue-500"
+            class="block w-full rounded-md border-gray-300 text-sm focus:border-brand-500 focus:ring-brand-500"
             placeholder="8.5"
           />
           <span class="ml-1 inline-flex items-center text-sm text-gray-500">m</span>
@@ -34,7 +34,7 @@ const { t } = useI18n()
             type="number"
             step="0.1"
             min="0"
-            class="block w-full rounded-md border-gray-300 text-sm focus:border-blue-500 focus:ring-blue-500"
+            class="block w-full rounded-md border-gray-300 text-sm focus:border-brand-500 focus:ring-brand-500"
             placeholder="2.9"
           />
           <span class="ml-1 inline-flex items-center text-sm text-gray-500">m</span>
@@ -48,7 +48,7 @@ const { t } = useI18n()
             type="number"
             step="0.1"
             min="0"
-            class="block w-full rounded-md border-gray-300 text-sm focus:border-blue-500 focus:ring-blue-500"
+            class="block w-full rounded-md border-gray-300 text-sm focus:border-brand-500 focus:ring-brand-500"
             placeholder="1.4"
           />
           <span class="ml-1 inline-flex items-center text-sm text-gray-500">m</span>

@@ -70,7 +70,7 @@ const fmtDim = (v?: number | null): string => (v != null ? `${v} m` : '—')
       </div>
       <div v-if="actions" class="flex shrink-0 gap-2">
         <button
-          class="text-blue-600 hover:text-blue-800"
+          class="text-brand-600 hover:text-brand-800"
           :title="t('common.edit')"
           @click="emit('edit', boat)"
         >

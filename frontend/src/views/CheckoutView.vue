@@ -53,7 +53,7 @@ async function checkout() {
       <p class="mt-4 text-slate-500">{{ t('merchandise.cartEmpty') }}</p>
       <router-link
         to="/merchandise"
-        class="mt-4 inline-block rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+        class="mt-4 inline-block rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
       >
         {{ t('merchandise.backToShop') }}
       </router-link>

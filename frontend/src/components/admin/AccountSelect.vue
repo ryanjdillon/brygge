@@ -25,7 +25,7 @@ const emit = defineEmits<{ (e: 'update:modelValue', v: string): void }>()
 // Same palette the Chart of Accounts page uses.
 function accountChipClass(type: string): string {
   switch (type) {
-    case 'asset': return 'bg-blue-100 text-blue-800'
+    case 'asset': return 'bg-indigo-100 text-indigo-800'
     case 'liability': return 'bg-amber-100 text-amber-800'
     case 'revenue': return 'bg-green-100 text-green-800'
     case 'expense': return 'bg-red-100 text-red-800'

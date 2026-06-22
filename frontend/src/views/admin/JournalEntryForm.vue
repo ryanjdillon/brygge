@@ -272,7 +272,7 @@ const accountOptions = computed(() => [
         @change="handleFileChange"
       />
       <!-- parsing state feedback -->
-      <div v-if="parseStatus === 'parsing'" class="mt-2 flex items-center gap-2 text-sm text-blue-700">
+      <div v-if="parseStatus === 'parsing'" class="mt-2 flex items-center gap-2 text-sm text-brand-700">
         <svg class="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
@@ -292,7 +292,7 @@ const accountOptions = computed(() => [
         {{ t('admin.accounting.journalForm.receiptParseFailed') }}
       </div>
       <p v-if="uploadError" class="mt-1 text-xs text-red-600">{{ uploadError }}</p>
-      <p v-if="uploadMutation.isPending.value" class="mt-1 text-xs text-blue-600">{{ t('admin.accounting.journalForm.receiptUploading') }}</p>
+      <p v-if="uploadMutation.isPending.value" class="mt-1 text-xs text-brand-600">{{ t('admin.accounting.journalForm.receiptUploading') }}</p>
     </div>
 
     <div class="mt-6">
@@ -365,7 +365,7 @@ const accountOptions = computed(() => [
       </div>
 
       <button
-        class="mt-3 inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-800"
+        class="mt-3 inline-flex items-center gap-1 text-sm font-medium text-brand-600 hover:text-brand-800"
         @click="addLine"
       >
         <Plus class="h-4 w-4" />
@@ -406,7 +406,7 @@ const accountOptions = computed(() => [
         {{ t('admin.accounting.journalForm.saveDraft') }}
       </button>
       <button
-        class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+        class="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
         :disabled="!canSave || !isBalanced || createMutation.isPending.value || postMutation.isPending.value"
         @click="handlePost"
       >

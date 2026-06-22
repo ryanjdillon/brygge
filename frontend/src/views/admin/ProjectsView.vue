@@ -51,7 +51,7 @@ function handleCreate() {
     <div class="flex items-center justify-between">
       <h1 class="text-2xl font-bold text-gray-900">{{ t('projects.title') }}</h1>
       <button
-        class="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+        class="flex items-center gap-1.5 rounded-md bg-brand-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700"
         @click="openModal"
       >
         <Plus class="h-4 w-4" />
@@ -87,7 +87,7 @@ function handleCreate() {
         class="block rounded-lg border border-gray-200 bg-white p-5 shadow-sm transition hover:shadow-md"
       >
         <div class="flex items-start gap-3">
-          <FolderKanban class="mt-0.5 h-5 w-5 text-blue-600" />
+          <FolderKanban class="mt-0.5 h-5 w-5 text-brand-600" />
           <div class="flex-1">
             <h3 class="font-semibold text-gray-900">{{ project.name }}</h3>
             <p v-if="project.description" class="mt-1 text-sm text-gray-500 line-clamp-2">
@@ -99,7 +99,7 @@ function handleCreate() {
           <span class="rounded-full bg-gray-100 px-2 py-0.5 text-gray-600">
             {{ t('projects.statusTodo') }}: {{ project.todo_count }}
           </span>
-          <span class="rounded-full bg-blue-100 px-2 py-0.5 text-blue-700">
+          <span class="rounded-full bg-brand-100 px-2 py-0.5 text-brand-700">
             {{ t('projects.statusInProgress') }}: {{ project.in_progress_count }}
           </span>
           <span class="rounded-full bg-green-100 px-2 py-0.5 text-green-700">
@@ -141,7 +141,7 @@ function handleCreate() {
             <button
               type="submit"
               :disabled="createProject.isPending.value"
-              class="rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
+              class="rounded-md bg-brand-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-50"
             >
               {{ t('common.save') }}
             </button>

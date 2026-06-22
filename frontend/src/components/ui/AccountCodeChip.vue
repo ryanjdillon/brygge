@@ -14,7 +14,7 @@ const props = defineProps<{
 // Colors mirror the chip styling on the Chart of Accounts page so users
 // see the same visual identity for an account wherever it appears.
 const typeColors: Record<AccountType, string> = {
-  asset: 'bg-blue-100 text-blue-800',
+  asset: 'bg-indigo-100 text-indigo-800',
   liability: 'bg-amber-100 text-amber-800',
   revenue: 'bg-green-100 text-green-800',
   expense: 'bg-red-100 text-red-800',

@@ -95,7 +95,7 @@ function confirmDelete(id: string) {
       <h1 class="text-2xl font-bold text-gray-900">{{ t('portal.boats.title') }}</h1>
       <button
         v-if="!showForm"
-        class="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+        class="flex items-center gap-1.5 rounded-md bg-brand-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700"
         @click="openAdd"
       >
         <Plus class="h-4 w-4" />

@@ -165,7 +165,7 @@ async function confirmArchive(a: BankAccount) {
       <p class="text-sm text-gray-600">{{ t('admin.bankAccounts.intro') }}</p>
       <button
         type="button"
-        class="inline-flex shrink-0 items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+        class="inline-flex shrink-0 items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
         @click="openCreate"
       >
         <Plus class="h-4 w-4" />
@@ -201,7 +201,7 @@ async function confirmArchive(a: BankAccount) {
         </div>
         <button
           type="button"
-          class="text-sm font-medium text-blue-600 hover:text-blue-700"
+          class="text-sm font-medium text-brand-600 hover:text-brand-700"
           @click="openEdit(a)"
         >
           {{ t('common.edit') }}
@@ -235,7 +235,7 @@ async function confirmArchive(a: BankAccount) {
         <label class="block text-sm font-medium text-gray-700">{{ t('admin.bankAccounts.accountNumber') }}</label>
         <input
           v-model="form.account_number"
-          class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
           placeholder="1234.56.78901"
           required
         />
@@ -246,7 +246,7 @@ async function confirmArchive(a: BankAccount) {
           <label class="block text-sm font-medium text-gray-700">{{ t('admin.bankAccounts.roleLabel') }}</label>
           <select
             v-model="form.role"
-            class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
           >
             <option value="drift">{{ t('admin.bankAccounts.role.drift') }}</option>
             <option value="hoyrente">{{ t('admin.bankAccounts.role.hoyrente') }}</option>
@@ -257,7 +257,7 @@ async function confirmArchive(a: BankAccount) {
           <label class="block text-sm font-medium text-gray-700">{{ t('admin.bankAccounts.glCode') }}</label>
           <input
             v-model="form.gl_code"
-            class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             placeholder="1920"
           />
         </div>
@@ -267,7 +267,7 @@ async function confirmArchive(a: BankAccount) {
         <label class="block text-sm font-medium text-gray-700">{{ t('admin.bankAccounts.labelOptional') }}</label>
         <input
           v-model="form.label"
-          class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
           :placeholder="t('admin.bankAccounts.labelPlaceholder')"
         />
       </div>
@@ -288,7 +288,7 @@ async function confirmArchive(a: BankAccount) {
         <button
           type="submit"
           :disabled="saving"
-          class="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+          class="rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
         >
           {{ saving ? t('common.loading') : t('common.save') }}
         </button>

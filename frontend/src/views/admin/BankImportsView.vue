@@ -433,7 +433,7 @@ const filterMonthValue = computed<number>({
         <button
           type="button"
           :disabled="syncBusy"
-          class="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+          class="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
           data-testid="bank-sync-btn"
           @click="runSync"
         >
@@ -442,7 +442,7 @@ const filterMonthValue = computed<number>({
         <button
           type="button"
           :disabled="vippsResyncBusy"
-          class="rounded-md border border-blue-300 bg-white px-3 py-1.5 text-sm font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+          class="rounded-md border border-brand-300 bg-white px-3 py-1.5 text-sm font-semibold text-brand-700 hover:bg-brand-50 disabled:opacity-50"
           data-testid="vipps-resync-btn"
           @click="runVippsResyncAction"
         >
@@ -451,7 +451,7 @@ const filterMonthValue = computed<number>({
       </div>
     </div>
 
-    <div v-if="syncResult" class="mt-3 rounded-md bg-blue-50 px-3 py-2 text-xs text-blue-900" data-testid="bank-sync-result">
+    <div v-if="syncResult" class="mt-3 rounded-md bg-brand-50 px-3 py-2 text-xs text-brand-900" data-testid="bank-sync-result">
       {{ t('admin.bankImports.runSyncResult', {
         kid: syncResult.kid_matched,
         vipps: syncResult.vipps_reconciled,
@@ -461,7 +461,7 @@ const filterMonthValue = computed<number>({
         ({{ t('admin.bankImports.runSyncClosed', { years: syncResult.closed_periods.join(', ') }) }})
       </span>
     </div>
-    <div v-if="vippsResyncResult" class="mt-3 rounded-md bg-blue-50 px-3 py-2 text-xs text-blue-900" data-testid="vipps-resync-result">
+    <div v-if="vippsResyncResult" class="mt-3 rounded-md bg-brand-50 px-3 py-2 text-xs text-brand-900" data-testid="vipps-resync-result">
       {{ t('admin.bankImports.vippsResyncResult', {
         resynced: vippsResyncResult.resynced,
         scanned: vippsResyncResult.scanned,
@@ -608,7 +608,7 @@ const filterMonthValue = computed<number>({
           <button
             type="button"
             :disabled="!bankFile || !bankAccountCode || bankBusy"
-            class="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+            class="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
             data-testid="bank-upload-submit"
             @click="submitBank"
           >
@@ -622,7 +622,7 @@ const filterMonthValue = computed<number>({
           · {{ t('admin.bankImports.skipped') }}: {{ bankResult.skipped_dup }}
           · {{ t('admin.bankImports.matched') }}: {{ bankResult.matched }}
           · {{ t('admin.bankImports.transfers') }}: {{ bankResult.transfers }}
-          <p v-if="bankResult.auto_matched" class="mt-2 rounded bg-blue-50 px-2 py-1 text-blue-800">
+          <p v-if="bankResult.auto_matched" class="mt-2 rounded bg-brand-50 px-2 py-1 text-brand-800">
             {{ t('admin.bankImports.autoMatchedNotice', { code: bankResult.bank_account_code }) }}
           </p>
           <p v-if="bankResult.closed_periods?.length" class="mt-2 rounded bg-yellow-50 px-2 py-1 text-yellow-800">
@@ -650,7 +650,7 @@ const filterMonthValue = computed<number>({
           <button
             type="button"
             :disabled="!vippsFile || vippsBusy"
-            class="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+            class="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
             data-testid="vipps-upload-submit"
             @click="submitVipps"
           >
@@ -677,7 +677,7 @@ const filterMonthValue = computed<number>({
               <input
                 v-model="uni24DateFrom"
                 type="date"
-                class="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                class="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
               />
             </div>
             <div>
@@ -685,7 +685,7 @@ const filterMonthValue = computed<number>({
               <input
                 v-model="uni24DateTo"
                 type="date"
-                class="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                class="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
               />
             </div>
           </div>
@@ -705,7 +705,7 @@ const filterMonthValue = computed<number>({
           <button
             type="button"
             :disabled="!uni24File || uni24Busy"
-            class="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+            class="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
             data-testid="uni24-upload-submit"
             @click="submitUni24"
           >
@@ -752,7 +752,7 @@ const filterMonthValue = computed<number>({
           v-for="b in bankImportsList"
           :key="b.id"
           class="flex cursor-pointer items-center justify-between px-3 py-2 text-sm hover:bg-gray-50"
-          :class="{ 'bg-blue-50': b.id === currentBankImportId }"
+          :class="{ 'bg-brand-50': b.id === currentBankImportId }"
           @click="selectBankImport(b.id)"
         >
           <span>
@@ -764,7 +764,7 @@ const filterMonthValue = computed<number>({
             {{ b.row_count }} {{ t('admin.bankImports.rows') }}
             <button
               type="button"
-              class="font-semibold text-blue-700 hover:underline"
+              class="font-semibold text-brand-700 hover:underline"
               @click.stop="openReassign(b.id, b.account_code)"
             >
               {{ t('admin.bankImports.reassign') }}
@@ -790,7 +790,7 @@ const filterMonthValue = computed<number>({
           v-for="v in vippsImports"
           :key="v.id"
           class="flex cursor-pointer items-center justify-between px-3 py-2 text-sm hover:bg-gray-50"
-          :class="{ 'bg-blue-50': v.id === currentVippsImportId }"
+          :class="{ 'bg-brand-50': v.id === currentVippsImportId }"
           @click="currentVippsImportId = v.id"
         >
           <span>{{ v.filename }} <span class="ml-2 text-xs text-gray-500">msn {{ v.msn }}</span></span>
@@ -916,7 +916,7 @@ const filterMonthValue = computed<number>({
           <button
             type="button"
             :disabled="reassignBusy || reassignTo === reassignFrom"
-            class="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+            class="rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
             @click="submitReassign"
           >
             {{ reassignBusy ? t('common.loading') : t('admin.bankImports.reassign') }}

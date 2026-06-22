@@ -107,7 +107,7 @@ function handleSetRequired() {
             <button
               type="submit"
               :disabled="setRequired.isPending.value"
-              class="rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
+              class="rounded-md bg-brand-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-50"
             >
               {{ t('common.save') }}
             </button>

@@ -160,7 +160,7 @@ const tabs: { key: Tab; label: string }[] = [
         <select
           id="rpt-period"
           v-model="selectedPeriodId"
-          class="rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          class="rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
         >
           <option v-for="p in periods" :key="p.id" :value="p.id">{{ p.year }}</option>
         </select>
@@ -172,11 +172,11 @@ const tabs: { key: Tab; label: string }[] = [
       <span class="text-sm font-medium text-gray-700">{{ t('admin.accounting.reports.viewMode') }}:</span>
       <div class="flex rounded-md border border-gray-300 overflow-hidden text-sm">
         <button
-          :class="['px-3 py-1.5 transition', viewMode === 'accrual' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50']"
+          :class="['px-3 py-1.5 transition', viewMode === 'accrual' ? 'bg-brand-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50']"
           @click="viewMode = 'accrual'"
         >{{ t('admin.accounting.reports.accrual') }}</button>
         <button
-          :class="['px-3 py-1.5 border-l border-gray-300 transition', viewMode === 'cash' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50']"
+          :class="['px-3 py-1.5 border-l border-gray-300 transition', viewMode === 'cash' ? 'bg-brand-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50']"
           @click="viewMode = 'cash'"
         >{{ t('admin.accounting.reports.cash') }}</button>
       </div>
@@ -194,7 +194,7 @@ const tabs: { key: Tab; label: string }[] = [
           :class="[
             'pb-3 text-sm font-medium transition border-b-2',
             activeTab === tab.key
-              ? 'border-blue-600 text-blue-600'
+              ? 'border-brand-600 text-brand-600'
               : 'border-transparent text-gray-500 hover:text-gray-700',
           ]"
           @click="activeTab = tab.key"
@@ -423,9 +423,9 @@ const tabs: { key: Tab; label: string }[] = [
             <p class="text-xs font-medium uppercase tracking-wide text-gray-500">{{ t('admin.accounting.reports.eligibleCosts') }}</p>
             <p class="mt-1 text-2xl font-bold text-gray-900">{{ fmt(momskompQuery.data.value.eligible_costs) }}</p>
           </div>
-          <div class="rounded-lg border border-blue-200 bg-blue-50 p-4">
-            <p class="text-xs font-medium uppercase tracking-wide text-blue-600">{{ t('admin.accounting.reports.compensation') }}</p>
-            <p class="mt-1 text-2xl font-bold text-blue-700">{{ fmt(momskompQuery.data.value.compensation_amount) }}</p>
+          <div class="rounded-lg border border-brand-200 bg-brand-50 p-4">
+            <p class="text-xs font-medium uppercase tracking-wide text-brand-600">{{ t('admin.accounting.reports.compensation') }}</p>
+            <p class="mt-1 text-2xl font-bold text-brand-700">{{ fmt(momskompQuery.data.value.compensation_amount) }}</p>
           </div>
         </div>
         <div class="rounded-lg border border-gray-200 overflow-hidden">

@@ -49,7 +49,7 @@ function toggleCategory(category: string, currentEnabled: boolean) {
     <div class="rounded-lg border border-gray-200 bg-white p-4">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-3">
-          <component :is="isSubscribed ? Bell : BellOff" class="h-5 w-5" :class="isSubscribed ? 'text-blue-600' : 'text-gray-400'" />
+          <component :is="isSubscribed ? Bell : BellOff" class="h-5 w-5" :class="isSubscribed ? 'text-brand-600' : 'text-gray-400'" />
           <div>
             <p class="font-medium text-gray-900">{{ t('notifications.pushToggle') }}</p>
             <p class="text-sm text-gray-500">{{ isSubscribed ? t('notifications.pushEnabled') : t('notifications.pushDisabled') }}</p>
@@ -61,7 +61,7 @@ function toggleCategory(category: string, currentEnabled: boolean) {
           class="rounded-md px-3 py-1.5 text-sm font-medium transition"
           :class="isSubscribed
             ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            : 'bg-blue-600 text-white hover:bg-blue-700'"
+            : 'bg-brand-600 text-white hover:bg-brand-700'"
           @click="togglePush"
         >
           {{ pushLoading ? t('common.loading') : (isSubscribed ? t('notifications.disable') : t('notifications.enable')) }}
@@ -89,8 +89,8 @@ function toggleCategory(category: string, currentEnabled: boolean) {
         </div>
         <button
           :disabled="pref.required"
-          class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          :class="pref.enabled ? 'bg-blue-600' : 'bg-gray-200'"
+          class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          :class="pref.enabled ? 'bg-brand-600' : 'bg-gray-200'"
           role="switch"
           :aria-checked="pref.enabled"
           @click="!pref.required && toggleCategory(pref.category, pref.enabled)"

@@ -22,7 +22,7 @@ const hasCoordinates = computed(
     <div class="mt-10 grid gap-10 lg:grid-cols-2">
       <section>
         <h2 class="flex items-center gap-2 text-xl font-semibold text-slate-900">
-          <Car class="h-5 w-5 text-blue-600" aria-hidden="true" />
+          <Car class="h-5 w-5 text-brand-600" aria-hidden="true" />
           {{ t('directions.land') }}
         </h2>
         <div class="mt-4 h-72 overflow-hidden rounded-lg border border-slate-200">
@@ -50,7 +50,7 @@ const hasCoordinates = computed(
 
       <section>
         <h2 class="flex items-center gap-2 text-xl font-semibold text-slate-900">
-          <Ship class="h-5 w-5 text-blue-600" aria-hidden="true" />
+          <Ship class="h-5 w-5 text-brand-600" aria-hidden="true" />
           {{ t('directions.sea') }}
         </h2>
 

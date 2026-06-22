@@ -149,7 +149,7 @@ function handleSendReminder(_paymentId: string) {
             </td>
             <td class="whitespace-nowrap px-4 py-3 text-right">
               <button
-                class="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800"
+                class="inline-flex items-center gap-1 text-sm text-brand-600 hover:text-brand-800"
                 :title="t('admin.financials.sendReminder')"
                 @click="handleSendReminder(item.id)"
               >

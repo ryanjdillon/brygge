@@ -190,7 +190,7 @@ const financeCards = computed(() => {
     { label: t('admin.financials.duesReceived'), value: formatNOK(summary.value.total_dues_received), icon: Banknote, color: 'text-green-600', bg: 'bg-green-50' },
     { label: t('admin.financials.outstanding'), value: formatNOK(summary.value.total_outstanding), icon: Clock, color: 'text-yellow-600', bg: 'bg-yellow-50' },
     { label: t('admin.financials.overdue'), value: formatNOK(summary.value.total_overdue), icon: AlertTriangle, color: 'text-red-600', bg: 'bg-red-50' },
-    { label: t('admin.financials.harborMembershipCollected'), value: formatNOK(summary.value.total_harbor_membership_collected), icon: TrendingUp, color: 'text-blue-600', bg: 'bg-blue-50' },
+    { label: t('admin.financials.harborMembershipCollected'), value: formatNOK(summary.value.total_harbor_membership_collected), icon: TrendingUp, color: 'text-brand-600', bg: 'bg-brand-50' },
     { label: t('admin.financials.bookingRevenue'), value: formatNOK(summary.value.total_booking_revenue), icon: CreditCard, color: 'text-purple-600', bg: 'bg-purple-50' },
   ]
 })
@@ -224,7 +224,7 @@ const postedCount = computed(() => entries.value?.filter(e => e.status === 'post
           <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div class="rounded-lg border border-gray-200 bg-white p-5">
               <div class="flex items-center gap-2">
-                <div class="rounded-md bg-blue-50 p-1.5"><Receipt class="h-4 w-4 text-blue-600" /></div>
+                <div class="rounded-md bg-brand-50 p-1.5"><Receipt class="h-4 w-4 text-brand-600" /></div>
                 <p class="text-xs font-medium text-gray-500">{{ t('admin.financials.totalBilled') }}</p>
               </div>
               <div class="mt-2 flex items-baseline gap-2">
@@ -292,7 +292,7 @@ const postedCount = computed(() => entries.value?.filter(e => e.status === 'post
                 <BarChart
                   :buckets="reservationBuckets"
                   :series="[
-                    { key: 'guest_slip', label: t('admin.financials.guestSlip'), color: '#2563eb' },
+                    { key: 'guest_slip', label: t('admin.financials.guestSlip'), color: '#64748b' },
                     { key: 'motorhome', label: t('admin.financials.motorhome'), color: '#a855f7' },
                   ]"
                   :height="180"
@@ -339,7 +339,7 @@ const postedCount = computed(() => entries.value?.filter(e => e.status === 'post
               </thead>
               <tbody>
                 <template v-for="g in priceItemGroups" :key="g.category">
-                  <tr class="border-t border-gray-200 bg-blue-50/40">
+                  <tr class="border-t border-gray-200 bg-brand-50/40">
                     <td class="px-4 py-2 text-sm font-semibold text-gray-900">
                       {{ g.category ? categoryLabel(g.category) : t('admin.financials.unmappedLines') }}
                       <span class="ml-2 text-xs font-normal text-gray-500">{{ g.items.length }}</span>
@@ -411,9 +411,9 @@ const postedCount = computed(() => entries.value?.filter(e => e.status === 'post
       <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <RouterLink
           to="/admin/financials/payments"
-          class="group flex items-center gap-2 rounded-lg border border-gray-200 bg-white p-3 text-sm transition hover:border-blue-300"
+          class="group flex items-center gap-2 rounded-lg border border-gray-200 bg-white p-3 text-sm transition hover:border-brand-300"
         >
-          <Banknote class="h-4 w-4 text-blue-600" />
+          <Banknote class="h-4 w-4 text-brand-600" />
           <span class="font-medium text-gray-700">{{ t('admin.financials.viewPayments') }}</span>
         </RouterLink>
         <RouterLink
@@ -455,9 +455,9 @@ const postedCount = computed(() => entries.value?.filter(e => e.status === 'post
       <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <RouterLink
           to="/admin/accounting/faktura"
-          class="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-5 transition hover:border-blue-300 hover:shadow-sm"
+          class="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-5 transition hover:border-brand-300 hover:shadow-sm"
         >
-          <Mail class="h-8 w-8 text-blue-600" />
+          <Mail class="h-8 w-8 text-brand-600" />
           <div>
             <p class="font-medium text-gray-900">{{ t('admin.invoiceDrafts.title') }}</p>
             <p class="text-sm text-gray-500">{{ t('admin.invoiceDrafts.cardDesc') }}</p>
@@ -465,9 +465,9 @@ const postedCount = computed(() => entries.value?.filter(e => e.status === 'post
         </RouterLink>
         <RouterLink
           to="/admin/accounting/accounts"
-          class="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-5 transition hover:border-blue-300 hover:shadow-sm"
+          class="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-5 transition hover:border-brand-300 hover:shadow-sm"
         >
-          <BookOpen class="h-8 w-8 text-blue-600" />
+          <BookOpen class="h-8 w-8 text-brand-600" />
           <div>
             <p class="font-medium text-gray-900">{{ t('admin.accounting.dashboard.navAccounts') }}</p>
             <p class="text-sm text-gray-500">{{ t('admin.accounting.dashboard.navAccountsDesc') }}</p>
@@ -475,9 +475,9 @@ const postedCount = computed(() => entries.value?.filter(e => e.status === 'post
         </RouterLink>
         <RouterLink
           to="/admin/accounting/journal"
-          class="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-5 transition hover:border-blue-300 hover:shadow-sm"
+          class="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-5 transition hover:border-brand-300 hover:shadow-sm"
         >
-          <FileText class="h-8 w-8 text-blue-600" />
+          <FileText class="h-8 w-8 text-brand-600" />
           <div>
             <p class="font-medium text-gray-900">{{ t('admin.accounting.dashboard.navJournal') }}</p>
             <p class="text-sm text-gray-500">{{ t('admin.accounting.dashboard.navJournalDesc') }}</p>
@@ -485,9 +485,9 @@ const postedCount = computed(() => entries.value?.filter(e => e.status === 'post
         </RouterLink>
         <RouterLink
           to="/admin/economy/settings"
-          class="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-5 transition hover:border-blue-300 hover:shadow-sm"
+          class="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-5 transition hover:border-brand-300 hover:shadow-sm"
         >
-          <Settings class="h-8 w-8 text-blue-600" />
+          <Settings class="h-8 w-8 text-brand-600" />
           <div>
             <p class="font-medium text-gray-900">{{ t('admin.economySettings.title') }}</p>
             <p class="text-sm text-gray-500">{{ t('admin.economySettings.subtitle') }}</p>
@@ -495,10 +495,10 @@ const postedCount = computed(() => entries.value?.filter(e => e.status === 'post
         </RouterLink>
         <RouterLink
           to="/admin/accounting/bank-imports"
-          class="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-5 transition hover:border-blue-300 hover:shadow-sm"
+          class="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-5 transition hover:border-brand-300 hover:shadow-sm"
           data-testid="bank-imports-tile"
         >
-          <Upload class="h-8 w-8 text-blue-600" />
+          <Upload class="h-8 w-8 text-brand-600" />
           <div>
             <p class="font-medium text-gray-900">{{ t('admin.bankImports.navCardTitle') }}</p>
             <p class="text-sm text-gray-500">{{ t('admin.bankImports.navCardDesc') }}</p>

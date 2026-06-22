@@ -59,7 +59,7 @@ function formatDate(iso: string): string {
 
 function tagColor(tag: string): string {
   switch (tag) {
-    case 'regatta': return 'bg-blue-100 text-blue-800'
+    case 'regatta': return 'bg-brand-100 text-brand-800'
     case 'volunteer': return 'bg-orange-100 text-orange-800'
     case 'social': return 'bg-green-100 text-green-800'
     case 'agm': return 'bg-purple-100 text-purple-800'
@@ -88,7 +88,7 @@ function tagLabel(tag: string): string {
       <div class="flex gap-2">
         <button
           v-if="auth.isAuthenticated"
-          class="inline-flex items-center gap-2 rounded-md border border-blue-600 px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50"
+          class="inline-flex items-center gap-2 rounded-md border border-brand-600 px-4 py-2 text-sm font-medium text-brand-600 hover:bg-brand-50"
           @click="showProposeModal = true"
         >
           <Plus class="h-4 w-4" />
@@ -96,7 +96,7 @@ function tagLabel(tag: string): string {
         </button>
         <a
           href="/api/v1/calendar/public.ics"
-          class="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          class="inline-flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
         >
           <Download class="h-4 w-4" />
           {{ t('calendar.export') }}
@@ -111,7 +111,7 @@ function tagLabel(tag: string): string {
         :class="[
           'rounded-full px-3 py-1 text-sm font-medium transition',
           activeTags.has(tag.key)
-            ? 'bg-blue-600 text-white'
+            ? 'bg-brand-600 text-white'
             : 'bg-slate-100 text-slate-600 hover:bg-slate-200',
         ]"
         @click="toggleTag(tag.key)"
@@ -194,7 +194,7 @@ function tagLabel(tag: string): string {
               </button>
               <button
                 type="submit"
-                class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                class="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
               >
                 {{ t('common.submit') }}
               </button>

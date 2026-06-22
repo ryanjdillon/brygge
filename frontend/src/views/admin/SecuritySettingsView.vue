@@ -85,7 +85,7 @@ function totpHours() { return Math.round(form.value.admin_totp_minutes / 60 * 10
               min="30"
               max="43200"
               step="30"
-              class="w-28 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              class="w-28 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             />
             <span class="text-sm text-gray-500">{{ t('admin.securitySettings.minutes') }}</span>
             <span class="text-xs text-gray-400">({{ idleHours() }}h)</span>
@@ -105,7 +105,7 @@ function totpHours() { return Math.round(form.value.admin_totp_minutes / 60 * 10
               :min="form.idle_minutes"
               max="129600"
               step="60"
-              class="w-28 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              class="w-28 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             />
             <span class="text-sm text-gray-500">{{ t('admin.securitySettings.minutes') }}</span>
             <span class="text-xs text-gray-400">({{ capDays() }}d)</span>
@@ -131,7 +131,7 @@ function totpHours() { return Math.round(form.value.admin_totp_minutes / 60 * 10
               min="5"
               max="1440"
               step="5"
-              class="w-28 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              class="w-28 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             />
             <span class="text-sm text-gray-500">{{ t('admin.securitySettings.minutes') }}</span>
             <span class="text-xs text-gray-400">({{ totpHours() }}h)</span>
@@ -150,7 +150,7 @@ function totpHours() { return Math.round(form.value.admin_totp_minutes / 60 * 10
         <button
           type="submit"
           :disabled="saving"
-          class="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+          class="rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
         >
           {{ saving ? t('common.loading') : t('common.save') }}
         </button>

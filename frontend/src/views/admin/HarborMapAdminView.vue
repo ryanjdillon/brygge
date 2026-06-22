@@ -507,12 +507,12 @@ onUnmounted(() => {
     >
       <div class="flex flex-col items-center">
         <div
-          class="rounded-md border-2 border-dashed border-blue-600 bg-white/90 px-3 py-1 text-base font-semibold text-blue-700 shadow"
+          class="rounded-md border-2 border-dashed border-brand-600 bg-white/90 px-3 py-1 text-base font-semibold text-brand-700 shadow"
         >
           Dock {{ editingDock.name }}
         </div>
-        <div class="mt-1 h-3 w-px bg-blue-600/70" />
-        <div class="h-2 w-2 rounded-full bg-blue-600 ring-2 ring-white" />
+        <div class="mt-1 h-3 w-px bg-brand-600/70" />
+        <div class="h-2 w-2 rounded-full bg-brand-600 ring-2 ring-white" />
       </div>
     </div>
 
@@ -550,7 +550,7 @@ onUnmounted(() => {
           'pointer-events-auto inline-flex items-center gap-1.5 rounded-full border-2 px-4 py-2 text-sm font-semibold shadow-lg transition hover:scale-[1.03]',
           d.default_lng == null
             ? 'border-gray-300 bg-white/85 text-gray-400'
-            : 'border-blue-600 bg-blue-600 text-white hover:bg-blue-700',
+            : 'border-brand-600 bg-brand-600 text-white hover:bg-brand-700',
         ]"
         :disabled="d.default_lng == null"
         :title="
@@ -605,7 +605,7 @@ onUnmounted(() => {
               :class="[
                 'rounded border px-2 py-1 text-[11px]',
                 editingDockSlug === d.slug
-                  ? 'border-blue-600 bg-blue-50 text-blue-700'
+                  ? 'border-brand-600 bg-brand-50 text-brand-700'
                   : 'border-gray-300 bg-white hover:bg-gray-50',
               ]"
               @click="
@@ -615,7 +615,7 @@ onUnmounted(() => {
               Dock {{ d.name }}
             </button>
           </div>
-          <div v-if="editingDock" class="mt-2 rounded-md bg-blue-50/70 p-2">
+          <div v-if="editingDock" class="mt-2 rounded-md bg-brand-50/70 p-2">
             <p class="text-[11px] text-gray-700">
               {{ t('admin.harborMap.dockEditHint') }}
             </p>
@@ -626,7 +626,7 @@ onUnmounted(() => {
             <div class="mt-2 flex gap-1.5">
               <button
                 type="button"
-                class="flex-1 rounded border border-blue-300 bg-blue-600 px-2 py-1 text-[11px] font-medium text-white hover:bg-blue-700"
+                class="flex-1 rounded border border-brand-300 bg-brand-600 px-2 py-1 text-[11px] font-medium text-white hover:bg-brand-700"
                 @click="updateEditingDockView"
               >
                 {{ t('admin.harborMap.saveDockView') }}
@@ -674,7 +674,7 @@ onUnmounted(() => {
                 :class="[
                   'rounded border px-2 py-1 font-mono text-xs',
                   placementSlipId === s.id
-                    ? 'border-blue-600 bg-blue-50 text-blue-700'
+                    ? 'border-brand-600 bg-brand-50 text-brand-700'
                     : 'border-gray-300 bg-white hover:bg-gray-50',
                 ]"
                 @click="pickSlipToPlace(s.id)"
@@ -685,7 +685,7 @@ onUnmounted(() => {
             <p v-else class="text-[11px] italic text-gray-500">
               {{ t('admin.harborMap.allPlaced') }}
             </p>
-            <p v-if="placementSlipId" class="mt-1.5 text-[11px] text-blue-700">
+            <p v-if="placementSlipId" class="mt-1.5 text-[11px] text-brand-700">
               {{ t('admin.harborMap.placeSlipClick') }}
             </p>
             <p v-else class="mt-1.5 text-[11px] text-gray-500">
@@ -724,7 +724,7 @@ onUnmounted(() => {
                 :class="[
                   'flex items-center justify-center gap-1 rounded-md border px-2 py-1.5 text-[11px]',
                   mode === 'view'
-                    ? 'border-blue-600 bg-blue-50 text-blue-700'
+                    ? 'border-brand-600 bg-brand-50 text-brand-700'
                     : 'border-gray-200 bg-white hover:bg-gray-100',
                 ]"
                 @click="setMode('view')"
@@ -737,7 +737,7 @@ onUnmounted(() => {
                 :class="[
                   'flex items-center justify-center gap-1 rounded-md border px-2 py-1.5 text-[11px]',
                   mode === 'finger'
-                    ? 'border-blue-600 bg-blue-50 text-blue-700'
+                    ? 'border-brand-600 bg-brand-50 text-brand-700'
                     : 'border-gray-200 bg-white hover:bg-gray-100',
                 ]"
                 @click="setMode('finger')"

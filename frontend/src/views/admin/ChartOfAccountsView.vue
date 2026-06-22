@@ -163,7 +163,7 @@ function handleAddAccount() {
       <h1 class="text-2xl font-bold text-gray-900">{{ t('admin.accounting.accounts.title') }}</h1>
       <button
         v-if="hasAccounts"
-        class="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+        class="inline-flex items-center gap-1.5 rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
         @click="showAddForm = !showAddForm"
       >
         <Plus class="h-4 w-4" />
@@ -178,7 +178,7 @@ function handleAddAccount() {
       <h3 class="text-sm font-semibold text-gray-900">{{ t('admin.accounting.accounts.title') }}</h3>
       <p class="mt-1 text-sm text-gray-500">{{ t('admin.accounting.accounts.seedButton') }}</p>
       <button
-        class="mt-3 inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+        class="mt-3 inline-flex items-center gap-1.5 rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
         :disabled="seedMutation.isPending.value"
         @click="seedMutation.mutate(undefined)"
       >
@@ -203,7 +203,7 @@ function handleAddAccount() {
         </div>
         <div class="mt-3 flex gap-2">
           <button
-            class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            class="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
             :disabled="!newAccount.code || !newAccount.name || createMutation.isPending.value"
             @click="handleAddAccount"
           >

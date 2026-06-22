@@ -43,7 +43,7 @@ const cls = computed(() => [
   alignClass.value,
   props.error
     ? 'border-red-400 focus:border-red-500 focus:ring-red-500'
-    : 'border-gray-300 hover:border-gray-400 focus:border-blue-500 focus:ring-blue-500',
+    : 'border-gray-300 hover:border-gray-400 focus:border-brand-500 focus:ring-brand-500',
   props.inputClass,
 ])
 </script>

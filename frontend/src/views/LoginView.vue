@@ -71,7 +71,7 @@ function roleColor(role: string): string {
   switch (role) {
     case 'admin': return 'bg-red-100 text-red-700'
     case 'board': return 'bg-purple-100 text-purple-700'
-    case 'member': return 'bg-blue-100 text-blue-700'
+    case 'member': return 'bg-brand-100 text-brand-700'
     default: return 'bg-gray-100 text-gray-700'
   }
 }
@@ -81,7 +81,7 @@ function roleColor(role: string): string {
   <div class="flex min-h-[calc(100vh-8rem)] items-center justify-center px-4">
     <div class="w-full max-w-sm">
       <div class="text-center">
-        <LogIn class="mx-auto h-10 w-10 text-blue-600" />
+        <LogIn class="mx-auto h-10 w-10 text-brand-600" />
         <h1 class="mt-4 text-2xl font-bold text-gray-900">{{ t('login.title') }}</h1>
       </div>
 
@@ -96,7 +96,7 @@ function roleColor(role: string): string {
             v-for="user in demoUsers"
             :key="user.email"
             :disabled="demoLoading === user.email"
-            class="flex w-full items-center justify-between rounded-md border border-gray-200 px-4 py-3 text-left text-sm transition hover:border-blue-300 hover:bg-blue-50 disabled:opacity-50"
+            class="flex w-full items-center justify-between rounded-md border border-gray-200 px-4 py-3 text-left text-sm transition hover:border-brand-300 hover:bg-brand-50 disabled:opacity-50"
             @click="handleDemoLogin(user)"
           >
             <div>
@@ -160,7 +160,7 @@ function roleColor(role: string): string {
           <button
             type="submit"
             :disabled="submitting"
-            class="w-full rounded-md bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
+            class="w-full rounded-md bg-brand-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 disabled:opacity-50"
           >
             {{ submitting ? t('login.sending') : t('login.sendLink') }}
           </button>
@@ -169,7 +169,7 @@ function roleColor(role: string): string {
 
       <p class="mt-6 text-center text-sm text-gray-500">
         {{ t('login.noAccount') }}
-        <router-link to="/join" class="font-medium text-blue-600 hover:text-blue-500">
+        <router-link to="/join" class="font-medium text-brand-600 hover:text-brand-500">
           {{ t('login.joinLink') }}
         </router-link>
       </p>

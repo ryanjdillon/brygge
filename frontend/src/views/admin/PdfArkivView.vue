@@ -104,13 +104,13 @@ function formatBytes(n: number): string {
           type="search"
           inputmode="numeric"
           :placeholder="t('admin.pdfArchive.placeholder')"
-          class="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          class="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
         />
       </div>
       <button
         type="submit"
         :disabled="loading"
-        class="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+        class="rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
       >
         {{ loading ? t('common.loading') : t('admin.pdfArchive.lookup') }}
       </button>
@@ -172,13 +172,13 @@ function formatBytes(n: number): string {
                   :href="`/api/v1/admin/financials/invoices/${result.id}/pdf-archive/${entry.id}`"
                   target="_blank"
                   rel="noopener"
-                  class="text-xs font-semibold text-blue-700 hover:underline"
+                  class="text-xs font-semibold text-brand-700 hover:underline"
                 >
                   {{ t('admin.faktura.archive.view') }}
                 </a>
                 <a
                   :href="`/api/v1/admin/financials/invoices/${result.id}/pdf-archive/${entry.id}?download=1`"
-                  class="text-xs font-semibold text-blue-700 hover:underline"
+                  class="text-xs font-semibold text-brand-700 hover:underline"
                 >
                   {{ t('admin.faktura.archive.download') }}
                 </a>

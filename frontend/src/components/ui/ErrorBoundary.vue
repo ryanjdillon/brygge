@@ -23,7 +23,7 @@ defineExpose({ error, retry })
     <p class="text-lg font-medium text-gray-900">{{ t('error.title') }}</p>
     <p class="mt-2 text-sm text-gray-500">{{ t('error.description') }}</p>
     <button
-      class="mt-4 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+      class="mt-4 rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
       @click="retry"
     >
       {{ t('error.retry') }}

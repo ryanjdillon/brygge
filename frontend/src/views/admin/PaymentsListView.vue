@@ -114,7 +114,7 @@ function translateStatus(status: string): string {
 function typeClass(type: string): string {
   switch (type) {
     case 'dues':
-      return 'bg-blue-100 text-blue-800'
+      return 'bg-brand-100 text-brand-800'
     case 'harbor_membership':
       return 'bg-purple-100 text-purple-800'
     case 'booking':

@@ -90,7 +90,7 @@ const { mutate: reportIssue, isPending: isReporting } = useMutation({
           <span
             :class="[
               'mt-1 inline-block rounded-full px-3 py-1 text-sm font-medium',
-              slip.status === 'available' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800',
+              slip.status === 'available' ? 'bg-green-100 text-green-800' : 'bg-brand-100 text-brand-800',
             ]"
           >
             {{ slip.status }}
@@ -137,7 +137,7 @@ const { mutate: reportIssue, isPending: isReporting } = useMutation({
             <button
               type="submit"
               :disabled="isReporting"
-              class="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
+              class="rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 disabled:opacity-50"
             >
               {{ t('common.submit') }}
             </button>

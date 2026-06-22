@@ -43,7 +43,7 @@ function toggleSidebar() {
   <div class="flex h-full min-h-0">
     <!-- Mobile sidebar toggle -->
     <button
-      class="fixed bottom-4 left-4 z-50 rounded-full bg-blue-600 p-3 text-white shadow-lg md:hidden"
+      class="fixed bottom-4 left-4 z-50 rounded-full bg-brand-600 p-3 text-white shadow-lg md:hidden"
       @click="toggleSidebar"
     >
       <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -81,7 +81,7 @@ function toggleSidebar() {
           :class="[
             'flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors',
             currentRoomId === room.id
-              ? 'bg-blue-100 text-blue-800'
+              ? 'bg-brand-100 text-brand-800'
               : 'text-gray-700 hover:bg-gray-100',
           ]"
           @click="selectRoom(room.id)"

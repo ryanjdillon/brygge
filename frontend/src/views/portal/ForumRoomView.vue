@@ -173,7 +173,7 @@ function formatTime(timestamp: string): string {
           :key="message.id"
           class="group flex gap-3"
         >
-          <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-medium text-blue-700">
+          <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-medium text-brand-700">
             {{ message.senderName.charAt(0).toUpperCase() }}
           </div>
           <div class="min-w-0">
@@ -207,7 +207,7 @@ function formatTime(timestamp: string): string {
           />
         </div>
         <button
-          class="shrink-0 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+          class="shrink-0 rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
           :disabled="!messageInput.trim() || isSending"
           @click="handleSend"
         >

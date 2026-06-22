@@ -261,7 +261,7 @@ watch(docSearch, () => nextTick(() => applyHighlights()))
             class="group"
           >
             <p class="text-xs text-gray-500">{{ t('portal.dashboard.queuePosition') }}</p>
-            <p class="mt-0.5 font-semibold text-blue-600 group-hover:underline">
+            <p class="mt-0.5 font-semibold text-brand-600 group-hover:underline">
               {{ t('portal.waitingList.positionOf', { position: dashboard.queuePosition, total: dashboard.queueTotal }) }}
             </p>
           </RouterLink>
@@ -272,7 +272,7 @@ watch(docSearch, () => nextTick(() => applyHighlights()))
       <section class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
         <div class="flex items-center justify-between">
           <h2 class="text-sm font-semibold text-gray-900">{{ t('portal.dashboard.upcomingBookings') }}</h2>
-          <RouterLink to="/portal/bookings" class="text-sm font-medium text-blue-600 hover:text-blue-700">
+          <RouterLink to="/portal/bookings" class="text-sm font-medium text-brand-600 hover:text-brand-700">
             {{ t('portal.dashboard.viewAll') }}
           </RouterLink>
         </div>
@@ -287,7 +287,7 @@ watch(docSearch, () => nextTick(() => applyHighlights()))
       <section v-if="showInvoices" class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
         <div class="flex items-center justify-between">
           <h2 class="text-sm font-semibold text-gray-900">{{ t('portal.invoices.title') }}</h2>
-          <RouterLink to="/portal/invoices" class="text-sm font-medium text-blue-600 hover:text-blue-700">
+          <RouterLink to="/portal/invoices" class="text-sm font-medium text-brand-600 hover:text-brand-700">
             {{ t('portal.dashboard.viewAll') }}
           </RouterLink>
         </div>
@@ -369,7 +369,7 @@ watch(docSearch, () => nextTick(() => applyHighlights()))
       <section class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
         <div class="flex items-center justify-between">
           <h2 class="text-sm font-semibold text-gray-900">{{ t('portal.dashboard.myBoats') }}</h2>
-          <RouterLink to="/portal/boats" class="text-sm font-medium text-blue-600 hover:text-blue-700">
+          <RouterLink to="/portal/boats" class="text-sm font-medium text-brand-600 hover:text-brand-700">
             {{ t('portal.dashboard.manageBoats') }}
           </RouterLink>
         </div>
@@ -379,7 +379,7 @@ watch(docSearch, () => nextTick(() => applyHighlights()))
         </div>
         <p v-else class="mt-3 text-sm text-gray-500">
           {{ t('portal.dashboard.noBoats') }}
-          <RouterLink to="/portal/boats" class="font-medium text-blue-600 hover:text-blue-700">
+          <RouterLink to="/portal/boats" class="font-medium text-brand-600 hover:text-brand-700">
             {{ t('portal.dashboard.addBoat') }}
           </RouterLink>
         </p>
@@ -424,7 +424,7 @@ watch(docSearch, () => nextTick(() => applyHighlights()))
               class="flex items-center justify-between py-2.5"
             >
               <div class="flex min-w-0 items-center gap-2">
-                <FileText class="h-4 w-4 shrink-0 text-blue-400" />
+                <FileText class="h-4 w-4 shrink-0 text-brand-400" />
                 <span class="truncate text-sm font-medium text-gray-900">{{ doc.title }}</span>
                 <span class="shrink-0 text-xs text-gray-400">{{ formatDate(doc.created_at) }}</span>
               </div>

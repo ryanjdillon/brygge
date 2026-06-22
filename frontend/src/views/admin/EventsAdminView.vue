@@ -117,7 +117,7 @@ function tagLabel(tag: string): string {
     <div class="flex items-center justify-between">
       <h1 class="text-2xl font-bold text-gray-900">{{ t('admin.events.title') }}</h1>
       <button
-        class="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+        class="inline-flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
         @click="openCreateModal"
       >
         <Plus class="h-4 w-4" />
@@ -168,7 +168,7 @@ function tagLabel(tag: string): string {
               {{ formatDate(event.start_time) }}
             </td>
             <td class="px-4 py-3">
-              <span class="inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">
+              <span class="inline-flex rounded-full bg-brand-100 px-2 py-0.5 text-xs font-medium text-brand-800">
                 {{ tagLabel(event.tag) }}
               </span>
             </td>
@@ -177,7 +177,7 @@ function tagLabel(tag: string): string {
             </td>
             <td class="whitespace-nowrap px-4 py-3 text-right">
               <button
-                class="mr-2 text-gray-500 hover:text-blue-600"
+                class="mr-2 text-gray-500 hover:text-brand-600"
                 :title="t('common.edit')"
                 @click="openEditModal(event)"
               >
@@ -262,7 +262,7 @@ function tagLabel(tag: string): string {
               <button
                 type="submit"
                 :disabled="isSubmitting"
-                class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                class="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
               >
                 {{ isSubmitting ? t('common.loading') + '...' : t('common.save') }}
               </button>

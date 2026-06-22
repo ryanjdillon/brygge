@@ -88,7 +88,7 @@ const borderClass = computed(() => props.hasError ? 'border-red-400' : 'border-g
         v-for="cc in countryCodes"
         :key="cc.code"
         class="flex cursor-pointer items-center gap-2.5 px-3 py-2 text-sm transition-colors hover:bg-gray-50"
-        :class="cc.code === selectedCode ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'"
+        :class="cc.code === selectedCode ? 'bg-brand-50 text-brand-700 font-medium' : 'text-gray-700'"
         @click="selectCountry(cc.code)"
       >
         <span class="inline-flex h-5 w-7 items-center justify-center rounded-sm bg-gray-200 text-[10px] font-bold leading-none text-gray-500">{{ cc.country }}</span>
@@ -101,7 +101,7 @@ const borderClass = computed(() => props.hasError ? 'border-red-400' : 'border-g
       v-model="localNumber"
       type="tel"
       inputmode="tel"
-      class="block w-full min-w-0 rounded-r-md border text-sm focus:border-blue-500 focus:ring-blue-500"
+      class="block w-full min-w-0 rounded-r-md border text-sm focus:border-brand-500 focus:ring-brand-500"
       :class="borderClass"
       placeholder="912 34 567"
       @blur="emit('blur')"

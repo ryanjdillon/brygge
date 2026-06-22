@@ -57,7 +57,7 @@ async function remove(id: string) {
       </div>
       <button
         type="button"
-        class="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+        class="inline-flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
         @click="showForm = !showForm"
       >
         <Plus class="h-4 w-4" />
@@ -82,7 +82,7 @@ async function remove(id: string) {
       <button
         type="submit"
         :disabled="creating"
-        class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+        class="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
       >
         {{ creating ? t('common.loading') : t('common.save') }}
       </button>
