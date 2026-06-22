@@ -69,7 +69,7 @@ func (h *AdminDocumentsHandler) HandleListDocuments(w http.ResponseWriter, r *ht
 	if hasBoard {
 		rows, err = h.db.Query(ctx,
 			`SELECT d.id, d.title, d.filename, d.content_type, d.size_bytes,
-			        d.visibility, d.created_at, d.updated_at, u.full_name
+			        d.visibility, d.created_at, d.updated_at, COALESCE(u.full_name, '')
 			 FROM documents d
 			 JOIN users u ON u.id = d.uploaded_by
 			 WHERE d.club_id = $1
@@ -79,7 +79,7 @@ func (h *AdminDocumentsHandler) HandleListDocuments(w http.ResponseWriter, r *ht
 	} else {
 		rows, err = h.db.Query(ctx,
 			`SELECT d.id, d.title, d.filename, d.content_type, d.size_bytes,
-			        d.visibility, d.created_at, d.updated_at, u.full_name
+			        d.visibility, d.created_at, d.updated_at, COALESCE(u.full_name, '')
 			 FROM documents d
 			 JOIN users u ON u.id = d.uploaded_by
 			 WHERE d.club_id = $1 AND d.visibility = 'member'
@@ -95,15 +95,15 @@ func (h *AdminDocumentsHandler) HandleListDocuments(w http.ResponseWriter, r *ht
 	defer rows.Close()
 
 	type docRow struct {
-		ID          string `json:"id"`
-		Title       string `json:"title"`
-		Filename    string `json:"filename"`
-		ContentType string `json:"content_type"`
-		SizeBytes   int64  `json:"size_bytes"`
-		Visibility  string `json:"visibility"`
-		CreatedAt   string `json:"created_at"`
-		UpdatedAt   string `json:"updated_at"`
-		UploadedBy  string `json:"uploaded_by"`
+		ID          string    `json:"id"`
+		Title       string    `json:"title"`
+		Filename    string    `json:"filename"`
+		ContentType string    `json:"content_type"`
+		SizeBytes   int64     `json:"size_bytes"`
+		Visibility  string    `json:"visibility"`
+		CreatedAt   time.Time `json:"created_at"`
+		UpdatedAt   time.Time `json:"updated_at"`
+		UploadedBy  string    `json:"uploaded_by"`
 	}
 
 	var docs []docRow
@@ -153,22 +153,22 @@ func (h *AdminDocumentsHandler) HandleGetDocument(w http.ResponseWriter, r *http
 	}
 
 	type docDetail struct {
-		ID          string `json:"id"`
-		Title       string `json:"title"`
-		Filename    string `json:"filename"`
-		S3Key       string `json:"s3_key"`
-		ContentType string `json:"content_type"`
-		SizeBytes   int64  `json:"size_bytes"`
-		Visibility  string `json:"visibility"`
-		CreatedAt   string `json:"created_at"`
-		UpdatedAt   string `json:"updated_at"`
-		UploadedBy  string `json:"uploaded_by"`
+		ID          string    `json:"id"`
+		Title       string    `json:"title"`
+		Filename    string    `json:"filename"`
+		S3Key       string    `json:"s3_key"`
+		ContentType string    `json:"content_type"`
+		SizeBytes   int64     `json:"size_bytes"`
+		Visibility  string    `json:"visibility"`
+		CreatedAt   time.Time `json:"created_at"`
+		UpdatedAt   time.Time `json:"updated_at"`
+		UploadedBy  string    `json:"uploaded_by"`
 	}
 
 	var d docDetail
 	err := h.db.QueryRow(ctx,
 		`SELECT d.id, d.title, d.filename, d.s3_key, d.content_type, d.size_bytes,
-		        d.visibility, d.created_at, d.updated_at, u.full_name
+		        d.visibility, d.created_at, d.updated_at, COALESCE(u.full_name, '')
 		 FROM documents d
 		 JOIN users u ON u.id = d.uploaded_by
 		 WHERE d.id = $1 AND d.club_id = $2`,

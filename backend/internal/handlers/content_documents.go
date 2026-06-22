@@ -54,7 +54,7 @@ func (h *ContentDocumentsHandler) HandleAdminList(w http.ResponseWriter, r *http
 	rows, err := h.db.Query(ctx,
 		`SELECT cd.id, cd.title, cd.body_html, cd.visibility, cd.published,
 		        cd.revision, cd.published_at,
-		        cu.full_name, uu.full_name, cd.created_at, cd.updated_at
+		        COALESCE(cu.full_name, ''), COALESCE(uu.full_name, ''), cd.created_at, cd.updated_at
 		 FROM content_documents cd
 		 JOIN users cu ON cu.id = cd.created_by
 		 JOIN users uu ON uu.id = cd.updated_by
@@ -388,7 +388,7 @@ func (h *ContentDocumentsHandler) HandlePortalGetContentDoc(w http.ResponseWrite
 	err := h.db.QueryRow(ctx,
 		`SELECT cd.id, cd.title, cd.body_html, cd.visibility, cd.published,
 		        cd.revision, cd.published_at,
-		        cu.full_name, uu.full_name, cd.created_at, cd.updated_at
+		        COALESCE(cu.full_name, ''), COALESCE(uu.full_name, ''), cd.created_at, cd.updated_at
 		 FROM content_documents cd
 		 JOIN users cu ON cu.id = cd.created_by
 		 JOIN users uu ON uu.id = cd.updated_by
