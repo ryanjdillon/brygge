@@ -5,15 +5,29 @@ import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useClubStore } from '@/stores/club'
 import { useNavGate } from '@/composables/useNavGate'
-import { LogIn, LogOut, User, Shield, ShieldAlert } from 'lucide-vue-next'
+import { LogIn, LogOut, User, Shield, ShieldAlert, Bell, ChevronRight } from 'lucide-vue-next'
 import LanguageSwitcher from '@/components/layout/LanguageSwitcher.vue'
 import InboxIndicator from '@/components/layout/InboxIndicator.vue'
+import { useBreadcrumbStore } from '@/stores/breadcrumb'
 
 const { t } = useI18n()
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
+const breadcrumb = useBreadcrumbStore()
 const { gateToAdmin } = useNavGate()
+
+// On the logged-in portal/admin surfaces the top-left club-name link is
+// replaced by a breadcrumb (section › page). The page label is fed by the
+// active layout via the breadcrumb store.
+const sectionCrumb = computed(() => {
+  if (route.path.startsWith('/admin')) return { label: t('admin.sidebarTitle'), to: '/admin' }
+  if (route.path.startsWith('/portal')) return { label: t('portal.sidebarTitle'), to: '/portal' }
+  return null
+})
+const showBreadcrumb = computed(
+  () => auth.isAuthenticated && !isHero.value && sectionCrumb.value !== null,
+)
 
 // Intercept the admin-button click so the 12-hour step-up modal opens
 // before navigation. If the user has TOTP enrolled but the step-up
@@ -28,6 +42,10 @@ async function handleAdminClick(e: MouseEvent) {
 }
 const club = useClubStore()
 club.ensureLoaded()
+
+// Club logo lives in the top bar (left of the breadcrumb). Bound via a JS
+// const so Vite's import-analysis doesn't treat the API path as an asset.
+const clubLogoUrl = '/api/v1/club/logo'
 
 // On the landing page the hero photo extends up behind the navbar, so
 // the bar itself goes transparent and the controls invert to read on
@@ -73,8 +91,8 @@ const logoutClass = computed(() =>
 )
 const loginClass = computed(() =>
   isHero.value
-    ? `${pillBase} bg-white text-blue-900 shadow hover:bg-blue-50`
-    : `${pillBase} bg-blue-600 text-white hover:bg-blue-700`,
+    ? `${pillBase} bg-white text-brand-900 shadow hover:bg-brand-50`
+    : `${pillBase} bg-brand-600 text-white hover:bg-brand-700`,
 )
 
 async function handleLogout() {
@@ -90,14 +108,41 @@ async function handleLogout() {
            lower on the page, so the top-left slot is left empty for a
            cleaner hero. justify-end keeps the controls flush right. -->
       <div :class="['flex h-14 items-center gap-3', isHero ? 'justify-end' : 'justify-between']">
-        <RouterLink v-if="!isHero" to="/" :class="brandClass">
-          <span class="truncate text-base font-semibold sm:text-lg">
-            {{ club.name || 'Brygge' }}
-          </span>
-        </RouterLink>
+        <div v-if="!isHero" class="flex min-w-0 items-center gap-2 sm:gap-3">
+          <RouterLink to="/" :class="brandClass">
+            <img v-if="club.hasLogo" :src="clubLogoUrl" alt="" class="h-7 w-auto flex-none" />
+            <span class="truncate text-base font-semibold sm:text-lg">
+              {{ club.name || 'Brygge' }}
+            </span>
+          </RouterLink>
+          <template v-if="showBreadcrumb && sectionCrumb">
+            <span class="hidden h-5 w-px flex-none bg-slate-200 sm:block" aria-hidden="true" />
+            <nav
+              class="hidden min-w-0 items-center gap-1.5 text-sm sm:flex"
+              aria-label="Breadcrumb"
+            >
+              <RouterLink :to="sectionCrumb.to" class="font-medium text-slate-500 hover:text-slate-800">
+                {{ sectionCrumb.label }}
+              </RouterLink>
+              <template v-if="breadcrumb.pageLabel">
+                <ChevronRight class="h-4 w-4 flex-none text-slate-300" />
+                <span class="truncate font-semibold text-slate-900">{{ breadcrumb.pageLabel }}</span>
+              </template>
+            </nav>
+          </template>
+        </div>
 
         <div class="flex flex-none items-center gap-1 sm:gap-2">
           <InboxIndicator v-if="auth.isAuthenticated && !isHero" />
+          <RouterLink
+            v-if="auth.isAuthenticated && !isHero"
+            to="/portal/notifications"
+            class="inline-flex items-center rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+            :title="t('notifications.title')"
+            :aria-label="t('notifications.title')"
+          >
+            <Bell class="h-5 w-5" />
+          </RouterLink>
           <LanguageSwitcher :theme="isHero ? 'dark' : 'light'" />
           <template v-if="auth.isAuthenticated">
             <RouterLink

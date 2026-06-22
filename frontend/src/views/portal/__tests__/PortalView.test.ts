@@ -20,6 +20,7 @@ vi.mock('lucide-vue-next', () => ({
   Map: { template: '<span data-icon="map" />' },
   Menu: { template: '<span data-icon="menu" />' },
   X: { template: '<span data-icon="x" />' },
+  ChevronDown: { template: '<span data-icon="chevron-down" />' },
 }))
 
 describe('PortalView', () => {

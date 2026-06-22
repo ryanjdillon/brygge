@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { RouterView, useRouter } from 'vue-router'
+import { ref, computed, watch } from 'vue'
+import { RouterView, useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useClubStore } from '@/stores/club'
+import { useBreadcrumbStore } from '@/stores/breadcrumb'
 import { useFeatures } from '@/composables/useFeatures'
 import { useNavGate } from '@/composables/useNavGate'
 import { useBankUnmatchedCount, usePendingRefundCount } from '@/composables/useBankReconcile'
@@ -42,6 +43,8 @@ import {
 const { t } = useI18n()
 const auth = useAuthStore()
 const club = useClubStore()
+const route = useRoute()
+const breadcrumb = useBreadcrumbStore()
 club.ensureLoaded()
 
 const { isEnabled } = useFeatures()
@@ -131,6 +134,22 @@ const navGroups = computed<NavGroup[]>(() => {
 function closeSidebar() {
   sidebarOpen.value = false
 }
+
+// Feed the top-bar breadcrumb with the active nav item's localized label
+// (most-specific path match) so NavBar can show "Administrasjon › <page>".
+const activePageLabel = computed(() => {
+  const path = route.path
+  let best: { to: string; label: string } | null = null
+  for (const group of navGroups.value) {
+    for (const item of group.items) {
+      const match =
+        item.to === '/admin' ? path === '/admin' || path === '/admin/' : path.startsWith(item.to)
+      if (match && (!best || item.to.length > best.to.length)) best = item
+    }
+  }
+  return best?.label ?? ''
+})
+watch(activePageLabel, (label) => breadcrumb.setPage(label), { immediate: true })
 
 // Economy sidebar items gate on fresh-TOTP (10-min window). Anything
 // under /admin/accounting or /admin/economy hits this. See DIL-369.

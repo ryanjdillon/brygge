@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { RouterView } from 'vue-router'
+import { ref, computed, watch } from 'vue'
+import { RouterView, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
+import { useClubStore } from '@/stores/club'
+import { useBreadcrumbStore } from '@/stores/breadcrumb'
 import { useFeatures } from '@/composables/useFeatures'
 import ErrorBoundary from '@/components/ui/ErrorBoundary.vue'
 import FeedbackWidget from '@/components/ui/FeedbackWidget.vue'
@@ -25,7 +27,11 @@ import {
 
 const { t } = useI18n()
 const auth = useAuthStore()
+const club = useClubStore()
+const route = useRoute()
+const breadcrumb = useBreadcrumbStore()
 const { isEnabled } = useFeatures()
+club.ensureLoaded()
 
 const sidebarOpen = ref(false)
 
@@ -82,6 +88,22 @@ const navGroups = computed<NavGroup[]>(() => {
     }))
     .filter((group) => group.items.length > 0)
 })
+
+// Feed the top-bar breadcrumb: the localized label of the active nav item
+// (most-specific path match), so NavBar can show "Brukarportal › <page>".
+const activePageLabel = computed(() => {
+  const path = route.path
+  let best: { to: string; label: string } | null = null
+  for (const group of navGroups.value) {
+    for (const item of group.items) {
+      const match =
+        item.to === '/portal' ? path === '/portal' || path === '/portal/' : path.startsWith(item.to)
+      if (match && (!best || item.to.length > best.to.length)) best = item
+    }
+  }
+  return best?.label ?? ''
+})
+watch(activePageLabel, (label) => breadcrumb.setPage(label), { immediate: true })
 
 function closeSidebar() {
   sidebarOpen.value = false
