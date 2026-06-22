@@ -9,6 +9,7 @@ vi.mock('lucide-vue-next', () => ({
   Radio: { template: '<span data-icon="radio" />' },
   Mail: { template: '<span data-icon="mail" />' },
   MessageCircle: { template: '<span data-icon="messagecircle" />' },
+  Map: { template: '<span data-icon="map" />' },
 }))
 
 describe('ContactView', () => {

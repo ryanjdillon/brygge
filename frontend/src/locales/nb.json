@@ -149,6 +149,10 @@
   },
   "contact": {
     "title": "Kontakt oss",
+    "eyebrow": "Ta kontakt",
+    "intro": "Spørsmål om medlemskap, båtplass eller besøk i havna? Nå rett person under, eller send oss en melding.",
+    "replyTime": "Vi svarer vanligvis innen to dager.",
+    "findMarina": "Finn havna",
     "address": "Adresse",
     "phone": "Telefon",
     "vhf": "VHF-kanal",

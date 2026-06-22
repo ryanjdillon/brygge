@@ -148,6 +148,10 @@
   },
   "contact": {
     "title": "Kontakt oss",
+    "eyebrow": "Ta kontakt",
+    "intro": "Spørsmål om medlemskap, båtplass eller besøk i hamna? Nå rett person under, eller send oss ei melding.",
+    "replyTime": "Vi svarar vanlegvis innan to dagar.",
+    "findMarina": "Finn hamna",
     "address": "Adresse",
     "phone": "Telefon",
     "vhf": "VHF-kanal",

@@ -149,6 +149,10 @@
   },
   "contact": {
     "title": "Contact Us",
+    "eyebrow": "Get in touch",
+    "intro": "Questions about membership, slips, or visiting the harbour? Reach the right person below, or send us a message.",
+    "replyTime": "We usually reply within two days.",
+    "findMarina": "Find the marina",
     "address": "Address",
     "phone": "Phone",
     "vhf": "VHF Channel",
