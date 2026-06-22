@@ -203,10 +203,14 @@ func truncate(s string, max int) string {
 
 func uploadScreenshot(dataURL, apiKey string, log zerolog.Logger) (string, error) {
 	b64 := dataURL
+	contentType := "image/png"
 	if strings.HasPrefix(dataURL, "data:") {
 		idx := strings.Index(dataURL, ",")
 		if idx < 0 {
 			return "", fmt.Errorf("invalid data URL")
+		}
+		if mime, _, ok := strings.Cut(dataURL[len("data:"):idx], ";"); ok && strings.HasPrefix(mime, "image/") {
+			contentType = mime
 		}
 		b64 = dataURL[idx+1:]
 	}
@@ -221,11 +225,11 @@ func uploadScreenshot(dataURL, apiKey string, log zerolog.Logger) (string, error
 	}
 
 	size := int64(len(imgBytes))
-	filename := "screenshot.png"
-	contentType := "image/png"
+	filename := "screenshot" + extForMime(contentType)
 
 	prepQuery := fmt.Sprintf(`mutation {
-		fileUpload(name: %s, size: %d, contentType: %s) {
+		fileUpload(filename: %s, size: %d, contentType: %s) {
+			success
 			uploadFile { uploadUrl assetUrl headers { key value } }
 		}
 	}`, jsonStr(filename), size, jsonStr(contentType))
@@ -275,6 +279,7 @@ func uploadScreenshot(dataURL, apiKey string, log zerolog.Logger) (string, error
 		return "", err
 	}
 	uploadReq.Header.Set("Content-Type", contentType)
+	uploadReq.Header.Set("Cache-Control", "public, max-age=31536000")
 	for _, hdr := range uf.Headers {
 		uploadReq.Header.Set(hdr.Key, hdr.Value)
 	}
@@ -312,4 +317,17 @@ func linearGraphQL(query, apiKey string) ([]byte, int, error) {
 func jsonStr(s string) string {
 	b, _ := json.Marshal(s)
 	return string(b)
+}
+
+func extForMime(contentType string) string {
+	switch contentType {
+	case "image/jpeg":
+		return ".jpg"
+	case "image/gif":
+		return ".gif"
+	case "image/webp":
+		return ".webp"
+	default:
+		return ".png"
+	}
 }

@@ -25,7 +25,6 @@
     "class-variance-authority": "^0.7",
     "clsx": "^2",
     "dompurify": "^3.4.8",
-    "html2canvas": "^1.4.1",
     "lucide-vue-next": "^1.0.0",
     "maplibre-gl": "^5.24.0",
     "openapi-fetch": "^0.17.0",

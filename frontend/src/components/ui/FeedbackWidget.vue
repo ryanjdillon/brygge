@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { MessageSquare, Bug, Lightbulb, Camera, X, Send, Loader2, CheckCircle, GripHorizontal } from 'lucide-vue-next'
+import { MessageSquare, Bug, Lightbulb, ImagePlus, X, Send, Loader2, CheckCircle, GripHorizontal } from 'lucide-vue-next'
 import { useApi } from '@/composables/useApi'
 import { useFeatures } from '@/composables/useFeatures'
 
@@ -15,7 +15,7 @@ const title = ref('')
 const description = ref('')
 const pageURL = ref(window.location.href)
 const screenshot = ref<string | null>(null)
-const capturing = ref(false)
+const fileInput = ref<HTMLInputElement | null>(null)
 const submitting = ref(false)
 const submitted = ref(false)
 const screenshotDropped = ref(false)
@@ -78,23 +78,36 @@ onBeforeUnmount(() => {
   document.removeEventListener('mouseup', stopResize)
 })
 
-async function captureScreenshot() {
-  capturing.value = true
-  try {
-    const html2canvas = (await import('html2canvas')).default
-    const canvas = await html2canvas(document.body, {
-      useCORS: true,
-      allowTaint: false,
-      scale: Math.min(window.devicePixelRatio, 1.5),
-      logging: false,
-      ignoreElements: (el: Element) => el.classList.contains('feedback-widget'),
-    })
-    screenshot.value = canvas.toDataURL('image/png')
-  } catch {
-    // not all pages are capturable; skip silently
-  } finally {
-    capturing.value = false
+function fileToDataURL(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(file)
+  })
+}
+
+async function setImageFile(file: File | null | undefined) {
+  if (!file || !file.type.startsWith('image/')) return
+  screenshot.value = await fileToDataURL(file)
+}
+
+async function onFileChange(e: Event) {
+  const input = e.target as HTMLInputElement
+  await setImageFile(input.files?.[0])
+  input.value = ''
+}
+
+async function onPaste(e: ClipboardEvent) {
+  const item = Array.from(e.clipboardData?.items ?? []).find((i) => i.type.startsWith('image/'))
+  if (item) {
+    e.preventDefault()
+    await setImageFile(item.getAsFile())
   }
+}
+
+async function onDrop(e: DragEvent) {
+  await setImageFile(e.dataTransfer?.files?.[0])
 }
 
 function removeScreenshot() {
@@ -150,6 +163,9 @@ async function submit() {
         :style="panelHeight ? { height: panelHeight + 'px' } : {}"
         role="dialog"
         :aria-label="t('feedback.panelLabel')"
+        @paste="onPaste"
+        @dragover.prevent
+        @drop.prevent="onDrop"
       >
         <!-- resize handle — top-right corner, drag up to expand -->
         <div class="resize-handle" @mousedown="startResize">
@@ -203,16 +219,20 @@ async function submit() {
             />
 
             <div class="screenshot-row">
-              <button
-                v-if="!screenshot"
-                class="screenshot-btn"
-                :disabled="capturing"
-                @click="captureScreenshot"
-              >
-                <Loader2 v-if="capturing" class="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-                <Camera v-else class="h-3.5 w-3.5" aria-hidden="true" />
-                {{ capturing ? t('feedback.capturing') : t('feedback.captureScreenshot') }}
-              </button>
+              <template v-if="!screenshot">
+                <button class="screenshot-btn" @click="fileInput?.click()">
+                  <ImagePlus class="h-3.5 w-3.5" aria-hidden="true" />
+                  {{ t('feedback.attachImage') }}
+                </button>
+                <span class="attach-hint">{{ t('feedback.attachHint') }}</span>
+                <input
+                  ref="fileInput"
+                  type="file"
+                  accept="image/*"
+                  class="sr-only"
+                  @change="onFileChange"
+                />
+              </template>
               <div v-else class="screenshot-preview-wrap">
                 <img :src="screenshot" class="screenshot-preview" :alt="t('feedback.screenshotAlt')" />
                 <button class="screenshot-remove" :aria-label="t('feedback.removeScreenshot')" @click="removeScreenshot">
@@ -434,6 +454,12 @@ async function submit() {
 .screenshot-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.attach-hint {
+  font-size: 0.6875rem;
+  color: #9ca3af;
+  line-height: 1.2;
 }
 
 .screenshot-preview-wrap {
