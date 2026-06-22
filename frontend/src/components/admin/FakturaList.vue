@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { FileDown, Send, Trash2, Ban, Bell, RefreshCw, Copy, Check, ChevronUp, ChevronDown, X } from 'lucide-vue-next'
 import FakturaArchiveButton from '@/components/admin/FakturaArchiveButton.vue'
@@ -49,6 +50,26 @@ const filterMember = ref('')
 const filterPriceItem = ref('')
 const filterYear = ref<number | ''>('')
 const paidStatusFilter = ref<Set<PaidStatus>>(new Set())
+
+// Seed the paid-status chips from the `pay` query param so the Økonomi
+// summary cards can deep-link into the sent list pre-filtered (e.g.
+// `?tab=sent&pay=waiting,past_due` for outstanding). Only the sent list
+// carries these chips; drafts/voided ignore a stray param.
+const route = useRoute()
+const VALID_PAID_STATUS: PaidStatus[] = ['paid', 'waiting', 'past_due']
+function applyPayQuery() {
+  if (props.status !== 'sent') {
+    paidStatusFilter.value = new Set()
+    return
+  }
+  const raw = route.query.pay
+  const tokens = (typeof raw === 'string' ? raw.split(',') : []).filter(
+    (tok): tok is PaidStatus => (VALID_PAID_STATUS as string[]).includes(tok),
+  )
+  paidStatusFilter.value = new Set(tokens)
+}
+applyPayQuery()
+watch(() => route.query.pay, applyPayQuery)
 
 function rowPaidStatus(d: Row): PaidStatus {
   if (d.paid) return 'paid'

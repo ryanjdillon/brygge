@@ -222,7 +222,10 @@ const postedCount = computed(() => entries.value?.filter(e => e.status === 'post
         <template v-else-if="priceItemSummary && priceItemSummary.items.length">
           <!-- Headline totals across all price items -->
           <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div class="rounded-lg border border-gray-200 bg-white p-5">
+            <RouterLink
+              :to="{ path: '/admin/accounting/faktura', query: { tab: 'sent' } }"
+              class="block rounded-lg border border-gray-200 bg-white p-5 transition hover:border-gray-300 hover:shadow-sm"
+            >
               <div class="flex items-center gap-2">
                 <div class="rounded-md bg-brand-50 p-1.5"><Receipt class="h-4 w-4 text-brand-600" /></div>
                 <p class="text-xs font-medium text-gray-500">{{ t('admin.financials.totalBilled') }}</p>
@@ -231,8 +234,11 @@ const postedCount = computed(() => entries.value?.filter(e => e.status === 'post
                 <p class="text-lg font-semibold text-gray-900">{{ formatNOK(priceItemSummary.totals.billed) }}</p>
                 <p class="text-xs text-gray-500 tabular-nums">{{ t('admin.financials.countSuffix', { n: totalCounts.invoiceCount }) }}</p>
               </div>
-            </div>
-            <div class="rounded-lg border border-gray-200 bg-white p-5">
+            </RouterLink>
+            <RouterLink
+              :to="{ path: '/admin/accounting/faktura', query: { tab: 'sent', pay: 'paid' } }"
+              class="block rounded-lg border border-gray-200 bg-white p-5 transition hover:border-gray-300 hover:shadow-sm"
+            >
               <div class="flex items-center gap-2">
                 <div class="rounded-md bg-green-50 p-1.5"><Banknote class="h-4 w-4 text-green-600" /></div>
                 <p class="text-xs font-medium text-gray-500">{{ t('admin.financials.totalReceived') }}</p>
@@ -241,8 +247,11 @@ const postedCount = computed(() => entries.value?.filter(e => e.status === 'post
                 <p class="text-lg font-semibold text-gray-900">{{ formatNOK(priceItemSummary.totals.received) }}</p>
                 <p class="text-xs text-gray-500 tabular-nums">{{ t('admin.financials.countSuffix', { n: totalCounts.paidCount }) }}</p>
               </div>
-            </div>
-            <div class="rounded-lg border border-gray-200 bg-white p-5">
+            </RouterLink>
+            <RouterLink
+              :to="{ path: '/admin/accounting/faktura', query: { tab: 'sent', pay: 'waiting,past_due' } }"
+              class="block rounded-lg border border-gray-200 bg-white p-5 transition hover:border-gray-300 hover:shadow-sm"
+            >
               <div class="flex items-center gap-2">
                 <div class="rounded-md bg-yellow-50 p-1.5"><Clock class="h-4 w-4 text-yellow-600" /></div>
                 <p class="text-xs font-medium text-gray-500">{{ t('admin.financials.totalOutstanding') }}</p>
@@ -251,8 +260,11 @@ const postedCount = computed(() => entries.value?.filter(e => e.status === 'post
                 <p class="text-lg font-semibold text-gray-900">{{ formatNOK(priceItemSummary.totals.outstanding) }}</p>
                 <p class="text-xs text-gray-500 tabular-nums">{{ t('admin.financials.countSuffix', { n: totalCounts.outstandingCount }) }}</p>
               </div>
-            </div>
-            <div class="rounded-lg border border-gray-200 bg-white p-5">
+            </RouterLink>
+            <RouterLink
+              :to="{ path: '/admin/accounting/faktura', query: { tab: 'sent', pay: 'past_due' } }"
+              class="block rounded-lg border border-gray-200 bg-white p-5 transition hover:border-gray-300 hover:shadow-sm"
+            >
               <div class="flex items-center gap-2">
                 <div class="rounded-md bg-red-50 p-1.5"><AlertTriangle class="h-4 w-4 text-red-600" /></div>
                 <p class="text-xs font-medium text-gray-500">{{ t('admin.financials.totalForfall') }}</p>
@@ -261,7 +273,7 @@ const postedCount = computed(() => entries.value?.filter(e => e.status === 'post
                 <p class="text-lg font-semibold text-gray-900">{{ formatNOK(priceItemSummary.totals.overdue) }}</p>
                 <p class="text-xs text-gray-500 tabular-nums">{{ t('admin.financials.countSuffix', { n: totalCounts.overdueCount }) }}</p>
               </div>
-            </div>
+            </RouterLink>
           </div>
 
           <!-- Visualizations -->
