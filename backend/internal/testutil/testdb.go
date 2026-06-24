@@ -161,6 +161,17 @@ func runMigrations(ctx context.Context, pool *pgxpool.Pool, schema string) error
 	}
 	defer conn.Exec(ctx, "SELECT pg_advisory_unlock($1)", migrationLockKey) //nolint:errcheck // best-effort; conn release drops it anyway
 
+	// pgcrypto provides public.digest(), called by migrations 000037/000038/
+	// 000042. Install it in public ONCE here, before the loop sets the
+	// per-test schema search_path — otherwise `CREATE EXTENSION IF NOT EXISTS
+	// pgcrypto` inside a migration lands the extension (and digest()) in the
+	// throwaway test schema, and the migrations' `public.digest()` calls fail
+	// with "function public.digest(...) does not exist". Serialized by the
+	// advisory lock above so parallel test schemas don't race.
+	if _, err := conn.Exec(ctx, "CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public"); err != nil {
+		return fmt.Errorf("creating pgcrypto extension: %w", err)
+	}
+
 	for _, name := range upFiles {
 		sql, err := os.ReadFile(filepath.Join(dir, name)) // #nosec G304 -- test-only, dir is hardcoded migrations path
 		if err != nil {
