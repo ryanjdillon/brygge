@@ -2247,6 +2247,11 @@
       "title": "Betaling",
       "body": "Betaling skjer via de kanalene vi tilbyr — typisk Vipps, bankoverføring med KID eller faktura. Beløp, forfall og KID-nummer fremgår av fakturaen/bestillingsbekreftelsen. Ved forsinket betaling påløper purregebyr og forsinkelsesrente etter forsinkelsesrenteloven."
     },
+    "oppsigelse": {
+      "title": "Oppsigelse og avslutning av faste betalinger",
+      "body": "Det er ingen bindingstid. Du kan når som helst si opp medlemskapet ditt eller stoppe en avtale om fast betaling/trekk. For å avslutte, ta kontakt med {club} på e-post {email}{phone}. Faste Vipps-avtaler kan du i tillegg avslutte selv i Vipps-appen under «Avtaler». Oppsigelsen gjelder fra neste betalingsperiode, og du belastes ikke på nytt etter dette. Allerede betalt kontingent refunderes normalt ikke.",
+      "phoneFragment": " eller telefon {phone}"
+    },
     "levering": {
       "title": "Levering",
       "body": "Digitale ytelser (medlemskap, plasstildelinger, gjestehavn) trer i kraft umiddelbart ved registrert betaling. Fysiske varer leveres med post eller for henting ved havnesjefens kontor etter avtale ved bestilling. Forventet leveringstid fremgår av hver enkelt vare."

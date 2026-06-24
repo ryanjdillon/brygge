@@ -7,15 +7,31 @@ const { t } = useI18n()
 const club = useClubStore()
 club.ensureLoaded()
 
-const lastUpdated = '2026-06-09'
+const lastUpdated = '2026-06-24'
 
-// Each section maps to one of the seven mandatory headings Vipps
-// requires (Parter, Betaling, Levering, Angrerett, Retur,
+// Cancellation contact for recurring payments / membership (Vipps "krav til
+// nettside" — the agreement-cancellation requirement). Prefer the treasurer
+// (kasserar), who handles dues, then chair, then the general club mailbox.
+const cancelEmail = computed(
+  () =>
+    club.treasurerEmail ||
+    club.chairmanEmail ||
+    (club.domain ? `post@${club.domain}` : 'post@klokkarvikbaatlag.no'),
+)
+// Only fold a phone clause into the sentence when a number exists, so the
+// copy stays grammatical for clubs without a listed phone.
+const cancelPhone = computed(() =>
+  club.phone ? t('salgsvilkar.oppsigelse.phoneFragment', { phone: club.phone }) : '',
+)
+
+// Each section maps to one of the mandatory headings Vipps requires
+// (Parter, Betaling, Oppseiing, Levering, Angrerett, Retur,
 // Reklamasjonshåndtering, Konfliktløsning). The body copy is the
 // seed default; per-club overrides come in a follow-up admin view.
 const sections = computed(() => [
   { id: 'parter', title: t('salgsvilkar.parter.title'), body: t('salgsvilkar.parter.body', { club: club.name || 'Klubben', orgNumber: club.orgNumber || '—' }) },
   { id: 'betaling', title: t('salgsvilkar.betaling.title'), body: t('salgsvilkar.betaling.body') },
+  { id: 'oppsigelse', title: t('salgsvilkar.oppsigelse.title'), body: t('salgsvilkar.oppsigelse.body', { club: club.name || 'klubben', email: cancelEmail.value, phone: cancelPhone.value }) },
   { id: 'levering', title: t('salgsvilkar.levering.title'), body: t('salgsvilkar.levering.body') },
   { id: 'angrerett', title: t('salgsvilkar.angrerett.title'), body: t('salgsvilkar.angrerett.body') },
   { id: 'retur', title: t('salgsvilkar.retur.title'), body: t('salgsvilkar.retur.body') },

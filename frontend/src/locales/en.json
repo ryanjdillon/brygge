@@ -2251,6 +2251,11 @@
       "title": "Payment",
       "body": "Payment is made via the channels we offer — typically Vipps, bank transfer with KID, or invoice. The amount due, payment deadline, and KID number are stated on the invoice/order confirmation. Late payment may incur reminder fees and interest in accordance with the Late Payment Interest Act (forsinkelsesrenteloven)."
     },
+    "oppsigelse": {
+      "title": "Cancellation and stopping recurring payments",
+      "body": "There is no binding period. You can cancel your membership or stop a recurring payment/charge at any time. To cancel, contact {club} by email {email}{phone}. Recurring Vipps agreements can also be cancelled yourself in the Vipps app under \"Agreements\". Cancellation takes effect from the next billing period, after which you will not be charged again. Membership fees already paid are normally not refunded.",
+      "phoneFragment": " or phone {phone}"
+    },
     "levering": {
       "title": "Delivery",
       "body": "Digital goods (memberships, berth assignments, guest harbor stays) take effect immediately upon registered payment. Physical merchandise is delivered by post or for pickup at the harbor master's hut as agreed at checkout. Expected delivery time is stated for each product."

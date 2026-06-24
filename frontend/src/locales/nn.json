@@ -2129,6 +2129,11 @@
       "title": "Betaling",
       "body": "Betaling skjer via dei kanalane vi tilbyr — typisk Vipps, bankoverføring med KID eller faktura. Beløp, forfall og KID-nummer går fram av fakturaen/bestillingsstadfestinga. Ved sein betaling påløper purregebyr og forseinkingsrente etter forseinkingsrentelova."
     },
+    "oppsigelse": {
+      "title": "Oppseiing og avslutting av faste betalingar",
+      "body": "Det er inga bindingstid. Du kan når som helst seie opp medlemskapet ditt eller stoppe ein avtale om fast betaling/trekk. For å avslutte, ta kontakt med {club} på e-post {email}{phone}. Faste Vipps-avtalar kan du i tillegg avslutte sjølv i Vipps-appen under «Avtalar». Oppseiinga tek til å gjelde frå neste betalingsperiode, og du blir ikkje belasta på nytt etter dette. Allereie betalt kontingent vert normalt ikkje refundert.",
+      "phoneFragment": " eller telefon {phone}"
+    },
     "levering": {
       "title": "Levering",
       "body": "Digitale ytingar (medlemskap, plasstildelingar, gjestehamn) trer i kraft straks etter registrert betaling. Fysiske varer vert leverte med post eller for henting ved hamnesjefens kontor etter avtale ved bestilling. Forventa leveringstid går fram av kvar einskild vare."
