@@ -179,7 +179,7 @@ func TestHandleBulkSend_DedupAndPrefersMember(t *testing.T) {
 	// being added via the case-different explicit bcc.
 	var userIDForA *string
 	if err := pool.QueryRow(ctx,
-		`SELECT user_id FROM broadcast_deliveries WHERE broadcast_id = $1 AND lower(email) = lower($2)`,
+		`SELECT user_id FROM deliveries WHERE broadcast_id = $1 AND lower(email) = lower($2)`,
 		resp.BroadcastID, emailA,
 	).Scan(&userIDForA); err != nil {
 		t.Fatalf("query userA delivery: %v", err)
@@ -191,7 +191,7 @@ func TestHandleBulkSend_DedupAndPrefersMember(t *testing.T) {
 	// The external address has no member mapping.
 	var userIDForExt *string
 	if err := pool.QueryRow(ctx,
-		`SELECT user_id FROM broadcast_deliveries WHERE broadcast_id = $1 AND email = $2`,
+		`SELECT user_id FROM deliveries WHERE broadcast_id = $1 AND email = $2`,
 		resp.BroadcastID, "ext@example.com",
 	).Scan(&userIDForExt); err != nil {
 		t.Fatalf("query ext delivery: %v", err)
@@ -237,7 +237,7 @@ func TestHandleBulkSend_ExcludesOptedOutMembers(t *testing.T) {
 
 	var gotUser, gotEmail string
 	if err := pool.QueryRow(ctx,
-		`SELECT user_id, email FROM broadcast_deliveries WHERE broadcast_id = $1`, resp.BroadcastID,
+		`SELECT user_id, email FROM deliveries WHERE broadcast_id = $1`, resp.BroadcastID,
 	).Scan(&gotUser, &gotEmail); err != nil {
 		t.Fatalf("read delivery: %v", err)
 	}

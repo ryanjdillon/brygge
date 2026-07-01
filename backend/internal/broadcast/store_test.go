@@ -67,7 +67,7 @@ func TestEnqueueWritesParentAndDeliveries(t *testing.T) {
 
 	var n, pending int
 	if err := pool.QueryRow(ctx,
-		`SELECT count(*), count(*) FILTER (WHERE status = 'pending') FROM broadcast_deliveries WHERE broadcast_id = $1`, id,
+		`SELECT count(*), count(*) FILTER (WHERE status = 'pending') FROM deliveries WHERE broadcast_id = $1`, id,
 	).Scan(&n, &pending); err != nil {
 		t.Fatalf("count deliveries: %v", err)
 	}
@@ -91,11 +91,11 @@ func TestClaimPendingFlipsToSendingAndJoinsParent(t *testing.T) {
 		t.Fatalf("claimed %d, want 2", len(claimed))
 	}
 	for _, c := range claimed {
-		if c.BroadcastID != id {
-			t.Errorf("broadcast id = %q, want %q", c.BroadcastID, id)
+		if c.Kind != broadcast.KindBroadcast {
+			t.Errorf("kind = %q, want broadcast", c.Kind)
 		}
-		if c.Subject != "AGM på lørdag" || c.SourceAddress != "kasserar@klokkarvikbaatlag.no" {
-			t.Errorf("parent join missing: %q / %q", c.Subject, c.SourceAddress)
+		if c.BroadcastID == nil || *c.BroadcastID != id {
+			t.Errorf("broadcast id = %v, want %q", c.BroadcastID, id)
 		}
 	}
 
@@ -110,7 +110,7 @@ func TestClaimPendingFlipsToSendingAndJoinsParent(t *testing.T) {
 
 	var sending int
 	if err := pool.QueryRow(ctx,
-		`SELECT count(*) FROM broadcast_deliveries WHERE broadcast_id = $1 AND status = 'sending'`, id,
+		`SELECT count(*) FROM deliveries WHERE broadcast_id = $1 AND status = 'sending'`, id,
 	).Scan(&sending); err != nil {
 		t.Fatalf("count sending: %v", err)
 	}
@@ -188,7 +188,7 @@ func TestMarkSentAndFailed(t *testing.T) {
 	}
 	got := map[string]row{}
 	rows, err := pool.Query(ctx,
-		`SELECT email, status, attempts, error, sent_at IS NOT NULL FROM broadcast_deliveries`)
+		`SELECT email, status, attempts, error, sent_at IS NOT NULL FROM deliveries`)
 	if err != nil {
 		t.Fatalf("query: %v", err)
 	}
@@ -256,7 +256,7 @@ func TestResetOrphanedSending(t *testing.T) {
 	}
 	var pending int
 	if err := pool.QueryRow(ctx,
-		`SELECT count(*) FROM broadcast_deliveries WHERE broadcast_id = $1 AND status = 'pending'`, id,
+		`SELECT count(*) FROM deliveries WHERE broadcast_id = $1 AND status = 'pending'`, id,
 	).Scan(&pending); err != nil {
 		t.Fatalf("count: %v", err)
 	}
@@ -339,7 +339,7 @@ func TestRequeueFailed(t *testing.T) {
 	var sent, pending int
 	if err := pool.QueryRow(ctx,
 		`SELECT count(*) FILTER (WHERE status='sent'), count(*) FILTER (WHERE status='pending')
-		 FROM broadcast_deliveries WHERE broadcast_id = $1`, id,
+		 FROM deliveries WHERE broadcast_id = $1`, id,
 	).Scan(&sent, &pending); err != nil {
 		t.Fatalf("count: %v", err)
 	}
@@ -354,6 +354,64 @@ func TestRequeueFailed(t *testing.T) {
 	otherClub := testutil.SeedClub(t, pool)
 	if _, err := s.RequeueFailed(ctx, otherClub, id); !errors.Is(err, pgx.ErrNoRows) {
 		t.Errorf("cross-club RequeueFailed err = %v, want ErrNoRows", err)
+	}
+}
+
+// seedInvoice inserts a minimal unpaid, already-sent invoice and returns
+// its id. Only the columns the delivery CHECK/foreign key need are set.
+func seedInvoice(t *testing.T, pool *pgxpool.Pool, clubID, kid string) string {
+	t.Helper()
+	var id string
+	if err := pool.QueryRow(context.Background(),
+		`INSERT INTO invoices (club_id, kid_number, due_date, total_amount, sent_at)
+		 VALUES ($1, $2, CURRENT_DATE, 100.00, now())
+		 RETURNING id`,
+		clubID, kid,
+	).Scan(&id); err != nil {
+		t.Fatalf("seed invoice: %v", err)
+	}
+	return id
+}
+
+func TestEnqueueInvoiceReminders(t *testing.T) {
+	s, pool, clubID, _ := newStore(t)
+	ctx := context.Background()
+	inv1 := seedInvoice(t, pool, clubID, "000000010012")
+	inv2 := seedInvoice(t, pool, clubID, "000000020010")
+
+	payload := []byte(`{"locale":"nb","clubName":"Test"}`)
+	enq, skipped, err := s.EnqueueInvoiceReminders(ctx, clubID, []broadcast.InvoiceDelivery{
+		{InvoiceID: inv1, Email: "a@example.com", Payload: payload},
+		{InvoiceID: inv2, Email: "b@example.com", Payload: payload},
+	})
+	if err != nil {
+		t.Fatalf("EnqueueInvoiceReminders: %v", err)
+	}
+	if enq != 2 || len(skipped) != 0 {
+		t.Fatalf("first enqueue = %d/%v, want 2/none", enq, skipped)
+	}
+
+	var n int
+	if err := pool.QueryRow(ctx,
+		`SELECT count(*) FROM deliveries WHERE kind = 'invoice_reminder' AND status = 'pending'`,
+	).Scan(&n); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if n != 2 {
+		t.Errorf("pending invoice deliveries = %d, want 2", n)
+	}
+
+	// Re-run: both invoices already have a pending reminder → both skipped,
+	// nothing new enqueued (idempotent, no double-send).
+	enq2, skipped2, err := s.EnqueueInvoiceReminders(ctx, clubID, []broadcast.InvoiceDelivery{
+		{InvoiceID: inv1, Email: "a@example.com", Payload: payload},
+		{InvoiceID: inv2, Email: "b@example.com", Payload: payload},
+	})
+	if err != nil {
+		t.Fatalf("EnqueueInvoiceReminders (2): %v", err)
+	}
+	if enq2 != 0 || len(skipped2) != 2 {
+		t.Errorf("second enqueue = %d/%v, want 0 enqueued / 2 skipped", enq2, skipped2)
 	}
 }
 

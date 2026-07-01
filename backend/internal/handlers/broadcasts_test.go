@@ -161,7 +161,7 @@ func TestBroadcastsRetryRequeuesFailedAndKicks(t *testing.T) {
 	var sent, pending int
 	if err := pool.QueryRow(ctx,
 		`SELECT count(*) FILTER (WHERE status='sent'), count(*) FILTER (WHERE status='pending')
-		 FROM broadcast_deliveries WHERE broadcast_id = $1`, id,
+		 FROM deliveries WHERE broadcast_id = $1`, id,
 	).Scan(&sent, &pending); err != nil {
 		t.Fatalf("count: %v", err)
 	}

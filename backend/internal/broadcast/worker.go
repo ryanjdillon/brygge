@@ -22,17 +22,26 @@ type OutgoingMessage struct {
 
 // MessageSender delivers one broadcast message as the shared mailbox
 // identified by sourceAddress. Implemented by the inbox handler
-// (sendAsPrincipal); the worker depends only on this interface so it can
-// be exercised with a fake in tests.
+// (sendAsPrincipal); wrapped by BroadcastSender so the worker depends only
+// on the generic Sender interface.
 type MessageSender interface {
 	SendBroadcast(ctx context.Context, sourceAddress string, msg OutgoingMessage) error
 }
 
-// Worker drains the broadcast delivery queue: it claims pending deliveries,
-// sends each as an individual (non-BCC) message through MessageSender,
+// Sender delivers a single claimed delivery of one kind. The worker owns
+// the generic queue mechanics (claim, throttle, retry, mark); each Sender
+// owns the kind-specific "how to actually send this row" — loading whatever
+// parent content it needs and calling the right backend (JMAP for
+// broadcasts, SMTP for invoice reminders).
+type Sender interface {
+	Send(ctx context.Context, c Claimed) error
+}
+
+// Worker drains the shared delivery queue: it claims pending deliveries of
+// any kind, dispatches each to the Sender registered for its kind,
 // throttles between sends to protect the mail backend, retries transient
-// failures up to a cap, and rolls a broadcast up to 'complete' once all of
-// its deliveries are resolved.
+// failures up to a cap, and (for broadcasts) rolls the parent up to
+// 'complete' once all of its deliveries are resolved.
 //
 // It runs on a background context (not a request context), which is the
 // fix for the old fire-and-forget truncation bug — sends no longer stop
@@ -40,7 +49,7 @@ type MessageSender interface {
 // resumes where it left off.
 type Worker struct {
 	store    *Store
-	sender   MessageSender
+	senders  map[string]Sender
 	throttle time.Duration
 	log      zerolog.Logger
 	kick     chan struct{}
@@ -53,18 +62,27 @@ type Worker struct {
 	BatchSize   int
 }
 
-// NewWorker builds a delivery worker. throttle is the pause between
-// individual sends (cfg.BulkSendThrottle).
-func NewWorker(store *Store, sender MessageSender, throttle time.Duration, log zerolog.Logger) *Worker {
+// NewWorker builds a delivery worker with no senders yet — register one per
+// kind via RegisterSender. throttle is the pause between individual sends
+// (cfg.BulkSendThrottle).
+func NewWorker(store *Store, throttle time.Duration, log zerolog.Logger) *Worker {
 	return &Worker{
 		store:       store,
-		sender:      sender,
+		senders:     make(map[string]Sender),
 		throttle:    throttle,
-		log:         log.With().Str("component", "broadcast-worker").Logger(),
+		log:         log.With().Str("component", "delivery-worker").Logger(),
 		kick:        make(chan struct{}, 1),
 		MaxAttempts: 3,
 		BatchSize:   100,
 	}
+}
+
+// RegisterSender binds a Sender to a delivery kind. Called at wiring time —
+// the broadcast sender only when the inbox/JMAP stack is up, the invoice
+// sender only when SMTP is configured — so a kind's rows are never created
+// without its sender present.
+func (w *Worker) RegisterSender(kind string, s Sender) {
+	w.senders[kind] = s
 }
 
 // Kick nudges the worker to drain now instead of waiting for the next tick.
@@ -117,13 +135,17 @@ func (w *Worker) drain(ctx context.Context) {
 			return
 		}
 
+		// Only broadcast-kind deliveries roll up a parent; collect the
+		// touched broadcast ids to finalize after the batch.
 		touched := map[string]struct{}{}
 		for _, c := range claimed {
 			if ctx.Err() != nil {
 				return
 			}
 			w.process(ctx, c)
-			touched[c.BroadcastID] = struct{}{}
+			if c.Kind == KindBroadcast && c.BroadcastID != nil {
+				touched[*c.BroadcastID] = struct{}{}
+			}
 			if !w.sleep(ctx) {
 				return
 			}
@@ -136,18 +158,21 @@ func (w *Worker) drain(ctx context.Context) {
 	}
 }
 
-// process sends a single delivery and records the outcome. A failure short
-// of the attempt cap returns the row to 'pending' for another round; at the
-// cap it becomes terminally 'failed'.
+// process dispatches a single delivery to its kind's Sender and records the
+// outcome. A failure short of the attempt cap returns the row to 'pending'
+// for another round; at the cap it becomes terminally 'failed'. A delivery
+// whose kind has no registered sender is left as-is (still 'sending') and
+// reclaimed by the next boot sweep — this shouldn't happen since a kind's
+// rows are only created when its sender exists.
 func (w *Worker) process(ctx context.Context, c Claimed) {
-	err := w.sender.SendBroadcast(ctx, c.SourceAddress, OutgoingMessage{
-		To:              c.Email,
-		Subject:         c.Subject,
-		BodyText:        c.BodyText,
-		BodyHTML:        c.BodyHTML,
-		AttachBodyParts: c.Attachments,
-		UserID:          c.UserID,
-	})
+	s, ok := w.senders[c.Kind]
+	if !ok {
+		w.log.Warn().Str("kind", c.Kind).Str("delivery", c.DeliveryID).
+			Msg("no sender registered for kind; leaving delivery unclaimed")
+		return
+	}
+
+	err := s.Send(ctx, c)
 	if err == nil {
 		if merr := w.store.Mark(ctx, c.DeliveryID, DeliverySent, ""); merr != nil {
 			w.log.Error().Err(merr).Str("delivery", c.DeliveryID).Msg("mark sent failed")
@@ -163,7 +188,7 @@ func (w *Worker) process(ctx context.Context, c Claimed) {
 	if merr := w.store.Mark(ctx, c.DeliveryID, next, err.Error()); merr != nil {
 		w.log.Error().Err(merr).Str("delivery", c.DeliveryID).Msg("mark failed")
 	}
-	w.log.Warn().Err(err).Str("to", c.Email).Str("broadcast_id", c.BroadcastID).
+	w.log.Warn().Err(err).Str("kind", c.Kind).Str("to", c.Email).
 		Str("next", next).Int("attempt", c.Attempts+1).Msg("delivery attempt failed")
 }
 

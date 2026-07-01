@@ -15,6 +15,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/brygge-klubb/brygge/internal/audit"
+	bcast "github.com/brygge-klubb/brygge/internal/broadcast"
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/email"
 	"github.com/brygge-klubb/brygge/internal/finance"
@@ -30,11 +31,15 @@ type InvoiceHandler struct {
 	s3Legal *storage.Client
 	log     zerolog.Logger
 
-	// In-process queue for async bulk-reminder sends. Buffer of 1000
-	// is generous for the operator-triggered batch shape (typically
-	// ≤100 rows). Drained by a single goroutine started in
-	// NewInvoiceHandler; not persisted across API restarts.
-	reminderQueue chan reminderJob
+	// deliveries is the shared durable delivery queue (broadcasts +
+	// invoice reminders). Bulk-reminder sends enqueue 'invoice_reminder'
+	// rows here instead of an in-process channel, so a restart resumes the
+	// batch and each send is throttled/retried by the delivery worker.
+	// kickDelivery nudges that worker to drain immediately after an enqueue.
+	// Both are nil until SetDeliveryQueue is called (only when SMTP is
+	// configured); the bulk handler returns 503 otherwise.
+	deliveries   *bcast.Store
+	kickDelivery func()
 }
 
 func NewInvoiceHandler(
@@ -45,17 +50,22 @@ func NewInvoiceHandler(
 	s3Legal *storage.Client,
 	log zerolog.Logger,
 ) *InvoiceHandler {
-	h := &InvoiceHandler{
-		db:            db,
-		config:        cfg,
-		email:         emailClient,
-		audit:         auditService,
-		s3Legal:       s3Legal,
-		log:           log.With().Str("handler", "invoices").Logger(),
-		reminderQueue: make(chan reminderJob, 1000),
+	return &InvoiceHandler{
+		db:      db,
+		config:  cfg,
+		email:   emailClient,
+		audit:   auditService,
+		s3Legal: s3Legal,
+		log:     log.With().Str("handler", "invoices").Logger(),
 	}
-	h.startReminderWorker()
-	return h
+}
+
+// SetDeliveryQueue wires the shared delivery store and worker-kick so
+// bulk-reminder sends enqueue durably. Called at startup only when SMTP is
+// configured (the invoice reminder Sender is registered on the same worker).
+func (h *InvoiceHandler) SetDeliveryQueue(store *bcast.Store, kick func()) {
+	h.deliveries = store
+	h.kickDelivery = kick
 }
 
 type createInvoiceFullRequest struct {

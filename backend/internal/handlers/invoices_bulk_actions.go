@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/brygge-klubb/brygge/internal/audit"
+	bcast "github.com/brygge-klubb/brygge/internal/broadcast"
 	"github.com/brygge-klubb/brygge/internal/email"
 	"github.com/brygge-klubb/brygge/internal/finance"
 	"github.com/brygge-klubb/brygge/internal/middleware"
@@ -29,19 +30,20 @@ type bulkInvoiceResult struct {
 }
 
 // HandleBulkSendReminder validates each supplied invoice and enqueues
-// a reminder send for the eligible ones. Eligible = was originally
-// sent (sent_at IS NOT NULL), still unpaid (payment_id IS NULL), has a
-// recipient email and stored PDF. The actual SMTP submission happens
-// asynchronously in the worker started by NewInvoiceHandler — one
-// send at a time, throttled by cfg.BulkSendThrottle (default 1s)
-// — so this handler can return immediately and the HTTP request
-// doesn't run into the response timeout on large batches.
+// a reminder send for the eligible ones onto the durable delivery queue.
+// Eligible = was originally sent (sent_at IS NOT NULL), still unpaid
+// (payment_id IS NULL), has a recipient email and stored PDF. The actual
+// SMTP submission happens asynchronously in the shared delivery worker —
+// one send at a time, throttled by cfg.BulkSendThrottle (default 1s) — so
+// this handler returns immediately and large batches don't hit the
+// response timeout. Because the queue is a table (kind='invoice_reminder'
+// rows in `deliveries`), a restart mid-batch resumes instead of dropping
+// the tail, and each send is retried on transient failure.
 //
-// Operator-visible progress: each successful async send writes an
+// Operator-visible progress: each successful send writes an
 // `invoice.reminded` audit row, which the Sent tab's "Sist purring"
-// column reflects. Operators see rows tick forward as the worker
-// drains. See DIL-364 and DIL-387's follow-up ticket for the queue
-// design.
+// column reflects. Operators see rows tick forward as the worker drains.
+// See DIL-364 and BRY-11 for the shared-queue design.
 func (h *InvoiceHandler) HandleBulkSendReminder(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
@@ -49,7 +51,7 @@ func (h *InvoiceHandler) HandleBulkSendReminder(w http.ResponseWriter, r *http.R
 		Error(w, http.StatusUnauthorized, "authentication required")
 		return
 	}
-	if h.email == nil {
+	if h.email == nil || h.deliveries == nil {
 		Error(w, http.StatusServiceUnavailable, "email delivery not configured")
 		return
 	}
@@ -107,7 +109,23 @@ func (h *InvoiceHandler) HandleBulkSendReminder(w http.ResponseWriter, r *http.R
 		seen[p.id] = p
 	}
 
+	// The send context is club/actor/request-scoped, not per-invoice, so
+	// every row in this batch carries the same JSONB payload.
+	payload, err := json.Marshal(invoiceReminderPayload{
+		Locale:      locale,
+		ClubName:    clubName,
+		DefaultBank: defaultBank,
+		ActorID:     claims.UserID,
+		RemoteAddr:  r.RemoteAddr,
+	})
+	if err != nil {
+		h.log.Error().Err(err).Msg("marshal reminder payload")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
 	res := bulkInvoiceResult{}
+	items := make([]bcast.InvoiceDelivery, 0, len(req.IDs))
 	for _, id := range req.IDs {
 		p, ok := seen[id]
 		if !ok {
@@ -126,27 +144,40 @@ func (h *InvoiceHandler) HandleBulkSendReminder(w http.ResponseWriter, r *http.R
 			res.Failures = append(res.Failures, id+": invoice has no stored PDF")
 			continue
 		}
-		job := reminderJob{
-			clubID:      claims.ClubID,
-			actorID:     claims.UserID,
-			remoteAddr:  r.RemoteAddr,
-			invoiceID:   id,
-			clubName:    clubName,
-			defaultBank: defaultBank,
-			locale:      locale,
-		}
-		select {
-		case h.reminderQueue <- job:
-			res.Processed++
-		default:
-			res.Failures = append(res.Failures, id+": reminder queue full")
-			h.log.Warn().Str("invoice_id", id).Msg("reminder queue full — dropping")
-		}
+		items = append(items, bcast.InvoiceDelivery{
+			InvoiceID: id,
+			Email:     p.recipient,
+			Payload:   payload,
+		})
+	}
+
+	// Enqueue eligible reminders onto the durable delivery queue. The store
+	// skips any invoice that already has a non-failed reminder queued so a
+	// re-run (or double click) can't double-send; those surface as
+	// "already queued" so the operator sees why they weren't re-sent. The
+	// worker then drains each row throttled/retried, surviving restarts.
+	enqueued, alreadyQueued, err := h.deliveries.EnqueueInvoiceReminders(ctx, claims.ClubID, items)
+	if err != nil {
+		h.log.Error().Err(err).Msg("enqueue invoice reminders")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	res.Processed = enqueued
+	for _, id := range alreadyQueued {
+		res.Failures = append(res.Failures, id+": already queued")
+	}
+	if enqueued > 0 && h.kickDelivery != nil {
+		h.kickDelivery()
 	}
 	JSON(w, http.StatusOK, res)
 }
 
 var errSkip = errors.New("skip")
+
+// errInvoiceNotFound is returned by sendOneReminder when the invoice row is
+// gone (deleted between enqueue and send). The reminder Sender treats it as
+// a terminal no-op rather than retrying.
+var errInvoiceNotFound = errors.New("invoice not found")
 
 func (h *InvoiceHandler) sendOneReminder(
 	ctx context.Context, clubID, actorID, remoteAddr, invoiceID, clubName, defaultBank, locale string,
@@ -181,7 +212,7 @@ func (h *InvoiceHandler) sendOneReminder(
 		&dueDate, &total, &kid, &pdfData, &sentAt, &paymentID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return errors.New("not found")
+			return errInvoiceNotFound
 		}
 		return err
 	}

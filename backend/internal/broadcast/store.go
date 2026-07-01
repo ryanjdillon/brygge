@@ -1,7 +1,11 @@
-// Package broadcast holds the persistence layer for bulk member sends:
-// a parent broadcast row plus one delivery row per recipient that the
-// background worker drains. It is shared by the inbox send path (which
-// enqueues) and the delivery worker (which claims and marks rows).
+// Package broadcast holds the persistence layer for the shared bulk-send
+// delivery queue: one row per recipient in the `deliveries` table that a
+// background worker drains, throttled and retried. It is shared by two
+// producers keyed on a delivery `kind`: broadcasts (a parent `broadcasts`
+// row fanned out to members) and invoice reminders (each pointing at an
+// `invoices` row with a per-row JSONB payload). Despite the package name,
+// the store and worker are kind-agnostic; the broadcast surface just
+// happens to be the original tenant.
 package broadcast
 
 import (
@@ -22,13 +26,19 @@ const (
 	DeliveryFailed  = "failed"
 )
 
+// Delivery kinds — the discriminator the worker dispatches on.
+const (
+	KindBroadcast       = "broadcast"
+	KindInvoiceReminder = "invoice_reminder"
+)
+
 // Broadcast (parent) statuses.
 const (
 	BroadcastPending  = "pending"
 	BroadcastComplete = "complete"
 )
 
-// Store wraps the pool with broadcast/delivery queries.
+// Store wraps the pool with delivery-queue queries.
 type Store struct {
 	db *pgxpool.Pool
 }
@@ -60,8 +70,9 @@ type Recipient struct {
 	Email  string
 }
 
-// Enqueue inserts the parent broadcast plus one pending delivery per
-// recipient in a single transaction and returns the broadcast id.
+// Enqueue inserts the parent broadcast plus one pending broadcast-kind
+// delivery per recipient in a single transaction and returns the
+// broadcast id.
 func (s *Store) Enqueue(ctx context.Context, n New, recipients []Recipient) (string, error) {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
@@ -90,9 +101,9 @@ func (s *Store) Enqueue(ctx context.Context, n New, recipients []Recipient) (str
 	batch := &pgx.Batch{}
 	for _, r := range recipients {
 		batch.Queue(`
-			INSERT INTO broadcast_deliveries (broadcast_id, club_id, user_id, email, status)
-			VALUES ($1, $2, $3, $4, $5)`,
-			id, n.ClubID, r.UserID, r.Email, DeliveryPending)
+			INSERT INTO deliveries (kind, broadcast_id, club_id, user_id, email, status)
+			VALUES ($1, $2, $3, $4, $5, $6)`,
+			KindBroadcast, id, n.ClubID, r.UserID, r.Email, DeliveryPending)
 	}
 	br := tx.SendBatch(ctx, batch)
 	for range recipients {
@@ -111,47 +122,87 @@ func (s *Store) Enqueue(ctx context.Context, n New, recipients []Recipient) (str
 	return id, nil
 }
 
-// Claimed is a pending delivery joined with the parent fields the worker
-// needs to actually send the message.
-type Claimed struct {
-	DeliveryID    string
-	BroadcastID   string
-	ClubID        string
-	SourceAddress string
-	Subject       string
-	BodyText      string
-	BodyHTML      string
-	Email         string
-	Attempts      int
-	Attachments   []map[string]any
-	// UserID is the recipient's member id, nil for ad-hoc addresses.
-	// Used to build a per-recipient unsubscribe token.
-	UserID *string
+// InvoiceDelivery is one invoice-reminder row to enqueue. Payload carries
+// the send context (locale, club name, actor, ...) the worker needs once
+// the originating request is gone; it is opaque to the store.
+type InvoiceDelivery struct {
+	InvoiceID string
+	Email     string
+	UserID    *string
+	Payload   json.RawMessage
 }
 
-// ClaimPending atomically claims up to limit pending deliveries, flipping
-// them to 'sending' so a concurrent worker can't grab the same rows
-// (FOR UPDATE SKIP LOCKED), and returns them joined with their parent.
+// EnqueueInvoiceReminders inserts one pending 'invoice_reminder' delivery
+// per item. It is idempotent per invoice: an invoice that already has a
+// non-failed reminder delivery is skipped so a re-run (or a double click)
+// can't double-send. Returns the count enqueued and the invoice ids that
+// were skipped because a reminder was already queued/sent.
+func (s *Store) EnqueueInvoiceReminders(ctx context.Context, clubID string, items []InvoiceDelivery) (enqueued int, skipped []string, err error) {
+	for _, it := range items {
+		tag, xerr := s.db.Exec(ctx, `
+			INSERT INTO deliveries (kind, invoice_id, club_id, user_id, email, status, payload)
+			SELECT $1, $2, $3, $4, $5, $6, $7
+			WHERE NOT EXISTS (
+				SELECT 1 FROM deliveries
+				WHERE invoice_id = $2 AND kind = $1
+				  AND status IN ($8, $9, $10)
+			)`,
+			KindInvoiceReminder, it.InvoiceID, clubID, it.UserID, it.Email, DeliveryPending, it.Payload,
+			DeliveryPending, DeliverySending, DeliverySent,
+		)
+		if xerr != nil {
+			return enqueued, skipped, fmt.Errorf("insert reminder delivery: %w", xerr)
+		}
+		if tag.RowsAffected() == 1 {
+			enqueued++
+		} else {
+			skipped = append(skipped, it.InvoiceID)
+		}
+	}
+	return enqueued, skipped, nil
+}
+
+// Claimed is one pending delivery flipped to 'sending'. It carries only the
+// generic queue fields plus the kind-specific parent ids and payload; the
+// per-kind Sender loads whatever else it needs (broadcast content, invoice
+// row) itself.
+type Claimed struct {
+	DeliveryID string
+	Kind       string
+	ClubID     string
+	Email      string
+	Attempts   int
+	// UserID is the recipient's member id, nil for ad-hoc addresses.
+	UserID *string
+	// Exactly one parent id is set per kind (enforced by a CHECK).
+	BroadcastID *string
+	InvoiceID   *string
+	// Payload is the opaque per-row JSONB (invoice reminders use it; nil for
+	// broadcasts).
+	Payload json.RawMessage
+}
+
+// ClaimPending atomically claims up to limit pending deliveries of ANY
+// kind, flipping them to 'sending' so a concurrent worker can't grab the
+// same rows (FOR UPDATE SKIP LOCKED).
 func (s *Store) ClaimPending(ctx context.Context, limit int) ([]Claimed, error) {
 	rows, err := s.db.Query(ctx, `
 		WITH claimed AS (
 			SELECT id
-			FROM broadcast_deliveries
+			FROM deliveries
 			WHERE status = $1
 			ORDER BY created_at
 			LIMIT $2
 			FOR UPDATE SKIP LOCKED
 		), upd AS (
-			UPDATE broadcast_deliveries bd
+			UPDATE deliveries d
 			SET status = $3, updated_at = now()
 			FROM claimed
-			WHERE bd.id = claimed.id
-			RETURNING bd.id, bd.broadcast_id, bd.club_id, bd.user_id, bd.email, bd.attempts
+			WHERE d.id = claimed.id
+			RETURNING d.id, d.kind, d.broadcast_id, d.invoice_id, d.club_id, d.user_id, d.email, d.attempts, d.payload
 		)
-		SELECT upd.id, upd.broadcast_id, upd.club_id, upd.user_id, upd.email, upd.attempts,
-		       COALESCE(b.source_address, ''), b.subject, b.body, COALESCE(b.body_html, ''), b.attachments
-		FROM upd
-		JOIN broadcasts b ON b.id = upd.broadcast_id`,
+		SELECT id, kind, broadcast_id, invoice_id, club_id, user_id, email, attempts, payload
+		FROM upd`,
 		DeliveryPending, limit, DeliverySending,
 	)
 	if err != nil {
@@ -162,19 +213,47 @@ func (s *Store) ClaimPending(ctx context.Context, limit int) ([]Claimed, error) 
 	var out []Claimed
 	for rows.Next() {
 		var c Claimed
-		var attachmentsJSON []byte
-		if err := rows.Scan(&c.DeliveryID, &c.BroadcastID, &c.ClubID, &c.UserID, &c.Email, &c.Attempts,
-			&c.SourceAddress, &c.Subject, &c.BodyText, &c.BodyHTML, &attachmentsJSON); err != nil {
+		var payload []byte
+		if err := rows.Scan(&c.DeliveryID, &c.Kind, &c.BroadcastID, &c.InvoiceID,
+			&c.ClubID, &c.UserID, &c.Email, &c.Attempts, &payload); err != nil {
 			return nil, fmt.Errorf("scan claimed: %w", err)
 		}
-		if len(attachmentsJSON) > 0 {
-			if err := json.Unmarshal(attachmentsJSON, &c.Attachments); err != nil {
-				return nil, fmt.Errorf("unmarshal attachments: %w", err)
-			}
-		}
+		c.Payload = payload
 		out = append(out, c)
 	}
 	return out, rows.Err()
+}
+
+// BroadcastContent is the parent-broadcast content a broadcast-kind
+// delivery renders into an outgoing message.
+type BroadcastContent struct {
+	SourceAddress string
+	Subject       string
+	BodyText      string
+	BodyHTML      string
+	Attachments   []map[string]any
+}
+
+// LoadBroadcastContent fetches the parent broadcast's send content. The
+// broadcast Sender calls this per delivery instead of the old ClaimPending
+// JOIN (which no longer applies now that invoice rows have no parent).
+func (s *Store) LoadBroadcastContent(ctx context.Context, broadcastID string) (BroadcastContent, error) {
+	var bc BroadcastContent
+	var attachmentsJSON []byte
+	err := s.db.QueryRow(ctx, `
+		SELECT COALESCE(source_address, ''), subject, body, COALESCE(body_html, ''), attachments
+		FROM broadcasts WHERE id = $1`,
+		broadcastID,
+	).Scan(&bc.SourceAddress, &bc.Subject, &bc.BodyText, &bc.BodyHTML, &attachmentsJSON)
+	if err != nil {
+		return bc, fmt.Errorf("load broadcast content: %w", err)
+	}
+	if len(attachmentsJSON) > 0 {
+		if err := json.Unmarshal(attachmentsJSON, &bc.Attachments); err != nil {
+			return bc, fmt.Errorf("unmarshal attachments: %w", err)
+		}
+	}
+	return bc, nil
 }
 
 // Mark records the outcome of a delivery attempt. status is one of
@@ -183,7 +262,7 @@ func (s *Store) ClaimPending(ctx context.Context, limit int) ([]Claimed, error) 
 // stamped only on success.
 func (s *Store) Mark(ctx context.Context, deliveryID, status, errMsg string) error {
 	_, err := s.db.Exec(ctx, `
-		UPDATE broadcast_deliveries
+		UPDATE deliveries
 		SET status = $2,
 		    attempts = attempts + 1,
 		    error = $3,
@@ -198,8 +277,10 @@ func (s *Store) Mark(ctx context.Context, deliveryID, status, errMsg string) err
 	return nil
 }
 
-// FinalizeIfDone flips the parent to 'complete' once no delivery remains
-// pending or sending. Per-recipient failures stay visible on their rows.
+// FinalizeIfDone flips the parent broadcast to 'complete' once no delivery
+// remains pending or sending. Broadcast-specific; the worker calls it only
+// for broadcast-kind deliveries. Per-recipient failures stay visible on
+// their rows.
 func (s *Store) FinalizeIfDone(ctx context.Context, broadcastID string) error {
 	_, err := s.db.Exec(ctx, `
 		UPDATE broadcasts b
@@ -207,7 +288,7 @@ func (s *Store) FinalizeIfDone(ctx context.Context, broadcastID string) error {
 		WHERE b.id = $1
 		  AND b.status <> $2
 		  AND NOT EXISTS (
-		      SELECT 1 FROM broadcast_deliveries d
+		      SELECT 1 FROM deliveries d
 		      WHERE d.broadcast_id = b.id AND d.status IN ($3, $4)
 		  )`,
 		broadcastID, BroadcastComplete, DeliveryPending, DeliverySending,
@@ -219,10 +300,11 @@ func (s *Store) FinalizeIfDone(ctx context.Context, broadcastID string) error {
 }
 
 // ResetOrphanedSending returns any rows stuck in 'sending' (a worker died
-// mid-flight) back to 'pending' so they get reclaimed. Returns the count.
+// mid-flight) back to 'pending' so they get reclaimed. Kind-agnostic.
+// Returns the count.
 func (s *Store) ResetOrphanedSending(ctx context.Context) (int64, error) {
 	tag, err := s.db.Exec(ctx, `
-		UPDATE broadcast_deliveries
+		UPDATE deliveries
 		SET status = $1, updated_at = now()
 		WHERE status = $2`,
 		DeliveryPending, DeliverySending,
@@ -249,6 +331,8 @@ type Summary struct {
 }
 
 // List returns the club's broadcasts newest-first with delivery counts.
+// The join is broadcast-scoped (invoice-kind rows have no broadcast parent
+// and are filtered out explicitly) so they never leak into the history UI.
 func (s *Store) List(ctx context.Context, clubID string) ([]Summary, error) {
 	rows, err := s.db.Query(ctx, `
 		SELECT b.id, b.subject, b.recipients, COALESCE(b.source_address, ''), b.status,
@@ -258,7 +342,7 @@ func (s *Store) List(ctx context.Context, clubID string) ([]Summary, error) {
 		       COUNT(*) FILTER (WHERE d.status IN ($4, $5)) AS pending,
 		       b.sent_at, b.created_at
 		FROM broadcasts b
-		LEFT JOIN broadcast_deliveries d ON d.broadcast_id = b.id
+		LEFT JOIN deliveries d ON d.broadcast_id = b.id AND d.kind = 'broadcast'
 		WHERE b.club_id = $1
 		GROUP BY b.id
 		ORDER BY b.created_at DESC`,
@@ -312,7 +396,7 @@ func (s *Store) Get(ctx context.Context, clubID, id string) (*Detail, error) {
 		       COUNT(*) FILTER (WHERE dd.status IN ($5, $6)) AS pending,
 		       b.sent_at, b.created_at
 		FROM broadcasts b
-		LEFT JOIN broadcast_deliveries dd ON dd.broadcast_id = b.id
+		LEFT JOIN deliveries dd ON dd.broadcast_id = b.id AND dd.kind = 'broadcast'
 		WHERE b.id = $1 AND b.club_id = $2
 		GROUP BY b.id`,
 		id, clubID, DeliverySent, DeliveryFailed, DeliveryPending, DeliverySending,
@@ -325,8 +409,8 @@ func (s *Store) Get(ctx context.Context, clubID, id string) (*Detail, error) {
 
 	rows, err := s.db.Query(ctx, `
 		SELECT id, email, status, attempts, error, sent_at
-		FROM broadcast_deliveries
-		WHERE broadcast_id = $1
+		FROM deliveries
+		WHERE broadcast_id = $1 AND kind = 'broadcast'
 		ORDER BY email`,
 		id,
 	)
@@ -369,9 +453,9 @@ func (s *Store) RequeueFailed(ctx context.Context, clubID, id string) (int64, er
 	}
 
 	tag, err := tx.Exec(ctx, `
-		UPDATE broadcast_deliveries
+		UPDATE deliveries
 		SET status = $2, error = '', updated_at = now()
-		WHERE broadcast_id = $1 AND status = $3`,
+		WHERE broadcast_id = $1 AND kind = 'broadcast' AND status = $3`,
 		id, DeliveryPending, DeliveryFailed,
 	)
 	if err != nil {

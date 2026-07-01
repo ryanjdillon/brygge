@@ -172,9 +172,13 @@ func main() {
 	// Shared-inbox ACL reconciler (DIL-275/276). Nil when Stalwart
 	// admin creds aren't configured — feature is fully optional.
 	var inboxReconciler *mail.Reconciler
-	// Broadcast delivery worker (BRY-164). Created alongside the inbox
-	// handler when the mail stack is configured; started below.
-	var broadcastWorker *broadcast.Worker
+	// Shared delivery worker (BRY-164 broadcasts + BRY-11 invoice
+	// reminders): one durable, throttled, retried queue drained by a
+	// per-kind Sender registry. Created when SMTP and/or the inbox stack is
+	// up; the invoice sender is registered when SMTP is configured, the
+	// broadcast sender when the inbox/JMAP stack is up. Started below.
+	deliveryStore := broadcast.NewStore(db)
+	var deliveryWorker *broadcast.Worker
 	if cfg.StalwartAdminURL != "" && cfg.BoardMailboxesPath != "" {
 		spec, err := mail.LoadSpec(cfg.BoardMailboxesPath)
 		if err != nil {
@@ -235,8 +239,8 @@ func main() {
 	// lazy closure because broadcastWorker is assigned later, when the
 	// inbox/mail stack is wired; by the time a retry fires at runtime it's set.
 	broadcastsHandler := handlers.NewBroadcastsHandler(db, func() {
-		if broadcastWorker != nil {
-			broadcastWorker.Kick()
+		if deliveryWorker != nil {
+			deliveryWorker.Kick()
 		}
 	}, log)
 	emailPrefsHandler := handlers.NewEmailPrefsHandler(db, &cfg, log)
@@ -244,6 +248,16 @@ func main() {
 	featureRequestsHandler := handlers.NewFeatureRequestsHandler(db, &cfg, log)
 	financialsHandler := handlers.NewFinancialsHandler(db, &cfg, auditService, log)
 	invoiceHandler := handlers.NewInvoiceHandler(db, &cfg, emailClient, auditService, s3LegalClient, log)
+	// Invoice reminders reuse the shared delivery queue whenever SMTP is
+	// configured — independent of the inbox/JMAP stack, which may be absent
+	// (e.g. all of local dev). Create the worker here and register the
+	// invoice-reminder Sender; the broadcast Sender is added later inside
+	// the inbox block when that stack is present.
+	if emailClient != nil {
+		deliveryWorker = broadcast.NewWorker(deliveryStore, cfg.BulkSendThrottle, log)
+		deliveryWorker.RegisterSender(broadcast.KindInvoiceReminder, handlers.NewInvoiceReminderSender(invoiceHandler))
+		invoiceHandler.SetDeliveryQueue(deliveryStore, deliveryWorker.Kick)
+	}
 	accountingSvc := accounting.NewService(db, auditService, log)
 	accountingHandler := handlers.NewAccountingHandler(accountingSvc, auditService, s3LegalClient, claudeClient, log)
 	bankRowsHandler := handlers.NewBankRowsHandler(accountingSvc, auditService, log)
@@ -875,8 +889,15 @@ func main() {
 					// recipient individually through the same principal
 					// send path. The kick lets an enqueue start delivery
 					// immediately instead of waiting for the next tick.
-					broadcastWorker = broadcast.NewWorker(broadcast.NewStore(db), inboxHandler, cfg.BulkSendThrottle, log)
-					inboxHandler.SetBroadcastKick(broadcastWorker.Kick)
+					// The delivery worker may already exist (SMTP up); if
+					// not (JMAP configured without SMTP), create it now so
+					// broadcasts still drain. Register the broadcast Sender
+					// and let an enqueue kick delivery immediately.
+					if deliveryWorker == nil {
+						deliveryWorker = broadcast.NewWorker(deliveryStore, cfg.BulkSendThrottle, log)
+					}
+					deliveryWorker.RegisterSender(broadcast.KindBroadcast, broadcast.NewBroadcastSender(deliveryStore, inboxHandler))
+					inboxHandler.SetBroadcastKick(deliveryWorker.Kick)
 					r.Route("/inbox", func(r chi.Router) {
 						// Read-only surface gated on having ANY board-mailbox
 						// role; the per-address check (matching the spec's
@@ -1262,12 +1283,13 @@ func main() {
 		}()
 	}
 
-	// Broadcast delivery worker (BRY-164): drains the bulk-send queue on a
-	// background context (survives request lifecycles and restarts). The
-	// boot sweep inside Run re-claims any deliveries orphaned by a crash;
-	// the ticker is a safety net behind the per-enqueue kick.
-	if broadcastWorker != nil {
-		go broadcastWorker.Run(ctx, time.Minute)
+	// Shared delivery worker (broadcasts + invoice reminders): drains the
+	// queue on a background context (survives request lifecycles and
+	// restarts). The boot sweep inside Run re-claims any deliveries orphaned
+	// by a crash; the ticker is a safety net behind the per-enqueue kick.
+	// Present whenever SMTP and/or the inbox stack is configured.
+	if deliveryWorker != nil {
+		go deliveryWorker.Run(ctx, time.Minute)
 	}
 
 	// Hourly background sweep of expired sessions. Cookies expire on the
