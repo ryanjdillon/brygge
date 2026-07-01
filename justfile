@@ -123,6 +123,10 @@ seed:
 totp:
     cd backend && go run ./cmd/totp
 
+# Verify the configured Vipps credentials authenticate against the Access Token API
+vipps-verify:
+    cd backend && go run ./cmd/vipps-verify
+
 # Build Go binary with embedded Vue dist
 build: build-frontend
     cp -r frontend/dist/* backend/internal/web/dist/
