@@ -98,14 +98,22 @@ func seedInvoices(ctx context.Context, db *pgxpool.Pool, clubID string, userIDs 
 		}
 		kid := fmt.Sprintf("%010d", 2026_000_001+i)
 
+		// Sent invoices carry a placeholder PDF blob so the reminder
+		// ("purring") path — which requires a stored PDF — is testable in
+		// dev without wiring the real PDF generator into the seed.
+		var pdfData []byte
+		if sentAt != nil {
+			pdfData = []byte("%PDF-1.4\n% brygge seed placeholder\n")
+		}
+
 		var invoiceID string
 		err := db.QueryRow(ctx, `
 			INSERT INTO invoices (club_id, user_id, kid_number, issue_date, due_date,
-			                      total_amount, status, sent_at, price_item_id, fiscal_period_id)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			                      total_amount, status, sent_at, price_item_id, fiscal_period_id, pdf_data)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 			RETURNING id
 		`, clubID, userID, kid, issue, due, s.amount, status, sentAt,
-			priceItemID(s.priceItem), fiscalPeriodID).Scan(&invoiceID)
+			priceItemID(s.priceItem), fiscalPeriodID, pdfData).Scan(&invoiceID)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "  failed to create invoice for %s: %v\n", s.email, err)
 			continue
