@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { X } from 'lucide-vue-next'
@@ -10,27 +11,40 @@ import type { NavGroup } from './navTypes'
 // every link click so a parent can intercept it (e.g. the admin TOTP gate)
 // before the route changes. The club brand (logo + name) lives in the top
 // bar, not here.
-defineProps<{
-  title: string
-  groups: NavGroup[]
-  ariaLabel: string
-}>()
-
 const emit = defineEmits<{
   (e: 'navigate', event: MouseEvent, to: string): void
   (e: 'close'): void
 }>()
 
+const props = defineProps<{
+  title: string
+  groups: NavGroup[]
+  ariaLabel: string
+}>()
+
 const route = useRoute()
 const { t } = useI18n()
 
-function isActive(to: string): boolean {
-  // Exact match for the portal/admin roots so they don't stay
-  // highlighted on every nested route.
-  if (to === '/portal' || to === '/admin') {
-    return route.path === to || route.path === `${to}/`
+// Only the most specific (longest matching `to`) nav item is highlighted,
+// so a parent route like /admin/accounting doesn't stay lit up while a
+// nested route like /admin/accounting/faktura is the actual active page.
+const activeTo = computed(() => {
+  const path = route.path
+  let best: string | null = null
+  for (const group of props.groups) {
+    for (const item of group.items) {
+      const match =
+        item.to === '/portal' || item.to === '/admin'
+          ? path === item.to || path === `${item.to}/`
+          : path.startsWith(item.to)
+      if (match && (!best || item.to.length > best.length)) best = item.to
+    }
   }
-  return route.path.startsWith(to)
+  return best
+})
+
+function isActive(to: string): boolean {
+  return to === activeTo.value
 }
 </script>
 
