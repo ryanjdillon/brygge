@@ -48,6 +48,54 @@ func New(baseURL, clientID, clientSecret, subscriptionKey, msn string, log zerol
 // MSN returns the Merchant Serial Number for this client.
 func (c *Client) MSN() string { return c.msn }
 
+// VerifyResult summarises a successful Access Token API handshake without
+// exposing the bearer token itself. Returned by Verify for operator
+// credential checks and structured logging.
+type VerifyResult struct {
+	BaseURL     string
+	MSN         string
+	TokenMasked string
+	ExpiresAt   time.Time
+}
+
+// Verify performs an end-to-end Access Token API handshake with the
+// configured credentials and returns a non-sensitive summary of the
+// result. It bypasses the token cache so each call exercises the live
+// credential path — intended for the cmd/vipps-verify operator check, not
+// the hot path. A nil error means client_id/client_secret/subscription-key/
+// MSN are all accepted by Vipps for this environment.
+func (c *Client) Verify(ctx context.Context) (VerifyResult, error) {
+	c.mu.Lock()
+	c.tokenValue = ""
+	c.tokenExpiry = time.Time{}
+	c.mu.Unlock()
+
+	token, err := c.accessToken(ctx)
+	if err != nil {
+		return VerifyResult{BaseURL: c.baseURL, MSN: c.msn}, err
+	}
+
+	c.mu.Lock()
+	expiry := c.tokenExpiry
+	c.mu.Unlock()
+
+	return VerifyResult{
+		BaseURL:     c.baseURL,
+		MSN:         c.msn,
+		TokenMasked: maskToken(token),
+		ExpiresAt:   expiry,
+	}, nil
+}
+
+// maskToken reduces a bearer token to a non-reversible fingerprint safe for
+// logs: a short prefix plus the length. Never log the full token.
+func maskToken(tok string) string {
+	if len(tok) <= 6 {
+		return fmt.Sprintf("***(len=%d)", len(tok))
+	}
+	return fmt.Sprintf("%s…(len=%d)", tok[:6], len(tok))
+}
+
 // accessToken returns a cached bearer token, refreshing it proactively
 // when fewer than 10 minutes remain.
 func (c *Client) accessToken(ctx context.Context) (string, error) {

@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/rs/zerolog"
 
@@ -162,5 +164,68 @@ func TestTokenRetryOn401(t *testing.T) {
 	}
 	if n := calls.Load(); n != 2 {
 		t.Errorf("expected 2 token fetches (initial + retry), got %d", n)
+	}
+}
+
+func TestVerifySucceeds(t *testing.T) {
+	srv, tokenCalls := mockVippsServer(t)
+	c := newTestClient(srv.URL)
+
+	res, err := c.Verify(context.Background())
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if n := tokenCalls.Load(); n != 1 {
+		t.Errorf("expected 1 token fetch, got %d", n)
+	}
+	if res.BaseURL != srv.URL {
+		t.Errorf("BaseURL = %q, want %q", res.BaseURL, srv.URL)
+	}
+	if res.MSN != "123456" {
+		t.Errorf("MSN = %q, want 123456", res.MSN)
+	}
+	// The token must never appear verbatim in the result.
+	if res.TokenMasked == "" || strings.Contains(res.TokenMasked, "test-client-id") {
+		t.Errorf("TokenMasked = %q leaks or is empty", res.TokenMasked)
+	}
+	if !res.ExpiresAt.After(time.Now()) {
+		t.Errorf("ExpiresAt = %v is not in the future", res.ExpiresAt)
+	}
+}
+
+func TestVerifyBypassesCache(t *testing.T) {
+	srv, tokenCalls := mockVippsServer(t)
+	c := newTestClient(srv.URL)
+
+	if _, err := c.Verify(context.Background()); err != nil {
+		t.Fatalf("first Verify: %v", err)
+	}
+	// A cached token would make the second handshake skip the fetch; Verify
+	// must always exercise the live credential path.
+	if _, err := c.Verify(context.Background()); err != nil {
+		t.Fatalf("second Verify: %v", err)
+	}
+	if n := tokenCalls.Load(); n != 2 {
+		t.Errorf("expected 2 token fetches (cache bypassed), got %d", n)
+	}
+}
+
+func TestVerifyReportsError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /accesstoken/get", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte(`{"error":"invalid_client"}`))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	c := newTestClient(srv.URL)
+	res, err := c.Verify(context.Background())
+	if err == nil {
+		t.Fatal("expected error on 401, got nil")
+	}
+	// Even on failure the non-sensitive context is returned for diagnostics.
+	if res.BaseURL != srv.URL || res.MSN != "123456" {
+		t.Errorf("error result missing context: %+v", res)
 	}
 }
