@@ -11,7 +11,7 @@ import SortableTh from '@/components/admin/SortableTh.vue'
 import SlipCell from '@/components/admin/SlipCell.vue'
 import ColumnSelector, { type ColumnDef } from '@/components/admin/ColumnSelector.vue'
 import InvoiceStatusChip, { type InvoiceState } from '@/components/admin/InvoiceStatusChip.vue'
-import { Trash2, UserPlus, Upload, Download, X, Pencil } from 'lucide-vue-next'
+import { UserPlus, Upload, Download, X, Pencil, Ban, RotateCcw } from 'lucide-vue-next'
 import BoatForm, { type BoatFormValue } from '@/components/boats/BoatForm.vue'
 import BoatCard from '@/components/boats/BoatCard.vue'
 import BulkInvoicesModal from '@/components/admin/BulkInvoicesModal.vue'
@@ -27,7 +27,7 @@ import Checkbox from '@/components/ui/form/Checkbox.vue'
 import Select from '@/components/ui/form/Select.vue'
 import FileInput from '@/components/ui/form/FileInput.vue'
 
-type User = components['schemas']['AdminUser']
+type User = components['schemas']['AdminUser'] & { deactivated_at?: string | null }
 type CreateBody = components['schemas']['AdminUserCreate']
 type UpdateBody = components['schemas']['AdminUserUpdate']
 type ImportRow = components['schemas']['ImportUsersResultRow']
@@ -46,6 +46,7 @@ const sortParam = computed(() => (sortDir.value === 'desc' ? '-' : '') + sortFie
 const spotFilter = ref<SpotFilterValue>('')
 const dockFilter = ref<string>('')
 const notesFilter = ref<NotesFilterValue>('')
+const statusFilter = ref<'' | 'deactivated' | 'all'>('')
 
 // Member-table column visibility. Persisted per-browser in localStorage
 // so a club admin's preferred view survives reloads. The two flagged
@@ -103,7 +104,7 @@ function onSearchInput() {
 }
 
 const { data: usersResponse, isLoading, isError } = useQuery({
-  queryKey: ['admin', 'users', sortParam, spotFilter, dockFilter, notesFilter, searchQuery, offset],
+  queryKey: ['admin', 'users', sortParam, spotFilter, dockFilter, notesFilter, statusFilter, searchQuery, offset],
   queryFn: async () =>
     unwrap(
       await client.GET('/api/v1/admin/users', {
@@ -115,6 +116,7 @@ const { data: usersResponse, isLoading, isError } = useQuery({
             ...(spotFilter.value ? { spot: spotFilter.value } : {}),
             ...(dockFilter.value ? { dock: dockFilter.value } : {}),
             ...(notesFilter.value ? { notes: notesFilter.value } : {}),
+            status: statusFilter.value || undefined,
             ...(searchQuery.value ? { q: searchQuery.value } : {}),
           } as any,
         },
@@ -123,6 +125,10 @@ const { data: usersResponse, isLoading, isError } = useQuery({
 })
 
 function onSpotFilterChange() {
+  offset.value = 0
+}
+
+function onStatusFilterChange() {
   offset.value = 0
 }
 
@@ -183,7 +189,7 @@ async function loadSlips({ force = true }: { force?: boolean } = {}) {
   }
 }
 
-const users = computed(() => usersResponse.value?.users ?? [])
+const users = computed<User[]>(() => (usersResponse.value?.users ?? []) as User[])
 const totalCount = computed(() => usersResponse.value?.total_count ?? 0)
 const pageStart = computed(() => (totalCount.value === 0 ? 0 : offset.value + 1))
 const pageEnd = computed(() => Math.min(offset.value + users.value.length, totalCount.value))
@@ -222,14 +228,6 @@ const { mutate: updateRoles } = useMutation({
     })),
   onSuccess: (_, { userId }) => {
     delete editingRoles.value[userId]
-    queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
-  },
-})
-
-const { mutate: deleteUser } = useMutation({
-  mutationFn: async (userId: string) =>
-    unwrap(await client.DELETE('/api/v1/admin/users/{userID}', { params: { path: { userID: userId } } })),
-  onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
   },
 })
@@ -280,6 +278,7 @@ async function selectAllFiltered() {
         ...(spotFilter.value ? { spot: spotFilter.value } : {}),
         ...(dockFilter.value ? { dock: dockFilter.value } : {}),
         ...(notesFilter.value ? { notes: notesFilter.value } : {}),
+        status: statusFilter.value || undefined,
         ...(searchQuery.value ? { q: searchQuery.value } : {}),
       } as any,
     },
@@ -341,10 +340,27 @@ function toggleRole(userId: string, role: string) {
   else roles.push(role)
 }
 
-async function confirmDelete(userId: string) {
+async function deactivateUser(userId: string) {
   if (!(await ensureFreshTotp())) return
-  if (confirm(t('admin.users.deleteConfirm'))) {
-    deleteUser(userId)
+  if (!confirm(t('admin.users.deactivateConfirm'))) return
+  const res = await totpAwareFetch(`/api/v1/admin/users/${userId}/deactivate`, {
+    method: 'POST',
+    credentials: 'include',
+  })
+  if (res.ok) {
+    queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
+  }
+}
+
+async function reactivateUser(userId: string) {
+  if (!(await ensureFreshTotp())) return
+  if (!confirm(t('admin.users.reactivateConfirm'))) return
+  const res = await totpAwareFetch(`/api/v1/admin/users/${userId}/reactivate`, {
+    method: 'POST',
+    credentials: 'include',
+  })
+  if (res.ok) {
+    queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
   }
 }
 
@@ -823,6 +839,16 @@ async function submitImport() {
           v-model="notesFilter"
           @update:model-value="onNotesFilterChange"
         />
+        <select
+          id="member-status-filter"
+          v-model="statusFilter"
+          class="rounded-md border-gray-300 py-1.5 text-sm text-gray-700 focus:border-brand-500 focus:ring-brand-500"
+          @change="onStatusFilterChange"
+        >
+          <option value="">{{ t('admin.users.statusActive') }}</option>
+          <option value="deactivated">{{ t('admin.users.statusDeactivated') }}</option>
+          <option value="all">{{ t('admin.users.statusAll') }}</option>
+        </select>
         <ColumnSelector
           :columns="ALL_COLUMNS"
           v-model="visibleColumns"
@@ -933,7 +959,13 @@ async function submitImport() {
               />
             </td>
             <td class="whitespace-nowrap px-3 py-3 text-right text-xs text-gray-400 tabular-nums">{{ offset + index + 1 }}</td>
-            <td v-if="visible.has('first_name')" class="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">{{ user.first_name || formatName(user) }}</td>
+            <td v-if="visible.has('first_name')" class="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">
+              {{ user.first_name || formatName(user) }}
+              <span
+                v-if="user.deactivated_at"
+                class="ml-1 inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600"
+              >{{ t('admin.users.deactivatedBadge') }}</span>
+            </td>
             <td v-if="visible.has('last_name')" class="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">{{ user.last_name }}</td>
             <td v-if="visible.has('email')" class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ user.email }}</td>
             <td v-if="visible.has('phone')" class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ user.phone }}</td>
@@ -1031,8 +1063,21 @@ async function submitImport() {
                 <button class="text-gray-500 hover:text-brand-700" :title="t('common.edit')" @click="openEditDirect(user)">
                   <Pencil class="h-4 w-4" />
                 </button>
-                <button class="text-red-600 hover:text-red-800" :title="t('common.delete')" @click="confirmDelete(user.id)">
-                  <Trash2 class="h-4 w-4" />
+                <button
+                  v-if="!user.deactivated_at"
+                  class="text-gray-500 hover:text-red-700"
+                  :title="t('admin.users.deactivate')"
+                  @click="deactivateUser(user.id)"
+                >
+                  <Ban class="h-4 w-4" />
+                </button>
+                <button
+                  v-else
+                  class="text-gray-500 hover:text-emerald-700"
+                  :title="t('admin.users.reactivate')"
+                  @click="reactivateUser(user.id)"
+                >
+                  <RotateCcw class="h-4 w-4" />
                 </button>
               </div>
             </td>
