@@ -21,6 +21,7 @@ import { formatName } from '@/lib/format'
 import { useRangeSelect } from '@/composables/useRangeSelect'
 import { useAuthStore } from '@/stores/auth'
 import { useFreshTotp } from '@/composables/useFreshTotp'
+import { useConfirm } from '@/stores/confirm'
 import Input from '@/components/ui/form/Input.vue'
 import Textarea from '@/components/ui/form/Textarea.vue'
 import Checkbox from '@/components/ui/form/Checkbox.vue'
@@ -37,6 +38,7 @@ const client = useApiClient()
 const queryClient = useQueryClient()
 const auth = useAuthStore()
 const { ensureFreshTotp, totpAwareFetch } = useFreshTotp()
+const confirm = useConfirm()
 
 type SortField = 'first_name' | 'last_name' | 'email' | 'phone' | 'slip' | 'membership' | 'slip_fee'
 const sortField = ref<SortField>('last_name')
@@ -342,7 +344,13 @@ function toggleRole(userId: string, role: string) {
 
 async function deactivateUser(userId: string) {
   if (!(await ensureFreshTotp())) return
-  if (!confirm(t('admin.users.deactivateConfirm'))) return
+  const ok = await confirm({
+    title: t('admin.users.deactivate'),
+    body: t('admin.users.deactivateConfirm'),
+    confirmLabel: t('admin.users.deactivate'),
+    tone: 'warning',
+  })
+  if (!ok) return
   const res = await totpAwareFetch(`/api/v1/admin/users/${userId}/deactivate`, {
     method: 'POST',
     credentials: 'include',
@@ -354,7 +362,13 @@ async function deactivateUser(userId: string) {
 
 async function reactivateUser(userId: string) {
   if (!(await ensureFreshTotp())) return
-  if (!confirm(t('admin.users.reactivateConfirm'))) return
+  const ok = await confirm({
+    title: t('admin.users.reactivate'),
+    body: t('admin.users.reactivateConfirm'),
+    confirmLabel: t('admin.users.reactivate'),
+    tone: 'info',
+  })
+  if (!ok) return
   const res = await totpAwareFetch(`/api/v1/admin/users/${userId}/reactivate`, {
     method: 'POST',
     credentials: 'include',
@@ -482,7 +496,13 @@ async function saveBoat(value: BoatFormValue & { approve?: boolean }) {
 async function deleteBoat(boatId: string) {
   if (!detailUser.value) return
   if (!(await ensureFreshTotp())) return
-  if (!confirm(t('admin.users.boatDeleteConfirm'))) return
+  const ok = await confirm({
+    title: t('common.delete'),
+    body: t('admin.users.boatDeleteConfirm'),
+    confirmLabel: t('common.delete'),
+    tone: 'danger',
+  })
+  if (!ok) return
   const userId = detailUser.value.id
   const res = await totpAwareFetch(`/api/v1/admin/users/${userId}/boats/${boatId}`, {
     method: 'DELETE',
