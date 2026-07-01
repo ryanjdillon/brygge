@@ -23,10 +23,18 @@ export function useRangeSelect<T extends RangeSelectable>(
   const anchorIndex = ref<number | null>(null)
 
   // Use on `@click` (not `@change`) so MouseEvent's shiftKey is
-  // available. Call `.preventDefault()` because we drive the
-  // checkbox's checked state manually via `:checked`.
+  // available.
+  //
+  // We deliberately do NOT preventDefault. Letting the browser's native
+  // toggle stand keeps the clicked <input> in sync with the new selection:
+  // preventDefault reverts the clicked element to its pre-click state *after*
+  // this handler runs, and because Vue's `:checked` vnode already holds the
+  // intended value it then skips re-patching — so the clicked checkbox (a
+  // range's endpoints especially) shows the wrong state while its row
+  // highlight is correct. The native toggle sets the clicked element to the
+  // same value we compute, and Vue's `:checked` binding drives every other
+  // row in a shift-range.
   function onCheckboxClick(index: number, event: MouseEvent) {
-    event.preventDefault()
     const rows = visible()
     const clicked = rows[index]
     if (!clicked) return
