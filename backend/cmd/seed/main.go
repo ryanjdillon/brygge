@@ -632,6 +632,8 @@ func main() {
 	}
 	fmt.Printf("  products: %d created\n", len(products))
 
+	seedInvoices(ctx, db, clubID, userIDs)
+
 	fmt.Println("\ndone! you can now log in with:")
 	fmt.Println("  admin:          admin@brygge.local / admin123")
 	fmt.Println("  member (slip):  slip-member@brygge.local / member123  (Kari Sjømann, has harbor membership + slip A1)")
