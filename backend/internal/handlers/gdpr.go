@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 
+	"github.com/brygge-klubb/brygge/internal/accounting"
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/middleware"
 )
@@ -482,34 +483,80 @@ func (h *GDPRHandler) HandleProcessDeletion(w http.ResponseWriter, r *http.Reque
 	}
 	defer tx.Rollback(ctx)
 
-	_, err = tx.Exec(ctx,
-		`UPDATE users SET first_name = 'Slettet', last_name = 'bruker',
-		    email = gen_random_uuid()::text || '@deleted.local', phone = '' WHERE id = $1`,
-		userID,
-	)
-	if err != nil {
-		h.log.Error().Err(err).Msg("failed to anonymize user")
+	// Retention gate (BRY-208). Data with no bookkeeping obligation is
+	// always wiped now. But if the member still has in-window financial
+	// records, their name/email must be retained for those records
+	// (bokføringsloven §13) — so we defer identity erasure by deactivating
+	// them (BRY-203) and let the scheduled purge (BRY-207) finish once
+	// retention clears. Only when retention is already cleared do we erase
+	// identity immediately.
+	ret, rerr := accounting.MemberFinancialRetention(ctx, tx, claims.ClubID, userID)
+	if rerr != nil {
+		h.log.Error().Err(rerr).Msg("failed to evaluate member retention")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
-	_, err = tx.Exec(ctx, `DELETE FROM push_subscriptions WHERE user_id = $1`, userID)
-	if err != nil {
-		h.log.Error().Err(err).Msg("failed to delete push subscriptions")
-		Error(w, http.StatusInternalServerError, "internal error")
-		return
+	// Always wipe data carrying no retention obligation.
+	recordsWiped := []string{"push_subscriptions", "notification_preferences", "user_consents"}
+	for _, stmt := range []string{
+		`DELETE FROM push_subscriptions WHERE user_id = $1`,
+		`DELETE FROM notification_preferences WHERE user_id = $1`,
+		`DELETE FROM user_consents WHERE user_id = $1`,
+	} {
+		if _, err = tx.Exec(ctx, stmt, userID); err != nil {
+			h.log.Error().Err(err).Str("stmt", stmt).Msg("failed to wipe non-retained user data")
+			Error(w, http.StatusInternalServerError, "internal error")
+			return
+		}
 	}
 
-	_, err = tx.Exec(ctx, `DELETE FROM notification_preferences WHERE user_id = $1`, userID)
-	if err != nil {
-		h.log.Error().Err(err).Msg("failed to delete notification preferences")
-		Error(w, http.StatusInternalServerError, "internal error")
-		return
+	identityErased := ret.Eligible
+	if identityErased {
+		if _, err = tx.Exec(ctx,
+			`UPDATE users SET first_name = 'Slettet', last_name = 'bruker',
+			    email = gen_random_uuid()::text || '@deleted.local', phone = '',
+			    address_line = '', postal_code = '', city = '', updated_at = now()
+			  WHERE id = $1`,
+			userID,
+		); err != nil {
+			h.log.Error().Err(err).Msg("failed to anonymize user")
+			Error(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+	} else {
+		// Defer identity erasure: deactivate so they're hidden and blocked
+		// from login, and drop their sessions. The purge job erases the
+		// remaining PII once ret.ClearsAt passes.
+		if _, err = tx.Exec(ctx,
+			`UPDATE users SET deactivated_at = now(), deactivated_by = $2, updated_at = now()
+			  WHERE id = $1 AND deactivated_at IS NULL`,
+			userID, claims.UserID,
+		); err != nil {
+			h.log.Error().Err(err).Msg("failed to deactivate user for deferred erasure")
+			Error(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		if _, err = tx.Exec(ctx, `DELETE FROM sessions WHERE user_id = $1`, userID); err != nil {
+			h.log.Error().Err(err).Msg("failed to clear sessions")
+			Error(w, http.StatusInternalServerError, "internal error")
+			return
+		}
 	}
 
-	_, err = tx.Exec(ctx, `DELETE FROM user_consents WHERE user_id = $1`, userID)
-	if err != nil {
-		h.log.Error().Err(err).Msg("failed to delete user consents")
+	// Audit the outcome, including what was wiped now vs deferred, so the
+	// records_wiped trail is populated (see docs/developer/reference/audit-actions.md).
+	auditDetails, _ := json.Marshal(map[string]any{
+		"records_wiped":       recordsWiped,
+		"identity_erased":     identityErased,
+		"retention_clears_at": ret.ClearsAt,
+	})
+	if _, err = tx.Exec(ctx,
+		`INSERT INTO audit_log (club_id, actor_id, action, resource, resource_id, details)
+		 VALUES ($1, $2, 'gdpr.deletion_processed', 'user', $3, $4)`,
+		claims.ClubID, claims.UserID, userID, auditDetails,
+	); err != nil {
+		h.log.Error().Err(err).Msg("failed to write audit log")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
@@ -530,7 +577,12 @@ func (h *GDPRHandler) HandleProcessDeletion(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	JSON(w, http.StatusOK, map[string]any{"id": requestID, "status": "processed"})
+	JSON(w, http.StatusOK, map[string]any{
+		"id":              requestID,
+		"status":          "processed",
+		"identity_erased": identityErased,
+		"deferred_until":  ret.ClearsAt,
+	})
 }
 
 func (h *GDPRHandler) HandleAdminCreateLegalDocument(w http.ResponseWriter, r *http.Request) {
