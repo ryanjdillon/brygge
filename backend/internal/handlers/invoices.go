@@ -392,14 +392,16 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 		                       total_amount, pdf_data, fiscal_period_id,
 		                       recipient_kind, recipient_org_name, recipient_org_number,
 		                       recipient_org_address, recipient_contact_person,
-		                       recipient_their_ref, recipient_email)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+		                       recipient_their_ref, recipient_email,
+		                       member_name, member_email)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
 		 RETURNING id, created_at`,
 		claims.ClubID, userIDArg, invoiceSeq, kid, dueDate, total, pdfData, req.FiscalPeriodID,
 		recipientKind,
 		req.RecipientOrgName, req.RecipientOrgNumber,
 		req.RecipientOrgAddress, req.RecipientContactPerson,
 		req.RecipientTheirRef, req.RecipientEmail,
+		memberName, memberEmail,
 	).Scan(&invoiceID, &createdAt)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to store invoice")
@@ -873,10 +875,11 @@ func (h *InvoiceHandler) HandleListInvoices(w http.ResponseWriter, r *http.Reque
 	rows, err := h.db.Query(ctx,
 		`SELECT i.id, i.invoice_number, i.user_id,
 		        COALESCE(NULLIF(i.recipient_org_name, ''),
+		                 NULLIF(i.member_name, ''),
 		                 u.full_name,
 		                 u.first_name || ' ' || u.last_name,
 		                 ''),
-		        COALESCE(NULLIF(i.recipient_email, ''), u.email, ''),
+		        COALESCE(NULLIF(i.recipient_email, ''), NULLIF(i.member_email, ''), u.email, ''),
 		        i.total_amount, i.issue_date, i.due_date,
 		        COALESCE(pi.name, ''), fp.year,
 		        COALESCE((SELECT description FROM invoice_lines WHERE invoice_id = i.id LIMIT 1), ''),
@@ -974,6 +977,7 @@ func (h *InvoiceHandler) HandleSendInvoice(w http.ResponseWriter, r *http.Reques
 	if err := h.db.QueryRow(ctx,
 		`SELECT i.invoice_number, i.user_id,
 		        COALESCE(NULLIF(i.recipient_org_name, ''),
+		                 NULLIF(i.member_name, ''),
 		                 u.full_name,
 		                 u.first_name || ' ' || u.last_name,
 		                 ''),
@@ -1112,6 +1116,7 @@ func (h *InvoiceHandler) HandleResendInvoice(w http.ResponseWriter, r *http.Requ
 	if err := h.db.QueryRow(ctx,
 		`SELECT i.invoice_number,
 		        COALESCE(NULLIF(i.recipient_org_name, ''),
+		                 NULLIF(i.member_name, ''),
 		                 u.full_name,
 		                 u.first_name || ' ' || u.last_name,
 		                 ''),

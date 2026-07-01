@@ -596,6 +596,7 @@ func (h *MembersHandler) HandleGetDirectory(w http.ResponseWriter, r *http.Reque
 		 JOIN user_roles ur ON ur.user_id = u.id AND ur.club_id = u.club_id
 		 WHERE u.club_id = $1
 		 AND u.hide_in_directory = FALSE
+		 AND u.deactivated_at IS NULL
 		 AND ur.role IN ('member', 'slip_holder', 'board', 'harbor_master', 'treasurer', 'admin')
 		 GROUP BY u.id, u.first_name, u.last_name, u.full_name, u.phone, u.email
 		 ORDER BY u.last_name, u.first_name

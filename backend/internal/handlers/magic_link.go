@@ -81,7 +81,8 @@ func (h *MagicLinkHandler) HandleRequestMagicLink(w http.ResponseWriter, r *http
 	// Check if user exists
 	var userID string
 	err := h.db.QueryRow(ctx,
-		`SELECT id FROM users WHERE email = $1 AND club_id = (SELECT id FROM clubs WHERE slug = $2)`,
+		`SELECT id FROM users WHERE email = $1 AND club_id = (SELECT id FROM clubs WHERE slug = $2)
+		   AND deactivated_at IS NULL`,
 		req.Email, h.config.ClubSlug,
 	).Scan(&userID)
 
@@ -172,7 +173,8 @@ func (h *MagicLinkHandler) HandleVerifyMagicLink(w http.ResponseWriter, r *http.
 	// Look up user
 	var userID string
 	err = h.db.QueryRow(ctx,
-		`SELECT id FROM users WHERE email = $1 AND club_id = $2`,
+		`SELECT id FROM users WHERE email = $1 AND club_id = $2
+		   AND deactivated_at IS NULL`,
 		linkEmail, clubID,
 	).Scan(&userID)
 	if err != nil {

@@ -90,7 +90,7 @@ func (h *DemoAuthHandler) HandleDemoLogin(w http.ResponseWriter, r *http.Request
 	err := h.db.QueryRow(r.Context(),
 		`SELECT u.id, u.club_id FROM users u
 		 JOIN clubs c ON c.id = u.club_id
-		 WHERE u.email = $1 AND c.slug = $2`,
+		 WHERE u.email = $1 AND c.slug = $2 AND u.deactivated_at IS NULL`,
 		req.Email, h.config.ClubSlug,
 	).Scan(&userID, &clubID)
 	if err == pgx.ErrNoRows {

@@ -787,6 +787,7 @@ func (h *InboxHandler) roleMembers(ctx context.Context, role, clubID string) ([]
 		LEFT JOIN communication_preferences cp
 		  ON cp.user_id = u.id AND cp.club_id = u.club_id AND cp.category = 'broadcast'
 		WHERE ur.role = $1::user_role AND u.club_id = $2
+		  AND u.deactivated_at IS NULL
 		  AND u.email IS NOT NULL AND u.email <> ''
 		  AND (cp.email_enabled IS NULL OR cp.email_enabled = true)
 		GROUP BY u.id, u.email`, role, clubID)
@@ -817,6 +818,7 @@ func (h *InboxHandler) waitingListMembers(ctx context.Context, clubID string) ([
 		  ON cp.user_id = u.id AND cp.club_id = wle.club_id AND cp.category = 'broadcast'
 		WHERE wle.club_id = $1
 		  AND wle.status NOT IN ('offered_accepted', 'cancelled')
+		  AND u.deactivated_at IS NULL
 		  AND u.email IS NOT NULL AND u.email <> ''
 		  AND (cp.email_enabled IS NULL OR cp.email_enabled = true)`, clubID)
 	if err != nil {

@@ -349,6 +349,7 @@ func (r *Reconciler) computeDesired(ctx context.Context, spec MailboxSpec, idx m
 		JOIN user_roles ur ON ur.user_id = u.id AND ur.club_id = u.club_id
 		JOIN user_mail_credentials umc ON umc.user_id = u.id
 		WHERE ur.role = $1::user_role
+		  AND u.deactivated_at IS NULL
 		GROUP BY umc.jmap_user
 		ORDER BY umc.jmap_user
 	`, spec.Role)

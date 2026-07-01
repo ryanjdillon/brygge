@@ -838,6 +838,8 @@ func main() {
 							r.Put("/{userID}/boats/{boatID}/slip", adminUsersHandler.HandleSetUserBoatSlip)
 						})
 						r.Delete("/{userID}", adminUsersHandler.HandleDeleteUser)
+						r.Post("/{userID}/deactivate", adminUsersHandler.HandleDeactivateUser)
+						r.Post("/{userID}/reactivate", adminUsersHandler.HandleReactivateUser)
 
 						// Lost-device backstop — admin disables a target
 						// user's TOTP so they can re-enroll. Acting admin
@@ -1287,6 +1289,27 @@ func main() {
 				if n > 0 {
 					log.Info().Int64("rows", n).Msg("purged expired sessions")
 				}
+			}
+		}
+	}()
+
+	// Daily sweep that anonymizes the PII of deactivated members once their
+	// financial records clear the bokføringsloven §13 retention window
+	// (BRY-207). Retention advances only at year boundaries, so daily is
+	// ample; runs once at startup so a long-idle deploy catches up promptly.
+	go func() {
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+		for {
+			if n, err := accountingSvc.PurgeExpiredMemberPII(ctx); err != nil {
+				log.Warn().Err(err).Msg("member PII purge failed")
+			} else if n > 0 {
+				log.Info().Int64("members", n).Msg("purged PII of past-retention deactivated members")
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
 			}
 		}
 	}()

@@ -19,6 +19,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 
+	"github.com/brygge-klubb/brygge/internal/accounting"
 	"github.com/brygge-klubb/brygge/internal/config"
 	brmail "github.com/brygge-klubb/brygge/internal/mail"
 	"github.com/brygge-klubb/brygge/internal/middleware"
@@ -219,10 +220,21 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
+	// Optional ?status filter for account lifecycle (BRY-203). Default
+	// hides deactivated members; "deactivated" shows only them, "all"
+	// shows both. Count and list share the clause so paging stays consistent.
+	statusClause := " AND u.deactivated_at IS NULL"
+	switch strings.ToLower(r.URL.Query().Get("status")) {
+	case "deactivated":
+		statusClause = " AND u.deactivated_at IS NOT NULL"
+	case "all":
+		statusClause = ""
+	}
+
 	var totalCount int
 	err := h.db.QueryRow(ctx,
 		`SELECT COUNT(*) FROM users u
-		 WHERE u.club_id = $1 `+spotFilter+dockClause+notesClause+searchClause,
+		 WHERE u.club_id = $1 `+spotFilter+dockClause+notesClause+searchClause+statusClause,
 		args...,
 	).Scan(&totalCount)
 	if err != nil {
@@ -245,7 +257,8 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 		        COALESCE(all_slips.slips, '[]'::jsonb),
 		        COALESCE(membership_status.state, ''),
 		        COALESCE(slip_status.state, ''),
-		        COALESCE(boat_summary.boats, '[]'::jsonb)
+		        COALESCE(boat_summary.boats, '[]'::jsonb),
+		        u.deactivated_at
 		 FROM users u
 		 LEFT JOIN user_roles ur ON ur.user_id = u.id AND ur.club_id = u.club_id
 		 LEFT JOIN LATERAL (
@@ -345,7 +358,7 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 		       JOIN boats b ON b.id = sa.boat_id
 		      WHERE sa.user_id = u.id AND sa.club_id = u.club_id AND sa.released_at IS NULL
 		 ) boat_summary ON true
-		 WHERE u.club_id = $1 `+spotFilter+dockClause+notesClause+searchClause+`
+		 WHERE u.club_id = $1 `+spotFilter+dockClause+notesClause+searchClause+statusClause+`
 		 GROUP BY u.id, primary_sa.slip_id, primary_sa.assignment_type, primary_sa.number, primary_sa.section,
 		          all_slips.slips, membership_status.state, slip_status.state, boat_summary.boats
 		 ORDER BY `+sortCol+`
@@ -382,12 +395,13 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 		MembershipStatus   string          `json:"membership_status"`
 		SlipFeeStatus      string          `json:"slip_fee_status"`
 		Boats              json.RawMessage `json:"boats"`
+		DeactivatedAt      *time.Time      `json:"deactivated_at,omitempty"`
 	}
 
 	var users []userRow
 	for rows.Next() {
 		var u userRow
-		if err := rows.Scan(&u.ID, &u.Email, &u.FirstName, &u.LastName, &u.FullName, &u.Phone, &u.AddressLine, &u.PostalCode, &u.City, &u.IsLocal, &u.AdminNotes, &u.CreatedAt, &u.UpdatedAt, &u.Roles, &u.SlipID, &u.SlipNumber, &u.SlipSection, &u.SlipAssignmentType, &u.Slips, &u.MembershipStatus, &u.SlipFeeStatus, &u.Boats); err != nil {
+		if err := rows.Scan(&u.ID, &u.Email, &u.FirstName, &u.LastName, &u.FullName, &u.Phone, &u.AddressLine, &u.PostalCode, &u.City, &u.IsLocal, &u.AdminNotes, &u.CreatedAt, &u.UpdatedAt, &u.Roles, &u.SlipID, &u.SlipNumber, &u.SlipSection, &u.SlipAssignmentType, &u.Slips, &u.MembershipStatus, &u.SlipFeeStatus, &u.Boats, &u.DeactivatedAt); err != nil {
 			h.log.Error().Err(err).Msg("failed to scan user row")
 			Error(w, http.StatusInternalServerError, "internal error")
 			return
@@ -581,10 +595,20 @@ func (h *AdminUsersHandler) HandleGetUser(w http.ResponseWriter, r *http.Request
 		payments = []paymentRow{}
 	}
 
+	// Retention status (BRY-206) so the admin UI can show whether/when the
+	// member's PII may be erased.
+	ret, rerr := accounting.MemberFinancialRetention(ctx, h.db, claims.ClubID, userID)
+	if rerr != nil {
+		h.log.Error().Err(rerr).Msg("failed to evaluate member retention")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
 	JSON(w, http.StatusOK, map[string]any{
-		"user":     u,
-		"boats":    boats,
-		"payments": payments,
+		"user":      u,
+		"boats":     boats,
+		"payments":  payments,
+		"retention": ret,
 	})
 }
 
@@ -776,6 +800,30 @@ func (h *AdminUsersHandler) HandleDeleteUser(w http.ResponseWriter, r *http.Requ
 
 	erasure := r.URL.Query().Get("erasure") == "true"
 
+	// Retention guard (BRY-206). A member with financial records cannot be
+	// hard-deleted: their invoices reference this row (no ON DELETE cascade)
+	// and bokføringsloven §13 requires those records for ~5 years. Refuse an
+	// erasure while records are in-window; once cleared, downgrade to
+	// anonymize-in-place so the retained invoices keep their snapshot identity
+	// (BRY-205) rather than orphaning on a hard delete.
+	if erasure {
+		ret, rerr := accounting.MemberFinancialRetention(ctx, tx, clubID, userID)
+		if rerr != nil {
+			h.log.Error().Err(rerr).Msg("failed to evaluate member retention")
+			Error(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		if ret.HasRecords && !ret.Eligible {
+			Error(w, http.StatusConflict, fmt.Sprintf(
+				"member has financial records retained until %s (bokføringsloven §13); erase after that date or deactivate instead",
+				ret.ClearsAt.Format("2006-01-02")))
+			return
+		}
+		if ret.HasRecords {
+			erasure = false
+		}
+	}
+
 	auditDetails, _ := json.Marshal(map[string]any{
 		"old_email":     userEmail,
 		"old_full_name": userName,
@@ -839,6 +887,147 @@ func (h *AdminUsersHandler) HandleDeleteUser(w http.ResponseWriter, r *http.Requ
 		Msg("user deleted")
 
 	JSON(w, http.StatusOK, map[string]string{"status": action})
+}
+
+// HandleDeactivateUser marks a member as deactivated (BRY-204): a
+// reversible "removed" state that hides them from active lists and blocks
+// login, while keeping the row and its financial history intact. PII is
+// only erased later, once the retention window clears (BRY-206/207). This
+// is distinct from HandleDeleteUser's anonymize/erase paths.
+func (h *AdminUsersHandler) HandleDeactivateUser(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	userID := chi.URLParam(r, "userID")
+	if userID == "" {
+		Error(w, http.StatusBadRequest, "user ID is required")
+		return
+	}
+	if userID == claims.UserID {
+		Error(w, http.StatusBadRequest, "cannot deactivate your own account")
+		return
+	}
+
+	tx, err := h.db.Begin(ctx)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to begin transaction")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	defer tx.Rollback(ctx)
+
+	var userEmail, userName string
+	err = tx.QueryRow(ctx,
+		`UPDATE users SET deactivated_at = now(), deactivated_by = $3, updated_at = now()
+		  WHERE id = $1 AND club_id = $2 AND deactivated_at IS NULL
+		  RETURNING email, COALESCE(full_name, '')`,
+		userID, claims.ClubID, claims.UserID,
+	).Scan(&userEmail, &userName)
+	if err == pgx.ErrNoRows {
+		// Either no such member in this club, or already deactivated.
+		Error(w, http.StatusNotFound, "member not found or already deactivated")
+		return
+	}
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to deactivate user")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	auditDetails, _ := json.Marshal(map[string]any{"email": userEmail, "full_name": userName})
+	if _, err := tx.Exec(ctx,
+		`INSERT INTO audit_log (club_id, actor_id, action, resource, resource_id, details)
+		 VALUES ($1, $2, 'user.deactivated', 'user', $3, $4)`,
+		claims.ClubID, claims.UserID, userID, auditDetails,
+	); err != nil {
+		h.log.Error().Err(err).Msg("failed to write audit log")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	// Drop their sessions so they're logged out immediately rather than at
+	// the next natural expiry (ValidateSession also rejects deactivated
+	// members, so this is belt-and-suspenders).
+	if _, err := tx.Exec(ctx, `DELETE FROM sessions WHERE user_id = $1`, userID); err != nil {
+		h.log.Error().Err(err).Msg("failed to clear sessions")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		h.log.Error().Err(err).Msg("failed to commit transaction")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	h.log.Info().Str("target_user", userID).Str("actor", claims.UserID).Msg("user deactivated")
+	JSON(w, http.StatusOK, map[string]string{"status": "deactivated"})
+}
+
+// HandleReactivateUser clears a member's deactivated state, restoring them
+// to active lists. Login works again, but they must start a new session.
+func (h *AdminUsersHandler) HandleReactivateUser(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	userID := chi.URLParam(r, "userID")
+	if userID == "" {
+		Error(w, http.StatusBadRequest, "user ID is required")
+		return
+	}
+
+	tx, err := h.db.Begin(ctx)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to begin transaction")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	defer tx.Rollback(ctx)
+
+	var userEmail, userName string
+	err = tx.QueryRow(ctx,
+		`UPDATE users SET deactivated_at = NULL, deactivated_by = NULL, updated_at = now()
+		  WHERE id = $1 AND club_id = $2 AND deactivated_at IS NOT NULL
+		  RETURNING email, COALESCE(full_name, '')`,
+		userID, claims.ClubID,
+	).Scan(&userEmail, &userName)
+	if err == pgx.ErrNoRows {
+		Error(w, http.StatusNotFound, "member not found or not deactivated")
+		return
+	}
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to reactivate user")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	auditDetails, _ := json.Marshal(map[string]any{"email": userEmail, "full_name": userName})
+	if _, err := tx.Exec(ctx,
+		`INSERT INTO audit_log (club_id, actor_id, action, resource, resource_id, details)
+		 VALUES ($1, $2, 'user.reactivated', 'user', $3, $4)`,
+		claims.ClubID, claims.UserID, userID, auditDetails,
+	); err != nil {
+		h.log.Error().Err(err).Msg("failed to write audit log")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		h.log.Error().Err(err).Msg("failed to commit transaction")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	h.log.Info().Str("target_user", userID).Str("actor", claims.UserID).Msg("user reactivated")
+	JSON(w, http.StatusOK, map[string]string{"status": "active"})
 }
 
 type adminUserCreateRequest struct {
@@ -1182,6 +1371,7 @@ func (h *AdminUsersHandler) HandleExportUsersCSV(w http.ResponseWriter, r *http.
 		       ) AS roles
 		  FROM users u
 		 WHERE u.club_id = $1
+		   AND u.deactivated_at IS NULL
 		 ORDER BY u.last_name, u.first_name, u.email`,
 		claims.ClubID,
 	)

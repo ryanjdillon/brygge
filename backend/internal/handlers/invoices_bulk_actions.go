@@ -166,6 +166,7 @@ func (h *InvoiceHandler) sendOneReminder(
 	err := h.db.QueryRow(ctx,
 		`SELECT i.invoice_number,
 		        COALESCE(NULLIF(i.recipient_org_name, ''),
+		                 NULLIF(i.member_name, ''),
 		                 u.full_name,
 		                 u.first_name || ' ' || u.last_name,
 		                 ''),
@@ -328,7 +329,7 @@ func (h *InvoiceHandler) regenerateOnePDF(
 	)
 	err := h.db.QueryRow(ctx,
 		`SELECT i.invoice_number, i.user_id,
-		        COALESCE(u.full_name, ''),
+		        COALESCE(NULLIF(i.member_name, ''), u.full_name, ''),
 		        COALESCE(u.address_line || ', ' || u.postal_code || ' ' || u.city, ''),
 		        i.recipient_kind,
 		        COALESCE(i.recipient_org_name, ''),

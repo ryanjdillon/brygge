@@ -109,7 +109,7 @@ func (s *SessionService) ValidateSession(ctx context.Context, sessionID string) 
 		 JOIN users u ON u.id = s.user_id
 		 LEFT JOIN club_settings cs ON cs.club_id = s.club_id
 		     AND cs.key IN ('session_idle_minutes', 'session_absolute_cap_minutes', 'admin_totp_minutes')
-		 WHERE s.id = $1
+		 WHERE s.id = $1 AND u.deactivated_at IS NULL
 		 GROUP BY s.user_id, s.club_id, s.totp_verified_at, u.totp_enabled, s.created_at, s.expires_at`,
 		sessionID,
 	).Scan(&userID, &clubID, &info.TOTPVerifiedAt, &info.TOTPEnabled,

@@ -86,6 +86,24 @@ func (h *InvoiceHandler) HandleBulkCreateInvoices(w http.ResponseWriter, r *http
 		Error(w, http.StatusBadRequest, "user_ids is required")
 		return
 	}
+	// Deactivated members must not be invoiced (BRY-203). The admin list
+	// already hides them, so this only trips on a stale/hand-crafted
+	// selection; reject the whole batch with a clear message rather than
+	// silently skipping.
+	var deactivatedCount int
+	if err := h.db.QueryRow(ctx,
+		`SELECT COUNT(*) FROM users
+		  WHERE club_id = $1 AND id = ANY($2) AND deactivated_at IS NOT NULL`,
+		claims.ClubID, req.UserIDs,
+	).Scan(&deactivatedCount); err != nil {
+		h.log.Error().Err(err).Msg("failed to check deactivated members for bulk invoice")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if deactivatedCount > 0 {
+		Error(w, http.StatusBadRequest, "cannot create invoices for deactivated members")
+		return
+	}
 	if req.FiscalPeriodID == "" {
 		Error(w, http.StatusBadRequest, "fiscal_period_id is required")
 		return
@@ -544,10 +562,11 @@ func (h *InvoiceHandler) createBulkInvoice(
 	if err := h.db.QueryRow(ctx,
 		`INSERT INTO invoices (club_id, user_id, invoice_number, kid_number, due_date,
 		                       total_amount, pdf_data, price_item_id, fiscal_period_id,
-		                       category, status)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'open')
+		                       category, status, member_name, member_email)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'open', $11, $12)
 		 RETURNING id`,
 		clubID, userID, invoiceSeq, kid, dueDate, total, pdfData, invoicePriceItem, fiscalPeriodID, invoiceCategory,
+		memberName, memberEmail,
 	).Scan(&invoiceID); err != nil {
 		return "", 0, 0, err
 	}
@@ -574,7 +593,6 @@ func (h *InvoiceHandler) createBulkInvoice(
 			h.log.Error().Err(err).Msg("failed to insert invoice line for bulk invoice")
 		}
 	}
-	_ = memberEmail
 	_ = actorID
 	return invoiceID, invoiceSeq, total, nil
 }
