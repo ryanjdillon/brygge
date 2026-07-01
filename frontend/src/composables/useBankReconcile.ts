@@ -7,6 +7,7 @@ export interface BankRowSummary {
   row_date: string
   amount: number
   kid_number: string
+  reference: string
   counterpart: string
   description: string
   bank_account_code: string

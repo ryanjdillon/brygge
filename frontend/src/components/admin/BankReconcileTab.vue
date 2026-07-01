@@ -301,6 +301,10 @@ async function doUnassign(rowId: string) {
                 </p>
                 <p v-if="row.counterpart" class="mt-0.5 text-sm font-medium text-gray-900">{{ row.counterpart }}</p>
                 <p class="mt-0.5 truncate text-xs text-gray-500" :title="row.description">{{ row.description || '—' }}</p>
+                <p v-if="row.kid_number || row.reference" class="mt-0.5 flex flex-wrap gap-1 text-[10px] text-gray-500">
+                  <span v-if="row.kid_number" class="rounded bg-gray-100 px-1.5 py-0.5 font-mono">KID {{ row.kid_number }}</span>
+                  <span v-if="row.reference" class="rounded bg-gray-100 px-1.5 py-0.5 font-mono">Ref {{ row.reference }}</span>
+                </p>
               </div>
             </div>
             <div class="flex shrink-0 items-center gap-2">
@@ -366,6 +370,10 @@ async function doUnassign(rowId: string) {
                 </p>
                 <p v-if="row.counterpart" class="mt-0.5 text-sm font-medium text-gray-900">{{ row.counterpart }}</p>
                 <p class="mt-0.5 truncate text-xs text-gray-500" :title="row.description">{{ row.description || '—' }}</p>
+                <p v-if="row.kid_number || row.reference" class="mt-0.5 flex flex-wrap gap-1 text-[10px] text-gray-500">
+                  <span v-if="row.kid_number" class="rounded bg-gray-100 px-1.5 py-0.5 font-mono">KID {{ row.kid_number }}</span>
+                  <span v-if="row.reference" class="rounded bg-gray-100 px-1.5 py-0.5 font-mono">Ref {{ row.reference }}</span>
+                </p>
                 <p v-if="row.dismissed_at" class="mt-1 text-xs text-amber-700">
                   {{ t('admin.bankReconcile.dismissedAs', { reason: t('admin.bankReconcile.reasons.' + (row.dismissed_reason ?? '')) }) }}
                 </p>

@@ -38,6 +38,7 @@ type BankRowSummary struct {
 	RowDate                  time.Time  `json:"row_date"`
 	Amount                   float64    `json:"amount"`
 	KIDNumber                string     `json:"kid_number"`
+	Reference                string     `json:"reference"`
 	Counterpart              string     `json:"counterpart"`
 	Description              string     `json:"description"`
 	BankAccountCode          string     `json:"bank_account_code"`
@@ -135,6 +136,7 @@ func (s *Service) ListUnmatchedBankRows(
 	query := `
 		SELECT bir.id, bir.row_date, bir.amount,
 		       COALESCE(bir.kid_number, ''),
+		       COALESCE(bir.reference, ''),
 		       COALESCE(bir.counterpart, ''),
 		       COALESCE(bir.description, ''),
 		       bi.bank_account_code,
@@ -183,7 +185,7 @@ func (s *Service) ListUnmatchedBankRows(
 	for rows.Next() {
 		var r BankRowSummary
 		if err := rows.Scan(&r.ID, &r.RowDate, &r.Amount, &r.KIDNumber,
-			&r.Counterpart, &r.Description, &r.BankAccountCode,
+			&r.Reference, &r.Counterpart, &r.Description, &r.BankAccountCode,
 			&r.DismissedAt, &r.DismissedReason, &r.LikelyDuplicateOfMatched,
 			&r.PossibleDoublePayment); err != nil {
 			return nil, fmt.Errorf("scan: %w", err)
