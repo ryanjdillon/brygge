@@ -57,7 +57,8 @@
     "dock": "Brygge",
     "dockAll": "Alle",
     "clearSelection": "Tøm utval",
-    "uploading": "Lastar opp…"
+    "uploading": "Lastar opp…",
+    "ok": "OK"
   },
   "privacyPolicy": {
     "title": "Personvernerklæring",
@@ -1748,7 +1749,11 @@
       "dataFreshness": "Sist oppdatert per bank",
       "dataFreshnessHint": "Når hver konto sist fikk importerte transaksjoner.",
       "lastUpdated": "Sist oppdatert",
-      "neverImported": "Ingen import ennå"
+      "neverImported": "Ingen import ennå",
+      "reimport": "Re-importer",
+      "reimportConfirm": "Last opp den korrigerte bankfilen på nytt? Kun umatchede rader byttes ut — matchede rader (med bilag) berøres ikke.",
+      "reimportResult": "Ferdig: {deleted} fjernet, {reimported} importert på nytt, {matched} matchet, {skipped} hoppet over (allerede bokført).",
+      "reimportError": "Re-import feilet."
     },
     "pdfArchive": {
       "title": "PDF-arkiv",

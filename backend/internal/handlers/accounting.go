@@ -851,6 +851,110 @@ func (h *AccountingHandler) HandleImportBankStatement(w http.ResponseWriter, r *
 	})
 }
 
+// HandleReimportBankStatement re-parses a corrected upload for an existing
+// import and replaces ONLY its unmatched rows — matched rows (booked bilag +
+// payment) are never touched, and a parsed row a booked row already represents
+// is skipped. Recovers rows mis-parsed by an older format manifest.
+func (h *AccountingHandler) HandleReimportBankStatement(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	importID := chi.URLParam(r, "importID")
+	if importID == "" {
+		Error(w, http.StatusBadRequest, "import id is required")
+		return
+	}
+
+	// Ownership check + stored format fallback.
+	var storedFormat string
+	err := h.svc.DB().QueryRow(r.Context(),
+		`SELECT format FROM bank_imports WHERE id = $1 AND club_id = $2`,
+		importID, claims.ClubID,
+	).Scan(&storedFormat)
+	if err == pgx.ErrNoRows {
+		Error(w, http.StatusNotFound, "bank import not found")
+		return
+	}
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to load bank import for re-import")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		Error(w, http.StatusBadRequest, "file too large or invalid multipart form")
+		return
+	}
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		Error(w, http.StatusBadRequest, "file is required")
+		return
+	}
+	defer file.Close()
+
+	formatName := r.FormValue("format")
+	if formatName == "" {
+		formatName = storedFormat
+	}
+	periodID := r.FormValue("period_id")
+
+	bankFormat, ok := accounting.BankFormats[formatName]
+	if !ok {
+		Error(w, http.StatusBadRequest, "unknown bank format: "+formatName)
+		return
+	}
+
+	parser := &accounting.CSVParser{Format: bankFormat}
+	rows, err := parser.Parse(file)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to parse CSV for re-import")
+		Error(w, http.StatusBadRequest, "failed to parse CSV: "+err.Error())
+		return
+	}
+
+	result, err := h.svc.ReimportBankRows(r.Context(), claims.ClubID, importID, periodID, rows)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to re-import bank rows")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	// Recompute the import's row/matched counts from the current rows.
+	h.svc.DB().Exec(r.Context(),
+		`UPDATE bank_imports SET
+		    row_count = (SELECT count(*) FROM bank_import_rows WHERE bank_import_id = $1),
+		    matched_count = (SELECT count(*) FROM bank_import_rows WHERE bank_import_id = $1 AND journal_entry_id IS NOT NULL)
+		  WHERE id = $1`,
+		importID,
+	)
+
+	if h.audit != nil {
+		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,
+			"accounting.bank_reimported", "bank_import", importID,
+			map[string]any{
+				"filename":       header.Filename,
+				"format":         formatName,
+				"deleted":        result.Deleted,
+				"reimported":     result.Imported,
+				"matched":        result.Matched,
+				"skipped_dup":    result.SkippedDup,
+				"skipped_booked": result.SkippedBooked,
+			})
+	}
+
+	JSON(w, http.StatusOK, map[string]any{
+		"id":             importID,
+		"deleted":        result.Deleted,
+		"reimported":     result.Imported,
+		"skipped_dup":    result.SkippedDup,
+		"skipped_booked": result.SkippedBooked,
+		"matched":        result.Matched,
+	})
+}
+
 func (h *AccountingHandler) HandleGetBankImport(w http.ResponseWriter, r *http.Request) {
 	claims := middleware.GetClaims(r.Context())
 	if claims == nil {

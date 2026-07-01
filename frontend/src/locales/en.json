@@ -57,7 +57,8 @@
     "dock": "Dock",
     "dockAll": "All",
     "clearSelection": "Clear selection",
-    "uploading": "Uploading…"
+    "uploading": "Uploading…",
+    "ok": "OK"
   },
   "privacyPolicy": {
     "title": "Privacy policy",
@@ -1752,7 +1753,11 @@
       "dataFreshness": "Data freshness per bank",
       "dataFreshnessHint": "When each account last received imported transactions.",
       "lastUpdated": "Last updated",
-      "neverImported": "No imports yet"
+      "neverImported": "No imports yet",
+      "reimport": "Re-import",
+      "reimportConfirm": "Re-upload the corrected bank file? Only unmatched rows are replaced — matched rows (with a journal entry) are untouched.",
+      "reimportResult": "Done: {deleted} removed, {reimported} re-imported, {matched} matched, {skipped} skipped (already booked).",
+      "reimportError": "Re-import failed."
     },
     "pdfArchive": {
       "title": "PDF archive",

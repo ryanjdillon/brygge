@@ -49,7 +49,8 @@
     "optional": "optioneel",
     "dock": "Steiger",
     "dockAll": "Alle",
-    "clearSelection": "Selectie wissen"
+    "clearSelection": "Selectie wissen",
+    "ok": "OK"
   },
   "home": {
     "welcome": "Welkom bij Brygge",
@@ -968,7 +969,11 @@
       "dataFreshness": "Gegevensactualiteit per bank",
       "dataFreshnessHint": "Wanneer elke rekening voor het laatst geïmporteerde transacties ontving.",
       "lastUpdated": "Laatst bijgewerkt",
-      "neverImported": "Nog geen imports"
+      "neverImported": "Nog geen imports",
+      "reimport": "Re-import",
+      "reimportConfirm": "Re-upload the corrected bank file? Only unmatched rows are replaced — matched rows (with a journal entry) are untouched.",
+      "reimportResult": "Done: {deleted} removed, {reimported} re-imported, {matched} matched, {skipped} skipped (already booked).",
+      "reimportError": "Re-import failed."
     },
     "bankReconcile": {
       "filterAll": "All",

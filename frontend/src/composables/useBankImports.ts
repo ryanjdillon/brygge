@@ -206,6 +206,27 @@ export async function uploadBankCSV(
   return fetchJSON<BankImportResult>(`${BASE}/bank-import/`, { method: 'POST', body: fd })
 }
 
+// reimportBankCSV re-parses a corrected CSV for an existing import, replacing
+// only its unmatched rows (matched rows with a booked bilag are never touched).
+// Recovers rows that an older format manifest mis-parsed.
+export async function reimportBankCSV(
+  importID: string,
+  file: File,
+  format?: string,
+): Promise<{
+  id: string
+  deleted: number
+  reimported: number
+  skipped_dup: number
+  skipped_booked: number
+  matched: number
+}> {
+  const fd = new FormData()
+  fd.append('file', file)
+  if (format) fd.append('format', format)
+  return fetchJSON(`${BASE}/bank-import/${importID}/reimport`, { method: 'POST', body: fd })
+}
+
 export async function reassignBankImport(
   importID: string,
   bankAccountCode: string,

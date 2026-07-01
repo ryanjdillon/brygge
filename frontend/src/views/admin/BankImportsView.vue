@@ -13,6 +13,7 @@ import {
   uploadBankCSV,
   uploadVippsCSV,
   reassignBankImport,
+  reimportBankCSV,
   previewVippsReconcile,
   confirmVippsReconcile,
   type BankImportResult,
@@ -35,9 +36,11 @@ import { runBankSync, runVippsResync, type BankSyncResult, type VippsResyncResul
 import { importUni24CSV, type Uni24ImportResult } from '@/composables/useFinancials'
 import { formatNOK as nok, formatDate } from '@/lib/format'
 import { useFreshTotp } from '@/composables/useFreshTotp'
+import { useConfirm } from '@/stores/confirm'
 
 const { t, locale } = useI18n()
 const { ensureFreshTotp } = useFreshTotp()
+const confirm = useConfirm()
 const queryClient = useQueryClient()
 
 const { data: formats } = useBankFormats()
@@ -247,6 +250,52 @@ const vippsFreshness = computed(() => {
 
 function selectBankImport(id: string) {
   currentBankImportId.value = id
+}
+
+// ── Re-import (fix mis-parsed rows) ────────────────────────
+const reimportFileInput = ref<HTMLInputElement | null>(null)
+const reimportTargetId = ref<string | null>(null)
+
+function openReimport(id: string) {
+  reimportTargetId.value = id
+  reimportFileInput.value?.click()
+}
+
+async function onReimportFile(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = '' // allow re-picking the same file
+  const importID = reimportTargetId.value
+  if (!file || !importID) return
+  if (!(await ensureFreshTotp())) return
+  const ok = await confirm({
+    title: t('admin.bankImports.reimport'),
+    body: t('admin.bankImports.reimportConfirm'),
+    tone: 'warning',
+  })
+  if (!ok) return
+  try {
+    const res = await reimportBankCSV(importID, file)
+    queryClient.invalidateQueries({ queryKey: ['accounting'] })
+    await confirm({
+      title: t('admin.bankImports.reimport'),
+      body: t('admin.bankImports.reimportResult', {
+        deleted: res.deleted,
+        reimported: res.reimported,
+        matched: res.matched,
+        skipped: res.skipped_booked,
+      }),
+      tone: 'info',
+      confirmLabel: t('common.ok'),
+    })
+  } catch {
+    await confirm({
+      title: t('admin.bankImports.reimport'),
+      body: t('admin.bankImports.reimportError'),
+      tone: 'danger',
+      confirmLabel: t('common.ok'),
+    })
+  }
 }
 
 // ── Reassign misuploaded import ────────────────────────────
@@ -769,9 +818,23 @@ const filterMonthValue = computed<number>({
             >
               {{ t('admin.bankImports.reassign') }}
             </button>
+            <button
+              type="button"
+              class="font-semibold text-brand-700 hover:underline"
+              @click.stop="openReimport(b.id)"
+            >
+              {{ t('admin.bankImports.reimport') }}
+            </button>
           </span>
         </li>
       </ul>
+      <input
+        ref="reimportFileInput"
+        type="file"
+        accept=".csv,text/csv"
+        class="hidden"
+        @change="onReimportFile"
+      />
     </section>
 
     <!-- Bank rows from selected/uploaded import -->

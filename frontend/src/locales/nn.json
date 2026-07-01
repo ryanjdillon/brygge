@@ -56,7 +56,8 @@
     "view": "Vis",
     "dock": "Brygge",
     "dockAll": "Alle",
-    "clearSelection": "Tøm utval"
+    "clearSelection": "Tøm utval",
+    "ok": "OK"
   },
   "privacyPolicy": {
     "title": "Personvernerklæring",
@@ -1630,7 +1631,11 @@
       "dataFreshness": "Sist oppdatert per bank",
       "dataFreshnessHint": "Når kvar konto sist fekk importerte transaksjonar.",
       "lastUpdated": "Sist oppdatert",
-      "neverImported": "Ingen import enno"
+      "neverImported": "Ingen import enno",
+      "reimport": "Re-importer",
+      "reimportConfirm": "Last opp den korrigerte bankfila på nytt? Berre umatcha rader blir bytte ut — matcha rader (med bilag) blir ikkje rørt.",
+      "reimportResult": "Ferdig: {deleted} fjerna, {reimported} importert på nytt, {matched} matcha, {skipped} hoppa over (allereie bokført).",
+      "reimportError": "Re-import feila."
     },
     "pdfArchive": {
       "title": "PDF-arkiv",

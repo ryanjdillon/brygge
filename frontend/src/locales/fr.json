@@ -49,7 +49,8 @@
     "optional": "facultatif",
     "dock": "Ponton",
     "dockAll": "Tous",
-    "clearSelection": "Effacer la sélection"
+    "clearSelection": "Effacer la sélection",
+    "ok": "OK"
   },
   "home": {
     "welcome": "Bienvenue à Brygge",
@@ -967,7 +968,11 @@
       "dataFreshness": "Fraîcheur des données par banque",
       "dataFreshnessHint": "Quand chaque compte a reçu des transactions importées pour la dernière fois.",
       "lastUpdated": "Dernière mise à jour",
-      "neverImported": "Aucun import"
+      "neverImported": "Aucun import",
+      "reimport": "Re-import",
+      "reimportConfirm": "Re-upload the corrected bank file? Only unmatched rows are replaced — matched rows (with a journal entry) are untouched.",
+      "reimportResult": "Done: {deleted} removed, {reimported} re-imported, {matched} matched, {skipped} skipped (already booked).",
+      "reimportError": "Re-import failed."
     },
     "bankReconcile": {
       "filterAll": "All",

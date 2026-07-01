@@ -226,6 +226,72 @@ type ImportResult struct {
 	ClosedPeriods  []string // labels of closed periods that prevented auto-match (e.g. "2025")
 }
 
+// ReimportResult reports a re-import that replaced only the unmatched rows of
+// an existing import.
+type ReimportResult struct {
+	ImportResult
+	Deleted       int64 // unmatched/non-dismissed rows removed before re-parse
+	SkippedBooked int   // parsed rows skipped because a booked row already represents them
+}
+
+// ReimportBankRows re-parses a corrected upload for an existing import and
+// replaces ONLY its unmatched, non-dismissed, non-refund-paired rows. Matched
+// rows carry a booked bilag + payment and are never touched. A parsed row that
+// a surviving BOOKED row already represents — keyed on (date, amount, arkivref
+// found in EITHER reference or kid_number, so an originally mis-parsed match is
+// still recognised) — is skipped, so a re-import can never duplicate an
+// already-matched payment. Fresh rows go through the normal insert + auto-match
+// cascade.
+func (s *Service) ReimportBankRows(ctx context.Context, clubID, importID, periodOverride string, rows []BankRow) (ReimportResult, error) {
+	var res ReimportResult
+
+	tag, err := s.db.Exec(ctx,
+		`DELETE FROM bank_import_rows
+		  WHERE bank_import_id = $1
+		    AND journal_entry_id IS NULL
+		    AND dismissed_at IS NULL
+		    AND refund_paired_with IS NULL`,
+		importID,
+	)
+	if err != nil {
+		return res, fmt.Errorf("clearing unmatched rows: %w", err)
+	}
+	res.Deleted = tag.RowsAffected()
+
+	var fresh []BankRow
+	for _, row := range rows {
+		ref := strings.TrimSpace(row.Reference)
+		if ref != "" {
+			var booked bool
+			if err := s.db.QueryRow(ctx,
+				`SELECT EXISTS (
+				    SELECT 1 FROM bank_import_rows bir
+				     WHERE bir.club_id = $1
+				       AND bir.journal_entry_id IS NOT NULL
+				       AND bir.row_date = $2
+				       AND bir.amount = $3
+				       AND ($4 = bir.reference OR $4 = bir.kid_number)
+				 )`,
+				clubID, row.Date, row.Amount, ref,
+			).Scan(&booked); err != nil {
+				return res, fmt.Errorf("checking booked duplicate: %w", err)
+			}
+			if booked {
+				res.SkippedBooked++
+				continue
+			}
+		}
+		fresh = append(fresh, row)
+	}
+
+	imp, err := s.ImportBankRows(ctx, clubID, importID, periodOverride, fresh)
+	if err != nil {
+		return res, err
+	}
+	res.ImportResult = imp
+	return res, nil
+}
+
 // BankRowHash computes the dedup hash for a normalized bank row, scoped per club.
 // Recipe must stay in sync with the SQL backfill in the dedup migration.
 func BankRowHash(clubID string, row BankRow) string {

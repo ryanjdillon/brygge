@@ -1150,6 +1150,8 @@ func main() {
 							r.Post("/{importID}/auto-match", accountingHandler.HandleAutoMatchImport)
 							r.With(middleware.RequireFreshTOTPDefault()).
 								Patch("/{importID}/account", accountingHandler.HandleReassignBankImport)
+							r.With(middleware.RequireFreshTOTPDefault()).
+								Post("/{importID}/reimport", accountingHandler.HandleReimportBankStatement)
 						})
 
 						r.Route("/vipps-imports", func(r chi.Router) {
