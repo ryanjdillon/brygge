@@ -6,6 +6,7 @@ Cross-audience navigation: see [`../../index.md`](../../index.md).
 |----------|----------|-------------|
 | [2fa.md](2fa.md) | Board members + Operators | Two-factor authentication: enrollment, recovery codes, admin reset, all-admins-lost recovery, configurable step-up window |
 | [auth-middleware-matrix.md](auth-middleware-matrix.md) | Developers | Route × role × TOTP-gate coverage map for every registered API surface (DIL-245) |
+| [member-lifecycle.md](member-lifecycle.md) | Operators + Developers | Deactivate vs erase vs purge, the bokføringsloven §13 retention rule, and how GDPR deletion reconciles with it |
 
 Related:
 

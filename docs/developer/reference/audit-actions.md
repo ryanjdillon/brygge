@@ -36,6 +36,9 @@ The action string is the JSON wire format (`row.action`); the constant is the Go
 |---|---|---|---|---|
 | `ActionUserRoleUpdated` | `user.role_updated` | user | Grant/revoke a role on a user | `role`, `granted` (bool) |
 | `ActionUserDeleted` | `user.deleted` | user | Hard-delete via admin action (not the soft GDPR path) | — |
+| `ActionUserDeactivated` | `user.deactivated` | user | Admin deactivates a member (reversible; hides + blocks login, keeps data) | `email`, `full_name` |
+| `ActionUserReactivated` | `user.reactivated` | user | Admin reactivates a deactivated member | `email`, `full_name` |
+| `ActionMemberPIIPurged` | `user.pii_purged` | user | Scheduled sweep erases a deactivated member's PII once retention clears (actor is NULL — system job) | `reason` |
 | `ActionUserMailProvisioned` | `user.mail_provisioned` | user | Stalwart mailbox created for the user | `email` |
 | `ActionUserMailDeprovisioned` | `user.mail_deprovisioned` | user | Stalwart mailbox removed | `email` |
 
@@ -112,7 +115,7 @@ These don't have constants in `audit.go` — they're inlined as strings because 
 | `ActionGDPRExportRequested` | `gdpr.export_requested` | user | Member kicks off an export from My page → Privacy | — |
 | `ActionGDPRDeletionRequested` | `gdpr.deletion_requested` | user | Member kicks off the deletion countdown | `cooling_off_days` |
 | `ActionGDPRDeletionCancelled` | `gdpr.deletion_cancelled` | user | Member cancels during the cooling-off window | — |
-| `ActionGDPRDeletionProcessed` | `gdpr.deletion_processed` | user | Cooling-off elapsed; data wipe ran | `records_wiped` |
+| `ActionGDPRDeletionProcessed` | `gdpr.deletion_processed` | user | Cooling-off elapsed; non-retained data wiped, identity erased or deferred behind retention | `records_wiped`, `identity_erased` (bool), `retention_clears_at` |
 | `ActionLegalDocumentCreated` | `legal_document.created` | legal_document | New club bylaw / vedtekt uploaded | `kind`, `version` |
 | `ActionNotificationConfigUpdated` | `notification_config.updated` | user | User updates notification prefs (per-channel, per-category) | — |
 

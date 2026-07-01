@@ -32,6 +32,18 @@ Each invariant lists the **rule**, then the **failure mode** it prevents. When p
 
 **Failure mode:** legal exposure on a member dispute. No way to prove what the recipient was actually shown.
 
+### Invoices snapshot the member's identity at issue
+
+**Rule:** Every invoice stores `member_name` / `member_email` captured when it is created (historical rows are backfilled). Display and PDF-regeneration paths read the snapshot first — `COALESCE(NULLIF(recipient_org_name,''), NULLIF(member_name,''), users.full_name, …)` — so anonymizing or deleting the member never rewrites the name/email on their past invoices.
+
+**Failure mode:** a member is anonymized and all their historical invoices suddenly read "Deleted User", breaking the bokføringsloven §13 requirement that the record show who was billed.
+
+### A member with in-window financial records is deactivated, never erased
+
+**Rule:** "Removing" a member sets `users.deactivated_at` (reversible; hides them from active lists and member counts, blocks login, drops sessions) — it does *not* delete the row or scrub PII. Their name/email/address are erased only after their most recent invoice clears the retention window (1 January of the record's year + 6), by the daily sweep `accounting.PurgeExpiredMemberPII` or a manual erase. `HandleDeleteUser(?erasure=true)` refuses while records are in-window and downgrades to anonymize-in-place once cleared (the row must survive — invoices reference it with no `ON DELETE` cascade). `accounting.MemberFinancialRetention` is the single source of truth for eligibility — never hand-roll the date math or the `deactivated_at IS NULL` list filter.
+
+**Failure mode:** either an erase/GDPR action destroys records the club must keep for 5 years (FK violation or lost history), or a member's PII lingers indefinitely past the point erasure is legally required.
+
 ### Sent fakturas keep their issue-time kontonummer
 
 **Rule:** A sent faktura's PDF is whatever bytes are stored in `invoices.pdf_data` at delivery time. Switching the club's `is_default_for_invoices` bank account does NOT retroactively change the kontonummer on already-sent PDFs. To correct a batch, the operator runs `Regenerer PDF` from the Sent tab, which archives the original and rebuilds with the current default.

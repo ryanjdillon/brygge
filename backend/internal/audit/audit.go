@@ -25,6 +25,9 @@ const (
 	// Admin user operations
 	ActionUserRoleUpdated       = "user.role_updated"
 	ActionUserDeleted           = "user.deleted"
+	ActionUserDeactivated       = "user.deactivated"
+	ActionUserReactivated       = "user.reactivated"
+	ActionMemberPIIPurged       = "user.pii_purged"
 	ActionUserMailProvisioned   = "user.mail_provisioned"
 	ActionUserMailDeprovisioned = "user.mail_deprovisioned"
 
