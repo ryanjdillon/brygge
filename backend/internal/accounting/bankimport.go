@@ -249,6 +249,24 @@ func BankRowHash(clubID string, row BankRow) string {
 // The optional periodOverride argument, if non-empty, forces every row to
 // land in that one period regardless of date — kept for migration / special
 // cases where the treasurer needs to consolidate.
+// kidMatchCandidates returns the distinct non-empty KID-like values worth
+// matching a bank row against an invoice's kid_number: the parsed KID, the
+// arkivref (some giro-med-melding exports carry the KID there), and any KID
+// embedded in the description. Matching is exact-equality against real invoice
+// KIDs, so trying extra candidates can't produce a false match.
+func kidMatchCandidates(row BankRow) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, c := range []string{row.KID, row.Reference, ExtractKIDFromDescription(row.Description)} {
+		c = strings.TrimSpace(c)
+		if c != "" && !seen[c] {
+			seen[c] = true
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
 func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOverride string, rows []BankRow) (ImportResult, error) {
 	var res ImportResult
 	closedYears := map[int]bool{}
@@ -333,12 +351,13 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOv
 			continue
 		}
 
-		// Resolve invoice id: prefer KID match, fall back to
-		// "Fakturanummer NN" lookup by invoice_number for rows
-		// where the payer typed the human-readable number through
-		// a mobile bank or wire interface.
+		// Resolve invoice id. Try each KID-like candidate (parsed KID,
+		// arkivref, KID embedded in the description) — some giro-med-melding
+		// exports carry the real KID in a column other than the KID field.
+		// Then fall back to "Fakturanummer NN" by invoice_number, and finally
+		// to a unique counterpart-name + amount match.
 		var invoiceID string
-		if row.KID != "" {
+		for _, cand := range kidMatchCandidates(row) {
 			_ = s.db.QueryRow(ctx,
 				`SELECT i.id FROM invoices i
 				 WHERE i.club_id = $1 AND i.kid_number = $2
@@ -347,8 +366,11 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOv
 				   WHERE bir.kid_number = $2 AND bir.journal_entry_id IS NOT NULL
 				 )
 				 LIMIT 1`,
-				clubID, row.KID,
+				clubID, cand,
 			).Scan(&invoiceID)
+			if invoiceID != "" {
+				break
+			}
 		}
 		if invoiceID == "" {
 			if num := ExtractInvoiceNumberFromDescription(row.Description); num != "" {
@@ -369,6 +391,14 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOv
 					clubID, num, row.Amount,
 				).Scan(&invoiceID)
 			}
+		}
+		if invoiceID == "" && row.Counterpart != "" {
+			// Tertiary: a unique open unpaid invoice whose member's name
+			// equals the bank counterpart and whose total matches the amount
+			// — catches giro-med-melding payments where the KID never
+			// validated. Same helper the on-demand BankSync uses; ambiguity
+			// (2+ candidates) leaves the row unmatched for manual review.
+			invoiceID = s.findInvoiceByCounterpartAndAmount(ctx, clubID, row.Counterpart, row.Amount)
 		}
 		if invoiceID == "" {
 			continue

@@ -247,6 +247,7 @@ func (s *Service) syncKIDMatches(ctx context.Context, clubID, createdBy string) 
 	rows, err := s.db.Query(ctx,
 		`SELECT bir.id, bir.row_date, bir.amount,
 		        COALESCE(bir.kid_number, ''),
+		        COALESCE(bir.reference, ''),
 		        COALESCE(bir.counterpart, ''),
 		        bir.description, bi.bank_account_code
 		 FROM bank_import_rows bir
@@ -262,14 +263,14 @@ func (s *Service) syncKIDMatches(ctx context.Context, clubID, createdBy string) 
 	defer rows.Close()
 
 	type pending struct {
-		rowID, kid, counterpart, desc, bankAccount string
-		date                                       time.Time
-		amount                                     float64
+		rowID, kid, reference, counterpart, desc, bankAccount string
+		date                                                  time.Time
+		amount                                                float64
 	}
 	var work []pending
 	for rows.Next() {
 		var p pending
-		if err := rows.Scan(&p.rowID, &p.date, &p.amount, &p.kid, &p.counterpart, &p.desc, &p.bankAccount); err != nil {
+		if err := rows.Scan(&p.rowID, &p.date, &p.amount, &p.kid, &p.reference, &p.counterpart, &p.desc, &p.bankAccount); err != nil {
 			continue
 		}
 		work = append(work, p)
@@ -315,10 +316,16 @@ func (s *Service) syncKIDMatches(ctx context.Context, clubID, createdBy string) 
 			p.counterpart = newCounterpart
 		}
 
-		// Match cascade: KID → "Fakturanummer NN" + amount →
-		// unique counterpart-name + amount.
+		// Match cascade: KID candidates (kid / arkivref / from description)
+		// → "Fakturanummer NN" + amount → unique counterpart-name + amount.
 		var invoiceID string
-		if p.kid != "" {
+		kidCands := map[string]bool{}
+		for _, c := range []string{p.kid, p.reference, ExtractKIDFromDescription(p.desc)} {
+			c = strings.TrimSpace(c)
+			if c == "" || kidCands[c] {
+				continue
+			}
+			kidCands[c] = true
 			_ = s.db.QueryRow(ctx,
 				`SELECT i.id FROM invoices i
 				 WHERE i.club_id = $1 AND i.kid_number = $2
@@ -327,8 +334,11 @@ func (s *Service) syncKIDMatches(ctx context.Context, clubID, createdBy string) 
 				   WHERE bir.kid_number = $2 AND bir.journal_entry_id IS NOT NULL
 				 )
 				 LIMIT 1`,
-				clubID, p.kid,
+				clubID, c,
 			).Scan(&invoiceID)
+			if invoiceID != "" {
+				break
+			}
 		}
 		if invoiceID == "" {
 			if num := ExtractInvoiceNumberFromDescription(p.desc); num != "" {
