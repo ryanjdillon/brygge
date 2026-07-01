@@ -282,7 +282,7 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 	// row flagged is_default_for_invoices in club_bank_accounts; the
 	// clubs.bank_account column is the fallback for the deprecation
 	// window. See DIL-338/341.
-	var clubName, orgNumber, clubAddress, bankAccount, website, treasurerEmail, logoMIME string
+	var clubName, orgNumber, clubAddress, bankAccount, website, treasurerEmail, logoMIME, kidMethod string
 	var logoData []byte
 	err = h.db.QueryRow(ctx,
 		`SELECT name, COALESCE(org_number, ''), COALESCE(address, ''),
@@ -292,17 +292,23 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 		            LIMIT 1),
 		          bank_account, ''),
 		        COALESCE(website_url, ''), COALESCE(treasurer_email, ''),
-		        faktura_logo_data, COALESCE(faktura_logo_mime, '')
+		        faktura_logo_data, COALESCE(faktura_logo_mime, ''),
+		        COALESCE(kid_check_method, 'mod11')
 		 FROM clubs WHERE id = $1`,
 		claims.ClubID,
-	).Scan(&clubName, &orgNumber, &clubAddress, &bankAccount, &website, &treasurerEmail, &logoData, &logoMIME)
+	).Scan(&clubName, &orgNumber, &clubAddress, &bankAccount, &website, &treasurerEmail, &logoData, &logoMIME, &kidMethod)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to get club details for invoice")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
-	kid := finance.GenerateKID("000", invoiceSeq, 1)
+	kid, err := finance.GenerateKIDMethod("000", invoiceSeq, 1, kidMethod)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to generate KID")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
 
 	// Resolve recipient overrides. recipient_org_name doubles as the
 	// canonical recipient name in *both* private and organisation modes

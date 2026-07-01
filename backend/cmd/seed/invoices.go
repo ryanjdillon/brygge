@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/brygge-klubb/brygge/internal/finance"
 )
 
 // invoiceSeed describes one invoice to create across the Faktura tabs.
@@ -96,7 +98,13 @@ func seedInvoices(ctx context.Context, db *pgxpool.Pool, clubID string, userIDs 
 		if id := userIDs[s.email]; id != "" {
 			userID = &id
 		}
-		kid := fmt.Sprintf("%010d", 2026_000_001+i)
+		// Valid mod-11 KID (matches production generation) so reissue and
+		// reconcile flows are testable against realistic references.
+		kid, kerr := finance.GenerateKIDMethod("000", 700+i, 1, finance.KIDMethodMod11)
+		if kerr != nil {
+			fmt.Fprintf(os.Stderr, "  failed to generate KID for %s: %v\n", s.email, kerr)
+			continue
+		}
 
 		// Sent invoices carry a placeholder PDF blob so the reminder
 		// ("purring") path — which requires a stored PDF — is testable in

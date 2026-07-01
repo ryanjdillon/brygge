@@ -67,7 +67,7 @@ func ExtractKIDFromDescription(desc string) string {
 		return ""
 	}
 	candidate := m[1]
-	if !finance.ValidateKID(candidate) {
+	if !finance.ValidateKIDAny(candidate) {
 		return ""
 	}
 	return candidate

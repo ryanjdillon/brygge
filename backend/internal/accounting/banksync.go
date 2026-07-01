@@ -12,11 +12,11 @@ import (
 )
 
 // isBryggeKID is `true` only for strings that match Brygge's own KID
-// shape: exactly 12 ASCII digits with a valid Luhn check digit. This
-// is intentionally narrower than `finance.ValidateKID` (which only
-// asserts the Luhn) because the bank's Melding column carries lots
-// of free-text garbage that happens to fail length but might fluke
-// the Luhn — easier to reject the whole class.
+// shape: exactly 12 ASCII digits with a valid check digit under EITHER
+// scheme (mod-10 for historical KIDs, mod-11 for current ones). This is
+// intentionally narrower than a bare check-digit assert because the bank's
+// Melding column carries lots of free-text garbage that happens to fail
+// length but might fluke a check digit — easier to reject the whole class.
 func isBryggeKID(s string) bool {
 	if len(s) != 12 {
 		return false
@@ -26,7 +26,7 @@ func isBryggeKID(s string) bool {
 			return false
 		}
 	}
-	return finance.ValidateKID(s)
+	return finance.ValidateKIDAny(s)
 }
 
 // findInvoiceByCounterpartAndAmount is the tertiary auto-match path

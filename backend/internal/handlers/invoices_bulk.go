@@ -207,7 +207,7 @@ func (h *InvoiceHandler) HandleBulkCreateInvoices(w http.ResponseWriter, r *http
 		tiersByCategory[cat] = list
 	}
 
-	var clubName, orgNumber, clubAddress, bankAccount, website, treasurerEmail, logoMIME string
+	var clubName, orgNumber, clubAddress, bankAccount, website, treasurerEmail, logoMIME, kidMethod string
 	var logoData []byte
 	if err := h.db.QueryRow(ctx,
 		`SELECT name, COALESCE(org_number, ''), COALESCE(address, ''),
@@ -217,10 +217,11 @@ func (h *InvoiceHandler) HandleBulkCreateInvoices(w http.ResponseWriter, r *http
 		            LIMIT 1),
 		          bank_account, ''),
 		        COALESCE(website_url, ''), COALESCE(treasurer_email, ''),
-		        faktura_logo_data, COALESCE(faktura_logo_mime, '')
+		        faktura_logo_data, COALESCE(faktura_logo_mime, ''),
+		        COALESCE(kid_check_method, 'mod11')
 		   FROM clubs WHERE id = $1`,
 		claims.ClubID,
-	).Scan(&clubName, &orgNumber, &clubAddress, &bankAccount, &website, &treasurerEmail, &logoData, &logoMIME); err != nil {
+	).Scan(&clubName, &orgNumber, &clubAddress, &bankAccount, &website, &treasurerEmail, &logoData, &logoMIME, &kidMethod); err != nil {
 		h.log.Error().Err(err).Msg("failed to load club for bulk invoices")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
@@ -365,7 +366,7 @@ func (h *InvoiceHandler) HandleBulkCreateInvoices(w http.ResponseWriter, r *http
 		invID, invNum, total, err := h.createBulkInvoice(ctx,
 			claims.ClubID, claims.UserID, userID, lines,
 			req.FiscalPeriodID, fiscalYear, dueDate,
-			clubName, orgNumber, clubAddress, bankAccount, website, treasurerEmail, logoData, logoMIME)
+			clubName, orgNumber, clubAddress, bankAccount, website, treasurerEmail, logoData, logoMIME, kidMethod)
 		if err != nil {
 			h.log.Error().Err(err).Str("user_id", userID).Msg("bulk invoice create failed")
 			resp.Skipped = append(resp.Skipped, bulkInvoiceSkipped{UserID: userID, Reason: "create failed: " + err.Error()})
@@ -487,7 +488,7 @@ func (h *InvoiceHandler) createBulkInvoice(
 	fiscalYear int,
 	dueDate time.Time,
 	clubName, orgNumber, clubAddress, bankAccount, website, treasurerEmail string,
-	logoData []byte, logoMIME string,
+	logoData []byte, logoMIME string, kidMethod string,
 ) (string, int, float64, error) {
 	var memberName, memberEmail, memberAddress string
 	if err := h.db.QueryRow(ctx,
@@ -506,7 +507,10 @@ func (h *InvoiceHandler) createBulkInvoice(
 		return "", 0, 0, err
 	}
 
-	kid := finance.GenerateKID("000", invoiceSeq, 1)
+	kid, err := finance.GenerateKIDMethod("000", invoiceSeq, 1, kidMethod)
+	if err != nil {
+		return "", 0, 0, err
+	}
 
 	pdfLines := make([]finance.InvoiceLine, 0, len(lines))
 	var total float64

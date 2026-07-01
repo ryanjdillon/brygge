@@ -1,6 +1,9 @@
 package finance
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 func TestLuhnCheckDigitStandardVector(t *testing.T) {
 	// Standard Luhn test: "7992739871" should have check digit "3"
@@ -64,5 +67,75 @@ func TestGenerateKIDUniqueness(t *testing.T) {
 	k3 := GenerateKID("000", 2, 1)
 	if k1 == k2 || k1 == k3 || k2 == k3 {
 		t.Errorf("KIDs should be unique: %q, %q, %q", k1, k2, k3)
+	}
+}
+
+// Every generated mod-11 KID must validate under mod-11, across a range that
+// exercises the control-digit==10 skip path.
+func TestMod11GenerateValidatesRoundTrip(t *testing.T) {
+	for member := 1; member <= 300; member++ {
+		kid, err := GenerateKIDMethod("000", member, 1, KIDMethodMod11)
+		if err != nil {
+			t.Fatalf("GenerateKIDMethod mod11 member=%d: %v", member, err)
+		}
+		if !ValidateKIDMethod(kid, KIDMethodMod11) {
+			t.Errorf("member=%d KID %q does not validate under mod-11", member, kid)
+		}
+		if len(kid) != 12 {
+			t.Errorf("member=%d KID %q wrong length", member, kid)
+		}
+	}
+}
+
+// When a base's mod-11 control digit would be 10 (unusable), the generator must
+// advance the invoiceSeq component to a valid KID rather than emit an invalid one.
+func TestMod11SkipsControlDigitTen(t *testing.T) {
+	found := false
+	for member := 1; member <= 2000; member++ {
+		base := fmt.Sprintf("%s%05d%03d", "000", member, 1)
+		if _, ok := mod11CheckDigit(base); ok {
+			continue
+		}
+		found = true
+		kid, err := GenerateKIDMethod("000", member, 1, KIDMethodMod11)
+		if err != nil {
+			t.Fatalf("member=%d: %v", member, err)
+		}
+		if !ValidateKIDMethod(kid, KIDMethodMod11) {
+			t.Errorf("member=%d advanced KID %q invalid under mod-11", member, kid)
+		}
+		if kid[8:11] == "001" {
+			t.Errorf("member=%d expected invoiceSeq bump past 001, got %q", member, kid)
+		}
+		break
+	}
+	if !found {
+		t.Skip("no control-digit==10 base found in range")
+	}
+}
+
+// The real Trond/Preben KIDs are mod-10 valid but mod-11 invalid; their numbers
+// must regenerate to mod-11-valid KIDs, and ValidateKIDAny accepts both schemes.
+func TestValidateKIDAnyAndRealCases(t *testing.T) {
+	if !ValidateKIDMethod("000000740019", KIDMethodMod10) || ValidateKIDMethod("000000740019", KIDMethodMod11) {
+		t.Error("Trond KID should be mod10-valid, mod11-invalid")
+	}
+	if !ValidateKIDMethod("000001050012", KIDMethodMod10) || ValidateKIDMethod("000001050012", KIDMethodMod11) {
+		t.Error("Preben KID should be mod10-valid, mod11-invalid")
+	}
+	for _, member := range []int{74, 105} {
+		kid, err := GenerateKIDMethod("000", member, 1, KIDMethodMod11)
+		if err != nil {
+			t.Fatalf("member=%d: %v", member, err)
+		}
+		if !ValidateKIDMethod(kid, KIDMethodMod11) {
+			t.Errorf("member=%d regenerated mod-11 KID %q invalid", member, kid)
+		}
+		if !ValidateKIDAny(kid) {
+			t.Errorf("ValidateKIDAny rejected mod-11 KID %q", kid)
+		}
+	}
+	if !ValidateKIDAny("000000740019") {
+		t.Error("ValidateKIDAny should accept a historical mod-10 KID")
 	}
 }
