@@ -621,7 +621,7 @@ defineExpose({ load })
                 <input
                   type="checkbox"
                   :checked="allFilteredSelected"
-                  class="rounded border-gray-300"
+                  class="h-4 w-4 rounded border-gray-300 accent-brand-600 focus:ring-1 focus:ring-brand-500"
                   @change="toggleAll"
                 />
               </th>
@@ -658,7 +658,7 @@ defineExpose({ load })
                 <input
                   type="checkbox"
                   :checked="selected.has(d.id)"
-                  class="rounded border-gray-300"
+                  class="h-4 w-4 rounded border-gray-300 accent-brand-600 focus:ring-1 focus:ring-brand-500"
                   @click="onRowClick(idx, $event)"
                 />
               </td>

@@ -177,7 +177,7 @@ function onBulkCompleted() {
         <thead class="bg-gray-50">
           <tr>
             <th class="w-8 px-2 py-2 text-center">
-              <input type="checkbox" :checked="allSelected" class="rounded border-gray-300" @change="toggleAll" />
+              <input type="checkbox" :checked="allSelected" class="h-4 w-4 rounded border-gray-300 accent-brand-600 focus:ring-1 focus:ring-brand-500" @change="toggleAll" />
             </th>
             <th class="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.groupFaktura.member') }}</th>
             <th class="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.groupFaktura.email') }}</th>
@@ -187,7 +187,7 @@ function onBulkCompleted() {
         <tbody class="divide-y divide-gray-200 bg-white">
           <tr v-for="(r, idx) in rows" :key="r.id" :class="{ 'bg-brand-50/50': selected.has(r.id) }">
             <td class="px-2 py-2 text-center">
-              <input type="checkbox" :checked="selected.has(r.id)" class="rounded border-gray-300" @click="onRowClick(idx, $event)" />
+              <input type="checkbox" :checked="selected.has(r.id)" class="h-4 w-4 rounded border-gray-300 accent-brand-600 focus:ring-1 focus:ring-brand-500" @click="onRowClick(idx, $event)" />
             </td>
             <td class="px-3 py-2 text-sm font-medium text-gray-900">{{ r.full_name }}</td>
             <td class="px-3 py-2 text-sm text-gray-700">{{ r.email }}</td>
