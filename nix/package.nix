@@ -38,6 +38,7 @@ buildGoModule rec {
   subPackages = [
     "cmd/api"
     "cmd/seed"
+    "cmd/backfill-bank-names"
   ];
 
   ldflags = [
