@@ -12,12 +12,17 @@ import {
   useReconcileMutations,
   useAssignMultiInvoiceMutation,
   fetchPotentialInvoices,
+  useVippsPerChargeEnabled,
+  useUnreconciledVippsCharges,
+  useVippsChargeMutations,
+  fetchVippsChargePotentialInvoices,
   DISMISS_REASONS,
   type BankRowSummary,
   type BankRowKind,
   type InvoiceSuggestion,
   type AccountSuggestion,
   type DismissReason,
+  type VippsCharge,
 } from '@/composables/useBankReconcile'
 import { formatNOK as formatNOKBase, formatDate as fmtDate } from '@/lib/format'
 import { useAccountsList } from '@/composables/useAccounting'
@@ -71,6 +76,53 @@ const missingSettlementsTotal = computed(() =>
 
 const { assignInvoice, assignAccount, dismiss, unassign } = useReconcileMutations()
 const assignMultiInvoice = useAssignMultiInvoiceMutation()
+
+// ── Per-charge Vipps model (BRY-227) ─────────────────────────
+// When the club is on the per-charge model, individual Vipps charges appear as
+// their own Tildel items and the batched payout bank rows render as quiet
+// auto-clearing items instead of unassignable deposits.
+const { data: perChargeEnabled } = useVippsPerChargeEnabled()
+const vippsEnabled = computed(() => !!perChargeEnabled.value)
+const { data: vippsCharges } = useUnreconciledVippsCharges(vippsEnabled)
+const { assignInvoice: vAssignInvoice, bilag: vBilag, dismiss: vDismiss, clearPayout } = useVippsChargeMutations()
+
+// The modals below are shared between bank rows and Vipps charges; activeSource
+// tells the submit handlers which mutation + candidate fetch to use.
+const activeSource = ref<'bank' | 'vipps'>('bank')
+
+// Remaining-charge counts from the last payout clear attempt, keyed by bank row
+// id, so a not-yet-ready payout shows "N charges left" inline.
+const payoutRemaining = ref<Record<string, number>>({})
+
+async function doClearPayout(rowId: string) {
+  const res = await clearPayout.mutateAsync({ rowId })
+  if (res && !res.ready) {
+    payoutRemaining.value = { ...payoutRemaining.value, [rowId]: res.unreconciled_charges }
+  }
+}
+
+function openVippsPotential(charge: VippsCharge) {
+  activeSource.value = 'vipps'
+  potentialRowId.value = charge.id
+  potentialQuery.value = ''
+  potentialOpen.value = true
+  void loadPotential()
+}
+function openVippsAccountPicker(charge: VippsCharge) {
+  activeSource.value = 'vipps'
+  accountPickerRowId.value = charge.id
+  accountPickerKind.value = 'revenue'
+  accountPickerSuggestions.value = []
+  accountPickerSearch.value = ''
+  bilagDescription.value = charge.description ?? ''
+  accountPickerOpen.value = true
+}
+function openVippsDismiss(charge: VippsCharge) {
+  activeSource.value = 'vipps'
+  dismissRowId.value = charge.id
+  dismissReason.value = null
+  dismissOpen.value = true
+}
 
 // ── Multi-select ─────────────────────────────────────────────
 const selectedIds = ref<Set<string>>(new Set())
@@ -133,6 +185,7 @@ const potentialItems = ref<InvoiceSuggestion[]>([])
 const potentialLoading = ref(false)
 
 async function openPotential(row: BankRowSummary) {
+  activeSource.value = 'bank'
   potentialRowId.value = row.id
   potentialQuery.value = ''
   potentialOpen.value = true
@@ -142,7 +195,9 @@ async function loadPotential() {
   if (!potentialRowId.value) return
   potentialLoading.value = true
   try {
-    potentialItems.value = await fetchPotentialInvoices(potentialRowId.value, potentialQuery.value)
+    potentialItems.value = activeSource.value === 'vipps'
+      ? await fetchVippsChargePotentialInvoices(potentialRowId.value, potentialQuery.value)
+      : await fetchPotentialInvoices(potentialRowId.value, potentialQuery.value)
   } finally {
     potentialLoading.value = false
   }
@@ -157,6 +212,7 @@ const accountPickerSearch = ref('')
 const bilagDescription = ref('')
 
 function openAccountPicker(row: BankRowSummary) {
+  activeSource.value = 'bank'
   accountPickerRowId.value = row.id
   accountPickerKind.value = row.amount < 0 ? 'expense' : 'revenue'
   accountPickerSuggestions.value = suggestions.value?.accounts ?? []
@@ -177,6 +233,7 @@ const dismissRowId = ref<string | null>(null)
 const dismissReason = ref<DismissReason | null>(null)
 
 function openDismiss(row: BankRowSummary) {
+  activeSource.value = 'bank'
   dismissRowId.value = row.id
   if (row.likely_duplicate_of_matched) dismissReason.value = 'duplicate'
   else if (row.possible_double_payment) dismissReason.value = 'double_payment'
@@ -186,7 +243,11 @@ function openDismiss(row: BankRowSummary) {
 
 async function submitDismiss() {
   if (!dismissRowId.value || !dismissReason.value) return
-  await dismiss.mutateAsync({ rowId: dismissRowId.value, reason: dismissReason.value })
+  if (activeSource.value === 'vipps') {
+    await vDismiss.mutateAsync({ rowId: dismissRowId.value, reason: dismissReason.value })
+  } else {
+    await dismiss.mutateAsync({ rowId: dismissRowId.value, reason: dismissReason.value })
+  }
   dismissOpen.value = false
 }
 
@@ -218,10 +279,19 @@ async function doAssignMultiInvoice(invoiceId: string) {
 
 // ── Actions ──────────────────────────────────────────────────
 async function doAssignInvoice(rowId: string, invoiceId: string) {
-  await assignInvoice.mutateAsync({ rowId, invoiceId })
+  if (activeSource.value === 'vipps') {
+    await vAssignInvoice.mutateAsync({ rowId, invoiceId })
+  } else {
+    await assignInvoice.mutateAsync({ rowId, invoiceId })
+  }
   potentialOpen.value = false
 }
 async function doAssignAccount(rowId: string, accountCode: string, k: 'expense' | 'revenue') {
+  if (activeSource.value === 'vipps') {
+    await vBilag.mutateAsync({ rowId, accountCode, description: bilagDescription.value || undefined })
+    accountPickerOpen.value = false
+    return
+  }
   const targetIds = selectedIds.value.size > 1 ? [...selectedIds.value] : [rowId]
   for (const id of targetIds) {
     await assignAccount.mutateAsync({ rowId: id, accountCode, kind: k, description: bilagDescription.value || undefined })
@@ -302,6 +372,67 @@ async function doUnassign(rowId: string) {
           <span class="font-mono">Utb. {{ m.settlement_number }} · Vippsnr {{ m.msn }}</span>
           <span>{{ fmtDate(m.date) }}</span>
           <span class="font-semibold">{{ formatNOK(m.amount) }}</span>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Individual Vipps charges (per-charge model): one line per payer,
+         reconciled independently of the batched payout below. -->
+    <div v-if="vippsEnabled && vippsCharges?.length" class="mt-4">
+      <p class="mb-2 text-xs font-semibold uppercase text-gray-500">
+        {{ t('admin.bankReconcile.vippsChargesHeader', { count: vippsCharges.length }) }}
+      </p>
+      <ul class="space-y-3">
+        <li
+          v-for="c in vippsCharges"
+          :key="c.id"
+          class="rounded-md border border-violet-200 bg-white p-4"
+        >
+          <div class="flex items-start justify-between gap-4">
+            <div class="flex items-start gap-3">
+              <ArrowDownLeft class="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
+              <div>
+                <p class="text-sm">
+                  <span class="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700">Vipps</span>
+                  <span class="ml-2 font-semibold tabular-nums text-emerald-700">{{ formatNOK(c.amount) }}</span>
+                  <span class="ml-2 text-gray-500">{{ formatDate(c.date) }}</span>
+                  <span v-if="c.reference" class="ml-2 rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[10px] text-gray-600">Utb. {{ c.reference }}</span>
+                </p>
+                <p v-if="c.counterpart" class="mt-0.5 text-sm font-medium text-gray-900">{{ c.counterpart }}</p>
+                <p class="mt-0.5 truncate text-xs text-gray-500" :title="c.description">{{ c.description || '—' }}</p>
+                <p v-if="c.suggestion_count > 0" class="mt-0.5 inline-flex items-center gap-1 text-[10px] text-brand-700">
+                  <Sparkles class="h-3 w-3" />
+                  {{ t('admin.bankReconcile.vippsChargeSuggestions', { count: c.suggestion_count > 9 ? '9+' : c.suggestion_count }) }}
+                </p>
+              </div>
+            </div>
+            <div class="flex shrink-0 flex-wrap items-center justify-end gap-2">
+              <button
+                type="button"
+                class="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-3 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                @click="openVippsPotential(c)"
+              >
+                <Search class="h-3 w-3" />
+                {{ t('admin.bankReconcile.searchInvoice') }}
+              </button>
+              <button
+                type="button"
+                class="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-3 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                @click="openVippsAccountPicker(c)"
+              >
+                <FileText class="h-3 w-3" />
+                {{ t('admin.bankReconcile.lagBilag') }}
+              </button>
+              <button
+                type="button"
+                class="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-white px-3 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-50"
+                @click="openVippsDismiss(c)"
+              >
+                <Ban class="h-3 w-3" />
+                {{ t('admin.bankReconcile.dismiss') }}
+              </button>
+            </div>
+          </div>
         </li>
       </ul>
     </div>
@@ -415,7 +546,26 @@ async function doUnassign(rowId: string) {
                 </p>
               </div>
             </div>
+            <!-- Batched Vipps payout under the per-charge model: quiet
+                 auto-clearing item, not an assignable deposit. -->
+            <div v-if="vippsEnabled && row.vipps_payout" class="flex flex-col items-end gap-1 text-right">
+              <span class="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700">
+                {{ t('admin.bankReconcile.vippsAutoClearing') }}
+              </span>
+              <button
+                type="button"
+                class="inline-flex items-center gap-1 rounded-md border border-violet-300 bg-white px-2.5 py-1 text-xs font-semibold text-violet-700 hover:bg-violet-50 disabled:opacity-50"
+                :disabled="clearPayout.isPending.value"
+                @click="doClearPayout(row.id)"
+              >
+                {{ t('admin.bankReconcile.vippsClearPayout') }}
+              </button>
+              <span v-if="payoutRemaining[row.id]" class="text-[10px] text-amber-700">
+                {{ t('admin.bankReconcile.vippsChargesRemaining', { count: payoutRemaining[row.id] }) }}
+              </span>
+            </div>
             <button
+              v-else
               type="button"
               class="text-xs hover:underline"
               :class="

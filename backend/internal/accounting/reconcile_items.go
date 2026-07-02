@@ -104,6 +104,20 @@ func (s *Service) ListMissingVippsSettlements(ctx context.Context, clubID string
 	return out, nil
 }
 
+// PotentialInvoicesForVippsCharge lists open unpaid invoices whose amount
+// matches the given Vipps charge — the candidate list for assigning the charge
+// to a faktura. It reuses the bank-row candidate query via its amount override.
+func (s *Service) PotentialInvoicesForVippsCharge(ctx context.Context, clubID, chargeID, q string, limit int) ([]InvoiceSuggestion, error) {
+	var amount float64
+	if err := s.db.QueryRow(ctx,
+		`SELECT amount FROM vipps_import_rows WHERE id = $1 AND club_id = $2 AND row_type = $3`,
+		chargeID, clubID, string(VippsRowBelastning),
+	).Scan(&amount); err != nil {
+		return nil, fmt.Errorf("vipps charge not found")
+	}
+	return s.PotentialInvoicesForRow(ctx, clubID, "", q, limit, amount)
+}
+
 // ListUnreconciledVippsCharges returns the individual Vipps settlement charges
 // (belastning rows) not yet journaled, as unified reconcile items — the
 // per-payer lines that will populate the Tildel queue under the per-charge

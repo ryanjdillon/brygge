@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 
@@ -32,6 +33,27 @@ func (h *AccountingHandler) HandleListUnreconciledVippsCharges(w http.ResponseWr
 		return
 	}
 	JSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+// HandleVippsChargePotentialInvoices lists open unpaid invoices whose amount
+// matches the charge — the candidate list for Tildel→faktura. Reuses the
+// bank-row potential-invoices query via its amount override.
+func (h *AccountingHandler) HandleVippsChargePotentialInvoices(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	rowID := chi.URLParam(r, "rowID")
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	items, err := h.svc.PotentialInvoicesForVippsCharge(ctx, claims.ClubID, rowID, r.URL.Query().Get("q"), limit)
+	if err != nil {
+		h.log.Warn().Err(err).Str("row_id", rowID).Msg("vipps charge potential invoices")
+		Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	JSON(w, http.StatusOK, map[string]any{"items": items, "potential": true})
 }
 
 // HandleAssignVippsChargeToInvoice books a charge against an open faktura

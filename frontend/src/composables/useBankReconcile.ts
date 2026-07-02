@@ -16,6 +16,23 @@ export interface BankRowSummary {
   likely_duplicate_of_matched: boolean
   possible_double_payment: boolean
   suggestion_count: number
+  // True for a batched Vipps settlement payout ("Utb. N Vippsnr M"). Under the
+  // per-charge model its individual charges are reconciled one by one and this
+  // row auto-clears — so it renders as a quiet auto-clearing item.
+  vipps_payout: boolean
+}
+
+// A single individual Vipps settlement charge awaiting reconciliation — one
+// line per payer in the Tildel queue under the per-charge model (BRY-227).
+export interface VippsCharge {
+  id: string
+  source: 'vipps'
+  date: string
+  amount: number
+  counterpart: string
+  description: string
+  reference: string
+  suggestion_count: number
 }
 
 export interface InvoiceSuggestion {
@@ -111,6 +128,104 @@ export function useMissingVippsSettlements() {
         '/api/v1/admin/accounting/vipps-missing-settlements',
       ),
   })
+}
+
+// Whether the club is on the per-charge Vipps reconciliation model — gates
+// whether the Tildel tab surfaces individual charges + quiet payout items.
+export function useVippsPerChargeEnabled() {
+  return useQuery({
+    queryKey: ['accounting', 'vipps-per-charge-enabled'],
+    queryFn: async () => {
+      const body = await useApi().fetchApi<{ vipps_per_charge_enabled?: boolean }>(
+        '/api/v1/admin/settings/site',
+      )
+      return !!body.vipps_per_charge_enabled
+    },
+    staleTime: 300_000,
+  })
+}
+
+// Individual unreconciled Vipps charges for the Tildel queue (per-charge model).
+export function useUnreconciledVippsCharges(enabled: Ref<boolean>) {
+  return useQuery({
+    queryKey: ['vipps-charges', 'unmatched'],
+    enabled,
+    queryFn: async () => {
+      const body = await useApi().fetchApi<{ items: VippsCharge[] }>(
+        '/api/v1/admin/accounting/vipps-charges/unmatched',
+      )
+      return body.items
+    },
+    refetchOnWindowFocus: true,
+  })
+}
+
+export interface VippsPayoutClearResult {
+  ready: boolean
+  settlement_number: string
+  msn: string
+  unreconciled_charges: number
+  already_cleared: boolean
+  clearing_balance: number
+}
+
+// Actions on individual Vipps charges + the settlement payout auto-clear.
+export function useVippsChargeMutations() {
+  const qc = useQueryClient()
+  const CBASE = '/api/v1/admin/accounting/vipps-charges'
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ['vipps-charges'] })
+    qc.invalidateQueries({ queryKey: ['bank-rows'] })
+  }
+
+  const assignInvoice = useMutation({
+    mutationFn: ({ rowId, invoiceId }: { rowId: string; invoiceId: string }) =>
+      useApi().fetchApi(`${CBASE}/${rowId}/assign-invoice`, {
+        method: 'POST',
+        body: JSON.stringify({ invoice_id: invoiceId }),
+      }),
+    onSuccess: invalidate,
+  })
+
+  const bilag = useMutation({
+    mutationFn: ({ rowId, accountCode, description }: { rowId: string; accountCode: string; description?: string }) =>
+      useApi().fetchApi(`${CBASE}/${rowId}/assign-account`, {
+        method: 'POST',
+        body: JSON.stringify({ account_code: accountCode, description }),
+      }),
+    onSuccess: invalidate,
+  })
+
+  const dismiss = useMutation({
+    mutationFn: ({ rowId, reason }: { rowId: string; reason: string }) =>
+      useApi().fetchApi(`${CBASE}/${rowId}/dismiss`, {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+      }),
+    onSuccess: invalidate,
+  })
+
+  const clearPayout = useMutation({
+    mutationFn: ({ rowId }: { rowId: string }) =>
+      useApi().fetchApi<VippsPayoutClearResult>(
+        `/api/v1/admin/accounting/bank-rows/${rowId}/clear-vipps-payout`,
+        { method: 'POST' },
+      ),
+    onSuccess: invalidate,
+  })
+
+  return { assignInvoice, bilag, dismiss, clearPayout }
+}
+
+// Candidate invoices for assigning a Vipps charge to a faktura.
+export async function fetchVippsChargePotentialInvoices(chargeId: string, q: string): Promise<InvoiceSuggestion[]> {
+  const url = new URL(
+    `/api/v1/admin/accounting/vipps-charges/${chargeId}/potential-invoices`,
+    window.location.origin,
+  )
+  if (q) url.searchParams.set('q', q)
+  const body = await useApi().fetchApi<{ items: InvoiceSuggestion[] }>(url.toString())
+  return body.items
 }
 
 export function useBankRowSuggestions(rowId: Ref<string | null>) {
