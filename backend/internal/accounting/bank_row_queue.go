@@ -51,6 +51,12 @@ type BankRowSummary struct {
 	// worth opening (vs a genuinely orphan deposit with no matching invoice).
 	// Advisory only; 0 for outgoing rows.
 	SuggestionCount int `json:"suggestion_count"`
+	// VippsPayout is true for a batched Vipps settlement payout ("Utb. N
+	// Vippsnr M"). Under the per-charge model (BRY-227) the individual charges
+	// are reconciled one by one and this row auto-clears — so the Tildel UI
+	// renders it as a quiet auto-clearing item rather than an unassignable
+	// "Ingen fakturaforslag" deposit.
+	VippsPayout bool `json:"vipps_payout"`
 }
 
 // ListUnmatchedBankRows returns the paginated set of rows that still
@@ -182,7 +188,8 @@ func (s *Service) ListUnmatchedBankRows(
 		             AND i.status = 'open'
 		             AND i.payment_id IS NULL
 		             AND ABS(i.total_amount - bir.amount) < 0.005
-		        ) ELSE 0 END) AS suggestion_count
+		        ) ELSE 0 END) AS suggestion_count,
+		       (bir.description ~* 'Utb\.\s*[0-9]+\s+Vippsnr\s+[0-9]+') AS vipps_payout
 		  FROM bank_import_rows bir
 		  JOIN bank_imports bi ON bi.id = bir.bank_import_id
 		 WHERE ` + strings.Join(where, " AND ") + `
@@ -201,7 +208,7 @@ func (s *Service) ListUnmatchedBankRows(
 		if err := rows.Scan(&r.ID, &r.RowDate, &r.Amount, &r.KIDNumber,
 			&r.Reference, &r.Counterpart, &r.Description, &r.BankAccountCode,
 			&r.DismissedAt, &r.DismissedReason, &r.LikelyDuplicateOfMatched,
-			&r.PossibleDoublePayment, &r.SuggestionCount); err != nil {
+			&r.PossibleDoublePayment, &r.SuggestionCount, &r.VippsPayout); err != nil {
 			return nil, fmt.Errorf("scan: %w", err)
 		}
 		out = append(out, r)

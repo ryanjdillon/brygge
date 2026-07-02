@@ -126,6 +126,7 @@ func (s *Service) ListUnreconciledVippsCharges(ctx context.Context, clubID strin
 		  WHERE vir.club_id = $1
 		    AND vir.row_type = $2
 		    AND vir.journal_entry_id IS NULL
+		    AND vir.dismissed_at IS NULL
 		    AND vir.amount > 0
 		  ORDER BY d NULLS LAST, vir.id`,
 		clubID, string(VippsRowBelastning),

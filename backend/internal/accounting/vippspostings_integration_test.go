@@ -333,6 +333,65 @@ func TestClearVippsPayoutNetsToZero(t *testing.T) {
 	}
 }
 
+func TestDismissVippsCharge(t *testing.T) {
+	svc, ctx, f := newSettlement(t)
+
+	// Invalid reason is rejected.
+	if err := svc.DismissVippsCharge(ctx, f.clubID, f.userID, f.chargeB, "made_up"); err == nil {
+		t.Error("invalid dismiss reason should be rejected")
+	}
+
+	// Dismiss the walk-up charge B.
+	if err := svc.DismissVippsCharge(ctx, f.clubID, f.userID, f.chargeB, "test_transaction"); err != nil {
+		t.Fatalf("dismiss B: %v", err)
+	}
+
+	// B drops out of the Tildel queue; only A remains.
+	items, err := svc.ListUnreconciledVippsCharges(ctx, f.clubID)
+	if err != nil {
+		t.Fatalf("list charges: %v", err)
+	}
+	if len(items) != 1 || items[0].ID != f.chargeA {
+		t.Errorf("after dismiss, queue = %+v, want only charge A", items)
+	}
+
+	// A dismissed charge can't be assigned.
+	if _, err := svc.AssignVippsChargeToInvoice(ctx, f.clubID, f.chargeB, f.invoiceID, f.userID); err == nil {
+		t.Error("assigning a dismissed charge should fail")
+	}
+
+	// Re-dismiss is idempotent.
+	if err := svc.DismissVippsCharge(ctx, f.clubID, f.userID, f.chargeB, "test_transaction"); err != nil {
+		t.Errorf("re-dismiss should be a no-op, got %v", err)
+	}
+
+	// The dismissed charge no longer blocks the payout gate.
+	res, err := svc.ClearVippsPayout(ctx, f.clubID, f.bankRowID, f.userID)
+	if err != nil {
+		t.Fatalf("clear (A unbooked, B dismissed): %v", err)
+	}
+	if res.Ready || res.UnreconciledCharges != 1 {
+		t.Errorf("gate should count only charge A: ready %v unreconciled %d", res.Ready, res.UnreconciledCharges)
+	}
+
+	// Book A, then the payout clears despite B being dismissed. Clearing does
+	// NOT net to zero — B's money is in the payout but was never booked — which
+	// is the documented dismiss caveat.
+	if _, err := svc.AssignVippsChargeToInvoice(ctx, f.clubID, f.chargeA, f.invoiceID, f.userID); err != nil {
+		t.Fatalf("assign A: %v", err)
+	}
+	res, err = svc.ClearVippsPayout(ctx, f.clubID, f.bankRowID, f.userID)
+	if err != nil {
+		t.Fatalf("clear after booking A: %v", err)
+	}
+	if !res.Ready {
+		t.Fatalf("expected ready clear, got %+v", res)
+	}
+	if floatNear(res.ClearingBalance, 0, 0.01) {
+		t.Errorf("clearing should be off by the dismissed 300, got %.2f", res.ClearingBalance)
+	}
+}
+
 func TestVippsPostingRefusesClosedPeriod(t *testing.T) {
 	svc, ctx, f := newSettlement(t)
 

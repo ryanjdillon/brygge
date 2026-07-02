@@ -45,15 +45,15 @@ const (
 	ActionDocumentDeleted  = "document.deleted"
 
 	// Finance operations
-	ActionInvoiceCreated      = "invoice.created"
-	ActionInvoicePDFGenerated = "invoice.pdf_generated"
-	ActionInvoiceEmailed      = "invoice.emailed"
-	ActionInvoiceReminded     = "invoice.reminded"
-	ActionInvoiceRegenerated  = "invoice.pdf_regenerated"
+	ActionInvoiceCreated           = "invoice.created"
+	ActionInvoicePDFGenerated      = "invoice.pdf_generated"
+	ActionInvoiceEmailed           = "invoice.emailed"
+	ActionInvoiceReminded          = "invoice.reminded"
+	ActionInvoiceRegenerated       = "invoice.pdf_regenerated"
 	ActionInvoiceDeliveryLogViewed = "invoice.delivery_log_viewed"
-	ActionFinanceCSVExported  = "finance.csv_exported"
-	ActionPaymentCreated      = "payment.created"
-	ActionPaymentViewed       = "finance.payment_viewed"
+	ActionFinanceCSVExported       = "finance.csv_exported"
+	ActionPaymentCreated           = "payment.created"
+	ActionPaymentViewed            = "finance.payment_viewed"
 
 	// Bank row reconciliation (DIL-392)
 	ActionBankRowAssignedInvoice = "bank_row.assigned_invoice"
@@ -61,6 +61,12 @@ const (
 	ActionBankRowDismissed       = "bank_row.dismissed"
 	ActionBankRowUnassigned      = "bank_row.unassigned"
 	ActionBankRowRefundPaired    = "bank_row.refund_paired"
+
+	// Per-charge Vipps reconciliation (BRY-227)
+	ActionVippsChargeAssignedInvoice = "vipps_charge.assigned_invoice"
+	ActionVippsChargeBilag           = "vipps_charge.bilag"
+	ActionVippsChargeDismissed       = "vipps_charge.dismissed"
+	ActionVippsPayoutCleared         = "vipps_payout.cleared"
 
 	// Developer / DB inspection (DIL-365)
 	ActionDeveloperQuery = "developer.db_query"

@@ -79,11 +79,12 @@ type vippsBelastning struct {
 	customerName string
 	message      string
 	entryID      *string
+	dismissedAt  *time.Time
 }
 
 // loadVippsBelastning reads one belastning row and validates it is an
 // unbooked, positive customer payment. entryID is non-nil when the row has
-// already been reconciled.
+// already been reconciled; dismissedAt is non-nil when it was avvist.
 func (s *Service) loadVippsBelastning(ctx context.Context, clubID, rowID string) (*vippsBelastning, error) {
 	var b vippsBelastning
 	var rowType string
@@ -91,11 +92,11 @@ func (s *Service) loadVippsBelastning(ctx context.Context, clubID, rowID string)
 		`SELECT id, row_type, amount,
 		        COALESCE(booking_date, tx_at::date),
 		        COALESCE(customer_name, ''), COALESCE(message, ''),
-		        journal_entry_id
+		        journal_entry_id, dismissed_at
 		   FROM vipps_import_rows
 		  WHERE id = $1 AND club_id = $2`,
 		rowID, clubID,
-	).Scan(&b.id, &rowType, &b.amount, &b.date, &b.customerName, &b.message, &b.entryID)
+	).Scan(&b.id, &rowType, &b.amount, &b.date, &b.customerName, &b.message, &b.entryID, &b.dismissedAt)
 	if err == pgx.ErrNoRows {
 		return nil, fmt.Errorf("vipps charge not found")
 	}
@@ -109,6 +110,42 @@ func (s *Service) loadVippsBelastning(ctx context.Context, clubID, rowID string)
 		return nil, fmt.Errorf("vipps charge %s has non-positive amount %.2f", rowID, b.amount)
 	}
 	return &b, nil
+}
+
+// DismissVippsCharge marks an individual Vipps charge as avvist so it drops out
+// of the Tildel queue and no longer blocks its settlement's payout auto-clear.
+// Only unbooked, non-dismissed charges can be dismissed; re-dismissing is a
+// no-op. Reasons reuse the bank-row dismissal vocabulary (IsValidDismissReason).
+//
+// Caveat: a dismissed charge is money that still flowed through the Vipps
+// payout, so its settlement's clearing account will not net to exactly zero.
+// Dismiss is for charges that are genuinely not the club's revenue (a reversed
+// or duplicate charge Vipps already excluded from the payout); real charges
+// should be booked with Lag bilag instead.
+func (s *Service) DismissVippsCharge(ctx context.Context, clubID, userID, rowID, reason string) error {
+	if !IsValidDismissReason(reason) {
+		return fmt.Errorf("invalid dismiss reason %q", reason)
+	}
+	b, err := s.loadVippsBelastning(ctx, clubID, rowID)
+	if err != nil {
+		return err
+	}
+	if b.entryID != nil {
+		return fmt.Errorf("charge is already reconciled — unassign it before dismissing")
+	}
+	if b.dismissedAt != nil {
+		return nil // already dismissed — idempotent
+	}
+	_, err = s.db.Exec(ctx,
+		`UPDATE vipps_import_rows
+		    SET dismissed_at = now(), dismissed_reason = $3, dismissed_by = $4
+		  WHERE id = $1 AND club_id = $2 AND journal_entry_id IS NULL AND dismissed_at IS NULL`,
+		rowID, clubID, reason, userID,
+	)
+	if err != nil {
+		return fmt.Errorf("dismissing vipps charge: %w", err)
+	}
+	return nil
 }
 
 // postVippsCharge books one belastning as DR clearing / CR <creditAccount>,
@@ -190,6 +227,9 @@ func (s *Service) AssignVippsChargeToInvoice(ctx context.Context, clubID, vippsR
 	if b.entryID != nil {
 		return &VippsChargePostResult{EntryID: *b.entryID, AlreadyReconciled: true}, nil
 	}
+	if b.dismissedAt != nil {
+		return nil, fmt.Errorf("charge is dismissed — un-dismiss it before assigning")
+	}
 
 	// Validate the target invoice is a payable match. Requiring the amounts
 	// to agree keeps the payment_id back-link honest — a differently priced
@@ -256,6 +296,9 @@ func (s *Service) CreateVippsChargeBilag(ctx context.Context, clubID, vippsRowID
 	}
 	if b.entryID != nil {
 		return &VippsChargePostResult{EntryID: *b.entryID, AlreadyReconciled: true}, nil
+	}
+	if b.dismissedAt != nil {
+		return nil, fmt.Errorf("charge is dismissed — un-dismiss it before booking")
 	}
 
 	desc := fmt.Sprintf("Vipps innbetaling: %s", b.customerName)
@@ -343,7 +386,8 @@ func (s *Service) ClearVippsPayout(ctx context.Context, clubID, bankRowID, creat
 	if err := s.db.QueryRow(ctx,
 		`SELECT count(*) FROM vipps_import_rows
 		  WHERE club_id = $1 AND msn = $2 AND row_type = 'belastning'
-		    AND booking_date = $3::date AND journal_entry_id IS NULL`,
+		    AND booking_date = $3::date
+		    AND journal_entry_id IS NULL AND dismissed_at IS NULL`,
 		clubID, res.MSN, payoutBooking,
 	).Scan(&res.UnreconciledCharges); err != nil {
 		return nil, fmt.Errorf("counting unreconciled charges: %w", err)

@@ -1177,6 +1177,23 @@ func main() {
 							r.Post("/confirm", accountingHandler.HandleVippsReconcileConfirm)
 						})
 
+						// Per-charge Vipps reconciliation (BRY-227): one item
+						// per payer in the Tildel queue instead of a single
+						// batched payout bilag.
+						r.Get("/vipps-charges/unmatched", accountingHandler.HandleListUnreconciledVippsCharges)
+						r.With(middleware.RequireRole("treasurer", "admin"),
+							middleware.RequireFreshTOTPDefault()).
+							Post("/vipps-charges/{rowID}/assign-invoice", accountingHandler.HandleAssignVippsChargeToInvoice)
+						r.With(middleware.RequireRole("treasurer", "admin"),
+							middleware.RequireFreshTOTPDefault()).
+							Post("/vipps-charges/{rowID}/assign-account", accountingHandler.HandleCreateVippsChargeBilag)
+						r.With(middleware.RequireRole("treasurer", "admin"),
+							middleware.RequireFreshTOTPDefault()).
+							Post("/vipps-charges/{rowID}/dismiss", accountingHandler.HandleDismissVippsCharge)
+						r.With(middleware.RequireRole("treasurer", "admin"),
+							middleware.RequireFreshTOTPDefault()).
+							Post("/bank-rows/{rowID}/clear-vipps-payout", accountingHandler.HandleClearVippsPayout)
+
 						// DIL-392 Tildel tab — per-row manual
 						// reconciliation. Static "unmatched" paths
 						// must register before the parameterised
