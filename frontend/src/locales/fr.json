@@ -27,6 +27,7 @@
     "loading": "Chargement",
     "error": "Erreur",
     "save": "Enregistrer",
+    "saved": "Enregistré",
     "cancel": "Annuler",
     "delete": "Supprimer",
     "confirm": "Confirmer",
@@ -931,6 +932,12 @@
     "groupEconomy": "Economy",
     "groupShop": "Shop",
     "groupSite": "Site",
+    "economySettings": {
+      "kidMethodLabel": "Méthode de clé de contrôle KID",
+      "kidMethodHint": "Doit correspondre à l'accord OCR/Nets du club. Modulo 11 est la valeur par défaut du OCR-giro norvégien. Cela n'affecte que les KID nouvellement générés — utilisez «Nouveau KID» dans l'onglet Envoyées pour réémettre les factures impayées existantes.",
+      "kidMethodMod11": "Modulo 11 (par défaut)",
+      "kidMethodMod10": "Modulo 10 (Luhn)"
+    },
     "faktura": {
       "tabs": {
         "archive": "Archives"
@@ -942,7 +949,13 @@
           "noRecipient": "Cette facture n'a pas d'e-mail destinataire enregistré.",
           "helpText": "Affiche ce que Stalwart a tenté de livrer et la réponse du serveur du destinataire. 2xx = accepté (peut tout de même atterrir dans le spam) ; 4xx = transitoire ; 5xx = rejeté."
         },
-        "lastReminder": "Dernier rappel"
+        "lastReminder": "Dernier rappel",
+        "reissueKidSelected": "Nouveau KID",
+        "reissueKidTooltip": "Générer un nouveau KID (méthode de contrôle du club) et reconstruire le PDF. N'envoie pas.",
+        "reissueKidConfirmTitle": "Réémettre le KID ?",
+        "reissueKidBulkBody": "Générer un nouveau KID pour {n} facture(s) impayée(s) selon la méthode de contrôle du club et reconstruire le PDF (le PDF précédent est archivé). Les factures payées sont ignorées. Aucun e-mail n'est envoyé — utilisez «Envoyer un rappel» ensuite.",
+        "reissueKidAction": "Réémettre le KID",
+        "reissueKidNoneEligible": "Aucune des factures sélectionnées n'est éligible — toutes sont déjà payées."
       }
     },
     "devQuery": {

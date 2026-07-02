@@ -27,6 +27,7 @@
     "loading": "Laden",
     "error": "Fout",
     "save": "Opslaan",
+    "saved": "Opgeslagen",
     "cancel": "Annuleren",
     "delete": "Verwijderen",
     "confirm": "Bevestigen",
@@ -932,6 +933,12 @@
     "groupEconomy": "Economy",
     "groupShop": "Shop",
     "groupSite": "Site",
+    "economySettings": {
+      "kidMethodLabel": "KID-controlecijfermethode",
+      "kidMethodHint": "Moet overeenkomen met de OCR-/Nets-overeenkomst van de club. Modulo 11 is de standaard voor Noorse OCR-giro. Dit geldt alleen voor nieuw gegenereerde KID's — gebruik «Nieuwe KID» op het tabblad Verzonden om bestaande onbetaalde facturen opnieuw uit te geven.",
+      "kidMethodMod11": "Modulo 11 (standaard)",
+      "kidMethodMod10": "Modulo 10 (Luhn)"
+    },
     "faktura": {
       "tabs": {
         "archive": "Archief"
@@ -943,7 +950,13 @@
           "noRecipient": "Deze factuur heeft geen ontvanger-e-mail vastgelegd.",
           "helpText": "Toont wat Stalwart probeerde te bezorgen en wat de mailserver van de ontvanger antwoordde. 2xx = geaccepteerd (kan alsnog in spam belanden); 4xx = tijdelijk; 5xx = geweigerd."
         },
-        "lastReminder": "Laatste herinnering"
+        "lastReminder": "Laatste herinnering",
+        "reissueKidSelected": "Nieuwe KID",
+        "reissueKidTooltip": "Genereer een nieuwe KID (controlemethode van de club) en bouw de PDF opnieuw op. Verzendt niet.",
+        "reissueKidConfirmTitle": "KID opnieuw uitgeven?",
+        "reissueKidBulkBody": "Genereer een nieuwe KID voor {n} onbetaalde factu(u)r(en) met de controlemethode van de club en bouw de PDF opnieuw op (de vorige PDF wordt gearchiveerd). Betaalde facturen worden overgeslagen. Er wordt geen e-mail verzonden — gebruik daarna «Herinnering sturen».",
+        "reissueKidAction": "KID opnieuw uitgeven",
+        "reissueKidNoneEligible": "Geen van de geselecteerde facturen komt in aanmerking — ze zijn allemaal al betaald."
       }
     },
     "devQuery": {

@@ -27,6 +27,7 @@
     "loading": "Wird geladen",
     "error": "Fehler",
     "save": "Speichern",
+    "saved": "Gespeichert",
     "cancel": "Abbrechen",
     "delete": "Löschen",
     "confirm": "Bestätigen",
@@ -932,6 +933,12 @@
     "groupEconomy": "Economy",
     "groupShop": "Shop",
     "groupSite": "Site",
+    "economySettings": {
+      "kidMethodLabel": "KID-Prüfziffernmethode",
+      "kidMethodHint": "Muss mit der OCR-/Nets-Vereinbarung des Vereins übereinstimmen. Modulo 11 ist der Standard für norwegische OCR-Giro. Dies betrifft nur neu erzeugte KID — verwenden Sie «Neue KID» im Reiter «Gesendet», um bestehende unbezahlte Rechnungen neu auszustellen.",
+      "kidMethodMod11": "Modulo 11 (Standard)",
+      "kidMethodMod10": "Modulo 10 (Luhn)"
+    },
     "faktura": {
       "tabs": {
         "archive": "Archiv"
@@ -943,7 +950,13 @@
           "noRecipient": "Diese Rechnung hat keine hinterlegte Empfänger-E-Mail.",
           "helpText": "Zeigt, was Stalwart zuzustellen versucht hat und was der Mailserver des Empfängers geantwortet hat. 2xx = akzeptiert (kann beim Empfänger trotzdem im Spam landen); 4xx = vorübergehend; 5xx = abgelehnt."
         },
-        "lastReminder": "Letzte Mahnung"
+        "lastReminder": "Letzte Mahnung",
+        "reissueKidSelected": "Neue KID",
+        "reissueKidTooltip": "Neue KID erzeugen (Prüfmethode des Vereins) und PDF neu erstellen. Versendet nicht.",
+        "reissueKidConfirmTitle": "KID neu ausstellen?",
+        "reissueKidBulkBody": "Neue KID für {n} unbezahlte Rechnung(en) mit der Prüfmethode des Vereins erzeugen und das PDF neu erstellen (das vorherige PDF wird archiviert). Bezahlte Rechnungen werden übersprungen. Es wird keine E-Mail gesendet — verwenden Sie anschließend «Mahnung senden».",
+        "reissueKidAction": "KID neu ausstellen",
+        "reissueKidNoneEligible": "Keine der ausgewählten Rechnungen ist geeignet — alle sind bereits bezahlt."
       }
     },
     "devQuery": {

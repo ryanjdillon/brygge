@@ -27,6 +27,7 @@
     "loading": "Caricamento",
     "error": "Errore",
     "save": "Salva",
+    "saved": "Salvato",
     "cancel": "Annulla",
     "delete": "Elimina",
     "confirm": "Conferma",
@@ -932,6 +933,12 @@
     "groupEconomy": "Economy",
     "groupShop": "Shop",
     "groupSite": "Site",
+    "economySettings": {
+      "kidMethodLabel": "Metodo cifra di controllo KID",
+      "kidMethodHint": "Deve corrispondere all'accordo OCR/Nets del club. Modulo 11 è l'impostazione predefinita per l'OCR-giro norvegese. Riguarda solo i KID appena generati — usa «Nuovo KID» nella scheda Inviate per riemettere le fatture non pagate esistenti.",
+      "kidMethodMod11": "Modulo 11 (predefinito)",
+      "kidMethodMod10": "Modulo 10 (Luhn)"
+    },
     "faktura": {
       "tabs": {
         "archive": "Archivio"
@@ -943,7 +950,13 @@
           "noRecipient": "Questa fattura non ha un'email destinatario registrata.",
           "helpText": "Mostra cosa Stalwart ha tentato di consegnare e la risposta del server del destinatario. 2xx = accettato (può comunque finire nello spam); 4xx = transitorio; 5xx = rifiutato."
         },
-        "lastReminder": "Ultimo sollecito"
+        "lastReminder": "Ultimo sollecito",
+        "reissueKidSelected": "Nuovo KID",
+        "reissueKidTooltip": "Genera un nuovo KID (metodo di controllo del club) e ricostruisci il PDF. Non invia.",
+        "reissueKidConfirmTitle": "Riemettere il KID?",
+        "reissueKidBulkBody": "Genera un nuovo KID per {n} fattura/e non pagata/e con il metodo di controllo del club e ricostruisci il PDF (il PDF precedente viene archiviato). Le fatture pagate vengono ignorate. Nessuna e-mail viene inviata — usa «Invia sollecito» in seguito.",
+        "reissueKidAction": "Riemetti KID",
+        "reissueKidNoneEligible": "Nessuna delle fatture selezionate è idonea — sono tutte già pagate."
       }
     },
     "devQuery": {

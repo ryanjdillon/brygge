@@ -27,6 +27,7 @@
     "loading": "Ładowanie",
     "error": "Błąd",
     "save": "Zapisz",
+    "saved": "Zapisano",
     "cancel": "Anuluj",
     "delete": "Usuń",
     "confirm": "Potwierdź",
@@ -932,6 +933,12 @@
     "groupEconomy": "Economy",
     "groupShop": "Shop",
     "groupSite": "Site",
+    "economySettings": {
+      "kidMethodLabel": "Metoda cyfry kontrolnej KID",
+      "kidMethodHint": "Musi być zgodna z umową OCR/Nets klubu. Modulo 11 to domyślna metoda dla norweskiego OCR-giro. Dotyczy tylko nowo generowanych numerów KID — użyj «Nowy KID» na karcie Wysłane, aby ponownie wystawić istniejące nieopłacone faktury.",
+      "kidMethodMod11": "Modulo 11 (domyślnie)",
+      "kidMethodMod10": "Modulo 10 (Luhn)"
+    },
     "faktura": {
       "tabs": {
         "archive": "Archiwum"
@@ -943,7 +950,13 @@
           "noRecipient": "Ta faktura nie ma zapisanego adresu e-mail odbiorcy.",
           "helpText": "Pokazuje, co Stalwart próbował dostarczyć i co odpowiedział serwer odbiorcy. 2xx = przyjęte (może i tak trafić do spamu); 4xx = tymczasowe; 5xx = odrzucone."
         },
-        "lastReminder": "Ostatnie przypomnienie"
+        "lastReminder": "Ostatnie przypomnienie",
+        "reissueKidSelected": "Nowy KID",
+        "reissueKidTooltip": "Wygeneruj nowy numer KID (metoda kontrolna klubu) i odbuduj PDF. Nie wysyła.",
+        "reissueKidConfirmTitle": "Wystawić nowy KID?",
+        "reissueKidBulkBody": "Wygeneruj nowy numer KID dla {n} nieopłaconych faktur metodą kontrolną klubu i odbuduj PDF (poprzedni PDF zostanie zarchiwizowany). Opłacone faktury są pomijane. Nie wysyła się żadnego e-maila — użyj następnie «Wyślij przypomnienie».",
+        "reissueKidAction": "Wystaw nowy KID",
+        "reissueKidNoneEligible": "Żadna z wybranych faktur nie kwalifikuje się — wszystkie są już opłacone."
       }
     },
     "devQuery": {
