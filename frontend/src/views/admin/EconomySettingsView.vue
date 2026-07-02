@@ -17,6 +17,10 @@ const fakturaLogoUploading = ref(false)
 const loading = ref(true)
 const error = ref<string | null>(null)
 
+const kidCheckMethod = ref<'mod10' | 'mod11'>('mod11')
+const kidSaving = ref(false)
+const kidSaved = ref(false)
+
 async function load() {
   loading.value = true
   error.value = null
@@ -25,11 +29,36 @@ async function load() {
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
     const body = await res.json()
     hasFakturaLogo.value = !!body.has_faktura_logo
+    kidCheckMethod.value = body.kid_check_method === 'mod10' ? 'mod10' : 'mod11'
     fakturaLogoCacheBust.value = Date.now()
   } catch (e) {
     error.value = (e as Error).message
   } finally {
     loading.value = false
+  }
+}
+
+async function saveKidCheckMethod() {
+  if (!(await ensureFreshTotp())) return
+  kidSaving.value = true
+  kidSaved.value = false
+  error.value = null
+  try {
+    const res = await totpAwareFetch('/api/v1/admin/settings/site', {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kid_check_method: kidCheckMethod.value }),
+    })
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '')
+      throw new Error(`${res.status} ${txt}`)
+    }
+    kidSaved.value = true
+  } catch (e) {
+    error.value = (e as Error).message
+  } finally {
+    kidSaving.value = false
   }
 }
 
@@ -128,6 +157,34 @@ onMounted(load)
           :disabled="fakturaLogoUploading"
           @change="uploadFakturaLogo"
         />
+      </fieldset>
+
+      <fieldset class="rounded-md border border-slate-200 bg-slate-50 p-3 space-y-3">
+        <legend class="px-1 text-xs font-semibold text-slate-700">
+          {{ t('admin.economySettings.kidMethodLabel') }}
+        </legend>
+        <p class="text-xs text-slate-600">{{ t('admin.economySettings.kidMethodHint') }}</p>
+        <div class="flex flex-wrap items-center gap-3">
+          <select
+            v-model="kidCheckMethod"
+            class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+            @change="kidSaved = false"
+          >
+            <option value="mod11">{{ t('admin.economySettings.kidMethodMod11') }}</option>
+            <option value="mod10">{{ t('admin.economySettings.kidMethodMod10') }}</option>
+          </select>
+          <button
+            type="button"
+            class="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+            :disabled="kidSaving"
+            @click="saveKidCheckMethod"
+          >
+            {{ t('common.save') }}
+          </button>
+          <span v-if="kidSaved" class="text-sm font-medium text-green-600">
+            {{ t('common.saved') }}
+          </span>
+        </div>
       </fieldset>
     </section>
 

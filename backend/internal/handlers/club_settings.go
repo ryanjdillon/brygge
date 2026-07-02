@@ -14,6 +14,7 @@ import (
 
 	"github.com/brygge-klubb/brygge/internal/auth"
 	"github.com/brygge-klubb/brygge/internal/config"
+	"github.com/brygge-klubb/brygge/internal/finance"
 	"github.com/brygge-klubb/brygge/internal/middleware"
 )
 
@@ -231,6 +232,7 @@ type clubFinancialSettings struct {
 	Latitude          *float64 `json:"latitude"`
 	Longitude         *float64 `json:"longitude"`
 	BankAccount       string   `json:"bank_account"`
+	KIDCheckMethod    string   `json:"kid_check_method"`
 	WebsiteURL        string   `json:"website_url"`
 	ChairmanEmail     string   `json:"chairman_email"`
 	ViceChairmanEmail string   `json:"vice_chairman_email"`
@@ -281,6 +283,7 @@ func (h *ClubSettingsHandler) HandleGetFinancialSettings(w http.ResponseWriter, 
 		        COALESCE(phone, ''), COALESCE(vhf_channel, ''),
 		        latitude, longitude,
 		        COALESCE(bank_account, ''),
+		        COALESCE(kid_check_method, 'mod11'),
 		        COALESCE(website_url, ''),
 		        COALESCE(chairman_email, ''), COALESCE(vice_chairman_email, ''),
 		        COALESCE(treasurer_email, ''),
@@ -302,6 +305,7 @@ func (h *ClubSettingsHandler) HandleGetFinancialSettings(w http.ResponseWriter, 
 		&s.Phone, &s.VHFChannel,
 		&s.Latitude, &s.Longitude,
 		&s.BankAccount,
+		&s.KIDCheckMethod,
 		&s.WebsiteURL,
 		&s.ChairmanEmail, &s.ViceChairmanEmail,
 		&s.TreasurerEmail,
@@ -332,6 +336,7 @@ type updateFinancialSettingsRequest struct {
 	Latitude                *float64 `json:"latitude,omitempty"`
 	Longitude               *float64 `json:"longitude,omitempty"`
 	BankAccount             *string  `json:"bank_account,omitempty"`
+	KIDCheckMethod          *string  `json:"kid_check_method,omitempty"`
 	WebsiteURL              *string  `json:"website_url,omitempty"`
 	ChairmanEmail           *string  `json:"chairman_email,omitempty"`
 	ViceChairmanEmail       *string  `json:"vice_chairman_email,omitempty"`
@@ -377,6 +382,14 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 	if anthropicKey != nil && *anthropicKey == "" {
 		anthropicKey = nil
 	}
+	// Guard the KID check method to the two recognised OCR schemes so an
+	// invalid value can never reach the generator (would break every faktura).
+	if req.KIDCheckMethod != nil &&
+		*req.KIDCheckMethod != finance.KIDMethodMod10 &&
+		*req.KIDCheckMethod != finance.KIDMethodMod11 {
+		Error(w, http.StatusBadRequest, "kid_check_method must be mod10 or mod11")
+		return
+	}
 
 	// Build COALESCE-style update so unspecified fields stay as-is.
 	// Empty-fields check is intentionally relaxed: with this many
@@ -412,7 +425,8 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		   feature_calendar          = COALESCE($28, feature_calendar),
 		   feature_commerce          = COALESCE($29, feature_commerce),
 		   feature_accounting        = COALESCE($30, feature_accounting),
-		   anthropic_api_key         = COALESCE($31, anthropic_api_key)
+		   anthropic_api_key         = COALESCE($31, anthropic_api_key),
+		   kid_check_method          = COALESCE($32, kid_check_method)
 		 WHERE id = $1`,
 		claims.ClubID, req.OrgNumber, req.Address, req.Phone, req.VHFChannel,
 		req.Latitude, req.Longitude,
@@ -427,6 +441,7 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		req.FeatureBookings, req.FeatureProjects, req.FeatureCalendar,
 		req.FeatureCommerce, req.FeatureAccounting,
 		anthropicKey,
+		req.KIDCheckMethod,
 	); err != nil {
 		h.log.Error().Err(err).Msg("update financial settings")
 		Error(w, http.StatusInternalServerError, "internal error")
