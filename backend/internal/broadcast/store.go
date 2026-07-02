@@ -132,11 +132,19 @@ type InvoiceDelivery struct {
 	Payload   json.RawMessage
 }
 
-// EnqueueInvoiceReminders inserts one pending 'invoice_reminder' delivery
-// per item. It is idempotent per invoice: an invoice that already has a
-// non-failed reminder delivery is skipped so a re-run (or a double click)
-// can't double-send. Returns the count enqueued and the invoice ids that
-// were skipped because a reminder was already queued/sent.
+// reminderResendCooldown is how long a successfully-sent reminder blocks a
+// re-send of the SAME invoice. It exists only to swallow accidental
+// double-clicks / batch re-runs where the queue already drained — a deliberate
+// reminder later (the normal case: chasing an invoice that stayed unpaid) must
+// go through. In-flight rows (pending/sending) always block regardless of age.
+const reminderResendCooldown = "10 minutes"
+
+// EnqueueInvoiceReminders inserts one pending 'invoice_reminder' delivery per
+// item. Idempotent against accidental re-runs: an invoice with an in-flight
+// (pending/sending) reminder, or one sent within reminderResendCooldown, is
+// skipped so a double-click can't double-send. A reminder sent longer ago no
+// longer blocks — otherwise an invoice could only ever be reminded once.
+// Returns the count enqueued and the invoice ids that were skipped.
 func (s *Store) EnqueueInvoiceReminders(ctx context.Context, clubID string, items []InvoiceDelivery) (enqueued int, skipped []string, err error) {
 	for _, it := range items {
 		tag, xerr := s.db.Exec(ctx, `
@@ -145,10 +153,13 @@ func (s *Store) EnqueueInvoiceReminders(ctx context.Context, clubID string, item
 			WHERE NOT EXISTS (
 				SELECT 1 FROM deliveries
 				WHERE invoice_id = $2 AND kind = $1
-				  AND status IN ($8, $9, $10)
+				  AND (
+				    status IN ($8, $9)
+				    OR (status = $10 AND COALESCE(sent_at, updated_at, created_at) > now() - $11::interval)
+				  )
 			)`,
 			KindInvoiceReminder, it.InvoiceID, clubID, it.UserID, it.Email, DeliveryPending, it.Payload,
-			DeliveryPending, DeliverySending, DeliverySent,
+			DeliveryPending, DeliverySending, DeliverySent, reminderResendCooldown,
 		)
 		if xerr != nil {
 			return enqueued, skipped, fmt.Errorf("insert reminder delivery: %w", xerr)

@@ -415,6 +415,41 @@ func TestEnqueueInvoiceReminders(t *testing.T) {
 	}
 }
 
+func TestEnqueueInvoiceRemindersResendAfterCooldown(t *testing.T) {
+	s, pool, clubID, _ := newStore(t)
+	ctx := context.Background()
+	inv := seedInvoice(t, pool, clubID, "000000030018")
+	payload := []byte(`{"locale":"nb"}`)
+
+	// First reminder, then drain + mark it sent.
+	if enq, _, err := s.EnqueueInvoiceReminders(ctx, clubID,
+		[]broadcast.InvoiceDelivery{{InvoiceID: inv, Email: "a@example.com", Payload: payload}}); err != nil || enq != 1 {
+		t.Fatalf("first enqueue = %d (err %v), want 1", enq, err)
+	}
+	claimed, _ := s.ClaimPending(ctx, 10)
+	for _, c := range claimed {
+		_ = s.Mark(ctx, c.DeliveryID, broadcast.DeliverySent, "")
+	}
+
+	// A re-send inside the cooldown is skipped (double-click protection).
+	if enq, skipped, err := s.EnqueueInvoiceReminders(ctx, clubID,
+		[]broadcast.InvoiceDelivery{{InvoiceID: inv, Email: "a@example.com", Payload: payload}}); err != nil || enq != 0 || len(skipped) != 1 {
+		t.Fatalf("resend within cooldown = %d/%v (err %v), want 0 enqueued / 1 skipped", enq, skipped, err)
+	}
+
+	// Backdate the sent reminder past the cooldown → a deliberate re-send now
+	// enqueues (an invoice must be remindable more than once).
+	if _, err := pool.Exec(ctx,
+		`UPDATE deliveries SET sent_at = now() - interval '1 hour', updated_at = now() - interval '1 hour'
+		  WHERE invoice_id = $1 AND kind = 'invoice_reminder'`, inv); err != nil {
+		t.Fatalf("backdate: %v", err)
+	}
+	if enq, skipped, err := s.EnqueueInvoiceReminders(ctx, clubID,
+		[]broadcast.InvoiceDelivery{{InvoiceID: inv, Email: "a@example.com", Payload: payload}}); err != nil || enq != 1 || len(skipped) != 0 {
+		t.Fatalf("resend after cooldown = %d/%v (err %v), want 1 enqueued / none skipped", enq, skipped, err)
+	}
+}
+
 func broadcastStatus(t *testing.T, pool *pgxpool.Pool, id string) string {
 	t.Helper()
 	var status string
