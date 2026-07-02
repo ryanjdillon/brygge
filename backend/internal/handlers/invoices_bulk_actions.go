@@ -78,7 +78,7 @@ func (h *InvoiceHandler) HandleBulkSendReminder(w http.ResponseWriter, r *http.R
 	rows, err := h.db.Query(ctx,
 		`SELECT i.id, i.sent_at, i.payment_id,
 		        COALESCE(NULLIF(i.recipient_email, ''), u.email, '') AS recipient,
-		        (i.pdf_data IS NOT NULL) AS has_pdf
+		        (i.pdf_data IS NOT NULL OR COALESCE(i.s3_key, '') <> '') AS has_pdf
 		   FROM invoices i
 		   LEFT JOIN users u ON u.id = i.user_id
 		  WHERE i.club_id = $1 AND i.id = ANY($2)`,
@@ -191,6 +191,7 @@ func (h *InvoiceHandler) sendOneReminder(
 		total          float64
 		kid            string
 		pdfData        []byte
+		s3Key          string
 		sentAt         *time.Time
 		paymentID      *string
 	)
@@ -203,13 +204,13 @@ func (h *InvoiceHandler) sendOneReminder(
 		                 ''),
 		        COALESCE(u.email, ''), COALESCE(i.recipient_email, ''),
 		        i.due_date, i.total_amount, i.kid_number,
-		        i.pdf_data, i.sent_at, i.payment_id
+		        i.pdf_data, COALESCE(i.s3_key, ''), i.sent_at, i.payment_id
 		   FROM invoices i
 		   LEFT JOIN users u ON u.id = i.user_id
 		  WHERE i.id = $1 AND i.club_id = $2`,
 		invoiceID, clubID,
 	).Scan(&invoiceNumber, &memberName, &memberEmail, &recipientEmail,
-		&dueDate, &total, &kid, &pdfData, &sentAt, &paymentID)
+		&dueDate, &total, &kid, &pdfData, &s3Key, &sentAt, &paymentID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return errInvoiceNotFound
@@ -226,7 +227,11 @@ func (h *InvoiceHandler) sendOneReminder(
 	if deliverTo == "" {
 		return errors.New("no recipient email")
 	}
-	if pdfData == nil {
+	// PDFs live in S3 once regenerated/reissued (pdf_data is nulled on upload),
+	// so pull the bytes S3-first with a DB fallback — reading pdf_data alone
+	// would drop every reissued invoice as "no stored PDF". See BRY-230.
+	pdfData, err = h.fetchInvoicePDFBytes(ctx, s3Key, pdfData)
+	if err != nil || pdfData == nil {
 		return errors.New("invoice has no stored PDF")
 	}
 
