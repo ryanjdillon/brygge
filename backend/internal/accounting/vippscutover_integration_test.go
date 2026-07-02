@@ -114,6 +114,27 @@ func TestRegenerateOpenPeriodVippsReconciliations(t *testing.T) {
 	if bankEntry == nil {
 		t.Error("bank row should be re-linked to the new payout entry")
 	}
+
+	// Idempotent: the per-charge bank-payout entry shares source='vipps' /
+	// source_table='bank_import_rows' with a legacy bilag, so the scan must
+	// exclude it (it credits the clearing account) — a second run finds nothing.
+	rerun, err := svc.RegenerateOpenPeriodVippsReconciliations(ctx, f.clubID, f.userID, false)
+	if err != nil {
+		t.Fatalf("second regenerate: %v", err)
+	}
+	if rerun.ScannedBilags != 0 || rerun.Regenerated != 0 {
+		t.Errorf("re-run should be a no-op, got %+v", rerun)
+	}
+	// The faktura link still survives the (no-op) re-run.
+	var afterRerun *string
+	if err := svc.db.QueryRow(ctx,
+		`SELECT payment_id FROM invoices WHERE id = $1`, f.invoiceID,
+	).Scan(&afterRerun); err != nil {
+		t.Fatalf("read invoice after re-run: %v", err)
+	}
+	if afterRerun == nil || *afterRerun != *legacyPayment {
+		t.Errorf("payment_id changed on re-run: was %v now %v", legacyPayment, afterRerun)
+	}
 }
 
 // assertChargeReposted checks a belastning row is now booked to a NEW entry

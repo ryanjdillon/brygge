@@ -18,7 +18,7 @@ type VippsResyncResult struct {
 	Skipped int `json:"skipped"`
 	// Bilags that the cascade refused to balance the second time —
 	// rare, surfaced so the operator can hunt them.
-	Failed   []string `json:"failed"`
+	Failed []string `json:"failed"`
 }
 
 // ResyncVippsBilags re-runs the Vipps classification cascade on every
@@ -27,17 +27,28 @@ type VippsResyncResult struct {
 // Operator-edited or posted bilags are left untouched. See DIL-367.
 //
 // Mechanism:
-//   1. Find candidate draft bilags (source='vipps', status='draft',
-//      any line credits 2900 or 3900).
-//   2. For each: delete the journal entry (cascade-removes lines),
-//      null the bank_import_row.journal_entry_id link.
-//   3. Re-run ReconcileVippsPreview against the freed bank row and
-//      ReconcileVippsConfirm to post the new draft.
+//  1. Find candidate draft bilags (source='vipps', status='draft',
+//     any line credits 2900 or 3900).
+//  2. For each: delete the journal entry (cascade-removes lines),
+//     null the bank_import_row.journal_entry_id link.
+//  3. Re-run ReconcileVippsPreview against the freed bank row and
+//     ReconcileVippsConfirm to post the new draft.
 func (s *Service) ResyncVippsBilags(ctx context.Context, clubID, createdBy string) (*VippsResyncResult, error) {
 	// Initialize Failed as an empty (not nil) slice so JSON
 	// serializes to [] rather than null — frontend templates that
 	// touch `.length` shouldn't have to be null-safe.
 	res := &VippsResyncResult{Failed: []string{}}
+
+	// On the per-charge model this legacy cascade must stand down: it keys on
+	// draft vipps entries crediting 2900/3900 and would re-process the
+	// per-charge charge/fee/payout entries, corrupting the ledger.
+	perCharge, ferr := s.VippsPerChargeEnabled(ctx, clubID)
+	if ferr != nil {
+		return nil, fmt.Errorf("checking vipps model: %w", ferr)
+	}
+	if perCharge {
+		return res, nil
+	}
 
 	rows, err := s.db.Query(ctx,
 		`SELECT DISTINCT je.id, je.source_id

@@ -64,6 +64,19 @@ type cutoverCharge struct {
 func (s *Service) RegenerateOpenPeriodVippsReconciliations(ctx context.Context, clubID, createdBy string, dryRun bool) (*VippsCutoverResult, error) {
 	res := &VippsCutoverResult{DryRun: dryRun, Failed: []string{}}
 
+	// A legacy single-bilag credits revenue/receivable and never touches the
+	// clearing account. The per-charge bank-payout entry this cutover creates
+	// shares source='vipps'/source_table='bank_import_rows' but its only credit
+	// is TO the clearing account — so excluding clearing-credit entries keeps
+	// the scan from re-detecting its own output, making re-runs idempotent.
+	const notPerChargeEntry = `
+		    AND NOT EXISTS (
+		      SELECT 1 FROM journal_lines jl JOIN accounts a ON a.id = jl.account_id
+		       WHERE jl.journal_entry_id = je.id AND jl.credit > 0
+		         AND a.code = COALESCE(NULLIF(
+		               (SELECT vipps_clearing_account FROM clubs WHERE id = $1), ''), '2900')
+		    )`
+
 	// Count closed-period legacy bilags so the operator sees what is being
 	// deliberately left on the old model.
 	if err := s.db.QueryRow(ctx,
@@ -72,7 +85,7 @@ func (s *Service) RegenerateOpenPeriodVippsReconciliations(ctx context.Context, 
 		  WHERE je.club_id = $1 AND je.source = 'vipps'
 		    AND je.source_table = 'bank_import_rows' AND je.source_id IS NOT NULL
 		    AND je.status IN ('draft','posted')
-		    AND fp.status = 'closed'`,
+		    AND fp.status = 'closed'`+notPerChargeEntry,
 		clubID,
 	).Scan(&res.SkippedClosedPeriod); err != nil {
 		return nil, fmt.Errorf("counting closed-period bilags: %w", err)
@@ -85,7 +98,7 @@ func (s *Service) RegenerateOpenPeriodVippsReconciliations(ctx context.Context, 
 		  WHERE je.club_id = $1 AND je.source = 'vipps'
 		    AND je.source_table = 'bank_import_rows' AND je.source_id IS NOT NULL
 		    AND je.status IN ('draft','posted')
-		    AND fp.status = 'open'
+		    AND fp.status = 'open'`+notPerChargeEntry+`
 		  ORDER BY je.entry_date, je.id`,
 		clubID,
 	)
