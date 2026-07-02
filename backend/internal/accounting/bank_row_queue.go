@@ -46,6 +46,11 @@ type BankRowSummary struct {
 	DismissedReason          *string    `json:"dismissed_reason,omitempty"`
 	LikelyDuplicateOfMatched bool       `json:"likely_duplicate_of_matched"`
 	PossibleDoublePayment    bool       `json:"possible_double_payment"`
+	// SuggestionCount is how many open, unpaid invoices match this incoming
+	// row's amount — a cheap hint so the UI can flag which anonymous rows are
+	// worth opening (vs a genuinely orphan deposit with no matching invoice).
+	// Advisory only; 0 for outgoing rows.
+	SuggestionCount int `json:"suggestion_count"`
 }
 
 // ListUnmatchedBankRows returns the paginated set of rows that still
@@ -168,7 +173,16 @@ func (s *Service) ListUnmatchedBankRows(
 		            AND other.kid_number = bir.kid_number
 		            AND COALESCE(other.reference, '') <> COALESCE(bir.reference, '')
 		            AND other.journal_entry_id IS NOT NULL
-		       )) AS possible_double_payment
+		       )) AS possible_double_payment,
+		       -- Cheap "worth opening?" hint: how many open unpaid invoices
+		       -- match this incoming row's amount. Advisory only.
+		       (CASE WHEN bir.amount > 0 THEN (
+		          SELECT count(*) FROM invoices i
+		           WHERE i.club_id = bir.club_id
+		             AND i.status = 'open'
+		             AND i.payment_id IS NULL
+		             AND ABS(i.total_amount - bir.amount) < 0.005
+		        ) ELSE 0 END) AS suggestion_count
 		  FROM bank_import_rows bir
 		  JOIN bank_imports bi ON bi.id = bir.bank_import_id
 		 WHERE ` + strings.Join(where, " AND ") + `
@@ -187,7 +201,7 @@ func (s *Service) ListUnmatchedBankRows(
 		if err := rows.Scan(&r.ID, &r.RowDate, &r.Amount, &r.KIDNumber,
 			&r.Reference, &r.Counterpart, &r.Description, &r.BankAccountCode,
 			&r.DismissedAt, &r.DismissedReason, &r.LikelyDuplicateOfMatched,
-			&r.PossibleDoublePayment); err != nil {
+			&r.PossibleDoublePayment, &r.SuggestionCount); err != nil {
 			return nil, fmt.Errorf("scan: %w", err)
 		}
 		out = append(out, r)
