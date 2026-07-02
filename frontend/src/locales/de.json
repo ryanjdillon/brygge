@@ -999,6 +999,8 @@
       "filterDismissed": "Dismissed",
       "confirmedDuplicatesHeader": "Bestätigte Duplikate ({count} Zeilen)",
       "confirmedDuplicatesHint": "Arkivref. bereits verbucht — diese Zeilen stammen aus überlappenden CSV-Importen. Als Duplikat abweisen.",
+      "missingSettlementsHeader": "{count} Vipps-Auszahlung(en) ohne Abrechnungsbericht ({total}) — können erst nach dem Import auf Mitglieder aufgeteilt werden.",
+      "missingSettlementsHint": "Exportieren Sie den Abrechnungsbericht aus Vipps/MobilePay für jede davon, importieren Sie ihn unter Import → Vipps und führen Sie Synchronisieren aus.",
       "notADuplicateHint": "Kein Duplikat? Rechnung suchen und direkt zuweisen.",
       "filterBank": "Bank",
       "filterVipps": "Vipps",

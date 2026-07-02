@@ -998,6 +998,8 @@
       "filterDismissed": "Dismissed",
       "confirmedDuplicatesHeader": "Doublons confirmés ({count} lignes)",
       "confirmedDuplicatesHint": "Arkivref. déjà comptabilisé — ces lignes proviennent d'imports CSV chevauchants. Rejeter comme doublon.",
+      "missingSettlementsHeader": "{count} versement(s) Vipps sans rapport de règlement ({total}) — impossible de les répartir entre les membres avant importation.",
+      "missingSettlementsHint": "Exportez le rapport de règlement depuis Vipps/MobilePay pour chacun, importez-le sous Import → Vipps, puis lancez Synchroniser.",
       "notADuplicateHint": "Pas un doublon ? Cherchez la facture et affectez directement.",
       "filterBank": "Banque",
       "filterVipps": "Vipps",

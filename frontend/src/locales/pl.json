@@ -999,6 +999,8 @@
       "filterDismissed": "Dismissed",
       "confirmedDuplicatesHeader": "Potwierdzone duplikaty ({count} wierszy)",
       "confirmedDuplicatesHint": "Arkivref. już zaksięgowany — te wiersze pochodzą z nakładających się importów CSV. Odrzuć jako duplikat.",
+      "missingSettlementsHeader": "{count} wypłat(y) Vipps bez raportu rozliczeniowego ({total}) — nie można ich rozdzielić na członków przed zaimportowaniem.",
+      "missingSettlementsHint": "Wyeksportuj raport rozliczeniowy z Vipps/MobilePay dla każdego z nich, zaimportuj go w Import → Vipps, a następnie uruchom Synchronizuj.",
       "notADuplicateHint": "Nie wygląda jak duplikat? Znajdź fakturę i przypisz bezpośrednio.",
       "filterBank": "Bank",
       "filterVipps": "Vipps",

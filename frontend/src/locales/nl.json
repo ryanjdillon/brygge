@@ -999,6 +999,8 @@
       "filterDismissed": "Dismissed",
       "confirmedDuplicatesHeader": "Bevestigde duplicaten ({count} rijen)",
       "confirmedDuplicatesHint": "Arkivref. al geboekt — deze rijen komen uit overlappende CSV-imports. Afwijzen als duplicaat.",
+      "missingSettlementsHeader": "{count} Vipps-uitbetaling(en) zonder afrekeningsrapport ({total}) — kunnen pas na import over leden worden verdeeld.",
+      "missingSettlementsHint": "Exporteer het afrekeningsrapport uit Vipps/MobilePay voor elk hiervan, importeer het onder Import → Vipps en voer Synchroniseren uit.",
       "notADuplicateHint": "Geen duplicaat? Zoek de factuur en wijs direct toe.",
       "filterBank": "Bank",
       "filterVipps": "Vipps",

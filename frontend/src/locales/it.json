@@ -999,6 +999,8 @@
       "filterDismissed": "Dismissed",
       "confirmedDuplicatesHeader": "Duplicati confermati ({count} righe)",
       "confirmedDuplicatesHint": "Arkivref. già contabilizzato — queste righe provengono da importazioni CSV sovrapposte. Rifiuta come duplicato.",
+      "missingSettlementsHeader": "{count} pagamento/i Vipps senza rapporto di liquidazione ({total}) — non ripartibili tra i membri finché non li importi.",
+      "missingSettlementsHint": "Esporta il rapporto di liquidazione da Vipps/MobilePay per ciascuno, importalo in Import → Vipps ed esegui Sincronizza.",
       "notADuplicateHint": "Non sembra un duplicato? Cerca la fattura e assegna direttamente.",
       "filterBank": "Banca",
       "filterVipps": "Vipps",

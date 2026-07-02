@@ -8,6 +8,7 @@ import {
   useBankUnmatchedRows,
   useBankRowSuggestions,
   useBankUnmatchedCountsByYear,
+  useMissingVippsSettlements,
   useReconcileMutations,
   useAssignMultiInvoiceMutation,
   fetchPotentialInvoices,
@@ -62,6 +63,11 @@ const mainRows = computed(() =>
 
 const focusedRowId = ref<string | null>(null)
 const { data: suggestions } = useBankRowSuggestions(focusedRowId)
+
+const { data: missingSettlements } = useMissingVippsSettlements()
+const missingSettlementsTotal = computed(() =>
+  (missingSettlements.value ?? []).reduce((sum, m) => sum + Number(m.amount), 0),
+)
 
 const { assignInvoice, assignAccount, dismiss, unassign } = useReconcileMutations()
 const assignMultiInvoice = useAssignMultiInvoiceMutation()
@@ -271,6 +277,33 @@ async function doUnassign(rowId: string) {
           class="rounded-md border border-gray-300 px-3 py-1 text-sm"
         />
       </div>
+    </div>
+
+    <!-- Vipps payouts whose settlement export isn't imported: they can't be
+         split into member payments, so a faktura paid inside one still looks
+         unpaid. Warn before reconciling / sending purringer. -->
+    <div
+      v-if="missingSettlements?.length"
+      class="mt-4 rounded-md border border-orange-300 bg-orange-50 p-3"
+      data-testid="missing-vipps-settlements"
+    >
+      <p class="mb-1 text-xs font-semibold text-orange-900">
+        ⚠
+        {{
+          t('admin.bankReconcile.missingSettlementsHeader', {
+            count: missingSettlements.length,
+            total: formatNOK(missingSettlementsTotal),
+          })
+        }}
+      </p>
+      <p class="mb-2 text-xs text-orange-700">{{ t('admin.bankReconcile.missingSettlementsHint') }}</p>
+      <ul class="space-y-1 text-xs text-orange-900">
+        <li v-for="m in missingSettlements" :key="m.bank_row_id" class="flex flex-wrap gap-x-3">
+          <span class="font-mono">Utb. {{ m.settlement_number }} · Vippsnr {{ m.msn }}</span>
+          <span>{{ fmtDate(m.date) }}</span>
+          <span class="font-semibold">{{ formatNOK(m.amount) }}</span>
+        </li>
+      </ul>
     </div>
 
     <p v-if="isLoading" class="mt-6 text-sm text-gray-500">{{ t('common.loading') }}…</p>

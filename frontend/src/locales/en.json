@@ -1812,6 +1812,8 @@
       "filterDismissed": "Dismissed",
       "confirmedDuplicatesHeader": "Confirmed duplicates ({count} rows)",
       "confirmedDuplicatesHint": "Arkivref. already journalled — these rows came from overlapping CSV imports. Dismiss as duplicate.",
+      "missingSettlementsHeader": "{count} Vipps payout(s) missing a settlement report ({total}) — can't be split to members until you import them.",
+      "missingSettlementsHint": "Export the settlement report from Vipps/MobilePay for each of these, import it under Import → Vipps, then run Synchronize.",
       "notADuplicateHint": "Doesn't look like a duplicate? Search for the invoice and assign directly.",
       "filterBank": "Bank",
       "filterVipps": "Vipps",

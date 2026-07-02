@@ -1690,6 +1690,8 @@
       "filterDismissed": "Avvising",
       "confirmedDuplicatesHeader": "Stadfesta duplikat ({count} rad)",
       "confirmedDuplicatesHint": "Arkivref. er allereie journalførd. Desse betalingane kjem frå overlappande CSV-import. Avvis som duplikat.",
+      "missingSettlementsHeader": "{count} Vipps-utbetaling(ar) manglar oppgjersrapport ({total}) – kan ikkje fordelast på medlemmer før du importerer dei.",
+      "missingSettlementsHint": "Eksporter oppgjersrapporten frå Vipps/MobilePay for kvar av desse, importer han under Import → Vipps, og køyr Synkroniser.",
       "notADuplicateHint": "Ser ikkje ut som ein duplikat? Søk opp fakturaen og tildel direkte.",
       "filterBank": "Bank",
       "filterVipps": "Vipps",

@@ -93,6 +93,26 @@ export function useBankUnmatchedCountsByYear() {
   })
 }
 
+export interface MissingVippsSettlement {
+  bank_row_id: string
+  date: string
+  amount: number
+  settlement_number: string
+  msn: string
+}
+
+// Vipps payouts sitting unmatched because their settlement export hasn't been
+// imported — can't be split into member payments until it is.
+export function useMissingVippsSettlements() {
+  return useQuery({
+    queryKey: ['accounting', 'vipps-missing-settlements'],
+    queryFn: () =>
+      useApi().fetchApi<MissingVippsSettlement[]>(
+        '/api/v1/admin/accounting/vipps-missing-settlements',
+      ),
+  })
+}
+
 export function useBankRowSuggestions(rowId: Ref<string | null>) {
   return useQuery({
     queryKey: computed(() => ['bank-rows', 'suggestions', rowId.value]),
