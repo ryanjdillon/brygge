@@ -1821,6 +1821,7 @@
       "empty": "Nothing to assign. Great.",
       "showSuggestions": "Show suggestions",
       "hideSuggestions": "Hide",
+      "noInvoiceSuggestions": "No invoice suggestions",
       "assign": "Assign",
       "searchInvoice": "Search invoice",
       "assignAccount": "Assign account",

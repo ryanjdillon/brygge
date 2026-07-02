@@ -1699,6 +1699,7 @@
       "empty": "Ingenting å tildele. Bra.",
       "showSuggestions": "Vis forslag",
       "hideSuggestions": "Skjul",
+      "noInvoiceSuggestions": "Ingen fakturaforslag",
       "assign": "Tildel",
       "searchInvoice": "Søk faktura",
       "assignAccount": "Tildel konto",

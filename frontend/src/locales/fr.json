@@ -1007,6 +1007,7 @@
       "empty": "Nothing to assign. Great.",
       "showSuggestions": "Show suggestions",
       "hideSuggestions": "Hide",
+      "noInvoiceSuggestions": "Aucune facture suggérée",
       "assign": "Assign",
       "searchInvoice": "Search invoice",
       "assignAccount": "Assign account",

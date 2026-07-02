@@ -1008,6 +1008,7 @@
       "empty": "Nothing to assign. Great.",
       "showSuggestions": "Show suggestions",
       "hideSuggestions": "Hide",
+      "noInvoiceSuggestions": "Nessuna fattura suggerita",
       "assign": "Assign",
       "searchInvoice": "Search invoice",
       "assignAccount": "Assign account",
