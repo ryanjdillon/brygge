@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -120,7 +121,7 @@ func TestRegenerateOnePDF(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loading club invoice fields: %v", err)
 	}
-	if err := h.regenerateOnePDF(ctx, clubID, userID, "", invoiceID, clubFields); err != nil {
+	if err := h.regenerateOnePDF(ctx, clubID, userID, "", invoiceID, clubFields, ""); err != nil {
 		t.Fatalf("regenerateOnePDF: %v", err)
 	}
 
@@ -187,6 +188,149 @@ func TestRegenerateOnePDF(t *testing.T) {
 	}
 	if archivedReason != "regenerate" {
 		t.Errorf("archive reason = %q, want %q", archivedReason, "regenerate")
+	}
+}
+
+// TestReissueOneKID verifies the Phase B reissue path: an invoice carrying
+// the legacy mod-10 KID is reissued to the club's configured mod-11 KID, the
+// PDF is rebuilt with the new reference (prior PDF archived under
+// reason='reissue_kid'), and paid / already-correct invoices are skipped so
+// booked reconciliation is never disturbed.
+func TestReissueOneKID(t *testing.T) {
+	testutil.SkipIfNoDB(t)
+	db := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	clubID := testutil.SeedClub(t, db)
+	userID, _ := testutil.SeedUser(t, db, clubID, []string{"member"})
+
+	if _, err := db.Exec(ctx,
+		`UPDATE clubs SET name = 'Klokkarvik Båtlag Test', org_number = '999999999',
+		                  address = 'Brygga 1, 5378 Klokkarvik', bank_account = '1234.56.78901',
+		                  kid_check_method = 'mod11'
+		   WHERE id = $1`, clubID,
+	); err != nil {
+		t.Fatalf("updating club: %v", err)
+	}
+
+	periodID := seedFiscalPeriod(t, db, clubID, 2026)
+
+	// The invoice starts life with the legacy mod-10 KID for its number.
+	// #74 is a real Klokkarvik case whose mod-10 KID (…40019) fails mod-11,
+	// so the two schemes yield different check digits and reissue has work.
+	const invoiceNumber = 74
+	oldKID, err := finance.GenerateKIDMethod("000", invoiceNumber, 1, finance.KIDMethodMod10)
+	if err != nil {
+		t.Fatalf("generating mod-10 KID: %v", err)
+	}
+	wantKID, err := finance.GenerateKIDMethod("000", invoiceNumber, 1, finance.KIDMethodMod11)
+	if err != nil {
+		t.Fatalf("generating mod-11 KID: %v", err)
+	}
+	if oldKID == wantKID {
+		t.Skip("invoice #42's mod-10 and mod-11 KIDs coincide — pick another number to exercise reissue")
+	}
+
+	invoice := finance.Invoice{
+		ClubName: "Klokkarvik Båtlag Test", OrgNumber: "999999999",
+		ClubAddress: "Brygga 1, 5378 Klokkarvik", MemberName: "Test User",
+		MemberAddress: "Stranda 4", InvoiceNumber: invoiceNumber,
+		IssueDate: time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC),
+		DueDate:   time.Date(2026, 6, 14, 0, 0, 0, 0, time.UTC),
+		KID:       oldKID, BankAccount: "1234.56.78901",
+		Lines: []finance.InvoiceLine{{Description: "Kontingent 2026", Quantity: 1, UnitPrice: 450}},
+	}
+	originalPDF, err := finance.GeneratePDF(invoice)
+	if err != nil {
+		t.Fatalf("generating PDF: %v", err)
+	}
+
+	var invoiceID string
+	if err := db.QueryRow(ctx,
+		`INSERT INTO invoices
+		   (club_id, user_id, invoice_number, kid_number, due_date,
+		    total_amount, pdf_data, fiscal_period_id,
+		    recipient_kind, recipient_email, sent_at)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'private','test@example.com', now())
+		 RETURNING id`,
+		clubID, userID, invoiceNumber, oldKID, invoice.DueDate,
+		450.00, originalPDF, periodID,
+	).Scan(&invoiceID); err != nil {
+		t.Fatalf("inserting invoice: %v", err)
+	}
+	if _, err := db.Exec(ctx,
+		`INSERT INTO invoice_lines (invoice_id, description, quantity, unit_price, line_total)
+		 VALUES ($1, 'Kontingent 2026', 1, 450.00, 450.00)`, invoiceID,
+	); err != nil {
+		t.Fatalf("inserting line: %v", err)
+	}
+
+	h := &InvoiceHandler{
+		db:     db,
+		config: &config.Config{},
+		audit:  audit.NewService(db, zerolog.Nop()),
+		log:    zerolog.Nop(),
+	}
+	clubFields, err := loadClubInvoiceFields(ctx, db, clubID)
+	if err != nil {
+		t.Fatalf("loading club fields: %v", err)
+	}
+
+	if err := h.reissueOneKID(ctx, clubID, userID, "", invoiceID, clubFields, finance.KIDMethodMod11); err != nil {
+		t.Fatalf("reissueOneKID: %v", err)
+	}
+
+	after := loadInvoiceSnapshot(t, db, invoiceID)
+	if after.kidNumber != wantKID {
+		t.Errorf("kid_number = %q, want mod-11 %q (was %q)", after.kidNumber, wantKID, oldKID)
+	}
+	if !finance.ValidateKIDMethod(after.kidNumber, finance.KIDMethodMod11) {
+		t.Errorf("reissued KID %q does not validate as mod-11", after.kidNumber)
+	}
+	if bytesEqual(originalPDF, after.pdfData) {
+		t.Error("pdf_data unchanged after reissue — PDF was not rebuilt with the new KID")
+	}
+
+	var archiveReason string
+	if err := db.QueryRow(ctx,
+		`SELECT COALESCE(MAX(reason), '') FROM invoice_pdf_archive WHERE invoice_id = $1`,
+		invoiceID,
+	).Scan(&archiveReason); err != nil {
+		t.Fatalf("reading archive: %v", err)
+	}
+	if archiveReason != "reissue_kid" {
+		t.Errorf("archive reason = %q, want %q", archiveReason, "reissue_kid")
+	}
+
+	// Re-running is a no-op now that the KID already matches the club method.
+	if err := h.reissueOneKID(ctx, clubID, userID, "", invoiceID, clubFields, finance.KIDMethodMod11); !errors.Is(err, errSkip) {
+		t.Errorf("second reissue: err = %v, want errSkip (KID already correct)", err)
+	}
+
+	// A paid invoice must be skipped — its KID backs a booked payment/bilag.
+	var paymentID string
+	if err := db.QueryRow(ctx,
+		`INSERT INTO payments (club_id, user_id, type, amount, status, paid_at)
+		 VALUES ($1, $2, 'dues', 450.00, 'completed', now()) RETURNING id`,
+		clubID, userID,
+	).Scan(&paymentID); err != nil {
+		t.Fatalf("inserting payment: %v", err)
+	}
+	var paidID string
+	paidKID, _ := finance.GenerateKIDMethod("000", 43, 1, finance.KIDMethodMod10)
+	if err := db.QueryRow(ctx,
+		`INSERT INTO invoices
+		   (club_id, user_id, invoice_number, kid_number, due_date,
+		    total_amount, fiscal_period_id, recipient_kind, recipient_email,
+		    sent_at, payment_id)
+		 VALUES ($1,$2,43,$3,$4,450.00,$5,'private','p@example.com', now(), $6)
+		 RETURNING id`,
+		clubID, userID, paidKID, invoice.DueDate, periodID, paymentID,
+	).Scan(&paidID); err != nil {
+		t.Fatalf("inserting paid invoice: %v", err)
+	}
+	if err := h.reissueOneKID(ctx, clubID, userID, "", paidID, clubFields, finance.KIDMethodMod11); !errors.Is(err, errSkip) {
+		t.Errorf("paid invoice reissue: err = %v, want errSkip", err)
 	}
 }
 

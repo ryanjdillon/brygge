@@ -2,7 +2,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { FileDown, Send, Trash2, Ban, Bell, RefreshCw, Copy, Check, ChevronUp, ChevronDown, X } from 'lucide-vue-next'
+import { FileDown, Send, Trash2, Ban, Bell, RefreshCw, KeyRound, Copy, Check, ChevronUp, ChevronDown, X } from 'lucide-vue-next'
 import FakturaArchiveButton from '@/components/admin/FakturaArchiveButton.vue'
 import DeliveryLogButton from '@/components/admin/DeliveryLogButton.vue'
 import InvoiceNumberChip from '@/components/ui/InvoiceNumberChip.vue'
@@ -200,6 +200,7 @@ const showDelete = computed(() => props.status !== 'sent') // backend rejects DE
 const showVoid = computed(() => props.status !== 'voided')
 const showReminder = computed(() => props.status === 'sent')
 const showRegenerate = computed(() => props.status === 'sent')
+const showReissueKid = computed(() => props.status === 'sent')
 
 const { onCheckboxClick: onRowClick, resetAnchor } = useRangeSelect(selected, () => sorted.value)
 function toggleAll() {
@@ -459,6 +460,39 @@ async function regeneratePdfSelected() {
   await load()
 }
 
+async function reissueKidSelected() {
+  if (selected.value.size === 0) return
+  if (!(await ensureFreshTotp())) return
+  // Only unpaid invoices are eligible — a paid one carries a booked
+  // payment/bilag keyed on its current KID (the backend also enforces this).
+  const items = rows.value.filter((d) => selected.value.has(d.id) && !d.paid)
+  if (items.length === 0) {
+    error.value = t('admin.faktura.sent.reissueKidNoneEligible')
+    return
+  }
+  const ok = await confirm({
+    title: t('admin.faktura.sent.reissueKidConfirmTitle'),
+    body: t('admin.faktura.sent.reissueKidBulkBody', { n: items.length }),
+    details: items.map(rowLabel),
+    confirmLabel: t('admin.faktura.sent.reissueKidAction'),
+    tone: 'warning',
+  })
+  if (!ok) return
+  const ids = items.map((d) => d.id)
+  const res = await totpAwareFetch(`/api/v1/admin/financials/invoices/bulk-reissue-kid`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids }),
+  })
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '')
+    error.value = `${res.status} ${txt}`
+    return
+  }
+  selected.value = new Set()
+  await load()
+}
+
 async function voidSelected() {
   if (selected.value.size === 0) return
   if (!(await ensureFreshTotp())) return
@@ -595,6 +629,14 @@ defineExpose({ load })
             @click="regeneratePdfSelected"
           >
             <RefreshCw class="h-3.5 w-3.5" /> {{ t('admin.faktura.sent.regenSelected') }}
+          </button>
+          <button
+            v-if="showReissueKid"
+            class="inline-flex items-center gap-1 rounded-md border border-brand-300 bg-white px-3 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-50"
+            :title="t('admin.faktura.sent.reissueKidTooltip')"
+            @click="reissueKidSelected"
+          >
+            <KeyRound class="h-3.5 w-3.5" /> {{ t('admin.faktura.sent.reissueKidSelected') }}
           </button>
           <button
             v-if="showVoid"

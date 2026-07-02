@@ -282,7 +282,7 @@ func (h *InvoiceHandler) HandleBulkRegeneratePDF(w http.ResponseWriter, r *http.
 
 	res := bulkInvoiceResult{}
 	for _, id := range req.IDs {
-		err := h.regenerateOnePDF(ctx, claims.ClubID, claims.UserID, r.RemoteAddr, id, clubFields)
+		err := h.regenerateOnePDF(ctx, claims.ClubID, claims.UserID, r.RemoteAddr, id, clubFields, "")
 		switch {
 		case err == nil:
 			res.Processed++
@@ -294,6 +294,104 @@ func (h *InvoiceHandler) HandleBulkRegeneratePDF(w http.ResponseWriter, r *http.
 		}
 	}
 	JSON(w, http.StatusOK, res)
+}
+
+// HandleBulkReissueKID regenerates the payment reference (KID) on the
+// supplied invoices using the club's configured OCR check method
+// (mod10/mod11), then reprints the PDF with the new KID — archiving the
+// prior PDF — in one transaction. Scoped to sent, still-unpaid invoices
+// that already carry a Brygge-generated KID: paid/matched invoices have a
+// booked payment + bilag keyed on the current KID, so changing it would
+// orphan bank reconciliation and they are skipped. Delivering the
+// corrected faktura is intentionally left to the operator's normal
+// "Send purring" flow, so this handler never sends.
+func (h *InvoiceHandler) HandleBulkReissueKID(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	var req bulkInvoiceActionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if len(req.IDs) == 0 {
+		Error(w, http.StatusBadRequest, "ids is required")
+		return
+	}
+
+	clubFields, err := loadClubInvoiceFields(ctx, h.db, claims.ClubID)
+	if err != nil {
+		h.log.Error().Err(err).Msg("load club fields for reissue")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	var kidMethod string
+	if err := h.db.QueryRow(ctx,
+		`SELECT COALESCE(kid_check_method, 'mod11') FROM clubs WHERE id = $1`,
+		claims.ClubID,
+	).Scan(&kidMethod); err != nil {
+		h.log.Error().Err(err).Msg("load kid method for reissue")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	res := bulkInvoiceResult{}
+	for _, id := range req.IDs {
+		err := h.reissueOneKID(ctx, claims.ClubID, claims.UserID, r.RemoteAddr, id, clubFields, kidMethod)
+		switch {
+		case err == nil:
+			res.Processed++
+		case errors.Is(err, errSkip):
+			res.Skipped++
+		default:
+			res.Failures = append(res.Failures, id+": "+err.Error())
+			h.log.Warn().Err(err).Str("invoice_id", id).Msg("bulk reissue-kid failed for invoice")
+		}
+	}
+	JSON(w, http.StatusOK, res)
+}
+
+// reissueOneKID computes a fresh KID for a single invoice under the club's
+// check method and, when it differs from the stored one, reprints the PDF
+// with it. Skips invoices that are unsent, already paid, carry no KID, or
+// whose KID is already correct — leaving nothing to send or reconcile.
+func (h *InvoiceHandler) reissueOneKID(
+	ctx context.Context, clubID, actorID, remoteAddr, invoiceID string, club *clubInvoiceFields, kidMethod string,
+) error {
+	var (
+		invoiceNumber int
+		kidNumber     string
+		sent          bool
+		paid          bool
+	)
+	err := h.db.QueryRow(ctx,
+		`SELECT invoice_number, COALESCE(kid_number, ''),
+		        (sent_at IS NOT NULL), (payment_id IS NOT NULL)
+		   FROM invoices WHERE id = $1 AND club_id = $2`,
+		invoiceID, clubID,
+	).Scan(&invoiceNumber, &kidNumber, &sent, &paid)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return errors.New("not found")
+		}
+		return err
+	}
+	if !sent || paid || kidNumber == "" {
+		return errSkip
+	}
+
+	newKID, err := finance.GenerateKIDMethod("000", invoiceNumber, 1, kidMethod)
+	if err != nil {
+		return err
+	}
+	if newKID == kidNumber {
+		return errSkip
+	}
+
+	return h.regenerateOnePDF(ctx, clubID, actorID, remoteAddr, invoiceID, club, newKID)
 }
 
 type clubInvoiceFields struct {
@@ -337,8 +435,13 @@ type pgxQuerier interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
+// regenerateOnePDF rebuilds and stores an invoice's PDF, archiving the
+// prior one for bokføringsloven §13 retention. When newKID is non-empty
+// the invoice's payment reference is reissued in the same transaction:
+// the PDF is printed with newKID and invoices.kid_number is updated
+// alongside pdf_data, so the stored KID and the printed KID never diverge.
 func (h *InvoiceHandler) regenerateOnePDF(
-	ctx context.Context, clubID, actorID, remoteAddr, invoiceID string, club *clubInvoiceFields,
+	ctx context.Context, clubID, actorID, remoteAddr, invoiceID string, club *clubInvoiceFields, newKID string,
 ) error {
 	var (
 		invoiceNumber int
@@ -410,6 +513,13 @@ func (h *InvoiceHandler) regenerateOnePDF(
 		return err
 	}
 
+	// A reissue prints the new KID; a plain regenerate reprints the
+	// existing one.
+	pdfKID := kid
+	if newKID != "" {
+		pdfKID = newKID
+	}
+
 	inv := finance.Invoice{
 		ClubName:       club.Name,
 		OrgNumber:      club.OrgNumber,
@@ -424,7 +534,7 @@ func (h *InvoiceHandler) regenerateOnePDF(
 		InvoiceNumber:  invoiceNumber,
 		IssueDate:      issueDate,
 		DueDate:        dueDate,
-		KID:            kid,
+		KID:            pdfKID,
 		BankAccount:    club.BankAccount,
 		Lines:          lines,
 	}
@@ -478,11 +588,15 @@ func (h *InvoiceHandler) regenerateOnePDF(
 		} else {
 			archivePDFArg = existingPDF
 		}
+		archiveReason := "regenerate"
+		if newKID != "" {
+			archiveReason = "reissue_kid"
+		}
 		if err := tx.QueryRow(ctx,
 			`INSERT INTO invoice_pdf_archive (invoice_id, pdf_data, archived_by, reason)
-			 VALUES ($1, $2, $3, 'regenerate')
+			 VALUES ($1, $2, $3, $4)
 			 RETURNING id`,
-			invoiceID, archivePDFArg, archivedBy,
+			invoiceID, archivePDFArg, archivedBy, archiveReason,
 		).Scan(&archiveID); err != nil {
 			return err
 		}
@@ -512,8 +626,11 @@ func (h *InvoiceHandler) regenerateOnePDF(
 		newPDFArg = pdfData
 	}
 	if _, err := tx.Exec(ctx,
-		`UPDATE invoices SET pdf_data = $1, s3_key = $2 WHERE id = $3 AND club_id = $4`,
-		newPDFArg, nilIfEmpty(newS3Key), invoiceID, clubID,
+		`UPDATE invoices
+		    SET pdf_data = $1, s3_key = $2,
+		        kid_number = COALESCE($5, kid_number)
+		  WHERE id = $3 AND club_id = $4`,
+		newPDFArg, nilIfEmpty(newS3Key), invoiceID, clubID, nilIfEmpty(newKID),
 	); err != nil {
 		return err
 	}
@@ -523,13 +640,17 @@ func (h *InvoiceHandler) regenerateOnePDF(
 	_ = archiveS3Key
 
 	if h.audit != nil {
+		detail := map[string]any{
+			"invoice_number":  invoiceNumber,
+			"bank_account":    club.BankAccount,
+			"prior_pdf_bytes": len(existingPDF),
+		}
+		if newKID != "" {
+			detail["reissued_kid"] = newKID
+			detail["prior_kid"] = kid
+		}
 		h.audit.LogAction(ctx, clubID, actorID, remoteAddr,
-			audit.ActionInvoiceRegenerated, "invoice", invoiceID,
-			map[string]any{
-				"invoice_number":  invoiceNumber,
-				"bank_account":    club.BankAccount,
-				"prior_pdf_bytes": len(existingPDF),
-			})
+			audit.ActionInvoiceRegenerated, "invoice", invoiceID, detail)
 	}
 	return nil
 }

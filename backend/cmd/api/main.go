@@ -816,6 +816,9 @@ func main() {
 							Post("/invoices/bulk-regenerate-pdf", invoiceHandler.HandleBulkRegeneratePDF)
 						r.With(middleware.RequireRole("treasurer", "admin"),
 							middleware.RequireFreshTOTPDefault()).
+							Post("/invoices/bulk-reissue-kid", invoiceHandler.HandleBulkReissueKID)
+						r.With(middleware.RequireRole("treasurer", "admin"),
+							middleware.RequireFreshTOTPDefault()).
 							Post("/invoices/import/uni24", invoiceHandler.HandleImportUni24Invoices)
 					}
 				})
