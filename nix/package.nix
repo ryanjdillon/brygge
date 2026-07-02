@@ -39,6 +39,7 @@ buildGoModule rec {
     "cmd/api"
     "cmd/seed"
     "cmd/backfill-bank-names"
+    "cmd/vipps-cutover"
   ];
 
   ldflags = [

@@ -224,27 +224,28 @@ func (h *ClubSettingsHandler) HandleUpdateBookingSettings(w http.ResponseWriter,
 }
 
 type clubFinancialSettings struct {
-	Name              string   `json:"name"`
-	OrgNumber         string   `json:"org_number"`
-	Address           string   `json:"address"`
-	Phone             string   `json:"phone"`
-	VHFChannel        string   `json:"vhf_channel"`
-	Latitude          *float64 `json:"latitude"`
-	Longitude         *float64 `json:"longitude"`
-	BankAccount          string `json:"bank_account"`
-	KIDCheckMethod       string `json:"kid_check_method"`
-	VippsClearingAccount string `json:"vipps_clearing_account"`
-	VippsFeeAccount      string `json:"vipps_fee_account"`
-	WebsiteURL           string `json:"website_url"`
-	ChairmanEmail     string   `json:"chairman_email"`
-	ViceChairmanEmail string   `json:"vice_chairman_email"`
-	TreasurerEmail    string   `json:"treasurer_email"`
-	SecretaryEmail    string   `json:"secretary_email"`
-	HarborMasterEmail string   `json:"harbor_master_email"`
-	HasFakturaLogo    bool     `json:"has_faktura_logo"`
-	FakturaLogoMIME   string   `json:"faktura_logo_mime"`
-	HasSiteLogo       bool     `json:"has_site_logo"`
-	SiteLogoMIME      string   `json:"site_logo_mime"`
+	Name                  string   `json:"name"`
+	OrgNumber             string   `json:"org_number"`
+	Address               string   `json:"address"`
+	Phone                 string   `json:"phone"`
+	VHFChannel            string   `json:"vhf_channel"`
+	Latitude              *float64 `json:"latitude"`
+	Longitude             *float64 `json:"longitude"`
+	BankAccount           string   `json:"bank_account"`
+	KIDCheckMethod        string   `json:"kid_check_method"`
+	VippsClearingAccount  string   `json:"vipps_clearing_account"`
+	VippsFeeAccount       string   `json:"vipps_fee_account"`
+	VippsPerChargeEnabled bool     `json:"vipps_per_charge_enabled"`
+	WebsiteURL            string   `json:"website_url"`
+	ChairmanEmail         string   `json:"chairman_email"`
+	ViceChairmanEmail     string   `json:"vice_chairman_email"`
+	TreasurerEmail        string   `json:"treasurer_email"`
+	SecretaryEmail        string   `json:"secretary_email"`
+	HarborMasterEmail     string   `json:"harbor_master_email"`
+	HasFakturaLogo        bool     `json:"has_faktura_logo"`
+	FakturaLogoMIME       string   `json:"faktura_logo_mime"`
+	HasSiteLogo           bool     `json:"has_site_logo"`
+	SiteLogoMIME          string   `json:"site_logo_mime"`
 	// Public site content — empty string means "use the frontend's
 	// i18n fallback so the page reads sensibly even before any admin
 	// has visited settings".
@@ -288,6 +289,7 @@ func (h *ClubSettingsHandler) HandleGetFinancialSettings(w http.ResponseWriter, 
 		        COALESCE(kid_check_method, 'mod11'),
 		        COALESCE(vipps_clearing_account, '2900'),
 		        COALESCE(vipps_fee_account, '7700'),
+		        COALESCE(vipps_per_charge_enabled, false),
 		        COALESCE(website_url, ''),
 		        COALESCE(chairman_email, ''), COALESCE(vice_chairman_email, ''),
 		        COALESCE(treasurer_email, ''),
@@ -311,6 +313,7 @@ func (h *ClubSettingsHandler) HandleGetFinancialSettings(w http.ResponseWriter, 
 		&s.BankAccount,
 		&s.KIDCheckMethod,
 		&s.VippsClearingAccount, &s.VippsFeeAccount,
+		&s.VippsPerChargeEnabled,
 		&s.WebsiteURL,
 		&s.ChairmanEmail, &s.ViceChairmanEmail,
 		&s.TreasurerEmail,
@@ -344,6 +347,7 @@ type updateFinancialSettingsRequest struct {
 	KIDCheckMethod          *string  `json:"kid_check_method,omitempty"`
 	VippsClearingAccount    *string  `json:"vipps_clearing_account,omitempty"`
 	VippsFeeAccount         *string  `json:"vipps_fee_account,omitempty"`
+	VippsPerChargeEnabled   *bool    `json:"vipps_per_charge_enabled,omitempty"`
 	WebsiteURL              *string  `json:"website_url,omitempty"`
 	ChairmanEmail           *string  `json:"chairman_email,omitempty"`
 	ViceChairmanEmail       *string  `json:"vice_chairman_email,omitempty"`
@@ -435,7 +439,8 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		   anthropic_api_key         = COALESCE($31, anthropic_api_key),
 		   kid_check_method          = COALESCE($32, kid_check_method),
 		   vipps_clearing_account    = COALESCE($33, vipps_clearing_account),
-		   vipps_fee_account         = COALESCE($34, vipps_fee_account)
+		   vipps_fee_account         = COALESCE($34, vipps_fee_account),
+		   vipps_per_charge_enabled  = COALESCE($35, vipps_per_charge_enabled)
 		 WHERE id = $1`,
 		claims.ClubID, req.OrgNumber, req.Address, req.Phone, req.VHFChannel,
 		req.Latitude, req.Longitude,
@@ -452,6 +457,7 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		anthropicKey,
 		req.KIDCheckMethod,
 		req.VippsClearingAccount, req.VippsFeeAccount,
+		req.VippsPerChargeEnabled,
 	); err != nil {
 		h.log.Error().Err(err).Msg("update financial settings")
 		Error(w, http.StatusInternalServerError, "internal error")

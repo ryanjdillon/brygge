@@ -86,12 +86,12 @@ func (s *Service) findInvoiceByCounterpartAndAmount(ctx context.Context, clubID,
 
 // BankSyncResult summarizes one full-scope bank sync run.
 type BankSyncResult struct {
-	KIDMatched       int      `json:"kid_matched"`
-	VippsReconciled  int      `json:"vipps_reconciled"`
-	VippsUnbalanced  int      `json:"vipps_unbalanced"`
-	TransfersLinked  int      `json:"transfers_linked"`
-	PaymentsLinked   int      `json:"payments_linked"`
-	ClosedPeriods    []string `json:"closed_periods"`
+	KIDMatched      int      `json:"kid_matched"`
+	VippsReconciled int      `json:"vipps_reconciled"`
+	VippsUnbalanced int      `json:"vipps_unbalanced"`
+	TransfersLinked int      `json:"transfers_linked"`
+	PaymentsLinked  int      `json:"payments_linked"`
+	ClosedPeriods   []string `json:"closed_periods"`
 }
 
 // BankSync re-runs auto-correlation across every unmatched bank import row
@@ -448,6 +448,17 @@ func (s *Service) syncKIDMatches(ctx context.Context, clubID, createdBy string) 
 }
 
 func (s *Service) syncVippsReconciliations(ctx context.Context, clubID, createdBy string) (matched, unbalanced int, closed []int, err error) {
+	// Clubs on the per-charge model own Vipps payout reconciliation through the
+	// Tildel per-charge flow + payout auto-clear (BRY-226/227). The legacy
+	// single-bilag auto-match must stand down so it doesn't pre-empt them.
+	perCharge, ferr := s.VippsPerChargeEnabled(ctx, clubID)
+	if ferr != nil {
+		return 0, 0, nil, fmt.Errorf("checking vipps model: %w", ferr)
+	}
+	if perCharge {
+		return 0, 0, nil, nil
+	}
+
 	rows, qerr := s.db.Query(ctx,
 		`SELECT id FROM bank_import_rows
 		 WHERE club_id = $1
