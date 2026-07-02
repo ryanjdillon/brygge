@@ -52,6 +52,10 @@ type BankFormat struct {
 	FromAccountColumn  string   `yaml:"from_account_column"`
 	ToAccountColumn    string   `yaml:"to_account_column"`
 	SkipRows           int      `yaml:"skip_rows"`
+	// CounterpartCharset names a legacy encoding used only by the payer-name
+	// field (some Norwegian banks store names via a 7-bit giro subsystem while
+	// the rest of the file is UTF-8). "iso646-no" reverses that substitution.
+	CounterpartCharset string `yaml:"counterpart_charset"`
 }
 
 func (f BankFormat) delimRune() rune {
@@ -182,13 +186,18 @@ func (p *CSVParser) Parse(reader io.Reader) ([]BankRow, error) {
 			}
 		}
 
+		counterpart := firstNonEmpty(record, counterIdxs)
+		if p.Format.CounterpartCharset == "iso646-no" {
+			counterpart = decodeISO646NOName(counterpart)
+		}
+
 		row := BankRow{
 			Date:        date,
 			Description: joinNonEmpty(record, descIdxs, " · "),
 			Amount:      amount,
 			Reference:   strings.TrimSpace(safeGet(record, refIdx)),
 			KID:         strings.TrimSpace(safeGet(record, kidIdx)),
-			Counterpart: firstNonEmpty(record, counterIdxs),
+			Counterpart: counterpart,
 			FromAccount: strings.TrimSpace(safeGet(record, fromAcctIdx)),
 			ToAccount:   strings.TrimSpace(safeGet(record, toAcctIdx)),
 		}
@@ -857,4 +866,25 @@ func firstNonEmpty(record []string, idxs []int) string {
 
 func stripBOM(s string) string {
 	return strings.TrimPrefix(s, "\ufeff")
+}
+
+// iso646NONameDecoder reverses the 7-bit ISO-646-Norwegian substitution some
+// banks apply to the payer-name field (a legacy giro subsystem), while the
+// rest of the CSV is UTF-8. A Norwegian person/company name never legitimately
+// contains these ASCII symbols, so the mapping is unambiguous *in the name
+// field only* \u2014 it must not be applied to free-text meldings (which can carry
+// a real "@" in an email). Byte mappings, confirmed against Sparebank Norge
+// exports: @\u2192\u00d8, |\u2192\u00f8, }\u2192\u00e5, {\u2192\u00e6. Uppercase \u00c6/\u00c5 bytes are not yet observed for
+// this bank (its uppercase \u00d8 deviates from the standard \ to @), so they are
+// left untouched until a sample confirms them rather than risk a wrong guess.
+var iso646NONameDecoder = strings.NewReplacer(
+	"@", "\u00d8",
+	"|", "\u00f8",
+	"}", "\u00e5",
+	"{", "\u00e6",
+)
+
+// decodeISO646NOName restores Norwegian letters in a bank-provided payer name.
+func decodeISO646NOName(s string) string {
+	return iso646NONameDecoder.Replace(s)
 }

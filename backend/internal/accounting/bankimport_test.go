@@ -192,9 +192,9 @@ func TestListBankFormats(t *testing.T) {
 
 func TestCSVParserSparebankNorge(t *testing.T) {
 	csv := "\ufeffBokført;Transaksjonsdato;Rentedato;Kategori;Type;Beskrivelse;Melding;Beløp (NOK);Beløp (valuta);Valuta;Vekslingskurs;Arkivref.;Fra konto;Til konto;Kreditornavn;Debitornavn\n" +
-		"04.05.2026;;04.05.2026;Innbetaling;OVERF;Overførsel;;3281,55;3281,55;NOK;1;273196130;;34700502793;;\n" +
-		"30.04.2026;;30.04.2026;Gebyr;GEBYR;Avtalegiro;;-6;-6;NOK;1;0;34700502793;;;\n" +
-		"30.04.2026;;30.04.2026;Innbetaling;OVERFØRSEL;Utb. 2000591 Vippsnr 698382;;1572;1572;NOK;1;272437290;15200281214;34700502793;;Vipps Mobilepay As\n"
+		"04.05.2026;;04.05.2026;Innbetaling;OVERF;Overførsel;;3281,55;3281,55;NOK;1;273196130;;99990000002;;\n" +
+		"30.04.2026;;30.04.2026;Gebyr;GEBYR;Avtalegiro;;-6;-6;NOK;1;0;99990000002;;;\n" +
+		"30.04.2026;;30.04.2026;Innbetaling;OVERFØRSEL;Utb. 2000591 Vippsnr 698382;;1572;1572;NOK;1;272437290;99990000003;99990000002;;Vipps Mobilepay As\n"
 
 	parser := &CSVParser{Format: BankFormats["sparebank-norge-v1"]}
 	rows, err := parser.Parse(strings.NewReader(csv))
@@ -227,6 +227,51 @@ func TestCSVParserSparebankNorge(t *testing.T) {
 	}
 	if rows[2].Counterpart != "Vipps Mobilepay As" {
 		t.Errorf("row 2 counterpart = %q (expected Debitornavn fallback)", rows[2].Counterpart)
+	}
+}
+
+func TestDecodeISO646NOName(t *testing.T) {
+	// Synthetic fixtures — each exercises one 7-bit substitution byte, not any
+	// real member or account. The bank encodes ø/å/æ/Ø as |/}/{/@ in the name
+	// field; the decoder reverses that.
+	cases := map[string]string{
+		"Test@vik AS":     "TestØvik AS",     // @ → Ø (uppercase)
+		"test|en":         "testøen",         // | → ø
+		"Test}sen":        "Teståsen",        // } → å
+		"Test{r":          "Testær",          // { → æ
+		"Ola Nordmann":    "Ola Nordmann",    // untouched — no substitution bytes
+		"post@example.no": "postØexample.no", // why we decode only the NAME field, never meldings
+	}
+	for in, want := range cases {
+		if got := decodeISO646NOName(in); got != want {
+			t.Errorf("decodeISO646NOName(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// TestCSVParserSparebankNorgeDecodesName proves the payer-name field is decoded
+// from the bank's 7-bit giro encoding on import (so name+amount matching sees a
+// real Norwegian name), while the free-text melding is left untouched. Uses
+// synthetic names and placeholder account numbers.
+func TestCSVParserSparebankNorgeDecodesName(t *testing.T) {
+	csv := "\ufeffBokført;Transaksjonsdato;Rentedato;Kategori;Type;Beskrivelse;Melding;Beløp (NOK);Beløp (valuta);Valuta;Vekslingskurs;Arkivref.;Fra konto;Til konto;Kreditornavn;Debitornavn\n" +
+		"15.06.2026;;15.06.2026;Innbetaling;OVERFØRSEL;Nettbank;Hei fra test|en;450;450;NOK;1;999001;99990000001;99990000002;Testlaget Test}g;Kari Test@Y\n"
+
+	parser := &CSVParser{Format: BankFormats["sparebank-norge-v1"]}
+	rows, err := parser.Parse(strings.NewReader(csv))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(rows))
+	}
+	// Debitornavn is preferred (inbound payer); it must be decoded.
+	if rows[0].Counterpart != "Kari TestØY" {
+		t.Errorf("counterpart = %q, want decoded %q", rows[0].Counterpart, "Kari TestØY")
+	}
+	// The melding (free text) must NOT be decoded — it can carry a real "@".
+	if !strings.Contains(rows[0].Description, "test|en") {
+		t.Errorf("description %q should keep the raw melding untouched", rows[0].Description)
 	}
 }
 

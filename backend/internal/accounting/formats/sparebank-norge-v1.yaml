@@ -23,5 +23,9 @@ ref_column: "Arkivref."
 counterpart_columns:
   - Debitornavn
   - Kreditornavn
+# The name fields come from a legacy 7-bit giro subsystem: ø/å/æ/Ø arrive as
+# |/}/{/@ while the rest of the file is UTF-8. Decode only the payer name so
+# name+amount matching sees "Lokøy" rather than "Lok@Y".
+counterpart_charset: iso646-no
 from_account_column: "Fra konto"
 to_account_column: "Til konto"
