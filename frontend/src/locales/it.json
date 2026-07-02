@@ -1009,6 +1009,7 @@
       "showSuggestions": "Show suggestions",
       "hideSuggestions": "Hide",
       "noInvoiceSuggestions": "Nessuna fattura suggerita",
+      "noNameMatchWarning": "Nessuna fattura corrisponde al pagante «{name}». I suggerimenti sotto corrispondono solo per importo — non assegnare se non sei sicuro.",
       "assign": "Assign",
       "searchInvoice": "Search invoice",
       "assignAccount": "Assign account",

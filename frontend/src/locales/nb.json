@@ -1818,6 +1818,7 @@
       "showSuggestions": "Vis forslag",
       "hideSuggestions": "Skjul",
       "noInvoiceSuggestions": "Ingen fakturaforslag",
+      "noNameMatchWarning": "Ingen faktura matcher betaleren «{name}». Forslagene nedenfor samsvarer bare på beløp – ikke tildel uten å være sikker.",
       "assign": "Tildel",
       "searchInvoice": "Søk faktura",
       "assignAccount": "Tildel konto",

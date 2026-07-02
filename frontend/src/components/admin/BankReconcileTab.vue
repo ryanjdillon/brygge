@@ -405,6 +405,19 @@ async function doUnassign(rowId: string) {
 
           <!-- Suggestions, only when focused -->
           <div v-if="focusedRowId === row.id && suggestions" class="mt-3 space-y-2">
+            <!-- Named row, but nothing matches the payer's name: the suggestions
+                 below coincide on amount only. Warn so they aren't mistaken for
+                 this payer's invoice. -->
+            <p
+              v-if="
+                row.counterpart &&
+                suggestions.invoices.length > 0 &&
+                !suggestions.invoices.some((s) => s.score >= 50)
+              "
+              class="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800"
+            >
+              {{ t('admin.bankReconcile.noNameMatchWarning', { name: row.counterpart }) }}
+            </p>
             <div
               v-for="sug in suggestions.invoices.slice(0, 3)"
               :key="sug.invoice_id"

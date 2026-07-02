@@ -1009,6 +1009,7 @@
       "showSuggestions": "Show suggestions",
       "hideSuggestions": "Hide",
       "noInvoiceSuggestions": "Geen factuursuggesties",
+      "noNameMatchWarning": "Geen factuur komt overeen met de betaler '{name}'. De suggesties hieronder komen alleen op bedrag overeen — wijs niet toe als je niet zeker bent.",
       "assign": "Assign",
       "searchInvoice": "Search invoice",
       "assignAccount": "Assign account",

@@ -1822,6 +1822,7 @@
       "showSuggestions": "Show suggestions",
       "hideSuggestions": "Hide",
       "noInvoiceSuggestions": "No invoice suggestions",
+      "noNameMatchWarning": "No invoice matches the payer \"{name}\". The suggestions below match on amount only — don't assign unless you're sure.",
       "assign": "Assign",
       "searchInvoice": "Search invoice",
       "assignAccount": "Assign account",

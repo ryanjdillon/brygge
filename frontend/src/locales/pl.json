@@ -1009,6 +1009,7 @@
       "showSuggestions": "Show suggestions",
       "hideSuggestions": "Hide",
       "noInvoiceSuggestions": "Brak sugestii faktur",
+      "noNameMatchWarning": "Żadna faktura nie pasuje do płatnika „{name}”. Poniższe sugestie pasują tylko kwotą — nie przypisuj, jeśli nie masz pewności.",
       "assign": "Assign",
       "searchInvoice": "Search invoice",
       "assignAccount": "Assign account",

@@ -1009,6 +1009,7 @@
       "showSuggestions": "Show suggestions",
       "hideSuggestions": "Hide",
       "noInvoiceSuggestions": "Keine Rechnungsvorschläge",
+      "noNameMatchWarning": "Keine Rechnung passt zum Zahler „{name}“. Die Vorschläge unten stimmen nur im Betrag überein – nicht zuweisen, wenn Sie unsicher sind.",
       "assign": "Assign",
       "searchInvoice": "Search invoice",
       "assignAccount": "Assign account",
