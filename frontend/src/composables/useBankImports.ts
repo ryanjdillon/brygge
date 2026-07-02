@@ -41,6 +41,9 @@ export interface BankImportResult {
   closed_periods?: string[]
   bank_account_code: string
   auto_matched: boolean
+  // Present only on a full-account overwrite reconcile.
+  deleted?: number
+  skipped_booked?: number
 }
 
 export interface VippsImportSummary {
@@ -225,6 +228,24 @@ export async function reimportBankCSV(
   fd.append('file', file)
   if (format) fd.append('format', format)
   return fetchJSON(`${BASE}/bank-import/${importID}/reimport`, { method: 'POST', body: fd })
+}
+
+// reimportAccountBankCSV does a full-account reconcile: it clears the account's
+// unmatched rows within the CSV's date range, then imports + auto-matches the
+// whole file. Booked rows are never touched. Fresh-TOTP gated on the server.
+export async function reimportAccountBankCSV(
+  file: File,
+  format: string,
+  bankAccountCode: string,
+): Promise<BankImportResult> {
+  const fd = new FormData()
+  fd.append('file', file)
+  fd.append('format', format)
+  fd.append('bank_account_code', bankAccountCode)
+  return fetchJSON<BankImportResult>(`${BASE}/bank-import/account-reimport`, {
+    method: 'POST',
+    body: fd,
+  })
 }
 
 export async function reassignBankImport(

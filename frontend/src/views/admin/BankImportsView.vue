@@ -14,6 +14,7 @@ import {
   uploadVippsCSV,
   reassignBankImport,
   reimportBankCSV,
+  reimportAccountBankCSV,
   previewVippsReconcile,
   confirmVippsReconcile,
   type BankImportResult,
@@ -61,6 +62,7 @@ const bankAccounts = computed(() =>
 const bankFile = ref<File | null>(null)
 const bankFormat = ref<string>('sparebank-norge-v1')
 const bankAccountCode = ref<string>('1920')
+const bankOverwrite = ref(false)
 const bankError = ref<string | null>(null)
 const bankBusy = ref(false)
 const bankResult = ref<BankImportResult | null>(null)
@@ -73,13 +75,26 @@ function onBankFile(files: FileList | null) {
 
 async function submitBank() {
   if (!bankFile.value || !bankAccountCode.value) return
+  // The overwrite path clears the account's unmatched rows in the file's date
+  // range, so it is gated behind fresh TOTP + an explicit confirm.
+  if (bankOverwrite.value) {
+    if (!(await ensureFreshTotp())) return
+    const ok = await confirm({
+      title: t('admin.bankImports.overwrite'),
+      body: t('admin.bankImports.overwriteConfirm', { code: bankAccountCode.value }),
+      tone: 'warning',
+    })
+    if (!ok) return
+  }
   bankError.value = null
   bankBusy.value = true
   try {
-    const res = await uploadBankCSV(bankFile.value, bankFormat.value, bankAccountCode.value)
+    const res = bankOverwrite.value
+      ? await reimportAccountBankCSV(bankFile.value, bankFormat.value, bankAccountCode.value)
+      : await uploadBankCSV(bankFile.value, bankFormat.value, bankAccountCode.value)
     bankResult.value = res
     currentBankImportId.value = res.id
-    queryClient.invalidateQueries({ queryKey: ['accounting', 'bank-imports'] })
+    queryClient.invalidateQueries({ queryKey: ['accounting'] })
   } catch (e: any) {
     bankError.value = e?.message ?? 'Upload failed'
   } finally {
@@ -649,6 +664,19 @@ const filterMonthValue = computed<number>({
             data-testid="bank-file-input"
             @change="onBankFile"
           />
+
+          <label class="flex items-start gap-2 text-xs text-gray-700">
+            <input
+              v-model="bankOverwrite"
+              type="checkbox"
+              class="mt-0.5 accent-brand-600"
+              data-testid="bank-overwrite"
+            />
+            <span>
+              <span class="font-medium">{{ t('admin.bankImports.overwrite') }}</span>
+              <span class="block text-gray-500">{{ t('admin.bankImports.overwriteHint') }}</span>
+            </span>
+          </label>
         </div>
 
         <p v-if="bankError" class="mt-3 rounded-md bg-red-50 px-2 py-1 text-xs text-red-700">{{ bankError }}</p>
@@ -671,6 +699,9 @@ const filterMonthValue = computed<number>({
           · {{ t('admin.bankImports.skipped') }}: {{ bankResult.skipped_dup }}
           · {{ t('admin.bankImports.matched') }}: {{ bankResult.matched }}
           · {{ t('admin.bankImports.transfers') }}: {{ bankResult.transfers }}
+          <template v-if="bankResult.deleted !== undefined">
+            · {{ t('admin.bankImports.cleared') }}: {{ bankResult.deleted }}
+          </template>
           <p v-if="bankResult.auto_matched" class="mt-2 rounded bg-brand-50 px-2 py-1 text-brand-800">
             {{ t('admin.bankImports.autoMatchedNotice', { code: bankResult.bank_account_code }) }}
           </p>
