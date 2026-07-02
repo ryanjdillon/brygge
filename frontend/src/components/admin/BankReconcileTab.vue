@@ -384,10 +384,22 @@ async function doUnassign(rowId: string) {
             </div>
             <button
               type="button"
-              class="text-xs text-brand-700 hover:underline"
+              class="text-xs hover:underline"
+              :class="
+                focusedRowId !== row.id && row.amount > 0 && row.suggestion_count === 0
+                  ? 'text-gray-400'
+                  : 'text-brand-700'
+              "
               @click="focusRow(row.id)"
             >
-              {{ focusedRowId === row.id ? t('admin.bankReconcile.hideSuggestions') : t('admin.bankReconcile.showSuggestions') }}
+              <template v-if="focusedRowId === row.id">{{ t('admin.bankReconcile.hideSuggestions') }}</template>
+              <template v-else-if="row.amount > 0 && row.suggestion_count === 0">
+                {{ t('admin.bankReconcile.noInvoiceSuggestions') }}
+              </template>
+              <template v-else>
+                {{ t('admin.bankReconcile.showSuggestions')
+                }}<span v-if="row.amount > 0"> ({{ row.suggestion_count > 9 ? '9+' : row.suggestion_count }})</span>
+              </template>
             </button>
           </div>
 

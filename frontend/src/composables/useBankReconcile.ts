@@ -15,6 +15,7 @@ export interface BankRowSummary {
   dismissed_reason?: string | null
   likely_duplicate_of_matched: boolean
   possible_double_payment: boolean
+  suggestion_count: number
 }
 
 export interface InvoiceSuggestion {
