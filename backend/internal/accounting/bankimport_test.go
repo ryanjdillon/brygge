@@ -231,16 +231,17 @@ func TestCSVParserSparebankNorge(t *testing.T) {
 }
 
 func TestDecodeISO646NOName(t *testing.T) {
-	// Synthetic fixtures — each exercises one 7-bit substitution byte, not any
-	// real member or account. The bank encodes ø/å/æ/Ø as |/}/{/@ in the name
-	// field; the decoder reverses that.
+	// Synthetic fixtures — each exercises a 7-bit substitution symbol and the
+	// title-case artifact (letter after the symbol is spuriously capitalised),
+	// not any real member or account.
 	cases := map[string]string{
-		"Test@vik AS":     "TestØvik AS",     // @ → Ø (uppercase)
-		"test|en":         "testøen",         // | → ø
-		"Test}sen":        "Teståsen",        // } → å
-		"Test{r":          "Testær",          // { → æ
-		"Ola Nordmann":    "Ola Nordmann",    // untouched — no substitution bytes
-		"post@example.no": "postØexample.no", // why we decode only the NAME field, never meldings
+		"Test@vik AS":  "Testøvik AS", // @ mid-word → ø
+		"@Ytest AS":    "Øytest AS",   // @ word-start → Ø, following letter lower-cased
+		"Sm@Y":         "Smøy",        // title-case artifact: @ → ø, Y → y
+		"test|en":      "testøen",     // | → ø
+		"Test}sen":     "Teståsen",    // } → å
+		"Test{r":       "Testær",      // { → æ
+		"Ola Nordmann": "Ola Nordmann",
 	}
 	for in, want := range cases {
 		if got := decodeISO646NOName(in); got != want {
@@ -265,9 +266,10 @@ func TestCSVParserSparebankNorgeDecodesName(t *testing.T) {
 	if len(rows) != 1 {
 		t.Fatalf("expected 1 row, got %d", len(rows))
 	}
-	// Debitornavn is preferred (inbound payer); it must be decoded.
-	if rows[0].Counterpart != "Kari TestØY" {
-		t.Errorf("counterpart = %q, want decoded %q", rows[0].Counterpart, "Kari TestØY")
+	// Debitornavn is preferred (inbound payer); it must be decoded, including
+	// the title-case artifact (Test@Y → Testøy, not TestØY).
+	if rows[0].Counterpart != "Kari Testøy" {
+		t.Errorf("counterpart = %q, want decoded %q", rows[0].Counterpart, "Kari Testøy")
 	}
 	// The melding (free text) must NOT be decoded — it can carry a real "@".
 	if !strings.Contains(rows[0].Description, "test|en") {

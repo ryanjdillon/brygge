@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/jackc/pgx/v5"
 	"gopkg.in/yaml.v3"
@@ -941,23 +942,46 @@ func stripBOM(s string) string {
 	return strings.TrimPrefix(s, "\ufeff")
 }
 
-// iso646NONameDecoder reverses the 7-bit ISO-646-Norwegian substitution some
-// banks apply to the payer-name field (a legacy giro subsystem), while the
-// rest of the CSV is UTF-8. A Norwegian person/company name never legitimately
-// contains these ASCII symbols, so the mapping is unambiguous *in the name
-// field only* \u2014 it must not be applied to free-text meldings (which can carry
-// a real "@" in an email). Byte mappings, confirmed against Sparebank Norge
-// exports: @\u2192\u00d8, |\u2192\u00f8, }\u2192\u00e5, {\u2192\u00e6. Uppercase \u00c6/\u00c5 bytes are not yet observed for
-// this bank (its uppercase \u00d8 deviates from the standard \ to @), so they are
-// left untouched until a sample confirms them rather than risk a wrong guess.
-var iso646NONameDecoder = strings.NewReplacer(
-	"@", "\u00d8",
-	"|", "\u00f8",
-	"}", "\u00e5",
-	"{", "\u00e6",
-)
+// iso646NONameSubst maps each 7-bit substitution symbol some Norwegian banks
+// use in the payer-name field (a legacy giro subsystem, while the rest of the
+// CSV is UTF-8) to its Norwegian letter as {word-start, mid-word}. A person or
+// company name never legitimately contains these ASCII symbols, so the mapping
+// is unambiguous *in the name field only* \u2014 it must not be applied to free-text
+// meldings (which can carry a real "@" in an email). Confirmed against real
+// Sparebank Norge names.
+var iso646NONameSubst = map[rune][2]rune{
+	'@': {'\u00d8', '\u00f8'},
+	'|': {'\u00d8', '\u00f8'},
+	'}': {'\u00c5', '\u00e5'},
+	'{': {'\u00c6', '\u00e6'},
+}
 
 // decodeISO646NOName restores Norwegian letters in a bank-provided payer name.
+// The bank upper-cases the name and then title-cases it with the substitution
+// symbols treated as word boundaries, so the letter right after a symbol is
+// spuriously capitalised ("Lok\u00f8y"\u2192"Lok@Y", "\u00d8ygarden"\u2192"@Ygarden",
+// "B\u00e5tlag"\u2192"B}Tlag"). This reverses both effects: the Norwegian letter is
+// upper-case only at a word start, and the letter following a symbol is
+// lower-cased back.
 func decodeISO646NOName(s string) string {
-	return iso646NONameDecoder.Replace(s)
+	runes := []rune(s)
+	out := make([]rune, 0, len(runes))
+	lowerNext := false
+	for i, r := range runes {
+		if pair, ok := iso646NONameSubst[r]; ok {
+			if i == 0 || runes[i-1] == ' ' {
+				out = append(out, pair[0]) // word start \u2192 upper-case
+			} else {
+				out = append(out, pair[1]) // mid-word \u2192 lower-case
+			}
+			lowerNext = true
+			continue
+		}
+		if lowerNext {
+			r = unicode.ToLower(r)
+			lowerNext = false
+		}
+		out = append(out, r)
+	}
+	return string(out)
 }
