@@ -3,10 +3,72 @@ package accounting
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/brygge-klubb/brygge/internal/testutil"
 	"github.com/rs/zerolog"
 )
+
+// ListMissingVippsSettlements flags unmatched Vipps payout bank rows whose
+// settlement isn't imported, and ignores payouts whose settlement IS imported,
+// non-Vipps rows, and already-matched rows.
+func TestListMissingVippsSettlements(t *testing.T) {
+	testutil.SkipIfNoDB(t)
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	clubID := testutil.SeedClub(t, pool)
+	userID, _ := testutil.SeedUser(t, pool, clubID, []string{"treasurer"})
+	svc := NewService(pool, nil, zerolog.Nop())
+
+	var importID string
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO bank_imports (club_id, filename, format, bank_account_code, imported_by, row_count)
+		 VALUES ($1, 'b.csv', 'sparebank-norge-v1', '1920', $2, 0) RETURNING id`,
+		clubID, userID,
+	).Scan(&importID); err != nil {
+		t.Fatalf("insert import: %v", err)
+	}
+
+	d := time.Date(2026, 3, 25, 0, 0, 0, 0, time.UTC)
+	if _, err := svc.ImportBankRows(ctx, clubID, importID, "", []BankRow{
+		{Date: d, Description: "Utb. 3000100 Vippsnr 548005", Amount: 500, Reference: "A1"}, // settlement NOT imported
+		{Date: d, Description: "Utb. 3000200 Vippsnr 548005", Amount: 700, Reference: "A2"}, // settlement imported
+		{Date: d, Description: "Nettgiro overførsel", Amount: 300, Reference: "A3"},         // not a Vipps payout
+	}); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+
+	// Import settlement 3000200 (so it is NOT missing).
+	var vippsImportID string
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO vipps_imports (club_id, filename, msn, imported_by)
+		 VALUES ($1, 's.csv', '548005', $2) RETURNING id`,
+		clubID, userID,
+	).Scan(&vippsImportID); err != nil {
+		t.Fatalf("insert vipps import: %v", err)
+	}
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO vipps_import_rows
+		   (vipps_import_id, club_id, row_hash, row_type, amount, settlement_number, msn)
+		 VALUES ($1, $2, repeat('a',64), 'belastning', 700.00, '3000200', '548005')`,
+		vippsImportID, clubID,
+	); err != nil {
+		t.Fatalf("insert vipps row: %v", err)
+	}
+
+	missing, err := svc.ListMissingVippsSettlements(ctx, clubID)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(missing) != 1 {
+		t.Fatalf("got %d missing, want 1 (only 3000100)", len(missing))
+	}
+	m := missing[0]
+	if m.SettlementNumber != "3000100" || m.MSN != "548005" || m.Amount != 500 {
+		t.Errorf("missing = %+v, want settlement 3000100 / msn 548005 / amount 500", m)
+	}
+}
 
 // ListUnreconciledVippsCharges surfaces one item per un-journaled belastning
 // row (the per-payer Tildel lines), with the amount-matched invoice suggestion

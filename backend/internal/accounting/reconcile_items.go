@@ -24,6 +24,86 @@ type ReconcileItem struct {
 	SuggestionCount int `json:"suggestion_count"`
 }
 
+// MissingVippsSettlement is an unmatched Vipps payout bank row whose settlement
+// export has not been imported — so it cannot be split into member payments.
+type MissingVippsSettlement struct {
+	BankRowID        string    `json:"bank_row_id"`
+	Date             time.Time `json:"date"`
+	Amount           float64   `json:"amount"`
+	SettlementNumber string    `json:"settlement_number"`
+	MSN              string    `json:"msn"`
+}
+
+// ListMissingVippsSettlements finds unmatched "Utb. N Vippsnr M" bank rows whose
+// settlement export hasn't been imported into vipps_import_rows. Each is a
+// batched Vipps payout that can't be reconciled — so any faktura paid inside it
+// still looks unpaid — until the treasurer imports that settlement report. This
+// is the pre-purring / reconcile-view warning so the gap is visible in-app
+// instead of discovered by hand. See BRY-223.
+func (s *Service) ListMissingVippsSettlements(ctx context.Context, clubID string) ([]MissingVippsSettlement, error) {
+	rows, err := s.db.Query(ctx,
+		`SELECT id, row_date, amount, COALESCE(description, '')
+		   FROM bank_import_rows
+		  WHERE club_id = $1
+		    AND journal_entry_id IS NULL
+		    AND dismissed_at IS NULL
+		    AND description ~* 'Utb\.\s*[0-9]+\s+Vippsnr\s+[0-9]+'
+		  ORDER BY row_date`,
+		clubID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list vipps payout rows: %w", err)
+	}
+
+	type cand struct {
+		id              string
+		date            time.Time
+		amount          float64
+		settlement, msn string
+	}
+	var cands []cand
+	for rows.Next() {
+		var c cand
+		var desc string
+		if err := rows.Scan(&c.id, &c.date, &c.amount, &desc); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("scan: %w", err)
+		}
+		m := VippsSettlementPattern.FindStringSubmatch(desc)
+		if len(m) < 3 {
+			continue
+		}
+		c.settlement, c.msn = m[1], m[2]
+		cands = append(cands, c)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate: %w", err)
+	}
+
+	out := make([]MissingVippsSettlement, 0)
+	for _, c := range cands {
+		var imported bool
+		if err := s.db.QueryRow(ctx,
+			`SELECT EXISTS (SELECT 1 FROM vipps_import_rows
+			                 WHERE club_id = $1 AND settlement_number = $2)`,
+			clubID, c.settlement,
+		).Scan(&imported); err != nil {
+			return nil, fmt.Errorf("check settlement %s: %w", c.settlement, err)
+		}
+		if !imported {
+			out = append(out, MissingVippsSettlement{
+				BankRowID:        c.id,
+				Date:             c.date,
+				Amount:           c.amount,
+				SettlementNumber: c.settlement,
+				MSN:              c.msn,
+			})
+		}
+	}
+	return out, nil
+}
+
 // ListUnreconciledVippsCharges returns the individual Vipps settlement charges
 // (belastning rows) not yet journaled, as unified reconcile items — the
 // per-payer lines that will populate the Tildel queue under the per-charge

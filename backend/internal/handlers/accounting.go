@@ -1002,6 +1002,24 @@ func (h *AccountingHandler) HandleReimportAccountBankStatement(w http.ResponseWr
 	h.importBankStatement(w, r, true)
 }
 
+// HandleListMissingVippsSettlements returns unmatched Vipps payout bank rows
+// whose settlement export hasn't been imported — surfaced as a warning in the
+// reconcile view so the treasurer imports them before reconciling/purringer.
+func (h *AccountingHandler) HandleListMissingVippsSettlements(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	items, err := h.svc.ListMissingVippsSettlements(r.Context(), claims.ClubID)
+	if err != nil {
+		h.log.Error().Err(err).Msg("list missing vipps settlements")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	JSON(w, http.StatusOK, items)
+}
+
 func (h *AccountingHandler) HandleGetBankImport(w http.ResponseWriter, r *http.Request) {
 	claims := middleware.GetClaims(r.Context())
 	if claims == nil {

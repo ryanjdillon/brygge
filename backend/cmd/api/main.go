@@ -1166,6 +1166,7 @@ func main() {
 						})
 
 						r.Get("/bank-imports", accountingHandler.HandleListBankImports)
+						r.Get("/vipps-missing-settlements", accountingHandler.HandleListMissingVippsSettlements)
 						r.Get("/bank-rows", accountingHandler.HandleListBankRowsByAccount)
 						r.Get("/vipps-rows", accountingHandler.HandleListVippsRowsByMSN)
 						r.Post("/bank-sync", accountingHandler.HandleBankSync)
