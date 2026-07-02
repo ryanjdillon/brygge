@@ -231,9 +231,11 @@ type clubFinancialSettings struct {
 	VHFChannel        string   `json:"vhf_channel"`
 	Latitude          *float64 `json:"latitude"`
 	Longitude         *float64 `json:"longitude"`
-	BankAccount       string   `json:"bank_account"`
-	KIDCheckMethod    string   `json:"kid_check_method"`
-	WebsiteURL        string   `json:"website_url"`
+	BankAccount          string `json:"bank_account"`
+	KIDCheckMethod       string `json:"kid_check_method"`
+	VippsClearingAccount string `json:"vipps_clearing_account"`
+	VippsFeeAccount      string `json:"vipps_fee_account"`
+	WebsiteURL           string `json:"website_url"`
 	ChairmanEmail     string   `json:"chairman_email"`
 	ViceChairmanEmail string   `json:"vice_chairman_email"`
 	TreasurerEmail    string   `json:"treasurer_email"`
@@ -284,6 +286,8 @@ func (h *ClubSettingsHandler) HandleGetFinancialSettings(w http.ResponseWriter, 
 		        latitude, longitude,
 		        COALESCE(bank_account, ''),
 		        COALESCE(kid_check_method, 'mod11'),
+		        COALESCE(vipps_clearing_account, '2900'),
+		        COALESCE(vipps_fee_account, '7700'),
 		        COALESCE(website_url, ''),
 		        COALESCE(chairman_email, ''), COALESCE(vice_chairman_email, ''),
 		        COALESCE(treasurer_email, ''),
@@ -306,6 +310,7 @@ func (h *ClubSettingsHandler) HandleGetFinancialSettings(w http.ResponseWriter, 
 		&s.Latitude, &s.Longitude,
 		&s.BankAccount,
 		&s.KIDCheckMethod,
+		&s.VippsClearingAccount, &s.VippsFeeAccount,
 		&s.WebsiteURL,
 		&s.ChairmanEmail, &s.ViceChairmanEmail,
 		&s.TreasurerEmail,
@@ -337,6 +342,8 @@ type updateFinancialSettingsRequest struct {
 	Longitude               *float64 `json:"longitude,omitempty"`
 	BankAccount             *string  `json:"bank_account,omitempty"`
 	KIDCheckMethod          *string  `json:"kid_check_method,omitempty"`
+	VippsClearingAccount    *string  `json:"vipps_clearing_account,omitempty"`
+	VippsFeeAccount         *string  `json:"vipps_fee_account,omitempty"`
 	WebsiteURL              *string  `json:"website_url,omitempty"`
 	ChairmanEmail           *string  `json:"chairman_email,omitempty"`
 	ViceChairmanEmail       *string  `json:"vice_chairman_email,omitempty"`
@@ -426,7 +433,9 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		   feature_commerce          = COALESCE($29, feature_commerce),
 		   feature_accounting        = COALESCE($30, feature_accounting),
 		   anthropic_api_key         = COALESCE($31, anthropic_api_key),
-		   kid_check_method          = COALESCE($32, kid_check_method)
+		   kid_check_method          = COALESCE($32, kid_check_method),
+		   vipps_clearing_account    = COALESCE($33, vipps_clearing_account),
+		   vipps_fee_account         = COALESCE($34, vipps_fee_account)
 		 WHERE id = $1`,
 		claims.ClubID, req.OrgNumber, req.Address, req.Phone, req.VHFChannel,
 		req.Latitude, req.Longitude,
@@ -442,6 +451,7 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		req.FeatureCommerce, req.FeatureAccounting,
 		anthropicKey,
 		req.KIDCheckMethod,
+		req.VippsClearingAccount, req.VippsFeeAccount,
 	); err != nil {
 		h.log.Error().Err(err).Msg("update financial settings")
 		Error(w, http.StatusInternalServerError, "internal error")
