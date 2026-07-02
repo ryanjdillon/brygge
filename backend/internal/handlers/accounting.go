@@ -727,6 +727,16 @@ func (h *AccountingHandler) HandleListBankFormats(w http.ResponseWriter, r *http
 }
 
 func (h *AccountingHandler) HandleImportBankStatement(w http.ResponseWriter, r *http.Request) {
+	h.importBankStatement(w, r, false)
+}
+
+// importBankStatement handles both a normal bank-CSV import and a full-account
+// overwrite reconcile. When overwrite is true it first clears the account's
+// unmatched rows within the CSV's own date range (rows outside that window, and
+// any booked rows, are left untouched) so the file's corrected parse replaces
+// only what it actually covers. Everything else — parsing, own-account
+// inference, dedup, and auto-match — is shared. See BRY-222.
+func (h *AccountingHandler) importBankStatement(w http.ResponseWriter, r *http.Request, overwrite bool) {
 	claims := middleware.GetClaims(r.Context())
 	if claims == nil {
 		Error(w, http.StatusUnauthorized, "authentication required")
@@ -813,30 +823,55 @@ func (h *AccountingHandler) HandleImportBankStatement(w http.ResponseWriter, r *
 		return
 	}
 
-	result, err := h.svc.ImportBankRows(r.Context(), claims.ClubID, importID, periodID, rows)
+	var result accounting.ReimportResult
+	if overwrite {
+		result, err = h.svc.ReimportAccountBankRows(r.Context(), claims.ClubID, bankAccountCode, importID, periodID, rows)
+	} else {
+		var imp accounting.ImportResult
+		imp, err = h.svc.ImportBankRows(r.Context(), claims.ClubID, importID, periodID, rows)
+		result = accounting.ReimportResult{ImportResult: imp}
+	}
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to import bank rows")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
-	h.svc.DB().Exec(r.Context(), `UPDATE bank_imports SET matched_count = $1, row_count = $2 WHERE id = $3`, result.Matched, result.Imported, importID)
+	if overwrite {
+		// The delete also cleared ghost rows from the account's older imports,
+		// so recompute the whole account, not just this import.
+		h.svc.DB().Exec(r.Context(),
+			`UPDATE bank_imports SET
+			    row_count = (SELECT count(*) FROM bank_import_rows WHERE bank_import_id = bank_imports.id),
+			    matched_count = (SELECT count(*) FROM bank_import_rows WHERE bank_import_id = bank_imports.id AND journal_entry_id IS NOT NULL)
+			  WHERE club_id = $1 AND bank_account_code = $2`,
+			claims.ClubID, bankAccountCode)
+	} else {
+		h.svc.DB().Exec(r.Context(), `UPDATE bank_imports SET matched_count = $1, row_count = $2 WHERE id = $3`, result.Matched, result.Imported, importID)
+	}
 
+	auditAction := "accounting.bank_imported"
+	if overwrite {
+		auditAction = "accounting.bank_account_reimported"
+	}
 	if h.audit != nil {
 		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,
-			"accounting.bank_imported", "bank_import", importID,
+			auditAction, "bank_import", importID,
 			map[string]any{
-				"filename":    header.Filename,
-				"format":      formatName,
-				"rows_total":  len(rows),
-				"imported":    result.Imported,
-				"skipped_dup": result.SkippedDup,
-				"matched":     result.Matched,
-				"transfers":   result.Transfers,
+				"filename":          header.Filename,
+				"format":            formatName,
+				"bank_account_code": bankAccountCode,
+				"rows_total":        len(rows),
+				"imported":          result.Imported,
+				"skipped_dup":       result.SkippedDup,
+				"matched":           result.Matched,
+				"transfers":         result.Transfers,
+				"deleted":           result.Deleted,
+				"skipped_booked":    result.SkippedBooked,
 			})
 	}
 
-	JSON(w, http.StatusCreated, map[string]any{
+	resp := map[string]any{
 		"id":                importID,
 		"filename":          header.Filename,
 		"format":            formatName,
@@ -848,7 +883,12 @@ func (h *AccountingHandler) HandleImportBankStatement(w http.ResponseWriter, r *
 		"closed_periods":    result.ClosedPeriods,
 		"bank_account_code": bankAccountCode,
 		"auto_matched":      autoMatched,
-	})
+	}
+	if overwrite {
+		resp["deleted"] = result.Deleted
+		resp["skipped_booked"] = result.SkippedBooked
+	}
+	JSON(w, http.StatusCreated, resp)
 }
 
 // HandleReimportBankStatement re-parses a corrected upload for an existing
@@ -953,6 +993,13 @@ func (h *AccountingHandler) HandleReimportBankStatement(w http.ResponseWriter, r
 		"skipped_booked": result.SkippedBooked,
 		"matched":        result.Matched,
 	})
+}
+
+// HandleReimportAccountBankStatement does a full-account reconcile from one
+// complete CSV — the normal import plus a scoped clear of the account's
+// unmatched rows within the file's date range. See importBankStatement.
+func (h *AccountingHandler) HandleReimportAccountBankStatement(w http.ResponseWriter, r *http.Request) {
+	h.importBankStatement(w, r, true)
 }
 
 func (h *AccountingHandler) HandleGetBankImport(w http.ResponseWriter, r *http.Request) {

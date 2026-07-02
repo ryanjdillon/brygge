@@ -267,7 +267,29 @@ func (s *Service) ReimportBankRows(ctx context.Context, clubID, importID, period
 	}
 	res.Deleted = tag.RowsAffected()
 
+	fresh, skipped, err := s.skipRowsAlreadyBooked(ctx, clubID, rows)
+	if err != nil {
+		return res, err
+	}
+	res.SkippedBooked = skipped
+
+	imp, err := s.ImportBankRows(ctx, clubID, importID, periodOverride, fresh)
+	if err != nil {
+		return res, err
+	}
+	res.ImportResult = imp
+	return res, nil
+}
+
+// skipRowsAlreadyBooked drops any parsed row that a surviving matched row
+// already represents — same booking (row_date + amount + arkivref/KID) with a
+// journal entry attached. It returns the rows safe to re-insert plus the number
+// skipped. This is what stops a re-import from duplicating a booked payment when
+// the file's date range overlaps transactions that were previously mis-parsed
+// and separately booked.
+func (s *Service) skipRowsAlreadyBooked(ctx context.Context, clubID string, rows []BankRow) ([]BankRow, int, error) {
 	var fresh []BankRow
+	skipped := 0
 	for _, row := range rows {
 		ref := strings.TrimSpace(row.Reference)
 		if ref != "" {
@@ -283,17 +305,68 @@ func (s *Service) ReimportBankRows(ctx context.Context, clubID, importID, period
 				 )`,
 				clubID, row.Date, row.Amount, ref,
 			).Scan(&booked); err != nil {
-				return res, fmt.Errorf("checking booked duplicate: %w", err)
+				return nil, 0, fmt.Errorf("checking booked duplicate: %w", err)
 			}
 			if booked {
-				res.SkippedBooked++
+				skipped++
 				continue
 			}
 		}
 		fresh = append(fresh, row)
 	}
+	return fresh, skipped, nil
+}
 
-	imp, err := s.ImportBankRows(ctx, clubID, importID, periodOverride, fresh)
+// ReimportAccountBankRows does a full-account reconcile from one complete CSV.
+// It clears the account's unmatched ghost rows *only within the date range the
+// CSV actually covers* — rows outside that window are left alone (this file
+// doesn't re-provide them), and booked rows (bilag + payment) are never touched
+// regardless. It then imports the supplied rows into targetImportID; a booked
+// transaction that reappears in the file is skipped so no payment is
+// duplicated. Use for a periodic "import everything since Jan 1 for this
+// account" cleanup pass. See BRY-222.
+func (s *Service) ReimportAccountBankRows(ctx context.Context, clubID, bankAccountCode, targetImportID, periodOverride string, rows []BankRow) (ReimportResult, error) {
+	var res ReimportResult
+
+	// Nothing parsed → clear nothing. Deleting on an empty file would be an
+	// unbounded wipe with no replacement.
+	if len(rows) == 0 {
+		return res, nil
+	}
+
+	from, to := rows[0].Date, rows[0].Date
+	for _, row := range rows {
+		if row.Date.Before(from) {
+			from = row.Date
+		}
+		if row.Date.After(to) {
+			to = row.Date
+		}
+	}
+
+	tag, err := s.db.Exec(ctx,
+		`DELETE FROM bank_import_rows
+		  WHERE journal_entry_id IS NULL
+		    AND dismissed_at IS NULL
+		    AND refund_paired_with IS NULL
+		    AND row_date BETWEEN $3 AND $4
+		    AND bank_import_id IN (
+		      SELECT id FROM bank_imports WHERE club_id = $1 AND bank_account_code = $2
+		    )`,
+		clubID, bankAccountCode, from, to,
+	)
+	if err != nil {
+		return res, fmt.Errorf("clearing unmatched account rows: %w", err)
+	}
+	res.Deleted = tag.RowsAffected()
+
+	fresh, skipped, err := s.skipRowsAlreadyBooked(ctx, clubID, rows)
+	if err != nil {
+		return res, err
+	}
+	res.SkippedBooked = skipped
+
+	imp, err := s.ImportBankRows(ctx, clubID, targetImportID, periodOverride, fresh)
 	if err != nil {
 		return res, err
 	}
