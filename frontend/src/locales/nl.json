@@ -937,7 +937,11 @@
       "kidMethodLabel": "KID-controlecijfermethode",
       "kidMethodHint": "Moet overeenkomen met de OCR-/Nets-overeenkomst van de club. Modulo 11 is de standaard voor Noorse OCR-giro. Dit geldt alleen voor nieuw gegenereerde KID's — gebruik «Nieuwe KID» op het tabblad Verzonden om bestaande onbetaalde facturen opnieuw uit te geven.",
       "kidMethodMod11": "Modulo 11 (standaard)",
-      "kidMethodMod10": "Modulo 10 (Luhn)"
+      "kidMethodMod10": "Modulo 10 (Luhn)",
+      "vippsAccountsLabel": "Vipps-rekeningen",
+      "vippsAccountsHint": "Grootboekrekeningen voor het afstemmen van Vipps-uitbetalingen: tussenrekening en kostenrekening. Standaard: 2900 en 7700.",
+      "vippsClearingAccount": "Tussenrekening",
+      "vippsFeeAccount": "Kostenrekening"
     },
     "faktura": {
       "tabs": {

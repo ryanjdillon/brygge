@@ -937,7 +937,11 @@
       "kidMethodLabel": "Metodo cifra di controllo KID",
       "kidMethodHint": "Deve corrispondere all'accordo OCR/Nets del club. Modulo 11 è l'impostazione predefinita per l'OCR-giro norvegese. Riguarda solo i KID appena generati — usa «Nuovo KID» nella scheda Inviate per riemettere le fatture non pagate esistenti.",
       "kidMethodMod11": "Modulo 11 (predefinito)",
-      "kidMethodMod10": "Modulo 10 (Luhn)"
+      "kidMethodMod10": "Modulo 10 (Luhn)",
+      "vippsAccountsLabel": "Conti Vipps",
+      "vippsAccountsHint": "Conti contabili usati per la riconciliazione dei pagamenti Vipps: conto di transito e conto commissioni. Predefiniti: 2900 e 7700.",
+      "vippsClearingAccount": "Conto di transito",
+      "vippsFeeAccount": "Conto commissioni"
     },
     "faktura": {
       "tabs": {

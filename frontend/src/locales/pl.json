@@ -937,7 +937,11 @@
       "kidMethodLabel": "Metoda cyfry kontrolnej KID",
       "kidMethodHint": "Musi być zgodna z umową OCR/Nets klubu. Modulo 11 to domyślna metoda dla norweskiego OCR-giro. Dotyczy tylko nowo generowanych numerów KID — użyj «Nowy KID» na karcie Wysłane, aby ponownie wystawić istniejące nieopłacone faktury.",
       "kidMethodMod11": "Modulo 11 (domyślnie)",
-      "kidMethodMod10": "Modulo 10 (Luhn)"
+      "kidMethodMod10": "Modulo 10 (Luhn)",
+      "vippsAccountsLabel": "Konta Vipps",
+      "vippsAccountsHint": "Konta księgowe używane przy uzgadnianiu wypłat Vipps: konto rozrachunkowe i konto opłat. Domyślnie: 2900 i 7700.",
+      "vippsClearingAccount": "Konto rozrachunkowe",
+      "vippsFeeAccount": "Konto opłat"
     },
     "faktura": {
       "tabs": {

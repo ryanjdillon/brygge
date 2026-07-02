@@ -21,6 +21,11 @@ const kidCheckMethod = ref<'mod10' | 'mod11'>('mod11')
 const kidSaving = ref(false)
 const kidSaved = ref(false)
 
+const vippsClearingAccount = ref('2900')
+const vippsFeeAccount = ref('7700')
+const vippsSaving = ref(false)
+const vippsSaved = ref(false)
+
 async function load() {
   loading.value = true
   error.value = null
@@ -30,6 +35,8 @@ async function load() {
     const body = await res.json()
     hasFakturaLogo.value = !!body.has_faktura_logo
     kidCheckMethod.value = body.kid_check_method === 'mod10' ? 'mod10' : 'mod11'
+    vippsClearingAccount.value = body.vipps_clearing_account || '2900'
+    vippsFeeAccount.value = body.vipps_fee_account || '7700'
     fakturaLogoCacheBust.value = Date.now()
   } catch (e) {
     error.value = (e as Error).message
@@ -59,6 +66,33 @@ async function saveKidCheckMethod() {
     error.value = (e as Error).message
   } finally {
     kidSaving.value = false
+  }
+}
+
+async function saveVippsAccounts() {
+  if (!(await ensureFreshTotp())) return
+  vippsSaving.value = true
+  vippsSaved.value = false
+  error.value = null
+  try {
+    const res = await totpAwareFetch('/api/v1/admin/settings/site', {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        vipps_clearing_account: vippsClearingAccount.value.trim(),
+        vipps_fee_account: vippsFeeAccount.value.trim(),
+      }),
+    })
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '')
+      throw new Error(`${res.status} ${txt}`)
+    }
+    vippsSaved.value = true
+  } catch (e) {
+    error.value = (e as Error).message
+  } finally {
+    vippsSaving.value = false
   }
 }
 
@@ -182,6 +216,44 @@ onMounted(load)
             {{ t('common.save') }}
           </button>
           <span v-if="kidSaved" class="text-sm font-medium text-green-600">
+            {{ t('common.saved') }}
+          </span>
+        </div>
+      </fieldset>
+
+      <fieldset class="rounded-md border border-slate-200 bg-slate-50 p-3 space-y-3">
+        <legend class="px-1 text-xs font-semibold text-slate-700">
+          {{ t('admin.economySettings.vippsAccountsLabel') }}
+        </legend>
+        <p class="text-xs text-slate-600">{{ t('admin.economySettings.vippsAccountsHint') }}</p>
+        <div class="flex flex-wrap items-end gap-3">
+          <label class="flex flex-col gap-1 text-xs text-slate-700">
+            {{ t('admin.economySettings.vippsClearingAccount') }}
+            <input
+              v-model="vippsClearingAccount"
+              inputmode="numeric"
+              class="w-28 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              @input="vippsSaved = false"
+            />
+          </label>
+          <label class="flex flex-col gap-1 text-xs text-slate-700">
+            {{ t('admin.economySettings.vippsFeeAccount') }}
+            <input
+              v-model="vippsFeeAccount"
+              inputmode="numeric"
+              class="w-28 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              @input="vippsSaved = false"
+            />
+          </label>
+          <button
+            type="button"
+            class="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+            :disabled="vippsSaving"
+            @click="saveVippsAccounts"
+          >
+            {{ t('common.save') }}
+          </button>
+          <span v-if="vippsSaved" class="text-sm font-medium text-green-600">
             {{ t('common.saved') }}
           </span>
         </div>

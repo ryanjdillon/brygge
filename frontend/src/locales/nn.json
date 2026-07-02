@@ -1514,6 +1514,10 @@
     },
     "economySettings": {
       "title": "Økonomi-innstillingar",
+      "vippsAccountsLabel": "Vipps-konti",
+      "vippsAccountsHint": "Rekneskapskonti brukt ved avstemming av Vipps-utbetalingar: mellomverande-konto (samlekonto) og gebyrkonto. Standard er 2900 og 7700.",
+      "vippsClearingAccount": "Mellomverande-konto",
+      "vippsFeeAccount": "Gebyrkonto",
       "subtitle": "Faktura-standardar, registrerte bankkontoar og (snart) Vipps-merchant — alt rekneskapsmodulen treng på éin stad.",
       "fakturaTab": "Faktura",
       "bankAccountsTab": "Bankkontoar",

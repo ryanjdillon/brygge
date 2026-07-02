@@ -1636,6 +1636,10 @@
     },
     "economySettings": {
       "title": "Economy settings",
+      "vippsAccountsLabel": "Vipps accounts",
+      "vippsAccountsHint": "Ledger accounts used when reconciling Vipps payouts: the clearing (holding) account and the fee account. Defaults are 2900 and 7700.",
+      "vippsClearingAccount": "Clearing account",
+      "vippsFeeAccount": "Fee account",
       "subtitle": "Faktura defaults, registered bank accounts, and (soon) Vipps merchant configuration — everything the accounting module needs in one place.",
       "fakturaTab": "Faktura",
       "bankAccountsTab": "Bank accounts",

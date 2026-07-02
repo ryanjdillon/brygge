@@ -936,7 +936,11 @@
       "kidMethodLabel": "Méthode de clé de contrôle KID",
       "kidMethodHint": "Doit correspondre à l'accord OCR/Nets du club. Modulo 11 est la valeur par défaut du OCR-giro norvégien. Cela n'affecte que les KID nouvellement générés — utilisez «Nouveau KID» dans l'onglet Envoyées pour réémettre les factures impayées existantes.",
       "kidMethodMod11": "Modulo 11 (par défaut)",
-      "kidMethodMod10": "Modulo 10 (Luhn)"
+      "kidMethodMod10": "Modulo 10 (Luhn)",
+      "vippsAccountsLabel": "Comptes Vipps",
+      "vippsAccountsHint": "Comptes comptables utilisés pour le rapprochement des versements Vipps : compte d'attente et compte de frais. Par défaut : 2900 et 7700.",
+      "vippsClearingAccount": "Compte d'attente",
+      "vippsFeeAccount": "Compte de frais"
     },
     "faktura": {
       "tabs": {

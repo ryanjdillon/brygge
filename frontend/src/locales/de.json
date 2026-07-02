@@ -937,7 +937,11 @@
       "kidMethodLabel": "KID-Prüfziffernmethode",
       "kidMethodHint": "Muss mit der OCR-/Nets-Vereinbarung des Vereins übereinstimmen. Modulo 11 ist der Standard für norwegische OCR-Giro. Dies betrifft nur neu erzeugte KID — verwenden Sie «Neue KID» im Reiter «Gesendet», um bestehende unbezahlte Rechnungen neu auszustellen.",
       "kidMethodMod11": "Modulo 11 (Standard)",
-      "kidMethodMod10": "Modulo 10 (Luhn)"
+      "kidMethodMod10": "Modulo 10 (Luhn)",
+      "vippsAccountsLabel": "Vipps-Konten",
+      "vippsAccountsHint": "Sachkonten für den Abgleich von Vipps-Auszahlungen: Verrechnungskonto und Gebührenkonto. Standard: 2900 und 7700.",
+      "vippsClearingAccount": "Verrechnungskonto",
+      "vippsFeeAccount": "Gebührenkonto"
     },
     "faktura": {
       "tabs": {
