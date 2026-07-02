@@ -169,6 +169,18 @@ func (s *Service) BankSync(ctx context.Context, clubID, createdBy string) (*Bank
 	}
 	res.PaymentsLinked = backfilled
 
+	// Pass 4b: same heal, but for rows matched by invoice NUMBER in the
+	// description ("Faktura 44") rather than KID — the case where a member
+	// paid by typing the invoice number because their KID was rejected. The
+	// KID-keyed pass above can't reach these (no KID on the row, and reissuing
+	// the KID moves the invoice's KID out from under any later match), so they
+	// would otherwise stay "unpaid" forever and generate false purringer.
+	numBackfilled, nerr := s.backfillInvoiceNumberPayments(ctx, clubID)
+	if nerr != nil {
+		s.log.Warn().Err(nerr).Msg("backfill invoice-number payments failed")
+	}
+	res.PaymentsLinked += numBackfilled
+
 	for y := range closedYears {
 		res.ClosedPeriods = append(res.ClosedPeriods, fmt.Sprintf("%d", y))
 	}
@@ -228,6 +240,73 @@ func (s *Service) backfillUnlinkedPayments(ctx context.Context, clubID string) (
 			s.log.Warn().Err(err).
 				Str("invoice_id", p.invoiceID).
 				Msg("backfill linkInvoicePayment failed")
+			continue
+		}
+		n++
+	}
+	return n, nil
+}
+
+// backfillInvoiceNumberPayments links payments for invoices that are still
+// open+unpaid but whose matched bank row references them by invoice number in
+// the description (or via an explicit bank_import_rows.invoice_id) and whose
+// journal entry credits receivables — i.e. the payment is booked at the GL but
+// invoices.payment_id was never set. Only exact-amount matches on a genuine
+// receivables (1500) credit are healed, so the (invoice_number, amount) key is
+// high-confidence. Idempotent: linkInvoicePayment no-ops if already linked.
+//
+// This is the invoice-number counterpart to backfillUnlinkedPayments (which
+// keys on KID). It exists because members whose KID was rejected paid by
+// typing "Faktura NN", and a later KID reissue removed any KID linkage. See
+// BRY-233.
+func (s *Service) backfillInvoiceNumberPayments(ctx context.Context, clubID string) (int, error) {
+	rows, err := s.db.Query(ctx,
+		`SELECT DISTINCT ON (i.id) i.id, bir.row_date
+		   FROM invoices i
+		   JOIN bank_import_rows bir
+		     ON bir.club_id = i.club_id
+		    AND bir.journal_entry_id IS NOT NULL
+		    AND bir.amount > 0
+		    AND bir.amount = i.total_amount
+		    AND (bir.invoice_id = i.id
+		         OR bir.description ~* ('faktura\D*' || i.invoice_number::text || '\y'))
+		   JOIN journal_lines jl ON jl.journal_entry_id = bir.journal_entry_id
+		   JOIN accounts a ON a.id = jl.account_id
+		  WHERE i.club_id = $1
+		    AND i.payment_id IS NULL
+		    AND i.status = 'open'
+		    AND a.code = $2
+		    AND jl.credit > 0
+		  ORDER BY i.id, bir.row_date ASC`,
+		clubID, receivablesAccountCode,
+	)
+	if err != nil {
+		return 0, err
+	}
+	type pending struct {
+		invoiceID string
+		paidAt    time.Time
+	}
+	var pendings []pending
+	for rows.Next() {
+		var p pending
+		if err := rows.Scan(&p.invoiceID, &p.paidAt); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		pendings = append(pendings, p)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+
+	n := 0
+	for _, p := range pendings {
+		if err := s.linkInvoicePayment(ctx, clubID, p.invoiceID, p.paidAt); err != nil {
+			s.log.Warn().Err(err).
+				Str("invoice_id", p.invoiceID).
+				Msg("backfill invoice-number linkInvoicePayment failed")
 			continue
 		}
 		n++
