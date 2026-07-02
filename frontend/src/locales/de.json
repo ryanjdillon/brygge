@@ -986,7 +986,11 @@
       "reimport": "Re-import",
       "reimportConfirm": "Re-upload the corrected bank file? Only unmatched rows are replaced — matched rows (with a journal entry) are untouched.",
       "reimportResult": "Done: {deleted} removed, {reimported} re-imported, {matched} matched, {skipped} skipped (already booked).",
-      "reimportError": "Re-import failed."
+      "reimportError": "Re-import failed.",
+      "overwrite": "Vollständiger Abgleich (überschreiben)",
+      "overwriteHint": "Entfernt die nicht zugeordneten Zeilen dieses Kontos im Datumsbereich der Datei und importiert und ordnet die gesamte Datei neu zu. Gebuchte Einträge bleiben unberührt.",
+      "overwriteConfirm": "Nicht zugeordnete Zeilen für Konto {code} im Datumsbereich der hochgeladenen Datei entfernen und die gesamte Datei neu importieren? Gebuchte Einträge sind nicht betroffen.",
+      "cleared": "Entfernt"
     },
     "bankReconcile": {
       "filterAll": "All",

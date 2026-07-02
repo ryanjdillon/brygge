@@ -986,7 +986,11 @@
       "reimport": "Re-import",
       "reimportConfirm": "Re-upload the corrected bank file? Only unmatched rows are replaced — matched rows (with a journal entry) are untouched.",
       "reimportResult": "Done: {deleted} removed, {reimported} re-imported, {matched} matched, {skipped} skipped (already booked).",
-      "reimportError": "Re-import failed."
+      "reimportError": "Re-import failed.",
+      "overwrite": "Pełne uzgodnienie (nadpisz)",
+      "overwriteHint": "Usuwa niedopasowane wiersze tego konta w zakresie dat pliku, a następnie ponownie importuje i dopasowuje cały plik. Zaksięgowane pozycje pozostają nienaruszone.",
+      "overwriteConfirm": "Usunąć niedopasowane wiersze dla konta {code} w zakresie dat przesłanego pliku i ponownie zaimportować cały plik? Zaksięgowane pozycje nie są naruszane.",
+      "cleared": "Usunięto"
     },
     "bankReconcile": {
       "filterAll": "All",

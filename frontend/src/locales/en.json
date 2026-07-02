@@ -1768,7 +1768,11 @@
       "reimport": "Re-import",
       "reimportConfirm": "Re-upload the corrected bank file? Only unmatched rows are replaced — matched rows (with a journal entry) are untouched.",
       "reimportResult": "Done: {deleted} removed, {reimported} re-imported, {matched} matched, {skipped} skipped (already booked).",
-      "reimportError": "Re-import failed."
+      "reimportError": "Re-import failed.",
+      "overwrite": "Full reconcile (overwrite)",
+      "overwriteHint": "Removes this account's unmatched rows within the file's date range, then re-imports and matches the whole file. Booked entries are untouched.",
+      "overwriteConfirm": "Clear unmatched rows for account {code} within the uploaded file's date range and re-import the whole file? Booked entries are not affected.",
+      "cleared": "Cleared"
     },
     "pdfArchive": {
       "title": "PDF archive",

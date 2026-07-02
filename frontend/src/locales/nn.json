@@ -1646,7 +1646,11 @@
       "reimport": "Re-importer",
       "reimportConfirm": "Last opp den korrigerte bankfila på nytt? Berre umatcha rader blir bytte ut — matcha rader (med bilag) blir ikkje rørt.",
       "reimportResult": "Ferdig: {deleted} fjerna, {reimported} importert på nytt, {matched} matcha, {skipped} hoppa over (allereie bokført).",
-      "reimportError": "Re-import feila."
+      "reimportError": "Re-import feila.",
+      "overwrite": "Full avstemming (overskriv)",
+      "overwriteHint": "Fjernar kontoen sine umatcha rader i filen sitt datoområde, og importerer og matchar heile filen på nytt. Bokførte postar vert ikkje rørte.",
+      "overwriteConfirm": "Fjerne umatcha rader for konto {code} innanfor datoområdet i den opplasta filen og importere heile filen på nytt? Bokførte postar vert ikkje påverka.",
+      "cleared": "Fjerna"
     },
     "pdfArchive": {
       "title": "PDF-arkiv",

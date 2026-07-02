@@ -1764,7 +1764,11 @@
       "reimport": "Re-importer",
       "reimportConfirm": "Last opp den korrigerte bankfilen på nytt? Kun umatchede rader byttes ut — matchede rader (med bilag) berøres ikke.",
       "reimportResult": "Ferdig: {deleted} fjernet, {reimported} importert på nytt, {matched} matchet, {skipped} hoppet over (allerede bokført).",
-      "reimportError": "Re-import feilet."
+      "reimportError": "Re-import feilet.",
+      "overwrite": "Full avstemming (overskriv)",
+      "overwriteHint": "Fjerner kontoens umatchede rader i filens datoområde, og importerer og matcher hele filen på nytt. Bokførte poster røres ikke.",
+      "overwriteConfirm": "Fjerne umatchede rader for konto {code} innenfor datoområdet i den opplastede filen og importere hele filen på nytt? Bokførte poster påvirkes ikke.",
+      "cleared": "Fjernet"
     },
     "pdfArchive": {
       "title": "PDF-arkiv",

@@ -985,7 +985,11 @@
       "reimport": "Re-import",
       "reimportConfirm": "Re-upload the corrected bank file? Only unmatched rows are replaced — matched rows (with a journal entry) are untouched.",
       "reimportResult": "Done: {deleted} removed, {reimported} re-imported, {matched} matched, {skipped} skipped (already booked).",
-      "reimportError": "Re-import failed."
+      "reimportError": "Re-import failed.",
+      "overwrite": "Réconciliation complète (écraser)",
+      "overwriteHint": "Supprime les lignes non rapprochées de ce compte dans la plage de dates du fichier, puis réimporte et rapproche l'ensemble du fichier. Les écritures comptabilisées ne sont pas touchées.",
+      "overwriteConfirm": "Supprimer les lignes non rapprochées du compte {code} dans la plage de dates du fichier téléversé et réimporter l'ensemble du fichier ? Les écritures comptabilisées ne sont pas affectées.",
+      "cleared": "Supprimées"
     },
     "bankReconcile": {
       "filterAll": "All",
