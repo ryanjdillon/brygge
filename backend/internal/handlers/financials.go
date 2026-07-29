@@ -498,11 +498,19 @@ func (h *FinancialsHandler) HandleListPayments(w http.ResponseWriter, r *http.Re
 	offset := (page - 1) * perPage
 	args = append(args, perPage, offset)
 
+	// LEFT JOIN both payer sides: member payments carry user_id, organization /
+	// non-member payments carry recipient_id (BRY-234). An INNER JOIN on users
+	// would silently drop recipient payments from the list and its count.
 	query := fmt.Sprintf(`
-		SELECT p.id, p.user_id, u.full_name, u.email, p.type, p.amount, p.currency,
+		SELECT COALESCE(p.user_id::text, ''),
+		       COALESCE(NULLIF(u.full_name, ''), NULLIF(br.org_name, ''),
+		                NULLIF(br.contact_person, ''), 'Organisasjon'),
+		       COALESCE(NULLIF(u.email, ''), NULLIF(br.email, ''), ''),
+		       p.id, p.type, p.amount, p.currency,
 		       p.status, p.description, p.due_date, p.paid_at, p.vipps_reference, p.created_at
 		FROM payments p
-		JOIN users u ON u.id = p.user_id
+		LEFT JOIN users u ON u.id = p.user_id
+		LEFT JOIN billing_recipients br ON br.id = p.recipient_id
 		%s
 		ORDER BY p.created_at DESC
 		LIMIT $%d OFFSET $%d
@@ -520,8 +528,8 @@ func (h *FinancialsHandler) HandleListPayments(w http.ResponseWriter, r *http.Re
 	for rows.Next() {
 		var p paymentRow
 		if err := rows.Scan(
-			&p.ID, &p.UserID, &p.UserName, &p.UserEmail,
-			&p.Type, &p.Amount, &p.Currency, &p.Status,
+			&p.UserID, &p.UserName, &p.UserEmail,
+			&p.ID, &p.Type, &p.Amount, &p.Currency, &p.Status,
 			&p.Description, &p.DueDate, &p.PaidAt, &p.Reference, &p.CreatedAt,
 		); err != nil {
 			h.log.Error().Err(err).Msg("failed to scan payment row")
@@ -560,15 +568,20 @@ func (h *FinancialsHandler) HandleGetPaymentDetails(w http.ResponseWriter, r *ht
 
 	var p paymentRow
 	err := h.db.QueryRow(ctx,
-		`SELECT p.id, p.user_id, u.full_name, u.email, p.type, p.amount, p.currency,
+		`SELECT COALESCE(p.user_id::text, ''),
+		        COALESCE(NULLIF(u.full_name, ''), NULLIF(br.org_name, ''),
+		                 NULLIF(br.contact_person, ''), 'Organisasjon'),
+		        COALESCE(NULLIF(u.email, ''), NULLIF(br.email, ''), ''),
+		        p.id, p.type, p.amount, p.currency,
 		        p.status, p.description, p.due_date, p.paid_at, p.vipps_reference, p.created_at
 		 FROM payments p
-		 JOIN users u ON u.id = p.user_id
+		 LEFT JOIN users u ON u.id = p.user_id
+		 LEFT JOIN billing_recipients br ON br.id = p.recipient_id
 		 WHERE p.id = $1 AND p.club_id = $2`,
 		paymentID, claims.ClubID,
 	).Scan(
-		&p.ID, &p.UserID, &p.UserName, &p.UserEmail,
-		&p.Type, &p.Amount, &p.Currency, &p.Status,
+		&p.UserID, &p.UserName, &p.UserEmail,
+		&p.ID, &p.Type, &p.Amount, &p.Currency, &p.Status,
 		&p.Description, &p.DueDate, &p.PaidAt, &p.Reference, &p.CreatedAt,
 	)
 	if err == pgx.ErrNoRows {
@@ -643,10 +656,14 @@ func (h *FinancialsHandler) HandleExportCSV(w http.ResponseWriter, r *http.Reque
 	}
 
 	query := fmt.Sprintf(`
-		SELECT p.created_at, u.full_name, u.email, p.type, p.amount, p.currency,
-		       p.status, p.vipps_reference
+		SELECT p.created_at,
+		       COALESCE(NULLIF(u.full_name, ''), NULLIF(br.org_name, ''),
+		                NULLIF(br.contact_person, ''), 'Organisasjon'),
+		       COALESCE(NULLIF(u.email, ''), NULLIF(br.email, ''), ''),
+		       p.type, p.amount, p.currency, p.status, p.vipps_reference
 		FROM payments p
-		JOIN users u ON u.id = p.user_id
+		LEFT JOIN users u ON u.id = p.user_id
+		LEFT JOIN billing_recipients br ON br.id = p.recipient_id
 		%s
 		ORDER BY p.created_at DESC
 	`, whereClause)
