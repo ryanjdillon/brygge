@@ -94,6 +94,22 @@ func TestPriceItemSummaryIncludesOrphanedLines(t *testing.T) {
 	approxEq(t, "totals.overdue", resp.Totals.Overdue, 4714)
 	approxEq(t, "totals.outstanding", resp.Totals.Outstanding, 4714)
 
+	// BRY-235: this invoice has lines across two price-item groups (mapped +
+	// orphaned catch-all), but is ONE invoice. The headline count totals must
+	// be COUNT(DISTINCT invoice) = 1, not the summed per-group count of 2.
+	if resp.Totals.InvoiceCount != 1 {
+		t.Errorf("totals.invoice_count = %d, want 1 (one invoice across two price-item groups)", resp.Totals.InvoiceCount)
+	}
+	if resp.Totals.OverdueCount != 1 {
+		t.Errorf("totals.overdue_count = %d, want 1", resp.Totals.OverdueCount)
+	}
+	if resp.Totals.PaidCount != 0 {
+		t.Errorf("totals.paid_count = %d, want 0", resp.Totals.PaidCount)
+	}
+	if resp.Totals.OutstandingCount != 1 {
+		t.Errorf("totals.outstanding_count = %d, want 1", resp.Totals.OutstandingCount)
+	}
+
 	// The breakdown must carry a catch-all bucket (empty price_item_id)
 	// holding the orphaned line, alongside the mapped row.
 	var mapped, orphan *priceItemSummaryRow

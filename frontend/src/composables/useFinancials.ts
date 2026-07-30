@@ -69,6 +69,12 @@ export interface PriceItemSummaryResponse {
     received: number
     overdue: number
     outstanding: number
+    // True COUNT(DISTINCT invoice) totals — do not re-sum the per-item
+    // counts client-side (double-counts multi-price-item invoices). BRY-235.
+    invoice_count: number
+    paid_count: number
+    overdue_count: number
+    outstanding_count: number
   }
 }
 

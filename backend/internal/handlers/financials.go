@@ -63,13 +63,20 @@ type priceItemSummaryRow struct {
 type priceItemSummaryResponse struct {
 	Year  *int                  `json:"year,omitempty"`
 	Items []priceItemSummaryRow `json:"items"`
-	// Totals across every price item in the response — convenient for
-	// the dashboard's headline numbers without re-summing client-side.
+	// Totals across every price item in the response — the dashboard's
+	// headline numbers. Counts are true COUNT(DISTINCT invoice) values
+	// computed un-grouped: summing the per-price-item counts client-side
+	// double-counts any invoice whose lines span multiple price items. See
+	// BRY-235.
 	Totals struct {
-		Billed      float64 `json:"billed"`
-		Received    float64 `json:"received"`
-		Overdue     float64 `json:"overdue"`
-		Outstanding float64 `json:"outstanding"`
+		Billed           float64 `json:"billed"`
+		Received         float64 `json:"received"`
+		Overdue          float64 `json:"overdue"`
+		Outstanding      float64 `json:"outstanding"`
+		InvoiceCount     int     `json:"invoice_count"`
+		PaidCount        int     `json:"paid_count"`
+		OverdueCount     int     `json:"overdue_count"`
+		OutstandingCount int     `json:"outstanding_count"`
 	} `json:"totals"`
 }
 
@@ -172,11 +179,40 @@ func (h *FinancialsHandler) HandleGetPriceItemSummary(w http.ResponseWriter, r *
 		}
 		row.Outstanding = row.Billed - row.Received
 		resp.Items = append(resp.Items, row)
-		resp.Totals.Billed += row.Billed
-		resp.Totals.Received += row.Received
-		resp.Totals.Overdue += row.Overdue
-		resp.Totals.Outstanding += row.Outstanding
 	}
+	if err := rows.Err(); err != nil {
+		h.log.Error().Err(err).Msg("price-item summary iterate")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	// Headline totals from an un-grouped query so invoice counts are true
+	// COUNT(DISTINCT i.id) — summing the per-price-item counts would count a
+	// multi-price-item invoice once per line. Money is the same either way
+	// (each line belongs to exactly one group). Same predicate as the rows so
+	// the card totals reconcile with the breakdown. See BRY-235.
+	if err := h.db.QueryRow(ctx, `
+		SELECT COALESCE(SUM(il.line_total), 0),
+		       COALESCE(SUM(CASE WHEN i.payment_id IS NOT NULL THEN il.line_total ELSE 0 END), 0),
+		       COALESCE(SUM(CASE WHEN i.payment_id IS NULL AND i.due_date < CURRENT_DATE THEN il.line_total ELSE 0 END), 0),
+		       COUNT(DISTINCT i.id),
+		       COUNT(DISTINCT CASE WHEN i.payment_id IS NOT NULL THEN i.id END),
+		       COUNT(DISTINCT CASE WHEN i.payment_id IS NULL AND i.due_date < CURRENT_DATE THEN i.id END)
+		  FROM invoices i
+		  JOIN invoice_lines il ON il.invoice_id = i.id
+		 WHERE i.club_id = $1
+		   AND i.status <> 'voided'`+periodClause,
+		args...,
+	).Scan(
+		&resp.Totals.Billed, &resp.Totals.Received, &resp.Totals.Overdue,
+		&resp.Totals.InvoiceCount, &resp.Totals.PaidCount, &resp.Totals.OverdueCount,
+	); err != nil {
+		h.log.Error().Err(err).Msg("price-item summary totals")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	resp.Totals.Outstanding = resp.Totals.Billed - resp.Totals.Received
+	resp.Totals.OutstandingCount = resp.Totals.InvoiceCount - resp.Totals.PaidCount
 
 	JSON(w, http.StatusOK, resp)
 }

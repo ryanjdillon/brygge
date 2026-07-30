@@ -141,24 +141,17 @@ const priceItemGroups = computed<CategoryGroup[]>(() => {
   return [...byCat.values()]
 })
 
-// Aggregate counts across every price-item — paired with the four
-// headline cards (Fakturert / Motteke / Utestående / Forfalle) so the
-// operator gets a "how many" answer right beside the kroner amount.
+// Headline card counts (Fakturert / Motteke / Utestående / Forfalle) come
+// straight from the backend totals, which are true COUNT(DISTINCT invoice)
+// values. Summing the per-price-item counts here would double-count any
+// invoice whose lines span multiple price items. See BRY-235.
 const totalCounts = computed(() => {
-  const items = priceItemSummary.value?.items ?? []
-  let invoiceCount = 0
-  let paidCount = 0
-  let overdueCount = 0
-  for (const it of items) {
-    invoiceCount += it.invoice_count
-    paidCount += it.paid_count
-    overdueCount += it.overdue_count
-  }
+  const totals = priceItemSummary.value?.totals
   return {
-    invoiceCount,
-    paidCount,
-    outstandingCount: Math.max(0, invoiceCount - paidCount),
-    overdueCount,
+    invoiceCount: totals?.invoice_count ?? 0,
+    paidCount: totals?.paid_count ?? 0,
+    outstandingCount: totals?.outstanding_count ?? 0,
+    overdueCount: totals?.overdue_count ?? 0,
   }
 })
 
