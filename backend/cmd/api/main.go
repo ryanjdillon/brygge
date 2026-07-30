@@ -1354,6 +1354,14 @@ func main() {
 			} else if n > 0 {
 				log.Info().Int64("members", n).Msg("purged PII of past-retention deactivated members")
 			}
+			// Same window for external billing recipients (BRY-234): scrub a
+			// dormant non-member payer's PII once past retention; organizations
+			// are retained (legal persons, not personal data).
+			if n, err := accountingSvc.PurgeExpiredRecipientPII(ctx); err != nil {
+				log.Warn().Err(err).Msg("recipient PII purge failed")
+			} else if n > 0 {
+				log.Info().Int64("recipients", n).Msg("purged PII of past-retention billing recipients")
+			}
 			select {
 			case <-ctx.Done():
 				return
