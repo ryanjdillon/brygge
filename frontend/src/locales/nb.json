@@ -628,7 +628,8 @@
         "drafts": "Kladder",
         "voided": "Annullerte",
         "sent": "Sendt",
-        "archive": "Arkiv"
+        "archive": "Arkiv",
+        "imported": "Importert"
       },
       "create": {
         "singleTitle": "Enkeltfaktura",

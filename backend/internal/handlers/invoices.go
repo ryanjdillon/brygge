@@ -854,9 +854,13 @@ type draftInvoiceRow struct {
 // HandleListInvoices returns invoices for the club filtered by a
 // lifecycle status passed via ?status=. Supported values:
 //
-//   - "draft" (default): unsent open invoices (sent_at IS NULL AND status='open')
+//   - "draft" (default): unsent, NON-imported open invoices
+//     (sent_at IS NULL AND status='open' AND import_source IS NULL)
 //   - "sent":             sent open invoices  (sent_at IS NOT NULL AND status='open')
 //   - "voided":           any voided invoice  (status='voided')
+//   - "imported":         invoices migrated from a previous system
+//     (import_source IS NOT NULL AND status='open') — these were sent by the
+//     old system, so they are historicals, not working drafts. See BRY-239.
 //
 // Used by the tabbed Faktura page (DIL-257). The legacy
 // "/invoices/drafts" route maps to status=draft for back-compat.
@@ -872,14 +876,18 @@ func (h *InvoiceHandler) HandleListInvoices(w http.ResponseWriter, r *http.Reque
 	var where string
 	switch status {
 	case "", "draft":
-		where = "i.sent_at IS NULL AND i.status = 'open'"
+		// Imported historicals were already sent by the previous system, so
+		// they must not clutter the working drafts queue (BRY-239).
+		where = "i.sent_at IS NULL AND i.status = 'open' AND i.import_source IS NULL"
 		status = "draft"
 	case "sent":
 		where = "i.sent_at IS NOT NULL AND i.status = 'open'"
 	case "voided":
 		where = "i.status = 'voided'"
+	case "imported":
+		where = "i.import_source IS NOT NULL AND i.status = 'open'"
 	default:
-		Error(w, http.StatusBadRequest, "status must be one of: draft, sent, voided")
+		Error(w, http.StatusBadRequest, "status must be one of: draft, sent, voided, imported")
 		return
 	}
 
@@ -947,6 +955,31 @@ func (h *InvoiceHandler) HandleListInvoices(w http.ResponseWriter, r *http.Reque
 	}
 
 	JSON(w, http.StatusOK, map[string]any{"items": out, "status": status})
+}
+
+// HandleCountImportedInvoices returns how many open invoices were migrated
+// from a previous system (import_source IS NOT NULL). The Faktura page uses it
+// to show the "Importert" tab only when a club actually has imported
+// historicals, so the tab never appears as cruft on a fresh deployment. See
+// BRY-239.
+func (h *InvoiceHandler) HandleCountImportedInvoices(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	var n int
+	if err := h.db.QueryRow(ctx,
+		`SELECT count(*) FROM invoices
+		  WHERE club_id = $1 AND import_source IS NOT NULL AND status = 'open'`,
+		claims.ClubID,
+	).Scan(&n); err != nil {
+		h.log.Error().Err(err).Msg("count imported invoices")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	JSON(w, http.StatusOK, map[string]any{"count": n})
 }
 
 // HandleListDraftInvoices is preserved as a thin wrapper around

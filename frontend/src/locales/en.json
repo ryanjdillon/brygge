@@ -632,7 +632,8 @@
         "drafts": "Drafts",
         "voided": "Voided",
         "sent": "Sent",
-        "archive": "Archive"
+        "archive": "Archive",
+        "imported": "Imported"
       },
       "create": {
         "singleTitle": "Single faktura",

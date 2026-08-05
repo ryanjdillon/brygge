@@ -34,7 +34,7 @@ type PaidStatus = 'paid' | 'waiting' | 'past_due'
 
 const props = defineProps<{
   /** Backend filter — drives which rows are listed and which actions are shown. */
-  status: 'draft' | 'sent' | 'voided'
+  status: 'draft' | 'sent' | 'voided' | 'imported'
 }>()
 
 const { t } = useI18n()
@@ -196,8 +196,11 @@ const allFilteredSelected = computed(() =>
 
 const showSend = computed(() => props.status === 'draft')
 const showResend = computed(() => props.status === 'sent')
-const showDelete = computed(() => props.status !== 'sent') // backend rejects DELETE on sent open invoices
-const showVoid = computed(() => props.status !== 'voided')
+// Imported historicals are migrated accounting records — read-only here (no
+// send/delete/void). Resolving them as paid happens via bank reconciliation
+// (Tildel), not this list. See BRY-239.
+const showDelete = computed(() => props.status !== 'sent' && props.status !== 'imported') // backend rejects DELETE on sent open invoices
+const showVoid = computed(() => props.status !== 'voided' && props.status !== 'imported')
 const showReminder = computed(() => props.status === 'sent')
 const showRegenerate = computed(() => props.status === 'sent')
 const showReissueKid = computed(() => props.status === 'sent')

@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, FilePlus, Users, Receipt, Send, Ban, Inbox, Archive, ArrowLeft as Back } from 'lucide-vue-next'
+import { ArrowLeft, FilePlus, Users, Receipt, Send, Ban, Inbox, Archive, DownloadCloud, ArrowLeft as Back } from 'lucide-vue-next'
 import FakturaList from '@/components/admin/FakturaList.vue'
 import SingleFakturaModal from '@/components/admin/SingleFakturaModal.vue'
 import GroupFakturaTab from '@/components/admin/GroupFakturaTab.vue'
@@ -16,8 +16,21 @@ const { updatedAt: paymentsUpdatedAt } = usePaymentDataUpdatedAt()
 const route = useRoute()
 const router = useRouter()
 
-type Tab = 'create' | 'drafts' | 'voided' | 'sent' | 'archive'
-const validTabs: Tab[] = ['create', 'drafts', 'voided', 'sent', 'archive']
+type Tab = 'create' | 'drafts' | 'voided' | 'sent' | 'archive' | 'imported'
+const validTabs: Tab[] = ['create', 'drafts', 'voided', 'sent', 'archive', 'imported']
+
+// The "Importert" tab only appears when the club has historicals migrated
+// from a previous system, so it never shows as cruft on a fresh deployment.
+const importedCount = ref(0)
+async function loadImportedCount() {
+  try {
+    const res = await fetch('/api/v1/admin/financials/invoices/imported-count', { credentials: 'include' })
+    if (res.ok) importedCount.value = (await res.json()).count ?? 0
+  } catch {
+    importedCount.value = 0
+  }
+}
+loadImportedCount()
 
 const activeTab = computed<Tab>(() => {
   const q = route.query.tab
@@ -73,13 +86,19 @@ function onCreated() {
   router.push({ query: { ...route.query, tab: 'drafts' } })
 }
 
-const tabs: { id: Tab; icon: typeof FilePlus; labelKey: string }[] = [
-  { id: 'create', icon: FilePlus, labelKey: 'admin.faktura.tabs.create' },
-  { id: 'drafts', icon: Inbox, labelKey: 'admin.faktura.tabs.drafts' },
-  { id: 'voided', icon: Ban, labelKey: 'admin.faktura.tabs.voided' },
-  { id: 'sent', icon: Send, labelKey: 'admin.faktura.tabs.sent' },
-  { id: 'archive', icon: Archive, labelKey: 'admin.faktura.tabs.archive' },
-]
+const tabs = computed<{ id: Tab; icon: typeof FilePlus; labelKey: string }[]>(() => {
+  const base = [
+    { id: 'create' as Tab, icon: FilePlus, labelKey: 'admin.faktura.tabs.create' },
+    { id: 'drafts' as Tab, icon: Inbox, labelKey: 'admin.faktura.tabs.drafts' },
+    { id: 'voided' as Tab, icon: Ban, labelKey: 'admin.faktura.tabs.voided' },
+    { id: 'sent' as Tab, icon: Send, labelKey: 'admin.faktura.tabs.sent' },
+    { id: 'archive' as Tab, icon: Archive, labelKey: 'admin.faktura.tabs.archive' },
+  ]
+  if (importedCount.value > 0) {
+    base.push({ id: 'imported' as Tab, icon: DownloadCloud, labelKey: 'admin.faktura.tabs.imported' })
+  }
+  return base
+})
 </script>
 
 <template>
@@ -163,6 +182,7 @@ const tabs: { id: Tab; icon: typeof FilePlus; labelKey: string }[] = [
       <FakturaList v-else-if="activeTab === 'drafts'" status="draft" />
       <FakturaList v-else-if="activeTab === 'sent'" status="sent" />
       <FakturaList v-else-if="activeTab === 'voided'" status="voided" />
+      <FakturaList v-else-if="activeTab === 'imported'" status="imported" />
       <PdfArkivView v-else-if="activeTab === 'archive'" embedded />
     </div>
   </div>

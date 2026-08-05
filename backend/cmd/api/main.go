@@ -789,6 +789,7 @@ func main() {
 							middleware.RequireFreshTOTPDefault()).
 							Post("/invoices/full", invoiceHandler.HandleCreateInvoice)
 						r.Get("/invoices/drafts", invoiceHandler.HandleListDraftInvoices)
+						r.Get("/invoices/imported-count", invoiceHandler.HandleCountImportedInvoices)
 						r.Get("/invoices", invoiceHandler.HandleListInvoices)
 						r.With(middleware.RequireRole("treasurer", "admin"),
 							middleware.RequireFreshTOTPDefault()).
