@@ -96,7 +96,7 @@ const emptyForm: FormData = {
   tier_max: null,
   show_in_batch: false,
   show_in_single: true,
-  requires_boat_selection: true,
+  requires_boat_selection: false,
   audience: 'all',
 }
 
@@ -176,7 +176,7 @@ function openEdit(item: PriceItem) {
     tier_max: tierMax,
     show_in_batch: it.show_in_batch ?? false,
     show_in_single: it.show_in_single ?? true,
-    requires_boat_selection: it.requires_boat_selection ?? true,
+    requires_boat_selection: it.requires_boat_selection ?? false,
     audience: it.audience ?? 'all',
   }
   showForm.value = true
