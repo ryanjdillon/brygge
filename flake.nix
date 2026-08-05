@@ -147,6 +147,7 @@
         packages = {
           default = pkgs.brygge;
           brygge = pkgs.brygge;
+          brygge-tools = pkgs.brygge.tools;
           terraformConfiguration = terraformConfiguration;
         };
 
@@ -188,6 +189,19 @@
               echo "installed .githooks/ (blocks accidental commits of tfvars.json)"
             fi
           '';
+        };
+
+        # One-shot operational tools, run on demand rather than shipped in
+        # the deployed system closure. Set DATABASE_URL to target the DB.
+        apps.seed = {
+          type = "app";
+          program = "${pkgs.brygge.tools}/bin/brygge-seed";
+          meta.description = "Seed the brygge database (run with DATABASE_URL set)";
+        };
+        apps.vipps-cutover = {
+          type = "app";
+          program = "${pkgs.brygge.tools}/bin/vipps-cutover";
+          meta.description = "One-off Vipps per-charge cutover (run with DATABASE_URL set)";
         };
 
         apps.tf-plan = {

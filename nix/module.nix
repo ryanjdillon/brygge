@@ -16,7 +16,7 @@ in
 
     package = lib.mkOption {
       type = lib.types.package;
-      description = "The brygge package to use (provides /bin/brygge and /bin/brygge-seed).";
+      description = "The brygge package to use (provides /bin/brygge).";
     };
 
     domain = lib.mkOption {

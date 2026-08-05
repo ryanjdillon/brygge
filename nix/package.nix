@@ -25,50 +25,69 @@ let
       runHook postInstall
     '';
   };
+
+  # Shared Go build attributes for every brygge binary.
+  goCommon = {
+    version = "0.1.0";
+    src = repoRoot;
+    modRoot = "backend";
+    vendorHash = null;
+    ldflags = [
+      "-s"
+      "-w"
+    ];
+    env.CGO_ENABLED = "0";
+    # The embed target must exist even for binaries that never serve the
+    # SPA, so the //go:embed directive resolves whenever internal/web is
+    # pulled into the build graph.
+    preBuild = ''
+      mkdir -p internal/web/dist
+      cp -r ${frontend}/. internal/web/dist/
+    '';
+  };
+
+  # Operational one-shot tools (seed, data backfills, cutovers). Built as
+  # a separate package so they stay OUT of the deployed system closure —
+  # none run as a service, so shipping them to the server on every deploy
+  # only inflated the pushed closure. Run them on demand instead:
+  #   nix run .#seed
+  #   nix run .#vipps-cutover
+  tools = buildGoModule (
+    goCommon
+    // {
+      pname = "brygge-tools";
+      subPackages = [
+        "cmd/seed"
+        "cmd/vipps-cutover"
+      ];
+      postInstall = ''
+        mv $out/bin/seed $out/bin/brygge-seed
+      '';
+    }
+  );
 in
-buildGoModule rec {
-  pname = "brygge";
-  version = "0.1.0";
+buildGoModule (
+  goCommon
+  // {
+    pname = "brygge";
 
-  src = repoRoot;
-  modRoot = "backend";
+    subPackages = [ "cmd/api" ];
 
-  vendorHash = null;
+    postInstall = ''
+      mv $out/bin/api $out/bin/brygge
+    '';
 
-  subPackages = [
-    "cmd/api"
-    "cmd/seed"
-    "cmd/backfill-bank-names"
-    "cmd/vipps-cutover"
-  ];
+    passthru = {
+      inherit frontend tools;
+      migrations = "${repoRoot}/backend/migrations";
+    };
 
-  ldflags = [
-    "-s"
-    "-w"
-  ];
-
-  env.CGO_ENABLED = "0";
-
-  preBuild = ''
-    mkdir -p internal/web/dist
-    cp -r ${frontend}/. internal/web/dist/
-  '';
-
-  postInstall = ''
-    mv $out/bin/api $out/bin/brygge
-    mv $out/bin/seed $out/bin/brygge-seed
-  '';
-
-  passthru = {
-    inherit frontend;
-    migrations = "${repoRoot}/backend/migrations";
-  };
-
-  meta = with lib; {
-    description = "Brygge — harbor club platform (Go API + embedded Vue SPA)";
-    homepage = "https://github.com/brygge-klubb/brygge";
-    license = licenses.mit;
-    mainProgram = "brygge";
-    platforms = platforms.linux;
-  };
-}
+    meta = with lib; {
+      description = "Brygge — harbor club platform (Go API + embedded Vue SPA)";
+      homepage = "https://github.com/brygge-klubb/brygge";
+      license = licenses.mit;
+      mainProgram = "brygge";
+      platforms = platforms.linux;
+    };
+  }
+)

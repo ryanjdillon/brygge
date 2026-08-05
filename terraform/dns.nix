@@ -23,13 +23,6 @@
       ttl     = 300;
       records = [{ value = "\${hcloud_server.brygge.ipv4_address}"; }];
     };
-    element = {
-      zone    = "\${var.domain}";
-      name    = "element";
-      type    = "A";
-      ttl     = 300;
-      records = [{ value = "\${hcloud_server.brygge.ipv4_address}"; }];
-    };
     status = {
       zone    = "\${var.domain}";
       name    = "status";

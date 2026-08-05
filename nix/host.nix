@@ -8,19 +8,6 @@
 
 let
   cfg = config.services.brygge;
-
-  elementWeb = pkgs.element-web.override {
-    conf = {
-      default_server_config."m.homeserver" = {
-        base_url = "https://matrix.${cfg.domain}";
-        server_name = "matrix.${cfg.domain}";
-      };
-      default_server_name = "matrix.${cfg.domain}";
-      brand = "Brygge";
-      disable_guests = true;
-      disable_3pid_login = true;
-    };
-  };
 in
 {
   imports = [
@@ -34,6 +21,9 @@ in
     loader.grub = {
       enable = true;
       efiSupport = false;
+      # Cap retained boot entries so the menu (and the generations the
+      # bootloader pins against nix.gc) stay bounded across deploys.
+      configurationLimit = 10;
     };
     kernelParams = [ "console=ttyS0,19200n8" ];
     tmp.cleanOnBoot = true;
@@ -288,13 +278,6 @@ in
 
     virtualHosts."matrix.${cfg.domain}".extraConfig = ''
       reverse_proxy 127.0.0.1:8008
-    '';
-
-    virtualHosts."element.${cfg.domain}".extraConfig = ''
-      root * ${elementWeb}
-      encode gzip zstd
-      file_server
-      try_files {path} /index.html
     '';
 
     virtualHosts."status.${cfg.domain}".extraConfig = ''
