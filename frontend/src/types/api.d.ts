@@ -174,6 +174,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/faqs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List FAQ items (admin) */
+        get: operations["admin-list-faqs"];
+        put?: never;
+        /** Create FAQ item */
+        post: operations["admin-create-faq"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/faqs/reorder": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Reorder FAQ items within a group */
+        put: operations["admin-reorder-faqs"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/faqs/{faqID}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update FAQ item */
+        put: operations["admin-update-faq"];
+        post?: never;
+        /** Delete FAQ item */
+        delete: operations["admin-delete-faq"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/financials/export": {
         parameters: {
             query?: never;
@@ -1210,6 +1263,23 @@ export interface paths {
         put?: never;
         /** Add a comment to a document */
         post: operations["create-document-comment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/faqs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List published FAQ items */
+        get: operations["list-public-faqs"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3339,6 +3409,98 @@ export interface components {
              */
             type: string;
         };
+        FaqIDResponse: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/FaqIDResponse.json
+             */
+            readonly $schema?: string;
+            /** @description Created FAQ item UUID */
+            id: string;
+        };
+        FaqItem: {
+            /** @description Answer text */
+            answer: string;
+            /**
+             * Format: date-time
+             * @description Creation timestamp
+             */
+            created_at: string;
+            /**
+             * @description Section key
+             * @enum {string}
+             */
+            group_key: "newcomers" | "members" | "deposit" | "general";
+            /** @description FAQ item UUID */
+            id: string;
+            /** @description Optional link label */
+            link_label?: string;
+            /** @description Optional link URL (internal path or external URL) */
+            link_url?: string;
+            /**
+             * Format: int64
+             * @description Order within the group
+             */
+            position: number;
+            /** @description Whether the item is publicly visible */
+            published: boolean;
+            /** @description Question text */
+            question: string;
+            /**
+             * Format: date-time
+             * @description Update timestamp
+             */
+            updated_at: string;
+        };
+        FaqListResponse: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/FaqListResponse.json
+             */
+            readonly $schema?: string;
+            /** @description FAQ items */
+            items: components["schemas"]["FaqItem"][] | null;
+        };
+        FaqReorderRequest: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/FaqReorderRequest.json
+             */
+            readonly $schema?: string;
+            /**
+             * @description Section key
+             * @enum {string}
+             */
+            group_key: "newcomers" | "members" | "deposit" | "general";
+            /** @description Item IDs in the desired order */
+            ids: string[] | null;
+        };
+        FaqWriteRequest: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/FaqWriteRequest.json
+             */
+            readonly $schema?: string;
+            /** @description Answer text */
+            answer: string;
+            /**
+             * @description Section key
+             * @enum {string}
+             */
+            group_key: "newcomers" | "members" | "deposit" | "general";
+            /** @description Optional link label */
+            link_label?: string;
+            /** @description Optional link URL */
+            link_url?: string;
+            /** @description Whether the item is publicly visible */
+            published: boolean;
+            /** @description Question text */
+            question: string;
+        };
         FeatureRequest: {
             /**
              * Format: uri
@@ -5171,6 +5333,169 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "admin-list-faqs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FaqListResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "admin-create-faq": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FaqWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FaqIDResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "admin-reorder-faqs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FaqReorderRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "admin-update-faq": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description FAQ item UUID */
+                faqID: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FaqWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "admin-delete-faq": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description FAQ item UUID */
+                faqID: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponse"];
                 };
             };
             /** @description Error */
@@ -7723,6 +8048,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DocumentComment"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-public-faqs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FaqListResponse"];
                 };
             };
             /** @description Error */
