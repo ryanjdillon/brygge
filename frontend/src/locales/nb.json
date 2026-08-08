@@ -90,6 +90,8 @@
     "featureCalendarDesc": "Regattaer, dugnader og sosiale arrangement",
     "featureContact": "Kontakt",
     "featureContactDesc": "Hvor du finner oss og hvordan du når styret",
+    "featureFaq": "Ofte stilte spørsmål",
+    "featureFaqDesc": "Svar om medlemskap, båtplass og drift av havnen",
     "featurePricing": "Priser",
     "featurePricingDesc": "Medlemskontingent, plassleie og andre priser",
     "featureMerchandise": "Klubbeffekter",
@@ -579,6 +581,7 @@
       "reports": "Rapporter",
       "economySettings": "Innstillinger",
       "siteSettings": "Nettstedsinnhold",
+      "faqSettings": "Ofte stilte spørsmål",
       "harborSettings": "Havneinformasjon",
       "motorhomeSettings": "Bobilinformasjon",
       "pdfArchive": "PDF-arkiv",
@@ -1551,6 +1554,30 @@
     "groupEconomy": "Økonomi",
     "groupShop": "Butikk",
     "groupSite": "Nettsted",
+    "faq": {
+      "title": "Ofte stilte spørsmål",
+      "subtitle": "Spørsmål og svar som vises på den offentlige FAQ-siden.",
+      "newItem": "Nytt spørsmål",
+      "editItem": "Rediger spørsmål",
+      "group": "Seksjon",
+      "question": "Spørsmål",
+      "answer": "Svar",
+      "link": "Valgfri lenke",
+      "linkHint": "Lenk svaret til en side, f.eks. /pricing for priser, eller en full ekstern URL.",
+      "linkUrl": "Lenke-URL",
+      "linkLabel": "Lenketekst",
+      "published": "Publisert (synlig på nettsiden)",
+      "noItems": "Ingen spørsmål ennå. Legg til det første.",
+      "created": "Spørsmål opprettet",
+      "updated": "Spørsmål oppdatert",
+      "deleted": "Spørsmål slettet",
+      "saveError": "Kunne ikke lagre",
+      "deleteError": "Kunne ikke slette",
+      "deleteConfirm": "Slette dette spørsmålet?",
+      "moveUp": "Flytt opp",
+      "moveDown": "Flytt ned",
+      "draft": "Utkast"
+    },
     "siteSettings": {
       "title": "Nettstedsinnstillinger",
       "subtitle": "Klubbidentitet, kontakt-e-poster, koordinater, nettadresse og logo — innstillinger som brukes på tvers av moduler.",
@@ -2259,7 +2286,8 @@
     "reach": "Kontakt oss",
     "legal": "Informasjon",
     "terms": "Salgsvilkår",
-    "privacy": "Personvern"
+    "privacy": "Personvern",
+    "faq": "Ofte stilte spørsmål"
   },
   "totpExpiring": {
     "title": "Bekreftelse utløper",
@@ -2332,5 +2360,21 @@
     "screenshotDropped": "Skjermbildet ble ikke vedlagt (sendt uten det).",
     "screenshotAlt": "Forhåndsvisning av skjermbilde",
     "errorGeneric": "Noe gikk galt. Prøv igjen."
+  },
+  "faq": {
+    "title": "Ofte stilte spørsmål",
+    "intro": "Her finner du svar på de vanligste spørsmålene om medlemskap, båtplass og drift av havnen. Svarene bygger på havnereglementet og vedtektene til laget.",
+    "seeAll": "Se alle spørsmål",
+    "notFound": "Fant du ikke det du lette etter?",
+    "contactCta": "Kontakt styret",
+    "home": {
+      "title": "Ofte stilte spørsmål"
+    },
+    "groups": {
+      "newcomers": "Vil du bli medlem?",
+      "members": "For medlemmer",
+      "deposit": "Innskudd og andel",
+      "general": "Annet"
+    }
   }
 }

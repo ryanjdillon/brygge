@@ -12,15 +12,24 @@ import {
   ShoppingBag,
   ArrowRight,
   LogIn,
+  HelpCircle,
 } from 'lucide-vue-next'
 import { useFeatures } from '@/composables/useFeatures'
 import { useClubStore } from '@/stores/club'
+import { useFaqs } from '@/composables/useFaqs'
+import FaqList from '@/components/FaqList.vue'
 import heroImage from '@/assets/hero.jpg'
 
 const { t } = useI18n()
 const { isEnabled } = useFeatures()
 const club = useClubStore()
 club.ensureLoaded()
+
+const { items: faqItems } = useFaqs()
+useFaqs().ensureLoaded()
+const hasFaq = computed(() => faqItems.value.length > 0)
+// A short, broadly useful subset for the teaser.
+const featuredFaqs = computed(() => faqItems.value.slice(0, 5))
 
 const clubName = computed(() => club.name || 'Brygge')
 const postEmail = computed(() => (club.domain ? `post@${club.domain}` : 'post@klokkarvikbaatlag.no'))
@@ -33,6 +42,7 @@ interface Tile {
   desc: string
   to: string
   feature?: FeatureFlag
+  requiresFaq?: boolean
 }
 
 interface Section {
@@ -56,12 +66,18 @@ const sections = computed<Section[]>(() => {
         { icon: Tag, title: 'home.featurePricing', desc: 'home.featurePricingDesc', to: '/pricing', feature: 'accounting' },
         { icon: Calendar, title: 'home.featureCalendar', desc: 'home.featureCalendarDesc', to: '/calendar', feature: 'calendar' },
         { icon: Mail, title: 'home.featureContact', desc: 'home.featureContactDesc', to: '/contact' },
+        { icon: HelpCircle, title: 'home.featureFaq', desc: 'home.featureFaqDesc', to: '/faq', requiresFaq: true },
         { icon: ShoppingBag, title: 'home.featureMerchandise', desc: 'home.featureMerchandiseDesc', to: '/merchandise', feature: 'commerce' },
       ],
     },
   ]
   return all
-    .map((s) => ({ ...s, tiles: s.tiles.filter((tile) => !tile.feature || isEnabled(tile.feature)) }))
+    .map((s) => ({
+      ...s,
+      tiles: s.tiles.filter(
+        (tile) => (!tile.feature || isEnabled(tile.feature)) && (!tile.requiresFaq || hasFaq.value),
+      ),
+    }))
     .filter((s) => s.tiles.length > 0)
 })
 </script>
@@ -142,6 +158,28 @@ const sections = computed<Section[]>(() => {
         </div>
       </section>
     </div>
+
+    <!-- FAQ teaser: a short, broadly useful subset with a link through to
+         the full page. Keeps the common questions one click from the home
+         page without lengthening it with the whole list. -->
+    <section v-if="hasFaq" class="mx-auto max-w-3xl px-4 pb-4 sm:px-6 lg:px-8">
+      <header class="mb-6 flex items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <span class="h-px w-8 bg-slate-400" aria-hidden="true" />
+          <h2 class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+            {{ t('faq.home.title') }}
+          </h2>
+        </div>
+        <RouterLink
+          to="/faq"
+          class="inline-flex items-center gap-1 text-sm font-semibold text-teal-700 hover:text-teal-800 hover:underline"
+        >
+          {{ t('faq.seeAll') }}
+          <ArrowRight class="h-4 w-4" aria-hidden="true" />
+        </RouterLink>
+      </header>
+      <FaqList :items="featuredFaqs" />
+    </section>
 
     <!-- Bli medlem: self-service registration isn't wired up yet, so point
          prospective members at the club mailbox. The wave backdrop sets off a

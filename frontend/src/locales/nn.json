@@ -89,6 +89,8 @@
     "featureCalendarDesc": "Regattaar, dugnadar og sosiale arrangement",
     "featureContact": "Kontakt",
     "featureContactDesc": "Kvar du finn oss og korleis du når styret",
+    "featureFaq": "Ofte stilte spørsmål",
+    "featureFaqDesc": "Svar om medlemskap, båtplass og drift av hamna",
     "featurePricing": "Prisar",
     "featurePricingDesc": "Medlemskontingent, plassleige og andre prisar",
     "featureMerchandise": "Klubbeffektar",
@@ -575,6 +577,7 @@
       "bankAccounts": "Bankkontoar",
       "economySettings": "Innstillingar",
       "siteSettings": "Nettstadsinnhald",
+      "faqSettings": "Ofte stilte spørsmål",
       "harborSettings": "Hamneinformasjon",
       "motorhomeSettings": "Bubilinformasjon",
       "pdfArchive": "PDF-arkiv",
@@ -1443,6 +1446,30 @@
     "groupEconomy": "Økonomi",
     "groupShop": "Butikk",
     "groupSite": "Nettstad",
+    "faq": {
+      "title": "Ofte stilte spørsmål",
+      "subtitle": "Spørsmål og svar som blir viste på den offentlege FAQ-sida.",
+      "newItem": "Nytt spørsmål",
+      "editItem": "Rediger spørsmål",
+      "group": "Seksjon",
+      "question": "Spørsmål",
+      "answer": "Svar",
+      "link": "Valfri lenkje",
+      "linkHint": "Lenk svaret til ei side, t.d. /pricing for prisar, eller ein full ekstern URL.",
+      "linkUrl": "Lenkje-URL",
+      "linkLabel": "Lenkjetekst",
+      "published": "Publisert (synleg på nettsida)",
+      "noItems": "Ingen spørsmål enno. Legg til det første.",
+      "created": "Spørsmål oppretta",
+      "updated": "Spørsmål oppdatert",
+      "deleted": "Spørsmål sletta",
+      "saveError": "Kunne ikkje lagre",
+      "deleteError": "Kunne ikkje slette",
+      "deleteConfirm": "Slette dette spørsmålet?",
+      "moveUp": "Flytt opp",
+      "moveDown": "Flytt ned",
+      "draft": "Utkast"
+    },
     "siteSettings": {
       "title": "Nettstadsinnstillingar",
       "subtitle": "Klubbidentitet, kontakt-e-postar, koordinatar, nettadresse og logo — innstillingar som vert brukte på tvers av modular.",
@@ -2141,7 +2168,8 @@
     "reach": "Kontakt oss",
     "legal": "Informasjon",
     "terms": "Salsvilkår",
-    "privacy": "Personvern"
+    "privacy": "Personvern",
+    "faq": "Ofte stilte spørsmål"
   },
   "totpExpiring": {
     "title": "Stadfesting går ut",
@@ -2214,5 +2242,21 @@
     "screenshotDropped": "Skjermbiletet vart ikkje lagt ved (sendt utan det).",
     "screenshotAlt": "Førehandsvising av skjermbilete",
     "errorGeneric": "Noko gjekk gale. Prøv igjen."
+  },
+  "faq": {
+    "title": "Ofte stilte spørsmål",
+    "intro": "Her finn du svar på dei vanlegaste spørsmåla om medlemskap, båtplass og drift av hamna. Svara byggjer på hamnereglementet og vedtektene til laget.",
+    "seeAll": "Sjå alle spørsmål",
+    "notFound": "Fann du ikkje det du leita etter?",
+    "contactCta": "Kontakt styret",
+    "home": {
+      "title": "Ofte stilte spørsmål"
+    },
+    "groups": {
+      "newcomers": "Vil du bli medlem?",
+      "members": "For medlemer",
+      "deposit": "Innskot og andel",
+      "general": "Anna"
+    }
   }
 }

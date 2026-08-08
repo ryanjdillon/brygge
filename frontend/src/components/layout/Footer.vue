@@ -2,10 +2,14 @@
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useClubStore } from '@/stores/club'
+import { useFaqs } from '@/composables/useFaqs'
 
 const { t } = useI18n()
 const club = useClubStore()
 club.ensureLoaded()
+
+const { items: faqItems } = useFaqs()
+useFaqs().ensureLoaded()
 
 const repoUrl = 'https://github.com/ryanjdillon/brygge'
 </script>
@@ -42,6 +46,9 @@ const repoUrl = 'https://github.com/ryanjdillon/brygge'
           <ul class="mt-2 space-y-1">
             <li>
               <RouterLink to="/contact" class="hover:underline">{{ t('nav.contact') }}</RouterLink>
+            </li>
+            <li v-if="faqItems.length">
+              <RouterLink to="/faq" class="hover:underline">{{ t('footer.faq') }}</RouterLink>
             </li>
             <li>
               <RouterLink to="/salgsvilkar" class="hover:underline">{{ t('footer.terms') }}</RouterLink>

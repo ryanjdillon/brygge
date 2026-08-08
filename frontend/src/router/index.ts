@@ -46,6 +46,10 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/PricingView.vue'),
   },
   {
+    path: '/faq',
+    component: () => import('@/views/FaqView.vue'),
+  },
+  {
     path: '/join',
     component: () => import('@/views/JoinView.vue'),
   },
@@ -365,6 +369,11 @@ const routes: RouteRecordRaw[] = [
         path: 'settings/site',
         name: 'admin-site-settings',
         component: () => import('@/views/admin/SiteSettingsView.vue'),
+      },
+      {
+        path: 'settings/faq',
+        name: 'admin-faq-settings',
+        component: () => import('@/views/admin/FaqSettingsView.vue'),
       },
       {
         // Legacy URL — older bookmarks land here. Redirects to the

@@ -90,6 +90,8 @@
     "featureCalendarDesc": "Regattas, volunteer days and social events",
     "featureContact": "Contact",
     "featureContactDesc": "Where to find us and how to reach the board",
+    "featureFaq": "FAQ",
+    "featureFaqDesc": "Answers about membership, berths and running the harbour",
     "featurePricing": "Pricing",
     "featurePricingDesc": "Membership dues, slip fees and other prices",
     "featureMerchandise": "Merchandise",
@@ -583,6 +585,7 @@
       "reports": "Reports",
       "economySettings": "Settings",
       "siteSettings": "Site content",
+      "faqSettings": "FAQ",
       "harborSettings": "Harbor info",
       "motorhomeSettings": "Motorhome info",
       "pdfArchive": "PDF archive",
@@ -1555,6 +1558,30 @@
     "groupEconomy": "Economy",
     "groupShop": "Shop",
     "groupSite": "Site",
+    "faq": {
+      "title": "FAQ",
+      "subtitle": "Questions and answers shown on the public FAQ page.",
+      "newItem": "New question",
+      "editItem": "Edit question",
+      "group": "Section",
+      "question": "Question",
+      "answer": "Answer",
+      "link": "Optional link",
+      "linkHint": "Link the answer to a page, e.g. /pricing for prices, or a full external URL.",
+      "linkUrl": "Link URL",
+      "linkLabel": "Link label",
+      "published": "Published (visible on the website)",
+      "noItems": "No questions yet. Add the first one.",
+      "created": "Question created",
+      "updated": "Question updated",
+      "deleted": "Question deleted",
+      "saveError": "Could not save",
+      "deleteError": "Could not delete",
+      "deleteConfirm": "Delete this question?",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "draft": "Draft"
+    },
     "siteSettings": {
       "title": "Site settings",
       "subtitle": "Club identity, board contact emails, coordinates, website URL, and the public site logo — cross-module settings used everywhere the club appears.",
@@ -2263,7 +2290,8 @@
     "reach": "Reach us",
     "legal": "Information",
     "terms": "Sales terms",
-    "privacy": "Privacy"
+    "privacy": "Privacy",
+    "faq": "FAQ"
   },
   "totpExpiring": {
     "title": "Verification expiring",
@@ -2336,5 +2364,21 @@
     "screenshotDropped": "Screenshot couldn't be attached (submitted without it).",
     "screenshotAlt": "Screenshot preview",
     "errorGeneric": "Something went wrong. Please try again."
+  },
+  "faq": {
+    "title": "Frequently asked questions",
+    "intro": "Answers to the most common questions about membership, berths and how the harbour is run. They are based on the club's harbour rules (hamnereglement) and bylaws (vedtekter).",
+    "seeAll": "See all questions",
+    "notFound": "Didn't find what you were looking for?",
+    "contactCta": "Contact the board",
+    "home": {
+      "title": "Frequently asked questions"
+    },
+    "groups": {
+      "newcomers": "Thinking of joining?",
+      "members": "For members",
+      "deposit": "Deposit and share",
+      "general": "General"
+    }
   }
 }
