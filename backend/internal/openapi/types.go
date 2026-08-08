@@ -833,3 +833,41 @@ type Broadcast struct {
 	SentAt     time.Time `json:"sent_at" doc:"Send timestamp"`
 	CreatedAt  time.Time `json:"created_at" doc:"Creation timestamp"`
 }
+
+// FAQ — per-club public FAQ content (BRY-241). Text is free-form in the
+// club's own language; group_key is a fixed set the public page orders and
+// labels via i18n chrome.
+type FaqItem struct {
+	ID        string    `json:"id" doc:"FAQ item UUID"`
+	GroupKey  string    `json:"group_key" enum:"newcomers,members,deposit,general" doc:"Section key"`
+	Position  int       `json:"position" doc:"Order within the group"`
+	Question  string    `json:"question" doc:"Question text"`
+	Answer    string    `json:"answer" doc:"Answer text"`
+	LinkURL   *string   `json:"link_url,omitempty" doc:"Optional link URL (internal path or external URL)"`
+	LinkLabel *string   `json:"link_label,omitempty" doc:"Optional link label"`
+	Published bool      `json:"published" doc:"Whether the item is publicly visible"`
+	CreatedAt time.Time `json:"created_at" doc:"Creation timestamp"`
+	UpdatedAt time.Time `json:"updated_at" doc:"Update timestamp"`
+}
+
+type FaqListResponse struct {
+	Items []FaqItem `json:"items" doc:"FAQ items"`
+}
+
+type FaqWriteRequest struct {
+	GroupKey  string  `json:"group_key" enum:"newcomers,members,deposit,general" doc:"Section key"`
+	Question  string  `json:"question" doc:"Question text"`
+	Answer    string  `json:"answer" doc:"Answer text"`
+	LinkURL   *string `json:"link_url,omitempty" doc:"Optional link URL"`
+	LinkLabel *string `json:"link_label,omitempty" doc:"Optional link label"`
+	Published bool    `json:"published" doc:"Whether the item is publicly visible"`
+}
+
+type FaqReorderRequest struct {
+	GroupKey string   `json:"group_key" enum:"newcomers,members,deposit,general" doc:"Section key"`
+	IDs      []string `json:"ids" doc:"Item IDs in the desired order"`
+}
+
+type FaqIDResponse struct {
+	ID string `json:"id" doc:"Created FAQ item UUID"`
+}

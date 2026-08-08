@@ -1693,6 +1693,66 @@ func registerAdminOps(api huma.API) {
 		ItemID string `path:"itemID" doc:"Item UUID"`
 	}, struct{}]())
 
+	// FAQ (public)
+	huma.Register(api, huma.Operation{
+		OperationID: "list-public-faqs",
+		Method:      http.MethodGet,
+		Path:        "/api/v1/faqs",
+		Tags:        []string{"Public"},
+		Summary:     "List published FAQ items",
+	}, stub[struct{}, struct{ Body FaqListResponse }]())
+
+	// FAQ (admin)
+	huma.Register(api, huma.Operation{
+		OperationID: "admin-list-faqs",
+		Method:      http.MethodGet,
+		Path:        "/api/v1/admin/faqs",
+		Tags:        []string{"Admin"},
+		Summary:     "List FAQ items (admin)",
+		Security:    BearerSecurity,
+	}, stub[struct{}, struct{ Body FaqListResponse }]())
+
+	huma.Register(api, huma.Operation{
+		OperationID: "admin-create-faq",
+		Method:      http.MethodPost,
+		Path:        "/api/v1/admin/faqs",
+		Tags:        []string{"Admin"},
+		Summary:     "Create FAQ item",
+		Security:    BearerSecurity,
+	}, stub[struct{ Body FaqWriteRequest }, struct{ Body FaqIDResponse }]())
+
+	huma.Register(api, huma.Operation{
+		OperationID: "admin-reorder-faqs",
+		Method:      http.MethodPut,
+		Path:        "/api/v1/admin/faqs/reorder",
+		Tags:        []string{"Admin"},
+		Summary:     "Reorder FAQ items within a group",
+		Security:    BearerSecurity,
+	}, stub[struct{ Body FaqReorderRequest }, struct{ Body StatusResponse }]())
+
+	huma.Register(api, huma.Operation{
+		OperationID: "admin-update-faq",
+		Method:      http.MethodPut,
+		Path:        "/api/v1/admin/faqs/{faqID}",
+		Tags:        []string{"Admin"},
+		Summary:     "Update FAQ item",
+		Security:    BearerSecurity,
+	}, stub[struct {
+		FaqID string `path:"faqID" doc:"FAQ item UUID"`
+		Body  FaqWriteRequest
+	}, struct{ Body StatusResponse }]())
+
+	huma.Register(api, huma.Operation{
+		OperationID: "admin-delete-faq",
+		Method:      http.MethodDelete,
+		Path:        "/api/v1/admin/faqs/{faqID}",
+		Tags:        []string{"Admin"},
+		Summary:     "Delete FAQ item",
+		Security:    BearerSecurity,
+	}, stub[struct {
+		FaqID string `path:"faqID" doc:"FAQ item UUID"`
+	}, struct{ Body StatusResponse }]())
+
 	// Admin Products
 	huma.Register(api, huma.Operation{
 		OperationID: "admin-list-products",

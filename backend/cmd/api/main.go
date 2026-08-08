@@ -263,6 +263,7 @@ func main() {
 	bankRowsHandler := handlers.NewBankRowsHandler(accountingSvc, auditService, log)
 	devQueryHandler := handlers.NewDevQueryHandler(db, auditService, log)
 	priceItemsHandler := handlers.NewPriceItemsHandler(db, &cfg, log)
+	faqsHandler := handlers.NewFaqsHandler(db, &cfg, log)
 	productsHandler := handlers.NewProductsHandler(db, &cfg, log)
 	ordersHandler := handlers.NewOrdersHandler(db, &cfg, log)
 	boatModelsHandler := handlers.NewBoatModelsHandler(db, log)
@@ -340,6 +341,7 @@ func main() {
 				r.Get("/products", productsHandler.HandleListPublic)
 			}
 			r.Get("/boat-models", boatModelsHandler.HandleSearch)
+			r.Get("/faqs", faqsHandler.HandleListPublic)
 			r.Get("/weather", weatherHandler.HandleGetWeather)
 			r.Post("/contact", contactHandler.HandleContactForm)
 			r.Get("/unsubscribe", emailPrefsHandler.HandleUnsubscribeRedirect)
@@ -1080,6 +1082,15 @@ func main() {
 					r.Post("/", contentDocumentsHandler.HandleAdminCreate)
 					r.Put("/{docID}", contentDocumentsHandler.HandleAdminUpdate)
 					r.Delete("/{docID}", contentDocumentsHandler.HandleAdminDelete)
+				})
+
+				r.Route("/faqs", func(r chi.Router) {
+					r.Use(middleware.RequireRole("board", "admin"))
+					r.Get("/", faqsHandler.HandleAdminList)
+					r.Post("/", faqsHandler.HandleAdminCreate)
+					r.Put("/reorder", faqsHandler.HandleReorder)
+					r.Put("/{faqID}", faqsHandler.HandleAdminUpdate)
+					r.Delete("/{faqID}", faqsHandler.HandleAdminDelete)
 				})
 
 				r.Route("/notifications", func(r chi.Router) {
