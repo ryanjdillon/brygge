@@ -268,6 +268,37 @@
             fi
             shift
 
+            # ── Preflight: refuse to deploy placeholder club identity ─────
+            # terraform/terraform.tfvars.json is committed with PLACEHOLDER
+            # values (domain=example.invalid); the deployer fills the working
+            # copy with real values. If those go missing — fresh clone, a
+            # `git stash`, a reverted checkout — Nix silently builds the
+            # placeholder domain. ACME then fails for a bogus TLD, activation
+            # aborts, and deploy-rs rolls the LIVE site back onto the previous
+            # generation (which may itself be broken). Fail fast here instead
+            # of taking a running site down.
+            TFVARS="terraform/terraform.tfvars.json"
+            if [[ ! -f "$TFVARS" ]]; then
+              echo "deploy: ABORT — $TFVARS not found." >&2
+              exit 1
+            fi
+            tf_domain=$(${pkgs.jq}/bin/jq -r '.domain // ""' "$TFVARS")
+            tf_admin_email=$(${pkgs.jq}/bin/jq -r '.admin_email // ""' "$TFVARS")
+            if [[ -z "$tf_domain" || "$tf_domain" == "example.invalid" || "$tf_domain" == *.invalid ]]; then
+              echo "deploy: ABORT — $TFVARS has a placeholder/empty domain ('$tf_domain')." >&2
+              echo "deploy: Your real deployer values are not in the working copy — were they stashed?" >&2
+              echo "deploy: Recover with:  git stash list  then  git stash pop" >&2
+              echo "deploy: Verify with:   ${pkgs.jq}/bin/jq -r .domain $TFVARS   (should be your real domain)" >&2
+              echo "deploy: Deploying now would build ACME for a bogus domain, fail activation, and roll" >&2
+              echo "deploy: the LIVE site back onto the previous generation. Refusing to continue." >&2
+              exit 1
+            fi
+            if [[ "$tf_admin_email" == *@example.invalid || "$tf_admin_email" == *.invalid ]]; then
+              echo "deploy: ABORT — admin_email ('$tf_admin_email') has a placeholder domain; ACME will reject it." >&2
+              echo "deploy: Restore real deployer values in $TFVARS before deploying." >&2
+              exit 1
+            fi
+
             # Nix flakes copy git-tracked files (including unstaged
             # edits) into the build, but skip untracked files entirely —
             # an untracked source/migration file ships as an invisible
