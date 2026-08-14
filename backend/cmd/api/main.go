@@ -31,6 +31,7 @@ import (
 	"github.com/brygge-klubb/brygge/internal/mail"
 	"github.com/brygge-klubb/brygge/internal/middleware"
 	oa "github.com/brygge-klubb/brygge/internal/openapi"
+	"github.com/brygge-klubb/brygge/internal/passkey"
 	"github.com/brygge-klubb/brygge/internal/storage"
 	"github.com/brygge-klubb/brygge/internal/telemetry"
 )
@@ -215,6 +216,12 @@ func main() {
 	}
 	totpHandler := handlers.NewTOTPHandler(db, &cfg, sessionService, auditService, log)
 	demoAuthHandler := handlers.NewDemoAuthHandler(db, &cfg, sessionService, log)
+
+	webAuthn, err := passkey.New(&cfg)
+	if err != nil {
+		log.Fatal().Err(err).Msg("initialize passkey relying party")
+	}
+	passkeyHandler := handlers.NewPasskeyHandler(webAuthn, passkey.NewStore(db), passkey.NewChallengeStore(rdb), &cfg, log)
 	waitingListHandler := handlers.NewWaitingListHandler(db, rdb, &cfg, log)
 	adminUsersHandler := handlers.NewAdminUsersHandler(db, &cfg, log)
 	if inboxReconciler != nil && inboxReconciler.HasMailboxes() {
@@ -326,6 +333,22 @@ func main() {
 				r.Use(middleware.AuthenticateSession(sessionService))
 				r.Post("/session/logout", magicLinkHandler.HandleSessionLogout)
 				r.Get("/session/me", authHandler.HandleMe) // same handler — reads from context
+			})
+
+			// Passkeys (WebAuthn). Enrolling or removing an authenticator is a
+			// step-up action (fresh TOTP); listing/renaming only needs a session.
+			r.Route("/passkeys", func(r chi.Router) {
+				r.Use(middleware.AuthenticateSession(sessionService))
+				r.Use(authedRL)
+				r.Get("/", passkeyHandler.HandleList)
+				r.Patch("/{id}", passkeyHandler.HandleRename)
+
+				r.Group(func(r chi.Router) {
+					r.Use(middleware.RequireFreshTOTPDefault())
+					r.Post("/register/begin", passkeyHandler.HandleRegisterBegin)
+					r.Post("/register/finish", passkeyHandler.HandleRegisterFinish)
+					r.Delete("/{id}", passkeyHandler.HandleDelete)
+				})
 			})
 		})
 

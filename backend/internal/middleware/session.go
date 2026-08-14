@@ -232,6 +232,13 @@ func GetSessionID(ctx context.Context) string {
 	return id
 }
 
+// WithSessionID returns a context carrying the session ID, matching what
+// AuthenticateSession injects. Symmetric with WithClaims; used by handlers or
+// tests that build contexts directly.
+func WithSessionID(ctx context.Context, sessionID string) context.Context {
+	return context.WithValue(ctx, sessionContextKey{}, sessionID)
+}
+
 // GetSessionInfo returns the SessionInfo populated by AuthenticateSession,
 // or nil for unauthenticated requests / contexts where it wasn't set.
 func GetSessionInfo(ctx context.Context) *auth.SessionInfo {
