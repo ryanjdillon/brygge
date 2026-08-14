@@ -221,7 +221,7 @@ func main() {
 	if err != nil {
 		log.Fatal().Err(err).Msg("initialize passkey relying party")
 	}
-	passkeyHandler := handlers.NewPasskeyHandler(webAuthn, passkey.NewStore(db), passkey.NewChallengeStore(rdb), sessionService, &cfg, log)
+	passkeyHandler := handlers.NewPasskeyHandler(webAuthn, passkey.NewStore(db), passkey.NewChallengeStore(rdb), sessionService, auditService, &cfg, log)
 	waitingListHandler := handlers.NewWaitingListHandler(db, rdb, &cfg, log)
 	adminUsersHandler := handlers.NewAdminUsersHandler(db, &cfg, log)
 	if inboxReconciler != nil && inboxReconciler.HasMailboxes() {
@@ -896,6 +896,9 @@ func main() {
 						r.Group(func(r chi.Router) {
 							r.Use(middleware.RequireRole("admin"))
 							r.Post("/{userID}/totp/disable", totpHandler.HandleAdminDisableTOTP)
+							// Same backstop for passkeys — wipe a locked-out
+							// member's passkeys so they can re-enroll.
+							r.Delete("/{userID}/passkeys", passkeyHandler.HandleAdminReset)
 						})
 					})
 				})

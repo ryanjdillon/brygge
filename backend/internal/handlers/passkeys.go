@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/rs/zerolog"
 
+	"github.com/brygge-klubb/brygge/internal/audit"
 	"github.com/brygge-klubb/brygge/internal/auth"
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/middleware"
@@ -29,6 +30,7 @@ type PasskeyHandler struct {
 	store    *passkey.Store
 	chal     *passkey.ChallengeStore
 	sessions *auth.SessionService
+	audit    *audit.Service
 	config   *config.Config
 	log      zerolog.Logger
 }
@@ -38,6 +40,7 @@ func NewPasskeyHandler(
 	store *passkey.Store,
 	chal *passkey.ChallengeStore,
 	sessions *auth.SessionService,
+	auditService *audit.Service,
 	cfg *config.Config,
 	log zerolog.Logger,
 ) *PasskeyHandler {
@@ -46,6 +49,7 @@ func NewPasskeyHandler(
 		store:    store,
 		chal:     chal,
 		sessions: sessions,
+		audit:    auditService,
 		config:   cfg,
 		log:      log.With().Str("handler", "passkey").Logger(),
 	}
@@ -327,6 +331,67 @@ func (h *PasskeyHandler) HandleStepUpFinish(w http.ResponseWriter, r *http.Reque
 	}
 
 	JSON(w, http.StatusOK, passkeyStepUpFinishResponse{Message: "verified", MFAMethod: "passkey"})
+}
+
+type passkeyAdminResetResponse struct {
+	Message string `json:"message"`
+	Removed int    `json:"removed"`
+}
+
+// HandleAdminReset wipes another member's passkeys (recovery backstop, BRY-251):
+// a locked-out board member re-bootstraps via magic link → re-enrolls. TOTP +
+// recovery codes remain the break-glass, so a member who kept TOTP is never
+// fully locked out of step-up. Gated upstream by admin role + fresh TOTP.
+func (h *PasskeyHandler) HandleAdminReset(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	actor := middleware.GetClaims(ctx)
+	if actor == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	targetID := chi.URLParam(r, "userID")
+	if targetID == "" {
+		Error(w, http.StatusBadRequest, "userID is required")
+		return
+	}
+
+	// Tenant scoping — an admin can only reset members of their own club.
+	targetClub, err := h.store.UserClubID(ctx, targetID)
+	if err != nil {
+		if errors.Is(err, passkey.ErrNoUser) {
+			Error(w, http.StatusNotFound, "user not found")
+			return
+		}
+		h.log.Error().Err(err).Msg("look up target user")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if targetClub != actor.ClubID {
+		Error(w, http.StatusNotFound, "user not found")
+		return
+	}
+
+	removed, err := h.store.DeleteAllForUser(ctx, targetID)
+	if err != nil {
+		h.log.Error().Err(err).Msg("delete target passkeys")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	// Revoke the target's sessions so a session that already stepped up via the
+	// now-removed passkey can't linger.
+	if err := h.sessions.DeleteUserSessions(ctx, targetID); err != nil {
+		h.log.Error().Err(err).Msg("revoke target sessions")
+	}
+
+	if h.audit != nil {
+		h.audit.LogAction(ctx, actor.ClubID, actor.UserID, r.RemoteAddr,
+			audit.ActionPasskeyAdminReset, "user", targetID, nil)
+	}
+
+	JSON(w, http.StatusOK, passkeyAdminResetResponse{
+		Message: "passkeys removed; the member can re-enroll after signing in",
+		Removed: removed,
+	})
 }
 
 // credentialExclusions lists a member's existing credentials so an authenticator

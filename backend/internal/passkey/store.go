@@ -147,6 +147,17 @@ func (s *Store) ListCredentials(ctx context.Context, userID string) ([]Credentia
 	return out, rows.Err()
 }
 
+// UserClubID returns the club a member belongs to, for tenant-scoping admin
+// actions. ErrNoUser when the member doesn't exist.
+func (s *Store) UserClubID(ctx context.Context, userID string) (string, error) {
+	var clubID string
+	err := s.db.QueryRow(ctx, `SELECT club_id FROM users WHERE id = $1`, userID).Scan(&clubID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNoUser
+	}
+	return clubID, err
+}
+
 // CountForUser reports how many credentials a member has (for "is a passkey
 // enrolled?" checks).
 func (s *Store) CountForUser(ctx context.Context, userID string) (int, error) {

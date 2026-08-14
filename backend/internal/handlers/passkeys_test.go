@@ -70,7 +70,7 @@ func TestPasskeyRegisterBeginReturnsOptions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("passkey.New: %v", err)
 	}
-	h := NewPasskeyHandler(wa, passkey.NewStore(pool), passkey.NewChallengeStore(rdb), auth.NewSessionService(pool), &config.Config{}, zerolog.Nop())
+	h := NewPasskeyHandler(wa, passkey.NewStore(pool), passkey.NewChallengeStore(rdb), auth.NewSessionService(pool), nil, &config.Config{}, zerolog.Nop())
 
 	rec := httptest.NewRecorder()
 	h.HandleRegisterBegin(rec, authedReq(http.MethodPost, "/api/v1/auth/passkeys/register/begin", nil, userID, clubID, "sess-1", ""))
@@ -129,7 +129,7 @@ func TestPasskeyManagementRoundTrip(t *testing.T) {
 	}
 
 	wa, _ := passkey.New(&config.Config{FrontendURL: "https://example.org"})
-	h := NewPasskeyHandler(wa, store, passkey.NewChallengeStore(rdb), auth.NewSessionService(pool), &config.Config{}, zerolog.Nop())
+	h := NewPasskeyHandler(wa, store, passkey.NewChallengeStore(rdb), auth.NewSessionService(pool), nil, &config.Config{}, zerolog.Nop())
 
 	// List
 	rec := httptest.NewRecorder()
@@ -167,5 +167,57 @@ func TestPasskeyManagementRoundTrip(t *testing.T) {
 	}
 	if n, _ := store.CountForUser(context.Background(), userID); n != 0 {
 		t.Errorf("count after delete = %d, want 0", n)
+	}
+}
+
+func TestPasskeyAdminReset(t *testing.T) {
+	testutil.SkipIfNoDB(t)
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	clubID := testutil.SeedClub(t, pool)
+	adminID, _ := testutil.SeedUser(t, pool, clubID, []string{"admin"})
+	targetID, _ := testutil.SeedUser(t, pool, clubID, []string{"board"})
+
+	store := passkey.NewStore(pool)
+	if _, err := store.LoadUser(ctx, targetID); err != nil {
+		t.Fatalf("LoadUser: %v", err)
+	}
+	if err := store.SaveCredential(ctx, targetID, clubID, passkeyTestCredential("t1"), ""); err != nil {
+		t.Fatalf("SaveCredential: %v", err)
+	}
+
+	wa, _ := passkey.New(&config.Config{FrontendURL: "https://example.org"})
+	h := NewPasskeyHandler(wa, store, nil, auth.NewSessionService(pool), nil, &config.Config{}, zerolog.Nop())
+
+	// Build a request as the admin actor, targeting {userID}.
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/users/"+targetID+"/passkeys", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("userID", targetID)
+	reqCtx := middleware.WithClaims(req.Context(), &auth.Claims{UserID: adminID, ClubID: clubID, Roles: []string{"admin"}})
+	reqCtx = context.WithValue(reqCtx, chi.RouteCtxKey, rctx)
+	req = req.WithContext(reqCtx)
+
+	rec := httptest.NewRecorder()
+	h.HandleAdminReset(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("reset status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if n, _ := store.CountForUser(ctx, targetID); n != 0 {
+		t.Errorf("target still has %d passkeys after reset, want 0", n)
+	}
+
+	// A target in another club is not found (tenant scoping).
+	otherClub := testutil.SeedClub(t, pool)
+	otherUser, _ := testutil.SeedUser(t, pool, otherClub, []string{"board"})
+	req2 := httptest.NewRequest(http.MethodDelete, "/x", nil)
+	rctx2 := chi.NewRouteContext()
+	rctx2.URLParams.Add("userID", otherUser)
+	ctx2 := middleware.WithClaims(req2.Context(), &auth.Claims{UserID: adminID, ClubID: clubID, Roles: []string{"admin"}})
+	ctx2 = context.WithValue(ctx2, chi.RouteCtxKey, rctx2)
+	rec2 := httptest.NewRecorder()
+	h.HandleAdminReset(rec2, req2.WithContext(ctx2))
+	if rec2.Code != http.StatusNotFound {
+		t.Errorf("cross-club reset status = %d, want 404", rec2.Code)
 	}
 }

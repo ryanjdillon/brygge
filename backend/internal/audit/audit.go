@@ -21,6 +21,7 @@ const (
 	ActionTOTPRecoveryRedeemed = "admin.totp_recovery_redeemed"
 	ActionTOTPCodesRegenerated = "admin.totp_codes_regenerated"
 	ActionTOTPAdminDisabled    = "admin.totp_disabled_by_admin"
+	ActionPasskeyAdminReset    = "admin.passkey_reset_by_admin"
 
 	// Admin user operations
 	ActionUserRoleUpdated       = "user.role_updated"
