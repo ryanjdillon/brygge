@@ -70,7 +70,7 @@ func TestPasskeyRegisterBeginReturnsOptions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("passkey.New: %v", err)
 	}
-	h := NewPasskeyHandler(wa, passkey.NewStore(pool), passkey.NewChallengeStore(rdb), &config.Config{}, zerolog.Nop())
+	h := NewPasskeyHandler(wa, passkey.NewStore(pool), passkey.NewChallengeStore(rdb), auth.NewSessionService(pool), &config.Config{}, zerolog.Nop())
 
 	rec := httptest.NewRecorder()
 	h.HandleRegisterBegin(rec, authedReq(http.MethodPost, "/api/v1/auth/passkeys/register/begin", nil, userID, clubID, "sess-1", ""))
@@ -129,7 +129,7 @@ func TestPasskeyManagementRoundTrip(t *testing.T) {
 	}
 
 	wa, _ := passkey.New(&config.Config{FrontendURL: "https://example.org"})
-	h := NewPasskeyHandler(wa, store, passkey.NewChallengeStore(rdb), &config.Config{}, zerolog.Nop())
+	h := NewPasskeyHandler(wa, store, passkey.NewChallengeStore(rdb), auth.NewSessionService(pool), &config.Config{}, zerolog.Nop())
 
 	// List
 	rec := httptest.NewRecorder()

@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/rs/zerolog"
 
+	"github.com/brygge-klubb/brygge/internal/auth"
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/middleware"
 	"github.com/brygge-klubb/brygge/internal/passkey"
@@ -22,34 +23,38 @@ import (
 const passkeyChallengeTTL = 5 * time.Minute
 
 // PasskeyHandler serves the WebAuthn ceremonies: registration + management
-// here (BRY-249); step-up and login are added by later sub-issues.
+// (BRY-249) and step-up (BRY-250); login is added by a later sub-issue.
 type PasskeyHandler struct {
-	wa     *webauthn.WebAuthn
-	store  *passkey.Store
-	chal   *passkey.ChallengeStore
-	config *config.Config
-	log    zerolog.Logger
+	wa       *webauthn.WebAuthn
+	store    *passkey.Store
+	chal     *passkey.ChallengeStore
+	sessions *auth.SessionService
+	config   *config.Config
+	log      zerolog.Logger
 }
 
 func NewPasskeyHandler(
 	wa *webauthn.WebAuthn,
 	store *passkey.Store,
 	chal *passkey.ChallengeStore,
+	sessions *auth.SessionService,
 	cfg *config.Config,
 	log zerolog.Logger,
 ) *PasskeyHandler {
 	return &PasskeyHandler{
-		wa:     wa,
-		store:  store,
-		chal:   chal,
-		config: cfg,
-		log:    log.With().Str("handler", "passkey").Logger(),
+		wa:       wa,
+		store:    store,
+		chal:     chal,
+		sessions: sessions,
+		config:   cfg,
+		log:      log.With().Str("handler", "passkey").Logger(),
 	}
 }
 
 // challenge keys are namespaced by ceremony so a register challenge can't be
-// replayed against a step-up finish.
-func regChallengeKey(sessionID string) string { return "reg:" + sessionID }
+// replayed against a step-up finish, or vice versa.
+func regChallengeKey(sessionID string) string    { return "reg:" + sessionID }
+func stepUpChallengeKey(sessionID string) string { return "step:" + sessionID }
 
 // HandleRegisterBegin starts enrollment for the logged-in member and returns
 // the creation options for @simplewebauthn/browser's startRegistration. Gated
@@ -224,6 +229,104 @@ func (h *PasskeyHandler) HandleDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	JSON(w, http.StatusOK, map[string]string{"message": "deleted"})
+}
+
+// HandleStepUpBegin starts a passkey assertion for the logged-in member to
+// satisfy the admin step-up in place of a TOTP code. User verification is
+// required — the passkey then proves possession + inherence in one gesture.
+func (h *PasskeyHandler) HandleStepUpBegin(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	sessionID := middleware.GetSessionID(ctx)
+	if claims == nil || sessionID == "" {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	user, err := h.store.LoadUser(ctx, claims.UserID)
+	if err != nil {
+		h.log.Error().Err(err).Msg("load user for step-up")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if len(user.WebAuthnCredentials()) == 0 {
+		Error(w, http.StatusBadRequest, "no passkey enrolled")
+		return
+	}
+
+	// BeginLogin scopes allowCredentials to this user's registered passkeys.
+	options, sessionData, err := h.wa.BeginLogin(
+		user,
+		webauthn.WithUserVerification(protocol.VerificationRequired),
+	)
+	if err != nil {
+		h.log.Error().Err(err).Msg("begin step-up")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	if err := h.chal.Put(ctx, stepUpChallengeKey(sessionID), sessionData, passkeyChallengeTTL); err != nil {
+		h.log.Error().Err(err).Msg("store step-up challenge")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	JSON(w, http.StatusOK, options.Response)
+}
+
+type passkeyStepUpFinishResponse struct {
+	Message   string `json:"message"`
+	MFAMethod string `json:"mfa_method"`
+}
+
+// HandleStepUpFinish verifies the assertion and stamps the session's step-up
+// timestamp, satisfying RequireAdminTOTP / RequireFreshTOTP.
+func (h *PasskeyHandler) HandleStepUpFinish(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	sessionID := middleware.GetSessionID(ctx)
+	if claims == nil || sessionID == "" {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	sessionData, err := h.chal.Take(ctx, stepUpChallengeKey(sessionID))
+	if err != nil {
+		Error(w, http.StatusBadRequest, "no step-up in progress — start again")
+		return
+	}
+
+	user, err := h.store.LoadUser(ctx, claims.UserID)
+	if err != nil {
+		h.log.Error().Err(err).Msg("load user for step-up finish")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	cred, err := h.wa.FinishLogin(user, *sessionData, r)
+	if err != nil {
+		Error(w, http.StatusBadRequest, "passkey verification failed")
+		return
+	}
+	if cred.Authenticator.CloneWarning {
+		// Signature counter went backwards — possible cloned authenticator.
+		// Don't hard-fail (some platform authenticators always report 0), but
+		// leave a trail.
+		h.log.Warn().Str("user_id", claims.UserID).Msg("passkey clone warning during step-up")
+	}
+
+	// Persist the updated signature counter / last-used before granting step-up.
+	if err := h.store.TouchCredential(ctx, cred); err != nil {
+		h.log.Error().Err(err).Msg("touch credential after step-up")
+	}
+
+	if err := h.sessions.StampStepUp(ctx, sessionID, "passkey"); err != nil {
+		h.log.Error().Err(err).Msg("stamp step-up")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	JSON(w, http.StatusOK, passkeyStepUpFinishResponse{Message: "verified", MFAMethod: "passkey"})
 }
 
 // credentialExclusions lists a member's existing credentials so an authenticator

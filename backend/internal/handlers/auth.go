@@ -59,6 +59,8 @@ func (h *AuthHandler) HandleMe(w http.ResponseWriter, r *http.Request) {
 	if info := middleware.GetSessionInfo(r.Context()); info != nil {
 		resp.TOTPEnabled = info.TOTPEnabled
 		resp.TOTPVerifiedAt = info.TOTPVerifiedAt
+		resp.HasPasskey = info.HasPasskey
+		resp.MFAMethod = info.MFAMethod
 	}
 
 	JSON(w, http.StatusOK, resp)
@@ -74,6 +76,11 @@ type meResponse struct {
 	Email          string     `json:"email"`
 	TOTPEnabled    bool       `json:"totp_enabled"`
 	TOTPVerifiedAt *time.Time `json:"totp_verified_at,omitempty"`
+	// HasPasskey reports whether the member has a registered passkey, so the
+	// SPA can offer passkey step-up. MFAMethod is how the current session last
+	// stepped up ("totp" | "passkey" | "").
+	HasPasskey bool   `json:"has_passkey"`
+	MFAMethod  string `json:"mfa_method,omitempty"`
 	// PreferredLanguage is the member's explicit UI language, or nil
 	// when they've made no choice (→ fall back to the club default).
 	PreferredLanguage   *string `json:"preferred_language"`

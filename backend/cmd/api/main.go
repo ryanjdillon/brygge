@@ -221,7 +221,7 @@ func main() {
 	if err != nil {
 		log.Fatal().Err(err).Msg("initialize passkey relying party")
 	}
-	passkeyHandler := handlers.NewPasskeyHandler(webAuthn, passkey.NewStore(db), passkey.NewChallengeStore(rdb), &cfg, log)
+	passkeyHandler := handlers.NewPasskeyHandler(webAuthn, passkey.NewStore(db), passkey.NewChallengeStore(rdb), sessionService, &cfg, log)
 	waitingListHandler := handlers.NewWaitingListHandler(db, rdb, &cfg, log)
 	adminUsersHandler := handlers.NewAdminUsersHandler(db, &cfg, log)
 	if inboxReconciler != nil && inboxReconciler.HasMailboxes() {
@@ -342,6 +342,12 @@ func main() {
 				r.Use(authedRL)
 				r.Get("/", passkeyHandler.HandleList)
 				r.Patch("/{id}", passkeyHandler.HandleRename)
+
+				// Step-up: a passkey assertion satisfies the admin gate in
+				// place of TOTP. Only needs a session — this is how a member
+				// BECOMES fresh, so it must not sit behind the fresh gate.
+				r.Post("/step-up/begin", passkeyHandler.HandleStepUpBegin)
+				r.Post("/step-up/finish", passkeyHandler.HandleStepUpFinish)
 
 				r.Group(func(r chi.Router) {
 					r.Use(middleware.RequireFreshTOTPDefault())

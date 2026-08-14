@@ -24,9 +24,9 @@ const (
 	sessionExtendThreshold = time.Minute
 
 	// Exported defaults (used by handlers to report current effective value).
-	SessionIdleWindowDefault    = 12 * time.Hour
-	SessionAbsoluteCapDefault   = 7 * 24 * time.Hour
-	AdminTOTPWindowDefault      = 12 * time.Hour
+	SessionIdleWindowDefault  = 12 * time.Hour
+	SessionAbsoluteCapDefault = 7 * 24 * time.Hour
+	AdminTOTPWindowDefault    = 12 * time.Hour
 
 	// Clamp bounds for per-club overrides (server-enforced regardless of DB value).
 	MinSessionIdleWindow  = 30 * time.Minute
@@ -79,8 +79,17 @@ func (s *SessionService) CreateSession(ctx context.Context, userID, clubID, ip, 
 // session (nil = never), whether the user has TOTP enrolled at all,
 // and per-club timeout overrides loaded from club_settings.
 type SessionInfo struct {
-	TOTPVerifiedAt  *time.Time
-	TOTPEnabled     bool
+	// TOTPVerifiedAt is the time of the last step-up by ANY factor (a TOTP
+	// code or a passkey assertion both stamp it). The step-up gates key their
+	// freshness windows off this single timestamp.
+	TOTPVerifiedAt *time.Time
+	TOTPEnabled    bool
+	// HasPasskey reports whether the member has at least one registered
+	// passkey — a second factor the step-up gate accepts alongside TOTP.
+	HasPasskey bool
+	// MFAMethod is how the last step-up was performed ("totp" | "passkey"),
+	// surfaced to the SPA so it can prefer the matching prompt.
+	MFAMethod string
 	// Per-club timeout overrides. Zero means "use the code default."
 	// AdminTOTPWindow is applied on every request (TOTP gate re-evaluated
 	// each time). IdleWindow/AbsoluteCap affect the next expires_at slide
@@ -97,10 +106,13 @@ type SessionInfo struct {
 func (s *SessionService) ValidateSession(ctx context.Context, sessionID string) (*Claims, *SessionInfo, error) {
 	var userID, clubID string
 	var info SessionInfo
+	var mfaMethod *string
 	var createdAt, expiresAt time.Time
 	var idleMin, capMin, adminTOTPMin *int
 	err := s.db.QueryRow(ctx,
 		`SELECT s.user_id, s.club_id, s.totp_verified_at, COALESCE(u.totp_enabled, false),
+		        s.mfa_method,
+		        EXISTS(SELECT 1 FROM webauthn_credentials wc WHERE wc.user_id = s.user_id),
 		        s.created_at, s.expires_at,
 		        MAX(CASE WHEN cs.key = 'session_idle_minutes'          THEN (cs.value::text)::int END),
 		        MAX(CASE WHEN cs.key = 'session_absolute_cap_minutes'  THEN (cs.value::text)::int END),
@@ -110,15 +122,19 @@ func (s *SessionService) ValidateSession(ctx context.Context, sessionID string) 
 		 LEFT JOIN club_settings cs ON cs.club_id = s.club_id
 		     AND cs.key IN ('session_idle_minutes', 'session_absolute_cap_minutes', 'admin_totp_minutes')
 		 WHERE s.id = $1 AND u.deactivated_at IS NULL
-		 GROUP BY s.user_id, s.club_id, s.totp_verified_at, u.totp_enabled, s.created_at, s.expires_at`,
+		 GROUP BY s.user_id, s.club_id, s.totp_verified_at, u.totp_enabled, s.mfa_method, s.created_at, s.expires_at`,
 		sessionID,
 	).Scan(&userID, &clubID, &info.TOTPVerifiedAt, &info.TOTPEnabled,
+		&mfaMethod, &info.HasPasskey,
 		&createdAt, &expiresAt, &idleMin, &capMin, &adminTOTPMin)
 	if err == pgx.ErrNoRows {
 		return nil, nil, ErrSessionNotFound
 	}
 	if err != nil {
 		return nil, nil, fmt.Errorf("querying session: %w", err)
+	}
+	if mfaMethod != nil {
+		info.MFAMethod = *mfaMethod
 	}
 
 	// Resolve per-club overrides with server-side clamps.
@@ -197,11 +213,19 @@ func (s *SessionService) DeleteUserSessions(ctx context.Context, userID string) 
 	return err
 }
 
-// StampTOTP marks the session as TOTP-verified.
+// StampTOTP marks the session as stepped-up via TOTP.
 func (s *SessionService) StampTOTP(ctx context.Context, sessionID string) error {
+	return s.StampStepUp(ctx, sessionID, "totp")
+}
+
+// StampStepUp records a completed step-up on the session: it refreshes the
+// shared step-up timestamp (totp_verified_at) and notes the factor used. Both
+// the TOTP verify and the passkey step-up flow through here, so either satisfies
+// the admin gates.
+func (s *SessionService) StampStepUp(ctx context.Context, sessionID, method string) error {
 	_, err := s.db.Exec(ctx,
-		`UPDATE sessions SET totp_verified_at = NOW() WHERE id = $1`,
-		sessionID,
+		`UPDATE sessions SET totp_verified_at = NOW(), mfa_method = $2 WHERE id = $1`,
+		sessionID, method,
 	)
 	return err
 }

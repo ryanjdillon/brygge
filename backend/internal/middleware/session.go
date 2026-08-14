@@ -96,7 +96,10 @@ func RequireAdminTOTP(sessionService *auth.SessionService) func(http.Handler) ht
 				info = fresh
 			}
 
-			if !info.TOTPEnabled {
+			// A step-up requires an enrolled second factor — TOTP or a
+			// passkey. The freshness check below is factor-agnostic: both
+			// stamp the same totp_verified_at timestamp.
+			if !info.TOTPEnabled && !info.HasPasskey {
 				writeTOTPRequired(w, r, "totp_not_enrolled")
 				return
 			}
@@ -166,7 +169,7 @@ func RequireFreshTOTP(window time.Duration) func(http.Handler) http.Handler {
 // the request body).
 func IsFreshTOTP(ctx context.Context, window time.Duration) bool {
 	info := GetSessionInfo(ctx)
-	if info == nil || !info.TOTPEnabled || info.TOTPVerifiedAt == nil {
+	if info == nil || (!info.TOTPEnabled && !info.HasPasskey) || info.TOTPVerifiedAt == nil {
 		return false
 	}
 	return time.Since(*info.TOTPVerifiedAt) <= window
