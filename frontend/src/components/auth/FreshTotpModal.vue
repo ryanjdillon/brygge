@@ -1,14 +1,42 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ShieldCheck, X, KeyRound } from 'lucide-vue-next'
+import { ShieldCheck, X, KeyRound, Fingerprint } from 'lucide-vue-next'
 
 import { useTotp, TotpError } from '@/composables/useTotp'
+import { usePasskey, passkeysSupported } from '@/composables/usePasskey'
 import { useTotpGateStore } from '@/stores/totpGate'
+import { useAuthStore } from '@/stores/auth'
 
 const { t } = useI18n()
 const totp = useTotp()
+const passkey = usePasskey()
 const gate = useTotpGateStore()
+const auth = useAuthStore()
+
+const showPasskey = computed(() => passkeysSupported() && auth.user?.hasPasskey === true)
+const showTotp = computed(() => auth.user?.totpEnabled === true)
+const passkeyBusy = ref(false)
+const passkeyError = ref<string | null>(null)
+
+async function usePasskeyStepUp() {
+  passkeyError.value = null
+  passkeyBusy.value = true
+  try {
+    await passkey.stepUp()
+    gate.settle(true)
+  } catch (e) {
+    if (e instanceof DOMException && (e.name === 'NotAllowedError' || e.name === 'AbortError')) {
+      // User dismissed the browser prompt — not an error.
+    } else if (e instanceof Error && e.message) {
+      passkeyError.value = e.message
+    } else {
+      passkeyError.value = t('totpVerify.errors.passkeyFailed')
+    }
+  } finally {
+    passkeyBusy.value = false
+  }
+}
 
 const code = ref('')
 const useRecovery = ref(false)
@@ -28,6 +56,7 @@ watch(
       useRecovery.value = false
       failedAttempts.value = 0
       error.value = null
+      passkeyError.value = null
       await nextTick()
       inputRef.value?.focus()
     }
@@ -106,7 +135,34 @@ function friendlyError(backendCode: string): string {
 
       <p class="mt-3 text-sm text-gray-600">{{ t('totpVerify.modalSubtitle') }}</p>
 
-      <form class="mt-4 space-y-3" @submit.prevent="submit">
+      <!-- Passkey step-up (one tap) -->
+      <div v-if="showPasskey" class="mt-4 space-y-3">
+        <button
+          type="button"
+          class="flex w-full items-center justify-center gap-2 rounded-md bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+          :disabled="passkeyBusy"
+          @click="usePasskeyStepUp"
+        >
+          <Fingerprint class="h-4 w-4" />
+          {{ passkeyBusy ? t('common.loading') : t('totpVerify.usePasskey') }}
+        </button>
+        <p v-if="passkeyError" class="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{{ passkeyError }}</p>
+        <div v-if="showTotp" class="flex items-center gap-3 text-xs uppercase text-gray-400">
+          <span class="h-px flex-1 bg-gray-200" />
+          {{ t('totpVerify.or') }}
+          <span class="h-px flex-1 bg-gray-200" />
+        </div>
+        <button
+          v-if="!showTotp"
+          type="button"
+          class="w-full rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-700 ring-1 ring-gray-300 hover:bg-gray-50"
+          @click="cancel"
+        >
+          {{ t('common.cancel') }}
+        </button>
+      </div>
+
+      <form v-if="showTotp" class="mt-4 space-y-3" @submit.prevent="submit">
         <input
           v-if="!useRecovery"
           ref="inputRef"

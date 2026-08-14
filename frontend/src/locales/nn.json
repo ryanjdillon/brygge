@@ -2097,6 +2097,22 @@
       "regenerateFailed": "Kunne ikkje generere nye kodar",
       "freshRequired": "Stadfest 2FA-koden på nytt for å halde fram",
       "codeFormat": "Koden må vere 6 siffer"
+    },
+    "passkey": {
+      "title": "Passnøklar",
+      "description": "Stadfest sensitive handlingar med fingeravtrykk, andlet eller ein tryggingsnøkkel – i staden for å taste ein kode.",
+      "none": "Ingen passnøklar enno.",
+      "unnamed": "Passnøkkel",
+      "added": "Lagt til",
+      "addButton": "Legg til passnøkkel",
+      "addFailed": "Klarte ikkje å leggje til passnøkkelen",
+      "removeFailed": "Klarte ikkje å fjerne passnøkkelen",
+      "renameFailed": "Klarte ikkje å gje passnøkkelen nytt namn",
+      "freshRequired": "Stadfest 2FA-koden din først, og legg deretter til ein passnøkkel.",
+      "nameLabel": "Namn på passnøkkel",
+      "rename": "Gje nytt namn",
+      "remove": "Fjern",
+      "save": "Lagre"
     }
   },
   "totpVerify": {
@@ -2110,11 +2126,14 @@
     "useRecovery": "Bruk ein gjenopprettingskode i staden",
     "useAuthenticator": "Bruk autentiseringsappen i staden",
     "suggestRecovery": "Mange feilforsøk? Bruk ein av gjenopprettingskodane.",
+    "usePasskey": "Bruk ein passnøkkel",
+    "or": "eller",
     "errors": {
       "required": "Skriv inn ein kode",
       "failed": "Stadfestinga feila",
       "invalidCode": "Ugyldig kode — sjekk at klokka på autentiseringsappen er rett",
-      "invalidRecovery": "Ugyldig eller allereie brukt gjenopprettingskode"
+      "invalidRecovery": "Ugyldig eller allereie brukt gjenopprettingskode",
+      "passkeyFailed": "Stadfesting med passnøkkel mislukkast"
     }
   },
   "lineItemPicker": {

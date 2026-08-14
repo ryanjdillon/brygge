@@ -2219,6 +2219,22 @@
       "regenerateFailed": "Couldn't generate new codes",
       "freshRequired": "Verify your 2FA code again to continue",
       "codeFormat": "The code must be 6 digits"
+    },
+    "passkey": {
+      "title": "Passkeys",
+      "description": "Confirm sensitive actions with your fingerprint, face, or a security key — instead of typing a code.",
+      "none": "No passkeys yet.",
+      "unnamed": "Passkey",
+      "added": "Added",
+      "addButton": "Add passkey",
+      "addFailed": "Couldn't add the passkey",
+      "removeFailed": "Couldn't remove the passkey",
+      "renameFailed": "Couldn't rename the passkey",
+      "freshRequired": "Verify your 2FA code first, then add a passkey.",
+      "nameLabel": "Passkey name",
+      "rename": "Rename",
+      "remove": "Remove",
+      "save": "Save"
     }
   },
   "totpVerify": {
@@ -2232,11 +2248,14 @@
     "useRecovery": "Use a recovery code instead",
     "useAuthenticator": "Use the authenticator app instead",
     "suggestRecovery": "Several failed attempts? Try one of your recovery codes.",
+    "usePasskey": "Use a passkey",
+    "or": "or",
     "errors": {
       "required": "Enter a code",
       "failed": "Verification failed",
       "invalidCode": "Invalid code — check that your authenticator app's clock is correct",
-      "invalidRecovery": "Invalid or already-used recovery code"
+      "invalidRecovery": "Invalid or already-used recovery code",
+      "passkeyFailed": "Passkey verification failed"
     }
   },
   "lineItemPicker": {

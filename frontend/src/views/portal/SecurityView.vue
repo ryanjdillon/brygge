@@ -2,11 +2,24 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ShieldCheck, ShieldAlert, KeyRound, RefreshCw, Copy, Download, Check } from 'lucide-vue-next'
+import {
+  ShieldCheck,
+  ShieldAlert,
+  KeyRound,
+  RefreshCw,
+  Copy,
+  Download,
+  Check,
+  Fingerprint,
+  Plus,
+  Pencil,
+  Trash2,
+} from 'lucide-vue-next'
 import QRCode from 'qrcode'
 
 import { useAuthStore } from '@/stores/auth'
 import { useTotp, TotpError } from '@/composables/useTotp'
+import { usePasskey, passkeysSupported, PasskeyError, type PasskeyInfo } from '@/composables/usePasskey'
 import Checkbox from '@/components/ui/form/Checkbox.vue'
 import Input from '@/components/ui/form/Input.vue'
 
@@ -15,6 +28,7 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const totp = useTotp()
+const passkey = usePasskey()
 
 // Three-state setup flow:
 //   idle      → user hasn't started enrolling
@@ -34,10 +48,89 @@ const busy = ref(false)
 
 const isEnrolled = computed(() => auth.user?.totpEnabled === true)
 
+// --- Passkeys ---
+const passkeysAvailable = passkeysSupported()
+const passkeys = ref<PasskeyInfo[]>([])
+const passkeyBusy = ref(false)
+const passkeyError = ref<string | null>(null)
+const editingId = ref<string | null>(null)
+const editName = ref('')
+
+async function loadPasskeys() {
+  if (!passkeysAvailable) return
+  try {
+    passkeys.value = await passkey.list()
+  } catch {
+    // A failed list shouldn't break the page; leave the section empty.
+  }
+}
+
+async function addPasskey() {
+  passkeyError.value = null
+  passkeyBusy.value = true
+  try {
+    await passkey.register()
+    await loadPasskeys()
+  } catch (e) {
+    if (e instanceof PasskeyError && e.message === 'totp_fresh_required') {
+      passkeyError.value = t('security.passkey.freshRequired')
+    } else if (e instanceof DOMException && (e.name === 'NotAllowedError' || e.name === 'AbortError')) {
+      // User dismissed the browser prompt — not an error.
+    } else {
+      passkeyError.value = formatError(e, t('security.passkey.addFailed'))
+    }
+  } finally {
+    passkeyBusy.value = false
+  }
+}
+
+function startRename(pk: PasskeyInfo) {
+  editingId.value = pk.id
+  editName.value = pk.name
+}
+
+async function saveRename(id: string) {
+  const name = editName.value.trim()
+  if (!name) {
+    editingId.value = null
+    return
+  }
+  try {
+    await passkey.rename(id, name)
+    await loadPasskeys()
+  } catch (e) {
+    passkeyError.value = formatError(e, t('security.passkey.renameFailed'))
+  }
+  editingId.value = null
+}
+
+async function removePasskey(id: string) {
+  passkeyError.value = null
+  try {
+    await passkey.remove(id)
+    await loadPasskeys()
+  } catch (e) {
+    if (e instanceof PasskeyError && e.message === 'totp_fresh_required') {
+      passkeyError.value = t('security.passkey.freshRequired')
+    } else {
+      passkeyError.value = formatError(e, t('security.passkey.removeFailed'))
+    }
+  }
+}
+
+function passkeyLabel(pk: PasskeyInfo): string {
+  return pk.name || t('security.passkey.unnamed')
+}
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString()
+}
+
 onMounted(async () => {
   // The auth store fetches /me eagerly at boot, but make sure it's
   // settled before we render — a stale enrolled flag would flicker.
   await auth.ready
+  await loadPasskeys()
 })
 
 async function beginEnrollment() {
@@ -255,5 +348,64 @@ function formatError(e: unknown, fallback: string): string {
     </div>
 
     <p v-if="error" class="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{{ error }}</p>
+
+    <!-- Passkeys -->
+    <div v-if="passkeysAvailable" class="rounded-lg border border-gray-200 bg-white p-4">
+      <div class="flex items-center gap-2">
+        <Fingerprint class="h-5 w-5 text-brand-600" />
+        <h3 class="font-medium text-gray-900">{{ t('security.passkey.title') }}</h3>
+      </div>
+      <p class="mt-1 text-sm text-gray-600">{{ t('security.passkey.description') }}</p>
+
+      <ul v-if="passkeys.length" class="mt-3 divide-y divide-gray-100 rounded border border-gray-100">
+        <li v-for="pk in passkeys" :key="pk.id" class="flex items-center justify-between gap-3 px-3 py-2">
+          <div class="min-w-0 flex-1">
+            <div v-if="editingId === pk.id" class="flex items-center gap-2">
+              <Input
+                v-model="editName"
+                type="text"
+                :maxlength="64"
+                :aria-label="t('security.passkey.nameLabel')"
+                @keyup.enter="saveRename(pk.id)"
+              />
+              <button class="text-sm font-medium text-brand-600 hover:text-brand-700" @click="saveRename(pk.id)">
+                {{ t('security.passkey.save') }}
+              </button>
+            </div>
+            <template v-else>
+              <p class="truncate font-medium text-gray-900">{{ passkeyLabel(pk) }}</p>
+              <p class="text-xs text-gray-500">{{ t('security.passkey.added') }} {{ formatDate(pk.created_at) }}</p>
+            </template>
+          </div>
+          <div v-if="editingId !== pk.id" class="flex shrink-0 items-center gap-1">
+            <button
+              class="rounded p-1.5 text-gray-500 hover:bg-gray-50"
+              :title="t('security.passkey.rename')"
+              @click="startRename(pk)"
+            >
+              <Pencil class="h-4 w-4" />
+            </button>
+            <button
+              class="rounded p-1.5 text-red-600 hover:bg-red-50"
+              :title="t('security.passkey.remove')"
+              @click="removePasskey(pk.id)"
+            >
+              <Trash2 class="h-4 w-4" />
+            </button>
+          </div>
+        </li>
+      </ul>
+      <p v-else class="mt-3 text-sm text-gray-500">{{ t('security.passkey.none') }}</p>
+
+      <button
+        class="mt-3 inline-flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+        :disabled="passkeyBusy"
+        @click="addPasskey"
+      >
+        <Plus class="h-4 w-4" />
+        {{ passkeyBusy ? t('common.loading') : t('security.passkey.addButton') }}
+      </button>
+      <p v-if="passkeyError" class="mt-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{{ passkeyError }}</p>
+    </div>
   </div>
 </template>

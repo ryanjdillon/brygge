@@ -2,27 +2,55 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ShieldCheck, KeyRound } from 'lucide-vue-next'
+import { ShieldCheck, KeyRound, Fingerprint } from 'lucide-vue-next'
 
 import { useAuthStore } from '@/stores/auth'
 import { useTotp, TotpError } from '@/composables/useTotp'
+import { usePasskey, passkeysSupported } from '@/composables/usePasskey'
 
 const router = useRouter()
 const route = useRoute()
 const { t } = useI18n()
 const totp = useTotp()
+const passkey = usePasskey()
 const auth = useAuthStore()
 
-// If we land here without 2FA enrolled, the verify form is a
-// dead-end — there's no code to type. Redirect into enrollment so
-// the user has a path forward instead of staring at an empty input.
+// Which factors this member can use to step up here.
+const showPasskey = computed(() => passkeysSupported() && auth.user?.hasPasskey === true)
+const showTotp = computed(() => auth.user?.totpEnabled === true)
+
+// If we land here with no second factor at all, the verify form is a
+// dead-end — redirect into enrollment so the user has a path forward.
+// A passkey-only member keeps the passkey button and isn't redirected.
 onMounted(async () => {
   await auth.ready
-  if (auth.user && !auth.user.totpEnabled) {
+  if (auth.user && !auth.user.totpEnabled && !auth.user.hasPasskey) {
     const next = (route.query.next as string) || '/admin'
     router.replace({ path: '/portal/security', query: { next } })
   }
 })
+
+const passkeyBusy = ref(false)
+const passkeyError = ref<string | null>(null)
+
+async function usePasskeyStepUp() {
+  passkeyError.value = null
+  passkeyBusy.value = true
+  try {
+    await passkey.stepUp()
+    router.replace(nextPath.value)
+  } catch (e) {
+    if (e instanceof DOMException && (e.name === 'NotAllowedError' || e.name === 'AbortError')) {
+      // User dismissed the browser prompt — not an error.
+    } else if (e instanceof Error && e.message) {
+      passkeyError.value = e.message
+    } else {
+      passkeyError.value = t('totpVerify.errors.passkeyFailed')
+    }
+  } finally {
+    passkeyBusy.value = false
+  }
+}
 
 const code = ref('')
 const useRecovery = ref(false)
@@ -100,7 +128,26 @@ function friendlyError(backendCode: string): string {
         </div>
       </div>
 
-      <form class="mt-5 space-y-4" @submit.prevent="submit">
+      <!-- Passkey step-up (phishing-resistant; one tap) -->
+      <div v-if="showPasskey" class="mt-5 space-y-3">
+        <button
+          type="button"
+          class="flex w-full items-center justify-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+          :disabled="passkeyBusy"
+          @click="usePasskeyStepUp"
+        >
+          <Fingerprint class="h-4 w-4" />
+          {{ passkeyBusy ? t('common.loading') : t('totpVerify.usePasskey') }}
+        </button>
+        <p v-if="passkeyError" class="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{{ passkeyError }}</p>
+        <div v-if="showTotp" class="flex items-center gap-3 text-xs uppercase text-gray-400">
+          <span class="h-px flex-1 bg-gray-200" />
+          {{ t('totpVerify.or') }}
+          <span class="h-px flex-1 bg-gray-200" />
+        </div>
+      </div>
+
+      <form v-if="showTotp" class="mt-5 space-y-4" @submit.prevent="submit">
         <div>
           <label class="block text-sm font-medium text-gray-700" :for="useRecovery ? 'recovery-code' : 'totp-code'">
             {{ useRecovery ? t('totpVerify.recoveryLabel') : t('totpVerify.codeLabel') }}

@@ -13,6 +13,8 @@ interface User {
   roles: string[]
   totpEnabled: boolean
   totpVerifiedAt: Date | null
+  hasPasskey: boolean
+  mfaMethod: string
   preferredLanguage: string | null
   clubDefaultLanguage: string
 }
@@ -27,6 +29,8 @@ interface MeResponse {
   email: string
   totp_enabled: boolean
   totp_verified_at?: string | null
+  has_passkey?: boolean
+  mfa_method?: string
   preferred_language?: string | null
   club_default_language?: string
   fresh_totp_window_ms?: number
@@ -62,17 +66,19 @@ export const useAuthStore = defineStore('auth', () => {
     return user.value.roles.some((r) => ADMIN_ROLES.includes(r))
   })
 
-  // canAccessAdmin: role-eligible AND TOTP enrolled AND verified
-  // within the step-up window. The backend is the hard gate; this
-  // just keeps the nav from showing dead-ends.
+  // canAccessAdmin: role-eligible AND a second factor enrolled (TOTP or a
+  // passkey) AND stepped up within the window. The backend is the hard gate;
+  // this just keeps the nav from showing dead-ends. totpVerifiedAt is stamped
+  // by either factor.
   const canAccessAdmin = computed(() => {
     if (!hasAdminRole.value || !user.value) return false
-    if (!user.value.totpEnabled || !user.value.totpVerifiedAt) return false
+    if ((!user.value.totpEnabled && !user.value.hasPasskey) || !user.value.totpVerifiedAt) return false
     return Date.now() - user.value.totpVerifiedAt.getTime() < TOTP_FRESH_MS
   })
 
   const hasFreshTotp = computed(() => {
-    if (!user.value?.totpEnabled || !user.value.totpVerifiedAt) return false
+    if (!user.value || (!user.value.totpEnabled && !user.value.hasPasskey) || !user.value.totpVerifiedAt)
+      return false
     return Date.now() - user.value.totpVerifiedAt.getTime() < totpActionFreshMs.value
   })
 
@@ -103,6 +109,8 @@ export const useAuthStore = defineStore('auth', () => {
         roles: data.roles,
         totpEnabled: !!data.totp_enabled,
         totpVerifiedAt: data.totp_verified_at ? new Date(data.totp_verified_at) : null,
+        hasPasskey: !!data.has_passkey,
+        mfaMethod: data.mfa_method ?? '',
         preferredLanguage,
         clubDefaultLanguage,
       }

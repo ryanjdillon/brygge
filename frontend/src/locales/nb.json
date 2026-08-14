@@ -2215,6 +2215,22 @@
       "regenerateFailed": "Kunne ikke generere nye koder",
       "freshRequired": "Bekreft 2FA-koden på nytt for å fortsette",
       "codeFormat": "Koden må være 6 siffer"
+    },
+    "passkey": {
+      "title": "Passnøkler",
+      "description": "Bekreft sensitive handlinger med fingeravtrykk, ansikt eller en sikkerhetsnøkkel – i stedet for å taste en kode.",
+      "none": "Ingen passnøkler ennå.",
+      "unnamed": "Passnøkkel",
+      "added": "Lagt til",
+      "addButton": "Legg til passnøkkel",
+      "addFailed": "Kunne ikke legge til passnøkkelen",
+      "removeFailed": "Kunne ikke fjerne passnøkkelen",
+      "renameFailed": "Kunne ikke gi passnøkkelen nytt navn",
+      "freshRequired": "Bekreft 2FA-koden din først, og legg deretter til en passnøkkel.",
+      "nameLabel": "Navn på passnøkkel",
+      "rename": "Gi nytt navn",
+      "remove": "Fjern",
+      "save": "Lagre"
     }
   },
   "totpVerify": {
@@ -2228,11 +2244,14 @@
     "useRecovery": "Bruk en gjenopprettingskode i stedet",
     "useAuthenticator": "Bruk autentiseringsappen i stedet",
     "suggestRecovery": "Mange feilforsøk? Bruk en av gjenopprettingskodene.",
+    "usePasskey": "Bruk en passnøkkel",
+    "or": "eller",
     "errors": {
       "required": "Skriv inn en kode",
       "failed": "Bekreftelsen feilet",
       "invalidCode": "Ugyldig kode — sjekk at klokken på autentiseringsappen er riktig",
-      "invalidRecovery": "Ugyldig eller allerede brukt gjenopprettingskode"
+      "invalidRecovery": "Ugyldig eller allerede brukt gjenopprettingskode",
+      "passkeyFailed": "Bekreftelse med passnøkkel mislyktes"
     }
   },
   "lineItemPicker": {
