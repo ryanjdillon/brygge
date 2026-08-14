@@ -515,7 +515,7 @@ func main() {
 			})
 		}
 
-		// Vipps webhook — public endpoint, authenticated by Authorization header secret.
+		// Vipps webhook — public endpoint, authenticated by HMAC-SHA256 signature.
 		r.Post("/vipps/webhooks", vippsWebhookHandler.Handle)
 
 		r.Group(func(r chi.Router) {
