@@ -59,6 +59,7 @@ let
       subPackages = [
         "cmd/seed"
         "cmd/vipps-cutover"
+        "cmd/vipps-audit"
       ];
       postInstall = ''
         mv $out/bin/seed $out/bin/brygge-seed

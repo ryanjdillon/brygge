@@ -203,6 +203,11 @@
           program = "${pkgs.brygge.tools}/bin/vipps-cutover";
           meta.description = "One-off Vipps per-charge cutover (run with DATABASE_URL set)";
         };
+        apps.vipps-audit = {
+          type = "app";
+          program = "${pkgs.brygge.tools}/bin/vipps-audit";
+          meta.description = "Find Vipps payments not linked to a faktura, pre-purring (DATABASE_URL + CLUB_ID)";
+        };
 
         apps.tf-plan = {
           type = "app";
