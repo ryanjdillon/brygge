@@ -32,7 +32,8 @@ func mockVippsServer(t *testing.T) (*httptest.Server, *atomic.Int32) {
 		json.NewEncoder(w).Encode(map[string]any{
 			"access_token": "tok-" + r.Header.Get("client_id"),
 			"token_type":   "Bearer",
-			"expires_in":   3600,
+			// Vipps sends numeric accesstoken fields as JSON strings.
+			"expires_in": "3600",
 		})
 	})
 
@@ -57,6 +58,28 @@ func mockVippsServer(t *testing.T) (*httptest.Server, *atomic.Int32) {
 
 	mux.HandleFunc("POST /epayment/v1/payments/", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
+	})
+
+	mux.HandleFunc("POST /webhooks/v1/webhooks", func(w http.ResponseWriter, r *http.Request) {
+		var req vipps.RegisterWebhookRequest
+		json.NewDecoder(r.Body).Decode(&req)
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(map[string]any{
+			"id":     "wh-" + req.URL,
+			"secret": "generated-secret",
+		})
+	})
+
+	mux.HandleFunc("GET /webhooks/v1/webhooks", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{
+			"webhooks": []map[string]any{
+				{"id": "wh-1", "url": "https://example.com/hook", "events": []string{"epayments.payment.captured.v1"}},
+			},
+		})
+	})
+
+	mux.HandleFunc("DELETE /webhooks/v1/webhooks/", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
 	})
 
 	srv := httptest.NewServer(mux)
