@@ -127,6 +127,10 @@ totp:
 vipps-verify:
     cd backend && go run ./cmd/vipps-verify
 
+# Register/list/delete the Vipps ePayment webhook (register [url] | list | delete <id>)
+vipps-webhook-register *ARGS:
+    cd backend && go run ./cmd/vipps-webhook-register {{ARGS}}
+
 # Build Go binary with embedded Vue dist
 build: build-frontend
     cp -r frontend/dist/* backend/internal/web/dist/
