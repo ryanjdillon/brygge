@@ -12,7 +12,7 @@ func (h *VippsWebhookHandler) dispatch(ctx context.Context, clubID string, evt *
 	switch evt.Name {
 	case vipps.EventPaymentCaptured:
 		h.onCaptured(ctx, clubID, evt)
-	case vipps.EventPaymentCancelled, vipps.EventPaymentAborted, vipps.EventPaymentExpired:
+	case vipps.EventPaymentCancelled, vipps.EventPaymentAborted, vipps.EventPaymentExpired, vipps.EventPaymentTerminated:
 		h.onTerminated(ctx, clubID, evt)
 	}
 }

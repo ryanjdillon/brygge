@@ -12,8 +12,8 @@ import (
 )
 
 // VippsWebhookHandler receives ePayment lifecycle events from Vipps.
-// The endpoint is unauthenticated (no session); authorization is via the
-// shared webhook secret in the Authorization header.
+// The endpoint carries no session; each request is authenticated by verifying
+// the Vipps HMAC-SHA256 signature over the body against the registration secret.
 type VippsWebhookHandler struct {
 	db     *pgxpool.Pool
 	cfg    *config.Config
