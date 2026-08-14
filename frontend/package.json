@@ -15,6 +15,7 @@
     "format": "prettier --write src/"
   },
   "dependencies": {
+    "@simplewebauthn/browser": "^13.3.0",
     "@tailwindcss/vite": "^4",
     "@tanstack/vue-query": "^5",
     "@tiptap/extension-image": "^3.27.1",
