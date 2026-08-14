@@ -12,13 +12,19 @@ type Amount struct {
 	Value    int64  `json:"value"` // øre (1 NOK = 100 øre)
 }
 
+// PaymentMethod selects how the payer pays. The ePayment API requires it.
+type PaymentMethod struct {
+	Type string `json:"type"` // WALLET | CARD
+}
+
 // CreatePaymentRequest is the body for POST /epayment/v1/payments.
 type CreatePaymentRequest struct {
-	Amount             Amount `json:"amount"`
-	Reference          string `json:"reference"`
-	ReturnURL          string `json:"returnUrl"`
-	PaymentDescription string `json:"paymentDescription,omitempty"`
-	UserFlow           string `json:"userFlow,omitempty"` // WEB_REDIRECT | PUSH_MESSAGE | QR | NATIVE_REDIRECT
+	Amount             Amount        `json:"amount"`
+	PaymentMethod      PaymentMethod `json:"paymentMethod"`
+	Reference          string        `json:"reference"`
+	ReturnURL          string        `json:"returnUrl"`
+	PaymentDescription string        `json:"paymentDescription,omitempty"`
+	UserFlow           string        `json:"userFlow,omitempty"` // WEB_REDIRECT | PUSH_MESSAGE | QR | NATIVE_REDIRECT
 }
 
 // PaymentResponse is the body returned by CreatePayment.
@@ -47,6 +53,9 @@ func (c *Client) CreatePayment(ctx context.Context, idempotencyKey string, req C
 	}
 	if req.UserFlow == "" {
 		req.UserFlow = "WEB_REDIRECT"
+	}
+	if req.PaymentMethod.Type == "" {
+		req.PaymentMethod.Type = "WALLET"
 	}
 	var out PaymentResponse
 	if err := c.do(ctx, http.MethodPost, "/epayment/v1/payments", idempotencyKey, req, &out); err != nil {

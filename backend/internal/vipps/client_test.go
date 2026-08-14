@@ -40,6 +40,12 @@ func mockVippsServer(t *testing.T) (*httptest.Server, *atomic.Int32) {
 	mux.HandleFunc("POST /epayment/v1/payments", func(w http.ResponseWriter, r *http.Request) {
 		var req vipps.CreatePaymentRequest
 		json.NewDecoder(r.Body).Decode(&req)
+		// The ePayment API rejects a create without paymentMethod (400).
+		if req.PaymentMethod.Type == "" {
+			t.Errorf("CreatePayment sent no paymentMethod.type")
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(map[string]string{
 			"reference":   req.Reference,
