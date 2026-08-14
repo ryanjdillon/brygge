@@ -7,11 +7,32 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/rs/zerolog"
 )
+
+// vippsInt tolerates Vipps returning numeric fields as JSON strings — the
+// Access Token API sends "expires_in": "3599" (quoted), not a bare number —
+// while still accepting a plain JSON number.
+type vippsInt int
+
+func (v *vippsInt) UnmarshalJSON(b []byte) error {
+	s := strings.Trim(string(b), `"`)
+	if s == "" || s == "null" {
+		*v = 0
+		return nil
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return fmt.Errorf("vippsInt %q: %w", s, err)
+	}
+	*v = vippsInt(n)
+	return nil
+}
 
 // Client is a reusable Vipps ePayment API client. It handles access-token
 // fetch + caching so callers never need to manage credentials directly.
@@ -135,8 +156,8 @@ func (c *Client) accessToken(ctx context.Context) (string, error) {
 	}
 
 	var body struct {
-		AccessToken string `json:"access_token"`
-		ExpiresIn   int    `json:"expires_in"`
+		AccessToken string   `json:"access_token"`
+		ExpiresIn   vippsInt `json:"expires_in"`
 	}
 	if err := json.Unmarshal(raw, &body); err != nil {
 		return "", fmt.Errorf("vipps access token decode: %w", err)
