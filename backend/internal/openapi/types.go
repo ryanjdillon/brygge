@@ -854,6 +854,36 @@ type FaqListResponse struct {
 	Items []FaqItem `json:"items" doc:"FAQ items"`
 }
 
+// --- Passkeys (WebAuthn) ---
+
+type PasskeyInfo struct {
+	ID             string     `json:"id" doc:"Credential UUID"`
+	Name           string     `json:"name" doc:"User-facing label"`
+	Transports     []string   `json:"transports" doc:"Authenticator transports (usb, nfc, ble, internal, hybrid)"`
+	BackupEligible bool       `json:"backup_eligible" doc:"Whether the credential can be backed up / synced across devices"`
+	BackupState    bool       `json:"backup_state" doc:"Whether the credential has been backed up / synced"`
+	CreatedAt      time.Time  `json:"created_at" doc:"When the passkey was registered"`
+	LastUsedAt     *time.Time `json:"last_used_at,omitempty" doc:"When the passkey was last used"`
+}
+
+type PasskeyListResponse struct {
+	Passkeys []PasskeyInfo `json:"passkeys" doc:"The member's registered passkeys"`
+}
+
+type PasskeyRenameRequest struct {
+	Name string `json:"name" doc:"New label for the passkey"`
+}
+
+type PasskeyAdminResetResponse struct {
+	Message string `json:"message"`
+	Removed int    `json:"removed" doc:"Number of passkeys removed"`
+}
+
+// PasskeyCeremony is the opaque WebAuthn JSON exchanged during begin/finish —
+// creation/assertion options or the authenticator's response. The browser
+// handles it via @simplewebauthn/browser; documented here as a free-form object.
+type PasskeyCeremony map[string]any
+
 type FaqWriteRequest struct {
 	GroupKey  string  `json:"group_key" enum:"newcomers,members,deposit,general" doc:"Section key"`
 	Question  string  `json:"question" doc:"Question text"`

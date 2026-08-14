@@ -20,6 +20,7 @@ func stub[I, O any]() func(context.Context, *I) (*O, error) {
 func RegisterAllOperations(api huma.API) {
 	registerHealthOps(api)
 	registerAuthOps(api)
+	registerPasskeyOps(api)
 	registerPublicContentOps(api)
 	registerMapOps(api)
 	registerBookingOps(api)
@@ -95,6 +96,80 @@ func registerAuthOps(api huma.API) {
 		Tags:        []string{"Auth"},
 		Summary:     "Get current authenticated user",
 	}, stub[struct{}, struct{ Body UserProfile }]())
+}
+
+func registerPasskeyOps(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "list-passkeys",
+		Method:      http.MethodGet,
+		Path:        "/api/v1/auth/passkeys",
+		Tags:        []string{"Passkeys"},
+		Summary:     "List the member's registered passkeys",
+	}, stub[struct{}, struct{ Body PasskeyListResponse }]())
+
+	huma.Register(api, huma.Operation{
+		OperationID: "rename-passkey",
+		Method:      http.MethodPatch,
+		Path:        "/api/v1/auth/passkeys/{id}",
+		Tags:        []string{"Passkeys"},
+		Summary:     "Rename a passkey",
+	}, stub[struct {
+		ID   string `path:"id"`
+		Body PasskeyRenameRequest
+	}, struct{ Body StatusResponse }]())
+
+	huma.Register(api, huma.Operation{
+		OperationID: "delete-passkey",
+		Method:      http.MethodDelete,
+		Path:        "/api/v1/auth/passkeys/{id}",
+		Tags:        []string{"Passkeys"},
+		Summary:     "Remove a passkey",
+	}, stub[struct {
+		ID string `path:"id"`
+	}, struct{ Body StatusResponse }]())
+
+	// Ceremony endpoints exchange opaque WebAuthn JSON (@simplewebauthn/browser).
+	huma.Register(api, huma.Operation{
+		OperationID: "passkey-register-begin",
+		Method:      http.MethodPost,
+		Path:        "/api/v1/auth/passkeys/register/begin",
+		Tags:        []string{"Passkeys"},
+		Summary:     "Begin passkey registration — returns creation options",
+	}, stub[struct{}, struct{ Body PasskeyCeremony }]())
+
+	huma.Register(api, huma.Operation{
+		OperationID: "passkey-register-finish",
+		Method:      http.MethodPost,
+		Path:        "/api/v1/auth/passkeys/register/finish",
+		Tags:        []string{"Passkeys"},
+		Summary:     "Finish passkey registration — verify + persist the credential",
+	}, stub[struct{ Body PasskeyCeremony }, struct{ Body StatusResponse }]())
+
+	huma.Register(api, huma.Operation{
+		OperationID: "passkey-stepup-begin",
+		Method:      http.MethodPost,
+		Path:        "/api/v1/auth/passkeys/step-up/begin",
+		Tags:        []string{"Passkeys"},
+		Summary:     "Begin passkey step-up — returns assertion options",
+	}, stub[struct{}, struct{ Body PasskeyCeremony }]())
+
+	huma.Register(api, huma.Operation{
+		OperationID: "passkey-stepup-finish",
+		Method:      http.MethodPost,
+		Path:        "/api/v1/auth/passkeys/step-up/finish",
+		Tags:        []string{"Passkeys"},
+		Summary:     "Finish passkey step-up — satisfies the admin gate",
+	}, stub[struct{ Body PasskeyCeremony }, struct{ Body StatusResponse }]())
+
+	huma.Register(api, huma.Operation{
+		OperationID: "admin-reset-passkeys",
+		Method:      http.MethodDelete,
+		Path:        "/api/v1/admin/users/{userID}/passkeys",
+		Tags:        []string{"Passkeys"},
+		Summary:     "Admin: remove all of a member's passkeys (recovery backstop)",
+	}, stub[struct {
+		UserID string `path:"userID"`
+	}, struct{ Body PasskeyAdminResetResponse }]())
 }
 
 func registerPublicContentOps(api huma.API) {
@@ -678,7 +753,9 @@ func registerNotificationOps(api huma.API) {
 		Tags:        []string{"Notifications"},
 		Summary:     "Get notification preferences",
 		Security:    BearerSecurity,
-	}, stub[struct{}, struct{ Body NotificationPreferencesResponse }]())
+	}, stub[struct{}, struct {
+		Body NotificationPreferencesResponse
+	}]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "update-notification-preferences",
