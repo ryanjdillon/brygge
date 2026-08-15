@@ -39,7 +39,7 @@ func TestInvoiceBodyWithVipps(t *testing.T) {
 	url := "https://pay.vipps.no/v2/?token=xyz&foo=bar"
 	body := InvoiceBody("nb", "Ryan Dillon", "Klokkarvik Båtlag", 285,
 		time.Date(2026, 9, 5, 0, 0, 0, 0, time.UTC), 1.0, "000002850028", "3470.05.02793",
-		url, time.Date(2026, 9, 19, 0, 0, 0, 0, time.UTC))
+		url)
 	mustNoRawTemplate(t, "invoice", body)
 	// The button href must carry the exact URL (template.URL, not filtered).
 	if !strings.Contains(body, `href="https://pay.vipps.no/v2/?token=xyz&amp;foo=bar"`) {
@@ -51,9 +51,6 @@ func TestInvoiceBodyWithVipps(t *testing.T) {
 	if !strings.Contains(body, "background:#ff5b24") {
 		t.Error("invoice: Vipps brand colour missing")
 	}
-	if !strings.Contains(body, "Lenken er gyldig til 19.09.2026") {
-		t.Error("invoice: expiry line missing")
-	}
 	if !strings.Contains(body, "000002850028") {
 		t.Error("invoice: KID missing from details box")
 	}
@@ -62,7 +59,7 @@ func TestInvoiceBodyWithVipps(t *testing.T) {
 func TestInvoiceBodyWithoutVipps(t *testing.T) {
 	body := InvoiceBody("nb", "Ryan Dillon", "Klokkarvik Båtlag", 285,
 		time.Date(2026, 9, 5, 0, 0, 0, 0, time.UTC), 1.0, "000002850028", "3470.05.02793",
-		"", time.Time{})
+		"")
 	mustNoRawTemplate(t, "invoice-no-vipps", body)
 	if strings.Contains(body, "Betal med Vipps") {
 		t.Error("invoice: Vipps button rendered despite empty URL")
@@ -73,7 +70,7 @@ func TestReminderBodyWithVipps(t *testing.T) {
 	url := "https://pay.vipps.no/v2/?token=abc"
 	body := InvoiceReminderBody("nb", "Ryan Dillon", "Klokkarvik Båtlag", 285,
 		time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC), 1.0, "000002850028", "3470.05.02793",
-		url, time.Date(2026, 9, 19, 0, 0, 0, 0, time.UTC))
+		url)
 	mustNoRawTemplate(t, "reminder", body)
 	if !strings.Contains(body, ">Betal med Vipps</a>") || !strings.Contains(body, "background:#ff5b24") {
 		t.Error("reminder: Vipps button missing")

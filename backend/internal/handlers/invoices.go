@@ -487,11 +487,10 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 		// Opt-in "Betal med Vipps" link. Non-fatal: a nil URL just renders the
 		// KID-only email.
 		var vippsURL string
-		var vippsExpiry time.Time
 		if req.VippsPaymentLink {
-			vippsURL, vippsExpiry = h.ensureVippsPayment(ctx, claims.ClubID, invoiceID, true)
+			vippsURL = h.orderPayURL(h.ensureFakturaOrderToken(ctx, claims.ClubID, invoiceID, true))
 		}
-		htmlBody := email.InvoiceBody(locale, deliverName, clubName, invoiceSeq, dueDate, total, kid, bankAccount, vippsURL, vippsExpiry)
+		htmlBody := email.InvoiceBody(locale, deliverName, clubName, invoiceSeq, dueDate, total, kid, bankAccount, vippsURL)
 		if err := h.email.SendWithAttachment(ctx, deliverTo, subject, htmlBody, filename, pdfData); err != nil {
 			h.log.Error().Err(err).Str("email", deliverTo).Msg("failed to send invoice email")
 		} else {
@@ -1104,8 +1103,8 @@ func (h *InvoiceHandler) HandleSendInvoice(w http.ResponseWriter, r *http.Reques
 	// A "Betal med Vipps" link if the faktura opted in at creation (BRY-8).
 	// This is the send moment for a draft, so mint the payment now (amount is
 	// final); a still-live link is reused, an expired one refreshed.
-	vippsURL, vippsExpiry := h.ensureVippsPayment(ctx, claims.ClubID, invoiceID, vippsOptIn)
-	htmlBody := email.InvoiceBody(locale, memberName, clubName, invoiceNumber, dueDate, total, kid, bankAccount, vippsURL, vippsExpiry)
+	vippsURL := h.orderPayURL(h.ensureFakturaOrderToken(ctx, claims.ClubID, invoiceID, vippsOptIn))
+	htmlBody := email.InvoiceBody(locale, memberName, clubName, invoiceNumber, dueDate, total, kid, bankAccount, vippsURL)
 	filename := buildInvoiceFilename(invoiceNumber, memberLast, memberFirst, fiscalYear)
 
 	// Stamp sent_at BEFORE handing the message to the mail server, then
@@ -1244,8 +1243,8 @@ func (h *InvoiceHandler) HandleResendInvoice(w http.ResponseWriter, r *http.Requ
 
 	locale := email.DetectLocale(r)
 	subject := email.InvoiceSubject(locale, clubName, invoiceNumber)
-	vippsURL, vippsExpiry := h.ensureVippsPayment(ctx, claims.ClubID, invoiceID, false)
-	htmlBody := email.InvoiceBody(locale, memberName, clubName, invoiceNumber, dueDate, total, kid, bankAccount, vippsURL, vippsExpiry)
+	vippsURL := h.orderPayURL(h.ensureFakturaOrderToken(ctx, claims.ClubID, invoiceID, false))
+	htmlBody := email.InvoiceBody(locale, memberName, clubName, invoiceNumber, dueDate, total, kid, bankAccount, vippsURL)
 	filename := buildInvoiceFilename(invoiceNumber, memberLast, memberFirst, fiscalYear)
 
 	if err := h.email.SendWithAttachment(ctx, deliverTo, subject, htmlBody, filename, pdfBytesResend); err != nil {

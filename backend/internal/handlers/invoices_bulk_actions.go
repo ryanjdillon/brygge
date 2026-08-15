@@ -251,11 +251,10 @@ func (h *InvoiceHandler) sendOneReminder(
 	// out — reminders chase stragglers. Non-fatal: an empty URL just renders
 	// the KID-only reminder.
 	var vippsURL string
-	var vippsExpiry time.Time
 	if includeVipps {
-		vippsURL, vippsExpiry = h.ensureVippsPayment(ctx, clubID, invoiceID, true)
+		vippsURL = h.orderPayURL(h.ensureFakturaOrderToken(ctx, clubID, invoiceID, true))
 	}
-	body := email.InvoiceReminderBody(locale, memberName, clubName, invoiceNumber, dueDate, total, kid, defaultBank, vippsURL, vippsExpiry)
+	body := email.InvoiceReminderBody(locale, memberName, clubName, invoiceNumber, dueDate, total, kid, defaultBank, vippsURL)
 	filename := buildSimpleReminderFilename(invoiceNumber)
 	if err := h.email.SendWithAttachment(ctx, deliverTo, subject, body, filename, pdfData); err != nil {
 		return err

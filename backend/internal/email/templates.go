@@ -322,16 +322,12 @@ func InvoiceSubject(_, clubName string, invoiceNumber int) string {
 // memberName, dueDate, total, kid and bankAccount are interpolated
 // into the Norwegian copy below. The PDF is attached separately by
 // the caller.
-func InvoiceBody(_ /*locale*/, memberName, clubName string, invoiceNumber int, dueDate time.Time, total float64, kid, bankAccount, vippsURL string, vippsExpiry time.Time) string {
+func InvoiceBody(_ /*locale*/, memberName, clubName string, invoiceNumber int, dueDate time.Time, total float64, kid, bankAccount, vippsURL string) string {
 	if clubName == "" {
 		clubName = "klubben"
 	}
 	if memberName == "" {
 		memberName = "medlem"
-	}
-	var vippsExpiryStr string
-	if vippsURL != "" && !vippsExpiry.IsZero() {
-		vippsExpiryStr = vippsExpiry.Format("02.01.2006")
 	}
 	data := struct {
 		Club          string
@@ -342,7 +338,6 @@ func InvoiceBody(_ /*locale*/, memberName, clubName string, invoiceNumber int, d
 		KID           string
 		BankAccount   string
 		VippsURL      template.URL
-		VippsExpiry   string
 	}{
 		Club:          clubName,
 		Member:        memberName,
@@ -352,7 +347,6 @@ func InvoiceBody(_ /*locale*/, memberName, clubName string, invoiceNumber int, d
 		KID:           kid,
 		BankAccount:   bankAccount,
 		VippsURL:      template.URL(vippsURL),
-		VippsExpiry:   vippsExpiryStr,
 	}
 	var buf bytes.Buffer
 	if err := invoiceHTMLTpl.ExecuteTemplate(&buf, "base", data); err != nil {
@@ -383,7 +377,7 @@ func InvoiceReminderSubject(_, clubName string, invoiceNumber int) string {
 // the invoice is past due (or pending), restates the payment details,
 // and notes the PDF copy is attached. The PDF is attached separately
 // by the caller — same as InvoiceBody.
-func InvoiceReminderBody(_ /*locale*/, memberName, clubName string, invoiceNumber int, dueDate time.Time, total float64, kid, bankAccount, vippsURL string, vippsExpiry time.Time) string {
+func InvoiceReminderBody(_ /*locale*/, memberName, clubName string, invoiceNumber int, dueDate time.Time, total float64, kid, bankAccount, vippsURL string) string {
 	if clubName == "" {
 		clubName = "klubben"
 	}
@@ -391,10 +385,6 @@ func InvoiceReminderBody(_ /*locale*/, memberName, clubName string, invoiceNumbe
 		memberName = "medlem"
 	}
 	overdue := time.Now().After(dueDate)
-	var vippsExpiryStr string
-	if vippsURL != "" && !vippsExpiry.IsZero() {
-		vippsExpiryStr = vippsExpiry.Format("02.01.2006")
-	}
 	data := struct {
 		Club          string
 		Member        string
@@ -405,7 +395,6 @@ func InvoiceReminderBody(_ /*locale*/, memberName, clubName string, invoiceNumbe
 		BankAccount   string
 		Overdue       bool
 		VippsURL      template.URL
-		VippsExpiry   string
 	}{
 		Club:          clubName,
 		Member:        memberName,
@@ -416,7 +405,6 @@ func InvoiceReminderBody(_ /*locale*/, memberName, clubName string, invoiceNumbe
 		BankAccount:   bankAccount,
 		Overdue:       overdue,
 		VippsURL:      template.URL(vippsURL),
-		VippsExpiry:   vippsExpiryStr,
 	}
 	var buf bytes.Buffer
 	if err := reminderHTMLTpl.ExecuteTemplate(&buf, "base", data); err != nil {
@@ -464,7 +452,6 @@ var reminderHTMLTpl = template.Must(template.Must(sharedEmail.Clone()).Parse(`{{
 {{template "invoiceDetails" .}}
 {{if .VippsURL}}
 {{template "button" (dict "URL" .VippsURL "Label" "Betal med Vipps" "BG" "#ff5b24")}}
-              <p style="margin:0 0 20px 0;text-align:center;font-size:12px;color:#64748b;">Lenken er gyldig til {{.VippsExpiry}}.</p>
 {{end}}
               <p style="margin:0 0 8px 0;font-size:13px;color:#64748b;">Hvis betalingen allerede er sendt, kan du se bort fra denne påminnelsen.</p>
               <p style="margin:0;font-size:13px;color:#64748b;">Spørsmål kan sendes til kasserer ved å svare på denne e-posten.</p>{{end}}`))
@@ -475,7 +462,6 @@ var invoiceHTMLTpl = template.Must(template.Must(sharedEmail.Clone()).Parse(`{{d
 {{template "invoiceDetails" .}}
 {{if .VippsURL}}
 {{template "button" (dict "URL" .VippsURL "Label" "Betal med Vipps" "BG" "#ff5b24")}}
-              <p style="margin:0 0 20px 0;text-align:center;font-size:12px;color:#64748b;">Lenken er gyldig til {{.VippsExpiry}}.</p>
 {{end}}
               <p style="margin:0 0 8px 0;font-size:13px;color:#64748b;">Bruk KID-nummeret når du betaler i nettbanken slik at innbetalingen registreres automatisk.</p>
               <p style="margin:0;font-size:13px;color:#64748b;">Spørsmål om fakturaen kan sendes til kasserer ved å svare på denne e-posten.</p>{{end}}`))

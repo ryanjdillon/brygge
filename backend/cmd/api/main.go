@@ -393,6 +393,9 @@ func main() {
 			r.Post("/contact", contactHandler.HandleContactForm)
 			r.Get("/unsubscribe", emailPrefsHandler.HandleUnsubscribeRedirect)
 			r.Post("/unsubscribe", emailPrefsHandler.HandleUnsubscribeOneClick)
+			// Public "Betal med Vipps" link from faktura emails — mints a fresh
+			// ePayment on click and redirects to Vipps (BRY-8).
+			r.Get("/betal/{token}", invoiceHandler.HandleOrderPayRedirect)
 			r.Get("/club", func(w http.ResponseWriter, r *http.Request) {
 				// Public club info — name/slug/domain come from the static
 				// deploy config so the response is available even before any
