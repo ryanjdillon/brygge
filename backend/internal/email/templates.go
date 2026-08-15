@@ -450,7 +450,9 @@ var reminderHTMLTpl = template.Must(template.Must(sharedEmail.Clone()).Parse(`{{
               <p style="margin:0 0 20px 0;">Vi minner om forfallet under. PDF-kopi følger som vedlegg.</p>
               {{end}}
 {{template "invoiceDetails" .}}
+              <p style="margin:0 0 12px 0;font-size:13px;color:#334155;"><strong>Vi foretrekker bankoverføring med KID</strong> — det koster laget ingenting. Bruk KID-nummeret når du betaler i nettbanken.</p>
 {{if .VippsURL}}
+              <p style="margin:0 0 4px 0;font-size:13px;color:#64748b;">Du kan også betale med Vipps om du ønsker det:</p>
 {{template "button" (dict "URL" .VippsURL "Label" "Betal med Vipps" "BG" "#ff5b24")}}
 {{end}}
               <p style="margin:0 0 8px 0;font-size:13px;color:#64748b;">Hvis betalingen allerede er sendt, kan du se bort fra denne påminnelsen.</p>
@@ -460,8 +462,9 @@ var invoiceHTMLTpl = template.Must(template.Must(sharedEmail.Clone()).Parse(`{{d
               <p style="margin:0 0 16px 0;">Hei {{.Member}},</p>
               <p style="margin:0 0 20px 0;">Du har mottatt en ny faktura fra {{.Club}}. Den fullstendige fakturaen ligger som PDF-vedlegg til denne e-posten.</p>
 {{template "invoiceDetails" .}}
+              <p style="margin:0 0 12px 0;font-size:13px;color:#334155;"><strong>Vi foretrekker bankoverføring med KID</strong> — det koster laget ingenting. Bruk KID-nummeret når du betaler i nettbanken, så registreres innbetalingen automatisk.</p>
 {{if .VippsURL}}
+              <p style="margin:0 0 4px 0;font-size:13px;color:#64748b;">Du kan også betale med Vipps om du ønsker det:</p>
 {{template "button" (dict "URL" .VippsURL "Label" "Betal med Vipps" "BG" "#ff5b24")}}
 {{end}}
-              <p style="margin:0 0 8px 0;font-size:13px;color:#64748b;">Bruk KID-nummeret når du betaler i nettbanken slik at innbetalingen registreres automatisk.</p>
               <p style="margin:0;font-size:13px;color:#64748b;">Spørsmål om fakturaen kan sendes til kasserer ved å svare på denne e-posten.</p>{{end}}`))
