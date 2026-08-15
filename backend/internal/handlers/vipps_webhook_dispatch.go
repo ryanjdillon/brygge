@@ -47,18 +47,24 @@ func (h *VippsWebhookHandler) onCaptured(ctx context.Context, clubID string, evt
 		h.log.Error().Err(err).Str("reference", evt.Reference).Msg("webhook captured: order update failed")
 	}
 
-	// Faktura payment links (BRY-8): mark the invoice paid. No GL entry — the
-	// journal posting for Vipps money is owned by settlement reconciliation
-	// (BRY-256), so posting here too would double-count.
-	if invoiceID, ok := h.invoiceByReference(ctx, clubID, evt.Reference); ok && h.accounting != nil {
-		paidAt := evt.Timestamp
-		if paidAt.IsZero() {
-			paidAt = time.Now()
-		}
-		if err := h.accounting.MarkInvoicePaidFromVipps(ctx, clubID, invoiceID, paidAt); err != nil {
-			h.log.Error().Err(err).Str("reference", evt.Reference).Str("invoice_id", invoiceID).
-				Msg("webhook captured: mark invoice paid failed")
-		}
+	// Faktura payment links (BRY-8): record a soft "Vipps payment received"
+	// marker only — deliberately NOT payment_id, and no GL entry. During the
+	// CSV overlap the settlement import stays the single source of the paid
+	// status and the journal posting, and it matches only invoices with
+	// payment_id IS NULL; setting payment_id here would orphan that
+	// reconciliation. The marker just drives a realtime "mottatt, venter
+	// oppgjør" indicator until settlement clears it. API-primary GL ownership
+	// is BRY-256, gated on BRY-4 (Report API settlements).
+	paidAt := evt.Timestamp
+	if paidAt.IsZero() {
+		paidAt = time.Now()
+	}
+	if _, err := h.db.Exec(ctx,
+		`UPDATE invoices SET vipps_paid_at = $3
+		 WHERE club_id = $1 AND vipps_payment_reference = $2 AND vipps_paid_at IS NULL`,
+		clubID, evt.Reference, paidAt,
+	); err != nil {
+		h.log.Error().Err(err).Str("reference", evt.Reference).Msg("webhook captured: invoice marker failed")
 	}
 }
 

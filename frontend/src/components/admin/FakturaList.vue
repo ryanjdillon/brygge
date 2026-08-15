@@ -28,6 +28,7 @@ interface Row {
   last_reminder_at: string | null
   status: string
   paid: boolean
+  vipps_paid_at: string | null
 }
 
 type PaidStatus = 'paid' | 'waiting' | 'past_due'
@@ -721,6 +722,13 @@ defineExpose({ load })
               <td class="px-3 py-2 text-sm">
                 <div class="font-medium text-gray-900">{{ d.member_name }}</div>
                 <div class="text-xs text-gray-500">{{ d.member_email }}</div>
+                <span
+                  v-if="status === 'sent' && d.vipps_paid_at && !d.paid"
+                  class="mt-1 inline-flex items-center rounded-full bg-orange-50 px-1.5 py-0.5 text-[10px] font-medium text-orange-700 ring-1 ring-orange-200"
+                  :title="t('admin.faktura.sent.vippsReceivedTitle')"
+                >
+                  {{ t('admin.faktura.sent.vippsReceived') }}
+                </span>
               </td>
               <td class="px-3 py-2 text-sm text-gray-700">{{ d.price_item_name || d.description || '—' }}</td>
               <td class="whitespace-nowrap px-3 py-2 text-sm text-gray-600">{{ d.fiscal_year ?? '—' }}</td>

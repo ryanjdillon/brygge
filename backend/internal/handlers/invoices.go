@@ -928,7 +928,8 @@ func (h *InvoiceHandler) HandleListInvoices(w http.ResponseWriter, r *http.Reque
 		           WHERE club_id = i.club_id
 		             AND resource  = 'invoice'
 		             AND resource_id = i.id::text
-		             AND action = 'invoice.reminded') AS last_reminder_at
+		             AND action = 'invoice.reminded') AS last_reminder_at,
+		        i.vipps_paid_at
 		   FROM invoices i
 		   LEFT JOIN users u ON u.id = i.user_id
 		   LEFT JOIN price_items pi ON pi.id = i.price_item_id
@@ -950,6 +951,7 @@ func (h *InvoiceHandler) HandleListInvoices(w http.ResponseWriter, r *http.Reque
 		Status         string     `json:"status"`
 		Paid           bool       `json:"paid"`
 		LastReminderAt *time.Time `json:"last_reminder_at"`
+		VippsPaidAt    *time.Time `json:"vipps_paid_at"`
 	}
 	out := make([]listRow, 0)
 	for rows.Next() {
@@ -959,7 +961,7 @@ func (h *InvoiceHandler) HandleListInvoices(w http.ResponseWriter, r *http.Reque
 			&d.MemberName, &d.MemberEmail,
 			&d.TotalAmount, &issue, &due,
 			&d.PriceItemName, &d.FiscalYear, &d.Description, &d.CreatedAt,
-			&d.SentAt, &d.Status, &d.Paid, &d.LastReminderAt); err != nil {
+			&d.SentAt, &d.Status, &d.Paid, &d.LastReminderAt, &d.VippsPaidAt); err != nil {
 			h.log.Error().Err(err).Msg("scan invoice row")
 			Error(w, http.StatusInternalServerError, "internal error")
 			return

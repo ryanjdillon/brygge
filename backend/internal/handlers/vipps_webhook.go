@@ -7,7 +7,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 
-	"github.com/brygge-klubb/brygge/internal/accounting"
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/vipps"
 )
@@ -16,20 +15,18 @@ import (
 // The endpoint carries no session; each request is authenticated by verifying
 // the Vipps HMAC-SHA256 signature over the body against the registration secret.
 type VippsWebhookHandler struct {
-	db         *pgxpool.Pool
-	cfg        *config.Config
-	accounting *accounting.Service
-	vipps      *vipps.Client // nil when the instance has no Vipps credentials
-	log        zerolog.Logger
+	db    *pgxpool.Pool
+	cfg   *config.Config
+	vipps *vipps.Client // nil when the instance has no Vipps credentials
+	log   zerolog.Logger
 }
 
-func NewVippsWebhookHandler(db *pgxpool.Pool, cfg *config.Config, accountingSvc *accounting.Service, vippsClient *vipps.Client, log zerolog.Logger) *VippsWebhookHandler {
+func NewVippsWebhookHandler(db *pgxpool.Pool, cfg *config.Config, vippsClient *vipps.Client, log zerolog.Logger) *VippsWebhookHandler {
 	return &VippsWebhookHandler{
-		db:         db,
-		cfg:        cfg,
-		accounting: accountingSvc,
-		vipps:      vippsClient,
-		log:        log.With().Str("handler", "vipps_webhook").Logger(),
+		db:    db,
+		cfg:   cfg,
+		vipps: vippsClient,
+		log:   log.With().Str("handler", "vipps_webhook").Logger(),
 	}
 }
 
