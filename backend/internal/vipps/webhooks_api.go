@@ -30,27 +30,22 @@ type listWebhooksResponse struct {
 	Webhooks []Webhook `json:"webhooks"`
 }
 
-// registrationEvents returns the ePayment events to subscribe to, in the
-// ".v1"-suffixed form the Webhooks API expects at registration. The delivered
-// payload's `name` field uses the un-suffixed names (EventPayment*); confirm
-// the exact delivered form against the Vipps test environment before relying on
-// dispatch matching, since the two representations differ.
+// registrationEvents returns the ePayment event TYPES to subscribe to, in the
+// ".v1"-suffixed form the Webhooks API requires at registration. This is a
+// distinct representation from the delivered payload's `name` field, which
+// carries the bare uppercase state (EventPayment*) — do not derive one from the
+// other. See https://developer.vippsmobilepay.com/docs/APIs/webhooks-api/events/
 func registrationEvents() []string {
-	base := []string{
-		EventPaymentCreated,
-		EventPaymentAuthorized,
-		EventPaymentCaptured,
-		EventPaymentCancelled,
-		EventPaymentAborted,
-		EventPaymentExpired,
-		EventPaymentTerminated,
-		EventPaymentRefunded,
+	return []string{
+		"epayments.payment.created.v1",
+		"epayments.payment.authorized.v1",
+		"epayments.payment.captured.v1",
+		"epayments.payment.cancelled.v1",
+		"epayments.payment.aborted.v1",
+		"epayments.payment.expired.v1",
+		"epayments.payment.terminated.v1",
+		"epayments.payment.refunded.v1",
 	}
-	out := make([]string, len(base))
-	for i, e := range base {
-		out[i] = e + ".v1"
-	}
-	return out
 }
 
 // RegisterWebhook registers callbackURL to receive this merchant's ePayment

@@ -13,21 +13,21 @@ import (
 	"time"
 )
 
-// Event names sent by Vipps ePayment webhooks, in the un-suffixed base form.
-// The Webhooks API registers these with a ".v1" suffix (see registrationEvents);
-// the delivered payload's `name` may or may not carry that suffix — confirm
-// against a live test delivery before matching on it in dispatch. The set is
-// the ePayment catalog:
-// https://developer.vippsmobilepay.com/docs/APIs/webhooks-api/events/
+// Event names as they appear in the delivered webhook payload's `name` field:
+// bare uppercase state names. NOTE these differ from the ".v1"-suffixed event
+// TYPES used to register a webhook (see registrationEvents) — the payload does
+// NOT echo the dotted registration type. Confirmed against a live test delivery
+// (name="AUTHORIZED") and
+// https://developer.vippsmobilepay.com/docs/APIs/epayment-api/api-guide/webhooks/
 const (
-	EventPaymentCreated    = "epayments.payment.created"
-	EventPaymentAuthorized = "epayments.payment.authorized"
-	EventPaymentCaptured   = "epayments.payment.captured"
-	EventPaymentCancelled  = "epayments.payment.cancelled"
-	EventPaymentAborted    = "epayments.payment.aborted"
-	EventPaymentExpired    = "epayments.payment.expired"
-	EventPaymentTerminated = "epayments.payment.terminated"
-	EventPaymentRefunded   = "epayments.payment.refunded"
+	EventPaymentCreated    = "CREATED"
+	EventPaymentAuthorized = "AUTHORIZED"
+	EventPaymentCaptured   = "CAPTURED"
+	EventPaymentCancelled  = "CANCELLED"
+	EventPaymentAborted    = "ABORTED"
+	EventPaymentExpired    = "EXPIRED"
+	EventPaymentTerminated = "TERMINATED"
+	EventPaymentRefunded   = "REFUNDED"
 )
 
 // maxWebhookBody caps how much of the request body we buffer for hashing.
@@ -91,7 +91,14 @@ func verifySignature(r *http.Request, body []byte, secret string) error {
 		return fmt.Errorf("webhook secret not configured")
 	}
 
-	sig, err := signatureFromAuthHeader(r.Header.Get("Authorization"))
+	// Vipps sends the signature in both x-vipps-authorization and Authorization.
+	// Prefer the former: reverse proxies and API gateways commonly strip or
+	// overwrite Authorization, which is why Vipps added the x-vipps- variant.
+	authHeader := r.Header.Get("x-vipps-authorization")
+	if authHeader == "" {
+		authHeader = r.Header.Get("Authorization")
+	}
+	sig, err := signatureFromAuthHeader(authHeader)
 	if err != nil {
 		return err
 	}

@@ -41,7 +41,7 @@ func signedRequest(body []byte, secret string) *http.Request {
 	return req
 }
 
-var validPayload = []byte(`{"name":"epayments.payment.captured","reference":"order-99","idempotencyKey":"uuid-abc-123","timestamp":"2026-06-20T10:00:00Z","amount":{"currency":"NOK","value":15000}}`)
+var validPayload = []byte(`{"name":"CAPTURED","reference":"order-99","pspReference":"10002405177","amount":{"currency":"NOK","value":15000},"timestamp":"2026-06-20T10:00:00Z","idempotencyKey":"uuid-abc-123","success":true}`)
 
 // TestParseAndVerify_GoldenVector pins the canonical string construction to a
 // signature computed independently of the production code. If the string-to-sign
@@ -51,9 +51,9 @@ func TestParseAndVerify_GoldenVector(t *testing.T) {
 	req := httptest.NewRequest("POST", "/vipps/webhooks", bytes.NewReader(validPayload))
 	req.Host = "example.com"
 	req.Header.Set("x-ms-date", testDate)
-	req.Header.Set("x-ms-content-sha256", "NJD81qgYGGNuFK3SrNfs4jpSNxU0h3qrUDN5Cwx47MM=")
+	req.Header.Set("x-ms-content-sha256", "4YqMjOs+Z0ABtoV8I48tv4FZLYLbcpd18faQgyni9JQ=")
 	req.Header.Set("Authorization",
-		"HMAC-SHA256 SignedHeaders=x-ms-date;host;x-ms-content-sha256&Signature=+XiP5lM8rkSTqYrFqCiHIiO2gn0sCC4Efqpgh6kwA6Q=")
+		"HMAC-SHA256 SignedHeaders=x-ms-date;host;x-ms-content-sha256&Signature=xgQ/PCp5FYGm7QUWmBeyGDO9t+FiSuq59HiOPauMdxs=")
 
 	evt, _, err := vipps.ParseAndVerify(req, testSecret)
 	if err != nil {
@@ -143,6 +143,17 @@ func TestParseAndVerify_InvalidJSON(t *testing.T) {
 	// Correctly signed, but the body is not a JSON event.
 	if _, _, err := vipps.ParseAndVerify(signedRequest([]byte("not json"), testSecret), testSecret); err == nil {
 		t.Fatal("expected error for invalid JSON, got nil")
+	}
+}
+
+func TestParseAndVerify_XVippsAuthorizationHeader(t *testing.T) {
+	// Vipps' primary signature header is x-vipps-authorization; verify it is
+	// honored even when Authorization is absent (stripped by a proxy).
+	req := signedRequest(validPayload, testSecret)
+	req.Header.Set("x-vipps-authorization", req.Header.Get("Authorization"))
+	req.Header.Del("Authorization")
+	if _, _, err := vipps.ParseAndVerify(req, testSecret); err != nil {
+		t.Fatalf("expected x-vipps-authorization to verify, got: %v", err)
 	}
 }
 
