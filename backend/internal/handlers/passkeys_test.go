@@ -170,6 +170,72 @@ func TestPasskeyManagementRoundTrip(t *testing.T) {
 	}
 }
 
+func TestPasskeyLoginBegin(t *testing.T) {
+	testutil.SkipIfNoDB(t)
+	pool := testutil.SetupTestDB(t)
+
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("miniredis: %v", err)
+	}
+	defer mr.Close()
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+
+	wa, _ := passkey.New(&config.Config{FrontendURL: "https://example.org"})
+	chal := passkey.NewChallengeStore(rdb)
+	h := NewPasskeyHandler(wa, passkey.NewStore(pool), chal, auth.NewSessionService(pool), nil, &config.Config{}, zerolog.Nop())
+
+	// Public — no auth context needed.
+	rec := httptest.NewRecorder()
+	h.HandleLoginBegin(rec, httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/login/begin", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("login begin status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	var resp struct {
+		Options struct {
+			Challenge string `json:"challenge"`
+		} `json:"options"`
+		ChallengeID string `json:"challenge_id"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Options.Challenge == "" {
+		t.Error("empty assertion challenge")
+	}
+	if resp.ChallengeID == "" {
+		t.Fatal("empty challenge_id")
+	}
+	// The ceremony state was stashed under the returned id.
+	if _, err := chal.Take(context.Background(), "login:"+resp.ChallengeID); err != nil {
+		t.Errorf("login challenge not stored: %v", err)
+	}
+}
+
+func TestPasskeyLoginFinishRequiresChallengeID(t *testing.T) {
+	testutil.SkipIfNoDB(t)
+	pool := testutil.SetupTestDB(t)
+	mr, _ := miniredis.Run()
+	defer mr.Close()
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	wa, _ := passkey.New(&config.Config{FrontendURL: "https://example.org"})
+	h := NewPasskeyHandler(wa, passkey.NewStore(pool), passkey.NewChallengeStore(rdb), auth.NewSessionService(pool), nil, &config.Config{}, zerolog.Nop())
+
+	// Missing cid → 400.
+	rec := httptest.NewRecorder()
+	h.HandleLoginFinish(rec, httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/login/finish", nil))
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("missing cid status = %d, want 400", rec.Code)
+	}
+
+	// Unknown cid → 400 (expired/not found).
+	rec2 := httptest.NewRecorder()
+	h.HandleLoginFinish(rec2, httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/login/finish?cid=nope", nil))
+	if rec2.Code != http.StatusBadRequest {
+		t.Errorf("unknown cid status = %d, want 400", rec2.Code)
+	}
+}
+
 func TestPasskeyAdminReset(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.SetupTestDB(t)

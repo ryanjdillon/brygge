@@ -7,6 +7,7 @@ import "github.com/go-webauthn/webauthn/webauthn"
 // that correlates to a person.
 type User struct {
 	id          string
+	clubID      string
 	handle      []byte
 	email       string
 	displayName string
@@ -21,3 +22,7 @@ func (u *User) WebAuthnCredentials() []webauthn.Credential { return u.creds }
 
 // UserID is the brygge user UUID (our own identifier, not the WebAuthn handle).
 func (u *User) UserID() string { return u.id }
+
+// ClubID is the club the member belongs to — needed to create a session on
+// passkey login.
+func (u *User) ClubID() string { return u.clubID }

@@ -335,25 +335,33 @@ func main() {
 				r.Get("/session/me", authHandler.HandleMe) // same handler — reads from context
 			})
 
-			// Passkeys (WebAuthn). Enrolling or removing an authenticator is a
-			// step-up action (fresh TOTP); listing/renaming only needs a session.
+			// Passkeys (WebAuthn).
 			r.Route("/passkeys", func(r chi.Router) {
-				r.Use(middleware.AuthenticateSession(sessionService))
-				r.Use(authedRL)
-				r.Get("/", passkeyHandler.HandleList)
-				r.Patch("/{id}", passkeyHandler.HandleRename)
-
-				// Step-up: a passkey assertion satisfies the admin gate in
-				// place of TOTP. Only needs a session — this is how a member
-				// BECOMES fresh, so it must not sit behind the fresh gate.
-				r.Post("/step-up/begin", passkeyHandler.HandleStepUpBegin)
-				r.Post("/step-up/finish", passkeyHandler.HandleStepUpFinish)
-
+				// Discoverable login — public, no session yet, IP rate-limited
+				// like magic-link. Terminates in the same session creation.
 				r.Group(func(r chi.Router) {
-					r.Use(middleware.RequireFreshTOTPDefault())
-					r.Post("/register/begin", passkeyHandler.HandleRegisterBegin)
-					r.Post("/register/finish", passkeyHandler.HandleRegisterFinish)
-					r.Delete("/{id}", passkeyHandler.HandleDelete)
+					r.Use(strictRL)
+					r.Post("/login/begin", passkeyHandler.HandleLoginBegin)
+					r.Post("/login/finish", passkeyHandler.HandleLoginFinish)
+				})
+
+				// Everything else needs a session. Enroll/remove is a step-up
+				// action (fresh TOTP); list/rename/step-up only need a session.
+				r.Group(func(r chi.Router) {
+					r.Use(middleware.AuthenticateSession(sessionService))
+					r.Use(authedRL)
+					r.Get("/", passkeyHandler.HandleList)
+					r.Patch("/{id}", passkeyHandler.HandleRename)
+
+					r.Post("/step-up/begin", passkeyHandler.HandleStepUpBegin)
+					r.Post("/step-up/finish", passkeyHandler.HandleStepUpFinish)
+
+					r.Group(func(r chi.Router) {
+						r.Use(middleware.RequireFreshTOTPDefault())
+						r.Post("/register/begin", passkeyHandler.HandleRegisterBegin)
+						r.Post("/register/finish", passkeyHandler.HandleRegisterFinish)
+						r.Delete("/{id}", passkeyHandler.HandleDelete)
+					})
 				})
 			})
 		})

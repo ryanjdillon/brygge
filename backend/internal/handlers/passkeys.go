@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -22,6 +24,10 @@ import (
 
 // passkeyChallengeTTL bounds how long a begin→finish ceremony may take.
 const passkeyChallengeTTL = 5 * time.Minute
+
+// passkeyLoginChallengeTTL is shorter — a login ceremony is a single
+// uninterrupted gesture with no session to lean on.
+const passkeyLoginChallengeTTL = 2 * time.Minute
 
 // PasskeyHandler serves the WebAuthn ceremonies: registration + management
 // (BRY-249) and step-up (BRY-250); login is added by a later sub-issue.
@@ -59,6 +65,17 @@ func NewPasskeyHandler(
 // replayed against a step-up finish, or vice versa.
 func regChallengeKey(sessionID string) string    { return "reg:" + sessionID }
 func stepUpChallengeKey(sessionID string) string { return "step:" + sessionID }
+func loginChallengeKey(cid string) string        { return "login:" + cid }
+
+// newChallengeID mints an opaque id the client echoes back on login/finish —
+// the login ceremony has no session to key its challenge on.
+func newChallengeID() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(b), nil
+}
 
 // HandleRegisterBegin starts enrollment for the logged-in member and returns
 // the creation options for @simplewebauthn/browser's startRegistration. Gated
@@ -331,6 +348,106 @@ func (h *PasskeyHandler) HandleStepUpFinish(w http.ResponseWriter, r *http.Reque
 	}
 
 	JSON(w, http.StatusOK, passkeyStepUpFinishResponse{Message: "verified", MFAMethod: "passkey"})
+}
+
+type passkeyLoginBeginResponse struct {
+	Options     any    `json:"options"`
+	ChallengeID string `json:"challenge_id"`
+}
+
+// HandleLoginBegin starts a usernameless (discoverable) login. Public + rate
+// limited. The ceremony state is keyed by an opaque challenge id the client
+// echoes back, since there's no session yet.
+func (h *PasskeyHandler) HandleLoginBegin(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	options, sessionData, err := h.wa.BeginDiscoverableLogin(
+		webauthn.WithUserVerification(protocol.VerificationPreferred),
+	)
+	if err != nil {
+		h.log.Error().Err(err).Msg("begin discoverable login")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	cid, err := newChallengeID()
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if err := h.chal.Put(ctx, loginChallengeKey(cid), sessionData, passkeyLoginChallengeTTL); err != nil {
+		h.log.Error().Err(err).Msg("store login challenge")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	JSON(w, http.StatusOK, passkeyLoginBeginResponse{Options: options.Response, ChallengeID: cid})
+}
+
+type passkeyLoginFinishResponse struct {
+	Message string `json:"message"`
+}
+
+// HandleLoginFinish verifies a discoverable assertion, resolves the member from
+// the credential's user handle, and creates a session exactly like the
+// magic-link verify path. A user-verifying assertion also stamps the step-up,
+// so a board member is signed in AND stepped-up in one tap.
+func (h *PasskeyHandler) HandleLoginFinish(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	cid := r.URL.Query().Get("cid")
+	if cid == "" {
+		Error(w, http.StatusBadRequest, "missing challenge id")
+		return
+	}
+	sessionData, err := h.chal.Take(ctx, loginChallengeKey(cid))
+	if err != nil {
+		Error(w, http.StatusBadRequest, "login expired — start again")
+		return
+	}
+
+	// The handler resolves the assertion's user handle to a member; capture it
+	// so we know who to sign in after verification succeeds.
+	var resolved *passkey.User
+	handler := func(_, userHandle []byte) (webauthn.User, error) {
+		u, err := h.store.UserByHandle(ctx, userHandle)
+		if err != nil {
+			return nil, err
+		}
+		resolved = u
+		return u, nil
+	}
+
+	cred, err := h.wa.FinishDiscoverableLogin(handler, *sessionData, r)
+	if err != nil || resolved == nil {
+		Error(w, http.StatusUnauthorized, "passkey login failed")
+		return
+	}
+
+	if err := h.store.TouchCredential(ctx, cred); err != nil {
+		h.log.Error().Err(err).Msg("touch credential after login")
+	}
+
+	ip := r.RemoteAddr
+	ua := r.UserAgent()
+	sessionID, err := h.sessions.CreateSession(ctx, resolved.UserID(), resolved.ClubID(), ip, ua)
+	if err != nil {
+		h.log.Error().Err(err).Msg("create session on passkey login")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	secure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
+	middleware.SetSessionCookie(w, sessionID, secure)
+
+	// A user-verifying assertion proves possession + inherence — enough to also
+	// satisfy the step-up gate, so an admin lands signed in and stepped up.
+	if cred.Flags.UserVerified {
+		if err := h.sessions.StampStepUp(ctx, sessionID, "passkey"); err != nil {
+			h.log.Warn().Err(err).Msg("stamp step-up on passkey login")
+		}
+	}
+
+	JSON(w, http.StatusOK, passkeyLoginFinishResponse{Message: "signed in"})
 }
 
 type passkeyAdminResetResponse struct {

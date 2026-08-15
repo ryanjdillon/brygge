@@ -69,22 +69,22 @@ func (s *Store) LoadUser(ctx context.Context, userID string) (*User, error) {
 	if err != nil {
 		return nil, err
 	}
-	var email, displayName string
+	var clubID, email, displayName string
 	if err := s.db.QueryRow(ctx,
-		`SELECT COALESCE(email, ''),
+		`SELECT club_id::text, COALESCE(email, ''),
 		        COALESCE(NULLIF(full_name, ''),
 		                 NULLIF(TRIM(COALESCE(first_name, '') || ' ' || COALESCE(last_name, '')), ''),
 		                 COALESCE(email, ''))
 		   FROM users WHERE id = $1`,
 		userID,
-	).Scan(&email, &displayName); err != nil {
+	).Scan(&clubID, &email, &displayName); err != nil {
 		return nil, err
 	}
 	creds, err := s.loadCredentials(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	return &User{id: userID, handle: handle, email: email, displayName: displayName, creds: creds}, nil
+	return &User{id: userID, clubID: clubID, handle: handle, email: email, displayName: displayName, creds: creds}, nil
 }
 
 // UserByHandle resolves a discoverable-login assertion's user handle back to a
