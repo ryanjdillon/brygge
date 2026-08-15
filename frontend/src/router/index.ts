@@ -216,6 +216,11 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/HarborMapAdminView.vue'),
       },
       {
+        path: 'harbor/recent-payments',
+        name: 'admin-recent-payments',
+        component: () => import('@/views/admin/RecentPaymentsView.vue'),
+      },
+      {
         path: 'waiting-list',
         name: 'admin-waiting-list',
         component: () => import('@/views/admin/WaitingListAdminView.vue'),

@@ -563,6 +563,7 @@
       "users": "Members",
       "slips": "Slips",
       "harborMap": "Harbor Map",
+      "recentPayments": "Payments",
       "waitingList": "Waiting List",
       "events": "Events",
       "bookings": "Bookings",
@@ -2295,6 +2296,23 @@
     "processing": "Starting Vipps …",
     "payButton": "Pay with Vipps",
     "payError": "Could not start payment. Please try again."
+  },
+  "recentPayments": {
+    "title": "Payments",
+    "subtitle": "Recent payments via Vipps — near realtime.",
+    "refresh": "Refresh",
+    "searchPlaceholder": "Search payer …",
+    "since": "From",
+    "until": "To",
+    "empty": "No payments yet.",
+    "anonymous": "Guest",
+    "kind": {
+      "all": "All",
+      "guest": "Guest berth",
+      "faktura": "Invoice",
+      "merch": "Shop",
+      "other": "Other"
+    }
   },
   "bulkInvoices": {
     "title": "Generate fakturas for {n} members",

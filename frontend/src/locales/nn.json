@@ -556,6 +556,7 @@
       "users": "Medlemmer",
       "slips": "Båtplassar",
       "harborMap": "Hamnekart",
+      "recentPayments": "Betalingar",
       "waitingList": "Venteliste",
       "events": "Arrangement",
       "bookings": "Bestillingar",
@@ -2173,6 +2174,23 @@
     "processing": "Startar Vipps …",
     "payButton": "Betal med Vipps",
     "payError": "Kunne ikkje starte betaling. Prøv igjen."
+  },
+  "recentPayments": {
+    "title": "Betalingar",
+    "subtitle": "Nylege innbetalingar via Vipps — nær sanntid.",
+    "refresh": "Oppdater",
+    "searchPlaceholder": "Søk etter betalar …",
+    "since": "Frå",
+    "until": "Til",
+    "empty": "Ingen betalingar enno.",
+    "anonymous": "Gjest",
+    "kind": {
+      "all": "Alle",
+      "guest": "Gjesteplass",
+      "faktura": "Faktura",
+      "merch": "Butikk",
+      "other": "Anna"
+    }
   },
   "bulkInvoices": {
     "title": "Generer fakturaar for {n} medlemmer",

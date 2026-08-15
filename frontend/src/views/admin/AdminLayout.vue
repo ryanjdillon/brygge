@@ -81,6 +81,7 @@ const navGroups = computed<NavGroup[]>(() => {
       items: [
         { to: '/admin/slips', icon: Anchor, label: t('admin.sidebar.slips'), roles: ['board', 'harbor_master', 'admin'] },
         { to: '/admin/harbor-map', icon: Map, label: t('admin.sidebar.harborMap'), roles: ['board', 'harbor_master', 'admin'] },
+        { to: '/admin/harbor/recent-payments', icon: Receipt, label: t('admin.sidebar.recentPayments'), roles: ['board', 'harbor_master', 'admin'] },
         { to: '/admin/boats', icon: Ship, label: t('admin.sidebar.boats'), roles: ['board', 'harbor_master', 'admin'] },
         { to: '/admin/bookings', icon: CalendarCheck, label: t('admin.sidebar.bookings'), roles: ['board', 'harbor_master', 'admin'], feature: 'bookings' },
         { to: '/admin/projects', icon: FolderKanban, label: t('admin.sidebar.projects'), feature: 'projects' },

@@ -524,6 +524,8 @@ func main() {
 			r.Use(middleware.AuthenticateSession(sessionService))
 			r.Use(middleware.RequireRole("board", "admin", "harbor_master"))
 			r.Put("/harbor/layout", harborHandler.HandlePutLayout)
+			// Near-realtime harbor overview of recent paid orders (BRY-265).
+			r.Get("/harbor/recent-payments", harborHandler.HandleRecentPayments)
 		})
 
 		if cfg.Features.Commerce {
