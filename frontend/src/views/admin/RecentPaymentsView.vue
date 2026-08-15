@@ -44,7 +44,7 @@ async function load() {
     if (since.value) p.set('since', since.value)
     if (until.value) p.set('until', until.value)
     if (search.value.trim()) p.set('q', search.value.trim())
-    const res = await fetchApi<{ payments: Payment[] }>(`/api/v1/admin/harbor/recent-payments?${p.toString()}`)
+    const res = await fetchApi<{ payments: Payment[] }>(`/api/v1/harbor/recent-payments?${p.toString()}`)
     payments.value = res?.payments ?? []
   } finally {
     loading.value = false
