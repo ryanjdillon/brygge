@@ -90,7 +90,7 @@ func MagicLinkBody(locale, clubName, domain, loginURL string) string {
 		Copy:     rendered,
 	}
 	var buf bytes.Buffer
-	if err := magicLinkHTMLTpl.Execute(&buf, data); err != nil {
+	if err := magicLinkHTMLTpl.ExecuteTemplate(&buf, "base", data); err != nil {
 		// template bug — fall back to a plain anchor so the user can still log in
 		return fmt.Sprintf(`<p><a href=%q>%s</a></p>`, loginURL, tpl.CTA)
 	}
@@ -189,7 +189,37 @@ var magicLinkCopy = map[string]magicLinkCopyT{
 	},
 }
 
-var magicLinkHTMLTpl = template.Must(template.New("magic_link").Parse(`<!DOCTYPE html>
+// --- Shared email chrome + partials (single source of truth, BRY-258) ---
+//
+// Every transactional email is the same card: grey page, white rounded card,
+// a {{.Club}} header, a per-email {{template "content" .}}, and a
+// {{template "footer" .}} (default below, overridable per email). The CTA
+// button and the invoice detail box are single partials so their structure
+// and style cannot diverge between emails.
+
+// emailDict builds a map for passing named params to a partial, e.g.
+// {{template "button" (dict "URL" .X "Label" "..." "BG" "#hex")}}.
+func emailDict(pairs ...any) (map[string]any, error) {
+	if len(pairs)%2 != 0 {
+		return nil, fmt.Errorf("dict: odd argument count")
+	}
+	m := make(map[string]any, len(pairs)/2)
+	for i := 0; i < len(pairs); i += 2 {
+		k, ok := pairs[i].(string)
+		if !ok {
+			return nil, fmt.Errorf("dict: non-string key at %d", i)
+		}
+		m[k] = pairs[i+1]
+	}
+	return m, nil
+}
+
+var emailFuncs = template.FuncMap{
+	"dict": emailDict,
+	"css":  func(s string) template.CSS { return template.CSS(s) },
+}
+
+const emailBaseLayout = `{{define "base"}}<!DOCTYPE html>
 <html>
 <body style="margin:0;padding:0;background:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f5f5f5;padding:32px 16px;">
@@ -203,21 +233,12 @@ var magicLinkHTMLTpl = template.Must(template.New("magic_link").Parse(`<!DOCTYPE
           </tr>
           <tr>
             <td style="padding:24px 32px;color:#1f2937;font-size:15px;line-height:1.55;">
-              <p style="margin:0 0 16px 0;">{{.Copy.Greeting}}</p>
-              <p style="margin:0 0 24px 0;">{{.Copy.Explanation}}</p>
-              <p style="margin:0 0 24px 0;text-align:center;">
-                <a href="{{.LoginURL}}" style="display:inline-block;background:#0f172a;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:4px;font-weight:600;font-size:15px;">{{.Copy.CTA}}</a>
-              </p>
-              <p style="margin:0 0 8px 0;font-size:13px;color:#64748b;">{{.Copy.LinkIntro}}</p>
-              <p style="margin:0 0 24px 0;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;color:#475569;word-break:break-all;background:#f8fafc;padding:10px 12px;border-radius:4px;">{{.LoginURL}}</p>
-              <p style="margin:0 0 8px 0;font-size:13px;color:#64748b;">{{.Copy.Expiry}}</p>
-              <p style="margin:0;font-size:13px;color:#64748b;">{{.Copy.Ignore}}</p>
+{{template "content" .}}
             </td>
           </tr>
           <tr>
             <td style="padding:20px 32px;border-top:1px solid #e5e7eb;background:#f8fafc;color:#64748b;font-size:12px;line-height:1.5;border-radius:0 0 6px 6px;">
-              <p style="margin:0 0 6px 0;">{{.Copy.FooterContact}}</p>
-              <p style="margin:0;"><strong style="color:#334155;">{{.Club}}</strong> · <a href="https://{{.Domain}}" style="color:#64748b;text-decoration:underline;">{{.Domain}}</a></p>
+{{template "footer" .}}
             </td>
           </tr>
         </table>
@@ -225,7 +246,58 @@ var magicLinkHTMLTpl = template.Must(template.New("magic_link").Parse(`<!DOCTYPE
     </tr>
   </table>
 </body>
-</html>`))
+</html>{{end}}`
+
+// emailButton is the one CTA button: shared Gmail-safe structure (centered <p>
+// + inline-block <a>, template.URL href), brand colour via .BG.
+const emailButton = `{{define "button"}}<p style="margin:0 0 8px 0;text-align:center;">
+                <a href="{{.URL}}" style="display:inline-block;background:{{css .BG}};color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:4px;font-weight:600;font-size:15px;">{{.Label}}</a>
+              </p>{{end}}`
+
+// emailInvoiceDetails is the label|value payment box shared by the invoice and
+// reminder emails.
+const emailInvoiceDetails = `{{define "invoiceDetails"}}<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 24px 0;background:#f8fafc;border-radius:6px;">
+                <tr>
+                  <td style="padding:14px 16px;font-size:14px;color:#64748b;width:40%;">Fakturanummer</td>
+                  <td style="padding:14px 16px;font-size:14px;color:#0f172a;font-family:ui-monospace,Menlo,Consolas,monospace;">#{{.InvoiceNumber}}</td>
+                </tr>
+                <tr>
+                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#64748b;">Forfallsdato</td>
+                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#0f172a;font-weight:600;">{{.DueDate}}</td>
+                </tr>
+                <tr>
+                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#64748b;">Beløp å betale</td>
+                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#0f172a;font-weight:600;">{{.Amount}}</td>
+                </tr>
+                <tr>
+                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#64748b;">KID</td>
+                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#0f172a;font-family:ui-monospace,Menlo,Consolas,monospace;">{{.KID}}</td>
+                </tr>
+                <tr>
+                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#64748b;">Kontonummer</td>
+                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#0f172a;font-family:ui-monospace,Menlo,Consolas,monospace;">{{.BankAccount}}</td>
+                </tr>
+              </table>{{end}}`
+
+// emailDefaultFooter is the simple club-name footer (invoice + reminder). The
+// magic-link email overrides "footer" with its own.
+const emailDefaultFooter = `{{define "footer"}}<p style="margin:0;"><strong style="color:#334155;">{{.Club}}</strong></p>{{end}}`
+
+// sharedEmail holds the base layout + partials. Each email clones it and adds
+// its own "content" (and, for the magic-link, a "footer" override).
+var sharedEmail = template.Must(template.New("shared").Funcs(emailFuncs).
+	Parse(emailBaseLayout + emailButton + emailInvoiceDetails + emailDefaultFooter))
+
+var magicLinkHTMLTpl = template.Must(template.Must(sharedEmail.Clone()).Parse(`{{define "content"}}
+              <p style="margin:0 0 16px 0;">{{.Copy.Greeting}}</p>
+              <p style="margin:0 0 24px 0;">{{.Copy.Explanation}}</p>
+{{template "button" (dict "URL" .LoginURL "Label" .Copy.CTA "BG" "#0f172a")}}
+              <p style="margin:0 0 8px 0;font-size:13px;color:#64748b;">{{.Copy.LinkIntro}}</p>
+              <p style="margin:0 0 24px 0;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;color:#475569;word-break:break-all;background:#f8fafc;padding:10px 12px;border-radius:4px;">{{.LoginURL}}</p>
+              <p style="margin:0 0 8px 0;font-size:13px;color:#64748b;">{{.Copy.Expiry}}</p>
+              <p style="margin:0;font-size:13px;color:#64748b;">{{.Copy.Ignore}}</p>{{end}}
+{{define "footer"}}<p style="margin:0 0 6px 0;">{{.Copy.FooterContact}}</p>
+              <p style="margin:0;"><strong style="color:#334155;">{{.Club}}</strong> · <a href="https://{{.Domain}}" style="color:#64748b;text-decoration:underline;">{{.Domain}}</a></p>{{end}}`))
 
 // --- Invoice email ---
 //
@@ -283,7 +355,7 @@ func InvoiceBody(_ /*locale*/, memberName, clubName string, invoiceNumber int, d
 		VippsExpiry:   vippsExpiryStr,
 	}
 	var buf bytes.Buffer
-	if err := invoiceHTMLTpl.Execute(&buf, data); err != nil {
+	if err := invoiceHTMLTpl.ExecuteTemplate(&buf, "base", data); err != nil {
 		// Template bug — fall back to a flat readable summary so the
 		// member still has the payment details.
 		vippsLine := ""
@@ -347,7 +419,7 @@ func InvoiceReminderBody(_ /*locale*/, memberName, clubName string, invoiceNumbe
 		VippsExpiry:   vippsExpiryStr,
 	}
 	var buf bytes.Buffer
-	if err := reminderHTMLTpl.Execute(&buf, data); err != nil {
+	if err := reminderHTMLTpl.ExecuteTemplate(&buf, "base", data); err != nil {
 		vippsLine := ""
 		if vippsURL != "" {
 			vippsLine = fmt.Sprintf(`<p>Betal med Vipps: <a href="%s">%s</a></p>`, vippsURL, vippsURL)
@@ -380,20 +452,7 @@ func formatNOK(amount float64) string {
 	return fmt.Sprintf("kr %s,%02d", grouped.String(), cents)
 }
 
-var reminderHTMLTpl = template.Must(template.New("reminder").Parse(`<!DOCTYPE html>
-<html>
-<body style="margin:0;padding:0;background:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f5f5f5;padding:32px 16px;">
-    <tr>
-      <td align="center">
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:560px;background:#ffffff;border:1px solid #e5e7eb;border-radius:6px;">
-          <tr>
-            <td style="padding:32px 32px 16px 32px;border-bottom:1px solid #e5e7eb;">
-              <h1 style="margin:0;font-size:20px;color:#0f172a;font-weight:600;">{{.Club}}</h1>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:24px 32px;color:#1f2937;font-size:15px;line-height:1.55;">
+var reminderHTMLTpl = template.Must(template.Must(sharedEmail.Clone()).Parse(`{{define "content"}}
               <p style="margin:0 0 16px 0;">Hei {{.Member}},</p>
               {{if .Overdue}}
               <p style="margin:0 0 8px 0;color:#b91c1c;font-weight:600;">Påminnelse: faktura #{{.InvoiceNumber}} er forfalt.</p>
@@ -402,108 +461,21 @@ var reminderHTMLTpl = template.Must(template.New("reminder").Parse(`<!DOCTYPE ht
               <p style="margin:0 0 8px 0;color:#b45309;font-weight:600;">Påminnelse om ubetalt faktura #{{.InvoiceNumber}}.</p>
               <p style="margin:0 0 20px 0;">Vi minner om forfallet under. PDF-kopi følger som vedlegg.</p>
               {{end}}
-
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 24px 0;background:#f8fafc;border-radius:6px;">
-                <tr>
-                  <td style="padding:14px 16px;font-size:14px;color:#64748b;width:40%;">Fakturanummer</td>
-                  <td style="padding:14px 16px;font-size:14px;color:#0f172a;font-family:ui-monospace,Menlo,Consolas,monospace;">#{{.InvoiceNumber}}</td>
-                </tr>
-                <tr>
-                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#64748b;">Forfallsdato</td>
-                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#0f172a;font-weight:600;">{{.DueDate}}</td>
-                </tr>
-                <tr>
-                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#64748b;">Beløp å betale</td>
-                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#0f172a;font-weight:600;">{{.Amount}}</td>
-                </tr>
-                <tr>
-                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#64748b;">KID</td>
-                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#0f172a;font-family:ui-monospace,Menlo,Consolas,monospace;">{{.KID}}</td>
-                </tr>
-                <tr>
-                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#64748b;">Kontonummer</td>
-                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#0f172a;font-family:ui-monospace,Menlo,Consolas,monospace;">{{.BankAccount}}</td>
-                </tr>
-              </table>
+{{template "invoiceDetails" .}}
 {{if .VippsURL}}
-              <p style="margin:0 0 8px 0;text-align:center;">
-                <a href="{{.VippsURL}}" style="display:inline-block;background:#ff5b24;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:4px;font-weight:600;font-size:15px;">Betal med Vipps</a>
-              </p>
+{{template "button" (dict "URL" .VippsURL "Label" "Betal med Vipps" "BG" "#ff5b24")}}
               <p style="margin:0 0 20px 0;text-align:center;font-size:12px;color:#64748b;">Lenken er gyldig til {{.VippsExpiry}}.</p>
 {{end}}
               <p style="margin:0 0 8px 0;font-size:13px;color:#64748b;">Hvis betalingen allerede er sendt, kan du se bort fra denne påminnelsen.</p>
-              <p style="margin:0;font-size:13px;color:#64748b;">Spørsmål kan sendes til kasserer ved å svare på denne e-posten.</p>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:20px 32px;border-top:1px solid #e5e7eb;background:#f8fafc;color:#64748b;font-size:12px;line-height:1.5;border-radius:0 0 6px 6px;">
-              <p style="margin:0;"><strong style="color:#334155;">{{.Club}}</strong></p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`))
+              <p style="margin:0;font-size:13px;color:#64748b;">Spørsmål kan sendes til kasserer ved å svare på denne e-posten.</p>{{end}}`))
 
-var invoiceHTMLTpl = template.Must(template.New("invoice").Parse(`<!DOCTYPE html>
-<html>
-<body style="margin:0;padding:0;background:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f5f5f5;padding:32px 16px;">
-    <tr>
-      <td align="center">
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:560px;background:#ffffff;border:1px solid #e5e7eb;border-radius:6px;">
-          <tr>
-            <td style="padding:32px 32px 16px 32px;border-bottom:1px solid #e5e7eb;">
-              <h1 style="margin:0;font-size:20px;color:#0f172a;font-weight:600;">{{.Club}}</h1>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:24px 32px;color:#1f2937;font-size:15px;line-height:1.55;">
+var invoiceHTMLTpl = template.Must(template.Must(sharedEmail.Clone()).Parse(`{{define "content"}}
               <p style="margin:0 0 16px 0;">Hei {{.Member}},</p>
               <p style="margin:0 0 20px 0;">Du har mottatt en ny faktura fra {{.Club}}. Den fullstendige fakturaen ligger som PDF-vedlegg til denne e-posten.</p>
-
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 24px 0;background:#f8fafc;border-radius:6px;">
-                <tr>
-                  <td style="padding:14px 16px;font-size:14px;color:#64748b;width:40%;">Fakturanummer</td>
-                  <td style="padding:14px 16px;font-size:14px;color:#0f172a;font-family:ui-monospace,Menlo,Consolas,monospace;">#{{.InvoiceNumber}}</td>
-                </tr>
-                <tr>
-                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#64748b;">Forfallsdato</td>
-                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#0f172a;font-weight:600;">{{.DueDate}}</td>
-                </tr>
-                <tr>
-                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#64748b;">Beløp å betale</td>
-                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#0f172a;font-weight:600;">{{.Amount}}</td>
-                </tr>
-                <tr>
-                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#64748b;">KID</td>
-                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#0f172a;font-family:ui-monospace,Menlo,Consolas,monospace;">{{.KID}}</td>
-                </tr>
-                <tr>
-                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#64748b;">Kontonummer</td>
-                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#0f172a;font-family:ui-monospace,Menlo,Consolas,monospace;">{{.BankAccount}}</td>
-                </tr>
-              </table>
+{{template "invoiceDetails" .}}
 {{if .VippsURL}}
-              <p style="margin:0 0 8px 0;text-align:center;">
-                <a href="{{.VippsURL}}" style="display:inline-block;background:#ff5b24;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:4px;font-weight:600;font-size:15px;">Betal med Vipps</a>
-              </p>
+{{template "button" (dict "URL" .VippsURL "Label" "Betal med Vipps" "BG" "#ff5b24")}}
               <p style="margin:0 0 20px 0;text-align:center;font-size:12px;color:#64748b;">Lenken er gyldig til {{.VippsExpiry}}.</p>
 {{end}}
               <p style="margin:0 0 8px 0;font-size:13px;color:#64748b;">Bruk KID-nummeret når du betaler i nettbanken slik at innbetalingen registreres automatisk.</p>
-              <p style="margin:0;font-size:13px;color:#64748b;">Spørsmål om fakturaen kan sendes til kasserer ved å svare på denne e-posten.</p>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:20px 32px;border-top:1px solid #e5e7eb;background:#f8fafc;color:#64748b;font-size:12px;line-height:1.5;border-radius:0 0 6px 6px;">
-              <p style="margin:0;"><strong style="color:#334155;">{{.Club}}</strong></p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`))
+              <p style="margin:0;font-size:13px;color:#64748b;">Spørsmål om fakturaen kan sendes til kasserer ved å svare på denne e-posten.</p>{{end}}`))
