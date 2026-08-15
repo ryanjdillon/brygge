@@ -768,6 +768,7 @@
       "fromPriceList": "From price list",
       "tierResolved": "Resolved from boat",
       "tierExcluded": "tiered lines not included",
+      "vippsPaymentLink": "Add a Betal med Vipps link when the invoice is sent",
       "noBoatsForMember": "This member has no boats registered — add one first.",
       "legendLabel": "Account types:",
       "accountType": {
@@ -2298,6 +2299,7 @@
     "droppedHint": "Review each affected faktura below — most often the boat's beam/length falls outside any configured price tier.",
     "advanced": "Advanced",
     "allowDuplicates": "Allow re-billing of already-invoiced lines",
+    "vippsPaymentLink": "Add a Betal med Vipps link when the invoices are sent",
     "allowDuplicatesHint": "By default the system skips price-item lines that already appear on a non-voided faktura for the same member and fiscal period. Enable only when you intentionally want to bill the same yearly item a second time.",
     "member": "Member",
     "amount": "Amount",

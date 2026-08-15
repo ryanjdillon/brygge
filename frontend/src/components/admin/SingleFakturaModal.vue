@@ -118,6 +118,9 @@ const member = ref<MemberHit | null>(null)
 const dueDate = ref(defaultDueDate())
 const lines = ref<LineDraft[]>([emptyCustomLine()])
 const submitting = ref(false)
+// Opt-in "Betal med Vipps" link (BRY-8), default off — bank transfer stays the
+// norm. Stored on the invoice and honoured when the draft is sent.
+const vippsPaymentLink = ref(false)
 const error = ref<string | null>(null)
 
 // Recipient kind defaults to "private". Either mode supports issuing
@@ -472,6 +475,7 @@ async function submit() {
         recipient_contact_person: recipientKind.value === 'organization' && contactPerson.value.trim() ? contactPerson.value.trim() : undefined,
         recipient_their_ref: recipientKind.value === 'organization' && theirRef.value.trim() ? theirRef.value.trim() : undefined,
         recipient_email: recipientEmail.value.trim() || undefined,
+        vipps_payment_link: vippsPaymentLink.value,
         lines: lines.value.map((l) => ({
           description: l.description.trim(),
           sub_description: l.sub_description.trim() || undefined,
@@ -863,6 +867,11 @@ function boatLabel(b: Boat): string {
               ({{ t('admin.singleFaktura.tierExcluded') }})
             </span>
           </p>
+
+          <label class="mt-3 flex items-center gap-2 text-sm text-slate-700">
+            <input v-model="vippsPaymentLink" type="checkbox" class="h-4 w-4 rounded border-slate-300" />
+            {{ t('admin.singleFaktura.vippsPaymentLink') }}
+          </label>
         </div>
 
         <p v-if="error" class="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{{ error }}</p>

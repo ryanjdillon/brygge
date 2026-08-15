@@ -417,15 +417,15 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 		                       recipient_kind, recipient_org_name, recipient_org_number,
 		                       recipient_org_address, recipient_contact_person,
 		                       recipient_their_ref, recipient_email,
-		                       member_name, member_email)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+		                       member_name, member_email, vipps_payment_link_opt_in)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
 		 RETURNING id, created_at`,
 		claims.ClubID, userIDArg, invoiceSeq, kid, dueDate, total, pdfData, req.FiscalPeriodID,
 		recipientKind,
 		req.RecipientOrgName, req.RecipientOrgNumber,
 		req.RecipientOrgAddress, req.RecipientContactPerson,
 		req.RecipientTheirRef, req.RecipientEmail,
-		memberName, memberEmail,
+		memberName, memberEmail, req.VippsPaymentLink,
 	).Scan(&invoiceID, &createdAt)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to store invoice")
@@ -1039,6 +1039,7 @@ func (h *InvoiceHandler) HandleSendInvoice(w http.ResponseWriter, r *http.Reques
 		pdfData        []byte
 		s3Key          string
 		alreadySent    *time.Time
+		vippsOptIn     bool
 	)
 	if err := h.db.QueryRow(ctx,
 		`SELECT i.invoice_number, i.user_id,
@@ -1050,14 +1051,15 @@ func (h *InvoiceHandler) HandleSendInvoice(w http.ResponseWriter, r *http.Reques
 		        COALESCE(u.last_name, ''), COALESCE(u.first_name, ''),
 		        COALESCE(u.email, ''), COALESCE(i.recipient_email, ''),
 		        fp.year, i.total_amount, i.due_date, i.kid_number,
-		        i.pdf_data, COALESCE(i.s3_key, ''), i.sent_at
+		        i.pdf_data, COALESCE(i.s3_key, ''), i.sent_at,
+		        i.vipps_payment_link_opt_in
 		   FROM invoices i
 		   LEFT JOIN users u ON u.id = i.user_id
 		   LEFT JOIN fiscal_periods fp ON fp.id = i.fiscal_period_id
 		  WHERE i.id = $1 AND i.club_id = $2`,
 		invoiceID, claims.ClubID,
 	).Scan(&invoiceNumber, &userID, &memberName, &memberLast, &memberFirst, &memberEmail, &recipientEmail,
-		&fiscalYear, &total, &dueDate, &kid, &pdfData, &s3Key, &alreadySent); err != nil {
+		&fiscalYear, &total, &dueDate, &kid, &pdfData, &s3Key, &alreadySent, &vippsOptIn); err != nil {
 		if err == pgx.ErrNoRows {
 			Error(w, http.StatusNotFound, "invoice not found")
 			return
@@ -1099,9 +1101,10 @@ func (h *InvoiceHandler) HandleSendInvoice(w http.ResponseWriter, r *http.Reques
 
 	locale := email.DetectLocale(r)
 	subject := email.InvoiceSubject(locale, clubName, invoiceNumber)
-	// Refresh (never add) a Vipps link the invoice already opted into; mints a
-	// fresh payment if the prior one expired (BRY-8 re-issue).
-	vippsURL, vippsExpiry := h.ensureVippsPayment(ctx, claims.ClubID, invoiceID, false)
+	// A "Betal med Vipps" link if the faktura opted in at creation (BRY-8).
+	// This is the send moment for a draft, so mint the payment now (amount is
+	// final); a still-live link is reused, an expired one refreshed.
+	vippsURL, vippsExpiry := h.ensureVippsPayment(ctx, claims.ClubID, invoiceID, vippsOptIn)
 	htmlBody := email.InvoiceBody(locale, memberName, clubName, invoiceNumber, dueDate, total, kid, bankAccount, vippsURL, vippsExpiry)
 	filename := buildInvoiceFilename(invoiceNumber, memberLast, memberFirst, fiscalYear)
 

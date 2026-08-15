@@ -760,6 +760,7 @@
       "fromPriceList": "Frå prisliste",
       "tierResolved": "Blir berekna ut frå båt",
       "tierExcluded": "trinnprisar ikkje inkluderte",
+      "vippsPaymentLink": "Legg til Betal med Vipps-lenke når fakturaen blir sendt",
       "noBoatsForMember": "Dette medlemmet har ingen registrerte båtar — legg dei til først.",
       "legendLabel": "Kontotypar:",
       "accountType": {
@@ -2176,6 +2177,7 @@
     "droppedHint": "Sjå gjennom kvar påverka faktura nedanfor — som regel ligg breidda/lengda til båten utanfor dei konfigurerte prisnivåa.",
     "advanced": "Avansert",
     "allowDuplicates": "Tillat dobbeltfakturering av allereie fakturerte linjer",
+    "vippsPaymentLink": "Legg til Betal med Vipps-lenke når fakturaene blir sende",
     "allowDuplicatesHint": "Som standard blir prislinjer som allereie finst på ein ikkje-kreditert faktura for same medlem og rekneskapsperiode hoppa over. Slå på berre når du bevisst vil fakturere same årlege linje på nytt.",
     "member": "Medlem",
     "amount": "Beløp",
