@@ -61,6 +61,7 @@ let
         "cmd/vipps-cutover"
         "cmd/vipps-audit"
         "cmd/vipps-webhook-register"
+        "cmd/vipps-report"
       ];
       postInstall = ''
         mv $out/bin/seed $out/bin/brygge-seed

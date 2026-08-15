@@ -88,6 +88,14 @@ func mockVippsServer(t *testing.T) (*httptest.Server, *atomic.Int32) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
+	mux.HandleFunc("GET /settlement/v1/ledgers", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"ledgers":[{"ledgerId":"123456","currency":"NOK","owner":{"msn":"` + r.Header.Get("Merchant-Serial-Number") + `"}}]}`))
+	})
+
+	mux.HandleFunc("GET /report/v2/ledgers/", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"items":[{"reference":"inv-abc","pspReference":"100","amount":100}],"cursor":{"next":null}}`))
+	})
+
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	return srv, &tokenCalls

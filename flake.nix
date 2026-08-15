@@ -213,6 +213,11 @@
           program = "${pkgs.brygge.tools}/bin/vipps-webhook-register";
           meta.description = "Register/list/delete the Vipps ePayment webhook (run with Vipps credentials set)";
         };
+        apps.vipps-report = {
+          type = "app";
+          program = "${pkgs.brygge.tools}/bin/vipps-report";
+          meta.description = "Probe the Vipps Report API — ledgers/funds/fees (run with Vipps credentials set)";
+        };
 
         apps.tf-plan = {
           type = "app";

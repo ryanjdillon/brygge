@@ -131,6 +131,10 @@ vipps-verify:
 vipps-webhook-register *ARGS:
     cd backend && go run ./cmd/vipps-webhook-register {{ARGS}}
 
+# Probe the Vipps Report API (ledgers | funds <ledgerId> <date> | fees <ledgerId> <date>)
+vipps-report *ARGS:
+    cd backend && go run ./cmd/vipps-report {{ARGS}}
+
 # Build Go binary with embedded Vue dist
 build: build-frontend
     cp -r frontend/dist/* backend/internal/web/dist/
