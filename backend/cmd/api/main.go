@@ -393,9 +393,16 @@ func main() {
 			r.Post("/contact", contactHandler.HandleContactForm)
 			r.Get("/unsubscribe", emailPrefsHandler.HandleUnsubscribeRedirect)
 			r.Post("/unsubscribe", emailPrefsHandler.HandleUnsubscribeOneClick)
-			// Public "Betal med Vipps" link from faktura emails — mints a fresh
-			// ePayment on click and redirects to Vipps (BRY-8).
+			// Public "Betal med Vipps" link from faktura emails — one-tap redirect
+			// that mints a fresh ePayment (BRY-8). Kept for already-sent emails;
+			// new emails link to the /betal/{token} checkout page below.
 			r.Get("/betal/{token}", invoiceHandler.HandleOrderPayRedirect)
+			// Token-addressed checkout page API: itemised faktura + ad-hoc catalog
+			// add-ons, then mint a Vipps payment on demand (BRY-263).
+			r.Get("/checkout/{token}", invoiceHandler.HandleGetCheckout)
+			r.Post("/checkout/{token}/lines", invoiceHandler.HandleAddCheckoutLine)
+			r.Delete("/checkout/{token}/lines/{lineID}", invoiceHandler.HandleRemoveCheckoutLine)
+			r.Post("/checkout/{token}/pay", invoiceHandler.HandlePayCheckout)
 			r.Get("/club", func(w http.ResponseWriter, r *http.Request) {
 				// Public club info — name/slug/domain come from the static
 				// deploy config so the response is available even before any

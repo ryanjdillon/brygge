@@ -2277,6 +2277,25 @@
     "byLength": "by length",
     "tiersCount": "{n} tiers"
   },
+  "pay": {
+    "loading": "Loading payment …",
+    "notFoundTitle": "Payment not found",
+    "notFoundBody": "The link is invalid or expired. Please contact the treasurer.",
+    "alreadyPaidTitle": "Already paid",
+    "alreadyPaidBody": "This invoice is recorded as paid. Thank you!",
+    "title": "Pay invoice #{n}",
+    "titleGeneric": "Payment",
+    "invoiceSection": "Invoice #{n}",
+    "addonsSection": "Add-ons",
+    "addLabel": "Add something more",
+    "addPlaceholder": "Choose …",
+    "addButton": "Add",
+    "total": "To pay",
+    "preferBankNote": "You can also pay by bank transfer using the KID from the invoice — it costs the club nothing.",
+    "processing": "Starting Vipps …",
+    "payButton": "Pay with Vipps",
+    "payError": "Could not start payment. Please try again."
+  },
   "bulkInvoices": {
     "title": "Generate fakturas for {n} members",
     "fiscalPeriod": "Fiscal year",

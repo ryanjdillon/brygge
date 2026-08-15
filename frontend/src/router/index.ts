@@ -66,6 +66,10 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/CheckoutConfirmView.vue'),
   },
   {
+    path: '/betal/:token',
+    component: () => import('@/views/PayInvoiceView.vue'),
+  },
+  {
     path: '/login',
     component: () => import('@/views/LoginView.vue'),
   },

@@ -2155,6 +2155,25 @@
     "byLength": "etter lengd",
     "tiersCount": "{n} trinn"
   },
+  "pay": {
+    "loading": "Lastar betaling …",
+    "notFoundTitle": "Fann ikkje betalinga",
+    "notFoundBody": "Lenka er ugyldig eller utløpt. Ta kontakt med kasserar.",
+    "alreadyPaidTitle": "Allereie betalt",
+    "alreadyPaidBody": "Denne fakturaen er registrert som betalt. Takk!",
+    "title": "Betal faktura #{n}",
+    "titleGeneric": "Betaling",
+    "invoiceSection": "Faktura #{n}",
+    "addonsSection": "Tillegg",
+    "addLabel": "Legg til noko meir",
+    "addPlaceholder": "Vel …",
+    "addButton": "Legg til",
+    "total": "Å betale",
+    "preferBankNote": "Du kan òg betale med bankoverføring og KID frå fakturaen — det er gratis for laget.",
+    "processing": "Startar Vipps …",
+    "payButton": "Betal med Vipps",
+    "payError": "Kunne ikkje starte betaling. Prøv igjen."
+  },
   "bulkInvoices": {
     "title": "Generer fakturaar for {n} medlemmer",
     "fiscalPeriod": "Rekneskapsår",

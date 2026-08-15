@@ -1,0 +1,325 @@
+package handlers
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"net/http"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
+)
+
+// Public token-addressed checkout API backing the /betal/{token} pay page
+// (BRY-263). The token is the capability; no auth. A checkout is an `orders`
+// row that settles a faktura (order_sources) and can carry ad-hoc catalog
+// add-ons (order_lines). Billing-only price_items are never offered as add-ons.
+var checkoutCatalogExcludedCategories = []string{"harbor_membership", "slip_fee", "broadcast"}
+
+type checkoutLineResp struct {
+	ID         string  `json:"id"`
+	Name       string  `json:"name"`
+	Quantity   int     `json:"quantity"`
+	UnitAmount float64 `json:"unit_amount"`
+	Total      float64 `json:"total"`
+}
+
+type checkoutInvoiceResp struct {
+	Number int                `json:"number"`
+	Amount float64            `json:"amount"`
+	Lines  []checkoutLineResp `json:"lines"`
+}
+
+type checkoutCatalogItem struct {
+	PriceItemID string  `json:"price_item_id"`
+	Name        string  `json:"name"`
+	Description string  `json:"description"`
+	Amount      float64 `json:"amount"`
+	Category    string  `json:"category"`
+}
+
+type checkoutResp struct {
+	Status      string                `json:"status"`
+	Currency    string                `json:"currency"`
+	Invoice     *checkoutInvoiceResp  `json:"invoice"`
+	Lines       []checkoutLineResp    `json:"lines"`
+	Total       float64               `json:"total"`
+	Catalog     []checkoutCatalogItem `json:"catalog"`
+	AlreadyPaid bool                  `json:"already_paid"`
+}
+
+// checkoutByToken loads the order behind a pay token.
+func (h *InvoiceHandler) checkoutByToken(ctx context.Context, token string) (orderID, clubID, status string, ok bool) {
+	if token == "" {
+		return "", "", "", false
+	}
+	if err := h.db.QueryRow(ctx,
+		`SELECT id, club_id, status FROM orders WHERE token = $1`,
+		token,
+	).Scan(&orderID, &clubID, &status); err != nil {
+		return "", "", "", false
+	}
+	return orderID, clubID, status, true
+}
+
+// HandleGetCheckout returns the full pay-page state: the faktura being settled
+// (read-only), any ad-hoc add-ons, the running total, and the addable catalog.
+func (h *InvoiceHandler) HandleGetCheckout(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	orderID, clubID, status, ok := h.checkoutByToken(ctx, chi.URLParam(r, "token"))
+	if !ok {
+		Error(w, http.StatusNotFound, "checkout not found")
+		return
+	}
+	resp, err := h.buildCheckoutResp(ctx, orderID, clubID, status)
+	if err != nil {
+		h.log.Error().Err(err).Str("order_id", orderID).Msg("checkout: build response failed")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	JSON(w, http.StatusOK, resp)
+}
+
+func (h *InvoiceHandler) buildCheckoutResp(ctx context.Context, orderID, clubID, status string) (*checkoutResp, error) {
+	resp := &checkoutResp{
+		Status:      status,
+		Currency:    "NOK",
+		Lines:       []checkoutLineResp{},
+		Catalog:     []checkoutCatalogItem{},
+		AlreadyPaid: status == "paid" || status == "refunded",
+	}
+
+	// The faktura being settled (phase 1: a single invoice source).
+	var (
+		invoiceID     string
+		invoiceNumber int
+		invoiceAmount float64
+	)
+	err := h.db.QueryRow(ctx,
+		`SELECT i.id, i.invoice_number, i.total_amount
+		   FROM order_sources os
+		   JOIN invoices i ON i.id = os.invoice_id
+		  WHERE os.order_id = $1
+		  ORDER BY i.invoice_number
+		  LIMIT 1`,
+		orderID,
+	).Scan(&invoiceID, &invoiceNumber, &invoiceAmount)
+	if err == nil {
+		inv := &checkoutInvoiceResp{Number: invoiceNumber, Amount: invoiceAmount, Lines: []checkoutLineResp{}}
+		rows, err := h.db.Query(ctx,
+			`SELECT description, quantity, unit_price, line_total
+			   FROM invoice_lines WHERE invoice_id = $1 ORDER BY id`,
+			invoiceID,
+		)
+		if err != nil {
+			return nil, err
+		}
+		for rows.Next() {
+			var l checkoutLineResp
+			if err := rows.Scan(&l.Name, &l.Quantity, &l.UnitAmount, &l.Total); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			inv.Lines = append(inv.Lines, l)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+		resp.Invoice = inv
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return nil, err
+	}
+
+	// Ad-hoc add-ons.
+	lineRows, err := h.db.Query(ctx,
+		`SELECT id, name, quantity, unit_price, total_price
+		   FROM order_lines WHERE order_id = $1 ORDER BY created_at`,
+		orderID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	for lineRows.Next() {
+		var l checkoutLineResp
+		if err := lineRows.Scan(&l.ID, &l.Name, &l.Quantity, &l.UnitAmount, &l.Total); err != nil {
+			lineRows.Close()
+			return nil, err
+		}
+		resp.Lines = append(resp.Lines, l)
+	}
+	lineRows.Close()
+	if err := lineRows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Running total (unpaid invoice sources + ad-hoc lines).
+	total, _, err := h.orderTotal(ctx, orderID)
+	if err != nil {
+		return nil, err
+	}
+	resp.Total = total
+
+	// Addable catalog: active price_items minus billing-only categories.
+	catRows, err := h.db.Query(ctx,
+		`SELECT id, name, description, amount, category
+		   FROM price_items
+		  WHERE club_id = $1 AND is_active = true
+		    AND category <> ALL($2)
+		  ORDER BY sort_order, name`,
+		clubID, checkoutCatalogExcludedCategories,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer catRows.Close()
+	for catRows.Next() {
+		var c checkoutCatalogItem
+		if err := catRows.Scan(&c.PriceItemID, &c.Name, &c.Description, &c.Amount, &c.Category); err != nil {
+			return nil, err
+		}
+		resp.Catalog = append(resp.Catalog, c)
+	}
+	if err := catRows.Err(); err != nil {
+		return nil, err
+	}
+
+	return resp, nil
+}
+
+type addCheckoutLineRequest struct {
+	PriceItemID string `json:"price_item_id"`
+	Quantity    int    `json:"quantity"`
+}
+
+// HandleAddCheckoutLine adds an ad-hoc catalog line to the checkout. Only
+// allowed while the checkout is unpaid; the faktura itself is never mutated.
+func (h *InvoiceHandler) HandleAddCheckoutLine(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	orderID, clubID, status, ok := h.checkoutByToken(ctx, chi.URLParam(r, "token"))
+	if !ok {
+		Error(w, http.StatusNotFound, "checkout not found")
+		return
+	}
+	if status != "pending" {
+		Error(w, http.StatusConflict, "checkout is already settled")
+		return
+	}
+
+	var req addCheckoutLineRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.Quantity < 1 {
+		req.Quantity = 1
+	}
+
+	// Resolve the price item — must be active, this club's, and not a
+	// billing-only category (members can't self-add a membership fee).
+	var (
+		name     string
+		amount   float64
+		category string
+	)
+	err := h.db.QueryRow(ctx,
+		`SELECT name, amount, category FROM price_items
+		  WHERE id = $1 AND club_id = $2 AND is_active = true`,
+		req.PriceItemID, clubID,
+	).Scan(&name, &amount, &category)
+	if errors.Is(err, pgx.ErrNoRows) {
+		Error(w, http.StatusBadRequest, "unknown or unavailable item")
+		return
+	}
+	if err != nil {
+		h.log.Error().Err(err).Msg("checkout: resolve price item failed")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	for _, c := range checkoutCatalogExcludedCategories {
+		if category == c {
+			Error(w, http.StatusBadRequest, "item is not available for self-service purchase")
+			return
+		}
+	}
+
+	lineTotal := amount * float64(req.Quantity)
+	if _, err := h.db.Exec(ctx,
+		`INSERT INTO order_lines (order_id, price_item_id, name, quantity, unit_price, total_price)
+		 VALUES ($1, $2, $3, $4, $5, $6)`,
+		orderID, req.PriceItemID, name, req.Quantity, amount, lineTotal,
+	); err != nil {
+		h.log.Error().Err(err).Msg("checkout: insert order line failed")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	resp, err := h.buildCheckoutResp(ctx, orderID, clubID, status)
+	if err != nil {
+		h.log.Error().Err(err).Msg("checkout: rebuild after add failed")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	JSON(w, http.StatusOK, resp)
+}
+
+// HandleRemoveCheckoutLine deletes an ad-hoc add-on. Invoice lines are not
+// order_lines, so this can never touch the faktura.
+func (h *InvoiceHandler) HandleRemoveCheckoutLine(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	orderID, clubID, status, ok := h.checkoutByToken(ctx, chi.URLParam(r, "token"))
+	if !ok {
+		Error(w, http.StatusNotFound, "checkout not found")
+		return
+	}
+	if status != "pending" {
+		Error(w, http.StatusConflict, "checkout is already settled")
+		return
+	}
+	lineID := chi.URLParam(r, "lineID")
+	if _, err := h.db.Exec(ctx,
+		`DELETE FROM order_lines WHERE id = $1 AND order_id = $2`,
+		lineID, orderID,
+	); err != nil {
+		h.log.Error().Err(err).Msg("checkout: delete order line failed")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	resp, err := h.buildCheckoutResp(ctx, orderID, clubID, status)
+	if err != nil {
+		h.log.Error().Err(err).Msg("checkout: rebuild after remove failed")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	JSON(w, http.StatusOK, resp)
+}
+
+// HandlePayCheckout mints a fresh Vipps ePayment for the current total and
+// returns the checkout URL for the browser to follow.
+func (h *InvoiceHandler) HandlePayCheckout(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	orderID, _, status, ok := h.checkoutByToken(ctx, chi.URLParam(r, "token"))
+	if !ok {
+		Error(w, http.StatusNotFound, "checkout not found")
+		return
+	}
+	if status == "paid" || status == "refunded" {
+		Error(w, http.StatusConflict, "checkout is already paid")
+		return
+	}
+	if h.vipps == nil {
+		Error(w, http.StatusServiceUnavailable, "Vipps is not available")
+		return
+	}
+	redirectURL, err := h.mintOrderPayment(ctx, orderID)
+	if errors.Is(err, errNothingToPay) {
+		Error(w, http.StatusBadRequest, "nothing to pay")
+		return
+	}
+	if err != nil {
+		h.log.Error().Err(err).Str("order_id", orderID).Msg("checkout: mint payment failed")
+		Error(w, http.StatusBadGateway, "could not start Vipps payment")
+		return
+	}
+	JSON(w, http.StatusOK, map[string]string{"redirect_url": redirectURL})
+}

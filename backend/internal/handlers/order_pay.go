@@ -99,7 +99,8 @@ func (h *InvoiceHandler) ensureFakturaOrderToken(ctx context.Context, clubID, in
 }
 
 // orderPayURL builds the public, tokenised pay link put in the email. It points
-// at our own endpoint (which mints a fresh ePayment on click), not Vipps
+// at the /betal/{token} checkout page (which itemises the faktura, lets the
+// payer add catalog items, then mints a fresh ePayment on demand), not Vipps
 // directly. Empty token → empty URL (KID-only email).
 func (h *InvoiceHandler) orderPayURL(token string) string {
 	if token == "" {
@@ -109,7 +110,7 @@ func (h *InvoiceHandler) orderPayURL(token string) string {
 	if base == "" {
 		base = "https://" + h.config.Domain
 	}
-	return strings.TrimRight(base, "/") + "/api/v1/betal/" + token
+	return strings.TrimRight(base, "/") + "/betal/" + token
 }
 
 // HandleOrderPayRedirect is the public GET /api/v1/betal/{token} endpoint the

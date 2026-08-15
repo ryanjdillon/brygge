@@ -2273,6 +2273,25 @@
     "byLength": "etter lengde",
     "tiersCount": "{n} trinn"
   },
+  "pay": {
+    "loading": "Laster betaling …",
+    "notFoundTitle": "Fant ikke betalingen",
+    "notFoundBody": "Lenken er ugyldig eller utløpt. Ta kontakt med kasserer.",
+    "alreadyPaidTitle": "Allerede betalt",
+    "alreadyPaidBody": "Denne fakturaen er registrert som betalt. Takk!",
+    "title": "Betal faktura #{n}",
+    "titleGeneric": "Betaling",
+    "invoiceSection": "Faktura #{n}",
+    "addonsSection": "Tillegg",
+    "addLabel": "Legg til noe mer",
+    "addPlaceholder": "Velg …",
+    "addButton": "Legg til",
+    "total": "Å betale",
+    "preferBankNote": "Du kan også betale med bankoverføring og KID fra fakturaen — det er gratis for laget.",
+    "processing": "Starter Vipps …",
+    "payButton": "Betal med Vipps",
+    "payError": "Kunne ikke starte betaling. Prøv igjen."
+  },
   "bulkInvoices": {
     "title": "Generer fakturaer for {n} medlemmer",
     "fiscalPeriod": "Regnskapsår",
