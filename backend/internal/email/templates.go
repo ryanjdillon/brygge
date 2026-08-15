@@ -269,7 +269,7 @@ func InvoiceBody(_ /*locale*/, memberName, clubName string, invoiceNumber int, d
 		Amount        string
 		KID           string
 		BankAccount   string
-		VippsURL      string
+		VippsURL      template.URL
 		VippsExpiry   string
 	}{
 		Club:          clubName,
@@ -279,7 +279,7 @@ func InvoiceBody(_ /*locale*/, memberName, clubName string, invoiceNumber int, d
 		Amount:        formatNOK(total),
 		KID:           kid,
 		BankAccount:   bankAccount,
-		VippsURL:      vippsURL,
+		VippsURL:      template.URL(vippsURL),
 		VippsExpiry:   vippsExpiryStr,
 	}
 	var buf bytes.Buffer
@@ -332,7 +332,7 @@ func InvoiceReminderBody(_ /*locale*/, memberName, clubName string, invoiceNumbe
 		KID           string
 		BankAccount   string
 		Overdue       bool
-		VippsURL      string
+		VippsURL      template.URL
 		VippsExpiry   string
 	}{
 		Club:          clubName,
@@ -343,7 +343,7 @@ func InvoiceReminderBody(_ /*locale*/, memberName, clubName string, invoiceNumbe
 		KID:           kid,
 		BankAccount:   bankAccount,
 		Overdue:       overdue,
-		VippsURL:      vippsURL,
+		VippsURL:      template.URL(vippsURL),
 		VippsExpiry:   vippsExpiryStr,
 	}
 	var buf bytes.Buffer
@@ -426,16 +426,10 @@ var reminderHTMLTpl = template.Must(template.New("reminder").Parse(`<!DOCTYPE ht
                 </tr>
               </table>
 {{if .VippsURL}}
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 24px 0;">
-                <tr>
-                  <td align="center">
-                    <a href="{{.VippsURL}}" style="display:inline-block;background:#ff5b24;color:#ffffff;text-decoration:none;font-size:16px;font-weight:600;padding:14px 32px;border-radius:8px;">Betal med Vipps</a>
-                  </td>
-                </tr>
-                <tr>
-                  <td align="center" style="padding-top:8px;font-size:12px;color:#64748b;">Lenken er gyldig til {{.VippsExpiry}}.</td>
-                </tr>
-              </table>
+              <p style="margin:0 0 8px 0;text-align:center;">
+                <a href="{{.VippsURL}}" style="display:inline-block;background:#ff5b24;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:4px;font-weight:600;font-size:15px;">Betal med Vipps</a>
+              </p>
+              <p style="margin:0 0 20px 0;text-align:center;font-size:12px;color:#64748b;">Lenken er gyldig til {{.VippsExpiry}}.</p>
 {{end}}
               <p style="margin:0 0 8px 0;font-size:13px;color:#64748b;">Hvis betalingen allerede er sendt, kan du se bort fra denne påminnelsen.</p>
               <p style="margin:0;font-size:13px;color:#64748b;">Spørsmål kan sendes til kasserer ved å svare på denne e-posten.</p>
@@ -493,16 +487,10 @@ var invoiceHTMLTpl = template.Must(template.New("invoice").Parse(`<!DOCTYPE html
                 </tr>
               </table>
 {{if .VippsURL}}
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 20px 0;">
-                <tr>
-                  <td align="center">
-                    <a href="{{.VippsURL}}" style="display:inline-block;background:#ff5b24;color:#ffffff;text-decoration:none;font-size:16px;font-weight:600;padding:14px 32px;border-radius:8px;">Betal med Vipps</a>
-                  </td>
-                </tr>
-                <tr>
-                  <td align="center" style="padding-top:8px;font-size:12px;color:#64748b;">Lenken er gyldig til {{.VippsExpiry}}.</td>
-                </tr>
-              </table>
+              <p style="margin:0 0 8px 0;text-align:center;">
+                <a href="{{.VippsURL}}" style="display:inline-block;background:#ff5b24;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:4px;font-weight:600;font-size:15px;">Betal med Vipps</a>
+              </p>
+              <p style="margin:0 0 20px 0;text-align:center;font-size:12px;color:#64748b;">Lenken er gyldig til {{.VippsExpiry}}.</p>
 {{end}}
               <p style="margin:0 0 8px 0;font-size:13px;color:#64748b;">Bruk KID-nummeret når du betaler i nettbanken slik at innbetalingen registreres automatisk.</p>
               <p style="margin:0;font-size:13px;color:#64748b;">Spørsmål om fakturaen kan sendes til kasserer ved å svare på denne e-posten.</p>
