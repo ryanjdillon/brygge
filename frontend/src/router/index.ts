@@ -433,8 +433,7 @@ const routes: RouteRecordRaw[] = [
       },
       {
         path: 'motorhome/settings',
-        name: 'admin-motorhome-settings',
-        component: () => import('@/views/admin/MotorhomeSettingsView.vue'),
+        redirect: { name: 'admin-harbor-settings' },
       },
     ],
   },

@@ -583,7 +583,7 @@
       "economySettings": "Innstillingar",
       "siteSettings": "Nettstadsinnhald",
       "faqSettings": "Ofte stilte spørsmål",
-      "harborSettings": "Hamneinformasjon",
+      "harborSettings": "Hamn & bubil",
       "motorhomeSettings": "Bubilinformasjon",
       "pdfArchive": "PDF-arkiv",
       "devQuery": "Database-spørring"
@@ -1525,6 +1525,9 @@
       }
     },
     "harborSettings": {
+      "pageTitle": "Hamn og bubil",
+      "tabHarbor": "Hamn",
+      "tabMotorhome": "Bubil",
       "title": "Hamneinformasjon",
       "subtitle": "Innhald vist på den offentlege hamnesida — innsegling, djupne, VHF-kanal og handlingsknappen.",
       "ctaGroup": "Handlingsknapp",

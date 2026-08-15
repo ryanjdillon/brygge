@@ -587,7 +587,7 @@
       "economySettings": "Innstillinger",
       "siteSettings": "Nettstedsinnhold",
       "faqSettings": "Ofte stilte spørsmål",
-      "harborSettings": "Havneinformasjon",
+      "harborSettings": "Havn & bobil",
       "motorhomeSettings": "Bobilinformasjon",
       "pdfArchive": "PDF-arkiv",
       "devQuery": "Database-spørring"
@@ -1643,6 +1643,9 @@
       }
     },
     "harborSettings": {
+      "pageTitle": "Havn og bobil",
+      "tabHarbor": "Havn",
+      "tabMotorhome": "Bobil",
       "title": "Havneinformasjon",
       "subtitle": "Innhold vist på den offentlige havnesiden — innseiling, dybde, VHF-kanal og handlingsknappen.",
       "ctaGroup": "Handlingsknapp",

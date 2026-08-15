@@ -10,12 +10,11 @@ import Textarea from '@/components/ui/form/Textarea.vue'
 const { t } = useI18n()
 const { ensureFreshTotp, totpAwareFetch } = useFreshTotp()
 
-const motorhomePower = ref('')
-const motorhomeFacilities = ref('')
-const motorhomeCheckin = ref('')
-const motorhomeRules = ref('')
-const motorhomeCtaTitle = ref('')
-const motorhomeCtaDescription = ref('')
+const harborApproach = ref('')
+const harborDepth = ref('')
+const harborVhf = ref('')
+const harborCtaTitle = ref('')
+const harborCtaDescription = ref('')
 
 const loading = ref(true)
 const saving = ref(false)
@@ -29,12 +28,11 @@ async function load() {
     const res = await fetch('/api/v1/admin/settings/site', { credentials: 'include' })
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
     const body = await res.json()
-    motorhomePower.value = body.motorhome_power ?? ''
-    motorhomeFacilities.value = body.motorhome_facilities ?? ''
-    motorhomeCheckin.value = body.motorhome_checkin ?? ''
-    motorhomeRules.value = body.motorhome_rules ?? ''
-    motorhomeCtaTitle.value = body.motorhome_cta_title ?? ''
-    motorhomeCtaDescription.value = body.motorhome_cta_description ?? ''
+    harborApproach.value = body.harbor_approach ?? ''
+    harborDepth.value = body.harbor_depth ?? ''
+    harborVhf.value = body.harbor_vhf ?? ''
+    harborCtaTitle.value = body.harbor_cta_title ?? ''
+    harborCtaDescription.value = body.harbor_cta_description ?? ''
   } catch (e) {
     error.value = (e as Error).message
   } finally {
@@ -52,12 +50,11 @@ async function save() {
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        motorhome_power: motorhomePower.value,
-        motorhome_facilities: motorhomeFacilities.value,
-        motorhome_checkin: motorhomeCheckin.value,
-        motorhome_rules: motorhomeRules.value,
-        motorhome_cta_title: motorhomeCtaTitle.value,
-        motorhome_cta_description: motorhomeCtaDescription.value,
+        harbor_approach: harborApproach.value,
+        harbor_depth: harborDepth.value,
+        harbor_vhf: harborVhf.value,
+        harbor_cta_title: harborCtaTitle.value,
+        harbor_cta_description: harborCtaDescription.value,
       }),
     })
     if (!res.ok) {
@@ -76,43 +73,40 @@ onMounted(load)
 </script>
 
 <template>
-  <div class="space-y-6">
-    <h1 class="text-2xl font-bold text-gray-900">{{ t('admin.motorhomeSettings.title') }}</h1>
-    <p class="text-sm text-gray-600">{{ t('admin.motorhomeSettings.subtitle') }}</p>
+  <div class="space-y-5">
+    <p class="text-sm text-gray-600">{{ t('admin.harborSettings.subtitle') }}</p>
 
     <form class="space-y-5" @submit.prevent="save">
+      <FormField :label="t('admin.harborSettings.harborApproach')">
+        <Textarea v-model="harborApproach" :rows="3" :disabled="loading" />
+      </FormField>
+
       <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <FormField :label="t('admin.motorhomeSettings.motorhomePower')">
-          <Textarea v-model="motorhomePower" :rows="3" :disabled="loading" />
+        <FormField :label="t('admin.harborSettings.harborDepth')">
+          <Input v-model="harborDepth" :disabled="loading" />
         </FormField>
-        <FormField :label="t('admin.motorhomeSettings.motorhomeFacilities')">
-          <Textarea v-model="motorhomeFacilities" :rows="3" :disabled="loading" />
-        </FormField>
-        <FormField :label="t('admin.motorhomeSettings.motorhomeCheckin')">
-          <Textarea v-model="motorhomeCheckin" :rows="3" :disabled="loading" />
-        </FormField>
-        <FormField :label="t('admin.motorhomeSettings.motorhomeRules')">
-          <Textarea v-model="motorhomeRules" :rows="3" :disabled="loading" />
+        <FormField :label="t('admin.harborSettings.harborVhf')">
+          <Input v-model="harborVhf" placeholder="Ch 16 / Ch 73" :disabled="loading" />
         </FormField>
       </div>
 
       <fieldset class="rounded-md border border-slate-200 bg-slate-50 p-3 space-y-3">
         <legend class="px-1 text-xs font-semibold text-slate-700">
-          {{ t('admin.motorhomeSettings.ctaGroup') }}
+          {{ t('admin.harborSettings.ctaGroup') }}
         </legend>
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <FormField :label="t('admin.motorhomeSettings.ctaTitle')">
-            <Input v-model="motorhomeCtaTitle" :disabled="loading" />
+          <FormField :label="t('admin.harborSettings.ctaTitle')">
+            <Input v-model="harborCtaTitle" :disabled="loading" />
           </FormField>
-          <FormField :label="t('admin.motorhomeSettings.ctaDescription')">
-            <Input v-model="motorhomeCtaDescription" :disabled="loading" />
+          <FormField :label="t('admin.harborSettings.ctaDescription')">
+            <Input v-model="harborCtaDescription" :disabled="loading" />
           </FormField>
         </div>
       </fieldset>
 
       <p v-if="error" class="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{{ error }}</p>
       <p v-else-if="savedAt" class="rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">
-        {{ t('admin.motorhomeSettings.saved') }} ({{ savedAt.toLocaleTimeString() }})
+        {{ t('admin.harborSettings.saved') }} ({{ savedAt.toLocaleTimeString() }})
       </p>
 
       <div class="flex justify-end pt-2">
