@@ -104,6 +104,15 @@ func (s *Service) linkInvoicePayment(ctx context.Context, clubID, invoiceID stri
 	return nil
 }
 
+// MarkInvoicePaidFromVipps marks an invoice paid from an inbound Vipps
+// ePayment webhook: it creates the payments back-link (idempotent) so the
+// invoice reads as paid, but posts NO journal entry. For Vipps the GL posting
+// is owned by the settlement/clearing reconciliation path (BRY-256); posting
+// here as well would double-count the same money.
+func (s *Service) MarkInvoicePaidFromVipps(ctx context.Context, clubID, invoiceID string, paidAt time.Time) error {
+	return s.linkInvoicePayment(ctx, clubID, invoiceID, paidAt)
+}
+
 // resolveBillingRecipient returns the id of the billing_recipients row for an
 // organization / non-member invoice, creating it from the invoice snapshot if
 // none exists yet. Orgs are keyed on (club, org_number|org_name);

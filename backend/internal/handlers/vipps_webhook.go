@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 
+	"github.com/brygge-klubb/brygge/internal/accounting"
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/vipps"
 )
@@ -15,16 +16,20 @@ import (
 // The endpoint carries no session; each request is authenticated by verifying
 // the Vipps HMAC-SHA256 signature over the body against the registration secret.
 type VippsWebhookHandler struct {
-	db     *pgxpool.Pool
-	cfg    *config.Config
-	log    zerolog.Logger
+	db         *pgxpool.Pool
+	cfg        *config.Config
+	accounting *accounting.Service
+	vipps      *vipps.Client // nil when the instance has no Vipps credentials
+	log        zerolog.Logger
 }
 
-func NewVippsWebhookHandler(db *pgxpool.Pool, cfg *config.Config, log zerolog.Logger) *VippsWebhookHandler {
+func NewVippsWebhookHandler(db *pgxpool.Pool, cfg *config.Config, accountingSvc *accounting.Service, vippsClient *vipps.Client, log zerolog.Logger) *VippsWebhookHandler {
 	return &VippsWebhookHandler{
-		db:  db,
-		cfg: cfg,
-		log: log.With().Str("handler", "vipps_webhook").Logger(),
+		db:         db,
+		cfg:        cfg,
+		accounting: accountingSvc,
+		vipps:      vippsClient,
+		log:        log.With().Str("handler", "vipps_webhook").Logger(),
 	}
 }
 
@@ -39,22 +44,36 @@ func (h *VippsWebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if evt.IdempotencyKey == "" {
-		h.log.Warn().Str("event_name", evt.Name).Msg("webhook missing idempotency key — skipping")
+	// idempotencyKey is optional per Vipps ("some webhooks may not supply this
+	// value"), so fall back to pspReference — which is unique per operation —
+	// as the dedup key. Only drop when neither is present.
+	eventID := evt.IdempotencyKey
+	if eventID == "" {
+		eventID = evt.PSPReference
+	}
+	if eventID == "" {
+		h.log.Warn().Str("event_name", evt.Name).Str("reference", evt.Reference).
+			Msg("webhook missing idempotencyKey and pspReference — skipping")
 		w.WriteHeader(http.StatusOK)
 		return
 	}
 
-	// Resolve club_id via the order reference (vipps_reference on orders table).
-	// Fall back to the instance-level club when the reference is unrecognised
-	// (e.g. QR payments not yet tied to an order).
+	// Resolve club_id from the reference: an order (checkout/QR) or an invoice
+	// (BRY-8 faktura payment link). Fall back to the instance-level club when
+	// the reference is unrecognised.
 	var clubID string
 	err = h.db.QueryRow(ctx,
 		`SELECT club_id FROM orders WHERE vipps_reference = $1 LIMIT 1`,
 		evt.Reference,
 	).Scan(&clubID)
 	if err != nil {
-		// Reference not found in orders yet — use the instance club.
+		err = h.db.QueryRow(ctx,
+			`SELECT club_id FROM invoices WHERE vipps_payment_reference = $1 LIMIT 1`,
+			evt.Reference,
+		).Scan(&clubID)
+	}
+	if err != nil {
+		// Reference matched neither — use the instance club.
 		_ = h.db.QueryRow(ctx,
 			`SELECT id FROM clubs WHERE slug = $1 LIMIT 1`,
 			h.cfg.ClubSlug,
@@ -71,7 +90,7 @@ func (h *VippsWebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		`INSERT INTO vipps_webhook_events (club_id, event_id, event_name, reference, payload)
 		 VALUES ($1, $2, $3, $4, $5)
 		 ON CONFLICT (club_id, event_id) DO NOTHING`,
-		clubID, evt.IdempotencyKey, evt.Name, evt.Reference, json.RawMessage(raw),
+		clubID, eventID, evt.Name, evt.Reference, json.RawMessage(raw),
 	)
 	if err != nil {
 		h.log.Error().Err(err).Str("event_id", evt.IdempotencyKey).Msg("webhook: failed to persist event")

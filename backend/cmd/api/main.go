@@ -282,7 +282,7 @@ func main() {
 	faqsHandler := handlers.NewFaqsHandler(db, &cfg, log)
 	productsHandler := handlers.NewProductsHandler(db, &cfg, log)
 	ordersHandler := handlers.NewOrdersHandler(db, &cfg, log)
-	vippsWebhookHandler := handlers.NewVippsWebhookHandler(db, &cfg, log)
+	vippsWebhookHandler := handlers.NewVippsWebhookHandler(db, &cfg, accountingSvc, vippsClient, log)
 	boatModelsHandler := handlers.NewBoatModelsHandler(db, log)
 	volunteerHandler := handlers.NewVolunteerHandler(db, &cfg, log)
 	shoppingListsHandler := handlers.NewShoppingListsHandler(db, &cfg, log)
