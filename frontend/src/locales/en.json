@@ -672,6 +672,7 @@
         "reminderConfirmTitle": "Send payment reminders?",
         "reminderBulkBody": "Email a payment reminder for {n} invoice(s). Already-paid rows in the selection are skipped automatically.",
         "reminderAction": "Send reminders",
+        "reminderVippsLink": "Include Betal med Vipps link",
         "reminderNoneEligible": "No selected invoices are eligible — all are already marked as paid.",
         "regenSelected": "Regenerate PDF",
         "regenConfirmTitle": "Regenerate PDFs?",

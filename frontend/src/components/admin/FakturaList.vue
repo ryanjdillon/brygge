@@ -6,7 +6,7 @@ import { FileDown, Send, Trash2, Ban, Bell, RefreshCw, KeyRound, Copy, Check, Ch
 import FakturaArchiveButton from '@/components/admin/FakturaArchiveButton.vue'
 import DeliveryLogButton from '@/components/admin/DeliveryLogButton.vue'
 import InvoiceNumberChip from '@/components/ui/InvoiceNumberChip.vue'
-import { useConfirm } from '@/stores/confirm'
+import { useConfirm, useConfirmStore } from '@/stores/confirm'
 import { useFreshTotp } from '@/composables/useFreshTotp'
 import { useRangeSelect } from '@/composables/useRangeSelect'
 import { formatNOK, formatDate, formatDateTime } from '@/lib/format'
@@ -39,6 +39,7 @@ const props = defineProps<{
 
 const { t } = useI18n()
 const confirm = useConfirm()
+const confirmStore = useConfirmStore()
 const { ensureFreshTotp, totpAwareFetch } = useFreshTotp()
 
 const rows = ref<Row[]>([])
@@ -419,13 +420,14 @@ async function sendRemindersSelected() {
     details: items.map(rowLabel),
     confirmLabel: t('admin.faktura.sent.reminderAction'),
     tone: 'info',
+    checkbox: { label: t('admin.faktura.sent.reminderVippsLink'), default: true },
   })
   if (!ok) return
   const ids = items.map((d) => d.id)
   const res = await totpAwareFetch(`/api/v1/admin/financials/invoices/bulk-reminder`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ids }),
+    body: JSON.stringify({ ids, vipps_payment_link: confirmStore.checkboxValue }),
   })
   if (!res.ok) {
     const txt = await res.text().catch(() => '')

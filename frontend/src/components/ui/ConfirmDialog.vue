@@ -71,6 +71,14 @@ function onCancel() {
       <li v-for="(d, i) in store.current.details" :key="i" class="truncate">{{ d }}</li>
     </ul>
 
+    <label
+      v-if="store.current?.checkbox"
+      class="mt-4 flex items-center gap-2 text-sm text-gray-700"
+    >
+      <input v-model="store.checkboxValue" type="checkbox" class="h-4 w-4 rounded border-gray-300" />
+      {{ store.current.checkbox.label }}
+    </label>
+
     <template #footer>
       <div class="flex justify-end gap-2">
         <button

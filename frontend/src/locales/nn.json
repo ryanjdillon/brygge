@@ -664,6 +664,7 @@
         "reminderConfirmTitle": "Send purringar?",
         "reminderBulkBody": "Send e-postpurring for {n} faktura(ar). Alt betalte rader vert automatisk hoppa over.",
         "reminderAction": "Send purringar",
+        "reminderVippsLink": "Inkluder Betal med Vipps-lenke",
         "reminderNoneEligible": "Ingen valde fakturaar er aktuelle — alle er allereie merkte som betalte.",
         "regenSelected": "Regenerer PDF",
         "regenConfirmTitle": "Regenerer fakturaar?",

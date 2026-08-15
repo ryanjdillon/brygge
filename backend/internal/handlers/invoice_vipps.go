@@ -16,17 +16,18 @@ import (
 // to decide whether a re-issue must mint a fresh payment.
 const vippsPaymentValidity = 14 * 24 * time.Hour
 
-// ensureVippsPayment returns a payable Vipps ePayment URL for the invoice,
-// creating one if the instance has Vipps configured and no still-live link
-// already exists. It is idempotent: a link that has not yet expired is reused
-// rather than duplicated, so calling it from both invoice creation and reminder
-// sending is safe.
+// ensureVippsPayment returns a payable Vipps ePayment URL for the invoice.
+// A link that has not yet expired is reused rather than duplicated. When the
+// stored link is missing or expired, a fresh payment is minted only if
+// createIfAbsent is true (invoice creation with opt-in, or a reminder) — a
+// resend passes false so it refreshes an expired link the invoice already had
+// but never adds one to a faktura that opted out.
 //
 // It is deliberately non-fatal: on any problem (Vipps unconfigured, API error,
 // store failure) it returns an empty URL and the caller sends the faktura with
 // the KID-only fallback. Money is never at stake here — the link is a
 // convenience, and the invoice remains payable by bank transfer regardless.
-func (h *InvoiceHandler) ensureVippsPayment(ctx context.Context, clubID, invoiceID string) (url string, expiresAt time.Time) {
+func (h *InvoiceHandler) ensureVippsPayment(ctx context.Context, clubID, invoiceID string, createIfAbsent bool) (url string, expiresAt time.Time) {
 	if h.vipps == nil {
 		return "", time.Time{}
 	}
@@ -35,15 +36,16 @@ func (h *InvoiceHandler) ensureVippsPayment(ctx context.Context, clubID, invoice
 		total         float64
 		invoiceNumber int
 		dueDate       time.Time
+		existingRef   *string
 		existingURL   *string
 		existingExp   *time.Time
 	)
 	err := h.db.QueryRow(ctx,
-		`SELECT total_amount, invoice_number, due_date,
+		`SELECT total_amount, invoice_number, due_date, vipps_payment_reference,
 		        vipps_payment_url, vipps_payment_expires_at
 		 FROM invoices WHERE id = $1 AND club_id = $2`,
 		invoiceID, clubID,
-	).Scan(&total, &invoiceNumber, &dueDate, &existingURL, &existingExp)
+	).Scan(&total, &invoiceNumber, &dueDate, &existingRef, &existingURL, &existingExp)
 	if err != nil {
 		h.log.Error().Err(err).Str("invoice_id", invoiceID).Msg("vipps: load invoice for payment failed")
 		return "", time.Time{}
@@ -52,6 +54,11 @@ func (h *InvoiceHandler) ensureVippsPayment(ctx context.Context, clubID, invoice
 	// Reuse a link that is still live.
 	if existingURL != nil && *existingURL != "" && existingExp != nil && existingExp.After(time.Now()) {
 		return *existingURL, *existingExp
+	}
+
+	// Never opted in and the caller won't create one → nothing to offer.
+	if (existingRef == nil || *existingRef == "") && !createIfAbsent {
+		return "", time.Time{}
 	}
 
 	ref := genVippsReference()

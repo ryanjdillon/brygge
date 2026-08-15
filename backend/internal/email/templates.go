@@ -98,15 +98,15 @@ func MagicLinkBody(locale, clubName, domain, loginURL string) string {
 }
 
 type magicLinkCopyT struct {
-	Subject        string // fmt string with %s for club name
-	Greeting       string
-	Explanation    string // "Someone requested a login link for {Club}"
-	CTA            string // button text
-	LinkIntro      string // "Or copy this link..."
-	Expiry         string
-	Ignore         string // "If you didn't request this..."
-	FallbackClub   string
-	FooterContact  string // shown beneath the divider
+	Subject       string // fmt string with %s for club name
+	Greeting      string
+	Explanation   string // "Someone requested a login link for {Club}"
+	CTA           string // button text
+	LinkIntro     string // "Or copy this link..."
+	Expiry        string
+	Ignore        string // "If you didn't request this..."
+	FallbackClub  string
+	FooterContact string // shown beneath the divider
 }
 
 var magicLinkCopy = map[string]magicLinkCopyT{
@@ -250,12 +250,16 @@ func InvoiceSubject(_, clubName string, invoiceNumber int) string {
 // memberName, dueDate, total, kid and bankAccount are interpolated
 // into the Norwegian copy below. The PDF is attached separately by
 // the caller.
-func InvoiceBody(_ /*locale*/, memberName, clubName string, invoiceNumber int, dueDate time.Time, total float64, kid, bankAccount string) string {
+func InvoiceBody(_ /*locale*/, memberName, clubName string, invoiceNumber int, dueDate time.Time, total float64, kid, bankAccount, vippsURL string, vippsExpiry time.Time) string {
 	if clubName == "" {
 		clubName = "klubben"
 	}
 	if memberName == "" {
 		memberName = "medlem"
+	}
+	var vippsExpiryStr string
+	if vippsURL != "" && !vippsExpiry.IsZero() {
+		vippsExpiryStr = vippsExpiry.Format("02.01.2006")
 	}
 	data := struct {
 		Club          string
@@ -265,6 +269,8 @@ func InvoiceBody(_ /*locale*/, memberName, clubName string, invoiceNumber int, d
 		Amount        string
 		KID           string
 		BankAccount   string
+		VippsURL      string
+		VippsExpiry   string
 	}{
 		Club:          clubName,
 		Member:        memberName,
@@ -273,14 +279,20 @@ func InvoiceBody(_ /*locale*/, memberName, clubName string, invoiceNumber int, d
 		Amount:        formatNOK(total),
 		KID:           kid,
 		BankAccount:   bankAccount,
+		VippsURL:      vippsURL,
+		VippsExpiry:   vippsExpiryStr,
 	}
 	var buf bytes.Buffer
 	if err := invoiceHTMLTpl.Execute(&buf, data); err != nil {
 		// Template bug — fall back to a flat readable summary so the
 		// member still has the payment details.
+		vippsLine := ""
+		if vippsURL != "" {
+			vippsLine = fmt.Sprintf(`<p>Betal med Vipps: <a href="%s">%s</a></p>`, vippsURL, vippsURL)
+		}
 		return fmt.Sprintf(
-			`<p>Hei %s,</p><p>Du har mottatt en ny faktura (#%d) fra %s.</p><p>Forfall: %s · Beløp: %s · KID: %s · Konto: %s</p>`,
-			memberName, invoiceNumber, clubName, data.DueDate, data.Amount, kid, bankAccount,
+			`<p>Hei %s,</p><p>Du har mottatt en ny faktura (#%d) fra %s.</p><p>Forfall: %s · Beløp: %s · KID: %s · Konto: %s</p>%s`,
+			memberName, invoiceNumber, clubName, data.DueDate, data.Amount, kid, bankAccount, vippsLine,
 		)
 	}
 	return buf.String()
@@ -299,7 +311,7 @@ func InvoiceReminderSubject(_, clubName string, invoiceNumber int) string {
 // the invoice is past due (or pending), restates the payment details,
 // and notes the PDF copy is attached. The PDF is attached separately
 // by the caller — same as InvoiceBody.
-func InvoiceReminderBody(_ /*locale*/, memberName, clubName string, invoiceNumber int, dueDate time.Time, total float64, kid, bankAccount string) string {
+func InvoiceReminderBody(_ /*locale*/, memberName, clubName string, invoiceNumber int, dueDate time.Time, total float64, kid, bankAccount, vippsURL string, vippsExpiry time.Time) string {
 	if clubName == "" {
 		clubName = "klubben"
 	}
@@ -307,6 +319,10 @@ func InvoiceReminderBody(_ /*locale*/, memberName, clubName string, invoiceNumbe
 		memberName = "medlem"
 	}
 	overdue := time.Now().After(dueDate)
+	var vippsExpiryStr string
+	if vippsURL != "" && !vippsExpiry.IsZero() {
+		vippsExpiryStr = vippsExpiry.Format("02.01.2006")
+	}
 	data := struct {
 		Club          string
 		Member        string
@@ -316,6 +332,8 @@ func InvoiceReminderBody(_ /*locale*/, memberName, clubName string, invoiceNumbe
 		KID           string
 		BankAccount   string
 		Overdue       bool
+		VippsURL      string
+		VippsExpiry   string
 	}{
 		Club:          clubName,
 		Member:        memberName,
@@ -325,12 +343,18 @@ func InvoiceReminderBody(_ /*locale*/, memberName, clubName string, invoiceNumbe
 		KID:           kid,
 		BankAccount:   bankAccount,
 		Overdue:       overdue,
+		VippsURL:      vippsURL,
+		VippsExpiry:   vippsExpiryStr,
 	}
 	var buf bytes.Buffer
 	if err := reminderHTMLTpl.Execute(&buf, data); err != nil {
+		vippsLine := ""
+		if vippsURL != "" {
+			vippsLine = fmt.Sprintf(`<p>Betal med Vipps: <a href="%s">%s</a></p>`, vippsURL, vippsURL)
+		}
 		return fmt.Sprintf(
-			`<p>Hei %s,</p><p>Påminnelse om ubetalt faktura (#%d) fra %s.</p><p>Forfall: %s · Beløp: %s · KID: %s · Konto: %s</p>`,
-			memberName, invoiceNumber, clubName, data.DueDate, data.Amount, kid, bankAccount,
+			`<p>Hei %s,</p><p>Påminnelse om ubetalt faktura (#%d) fra %s.</p><p>Forfall: %s · Beløp: %s · KID: %s · Konto: %s</p>%s`,
+			memberName, invoiceNumber, clubName, data.DueDate, data.Amount, kid, bankAccount, vippsLine,
 		)
 	}
 	return buf.String()
@@ -401,7 +425,18 @@ var reminderHTMLTpl = template.Must(template.New("reminder").Parse(`<!DOCTYPE ht
                   <td style="padding:0 16px 14px 16px;font-size:14px;color:#0f172a;font-family:ui-monospace,Menlo,Consolas,monospace;">{{.BankAccount}}</td>
                 </tr>
               </table>
-
+{{if .VippsURL}}
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 24px 0;">
+                <tr>
+                  <td align="center">
+                    <a href="{{.VippsURL}}" style="display:inline-block;background:#ff5b24;color:#ffffff;text-decoration:none;font-size:16px;font-weight:600;padding:14px 32px;border-radius:8px;">Betal med Vipps</a>
+                  </td>
+                </tr>
+                <tr>
+                  <td align="center" style="padding-top:8px;font-size:12px;color:#64748b;">Lenken er gyldig til {{.VippsExpiry}}.</td>
+                </tr>
+              </table>
+{{end}}
               <p style="margin:0 0 8px 0;font-size:13px;color:#64748b;">Hvis betalingen allerede er sendt, kan du se bort fra denne påminnelsen.</p>
               <p style="margin:0;font-size:13px;color:#64748b;">Spørsmål kan sendes til kasserer ved å svare på denne e-posten.</p>
             </td>
@@ -457,7 +492,18 @@ var invoiceHTMLTpl = template.Must(template.New("invoice").Parse(`<!DOCTYPE html
                   <td style="padding:0 16px 14px 16px;font-size:14px;color:#0f172a;font-family:ui-monospace,Menlo,Consolas,monospace;">{{.BankAccount}}</td>
                 </tr>
               </table>
-
+{{if .VippsURL}}
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 20px 0;">
+                <tr>
+                  <td align="center">
+                    <a href="{{.VippsURL}}" style="display:inline-block;background:#ff5b24;color:#ffffff;text-decoration:none;font-size:16px;font-weight:600;padding:14px 32px;border-radius:8px;">Betal med Vipps</a>
+                  </td>
+                </tr>
+                <tr>
+                  <td align="center" style="padding-top:8px;font-size:12px;color:#64748b;">Lenken er gyldig til {{.VippsExpiry}}.</td>
+                </tr>
+              </table>
+{{end}}
               <p style="margin:0 0 8px 0;font-size:13px;color:#64748b;">Bruk KID-nummeret når du betaler i nettbanken slik at innbetalingen registreres automatisk.</p>
               <p style="margin:0;font-size:13px;color:#64748b;">Spørsmål om fakturaen kan sendes til kasserer ved å svare på denne e-posten.</p>
             </td>

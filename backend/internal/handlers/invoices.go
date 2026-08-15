@@ -78,6 +78,10 @@ type createInvoiceFullRequest struct {
 	FiscalPeriodID *string            `json:"fiscal_period_id,omitempty"`
 	Lines          []invoiceLineInput `json:"lines"`
 	SendEmail      bool               `json:"send_email"`
+	// VippsPaymentLink opts this faktura into a "Betal med Vipps" link in the
+	// email (BRY-8). Off by default — bank transfer stays the norm. Ignored
+	// when the instance has no Vipps credentials.
+	VippsPaymentLink bool `json:"vipps_payment_link"`
 
 	// Optional organisation recipient. When RecipientKind is "organization"
 	// the OrgName is required and the rest are optional overrides; the
@@ -480,7 +484,14 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 		// DIL-185 (users.preferred_locale) will swap this for per-member.
 		locale := email.DetectLocale(r)
 		subject := email.InvoiceSubject(locale, clubName, invoiceSeq)
-		htmlBody := email.InvoiceBody(locale, deliverName, clubName, invoiceSeq, dueDate, total, kid, bankAccount)
+		// Opt-in "Betal med Vipps" link. Non-fatal: a nil URL just renders the
+		// KID-only email.
+		var vippsURL string
+		var vippsExpiry time.Time
+		if req.VippsPaymentLink {
+			vippsURL, vippsExpiry = h.ensureVippsPayment(ctx, claims.ClubID, invoiceID, true)
+		}
+		htmlBody := email.InvoiceBody(locale, deliverName, clubName, invoiceSeq, dueDate, total, kid, bankAccount, vippsURL, vippsExpiry)
 		if err := h.email.SendWithAttachment(ctx, deliverTo, subject, htmlBody, filename, pdfData); err != nil {
 			h.log.Error().Err(err).Str("email", deliverTo).Msg("failed to send invoice email")
 		} else {
@@ -1086,7 +1097,10 @@ func (h *InvoiceHandler) HandleSendInvoice(w http.ResponseWriter, r *http.Reques
 
 	locale := email.DetectLocale(r)
 	subject := email.InvoiceSubject(locale, clubName, invoiceNumber)
-	htmlBody := email.InvoiceBody(locale, memberName, clubName, invoiceNumber, dueDate, total, kid, bankAccount)
+	// Refresh (never add) a Vipps link the invoice already opted into; mints a
+	// fresh payment if the prior one expired (BRY-8 re-issue).
+	vippsURL, vippsExpiry := h.ensureVippsPayment(ctx, claims.ClubID, invoiceID, false)
+	htmlBody := email.InvoiceBody(locale, memberName, clubName, invoiceNumber, dueDate, total, kid, bankAccount, vippsURL, vippsExpiry)
 	filename := buildInvoiceFilename(invoiceNumber, memberLast, memberFirst, fiscalYear)
 
 	// Stamp sent_at BEFORE handing the message to the mail server, then
@@ -1225,7 +1239,8 @@ func (h *InvoiceHandler) HandleResendInvoice(w http.ResponseWriter, r *http.Requ
 
 	locale := email.DetectLocale(r)
 	subject := email.InvoiceSubject(locale, clubName, invoiceNumber)
-	htmlBody := email.InvoiceBody(locale, memberName, clubName, invoiceNumber, dueDate, total, kid, bankAccount)
+	vippsURL, vippsExpiry := h.ensureVippsPayment(ctx, claims.ClubID, invoiceID, false)
+	htmlBody := email.InvoiceBody(locale, memberName, clubName, invoiceNumber, dueDate, total, kid, bankAccount, vippsURL, vippsExpiry)
 	filename := buildInvoiceFilename(invoiceNumber, memberLast, memberFirst, fiscalYear)
 
 	if err := h.email.SendWithAttachment(ctx, deliverTo, subject, htmlBody, filename, pdfBytesResend); err != nil {
