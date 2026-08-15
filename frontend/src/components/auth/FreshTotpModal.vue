@@ -28,8 +28,6 @@ async function usePasskeyStepUp() {
   } catch (e) {
     if (e instanceof DOMException && (e.name === 'NotAllowedError' || e.name === 'AbortError')) {
       // User dismissed the browser prompt — not an error.
-    } else if (e instanceof Error && e.message) {
-      passkeyError.value = e.message
     } else {
       passkeyError.value = t('totpVerify.errors.passkeyFailed')
     }

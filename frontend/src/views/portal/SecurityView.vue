@@ -20,6 +20,7 @@ import QRCode from 'qrcode'
 import { useAuthStore } from '@/stores/auth'
 import { useTotp, TotpError } from '@/composables/useTotp'
 import { usePasskey, passkeysSupported, PasskeyError, type PasskeyInfo } from '@/composables/usePasskey'
+import { useTotpGateStore } from '@/stores/totpGate'
 import Checkbox from '@/components/ui/form/Checkbox.vue'
 import Input from '@/components/ui/form/Input.vue'
 
@@ -29,6 +30,7 @@ const router = useRouter()
 const auth = useAuthStore()
 const totp = useTotp()
 const passkey = usePasskey()
+const gate = useTotpGateStore()
 
 // Three-state setup flow:
 //   idle      → user hasn't started enrolling
@@ -65,6 +67,21 @@ async function loadPasskeys() {
   }
 }
 
+// isFreshRequired reports whether an error is the backend's "step up first"
+// signal — enrolling or removing a passkey needs a recent 2FA verification.
+function isFreshRequired(e: unknown): boolean {
+  return e instanceof PasskeyError && e.message === 'totp_fresh_required'
+}
+
+function reportAddError(e: unknown) {
+  if (e instanceof DOMException && (e.name === 'NotAllowedError' || e.name === 'AbortError')) return
+  if (e instanceof PasskeyError && e.status === 409) {
+    passkeyError.value = t('security.passkey.alreadyRegistered')
+  } else {
+    passkeyError.value = t('security.passkey.addFailed')
+  }
+}
+
 async function addPasskey() {
   passkeyError.value = null
   passkeyBusy.value = true
@@ -72,12 +89,17 @@ async function addPasskey() {
     await passkey.register()
     await loadPasskeys()
   } catch (e) {
-    if (e instanceof PasskeyError && e.message === 'totp_fresh_required') {
-      passkeyError.value = t('security.passkey.freshRequired')
-    } else if (e instanceof DOMException && (e.name === 'NotAllowedError' || e.name === 'AbortError')) {
-      // User dismissed the browser prompt — not an error.
-    } else {
-      passkeyError.value = formatError(e, t('security.passkey.addFailed'))
+    // Not fresh? Prompt for a 2FA step-up, then retry enrollment in one flow
+    // rather than dead-ending on a message the user can't act on.
+    if (isFreshRequired(e) && (await gate.open())) {
+      try {
+        await passkey.register()
+        await loadPasskeys()
+      } catch (retryErr) {
+        reportAddError(retryErr)
+      }
+    } else if (!isFreshRequired(e)) {
+      reportAddError(e)
     }
   } finally {
     passkeyBusy.value = false
@@ -99,7 +121,7 @@ async function saveRename(id: string) {
     await passkey.rename(id, name)
     await loadPasskeys()
   } catch (e) {
-    passkeyError.value = formatError(e, t('security.passkey.renameFailed'))
+    passkeyError.value = t('security.passkey.renameFailed')
   }
   editingId.value = null
 }
@@ -110,10 +132,15 @@ async function removePasskey(id: string) {
     await passkey.remove(id)
     await loadPasskeys()
   } catch (e) {
-    if (e instanceof PasskeyError && e.message === 'totp_fresh_required') {
-      passkeyError.value = t('security.passkey.freshRequired')
-    } else {
-      passkeyError.value = formatError(e, t('security.passkey.removeFailed'))
+    if (isFreshRequired(e) && (await gate.open())) {
+      try {
+        await passkey.remove(id)
+        await loadPasskeys()
+      } catch {
+        passkeyError.value = t('security.passkey.removeFailed')
+      }
+    } else if (!isFreshRequired(e)) {
+      passkeyError.value = t('security.passkey.removeFailed')
     }
   }
 }
