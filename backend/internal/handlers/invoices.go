@@ -78,10 +78,6 @@ type createInvoiceFullRequest struct {
 	FiscalPeriodID *string            `json:"fiscal_period_id,omitempty"`
 	Lines          []invoiceLineInput `json:"lines"`
 	SendEmail      bool               `json:"send_email"`
-	// VippsPaymentLink opts this faktura into a "Betal med Vipps" link in the
-	// email (BRY-8). Off by default — bank transfer stays the norm. Ignored
-	// when the instance has no Vipps credentials.
-	VippsPaymentLink bool `json:"vipps_payment_link"`
 
 	// Optional organisation recipient. When RecipientKind is "organization"
 	// the OrgName is required and the rest are optional overrides; the
@@ -417,15 +413,15 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 		                       recipient_kind, recipient_org_name, recipient_org_number,
 		                       recipient_org_address, recipient_contact_person,
 		                       recipient_their_ref, recipient_email,
-		                       member_name, member_email, vipps_payment_link_opt_in)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+		                       member_name, member_email)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
 		 RETURNING id, created_at`,
 		claims.ClubID, userIDArg, invoiceSeq, kid, dueDate, total, pdfData, req.FiscalPeriodID,
 		recipientKind,
 		req.RecipientOrgName, req.RecipientOrgNumber,
 		req.RecipientOrgAddress, req.RecipientContactPerson,
 		req.RecipientTheirRef, req.RecipientEmail,
-		memberName, memberEmail, req.VippsPaymentLink,
+		memberName, memberEmail,
 	).Scan(&invoiceID, &createdAt)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to store invoice")
@@ -1036,7 +1032,6 @@ func (h *InvoiceHandler) HandleSendInvoice(w http.ResponseWriter, r *http.Reques
 		pdfData        []byte
 		s3Key          string
 		alreadySent    *time.Time
-		vippsOptIn     bool
 	)
 	if err := h.db.QueryRow(ctx,
 		`SELECT i.invoice_number, i.user_id,
@@ -1048,15 +1043,14 @@ func (h *InvoiceHandler) HandleSendInvoice(w http.ResponseWriter, r *http.Reques
 		        COALESCE(u.last_name, ''), COALESCE(u.first_name, ''),
 		        COALESCE(u.email, ''), COALESCE(i.recipient_email, ''),
 		        fp.year, i.total_amount, i.due_date, i.kid_number,
-		        i.pdf_data, COALESCE(i.s3_key, ''), i.sent_at,
-		        i.vipps_payment_link_opt_in
+		        i.pdf_data, COALESCE(i.s3_key, ''), i.sent_at
 		   FROM invoices i
 		   LEFT JOIN users u ON u.id = i.user_id
 		   LEFT JOIN fiscal_periods fp ON fp.id = i.fiscal_period_id
 		  WHERE i.id = $1 AND i.club_id = $2`,
 		invoiceID, claims.ClubID,
 	).Scan(&invoiceNumber, &userID, &memberName, &memberLast, &memberFirst, &memberEmail, &recipientEmail,
-		&fiscalYear, &total, &dueDate, &kid, &pdfData, &s3Key, &alreadySent, &vippsOptIn); err != nil {
+		&fiscalYear, &total, &dueDate, &kid, &pdfData, &s3Key, &alreadySent); err != nil {
 		if err == pgx.ErrNoRows {
 			Error(w, http.StatusNotFound, "invoice not found")
 			return

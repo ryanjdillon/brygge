@@ -21,11 +21,6 @@ import (
 
 type bulkInvoiceActionRequest struct {
 	IDs []string `json:"ids"`
-	// VippsPaymentLink controls whether reminders include a "Betal med Vipps"
-	// link (BRY-8). Nil (omitted) defaults to on — the reminder form checks it
-	// by default; send false to leave it off. Ignored by non-reminder actions
-	// and when the instance has no Vipps credentials.
-	VippsPaymentLink *bool `json:"vipps_payment_link,omitempty"`
 }
 
 type bulkInvoiceResult struct {
@@ -114,18 +109,14 @@ func (h *InvoiceHandler) HandleBulkSendReminder(w http.ResponseWriter, r *http.R
 		seen[p.id] = p
 	}
 
-	// Default the Vipps link on unless the form explicitly unchecked it.
-	includeVipps := req.VippsPaymentLink == nil || *req.VippsPaymentLink
-
 	// The send context is club/actor/request-scoped, not per-invoice, so
 	// every row in this batch carries the same JSONB payload.
 	payload, err := json.Marshal(invoiceReminderPayload{
-		Locale:       locale,
-		ClubName:     clubName,
-		DefaultBank:  defaultBank,
-		ActorID:      claims.UserID,
-		RemoteAddr:   r.RemoteAddr,
-		IncludeVipps: includeVipps,
+		Locale:      locale,
+		ClubName:    clubName,
+		DefaultBank: defaultBank,
+		ActorID:     claims.UserID,
+		RemoteAddr:  r.RemoteAddr,
 	})
 	if err != nil {
 		h.log.Error().Err(err).Msg("marshal reminder payload")
@@ -190,7 +181,6 @@ var errInvoiceNotFound = errors.New("invoice not found")
 
 func (h *InvoiceHandler) sendOneReminder(
 	ctx context.Context, clubID, actorID, remoteAddr, invoiceID, clubName, defaultBank, locale string,
-	includeVipps bool,
 ) error {
 	var (
 		invoiceNumber  int
@@ -246,14 +236,10 @@ func (h *InvoiceHandler) sendOneReminder(
 	}
 
 	subject := email.InvoiceReminderSubject(locale, clubName, invoiceNumber)
-	// The reminder form chooses whether to include a "Betal med Vipps" link
-	// (default on). When enabled, mint one even if the original faktura opted
-	// out — reminders chase stragglers. Non-fatal: an empty URL just renders
-	// the KID-only reminder.
-	var vippsURL string
-	if includeVipps {
-		vippsURL = h.orderPayURL(h.ensureFakturaOrderToken(ctx, clubID, invoiceID, true))
-	}
+	// Always offer a "Betal med Vipps" link on reminders; the copy keeps bank
+	// transfer preferred. Non-fatal: an empty URL just renders the KID-only
+	// reminder.
+	vippsURL := h.orderPayURL(h.ensureFakturaOrderToken(ctx, clubID, invoiceID, true))
 	body := email.InvoiceReminderBody(locale, memberName, clubName, invoiceNumber, dueDate, total, kid, defaultBank, vippsURL)
 	filename := buildSimpleReminderFilename(invoiceNumber)
 	if err := h.email.SendWithAttachment(ctx, deliverTo, subject, body, filename, pdfData); err != nil {

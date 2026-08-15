@@ -58,7 +58,6 @@ const dueDate = ref(defaultDueDate())
 const allowDuplicateLines = ref(false)
 // Opt every invoice in the batch into a "Betal med Vipps" link (BRY-8),
 // default off; honoured when each draft is sent.
-const vippsPaymentLink = ref(false)
 
 function defaultDueDate(): string {
   const d = new Date()
@@ -136,7 +135,6 @@ async function submit() {
       beam_categories: selectedBeamCategories.value,
       due_date: dueDate.value,
       allow_duplicate_lines: allowDuplicateLines.value,
-      vipps_payment_link: vippsPaymentLink.value,
     }
     const res = await totpAwareFetch('/api/v1/admin/financials/invoices/bulk', {
       method: 'POST',
@@ -229,11 +227,6 @@ function nameFor(id: string): string {
               </span>
             </span>
           </div>
-
-          <label class="flex items-center gap-2 text-sm text-gray-700">
-            <input v-model="vippsPaymentLink" type="checkbox" class="h-4 w-4 rounded border-gray-300" />
-            {{ t('bulkInvoices.vippsPaymentLink') }}
-          </label>
 
           <details class="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-xs">
             <summary class="cursor-pointer text-gray-600">{{ t('bulkInvoices.advanced') }}</summary>

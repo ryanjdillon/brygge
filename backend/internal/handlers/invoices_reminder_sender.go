@@ -14,12 +14,11 @@ import (
 // time the worker sends, so everything sendOneReminder needs beyond the
 // invoice id itself travels here in the row's JSONB payload.
 type invoiceReminderPayload struct {
-	Locale       string `json:"locale"`
-	ClubName     string `json:"clubName"`
-	DefaultBank  string `json:"defaultBank"`
-	ActorID      string `json:"actorID"`
-	RemoteAddr   string `json:"remoteAddr"`
-	IncludeVipps bool   `json:"includeVipps"`
+	Locale      string `json:"locale"`
+	ClubName    string `json:"clubName"`
+	DefaultBank string `json:"defaultBank"`
+	ActorID     string `json:"actorID"`
+	RemoteAddr  string `json:"remoteAddr"`
 }
 
 // InvoiceReminderSender is the broadcast.Sender for 'invoice_reminder'
@@ -52,7 +51,7 @@ func (s *InvoiceReminderSender) Send(ctx context.Context, c bcast.Claimed) error
 		}
 	}
 	err := s.h.sendOneReminder(ctx, c.ClubID, p.ActorID, p.RemoteAddr,
-		*c.InvoiceID, p.ClubName, p.DefaultBank, p.Locale, p.IncludeVipps)
+		*c.InvoiceID, p.ClubName, p.DefaultBank, p.Locale)
 	if errors.Is(err, errSkip) || errors.Is(err, errInvoiceNotFound) {
 		return nil
 	}

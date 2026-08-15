@@ -40,9 +40,6 @@ type bulkInvoiceRequest struct {
 	// (or draft) invoice this fiscal period. Set to true only when the
 	// operator has explicitly confirmed a re-bill in the UI.
 	AllowDuplicateLines bool `json:"allow_duplicate_lines,omitempty"`
-	// VippsPaymentLink opts every invoice in the batch into a "Betal med Vipps"
-	// link, honoured when each draft is sent (BRY-8). Off by default.
-	VippsPaymentLink bool `json:"vipps_payment_link,omitempty"`
 }
 
 type bulkInvoiceCreated struct {
@@ -369,8 +366,7 @@ func (h *InvoiceHandler) HandleBulkCreateInvoices(w http.ResponseWriter, r *http
 		invID, invNum, total, err := h.createBulkInvoice(ctx,
 			claims.ClubID, claims.UserID, userID, lines,
 			req.FiscalPeriodID, fiscalYear, dueDate,
-			clubName, orgNumber, clubAddress, bankAccount, website, treasurerEmail, logoData, logoMIME, kidMethod,
-			req.VippsPaymentLink)
+			clubName, orgNumber, clubAddress, bankAccount, website, treasurerEmail, logoData, logoMIME, kidMethod)
 		if err != nil {
 			h.log.Error().Err(err).Str("user_id", userID).Msg("bulk invoice create failed")
 			resp.Skipped = append(resp.Skipped, bulkInvoiceSkipped{UserID: userID, Reason: "create failed: " + err.Error()})
@@ -493,7 +489,6 @@ func (h *InvoiceHandler) createBulkInvoice(
 	dueDate time.Time,
 	clubName, orgNumber, clubAddress, bankAccount, website, treasurerEmail string,
 	logoData []byte, logoMIME string, kidMethod string,
-	vippsOptIn bool,
 ) (string, int, float64, error) {
 	var memberName, memberEmail, memberAddress string
 	if err := h.db.QueryRow(ctx,
@@ -571,11 +566,11 @@ func (h *InvoiceHandler) createBulkInvoice(
 	if err := h.db.QueryRow(ctx,
 		`INSERT INTO invoices (club_id, user_id, invoice_number, kid_number, due_date,
 		                       total_amount, pdf_data, price_item_id, fiscal_period_id,
-		                       category, status, member_name, member_email, vipps_payment_link_opt_in)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'open', $11, $12, $13)
+		                       category, status, member_name, member_email)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'open', $11, $12)
 		 RETURNING id`,
 		clubID, userID, invoiceSeq, kid, dueDate, total, pdfData, invoicePriceItem, fiscalPeriodID, invoiceCategory,
-		memberName, memberEmail, vippsOptIn,
+		memberName, memberEmail,
 	).Scan(&invoiceID); err != nil {
 		return "", 0, 0, err
 	}
