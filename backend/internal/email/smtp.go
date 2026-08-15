@@ -6,8 +6,10 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"mime"
 	"mime/multipart"
+	"mime/quotedprintable"
 	"net"
 	"net/mail"
 	"net/smtp"
@@ -156,9 +158,12 @@ func (c *SMTPClient) buildMessage(to, subject, htmlBody, filename string, attach
 
 	if len(attachment) == 0 {
 		header.Set("Content-Type", "text/html; charset=UTF-8")
+		header.Set("Content-Transfer-Encoding", "quoted-printable")
 		writeHeaders(&buf, header)
 		buf.WriteString("\r\n")
-		buf.WriteString(htmlBody)
+		if err := writeQuotedPrintable(&buf, htmlBody); err != nil {
+			return nil, err
+		}
 		return buf.Bytes(), nil
 	}
 
@@ -208,17 +213,17 @@ func writeHeaders(buf *bytes.Buffer, h textproto.MIMEHeader) {
 	}
 }
 
-func writeQuotedPrintable(w interface {
-	Write(p []byte) (int, error)
-}, body string) error {
-	qp := mime.QEncoding
-	_ = qp
-	// net/mail doesn't expose a stream QP encoder; for HTML bodies we
-	// accept plain UTF-8 with explicit charset and let the CTE line-
-	// wrapping rule be best-effort. For transactional mail this is
-	// acceptable across all major MTAs.
-	_, err := w.Write([]byte(body))
-	return err
+// writeQuotedPrintable encodes body with the standard-library streaming
+// quoted-printable writer. This MUST match the declared
+// Content-Transfer-Encoding: quoted-printable — writing the raw body instead
+// makes the recipient's QP decoder mangle every literal '=' (so `style="..."`
+// arrives as `style"..."`), which silently breaks all HTML attributes.
+func writeQuotedPrintable(w io.Writer, body string) error {
+	qw := quotedprintable.NewWriter(w)
+	if _, err := qw.Write([]byte(body)); err != nil {
+		return err
+	}
+	return qw.Close()
 }
 
 func detectContentType(filename string) string {
