@@ -64,6 +64,26 @@ describe('usePasskey', () => {
     expect(urls.some((u) => u.endsWith('/step-up/finish'))).toBe(true)
   })
 
+  it('login runs begin → startAuthentication → finish?cid', async () => {
+    vi.mocked(globalThis.fetch).mockImplementation(async (url) => {
+      const u = String(url)
+      if (u.endsWith('/login/begin')) {
+        return new Response(JSON.stringify({ options: { challenge: 'x' }, challenge_id: 'cid1' }), {
+          status: 200,
+        })
+      }
+      if (u.includes('/login/finish')) {
+        return new Response(JSON.stringify({ message: 'signed in' }), { status: 200 })
+      }
+      return respond(u)
+    })
+    const { login } = usePasskey()
+    await login()
+    expect(startAuthentication).toHaveBeenCalledOnce()
+    const urls = vi.mocked(globalThis.fetch).mock.calls.map((c) => String(c[0]))
+    expect(urls.some((u) => u.includes('/login/finish?cid=cid1'))).toBe(true)
+  })
+
   it('list returns the passkeys array', async () => {
     const { list } = usePasskey()
     const pks = await list()

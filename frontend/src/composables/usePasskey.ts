@@ -82,6 +82,23 @@ export function usePasskey() {
     await auth.checkSession()
   }
 
+  // login runs the usernameless (discoverable) login ceremony and, on success,
+  // establishes a session cookie — the same result as clicking a magic link.
+  async function login(): Promise<void> {
+    const { options, challenge_id } = await req<{
+      options: Record<string, unknown>
+      challenge_id: string
+    }>('/api/v1/auth/passkeys/login/begin', 'POST')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const assResp = await startAuthentication({ optionsJSON: options as any })
+    await req(
+      `/api/v1/auth/passkeys/login/finish?cid=${encodeURIComponent(challenge_id)}`,
+      'POST',
+      assResp,
+    )
+    await auth.checkSession()
+  }
+
   async function rename(id: string, name: string): Promise<void> {
     await req(`/api/v1/auth/passkeys/${id}`, 'PATCH', { name })
   }
@@ -91,5 +108,5 @@ export function usePasskey() {
     await auth.checkSession()
   }
 
-  return { list, register, stepUp, rename, remove }
+  return { list, register, stepUp, login, rename, remove }
 }

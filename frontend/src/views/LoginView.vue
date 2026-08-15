@@ -3,17 +3,40 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
-import { LogIn, Users } from 'lucide-vue-next'
+import { LogIn, Users, Fingerprint } from 'lucide-vue-next'
 import Input from '@/components/ui/form/Input.vue'
 import FormField from '@/components/ui/form/FormField.vue'
+import { usePasskey, passkeysSupported } from '@/composables/usePasskey'
 
 const { t } = useI18n()
 const router = useRouter()
 const auth = useAuthStore()
+const passkey = usePasskey()
 
 const email = ref('')
 const submitting = ref(false)
 const magicLinkSent = ref(false)
+
+const passkeyAvailable = passkeysSupported()
+const passkeyBusy = ref(false)
+
+async function signInWithPasskey() {
+  auth.loginError = null
+  passkeyBusy.value = true
+  try {
+    await passkey.login()
+    const redirect = auth.hasAdminRole ? '/admin' : '/portal'
+    router.push(redirect)
+  } catch (e) {
+    if (e instanceof DOMException && (e.name === 'NotAllowedError' || e.name === 'AbortError')) {
+      // User dismissed the passkey prompt — not an error.
+    } else {
+      auth.loginError = t('login.passkeyFailed')
+    }
+  } finally {
+    passkeyBusy.value = false
+  }
+}
 
 interface DemoUser {
   email: string
@@ -151,7 +174,7 @@ function roleColor(role: string): string {
               id="email"
               v-model="email"
               type="email"
-              autocomplete="email"
+              autocomplete="email webauthn"
               :placeholder="t('login.emailPlaceholder')"
               required
             />
@@ -165,6 +188,27 @@ function roleColor(role: string): string {
             {{ submitting ? t('login.sending') : t('login.sendLink') }}
           </button>
         </form>
+
+        <!-- Optional: sign in with a passkey instead of the email link -->
+        <div v-if="passkeyAvailable && !magicLinkSent" class="space-y-4">
+          <div class="relative">
+            <div class="absolute inset-0 flex items-center">
+              <div class="w-full border-t border-gray-200" />
+            </div>
+            <div class="relative flex justify-center text-sm">
+              <span class="bg-white px-3 text-gray-400">{{ t('login.or') }}</span>
+            </div>
+          </div>
+          <button
+            type="button"
+            :disabled="passkeyBusy"
+            class="flex w-full items-center justify-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 disabled:opacity-50"
+            @click="signInWithPasskey"
+          >
+            <Fingerprint class="h-4 w-4" />
+            {{ passkeyBusy ? t('login.signingIn') : t('login.usePasskey') }}
+          </button>
+        </div>
       </div>
 
       <p class="mt-6 text-center text-sm text-gray-500">
