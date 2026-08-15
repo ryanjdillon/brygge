@@ -43,6 +43,35 @@ func TestRateLimitAllowsWithinLimit(t *testing.T) {
 	}
 }
 
+// Distinct limiters (e.g. the strict auth limiter and the 30/min browse
+// limiter) must keep independent per-IP budgets — browsing the public site
+// must not burn the auth budget for the same IP.
+func TestRateLimitLimitersAreIsolated(t *testing.T) {
+	rdb, _ := testRedis(t)
+	log := zerolog.Nop()
+
+	browse := NewRateLimiter(rdb, log, 30, time.Minute, IPKey).Handler(okHandler())
+	strict := NewRateLimiter(rdb, log, 2, time.Minute, IPKey).Handler(okHandler())
+
+	// Hammer the browse limiter well past the strict limit (same default IP).
+	for i := 0; i < 10; i++ {
+		rec := httptest.NewRecorder()
+		browse.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/club", nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("browse request %d unexpectedly blocked: %d", i+1, rec.Code)
+		}
+	}
+
+	// The strict limiter must still allow its own full budget.
+	for i := 0; i < 2; i++ {
+		rec := httptest.NewRecorder()
+		strict.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/auth/verify", nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("strict request %d should be independent of browse traffic; got %d", i+1, rec.Code)
+		}
+	}
+}
+
 func TestRateLimitBlocks429OnExceed(t *testing.T) {
 	rdb, _ := testRedis(t)
 	log := zerolog.Nop()

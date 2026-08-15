@@ -71,7 +71,12 @@ func (rl *RateLimiter) Handler(next http.Handler) http.Handler {
 }
 
 func (rl *RateLimiter) increment(ctx context.Context, key string) (int, time.Duration, error) {
-	fullKey := fmt.Sprintf("ratelimit:%s", key)
+	// Namespace the counter by the limiter's own limit+window so independent
+	// limiters don't share one per-IP bucket. Without this, the strict 5/min
+	// auth limiter and the 30/min public-browse limiter both incremented
+	// "ratelimit:<ip>", so merely loading the site (public API calls) burned the
+	// auth budget and magic-link / passkey requests spuriously 429'd.
+	fullKey := fmt.Sprintf("ratelimit:%d:%d:%s", rl.limit, int(rl.window.Seconds()), key)
 
 	pipe := rl.rdb.Pipeline()
 	incrCmd := pipe.Incr(ctx, fullKey)
