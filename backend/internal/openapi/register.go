@@ -162,6 +162,25 @@ func registerPasskeyOps(api huma.API) {
 	}, stub[struct{ Body PasskeyCeremony }, struct{ Body StatusResponse }]())
 
 	huma.Register(api, huma.Operation{
+		OperationID: "passkey-login-begin",
+		Method:      http.MethodPost,
+		Path:        "/api/v1/auth/passkeys/login/begin",
+		Tags:        []string{"Passkeys"},
+		Summary:     "Begin usernameless passkey login — returns assertion options + a challenge id",
+	}, stub[struct{}, struct{ Body PasskeyLoginBeginResponse }]())
+
+	huma.Register(api, huma.Operation{
+		OperationID: "passkey-login-finish",
+		Method:      http.MethodPost,
+		Path:        "/api/v1/auth/passkeys/login/finish",
+		Tags:        []string{"Passkeys"},
+		Summary:     "Finish passkey login — verify + create a session",
+	}, stub[struct {
+		Cid  string `query:"cid"`
+		Body PasskeyCeremony
+	}, struct{ Body StatusResponse }]())
+
+	huma.Register(api, huma.Operation{
 		OperationID: "admin-reset-passkeys",
 		Method:      http.MethodDelete,
 		Path:        "/api/v1/admin/users/{userID}/passkeys",

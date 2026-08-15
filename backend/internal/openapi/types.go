@@ -884,6 +884,11 @@ type PasskeyAdminResetResponse struct {
 // handles it via @simplewebauthn/browser; documented here as a free-form object.
 type PasskeyCeremony map[string]any
 
+type PasskeyLoginBeginResponse struct {
+	Options     PasskeyCeremony `json:"options" doc:"WebAuthn assertion options for startAuthentication"`
+	ChallengeID string          `json:"challenge_id" doc:"Opaque id echoed back on login finish"`
+}
+
 type FaqWriteRequest struct {
 	GroupKey  string  `json:"group_key" enum:"newcomers,members,deposit,general" doc:"Section key"`
 	Question  string  `json:"question" doc:"Question text"`

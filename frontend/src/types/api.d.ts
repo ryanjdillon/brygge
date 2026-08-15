@@ -939,6 +939,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/passkeys/login/begin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Begin usernameless passkey login — returns assertion options + a challenge id */
+        post: operations["passkey-login-begin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/passkeys/login/finish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Finish passkey login — verify + create a session */
+        post: operations["passkey-login-finish"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/passkeys/register/begin": {
         parameters: {
             query?: never;
@@ -4292,6 +4326,20 @@ export interface components {
             /** @description The member's registered passkeys */
             passkeys: components["schemas"]["PasskeyInfo"][] | null;
         };
+        PasskeyLoginBeginResponse: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/PasskeyLoginBeginResponse.json
+             */
+            readonly $schema?: string;
+            /** @description Opaque id echoed back on login finish */
+            challenge_id: string;
+            /** @description WebAuthn assertion options for startAuthentication */
+            options: {
+                [key: string]: unknown;
+            };
+        };
         PasskeyRenameRequest: {
             /**
              * Format: uri
@@ -7491,6 +7539,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PasskeyListResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "passkey-login-begin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PasskeyLoginBeginResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "passkey-login-finish": {
+        parameters: {
+            query?: {
+                cid?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponse"];
                 };
             };
             /** @description Error */
