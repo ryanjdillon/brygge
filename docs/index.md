@@ -36,6 +36,7 @@ Audience: deployers, contributors, and anyone troubleshooting at the OS/protocol
 | [developer/reference/invariants.md](developer/reference/invariants.md) | Append-only list of rules other code must respect |
 | [developer/reference/audit-actions.md](developer/reference/audit-actions.md) | Every `audit.Action*` constant: string, resource, when, `extra` fields |
 | [developer/checklists/](developer/checklists/) | Per-change-type recipes (add route, migration, bulk action, audit action, feature flag) |
+| [developer/batch-loop.md](developer/batch-loop.md) | Agent workflow: process a backlog of issues fast — one branch per issue in a self-paced `/loop`, then merge least-conflict-first |
 | [developer/rescue-recover-ssh-access.md](developer/rescue-recover-ssh-access.md) | Recovering SSH access when locked out |
 | [developer/troubleshooting.md](developer/troubleshooting.md) | Common dev + deploy issues |
 | [developer/k8s.md](developer/k8s.md) | Kubernetes migration notes for scaling beyond a single VPS |

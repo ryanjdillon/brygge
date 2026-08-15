@@ -30,6 +30,12 @@ Audience: deployers, contributors, and anyone troubleshooting at the OS / protoc
 
 [checklists/](checklists/) — per-change-type recipes. Start here when adding a route, migration, bulk action, audit action, or feature flag. See [checklists/README.md](checklists/README.md) for the full index.
 
+## Agent workflows
+
+| Document | Description |
+|----------|-------------|
+| [batch-loop.md](batch-loop.md) | Ship a batch of independent issues in one self-paced `/loop` session — one branch per issue, verify + commit each, then merge least-conflict-first via [`scripts/rebase-merge-branches.sh`](../../scripts/rebase-merge-branches.sh) |
+
 ## Troubleshooting & recovery
 
 | Document | Description |

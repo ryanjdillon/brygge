@@ -215,6 +215,21 @@ ssh root@<server-ip> 'journalctl -u caddy -f'
 # look for "certificate obtained successfully" for each vhost
 ```
 
+If Vipps credentials were filled in `/etc/brygge/env`, confirm the merchant
+authenticates against the Vipps Access Token API before relying on any
+payment flow. Run from a dev checkout (the NixOS VM ships only the built
+binary, no Go toolchain) with the same credentials exported — for the test
+merchant set `VIPPS_TEST_MODE=true`, for prod `VIPPS_TEST_MODE=false`:
+
+```bash
+VIPPS_TEST_MODE=true \
+VIPPS_CLIENT_ID=... VIPPS_CLIENT_SECRET=... \
+VIPPS_SUBSCRIPTION_KEY=... VIPPS_MSN=... \
+just vipps-verify
+# prints "OK — Vipps Access Token API handshake succeeded" on success,
+# exits non-zero if Vipps rejects the credentials
+```
+
 ### 8. Set up the mail server
 
 Follow [mail/setup.md](mail/setup.md) for:

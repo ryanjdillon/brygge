@@ -18,6 +18,8 @@ type Config struct {
 
 	// Vipps ePayment
 	VippsTestMode        bool
+	VippsClientID        string
+	VippsClientSecret    string
 	VippsMSN             string
 	VippsSubscriptionKey string
 	VippsWebhookSecret   string
@@ -104,6 +106,8 @@ func Load() Config {
 		Domain:      envStr("DOMAIN", "localhost"),
 
 		VippsTestMode:        envBool("VIPPS_TEST_MODE", true),
+		VippsClientID:        envStr("VIPPS_CLIENT_ID", ""),
+		VippsClientSecret:    envStr("VIPPS_CLIENT_SECRET", ""),
 		VippsMSN:             envStr("VIPPS_MSN", ""),
 		VippsSubscriptionKey: envStr("VIPPS_SUBSCRIPTION_KEY", ""),
 		VippsWebhookSecret:   envStr("VIPPS_WEBHOOK_SECRET", ""),

@@ -393,6 +393,11 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/BankImportsView.vue'),
       },
       {
+        path: 'accounting/vipps-queue',
+        name: 'admin-vipps-queue',
+        component: () => import('@/views/admin/VippsQueueView.vue'),
+      },
+      {
         path: 'dev/query',
         name: 'admin-dev-query',
         component: () => import('@/views/admin/DevQueryView.vue'),

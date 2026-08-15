@@ -21,6 +21,7 @@ import (
 	"github.com/brygge-klubb/brygge/internal/finance"
 	"github.com/brygge-klubb/brygge/internal/middleware"
 	"github.com/brygge-klubb/brygge/internal/storage"
+	"github.com/brygge-klubb/brygge/internal/vipps"
 )
 
 type InvoiceHandler struct {
@@ -29,6 +30,7 @@ type InvoiceHandler struct {
 	email   email.Sender
 	audit   *audit.Service
 	s3Legal *storage.Client
+	vipps   *vipps.Client // nil when the instance has no Vipps credentials
 	log     zerolog.Logger
 
 	// deliveries is the shared durable delivery queue (broadcasts +
@@ -48,6 +50,7 @@ func NewInvoiceHandler(
 	emailClient email.Sender,
 	auditService *audit.Service,
 	s3Legal *storage.Client,
+	vippsClient *vipps.Client,
 	log zerolog.Logger,
 ) *InvoiceHandler {
 	return &InvoiceHandler{
@@ -56,6 +59,7 @@ func NewInvoiceHandler(
 		email:   emailClient,
 		audit:   auditService,
 		s3Legal: s3Legal,
+		vipps:   vippsClient,
 		log:     log.With().Str("handler", "invoices").Logger(),
 	}
 }

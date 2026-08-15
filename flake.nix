@@ -208,6 +208,11 @@
           program = "${pkgs.brygge.tools}/bin/vipps-audit";
           meta.description = "Find Vipps payments not linked to a faktura, pre-purring (DATABASE_URL + CLUB_ID)";
         };
+        apps.vipps-webhook-register = {
+          type = "app";
+          program = "${pkgs.brygge.tools}/bin/vipps-webhook-register";
+          meta.description = "Register/list/delete the Vipps ePayment webhook (run with Vipps credentials set)";
+        };
 
         apps.tf-plan = {
           type = "app";

@@ -33,6 +33,7 @@ import (
 	oa "github.com/brygge-klubb/brygge/internal/openapi"
 	"github.com/brygge-klubb/brygge/internal/storage"
 	"github.com/brygge-klubb/brygge/internal/telemetry"
+	"github.com/brygge-klubb/brygge/internal/vipps"
 )
 
 func main() {
@@ -247,7 +248,15 @@ func main() {
 	projectsHandler := handlers.NewProjectsHandler(db, &cfg, log)
 	featureRequestsHandler := handlers.NewFeatureRequestsHandler(db, &cfg, log)
 	financialsHandler := handlers.NewFinancialsHandler(db, &cfg, auditService, log)
-	invoiceHandler := handlers.NewInvoiceHandler(db, &cfg, emailClient, auditService, s3LegalClient, log)
+	// Vipps ePayment client — constructed only when the instance has Vipps
+	// credentials (MSN present). Nil otherwise, in which case invoice/webhook
+	// handlers skip the Vipps flows and fall back to KID-only fakturas.
+	var vippsClient *vipps.Client
+	if cfg.VippsMSN != "" {
+		vippsClient = vipps.New(cfg.VippsBaseURL(), cfg.VippsClientID, cfg.VippsClientSecret,
+			cfg.VippsSubscriptionKey, cfg.VippsMSN, log)
+	}
+	invoiceHandler := handlers.NewInvoiceHandler(db, &cfg, emailClient, auditService, s3LegalClient, vippsClient, log)
 	// Invoice reminders reuse the shared delivery queue whenever SMTP is
 	// configured — independent of the inbox/JMAP stack, which may be absent
 	// (e.g. all of local dev). Create the worker here and register the
@@ -266,6 +275,7 @@ func main() {
 	faqsHandler := handlers.NewFaqsHandler(db, &cfg, log)
 	productsHandler := handlers.NewProductsHandler(db, &cfg, log)
 	ordersHandler := handlers.NewOrdersHandler(db, &cfg, log)
+	vippsWebhookHandler := handlers.NewVippsWebhookHandler(db, &cfg, log)
 	boatModelsHandler := handlers.NewBoatModelsHandler(db, log)
 	volunteerHandler := handlers.NewVolunteerHandler(db, &cfg, log)
 	shoppingListsHandler := handlers.NewShoppingListsHandler(db, &cfg, log)
@@ -476,6 +486,9 @@ func main() {
 				r.Post("/{orderID}/confirm", ordersHandler.HandleConfirmOrder)
 			})
 		}
+
+		// Vipps webhook — public endpoint, authenticated by HMAC-SHA256 signature.
+		r.Post("/vipps/webhooks", vippsWebhookHandler.Handle)
 
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.AuthenticateSession(sessionService))
@@ -1206,6 +1219,20 @@ func main() {
 						r.With(middleware.RequireRole("treasurer", "admin"),
 							middleware.RequireFreshTOTPDefault()).
 							Post("/bank-rows/{rowID}/clear-vipps-payout", accountingHandler.HandleClearVippsPayout)
+
+						// BRY-11 sub 5: learned aliases & message rules
+						// for aggressive Vipps auto-classification.
+						r.Get("/vipps/queue", accountingHandler.HandleListVippsQueue)
+						r.Route("/vipps/customer-aliases", func(r chi.Router) {
+							r.Get("/", accountingHandler.HandleListCustomerAliases)
+							r.Post("/", accountingHandler.HandleUpsertCustomerAlias)
+							r.Delete("/{aliasID}", accountingHandler.HandleDeleteCustomerAlias)
+						})
+						r.Route("/vipps/message-rules", func(r chi.Router) {
+							r.Get("/", accountingHandler.HandleListMessageRules)
+							r.Post("/", accountingHandler.HandleUpsertMessageRule)
+							r.Delete("/{ruleID}", accountingHandler.HandleDeleteMessageRule)
+						})
 
 						// DIL-392 Tildel tab — per-row manual
 						// reconciliation. Static "unmatched" paths

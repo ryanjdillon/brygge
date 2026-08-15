@@ -50,13 +50,16 @@ If `SMTP_HOST` is not set, the app starts in degraded mode — magic link auth a
 
 | Variable                 | Required     | Default | Description                    |
 |----------                |----------    |---------|-------------                   |
-| `VIPPS_CLIENT_ID`        | For Vipps    | —       | OAuth client ID                |
-| `VIPPS_CLIENT_SECRET`    | For Vipps    | —       | OAuth client secret            |
-| `VIPPS_CALLBACK_URL`     | For Vipps    | —       | OAuth callback URL             |
+| `VIPPS_CLIENT_ID`        | For Vipps    | —       | API client ID                  |
+| `VIPPS_CLIENT_SECRET`    | For Vipps    | —       | API client secret              |
 | `VIPPS_TEST_MODE`        | No           | `true`  | Use Vipps test environment     |
 | `VIPPS_MSN`              | For payments | —       | Merchant serial number         |
 | `VIPPS_SUBSCRIPTION_KEY` | For payments | —       | API subscription key           |
 | `VIPPS_WEBHOOK_SECRET`   | For payments | —       | Webhook signature verification |
+
+After setting the credentials, run `just vipps-verify` to confirm the
+configured merchant authenticates against the Vipps Access Token API
+end-to-end before relying on any payment flow.
 
 ## Object Storage (S3)
 

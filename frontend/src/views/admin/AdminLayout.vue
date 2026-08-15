@@ -39,6 +39,7 @@ import {
   Inbox as InboxIcon,
   TerminalSquare,
   BarChart2,
+  ListFilter,
 } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -97,6 +98,7 @@ const navGroups = computed<NavGroup[]>(() => {
         { to: '/admin/accounting/accounts', icon: ClipboardList, label: t('admin.sidebar.accounts'), roles: ['treasurer', 'board', 'admin'], feature: 'accounting' },
         { to: '/admin/accounting/journal', icon: BookOpen, label: t('admin.sidebar.journal'), roles: ['treasurer', 'board', 'admin'], feature: 'accounting' },
         { to: '/admin/accounting/bank-imports', icon: Landmark, label: t('admin.sidebar.bankImports'), roles: ['treasurer', 'admin'], feature: 'accounting', badge: (bankUnmatchedCount.value ?? 0) + (pendingRefundCount.value ?? 0) },
+        { to: '/admin/accounting/vipps-queue', icon: ListFilter, label: t('admin.sidebar.vippsQueue'), roles: ['treasurer', 'admin'], feature: 'accounting' },
         { to: '/admin/economy/settings', icon: Settings, label: t('admin.sidebar.economySettings'), roles: ['treasurer', 'admin'], feature: 'accounting' },
       ],
     },
