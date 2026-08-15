@@ -275,7 +275,7 @@ func main() {
 		invoiceHandler.SetDeliveryQueue(deliveryStore, deliveryWorker.Kick)
 	}
 	accountingSvc := accounting.NewService(db, auditService, log)
-	accountingHandler := handlers.NewAccountingHandler(accountingSvc, auditService, s3LegalClient, claudeClient, log)
+	accountingHandler := handlers.NewAccountingHandler(accountingSvc, auditService, s3LegalClient, claudeClient, vippsClient, log)
 	bankRowsHandler := handlers.NewBankRowsHandler(accountingSvc, auditService, log)
 	devQueryHandler := handlers.NewDevQueryHandler(db, auditService, log)
 	priceItemsHandler := handlers.NewPriceItemsHandler(db, &cfg, log)
@@ -1273,6 +1273,11 @@ func main() {
 						// BRY-11 sub 5: learned aliases & message rules
 						// for aggressive Vipps auto-classification.
 						r.Get("/vipps/queue", accountingHandler.HandleListVippsQueue)
+						// BRY-4: pull the Vipps Report API settlement for a date
+						// into the same review queue as the CSV export.
+						r.With(middleware.RequireRole("treasurer", "admin"),
+							middleware.RequireFreshTOTPDefault()).
+							Post("/vipps/report-sync", accountingHandler.HandleVippsReportSync)
 						r.Route("/vipps/customer-aliases", func(r chi.Router) {
 							r.Get("/", accountingHandler.HandleListCustomerAliases)
 							r.Post("/", accountingHandler.HandleUpsertCustomerAlias)

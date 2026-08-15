@@ -20,6 +20,7 @@ import (
 	"github.com/brygge-klubb/brygge/internal/audit"
 	"github.com/brygge-klubb/brygge/internal/middleware"
 	"github.com/brygge-klubb/brygge/internal/storage"
+	"github.com/brygge-klubb/brygge/internal/vipps"
 )
 
 type AccountingHandler struct {
@@ -27,15 +28,17 @@ type AccountingHandler struct {
 	audit  *audit.Service
 	s3     *storage.Client
 	claude *ai.ClaudeClient
+	vipps  *vipps.Client // nil when the instance has no Vipps credentials
 	log    zerolog.Logger
 }
 
-func NewAccountingHandler(svc *accounting.Service, auditService *audit.Service, s3 *storage.Client, claude *ai.ClaudeClient, log zerolog.Logger) *AccountingHandler {
+func NewAccountingHandler(svc *accounting.Service, auditService *audit.Service, s3 *storage.Client, claude *ai.ClaudeClient, vippsClient *vipps.Client, log zerolog.Logger) *AccountingHandler {
 	return &AccountingHandler{
 		svc:    svc,
 		audit:  auditService,
 		s3:     s3,
 		claude: claude,
+		vipps:  vippsClient,
 		log:    log.With().Str("handler", "accounting").Logger(),
 	}
 }
