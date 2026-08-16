@@ -2,21 +2,19 @@
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { Loader2, Plus, Trash2, CheckCircle } from 'lucide-vue-next'
+import { Loader2, CheckCircle } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const route = useRoute()
 const token = route.params.token as string
 
 type Line = { id?: string; name: string; quantity: number; unit_amount: number; total: number }
-type CatalogItem = { price_item_id: string; name: string; description: string; amount: number; category: string }
 type Checkout = {
   status: string
   currency: string
   invoice: { number: number; amount: number; lines: Line[] } | null
   lines: Line[]
   total: number
-  catalog: CatalogItem[]
   already_paid: boolean
 }
 
@@ -24,7 +22,6 @@ const state = ref<'loading' | 'ready' | 'error'>('loading')
 const checkout = ref<Checkout | null>(null)
 const error = ref('')
 const busy = ref(false)
-const selected = ref('')
 
 function fmt(n: number): string {
   return n.toLocaleString('nb-NO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -38,35 +35,6 @@ async function load() {
     state.value = 'ready'
   } catch {
     state.value = 'error'
-  }
-}
-
-async function addItem() {
-  if (!selected.value || busy.value) return
-  busy.value = true
-  try {
-    const res = await fetch(`/api/v1/checkout/${token}/lines`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ price_item_id: selected.value, quantity: 1 }),
-    })
-    if (res.ok) {
-      checkout.value = await res.json()
-      selected.value = ''
-    }
-  } finally {
-    busy.value = false
-  }
-}
-
-async function removeItem(id?: string) {
-  if (!id || busy.value) return
-  busy.value = true
-  try {
-    const res = await fetch(`/api/v1/checkout/${token}/lines/${id}`, { method: 'DELETE' })
-    if (res.ok) checkout.value = await res.json()
-  } finally {
-    busy.value = false
   }
 }
 
@@ -132,10 +100,10 @@ onMounted(load)
           </div>
         </div>
 
-        <!-- Ad-hoc add-ons -->
+        <!-- Order lines (services, overnatting) — read-only -->
         <div v-if="checkout.lines.length" class="rounded-lg border border-slate-200 bg-white">
           <div class="border-b border-slate-100 px-4 py-2 text-xs font-medium uppercase tracking-wide text-slate-500">
-            {{ t('pay.addonsSection') }}
+            {{ t('pay.itemsSection') }}
           </div>
           <div
             v-for="line in checkout.lines"
@@ -143,33 +111,8 @@ onMounted(load)
             class="flex items-center justify-between px-4 py-2 text-sm"
           >
             <span class="text-slate-700">{{ line.name }}<span v-if="line.quantity > 1" class="text-slate-400"> × {{ line.quantity }}</span></span>
-            <span class="flex items-center gap-3">
-              <span class="font-medium text-slate-900">{{ fmt(line.total) }} kr</span>
-              <button class="text-slate-400 hover:text-red-600" :disabled="busy" @click="removeItem(line.id)">
-                <Trash2 class="h-4 w-4" />
-              </button>
-            </span>
+            <span class="font-medium text-slate-900">{{ fmt(line.total) }} kr</span>
           </div>
-        </div>
-
-        <!-- Add from catalog -->
-        <div v-if="checkout.catalog.length" class="flex items-end gap-2">
-          <label class="flex-1">
-            <span class="mb-1 block text-xs font-medium text-slate-500">{{ t('pay.addLabel') }}</span>
-            <select v-model="selected" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
-              <option value="">{{ t('pay.addPlaceholder') }}</option>
-              <option v-for="c in checkout.catalog" :key="c.price_item_id" :value="c.price_item_id">
-                {{ c.name }} — {{ fmt(c.amount) }} kr
-              </option>
-            </select>
-          </label>
-          <button
-            class="flex items-center gap-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-            :disabled="!selected || busy"
-            @click="addItem"
-          >
-            <Plus class="h-4 w-4" /> {{ t('pay.addButton') }}
-          </button>
         </div>
 
         <!-- Total -->

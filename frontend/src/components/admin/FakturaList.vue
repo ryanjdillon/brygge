@@ -45,6 +45,13 @@ const { ensureFreshTotp, totpAwareFetch } = useFreshTotp()
 const rows = ref<Row[]>([])
 const loading = ref(true)
 const error = ref<string | null>(null)
+const notice = ref<string | null>(null)
+let noticeTimer: ReturnType<typeof setTimeout> | undefined
+function flash(message: string) {
+  notice.value = message
+  if (noticeTimer) clearTimeout(noticeTimer)
+  noticeTimer = setTimeout(() => (notice.value = null), 5000)
+}
 const busyIds = ref<Set<string>>(new Set())
 const selected = ref<Set<string>>(new Set())
 const filterMember = ref('')
@@ -249,7 +256,10 @@ async function doResend(id: string) {
     if (!res.ok) {
       const txt = await res.text().catch(() => '')
       error.value = `${res.status} ${txt}`
+      return
     }
+    const to = rows.value.find((d) => d.id === id)?.member_email ?? ''
+    flash(t('admin.faktura.sent.resendSuccess', { email: to }))
   } finally {
     busyIds.value.delete(id)
   }
@@ -528,6 +538,8 @@ defineExpose({ load })
         <RefreshCw class="h-4 w-4" /> {{ t('common.refresh') }}
       </button>
     </div>
+
+    <p v-if="notice" class="mt-4 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">{{ notice }}</p>
 
     <p v-if="loading" class="mt-4 text-sm text-gray-500">{{ t('common.loading') }}…</p>
     <p v-else-if="error" class="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{{ error }}</p>
