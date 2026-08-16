@@ -403,6 +403,10 @@ func main() {
 			r.Post("/checkout/{token}/lines", invoiceHandler.HandleAddCheckoutLine)
 			r.Delete("/checkout/{token}/lines/{lineID}", invoiceHandler.HandleRemoveCheckoutLine)
 			r.Post("/checkout/{token}/pay", invoiceHandler.HandlePayCheckout)
+			// Public harbor QR checkout (BRY-6): a poster's QR encodes /qr/{token};
+			// the payer picks nights/units and pays a fresh ePayment.
+			r.Get("/qr/{token}", invoiceHandler.HandleGetQRTarget)
+			r.Post("/qr/{token}/pay", invoiceHandler.HandlePayQRTarget)
 			r.Get("/club", func(w http.ResponseWriter, r *http.Request) {
 				// Public club info — name/slug/domain come from the static
 				// deploy config so the response is available even before any
@@ -526,6 +530,13 @@ func main() {
 			r.Put("/harbor/layout", harborHandler.HandlePutLayout)
 			// Near-realtime harbor overview of recent paid orders (BRY-265).
 			r.Get("/harbor/recent-payments", harborHandler.HandleRecentPayments)
+			// Harbor QR payment targets — mint/manage posters (BRY-6).
+			r.Get("/harbor/payment-targets", harborHandler.HandleListTargets)
+			r.Post("/harbor/payment-targets", harborHandler.HandleCreateTarget)
+			r.Patch("/harbor/payment-targets/{id}", harborHandler.HandleUpdateTarget)
+			r.Post("/harbor/payment-targets/{id}/archive", harborHandler.HandleArchiveTarget)
+			r.Get("/harbor/payment-targets/{id}/qr.png", harborHandler.HandleTargetQR)
+			r.Get("/harbor/payment-targets/{id}/poster.pdf", harborHandler.HandleTargetPoster)
 		})
 
 		if cfg.Features.Commerce {

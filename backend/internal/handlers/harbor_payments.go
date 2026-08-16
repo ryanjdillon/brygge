@@ -124,6 +124,9 @@ func derivePaymentKind(hasInvoice bool, categories string) string {
 	if strings.Contains(categories, "guest") { // guest_slip, guest
 		return "guest"
 	}
+	if strings.Contains(categories, "motorhome") || strings.Contains(categories, "bobil") {
+		return "motorhome"
+	}
 	if hasInvoice {
 		return "faktura"
 	}
