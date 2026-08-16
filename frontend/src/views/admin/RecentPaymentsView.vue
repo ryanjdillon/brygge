@@ -3,7 +3,7 @@ import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useApi } from '@/composables/useApi'
 import { formatNOK as nok } from '@/lib/format'
-import { RefreshCw, Inbox, Search, Anchor, FileText, ShoppingBag, CircleDollarSign } from 'lucide-vue-next'
+import { RefreshCw, Inbox, Search, Anchor, Caravan, FileText, ShoppingBag, CircleDollarSign } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const { fetchApi } = useApi()
@@ -14,7 +14,7 @@ interface Payment {
   amount: number
   payer: string
   summary: string
-  kind: 'guest' | 'faktura' | 'merch' | 'other'
+  kind: 'guest' | 'motorhome' | 'faktura' | 'merch' | 'other'
   channel: string
 }
 
@@ -25,10 +25,11 @@ const since = ref('')
 const until = ref('')
 const search = ref('')
 
-const kinds = ['', 'guest', 'faktura', 'merch', 'other'] as const
+const kinds = ['', 'guest', 'motorhome', 'faktura', 'merch', 'other'] as const
 
 const kindMeta: Record<string, { icon: any; classes: string }> = {
   guest: { icon: Anchor, classes: 'bg-blue-50 text-blue-700 ring-blue-200' },
+  motorhome: { icon: Caravan, classes: 'bg-teal-50 text-teal-700 ring-teal-200' },
   faktura: { icon: FileText, classes: 'bg-slate-100 text-slate-700 ring-slate-200' },
   merch: { icon: ShoppingBag, classes: 'bg-amber-50 text-amber-700 ring-amber-200' },
   other: { icon: CircleDollarSign, classes: 'bg-gray-50 text-gray-600 ring-gray-200' },

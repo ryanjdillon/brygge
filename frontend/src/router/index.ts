@@ -70,6 +70,10 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/PayInvoiceView.vue'),
   },
   {
+    path: '/qr/:token',
+    component: () => import('@/views/QrCheckoutView.vue'),
+  },
+  {
     path: '/login',
     component: () => import('@/views/LoginView.vue'),
   },
@@ -219,6 +223,11 @@ const routes: RouteRecordRaw[] = [
         path: 'harbor/recent-payments',
         name: 'admin-recent-payments',
         component: () => import('@/views/admin/RecentPaymentsView.vue'),
+      },
+      {
+        path: 'harbor/payment-targets',
+        name: 'admin-harbor-targets',
+        component: () => import('@/views/admin/HarborTargetsView.vue'),
       },
       {
         path: 'waiting-list',

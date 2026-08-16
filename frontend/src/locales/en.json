@@ -564,6 +564,7 @@
       "slips": "Slips",
       "harborMap": "Harbor Map",
       "recentPayments": "Payments",
+      "qrTargets": "QR posters",
       "waitingList": "Waiting List",
       "events": "Events",
       "bookings": "Bookings",
@@ -2282,6 +2283,20 @@
     "byLength": "by length",
     "tiersCount": "{n} tiers"
   },
+  "qr": {
+    "loading": "Loading …",
+    "notFoundTitle": "Payment unavailable",
+    "notFoundBody": "This QR code is inactive or invalid. Please ask the harbor master.",
+    "quantityLabel": "Number of {unit}s",
+    "decrease": "Fewer",
+    "increase": "More",
+    "guestNameLabel": "Your name (optional)",
+    "guestNamePlaceholder": "e.g. boat name or your name",
+    "total": "To pay",
+    "processing": "Starting Vipps …",
+    "payButton": "Pay with Vipps",
+    "payError": "Could not start the Vipps payment. Please try again."
+  },
   "pay": {
     "loading": "Loading payment …",
     "notFoundTitle": "Payment not found",
@@ -2298,6 +2313,29 @@
     "payButton": "Pay with Vipps",
     "payError": "Could not start payment. Please try again."
   },
+  "harborTargets": {
+    "title": "QR payment posters",
+    "subtitle": "Printable QR codes for guest berths, motorhomes and services. A scan opens a pay page and the payment shows up under Payments.",
+    "new": "New poster",
+    "showArchived": "Show archived",
+    "empty": "No QR posters yet.",
+    "archived": "Archived",
+    "archiveAction": "Archive",
+    "archiveConfirm": "Archive \"{label}\"? Its QR will stop working, but history is kept.",
+    "poster": "Poster",
+    "editTitle": "Edit poster",
+    "kind": { "guest_slip": "Guest berth", "motorhome": "Motorhome", "service": "Service" },
+    "field": {
+      "label": "Label",
+      "location": "Location",
+      "kind": "Type",
+      "priceItem": "Price item",
+      "fixedUnits": "Fixed price (no nights selector)",
+      "unitLabel": "Unit (e.g. night)",
+      "minUnits": "Min",
+      "maxUnits": "Max"
+    }
+  },
   "recentPayments": {
     "title": "Payments",
     "subtitle": "Recent payments via Vipps — near realtime.",
@@ -2310,6 +2348,7 @@
     "kind": {
       "all": "All",
       "guest": "Guest berth",
+      "motorhome": "Motorhome",
       "faktura": "Invoice",
       "merch": "Shop",
       "other": "Other"

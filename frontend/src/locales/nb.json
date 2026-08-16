@@ -560,6 +560,7 @@
       "slips": "Båtplasser",
       "harborMap": "Havnekart",
       "recentPayments": "Betalinger",
+      "qrTargets": "QR-plakater",
       "waitingList": "Venteliste",
       "events": "Arrangementer",
       "bookings": "Bestillinger",
@@ -2278,6 +2279,20 @@
     "byLength": "etter lengde",
     "tiersCount": "{n} trinn"
   },
+  "qr": {
+    "loading": "Laster …",
+    "notFoundTitle": "Betaling utilgjengelig",
+    "notFoundBody": "Denne QR-koden er inaktiv eller ugyldig. Spør havnesjefen.",
+    "quantityLabel": "Antall {unit}",
+    "decrease": "Færre",
+    "increase": "Flere",
+    "guestNameLabel": "Navnet ditt (valgfritt)",
+    "guestNamePlaceholder": "f.eks. båtnavn eller navnet ditt",
+    "total": "Å betale",
+    "processing": "Starter Vipps …",
+    "payButton": "Betal med Vipps",
+    "payError": "Kunne ikke starte Vipps-betalingen. Prøv igjen."
+  },
   "pay": {
     "loading": "Laster betaling …",
     "notFoundTitle": "Fant ikke betalingen",
@@ -2294,6 +2309,29 @@
     "payButton": "Betal med Vipps",
     "payError": "Kunne ikke starte betaling. Prøv igjen."
   },
+  "harborTargets": {
+    "title": "QR-betalingsplakater",
+    "subtitle": "Utskrivbare QR-koder for gjesteplasser, bobiler og tjenester. Et skann åpner en betalingsside, og betalingen dukker opp under Betalinger.",
+    "new": "Ny plakat",
+    "showArchived": "Vis arkiverte",
+    "empty": "Ingen QR-plakater ennå.",
+    "archived": "Arkivert",
+    "archiveAction": "Arkiver",
+    "archiveConfirm": "Arkivere «{label}»? QR-koden slutter å virke, men historikken beholdes.",
+    "poster": "Plakat",
+    "editTitle": "Rediger plakat",
+    "kind": { "guest_slip": "Gjesteplass", "motorhome": "Bobil", "service": "Tjeneste" },
+    "field": {
+      "label": "Navn",
+      "location": "Plassering",
+      "kind": "Type",
+      "priceItem": "Prisvare",
+      "fixedUnits": "Fast pris (ingen antall-velger)",
+      "unitLabel": "Enhet (f.eks. natt)",
+      "minUnits": "Min",
+      "maxUnits": "Maks"
+    }
+  },
   "recentPayments": {
     "title": "Betalinger",
     "subtitle": "Nylige innbetalinger via Vipps — nær sanntid.",
@@ -2306,6 +2344,7 @@
     "kind": {
       "all": "Alle",
       "guest": "Gjesteplass",
+      "motorhome": "Bobil",
       "faktura": "Faktura",
       "merch": "Butikk",
       "other": "Annet"
