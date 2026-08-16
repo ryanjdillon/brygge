@@ -2,6 +2,9 @@ package main
 
 import (
 	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -393,8 +396,16 @@ func fireWebhook(p Payment, eventName string, success bool) {
 	body, _ := json.Marshal(payload)
 	target := webhookTarget()
 
+	req, err := http.NewRequest(http.MethodPost, target, bytes.NewReader(body))
+	if err != nil {
+		log.Printf("  webhook build failed: %s %v", target, err)
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	signWebhook(req, body)
+
 	go func() {
-		resp, err := http.Post(target, "application/json", bytes.NewReader(body))
+		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			log.Printf("  webhook failed: %s %v", target, err)
 			return
@@ -402,6 +413,32 @@ func fireWebhook(p Payment, eventName string, success bool) {
 		resp.Body.Close()
 		log.Printf("  webhook sent: %s -> %s (status %d)", eventName, target, resp.StatusCode)
 	}()
+}
+
+// signWebhook adds the Vipps HMAC-SHA256 webhook headers so the API's real
+// signature verification path runs against the mock too. It mirrors the scheme
+// in backend/internal/vipps/webhook.go: string-to-sign is
+// "POST\n<pathAndQuery>\n<x-ms-date>;<host>;<contentHash>". No-op when
+// WEBHOOK_SECRET is unset (verification would then reject — set it in dev).
+func signWebhook(req *http.Request, body []byte) {
+	secret := os.Getenv("WEBHOOK_SECRET")
+	if secret == "" {
+		return
+	}
+	sum := sha256.Sum256(body)
+	contentHash := base64.StdEncoding.EncodeToString(sum[:])
+	date := time.Now().UTC().Format(http.TimeFormat)
+	host := req.URL.Host // the Host the API server will see
+
+	stringToSign := "POST\n" + req.URL.RequestURI() + "\n" + date + ";" + host + ";" + contentHash
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(stringToSign))
+	sig := base64.StdEncoding.EncodeToString(mac.Sum(nil))
+
+	req.Header.Set("x-ms-content-sha256", contentHash)
+	req.Header.Set("x-ms-date", date)
+	req.Header.Set("x-vipps-authorization",
+		"HMAC-SHA256 SignedHeaders=x-ms-date;host;x-ms-content-sha256&Signature="+sig)
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

@@ -15,7 +15,17 @@ services:
     labels:
       - traefik.enable=false
     environment:
+      # Vipps → local mock. A dummy MSN is required so the API builds a Vipps
+      # client (client init is gated on VIPPS_MSN); VIPPS_MOCK_URL then points
+      # every call at the mock instead of apitest. VIPPS_WEBHOOK_SECRET must
+      # match the mock's WEBHOOK_SECRET so real HMAC verification passes.
       - VIPPS_MOCK_URL=http://vipps-mock:8090
+      - VIPPS_TEST_MODE=true
+      - VIPPS_MSN=mock-msn
+      - VIPPS_CLIENT_ID=mock-client
+      - VIPPS_CLIENT_SECRET=mock-secret
+      - VIPPS_SUBSCRIPTION_KEY=mock-sub
+      - VIPPS_WEBHOOK_SECRET=dev-webhook-secret
       - FRONTEND_URL=http://localhost:5173
       # Mail goes to MailPit (mock SMTP) — captures every send and
       # exposes a web UI at http://localhost:8025 for inspection.
@@ -49,6 +59,8 @@ services:
       - "8090:8090"
     environment:
       - WEBHOOK_TARGET=http://api:8080/api/v1/webhooks/vipps
+      # Sign mock webhooks with the same secret the API verifies against.
+      - WEBHOOK_SECRET=dev-webhook-secret
     networks:
       - brygge
 

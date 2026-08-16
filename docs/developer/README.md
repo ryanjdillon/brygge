@@ -7,6 +7,7 @@ Audience: deployers, contributors, and anyone troubleshooting at the OS / protoc
 | Document | Description |
 |----------|-------------|
 | [quickstart.md](quickstart.md) | Local dev environment in five minutes |
+| [vipps-local-testing.md](vipps-local-testing.md) | Testing Vipps payment flows locally (mock + MT tunnel) |
 | [setup.md](setup.md) | Single-VPS deployment walkthrough (DNS, SSH, Hetzner) |
 | [deploy.md](deploy.md) | Production deploy: Nix flake, deploy-rs, magic-rollback |
 | [k8s.md](k8s.md) | Kubernetes migration notes for scaling beyond a single VPS |

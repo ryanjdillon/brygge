@@ -165,10 +165,13 @@ func Load() Config {
 
 // VippsBaseURL returns the Vipps API base URL for server-to-server calls.
 func (c *Config) VippsBaseURL() string {
-	if c.VippsTestMode && c.VippsMSN == "" {
-		return envStr("VIPPS_MOCK_URL", "http://vipps-mock:8090")
-	}
 	if c.VippsTestMode {
+		// An explicit VIPPS_MOCK_URL (local dev compose) wins so a dummy MSN can
+		// still be set — that lets the API build a Vipps client (gated on MSN)
+		// while pointing every call at the local mock instead of apitest.
+		if u := strings.TrimSpace(os.Getenv("VIPPS_MOCK_URL")); u != "" {
+			return u
+		}
 		return "https://apitest.vipps.no"
 	}
 	return "https://api.vipps.no"
@@ -177,7 +180,7 @@ func (c *Config) VippsBaseURL() string {
 // VippsBrowserURL returns the Vipps base URL for browser redirects.
 // In mock mode this is localhost:8090 (accessible from browser), otherwise same as VippsBaseURL.
 func (c *Config) VippsBrowserURL() string {
-	if c.VippsTestMode && c.VippsMSN == "" {
+	if c.VippsTestMode && strings.TrimSpace(os.Getenv("VIPPS_MOCK_URL")) != "" {
 		return envStr("VIPPS_MOCK_BROWSER_URL", "http://localhost:8090")
 	}
 	return c.VippsBaseURL()
