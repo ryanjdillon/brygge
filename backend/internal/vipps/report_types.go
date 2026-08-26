@@ -7,12 +7,14 @@ import (
 )
 
 // Typed Report API v2 parsing (BRY-4). The response envelope
-// {items, tryLater, hasMore} is confirmed against the live API; the per-item
-// field names below follow the documented Report v2 shape and are PENDING
-// VERIFICATION against the first real settlement. Unknown fields degrade to zero
-// values, and each entry keeps its Raw JSON so a mismatch is easy to diagnose
-// and correct. These rows land in the vipps_import_rows review queue (not the
-// GL), so a wrong tag is low-risk and self-evident in the Vipps-kø.
+// {items, tryLater, hasMore} is confirmed against the live API, and the per-item
+// field names match the documented Report v2 schema (funds item: pspReference,
+// time, ledgerDate, entryType, reference, currency, amount, balanceBefore,
+// balanceAfter, recipientHandle). Note amount is a flat integer in minor units
+// with a *sibling* currency field — NOT the nested {currency,value} the ePayment
+// API uses. Each entry keeps its Raw JSON so any residual mismatch against a
+// real settlement is easy to diagnose. These rows land in the vipps_import_rows
+// review queue (not the GL), so a wrong tag is low-risk.
 
 // reportEnvelope is the shared page wrapper for funds and fees. tryLater=true
 // means the report for the date is not finalised yet (retry later).
@@ -20,12 +22,6 @@ type reportEnvelope struct {
 	Items    []json.RawMessage `json:"items"`
 	TryLater bool              `json:"tryLater"`
 	HasMore  bool              `json:"hasMore"`
-}
-
-// Money is a Vipps amount in minor units (øre).
-type Money struct {
-	Currency string `json:"currency"`
-	Value    int64  `json:"value"`
 }
 
 // Ledger is one settlement ledger from /settlement/v1/ledgers.
@@ -38,26 +34,32 @@ type Ledger struct {
 	} `json:"payoutBankAccount"`
 }
 
-// FundsEntry is one settled transaction from the funds report.
+// FundsEntry is one settled transaction from the funds report. amount is minor
+// units (øre) with a sibling currency; time is the transaction timestamp and
+// ledgerDate the accounting date.
 type FundsEntry struct {
 	PspReference    string          `json:"pspReference"`
-	Reference       string          `json:"reference"` // merchant reference (our chk-…)
-	EntryType       string          `json:"entryType"` // e.g. capture / refund
-	Amount          Money           `json:"amount"`
-	SettlementID    string          `json:"settlementId"`
-	BookingDate     string          `json:"bookingDate"`
-	TransactionDate string          `json:"transactionDate"`
+	Reference       string          `json:"reference"`  // merchant reference (our chk-…)
+	EntryType       string          `json:"entryType"`  // e.g. capture / refund
+	Amount          int64           `json:"amount"`     // minor units (øre)
+	Currency        string          `json:"currency"`
+	Time            string          `json:"time"`       // transaction timestamp (RFC3339)
+	LedgerDate      string          `json:"ledgerDate"` // accounting date (YYYY-MM-DD)
+	RecipientHandle string          `json:"recipientHandle"`
+	Message         string          `json:"message"` // present only with includeGDPRSensitiveData
 	Raw             json.RawMessage `json:"-"`
 }
 
-// FeeEntry is one fee line from the fees report.
+// FeeEntry is one fee line from the fees report. Same amount/date convention as
+// FundsEntry.
 type FeeEntry struct {
 	PspReference string          `json:"pspReference"`
 	Reference    string          `json:"reference"`
-	Name         string          `json:"name"`
-	Amount       Money           `json:"amount"`
-	SettlementID string          `json:"settlementId"`
-	BookingDate  string          `json:"bookingDate"`
+	EntryType    string          `json:"entryType"`
+	Amount       int64           `json:"amount"` // minor units (øre)
+	Currency     string          `json:"currency"`
+	Time         string          `json:"time"`
+	LedgerDate   string          `json:"ledgerDate"`
 	Raw          json.RawMessage `json:"-"`
 }
 

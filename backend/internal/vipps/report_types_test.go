@@ -2,9 +2,8 @@ package vipps
 
 import "testing"
 
-// Fixture follows the documented Report API v2 funds shape. Field names are
-// pending verification against the first real settlement (BRY-4); this test
-// pins the current expected mapping so a real-data diff is obvious.
+// Fixture matches the documented Report API v2 funds item: amount is a flat
+// minor-unit integer with a sibling currency, dates are time/ledgerDate.
 func TestParseFundsPage(t *testing.T) {
 	raw := []byte(`{
 		"items": [
@@ -12,10 +11,11 @@ func TestParseFundsPage(t *testing.T) {
 				"pspReference": "psp-1",
 				"reference": "chk-abc123",
 				"entryType": "capture",
-				"amount": {"currency": "NOK", "value": 12500},
-				"settlementId": "settle-9",
-				"bookingDate": "2026-08-15",
-				"transactionDate": "2026-08-14"
+				"currency": "NOK",
+				"amount": 12500,
+				"time": "2026-08-14T00:00:00.000000Z",
+				"ledgerDate": "2026-08-15",
+				"recipientHandle": "NO:123455"
 			}
 		],
 		"tryLater": false,
@@ -36,11 +36,11 @@ func TestParseFundsPage(t *testing.T) {
 	if e.Reference != "chk-abc123" || e.PspReference != "psp-1" || e.EntryType != "capture" {
 		t.Errorf("unexpected refs/type: %+v", e)
 	}
-	if e.Amount.Value != 12500 || e.Amount.Currency != "NOK" {
-		t.Errorf("unexpected amount: %+v", e.Amount)
+	if e.Amount != 12500 || e.Currency != "NOK" {
+		t.Errorf("unexpected amount: value=%d currency=%s", e.Amount, e.Currency)
 	}
-	if e.SettlementID != "settle-9" || e.BookingDate != "2026-08-15" {
-		t.Errorf("unexpected settlement/date: %+v", e)
+	if e.LedgerDate != "2026-08-15" || e.Time != "2026-08-14T00:00:00.000000Z" {
+		t.Errorf("unexpected dates: %+v", e)
 	}
 	if len(e.Raw) == 0 {
 		t.Error("raw item not retained")
@@ -62,12 +62,12 @@ func TestParseFundsPageTryLater(t *testing.T) {
 }
 
 func TestParseFeesPage(t *testing.T) {
-	raw := []byte(`{"items":[{"pspReference":"psp-1","reference":"chk-abc123","name":"Transaction fee","amount":{"currency":"NOK","value":145},"settlementId":"settle-9","bookingDate":"2026-08-15"}],"tryLater":false,"hasMore":false}`)
+	raw := []byte(`{"items":[{"pspReference":"psp-1","reference":"chk-abc123","entryType":"fee","currency":"NOK","amount":145,"ledgerDate":"2026-08-15","time":"2026-08-15T00:00:00.000000Z"}],"tryLater":false,"hasMore":false}`)
 	entries, tryLater, err := parseFeesPage(raw)
 	if err != nil || tryLater || len(entries) != 1 {
 		t.Fatalf("parseFeesPage: err=%v tryLater=%v n=%d", err, tryLater, len(entries))
 	}
-	if entries[0].Name != "Transaction fee" || entries[0].Amount.Value != 145 {
+	if entries[0].EntryType != "fee" || entries[0].Amount != 145 || entries[0].Currency != "NOK" {
 		t.Errorf("unexpected fee: %+v", entries[0])
 	}
 }

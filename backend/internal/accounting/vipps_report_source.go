@@ -25,28 +25,27 @@ func VippsReportRows(msn string, funds []vipps.FundsEntry, fees []vipps.FeeEntry
 		}
 		msg := f.EntryType
 		rows = append(rows, VippsRow{
-			RowType:          rowType,
-			MSN:              msn,
-			TxAt:             parseReportDate(f.TransactionDate),
-			BookingDate:      parseReportDate(f.BookingDate),
-			Amount:           minorToMajor(f.Amount.Value),
-			Message:          msg,
-			PSPRef:           f.PspReference,
-			OrderID:          f.Reference,
-			SettlementNumber: f.SettlementID,
+			RowType:     rowType,
+			MSN:         msn,
+			TxAt:        parseReportDate(f.Time),
+			BookingDate: parseReportDate(f.LedgerDate),
+			Amount:      minorToMajor(f.Amount),
+			Message:     msg,
+			PSPRef:      f.PspReference,
+			OrderID:     f.Reference,
 		})
 	}
 
 	for _, fee := range fees {
 		rows = append(rows, VippsRow{
-			RowType:          VippsRowFee,
-			MSN:              msn,
-			BookingDate:      parseReportDate(fee.BookingDate),
-			Fee:              minorToMajor(fee.Amount.Value),
-			Message:          fee.Name,
-			PSPRef:           fee.PspReference,
-			OrderID:          fee.Reference,
-			SettlementNumber: fee.SettlementID,
+			RowType:     VippsRowFee,
+			MSN:         msn,
+			TxAt:        parseReportDate(fee.Time),
+			BookingDate: parseReportDate(fee.LedgerDate),
+			Fee:         minorToMajor(fee.Amount),
+			Message:     fee.EntryType,
+			PSPRef:      fee.PspReference,
+			OrderID:     fee.Reference,
 		})
 	}
 
