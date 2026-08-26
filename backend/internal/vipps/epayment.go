@@ -2,6 +2,7 @@ package vipps
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 )
@@ -62,6 +63,17 @@ func (c *Client) CreatePayment(ctx context.Context, idempotencyKey string, req C
 		return nil, fmt.Errorf("create payment %s: %w", req.Reference, err)
 	}
 	return &out, nil
+}
+
+// GetPaymentRaw fetches a payment by reference as raw JSON, preserving fields
+// (e.g. the aggregate authorized/captured/refunded breakdown) that the typed
+// PaymentDetails drops. Used by operator diagnostics.
+func (c *Client) GetPaymentRaw(ctx context.Context, reference string) (json.RawMessage, error) {
+	var out json.RawMessage
+	if err := c.do(ctx, http.MethodGet, "/epayment/v1/payments/"+reference, "", nil, &out); err != nil {
+		return nil, fmt.Errorf("get payment %s: %w", reference, err)
+	}
+	return out, nil
 }
 
 // GetPayment fetches the current state of a payment by reference.

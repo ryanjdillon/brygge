@@ -66,6 +66,12 @@ func main() {
 			os.Exit(1)
 		}
 		raw, err = client.LedgerFees(ctx, os.Args[2], os.Args[3])
+	case "payment":
+		if len(os.Args) < 3 {
+			fmt.Fprintln(os.Stderr, "payment: needs <reference>")
+			os.Exit(1)
+		}
+		raw, err = client.GetPaymentRaw(ctx, os.Args[2])
 	default:
 		usage()
 		os.Exit(1)
@@ -86,5 +92,5 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: vipps-report ledgers | funds <ledgerId> <date> | fees <ledgerId> <date>")
+	fmt.Fprintln(os.Stderr, "usage: vipps-report ledgers | funds <ledgerId> <date> | fees <ledgerId> <date> | payment <reference>")
 }
