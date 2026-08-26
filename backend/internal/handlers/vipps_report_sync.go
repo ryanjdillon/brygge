@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/brygge-klubb/brygge/internal/accounting"
 	"github.com/brygge-klubb/brygge/internal/middleware"
 )
 
@@ -40,39 +39,20 @@ func (h *AccountingHandler) HandleVippsReportSync(w http.ResponseWriter, r *http
 		return
 	}
 
-	ledgerID := req.LedgerID
-	if ledgerID == "" {
-		ledgers, err := h.vipps.LedgersParsed(ctx)
-		if err != nil || len(ledgers) == 0 {
-			h.log.Error().Err(err).Msg("vipps report sync: resolve ledger failed")
-			Error(w, http.StatusBadGateway, "could not resolve Vipps ledger")
-			return
-		}
-		ledgerID = ledgers[0].LedgerID
-	}
-
-	funds, fundsTryLater, err := h.vipps.FundsForDate(ctx, ledgerID, req.Date)
+	res, err := h.svc.SyncVippsReport(ctx, h.vipps, claims.ClubID, claims.UserID, req.LedgerID, req.Date)
 	if err != nil {
-		h.log.Error().Err(err).Str("date", req.Date).Msg("vipps report sync: funds failed")
-		Error(w, http.StatusBadGateway, "Vipps funds report failed")
+		h.log.Error().Err(err).Str("date", req.Date).Msg("vipps report sync failed")
+		Error(w, http.StatusBadGateway, "Vipps report sync failed")
 		return
 	}
-	fees, feesTryLater, err := h.vipps.FeesForDate(ctx, ledgerID, req.Date)
-	if err != nil {
-		h.log.Error().Err(err).Str("date", req.Date).Msg("vipps report sync: fees failed")
-		Error(w, http.StatusBadGateway, "Vipps fees report failed")
-		return
-	}
-	if fundsTryLater || feesTryLater {
+	if res.TryLater {
 		JSON(w, http.StatusAccepted, map[string]any{
 			"status":  "try_later",
 			"message": "Vipps report for this date is not finalised yet — try again later",
 		})
 		return
 	}
-
-	rows := accounting.VippsReportRows(h.vipps.MSN(), funds, fees)
-	if len(rows) == 0 {
+	if res.Rows == 0 {
 		JSON(w, http.StatusOK, map[string]any{
 			"imported":    0,
 			"skipped_dup": 0,
@@ -81,42 +61,20 @@ func (h *AccountingHandler) HandleVippsReportSync(w http.ResponseWriter, r *http
 		return
 	}
 
-	var importID string
-	if err := h.svc.DB().QueryRow(ctx,
-		`INSERT INTO vipps_imports (club_id, filename, msn, imported_by, row_count)
-		 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-		claims.ClubID, "Vipps Report API "+req.Date, h.vipps.MSN(), claims.UserID, len(rows),
-	).Scan(&importID); err != nil {
-		h.log.Error().Err(err).Msg("vipps report sync: create import failed")
-		Error(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-
-	result, err := h.svc.ImportVippsRows(ctx, claims.ClubID, importID, rows)
-	if err != nil {
-		h.log.Error().Err(err).Msg("vipps report sync: import rows failed")
-		Error(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-
-	h.svc.DB().Exec(ctx,
-		`UPDATE vipps_imports SET row_count = $1 WHERE id = $2`,
-		result.Imported, importID)
-
 	if h.audit != nil {
 		h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,
-			"accounting.vipps_report_synced", "vipps_import", importID,
+			"accounting.vipps_report_synced", "vipps_import", res.ImportID,
 			map[string]any{
 				"date":        req.Date,
-				"ledger_id":   ledgerID,
-				"imported":    result.Imported,
-				"skipped_dup": result.SkippedDup,
+				"ledger_id":   res.LedgerID,
+				"imported":    res.Imported,
+				"skipped_dup": res.SkippedDup,
 			})
 	}
 
 	JSON(w, http.StatusOK, map[string]any{
-		"imported":    result.Imported,
-		"skipped_dup": result.SkippedDup,
-		"import_id":   importID,
+		"imported":    res.Imported,
+		"skipped_dup": res.SkippedDup,
+		"import_id":   res.ImportID,
 	})
 }

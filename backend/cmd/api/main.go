@@ -1477,6 +1477,45 @@ func main() {
 		}
 	}()
 
+	// Nightly Vipps settlement sync (BRY-4): pull the last few days of Report
+	// API funds+fees into the Vipps-kø as an automated import (NULL actor).
+	// Idempotent (row_hash dedup), so re-pulling recent days is free and covers
+	// reports that finalise late or over a weekend. Runs once at startup too.
+	if vippsClient != nil {
+		go func() {
+			ticker := time.NewTicker(24 * time.Hour)
+			defer ticker.Stop()
+			for {
+				var clubID string
+				if err := db.QueryRow(ctx, `SELECT id FROM clubs WHERE slug = $1`, cfg.ClubSlug).Scan(&clubID); err != nil {
+					log.Warn().Err(err).Msg("vipps report sync: resolve club failed")
+				} else if ledgers, err := vippsClient.LedgersParsed(ctx); err != nil || len(ledgers) == 0 {
+					log.Warn().Err(err).Msg("vipps report sync: resolve ledger failed")
+				} else {
+					ledgerID := ledgers[0].LedgerID
+					for d := 1; d <= 4; d++ {
+						date := time.Now().AddDate(0, 0, -d).Format("2006-01-02")
+						res, err := accountingSvc.SyncVippsReport(ctx, vippsClient, clubID, "", ledgerID, date)
+						switch {
+						case err != nil:
+							log.Warn().Err(err).Str("date", date).Msg("vipps report sync failed")
+						case res.TryLater:
+							log.Debug().Str("date", date).Msg("vipps report not finalised yet")
+						case res.Imported > 0:
+							log.Info().Str("date", date).Int("imported", res.Imported).
+								Int("skipped", res.SkippedDup).Msg("vipps report synced")
+						}
+					}
+				}
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+				}
+			}
+		}()
+	}
+
 	<-ctx.Done()
 	log.Info().Msg("shutting down server")
 
