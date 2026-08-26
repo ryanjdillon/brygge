@@ -57,10 +57,13 @@ func Poster(d PosterData) ([]byte, error) {
 	}
 
 	pdf := fpdf.New("P", "mm", "A4", "")
+	// Core fonts are cp1252-encoded; translate UTF-8 (e.g. "Båtlag") so it
+	// doesn't render as mojibake ("BÃ¥tlag").
+	tr := pdf.UnicodeTranslatorFromDescriptor("")
 	pdf.SetMargins(20, 24, 20)
 	pdf.AddPage()
 	const pageW = 210.0
-	center := func(txt string) { pdf.CellFormat(0, 0, txt, "", 0, "C", false, 0, "") }
+	center := func(txt string) { pdf.CellFormat(0, 0, tr(txt), "", 0, "C", false, 0, "") }
 
 	if d.ClubName != "" {
 		pdf.SetFont("Helvetica", "", 12)
