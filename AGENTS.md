@@ -1,6 +1,152 @@
-# AGENTS.md
+<!--
+  GENERATED FILE — do not edit.
+  Source: <base>/AGENTS.base.md (shared conventions)
+  Source: AGENTS.repo.md (this repo)
+  Regenerate with: just agents
+-->
 
-This file provides guidance to AI coding agents (Claude Code, Cursor, etc.) when working with code in this repository.
+# Agent conventions
+
+Shared across all my repos. Repo-specific detail lives in the overlay below the
+separator. The deeper reasoning behind each rule is in `docs/` — read a doc when
+you need the *why* or an edge case, not by default.
+
+## Plan on Linear
+
+Linear is the source of truth for what is being worked on. The repo records how
+the code works; Linear records why work is happening and what is left.
+
+- **File, ship, close.** Every non-trivial change has an issue. Move it to
+  In Progress when you start and close it when the change ships.
+- **Tier the tracking to the size.** A one-line fix needs no issue. A change
+  worth reviewing needs an issue. A body of work spanning several changes needs
+  a project with a dependency graph.
+- **Parents before subs.** Create the parent issue first, then decompose.
+- **Close on ship, in the same turn.** An issue left open after its change ships
+  makes the whole board untrustworthy. The exception is an explicit "leave it,
+  I want to look first".
+- **Reference the issue in the commit message** so history and Linear stay linked.
+- **Do not invent issues** to look busy, and do not silently work off-issue.
+
+See `docs/planning-on-linear.md`.
+
+## Plan strategically before decomposing
+
+Work descends from an objective, not from whatever is nearest to hand.
+
+1. Start from the **initiative** — the goal in one sentence.
+2. Decompose into **projects** with explicit acceptance criteria.
+3. Map the **critical path to the objective** and the **path to the target
+   state** independently. They are not the same path.
+4. Classify every body of work as one of:
+   - **strategic-critical** — on the critical path; do it now.
+   - **drift-guard** — not on the path, but deferring it causes rework; do it now.
+   - **target-state-deferrable** — improves the end state, costs nothing to
+     defer; file it and move on.
+
+The rule: no shortsighted shortcuts, and no gold-plating off the critical path.
+
+See `docs/planning-strategically.md`.
+
+## Stay on target
+
+When a fix or a discovery spawns work that is not on the current critical path:
+**file it as a Linear issue and continue.** Do not rabbit-hole, and do not
+silently expand scope.
+
+- Distinguish must-do-now (on the path, or a drift-guard) from file-for-later.
+- Filing is not dropping — Linear is durable, so deferring loses nothing.
+- If the new work invalidates the current plan, say so and stop; do not
+  improvise a new plan mid-change.
+
+See `docs/staying-on-target.md`.
+
+## Protect the main context
+
+Delegate to a sub-agent whatever produces bulk you do not need to keep: broad
+searches, multi-file reads, research spikes, large tool output.
+
+- The sub-agent returns **the conclusion**, not the raw material.
+- The main thread keeps the decision and the Linear update, never the dumps.
+- State the return contract in the sub-agent's prompt (what shape, what fields).
+- Sub-agent context loss is harmless because Linear holds the durable record.
+
+See `docs/subagents.md`.
+
+## Keep modules deep
+
+A small, narrow interface with as much depth behind it as the domain needs —
+for source and docs alike. One unit per domain; one topic per doc, standing
+alone rather than assembled from fragments across five files.
+
+See `docs/module-organisation.md`.
+
+## Keep docs honest
+
+- **Docs alongside code, in the same commit.** A change that invalidates a doc
+  updates that doc in the same commit — never as a follow-up.
+- **Write back what you learn.** A non-obvious fact discovered while working
+  (an invariant, a gotcha, why an approach failed) goes into the relevant doc.
+- Every `docs/` tree has an index; every substantial directory has a README.
+
+See `docs/doc-discipline.md`.
+
+## Code and comments
+
+- Comments explain **why**, not what. No comment narrates a change, references a
+  conversation, or notes that something was removed.
+- Keep comments general to the code, not to one deployment — describe what the
+  code does, not the author's hosts or environment.
+- Match the surrounding code's naming, idiom, and comment density.
+- Destructure imports where the language supports it
+  (`import { foo } from 'bar'`).
+
+## Commits
+
+- Logical, atomic, rebase-able, and succinct. One concern per commit.
+- Strip trailing whitespace before staging.
+- No references to the tooling or model that produced the change.
+- Reference the Linear issue.
+- **Never assume git state.** Check `git status` / `git log` before acting —
+  do not assume the user has already committed, pushed, or pulled.
+- Stage files by name, not by glob.
+
+## Handing off
+
+Work that outlives a session goes in an untracked `<TOPIC>-HANDOFF.md` written
+for a reader with no prior context — settled decisions, what is verified (with
+SHAs), what remains, and what must not be touched. Never secret values.
+
+See `docs/session-handoff.md`.
+
+## Memory
+
+Record what is durable and not derivable from the repo: user preferences,
+guidance you were given and why, project constraints, external references.
+Do not record what the code, git history, or this file already says.
+
+See `docs/memory.md`.
+
+---
+
+# Brygge
+
+Harbor club platform: a Go API backend and a Vue 3 SPA frontend in one
+monorepo. In production the Vue dist is embedded into the Go binary via
+`go:embed` and served by chi.
+
+## Linear
+
+- Workspace `dillonteknisk`, team `brygge`, prefix `BRY-`.
+- **Operator/external work** for this repo means DNS changes, Vipps onboarding,
+  RBL delisting, and manual production SQL backfills. These stay In Progress
+  until confirmed out of band.
+- Batch processing recipe (queue format, merge script, when to block instead of
+  guess): [docs/developer/batch-loop.md](docs/developer/batch-loop.md).
+- Worked example of a mapped project: **Inbox Broadcast & Bulk Send**
+  (BRY-162 → BRY-183) — 7 feature parents, 15 task sub-issues, `blocks` edges
+  from the data-model root through enqueue/worker to frontend and decommission,
+  tests as definition of done on each feature.
 
 ## Documentation
 
@@ -14,9 +160,10 @@ Source-tree subsystems also carry colocated READMEs that cross-link up:
 - `backend/internal/{accounting,handlers,email,middleware,finance}/README.md`
 - `frontend/src/views/admin/README.md`
 
-### Drift discipline — update docs alongside code
+### Drift discipline
 
-When you make one of these changes, update the listed doc in the **same commit**:
+The base rule is docs-alongside-code in the same commit. For this repo, that
+means specifically:
 
 | When you | Update |
 |----------|--------|
@@ -30,18 +177,24 @@ When you make one of these changes, update the listed doc in the **same commit**
 | Change handler conventions (response shape, audit pattern, gating) | [backend/internal/handlers/README.md](backend/internal/handlers/README.md) |
 | Add an admin nav item / new TOTP-gated path | [frontend/src/views/admin/README.md](frontend/src/views/admin/README.md) |
 
-### Write back what you learn
+### Where to write back what you learn
 
-When you (or the user) hit a non-obvious gotcha worth not re-discovering — a hidden constraint, a surprising failure mode, a workaround for a known issue — capture it in the **relevant** doc the same session:
-
-- A rule that other code must obey → [docs/developer/reference/invariants.md](docs/developer/reference/invariants.md)
+- A rule other code must obey → [docs/developer/reference/invariants.md](docs/developer/reference/invariants.md)
 - A subsystem-specific footgun → the "Common misses" section of that subsystem's README
 - A change-type-specific trap → the matching checklist's "Common misses"
 - A non-blocking issue parked for later → the "Known issues" section below
 
-Call it out in the commit message so a reviewer can verify the doc capture is in the right place.
+Call it out in the commit message so a reviewer can verify the capture landed in
+the right place.
 
-### Migrations — applied automatically on deploy
+### Docs categorisation
+
+Docs split by audience — `docs/user/` (in-app site admins, board, members) and
+`docs/developer/` (deploy, contribute, low-level troubleshoot, and subject
+subdirs like `mail/`, `otel/`, `security/`). Only top-level/cross-audience
+material (`architecture.md`, `tech-stack.md`) lives at `docs/`.
+
+## Migrations — applied automatically on deploy
 
 Migrations run automatically as part of every deploy — `brygge-migrate.service` fires before the API starts, so no manual migration step is needed after merging. Do not tell the user to run migrations manually.
 
@@ -74,50 +227,6 @@ When writing a new migration, always:
 - Use `CREATE INDEX IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`, and wrap `ADD CONSTRAINT` in a `DO` block that queries `pg_constraint`.
 - Cast enum literals explicitly (`'asset'::account_type`, `'completed'::payment_status`).
 - Run as the `brygge` role's actual privilege level — anything needing `CREATEROLE` or superuser goes in a NixOS systemd-oneshot bootstrap (see `brygge-dev-query-role.service` for the pattern).
-
-### Linear lifecycle — file work, ship it, close it
-
-Brygge tracks work in Linear (workspace `dillonteknisk`, team `brygge`, prefix `BRY-`). Use the Linear MCP tools (`mcp__linear__save_issue`, `get_issue`, `list_issues`, `save_project`) — never tell the user to open Linear in a browser unless the action genuinely requires the web UI.
-
-**Pick the tracking tier by size:**
-
-- **Trivial** (typo, whitespace, one-line doc tweak) — just commit, no issue.
-- **Single change** (≥3 steps or one subsystem) — one issue. Follow the per-change workflow below.
-- **Multi-step within one subsystem** — a parent issue + task sub-issues.
-- **Larger body of work** (spans backend + frontend + migration, or more than a handful of sub-issues) — a **Linear project**. See "Larger bodies of work" below.
-
-**Default policy: auto-close on ship.** When a piece of work is implemented and committed, mark its Linear issue **Done** in the same turn. Do not leave issues in "In Review" indefinitely — that's what produced the drift the user had to clean up by hand. The exception is when the user explicitly says some variation of "leave open for review" / "I want to look first" / "don't close yet" — then leave it In Review and let the user close it.
-
-**Workflow per change:**
-
-1. **Before starting** non-trivial work (≥3 distinct steps, or anything that touches more than one subsystem), file a Linear issue with `mcp__linear__save_issue` — `team: "brygge"`, descriptive title, `description` covering Why / Scope / Acceptance. Track multi-step work as **parent + sub-issues** up front; do not one-shot. (See [[feedback_linear_tracking]].)
-2. **When starting**, transition the issue to **In Progress** (`state: "In Progress"`).
-3. **When the commit lands**, transition to **Done** (`state: "Done"`) — unless the user has asked you to leave it for review.
-4. **Parent lifecycle**: do not mark a parent Done while any sub is still open. Close every sub first, then the parent. (See [[feedback_parent_issue_lifecycle]].)
-5. **Operator/external work** (DNS changes, Vipps onboarding, RBL delisting, manual prod SQL backfills) stays in **In Progress** until the user confirms it's been done out-of-band — repo grep can't verify it.
-
-**Drift detection — when picking up a session:** scan `In Review` and `In Progress` first; an issue that's been in either state for >7 days without commit activity is suspect and may already be shipped. Verify by repo grep against the issue's named files/symbols, then close.
-
-**What goes in the commit message:** for any commit that resolves one or more issues, include `(BRY-NNN)` or `Closes BRY-NNN` in the subject so the link is obvious in `git log`. The status transition still happens via Linear MCP — Linear doesn't auto-close from commit messages here.
-
-**Don't invent issues to inflate the trail.** A one-line typo fix, a trailing-whitespace cleanup, an obvious doc tweak — just commit. Linear is for work that benefits from being trackable, not for every commit.
-
-**Processing a batch of issues at once** (e.g. "ship the 6 best backlog tasks"): drive them through a self-paced queue loop — one issue per branch, verify + commit each, leave them for batch review, then merge least-conflict-first. Full recipe (queue-file format, the `/loop` prompt, the merge script, when to block instead of guess) in [docs/developer/batch-loop.md](docs/developer/batch-loop.md).
-
-### Larger bodies of work — Linear project + dependency graph
-
-For a body of work that spans multiple subsystems (e.g. backend + frontend + migration) or decomposes into more than a handful of sub-issues, map it out as a **Linear project** *before writing code*, so the critical path and the work that can run in parallel are explicit. Do not one-shot a large feature, and do not hide the structure in prose.
-
-1. **Create the project** (`mcp__linear__save_project`, `addTeams: ["brygge"]`). The `description` is the source of truth: settled design decisions, an explicit **critical path**, what's **out of scope / deferred** (link the issues), and the **definition of done** (see step 5). Set `priority`.
-2. **Feature parent issues** — one per shippable slice (a coherent backend or frontend capability). Each carries Scope + Definition of Done. Label `Feature`.
-3. **Task sub-issues** — implementation units under each parent (`parentId`). Keep them small enough to land in one commit; split the tests into their own sub-issue when that keeps the slice reviewable.
-4. **Priorities + dependencies make the graph legible:**
-   - Set `priority` so the critical path reads as High and leaf/cleanup work as Low.
-   - Encode **real edges** with `blocks` / `blockedBy` on `save_issue` — not just sentences. This is what lets anyone (you, next session, the user) see the critical path and the parallelizable branches at a glance. A feature that "parallels X once the data model lands" must show that as a dependency edge, not only a note.
-5. **Tests are the definition of done.** Every feature states "tests written, run, and **passing** before close" — backend `go test ./...` for touched packages, frontend Vitest for touched components. Do not close a parent until its sub-tasks are done *and* its tests are green. (Parent-before-subs rule from step 4 of the per-change workflow still applies.)
-6. **Record the project** in auto-memory (`type: project`) with the issue range and critical path, so later sessions pick it up without re-deriving it.
-
-Worked example: the **Inbox Broadcast & Bulk Send** project (BRY-162 → BRY-183) — 7 feature parents, 15 task sub-issues, `blocks` edges from the data-model root through enqueue/worker to the frontend and decommission, tests as DoD on each feature.
 
 ## Dev Environment
 
@@ -193,14 +302,6 @@ Spec generation (`backend/cmd/openapi/main.go`) → `just api-types` → `fronte
 - **After OpenAPI changes**: `just api-types` to regenerate types. Register new endpoints in `backend/internal/openapi/register.go`, add wrapper types in `openapi/types.go`
 - **API calls in views**: `const client = useApiClient()` + `unwrap(await client.GET(...))`. Only use `fetchApi` for endpoints not in OpenAPI spec
 - **TOTP gating (frontend UX)**: action buttons that trigger sensitive operations (anything behind `RequireFreshTOTP` middleware on the server) must call `ensureFreshTotp()` at **click time**, not on form submit. Pattern: prompt the step-up first, then show the confirm dialog (or open the form modal), then run the action. The backend middleware is the hard gate; the frontend prompt is just so users re-verify before they fill in a form, not after
-
-### Module organisation (Ousterhout's deep-module principle)
-
-Both source and docs follow the same shape: **small, narrow interface → as much depth behind it as the domain actually has**. The goal is that another contributor (or agent) can load exactly one module to do exactly one job, without dragging in unrelated context.
-
-- **Source modules** — one handler struct per domain in `backend/internal/handlers/<domain>.go`; one composable / view-domain in `frontend/src/composables/use<Domain>.ts` + `frontend/src/views/<area>/<Domain>View.vue`. The struct/composable is the narrow door; the internals can be as deep as the feature requires. Don't spread a single domain across many files until the file becomes the bottleneck.
-- **Docs modules** — one topic per file in `docs/<category>/<topic>.md`. Each file stands alone: clear entry sentence stating audience + scope, full coverage of the topic, cross-links to siblings where genuinely helpful but NO duplication of content. An agent looking up a single subject should be able to load that one file and have everything they need; opening five files to assemble one answer is the failure mode this rule prevents. When a topic outgrows one file, split it into a coherent subdirectory module (e.g. `docs/developer/mail/`) with its own `index.md`-or-equivalent entry, not into ad-hoc cross-references scattered across the tree.
-- **Categorisation**: docs split by audience — `docs/user/` (in-app site admins, board, members) and `docs/developer/` (everything else: deploy, contribute, low-level troubleshoot, subject subdirs like `mail/`, `otel/`, `security/`). When adding a doc, pick the audience-narrowest home; only top-level/cross-audience material (`architecture.md`, `tech-stack.md`) lives at `docs/`.
 
 ## CI Pipeline
 
