@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 )
 
 // Amount represents a monetary value in the smallest currency unit (øre for NOK).
@@ -26,6 +27,39 @@ type CreatePaymentRequest struct {
 	ReturnURL          string        `json:"returnUrl"`
 	PaymentDescription string        `json:"paymentDescription,omitempty"`
 	UserFlow           string        `json:"userFlow,omitempty"` // WEB_REDIRECT | PUSH_MESSAGE | QR | NATIVE_REDIRECT
+	Profile            *Profile      `json:"profile,omitempty"`
+}
+
+// Profile requests the payer's consented profile info via ePayment profile
+// sharing (https://developer.vippsmobilepay.com/docs/APIs/epayment-api/api-guide/features/profile-sharing/).
+// Scope is space-separated: "name", "phoneNumber", "email", etc. The payer
+// consents in the Vipps app before paying.
+type Profile struct {
+	Scope string `json:"scope"`
+}
+
+// UserDetails is the payer's consented profile, returned on GET payment and the
+// authorized webhook when profile.scope was requested. OIDC field names;
+// populated only for scopes the payer consented to.
+type UserDetails struct {
+	Sub         string `json:"sub"`
+	Name        string `json:"name"`
+	GivenName   string `json:"given_name"`
+	FamilyName  string `json:"family_name"`
+	PhoneNumber string `json:"phone_number"`
+	Email       string `json:"email"`
+}
+
+// PayerName returns the best display name, preferring the full name then
+// given+family. Empty when nothing was consented.
+func (u *UserDetails) PayerName() string {
+	if u == nil {
+		return ""
+	}
+	if n := strings.TrimSpace(u.Name); n != "" {
+		return n
+	}
+	return strings.TrimSpace(strings.TrimSpace(u.GivenName) + " " + strings.TrimSpace(u.FamilyName))
 }
 
 // PaymentResponse is the body returned by CreatePayment.
@@ -36,9 +70,10 @@ type PaymentResponse struct {
 
 // PaymentDetails is the body returned by GetPayment.
 type PaymentDetails struct {
-	Reference string `json:"reference"`
-	State     string `json:"state"` // CREATED | AUTHORIZED | TERMINATED | ABORTED | EXPIRED | CANCELLED | CAPTURED | REFUNDED | PARTIALLY_REFUNDED | PARTIALLY_CAPTURED
-	Amount    Amount `json:"amount"`
+	Reference   string       `json:"reference"`
+	State       string       `json:"state"` // CREATED | AUTHORIZED | TERMINATED | ABORTED | EXPIRED | CANCELLED | CAPTURED | REFUNDED | PARTIALLY_REFUNDED | PARTIALLY_CAPTURED
+	Amount      Amount       `json:"amount"`
+	UserDetails *UserDetails `json:"userDetails,omitempty"`
 }
 
 // CaptureRequest is the body for POST /epayment/v1/payments/{ref}/capture.

@@ -47,6 +47,11 @@ func (h *VippsWebhookHandler) onCaptured(ctx context.Context, clubID string, evt
 		h.log.Error().Err(err).Str("reference", evt.Reference).Msg("webhook captured: order update failed")
 	}
 
+	// Backfill the payer's name onto guest orders (QR / walk-up) from the Vipps
+	// profile the payer consented to share (BRY-272), so the harbor overview
+	// shows who paid instead of "Gjest".
+	h.backfillGuestName(ctx, clubID, evt.Reference)
+
 	// Faktura payment links (BRY-8): for every invoice this order settles, record
 	// a soft "Vipps payment received" marker only — deliberately NOT payment_id,
 	// and no GL entry. During the CSV overlap the settlement import stays the
@@ -70,6 +75,33 @@ func (h *VippsWebhookHandler) onCaptured(ctx context.Context, clubID string, evt
 		clubID, evt.Reference, paidAt,
 	); err != nil {
 		h.log.Error().Err(err).Str("reference", evt.Reference).Msg("webhook captured: invoice marker failed")
+	}
+}
+
+// backfillGuestName sets a guest order's payer name from the Vipps profile
+// (BRY-272). No-op unless the payer consented to share their name and the order
+// is a guest order (user_id IS NULL) with no name yet — never overwrites a
+// linked member or a name the payer typed on the checkout page.
+func (h *VippsWebhookHandler) backfillGuestName(ctx context.Context, clubID, reference string) {
+	if h.vipps == nil {
+		return
+	}
+	pd, err := h.vipps.GetPayment(ctx, reference)
+	if err != nil {
+		h.log.Debug().Err(err).Str("reference", reference).Msg("webhook: get payment for guest name failed")
+		return
+	}
+	name := pd.UserDetails.PayerName()
+	if name == "" {
+		return
+	}
+	if _, err := h.db.Exec(ctx,
+		`UPDATE orders SET guest_name = $3
+		   WHERE club_id = $1 AND vipps_reference = $2
+		     AND user_id IS NULL AND COALESCE(guest_name, '') = ''`,
+		clubID, reference, name,
+	); err != nil {
+		h.log.Error().Err(err).Str("reference", reference).Msg("webhook: backfill guest name failed")
 	}
 }
 

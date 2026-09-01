@@ -174,6 +174,18 @@ func (h *InvoiceHandler) mintOrderPayment(ctx context.Context, orderID string) (
 		return "", errNothingToPay
 	}
 
+	// Guest checkout (QR / walk-up, no linked member): ask the payer to share
+	// their name so the harbor overview shows who paid instead of "Gjest"
+	// (BRY-272). Members paying their own faktura are skipped — no consent
+	// friction, and we already know them.
+	var (
+		profile *vipps.Profile
+		userID  *string
+	)
+	if err := h.db.QueryRow(ctx, `SELECT user_id FROM orders WHERE id = $1`, orderID).Scan(&userID); err == nil && userID == nil {
+		profile = &vipps.Profile{Scope: "name"}
+	}
+
 	ref := genVippsReference()
 	res, err := h.vipps.CreatePayment(ctx, ref, vipps.CreatePaymentRequest{
 		Amount:             vipps.Amount{Currency: "NOK", Value: int64(math.Round(total * 100))},
@@ -181,6 +193,7 @@ func (h *InvoiceHandler) mintOrderPayment(ctx context.Context, orderID string) (
 		ReturnURL:          h.vippsReturnURL(),
 		PaymentDescription: desc,
 		UserFlow:           "WEB_REDIRECT",
+		Profile:            profile,
 	})
 	if err != nil {
 		return "", err

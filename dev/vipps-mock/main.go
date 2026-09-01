@@ -24,6 +24,7 @@ type Payment struct {
 	PaymentDescription string `json:"paymentDescription"`
 	ReturnURL          string `json:"returnUrl"`
 	Status             string `json:"status"`
+	ProfileScope       string `json:"-"`
 }
 
 type Amount struct {
@@ -36,6 +37,9 @@ type CreatePaymentRequest struct {
 	Reference          string `json:"reference"`
 	ReturnURL          string `json:"returnUrl"`
 	PaymentDescription string `json:"paymentDescription"`
+	Profile            *struct {
+		Scope string `json:"scope"`
+	} `json:"profile"`
 }
 
 func webhookTarget() string {
@@ -223,6 +227,9 @@ func handleCreatePayment(w http.ResponseWriter, r *http.Request) {
 		ReturnURL:          req.ReturnURL,
 		Status:             "CREATED",
 	}
+	if req.Profile != nil {
+		p.ProfileScope = req.Profile.Scope
+	}
 	payments.Store(req.Reference, p)
 
 	log.Printf("  payment created: ref=%s amount=%d %s", req.Reference, req.Amount.Value, req.Amount.Currency)
@@ -332,11 +339,22 @@ func handleGetPayment(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("  get payment: ref=%s status=%s", reference, p.Status)
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	resp := map[string]any{
 		"reference": p.Reference,
 		"amount":    p.Amount,
 		"status":    p.Status,
-	})
+	}
+	// Echo a consented profile when name scope was requested, so the local
+	// backfill (BRY-272) can be exercised end-to-end against the mock.
+	if strings.Contains(p.ProfileScope, "name") {
+		resp["userDetails"] = map[string]any{
+			"sub":         "mock-sub-" + p.Reference,
+			"name":        "Test Testesen",
+			"given_name":  "Test",
+			"family_name": "Testesen",
+		}
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func handleCapture(w http.ResponseWriter, r *http.Request) {
