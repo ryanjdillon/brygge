@@ -17,6 +17,7 @@ interface Row {
   user_id: string
   member_name: string
   member_email: string
+  member_phone?: string
   total_amount: number
   issue_date: string
   due_date: string
@@ -731,6 +732,7 @@ defineExpose({ load })
               </td>
               <td class="px-3 py-2 text-sm">
                 <div class="font-medium text-gray-900">{{ d.member_name }}</div>
+                <div v-if="d.member_phone" class="text-xs text-gray-500">{{ d.member_phone }}</div>
                 <div class="text-xs text-gray-500">{{ d.member_email }}</div>
                 <span
                   v-if="status === 'sent' && d.vipps_paid_at && !d.paid"

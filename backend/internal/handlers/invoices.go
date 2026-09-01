@@ -850,6 +850,7 @@ type draftInvoiceRow struct {
 	UserID        *string   `json:"user_id"`
 	MemberName    string    `json:"member_name"`
 	MemberEmail   string    `json:"member_email"`
+	MemberPhone   string    `json:"member_phone"`
 	TotalAmount   float64   `json:"total_amount"`
 	IssueDate     string    `json:"issue_date"`
 	DueDate       string    `json:"due_date"`
@@ -912,6 +913,7 @@ func (h *InvoiceHandler) HandleListInvoices(w http.ResponseWriter, r *http.Reque
 		                 u.first_name || ' ' || u.last_name,
 		                 ''),
 		        COALESCE(NULLIF(i.recipient_email, ''), NULLIF(i.member_email, ''), u.email, ''),
+		        COALESCE(u.phone, ''),
 		        i.total_amount, i.issue_date, i.due_date,
 		        COALESCE(pi.name, ''), fp.year,
 		        COALESCE((SELECT description FROM invoice_lines WHERE invoice_id = i.id LIMIT 1), ''),
@@ -951,7 +953,7 @@ func (h *InvoiceHandler) HandleListInvoices(w http.ResponseWriter, r *http.Reque
 		var d listRow
 		var issue, due time.Time
 		if err := rows.Scan(&d.ID, &d.InvoiceNumber, &d.UserID,
-			&d.MemberName, &d.MemberEmail,
+			&d.MemberName, &d.MemberEmail, &d.MemberPhone,
 			&d.TotalAmount, &issue, &due,
 			&d.PriceItemName, &d.FiscalYear, &d.Description, &d.CreatedAt,
 			&d.SentAt, &d.Status, &d.Paid, &d.LastReminderAt, &d.VippsPaidAt); err != nil {
