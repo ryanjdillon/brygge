@@ -14,7 +14,7 @@ import { formatNOK, formatDate, formatDateTime } from '@/lib/format'
 interface Row {
   id: string
   invoice_number: number
-  user_id: string
+  user_id: string | null
   member_name: string
   member_email: string
   member_phone?: string
@@ -731,7 +731,14 @@ defineExpose({ load })
                 <span v-else class="font-mono text-xs text-gray-500">{{ d.invoice_number }}</span>
               </td>
               <td class="px-3 py-2 text-sm">
-                <div class="font-medium text-gray-900">{{ d.member_name }}</div>
+                <div class="font-medium text-gray-900">
+                  <RouterLink
+                    v-if="d.user_id"
+                    :to="{ name: 'admin-users', query: { user: d.user_id } }"
+                    class="text-blue-600 hover:underline"
+                  >{{ d.member_name }}</RouterLink>
+                  <template v-else>{{ d.member_name }}</template>
+                </div>
                 <div v-if="d.member_phone" class="text-xs text-gray-500">{{ d.member_phone }}</div>
                 <div class="text-xs text-gray-500">{{ d.member_email }}</div>
                 <span

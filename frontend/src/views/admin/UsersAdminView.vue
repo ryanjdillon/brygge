@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, reactive, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useApiClient, unwrap } from '@/lib/apiClient'
@@ -530,6 +531,20 @@ function openDetail(user: User) {
   editingBoatId.value = null
   loadUserBoats(user.id)
 }
+
+// Deep-link: /admin/users?user=<id> (e.g. from a faktura row) opens that
+// user's detail panel once the list has loaded.
+const route = useRoute()
+watch(
+  users,
+  (list) => {
+    const target = route.query.user
+    if (typeof target !== 'string' || !target || detailUser.value) return
+    const u = list.find((x) => x.id === target)
+    if (u) openDetail(u)
+  },
+  { immediate: true },
+)
 
 function closeDetail() {
   detailUser.value = null
