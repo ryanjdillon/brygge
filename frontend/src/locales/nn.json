@@ -626,6 +626,12 @@
     },
     "faktura": {
       "title": "Faktura",
+      "payLink": {
+        "title": "Kopier Vipps-betalingslenke",
+        "copied": "Betalingslenke kopiert til utklippstavla",
+        "failed": "Klarte ikkje å lage betalingslenka",
+        "vippsUnavailable": "Vipps er ikkje konfigurert for denne klubben"
+      },
       "subtitle": "Opprett nye fakturaar og sjå kladdar, sende og annullerte.",
       "tabsAria": "Fakturafaner",
       "tabs": {

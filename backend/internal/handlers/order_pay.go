@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/brygge-klubb/brygge/internal/middleware"
 	"github.com/brygge-klubb/brygge/internal/vipps"
 )
 
@@ -111,6 +112,61 @@ func (h *InvoiceHandler) orderPayURL(token string) string {
 		base = "https://" + h.config.Domain
 	}
 	return strings.TrimRight(base, "/") + "/betal/" + token
+}
+
+type invoicePayLinkResponse struct {
+	PayURL string `json:"pay_url"`
+}
+
+// HandleGetInvoicePayLink returns the durable /betal pay link for one invoice so
+// staff can hand it to a member directly (SMS, chat, read it out) rather than
+// only via the emailed faktura. It ensures the checkout order exists (reusing it
+// on later calls), refuses voided invoices, and returns 409 "vipps_unavailable"
+// when Vipps isn't configured so the UI can hide the affordance gracefully.
+func (h *InvoiceHandler) HandleGetInvoicePayLink(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	invoiceID := chi.URLParam(r, "invoiceID")
+	if invoiceID == "" {
+		Error(w, http.StatusBadRequest, "invoice ID is required")
+		return
+	}
+	if h.vipps == nil {
+		Error(w, http.StatusConflict, "vipps_unavailable")
+		return
+	}
+
+	// Club-scope the invoice and block voided ones (paying a cancelled faktura
+	// makes no sense; the /betal page already refuses already-settled orders).
+	var status string
+	err := h.db.QueryRow(ctx,
+		`SELECT status FROM invoices WHERE id = $1 AND club_id = $2`,
+		invoiceID, claims.ClubID,
+	).Scan(&status)
+	if errors.Is(err, pgx.ErrNoRows) {
+		Error(w, http.StatusNotFound, "invoice not found")
+		return
+	}
+	if err != nil {
+		h.log.Error().Err(err).Str("invoice_id", invoiceID).Msg("pay-link: load invoice failed")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if status == "voided" {
+		Error(w, http.StatusConflict, "invoice is voided")
+		return
+	}
+
+	url := h.orderPayURL(h.ensureFakturaOrderToken(ctx, claims.ClubID, invoiceID, true))
+	if url == "" {
+		Error(w, http.StatusConflict, "vipps_unavailable")
+		return
+	}
+	JSON(w, http.StatusOK, invoicePayLinkResponse{PayURL: url})
 }
 
 // HandleOrderPayRedirect is the public GET /api/v1/betal/{token} endpoint the

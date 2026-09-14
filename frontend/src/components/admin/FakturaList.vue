@@ -2,7 +2,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { FileDown, Send, Trash2, Ban, Bell, RefreshCw, KeyRound, Copy, Check, ChevronUp, ChevronDown, X } from 'lucide-vue-next'
+import { FileDown, Send, Trash2, Ban, Bell, RefreshCw, KeyRound, Copy, Check, ChevronUp, ChevronDown, X, Link2 } from 'lucide-vue-next'
 import FakturaArchiveButton from '@/components/admin/FakturaArchiveButton.vue'
 import DeliveryLogButton from '@/components/admin/DeliveryLogButton.vue'
 import InvoiceNumberChip from '@/components/ui/InvoiceNumberChip.vue'
@@ -205,6 +205,7 @@ const allFilteredSelected = computed(() =>
 
 const showSend = computed(() => props.status === 'draft')
 const showResend = computed(() => props.status === 'sent')
+const showPayLink = computed(() => props.status === 'sent')
 // Imported historicals are migrated accounting records — read-only here (no
 // send/delete/void). Resolving them as paid happens via bank reconciliation
 // (Tildel), not this list. See BRY-239.
@@ -263,6 +264,36 @@ async function doResend(id: string) {
     flash(t('admin.faktura.sent.resendSuccess', { email: to }))
   } finally {
     busyIds.value.delete(id)
+  }
+}
+
+// Fetches the invoice's durable /betal pay link and copies it to the clipboard
+// so the treasurer can send it however they like (SMS, chat) — handy for members
+// who don't cope well with email / magic links. No fresh-TOTP gate: it's a
+// benign read that only ensures the checkout order exists.
+async function copyPayLink(d: Row) {
+  if (busyIds.value.has(d.id)) return
+  busyIds.value.add(d.id)
+  try {
+    const res = await fetch(`/api/v1/admin/financials/invoices/${d.id}/pay-link`, {
+      credentials: 'include',
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => null)
+      flash(
+        res.status === 409 && data?.error === 'vipps_unavailable'
+          ? t('admin.faktura.payLink.vippsUnavailable')
+          : t('admin.faktura.payLink.failed'),
+      )
+      return
+    }
+    const { pay_url } = (await res.json()) as { pay_url: string }
+    await navigator.clipboard.writeText(pay_url)
+    flash(t('admin.faktura.payLink.copied'))
+  } catch {
+    flash(t('admin.faktura.payLink.failed'))
+  } finally {
+    busyIds.value.delete(d.id)
   }
 }
 
@@ -789,6 +820,15 @@ defineExpose({ load })
                     @click="resendOne(d)"
                   >
                     <Send class="h-4 w-4" />
+                  </button>
+                  <button
+                    v-if="showPayLink && !d.paid && !d.vipps_paid_at"
+                    class="text-indigo-600 hover:text-indigo-800 disabled:opacity-50"
+                    :disabled="busyIds.has(d.id)"
+                    :title="t('admin.faktura.payLink.title')"
+                    @click="copyPayLink(d)"
+                  >
+                    <Link2 class="h-4 w-4" />
                   </button>
                   <button
                     v-if="showVoid"
