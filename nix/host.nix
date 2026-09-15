@@ -739,7 +739,14 @@ in
         # is redundant. The bearer token still rides in gRPC metadata
         # headers regardless of tls.insecure.
         "otlp/upstream" = {
-          endpoint = "\${env:OTLP_ENDPOINT}";
+          # Build-time default: the newer otelcol validates this config when it
+          # is built, but OTLP_ENDPOINT only exists at runtime (/etc/otel/env),
+          # so an unset var would validate as empty and fail the build. The
+          # `:-` default keeps validate happy; at runtime the real env value
+          # overrides it. `.invalid` never resolves, so a misconfigured host
+          # fails to connect (logged) rather than looping into the local otlp
+          # receiver on localhost.
+          endpoint = "\${env:OTLP_ENDPOINT:-otel.invalid:4317}";
           tls.insecure = true;
           headers = {
             Authorization = "\${env:OTLP_AUTH_HEADER}";
