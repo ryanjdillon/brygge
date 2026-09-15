@@ -1,0 +1,35 @@
+name: update-flake-lock
+
+# Keeps flake inputs (esp. nixpkgs) current so a stale pin never silently rots.
+# The 2026 crates.io User-Agent block broke deploy-rs's from-source build only
+# because nixpkgs was ~5 months old and predated the static.crates.io fetcher
+# fix; a weekly bump would have carried that fix in long before it bit a deploy.
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "0 5 * * 1" # Mondays 05:00 UTC
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  lockfile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/update-flake-lock@main
+        with:
+          # The built-in GITHUB_TOKEN deliberately does NOT trigger other
+          # workflows on the PR it opens — so the nix-build check in ci.yml
+          # would NOT run on the bot PR, defeating the point. Add a
+          # fine-grained PAT (contents+PRs write) as the FLAKE_UPDATE_TOKEN
+          # secret so the update PR gets validated by CI. Without it, the PR is
+          # still created; you'd just re-run CI manually before merging.
+          token: ${{ secrets.FLAKE_UPDATE_TOKEN || github.token }}
+          pr-title: "flake.lock: automated weekly update"
+          commit-msg: "chore(flake): automated flake.lock update"
+          pr-labels: |
+            dependencies
+            automated

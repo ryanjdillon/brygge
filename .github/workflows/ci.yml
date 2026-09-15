@@ -15,6 +15,19 @@ jobs:
       - run: nix develop --command just lint-go
       - run: nix develop --command just lint-vue
 
+  # Builds the app THROUGH Nix (the flake's own nixpkgs), unlike the setup-go /
+  # setup-node jobs. This is what actually validates a flake.lock bump — without
+  # it, a stale or broken nixpkgs sails through CI and only fails at deploy time.
+  nix-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: DeterminateSystems/nix-installer-action@main
+      - name: Evaluate the flake (catches eval / lockfile breakage)
+        run: nix flake check --no-build
+      - name: Build the app on the flake's nixpkgs
+        run: nix build .#brygge --print-build-logs
+
   test-go:
     runs-on: ubuntu-latest
     services:
