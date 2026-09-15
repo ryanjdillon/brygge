@@ -3,6 +3,7 @@
   lib,
   pkgs,
   clubConfig,
+  stalwartCliPkg,
   ...
 }:
 
@@ -168,6 +169,12 @@ in
     unixSocket = "/run/redis-brygge/redis.sock";
     unixSocketPerm = 660;
     port = 0;
+    # Disable RDB snapshots. This instance is a pure cache (rate-limiting, with
+    # allkeys-lru eviction) — nothing needs persisting — and persisting was a
+    # rollback landmine: a newer redis writes an RDB format the previous
+    # generation's older redis can't read, so a rolled-back deploy left redis
+    # unable to start (the 2026-09 outage). No dump file ⇒ safe rollbacks.
+    save = [ ];
     settings = {
       maxmemory = "256mb";
       maxmemory-policy = "allkeys-lru";
@@ -556,7 +563,10 @@ in
     after = [ "stalwart.service" "stalwart-relay-account.service" ];
     wants = [ "stalwart.service" ];
     wantedBy = [ "multi-user.target" ];
-    path = with pkgs; [ stalwart curl jq coreutils ];
+    # stalwartCliPkg is the pinned 0.15.x stalwart package (provides the
+    # `stalwart-cli` binary matching the 0.15.5 server); newer nixpkgs split the
+    # CLI out and jumped it to an incompatible 1.x. See flake.nix / BRY-278.
+    path = [ stalwartCliPkg pkgs.curl pkgs.jq pkgs.coreutils ];
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;

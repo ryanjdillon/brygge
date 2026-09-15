@@ -5,6 +5,15 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
 
+    # Pinned to the pre-2026-09 rev that still ships stalwart-cli 0.15.x bundled
+    # in the `stalwart` package. Newer nixpkgs split stalwart-cli into its own
+    # package AND jumped it to a 1.x generic-object CLI with no `dkim`
+    # subcommand, which doesn't match our 0.15.5 server. Used ONLY for the DKIM
+    # provisioning CLI (stalwart-dkim-config.service); the server and everything
+    # else track the main nixpkgs. Remove when the mail server is modernised
+    # (BRY-278). NOT following nixpkgs — it must stay on the old rev.
+    nixpkgs-stalwart-cli.url = "github:NixOS/nixpkgs/b12141ef619e0a9c1c84dc8c684040326f27cdcc";
+
     terranix.url = "github:terranix/terranix";
     terranix.inputs.nixpkgs.follows = "nixpkgs";
 
@@ -21,6 +30,7 @@
   outputs = {
     self,
     nixpkgs,
+    nixpkgs-stalwart-cli,
     flake-utils,
     terranix,
     disko,
@@ -92,7 +102,12 @@
 
       nixosConfigurations.brygge = nixpkgs.lib.nixosSystem {
         system = deploySystem;
-        specialArgs = { inherit self clubConfig; };
+        specialArgs = {
+          inherit self clubConfig;
+          # 0.15.x stalwart-cli (matches the 0.15.5 server) from a pinned rev,
+          # for the DKIM provisioning service only. See the input comment / BRY-278.
+          stalwartCliPkg = nixpkgs-stalwart-cli.legacyPackages.${deploySystem}.stalwart;
+        };
         modules = [
           { nixpkgs.overlays = [ overlay ]; }
           disko.nixosModules.disko
