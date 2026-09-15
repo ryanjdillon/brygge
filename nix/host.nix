@@ -642,10 +642,10 @@ in
     enable = false;
   };
 
-  services.journald.extraConfig = ''
-    SystemMaxUse=500M
-    MaxRetentionSec=1month
-  '';
+  services.journald.settings.Journal = {
+    SystemMaxUse = "500M";
+    MaxRetentionSec = "1month";
+  };
 
   # Tailscale — used as the network path for forwarding telemetry to the
   # home cluster's OTel stack. Run `tailscale up` once on first deploy
