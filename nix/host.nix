@@ -647,6 +647,13 @@ in
     MaxRetentionSec = "1month";
   };
 
+  # nixpkgs (26.11) flips the default D-Bus implementation to dbus-broker, which
+  # NixOS refuses to apply on a live `switch` (it's a critical component and
+  # wants a reboot), blocking deploy-rs activation. Pin classic dbus so deploys
+  # switch without downtime. Moving to dbus-broker is a deliberate, reboot-gated
+  # change tracked separately (BRY-279).
+  services.dbus.implementation = "dbus";
+
   # Tailscale — used as the network path for forwarding telemetry to the
   # home cluster's OTel stack. Run `tailscale up` once on first deploy
   # to authenticate the node into the tailnet.
