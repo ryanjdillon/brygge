@@ -546,6 +546,7 @@
       "paidHeading": "Betalte",
       "status": {
         "paid": "Betalt",
+        "received": "Betaling mottatt",
         "unpaid": "Ubetalt",
         "overdue": "Forfalt"
       }

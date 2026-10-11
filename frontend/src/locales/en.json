@@ -550,6 +550,7 @@
       "paidHeading": "Paid",
       "status": {
         "paid": "Paid",
+        "received": "Payment received",
         "unpaid": "Unpaid",
         "overdue": "Overdue"
       }

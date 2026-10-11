@@ -292,17 +292,18 @@ type DashboardResponse struct {
 }
 
 type MemberInvoice struct {
-	ID            string  `json:"id" doc:"Invoice UUID"`
-	InvoiceNumber int     `json:"invoice_number" doc:"Sequential invoice number"`
-	KID           string  `json:"kid_number" doc:"KID payment reference"`
-	TotalAmount   float64 `json:"total_amount" doc:"Total amount due"`
-	IssueDate     string  `json:"issue_date" doc:"Issue date (YYYY-MM-DD)"`
-	DueDate       string  `json:"due_date" doc:"Due date (YYYY-MM-DD)"`
-	SentAt        *string `json:"sent_at,omitempty" doc:"When the invoice was sent"`
-	Paid          bool    `json:"paid" doc:"Whether a payment is linked to the invoice"`
-	PriceItemName string  `json:"price_item_name" doc:"Price item name, if any"`
-	Description   string  `json:"description" doc:"First invoice-line description"`
-	HasPDF        bool    `json:"has_pdf" doc:"Whether a downloadable PDF exists for this invoice"`
+	ID              string  `json:"id" doc:"Invoice UUID"`
+	InvoiceNumber   int     `json:"invoice_number" doc:"Sequential invoice number"`
+	KID             string  `json:"kid_number" doc:"KID payment reference"`
+	TotalAmount     float64 `json:"total_amount" doc:"Total amount due"`
+	IssueDate       string  `json:"issue_date" doc:"Issue date (YYYY-MM-DD)"`
+	DueDate         string  `json:"due_date" doc:"Due date (YYYY-MM-DD)"`
+	SentAt          *string `json:"sent_at,omitempty" doc:"When the invoice was sent"`
+	Paid            bool    `json:"paid" doc:"Whether a payment is linked to the invoice"`
+	PaymentReceived bool    `json:"payment_received" doc:"A Vipps pay-link payment was seen via webhook but settlement is not yet reconciled"`
+	PriceItemName   string  `json:"price_item_name" doc:"Price item name, if any"`
+	Description     string  `json:"description" doc:"First invoice-line description"`
+	HasPDF          bool    `json:"has_pdf" doc:"Whether a downloadable PDF exists for this invoice"`
 }
 
 // --- Boats ---

@@ -455,6 +455,7 @@
       "paidHeading": "Betaald",
       "status": {
         "paid": "Betaald",
+        "received": "Betaling ontvangen",
         "unpaid": "Onbetaald",
         "overdue": "Achterstallig"
       }

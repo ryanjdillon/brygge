@@ -15,12 +15,14 @@ const { t } = useI18n()
 
 function statusClass(inv: MemberInvoice): string {
   if (inv.paid) return 'bg-green-100 text-green-800'
+  if (inv.payment_received) return 'bg-blue-100 text-blue-800'
   if (isOverdue(inv)) return 'bg-red-100 text-red-800'
   return 'bg-amber-100 text-amber-800'
 }
 
 function statusLabel(inv: MemberInvoice): string {
   if (inv.paid) return t('portal.invoices.status.paid')
+  if (inv.payment_received) return t('portal.invoices.status.received')
   if (isOverdue(inv)) return t('portal.invoices.status.overdue')
   return t('portal.invoices.status.unpaid')
 }

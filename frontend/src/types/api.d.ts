@@ -4028,6 +4028,8 @@ export interface components {
             kid_number: string;
             /** @description Whether a payment is linked to the invoice */
             paid: boolean;
+            /** @description A Vipps pay-link payment was seen via webhook but settlement is not yet reconciled */
+            payment_received: boolean;
             /** @description Price item name, if any */
             price_item_name: string;
             /** @description When the invoice was sent */

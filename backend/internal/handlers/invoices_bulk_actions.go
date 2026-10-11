@@ -76,7 +76,7 @@ func (h *InvoiceHandler) HandleBulkSendReminder(w http.ResponseWriter, r *http.R
 	// can give the operator immediate "X enqueued, Y skipped" feedback
 	// without making them wait for the worker.
 	rows, err := h.db.Query(ctx,
-		`SELECT i.id, i.sent_at, i.payment_id,
+		`SELECT i.id, i.sent_at, i.payment_id, i.vipps_paid_at,
 		        COALESCE(NULLIF(i.recipient_email, ''), u.email, '') AS recipient,
 		        (i.pdf_data IS NOT NULL OR COALESCE(i.s3_key, '') <> '') AS has_pdf
 		   FROM invoices i
@@ -92,16 +92,17 @@ func (h *InvoiceHandler) HandleBulkSendReminder(w http.ResponseWriter, r *http.R
 	defer rows.Close()
 
 	type pre struct {
-		id        string
-		sentAt    *time.Time
-		paymentID *string
-		recipient string
-		hasPDF    bool
+		id          string
+		sentAt      *time.Time
+		paymentID   *string
+		vippsPaidAt *time.Time
+		recipient   string
+		hasPDF      bool
 	}
 	seen := make(map[string]pre, len(req.IDs))
 	for rows.Next() {
 		var p pre
-		if err := rows.Scan(&p.id, &p.sentAt, &p.paymentID, &p.recipient, &p.hasPDF); err != nil {
+		if err := rows.Scan(&p.id, &p.sentAt, &p.paymentID, &p.vippsPaidAt, &p.recipient, &p.hasPDF); err != nil {
 			h.log.Error().Err(err).Msg("bulk reminder preflight scan")
 			Error(w, http.StatusInternalServerError, "internal error")
 			return
@@ -132,7 +133,12 @@ func (h *InvoiceHandler) HandleBulkSendReminder(w http.ResponseWriter, r *http.R
 			res.Failures = append(res.Failures, id+": not found")
 			continue
 		}
-		if p.sentAt == nil || p.paymentID != nil {
+		// Skip not-yet-sent, already-paid, and vipps-received-pending-settlement
+		// invoices. The last is the key one: a member who paid via the /betal
+		// link has vipps_paid_at set but payment_id still null (authoritative
+		// paid comes from settlement reconciliation) — reminding them would be a
+		// false purring.
+		if p.sentAt == nil || p.paymentID != nil || p.vippsPaidAt != nil {
 			res.Skipped++
 			continue
 		}

@@ -543,6 +543,7 @@
       "paidHeading": "Betalte",
       "status": {
         "paid": "Betalt",
+        "received": "Betaling motteke",
         "unpaid": "Ubetalt",
         "overdue": "Forfalle"
       }

@@ -658,8 +658,13 @@ type memberInvoice struct {
 	DueDate       string  `json:"due_date"`
 	SentAt        *string `json:"sent_at"`
 	Paid          bool    `json:"paid"`
-	PriceItemName string  `json:"price_item_name"`
-	Description   string  `json:"description"`
+	// PaymentReceived is a Vipps pay-link payment seen via webhook
+	// (vipps_paid_at set) but not yet authoritatively settled (payment_id still
+	// null). Surfaced so the member sees "betaling mottatt, venter oppgjør"
+	// instead of "ubetalt" and doesn't pay twice.
+	PaymentReceived bool   `json:"payment_received"`
+	PriceItemName   string `json:"price_item_name"`
+	Description     string `json:"description"`
 	// HasPDF gates the portal "Open PDF" action — imported invoices (and
 	// any not yet rendered) have no retrievable PDF, so the button is
 	// hidden rather than leading to a "PDF not available" error.
@@ -766,6 +771,7 @@ func (h *MembersHandler) HandleListMyInvoices(w http.ResponseWriter, r *http.Req
 	q := `SELECT i.id, i.invoice_number, i.kid_number, i.total_amount,
 	             i.issue_date, i.due_date, i.sent_at,
 	             (i.payment_id IS NOT NULL) AS paid,
+	             (i.payment_id IS NULL AND i.vipps_paid_at IS NOT NULL) AS payment_received,
 	             COALESCE(pi.name, ''),
 	             COALESCE((SELECT description FROM invoice_lines WHERE invoice_id = i.id LIMIT 1), ''),
 	             (i.pdf_data IS NOT NULL OR COALESCE(i.s3_key, '') <> '')
@@ -797,7 +803,7 @@ func (h *MembersHandler) HandleListMyInvoices(w http.ResponseWriter, r *http.Req
 		var issue, due time.Time
 		var sentAt *time.Time
 		if err := rows.Scan(&mi.ID, &mi.InvoiceNumber, &mi.KID, &mi.TotalAmount,
-			&issue, &due, &sentAt, &mi.Paid, &mi.PriceItemName, &mi.Description, &mi.HasPDF); err != nil {
+			&issue, &due, &sentAt, &mi.Paid, &mi.PaymentReceived, &mi.PriceItemName, &mi.Description, &mi.HasPDF); err != nil {
 			h.log.Error().Err(err).Msg("scan my invoice row")
 			Error(w, http.StatusInternalServerError, "internal error")
 			return

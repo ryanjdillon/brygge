@@ -455,6 +455,7 @@
       "paidHeading": "Pagate",
       "status": {
         "paid": "Pagata",
+        "received": "Pagamento ricevuto",
         "unpaid": "Non pagata",
         "overdue": "Scaduta"
       }
