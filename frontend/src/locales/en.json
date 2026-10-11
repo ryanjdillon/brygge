@@ -557,6 +557,12 @@
     }
   },
   "admin": {
+    "payLink": {
+      "title": "Copy Vipps payment link",
+      "copied": "Payment link copied to clipboard",
+      "failed": "Couldn't create the payment link",
+      "vippsUnavailable": "Vipps isn't configured for this club"
+    },
     "title": "Administration",
     "ariaNav": "Admin navigation",
     "groupArchive": "Archive and info",
@@ -635,12 +641,6 @@
     },
     "faktura": {
       "title": "Faktura",
-      "payLink": {
-        "title": "Copy Vipps payment link",
-        "copied": "Payment link copied to clipboard",
-        "failed": "Couldn't create the payment link",
-        "vippsUnavailable": "Vipps isn't configured for this club"
-      },
       "subtitle": "Create new fakturas and review drafts, sent, and voided.",
       "tabsAria": "Faktura tabs",
       "tabs": {

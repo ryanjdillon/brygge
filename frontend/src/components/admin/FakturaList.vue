@@ -8,6 +8,7 @@ import DeliveryLogButton from '@/components/admin/DeliveryLogButton.vue'
 import InvoiceNumberChip from '@/components/ui/InvoiceNumberChip.vue'
 import { useConfirm } from '@/stores/confirm'
 import { useFreshTotp } from '@/composables/useFreshTotp'
+import { copyPayLink as copyPayLinkFor } from '@/composables/useCopyPayLink'
 import { useRangeSelect } from '@/composables/useRangeSelect'
 import { formatNOK, formatDate, formatDateTime } from '@/lib/format'
 
@@ -275,23 +276,12 @@ async function copyPayLink(d: Row) {
   if (busyIds.value.has(d.id)) return
   busyIds.value.add(d.id)
   try {
-    const res = await fetch(`/api/v1/admin/financials/invoices/${d.id}/pay-link`, {
-      credentials: 'include',
-    })
-    if (!res.ok) {
-      const data = await res.json().catch(() => null)
-      flash(
-        res.status === 409 && data?.error === 'vipps_unavailable'
-          ? t('admin.faktura.payLink.vippsUnavailable')
-          : t('admin.faktura.payLink.failed'),
-      )
-      return
-    }
-    const { pay_url } = (await res.json()) as { pay_url: string }
-    await navigator.clipboard.writeText(pay_url)
-    flash(t('admin.faktura.payLink.copied'))
-  } catch {
-    flash(t('admin.faktura.payLink.failed'))
+    const r = await copyPayLinkFor(`/api/v1/admin/financials/invoices/${d.id}/pay-link`)
+    flash(
+      r.ok
+        ? t('admin.payLink.copied')
+        : t(r.reason === 'vipps_unavailable' ? 'admin.payLink.vippsUnavailable' : 'admin.payLink.failed'),
+    )
   } finally {
     busyIds.value.delete(d.id)
   }
@@ -825,7 +815,7 @@ defineExpose({ load })
                     v-if="showPayLink && !d.paid && !d.vipps_paid_at"
                     class="text-indigo-600 hover:text-indigo-800 disabled:opacity-50"
                     :disabled="busyIds.has(d.id)"
-                    :title="t('admin.faktura.payLink.title')"
+                    :title="t('admin.payLink.title')"
                     @click="copyPayLink(d)"
                   >
                     <Link2 class="h-4 w-4" />

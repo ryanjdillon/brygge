@@ -57,17 +57,21 @@ function statusLabel(inv: MemberInvoice): string {
           >
             {{ statusLabel(inv) }}
           </span>
-          <a
-            v-if="inv.has_pdf"
-            :href="`/api/v1/members/me/invoices/${inv.id}/pdf`"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
-            :title="t('portal.invoices.open')"
-          >
-            <ExternalLink class="h-3.5 w-3.5" />
-            {{ t('portal.invoices.open') }}
-          </a>
+          <!-- Trailing per-row action. Defaults to the "open PDF" link; the
+               public payables page overrides it with a "Pay" button. -->
+          <slot name="actions" :invoice="inv">
+            <a
+              v-if="inv.has_pdf"
+              :href="`/api/v1/members/me/invoices/${inv.id}/pdf`"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+              :title="t('portal.invoices.open')"
+            >
+              <ExternalLink class="h-3.5 w-3.5" />
+              {{ t('portal.invoices.open') }}
+            </a>
+          </slot>
         </div>
       </li>
     </ul>
