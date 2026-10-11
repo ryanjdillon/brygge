@@ -39,7 +39,7 @@ check_links() {
 
 echo ""
 echo "Checking markdown cross-links..."
-find "$REPO_ROOT" -name '*.md' -not -path '*/node_modules/*' -not -path '*/.go/*' -not -path '*/.claude/*' | sort | while read -r mdfile; do
+find "$REPO_ROOT" -name '*.md' -not -path '*/node_modules/*' -not -path '*/vendor/*' -not -path '*/.go/*' -not -path '*/.claude/*' | sort | while read -r mdfile; do
   rel="${mdfile#$REPO_ROOT/}"
   if ! check_links "$mdfile"; then
     errors=$((errors + 1))

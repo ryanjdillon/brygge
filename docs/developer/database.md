@@ -73,7 +73,7 @@ whatever `EnvironmentFile` your deploy uses). Treat it as a secret.
 ## Running an SQL script
 
 Two patterns. Both are idempotent if the script itself is idempotent —
-the scripts in [`backend/scripts/`](../backend/scripts/) are written this
+the scripts in [`backend/scripts/`](../../backend/scripts/) are written this
 way (every INSERT is gated on `NOT EXISTS`).
 
 ### Pattern A — `scp` then `ssh`
@@ -106,7 +106,7 @@ errors happen, which is why the seed scripts default to Pattern A.
 
 ## Pre-built scripts
 
-Located in [`backend/scripts/`](../backend/scripts/):
+Located in [`backend/scripts/`](../../backend/scripts/):
 
 | Script                 | Purpose                                                           | Required vars  |
 |------------------------|-------------------------------------------------------------------|----------------|
@@ -122,7 +122,7 @@ When adding new operator scripts, follow the same conventions:
 
 ## Migrations
 
-Schema changes live in [`backend/migrations/`](../backend/migrations/) as
+Schema changes live in [`backend/migrations/`](../../backend/migrations/) as
 paired `NNNNNN_name.up.sql` / `NNNNNN_name.down.sql` files. They are run
 automatically by the `brygge-migrate` systemd unit on every deploy
 (before `brygge.service` starts).

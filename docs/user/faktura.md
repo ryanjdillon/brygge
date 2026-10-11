@@ -231,7 +231,7 @@ Member resolution uses fuzzy normalization (æøå/diacritics, hyphens, case, wh
 
 ## Reference
 
-- Pricing admin: [`/admin/pricing`](/admin/pricing)
-- Faktura admin: [`/admin/accounting/faktura`](/admin/accounting/faktura)
-- Member list (with status chips): [`/admin/users`](/admin/users)
-- Accounting overview: [`/admin/accounting`](/admin/accounting)
+- Pricing admin: `/admin/pricing`
+- Faktura admin: `/admin/accounting/faktura`
+- Member list (with status chips): `/admin/users`
+- Accounting overview: `/admin/accounting`

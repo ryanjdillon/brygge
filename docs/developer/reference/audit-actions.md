@@ -2,7 +2,7 @@
 
 Every `audit.Action*` constant defined in `backend/internal/audit/audit.go`, with the action string, the resource type the row binds to, when it fires, and the notable `extra` fields.
 
-When adding a new action, follow [`checklists/add-audit-action.md`](checklists/add-audit-action.md) and add the row here in the same commit.
+When adding a new action, follow [`checklists/add-audit-action.md`](../checklists/add-audit-action.md) and add the row here in the same commit.
 
 The action string is the JSON wire format (`row.action`); the constant is the Go reference. Downstream filters (CSV exports, audit-log search) match on the string, not the constant — once shipped, never change.
 
@@ -172,7 +172,7 @@ SELECT created_at, action, extra
 
 ## Adding a new action
 
-Per [`checklists/add-audit-action.md`](checklists/add-audit-action.md):
+Per [`checklists/add-audit-action.md`](../checklists/add-audit-action.md):
 
 1. Add constant to `internal/audit/audit.go` (alphabetical within its block — Auth, TOTP, User, Slip, Content, Finance, etc.)
 2. Use from the handler behind `if h.audit != nil`
