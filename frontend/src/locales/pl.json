@@ -263,6 +263,15 @@
     "paymentError": "Nie udało się przetworzyć płatności. Skontaktuj się z nami po pomoc."
   },
   "portal": {
+    "payables": {
+      "title": "Zapłać swoje faktury",
+      "intro": "Otwarte faktury dla {name}",
+      "club": "{club}",
+      "pay": "Zapłać przez Vipps",
+      "none": "Nie masz obecnie żadnych nieopłaconych faktur.",
+      "loadError": "Nie udało się wczytać Twoich faktur. Otwórz link ponownie.",
+      "notFound": "Ten link do płatności jest już nieważny. Poproś klub o nowy."
+    },
     "title": "Moja strona",
     "ariaNav": "Nawigacja portalu",
     "sidebar": {

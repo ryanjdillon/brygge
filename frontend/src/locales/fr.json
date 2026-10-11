@@ -263,6 +263,15 @@
     "paymentError": "Le paiement n'a pas pu être traité. Contactez-nous pour obtenir de l'aide."
   },
   "portal": {
+    "payables": {
+      "title": "Payer vos factures",
+      "intro": "Factures ouvertes pour {name}",
+      "club": "{club}",
+      "pay": "Payer avec Vipps",
+      "none": "Vous n'avez aucune facture ouverte pour le moment.",
+      "loadError": "Impossible de charger vos factures. Veuillez rouvrir le lien.",
+      "notFound": "Ce lien de paiement n'est plus valide. Demandez-en un nouveau au club."
+    },
     "title": "Mon espace",
     "ariaNav": "Navigation du portail",
     "sidebar": {

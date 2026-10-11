@@ -107,11 +107,17 @@ func (h *InvoiceHandler) orderPayURL(token string) string {
 	if token == "" {
 		return ""
 	}
+	return h.frontendBase() + "/betal/" + token
+}
+
+// frontendBase is the trimmed public site origin used to build member-facing
+// links: the configured FrontendURL, falling back to https://<Domain>.
+func (h *InvoiceHandler) frontendBase() string {
 	base := h.config.FrontendURL
 	if base == "" {
 		base = "https://" + h.config.Domain
 	}
-	return strings.TrimRight(base, "/") + "/betal/" + token
+	return strings.TrimRight(base, "/")
 }
 
 type invoicePayLinkResponse struct {
@@ -347,10 +353,7 @@ func (h *InvoiceHandler) orderTotal(ctx context.Context, orderID string) (float6
 // vippsReturnURL is where Vipps sends the payer's browser after they complete
 // (or abort) the payment: the club site.
 func (h *InvoiceHandler) vippsReturnURL() string {
-	if h.config.FrontendURL != "" {
-		return h.config.FrontendURL
-	}
-	return "https://" + h.config.Domain
+	return h.frontendBase()
 }
 
 // genVippsReference returns a globally unique, Vipps-safe payment reference

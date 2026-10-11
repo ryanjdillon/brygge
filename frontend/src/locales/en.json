@@ -311,6 +311,15 @@
     "forgotPassword": "Forgot password?"
   },
   "portal": {
+    "payables": {
+      "title": "Pay your invoices",
+      "intro": "Open invoices for {name}",
+      "club": "{club}",
+      "pay": "Pay with Vipps",
+      "none": "You have no open invoices right now.",
+      "loadError": "We couldn't load your invoices. Please open the link again.",
+      "notFound": "This payment link is no longer valid. Ask the club for a new one."
+    },
     "title": "My page",
     "ariaNav": "Portal navigation",
     "sidebar": {
@@ -1157,6 +1166,7 @@
       "paid": "Paid"
     },
     "users": {
+      "copyPayLink": "Copy pay link",
       "name": "Name",
       "email": "Email",
       "roles": "Roles",

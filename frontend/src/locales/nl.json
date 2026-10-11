@@ -263,6 +263,15 @@
     "paymentError": "De betaling kon niet worden verwerkt. Neem contact met ons op voor hulp."
   },
   "portal": {
+    "payables": {
+      "title": "Betaal je facturen",
+      "intro": "Openstaande facturen voor {name}",
+      "club": "{club}",
+      "pay": "Betalen met Vipps",
+      "none": "Je hebt momenteel geen openstaande facturen.",
+      "loadError": "We konden je facturen niet laden. Open de link opnieuw.",
+      "notFound": "Deze betaallink is niet meer geldig. Vraag de club om een nieuwe."
+    },
     "title": "Mijn pagina",
     "ariaNav": "Portalnavigatie",
     "sidebar": {

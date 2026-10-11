@@ -304,6 +304,15 @@
     "forgotPassword": "Gløymt passord?"
   },
   "portal": {
+    "payables": {
+      "title": "Betal fakturaane dine",
+      "intro": "Ubetalte fakturaar for {name}",
+      "club": "{club}",
+      "pay": "Betal med Vipps",
+      "none": "Du har ingen ubetalte fakturaar akkurat no.",
+      "loadError": "Vi klarte ikkje å hente fakturaane dine. Opne lenka på nytt.",
+      "notFound": "Denne betalingslenka er ikkje lenger gyldig. Be klubben om ei ny."
+    },
     "title": "Mi side",
     "ariaNav": "Portal-navigasjon",
     "sidebar": {
@@ -1117,6 +1126,7 @@
       "paid": "Betalt"
     },
     "users": {
+      "copyPayLink": "Kopier betalingslenke",
       "name": "Namn",
       "email": "E-post",
       "roles": "Roller",

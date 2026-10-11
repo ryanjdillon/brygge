@@ -263,6 +263,15 @@
     "paymentError": "Die Zahlung konnte nicht verarbeitet werden. Kontaktieren Sie uns für Hilfe."
   },
   "portal": {
+    "payables": {
+      "title": "Rechnungen bezahlen",
+      "intro": "Offene Rechnungen für {name}",
+      "club": "{club}",
+      "pay": "Mit Vipps bezahlen",
+      "none": "Sie haben derzeit keine offenen Rechnungen.",
+      "loadError": "Ihre Rechnungen konnten nicht geladen werden. Öffnen Sie den Link erneut.",
+      "notFound": "Dieser Zahlungslink ist nicht mehr gültig. Bitten Sie den Verein um einen neuen."
+    },
     "title": "Meine Seite",
     "ariaNav": "Portalnavigation",
     "sidebar": {

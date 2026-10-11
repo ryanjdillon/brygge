@@ -12,7 +12,7 @@ import SortableTh from '@/components/admin/SortableTh.vue'
 import SlipCell from '@/components/admin/SlipCell.vue'
 import ColumnSelector, { type ColumnDef } from '@/components/admin/ColumnSelector.vue'
 import InvoiceStatusChip, { type InvoiceState } from '@/components/admin/InvoiceStatusChip.vue'
-import { UserPlus, Upload, Download, X, Pencil, Ban, RotateCcw } from 'lucide-vue-next'
+import { UserPlus, Upload, Download, X, Pencil, Ban, RotateCcw, Link2 } from 'lucide-vue-next'
 import BoatForm, { type BoatFormValue } from '@/components/boats/BoatForm.vue'
 import BoatCard from '@/components/boats/BoatCard.vue'
 import BulkInvoicesModal from '@/components/admin/BulkInvoicesModal.vue'
@@ -22,6 +22,8 @@ import { formatName } from '@/lib/format'
 import { useRangeSelect } from '@/composables/useRangeSelect'
 import { useAuthStore } from '@/stores/auth'
 import { useFreshTotp } from '@/composables/useFreshTotp'
+import { copyPayLink as copyPayLinkFor } from '@/composables/useCopyPayLink'
+import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/stores/confirm'
 import Input from '@/components/ui/form/Input.vue'
 import Textarea from '@/components/ui/form/Textarea.vue'
@@ -40,6 +42,19 @@ const queryClient = useQueryClient()
 const auth = useAuthStore()
 const { ensureFreshTotp, totpAwareFetch } = useFreshTotp()
 const confirm = useConfirm()
+const toast = useToast()
+
+// Copies the member's durable payables link (BRY-275) so staff can hand a member
+// their personal "pay my fakturas" page via SMS/chat. No fresh-TOTP gate — a
+// benign read that only ensures the token exists (same as the per-invoice link).
+async function copyUserPayLink(userId: string) {
+  const r = await copyPayLinkFor(`/api/v1/admin/financials/users/${userId}/pay-link`)
+  if (r.ok) {
+    toast.success(t('admin.payLink.copied'))
+  } else {
+    toast.error(t(r.reason === 'vipps_unavailable' ? 'admin.payLink.vippsUnavailable' : 'admin.payLink.failed'))
+  }
+}
 
 type SortField = 'first_name' | 'last_name' | 'email' | 'phone' | 'slip' | 'membership' | 'slip_fee'
 const sortField = ref<SortField>('last_name')
@@ -1221,6 +1236,13 @@ async function submitImport() {
 
           <div class="flex justify-end gap-2 pt-3">
             <button class="rounded-md px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100" @click="closeDetail">{{ t('common.close') }}</button>
+            <button
+              class="inline-flex items-center gap-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              :title="t('admin.payLink.title')"
+              @click="copyUserPayLink(detailUser.id)"
+            >
+              <Link2 class="h-4 w-4" /> {{ t('admin.users.copyPayLink') }}
+            </button>
             <button
               class="inline-flex items-center gap-1 rounded-md bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-700"
               @click="startDetailEdit"

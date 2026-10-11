@@ -397,6 +397,9 @@ func main() {
 			// that mints a fresh ePayment (BRY-8). Kept for already-sent emails;
 			// new emails link to the /betal/{token} checkout page below.
 			r.Get("/betal/{token}", invoiceHandler.HandleOrderPayRedirect)
+			// Public per-member payables page (BRY-275): a durable personal token
+			// lists the member's open fakturas; paying one reuses /betal/{token}.
+			r.Get("/betal/bruker/{token}", invoiceHandler.HandleGetPayables)
 			// Token-addressed checkout page API: itemised faktura + ad-hoc catalog
 			// add-ons, then mint a Vipps payment on demand (BRY-263).
 			r.Get("/checkout/{token}", invoiceHandler.HandleGetCheckout)
@@ -877,6 +880,11 @@ func main() {
 							Post("/invoices/{invoiceID}/resend", invoiceHandler.HandleResendInvoice)
 						r.With(middleware.RequireRole("treasurer", "admin")).
 							Get("/invoices/{invoiceID}/pay-link", invoiceHandler.HandleGetInvoicePayLink)
+						// Durable per-member payables link (BRY-275): all of a member's
+						// open fakturas on one no-login page. Same benign-read gating as
+						// the per-invoice link above.
+						r.With(middleware.RequireRole("treasurer", "admin")).
+							Get("/users/{userID}/pay-link", invoiceHandler.HandleGetUserPayLink)
 						r.With(middleware.RequireRole("treasurer", "admin"),
 							middleware.RequireFreshTOTPDefault()).
 							Get("/invoices/{invoiceID}/delivery-log", invoiceHandler.HandleGetDeliveryLog)

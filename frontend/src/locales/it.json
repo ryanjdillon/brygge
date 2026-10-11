@@ -263,6 +263,15 @@
     "paymentError": "Il pagamento non è stato elaborato. Contattaci per assistenza."
   },
   "portal": {
+    "payables": {
+      "title": "Paga le tue fatture",
+      "intro": "Fatture aperte per {name}",
+      "club": "{club}",
+      "pay": "Paga con Vipps",
+      "none": "Non hai fatture aperte al momento.",
+      "loadError": "Impossibile caricare le tue fatture. Riapri il link.",
+      "notFound": "Questo link di pagamento non è più valido. Chiedine uno nuovo al club."
+    },
     "title": "La mia pagina",
     "ariaNav": "Navigazione portale",
     "sidebar": {

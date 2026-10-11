@@ -43,6 +43,7 @@ Notes:
 | `GET /harbor/layout` | `OptionalSessionAuth` |
 | `POST /bookings` | `OptionalSessionAuth` (guest booking) |
 | `POST /orders`, `GET/POST /orders/{id}*` | none (commerce checkout) |
+| `GET /betal/{token}`, `GET /checkout/{token}*`, `GET /betal/bruker/{token}` | none — the durable token is the capability (per-invoice and per-member payables links) |
 
 ## Authenticated member surfaces (`AuthenticateSession`, no role gate)
 

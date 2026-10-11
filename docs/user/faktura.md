@@ -132,8 +132,11 @@ Per-row actions:
 
 - **Preview PDF** — current version.
 - **Resend** — re-emails the stored PDF (no re-generation; just delivery).
+- **Copy pay link** (link icon) — copies this faktura's durable Vipps pay link (`/betal/{token}`) to the clipboard so you can send it however you like (SMS, chat, read it out) — handy for members who don't cope with email or magic-link login.
 - **History** (clock icon) — opens the **Previous PDF versions** popover. Every PDF that was overwritten by a regenerate is archived here with timestamp, who did it, and view/download links. See [PDF archive](#pdf-archive).
 - **Void** — moves the row to Voided without deletion (audit trail preserved).
+
+> **Per-member payables link.** For a member with several open fakturas, open them under `Admin → Members`, and use **Copy pay link** in their detail to get their personal `/betal/bruker/…` page. It lists *all* their open fakturas with a Vipps button on each — no login — so a less technical member pays everything from one link. Already-paid and already-received (awaiting settlement) fakturas are hidden so nobody is asked to pay twice.
 
 Bulk actions on the selection:
 
