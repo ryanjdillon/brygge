@@ -124,6 +124,12 @@ Each invariant lists the **rule**, then the **failure mode** it prevents. When p
 
 **Failure mode:** a deploy or crash during a 100-row send no longer loses the un-drained tail — the worker resumes on restart. Per-row `invoice.reminded` audit rows still reflect progress on the Sent tab's "Sist purring" column. Reminders whose invoice was paid or deleted between enqueue and send are treated as terminal no-ops (marked sent, not retried).
 
+### Vipps is offered only within the club's amount cap
+
+**Rule:** A "Betal med Vipps" link/payment is offered for an invoice only when `invoices.total_amount <= clubs.vipps_max_amount`, or when `vipps_max_amount IS NULL` (no cap). The cap is enforced at **both** points, because `orders.token`s are permanent and one exists for every sent faktura: at **issuance** in `ensureFakturaOrderToken` (returns `""` over the cap, before the token-reuse lookup — so faktura/reminder emails, the admin copy-link, and the payables page all go KID-only) and at **mint** in `mintOrderPayment` (returns `errVippsOverLimit` — so a link already in an inbox or issued before the cap can't be charged). Reminders also carry a per-batch manual `vipps_payment_link` override that can only further suppress the link, never override the cap upward.
+
+**Failure mode:** enforcing at issuance alone would leave every large invoice already emailed fully Vipps-payable (BRY-283). Over-cap invoices simply never get an `orders`/`order_sources` row minted, which is safe — reconciliation and the webhook key off `orders.vipps_reference`, created only on mint.
+
 ---
 
 ## Sessions

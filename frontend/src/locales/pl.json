@@ -269,6 +269,8 @@
       "club": "{club}",
       "pay": "Zapłać przez Vipps",
       "none": "Nie masz obecnie żadnych nieopłaconych faktur.",
+      "bankOnly": "Przelew bankowy",
+      "bankTransferHint": "Faktury oznaczone „przelew bankowy” przekraczają limit Vipps — zapłać na konto {account}, używając numeru KID podanego przy każdej.",
       "loadError": "Nie udało się wczytać Twoich faktur. Otwórz link ponownie.",
       "notFound": "Ten link do płatności jest już nieważny. Poproś klub o nowy."
     },
@@ -950,6 +952,9 @@
       "kidMethodMod10": "Modulo 10 (Luhn)",
       "vippsAccountsLabel": "Konta Vipps",
       "vippsAccountsHint": "Konta księgowe używane przy uzgadnianiu wypłat Vipps: konto rozrachunkowe i konto opłat. Domyślnie: 2900 i 7700.",
+      "vippsMaxAmount": "Maksymalna kwota dla Vipps (kr)",
+      "vippsMaxAmountPlaceholder": "Bez limitu",
+      "vippsMaxAmountHint": "Faktury powyżej tej kwoty są oferowane tylko przelewem bankowym (KID), aby klub uniknął opłat Vipps. Pozostaw puste, aby nie ustawiać limitu.",
       "vippsClearingAccount": "Konto rozrachunkowe",
       "vippsFeeAccount": "Konto opłat"
     },

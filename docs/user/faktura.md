@@ -141,9 +141,11 @@ Per-row actions:
 Bulk actions on the selection:
 
 - **Copy emails** — same as Drafts; useful when emails are routing to spam and you want to send a personal heads-up before/after the automated send.
-- **Send purring** — bulk reminder email. Skips already-paid rows automatically; uses the stored PDF as attachment. The reminder copy automatically shifts between "ubetalt" and "forfalt" tone based on the due date.
+- **Send purring** — bulk reminder email. Skips already-paid rows automatically; uses the stored PDF as attachment. The reminder copy automatically shifts between "ubetalt" and "forfalt" tone based on the due date. The confirm dialog has an **Include Vipps payment link** checkbox (default on) — untick it to send this batch KID/bank-transfer only.
 - **Regenerer PDF** — rebuilds `invoices.pdf_data` in place using the **current** club bank-account default. Invoice number, KID, dates, recipient, and lines stay identical. No email is sent. Each regenerate archives the prior PDF under [bokføringsloven §13](https://lovdata.no/lov/2004-11-19-73/§13) so the original is still retrievable.
 - **Void** — same as per-row but for the selection.
+
+> **Large payments → bank transfer.** To avoid Vipps fees on big invoices, set a **max amount for Vipps** under `Admin → Economy → Settings`. Invoices over that amount never show a Vipps button — on the faktura, on reminders, on the copy-link, and on the member's payables page — so the member pays by bank transfer (KID) instead. Leave it empty for no limit.
 
 **Typical incident recovery flow** (we built this for the operator who issued a batch of fakturas with the wrong bank account):
 

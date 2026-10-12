@@ -6,7 +6,7 @@
 
 export type CopyPayLinkResult =
   | { ok: true; url: string }
-  | { ok: false; reason: 'vipps_unavailable' | 'failed' }
+  | { ok: false; reason: 'vipps_unavailable' | 'vipps_over_limit' | 'failed' }
 
 /**
  * Fetches a pay link from the given admin endpoint (cookie-authed) and copies it
@@ -19,19 +19,29 @@ export async function copyPayLink(url: string): Promise<CopyPayLinkResult> {
     const res = await fetch(url, { credentials: 'include' })
     if (!res.ok) {
       const data = await res.json().catch(() => null)
-      return {
-        ok: false,
-        reason:
-          res.status === 409 && data?.error === 'vipps_unavailable'
-            ? 'vipps_unavailable'
-            : 'failed',
-      }
+      let reason: 'vipps_unavailable' | 'vipps_over_limit' | 'failed' = 'failed'
+      if (res.status === 409 && data?.error === 'vipps_unavailable') reason = 'vipps_unavailable'
+      else if (res.status === 409 && data?.error === 'vipps_over_limit') reason = 'vipps_over_limit'
+      return { ok: false, reason }
     }
     const { pay_url } = (await res.json()) as { pay_url: string }
     await navigator.clipboard.writeText(pay_url)
     return { ok: true, url: pay_url }
   } catch {
     return { ok: false, reason: 'failed' }
+  }
+}
+
+// Maps a failure reason to its i18n key so both copy-link callers show the same
+// localized message (admin.payLink.*).
+export function payLinkErrorKey(reason: 'vipps_unavailable' | 'vipps_over_limit' | 'failed'): string {
+  switch (reason) {
+    case 'vipps_unavailable':
+      return 'admin.payLink.vippsUnavailable'
+    case 'vipps_over_limit':
+      return 'admin.payLink.overLimit'
+    default:
+      return 'admin.payLink.failed'
   }
 }
 

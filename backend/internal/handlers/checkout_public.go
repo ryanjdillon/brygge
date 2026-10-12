@@ -46,6 +46,12 @@ type checkoutResp struct {
 	Total       float64               `json:"total"`
 	Catalog     []checkoutCatalogItem `json:"catalog"`
 	AlreadyPaid bool                  `json:"already_paid"`
+	// VippsBlocked is set when the invoice is over the club's Vipps amount cap
+	// (BRY-283): the page hides the Vipps button and shows KID + Konto for bank
+	// transfer instead. KID/BankAccount are populated so it can.
+	VippsBlocked bool   `json:"vipps_blocked"`
+	KID          string `json:"kid_number"`
+	BankAccount  string `json:"bank_account"`
 }
 
 // checkoutByToken loads the order behind a pay token.
@@ -96,14 +102,14 @@ func (h *InvoiceHandler) buildCheckoutResp(ctx context.Context, orderID, clubID,
 		invoiceAmount float64
 	)
 	err := h.db.QueryRow(ctx,
-		`SELECT i.id, i.invoice_number, i.total_amount
+		`SELECT i.id, i.invoice_number, i.total_amount, COALESCE(i.kid_number, '')
 		   FROM order_sources os
 		   JOIN invoices i ON i.id = os.invoice_id
 		  WHERE os.order_id = $1
 		  ORDER BY i.invoice_number
 		  LIMIT 1`,
 		orderID,
-	).Scan(&invoiceID, &invoiceNumber, &invoiceAmount)
+	).Scan(&invoiceID, &invoiceNumber, &invoiceAmount, &resp.KID)
 	if err == nil {
 		inv := &checkoutInvoiceResp{Number: invoiceNumber, Amount: invoiceAmount, Lines: []checkoutLineResp{}}
 		rows, err := h.db.Query(ctx,
@@ -182,6 +188,22 @@ func (h *InvoiceHandler) buildCheckoutResp(ctx context.Context, orderID, clubID,
 	}
 	if err := catRows.Err(); err != nil {
 		return nil, err
+	}
+
+	// If an unpaid source is over the club's Vipps cap, the page must steer to
+	// bank transfer: flag it and surface KID + konto so no Vipps button shows
+	// (BRY-283). KID is already loaded above; load the club's default account.
+	blocked, err := h.orderVippsOverLimit(ctx, orderID)
+	if err != nil {
+		return nil, err
+	}
+	if blocked {
+		resp.VippsBlocked = true
+		if club, err := loadClubInvoiceFields(ctx, h.db, clubID); err != nil {
+			return nil, err
+		} else {
+			resp.BankAccount = club.BankAccount
+		}
 	}
 
 	return resp, nil
@@ -314,6 +336,12 @@ func (h *InvoiceHandler) HandlePayCheckout(w http.ResponseWriter, r *http.Reques
 	redirectURL, err := h.mintOrderPayment(ctx, orderID)
 	if errors.Is(err, errNothingToPay) {
 		Error(w, http.StatusBadRequest, "nothing to pay")
+		return
+	}
+	if errors.Is(err, errVippsOverLimit) {
+		// Over the club's cap → bank transfer only (BRY-283). The page already
+		// hides the button via vipps_blocked; this guards a stale client.
+		Error(w, http.StatusConflict, "vipps_over_limit")
 		return
 	}
 	if err != nil {

@@ -269,6 +269,8 @@
       "club": "{club}",
       "pay": "Payer avec Vipps",
       "none": "Vous n'avez aucune facture ouverte pour le moment.",
+      "bankOnly": "Virement bancaire",
+      "bankTransferHint": "Les factures marquées « virement bancaire » dépassent la limite Vipps — payez sur le compte {account} avec le KID indiqué sur chacune.",
       "loadError": "Impossible de charger vos factures. Veuillez rouvrir le lien.",
       "notFound": "Ce lien de paiement n'est plus valide. Demandez-en un nouveau au club."
     },
@@ -949,6 +951,9 @@
       "kidMethodMod10": "Modulo 10 (Luhn)",
       "vippsAccountsLabel": "Comptes Vipps",
       "vippsAccountsHint": "Comptes comptables utilisés pour le rapprochement des versements Vipps : compte d'attente et compte de frais. Par défaut : 2900 et 7700.",
+      "vippsMaxAmount": "Montant maximal pour Vipps (kr)",
+      "vippsMaxAmountPlaceholder": "Aucune limite",
+      "vippsMaxAmountHint": "Les factures dépassant ce montant ne sont proposées quen virement bancaire (KID), afin déviter les frais Vipps. Laisser vide pour aucune limite.",
       "vippsClearingAccount": "Compte d'attente",
       "vippsFeeAccount": "Compte de frais"
     },

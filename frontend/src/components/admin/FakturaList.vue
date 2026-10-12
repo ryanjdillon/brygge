@@ -6,9 +6,9 @@ import { FileDown, Send, Trash2, Ban, Bell, RefreshCw, KeyRound, Copy, Check, Ch
 import FakturaArchiveButton from '@/components/admin/FakturaArchiveButton.vue'
 import DeliveryLogButton from '@/components/admin/DeliveryLogButton.vue'
 import InvoiceNumberChip from '@/components/ui/InvoiceNumberChip.vue'
-import { useConfirm } from '@/stores/confirm'
+import { useConfirm, useConfirmStore } from '@/stores/confirm'
 import { useFreshTotp } from '@/composables/useFreshTotp'
-import { copyPayLink as copyPayLinkFor } from '@/composables/useCopyPayLink'
+import { copyPayLink as copyPayLinkFor, payLinkErrorKey } from '@/composables/useCopyPayLink'
 import { useRangeSelect } from '@/composables/useRangeSelect'
 import { formatNOK, formatDate, formatDateTime } from '@/lib/format'
 
@@ -42,6 +42,7 @@ const props = defineProps<{
 
 const { t } = useI18n()
 const confirm = useConfirm()
+const confirmStore = useConfirmStore()
 const { ensureFreshTotp, totpAwareFetch } = useFreshTotp()
 
 const rows = ref<Row[]>([])
@@ -277,11 +278,7 @@ async function copyPayLink(d: Row) {
   busyIds.value.add(d.id)
   try {
     const r = await copyPayLinkFor(`/api/v1/admin/financials/invoices/${d.id}/pay-link`)
-    flash(
-      r.ok
-        ? t('admin.payLink.copied')
-        : t(r.reason === 'vipps_unavailable' ? 'admin.payLink.vippsUnavailable' : 'admin.payLink.failed'),
-    )
+    flash(r.ok ? t('admin.payLink.copied') : t(payLinkErrorKey(r.reason)))
   } finally {
     busyIds.value.delete(d.id)
   }
@@ -452,13 +449,17 @@ async function sendRemindersSelected() {
     details: items.map(rowLabel),
     confirmLabel: t('admin.faktura.sent.reminderAction'),
     tone: 'info',
+    // Manual override (BRY-283): default on; unticking sends KID-only for this
+    // batch. The club's amount cap still applies on top of this.
+    checkbox: { label: t('admin.faktura.sent.reminderVippsLink'), default: true },
   })
   if (!ok) return
+  const includeVipps = confirmStore.checkboxValue
   const ids = items.map((d) => d.id)
   const res = await totpAwareFetch(`/api/v1/admin/financials/invoices/bulk-reminder`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ids }),
+    body: JSON.stringify({ ids, vipps_payment_link: includeVipps }),
   })
   if (!res.ok) {
     const txt = await res.text().catch(() => '')

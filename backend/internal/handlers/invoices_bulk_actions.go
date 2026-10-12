@@ -21,6 +21,11 @@ import (
 
 type bulkInvoiceActionRequest struct {
 	IDs []string `json:"ids"`
+	// VippsPaymentLink is the reminder batch's manual override for the "Betal
+	// med Vipps" link (BRY-283). nil or true = offer it (still subject to the
+	// club's amount cap); false = KID-only for this whole batch. Ignored by the
+	// non-reminder bulk actions that share this request shape.
+	VippsPaymentLink *bool `json:"vipps_payment_link"`
 }
 
 type bulkInvoiceResult struct {
@@ -110,14 +115,19 @@ func (h *InvoiceHandler) HandleBulkSendReminder(w http.ResponseWriter, r *http.R
 		seen[p.id] = p
 	}
 
+	// Manual override: default on (offer Vipps), off = KID-only for this batch.
+	// This only further suppresses Vipps; it can't override the club's amount cap.
+	includeVipps := boolOrDefault(req.VippsPaymentLink, true)
+
 	// The send context is club/actor/request-scoped, not per-invoice, so
 	// every row in this batch carries the same JSONB payload.
 	payload, err := json.Marshal(invoiceReminderPayload{
-		Locale:      locale,
-		ClubName:    clubName,
-		DefaultBank: defaultBank,
-		ActorID:     claims.UserID,
-		RemoteAddr:  r.RemoteAddr,
+		Locale:       locale,
+		ClubName:     clubName,
+		DefaultBank:  defaultBank,
+		ActorID:      claims.UserID,
+		RemoteAddr:   r.RemoteAddr,
+		IncludeVipps: includeVipps,
 	})
 	if err != nil {
 		h.log.Error().Err(err).Msg("marshal reminder payload")
@@ -178,6 +188,15 @@ func (h *InvoiceHandler) HandleBulkSendReminder(w http.ResponseWriter, r *http.R
 	JSON(w, http.StatusOK, res)
 }
 
+// boolOrDefault returns *p when p is set, else def — for optional JSON bools
+// where "absent" means "use the default".
+func boolOrDefault(p *bool, def bool) bool {
+	if p == nil {
+		return def
+	}
+	return *p
+}
+
 var errSkip = errors.New("skip")
 
 // errInvoiceNotFound is returned by sendOneReminder when the invoice row is
@@ -186,7 +205,7 @@ var errSkip = errors.New("skip")
 var errInvoiceNotFound = errors.New("invoice not found")
 
 func (h *InvoiceHandler) sendOneReminder(
-	ctx context.Context, clubID, actorID, remoteAddr, invoiceID, clubName, defaultBank, locale string,
+	ctx context.Context, clubID, actorID, remoteAddr, invoiceID, clubName, defaultBank, locale string, includeVipps bool,
 ) error {
 	var (
 		invoiceNumber  int
@@ -242,10 +261,14 @@ func (h *InvoiceHandler) sendOneReminder(
 	}
 
 	subject := email.InvoiceReminderSubject(locale, clubName, invoiceNumber)
-	// Always offer a "Betal med Vipps" link on reminders; the copy keeps bank
-	// transfer preferred. Non-fatal: an empty URL just renders the KID-only
-	// reminder.
-	vippsURL := h.orderPayURL(h.ensureFakturaOrderToken(ctx, clubID, invoiceID, true))
+	// Offer a "Betal med Vipps" link unless the operator unticked it for this
+	// batch (includeVipps) or the invoice is over the club's amount cap
+	// (enforced inside ensureFakturaOrderToken, BRY-283). The copy keeps bank
+	// transfer preferred; an empty URL just renders the KID-only reminder.
+	vippsURL := ""
+	if includeVipps {
+		vippsURL = h.orderPayURL(h.ensureFakturaOrderToken(ctx, clubID, invoiceID, true))
+	}
 	body := email.InvoiceReminderBody(locale, memberName, clubName, invoiceNumber, dueDate, total, kid, defaultBank, vippsURL)
 	filename := buildSimpleReminderFilename(invoiceNumber)
 	if err := h.email.SendWithAttachment(ctx, deliverTo, subject, body, filename, pdfData); err != nil {

@@ -269,6 +269,8 @@
       "club": "{club}",
       "pay": "Betalen met Vipps",
       "none": "Je hebt momenteel geen openstaande facturen.",
+      "bankOnly": "Bankoverschrijving",
+      "bankTransferHint": "Facturen met „bankoverschrijving” liggen boven de Vipps-limiet — betaal op rekening {account} met de KID die bij elke factuur staat.",
       "loadError": "We konden je facturen niet laden. Open de link opnieuw.",
       "notFound": "Deze betaallink is niet meer geldig. Vraag de club om een nieuwe."
     },
@@ -950,6 +952,9 @@
       "kidMethodMod10": "Modulo 10 (Luhn)",
       "vippsAccountsLabel": "Vipps-rekeningen",
       "vippsAccountsHint": "Grootboekrekeningen voor het afstemmen van Vipps-uitbetalingen: tussenrekening en kostenrekening. Standaard: 2900 en 7700.",
+      "vippsMaxAmount": "Maximumbedrag voor Vipps (kr)",
+      "vippsMaxAmountPlaceholder": "Geen limiet",
+      "vippsMaxAmountHint": "Facturen boven dit bedrag worden alleen per bankoverschrijving (KID) aangeboden, zodat de club Vipps-kosten vermijdt. Laat leeg voor geen limiet.",
       "vippsClearingAccount": "Tussenrekening",
       "vippsFeeAccount": "Kostenrekening"
     },

@@ -269,6 +269,8 @@
       "club": "{club}",
       "pay": "Paga con Vipps",
       "none": "Non hai fatture aperte al momento.",
+      "bankOnly": "Bonifico bancario",
+      "bankTransferHint": "Le fatture contrassegnate «bonifico bancario» superano il limite Vipps — paga sul conto {account} usando il KID indicato su ciascuna.",
       "loadError": "Impossibile caricare le tue fatture. Riapri il link.",
       "notFound": "Questo link di pagamento non è più valido. Chiedine uno nuovo al club."
     },
@@ -950,6 +952,9 @@
       "kidMethodMod10": "Modulo 10 (Luhn)",
       "vippsAccountsLabel": "Conti Vipps",
       "vippsAccountsHint": "Conti contabili usati per la riconciliazione dei pagamenti Vipps: conto di transito e conto commissioni. Predefiniti: 2900 e 7700.",
+      "vippsMaxAmount": "Importo massimo per Vipps (kr)",
+      "vippsMaxAmountPlaceholder": "Nessun limite",
+      "vippsMaxAmountHint": "Le fatture oltre questo importo offrono solo il bonifico bancario (KID), così il club evita le commissioni Vipps. Lasciare vuoto per nessun limite.",
       "vippsClearingAccount": "Conto di transito",
       "vippsFeeAccount": "Conto commissioni"
     },

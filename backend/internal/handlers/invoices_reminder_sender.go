@@ -19,6 +19,11 @@ type invoiceReminderPayload struct {
 	DefaultBank string `json:"defaultBank"`
 	ActorID     string `json:"actorID"`
 	RemoteAddr  string `json:"remoteAddr"`
+	// IncludeVipps is the batch's manual Vipps-link override (BRY-283). Absent
+	// on older queued rows → false; those predate the feature and the default
+	// behaviour was always-on, but a reminder enqueued before this field existed
+	// has already drained, so the zero value is only hit by new rows that set it.
+	IncludeVipps bool `json:"includeVipps"`
 }
 
 // InvoiceReminderSender is the broadcast.Sender for 'invoice_reminder'
@@ -51,7 +56,7 @@ func (s *InvoiceReminderSender) Send(ctx context.Context, c bcast.Claimed) error
 		}
 	}
 	err := s.h.sendOneReminder(ctx, c.ClubID, p.ActorID, p.RemoteAddr,
-		*c.InvoiceID, p.ClubName, p.DefaultBank, p.Locale)
+		*c.InvoiceID, p.ClubName, p.DefaultBank, p.Locale, p.IncludeVipps)
 	if errors.Is(err, errSkip) || errors.Is(err, errInvoiceNotFound) {
 		return nil
 	}

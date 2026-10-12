@@ -236,16 +236,20 @@ type clubFinancialSettings struct {
 	VippsClearingAccount  string   `json:"vipps_clearing_account"`
 	VippsFeeAccount       string   `json:"vipps_fee_account"`
 	VippsPerChargeEnabled bool     `json:"vipps_per_charge_enabled"`
-	WebsiteURL            string   `json:"website_url"`
-	ChairmanEmail         string   `json:"chairman_email"`
-	ViceChairmanEmail     string   `json:"vice_chairman_email"`
-	TreasurerEmail        string   `json:"treasurer_email"`
-	SecretaryEmail        string   `json:"secretary_email"`
-	HarborMasterEmail     string   `json:"harbor_master_email"`
-	HasFakturaLogo        bool     `json:"has_faktura_logo"`
-	FakturaLogoMIME       string   `json:"faktura_logo_mime"`
-	HasSiteLogo           bool     `json:"has_site_logo"`
-	SiteLogoMIME          string   `json:"site_logo_mime"`
+	// VippsMaxAmount caps which invoices may offer a Vipps link (BRY-283):
+	// null = no limit (Vipps for any amount); otherwise invoices over this
+	// kr amount are bank-transfer only.
+	VippsMaxAmount    *float64 `json:"vipps_max_amount"`
+	WebsiteURL        string   `json:"website_url"`
+	ChairmanEmail     string   `json:"chairman_email"`
+	ViceChairmanEmail string   `json:"vice_chairman_email"`
+	TreasurerEmail    string   `json:"treasurer_email"`
+	SecretaryEmail    string   `json:"secretary_email"`
+	HarborMasterEmail string   `json:"harbor_master_email"`
+	HasFakturaLogo    bool     `json:"has_faktura_logo"`
+	FakturaLogoMIME   string   `json:"faktura_logo_mime"`
+	HasSiteLogo       bool     `json:"has_site_logo"`
+	SiteLogoMIME      string   `json:"site_logo_mime"`
 	// Public site content — empty string means "use the frontend's
 	// i18n fallback so the page reads sensibly even before any admin
 	// has visited settings".
@@ -290,6 +294,7 @@ func (h *ClubSettingsHandler) HandleGetFinancialSettings(w http.ResponseWriter, 
 		        COALESCE(vipps_clearing_account, '2900'),
 		        COALESCE(vipps_fee_account, '7700'),
 		        COALESCE(vipps_per_charge_enabled, false),
+		        vipps_max_amount,
 		        COALESCE(website_url, ''),
 		        COALESCE(chairman_email, ''), COALESCE(vice_chairman_email, ''),
 		        COALESCE(treasurer_email, ''),
@@ -314,6 +319,7 @@ func (h *ClubSettingsHandler) HandleGetFinancialSettings(w http.ResponseWriter, 
 		&s.KIDCheckMethod,
 		&s.VippsClearingAccount, &s.VippsFeeAccount,
 		&s.VippsPerChargeEnabled,
+		&s.VippsMaxAmount,
 		&s.WebsiteURL,
 		&s.ChairmanEmail, &s.ViceChairmanEmail,
 		&s.TreasurerEmail,
@@ -337,17 +343,20 @@ func (h *ClubSettingsHandler) HandleGetFinancialSettings(w http.ResponseWriter, 
 }
 
 type updateFinancialSettingsRequest struct {
-	OrgNumber               *string  `json:"org_number,omitempty"`
-	Address                 *string  `json:"address,omitempty"`
-	Phone                   *string  `json:"phone,omitempty"`
-	VHFChannel              *string  `json:"vhf_channel,omitempty"`
-	Latitude                *float64 `json:"latitude,omitempty"`
-	Longitude               *float64 `json:"longitude,omitempty"`
-	BankAccount             *string  `json:"bank_account,omitempty"`
-	KIDCheckMethod          *string  `json:"kid_check_method,omitempty"`
-	VippsClearingAccount    *string  `json:"vipps_clearing_account,omitempty"`
-	VippsFeeAccount         *string  `json:"vipps_fee_account,omitempty"`
-	VippsPerChargeEnabled   *bool    `json:"vipps_per_charge_enabled,omitempty"`
+	OrgNumber             *string  `json:"org_number,omitempty"`
+	Address               *string  `json:"address,omitempty"`
+	Phone                 *string  `json:"phone,omitempty"`
+	VHFChannel            *string  `json:"vhf_channel,omitempty"`
+	Latitude              *float64 `json:"latitude,omitempty"`
+	Longitude             *float64 `json:"longitude,omitempty"`
+	BankAccount           *string  `json:"bank_account,omitempty"`
+	KIDCheckMethod        *string  `json:"kid_check_method,omitempty"`
+	VippsClearingAccount  *string  `json:"vipps_clearing_account,omitempty"`
+	VippsFeeAccount       *string  `json:"vipps_fee_account,omitempty"`
+	VippsPerChargeEnabled *bool    `json:"vipps_per_charge_enabled,omitempty"`
+	// VippsMaxAmount: omitted = keep; <= 0 = clear the cap (unlimited);
+	// > 0 = set the cap (BRY-283).
+	VippsMaxAmount          *float64 `json:"vipps_max_amount,omitempty"`
 	WebsiteURL              *string  `json:"website_url,omitempty"`
 	ChairmanEmail           *string  `json:"chairman_email,omitempty"`
 	ViceChairmanEmail       *string  `json:"vice_chairman_email,omitempty"`
@@ -440,7 +449,11 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		   kid_check_method          = COALESCE($32, kid_check_method),
 		   vipps_clearing_account    = COALESCE($33, vipps_clearing_account),
 		   vipps_fee_account         = COALESCE($34, vipps_fee_account),
-		   vipps_per_charge_enabled  = COALESCE($35, vipps_per_charge_enabled)
+		   vipps_per_charge_enabled  = COALESCE($35, vipps_per_charge_enabled),
+		   vipps_max_amount          = CASE
+		                                 WHEN $36::numeric IS NULL THEN vipps_max_amount
+		                                 WHEN $36::numeric <= 0    THEN NULL
+		                                 ELSE $36::numeric END
 		 WHERE id = $1`,
 		claims.ClubID, req.OrgNumber, req.Address, req.Phone, req.VHFChannel,
 		req.Latitude, req.Longitude,
@@ -458,6 +471,7 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		req.KIDCheckMethod,
 		req.VippsClearingAccount, req.VippsFeeAccount,
 		req.VippsPerChargeEnabled,
+		req.VippsMaxAmount,
 	); err != nil {
 		h.log.Error().Err(err).Msg("update financial settings")
 		Error(w, http.StatusInternalServerError, "internal error")

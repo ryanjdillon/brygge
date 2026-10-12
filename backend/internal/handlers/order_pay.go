@@ -22,18 +22,30 @@ import (
 // instead of a zero-amount Vipps checkout.
 var errNothingToPay = errors.New("order has nothing left to pay")
 
+// errVippsOverLimit signals a checkout order whose unpaid invoice source exceeds
+// the club's Vipps amount cap (BRY-283): the payer is steered to bank transfer
+// (KID) instead of being charged via Vipps, so the club avoids the fee.
+var errVippsOverLimit = errors.New("order exceeds the club's Vipps amount limit")
+
 // ensureFakturaOrderToken returns the durable token of the faktura's checkout
 // order, which the email links to. The order (an `orders` row with an
 // order_sources link to the invoice) is created lazily the first time a faktura
-// should carry a Vipps link (create=true — from the creation opt-in or a
-// reminder's choice) and reused forever after, so resends keep the same link.
-// Returns "" when Vipps is unconfigured or nothing should be offered.
+// should carry a Vipps link (create=true) and reused forever after, so resends
+// keep the same link. Returns "" when Vipps is unconfigured, the invoice is over
+// the club's Vipps amount cap (BRY-283), or nothing should be offered.
 //
 // The ePayment itself is NOT minted here: its redirectUrl is only valid ~10
 // minutes, so it is useless in a pay-later email. It is minted on click by
 // HandleOrderPayRedirect. This only ensures the durable order + link exist.
 func (h *InvoiceHandler) ensureFakturaOrderToken(ctx context.Context, clubID, invoiceID string, create bool) string {
 	if h.vipps == nil {
+		return ""
+	}
+
+	// Respect the club's Vipps amount cap: large invoices are bank-transfer only.
+	// Checked before the reuse SELECT below so an invoice that already has a
+	// durable order stops offering Vipps once the club sets a cap under it.
+	if !h.invoiceVippsAllowed(ctx, clubID, invoiceID) {
 		return ""
 	}
 
@@ -97,6 +109,56 @@ func (h *InvoiceHandler) ensureFakturaOrderToken(ctx context.Context, clubID, in
 		return ""
 	}
 	return token
+}
+
+// invoiceVippsAllowed reports whether the club offers a Vipps link for this
+// invoice: true unless the club set clubs.vipps_max_amount and the invoice's
+// total_amount exceeds it (BRY-283). A NULL cap means no limit. On error it
+// fails open (returns true) rather than silently suppressing a legitimate link.
+func (h *InvoiceHandler) invoiceVippsAllowed(ctx context.Context, clubID, invoiceID string) bool {
+	var overLimit bool
+	err := h.db.QueryRow(ctx,
+		`SELECT i.total_amount > c.vipps_max_amount
+		   FROM invoices i
+		   JOIN clubs c ON c.id = i.club_id
+		  WHERE i.id = $1 AND i.club_id = $2 AND c.vipps_max_amount IS NOT NULL`,
+		invoiceID, clubID,
+	).Scan(&overLimit)
+	if errors.Is(err, pgx.ErrNoRows) {
+		// No row: the club has no cap (vipps_max_amount IS NULL) or the invoice
+		// doesn't exist — either way, don't suppress here.
+		return true
+	}
+	if err != nil {
+		h.log.Error().Err(err).Str("invoice_id", invoiceID).Msg("vipps limit check failed")
+		return true
+	}
+	return !overLimit
+}
+
+// orderVippsOverLimit reports whether any still-unpaid invoice source of the
+// order exceeds the club's Vipps amount cap (BRY-283). Used at mint time to
+// refuse charging a link that was issued before the cap was set (or is already
+// sitting in a member's inbox).
+func (h *InvoiceHandler) orderVippsOverLimit(ctx context.Context, orderID string) (bool, error) {
+	var over bool
+	err := h.db.QueryRow(ctx,
+		`SELECT EXISTS (
+		   SELECT 1
+		     FROM order_sources os
+		     JOIN invoices i ON i.id = os.invoice_id
+		     JOIN orders o   ON o.id = os.order_id
+		     JOIN clubs c    ON c.id = o.club_id
+		    WHERE os.order_id = $1
+		      AND c.vipps_max_amount IS NOT NULL
+		      AND i.total_amount > c.vipps_max_amount
+		      AND i.payment_id IS NULL
+		      AND i.vipps_paid_at IS NULL
+		      AND i.status <> 'voided'
+		 )`,
+		orderID,
+	).Scan(&over)
+	return over, err
 }
 
 // orderPayURL builds the public, tokenised pay link put in the email. It points
@@ -167,6 +229,13 @@ func (h *InvoiceHandler) HandleGetInvoicePayLink(w http.ResponseWriter, r *http.
 		return
 	}
 
+	// Over the club's Vipps cap → bank transfer only; tell the UI distinctly so
+	// it shows "over limit" rather than "Vipps not configured" (BRY-283).
+	if !h.invoiceVippsAllowed(ctx, claims.ClubID, invoiceID) {
+		Error(w, http.StatusConflict, "vipps_over_limit")
+		return
+	}
+
 	url := h.orderPayURL(h.ensureFakturaOrderToken(ctx, claims.ClubID, invoiceID, true))
 	if url == "" {
 		Error(w, http.StatusConflict, "vipps_unavailable")
@@ -215,6 +284,12 @@ func (h *InvoiceHandler) HandleOrderPayRedirect(w http.ResponseWriter, r *http.R
 		http.Redirect(w, r, h.vippsReturnURL(), http.StatusFound)
 		return
 	}
+	if errors.Is(err, errVippsOverLimit) {
+		// Over the club's Vipps cap → send them to the checkout page, which shows
+		// KID + konto for bank transfer instead of a Vipps button (BRY-283).
+		http.Redirect(w, r, h.frontendBase()+"/betal/"+token, http.StatusFound)
+		return
+	}
 	if err != nil {
 		h.log.Error().Err(err).Str("order_id", orderID).Msg("order pay redirect: mint payment failed")
 		http.Error(w, "Kunne ikke starte Vipps-betaling. Prøv igjen.", http.StatusBadGateway)
@@ -228,6 +303,17 @@ func (h *InvoiceHandler) HandleOrderPayRedirect(w http.ResponseWriter, r *http.R
 // CAPTURED webhook can match it back. Returns the short-lived Vipps checkout
 // URL, or errNothingToPay when nothing is outstanding.
 func (h *InvoiceHandler) mintOrderPayment(ctx context.Context, orderID string) (string, error) {
+	// Refuse to charge via Vipps when an unpaid source is over the club's cap —
+	// closes the gap that a token issued before the cap (or already emailed)
+	// would otherwise leave open (BRY-283).
+	over, err := h.orderVippsOverLimit(ctx, orderID)
+	if err != nil {
+		return "", err
+	}
+	if over {
+		return "", errVippsOverLimit
+	}
+
 	total, desc, err := h.orderTotal(ctx, orderID)
 	if err != nil {
 		return "", err

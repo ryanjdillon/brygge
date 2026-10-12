@@ -61,6 +61,13 @@ After setting the credentials, run `just vipps-verify` to confirm the
 configured merchant authenticates against the Vipps Access Token API
 end-to-end before relying on any payment flow.
 
+**Per-club amount cap (runtime, not env).** `clubs.vipps_max_amount` (set at
+`Admin → Economy → Settings`) suppresses the "Betal med Vipps" link for invoices
+whose `total_amount` exceeds it, so the club avoids Vipps fees on large payments
+and the member pays by bank transfer (KID) instead. `NULL` (empty field) means no
+limit. It is enforced at both link issuance and payment mint — see the invariant
+in [reference/invariants.md](reference/invariants.md).
+
 ## Object Storage (S3)
 
 | Variable        | Required    | Default  | Description                |

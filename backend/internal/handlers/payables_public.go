@@ -40,9 +40,13 @@ type payableInvoice struct {
 }
 
 type payablesResponse struct {
-	ClubName   string           `json:"club_name"`
-	MemberName string           `json:"member_name"`
-	Invoices   []payableInvoice `json:"invoices"`
+	ClubName   string `json:"club_name"`
+	MemberName string `json:"member_name"`
+	// BankAccount is the club's default faktura account, shown so a member can
+	// pay by bank transfer — needed for invoices over the club's Vipps cap,
+	// which carry an empty pay_token (BRY-283).
+	BankAccount string           `json:"bank_account"`
+	Invoices    []payableInvoice `json:"invoices"`
 }
 
 // ensureUserPayablesToken returns the member's durable payables-link token,
@@ -191,6 +195,9 @@ func (h *InvoiceHandler) HandleGetPayables(w http.ResponseWriter, r *http.Reques
 	defer rows.Close()
 
 	resp := payablesResponse{ClubName: clubName, MemberName: memberName, Invoices: []payableInvoice{}}
+	if club, err := loadClubInvoiceFields(ctx, h.db, clubID); err == nil {
+		resp.BankAccount = club.BankAccount
+	}
 	for rows.Next() {
 		var (
 			inv        payableInvoice

@@ -22,7 +22,7 @@ import { formatName } from '@/lib/format'
 import { useRangeSelect } from '@/composables/useRangeSelect'
 import { useAuthStore } from '@/stores/auth'
 import { useFreshTotp } from '@/composables/useFreshTotp'
-import { copyPayLink as copyPayLinkFor } from '@/composables/useCopyPayLink'
+import { copyPayLink as copyPayLinkFor, payLinkErrorKey } from '@/composables/useCopyPayLink'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/stores/confirm'
 import Input from '@/components/ui/form/Input.vue'
@@ -52,7 +52,7 @@ async function copyUserPayLink(userId: string) {
   if (r.ok) {
     toast.success(t('admin.payLink.copied'))
   } else {
-    toast.error(t(r.reason === 'vipps_unavailable' ? 'admin.payLink.vippsUnavailable' : 'admin.payLink.failed'))
+    toast.error(t(payLinkErrorKey(r.reason)))
   }
 }
 

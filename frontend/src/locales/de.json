@@ -269,6 +269,8 @@
       "club": "{club}",
       "pay": "Mit Vipps bezahlen",
       "none": "Sie haben derzeit keine offenen Rechnungen.",
+      "bankOnly": "Banküberweisung",
+      "bankTransferHint": "Mit „Banküberweisung“ markierte Rechnungen liegen über dem Vipps-Limit — zahlen Sie auf Konto {account} mit der jeweils angezeigten KID.",
       "loadError": "Ihre Rechnungen konnten nicht geladen werden. Öffnen Sie den Link erneut.",
       "notFound": "Dieser Zahlungslink ist nicht mehr gültig. Bitten Sie den Verein um einen neuen."
     },
@@ -950,6 +952,9 @@
       "kidMethodMod10": "Modulo 10 (Luhn)",
       "vippsAccountsLabel": "Vipps-Konten",
       "vippsAccountsHint": "Sachkonten für den Abgleich von Vipps-Auszahlungen: Verrechnungskonto und Gebührenkonto. Standard: 2900 und 7700.",
+      "vippsMaxAmount": "Höchstbetrag für Vipps (kr)",
+      "vippsMaxAmountPlaceholder": "Kein Limit",
+      "vippsMaxAmountHint": "Rechnungen über diesem Betrag werden nur per Banküberweisung (KID) angeboten, damit der Verein Vipps-Gebühren vermeidet. Leer lassen für kein Limit.",
       "vippsClearingAccount": "Verrechnungskonto",
       "vippsFeeAccount": "Gebührenkonto"
     },

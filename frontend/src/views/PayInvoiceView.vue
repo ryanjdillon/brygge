@@ -16,6 +16,11 @@ type Checkout = {
   lines: Line[]
   total: number
   already_paid: boolean
+  // Over the club's Vipps cap (BRY-283): no Vipps button; pay by bank transfer
+  // using the KID + konto shown instead.
+  vipps_blocked: boolean
+  kid_number: string
+  bank_account: string
 }
 
 const state = ref<'loading' | 'ready' | 'error'>('loading')
@@ -125,16 +130,34 @@ onMounted(load)
 
         <p class="text-xs text-slate-500">{{ t('pay.preferBankNote') }}</p>
 
-        <div v-if="error" class="rounded-md bg-red-50 p-3 text-sm text-red-800">{{ error }}</div>
+        <!-- Over the club's Vipps cap → bank transfer only (BRY-283). -->
+        <div v-if="checkout.vipps_blocked" class="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm">
+          <p class="font-semibold text-slate-900">{{ t('pay.bankOnlyTitle') }}</p>
+          <p class="text-slate-600">{{ t('pay.bankOnlyBody') }}</p>
+          <dl class="space-y-1 pt-1">
+            <div v-if="checkout.bank_account" class="flex justify-between">
+              <dt class="text-slate-500">{{ t('pay.account') }}</dt>
+              <dd class="font-medium text-slate-900">{{ checkout.bank_account }}</dd>
+            </div>
+            <div v-if="checkout.kid_number" class="flex justify-between">
+              <dt class="text-slate-500">KID</dt>
+              <dd class="font-medium text-slate-900">{{ checkout.kid_number }}</dd>
+            </div>
+          </dl>
+        </div>
 
-        <button
-          class="flex w-full items-center justify-center gap-2 rounded-md bg-orange-500 px-6 py-3 text-sm font-semibold text-white shadow-sm hover:bg-orange-600 disabled:opacity-50"
-          :disabled="busy || checkout.total <= 0"
-          @click="pay"
-        >
-          <Loader2 v-if="busy" class="h-5 w-5 animate-spin" />
-          {{ busy ? t('pay.processing') : t('pay.payButton') }}
-        </button>
+        <template v-else>
+          <div v-if="error" class="rounded-md bg-red-50 p-3 text-sm text-red-800">{{ error }}</div>
+
+          <button
+            class="flex w-full items-center justify-center gap-2 rounded-md bg-orange-500 px-6 py-3 text-sm font-semibold text-white shadow-sm hover:bg-orange-600 disabled:opacity-50"
+            :disabled="busy || checkout.total <= 0"
+            @click="pay"
+          >
+            <Loader2 v-if="busy" class="h-5 w-5 animate-spin" />
+            {{ busy ? t('pay.processing') : t('pay.payButton') }}
+          </button>
+        </template>
       </template>
     </div>
   </div>

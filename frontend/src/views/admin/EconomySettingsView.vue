@@ -23,6 +23,8 @@ const kidSaved = ref(false)
 
 const vippsClearingAccount = ref('2900')
 const vippsFeeAccount = ref('7700')
+// Max invoice amount (kr) eligible for a Vipps link; '' = no limit (BRY-283).
+const vippsMaxAmount = ref<string>('')
 const vippsSaving = ref(false)
 const vippsSaved = ref(false)
 
@@ -37,6 +39,7 @@ async function load() {
     kidCheckMethod.value = body.kid_check_method === 'mod10' ? 'mod10' : 'mod11'
     vippsClearingAccount.value = body.vipps_clearing_account || '2900'
     vippsFeeAccount.value = body.vipps_fee_account || '7700'
+    vippsMaxAmount.value = body.vipps_max_amount != null ? String(body.vipps_max_amount) : ''
     fakturaLogoCacheBust.value = Date.now()
   } catch (e) {
     error.value = (e as Error).message
@@ -82,6 +85,8 @@ async function saveVippsAccounts() {
       body: JSON.stringify({
         vipps_clearing_account: vippsClearingAccount.value.trim(),
         vipps_fee_account: vippsFeeAccount.value.trim(),
+        // Empty field clears the cap (0 → NULL on the backend); otherwise set it.
+        vipps_max_amount: vippsMaxAmount.value.trim() === '' ? 0 : Number(vippsMaxAmount.value),
       }),
     })
     if (!res.ok) {
@@ -245,6 +250,16 @@ onMounted(load)
               @input="vippsSaved = false"
             />
           </label>
+          <label class="flex flex-col gap-1 text-xs text-slate-700">
+            {{ t('admin.economySettings.vippsMaxAmount') }}
+            <input
+              v-model="vippsMaxAmount"
+              inputmode="numeric"
+              :placeholder="t('admin.economySettings.vippsMaxAmountPlaceholder')"
+              class="w-32 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              @input="vippsSaved = false"
+            />
+          </label>
           <button
             type="button"
             class="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
@@ -257,6 +272,7 @@ onMounted(load)
             {{ t('common.saved') }}
           </span>
         </div>
+        <p class="text-xs text-slate-500">{{ t('admin.economySettings.vippsMaxAmountHint') }}</p>
       </fieldset>
     </section>
 

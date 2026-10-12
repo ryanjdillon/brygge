@@ -154,6 +154,29 @@ func TestGetPayables(t *testing.T) {
 		}
 	}
 
+	// Over the club's Vipps cap (BRY-283): the invoices still list, but with no
+	// pay_token, and the club bank account is surfaced for bank transfer.
+	if _, err := pool.Exec(ctx, `UPDATE clubs SET vipps_max_amount = 100 WHERE id = $1`, clubID); err != nil {
+		t.Fatalf("set cap: %v", err)
+	}
+	recCap := httptest.NewRecorder()
+	h.HandleGetPayables(recCap, payablesReq(token))
+	var capped struct {
+		BankAccount string `json:"bank_account"`
+		Invoices    []struct {
+			PayToken string `json:"pay_token"`
+		} `json:"invoices"`
+	}
+	_ = json.Unmarshal(recCap.Body.Bytes(), &capped)
+	if len(capped.Invoices) != 2 {
+		t.Fatalf("capped: got %d invoices, want 2", len(capped.Invoices))
+	}
+	for _, inv := range capped.Invoices {
+		if inv.PayToken != "" {
+			t.Errorf("capped: expected empty pay_token (bank transfer only), got %q", inv.PayToken)
+		}
+	}
+
 	// Unknown token → 404.
 	recNF := httptest.NewRecorder()
 	h.HandleGetPayables(recNF, payablesReq("deadbeef"))
