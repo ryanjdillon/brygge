@@ -16,7 +16,7 @@ import (
 // It mirrors migrations/repeatable/dev_masked.sql; the parity subtest
 // fails if a base table here grows a column the view doesn't account for.
 var maskedTables = []string{
-	"users", "billing_recipients", "orders", "invoices",
+	"users", "clubs", "billing_recipients", "orders", "invoices",
 	"vipps_import_rows", "bank_import_rows", "vipps_webhook_events",
 	"slip_shares", "boats",
 }
@@ -91,7 +91,7 @@ func TestDevMaskedViews(t *testing.T) {
 		}
 	})
 
-	t.Run("role reads masked NULLs", func(t *testing.T) {
+	t.Run("role access: masking + default-deny", func(t *testing.T) {
 		// Synthetic fixtures only.
 		club := "22222222-2222-2222-2222-222222222222"
 		user := "11111111-1111-1111-1111-111111111111"
@@ -111,8 +111,8 @@ func TestDevMaskedViews(t *testing.T) {
 		}
 
 		// Unqualified name resolves to dev_masked via the role's login
-		// search_path; identity columns must come back NULL, the opaque id
-		// and the has_email flag intact.
+		// search_path; identity columns come back NULL, the opaque id and
+		// the has_email flag intact.
 		var email *string
 		var gotID string
 		var hasEmail bool
@@ -131,8 +131,23 @@ func TestDevMaskedViews(t *testing.T) {
 			t.Errorf("has_email should be true for a user with an email on file")
 		}
 
-		// public.users must NOT resolve for this role once A2 lands; at A3
-		// it still can (default-allow), so we don't assert denial here.
+		// Default-deny: the raw base table is denied (reachable only via the
+		// masked view), an allowlisted table is readable, and a brand-new
+		// unclassified table is denied — the drift guard.
+		if _, err := rolePool.Exec(ctx, "SELECT 1 FROM public.users"); err == nil {
+			t.Error("role could read raw public.users — base PII not denied")
+		}
+		if _, err := rolePool.Exec(ctx, "SELECT 1 FROM public.clubs"); err == nil {
+			t.Error("role could read raw public.clubs — base secrets not denied")
+		}
+		if _, err := rolePool.Exec(ctx, "SELECT 1 FROM public.accounts"); err != nil {
+			t.Errorf("role could not read allowlisted public.accounts: %v", err)
+		}
+		drift := "drifttest_" + testutil.RandomHex(6)
+		mustExec(t, pool, ctx, "CREATE TABLE public."+drift+" (id int)")
+		if _, err := rolePool.Exec(ctx, "SELECT 1 FROM public."+drift); err == nil {
+			t.Errorf("role could read unclassified new table %s — default-deny not in effect", drift)
+		}
 	})
 }
 

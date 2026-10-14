@@ -48,6 +48,38 @@ SELECT
     (email IS NOT NULL) AS has_email
 FROM public.users;
 
+CREATE VIEW dev_masked.clubs AS
+SELECT
+    id, slug, name, description, latitude, longitude,
+    municipality_codes, postal_codes,
+    NULL::jsonb AS config,               -- free-form; may hold anything
+    required_volunteer_hours, created_at, updated_at,
+    org_number, address, bank_account,   -- club's own, printed on fakturas
+    NULL::bytea AS faktura_logo_data,
+    faktura_logo_mime, website_url,
+    NULL::text AS chairman_email,         -- board PII
+    NULL::text AS treasurer_email,
+    NULL::text AS secretary_email,
+    NULL::text AS harbor_master_email,
+    NULL::text AS phone,
+    vhf_channel, harbor_approach, harbor_depth, harbor_vhf,
+    harbor_cta_title, harbor_cta_description,
+    motorhome_power, motorhome_facilities, motorhome_checkin,
+    motorhome_rules, motorhome_cta_title, motorhome_cta_description,
+    NULL::bytea AS site_logo_data,
+    site_logo_mime,
+    NULL::text AS vice_chairman_email,    -- board PII
+    default_language,
+    feature_bookings, feature_projects, feature_calendar, feature_commerce,
+    feature_accounting, feature_feedback,
+    NULL::text AS feedback_linear_api_key,    -- secret
+    NULL::text AS feedback_linear_team_id,    -- secret
+    NULL::text AS feedback_linear_triage_id,  -- secret
+    NULL::text AS anthropic_api_key,          -- secret
+    kid_check_method, vipps_clearing_account, vipps_fee_account,
+    vipps_per_charge_enabled, vipps_max_amount
+FROM public.clubs;
+
 CREATE VIEW dev_masked.billing_recipients AS
 SELECT
     id, club_id, kind,

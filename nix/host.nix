@@ -1003,12 +1003,10 @@ in
 
         GRANT USAGE ON SCHEMA public TO brygge_dev_ro;
 
-        -- Default privileges so future migrations auto-grant SELECT to
-        -- the read-only role. Must be issued FOR ROLE brygge so the
-        -- default applies to tables brygge creates (= all of them).
-        -- Switched to default-deny + masked views in BRY-286/287.
-        ALTER DEFAULT PRIVILEGES FOR ROLE brygge IN SCHEMA public
-            GRANT SELECT ON TABLES TO brygge_dev_ro;
+        -- Table-level grants are default-DENY + an explicit allowlist,
+        -- owned by migration 000095 (BRY-286); the dev_masked.* view grants
+        -- live in the repeatable migrations/repeatable/dev_masked.sql. This
+        -- unit only provisions the role itself (runs before brygge-migrate).
 SQL
     '';
   };
