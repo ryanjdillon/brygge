@@ -186,6 +186,20 @@ func runMigrations(ctx context.Context, pool *pgxpool.Pool, schema string) error
 	return nil
 }
 
+// MigrationsDir exposes the absolute migrations directory path so callers
+// outside this package (e.g. the dev_masked integration test, which also
+// needs migrations/repeatable/dev_masked.sql) can resolve sibling files.
+func MigrationsDir() string { return migrationsDir() }
+
+// MigrateSchema runs every *.up.sql migration into the given schema of the
+// supplied pool's database. Unlike SetupTestDB (which isolates into a random
+// schema), passing "public" migrates the database proper — needed by tests
+// that must then connect as a different role, since per-role search_path and
+// object privileges apply per database, not per schema search_path.
+func MigrateSchema(ctx context.Context, pool *pgxpool.Pool, schema string) error {
+	return runMigrations(ctx, pool, schema)
+}
+
 // SetupTestRedis connects to Redis, selects a random DB number (1-15), and
 // flushes it. The DB is flushed again in t.Cleanup.
 func SetupTestRedis(t *testing.T) *redis.Client {

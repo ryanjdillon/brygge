@@ -66,6 +66,8 @@ migrate-check:
     {{compose}} exec -T db psql -U brygge -d brygge_migrate_check -v ON_ERROR_STOP=1 -c "DO \$\$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'brygge_dev_ro') THEN CREATE ROLE brygge_dev_ro LOGIN; END IF; END \$\$; GRANT USAGE ON SCHEMA public TO brygge_dev_ro; ALTER DEFAULT PRIVILEGES FOR ROLE brygge IN SCHEMA public GRANT SELECT ON TABLES TO brygge_dev_ro;" >/dev/null
     @echo "▶ Applying all migrations to brygge_migrate_check..."
     nix develop --command bash -c 'migrate -path backend/migrations -database "postgres://brygge:brygge@localhost:5432/brygge_migrate_check?sslmode=disable" up'
+    @echo "▶ Applying dev_masked repeatable views..."
+    {{compose}} exec -T db psql -U brygge -d brygge_migrate_check -v ON_ERROR_STOP=1 -f - < backend/migrations/repeatable/dev_masked.sql >/dev/null
     @echo "▶ Migrations applied cleanly. Cleaning up..."
     {{compose}} exec -T db psql -U brygge -d postgres -v ON_ERROR_STOP=1 -c "DROP DATABASE brygge_migrate_check;" >/dev/null
     @echo "✓ migrate-check passed."
@@ -116,6 +118,9 @@ coverage-vue:
 # Run pending database migrations
 migrate:
     {{compose}} run --rm migrate -path=/migrations -database 'postgres://brygge:brygge@db:5432/brygge?sslmode=disable' up
+    # Rebuild the dev_masked PII-masking views from the current schema
+    # (repeatable, applied after the numbered migrations — see the file header).
+    {{compose}} exec -T db psql -U brygge -d brygge -v ON_ERROR_STOP=1 -f - < backend/migrations/repeatable/dev_masked.sql
 
 # Run sqlc code generation
 generate:

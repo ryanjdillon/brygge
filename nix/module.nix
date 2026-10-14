@@ -139,6 +139,15 @@ in
           -path ${cfg.package.migrations} \
           -database "''${DATABASE_URL}" \
           up
+
+        # Rebuild the dev_masked PII-masking views (BRY-287) from the
+        # current schema after the numbered migrations. Repeatable, not a
+        # numbered migration, because a view freezes its referenced columns
+        # and would block later ALTER COLUMN migrations. Deploy-blocking if
+        # it fails — a view left stale is a drift risk for the read-only role.
+        ${pkgs.postgresql_16}/bin/psql "''${DATABASE_URL}" \
+          -v ON_ERROR_STOP=1 \
+          -f ${cfg.package.migrations}/repeatable/dev_masked.sql
       '';
     };
 
