@@ -22,10 +22,11 @@ import (
 // instead of a zero-amount Vipps checkout.
 var errNothingToPay = errors.New("order has nothing left to pay")
 
-// errVippsOverLimit signals a checkout order whose unpaid invoice source exceeds
-// the club's Vipps amount cap (BRY-283): the payer is steered to bank transfer
+// errVippsBlocked signals a checkout order whose unpaid invoice source is not
+// allowed to be paid via Vipps (BRY-283): either over the club's amount cap with
+// no override, or explicitly forced off. The payer is steered to bank transfer
 // (KID) instead of being charged via Vipps, so the club avoids the fee.
-var errVippsOverLimit = errors.New("order exceeds the club's Vipps amount limit")
+var errVippsBlocked = errors.New("order has a source not payable via Vipps")
 
 // ensureFakturaOrderToken returns the durable token of the faktura's checkout
 // order, which the email links to. The order (an `orders` row with an
@@ -111,37 +112,48 @@ func (h *InvoiceHandler) ensureFakturaOrderToken(ctx context.Context, clubID, in
 	return token
 }
 
-// invoiceVippsAllowed reports whether the club offers a Vipps link for this
-// invoice: true unless the club set clubs.vipps_max_amount and the invoice's
-// total_amount exceeds it (BRY-283). A NULL cap means no limit. On error it
-// fails open (returns true) rather than silently suppressing a legitimate link.
+// vippsAllowedExpr is the tri-state rule deciding whether an invoice may offer a
+// Vipps link (BRY-283), given aliases i (invoices) and c (clubs):
+//
+//	On   (opt_in TRUE)  → always
+//	Off  (opt_in FALSE) → never
+//	Auto (opt_in NULL)  → iff the club has no cap or the amount is within it
+const vippsAllowedExpr = `CASE
+	WHEN i.vipps_payment_link_opt_in IS TRUE  THEN true
+	WHEN i.vipps_payment_link_opt_in IS FALSE THEN false
+	WHEN c.vipps_max_amount IS NULL           THEN true
+	ELSE i.total_amount <= c.vipps_max_amount
+END`
+
+// invoiceVippsAllowed reports whether a Vipps link should be offered for this
+// invoice under the tri-state rule above. On error it fails open (returns true)
+// rather than silently suppressing a legitimate link.
 func (h *InvoiceHandler) invoiceVippsAllowed(ctx context.Context, clubID, invoiceID string) bool {
-	var overLimit bool
+	var allowed bool
 	err := h.db.QueryRow(ctx,
-		`SELECT i.total_amount > c.vipps_max_amount
+		`SELECT `+vippsAllowedExpr+`
 		   FROM invoices i
 		   JOIN clubs c ON c.id = i.club_id
-		  WHERE i.id = $1 AND i.club_id = $2 AND c.vipps_max_amount IS NOT NULL`,
+		  WHERE i.id = $1 AND i.club_id = $2`,
 		invoiceID, clubID,
-	).Scan(&overLimit)
+	).Scan(&allowed)
 	if errors.Is(err, pgx.ErrNoRows) {
-		// No row: the club has no cap (vipps_max_amount IS NULL) or the invoice
-		// doesn't exist — either way, don't suppress here.
+		// Unknown invoice — don't suppress here; the create path handles it.
 		return true
 	}
 	if err != nil {
-		h.log.Error().Err(err).Str("invoice_id", invoiceID).Msg("vipps limit check failed")
+		h.log.Error().Err(err).Str("invoice_id", invoiceID).Msg("vipps allowed check failed")
 		return true
 	}
-	return !overLimit
+	return allowed
 }
 
-// orderVippsOverLimit reports whether any still-unpaid invoice source of the
-// order exceeds the club's Vipps amount cap (BRY-283). Used at mint time to
-// refuse charging a link that was issued before the cap was set (or is already
-// sitting in a member's inbox).
-func (h *InvoiceHandler) orderVippsOverLimit(ctx context.Context, orderID string) (bool, error) {
-	var over bool
+// orderHasVippsBlockedSource reports whether any still-unpaid invoice source of
+// the order is not allowed to be paid via Vipps (BRY-283). Used at mint time to
+// refuse charging a link that was issued before the cap/override was set (or is
+// already sitting in a member's inbox).
+func (h *InvoiceHandler) orderHasVippsBlockedSource(ctx context.Context, orderID string) (bool, error) {
+	var blocked bool
 	err := h.db.QueryRow(ctx,
 		`SELECT EXISTS (
 		   SELECT 1
@@ -150,15 +162,14 @@ func (h *InvoiceHandler) orderVippsOverLimit(ctx context.Context, orderID string
 		     JOIN orders o   ON o.id = os.order_id
 		     JOIN clubs c    ON c.id = o.club_id
 		    WHERE os.order_id = $1
-		      AND c.vipps_max_amount IS NOT NULL
-		      AND i.total_amount > c.vipps_max_amount
 		      AND i.payment_id IS NULL
 		      AND i.vipps_paid_at IS NULL
 		      AND i.status <> 'voided'
+		      AND NOT (`+vippsAllowedExpr+`)
 		 )`,
 		orderID,
-	).Scan(&over)
-	return over, err
+	).Scan(&blocked)
+	return blocked, err
 }
 
 // orderPayURL builds the public, tokenised pay link put in the email. It points
@@ -284,8 +295,8 @@ func (h *InvoiceHandler) HandleOrderPayRedirect(w http.ResponseWriter, r *http.R
 		http.Redirect(w, r, h.vippsReturnURL(), http.StatusFound)
 		return
 	}
-	if errors.Is(err, errVippsOverLimit) {
-		// Over the club's Vipps cap → send them to the checkout page, which shows
+	if errors.Is(err, errVippsBlocked) {
+		// Not payable via Vipps → send them to the checkout page, which shows
 		// KID + konto for bank transfer instead of a Vipps button (BRY-283).
 		http.Redirect(w, r, h.frontendBase()+"/betal/"+token, http.StatusFound)
 		return
@@ -303,15 +314,16 @@ func (h *InvoiceHandler) HandleOrderPayRedirect(w http.ResponseWriter, r *http.R
 // CAPTURED webhook can match it back. Returns the short-lived Vipps checkout
 // URL, or errNothingToPay when nothing is outstanding.
 func (h *InvoiceHandler) mintOrderPayment(ctx context.Context, orderID string) (string, error) {
-	// Refuse to charge via Vipps when an unpaid source is over the club's cap —
-	// closes the gap that a token issued before the cap (or already emailed)
-	// would otherwise leave open (BRY-283).
-	over, err := h.orderVippsOverLimit(ctx, orderID)
+	// Refuse to charge via Vipps when an unpaid source isn't allowed (over the
+	// club's cap with no override, or forced off) — closes the gap that a token
+	// issued before the cap/override (or already emailed) would otherwise leave
+	// open (BRY-283).
+	blocked, err := h.orderHasVippsBlockedSource(ctx, orderID)
 	if err != nil {
 		return "", err
 	}
-	if over {
-		return "", errVippsOverLimit
+	if blocked {
+		return "", errVippsBlocked
 	}
 
 	total, desc, err := h.orderTotal(ctx, orderID)

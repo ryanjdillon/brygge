@@ -925,7 +925,7 @@ func (h *InvoiceHandler) HandleListInvoices(w http.ResponseWriter, r *http.Reque
 		             AND resource  = 'invoice'
 		             AND resource_id = i.id::text
 		             AND action = 'invoice.reminded') AS last_reminder_at,
-		        i.vipps_paid_at
+		        i.vipps_paid_at, i.vipps_payment_link_opt_in
 		   FROM invoices i
 		   LEFT JOIN users u ON u.id = i.user_id
 		   LEFT JOIN price_items pi ON pi.id = i.price_item_id
@@ -948,6 +948,7 @@ func (h *InvoiceHandler) HandleListInvoices(w http.ResponseWriter, r *http.Reque
 		Paid           bool       `json:"paid"`
 		LastReminderAt *time.Time `json:"last_reminder_at"`
 		VippsPaidAt    *time.Time `json:"vipps_paid_at"`
+		VippsLinkOptIn *bool      `json:"vipps_payment_link_opt_in"`
 	}
 	out := make([]listRow, 0)
 	for rows.Next() {
@@ -957,7 +958,7 @@ func (h *InvoiceHandler) HandleListInvoices(w http.ResponseWriter, r *http.Reque
 			&d.MemberName, &d.MemberEmail, &d.MemberPhone,
 			&d.TotalAmount, &issue, &due,
 			&d.PriceItemName, &d.FiscalYear, &d.Description, &d.CreatedAt,
-			&d.SentAt, &d.Status, &d.Paid, &d.LastReminderAt, &d.VippsPaidAt); err != nil {
+			&d.SentAt, &d.Status, &d.Paid, &d.LastReminderAt, &d.VippsPaidAt, &d.VippsLinkOptIn); err != nil {
 			h.log.Error().Err(err).Msg("scan invoice row")
 			Error(w, http.StatusInternalServerError, "internal error")
 			return
@@ -1337,6 +1338,56 @@ func (h *InvoiceHandler) HandleVoidInvoice(w http.ResponseWriter, r *http.Reques
 		h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,
 			audit.ActionInvoiceCreated, "invoice", invoiceID,
 			map[string]any{"voided": true})
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+type setVippsLinkRequest struct {
+	// OptIn is the per-invoice Vipps-link override (BRY-283): null = Auto (follow
+	// the club amount cap), true = On (always offer), false = Off (never offer).
+	OptIn *bool `json:"opt_in"`
+}
+
+// HandleSetInvoiceVippsLink sets an invoice's Vipps-link override. It's a
+// reversible preference (not a destructive/money-moving action), so it is
+// role-gated but not fresh-TOTP gated. The effective link on every surface
+// (emails, copy-link, payables page, and the member's click) then follows
+// invoiceVippsAllowed / orderHasVippsBlockedSource.
+func (h *InvoiceHandler) HandleSetInvoiceVippsLink(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	invoiceID := chi.URLParam(r, "invoiceID")
+	if invoiceID == "" {
+		Error(w, http.StatusBadRequest, "invoice ID is required")
+		return
+	}
+	var req setVippsLinkRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	tag, err := h.db.Exec(ctx,
+		`UPDATE invoices SET vipps_payment_link_opt_in = $1
+		  WHERE id = $2 AND club_id = $3`,
+		req.OptIn, invoiceID, claims.ClubID,
+	)
+	if err != nil {
+		h.log.Error().Err(err).Msg("set invoice vipps link")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if tag.RowsAffected() == 0 {
+		Error(w, http.StatusNotFound, "invoice not found")
+		return
+	}
+	if h.audit != nil {
+		h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,
+			audit.ActionInvoiceVippsLinkSet, "invoice", invoiceID,
+			map[string]any{"opt_in": req.OptIn})
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

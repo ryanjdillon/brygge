@@ -56,8 +56,6 @@ const selectedFlatIds = ref<string[]>([])
 const selectedBeamCategories = ref<string[]>([])
 const dueDate = ref(defaultDueDate())
 const allowDuplicateLines = ref(false)
-// Opt every invoice in the batch into a "Betal med Vipps" link (BRY-8),
-// default off; honoured when each draft is sent.
 
 function defaultDueDate(): string {
   const d = new Date()

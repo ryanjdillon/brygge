@@ -118,8 +118,6 @@ const member = ref<MemberHit | null>(null)
 const dueDate = ref(defaultDueDate())
 const lines = ref<LineDraft[]>([emptyCustomLine()])
 const submitting = ref(false)
-// Opt-in "Betal med Vipps" link (BRY-8), default off — bank transfer stays the
-// norm. Stored on the invoice and honoured when the draft is sent.
 const error = ref<string | null>(null)
 
 // Recipient kind defaults to "private". Either mode supports issuing

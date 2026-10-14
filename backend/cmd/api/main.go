@@ -885,6 +885,10 @@ func main() {
 						// the per-invoice link above.
 						r.With(middleware.RequireRole("treasurer", "admin")).
 							Get("/users/{userID}/pay-link", invoiceHandler.HandleGetUserPayLink)
+						// Per-invoice Vipps-link override (BRY-283): Auto/On/Off. A
+						// reversible preference, role-gated but no fresh-TOTP step-up.
+						r.With(middleware.RequireRole("treasurer", "admin")).
+							Patch("/invoices/{invoiceID}/vipps-link", invoiceHandler.HandleSetInvoiceVippsLink)
 						r.With(middleware.RequireRole("treasurer", "admin"),
 							middleware.RequireFreshTOTPDefault()).
 							Get("/invoices/{invoiceID}/delivery-log", invoiceHandler.HandleGetDeliveryLog)

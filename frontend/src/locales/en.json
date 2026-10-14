@@ -693,7 +693,18 @@
         "reminderSelected": "Send reminder",
         "reminderConfirmTitle": "Send payment reminders?",
         "reminderBulkBody": "Email a payment reminder for {n} invoice(s). Already-paid rows in the selection are skipped automatically.",
-        "reminderVippsLink": "Include Vipps payment link",
+        "vippsLink": {
+          "label": "Vipps link",
+          "auto": "Auto",
+          "on": "Vipps on",
+          "off": "Vipps off"
+        },
+        "reminderVippsChoice": {
+          "label": "Vipps payment link",
+          "auto": "Leave as set (by amount)",
+          "on": "Include for all selected",
+          "off": "Bank transfer only (no Vipps)"
+        },
         "reminderAction": "Send reminders",
         "vippsReceived": "Vipps received",
         "vippsReceivedTitle": "Payment received via Vipps — awaiting settlement and reconciliation",

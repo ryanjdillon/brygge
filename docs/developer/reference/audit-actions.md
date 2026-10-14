@@ -69,6 +69,7 @@ The action string is the JSON wire format (`row.action`); the constant is the Go
 | `ActionInvoicePDFGenerated` | `invoice.pdf_generated` | invoice | `finance.GeneratePDF` succeeded and bytes stored | `invoice_number` |
 | `ActionInvoiceEmailed` | `invoice.emailed` | invoice | After `SendWithAttachment` succeeds (post-`sent_at` stamp) | `email`, `invoice_number` |
 | `ActionInvoiceReminded` | `invoice.reminded` | invoice | Per row inside `HandleBulkSendReminder` after reminder email sent | `email`, `invoice_number` |
+| `ActionInvoiceVippsLinkSet` | `invoice.vipps_link_set` | invoice | `HandleSetInvoiceVippsLink` (per invoice), and the reminder batch's On/Off override (resource_id empty, `count`) | `opt_in` (and `count` for the batch) |
 | `ActionInvoiceRegenerated` | `invoice.pdf_regenerated` | invoice | Per row inside `HandleBulkRegeneratePDF` after archive+overwrite succeeds | `invoice_number`, `bank_account`, `prior_pdf_bytes` |
 | `ActionInvoiceDeliveryLogViewed` | `invoice.delivery_log_viewed` | invoice | Treasurer opens the Stalwart delivery-log popover for a sent invoice (PII visibility audit — recipient email is exposed in the response) | `recipient_email`, `matches_returned` |
 | `ActionFinanceCSVExported` | `finance.csv_exported` | finance | Treasurer downloads a payments/invoices CSV | `format`, `rows` |

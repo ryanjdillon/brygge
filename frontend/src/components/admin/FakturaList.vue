@@ -31,6 +31,7 @@ interface Row {
   status: string
   paid: boolean
   vipps_paid_at: string | null
+  vipps_payment_link_opt_in: boolean | null
 }
 
 type PaidStatus = 'paid' | 'waiting' | 'past_due'
@@ -284,6 +285,32 @@ async function copyPayLink(d: Row) {
   }
 }
 
+// Per-invoice Vipps-link override (BRY-283): Auto (null) / On (true) / Off (false).
+function optInToStr(v: boolean | null): 'auto' | 'on' | 'off' {
+  return v === true ? 'on' : v === false ? 'off' : 'auto'
+}
+async function setVippsLink(d: Row, value: string) {
+  if (busyIds.value.has(d.id)) return
+  const optIn = value === 'on' ? true : value === 'off' ? false : null
+  busyIds.value.add(d.id)
+  try {
+    const res = await fetch(`/api/v1/admin/financials/invoices/${d.id}/vipps-link`, {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ opt_in: optIn }),
+    })
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '')
+      error.value = `${res.status} ${txt}`
+      return
+    }
+    d.vipps_payment_link_opt_in = optIn
+  } finally {
+    busyIds.value.delete(d.id)
+  }
+}
+
 async function doDelete(id: string) {
   busyIds.value.add(id)
   try {
@@ -449,17 +476,29 @@ async function sendRemindersSelected() {
     details: items.map(rowLabel),
     confirmLabel: t('admin.faktura.sent.reminderAction'),
     tone: 'info',
-    // Manual override (BRY-283): default on; unticking sends KID-only for this
-    // batch. The club's amount cap still applies on top of this.
-    checkbox: { label: t('admin.faktura.sent.reminderVippsLink'), default: true },
+    // Vipps-link override for this batch (BRY-283): auto = leave each invoice's
+    // setting (Auto still follows the club cap); on/off persist to the reminded
+    // invoices. Default auto, so reminders never clobber per-row overrides.
+    choice: {
+      label: t('admin.faktura.sent.reminderVippsChoice.label'),
+      default: 'auto',
+      options: [
+        { value: 'auto', label: t('admin.faktura.sent.reminderVippsChoice.auto') },
+        { value: 'on', label: t('admin.faktura.sent.reminderVippsChoice.on') },
+        { value: 'off', label: t('admin.faktura.sent.reminderVippsChoice.off') },
+      ],
+    },
   })
   if (!ok) return
-  const includeVipps = confirmStore.checkboxValue
+  const choice = confirmStore.choiceValue
   const ids = items.map((d) => d.id)
+  const body: { ids: string[]; vipps_payment_link?: boolean } = { ids }
+  if (choice === 'on') body.vipps_payment_link = true
+  else if (choice === 'off') body.vipps_payment_link = false
   const res = await totpAwareFetch(`/api/v1/admin/financials/invoices/bulk-reminder`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ids, vipps_payment_link: includeVipps }),
+    body: JSON.stringify(body),
   })
   if (!res.ok) {
     const txt = await res.text().catch(() => '')
@@ -812,6 +851,18 @@ defineExpose({ load })
                   >
                     <Send class="h-4 w-4" />
                   </button>
+                  <select
+                    v-if="showPayLink && !d.paid && !d.vipps_paid_at"
+                    class="rounded-md border border-gray-300 bg-white px-1.5 py-1 text-xs text-gray-700 disabled:opacity-50"
+                    :disabled="busyIds.has(d.id)"
+                    :title="t('admin.faktura.sent.vippsLink.label')"
+                    :value="optInToStr(d.vipps_payment_link_opt_in)"
+                    @change="setVippsLink(d, ($event.target as HTMLSelectElement).value)"
+                  >
+                    <option value="auto">{{ t('admin.faktura.sent.vippsLink.auto') }}</option>
+                    <option value="on">{{ t('admin.faktura.sent.vippsLink.on') }}</option>
+                    <option value="off">{{ t('admin.faktura.sent.vippsLink.off') }}</option>
+                  </select>
                   <button
                     v-if="showPayLink && !d.paid && !d.vipps_paid_at"
                     class="text-indigo-600 hover:text-indigo-800 disabled:opacity-50"

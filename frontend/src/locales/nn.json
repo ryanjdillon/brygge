@@ -685,7 +685,18 @@
         "reminderSelected": "Send purring",
         "reminderConfirmTitle": "Send purringar?",
         "reminderBulkBody": "Send e-postpurring for {n} faktura(ar). Alt betalte rader vert automatisk hoppa over.",
-        "reminderVippsLink": "Ta med Vipps-betalingslenke",
+        "vippsLink": {
+          "label": "Vipps-lenke",
+          "auto": "Auto",
+          "on": "Vipps på",
+          "off": "Vipps av"
+        },
+        "reminderVippsChoice": {
+          "label": "Vipps-betalingslenke",
+          "auto": "La stå (etter beløp)",
+          "on": "Ta med for alle valde",
+          "off": "Berre bankoverføring (ingen Vipps)"
+        },
         "reminderAction": "Send purringar",
         "vippsReceived": "Vipps motteke",
         "vippsReceivedTitle": "Betaling motteke via Vipps – ventar på oppgjer og avstemming",

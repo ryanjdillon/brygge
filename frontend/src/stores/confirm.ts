@@ -17,6 +17,12 @@ export interface ConfirmOptions {
    * resolves (the promise itself still resolves to the OK/cancel boolean).
    */
   checkbox?: { label: string; default?: boolean }
+  /**
+   * Optional single-choice radio group shown above the buttons. The selected
+   * value is exposed on the store as `choiceValue`, read the same way as
+   * `checkboxValue`.
+   */
+  choice?: { label: string; options: { value: string; label: string }[]; default?: string }
 }
 
 interface PendingConfirm extends ConfirmOptions {
@@ -31,6 +37,8 @@ export const useConfirmStore = defineStore('confirm', () => {
   // Bound to the optional checkbox in the dialog; the caller reads it after
   // the ask() promise resolves.
   const checkboxValue = ref(false)
+  // Bound to the optional radio group; read the same way as checkboxValue.
+  const choiceValue = ref('')
 
   function ask(opts: ConfirmOptions): Promise<boolean> {
     if (current.value) {
@@ -38,6 +46,7 @@ export const useConfirmStore = defineStore('confirm', () => {
       current.value.resolve(false)
     }
     checkboxValue.value = opts.checkbox?.default ?? false
+    choiceValue.value = opts.choice?.default ?? opts.choice?.options[0]?.value ?? ''
     return new Promise((resolve) => {
       current.value = { ...opts, resolve }
     })
@@ -48,7 +57,7 @@ export const useConfirmStore = defineStore('confirm', () => {
     current.value = null
   }
 
-  return { current, checkboxValue, ask, settle }
+  return { current, checkboxValue, choiceValue, ask, settle }
 })
 
 /** Convenience: returns the `ask` function so callers don't deal with the store. */

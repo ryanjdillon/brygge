@@ -79,6 +79,25 @@ function onCancel() {
       {{ store.current.checkbox.label }}
     </label>
 
+    <fieldset v-if="store.current?.choice" class="mt-4 text-sm text-gray-700">
+      <legend class="mb-1 font-medium">{{ store.current.choice.label }}</legend>
+      <div class="flex flex-col gap-1.5">
+        <label
+          v-for="opt in store.current.choice.options"
+          :key="opt.value"
+          class="flex items-center gap-2"
+        >
+          <input
+            v-model="store.choiceValue"
+            type="radio"
+            :value="opt.value"
+            class="h-4 w-4 border-gray-300"
+          />
+          {{ opt.label }}
+        </label>
+      </div>
+    </fieldset>
+
     <template #footer>
       <div class="flex justify-end gap-2">
         <button

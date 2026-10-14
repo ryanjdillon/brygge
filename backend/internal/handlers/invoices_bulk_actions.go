@@ -21,10 +21,11 @@ import (
 
 type bulkInvoiceActionRequest struct {
 	IDs []string `json:"ids"`
-	// VippsPaymentLink is the reminder batch's manual override for the "Betal
-	// med Vipps" link (BRY-283). nil or true = offer it (still subject to the
-	// club's amount cap); false = KID-only for this whole batch. Ignored by the
-	// non-reminder bulk actions that share this request shape.
+	// VippsPaymentLink is the reminder batch's override of the per-invoice Vipps
+	// setting (BRY-283): nil = leave each invoice's setting as-is (Auto follows
+	// the club amount cap); true/false = set vipps_payment_link_opt_in On/Off for
+	// the reminded invoices, persisting so it holds when the member later clicks.
+	// Ignored by the non-reminder bulk actions that share this request shape.
 	VippsPaymentLink *bool `json:"vipps_payment_link"`
 }
 
@@ -77,57 +78,14 @@ func (h *InvoiceHandler) HandleBulkSendReminder(w http.ResponseWriter, r *http.R
 	).Scan(&clubName, &defaultBank)
 	locale := email.DetectLocale(r)
 
-	// Pre-flight: load eligibility fields in one batched query so we
-	// can give the operator immediate "X enqueued, Y skipped" feedback
-	// without making them wait for the worker.
-	rows, err := h.db.Query(ctx,
-		`SELECT i.id, i.sent_at, i.payment_id, i.vipps_paid_at,
-		        COALESCE(NULLIF(i.recipient_email, ''), u.email, '') AS recipient,
-		        (i.pdf_data IS NOT NULL OR COALESCE(i.s3_key, '') <> '') AS has_pdf
-		   FROM invoices i
-		   LEFT JOIN users u ON u.id = i.user_id
-		  WHERE i.club_id = $1 AND i.id = ANY($2)`,
-		claims.ClubID, req.IDs,
-	)
-	if err != nil {
-		h.log.Error().Err(err).Msg("bulk reminder preflight")
-		Error(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-	defer rows.Close()
-
-	type pre struct {
-		id          string
-		sentAt      *time.Time
-		paymentID   *string
-		vippsPaidAt *time.Time
-		recipient   string
-		hasPDF      bool
-	}
-	seen := make(map[string]pre, len(req.IDs))
-	for rows.Next() {
-		var p pre
-		if err := rows.Scan(&p.id, &p.sentAt, &p.paymentID, &p.vippsPaidAt, &p.recipient, &p.hasPDF); err != nil {
-			h.log.Error().Err(err).Msg("bulk reminder preflight scan")
-			Error(w, http.StatusInternalServerError, "internal error")
-			return
-		}
-		seen[p.id] = p
-	}
-
-	// Manual override: default on (offer Vipps), off = KID-only for this batch.
-	// This only further suppresses Vipps; it can't override the club's amount cap.
-	includeVipps := boolOrDefault(req.VippsPaymentLink, true)
-
 	// The send context is club/actor/request-scoped, not per-invoice, so
 	// every row in this batch carries the same JSONB payload.
 	payload, err := json.Marshal(invoiceReminderPayload{
-		Locale:       locale,
-		ClubName:     clubName,
-		DefaultBank:  defaultBank,
-		ActorID:      claims.UserID,
-		RemoteAddr:   r.RemoteAddr,
-		IncludeVipps: includeVipps,
+		Locale:      locale,
+		ClubName:    clubName,
+		DefaultBank: defaultBank,
+		ActorID:     claims.UserID,
+		RemoteAddr:  r.RemoteAddr,
 	})
 	if err != nil {
 		h.log.Error().Err(err).Msg("marshal reminder payload")
@@ -135,36 +93,22 @@ func (h *InvoiceHandler) HandleBulkSendReminder(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	res := bulkInvoiceResult{}
-	items := make([]bcast.InvoiceDelivery, 0, len(req.IDs))
-	for _, id := range req.IDs {
-		p, ok := seen[id]
-		if !ok {
-			res.Failures = append(res.Failures, id+": not found")
-			continue
-		}
-		// Skip not-yet-sent, already-paid, and vipps-received-pending-settlement
-		// invoices. The last is the key one: a member who paid via the /betal
-		// link has vipps_paid_at set but payment_id still null (authoritative
-		// paid comes from settlement reconciliation) — reminding them would be a
-		// false purring.
-		if p.sentAt == nil || p.paymentID != nil || p.vippsPaidAt != nil {
-			res.Skipped++
-			continue
-		}
-		if p.recipient == "" {
-			res.Failures = append(res.Failures, id+": no recipient email")
-			continue
-		}
-		if !p.hasPDF {
-			res.Failures = append(res.Failures, id+": invoice has no stored PDF")
-			continue
-		}
-		items = append(items, bcast.InvoiceDelivery{
-			InvoiceID: id,
-			Email:     p.recipient,
-			Payload:   payload,
-		})
+	// Pre-flight eligibility: which supplied invoices are actually sendable, with
+	// immediate "X enqueued, Y skipped" feedback for the operator.
+	items, res, err := h.collectReminderItems(ctx, claims.ClubID, req.IDs, payload)
+	if err != nil {
+		h.log.Error().Err(err).Msg("bulk reminder preflight")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	// Batch Vipps-link override (BRY-283): if the operator chose On/Off in the
+	// reminder dialog, persist it on the reminded invoices before enqueue so the
+	// async sends — and the member's later click — all honour it.
+	if err := h.applyReminderVippsOverride(ctx, claims.ClubID, claims.UserID, r.RemoteAddr, req.VippsPaymentLink, items); err != nil {
+		h.log.Error().Err(err).Msg("bulk reminder: set vipps opt-in")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
 	}
 
 	// Enqueue eligible reminders onto the durable delivery queue. The store
@@ -188,13 +132,97 @@ func (h *InvoiceHandler) HandleBulkSendReminder(w http.ResponseWriter, r *http.R
 	JSON(w, http.StatusOK, res)
 }
 
-// boolOrDefault returns *p when p is set, else def — for optional JSON bools
-// where "absent" means "use the default".
-func boolOrDefault(p *bool, def bool) bool {
-	if p == nil {
-		return def
+// collectReminderItems runs the batched eligibility preflight for a bulk
+// reminder and returns the sendable deliveries plus the skipped/failure tally.
+// Eligible = originally sent, still unpaid, not vipps-received-pending-settlement,
+// with a recipient email and a stored PDF.
+func (h *InvoiceHandler) collectReminderItems(ctx context.Context, clubID string, ids []string, payload []byte) ([]bcast.InvoiceDelivery, bulkInvoiceResult, error) {
+	res := bulkInvoiceResult{}
+	rows, err := h.db.Query(ctx,
+		`SELECT i.id, i.sent_at, i.payment_id, i.vipps_paid_at,
+		        COALESCE(NULLIF(i.recipient_email, ''), u.email, '') AS recipient,
+		        (i.pdf_data IS NOT NULL OR COALESCE(i.s3_key, '') <> '') AS has_pdf
+		   FROM invoices i
+		   LEFT JOIN users u ON u.id = i.user_id
+		  WHERE i.club_id = $1 AND i.id = ANY($2)`,
+		clubID, ids,
+	)
+	if err != nil {
+		return nil, res, err
 	}
-	return *p
+	defer rows.Close()
+
+	type pre struct {
+		id          string
+		sentAt      *time.Time
+		paymentID   *string
+		vippsPaidAt *time.Time
+		recipient   string
+		hasPDF      bool
+	}
+	seen := make(map[string]pre, len(ids))
+	for rows.Next() {
+		var p pre
+		if err := rows.Scan(&p.id, &p.sentAt, &p.paymentID, &p.vippsPaidAt, &p.recipient, &p.hasPDF); err != nil {
+			return nil, res, err
+		}
+		seen[p.id] = p
+	}
+	if err := rows.Err(); err != nil {
+		return nil, res, err
+	}
+
+	items := make([]bcast.InvoiceDelivery, 0, len(ids))
+	for _, id := range ids {
+		p, ok := seen[id]
+		if !ok {
+			res.Failures = append(res.Failures, id+": not found")
+			continue
+		}
+		// Skip not-yet-sent, already-paid, and vipps-received-pending-settlement
+		// invoices. The last is the key one: a member who paid via the /betal link
+		// has vipps_paid_at set but payment_id still null (authoritative paid comes
+		// from settlement reconciliation) — reminding them would be a false purring.
+		if p.sentAt == nil || p.paymentID != nil || p.vippsPaidAt != nil {
+			res.Skipped++
+			continue
+		}
+		if p.recipient == "" {
+			res.Failures = append(res.Failures, id+": no recipient email")
+			continue
+		}
+		if !p.hasPDF {
+			res.Failures = append(res.Failures, id+": invoice has no stored PDF")
+			continue
+		}
+		items = append(items, bcast.InvoiceDelivery{InvoiceID: id, Email: p.recipient, Payload: payload})
+	}
+	return items, res, nil
+}
+
+// applyReminderVippsOverride persists the reminder dialog's On/Off batch choice
+// (BRY-283) onto the reminded invoices before enqueue. nil = leave each invoice
+// as set (Auto still follows the club cap); no-op when there is nothing to send.
+func (h *InvoiceHandler) applyReminderVippsOverride(ctx context.Context, clubID, actorID, remoteAddr string, optIn *bool, items []bcast.InvoiceDelivery) error {
+	if optIn == nil || len(items) == 0 {
+		return nil
+	}
+	ids := make([]string, len(items))
+	for i, it := range items {
+		ids[i] = it.InvoiceID
+	}
+	if _, err := h.db.Exec(ctx,
+		`UPDATE invoices SET vipps_payment_link_opt_in = $1 WHERE club_id = $2 AND id = ANY($3)`,
+		*optIn, clubID, ids,
+	); err != nil {
+		return err
+	}
+	if h.audit != nil {
+		h.audit.LogAction(ctx, clubID, actorID, remoteAddr,
+			audit.ActionInvoiceVippsLinkSet, "invoice", "",
+			map[string]any{"opt_in": *optIn, "count": len(ids)})
+	}
+	return nil
 }
 
 var errSkip = errors.New("skip")
@@ -205,7 +233,7 @@ var errSkip = errors.New("skip")
 var errInvoiceNotFound = errors.New("invoice not found")
 
 func (h *InvoiceHandler) sendOneReminder(
-	ctx context.Context, clubID, actorID, remoteAddr, invoiceID, clubName, defaultBank, locale string, includeVipps bool,
+	ctx context.Context, clubID, actorID, remoteAddr, invoiceID, clubName, defaultBank, locale string,
 ) error {
 	var (
 		invoiceNumber  int
@@ -261,14 +289,11 @@ func (h *InvoiceHandler) sendOneReminder(
 	}
 
 	subject := email.InvoiceReminderSubject(locale, clubName, invoiceNumber)
-	// Offer a "Betal med Vipps" link unless the operator unticked it for this
-	// batch (includeVipps) or the invoice is over the club's amount cap
-	// (enforced inside ensureFakturaOrderToken, BRY-283). The copy keeps bank
-	// transfer preferred; an empty URL just renders the KID-only reminder.
-	vippsURL := ""
-	if includeVipps {
-		vippsURL = h.orderPayURL(h.ensureFakturaOrderToken(ctx, clubID, invoiceID, true))
-	}
+	// Offer a "Betal med Vipps" link per the invoice's effective Vipps setting —
+	// its On/Off override or, for Auto, the club amount cap (all enforced inside
+	// ensureFakturaOrderToken, BRY-283). The copy keeps bank transfer preferred;
+	// an empty URL just renders the KID-only reminder.
+	vippsURL := h.orderPayURL(h.ensureFakturaOrderToken(ctx, clubID, invoiceID, true))
 	body := email.InvoiceReminderBody(locale, memberName, clubName, invoiceNumber, dueDate, total, kid, defaultBank, vippsURL)
 	filename := buildSimpleReminderFilename(invoiceNumber)
 	if err := h.email.SendWithAttachment(ctx, deliverTo, subject, body, filename, pdfData); err != nil {

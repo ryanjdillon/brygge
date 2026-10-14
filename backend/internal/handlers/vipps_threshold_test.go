@@ -7,9 +7,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
 
+	"github.com/brygge-klubb/brygge/internal/auth"
 	"github.com/brygge-klubb/brygge/internal/config"
+	"github.com/brygge-klubb/brygge/internal/middleware"
 	"github.com/brygge-klubb/brygge/internal/testutil"
 	"github.com/brygge-klubb/brygge/internal/vipps"
 )
@@ -61,27 +64,113 @@ func TestVippsAmountThreshold(t *testing.T) {
 		t.Error("cap 1000: expected Vipps allowed for a 450 invoice")
 	}
 
-	// Cap below the amount (100 < 450) → suppressed everywhere.
+	// Cap below the amount (100 < 450), Auto override → suppressed everywhere.
 	setCap(100)
+	setOptIn := func(v any) {
+		t.Helper()
+		if _, err := pool.Exec(ctx, `UPDATE invoices SET vipps_payment_link_opt_in = $1 WHERE id = $2`, v, invID); err != nil {
+			t.Fatalf("set opt_in: %v", err)
+		}
+	}
+	setOptIn(nil) // Auto
 	if h.invoiceVippsAllowed(ctx, clubID, invID) {
-		t.Error("cap 100: expected Vipps suppressed for a 450 invoice")
+		t.Error("cap 100, Auto: expected Vipps suppressed for a 450 invoice")
 	}
 	if tok := h.ensureFakturaOrderToken(ctx, clubID, invID, true); tok != "" {
-		t.Errorf("cap 100: issuance should return no token, got %q", tok)
+		t.Errorf("cap 100, Auto: issuance should return no token, got %q", tok)
 	}
 	// Redeem gate: the order minted while uncapped must now refuse at mint time,
 	// before any Vipps call — closing the already-issued-link leak.
-	if _, err := h.mintOrderPayment(ctx, orderID); err != errVippsOverLimit {
-		t.Errorf("cap 100: mint should refuse with errVippsOverLimit, got %v", err)
+	if _, err := h.mintOrderPayment(ctx, orderID); err != errVippsBlocked {
+		t.Errorf("cap 100, Auto: mint should refuse with errVippsBlocked, got %v", err)
 	}
-
 	// Admin pay-link endpoint reports the distinct over-limit reason.
 	rec := httptest.NewRecorder()
 	h.HandleGetInvoicePayLink(rec, payLinkReq(invID, clubID))
-	if rec.Code != http.StatusConflict {
-		t.Fatalf("cap 100: pay-link status = %d, want 409; body=%s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "vipps_over_limit") {
+		t.Errorf("cap 100, Auto: pay-link = %d %q, want 409 vipps_over_limit", rec.Code, rec.Body.String())
 	}
-	if body := rec.Body.String(); !strings.Contains(body, "vipps_over_limit") {
-		t.Errorf("cap 100: pay-link body = %q, want vipps_over_limit", body)
+
+	// Override On → forces Vipps on even above the cap: issuance mints, mint allows.
+	setOptIn(true)
+	if !h.invoiceVippsAllowed(ctx, clubID, invID) {
+		t.Error("On: expected Vipps allowed above cap")
+	}
+	if tok := h.ensureFakturaOrderToken(ctx, clubID, invID, true); tok == "" {
+		t.Error("On: issuance should return a token above cap")
+	}
+	// Check the mint-time gate directly (not mintOrderPayment, which would call
+	// the Vipps API): the order must no longer be blocked.
+	if blocked, err := h.orderHasVippsBlockedSource(ctx, orderID); err != nil || blocked {
+		t.Errorf("On: order should not be blocked above cap (blocked=%v err=%v)", blocked, err)
+	}
+
+	// Override Off → forces Vipps off even when a generous cap would allow it.
+	setCap(10000)
+	setOptIn(false)
+	if h.invoiceVippsAllowed(ctx, clubID, invID) {
+		t.Error("Off: expected Vipps suppressed below cap")
+	}
+	if tok := h.ensureFakturaOrderToken(ctx, clubID, invID, true); tok != "" {
+		t.Errorf("Off: issuance should return no token, got %q", tok)
 	}
 }
+
+// TestSetInvoiceVippsLink covers the per-invoice Auto/On/Off override endpoint.
+func TestSetInvoiceVippsLink(t *testing.T) {
+	testutil.SkipIfNoDB(t)
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	clubID := testutil.SeedClub(t, pool)
+	userID, _ := testutil.SeedUser(t, pool, clubID, []string{"treasurer"})
+	h := &InvoiceHandler{db: pool, config: &config.Config{}, log: zerolog.Nop()}
+	invID := seedPayableInvoice(t, pool, clubID, userID, "open", 960)
+
+	req := func(invoiceID, body string) *http.Request {
+		r := httptest.NewRequest(http.MethodPatch, "/x", strings.NewReader(body))
+		c := middleware.WithClaims(r.Context(), &auth.Claims{UserID: "staff", ClubID: clubID, Roles: []string{"treasurer"}})
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("invoiceID", invoiceID)
+		return r.WithContext(context.WithValue(c, chi.RouteCtxKey, rctx))
+	}
+	stored := func() *bool {
+		var v *bool
+		if err := pool.QueryRow(ctx, `SELECT vipps_payment_link_opt_in FROM invoices WHERE id = $1`, invID).Scan(&v); err != nil {
+			t.Fatalf("read opt_in: %v", err)
+		}
+		return v
+	}
+
+	cases := []struct {
+		body string
+		want *bool
+	}{
+		{`{"opt_in":true}`, ptr(true)},
+		{`{"opt_in":false}`, ptr(false)},
+		{`{"opt_in":null}`, nil},
+	}
+	for _, tc := range cases {
+		rec := httptest.NewRecorder()
+		h.HandleSetInvoiceVippsLink(rec, req(invID, tc.body))
+		if rec.Code != http.StatusNoContent {
+			t.Fatalf("body %s: status = %d, want 204 (%s)", tc.body, rec.Code, rec.Body.String())
+		}
+		got := stored()
+		if (got == nil) != (tc.want == nil) || (got != nil && tc.want != nil && *got != *tc.want) {
+			t.Errorf("body %s: stored = %v, want %v", tc.body, got, tc.want)
+		}
+	}
+
+	// Cross-club invoice → 404.
+	otherClub := testutil.SeedClub(t, pool)
+	otherUser, _ := testutil.SeedUser(t, pool, otherClub, []string{"member"})
+	otherInv := seedPayableInvoice(t, pool, otherClub, otherUser, "open", 961)
+	rec := httptest.NewRecorder()
+	h.HandleSetInvoiceVippsLink(rec, req(otherInv, `{"opt_in":true}`))
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("cross-club: status = %d, want 404", rec.Code)
+	}
+}
+
+func ptr(b bool) *bool { return &b }
