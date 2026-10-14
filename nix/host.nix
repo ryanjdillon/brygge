@@ -1000,6 +1000,9 @@ in
         ALTER ROLE brygge_dev_ro SET statement_timeout = '15s';
         ALTER ROLE brygge_dev_ro SET idle_in_transaction_session_timeout = '15s';
         ALTER ROLE brygge_dev_ro SET search_path = dev_masked, public;
+        -- Audit trail: every query by the role (the SSH `just prod-query`
+        -- path and the HTTP endpoint) lands in the host journal.
+        ALTER ROLE brygge_dev_ro SET log_statement = 'all';
 
         GRANT USAGE ON SCHEMA public TO brygge_dev_ro;
 

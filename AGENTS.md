@@ -238,6 +238,17 @@ nix develop /home/ryan/code/personal/brygge --command bash -c "cd backend && go 
 
 Node (v22) is available system-wide. Frontend commands (`npm`, `npx`) work directly from `frontend/`.
 
+### Troubleshooting production data
+
+To inspect production data (e.g. a Vipps payment that didn't reconcile to its
+faktura), use `just prod-query "<read-only SQL>"`. It runs as the restricted,
+read-only `brygge_dev_ro` role: writes are rejected and member identity columns
+(names, emails, addresses) come back **NULL by design** — correlate on
+`user_id` / `kid_number` / `vipps_reference` instead. The deny / allow / mask
+table matrix is [docs/developer/security/dev-query.md](docs/developer/security/dev-query.md).
+Prefer this wrapper over raw `ssh`/`psql` (a permission allowlist should cover
+only `just prod-query`), and add your own `LIMIT` — rows are not capped.
+
 ## Common Commands
 
 All `just` commands run from the repo root (`/home/ryan/code/personal/brygge`). Use `nix develop --command just <target>` if just isn't in PATH.

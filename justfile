@@ -46,7 +46,7 @@ dev-role-bootstrap:
     # LOGIN + a known local password so the API/tests can connect AS the
     # role over TCP (prod uses peer/ident, no password). Not a member of
     # brygge: the dedicated pool is the privilege boundary (BRY-285).
-    {{compose}} exec -T db psql -U brygge -d brygge -v ON_ERROR_STOP=1 -c "ALTER ROLE brygge_dev_ro LOGIN PASSWORD 'brygge_dev_ro'; REVOKE brygge_dev_ro FROM brygge; ALTER ROLE brygge_dev_ro SET default_transaction_read_only = on; ALTER ROLE brygge_dev_ro SET statement_timeout = '15s'; ALTER ROLE brygge_dev_ro SET idle_in_transaction_session_timeout = '15s'; ALTER ROLE brygge_dev_ro SET search_path = dev_masked, public;"
+    {{compose}} exec -T db psql -U brygge -d brygge -v ON_ERROR_STOP=1 -c "ALTER ROLE brygge_dev_ro LOGIN PASSWORD 'brygge_dev_ro'; REVOKE brygge_dev_ro FROM brygge; ALTER ROLE brygge_dev_ro SET default_transaction_read_only = on; ALTER ROLE brygge_dev_ro SET statement_timeout = '15s'; ALTER ROLE brygge_dev_ro SET idle_in_transaction_session_timeout = '15s'; ALTER ROLE brygge_dev_ro SET search_path = dev_masked, public; ALTER ROLE brygge_dev_ro SET log_statement = 'all';"
     # Only schema USAGE here. Table-level grants are default-deny + allowlist,
     # owned by migration 000095; dev_masked view grants by the repeatable file.
     {{compose}} exec -T db psql -U brygge -d brygge -v ON_ERROR_STOP=1 -c "GRANT USAGE ON SCHEMA public TO brygge_dev_ro;"
@@ -211,6 +211,17 @@ deploy host="brygge":
 # Roll back to the previous system generation on the server.
 rollback host="brygge":
     nix run .#deploy -- {{host}} --rollback
+
+# Run a read-only, PII-masked SQL query against production for troubleshooting
+# (e.g. a Vipps payment that didn't reconcile to its faktura). Connects as the
+# restricted brygge_dev_ro role over the Unix socket, so writes are rejected and
+# names / emails / addresses come back NULL by design — correlate on user_id /
+# kid_number / vipps_reference. See docs/developer/security/dev-query.md for the
+# deny / allow / mask matrix. Output is CSV; add your own LIMIT (rows are not
+# capped). Every query is logged to the host journal. Usage:
+#   just prod-query "select id, status, vipps_payment_reference from invoices where kid_number = '1234567890'"
+prod-query sql host="klokkarvikbaatlag.no":
+    printf '%s\n' {{quote(sql)}} | ssh {{host}} "sudo -u brygge psql 'postgres://brygge_dev_ro@/brygge?host=/run/postgresql&sslmode=disable' --csv -P pager=off -v ON_ERROR_STOP=1 -f -"
 
 # Build the brygge package locally (frontend + Go binary with embedded SPA).
 build-nix:
