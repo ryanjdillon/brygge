@@ -21,26 +21,33 @@ import (
 )
 
 // DevQueryHandler exposes a read-only SQL endpoint for operator
-// debugging (DIL-365 Phase 1a). Two defenses-in-depth:
+// debugging (DIL-365). Defenses in depth, outermost first:
 //
 //   - Go-side validator rejects non-SELECT/WITH/EXPLAIN and stacked
 //     statements before touching Postgres.
-//   - Postgres-side `brygge_dev_ro` role (migration 000051) is granted
-//     SELECT on public.* EXCEPT audit_log + developer_tokens, so even
-//     if the validator misses something, the role can't mutate or
-//     enumerate sensitive tables.
+//   - The query runs on a SEPARATE pool (`devDB`) that authenticates as
+//     the restricted `brygge_dev_ro` LOGIN role — NOT via `SET ROLE` on
+//     the main `brygge` pool. That matters: `SET ROLE` is reversible by
+//     the session user (`RESET ROLE`, `set_config('role','none',...)`
+//     mid-statement, then `query_to_xml(...)` to run arbitrary SQL as
+//     `brygge`), so it was never a real boundary. A session that *is*
+//     `brygge_dev_ro` has no higher role to reset to.
+//   - The role is default-deny with PII masked behind the `dev_masked`
+//     views (BRY-286/287); its read-only/timeout GUCs are pinned at the
+//     role level, with the read-only tx + SET LOCAL timeouts below as
+//     belt-and-braces.
 //
-// Phase 1b (DIL-389) adds bearer-token auth so external tools can
-// query without a cookie session.
+// devDB is nil when DEV_QUERY_DATABASE_URL is unset; the endpoint then
+// reports 503 rather than falling back to a privileged connection.
 type DevQueryHandler struct {
-	db    *pgxpool.Pool
+	devDB *pgxpool.Pool
 	audit *audit.Service
 	log   zerolog.Logger
 }
 
-func NewDevQueryHandler(db *pgxpool.Pool, auditService *audit.Service, log zerolog.Logger) *DevQueryHandler {
+func NewDevQueryHandler(devDB *pgxpool.Pool, auditService *audit.Service, log zerolog.Logger) *DevQueryHandler {
 	return &DevQueryHandler{
-		db:    db,
+		devDB: devDB,
 		audit: auditService,
 		log:   log.With().Str("handler", "dev_query").Logger(),
 	}
@@ -70,6 +77,10 @@ func (h *DevQueryHandler) HandleQuery(w http.ResponseWriter, r *http.Request) {
 	claims := middleware.GetClaims(ctx)
 	if claims == nil {
 		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	if h.devDB == nil {
+		Error(w, http.StatusServiceUnavailable, "dev query endpoint not configured (DEV_QUERY_DATABASE_URL unset)")
 		return
 	}
 
@@ -127,9 +138,11 @@ func (h *DevQueryHandler) HandleQuery(w http.ResponseWriter, r *http.Request) {
 	JSON(w, http.StatusOK, resp)
 }
 
-// runQuery wraps the user SQL in a transaction with SET LOCAL ROLE and
-// a statement timeout, so an injection that bypassed validation still
-// can't write or take down the DB.
+// runQuery runs the user SQL on the dedicated brygge_dev_ro pool, in a
+// read-only transaction with a statement timeout, so an injection that
+// bypassed validation still can't write or take down the DB. The pool
+// already authenticates as the restricted role, so there is no SET ROLE
+// to issue (and none to reverse).
 func (h *DevQueryHandler) runQuery(parent context.Context, sql string, limit int) (devQueryResponse, error) {
 	var resp devQueryResponse
 	resp.Rows = make([][]any, 0)
@@ -138,15 +151,14 @@ func (h *DevQueryHandler) runQuery(parent context.Context, sql string, limit int
 	ctx, cancel := context.WithTimeout(parent, devQueryTimeout+5*time.Second)
 	defer cancel()
 
-	tx, err := h.db.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
+	tx, err := h.devDB.BeginTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
 	if err != nil {
 		return resp, fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback(ctx) // ROLLBACK is fine for read-only
 
-	if _, err := tx.Exec(ctx, "SET LOCAL ROLE brygge_dev_ro"); err != nil {
-		return resp, fmt.Errorf("set role: %w", err)
-	}
+	// Belt-and-braces: the role pins these GUCs too, but a role
+	// bootstrapped without them (e.g. a local dev DB) still gets bounded.
 	if _, err := tx.Exec(ctx, "SET LOCAL statement_timeout = '15s'"); err != nil {
 		return resp, fmt.Errorf("set timeout: %w", err)
 	}

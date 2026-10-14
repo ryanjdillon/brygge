@@ -11,7 +11,14 @@ import (
 type Config struct {
 	Port        int
 	DatabaseURL string
-	RedisURL    string
+	// DevQueryDatabaseURL is a SEPARATE DSN that connects as the
+	// restricted, read-only `brygge_dev_ro` LOGIN role, used only by the
+	// /admin/dev/query endpoint. It must be a different connection from
+	// DatabaseURL (which connects as `brygge`) — that separation is the
+	// privilege boundary: a session that is already `brygge_dev_ro` has
+	// no higher role to `RESET ROLE` back to. Empty disables the endpoint.
+	DevQueryDatabaseURL string
+	RedisURL            string
 	ClubSlug    string
 	ClubName    string // Human-readable club name used in email subjects etc.
 	Domain      string // Public domain (DOMAIN env) — used in email footers and canonical URLs
@@ -99,8 +106,9 @@ type Features struct {
 func Load() Config {
 	return Config{
 		Port:        envInt("PORT", 8080),
-		DatabaseURL: envStr("DATABASE_URL", "postgres://brygge:brygge@localhost:5432/brygge?sslmode=disable"),
-		RedisURL:    envStr("REDIS_URL", "redis://localhost:6379/0"),
+		DatabaseURL:         envStr("DATABASE_URL", "postgres://brygge:brygge@localhost:5432/brygge?sslmode=disable"),
+		DevQueryDatabaseURL: envStr("DEV_QUERY_DATABASE_URL", ""),
+		RedisURL:            envStr("REDIS_URL", "redis://localhost:6379/0"),
 		ClubSlug:    envStr("CLUB_SLUG", "brygge"),
 		ClubName:    envStr("CLUB_NAME", ""),
 		Domain:      envStr("DOMAIN", "localhost"),

@@ -177,6 +177,20 @@ So the amount cap is a **default**, not a hard ceiling — the per-invoice overr
 
 **Failure mode:** leaked token covers its tracks, blast radius becomes unbounded.
 
+### Query role is a real privilege boundary, not `SET ROLE`
+
+**Rule:** the `/admin/dev/query` endpoint runs on a dedicated pool that
+*authenticates as* `brygge_dev_ro` (a `LOGIN` role, `DEV_QUERY_DATABASE_URL`),
+never via `SET ROLE` on the `brygge` connection. `brygge_dev_ro` is **not** a
+member of `brygge`, so a session has no higher role to return to. The role's
+read-only / timeout / `search_path` GUCs are pinned with `ALTER ROLE`.
+
+**Failure mode:** `SET ROLE` is reversible by the session user —
+`SELECT set_config('role','none',true), query_to_xml('select … from users', …)`
+resets to the owning superuser and runs arbitrary SQL via SPI, so `SET ROLE`
+was never a boundary (BRY-285). Granting `brygge_dev_ro` membership to `brygge`
+re-opens the same hole.
+
 ---
 
 ## When to add a new invariant

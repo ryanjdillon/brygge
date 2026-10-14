@@ -99,6 +99,29 @@ func main() {
 		log.Warn().Err(err).Msg("failed to register database pool metrics")
 	}
 
+	// Dedicated read-only pool for /admin/dev/query. Authenticates as the
+	// restricted brygge_dev_ro LOGIN role (DEV_QUERY_DATABASE_URL), kept
+	// entirely separate from the brygge pool so the role is a real
+	// privilege boundary (see handlers.DevQueryHandler). Nil when unset —
+	// the endpoint then reports 503 instead of borrowing the brygge pool.
+	var devQueryDB *pgxpool.Pool
+	if cfg.DevQueryDatabaseURL != "" {
+		devCfg, derr := pgxpool.ParseConfig(cfg.DevQueryDatabaseURL)
+		if derr != nil {
+			log.Fatal().Err(derr).Msg("failed to parse DEV_QUERY_DATABASE_URL")
+		}
+		devCfg.MaxConns = 4
+		devCfg.MinConns = 0
+		devQueryDB, derr = pgxpool.NewWithConfig(ctx, devCfg)
+		if derr != nil {
+			log.Fatal().Err(derr).Msg("failed to connect dev-query pool")
+		}
+		defer devQueryDB.Close()
+		log.Info().Msg("dev-query read-only pool enabled (brygge_dev_ro)")
+	} else {
+		log.Info().Msg("dev-query endpoint disabled (DEV_QUERY_DATABASE_URL unset)")
+	}
+
 	redisOpts, err := redis.ParseURL(cfg.RedisURL)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to parse redis URL")
@@ -277,7 +300,7 @@ func main() {
 	accountingSvc := accounting.NewService(db, auditService, log)
 	accountingHandler := handlers.NewAccountingHandler(accountingSvc, auditService, s3LegalClient, claudeClient, vippsClient, log)
 	bankRowsHandler := handlers.NewBankRowsHandler(accountingSvc, auditService, log)
-	devQueryHandler := handlers.NewDevQueryHandler(db, auditService, log)
+	devQueryHandler := handlers.NewDevQueryHandler(devQueryDB, auditService, log)
 	priceItemsHandler := handlers.NewPriceItemsHandler(db, &cfg, log)
 	faqsHandler := handlers.NewFaqsHandler(db, &cfg, log)
 	productsHandler := handlers.NewProductsHandler(db, &cfg, log)

@@ -9,7 +9,8 @@ Brygge is configured entirely via environment variables. In production, set thes
 | Variable       | Required | Default                 | Description                                       |
 |----------      |----------|---------                |-------------                                      |
 | `PORT`         | No       | `8080`                  | HTTP server port                                  |
-| `DATABASE_URL` | Yes      | —                       | PostgreSQL connection string                      |
+| `DATABASE_URL` | Yes      | —                       | PostgreSQL connection string (connects as `brygge`) |
+| `DEV_QUERY_DATABASE_URL` | No | —                     | Separate DSN for the `/admin/dev/query` endpoint, connecting as the restricted read-only `brygge_dev_ro` LOGIN role. Kept distinct from `DATABASE_URL` so the role is a real privilege boundary (see [invariants.md](reference/invariants.md#query-role-is-a-real-privilege-boundary-not-set-role)). Unset → the endpoint returns 503. In NixOS deploys it defaults to the `brygge_dev_ro` Unix-socket DSN. |
 | `REDIS_URL`    | Yes      | —                       | Redis connection string                           |
 | `FRONTEND_URL` | No       | `http://localhost:5173` | Base URL for frontend (used in magic link emails) |
 

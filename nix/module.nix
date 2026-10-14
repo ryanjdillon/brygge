@@ -45,6 +45,18 @@ in
       '';
     };
 
+    devQueryDatabaseUrl = lib.mkOption {
+      type = lib.types.str;
+      default = "postgres://brygge_dev_ro@/brygge?host=/run/postgresql&sslmode=disable";
+      description = ''
+        DSN for the /admin/dev/query endpoint's dedicated read-only pool.
+        Connects as the restricted brygge_dev_ro LOGIN role over the Unix
+        socket (peer/ident auth, no password). Kept separate from
+        databaseUrl so the role is a real privilege boundary (BRY-285).
+        Set to "" to disable the endpoint.
+      '';
+    };
+
     redisUrl = lib.mkOption {
       type = lib.types.str;
       default = "unix:///run/redis-brygge/redis.sock";
@@ -149,6 +161,7 @@ in
         HOST = "127.0.0.1";
         DOMAIN = cfg.domain;
         DATABASE_URL = cfg.databaseUrl;
+        DEV_QUERY_DATABASE_URL = cfg.devQueryDatabaseUrl;
         REDIS_URL = cfg.redisUrl;
       }
       // lib.mapAttrs' (name: enabled:

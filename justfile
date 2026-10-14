@@ -42,8 +42,12 @@ setup:
 # Idempotent. In prod this is handled by the brygge-dev-query-role systemd unit;
 # this recipe mirrors it for local dev against the docker-compose postgres.
 dev-role-bootstrap:
-    {{compose}} exec -T db psql -U postgres -d brygge -v ON_ERROR_STOP=1 -c "DO \$\$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'brygge_dev_ro') THEN CREATE ROLE brygge_dev_ro NOLOGIN; END IF; END \$\$;"
-    {{compose}} exec -T db psql -U postgres -d brygge -v ON_ERROR_STOP=1 -c "GRANT USAGE ON SCHEMA public TO brygge_dev_ro; GRANT brygge_dev_ro TO brygge; ALTER DEFAULT PRIVILEGES FOR ROLE brygge IN SCHEMA public GRANT SELECT ON TABLES TO brygge_dev_ro; GRANT SELECT ON ALL TABLES IN SCHEMA public TO brygge_dev_ro; REVOKE ALL ON TABLE audit_log FROM brygge_dev_ro;"
+    {{compose}} exec -T db psql -U brygge -d brygge -v ON_ERROR_STOP=1 -c "DO \$\$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'brygge_dev_ro') THEN CREATE ROLE brygge_dev_ro; END IF; END \$\$;"
+    # LOGIN + a known local password so the API/tests can connect AS the
+    # role over TCP (prod uses peer/ident, no password). Not a member of
+    # brygge: the dedicated pool is the privilege boundary (BRY-285).
+    {{compose}} exec -T db psql -U brygge -d brygge -v ON_ERROR_STOP=1 -c "ALTER ROLE brygge_dev_ro LOGIN PASSWORD 'brygge_dev_ro'; REVOKE brygge_dev_ro FROM brygge; ALTER ROLE brygge_dev_ro SET default_transaction_read_only = on; ALTER ROLE brygge_dev_ro SET statement_timeout = '15s'; ALTER ROLE brygge_dev_ro SET idle_in_transaction_session_timeout = '15s'; ALTER ROLE brygge_dev_ro SET search_path = dev_masked, public;"
+    {{compose}} exec -T db psql -U brygge -d brygge -v ON_ERROR_STOP=1 -c "GRANT USAGE ON SCHEMA public TO brygge_dev_ro; ALTER DEFAULT PRIVILEGES FOR ROLE brygge IN SCHEMA public GRANT SELECT ON TABLES TO brygge_dev_ro; GRANT SELECT ON ALL TABLES IN SCHEMA public TO brygge_dev_ro; REVOKE ALL ON TABLE audit_log FROM brygge_dev_ro;"
 
 # Pre-deploy dry-run: spins up a fresh test DB, applies every migration
 # end-to-end as the brygge role (matching prod), drops the DB. Catches
@@ -59,7 +63,7 @@ migrate-check:
     @echo "▶ Setting up clean test DB brygge_migrate_check..."
     {{compose}} exec -T db psql -U brygge -d postgres -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS brygge_migrate_check;" >/dev/null
     {{compose}} exec -T db psql -U brygge -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE brygge_migrate_check OWNER brygge;" >/dev/null
-    {{compose}} exec -T db psql -U brygge -d brygge_migrate_check -v ON_ERROR_STOP=1 -c "DO \$\$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'brygge_dev_ro') THEN CREATE ROLE brygge_dev_ro NOLOGIN; END IF; END \$\$; GRANT USAGE ON SCHEMA public TO brygge_dev_ro; GRANT brygge_dev_ro TO brygge; ALTER DEFAULT PRIVILEGES FOR ROLE brygge IN SCHEMA public GRANT SELECT ON TABLES TO brygge_dev_ro;" >/dev/null
+    {{compose}} exec -T db psql -U brygge -d brygge_migrate_check -v ON_ERROR_STOP=1 -c "DO \$\$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'brygge_dev_ro') THEN CREATE ROLE brygge_dev_ro LOGIN; END IF; END \$\$; GRANT USAGE ON SCHEMA public TO brygge_dev_ro; ALTER DEFAULT PRIVILEGES FOR ROLE brygge IN SCHEMA public GRANT SELECT ON TABLES TO brygge_dev_ro;" >/dev/null
     @echo "▶ Applying all migrations to brygge_migrate_check..."
     nix develop --command bash -c 'migrate -path backend/migrations -database "postgres://brygge:brygge@localhost:5432/brygge_migrate_check?sslmode=disable" up'
     @echo "▶ Migrations applied cleanly. Cleaning up..."

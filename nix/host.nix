@@ -154,6 +154,9 @@ in
       system-to-pg postgres postgres
       system-to-pg brygge   brygge
       system-to-pg dendrite dendrite
+      # The API (OS user brygge) opens a second pool as the restricted
+      # read-only role for /admin/dev/query (DEV_QUERY_DATABASE_URL).
+      system-to-pg brygge   brygge_dev_ro
     '';
 
     settings = {
@@ -976,17 +979,34 @@ in
         DO $$
         BEGIN
             IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'brygge_dev_ro') THEN
-                CREATE ROLE brygge_dev_ro NOLOGIN;
+                CREATE ROLE brygge_dev_ro;
             END IF;
         END
         $$;
 
+        -- LOGIN so the API can connect AS this role via a dedicated pool
+        -- (peer/ident, no password) instead of SET ROLE on the brygge
+        -- connection — SET ROLE is reversible and was never a real
+        -- boundary (BRY-285). NOT a member of brygge: a session that is
+        -- already brygge_dev_ro has no higher role to reset to.
+        ALTER ROLE brygge_dev_ro LOGIN;
+        REVOKE brygge_dev_ro FROM brygge;
+
+        -- Pin the read-only / timeout / search_path GUCs on the role so
+        -- they hold for every connection regardless of what the client
+        -- sets. search_path puts the PII-masking views (dev_masked,
+        -- BRY-287) ahead of public.
+        ALTER ROLE brygge_dev_ro SET default_transaction_read_only = on;
+        ALTER ROLE brygge_dev_ro SET statement_timeout = '15s';
+        ALTER ROLE brygge_dev_ro SET idle_in_transaction_session_timeout = '15s';
+        ALTER ROLE brygge_dev_ro SET search_path = dev_masked, public;
+
         GRANT USAGE ON SCHEMA public TO brygge_dev_ro;
-        GRANT brygge_dev_ro TO brygge;
 
         -- Default privileges so future migrations auto-grant SELECT to
         -- the read-only role. Must be issued FOR ROLE brygge so the
         -- default applies to tables brygge creates (= all of them).
+        -- Switched to default-deny + masked views in BRY-286/287.
         ALTER DEFAULT PRIVILEGES FOR ROLE brygge IN SCHEMA public
             GRANT SELECT ON TABLES TO brygge_dev_ro;
 SQL
