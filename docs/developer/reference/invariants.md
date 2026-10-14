@@ -171,11 +171,11 @@ So the amount cap is a **default**, not a hard ceiling — the per-invoice overr
 
 ## Developer DB query (DIL-365)
 
-### Query role cannot SELECT its own evidence
+### Query role is default-deny: masked views + a non-PII allowlist
 
-**Rule:** `brygge_dev_ro` Postgres role gets `SELECT` on `public.*` EXCEPT `audit_log`. (DIL-389 Phase 1b will also revoke `developer_tokens` when that table lands.) A leaked admin session or token must not be able to enumerate or erase its own audit trail. Migration `000051_developer_query_role` establishes the role + grants.
+**Rule:** `brygge_dev_ro` reads only (a) the PII-masking `dev_masked.*` views and (b) an explicit allowlist of verified non-PII base tables (migration `000095`). Everything else — `audit_log`, credential tables, and any newly-added table — is denied until explicitly classified. The full deny/allow/mask classification is the source of truth in [`../security/dev-query.md`](../security/dev-query.md), not `accounting/purge.go`. Identity, credential and free-text columns in the masked views are `NULL`, never partial-masked (a partial value plus the opaque id is a reversible membership oracle in a small club); correlation keys pass through verbatim. Because the role can never read raw PII, a full-SQL audit of its queries contains no PII by construction.
 
-**Failure mode:** leaked token covers its tracks, blast radius becomes unbounded.
+**Failure mode:** a new table auto-granted to the role (the pre-BRY-286 default-allow) silently exposes PII/secrets; a leaked session enumerates or erases its own `audit_log` evidence and the blast radius becomes unbounded.
 
 ### Query role is a real privilege boundary, not `SET ROLE`
 

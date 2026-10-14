@@ -71,6 +71,13 @@ If the migration adds a column that affects how operators configure the system:
 
 If the new table or column introduces a rule (e.g. "this column must never be NULL once invoice is sent"), add it to [`invariants.md`](../reference/invariants.md) with the failure mode.
 
+### Dev-query read-only role (default-deny)
+
+The `brygge_dev_ro` role (`/admin/dev/query`, `just prod-query`) is default-deny:
+
+- **New table** → invisible to the role until classified. If it holds no PII, add it to the allowlist (a migration following `000095`'s pattern); if it holds PII/secrets, add a `dev_masked` view instead. Record the choice in [`../security/dev-query.md`](../security/dev-query.md).
+- **New column on a table that already has a `dev_masked` view** → the parity test in `backend/internal/handlers/dev_masked_test.go` fails until you classify it in `backend/migrations/repeatable/dev_masked.sql` (keep it, `NULL`-mask it, or expose a derived hint) and update the matrix doc.
+
 ## 8. Code wiring
 
 Most migrations need matching Go changes:
