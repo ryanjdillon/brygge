@@ -23,6 +23,15 @@ const (
 	bookingLockTTL    = 30 * time.Second
 )
 
+// httpError carries an HTTP status out of a transactional helper so the
+// handler can respond with it after rollback.
+type httpError struct {
+	status  int
+	message string
+}
+
+func (e *httpError) Error() string { return e.message }
+
 type BookingsHandler struct {
 	db     *pgxpool.Pool
 	redis  *redis.Client

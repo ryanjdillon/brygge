@@ -307,7 +307,6 @@ func main() {
 	priceItemsHandler := handlers.NewPriceItemsHandler(db, &cfg, log)
 	faqsHandler := handlers.NewFaqsHandler(db, &cfg, log)
 	productsHandler := handlers.NewProductsHandler(db, &cfg, log)
-	ordersHandler := handlers.NewOrdersHandler(db, &cfg, log)
 	vippsWebhookHandler := handlers.NewVippsWebhookHandler(db, &cfg, vippsClient, log)
 	boatModelsHandler := handlers.NewBoatModelsHandler(db, log)
 	volunteerHandler := handlers.NewVolunteerHandler(db, &cfg, log)
@@ -582,14 +581,6 @@ func main() {
 			r.Get("/harbor/payment-targets/{id}/qr.png", harborHandler.HandleTargetQR)
 			r.Get("/harbor/payment-targets/{id}/poster.pdf", harborHandler.HandleTargetPoster)
 		})
-
-		if cfg.Features.Commerce {
-			r.Route("/orders", func(r chi.Router) {
-				r.Post("/", ordersHandler.HandleCreateOrder)
-				r.Get("/{orderID}", ordersHandler.HandleGetOrder)
-				r.Post("/{orderID}/confirm", ordersHandler.HandleConfirmOrder)
-			})
-		}
 
 		// Vipps webhook — public endpoint, authenticated by HMAC-SHA256 signature.
 		r.Post("/vipps/webhooks", vippsWebhookHandler.Handle)

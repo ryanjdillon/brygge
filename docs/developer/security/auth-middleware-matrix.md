@@ -43,7 +43,6 @@ Notes:
 | `POST /auth/magic-link`, `GET /auth/verify` | none (strict rate-limit) |
 | `GET /harbor/layout` | `OptionalSessionAuth` |
 | `POST /bookings` | `OptionalSessionAuth` (guest booking) |
-| `POST /orders`, `GET/POST /orders/{id}*` | none (commerce checkout) |
 | `GET /betal/{token}`, `GET /checkout/{token}*`, `GET /betal/bruker/{token}` | none — the durable token is the capability (per-invoice and per-member payables links) |
 | `POST /dev/query` | `RequireDevToken(db_query)` + per-IP and per-token (60/min) rate limits. Only mounted when `DEV_QUERY_TOKENS_ENABLED`. No session, no TOTP — the short-lived token is the credential, and the handler is bounded by the read-only, PII-masked `brygge_dev_ro` role (BRY-115) |
 

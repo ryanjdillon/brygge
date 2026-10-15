@@ -5,8 +5,7 @@ import MerchandiseView from '@/views/MerchandiseView.vue'
 
 vi.mock('lucide-vue-next', () => ({
   ShoppingCart: { template: '<span data-icon="shopping-cart" />' },
-  Plus: { template: '<span data-icon="plus" />' },
-  Check: { template: '<span data-icon="check" />' },
+  Info: { template: '<span data-icon="info" />' },
   X: { template: '<span data-icon="x" />' },
 }))
 
@@ -104,13 +103,14 @@ describe('MerchandiseView', () => {
     expect(dialog.text()).toContain('M')
   })
 
-  it('disables add-to-cart when no variant selected for variant product', async () => {
+  it('offers no online ordering: modal shows the unavailable note and no cart action', async () => {
     const wrapper = mountWithPlugins(MerchandiseView)
     const card = wrapper.findAll('button').find((b) => b.text().includes('T-skjorte'))
     await card!.trigger('click')
     const dialog = wrapper.find('[role="dialog"]')
-    const addBtn = dialog.findAll('button').find((b) => b.text().includes('merchandise.addToCart'))
-    expect(addBtn!.attributes('disabled')).toBeDefined()
+    expect(dialog.text()).toContain('merchandise.orderingUnavailable')
+    expect(dialog.findAll('button').some((b) => b.text().includes('merchandise.addToCart'))).toBe(false)
+    expect(wrapper.find('a[href="/checkout"]').exists()).toBe(false)
   })
 
   it('shows product image on card when image_url is set', () => {

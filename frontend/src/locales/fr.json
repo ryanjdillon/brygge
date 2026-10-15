@@ -245,6 +245,7 @@
     "soldOut": "Épuisé",
     "addedToCart": "Ajouté au panier",
     "addToCart": "Ajouter au panier",
+    "orderingUnavailable": "La commande en ligne n'est pas encore disponible. Contactez le club pour commander.",
     "size": "Taille",
     "color": "Couleur",
     "inStock": "en stock",

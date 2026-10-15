@@ -245,6 +245,7 @@
     "soldOut": "Ausverkauft",
     "addedToCart": "Zum Warenkorb hinzugefügt",
     "addToCart": "In den Warenkorb",
+    "orderingUnavailable": "Online-Bestellungen sind noch nicht möglich. Wenden Sie sich zur Bestellung an den Verein.",
     "size": "Größe",
     "color": "Farbe",
     "inStock": "auf Lager",

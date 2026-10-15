@@ -3,12 +3,10 @@ import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 import { useApiClient, unwrap } from '@/lib/apiClient'
-import { useCartStore } from '@/stores/cart'
-import { ShoppingCart, X, Check, Plus } from 'lucide-vue-next'
+import { ShoppingCart, X, Info } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const client = useApiClient()
-const cart = useCartStore()
 const brokenImages = ref<Record<string, boolean>>({})
 
 import type { components } from '@/types/api'
@@ -24,13 +22,11 @@ const { data: response, isLoading } = useQuery({
 const selectedProduct = ref<Product | null>(null)
 const selectedSize = ref('')
 const selectedColor = ref('')
-const justAdded = ref(false)
 
 function openProduct(product: Product) {
   selectedProduct.value = product
   selectedSize.value = ''
   selectedColor.value = ''
-  justAdded.value = false
 
   // Auto-select if only one option
   const sizes = availableSizes.value
@@ -134,46 +130,12 @@ function priceRange(product: Product): string {
   return `${prices[0]}–${prices[prices.length - 1]} kr`
 }
 
-function addToCart() {
-  if (!selectedProduct.value || !canAddToCart.value) return
-
-  const product = selectedProduct.value
-  const variant = variantForSelection()
-
-  const nameParts = [product.name]
-  if (selectedSize.value) nameParts.push(selectedSize.value)
-  if (selectedColor.value) nameParts.push(selectedColor.value)
-
-  cart.addItem({
-    id: product.id,
-    type: 'product',
-    name: nameParts.join(' – '),
-    unitPrice: effectivePrice.value,
-    imageUrl: product.image_url,
-    variantId: variant?.id,
-    size: selectedSize.value || undefined,
-    color: selectedColor.value || undefined,
-  })
-
-  justAdded.value = true
-  setTimeout(() => {
-    justAdded.value = false
-  }, 1500)
-}
 </script>
 
 <template>
   <div class="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
     <div class="flex items-center justify-between">
       <h1 class="text-3xl font-bold text-slate-900">{{ t('merchandise.title') }}</h1>
-      <router-link
-        v-if="cart.totalItems > 0"
-        to="/checkout"
-        class="flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700"
-      >
-        <ShoppingCart class="h-4 w-4" aria-hidden="true" />
-        {{ t('merchandise.cart') }} ({{ cart.totalItems }})
-      </router-link>
     </div>
 
     <div v-if="isLoading" class="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -309,23 +271,12 @@ function addToCart() {
             {{ totalStock }} {{ t('merchandise.remaining') }}
           </div>
 
-          <!-- Add to cart button -->
-          <button
-            :disabled="!canAddToCart"
-            :class="[
-              'flex w-full items-center justify-center gap-2 rounded-lg px-6 py-3 text-sm font-semibold shadow-sm transition',
-              justAdded
-                ? 'bg-green-600 text-white'
-                : canAddToCart
-                  ? 'bg-brand-600 text-white hover:bg-brand-700'
-                  : 'cursor-not-allowed bg-slate-100 text-slate-400',
-            ]"
-            @click="addToCart"
-          >
-            <Check v-if="justAdded" class="h-5 w-5" aria-hidden="true" />
-            <Plus v-else class="h-5 w-5" aria-hidden="true" />
-            {{ justAdded ? t('merchandise.addedToCart') : t('merchandise.addToCart') }}
-          </button>
+          <!-- No online checkout: a paid checkout must go through the Vipps
+               payment path (BRY-7); until then the catalog is informational. -->
+          <p class="flex items-start gap-2 rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            <Info class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            {{ t('merchandise.orderingUnavailable') }}
+          </p>
         </div>
       </div>
     </div>

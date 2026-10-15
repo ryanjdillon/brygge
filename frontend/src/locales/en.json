@@ -273,6 +273,7 @@
     "soldOut": "Sold out",
     "addedToCart": "Added to cart",
     "addToCart": "Add to cart",
+    "orderingUnavailable": "Online ordering isn't available yet. Contact the club to order.",
     "size": "Size",
     "color": "Colour",
     "inStock": "in stock",

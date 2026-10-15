@@ -58,14 +58,6 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/MerchandiseView.vue'),
   },
   {
-    path: '/checkout',
-    component: () => import('@/views/CheckoutView.vue'),
-  },
-  {
-    path: '/checkout/confirm',
-    component: () => import('@/views/CheckoutConfirmView.vue'),
-  },
-  {
     // More specific than /betal/:token, so it must be registered first: the
     // durable per-member payables page (BRY-275).
     path: '/betal/bruker/:token',

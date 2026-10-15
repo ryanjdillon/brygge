@@ -33,7 +33,6 @@ func RegisterAllOperations(api huma.API) {
 	registerProjectOps(api)
 	registerShoppingListOps(api)
 	registerFeatureRequestOps(api)
-	registerOrderOps(api)
 	registerGDPROps(api)
 	registerAdminOps(api)
 }
@@ -1159,36 +1158,6 @@ func registerFeatureRequestOps(api huma.API) {
 	}, stub[struct {
 		RequestID string `path:"requestID" doc:"Request UUID"`
 	}, struct{ Body Task }]())
-}
-
-func registerOrderOps(api huma.API) {
-	huma.Register(api, huma.Operation{
-		OperationID: "create-order",
-		Method:      http.MethodPost,
-		Path:        "/api/v1/orders",
-		Tags:        []string{"Commerce"},
-		Summary:     "Create an order",
-	}, stub[struct{ Body map[string]any }, struct{ Body map[string]any }]())
-
-	huma.Register(api, huma.Operation{
-		OperationID: "get-order",
-		Method:      http.MethodGet,
-		Path:        "/api/v1/orders/{orderID}",
-		Tags:        []string{"Commerce"},
-		Summary:     "Get order details",
-	}, stub[struct {
-		OrderID string `path:"orderID" doc:"Order UUID"`
-	}, struct{ Body map[string]any }]())
-
-	huma.Register(api, huma.Operation{
-		OperationID: "confirm-order",
-		Method:      http.MethodPost,
-		Path:        "/api/v1/orders/{orderID}/confirm",
-		Tags:        []string{"Commerce"},
-		Summary:     "Confirm order payment",
-	}, stub[struct {
-		OrderID string `path:"orderID" doc:"Order UUID"`
-	}, struct{ Body StatusResponse }]())
 }
 
 func registerGDPROps(api huma.API) {

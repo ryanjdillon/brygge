@@ -135,6 +135,12 @@ So the amount cap is a **default**, not a hard ceiling — the per-invoice overr
 
 **Failure mode:** enforcing at issuance alone would leave every large invoice already emailed fully Vipps-payable. Not-allowed invoices simply never get an `orders`/`order_sources` row minted, which is safe — reconciliation and the webhook key off `orders.vipps_reference`, created only on mint.
 
+### Only the payment provider can mark an order paid
+
+**Rule:** an order (or the invoice behind it) becomes paid only from evidence that money moved: the signed Vipps webhook (`onCaptured`), or reconciliation against a settlement or bank row. No HTTP route, public or admin, sets `orders.status = 'paid'` or `invoices.vipps_paid_at`/`payment_id` from a caller's say-so.
+
+**Failure mode:** a "confirm" endpoint that flips status on request lets anyone holding an order id mark it paid with no money received. That is what the pre-BRY-259 `POST /orders/{id}/confirm` stub did; it was removed in BRY-306.
+
 ---
 
 ## Sessions

@@ -245,6 +245,7 @@
     "soldOut": "Esaurito",
     "addedToCart": "Aggiunto al carrello",
     "addToCart": "Aggiungi al carrello",
+    "orderingUnavailable": "Gli ordini online non sono ancora disponibili. Contatta il club per ordinare.",
     "size": "Taglia",
     "color": "Colore",
     "inStock": "disponibili",

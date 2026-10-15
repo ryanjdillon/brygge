@@ -266,6 +266,7 @@
     "soldOut": "Utseld",
     "addedToCart": "Lagt til i handlekorga",
     "addToCart": "Legg i handlekorg",
+    "orderingUnavailable": "Bestilling på nett er ikkje tilgjengeleg enno. Kontakt klubben for å bestille.",
     "size": "Storleik",
     "color": "Farge",
     "inStock": "på lager",
