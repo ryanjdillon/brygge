@@ -17,6 +17,7 @@ Tracking issue: **DIL-245**.
 | `RequireRole(…)` | Caller's roles must intersect the list. | `403` (structured `error`) |
 | `RequireAdminTOTP` | TOTP enrolled **and** verified within the 12 h step-up window. Applied once to the whole `/admin` subtree. | `403 totp_required` / `403 totp_not_enrolled`, or `302` for top-level browser navigations |
 | `RequireFreshTOTP(window)` / `RequireFreshTOTPDefault()` | TOTP verified within a short per-action window (default 10 min, `AUTH_FRESH_TOTP_WINDOW`). For high-blast-radius mutations. | `403 totp_fresh_required` (with `window_seconds`), or `302` for browser navigations |
+| `RequireDevToken(svc, scope)` | Developer bearer token (`Authorization: Bearer bry_dev_…`) that is live and carries `scope`. Ignores cookies entirely; injects claims for the token's creator and club with **no roles**, plus the token id. Used only on `/api/v1/dev/query` (BRY-115). | `401 developer bearer token required` / `401 invalid or expired developer token` |
 
 Notes:
 - `RequireAdminTOTP` wraps the entire `/api/v1/admin` group, so **every**
@@ -44,6 +45,7 @@ Notes:
 | `POST /bookings` | `OptionalSessionAuth` (guest booking) |
 | `POST /orders`, `GET/POST /orders/{id}*` | none (commerce checkout) |
 | `GET /betal/{token}`, `GET /checkout/{token}*`, `GET /betal/bruker/{token}` | none — the durable token is the capability (per-invoice and per-member payables links) |
+| `POST /dev/query` | `RequireDevToken(db_query)` + per-IP and per-token (60/min) rate limits. Only mounted when `DEV_QUERY_TOKENS_ENABLED`. No session, no TOTP — the short-lived token is the credential, and the handler is bounded by the read-only, PII-masked `brygge_dev_ro` role (BRY-115) |
 
 ## Authenticated member surfaces (`AuthenticateSession`, no role gate)
 
@@ -74,6 +76,9 @@ The **Fresh TOTP** column marks the extra per-action gate.
 |---|---|---|
 | `GET /admin/audit` | board, admin | — |
 | `POST /admin/dev/query` | admin | ✅ |
+| `GET /admin/dev/tokens` | admin | — |
+| `POST /admin/dev/tokens` | admin | ✅ |
+| `DELETE /admin/dev/tokens/{tokenID}` | admin | ✅ |
 | `/admin/volunteer/*` | board | — |
 | `/admin/map/markers` (POST/PUT/DELETE) | board | — |
 | `/admin/boats/*` | board, harbor_master | — |

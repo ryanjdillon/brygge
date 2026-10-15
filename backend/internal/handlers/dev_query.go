@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -70,7 +71,19 @@ const (
 	defaultDevQueryLimit = 200
 	maxDevQueryLimit     = 1000
 	devQueryTimeout      = 15 * time.Second
+	maxAuditSQLBytes     = 8 << 10
 )
+
+// capString truncates s to at most n bytes without splitting a UTF-8 rune.
+func capString(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
+	}
+	return s[:n]
+}
 
 func (h *DevQueryHandler) HandleQuery(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -111,16 +124,23 @@ func (h *DevQueryHandler) HandleQuery(w http.ResponseWriter, r *http.Request) {
 	elapsed := time.Since(start)
 	resp.ElapsedMs = elapsed.Milliseconds()
 
-	// Audit every attempt, success or fail. SHA the SQL so the raw
-	// text (which may carry PII via WHERE) doesn't land in audit_log,
-	// but repeated identical queries dedupe at the SHA level.
+	// Audit every attempt, success or fail, with the full SQL text (capped)
+	// so an agent's session is legible after the fact. Storing the raw text
+	// is safe because the role can only read masked, non-PII data — an
+	// identifier typed into a WHERE clause can't match a NULLed column. The
+	// SHA still lets identical queries be grouped.
 	if h.audit != nil {
 		sum := sha256.Sum256([]byte(sql))
 		extra := map[string]any{
+			"sql":        capString(sql, maxAuditSQLBytes),
 			"sql_sha256": hex.EncodeToString(sum[:]),
+			"columns":    resp.Columns,
 			"row_count":  resp.RowCount,
 			"elapsed_ms": resp.ElapsedMs,
 			"truncated":  resp.Truncated,
+		}
+		if tokenID := middleware.GetDevTokenID(ctx); tokenID != "" {
+			extra["token_id"] = tokenID
 		}
 		if runErr != nil {
 			extra["error"] = runErr.Error()

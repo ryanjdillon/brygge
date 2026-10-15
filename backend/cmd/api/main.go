@@ -26,6 +26,7 @@ import (
 	"github.com/brygge-klubb/brygge/internal/auth"
 	"github.com/brygge-klubb/brygge/internal/broadcast"
 	"github.com/brygge-klubb/brygge/internal/config"
+	"github.com/brygge-klubb/brygge/internal/devtoken"
 	"github.com/brygge-klubb/brygge/internal/email"
 	"github.com/brygge-klubb/brygge/internal/handlers"
 	"github.com/brygge-klubb/brygge/internal/mail"
@@ -301,6 +302,8 @@ func main() {
 	accountingHandler := handlers.NewAccountingHandler(accountingSvc, auditService, s3LegalClient, claudeClient, vippsClient, log)
 	bankRowsHandler := handlers.NewBankRowsHandler(accountingSvc, auditService, log)
 	devQueryHandler := handlers.NewDevQueryHandler(devQueryDB, auditService, log)
+	devTokenService := devtoken.NewService(db)
+	devTokenHandler := handlers.NewDevTokenHandler(devTokenService, auditService, cfg.DevQueryTokensEnabled, log)
 	priceItemsHandler := handlers.NewPriceItemsHandler(db, &cfg, log)
 	faqsHandler := handlers.NewFaqsHandler(db, &cfg, log)
 	productsHandler := handlers.NewProductsHandler(db, &cfg, log)
@@ -342,6 +345,21 @@ func main() {
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Method(http.MethodGet, "/health", healthHandler)
 		r.Get("/features", featuresHandler.HandleGetFeatures)
+
+		// BRY-115: the dev-query endpoint for developer bearer tokens, so an
+		// external tool can query without a cookie session or SSH. Mounted
+		// only when the club opts in. Its sole auth is the token (cookies are
+		// ignored); the per-IP limiter blunts token guessing and the
+		// per-token limiter throttles a leaked token. Same handler, and so
+		// the same brygge_dev_ro boundary, as /admin/dev/query.
+		if cfg.DevQueryTokensEnabled {
+			r.Group(func(r chi.Router) {
+				r.Use(standardRL)
+				r.Use(middleware.RequireDevToken(devTokenService, devtoken.ScopeDBQuery))
+				r.Use(middleware.NewRateLimiter(rdb, log, 60, time.Minute, middleware.DevTokenKey).Handler)
+				r.Post("/dev/query", devQueryHandler.HandleQuery)
+			})
+		}
 
 		r.Route("/auth", func(r chi.Router) {
 			if cfg.Features.DemoAuth {
@@ -816,7 +834,11 @@ func main() {
 					r.Use(middleware.RequireRole("admin"))
 					r.Use(middleware.RequireFreshTOTPDefault())
 					r.Post("/dev/query", devQueryHandler.HandleQuery)
+					// BRY-115: mint / revoke developer bearer tokens.
+					r.Post("/dev/tokens", devTokenHandler.HandleCreate)
+					r.Delete("/dev/tokens/{tokenID}", devTokenHandler.HandleRevoke)
 				})
+				r.With(middleware.RequireRole("admin")).Get("/dev/tokens", devTokenHandler.HandleList)
 
 				if cfg.Features.Projects {
 					r.Route("/volunteer", func(r chi.Router) {
@@ -1473,6 +1495,11 @@ func main() {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
+				if n, err := devTokenService.PurgeExpired(ctx); err != nil {
+					log.Warn().Err(err).Msg("developer token purge failed")
+				} else if n > 0 {
+					log.Info().Int64("rows", n).Msg("purged expired developer tokens")
+				}
 				n, err := sessionService.PurgeExpired(ctx)
 				if err != nil {
 					log.Warn().Err(err).Msg("session purge failed")

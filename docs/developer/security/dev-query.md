@@ -1,7 +1,8 @@
 # Developer DB query — read-only, PII-masked access
 
-The `/admin/dev/query` endpoint (and the `just prod-query` recipe) let an
-operator — or an AI agent acting for one — run read-only SQL against the
+The `/admin/dev/query` endpoint, the `just prod-query` recipe, and
+developer-token access let an operator — or an AI agent acting for one —
+run read-only SQL against the
 database to troubleshoot data problems (e.g. a Vipps payment that didn't
 reconcile to its faktura) **without ever seeing member PII**.
 
@@ -37,6 +38,43 @@ The view definitions live in
 `migrate up`); the grants live in migration `000095_dev_ro_default_deny`. A
 column-parity integration test (`backend/internal/handlers/dev_masked_test.go`)
 fails if a base column of a masked table isn't accounted for in its view.
+
+## Three ways in, one boundary
+
+| Path | Auth | Use when |
+|------|------|----------|
+| Admin UI → Database query (`POST /admin/dev/query`) | admin session + fresh TOTP | An operator investigating by hand |
+| `just prod-query "<sql>"` | SSH key → `sudo -u brygge psql` as the role over the socket | Operator shell with a working SSH key |
+| `just prod-query-http "<sql>"` (`POST /api/v1/dev/query`) | developer bearer token | An external tool or agent that cannot use the SSH key (BRY-115) |
+
+All three run as the same `brygge_dev_ro` role, so they see the same masked data.
+
+### Developer bearer tokens
+
+- **Minted per use** by an admin under Admin → Developer tokens (fresh TOTP at
+  click time). The plaintext (`bry_dev_…`) is shown **once**; only its
+  `sha256` is stored, in `developer_tokens`. That table is not on the role's
+  allowlist, so a query session can't read or enumerate tokens.
+- **Short-lived:** 24 h by default, 7 days maximum. Revocation is immediate.
+  Tokens are purged 7 days after expiry or revocation.
+- **Scoped, not privileged:** the token authenticates only
+  `POST /api/v1/dev/query`. The middleware injects the creator and club with
+  **no roles**, so a token can't reach any session-authenticated route.
+- **Opt-in:** the route is only mounted when `DEV_QUERY_TOKENS_ENABLED=true`.
+- **Throttled and audited:** a per-IP limit blunts token guessing, and a
+  per-token 60/min limit throttles a leaked token. Every query's full SQL,
+  columns and `token_id` land in `audit_log` (`developer.db_query`). The text
+  is safe to log because the role can't read raw PII.
+- **Exposure:** the route is reachable over HTTPS, not loopback-only. This is
+  deliberate: the motivating case is an agent that can't use SSH, and the
+  blast radius of a leaked token is bounded to masked, non-PII, read-only
+  data for at most its TTL.
+
+On the agent side, keep the token out of the repo and out of agent settings.
+Export it as `BRYGGE_DEV_TOKEN`, or store it with `chmod 600` in
+`~/.config/brygge/dev-token`, which is where `just prod-query-http` reads it
+from. The recipe passes the header through a process substitution, so the
+token never appears in `ps`.
 
 ## Classification
 

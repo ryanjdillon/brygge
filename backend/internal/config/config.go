@@ -18,10 +18,14 @@ type Config struct {
 	// privilege boundary: a session that is already `brygge_dev_ro` has
 	// no higher role to `RESET ROLE` back to. Empty disables the endpoint.
 	DevQueryDatabaseURL string
-	RedisURL            string
-	ClubSlug    string
-	ClubName    string // Human-readable club name used in email subjects etc.
-	Domain      string // Public domain (DOMAIN env) — used in email footers and canonical URLs
+	// DevQueryTokensEnabled mounts POST /api/v1/dev/query for developer
+	// bearer tokens (BRY-115) and allows admins to mint them. Off by default
+	// so the credential-only route only exists on clubs that opted in.
+	DevQueryTokensEnabled bool
+	RedisURL              string
+	ClubSlug              string
+	ClubName              string // Human-readable club name used in email subjects etc.
+	Domain                string // Public domain (DOMAIN env) — used in email footers and canonical URLs
 
 	// Vipps ePayment
 	VippsTestMode        bool
@@ -105,13 +109,14 @@ type Features struct {
 
 func Load() Config {
 	return Config{
-		Port:        envInt("PORT", 8080),
-		DatabaseURL:         envStr("DATABASE_URL", "postgres://brygge:brygge@localhost:5432/brygge?sslmode=disable"),
-		DevQueryDatabaseURL: envStr("DEV_QUERY_DATABASE_URL", ""),
-		RedisURL:            envStr("REDIS_URL", "redis://localhost:6379/0"),
-		ClubSlug:    envStr("CLUB_SLUG", "brygge"),
-		ClubName:    envStr("CLUB_NAME", ""),
-		Domain:      envStr("DOMAIN", "localhost"),
+		Port:                  envInt("PORT", 8080),
+		DatabaseURL:           envStr("DATABASE_URL", "postgres://brygge:brygge@localhost:5432/brygge?sslmode=disable"),
+		DevQueryDatabaseURL:   envStr("DEV_QUERY_DATABASE_URL", ""),
+		DevQueryTokensEnabled: envBool("DEV_QUERY_TOKENS_ENABLED", false),
+		RedisURL:              envStr("REDIS_URL", "redis://localhost:6379/0"),
+		ClubSlug:              envStr("CLUB_SLUG", "brygge"),
+		ClubName:              envStr("CLUB_NAME", ""),
+		Domain:                envStr("DOMAIN", "localhost"),
 
 		VippsTestMode:        envBool("VIPPS_TEST_MODE", true),
 		VippsClientID:        envStr("VIPPS_CLIENT_ID", ""),

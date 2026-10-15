@@ -177,6 +177,12 @@ So the amount cap is a **default**, not a hard ceiling — the per-invoice overr
 
 **Failure mode:** a new table auto-granted to the role (the pre-BRY-286 default-allow) silently exposes PII/secrets; a leaked session enumerates or erases its own `audit_log` evidence and the blast radius becomes unbounded.
 
+### Developer tokens are hashed, scoped and role-less
+
+**Rule:** developer bearer tokens (BRY-115) are stored only as `sha256(token)`, and the plaintext is returned once at mint. `RequireDevToken` is the **only** middleware on `POST /api/v1/dev/query` and is mounted on no other route. It ignores cookies and injects claims with **no roles**, so a token can never satisfy `RequireRole` or reach a session route. The route exists only when `DEV_QUERY_TOKENS_ENABLED=true`. `developer_tokens` is never added to the `brygge_dev_ro` allowlist.
+
+**Failure mode:** a token mounted on a broader route, or carrying the creator's roles, turns a short-lived read credential into an admin session that bypasses TOTP. A plaintext token at rest, or a readable `developer_tokens` table, turns one DB read into token theft.
+
 ### Query role is a real privilege boundary, not `SET ROLE`
 
 **Rule:** the `/admin/dev/query` endpoint runs on a dedicated pool that

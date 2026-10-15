@@ -70,8 +70,10 @@ const (
 	ActionVippsChargeDismissed       = "vipps_charge.dismissed"
 	ActionVippsPayoutCleared         = "vipps_payout.cleared"
 
-	// Developer / DB inspection (DIL-365)
-	ActionDeveloperQuery = "developer.db_query"
+	// Developer / DB inspection (DIL-365, BRY-115)
+	ActionDeveloperQuery        = "developer.db_query"
+	ActionDeveloperTokenCreated = "developer.token_created"
+	ActionDeveloperTokenRevoked = "developer.token_revoked"
 
 	// Booking operations
 	ActionBookingConfirmed = "booking.confirmed"
