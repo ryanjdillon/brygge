@@ -610,7 +610,8 @@
       "harborSettings": "Innstillinger",
       "motorhomeSettings": "Bobilinformasjon",
       "pdfArchive": "PDF-arkiv",
-      "devQuery": "Database-spørring"
+      "devQuery": "Database-spørring",
+      "devTokens": "Utviklernøkler"
     },
     "invoiceDrafts": {
       "title": "Fakturakladder",
@@ -1861,6 +1862,39 @@
       "issueDate": "Utstedt",
       "viewCurrent": "Vis gjeldende PDF",
       "archiveCount": "{n} arkivert versjon(er)"
+    },
+    "devTokens": {
+      "title": "Utviklernøkler",
+      "subtitle": "Kortlevde nøkler som lar et eksternt verktøy (for eksempel en KI-assistent) kjøre lese-spørringer med maskerte personopplysninger, uten innlogging.",
+      "disabled": "Utviklernøkler er slått av på denne installasjonen. Sett DEV_QUERY_TOKENS_ENABLED=true for å tillate dem.",
+      "name": "Navn",
+      "namePlaceholder": "f.eks. Claude — Vipps-avstemming",
+      "ttl": "Utløper etter",
+      "ttlHours": "{n} t",
+      "create": "Opprett nøkkel",
+      "newTokenTitle": "Nøkkelen «{name}» er opprettet",
+      "newTokenWarning": "Kopier den nå — den vises ikke igjen. Behandle den som et passord.",
+      "copy": "Kopier",
+      "copied": "Kopiert",
+      "usageHint": "Bruk den som bearer-nøkkel mot spørre-endepunktet:",
+      "empty": "Ingen utviklernøkler ennå.",
+      "never": "Aldri",
+      "revoke": "Tilbakekall",
+      "revokeConfirmTitle": "Tilbakekalle nøkkelen?",
+      "revokeConfirmBody": "«{name}» slutter å virke umiddelbart. Dette kan ikke angres.",
+      "loadFailed": "Kunne ikke hente nøkler",
+      "cols": {
+        "name": "Navn",
+        "prefix": "Nøkkel",
+        "status": "Status",
+        "expires": "Utløper",
+        "lastUsed": "Sist brukt"
+      },
+      "status": {
+        "active": "Aktiv",
+        "expired": "Utløpt",
+        "revoked": "Tilbakekalt"
+      }
     },
     "devQuery": {
       "title": "Database-spørring",

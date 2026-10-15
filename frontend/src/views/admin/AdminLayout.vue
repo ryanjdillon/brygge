@@ -39,6 +39,7 @@ import {
   HelpCircle,
   Inbox as InboxIcon,
   TerminalSquare,
+  KeyRound,
   BarChart2,
   ListFilter,
 } from 'lucide-vue-next'
@@ -121,6 +122,7 @@ const navGroups = computed<NavGroup[]>(() => {
         { to: '/admin/settings/site', icon: Settings, label: t('admin.sidebar.siteSettings'), roles: ['board', 'admin'] },
         { to: '/admin/settings/faq', icon: HelpCircle, label: t('admin.sidebar.faqSettings'), roles: ['board', 'admin'] },
         { to: '/admin/dev/query', icon: TerminalSquare, label: t('admin.sidebar.devQuery'), roles: ['admin'] },
+        { to: '/admin/dev/tokens', icon: KeyRound, label: t('admin.sidebar.devTokens'), roles: ['admin'] },
       ],
     },
   ]

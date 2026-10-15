@@ -494,7 +494,8 @@
       "accounts": "Chart of Accounts",
       "periods": "Periods",
       "journal": "Journal entries",
-      "devQuery": "Zapytanie do bazy"
+      "devQuery": "Zapytanie do bazy",
+      "devTokens": "Tokeny deweloperskie"
     },
     "financials": {
       "title": "Finanse",

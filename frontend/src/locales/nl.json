@@ -494,7 +494,8 @@
       "accounts": "Chart of Accounts",
       "periods": "Periods",
       "journal": "Journal entries",
-      "devQuery": "Database-query"
+      "devQuery": "Database-query",
+      "devTokens": "Ontwikkelaarstokens"
     },
     "financials": {
       "title": "Financiën",

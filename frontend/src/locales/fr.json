@@ -494,7 +494,8 @@
       "accounts": "Chart of Accounts",
       "periods": "Periods",
       "journal": "Journal entries",
-      "devQuery": "Requête BD"
+      "devQuery": "Requête BD",
+      "devTokens": "Jetons développeur"
     },
     "financials": {
       "title": "Finances",

@@ -614,7 +614,8 @@
       "harborSettings": "Settings",
       "motorhomeSettings": "Motorhome info",
       "pdfArchive": "PDF archive",
-      "devQuery": "Database query"
+      "devQuery": "Database query",
+      "devTokens": "Developer tokens"
     },
     "invoiceDrafts": {
       "title": "Faktura drafts",
@@ -1865,6 +1866,39 @@
       "issueDate": "Issued",
       "viewCurrent": "View current PDF",
       "archiveCount": "{n} archived version(s)"
+    },
+    "devTokens": {
+      "title": "Developer tokens",
+      "subtitle": "Short-lived bearer tokens that let an external tool (such as an AI assistant) run read-only, PII-masked queries without a login session.",
+      "disabled": "Developer tokens are disabled on this deployment. Set DEV_QUERY_TOKENS_ENABLED=true to allow them.",
+      "name": "Name",
+      "namePlaceholder": "e.g. Claude — Vipps reconciliation",
+      "ttl": "Expires after",
+      "ttlHours": "{n} h",
+      "create": "Create token",
+      "newTokenTitle": "Token \"{name}\" created",
+      "newTokenWarning": "Copy it now — it will not be shown again. Treat it like a password.",
+      "copy": "Copy",
+      "copied": "Copied",
+      "usageHint": "Use it as a bearer token against the query endpoint:",
+      "empty": "No developer tokens yet.",
+      "never": "Never",
+      "revoke": "Revoke",
+      "revokeConfirmTitle": "Revoke token?",
+      "revokeConfirmBody": "\"{name}\" stops working immediately. This cannot be undone.",
+      "loadFailed": "Could not load tokens",
+      "cols": {
+        "name": "Name",
+        "prefix": "Token",
+        "status": "Status",
+        "expires": "Expires",
+        "lastUsed": "Last used"
+      },
+      "status": {
+        "active": "Active",
+        "expired": "Expired",
+        "revoked": "Revoked"
+      }
     },
     "devQuery": {
       "title": "Database query",

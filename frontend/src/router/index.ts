@@ -427,6 +427,11 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/DevQueryView.vue'),
       },
       {
+        path: 'dev/tokens',
+        name: 'admin-dev-tokens',
+        component: () => import('@/views/admin/DevTokensView.vue'),
+      },
+      {
         path: 'accounting/pdf-archive',
         name: 'admin-pdf-archive',
         redirect: '/admin/accounting/faktura?tab=archive',
