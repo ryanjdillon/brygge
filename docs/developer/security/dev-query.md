@@ -95,16 +95,29 @@ Unqualified names (`users`) resolve to the view through the role's search_path;
 | `vipps_webhook_events` | payload (raw JSONB) | `payload_psp_ref`, `payload_state`, `payload_amount` |
 | `slip_shares` | notes | — |
 | `boats` | name, registration_number, mmsi, call_sign | — |
+| `journal_entries` | description (bank-import entries copy the bank text, payer name included), attachment_url | `description_kid`, `description_length`, `has_attachment` |
+| `journal_lines` | description | — |
+| `payments` | description | — |
+| `invoice_lines` | description, sub_description | — |
+| `account_mapping_rules` | name, match_value (rules can match on a payer's name) | — |
+| `vipps_message_rules` | pattern (same) | — |
+| `slips`, `dock_fingers` | notes | — |
 
 Org fields (`*_org_name/number/address`), the club's own `bank_account`/`org_number`/`address` (printed on fakturas), and `customer_phone_masked` (masked at import) pass through.
 
 ### Allowlist — readable raw (verified no PII)
 
-`accounts`, `account_mapping_rules`, `bank_imports`, `dock_fingers`, `docks`,
-`fiscal_periods`, `invoice_lines`, `journal_entries`, `journal_lines`,
-`mva_compensation_reports`, `order_lines`, `order_sources`, `payments`,
-`price_items`, `product_variants`, `products`, `slip_assignments`, `slips`,
-`vipps_imports`, `vipps_message_rules`, `waiting_list_entries`.
+`accounts`, `bank_imports`, `docks`, `fiscal_periods`,
+`mva_compensation_reports`, `order_lines`, `order_sources`, `price_items`,
+`product_variants`, `products`, `slip_assignments`, `vipps_imports`,
+`waiting_list_entries`.
+
+**Rule: a table is allowlisted raw only if none of its free-text columns can
+name a person.** "Structural" isn't enough: bank-import journal entries copy
+the bank text with the payer's name, and rules or notes are typed by people
+(BRY-336). Every text/JSON column the role can read raw is listed and reviewed
+in `rawTextColumns` in `dev_masked_test.go`; a new one fails the test until it
+is reviewed or its table moves to a masked view.
 
 ### Denied — not granted (default)
 

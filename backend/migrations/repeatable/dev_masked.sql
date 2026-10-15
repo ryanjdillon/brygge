@@ -180,6 +180,81 @@ SELECT
     NULL::text AS call_sign               -- indirect identifier
 FROM public.boats;
 
+-- Accounting / structural tables. Their numbers and keys are safe, but
+-- their free-text columns are not: bank-import journal entries copy the
+-- bank text verbatim ("Innbetaling KID … Fra: <payer> …"), and rules,
+-- notes and line descriptions are typed by people who may name members.
+-- So free text is NULLed here too; only tables with no free-text columns
+-- are allowlisted raw (migration 000097).
+
+CREATE VIEW dev_masked.journal_entries AS
+SELECT
+    id, club_id, fiscal_period_id, entry_number, entry_date,
+    NULL::text AS description,
+    status, source, source_id, source_table,
+    NULL::text AS attachment_url,
+    created_by, posted_by, posted_at, voided_by, voided_at,
+    created_at, updated_at,
+    substring(description from '[0-9]{6,}') AS description_kid,
+    length(description)                     AS description_length,
+    (attachment_url IS NOT NULL)            AS has_attachment
+FROM public.journal_entries;
+
+CREATE VIEW dev_masked.journal_lines AS
+SELECT
+    id, journal_entry_id, account_id, debit, credit,
+    NULL::text AS description,
+    mva_amount, mva_eligible
+FROM public.journal_lines;
+
+CREATE VIEW dev_masked.payments AS
+SELECT
+    id, club_id, user_id, type, amount, currency, vipps_reference, status,
+    due_date,
+    NULL::text AS description,
+    paid_at, created_at, recipient_id
+FROM public.payments;
+
+CREATE VIEW dev_masked.invoice_lines AS
+SELECT
+    id, invoice_id,
+    NULL::text AS description,
+    quantity, unit_price, line_total, account_id,
+    NULL::text AS sub_description,
+    price_item_id, category, boat_id
+FROM public.invoice_lines;
+
+CREATE VIEW dev_masked.account_mapping_rules AS
+SELECT
+    id, club_id,
+    NULL::text AS name,
+    priority, match_field,
+    NULL::text AS match_value,            -- may match on a payer's name
+    match_operator, debit_account_id, credit_account_id, mva_eligible,
+    is_active, created_at
+FROM public.account_mapping_rules;
+
+CREATE VIEW dev_masked.vipps_message_rules AS
+SELECT
+    id, club_id,
+    NULL::text AS pattern,                -- may match on a payer's name
+    account_code, priority, created_at
+FROM public.vipps_message_rules;
+
+CREATE VIEW dev_masked.slips AS
+SELECT
+    id, club_id, number, section, length_m, width_m, depth_m, status,
+    map_x, map_y, created_at, updated_at,
+    NULL::text AS notes,
+    location
+FROM public.slips;
+
+CREATE VIEW dev_masked.dock_fingers AS
+SELECT
+    id, club_id, geometry, position, created_at, updated_at,
+    NULL::text AS notes
+FROM public.dock_fingers;
+
 -- Grant the read-only role access to the masked schema. Guarded so the
 -- file still applies on a DB where the role has not been bootstrapped
 -- (fresh migrate-check / test DB) — the dev-query feature simply won't

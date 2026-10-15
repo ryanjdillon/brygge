@@ -19,6 +19,36 @@ var maskedTables = []string{
 	"users", "clubs", "billing_recipients", "orders", "invoices",
 	"vipps_import_rows", "bank_import_rows", "vipps_webhook_events",
 	"slip_shares", "boats",
+	"journal_entries", "journal_lines", "payments", "invoice_lines",
+	"account_mapping_rules", "vipps_message_rules", "slips", "dock_fingers",
+}
+
+// rawTextColumns is every text/JSON column the role may read from a raw
+// (non-view) public table, each reviewed as unable to name a person: GL
+// account names, product/catalog text, the club's own bank account, enum-
+// like codes. A new free-text column on an allowlisted table fails the
+// "raw text columns" subtest until it is reviewed here or the table moves
+// to a dev_masked view — free text copied from bank rows or typed by
+// people is how payer names leaked before.
+var rawTextColumns = map[string]bool{
+	// chart of accounts
+	"accounts.code": true, "accounts.description": true, "accounts.name": true, "accounts.parent_code": true,
+	// the club's own statement files and account
+	"bank_imports.bank_account_code": true, "bank_imports.bank_account_number": true, "bank_imports.filename": true, "bank_imports.format": true,
+	// pier names
+	"docks.name": true, "docks.slug": true,
+	// enum-like codes
+	"mva_compensation_reports.model": true, "mva_compensation_reports.status": true,
+	// catalog item names (guest names live on orders, masked)
+	"order_lines.name": true,
+	// fee/price catalog
+	"price_items.audience": true, "price_items.category": true, "price_items.currency": true, "price_items.description": true, "price_items.metadata": true, "price_items.name": true, "price_items.pricing_kind": true, "price_items.tier_dimension": true, "price_items.unit": true,
+	// merch catalog
+	"product_variants.color": true, "product_variants.image_url": true, "product_variants.size": true,
+	// merch catalog
+	"products.currency": true, "products.description": true, "products.image_url": true, "products.name": true,
+	// settlement file names and merchant numbers
+	"vipps_imports.filename": true, "vipps_imports.msn": true,
 }
 
 // TestDevMaskedViews migrates a throwaway database, applies the dev_masked
@@ -91,6 +121,34 @@ func TestDevMaskedViews(t *testing.T) {
 		}
 	})
 
+	t.Run("raw text columns", func(t *testing.T) {
+		rows, err := pool.Query(ctx, `
+			SELECT c.relname || '.' || a.attname
+			FROM pg_class c
+			JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped
+			WHERE c.relnamespace = 'public'::regnamespace AND c.relkind = 'r'
+			  AND has_table_privilege('brygge_dev_ro', c.oid, 'SELECT')
+			  AND a.atttypid IN ('text'::regtype, 'varchar'::regtype, 'bpchar'::regtype, 'jsonb'::regtype, 'json'::regtype)`)
+		if err != nil {
+			t.Skipf("brygge_dev_ro role not present: %v", err)
+		}
+		defer rows.Close()
+		seen := 0
+		for rows.Next() {
+			var col string
+			if err := rows.Scan(&col); err != nil {
+				t.Fatalf("scan: %v", err)
+			}
+			seen++
+			if !rawTextColumns[col] {
+				t.Errorf("%s is free text readable raw by brygge_dev_ro — review it into rawTextColumns, or mask the table via a dev_masked view", col)
+			}
+		}
+		if seen == 0 {
+			t.Fatal("no raw-readable text columns found; the privilege query is broken, so this guard would pass vacuously")
+		}
+	})
+
 	t.Run("role access: masking + default-deny", func(t *testing.T) {
 		// Synthetic fixtures only.
 		club := "22222222-2222-2222-2222-222222222222"
@@ -139,6 +197,9 @@ func TestDevMaskedViews(t *testing.T) {
 		}
 		if _, err := rolePool.Exec(ctx, "SELECT 1 FROM public.clubs"); err == nil {
 			t.Error("role could read raw public.clubs — base secrets not denied")
+		}
+		if _, err := rolePool.Exec(ctx, "SELECT 1 FROM public.journal_entries"); err == nil {
+			t.Error("role could read raw public.journal_entries — bank-copied descriptions carry payer names")
 		}
 		if _, err := rolePool.Exec(ctx, "SELECT 1 FROM public.accounts"); err != nil {
 			t.Errorf("role could not read allowlisted public.accounts: %v", err)
