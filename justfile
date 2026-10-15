@@ -223,6 +223,34 @@ rollback host="brygge":
 prod-query sql host="klokkarvikbaatlag.no":
     printf '%s\n' {{quote(sql)}} | ssh {{host}} "sudo -u brygge psql 'postgres://brygge_dev_ro@/brygge?host=/run/postgresql&sslmode=disable' --csv -P pager=off -v ON_ERROR_STOP=1 -f -"
 
+# Same as prod-query, but over HTTPS with a developer bearer token instead of
+# SSH (BRY-115) — for when the SSH key isn't usable, e.g. from an agent
+# session. Mint a token under Admin → Developer tokens, then export
+# BRYGGE_DEV_TOKEN or save it (chmod 600) to ~/.config/brygge/dev-token.
+# Same read-only brygge_dev_ro role and PII masking. Rows are capped by
+# `limit` (default 200, max 1000); CSV on stdout, truncation notice on stderr.
+#   just prod-query-http "select id, status from invoices where kid_number = '1234567890'"
+prod-query-http sql limit="200" origin="https://klokkarvikbaatlag.no":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    token="${BRYGGE_DEV_TOKEN:-}"
+    if [ -z "$token" ] && [ -r "$HOME/.config/brygge/dev-token" ]; then
+      token="$(tr -d '[:space:]' < "$HOME/.config/brygge/dev-token")"
+    fi
+    if [ -z "$token" ]; then
+      echo "no developer token: set BRYGGE_DEV_TOKEN or write ~/.config/brygge/dev-token (mint under Admin → Developer tokens)" >&2
+      exit 1
+    fi
+    body="$(jq -n --arg sql {{quote(sql)}} --argjson limit {{limit}} '{sql: $sql, limit: $limit}')"
+    # Header via process substitution so the token never lands in argv / ps.
+    resp="$(curl -sS --fail-with-body -H @<(printf 'Authorization: Bearer %s\n' "$token") \
+      -H 'Content-Type: application/json' -d "$body" "{{origin}}/api/v1/dev/query")" \
+      || { echo "$resp" >&2; exit 1; }
+    jq -r '.columns, (.rows[] | map(if type == "object" or type == "array" then tojson else . end)) | @csv' <<<"$resp"
+    if [ "$(jq -r .truncated <<<"$resp")" = "true" ]; then
+      echo "(truncated at {{limit}} rows — raise limit= or narrow the WHERE)" >&2
+    fi
+
 # Build the brygge package locally (frontend + Go binary with embedded SPA).
 build-nix:
     nix build .#brygge

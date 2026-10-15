@@ -248,6 +248,9 @@ read-only `brygge_dev_ro` role: writes are rejected and member identity columns
 table matrix is [docs/developer/security/dev-query.md](docs/developer/security/dev-query.md).
 Prefer this wrapper over raw `ssh`/`psql` (a permission allowlist should cover
 only `just prod-query`), and add your own `LIMIT` — rows are not capped.
+Without a usable SSH key (e.g. an agent session), use `just prod-query-http
+"<sql>"` instead — same role and masking, authenticated by a short-lived
+developer token from `$BRYGGE_DEV_TOKEN` or `~/.config/brygge/dev-token`.
 
 ## Common Commands
 

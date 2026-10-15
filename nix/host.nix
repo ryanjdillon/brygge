@@ -832,6 +832,10 @@ in
     OTEL_EXPORTER_OTLP_PROTOCOL = "grpc";
     OTEL_SERVICE_NAME = "brygge-api";
     OTEL_TRACES_SAMPLER_ARG = "0.1";
+    # Mount POST /api/v1/dev/query for developer bearer tokens (BRY-115) so
+    # an external tool can run read-only, PII-masked queries without SSH.
+    # Tokens are minted per use under Admin → Developer tokens.
+    DEV_QUERY_TOKENS_ENABLED = "true";
     # Magic-link / share URLs use this as the public origin. Without it,
     # config defaults to the dev Vite URL (http://localhost:5173).
     FRONTEND_URL = "https://${clubConfig.domain}";
