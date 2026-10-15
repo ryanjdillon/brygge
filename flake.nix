@@ -366,45 +366,73 @@
             fi
 
             # ── Pre-deploy database snapshot ─────────────────────────────
-            # Take a quiesced dump before migration runs so there is always
-            # a local rollback point. Also pulls a copy to ~/brygge-backups/
-            # on the deployer's machine (last 10 kept).
-            #
-            # Skip with SKIP_BACKUP=1 nix run .#deploy -- <host> if the
-            # backup service is not yet configured on the target host.
+            # Take a quiesced dump before migrations run so there is always a
+            # rollback point, and pull a copy to ~/brygge-backups/ on the
+            # deployer's machine (last 10 kept). A failed snapshot aborts the
+            # deploy: running migrations without one is exactly the risk this
+            # guards against. SKIP_BACKUP=1 is the explicit, visible opt-out.
             if [[ "''${SKIP_BACKUP:-0}" != "1" ]]; then
-              echo "deploy: triggering pre-deploy backup on ''${HOSTNAME}…"
-              if ! ssh "root@''${HOSTNAME}" \
-                "systemctl start brygge-pre-deploy-backup.service" 2>/dev/null; then
-                echo "deploy: WARNING — pre-deploy backup skipped (service not found on host)"
+              PREDEPLOY_DIR=/var/lib/brygge/backups/pre-deploy
+
+              abort_backup() {
+                echo "deploy: ERROR — $1"
+                echo "deploy: aborting: migrations must not run without a rollback snapshot."
+                echo "deploy: fix the cause above, or re-run with SKIP_BACKUP=1 to deploy without one."
+                exit 1
+              }
+
+              echo "deploy: taking pre-deploy database snapshot on ''${HOSTNAME}…"
+
+              # Create the dump directory before starting the unit: its
+              # ReadWritePaths entry fails namespace setup (exit 226) when the
+              # path is missing, and a host whose config predates the tmpfiles
+              # rule won't have it yet. Also captures the host clock so the
+              # dump found below is provably from this run.
+              if ! REMOTE_START=$(ssh "root@''${HOSTNAME}" \
+                  "install -d -o brygge -g brygge -m 0750 ''${PREDEPLOY_DIR%/*} ''${PREDEPLOY_DIR} && date +%s" 2>&1); then
+                echo "''${REMOTE_START}"
+                abort_backup "could not prepare the backup directory on ''${HOSTNAME}"
               fi
+
+              if ! out=$(ssh "root@''${HOSTNAME}" \
+                  "systemctl start brygge-pre-deploy-backup.service" 2>&1); then
+                echo "''${out}"
+                echo "deploy: last log lines of brygge-pre-deploy-backup.service:"
+                ssh "root@''${HOSTNAME}" \
+                  "journalctl -u brygge-pre-deploy-backup.service -n 30 --no-pager" 2>&1 || true
+                abort_backup "pre-deploy backup failed on ''${HOSTNAME}"
+              fi
+
+              LATEST=$(ssh "root@''${HOSTNAME}" \
+                "find ''${PREDEPLOY_DIR} -maxdepth 1 -name 'brygge-predeploy-*.dump' -newermt @''${REMOTE_START} -printf '%T@ %p\n' | sort -rn | head -1 | cut -d' ' -f2-")
+              if [[ -z "''${LATEST}" ]]; then
+                abort_backup "backup unit reported success but no new dump appeared in ''${PREDEPLOY_DIR}"
+              fi
+              echo "deploy: snapshot ready on host: ''${LATEST}"
 
               LOCAL_BACKUP_DIR="''${HOME}/brygge-backups"
               mkdir -p "''${LOCAL_BACKUP_DIR}"
-
-              LATEST=$(ssh "root@''${HOSTNAME}" \
-                "ls -t /var/lib/brygge/backups/pre-deploy/brygge-predeploy-*.dump 2>/dev/null | head -1")
-              if [[ -n "''${LATEST}" ]]; then
-                DEST="''${LOCAL_BACKUP_DIR}/$(basename "''${LATEST}")"
-                echo "deploy: pulling ''${LATEST} → ''${DEST}…"
-                ${pkgs.openssh}/bin/scp \
-                  "root@''${HOSTNAME}:''${LATEST}" \
-                  "''${DEST}"
+              DEST="''${LOCAL_BACKUP_DIR}/$(basename "''${LATEST}")"
+              echo "deploy: pulling ''${LATEST} → ''${DEST}…"
+              if ${pkgs.openssh}/bin/scp "root@''${HOSTNAME}:''${LATEST}" "''${DEST}"; then
                 echo "deploy: local backup saved to ''${DEST}"
-
-                # Prune local copies to last 10.
-                mapfile -t LOCAL_ALL < <(ls -t "''${LOCAL_BACKUP_DIR}"/brygge-predeploy-*.dump 2>/dev/null || true)
-                LOCAL_TOTAL="''${#LOCAL_ALL[@]}"
-                if [[ "''${LOCAL_TOTAL}" -gt 10 ]]; then
-                  echo "deploy: pruning local backup dir (keep=10)…"
-                  for (( i=10; i<LOCAL_TOTAL; i++ )); do
-                    rm -f "''${LOCAL_ALL[''${i}]}"
-                    echo "deploy: removed ''${LOCAL_ALL[''${i}]}"
-                  done
-                fi
               else
-                echo "deploy: WARNING — no pre-deploy dump found on host, continuing without local backup"
+                # The host copy is the rollback point; the local copy is extra.
+                echo "deploy: WARNING — could not pull a local copy; the snapshot is still on the host"
               fi
+
+              # Prune local copies to last 10.
+              mapfile -t LOCAL_ALL < <(ls -t "''${LOCAL_BACKUP_DIR}"/brygge-predeploy-*.dump 2>/dev/null || true)
+              LOCAL_TOTAL="''${#LOCAL_ALL[@]}"
+              if [[ "''${LOCAL_TOTAL}" -gt 10 ]]; then
+                echo "deploy: pruning local backup dir (keep=10)…"
+                for (( i=10; i<LOCAL_TOTAL; i++ )); do
+                  rm -f "''${LOCAL_ALL[''${i}]}"
+                  echo "deploy: removed ''${LOCAL_ALL[''${i}]}"
+                done
+              fi
+            else
+              echo "deploy: WARNING — SKIP_BACKUP=1: deploying WITHOUT a pre-deploy snapshot"
             fi
 
             ${deploy-rs.packages.${system}.default}/bin/deploy \

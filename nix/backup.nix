@@ -395,11 +395,18 @@ in
         LockPersonality = true;
         RestrictRealtime = true;
         SystemCallArchitectures = "native";
-        # Pre-deploy dumps land in /var/lib/brygge which is the service's
-        # StateDirectory — ProtectSystem=strict requires ReadWritePaths for
-        # any path the script writes to outside of /tmp.
+        # ProtectSystem=strict makes the whole tree read-only except these
+        # paths. systemd refuses to start the unit (exit 226/NAMESPACE) if a
+        # ReadWritePaths entry does not exist, so the directory is created
+        # ahead of time by the tmpfiles rules below — the script's own
+        # `mkdir -p` runs too late to help.
         ReadWritePaths = [ cfg.preDeployBackup.localDir ];
       };
     };
+
+    systemd.tmpfiles.rules = lib.mkIf cfg.preDeployBackup.enable [
+      "d ${builtins.dirOf cfg.preDeployBackup.localDir} 0750 brygge brygge -"
+      "d ${cfg.preDeployBackup.localDir} 0750 brygge brygge -"
+    ];
   };
 }

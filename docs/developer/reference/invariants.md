@@ -153,6 +153,14 @@ So the amount cap is a **default**, not a hard ceiling — the per-invoice overr
 
 ---
 
+## Deploy
+
+### No migration runs without a pre-deploy snapshot
+
+**Rule:** `nix run .#deploy` (and so `just deploy`) takes a fresh `pg_dump` on the host via `brygge-pre-deploy-backup.service` before deploy-rs activates the new system, which is when migrations run. If the snapshot fails, or no dump newer than this deploy appears, the deploy aborts. `SKIP_BACKUP=1` is the only bypass and is announced. The snapshot directory is created by tmpfiles on the host, and pre-created by the deploy script for hosts whose config predates that rule. The unit's `ProtectSystem=strict` + `ReadWritePaths` fails with exit 226 when the path is missing.
+
+**Failure mode:** a deploy script that swallows the backup error ("skipped (service not found on host)") ran every migration with no rollback point while the operator believed one existed (BRY-304). A system rollback does not undo a migration.
+
 ## Config
 
 ### Env vars are trimmed at the boundary

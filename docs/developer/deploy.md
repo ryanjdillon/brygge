@@ -279,6 +279,31 @@ nix run .#deploy -- <host> --rollback
 
 Or directly on the server: `nixos-rebuild switch --rollback`.
 
+### Pre-deploy snapshot and restoring from it
+
+Rolling the system back does **not** roll back the database, because migrations are applied on activation. Before deploy-rs runs, the deploy script therefore:
+
+1. starts `brygge-pre-deploy-backup.service` on the host, which writes a `pg_dump -Fc` to `/var/lib/brygge/backups/pre-deploy/brygge-predeploy-<UTC timestamp>.dump` and keeps the last 10;
+2. checks that a dump newer than this deploy exists;
+3. pulls a copy to `~/brygge-backups/` on your machine, also keeping the last 10.
+
+If any of steps 1–2 fails, the deploy **aborts** and prints the real error plus the unit's recent journal. To deploy without a snapshot anyway, re-run with `SKIP_BACKUP=1`, which is loudly reported. Don't use that to paper over a broken backup.
+
+To restore after a bad migration, roll the system back first so the old binary isn't fighting the restored schema, then restore the dump taken just before that deploy:
+
+```bash
+nix run .#deploy -- <host> --rollback
+ssh root@<host>
+systemctl stop brygge
+ls -t /var/lib/brygge/backups/pre-deploy/        # newest first; pick the one from the bad deploy
+sudo -u brygge pg_restore --clean --if-exists --no-owner --no-privileges \
+  -d "postgres:///brygge?host=/run/postgresql" \
+  /var/lib/brygge/backups/pre-deploy/brygge-predeploy-<timestamp>.dump
+systemctl start brygge
+```
+
+`--clean --if-exists` drops and recreates the objects in the dump, which brings `schema_migrations` back to the pre-deploy version. Then fix the migration, check it with `just migrate-check-prod`, and deploy again.
+
 ### When only the env file changed
 
 Editing `/etc/brygge/env` doesn't trigger a rebuild; restart affected units:
