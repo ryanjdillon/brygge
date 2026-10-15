@@ -53,6 +53,9 @@ const isEnrolled = computed(() => auth.user?.totpEnabled === true)
 // --- Passkeys ---
 const passkeysAvailable = passkeysSupported()
 const passkeys = ref<PasskeyInfo[]>([])
+// Any existing second factor means (re)enrolling TOTP replaces a factor,
+// which the server only allows after a fresh step-up.
+const hasSecondFactor = computed(() => isEnrolled.value || passkeys.value.length > 0)
 const passkeyBusy = ref(false)
 const passkeyError = ref<string | null>(null)
 const editingId = ref<string | null>(null)
@@ -70,7 +73,7 @@ async function loadPasskeys() {
 // isFreshRequired reports whether an error is the backend's "step up first"
 // signal — enrolling or removing a passkey needs a recent 2FA verification.
 function isFreshRequired(e: unknown): boolean {
-  return e instanceof PasskeyError && e.message === 'totp_fresh_required'
+  return (e instanceof PasskeyError || e instanceof TotpError) && e.message === 'totp_fresh_required'
 }
 
 function reportAddError(e: unknown) {
@@ -162,6 +165,9 @@ onMounted(async () => {
 
 async function beginEnrollment() {
   error.value = null
+  // Click-time step-up for users who already have a factor, so they verify
+  // before scanning a new QR rather than after the request is refused.
+  if (hasSecondFactor.value && !auth.hasFreshTotp && !(await gate.open())) return
   busy.value = true
   try {
     const { secret: s, qr_url } = await totp.setup()
@@ -183,7 +189,15 @@ async function submitConfirm() {
   }
   busy.value = true
   try {
-    const result = await totp.confirm(secret.value, codeInput.value.trim())
+    let result
+    try {
+      result = await totp.confirm(secret.value, codeInput.value.trim())
+    } catch (e) {
+      // The step-up window can lapse while the user scans the QR code;
+      // re-verify and retry once instead of losing the pending setup.
+      if (!isFreshRequired(e) || !(await gate.open())) throw e
+      result = await totp.confirm(secret.value, codeInput.value.trim())
+    }
     recoveryCodes.value = result.recovery_codes
     stage.value = 'confirmed'
     codeInput.value = ''

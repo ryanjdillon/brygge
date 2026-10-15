@@ -789,13 +789,18 @@ func main() {
 
 			// /totp endpoints provision the TOTP factor itself — they
 			// must NOT be gated by RequireAdminTOTP (chicken-and-egg).
-			// Role-gated only. /recover and /verify are how a user
-			// proves possession to open the step-up window in the first
-			// place; /setup and /confirm are the enrollment ceremony.
+			// /recover and /verify are how a user proves possession to
+			// open the step-up window in the first place. /setup and
+			// /confirm are the enrollment ceremony: open for a first
+			// factor, but replacing an existing factor needs a fresh
+			// step-up, or a stolen session could enroll its own secret.
 			r.Route("/totp", func(r chi.Router) {
 				r.Use(middleware.RequireRole("admin", "board", "treasurer"))
-				r.Post("/setup", totpHandler.HandleSetup)
-				r.Post("/confirm", totpHandler.HandleConfirm)
+				r.Group(func(r chi.Router) {
+					r.Use(middleware.RequireFreshTOTPIfEnrolled())
+					r.Post("/setup", totpHandler.HandleSetup)
+					r.Post("/confirm", totpHandler.HandleConfirm)
+				})
 				r.Post("/verify", totpHandler.HandleVerify)
 				r.Post("/recover", totpHandler.HandleRecover)
 

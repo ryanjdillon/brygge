@@ -17,6 +17,7 @@ Tracking issue: **DIL-245**.
 | `RequireRole(…)` | Caller's roles must intersect the list. | `403` (structured `error`) |
 | `RequireAdminTOTP` | TOTP enrolled **and** verified within the 12 h step-up window. Applied once to the whole `/admin` subtree. | `403 totp_required` / `403 totp_not_enrolled`, or `302` for top-level browser navigations |
 | `RequireFreshTOTP(window)` / `RequireFreshTOTPDefault()` | TOTP verified within a short per-action window (default 10 min, `AUTH_FRESH_TOTP_WINDOW`). For high-blast-radius mutations. | `403 totp_fresh_required` (with `window_seconds`), or `302` for browser navigations |
+| `RequireFreshTOTPIfEnrolled()` | Same fresh-window check, but only for users who already have a second factor (TOTP or passkey); users with none pass. Guards TOTP `setup`/`confirm` so an existing factor can't be replaced from a stale session. Fails closed without session info. | `403 totp_fresh_required` (with `window_seconds`), or `302` for browser navigations |
 | `RequireDevToken(svc, scope)` | Developer bearer token (`Authorization: Bearer bry_dev_…`) that is live and carries `scope`. Ignores cookies entirely; injects claims for the token's creator and club with **no roles**, plus the token id. Used only on `/api/v1/dev/query` (BRY-115). | `401 developer bearer token required` / `401 invalid or expired developer token` |
 
 Notes:
@@ -25,7 +26,10 @@ Notes:
   the *additional* `RequireFreshTOTP` gates layered on top.
 - The `/admin/totp/*` enrollment/verification endpoints are deliberately
   **outside** `RequireAdminTOTP` (chicken-and-egg: they are how you open
-  the step-up window). Only `regenerate-codes` adds a fresh-TOTP gate.
+  the step-up window). `regenerate-codes` adds a fresh-TOTP gate.
+  `setup` and `confirm` sit behind `RequireFreshTOTPIfEnrolled`: open for a
+  user's first factor, but a user who already has TOTP or a passkey must
+  step up fresh before replacing it.
 - Reject bodies are SPA-interpretable (`totp_required` →
   redirect/enroll, `totp_fresh_required` → in-context modal). Top-level
   browser navigations get a `302` to `/admin/verify-totp?next=…` instead

@@ -32,7 +32,9 @@ That's it. The next time you click "Admin", you'll be asked for a TOTP code (12-
 
 ### What if I want to re-enroll?
 
-Re-running enrollment overwrites the existing secret and clears any previously-issued recovery codes. Useful if you suspect your authenticator app was compromised, or if you're switching apps. Disabling first isn't necessary.
+Re-running enrollment overwrites the existing secret and clears any previously-issued recovery codes. Useful if you suspect your authenticator app was compromised, or if you're switching apps. Disabling first isn't necessary, but you must **verify first**. Because you already have a second factor, the page asks you to confirm it before showing a new QR code. Use your current authenticator, a passkey, or a recovery code if the authenticator is gone.
+
+This is deliberate. Enrolling stamps your session as verified, so if re-enrollment worked on a plain signed-in session, anyone holding a stolen session cookie could enroll their own authenticator and pass every 2FA prompt. The very first enrollment, when you have no second factor yet, needs no extra step.
 
 ## Recovery (lost authenticator)
 

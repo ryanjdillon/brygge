@@ -163,6 +163,28 @@ func RequireFreshTOTP(window time.Duration) func(http.Handler) http.Handler {
 	}
 }
 
+// RequireFreshTOTPIfEnrolled guards second-factor enrollment. A user who
+// already has a factor (TOTP or passkey) must step up within the fresh
+// window before setting up or replacing TOTP: enrollment stamps the
+// session as stepped-up, so without this a stolen session cookie could
+// enroll an attacker's secret and then satisfy every step-up gate with
+// it. A user with no factor yet passes, since the session is the only
+// proof available at first enrollment. Must run after AuthenticateSession;
+// fails closed when session info is missing.
+func RequireFreshTOTPIfEnrolled() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			info := GetSessionInfo(r.Context())
+			enrolled := info == nil || info.TOTPEnabled || info.HasPasskey
+			if enrolled && !IsFreshTOTP(r.Context(), freshTOTPWindow) {
+				writeTOTPFreshRequired(w, r, freshTOTPWindow)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 // IsFreshTOTP reports whether the current session has TOTP verified
 // within the supplied window. Useful for handlers that need to gate
 // only on certain field changes (where the middleware can't inspect

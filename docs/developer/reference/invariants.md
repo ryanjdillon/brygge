@@ -78,6 +78,12 @@ Each invariant lists the **rule**, then the **failure mode** it prevents. When p
 
 **Failure mode:** user thinks they enrolled, can't verify, is locked out. Or worse: secret leaked from logs while the user never actually scanned it.
 
+### Replacing a second factor requires a fresh step-up
+
+**Rule:** a user who already has a second factor (TOTP or passkey) can only add, replace or remove a factor after a fresh step-up. TOTP `setup`/`confirm` sit behind `RequireFreshTOTPIfEnrolled`; passkey register/delete sit behind `RequireFreshTOTPDefault`. Only a user with **no** factor may enroll on a plain session.
+
+**Failure mode:** enrollment stamps the session as stepped-up. If replacing a factor needed only a session cookie, a stolen cookie could enroll the attacker's own secret and then pass every admin and fresh gate (BRY-298).
+
 ### `totp_verified_at` is the source of truth for step-up freshness
 
 **Rule:** Both `RequireFreshTOTP` and the SPA's countdown logic compute "is this fresh?" from `sessions.totp_verified_at`. Client-side timers are advisory only. The backend always reverifies on every gated request.
