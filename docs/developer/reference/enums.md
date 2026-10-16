@@ -129,10 +129,10 @@ open   closed   locked
 ### `transaction_source` — `journal_entries.source`
 
 ```
-manual   bank_import   payment_sync   invoice_sync   vipps
+manual   bank_import   payment_sync   invoice_sync   vipps   invoice_resplit
 ```
 
-The `source` field tags how a journal entry was created. Filters in cash-flow / reconciliation logic depend on this (e.g. Vipps resync targets `source = 'vipps' AND status = 'draft'`).
+The `source` field tags how a journal entry was created. `invoice_resplit` (migration 000101, BRY-364) marks a revenue reclassification posted against an invoice's `invoice_sync` entry; `source_id` is the invoice id. Filters in cash-flow / reconciliation logic depend on this (e.g. Vipps resync targets `source = 'vipps' AND status = 'draft'`).
 
 ### `mva_eligibility` — `accounts.mva_eligible`, `journal_lines.mva_eligible`
 

@@ -1981,9 +1981,21 @@ func (h *AccountingHandler) HandleUpdateMomskompStatus(w http.ResponseWriter, r 
 	JSON(w, http.StatusOK, map[string]string{"message": "status updated"})
 }
 
-// ── Rebuild invoice bilags ──────────────────────────────────
+// ── Resplit invoice bilags ──────────────────────────────────
 
-func (h *AccountingHandler) HandleRebuildInvoiceBilags(w http.ResponseWriter, r *http.Request) {
+// HandlePreviewResplitInvoiceBilags reports, without posting anything, the
+// revenue reclassifications ResplitInvoiceBilags would post for a period.
+func (h *AccountingHandler) HandlePreviewResplitInvoiceBilags(w http.ResponseWriter, r *http.Request) {
+	h.resplitInvoiceBilags(w, r, false)
+}
+
+// HandleApplyResplitInvoiceBilags posts the reclassifications. The route is
+// behind RequireFreshTOTP because it books entries.
+func (h *AccountingHandler) HandleApplyResplitInvoiceBilags(w http.ResponseWriter, r *http.Request) {
+	h.resplitInvoiceBilags(w, r, true)
+}
+
+func (h *AccountingHandler) resplitInvoiceBilags(w http.ResponseWriter, r *http.Request, apply bool) {
 	claims := middleware.GetClaims(r.Context())
 	if claims == nil {
 		Error(w, http.StatusUnauthorized, "authentication required")
@@ -1999,23 +2011,23 @@ func (h *AccountingHandler) HandleRebuildInvoiceBilags(w http.ResponseWriter, r 
 		return
 	}
 
-	result, deleted, err := h.svc.RebuildInvoiceBilags(r.Context(), claims.ClubID, req.PeriodID, claims.UserID)
+	result, err := h.svc.ResplitInvoiceBilags(r.Context(), claims.ClubID, req.PeriodID, claims.UserID, apply)
 	if err != nil {
 		Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	if h.audit != nil {
+	if apply && h.audit != nil {
 		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,
-			"accounting.invoice_bilags_rebuilt", "fiscal_period", req.PeriodID,
-			map[string]any{"deleted": deleted, "resynced": result.Synced, "skipped": result.Skipped})
+			audit.ActionAccountingInvoicesResplit, "fiscal_period", req.PeriodID,
+			map[string]any{
+				"posted":         result.Posted,
+				"account_totals": result.AccountTotals,
+				"skipped":        len(result.SkippedDetails),
+			})
 	}
 
-	JSON(w, http.StatusOK, map[string]any{
-		"deleted":  deleted,
-		"resynced": result.Synced,
-		"skipped":  result.Skipped,
-	})
+	JSON(w, http.StatusOK, result)
 }
 
 // ── Full bank sync ──────────────────────────────────────────

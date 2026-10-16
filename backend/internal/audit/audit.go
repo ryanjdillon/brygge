@@ -49,16 +49,17 @@ const (
 	ActionDocumentDeleted  = "document.deleted"
 
 	// Finance operations
-	ActionInvoiceCreated           = "invoice.created"
-	ActionInvoicePDFGenerated      = "invoice.pdf_generated"
-	ActionInvoiceEmailed           = "invoice.emailed"
-	ActionInvoiceReminded          = "invoice.reminded"
-	ActionInvoiceVippsLinkSet      = "invoice.vipps_link_set"
-	ActionInvoiceRegenerated       = "invoice.pdf_regenerated"
-	ActionInvoiceDeliveryLogViewed = "invoice.delivery_log_viewed"
-	ActionFinanceCSVExported       = "finance.csv_exported"
-	ActionPaymentCreated           = "payment.created"
-	ActionPaymentViewed            = "finance.payment_viewed"
+	ActionInvoiceCreated            = "invoice.created"
+	ActionInvoicePDFGenerated       = "invoice.pdf_generated"
+	ActionInvoiceEmailed            = "invoice.emailed"
+	ActionInvoiceReminded           = "invoice.reminded"
+	ActionInvoiceVippsLinkSet       = "invoice.vipps_link_set"
+	ActionInvoiceRegenerated        = "invoice.pdf_regenerated"
+	ActionInvoiceDeliveryLogViewed  = "invoice.delivery_log_viewed"
+	ActionFinanceCSVExported        = "finance.csv_exported"
+	ActionAccountingInvoicesResplit = "accounting.invoices_resplit"
+	ActionPaymentCreated            = "payment.created"
+	ActionPaymentViewed             = "finance.payment_viewed"
 
 	// Bank row reconciliation (DIL-392)
 	ActionBankRowAssignedInvoice = "bank_row.assigned_invoice"

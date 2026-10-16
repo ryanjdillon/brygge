@@ -20,6 +20,12 @@ Each invariant lists the **rule**, then the **failure mode** it prevents. When p
 
 **Failure mode:** historical reports start disagreeing with themselves. Auditor finds the GL doesn't tie back to the printed annual report.
 
+### Booked faktura bilags are corrected, never rebuilt
+
+**Rule (BRY-364):** a posted `invoice_sync` entry is never deleted or edited. When its revenue split is wrong, `ResplitInvoiceBilags` posts an `invoice_resplit` entry for the invoice that moves the difference between revenue accounts. The difference is the lines' expected per-account split minus what the sync entry and earlier resplits booked. The run is idempotent, a preview posts nothing, and apply is behind fresh TOTP. An invoice whose booked revenue differs from its total is skipped with a reason for manual correction. The old `RebuildInvoiceBilags` (delete and re-sync) was removed.
+
+**Failure mode:** deleting `invoice_sync` entries also deletes voided originals whose `manual` reversals survive, so reports go negative. It also erases the audit trail that bokføringsloven expects corrections to leave.
+
 ### An auto-match posts or leaves nothing
 
 **Rule (BRY-324):** the KID auto-match in `ImportBankRows` and in the bank sync either creates **and posts** the journal entry and links the row, or it leaves no entry at all. Posting uses the importing user (`bank_imports.imported_by`) as `posted_by`. If posting fails, the draft is deleted (`discardDraft`) and the failure is returned in the import result's `row_errors`, never swallowed. The row stays unmatched for manual Tildel.

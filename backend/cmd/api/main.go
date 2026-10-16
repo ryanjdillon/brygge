@@ -1284,7 +1284,9 @@ func main() {
 						r.Route("/sync", func(r chi.Router) {
 							r.Post("/payments", accountingHandler.HandleSyncPayments)
 							r.Post("/invoices", accountingHandler.HandleSyncInvoices)
-							r.Post("/invoices/rebuild", accountingHandler.HandleRebuildInvoiceBilags)
+							r.Post("/invoices/resplit/preview", accountingHandler.HandlePreviewResplitInvoiceBilags)
+							r.With(middleware.RequireFreshTOTPDefault()).
+								Post("/invoices/resplit", accountingHandler.HandleApplyResplitInvoiceBilags)
 						})
 
 						r.Get("/bank-formats", accountingHandler.HandleListBankFormats)

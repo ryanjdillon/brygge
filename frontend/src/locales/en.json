@@ -1559,12 +1559,13 @@
         "tooltipStatus": "Draft = not finalized, Posted = finalized, Voided = reversed",
         "tooltipSource": "How this entry was created (manual, payment sync, bank import)",
         "tooltipAccounts": "Which accounts are affected",
-        "rebuildInvoiceBilags": "Rebuild invoice bilags",
-        "rebuildInvoiceBilagsTooltip": "Delete existing invoice bilags for the selected period and rebuild them with the updated per-category split.",
-        "rebuildInvoiceBilagsTitle": "Rebuild invoice bilags for {year}?",
-        "rebuildInvoiceBilagsBody": "Deletes every invoice bilag (source = invoice_sync) in fiscal period {year}, then recreates them using the current per-category split. Other entries (KID matches, Vipps reconciliations, payments) are not affected. The operation can only be undone by running it again.",
-        "rebuildInvoiceBilagsConfirm": "Delete and rebuild",
-        "rebuildInvoiceBilagsDone": "Rebuilt: {deleted} deleted, {resynced} created, {skipped} skipped."
+        "resplitInvoiceBilags": "Correct revenue split",
+        "resplitTooltip": "Move booked faktura revenue to the right income accounts per price category. Posts correction entries; existing bilags are not changed.",
+        "resplitTitle": "Correct revenue split for {year}?",
+        "resplitBody": "{count} faktura(s) are booked to the wrong income accounts. One correction bilag per faktura will move the amounts below. Totals and receivables do not change.",
+        "resplitConfirm": "Post corrections",
+        "resplitNothing": "The revenue split is already correct. Nothing to correct.",
+        "resplitDone": "{posted} correction bilag(s) posted."
       },
       "journalForm": {
         "title": "New entry",

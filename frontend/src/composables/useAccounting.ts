@@ -345,17 +345,33 @@ export function useSyncInvoices() {
   })
 }
 
-export interface RebuildInvoiceBilagsResult {
-  deleted: number
-  resynced: number
-  skipped: number
+export interface ResplitMove {
+  account_code: string
+  amount: number
 }
 
-export function useRebuildInvoiceBilags() {
+export interface ResplitResult {
+  invoices: { invoice_number: number; moves: ResplitMove[] }[]
+  account_totals: ResplitMove[]
+  posted: number
+  skipped_details?: SkippedItem[] | null
+}
+
+// Preview is side-effect free; apply books correction entries and is
+// behind fresh TOTP on the server, so call ensureFreshTotp() first.
+export function previewResplitInvoiceBilags(periodId: string) {
+  return apiFetch<ResplitResult>(`${BASE}/sync/invoices/resplit/preview`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ period_id: periodId }),
+  })
+}
+
+export function useApplyResplitInvoiceBilags() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (body: { period_id: string }) =>
-      apiFetch<RebuildInvoiceBilagsResult>(`${BASE}/sync/invoices/rebuild`, {
+      apiFetch<ResplitResult>(`${BASE}/sync/invoices/resplit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),

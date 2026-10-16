@@ -17,6 +17,7 @@ The double-entry GL plus everything that posts to it: bank statement parsing, KI
 | `vippsreconcile.go` | `ReconcileVippsPreview` + `ReconcileVippsConfirm` — the cascade that classifies each Vipps belastning. See cascade below. |
 | `vippsresync.go` | `ResyncVippsBilags` — re-runs the cascade across already-imported drafts that still land on 2900/3900. Called by the "Synk Vipps" button. |
 | `invoicepayment.go` | `Service.linkInvoicePayment` — inserts a `payments` row and back-links `invoices.payment_id`. Used by both bank KID match and Vipps invoice match so the dashboard faktura-status widgets reflect the payment. |
+| `resplit.go` | `ResplitInvoiceBilags` — corrects the per-account revenue split of booked fakturas with `invoice_resplit` reclassification entries (preview + apply). |
 | `sync.go` | `paymentTypeAccountMap`, `SyncPayments`, `SyncInvoices`, `bookedEntryFilter`. The faktura → journal entry sync; results carry `skipped_details` with a reason per skipped row. |
 | `description_parse.go` | `ExtractKIDFromDescription`, `ExtractInvoiceNumberFromDescription`, `ExtractPayerFromDescription`. Vendor-specific (DNB/Sparebank) heuristics for pulling structure out of unstructured bank row descriptions. |
 | `momskomp.go`, `momskomp_pdf.go` | Momskompensasjon (VAT reimbursement for non-profits) report + PDF. |

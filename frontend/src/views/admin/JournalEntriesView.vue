@@ -3,6 +3,7 @@ import { ref, computed, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useConfirm } from '@/stores/confirm'
+import { useFreshTotp } from '@/composables/useFreshTotp'
 import {
   Plus,
   ChevronDown,
@@ -26,11 +27,13 @@ import {
   useReopenPeriod,
   useSyncPayments,
   useSyncInvoices,
-  useRebuildInvoiceBilags,
+  previewResplitInvoiceBilags,
+  useApplyResplitInvoiceBilags,
   fetchJournalAttachmentUrl,
   type JournalEntry,
   type SkippedItem,
   type SyncResult,
+  type ResplitResult,
 } from '@/composables/useAccounting'
 import Select from '@/components/ui/form/Select.vue'
 import NumberInput from '@/components/ui/form/NumberInput.vue'
@@ -96,7 +99,8 @@ const closePeriodMutation = useClosePeriod()
 const reopenPeriodMutation = useReopenPeriod()
 const syncPaymentsMutation = useSyncPayments()
 const syncInvoicesMutation = useSyncInvoices()
-const rebuildInvoicesMutation = useRebuildInvoiceBilags()
+const applyResplitMutation = useApplyResplitInvoiceBilags()
+const { ensureFreshTotp } = useFreshTotp()
 const askConfirm = useConfirm()
 
 const statusLabels = computed<Record<string, string>>(() => ({
@@ -181,37 +185,48 @@ async function handleSync() {
   }
 }
 
-const rebuilding = ref(false)
-async function handleRebuildInvoiceBilags() {
+// Corrects the revenue split of booked fakturas with reclassification
+// entries; the original bilags are never edited or deleted.
+const resplitting = ref(false)
+async function handleResplitInvoiceBilags() {
   if (!selectedPeriodId.value) return
+  if (!(await ensureFreshTotp())) return
   const periodLabel = periods.value?.find((p) => p.id === selectedPeriodId.value)?.year ?? ''
-  const ok = await askConfirm({
-    title: t('admin.accounting.journal.rebuildInvoiceBilagsTitle'),
-    body: t('admin.accounting.journal.rebuildInvoiceBilagsBody', { year: periodLabel }),
-    confirmLabel: t('admin.accounting.journal.rebuildInvoiceBilagsConfirm'),
-    cancelLabel: t('common.cancel'),
-    tone: 'danger',
-  })
-  if (!ok) return
 
-  rebuilding.value = true
+  resplitting.value = true
   syncMessage.value = ''
+  syncSkipped.value = []
   try {
-    const result = await new Promise<{ deleted: number; resynced: number; skipped: number }>((resolve, reject) => {
-      rebuildInvoicesMutation.mutate(
+    const preview = await previewResplitInvoiceBilags(selectedPeriodId.value)
+    syncSkipped.value = preview.skipped_details ?? []
+    if (!preview.invoices.length) {
+      syncMessage.value = t('admin.accounting.journal.resplitNothing')
+      return
+    }
+    const ok = await askConfirm({
+      title: t('admin.accounting.journal.resplitTitle', { year: periodLabel }),
+      body: t('admin.accounting.journal.resplitBody', { count: preview.invoices.length }),
+      details: preview.account_totals.map(
+        (m) => `${m.account_code}: ${m.amount > 0 ? '+' : ''}${m.amount.toLocaleString('nb-NO')} kr`,
+      ),
+      confirmLabel: t('admin.accounting.journal.resplitConfirm'),
+      cancelLabel: t('common.cancel'),
+      tone: 'warning',
+    })
+    if (!ok) return
+
+    const result = await new Promise<ResplitResult>((resolve, reject) => {
+      applyResplitMutation.mutate(
         { period_id: selectedPeriodId.value },
         { onSuccess: resolve, onError: reject },
       )
     })
-    syncMessage.value = t('admin.accounting.journal.rebuildInvoiceBilagsDone', {
-      deleted: result.deleted,
-      resynced: result.resynced,
-      skipped: result.skipped,
-    })
+    syncMessage.value = t('admin.accounting.journal.resplitDone', { posted: result.posted })
+    syncSkipped.value = result.skipped_details ?? []
   } catch (err) {
     syncMessage.value = `${t('common.error')}: ${(err as Error).message}`
   } finally {
-    rebuilding.value = false
+    resplitting.value = false
   }
 }
 
@@ -349,14 +364,14 @@ function formatNOK(amount: number): string {
             {{ syncing ? t('admin.accounting.journal.updating') : t('admin.accounting.journal.updatePeriod') }}
           </button>
           <button
-            class="inline-flex items-center gap-1.5 rounded-md border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
-            :disabled="rebuilding || !selectedPeriodId"
-            :title="t('admin.accounting.journal.rebuildInvoiceBilagsTooltip')"
-            data-testid="rebuild-invoice-bilags"
-            @click="handleRebuildInvoiceBilags"
+            class="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            :disabled="resplitting || !selectedPeriodId"
+            :title="t('admin.accounting.journal.resplitTooltip')"
+            data-testid="resplit-invoice-bilags"
+            @click="handleResplitInvoiceBilags"
           >
-            <RefreshCw class="h-4 w-4" :class="{ 'animate-spin': rebuilding }" />
-            {{ rebuilding ? t('admin.accounting.journal.updating') : t('admin.accounting.journal.rebuildInvoiceBilags') }}
+            <RefreshCw class="h-4 w-4" :class="{ 'animate-spin': resplitting }" />
+            {{ resplitting ? t('admin.accounting.journal.updating') : t('admin.accounting.journal.resplitInvoiceBilags') }}
           </button>
         </div>
       </div>

@@ -1455,12 +1455,13 @@
         "tooltipStatus": "Kladd = ikkje ferdigstilt, Postert = ferdigstilt, Annullert = reversert",
         "tooltipSource": "Korleis bilaget vart oppretta (manuelt, synkronisert, bankimport)",
         "tooltipAccounts": "Kva kontoar som er påverka",
-        "rebuildInvoiceBilags": "Gjenoppbygg fakturabilag",
-        "rebuildInvoiceBilagsTooltip": "Slett eksisterande fakturabilag for vald periode og opprett dei på nytt med oppdatert kontosplitt per varekategori.",
-        "rebuildInvoiceBilagsTitle": "Gjenoppbygg fakturabilag for {year}?",
-        "rebuildInvoiceBilagsBody": "Slettar alle eksisterande fakturabilag (source = invoice_sync) for rekneskapsperioden {year}, og opprettar dei på nytt med oppdatert kontosplitt per varekategori. Andre bilag (KID-treff, Vipps-avstemming, betalingar) blir ikkje påverka. Operasjonen kan ikkje angrast utan å køyre han på nytt.",
-        "rebuildInvoiceBilagsConfirm": "Slett og gjenoppbygg",
-        "rebuildInvoiceBilagsDone": "Gjenoppbygd: {deleted} sletta, {resynced} oppretta, {skipped} hoppa over."
+        "resplitInvoiceBilags": "Korriger inntektsfordeling",
+        "resplitTooltip": "Flytt bokførte fakturainntekter til rette inntektskontoar per priskategori. Bokfører korreksjonsbilag; eksisterande bilag blir ikkje endra.",
+        "resplitTitle": "Korriger inntektsfordeling for {year}?",
+        "resplitBody": "{count} faktura(er) er bokførte på feil inntektskontoar. Eitt korreksjonsbilag per faktura flyttar beløpa under. Totalar og kundefordringar blir ikkje endra.",
+        "resplitConfirm": "Bokfør korreksjonar",
+        "resplitNothing": "Inntektsfordelinga er allereie rett. Ingenting å korrigere.",
+        "resplitDone": "{posted} korreksjonsbilag bokførte."
       },
       "journalForm": {
         "title": "Nytt bilag",
