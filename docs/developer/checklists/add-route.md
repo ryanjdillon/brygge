@@ -49,7 +49,7 @@ If the route writes data, add an `audit.Action*` constant in `backend/internal/a
 
 ## 4. Tests
 
-Add at least one test in `backend/internal/handlers/<resource>_test.go`. For integration tests, use `testutil.SkipIfNoDB(t)` + `testutil.SetupTestDB(t)` + `testutil.SeedClub(t, db)`.
+Add at least one test in `backend/internal/handlers/<resource>_test.go`. For integration tests, use `testutil.SkipIfNoDB(t)` + `testutil.SetupTestDB(t)` + `testutil.SeedClub(t, db)`. For finance routes, prefer the `internal/testutil/fin` builders.
 
 If the handler depends on the audit service, pass `audit.NewService(db, zerolog.Nop())`.
 

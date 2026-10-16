@@ -8,6 +8,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/brygge-klubb/brygge/internal/testutil"
+	"github.com/brygge-klubb/brygge/internal/testutil/fin"
 )
 
 // An import-time KID match must leave exactly one posted entry linked to the
@@ -19,31 +20,16 @@ func TestImportBankRowsKIDMatchPostsAndLinks(t *testing.T) {
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
 
-	clubID := testutil.SeedClub(t, pool)
-	userID, _ := testutil.SeedUser(t, pool, clubID, []string{"treasurer"})
 	svc := NewService(pool, nil, zerolog.Nop())
-	if _, err := svc.SeedKontoplan(ctx, clubID); err != nil {
-		t.Fatalf("seed kontoplan: %v", err)
-	}
+	club := fin.NewClub(t, pool, fin.WithKontoplan(svc.SeedKontoplan))
+	clubID := club.ID
 
 	const kid = "000000777013"
-	var invoiceID string
-	if err := pool.QueryRow(ctx,
-		`INSERT INTO invoices (club_id, user_id, invoice_number, issue_date, due_date, total_amount, status, kid_number, sent_at)
-		 VALUES ($1, $2, 7701, '2026-05-01', '2026-05-15', 450, 'open', $3, now()) RETURNING id`,
-		clubID, userID, kid,
-	).Scan(&invoiceID); err != nil {
-		t.Fatalf("invoice: %v", err)
-	}
-
-	var importID string
-	if err := pool.QueryRow(ctx,
-		`INSERT INTO bank_imports (club_id, filename, format, imported_by, row_count)
-		 VALUES ($1, 'synthetic.csv', 'sparebank-norge-v1', $2, 0) RETURNING id`,
-		clubID, userID,
-	).Scan(&importID); err != nil {
-		t.Fatalf("bank import: %v", err)
-	}
+	invoiceID := club.NewInvoice(t, fin.InvoiceOpts{
+		Number: 7701, KID: kid, Cents: 45000,
+		Lines: []fin.Line{{Category: "membership", Cents: 45000}},
+	}).ID
+	importID := club.NewBankImport(t)
 
 	rows := []BankRow{{
 		Date:        time.Date(2026, 6, 14, 0, 0, 0, 0, time.UTC),

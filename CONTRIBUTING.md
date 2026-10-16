@@ -183,6 +183,8 @@ just test-go
 
 Go tests use `testcontainers-go` to spin up real PostgreSQL and Redis instances. No mocking of database calls. Tests run against the actual schema after applying all migrations.
 
+For finance tests (invoices, orders, bank and Vipps rows, GL), build fixtures with `internal/testutil/fin`: `fin.NewClub(t, pool, fin.WithKontoplan(svc.SeedKontoplan))` gives a club with an open fiscal period, a treasurer and a 1920 bank account. `club.NewInvoice`, `NewOrderForInvoice`, `NewBankRow` and `NewVippsRow` take amounts in integer øre. Use synthetic data only, never real members or account numbers.
+
 ### Vue component tests
 
 ```bash

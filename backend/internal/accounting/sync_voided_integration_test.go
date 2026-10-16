@@ -2,6 +2,7 @@ package accounting
 
 import (
 	"context"
+	"math"
 	"strings"
 	"testing"
 
@@ -9,80 +10,42 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/brygge-klubb/brygge/internal/testutil"
+	"github.com/brygge-klubb/brygge/internal/testutil/fin"
 )
 
 type syncFixture struct {
+	club     *fin.Club
 	pool     *pgxpool.Pool
 	svc      *Service
 	clubID   string
 	userID   string
 	periodID string
-	slipItem string
 }
 
 func newSyncFixture(t *testing.T) *syncFixture {
 	t.Helper()
 	testutil.SkipIfNoDB(t)
 	pool := testutil.SetupTestDB(t)
-	ctx := context.Background()
-	f := &syncFixture{pool: pool, svc: NewService(pool, nil, zerolog.Nop())}
-	f.clubID = testutil.SeedClub(t, pool)
-	f.userID, _ = testutil.SeedUser(t, pool, f.clubID, []string{"treasurer"})
-	if _, err := f.svc.SeedKontoplan(ctx, f.clubID); err != nil {
-		t.Fatalf("seed kontoplan: %v", err)
+	svc := NewService(pool, nil, zerolog.Nop())
+	club := fin.NewClub(t, pool, fin.WithKontoplan(svc.SeedKontoplan))
+	return &syncFixture{
+		club: club, pool: pool, svc: svc,
+		clubID: club.ID, userID: club.Treasurer.ID, periodID: club.PeriodID,
 	}
-	if err := pool.QueryRow(ctx,
-		`INSERT INTO fiscal_periods (club_id, year, start_date, end_date, status)
-		 VALUES ($1, 2026, '2026-01-01', '2026-12-31', 'open') RETURNING id`,
-		f.clubID,
-	).Scan(&f.periodID); err != nil {
-		t.Fatalf("fiscal period: %v", err)
-	}
-	if err := pool.QueryRow(ctx,
-		`INSERT INTO price_items (club_id, category, name, amount, unit, is_active)
-		 VALUES ($1, 'slip_fee', 'Plassleie syntetisk', 2500, 'season', true) RETURNING id`,
-		f.clubID,
-	).Scan(&f.slipItem); err != nil {
-		t.Fatalf("slip item: %v", err)
-	}
-	return f
 }
 
 // invoice inserts a one-line invoice. accountCode, when set, ties the line
 // to that account instead of the slip price item (a custom line).
 func (f *syncFixture) invoice(t *testing.T, number int, total float64, status string, sent bool, accountCode string) string {
 	t.Helper()
-	ctx := context.Background()
-	var id string
-	sentAt := "NULL"
-	if sent {
-		sentAt = "now()"
-	}
-	if err := f.pool.QueryRow(ctx,
-		`INSERT INTO invoices (club_id, user_id, invoice_number, issue_date, due_date, total_amount, status, kid_number, sent_at)
-		 VALUES ($1, $2, $3, '2026-03-01', '2026-03-15', $4, $5, $6, `+sentAt+`) RETURNING id`,
-		f.clubID, f.userID, number, total, status, "77"+testutil.RandomHex(4),
-	).Scan(&id); err != nil {
-		t.Fatalf("invoice %d: %v", number, err)
-	}
-	if accountCode != "" {
-		if _, err := f.pool.Exec(ctx,
-			`INSERT INTO invoice_lines (invoice_id, description, quantity, unit_price, line_total, account_id)
-			 VALUES ($1, 'Custom line', 1, $2, $2, (SELECT id FROM accounts WHERE club_id = $3 AND code = $4))`,
-			id, total, f.clubID, accountCode,
-		); err != nil {
-			t.Fatalf("custom line: %v", err)
-		}
-		return id
-	}
-	if _, err := f.pool.Exec(ctx,
-		`INSERT INTO invoice_lines (invoice_id, description, quantity, unit_price, line_total, price_item_id)
-		 VALUES ($1, 'Plassleie', 1, $2, $2, $3)`,
-		id, total, f.slipItem,
-	); err != nil {
-		t.Fatalf("slip line: %v", err)
-	}
-	return id
+	cents := int64(math.Round(total * 100))
+	return f.club.NewInvoice(t, fin.InvoiceOpts{
+		Number: number,
+		Status: status,
+		Unsent: !sent,
+		Member: &fin.Member{ID: f.userID},
+		Lines:  []fin.Line{{Category: "slip_fee", AccountCode: accountCode, Cents: cents}},
+	}).ID
 }
 
 func (f *syncFixture) sync(t *testing.T) *SyncResult {
