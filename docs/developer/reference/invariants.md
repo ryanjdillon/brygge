@@ -254,6 +254,12 @@ So the amount cap is a **default**, not a hard ceiling — the per-invoice overr
 
 **Failure mode:** a deploy script that swallows the backup error ("skipped (service not found on host)") ran every migration with no rollback point while the operator believed one existed (BRY-304). A system rollback does not undo a migration.
 
+### Backups are dumped with the server's own Postgres major version
+
+**Rule:** `nix/backup.nix` takes `pg_dump` from `config.services.postgresql.package`, never an unpinned `pkgs.postgresql`. A dump has to be restorable with the server's own `pg_restore`.
+
+**Failure mode:** the backup scripts used `pkgs.postgresql`, which follows nixpkgs (17 by October 2026) while the server ran 16. Every nightly and pre-deploy dump was written in archive format 1.16, which the server's `pg_restore` 16 rejects ("unsupported version (1.16) in file header"). A disaster restore on the host would have failed. Found by `migrate-check-prod` on 2026-10-16.
+
 ## Config
 
 ### Env vars are trimmed at the boundary

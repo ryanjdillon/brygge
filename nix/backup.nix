@@ -9,11 +9,17 @@ let
   cfg = config.services.brygge.backup;
   parentCfg = config.services.brygge;
 
+  # pg_dump must come from the same major version as the server. An
+  # unpinned pkgs.postgresql tracks nixpkgs (newer than the server), and its
+  # archives can't be read by the server's own pg_restore, so a restore on
+  # the host would fail.
+  pgPackage = config.services.postgresql.package;
+
   # Shared pg_dump + mc upload logic used by both GFS and pre-deploy scripts.
   # Arguments: $1 = destination prefix path (e.g. "bryggebackup/bucket/daily")
   #            $2 = dump file path
   commonInputs = [
-    pkgs.postgresql
+    pgPackage
     pkgs.minio-client
     pkgs.coreutils
     pkgs.gawk
@@ -125,7 +131,7 @@ let
   preDeployScript = pkgs.writeShellApplication {
     name = "brygge-pre-deploy-backup";
 
-    runtimeInputs = [ pkgs.postgresql pkgs.coreutils ];
+    runtimeInputs = [ pgPackage pkgs.coreutils ];
 
     text = ''
       set -euo pipefail

@@ -345,7 +345,7 @@ Every table has `created_at` / `updated_at` `TIMESTAMPTZ` columns and a
 
 `just migrate-check` applies every migration to an empty DB. `just
 migrate-check-prod` is the thorough variant: it restores the **latest
-daily snapshot** (from the automated S3 backup — `<bucket>/daily/`, GFS
+daily snapshot** (from the automated S3 backup — `<bucket>/<s3Prefix>/daily/`, GFS
 retention daily×7 / weekly×4 / monthly×12) into a throwaway
 `brygge_migrate_check_prod` DB, applies the *pending* migrations against
 that real data, then drops it. Use it before any migration that changes a
@@ -357,7 +357,7 @@ just migrate-check-prod              # newest snapshot from S3
 just migrate-check-prod ./some.dump  # a local dump (offline)
 ```
 
-Needs `BACKUP_S3_*` env (same vars as the backup job). The snapshot
+Needs `BACKUP_S3_*` env (same vars as the backup job) in the repo-root `.env`, plus `BACKUP_S3_PREFIX` set to the host's `services.brygge.backup.s3Prefix` (`brygge/backups` on the reference host). A snapshot written by a newer `pg_dump` than the local container is converted through `nixpkgs#postgresql_17` before loading. The snapshot
 carries member PII — it is fetched to a tmpdir and `shred`-ded on exit,
 never persisted in clear.
 

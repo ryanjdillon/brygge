@@ -19,6 +19,8 @@
 #
 # Env (same vars as the DIL-328 backup job; loaded from .env via just):
 #   BACKUP_S3_ENDPOINT, BACKUP_S3_BUCKET, BACKUP_S3_ACCESS_KEY, BACKUP_S3_SECRET_KEY
+#   BACKUP_S3_PREFIX (optional) — key prefix the backup job writes under; must match
+#   services.brygge.backup.s3Prefix on the host (dumps live at <prefix>/daily/).
 set -euo pipefail
 
 COMPOSE=(docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml)
@@ -27,10 +29,13 @@ LOCAL_DUMP="${1:-}"
 
 workdir="$(mktemp -d)"
 cleanup() {
-    # shred the snapshot copy so prod PII never lingers on disk
-    if [[ -f "$workdir/snap.dump" ]]; then
-        shred -u "$workdir/snap.dump" 2>/dev/null || rm -f "$workdir/snap.dump"
-    fi
+    # shred the snapshot copies so prod PII never lingers on disk
+    local f
+    for f in "$workdir/snap.dump" "$workdir/snap.sql"; do
+        if [[ -f "$f" ]]; then
+            shred -u "$f" 2>/dev/null || rm -f "$f"
+        fi
+    done
     rm -rf "$workdir"
     "${COMPOSE[@]}" exec -T db psql -U brygge -d postgres -v ON_ERROR_STOP=1 \
         -c "DROP DATABASE IF EXISTS ${CHECK_DB};" >/dev/null 2>&1 || true
@@ -50,11 +55,20 @@ else
     export MC_CONFIG_DIR="$workdir/mc"
     mc alias set bryggesnap "$BACKUP_S3_ENDPOINT" "$BACKUP_S3_ACCESS_KEY" "$BACKUP_S3_SECRET_KEY" >/dev/null
 
-    echo "▶ Finding newest daily snapshot in ${BACKUP_S3_BUCKET}/daily/ ..."
-    latest="$(mc ls "bryggesnap/${BACKUP_S3_BUCKET}/daily/" | awk '{print $NF}' | grep '\.dump$' | sort | tail -n1)"
-    [[ -n "$latest" ]] || { echo "✗ No snapshot found under ${BACKUP_S3_BUCKET}/daily/" >&2; exit 1; }
+    prefix="${BACKUP_S3_PREFIX:-}"
+    prefix="${prefix#/}"; prefix="${prefix%/}"
+    daily="${BACKUP_S3_BUCKET}/${prefix:+${prefix}/}daily"
+    echo "▶ Finding newest daily snapshot in ${daily}/ ..."
+    # List separately so a missing path or bad credentials is reported
+    # instead of pipefail ending the script with no message.
+    if ! listing="$(mc ls "bryggesnap/${daily}/")"; then
+        echo "✗ Could not list ${daily}/ — check BACKUP_S3_* and BACKUP_S3_PREFIX" >&2
+        exit 1
+    fi
+    latest="$(awk '{print $NF}' <<<"$listing" | { grep '\.dump$' || true; } | sort | tail -n1)"
+    [[ -n "$latest" ]] || { echo "✗ No *.dump snapshot found under ${daily}/ (is BACKUP_S3_PREFIX set to the host's s3Prefix?)" >&2; exit 1; }
     echo "▶ Fetching $latest ..."
-    mc cp --quiet "bryggesnap/${BACKUP_S3_BUCKET}/daily/${latest}" "$workdir/snap.dump"
+    mc cp --quiet "bryggesnap/${daily}/${latest}" "$workdir/snap.dump"
 fi
 
 # ── 2. Fresh restore target ──────────────────────────────────
@@ -67,8 +81,21 @@ echo "▶ Re-creating ${CHECK_DB} ..."
 # ── 3. Restore the snapshot (custom format) ──────────────────
 echo "▶ Restoring snapshot into ${CHECK_DB} ..."
 "${COMPOSE[@]}" cp "$workdir/snap.dump" db:/tmp/snap.dump
-"${COMPOSE[@]}" exec -T db pg_restore -U brygge -d "${CHECK_DB}" \
-    --no-owner --no-privileges --clean --if-exists /tmp/snap.dump
+if "${COMPOSE[@]}" exec -T db pg_restore --list /tmp/snap.dump >/dev/null 2>&1; then
+    "${COMPOSE[@]}" exec -T db pg_restore -U brygge -d "${CHECK_DB}" \
+        --no-owner --no-privileges --clean --if-exists /tmp/snap.dump
+else
+    # Snapshots written by a newer pg_dump than the local container (e.g.
+    # before the backup job was pinned to the server's major version) are
+    # converted to SQL with the newest pg_restore, then loaded into the
+    # container. Settings the older server doesn't know are dropped.
+    echo "  (archive is newer than the container's pg_restore; converting via nixpkgs#postgresql_17)"
+    nix shell nixpkgs#postgresql_17 --command pg_restore --no-owner --no-privileges \
+        -f "$workdir/snap.sql" "$workdir/snap.dump"
+    sed -i '/^SET transaction_timeout/d' "$workdir/snap.sql"
+    "${COMPOSE[@]}" exec -T db psql -q -U brygge -d "${CHECK_DB}" -v ON_ERROR_STOP=1 \
+        < "$workdir/snap.sql" >/dev/null
+fi
 "${COMPOSE[@]}" exec -T db rm -f /tmp/snap.dump
 
 restored_version="$("${COMPOSE[@]}" exec -T db psql -U brygge -d "${CHECK_DB}" -tAc \
