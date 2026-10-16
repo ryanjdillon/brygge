@@ -304,7 +304,7 @@ func main() {
 	devQueryHandler := handlers.NewDevQueryHandler(devQueryDB, auditService, log)
 	devTokenService := devtoken.NewService(db)
 	devTokenHandler := handlers.NewDevTokenHandler(devTokenService, auditService, cfg.DevQueryTokensEnabled, log)
-	priceItemsHandler := handlers.NewPriceItemsHandler(db, &cfg, log)
+	priceItemsHandler := handlers.NewPriceItemsHandler(db, &cfg, auditService, log)
 	faqsHandler := handlers.NewFaqsHandler(db, &cfg, log)
 	productsHandler := handlers.NewProductsHandler(db, &cfg, log)
 	vippsWebhookHandler := handlers.NewVippsWebhookHandler(db, &cfg, vippsClient, log)

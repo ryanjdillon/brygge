@@ -2,14 +2,19 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 
+	"github.com/brygge-klubb/brygge/internal/audit"
+	"github.com/brygge-klubb/brygge/internal/auth"
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/middleware"
 )
@@ -17,15 +22,44 @@ import (
 type PriceItemsHandler struct {
 	db     *pgxpool.Pool
 	config *config.Config
+	audit  *audit.Service
 	log    zerolog.Logger
 }
 
-func NewPriceItemsHandler(db *pgxpool.Pool, cfg *config.Config, log zerolog.Logger) *PriceItemsHandler {
+func NewPriceItemsHandler(db *pgxpool.Pool, cfg *config.Config, auditSvc *audit.Service, log zerolog.Logger) *PriceItemsHandler {
 	return &PriceItemsHandler{
 		db:     db,
 		config: cfg,
+		audit:  auditSvc,
 		log:    log.With().Str("handler", "price_items").Logger(),
 	}
+}
+
+// priceItemInUseCode is the error code the SPA keys on to offer
+// archiving instead of deleting.
+const priceItemInUseCode = "price_item_in_use"
+
+// priceItemReferences counts the rows that point at a price item. Some
+// of these FKs are ON DELETE SET NULL, so a delete would succeed but
+// silently strip the category (and with it the revenue-account mapping)
+// from historical invoices and orders; any reference therefore blocks
+// a hard delete.
+type priceItemReferences struct {
+	InvoiceLines int `json:"invoice_lines"`
+	Invoices     int `json:"invoices"`
+	OrderLines   int `json:"order_lines"`
+	QRTargets    int `json:"qr_targets"`
+}
+
+func (r priceItemReferences) total() int {
+	return r.InvoiceLines + r.Invoices + r.OrderLines + r.QRTargets
+}
+
+func (h *PriceItemsHandler) logAudit(r *http.Request, claims *auth.Claims, action, itemID string, details map[string]any) {
+	if h.audit == nil {
+		return
+	}
+	h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr, action, "price_item", itemID, details)
 }
 
 type priceItem struct {
@@ -270,6 +304,12 @@ func (h *PriceItemsHandler) HandleCreate(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	h.logAudit(r, claims, audit.ActionPricingCreated, item.ID, map[string]any{
+		"name":     item.Name,
+		"category": item.Category,
+		"amount":   item.Amount,
+		"audience": item.Audience,
+	})
 	JSON(w, http.StatusCreated, item)
 }
 
@@ -323,9 +363,16 @@ func (h *PriceItemsHandler) HandleUpdate(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// prev is read from the statement's snapshot, i.e. before the update,
+	// so the audit row can record what changed.
 	var item priceItem
+	var prevAmount float64
+	var prevActive bool
 	err := h.db.QueryRow(ctx,
-		`UPDATE price_items
+		`WITH prev AS (
+		     SELECT amount, is_active FROM price_items WHERE id = $1 AND club_id = $2
+		 )
+		 UPDATE price_items
 		 SET category = $3, name = $4, description = $5, amount = $6, currency = $7, unit = $8,
 		     installments_allowed = $9, max_installments = $10, metadata = $11,
 		     sort_order = $12, is_active = $13,
@@ -334,7 +381,8 @@ func (h *PriceItemsHandler) HandleUpdate(w http.ResponseWriter, r *http.Request)
 		     audience = $19,
 		     updated_at = now()
 		 WHERE id = $1 AND club_id = $2
-		 RETURNING `+priceItemColumns,
+		 RETURNING `+priceItemColumns+`,
+		     (SELECT amount FROM prev), (SELECT is_active FROM prev)`,
 		itemID, claims.ClubID,
 		req.Category, req.Name, req.Description, req.Amount, req.Currency, req.Unit,
 		req.InstallmentsAllowed, req.MaxInstallments, req.Metadata,
@@ -346,7 +394,8 @@ func (h *PriceItemsHandler) HandleUpdate(w http.ResponseWriter, r *http.Request)
 		&item.SortOrder, &item.IsActive,
 		&item.PricingKind, &item.TierDimension, &item.ShowInBatch, &item.ShowInSingle, &item.RequiresBoatSelection,
 		&item.Audience,
-		&item.CreatedAt, &item.UpdatedAt)
+		&item.CreatedAt, &item.UpdatedAt,
+		&prevAmount, &prevActive)
 	if err == pgx.ErrNoRows {
 		Error(w, http.StatusNotFound, "price item not found")
 		return
@@ -357,6 +406,17 @@ func (h *PriceItemsHandler) HandleUpdate(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	action := audit.ActionPricingUpdated
+	if prevActive && !item.IsActive {
+		action = audit.ActionPricingArchived
+	}
+	h.logAudit(r, claims, action, item.ID, map[string]any{
+		"name":            item.Name,
+		"category":        item.Category,
+		"amount_before":   prevAmount,
+		"amount_after":    item.Amount,
+		"is_active_after": item.IsActive,
+	})
 	JSON(w, http.StatusOK, item)
 }
 
@@ -374,21 +434,78 @@ func (h *PriceItemsHandler) HandleDelete(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	tag, err := h.db.Exec(ctx,
+	tx, err := h.db.Begin(ctx)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to begin price item delete")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var name string
+	err = tx.QueryRow(ctx,
+		`SELECT name FROM price_items WHERE id = $1 AND club_id = $2 FOR UPDATE`,
+		itemID, claims.ClubID,
+	).Scan(&name)
+	if errors.Is(err, pgx.ErrNoRows) {
+		Error(w, http.StatusNotFound, "price item not found")
+		return
+	}
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to load price item for delete")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	var refs priceItemReferences
+	if err := tx.QueryRow(ctx,
+		`SELECT (SELECT count(*) FROM invoice_lines WHERE price_item_id = $1),
+		        (SELECT count(*) FROM invoices WHERE price_item_id = $1),
+		        (SELECT count(*) FROM order_lines WHERE price_item_id = $1),
+		        (SELECT count(*) FROM harbor_payment_targets WHERE price_item_id = $1)`,
+		itemID,
+	).Scan(&refs.InvoiceLines, &refs.Invoices, &refs.OrderLines, &refs.QRTargets); err != nil {
+		h.log.Error().Err(err).Msg("failed to count price item references")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if refs.total() > 0 {
+		writePriceItemInUse(w, refs)
+		return
+	}
+
+	if _, err := tx.Exec(ctx,
 		`DELETE FROM price_items WHERE id = $1 AND club_id = $2`,
 		itemID, claims.ClubID,
-	)
-	if err != nil {
+	); err != nil {
+		// A reference created after the count still trips the FK.
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23503" {
+			writePriceItemInUse(w, refs)
+			return
+		}
 		h.log.Error().Err(err).Msg("failed to delete price item")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	if tag.RowsAffected() == 0 {
-		Error(w, http.StatusNotFound, "price item not found")
+	if err := tx.Commit(ctx); err != nil {
+		h.log.Error().Err(err).Msg("failed to commit price item delete")
+		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
+	h.logAudit(r, claims, audit.ActionPricingDeleted, itemID, map[string]any{"name": name})
 	JSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+func writePriceItemInUse(w http.ResponseWriter, refs priceItemReferences) {
+	JSON(w, http.StatusConflict, map[string]any{
+		"error": fmt.Sprintf(
+			"price item is in use (%d invoice lines, %d invoices, %d order lines, %d QR targets); archive it instead",
+			refs.InvoiceLines, refs.Invoices, refs.OrderLines, refs.QRTargets),
+		"code":       priceItemInUseCode,
+		"references": refs,
+	})
 }
 
 func scanPriceItems(rows pgx.Rows) ([]priceItem, error) {

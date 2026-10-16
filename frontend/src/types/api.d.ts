@@ -480,7 +480,10 @@ export interface paths {
         /** Update pricing item */
         put: operations["admin-update-pricing"];
         post?: never;
-        /** Delete pricing item */
+        /**
+         * Delete pricing item
+         * @description Hard-deletes an unreferenced item. Returns 409 with code `price_item_in_use` when any invoice, invoice line, order line or QR target references it; archive it (is_active=false) instead.
+         */
         delete: operations["admin-delete-pricing"];
         options?: never;
         head?: never;

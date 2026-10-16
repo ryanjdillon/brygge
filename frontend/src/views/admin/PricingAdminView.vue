@@ -3,6 +3,8 @@ import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useApiClient, unwrap } from '@/lib/apiClient'
+import { ApiError } from '@/lib/errors'
+import { useConfirm } from '@/stores/confirm'
 import { Plus, Pencil, Trash2, X } from 'lucide-vue-next'
 import type { PriceItem } from '@/composables/usePricing'
 import Input from '@/components/ui/form/Input.vue'
@@ -14,6 +16,7 @@ import RadioGroup from '@/components/ui/form/RadioGroup.vue'
 const { t } = useI18n()
 const client = useApiClient()
 const queryClient = useQueryClient()
+const askConfirm = useConfirm()
 
 function meta(item: PriceItem): Record<string, string> {
   return (item.metadata ?? {}) as Record<string, string>
@@ -142,6 +145,11 @@ function openCreate() {
 }
 
 function openEdit(item: PriceItem) {
+  form.value = formFromItem(item)
+  showForm.value = true
+}
+
+function formFromItem(item: PriceItem): FormData {
   const meta = (item.metadata ?? {}) as Record<string, string>
   const it = item as PriceItem & {
     pricing_kind?: 'flat' | 'tiered'
@@ -156,7 +164,7 @@ function openEdit(item: PriceItem) {
   const tierMaxRaw = dim === 'length' ? meta.length_max : meta.beam_max
   const tierMin = tierMinRaw != null && tierMinRaw !== '' ? parseFloat(tierMinRaw) : null
   const tierMax = tierMaxRaw != null && tierMaxRaw !== '' ? parseFloat(tierMaxRaw) : null
-  form.value = {
+  return {
     id: item.id,
     category: item.category,
     name: item.name,
@@ -179,38 +187,37 @@ function openEdit(item: PriceItem) {
     requires_boat_selection: it.requires_boat_selection ?? false,
     audience: it.audience ?? 'all',
   }
-  showForm.value = true
 }
 
-function buildPayload() {
+function buildPayload(f: FormData) {
   const metadata: Record<string, string | number> = {}
-  if (form.value.season) metadata.season = form.value.season
-  if (form.value.period_start) metadata.period_start = form.value.period_start
-  if (form.value.period_end) metadata.period_end = form.value.period_end
-  if (form.value.pricing_kind === 'tiered') {
-    const minKey = form.value.tier_dimension === 'length' ? 'length_min' : 'beam_min'
-    const maxKey = form.value.tier_dimension === 'length' ? 'length_max' : 'beam_max'
-    if (form.value.tier_min != null) metadata[minKey] = form.value.tier_min
-    if (form.value.tier_max != null) metadata[maxKey] = form.value.tier_max
+  if (f.season) metadata.season = f.season
+  if (f.period_start) metadata.period_start = f.period_start
+  if (f.period_end) metadata.period_end = f.period_end
+  if (f.pricing_kind === 'tiered') {
+    const minKey = f.tier_dimension === 'length' ? 'length_min' : 'beam_min'
+    const maxKey = f.tier_dimension === 'length' ? 'length_max' : 'beam_max'
+    if (f.tier_min != null) metadata[minKey] = f.tier_min
+    if (f.tier_max != null) metadata[maxKey] = f.tier_max
   }
 
   return {
-    category: form.value.category,
-    name: form.value.name,
-    description: form.value.description,
-    amount: form.value.amount ?? 0,
-    unit: form.value.unit,
-    installments_allowed: form.value.installments_allowed,
-    max_installments: form.value.max_installments ?? 1,
-    sort_order: form.value.sort_order ?? 0,
-    is_active: form.value.is_active,
+    category: f.category,
+    name: f.name,
+    description: f.description,
+    amount: f.amount ?? 0,
+    unit: f.unit,
+    installments_allowed: f.installments_allowed,
+    max_installments: f.max_installments ?? 1,
+    sort_order: f.sort_order ?? 0,
+    is_active: f.is_active,
     metadata,
-    pricing_kind: form.value.pricing_kind,
-    tier_dimension: form.value.pricing_kind === 'tiered' ? form.value.tier_dimension : null,
-    show_in_batch: form.value.show_in_batch,
-    show_in_single: form.value.show_in_single,
-    requires_boat_selection: form.value.requires_boat_selection,
-    audience: form.value.audience,
+    pricing_kind: f.pricing_kind,
+    tier_dimension: f.pricing_kind === 'tiered' ? f.tier_dimension : null,
+    show_in_batch: f.show_in_batch,
+    show_in_single: f.show_in_single,
+    requires_boat_selection: f.requires_boat_selection,
+    audience: f.audience,
   }
 }
 
@@ -221,7 +228,7 @@ function showToast(type: 'success' | 'error', message: string) {
 
 const { mutate: saveItem, isPending: isSaving } = useMutation({
   mutationFn: async () => {
-    const payload = buildPayload()
+    const payload = buildPayload(form.value)
     if (form.value.id) {
       return unwrap(await client.PUT('/api/v1/admin/pricing/{itemID}', {
         params: { path: { itemID: form.value.id } },
@@ -241,20 +248,52 @@ const { mutate: saveItem, isPending: isSaving } = useMutation({
   onError: () => showToast('error', t('admin.pricing.saveError')),
 })
 
-const { mutate: deleteItem } = useMutation({
-  mutationFn: async (id: string) =>
-    unwrap(await client.DELETE('/api/v1/admin/pricing/{itemID}', { params: { path: { itemID: id } } })),
-  onSuccess: () => {
-    queryClient.invalidateQueries({ queryKey: ['admin', 'pricing'] })
-    queryClient.invalidateQueries({ queryKey: ['pricing'] })
-    showToast('success', t('admin.pricing.priceDeleted'))
-  },
-  onError: () => showToast('error', t('admin.pricing.deleteError')),
-})
+function invalidatePricing() {
+  queryClient.invalidateQueries({ queryKey: ['admin', 'pricing'] })
+  queryClient.invalidateQueries({ queryKey: ['pricing'] })
+}
 
-function confirmDelete(id: string) {
-  if (confirm(t('admin.pricing.deleteConfirm'))) {
-    deleteItem(id)
+// The server refuses to hard-delete an item that invoices, orders or QR
+// targets reference (deleting would strip their revenue mapping), so the
+// fallback is to archive it instead.
+async function confirmDelete(item: PriceItem) {
+  const ok = await askConfirm({
+    title: t('admin.pricing.deleteConfirmTitle'),
+    body: t('admin.pricing.deleteConfirm'),
+    confirmLabel: t('admin.pricing.delete'),
+    tone: 'danger',
+  })
+  if (!ok) return
+  try {
+    unwrap(await client.DELETE('/api/v1/admin/pricing/{itemID}', { params: { path: { itemID: item.id } } }))
+    invalidatePricing()
+    showToast('success', t('admin.pricing.priceDeleted'))
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 409 && e.code === 'price_item_in_use') {
+      await offerArchive(item)
+      return
+    }
+    showToast('error', t('admin.pricing.deleteError'))
+  }
+}
+
+async function offerArchive(item: PriceItem) {
+  const ok = await askConfirm({
+    title: t('admin.pricing.inUseTitle'),
+    body: t('admin.pricing.inUseBody', { name: item.name }),
+    confirmLabel: t('admin.pricing.archive'),
+    tone: 'warning',
+  })
+  if (!ok) return
+  try {
+    unwrap(await client.PUT('/api/v1/admin/pricing/{itemID}', {
+      params: { path: { itemID: item.id } },
+      body: buildPayload({ ...formFromItem(item), is_active: false }) as any,
+    }))
+    invalidatePricing()
+    showToast('success', t('admin.pricing.priceArchived'))
+  } catch {
+    showToast('error', t('admin.pricing.archiveError'))
   }
 }
 
@@ -509,7 +548,7 @@ function unitLabel(value: string): string {
               <button class="mr-2 text-gray-500 hover:text-brand-600" @click="openEdit(item)">
                 <Pencil class="h-4 w-4" />
               </button>
-              <button class="text-gray-500 hover:text-red-600" @click="confirmDelete(item.id)">
+              <button class="text-gray-500 hover:text-red-600" @click="confirmDelete(item)">
                 <Trash2 class="h-4 w-4" />
               </button>
             </td>

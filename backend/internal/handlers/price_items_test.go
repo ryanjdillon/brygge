@@ -14,7 +14,7 @@ func newTestPriceItemsHandler(t *testing.T) *PriceItemsHandler {
 	t.Helper()
 	cfg := testConfig()
 	log := zerolog.Nop()
-	return NewPriceItemsHandler(nil, cfg, log)
+	return NewPriceItemsHandler(nil, cfg, nil, log)
 }
 
 func TestHandleListAdminPricingUnauthenticated(t *testing.T) {

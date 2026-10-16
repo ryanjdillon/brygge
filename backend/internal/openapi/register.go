@@ -1753,6 +1753,7 @@ func registerAdminOps(api huma.API) {
 		Path:        "/api/v1/admin/pricing/{itemID}",
 		Tags:        []string{"Admin", "Commerce"},
 		Summary:     "Delete pricing item",
+		Description: "Hard-deletes an unreferenced item. Returns 409 with code `price_item_in_use` when any invoice, invoice line, order line or QR target references it; archive it (is_active=false) instead.",
 		Security:    BearerSecurity,
 	}, stub[struct {
 		ItemID string `path:"itemID" doc:"Item UUID"`

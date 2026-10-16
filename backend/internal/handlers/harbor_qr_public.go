@@ -76,7 +76,7 @@ func (h *InvoiceHandler) loadQRTarget(ctx context.Context, token string) (qrTarg
 		        t.min_units, t.max_units, t.fixed_units
 		   FROM harbor_payment_targets t
 		   JOIN price_items pi ON pi.id = t.price_item_id
-		  WHERE t.token = $1 AND t.archived_at IS NULL`,
+		  WHERE t.token = $1 AND t.archived_at IS NULL AND pi.is_active`,
 		token,
 	).Scan(&t.ID, &t.ClubID, &t.Label, &t.Location, &t.Kind, &t.PriceItemID,
 		&t.ItemName, &t.UnitLabel, &t.UnitAmount, &t.Currency,

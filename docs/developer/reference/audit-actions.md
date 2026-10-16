@@ -56,7 +56,10 @@ The action string is the JSON wire format (`row.action`); the constant is the Go
 |---|---|---|---|---|
 | `ActionEventCreated` | `event.created` | event | Calendar event created | `title`, `start_date` |
 | `ActionEventDeleted` | `event.deleted` | event | Calendar event deleted | — |
-| `ActionPricingUpdated` | `pricing.updated` | price_item | Treasurer edits the price catalog | `price_item_id`, `field` |
+| `ActionPricingCreated` | `pricing.created` | price_item | Price item created | `name`, `category`, `amount`, `audience` |
+| `ActionPricingUpdated` | `pricing.updated` | price_item | Price item edited (any change other than active → inactive) | `name`, `category`, `amount_before`, `amount_after`, `is_active_after` |
+| `ActionPricingArchived` | `pricing.archived` | price_item | Price item edited from active to inactive, including the "archive instead" path when delete is refused | same as `pricing.updated` |
+| `ActionPricingDeleted` | `pricing.deleted` | price_item | Unreferenced price item hard-deleted. A refused delete (409) is not logged. | `name` |
 | `ActionBroadcastSent` | `broadcast.sent` | broadcast | Communication broadcast emailed/pushed | `recipient_count` |
 | `ActionDocumentUploaded` | `document.uploaded` | document | New doc uploaded to the archive | `filename`, `visibility` |
 | `ActionDocumentDeleted` | `document.deleted` | document | Doc removed | `filename` |

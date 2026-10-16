@@ -40,7 +40,10 @@ const (
 	// Content operations
 	ActionEventCreated     = "event.created"
 	ActionEventDeleted     = "event.deleted"
+	ActionPricingCreated   = "pricing.created"
 	ActionPricingUpdated   = "pricing.updated"
+	ActionPricingArchived  = "pricing.archived"
+	ActionPricingDeleted   = "pricing.deleted"
 	ActionBroadcastSent    = "broadcast.sent"
 	ActionDocumentUploaded = "document.uploaded"
 	ActionDocumentDeleted  = "document.deleted"

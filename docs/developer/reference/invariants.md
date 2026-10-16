@@ -124,6 +124,12 @@ Each invariant lists the **rule**, then the **failure mode** it prevents. When p
 
 **Failure mode:** a price-list correction silently changes amounts on already-issued invoices. Treasurer's totals start drifting.
 
+### A referenced price item is archived, never deleted
+
+**Rule (BRY-360):** `HandleDelete` on `/admin/pricing/{id}` hard-deletes a price item only when no `invoice_lines`, `invoices`, `order_lines` or `harbor_payment_targets` row references it. Otherwise it returns 409 `price_item_in_use`, and the SPA offers to archive it instead (`is_active = false`). Archived items are excluded from the faktura pickers, bulk invoicing, the public price list, the QR checkout catalogue, and the public QR target lookup (`loadQRTarget`). A printed poster for an archived item therefore stops taking payments.
+
+**Failure mode:** `order_lines.price_item_id` and `invoices.price_item_id` are `ON DELETE SET NULL`. A delete that succeeded would silently strip the category from historical orders and invoices, and with it the revenue-account mapping used by GL sync and reconciliation. The other two FKs fail the delete, which used to surface only as a generic 500.
+
 ### Bulk-reminder queue is durable, throttled, and retried
 
 **Rule:** `HandleBulkSendReminder` validates rows synchronously and enqueues each eligible reminder as an `invoice_reminder` row in the shared `deliveries` table (the same durable queue broadcasts use). The delivery worker drains it on a background context at `cfg.BulkSendThrottle` (default 1s) per send, retries transient SMTP failures up to a cap, and survives restarts (a boot sweep re-claims rows orphaned mid-send). Enqueue is idempotent per invoice: an invoice that already has a non-failed reminder queued is skipped (surfaced to the operator as "already queued"), so a re-run or double click can't double-send.
