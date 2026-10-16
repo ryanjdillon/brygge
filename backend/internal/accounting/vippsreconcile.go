@@ -39,9 +39,11 @@ var vippsCategoryAccountMap = map[string]string{
 	"harbor_membership": "3110",
 	"slip_fee":          "3120",
 	"seasonal_rental":   "3120",
+	"electricity":       "3130",
 	"guest":             "3200",
-	"motorhome":         "3200",
-	"room_hire":         "3200",
+	"motorhome":         "3210",
+	"room_hire":         "3220",
+	"service":           "3300",
 	"merchandise":       "3300",
 }
 

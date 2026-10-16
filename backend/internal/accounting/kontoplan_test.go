@@ -87,6 +87,38 @@ func TestDefaultKontoplanBoatCostsIneligible(t *testing.T) {
 	}
 }
 
+// Every account code the posting paths can emit must exist in the default
+// chart; a missing one makes CreateJournalEntry fail with "account not
+// found", which sync counts as skipped and nobody sees.
+func TestCategoryMapsResolveToDefaultKontoplan(t *testing.T) {
+	chart := map[string]bool{}
+	for _, def := range DefaultKontoplan() {
+		chart[def.Code] = true
+	}
+
+	check := func(source, key, code string) {
+		if !chart[code] {
+			t.Errorf("%s[%q] = %s, which is not in DefaultKontoplan", source, key, code)
+		}
+	}
+	for k, code := range paymentTypeAccountMap {
+		check("paymentTypeAccountMap", k, code)
+	}
+	for k, code := range vippsCategoryAccountMap {
+		check("vippsCategoryAccountMap", k, code)
+	}
+	for name, code := range map[string]string{
+		"bankAccountCode":          bankAccountCode,
+		"receivablesAccountCode":   receivablesAccountCode,
+		"defaultRevenueCode":       defaultRevenueCode,
+		"vippsFeeAccountCode":      vippsFeeAccountCode,
+		"vippsFallbackRevenueCode": vippsFallbackRevenueCode,
+		"vippsClearingAccountCode": vippsClearingAccountCode,
+	} {
+		check("const", name, code)
+	}
+}
+
 func TestDefaultKontoplanClubhouseEligible(t *testing.T) {
 	accounts := DefaultKontoplan()
 	for _, a := range accounts {

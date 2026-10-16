@@ -229,7 +229,7 @@ When you upload a bank statement (`Admin → Accounting → Bank & Vipps`), the 
 For Vipps payouts (the consolidated daily Utb. row in the bank statement), the reconciliation builds a draft bilag per payer using this cascade (DIL-367):
 
 1. **Member + matching open invoice** → CR 1500 receivables + back-link `invoices.payment_id`. The faktura-status donut reflects the payment immediately.
-2. **Amount → price-article match** → CR the mapped revenue account (3120 plassleie, 3200 gjestehavn, etc.). Handles guest-slip × N nights, motorhome × N nights, sesongplass, slipping fees — the typical non-member walk-up payments. Exact amount match for once/year/season units; integer-multiple match (2–60×) for per-night/day/hour units.
+2. **Amount → price-article match** → CR the mapped revenue account (3120 plassleie, 3200 gjestehavn, 3210 bobil/camping, 3300 tjenester such as slipping, etc.). Handles guest-slip × N nights, motorhome × N nights, sesongplass, slipping fees — the typical non-member walk-up payments. Exact amount match for once/year/season units; integer-multiple match (2–60×) for per-night/day/hour units.
 3. **Member resolved but no clear classification** → CR 1500 receivables for manual reconciliation.
 4. **Fallback** → CR 3900 Andre inntekter. (Previously this was 2900, which implied "we owe the payer money" — wrong for revenue.)
 

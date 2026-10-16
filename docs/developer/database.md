@@ -327,7 +327,10 @@ in `backend/migrations/` for the source of truth. The high-level shape:
   set by `ReconcileVippsConfirm` after the cascade resolves; unresolved
   belastning lines land in 3900 (Andre inntekter) rather than 2900.
 - `journal_entries`, `journal_lines`, `accounts`, `fiscal_periods` —
-  double-entry GL with NS 4102 chart of accounts.
+  double-entry GL with NS 4102 chart of accounts. New clubs get the default
+  chart from `SeedKontoplan`. An account added to the default chart later
+  needs a backfill migration for existing clubs, as in 000041 (1925) and
+  000099 (3130 Strøm, 3210 Bobil/campingplass, 3220 Lokalleie).
 - `broadcasts`, `broadcast_deliveries` (migration 000069) — bulk member
   sends. A `broadcasts` row is the parent announcement (subject/body, the
   originating shared-mailbox `source_address`, a `status`); each recipient

@@ -220,10 +220,18 @@ Source: `paymentTypeAccountMap` in `backend/internal/accounting/sync.go`.
 | `membership` (price_items.category) | 3100 | Medlemskontingent — same account, different vocab |
 | `harbor_membership` | 3110 | Havneavgift |
 | `slip_fee` | 3120 | Plassleie |
+| `electricity` | 3130 | Strøm |
 | `booking` (payment_type) | 3200 | Gjestehavninntekter |
-| `merchandise` | 3300 | Salgsinntekter |
+| `seasonal_rental` | 3200 | Gjestehavninntekter (the Vipps map uses 3120; see below) |
+| `guest` | 3200 | Gjestehavninntekter |
+| `motorhome` | 3210 | Bobil/campingplass, kept apart from 3200 because it may be taxed differently under MVA |
+| `room_hire` | 3220 | Lokalleie |
+| `merchandise`, `service` | 3300 | Salgsinntekter |
+| `other` | 3900 | Andre inntekter |
 
 Fallback when no entry matches: `defaultRevenueCode = "3100"` (Medlemskontingent).
+
+Every code in this table and the Vipps one below must exist in `DefaultKontoplan()`. `TestCategoryMapsResolveToDefaultKontoplan` enforces that. A code missing from the chart makes `CreateJournalEntry` fail with "account not found", and sync silently counts the invoice as skipped. That happened to 3130, 3210 and 3220 until migration `000099` (BRY-361).
 
 ### Vipps category → revenue GL code
 
@@ -235,9 +243,11 @@ Source: `vippsCategoryAccountMap` in `backend/internal/accounting/vippsreconcile
 | `harbor_membership` | 3110 |
 | `slip_fee` | 3120 |
 | `seasonal_rental` | 3120 |
+| `electricity` | 3130 |
 | `guest` | 3200 |
-| `motorhome` | 3200 |
-| `room_hire` | 3200 |
+| `motorhome` | 3210 |
+| `room_hire` | 3220 |
+| `service` | 3300 |
 | `merchandise` | 3300 |
 
 Fallback: `vippsFallbackRevenueCode = "3900"` (Andre inntekter). **Not 2900** — see `invariants.md`.
