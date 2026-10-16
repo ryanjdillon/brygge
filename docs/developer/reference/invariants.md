@@ -30,6 +30,16 @@ It is refused when the split differs from the charge amount, or when a faktura o
 
 **Failure mode:** before BRY-337 nothing read the order reference. Pay-link payments stayed "betaling mottatt, venter oppgjør" for weeks: the money had been paid out, but the faktura never settled and the payout could not clear.
 
+### Vipps charges are auto-booked only when unambiguous, and only on opt-in
+
+**Rule (BRY-340):** `AutoAssignVippsCharges` runs after every Vipps CSV upload, operator Report API sync and **Synk Vipps**, but books nothing unless `clubs.vipps_auto_assign` is on. It books a charge in one of two cases. Anything else is left in Tildel.
+- **Member faktura:** the payer resolves to one member by a strong pass (taught alias, KID, or the exact normalized full or first+last name; never last-name-only, fuzzy or email), that member has exactly one sent faktura not settled for the member (`finance.SettledForMemberSQL`), and the totals are equal.
+- **Price item:** the amount fits active price items in one category. Several categories count as a tie, which is resolved only by the club's `vipps_auto_assign_tie_category`. A members-only item also needs a strong member match. A member who has an open faktura for the exact amount is never price-classified.
+
+Charges naming a checkout order are left to `AutoReconcileOrderCharges`. Each booking is audited (`vipps_charge.auto_assigned`) and can be undone with `UnassignVippsCharge`.
+
+**Failure mode:** guessing on a weak name match or a cross-category amount books a member's dues as walk-up revenue, or the reverse. The member is then chased for a faktura they paid, or revenue lands on the wrong account. With no opt-in, a club that never chose this would find bookings it didn't make.
+
 ### Booked faktura bilags are corrected, never rebuilt
 
 **Rule (BRY-364):** a posted `invoice_sync` entry is never deleted or edited. When its revenue split is wrong, `ResplitInvoiceBilags` posts an `invoice_resplit` entry for the invoice that moves the difference between revenue accounts. The difference is the lines' expected per-account split minus what the sync entry and earlier resplits booked. The run is idempotent, a preview posts nothing, and apply is behind fresh TOTP. An invoice whose booked revenue differs from its total is skipped with a reason for manual correction. The old `RebuildInvoiceBilags` (delete and re-sync) was removed.

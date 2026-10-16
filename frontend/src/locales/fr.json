@@ -966,6 +966,10 @@
       "vippsMaxAmount": "Montant maximal pour Vipps (kr)",
       "vippsMaxAmountPlaceholder": "Aucune limite",
       "vippsMaxAmountHint": "Les factures dépassant ce montant ne sont proposées quen virement bancaire (KID), afin déviter les frais Vipps. Laisser vide pour aucune limite.",
+      "vippsAutoAssign": "Comptabiliser automatiquement les paiements Vipps sans ambiguïté",
+      "vippsAutoAssignTieCategory": "Quand un montant correspond à plusieurs catégories de prix",
+      "vippsAutoAssignTieNone": "Laisser pour vérification",
+      "vippsAutoAssignHint": "Ne comptabilise un paiement que s'il correspond clairement à l'unique facture ouverte d'un membre ou à une seule catégorie de prix. Le reste reste dans Tildel. Chaque écriture peut être annulée.",
       "vippsClearingAccount": "Compte d'attente",
       "vippsFeeAccount": "Compte de frais"
     },

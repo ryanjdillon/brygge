@@ -316,6 +316,8 @@ type VippsRowOpts struct {
 	PSPRef     string
 	Settlement string
 	MSN        string
+	// CustomerName is the payer as Vipps reports it (synthetic in tests).
+	CustomerName string
 }
 
 // NewVippsRow seeds a Vipps import (once per call) with one row and returns
@@ -346,10 +348,10 @@ func (c *Club) NewVippsRow(t *testing.T, o VippsRowOpts) string {
 	var id string
 	if err := c.Pool.QueryRow(ctx,
 		`INSERT INTO vipps_import_rows (vipps_import_id, club_id, row_hash, row_type, booking_date,
-		                                amount, psp_ref, order_id, settlement_number, msn)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
+		                                amount, psp_ref, order_id, settlement_number, msn, customer_name)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
 		importID, c.ID, testutil.RandomHex(32), o.RowType, o.Date, Kr(o.Cents),
-		o.PSPRef, o.OrderID, o.Settlement, o.MSN,
+		o.PSPRef, o.OrderID, o.Settlement, o.MSN, o.CustomerName,
 	).Scan(&id); err != nil {
 		t.Fatalf("fin: vipps row: %v", err)
 	}

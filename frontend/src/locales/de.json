@@ -967,6 +967,10 @@
       "vippsMaxAmount": "Höchstbetrag für Vipps (kr)",
       "vippsMaxAmountPlaceholder": "Kein Limit",
       "vippsMaxAmountHint": "Rechnungen über diesem Betrag werden nur per Banküberweisung (KID) angeboten, damit der Verein Vipps-Gebühren vermeidet. Leer lassen für kein Limit.",
+      "vippsAutoAssign": "Eindeutige Vipps-Zahlungen automatisch buchen",
+      "vippsAutoAssignTieCategory": "Wenn ein Betrag zu mehreren Preiskategorien passt",
+      "vippsAutoAssignTieNone": "Zur Prüfung lassen",
+      "vippsAutoAssignHint": "Bucht eine Zahlung nur, wenn sie eindeutig zur einzigen offenen Rechnung eines Mitglieds oder zu einer Preiskategorie passt. Alles andere bleibt in Tildel. Jede Buchung kann rückgängig gemacht werden.",
       "vippsClearingAccount": "Verrechnungskonto",
       "vippsFeeAccount": "Gebührenkonto"
     },

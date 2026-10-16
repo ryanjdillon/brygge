@@ -25,6 +25,17 @@ const vippsClearingAccount = ref('2900')
 const vippsFeeAccount = ref('7700')
 // Max invoice amount (kr) eligible for a Vipps link; '' = no limit (BRY-283).
 const vippsMaxAmount = ref<string>('')
+// Book unambiguous Vipps charges without review (BRY-340); the tie category
+// decides amounts that fit price items in several categories ('' = review).
+const vippsAutoAssign = ref(false)
+const vippsAutoAssignTieCategory = ref('')
+const priceCategories = [
+  'membership', 'harbor_membership', 'slip_fee', 'electricity', 'seasonal_rental',
+  'guest', 'motorhome', 'room_hire', 'service', 'other',
+] as const
+function categoryLabel(c: string) {
+  return t(`admin.pricing.category${c.split('_').map((p) => p[0].toUpperCase() + p.slice(1)).join('')}`)
+}
 const vippsSaving = ref(false)
 const vippsSaved = ref(false)
 
@@ -40,6 +51,8 @@ async function load() {
     vippsClearingAccount.value = body.vipps_clearing_account || '2900'
     vippsFeeAccount.value = body.vipps_fee_account || '7700'
     vippsMaxAmount.value = body.vipps_max_amount != null ? String(body.vipps_max_amount) : ''
+    vippsAutoAssign.value = !!body.vipps_auto_assign
+    vippsAutoAssignTieCategory.value = body.vipps_auto_assign_tie_category || ''
     fakturaLogoCacheBust.value = Date.now()
   } catch (e) {
     error.value = (e as Error).message
@@ -87,6 +100,8 @@ async function saveVippsAccounts() {
         vipps_fee_account: vippsFeeAccount.value.trim(),
         // Empty field clears the cap (0 → NULL on the backend); otherwise set it.
         vipps_max_amount: vippsMaxAmount.value.trim() === '' ? 0 : Number(vippsMaxAmount.value),
+        vipps_auto_assign: vippsAutoAssign.value,
+        vipps_auto_assign_tie_category: vippsAutoAssignTieCategory.value,
       }),
     })
     if (!res.ok) {
@@ -273,6 +288,25 @@ onMounted(load)
           </span>
         </div>
         <p class="text-xs text-slate-500">{{ t('admin.economySettings.vippsMaxAmountHint') }}</p>
+        <div class="mt-2 flex flex-wrap items-end gap-3" data-testid="vipps-auto-assign">
+          <label class="flex items-center gap-2 text-sm text-slate-700">
+            <input v-model="vippsAutoAssign" type="checkbox" @change="vippsSaved = false" />
+            {{ t('admin.economySettings.vippsAutoAssign') }}
+          </label>
+          <label class="flex flex-col gap-1 text-xs text-slate-700">
+            {{ t('admin.economySettings.vippsAutoAssignTieCategory') }}
+            <select
+              v-model="vippsAutoAssignTieCategory"
+              :disabled="!vippsAutoAssign"
+              class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              @change="vippsSaved = false"
+            >
+              <option value="">{{ t('admin.economySettings.vippsAutoAssignTieNone') }}</option>
+              <option v-for="c in priceCategories" :key="c" :value="c">{{ categoryLabel(c) }}</option>
+            </select>
+          </label>
+        </div>
+        <p class="text-xs text-slate-500">{{ t('admin.economySettings.vippsAutoAssignHint') }}</p>
       </fieldset>
     </section>
 

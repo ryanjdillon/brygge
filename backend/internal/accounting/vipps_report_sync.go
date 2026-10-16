@@ -16,6 +16,7 @@ type VippsReportSyncResult struct {
 	SkippedDup int  // rows skipped as duplicates
 	TryLater   bool // report for the date not finalised yet
 	Orders     *VippsOrderReconcileResult
+	AutoAssign *VippsAutoAssignResult
 }
 
 // SyncVippsReport pulls the Report API v2 funds + fees for a settlement date and
@@ -92,6 +93,11 @@ func (s *Service) SyncVippsReport(ctx context.Context, vc *vipps.Client, clubID,
 			return res, fmt.Errorf("booking order-linked charges: %w", err)
 		}
 		res.Orders = orders
+		auto, err := s.AutoAssignVippsCharges(ctx, clubID, actorID)
+		if err != nil {
+			return res, fmt.Errorf("auto-assigning charges: %w", err)
+		}
+		res.AutoAssign = auto
 	} else if _, err := s.RepairVippsReportRows(ctx, clubID); err != nil {
 		return res, fmt.Errorf("repairing report rows: %w", err)
 	}

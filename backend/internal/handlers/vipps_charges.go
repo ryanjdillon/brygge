@@ -121,6 +121,33 @@ func (h *AccountingHandler) HandleCreateVippsChargeBilag(w http.ResponseWriter, 
 	JSON(w, http.StatusOK, res)
 }
 
+// HandleUnassignVippsCharge undoes a charge booking (manual or automatic) so
+// the charge returns to the Tildel queue and a faktura it settled reopens.
+func (h *AccountingHandler) HandleUnassignVippsCharge(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	rowID := chi.URLParam(r, "rowID")
+	entryID, invoiceID, err := h.svc.UnassignVippsCharge(ctx, claims.ClubID, claims.UserID, rowID)
+	if err != nil {
+		h.log.Warn().Err(err).Str("row_id", rowID).Msg("unassign vipps charge")
+		Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if h.audit != nil {
+		h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,
+			audit.ActionVippsChargeUnassigned, "vipps_import_row", rowID,
+			map[string]any{
+				"journal_entry_id": entryID,
+				"invoice_id":       invoiceID,
+			})
+	}
+	JSON(w, http.StatusOK, map[string]string{"status": "unassigned"})
+}
+
 // HandleDismissVippsCharge marks a charge avvist so it leaves the queue and no
 // longer blocks its settlement's payout auto-clear.
 func (h *AccountingHandler) HandleDismissVippsCharge(w http.ResponseWriter, r *http.Request) {

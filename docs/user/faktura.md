@@ -235,6 +235,17 @@ For Vipps payouts (the consolidated daily Utb. row in the bank statement), the r
 
 Member resolution uses fuzzy normalization (æøå/diacritics, hyphens, case, whitespace) plus a full-name → first+last → unique-last-name cascade. Most recurring members resolve without operator intervention.
 
+### Automatic Vipps booking (per-charge Tildel)
+
+Turn on **Bokfør entydige Vipps-betalinger automatisk** under **Admin → Økonomiinnstillinger → Vipps**. After each Vipps upload and **Synk Vipps**, Brygge then books a payment by itself, but only when the match is clear:
+
+- **The payer is a member with exactly one open faktura for the same amount.** The faktura is marked paid. The name must match exactly (or through a taught alias or a KID); close-but-not-exact names are left for you.
+- **The amount fits one price category.** Examples: 1,600 kr is "Slipping <26 fot", or 900 kr is 3 nights at 300 kr. The payment is booked to that category's income account.
+
+If an amount fits several categories (a guest berth and a motorhome spot at the same nightly price, for example), choose which category wins under **Når et beløp passer flere priskategorier**, or leave it for review. Prices for members only are booked automatically only when the payer is a known member.
+
+Everything else stays in **Tildel**. The upload and Synk Vipps results list what was booked, and each line has **Angre**, which puts the payment back in Tildel and reopens the faktura.
+
 ## Reference
 
 - Pricing admin: `/admin/pricing`

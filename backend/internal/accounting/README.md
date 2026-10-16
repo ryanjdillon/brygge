@@ -34,6 +34,12 @@ When a bank row matching `Utb. NNN Vippsnr MMM` arrives, the reconciliation pull
 
 **Order-linked charges (per-charge model, BRY-337).** An ePayment charge (faktura pay link, QR checkout) carries our merchant reference (`chk-…`) as the row's `order_id`. `AutoReconcileOrderCharges` books it from the order itself, with no amount or name guessing: DR clearing / CR 1500 for each faktura in `order_sources` (with the `linkInvoicePayment` back-link), and CR the category revenue account for each catalog line (`resolveOrderChargeSplit`). It refuses if the order total and the charge differ, or if a faktura on the order is already paid or voided; those are reported in `skipped_details`. It runs from **Synk Vipps**, an operator Report API sync, and CSV upload. The nightly Report sync only repairs row types, because journal entries need a human `created_by`. Postings are drafts, like every per-charge posting.
 
+**Auto-assign (per-charge model, BRY-340).** After order-linked charges, `AutoAssignVippsCharges` (`vipps_auto_assign.go`) books the rest of the queue when the outcome is unambiguous and the club has opted in (`clubs.vipps_auto_assign`):
+1. `member_invoice`: a strong member match (`resolveCustomerToMemberPass` up to `memberPassFirstLast`) with exactly one open faktura of equal total goes through `AssignVippsChargeToInvoice`.
+2. `price_item`: `priceArticleCandidates` in one category, or a cross-category tie resolved by `clubs.vipps_auto_assign_tie_category`, goes through `CreateVippsChargeBilag` to `vippsCategoryAccountMap[category]`. Members-only items also need a strong member match.
+
+Everything else stays in Tildel; the result reports `assigned` and `needs_review`. It runs where `AutoReconcileOrderCharges` runs. `UnassignVippsCharge` undoes any charge booking: it deletes a draft or voids a posted entry, and reopens the faktura recorded in `vipps_import_rows.invoice_id`.
+
 ⚠️ **Never route to 2900.** The `vippsClearingAccountCode = "2900"` constant exists only for backwards-compat with legacy reports. New lines must land on 3900 — see [`../../../docs/developer/reference/invariants.md`](../../../docs/developer/reference/invariants.md).
 
 ## The bank-row KID matching cascade

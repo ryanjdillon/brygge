@@ -2203,10 +2203,15 @@ func (h *AccountingHandler) HandleImportVippsSettlement(w http.ResponseWriter, r
 	// On the per-charge model, charges that name their checkout order are
 	// booked straight away (BRY-337); the rest wait in the Tildel queue.
 	var orders *accounting.VippsOrderReconcileResult
+	var autoAssign *accounting.VippsAutoAssignResult
 	if perCharge, perr := h.svc.VippsPerChargeEnabled(r.Context(), claims.ClubID); perr == nil && perCharge {
 		orders, err = h.svc.AutoReconcileOrderCharges(r.Context(), claims.ClubID, claims.UserID)
 		if err != nil {
 			h.log.Error().Err(err).Msg("booking order-linked vipps charges failed")
+		}
+		autoAssign, err = h.svc.AutoAssignVippsCharges(r.Context(), claims.ClubID, claims.UserID)
+		if err != nil {
+			h.log.Error().Err(err).Msg("auto-assigning vipps charges failed")
 		}
 	}
 
@@ -2230,6 +2235,7 @@ func (h *AccountingHandler) HandleImportVippsSettlement(w http.ResponseWriter, r
 		"imported":    result.Imported,
 		"skipped_dup": result.SkippedDup,
 		"orders":      orders,
+		"auto_assign": autoAssign,
 	})
 }
 

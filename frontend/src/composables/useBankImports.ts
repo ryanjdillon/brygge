@@ -82,6 +82,22 @@ export interface VippsImportRow {
   journal_entry_id: string | null
 }
 
+export interface VippsAutoAssignItem {
+  row_id: string
+  date: string
+  amount: number
+  rule: 'member_invoice' | 'price_item'
+  target: string
+  entry_id: string
+}
+
+// Charges booked without review after an import or Synk Vipps (BRY-340).
+export interface VippsAutoAssignResult {
+  enabled: boolean
+  assigned: VippsAutoAssignItem[]
+  needs_review: number
+}
+
 export interface VippsImportResult {
   id: string
   filename: string
@@ -89,6 +105,7 @@ export interface VippsImportResult {
   rows_total: number
   imported: number
   skipped_dup: number
+  auto_assign?: VippsAutoAssignResult | null
 }
 
 export interface VippsReconcileLine {
@@ -306,8 +323,14 @@ export interface VippsResyncResult {
   resynced: number
   skipped: number
   failed: string[]
+  auto_assign?: VippsAutoAssignResult | null
 }
 
 export async function runVippsResync(): Promise<VippsResyncResult> {
   return fetchJSON<VippsResyncResult>(`${BASE}/vipps-resync`, { method: 'POST' })
+}
+
+// Undoes a charge booking so it returns to Tildel. Behind fresh TOTP.
+export async function unassignVippsCharge(rowID: string): Promise<{ status: string }> {
+  return fetchJSON(`${BASE}/vipps-charges/${rowID}/unassign`, { method: 'POST' })
 }

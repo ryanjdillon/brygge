@@ -72,6 +72,8 @@ const (
 	ActionVippsChargeAssignedInvoice = "vipps_charge.assigned_invoice"
 	ActionVippsChargeBilag           = "vipps_charge.bilag"
 	ActionVippsChargeDismissed       = "vipps_charge.dismissed"
+	ActionVippsChargeAutoAssigned    = "vipps_charge.auto_assigned"
+	ActionVippsChargeUnassigned      = "vipps_charge.unassigned"
 	ActionVippsPayoutCleared         = "vipps_payout.cleared"
 
 	// Developer / DB inspection (DIL-365, BRY-115)

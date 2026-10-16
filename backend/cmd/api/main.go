@@ -1338,6 +1338,9 @@ func main() {
 							Post("/vipps-charges/{rowID}/dismiss", accountingHandler.HandleDismissVippsCharge)
 						r.With(middleware.RequireRole("treasurer", "admin"),
 							middleware.RequireFreshTOTPDefault()).
+							Post("/vipps-charges/{rowID}/unassign", accountingHandler.HandleUnassignVippsCharge)
+						r.With(middleware.RequireRole("treasurer", "admin"),
+							middleware.RequireFreshTOTPDefault()).
 							Post("/bank-rows/{rowID}/clear-vipps-payout", accountingHandler.HandleClearVippsPayout)
 
 						// BRY-11 sub 5: learned aliases & message rules

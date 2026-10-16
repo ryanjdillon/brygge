@@ -440,51 +440,7 @@ func (s *Service) ReconcileVippsConfirm(ctx context.Context, clubID, bankRowID, 
 // "" so the caller falls through to the next pass in the cascade.
 // See DIL-367.
 func (s *Service) matchVippsAmountToPriceArticle(ctx context.Context, clubID string, amount float64) (accountCode, name string) {
-	if amount <= 0 {
-		return "", ""
-	}
-	rows, err := s.db.Query(ctx,
-		`SELECT name, category, amount, unit
-		   FROM price_items
-		  WHERE club_id = $1 AND is_active = TRUE AND amount > 0`,
-		clubID,
-	)
-	if err != nil {
-		return "", ""
-	}
-	defer rows.Close()
-
-	type candidate struct {
-		name, category string
-		multiplier     int
-	}
-	var matches []candidate
-	for rows.Next() {
-		var n, cat, unit string
-		var unitAmount float64
-		if err := rows.Scan(&n, &cat, &unitAmount, &unit); err != nil {
-			continue
-		}
-		if floatNear(unitAmount, amount, 0.005) {
-			matches = append(matches, candidate{name: n, category: cat, multiplier: 1})
-			continue
-		}
-		// Per-time-unit price items support multiplied matches —
-		// guest slip @ 250/night fits 250, 500, 750, 1000, …
-		if unit == "night" || unit == "day" || unit == "hour" {
-			if unitAmount <= 0 {
-				continue
-			}
-			ratio := amount / unitAmount
-			mult := int(ratio + 0.0001)
-			if mult < 2 || mult > 60 {
-				continue
-			}
-			if floatNear(float64(mult)*unitAmount, amount, 0.005) {
-				matches = append(matches, candidate{name: n, category: cat, multiplier: mult})
-			}
-		}
-	}
+	matches := s.priceArticleCandidates(ctx, clubID, amount)
 	if len(matches) != 1 {
 		return "", ""
 	}
@@ -493,10 +449,64 @@ func (s *Service) matchVippsAmountToPriceArticle(ctx context.Context, clubID str
 	if !ok {
 		code = vippsFallbackRevenueCode
 	}
-	if m.multiplier > 1 {
-		return code, fmt.Sprintf("%dx %s", m.multiplier, m.name)
+	return code, m.label()
+}
+
+// priceArticleCandidate is one active price item that produces an amount,
+// either exactly or as a whole number of per-time units.
+type priceArticleCandidate struct {
+	name, category, audience string
+	multiplier               int
+}
+
+func (c priceArticleCandidate) label() string {
+	if c.multiplier > 1 {
+		return fmt.Sprintf("%dx %s", c.multiplier, c.name)
 	}
-	return code, m.name
+	return c.name
+}
+
+// priceArticleCandidates returns every active price item that produces the
+// amount: an exact match (once / year / season units) or an integer multiple
+// of a per-time unit (night, day, hour; 2–60×, so a guest slip at 250/night
+// fits 750 as three nights).
+func (s *Service) priceArticleCandidates(ctx context.Context, clubID string, amount float64) []priceArticleCandidate {
+	if amount <= 0 {
+		return nil
+	}
+	rows, err := s.db.Query(ctx,
+		`SELECT name, category, COALESCE(audience, 'all'), amount, unit
+		   FROM price_items
+		  WHERE club_id = $1 AND is_active = TRUE AND amount > 0`,
+		clubID,
+	)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+
+	var matches []priceArticleCandidate
+	for rows.Next() {
+		var n, cat, aud, unit string
+		var unitAmount float64
+		if err := rows.Scan(&n, &cat, &aud, &unitAmount, &unit); err != nil {
+			continue
+		}
+		if floatNear(unitAmount, amount, 0.005) {
+			matches = append(matches, priceArticleCandidate{name: n, category: cat, audience: aud, multiplier: 1})
+			continue
+		}
+		if unit == "night" || unit == "day" || unit == "hour" {
+			mult := int(amount/unitAmount + 0.0001)
+			if mult < 2 || mult > 60 {
+				continue
+			}
+			if floatNear(float64(mult)*unitAmount, amount, 0.005) {
+				matches = append(matches, priceArticleCandidate{name: n, category: cat, audience: aud, multiplier: mult})
+			}
+		}
+	}
+	return matches
 }
 
 // resolveCustomerToMember tries to map a Vipps customer to a member.
@@ -515,6 +525,27 @@ func (s *Service) matchVippsAmountToPriceArticle(ctx context.Context, clubID str
 // Normalization handles æøå / accents / hyphens / case so common
 // Norwegian spelling variants don't block the match. See DIL-367.
 func (s *Service) resolveCustomerToMember(ctx context.Context, clubID, customerName, message string) (string, error) {
+	id, _, err := s.resolveCustomerToMemberPass(ctx, clubID, customerName, message)
+	return id, err
+}
+
+// Resolution passes, strongest first. Passes up to memberPassFirstLast are
+// exact (a taught alias, a KID, or the whole normalized name) and safe to
+// act on without a human; the later ones are heuristics that only suggest.
+const (
+	memberPassAlias = iota
+	memberPassKID
+	memberPassFullName
+	memberPassFirstLast
+	memberPassLastName
+	memberPassFuzzy
+	memberPassEmail
+	memberPassNone
+)
+
+// resolveCustomerToMemberPass is resolveCustomerToMember that also reports
+// which pass matched (memberPassNone when none did).
+func (s *Service) resolveCustomerToMemberPass(ctx context.Context, clubID, customerName, message string) (string, int, error) {
 	// Pass 0: check treasurer-taught aliases first — skip all fuzzy work.
 	var aliasUserID string
 	aerr := s.db.QueryRow(ctx,
@@ -524,7 +555,7 @@ func (s *Service) resolveCustomerToMember(ctx context.Context, clubID, customerN
 		clubID, customerName,
 	).Scan(&aliasUserID)
 	if aerr == nil && aliasUserID != "" {
-		return aliasUserID, nil
+		return aliasUserID, memberPassAlias, nil
 	}
 
 	if kid := extractKID(message); kid != "" {
@@ -536,13 +567,13 @@ func (s *Service) resolveCustomerToMember(ctx context.Context, clubID, customerN
 			clubID, kid,
 		).Scan(&memberID)
 		if err == nil && memberID != "" {
-			return memberID, nil
+			return memberID, memberPassKID, nil
 		}
 	}
 
 	needle := normalizeName(customerName)
 	if needle == "" {
-		return "", nil
+		return "", memberPassNone, nil
 	}
 
 	// Load all members (small set per club) and match in Go so we can
@@ -554,7 +585,7 @@ func (s *Service) resolveCustomerToMember(ctx context.Context, clubID, customerN
 		clubID,
 	)
 	if err != nil {
-		return "", err
+		return "", memberPassNone, err
 	}
 	defer rows.Close()
 
@@ -580,13 +611,13 @@ func (s *Service) resolveCustomerToMember(ctx context.Context, clubID, customerN
 	// Pass 1: exact normalized full_name
 	for _, c := range cands {
 		if c.fullN != "" && c.fullN == needle {
-			return c.id, nil
+			return c.id, memberPassFullName, nil
 		}
 	}
 	// Pass 2: exact normalized first+last
 	for _, c := range cands {
 		if c.firstLastN != "" && c.firstLastN != " " && c.firstLastN == needle {
-			return c.id, nil
+			return c.id, memberPassFirstLast, nil
 		}
 	}
 	// Pass 3: last name only when unique
@@ -599,7 +630,7 @@ func (s *Service) resolveCustomerToMember(ctx context.Context, clubID, customerN
 		}
 	}
 	if matches == 1 {
-		return matchedID, nil
+		return matchedID, memberPassLastName, nil
 	}
 	// Pass 4: Levenshtein-1 on full name / first+last — catches typos and
 	// diacritic/spacing variants normalizeName missed — when exactly one
@@ -613,7 +644,7 @@ func (s *Service) resolveCustomerToMember(ctx context.Context, clubID, customerN
 		}
 	}
 	if matches == 1 {
-		return matchedID, nil
+		return matchedID, memberPassFuzzy, nil
 	}
 	// Pass 5: email local-part (the Vipps name matches the part before @
 	// in the member's email) when unique. Compare with separators removed
@@ -627,12 +658,12 @@ func (s *Service) resolveCustomerToMember(ctx context.Context, clubID, customerN
 		}
 	}
 	if matches == 1 {
-		return matchedID, nil
+		return matchedID, memberPassEmail, nil
 	}
 	// Pass 6 (phone) is intentionally absent: the Vipps export only exposes
 	// a MASKED customer phone, so there is nothing to match against
 	// users.phone. See DIL-367.
-	return "", nil
+	return "", memberPassNone, nil
 }
 
 // levenshteinWithin1 reports whether a and b are within Levenshtein

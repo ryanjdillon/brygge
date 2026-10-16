@@ -967,6 +967,10 @@
       "vippsMaxAmount": "Importo massimo per Vipps (kr)",
       "vippsMaxAmountPlaceholder": "Nessun limite",
       "vippsMaxAmountHint": "Le fatture oltre questo importo offrono solo il bonifico bancario (KID), così il club evita le commissioni Vipps. Lasciare vuoto per nessun limite.",
+      "vippsAutoAssign": "Registra automaticamente i pagamenti Vipps univoci",
+      "vippsAutoAssignTieCategory": "Quando un importo corrisponde a più categorie di prezzo",
+      "vippsAutoAssignTieNone": "Lascia da verificare",
+      "vippsAutoAssignHint": "Registra un pagamento solo se corrisponde chiaramente all'unica fattura aperta di un socio o a una sola categoria di prezzo. Il resto rimane in Tildel. Ogni registrazione può essere annullata.",
       "vippsClearingAccount": "Conto di transito",
       "vippsFeeAccount": "Conto commissioni"
     },

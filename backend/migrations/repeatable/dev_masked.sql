@@ -77,7 +77,8 @@ SELECT
     NULL::text AS feedback_linear_triage_id,  -- secret
     NULL::text AS anthropic_api_key,          -- secret
     kid_check_method, vipps_clearing_account, vipps_fee_account,
-    vipps_per_charge_enabled, vipps_max_amount
+    vipps_per_charge_enabled, vipps_max_amount,
+    vipps_auto_assign, vipps_auto_assign_tie_category
 FROM public.clubs;
 
 CREATE VIEW dev_masked.billing_recipients AS
@@ -132,6 +133,7 @@ SELECT
     psp_ref, order_id, settlement_number, payout_account,
     scheduled_payout_date, msn, journal_entry_id, created_at,
     dismissed_at, dismissed_reason, dismissed_by,
+    invoice_id, auto_assign_rule,
     substring(message from '[0-9]{6,}') AS message_kid,
     length(message)                      AS message_length
 FROM public.vipps_import_rows;

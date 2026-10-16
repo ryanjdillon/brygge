@@ -37,6 +37,7 @@ import { runBankSync, runVippsResync, type BankSyncResult, type VippsResyncResul
 import { importUni24CSV, type Uni24ImportResult } from '@/composables/useFinancials'
 import { formatNOK as nok, formatDate } from '@/lib/format'
 import { useFreshTotp } from '@/composables/useFreshTotp'
+import VippsAutoAssignSummary from '@/components/admin/VippsAutoAssignSummary.vue'
 import { useConfirm } from '@/stores/confirm'
 
 const { t, locale } = useI18n()
@@ -532,6 +533,7 @@ const filterMonthValue = computed<number>({
         skipped: vippsResyncResult.skipped,
         failed: vippsResyncResult.failed?.length ?? 0,
       }) }}
+      <VippsAutoAssignSummary v-if="vippsResyncResult.auto_assign" :result="vippsResyncResult.auto_assign" />
     </div>
     <div v-if="syncError" class="mt-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">{{ syncError }}</div>
     <div v-if="vippsResyncError" class="mt-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">{{ vippsResyncError }}</div>
@@ -748,6 +750,7 @@ const filterMonthValue = computed<number>({
           <span class="font-medium">{{ vippsResult.filename }}</span>
           — {{ t('admin.bankImports.imported') }}: {{ vippsResult.imported }}
           · {{ t('admin.bankImports.skipped') }}: {{ vippsResult.skipped_dup }}
+          <VippsAutoAssignSummary v-if="vippsResult.auto_assign" :result="vippsResult.auto_assign" />
         </div>
       </section>
 

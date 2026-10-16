@@ -239,17 +239,23 @@ type clubFinancialSettings struct {
 	// VippsMaxAmount caps which invoices may offer a Vipps link (BRY-283):
 	// null = no limit (Vipps for any amount); otherwise invoices over this
 	// kr amount are bank-transfer only.
-	VippsMaxAmount    *float64 `json:"vipps_max_amount"`
-	WebsiteURL        string   `json:"website_url"`
-	ChairmanEmail     string   `json:"chairman_email"`
-	ViceChairmanEmail string   `json:"vice_chairman_email"`
-	TreasurerEmail    string   `json:"treasurer_email"`
-	SecretaryEmail    string   `json:"secretary_email"`
-	HarborMasterEmail string   `json:"harbor_master_email"`
-	HasFakturaLogo    bool     `json:"has_faktura_logo"`
-	FakturaLogoMIME   string   `json:"faktura_logo_mime"`
-	HasSiteLogo       bool     `json:"has_site_logo"`
-	SiteLogoMIME      string   `json:"site_logo_mime"`
+	VippsMaxAmount *float64 `json:"vipps_max_amount"`
+	// VippsAutoAssign opts the club into booking unambiguous Vipps charges
+	// without a human (BRY-340). VippsAutoAssignTieCategory is the price
+	// category to use when an amount fits items in several categories;
+	// empty leaves those charges for review.
+	VippsAutoAssign            bool   `json:"vipps_auto_assign"`
+	VippsAutoAssignTieCategory string `json:"vipps_auto_assign_tie_category"`
+	WebsiteURL                 string `json:"website_url"`
+	ChairmanEmail              string `json:"chairman_email"`
+	ViceChairmanEmail          string `json:"vice_chairman_email"`
+	TreasurerEmail             string `json:"treasurer_email"`
+	SecretaryEmail             string `json:"secretary_email"`
+	HarborMasterEmail          string `json:"harbor_master_email"`
+	HasFakturaLogo             bool   `json:"has_faktura_logo"`
+	FakturaLogoMIME            string `json:"faktura_logo_mime"`
+	HasSiteLogo                bool   `json:"has_site_logo"`
+	SiteLogoMIME               string `json:"site_logo_mime"`
 	// Public site content — empty string means "use the frontend's
 	// i18n fallback so the page reads sensibly even before any admin
 	// has visited settings".
@@ -295,6 +301,7 @@ func (h *ClubSettingsHandler) HandleGetFinancialSettings(w http.ResponseWriter, 
 		        COALESCE(vipps_fee_account, '7700'),
 		        COALESCE(vipps_per_charge_enabled, false),
 		        vipps_max_amount,
+		        vipps_auto_assign, COALESCE(vipps_auto_assign_tie_category, ''),
 		        COALESCE(website_url, ''),
 		        COALESCE(chairman_email, ''), COALESCE(vice_chairman_email, ''),
 		        COALESCE(treasurer_email, ''),
@@ -320,6 +327,7 @@ func (h *ClubSettingsHandler) HandleGetFinancialSettings(w http.ResponseWriter, 
 		&s.VippsClearingAccount, &s.VippsFeeAccount,
 		&s.VippsPerChargeEnabled,
 		&s.VippsMaxAmount,
+		&s.VippsAutoAssign, &s.VippsAutoAssignTieCategory,
 		&s.WebsiteURL,
 		&s.ChairmanEmail, &s.ViceChairmanEmail,
 		&s.TreasurerEmail,
@@ -356,30 +364,34 @@ type updateFinancialSettingsRequest struct {
 	VippsPerChargeEnabled *bool    `json:"vipps_per_charge_enabled,omitempty"`
 	// VippsMaxAmount: omitted = keep; <= 0 = clear the cap (unlimited);
 	// > 0 = set the cap (BRY-283).
-	VippsMaxAmount          *float64 `json:"vipps_max_amount,omitempty"`
-	WebsiteURL              *string  `json:"website_url,omitempty"`
-	ChairmanEmail           *string  `json:"chairman_email,omitempty"`
-	ViceChairmanEmail       *string  `json:"vice_chairman_email,omitempty"`
-	TreasurerEmail          *string  `json:"treasurer_email,omitempty"`
-	SecretaryEmail          *string  `json:"secretary_email,omitempty"`
-	HarborMasterEmail       *string  `json:"harbor_master_email,omitempty"`
-	HarborApproach          *string  `json:"harbor_approach,omitempty"`
-	HarborDepth             *string  `json:"harbor_depth,omitempty"`
-	HarborVHF               *string  `json:"harbor_vhf,omitempty"`
-	HarborCTATitle          *string  `json:"harbor_cta_title,omitempty"`
-	HarborCTADescription    *string  `json:"harbor_cta_description,omitempty"`
-	MotorhomePower          *string  `json:"motorhome_power,omitempty"`
-	MotorhomeFacilities     *string  `json:"motorhome_facilities,omitempty"`
-	MotorhomeCheckin        *string  `json:"motorhome_checkin,omitempty"`
-	MotorhomeRules          *string  `json:"motorhome_rules,omitempty"`
-	MotorhomeCTATitle       *string  `json:"motorhome_cta_title,omitempty"`
-	MotorhomeCTADescription *string  `json:"motorhome_cta_description,omitempty"`
-	FeatureBookings         *bool    `json:"feature_bookings,omitempty"`
-	FeatureProjects         *bool    `json:"feature_projects,omitempty"`
-	FeatureCalendar         *bool    `json:"feature_calendar,omitempty"`
-	FeatureCommerce         *bool    `json:"feature_commerce,omitempty"`
-	FeatureAccounting       *bool    `json:"feature_accounting,omitempty"`
-	AnthropicAPIKey         *string  `json:"anthropic_api_key,omitempty"`
+	VippsMaxAmount *float64 `json:"vipps_max_amount,omitempty"`
+	// VippsAutoAssignTieCategory: omitted = keep; "" = clear; otherwise a
+	// price_items category.
+	VippsAutoAssign            *bool   `json:"vipps_auto_assign,omitempty"`
+	VippsAutoAssignTieCategory *string `json:"vipps_auto_assign_tie_category,omitempty"`
+	WebsiteURL                 *string `json:"website_url,omitempty"`
+	ChairmanEmail              *string `json:"chairman_email,omitempty"`
+	ViceChairmanEmail          *string `json:"vice_chairman_email,omitempty"`
+	TreasurerEmail             *string `json:"treasurer_email,omitempty"`
+	SecretaryEmail             *string `json:"secretary_email,omitempty"`
+	HarborMasterEmail          *string `json:"harbor_master_email,omitempty"`
+	HarborApproach             *string `json:"harbor_approach,omitempty"`
+	HarborDepth                *string `json:"harbor_depth,omitempty"`
+	HarborVHF                  *string `json:"harbor_vhf,omitempty"`
+	HarborCTATitle             *string `json:"harbor_cta_title,omitempty"`
+	HarborCTADescription       *string `json:"harbor_cta_description,omitempty"`
+	MotorhomePower             *string `json:"motorhome_power,omitempty"`
+	MotorhomeFacilities        *string `json:"motorhome_facilities,omitempty"`
+	MotorhomeCheckin           *string `json:"motorhome_checkin,omitempty"`
+	MotorhomeRules             *string `json:"motorhome_rules,omitempty"`
+	MotorhomeCTATitle          *string `json:"motorhome_cta_title,omitempty"`
+	MotorhomeCTADescription    *string `json:"motorhome_cta_description,omitempty"`
+	FeatureBookings            *bool   `json:"feature_bookings,omitempty"`
+	FeatureProjects            *bool   `json:"feature_projects,omitempty"`
+	FeatureCalendar            *bool   `json:"feature_calendar,omitempty"`
+	FeatureCommerce            *bool   `json:"feature_commerce,omitempty"`
+	FeatureAccounting          *bool   `json:"feature_accounting,omitempty"`
+	AnthropicAPIKey            *string `json:"anthropic_api_key,omitempty"`
 }
 
 // HandleUpdateFinancialSettings updates org_number, address, and
@@ -408,6 +420,12 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		*req.KIDCheckMethod != finance.KIDMethodMod10 &&
 		*req.KIDCheckMethod != finance.KIDMethodMod11 {
 		Error(w, http.StatusBadRequest, "kid_check_method must be mod10 or mod11")
+		return
+	}
+
+	if req.VippsAutoAssignTieCategory != nil && *req.VippsAutoAssignTieCategory != "" &&
+		!validCategories[*req.VippsAutoAssignTieCategory] {
+		Error(w, http.StatusBadRequest, "vipps_auto_assign_tie_category must be a price category")
 		return
 	}
 
@@ -453,7 +471,11 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		   vipps_max_amount          = CASE
 		                                 WHEN $36::numeric IS NULL THEN vipps_max_amount
 		                                 WHEN $36::numeric <= 0    THEN NULL
-		                                 ELSE $36::numeric END
+		                                 ELSE $36::numeric END,
+		   vipps_auto_assign         = COALESCE($37, vipps_auto_assign),
+		   vipps_auto_assign_tie_category = CASE
+		                                 WHEN $38::text IS NULL THEN vipps_auto_assign_tie_category
+		                                 ELSE NULLIF($38::text, '') END
 		 WHERE id = $1`,
 		claims.ClubID, req.OrgNumber, req.Address, req.Phone, req.VHFChannel,
 		req.Latitude, req.Longitude,
@@ -472,6 +494,7 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		req.VippsClearingAccount, req.VippsFeeAccount,
 		req.VippsPerChargeEnabled,
 		req.VippsMaxAmount,
+		req.VippsAutoAssign, req.VippsAutoAssignTieCategory,
 	); err != nil {
 		h.log.Error().Err(err).Msg("update financial settings")
 		Error(w, http.StatusInternalServerError, "internal error")

@@ -22,6 +22,9 @@ type VippsResyncResult struct {
 	// Orders reports the per-charge model's order-linked bookings (BRY-337);
 	// nil on the legacy model.
 	Orders *VippsOrderReconcileResult `json:"orders,omitempty"`
+	// AutoAssign reports the unambiguous charges booked without a human
+	// (BRY-340) and how many still wait in Tildel.
+	AutoAssign *VippsAutoAssignResult `json:"auto_assign,omitempty"`
 }
 
 // ResyncVippsBilags re-runs the Vipps classification cascade on every
@@ -57,6 +60,11 @@ func (s *Service) ResyncVippsBilags(ctx context.Context, clubID, createdBy strin
 			return nil, fmt.Errorf("booking order-linked charges: %w", err)
 		}
 		res.Orders = orders
+		auto, err := s.AutoAssignVippsCharges(ctx, clubID, createdBy)
+		if err != nil {
+			return nil, fmt.Errorf("auto-assigning charges: %w", err)
+		}
+		res.AutoAssign = auto
 		return res, nil
 	}
 

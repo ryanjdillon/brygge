@@ -957,6 +957,10 @@
       "vippsMaxAmount": "Maksymalna kwota dla Vipps (kr)",
       "vippsMaxAmountPlaceholder": "Bez limitu",
       "vippsMaxAmountHint": "Faktury powyżej tej kwoty są oferowane tylko przelewem bankowym (KID), aby klub uniknął opłat Vipps. Pozostaw puste, aby nie ustawiać limitu.",
+      "vippsAutoAssign": "Automatycznie księguj jednoznaczne płatności Vipps",
+      "vippsAutoAssignTieCategory": "Gdy kwota pasuje do kilku kategorii cenowych",
+      "vippsAutoAssignTieNone": "Pozostaw do sprawdzenia",
+      "vippsAutoAssignHint": "Księguje płatność tylko wtedy, gdy wyraźnie pasuje do jedynej otwartej faktury członka lub do jednej kategorii cenowej. Reszta pozostaje w Tildel. Każde księgowanie można cofnąć.",
       "vippsClearingAccount": "Konto rozrachunkowe",
       "vippsFeeAccount": "Konto opłat"
     },

@@ -967,6 +967,10 @@
       "vippsMaxAmount": "Maximumbedrag voor Vipps (kr)",
       "vippsMaxAmountPlaceholder": "Geen limiet",
       "vippsMaxAmountHint": "Facturen boven dit bedrag worden alleen per bankoverschrijving (KID) aangeboden, zodat de club Vipps-kosten vermijdt. Laat leeg voor geen limiet.",
+      "vippsAutoAssign": "Eenduidige Vipps-betalingen automatisch boeken",
+      "vippsAutoAssignTieCategory": "Als een bedrag bij meerdere prijscategorieën past",
+      "vippsAutoAssignTieNone": "Laten voor controle",
+      "vippsAutoAssignHint": "Boekt een betaling alleen als die duidelijk past bij de enige openstaande factuur van een lid of bij één prijscategorie. De rest blijft in Tildel. Elke boeking kan ongedaan worden gemaakt.",
       "vippsClearingAccount": "Tussenrekening",
       "vippsFeeAccount": "Kostenrekening"
     },

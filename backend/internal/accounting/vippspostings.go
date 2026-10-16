@@ -288,6 +288,13 @@ func (s *Service) AssignVippsChargeToInvoice(ctx context.Context, clubID, vippsR
 			Str("journal_entry_id", entryID).
 			Msg("vipps per-charge assign: invoice payment back-link failed")
 	}
+	if _, err := s.db.Exec(ctx,
+		`UPDATE vipps_import_rows SET invoice_id = $3 WHERE id = $1 AND club_id = $2`,
+		vippsRowID, clubID, invoiceID,
+	); err != nil {
+		s.log.Warn().Err(err).Str("vipps_row_id", vippsRowID).
+			Msg("vipps per-charge assign: recording the settled invoice failed")
+	}
 
 	return &VippsChargePostResult{EntryID: entryID}, nil
 }
