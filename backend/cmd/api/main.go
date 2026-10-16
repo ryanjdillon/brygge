@@ -1277,6 +1277,8 @@ func main() {
 								Post("/{entryID}/post", accountingHandler.HandlePostJournalEntry)
 							r.With(middleware.RequireFreshTOTPDefault()).
 								Post("/{entryID}/void", accountingHandler.HandleVoidJournalEntry)
+							r.With(middleware.RequireFreshTOTPDefault()).
+								Delete("/{entryID}", accountingHandler.HandleDeleteDraftJournalEntry)
 							r.Post("/{entryID}/attachment", accountingHandler.HandleUploadJournalAttachment)
 							r.Get("/{entryID}/attachment", accountingHandler.HandleGetJournalAttachment)
 						})

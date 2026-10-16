@@ -873,7 +873,8 @@
         "reopen": "Reopen",
         "createYear": "Create new year",
         "noPeriods": "No fiscal periods yet.",
-        "confirmClose": "Are you sure you want to close this period? Entries cannot be modified in closed periods."
+        "confirmClose": "Are you sure you want to close this period? Entries cannot be modified in closed periods.",
+        "closeBlocked": "Die Periode enthält noch Entwürfe. Buchen oder löschen Sie sie zuerst; in einer geschlossenen Periode kann nicht mehr gebucht werden."
       },
       "journal": {
         "title": "Journal",
@@ -898,6 +899,10 @@
         "sourceInvoiceSync": "Invoice sync",
         "sourceBankImport": "Bank import",
         "confirmVoid": "Are you sure you want to void this entry? A reversal entry will be created.",
+        "deleteDraft": "Entwurf löschen",
+        "deleteDraftTitle": "Diesen Entwurf löschen?",
+        "deleteDraftBody": "Der Entwurf wurde nie gebucht und erscheint in keinem Bericht. Entwürfe aus einer Bank- oder Vipps-Zeile müssen stattdessen in Tildel rückgängig gemacht werden.",
+        "closeBlocked": "Die Periode enthält noch Entwürfe. Buchen oder löschen Sie sie zuerst; in einer geschlossenen Periode kann nicht mehr gebucht werden.",
         "updating": "Updating...",
         "updateComplete": "Update complete",
         "paymentsSynced": "payments synced",

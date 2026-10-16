@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plus, Lock, Unlock } from 'lucide-vue-next'
 import {
@@ -35,6 +35,9 @@ function handleClose(periodId: string) {
     closeMutation.mutate(periodId)
   }
 }
+
+// The server refuses to close while drafts remain (409 period_has_drafts).
+const closeError = computed(() => (closeMutation.error.value as Error | null)?.message ?? '')
 
 function handleReopen(periodId: string) {
   reopenMutation.mutate(periodId)
@@ -85,6 +88,9 @@ function formatDate(d: string | null): string {
 
     <div v-if="isLoading" class="mt-6 text-gray-500">{{ t('common.loading') }}...</div>
     <div v-else-if="isError" class="mt-6 rounded-md bg-red-50 p-3 text-sm text-red-800">{{ t('common.error') }}</div>
+    <p v-if="closeError" class="mt-4 rounded-md bg-amber-50 p-3 text-sm text-amber-800">
+      {{ t('admin.accounting.periods.closeBlocked') }} ({{ closeError }})
+    </p>
 
     <div v-else class="mt-6 overflow-x-auto">
       <table class="min-w-full divide-y divide-gray-200">

@@ -15,7 +15,7 @@ The double-entry GL plus everything that posts to it: bank statement parsing, KI
 | `automatch.go` | `AutoMatchImport` — applies operator-defined `account_mapping_rules` against unmatched rows. |
 | `vippsimport.go` | Parse Vipps export CSV (rows are `payout`, `belastning`, `fee`). |
 | `vippsreconcile.go` | `ReconcileVippsPreview` + `ReconcileVippsConfirm` — the cascade that classifies each Vipps belastning. See cascade below. |
-| `vippsresync.go` | `ResyncVippsBilags` — re-runs the cascade across already-imported drafts that still land on 2900/3900. Called by the "Synk Vipps" button. |
+| `vippsresync.go` | `ResyncVippsBilags` — on the per-charge model, books order-linked charges and runs auto-assign; on the legacy model, re-runs the cascade across existing drafts that still land on 2900/3900 and keeps the results as drafts (posting a backlog is a supervised step, BRY-341). Called by the "Synk Vipps" button. |
 | `invoicepayment.go` | `Service.linkInvoicePayment` — inserts a `payments` row and back-links `invoices.payment_id`. Used by both bank KID match and Vipps invoice match so the dashboard faktura-status widgets reflect the payment. |
 | `resplit.go` | `ResplitInvoiceBilags` — corrects the per-account revenue split of booked fakturas with `invoice_resplit` reclassification entries (preview + apply). |
 | `sync.go` | `paymentTypeAccountMap`, `SyncPayments`, `SyncInvoices`, `bookedEntryFilter`. The faktura → journal entry sync; results carry `skipped_details` with a reason per skipped row. |
@@ -32,7 +32,7 @@ When a bank row matching `Utb. NNN Vippsnr MMM` arrives, the reconciliation pull
 3. **Member resolved, no clear classification** → CR 1500 receivables (treasurer reconciles manually)
 4. **Fallback** → CR 3900 `vippsFallbackRevenueCode` (Andre inntekter)
 
-**Order-linked charges (per-charge model, BRY-337).** An ePayment charge (faktura pay link, QR checkout) carries our merchant reference (`chk-…`) as the row's `order_id`. `AutoReconcileOrderCharges` books it from the order itself, with no amount or name guessing: DR clearing / CR 1500 for each faktura in `order_sources` (with the `linkInvoicePayment` back-link), and CR the category revenue account for each catalog line (`resolveOrderChargeSplit`). It refuses if the order total and the charge differ, or if a faktura on the order is already paid or voided; those are reported in `skipped_details`. It runs from **Synk Vipps**, an operator Report API sync, and CSV upload. The nightly Report sync only repairs row types, because journal entries need a human `created_by`. Postings are drafts, like every per-charge posting.
+**Order-linked charges (per-charge model, BRY-337).** An ePayment charge (faktura pay link, QR checkout) carries our merchant reference (`chk-…`) as the row's `order_id`. `AutoReconcileOrderCharges` books it from the order itself, with no amount or name guessing: DR clearing / CR 1500 for each faktura in `order_sources` (with the `linkInvoicePayment` back-link), and CR the category revenue account for each catalog line (`resolveOrderChargeSplit`). It refuses if the order total and the charge differ, or if a faktura on the order is already paid or voided; those are reported in `skipped_details`. It runs from **Synk Vipps**, an operator Report API sync, and CSV upload. The nightly Report sync only repairs row types, because journal entries need a human `created_by`. Like every Vipps posting, the entry is posted on creation (BRY-339).
 
 **Auto-assign (per-charge model, BRY-340).** After order-linked charges, `AutoAssignVippsCharges` (`vipps_auto_assign.go`) books the rest of the queue when the outcome is unambiguous and the club has opted in (`clubs.vipps_auto_assign`):
 1. `member_invoice`: a strong member match (`resolveCustomerToMemberPass` up to `memberPassFirstLast`) with exactly one open faktura of equal total goes through `AssignVippsChargeToInvoice`.
@@ -74,6 +74,8 @@ See [`../../../docs/developer/reference/enums.md`](../../../docs/developer/refer
 ## Invariants
 
 - `posted` journal entries are immutable — only `VoidJournalEntry` (creates a balanced reversal)
+- Every Vipps posting (charge, order split, auto-assign, fee, payout, legacy confirm) is posted on creation; a failed post unlinks its rows and discards the draft
+- `ClosePeriod` refuses while the period holds drafts (409 `period_has_drafts`, listed per source); `DeleteDraftJournalEntry` removes an unlinked draft
 - `closed`/`locked` fiscal periods reject new entries
 - Vipps belastning amounts are positive; fees are negative
 - Bank rows with `journal_entry_id IS NOT NULL` cannot be reassigned without cascading `journal_lines`

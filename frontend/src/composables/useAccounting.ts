@@ -315,6 +315,20 @@ export function useVoidEntry() {
   })
 }
 
+// Deleting is limited to drafts that no bank or Vipps row points at; the
+// server answers 409 otherwise. Behind fresh TOTP, so call ensureFreshTotp()
+// before mutating.
+export function useDeleteDraftEntry() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (entryId: string) =>
+      apiFetch<void>(`${BASE}/journal/${entryId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['accounting', 'journal'] })
+    },
+  })
+}
+
 export function useSyncPayments() {
   const qc = useQueryClient()
   return useMutation({

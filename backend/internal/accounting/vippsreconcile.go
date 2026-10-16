@@ -323,11 +323,19 @@ func (s *Service) ReconcileVippsPreview(ctx context.Context, clubID, bankRowID s
 	return preview, nil
 }
 
-// ReconcileVippsConfirm creates a draft journal entry from a (possibly edited)
-// preview. The caller is responsible for passing the final line set.
+// ReconcileVippsConfirm books a (possibly edited) preview as a posted journal
+// entry (BRY-339). The caller is responsible for passing the final line set.
 // If periodOverride is empty, the period is auto-resolved from the bank row's
 // date (and auto-created as calendar-year if missing).
 func (s *Service) ReconcileVippsConfirm(ctx context.Context, clubID, bankRowID, periodOverride, createdBy string, lines []VippsReconcileLine) (string, error) {
+	return s.reconcileVippsConfirm(ctx, clubID, bankRowID, periodOverride, createdBy, lines, true)
+}
+
+// reconcileVippsConfirm is ReconcileVippsConfirm with posting optional.
+// ResyncVippsBilags re-creates existing draft bilags and keeps them drafts:
+// posting a pre-existing backlog is a supervised step (BRY-341), not a side
+// effect of reclassifying it.
+func (s *Service) reconcileVippsConfirm(ctx context.Context, clubID, bankRowID, periodOverride, createdBy string, lines []VippsReconcileLine, post bool) (string, error) {
 	if len(lines) == 0 {
 		return "", fmt.Errorf("at least one line is required")
 	}
@@ -394,17 +402,28 @@ func (s *Service) ReconcileVippsConfirm(ctx context.Context, clubID, bankRowID, 
 		`UPDATE bank_import_rows SET journal_entry_id = $1, auto_matched = true WHERE id = $2`,
 		entry.ID, bankRowID,
 	); err != nil {
-		return entry.ID, fmt.Errorf("linking bank row: %w", err)
+		s.discardDraft(ctx, clubID, entry.ID)
+		return "", fmt.Errorf("linking bank row: %w", err)
 	}
 
+	var vippsRowIDs []string
 	for _, l := range lines {
 		if l.VippsRowID == "" {
 			continue
 		}
+		vippsRowIDs = append(vippsRowIDs, l.VippsRowID)
 		_, _ = s.db.Exec(ctx,
 			`UPDATE vipps_import_rows SET journal_entry_id = $1 WHERE id = $2 AND club_id = $3`,
 			entry.ID, l.VippsRowID, clubID,
 		)
+	}
+
+	if post {
+		if err := s.PostJournalEntry(ctx, entry.ID, createdBy); err != nil {
+			s.unwindVippsPosting(ctx, clubID, entry.ID, "bank_import_rows", []string{bankRowID})
+			s.unwindVippsPosting(ctx, clubID, entry.ID, "vipps_import_rows", vippsRowIDs)
+			return "", fmt.Errorf("posting journal entry: %w", err)
+		}
 	}
 
 	// Back-link any invoice that this reconciliation paid off so the

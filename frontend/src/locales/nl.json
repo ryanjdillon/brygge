@@ -873,7 +873,8 @@
         "reopen": "Reopen",
         "createYear": "Create new year",
         "noPeriods": "No fiscal periods yet.",
-        "confirmClose": "Are you sure you want to close this period? Entries cannot be modified in closed periods."
+        "confirmClose": "Are you sure you want to close this period? Entries cannot be modified in closed periods.",
+        "closeBlocked": "De periode bevat nog conceptboekingen. Boek of verwijder ze eerst; in een afgesloten periode kan niet meer worden geboekt."
       },
       "journal": {
         "title": "Journal",
@@ -898,6 +899,10 @@
         "sourceInvoiceSync": "Invoice sync",
         "sourceBankImport": "Bank import",
         "confirmVoid": "Are you sure you want to void this entry? A reversal entry will be created.",
+        "deleteDraft": "Concept verwijderen",
+        "deleteDraftTitle": "Dit concept verwijderen?",
+        "deleteDraftBody": "Het concept is nooit geboekt en staat in geen enkel rapport. Concepten uit een bank- of Vipps-regel moeten in Tildel ongedaan worden gemaakt.",
+        "closeBlocked": "De periode bevat nog conceptboekingen. Boek of verwijder ze eerst; in een afgesloten periode kan niet meer worden geboekt.",
         "updating": "Updating...",
         "updateComplete": "Update complete",
         "paymentsSynced": "payments synced",

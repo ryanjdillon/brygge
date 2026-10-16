@@ -218,7 +218,7 @@ Single fakturas go through the same draft → send → paid flow.
 
 - **End of year:** run `Admin → Accounting` to view the income summary for the period. The faktura-status donut and headline cards (Fakturert / Motteke / Utestående / Forfalle) show counts beside amounts. Compare against bank statements. Voided fakturas don't appear in the income totals.
 - **Recurring members who never pay:** Sent tab → filter `Past due` chip → bulk **Send purring** to nudge.
-- **Closing the period:** once everything is reconciled, mark the fiscal period as closed in `Admin → Accounting`. After that, no new fakturas can be issued against that period — protects historical balance sheets.
+- **Closing the period:** once everything is reconciled, mark the fiscal period as closed in `Admin → Accounting`. After that, no new fakturas can be issued against that period — protects historical balance sheets. Closing is refused while the period still has **draft** (kladd) bilag, and the message lists them per source. Post them, or delete an abandoned draft with the bin icon on the Bilag page. Drafts that came from a bank or Vipps row are undone from **Tildel** instead.
 
 ### Bank statement → invoice reconciliation
 
@@ -226,7 +226,7 @@ When you upload a bank statement (`Admin → Accounting → Bank & Vipps`), the 
 
 ### Vipps reconciliation cascade
 
-For Vipps payouts (the consolidated daily Utb. row in the bank statement), the reconciliation builds a draft bilag per payer using this cascade (DIL-367):
+For Vipps payouts (the consolidated daily Utb. row in the bank statement), the reconciliation books a bilag per payer using this cascade (DIL-367). Vipps bilags are posted as soon as they are created, so they count in the reports immediately (BRY-339):
 
 1. **Member + matching open invoice** → CR 1500 receivables + back-link `invoices.payment_id`. The faktura-status donut reflects the payment immediately.
 2. **Amount → price-article match** → CR the mapped revenue account (3120 plassleie, 3200 gjestehavn, 3210 bobil/camping, 3300 tjenester such as slipping, etc.). Handles guest-slip × N nights, motorhome × N nights, sesongplass, slipping fees — the typical non-member walk-up payments. Exact amount match for once/year/season units; integer-multiple match (2–60×) for per-night/day/hour units.

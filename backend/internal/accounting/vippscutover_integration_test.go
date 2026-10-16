@@ -67,15 +67,16 @@ func TestRegenerateOpenPeriodVippsReconciliations(t *testing.T) {
 		t.Errorf("unexpected failures: %v", res.Failed)
 	}
 
-	// Legacy draft is gone.
-	var n int
+	// The legacy bilag was posted on confirm, so regeneration voids it
+	// (original kept, reversal posted) instead of deleting it.
+	var legacyStatus string
 	if err := svc.db.QueryRow(ctx,
-		`SELECT count(*) FROM journal_entries WHERE id = $1`, legacyEntry,
-	).Scan(&n); err != nil {
-		t.Fatalf("count legacy: %v", err)
+		`SELECT status FROM journal_entries WHERE id = $1`, legacyEntry,
+	).Scan(&legacyStatus); err != nil {
+		t.Fatalf("read legacy: %v", err)
 	}
-	if n != 0 {
-		t.Error("legacy draft bilag should be deleted after regeneration")
+	if legacyStatus != "voided" {
+		t.Errorf("legacy bilag status = %q, want voided", legacyStatus)
 	}
 
 	// Faktura link preserved — same payment id, untouched.

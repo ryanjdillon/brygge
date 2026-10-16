@@ -37,8 +37,9 @@ type VippsResyncResult struct {
 //     any line credits 2900 or 3900).
 //  2. For each: delete the journal entry (cascade-removes lines),
 //     null the bank_import_row.journal_entry_id link.
-//  3. Re-run ReconcileVippsPreview against the freed bank row and
-//     ReconcileVippsConfirm to post the new draft.
+//  3. Re-run ReconcileVippsPreview against the freed bank row and book the
+//     result as a new draft. The candidates were drafts, so the result stays
+//     one; posting the backlog is a separate, supervised step (BRY-341).
 func (s *Service) ResyncVippsBilags(ctx context.Context, clubID, createdBy string) (*VippsResyncResult, error) {
 	// Initialize Failed as an empty (not nil) slice so JSON
 	// serializes to [] rather than null — frontend templates that
@@ -140,7 +141,7 @@ func (s *Service) ResyncVippsBilags(ctx context.Context, clubID, createdBy strin
 			res.Skipped++
 			continue
 		}
-		if _, err := s.ReconcileVippsConfirm(ctx, clubID, c.bankRowID, "", createdBy, preview.Lines); err != nil {
+		if _, err := s.reconcileVippsConfirm(ctx, clubID, c.bankRowID, "", createdBy, preview.Lines, false); err != nil {
 			res.Failed = append(res.Failed, c.bankRowID)
 			continue
 		}

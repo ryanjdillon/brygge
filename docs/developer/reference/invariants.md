@@ -40,6 +40,18 @@ Charges naming a checkout order are left to `AutoReconcileOrderCharges`. Each bo
 
 **Failure mode:** guessing on a weak name match or a cross-category amount books a member's dues as walk-up revenue, or the reverse. The member is then chased for a faktura they paid, or revenue lands on the wrong account. With no opt-in, a club that never chose this would find bookings it didn't make.
 
+### Vipps postings are posted on creation; no period closes with drafts
+
+**Rule (BRY-339):** every Vipps posting path posts its entry right away: per-charge charge→faktura and charge→account, the order-linked split, auto-assign, the payout's fee and bank entries, and the legacy `ReconcileVippsConfirm`.
+- Each path marks its source row with a guarded update first, then posts. If the post fails, it unlinks the row and deletes the draft (`unwindVippsPosting`), so the charge returns to Tildel.
+- The legacy `ResyncVippsBilags` re-creates existing drafts and keeps them as drafts. Posting a pre-existing backlog is a separate, supervised step (BRY-341).
+- `ClosePeriod` refuses (409 `period_has_drafts`) while the period holds any draft, and lists them per source with count and total. `DeleteDraftJournalEntry` removes a draft that no bank or Vipps row references. Linked drafts are undone through Tildel unassign.
+- Posted entries are never hard-deleted. Undoing a posted charge voids it with a reversal (`UnassignVippsCharge`, `VoidJournalEntry`).
+
+**Failure mode:**
+- Reports and momskomp count only booked entries, so draft Vipps postings left all Vipps income and fees out of the accounts. In prod that was 869 drafts.
+- Closing a period with drafts strands them, because posting into a closed period is refused.
+
 ### Booked faktura bilags are corrected, never rebuilt
 
 **Rule (BRY-364):** a posted `invoice_sync` entry is never deleted or edited. When its revenue split is wrong, `ResplitInvoiceBilags` posts an `invoice_resplit` entry for the invoice that moves the difference between revenue accounts. The difference is the lines' expected per-account split minus what the sync entry and earlier resplits booked. The run is idempotent, a preview posts nothing, and apply is behind fresh TOTP. An invoice whose booked revenue differs from its total is skipped with a reason for manual correction. The old `RebuildInvoiceBilags` (delete and re-sync) was removed.

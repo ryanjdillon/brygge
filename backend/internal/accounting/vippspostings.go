@@ -21,11 +21,13 @@ import (
 //	  bank payout    : DR bank     / CR clearing   (keyed on settlement number)
 //
 // Per settlement the clearing account nets to ~0: sum of the charge debits
-// equals the fee credit plus the net-payout credit. Every entry is a draft
-// (mirroring the legacy Vipps reconcile), and each posting marks the source
-// row's journal_entry_id so it is reconciled exactly once. Concurrent double
-// bookings are caught by a guarded UPDATE ... WHERE journal_entry_id IS NULL:
-// the loser deletes the draft it just created and returns the winner's entry.
+// equals the fee credit plus the net-payout credit. Every entry is posted on
+// creation (BRY-339): reports and momskomp only count booked entries, so a
+// draft would leave Vipps income and fees out of the accounts. Each posting
+// first marks the source row's journal_entry_id with a guarded UPDATE ...
+// WHERE journal_entry_id IS NULL (the loser of a concurrent double booking
+// deletes its still-draft entry and returns the winner's), and only then
+// posts; a failed post unlinks the row and discards the draft.
 
 // VippsChargePostResult is the outcome of booking a single Vipps belastning.
 type VippsChargePostResult struct {
@@ -218,7 +220,33 @@ func (s *Service) postVippsChargeSplit(ctx context.Context, clubID, createdBy, d
 		}
 		return existing, errChargeRaced
 	}
+	if err := s.PostJournalEntry(ctx, entry.ID, createdBy); err != nil {
+		s.unwindVippsPosting(ctx, clubID, entry.ID, "vipps_import_rows", []string{b.id})
+		return "", fmt.Errorf("posting journal entry: %w", err)
+	}
 	return entry.ID, nil
+}
+
+// unwindVippsPosting undoes a posting whose PostJournalEntry failed: it
+// unlinks the rows the draft was marked on and deletes the draft, so the
+// charge or payout goes back to the Tildel queue instead of sitting on an
+// unposted orphan.
+func (s *Service) unwindVippsPosting(ctx context.Context, clubID, entryID, table string, rowIDs []string) {
+	var q string
+	switch table {
+	case "vipps_import_rows":
+		q = `UPDATE vipps_import_rows SET journal_entry_id = NULL
+		      WHERE club_id = $1 AND journal_entry_id = $2 AND id = ANY($3::uuid[])`
+	case "bank_import_rows":
+		q = `UPDATE bank_import_rows SET journal_entry_id = NULL, auto_matched = false
+		      WHERE club_id = $1 AND journal_entry_id = $2 AND id = ANY($3::uuid[])`
+	default:
+		return
+	}
+	if _, err := s.db.Exec(ctx, q, clubID, entryID, rowIDs); err != nil {
+		s.log.Error().Err(err).Str("entry_id", entryID).Msg("vipps posting: unlinking rows after a failed post failed")
+	}
+	s.discardDraft(ctx, clubID, entryID)
 }
 
 // errChargeRaced signals that postVippsCharge lost the guarded-mark race and
@@ -452,14 +480,19 @@ func (s *Service) ClearVippsPayout(ctx context.Context, clubID, bankRowID, creat
 		if cerr != nil {
 			return nil, fmt.Errorf("creating fee entry: %w", cerr)
 		}
-		res.FeeEntryID = feeJE.ID
-		for _, id := range feeRows {
-			_, _ = s.db.Exec(ctx,
-				`UPDATE vipps_import_rows SET journal_entry_id = $1
-				  WHERE id = $2 AND club_id = $3 AND journal_entry_id IS NULL`,
-				feeJE.ID, id, clubID,
-			)
+		if _, err := s.db.Exec(ctx,
+			`UPDATE vipps_import_rows SET journal_entry_id = $1
+			  WHERE club_id = $2 AND journal_entry_id IS NULL AND id = ANY($3::uuid[])`,
+			feeJE.ID, clubID, feeRows,
+		); err != nil {
+			s.discardDraft(ctx, clubID, feeJE.ID)
+			return nil, fmt.Errorf("linking fee rows: %w", err)
 		}
+		if err := s.PostJournalEntry(ctx, feeJE.ID, createdBy); err != nil {
+			s.unwindVippsPosting(ctx, clubID, feeJE.ID, "vipps_import_rows", feeRows)
+			return nil, fmt.Errorf("posting fee entry: %w", err)
+		}
+		res.FeeEntryID = feeJE.ID
 	}
 
 	// Bank entry (DR bank / CR clearing) for the net payout, dated at the bank
@@ -497,6 +530,7 @@ func (s *Service) ClearVippsPayout(ctx context.Context, clubID, bankRowID, creat
 		bankJE.ID, bankRowID, clubID,
 	)
 	if uerr != nil {
+		s.discardDraft(ctx, clubID, bankJE.ID)
 		return nil, fmt.Errorf("linking bank row: %w", uerr)
 	}
 	if tag.RowsAffected() == 0 {
@@ -511,6 +545,10 @@ func (s *Service) ClearVippsPayout(ctx context.Context, clubID, bankRowID, creat
 			bankRowID, clubID,
 		).Scan(&res.BankEntryID)
 	} else {
+		if err := s.PostJournalEntry(ctx, bankJE.ID, createdBy); err != nil {
+			s.unwindVippsPosting(ctx, clubID, bankJE.ID, "bank_import_rows", []string{bankRowID})
+			return nil, fmt.Errorf("posting payout entry: %w", err)
+		}
 		res.BankEntryID = bankJE.ID
 		// Mark the payout row reconciled against the bank entry.
 		if payoutEntry == nil {

@@ -1410,7 +1410,8 @@
         "reopen": "Opne att",
         "createYear": "Opprett nytt år",
         "noPeriods": "Ingen rekneskapsperiodar enno.",
-        "confirmClose": "Er du sikker på at du vil lukke denne perioden? Bilag kan ikkje endrast i lukka periodar."
+        "confirmClose": "Er du sikker på at du vil lukke denne perioden? Bilag kan ikkje endrast i lukka periodar.",
+        "closeBlocked": "Perioden har framleis kladdebilag. Bokfør eller slett dei først; ein lukka periode kan ikkje lenger bokførast i."
       },
       "journal": {
         "title": "Bilagsjournal",
@@ -1435,6 +1436,10 @@
         "sourceInvoiceSync": "Fakturasynk",
         "sourceBankImport": "Bankimport",
         "confirmVoid": "Er du sikker på at du vil annullere dette bilaget? Ei reverseringspostering vil bli oppretta.",
+        "deleteDraft": "Slett kladd",
+        "deleteDraftTitle": "Slette denne kladden?",
+        "deleteDraftBody": "Kladden er aldri bokført og er ikkje med i nokon rapport. Kladdar frå ei bank- eller Vipps-rad må angrast frå Tildel i staden.",
+        "closeBlocked": "Perioden har framleis kladdebilag. Bokfør eller slett dei først; ein lukka periode kan ikkje lenger bokførast i.",
         "updating": "Oppdaterer...",
         "updateComplete": "Oppdatering fullført",
         "paymentsSynced": "betalingar synkronisert",

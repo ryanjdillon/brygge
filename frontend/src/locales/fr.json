@@ -873,7 +873,8 @@
         "reopen": "Reopen",
         "createYear": "Create new year",
         "noPeriods": "No fiscal periods yet.",
-        "confirmClose": "Are you sure you want to close this period? Entries cannot be modified in closed periods."
+        "confirmClose": "Are you sure you want to close this period? Entries cannot be modified in closed periods.",
+        "closeBlocked": "La période contient encore des écritures en brouillon. Comptabilisez-les ou supprimez-les d'abord ; une période clôturée ne peut plus recevoir d'écritures."
       },
       "journal": {
         "title": "Journal",
@@ -897,6 +898,10 @@
         "sourceInvoiceSync": "Invoice sync",
         "sourceBankImport": "Bank import",
         "confirmVoid": "Are you sure you want to void this entry? A reversal entry will be created.",
+        "deleteDraft": "Supprimer le brouillon",
+        "deleteDraftTitle": "Supprimer ce brouillon ?",
+        "deleteDraftBody": "Le brouillon n'a jamais été comptabilisé et n'apparaît dans aucun rapport. Les brouillons issus d'une ligne bancaire ou Vipps doivent être annulés depuis Tildel.",
+        "closeBlocked": "La période contient encore des écritures en brouillon. Comptabilisez-les ou supprimez-les d'abord ; une période clôturée ne peut plus recevoir d'écritures.",
         "updating": "Updating...",
         "updateComplete": "Update complete",
         "paymentsSynced": "payments synced",

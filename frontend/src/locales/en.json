@@ -1513,7 +1513,8 @@
         "reopen": "Reopen",
         "createYear": "Create new year",
         "noPeriods": "No fiscal periods yet.",
-        "confirmClose": "Are you sure you want to close this period? Entries cannot be modified in closed periods."
+        "confirmClose": "Are you sure you want to close this period? Entries cannot be modified in closed periods.",
+        "closeBlocked": "The period still has draft entries. Post or delete them first; a closed period can no longer take posts."
       },
       "journal": {
         "title": "Journal",
@@ -1539,6 +1540,10 @@
         "sourceInvoiceSync": "Invoice sync",
         "sourceBankImport": "Bank import",
         "confirmVoid": "Are you sure you want to void this entry? A reversal entry will be created.",
+        "deleteDraft": "Delete draft",
+        "deleteDraftTitle": "Delete this draft?",
+        "deleteDraftBody": "The draft was never posted and is not in any report. Drafts booked from a bank or Vipps row must be undone from Tildel instead.",
+        "closeBlocked": "The period still has draft entries. Post or delete them first; a closed period can no longer take posts.",
         "updating": "Updating...",
         "updateComplete": "Update complete",
         "paymentsSynced": "payments synced",

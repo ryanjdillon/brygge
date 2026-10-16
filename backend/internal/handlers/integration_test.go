@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"strings"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -737,6 +738,7 @@ func TestIntegration_JournalEntryLifecycle(t *testing.T) {
 	r.Get("/journal/{entryID}", ah.HandleGetJournalEntry)
 	r.Post("/journal/{entryID}/post", ah.HandlePostJournalEntry)
 	r.Post("/journal/{entryID}/void", ah.HandleVoidJournalEntry)
+	r.Delete("/journal/{entryID}", ah.HandleDeleteDraftJournalEntry)
 
 	auth := "Bearer " + token
 
@@ -872,7 +874,23 @@ func TestIntegration_JournalEntryLifecycle(t *testing.T) {
 		t.Fatalf("expected 400 for unbalanced post, got %d; body: %s", rec.Code, rec.Body.String())
 	}
 
-	// Step 10: Close period, try to create entry — should fail
+	// Step 10: Close period. The unbalanced draft blocks it until deleted;
+	// then a new entry in the closed period must fail.
+	req = httptest.NewRequest(http.MethodPost, "/periods/"+periodID+"/close", nil)
+	req.Header.Set("Authorization", auth)
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	assertStatus(t, rec, http.StatusConflict)
+	if !strings.Contains(rec.Body.String(), `"period_has_drafts"`) {
+		t.Fatalf("expected period_has_drafts, got %s", rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodDelete, "/journal/"+unbalanced.ID, nil)
+	req.Header.Set("Authorization", auth)
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	assertStatus(t, rec, http.StatusNoContent)
+
 	req = httptest.NewRequest(http.MethodPost, "/periods/"+periodID+"/close", nil)
 	req.Header.Set("Authorization", auth)
 	rec = httptest.NewRecorder()

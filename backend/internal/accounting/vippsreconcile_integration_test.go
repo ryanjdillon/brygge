@@ -146,8 +146,8 @@ Klokkarvik Båtlag,548005,Norge,,2026-03-24 00:23:17,2026-03-23,Utbetaling planl
 	if source != "vipps" {
 		t.Errorf("source = %q, want vipps", source)
 	}
-	if status != "draft" {
-		t.Errorf("status = %q, want draft", status)
+	if status != "posted" {
+		t.Errorf("status = %q, want posted (Vipps postings post on creation)", status)
 	}
 	if dr != cr || dr == 0 {
 		t.Errorf("entry not balanced: dr=%.2f cr=%.2f", dr, cr)

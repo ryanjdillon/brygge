@@ -15,7 +15,44 @@ var (
 	ErrPeriodClosed    = errors.New("cannot post to a closed or locked period")
 	ErrEntryNotDraft   = errors.New("only draft entries can be modified")
 	ErrEntryNotPosted  = errors.New("only posted entries can be voided")
+	ErrEntryLinked     = errors.New("draft is linked to a bank or Vipps row; unassign it from Tildel instead")
 )
+
+// DeleteDraftJournalEntry deletes a draft that nothing points at. Drafts are
+// never reported, but they block closing their period (ClosePeriod), so an
+// abandoned or unbalanced draft needs a way out. Drafts booked from a bank or
+// Vipps row are refused: deleting those would orphan the row's faktura link,
+// and the Tildel unassign flow undoes them properly.
+func (s *Service) DeleteDraftJournalEntry(ctx context.Context, clubID, entryID string) error {
+	var status string
+	var linked bool
+	err := s.db.QueryRow(ctx,
+		`SELECT je.status,
+		        EXISTS (SELECT 1 FROM bank_import_rows WHERE journal_entry_id = je.id)
+		     OR EXISTS (SELECT 1 FROM vipps_import_rows WHERE journal_entry_id = je.id)
+		   FROM journal_entries je WHERE je.id = $1 AND je.club_id = $2`,
+		entryID, clubID,
+	).Scan(&status, &linked)
+	if err == pgx.ErrNoRows {
+		return fmt.Errorf("journal entry not found")
+	}
+	if err != nil {
+		return fmt.Errorf("loading entry: %w", err)
+	}
+	if status != "draft" {
+		return ErrEntryNotDraft
+	}
+	if linked {
+		return ErrEntryLinked
+	}
+	if _, err := s.db.Exec(ctx,
+		`DELETE FROM journal_entries WHERE id = $1 AND club_id = $2 AND status = 'draft'`,
+		entryID, clubID,
+	); err != nil {
+		return fmt.Errorf("deleting draft: %w", err)
+	}
+	return nil
+}
 
 // JournalEntry represents a bilag (voucher) with its lines.
 type JournalEntry struct {

@@ -275,7 +275,16 @@ func (h *AccountingHandler) HandleClosePeriod(w http.ResponseWriter, r *http.Req
 	}
 
 	periodID := chi.URLParam(r, "periodID")
-	if err := h.svc.ClosePeriod(r.Context(), periodID, claims.UserID); err != nil {
+	if err := h.svc.ClosePeriod(r.Context(), claims.ClubID, periodID, claims.UserID); err != nil {
+		var drafts *accounting.PeriodHasDraftsError
+		if errors.As(err, &drafts) {
+			JSON(w, http.StatusConflict, map[string]any{
+				"error":  err.Error(),
+				"code":   "period_has_drafts",
+				"drafts": drafts.Drafts,
+			})
+			return
+		}
 		h.log.Error().Err(err).Msg("failed to close period")
 		Error(w, http.StatusBadRequest, err.Error())
 		return
@@ -495,6 +504,36 @@ func (h *AccountingHandler) HandleVoidJournalEntry(w http.ResponseWriter, r *htt
 	}
 
 	JSON(w, http.StatusOK, reversal)
+}
+
+// HandleDeleteDraftJournalEntry removes an unlinked draft so it no longer
+// blocks closing its period.
+func (h *AccountingHandler) HandleDeleteDraftJournalEntry(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	entryID := chi.URLParam(r, "entryID")
+	if err := h.svc.DeleteDraftJournalEntry(r.Context(), claims.ClubID, entryID); err != nil {
+		switch {
+		case errors.Is(err, accounting.ErrEntryNotDraft), errors.Is(err, accounting.ErrEntryLinked):
+			Error(w, http.StatusConflict, err.Error())
+		case err.Error() == "journal entry not found":
+			Error(w, http.StatusNotFound, err.Error())
+		default:
+			h.log.Error().Err(err).Msg("failed to delete draft journal entry")
+			Error(w, http.StatusInternalServerError, "internal error")
+		}
+		return
+	}
+
+	if h.audit != nil {
+		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,
+			audit.ActionAccountingDraftDeleted, "journal_entry", entryID, nil)
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // getClaudeClient returns the configured Claude client. If no client was

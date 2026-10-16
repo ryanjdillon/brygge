@@ -11,6 +11,7 @@ import {
   ChevronRight,
   Send,
   Ban,
+  Trash2,
   RefreshCw,
   Lock,
   Unlock,
@@ -22,6 +23,7 @@ import {
   useJournalEntries,
   usePostEntry,
   useVoidEntry,
+  useDeleteDraftEntry,
   useCreatePeriod,
   useClosePeriod,
   useReopenPeriod,
@@ -94,6 +96,7 @@ const { data: entries, isLoading } = useJournalEntries(selectedPeriodId, {
 
 const postMutation = usePostEntry()
 const voidMutation = useVoidEntry()
+const deleteDraftMutation = useDeleteDraftEntry()
 const createPeriodMutation = useCreatePeriod()
 const closePeriodMutation = useClosePeriod()
 const reopenPeriodMutation = useReopenPeriod()
@@ -141,6 +144,27 @@ function handleVoid(entryId: string) {
   if (confirm(t('admin.accounting.journal.confirmVoid'))) {
     voidMutation.mutate(entryId)
   }
+}
+
+// A draft blocks closing its period, so an abandoned one needs a way out.
+// Drafts booked from a bank or Vipps row are refused by the server (undo
+// those from Tildel instead).
+async function handleDeleteDraft(entryId: string) {
+  if (!(await ensureFreshTotp())) return
+  const ok = await askConfirm({
+    title: t('admin.accounting.journal.deleteDraftTitle'),
+    body: t('admin.accounting.journal.deleteDraftBody'),
+    confirmLabel: t('admin.accounting.journal.deleteDraft'),
+    cancelLabel: t('common.cancel'),
+    tone: 'danger',
+  })
+  if (!ok) return
+  syncMessage.value = ''
+  deleteDraftMutation.mutate(entryId, {
+    onError: (err) => {
+      syncMessage.value = `${t('common.error')}: ${(err as Error).message}`
+    },
+  })
 }
 
 async function openAttachment(entryId: string) {
@@ -244,7 +268,12 @@ function handleCreatePeriod() {
 
 function handleClosePeriod() {
   if (!selectedPeriodId.value) return
-  closePeriodMutation.mutate(selectedPeriodId.value)
+  syncMessage.value = ''
+  closePeriodMutation.mutate(selectedPeriodId.value, {
+    onError: (err) => {
+      syncMessage.value = `${t('common.error')}: ${t('admin.accounting.journal.closeBlocked')} (${(err as Error).message})`
+    },
+  })
 }
 
 function handleReopenPeriod() {
@@ -527,6 +556,15 @@ function formatNOK(amount: number): string {
                     @click="handlePost(entry.id)"
                   >
                     <Send class="h-4 w-4" />
+                  </button>
+                  <button
+                    v-if="entry.status === 'draft'"
+                    class="text-gray-500 hover:text-red-700 disabled:opacity-50"
+                    :disabled="deleteDraftMutation.isPending.value"
+                    :title="t('admin.accounting.journal.deleteDraft')"
+                    @click="handleDeleteDraft(entry.id)"
+                  >
+                    <Trash2 class="h-4 w-4" />
                   </button>
                   <button
                     v-if="entry.status === 'posted'"

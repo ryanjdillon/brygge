@@ -105,20 +105,87 @@ func (s *Service) GetPeriod(ctx context.Context, periodID string) (*FiscalPeriod
 	return &p, nil
 }
 
-// ClosePeriod sets a period's status to closed, preventing new journal entries.
-func (s *Service) ClosePeriod(ctx context.Context, periodID, closedBy string) error {
+// PeriodDraftSummary counts the draft entries of one source left in a period.
+type PeriodDraftSummary struct {
+	Source string  `json:"source"`
+	Count  int     `json:"count"`
+	Total  float64 `json:"total"`
+}
+
+// PeriodHasDraftsError is returned by ClosePeriod while the period still
+// holds draft entries. Drafts are left out of every report, and a closed
+// period can no longer take a post, so closing would strand them for good.
+type PeriodHasDraftsError struct {
+	Drafts []PeriodDraftSummary
+}
+
+func (e *PeriodHasDraftsError) Error() string {
+	total := 0
+	for _, d := range e.Drafts {
+		total += d.Count
+	}
+	return fmt.Sprintf("period has %d draft entries; post or delete them before closing", total)
+}
+
+// ClosePeriod sets a period's status to closed, preventing new journal
+// entries. It refuses while the period has drafts (PeriodHasDraftsError).
+func (s *Service) ClosePeriod(ctx context.Context, clubID, periodID, closedBy string) error {
+	drafts, err := s.periodDrafts(ctx, clubID, periodID)
+	if err != nil {
+		return err
+	}
+	if len(drafts) > 0 {
+		return &PeriodHasDraftsError{Drafts: drafts}
+	}
+	// The NOT EXISTS re-checks inside the update, so a draft created after
+	// the read above still blocks the close.
 	tag, err := s.db.Exec(ctx,
-		`UPDATE fiscal_periods SET status = 'closed', closed_by = $2, closed_at = now(), updated_at = now()
-		 WHERE id = $1 AND status = 'open'`,
-		periodID, closedBy,
+		`UPDATE fiscal_periods SET status = 'closed', closed_by = $3, closed_at = now(), updated_at = now()
+		 WHERE id = $1 AND club_id = $2 AND status = 'open'
+		   AND NOT EXISTS (
+		     SELECT 1 FROM journal_entries
+		      WHERE fiscal_period_id = $1 AND club_id = $2 AND status = 'draft'
+		   )`,
+		periodID, clubID, closedBy,
 	)
 	if err != nil {
 		return fmt.Errorf("closing period: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
+		if drafts, derr := s.periodDrafts(ctx, clubID, periodID); derr == nil && len(drafts) > 0 {
+			return &PeriodHasDraftsError{Drafts: drafts}
+		}
 		return fmt.Errorf("period not found or not open")
 	}
 	return nil
+}
+
+// periodDrafts lists the period's draft entries per source with their total
+// (the debit side of each entry).
+func (s *Service) periodDrafts(ctx context.Context, clubID, periodID string) ([]PeriodDraftSummary, error) {
+	rows, err := s.db.Query(ctx,
+		`SELECT je.source::text, count(*),
+		        COALESCE(sum((SELECT sum(jl.debit) FROM journal_lines jl WHERE jl.journal_entry_id = je.id)), 0)
+		   FROM journal_entries je
+		  WHERE je.club_id = $1 AND je.fiscal_period_id = $2 AND je.status = 'draft'
+		  GROUP BY je.source
+		  ORDER BY je.source`,
+		clubID, periodID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("counting draft entries: %w", err)
+	}
+	defer rows.Close()
+	var out []PeriodDraftSummary
+	for rows.Next() {
+		var d PeriodDraftSummary
+		if err := rows.Scan(&d.Source, &d.Count, &d.Total); err != nil {
+			return nil, fmt.Errorf("scanning draft summary: %w", err)
+		}
+		d.Total = roundCents(d.Total)
+		out = append(out, d)
+	}
+	return out, rows.Err()
 }
 
 // ReopenPeriod sets a closed period back to open.

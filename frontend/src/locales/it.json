@@ -873,7 +873,8 @@
         "reopen": "Reopen",
         "createYear": "Create new year",
         "noPeriods": "No fiscal periods yet.",
-        "confirmClose": "Are you sure you want to close this period? Entries cannot be modified in closed periods."
+        "confirmClose": "Are you sure you want to close this period? Entries cannot be modified in closed periods.",
+        "closeBlocked": "Il periodo contiene ancora bozze. Registrale o eliminale prima; in un periodo chiuso non si può più registrare."
       },
       "journal": {
         "title": "Journal",
@@ -898,6 +899,10 @@
         "sourceInvoiceSync": "Invoice sync",
         "sourceBankImport": "Bank import",
         "confirmVoid": "Are you sure you want to void this entry? A reversal entry will be created.",
+        "deleteDraft": "Elimina bozza",
+        "deleteDraftTitle": "Eliminare questa bozza?",
+        "deleteDraftBody": "La bozza non è mai stata registrata e non compare in nessun report. Le bozze da una riga bancaria o Vipps vanno annullate da Tildel.",
+        "closeBlocked": "Il periodo contiene ancora bozze. Registrale o eliminale prima; in un periodo chiuso non si può più registrare.",
         "updating": "Updating...",
         "updateComplete": "Update complete",
         "paymentsSynced": "payments synced",

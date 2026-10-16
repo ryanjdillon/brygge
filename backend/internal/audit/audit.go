@@ -58,6 +58,7 @@ const (
 	ActionInvoiceDeliveryLogViewed  = "invoice.delivery_log_viewed"
 	ActionFinanceCSVExported        = "finance.csv_exported"
 	ActionAccountingInvoicesResplit = "accounting.invoices_resplit"
+	ActionAccountingDraftDeleted    = "accounting.draft_deleted"
 	ActionPaymentCreated            = "payment.created"
 	ActionPaymentViewed             = "finance.payment_viewed"
 
