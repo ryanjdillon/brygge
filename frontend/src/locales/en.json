@@ -1810,6 +1810,7 @@
       "bankAccount": "Bank account",
       "transfers": "Transfers",
       "closedPeriodsNotice": "Rows from the following closed period(s) were not auto-matched: {years}. Reopen those periods if you want to book them.",
+      "rowErrorsNotice": "{count} row(s) matched a faktura but could not be booked. They stay in Tildel for manual handling:",
       "autoMatchedNotice": "Auto-matched to the registered bank account (GL code {code}) based on the statement's own account number — your selection was overridden to prevent a misuploaded statement.",
       "reassign": "Reassign",
       "reassignTitle": "Reassign import to a different bank account",

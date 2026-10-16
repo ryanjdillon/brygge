@@ -44,6 +44,15 @@ export interface BankImportResult {
   // Present only on a full-account overwrite reconcile.
   deleted?: number
   skipped_booked?: number
+  // Rows whose auto-match failed; they stay unmatched for manual Tildel.
+  row_errors?: BankImportRowError[] | null
+}
+
+export interface BankImportRowError {
+  row_id: string
+  date: string
+  amount: number
+  reason: string
 }
 
 export interface VippsImportSummary {

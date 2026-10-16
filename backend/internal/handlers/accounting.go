@@ -871,6 +871,7 @@ func (h *AccountingHandler) importBankStatement(w http.ResponseWriter, r *http.R
 				"transfers":         result.Transfers,
 				"deleted":           result.Deleted,
 				"skipped_booked":    result.SkippedBooked,
+				"row_errors":        len(result.RowErrors),
 			})
 	}
 
@@ -886,6 +887,7 @@ func (h *AccountingHandler) importBankStatement(w http.ResponseWriter, r *http.R
 		"closed_periods":    result.ClosedPeriods,
 		"bank_account_code": bankAccountCode,
 		"auto_matched":      autoMatched,
+		"row_errors":        result.RowErrors,
 	}
 	if overwrite {
 		resp["deleted"] = result.Deleted
@@ -995,6 +997,7 @@ func (h *AccountingHandler) HandleReimportBankStatement(w http.ResponseWriter, r
 		"skipped_dup":    result.SkippedDup,
 		"skipped_booked": result.SkippedBooked,
 		"matched":        result.Matched,
+		"row_errors":     result.RowErrors,
 	})
 }
 

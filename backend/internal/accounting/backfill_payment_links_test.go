@@ -62,11 +62,20 @@ func TestBackfillInvoiceNumberPayments(t *testing.T) {
 	).Scan(&importID); err != nil {
 		t.Fatalf("bank import: %v", err)
 	}
-	if _, err := svc.ImportBankRows(ctx, clubID, importID, "", []BankRow{
+	// Insert the rows directly rather than through ImportBankRows: the
+	// importer would auto-match "Faktura NN" itself, and this test needs the
+	// rows booked by hand below to exercise only the backfill.
+	for _, r := range []BankRow{
 		{Date: time.Date(2026, 6, 3, 0, 0, 0, 0, time.UTC), Description: "Mobilbank · Faktura 77", Amount: 450, Reference: "R77"},
 		{Date: time.Date(2026, 6, 4, 0, 0, 0, 0, time.UTC), Description: "Mobilbank · Faktura 88", Amount: 300, Reference: "R88"},
-	}); err != nil {
-		t.Fatalf("import rows: %v", err)
+	} {
+		if _, err := pool.Exec(ctx,
+			`INSERT INTO bank_import_rows (bank_import_id, club_id, row_date, description, amount, reference, row_hash)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+			importID, clubID, r.Date, r.Description, r.Amount, r.Reference, BankRowHash(clubID, r),
+		); err != nil {
+			t.Fatalf("insert row %s: %v", r.Reference, err)
+		}
 	}
 
 	// Book each row: inv77 as a real AR payment (CR 1500), inv88 to revenue.

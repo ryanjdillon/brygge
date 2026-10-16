@@ -498,6 +498,7 @@ func (s *Service) syncKIDMatches(ctx context.Context, clubID, createdBy string) 
 				Str("bank_row_id", p.rowID).
 				Str("entry_id", entry.ID).
 				Msg("KID match: PostJournalEntry failed; row stays unmatched")
+			s.discardDraft(ctx, clubID, entry.ID)
 			continue
 		}
 		if _, uerr := s.db.Exec(ctx,
@@ -516,6 +517,11 @@ func (s *Service) syncKIDMatches(ctx context.Context, clubID, createdBy string) 
 					Str("bank_row_id", p.rowID).
 					Msg("KID match journal posted but invoice payment back-link failed")
 			}
+		} else {
+			s.log.Error().Err(uerr).
+				Str("bank_row_id", p.rowID).
+				Str("entry_id", entry.ID).
+				Msg("KID match posted but linking the bank row failed")
 		}
 	}
 

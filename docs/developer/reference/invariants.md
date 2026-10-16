@@ -20,6 +20,12 @@ Each invariant lists the **rule**, then the **failure mode** it prevents. When p
 
 **Failure mode:** historical reports start disagreeing with themselves. Auditor finds the GL doesn't tie back to the printed annual report.
 
+### An auto-match posts or leaves nothing
+
+**Rule (BRY-324):** the KID auto-match in `ImportBankRows` and in the bank sync either creates **and posts** the journal entry and links the row, or it leaves no entry at all. Posting uses the importing user (`bank_imports.imported_by`) as `posted_by`. If posting fails, the draft is deleted (`discardDraft`) and the failure is returned in the import result's `row_errors`, never swallowed. The row stays unmatched for manual Tildel.
+
+**Failure mode:** before BRY-324 the importer passed the club id as `posted_by`. The users FK rejected it, and the error was swallowed. Every import-time match left an orphan draft, and the bank sync later booked the same row again, so the draft became a duplicate that would double-book the payment if posted. That left 56 in prod (230,831 kr), removed by migration `000100`.
+
 ### Reports count posted and voided entries
 
 **Rule (BRY-352):** `VoidJournalEntry` sets the original to `voided` but keeps its lines, and adds a *posted* reversal. Every report and the momskomp calculation therefore select `je.status IN ('posted', 'voided')` (`bookedEntryFilter` in `sync.go`), so the original and its reversal net to zero. Only `VoidJournalEntry` sets `voided`, and only on a posted entry, so the filter means "was ever posted". Drafts are never counted.

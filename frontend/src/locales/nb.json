@@ -1806,6 +1806,7 @@
       "bankAccount": "Bankkonto",
       "transfers": "Interne overføringer",
       "closedPeriodsNotice": "Rader fra følgende lukkede perioder ble ikke avstemt automatisk: {years}. Gjenåpne periodene om du vil bokføre dem.",
+      "rowErrorsNotice": "{count} rad(er) traff en faktura, men kunne ikke bokføres. De ligger igjen i Tildel for manuell behandling:",
       "autoMatchedNotice": "Automatisk koblet til den registrerte bankkontoen (hovedbokskode {code}) basert på utskriftens eget kontonummer — valget ditt ble overstyrt for å hindre feilopplasting.",
       "reassign": "Flytt",
       "reassignTitle": "Flytt importen til en annen bankkonto",

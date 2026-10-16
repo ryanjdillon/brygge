@@ -708,6 +708,12 @@ const filterMonthValue = computed<number>({
           <p v-if="bankResult.closed_periods?.length" class="mt-2 rounded bg-yellow-50 px-2 py-1 text-yellow-800">
             {{ t('admin.bankImports.closedPeriodsNotice', { years: bankResult.closed_periods.join(', ') }) }}
           </p>
+          <div v-if="bankResult.row_errors?.length" class="mt-2 rounded bg-red-50 px-2 py-1 text-red-800">
+            <p class="font-medium">{{ t('admin.bankImports.rowErrorsNotice', { count: bankResult.row_errors.length }) }}</p>
+            <ul class="list-disc pl-5">
+              <li v-for="e in bankResult.row_errors" :key="e.row_id">{{ e.date }} · {{ e.amount }} kr — {{ e.reason }}</li>
+            </ul>
+          </div>
         </div>
       </section>
 

@@ -234,6 +234,27 @@ type ImportResult struct {
 	Matched        int
 	Transfers      int      // intra-bank transfer pairs auto-linked
 	ClosedPeriods  []string // labels of closed periods that prevented auto-match (e.g. "2025")
+	// RowErrors lists rows whose auto-match failed after an invoice was
+	// found. The row stays unmatched for manual Tildel; the reason is
+	// surfaced instead of being swallowed.
+	RowErrors []ImportRowError
+}
+
+// ImportRowError is one auto-match failure on an imported bank row.
+type ImportRowError struct {
+	RowID  string  `json:"row_id"`
+	Date   string  `json:"date"`
+	Amount float64 `json:"amount"`
+	Reason string  `json:"reason"`
+}
+
+func (r *ImportResult) rowError(rowID string, row BankRow, reason string) {
+	r.RowErrors = append(r.RowErrors, ImportRowError{
+		RowID:  rowID,
+		Date:   row.Date.Format("2006-01-02"),
+		Amount: row.Amount,
+		Reason: reason,
+	})
 }
 
 // ReimportResult reports a re-import that replaced only the unmatched rows of
@@ -553,8 +574,17 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOv
 			continue
 		}
 
+		// Posting needs a real user for posted_by (FK to users). Without
+		// one the entry would be left as an unposted orphan draft while the
+		// row stays unmatched — and a later bank sync books it again.
+		if importedBy == "" {
+			res.rowError(rowID, row, "import has no importing user; match it manually")
+			continue
+		}
+
 		periodID, periodStatus, perr := s.resolvePeriod(ctx, clubID, row.Date, periodOverride)
 		if perr != nil {
+			res.rowError(rowID, row, "resolving fiscal period: "+perr.Error())
 			continue
 		}
 		if periodStatus == "closed" {
@@ -583,15 +613,22 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOv
 			},
 		})
 		if createErr != nil {
+			res.rowError(rowID, row, "creating journal entry: "+createErr.Error())
 			continue
 		}
-		if postErr := s.PostJournalEntry(ctx, entry.ID, clubID); postErr != nil {
+		if postErr := s.PostJournalEntry(ctx, entry.ID, importedBy); postErr != nil {
+			s.discardDraft(ctx, clubID, entry.ID)
+			res.rowError(rowID, row, "posting journal entry: "+postErr.Error())
 			continue
 		}
 		if _, err := s.db.Exec(ctx,
 			`UPDATE bank_import_rows SET journal_entry_id = $1, auto_matched = true WHERE id = $2`,
 			entry.ID, rowID,
-		); err == nil {
+		); err != nil {
+			s.log.Error().Err(err).Str("bank_row_id", rowID).Str("entry_id", entry.ID).
+				Msg("import-time KID match posted but linking the bank row failed")
+			res.rowError(rowID, row, "linking row to posted entry "+entry.ID+": "+err.Error())
+		} else {
 			res.Matched++
 			// Mirror the GL credit-to-receivables side onto the
 			// invoice flag so the dashboard, faktura list, and
@@ -781,21 +818,37 @@ func (s *Service) detectIntraBankTransfers(ctx context.Context, clubID, importID
 			},
 		})
 		if err != nil {
+			s.log.Warn().Err(err).Str("bank_row_id", p.r1ID).Msg("intra-bank transfer: CreateJournalEntry failed; rows stay unmatched")
 			continue
 		}
 		if _, err := s.db.Exec(ctx,
 			`UPDATE bank_import_rows SET journal_entry_id = $1, auto_matched = true WHERE id = ANY($2::uuid[])`,
 			entry.ID, []string{p.r1ID, p.r2ID},
-		); err == nil {
-			used[p.r1ID] = true
-			used[p.r2ID] = true
-			matched++
+		); err != nil {
+			s.log.Warn().Err(err).Str("bank_row_id", p.r1ID).Msg("intra-bank transfer: linking rows failed; draft discarded")
+			s.discardDraft(ctx, clubID, entry.ID)
+			continue
 		}
+		used[p.r1ID] = true
+		used[p.r2ID] = true
+		matched++
 	}
 	for y := range closedYearSet {
 		skippedClosedYears = append(skippedClosedYears, y)
 	}
 	return matched, skippedClosedYears, nil
+}
+
+// discardDraft removes a draft journal entry an auto-match created but
+// could not complete, so a failed match leaves no orphan behind. Posted
+// entries are never touched.
+func (s *Service) discardDraft(ctx context.Context, clubID, entryID string) {
+	if _, err := s.db.Exec(ctx,
+		`DELETE FROM journal_entries WHERE id = $1 AND club_id = $2 AND status = 'draft'`,
+		entryID, clubID,
+	); err != nil {
+		s.log.Error().Err(err).Str("entry_id", entryID).Msg("failed to discard orphan draft")
+	}
 }
 
 // MatchBankRow manually creates a journal entry for an unmatched bank import row.

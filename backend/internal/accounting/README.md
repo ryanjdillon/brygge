@@ -69,6 +69,7 @@ See [`../../../docs/developer/reference/enums.md`](../../../docs/developer/refer
 - Vipps belastning amounts are positive; fees are negative
 - Bank rows with `journal_entry_id IS NOT NULL` cannot be reassigned without cascading `journal_lines`
 - Reports and momskomp count `posted` **and** `voided` entries (`bookedEntryFilter`), so a void and its reversal net to zero
+- KID auto-match (import and bank sync) posts as the importing user or discards its draft — never leaves an orphan; failures surface as `row_errors`
 - `SyncInvoices` books only sent, non-voided fakturas and reverses ones voided after booking; `SyncPayments` skips invoice-settling payments
 
 Full list: [`../../../docs/developer/reference/invariants.md`](../../../docs/developer/reference/invariants.md).
