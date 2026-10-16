@@ -2,11 +2,13 @@ package accounting
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // paymentTypeAccountMap maps both Brygge payment_type enum values and
@@ -219,60 +221,8 @@ func (s *Service) SyncInvoices(ctx context.Context, clubID, periodID, syncedBy s
 			return nil, fmt.Errorf("scanning invoice: %w", err)
 		}
 		ref := fmt.Sprintf("faktura %d", invoiceNumber)
-		amount = roundCents(amount)
-
-		description := fmt.Sprintf("Faktura #%d", invoiceNumber)
-		if memberName != nil {
-			description = fmt.Sprintf("Faktura #%d: %s", invoiceNumber, *memberName)
-		}
-
-		if amount == 0 {
-			result.skip(ref, "net total is 0, nothing to book")
-			continue
-		}
-
-		netByAccount, err := s.invoiceRevenueCredits(ctx, invoiceID, amount)
-		if err != nil {
-			s.log.Error().Err(err).Str("invoice_id", invoiceID).Msg("failed to aggregate invoice lines")
-			result.skip(ref, "reading lines: "+err.Error())
-			continue
-		}
-
-		// Receivable and revenue sides follow the sign: a credit note
-		// (negative total) books DR revenue / CR 1500. journal_line_one_side
-		// forbids zero or negative amounts, so each line goes on the side
-		// its sign dictates and zero nets are dropped.
-		journalLines := []CreateJournalLineInput{signedLine(receivablesAccountCode, amount)}
-		for code, net := range netByAccount {
-			if net = roundCents(net); net != 0 {
-				journalLines = append(journalLines, signedLine(code, -net))
-			}
-		}
-
-		sourceID := invoiceID
-		sourceTable := "invoices"
-
-		entry, err := s.CreateJournalEntry(ctx, CreateJournalEntryInput{
-			FiscalPeriodID: periodID,
-			EntryDate:      entryDate,
-			Description:    description,
-			Source:         "invoice_sync",
-			SourceID:       &sourceID,
-			SourceTable:    &sourceTable,
-			CreatedBy:      syncedBy,
-			ClubID:         clubID,
-			Lines:          journalLines,
-		})
-		if err != nil {
-			s.log.Error().Err(err).Str("invoice_id", invoiceID).Msg("failed to sync invoice")
+		if err := s.bookInvoiceEntry(ctx, clubID, periodID, invoiceID, invoiceNumber, amount, entryDate, memberName, syncedBy); err != nil {
 			result.skip(ref, err.Error())
-			continue
-		}
-
-		// Auto-post
-		if err := s.PostJournalEntry(ctx, entry.ID, syncedBy); err != nil {
-			s.log.Error().Err(err).Str("entry_id", entry.ID).Msg("failed to auto-post synced invoice")
-			result.skip(ref, "post: "+err.Error())
 			continue
 		}
 
@@ -286,6 +236,174 @@ func (s *Service) SyncInvoices(ctx context.Context, clubID, periodID, syncedBy s
 		return result, err
 	}
 	return result, nil
+}
+
+// errNothingToBook marks a faktura whose net total is zero.
+var errNothingToBook = errors.New("net total is 0, nothing to book")
+
+// bookInvoiceEntry creates and posts the invoice_sync entry for one faktura:
+// DR 1500 the total, CR each revenue account its lines map to. Signs drive
+// the sides, so a credit note books DR revenue / CR 1500. A draft whose post
+// fails is discarded so no orphan is left. This is the one code path both the
+// send-time booking (BookInvoice) and the repair sync use.
+func (s *Service) bookInvoiceEntry(ctx context.Context, clubID, periodID, invoiceID string, invoiceNumber int, amount float64, entryDate string, memberName *string, actor string) error {
+	amount = roundCents(amount)
+	if amount == 0 {
+		return errNothingToBook
+	}
+
+	description := fmt.Sprintf("Faktura #%d", invoiceNumber)
+	if memberName != nil {
+		description = fmt.Sprintf("Faktura #%d: %s", invoiceNumber, *memberName)
+	}
+
+	netByAccount, err := s.invoiceRevenueCredits(ctx, invoiceID, amount)
+	if err != nil {
+		s.log.Error().Err(err).Str("invoice_id", invoiceID).Msg("failed to aggregate invoice lines")
+		return fmt.Errorf("reading lines: %w", err)
+	}
+
+	// journal_line_one_side forbids zero or negative amounts, so each line
+	// goes on the side its sign dictates and zero nets are dropped.
+	journalLines := []CreateJournalLineInput{signedLine(receivablesAccountCode, amount)}
+	for code, net := range netByAccount {
+		if net = roundCents(net); net != 0 {
+			journalLines = append(journalLines, signedLine(code, -net))
+		}
+	}
+
+	sourceID := invoiceID
+	sourceTable := "invoices"
+	entry, err := s.CreateJournalEntry(ctx, CreateJournalEntryInput{
+		FiscalPeriodID: periodID,
+		EntryDate:      entryDate,
+		Description:    description,
+		Source:         "invoice_sync",
+		SourceID:       &sourceID,
+		SourceTable:    &sourceTable,
+		CreatedBy:      actor,
+		ClubID:         clubID,
+		Lines:          journalLines,
+	})
+	if err != nil {
+		s.log.Error().Err(err).Str("invoice_id", invoiceID).Msg("failed to book invoice")
+		return err
+	}
+	if err := s.PostJournalEntry(ctx, entry.ID, actor); err != nil {
+		s.log.Error().Err(err).Str("entry_id", entry.ID).Msg("failed to post invoice entry")
+		s.discardDraft(ctx, clubID, entry.ID)
+		return fmt.Errorf("post: %w", err)
+	}
+	return nil
+}
+
+// InvoiceBooking reports what BookInvoice did.
+type InvoiceBooking string
+
+const (
+	InvoiceBooked        InvoiceBooking = "booked"
+	InvoiceAlreadyBooked InvoiceBooking = "already_booked"
+	InvoiceNothingToBook InvoiceBooking = "nothing_to_book"
+)
+
+// ErrInvoicePeriodClosed means the faktura's fiscal period is closed, so its
+// entry cannot be booked or reversed there. The repair sync cannot fix it
+// either; the period has to be reopened.
+var ErrInvoicePeriodClosed = errors.New("the faktura's fiscal period is closed")
+
+// BookInvoice books one sent, non-voided faktura into the period its
+// issue_date falls in. It is idempotent: a faktura that already has an
+// invoice_sync entry (the unique index enforces one) is reported as
+// already booked. Callers on the send path treat an error as a booking
+// failure to surface, not as a reason to fail the send; the repair sync
+// books whatever was missed.
+func (s *Service) BookInvoice(ctx context.Context, clubID, invoiceID, actor string) (InvoiceBooking, error) {
+	var (
+		invoiceNumber int
+		amount        float64
+		issueDate     time.Time
+		status        string
+		sent          bool
+		memberName    *string
+		booked        bool
+	)
+	err := s.db.QueryRow(ctx,
+		`SELECT i.invoice_number, i.total_amount, i.issue_date, i.status,
+		        i.sent_at IS NOT NULL, u.full_name,
+		        EXISTS (SELECT 1 FROM journal_entries je
+		                 WHERE je.club_id = i.club_id AND je.source = 'invoice_sync'
+		                   AND je.source_id = i.id::text)
+		   FROM invoices i
+		   LEFT JOIN users u ON u.id = i.user_id
+		  WHERE i.id = $1 AND i.club_id = $2`,
+		invoiceID, clubID,
+	).Scan(&invoiceNumber, &amount, &issueDate, &status, &sent, &memberName, &booked)
+	if err != nil {
+		return "", fmt.Errorf("loading invoice: %w", err)
+	}
+	if booked {
+		return InvoiceAlreadyBooked, nil
+	}
+	if !sent || status == "voided" {
+		return "", fmt.Errorf("faktura %d is not a sent, open invoice", invoiceNumber)
+	}
+
+	periodID, periodStatus, err := s.ResolvePeriodForDate(ctx, clubID, issueDate)
+	if err != nil {
+		return "", fmt.Errorf("resolving fiscal period: %w", err)
+	}
+	if periodStatus != "open" {
+		return "", ErrInvoicePeriodClosed
+	}
+
+	err = s.bookInvoiceEntry(ctx, clubID, periodID, invoiceID, invoiceNumber, amount, issueDate.Format("2006-01-02"), memberName, actor)
+	switch {
+	case errors.Is(err, errNothingToBook):
+		return InvoiceNothingToBook, nil
+	case isUniqueViolation(err):
+		// A concurrent send or sync booked it first.
+		return InvoiceAlreadyBooked, nil
+	case err != nil:
+		return "", err
+	}
+	return InvoiceBooked, nil
+}
+
+// ReverseInvoice reverses the posted invoice_sync entry of a faktura that is
+// being voided, in the same flow, so the receivable and revenue net to zero
+// immediately. It reports false when there is nothing to reverse (never
+// booked, or already reversed).
+func (s *Service) ReverseInvoice(ctx context.Context, clubID, invoiceID, actor string) (bool, error) {
+	var entryID, periodStatus string
+	err := s.db.QueryRow(ctx,
+		`SELECT je.id, fp.status
+		   FROM journal_entries je
+		   JOIN fiscal_periods fp ON fp.id = je.fiscal_period_id
+		  WHERE je.club_id = $1 AND je.source = 'invoice_sync'
+		    AND je.source_id = $2 AND je.status = 'posted'`,
+		clubID, invoiceID,
+	).Scan(&entryID, &periodStatus)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("loading invoice entry: %w", err)
+	}
+	// VoidJournalEntry posts the reversal into the original period without
+	// checking it (BRY-333), so refuse here rather than write into a closed
+	// year.
+	if periodStatus != "open" {
+		return false, ErrInvoicePeriodClosed
+	}
+	if _, err := s.VoidJournalEntry(ctx, entryID, actor); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func isUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }
 
 // signedLine puts amount on the debit side when positive and on the

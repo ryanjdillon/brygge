@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS idx_journal_entries_invoice_sync_once;

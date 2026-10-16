@@ -19,7 +19,7 @@ The double-entry GL plus everything that posts to it: bank statement parsing, KI
 | `invoicepayment.go` | `Service.linkInvoicePayment` — inserts a `payments` row and back-links `invoices.payment_id`. Used by both bank KID match and Vipps invoice match so the dashboard faktura-status widgets reflect the payment. |
 | `vipps_backlog.go` | `PostVippsDraftBacklog`: posts a fiscal period's leftover Vipps drafts (preview, then apply). Parked charges on 3900, or on 1500 with no faktura, are rebooked by the auto-assign rules first when the club has auto-assign on. Unsafe drafts (unbalanced, orphan, source already booked, faktura already settled) are refused with a reason. |
 | `resplit.go` | `ResplitInvoiceBilags` — corrects the per-account revenue split of booked fakturas with `invoice_resplit` reclassification entries (preview + apply). |
-| `sync.go` | `paymentTypeAccountMap`, `SyncPayments`, `SyncInvoices`, `bookedEntryFilter`. The faktura → journal entry sync; results carry `skipped_details` with a reason per skipped row. |
+| `sync.go` | `paymentTypeAccountMap`, `BookInvoice` / `ReverseInvoice` (send- and void-time booking, called from the invoice handlers), `SyncInvoices` (the repair sync behind **Avstem periode**), `SyncPayments`, `bookedEntryFilter`. One per-faktura path (`bookInvoiceEntry`) serves both; results carry `skipped_details` with a reason per skipped row. |
 | `description_parse.go` | `ExtractKIDFromDescription`, `ExtractInvoiceNumberFromDescription`, `ExtractPayerFromDescription`. Vendor-specific (DNB/Sparebank) heuristics for pulling structure out of unstructured bank row descriptions. |
 | `momskomp.go`, `momskomp_pdf.go` | Momskompensasjon (VAT reimbursement for non-profits) report + PDF. |
 | `reports.go`, `reports_pdf.go` | Income statement, balance sheet generation. |
@@ -82,7 +82,7 @@ See [`../../../docs/developer/reference/enums.md`](../../../docs/developer/refer
 - Bank rows with `journal_entry_id IS NOT NULL` cannot be reassigned without cascading `journal_lines`
 - Reports and momskomp count `posted` **and** `voided` entries (`bookedEntryFilter`), so a void and its reversal net to zero
 - KID auto-match (import and bank sync) posts as the importing user or discards its draft — never leaves an orphan; failures surface as `row_errors`
-- `SyncInvoices` books only sent, non-voided fakturas and reverses ones voided after booking; `SyncPayments` skips invoice-settling payments
+- A faktura is booked when sent and reversed when voided (`BookInvoice` / `ReverseInvoice`); `SyncInvoices` only repairs what was missed. At most one `invoice_sync` entry per faktura (unique index). `SyncPayments` skips invoice-settling payments
 
 Full list: [`../../../docs/developer/reference/invariants.md`](../../../docs/developer/reference/invariants.md).
 

@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 
+	"github.com/brygge-klubb/brygge/internal/accounting"
 	"github.com/brygge-klubb/brygge/internal/audit"
 	bcast "github.com/brygge-klubb/brygge/internal/broadcast"
 	"github.com/brygge-klubb/brygge/internal/config"
@@ -42,6 +43,11 @@ type InvoiceHandler struct {
 	// configured); the bulk handler returns 503 otherwise.
 	deliveries   *bcast.Store
 	kickDelivery func()
+
+	// ledger books a faktura into the GL when it is sent and reverses it
+	// when it is voided. Nil when the accounting feature is off; the
+	// repair sync in Bilag then remains the only booking path.
+	ledger *accounting.Service
 }
 
 func NewInvoiceHandler(
@@ -70,6 +76,33 @@ func NewInvoiceHandler(
 func (h *InvoiceHandler) SetDeliveryQueue(store *bcast.Store, kick func()) {
 	h.deliveries = store
 	h.kickDelivery = kick
+}
+
+// SetLedger enables booking fakturas into the GL at send and void time.
+func (h *InvoiceHandler) SetLedger(svc *accounting.Service) {
+	h.ledger = svc
+}
+
+// glBooking reports the GL outcome of a send. The send itself has already
+// succeeded (the email went out), so a booking failure is returned here for
+// the operator to see rather than failing the request; the Bilag repair
+// sync books anything that was missed.
+type glBooking struct {
+	Status string `json:"status"`
+	Error  string `json:"error,omitempty"`
+}
+
+// bookSentInvoice books a just-sent faktura. It never fails the caller.
+func (h *InvoiceHandler) bookSentInvoice(ctx context.Context, clubID, invoiceID, actor string) *glBooking {
+	if h.ledger == nil {
+		return nil
+	}
+	status, err := h.ledger.BookInvoice(ctx, clubID, invoiceID, actor)
+	if err != nil {
+		h.log.Error().Err(err).Str("invoice_id", invoiceID).Msg("faktura sent but GL booking failed")
+		return &glBooking{Status: "failed", Error: err.Error()}
+	}
+	return &glBooking{Status: string(status)}
 }
 
 type createInvoiceFullRequest struct {
@@ -114,15 +147,16 @@ type invoiceLineInput struct {
 }
 
 type invoiceResponse struct {
-	ID            string    `json:"id"`
-	InvoiceNumber int       `json:"invoice_number"`
-	KID           string    `json:"kid_number"`
-	UserID        string    `json:"user_id"`
-	TotalAmount   float64   `json:"total_amount"`
-	IssueDate     string    `json:"issue_date"`
-	DueDate       string    `json:"due_date"`
-	SentAt        *string   `json:"sent_at"`
-	CreatedAt     time.Time `json:"created_at"`
+	ID            string     `json:"id"`
+	InvoiceNumber int        `json:"invoice_number"`
+	KID           string     `json:"kid_number"`
+	UserID        string     `json:"user_id"`
+	TotalAmount   float64    `json:"total_amount"`
+	IssueDate     string     `json:"issue_date"`
+	DueDate       string     `json:"due_date"`
+	SentAt        *string    `json:"sent_at"`
+	CreatedAt     time.Time  `json:"created_at"`
+	GLBooking     *glBooking `json:"gl_booking,omitempty"`
 }
 
 // HandleCreateInvoice generates a full invoice with KID, PDF, and optional email delivery.
@@ -474,6 +508,7 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 	if orgRecipient != nil {
 		deliverName = orgRecipient.Name
 	}
+	var gl *glBooking
 	if req.SendEmail && h.email != nil && deliverTo != "" {
 		filename := fmt.Sprintf("faktura-%d.pdf", invoiceSeq)
 		// Invoice locale follows the requesting admin's UI language for now.
@@ -492,6 +527,7 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 			now := time.Now().Format(time.RFC3339)
 			sentAt = &now
 			h.db.Exec(ctx, `UPDATE invoices SET sent_at = NOW() WHERE id = $1`, invoiceID)
+			gl = h.bookSentInvoice(ctx, claims.ClubID, invoiceID, claims.UserID)
 			if h.audit != nil {
 				h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,
 					audit.ActionInvoiceEmailed, "invoice", invoiceID,
@@ -516,6 +552,7 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 		DueDate:       req.DueDate,
 		SentAt:        sentAt,
 		CreatedAt:     createdAt,
+		GLBooking:     gl,
 	})
 }
 
@@ -1143,7 +1180,11 @@ func (h *InvoiceHandler) HandleSendInvoice(w http.ResponseWriter, r *http.Reques
 	}
 	_ = userID
 
-	JSON(w, http.StatusOK, map[string]any{"id": invoiceID, "sent": true})
+	resp := map[string]any{"id": invoiceID, "sent": true}
+	if gl := h.bookSentInvoice(ctx, claims.ClubID, invoiceID, claims.UserID); gl != nil {
+		resp["gl_booking"] = gl
+	}
+	JSON(w, http.StatusOK, resp)
 }
 
 // HandleResendInvoice resends the stored PDF to the recipient AFTER
@@ -1348,6 +1389,31 @@ func (h *InvoiceHandler) HandleVoidInvoice(w http.ResponseWriter, r *http.Reques
 		Error(w, http.StatusConflict, "invoice is already paid; refund or credit it instead of voiding")
 		return
 	}
+	// A faktura booked into a closed year can't be reversed there; voiding
+	// it would leave the receivable standing in the closed accounts.
+	if h.ledger != nil {
+		var inClosedPeriod bool
+		if err := h.db.QueryRow(ctx,
+			`SELECT EXISTS (
+			    SELECT 1 FROM journal_entries je
+			      JOIN fiscal_periods fp ON fp.id = je.fiscal_period_id
+			     WHERE je.club_id = $1 AND je.source = 'invoice_sync'
+			       AND je.source_id = $2 AND je.status = 'posted'
+			       AND fp.status <> 'open')`,
+			claims.ClubID, invoiceID,
+		).Scan(&inClosedPeriod); err != nil {
+			h.log.Error().Err(err).Msg("void invoice: check booked period")
+			Error(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		if inClosedPeriod {
+			JSON(w, http.StatusConflict, map[string]string{
+				"error": "invoice is booked in a closed fiscal period; issue a credit note instead",
+				"code":  "period_closed",
+			})
+			return
+		}
+	}
 
 	if _, err := h.db.Exec(ctx,
 		`UPDATE invoices SET status = 'voided'
@@ -1362,6 +1428,20 @@ func (h *InvoiceHandler) HandleVoidInvoice(w http.ResponseWriter, r *http.Reques
 		h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,
 			audit.ActionInvoiceCreated, "invoice", invoiceID,
 			map[string]any{"voided": true})
+	}
+
+	// Reverse the booking in the same flow. The void has already happened,
+	// so a reversal failure is reported, not returned as an error; the
+	// Bilag repair sync reverses any voided faktura still booked.
+	if h.ledger != nil {
+		if _, err := h.ledger.ReverseInvoice(ctx, claims.ClubID, invoiceID, claims.UserID); err != nil {
+			h.log.Error().Err(err).Str("invoice_id", invoiceID).Msg("faktura voided but GL reversal failed")
+			JSON(w, http.StatusOK, map[string]any{
+				"voided":     true,
+				"gl_booking": glBooking{Status: "failed", Error: err.Error()},
+			})
+			return
+		}
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

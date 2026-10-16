@@ -299,6 +299,9 @@ func main() {
 		invoiceHandler.SetDeliveryQueue(deliveryStore, deliveryWorker.Kick)
 	}
 	accountingSvc := accounting.NewService(db, auditService, log)
+	if cfg.Features.Accounting {
+		invoiceHandler.SetLedger(accountingSvc)
+	}
 	accountingHandler := handlers.NewAccountingHandler(accountingSvc, auditService, s3LegalClient, claudeClient, vippsClient, log)
 	bankRowsHandler := handlers.NewBankRowsHandler(accountingSvc, auditService, log)
 	devQueryHandler := handlers.NewDevQueryHandler(devQueryDB, auditService, log)

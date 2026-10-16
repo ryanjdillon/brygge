@@ -121,7 +121,7 @@ Newly created fakturas. You can:
 - **Preview the PDF** — click the row to open the modal, then "Download PDF".
 - **Edit** — open the row, change line amounts/descriptions, save.
 - **Delete** — drafts only; gone forever, including the assigned invoice number.
-- **Send** — emails the PDF to the member, stamps `sent_at`, moves the row to the Sent tab. The send is idempotent — clicking send on an already-sent faktura returns a 409 from the server, so accidental double-clicks don't double-deliver.
+- **Send** — emails the PDF to the member, stamps `sent_at`, books the faktura in the accounts (DR 1500 / CR the income account of each line), and moves the row to the Sent tab. The send is idempotent — clicking send on an already-sent faktura returns a 409 from the server, so accidental double-clicks don't double-deliver. If the booking fails (for example because the accounting year is closed) the email still goes out and a message says why; fix the cause and run **Avstem periode** in Bilag to book it.
 - **Copy emails** — comma-separated, deduplicated recipient emails land on the clipboard. Use when you want to paste into a personal Gmail/Outlook draft (e.g. heads-up that an automated message is on its way).
 
 You can also tick multiple rows and use the **Send selected** button. The bulk-send loop is sequential and continues past any single failure, so a partial run will leave the failed rows still in Drafts where you can retry them.
@@ -161,7 +161,9 @@ Bulk actions on the selection:
 
 ### Voided
 
-Read-only history of voided fakturas. Cannot be un-voided; create a new one if you need a corrected version.
+Read-only history of voided fakturas. Cannot be un-voided; create a new one if you need a corrected version. Voiding a sent faktura reverses its booking in the same step, so it nets to zero in the accounts. A faktura booked in a closed accounting year can't be voided; issue a credit note instead.
+
+**Avstem periode** in Bilag is a repair step, not part of the normal flow: it books any sent faktura that is still missing from the accounts and reverses voided ones that are still booked.
 
 ## PDF archive
 

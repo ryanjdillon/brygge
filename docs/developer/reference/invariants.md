@@ -70,6 +70,12 @@ Charges naming a checkout order are left to `AutoReconcileOrderCharges`. Each bo
 
 **Failure mode:** counting only `posted` drops the original but keeps the reversal, so a voided entry shows as its own **negative**. A voided 2,500 kr faktura would push receivables and revenue down 2,500 kr instead of back to zero.
 
+### A sent faktura has exactly one GL entry, booked at send time
+
+**Rule (BRY-363):** sending a faktura (`HandleSendInvoice`, or `HandleCreateInvoice` with `send_email`) books it through `accounting.BookInvoice` in the same request, and voiding it (`HandleVoidInvoice`) reverses that entry through `ReverseInvoice`. Both use the same per-faktura code path as the repair sync (`bookInvoiceEntry`). A unique index (`idx_journal_entries_invoice_sync_once`, migration 000104) allows one `invoice_sync` entry per faktura; a voided entry keeps the slot, so a voided faktura is never re-booked. The email is the event that matters, so a booking failure never fails the send: it is returned as `gl_booking: {status: "failed", error}`, shown in the faktura list, logged, and picked up by **Avstem periode** (`SyncInvoices`). Voiding a faktura booked in a closed period is refused with 409 `period_closed` (credit note instead), because the reversal would land in the closed year.
+
+**Failure mode:** with booking only on a manual button, nothing was booked between 2026-05-14 and 2026-10-16 (13 fakturas, 84,031 kr missing from the reports). Two booking paths without the unique index could double-book a faktura on a race.
+
 ### Invoice GL sync books only sent, non-voided fakturas
 
 **Rule (BRY-352):** `SyncInvoices` books a faktura only when `sent_at IS NOT NULL` and `status <> 'voided'`.

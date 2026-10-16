@@ -235,6 +235,15 @@ function rowLabel(d: Row): string {
   return `#${d.invoice_number} — ${d.member_name} (${formatNOK(Number(d.total_amount))})`
 }
 
+// Send and void have already happened when the GL booking is attempted, so a
+// booking failure comes back in the response instead of as an error. Show it
+// so the treasurer can run the repair sync in Bilag.
+function reportGLFailure(body: { gl_booking?: { status: string; error?: string } } | null) {
+  if (body?.gl_booking?.status === 'failed') {
+    error.value = t('admin.invoiceDrafts.glBookingFailed', { reason: body.gl_booking.error ?? '' })
+  }
+}
+
 async function doSend(id: string) {
   busyIds.value.add(id)
   try {
@@ -244,6 +253,7 @@ async function doSend(id: string) {
       error.value = `${res.status} ${txt}`
       return
     }
+    reportGLFailure(await res.json().catch(() => null))
     rows.value = rows.value.filter((d) => d.id !== id)
     selected.value.delete(id)
   } finally {
@@ -332,9 +342,14 @@ async function doVoid(id: string) {
   try {
     const res = await totpAwareFetch(`/api/v1/admin/financials/invoices/${id}/void`, { method: 'POST' })
     if (res.status === 409) {
-      // Payment already received (reconciled or via Vipps): it needs a
-      // refund or credit note, not a void.
-      error.value = t('admin.invoiceDrafts.voidSettled')
+      // Payment already received (reconciled or via Vipps), or the faktura
+      // is booked in a closed year: either way it needs a credit note, not
+      // a void.
+      const body = await res.json().catch(() => null)
+      error.value =
+        body?.code === 'period_closed'
+          ? t('admin.invoiceDrafts.voidPeriodClosed')
+          : t('admin.invoiceDrafts.voidSettled')
       return
     }
     if (!res.ok && res.status !== 204) {
@@ -342,6 +357,7 @@ async function doVoid(id: string) {
       error.value = `${res.status} ${txt}`
       return
     }
+    if (res.status === 200) reportGLFailure(await res.json().catch(() => null))
     rows.value = rows.value.filter((d) => d.id !== id)
     selected.value.delete(id)
   } finally {
