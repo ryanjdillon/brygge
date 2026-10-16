@@ -24,7 +24,7 @@ var paymentTypeAccountMap = map[string]string{
 	"harbor_membership": "3110", // Havneavgift
 	"slip_fee":          "3120", // Plassleie
 	"electricity":       "3130", // Strøm
-	"seasonal_rental":   "3200", // Sesongutleie
+	"seasonal_rental":   "3120", // Plassleie (sesong)
 	"guest":             "3200", // Gjestehavninntekter
 	"motorhome":         "3210", // Bobil/campingplass
 	"room_hire":         "3220", // Lokalleie

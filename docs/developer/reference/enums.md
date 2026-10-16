@@ -222,7 +222,7 @@ Source: `paymentTypeAccountMap` in `backend/internal/accounting/sync.go`.
 | `slip_fee` | 3120 | Plassleie |
 | `electricity` | 3130 | Strøm |
 | `booking` (payment_type) | 3200 | Gjestehavninntekter |
-| `seasonal_rental` | 3200 | Gjestehavninntekter (the Vipps map uses 3120; see below) |
+| `seasonal_rental` | 3120 | Plassleie (seasonal slip rent; same account as the Vipps map) |
 | `guest` | 3200 | Gjestehavninntekter |
 | `motorhome` | 3210 | Bobil/campingplass, kept apart from 3200 because it may be taxed differently under MVA |
 | `room_hire` | 3220 | Lokalleie |
