@@ -60,10 +60,14 @@ type BankRowSummary struct {
 }
 
 // ListUnmatchedBankRows returns the paginated set of rows that still
-// need operator attention. kind = "all" | "incoming" | "outgoing" |
-// "dismissed". q filters substrings against description + counterpart
-// or matches the raw amount. year (0 = no filter) restricts to rows
-// whose row_date falls in that calendar year.
+// need operator attention. kind is a comma-separated set of filters
+// that combine with AND, e.g. "incoming,bank,duplicate": a direction
+// ("incoming" | "outgoing" | "dismissed"), a source ("bank" | "vipps")
+// and flags ("duplicate", "double_payment"). Empty or "all" means no
+// filter. Only "dismissed" includes dismissed rows. q filters
+// substrings against description + counterpart or matches the raw
+// amount. year (0 = no filter) restricts to rows whose row_date falls
+// in that calendar year.
 //
 // Each returned row carries `likely_duplicate_of_matched` — true when
 // another bank row in the same club has identical (row_date, amount,
@@ -87,44 +91,11 @@ func (s *Service) ListUnmatchedBankRows(
 	args := []any{clubID}
 	next := 2
 
-	const vippsClause = `(bir.counterpart ILIKE '%vipps%' OR bir.description ~* 'Utb\.\s*\d+\s+Vippsnr\s+\d+')`
-	switch kind {
-	case "", "all":
-		where = append(where, "bir.dismissed_at IS NULL")
-	case "incoming":
-		where = append(where, "bir.dismissed_at IS NULL", "bir.amount > 0")
-	case "outgoing":
-		where = append(where, "bir.dismissed_at IS NULL", "bir.amount < 0")
-	case "dismissed":
-		where = append(where, "bir.dismissed_at IS NOT NULL")
-	case "vipps":
-		where = append(where, "bir.dismissed_at IS NULL", vippsClause)
-	case "bank":
-		where = append(where, "bir.dismissed_at IS NULL", "NOT "+vippsClause)
-	case "duplicate":
-		where = append(where, "bir.dismissed_at IS NULL",
-			`bir.reference <> '' AND EXISTS (
-			   SELECT 1 FROM bank_import_rows other
-			    WHERE other.id <> bir.id
-			      AND other.club_id = bir.club_id
-			      AND other.reference = bir.reference
-			      AND other.journal_entry_id IS NOT NULL
-			 )`)
-	case "double_payment":
-		where = append(where, "bir.dismissed_at IS NULL",
-			`bir.kid_number <> '' AND EXISTS (
-			   SELECT 1 FROM bank_import_rows other
-			    WHERE other.id <> bir.id
-			      AND other.club_id = bir.club_id
-			      AND other.row_date = bir.row_date
-			      AND other.amount = bir.amount
-			      AND other.kid_number = bir.kid_number
-			      AND COALESCE(other.reference, '') <> COALESCE(bir.reference, '')
-			      AND other.journal_entry_id IS NOT NULL
-			 )`)
-	default:
-		return nil, fmt.Errorf("invalid kind %q", kind)
+	filters, err := bankRowKindClauses(kind)
+	if err != nil {
+		return nil, err
 	}
+	where = append(where, filters...)
 
 	if q := strings.TrimSpace(q); q != "" {
 		ph := fmt.Sprintf("$%d", next)
@@ -633,4 +604,61 @@ func absInt(i int) int {
 		return -i
 	}
 	return i
+}
+
+const bankRowVippsClause = `(bir.counterpart ILIKE '%vipps%' OR bir.description ~* 'Utb\.\s*\d+\s+Vippsnr\s+\d+')`
+
+// bankRowKindFilters maps each Tildel filter token to its WHERE clause.
+// "dismissed" has no clause of its own: it flips the dismissed_at
+// condition that every query carries.
+var bankRowKindFilters = map[string]string{
+	"incoming":  "bir.amount > 0",
+	"outgoing":  "bir.amount < 0",
+	"dismissed": "",
+	"vipps":     bankRowVippsClause,
+	"bank":      "NOT " + bankRowVippsClause,
+	"duplicate": `bir.reference <> '' AND EXISTS (
+	   SELECT 1 FROM bank_import_rows other
+	    WHERE other.id <> bir.id
+	      AND other.club_id = bir.club_id
+	      AND other.reference = bir.reference
+	      AND other.journal_entry_id IS NOT NULL
+	 )`,
+	"double_payment": `bir.kid_number <> '' AND EXISTS (
+	   SELECT 1 FROM bank_import_rows other
+	    WHERE other.id <> bir.id
+	      AND other.club_id = bir.club_id
+	      AND other.row_date = bir.row_date
+	      AND other.amount = bir.amount
+	      AND other.kid_number = bir.kid_number
+	      AND COALESCE(other.reference, '') <> COALESCE(bir.reference, '')
+	      AND other.journal_entry_id IS NOT NULL
+	 )`,
+}
+
+// bankRowKindClauses turns a comma-separated kind set into WHERE
+// clauses that AND together. Dismissed rows are hidden unless the set
+// includes "dismissed".
+func bankRowKindClauses(kind string) ([]string, error) {
+	dismissed := false
+	var clauses []string
+	for _, tok := range strings.Split(kind, ",") {
+		tok = strings.TrimSpace(tok)
+		if tok == "" || tok == "all" {
+			continue
+		}
+		clause, ok := bankRowKindFilters[tok]
+		if !ok {
+			return nil, fmt.Errorf("invalid kind %q", tok)
+		}
+		if tok == "dismissed" {
+			dismissed = true
+			continue
+		}
+		clauses = append(clauses, clause)
+	}
+	if dismissed {
+		return append([]string{"bir.dismissed_at IS NOT NULL"}, clauses...), nil
+	}
+	return append([]string{"bir.dismissed_at IS NULL"}, clauses...), nil
 }

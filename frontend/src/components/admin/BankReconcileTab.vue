@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute, useRouter } from 'vue-router'
 import { ArrowDownLeft, ArrowUpRight, Sparkles, Search, FileText, Ban, Undo2, CheckSquare } from 'lucide-vue-next'
 import Modal from '@/components/ui/Modal.vue'
 import Select from '@/components/ui/form/Select.vue'
@@ -17,8 +18,15 @@ import {
   useVippsChargeMutations,
   fetchVippsChargePotentialInvoices,
   DISMISS_REASONS,
+  BANK_ROW_DIRECTIONS,
+  BANK_ROW_SOURCES,
+  BANK_ROW_FLAGS,
+  emptyBankRowFilter,
   type BankRowSummary,
-  type BankRowKind,
+  type BankRowFilter,
+  type BankRowDirection,
+  type BankRowSource,
+  type BankRowFlag,
   type InvoiceSuggestion,
   type AccountSuggestion,
   type DismissReason,
@@ -31,7 +39,70 @@ import { useConfirm } from '@/stores/confirm'
 const { t, locale } = useI18n()
 const askConfirm = useConfirm()
 
-const kind = ref<BankRowKind>('all')
+const route = useRoute()
+const router = useRouter()
+
+// Filter state lives in the URL (?dir=&src=&flags=a,b) so it survives a
+// reload and a tab switch. Unknown values are dropped.
+function filterFromQuery(): BankRowFilter {
+  const one = <T extends string>(v: unknown, allowed: T[]): T | null =>
+    typeof v === 'string' && (allowed as string[]).includes(v) ? (v as T) : null
+  const flagsRaw = typeof route.query.flags === 'string' ? route.query.flags.split(',') : []
+  return {
+    direction: one(route.query.dir, BANK_ROW_DIRECTIONS),
+    source: one(route.query.src, BANK_ROW_SOURCES),
+    flags: BANK_ROW_FLAGS.filter((f) => flagsRaw.includes(f)),
+  }
+}
+
+const filter = ref<BankRowFilter>(filterFromQuery())
+const filterActive = computed(
+  () => !!filter.value.direction || !!filter.value.source || filter.value.flags.length > 0,
+)
+
+watch(
+  filter,
+  (f) => {
+    const query = { ...route.query }
+    delete query.dir
+    delete query.src
+    delete query.flags
+    if (f.direction) query.dir = f.direction
+    if (f.source) query.src = f.source
+    if (f.flags.length) query.flags = f.flags.join(',')
+    void router.replace({ query })
+  },
+  { deep: true },
+)
+
+// Direction and source are single-choice groups: clicking the active chip
+// clears the group. Flags toggle independently. Groups narrow together.
+function toggleDirection(d: BankRowDirection) {
+  filter.value = { ...filter.value, direction: filter.value.direction === d ? null : d }
+}
+function toggleSource(s: BankRowSource) {
+  filter.value = { ...filter.value, source: filter.value.source === s ? null : s }
+}
+function toggleFlag(fl: BankRowFlag) {
+  const flags = filter.value.flags.includes(fl)
+    ? filter.value.flags.filter((x) => x !== fl)
+    : [...filter.value.flags, fl]
+  filter.value = { ...filter.value, flags }
+}
+function clearFilters() {
+  filter.value = emptyBankRowFilter()
+}
+
+// Unreconciled Vipps charges are incoming, never dismissed, and carry no
+// duplicate flags, so they only belong in views a filter would let them
+// through.
+const showVippsCharges = computed(() => {
+  const f = filter.value
+  return (f.source === null || f.source === 'vipps')
+    && (f.direction === null || f.direction === 'incoming')
+    && f.flags.length === 0
+})
+
 const q = ref('')
 const currentYear = new Date().getFullYear()
 
@@ -57,7 +128,7 @@ const yearOptions = computed(() => {
   })
 })
 
-const { data: rows, isLoading } = useBankUnmatchedRows(kind, q, year)
+const { data: rows, isLoading } = useBankUnmatchedRows(filter, q, year)
 
 const duplicateRows = computed(() =>
   (rows.value ?? []).filter((r) => r.likely_duplicate_of_matched && !r.dismissed_at),
@@ -152,19 +223,25 @@ function formatDate(s: string): string {
   return fmtDate(s, locale.value)
 }
 
-const filterChips: { value: BankRowKind; labelKey: string }[] = [
-  { value: 'all', labelKey: 'admin.bankReconcile.filterAll' },
+const directionChips: { value: BankRowDirection; labelKey: string }[] = [
   { value: 'incoming', labelKey: 'admin.bankReconcile.filterIncoming' },
   { value: 'outgoing', labelKey: 'admin.bankReconcile.filterOutgoing' },
   { value: 'dismissed', labelKey: 'admin.bankReconcile.filterDismissed' },
 ]
 
-const sourceChips: { value: BankRowKind; labelKey: string }[] = [
+const sourceChips: { value: BankRowSource; labelKey: string }[] = [
   { value: 'bank', labelKey: 'admin.bankReconcile.filterBank' },
   { value: 'vipps', labelKey: 'admin.bankReconcile.filterVipps' },
+]
+
+const flagChips: { value: BankRowFlag; labelKey: string }[] = [
   { value: 'duplicate', labelKey: 'admin.bankReconcile.filterDuplicate' },
   { value: 'double_payment', labelKey: 'admin.bankReconcile.filterDoublePayment' },
 ]
+
+function chipClass(active: boolean): string {
+  return active ? 'bg-brand-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+}
 
 const confidenceClass: Record<string, string> = {
   sterk: 'border-emerald-300 bg-emerald-50',
@@ -313,39 +390,76 @@ async function doUnassign(rowId: string) {
 
 <template>
   <div>
-    <!-- Filter chips + search -->
-    <div class="flex flex-wrap items-center gap-2">
-      <button
-        v-for="chip in filterChips"
-        :key="chip.value"
-        type="button"
-        class="rounded-full px-3 py-1 text-xs font-semibold"
-        :class="kind === chip.value ? 'bg-brand-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'"
-        @click="kind = chip.value"
-      >
-        {{ t(chip.labelKey) }}
-      </button>
-      <span class="h-4 w-px bg-gray-300" aria-hidden="true" />
-      <button
-        v-for="chip in sourceChips"
-        :key="chip.value"
-        type="button"
-        class="rounded-full px-3 py-1 text-xs font-semibold"
-        :class="kind === chip.value ? 'bg-brand-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'"
-        @click="kind = chip.value"
-      >
-        {{ t(chip.labelKey) }}
-      </button>
-      <div class="ml-auto flex items-center gap-2">
-        <label class="text-xs text-gray-600">{{ t('admin.bankReconcile.year') }}</label>
-        <Select v-model="yearSelectValue" :options="yearOptions" width="content" />
+    <!-- Search + filter chips. Each group (direction | source | flags)
+         narrows the list; groups combine. -->
+    <div class="flex flex-wrap items-center gap-2" data-testid="reconcile-filters">
+      <div class="flex items-center gap-2">
         <Search class="h-4 w-4 text-gray-400" />
         <input
           v-model="q"
           type="search"
           :placeholder="t('admin.bankReconcile.searchPlaceholder')"
-          class="rounded-md border border-gray-300 px-3 py-1 text-sm"
+          class="w-56 rounded-md border border-gray-300 px-3 py-1 text-sm"
         />
+      </div>
+      <button
+        type="button"
+        class="rounded-full px-3 py-1 text-xs font-semibold"
+        :class="chipClass(!filterActive)"
+        :aria-pressed="!filterActive"
+        data-testid="filter-all"
+        @click="clearFilters"
+      >
+        {{ t('admin.bankReconcile.filterAll') }}
+      </button>
+      <span class="h-4 w-px bg-gray-300" aria-hidden="true" />
+      <div role="group" :aria-label="t('admin.bankReconcile.filterGroupDirection')" class="flex flex-wrap gap-2">
+        <button
+          v-for="chip in directionChips"
+          :key="chip.value"
+          type="button"
+          class="rounded-full px-3 py-1 text-xs font-semibold"
+          :class="chipClass(filter.direction === chip.value)"
+          :aria-pressed="filter.direction === chip.value"
+          :data-testid="`filter-${chip.value}`"
+          @click="toggleDirection(chip.value)"
+        >
+          {{ t(chip.labelKey) }}
+        </button>
+      </div>
+      <span class="h-4 w-px bg-gray-300" aria-hidden="true" />
+      <div role="group" :aria-label="t('admin.bankReconcile.filterGroupSource')" class="flex flex-wrap gap-2">
+        <button
+          v-for="chip in sourceChips"
+          :key="chip.value"
+          type="button"
+          class="rounded-full px-3 py-1 text-xs font-semibold"
+          :class="chipClass(filter.source === chip.value)"
+          :aria-pressed="filter.source === chip.value"
+          :data-testid="`filter-${chip.value}`"
+          @click="toggleSource(chip.value)"
+        >
+          {{ t(chip.labelKey) }}
+        </button>
+      </div>
+      <span class="h-4 w-px bg-gray-300" aria-hidden="true" />
+      <div role="group" :aria-label="t('admin.bankReconcile.filterGroupFlags')" class="flex flex-wrap gap-2">
+        <button
+          v-for="chip in flagChips"
+          :key="chip.value"
+          type="button"
+          class="rounded-full px-3 py-1 text-xs font-semibold"
+          :class="chipClass(filter.flags.includes(chip.value))"
+          :aria-pressed="filter.flags.includes(chip.value)"
+          :data-testid="`filter-${chip.value}`"
+          @click="toggleFlag(chip.value)"
+        >
+          {{ t(chip.labelKey) }}
+        </button>
+      </div>
+      <div class="ml-auto flex items-center gap-2">
+        <label class="text-xs text-gray-600">{{ t('admin.bankReconcile.year') }}</label>
+        <Select v-model="yearSelectValue" :options="yearOptions" width="content" />
       </div>
     </div>
 
@@ -378,7 +492,7 @@ async function doUnassign(rowId: string) {
 
     <!-- Individual Vipps charges (per-charge model): one line per payer,
          reconciled independently of the batched payout below. -->
-    <div v-if="vippsEnabled && vippsCharges?.length" class="mt-4">
+    <div v-if="vippsEnabled && vippsCharges?.length && showVippsCharges" class="mt-4">
       <p class="mb-2 text-xs font-semibold uppercase text-gray-500">
         {{ t('admin.bankReconcile.vippsChargesHeader', { count: vippsCharges.length }) }}
       </p>

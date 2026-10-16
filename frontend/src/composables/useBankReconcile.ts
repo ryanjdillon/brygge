@@ -66,14 +66,38 @@ export interface BankRowSuggestions {
 
 const BASE = '/api/v1/admin/accounting/bank-rows'
 
-export type BankRowKind = 'all' | 'incoming' | 'outgoing' | 'dismissed' | 'bank' | 'vipps' | 'duplicate' | 'double_payment'
+export type BankRowDirection = 'incoming' | 'outgoing' | 'dismissed'
+export type BankRowSource = 'bank' | 'vipps'
+export type BankRowFlag = 'duplicate' | 'double_payment'
 
-export function useBankUnmatchedRows(kind: Ref<BankRowKind>, q: Ref<string>, year: Ref<number | null>) {
+// Tildel filter: at most one direction and one source, plus any flags.
+// The groups combine with AND on the server.
+export interface BankRowFilter {
+  direction: BankRowDirection | null
+  source: BankRowSource | null
+  flags: BankRowFlag[]
+}
+
+export const BANK_ROW_DIRECTIONS: BankRowDirection[] = ['incoming', 'outgoing', 'dismissed']
+export const BANK_ROW_SOURCES: BankRowSource[] = ['bank', 'vipps']
+export const BANK_ROW_FLAGS: BankRowFlag[] = ['duplicate', 'double_payment']
+
+export function emptyBankRowFilter(): BankRowFilter {
+  return { direction: null, source: null, flags: [] }
+}
+
+/** The comma-separated `kind` query value for a filter; '' means no filter. */
+export function bankRowKindParam(f: BankRowFilter): string {
+  return [f.direction, f.source, ...f.flags].filter(Boolean).join(',')
+}
+
+export function useBankUnmatchedRows(filter: Ref<BankRowFilter>, q: Ref<string>, year: Ref<number | null>) {
+  const kind = computed(() => bankRowKindParam(filter.value))
   return useQuery({
     queryKey: computed(() => ['bank-rows', 'unmatched', kind.value, q.value, year.value]),
     queryFn: async () => {
       const url = new URL(`${BASE}/unmatched`, window.location.origin)
-      if (kind.value && kind.value !== 'all') url.searchParams.set('kind', kind.value)
+      if (kind.value) url.searchParams.set('kind', kind.value)
       if (q.value) url.searchParams.set('q', q.value)
       if (year.value) url.searchParams.set('year', String(year.value))
       const body = await useApi().fetchApi<{ items: BankRowSummary[] }>(url.toString())
