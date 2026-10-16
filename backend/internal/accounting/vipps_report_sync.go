@@ -15,6 +15,7 @@ type VippsReportSyncResult struct {
 	Imported   int  // rows newly inserted
 	SkippedDup int  // rows skipped as duplicates
 	TryLater   bool // report for the date not finalised yet
+	Orders     *VippsOrderReconcileResult
 }
 
 // SyncVippsReport pulls the Report API v2 funds + fees for a settlement date and
@@ -81,6 +82,19 @@ func (s *Service) SyncVippsReport(ctx context.Context, vc *vipps.Client, clubID,
 	}
 	res.Imported = imp.Imported
 	res.SkippedDup = imp.SkippedDup
+
+	// Book order-linked charges right away when someone is acting; the nightly
+	// run has no user to record as creator, so it only repairs row types and
+	// leaves the booking to the next operator sync.
+	if actorID != "" {
+		orders, err := s.AutoReconcileOrderCharges(ctx, clubID, actorID)
+		if err != nil {
+			return res, fmt.Errorf("booking order-linked charges: %w", err)
+		}
+		res.Orders = orders
+	} else if _, err := s.RepairVippsReportRows(ctx, clubID); err != nil {
+		return res, fmt.Errorf("repairing report rows: %w", err)
+	}
 
 	if _, err := s.DB().Exec(ctx,
 		`UPDATE vipps_imports SET row_count = $1 WHERE id = $2`,

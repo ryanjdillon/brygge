@@ -20,6 +20,16 @@ Each invariant lists the **rule**, then the **failure mode** it prevents. When p
 
 **Failure mode:** historical reports start disagreeing with themselves. Auditor finds the GL doesn't tie back to the printed annual report.
 
+### An order-linked Vipps charge is booked from its order
+
+**Rule (BRY-337):** a Vipps `belastning` whose `order_id` equals an `orders.vipps_reference` is booked only by `AssignVippsChargeToOrder`:
+- CR 1500 for each `order_sources` faktura, with a payment back-link;
+- CR the category revenue account for each catalog line.
+
+It is refused when the split differs from the charge amount, or when a faktura on the order is already paid or voided. It is never classified by amount or payer name.
+
+**Failure mode:** before BRY-337 nothing read the order reference. Pay-link payments stayed "betaling mottatt, venter oppgjør" for weeks: the money had been paid out, but the faktura never settled and the payout could not clear.
+
 ### Booked faktura bilags are corrected, never rebuilt
 
 **Rule (BRY-364):** a posted `invoice_sync` entry is never deleted or edited. When its revenue split is wrong, `ResplitInvoiceBilags` posts an `invoice_resplit` entry for the invoice that moves the difference between revenue accounts. The difference is the lines' expected per-account split minus what the sync entry and earlier resplits booked. The run is idempotent, a preview posts nothing, and apply is behind fresh TOTP. An invoice whose booked revenue differs from its total is skipped with a reason for manual correction. The old `RebuildInvoiceBilags` (delete and re-sync) was removed.

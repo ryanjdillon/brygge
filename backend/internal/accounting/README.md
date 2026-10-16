@@ -32,6 +32,8 @@ When a bank row matching `Utb. NNN Vippsnr MMM` arrives, the reconciliation pull
 3. **Member resolved, no clear classification** → CR 1500 receivables (treasurer reconciles manually)
 4. **Fallback** → CR 3900 `vippsFallbackRevenueCode` (Andre inntekter)
 
+**Order-linked charges (per-charge model, BRY-337).** An ePayment charge (faktura pay link, QR checkout) carries our merchant reference (`chk-…`) as the row's `order_id`. `AutoReconcileOrderCharges` books it from the order itself, with no amount or name guessing: DR clearing / CR 1500 for each faktura in `order_sources` (with the `linkInvoicePayment` back-link), and CR the category revenue account for each catalog line (`resolveOrderChargeSplit`). It refuses if the order total and the charge differ, or if a faktura on the order is already paid or voided; those are reported in `skipped_details`. It runs from **Synk Vipps**, an operator Report API sync, and CSV upload. The nightly Report sync only repairs row types, because journal entries need a human `created_by`. Postings are drafts, like every per-charge posting.
+
 ⚠️ **Never route to 2900.** The `vippsClearingAccountCode = "2900"` constant exists only for backwards-compat with legacy reports. New lines must land on 3900 — see [`../../../docs/developer/reference/invariants.md`](../../../docs/developer/reference/invariants.md).
 
 ## The bank-row KID matching cascade

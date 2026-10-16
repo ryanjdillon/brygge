@@ -2200,6 +2200,16 @@ func (h *AccountingHandler) HandleImportVippsSettlement(w http.ResponseWriter, r
 		`UPDATE vipps_imports SET row_count = $1 WHERE id = $2`,
 		result.Imported, importID)
 
+	// On the per-charge model, charges that name their checkout order are
+	// booked straight away (BRY-337); the rest wait in the Tildel queue.
+	var orders *accounting.VippsOrderReconcileResult
+	if perCharge, perr := h.svc.VippsPerChargeEnabled(r.Context(), claims.ClubID); perr == nil && perCharge {
+		orders, err = h.svc.AutoReconcileOrderCharges(r.Context(), claims.ClubID, claims.UserID)
+		if err != nil {
+			h.log.Error().Err(err).Msg("booking order-linked vipps charges failed")
+		}
+	}
+
 	if h.audit != nil {
 		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,
 			"accounting.vipps_imported", "vipps_import", importID,
@@ -2219,6 +2229,7 @@ func (h *AccountingHandler) HandleImportVippsSettlement(w http.ResponseWriter, r
 		"rows_total":  len(rows),
 		"imported":    result.Imported,
 		"skipped_dup": result.SkippedDup,
+		"orders":      orders,
 	})
 }
 

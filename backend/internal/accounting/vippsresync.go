@@ -19,6 +19,9 @@ type VippsResyncResult struct {
 	// Bilags that the cascade refused to balance the second time —
 	// rare, surfaced so the operator can hunt them.
 	Failed []string `json:"failed"`
+	// Orders reports the per-charge model's order-linked bookings (BRY-337);
+	// nil on the legacy model.
+	Orders *VippsOrderReconcileResult `json:"orders,omitempty"`
 }
 
 // ResyncVippsBilags re-runs the Vipps classification cascade on every
@@ -47,6 +50,13 @@ func (s *Service) ResyncVippsBilags(ctx context.Context, clubID, createdBy strin
 		return nil, fmt.Errorf("checking vipps model: %w", ferr)
 	}
 	if perCharge {
+		// The per-charge model books charges one by one; the ones that name
+		// their checkout order can be booked without a human.
+		orders, err := s.AutoReconcileOrderCharges(ctx, clubID, createdBy)
+		if err != nil {
+			return nil, fmt.Errorf("booking order-linked charges: %w", err)
+		}
+		res.Orders = orders
 		return res, nil
 	}
 

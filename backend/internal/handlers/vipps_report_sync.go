@@ -76,5 +76,6 @@ func (h *AccountingHandler) HandleVippsReportSync(w http.ResponseWriter, r *http
 		"imported":    res.Imported,
 		"skipped_dup": res.SkippedDup,
 		"import_id":   res.ImportID,
+		"orders":      res.Orders,
 	})
 }

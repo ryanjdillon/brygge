@@ -17,22 +17,17 @@ func VippsReportRows(msn string, funds []vipps.FundsEntry, fees []vipps.FeeEntry
 	rows := make([]VippsRow, 0, len(funds)+len(fees))
 
 	for _, f := range funds {
-		rowType := VippsRowBelastning
-		if !strings.Contains(strings.ToLower(f.EntryType), "capture") && f.EntryType != "" {
-			// Refunds and any non-capture entry types are surfaced for review
-			// rather than silently booked as a customer payment.
-			rowType = VippsRowOther
-		}
-		msg := f.EntryType
+		rowType, settlement := classifyReportFunds(f.EntryType, f.Reference, f.PspReference)
 		rows = append(rows, VippsRow{
-			RowType:     rowType,
-			MSN:         msn,
-			TxAt:        parseReportDate(f.Time),
-			BookingDate: parseReportDate(f.LedgerDate),
-			Amount:      minorToMajor(f.Amount),
-			Message:     msg,
-			PSPRef:      f.PspReference,
-			OrderID:     f.Reference,
+			RowType:          rowType,
+			MSN:              msn,
+			TxAt:             parseReportDate(f.Time),
+			BookingDate:      parseReportDate(f.LedgerDate),
+			Amount:           minorToMajor(f.Amount),
+			Message:          f.EntryType,
+			PSPRef:           f.PspReference,
+			OrderID:          f.Reference,
+			SettlementNumber: settlement,
 		})
 	}
 
@@ -50,6 +45,38 @@ func VippsReportRows(msn string, funds []vipps.FundsEntry, fees []vipps.FeeEntry
 	}
 
 	return rows
+}
+
+// classifyReportFunds maps a funds-report entry onto the CSV export's row
+// vocabulary so both sources reconcile the same way. A capture is a customer
+// payment; the settlement's payout (reference "Utb. <n> Vippsnr <msn>") is the
+// payout row carrying its settlement number; the fees retained from the
+// settlement are the per-settlement fee row (amount negative, as in the CSV).
+// Anything else (refunds, adjustments) stays "other" for manual review rather
+// than being booked as revenue.
+func classifyReportFunds(entryType, reference, pspRef string) (VippsRowType, string) {
+	t := strings.ToLower(entryType)
+	if m := VippsSettlementPattern.FindStringSubmatch(reference); len(m) == 3 {
+		return VippsRowPayout, m[1]
+	}
+	switch {
+	case strings.Contains(t, "refund"), strings.Contains(t, "revers"):
+		return VippsRowOther, ""
+	case strings.Contains(t, "payout"):
+		// No "Utb." reference: fall back to the settlement number Vipps
+		// appends to the pspReference ("<ledger>-<settlement>").
+		settlement := ""
+		if i := strings.LastIndex(pspRef, "-"); i >= 0 {
+			settlement = pspRef[i+1:]
+		}
+		return VippsRowPayout, settlement
+	case strings.Contains(t, "fee"):
+		return VippsRowFee, ""
+	case t == "" || strings.Contains(t, "capture"):
+		return VippsRowBelastning, ""
+	default:
+		return VippsRowOther, ""
+	}
 }
 
 // minorToMajor converts øre to kroner.

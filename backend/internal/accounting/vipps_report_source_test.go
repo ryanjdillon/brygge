@@ -68,3 +68,36 @@ func TestVippsReportRowsRefundToOther(t *testing.T) {
 		t.Errorf("refund should map to 'other', got %+v", rows)
 	}
 }
+
+// The funds report carries the settlement payout and the retained fees as
+// their own entries; they must land as payout and fee rows (as in the CSV
+// export) so the payout can clear against its bank deposit (BRY-337).
+func TestVippsReportRowsSettlementEntries(t *testing.T) {
+	funds := []vipps.FundsEntry{
+		{EntryType: "capture", Reference: "chk-a", PspReference: "p1", Amount: 45000, LedgerDate: "2026-09-01"},
+		{EntryType: "fees-retained", PspReference: "900-20260901", Amount: -1549, LedgerDate: "2026-09-01"},
+		{EntryType: "payout-scheduled", Reference: "Utb. 2000001 Vippsnr 111", PspReference: "900-2000001", Amount: -43551, LedgerDate: "2026-09-01"},
+		{EntryType: "payout-scheduled", PspReference: "900-2000002", Amount: -100, LedgerDate: "2026-09-01"},
+		{EntryType: "capture-reversal", Reference: "chk-b", Amount: -100},
+	}
+	rows := VippsReportRows("111", funds, nil)
+	want := []struct {
+		typ        VippsRowType
+		settlement string
+	}{
+		{VippsRowBelastning, ""},
+		{VippsRowFee, ""},
+		{VippsRowPayout, "2000001"},
+		{VippsRowPayout, "2000002"},
+		{VippsRowOther, ""},
+	}
+	for i, w := range want {
+		if rows[i].RowType != w.typ || rows[i].SettlementNumber != w.settlement {
+			t.Errorf("row %d (%s) = %s/%q, want %s/%q", i, funds[i].EntryType,
+				rows[i].RowType, rows[i].SettlementNumber, w.typ, w.settlement)
+		}
+	}
+	if math.Abs(rows[1].Amount+15.49) > 0.001 {
+		t.Errorf("retained fee amount = %v, want -15.49 (negative, as in the CSV)", rows[1].Amount)
+	}
+}

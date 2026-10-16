@@ -296,9 +296,12 @@ Source: `VippsRowType` constants in `backend/internal/accounting/vippsimport.go`
 payout      The "Utbetaling planlagt" row — carries settlement_number
 belastning  Customer charge — amount > 0, customer_name + message set
 fee         Vipps gebyr — amount < 0
+other       Anything else (refunds, reversals) — left for manual review
 ```
 
 The reconciliation cascade groups `belastning` and `fee` rows by `booking_date` matching the payout row's date.
+
+Report API rows (`vipps_imports.filename` "Vipps Report API …") map onto the same vocabulary through `classifyReportFunds`. A `capture` becomes `belastning`, the settlement payout (reference `Utb. <n> Vippsnr <msn>`) becomes `payout` with its settlement number, and the fees retained from the settlement become the per-settlement `fee` row (negative amount). The fees report's per-charge lines are also `fee` rows, but they carry their value in `fee` with `amount` 0, so they don't double-count. Report rows imported as `other` before BRY-337 are reclassified by `RepairVippsReportRows`. `message` holds the entry type for Report rows only, and the payer's free text for CSV rows, which is why the repair never touches CSV rows.
 
 ---
 

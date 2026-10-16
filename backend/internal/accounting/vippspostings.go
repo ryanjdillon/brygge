@@ -78,6 +78,7 @@ type vippsBelastning struct {
 	date         time.Time
 	customerName string
 	message      string
+	orderRef     string // merchant reference (chk-…) on ePayment charges
 	entryID      *string
 	dismissedAt  *time.Time
 }
@@ -92,11 +93,11 @@ func (s *Service) loadVippsBelastning(ctx context.Context, clubID, rowID string)
 		`SELECT id, row_type, amount,
 		        COALESCE(booking_date, tx_at::date),
 		        COALESCE(customer_name, ''), COALESCE(message, ''),
-		        journal_entry_id, dismissed_at
+		        COALESCE(order_id, ''), journal_entry_id, dismissed_at
 		   FROM vipps_import_rows
 		  WHERE id = $1 AND club_id = $2`,
 		rowID, clubID,
-	).Scan(&b.id, &rowType, &b.amount, &b.date, &b.customerName, &b.message, &b.entryID, &b.dismissedAt)
+	).Scan(&b.id, &rowType, &b.amount, &b.date, &b.customerName, &b.message, &b.orderRef, &b.entryID, &b.dismissedAt)
 	if err == pgx.ErrNoRows {
 		return nil, fmt.Errorf("vipps charge not found")
 	}
@@ -152,6 +153,15 @@ func (s *Service) DismissVippsCharge(ctx context.Context, clubID, userID, rowID,
 // marks the row reconciled, and returns the entry. The guarded mark makes the
 // operation safe against a concurrent second booking of the same charge.
 func (s *Service) postVippsCharge(ctx context.Context, clubID, createdBy, creditAccount, description string, b *vippsBelastning) (string, error) {
+	return s.postVippsChargeSplit(ctx, clubID, createdBy, description, b, []CreateJournalLineInput{
+		{AccountCode: creditAccount, Debit: 0, Credit: b.amount, Description: description},
+	})
+}
+
+// postVippsChargeSplit is postVippsCharge with the credit side given as lines,
+// for a charge that pays several things at once (a checkout order settling
+// fakturas plus catalog lines). The credits must sum to the charge amount.
+func (s *Service) postVippsChargeSplit(ctx context.Context, clubID, createdBy, description string, b *vippsBelastning, credits []CreateJournalLineInput) (string, error) {
 	clearing, _, err := s.vippsAccounts(ctx, clubID)
 	if err != nil {
 		return "", err
@@ -176,10 +186,9 @@ func (s *Service) postVippsCharge(ctx context.Context, clubID, createdBy, credit
 		SourceTable:    &sourceTable,
 		CreatedBy:      createdBy,
 		ClubID:         clubID,
-		Lines: []CreateJournalLineInput{
+		Lines: append([]CreateJournalLineInput{
 			{AccountCode: clearing, Debit: b.amount, Credit: 0, Description: description},
-			{AccountCode: creditAccount, Debit: 0, Credit: b.amount, Description: description},
-		},
+		}, credits...),
 	})
 	if err != nil {
 		return "", fmt.Errorf("creating journal entry: %w", err)
