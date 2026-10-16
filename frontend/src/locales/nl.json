@@ -923,7 +923,17 @@
         "tooltipDescription": "What this entry is for",
         "tooltipStatus": "Draft = not finalized, Posted = finalized, Voided = reversed",
         "tooltipSource": "How this entry was created (manual, payment sync, bank import)",
-        "tooltipAccounts": "Which accounts are affected"
+        "tooltipAccounts": "Which accounts are affected",
+        "vippsDrafts": "Vipps-concepten boeken",
+        "vippsDraftsTooltip": "Boekt de Vipps-boekingen van deze periode die als concept zijn blijven staan. Geparkeerde betalingen worden eerst geclassificeerd als automatisch toewijzen aan staat; onveilige concepten worden vermeld en niet aangeraakt.",
+        "vippsDraftsTitle": "Vipps-concepten voor {year} boeken?",
+        "vippsDraftsBody": "{posted} concept(en) worden ongewijzigd geboekt, {reclassified} geparkeerde betaling(en) op de juiste rekening geboekt en {refused} blijven over voor handmatige verwerking.",
+        "vippsDraftsAutoAssignOff": "Automatisch toewijzen staat uit, dus betalingen op 3900 worden ongeclassificeerd geboekt. Zet het eerst aan onder Økonomiinnstillinger → Vipps.",
+        "vippsDraftsDebit": "debet",
+        "vippsDraftsCredit": "credit",
+        "vippsDraftsConfirm": "Concepten boeken",
+        "vippsDraftsNothing": "Geen Vipps-concepten om te boeken in deze periode.",
+        "vippsDraftsDone": "{posted} Vipps-boeking(en) geboekt, {reclassified} omgeboekt."
       },
       "journalForm": {
         "title": "New entry",

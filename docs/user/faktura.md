@@ -220,6 +220,13 @@ Single fakturas go through the same draft → send → paid flow.
 - **Recurring members who never pay:** Sent tab → filter `Past due` chip → bulk **Send purring** to nudge.
 - **Closing the period:** once everything is reconciled, mark the fiscal period as closed in `Admin → Accounting`. After that, no new fakturas can be issued against that period — protects historical balance sheets. Closing is refused while the period still has **draft** (kladd) bilag, and the message lists them per source. Post them, or delete an abandoned draft with the bin icon on the Bilag page. Drafts that came from a bank or Vipps row are undone from **Tildel** instead.
 
+  **Vipps drafts from before automatic posting.** Vipps bilag created before posting became automatic are still drafts. On the Bilag page, pick the year and click **Bokfør Vipps-utkast**. A preview shows:
+  - how many drafts will be posted as they are, with totals per account;
+  - which parked payments will be rebooked to the right account. These are payments sitting on 3900 Andre inntekter, or on 1500 with no faktura.
+  - which drafts are left alone, and why: unbalanced, linked to no row, already booked elsewhere, or a receivable with no faktura.
+
+  Rebooking uses the same rules as automatic Vipps assignment. Turn that on first under `Økonomiinnstillinger → Vipps` (with the tie category), or the 3900 payments are posted there unclassified. Running it again does nothing new.
+
 ### Bank statement → invoice reconciliation
 
 When you upload a bank statement (`Admin → Accounting → Bank & Vipps`), the KID auto-matcher links each incoming row to the corresponding invoice and back-links `invoices.payment_id` so the faktura-status widgets update. After deploying improvements to the matcher, click **Synk Vipps** (Vipps drafts) or **Synk bank** (KID matches) to retroactively re-run the cascade over already-imported rows.

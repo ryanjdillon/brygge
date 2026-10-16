@@ -44,7 +44,7 @@ Charges naming a checkout order are left to `AutoReconcileOrderCharges`. Each bo
 
 **Rule (BRY-339):** every Vipps posting path posts its entry right away: per-charge charge→faktura and charge→account, the order-linked split, auto-assign, the payout's fee and bank entries, and the legacy `ReconcileVippsConfirm`.
 - Each path marks its source row with a guarded update first, then posts. If the post fails, it unlinks the row and deletes the draft (`unwindVippsPosting`), so the charge returns to Tildel.
-- The legacy `ResyncVippsBilags` re-creates existing drafts and keeps them as drafts. Posting a pre-existing backlog is a separate, supervised step (BRY-341).
+- The legacy `ResyncVippsBilags` re-creates existing drafts and keeps them as drafts. Posting a pre-existing backlog is a separate, supervised step: `PostVippsDraftBacklog` (BRY-341), per fiscal period, preview then fresh-TOTP apply. It refuses unbalanced or orphan drafts, drafts whose source row another posted entry already booked, and drafts whose faktura another posted entry already settled. It never posts a 1500 credit that isn't tied to a faktura; with auto-assign on, it rebooks such a charge by rule or leaves it for Tildel.
 - `ClosePeriod` refuses (409 `period_has_drafts`) while the period holds any draft, and lists them per source with count and total. `DeleteDraftJournalEntry` removes a draft that no bank or Vipps row references. Linked drafts are undone through Tildel unassign.
 - Posted entries are never hard-deleted. Undoing a posted charge voids it with a reversal (`UnassignVippsCharge`, `VoidJournalEntry`).
 

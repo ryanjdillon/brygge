@@ -1567,7 +1567,17 @@
         "resplitBody": "{count} faktura(er) er bokført på feil inntektskontoer. Ett korreksjonsbilag per faktura flytter beløpene under. Totaler og kundefordringer endres ikke.",
         "resplitConfirm": "Bokfør korreksjoner",
         "resplitNothing": "Inntektsfordelingen er allerede riktig. Ingenting å korrigere.",
-        "resplitDone": "{posted} korreksjonsbilag bokført."
+        "resplitDone": "{posted} korreksjonsbilag bokført.",
+        "vippsDrafts": "Bokfør Vipps-utkast",
+        "vippsDraftsTooltip": "Bokfør Vipps-bilag i perioden som ble liggende som utkast. Parkerte betalinger klassifiseres først når automatisk tildeling er på; usikre utkast listes og røres ikke.",
+        "vippsDraftsTitle": "Bokføre Vipps-utkast for {year}?",
+        "vippsDraftsBody": "{posted} utkast bokføres som de er, {reclassified} parkerte betalinger bokføres på riktig konto, og {refused} blir liggende til manuell behandling.",
+        "vippsDraftsAutoAssignOff": "Automatisk tildeling er av, så betalinger på 3900 Andre inntekter bokføres der uklassifisert. Slå det på under Økonomiinnstillinger → Vipps først for å klassifisere dem.",
+        "vippsDraftsDebit": "debet",
+        "vippsDraftsCredit": "kredit",
+        "vippsDraftsConfirm": "Bokfør utkast",
+        "vippsDraftsNothing": "Ingen Vipps-utkast å bokføre i denne perioden.",
+        "vippsDraftsDone": "{posted} Vipps-bilag bokført, {reclassified} omklassifisert."
       },
       "journalForm": {
         "title": "Nytt bilag",

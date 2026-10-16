@@ -923,7 +923,17 @@
         "tooltipDescription": "What this entry is for",
         "tooltipStatus": "Draft = not finalized, Posted = finalized, Voided = reversed",
         "tooltipSource": "How this entry was created (manual, payment sync, bank import)",
-        "tooltipAccounts": "Which accounts are affected"
+        "tooltipAccounts": "Which accounts are affected",
+        "vippsDrafts": "Vipps-Entwürfe buchen",
+        "vippsDraftsTooltip": "Bucht die Vipps-Belege dieser Periode, die als Entwurf liegen geblieben sind. Geparkte Zahlungen werden zuerst klassifiziert, wenn die automatische Zuordnung aktiv ist; unsichere Entwürfe werden aufgelistet und nicht angetastet.",
+        "vippsDraftsTitle": "Vipps-Entwürfe für {year} buchen?",
+        "vippsDraftsBody": "{posted} Entwurf/Entwürfe werden unverändert gebucht, {reclassified} geparkte Zahlung(en) auf das richtige Konto umgebucht und {refused} zur manuellen Bearbeitung belassen.",
+        "vippsDraftsAutoAssignOff": "Die automatische Zuordnung ist aus, daher werden Zahlungen auf 3900 unklassifiziert gebucht. Aktivieren Sie sie zuerst unter Økonomiinnstillinger → Vipps.",
+        "vippsDraftsDebit": "Soll",
+        "vippsDraftsCredit": "Haben",
+        "vippsDraftsConfirm": "Entwürfe buchen",
+        "vippsDraftsNothing": "Keine Vipps-Entwürfe in dieser Periode.",
+        "vippsDraftsDone": "{posted} Vipps-Beleg(e) gebucht, {reclassified} umgebucht."
       },
       "journalForm": {
         "title": "New entry",

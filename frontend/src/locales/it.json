@@ -923,7 +923,17 @@
         "tooltipDescription": "What this entry is for",
         "tooltipStatus": "Draft = not finalized, Posted = finalized, Voided = reversed",
         "tooltipSource": "How this entry was created (manual, payment sync, bank import)",
-        "tooltipAccounts": "Which accounts are affected"
+        "tooltipAccounts": "Which accounts are affected",
+        "vippsDrafts": "Registra bozze Vipps",
+        "vippsDraftsTooltip": "Registra le scritture Vipps del periodo rimaste in bozza. I pagamenti parcheggiati vengono prima classificati se l'assegnazione automatica è attiva; le bozze non sicure sono elencate e lasciate invariate.",
+        "vippsDraftsTitle": "Registrare le bozze Vipps per il {year}?",
+        "vippsDraftsBody": "{posted} bozza/e saranno registrate così come sono, {reclassified} pagamento/i parcheggiato/i riclassificato/i sul conto corretto e {refused} lasciato/i alla gestione manuale.",
+        "vippsDraftsAutoAssignOff": "L'assegnazione automatica è disattivata, quindi i pagamenti su 3900 vengono registrati senza classificazione. Attivala prima in Økonomiinnstillinger → Vipps.",
+        "vippsDraftsDebit": "dare",
+        "vippsDraftsCredit": "avere",
+        "vippsDraftsConfirm": "Registra bozze",
+        "vippsDraftsNothing": "Nessuna bozza Vipps da registrare in questo periodo.",
+        "vippsDraftsDone": "{posted} scrittura/e Vipps registrata/e, {reclassified} riclassificata/e."
       },
       "journalForm": {
         "title": "New entry",

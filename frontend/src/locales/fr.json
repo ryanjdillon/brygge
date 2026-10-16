@@ -922,7 +922,17 @@
         "tooltipDescription": "What this entry is for",
         "tooltipStatus": "Draft = not finalized, Posted = finalized, Voided = reversed",
         "tooltipSource": "How this entry was created (manual, payment sync, bank import)",
-        "tooltipAccounts": "Which accounts are affected"
+        "tooltipAccounts": "Which accounts are affected",
+        "vippsDrafts": "Comptabiliser les brouillons Vipps",
+        "vippsDraftsTooltip": "Comptabilise les pièces Vipps de la période restées en brouillon. Les paiements en attente sont d'abord classés si l'attribution automatique est activée ; les brouillons douteux sont listés et laissés tels quels.",
+        "vippsDraftsTitle": "Comptabiliser les brouillons Vipps pour {year} ?",
+        "vippsDraftsBody": "{posted} brouillon(s) seront comptabilisés tels quels, {reclassified} paiement(s) en attente reclassés sur le bon compte, et {refused} laissés pour traitement manuel.",
+        "vippsDraftsAutoAssignOff": "L'attribution automatique est désactivée : les paiements sur 3900 sont comptabilisés sans classement. Activez-la d'abord dans Økonomiinnstillinger → Vipps.",
+        "vippsDraftsDebit": "débit",
+        "vippsDraftsCredit": "crédit",
+        "vippsDraftsConfirm": "Comptabiliser",
+        "vippsDraftsNothing": "Aucun brouillon Vipps à comptabiliser pour cette période.",
+        "vippsDraftsDone": "{posted} pièce(s) Vipps comptabilisée(s), {reclassified} reclassée(s)."
       },
       "journalForm": {
         "title": "New entry",

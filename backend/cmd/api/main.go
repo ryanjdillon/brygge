@@ -1289,6 +1289,9 @@ func main() {
 							r.Post("/invoices/resplit/preview", accountingHandler.HandlePreviewResplitInvoiceBilags)
 							r.With(middleware.RequireFreshTOTPDefault()).
 								Post("/invoices/resplit", accountingHandler.HandleApplyResplitInvoiceBilags)
+							r.Post("/vipps-drafts/preview", accountingHandler.HandlePreviewVippsDraftBacklog)
+							r.With(middleware.RequireFreshTOTPDefault()).
+								Post("/vipps-drafts", accountingHandler.HandleApplyVippsDraftBacklog)
 						})
 
 						r.Get("/bank-formats", accountingHandler.HandleListBankFormats)

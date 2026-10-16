@@ -1571,7 +1571,17 @@
         "resplitBody": "{count} faktura(s) are booked to the wrong income accounts. One correction bilag per faktura will move the amounts below. Totals and receivables do not change.",
         "resplitConfirm": "Post corrections",
         "resplitNothing": "The revenue split is already correct. Nothing to correct.",
-        "resplitDone": "{posted} correction bilag(s) posted."
+        "resplitDone": "{posted} correction bilag(s) posted.",
+        "vippsDrafts": "Post Vipps drafts",
+        "vippsDraftsTooltip": "Post the Vipps bilags in this period that were left as drafts. Parked charges are classified first when auto-assign is on; unsafe drafts are listed and left alone.",
+        "vippsDraftsTitle": "Post Vipps drafts for {year}?",
+        "vippsDraftsBody": "{posted} draft(s) will be posted as they are, {reclassified} parked charge(s) rebooked to the right account, and {refused} left for manual handling.",
+        "vippsDraftsAutoAssignOff": "Auto-assign is off, so charges on 3900 Andre inntekter are posted there unclassified. Turn it on under Økonomiinnstillinger → Vipps first to classify them.",
+        "vippsDraftsDebit": "debit",
+        "vippsDraftsCredit": "credit",
+        "vippsDraftsConfirm": "Post drafts",
+        "vippsDraftsNothing": "No Vipps drafts to post in this period.",
+        "vippsDraftsDone": "{posted} Vipps bilag(s) posted, {reclassified} rebooked."
       },
       "journalForm": {
         "title": "New entry",

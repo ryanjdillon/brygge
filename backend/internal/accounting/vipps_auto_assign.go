@@ -150,39 +150,52 @@ func (s *Service) AutoAssignVippsCharges(ctx context.Context, clubID, createdBy 
 	return res, nil
 }
 
-// autoAssignOne applies the rules to one charge. It returns the booking, or
-// nil with the reason it was left for a human.
-func (s *Service) autoAssignOne(ctx context.Context, clubID, createdBy string, cfg vippsAutoAssignConfig, rowID, customer, message string, amount float64) (*VippsAutoAssignItem, string, error) {
+// vippsChargeDecision is what the auto-assign rules conclude for one charge.
+// Rule is empty when the charge is ambiguous; Reason then says why.
+type vippsChargeDecision struct {
+	Rule          string
+	InvoiceID     string
+	InvoiceNumber int
+	Account       string
+	Label         string
+	Reason        string
+}
+
+// Target is the human-readable booking target: "faktura N" or an account.
+func (d *vippsChargeDecision) Target() string {
+	if d.Rule == autoAssignRuleMemberInvoice {
+		return fmt.Sprintf("faktura %d", d.InvoiceNumber)
+	}
+	return d.Account
+}
+
+// decideVippsCharge applies the auto-assign rules to one charge without
+// booking anything, so callers can preview the outcome.
+func (s *Service) decideVippsCharge(ctx context.Context, clubID string, cfg vippsAutoAssignConfig, customer, message string, amount float64) (*vippsChargeDecision, error) {
 	memberID, pass, err := s.resolveCustomerToMemberPass(ctx, clubID, customer, message)
 	if err != nil {
-		return nil, "", fmt.Errorf("resolving payer: %w", err)
+		return nil, fmt.Errorf("resolving payer: %w", err)
 	}
 	strongMember := memberID != "" && pass <= memberPassFirstLast
 
 	if strongMember {
 		invoiceID, invoiceNumber, sameAmount, open, err := s.singleOpenInvoice(ctx, clubID, memberID, amount)
 		if err != nil {
-			return nil, "", err
+			return nil, err
 		}
 		if open == 1 && invoiceID != "" {
-			r, err := s.AssignVippsChargeToInvoice(ctx, clubID, rowID, invoiceID, createdBy)
-			if err != nil {
-				return nil, "", err
-			}
-			target := fmt.Sprintf("faktura %d", invoiceNumber)
-			s.markAutoAssigned(ctx, clubID, createdBy, rowID, autoAssignRuleMemberInvoice, target, r.EntryID)
-			return &VippsAutoAssignItem{RowID: rowID, Rule: autoAssignRuleMemberInvoice, Target: target, EntryID: r.EntryID}, "", nil
+			return &vippsChargeDecision{Rule: autoAssignRuleMemberInvoice, InvoiceID: invoiceID, InvoiceNumber: invoiceNumber}, nil
 		}
 		// The payer has an open faktura for exactly this amount among others:
 		// it may be that faktura, so don't guess a revenue account instead.
 		if sameAmount > 0 {
-			return nil, "member has several open fakturas for this amount", nil
+			return &vippsChargeDecision{Reason: "member has several open fakturas for this amount"}, nil
 		}
 	}
 
 	cands := s.priceArticleCandidates(ctx, clubID, amount)
 	if len(cands) == 0 {
-		return nil, "no faktura or price item fits", nil
+		return &vippsChargeDecision{Reason: "no faktura or price item fits"}, nil
 	}
 	byCategory := map[string][]priceArticleCandidate{}
 	for _, c := range cands {
@@ -194,7 +207,7 @@ func (s *Service) autoAssignOne(ctx context.Context, clubID, createdBy string, c
 	} else if _, ok := byCategory[cfg.tieCategory]; ok && cfg.tieCategory != "" {
 		category = cfg.tieCategory
 	} else {
-		return nil, "amount fits price items in several categories", nil
+		return &vippsChargeDecision{Reason: "amount fits price items in several categories"}, nil
 	}
 	chosen := byCategory[category]
 	membersOnly := true
@@ -205,19 +218,54 @@ func (s *Service) autoAssignOne(ctx context.Context, clubID, createdBy string, c
 		}
 	}
 	if membersOnly && !strongMember {
-		return nil, "members-only price but the payer is not a known member", nil
+		return &vippsChargeDecision{Reason: "members-only price but the payer is not a known member"}, nil
 	}
 	account, ok := vippsCategoryAccountMap[category]
 	if !ok {
-		return nil, "price category has no revenue account", nil
+		return &vippsChargeDecision{Reason: "price category has no revenue account"}, nil
 	}
+	return &vippsChargeDecision{Rule: autoAssignRulePriceItem, Account: account, Label: chosen[0].label()}, nil
+}
 
-	r, err := s.CreateVippsChargeBilag(ctx, clubID, rowID, account, "auto: "+chosen[0].label(), createdBy)
+// bookVippsChargeDecision books an unbooked charge per a decision and
+// records the rule. It returns the posted entry.
+func (s *Service) bookVippsChargeDecision(ctx context.Context, clubID, createdBy, rowID string, d *vippsChargeDecision) (string, error) {
+	var entryID string
+	switch d.Rule {
+	case autoAssignRuleMemberInvoice:
+		r, err := s.AssignVippsChargeToInvoice(ctx, clubID, rowID, d.InvoiceID, createdBy)
+		if err != nil {
+			return "", err
+		}
+		entryID = r.EntryID
+	case autoAssignRulePriceItem:
+		r, err := s.CreateVippsChargeBilag(ctx, clubID, rowID, d.Account, "auto: "+d.Label, createdBy)
+		if err != nil {
+			return "", err
+		}
+		entryID = r.EntryID
+	default:
+		return "", fmt.Errorf("no booking rule for this charge")
+	}
+	s.markAutoAssigned(ctx, clubID, createdBy, rowID, d.Rule, d.Target(), entryID)
+	return entryID, nil
+}
+
+// autoAssignOne applies the rules to one charge. It returns the booking, or
+// nil with the reason it was left for a human.
+func (s *Service) autoAssignOne(ctx context.Context, clubID, createdBy string, cfg vippsAutoAssignConfig, rowID, customer, message string, amount float64) (*VippsAutoAssignItem, string, error) {
+	d, err := s.decideVippsCharge(ctx, clubID, cfg, customer, message, amount)
 	if err != nil {
 		return nil, "", err
 	}
-	s.markAutoAssigned(ctx, clubID, createdBy, rowID, autoAssignRulePriceItem, account, r.EntryID)
-	return &VippsAutoAssignItem{RowID: rowID, Rule: autoAssignRulePriceItem, Target: account, EntryID: r.EntryID}, "", nil
+	if d.Rule == "" {
+		return nil, d.Reason, nil
+	}
+	entryID, err := s.bookVippsChargeDecision(ctx, clubID, createdBy, rowID, d)
+	if err != nil {
+		return nil, "", err
+	}
+	return &VippsAutoAssignItem{RowID: rowID, Rule: d.Rule, Target: d.Target(), EntryID: entryID}, "", nil
 }
 
 // singleOpenInvoice looks at the member's fakturas that are sent and not yet

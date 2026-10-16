@@ -2069,6 +2069,58 @@ func (h *AccountingHandler) resplitInvoiceBilags(w http.ResponseWriter, r *http.
 	JSON(w, http.StatusOK, result)
 }
 
+// ── Vipps draft backlog ─────────────────────────────────────
+
+// HandlePreviewVippsDraftBacklog reports, without changing anything, what
+// posting a fiscal period's Vipps drafts would do.
+func (h *AccountingHandler) HandlePreviewVippsDraftBacklog(w http.ResponseWriter, r *http.Request) {
+	h.vippsDraftBacklog(w, r, false)
+}
+
+// HandleApplyVippsDraftBacklog posts the drafts (reclassifying parked
+// charges first). The route is behind RequireFreshTOTP because it books.
+func (h *AccountingHandler) HandleApplyVippsDraftBacklog(w http.ResponseWriter, r *http.Request) {
+	h.vippsDraftBacklog(w, r, true)
+}
+
+func (h *AccountingHandler) vippsDraftBacklog(w http.ResponseWriter, r *http.Request, apply bool) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	var req syncRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.PeriodID == "" {
+		Error(w, http.StatusBadRequest, "period_id is required")
+		return
+	}
+
+	result, err := h.svc.PostVippsDraftBacklog(r.Context(), claims.ClubID, req.PeriodID, claims.UserID, apply)
+	if err != nil {
+		Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if apply && h.audit != nil {
+		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,
+			audit.ActionAccountingVippsDraftsPosted, "fiscal_period", req.PeriodID,
+			map[string]any{
+				"year":          result.Year,
+				"drafts":        result.Drafts,
+				"posted":        result.Posted,
+				"reclassified":  len(result.Reclassified),
+				"refused":       len(result.Refused),
+				"posted_totals": result.PostedTotals,
+			})
+	}
+
+	JSON(w, http.StatusOK, result)
+}
+
 // ── Full bank sync ──────────────────────────────────────────
 
 // HandleResyncVipps re-runs the Vipps classification cascade on every

@@ -381,6 +381,48 @@ export function previewResplitInvoiceBilags(periodId: string) {
   })
 }
 
+export interface AccountTotal {
+  account_code: string
+  debit: number
+  credit: number
+}
+
+export interface VippsBacklogResult {
+  year: number
+  applied: boolean
+  auto_assign_enabled: boolean
+  drafts: number
+  posted: number
+  posted_totals: AccountTotal[]
+  reclassified: { entry_number: number; date: string; amount: number; from: string; to: string; rule: string }[]
+  refused: SkippedItem[]
+}
+
+// Preview is side-effect free; apply posts the period's Vipps drafts and is
+// behind fresh TOTP on the server, so call ensureFreshTotp() first.
+export function previewVippsDraftBacklog(periodId: string) {
+  return apiFetch<VippsBacklogResult>(`${BASE}/sync/vipps-drafts/preview`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ period_id: periodId }),
+  })
+}
+
+export function useApplyVippsDraftBacklog() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { period_id: string }) =>
+      apiFetch<VippsBacklogResult>(`${BASE}/sync/vipps-drafts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['accounting', 'journal'] })
+    },
+  })
+}
+
 export function useApplyResplitInvoiceBilags() {
   const qc = useQueryClient()
   return useMutation({

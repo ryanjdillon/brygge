@@ -31,11 +31,14 @@ import {
   useSyncInvoices,
   previewResplitInvoiceBilags,
   useApplyResplitInvoiceBilags,
+  previewVippsDraftBacklog,
+  useApplyVippsDraftBacklog,
   fetchJournalAttachmentUrl,
   type JournalEntry,
   type SkippedItem,
   type SyncResult,
   type ResplitResult,
+  type VippsBacklogResult,
 } from '@/composables/useAccounting'
 import Select from '@/components/ui/form/Select.vue'
 import NumberInput from '@/components/ui/form/NumberInput.vue'
@@ -103,6 +106,7 @@ const reopenPeriodMutation = useReopenPeriod()
 const syncPaymentsMutation = useSyncPayments()
 const syncInvoicesMutation = useSyncInvoices()
 const applyResplitMutation = useApplyResplitInvoiceBilags()
+const applyVippsBacklogMutation = useApplyVippsDraftBacklog()
 const { ensureFreshTotp } = useFreshTotp()
 const askConfirm = useConfirm()
 
@@ -254,6 +258,69 @@ async function handleResplitInvoiceBilags() {
   }
 }
 
+// Posts the period's Vipps drafts left over from before postings were
+// booked on creation. Parked charges are reclassified first when the club
+// has auto-assign on; unsafe drafts are refused and listed.
+const postingVippsDrafts = ref(false)
+async function handlePostVippsDrafts() {
+  if (!selectedPeriodId.value) return
+  if (!(await ensureFreshTotp())) return
+  const periodLabel = periods.value?.find((p) => p.id === selectedPeriodId.value)?.year ?? ''
+
+  postingVippsDrafts.value = true
+  syncMessage.value = ''
+  syncSkipped.value = []
+  try {
+    const preview = await previewVippsDraftBacklog(selectedPeriodId.value)
+    syncSkipped.value = preview.refused ?? []
+    if (!preview.posted && !preview.reclassified.length) {
+      syncMessage.value = t('admin.accounting.journal.vippsDraftsNothing')
+      return
+    }
+    const details = [
+      ...preview.posted_totals.map(
+        (a) => `${a.account_code}: ${t('admin.accounting.journal.vippsDraftsDebit')} ${a.debit.toLocaleString('nb-NO')} · ${t('admin.accounting.journal.vippsDraftsCredit')} ${a.credit.toLocaleString('nb-NO')} kr`,
+      ),
+      ...preview.reclassified.map((r) => `${r.date} ${r.amount.toLocaleString('nb-NO')} kr: ${r.from} → ${r.to}`),
+    ]
+    const body = [
+      t('admin.accounting.journal.vippsDraftsBody', {
+        posted: preview.posted,
+        reclassified: preview.reclassified.length,
+        refused: preview.refused.length,
+      }),
+      preview.auto_assign_enabled ? '' : t('admin.accounting.journal.vippsDraftsAutoAssignOff'),
+    ]
+      .filter(Boolean)
+      .join(' ')
+    const ok = await askConfirm({
+      title: t('admin.accounting.journal.vippsDraftsTitle', { year: periodLabel }),
+      body,
+      details,
+      confirmLabel: t('admin.accounting.journal.vippsDraftsConfirm'),
+      cancelLabel: t('common.cancel'),
+      tone: 'warning',
+    })
+    if (!ok) return
+
+    const result = await new Promise<VippsBacklogResult>((resolve, reject) => {
+      applyVippsBacklogMutation.mutate(
+        { period_id: selectedPeriodId.value },
+        { onSuccess: resolve, onError: reject },
+      )
+    })
+    syncMessage.value = t('admin.accounting.journal.vippsDraftsDone', {
+      posted: result.posted,
+      reclassified: result.reclassified.length,
+    })
+    syncSkipped.value = result.refused ?? []
+  } catch (err) {
+    syncMessage.value = `${t('common.error')}: ${(err as Error).message}`
+  } finally {
+    postingVippsDrafts.value = false
+  }
+}
+
 function handleCreatePeriod() {
   if (newYear.value == null) return
   createPeriodMutation.mutate({ year: newYear.value }, {
@@ -401,6 +468,16 @@ function formatNOK(amount: number): string {
           >
             <RefreshCw class="h-4 w-4" :class="{ 'animate-spin': resplitting }" />
             {{ resplitting ? t('admin.accounting.journal.updating') : t('admin.accounting.journal.resplitInvoiceBilags') }}
+          </button>
+          <button
+            class="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            :disabled="postingVippsDrafts || !selectedPeriodId"
+            :title="t('admin.accounting.journal.vippsDraftsTooltip')"
+            data-testid="post-vipps-drafts"
+            @click="handlePostVippsDrafts"
+          >
+            <RefreshCw class="h-4 w-4" :class="{ 'animate-spin': postingVippsDrafts }" />
+            {{ postingVippsDrafts ? t('admin.accounting.journal.updating') : t('admin.accounting.journal.vippsDrafts') }}
           </button>
         </div>
       </div>
