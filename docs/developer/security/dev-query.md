@@ -129,6 +129,41 @@ secrets), `invoice_pdf_archive`, and all credential/consent tables
 `user_consents`, `deletion_requests`, `push_subscriptions`,
 `notification_preferences`, `vipps_customer_aliases`).
 
+## Matching people without names: keyed name tokens
+
+Names stay NULL, but reconciliation often has to ask "is the payer on this bank row the member who owns that invoice?". For that, five views expose **keyed name tokens**:
+
+| View | Key columns | Tokens |
+|------|-------------|--------|
+| `user_name_tokens` | `user_id` | `name_pair_toks`, `household_tok` (address + postcode) |
+| `invoice_name_tokens` | `invoice_id`, `user_id`, `recipient_id` | `member_pair_toks` (issue-time snapshot), `recipient_contact_pair_toks` |
+| `bank_row_payer_tokens` | `bank_import_row_id` | `payer_pair_toks` ("Fra: … Betalt:" payer, else counterpart; never the club's own name) |
+| `vipps_row_customer_tokens` | `vipps_import_row_id` | `customer_pair_toks` |
+| `billing_recipient_tokens` | `recipient_id` | `contact_pair_toks` |
+
+A name is normalised the same way `accounting.normalizeName` does it: lowercase, diacritics folded, "." and "," dropped, anything else non-letter becomes a space, one-letter initials dropped, first four distinct words kept. It then becomes the set of `HMAC(key, "wordA wordB")` over its unordered word pairs, truncated to 12 hex characters. Match with array overlap, which is independent of word order, middle names and double surnames:
+
+```sql
+SELECT b.bank_import_row_id, u.user_id
+FROM bank_row_payer_tokens b
+JOIN user_name_tokens u ON b.payer_pair_toks && u.name_pair_toks;
+```
+
+Spouses and joint accounts link through `household_tok`. A shared surname alone deliberately doesn't link two people, because single-word tokens would leak through frequency analysis.
+
+**Why this can't be reversed**
+- The key lives in `dev_private.token_key` (migration `000098`). The role has neither USAGE on that schema nor SELECT on the table.
+- The views read the key with their owner's rights, through a scalar subquery. There is **no function** that reaches the key. EXECUTE inside a view is checked against the caller, so such a function would either fail for the role or let it tokenise any name it guessed. An IMMUTABLE accessor would also get folded into `EXPLAIN VERBOSE` output; the endpoint refuses `EXPLAIN VERBOSE` anyway.
+- Only names the agent can't write are tokenised. **`orders.guest_name` is excluded**: the public QR pay endpoint stores any caller-supplied name before payment, which would make it a chosen-plaintext oracle.
+- The key is generated server-side and is stable across deploys (the repeatable views file doesn't touch it). Rotate it with `just rotate-name-token-key`, after which every token changes.
+
+Tests in `dev_masked_test.go` ("keyed name tokens") cover:
+- the key being unreachable;
+- no executable function touching `dev_private`;
+- no key bytes in `EXPLAIN` output;
+- cross-source matches;
+- tokens staying stable when the views are re-applied, and changing when the key is rotated.
+
 ## Adding a table or column
 
 - **New table:** denied by default. If the agent needs it, add it to the

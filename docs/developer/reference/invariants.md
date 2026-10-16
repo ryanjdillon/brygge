@@ -197,6 +197,15 @@ So the amount cap is a **default**, not a hard ceiling — the per-invoice overr
 
 **Failure mode:** a new table auto-granted to the role (the pre-BRY-286 default-allow) silently exposes PII/secrets; a leaked session enumerates or erases its own `audit_log` evidence and the blast radius becomes unbounded.
 
+### Name tokens are keyed, function-free, and only from names the agent can't write
+
+**Rule:** the dev-query role sees names only as keyed HMAC pair tokens (BRY-343).
+- **The key:** `dev_private.token_key` is never granted to `brygge_dev_ro`. Views read it through a scalar subquery, never through a function or an IMMUTABLE accessor, and no function that reaches `dev_private` may be executable by the role.
+- **What gets tokenised:** only names the agent has no way to write. Data from public, unauthenticated inputs (such as `orders.guest_name` from the QR pay endpoint) is never tokenised.
+- **Granularity:** tokens cover unordered word pairs, never single words.
+
+**Failure mode:** a readable key, or any callable tokeniser, lets the role compute the token for a guessed name and confirm who someone is. A tokenised public input does the same by another route: submit a name, then read its token back. Single-word tokens re-identify people by frequency (a few common local surnames).
+
 ### Developer tokens are hashed, scoped and role-less
 
 **Rule:** developer bearer tokens (BRY-115) are stored only as `sha256(token)`, and the plaintext is returned once at mint. `RequireDevToken` is the **only** middleware on `POST /api/v1/dev/query` and is mounted on no other route. It ignores cookies and injects claims with **no roles**, so a token can never satisfy `RequireRole` or reach a session route. The route exists only when `DEV_QUERY_TOKENS_ENABLED=true`. `developer_tokens` is never added to the `brygge_dev_ro` allowlist.

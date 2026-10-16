@@ -251,6 +251,13 @@ prod-query-http sql limit="200" origin="https://klokkarvikbaatlag.no":
       echo "(truncated at {{limit}} rows — raise limit= or narrow the WHERE)" >&2
     fi
 
+# Rotate the secret behind the keyed name tokens in the dev_masked views
+# (BRY-343). Every token changes immediately, so any token an agent has
+# copied elsewhere stops matching. The new key is generated server-side and
+# never leaves the database.
+rotate-name-token-key host="klokkarvikbaatlag.no":
+    ssh {{host}} "sudo -u brygge psql 'postgres:///brygge?host=/run/postgresql&sslmode=disable' -v ON_ERROR_STOP=1 -c \"UPDATE dev_private.token_key SET key = public.gen_random_bytes(32), rotated_at = now()\""
+
 # Build the brygge package locally (frontend + Go binary with embedded SPA).
 build-nix:
     nix build .#brygge

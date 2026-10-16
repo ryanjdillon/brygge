@@ -255,6 +255,105 @@ SELECT
     NULL::text AS notes
 FROM public.dock_fingers;
 
+-- ── Keyed name tokens (BRY-343) ─────────────────────────────────────────
+-- Lets the role tell that a bank payer, a Vipps customer, an invoice's
+-- member snapshot and a member are the same person without seeing the
+-- name: each name becomes the set of HMAC(key, "wordA wordB") over its
+-- unordered word pairs, truncated to 12 hex. Match with array overlap:
+--   SELECT … FROM bank_row_payer_tokens b JOIN user_name_tokens u
+--     ON b.payer_pair_toks && u.name_pair_toks
+-- Pairs (not single words) so a token is near-unique per person and gives
+-- no usable frequency signal, while still matching across word order,
+-- middle names and double surnames. Spouses/joint accounts are linked by
+-- household_tok (address), not by a shared surname.
+--
+-- Rules that keep this safe:
+-- * The key (dev_private.token_key, migration 000098) is unreadable by the
+--   role and read here only through a scalar subquery. Never via a
+--   function: EXECUTE inside a view is checked against the caller, so a
+--   function either fails for the role or becomes an oracle for tokenising
+--   arbitrary text; an IMMUTABLE accessor also gets constant-folded into
+--   EXPLAIN VERBOSE output.
+-- * Only tokenise names the agent cannot write. orders.guest_name is
+--   excluded: the public QR pay endpoint stores any caller-supplied name
+--   before payment, which would make it a chosen-plaintext oracle.
+-- * Normalisation mirrors accounting.normalizeName: lowercase, Norwegian
+--   and Latin diacritics folded (æ→ae, ø→o, å→a …), "." and "," dropped,
+--   anything else non-letter becomes a space, one-letter initials dropped,
+--   first four distinct words kept.
+DO $do$
+DECLARE
+    pairs CONSTANT text := $t$(
+        WITH w AS (
+            SELECT u.w
+            FROM unnest(regexp_split_to_array(trim(regexp_replace(regexp_replace(
+                     replace(translate(lower(%1$s),
+                             'øåäöüéèêáàâíìóòôúùñç', 'oaaoueeeaaaiiooouunc'), 'æ', 'ae'),
+                     '[.,]', '', 'g'), '[^a-z]+', ' ', 'g')), ' '))
+                 WITH ORDINALITY AS u(w, ord)
+            WHERE length(u.w) > 1
+            GROUP BY u.w
+            ORDER BY min(u.ord)
+            LIMIT 4
+        )
+        SELECT array_agg(t ORDER BY t) FROM (
+            SELECT DISTINCT left(encode(public.hmac(
+                       convert_to(a.w || ' ' || b.w, 'UTF8'),
+                       (SELECT k.key FROM dev_private.token_key k), 'sha256'), 'hex'), 12) AS t
+            FROM w a JOIN w b ON a.w < b.w
+        ) s
+    )$t$;
+BEGIN
+    EXECUTE format($v$
+        CREATE VIEW dev_masked.user_name_tokens AS
+        SELECT u.id AS user_id, u.club_id,
+               %s AS name_pair_toks,
+               CASE WHEN nullif(trim(u.address_line), '') IS NOT NULL THEN
+                   left(encode(public.hmac(convert_to(trim(regexp_replace(
+                       replace(translate(lower(u.address_line || ' ' || coalesce(u.postal_code, '')),
+                               'øåäöüéèêáàâíìóòôúùñç', 'oaaoueeeaaaiiooouunc'), 'æ', 'ae'),
+                       '[^a-z0-9]+', ' ', 'g')), 'UTF8'),
+                       (SELECT k.key FROM dev_private.token_key k), 'sha256'), 'hex'), 12)
+               END AS household_tok
+        FROM public.users u
+    $v$, format(pairs, $e$concat_ws(' ', u.first_name, u.last_name)$e$));
+
+    EXECUTE format($v$
+        CREATE VIEW dev_masked.invoice_name_tokens AS
+        SELECT i.id AS invoice_id, i.club_id, i.user_id, i.recipient_id,
+               %s AS member_pair_toks,
+               %s AS recipient_contact_pair_toks
+        FROM public.invoices i
+    $v$, format(pairs, $e$i.member_name$e$), format(pairs, $e$i.recipient_contact_person$e$));
+
+    -- Payer: the "Fra: <name> Betalt:" prefix when present, else the
+    -- counterpart, ignoring the club's own name (intra-bank transfers).
+    EXECUTE format($v$
+        CREATE VIEW dev_masked.bank_row_payer_tokens AS
+        SELECT b.id AS bank_import_row_id, b.club_id,
+               %s AS payer_pair_toks
+        FROM public.bank_import_rows b
+        JOIN public.clubs c ON c.id = b.club_id
+    $v$, format(pairs, $e$coalesce(
+            nullif(substring(b.description from '^Fra:\s*(.+?)\s+Betalt:'), ''),
+            CASE WHEN lower(b.counterpart) = lower(c.name) THEN NULL ELSE nullif(b.counterpart, '') END)$e$));
+
+    EXECUTE format($v$
+        CREATE VIEW dev_masked.vipps_row_customer_tokens AS
+        SELECT v.id AS vipps_import_row_id, v.club_id,
+               %s AS customer_pair_toks
+        FROM public.vipps_import_rows v
+    $v$, format(pairs, $e$v.customer_name$e$));
+
+    EXECUTE format($v$
+        CREATE VIEW dev_masked.billing_recipient_tokens AS
+        SELECT r.id AS recipient_id, r.club_id,
+               %s AS contact_pair_toks
+        FROM public.billing_recipients r
+    $v$, format(pairs, $e$r.contact_person$e$));
+END
+$do$;
+
 -- Grant the read-only role access to the masked schema. Guarded so the
 -- file still applies on a DB where the role has not been bootstrapped
 -- (fresh migrate-check / test DB) — the dev-query feature simply won't

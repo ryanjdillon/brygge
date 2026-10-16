@@ -2,9 +2,11 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -208,6 +210,155 @@ func TestDevMaskedViews(t *testing.T) {
 		mustExec(t, pool, ctx, "CREATE TABLE public."+drift+" (id int)")
 		if _, err := rolePool.Exec(ctx, "SELECT 1 FROM public."+drift); err == nil {
 			t.Errorf("role could read unclassified new table %s — default-deny not in effect", drift)
+		}
+	})
+
+	t.Run("keyed name tokens", func(t *testing.T) {
+		// Synthetic fixtures only.
+		const (
+			club   = "22222222-2222-2222-2222-000000000001"
+			kari   = "11111111-0000-0000-0000-000000000001"
+			ola    = "11111111-0000-0000-0000-000000000002"
+			anne   = "11111111-0000-0000-0000-000000000003"
+			bankIm = "33333333-0000-0000-0000-000000000001"
+			vipIm  = "55555555-0000-0000-0000-000000000001"
+		)
+		mustExec(t, pool, ctx, "INSERT INTO clubs (id, slug, name) VALUES ($1, 'tok', 'Synthetic Tok Club')", club)
+		mustExec(t, pool, ctx, `INSERT INTO users (id, club_id, email, first_name, last_name, address_line, postal_code) VALUES
+			($1, $4, 'k@example.test', 'Kari', 'Nordmann', 'Strandvegen 5', '5000'),
+			($2, $4, 'o@example.test', 'Ola', 'Nordmann', 'Strandvegen 5', '5000'),
+			($3, $4, 'a@example.test', 'Anne-Lise', 'Bø', 'Fjellvegen 2', '5001')`, kari, ola, anne, club)
+		mustExec(t, pool, ctx, "INSERT INTO bank_imports (id, club_id, filename, imported_by) VALUES ($1, $2, 'synthetic.csv', $3)", bankIm, club, kari)
+		bankRows := []struct{ id, desc, counterpart string }{
+			{"44444444-0000-0000-0000-000000000001", "Fra: Kari Nordmann Betalt: 01.09.26", ""},
+			{"44444444-0000-0000-0000-000000000002", "Overføring", "NORDMANN KARI"},
+			{"44444444-0000-0000-0000-000000000003", "Fra: Kari Anne Nordmann Betalt: 03.09.26", ""},
+			{"44444444-0000-0000-0000-000000000004", "Overføring", "ANNE LISE BO"},
+			{"44444444-0000-0000-0000-000000000005", "Intern", "Synthetic Tok Club"},
+		}
+		for i, r := range bankRows {
+			mustExec(t, pool, ctx, `INSERT INTO bank_import_rows (id, club_id, bank_import_id, row_date, description, counterpart, amount, row_hash)
+				VALUES ($1, $2, $3, '2026-09-01', $4, $5, 450, $6)`, r.id, club, bankIm, r.desc, r.counterpart, fmt.Sprintf("tokh%d", i))
+		}
+		mustExec(t, pool, ctx, "INSERT INTO vipps_imports (id, club_id, filename) VALUES ($1, $2, 'v.csv')", vipIm, club)
+		mustExec(t, pool, ctx, `INSERT INTO vipps_import_rows (id, club_id, vipps_import_id, row_type, row_hash, customer_name, amount)
+			VALUES ('66666666-0000-0000-0000-000000000001', $1, $2, 'belastning', 'tokv1', 'Kari Nordmann', 450)`, club, vipIm)
+		mustExec(t, pool, ctx, `INSERT INTO invoices (id, club_id, user_id, total_amount, due_date, kid_number, member_name)
+			VALUES ('77777777-0000-0000-0000-000000000001', $1, $2, 450, '2026-09-30', '000000990017', 'Kari Nordmann')`, club, kari)
+
+		rolePool, err := pgxpool.New(ctx, devRoleURL(t, dbURL))
+		if err != nil {
+			t.Skipf("brygge_dev_ro pool unavailable: %v", err)
+		}
+		defer rolePool.Close()
+		if err := rolePool.Ping(ctx); err != nil {
+			t.Skipf("brygge_dev_ro not reachable (run `just dev-role-bootstrap`): %v", err)
+		}
+
+		// The key is unreachable: no schema USAGE, no table SELECT.
+		var usage bool
+		if err := rolePool.QueryRow(ctx, "SELECT has_schema_privilege('dev_private', 'USAGE')").Scan(&usage); err != nil || usage {
+			t.Errorf("role has USAGE on dev_private (usage=%v err=%v)", usage, err)
+		}
+		if _, err := rolePool.Exec(ctx, "SELECT key FROM dev_private.token_key"); err == nil {
+			t.Error("role could read the token key")
+		}
+		// No callable function may reach the key — it would be an oracle.
+		var oracles int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM pg_proc
+			WHERE prosrc ILIKE '%dev_private%' AND has_function_privilege('brygge_dev_ro', oid, 'EXECUTE')`).Scan(&oracles); err != nil || oracles != 0 {
+			t.Errorf("functions reaching dev_private executable by the role: %d (err %v)", oracles, err)
+		}
+
+		// Payer ↔ member matching across sources, as the role.
+		matched := func(bankRow string) []string {
+			var ids []string
+			rows, err := rolePool.Query(ctx, `SELECT u.user_id::text FROM bank_row_payer_tokens b
+				JOIN user_name_tokens u ON b.payer_pair_toks && u.name_pair_toks
+				WHERE b.bank_import_row_id = $1 ORDER BY 1`, bankRow)
+			if err != nil {
+				t.Fatalf("match query: %v", err)
+			}
+			defer rows.Close()
+			for rows.Next() {
+				var id string
+				_ = rows.Scan(&id)
+				ids = append(ids, id)
+			}
+			return ids
+		}
+		want := map[string][]string{
+			bankRows[0].id: {kari}, // "Fra: Kari Nordmann"
+			bankRows[1].id: {kari}, // reversed word order, upper case
+			bankRows[2].id: {kari}, // extra middle name
+			bankRows[3].id: {anne}, // hyphen and ø folded
+			bankRows[4].id: nil,    // the club's own name is never a payer
+		}
+		for row, w := range want {
+			if got := matched(row); fmt.Sprint(got) != fmt.Sprint(w) {
+				t.Errorf("bank row %s matched %v, want %v", row, got, w)
+			}
+		}
+		var vippsOK, invoiceOK, household, olaLinked bool
+		if err := rolePool.QueryRow(ctx, `SELECT
+				(SELECT v.customer_pair_toks && u.name_pair_toks FROM vipps_row_customer_tokens v),
+				(SELECT i.member_pair_toks && u.name_pair_toks FROM invoice_name_tokens i),
+				(SELECT o.household_tok = u.household_tok FROM user_name_tokens o WHERE o.user_id = $2),
+				(SELECT o.name_pair_toks && u.name_pair_toks FROM user_name_tokens o WHERE o.user_id = $2)
+			FROM user_name_tokens u WHERE u.user_id = $1`, kari, ola).Scan(&vippsOK, &invoiceOK, &household, &olaLinked); err != nil {
+			t.Fatalf("cross-source query: %v", err)
+		}
+		if !vippsOK || !invoiceOK {
+			t.Errorf("Vipps match %v, invoice snapshot match %v; want both true", vippsOK, invoiceOK)
+		}
+		if !household {
+			t.Error("members at the same address should share household_tok")
+		}
+		if olaLinked {
+			t.Error("a shared surname alone must not link two people")
+		}
+
+		// EXPLAIN must never print key bytes (an IMMUTABLE accessor would).
+		var keyHex string
+		if err := pool.QueryRow(ctx, "SELECT encode(key, 'hex') FROM dev_private.token_key").Scan(&keyHex); err != nil {
+			t.Fatalf("read key as owner: %v", err)
+		}
+		for _, q := range []string{
+			"EXPLAIN (VERBOSE, COSTS OFF) SELECT * FROM user_name_tokens",
+			"EXPLAIN (ANALYZE, VERBOSE) SELECT * FROM bank_row_payer_tokens",
+		} {
+			rows, err := rolePool.Query(ctx, q)
+			if err != nil {
+				t.Fatalf("%s: %v", q, err)
+			}
+			for rows.Next() {
+				var line string
+				_ = rows.Scan(&line)
+				if strings.Contains(line, keyHex[:16]) {
+					t.Fatalf("%s printed key bytes", q)
+				}
+			}
+			rows.Close()
+		}
+
+		// Tokens are stable across re-applying the views, and change on rotation.
+		tokens := func() string {
+			var s string
+			if err := pool.QueryRow(ctx, "SELECT name_pair_toks::text FROM dev_masked.user_name_tokens WHERE user_id = $1", kari).Scan(&s); err != nil {
+				t.Fatalf("read tokens: %v", err)
+			}
+			return s
+		}
+		before := tokens()
+		if _, err := pool.Exec(ctx, string(masked)); err != nil {
+			t.Fatalf("re-apply dev_masked.sql: %v", err)
+		}
+		if after := tokens(); after != before {
+			t.Errorf("tokens changed on re-applying the views: %s → %s", before, after)
+		}
+		mustExec(t, pool, ctx, "UPDATE dev_private.token_key SET key = public.gen_random_bytes(32), rotated_at = now()")
+		if rotated := tokens(); rotated == before {
+			t.Error("tokens did not change after key rotation")
 		}
 	})
 }

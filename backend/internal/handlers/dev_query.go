@@ -286,6 +286,12 @@ func validateDevQuery(raw string) (string, error) {
 	case strings.HasPrefix(upper, "SELECT"):
 	case strings.HasPrefix(upper, "WITH"):
 	case strings.HasPrefix(upper, "EXPLAIN"):
+		// VERBOSE prints expression internals. The keyed name-token views
+		// are built so no key bytes reach a plan, but refusing VERBOSE keeps
+		// that from depending on how the planner folds expressions.
+		if strings.Contains(upper, "VERBOSE") {
+			return "", errors.New("EXPLAIN VERBOSE not allowed")
+		}
 	default:
 		return "", errors.New("only SELECT, WITH, or EXPLAIN allowed")
 	}
