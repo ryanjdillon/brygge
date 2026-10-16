@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useApiClient, unwrap } from '@/lib/apiClient'
 import { ApiError } from '@/lib/errors'
 import { useConfirm } from '@/stores/confirm'
-import { Plus, Pencil, Trash2, X } from 'lucide-vue-next'
+import { Plus, Pencil, Trash2, X, ChevronDown, ChevronRight } from 'lucide-vue-next'
 import type { PriceItem } from '@/composables/usePricing'
 import Input from '@/components/ui/form/Input.vue'
 import NumberInput from '@/components/ui/form/NumberInput.vue'
@@ -25,6 +25,27 @@ function meta(item: PriceItem): Record<string, string> {
 const { data: response, isLoading } = useQuery({
   queryKey: ['admin', 'pricing'],
   queryFn: async () => unwrap(await client.GET('/api/v1/admin/pricing')),
+})
+
+// Archived (inactive) items stay listed so they can be reactivated, but
+// below the active ones in a section that starts collapsed.
+const showArchived = ref(false)
+const activeItems = computed(() => (response.value?.items ?? []).filter((i) => i.is_active))
+const archivedItems = computed(() => (response.value?.items ?? []).filter((i) => !i.is_active))
+
+type TableRow =
+  | { kind: 'item'; key: string; item: PriceItem }
+  | { kind: 'archivedToggle'; key: string }
+
+const tableRows = computed<TableRow[]>(() => {
+  const rows: TableRow[] = activeItems.value.map((item) => ({ kind: 'item', key: item.id, item }))
+  if (archivedItems.value.length) {
+    rows.push({ kind: 'archivedToggle', key: 'archived-toggle' })
+    if (showArchived.value) {
+      rows.push(...archivedItems.value.map((item) => ({ kind: 'item' as const, key: item.id, item })))
+    }
+  }
+  return rows
 })
 
 const categories = computed(() => [
@@ -496,63 +517,78 @@ function unitLabel(value: string): string {
           <tr v-if="!response?.items?.length">
             <td colspan="6" class="px-4 py-8 text-center text-gray-500">{{ t('admin.pricing.noItems') }}</td>
           </tr>
-          <tr v-for="item in response?.items" :key="item.id">
+          <template v-for="row in tableRows" :key="row.key">
+          <tr v-if="row.kind === 'archivedToggle'" class="bg-gray-50">
+            <td colspan="6" class="px-4 py-2">
+              <button
+                type="button"
+                class="flex items-center gap-1 text-sm font-medium text-gray-600 hover:text-gray-900"
+                :aria-expanded="showArchived"
+                @click="showArchived = !showArchived"
+              >
+                <component :is="showArchived ? ChevronDown : ChevronRight" class="h-4 w-4" />
+                {{ t('admin.pricing.archivedSection', { count: archivedItems.length }) }}
+              </button>
+            </td>
+          </tr>
+          <tr v-else-if="row.kind === 'item'" :class="{ 'opacity-70': !row.item.is_active }">
             <td class="px-4 py-3 text-sm">
-              <div class="font-medium text-gray-900">{{ item.name }}</div>
-              <div v-if="item.description" class="text-xs text-gray-500">{{ item.description }}</div>
+              <div class="font-medium text-gray-900">{{ row.item.name }}</div>
+              <div v-if="row.item.description" class="text-xs text-gray-500">{{ row.item.description }}</div>
               <div
-                v-if="meta(item).beam_min || meta(item).beam_max"
+                v-if="meta(row.item).beam_min || meta(row.item).beam_max"
                 class="text-xs text-brand-600"
               >
-                {{ t('admin.pricing.beam') }}: {{ meta(item).beam_min || '0' }}–{{ meta(item).beam_max || '∞' }} m
+                {{ t('admin.pricing.beam') }}: {{ meta(row.item).beam_min || '0' }}–{{ meta(row.item).beam_max || '∞' }} m
               </div>
               <div
-                v-if="meta(item).length_min || meta(item).length_max"
+                v-if="meta(row.item).length_min || meta(row.item).length_max"
                 class="text-xs text-brand-600"
               >
-                {{ t('admin.pricing.length') }}: {{ meta(item).length_min || '0' }}–{{ meta(item).length_max || '∞' }} m
+                {{ t('admin.pricing.length') }}: {{ meta(row.item).length_min || '0' }}–{{ meta(row.item).length_max || '∞' }} m
               </div>
             </td>
             <td class="whitespace-nowrap px-4 py-3 text-sm">
               <span class="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">
-                {{ categoryLabel(item.category) }}
+                {{ categoryLabel(row.item.category) }}
               </span>
               <span
-                v-if="(item as any).audience && (item as any).audience !== 'all'"
+                v-if="(row.item as any).audience && (row.item as any).audience !== 'all'"
                 class="ml-1 rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-medium text-brand-700"
               >
                 {{
-                  (item as any).audience === 'member'
+                  (row.item as any).audience === 'member'
                     ? t('admin.pricing.audienceMember')
                     : t('admin.pricing.audienceNonMember')
                 }}
               </span>
             </td>
             <td class="whitespace-nowrap px-4 py-3 text-right text-sm font-medium text-gray-900">
-              {{ item.amount.toLocaleString('nb-NO') }} kr
+              {{ row.item.amount.toLocaleString('nb-NO') }} kr
             </td>
             <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">
-              {{ unitLabel(item.unit) }}
+              {{ unitLabel(row.item.unit) }}
             </td>
             <td class="whitespace-nowrap px-4 py-3 text-center text-sm">
               <span
                 :class="[
                   'rounded-full px-2 py-0.5 text-xs font-medium',
-                  item.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-500',
+                  row.item.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-500',
                 ]"
               >
-                {{ item.is_active ? t('admin.pricing.active') : t('admin.pricing.inactive') }}
+                {{ row.item.is_active ? t('admin.pricing.active') : t('admin.pricing.inactive') }}
               </span>
             </td>
             <td class="whitespace-nowrap px-4 py-3 text-right text-sm">
-              <button class="mr-2 text-gray-500 hover:text-brand-600" @click="openEdit(item)">
+              <button class="mr-2 text-gray-500 hover:text-brand-600" @click="openEdit(row.item)">
                 <Pencil class="h-4 w-4" />
               </button>
-              <button class="text-gray-500 hover:text-red-600" @click="confirmDelete(item)">
+              <button class="text-gray-500 hover:text-red-600" @click="confirmDelete(row.item)">
                 <Trash2 class="h-4 w-4" />
               </button>
             </td>
           </tr>
+          </template>
         </tbody>
       </table>
     </div>

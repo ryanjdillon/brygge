@@ -26,7 +26,7 @@ Each line that can appear on a faktura is a **price item** with these fields:
 | **Show in batch** | Must be on for the item to appear in the bulk-faktura modal. |
 | **Audience** | `all` (default), `member`, or `non_member`. Lets you show the same service with two different prices on the public pricing page. |
 
-**Retiring a price item.** You can only delete a price item that nothing has used yet. If it already appears on a faktura, an order or a QR poster, Brygge offers to **archive** it instead, meaning it's set to inactive. An archived item stays on old fakturas and in the accounts, but it no longer appears when you create fakturas, on the price list or in QR checkout, and its QR posters stop taking payments. To bring it back, edit the item and tick **Active**.
+**Retiring a price item.** You can only delete a price item that nothing has used yet. If it already appears on a faktura, an order or a QR poster, Brygge offers to **archive** it instead, meaning it's set to inactive. An archived item stays on old fakturas and in the accounts, but it no longer appears when you create fakturas, on the price list or in QR checkout, and its QR posters stop taking payments. Archived items are listed under **Arkiverte priser** below the active ones, which is collapsed by default. To bring one back, expand that section, edit the item and tick **Active**.
 
 #### Tiered example — slip rental
 

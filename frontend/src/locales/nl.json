@@ -682,6 +682,7 @@
       "archive": "Archiveren",
       "priceArchived": "Tarief gearchiveerd",
       "archiveError": "Archiveren mislukt",
+      "archivedSection": "Gearchiveerde tarieven ({count})",
       "categorySlipFee": "Ligplaatsgeld",
       "categorySeasonalRental": "Seizoensligplaats",
       "categoryGuest": "Gastligplaatsen",

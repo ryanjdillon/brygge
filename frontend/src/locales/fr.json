@@ -682,6 +682,7 @@
       "archive": "Archiver",
       "priceArchived": "Tarif archivé",
       "archiveError": "Impossible d'archiver",
+      "archivedSection": "Tarifs archivés ({count})",
       "categorySlipFee": "Frais de poste",
       "categorySeasonalRental": "Location saisonnière",
       "categoryGuest": "Places visiteurs",

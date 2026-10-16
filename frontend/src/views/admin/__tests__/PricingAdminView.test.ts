@@ -43,7 +43,10 @@ vi.mock('@tanstack/vue-query', async () => {
   const actual = await vi.importActual('@tanstack/vue-query')
   return {
     ...actual,
-    useQuery: () => ({ data: ref({ items: [item] }), isLoading: ref(false) }),
+    useQuery: () => ({
+      data: ref({ items: [item, { ...item, id: 'p2', name: 'Retired service', is_active: false }] }),
+      isLoading: ref(false),
+    }),
     useQueryClient: () => ({ invalidateQueries: vi.fn() }),
     useMutation: () => ({ mutate: vi.fn(), isPending: ref(false) }),
   }
@@ -90,5 +93,18 @@ describe('PricingAdminView delete', () => {
     askConfirm.mockResolvedValue(false)
     await clickDelete()
     expect(client.DELETE).not.toHaveBeenCalled()
+  })
+})
+
+describe('PricingAdminView archived section', () => {
+  it('hides archived prices until the section is expanded', async () => {
+    const wrapper = mountWithPlugins(PricingAdminView)
+    expect(wrapper.text()).toContain('Synthetic service')
+    expect(wrapper.text()).not.toContain('Retired service')
+
+    const toggle = wrapper.find('button[aria-expanded]')
+    expect(toggle.attributes('aria-expanded')).toBe('false')
+    await toggle.trigger('click')
+    expect(wrapper.text()).toContain('Retired service')
   })
 })

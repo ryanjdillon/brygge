@@ -682,6 +682,7 @@
       "archive": "Archivia",
       "priceArchived": "Tariffa archiviata",
       "archiveError": "Impossibile archiviare",
+      "archivedSection": "Tariffe archiviate ({count})",
       "categorySlipFee": "Tariffa ormeggio",
       "categorySeasonalRental": "Ormeggio stagionale",
       "categoryGuest": "Posti barca ospiti",

@@ -1154,6 +1154,7 @@
       "archive": "Archive",
       "priceArchived": "Price archived",
       "archiveError": "Could not archive",
+      "archivedSection": "Archived prices ({count})",
       "categorySlipFee": "Slip fee",
       "categorySeasonalRental": "Seasonal berth",
       "categoryGuest": "Guest slips",

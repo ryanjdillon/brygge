@@ -1150,6 +1150,7 @@
       "archive": "Arkiver",
       "priceArchived": "Pris arkivert",
       "archiveError": "Kunne ikke arkivere",
+      "archivedSection": "Arkiverte priser ({count})",
       "categorySlipFee": "Plassleie",
       "categorySeasonalRental": "Sesongplass",
       "categoryGuest": "Gjesteplasser",

@@ -682,6 +682,7 @@
       "archive": "Archivieren",
       "priceArchived": "Preis archiviert",
       "archiveError": "Archivieren fehlgeschlagen",
+      "archivedSection": "Archivierte Preise ({count})",
       "categorySlipFee": "Liegeplatzgebühr",
       "categorySeasonalRental": "Saisonliegeplatz",
       "categoryGuest": "Gastliegeplätze",
