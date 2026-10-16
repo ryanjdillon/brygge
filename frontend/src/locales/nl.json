@@ -901,6 +901,8 @@
         "updateComplete": "Update complete",
         "paymentsSynced": "payments synced",
         "invoicesSynced": "invoices synced",
+        "invoicesReversed": "geannuleerde facturen tegengeboekt",
+        "syncSkippedHeading": "Niet geboekt (aandacht nodig):",
         "createPeriod": "Create period",
         "closePeriod": "Close period",
         "reopenPeriod": "Reopen period",

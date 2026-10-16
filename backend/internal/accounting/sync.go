@@ -3,6 +3,7 @@ package accounting
 import (
 	"context"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -38,10 +39,35 @@ const (
 	defaultRevenueCode     = "3100" // Fallback for unmatched types
 )
 
+// bookedEntryFilter selects journal entries that were ever posted. A voided
+// entry keeps its original lines and gets a posted reversal (see
+// VoidJournalEntry), so reports must count both sides to net to zero;
+// counting only 'posted' would book the reversal against nothing.
+const bookedEntryFilter = `je.status IN ('posted', 'voided')`
+
 // SyncResult holds the outcome of a sync operation.
 type SyncResult struct {
-	Synced  int `json:"synced"`
-	Skipped int `json:"skipped"`
+	Synced   int `json:"synced"`
+	Skipped  int `json:"skipped"`
+	Reversed int `json:"reversed"`
+	// SkippedDetails says why each skipped item was not booked, so the
+	// operator can act on it instead of seeing a bare count.
+	SkippedDetails []SkippedItem `json:"skipped_details"`
+}
+
+// SkippedItem identifies one source row a sync did not book.
+type SkippedItem struct {
+	Ref    string `json:"ref"`
+	Reason string `json:"reason"`
+}
+
+func (r *SyncResult) skip(ref, reason string) {
+	r.Skipped++
+	r.SkippedDetails = append(r.SkippedDetails, SkippedItem{Ref: ref, Reason: reason})
+}
+
+func roundCents(v float64) float64 {
+	return math.Round(v*100) / 100
 }
 
 // SyncPayments creates journal entries from completed payments that haven't been synced yet.
@@ -63,7 +89,10 @@ func (s *Service) SyncPayments(ctx context.Context, clubID, periodID, syncedBy s
 	// Add one day to end date for inclusive range
 	endDatePlusOne := endDate.AddDate(0, 0, 1)
 
-	// Query completed payments within the period that haven't been synced
+	// Query completed payments within the period that haven't been synced.
+	// A payment that settles an invoice was already booked by the bank or
+	// Vipps reconciliation that created it (DR bank / CR 1500); booking it
+	// again here as DR bank / CR revenue would double both bank and revenue.
 	rows, err := s.db.Query(ctx,
 		`SELECT p.id, p.type, p.amount, p.created_at::date::text, u.full_name
 		 FROM payments p
@@ -75,6 +104,7 @@ func (s *Service) SyncPayments(ctx context.Context, clubID, periodID, syncedBy s
 		     SELECT 1 FROM journal_entries je
 		     WHERE je.source = 'payment_sync' AND je.source_id = p.id::text
 		   )
+		   AND NOT EXISTS (SELECT 1 FROM invoices i WHERE i.payment_id = p.id)
 		 ORDER BY p.created_at`,
 		clubID, startDate, endDatePlusOne,
 	)
@@ -122,14 +152,14 @@ func (s *Service) SyncPayments(ctx context.Context, clubID, periodID, syncedBy s
 		})
 		if err != nil {
 			s.log.Error().Err(err).Str("payment_id", paymentID).Msg("failed to sync payment")
-			result.Skipped++
+			result.skip("payment "+paymentID, err.Error())
 			continue
 		}
 
 		// Auto-post (these are completed, real transactions)
 		if err := s.PostJournalEntry(ctx, entry.ID, syncedBy); err != nil {
 			s.log.Error().Err(err).Str("entry_id", entry.ID).Msg("failed to auto-post synced payment")
-			result.Skipped++
+			result.skip("payment "+paymentID, "post: "+err.Error())
 			continue
 		}
 
@@ -194,13 +224,17 @@ func (s *Service) SyncInvoices(ctx context.Context, clubID, periodID, syncedBy s
 		return nil, fmt.Errorf("getting period: %w", err)
 	}
 
-	// Query invoices within the period that haven't been synced
+	// Only sent, non-voided invoices are receivables. A draft hasn't been
+	// billed yet, and a voided one never should be (it is reversed below
+	// if it was booked before being voided).
 	rows, err := s.db.Query(ctx,
 		`SELECT i.id, i.invoice_number, i.total_amount, i.issue_date::text, u.full_name
 		 FROM invoices i
 		 LEFT JOIN users u ON u.id = i.user_id
 		 WHERE i.club_id = $1
 		   AND i.issue_date >= $2 AND i.issue_date <= $3
+		   AND i.status <> 'voided'
+		   AND i.sent_at IS NOT NULL
 		   AND NOT EXISTS (
 		     SELECT 1 FROM journal_entries je
 		     WHERE je.source = 'invoice_sync' AND je.source_id = i.id::text
@@ -223,33 +257,35 @@ func (s *Service) SyncInvoices(ctx context.Context, clubID, periodID, syncedBy s
 		if err := rows.Scan(&invoiceID, &invoiceNumber, &amount, &entryDate, &memberName); err != nil {
 			return nil, fmt.Errorf("scanning invoice: %w", err)
 		}
+		ref := fmt.Sprintf("faktura %d", invoiceNumber)
+		amount = roundCents(amount)
 
 		description := fmt.Sprintf("Faktura #%d", invoiceNumber)
 		if memberName != nil {
 			description = fmt.Sprintf("Faktura #%d: %s", invoiceNumber, *memberName)
 		}
 
-		// Per-category revenue split: sum invoice_lines by price-item
-		// category, mapped through paymentTypeAccountMap. Lines without
-		// a price_item or with an unmapped category fall through to
-		// defaultRevenueCode.
-		creditsByAccount, err := s.invoiceRevenueCredits(ctx, invoiceID, amount)
-		if err != nil {
-			s.log.Error().Err(err).Str("invoice_id", invoiceID).Msg("failed to aggregate invoice lines")
-			result.Skipped++
+		if amount == 0 {
+			result.skip(ref, "net total is 0, nothing to book")
 			continue
 		}
 
-		journalLines := []CreateJournalLineInput{
-			{AccountCode: receivablesAccountCode, Debit: amount, Credit: 0, Description: ""},
+		netByAccount, err := s.invoiceRevenueCredits(ctx, invoiceID, amount)
+		if err != nil {
+			s.log.Error().Err(err).Str("invoice_id", invoiceID).Msg("failed to aggregate invoice lines")
+			result.skip(ref, "reading lines: "+err.Error())
+			continue
 		}
-		for code, credit := range creditsByAccount {
-			journalLines = append(journalLines, CreateJournalLineInput{
-				AccountCode: code,
-				Debit:       0,
-				Credit:      credit,
-				Description: "",
-			})
+
+		// Receivable and revenue sides follow the sign: a credit note
+		// (negative total) books DR revenue / CR 1500. journal_line_one_side
+		// forbids zero or negative amounts, so each line goes on the side
+		// its sign dictates and zero nets are dropped.
+		journalLines := []CreateJournalLineInput{signedLine(receivablesAccountCode, amount)}
+		for code, net := range netByAccount {
+			if net = roundCents(net); net != 0 {
+				journalLines = append(journalLines, signedLine(code, -net))
+			}
 		}
 
 		sourceID := invoiceID
@@ -268,35 +304,99 @@ func (s *Service) SyncInvoices(ctx context.Context, clubID, periodID, syncedBy s
 		})
 		if err != nil {
 			s.log.Error().Err(err).Str("invoice_id", invoiceID).Msg("failed to sync invoice")
-			result.Skipped++
+			result.skip(ref, err.Error())
 			continue
 		}
 
 		// Auto-post
 		if err := s.PostJournalEntry(ctx, entry.ID, syncedBy); err != nil {
 			s.log.Error().Err(err).Str("entry_id", entry.ID).Msg("failed to auto-post synced invoice")
-			result.Skipped++
+			result.skip(ref, "post: "+err.Error())
 			continue
 		}
 
 		result.Synced++
 	}
+	if err := rows.Err(); err != nil {
+		return result, err
+	}
 
-	return result, rows.Err()
+	if err := s.reverseVoidedInvoiceEntries(ctx, clubID, periodID, syncedBy, result); err != nil {
+		return result, err
+	}
+	return result, nil
 }
 
-// invoiceRevenueCredits computes per-account credit amounts for an
-// invoice by walking its line items, mapping each line price item
-// category to a revenue account, and summing line_total per account.
-// Lines without a price_item or with an unmapped category fall through
-// to defaultRevenueCode. If the line-level sum diverges from the
-// invoice total (rounding or missing lines), the residual is assigned
-// to defaultRevenueCode so the bilag still balances.
+// signedLine puts amount on the debit side when positive and on the
+// credit side (as a positive number) when negative.
+func signedLine(code string, amount float64) CreateJournalLineInput {
+	if amount >= 0 {
+		return CreateJournalLineInput{AccountCode: code, Debit: amount}
+	}
+	return CreateJournalLineInput{AccountCode: code, Credit: -amount}
+}
+
+// reverseVoidedInvoiceEntries voids the posted invoice_sync entry of every
+// invoice in the period that has since been voided. VoidJournalEntry keeps
+// the original and posts a reversal, so the receivable and revenue net to
+// zero with a full trail. Restricted to the period being synced, which the
+// caller has verified is open.
+func (s *Service) reverseVoidedInvoiceEntries(ctx context.Context, clubID, periodID, syncedBy string, result *SyncResult) error {
+	rows, err := s.db.Query(ctx,
+		`SELECT je.id, i.invoice_number
+		 FROM journal_entries je
+		 JOIN invoices i ON i.id::text = je.source_id AND i.club_id = je.club_id
+		 WHERE je.club_id = $1 AND je.fiscal_period_id = $2
+		   AND je.source = 'invoice_sync' AND je.status = 'posted'
+		   AND i.status = 'voided'
+		 ORDER BY i.invoice_number`,
+		clubID, periodID,
+	)
+	if err != nil {
+		return fmt.Errorf("querying voided invoice entries: %w", err)
+	}
+	type pending struct {
+		entryID       string
+		invoiceNumber int
+	}
+	var todo []pending
+	for rows.Next() {
+		var p pending
+		if err := rows.Scan(&p.entryID, &p.invoiceNumber); err != nil {
+			rows.Close()
+			return fmt.Errorf("scanning voided invoice entry: %w", err)
+		}
+		todo = append(todo, p)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	for _, p := range todo {
+		if _, err := s.VoidJournalEntry(ctx, p.entryID, syncedBy); err != nil {
+			s.log.Error().Err(err).Str("entry_id", p.entryID).Msg("failed to reverse voided invoice entry")
+			result.skip(fmt.Sprintf("faktura %d", p.invoiceNumber), "reversing voided faktura: "+err.Error())
+			continue
+		}
+		result.Reversed++
+	}
+	return nil
+}
+
+// invoiceRevenueCredits computes the net revenue per account for an
+// invoice by walking its lines and summing line_total per account. A
+// line's own account_id (set on custom lines) wins; otherwise its price
+// item's category is mapped through paymentTypeAccountMap; otherwise it
+// falls to defaultRevenueCode. Nets may be negative (credit notes,
+// discount lines). If the line sum diverges from the invoice total, the
+// residual goes to defaultRevenueCode so the bilag still balances.
 func (s *Service) invoiceRevenueCredits(ctx context.Context, invoiceID string, invoiceTotal float64) (map[string]float64, error) {
 	rows, err := s.db.Query(ctx,
-		`SELECT il.line_total, pi.category
+		`SELECT il.line_total, pi.category, a.code
 		 FROM invoice_lines il
 		 LEFT JOIN price_items pi ON pi.id = il.price_item_id
+		 LEFT JOIN accounts a ON a.id = il.account_id
 		 WHERE il.invoice_id = $1`,
 		invoiceID,
 	)
@@ -309,12 +409,15 @@ func (s *Service) invoiceRevenueCredits(ctx context.Context, invoiceID string, i
 	var lineSum float64
 	for rows.Next() {
 		var lineTotal float64
-		var category *string
-		if err := rows.Scan(&lineTotal, &category); err != nil {
+		var category, accountCode *string
+		if err := rows.Scan(&lineTotal, &category, &accountCode); err != nil {
 			return nil, fmt.Errorf("scanning line: %w", err)
 		}
 		code := defaultRevenueCode
-		if category != nil {
+		switch {
+		case accountCode != nil:
+			code = *accountCode
+		case category != nil:
 			if c, ok := paymentTypeAccountMap[*category]; ok {
 				code = c
 			}
@@ -326,7 +429,7 @@ func (s *Service) invoiceRevenueCredits(ctx context.Context, invoiceID string, i
 		return nil, err
 	}
 
-	if residual := invoiceTotal - lineSum; residual != 0 {
+	if residual := roundCents(invoiceTotal - lineSum); residual != 0 {
 		credits[defaultRevenueCode] += residual
 	}
 	if len(credits) == 0 {

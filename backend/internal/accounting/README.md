@@ -17,7 +17,7 @@ The double-entry GL plus everything that posts to it: bank statement parsing, KI
 | `vippsreconcile.go` | `ReconcileVippsPreview` + `ReconcileVippsConfirm` — the cascade that classifies each Vipps belastning. See cascade below. |
 | `vippsresync.go` | `ResyncVippsBilags` — re-runs the cascade across already-imported drafts that still land on 2900/3900. Called by the "Synk Vipps" button. |
 | `invoicepayment.go` | `Service.linkInvoicePayment` — inserts a `payments` row and back-links `invoices.payment_id`. Used by both bank KID match and Vipps invoice match so the dashboard faktura-status widgets reflect the payment. |
-| `sync.go` | `paymentTypeAccountMap`, `SyncPayments`, `SyncInvoices`. The periodic faktura → journal entry sync. |
+| `sync.go` | `paymentTypeAccountMap`, `SyncPayments`, `SyncInvoices`, `bookedEntryFilter`. The faktura → journal entry sync; results carry `skipped_details` with a reason per skipped row. |
 | `description_parse.go` | `ExtractKIDFromDescription`, `ExtractInvoiceNumberFromDescription`, `ExtractPayerFromDescription`. Vendor-specific (DNB/Sparebank) heuristics for pulling structure out of unstructured bank row descriptions. |
 | `momskomp.go`, `momskomp_pdf.go` | Momskompensasjon (VAT reimbursement for non-profits) report + PDF. |
 | `reports.go`, `reports_pdf.go` | Income statement, balance sheet generation. |
@@ -68,6 +68,8 @@ See [`../../../docs/developer/reference/enums.md`](../../../docs/developer/refer
 - `closed`/`locked` fiscal periods reject new entries
 - Vipps belastning amounts are positive; fees are negative
 - Bank rows with `journal_entry_id IS NOT NULL` cannot be reassigned without cascading `journal_lines`
+- Reports and momskomp count `posted` **and** `voided` entries (`bookedEntryFilter`), so a void and its reversal net to zero
+- `SyncInvoices` books only sent, non-voided fakturas and reverses ones voided after booking; `SyncPayments` skips invoice-settling payments
 
 Full list: [`../../../docs/developer/reference/invariants.md`](../../../docs/developer/reference/invariants.md).
 

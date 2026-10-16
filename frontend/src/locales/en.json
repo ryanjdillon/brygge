@@ -1541,6 +1541,8 @@
         "updateComplete": "Update complete",
         "paymentsSynced": "payments synced",
         "invoicesSynced": "invoices synced",
+        "invoicesReversed": "voided invoices reversed",
+        "syncSkippedHeading": "Not booked (needs attention):",
         "createPeriod": "Create period",
         "closePeriod": "Close period",
         "reopenPeriod": "Reopen period",

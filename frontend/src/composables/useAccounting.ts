@@ -71,9 +71,16 @@ export interface JournalEntry {
   lines?: JournalLine[]
 }
 
+export interface SkippedItem {
+  ref: string
+  reason: string
+}
+
 export interface SyncResult {
   synced: number
   skipped: number
+  reversed?: number
+  skipped_details?: SkippedItem[]
 }
 
 export interface CreateJournalLineInput {

@@ -51,8 +51,8 @@ func TestSyncInvoicesSplitsRevenuePerCategory(t *testing.T) {
 
 	var invoiceID string
 	if err := pool.QueryRow(ctx,
-		`INSERT INTO invoices (club_id, user_id, invoice_number, issue_date, due_date, total_amount, status, kid_number)
-		 VALUES ($1, $2, 1001, '2026-03-01', '2026-03-15', 3300, 'sent', '1001') RETURNING id`,
+		`INSERT INTO invoices (club_id, user_id, invoice_number, issue_date, due_date, total_amount, status, kid_number, sent_at)
+		 VALUES ($1, $2, 1001, '2026-03-01', '2026-03-15', 3300, 'sent', '1001', now()) RETURNING id`,
 		clubID, userID,
 	).Scan(&invoiceID); err != nil {
 		t.Fatalf("invoice: %v", err)
@@ -171,8 +171,8 @@ func TestSyncInvoicesSingleCategoryShape(t *testing.T) {
 
 	var invoiceID string
 	if err := pool.QueryRow(ctx,
-		`INSERT INTO invoices (club_id, user_id, invoice_number, issue_date, due_date, total_amount, status, kid_number)
-		 VALUES ($1, $2, 1002, '2026-03-01', '2026-03-15', 500, 'sent', '1002') RETURNING id`,
+		`INSERT INTO invoices (club_id, user_id, invoice_number, issue_date, due_date, total_amount, status, kid_number, sent_at)
+		 VALUES ($1, $2, 1002, '2026-03-01', '2026-03-15', 500, 'sent', '1002', now()) RETURNING id`,
 		clubID, userID,
 	).Scan(&invoiceID); err != nil {
 		t.Fatalf("invoice: %v", err)

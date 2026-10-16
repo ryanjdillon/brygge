@@ -901,6 +901,8 @@
         "updateComplete": "Update complete",
         "paymentsSynced": "payments synced",
         "invoicesSynced": "invoices synced",
+        "invoicesReversed": "fatture annullate stornate",
+        "syncSkippedHeading": "Non registrato (da verificare):",
         "createPeriod": "Create period",
         "closePeriod": "Close period",
         "reopenPeriod": "Reopen period",

@@ -901,6 +901,8 @@
         "updateComplete": "Update complete",
         "paymentsSynced": "payments synced",
         "invoicesSynced": "invoices synced",
+        "invoicesReversed": "stornierte Rechnungen rückgebucht",
+        "syncSkippedHeading": "Nicht gebucht (erfordert Prüfung):",
         "createPeriod": "Create period",
         "closePeriod": "Close period",
         "reopenPeriod": "Reopen period",

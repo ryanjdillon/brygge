@@ -29,6 +29,8 @@ import {
   useRebuildInvoiceBilags,
   fetchJournalAttachmentUrl,
   type JournalEntry,
+  type SkippedItem,
+  type SyncResult,
 } from '@/composables/useAccounting'
 import Select from '@/components/ui/form/Select.vue'
 import NumberInput from '@/components/ui/form/NumberInput.vue'
@@ -46,6 +48,7 @@ const sortDir = ref<'asc' | 'desc'>('desc')
 const expandedId = ref<string | null>(null)
 const syncing = ref(false)
 const syncMessage = ref('')
+const syncSkipped = ref<SkippedItem[]>([])
 const showCreateYear = ref(false)
 
 function toggleSort(col: string) {
@@ -149,16 +152,17 @@ async function handleSync() {
   if (!selectedPeriodId.value) return
   syncing.value = true
   syncMessage.value = ''
+  syncSkipped.value = []
 
   try {
-    const payResult = await new Promise<{ synced: number }>((resolve, reject) => {
+    const payResult = await new Promise<SyncResult>((resolve, reject) => {
       syncPaymentsMutation.mutate(
         { period_id: selectedPeriodId.value },
         { onSuccess: resolve, onError: reject },
       )
     })
 
-    const invResult = await new Promise<{ synced: number }>((resolve, reject) => {
+    const invResult = await new Promise<SyncResult>((resolve, reject) => {
       syncInvoicesMutation.mutate(
         { period_id: selectedPeriodId.value },
         { onSuccess: resolve, onError: reject },
@@ -166,6 +170,10 @@ async function handleSync() {
     })
 
     syncMessage.value = `${t('admin.accounting.journal.updateComplete')}: ${payResult.synced} ${t('admin.accounting.journal.paymentsSynced')}, ${invResult.synced} ${t('admin.accounting.journal.invoicesSynced')}`
+    if (invResult.reversed) {
+      syncMessage.value += `, ${invResult.reversed} ${t('admin.accounting.journal.invoicesReversed')}`
+    }
+    syncSkipped.value = [...(payResult.skipped_details ?? []), ...(invResult.skipped_details ?? [])]
   } catch (err) {
     syncMessage.value = `${t('common.error')}: ${(err as Error).message}`
   } finally {
@@ -360,6 +368,12 @@ function formatNOK(amount: number): string {
       >
         {{ syncMessage }}
       </p>
+      <div v-if="syncSkipped.length" class="mt-2 text-sm text-amber-700">
+        <p class="font-medium">{{ t('admin.accounting.journal.syncSkippedHeading') }}</p>
+        <ul class="list-disc pl-5">
+          <li v-for="s in syncSkipped" :key="s.ref">{{ s.ref }}: {{ s.reason }}</li>
+        </ul>
+      </div>
 
     </div>
 

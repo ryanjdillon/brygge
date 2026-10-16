@@ -63,7 +63,7 @@ func (s *Service) Momskompensasjon(ctx context.Context, clubID, periodID, model 
 		 FROM accounts a
 		 LEFT JOIN journal_lines jl ON jl.account_id = a.id
 		 LEFT JOIN journal_entries je ON je.id = jl.journal_entry_id
-		   AND je.fiscal_period_id = $2 AND je.status = 'posted'
+		   AND je.fiscal_period_id = $2 AND `+bookedEntryFilter+`
 		 WHERE a.club_id = $1
 		   AND a.account_type = 'expense'
 		   AND a.is_active = true
@@ -166,7 +166,7 @@ func (s *Service) documentedCompensation(ctx context.Context, clubID, periodID s
 		 JOIN accounts a ON a.id = jl.account_id
 		 WHERE je.club_id = $1
 		   AND je.fiscal_period_id = $2
-		   AND je.status = 'posted'
+		   AND `+bookedEntryFilter+`
 		   AND a.account_type = 'expense'
 		   AND a.mva_eligible IN ('eligible', 'partial')`,
 		clubID, periodID,

@@ -20,6 +20,25 @@ Each invariant lists the **rule**, then the **failure mode** it prevents. When p
 
 **Failure mode:** historical reports start disagreeing with themselves. Auditor finds the GL doesn't tie back to the printed annual report.
 
+### Reports count posted and voided entries
+
+**Rule (BRY-352):** `VoidJournalEntry` sets the original to `voided` but keeps its lines, and adds a *posted* reversal. Every report and the momskomp calculation therefore select `je.status IN ('posted', 'voided')` (`bookedEntryFilter` in `sync.go`), so the original and its reversal net to zero. Only `VoidJournalEntry` sets `voided`, and only on a posted entry, so the filter means "was ever posted". Drafts are never counted.
+
+**Failure mode:** counting only `posted` drops the original but keeps the reversal, so a voided entry shows as its own **negative**. A voided 2,500 kr faktura would push receivables and revenue down 2,500 kr instead of back to zero.
+
+### Invoice GL sync books only sent, non-voided fakturas
+
+**Rule (BRY-352):** `SyncInvoices` books a faktura only when `sent_at IS NOT NULL` and `status <> 'voided'`.
+- A faktura voided after it was booked has its `invoice_sync` entry reversed on the next sync (`reverseVoidedInvoiceEntries`, within the open period being synced).
+- Each line books to its own `account_id` when set. Otherwise it uses its price-item category's account, and failing that 3100.
+- Signs drive the sides, so a credit note books DR revenue / CR 1500. A net-zero faktura is skipped with a reason.
+- `SyncPayments` never books a payment that settles an invoice (`invoices.payment_id`). The bank or Vipps reconciliation that created it already booked DR bank / CR 1500.
+
+**Failure mode:**
+- Drafts and voided fakturas inflate receivables and revenue.
+- Re-booking invoice-settling payments as DR bank / CR revenue doubles both (all 219 completed prod payments in 2026 were invoice-linked).
+- Skipped items with no reason hide missing accounts or bad data.
+
 ### Bank rows with booked journals require cascade on reassign
 
 **Rule:** A `bank_import_rows.journal_entry_id` that is not NULL means the row has been booked. Reassigning the parent `bank_imports.bank_account_code` must cascade through `journal_lines` to update the booked account. `HandleReassignBankImport` does this in a single transaction; closed/locked/voided journals refuse the cascade.

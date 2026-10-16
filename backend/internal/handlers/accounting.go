@@ -684,7 +684,7 @@ func (h *AccountingHandler) HandleSyncPayments(w http.ResponseWriter, r *http.Re
 	if h.audit != nil {
 		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,
 			"accounting.payments_synced", "sync", req.PeriodID,
-			map[string]any{"synced": result.Synced, "skipped": result.Skipped})
+			map[string]any{"synced": result.Synced, "skipped": result.Skipped, "reversed": result.Reversed})
 	}
 
 	JSON(w, http.StatusOK, result)
@@ -717,7 +717,7 @@ func (h *AccountingHandler) HandleSyncInvoices(w http.ResponseWriter, r *http.Re
 	if h.audit != nil {
 		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,
 			"accounting.invoices_synced", "sync", req.PeriodID,
-			map[string]any{"synced": result.Synced, "skipped": result.Skipped})
+			map[string]any{"synced": result.Synced, "skipped": result.Skipped, "reversed": result.Reversed})
 	}
 
 	JSON(w, http.StatusOK, result)

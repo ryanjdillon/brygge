@@ -1537,6 +1537,8 @@
         "updateComplete": "Oppdatering fullført",
         "paymentsSynced": "betalinger synkronisert",
         "invoicesSynced": "fakturaer synkronisert",
+        "invoicesReversed": "annullerte fakturaer reversert",
+        "syncSkippedHeading": "Ikke bokført (krever oppfølging):",
         "createPeriod": "Opprett periode",
         "closePeriod": "Lukk periode",
         "reopenPeriod": "Gjenåpne periode",

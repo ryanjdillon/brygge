@@ -115,7 +115,7 @@ func (s *Service) IncomeStatement(ctx context.Context, clubID, periodID string, 
 		 JOIN accounts a ON a.id = jl.account_id
 		 WHERE je.club_id = $1
 		   AND je.fiscal_period_id = $2
-		   AND je.status = 'posted'
+		   AND `+bookedEntryFilter+`
 		   AND a.account_type IN ('revenue', 'expense')`+extra+`
 		 GROUP BY a.code, a.name, a.account_type, a.sort_order
 		 ORDER BY a.sort_order, a.code`,
@@ -191,7 +191,7 @@ func (s *Service) BalanceSheet(ctx context.Context, clubID, periodID string, cas
 		 JOIN accounts a ON a.id = jl.account_id
 		 JOIN fiscal_periods fp ON fp.id = je.fiscal_period_id
 		 WHERE je.club_id = $1
-		   AND je.status = 'posted'
+		   AND `+bookedEntryFilter+`
 		   AND fp.end_date <= $2
 		   AND a.account_type IN ('asset', 'liability')`+extra+`
 		 GROUP BY a.code, a.name, a.account_type, a.sort_order
@@ -262,7 +262,7 @@ func (s *Service) TrialBalance(ctx context.Context, clubID, periodID string, cas
 		 JOIN accounts a ON a.id = jl.account_id
 		 WHERE je.club_id = $1
 		   AND je.fiscal_period_id = $2
-		   AND je.status = 'posted'`+extra+`
+		   AND `+bookedEntryFilter+extra+`
 		 GROUP BY a.code, a.name, a.sort_order
 		 ORDER BY a.sort_order, a.code`,
 		clubID, periodID,
@@ -309,7 +309,7 @@ func (s *Service) GeneralLedger(ctx context.Context, clubID, periodID, accountID
 		 WHERE jl.account_id = $1
 		   AND je.club_id = $2
 		   AND je.fiscal_period_id = $3
-		   AND je.status = 'posted'
+		   AND `+bookedEntryFilter+`
 		 ORDER BY je.entry_date, je.entry_number`,
 		accountID, clubID, periodID,
 	)
