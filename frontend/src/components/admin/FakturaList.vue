@@ -331,6 +331,12 @@ async function doVoid(id: string) {
   busyIds.value.add(id)
   try {
     const res = await totpAwareFetch(`/api/v1/admin/financials/invoices/${id}/void`, { method: 'POST' })
+    if (res.status === 409) {
+      // Payment already received (reconciled or via Vipps): it needs a
+      // refund or credit note, not a void.
+      error.value = t('admin.invoiceDrafts.voidSettled')
+      return
+    }
     if (!res.ok && res.status !== 204) {
       const txt = await res.text().catch(() => '')
       error.value = `${res.status} ${txt}`

@@ -139,7 +139,7 @@ func (h *InvoiceHandler) HandleBulkSendReminder(w http.ResponseWriter, r *http.R
 func (h *InvoiceHandler) collectReminderItems(ctx context.Context, clubID string, ids []string, payload []byte) ([]bcast.InvoiceDelivery, bulkInvoiceResult, error) {
 	res := bulkInvoiceResult{}
 	rows, err := h.db.Query(ctx,
-		`SELECT i.id, i.sent_at, i.payment_id, i.vipps_paid_at,
+		`SELECT i.id, i.sent_at, `+finance.SettledForMemberSQL("i")+` AS settled,
 		        COALESCE(NULLIF(i.recipient_email, ''), u.email, '') AS recipient,
 		        (i.pdf_data IS NOT NULL OR COALESCE(i.s3_key, '') <> '') AS has_pdf
 		   FROM invoices i
@@ -153,17 +153,16 @@ func (h *InvoiceHandler) collectReminderItems(ctx context.Context, clubID string
 	defer rows.Close()
 
 	type pre struct {
-		id          string
-		sentAt      *time.Time
-		paymentID   *string
-		vippsPaidAt *time.Time
-		recipient   string
-		hasPDF      bool
+		id        string
+		sentAt    *time.Time
+		settled   bool
+		recipient string
+		hasPDF    bool
 	}
 	seen := make(map[string]pre, len(ids))
 	for rows.Next() {
 		var p pre
-		if err := rows.Scan(&p.id, &p.sentAt, &p.paymentID, &p.vippsPaidAt, &p.recipient, &p.hasPDF); err != nil {
+		if err := rows.Scan(&p.id, &p.sentAt, &p.settled, &p.recipient, &p.hasPDF); err != nil {
 			return nil, res, err
 		}
 		seen[p.id] = p
@@ -179,11 +178,10 @@ func (h *InvoiceHandler) collectReminderItems(ctx context.Context, clubID string
 			res.Failures = append(res.Failures, id+": not found")
 			continue
 		}
-		// Skip not-yet-sent, already-paid, and vipps-received-pending-settlement
-		// invoices. The last is the key one: a member who paid via the /betal link
-		// has vipps_paid_at set but payment_id still null (authoritative paid comes
-		// from settlement reconciliation) — reminding them would be a false purring.
-		if p.sentAt == nil || p.paymentID != nil || p.vippsPaidAt != nil {
+		// Skip not-yet-sent invoices and anything settled for the member
+		// (finance.SettledForMemberSQL): paid, voided, or received via the
+		// /betal link but not yet settled — reminding them would be a false purring.
+		if p.sentAt == nil || p.settled {
 			res.Skipped++
 			continue
 		}
@@ -246,7 +244,7 @@ func (h *InvoiceHandler) sendOneReminder(
 		pdfData        []byte
 		s3Key          string
 		sentAt         *time.Time
-		paymentID      *string
+		settled        bool
 	)
 	err := h.db.QueryRow(ctx,
 		`SELECT i.invoice_number,
@@ -257,20 +255,23 @@ func (h *InvoiceHandler) sendOneReminder(
 		                 ''),
 		        COALESCE(u.email, ''), COALESCE(i.recipient_email, ''),
 		        i.due_date, i.total_amount, i.kid_number,
-		        i.pdf_data, COALESCE(i.s3_key, ''), i.sent_at, i.payment_id
+		        i.pdf_data, COALESCE(i.s3_key, ''), i.sent_at, `+finance.SettledForMemberSQL("i")+`
 		   FROM invoices i
 		   LEFT JOIN users u ON u.id = i.user_id
 		  WHERE i.id = $1 AND i.club_id = $2`,
 		invoiceID, clubID,
 	).Scan(&invoiceNumber, &memberName, &memberEmail, &recipientEmail,
-		&dueDate, &total, &kid, &pdfData, &s3Key, &sentAt, &paymentID)
+		&dueDate, &total, &kid, &pdfData, &s3Key, &sentAt, &settled)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return errInvoiceNotFound
 		}
 		return err
 	}
-	if sentAt == nil || paymentID != nil {
+	// Re-checked at send time, not only at enqueue: the queue may hold a
+	// reminder for days, and the member may pay or the invoice be voided
+	// in between.
+	if sentAt == nil || settled {
 		return errSkip
 	}
 	deliverTo := recipientEmail
@@ -432,7 +433,7 @@ func (h *InvoiceHandler) reissueOneKID(
 	)
 	err := h.db.QueryRow(ctx,
 		`SELECT invoice_number, COALESCE(kid_number, ''),
-		        (sent_at IS NOT NULL), (payment_id IS NOT NULL)
+		        (sent_at IS NOT NULL), `+finance.SettledForMemberSQL("")+`
 		   FROM invoices WHERE id = $1 AND club_id = $2`,
 		invoiceID, clubID,
 	).Scan(&invoiceNumber, &kidNumber, &sent, &paid)

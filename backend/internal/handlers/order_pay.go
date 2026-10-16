@@ -9,10 +9,12 @@ import (
 	"math"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/brygge-klubb/brygge/internal/finance"
 	"github.com/brygge-klubb/brygge/internal/middleware"
 	"github.com/brygge-klubb/brygge/internal/vipps"
 )
@@ -162,9 +164,7 @@ func (h *InvoiceHandler) orderHasVippsBlockedSource(ctx context.Context, orderID
 		     JOIN orders o   ON o.id = os.order_id
 		     JOIN clubs c    ON c.id = o.club_id
 		    WHERE os.order_id = $1
-		      AND i.payment_id IS NULL
-		      AND i.vipps_paid_at IS NULL
-		      AND i.status <> 'voided'
+		      AND NOT `+finance.SettledForMemberSQL("i")+`
 		      AND NOT (`+vippsAllowedExpr+`)
 		 )`,
 		orderID,
@@ -393,14 +393,13 @@ func (h *InvoiceHandler) orderTotal(ctx context.Context, orderID string) (float6
 			amount    float64
 			status    string
 			paymentID *string
-			paidAt    *string
+			paidAt    *time.Time
 		)
 		if err := rows.Scan(&number, &amount, &status, &paymentID, &paidAt); err != nil {
 			rows.Close()
 			return 0, "", err
 		}
-		// Skip anything already settled: voided, reconciled-paid, or received via Vipps.
-		if status == "voided" || paymentID != nil || paidAt != nil {
+		if finance.SettledForMember(status, paymentID, paidAt) {
 			continue
 		}
 		total += amount

@@ -634,6 +634,7 @@
       "voidConfirmTitle": "Annullere faktura?",
       "voidOneBody": "Annuller fakturaen for {name}. Den fjernes fra dedup-sjekken, så en ny kan utstedes for samme kategori og år.",
       "voidAction": "Annuller",
+      "voidSettled": "Fakturaen er allerede betalt (eller betalt med Vipps). Refunder eller krediter den i stedet for å annullere.",
       "filterMember": "Medlemsnavn eller e-post",
       "filterAllItems": "Alle prisposter",
       "filterAllYears": "Alle år",

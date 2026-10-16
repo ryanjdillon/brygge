@@ -143,6 +143,18 @@ Each invariant lists the **rule**, then the **failure mode** it prevents. When p
 
 **Failure mode:** dangling foreign key. Dashboard says paid; member says they didn't pay; nobody can explain the discrepancy.
 
+### Settled means one thing, defined once
+
+**Rule (BRY-325):** whether an invoice still needs paying is decided only through `internal/finance/settled.go`:
+- **`SettledForMemberSQL` / `SettledForMember`** returns true for `payment_id IS NOT NULL OR vipps_paid_at IS NOT NULL OR status = 'voided'`. It is used by reminders (both enqueue *and* the worker's send-time check), KID reissue, the member payables page, checkout totals and the Vipps-blocked check.
+- **`SettledForGLSQL`** returns true for `payment_id IS NOT NULL`. It is used where the receivable must actually be cleared: reconciliation and bookkeeping.
+
+Voiding an invoice that is settled for the member (paid, or captured via Vipps) is refused with 409, because money arrived and it needs a refund or credit note instead.
+
+**Failure mode:**
+- Settlement lags the Vipps capture by days. A check on `payment_id` alone chases members who already paid through the pay link. The reminder worker did exactly that at send time until BRY-325.
+- A voided paid invoice hides received money that nothing is owed against.
+
 ### Voided invoices stay in the table
 
 **Rule:** `invoices.status = 'voided'` is terminal. Voided rows are excluded from receivables totals but remain in the table for audit. Never DELETE a voided invoice.

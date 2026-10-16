@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/brygge-klubb/brygge/internal/finance"
 	"github.com/brygge-klubb/brygge/internal/middleware"
 )
 
@@ -180,10 +181,8 @@ func (h *InvoiceHandler) HandleGetPayables(w http.ResponseWriter, r *http.Reques
 		   FROM invoices i
 		   LEFT JOIN price_items pi ON pi.id = i.price_item_id
 		  WHERE i.user_id = $1 AND i.club_id = $2
-		    AND i.status = 'open'
 		    AND (i.sent_at IS NOT NULL OR i.import_source IS NOT NULL)
-		    AND i.payment_id IS NULL
-		    AND i.vipps_paid_at IS NULL
+		    AND NOT `+finance.SettledForMemberSQL("i")+`
 		  ORDER BY i.due_date ASC, i.issue_date DESC`,
 		userID, clubID,
 	)

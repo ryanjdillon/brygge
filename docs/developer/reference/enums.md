@@ -160,6 +160,14 @@ Synchronized vocabularies:
 
 Adding a new category requires touching **all three** plus this doc. Otherwise a faktura for that category routes to the default revenue code (3100) and the SPA shows the raw enum string.
 
+### `invoices.status` (CHECK since migration 000102)
+
+```
+open   voided
+```
+
+Enforced by `invoices_status_check` (BRY-325). This column is **not** the payment state: whether an invoice is paid lives in `payment_id` (reconciled) and `vipps_paid_at` (captured via the pay link, awaiting settlement). Ask "is it settled?" through `finance.SettledForMemberSQL` / `SettledForGLSQL`, never with ad-hoc checks. See the invariant "Settled means one thing, defined once".
+
 ### `invoices.recipient_kind`
 
 ```

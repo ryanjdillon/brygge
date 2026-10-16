@@ -330,7 +330,7 @@ in `backend/migrations/` for the source of truth. The high-level shape:
   double-entry GL with NS 4102 chart of accounts. New clubs get the default
   chart from `SeedKontoplan`. An account added to the default chart later
   needs a backfill migration for existing clubs, as in 000041 (1925) and
-  000099 (3130 Strøm, 3210 Bobil/campingplass, 3220 Lokalleie). Migration 000100 is a one-off data cleanup: it deletes the orphan import drafts that duplicated posted bookings (BRY-324). `journal_entries.source` gained `invoice_resplit` in 000101 for revenue reclassifications (BRY-364).
+  000099 (3130 Strøm, 3210 Bobil/campingplass, 3220 Lokalleie). Migration 000100 is a one-off data cleanup: it deletes the orphan import drafts that duplicated posted bookings (BRY-324). `journal_entries.source` gained `invoice_resplit` in 000101 for revenue reclassifications (BRY-364). 000102 adds `invoices_status_check` (`open`/`voided` only, BRY-325).
 - `broadcasts`, `broadcast_deliveries` (migration 000069) — bulk member
   sends. A `broadcasts` row is the parent announcement (subject/body, the
   originating shared-mailbox `source_address`, a `status`); each recipient

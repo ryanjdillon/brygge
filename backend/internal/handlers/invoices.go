@@ -1307,7 +1307,8 @@ func (h *InvoiceHandler) HandleDeleteInvoice(w http.ResponseWriter, r *http.Requ
 // HandleVoidInvoice flips an invoice's status to 'voided'. Voided
 // invoices fall out of the bulk-faktura dedup index so the admin can
 // re-issue under the same (member, category, period) without manual
-// SQL. Idempotent — voiding an already-voided invoice returns 204.
+// SQL. Idempotent — voiding an already-voided invoice returns 204. A
+// settled invoice (finance.SettledForMember) is refused with 409.
 func (h *InvoiceHandler) HandleVoidInvoice(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
@@ -1320,18 +1321,41 @@ func (h *InvoiceHandler) HandleVoidInvoice(w http.ResponseWriter, r *http.Reques
 		Error(w, http.StatusBadRequest, "invoice ID is required")
 		return
 	}
-	tag, err := h.db.Exec(ctx,
-		`UPDATE invoices SET status = 'voided'
-		  WHERE id = $1 AND club_id = $2`,
+	// Money has already arrived on a settled invoice (paid, or captured via
+	// Vipps and awaiting settlement). Voiding it would hide a payment with
+	// nothing owed against it; that needs a refund or credit note instead.
+	var status string
+	var settled bool
+	err := h.db.QueryRow(ctx,
+		`SELECT status, `+finance.SettledForMemberSQL("")+`
+		   FROM invoices WHERE id = $1 AND club_id = $2`,
 		invoiceID, claims.ClubID,
-	)
+	).Scan(&status, &settled)
+	if err == pgx.ErrNoRows {
+		Error(w, http.StatusNotFound, "invoice not found")
+		return
+	}
 	if err != nil {
-		h.log.Error().Err(err).Msg("void invoice")
+		h.log.Error().Err(err).Msg("void invoice: load")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	if tag.RowsAffected() == 0 {
-		Error(w, http.StatusNotFound, "invoice not found")
+	if status == "voided" {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if settled {
+		Error(w, http.StatusConflict, "invoice is already paid; refund or credit it instead of voiding")
+		return
+	}
+
+	if _, err := h.db.Exec(ctx,
+		`UPDATE invoices SET status = 'voided'
+		  WHERE id = $1 AND club_id = $2 AND NOT `+finance.SettledForMemberSQL(""),
+		invoiceID, claims.ClubID,
+	); err != nil {
+		h.log.Error().Err(err).Msg("void invoice")
+		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	if h.audit != nil {
