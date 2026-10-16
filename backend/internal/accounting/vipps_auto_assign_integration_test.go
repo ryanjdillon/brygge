@@ -162,6 +162,28 @@ func TestAutoAssignPriceItemAmounts(t *testing.T) {
 	}
 }
 
+// The tie category settles only per-night ties. An amount that is also an
+// exact one-off price elsewhere (here a 3,000 season = 10 nights) could be
+// that item, so it stays manual even with a preference configured.
+func TestAutoAssignTieIgnoresExactOneOffPrices(t *testing.T) {
+	f := newAutoAssignFixture(t)
+	f.priceItem(t, "guest", "Synthetic guest berth", 30000, "day", "all")
+	f.priceItem(t, "motorhome", "Synthetic motorhome spot", 30000, "day", "all")
+	f.priceItem(t, "seasonal_rental", "Synthetic summer season", 300000, "season", "all")
+	f.exec(t, `UPDATE clubs SET vipps_auto_assign_tie_category = 'motorhome' WHERE id = $1`, f.club.ID)
+
+	season := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 300000, CustomerName: "Synthetic Seasonal"})
+	nights := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 60000, CustomerName: "Synthetic Camper"})
+
+	res := f.run(t)
+	if len(res.Assigned) != 1 || res.Assigned[0].RowID != nights || res.Assigned[0].Target != "3210" {
+		t.Fatalf("result = %+v, want only the two-night stay booked to 3210", res)
+	}
+	if rowEntry(t, f.club, season) != "" {
+		t.Errorf("3,000 matching an exact season price was absorbed by the tie category")
+	}
+}
+
 func TestAutoAssignIsOptIn(t *testing.T) {
 	f := newAutoAssignFixture(t)
 	f.exec(t, `UPDATE clubs SET vipps_auto_assign = false WHERE id = $1`, f.club.ID)

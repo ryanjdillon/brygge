@@ -476,6 +476,9 @@ func (s *Service) matchVippsAmountToPriceArticle(ctx context.Context, clubID str
 type priceArticleCandidate struct {
 	name, category, audience string
 	multiplier               int
+	// perUnit is true for prices charged per night/day/hour, which match
+	// any whole multiple of the unit price.
+	perUnit bool
 }
 
 func (c priceArticleCandidate) label() string {
@@ -511,17 +514,18 @@ func (s *Service) priceArticleCandidates(ctx context.Context, clubID string, amo
 		if err := rows.Scan(&n, &cat, &aud, &unitAmount, &unit); err != nil {
 			continue
 		}
+		perUnit := unit == "night" || unit == "day" || unit == "hour"
 		if floatNear(unitAmount, amount, 0.005) {
-			matches = append(matches, priceArticleCandidate{name: n, category: cat, audience: aud, multiplier: 1})
+			matches = append(matches, priceArticleCandidate{name: n, category: cat, audience: aud, multiplier: 1, perUnit: perUnit})
 			continue
 		}
-		if unit == "night" || unit == "day" || unit == "hour" {
+		if perUnit {
 			mult := int(amount/unitAmount + 0.0001)
 			if mult < 2 || mult > 60 {
 				continue
 			}
 			if floatNear(float64(mult)*unitAmount, amount, 0.005) {
-				matches = append(matches, priceArticleCandidate{name: n, category: cat, audience: aud, multiplier: mult})
+				matches = append(matches, priceArticleCandidate{name: n, category: cat, audience: aud, multiplier: mult, perUnit: true})
 			}
 		}
 	}

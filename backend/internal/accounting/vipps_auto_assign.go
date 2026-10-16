@@ -24,13 +24,14 @@ import (
 //  2. price_item — the amount fits the club's active price items, and they
 //     all share one category (several items in one category book to the same
 //     account). When they span categories, the club's configured tie
-//     category wins if it is among them; with none configured the charge
-//     stays manual. An item for members only also needs the payer to resolve
+//     category wins only if it is among them and every match is a per-unit
+//     (night/day/hour) price; an exact one-off price in any tied category,
+//     or no configured tie category, leaves the charge manual. An item for members only also needs the payer to resolve
 //     to a member. Booked through CreateVippsChargeBilag to the category's
 //     revenue account.
 //
 // The whole feature is opt-in per club (clubs.vipps_auto_assign). Postings
-// follow the per-charge model and are drafts like every other Vipps posting.
+// follow the per-charge model and post on creation (BRY-339).
 // Each booking is audited and can be undone with UnassignVippsCharge.
 
 const (
@@ -150,6 +151,15 @@ func (s *Service) AutoAssignVippsCharges(ctx context.Context, clubID, createdBy 
 	return res, nil
 }
 
+func allPerUnit(cands []priceArticleCandidate) bool {
+	for _, c := range cands {
+		if !c.perUnit {
+			return false
+		}
+	}
+	return true
+}
+
 // vippsChargeDecision is what the auto-assign rules conclude for one charge.
 // Rule is empty when the charge is ambiguous; Reason then says why.
 type vippsChargeDecision struct {
@@ -204,7 +214,11 @@ func (s *Service) decideVippsCharge(ctx context.Context, clubID string, cfg vipp
 	category := ""
 	if len(byCategory) == 1 {
 		category = cands[0].category
-	} else if _, ok := byCategory[cfg.tieCategory]; ok && cfg.tieCategory != "" {
+	} else if _, ok := byCategory[cfg.tieCategory]; ok && cfg.tieCategory != "" && allPerUnit(cands) {
+		// The tie category only settles per-night style ties (e.g. guest
+		// slip vs motorhome at the same nightly rate). When the amount is
+		// also an exact one-off price elsewhere (a season, slipping, slip
+		// rent), it could be that item, so a human decides.
 		category = cfg.tieCategory
 	} else {
 		return &vippsChargeDecision{Reason: "amount fits price items in several categories"}, nil

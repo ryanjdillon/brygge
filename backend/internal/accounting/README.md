@@ -37,7 +37,7 @@ When a bank row matching `Utb. NNN Vippsnr MMM` arrives, the reconciliation pull
 
 **Auto-assign (per-charge model, BRY-340).** After order-linked charges, `AutoAssignVippsCharges` (`vipps_auto_assign.go`) books the rest of the queue when the outcome is unambiguous and the club has opted in (`clubs.vipps_auto_assign`):
 1. `member_invoice`: a strong member match (`resolveCustomerToMemberPass` up to `memberPassFirstLast`) with exactly one open faktura of equal total goes through `AssignVippsChargeToInvoice`.
-2. `price_item`: `priceArticleCandidates` in one category, or a cross-category tie resolved by `clubs.vipps_auto_assign_tie_category`, goes through `CreateVippsChargeBilag` to `vippsCategoryAccountMap[category]`. Members-only items also need a strong member match.
+2. `price_item`: `priceArticleCandidates` in one category, or a cross-category tie resolved by `clubs.vipps_auto_assign_tie_category` (only when every match is a per-night/day/hour price; an exact one-off price in any tied category leaves it manual), goes through `CreateVippsChargeBilag` to `vippsCategoryAccountMap[category]`. Members-only items also need a strong member match.
 
 Everything else stays in Tildel; the result reports `assigned` and `needs_review`. It runs where `AutoReconcileOrderCharges` runs. `UnassignVippsCharge` undoes any charge booking: it deletes a draft or voids a posted entry, and reopens the faktura recorded in `vipps_import_rows.invoice_id`.
 

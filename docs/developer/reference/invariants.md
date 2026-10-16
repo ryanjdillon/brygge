@@ -34,7 +34,7 @@ It is refused when the split differs from the charge amount, or when a faktura o
 
 **Rule (BRY-340):** `AutoAssignVippsCharges` runs after every Vipps CSV upload, operator Report API sync and **Synk Vipps**, but books nothing unless `clubs.vipps_auto_assign` is on. It books a charge in one of two cases. Anything else is left in Tildel.
 - **Member faktura:** the payer resolves to one member by a strong pass (taught alias, KID, or the exact normalized full or first+last name; never last-name-only, fuzzy or email), that member has exactly one sent faktura not settled for the member (`finance.SettledForMemberSQL`), and the totals are equal.
-- **Price item:** the amount fits active price items in one category. Several categories count as a tie, which is resolved only by the club's `vipps_auto_assign_tie_category`. A members-only item also needs a strong member match. A member who has an open faktura for the exact amount is never price-classified.
+- **Price item:** the amount fits active price items in one category. Several categories count as a tie. The club's `vipps_auto_assign_tie_category` resolves a tie only when every match is a per-unit (night, day or hour) price, for example guest slip versus motorhome at the same nightly rate. If the amount is also an exact one-off price in any tied category (a season, slipping, slip rent), the charge stays manual, so the tie category never absorbs amounts it can't explain. A members-only item also needs a strong member match. A member who has an open faktura for the exact amount is never price-classified.
 
 Charges naming a checkout order are left to `AutoReconcileOrderCharges`. Each booking is audited (`vipps_charge.auto_assigned`) and can be undone with `UnassignVippsCharge`.
 
