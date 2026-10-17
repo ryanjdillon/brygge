@@ -59,6 +59,9 @@ type VippsBacklogResult struct {
 	PostedTotals      []AccountTotal        `json:"posted_totals"`
 	Reclassified      []VippsBacklogReclass `json:"reclassified"`
 	Refused           []SkippedItem         `json:"refused"`
+	// Payouts reports the settlements an apply completed and cleared; nil in
+	// a preview.
+	Payouts *VippsPayoutSweepResult `json:"payouts,omitempty"`
 }
 
 type backlogDraft struct {
@@ -165,6 +168,15 @@ func (s *Service) PostVippsDraftBacklog(ctx context.Context, clubID, periodID, a
 	sort.Slice(res.PostedTotals, func(i, j int) bool {
 		return res.PostedTotals[i].AccountCode < res.PostedTotals[j].AccountCode
 	})
+
+	// Posting the backlog books charges, which can complete settlements.
+	if apply {
+		payouts, err := s.ClearReadyVippsPayouts(ctx, clubID, actor)
+		if err != nil {
+			return nil, fmt.Errorf("clearing ready payouts: %w", err)
+		}
+		res.Payouts = payouts
+	}
 	return res, nil
 }
 

@@ -53,6 +53,15 @@ Charges naming a checkout order are left to `AutoReconcileOrderCharges`. Each bo
 
 **Failure mode:** guessing on a weak name match or a cross-category amount books a member's dues as walk-up revenue, or the reverse. The member is then chased for a faktura they paid, or revenue lands on the wrong account. With no opt-in, a club that never chose this would find bookings it didn't make.
 
+### A Vipps payout clears as soon as its settlement's charges are booked
+
+**Rule (BRY-340):** on the per-charge model, `ClearReadyVippsPayouts` clears every unbooked bank deposit carrying `Utb. <settlement> Vippsnr <msn>` whose settlement has no `belastning` (same MSN + booking date) left unbooked and undismissed. It runs at the end of `BankSync`, after auto-assign in each operator Vipps path (CSV upload, Report API sync, **Synk Vipps**) and after a `PostVippsDraftBacklog` apply — all behind the money gate. The nightly Report sync has no acting user and does not clear.
+- Clearing is `ClearVippsPayout`: a posted fee entry for the settlement's unbooked fee rows, then a posted bank entry, so the settlement nets the clearing account to 0.
+- The fee rows and the bank row are each linked with a guarded update. A clear that links fewer fee rows than it read lost a race and unwinds rather than posting the fee twice.
+- A deposit without a parseable reference is never matched by amount. An imported payout no deposit names is reported as skipped with a reason, as is a deposit naming a settlement that was never imported.
+
+**Failure mode:** before this, Stage 2 ran only from the per-row Tildel action, so a sync reported "Vipps-avstemt: 0" and the clearing account kept the full gross of every settlement while the bank deposits sat unbooked.
+
 ### Vipps postings are posted on creation; no period closes with drafts
 
 **Rule (BRY-339):** every Vipps posting path posts its entry right away: per-charge charge→faktura and charge→account, the order-linked split, auto-assign, the payout's fee and bank entries, and the legacy `ReconcileVippsConfirm`.

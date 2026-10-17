@@ -78,5 +78,6 @@ func (h *AccountingHandler) HandleVippsReportSync(w http.ResponseWriter, r *http
 		"import_id":   res.ImportID,
 		"orders":      res.Orders,
 		"auto_assign": res.AutoAssign,
+		"payouts":     res.Payouts,
 	})
 }

@@ -17,6 +17,7 @@ type VippsReportSyncResult struct {
 	TryLater   bool // report for the date not finalised yet
 	Orders     *VippsOrderReconcileResult
 	AutoAssign *VippsAutoAssignResult
+	Payouts    *VippsPayoutSweepResult
 }
 
 // SyncVippsReport pulls the Report API v2 funds + fees for a settlement date and
@@ -84,9 +85,10 @@ func (s *Service) SyncVippsReport(ctx context.Context, vc *vipps.Client, clubID,
 	res.Imported = imp.Imported
 	res.SkippedDup = imp.SkippedDup
 
-	// Book order-linked charges right away when someone is acting; the nightly
-	// run has no user to record as creator, so it only repairs row types and
-	// leaves the booking to the next operator sync.
+	// Book order-linked charges, and clear the payouts they complete, right
+	// away when someone is acting; the nightly run has no user to record as
+	// creator, so it only repairs row types and leaves the booking to the
+	// next operator sync.
 	if actorID != "" {
 		orders, err := s.AutoReconcileOrderCharges(ctx, clubID, actorID)
 		if err != nil {
@@ -98,6 +100,11 @@ func (s *Service) SyncVippsReport(ctx context.Context, vc *vipps.Client, clubID,
 			return res, fmt.Errorf("auto-assigning charges: %w", err)
 		}
 		res.AutoAssign = auto
+		payouts, err := s.ClearReadyVippsPayouts(ctx, clubID, actorID)
+		if err != nil {
+			return res, fmt.Errorf("clearing ready payouts: %w", err)
+		}
+		res.Payouts = payouts
 	} else if _, err := s.RepairVippsReportRows(ctx, clubID); err != nil {
 		return res, fmt.Errorf("repairing report rows: %w", err)
 	}

@@ -287,6 +287,14 @@ If an amount fits several categories (a guest berth and a motorhome spot at the 
 
 Everything else stays in **Tildel**. The upload and Synk Vipps results list what was booked, and each line has **Angre**, which puts the payment back in Tildel and reopens the faktura.
 
+### Vipps payouts clear by themselves
+
+You do not need to clear the daily Vipps payout (the **Utb. … Vippsnr …** deposit in the bank statement) by hand. As soon as every payment in that settlement is booked or dismissed, the next **Synkroniser**, **Synk Vipps**, Vipps upload or **Bokfør Vipps-utkast** books the Vipps fee and the deposit, and the result shows how many payouts were cleared. Payouts that stay open are listed with the reason:
+
+- **Venter på belastninger** — some payments in the settlement are still in **Tildel**. Book or dismiss them and sync again.
+- **Ingen bankinnbetaling** — the bank statement with that deposit is not uploaded yet, or the deposit text has no Utb./Vippsnr reference.
+- **Ikke importert** — the bank deposit names a settlement whose Vipps export is not uploaded yet.
+
 ## Reference
 
 - Pricing admin: `/admin/pricing`

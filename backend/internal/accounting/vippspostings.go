@@ -2,6 +2,7 @@ package accounting
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -249,6 +250,10 @@ func (s *Service) unwindVippsPosting(ctx context.Context, clubID, entryID, table
 	s.discardDraft(ctx, clubID, entryID)
 }
 
+// ErrVippsSettlementNotImported is returned by ClearVippsPayout when the bank
+// deposit names a settlement whose Vipps rows have not been imported yet.
+var ErrVippsSettlementNotImported = errors.New("no imported settlement")
+
 // errChargeRaced signals that postVippsCharge lost the guarded-mark race and
 // the returned entry ID belongs to the concurrent winner.
 var errChargeRaced = fmt.Errorf("vipps charge booked concurrently")
@@ -410,7 +415,7 @@ func (s *Service) ClearVippsPayout(ctx context.Context, clubID, bankRowID, creat
 		clubID, res.MSN, res.SettlementNumber,
 	).Scan(&payoutRowID, &payoutBooking, &payoutAmount, &payoutEntry)
 	if err == pgx.ErrNoRows {
-		return nil, fmt.Errorf("no imported settlement for Utb. %s Vippsnr %s — import the Vipps export first", res.SettlementNumber, res.MSN)
+		return nil, fmt.Errorf("%w for Utb. %s Vippsnr %s — import the Vipps export first", ErrVippsSettlementNotImported, res.SettlementNumber, res.MSN)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("loading payout row: %w", err)
@@ -480,13 +485,20 @@ func (s *Service) ClearVippsPayout(ctx context.Context, clubID, bankRowID, creat
 		if cerr != nil {
 			return nil, fmt.Errorf("creating fee entry: %w", cerr)
 		}
-		if _, err := s.db.Exec(ctx,
+		tag, err := s.db.Exec(ctx,
 			`UPDATE vipps_import_rows SET journal_entry_id = $1
 			  WHERE club_id = $2 AND journal_entry_id IS NULL AND id = ANY($3::uuid[])`,
 			feeJE.ID, clubID, feeRows,
-		); err != nil {
+		)
+		if err != nil {
 			s.discardDraft(ctx, clubID, feeJE.ID)
 			return nil, fmt.Errorf("linking fee rows: %w", err)
+		}
+		// A concurrent clear (a manual Tildel racing a sync sweep) linked some
+		// of the fee rows first; posting this total would book the fee twice.
+		if tag.RowsAffected() != int64(len(feeRows)) {
+			s.unwindVippsPosting(ctx, clubID, feeJE.ID, "vipps_import_rows", feeRows)
+			return nil, fmt.Errorf("vipps fee for Utb. %s booked concurrently — sync again", res.SettlementNumber)
 		}
 		if err := s.PostJournalEntry(ctx, clubID, feeJE.ID, createdBy); err != nil {
 			s.unwindVippsPosting(ctx, clubID, feeJE.ID, "vipps_import_rows", feeRows)

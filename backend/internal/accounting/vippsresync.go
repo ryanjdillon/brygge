@@ -25,6 +25,9 @@ type VippsResyncResult struct {
 	// AutoAssign reports the unambiguous charges booked without a human
 	// (BRY-340) and how many still wait in Tildel.
 	AutoAssign *VippsAutoAssignResult `json:"auto_assign,omitempty"`
+	// Payouts reports the settlements cleared once their charges were all
+	// booked (per-charge model only).
+	Payouts *VippsPayoutSweepResult `json:"payouts,omitempty"`
 }
 
 // ResyncVippsBilags re-runs the Vipps classification cascade on every
@@ -66,6 +69,11 @@ func (s *Service) ResyncVippsBilags(ctx context.Context, clubID, createdBy strin
 			return nil, fmt.Errorf("auto-assigning charges: %w", err)
 		}
 		res.AutoAssign = auto
+		payouts, err := s.ClearReadyVippsPayouts(ctx, clubID, createdBy)
+		if err != nil {
+			return nil, fmt.Errorf("clearing ready payouts: %w", err)
+		}
+		res.Payouts = payouts
 		return res, nil
 	}
 

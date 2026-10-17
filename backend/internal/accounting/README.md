@@ -41,6 +41,8 @@ When a bank row matching `Utb. NNN Vippsnr MMM` arrives, the reconciliation pull
 
 Everything else stays in Tildel; the result reports `assigned` and `needs_review`. It runs where `AutoReconcileOrderCharges` runs. `UnassignVippsCharge` undoes any charge booking: it refuses a closed period, voids a posted entry (or deletes a draft) *before* clearing the row, then reopens the faktura recorded in `vipps_import_rows.invoice_id`.
 
+**Payout clearing (per-charge model, BRY-340).** `ClearReadyVippsPayouts` (`vipps_payout_sweep.go`) runs Stage 2 without a human: every unbooked, undismissed bank row matching `Utb. NNN Vippsnr MMM` goes through `ClearVippsPayout`, which posts the fee entry (DR 7700 / CR clearing) and the bank entry (DR bank / CR clearing) once no `belastning` with the payout's MSN + booking date is still unbooked and undismissed. It runs at the end of `BankSync`, after auto-assign in every Vipps path that has an acting user (CSV upload, operator Report API sync, **Synk Vipps**), and after a `PostVippsDraftBacklog` apply. The result splits settlements into `cleared`, `waiting` (charges left in Tildel), `skipped` (a deposit naming an unimported settlement, or an imported payout with no deposit carrying its reference) and `failed` (posting refused, e.g. closed period), each with a reason. Already-linked deposits are never candidates, so a re-run is a no-op. On the legacy model the sweep returns empty; `syncVippsReconciliations` owns those payouts. The manual `POST /bank-rows/{rowID}/clear-vipps-payout` stays for a single row.
+
 ⚠️ **Never route to 2900.** The `vippsClearingAccountCode = "2900"` constant exists only for backwards-compat with legacy reports. New lines must land on 3900 — see [`../../../docs/developer/reference/invariants.md`](../../../docs/developer/reference/invariants.md).
 
 ## The bank-row KID matching cascade
@@ -76,6 +78,7 @@ See [`../../../docs/developer/reference/enums.md`](../../../docs/developer/refer
 
 - `posted` journal entries are immutable: the only write is `VoidJournalEntry` (original marked `voided` + a posted balanced reversal); never updated or deleted
 - Every Vipps posting (charge, order split, auto-assign, fee, payout, legacy confirm) is posted on creation; a failed post unlinks its rows and discards the draft
+- A per-charge Vipps payout clears automatically (bank sync, Vipps sync, backlog apply) once every charge of its settlement is booked or dismissed; fee rows and the bank row are each linked with a guarded update, and a lost race unwinds instead of booking the fee twice
 - `ClosePeriod` refuses while the period holds drafts (409 `period_has_drafts`, listed per source); `DeleteDraftJournalEntry` removes an unlinked draft
 - `closed`/`locked` fiscal periods reject create, post **and void** (`ErrPeriodClosed` → 409 `period_closed`); a void is refused, never moved to a later period. Writers hold the period `FOR SHARE`; `ClosePeriod` takes it `FOR UPDATE` before counting drafts
 - Every function acting on a request id takes the club id and filters on it; a foreign id is not found (404)

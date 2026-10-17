@@ -92,6 +92,9 @@ type BankSyncResult struct {
 	PaymentsLinked  int      `json:"payments_linked"`
 	DraftsReleased  int      `json:"drafts_released"`
 	ClosedPeriods   []string `json:"closed_periods"`
+	// VippsPayouts reports the per-charge payout sweep (pass 5); its cleared
+	// settlements are also counted in VippsReconciled. Nil on the legacy model.
+	VippsPayouts *VippsPayoutSweepResult `json:"vipps_payouts,omitempty"`
 }
 
 // BankSync re-runs auto-correlation across every unmatched bank import row
@@ -103,6 +106,10 @@ type BankSyncResult struct {
 //     Utb./Vippsnr pattern (only when a balanced bilag can be produced
 //     against an open fiscal period).
 //  3. Intra-bank transfer pairing across all of the club's imports.
+//
+// On the per-charge Vipps model pass 2 stands down and a final pass clears
+// every payout deposit whose settlement has all its charges booked
+// (ClearReadyVippsPayouts).
 //
 // This is the on-demand counterpart to the per-upload auto-match that
 // already runs at import time. It lets the treasurer pull in matches that
@@ -189,6 +196,19 @@ func (s *Service) BankSync(ctx context.Context, clubID, createdBy string) (*Bank
 		s.log.Warn().Err(nerr).Msg("backfill invoice-number payments failed")
 	}
 	res.PaymentsLinked += numBackfilled
+
+	// Pass 5: per-charge model only — clear every Vipps payout deposit whose
+	// settlement has all its charges booked. Legacy clubs get an empty sweep.
+	if perCharge, perr := s.VippsPerChargeEnabled(ctx, clubID); perr != nil {
+		return nil, fmt.Errorf("checking vipps model: %w", perr)
+	} else if perCharge {
+		sweep, serr := s.ClearReadyVippsPayouts(ctx, clubID, createdBy)
+		if serr != nil {
+			return nil, fmt.Errorf("vipps payout sweep: %w", serr)
+		}
+		res.VippsPayouts = sweep
+		res.VippsReconciled += len(sweep.Cleared)
+	}
 
 	for y := range closedYears {
 		res.ClosedPeriods = append(res.ClosedPeriods, fmt.Sprintf("%d", y))

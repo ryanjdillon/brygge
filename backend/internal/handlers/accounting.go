@@ -2320,6 +2320,7 @@ func (h *AccountingHandler) HandleImportVippsSettlement(w http.ResponseWriter, r
 	// booked straight away (BRY-337); the rest wait in the Tildel queue.
 	var orders *accounting.VippsOrderReconcileResult
 	var autoAssign *accounting.VippsAutoAssignResult
+	var payouts *accounting.VippsPayoutSweepResult
 	if perCharge, perr := h.svc.VippsPerChargeEnabled(r.Context(), claims.ClubID); perr == nil && perCharge {
 		orders, err = h.svc.AutoReconcileOrderCharges(r.Context(), claims.ClubID, claims.UserID)
 		if err != nil {
@@ -2328,6 +2329,10 @@ func (h *AccountingHandler) HandleImportVippsSettlement(w http.ResponseWriter, r
 		autoAssign, err = h.svc.AutoAssignVippsCharges(r.Context(), claims.ClubID, claims.UserID)
 		if err != nil {
 			h.log.Error().Err(err).Msg("auto-assigning vipps charges failed")
+		}
+		payouts, err = h.svc.ClearReadyVippsPayouts(r.Context(), claims.ClubID, claims.UserID)
+		if err != nil {
+			h.log.Error().Err(err).Msg("clearing ready vipps payouts failed")
 		}
 	}
 
@@ -2352,6 +2357,7 @@ func (h *AccountingHandler) HandleImportVippsSettlement(w http.ResponseWriter, r
 		"skipped_dup": result.SkippedDup,
 		"orders":      orders,
 		"auto_assign": autoAssign,
+		"payouts":     payouts,
 	})
 }
 
