@@ -1,5 +1,15 @@
-import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
+import { createRouter, createWebHistory, type RouteLocationNormalized, type RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { canOpenAdminRoute } from '@/lib/adminAccess'
+
+declare module 'vue-router' {
+  interface RouteMeta {
+    requiresAuth?: boolean
+    requiresAdmin?: boolean
+    /** Developer and Site pages: site admins only, not the wider board. */
+    adminOnly?: boolean
+  }
+}
 
 const routes: RouteRecordRaw[] = [
   {
@@ -277,11 +287,13 @@ const routes: RouteRecordRaw[] = [
         path: 'notifications',
         name: 'admin-notifications',
         component: () => import('@/views/admin/NotificationsAdminView.vue'),
+        meta: { adminOnly: true },
       },
       {
         path: 'gdpr',
         name: 'admin-gdpr',
         component: () => import('@/views/admin/GDPRAdminView.vue'),
+        meta: { adminOnly: true },
       },
       {
         path: 'projects',
@@ -322,6 +334,7 @@ const routes: RouteRecordRaw[] = [
         path: 'map',
         name: 'admin-map',
         component: () => import('@/views/admin/MapMarkersAdminView.vue'),
+        meta: { adminOnly: true },
       },
       {
         path: 'slip-shares',
@@ -337,11 +350,13 @@ const routes: RouteRecordRaw[] = [
         path: 'settings/general',
         name: 'admin-general-settings',
         component: () => import('@/views/admin/GeneralSettingsView.vue'),
+        meta: { adminOnly: true },
       },
       {
         path: 'settings/security',
         name: 'admin-security-settings',
         component: () => import('@/views/admin/SecuritySettingsView.vue'),
+        meta: { adminOnly: true },
       },
       {
         path: 'settings/feedback',
@@ -385,11 +400,13 @@ const routes: RouteRecordRaw[] = [
         path: 'settings/site',
         name: 'admin-site-settings',
         component: () => import('@/views/admin/SiteSettingsView.vue'),
+        meta: { adminOnly: true },
       },
       {
         path: 'settings/faq',
         name: 'admin-faq-settings',
         component: () => import('@/views/admin/FaqSettingsView.vue'),
+        meta: { adminOnly: true },
       },
       {
         // Legacy URL — older bookmarks land here. Redirects to the
@@ -417,11 +434,13 @@ const routes: RouteRecordRaw[] = [
         path: 'dev/query',
         name: 'admin-dev-query',
         component: () => import('@/views/admin/DevQueryView.vue'),
+        meta: { adminOnly: true },
       },
       {
         path: 'dev/tokens',
         name: 'admin-dev-tokens',
         component: () => import('@/views/admin/DevTokensView.vue'),
+        meta: { adminOnly: true },
       },
       {
         path: 'accounting/pdf-archive',
@@ -456,7 +475,7 @@ export const router = createRouter({
   routes,
 })
 
-router.beforeEach(async (to) => {
+export async function guardRoute(to: RouteLocationNormalized) {
   const auth = useAuthStore()
   await auth.ready
 
@@ -464,10 +483,15 @@ router.beforeEach(async (to) => {
     return { path: '/login' }
   }
 
-  if (to.meta.requiresAdmin && !auth.hasRole('admin') && !auth.hasRole('board')) {
-    return { path: '/' }
+  // Board roles may view the admin area; Developer and Site pages
+  // (meta.adminOnly) stay with site admins (BRY-372). Matched-route meta
+  // is merged, so a child inherits requiresAdmin from /admin.
+  if (!canOpenAdminRoute(to.meta, auth.user?.roles ?? [])) {
+    return { path: auth.hasAdminRole ? '/admin' : '/' }
   }
-})
+}
+
+router.beforeEach(guardRoute)
 
 // A deploy replaces the hashed route chunks, so a tab opened before the
 // deploy fails to lazy-load a route ("Failed to fetch dynamically imported

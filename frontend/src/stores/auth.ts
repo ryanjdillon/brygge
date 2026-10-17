@@ -2,6 +2,7 @@ import { ref, computed, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { useTotpGateStore } from '@/stores/totpGate'
 import { setLocale, hasExplicitLocale } from '@/i18n'
+import { canViewAdmin } from '@/lib/adminAccess'
 
 interface User {
   id: string
@@ -53,8 +54,6 @@ export const totpActionWarnMs = computed(() =>
   Math.min(3 * 60 * 1000, Math.floor(totpActionFreshMs.value / 10)),
 )
 
-const ADMIN_ROLES = ['admin', 'board', 'treasurer', 'harbor_master']
-
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null)
   const loginError = ref<string | null>(null)
@@ -63,7 +62,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   const hasAdminRole = computed(() => {
     if (!user.value) return false
-    return user.value.roles.some((r) => ADMIN_ROLES.includes(r))
+    return canViewAdmin(user.value.roles)
   })
 
   // canAccessAdmin: role-eligible AND a second factor enrolled (TOTP or a
