@@ -15,6 +15,8 @@ Tracking issue: **DIL-245**.
 | `AuthenticateSession` | Requires a valid session cookie; loads `SessionInfo` into context. | `401 authentication required` / `401 invalid session` |
 | `OptionalSessionAuth` | Loads `SessionInfo` if present; never rejects. Used where a route serves both anon and authed callers. | — |
 | `RequireRole(…)` | Caller's roles must intersect the list. | `403` (structured `error`) |
+| `RequireAdminViewer()` | Caller holds an admin-viewer role: any board role (`roles.Board`) or `admin` (`roles.CanViewAdmin`). Any method. | `403` |
+| `RequireRoleOrBoardRead(…)` | `GET`/`HEAD`: as `RequireAdminViewer`. Every other method: as `RequireRole(…)` with the listed write roles. Lets the board browse a page whose writes keep their narrower gate (BRY-372). | `403` |
 | `RequireAdminTOTP` | TOTP enrolled **and** verified within the 12 h step-up window. Applied once to the whole `/admin` subtree. | `403 totp_required` / `403 totp_not_enrolled`, or `302` for top-level browser navigations |
 | `RequireFreshTOTP(window)` / `RequireFreshTOTPDefault()` | TOTP verified within a short per-action window (default 10 min, `AUTH_FRESH_TOTP_WINDOW`). For high-blast-radius mutations. | `403 totp_fresh_required` (with `window_seconds`), or `302` for browser navigations |
 | `RequireFreshTOTPIfEnrolled()` | Same fresh-window check, but only for users who already have a second factor (TOTP or passkey); users with none pass. Guards TOTP `setup`/`confirm` so an existing factor can't be replaced from a stale session. Fails closed without session info. | `403 totp_fresh_required` (with `window_seconds`), or `302` for browser navigations |
@@ -34,6 +36,44 @@ Notes:
   redirect/enroll, `totp_fresh_required` → in-context modal). Top-level
   browser navigations get a `302` to `/admin/verify-totp?next=…` instead
   of raw JSON. See `internal/middleware/session.go`.
+
+## Board read access (BRY-372)
+
+Every board role — `chair`, `vice_chair`, `treasurer`, `secretary`,
+`harbor_master`, `deputy`, `board` — and `admin` may **view** every admin
+page except the Developer and Site pages. Viewing never grants acting:
+each surface's writes keep the role set they had before, and money moves
+keep `moneyGate` (treasurer/admin + fresh step-up).
+
+- **Mechanism.** Groups and routes that serve a viewable page use
+  `RequireRoleOrBoardRead(<write roles>)`: reads admit any admin viewer,
+  writes check the listed roles exactly as `RequireRole` did. A `GET`
+  behind it must not write. `/admin/totp` uses `RequireAdminViewer()` so
+  every board role can enrol and step up to reach the admin area at all.
+- **Still narrower on read.** `GET /financials/invoices/{id}/pay-link`,
+  `GET /financials/users/{id}/pay-link`, `GET …/credit-candidates`,
+  `GET …/delivery-log` (treasurer, admin), `GET /users/export.csv`
+  (admin), and every Developer and Site route keep their own gate: they
+  either mint a credential, feed a write dialog, or belong to the
+  excluded pages.
+- **Previews.** The `POST` previews (`/sync/invoices/resplit/preview`,
+  `/sync/vipps-drafts/preview`) are writes by method, so they keep the
+  accounting group's write roles (treasurer, board, admin); they never
+  open to the wider board.
+- **PII.** Board viewers now read member data (`/admin/users`, slips,
+  waiting list, boats) and finance data (fakturas, payments, bank and
+  Vipps rows, ledger). This is a deliberate owner decision: the board
+  already holds this information as the club's governing body.
+- **Excluded pages.** Developer (`/admin/dev/query`, `/admin/dev/tokens`)
+  and Site — the whole "Nettsted" sidebar group (`/admin/settings/general`,
+  `/settings/security`, `/settings/site`, `/settings/faq`, `/map`,
+  `/notifications`, `/gdpr`) — are admin-only in the SPA (route meta
+  `adminOnly`). Their API gates are unchanged; `GET /admin/settings/site`
+  opens to board reads only because Havn and Økonomi pages read the same
+  club row (no secrets: the Anthropic key is reported as a boolean).
+- **SPA.** The router guard admits any admin viewer to `/admin`; write
+  buttons on the opened money pages hide behind `useCan()` (see
+  `frontend/src/views/admin/README.md`).
 
 ## Public / unauthenticated
 
@@ -64,53 +104,62 @@ live in the handlers.
 | Route | Roles |
 |---|---|
 | `PUT /harbor/layout` | board, admin, harbor_master |
+| `GET /harbor/recent-payments`, `/harbor/payment-targets[/{id}/qr.png]` | any admin viewer (writes: board, admin, harbor_master) |
 | `POST /bookings/{id}/confirm` | board, harbor_master |
 | `POST/PUT/DELETE /calendar/*` | board |
-| `GET /waiting-list/`, offer, reorder | board |
+| `GET /waiting-list/` | any admin viewer |
+| enroll, offer, reorder | board |
 | `POST /projects`, project tasks; `PUT/DELETE /tasks/{id}`, assign, hours | board |
 | `PUT /feature-requests/{id}/status`, promote | board |
 
 ## Admin subtree (`AuthenticateSession` + `RequireAdminTOTP` + `RequireRole`)
 
 Everything below also carries the inherited 12 h `RequireAdminTOTP`.
-The **Fresh TOTP** column marks the extra per-action gate.
+The **Fresh TOTP** column marks the extra per-action gate. **Roles** are
+the write roles; a row marked † uses `RequireRoleOrBoardRead`, so its
+reads admit any admin viewer (see *Board read access* above).
 
 | Route | Roles | Fresh TOTP |
 |---|---|---|
-| `GET /admin/audit` | board, admin | — |
+| `GET /admin/audit` † | board, admin | — |
 | `POST /admin/dev/query` | admin | ✅ |
 | `GET /admin/dev/tokens` | admin | — |
 | `POST /admin/dev/tokens` | admin | ✅ |
 | `DELETE /admin/dev/tokens/{tokenID}` | admin | ✅ |
-| `/admin/volunteer/*` | board | — |
+| `/admin/volunteer/*` † | board | — |
 | `/admin/map/markers` (POST/PUT/DELETE) | board | — |
-| `/admin/boats/*` | board, harbor_master | — |
-| `/admin/broadcast*` | board, admin | — |
-| **Financials** (`/admin/financials`) | treasurer, board, admin | — for reads |
+| `/admin/boats/*` † | board, harbor_master | — |
+| `/admin/broadcast*` † | board, admin | — |
+| **Financials** (`/admin/financials`) † | treasurer, board, admin | — for reads |
 | `POST /financials/invoices/full`, `/bulk`, send, resend, void, **delete**, bulk-reminder, bulk-regenerate-pdf, import/uni24, delivery-log | treasurer, **admin** | ✅ |
-| **Users** (`/admin/users`) | board, admin | — for reads |
+| **Users** (`/admin/users`) † | board, admin | — for reads |
 | `export.csv` | admin | — |
 | `POST import` (CSV) | admin | ✅ |
 | create, update, roles, slips, **delete**, boats CRUD | admin (boats) / board+admin | ✅ |
 | `POST /users/{id}/totp/disable` | admin | ✅ |
 | **Inbox** (`/admin/inbox`) | board-mailbox roles | — for reads |
 | `POST /inbox/{address}/send` | (same) | ✅ |
-| **Slips** (`/admin/slips`) | board, harbor_master, admin | — for reads |
+| **Slips** (`/admin/slips`) † | board, harbor_master, admin | — for reads |
 | create, update, **delete**, assign, assignment-type, release | (same) | ✅ |
 | `/admin/settings/general` | board, admin | — |
-| `GET /admin/settings/site` | treasurer, admin | — |
+| `GET /admin/settings/site` † | treasurer, admin | — |
+| `GET /admin/settings/economy/faktura-logo`, `/exemptions` † | treasurer, admin | — |
+| `PUT /admin/settings/economy/exemptions` | treasurer, admin | ✅ |
+| `/admin/settings/booking` † | board | — |
 | `PATCH /admin/settings/site` | treasurer, admin | ✅ |
 | `/admin/settings/economy/faktura-logo` (POST/DELETE) | treasurer, admin | ✅ |
-| `/admin/settings/bank-accounts` (POST/PUT/DELETE) | treasurer, admin | ✅ |
+| `/admin/settings/bank-accounts` † (POST/PUT/DELETE) | treasurer, admin | ✅ |
 | `/admin/settings/site-logo` (POST/DELETE) | treasurer, admin | ✅ |
-| `/admin/slip-shares/*` | board, harbor_master | — |
-| `/admin/pricing` (CUD) | admin, treasurer | — |
-| `/admin/products` (CUD) | board, admin | — |
+| `/admin/slip-shares/*` † | board, harbor_master | — |
+| `/admin/pricing` † (CUD) | admin, treasurer | — |
+| `/admin/products` † (CUD) | board, admin | — |
+| `/admin/content-documents` † | board | — |
+| `/admin/bookings` † | board, harbor_master | — |
 | `/admin/documents` (upload/delete/AI) | board | — |
 | `/admin/notifications/config` | board, admin | — |
 | `/admin/gdpr/*` | board, admin | — |
 
-### Accounting (`/admin/accounting`) — roles: treasurer, board, admin
+### Accounting (`/admin/accounting`) † — write roles: treasurer, board, admin; reads: any admin viewer
 
 | Route | Fresh TOTP | Notes |
 |---|---|---|
@@ -138,7 +187,7 @@ The **Fresh TOTP** column marks the extra per-action gate.
 **Rule (BRY-370):** every route that can create or change a *posted* GL
 entry, whether directly or by auto-matching during an import or sync,
 requires the treasurer or admin role **and** a fresh step-up (`moneyGate` in
-`cmd/api/main.go`). Board members keep read access to the books. The SPA asks
+`cmd/api/main.go`). Every board role keeps read access to the books (BRY-372). The SPA asks
 for the step-up at click time (`ensureFreshTotp()`). The journal, sync,
 bank-import and bank-reconciliation routes are mounted by
 `AccountingHandler.MountLedgerRoutes` (`internal/handlers/accounting_routes.go`);

@@ -6,8 +6,8 @@ Where chi route gating lives. Roughly one middleware per concern, ordered carefu
 
 | File | What |
 |---|---|
-| `auth.go` | `AuthenticateSession` — reads the session cookie, validates against `sessions`, populates `claims` + `SessionInfo` in the request context. |
-| `session.go` | `RequireRole`, `RequireAdminTOTP`, `RequireFreshTOTP`, `RequireFreshTOTPDefault`, `IsFreshTOTP`, `SetFreshTOTPWindow`, `FreshTOTPWindow`. |
+| `auth.go` | `AuthenticateSession` — reads the session cookie, validates against `sessions`, populates `claims` + `SessionInfo` in the request context. Role gates: `RequireRole`, `RequireAdminViewer` (any board role or admin) and `RequireRoleOrBoardRead(writeRoles…)` — reads for every admin viewer, other methods on `writeRoles` (BRY-372). |
+| `session.go` | `RequireAdminTOTP`, `RequireFreshTOTP`, `RequireFreshTOTPDefault`, `IsFreshTOTP`, `SetFreshTOTPWindow`, `FreshTOTPWindow`. |
 | `devtoken.go` | `RequireDevToken(svc, scope)` — developer bearer-token auth for `/api/v1/dev/query` (BRY-115). Ignores cookies, injects role-less claims plus the token id (`GetDevTokenID`); `DevTokenKey` buckets the rate limiter per token. Must never be combined with session auth on the same route. |
 | `ratelimit.go` | Per-IP / per-user sliding-window rate limit using Redis. |
 | `metrics.go` | Prometheus / OTel HTTP request metrics. |

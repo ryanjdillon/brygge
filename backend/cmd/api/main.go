@@ -572,7 +572,7 @@ func main() {
 
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.AuthenticateSession(sessionService))
-			r.Use(middleware.RequireRole("board", "admin", "harbor_master"))
+			r.Use(middleware.RequireRoleOrBoardRead("board", "admin", "harbor_master"))
 			r.Put("/harbor/layout", harborHandler.HandlePutLayout)
 			// Near-realtime harbor overview of recent paid orders (BRY-265).
 			r.Get("/harbor/recent-payments", harborHandler.HandleRecentPayments)
@@ -612,7 +612,7 @@ func main() {
 			r.Post("/{entryID}/decline", waitingListHandler.HandleDeclineOffer)
 
 			r.Group(func(r chi.Router) {
-				r.Use(middleware.RequireRole("board"))
+				r.Use(middleware.RequireRoleOrBoardRead("board"))
 				r.Get("/", waitingListHandler.HandleListWaitingList)
 				r.Post("/enroll", waitingListHandler.HandleAdminEnrollMember)
 				r.Post("/{entryID}/offer", waitingListHandler.HandleOfferSlip)
@@ -798,7 +798,7 @@ func main() {
 			// factor, but replacing an existing factor needs a fresh
 			// step-up, or a stolen session could enroll its own secret.
 			r.Route("/totp", func(r chi.Router) {
-				r.Use(middleware.RequireRole("admin", "board", "treasurer"))
+				r.Use(middleware.RequireAdminViewer())
 				r.Group(func(r chi.Router) {
 					r.Use(middleware.RequireFreshTOTPIfEnrolled())
 					r.Post("/setup", totpHandler.HandleSetup)
@@ -822,7 +822,7 @@ func main() {
 				r.Use(middleware.RequireAdminTOTP(sessionService))
 
 				r.Group(func(r chi.Router) {
-					r.Use(middleware.RequireRole("board", "admin"))
+					r.Use(middleware.RequireRoleOrBoardRead("board", "admin"))
 					r.Get("/audit", auditHandler.HandleListAuditLog)
 				})
 
@@ -841,7 +841,7 @@ func main() {
 
 				if cfg.Features.Projects {
 					r.Route("/volunteer", func(r chi.Router) {
-						r.Use(middleware.RequireRole("board"))
+						r.Use(middleware.RequireRoleOrBoardRead("board"))
 						r.Get("/hours", volunteerHandler.HandleListAllVolunteerHours)
 						r.Put("/settings/hours", volunteerHandler.HandleSetRequiredHours)
 						r.Post("/events/{eventID}/projects", volunteerHandler.HandleLinkProjectEvent)
@@ -858,13 +858,13 @@ func main() {
 				})
 
 				r.Route("/boats", func(r chi.Router) {
-					r.Use(middleware.RequireRole("board", "harbor_master"))
+					r.Use(middleware.RequireRoleOrBoardRead("board", "harbor_master"))
 					r.Get("/unconfirmed", boatModelsHandler.HandleListUnconfirmed)
 					r.Post("/{boatID}/confirm", boatModelsHandler.HandleConfirmBoat)
 				})
 
 				r.Route("/broadcasts", func(r chi.Router) {
-					r.Use(middleware.RequireRole("board", "admin"))
+					r.Use(middleware.RequireRoleOrBoardRead("board", "admin"))
 					r.Get("/", broadcastsHandler.HandleList)
 					r.Get("/{id}", broadcastsHandler.HandleGet)
 					// Retry re-sends mail; gate on a fresh TOTP re-verify,
@@ -879,7 +879,7 @@ func main() {
 				// shadowing the other (this is what produced the 404 on
 				// the invoice PDF endpoint).
 				r.Route("/financials", func(r chi.Router) {
-					r.Use(middleware.RequireRole("treasurer", "board", "admin"))
+					r.Use(middleware.RequireRoleOrBoardRead("treasurer", "board", "admin"))
 
 					// Per-price-item aggregates over invoice_lines — independent
 					// of the commerce module (which aggregates the Vipps
@@ -969,7 +969,7 @@ func main() {
 				})
 
 				r.Route("/users", func(r chi.Router) {
-					r.Use(middleware.RequireRole("board", "admin"))
+					r.Use(middleware.RequireRoleOrBoardRead("board", "admin"))
 					r.Get("/", adminUsersHandler.HandleListUsers)
 					r.Get("/{userID}", adminUsersHandler.HandleGetUser)
 					r.Get("/{userID}/boats", adminUsersHandler.HandleListUserBoats)
@@ -1078,7 +1078,7 @@ func main() {
 				}
 
 				r.Route("/slips", func(r chi.Router) {
-					r.Use(middleware.RequireRole("board", "harbor_master", "admin"))
+					r.Use(middleware.RequireRoleOrBoardRead("board", "harbor_master", "admin"))
 					r.Get("/", adminSlipsHandler.HandleListSlips)
 					r.Get("/{slipID}", adminSlipsHandler.HandleGetSlip)
 
@@ -1098,12 +1098,12 @@ func main() {
 
 				if cfg.Features.Bookings {
 					r.Route("/bookings", func(r chi.Router) {
-						r.Use(middleware.RequireRole("board", "harbor_master"))
+						r.Use(middleware.RequireRoleOrBoardRead("board", "harbor_master"))
 						r.Get("/", bookingsHandler.HandleListBookingsAdmin)
 					})
 
 					r.Route("/settings/booking", func(r chi.Router) {
-						r.Use(middleware.RequireRole("board"))
+						r.Use(middleware.RequireRoleOrBoardRead("board"))
 						r.Get("/", clubSettingsHandler.HandleGetBookingSettings)
 						r.Put("/", clubSettingsHandler.HandleUpdateBookingSettings)
 					})
@@ -1138,7 +1138,7 @@ func main() {
 				// trailing slash. The same handler still serves every
 				// field in the clubs row — module-specific views consume
 				// only the subset they care about. See DIL-358.
-				r.With(middleware.RequireRole("treasurer", "admin")).
+				r.With(middleware.RequireRoleOrBoardRead("treasurer", "admin")).
 					Get("/settings/site", clubSettingsHandler.HandleGetFinancialSettings)
 				r.With(
 					middleware.RequireRole("treasurer", "admin"),
@@ -1148,7 +1148,7 @@ func main() {
 				// Economy-specific assets (faktura logo). Gated on the
 				// accounting feature flag.
 				if cfg.Features.Accounting {
-					r.With(middleware.RequireRole("treasurer", "admin")).
+					r.With(middleware.RequireRoleOrBoardRead("treasurer", "admin")).
 						Get("/settings/economy/faktura-logo", clubSettingsHandler.HandleGetFakturaLogo)
 					r.With(
 						middleware.RequireRole("treasurer", "admin"),
@@ -1162,7 +1162,7 @@ func main() {
 					// Role-based price exemptions (BRY-351). Changing them
 					// changes what members are billed, so the write sits
 					// behind the same gate as other money settings.
-					r.With(middleware.RequireRole("treasurer", "admin")).
+					r.With(middleware.RequireRoleOrBoardRead("treasurer", "admin")).
 						Get("/settings/economy/exemptions", invoiceHandler.HandleGetExemptions)
 					r.With(
 						middleware.RequireRole("treasurer", "admin"),
@@ -1173,7 +1173,7 @@ func main() {
 					// Faktura PDFs read the row flagged is_default_for_invoices;
 					// statement uploads will match against account_number.
 					r.Route("/settings/bank-accounts", func(r chi.Router) {
-						r.Use(middleware.RequireRole("treasurer", "admin"))
+						r.Use(middleware.RequireRoleOrBoardRead("treasurer", "admin"))
 						r.Get("/", bankAccountsHandler.HandleList)
 						r.With(middleware.RequireFreshTOTPDefault()).Post("/", bankAccountsHandler.HandleCreate)
 						r.With(middleware.RequireFreshTOTPDefault()).Put("/{accountID}", bankAccountsHandler.HandleUpdate)
@@ -1195,7 +1195,7 @@ func main() {
 				).Delete("/settings/site-logo", clubSettingsHandler.HandleDeleteSiteLogo)
 
 				r.Route("/slip-shares", func(r chi.Router) {
-					r.Use(middleware.RequireRole("board", "harbor_master"))
+					r.Use(middleware.RequireRoleOrBoardRead("board", "harbor_master"))
 					r.Get("/", slipSharesHandler.HandleListAllSlipShares)
 					r.Get("/rebates", slipSharesHandler.HandleListAllRebates)
 					r.Put("/rebates/{rebateID}", slipSharesHandler.HandleUpdateRebateStatus)
@@ -1203,7 +1203,7 @@ func main() {
 
 				if cfg.Features.Accounting {
 					r.Route("/pricing", func(r chi.Router) {
-						r.Use(middleware.RequireRole("admin", "treasurer"))
+						r.Use(middleware.RequireRoleOrBoardRead("admin", "treasurer"))
 						r.Get("/", priceItemsHandler.HandleListAdmin)
 						r.Post("/", priceItemsHandler.HandleCreate)
 						r.Put("/{itemID}", priceItemsHandler.HandleUpdate)
@@ -1213,7 +1213,7 @@ func main() {
 
 				if cfg.Features.Commerce {
 					r.Route("/products", func(r chi.Router) {
-						r.Use(middleware.RequireRole("board", "admin"))
+						r.Use(middleware.RequireRoleOrBoardRead("board", "admin"))
 						r.Get("/", productsHandler.HandleListAdmin)
 						r.Post("/", productsHandler.HandleCreate)
 						r.Put("/{productID}", productsHandler.HandleUpdate)
@@ -1232,7 +1232,7 @@ func main() {
 				})
 
 				r.Route("/content-documents", func(r chi.Router) {
-					r.Use(middleware.RequireRole("board"))
+					r.Use(middleware.RequireRoleOrBoardRead("board"))
 					r.Get("/", contentDocumentsHandler.HandleAdminList)
 					r.Post("/", contentDocumentsHandler.HandleAdminCreate)
 					r.Put("/{docID}", contentDocumentsHandler.HandleAdminUpdate)
@@ -1265,11 +1265,11 @@ func main() {
 
 				if cfg.Features.Accounting {
 					r.Route("/accounting", func(r chi.Router) {
-						r.Use(middleware.RequireRole("treasurer", "board", "admin"))
+						r.Use(middleware.RequireRoleOrBoardRead("treasurer", "board", "admin"))
 						// Every route that can create or change a posted GL
 						// entry (directly, or by auto-matching during an
 						// import or sync) needs the treasurer/admin role and a
-						// fresh step-up; board members can read the books.
+						// fresh step-up; every board role can read the books.
 						moneyGate := []func(http.Handler) http.Handler{
 							middleware.RequireRole("treasurer", "admin"),
 							middleware.RequireFreshTOTPDefault(),

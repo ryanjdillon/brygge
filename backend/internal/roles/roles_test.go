@@ -35,3 +35,19 @@ func TestBoardDocumentReadersArePinned(t *testing.T) {
 		}
 	}
 }
+
+func TestCanViewAdminIsEveryBoardRoleAndAdmin(t *testing.T) {
+	for _, r := range append([]string{"admin"}, Board...) {
+		if !CanViewAdmin([]string{"member", r}) {
+			t.Errorf("%s must view the admin area", r)
+		}
+	}
+	for _, r := range []string{"member", "slip_holder", "applicant", ""} {
+		if CanViewAdmin([]string{r}) {
+			t.Errorf("%q must not view the admin area", r)
+		}
+	}
+	if CanViewAdmin(nil) {
+		t.Error("no roles must not view the admin area")
+	}
+}

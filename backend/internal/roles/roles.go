@@ -36,6 +36,19 @@ func BoardLabelNB(role string) string {
 	return role
 }
 
+// CanViewAdmin reports whether any of userRoles may open the admin area
+// read-only: every board role and admin (BRY-372). Writes are gated per
+// route on narrower role sets; this grants viewing, never acting. The
+// Developer and Site pages stay admin-only regardless.
+func CanViewAdmin(userRoles []string) bool {
+	for _, r := range userRoles {
+		if r == "admin" || IsBoard(r) {
+			return true
+		}
+	}
+	return false
+}
+
 // boardDocumentReaders are the roles that may read board-only documents
 // (visibility 'board'), in the portal and the admin document list alike.
 // It is deliberately narrower than Board: whether chair, vice_chair,

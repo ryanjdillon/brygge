@@ -182,6 +182,12 @@ Charges naming a checkout order are left to `AutoReconcileOrderCharges`. Each bo
 
 **Failure mode:** with only the accounting-router role check, a board member with a stale session could post or void entries, import statements that auto-book, or run syncs that book a whole period.
 
+### Board viewing never widens a write
+
+**Rule (BRY-372):** every board role and admin (`roles.CanViewAdmin`) may read every admin page except Developer and Site. Reads open through `middleware.RequireRoleOrBoardRead(<write roles>)`, which admits viewers only on `GET`/`HEAD` and applies `RequireRole(<write roles>)` to every other method, so a surface's write roles are the ones it had before. A handler mounted on `GET` behind it must not write, mint a credential or send anything; such a `GET` keeps its own `RequireRole` (the pay-link endpoints do). In the SPA, write controls on viewable pages hide behind `useCan()`.
+
+**Failure mode:** swapping a group's `RequireRole("board", …)` for a plain viewer check would hand `chair`, `secretary` or `deputy` every `POST`/`PUT`/`DELETE` that relied on the group gate (account create, rules, momskomp save, slip edits). The read helper exists so opening reads cannot do that.
+
 ### `totp_verified_at` is the source of truth for step-up freshness
 
 **Rule:** Both `RequireFreshTOTP` and the SPA's countdown logic compute "is this fresh?" from `sessions.totp_verified_at`. Client-side timers are advisory only. The backend always reverifies on every gated request.
