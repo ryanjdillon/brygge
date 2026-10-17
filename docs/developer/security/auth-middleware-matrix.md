@@ -53,9 +53,11 @@ keep `moneyGate` (treasurer/admin + fresh step-up).
 - **Still narrower on read.** `GET /financials/invoices/{id}/pay-link`,
   `GET /financials/users/{id}/pay-link`, `GET …/credit-candidates`,
   `GET …/delivery-log` (treasurer, admin), `GET /users/export.csv`
-  (admin), and every Developer and Site route keep their own gate: they
-  either mint a credential, feed a write dialog, or belong to the
-  excluded pages.
+  (admin), `GET /financials/export` (treasurer, board, admin; a full payer
+  list with names and emails), `GET /audit` (board, admin; actor IPs and
+  security events), and every Developer and Site route keep their own
+  gate: they mint a credential, feed a write dialog, export bulk PII,
+  expose security data, or belong to the excluded pages.
 - **Previews.** The `POST` previews (`/sync/invoices/resplit/preview`,
   `/sync/vipps-drafts/preview`) are writes by method, so they keep the
   accounting group's write roles (treasurer, board, admin); they never

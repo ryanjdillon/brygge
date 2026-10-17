@@ -822,7 +822,9 @@ func main() {
 				r.Use(middleware.RequireAdminTOTP(sessionService))
 
 				r.Group(func(r chi.Router) {
-					r.Use(middleware.RequireRoleOrBoardRead("board", "admin"))
+					// The audit log carries actor IPs and security events, so it
+					// stays with its original roles rather than every board role.
+					r.Use(middleware.RequireRole("board", "admin"))
 					r.Get("/audit", auditHandler.HandleListAuditLog)
 				})
 
@@ -894,7 +896,10 @@ func main() {
 						r.Get("/summary", financialsHandler.HandleGetFinancialSummary)
 						r.Get("/payments", financialsHandler.HandleListPayments)
 						r.Get("/payments/{paymentID}", financialsHandler.HandleGetPaymentDetails)
-						r.Get("/export", financialsHandler.HandleExportCSV)
+						// A full payer list with names and emails: kept to its
+						// original roles, like the member export.
+						r.With(middleware.RequireRole("treasurer", "board", "admin")).
+							Get("/export", financialsHandler.HandleExportCSV)
 						r.Post("/invoices", financialsHandler.HandleGenerateInvoice)
 						r.Get("/overdue", financialsHandler.HandleListOverdue)
 					}
