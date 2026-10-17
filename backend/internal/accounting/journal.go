@@ -5,9 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 var (
@@ -142,36 +144,27 @@ func (s *Service) CreateJournalEntry(ctx context.Context, input CreateJournalEnt
 		return nil, ErrPeriodClosed
 	}
 
-	// Get next entry number
-	var entryNumber int
-	err = tx.QueryRow(ctx,
-		`SELECT COALESCE(MAX(entry_number), 0) + 1 FROM journal_entries
-		 WHERE club_id = $1 AND fiscal_period_id = $2`,
-		input.ClubID, input.FiscalPeriodID,
-	).Scan(&entryNumber)
-	if err != nil {
-		return nil, fmt.Errorf("getting next entry number: %w", err)
-	}
-
 	source := input.Source
 	if source == "" {
 		source = "manual"
 	}
 
-	// Insert journal entry
+	// Insert journal entry under the next free bilag number.
 	var entry JournalEntry
-	err = tx.QueryRow(ctx,
-		`INSERT INTO journal_entries (club_id, fiscal_period_id, entry_number, entry_date, description, source, source_id, source_table, attachment_url, created_by)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-		 RETURNING id, club_id, fiscal_period_id, entry_number, entry_date::text, description, status, source, source_id, source_table, attachment_url, created_by, posted_by, posted_at, voided_by, voided_at, created_at`,
-		input.ClubID, input.FiscalPeriodID, entryNumber, input.EntryDate, input.Description,
-		source, input.SourceID, input.SourceTable, input.AttachmentURL, input.CreatedBy,
-	).Scan(
-		&entry.ID, &entry.ClubID, &entry.FiscalPeriodID, &entry.EntryNumber, &entry.EntryDate,
-		&entry.Description, &entry.Status, &entry.Source, &entry.SourceID, &entry.SourceTable,
-		&entry.AttachmentURL, &entry.CreatedBy, &entry.PostedBy, &entry.PostedAt,
-		&entry.VoidedBy, &entry.VoidedAt, &entry.CreatedAt,
-	)
+	err = insertWithNextEntryNumber(ctx, tx, input.ClubID, input.FiscalPeriodID, func(entryNumber int) error {
+		return tx.QueryRow(ctx,
+			`INSERT INTO journal_entries (club_id, fiscal_period_id, entry_number, entry_date, description, source, source_id, source_table, attachment_url, created_by)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			 RETURNING id, club_id, fiscal_period_id, entry_number, entry_date::text, description, status, source, source_id, source_table, attachment_url, created_by, posted_by, posted_at, voided_by, voided_at, created_at`,
+			input.ClubID, input.FiscalPeriodID, entryNumber, input.EntryDate, input.Description,
+			source, input.SourceID, input.SourceTable, input.AttachmentURL, input.CreatedBy,
+		).Scan(
+			&entry.ID, &entry.ClubID, &entry.FiscalPeriodID, &entry.EntryNumber, &entry.EntryDate,
+			&entry.Description, &entry.Status, &entry.Source, &entry.SourceID, &entry.SourceTable,
+			&entry.AttachmentURL, &entry.CreatedBy, &entry.PostedBy, &entry.PostedAt,
+			&entry.VoidedBy, &entry.VoidedAt, &entry.CreatedAt,
+		)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("inserting journal entry: %w", err)
 	}
@@ -381,29 +374,21 @@ func voidJournalEntryTx(ctx context.Context, tx pgx.Tx, clubID, entryID, voidedB
 	}
 
 	// Create reversal entry (same period, next entry number)
-	var nextNumber int
-	err = tx.QueryRow(ctx,
-		`SELECT COALESCE(MAX(entry_number), 0) + 1 FROM journal_entries
-		 WHERE club_id = $1 AND fiscal_period_id = $2`,
-		entry.ClubID, entry.FiscalPeriodID,
-	).Scan(&nextNumber)
-	if err != nil {
-		return nil, fmt.Errorf("getting next entry number: %w", err)
-	}
-
 	var reversal JournalEntry
-	err = tx.QueryRow(ctx,
-		`INSERT INTO journal_entries (club_id, fiscal_period_id, entry_number, entry_date, description, status, source, created_by, posted_by, posted_at)
-		 VALUES ($1, $2, $3, $4, $5, 'posted', 'manual', $6, $6, now())
-		 RETURNING id, club_id, fiscal_period_id, entry_number, entry_date::text, description, status, source, created_by, posted_by, posted_at, created_at`,
-		entry.ClubID, entry.FiscalPeriodID, nextNumber, entry.EntryDate,
-		fmt.Sprintf("Reversering av bilag #%d: %s", entry.EntryNumber, entry.Description),
-		voidedBy,
-	).Scan(
-		&reversal.ID, &reversal.ClubID, &reversal.FiscalPeriodID, &reversal.EntryNumber,
-		&reversal.EntryDate, &reversal.Description, &reversal.Status, &reversal.Source,
-		&reversal.CreatedBy, &reversal.PostedBy, &reversal.PostedAt, &reversal.CreatedAt,
-	)
+	err = insertWithNextEntryNumber(ctx, tx, entry.ClubID, entry.FiscalPeriodID, func(nextNumber int) error {
+		return tx.QueryRow(ctx,
+			`INSERT INTO journal_entries (club_id, fiscal_period_id, entry_number, entry_date, description, status, source, created_by, posted_by, posted_at)
+			 VALUES ($1, $2, $3, $4, $5, 'posted', 'manual', $6, $6, now())
+			 RETURNING id, club_id, fiscal_period_id, entry_number, entry_date::text, description, status, source, created_by, posted_by, posted_at, created_at`,
+			entry.ClubID, entry.FiscalPeriodID, nextNumber, entry.EntryDate,
+			fmt.Sprintf("Reversering av bilag #%d: %s", entry.EntryNumber, entry.Description),
+			voidedBy,
+		).Scan(
+			&reversal.ID, &reversal.ClubID, &reversal.FiscalPeriodID, &reversal.EntryNumber,
+			&reversal.EntryDate, &reversal.Description, &reversal.Status, &reversal.Source,
+			&reversal.CreatedBy, &reversal.PostedBy, &reversal.PostedAt, &reversal.CreatedAt,
+		)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("creating reversal entry: %w", err)
 	}
@@ -580,4 +565,53 @@ func (s *Service) ListJournalEntries(ctx context.Context, clubID string, filters
 	}
 
 	return entries, nil
+}
+
+// entryNumberAttempts bounds how often a bilag number is re-read after a
+// concurrent writer took it. Each failed attempt waited for that writer to
+// commit, so the bound only needs to exceed the writers that can be in
+// flight in one period at once.
+const entryNumberAttempts = 25
+
+// insertWithNextEntryNumber runs insert with the period's next bilag number
+// (MAX+1). The period is only share-locked, so two writers can read the
+// same MAX; the loser's insert hits the (club, period, entry_number) unique
+// key. That attempt is rolled back to a savepoint and retried with a fresh
+// MAX, which by then includes the winner's committed number. Any other
+// error, including other unique keys, is returned as is.
+func insertWithNextEntryNumber(ctx context.Context, tx pgx.Tx, clubID, periodID string, insert func(entryNumber int) error) error {
+	var lastErr error
+	for attempt := 0; attempt < entryNumberAttempts; attempt++ {
+		if _, err := tx.Exec(ctx, `SAVEPOINT entry_number`); err != nil {
+			return fmt.Errorf("savepoint: %w", err)
+		}
+		var n int
+		if err := tx.QueryRow(ctx,
+			`SELECT COALESCE(MAX(entry_number), 0) + 1 FROM journal_entries
+			  WHERE club_id = $1 AND fiscal_period_id = $2`,
+			clubID, periodID,
+		).Scan(&n); err != nil {
+			return fmt.Errorf("getting next entry number: %w", err)
+		}
+		err := insert(n)
+		if err == nil {
+			if _, rerr := tx.Exec(ctx, `RELEASE SAVEPOINT entry_number`); rerr != nil {
+				return fmt.Errorf("release savepoint: %w", rerr)
+			}
+			return nil
+		}
+		if !isEntryNumberCollision(err) {
+			return err
+		}
+		lastErr = err
+		if _, rerr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT entry_number`); rerr != nil {
+			return fmt.Errorf("rollback to savepoint: %w", rerr)
+		}
+	}
+	return fmt.Errorf("allocating a bilag number: %w", lastErr)
+}
+
+func isEntryNumberCollision(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505" && strings.Contains(pgErr.ConstraintName, "entry_number")
 }
