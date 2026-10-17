@@ -5,7 +5,7 @@ import type { VippsPayoutSweepResult } from '@/composables/useBankImports'
 
 // Shows the Vipps payouts a sync cleared on its own (BRY-340) and why the
 // rest stay open: charges still in Tildel, no matching bank deposit, or a
-// refused posting.
+// refused posting. The reasons and any sweep error come from the server.
 const props = defineProps<{ result: VippsPayoutSweepResult }>()
 
 const { t } = useI18n()
@@ -22,6 +22,9 @@ const open = computed(() => [...props.result.skipped, ...props.result.failed])
         skipped: props.result.skipped.length,
         failed: props.result.failed.length,
       }) }}
+    </p>
+    <p v-if="props.result.error" class="text-red-700" data-testid="vipps-payout-sweep-error">
+      {{ props.result.error }}
     </p>
     <ul v-if="open.length" class="mt-1 space-y-0.5">
       <li v-for="p in open" :key="`${p.msn}/${p.settlement_number}`">

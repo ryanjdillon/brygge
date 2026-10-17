@@ -112,6 +112,8 @@ export interface VippsPayoutSweepResult {
   waiting: VippsPayoutSweepItem[]
   skipped: VippsPayoutSweepItem[]
   failed: VippsPayoutSweepItem[]
+  // Set when the sweep itself could not run; the lists hold what it got through.
+  error?: string
 }
 
 export interface VippsImportResult {
