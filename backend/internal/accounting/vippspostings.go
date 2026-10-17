@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -254,6 +255,30 @@ func (s *Service) unwindVippsPosting(ctx context.Context, clubID, entryID, table
 // deposit names a settlement whose Vipps rows have not been imported yet.
 var ErrVippsSettlementNotImported = errors.New("no imported settlement")
 
+// ErrVippsSettlementAlreadyCleared is returned by ClearVippsPayout when the
+// settlement was already cleared through another bank deposit: booking this
+// one too would credit the net payout to clearing twice.
+var ErrVippsSettlementAlreadyCleared = errors.New("settlement already cleared by another deposit")
+
+// ErrVippsPayoutAmountMismatch is returned by ClearVippsPayout when the bank
+// deposit does not equal the imported net payout to the øre. Clearing it
+// would leave the settlement's clearing balance off by the difference.
+var ErrVippsPayoutAmountMismatch = errors.New("deposit does not match the payout amount")
+
+// ErrVippsSettlementAmbiguous is returned by ClearVippsPayout when more than
+// one payout shares the settlement's MSN and booking date. Charges and fees
+// carry no settlement number, only MSN + booking date, so they cannot be
+// attributed to one settlement.
+var ErrVippsSettlementAmbiguous = errors.New("several settlements share the booking date")
+
+// ErrVippsPeriodClosed is returned by ClearVippsPayout when the fee or bank
+// entry would land in a fiscal period that is not open (closed or locked). Nothing is posted.
+var ErrVippsPeriodClosed = errors.New("fiscal period is closed")
+
+// ErrVippsPayoutRaced is returned by ClearVippsPayout when a concurrent clear
+// booked part of the settlement first; the next sync sees the result.
+var ErrVippsPayoutRaced = errors.New("settlement booked concurrently")
+
 // errChargeRaced signals that postVippsCharge lost the guarded-mark race and
 // the returned entry ID belongs to the concurrent winner.
 var errChargeRaced = fmt.Errorf("vipps charge booked concurrently")
@@ -411,6 +436,7 @@ func (s *Service) ClearVippsPayout(ctx context.Context, clubID, bankRowID, creat
 		`SELECT id, booking_date, amount, journal_entry_id
 		   FROM vipps_import_rows
 		  WHERE club_id = $1 AND msn = $2 AND row_type = 'payout' AND settlement_number = $3
+		  ORDER BY booking_date, id
 		  LIMIT 1`,
 		clubID, res.MSN, res.SettlementNumber,
 	).Scan(&payoutRowID, &payoutBooking, &payoutAmount, &payoutEntry)
@@ -431,6 +457,10 @@ func (s *Service) ClearVippsPayout(ctx context.Context, clubID, bankRowID, creat
 		return res, nil
 	}
 
+	if err := s.checkSettlementClearable(ctx, clubID, res, bankRowID, payoutBooking, payoutEntry); err != nil {
+		return nil, err
+	}
+
 	// Gate: every belastning in the settlement must be booked first.
 	if err := s.db.QueryRow(ctx,
 		`SELECT count(*) FROM vipps_import_rows
@@ -446,25 +476,33 @@ func (s *Service) ClearVippsPayout(ctx context.Context, clubID, bankRowID, creat
 	}
 	res.Ready = true
 
+	// The deposit must be the imported net payout to the øre (payout rows are
+	// stored negative, as money leaving the Vipps account).
+	if err := checkPayoutAmount(bankAmount, payoutAmount, res.SettlementNumber); err != nil {
+		return nil, err
+	}
+
 	clearing, feeAccount, err := s.vippsAccounts(ctx, clubID)
+	if err != nil {
+		return nil, err
+	}
+
+	feeRows, feeTotal, err := s.unbookedSettlementFees(ctx, clubID, res.MSN, payoutBooking)
+	if err != nil {
+		return nil, err
+	}
+
+	// Resolve both periods before posting either entry, so a period that is
+	// not open does not leave the fee booked against a settlement that never
+	// clears.
+	feePeriod, bankPeriod, err := s.payoutPeriods(ctx, clubID, payoutBooking, bankDate, feeTotal > 0.005)
 	if err != nil {
 		return nil, err
 	}
 
 	// Fee entry (DR gebyr / CR clearing) for the settlement's still-unbooked
 	// fee rows. Dated at the settlement booking date.
-	feeRows, feeTotal, err := s.unbookedSettlementFees(ctx, clubID, res.MSN, payoutBooking)
-	if err != nil {
-		return nil, err
-	}
 	if feeTotal > 0.005 {
-		feePeriod, feeStatus, perr := s.resolvePeriod(ctx, clubID, payoutBooking, "")
-		if perr != nil {
-			return nil, fmt.Errorf("resolving fee period: %w", perr)
-		}
-		if feeStatus == "closed" {
-			return nil, fmt.Errorf("fiscal period %d is closed — cannot post Vipps fee", payoutBooking.Year())
-		}
 		feeSource := payoutRowID
 		feeTable := "vipps_import_rows"
 		feeDesc := fmt.Sprintf("Vipps gebyr oppgjør %s", res.SettlementNumber)
@@ -498,7 +536,7 @@ func (s *Service) ClearVippsPayout(ctx context.Context, clubID, bankRowID, creat
 		// of the fee rows first; posting this total would book the fee twice.
 		if tag.RowsAffected() != int64(len(feeRows)) {
 			s.unwindVippsPosting(ctx, clubID, feeJE.ID, "vipps_import_rows", feeRows)
-			return nil, fmt.Errorf("vipps fee for Utb. %s booked concurrently — sync again", res.SettlementNumber)
+			return nil, fmt.Errorf("%w: fee for Utb. %s", ErrVippsPayoutRaced, res.SettlementNumber)
 		}
 		if err := s.PostJournalEntry(ctx, clubID, feeJE.ID, createdBy); err != nil {
 			s.unwindVippsPosting(ctx, clubID, feeJE.ID, "vipps_import_rows", feeRows)
@@ -509,13 +547,6 @@ func (s *Service) ClearVippsPayout(ctx context.Context, clubID, bankRowID, creat
 
 	// Bank entry (DR bank / CR clearing) for the net payout, dated at the bank
 	// value date. The guarded mark protects against a concurrent clear.
-	bankPeriod, bankStatus, perr := s.resolvePeriod(ctx, clubID, bankDate, "")
-	if perr != nil {
-		return nil, fmt.Errorf("resolving bank period: %w", perr)
-	}
-	if bankStatus == "closed" {
-		return nil, fmt.Errorf("fiscal period %d is closed — cannot post Vipps payout", bankDate.Year())
-	}
 	bankSource := bankRowID
 	bankTable := "bank_import_rows"
 	bankDesc := fmt.Sprintf("Vipps utbetaling %s (Vippsnr %s)", res.SettlementNumber, res.MSN)
@@ -583,6 +614,107 @@ func (s *Service) ClearVippsPayout(ctx context.Context, clubID, bankRowID, creat
 			Msg("vipps payout cleared but settlement clearing does not net to zero")
 	}
 	return res, nil
+}
+
+// checkPayoutAmount compares a deposit with an imported payout row in øre.
+func checkPayoutAmount(bankAmount, payoutAmount float64, settlement string) error {
+	if math.Round(bankAmount*100) != math.Round(-payoutAmount*100) {
+		return fmt.Errorf("%w: deposit %.2f, payout %.2f (Utb. %s)", ErrVippsPayoutAmountMismatch,
+			bankAmount, -payoutAmount, settlement)
+	}
+	return nil
+}
+
+// payoutPeriods resolves the open periods for a payout clear's fee entry
+// (when there is a fee to post) and bank entry.
+func (s *Service) payoutPeriods(ctx context.Context, clubID string, feeDate, bankDate time.Time, withFee bool) (feePeriod, bankPeriod string, err error) {
+	if withFee {
+		id, status, err := s.resolvePeriod(ctx, clubID, feeDate, "")
+		if err != nil {
+			return "", "", fmt.Errorf("resolving fee period: %w", err)
+		}
+		if status != "open" {
+			return "", "", fmt.Errorf("%w: %d (Vipps fee)", ErrVippsPeriodClosed, feeDate.Year())
+		}
+		feePeriod = id
+	}
+	id, status, err := s.resolvePeriod(ctx, clubID, bankDate, "")
+	if err != nil {
+		return "", "", fmt.Errorf("resolving bank period: %w", err)
+	}
+	if status != "open" {
+		return "", "", fmt.Errorf("%w: %d (Vipps payout)", ErrVippsPeriodClosed, bankDate.Year())
+	}
+	return feePeriod, id, nil
+}
+
+// checkSettlementClearable refuses a deposit whose settlement must be left to
+// a human. A settlement clears once: a payout row still linked to a standing
+// entry, or another booked deposit naming the same settlement, means this
+// deposit is a second one (a bank correction, a re-exported statement whose
+// row hash differs). And charges and fees carry only MSN + booking date, so
+// two payouts sharing both cannot be told apart.
+func (s *Service) checkSettlementClearable(ctx context.Context, clubID string, res *VippsPayoutClearResult, bankRowID string, payoutBooking time.Time, payoutEntry *string) error {
+	cleared, err := s.settlementClearedElsewhere(ctx, clubID, res.SettlementNumber, res.MSN, bankRowID, payoutEntry)
+	if err != nil {
+		return err
+	}
+	if cleared {
+		return fmt.Errorf("%w: Utb. %s Vippsnr %s", ErrVippsSettlementAlreadyCleared, res.SettlementNumber, res.MSN)
+	}
+	var sameDay int
+	if err := s.db.QueryRow(ctx,
+		`SELECT count(*) FROM vipps_import_rows
+		  WHERE club_id = $1 AND msn = $2 AND row_type = 'payout' AND booking_date = $3::date`,
+		clubID, res.MSN, payoutBooking,
+	).Scan(&sameDay); err != nil {
+		return fmt.Errorf("counting same-day payouts: %w", err)
+	}
+	if sameDay > 1 {
+		return fmt.Errorf("%w: Vippsnr %s on %s", ErrVippsSettlementAmbiguous, res.MSN, payoutBooking.Format("2006-01-02"))
+	}
+	return nil
+}
+
+// settlementClearedElsewhere reports whether the settlement already has a
+// standing clearing: its payout row linked to a non-voided entry, or a
+// booked bank deposit other than bankRowID naming it. Descriptions are
+// matched with VippsSettlementPattern in Go; settlement and MSN are digit
+// runs, so the ILIKE prefilter carries no pattern characters.
+func (s *Service) settlementClearedElsewhere(ctx context.Context, clubID, settlement, msn, bankRowID string, payoutEntry *string) (bool, error) {
+	if payoutEntry != nil {
+		var standing bool
+		if err := s.db.QueryRow(ctx,
+			`SELECT EXISTS (SELECT 1 FROM journal_entries WHERE id = $1 AND club_id = $2 AND status <> 'voided')`,
+			*payoutEntry, clubID,
+		).Scan(&standing); err != nil {
+			return false, fmt.Errorf("checking payout entry: %w", err)
+		}
+		if standing {
+			return true, nil
+		}
+	}
+	rows, err := s.db.Query(ctx,
+		`SELECT b.description FROM bank_import_rows b
+		   JOIN journal_entries je ON je.id = b.journal_entry_id AND je.club_id = b.club_id
+		  WHERE b.club_id = $1 AND b.id <> $2 AND je.status <> 'voided'
+		    AND b.description ILIKE '%' || $3 || '%'`,
+		clubID, bankRowID, settlement,
+	)
+	if err != nil {
+		return false, fmt.Errorf("checking booked deposits: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var desc string
+		if err := rows.Scan(&desc); err != nil {
+			return false, fmt.Errorf("scan booked deposit: %w", err)
+		}
+		if m := VippsSettlementPattern.FindStringSubmatch(desc); len(m) == 3 && m[1] == settlement && m[2] == msn {
+			return true, nil
+		}
+	}
+	return false, rows.Err()
 }
 
 // unbookedSettlementFees returns the ids and summed absolute amount of the

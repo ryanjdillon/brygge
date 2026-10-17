@@ -2330,10 +2330,7 @@ func (h *AccountingHandler) HandleImportVippsSettlement(w http.ResponseWriter, r
 		if err != nil {
 			h.log.Error().Err(err).Msg("auto-assigning vipps charges failed")
 		}
-		payouts, err = h.svc.ClearReadyVippsPayouts(r.Context(), claims.ClubID, claims.UserID)
-		if err != nil {
-			h.log.Error().Err(err).Msg("clearing ready vipps payouts failed")
-		}
+		payouts = h.svc.ClearReadyVippsPayoutsReported(r.Context(), claims.ClubID, claims.UserID)
 	}
 
 	if h.audit != nil {

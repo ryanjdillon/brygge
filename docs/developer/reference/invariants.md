@@ -59,6 +59,11 @@ Charges naming a checkout order are left to `AutoReconcileOrderCharges`. Each bo
 - Clearing is `ClearVippsPayout`: a posted fee entry for the settlement's unbooked fee rows, then a posted bank entry, so the settlement nets the clearing account to 0.
 - The fee rows and the bank row are each linked with a guarded update. A clear that links fewer fee rows than it read lost a race and unwinds rather than posting the fee twice.
 - A deposit without a parseable reference is never matched by amount. An imported payout no deposit names is reported as skipped with a reason, as is a deposit naming a settlement that was never imported.
+- A deposit clears only if it equals the imported net payout to the øre; otherwise it fails with a reason and nothing is posted.
+- A settlement clears once. A second deposit naming a settlement whose payout row is already linked to a standing entry, or that another booked deposit names, is skipped ("allerede avstemt"), never booked.
+- Charges and fees carry only MSN + booking date, so when two payouts share both, neither is cleared automatically.
+- Both the fee and the bank period are checked before either entry is created; a period that is not open refuses the whole clear.
+- A sweep failure never fails the sync or import that ran it: callers use `ClearReadyVippsPayoutsReported`, which logs and sets the result's `error`.
 
 **Failure mode:** before this, Stage 2 ran only from the per-row Tildel action, so a sync reported "Vipps-avstemt: 0" and the clearing account kept the full gross of every settlement while the bank deposits sat unbooked.
 

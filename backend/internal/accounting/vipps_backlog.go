@@ -171,11 +171,7 @@ func (s *Service) PostVippsDraftBacklog(ctx context.Context, clubID, periodID, a
 
 	// Posting the backlog books charges, which can complete settlements.
 	if apply {
-		payouts, err := s.ClearReadyVippsPayouts(ctx, clubID, actor)
-		if err != nil {
-			return nil, fmt.Errorf("clearing ready payouts: %w", err)
-		}
-		res.Payouts = payouts
+		res.Payouts = s.ClearReadyVippsPayoutsReported(ctx, clubID, actor)
 	}
 	return res, nil
 }

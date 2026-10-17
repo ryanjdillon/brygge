@@ -44,7 +44,14 @@ type sweepSettlement struct {
 
 func (f *payoutSweepFixture) settlement(t *testing.T, number string, day int, chargeCents []int64, feeCents int64, deposit bool) sweepSettlement {
 	t.Helper()
-	s := sweepSettlement{number: number, booking: time.Date(f.club.Year, 6, day, 0, 0, 0, 0, time.UTC)}
+	return f.settlementOn(t, number, time.Date(f.club.Year, 6, day, 0, 0, 0, 0, time.UTC), chargeCents, feeCents, deposit)
+}
+
+// settlementOn is settlement with an explicit booking date; the deposit lands
+// the day after.
+func (f *payoutSweepFixture) settlementOn(t *testing.T, number string, booking time.Time, chargeCents []int64, feeCents int64, deposit bool) sweepSettlement {
+	t.Helper()
+	s := sweepSettlement{number: number, booking: booking}
 	var gross int64
 	for _, c := range chargeCents {
 		gross += c
@@ -264,5 +271,211 @@ func TestClearReadyVippsPayoutsStandsDownOnLegacyModel(t *testing.T) {
 	}
 	if f.bankEntry(t, s.bankRow) != nil {
 		t.Errorf("legacy model: bank row booked by the per-charge sweep")
+	}
+}
+
+func (f *payoutSweepFixture) exec(t *testing.T, sql string, args ...any) {
+	t.Helper()
+	if _, err := f.club.Pool.Exec(context.Background(), sql, args...); err != nil {
+		t.Fatalf("exec: %v", err)
+	}
+}
+
+func (f *payoutSweepFixture) sweep(t *testing.T) *VippsPayoutSweepResult {
+	t.Helper()
+	res, err := f.svc.ClearReadyVippsPayouts(context.Background(), f.club.ID, f.club.Treasurer.ID)
+	if err != nil {
+		t.Fatalf("ClearReadyVippsPayouts: %v", err)
+	}
+	return res
+}
+
+// bookedFeeRows counts the settlement-day fee rows linked to an entry.
+func (f *payoutSweepFixture) bookedFeeRows(t *testing.T, booking time.Time) int {
+	t.Helper()
+	var n int
+	if err := f.club.Pool.QueryRow(context.Background(),
+		`SELECT count(*) FROM vipps_import_rows
+		  WHERE club_id = $1 AND row_type = 'fee' AND booking_date = $2 AND journal_entry_id IS NOT NULL`,
+		f.club.ID, booking).Scan(&n); err != nil {
+		t.Fatalf("count fee rows: %v", err)
+	}
+	return n
+}
+
+// A deposit that is not the imported net payout to the øre is refused before
+// anything is posted: clearing it would leave the clearing account off.
+func TestClearReadyVippsPayoutsRefusesAmountMismatch(t *testing.T) {
+	f := newPayoutSweepFixture(t)
+	s := f.settlement(t, "3000401", 2, []int64{45000, 30000}, 3750, true)
+	f.book(t, s.charges...)
+	f.exec(t, `UPDATE bank_import_rows SET amount = amount - 25 WHERE id = $1`, s.bankRow)
+	before := f.postedEntries(t)
+
+	res := f.sweep(t)
+	if r, ok := settlementsOf(res.Failed)[s.number]; !ok || !strings.Contains(r, "beløpet") {
+		t.Errorf("failed = %+v, want %s refused for its amount", res.Failed, s.number)
+	}
+	if len(res.Cleared) != 0 {
+		t.Errorf("cleared = %+v, want none", res.Cleared)
+	}
+	if f.bankEntry(t, s.bankRow) != nil || f.bookedFeeRows(t, s.booking) != 0 {
+		t.Errorf("mismatched deposit: bank or fee was booked")
+	}
+	if after := f.postedEntries(t); after != before {
+		t.Errorf("mismatched deposit created %d entries, want 0", after-before)
+	}
+}
+
+// Two deposits naming one settlement: the first clears it, the second is
+// left for a human instead of crediting the payout to clearing twice — in
+// the same sweep and on every later one.
+func TestClearReadyVippsPayoutsBooksOneDepositPerSettlement(t *testing.T) {
+	f := newPayoutSweepFixture(t)
+	s := f.settlement(t, "3000501", 2, []int64{40000}, 2000, true)
+	f.book(t, s.charges...)
+	second := f.club.NewBankRow(t, f.bankImport, fin.BankRowOpts{
+		Date: s.booking.AddDate(0, 0, 2), Cents: 38000,
+		Description: "Utb. " + s.number + " Vippsnr " + sweepMSN + " korr",
+	})
+
+	for run := 0; run < 2; run++ {
+		res := f.sweep(t)
+		if r := settlementsOf(res.Skipped)[s.number]; !strings.Contains(r, "allerede avstemt") {
+			t.Errorf("run %d: skipped = %+v, want the second deposit skipped as already cleared", run, res.Skipped)
+		}
+		var booked int
+		if err := f.club.Pool.QueryRow(context.Background(),
+			`SELECT count(*) FROM bank_import_rows WHERE id = ANY($1::uuid[]) AND journal_entry_id IS NOT NULL`,
+			[]string{s.bankRow, second}).Scan(&booked); err != nil {
+			t.Fatalf("count booked deposits: %v", err)
+		}
+		if booked != 1 {
+			t.Errorf("run %d: %d deposits booked for one settlement, want 1", run, booked)
+		}
+	}
+}
+
+// A deposit dated in a period that is not open is refused before the fee is
+// posted, so the settlement is not left half cleared.
+func TestClearReadyVippsPayoutsChecksBothPeriodsFirst(t *testing.T) {
+	f := newPayoutSweepFixture(t)
+	f.exec(t,
+		`INSERT INTO fiscal_periods (club_id, year, start_date, end_date, status)
+		 VALUES ($1, $2, make_date($2, 1, 1), make_date($2, 12, 31), 'closed')`,
+		f.club.ID, f.club.Year+1)
+	s := f.settlementOn(t, "3000601", time.Date(f.club.Year, 12, 31, 0, 0, 0, 0, time.UTC), []int64{40000}, 2000, true)
+	f.book(t, s.charges...)
+	before := f.postedEntries(t)
+
+	res := f.sweep(t)
+	if r := settlementsOf(res.Failed)[s.number]; !strings.Contains(r, "lukket") {
+		t.Errorf("failed = %+v, want %s refused for its closed bank period", res.Failed, s.number)
+	}
+	if f.bookedFeeRows(t, s.booking) != 0 {
+		t.Errorf("fee was posted although the payout could not clear")
+	}
+	if after := f.postedEntries(t); after != before {
+		t.Errorf("closed bank period: %d entries created, want 0", after-before)
+	}
+}
+
+// Charges and fees carry only MSN + booking date, so two settlements on the
+// same day for one MSN cannot be told apart: both are left for a human.
+func TestClearReadyVippsPayoutsSkipsSameDaySettlements(t *testing.T) {
+	f := newPayoutSweepFixture(t)
+	a := f.settlement(t, "3000701", 2, []int64{40000}, 2000, true)
+	b := f.settlement(t, "3000702", 2, []int64{10000}, 500, true)
+	f.book(t, a.charges...)
+	f.book(t, b.charges...)
+	before := f.postedEntries(t)
+
+	res := f.sweep(t)
+	skipped := settlementsOf(res.Skipped)
+	for _, s := range []sweepSettlement{a, b} {
+		if !strings.Contains(skipped[s.number], "samme dag") {
+			t.Errorf("skipped = %+v, want %s skipped as ambiguous", res.Skipped, s.number)
+		}
+	}
+	if after := f.postedEntries(t); after != before {
+		t.Errorf("ambiguous day: %d entries created, want 0", after-before)
+	}
+}
+
+// Posting the draft backlog books charges, which completes settlements: the
+// apply run clears them in the same request.
+func TestPostVippsDraftBacklogClearsReadyPayouts(t *testing.T) {
+	f := newPayoutSweepFixture(t)
+	ctx := context.Background()
+	s := f.settlement(t, "3000801", 2, []int64{40000, 2500}, 2000, true)
+	for i, c := range []int64{40000, 2500} {
+		row := s.charges[i]
+		src := "vipps_import_rows"
+		e, err := f.svc.CreateJournalEntry(ctx, CreateJournalEntryInput{
+			FiscalPeriodID: f.club.PeriodID,
+			EntryDate:      s.booking.Format("2006-01-02"),
+			Description:    "Vipps innbetaling (legacy draft)",
+			Source:         "vipps",
+			SourceID:       &row,
+			SourceTable:    &src,
+			CreatedBy:      f.club.Treasurer.ID,
+			ClubID:         f.club.ID,
+			Lines: []CreateJournalLineInput{
+				{AccountCode: vippsClearingAccountCode, Debit: fin.Kr(c)},
+				{AccountCode: vippsFallbackRevenueCode, Credit: fin.Kr(c)},
+			},
+		})
+		if err != nil {
+			t.Fatalf("draft: %v", err)
+		}
+		f.exec(t, `UPDATE vipps_import_rows SET journal_entry_id = $1 WHERE id = $2`, e.ID, row)
+	}
+
+	res, err := f.svc.PostVippsDraftBacklog(ctx, f.club.ID, f.club.PeriodID, f.club.Treasurer.ID, true)
+	if err != nil {
+		t.Fatalf("PostVippsDraftBacklog: %v", err)
+	}
+	if res.Payouts == nil {
+		t.Fatalf("backlog apply returned no payout sweep")
+	}
+	if _, ok := settlementsOf(res.Payouts.Cleared)[s.number]; !ok {
+		t.Errorf("backlog apply cleared %+v, want %s", res.Payouts, s.number)
+	}
+	if f.bankEntry(t, s.bankRow) == nil {
+		t.Errorf("settlement's deposit still unbooked after the backlog apply")
+	}
+}
+
+// Imported settlement and MSN values never reach a SQL regex: an MSN with
+// pattern characters is reported like any other payout without a deposit.
+func TestClearReadyVippsPayoutsToleratesOddImportedValues(t *testing.T) {
+	f := newPayoutSweepFixture(t)
+	f.club.NewVippsRow(t, fin.VippsRowOpts{RowType: "payout", Cents: -5000,
+		Date: time.Date(f.club.Year, 6, 2, 0, 0, 0, 0, time.UTC), MSN: "12345.(", Settlement: "3000901"})
+	// A booked deposit elsewhere, so the payout lookup has rows to compare.
+	s := f.settlement(t, "3000902", 3, []int64{40000}, 2000, true)
+	f.book(t, s.charges...)
+
+	res := f.sweep(t)
+	if r := settlementsOf(res.Skipped)["3000901"]; !strings.Contains(r, "ingen bankinnbetaling") {
+		t.Errorf("skipped = %+v, want the odd payout reported without a deposit", res.Skipped)
+	}
+	if _, ok := settlementsOf(res.Cleared)[s.number]; !ok {
+		t.Errorf("cleared = %+v, want %s", res.Cleared, s.number)
+	}
+}
+
+// A payout whose only deposit was dismissed says so, rather than claiming
+// there is no deposit.
+func TestClearReadyVippsPayoutsReportsDismissedDeposit(t *testing.T) {
+	f := newPayoutSweepFixture(t)
+	s := f.settlement(t, "3001001", 2, []int64{40000}, 2000, true)
+	f.book(t, s.charges...)
+	f.exec(t, `UPDATE bank_import_rows SET dismissed_at = now(), dismissed_by = $2, dismissed_reason = 'duplicate'
+	            WHERE id = $1`, s.bankRow, f.club.Treasurer.ID)
+
+	res := f.sweep(t)
+	if r := settlementsOf(res.Skipped)[s.number]; !strings.Contains(r, "avvist") {
+		t.Errorf("skipped = %+v, want %s reported with a dismissed deposit", res.Skipped, s.number)
 	}
 }

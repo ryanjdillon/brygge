@@ -202,10 +202,7 @@ func (s *Service) BankSync(ctx context.Context, clubID, createdBy string) (*Bank
 	if perCharge, perr := s.VippsPerChargeEnabled(ctx, clubID); perr != nil {
 		return nil, fmt.Errorf("checking vipps model: %w", perr)
 	} else if perCharge {
-		sweep, serr := s.ClearReadyVippsPayouts(ctx, clubID, createdBy)
-		if serr != nil {
-			return nil, fmt.Errorf("vipps payout sweep: %w", serr)
-		}
+		sweep := s.ClearReadyVippsPayoutsReported(ctx, clubID, createdBy)
 		res.VippsPayouts = sweep
 		res.VippsReconciled += len(sweep.Cleared)
 	}

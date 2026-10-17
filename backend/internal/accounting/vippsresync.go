@@ -69,11 +69,7 @@ func (s *Service) ResyncVippsBilags(ctx context.Context, clubID, createdBy strin
 			return nil, fmt.Errorf("auto-assigning charges: %w", err)
 		}
 		res.AutoAssign = auto
-		payouts, err := s.ClearReadyVippsPayouts(ctx, clubID, createdBy)
-		if err != nil {
-			return nil, fmt.Errorf("clearing ready payouts: %w", err)
-		}
-		res.Payouts = payouts
+		res.Payouts = s.ClearReadyVippsPayoutsReported(ctx, clubID, createdBy)
 		return res, nil
 	}
 

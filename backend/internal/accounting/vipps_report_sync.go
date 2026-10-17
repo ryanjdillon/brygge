@@ -100,11 +100,7 @@ func (s *Service) SyncVippsReport(ctx context.Context, vc *vipps.Client, clubID,
 			return res, fmt.Errorf("auto-assigning charges: %w", err)
 		}
 		res.AutoAssign = auto
-		payouts, err := s.ClearReadyVippsPayouts(ctx, clubID, actorID)
-		if err != nil {
-			return res, fmt.Errorf("clearing ready payouts: %w", err)
-		}
-		res.Payouts = payouts
+		res.Payouts = s.ClearReadyVippsPayoutsReported(ctx, clubID, actorID)
 	} else if _, err := s.RepairVippsReportRows(ctx, clubID); err != nil {
 		return res, fmt.Errorf("repairing report rows: %w", err)
 	}

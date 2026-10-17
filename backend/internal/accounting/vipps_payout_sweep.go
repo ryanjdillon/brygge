@@ -21,12 +21,44 @@ type VippsPayoutSweepResult struct {
 	// Waiting settlements still have charges to book in Tildel.
 	Waiting []VippsPayoutSweepItem `json:"waiting"`
 	// Skipped settlements cannot be cleared from what is imported: a bank
-	// deposit naming a settlement that was never imported, or an imported
-	// payout with no bank deposit carrying its Utb./Vippsnr reference.
+	// deposit naming a settlement that was never imported or already cleared
+	// by another deposit, several settlements sharing a booking date, or an
+	// imported payout with no usable bank deposit carrying its reference.
 	Skipped []VippsPayoutSweepItem `json:"skipped"`
-	// Failed settlements were ready but posting refused (closed period, a
-	// concurrent clear); the next sweep retries them.
+	// Failed settlements were ready but posting refused (amount mismatch,
+	// closed period, a concurrent clear); the next sweep retries them.
 	Failed []VippsPayoutSweepItem `json:"failed"`
+	// Error is set when the sweep itself could not run; the lists above are
+	// then whatever it got through before stopping.
+	Error string `json:"error,omitempty"`
+}
+
+// sweepFailedText is shown when the sweep could not run at all. The cause is
+// logged; the treasurer sees that payouts were not cleared this time.
+const sweepFailedText = "Automatisk avstemming av Vipps-utbetalinger feilet – prøv igjen, eller se loggen"
+
+// ClearReadyVippsPayoutsReported runs ClearReadyVippsPayouts as the last step
+// of a sync or import. A failure is logged and carried in the result's Error
+// instead of failing the caller, whose own work is already done.
+func (s *Service) ClearReadyVippsPayoutsReported(ctx context.Context, clubID, actor string) *VippsPayoutSweepResult {
+	res, err := s.ClearReadyVippsPayouts(ctx, clubID, actor)
+	if err != nil {
+		s.log.Error().Err(err).Str("club_id", clubID).Msg("vipps payout sweep failed")
+		if res == nil {
+			res = newVippsPayoutSweepResult()
+		}
+		res.Error = sweepFailedText
+	}
+	return res
+}
+
+func newVippsPayoutSweepResult() *VippsPayoutSweepResult {
+	return &VippsPayoutSweepResult{
+		Cleared: []VippsPayoutSweepItem{},
+		Waiting: []VippsPayoutSweepItem{},
+		Skipped: []VippsPayoutSweepItem{},
+		Failed:  []VippsPayoutSweepItem{},
+	}
 }
 
 // ClearReadyVippsPayouts runs Stage 2 of the per-charge model on its own:
@@ -40,64 +72,44 @@ type VippsPayoutSweepResult struct {
 // no-op. Clubs on the legacy single-bilag model get an empty result: their
 // payouts are matched by syncVippsReconciliations instead.
 //
+// On error the partial result is returned alongside it.
+//
 // Callers must sit behind the same gate as any other posting path.
 func (s *Service) ClearReadyVippsPayouts(ctx context.Context, clubID, actor string) (*VippsPayoutSweepResult, error) {
-	res := &VippsPayoutSweepResult{
-		Cleared: []VippsPayoutSweepItem{},
-		Waiting: []VippsPayoutSweepItem{},
-		Skipped: []VippsPayoutSweepItem{},
-		Failed:  []VippsPayoutSweepItem{},
-	}
+	res := newVippsPayoutSweepResult()
 	perCharge, err := s.VippsPerChargeEnabled(ctx, clubID)
 	if err != nil {
-		return nil, fmt.Errorf("checking vipps model: %w", err)
+		return res, fmt.Errorf("checking vipps model: %w", err)
 	}
 	if !perCharge {
 		return res, nil
 	}
 
-	rows, err := s.db.Query(ctx,
-		`SELECT id, description FROM bank_import_rows
-		  WHERE club_id = $1 AND journal_entry_id IS NULL AND dismissed_at IS NULL
-		    AND description ~* 'utb\.\s*[0-9]+\s+vippsnr\s+[0-9]+'
-		  ORDER BY row_date, id`,
-		clubID,
-	)
+	deposits, err := s.vippsPayoutDeposits(ctx, clubID)
 	if err != nil {
-		return nil, fmt.Errorf("listing vipps payout deposits: %w", err)
-	}
-	type deposit struct{ id, settlement, msn string }
-	var deposits []deposit
-	for rows.Next() {
-		var id, desc string
-		if err := rows.Scan(&id, &desc); err != nil {
-			rows.Close()
-			return nil, fmt.Errorf("scanning vipps payout deposit: %w", err)
-		}
-		if m := VippsSettlementPattern.FindStringSubmatch(desc); len(m) == 3 {
-			deposits = append(deposits, deposit{id: id, settlement: m[1], msn: m[2]})
-		}
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("listing vipps payout deposits: %w", err)
+		return res, err
 	}
 
 	seen := map[string]bool{}
 	for _, d := range deposits {
-		seen[d.msn+"/"+d.settlement] = true
+		if d.booked || d.dismissed {
+			continue
+		}
+		seen[d.key()] = true
 		item := VippsPayoutSweepItem{SettlementNumber: d.settlement, MSN: d.msn, BankRowID: d.id}
 		r, err := s.ClearVippsPayout(ctx, clubID, d.id, actor)
 		switch {
-		case errors.Is(err, ErrVippsSettlementNotImported):
-			item.Reason = "Vipps-oppgjøret er ikke importert"
-			res.Skipped = append(res.Skipped, item)
 		case err != nil:
-			item.Reason = err.Error()
-			res.Failed = append(res.Failed, item)
-			s.log.Warn().Err(err).Str("bank_row_id", d.id).Msg("vipps payout sweep: clearing failed")
+			reason, skip := payoutSweepReason(err)
+			item.Reason = reason
+			if skip {
+				res.Skipped = append(res.Skipped, item)
+			} else {
+				res.Failed = append(res.Failed, item)
+				s.log.Warn().Err(err).Str("bank_row_id", d.id).Msg("vipps payout sweep: clearing failed")
+			}
 		case !r.Ready:
-			item.Reason = fmt.Sprintf("%d belastninger venter i Tildel", r.UnreconciledCharges)
+			item.Reason = waitingReason(r.UnreconciledCharges)
 			res.Waiting = append(res.Waiting, item)
 		case r.AlreadyCleared:
 			// A concurrent clear won the bank row; nothing new was posted.
@@ -106,18 +118,28 @@ func (s *Service) ClearReadyVippsPayouts(ctx context.Context, clubID, actor stri
 		}
 	}
 
-	// Payouts imported from Vipps that no deposit above names: the bank side
-	// is missing (not imported yet) or carries no settlement reference.
+	skipped, err := s.payoutsWithoutOpenDeposit(ctx, clubID, deposits, seen)
+	res.Skipped = append(res.Skipped, skipped...)
+	return res, err
+}
+
+// payoutsWithoutOpenDeposit reports imported payouts that no open deposit
+// names: the bank side is missing (not imported yet), was dismissed, or
+// carries no settlement reference.
+func (s *Service) payoutsWithoutOpenDeposit(ctx context.Context, clubID string, deposits []vippsPayoutDeposit, seen map[string]bool) ([]VippsPayoutSweepItem, error) {
+	booked, dismissed := map[string]bool{}, map[string]bool{}
+	for _, d := range deposits {
+		if d.booked {
+			booked[d.key()] = true
+		} else if d.dismissed {
+			dismissed[d.key()] = true
+		}
+	}
 	prows, err := s.db.Query(ctx,
 		`SELECT msn, settlement_number FROM vipps_import_rows
 		  WHERE club_id = $1 AND row_type = 'payout'
 		    AND journal_entry_id IS NULL AND dismissed_at IS NULL
 		    AND settlement_number IS NOT NULL AND settlement_number <> ''
-		    AND NOT EXISTS (
-		        SELECT 1 FROM bank_import_rows b
-		         WHERE b.club_id = vipps_import_rows.club_id
-		           AND b.journal_entry_id IS NOT NULL
-		           AND b.description ~* ('utb\.\s*' || settlement_number || '\s+vippsnr\s+' || msn || '([^0-9]|$)'))
 		  ORDER BY booking_date, settlement_number`,
 		clubID,
 	)
@@ -125,18 +147,91 @@ func (s *Service) ClearReadyVippsPayouts(ctx context.Context, clubID, actor stri
 		return nil, fmt.Errorf("listing open vipps payouts: %w", err)
 	}
 	defer prows.Close()
+	var out []VippsPayoutSweepItem
 	for prows.Next() {
 		var msn, settlement string
 		if err := prows.Scan(&msn, &settlement); err != nil {
-			return nil, fmt.Errorf("scanning open vipps payout: %w", err)
+			return out, fmt.Errorf("scanning open vipps payout: %w", err)
 		}
-		if seen[msn+"/"+settlement] {
+		key := msn + "/" + settlement
+		if seen[key] || booked[key] {
 			continue
 		}
-		res.Skipped = append(res.Skipped, VippsPayoutSweepItem{
-			SettlementNumber: settlement, MSN: msn,
-			Reason: fmt.Sprintf("ingen bankinnbetaling med «Utb. %s Vippsnr %s»", settlement, msn),
-		})
+		reason := fmt.Sprintf("ingen bankinnbetaling med «Utb. %s Vippsnr %s»", settlement, msn)
+		if dismissed[key] {
+			reason = fmt.Sprintf("bankinnbetalingen med «Utb. %s Vippsnr %s» er avvist i Tildel", settlement, msn)
+		}
+		out = append(out, VippsPayoutSweepItem{SettlementNumber: settlement, MSN: msn, Reason: reason})
 	}
-	return res, prows.Err()
+	return out, prows.Err()
+}
+
+type vippsPayoutDeposit struct {
+	id, settlement, msn string
+	booked, dismissed   bool
+}
+
+func (d vippsPayoutDeposit) key() string { return d.msn + "/" + d.settlement }
+
+// vippsPayoutDeposits lists every bank row whose description carries a Vipps
+// settlement reference, booked or not. The reference is parsed in Go with
+// VippsSettlementPattern; imported values never become part of a SQL regex.
+func (s *Service) vippsPayoutDeposits(ctx context.Context, clubID string) ([]vippsPayoutDeposit, error) {
+	rows, err := s.db.Query(ctx,
+		`SELECT id, description, journal_entry_id IS NOT NULL, dismissed_at IS NOT NULL
+		   FROM bank_import_rows
+		  WHERE club_id = $1
+		    AND description ~* 'utb\.\s*[0-9]+\s+vippsnr\s+[0-9]+'
+		  ORDER BY row_date, id`,
+		clubID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("listing vipps payout deposits: %w", err)
+	}
+	defer rows.Close()
+	var out []vippsPayoutDeposit
+	for rows.Next() {
+		var d vippsPayoutDeposit
+		var desc string
+		if err := rows.Scan(&d.id, &desc, &d.booked, &d.dismissed); err != nil {
+			return nil, fmt.Errorf("scanning vipps payout deposit: %w", err)
+		}
+		m := VippsSettlementPattern.FindStringSubmatch(desc)
+		if len(m) != 3 {
+			continue
+		}
+		d.settlement, d.msn = m[1], m[2]
+		out = append(out, d)
+	}
+	return out, rows.Err()
+}
+
+func waitingReason(n int) string {
+	if n == 1 {
+		return "1 belastning venter i Tildel"
+	}
+	return fmt.Sprintf("%d belastninger venter i Tildel", n)
+}
+
+// payoutSweepReason turns a ClearVippsPayout error into the reason shown to
+// the treasurer, and whether the deposit is skipped (needs a human) rather
+// than failed (retried by the next sweep). Unknown errors get a generic text;
+// the cause is logged by the caller.
+func payoutSweepReason(err error) (reason string, skip bool) {
+	switch {
+	case errors.Is(err, ErrVippsSettlementNotImported):
+		return "Vipps-oppgjøret er ikke importert", true
+	case errors.Is(err, ErrVippsSettlementAlreadyCleared):
+		return "oppgjøret er allerede avstemt via en annen innbetaling", true
+	case errors.Is(err, ErrVippsSettlementAmbiguous):
+		return "flere Vipps-oppgjør samme dag på samme Vippsnr – avstem manuelt", true
+	case errors.Is(err, ErrVippsPayoutAmountMismatch):
+		return "beløpet på bankinnbetalingen stemmer ikke med Vipps-utbetalingen", false
+	case errors.Is(err, ErrVippsPeriodClosed):
+		return "regnskapsperioden er lukket", false
+	case errors.Is(err, ErrVippsPayoutRaced):
+		return "ble bokført samtidig av en annen handling – synkroniser igjen", false
+	default:
+		return "kunne ikke bokføres – se loggen", false
+	}
 }
