@@ -238,19 +238,20 @@ func (s *Service) SyncInvoices(ctx context.Context, clubID, periodID, syncedBy s
 	return result, nil
 }
 
-// errNothingToBook marks a faktura whose net total is zero.
+// errNothingToBook marks a faktura with no amount on any account: zero total
+// and every line netting out on the same account.
 var errNothingToBook = errors.New("net total is 0, nothing to book")
 
 // bookInvoiceEntry creates and posts the invoice_sync entry for one faktura:
 // DR 1500 the total, CR each revenue account its lines map to. Signs drive
-// the sides, so a credit note books DR revenue / CR 1500. A draft whose post
-// fails is discarded so no orphan is left. This is the one code path both the
-// send-time booking (BookInvoice) and the repair sync use.
+// the sides, so a credit note books DR revenue / CR 1500. A zero-total
+// faktura whose lines hit different accounts (a role exemption: CR revenue,
+// DR the exemption expense account) is booked gross with no 1500 line, so it
+// never becomes a receivable. A draft whose post fails is discarded so no
+// orphan is left. This is the one code path both the send-time booking
+// (BookInvoice) and the repair sync use.
 func (s *Service) bookInvoiceEntry(ctx context.Context, clubID, periodID, invoiceID string, invoiceNumber int, amount float64, entryDate string, memberName *string, actor string) error {
 	amount = roundCents(amount)
-	if amount == 0 {
-		return errNothingToBook
-	}
 
 	description := fmt.Sprintf("Faktura #%d", invoiceNumber)
 	if memberName != nil {
@@ -265,11 +266,17 @@ func (s *Service) bookInvoiceEntry(ctx context.Context, clubID, periodID, invoic
 
 	// journal_line_one_side forbids zero or negative amounts, so each line
 	// goes on the side its sign dictates and zero nets are dropped.
-	journalLines := []CreateJournalLineInput{signedLine(receivablesAccountCode, amount)}
+	var journalLines []CreateJournalLineInput
+	if amount != 0 {
+		journalLines = append(journalLines, signedLine(receivablesAccountCode, amount))
+	}
 	for code, net := range netByAccount {
 		if net = roundCents(net); net != 0 {
 			journalLines = append(journalLines, signedLine(code, -net))
 		}
+	}
+	if len(journalLines) == 0 {
+		return errNothingToBook
 	}
 
 	sourceID := invoiceID

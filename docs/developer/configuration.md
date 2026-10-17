@@ -125,6 +125,10 @@ Configuration uses standard OTEL environment variables — no Brygge-specific va
 
 If the collector is unreachable, the app starts normally with a warning log.
 
+## In-app club settings
+
+Per-club financial settings are stored on `clubs` and edited in **Admin → Økonomiinnstillinger**, not through environment variables: KID check method, Vipps clearing/fee accounts, the Vipps amount cap and auto-assign, and role exemptions (`price_exemptions` + `clubs.exemption_expense_account`, BRY-351). None has a deployment default; role exemptions are off until a club adds them. Writes are treasurer/admin with fresh TOTP. See [docs/user/faktura.md](../user/faktura.md#role-exemptions).
+
 ## Feature Flags
 
 Feature flags have two layers since migration 000049: env-var defaults (set at deploy time) and per-club DB overrides (toggled at runtime from `Admin → Site → Site content → Modules`). The public `/api/v1/features` endpoint reads the DB row first, falling back to the env default when no row exists or the lookup fails.

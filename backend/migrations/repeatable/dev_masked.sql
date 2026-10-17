@@ -78,7 +78,8 @@ SELECT
     NULL::text AS anthropic_api_key,          -- secret
     kid_check_method, vipps_clearing_account, vipps_fee_account,
     vipps_per_charge_enabled, vipps_max_amount,
-    vipps_auto_assign, vipps_auto_assign_tie_category
+    vipps_auto_assign, vipps_auto_assign_tie_category,
+    exemption_expense_account
 FROM public.clubs;
 
 CREATE VIEW dev_masked.billing_recipients AS
@@ -224,7 +225,7 @@ SELECT
     NULL::text AS description,
     quantity, unit_price, line_total, account_id,
     NULL::text AS sub_description,
-    price_item_id, category, boat_id
+    price_item_id, category, boat_id, exemption_role
 FROM public.invoice_lines;
 
 CREATE VIEW dev_masked.account_mapping_rules AS

@@ -111,6 +111,9 @@ type createInvoiceFullRequest struct {
 	FiscalPeriodID *string            `json:"fiscal_period_id,omitempty"`
 	Lines          []invoiceLineInput `json:"lines"`
 	SendEmail      bool               `json:"send_email"`
+	// SkipExemptions bills the member in full even when one of their board
+	// roles is configured as exempt for a line's price item (BRY-351).
+	SkipExemptions bool `json:"skip_exemptions,omitempty"`
 
 	// Optional organisation recipient. When RecipientKind is "organization"
 	// the OrgName is required and the rest are optional overrides; the
@@ -144,6 +147,9 @@ type invoiceLineInput struct {
 	// BoatID is required for tiered lines (drives tier resolution) and
 	// for items with requires_boat_selection=true.
 	BoatID *string `json:"boat_id,omitempty"`
+	// exemptionRole is set by the server on an offsetting exemption line;
+	// clients cannot send it.
+	exemptionRole string
 }
 
 type invoiceResponse struct {
@@ -157,6 +163,10 @@ type invoiceResponse struct {
 	SentAt        *string    `json:"sent_at"`
 	CreatedAt     time.Time  `json:"created_at"`
 	GLBooking     *glBooking `json:"gl_booking,omitempty"`
+	// Exemptions lists the role exemptions applied to this faktura.
+	Exemptions []string `json:"exemptions,omitempty"`
+	// Warnings are problems that changed the outcome without failing it.
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 // HandleCreateInvoice generates a full invoice with KID, PDF, and optional email delivery.
@@ -302,6 +312,67 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 			UnitPrice:      resolved.UnitPrice,
 		}
 		total += float64(resolved.Quantity) * resolved.UnitPrice
+	}
+
+	// Role exemptions (BRY-351): a member whose board role is exempt from a
+	// line's price item gets an offsetting line right after it, booked to
+	// the club's exemption expense account.
+	var appliedExemptions, warnings []string
+	if req.UserID != "" && !req.SkipExemptions {
+		exemptions, err := loadExemptionConfig(ctx, h.db, claims.ClubID)
+		if err != nil {
+			h.log.Error().Err(err).Msg("failed to load exemptions")
+			Error(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		if exemptions.misconfigured() {
+			warnings = append(warnings, "exemptions are configured but no valid expense account is set; the member is billed in full")
+		}
+		if exemptions.active() {
+			held, err := memberRoles(ctx, h.db, claims.ClubID, req.UserID)
+			if err != nil {
+				h.log.Error().Err(err).Msg("failed to load member roles")
+				Error(w, http.StatusInternalServerError, "internal error")
+				return
+			}
+			withExemptions := make([]invoiceLineInput, 0, len(resolvedLines))
+			withPDF := make([]finance.InvoiceLine, 0, len(pdfLines))
+			for i, line := range resolvedLines {
+				withExemptions = append(withExemptions, line)
+				withPDF = append(withPDF, pdfLines[i])
+				if line.PriceItemID == nil {
+					continue
+				}
+				var category string
+				_ = h.db.QueryRow(ctx,
+					`SELECT category FROM price_items WHERE id = $1 AND club_id = $2`,
+					*line.PriceItemID, claims.ClubID,
+				).Scan(&category)
+				role, ok := exemptions.match(held, category, *line.PriceItemID)
+				if !ok {
+					continue
+				}
+				amount := float64(line.Quantity) * line.UnitPrice
+				acct := exemptions.expenseAccountID
+				offset := invoiceLineInput{
+					Description:    exemptionLineDescription(role),
+					SubDescription: line.Description,
+					Quantity:       1,
+					UnitPrice:      -amount,
+					AccountID:      &acct,
+					PriceItemID:    line.PriceItemID,
+					exemptionRole:  role,
+				}
+				withExemptions = append(withExemptions, offset)
+				withPDF = append(withPDF, finance.InvoiceLine{
+					Description: offset.Description, SubDescription: offset.SubDescription,
+					Quantity: 1, UnitPrice: -amount,
+				})
+				total -= amount
+				appliedExemptions = append(appliedExemptions, role)
+			}
+			resolvedLines, pdfLines = withExemptions, withPDF
+		}
 	}
 
 	// Get next invoice sequence for KID
@@ -475,7 +546,9 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 		// Denormalize price_items.category onto the line so dedup and
 		// the admin chip query work per-line on multi-category invoices.
 		var lineCategory *string
-		if line.PriceItemID != nil {
+		// An exemption line shares its item's price_item_id but carries no
+		// category, so per-line duplicate checks key on the item line only.
+		if line.PriceItemID != nil && line.exemptionRole == "" {
 			var c string
 			if err := h.db.QueryRow(ctx,
 				`SELECT category FROM price_items WHERE id = $1`, *line.PriceItemID,
@@ -483,12 +556,18 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 				lineCategory = &c
 			}
 		}
+		var exemptionRole *string
+		if line.exemptionRole != "" {
+			r := line.exemptionRole
+			exemptionRole = &r
+		}
 		_, err = h.db.Exec(ctx,
 			`INSERT INTO invoice_lines (invoice_id, description, sub_description, quantity,
-			                            unit_price, line_total, account_id, price_item_id, category)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+			                            unit_price, line_total, account_id, price_item_id, category,
+			                            exemption_role)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
 			invoiceID, line.Description, line.SubDescription, line.Quantity,
-			line.UnitPrice, lineTotal, line.AccountID, line.PriceItemID, lineCategory,
+			line.UnitPrice, lineTotal, line.AccountID, line.PriceItemID, lineCategory, exemptionRole,
 		)
 		if err != nil {
 			h.log.Error().Err(err).Msg("failed to store invoice line")
@@ -539,7 +618,8 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 	if h.audit != nil {
 		h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,
 			audit.ActionInvoiceCreated, "invoice", invoiceID,
-			map[string]any{"invoice_number": invoiceSeq, "kid": kid, "total": total, "user_id": req.UserID})
+			map[string]any{"invoice_number": invoiceSeq, "kid": kid, "total": total, "user_id": req.UserID,
+				"exemptions": appliedExemptions})
 	}
 
 	JSON(w, http.StatusCreated, invoiceResponse{
@@ -553,6 +633,8 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 		SentAt:        sentAt,
 		CreatedAt:     createdAt,
 		GLBooking:     gl,
+		Exemptions:    appliedExemptions,
+		Warnings:      warnings,
 	})
 }
 

@@ -40,6 +40,22 @@ type bulkInvoiceRequest struct {
 	// (or draft) invoice this fiscal period. Set to true only when the
 	// operator has explicitly confirmed a re-bill in the UI.
 	AllowDuplicateLines bool `json:"allow_duplicate_lines,omitempty"`
+	// Preview resolves every member's lines and reports the role
+	// exemptions that would apply, without creating anything.
+	Preview bool `json:"preview,omitempty"`
+	// SkipExemptions lists exemptions the operator unticked in the preview,
+	// as "<user_id>:<price_item_id>"; those lines are billed normally.
+	SkipExemptions []string `json:"skip_exemptions,omitempty"`
+}
+
+// bulkExemption is one role exemption a bulk run would apply (preview) or
+// applied (create).
+type bulkExemption struct {
+	UserID      string  `json:"user_id"`
+	PriceItemID string  `json:"price_item_id"`
+	Description string  `json:"description"`
+	Amount      float64 `json:"amount"`
+	Role        string  `json:"role"`
 }
 
 type bulkInvoiceCreated struct {
@@ -57,8 +73,12 @@ type bulkInvoiceSkipped struct {
 }
 
 type bulkInvoiceResponse struct {
-	Created []bulkInvoiceCreated `json:"created"`
-	Skipped []bulkInvoiceSkipped `json:"skipped"`
+	Created    []bulkInvoiceCreated `json:"created"`
+	Skipped    []bulkInvoiceSkipped `json:"skipped"`
+	Exemptions []bulkExemption      `json:"exemptions"`
+	// Warnings are problems that change the outcome but don't stop the run,
+	// e.g. exemptions configured without an expense account.
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 // bulkResolvedLine binds a chosen price tier to optional slip context.
@@ -67,6 +87,8 @@ type bulkInvoiceResponse struct {
 type bulkResolvedLine struct {
 	tier     priceTier
 	slipInfo *slipBoatInfo
+	// exemptRole is set when a role exemption offsets this line.
+	exemptRole string
 }
 
 func (h *InvoiceHandler) HandleBulkCreateInvoices(w http.ResponseWriter, r *http.Request) {
@@ -227,7 +249,21 @@ func (h *InvoiceHandler) HandleBulkCreateInvoices(w http.ResponseWriter, r *http
 		return
 	}
 
-	resp := bulkInvoiceResponse{Created: []bulkInvoiceCreated{}, Skipped: []bulkInvoiceSkipped{}}
+	resp := bulkInvoiceResponse{Created: []bulkInvoiceCreated{}, Skipped: []bulkInvoiceSkipped{}, Exemptions: []bulkExemption{}}
+
+	exemptions, err := loadExemptionConfig(ctx, h.db, claims.ClubID)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to load exemptions for bulk invoices")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if exemptions.misconfigured() {
+		resp.Warnings = append(resp.Warnings, "exemptions are configured but no valid expense account is set; members are billed in full")
+	}
+	skipExemption := make(map[string]bool, len(req.SkipExemptions))
+	for _, k := range req.SkipExemptions {
+		skipExemption[k] = true
+	}
 
 	for _, userID := range req.UserIDs {
 		userID := userID
@@ -363,10 +399,40 @@ func (h *InvoiceHandler) HandleBulkCreateInvoices(w http.ResponseWriter, r *http
 			continue
 		}
 
+		if exemptions.active() {
+			held, err := memberRoles(ctx, h.db, claims.ClubID, userID)
+			if err != nil {
+				h.log.Error().Err(err).Str("user_id", userID).Msg("member roles for exemptions")
+				resp.Skipped = append(resp.Skipped, bulkInvoiceSkipped{UserID: userID, Reason: "could not read member roles"})
+				continue
+			}
+			for i := range lines {
+				role, ok := exemptions.match(held, lines[i].tier.category, lines[i].tier.id)
+				if !ok {
+					continue
+				}
+				// The preview lists every match so the operator can untick
+				// one; a create honours the unticked ones.
+				if !req.Preview && skipExemption[userID+":"+lines[i].tier.id] {
+					continue
+				}
+				lines[i].exemptRole = role
+				resp.Exemptions = append(resp.Exemptions, bulkExemption{
+					UserID: userID, PriceItemID: lines[i].tier.id,
+					Description: lines[i].tier.desc, Amount: lines[i].tier.amount, Role: role,
+				})
+			}
+		}
+
+		if req.Preview {
+			continue
+		}
+
 		invID, invNum, total, err := h.createBulkInvoice(ctx,
 			claims.ClubID, claims.UserID, userID, lines,
 			req.FiscalPeriodID, fiscalYear, dueDate,
-			clubName, orgNumber, clubAddress, bankAccount, website, treasurerEmail, logoData, logoMIME, kidMethod)
+			clubName, orgNumber, clubAddress, bankAccount, website, treasurerEmail, logoData, logoMIME, kidMethod,
+			exemptions.expenseAccountID)
 		if err != nil {
 			h.log.Error().Err(err).Str("user_id", userID).Msg("bulk invoice create failed")
 			resp.Skipped = append(resp.Skipped, bulkInvoiceSkipped{UserID: userID, Reason: "create failed: " + err.Error()})
@@ -379,6 +445,11 @@ func (h *InvoiceHandler) HandleBulkCreateInvoices(w http.ResponseWriter, r *http
 		})
 	}
 
+	if req.Preview {
+		JSON(w, http.StatusOK, resp)
+		return
+	}
+
 	if h.audit != nil {
 		h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,
 			audit.ActionInvoiceCreated, "invoice", "bulk",
@@ -388,6 +459,8 @@ func (h *InvoiceHandler) HandleBulkCreateInvoices(w http.ResponseWriter, r *http
 				"fiscal_period_id": req.FiscalPeriodID,
 				"price_item_ids":   req.PriceItemIDs,
 				"beam_categories":  req.BeamCategories,
+				"exemptions":       len(resp.Exemptions),
+				"skip_exemptions":  req.SkipExemptions,
 			})
 	}
 
@@ -489,6 +562,7 @@ func (h *InvoiceHandler) createBulkInvoice(
 	dueDate time.Time,
 	clubName, orgNumber, clubAddress, bankAccount, website, treasurerEmail string,
 	logoData []byte, logoMIME string, kidMethod string,
+	exemptionAccountID string,
 ) (string, int, float64, error) {
 	var memberName, memberEmail, memberAddress string
 	if err := h.db.QueryRow(ctx,
@@ -512,6 +586,18 @@ func (h *InvoiceHandler) createBulkInvoice(
 		return "", 0, 0, err
 	}
 
+	// Each resolved line becomes one stored line, plus an offsetting
+	// exemption line right after it when a role exemption applies.
+	type storedLine struct {
+		pdf           finance.InvoiceLine
+		amount        float64
+		priceItemID   string
+		category      *string
+		boatID        *string
+		accountID     *string
+		exemptionRole *string
+	}
+	stored := make([]storedLine, 0, len(lines))
 	pdfLines := make([]finance.InvoiceLine, 0, len(lines))
 	var total float64
 	for _, l := range lines {
@@ -520,10 +606,44 @@ func (h *InvoiceHandler) createBulkInvoice(
 		if l.slipInfo != nil {
 			subDesc = describeSlipBoat(l.slipInfo)
 		}
-		pdfLines = append(pdfLines, finance.InvoiceLine{
-			Description: desc, SubDescription: subDesc, Quantity: 1, UnitPrice: l.tier.amount,
-		})
+		item := storedLine{
+			pdf:         finance.InvoiceLine{Description: desc, SubDescription: subDesc, Quantity: 1, UnitPrice: l.tier.amount},
+			amount:      l.tier.amount,
+			priceItemID: l.tier.id,
+		}
+		if l.tier.category != "" {
+			c := l.tier.category
+			item.category = &c
+		}
+		if l.slipInfo != nil && l.slipInfo.boatID != "" {
+			b := l.slipInfo.boatID
+			item.boatID = &b
+		}
+		stored = append(stored, item)
 		total += l.tier.amount
+
+		if l.exemptRole != "" && exemptionAccountID != "" {
+			role := l.exemptRole
+			acct := exemptionAccountID
+			// Same price item as the line it offsets (so per-item billing
+			// nets to zero) but no category, so the per-line duplicate
+			// check keys on the item line only. The account wins over the
+			// item in GL sync, so the waived amount books to the expense.
+			stored = append(stored, storedLine{
+				pdf: finance.InvoiceLine{
+					Description: exemptionLineDescription(role), SubDescription: desc,
+					Quantity: 1, UnitPrice: -l.tier.amount,
+				},
+				amount:        -l.tier.amount,
+				priceItemID:   l.tier.id,
+				accountID:     &acct,
+				exemptionRole: &role,
+			})
+			total -= l.tier.amount
+		}
+	}
+	for _, sl := range stored {
+		pdfLines = append(pdfLines, sl.pdf)
 	}
 
 	inv := finance.Invoice{
@@ -577,22 +697,14 @@ func (h *InvoiceHandler) createBulkInvoice(
 
 	// Upload PDF to S3 and wipe pdf_data from DB (non-fatal).
 	h.uploadInvoicePDFToS3(ctx, invoiceID, clubID, pdfData)
-	for i, l := range lines {
-		var lineCategory *string
-		if l.tier.category != "" {
-			c := l.tier.category
-			lineCategory = &c
-		}
-		var lineBoatID *string
-		if l.slipInfo != nil && l.slipInfo.boatID != "" {
-			b := l.slipInfo.boatID
-			lineBoatID = &b
-		}
+	for _, sl := range stored {
 		if _, err := h.db.Exec(ctx,
 			`INSERT INTO invoice_lines (invoice_id, description, sub_description, quantity,
-			                            unit_price, line_total, price_item_id, category, boat_id)
-			 VALUES ($1, $2, $3, 1, $4, $4, $5, $6, $7)`,
-			invoiceID, pdfLines[i].Description, pdfLines[i].SubDescription, l.tier.amount, l.tier.id, lineCategory, lineBoatID,
+			                            unit_price, line_total, price_item_id, category, boat_id,
+			                            account_id, exemption_role)
+			 VALUES ($1, $2, $3, 1, $4, $4, $5, $6, $7, $8, $9)`,
+			invoiceID, sl.pdf.Description, sl.pdf.SubDescription, sl.amount, sl.priceItemID,
+			sl.category, sl.boatID, sl.accountID, sl.exemptionRole,
 		); err != nil {
 			h.log.Error().Err(err).Msg("failed to insert invoice line for bulk invoice")
 		}

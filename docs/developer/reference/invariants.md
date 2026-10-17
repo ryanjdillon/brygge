@@ -104,7 +104,7 @@ Charges naming a checkout order are left to `AutoReconcileOrderCharges`. Each bo
 **Rule (BRY-352):** `SyncInvoices` books a faktura only when `sent_at IS NOT NULL` and `status <> 'voided'`.
 - A faktura voided after it was booked has its `invoice_sync` and `invoice_resplit` entries reversed on the next sync (`reverseVoidedInvoiceEntries`, within the open period being synced).
 - Each line books to its own `account_id` when set. Otherwise it uses its price-item category's account, and failing that 3100.
-- Signs drive the sides, so a credit note books DR revenue / CR 1500. A net-zero faktura is skipped with a reason.
+- Signs drive the sides, so a credit note books DR revenue / CR 1500. A faktura that nets to zero books its lines without a 1500 line (a fully exempt faktura: CR revenue / DR the exemption expense account); one with no non-zero line is skipped with a reason.
 - `SyncPayments` never books a payment that settles an invoice (`invoices.payment_id`). The bank or Vipps reconciliation that created it already booked DR bank / CR 1500.
 
 **Failure mode:**
@@ -259,6 +259,18 @@ Voiding an invoice that is settled for the member (paid, or captured via Vipps) 
 So the amount cap is a **default**, not a hard ceiling — the per-invoice override wins either way. It is enforced at **both** points, because `orders.token`s are permanent and one exists for every sent faktura: at **issuance** in `ensureFakturaOrderToken` (returns `""` when not allowed, before the token-reuse lookup — so faktura/reminder emails, the admin copy-link, and the payables page all go KID-only) and at **mint** in `mintOrderPayment` (returns `errVippsBlocked` via `orderHasVippsBlockedSource` — so a link already in an inbox, or issued before the cap/override changed, can't be charged). The reminder batch's `vipps_payment_link` persists On/Off onto the reminded invoices (it sets the same column), so it too is honored at the member's eventual click.
 
 **Failure mode:** enforcing at issuance alone would leave every large invoice already emailed fully Vipps-payable. Not-allowed invoices simply never get an `orders`/`order_sources` row minted, which is safe — reconciliation and the webhook key off `orders.vipps_reference`, created only on mint.
+
+### A role exemption is an offsetting line, booked gross
+
+**Rule (BRY-351):** a club may exempt a board role (`roles.Board`, the one canonical list) from a price item or a whole price category (`price_exemptions`). Nothing is exempt by default. When a faktura is generated, bulk or single, for a member who holds an exempting role, the item stays on the faktura at full price and an offsetting negative line follows it:
+- The offset line carries the item's `price_item_id`, `exemption_role`, a NULL `category` (so the per-line duplicate check still sees only the real line) and `account_id` = the club's `exemption_expense_account`. GL booking honours `account_id` over the category, so the faktura books **gross**: CR the item's revenue, DR the expense account. The waived revenue is never netted away.
+- Exemptions apply only while the expense account resolves to an active `expense` account. Otherwise nothing is exempted and the run returns a warning, so a misconfiguration bills in full rather than booking to the wrong account.
+- Roles are read when the faktura is generated. Removing a role makes the next run bill normally; existing fakturas are not touched.
+- The bulk preview (`preview: true`) lists every match; `skip_exemptions` (`<user_id>:<price_item_id>`) bills the unticked ones in full. A single faktura can opt out with `skip_exemptions: true`.
+- A faktura whose total is 0 is **settled on issue**: `IsDebtSQL` is `total_amount > 0`, so it is never owed, overdue, reminded or on the payables page, and `vippsAllowedExpr` never offers Vipps (`total_amount <= 0 → false`). It still gets a KID (the column is NOT NULL and unique), but the PDF and email hide it and say nothing is due. Its GL entry has no 1500 line.
+- Settings writes (`PUT /settings/economy/exemptions`) are treasurer/admin with fresh TOTP and audited as `pricing.exemptions_updated`.
+
+**Failure mode:** without the offset line, exempt members were billed and then manually credited or waived off-book, so the waived amount disappeared from revenue and expense alike. Netting the item price to zero instead would hide what the exemption costs the club.
 
 ### A credit note is never a debt, and a credit link never posts
 

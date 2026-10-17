@@ -108,7 +108,7 @@ Org fields (`*_org_name/number/address`), the club's own `bank_account`/`org_num
 ### Allowlist — readable raw (verified no PII)
 
 `accounts`, `bank_imports`, `docks`, `fiscal_periods`,
-`mva_compensation_reports`, `order_lines`, `order_sources`, `price_items`,
+`mva_compensation_reports`, `order_lines`, `order_sources`, `price_exemptions`, `price_items`,
 `product_variants`, `products`, `slip_assignments`, `vipps_imports`,
 `waiting_list_entries`.
 

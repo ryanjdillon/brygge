@@ -38,15 +38,16 @@ const (
 	ActionSlipReleased = "slip.released"
 
 	// Content operations
-	ActionEventCreated     = "event.created"
-	ActionEventDeleted     = "event.deleted"
-	ActionPricingCreated   = "pricing.created"
-	ActionPricingUpdated   = "pricing.updated"
-	ActionPricingArchived  = "pricing.archived"
-	ActionPricingDeleted   = "pricing.deleted"
-	ActionBroadcastSent    = "broadcast.sent"
-	ActionDocumentUploaded = "document.uploaded"
-	ActionDocumentDeleted  = "document.deleted"
+	ActionEventCreated             = "event.created"
+	ActionEventDeleted             = "event.deleted"
+	ActionPricingCreated           = "pricing.created"
+	ActionPricingUpdated           = "pricing.updated"
+	ActionPricingArchived          = "pricing.archived"
+	ActionPricingDeleted           = "pricing.deleted"
+	ActionPricingExemptionsUpdated = "pricing.exemptions_updated"
+	ActionBroadcastSent            = "broadcast.sent"
+	ActionDocumentUploaded         = "document.uploaded"
+	ActionDocumentDeleted          = "document.deleted"
 
 	// Finance operations
 	ActionInvoiceCreated              = "invoice.created"

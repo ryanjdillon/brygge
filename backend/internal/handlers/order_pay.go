@@ -116,10 +116,12 @@ func (h *InvoiceHandler) ensureFakturaOrderToken(ctx context.Context, clubID, in
 // vippsAllowedExpr is the tri-state rule deciding whether an invoice may offer a
 // Vipps link (BRY-283), given aliases i (invoices) and c (clubs):
 //
+//	Nothing owed (total ≤ 0: a credit note, or a fully exempt faktura) → never
 //	On   (opt_in TRUE)  → always
 //	Off  (opt_in FALSE) → never
 //	Auto (opt_in NULL)  → iff the club has no cap or the amount is within it
 const vippsAllowedExpr = `CASE
+	WHEN i.total_amount <= 0                  THEN false
 	WHEN i.vipps_payment_link_opt_in IS TRUE  THEN true
 	WHEN i.vipps_payment_link_opt_in IS FALSE THEN false
 	WHEN c.vipps_max_amount IS NULL           THEN true

@@ -160,6 +160,14 @@ Synchronized vocabularies:
 
 Adding a new category requires touching **all three** plus this doc. Otherwise a faktura for that category routes to the default revenue code (3100) and the SPA shows the raw enum string.
 
+### `price_exemptions.role` and `invoice_lines.exemption_role` (migration 000108)
+
+```
+chair   vice_chair   treasurer   secretary   harbor_master   deputy   board
+```
+
+The board roles, defined once in `backend/internal/roles` (`roles.Board`) and validated there; a subset of `user_role`. Adding a board role to `user_role` means adding it to `roles.Board` (with its Norwegian faktura label) and to the `admin.users.role.*` i18n keys. `price_exemptions.category` uses the `price_items.category` vocabulary.
+
 ### `invoices.status` (CHECK since migration 000102)
 
 ```

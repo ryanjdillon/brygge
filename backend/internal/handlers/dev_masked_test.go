@@ -51,6 +51,8 @@ var rawTextColumns = map[string]bool{
 	"products.currency": true, "products.description": true, "products.image_url": true, "products.name": true,
 	// settlement file names and merchant numbers
 	"vipps_imports.filename": true, "vipps_imports.msn": true,
+	// exemption config: board-role keys and price categories
+	"price_exemptions.category": true, "price_exemptions.role": true,
 }
 
 // TestDevMaskedViews migrates a throwaway database, applies the dev_masked

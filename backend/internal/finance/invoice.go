@@ -3,6 +3,7 @@ package finance
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/go-pdf/fpdf"
@@ -195,12 +196,18 @@ func GeneratePDF(inv Invoice) ([]byte, error) {
 	if inv.OrgRecipient != nil && inv.OrgRecipient.TheirRef != "" {
 		rs = append(rs, row{tr("Deres ref.:"), tr(inv.OrgRecipient.TheirRef), false})
 	}
-	rs = append(rs,
-		row{tr("Kontonummer:"), tr(inv.BankAccount), true},
-		row{"KID:", inv.KID, true},
-		row{tr("Beløp å betale:"), tr(formatNOK(total)), true},
-		row{tr("Forfallsdato:"), inv.DueDate.Format("02.01.2006"), true},
-	)
+	// A faktura that nets to zero (every line exempted) asks for nothing, so
+	// it carries no payment details a member could act on by mistake.
+	if roundOre(total) == 0 {
+		rs = append(rs, row{tr("Beløp å betale:"), tr(formatNOK(0)), true})
+	} else {
+		rs = append(rs,
+			row{tr("Kontonummer:"), tr(inv.BankAccount), true},
+			row{"KID:", inv.KID, true},
+			row{tr("Beløp å betale:"), tr(formatNOK(total)), true},
+			row{tr("Forfallsdato:"), inv.DueDate.Format("02.01.2006"), true},
+		)
+	}
 
 	// Box width = label column + the widest value rendered + symmetric
 	// padding on both sides. fpdf's GetStringWidth measures the current
@@ -297,9 +304,13 @@ func GeneratePDF(inv Invoice) ([]byte, error) {
 
 	// Payment instruction
 	pdf.SetFont("Helvetica", "", 9)
-	pdf.MultiCell(0, 5, tr(fmt.Sprintf(
-		"Vennligst betal %s til kontonummer %s med KID %s innen %s.",
-		formatNOK(total), inv.BankAccount, inv.KID, inv.DueDate.Format("02.01.2006"))), "", "L", false)
+	if roundOre(total) == 0 {
+		pdf.MultiCell(0, 5, tr("Ingen betaling – fakturaen er fullt fritatt. Den er kun til orientering."), "", "L", false)
+	} else {
+		pdf.MultiCell(0, 5, tr(fmt.Sprintf(
+			"Vennligst betal %s til kontonummer %s med KID %s innen %s.",
+			formatNOK(total), inv.BankAccount, inv.KID, inv.DueDate.Format("02.01.2006"))), "", "L", false)
+	}
 	if inv.TreasurerEmail != "" {
 		pdf.Ln(1)
 		pdf.SetFont("Helvetica", "I", 9)
@@ -315,6 +326,12 @@ func GeneratePDF(inv Invoice) ([]byte, error) {
 		return nil, fmt.Errorf("generating PDF: %w", err)
 	}
 	return buf.Bytes(), nil
+}
+
+// roundOre rounds to whole øre so float noise from summing lines can't make
+// a fully exempt faktura look like it owes 0.0000001 kr.
+func roundOre(v float64) float64 {
+	return math.Round(v*100) / 100
 }
 
 func formatNOK(amount float64) string {

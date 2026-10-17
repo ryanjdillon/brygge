@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"html/template"
+	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -349,6 +350,17 @@ func InvoiceBody(_ /*locale*/, memberName, clubName string, invoiceNumber int, d
 		VippsURL:      template.URL(vippsURL),
 	}
 	var buf bytes.Buffer
+	// A faktura that nets to zero (every line exempted) asks for nothing:
+	// no KID, account number or Vipps button that could prompt a payment.
+	if math.Round(total*100) == 0 {
+		if err := invoiceNoPaymentHTMLTpl.ExecuteTemplate(&buf, "base", data); err == nil {
+			return buf.String()
+		}
+		return fmt.Sprintf(
+			`<p>Hei %s,</p><p>Du har mottatt faktura #%d fra %s. Den er fullt fritatt, så du skal ikke betale noe.</p>`,
+			memberName, invoiceNumber, clubName,
+		)
+	}
 	if err := invoiceHTMLTpl.ExecuteTemplate(&buf, "base", data); err != nil {
 		// Template bug — fall back to a flat readable summary so the
 		// member still has the payment details.
@@ -457,6 +469,14 @@ var reminderHTMLTpl = template.Must(template.Must(sharedEmail.Clone()).Parse(`{{
 {{end}}
               <p style="margin:0 0 8px 0;font-size:13px;color:#64748b;">Hvis betalingen allerede er sendt, kan du se bort fra denne påminnelsen.</p>
               <p style="margin:0;font-size:13px;color:#64748b;">Spørsmål kan sendes til kasserer ved å svare på denne e-posten.</p>{{end}}`))
+
+// invoiceNoPaymentHTMLTpl is sent for a faktura whose lines net to zero (a
+// role exemption covers everything on it). It keeps the faktura number for
+// reference but omits every payment detail.
+var invoiceNoPaymentHTMLTpl = template.Must(template.Must(sharedEmail.Clone()).Parse(`{{define "content"}}
+              <p style="margin:0 0 16px 0;">Hei {{.Member}},</p>
+              <p style="margin:0 0 20px 0;">Du har mottatt faktura #{{.InvoiceNumber}} fra {{.Club}}. Den er fullt fritatt, så du skal <strong>ikke betale noe</strong>. Fakturaen ligger som PDF-vedlegg til orientering.</p>
+              <p style="margin:0;font-size:13px;color:#64748b;">Spørsmål om fakturaen kan sendes til kasserer ved å svare på denne e-posten.</p>{{end}}`))
 
 var invoiceHTMLTpl = template.Must(template.Must(sharedEmail.Clone()).Parse(`{{define "content"}}
               <p style="margin:0 0 16px 0;">Hei {{.Member}},</p>

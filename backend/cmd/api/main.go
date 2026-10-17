@@ -1159,6 +1159,16 @@ func main() {
 						middleware.RequireFreshTOTPDefault(),
 					).Delete("/settings/economy/faktura-logo", clubSettingsHandler.HandleDeleteFakturaLogo)
 
+					// Role-based price exemptions (BRY-351). Changing them
+					// changes what members are billed, so the write sits
+					// behind the same gate as other money settings.
+					r.With(middleware.RequireRole("treasurer", "admin")).
+						Get("/settings/economy/exemptions", invoiceHandler.HandleGetExemptions)
+					r.With(
+						middleware.RequireRole("treasurer", "admin"),
+						middleware.RequireFreshTOTPDefault(),
+					).Put("/settings/economy/exemptions", invoiceHandler.HandlePutExemptions)
+
 					// Multi-account bank registry (drift/høyrente/other).
 					// Faktura PDFs read the row flagged is_default_for_invoices;
 					// statement uploads will match against account_number.

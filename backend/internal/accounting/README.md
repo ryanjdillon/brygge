@@ -87,6 +87,7 @@ See [`../../../docs/developer/reference/enums.md`](../../../docs/developer/refer
 - Payment-match entries are sourced to their row and described by `kidMatchDescription`; bank sync's stranded-draft heal keys on exactly that, never on mapping-rule drafts
 - Manual bank-row assigns link the row (guarded) before posting; bilag numbers retry on a unique-key collision instead of failing
 - Matching incoming money to a faktura uses `finance.OwedByMemberSQL`; only ePayment order reconciliation uses `finance.OpenReceivableSQL` (it books captures the webhook already flagged)
+- A role-exemption line books to its own `account_id` (the club's exemption expense account), so an exempt item books gross: CR revenue, DR expense. A zero-total faktura books with no 1500 line
 - A faktura is booked when sent and reversed when voided (`BookInvoice` / `ReverseInvoice`, which reverses the whole `invoice_sync` + `invoice_resplit` family or nothing); `SyncInvoices` only repairs what was missed. At most one `invoice_sync` entry per faktura (unique index). `SyncPayments` skips invoice-settling payments
 
 Full list: [`../../../docs/developer/reference/invariants.md`](../../../docs/developer/reference/invariants.md).
