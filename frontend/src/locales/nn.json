@@ -558,6 +558,7 @@
         "received": "Betaling motteke",
         "unpaid": "Ubetalt",
         "overdue": "Forfalle",
+        "nothing_due": "Ingenting å betale",
         "credit_note": "Kreditnota",
         "credited": "Kreditert"
       }

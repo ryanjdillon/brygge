@@ -95,7 +95,7 @@ A yellow **warning banner** at the top appears if any *individual lines* (not wh
 | `boat has no beam recorded` | Edit the member's boat in `Admin → Members → (member) → Boats` and fill in the beam. |
 | `no active slip assignment` | Member has no slip — usually you didn't mean to bill them for slip_fee. Use the Spot filter to exclude. |
 
-If the club has [role exemptions](#role-exemptions) set up, a review step comes first: it lists every line that would be exempted, per member and role. Untick any line that should be billed in full this time, then click **Generate**. The result panel says how many lines were exempted. A yellow banner warns if exemptions are set up but no valid expense account is chosen; in that case nobody is exempted.
+If the club has [role exemptions](#role-exemptions) set up, a review step comes first: it lists every line that would be exempted, per member and role. Untick any line that should be billed in full this time (a member with two boats gets one line per boat, so you can untick just one), then click **Generate**. Changing the exemption settings while a run is in progress doesn't affect that run. The result panel says how many lines were exempted. A yellow banner warns if exemptions are set up but no valid expense account is chosen; in that case nobody is exempted.
 
 Fakturas land in **draft** state — generated but not yet sent.
 
@@ -109,7 +109,7 @@ Some clubs don't charge board members for certain things — for example slip re
 
 Nothing is exempt until you add it. Changes are logged.
 
-What the member gets: the faktura still lists the item at full price, followed by a line **"Fritak – <rolle>"** for the same amount with a minus sign. If everything on the faktura is exempt, the total is 0 kr: the PDF and email say there is nothing to pay, there is no KID or Vipps link, and the faktura never shows as overdue or gets reminders. A mixed faktura (say exempt slip rent plus normal dues) only asks for the dues.
+What the member gets: the faktura still lists the item at full price, followed by a line **"Fritak – <rolle>"** for the same amount with a minus sign. If everything on the faktura is exempt, the total is 0 kr: the PDF and email say there is nothing to pay, there is no KID or Vipps link, and the faktura never shows as overdue or gets reminders. A mixed faktura (say exempt slip rent plus normal dues) only asks for the dues. In the member portal a 0 kr faktura shows as **Ingenting å betale**. Credit notes are never given an exemption line.
 
 In the accounts, the item's income is booked in full and the exemption is booked as an expense on the chosen account, so the reports show what the exemption costs the club.
 

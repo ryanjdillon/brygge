@@ -19,6 +19,7 @@ function invoice(overrides: Partial<MemberInvoice> = {}): MemberInvoice {
     payment_received: false,
     credit_note: false,
     credited: false,
+    owed: true,
     price_item_name: 'Havneplass',
     description: 'Årsavgift',
     has_pdf: true,
@@ -85,5 +86,21 @@ describe('InvoiceList status chip (BRY-276)', () => {
     const unpaid = mountWithPlugins(InvoiceList, { props: { invoices: [invoice()] } })
     expect(chip(unpaid).text()).toBe('portal.invoices.status.unpaid')
     expect(chip(unpaid).classes()).toContain('bg-amber-100')
+  })
+})
+
+describe('InvoiceList fully exempt faktura (BRY-351)', () => {
+  it('shows a 0 kr faktura as nothing to pay and hides its KID', () => {
+    const w = mountWithPlugins(InvoiceList, {
+      props: { invoices: [invoice({ total_amount: 0, owed: false, due_date: '2000-01-01' })] },
+    })
+    expect(chip(w).text()).toBe('portal.invoices.status.nothing_due')
+    expect(chip(w).classes()).toContain('bg-green-100')
+    expect(w.text()).not.toContain('1234567890')
+  })
+
+  it('still shows the KID on a faktura the member owes', () => {
+    const w = mountWithPlugins(InvoiceList, { props: { invoices: [invoice()] } })
+    expect(w.text()).toContain('KID 1234567890')
   })
 })

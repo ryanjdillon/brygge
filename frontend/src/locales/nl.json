@@ -470,6 +470,7 @@
         "received": "Betaling ontvangen",
         "unpaid": "Onbetaald",
         "overdue": "Achterstallig",
+        "nothing_due": "Niets te betalen",
         "credit_note": "Creditnota",
         "credited": "Gecrediteerd"
       }
@@ -1405,5 +1406,13 @@
       "invalidCode": "Invalid code — check that your authenticator app's clock is correct",
       "invalidRecovery": "Invalid or already-used recovery code"
     }
+  },
+  "bulkInvoices": {
+    "exemptionsHeader": "{n} regel(s) worden vrijgesteld voor bestuursrollen. Vink uit wat volledig gefactureerd moet worden.",
+    "exemptionApply": "Vrijstellen",
+    "exemptionRole": "Rol",
+    "exemptionItem": "Post",
+    "exemptionsHint": "Vrijgestelde regels staan tegen volle prijs met een compenserende „Fritak”-regel; een faktura van 0 kr wordt ter informatie verstuurd, zonder te betalen bedrag.",
+    "exemptionsApplied": "{n} regel(s) vrijgesteld voor bestuursrollen."
   }
 }

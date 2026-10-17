@@ -565,6 +565,7 @@
         "received": "Payment received",
         "unpaid": "Unpaid",
         "overdue": "Overdue",
+        "nothing_due": "Nothing to pay",
         "credit_note": "Credit note",
         "credited": "Credited"
       }

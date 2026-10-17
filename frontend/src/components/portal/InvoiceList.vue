@@ -2,7 +2,7 @@
 import { useI18n } from 'vue-i18n'
 import { ExternalLink } from 'lucide-vue-next'
 import { formatNOK, formatDate } from '@/lib/format'
-import { isOverdue, type MemberInvoice } from '@/composables/useMyInvoices'
+import { isOverdue, isNothingDue, type MemberInvoice } from '@/composables/useMyInvoices'
 
 // Reusable list of the member's own invoices. Used both on the portal
 // dashboard (recent/unpaid summaries) and the full Fakturas page.
@@ -17,7 +17,7 @@ const { t } = useI18n()
 // done; neither is shown as unpaid or overdue (BRY-342).
 function statusClass(inv: MemberInvoice): string {
   if (inv.credit_note) return 'bg-sky-100 text-sky-800'
-  if (inv.paid || inv.credited) return 'bg-green-100 text-green-800'
+  if (inv.paid || inv.credited || isNothingDue(inv)) return 'bg-green-100 text-green-800'
   if (inv.payment_received) return 'bg-blue-100 text-blue-800'
   if (isOverdue(inv)) return 'bg-red-100 text-red-800'
   return 'bg-amber-100 text-amber-800'
@@ -26,6 +26,7 @@ function statusClass(inv: MemberInvoice): string {
 function statusLabel(inv: MemberInvoice): string {
   if (inv.credit_note) return t('portal.invoices.status.credit_note')
   if (inv.credited) return t('portal.invoices.status.credited')
+  if (isNothingDue(inv)) return t('portal.invoices.status.nothing_due')
   if (inv.paid) return t('portal.invoices.status.paid')
   if (inv.payment_received) return t('portal.invoices.status.received')
   if (isOverdue(inv)) return t('portal.invoices.status.overdue')
@@ -50,7 +51,7 @@ function statusLabel(inv: MemberInvoice): string {
           </p>
           <p class="mt-0.5 text-xs text-gray-500">
             {{ t('portal.invoices.due') }}: {{ formatDate(inv.due_date) }}
-            <span v-if="inv.kid_number"> · KID {{ inv.kid_number }}</span>
+            <span v-if="inv.kid_number && !isNothingDue(inv)"> · KID {{ inv.kid_number }}</span>
           </p>
         </div>
         <div class="flex shrink-0 items-center gap-3">

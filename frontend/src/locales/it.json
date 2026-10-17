@@ -470,6 +470,7 @@
         "received": "Pagamento ricevuto",
         "unpaid": "Non pagata",
         "overdue": "Scaduta",
+        "nothing_due": "Nulla da pagare",
         "credit_note": "Nota di credito",
         "credited": "Accreditata"
       }
@@ -1405,5 +1406,13 @@
       "invalidCode": "Invalid code — check that your authenticator app's clock is correct",
       "invalidRecovery": "Invalid or already-used recovery code"
     }
+  },
+  "bulkInvoices": {
+    "exemptionsHeader": "{n} riga/e saranno esentate per i ruoli del consiglio. Deseleziona quelle da fatturare per intero.",
+    "exemptionApply": "Esenta",
+    "exemptionRole": "Ruolo",
+    "exemptionItem": "Voce",
+    "exemptionsHint": "Le righe esentate appaiono a prezzo pieno con una riga di compensazione «Fritak»; una faktura da 0 kr viene inviata a titolo informativo, senza nulla da pagare.",
+    "exemptionsApplied": "{n} riga/e esentata/e per i ruoli del consiglio."
   }
 }

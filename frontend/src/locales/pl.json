@@ -469,7 +469,8 @@
         "paid": "Opłacona",
         "received": "Płatność otrzymana",
         "unpaid": "Nieopłacona",
-        "overdue": "Zaległa"
+        "overdue": "Zaległa",
+        "nothing_due": "Nic do zapłaty"
       }
     }
   },
@@ -1375,5 +1376,13 @@
       "invalidCode": "Invalid code — check that your authenticator app's clock is correct",
       "invalidRecovery": "Invalid or already-used recovery code"
     }
+  },
+  "bulkInvoices": {
+    "exemptionsHeader": "{n} pozycji zostanie zwolnionych dla ról zarządu. Odznacz te, które mają być naliczone w pełnej kwocie.",
+    "exemptionApply": "Zwolnij",
+    "exemptionRole": "Rola",
+    "exemptionItem": "Pozycja",
+    "exemptionsHint": "Zwolnione pozycje są pokazane w pełnej cenie z pozycją kompensującą „Fritak”; faktura na 0 kr jest wysyłana informacyjnie, bez kwoty do zapłaty.",
+    "exemptionsApplied": "Zwolniono {n} pozycji dla ról zarządu."
   }
 }

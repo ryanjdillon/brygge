@@ -470,6 +470,7 @@
         "received": "Paiement reçu",
         "unpaid": "Impayée",
         "overdue": "En retard",
+        "nothing_due": "Rien à payer",
         "credit_note": "Avoir",
         "credited": "Crédité"
       }
@@ -1404,5 +1405,13 @@
       "invalidCode": "Invalid code — check that your authenticator app's clock is correct",
       "invalidRecovery": "Invalid or already-used recovery code"
     }
+  },
+  "bulkInvoices": {
+    "exemptionsHeader": "{n} ligne(s) seront exonérées pour les rôles du bureau. Décochez celles qui doivent être facturées en totalité.",
+    "exemptionApply": "Exonérer",
+    "exemptionRole": "Rôle",
+    "exemptionItem": "Article",
+    "exemptionsHint": "Les lignes exonérées apparaissent au prix plein avec une ligne de compensation « Fritak » ; une faktura à 0 kr est envoyée pour information, sans rien à payer.",
+    "exemptionsApplied": "{n} ligne(s) exonérée(s) pour les rôles du bureau."
   }
 }

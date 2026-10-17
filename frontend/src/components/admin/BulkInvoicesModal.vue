@@ -35,8 +35,10 @@ interface BulkResult {
 }
 
 interface Exemption {
+  key?: string
   user_id: string
   price_item_id: string
+  boat_id?: string
   description: string
   amount: number
   role: string
@@ -65,8 +67,10 @@ const result = ref<BulkResult | null>(null)
 const preview = ref<BulkResult | null>(null)
 const applyExemption = ref<Record<string, boolean>>({})
 
+// The server names each exemptable line; a boat-bound line includes its
+// boat, so one boat of a multi-boat member can be unticked on its own.
 function exemptionKey(e: Exemption): string {
-  return `${e.user_id}:${e.price_item_id}`
+  return e.key ?? `${e.user_id}:${e.price_item_id}${e.boat_id ? `:${e.boat_id}` : ''}`
 }
 
 const fiscalPeriodId = ref('')

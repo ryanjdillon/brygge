@@ -73,4 +73,31 @@ describe('BulkInvoicesModal exemption preview', () => {
     expect(JSON.parse(totpAwareFetch.mock.calls[1][1].body).skip_exemptions).toEqual([])
     expect(wrapper.find('[data-testid="bulk-exemption-preview"]').exists()).toBe(false)
   })
+
+  it('keys each boat separately so one of two boats can be unticked', async () => {
+    const boat = (n: number) => ({
+      key: `u-a:slip-a:boat-${n}`,
+      user_id: 'u-a',
+      price_item_id: 'slip-a',
+      boat_id: `boat-${n}`,
+      description: 'Synthetic slip',
+      amount: 2600,
+      role: 'treasurer',
+    })
+    totpAwareFetch
+      .mockImplementationOnce(() => json({ created: [], skipped: [], exemptions: [boat(1), boat(2)], warnings: [] }))
+      .mockImplementationOnce(() => json({ created: [], skipped: [], exemptions: [boat(1)] }))
+    const wrapper = await mountReady()
+
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+    const boxes = wrapper.findAll('[data-testid="exemption-apply"]')
+    expect(boxes).toHaveLength(2)
+
+    await boxes[1].setValue(false)
+    expect((boxes[0].element as HTMLInputElement).checked).toBe(true)
+    await wrapper.find('[data-testid="bulk-confirm"]').trigger('click')
+    await flushPromises()
+    expect(JSON.parse(totpAwareFetch.mock.calls[1][1].body).skip_exemptions).toEqual(['u-a:slip-a:boat-2'])
+  })
 })

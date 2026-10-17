@@ -561,6 +561,7 @@
         "received": "Betaling mottatt",
         "unpaid": "Ubetalt",
         "overdue": "Forfalt",
+        "nothing_due": "Ingenting å betale",
         "credit_note": "Kreditnota",
         "credited": "Kreditert"
       }

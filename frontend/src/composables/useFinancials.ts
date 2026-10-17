@@ -52,7 +52,9 @@ export interface PriceItemSummaryRow {
   category: string
   amount: number
   unit: string
+  // billed is gross; role exemptions (BRY-351) are reported in exempted.
   billed: number
+  exempted: number
   received: number
   overdue: number
   outstanding: number
@@ -66,6 +68,7 @@ export interface PriceItemSummaryResponse {
   items: PriceItemSummaryRow[]
   totals: {
     billed: number
+    exempted: number
     received: number
     overdue: number
     outstanding: number

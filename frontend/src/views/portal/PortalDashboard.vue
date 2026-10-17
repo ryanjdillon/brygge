@@ -6,7 +6,12 @@ import { useQuery } from '@tanstack/vue-query'
 import { useAuthStore } from '@/stores/auth'
 import { useApiClient, unwrap } from '@/lib/apiClient'
 import { useFeatures } from '@/composables/useFeatures'
-import { useMyInvoices, isOverdue, type MemberInvoice } from '@/composables/useMyInvoices'
+import {
+  useMyInvoices,
+  isOverdue,
+  isNothingDue,
+  type MemberInvoice,
+} from '@/composables/useMyInvoices'
 import { usePaymentDataUpdatedAt } from '@/composables/usePaymentDataUpdatedAt'
 import LastUpdated from '@/components/ui/LastUpdated.vue'
 import { formatSlip } from '@/lib/slipSort'
@@ -53,18 +58,19 @@ const displayRole = computed(() => {
 })
 
 function chipBorderClass(inv: MemberInvoice): string {
-  if (inv.paid) return 'border-l-green-400'
+  if (inv.paid || !inv.owed) return 'border-l-green-400'
   if (isOverdue(inv)) return 'border-l-red-400'
   return 'border-l-amber-400'
 }
 
 function chipBadgeClass(inv: MemberInvoice): string {
-  if (inv.paid) return 'bg-green-100 text-green-800'
+  if (inv.paid || !inv.owed) return 'bg-green-100 text-green-800'
   if (isOverdue(inv)) return 'bg-red-100 text-red-800'
   return 'bg-amber-100 text-amber-800'
 }
 
 function chipBadgeLabel(inv: MemberInvoice): string {
+  if (isNothingDue(inv)) return t('portal.invoices.status.nothing_due')
   if (inv.paid) return t('portal.invoices.status.paid')
   if (isOverdue(inv)) return t('portal.invoices.status.overdue')
   return t('portal.invoices.status.unpaid')

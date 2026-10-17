@@ -470,6 +470,7 @@
         "received": "Zahlung erhalten",
         "unpaid": "Unbezahlt",
         "overdue": "Überfällig",
+        "nothing_due": "Nichts zu zahlen",
         "credit_note": "Gutschrift",
         "credited": "Gutgeschrieben"
       }
@@ -1405,5 +1406,13 @@
       "invalidCode": "Invalid code — check that your authenticator app's clock is correct",
       "invalidRecovery": "Invalid or already-used recovery code"
     }
+  },
+  "bulkInvoices": {
+    "exemptionsHeader": "{n} Zeile(n) werden für Vorstandsrollen befreit. Entfernen Sie das Häkchen bei allen, die voll berechnet werden sollen.",
+    "exemptionApply": "Befreien",
+    "exemptionRole": "Rolle",
+    "exemptionItem": "Posten",
+    "exemptionsHint": "Befreite Zeilen erscheinen zum vollen Preis mit einer ausgleichenden „Fritak“-Zeile; eine Faktura mit 0 kr wird zur Information versendet, ohne dass etwas zu zahlen ist.",
+    "exemptionsApplied": "{n} Zeile(n) für Vorstandsrollen befreit."
   }
 }
