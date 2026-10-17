@@ -30,7 +30,7 @@ Use `Error(w, status, msg)` for failures; never bare `http.Error`. Use `JSON(w, 
 
 ## 2. Route registration
 
-Register in `backend/cmd/api/main.go` under the right route group. Pattern:
+Register in `backend/cmd/api/main.go` under the right route group (ledger routes — journal, sync, bank import — go in `AccountingHandler.MountLedgerRoutes`, whose test fails on an ungated write unless you allowlist it). Pattern:
 
 ```go
 r.With(

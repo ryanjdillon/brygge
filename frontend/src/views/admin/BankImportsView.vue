@@ -327,7 +327,9 @@ const reassignTo = ref('')
 const reassignError = ref<string | null>(null)
 const reassignBusy = ref(false)
 
-function openReassign(id: string, currentCode: string) {
+// Reassigning rewrites posted journal lines, so step up before the form opens.
+async function openReassign(id: string, currentCode: string) {
+  if (!(await ensureFreshTotp())) return
   reassignImportId.value = id
   reassignFrom.value = currentCode
   reassignTo.value = currentCode

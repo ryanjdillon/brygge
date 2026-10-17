@@ -125,7 +125,8 @@ The **Fresh TOTP** column marks the extra per-action gate.
 | `POST /bank-sync`, `/vipps-resync` | ✅ (treasurer, admin; BRY-370) | auto-match and post (KID, Vipps order and auto-assign) |
 | `POST /bank-import` | ✅ (treasurer, admin; BRY-370) | posts import-time KID matches |
 | `/bank-import/{id}/rows/{row}/match`, `/auto-match` | — | create drafts only |
-| `PATCH /bank-import/{id}/account` | ✅ | reassigns an import to another account |
+| `PATCH /bank-import/{id}/account` | ✅ (treasurer, admin; BRY-370) | reassigns an import to another account; rewrites posted journal_lines |
+| `POST /bank-import/account-reimport`, `/bank-import/{id}/reimport` | ✅ (treasurer, admin; BRY-370) | rerun the import cascade, which posts KID matches |
 | `POST /vipps-imports` | ✅ (treasurer, admin; BRY-370) | posts order-linked and auto-assigned charges |
 | `POST /bank-rows/{id}/reconcile-vipps/confirm` | ✅ (treasurer, admin; BRY-370) | posts the payout reconciliation |
 | `/vipps-imports` list | — | |
@@ -138,7 +139,12 @@ The **Fresh TOTP** column marks the extra per-action gate.
 entry, whether directly or by auto-matching during an import or sync,
 requires the treasurer or admin role **and** a fresh step-up (`moneyGate` in
 `cmd/api/main.go`). Board members keep read access to the books. The SPA asks
-for the step-up at click time (`ensureFreshTotp()`).
+for the step-up at click time (`ensureFreshTotp()`). The journal, sync,
+bank-import and bank-reconciliation routes are mounted by
+`AccountingHandler.MountLedgerRoutes` (`internal/handlers/accounting_routes.go`);
+`TestLedgerRoutesGateMoneyMovesForBoard` walks them and fails on any non-GET
+route that answers a board session with anything but 403, outside a short
+allowlist of previews, attachments and draft-only matches.
 
 ## Findings (DIL-245)
 

@@ -2,6 +2,7 @@
 import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { useFreshTotp } from '@/composables/useFreshTotp'
 import {
   ArrowLeft,
   Plus,
@@ -27,6 +28,7 @@ import NumberInput from '@/components/ui/form/NumberInput.vue'
 import DateInput from '@/components/ui/form/DateInput.vue'
 
 const router = useRouter()
+const { ensureFreshTotp } = useFreshTotp()
 const { t } = useI18n()
 
 const { data: accounts } = useAccountsList()
@@ -158,7 +160,11 @@ function buildPayload() {
   }
 }
 
-function handleSaveDraft() {
+// Creating and posting entries are money moves (treasurer/admin + fresh
+// TOTP on the server), so the step-up is asked for when the button is
+// clicked, not when the request comes back 403.
+async function handleSaveDraft() {
+  if (!(await ensureFreshTotp())) return
   errorMessage.value = ''
   uploadError.value = ''
   createMutation.mutate(buildPayload(), {
@@ -176,7 +182,8 @@ function handleSaveDraft() {
   })
 }
 
-function handlePost() {
+async function handlePost() {
+  if (!(await ensureFreshTotp())) return
   errorMessage.value = ''
   uploadError.value = ''
   createMutation.mutate(buildPayload(), {
