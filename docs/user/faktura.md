@@ -165,6 +165,20 @@ Read-only history of voided fakturas. Cannot be un-voided; create a new one if y
 
 **Avstem periode** in Bilag is a repair step, not part of the normal flow: it books any sent faktura that is still missing from the accounts and reverses voided ones that are still booked.
 
+### Credit notes (kreditnotaer)
+
+A credit note is a faktura with a negative amount. It is never a debt: it is never overdue, never reminded, and members see it as **Kreditnota**, not "ubetalt". The **Kreditnotaer** chip in the Sent and Importert lists filters them.
+
+A credit note only settles the faktura it cancels once you link them:
+
+1. Click **Motregn mot faktura** (the scales icon) on the credit note. Brygge asks for a fresh TOTP.
+2. Pick the faktura from the list. Only fakturas with the same payer and the same amount are offered, and not ones already credited.
+3. The result depends on that faktura:
+   - **Open** → both count as settled (**Motregnet mot #N**), and the faktura reads **Kreditert av #M**.
+   - **Already paid** → the member has the amount owed back (**Tilgode medlem**). Refund it or carry it forward.
+
+Nothing new is booked in the accounts. A booked credit note already cancels its faktura's receivable, and imported history isn't booked at all. Brygge refuses links it can't make safely: a partial credit (settle the rest separately), different payers, or one side booked and the other not. **Angre motregning** (the undo icon) reopens the faktura. A linked credit note can't be voided until you undo the link.
+
 ## PDF archive
 
 Every regenerate inserts the prior PDF bytes into `invoice_pdf_archive` inside the same transaction as the overwrite, so a failure mid-flight leaves the original PDF in place. Two ways to access an archived version:

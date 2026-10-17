@@ -469,7 +469,9 @@
         "paid": "Betaald",
         "received": "Betaling ontvangen",
         "unpaid": "Onbetaald",
-        "overdue": "Achterstallig"
+        "overdue": "Achterstallig",
+        "credit_note": "Creditnota",
+        "credited": "Gecrediteerd"
       }
     }
   },

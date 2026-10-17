@@ -73,6 +73,8 @@ The action string is the JSON wire format (`row.action`); the constant is the Go
 | `ActionInvoiceEmailed` | `invoice.emailed` | invoice | After `SendWithAttachment` succeeds (post-`sent_at` stamp) | `email`, `invoice_number` |
 | `ActionInvoiceReminded` | `invoice.reminded` | invoice | Per row inside `HandleBulkSendReminder` after reminder email sent | `email`, `invoice_number` |
 | `ActionInvoiceVippsLinkSet` | `invoice.vipps_link_set` | invoice | `HandleSetInvoiceVippsLink` (per invoice), and the reminder batch's On/Off override (resource_id empty, `count`) | `opt_in` (and `count` for the batch) |
+| `ActionInvoiceCreditLinked` | `invoice.credit_linked` | invoice (the credit note) | `HandleLinkCreditNote`: a credit note is settled against the faktura it credits | `credit_note_number`, `invoice_number`, `amount`, `outcome` (`settled_pair` / `credit_owed`) |
+| `ActionInvoiceCreditUnlinked` | `invoice.credit_unlinked` | invoice (the credit note) | `HandleUnlinkCreditNote`: the settlement is undone and the faktura reopens | `credit_note_number`, `invoice_id` |
 | `ActionInvoiceRegenerated` | `invoice.pdf_regenerated` | invoice | Per row inside `HandleBulkRegeneratePDF` after archive+overwrite succeeds | `invoice_number`, `bank_account`, `prior_pdf_bytes` |
 | `ActionInvoiceDeliveryLogViewed` | `invoice.delivery_log_viewed` | invoice | Treasurer opens the Stalwart delivery-log popover for a sent invoice (PII visibility audit — recipient email is exposed in the response) | `recipient_email`, `matches_returned` |
 | `ActionFinanceCSVExported` | `finance.csv_exported` | finance | Treasurer downloads a payments/invoices CSV | `format`, `rows` |

@@ -15,6 +15,7 @@ import (
 
 	"github.com/brygge-klubb/brygge/internal/audit"
 	"github.com/brygge-klubb/brygge/internal/config"
+	"github.com/brygge-klubb/brygge/internal/finance"
 	"github.com/brygge-klubb/brygge/internal/middleware"
 	"github.com/brygge-klubb/brygge/internal/shared"
 )
@@ -130,10 +131,10 @@ func (h *FinancialsHandler) HandleGetPriceItemSummary(w http.ResponseWriter, r *
 		       pi.unit,
 		       COALESCE(SUM(il.line_total), 0) AS billed,
 		       COALESCE(SUM(CASE WHEN i.payment_id IS NOT NULL THEN il.line_total ELSE 0 END), 0) AS received,
-		       COALESCE(SUM(CASE WHEN i.payment_id IS NULL AND i.due_date < CURRENT_DATE THEN il.line_total ELSE 0 END), 0) AS overdue,
+		       COALESCE(SUM(CASE WHEN `+finance.OwedByMemberSQL("i")+` AND i.due_date < CURRENT_DATE THEN il.line_total ELSE 0 END), 0) AS overdue,
 		       COUNT(DISTINCT i.id) AS invoice_count,
 		       COUNT(DISTINCT CASE WHEN i.payment_id IS NOT NULL THEN i.id END) AS paid_count,
-		       COUNT(DISTINCT CASE WHEN i.payment_id IS NULL AND i.due_date < CURRENT_DATE THEN i.id END) AS overdue_count
+		       COUNT(DISTINCT CASE WHEN `+finance.OwedByMemberSQL("i")+` AND i.due_date < CURRENT_DATE THEN i.id END) AS overdue_count
 		  FROM invoices i
 		  JOIN invoice_lines il ON il.invoice_id = i.id
 		  LEFT JOIN price_items pi ON pi.id = il.price_item_id AND pi.club_id = i.club_id
@@ -194,10 +195,10 @@ func (h *FinancialsHandler) HandleGetPriceItemSummary(w http.ResponseWriter, r *
 	if err := h.db.QueryRow(ctx, `
 		SELECT COALESCE(SUM(il.line_total), 0),
 		       COALESCE(SUM(CASE WHEN i.payment_id IS NOT NULL THEN il.line_total ELSE 0 END), 0),
-		       COALESCE(SUM(CASE WHEN i.payment_id IS NULL AND i.due_date < CURRENT_DATE THEN il.line_total ELSE 0 END), 0),
+		       COALESCE(SUM(CASE WHEN `+finance.OwedByMemberSQL("i")+` AND i.due_date < CURRENT_DATE THEN il.line_total ELSE 0 END), 0),
 		       COUNT(DISTINCT i.id),
 		       COUNT(DISTINCT CASE WHEN i.payment_id IS NOT NULL THEN i.id END),
-		       COUNT(DISTINCT CASE WHEN i.payment_id IS NULL AND i.due_date < CURRENT_DATE THEN i.id END)
+		       COUNT(DISTINCT CASE WHEN `+finance.OwedByMemberSQL("i")+` AND i.due_date < CURRENT_DATE THEN i.id END)
 		  FROM invoices i
 		  JOIN invoice_lines il ON il.invoice_id = i.id
 		 WHERE i.club_id = $1

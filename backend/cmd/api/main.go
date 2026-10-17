@@ -939,6 +939,17 @@ func main() {
 						r.With(middleware.RequireRole("treasurer", "admin"),
 							middleware.RequireFreshTOTPDefault()).
 							Post("/invoices/{invoiceID}/void", invoiceHandler.HandleVoidInvoice)
+						// Credit-note links (BRY-342): settle a credit note against the
+						// faktura it credits. Linking changes what members owe, so it
+						// takes a fresh step-up; listing candidates is a read.
+						r.With(middleware.RequireRole("treasurer", "admin")).
+							Get("/invoices/{invoiceID}/credit-candidates", invoiceHandler.HandleListCreditCandidates)
+						r.With(middleware.RequireRole("treasurer", "admin"),
+							middleware.RequireFreshTOTPDefault()).
+							Post("/invoices/{invoiceID}/credit-link", invoiceHandler.HandleLinkCreditNote)
+						r.With(middleware.RequireRole("treasurer", "admin"),
+							middleware.RequireFreshTOTPDefault()).
+							Delete("/invoices/{invoiceID}/credit-link", invoiceHandler.HandleUnlinkCreditNote)
 						r.With(middleware.RequireRole("treasurer", "admin"),
 							middleware.RequireFreshTOTPDefault()).
 							Delete("/invoices/{invoiceID}", invoiceHandler.HandleDeleteInvoice)

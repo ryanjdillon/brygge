@@ -469,7 +469,9 @@
         "paid": "Pagata",
         "received": "Pagamento ricevuto",
         "unpaid": "Non pagata",
-        "overdue": "Scaduta"
+        "overdue": "Scaduta",
+        "credit_note": "Nota di credito",
+        "credited": "Accreditata"
       }
     }
   },

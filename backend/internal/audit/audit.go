@@ -54,6 +54,8 @@ const (
 	ActionInvoiceEmailed              = "invoice.emailed"
 	ActionInvoiceReminded             = "invoice.reminded"
 	ActionInvoiceVippsLinkSet         = "invoice.vipps_link_set"
+	ActionInvoiceCreditLinked         = "invoice.credit_linked"
+	ActionInvoiceCreditUnlinked       = "invoice.credit_unlinked"
 	ActionInvoiceRegenerated          = "invoice.pdf_regenerated"
 	ActionInvoiceDeliveryLogViewed    = "invoice.delivery_log_viewed"
 	ActionFinanceCSVExported          = "finance.csv_exported"

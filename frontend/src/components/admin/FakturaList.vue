@@ -2,7 +2,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { FileDown, Send, Trash2, Ban, Bell, RefreshCw, KeyRound, Copy, Check, ChevronUp, ChevronDown, X, Link2 } from 'lucide-vue-next'
+import { FileDown, Send, Trash2, Ban, Bell, RefreshCw, KeyRound, Copy, Check, ChevronUp, ChevronDown, X, Link2, Scale, Undo2 } from 'lucide-vue-next'
 import FakturaArchiveButton from '@/components/admin/FakturaArchiveButton.vue'
 import DeliveryLogButton from '@/components/admin/DeliveryLogButton.vue'
 import InvoiceNumberChip from '@/components/ui/InvoiceNumberChip.vue'
@@ -32,9 +32,23 @@ interface Row {
   paid: boolean
   vipps_paid_at: string | null
   vipps_payment_link_opt_in: boolean | null
+  // Credit-note links (BRY-342): set on a credit note linked to the faktura
+  // it credits, and on a faktura settled by one.
+  credits_invoice_number: number | null
+  credit_state: 'settled_pair' | 'credit_owed' | 'unlinked' | null
+  credited_by_invoice_number: number | null
 }
 
-type PaidStatus = 'paid' | 'waiting' | 'past_due'
+interface CreditCandidate {
+  id: string
+  invoice_number: number
+  total_amount: number
+  issue_date: string
+  paid: boolean
+  imported: boolean
+}
+
+type PaidStatus = 'paid' | 'waiting' | 'past_due' | 'credit'
 
 const props = defineProps<{
   /** Backend filter — drives which rows are listed and which actions are shown. */
@@ -68,9 +82,12 @@ const paidStatusFilter = ref<Set<PaidStatus>>(new Set())
 // `?tab=sent&pay=waiting,past_due` for outstanding). Only the sent list
 // carries these chips; drafts/voided ignore a stray param.
 const route = useRoute()
-const VALID_PAID_STATUS: PaidStatus[] = ['paid', 'waiting', 'past_due']
+const VALID_PAID_STATUS: PaidStatus[] = ['paid', 'waiting', 'past_due', 'credit']
+// The sent and imported lists carry paid-status chips; imported history
+// holds most credit notes.
+const showPaidChips = computed(() => props.status === 'sent' || props.status === 'imported')
 function applyPayQuery() {
-  if (props.status !== 'sent') {
+  if (!showPaidChips.value) {
     paidStatusFilter.value = new Set()
     return
   }
@@ -83,8 +100,14 @@ function applyPayQuery() {
 applyPayQuery()
 watch(() => route.query.pay, applyPayQuery)
 
+// A credit note is never a debt, and a faktura settled by one is settled
+// like a paid one — neither may show as past due (BRY-342).
+function isCreditNote(d: Row): boolean {
+  return Number(d.total_amount) < 0
+}
 function rowPaidStatus(d: Row): PaidStatus {
-  if (d.paid) return 'paid'
+  if (isCreditNote(d)) return 'credit'
+  if (d.paid || d.credited_by_invoice_number != null) return 'paid'
   return new Date(d.due_date) < new Date(new Date().toDateString()) ? 'past_due' : 'waiting'
 }
 function paidStatusTitle(d: Row): string {
@@ -92,6 +115,7 @@ function paidStatusTitle(d: Row): string {
     paid: t('admin.faktura.sent.filterPaid'),
     waiting: t('admin.faktura.sent.filterWaiting'),
     past_due: t('admin.faktura.sent.filterPastDue'),
+    credit: t('admin.faktura.credit.filter'),
   }
   return labels[rowPaidStatus(d)]
 }
@@ -107,7 +131,7 @@ function togglePaidStatus(s: PaidStatus) {
 // filter become if I toggled this on" and the operator can answer
 // "how many past-due fakturas are there" at a glance.
 const paidStatusCounts = computed(() => {
-  const acc = { paid: 0, waiting: 0, past_due: 0 } as Record<PaidStatus, number>
+  const acc = { paid: 0, waiting: 0, past_due: 0, credit: 0 } as Record<PaidStatus, number>
   for (const d of rows.value) acc[rowPaidStatus(d)]++
   return acc
 })
@@ -349,7 +373,9 @@ async function doVoid(id: string) {
       error.value =
         body?.code === 'period_closed'
           ? t('admin.invoiceDrafts.voidPeriodClosed')
-          : t('admin.invoiceDrafts.voidSettled')
+          : body?.code === 'credit_linked'
+            ? t('admin.faktura.credit.voidLinked')
+            : t('admin.invoiceDrafts.voidSettled')
       return
     }
     if (!res.ok && res.status !== 204) {
@@ -362,6 +388,89 @@ async function doVoid(id: string) {
     selected.value.delete(id)
   } finally {
     busyIds.value.delete(id)
+  }
+}
+
+// Settle a credit note against the faktura it credits. Linking changes what
+// the member owes, so the server requires a fresh step-up — prompt for it
+// at click time, before the picker.
+async function settleCredit(d: Row) {
+  if (!(await ensureFreshTotp())) return
+  busyIds.value.add(d.id)
+  try {
+    const res = await totpAwareFetch(`/api/v1/admin/financials/invoices/${d.id}/credit-candidates`)
+    if (!res.ok) {
+      error.value = `${res.status} ${await res.text().catch(() => '')}`
+      return
+    }
+    const candidates: CreditCandidate[] = (await res.json()).items ?? []
+    if (candidates.length === 0) {
+      error.value = t('admin.faktura.credit.noCandidates', { number: d.invoice_number })
+      return
+    }
+    const ok = await confirm({
+      title: t('admin.faktura.credit.settleTitle', { number: d.invoice_number }),
+      body: t('admin.faktura.credit.settleBody', { amount: formatNOK(Math.abs(Number(d.total_amount))) }),
+      choice: {
+        label: t('admin.faktura.credit.settleChoice'),
+        options: candidates.map((c) => ({
+          value: c.id,
+          label: t(c.paid ? 'admin.faktura.credit.candidatePaid' : 'admin.faktura.credit.candidateOpen', {
+            number: c.invoice_number,
+            amount: formatNOK(Number(c.total_amount)),
+            date: c.issue_date.slice(0, 10),
+          }),
+        })),
+        default: candidates[0].id,
+      },
+      confirmLabel: t('admin.faktura.credit.settleAction'),
+      tone: 'warning',
+    })
+    if (!ok) return
+    const target = confirmStore.choiceValue
+    const link = await totpAwareFetch(`/api/v1/admin/financials/invoices/${d.id}/credit-link`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ invoice_id: target }),
+    })
+    const body = await link.json().catch(() => null)
+    if (!link.ok) {
+      error.value = body?.code
+        ? t(`admin.faktura.credit.error.${body.code}`, body?.error ?? '')
+        : `${link.status} ${body?.error ?? ''}`
+      return
+    }
+    flash(
+      t(body?.outcome === 'credit_owed' ? 'admin.faktura.credit.doneOwed' : 'admin.faktura.credit.donePair', {
+        credit: body?.credit_note_number,
+        number: body?.invoice_number,
+      }),
+    )
+    await load()
+  } finally {
+    busyIds.value.delete(d.id)
+  }
+}
+
+async function unlinkCredit(d: Row) {
+  if (!(await ensureFreshTotp())) return
+  const ok = await confirm({
+    title: t('admin.faktura.credit.unlinkTitle', { number: d.invoice_number }),
+    body: t('admin.faktura.credit.unlinkBody', { number: d.credits_invoice_number }),
+    confirmLabel: t('admin.faktura.credit.unlinkAction'),
+    tone: 'warning',
+  })
+  if (!ok) return
+  busyIds.value.add(d.id)
+  try {
+    const res = await totpAwareFetch(`/api/v1/admin/financials/invoices/${d.id}/credit-link`, { method: 'DELETE' })
+    if (!res.ok && res.status !== 204) {
+      error.value = `${res.status} ${await res.text().catch(() => '')}`
+      return
+    }
+    await load()
+  } finally {
+    busyIds.value.delete(d.id)
   }
 }
 
@@ -644,7 +753,7 @@ defineExpose({ load })
           <option value="">{{ t('admin.invoiceDrafts.filterAllYears') }}</option>
           <option v-for="y in yearOptions" :key="y" :value="y">{{ y }}</option>
         </select>
-        <div v-if="status === 'sent'" class="flex flex-wrap gap-1.5">
+        <div v-if="showPaidChips" class="flex flex-wrap gap-1.5">
           <button
             type="button"
             class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition"
@@ -674,6 +783,18 @@ defineExpose({ load })
             <span class="inline-block h-1.5 w-1.5 rounded-full bg-red-500" />
             {{ t('admin.faktura.sent.filterPastDue') }}
             <span class="rounded-full bg-white/60 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-gray-700">{{ paidStatusCounts.past_due }}</span>
+          </button>
+          <button
+            v-if="paidStatusCounts.credit > 0"
+            type="button"
+            class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition"
+            :class="paidStatusFilter.has('credit') ? 'border-sky-300 bg-sky-50 text-sky-800' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'"
+            data-testid="credit-chip"
+            @click="togglePaidStatus('credit')"
+          >
+            <span class="inline-block h-1.5 w-1.5 rounded-full bg-sky-500" />
+            {{ t('admin.faktura.credit.filter') }}
+            <span class="rounded-full bg-white/60 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-gray-700">{{ paidStatusCounts.credit }}</span>
           </button>
         </div>
         <span class="ml-auto text-xs text-gray-500">
@@ -806,7 +927,7 @@ defineExpose({ load })
               </td>
               <td class="whitespace-nowrap px-3 py-2">
                 <InvoiceNumberChip
-                  v-if="status === 'sent'"
+                  v-if="showPaidChips"
                   :number="d.invoice_number"
                   :status="rowPaidStatus(d)"
                   :title="paidStatusTitle(d)"
@@ -830,6 +951,24 @@ defineExpose({ load })
                   :title="t('admin.faktura.sent.vippsReceivedTitle')"
                 >
                   {{ t('admin.faktura.sent.vippsReceived') }}
+                </span>
+                <span
+                  v-if="d.credit_state"
+                  class="mt-1 inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ring-1"
+                  :class="d.credit_state === 'credit_owed'
+                    ? 'bg-amber-50 text-amber-800 ring-amber-200'
+                    : d.credit_state === 'settled_pair'
+                      ? 'bg-sky-50 text-sky-800 ring-sky-200'
+                      : 'bg-gray-50 text-gray-700 ring-gray-200'"
+                  data-testid="credit-badge"
+                >
+                  {{ t(`admin.faktura.credit.state.${d.credit_state}`, { number: d.credits_invoice_number }) }}
+                </span>
+                <span
+                  v-else-if="d.credited_by_invoice_number != null"
+                  class="mt-1 inline-flex items-center rounded-full bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium text-sky-800 ring-1 ring-sky-200"
+                >
+                  {{ t('admin.faktura.credit.creditedBy', { number: d.credited_by_invoice_number }) }}
                 </span>
               </td>
               <td class="px-3 py-2 text-sm text-gray-700">{{ d.price_item_name || d.description || '—' }}</td>
@@ -893,6 +1032,26 @@ defineExpose({ load })
                     @click="copyPayLink(d)"
                   >
                     <Link2 class="h-4 w-4" />
+                  </button>
+                  <button
+                    v-if="d.credit_state === 'unlinked'"
+                    class="text-sky-600 hover:text-sky-800 disabled:opacity-50"
+                    :disabled="busyIds.has(d.id)"
+                    :title="t('admin.faktura.credit.settleAction')"
+                    data-testid="credit-settle"
+                    @click="settleCredit(d)"
+                  >
+                    <Scale class="h-4 w-4" />
+                  </button>
+                  <button
+                    v-if="d.credit_state === 'settled_pair' || d.credit_state === 'credit_owed'"
+                    class="text-gray-500 hover:text-gray-800 disabled:opacity-50"
+                    :disabled="busyIds.has(d.id)"
+                    :title="t('admin.faktura.credit.unlinkAction')"
+                    data-testid="credit-unlink"
+                    @click="unlinkCredit(d)"
+                  >
+                    <Undo2 class="h-4 w-4" />
                   </button>
                   <button
                     v-if="showVoid"

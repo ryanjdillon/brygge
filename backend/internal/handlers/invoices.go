@@ -962,7 +962,12 @@ func (h *InvoiceHandler) HandleListInvoices(w http.ResponseWriter, r *http.Reque
 		             AND resource  = 'invoice'
 		             AND resource_id = i.id::text
 		             AND action = 'invoice.reminded') AS last_reminder_at,
-		        i.vipps_paid_at, i.vipps_payment_link_opt_in
+		        i.vipps_paid_at, i.vipps_payment_link_opt_in,
+		        (SELECT o.invoice_number FROM invoices o WHERE o.id = i.credits_invoice_id),
+		        (SELECT o.payment_id IS NOT NULL OR o.vipps_paid_at IS NOT NULL
+		           FROM invoices o WHERE o.id = i.credits_invoice_id),
+		        (SELECT cn.invoice_number FROM invoices cn
+		          WHERE cn.credits_invoice_id = i.id AND cn.status <> 'voided')
 		   FROM invoices i
 		   LEFT JOIN users u ON u.id = i.user_id
 		   LEFT JOIN price_items pi ON pi.id = i.price_item_id
@@ -986,22 +991,42 @@ func (h *InvoiceHandler) HandleListInvoices(w http.ResponseWriter, r *http.Reque
 		LastReminderAt *time.Time `json:"last_reminder_at"`
 		VippsPaidAt    *time.Time `json:"vipps_paid_at"`
 		VippsLinkOptIn *bool      `json:"vipps_payment_link_opt_in"`
+		// Credit-note links (BRY-342). CreditsInvoiceNumber is set on a
+		// credit note linked to the faktura it credits; CreditState is
+		// "settled_pair" (that faktura was owed), "credit_owed" (it was
+		// already paid, so the member is owed the credit) or "unlinked".
+		// CreditedByNumber is set on a faktura settled by a credit note.
+		CreditsInvoiceNumber *int    `json:"credits_invoice_number"`
+		CreditState          *string `json:"credit_state"`
+		CreditedByNumber     *int    `json:"credited_by_invoice_number"`
 	}
 	out := make([]listRow, 0)
 	for rows.Next() {
 		var d listRow
 		var issue, due time.Time
+		var creditTargetPaid *bool
 		if err := rows.Scan(&d.ID, &d.InvoiceNumber, &d.UserID,
 			&d.MemberName, &d.MemberEmail, &d.MemberPhone,
 			&d.TotalAmount, &issue, &due,
 			&d.PriceItemName, &d.FiscalYear, &d.Description, &d.CreatedAt,
-			&d.SentAt, &d.Status, &d.Paid, &d.LastReminderAt, &d.VippsPaidAt, &d.VippsLinkOptIn); err != nil {
+			&d.SentAt, &d.Status, &d.Paid, &d.LastReminderAt, &d.VippsPaidAt, &d.VippsLinkOptIn,
+			&d.CreditsInvoiceNumber, &creditTargetPaid, &d.CreditedByNumber); err != nil {
 			h.log.Error().Err(err).Msg("scan invoice row")
 			Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
 		d.IssueDate = issue.Format("2006-01-02")
 		d.DueDate = due.Format("2006-01-02")
+		if d.TotalAmount < 0 {
+			state := "unlinked"
+			switch {
+			case d.CreditsInvoiceNumber != nil && creditTargetPaid != nil && *creditTargetPaid:
+				state = creditOwed
+			case d.CreditsInvoiceNumber != nil:
+				state = creditSettledPair
+			}
+			d.CreditState = &state
+		}
 		out = append(out, d)
 	}
 
@@ -1349,7 +1374,7 @@ func (h *InvoiceHandler) HandleDeleteInvoice(w http.ResponseWriter, r *http.Requ
 // invoices fall out of the bulk-faktura dedup index so the admin can
 // re-issue under the same (member, category, period) without manual
 // SQL. Idempotent — voiding an already-voided invoice returns 204. A
-// settled invoice (finance.SettledForMember) is refused with 409.
+// settled invoice (finance.SettledForMemberSQL) is refused with 409.
 func (h *InvoiceHandler) HandleVoidInvoice(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
@@ -1366,12 +1391,12 @@ func (h *InvoiceHandler) HandleVoidInvoice(w http.ResponseWriter, r *http.Reques
 	// Vipps and awaiting settlement). Voiding it would hide a payment with
 	// nothing owed against it; that needs a refund or credit note instead.
 	var status string
-	var settled bool
+	var settled, creditLinked bool
 	err := h.db.QueryRow(ctx,
-		`SELECT status, `+finance.SettledForMemberSQL("")+`
+		`SELECT status, `+finance.SettledForMemberSQL("")+`, credits_invoice_id IS NOT NULL
 		   FROM invoices WHERE id = $1 AND club_id = $2`,
 		invoiceID, claims.ClubID,
-	).Scan(&status, &settled)
+	).Scan(&status, &settled, &creditLinked)
 	if err == pgx.ErrNoRows {
 		Error(w, http.StatusNotFound, "invoice not found")
 		return
@@ -1387,6 +1412,15 @@ func (h *InvoiceHandler) HandleVoidInvoice(w http.ResponseWriter, r *http.Reques
 	}
 	if settled {
 		Error(w, http.StatusConflict, "invoice is already paid; refund or credit it instead of voiding")
+		return
+	}
+	// Voiding a linked credit note would silently reopen the faktura it
+	// settles; the link has to be undone first, deliberately.
+	if creditLinked {
+		JSON(w, http.StatusConflict, map[string]string{
+			"error": "the credit note settles a faktura; remove the credit link before voiding it",
+			"code":  "credit_linked",
+		})
 		return
 	}
 	// A faktura booked into a closed year can't be reversed there; voiding

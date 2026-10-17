@@ -1,35 +1,31 @@
 package finance
 
 import (
+	"strings"
 	"testing"
-	"time"
 )
 
 func TestSettledPredicates(t *testing.T) {
-	if got := SettledForMemberSQL("i"); got != "(i.payment_id IS NOT NULL OR i.vipps_paid_at IS NOT NULL OR i.status = 'voided')" {
-		t.Errorf("SettledForMemberSQL(i) = %s", got)
+	member := SettledForMemberSQL("i")
+	for _, part := range []string{
+		"i.payment_id IS NOT NULL",
+		"i.vipps_paid_at IS NOT NULL",
+		"i.status = 'voided'",
+		"cn.credits_invoice_id = i.id AND cn.status <> 'voided'",
+	} {
+		if !strings.Contains(member, part) {
+			t.Errorf("SettledForMemberSQL(i) = %s, missing %q", member, part)
+		}
+	}
+	// Unaliased callers (UPDATE invoices ... WHERE) need the outer table named
+	// inside the credit-note subquery.
+	if got := SettledForMemberSQL(""); !strings.Contains(got, "cn.credits_invoice_id = invoices.id") {
+		t.Errorf("SettledForMemberSQL() = %s, want the subquery to reference invoices.id", got)
 	}
 	if got := SettledForGLSQL(""); got != "(payment_id IS NOT NULL)" {
 		t.Errorf("SettledForGLSQL() = %s", got)
 	}
-
-	pid := "p1"
-	now := time.Now()
-	cases := []struct {
-		name   string
-		status string
-		pid    *string
-		vipps  *time.Time
-		want   bool
-	}{
-		{"open unpaid", "open", nil, nil, false},
-		{"reconciled", "open", &pid, nil, true},
-		{"vipps captured, awaiting settlement", "open", nil, &now, true},
-		{"voided", "voided", nil, nil, true},
-	}
-	for _, c := range cases {
-		if got := SettledForMember(c.status, c.pid, c.vipps); got != c.want {
-			t.Errorf("%s: SettledForMember = %v, want %v", c.name, got, c.want)
-		}
+	if got := OwedByMemberSQL("i"); !strings.HasPrefix(got, "((i.total_amount > 0) AND NOT (") {
+		t.Errorf("OwedByMemberSQL(i) = %s, want a debt check before the settled check", got)
 	}
 }

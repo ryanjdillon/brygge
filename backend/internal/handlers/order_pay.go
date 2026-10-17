@@ -9,7 +9,6 @@ import (
 	"math"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
@@ -164,7 +163,7 @@ func (h *InvoiceHandler) orderHasVippsBlockedSource(ctx context.Context, orderID
 		     JOIN orders o   ON o.id = os.order_id
 		     JOIN clubs c    ON c.id = o.club_id
 		    WHERE os.order_id = $1
-		      AND NOT `+finance.SettledForMemberSQL("i")+`
+		      AND `+finance.OwedByMemberSQL("i")+`
 		      AND NOT (`+vippsAllowedExpr+`)
 		 )`,
 		orderID,
@@ -377,7 +376,7 @@ func (h *InvoiceHandler) orderTotal(ctx context.Context, orderID string) (float6
 	var parts []string
 
 	rows, err := h.db.Query(ctx,
-		`SELECT i.invoice_number, i.total_amount, i.status, i.payment_id, i.vipps_paid_at
+		`SELECT i.invoice_number, i.total_amount, `+finance.OwedByMemberSQL("i")+`
 		   FROM order_sources os
 		   JOIN invoices i ON i.id = os.invoice_id
 		  WHERE os.order_id = $1
@@ -389,17 +388,15 @@ func (h *InvoiceHandler) orderTotal(ctx context.Context, orderID string) (float6
 	}
 	for rows.Next() {
 		var (
-			number    int
-			amount    float64
-			status    string
-			paymentID *string
-			paidAt    *time.Time
+			number int
+			amount float64
+			owed   bool
 		)
-		if err := rows.Scan(&number, &amount, &status, &paymentID, &paidAt); err != nil {
+		if err := rows.Scan(&number, &amount, &owed); err != nil {
 			rows.Close()
 			return 0, "", err
 		}
-		if finance.SettledForMember(status, paymentID, paidAt) {
+		if !owed {
 			continue
 		}
 		total += amount

@@ -184,7 +184,8 @@ Charges naming a checkout order are left to `AutoReconcileOrderCharges`. Each bo
 ### Settled means one thing, defined once
 
 **Rule (BRY-325):** whether an invoice still needs paying is decided only through `internal/finance/settled.go`:
-- **`SettledForMemberSQL` / `SettledForMember`** returns true for `payment_id IS NOT NULL OR vipps_paid_at IS NOT NULL OR status = 'voided'`. It is used by reminders (both enqueue *and* the worker's send-time check), KID reissue, the member payables page, checkout totals and the Vipps-blocked check.
+- **`SettledForMemberSQL`** returns true for `payment_id IS NOT NULL OR vipps_paid_at IS NOT NULL OR status = 'voided'`, or when a live credit note credits the invoice (`CreditedSQL`, BRY-342).
+- **`OwedByMemberSQL`** is `IsDebtSQL` (a positive total) and not settled for the member. It answers "is the member chased for this?" and is used by reminders (both enqueue *and* the worker's send-time check), KID reissue, the member payables page and "unpaid" filter, checkout totals, the Vipps-blocked check, Vipps auto-assign's open-faktura lookup, and the Økonomi overview's overdue figures.
 - **`SettledForGLSQL`** returns true for `payment_id IS NOT NULL`. It is used where the receivable must actually be cleared: reconciliation and bookkeeping.
 
 Voiding an invoice that is settled for the member (paid, or captured via Vipps) is refused with 409, because money arrived and it needs a refund or credit note instead.
@@ -227,6 +228,17 @@ Voiding an invoice that is settled for the member (paid, or captured via Vipps) 
 So the amount cap is a **default**, not a hard ceiling — the per-invoice override wins either way. It is enforced at **both** points, because `orders.token`s are permanent and one exists for every sent faktura: at **issuance** in `ensureFakturaOrderToken` (returns `""` when not allowed, before the token-reuse lookup — so faktura/reminder emails, the admin copy-link, and the payables page all go KID-only) and at **mint** in `mintOrderPayment` (returns `errVippsBlocked` via `orderHasVippsBlockedSource` — so a link already in an inbox, or issued before the cap/override changed, can't be charged). The reminder batch's `vipps_payment_link` persists On/Off onto the reminded invoices (it sets the same column), so it too is honored at the member's eventual click.
 
 **Failure mode:** enforcing at issuance alone would leave every large invoice already emailed fully Vipps-payable. Not-allowed invoices simply never get an `orders`/`order_sources` row minted, which is safe — reconciliation and the webhook key off `orders.vipps_reference`, created only on mint.
+
+### A credit note is never a debt, and a credit link never posts
+
+**Rule (BRY-342):** an invoice with a negative total is a credit note. It is never overdue, never reminded and never on the payables page (`OwedByMemberSQL`). A credit note settles the faktura it credits only through an explicit link, `invoices.credits_invoice_id`, set by an admin (`POST …/credit-link`, fresh TOTP). Nothing pairs them automatically, because several open fakturas can share a payer and amount.
+- The link is refused unless both invoices are live and issued (sent or imported), have the same payer (member or billing recipient), and the credit equals the faktura's total. Partial credits are refused, because every "amount owed" path would have to net them.
+- A faktura is credited by at most one live credit note (`idx_invoices_credits_once`).
+- **The link never posts to the GL.** A booked credit note's own entry (DR revenue / CR 1500) already offsets the faktura's receivable, and imported history has no bookings on either side. A pair where only one side is booked is refused (`booking_mismatch`).
+- A faktura that was already paid when it was credited makes the credit note **credit owed to the member** (refund or carry-forward). It is shown as such, never as overdue.
+- A linked credit note can't be voided until the link is undone, so a void can't silently reopen the faktura.
+
+**Failure mode:** before BRY-342, 19 imported credit notes (−27,700 kr) counted as overdue debts. Five open pairs each showed both halves as overdue, even though they net to zero.
 
 ### Only the payment provider can mark an order paid
 

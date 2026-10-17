@@ -301,6 +301,8 @@ type MemberInvoice struct {
 	SentAt          *string `json:"sent_at,omitempty" doc:"When the invoice was sent"`
 	Paid            bool    `json:"paid" doc:"Whether a payment is linked to the invoice"`
 	PaymentReceived bool    `json:"payment_received" doc:"A Vipps pay-link payment was seen via webhook but settlement is not yet reconciled"`
+	CreditNote      bool    `json:"credit_note" doc:"A credit note (negative total): money the club owes back, never a bill"`
+	Credited        bool    `json:"credited" doc:"Settled by a linked credit note"`
 	PriceItemName   string  `json:"price_item_name" doc:"Price item name, if any"`
 	Description     string  `json:"description" doc:"First invoice-line description"`
 	HasPDF          bool    `json:"has_pdf" doc:"Whether a downloadable PDF exists for this invoice"`

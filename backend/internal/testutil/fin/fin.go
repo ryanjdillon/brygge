@@ -145,6 +145,11 @@ type InvoiceOpts struct {
 	Cents     int64
 	Lines     []Line
 	VippsPaid bool
+	// Imported marks the invoice as migrated from a previous system
+	// (import_source 'uni24', never sent from Brygge).
+	Imported bool
+	// Paid links a completed payment, as bank/Vipps reconciliation does.
+	Paid bool
 }
 
 // Invoice is a seeded invoice.
@@ -188,9 +193,14 @@ func (c *Club) NewInvoice(t *testing.T, o InvoiceOpts) Invoice {
 	}
 
 	var sentAt, vippsPaidAt *time.Time
+	var importSource, externalID *string
 	now := time.Now()
-	if !o.Unsent {
+	if !o.Unsent && !o.Imported {
 		sentAt = &now
+	}
+	if o.Imported {
+		src, ext := "uni24", fmt.Sprintf("U%d", o.Number)
+		importSource, externalID = &src, &ext
 	}
 	if o.VippsPaid {
 		vippsPaidAt = &now
@@ -199,11 +209,24 @@ func (c *Club) NewInvoice(t *testing.T, o InvoiceOpts) Invoice {
 	inv := Invoice{Number: o.Number, KID: o.KID, TotalCents: total, MemberID: o.Member.ID}
 	if err := c.Pool.QueryRow(ctx,
 		`INSERT INTO invoices (club_id, user_id, invoice_number, kid_number, issue_date, due_date,
-		                       total_amount, status, sent_at, vipps_paid_at, fiscal_period_id)
-		 VALUES ($1, $2, $3, $4, $5, $5::date + 14, $6, $7, $8, $9, $10) RETURNING id`,
+		                       total_amount, status, sent_at, vipps_paid_at, fiscal_period_id,
+		                       import_source, external_id)
+		 VALUES ($1, $2, $3, $4, $5, $5::date + 14, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
 		c.ID, o.Member.ID, o.Number, o.KID, o.IssueDate, Kr(total), o.Status, sentAt, vippsPaidAt, c.PeriodID,
+		importSource, externalID,
 	).Scan(&inv.ID); err != nil {
 		t.Fatalf("fin: invoice %d: %v", o.Number, err)
+	}
+	if o.Paid {
+		if _, err := c.Pool.Exec(ctx,
+			`WITH p AS (
+			    INSERT INTO payments (club_id, user_id, type, amount, status, paid_at)
+			    VALUES ($1, $2, 'dues', $3, 'completed', now()) RETURNING id)
+			 UPDATE invoices SET payment_id = (SELECT id FROM p) WHERE id = $4`,
+			c.ID, o.Member.ID, Kr(total), inv.ID,
+		); err != nil {
+			t.Fatalf("fin: invoice %d payment: %v", o.Number, err)
+		}
 	}
 
 	for _, l := range lines {

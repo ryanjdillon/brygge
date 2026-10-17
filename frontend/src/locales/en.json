@@ -564,7 +564,9 @@
         "paid": "Paid",
         "received": "Payment received",
         "unpaid": "Unpaid",
-        "overdue": "Overdue"
+        "overdue": "Overdue",
+        "credit_note": "Credit note",
+        "credited": "Credited"
       }
     }
   },
@@ -657,6 +659,37 @@
       "empty": "No unsent fakturas."
     },
     "faktura": {
+      "credit": {
+        "filter": "Credit notes",
+        "state": {
+          "settled_pair": "Settled against #{number}",
+          "credit_owed": "Owed to member (#{number} was paid)",
+          "unlinked": "Credit note – not linked"
+        },
+        "creditedBy": "Credited by #{number}",
+        "settleAction": "Settle against faktura",
+        "settleTitle": "Settle credit note #{number}",
+        "settleBody": "Pick the faktura this credit note of {amount} belongs to. Both then count as settled. Nothing new is booked.",
+        "settleChoice": "Faktura",
+        "candidateOpen": "#{number} — {amount} ({date}), open",
+        "candidatePaid": "#{number} — {amount} ({date}), already paid → owed to member",
+        "noCandidates": "No faktura with the same payer and amount was found for credit note #{number}.",
+        "donePair": "Credit note #{credit} settled against faktura #{number}.",
+        "doneOwed": "Credit note #{credit} linked to faktura #{number}, which is already paid: the member is owed the credit.",
+        "unlinkAction": "Undo settlement",
+        "unlinkTitle": "Undo the settlement of credit note #{number}?",
+        "unlinkBody": "Faktura #{number} becomes open again.",
+        "voidLinked": "This credit note settles a faktura. Undo the settlement before voiding it.",
+        "error": {
+          "partial_credit": "The credit note doesn't cover the whole faktura. Partial credits aren't supported; settle the remainder separately.",
+          "different_payer": "The credit note and the faktura are for different payers.",
+          "booking_mismatch": "One of them is booked in the accounts and the other isn't. Book or correct them first.",
+          "already_linked": "The credit note is already linked to a faktura.",
+          "already_credited": "The faktura is already credited by another credit note.",
+          "voided": "A voided invoice can't be linked.",
+          "not_issued": "Only sent or imported invoices can be linked."
+        }
+      },
       "title": "Faktura",
       "subtitle": "Create new fakturas and review drafts, sent, and voided.",
       "tabsAria": "Faktura tabs",

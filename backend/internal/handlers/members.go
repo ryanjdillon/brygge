@@ -14,6 +14,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/brygge-klubb/brygge/internal/config"
+	"github.com/brygge-klubb/brygge/internal/finance"
 	"github.com/brygge-klubb/brygge/internal/middleware"
 	"github.com/brygge-klubb/brygge/internal/shared"
 )
@@ -662,9 +663,14 @@ type memberInvoice struct {
 	// (vipps_paid_at set) but not yet authoritatively settled (payment_id still
 	// null). Surfaced so the member sees "betaling mottatt, venter oppgjør"
 	// instead of "ubetalt" and doesn't pay twice.
-	PaymentReceived bool   `json:"payment_received"`
-	PriceItemName   string `json:"price_item_name"`
-	Description     string `json:"description"`
+	PaymentReceived bool `json:"payment_received"`
+	// CreditNote marks a negative invoice: money the club owes back, never a
+	// bill. Credited marks a faktura settled by a credit note. Both are shown
+	// as such instead of "ubetalt" (BRY-342).
+	CreditNote    bool   `json:"credit_note"`
+	Credited      bool   `json:"credited"`
+	PriceItemName string `json:"price_item_name"`
+	Description   string `json:"description"`
 	// HasPDF gates the portal "Open PDF" action — imported invoices (and
 	// any not yet rendered) have no retrievable PDF, so the button is
 	// hidden rather than leading to a "PDF not available" error.
@@ -750,7 +756,7 @@ func (h *MembersHandler) HandleListMyInvoices(w http.ResponseWriter, r *http.Req
 	case "paid":
 		where = " AND i.payment_id IS NOT NULL"
 	case "unpaid":
-		where = " AND i.payment_id IS NULL"
+		where = " AND " + finance.OwedByMemberSQL("i")
 	case "", "all":
 		// no extra filter
 	default:
@@ -772,6 +778,8 @@ func (h *MembersHandler) HandleListMyInvoices(w http.ResponseWriter, r *http.Req
 	             i.issue_date, i.due_date, i.sent_at,
 	             (i.payment_id IS NOT NULL) AS paid,
 	             (i.payment_id IS NULL AND i.vipps_paid_at IS NOT NULL) AS payment_received,
+	             (i.total_amount < 0) AS credit_note,
+	             ` + finance.CreditedSQL("i") + ` AS credited,
 	             COALESCE(pi.name, ''),
 	             COALESCE((SELECT description FROM invoice_lines WHERE invoice_id = i.id LIMIT 1), ''),
 	             (i.pdf_data IS NOT NULL OR COALESCE(i.s3_key, '') <> '')
@@ -780,8 +788,8 @@ func (h *MembersHandler) HandleListMyInvoices(w http.ResponseWriter, r *http.Req
 	       WHERE i.user_id = $1 AND i.club_id = $2
 	         AND i.status = 'open'
 	         AND (i.sent_at IS NOT NULL OR i.import_source IS NOT NULL)` + where + `
-	       ORDER BY (i.payment_id IS NULL) DESC,
-	                CASE WHEN i.payment_id IS NULL THEN i.due_date END ASC,
+	       ORDER BY ` + finance.OwedByMemberSQL("i") + ` DESC,
+	                CASE WHEN ` + finance.OwedByMemberSQL("i") + ` THEN i.due_date END ASC,
 	                i.issue_date DESC`
 	args := []any{claims.UserID, claims.ClubID}
 	if limit > 0 {
@@ -803,7 +811,8 @@ func (h *MembersHandler) HandleListMyInvoices(w http.ResponseWriter, r *http.Req
 		var issue, due time.Time
 		var sentAt *time.Time
 		if err := rows.Scan(&mi.ID, &mi.InvoiceNumber, &mi.KID, &mi.TotalAmount,
-			&issue, &due, &sentAt, &mi.Paid, &mi.PaymentReceived, &mi.PriceItemName, &mi.Description, &mi.HasPDF); err != nil {
+			&issue, &due, &sentAt, &mi.Paid, &mi.PaymentReceived, &mi.CreditNote, &mi.Credited,
+			&mi.PriceItemName, &mi.Description, &mi.HasPDF); err != nil {
 			h.log.Error().Err(err).Msg("scan my invoice row")
 			Error(w, http.StatusInternalServerError, "internal error")
 			return

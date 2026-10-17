@@ -139,7 +139,7 @@ func (h *InvoiceHandler) HandleBulkSendReminder(w http.ResponseWriter, r *http.R
 func (h *InvoiceHandler) collectReminderItems(ctx context.Context, clubID string, ids []string, payload []byte) ([]bcast.InvoiceDelivery, bulkInvoiceResult, error) {
 	res := bulkInvoiceResult{}
 	rows, err := h.db.Query(ctx,
-		`SELECT i.id, i.sent_at, `+finance.SettledForMemberSQL("i")+` AS settled,
+		`SELECT i.id, i.sent_at, NOT `+finance.OwedByMemberSQL("i")+` AS settled,
 		        COALESCE(NULLIF(i.recipient_email, ''), u.email, '') AS recipient,
 		        (i.pdf_data IS NOT NULL OR COALESCE(i.s3_key, '') <> '') AS has_pdf
 		   FROM invoices i
@@ -178,9 +178,10 @@ func (h *InvoiceHandler) collectReminderItems(ctx context.Context, clubID string
 			res.Failures = append(res.Failures, id+": not found")
 			continue
 		}
-		// Skip not-yet-sent invoices and anything settled for the member
-		// (finance.SettledForMemberSQL): paid, voided, or received via the
-		// /betal link but not yet settled — reminding them would be a false purring.
+		// Skip not-yet-sent invoices and anything the member doesn't owe
+		// (finance.OwedByMemberSQL): paid, voided, credited, received via the
+		// /betal link but not yet settled, or itself a credit note — reminding
+		// them would be a false purring.
 		if p.sentAt == nil || p.settled {
 			res.Skipped++
 			continue
@@ -255,7 +256,7 @@ func (h *InvoiceHandler) sendOneReminder(
 		                 ''),
 		        COALESCE(u.email, ''), COALESCE(i.recipient_email, ''),
 		        i.due_date, i.total_amount, i.kid_number,
-		        i.pdf_data, COALESCE(i.s3_key, ''), i.sent_at, `+finance.SettledForMemberSQL("i")+`
+		        i.pdf_data, COALESCE(i.s3_key, ''), i.sent_at, NOT `+finance.OwedByMemberSQL("i")+`
 		   FROM invoices i
 		   LEFT JOIN users u ON u.id = i.user_id
 		  WHERE i.id = $1 AND i.club_id = $2`,
@@ -433,7 +434,7 @@ func (h *InvoiceHandler) reissueOneKID(
 	)
 	err := h.db.QueryRow(ctx,
 		`SELECT invoice_number, COALESCE(kid_number, ''),
-		        (sent_at IS NOT NULL), `+finance.SettledForMemberSQL("")+`
+		        (sent_at IS NOT NULL), NOT `+finance.OwedByMemberSQL("")+`
 		   FROM invoices WHERE id = $1 AND club_id = $2`,
 		invoiceID, clubID,
 	).Scan(&invoiceNumber, &kidNumber, &sent, &paid)

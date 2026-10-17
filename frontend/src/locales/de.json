@@ -469,7 +469,9 @@
         "paid": "Bezahlt",
         "received": "Zahlung erhalten",
         "unpaid": "Unbezahlt",
-        "overdue": "Überfällig"
+        "overdue": "Überfällig",
+        "credit_note": "Gutschrift",
+        "credited": "Gutgeschrieben"
       }
     }
   },

@@ -469,7 +469,9 @@
         "paid": "Payée",
         "received": "Paiement reçu",
         "unpaid": "Impayée",
-        "overdue": "En retard"
+        "overdue": "En retard",
+        "credit_note": "Avoir",
+        "credited": "Crédité"
       }
     }
   },

@@ -291,7 +291,7 @@ func (s *Service) singleOpenInvoice(ctx context.Context, clubID, memberID string
 		`SELECT i.id, i.invoice_number, i.total_amount
 		   FROM invoices i
 		  WHERE i.club_id = $1 AND i.user_id = $2 AND i.sent_at IS NOT NULL
-		    AND NOT `+finance.SettledForMemberSQL("i"),
+		    AND `+finance.OwedByMemberSQL("i"),
 		clubID, memberID,
 	)
 	if err != nil {

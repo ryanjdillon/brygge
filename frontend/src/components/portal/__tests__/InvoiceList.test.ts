@@ -17,6 +17,8 @@ function invoice(overrides: Partial<MemberInvoice> = {}): MemberInvoice {
     sent_at: '2026-01-01T00:00:00Z',
     paid: false,
     payment_received: false,
+    credit_note: false,
+    credited: false,
     price_item_name: 'Havneplass',
     description: 'Årsavgift',
     has_pdf: true,
@@ -29,6 +31,22 @@ function chip(wrapper: ReturnType<typeof mountWithPlugins>) {
 }
 
 describe('InvoiceList status chip (BRY-276)', () => {
+  it('shows a credit note as a credit note, never unpaid or overdue (BRY-342)', () => {
+    const w = mountWithPlugins(InvoiceList, {
+      props: { invoices: [invoice({ total_amount: -1500, credit_note: true, due_date: '2020-01-01' })] },
+    })
+    expect(chip(w).text()).toBe('portal.invoices.status.credit_note')
+    expect(chip(w).classes()).toContain('bg-sky-100')
+  })
+
+  it('shows a faktura settled by a credit note as credited, not overdue (BRY-342)', () => {
+    const w = mountWithPlugins(InvoiceList, {
+      props: { invoices: [invoice({ credited: true, due_date: '2020-01-01' })] },
+    })
+    expect(chip(w).text()).toBe('portal.invoices.status.credited')
+    expect(chip(w).classes()).toContain('bg-green-100')
+  })
+
   it('shows the paid state when a payment is linked', () => {
     const w = mountWithPlugins(InvoiceList, { props: { invoices: [invoice({ paid: true })] } })
     expect(chip(w).text()).toBe('portal.invoices.status.paid')

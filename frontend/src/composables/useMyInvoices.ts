@@ -25,7 +25,7 @@ export function useMyInvoices() {
 
 // An invoice is overdue when it is unpaid and its due date is in the past.
 export function isOverdue(inv: MemberInvoice): boolean {
-  if (inv.paid) return false
+  if (inv.paid || inv.credited || inv.credit_note) return false
   const due = new Date(inv.due_date)
   if (Number.isNaN(due.getTime())) return false
   return due.getTime() < Date.now()

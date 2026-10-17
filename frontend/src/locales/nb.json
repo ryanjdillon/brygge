@@ -560,7 +560,9 @@
         "paid": "Betalt",
         "received": "Betaling mottatt",
         "unpaid": "Ubetalt",
-        "overdue": "Forfalt"
+        "overdue": "Forfalt",
+        "credit_note": "Kreditnota",
+        "credited": "Kreditert"
       }
     }
   },
@@ -653,6 +655,37 @@
       "empty": "Ingen usendte fakturaer."
     },
     "faktura": {
+      "credit": {
+        "filter": "Kreditnotaer",
+        "state": {
+          "settled_pair": "Motregnet mot #{number}",
+          "credit_owed": "Tilgode medlem (#{number} er betalt)",
+          "unlinked": "Kreditnota – ikke koblet"
+        },
+        "creditedBy": "Kreditert av #{number}",
+        "settleAction": "Motregn mot faktura",
+        "settleTitle": "Motregn kreditnota #{number}",
+        "settleBody": "Velg fakturaen kreditnotaen på {amount} gjelder. Begge regnes da som oppgjort. Det bokføres ikke noe nytt.",
+        "settleChoice": "Faktura",
+        "candidateOpen": "#{number} — {amount} ({date}), åpen",
+        "candidatePaid": "#{number} — {amount} ({date}), allerede betalt → tilgode medlem",
+        "noCandidates": "Fant ingen faktura med samme betaler og samme beløp for kreditnota #{number}.",
+        "donePair": "Kreditnota #{credit} er motregnet mot faktura #{number}.",
+        "doneOwed": "Kreditnota #{credit} er koblet til faktura #{number}, som allerede er betalt: medlemmet har beløpet tilgode.",
+        "unlinkAction": "Angre motregning",
+        "unlinkTitle": "Angre motregningen for kreditnota #{number}?",
+        "unlinkBody": "Faktura #{number} blir åpen igjen.",
+        "voidLinked": "Kreditnotaen er motregnet mot en faktura. Angre motregningen før du annullerer den.",
+        "error": {
+          "partial_credit": "Kreditnotaen dekker ikke hele fakturaen. Delvis kreditering støttes ikke; gjør opp resten separat.",
+          "different_payer": "Kreditnotaen og fakturaen gjelder forskjellige betalere.",
+          "booking_mismatch": "Den ene er bokført i regnskapet og den andre ikke. Bokfør eller korriger dem først.",
+          "already_linked": "Kreditnotaen er allerede koblet til en faktura.",
+          "already_credited": "Fakturaen er allerede kreditert av en annen kreditnota.",
+          "voided": "En annullert faktura kan ikke kobles.",
+          "not_issued": "Bare sendte eller importerte fakturaer kan kobles."
+        }
+      },
       "title": "Faktura",
       "subtitle": "Opprett nye fakturaer og se kladder, sendte og annullerte.",
       "tabsAria": "Fakturafaner",

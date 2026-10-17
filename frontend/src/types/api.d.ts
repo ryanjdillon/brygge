@@ -3961,6 +3961,10 @@ export interface components {
             unit?: string;
         };
         MemberInvoice: {
+            /** @description A credit note (negative total): money the club owes back, never a bill */
+            credit_note: boolean;
+            /** @description Settled by a linked credit note */
+            credited: boolean;
             /** @description First invoice-line description */
             description: string;
             /** @description Due date (YYYY-MM-DD) */

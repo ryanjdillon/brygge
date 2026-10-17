@@ -2,8 +2,8 @@
 // Faktura number rendered as a status-coloured chip (BRY-192), matching
 // the solid light-fill chip style used on the Chart of Accounts table.
 // Colour mirrors the Sent-tab paid-status filters: paid = green,
-// waiting = yellow, past due = red.
-export type PaidStatus = 'paid' | 'waiting' | 'past_due'
+// waiting = yellow, past due = red, credit note = sky.
+export type PaidStatus = 'paid' | 'waiting' | 'past_due' | 'credit'
 
 defineProps<{
   number: number | string
@@ -16,6 +16,7 @@ const colorByStatus: Record<PaidStatus, string> = {
   paid: 'bg-green-100 text-green-800',
   waiting: 'bg-yellow-100 text-yellow-800',
   past_due: 'bg-red-100 text-red-800',
+  credit: 'bg-sky-100 text-sky-800',
 }
 </script>
 

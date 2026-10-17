@@ -182,7 +182,7 @@ func (h *InvoiceHandler) HandleGetPayables(w http.ResponseWriter, r *http.Reques
 		   LEFT JOIN price_items pi ON pi.id = i.price_item_id
 		  WHERE i.user_id = $1 AND i.club_id = $2
 		    AND (i.sent_at IS NOT NULL OR i.import_source IS NOT NULL)
-		    AND NOT `+finance.SettledForMemberSQL("i")+`
+		    AND `+finance.OwedByMemberSQL("i")+`
 		  ORDER BY i.due_date ASC, i.issue_date DESC`,
 		userID, clubID,
 	)
