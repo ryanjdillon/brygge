@@ -29,7 +29,7 @@ func (f *syncFixture) bookMisSplit(t *testing.T, invoiceID string, amount float6
 	if err != nil {
 		t.Fatalf("legacy entry: %v", err)
 	}
-	if err := f.svc.PostJournalEntry(ctx, entry.ID, f.userID); err != nil {
+	if err := f.svc.PostJournalEntry(ctx, f.clubID, entry.ID, f.userID); err != nil {
 		t.Fatalf("post legacy entry: %v", err)
 	}
 	return entry.ID

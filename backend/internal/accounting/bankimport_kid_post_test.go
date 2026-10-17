@@ -128,7 +128,7 @@ func TestDiscardDraftLeavesPostedEntries(t *testing.T) {
 	}
 	draft := mk()
 	posted := mk()
-	if err := svc.PostJournalEntry(ctx, posted, userID); err != nil {
+	if err := svc.PostJournalEntry(ctx, clubID, posted, userID); err != nil {
 		t.Fatalf("post: %v", err)
 	}
 

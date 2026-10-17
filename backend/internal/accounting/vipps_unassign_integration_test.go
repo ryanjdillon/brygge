@@ -132,7 +132,7 @@ func TestUnassignRetryAfterVoidCompletes(t *testing.T) {
 	f := newAutoAssignFixture(t)
 	ctx := context.Background()
 	row, inv := f.assignedCharge(t)
-	if _, err := f.svc.VoidJournalEntry(ctx, f.rowEntry(t, row), f.club.Treasurer.ID); err != nil {
+	if _, err := f.svc.VoidJournalEntry(ctx, f.club.ID, f.rowEntry(t, row), f.club.Treasurer.ID); err != nil {
 		t.Fatalf("void: %v", err)
 	}
 

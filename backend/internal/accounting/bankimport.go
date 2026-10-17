@@ -536,7 +536,7 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOv
 				 AND `+finance.OwedByMemberSQL("i")+`
 				 AND NOT EXISTS (
 				   SELECT 1 FROM bank_import_rows bir
-				   WHERE bir.kid_number = $2 AND bir.journal_entry_id IS NOT NULL
+				   WHERE bir.club_id = i.club_id AND bir.kid_number = $2 AND bir.journal_entry_id IS NOT NULL
 				 )
 				 LIMIT 1`,
 				clubID, cand,
@@ -558,7 +558,7 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOv
 					   AND `+finance.OwedByMemberSQL("i")+`
 					   AND NOT EXISTS (
 					     SELECT 1 FROM bank_import_rows bir
-					     WHERE bir.journal_entry_id IS NOT NULL
+					     WHERE bir.club_id = i.club_id AND bir.journal_entry_id IS NOT NULL
 					       AND bir.kid_number = i.kid_number
 					   )
 					 LIMIT 1`,
@@ -638,7 +638,7 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOv
 			res.rowError(rowID, row, "linking row: "+reason)
 			continue
 		}
-		if postErr := s.PostJournalEntry(ctx, entry.ID, importedBy); postErr != nil {
+		if postErr := s.PostJournalEntry(ctx, clubID, entry.ID, importedBy); postErr != nil {
 			s.unwindVippsPosting(ctx, clubID, entry.ID, "bank_import_rows", []string{rowID})
 			res.rowError(rowID, row, "posting journal entry: "+postErr.Error())
 			continue

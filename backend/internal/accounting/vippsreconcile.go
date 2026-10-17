@@ -421,7 +421,7 @@ func (s *Service) reconcileVippsConfirm(ctx context.Context, clubID, bankRowID, 
 	}
 
 	if post {
-		if err := s.PostJournalEntry(ctx, entry.ID, createdBy); err != nil {
+		if err := s.PostJournalEntry(ctx, clubID, entry.ID, createdBy); err != nil {
 			s.unwindVippsPosting(ctx, clubID, entry.ID, "bank_import_rows", []string{bankRowID})
 			s.unwindVippsPosting(ctx, clubID, entry.ID, "vipps_import_rows", vippsRowIDs)
 			return "", fmt.Errorf("posting journal entry: %w", err)

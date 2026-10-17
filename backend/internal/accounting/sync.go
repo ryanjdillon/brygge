@@ -159,7 +159,7 @@ func (s *Service) SyncPayments(ctx context.Context, clubID, periodID, syncedBy s
 		}
 
 		// Auto-post (these are completed, real transactions)
-		if err := s.PostJournalEntry(ctx, entry.ID, syncedBy); err != nil {
+		if err := s.PostJournalEntry(ctx, clubID, entry.ID, syncedBy); err != nil {
 			s.log.Error().Err(err).Str("entry_id", entry.ID).Msg("failed to auto-post synced payment")
 			result.skip("payment "+paymentID, "post: "+err.Error())
 			continue
@@ -289,7 +289,7 @@ func (s *Service) bookInvoiceEntry(ctx context.Context, clubID, periodID, invoic
 		s.log.Error().Err(err).Str("invoice_id", invoiceID).Msg("failed to book invoice")
 		return err
 	}
-	if err := s.PostJournalEntry(ctx, entry.ID, actor); err != nil {
+	if err := s.PostJournalEntry(ctx, clubID, entry.ID, actor); err != nil {
 		s.log.Error().Err(err).Str("entry_id", entry.ID).Msg("failed to post invoice entry")
 		s.discardDraft(ctx, clubID, entry.ID)
 		return fmt.Errorf("post: %w", err)
@@ -309,7 +309,7 @@ const (
 // ErrInvoicePeriodClosed means the faktura's fiscal period is closed, so its
 // entry cannot be booked or reversed there. The repair sync cannot fix it
 // either; the period has to be reopened.
-var ErrInvoicePeriodClosed = errors.New("the faktura's fiscal period is closed")
+var ErrInvoicePeriodClosed = fmt.Errorf("the faktura's fiscal period is closed: %w", ErrPeriodClosed)
 
 // BookInvoice books one sent, non-voided faktura into the period its
 // issue_date falls in. It is idempotent: a faktura that already has an
@@ -411,15 +411,15 @@ func (s *Service) ReverseInvoice(ctx context.Context, clubID, invoiceID, actor s
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	// VoidJournalEntry posts the reversal into the original period without
-	// checking it (BRY-333), so refuse up front rather than write into a
-	// closed year or reverse only part of the family.
+	// VoidJournalEntry refuses a closed period per entry; checking the whole
+	// family first keeps the reversal all-or-nothing instead of voiding the
+	// entries in an open period and then failing on a closed one.
 	if closed {
 		return nil, ErrInvoicePeriodClosed
 	}
 	var reversals []string
 	for _, id := range entryIDs {
-		rev, err := s.VoidJournalEntry(ctx, id, actor)
+		rev, err := s.VoidJournalEntry(ctx, clubID, id, actor)
 		if err != nil {
 			return reversals, err
 		}
@@ -481,7 +481,7 @@ func (s *Service) reverseVoidedInvoiceEntries(ctx context.Context, clubID, perio
 
 	reversed := map[int]bool{}
 	for _, p := range todo {
-		if _, err := s.VoidJournalEntry(ctx, p.entryID, syncedBy); err != nil {
+		if _, err := s.VoidJournalEntry(ctx, clubID, p.entryID, syncedBy); err != nil {
 			s.log.Error().Err(err).Str("entry_id", p.entryID).Msg("failed to reverse voided invoice entry")
 			result.skip(fmt.Sprintf("faktura %d", p.invoiceNumber), "reversing voided faktura: "+err.Error())
 			continue

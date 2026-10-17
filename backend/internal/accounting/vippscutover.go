@@ -189,7 +189,7 @@ func (s *Service) regenerateOneSettlement(ctx context.Context, clubID, createdBy
 	// Reverse the legacy bilag. Drafts are deleted outright; posted entries are
 	// voided (leaving the original + a reversal for the audit trail).
 	if status == "posted" {
-		if _, verr := s.VoidJournalEntry(ctx, entryID, createdBy); verr != nil {
+		if _, verr := s.VoidJournalEntry(ctx, clubID, entryID, createdBy); verr != nil {
 			return 0, 0, fmt.Errorf("voiding legacy bilag: %w", verr)
 		}
 	}

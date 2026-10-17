@@ -243,7 +243,7 @@ func (s *Service) PairRefund(
 	if err != nil {
 		return "", "", fmt.Errorf("create inbound journal: %w", err)
 	}
-	if err := s.PostJournalEntry(ctx, inboundEntry.ID, actorID); err != nil {
+	if err := s.PostJournalEntry(ctx, clubID, inboundEntry.ID, actorID); err != nil {
 		return "", "", fmt.Errorf("post inbound journal: %w", err)
 	}
 
@@ -265,7 +265,7 @@ func (s *Service) PairRefund(
 	if err != nil {
 		return "", "", fmt.Errorf("create outbound journal: %w", err)
 	}
-	if err := s.PostJournalEntry(ctx, outboundEntry.ID, actorID); err != nil {
+	if err := s.PostJournalEntry(ctx, clubID, outboundEntry.ID, actorID); err != nil {
 		return "", "", fmt.Errorf("post outbound journal: %w", err)
 	}
 

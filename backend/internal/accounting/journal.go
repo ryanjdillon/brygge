@@ -16,6 +16,9 @@ var (
 	ErrEntryNotDraft   = errors.New("only draft entries can be modified")
 	ErrEntryNotPosted  = errors.New("only posted entries can be voided")
 	ErrEntryLinked     = errors.New("draft is linked to a bank or Vipps row; unassign it from Tildel instead")
+	// ErrEntryNotFound is returned for an id that doesn't exist or belongs to
+	// another club; callers map it to 404 so a foreign id reveals nothing.
+	ErrEntryNotFound = errors.New("journal entry not found")
 )
 
 // DeleteDraftJournalEntry deletes a draft that nothing points at. Drafts are
@@ -121,10 +124,12 @@ func (s *Service) CreateJournalEntry(ctx context.Context, input CreateJournalEnt
 	}
 	defer tx.Rollback(ctx)
 
-	// Verify period is open
+	// Verify period is open. FOR SHARE holds the period open until this
+	// entry commits, so ClosePeriod (FOR UPDATE) waits for it and then sees
+	// the new draft instead of closing around it.
 	var periodStatus string
 	err = tx.QueryRow(ctx,
-		`SELECT status FROM fiscal_periods WHERE id = $1 AND club_id = $2`,
+		`SELECT status FROM fiscal_periods WHERE id = $1 AND club_id = $2 FOR SHARE`,
 		input.FiscalPeriodID, input.ClubID,
 	).Scan(&periodStatus)
 	if err == pgx.ErrNoRows {
@@ -211,8 +216,9 @@ func (s *Service) CreateJournalEntry(ctx context.Context, input CreateJournalEnt
 	return &entry, nil
 }
 
-// PostJournalEntry validates balance and finalizes the entry.
-func (s *Service) PostJournalEntry(ctx context.Context, entryID, postedBy string) error {
+// PostJournalEntry validates balance and finalizes the entry. The entry must
+// belong to clubID; another club's id is reported as ErrEntryNotFound.
+func (s *Service) PostJournalEntry(ctx context.Context, clubID, entryID, postedBy string) error {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("beginning transaction: %w", err)
@@ -222,11 +228,11 @@ func (s *Service) PostJournalEntry(ctx context.Context, entryID, postedBy string
 	// Get entry and verify it's draft
 	var status, periodID string
 	err = tx.QueryRow(ctx,
-		`SELECT status, fiscal_period_id FROM journal_entries WHERE id = $1 FOR UPDATE`,
-		entryID,
+		`SELECT status, fiscal_period_id FROM journal_entries WHERE id = $1 AND club_id = $2 FOR UPDATE`,
+		entryID, clubID,
 	).Scan(&status, &periodID)
 	if err == pgx.ErrNoRows {
-		return fmt.Errorf("journal entry not found")
+		return ErrEntryNotFound
 	}
 	if err != nil {
 		return fmt.Errorf("getting entry: %w", err)
@@ -237,7 +243,10 @@ func (s *Service) PostJournalEntry(ctx context.Context, entryID, postedBy string
 
 	// Verify period is still open
 	var periodStatus string
-	err = tx.QueryRow(ctx, `SELECT status FROM fiscal_periods WHERE id = $1`, periodID).Scan(&periodStatus)
+	err = tx.QueryRow(ctx,
+		`SELECT status FROM fiscal_periods WHERE id = $1 AND club_id = $2 FOR SHARE`,
+		periodID, clubID,
+	).Scan(&periodStatus)
 	if err != nil {
 		return fmt.Errorf("checking period: %w", err)
 	}
@@ -273,7 +282,15 @@ func (s *Service) PostJournalEntry(ctx context.Context, entryID, postedBy string
 }
 
 // VoidJournalEntry creates a reversal entry and marks the original as voided.
-func (s *Service) VoidJournalEntry(ctx context.Context, entryID, voidedBy string) (*JournalEntry, error) {
+//
+// The reversal is written into the original entry's own period, so the void
+// is refused with ErrPeriodClosed when that period is closed or locked. It
+// never lands in a later open period instead: a closed year's figures have
+// been reported, and a correction must either reopen the period deliberately
+// or be booked as a new entry (e.g. a credit note) in the current one. The
+// period row is locked FOR SHARE so ClosePeriod cannot close it mid-void.
+// The entry must belong to clubID; another club's id is ErrEntryNotFound.
+func (s *Service) VoidJournalEntry(ctx context.Context, clubID, entryID, voidedBy string) (*JournalEntry, error) {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("beginning transaction: %w", err)
@@ -284,18 +301,29 @@ func (s *Service) VoidJournalEntry(ctx context.Context, entryID, voidedBy string
 	var entry JournalEntry
 	err = tx.QueryRow(ctx,
 		`SELECT id, club_id, fiscal_period_id, entry_number, entry_date::text, description, status, created_by
-		 FROM journal_entries WHERE id = $1 FOR UPDATE`,
-		entryID,
+		 FROM journal_entries WHERE id = $1 AND club_id = $2 FOR UPDATE`,
+		entryID, clubID,
 	).Scan(&entry.ID, &entry.ClubID, &entry.FiscalPeriodID, &entry.EntryNumber, &entry.EntryDate,
 		&entry.Description, &entry.Status, &entry.CreatedBy)
 	if err == pgx.ErrNoRows {
-		return nil, fmt.Errorf("journal entry not found")
+		return nil, ErrEntryNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("getting entry: %w", err)
 	}
 	if entry.Status != "posted" {
 		return nil, ErrEntryNotPosted
+	}
+
+	var periodStatus string
+	if err := tx.QueryRow(ctx,
+		`SELECT status FROM fiscal_periods WHERE id = $1 AND club_id = $2 FOR SHARE`,
+		entry.FiscalPeriodID, clubID,
+	).Scan(&periodStatus); err != nil {
+		return nil, fmt.Errorf("checking period: %w", err)
+	}
+	if periodStatus != "open" {
+		return nil, ErrPeriodClosed
 	}
 
 	// Get original lines
@@ -385,14 +413,15 @@ func (s *Service) VoidJournalEntry(ctx context.Context, entryID, voidedBy string
 	return &reversal, nil
 }
 
-// GetJournalEntry returns a journal entry with its lines.
-func (s *Service) GetJournalEntry(ctx context.Context, entryID string) (*JournalEntry, error) {
+// GetJournalEntry returns a journal entry with its lines, or nil when the id
+// doesn't exist or belongs to another club.
+func (s *Service) GetJournalEntry(ctx context.Context, clubID, entryID string) (*JournalEntry, error) {
 	var entry JournalEntry
 	err := s.db.QueryRow(ctx,
 		`SELECT id, club_id, fiscal_period_id, entry_number, entry_date::text, description, status, source,
 		        source_id, source_table, attachment_url, created_by, posted_by, posted_at, voided_by, voided_at, created_at
-		 FROM journal_entries WHERE id = $1`,
-		entryID,
+		 FROM journal_entries WHERE id = $1 AND club_id = $2`,
+		entryID, clubID,
 	).Scan(
 		&entry.ID, &entry.ClubID, &entry.FiscalPeriodID, &entry.EntryNumber, &entry.EntryDate,
 		&entry.Description, &entry.Status, &entry.Source, &entry.SourceID, &entry.SourceTable,

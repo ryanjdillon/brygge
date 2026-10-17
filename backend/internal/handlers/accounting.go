@@ -167,8 +167,12 @@ func (h *AccountingHandler) HandleUpdateAccount(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	if err := h.svc.UpdateAccount(r.Context(), accountID, req.Name, req.Description, req.MVAEligible); err != nil {
+	if err := h.svc.UpdateAccount(r.Context(), claims.ClubID, accountID, req.Name, req.Description, req.MVAEligible); err != nil {
 		h.log.Error().Err(err).Msg("failed to update account")
+		if errors.Is(err, accounting.ErrAccountNotFound) {
+			Error(w, http.StatusNotFound, err.Error())
+			return
+		}
 		Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -195,8 +199,12 @@ func (h *AccountingHandler) HandleDeleteAccount(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	if err := h.svc.DeactivateAccount(r.Context(), accountID); err != nil {
+	if err := h.svc.DeactivateAccount(r.Context(), claims.ClubID, accountID); err != nil {
 		h.log.Error().Err(err).Msg("failed to deactivate account")
+		if errors.Is(err, accounting.ErrAccountNotFound) {
+			Error(w, http.StatusNotFound, err.Error())
+			return
+		}
 		Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -306,7 +314,7 @@ func (h *AccountingHandler) HandleReopenPeriod(w http.ResponseWriter, r *http.Re
 	}
 
 	periodID := chi.URLParam(r, "periodID")
-	if err := h.svc.ReopenPeriod(r.Context(), periodID); err != nil {
+	if err := h.svc.ReopenPeriod(r.Context(), claims.ClubID, periodID); err != nil {
 		h.log.Error().Err(err).Msg("failed to reopen period")
 		Error(w, http.StatusBadRequest, err.Error())
 		return
@@ -432,7 +440,7 @@ func (h *AccountingHandler) HandleGetJournalEntry(w http.ResponseWriter, r *http
 	}
 
 	entryID := chi.URLParam(r, "entryID")
-	entry, err := h.svc.GetJournalEntry(r.Context(), entryID)
+	entry, err := h.svc.GetJournalEntry(r.Context(), claims.ClubID, entryID)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to get journal entry")
 		Error(w, http.StatusInternalServerError, "internal error")
@@ -454,16 +462,18 @@ func (h *AccountingHandler) HandlePostJournalEntry(w http.ResponseWriter, r *htt
 	}
 
 	entryID := chi.URLParam(r, "entryID")
-	err := h.svc.PostJournalEntry(r.Context(), entryID, claims.UserID)
+	err := h.svc.PostJournalEntry(r.Context(), claims.ClubID, entryID, claims.UserID)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to post journal entry")
 		switch {
 		case errors.Is(err, accounting.ErrUnbalancedEntry):
 			Error(w, http.StatusBadRequest, err.Error())
 		case errors.Is(err, accounting.ErrPeriodClosed):
-			Error(w, http.StatusConflict, err.Error())
+			writePeriodClosed(w, err)
 		case errors.Is(err, accounting.ErrEntryNotDraft):
 			Error(w, http.StatusBadRequest, err.Error())
+		case errors.Is(err, accounting.ErrEntryNotFound):
+			Error(w, http.StatusNotFound, err.Error())
 		default:
 			Error(w, http.StatusInternalServerError, "internal error")
 		}
@@ -486,12 +496,17 @@ func (h *AccountingHandler) HandleVoidJournalEntry(w http.ResponseWriter, r *htt
 	}
 
 	entryID := chi.URLParam(r, "entryID")
-	reversal, err := h.svc.VoidJournalEntry(r.Context(), entryID, claims.UserID)
+	reversal, err := h.svc.VoidJournalEntry(r.Context(), claims.ClubID, entryID, claims.UserID)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to void journal entry")
-		if errors.Is(err, accounting.ErrEntryNotPosted) {
+		switch {
+		case errors.Is(err, accounting.ErrEntryNotPosted):
 			Error(w, http.StatusBadRequest, err.Error())
-		} else {
+		case errors.Is(err, accounting.ErrPeriodClosed):
+			writePeriodClosed(w, err)
+		case errors.Is(err, accounting.ErrEntryNotFound):
+			Error(w, http.StatusNotFound, err.Error())
+		default:
 			Error(w, http.StatusInternalServerError, "internal error")
 		}
 		return
@@ -504,6 +519,16 @@ func (h *AccountingHandler) HandleVoidJournalEntry(w http.ResponseWriter, r *htt
 	}
 
 	JSON(w, http.StatusOK, reversal)
+}
+
+// writePeriodClosed reports an operation refused because the entry's fiscal
+// period is closed or locked. The code lets the SPA explain that the period
+// must be reopened, or the correction booked as a new entry, instead.
+func writePeriodClosed(w http.ResponseWriter, err error) {
+	JSON(w, http.StatusConflict, map[string]string{
+		"error": err.Error(),
+		"code":  "period_closed",
+	})
 }
 
 // HandleDeleteDraftJournalEntry removes an unlinked draft so it no longer

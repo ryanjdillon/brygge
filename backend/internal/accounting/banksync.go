@@ -50,7 +50,7 @@ func (s *Service) findInvoiceByCounterpartAndAmount(ctx context.Context, clubID,
 		    AND ABS(i.total_amount - $2) < 0.005
 		    AND NOT EXISTS (
 		      SELECT 1 FROM bank_import_rows bir
-		      WHERE bir.kid_number = i.kid_number
+		      WHERE bir.club_id = i.club_id AND bir.kid_number = i.kid_number
 		        AND bir.journal_entry_id IS NOT NULL
 		    )`,
 		clubID, amount,
@@ -410,7 +410,7 @@ func (s *Service) syncKIDMatches(ctx context.Context, clubID, createdBy string) 
 				 AND `+finance.OwedByMemberSQL("i")+`
 				 AND NOT EXISTS (
 				   SELECT 1 FROM bank_import_rows bir
-				   WHERE bir.kid_number = $2 AND bir.journal_entry_id IS NOT NULL
+				   WHERE bir.club_id = i.club_id AND bir.kid_number = $2 AND bir.journal_entry_id IS NOT NULL
 				 )
 				 LIMIT 1`,
 				clubID, c,
@@ -428,7 +428,7 @@ func (s *Service) syncKIDMatches(ctx context.Context, clubID, createdBy string) 
 					   AND `+finance.OwedByMemberSQL("i")+`
 					   AND NOT EXISTS (
 					     SELECT 1 FROM bank_import_rows bir
-					     WHERE bir.journal_entry_id IS NOT NULL
+					     WHERE bir.club_id = i.club_id AND bir.journal_entry_id IS NOT NULL
 					       AND bir.kid_number = i.kid_number
 					   )
 					 LIMIT 1`,
@@ -509,7 +509,7 @@ func (s *Service) syncKIDMatches(ctx context.Context, clubID, createdBy string) 
 			s.discardDraft(ctx, clubID, entry.ID)
 			continue
 		}
-		if perr := s.PostJournalEntry(ctx, entry.ID, createdBy); perr != nil {
+		if perr := s.PostJournalEntry(ctx, clubID, entry.ID, createdBy); perr != nil {
 			s.log.Warn().Err(perr).
 				Str("bank_row_id", p.rowID).
 				Str("entry_id", entry.ID).

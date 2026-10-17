@@ -220,7 +220,7 @@ func (s *Service) postVippsChargeSplit(ctx context.Context, clubID, createdBy, d
 		}
 		return existing, errChargeRaced
 	}
-	if err := s.PostJournalEntry(ctx, entry.ID, createdBy); err != nil {
+	if err := s.PostJournalEntry(ctx, clubID, entry.ID, createdBy); err != nil {
 		s.unwindVippsPosting(ctx, clubID, entry.ID, "vipps_import_rows", []string{b.id})
 		return "", fmt.Errorf("posting journal entry: %w", err)
 	}
@@ -488,7 +488,7 @@ func (s *Service) ClearVippsPayout(ctx context.Context, clubID, bankRowID, creat
 			s.discardDraft(ctx, clubID, feeJE.ID)
 			return nil, fmt.Errorf("linking fee rows: %w", err)
 		}
-		if err := s.PostJournalEntry(ctx, feeJE.ID, createdBy); err != nil {
+		if err := s.PostJournalEntry(ctx, clubID, feeJE.ID, createdBy); err != nil {
 			s.unwindVippsPosting(ctx, clubID, feeJE.ID, "vipps_import_rows", feeRows)
 			return nil, fmt.Errorf("posting fee entry: %w", err)
 		}
@@ -545,7 +545,7 @@ func (s *Service) ClearVippsPayout(ctx context.Context, clubID, bankRowID, creat
 			bankRowID, clubID,
 		).Scan(&res.BankEntryID)
 	} else {
-		if err := s.PostJournalEntry(ctx, bankJE.ID, createdBy); err != nil {
+		if err := s.PostJournalEntry(ctx, clubID, bankJE.ID, createdBy); err != nil {
 			s.unwindVippsPosting(ctx, clubID, bankJE.ID, "bank_import_rows", []string{bankRowID})
 			return nil, fmt.Errorf("posting payout entry: %w", err)
 		}

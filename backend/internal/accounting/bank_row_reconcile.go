@@ -128,7 +128,7 @@ func (s *Service) AssignBankRowToInvoice(
 	if perr != nil {
 		return "", fmt.Errorf("resolve period: %w", perr)
 	}
-	if periodStatus == "closed" {
+	if periodStatus != "open" {
 		return "", fmt.Errorf("fiscal period for %s is closed; reopen first", rowDate.Format("2006-01-02"))
 	}
 
@@ -152,7 +152,7 @@ func (s *Service) AssignBankRowToInvoice(
 	if cerr != nil {
 		return "", fmt.Errorf("create journal: %w", cerr)
 	}
-	if err := s.PostJournalEntry(ctx, entry.ID, actorID); err != nil {
+	if err := s.PostJournalEntry(ctx, clubID, entry.ID, actorID); err != nil {
 		return "", fmt.Errorf("post journal: %w", err)
 	}
 	if _, err := tx.Exec(ctx,
@@ -241,7 +241,7 @@ func (s *Service) AssignBankRowToAccount(
 	if perr != nil {
 		return "", fmt.Errorf("resolve period: %w", perr)
 	}
-	if periodStatus == "closed" {
+	if periodStatus != "open" {
 		return "", fmt.Errorf("fiscal period for %s is closed", rowDate.Format("2006-01-02"))
 	}
 
@@ -294,7 +294,7 @@ func (s *Service) AssignBankRowToAccount(
 	if cerr != nil {
 		return "", fmt.Errorf("create journal: %w", cerr)
 	}
-	if err := s.PostJournalEntry(ctx, entry.ID, actorID); err != nil {
+	if err := s.PostJournalEntry(ctx, clubID, entry.ID, actorID); err != nil {
 		return "", fmt.Errorf("post journal: %w", err)
 	}
 	if _, err := tx.Exec(ctx,
@@ -333,84 +333,57 @@ func (s *Service) DismissBankRow(ctx context.Context, clubID, actorID, bankRowID
 	return nil
 }
 
-// UnassignBankRow reverses a prior assignment: voids the journal
-// entry (creates a balanced reversal), nulls the row's
-// journal_entry_id so it returns to the queue, removes the payments
-// row if linkInvoicePayment had set one, and clears
-// invoices.payment_id. The original journal entry plus the reversal
-// stay in the GL — bokføringsloven §13 requires audit retention.
+// ErrBankRowNotFound is returned for a row id that doesn't exist or belongs
+// to another club.
+var ErrBankRowNotFound = errors.New("bank row not found")
+
+// ErrBankRowNotAssigned is returned when unassigning a row with no booking.
+var ErrBankRowNotAssigned = errors.New("bank row not assigned")
+
+// UnassignBankRow reverses a prior assignment and returns the row to the
+// queue. Every row that shares the booking (multi-row faktura assignments
+// share an invoice_id; an intra-bank transfer's two rows share one entry)
+// is unassigned with it.
 //
-// Returns the prior journal entry ID and invoice ID (if any) for the
-// audit row.
+// Order, so the GL never counts an entry for a row that is back in the
+// queue, and an interrupted run can simply be retried:
+//  1. Check every involved entry: a posted entry in a closed or locked
+//     period refuses the whole unassign (ErrPeriodClosed) and nothing
+//     changes.
+//  2. Void the posted entries (each one a balanced reversal; the original
+//     and the reversal stay in the GL for bokføringsloven §13 retention).
+//     Entries already voided by an earlier, interrupted run are skipped.
+//  3. In one transaction: clear the rows, delete draft entries (drafts were
+//     never reported, so they're removed rather than reversed), clear
+//     invoices.payment_id and remove the payments row linkInvoicePayment
+//     created.
+//
+// Returns the prior journal entry ID and invoice ID (if any) for the audit
+// row.
 func (s *Service) UnassignBankRow(
 	ctx context.Context, clubID, actorID, bankRowID string,
 ) (priorJournalID, priorInvoiceID string, err error) {
-	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
-	if err != nil {
-		return "", "", fmt.Errorf("begin tx: %w", err)
-	}
-	defer tx.Rollback(ctx)
-
 	var invoiceIDPtr *string
-	if err := tx.QueryRow(ctx,
+	if err := s.db.QueryRow(ctx,
 		`SELECT COALESCE(journal_entry_id::text, ''), invoice_id
 		   FROM bank_import_rows
 		  WHERE id = $1 AND club_id = $2`,
 		bankRowID, clubID,
 	).Scan(&priorJournalID, &invoiceIDPtr); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return "", "", errors.New("bank row not found")
+			return "", "", ErrBankRowNotFound
 		}
 		return "", "", fmt.Errorf("load row: %w", err)
 	}
 	if priorJournalID == "" {
-		return "", "", errors.New("bank row not assigned")
+		return "", "", ErrBankRowNotAssigned
 	}
 	if invoiceIDPtr != nil {
 		priorInvoiceID = *invoiceIDPtr
-	}
-
-	// Collect all journal entry IDs to void. For multi-row invoice
-	// assignments every sibling row shares the same invoice_id and
-	// must be unassigned atomically with this one.
-	journalIDsToVoid := []string{priorJournalID}
-	if priorInvoiceID != "" {
-		rows, rerr := tx.Query(ctx,
-			`SELECT COALESCE(journal_entry_id::text, '')
-			   FROM bank_import_rows
-			  WHERE invoice_id = $1 AND club_id = $2 AND id != $3
-			    AND journal_entry_id IS NOT NULL`,
-			priorInvoiceID, clubID, bankRowID,
-		)
-		if rerr != nil {
-			return "", "", fmt.Errorf("load siblings: %w", rerr)
-		}
-		for rows.Next() {
-			var jid string
-			if err := rows.Scan(&jid); err != nil {
-				rows.Close()
-				return "", "", fmt.Errorf("scan sibling: %w", err)
-			}
-			journalIDsToVoid = append(journalIDsToVoid, jid)
-		}
-		rows.Close()
-		if err := rows.Err(); err != nil {
-			return "", "", fmt.Errorf("siblings: %w", err)
-		}
-
-		// Clear all sibling rows.
-		if _, err := tx.Exec(ctx,
-			`UPDATE bank_import_rows
-			    SET journal_entry_id = NULL, invoice_id = NULL, auto_matched = false
-			  WHERE invoice_id = $1 AND club_id = $2`,
-			priorInvoiceID, clubID,
-		); err != nil {
-			return "", "", fmt.Errorf("clear sibling rows: %w", err)
-		}
 	} else {
-		// Single-row case: no invoice back-link. Use legacy lookup via
-		// payments table for rows assigned before migration 000057.
-		_ = tx.QueryRow(ctx,
+		// Rows assigned before migration 000057 have no invoice back-link;
+		// recover the faktura through the payment the assignment created.
+		_ = s.db.QueryRow(ctx,
 			`SELECT i.id
 			   FROM invoices i
 			   JOIN payments p ON p.id = i.payment_id
@@ -424,22 +397,100 @@ func (s *Service) UnassignBankRow(
 			  LIMIT 1`,
 			priorJournalID, clubID,
 		).Scan(&priorInvoiceID)
+	}
 
-		if _, err := tx.Exec(ctx,
-			`UPDATE bank_import_rows
-			    SET journal_entry_id = NULL, invoice_id = NULL, auto_matched = false
-			  WHERE id = $1`,
-			bankRowID,
-		); err != nil {
-			return "", "", fmt.Errorf("clear row: %w", err)
+	// Every entry booked for this assignment: this row's, its invoice
+	// siblings', and any other row pointing at the same entry.
+	type involved struct {
+		id, status, periodStatus string
+	}
+	rows, err := s.db.Query(ctx,
+		`SELECT DISTINCT je.id, je.status, fp.status
+		   FROM bank_import_rows b
+		   JOIN journal_entries je ON je.id = b.journal_entry_id AND je.club_id = b.club_id
+		   JOIN fiscal_periods fp ON fp.id = je.fiscal_period_id
+		  WHERE b.club_id = $1
+		    AND (b.id = $2
+		         OR ($3 <> '' AND b.invoice_id::text = $3)
+		         OR b.journal_entry_id::text = $4)`,
+		clubID, bankRowID, priorInvoiceID, priorJournalID,
+	)
+	if err != nil {
+		return "", "", fmt.Errorf("load bookings: %w", err)
+	}
+	var entries []involved
+	for rows.Next() {
+		var e involved
+		if err := rows.Scan(&e.id, &e.status, &e.periodStatus); err != nil {
+			rows.Close()
+			return "", "", fmt.Errorf("scan booking: %w", err)
+		}
+		entries = append(entries, e)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return "", "", fmt.Errorf("bookings: %w", err)
+	}
+
+	// 1. Refuse up front so a closed period never leaves the unassign half
+	// done (some entries reversed, others not).
+	for _, e := range entries {
+		if e.status == "posted" && e.periodStatus != "open" {
+			return "", "", fmt.Errorf("bank row is booked in a closed fiscal period; reopen it or correct with a new entry: %w", ErrPeriodClosed)
 		}
 	}
 
+	// 2. Reverse what was posted. A failure stops here with the rows still
+	// assigned, so the GL and the queue agree; a retry skips the entries
+	// this run already voided.
+	var drafts []string
+	for _, e := range entries {
+		switch e.status {
+		case "posted":
+			if _, err := s.VoidJournalEntry(ctx, clubID, e.id, actorID); err != nil {
+				return "", "", fmt.Errorf("voiding bilag: %w", err)
+			}
+		case "draft":
+			drafts = append(drafts, e.id)
+		}
+	}
+
+	// 3. Unlink and clean up atomically.
+	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return "", "", fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	entryIDs := make([]string, 0, len(entries))
+	for _, e := range entries {
+		entryIDs = append(entryIDs, e.id)
+	}
+	if _, err := tx.Exec(ctx,
+		`UPDATE bank_import_rows
+		    SET journal_entry_id = NULL, invoice_id = NULL, auto_matched = false
+		  WHERE club_id = $1
+		    AND (id = $2
+		         OR ($3 <> '' AND invoice_id::text = $3)
+		         OR journal_entry_id = ANY($4::uuid[]))`,
+		clubID, bankRowID, priorInvoiceID, entryIDs,
+	); err != nil {
+		return "", "", fmt.Errorf("clear rows: %w", err)
+	}
+	if len(drafts) > 0 {
+		if _, err := tx.Exec(ctx,
+			`DELETE FROM journal_entries
+			  WHERE club_id = $1 AND status = 'draft' AND id = ANY($2::uuid[])`,
+			clubID, drafts,
+		); err != nil {
+			return "", "", fmt.Errorf("delete draft bilag: %w", err)
+		}
+	}
 	if priorInvoiceID != "" {
 		var paymentID *string
 		if err := tx.QueryRow(ctx,
-			`SELECT payment_id FROM invoices WHERE id = $1`,
-			priorInvoiceID,
+			`SELECT payment_id FROM invoices WHERE id = $1 AND club_id = $2`,
+			priorInvoiceID, clubID,
 		).Scan(&paymentID); err != nil {
 			return "", "", fmt.Errorf("load invoice payment: %w", err)
 		}
@@ -460,15 +511,6 @@ func (s *Service) UnassignBankRow(
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return "", "", fmt.Errorf("commit: %w", err)
-	}
-
-	for _, jid := range journalIDsToVoid {
-		if _, verr := s.VoidJournalEntry(ctx, jid, actorID); verr != nil {
-			s.log.Warn().Err(verr).
-				Str("journal_entry_id", jid).
-				Str("bank_row_id", bankRowID).
-				Msg("UnassignBankRow: void journal failed; row cleared but GL still posted to original")
-		}
 	}
 	return priorJournalID, priorInvoiceID, nil
 }
@@ -566,7 +608,7 @@ func (s *Service) AssignMultipleBankRowsToInvoice(
 	if perr != nil {
 		return nil, fmt.Errorf("resolve period: %w", perr)
 	}
-	if periodStatus == "closed" {
+	if periodStatus != "open" {
 		return nil, fmt.Errorf("fiscal period for %s is closed; reopen first", latestDate.Format("2006-01-02"))
 	}
 
@@ -592,7 +634,7 @@ func (s *Service) AssignMultipleBankRowsToInvoice(
 		if cerr != nil {
 			return nil, fmt.Errorf("create journal for row %s: %w", rd.id, cerr)
 		}
-		if err := s.PostJournalEntry(ctx, entry.ID, actorID); err != nil {
+		if err := s.PostJournalEntry(ctx, clubID, entry.ID, actorID); err != nil {
 			return nil, fmt.Errorf("post journal for row %s: %w", rd.id, err)
 		}
 		if _, err := tx.Exec(ctx,

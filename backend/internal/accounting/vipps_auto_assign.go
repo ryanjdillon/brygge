@@ -394,9 +394,9 @@ func (s *Service) UnassignVippsCharge(ctx context.Context, clubID, actorID, rowI
 	// (status 'voided') just finishes the clearing.
 	if status == "posted" {
 		if periodStatus != "open" {
-			return "", "", fmt.Errorf("charge is booked in a closed fiscal period — correct it with a new entry in an open period")
+			return "", "", fmt.Errorf("charge is booked in a closed fiscal period — correct it with a new entry in an open period: %w", ErrPeriodClosed)
 		}
-		if _, err := s.VoidJournalEntry(ctx, priorEntryID, actorID); err != nil {
+		if _, err := s.VoidJournalEntry(ctx, clubID, priorEntryID, actorID); err != nil {
 			return "", "", fmt.Errorf("voiding bilag: %w", err)
 		}
 	}

@@ -10,15 +10,28 @@ Each invariant lists the **rule**, then the **failure mode** it prevents. When p
 
 ### Closed fiscal periods are immutable
 
-**Rule:** No journal entry can be created against, or voided into, a period whose `fiscal_period_status` is `closed` or `locked`. `accounting.Service.resolvePeriod()` enforces this — never bypass it by querying the period yourself.
+**Rule:** no journal entry can be created in, posted to, or voided into a period whose `fiscal_period_status` is `closed` or `locked`. The guard sits inside the service functions themselves, not only in their callers: `CreateJournalEntry` and `PostJournalEntry` refuse a non-open period, and so does `VoidJournalEntry` (BRY-333), all with `ErrPeriodClosed`. Handlers map that error to 409 with `code: "period_closed"`.
 
-**Failure mode:** silent corruption of a balance sheet that's already been reported to the styre or filed with skatteetaten. Bokføringsloven §13 violation.
+A void is **refused**. Its reversal never moves to a later open period instead, because a closed year's figures have been reported. To correct it, either reopen the period deliberately, or book a new correcting entry (e.g. a credit note) in the current period. Callers that act on a group of entries (`ReverseInvoice`, `UnassignBankRow`, `UnassignVippsCharge`) check every entry's period first, so the group is reversed completely or not at all.
+
+Closing is serialised against writers. `CreateJournalEntry`, `PostJournalEntry` and `VoidJournalEntry` hold the period row `FOR SHARE` until they commit. `ClosePeriod` takes it `FOR UPDATE` before it counts drafts, so it waits for in-flight writers and then sees what they committed.
+
+**Failure mode:**
+* Silent corruption of a balance sheet that has already been reported to the styre or filed with Skatteetaten (a bokføringsloven §13 violation).
+* Before BRY-333, `VoidJournalEntry` wrote its reversal into closed periods unchecked.
+* A draft created while the period was being closed could land in it for good.
 
 ### Posted journal entries cannot be edited
 
-**Rule:** Once `journal_status` is `posted`, the only legal write is `VoidJournalEntry`, which creates a balanced reversal entry rather than mutating lines. `draft` entries can be edited or deleted freely.
+**Rule:** once `journal_status` is `posted`, the only legal write is `VoidJournalEntry`. It marks the original `voided` and adds a balanced, posted reversal, and both stay in the GL. A posted entry is never updated or deleted: corrections are new entries (reversals, `invoice_resplit` reclassifications, credit notes). Only `draft` entries may be edited or deleted, and only drafts that no bank or Vipps row links to (`DeleteDraftJournalEntry`). Unassigning a row deletes its draft and voids its posted entry.
 
-**Failure mode:** historical reports start disagreeing with themselves. Auditor finds the GL doesn't tie back to the printed annual report.
+**Failure mode:** historical reports start disagreeing with themselves, and an auditor finds the GL doesn't tie back to the printed annual report.
+
+### Accounting reads and writes are club-scoped
+
+**Rule:** every service function that acts on an id from a request also takes the caller's club id and filters on it. This covers journal entries (get, post, void, delete-draft), accounts (update, deactivate, get), fiscal periods (close, reopen) and bank rows (assign, unassign). Another club's id is reported as not found (`ErrEntryNotFound`, `ErrAccountNotFound`, `ErrBankRowNotFound`, mapped to 404), so a foreign id reveals nothing. The "already booked" subqueries in KID matching also join on the faktura's club.
+
+**Failure mode:** an admin or treasurer of one club posts, voids, reopens or renames another club's records by guessing a UUID (BRY-367). This was harmless while every deployment ran one club, but not in a multi-tenant one.
 
 ### An order-linked Vipps charge is booked from its order
 

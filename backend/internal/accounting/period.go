@@ -129,41 +129,54 @@ func (e *PeriodHasDraftsError) Error() string {
 
 // ClosePeriod sets a period's status to closed, preventing new journal
 // entries. It refuses while the period has drafts (PeriodHasDraftsError).
+//
+// The period row is locked FOR UPDATE before drafts are counted. Every
+// writer that can add to the period (CreateJournalEntry, PostJournalEntry,
+// VoidJournalEntry) holds it FOR SHARE until it commits, so the lock waits
+// for in-flight writers, and the draft count that follows (a new statement,
+// so a fresh READ COMMITTED snapshot) sees what they committed.
 func (s *Service) ClosePeriod(ctx context.Context, clubID, periodID, closedBy string) error {
-	drafts, err := s.periodDrafts(ctx, clubID, periodID)
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("beginning transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	var status string
+	err = tx.QueryRow(ctx,
+		`SELECT status FROM fiscal_periods WHERE id = $1 AND club_id = $2 FOR UPDATE`,
+		periodID, clubID,
+	).Scan(&status)
+	if err == pgx.ErrNoRows || (err == nil && status != "open") {
+		return fmt.Errorf("period not found or not open")
+	}
+	if err != nil {
+		return fmt.Errorf("locking period: %w", err)
+	}
+
+	drafts, err := periodDrafts(ctx, tx, clubID, periodID)
 	if err != nil {
 		return err
 	}
 	if len(drafts) > 0 {
 		return &PeriodHasDraftsError{Drafts: drafts}
 	}
-	// The NOT EXISTS re-checks inside the update, so a draft created after
-	// the read above still blocks the close.
-	tag, err := s.db.Exec(ctx,
+	if _, err := tx.Exec(ctx,
 		`UPDATE fiscal_periods SET status = 'closed', closed_by = $3, closed_at = now(), updated_at = now()
-		 WHERE id = $1 AND club_id = $2 AND status = 'open'
-		   AND NOT EXISTS (
-		     SELECT 1 FROM journal_entries
-		      WHERE fiscal_period_id = $1 AND club_id = $2 AND status = 'draft'
-		   )`,
+		 WHERE id = $1 AND club_id = $2`,
 		periodID, clubID, closedBy,
-	)
-	if err != nil {
+	); err != nil {
 		return fmt.Errorf("closing period: %w", err)
 	}
-	if tag.RowsAffected() == 0 {
-		if drafts, derr := s.periodDrafts(ctx, clubID, periodID); derr == nil && len(drafts) > 0 {
-			return &PeriodHasDraftsError{Drafts: drafts}
-		}
-		return fmt.Errorf("period not found or not open")
-	}
-	return nil
+	return tx.Commit(ctx)
 }
 
 // periodDrafts lists the period's draft entries per source with their total
 // (the debit side of each entry).
-func (s *Service) periodDrafts(ctx context.Context, clubID, periodID string) ([]PeriodDraftSummary, error) {
-	rows, err := s.db.Query(ctx,
+func periodDrafts(ctx context.Context, q interface {
+	Query(context.Context, string, ...any) (pgx.Rows, error)
+}, clubID, periodID string) ([]PeriodDraftSummary, error) {
+	rows, err := q.Query(ctx,
 		`SELECT je.source::text, count(*),
 		        COALESCE(sum((SELECT sum(jl.debit) FROM journal_lines jl WHERE jl.journal_entry_id = je.id)), 0)
 		   FROM journal_entries je
@@ -188,12 +201,13 @@ func (s *Service) periodDrafts(ctx context.Context, clubID, periodID string) ([]
 	return out, rows.Err()
 }
 
-// ReopenPeriod sets a closed period back to open.
-func (s *Service) ReopenPeriod(ctx context.Context, periodID string) error {
+// ReopenPeriod sets a closed period back to open. A locked period stays
+// locked, and another club's period is reported as not found.
+func (s *Service) ReopenPeriod(ctx context.Context, clubID, periodID string) error {
 	tag, err := s.db.Exec(ctx,
 		`UPDATE fiscal_periods SET status = 'open', closed_by = NULL, closed_at = NULL, updated_at = now()
-		 WHERE id = $1 AND status = 'closed'`,
-		periodID,
+		 WHERE id = $1 AND club_id = $2 AND status = 'closed'`,
+		periodID, clubID,
 	)
 	if err != nil {
 		return fmt.Errorf("reopening period: %w", err)

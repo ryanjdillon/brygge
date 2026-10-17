@@ -74,10 +74,12 @@ See [`../../../docs/developer/reference/enums.md`](../../../docs/developer/refer
 
 ## Invariants
 
-- `posted` journal entries are immutable — only `VoidJournalEntry` (creates a balanced reversal)
+- `posted` journal entries are immutable: the only write is `VoidJournalEntry` (original marked `voided` + a posted balanced reversal); never updated or deleted
 - Every Vipps posting (charge, order split, auto-assign, fee, payout, legacy confirm) is posted on creation; a failed post unlinks its rows and discards the draft
 - `ClosePeriod` refuses while the period holds drafts (409 `period_has_drafts`, listed per source); `DeleteDraftJournalEntry` removes an unlinked draft
-- `closed`/`locked` fiscal periods reject new entries
+- `closed`/`locked` fiscal periods reject create, post **and void** (`ErrPeriodClosed` → 409 `period_closed`); a void is refused, never moved to a later period. Writers hold the period `FOR SHARE`; `ClosePeriod` takes it `FOR UPDATE` before counting drafts
+- Every function acting on a request id takes the club id and filters on it; a foreign id is not found (404)
+- `UnassignBankRow`: check every involved entry's period → void posted entries → one tx clears the rows (incl. a transfer's other row), deletes drafts, reopens the faktura; retry-safe
 - Vipps belastning amounts are positive; fees are negative
 - Bank rows with `journal_entry_id IS NOT NULL` cannot be reassigned without cascading `journal_lines`
 - Reports and momskomp count `posted` **and** `voided` entries (`bookedEntryFilter`), so a void and its reversal net to zero

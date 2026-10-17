@@ -126,7 +126,7 @@ func TestVippsBacklogRefusesUnsafeDrafts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("earlier booking: %v", err)
 	}
-	if err := f.svc.PostJournalEntry(ctx, posted.ID, f.club.Treasurer.ID); err != nil {
+	if err := f.svc.PostJournalEntry(ctx, f.club.ID, posted.ID, f.club.Treasurer.ID); err != nil {
 		t.Fatalf("post earlier booking: %v", err)
 	}
 

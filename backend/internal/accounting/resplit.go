@@ -159,7 +159,7 @@ func (s *Service) ResplitInvoiceBilags(ctx context.Context, clubID, periodID, ac
 				result.SkippedDetails = append(result.SkippedDetails, SkippedItem{Ref: ref, Reason: err.Error()})
 				continue
 			}
-			if err := s.PostJournalEntry(ctx, entry.ID, actor); err != nil {
+			if err := s.PostJournalEntry(ctx, clubID, entry.ID, actor); err != nil {
 				s.discardDraft(ctx, clubID, entry.ID)
 				result.SkippedDetails = append(result.SkippedDetails, SkippedItem{Ref: ref, Reason: "post: " + err.Error()})
 				continue

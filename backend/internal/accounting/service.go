@@ -2,6 +2,7 @@ package accounting
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
@@ -111,29 +112,46 @@ func (s *Service) CreateAccount(ctx context.Context, clubID string, a AccountDef
 	return id, nil
 }
 
+// ErrAccountNotFound is returned for an account id that doesn't exist or
+// belongs to another club.
+var ErrAccountNotFound = errors.New("account not found")
+
 // UpdateAccount modifies a non-system account's name, description, or MVA eligibility.
-func (s *Service) UpdateAccount(ctx context.Context, accountID string, name, description string, mvaEligible MVAEligibility) error {
-	tag, err := s.db.Exec(ctx,
-		`UPDATE accounts SET name = $2, description = $3, mva_eligible = $4, updated_at = now()
-		 WHERE id = $1 AND is_system = false`,
-		accountID, name, description, mvaEligible,
-	)
-	if err != nil {
-		return fmt.Errorf("updating account: %w", err)
+func (s *Service) UpdateAccount(ctx context.Context, clubID, accountID string, name, description string, mvaEligible MVAEligibility) error {
+	var isSystem bool
+	err := s.db.QueryRow(ctx,
+		`SELECT is_system FROM accounts WHERE id = $1 AND club_id = $2`,
+		accountID, clubID,
+	).Scan(&isSystem)
+	if err == pgx.ErrNoRows {
+		return ErrAccountNotFound
 	}
-	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("account not found or is a system account")
+	if err != nil {
+		return fmt.Errorf("checking account: %w", err)
+	}
+	if isSystem {
+		return fmt.Errorf("cannot edit a system account")
+	}
+	if _, err := s.db.Exec(ctx,
+		`UPDATE accounts SET name = $3, description = $4, mva_eligible = $5, updated_at = now()
+		 WHERE id = $1 AND club_id = $2 AND is_system = false`,
+		accountID, clubID, name, description, mvaEligible,
+	); err != nil {
+		return fmt.Errorf("updating account: %w", err)
 	}
 	return nil
 }
 
 // DeactivateAccount soft-deletes an account if it has no journal lines.
-func (s *Service) DeactivateAccount(ctx context.Context, accountID string) error {
+func (s *Service) DeactivateAccount(ctx context.Context, clubID, accountID string) error {
 	// Check for system account
 	var isSystem bool
-	err := s.db.QueryRow(ctx, `SELECT is_system FROM accounts WHERE id = $1`, accountID).Scan(&isSystem)
+	err := s.db.QueryRow(ctx,
+		`SELECT is_system FROM accounts WHERE id = $1 AND club_id = $2`,
+		accountID, clubID,
+	).Scan(&isSystem)
 	if err == pgx.ErrNoRows {
-		return fmt.Errorf("account not found")
+		return ErrAccountNotFound
 	}
 	if err != nil {
 		return fmt.Errorf("checking account: %w", err)
@@ -156,19 +174,19 @@ func (s *Service) DeactivateAccount(ctx context.Context, accountID string) error
 	}
 
 	_, err = s.db.Exec(ctx,
-		`UPDATE accounts SET is_active = false, updated_at = now() WHERE id = $1`,
-		accountID,
+		`UPDATE accounts SET is_active = false, updated_at = now() WHERE id = $1 AND club_id = $2`,
+		accountID, clubID,
 	)
 	return err
 }
 
-// GetAccount returns a single account by ID.
-func (s *Service) GetAccount(ctx context.Context, accountID string) (*Account, error) {
+// GetAccount returns a single account by ID, scoped to the club.
+func (s *Service) GetAccount(ctx context.Context, clubID, accountID string) (*Account, error) {
 	var a Account
 	err := s.db.QueryRow(ctx,
 		`SELECT id, club_id, code, name, account_type, COALESCE(parent_code, ''), is_system, is_active, mva_eligible, description, sort_order
-		 FROM accounts WHERE id = $1`,
-		accountID,
+		 FROM accounts WHERE id = $1 AND club_id = $2`,
+		accountID, clubID,
 	).Scan(&a.ID, &a.ClubID, &a.Code, &a.Name, &a.AccountType, &a.ParentCode, &a.IsSystem, &a.IsActive, &a.MVAEligible, &a.Description, &a.SortOrder)
 	if err == pgx.ErrNoRows {
 		return nil, nil

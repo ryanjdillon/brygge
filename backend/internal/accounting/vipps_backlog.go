@@ -141,7 +141,7 @@ func (s *Service) PostVippsDraftBacklog(ctx context.Context, clubID, periodID, a
 		}
 
 		if apply {
-			if err := s.PostJournalEntry(ctx, d.id, actor); err != nil {
+			if err := s.PostJournalEntry(ctx, clubID, d.id, actor); err != nil {
 				res.Refused = append(res.Refused, SkippedItem{Ref: ref, Reason: "posting: " + err.Error()})
 				continue
 			}

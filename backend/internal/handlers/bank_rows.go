@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -288,7 +289,14 @@ func (h *BankRowsHandler) HandleUnassign(w http.ResponseWriter, r *http.Request)
 	}
 	priorJournal, priorInvoice, err := h.svc.UnassignBankRow(ctx, claims.ClubID, claims.UserID, rowID)
 	if err != nil {
-		Error(w, http.StatusBadRequest, err.Error())
+		switch {
+		case errors.Is(err, accounting.ErrBankRowNotFound):
+			Error(w, http.StatusNotFound, err.Error())
+		case errors.Is(err, accounting.ErrPeriodClosed):
+			writePeriodClosed(w, err)
+		default:
+			Error(w, http.StatusBadRequest, err.Error())
+		}
 		return
 	}
 	if h.audit != nil {
