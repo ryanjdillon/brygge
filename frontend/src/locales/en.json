@@ -680,6 +680,7 @@
         "unlinkTitle": "Undo the settlement of credit note #{number}?",
         "unlinkBody": "Faktura #{number} becomes open again.",
         "voidLinked": "This credit note settles a faktura. Undo the settlement before voiding it.",
+        "voidCredited": "This faktura is credited by credit note #{number}. Unlink the credit note first if you really want to void it.",
         "error": {
           "partial_credit": "The credit note doesn't cover the whole faktura. Partial credits aren't supported; settle the remainder separately.",
           "different_payer": "The credit note and the faktura are for different payers.",

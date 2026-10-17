@@ -672,6 +672,7 @@
         "unlinkTitle": "Angre motrekninga for kreditnota #{number}?",
         "unlinkBody": "Faktura #{number} vert open att.",
         "voidLinked": "Kreditnotaen er motrekna mot ein faktura. Angre motrekninga før du annullerer han.",
+        "voidCredited": "Fakturaen er kreditert av kreditnota #{number}. Fjern koplinga til kreditnotaen først om du verkeleg vil annullere han.",
         "error": {
           "partial_credit": "Kreditnotaen dekkjer ikkje heile fakturaen. Delvis kreditering er ikkje støtta; gjer opp resten separat.",
           "different_payer": "Kreditnotaen og fakturaen gjeld ulike betalarar.",

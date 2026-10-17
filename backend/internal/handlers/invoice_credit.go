@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/brygge-klubb/brygge/internal/audit"
 	"github.com/brygge-klubb/brygge/internal/finance"
@@ -83,6 +84,11 @@ func samePayer(a, b *creditInvoiceRow) bool {
 		return true
 	}
 	return a.recipientID != nil && b.recipientID != nil && *a.recipientID == *b.recipientID
+}
+
+func isUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }
 
 func amountsCancel(credit, invoice float64) bool {
@@ -250,11 +256,33 @@ func (h *InvoiceHandler) HandleLinkCreditNote(w http.ResponseWriter, r *http.Req
 		creditConflict(w, "partial_credit",
 			"the credit note doesn't cover the whole faktura; partial credits aren't supported, so settle the remainder separately")
 		return
-	case cn.booked != target.booked:
+	case cn.booked != target.booked && !(cn.booked && target.imported):
 		// One side in the GL and the other not would leave the receivable
 		// (or a stray revenue reversal) standing after the member is settled.
+		// The exception is a booked Brygge credit note against an imported
+		// faktura: the faktura's receivable lives in the opening balance
+		// carried over from the previous system, so the credit note's own
+		// DR revenue / CR 1500 is what clears it.
 		creditConflict(w, "booking_mismatch",
 			"one of the two is booked in the accounts and the other isn't; book or correct them first")
+		return
+	}
+
+	// The credited check above was evaluated in the snapshot taken before
+	// this transaction waited for the row locks. Re-read it now that the
+	// faktura is locked, so a concurrent link of another credit note that
+	// committed while we waited is seen.
+	var nowCredited bool
+	if err := tx.QueryRow(ctx,
+		`SELECT `+finance.CreditedSQL("i")+` FROM invoices i WHERE i.id = $1 AND i.club_id = $2`,
+		target.id, claims.ClubID,
+	).Scan(&nowCredited); err != nil {
+		h.log.Error().Err(err).Msg("link credit: re-check credited")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if nowCredited {
+		creditConflict(w, "already_credited", "the faktura is already credited by another credit note")
 		return
 	}
 
@@ -267,11 +295,21 @@ func (h *InvoiceHandler) HandleLinkCreditNote(w http.ResponseWriter, r *http.Req
 		`UPDATE invoices SET credits_invoice_id = $1 WHERE id = $2 AND club_id = $3`,
 		target.id, cn.id, claims.ClubID,
 	); err != nil {
+		// idx_invoices_credits_once is the last line of defence against two
+		// credit notes linking the same faktura at once.
+		if isUniqueViolation(err) {
+			creditConflict(w, "already_credited", "the faktura is already credited by another credit note")
+			return
+		}
 		h.log.Error().Err(err).Msg("link credit: update")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	if err := tx.Commit(ctx); err != nil {
+		if isUniqueViolation(err) {
+			creditConflict(w, "already_credited", "the faktura is already credited by another credit note")
+			return
+		}
 		h.log.Error().Err(err).Msg("link credit: commit")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return

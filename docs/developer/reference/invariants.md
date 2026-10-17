@@ -235,8 +235,8 @@ So the amount cap is a **default**, not a hard ceiling — the per-invoice overr
 
 **Rule (BRY-342):** an invoice with a negative total is a credit note. It is never overdue, never reminded and never on the payables page (`OwedByMemberSQL`). A credit note settles the faktura it credits only through an explicit link, `invoices.credits_invoice_id`, set by an admin (`POST …/credit-link`, fresh TOTP). Nothing pairs them automatically, because several open fakturas can share a payer and amount.
 - The link is refused unless both invoices are live and issued (sent or imported), have the same payer (member or billing recipient), and the credit equals the faktura's total. Partial credits are refused, because every "amount owed" path would have to net them.
-- A faktura is credited by at most one live credit note (`idx_invoices_credits_once`).
-- **The link never posts to the GL.** A booked credit note's own entry (DR revenue / CR 1500) already offsets the faktura's receivable, and imported history has no bookings on either side. A pair where only one side is booked is refused (`booking_mismatch`).
+- A faktura is credited by at most one live credit note (`idx_invoices_credits_once`). The link re-checks inside its transaction, after locking, and maps the unique violation to 409 `already_credited`, so two concurrent links settle once.
+- **The link never posts to the GL.** A booked credit note's own entry (DR revenue / CR 1500) already offsets the faktura's receivable, and imported history has no bookings on either side. A pair where only one side is booked is refused (`booking_mismatch`), with one exception: a booked Brygge credit note may settle an *imported*, unbooked faktura. The imported receivable lives in the opening balance on 1500, so the credit note's own CR 1500 is what clears it; posting anything at link time would clear it twice.
 - A faktura that was already paid when it was credited makes the credit note **credit owed to the member** (refund or carry-forward). It is shown as such, never as overdue.
 - A linked credit note can't be voided until the link is undone, so a void can't silently reopen the faktura.
 

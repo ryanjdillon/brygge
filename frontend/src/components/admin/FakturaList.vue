@@ -375,7 +375,9 @@ async function doVoid(id: string) {
           ? t('admin.invoiceDrafts.voidPeriodClosed')
           : body?.code === 'credit_linked'
             ? t('admin.faktura.credit.voidLinked')
-            : t('admin.invoiceDrafts.voidSettled')
+            : body?.code === 'credited'
+              ? t('admin.faktura.credit.voidCredited', { number: body.credit_note_number })
+              : t('admin.invoiceDrafts.voidSettled')
       return
     }
     if (!res.ok && res.status !== 204) {
@@ -1034,7 +1036,7 @@ defineExpose({ load })
                     <Link2 class="h-4 w-4" />
                   </button>
                   <button
-                    v-if="d.credit_state === 'unlinked'"
+                    v-if="props.status !== 'draft' && d.credit_state === 'unlinked'"
                     class="text-sky-600 hover:text-sky-800 disabled:opacity-50"
                     :disabled="busyIds.has(d.id)"
                     :title="t('admin.faktura.credit.settleAction')"
