@@ -76,10 +76,11 @@ function onBankFile(files: FileList | null) {
 
 async function submitBank() {
   if (!bankFile.value || !bankAccountCode.value) return
-  // The overwrite path clears the account's unmatched rows in the file's date
-  // range, so it is gated behind fresh TOTP + an explicit confirm.
+  // Importing auto-books KID matches as posted entries, so it needs a fresh
+  // step-up. The overwrite path also clears the account's unmatched rows in
+  // the file's date range, so it adds an explicit confirm.
+  if (!(await ensureFreshTotp())) return
   if (bankOverwrite.value) {
-    if (!(await ensureFreshTotp())) return
     const ok = await confirm({
       title: t('admin.bankImports.overwrite'),
       body: t('admin.bankImports.overwriteConfirm', { code: bankAccountCode.value }),
@@ -117,6 +118,8 @@ function onVippsFile(files: FileList | null) {
 
 async function submitVipps() {
   if (!vippsFile.value) return
+  // The import books order-linked and auto-assigned charges as posted entries.
+  if (!(await ensureFreshTotp())) return
   vippsError.value = null
   vippsBusy.value = true
   try {
@@ -182,6 +185,7 @@ async function openReconcile(row: { id: string; description: string } | BankImpo
 
 async function confirmReconcile() {
   if (!reconcilePreview.value || !reconcileTarget.value) return
+  if (!(await ensureFreshTotp())) return
   reconcileBusy.value = true
   try {
     await confirmVippsReconcile(reconcileTarget.value.id, reconcilePreview.value.lines)
@@ -214,6 +218,7 @@ const vippsResyncResult = ref<VippsResyncResult | null>(null)
 const vippsResyncError = ref<string | null>(null)
 
 async function runVippsResyncAction() {
+  if (!(await ensureFreshTotp())) return
   vippsResyncBusy.value = true
   vippsResyncError.value = null
   try {
@@ -228,6 +233,7 @@ const syncResult = ref<BankSyncResult | null>(null)
 const syncError = ref<string | null>(null)
 
 async function runSync() {
+  if (!(await ensureFreshTotp())) return
   syncBusy.value = true
   syncError.value = null
   try {

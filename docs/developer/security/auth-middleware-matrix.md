@@ -119,15 +119,26 @@ The **Fresh TOTP** column marks the extra per-action gate.
 | `/periods` list/create | — | |
 | `POST /periods/{id}/close`, `/reopen` | ✅ (DIL-245) | locks/unlocks the books |
 | `/journal` list/get | — | |
-| `POST /journal`, `/{id}/post`, `/{id}/void` | ✅ (DIL-245) | the double-entry ledger itself |
-| `/sync/*`, `/bank-sync`, `/vipps-resync` | — | idempotent re-derivations |
-| `/bank-import` create/match/auto-match | — | |
+| `POST /journal`, `/{id}/post`, `/{id}/void`, `DELETE /journal/{id}` | ✅ (treasurer, admin; BRY-370) | the double-entry ledger itself |
+| `POST /sync/payments`, `/sync/invoices` (Avstem periode), `/sync/invoices/resplit`, `/sync/vipps-drafts` | ✅ (treasurer, admin; BRY-370) | book posted entries |
+| `POST /sync/invoices/resplit/preview`, `/sync/vipps-drafts/preview` | — | read-only previews |
+| `POST /bank-sync`, `/vipps-resync` | ✅ (treasurer, admin; BRY-370) | auto-match and post (KID, Vipps order and auto-assign) |
+| `POST /bank-import` | ✅ (treasurer, admin; BRY-370) | posts import-time KID matches |
+| `/bank-import/{id}/rows/{row}/match`, `/auto-match` | — | create drafts only |
 | `PATCH /bank-import/{id}/account` | ✅ | reassigns an import to another account |
-| `/vipps-imports` create/list | — | |
+| `POST /vipps-imports` | ✅ (treasurer, admin; BRY-370) | posts order-linked and auto-assigned charges |
+| `POST /bank-rows/{id}/reconcile-vipps/confirm` | ✅ (treasurer, admin; BRY-370) | posts the payout reconciliation |
+| `/vipps-imports` list | — | |
 | `bank-rows/{id}` suggestions/potential-invoices | — | reads |
 | `assign-invoice[-multi]`, assign-account, dismiss, unassign | ✅ (treasurer, admin) | manual reconcile (Tildel) |
 | `/rules/*` | — | reconciliation rules |
 | `/reports/*` (incl. momskomp save/status) | — | reporting |
+
+**Rule (BRY-370):** every route that can create or change a *posted* GL
+entry, whether directly or by auto-matching during an import or sync,
+requires the treasurer or admin role **and** a fresh step-up (`moneyGate` in
+`cmd/api/main.go`). Board members keep read access to the books. The SPA asks
+for the step-up at click time (`ensureFreshTotp()`).
 
 ## Findings (DIL-245)
 

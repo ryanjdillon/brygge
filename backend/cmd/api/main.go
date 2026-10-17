@@ -1256,6 +1256,14 @@ func main() {
 				if cfg.Features.Accounting {
 					r.Route("/accounting", func(r chi.Router) {
 						r.Use(middleware.RequireRole("treasurer", "board", "admin"))
+						// Every route that can create or change a posted GL
+						// entry (directly, or by auto-matching during an
+						// import or sync) needs the treasurer/admin role and a
+						// fresh step-up; board members can read the books.
+						moneyGate := []func(http.Handler) http.Handler{
+							middleware.RequireRole("treasurer", "admin"),
+							middleware.RequireFreshTOTPDefault(),
+						}
 
 						// Ledger mutations re-prompt for a fresh TOTP within
 						// the per-action window — same posture as invoice
@@ -1283,34 +1291,37 @@ func main() {
 
 						r.Route("/journal", func(r chi.Router) {
 							r.Get("/", accountingHandler.HandleListJournalEntries)
-							r.With(middleware.RequireFreshTOTPDefault()).
+							r.With(moneyGate...).
 								Post("/", accountingHandler.HandleCreateJournalEntry)
 							r.Post("/parse-receipt", accountingHandler.HandleParseReceipt)
 							r.Get("/{entryID}", accountingHandler.HandleGetJournalEntry)
-							r.With(middleware.RequireFreshTOTPDefault()).
+							r.With(moneyGate...).
 								Post("/{entryID}/post", accountingHandler.HandlePostJournalEntry)
-							r.With(middleware.RequireFreshTOTPDefault()).
+							r.With(moneyGate...).
 								Post("/{entryID}/void", accountingHandler.HandleVoidJournalEntry)
-							r.With(middleware.RequireFreshTOTPDefault()).
+							r.With(moneyGate...).
 								Delete("/{entryID}", accountingHandler.HandleDeleteDraftJournalEntry)
 							r.Post("/{entryID}/attachment", accountingHandler.HandleUploadJournalAttachment)
 							r.Get("/{entryID}/attachment", accountingHandler.HandleGetJournalAttachment)
 						})
 
 						r.Route("/sync", func(r chi.Router) {
-							r.Post("/payments", accountingHandler.HandleSyncPayments)
-							r.Post("/invoices", accountingHandler.HandleSyncInvoices)
+							r.With(moneyGate...).
+								Post("/payments", accountingHandler.HandleSyncPayments)
+							r.With(moneyGate...).
+								Post("/invoices", accountingHandler.HandleSyncInvoices)
 							r.Post("/invoices/resplit/preview", accountingHandler.HandlePreviewResplitInvoiceBilags)
-							r.With(middleware.RequireFreshTOTPDefault()).
+							r.With(moneyGate...).
 								Post("/invoices/resplit", accountingHandler.HandleApplyResplitInvoiceBilags)
 							r.Post("/vipps-drafts/preview", accountingHandler.HandlePreviewVippsDraftBacklog)
-							r.With(middleware.RequireFreshTOTPDefault()).
+							r.With(moneyGate...).
 								Post("/vipps-drafts", accountingHandler.HandleApplyVippsDraftBacklog)
 						})
 
 						r.Get("/bank-formats", accountingHandler.HandleListBankFormats)
 						r.Route("/bank-import", func(r chi.Router) {
-							r.Post("/", accountingHandler.HandleImportBankStatement)
+							r.With(moneyGate...).
+								Post("/", accountingHandler.HandleImportBankStatement)
 							r.With(middleware.RequireFreshTOTPDefault()).
 								Post("/account-reimport", accountingHandler.HandleReimportAccountBankStatement)
 							r.Get("/{importID}", accountingHandler.HandleGetBankImport)
@@ -1324,7 +1335,8 @@ func main() {
 						})
 
 						r.Route("/vipps-imports", func(r chi.Router) {
-							r.Post("/", accountingHandler.HandleImportVippsSettlement)
+							r.With(moneyGate...).
+								Post("/", accountingHandler.HandleImportVippsSettlement)
 							r.Get("/", accountingHandler.HandleListVippsImports)
 							r.Get("/{importID}", accountingHandler.HandleGetVippsImport)
 						})
@@ -1333,12 +1345,12 @@ func main() {
 						r.Get("/vipps-missing-settlements", accountingHandler.HandleListMissingVippsSettlements)
 						r.Get("/bank-rows", accountingHandler.HandleListBankRowsByAccount)
 						r.Get("/vipps-rows", accountingHandler.HandleListVippsRowsByMSN)
-						r.Post("/bank-sync", accountingHandler.HandleBankSync)
-						r.Post("/vipps-resync", accountingHandler.HandleResyncVipps)
+						r.With(moneyGate...).Post("/bank-sync", accountingHandler.HandleBankSync)
+						r.With(moneyGate...).Post("/vipps-resync", accountingHandler.HandleResyncVipps)
 
 						r.Route("/bank-rows/{rowID}/reconcile-vipps", func(r chi.Router) {
 							r.Get("/", accountingHandler.HandleVippsReconcilePreview)
-							r.Post("/confirm", accountingHandler.HandleVippsReconcileConfirm)
+							r.With(moneyGate...).Post("/confirm", accountingHandler.HandleVippsReconcileConfirm)
 						})
 
 						// Per-charge Vipps reconciliation (BRY-227): one item

@@ -140,11 +140,13 @@ function toggleExpand(entry: JournalEntry) {
   expandedId.value = expandedId.value === entry.id ? null : entry.id
 }
 
-function handlePost(entryId: string) {
+async function handlePost(entryId: string) {
+  if (!(await ensureFreshTotp())) return
   postMutation.mutate(entryId)
 }
 
-function handleVoid(entryId: string) {
+async function handleVoid(entryId: string) {
+  if (!(await ensureFreshTotp())) return
   if (confirm(t('admin.accounting.journal.confirmVoid'))) {
     voidMutation.mutate(entryId)
   }
@@ -182,6 +184,7 @@ async function openAttachment(entryId: string) {
 
 async function handleSync() {
   if (!selectedPeriodId.value) return
+  if (!(await ensureFreshTotp())) return
   syncing.value = true
   syncMessage.value = ''
   syncSkipped.value = []

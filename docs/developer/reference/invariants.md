@@ -153,6 +153,12 @@ Charges naming a checkout order are left to `AutoReconcileOrderCharges`. Each bo
 
 **Failure mode:** enrollment stamps the session as stepped-up. If replacing a factor needed only a session cookie, a stolen cookie could enroll the attacker's own secret and then pass every admin and fresh gate (BRY-298).
 
+### Anything that can post a journal entry is treasurer/admin with fresh TOTP
+
+**Rule (BRY-370):** every accounting route that can create or post a journal entry — manual entries, post, void, delete draft, the GL syncs (payments, invoices, resplit, Vipps drafts), bank and Vipps imports, bank sync, Vipps resync and the bank-row Vipps reconcile confirm — goes through `moneyGate` in `cmd/api/main.go`: `RequireRole("treasurer", "admin")` plus `RequireFreshTOTPDefault()`. Previews stay read-only and ungated. The SPA calls `ensureFreshTotp()` when the button is clicked.
+
+**Failure mode:** with only the accounting-router role check, a board member with a stale session could post or void entries, import statements that auto-book, or run syncs that book a whole period.
+
 ### `totp_verified_at` is the source of truth for step-up freshness
 
 **Rule:** Both `RequireFreshTOTP` and the SPA's countdown logic compute "is this fresh?" from `sessions.totp_verified_at`. Client-side timers are advisory only. The backend always reverifies on every gated request.
