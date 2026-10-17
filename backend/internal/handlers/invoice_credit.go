@@ -230,6 +230,29 @@ func (h *InvoiceHandler) HandleLinkCreditNote(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// A booked credit note may settle an imported, never-booked faktura only
+	// when that faktura's receivable exists in Brygge's GL, i.e. an opening
+	// balance carried over at the cutover put it on 1500. Otherwise the
+	// credit note's CR 1500 would reduce a receivable that was never there.
+	importedException := cn.booked && !target.booked && target.imported
+	openingReceivable := false
+	if importedException {
+		if err := tx.QueryRow(ctx,
+			`SELECT EXISTS (
+			     SELECT 1 FROM journal_entries je
+			       JOIN journal_lines jl ON jl.journal_entry_id = je.id
+			       JOIN accounts a ON a.id = jl.account_id
+			      WHERE je.club_id = $1 AND je.source = 'opening_balance' AND je.status = 'posted'
+			        AND a.code = '1500' AND jl.debit > 0
+			        AND je.entry_date <= (SELECT issue_date FROM invoices WHERE id = $2))`,
+			claims.ClubID, cn.id,
+		).Scan(&openingReceivable); err != nil {
+			h.log.Error().Err(err).Msg("link credit: opening balance check")
+			Error(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+	}
+
 	switch {
 	case cn.total >= 0:
 		Error(w, http.StatusBadRequest, "invoice is not a credit note")
@@ -256,13 +279,16 @@ func (h *InvoiceHandler) HandleLinkCreditNote(w http.ResponseWriter, r *http.Req
 		creditConflict(w, "partial_credit",
 			"the credit note doesn't cover the whole faktura; partial credits aren't supported, so settle the remainder separately")
 		return
-	case cn.booked != target.booked && !(cn.booked && target.imported):
+	case importedException && !openingReceivable:
+		creditConflict(w, "booking_mismatch",
+			"the faktura was imported from the previous system and Brygge has no opening balance on 1500 that includes it; "+
+				"post the opening balance first, otherwise the credit note would clear a receivable that was never booked")
+		return
+	case cn.booked != target.booked && !importedException:
 		// One side in the GL and the other not would leave the receivable
 		// (or a stray revenue reversal) standing after the member is settled.
-		// The exception is a booked Brygge credit note against an imported
-		// faktura: the faktura's receivable lives in the opening balance
-		// carried over from the previous system, so the credit note's own
-		// DR revenue / CR 1500 is what clears it.
+		// The only exception is the imported-faktura case above, where the
+		// opening balance holds the receivable the credit note clears.
 		creditConflict(w, "booking_mismatch",
 			"one of the two is booked in the accounts and the other isn't; book or correct them first")
 		return

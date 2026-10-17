@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/rs/zerolog"
 
+	"github.com/brygge-klubb/brygge/internal/accounting"
 	"github.com/brygge-klubb/brygge/internal/audit"
 	"github.com/brygge-klubb/brygge/internal/testutil/fin"
 )
@@ -232,14 +234,43 @@ func TestConcurrentCreditLinksOneWins(t *testing.T) {
 }
 
 // A Brygge credit note (booked when sent) can settle an imported faktura that
-// never had a GL entry: the imported receivable sits in the opening balance,
-// so the credit note's own booking is what clears it.
+// never had a GL entry only when the opening balance carried over from the
+// previous system put that faktura's receivable on 1500. Without it the
+// credit note's CR 1500 would clear a receivable that was never booked.
 func TestCreditLinkBookedNoteToImportedFaktura(t *testing.T) {
 	f := newCreditFixture(t)
+	ctx := context.Background()
 	faktura := f.club.NewInvoice(t, fin.InvoiceOpts{Member: &f.alice, Cents: 90000, Imported: true,
 		IssueDate: time.Date(2025, 9, 1, 0, 0, 0, 0, time.UTC)})
 	credit := f.club.NewInvoice(t, fin.InvoiceOpts{Member: &f.alice, Cents: -90000})
 	f.book(t, credit)
+
+	rec := f.link(t, credit, faktura)
+	wantCode(t, rec, http.StatusConflict, "booking_mismatch")
+	if !strings.Contains(rec.Body.String(), "opening balance") {
+		t.Errorf("refusal should name the missing opening balance: %s", rec.Body.String())
+	}
+
+	// Carry the imported receivable over at the cutover: DR 1500 / CR equity.
+	src := "opening_balance"
+	ob, err := f.svc.CreateJournalEntry(ctx, accounting.CreateJournalEntryInput{
+		FiscalPeriodID: f.club.PeriodID,
+		EntryDate:      time.Date(f.club.Year, 1, 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02"),
+		Description:    "Inngående balanse",
+		Source:         src,
+		CreatedBy:      f.club.Treasurer.ID,
+		ClubID:         f.club.ID,
+		Lines: []accounting.CreateJournalLineInput{
+			{AccountCode: "1500", Debit: 900},
+			{AccountCode: "2050", Credit: 900},
+		},
+	})
+	if err != nil {
+		t.Fatalf("opening balance: %v", err)
+	}
+	if err := f.svc.PostJournalEntry(ctx, f.club.ID, ob.ID, f.club.Treasurer.ID); err != nil {
+		t.Fatalf("post opening balance: %v", err)
+	}
 
 	entries := f.journalCount(t)
 	wantCode(t, f.link(t, credit, faktura), http.StatusOK, "")
@@ -248,5 +279,9 @@ func TestCreditLinkBookedNoteToImportedFaktura(t *testing.T) {
 	}
 	if f.owed(t, faktura) {
 		t.Errorf("imported faktura still owed after its credit note was linked")
+	}
+	// Opening DR 1500 900 and the credit note's CR 1500 900 cancel out.
+	if got := f.net(t, "1500"); got != 0 {
+		t.Errorf("1500 net = %v after the link, want 0", got)
 	}
 }
