@@ -2,6 +2,9 @@ package finance
 
 import (
 	"bytes"
+	"compress/zlib"
+	"io"
+	"strings"
 	"testing"
 	"time"
 )
@@ -79,5 +82,65 @@ func TestFormatNOK(t *testing.T) {
 		if got != tt.want {
 			t.Errorf("formatNOK(%f) = %q, want %q", tt.amount, got, tt.want)
 		}
+	}
+}
+
+// pdfText inflates every content stream of a PDF so tests can look for the
+// text drawn on the page.
+func pdfText(t *testing.T, pdf []byte) string {
+	t.Helper()
+	var out strings.Builder
+	rest := pdf
+	for {
+		start := bytes.Index(rest, []byte("stream\n"))
+		if start < 0 {
+			return out.String()
+		}
+		rest = rest[start+len("stream\n"):]
+		end := bytes.Index(rest, []byte("endstream"))
+		if end < 0 {
+			return out.String()
+		}
+		if r, err := zlib.NewReader(bytes.NewReader(rest[:end])); err == nil {
+			b, _ := io.ReadAll(r)
+			out.Write(b)
+		} else {
+			out.Write(rest[:end])
+		}
+		rest = rest[end:]
+	}
+}
+
+// A faktura that nets to zero asks for nothing, so its PDF carries neither
+// the KID nor the bank account.
+func TestGeneratePDFZeroTotalHidesKID(t *testing.T) {
+	inv := Invoice{
+		ClubName:      "Testvik Båtforening",
+		InvoiceNumber: 7,
+		IssueDate:     time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC),
+		DueDate:       time.Date(2026, 3, 31, 0, 0, 0, 0, time.UTC),
+		KID:           GenerateKID("000", 1, 7),
+		BankAccount:   "1234.56.78901",
+		Lines: []InvoiceLine{
+			{Description: "Plassleie", Quantity: 1, UnitPrice: 2600},
+			{Description: "Fritak", Quantity: 1, UnitPrice: -2600},
+		},
+	}
+	pdf, err := GeneratePDF(inv)
+	if err != nil {
+		t.Fatalf("GeneratePDF: %v", err)
+	}
+	text := pdfText(t, pdf)
+	if strings.Contains(text, inv.KID) || strings.Contains(text, inv.BankAccount) {
+		t.Errorf("zero faktura PDF shows the KID or bank account")
+	}
+
+	inv.Lines = inv.Lines[:1]
+	pdf, err = GeneratePDF(inv)
+	if err != nil {
+		t.Fatalf("GeneratePDF: %v", err)
+	}
+	if !strings.Contains(pdfText(t, pdf), inv.KID) {
+		t.Errorf("owed faktura PDF lacks the KID; the text check is not seeing page content")
 	}
 }

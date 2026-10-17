@@ -13,6 +13,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/brygge-klubb/brygge/internal/accounting"
+	"github.com/brygge-klubb/brygge/internal/audit"
 	"github.com/brygge-klubb/brygge/internal/auth"
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/email"
@@ -106,6 +107,8 @@ func (f *exemptionFixture) call(t *testing.T, fn http.HandlerFunc, method, path 
 	r := chi.NewRouter()
 	if strings.HasSuffix(path, "/send") {
 		r.Method(method, "/invoices/{invoiceID}/send", fn)
+	} else if strings.HasSuffix(path, "/void") {
+		r.Method(method, "/invoices/{invoiceID}/void", fn)
 	} else {
 		r.Method(method, path, fn)
 	}
@@ -496,5 +499,289 @@ func TestExemptionsWithoutValidAccountWarnAndBillInFull(t *testing.T) {
 	}
 	if total, _ := f.lines(t, f.createdFor(t, resp, treasurer.ID)); total != 2600 {
 		t.Errorf("total %.2f, want 2600 billed in full", total)
+	}
+}
+
+// createFull creates a single faktura for the member and returns its id,
+// total and the roles it was exempted under.
+func (f *exemptionFixture) createFull(t *testing.T, userID string, lines ...invoiceLineInput) (string, float64, []string) {
+	t.Helper()
+	rec := f.call(t, f.h.HandleCreateInvoice, http.MethodPost, "/invoices/full", createInvoiceFullRequest{
+		UserID: userID, DueDate: "2026-06-30", FiscalPeriodID: &f.club.PeriodID, Lines: lines,
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create: %d %s", rec.Code, rec.Body.String())
+	}
+	var out invoiceResponse
+	_ = json.Unmarshal(rec.Body.Bytes(), &out)
+	return out.ID, out.TotalAmount, out.Exemptions
+}
+
+// send attaches a placeholder PDF and sends the faktura, booking it.
+func (f *exemptionFixture) send(t *testing.T, inv string) {
+	t.Helper()
+	if _, err := f.club.Pool.Exec(context.Background(),
+		`UPDATE invoices SET pdf_data = '\x25504446'::bytea WHERE id = $1`, inv); err != nil {
+		t.Fatalf("pdf: %v", err)
+	}
+	if rec := f.call(t, f.h.HandleSendInvoice, http.MethodPost, "/invoices/"+inv+"/send", nil); rec.Code != http.StatusOK {
+		t.Fatalf("send: %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+// A credit note or a negative (discount) line is never offset: exempting it
+// would turn a refund into a further charge.
+func TestExemptionsSkipCreditNotesAndNegativeLines(t *testing.T) {
+	f := newExemptionFixture(t)
+	f.configure(t, "5000", exemptionRule{Role: "treasurer", PriceItemID: &f.service})
+	treasurer := f.club.NewMember(t, "member", "treasurer")
+
+	inv, total, ex := f.createFull(t, treasurer.ID,
+		invoiceLineInput{Description: "Kreditnota slipping", Quantity: 1, UnitPrice: -800, PriceItemID: &f.service})
+	if total != -800 || len(ex) != 0 {
+		t.Errorf("credit note total %.2f exemptions %v, want -800 with none", total, ex)
+	}
+	if _, lines := f.lines(t, inv); len(lines) != 1 || lines[0].role != "" {
+		t.Errorf("credit note lines = %+v, want the single credit line", lines)
+	}
+
+	// A positive faktura with a discount on an exempt item: the discount
+	// stands and nothing is offset.
+	inv, total, ex = f.createFull(t, treasurer.ID,
+		invoiceLineInput{Description: "Medlemskontingent", Quantity: 1, UnitPrice: 450, PriceItemID: &f.dues},
+		invoiceLineInput{Description: "Rabatt slipping", Quantity: 1, UnitPrice: -100, PriceItemID: &f.service})
+	if total != 350 || len(ex) != 0 {
+		t.Errorf("discounted faktura total %.2f exemptions %v, want 350 with none", total, ex)
+	}
+	if _, lines := f.lines(t, inv); len(lines) != 2 {
+		t.Errorf("discounted faktura has %d lines, want 2", len(lines))
+	}
+}
+
+// The offset covers the whole line, quantity times unit price.
+func TestExemptionsSingleFakturaQuantity(t *testing.T) {
+	f := newExemptionFixture(t)
+	f.configure(t, "5000", exemptionRule{Role: "treasurer", PriceItemID: &f.service})
+	treasurer := f.club.NewMember(t, "member", "treasurer")
+
+	inv, total, _ := f.createFull(t, treasurer.ID,
+		invoiceLineInput{Description: "Slipping", Quantity: 2, UnitPrice: 800, PriceItemID: &f.service},
+		invoiceLineInput{Description: "Medlemskontingent", Quantity: 1, UnitPrice: 450, PriceItemID: &f.dues})
+	if total != 450 {
+		t.Fatalf("total %.2f, want 450 with both slippings exempted", total)
+	}
+	_, lines := f.lines(t, inv)
+	if exempt := lines[len(lines)-1]; exempt.amount != -1600 || exempt.role != "treasurer" {
+		t.Errorf("exemption line = %+v, want -1600 by treasurer", exempt)
+	}
+}
+
+// A rule on one price item exempts only that item, not its sibling tiers.
+func TestExemptionsPriceItemRuleInBulk(t *testing.T) {
+	f := newExemptionFixture(t)
+	f.configure(t, "5000", exemptionRule{Role: "treasurer", PriceItemID: &f.slipHi})
+	wide := f.slipHolder(t, 3.1, "treasurer")
+	narrow := f.slipHolder(t, 2.2, "treasurer")
+
+	resp := f.bulk(t, bulkInvoiceRequest{UserIDs: []string{wide.ID, narrow.ID}, BeamCategories: []string{"slip_fee"}})
+	if total, _ := f.lines(t, f.createdFor(t, resp, wide.ID)); total != 0 {
+		t.Errorf("2.5–4 m tier total %.2f, want 0", total)
+	}
+	if total, _ := f.lines(t, f.createdFor(t, resp, narrow.ID)); total != 2600 {
+		t.Errorf("0–2.5 m tier total %.2f, want 2600 billed", total)
+	}
+}
+
+// A member with two boats gets one exemption per boat, and unticking one in
+// the review bills only that boat.
+func TestExemptionsUntickOneOfTwoBoats(t *testing.T) {
+	f := newExemptionFixture(t)
+	f.configure(t, "5000", catRule("treasurer", "slip_fee"))
+	m := f.slipHolder(t, 2.2, "treasurer")
+	ctx := context.Background()
+	var boatID, slipID string
+	if err := f.club.Pool.QueryRow(ctx,
+		`INSERT INTO boats (user_id, club_id, name, beam_m, length_m) VALUES ($1, $2, 'Second boat', 2.2, 6) RETURNING id`,
+		m.ID, f.club.ID).Scan(&boatID); err != nil {
+		t.Fatalf("boat: %v", err)
+	}
+	if err := f.club.Pool.QueryRow(ctx,
+		`INSERT INTO slips (club_id, section, number) VALUES ($1, 'Z', $2) RETURNING id`,
+		f.club.ID, "Z"+testutil.RandomHex(3)).Scan(&slipID); err != nil {
+		t.Fatalf("slip: %v", err)
+	}
+	if _, err := f.club.Pool.Exec(ctx,
+		`INSERT INTO slip_assignments (slip_id, user_id, club_id, boat_id) VALUES ($1, $2, $3, $4)`,
+		slipID, m.ID, f.club.ID, boatID); err != nil {
+		t.Fatalf("slip assignment: %v", err)
+	}
+
+	req := bulkInvoiceRequest{UserIDs: []string{m.ID}, BeamCategories: []string{"slip_fee"}, Preview: true}
+	preview := f.bulk(t, req)
+	if len(preview.Exemptions) != 2 || preview.Exemptions[0].Key == preview.Exemptions[1].Key {
+		t.Fatalf("preview exemptions = %+v, want two with distinct keys", preview.Exemptions)
+	}
+	var skipKey string
+	for _, e := range preview.Exemptions {
+		if e.BoatID == boatID {
+			skipKey = e.Key
+		}
+	}
+	if skipKey == "" {
+		t.Fatalf("no exemption keyed to the second boat: %+v", preview.Exemptions)
+	}
+
+	req.Preview = false
+	req.SkipExemptions = []string{skipKey}
+	resp := f.bulk(t, req)
+	total, lines := f.lines(t, f.createdFor(t, resp, m.ID))
+	if total != 2600 || len(lines) != 3 {
+		t.Errorf("total %.2f over %d lines, want 2600 over two slip lines and one exemption", total, len(lines))
+	}
+}
+
+// Voiding an exempt faktura reverses the gross booking along with the
+// receivable, leaving every account at zero.
+func TestExemptionsVoidReversesGrossEntry(t *testing.T) {
+	f := newExemptionFixture(t)
+	f.h.audit = audit.NewService(f.club.Pool, zerolog.Nop())
+	f.configure(t, "5000", catRule("treasurer", "slip_fee"))
+	treasurer := f.slipHolder(t, 2.2, "treasurer")
+
+	resp := f.bulk(t, bulkInvoiceRequest{
+		UserIDs: []string{treasurer.ID}, PriceItemIDs: []string{f.dues}, BeamCategories: []string{"slip_fee"},
+	})
+	inv := f.createdFor(t, resp, treasurer.ID)
+	f.send(t, inv)
+	if net := f.netByAccount(t); net["5000"] != 2600 {
+		t.Fatalf("before void 5000 = %.2f, want 2600", net["5000"])
+	}
+	if rec := f.call(t, f.h.HandleVoidInvoice, http.MethodPost, "/invoices/"+inv+"/void", nil); rec.Code != http.StatusNoContent {
+		t.Fatalf("void: %d %s", rec.Code, rec.Body.String())
+	}
+	for code, net := range f.netByAccount(t) {
+		if net != 0 {
+			t.Errorf("after void account %s nets %.2f, want 0", code, net)
+		}
+	}
+}
+
+// The portal marks a fully exempt faktura as not owed, so it reads as
+// settled rather than as an unpaid bill.
+func TestExemptionsPortalOwedFlag(t *testing.T) {
+	f := newExemptionFixture(t)
+	f.configure(t, "5000", catRule("harbor_master", "slip_fee"), exemptionRule{Role: "harbor_master", PriceItemID: &f.service})
+	hm := f.slipHolder(t, 2.2, "harbor_master")
+	resp := f.bulk(t, bulkInvoiceRequest{UserIDs: []string{hm.ID}, PriceItemIDs: []string{f.dues}, BeamCategories: []string{"slip_fee"}})
+	f.send(t, f.createdFor(t, resp, hm.ID))
+	zero, _, _ := f.createFull(t, hm.ID,
+		invoiceLineInput{Description: "Slipping", Quantity: 1, UnitPrice: 800, PriceItemID: &f.service})
+	f.send(t, zero)
+
+	mh := &MembersHandler{db: f.club.Pool, config: &config.Config{}, log: zerolog.Nop()}
+	req := httptest.NewRequest(http.MethodGet, "/members/me/invoices", nil)
+	req = req.WithContext(middleware.WithClaims(req.Context(), &auth.Claims{
+		UserID: hm.ID, ClubID: f.club.ID, Roles: []string{"member", "harbor_master"},
+	}))
+	rec := httptest.NewRecorder()
+	mh.HandleListMyInvoices(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list: %d %s", rec.Code, rec.Body.String())
+	}
+	var got []memberInvoice
+	_ = json.Unmarshal(rec.Body.Bytes(), &got)
+	if len(got) != 2 {
+		t.Fatalf("listed %d fakturas, want 2", len(got))
+	}
+	for _, mi := range got {
+		switch mi.TotalAmount {
+		case 450:
+			if !mi.Owed {
+				t.Errorf("450 faktura owed = false, want true")
+			}
+		case 0:
+			if mi.Owed || mi.Paid {
+				t.Errorf("0 faktura owed=%v paid=%v, want neither", mi.Owed, mi.Paid)
+			}
+		default:
+			t.Errorf("unexpected total %.2f", mi.TotalAmount)
+		}
+	}
+}
+
+// The overview reports gross billed with the exemptions beside it; a fully
+// exempt faktura is not counted as outstanding.
+func TestExemptionsPriceItemSummaryGross(t *testing.T) {
+	f := newExemptionFixture(t)
+	f.configure(t, "5000", catRule("treasurer", "slip_fee"), catRule("harbor_master", "slip_fee"))
+	treasurer := f.slipHolder(t, 2.2, "treasurer")
+	hm := f.slipHolder(t, 2.2, "harbor_master")
+	ordinary := f.slipHolder(t, 2.2)
+	f.bulk(t, bulkInvoiceRequest{UserIDs: []string{treasurer.ID, ordinary.ID}, PriceItemIDs: []string{f.dues}, BeamCategories: []string{"slip_fee"}})
+	f.bulk(t, bulkInvoiceRequest{UserIDs: []string{hm.ID}, BeamCategories: []string{"slip_fee"}})
+
+	fh := &FinancialsHandler{db: f.club.Pool, config: &config.Config{}, log: zerolog.Nop()}
+	rec := f.call(t, fh.HandleGetPriceItemSummary, http.MethodGet, "/financials/price-items/summary", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("summary: %d %s", rec.Code, rec.Body.String())
+	}
+	var got priceItemSummaryResponse
+	_ = json.Unmarshal(rec.Body.Bytes(), &got)
+	for _, row := range got.Items {
+		if row.PriceItemID == f.slipLow && (row.Billed != 7800 || row.Exempted != 5200 || row.Outstanding != 2600) {
+			t.Errorf("slip row billed %.2f exempted %.2f outstanding %.2f, want 7800 / 5200 / 2600",
+				row.Billed, row.Exempted, row.Outstanding)
+		}
+	}
+	tot := got.Totals
+	if tot.Billed != 8700 || tot.Exempted != 5200 || tot.Outstanding != 3500 {
+		t.Errorf("totals billed %.2f exempted %.2f outstanding %.2f, want 8700 / 5200 / 3500",
+			tot.Billed, tot.Exempted, tot.Outstanding)
+	}
+	if tot.InvoiceCount != 3 || tot.OutstandingCount != 2 {
+		t.Errorf("counts invoices %d outstanding %d, want 3 and 2", tot.InvoiceCount, tot.OutstandingCount)
+	}
+}
+
+// An expense account is checked whenever one is given, even with no rules.
+func TestExemptionsAccountValidatedWithoutRules(t *testing.T) {
+	f := newExemptionFixture(t)
+	for _, code := range []string{"9999", "3100"} {
+		rec := f.call(t, f.h.HandlePutExemptions, http.MethodPut, "/settings/economy/exemptions",
+			putExemptionsRequest{ExpenseAccount: code})
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("account %s with no rules: status %d, want 400", code, rec.Code)
+		}
+	}
+	f.configure(t, "5000")
+}
+
+// The audit row records the settings before and after the change.
+func TestExemptionsAuditPayload(t *testing.T) {
+	f := newExemptionFixture(t)
+	f.h.audit = audit.NewService(f.club.Pool, zerolog.Nop())
+	f.configure(t, "5000", catRule("treasurer", "slip_fee"))
+	f.configure(t, "5000", catRule("chair", "membership"))
+
+	var raw []byte
+	if err := f.club.Pool.QueryRow(context.Background(),
+		`SELECT details FROM audit_log WHERE club_id = $1 AND action = $2 AND resource = 'price_exemptions'
+		  ORDER BY created_at DESC, id DESC LIMIT 1`,
+		f.club.ID, audit.ActionPricingExemptionsUpdated).Scan(&raw); err != nil {
+		t.Fatalf("audit row: %v", err)
+	}
+	var d struct {
+		RulesBefore []exemptionRule `json:"rules_before"`
+		RulesAfter  []exemptionRule `json:"rules_after"`
+		AcctBefore  string          `json:"expense_account_before"`
+		AcctAfter   string          `json:"expense_account_after"`
+	}
+	if err := json.Unmarshal(raw, &d); err != nil {
+		t.Fatalf("decode details: %v", err)
+	}
+	if len(d.RulesBefore) != 1 || d.RulesBefore[0].Role != "treasurer" ||
+		len(d.RulesAfter) != 1 || d.RulesAfter[0].Role != "chair" ||
+		d.AcctBefore != "5000" || d.AcctAfter != "5000" {
+		t.Errorf("audit details = %s", raw)
 	}
 }

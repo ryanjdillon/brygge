@@ -44,15 +44,20 @@ type bulkInvoiceRequest struct {
 	// exemptions that would apply, without creating anything.
 	Preview bool `json:"preview,omitempty"`
 	// SkipExemptions lists exemptions the operator unticked in the preview,
-	// as "<user_id>:<price_item_id>"; those lines are billed normally.
+	// by their Key ("<user_id>:<price_item_id>", plus ":<boat_id>" for a
+	// boat-bound line, so one boat of a multi-boat member can be unticked
+	// alone); those lines are billed normally.
 	SkipExemptions []string `json:"skip_exemptions,omitempty"`
 }
 
 // bulkExemption is one role exemption a bulk run would apply (preview) or
 // applied (create).
 type bulkExemption struct {
+	// Key identifies this exemption for SkipExemptions.
+	Key         string  `json:"key"`
 	UserID      string  `json:"user_id"`
 	PriceItemID string  `json:"price_item_id"`
+	BoatID      string  `json:"boat_id,omitempty"`
 	Description string  `json:"description"`
 	Amount      float64 `json:"amount"`
 	Role        string  `json:"role"`
@@ -79,6 +84,15 @@ type bulkInvoiceResponse struct {
 	// Warnings are problems that change the outcome but don't stop the run,
 	// e.g. exemptions configured without an expense account.
 	Warnings []string `json:"warnings,omitempty"`
+}
+
+// exemptionKey names one exemptable bulk line. A boat-bound line carries
+// its boat so two boats on the same price item are distinct.
+func exemptionKey(userID, priceItemID, boatID string) string {
+	if boatID == "" {
+		return userID + ":" + priceItemID
+	}
+	return userID + ":" + priceItemID + ":" + boatID
 }
 
 // bulkResolvedLine binds a chosen price tier to optional slip context.
@@ -411,14 +425,20 @@ func (h *InvoiceHandler) HandleBulkCreateInvoices(w http.ResponseWriter, r *http
 				if !ok {
 					continue
 				}
+				boatID := ""
+				if lines[i].slipInfo != nil {
+					boatID = lines[i].slipInfo.boatID
+				}
+				key := exemptionKey(userID, lines[i].tier.id, boatID)
 				// The preview lists every match so the operator can untick
 				// one; a create honours the unticked ones.
-				if !req.Preview && skipExemption[userID+":"+lines[i].tier.id] {
+				// A two-part key unticks the item for every boat the member has.
+				if !req.Preview && (skipExemption[key] || skipExemption[userID+":"+lines[i].tier.id]) {
 					continue
 				}
 				lines[i].exemptRole = role
 				resp.Exemptions = append(resp.Exemptions, bulkExemption{
-					UserID: userID, PriceItemID: lines[i].tier.id,
+					Key: key, UserID: userID, PriceItemID: lines[i].tier.id, BoatID: boatID,
 					Description: lines[i].tier.desc, Amount: lines[i].tier.amount, Role: role,
 				})
 			}

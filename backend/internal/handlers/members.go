@@ -667,8 +667,12 @@ type memberInvoice struct {
 	// CreditNote marks a negative invoice: money the club owes back, never a
 	// bill. Credited marks a faktura settled by a credit note. Both are shown
 	// as such instead of "ubetalt" (BRY-342).
-	CreditNote    bool   `json:"credit_note"`
-	Credited      bool   `json:"credited"`
+	CreditNote bool `json:"credit_note"`
+	Credited   bool `json:"credited"`
+	// Owed is whether the member still has to pay this faktura (the shared
+	// OwedByMemberSQL predicate). A 0 kr faktura (fully exempted) is never
+	// owed, so the portal shows it as settled rather than unpaid/overdue.
+	Owed          bool   `json:"owed"`
 	PriceItemName string `json:"price_item_name"`
 	Description   string `json:"description"`
 	// HasPDF gates the portal "Open PDF" action — imported invoices (and
@@ -780,6 +784,7 @@ func (h *MembersHandler) HandleListMyInvoices(w http.ResponseWriter, r *http.Req
 	             (i.payment_id IS NULL AND i.vipps_paid_at IS NOT NULL) AS payment_received,
 	             (i.total_amount < 0) AS credit_note,
 	             ` + finance.CreditedSQL("i") + ` AS credited,
+	             ` + finance.OwedByMemberSQL("i") + ` AS owed,
 	             COALESCE(pi.name, ''),
 	             COALESCE((SELECT description FROM invoice_lines WHERE invoice_id = i.id LIMIT 1), ''),
 	             (i.pdf_data IS NOT NULL OR COALESCE(i.s3_key, '') <> '')
@@ -811,7 +816,7 @@ func (h *MembersHandler) HandleListMyInvoices(w http.ResponseWriter, r *http.Req
 		var issue, due time.Time
 		var sentAt *time.Time
 		if err := rows.Scan(&mi.ID, &mi.InvoiceNumber, &mi.KID, &mi.TotalAmount,
-			&issue, &due, &sentAt, &mi.Paid, &mi.PaymentReceived, &mi.CreditNote, &mi.Credited,
+			&issue, &due, &sentAt, &mi.Paid, &mi.PaymentReceived, &mi.CreditNote, &mi.Credited, &mi.Owed,
 			&mi.PriceItemName, &mi.Description, &mi.HasPDF); err != nil {
 			h.log.Error().Err(err).Msg("scan my invoice row")
 			Error(w, http.StatusInternalServerError, "internal error")

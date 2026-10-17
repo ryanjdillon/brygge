@@ -46,13 +46,17 @@ type financialSummary struct {
 }
 
 type priceItemSummaryRow struct {
-	PriceItemID  string  `json:"price_item_id"`
-	Name         string  `json:"name"`
-	Description  string  `json:"description"`
-	Category     string  `json:"category"`
-	Amount       float64 `json:"amount"`
-	Unit         string  `json:"unit"`
+	PriceItemID string  `json:"price_item_id"`
+	Name        string  `json:"name"`
+	Description string  `json:"description"`
+	Category    string  `json:"category"`
+	Amount      float64 `json:"amount"`
+	Unit        string  `json:"unit"`
+	// Billed is gross: role-exemption lines (BRY-351) are reported in
+	// Exempted instead of netting the item down. Outstanding is
+	// Billed - Exempted - Received.
 	Billed       float64 `json:"billed"`
+	Exempted     float64 `json:"exempted"`
 	Received     float64 `json:"received"`
 	Overdue      float64 `json:"overdue"`
 	Outstanding  float64 `json:"outstanding"`
@@ -71,6 +75,7 @@ type priceItemSummaryResponse struct {
 	// BRY-235.
 	Totals struct {
 		Billed           float64 `json:"billed"`
+		Exempted         float64 `json:"exempted"`
 		Received         float64 `json:"received"`
 		Overdue          float64 `json:"overdue"`
 		Outstanding      float64 `json:"outstanding"`
@@ -129,7 +134,8 @@ func (h *FinancialsHandler) HandleGetPriceItemSummary(w http.ResponseWriter, r *
 		       pi.category,
 		       pi.amount,
 		       pi.unit,
-		       COALESCE(SUM(il.line_total), 0) AS billed,
+		       COALESCE(SUM(CASE WHEN il.exemption_role IS NULL THEN il.line_total ELSE 0 END), 0) AS billed,
+		       COALESCE(SUM(CASE WHEN il.exemption_role IS NOT NULL THEN -il.line_total ELSE 0 END), 0) AS exempted,
 		       COALESCE(SUM(CASE WHEN i.payment_id IS NOT NULL THEN il.line_total ELSE 0 END), 0) AS received,
 		       COALESCE(SUM(CASE WHEN `+finance.OwedByMemberSQL("i")+` AND i.due_date < CURRENT_DATE THEN il.line_total ELSE 0 END), 0) AS overdue,
 		       COUNT(DISTINCT i.id) AS invoice_count,
@@ -163,7 +169,7 @@ func (h *FinancialsHandler) HandleGetPriceItemSummary(w http.ResponseWriter, r *
 		if err := rows.Scan(
 			&piID, &piName, &piDesc, &piCategory,
 			&piAmount, &piUnit,
-			&row.Billed, &row.Received, &row.Overdue,
+			&row.Billed, &row.Exempted, &row.Received, &row.Overdue,
 			&row.InvoiceCount, &row.PaidCount, &row.OverdueCount,
 		); err != nil {
 			h.log.Error().Err(err).Msg("price-item summary scan")
@@ -178,7 +184,7 @@ func (h *FinancialsHandler) HandleGetPriceItemSummary(w http.ResponseWriter, r *
 		if piAmount != nil {
 			row.Amount = *piAmount
 		}
-		row.Outstanding = row.Billed - row.Received
+		row.Outstanding = row.Billed - row.Exempted - row.Received
 		resp.Items = append(resp.Items, row)
 	}
 	if err := rows.Err(); err != nil {
@@ -193,27 +199,31 @@ func (h *FinancialsHandler) HandleGetPriceItemSummary(w http.ResponseWriter, r *
 	// (each line belongs to exactly one group). Same predicate as the rows so
 	// the card totals reconcile with the breakdown. See BRY-235.
 	if err := h.db.QueryRow(ctx, `
-		SELECT COALESCE(SUM(il.line_total), 0),
+		SELECT COALESCE(SUM(CASE WHEN il.exemption_role IS NULL THEN il.line_total ELSE 0 END), 0),
+		       COALESCE(SUM(CASE WHEN il.exemption_role IS NOT NULL THEN -il.line_total ELSE 0 END), 0),
 		       COALESCE(SUM(CASE WHEN i.payment_id IS NOT NULL THEN il.line_total ELSE 0 END), 0),
 		       COALESCE(SUM(CASE WHEN `+finance.OwedByMemberSQL("i")+` AND i.due_date < CURRENT_DATE THEN il.line_total ELSE 0 END), 0),
 		       COUNT(DISTINCT i.id),
 		       COUNT(DISTINCT CASE WHEN i.payment_id IS NOT NULL THEN i.id END),
-		       COUNT(DISTINCT CASE WHEN `+finance.OwedByMemberSQL("i")+` AND i.due_date < CURRENT_DATE THEN i.id END)
+		       COUNT(DISTINCT CASE WHEN `+finance.OwedByMemberSQL("i")+` AND i.due_date < CURRENT_DATE THEN i.id END),
+		       COUNT(DISTINCT CASE WHEN `+finance.OwedByMemberSQL("i")+` THEN i.id END)
 		  FROM invoices i
 		  JOIN invoice_lines il ON il.invoice_id = i.id
 		 WHERE i.club_id = $1
 		   AND i.status <> 'voided'`+periodClause,
 		args...,
 	).Scan(
-		&resp.Totals.Billed, &resp.Totals.Received, &resp.Totals.Overdue,
+		&resp.Totals.Billed, &resp.Totals.Exempted, &resp.Totals.Received, &resp.Totals.Overdue,
 		&resp.Totals.InvoiceCount, &resp.Totals.PaidCount, &resp.Totals.OverdueCount,
+		&resp.Totals.OutstandingCount,
 	); err != nil {
 		h.log.Error().Err(err).Msg("price-item summary totals")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	resp.Totals.Outstanding = resp.Totals.Billed - resp.Totals.Received
-	resp.Totals.OutstandingCount = resp.Totals.InvoiceCount - resp.Totals.PaidCount
+	resp.Totals.Outstanding = resp.Totals.Billed - resp.Totals.Exempted - resp.Totals.Received
+	// OutstandingCount counts what members still owe, so a settled 0 kr
+	// (fully exempted) or credited faktura isn't outstanding.
 
 	JSON(w, http.StatusOK, resp)
 }

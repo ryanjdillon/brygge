@@ -318,7 +318,9 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 	// line's price item gets an offsetting line right after it, booked to
 	// the club's exemption expense account.
 	var appliedExemptions, warnings []string
-	if req.UserID != "" && !req.SkipExemptions {
+	// A credit note (negative total) never gets exemptions: an offset on a
+	// negative line would be positive and cancel the credit itself.
+	if req.UserID != "" && !req.SkipExemptions && total >= 0 {
 		exemptions, err := loadExemptionConfig(ctx, h.db, claims.ClubID)
 		if err != nil {
 			h.log.Error().Err(err).Msg("failed to load exemptions")
@@ -353,6 +355,9 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 					continue
 				}
 				amount := float64(line.Quantity) * line.UnitPrice
+				if amount <= 0 {
+					continue
+				}
 				acct := exemptions.expenseAccountID
 				offset := invoiceLineInput{
 					Description:    exemptionLineDescription(role),

@@ -250,11 +250,13 @@ func (h *InvoiceHandler) HandlePutExemptions(w http.ResponseWriter, r *http.Requ
 		}
 		seen[key] = true
 	}
-	if len(req.Rules) > 0 {
-		if req.ExpenseAccount == "" {
-			Error(w, http.StatusBadRequest, "choose the expense account exemptions are booked to")
-			return
-		}
+	if len(req.Rules) > 0 && req.ExpenseAccount == "" {
+		Error(w, http.StatusBadRequest, "choose the expense account exemptions are booked to")
+		return
+	}
+	// Any account that is stored must be valid, even with no rules yet, so
+	// a later rule never inherits a bogus account.
+	if req.ExpenseAccount != "" {
 		var ok bool
 		if err := h.db.QueryRow(ctx,
 			`SELECT EXISTS (SELECT 1 FROM accounts
