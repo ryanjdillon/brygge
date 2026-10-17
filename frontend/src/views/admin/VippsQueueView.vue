@@ -1,10 +1,14 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useApi } from '@/composables/useApi'
+import { useCan } from '@/composables/useCan'
 import { formatNOK as nok } from '@/lib/format'
 import { UserPlus, Tag, Trash2, RefreshCw, Inbox } from 'lucide-vue-next'
 
 const { fetchApi } = useApi()
+// Aliases and rules are ledger settings; viewers without the role read them only (BRY-372).
+const { can } = useCan()
+const canEdit = can('ledger')
 
 interface QueueRow {
   id: string
@@ -225,7 +229,7 @@ function dateLabel(row: QueueRow): string {
                 <span class="inline-flex rounded bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">Uklassifisert</span>
               </td>
               <td class="whitespace-nowrap px-3 py-2">
-                <div class="flex gap-1">
+                <div v-if="canEdit" class="flex gap-1">
                   <button
                     class="inline-flex items-center gap-1 rounded border border-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-100"
                     title="Knytt betalar til medlem"
@@ -273,7 +277,7 @@ function dateLabel(row: QueueRow): string {
               <td class="px-3 py-2 font-mono text-xs text-gray-500">{{ a.user_id }}</td>
               <td class="whitespace-nowrap px-3 py-2 text-gray-500">{{ a.created_at.slice(0, 10) }}</td>
               <td class="px-3 py-2">
-                <button class="text-red-500 hover:text-red-700" @click="deleteAlias(a.id)">
+                <button v-if="canEdit" class="text-red-500 hover:text-red-700" @click="deleteAlias(a.id)">
                   <Trash2 class="h-4 w-4" />
                 </button>
               </td>
@@ -305,7 +309,7 @@ function dateLabel(row: QueueRow): string {
               <td class="px-3 py-2 tabular-nums">{{ r.account_code }}</td>
               <td class="px-3 py-2 tabular-nums text-gray-500">{{ r.priority }}</td>
               <td class="px-3 py-2">
-                <button class="text-red-500 hover:text-red-700" @click="deleteRule(r.id)">
+                <button v-if="canEdit" class="text-red-500 hover:text-red-700" @click="deleteRule(r.id)">
                   <Trash2 class="h-4 w-4" />
                 </button>
               </td>

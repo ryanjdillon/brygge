@@ -52,8 +52,11 @@ vi.mock('@tanstack/vue-query', async () => {
   }
 })
 
+// Price edits are money writes, shown to the money role only (BRY-372).
+const asTreasurer = { initialState: { auth: { user: { roles: ['treasurer'] } } } }
+
 async function clickDelete() {
-  const wrapper = mountWithPlugins(PricingAdminView)
+  const wrapper = mountWithPlugins(PricingAdminView, { piniaOptions: asTreasurer })
   const del = wrapper.findAll('button').find((b) => b.classes().includes('hover:text-red-600'))
   await del!.trigger('click')
   await flushPromises()
@@ -98,7 +101,7 @@ describe('PricingAdminView delete', () => {
 
 describe('PricingAdminView archived section', () => {
   it('hides archived prices until the section is expanded', async () => {
-    const wrapper = mountWithPlugins(PricingAdminView)
+    const wrapper = mountWithPlugins(PricingAdminView, { piniaOptions: asTreasurer })
     expect(wrapper.text()).toContain('Synthetic service')
     expect(wrapper.text()).not.toContain('Retired service')
 
@@ -106,5 +109,18 @@ describe('PricingAdminView archived section', () => {
     expect(toggle.attributes('aria-expanded')).toBe('false')
     await toggle.trigger('click')
     expect(wrapper.text()).toContain('Retired service')
+  })
+})
+
+describe('PricingAdminView for a board member (BRY-372)', () => {
+  it('lists the prices without any edit controls', async () => {
+    const wrapper = mountWithPlugins(PricingAdminView, {
+      piniaOptions: { initialState: { auth: { user: { roles: ['member', 'chair'] } } } },
+    })
+    await flushPromises()
+    expect(wrapper.text()).toContain('Synthetic service')
+    expect(wrapper.text()).not.toContain('admin.pricing.newPrice')
+    expect(wrapper.findAll('button').some((b) => b.classes().includes('hover:text-red-600'))).toBe(false)
+    expect(wrapper.findAll('button').some((b) => b.classes().includes('hover:text-brand-600'))).toBe(false)
   })
 })

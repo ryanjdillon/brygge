@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useConfirm } from '@/stores/confirm'
 import { useFreshTotp } from '@/composables/useFreshTotp'
+import { useCan } from '@/composables/useCan'
 import {
   Plus,
   ChevronDown,
@@ -44,6 +45,11 @@ import Select from '@/components/ui/form/Select.vue'
 import NumberInput from '@/components/ui/form/NumberInput.vue'
 
 const { t } = useI18n()
+// Periods are a ledger write; anything that books or voids an entry is a
+// money move. Board members without those roles read the journal (BRY-372).
+const { can } = useCan()
+const canEditPeriods = can('ledger')
+const canBook = can('money')
 
 const { data: periods } = useFiscalPeriods()
 
@@ -389,6 +395,7 @@ function formatNOK(amount: number): string {
           <NumberInput v-model="newYear" :min="2000" :max="2100" />
         </div>
         <button
+          v-if="canEditPeriods"
           class="inline-flex items-center gap-1.5 rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
           :disabled="createPeriodMutation.isPending.value"
           @click="handleCreatePeriod"
@@ -415,7 +422,7 @@ function formatNOK(amount: number): string {
         </span>
 
         <button
-          v-if="selectedPeriod?.status === 'open'"
+          v-if="canEditPeriods && selectedPeriod?.status === 'open'"
           class="inline-flex items-center gap-1.5 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
           :disabled="closePeriodMutation.isPending.value"
           :title="t('admin.accounting.journal.closePeriodTooltip')"
@@ -425,7 +432,7 @@ function formatNOK(amount: number): string {
           {{ t('admin.accounting.journal.closePeriod') }}
         </button>
         <button
-          v-if="selectedPeriod?.status === 'closed'"
+          v-if="canEditPeriods && selectedPeriod?.status === 'closed'"
           class="inline-flex items-center gap-1.5 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
           :disabled="reopenPeriodMutation.isPending.value"
           :title="t('admin.accounting.journal.reopenPeriodTooltip')"
@@ -436,6 +443,7 @@ function formatNOK(amount: number): string {
         </button>
 
         <div class="ml-auto flex items-center gap-2">
+          <template v-if="canEditPeriods">
           <div v-if="showCreateYear" class="w-20">
             <NumberInput v-model="newYear" :min="2000" :max="2100" />
           </div>
@@ -453,6 +461,8 @@ function formatNOK(amount: number): string {
             <Plus class="h-4 w-4" />
             {{ t('admin.accounting.journal.createPeriod') }}
           </button>
+          </template>
+          <template v-if="canBook">
           <button
             class="inline-flex items-center gap-1.5 rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
             :disabled="syncing || !selectedPeriodId"
@@ -482,6 +492,7 @@ function formatNOK(amount: number): string {
             <RefreshCw class="h-4 w-4" :class="{ 'animate-spin': postingVippsDrafts }" />
             {{ postingVippsDrafts ? t('admin.accounting.journal.updating') : t('admin.accounting.journal.vippsDrafts') }}
           </button>
+          </template>
         </div>
       </div>
 
@@ -504,6 +515,7 @@ function formatNOK(amount: number): string {
     <!-- Action bar -->
     <div class="mt-4 flex flex-wrap items-center gap-3">
       <RouterLink
+        v-if="canBook"
         to="/admin/accounting/journal/new"
         class="inline-flex items-center gap-1.5 rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
       >
@@ -627,7 +639,7 @@ function formatNOK(amount: number): string {
                 </button>
               </td>
               <td class="whitespace-nowrap px-4 py-3" @click.stop>
-                <div class="flex items-center gap-2">
+                <div v-if="canBook" class="flex items-center gap-2">
                   <button
                     v-if="entry.status === 'draft'"
                     class="text-green-600 hover:text-green-800 disabled:opacity-50"

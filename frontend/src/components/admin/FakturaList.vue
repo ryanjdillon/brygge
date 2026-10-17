@@ -10,6 +10,7 @@ import { useConfirm, useConfirmStore } from '@/stores/confirm'
 import { useFreshTotp } from '@/composables/useFreshTotp'
 import { copyPayLink as copyPayLinkFor, payLinkErrorKey } from '@/composables/useCopyPayLink'
 import { useRangeSelect } from '@/composables/useRangeSelect'
+import { useCan } from '@/composables/useCan'
 import { formatNOK, formatDate, formatDateTime } from '@/lib/format'
 
 interface Row {
@@ -230,17 +231,21 @@ const allFilteredSelected = computed(() =>
   filtered.value.length > 0 && filtered.value.every((d) => selected.value.has(d.id)),
 )
 
-const showSend = computed(() => props.status === 'draft')
-const showResend = computed(() => props.status === 'sent')
-const showPayLink = computed(() => props.status === 'sent')
+// Board members without the money role see the list but none of its
+// actions; the server would refuse them anyway (BRY-372).
+const { can } = useCan()
+const canAct = can('money')
+const showSend = computed(() => canAct && props.status === 'draft')
+const showResend = computed(() => canAct && props.status === 'sent')
+const showPayLink = computed(() => canAct && props.status === 'sent')
 // Imported historicals are migrated accounting records — read-only here (no
 // send/delete/void). Resolving them as paid happens via bank reconciliation
 // (Tildel), not this list. See BRY-239.
-const showDelete = computed(() => props.status !== 'sent' && props.status !== 'imported') // backend rejects DELETE on sent open invoices
-const showVoid = computed(() => props.status !== 'voided' && props.status !== 'imported')
-const showReminder = computed(() => props.status === 'sent')
-const showRegenerate = computed(() => props.status === 'sent')
-const showReissueKid = computed(() => props.status === 'sent')
+const showDelete = computed(() => canAct && props.status !== 'sent' && props.status !== 'imported') // backend rejects DELETE on sent open invoices
+const showVoid = computed(() => canAct && props.status !== 'voided' && props.status !== 'imported')
+const showReminder = computed(() => canAct && props.status === 'sent')
+const showRegenerate = computed(() => canAct && props.status === 'sent')
+const showReissueKid = computed(() => canAct && props.status === 'sent')
 
 const { onCheckboxClick: onRowClick, resetAnchor } = useRangeSelect(selected, () => sorted.value)
 function toggleAll() {
@@ -995,7 +1000,7 @@ defineExpose({ load })
                     <FileDown class="h-4 w-4" />
                   </a>
                   <FakturaArchiveButton :invoice-id="d.id" />
-                  <DeliveryLogButton v-if="status === 'sent'" :invoice-id="d.id" />
+                  <DeliveryLogButton v-if="canAct && status === 'sent'" :invoice-id="d.id" />
                   <button
                     v-if="showSend"
                     class="text-brand-600 hover:text-brand-800 disabled:opacity-50"
@@ -1036,7 +1041,7 @@ defineExpose({ load })
                     <Link2 class="h-4 w-4" />
                   </button>
                   <button
-                    v-if="props.status !== 'draft' && d.credit_state === 'unlinked'"
+                    v-if="canAct && props.status !== 'draft' && d.credit_state === 'unlinked'"
                     class="text-sky-600 hover:text-sky-800 disabled:opacity-50"
                     :disabled="busyIds.has(d.id)"
                     :title="t('admin.faktura.credit.settleAction')"
@@ -1046,7 +1051,7 @@ defineExpose({ load })
                     <Scale class="h-4 w-4" />
                   </button>
                   <button
-                    v-if="d.credit_state === 'settled_pair' || d.credit_state === 'credit_owed'"
+                    v-if="canAct && (d.credit_state === 'settled_pair' || d.credit_state === 'credit_owed')"
                     class="text-gray-500 hover:text-gray-800 disabled:opacity-50"
                     :disabled="busyIds.has(d.id)"
                     :title="t('admin.faktura.credit.unlinkAction')"

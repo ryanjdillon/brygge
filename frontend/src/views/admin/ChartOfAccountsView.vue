@@ -12,8 +12,12 @@ import {
 import AccountCodeChip from '@/components/ui/AccountCodeChip.vue'
 import Input from '@/components/ui/form/Input.vue'
 import Select from '@/components/ui/form/Select.vue'
+import { useCan } from '@/composables/useCan'
 
 const { t } = useI18n()
+// The chart of accounts is a ledger write; other board members read it (BRY-372).
+const { can } = useCan()
+const canEdit = can('ledger')
 
 const { data: accounts, isLoading, isError } = useAccountsList()
 const seedMutation = useSeedAccounts()
@@ -84,7 +88,7 @@ const editingId = ref<string | null>(null)
 const editForm = ref({ name: '', description: '', mva_eligible: '' })
 
 function startEdit(account: Account) {
-  if (account.is_system) return
+  if (account.is_system || !canEdit) return
   editingId.value = account.id
   editForm.value = {
     name: account.name,
@@ -162,7 +166,7 @@ function handleAddAccount() {
     <div class="flex items-center justify-between">
       <h1 class="text-2xl font-bold text-gray-900">{{ t('admin.accounting.accounts.title') }}</h1>
       <button
-        v-if="hasAccounts"
+        v-if="canEdit && hasAccounts"
         class="inline-flex items-center gap-1.5 rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
         @click="showAddForm = !showAddForm"
       >
@@ -178,6 +182,7 @@ function handleAddAccount() {
       <h3 class="text-sm font-semibold text-gray-900">{{ t('admin.accounting.accounts.title') }}</h3>
       <p class="mt-1 text-sm text-gray-500">{{ t('admin.accounting.accounts.seedButton') }}</p>
       <button
+        v-if="canEdit"
         class="mt-3 inline-flex items-center gap-1.5 rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
         :disabled="seedMutation.isPending.value"
         @click="seedMutation.mutate(undefined)"
@@ -286,7 +291,7 @@ function handleAddAccount() {
             <tr
               v-for="account in filteredAccounts"
               :key="account.id"
-              :class="{ 'cursor-pointer hover:bg-gray-50': !account.is_system }"
+              :class="{ 'cursor-pointer hover:bg-gray-50': canEdit && !account.is_system }"
               @click="startEdit(account)"
             >
               <template v-if="editingId === account.id">

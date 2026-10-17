@@ -9,6 +9,7 @@ import GroupFakturaTab from '@/components/admin/GroupFakturaTab.vue'
 import PdfArkivView from '@/views/admin/PdfArkivView.vue'
 import LastUpdated from '@/components/ui/LastUpdated.vue'
 import { useFreshTotp } from '@/composables/useFreshTotp'
+import { useCan } from '@/composables/useCan'
 import { usePaymentDataUpdatedAt } from '@/composables/usePaymentDataUpdatedAt'
 
 const { t } = useI18n()
@@ -17,7 +18,15 @@ const route = useRoute()
 const router = useRouter()
 
 type Tab = 'create' | 'drafts' | 'voided' | 'sent' | 'archive' | 'imported'
-const validTabs: Tab[] = ['create', 'drafts', 'voided', 'sent', 'archive', 'imported']
+
+// Board members without the money role read the lists but cannot create
+// fakturas, so the create tab is not theirs (BRY-372).
+const { can } = useCan()
+const canCreate = can('money')
+const defaultTab: Tab = canCreate ? 'create' : 'sent'
+const validTabs: Tab[] = canCreate
+  ? ['create', 'drafts', 'voided', 'sent', 'archive', 'imported']
+  : ['drafts', 'voided', 'sent', 'archive', 'imported']
 
 // The "Importert" tab only appears when the club has historicals migrated
 // from a previous system, so it never shows as cruft on a fresh deployment.
@@ -35,14 +44,14 @@ loadImportedCount()
 const activeTab = computed<Tab>(() => {
   const q = route.query.tab
   const t = typeof q === 'string' ? q : ''
-  return (validTabs as string[]).includes(t) ? (t as Tab) : 'create'
+  return (validTabs as string[]).includes(t) ? (t as Tab) : defaultTab
 })
 
 watch(
   () => route.query.tab,
   (q) => {
     if (typeof q !== 'string' || !(validTabs as string[]).includes(q)) {
-      router.replace({ query: { ...route.query, tab: 'create' } })
+      router.replace({ query: { ...route.query, tab: defaultTab } })
     }
   },
   { immediate: true },
@@ -88,7 +97,7 @@ function onCreated() {
 
 const tabs = computed<{ id: Tab; icon: typeof FilePlus; labelKey: string }[]>(() => {
   const base = [
-    { id: 'create' as Tab, icon: FilePlus, labelKey: 'admin.faktura.tabs.create' },
+    ...(canCreate ? [{ id: 'create' as Tab, icon: FilePlus, labelKey: 'admin.faktura.tabs.create' }] : []),
     { id: 'drafts' as Tab, icon: Inbox, labelKey: 'admin.faktura.tabs.drafts' },
     { id: 'voided' as Tab, icon: Ban, labelKey: 'admin.faktura.tabs.voided' },
     { id: 'sent' as Tab, icon: Send, labelKey: 'admin.faktura.tabs.sent' },

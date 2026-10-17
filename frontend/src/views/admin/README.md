@@ -11,15 +11,31 @@ Navigation lives in `navGroups` inside `AdminLayout.vue`. Each group is `{ title
   titleKey: 'admin.groupEconomy',
   items: [
     { to: '/admin/accounting', icon: Calculator, label: t('admin.sidebar.accountingOverview'),
-      roles: ['treasurer', 'board', 'admin'], feature: 'accounting' },
+      feature: 'accounting' },
     { to: '/admin/accounting/faktura', icon: Receipt, label: t('admin.sidebar.faktura'),
-      roles: ['treasurer', 'admin'], feature: 'accounting' },
+      feature: 'accounting' },
     // …
   ],
 },
 ```
 
 Filter logic at the bottom of the `<script setup>` block removes items whose `roles` the user lacks AND items whose `feature` flag is off. Empty groups disappear from the sidebar.
+
+## Who sees what (BRY-372)
+
+Every board role (`chair`, `vice_chair`, `treasurer`, `secretary`, `harbor_master`, `deputy`, `board`) and `admin` may **view** every admin page except Developer and Site. The rules live in [`../../lib/adminAccess.ts`](../../lib/adminAccess.ts) and mirror the server:
+
+- **Router.** `/admin` carries `meta.requiresAdmin`; the guard (`guardRoute`) admits any admin viewer (`canViewAdmin`). Developer and Site pages — the whole "Nettsted" group: general, security, site and FAQ settings, sea-chart markers, notifications, GDPR, dev query, dev tokens — carry `meta.adminOnly` and open for `admin` only. A board member who follows a link there lands on `/admin`.
+- **Sidebar.** Items outside "Nettsted" have no `roles`: anyone the router lets in sees them. "Nettsted" items carry `roles: ['admin']`. The inbox keeps its mailbox role list.
+- **Write controls.** Viewing is not acting. A page a board member can open hides the controls they cannot use with `useCan()`:
+
+  ```ts
+  const { can } = useCan()
+  const canEdit = can('money') // 'money' | 'ledger' | 'members' | 'harbor'
+  ```
+
+  Each area's roles (`WRITE_ROLES`) are the server's write roles for it: `money` is treasurer/admin (faktura, Tildel, imports, syncs, pricing, economy and bank settings), `ledger` is treasurer/board/admin (accounts, periods, Vipps aliases and rules). Hide the button (`v-if`), or for a settings form wrap it in `<fieldset :disabled="!canEdit">`. The step-up prompt (`ensureFreshTotp()`) stays on the click for writers.
+- **Covered so far:** faktura (create tab, row and bulk actions), bank imports (sync, uploads, Tildel and refund tabs, reassign/reimport), Vipps queue, economy settings, pricing, journal (periods, sync, new entry, post/void), chart of accounts. Other pages (users, slips, events, products, …) still show their write buttons to board members who lack the role; the server answers 403.
 
 ### Group titleKeys
 
@@ -141,7 +157,8 @@ Per [`../../../../docs/developer/checklists/add-route.md`](../../../../docs/deve
 
 ## Common misses
 
-- **Sidebar item without `roles`** — visible to everyone who reaches `/admin/*`, including bare members if they have any admin-adjacent role. Almost always wrong; add the explicit role list.
+- **Sidebar item without `roles`** — visible to every board role, by design. A page that only site admins may open needs `roles: ['admin']` **and** `meta: { adminOnly: true }` on its route; one without the other leaves either a dead link or a reachable page.
+- **Write button without `useCan()`** — on a page the board can view, a write control without a `useCan()` check is shown to members who will only get a 403. Pick the area whose roles match the route's server gate.
 - **TOTP gate omitted for a new economy sub-path** — backend enforces it, but the SPA navigates first and bounces, which is confusing. Extend `requiresFreshTotp` prefix list.
 - **`feature` flag forgotten** — the route shows up even when the module is disabled. Cross-reference [`add-feature-flag.md`](../../../../docs/developer/checklists/add-feature-flag.md).
 - **Component-level @click bypassing useNavGate** — works in isolation, breaks when the next change touches the gating policy. Always route through the composable.

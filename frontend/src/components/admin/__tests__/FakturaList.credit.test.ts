@@ -54,6 +54,9 @@ const rows = [
   row({ id: 'cn-owed', invoice_number: 13, total_amount: -800, credit_state: 'credit_owed', credits_invoice_number: 12 }),
 ]
 
+// The credit actions are money moves, shown to the money role only (BRY-372).
+const asTreasurer = { initialState: { auth: { user: { roles: ['treasurer'] } } } }
+
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 }
@@ -68,7 +71,7 @@ describe('FakturaList credit notes', () => {
   afterEach(() => vi.unstubAllGlobals())
 
   it('never shows credit notes or credited fakturas as past due', async () => {
-    const w = mountWithPlugins(FakturaList, { props: { status: 'imported' } })
+    const w = mountWithPlugins(FakturaList, { props: { status: 'imported' }, piniaOptions: asTreasurer })
     await flushPromises()
     const chips = w.findAll('span.font-mono')
     const byNumber = Object.fromEntries(chips.map((c) => [c.text(), c.classes().join(' ')]))
@@ -88,7 +91,7 @@ describe('FakturaList credit notes', () => {
       )
       .mockResolvedValueOnce(jsonResponse({ outcome: 'settled_pair', credit_note_number: 11, invoice_number: 9 }))
     confirmStore.choiceValue = 'cand'
-    const w = mountWithPlugins(FakturaList, { props: { status: 'imported' } })
+    const w = mountWithPlugins(FakturaList, { props: { status: 'imported' }, piniaOptions: asTreasurer })
     await flushPromises()
 
     await w.get('[data-testid="credit-settle"]').trigger('click')
@@ -108,10 +111,48 @@ describe('FakturaList credit notes', () => {
       )
       .mockResolvedValueOnce(jsonResponse({ code: 'partial_credit', error: 'partial' }, 409))
     confirmStore.choiceValue = 'cand'
-    const w = mountWithPlugins(FakturaList, { props: { status: 'imported' } })
+    const w = mountWithPlugins(FakturaList, { props: { status: 'imported' }, piniaOptions: asTreasurer })
     await flushPromises()
     await w.get('[data-testid="credit-settle"]').trigger('click')
     await flushPromises()
     expect(w.text()).toContain('admin.faktura.credit.error.partial_credit')
+  })
+})
+
+describe('FakturaList for a board member (BRY-372)', () => {
+  // Rows 11 (unlinked) and 13 (credit owed) carry the credit actions.
+  const rowActions = [
+    'admin.faktura.sent.resend',
+    'admin.payLink.title',
+    'admin.faktura.credit.settleAction',
+    'admin.faktura.credit.unlinkAction',
+    'admin.invoiceDrafts.void',
+  ]
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ items: rows, status: 'sent' })))
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('lists sent fakturas without send, void, credit or pay-link controls', async () => {
+    const w = mountWithPlugins(FakturaList, {
+      props: { status: 'sent' },
+      piniaOptions: { initialState: { auth: { user: { roles: ['member', 'board'] } } } },
+    })
+    await flushPromises()
+    expect(w.findAll('span.font-mono').map((c) => c.text())).toContain('10')
+    expect(w.find('[title="admin.invoiceDrafts.previewPdf"]').exists()).toBe(true)
+    for (const key of rowActions) {
+      expect(w.find(`[title="${key}"]`).exists(), key).toBe(false)
+    }
+    expect(w.find('select[title="admin.faktura.sent.vippsLink.label"]').exists()).toBe(false)
+  })
+
+  it('shows the same row actions to the treasurer', async () => {
+    const w = mountWithPlugins(FakturaList, { props: { status: 'sent' }, piniaOptions: asTreasurer })
+    await flushPromises()
+    expect(w.find('select[title="admin.faktura.sent.vippsLink.label"]').exists()).toBe(true)
+    for (const key of rowActions) {
+      expect(w.find(`[title="${key}"]`).exists(), key).toBe(true)
+    }
   })
 })

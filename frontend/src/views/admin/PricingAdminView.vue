@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useApiClient, unwrap } from '@/lib/apiClient'
 import { ApiError } from '@/lib/errors'
 import { useConfirm } from '@/stores/confirm'
+import { useCan } from '@/composables/useCan'
 import { Plus, Pencil, Trash2, X, ChevronDown, ChevronRight } from 'lucide-vue-next'
 import type { PriceItem } from '@/composables/usePricing'
 import Input from '@/components/ui/form/Input.vue'
@@ -14,6 +15,10 @@ import Checkbox from '@/components/ui/form/Checkbox.vue'
 import RadioGroup from '@/components/ui/form/RadioGroup.vue'
 
 const { t } = useI18n()
+// Prices drive what members are billed: board members read them, the
+// money role edits them (BRY-372).
+const { can } = useCan()
+const canEdit = can('money')
 const client = useApiClient()
 const queryClient = useQueryClient()
 const askConfirm = useConfirm()
@@ -332,7 +337,7 @@ function unitLabel(value: string): string {
     <div class="flex items-center justify-between">
       <h1 class="text-2xl font-bold text-gray-900">{{ t('admin.sidebar.pricing') }}</h1>
       <button
-        v-if="!showForm"
+        v-if="canEdit && !showForm"
         class="flex items-center gap-1.5 rounded-md bg-brand-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700"
         @click="openCreate"
       >
@@ -580,12 +585,14 @@ function unitLabel(value: string): string {
               </span>
             </td>
             <td class="whitespace-nowrap px-4 py-3 text-right text-sm">
+              <template v-if="canEdit">
               <button class="mr-2 text-gray-500 hover:text-brand-600" @click="openEdit(row.item)">
                 <Pencil class="h-4 w-4" />
               </button>
               <button class="text-gray-500 hover:text-red-600" @click="confirmDelete(row.item)">
                 <Trash2 class="h-4 w-4" />
               </button>
+              </template>
             </td>
           </tr>
           </template>

@@ -39,6 +39,7 @@ import { formatNOK as nok, formatDate } from '@/lib/format'
 import { useFreshTotp } from '@/composables/useFreshTotp'
 import VippsAutoAssignSummary from '@/components/admin/VippsAutoAssignSummary.vue'
 import { useConfirm } from '@/stores/confirm'
+import { useCan } from '@/composables/useCan'
 
 const { t, locale } = useI18n()
 const { ensureFreshTotp } = useFreshTotp()
@@ -200,15 +201,24 @@ async function confirmReconcile() {
 }
 
 // ── Tabs ────────────────────────────────────────────────────
-const activeTab = ref<'imports' | 'accounts' | 'reconcile' | 'refunds'>('imports')
+// Imports, syncs and the Tildel and refund queues are money moves; a board
+// member without the money role reads the account rows and the import
+// list only (BRY-372).
+const { can } = useCan()
+const canAct = can('money')
+const activeTab = ref<'imports' | 'accounts' | 'reconcile' | 'refunds'>(canAct ? 'imports' : 'accounts')
 const currentYear = ref(new Date().getFullYear())
 const { data: unmatchedCount } = useBankUnmatchedCount(currentYear)
 const { data: pendingRefundCount } = usePendingRefundCount()
 const tabs = computed(() => [
   { value: 'imports', label: t('admin.bankImports.tabImports') },
   { value: 'accounts', label: t('admin.bankImports.tabAccounts') },
-  { value: 'reconcile', label: t('admin.bankImports.tabReconcile'), badge: unmatchedCount.value ?? 0 },
-  { value: 'refunds', label: t('admin.bankImports.tabRefunds'), badge: pendingRefundCount.value ?? 0 },
+  ...(canAct
+    ? [
+        { value: 'reconcile', label: t('admin.bankImports.tabReconcile'), badge: unmatchedCount.value ?? 0 },
+        { value: 'refunds', label: t('admin.bankImports.tabRefunds'), badge: pendingRefundCount.value ?? 0 },
+      ]
+    : []),
 ])
 
 // ── Sync action ─────────────────────────────────────────────
@@ -502,7 +512,7 @@ const filterMonthValue = computed<number>({
         <h1 class="text-2xl font-bold text-gray-900">{{ t('admin.bankImports.title') }}</h1>
         <p class="mt-1 text-sm text-gray-500">{{ t('admin.bankImports.subtitle') }}</p>
       </div>
-      <div class="flex items-center gap-2">
+      <div v-if="canAct" class="flex items-center gap-2">
         <button
           type="button"
           :disabled="syncBusy"
@@ -551,12 +561,12 @@ const filterMonthValue = computed<number>({
     </div>
 
     <!-- Reconcile tab -->
-    <div v-if="activeTab === 'reconcile'" class="mt-6">
+    <div v-if="canAct && activeTab === 'reconcile'" class="mt-6">
       <BankReconcileTab />
     </div>
 
     <!-- Refunds tab -->
-    <div v-if="activeTab === 'refunds'" class="mt-6">
+    <div v-if="canAct && activeTab === 'refunds'" class="mt-6">
       <BankRefundTab />
     </div>
 
@@ -648,7 +658,7 @@ const filterMonthValue = computed<number>({
     </div>
 
     <!-- Imports tab -->
-    <div v-if="activeTab === 'imports'" class="mt-6 grid items-start gap-4 lg:grid-cols-3">
+    <div v-if="canAct && activeTab === 'imports'" class="mt-6 grid items-start gap-4 lg:grid-cols-3">
       <!-- Bank upload card -->
       <section class="flex flex-col rounded-lg border border-gray-200 bg-white p-5" data-testid="bank-upload-card">
         <h2 class="text-base font-semibold text-gray-900">{{ t('admin.bankImports.bankCardTitle') }}</h2>
@@ -860,6 +870,7 @@ const filterMonthValue = computed<number>({
             <span class="tabular-nums">{{ formatDate(b.created_at) }}</span>
             {{ b.row_count }} {{ t('admin.bankImports.rows') }}
             <button
+              v-if="canAct"
               type="button"
               class="font-semibold text-brand-700 hover:underline"
               @click.stop="openReassign(b.id, b.account_code)"
@@ -867,6 +878,7 @@ const filterMonthValue = computed<number>({
               {{ t('admin.bankImports.reassign') }}
             </button>
             <button
+              v-if="canAct"
               type="button"
               class="font-semibold text-brand-700 hover:underline"
               @click.stop="openReimport(b.id)"
@@ -889,7 +901,7 @@ const filterMonthValue = computed<number>({
     <section v-if="activeTab === 'imports' && bankRows && bankRows.length" class="mt-4">
       <h2 class="text-base font-semibold text-gray-900">{{ t('admin.bankImports.rowsTitle') }}</h2>
       <div class="mt-3">
-        <BankRowsTable :rows="bankRows" :show-reconcile="true" @reconcile="openReconcile" />
+        <BankRowsTable :rows="bankRows" :show-reconcile="canAct" @reconcile="openReconcile" />
       </div>
     </section>
 

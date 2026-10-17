@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFreshTotp } from '@/composables/useFreshTotp'
+import { useCan } from '@/composables/useCan'
 import FileInput from '@/components/ui/form/FileInput.vue'
 import Tabs from '@/components/ui/Tabs.vue'
 import BankAccountsPanel from '@/components/admin/BankAccountsPanel.vue'
@@ -170,6 +171,11 @@ async function deleteFakturaLogo() {
 }
 
 onMounted(load)
+
+// Board members without the money role read these settings; a disabled
+// fieldset turns every control below read-only (BRY-372).
+const { can } = useCan()
+const canEdit = can('money')
 </script>
 
 <template>
@@ -187,6 +193,7 @@ onMounted(load)
 
     <div v-if="error" class="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{{ error }}</div>
 
+    <fieldset :disabled="!canEdit" class="contents" data-testid="economy-settings-fields">
     <section v-if="activeTab === 'faktura'" class="space-y-5">
       <fieldset class="rounded-md border border-slate-200 bg-slate-50 p-3 space-y-3">
         <legend class="px-1 text-xs font-semibold text-slate-700">
@@ -314,5 +321,6 @@ onMounted(load)
     </section>
 
     <BankAccountsPanel v-else-if="activeTab === 'bank-accounts'" />
+    </fieldset>
   </div>
 </template>
