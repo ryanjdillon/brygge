@@ -7,10 +7,16 @@
 -- The evidence is exact: every manual charge→faktura assignment wrote a
 -- 'vipps_charge.assigned_invoice' audit row naming the charge (resource_id),
 -- the faktura (details.invoice_id) and the journal entry it posted
--- (details.journal_entry_id). A row is only filled when that entry is still
--- the one linked to the charge and the faktura, in the same club, still
--- reads as paid. Anything without such evidence stays NULL and the backlog
--- tool refuses it for a human.
+-- (details.journal_entry_id). The latest such row per charge in the
+-- charge's own club wins. A row is only filled when:
+--   * that entry is still the one linked to the charge and still stands
+--     (draft or posted; a voided booking no longer settles anything —
+--     legacy charge bookings were drafts before BRY-339, so drafts count);
+--   * the faktura, in the same club, still reads as paid by the payment
+--     this assignment created (linkInvoicePayment writes 'KID-avstemming'
+--     dated the charge date), not by some later, unrelated payment.
+-- Anything without such evidence stays NULL and the backlog tool refuses
+-- it for a human.
 
 UPDATE vipps_import_rows r
    SET invoice_id = ev.invoice_id
@@ -21,16 +27,24 @@ UPDATE vipps_import_rows r
                a.details->>'journal_entry_id'         AS journal_entry_id,
                a.club_id
           FROM audit_log a
+          JOIN vipps_import_rows vr ON vr.id::text = a.resource_id AND vr.club_id = a.club_id
          WHERE a.action = 'vipps_charge.assigned_invoice'
            AND a.resource = 'vipps_import_row'
            AND a.details->>'invoice_id' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-         ORDER BY a.resource_id, a.created_at DESC
+         ORDER BY a.resource_id, a.created_at DESC, a.id DESC
        ) ev
   JOIN invoices i ON i.id = ev.invoice_id
- WHERE r.id::text = ev.resource_id
+  JOIN payments p ON p.id = i.payment_id,
+       journal_entries je
+ WHERE je.id = r.journal_entry_id
+   AND r.id::text = ev.resource_id
    AND r.club_id = ev.club_id
    AND i.club_id = r.club_id
-   AND i.payment_id IS NOT NULL
+   AND p.club_id = r.club_id
+   AND p.description = 'KID-avstemming'
+   AND p.paid_at::date IN (r.tx_at::date, r.booking_date)
+   AND je.club_id = r.club_id
+   AND je.status <> 'voided'
    AND r.invoice_id IS NULL
    AND r.journal_entry_id IS NOT NULL
    AND r.journal_entry_id::text = ev.journal_entry_id;

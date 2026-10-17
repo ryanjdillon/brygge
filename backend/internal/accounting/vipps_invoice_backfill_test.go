@@ -44,23 +44,74 @@ func TestVippsInvoiceBackfillUsesOnlyExactAuditEvidence(t *testing.T) {
 		return f.club.NewInvoice(t, fin.InvoiceOpts{Member: &m, Cents: 45000, Paid: true,
 			Lines: []fin.Line{{Category: "membership", Cents: 45000}}})
 	}
+	// paidByCharge makes the faktura's payment the one AssignVippsChargeToInvoice
+	// would have written for this charge (linkInvoicePayment: 'KID-avstemming',
+	// dated the charge date).
+	paidByCharge := func(inv fin.Invoice, rowID string) {
+		f.exec(t,
+			`UPDATE payments SET description = 'KID-avstemming',
+			        paid_at = (SELECT COALESCE(tx_at, booking_date::timestamptz) FROM vipps_import_rows WHERE id = $2)
+			  WHERE id = (SELECT payment_id FROM invoices WHERE id = $1)`,
+			inv.ID, rowID)
+	}
 
 	// Exact evidence: filled.
 	good := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 45000})
 	goodInv := paidInvoice()
+	paidByCharge(goodInv, good)
 	audited(good, goodInv.ID, f.draftCharge(t, good, receivablesAccountCode, 45000))
+
+	// Several audit rows for one charge: the latest names the faktura that
+	// is actually paid by it, so it wins over an earlier, superseded one.
+	retried := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 45000})
+	retriedEntry := f.draftCharge(t, retried, receivablesAccountCode, 45000)
+	audited(retried, paidInvoice().ID, retriedEntry)
+	retriedInv := paidInvoice()
+	paidByCharge(retriedInv, retried)
+	f.exec(t, `INSERT INTO audit_log (club_id, actor_id, action, resource, resource_id, details, created_at)
+		VALUES ($1, $2, 'vipps_charge.assigned_invoice', 'vipps_import_row', $3,
+		        jsonb_build_object('invoice_id', $4::text, 'journal_entry_id', $5::text), now() + interval '1 minute')`,
+		f.club.ID, f.club.Treasurer.ID, retried, retriedInv.ID, retriedEntry)
 
 	// The audit names an entry that is no longer the row's: left alone.
 	stale := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 45000})
 	staleInv := paidInvoice()
+	paidByCharge(staleInv, stale)
 	f.draftCharge(t, stale, receivablesAccountCode, 45000)
 	audited(stale, staleInv.ID, "00000000-0000-0000-0000-000000000001")
 
 	// The faktura is no longer paid (payment unlinked since): left alone.
 	reopened := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 45000})
 	reopenedInv := paidInvoice()
+	paidByCharge(reopenedInv, reopened)
 	audited(reopened, reopenedInv.ID, f.draftCharge(t, reopened, receivablesAccountCode, 45000))
 	f.exec(t, `UPDATE invoices SET payment_id = NULL WHERE id = $1`, reopenedInv.ID)
+
+	// The faktura is paid, but by some other payment (a bank KID payment,
+	// not this charge's 'KID-avstemming' on the charge date): left alone.
+	otherPayment := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 45000})
+	otherPaymentInv := paidInvoice()
+	audited(otherPayment, otherPaymentInv.ID, f.draftCharge(t, otherPayment, receivablesAccountCode, 45000))
+
+	// The booking was voided but the row still points at it: left alone.
+	voided := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 45000})
+	voidedInv := paidInvoice()
+	paidByCharge(voidedInv, voided)
+	voidedEntry := f.draftCharge(t, voided, receivablesAccountCode, 45000)
+	audited(voided, voidedInv.ID, voidedEntry)
+	f.exec(t, `UPDATE journal_entries SET status = 'voided' WHERE id = $1`, voidedEntry)
+
+	// The only audit row comes from another club: left alone.
+	foreign := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 45000})
+	foreignInv := paidInvoice()
+	paidByCharge(foreignInv, foreign)
+	foreignEntry := f.draftCharge(t, foreign, receivablesAccountCode, 45000)
+	other := fin.NewClub(t, f.club.Pool, fin.WithKontoplan(f.svc.SeedKontoplan))
+	f.exec(t,
+		`INSERT INTO audit_log (club_id, actor_id, action, resource, resource_id, details)
+		 VALUES ($1, $2, 'vipps_charge.assigned_invoice', 'vipps_import_row', $3,
+		         jsonb_build_object('invoice_id', $4::text, 'journal_entry_id', $5::text))`,
+		other.ID, other.Treasurer.ID, foreign, foreignInv.ID, foreignEntry)
 
 	// No audit evidence at all: left alone.
 	bare := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 45000})
@@ -71,18 +122,28 @@ func TestVippsInvoiceBackfillUsesOnlyExactAuditEvidence(t *testing.T) {
 			t.Fatalf("run %d: %v", run, err)
 		}
 	}
-	if got := invoiceOf(good); got != goodInv.ID {
-		t.Errorf("exact evidence: invoice_id = %q, want %q", got, goodInv.ID)
+	for name, c := range map[string]struct{ row, want string }{
+		"exact evidence":    {good, goodInv.ID},
+		"latest audit wins": {retried, retriedInv.ID},
+	} {
+		if got := invoiceOf(c.row); got != c.want {
+			t.Errorf("%s: invoice_id = %q, want %q", name, got, c.want)
+		}
 	}
-	for name, row := range map[string]string{"stale entry": stale, "reopened faktura": reopened, "no audit": bare} {
+	for name, row := range map[string]string{
+		"stale entry": stale, "reopened faktura": reopened, "other payment": otherPayment,
+		"voided entry": voided, "foreign audit": foreign, "no audit": bare,
+	} {
 		if got := invoiceOf(row); got != "" {
 			t.Errorf("%s: invoice_id = %q, want it left NULL", name, got)
 		}
 	}
 
 	// The backfilled draft now posts as a faktura settlement; the rest are refused.
+	// The voided booking is no longer a draft, so the backlog sees 7 drafts:
+	// the two backfilled settle their fakturas, the other five are refused.
 	res := f.backlog(t, false)
-	if res.Posted != 1 || len(res.Refused) != 3 {
-		t.Errorf("backlog preview after backfill = %+v, want 1 postable and 3 refused", res)
+	if res.Posted != 2 || len(res.Refused) != 5 {
+		t.Errorf("backlog preview after backfill = %+v, want 2 postable and 5 refused", res)
 	}
 }
