@@ -1026,7 +1026,8 @@
       "overwrite": "Pełne uzgodnienie (nadpisz)",
       "overwriteHint": "Usuwa niedopasowane wiersze tego konta w zakresie dat pliku, a następnie ponownie importuje i dopasowuje cały plik. Zaksięgowane pozycje pozostają nienaruszone.",
       "overwriteConfirm": "Usunąć niedopasowane wiersze dla konta {code} w zakresie dat przesłanego pliku i ponownie zaimportować cały plik? Zaksięgowane pozycje nie są naruszane.",
-      "cleared": "Usunięto"
+      "cleared": "Usunięto",
+      "payoutSweepCounts": "Wypłaty Vipps uzgodnione: {cleared} · Oczekuje na obciążenia: {waiting} · Pominięte: {skipped} · Nieudane: {failed}"
     },
     "bankReconcile": {
       "filterAll": "All",

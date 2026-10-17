@@ -1053,7 +1053,8 @@
       "overwrite": "Vollständiger Abgleich (überschreiben)",
       "overwriteHint": "Entfernt die nicht zugeordneten Zeilen dieses Kontos im Datumsbereich der Datei und importiert und ordnet die gesamte Datei neu zu. Gebuchte Einträge bleiben unberührt.",
       "overwriteConfirm": "Nicht zugeordnete Zeilen für Konto {code} im Datumsbereich der hochgeladenen Datei entfernen und die gesamte Datei neu importieren? Gebuchte Einträge sind nicht betroffen.",
-      "cleared": "Entfernt"
+      "cleared": "Entfernt",
+      "payoutSweepCounts": "Vipps-Auszahlungen abgeglichen: {cleared} · Warten auf Belastungen: {waiting} · Übersprungen: {skipped} · Fehlgeschlagen: {failed}"
     },
     "bankReconcile": {
       "filterAll": "All",

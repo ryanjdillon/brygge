@@ -1911,6 +1911,7 @@
       "autoAssignAccount": "konto {code}",
       "autoAssignUndo": "Angre",
       "autoAssignUndone": "Angret — tilbake i Tildel",
+      "payoutSweepCounts": "Vipps-utbetalinger avstemt: {cleared} · Venter på belastninger: {waiting} · Hoppet over: {skipped} · Feilet: {failed}",
       "tabReconcile": "Tildel",
       "tabRefunds": "Refusjoner",
       "refundTabDescription": "Avviste rader som krever tilbakebetaling. Par hver rad med den tilsvarende utgående bankoverføringen.",

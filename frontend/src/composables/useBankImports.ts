@@ -98,6 +98,22 @@ export interface VippsAutoAssignResult {
   needs_review: number
 }
 
+export interface VippsPayoutSweepItem {
+  settlement_number: string
+  msn: string
+  bank_row_id?: string
+  reason?: string
+}
+
+// What a sync cleared on its own once a settlement's charges were all booked
+// (BRY-340); waiting/skipped/failed carry the reason a payout stays open.
+export interface VippsPayoutSweepResult {
+  cleared: VippsPayoutSweepItem[]
+  waiting: VippsPayoutSweepItem[]
+  skipped: VippsPayoutSweepItem[]
+  failed: VippsPayoutSweepItem[]
+}
+
 export interface VippsImportResult {
   id: string
   filename: string
@@ -106,6 +122,7 @@ export interface VippsImportResult {
   imported: number
   skipped_dup: number
   auto_assign?: VippsAutoAssignResult | null
+  payouts?: VippsPayoutSweepResult | null
 }
 
 export interface VippsReconcileLine {
@@ -312,6 +329,7 @@ export interface BankSyncResult {
   vipps_unbalanced: number
   transfers_linked: number
   closed_periods: string[]
+  vipps_payouts?: VippsPayoutSweepResult | null
 }
 
 export async function runBankSync(): Promise<BankSyncResult> {
@@ -324,6 +342,7 @@ export interface VippsResyncResult {
   skipped: number
   failed: string[]
   auto_assign?: VippsAutoAssignResult | null
+  payouts?: VippsPayoutSweepResult | null
 }
 
 export async function runVippsResync(): Promise<VippsResyncResult> {

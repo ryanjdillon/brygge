@@ -1053,7 +1053,8 @@
       "overwrite": "Volledige afstemming (overschrijven)",
       "overwriteHint": "Verwijdert de niet-gematchte regels van deze rekening binnen het datumbereik van het bestand en importeert en matcht vervolgens het hele bestand opnieuw. Geboekte posten blijven ongemoeid.",
       "overwriteConfirm": "Niet-gematchte regels voor rekening {code} binnen het datumbereik van het geüploade bestand verwijderen en het hele bestand opnieuw importeren? Geboekte posten worden niet beïnvloed.",
-      "cleared": "Verwijderd"
+      "cleared": "Verwijderd",
+      "payoutSweepCounts": "Vipps-uitbetalingen afgestemd: {cleared} · Wacht op afschrijvingen: {waiting} · Overgeslagen: {skipped} · Mislukt: {failed}"
     },
     "bankReconcile": {
       "filterAll": "All",

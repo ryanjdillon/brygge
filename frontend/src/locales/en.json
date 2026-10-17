@@ -1915,6 +1915,7 @@
       "autoAssignAccount": "account {code}",
       "autoAssignUndo": "Undo",
       "autoAssignUndone": "Undone — back in Tildel",
+      "payoutSweepCounts": "Vipps payouts cleared: {cleared} · Waiting on charges: {waiting} · Skipped: {skipped} · Failed: {failed}",
       "tabReconcile": "Tildel",
       "tabRefunds": "Refunds",
       "refundTabDescription": "Dismissed rows that require a refund transfer. Pair each row with the matching outbound bank transfer.",

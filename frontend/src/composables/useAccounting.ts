@@ -1,6 +1,7 @@
 import { computed, type Ref } from 'vue'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useApi } from '@/composables/useApi'
+import type { VippsPayoutSweepResult } from '@/composables/useBankImports'
 
 const BASE = '/api/v1/admin/accounting'
 
@@ -396,6 +397,7 @@ export interface VippsBacklogResult {
   posted_totals: AccountTotal[]
   reclassified: { entry_number: number; date: string; amount: number; from: string; to: string; rule: string }[]
   refused: SkippedItem[]
+  payouts?: VippsPayoutSweepResult | null
 }
 
 // Preview is side-effect free; apply posts the period's Vipps drafts and is

@@ -1052,7 +1052,8 @@
       "overwrite": "Réconciliation complète (écraser)",
       "overwriteHint": "Supprime les lignes non rapprochées de ce compte dans la plage de dates du fichier, puis réimporte et rapproche l'ensemble du fichier. Les écritures comptabilisées ne sont pas touchées.",
       "overwriteConfirm": "Supprimer les lignes non rapprochées du compte {code} dans la plage de dates du fichier téléversé et réimporter l'ensemble du fichier ? Les écritures comptabilisées ne sont pas affectées.",
-      "cleared": "Supprimées"
+      "cleared": "Supprimées",
+      "payoutSweepCounts": "Versements Vipps rapprochés : {cleared} · En attente de débits : {waiting} · Ignorés : {skipped} · Échoués : {failed}"
     },
     "bankReconcile": {
       "filterAll": "All",

@@ -38,6 +38,7 @@ import { importUni24CSV, type Uni24ImportResult } from '@/composables/useFinanci
 import { formatNOK as nok, formatDate } from '@/lib/format'
 import { useFreshTotp } from '@/composables/useFreshTotp'
 import VippsAutoAssignSummary from '@/components/admin/VippsAutoAssignSummary.vue'
+import VippsPayoutSweepSummary from '@/components/admin/VippsPayoutSweepSummary.vue'
 import { useConfirm } from '@/stores/confirm'
 import { useCan } from '@/composables/useCan'
 
@@ -543,6 +544,7 @@ const filterMonthValue = computed<number>({
       <span v-if="syncResult.closed_periods?.length" class="ml-2 text-yellow-800">
         ({{ t('admin.bankImports.runSyncClosed', { years: syncResult.closed_periods.join(', ') }) }})
       </span>
+      <VippsPayoutSweepSummary v-if="syncResult.vipps_payouts" :result="syncResult.vipps_payouts" />
     </div>
     <div v-if="vippsResyncResult" class="mt-3 rounded-md bg-brand-50 px-3 py-2 text-xs text-brand-900" data-testid="vipps-resync-result">
       {{ t('admin.bankImports.vippsResyncResult', {
@@ -552,6 +554,7 @@ const filterMonthValue = computed<number>({
         failed: vippsResyncResult.failed?.length ?? 0,
       }) }}
       <VippsAutoAssignSummary v-if="vippsResyncResult.auto_assign" :result="vippsResyncResult.auto_assign" />
+      <VippsPayoutSweepSummary v-if="vippsResyncResult.payouts" :result="vippsResyncResult.payouts" />
     </div>
     <div v-if="syncError" class="mt-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">{{ syncError }}</div>
     <div v-if="vippsResyncError" class="mt-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">{{ vippsResyncError }}</div>
@@ -769,6 +772,7 @@ const filterMonthValue = computed<number>({
           — {{ t('admin.bankImports.imported') }}: {{ vippsResult.imported }}
           · {{ t('admin.bankImports.skipped') }}: {{ vippsResult.skipped_dup }}
           <VippsAutoAssignSummary v-if="vippsResult.auto_assign" :result="vippsResult.auto_assign" />
+          <VippsPayoutSweepSummary v-if="vippsResult.payouts" :result="vippsResult.payouts" />
         </div>
       </section>
 

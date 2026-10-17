@@ -318,11 +318,30 @@ async function handlePostVippsDrafts() {
         { onSuccess: resolve, onError: reject },
       )
     })
-    syncMessage.value = t('admin.accounting.journal.vippsDraftsDone', {
-      posted: result.posted,
-      reclassified: result.reclassified.length,
-    })
-    syncSkipped.value = result.refused ?? []
+    const payouts = result.payouts
+    syncMessage.value = [
+      t('admin.accounting.journal.vippsDraftsDone', {
+        posted: result.posted,
+        reclassified: result.reclassified.length,
+      }),
+      payouts
+        ? t('admin.bankImports.payoutSweepCounts', {
+            cleared: payouts.cleared.length,
+            waiting: payouts.waiting.length,
+            skipped: payouts.skipped.length,
+            failed: payouts.failed.length,
+          })
+        : '',
+    ]
+      .filter(Boolean)
+      .join(' ')
+    syncSkipped.value = [
+      ...(result.refused ?? []),
+      ...[...(payouts?.skipped ?? []), ...(payouts?.failed ?? [])].map((p) => ({
+        ref: `Utb. ${p.settlement_number}`,
+        reason: p.reason ?? '',
+      })),
+    ]
   } catch (err) {
     syncMessage.value = `${t('common.error')}: ${(err as Error).message}`
   } finally {
