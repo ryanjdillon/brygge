@@ -34,3 +34,26 @@ func BoardLabelNB(role string) string {
 	}
 	return role
 }
+
+// boardDocumentReaders are the roles that may read board-only documents
+// (visibility 'board'), in the portal and the admin document list alike.
+// It is deliberately narrower than Board: whether chair, vice_chair,
+// secretary and deputy should also read board documents is an open owner
+// decision (BRY-351 review), so the pre-existing set is kept until then.
+var boardDocumentReaders = map[string]bool{
+	"board":         true,
+	"admin":         true,
+	"harbor_master": true,
+	"treasurer":     true,
+}
+
+// CanReadBoardDocuments reports whether any of userRoles may read
+// board-only documents.
+func CanReadBoardDocuments(userRoles []string) bool {
+	for _, r := range userRoles {
+		if boardDocumentReaders[r] {
+			return true
+		}
+	}
+	return false
+}

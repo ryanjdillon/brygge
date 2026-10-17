@@ -166,7 +166,7 @@ Adding a new category requires touching **all three** plus this doc. Otherwise a
 chair   vice_chair   treasurer   secretary   harbor_master   deputy   board
 ```
 
-The board roles, defined once in `backend/internal/roles` (`roles.Board`) and validated there; a subset of `user_role`. Adding a board role to `user_role` means adding it to `roles.Board` (with its Norwegian faktura label) and to the `admin.users.role.*` i18n keys. `price_exemptions.category` uses the `price_items.category` vocabulary.
+The board roles, defined once in `backend/internal/roles` (`roles.Board`) and validated there; a subset of `user_role`. Adding a board role to `user_role` means adding it to `roles.Board` (with its Norwegian faktura label) and to the `admin.users.role.*` i18n keys. `price_exemptions.category` uses the `price_items.category` vocabulary. Board-only documents (visibility `board`) are **not** gated on `roles.Board`: `roles.CanReadBoardDocuments` keeps the narrower set board, admin, harbor_master, treasurer until the owner decides whether the other board roles should read them.
 
 ### `invoices.status` (CHECK since migration 000102)
 

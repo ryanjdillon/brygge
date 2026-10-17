@@ -351,11 +351,9 @@ func (h *ContentDocumentsHandler) HandlePortalList(w http.ResponseWriter, r *htt
 func portalVisibilities(userRoles []string) []string {
 	isBoard := false
 	isSlipHolder := false
+	isBoard = roles.CanReadBoardDocuments(userRoles)
 	for _, r := range userRoles {
-		switch {
-		case r == "admin" || roles.IsBoard(r):
-			isBoard = true
-		case r == "slip_holder":
+		if r == "slip_holder" {
 			isSlipHolder = true
 		}
 	}

@@ -16,6 +16,7 @@ import (
 
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/middleware"
+	"github.com/brygge-klubb/brygge/internal/roles"
 	"github.com/brygge-klubb/brygge/internal/storage"
 )
 
@@ -55,13 +56,7 @@ func (h *AdminDocumentsHandler) HandleListDocuments(w http.ResponseWriter, r *ht
 		return
 	}
 
-	hasBoard := false
-	for _, role := range claims.Roles {
-		if role == "board" || role == "admin" || role == "harbor_master" || role == "treasurer" {
-			hasBoard = true
-			break
-		}
-	}
+	hasBoard := roles.CanReadBoardDocuments(claims.Roles)
 
 	var rows pgx.Rows
 	var err error
@@ -144,13 +139,7 @@ func (h *AdminDocumentsHandler) HandleGetDocument(w http.ResponseWriter, r *http
 		return
 	}
 
-	hasBoard := false
-	for _, role := range claims.Roles {
-		if role == "board" || role == "admin" || role == "harbor_master" || role == "treasurer" {
-			hasBoard = true
-			break
-		}
-	}
+	hasBoard := roles.CanReadBoardDocuments(claims.Roles)
 
 	type docDetail struct {
 		ID          string    `json:"id"`
@@ -219,13 +208,7 @@ func (h *AdminDocumentsHandler) HandleDocumentContent(w http.ResponseWriter, r *
 		return
 	}
 
-	hasBoard := false
-	for _, role := range claims.Roles {
-		if role == "board" || role == "admin" || role == "harbor_master" || role == "treasurer" {
-			hasBoard = true
-			break
-		}
-	}
+	hasBoard := roles.CanReadBoardDocuments(claims.Roles)
 
 	var s3Key, filename, visibility string
 	err := h.db.QueryRow(ctx,
