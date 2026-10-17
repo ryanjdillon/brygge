@@ -236,10 +236,18 @@ func (s *Service) AutoMatchImport(ctx context.Context, clubID, importID, periodI
 				break
 			}
 
-			s.db.Exec(ctx,
-				`UPDATE bank_import_rows SET journal_entry_id = $1, auto_matched = true WHERE id = $2`,
-				entry.ID, row.id,
+			// Guarded on the row still being unbooked, so a concurrent match
+			// can't be overwritten; a failed link leaves no draft behind.
+			tag, lerr := s.db.Exec(ctx,
+				`UPDATE bank_import_rows SET journal_entry_id = $1, auto_matched = true
+				  WHERE id = $2 AND club_id = $3 AND journal_entry_id IS NULL`,
+				entry.ID, row.id, clubID,
 			)
+			if lerr != nil || tag.RowsAffected() != 1 {
+				s.log.Warn().Err(lerr).Str("row_id", row.id).Msg("auto-match could not link the row; draft discarded")
+				s.discardDraft(ctx, clubID, entry.ID)
+				break
+			}
 			matched++
 			break
 		}

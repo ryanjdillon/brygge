@@ -596,16 +596,12 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOv
 			continue
 		}
 
-		sourceID := importID
-		sourceTable := "bank_import"
-		descLabel := fmt.Sprintf("Innbetaling KID %s: %s", row.KID, row.Description)
-		if row.KID == "" {
-			descLabel = fmt.Sprintf("Innbetaling: %s", row.Description)
-		}
+		sourceID := rowID
+		sourceTable := "bank_import_rows"
 		entry, createErr := s.CreateJournalEntry(ctx, CreateJournalEntryInput{
 			FiscalPeriodID: periodID,
 			EntryDate:      row.Date.Format("2006-01-02"),
-			Description:    descLabel,
+			Description:    kidMatchDescription(row.KID, row.Description),
 			Source:         "bank_import",
 			SourceID:       &sourceID,
 			SourceTable:    &sourceTable,
@@ -834,8 +830,9 @@ func (s *Service) detectIntraBankTransfers(ctx context.Context, clubID, importID
 			continue
 		}
 		if _, err := s.db.Exec(ctx,
-			`UPDATE bank_import_rows SET journal_entry_id = $1, auto_matched = true WHERE id = ANY($2::uuid[])`,
-			entry.ID, []string{p.r1ID, p.r2ID},
+			`UPDATE bank_import_rows SET journal_entry_id = $1, auto_matched = true
+			  WHERE id = ANY($2::uuid[]) AND club_id = $3 AND journal_entry_id IS NULL`,
+			entry.ID, []string{p.r1ID, p.r2ID}, clubID,
 		); err != nil {
 			s.log.Warn().Err(err).Str("bank_row_id", p.r1ID).Msg("intra-bank transfer: linking rows failed; draft discarded")
 			s.discardDraft(ctx, clubID, entry.ID)
@@ -850,6 +847,23 @@ func (s *Service) detectIntraBankTransfers(ctx context.Context, clubID, importID
 	}
 	return matched, skippedClosedYears, nil
 }
+
+// kidMatchDescription is the description every payment-match entry (bank
+// import and bank sync, KID / invoice-number / counterpart cascade) carries.
+// Bank sync's stranded-draft heal recognises these entries by this exact
+// shape, so it must stay in step with kidMatchDescriptionSQL.
+func kidMatchDescription(kid, desc string) string {
+	if kid == "" {
+		return fmt.Sprintf("Innbetaling: %s", desc)
+	}
+	return fmt.Sprintf("Innbetaling KID %s: %s", kid, desc)
+}
+
+// kidMatchDescriptionSQL is kidMatchDescription over a bank_import_rows
+// alias b.
+const kidMatchDescriptionSQL = `CASE WHEN b.kid_number <> ''
+	THEN 'Innbetaling KID ' || b.kid_number || ': ' || b.description
+	ELSE 'Innbetaling: ' || b.description END`
 
 // discardDraft removes a draft journal entry an auto-match created but
 // could not complete, so a failed match leaves no orphan behind. Posted
@@ -911,11 +925,19 @@ func (s *Service) MatchBankRow(ctx context.Context, clubID, periodID, rowID, deb
 		return fmt.Errorf("creating journal entry: %w", err)
 	}
 
-	_, err = s.db.Exec(ctx,
-		`UPDATE bank_import_rows SET journal_entry_id = $1 WHERE id = $2`,
-		entry.ID, rowID,
+	tag, err := s.db.Exec(ctx,
+		`UPDATE bank_import_rows SET journal_entry_id = $1
+		  WHERE id = $2 AND club_id = $3 AND journal_entry_id IS NULL`,
+		entry.ID, rowID, clubID,
 	)
-	return err
+	if err != nil || tag.RowsAffected() != 1 {
+		s.discardDraft(ctx, clubID, entry.ID)
+		if err != nil {
+			return fmt.Errorf("linking row: %w", err)
+		}
+		return fmt.Errorf("row already matched")
+	}
+	return nil
 }
 
 func parseNorwegianNumber(s string) float64 {

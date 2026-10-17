@@ -149,8 +149,9 @@ func TestImportBankRowsPostFailureAfterLinkUnwinds(t *testing.T) {
 }
 
 // A row a crashed KID match left linked to its unposted draft is released by
-// bank sync and matched again. A fresh draft (an import still in flight) and
-// an intra-bank transfer draft (no receivable) are left alone.
+// bank sync and matched again. A fresh draft (an import still in flight), an
+// intra-bank transfer draft (no receivable) and a mapping-rule draft that
+// credits 1500 (AutoMatchImport; it waits for a gated post) are left alone.
 func TestBankSyncReleasesStrandedKIDDraft(t *testing.T) {
 	f := newBankLinkFixture(t)
 	ctx := context.Background()
@@ -159,13 +160,30 @@ func TestBankSyncReleasesStrandedKIDDraft(t *testing.T) {
 	importID := f.club.NewBankImport(t)
 	date := time.Date(f.club.Year, 6, 14, 0, 0, 0, 0, time.UTC)
 
-	draft := func(rowID, creditCode string, age time.Duration) string {
+	// draft links rowID to an unposted bank_import entry. kidShaped gives it
+	// the shape the payment-match paths write (kidMatchDescription, sourced
+	// to the row); otherwise it carries the row's own description, as a
+	// mapping rule's draft does.
+	draft := func(rowID, creditCode string, age time.Duration, kidShaped bool) string {
 		t.Helper()
+		var kidNumber, rowDesc string
+		if err := f.club.Pool.QueryRow(ctx,
+			`SELECT kid_number, description FROM bank_import_rows WHERE id = $1`, rowID,
+		).Scan(&kidNumber, &rowDesc); err != nil {
+			t.Fatalf("load row: %v", err)
+		}
+		desc := rowDesc
+		if kidShaped {
+			desc = kidMatchDescription(kidNumber, rowDesc)
+		}
+		sourceTable := "bank_import_rows"
 		e, err := f.svc.CreateJournalEntry(ctx, CreateJournalEntryInput{
 			FiscalPeriodID: f.club.PeriodID,
 			EntryDate:      date.Format("2006-01-02"),
-			Description:    "Synthetic draft",
+			Description:    desc,
 			Source:         "bank_import",
+			SourceID:       &rowID,
+			SourceTable:    &sourceTable,
 			CreatedBy:      f.club.Treasurer.ID,
 			ClubID:         f.club.ID,
 			Lines: []CreateJournalLineInput{
@@ -191,11 +209,13 @@ func TestBankSyncReleasesStrandedKIDDraft(t *testing.T) {
 		return e.ID
 	}
 	stranded := f.club.NewBankRow(t, importID, fin.BankRowOpts{Date: date, Cents: 45000, KID: kid})
-	draft(stranded, receivablesAccountCode, time.Hour)
+	draft(stranded, receivablesAccountCode, time.Hour, true)
 	inFlight := f.club.NewBankRow(t, importID, fin.BankRowOpts{Date: date, Cents: 45000})
-	inFlightDraft := draft(inFlight, receivablesAccountCode, 0)
+	inFlightDraft := draft(inFlight, receivablesAccountCode, 0, true)
 	transfer := f.club.NewBankRow(t, importID, fin.BankRowOpts{Date: date, Cents: 45000})
-	transferDraft := draft(transfer, "1925", time.Hour)
+	transferDraft := draft(transfer, "1925", time.Hour, true)
+	ruled := f.club.NewBankRow(t, importID, fin.BankRowOpts{Date: date, Cents: 45000})
+	ruledDraft := draft(ruled, receivablesAccountCode, time.Hour, false)
 
 	res, err := f.svc.BankSync(ctx, f.club.ID, f.club.Treasurer.ID)
 	if err != nil {
@@ -216,7 +236,7 @@ func TestBankSyncReleasesStrandedKIDDraft(t *testing.T) {
 	if err := f.club.Pool.QueryRow(ctx, `SELECT payment_id IS NOT NULL FROM invoices WHERE id = $1`, inv.ID).Scan(&paid); err != nil || !paid {
 		t.Errorf("faktura paid=%v (err=%v), want paid after the re-match", paid, err)
 	}
-	for row, entry := range map[string]string{inFlight: inFlightDraft, transfer: transferDraft} {
+	for row, entry := range map[string]string{inFlight: inFlightDraft, transfer: transferDraft, ruled: ruledDraft} {
 		var linked string
 		if err := f.club.Pool.QueryRow(ctx,
 			`SELECT COALESCE(journal_entry_id::text, '') FROM bank_import_rows WHERE id = $1`, row,

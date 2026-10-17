@@ -94,7 +94,7 @@ func (s *Service) AssignBankRowToInvoice(
 		return "", fmt.Errorf("load bank row: %w", err)
 	}
 	if alreadyJrnl {
-		return "", errors.New("bank row already reconciled — unassign first")
+		return "", errBankRowRaced
 	}
 	if dismissed {
 		return "", errors.New("bank row is dismissed")
@@ -152,17 +152,8 @@ func (s *Service) AssignBankRowToInvoice(
 	if cerr != nil {
 		return "", fmt.Errorf("create journal: %w", cerr)
 	}
-	if err := s.PostJournalEntry(ctx, clubID, entry.ID, actorID); err != nil {
-		return "", fmt.Errorf("post journal: %w", err)
-	}
-	if _, err := tx.Exec(ctx,
-		`UPDATE bank_import_rows SET journal_entry_id = $1, invoice_id = $2, auto_matched = false WHERE id = $3`,
-		entry.ID, invoiceID, bankRowID,
-	); err != nil {
-		return "", fmt.Errorf("mark row matched: %w", err)
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return "", fmt.Errorf("commit: %w", err)
+	if err := s.linkAndPostBankRow(ctx, clubID, actorID, entry.ID, bankRowID, &invoiceID); err != nil {
+		return "", err
 	}
 
 	// linkInvoicePayment outside the tx — it's idempotent and best-effort
@@ -225,7 +216,7 @@ func (s *Service) AssignBankRowToAccount(
 		return "", fmt.Errorf("load bank row: %w", err)
 	}
 	if alreadyJrnl {
-		return "", errors.New("bank row already reconciled — unassign first")
+		return "", errBankRowRaced
 	}
 	if dismissed {
 		return "", errors.New("bank row is dismissed")
@@ -294,19 +285,49 @@ func (s *Service) AssignBankRowToAccount(
 	if cerr != nil {
 		return "", fmt.Errorf("create journal: %w", cerr)
 	}
-	if err := s.PostJournalEntry(ctx, clubID, entry.ID, actorID); err != nil {
-		return "", fmt.Errorf("post journal: %w", err)
-	}
-	if _, err := tx.Exec(ctx,
-		`UPDATE bank_import_rows SET journal_entry_id = $1, auto_matched = false WHERE id = $2`,
-		entry.ID, bankRowID,
-	); err != nil {
-		return "", fmt.Errorf("mark row matched: %w", err)
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return "", fmt.Errorf("commit: %w", err)
+	if err := s.linkAndPostBankRow(ctx, clubID, actorID, entry.ID, bankRowID, nil); err != nil {
+		return "", err
 	}
 	return entry.ID, nil
+}
+
+// errBankRowRaced means another booking linked the row first.
+var errBankRowRaced = errors.New("bank row already reconciled — unassign first")
+
+// linkAndPostBankRow links a manual assignment's draft to its bank row and
+// then posts it. The link is guarded on the row still being unbooked and
+// not dismissed, so of two concurrent assigns exactly one links; the loser's
+// draft is discarded. Posting comes after the link so a posted entry never
+// exists without its row (a later bank sync would book the money again);
+// a failed post unlinks the row and deletes the draft. invoiceID, when set,
+// is recorded on the row as the faktura it settles.
+func (s *Service) linkAndPostBankRow(ctx context.Context, clubID, actorID, entryID, bankRowID string, invoiceID *string) error {
+	tag, err := s.db.Exec(ctx,
+		`UPDATE bank_import_rows SET journal_entry_id = $1, invoice_id = COALESCE($2, invoice_id), auto_matched = false
+		  WHERE id = $3 AND club_id = $4 AND journal_entry_id IS NULL AND dismissed_at IS NULL`,
+		entryID, invoiceID, bankRowID, clubID,
+	)
+	if err != nil || tag.RowsAffected() != 1 {
+		s.discardDraft(ctx, clubID, entryID)
+		if err != nil {
+			return fmt.Errorf("mark row matched: %w", err)
+		}
+		return errBankRowRaced
+	}
+	if err := s.PostJournalEntry(ctx, clubID, entryID, actorID); err != nil {
+		if _, uerr := s.db.Exec(ctx,
+			`UPDATE bank_import_rows
+			    SET journal_entry_id = NULL, auto_matched = false,
+			        invoice_id = CASE WHEN $3::uuid IS NULL THEN invoice_id ELSE NULL END
+			  WHERE club_id = $1 AND journal_entry_id = $2`,
+			clubID, entryID, invoiceID,
+		); uerr != nil {
+			s.log.Error().Err(uerr).Str("entry_id", entryID).Msg("unlinking bank row after a failed post failed")
+		}
+		s.discardDraft(ctx, clubID, entryID)
+		return fmt.Errorf("post journal: %w", err)
+	}
+	return nil
 }
 
 // DismissBankRow flags the row as not-actionable with a structured
@@ -414,7 +435,8 @@ func (s *Service) UnassignBankRow(
 		  WHERE b.club_id = $1
 		    AND (b.id = $2
 		         OR ($3 <> '' AND b.invoice_id::text = $3)
-		         OR b.journal_entry_id::text = $4)`,
+		         OR b.journal_entry_id::text = $4)
+		  ORDER BY je.id`,
 		clubID, bankRowID, priorInvoiceID, priorJournalID,
 	)
 	if err != nil {
@@ -439,6 +461,11 @@ func (s *Service) UnassignBankRow(
 		switch e.status {
 		case "posted":
 			if _, err := voidJournalEntryTx(ctx, tx, clubID, e.id, actorID); err != nil {
+				// A concurrent unassign of a sibling row voided it first
+				// (the status above was read before the row lock).
+				if errors.Is(err, ErrEntryNotPosted) {
+					continue
+				}
 				if errors.Is(err, ErrPeriodClosed) {
 					return "", "", fmt.Errorf("bank row is booked in a closed fiscal period; reopen it or correct with a new entry: %w", ErrPeriodClosed)
 				}

@@ -200,14 +200,20 @@ func (s *Service) BankSync(ctx context.Context, clubID, createdBy string) (*Bank
 // treats it as stranded rather than as an import or sync still in flight.
 const strandedDraftGrace = 15 * time.Minute
 
-// healStrandedKIDDrafts finds bank rows auto-matched to a KID payment draft
-// (bank_import source, credit on 1500) that never got posted. The KID paths
-// link the row before posting so a posted entry never exists without its
-// row; a crash between the two leaves the row looking booked while the
-// draft counts nowhere. Such rows are unlinked and the draft deleted, in
-// one transaction, and pass 1 then matches them again against the invoices
-// as they are now. Intra-bank transfer drafts (no 1500 line) and manual
-// matches (auto_matched false) are left alone.
+// healStrandedKIDDrafts finds bank rows auto-matched to a payment-match
+// draft (the KID / invoice-number / counterpart cascade of bank import and
+// bank sync) that never got posted. Those paths link the row before posting
+// so a posted entry never exists without its row; a crash between the two
+// leaves the row looking booked while the draft counts nowhere. Such rows
+// are unlinked and the draft deleted, in one transaction, and pass 1 then
+// matches them again against the invoices as they are now.
+//
+// Only entries the payment-match paths created qualify: tied to the row by
+// source (per row, or per import for drafts written before both paths used
+// the row), crediting 1500, and carrying exactly kidMatchDescription for
+// that row. Mapping-rule drafts from AutoMatchImport, which may also credit
+// 1500 and are meant to wait for a gated post, never have that description;
+// transfer drafts and manual matches are left alone too.
 func (s *Service) healStrandedKIDDrafts(ctx context.Context, clubID string) (int, error) {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
@@ -220,7 +226,10 @@ func (s *Service) healStrandedKIDDrafts(ctx context.Context, clubID string) (int
 		  WHERE je.club_id = $1 AND je.status = 'draft' AND je.source = 'bank_import'
 		    AND je.created_at < now() - $3::interval
 		    AND EXISTS (SELECT 1 FROM bank_import_rows b
-		                 WHERE b.club_id = je.club_id AND b.journal_entry_id = je.id AND b.auto_matched)
+		                 WHERE b.club_id = je.club_id AND b.journal_entry_id = je.id AND b.auto_matched
+		                   AND ((je.source_table = 'bank_import_rows' AND je.source_id = b.id::text)
+		                     OR (je.source_table = 'bank_import' AND je.source_id = b.bank_import_id::text))
+		                   AND je.description = `+kidMatchDescriptionSQL+`)
 		    AND EXISTS (SELECT 1 FROM journal_lines jl JOIN accounts a ON a.id = jl.account_id
 		                 WHERE jl.journal_entry_id = je.id AND a.code = $2 AND jl.credit > 0)
 		  FOR UPDATE OF je SKIP LOCKED`,
@@ -533,14 +542,10 @@ func (s *Service) syncKIDMatches(ctx context.Context, clubID, createdBy string) 
 
 		sourceID := p.rowID
 		sourceTable := "bank_import_rows"
-		descLabel := fmt.Sprintf("Innbetaling: %s", p.desc)
-		if p.kid != "" {
-			descLabel = fmt.Sprintf("Innbetaling KID %s: %s", p.kid, p.desc)
-		}
 		entry, cerr := s.CreateJournalEntry(ctx, CreateJournalEntryInput{
 			FiscalPeriodID: periodID,
 			EntryDate:      p.date.Format("2006-01-02"),
-			Description:    descLabel,
+			Description:    kidMatchDescription(p.kid, p.desc),
 			Source:         "bank_import",
 			SourceID:       &sourceID,
 			SourceTable:    &sourceTable,
