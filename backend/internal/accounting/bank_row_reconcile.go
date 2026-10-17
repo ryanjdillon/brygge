@@ -345,18 +345,15 @@ var ErrBankRowNotAssigned = errors.New("bank row not assigned")
 // share an invoice_id; an intra-bank transfer's two rows share one entry)
 // is unassigned with it.
 //
-// Order, so the GL never counts an entry for a row that is back in the
-// queue, and an interrupted run can simply be retried:
-//  1. Check every involved entry: a posted entry in a closed or locked
-//     period refuses the whole unassign (ErrPeriodClosed) and nothing
-//     changes.
-//  2. Void the posted entries (each one a balanced reversal; the original
-//     and the reversal stay in the GL for bokføringsloven §13 retention).
-//     Entries already voided by an earlier, interrupted run are skipped.
-//  3. In one transaction: clear the rows, delete draft entries (drafts were
-//     never reported, so they're removed rather than reversed), clear
-//     invoices.payment_id and remove the payments row linkInvoicePayment
-//     created.
+// It all runs in one transaction: the posted entries are voided (each a
+// balanced reversal; the original and the reversal stay in the GL for
+// bokføringsloven §13 retention), drafts are deleted (they were never
+// reported), the rows are cleared, and invoices.payment_id and the payments
+// row linkInvoicePayment created are removed. Each void holds its period FOR
+// SHARE until commit, so a posted entry in a closed or locked period fails
+// with ErrPeriodClosed and rolls everything back, and ClosePeriod cannot
+// close a period between the check and the reversal. Entries already voided
+// (an earlier run, or a manual void) are skipped.
 //
 // Returns the prior journal entry ID and invoice ID (if any) for the audit
 // row.
@@ -399,16 +396,21 @@ func (s *Service) UnassignBankRow(
 		).Scan(&priorInvoiceID)
 	}
 
+	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return "", "", fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
 	// Every entry booked for this assignment: this row's, its invoice
 	// siblings', and any other row pointing at the same entry.
 	type involved struct {
-		id, status, periodStatus string
+		id, status string
 	}
-	rows, err := s.db.Query(ctx,
-		`SELECT DISTINCT je.id, je.status, fp.status
+	rows, err := tx.Query(ctx,
+		`SELECT DISTINCT je.id, je.status
 		   FROM bank_import_rows b
 		   JOIN journal_entries je ON je.id = b.journal_entry_id AND je.club_id = b.club_id
-		   JOIN fiscal_periods fp ON fp.id = je.fiscal_period_id
 		  WHERE b.club_id = $1
 		    AND (b.id = $2
 		         OR ($3 <> '' AND b.invoice_id::text = $3)
@@ -421,7 +423,7 @@ func (s *Service) UnassignBankRow(
 	var entries []involved
 	for rows.Next() {
 		var e involved
-		if err := rows.Scan(&e.id, &e.status, &e.periodStatus); err != nil {
+		if err := rows.Scan(&e.id, &e.status); err != nil {
 			rows.Close()
 			return "", "", fmt.Errorf("scan booking: %w", err)
 		}
@@ -432,35 +434,20 @@ func (s *Service) UnassignBankRow(
 		return "", "", fmt.Errorf("bookings: %w", err)
 	}
 
-	// 1. Refuse up front so a closed period never leaves the unassign half
-	// done (some entries reversed, others not).
-	for _, e := range entries {
-		if e.status == "posted" && e.periodStatus != "open" {
-			return "", "", fmt.Errorf("bank row is booked in a closed fiscal period; reopen it or correct with a new entry: %w", ErrPeriodClosed)
-		}
-	}
-
-	// 2. Reverse what was posted. A failure stops here with the rows still
-	// assigned, so the GL and the queue agree; a retry skips the entries
-	// this run already voided.
 	var drafts []string
 	for _, e := range entries {
 		switch e.status {
 		case "posted":
-			if _, err := s.VoidJournalEntry(ctx, clubID, e.id, actorID); err != nil {
+			if _, err := voidJournalEntryTx(ctx, tx, clubID, e.id, actorID); err != nil {
+				if errors.Is(err, ErrPeriodClosed) {
+					return "", "", fmt.Errorf("bank row is booked in a closed fiscal period; reopen it or correct with a new entry: %w", ErrPeriodClosed)
+				}
 				return "", "", fmt.Errorf("voiding bilag: %w", err)
 			}
 		case "draft":
 			drafts = append(drafts, e.id)
 		}
 	}
-
-	// 3. Unlink and clean up atomically.
-	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
-	if err != nil {
-		return "", "", fmt.Errorf("begin tx: %w", err)
-	}
-	defer tx.Rollback(ctx)
 
 	entryIDs := make([]string, 0, len(entries))
 	for _, e := range entries {

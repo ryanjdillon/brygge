@@ -382,10 +382,14 @@ const invoiceEntrySources = `('invoice_sync', 'invoice_resplit')`
 // booked, or already reversed). If any of the entries sits in a closed
 // period nothing is reversed and ErrInvoicePeriodClosed is returned.
 func (s *Service) ReverseInvoice(ctx context.Context, clubID, invoiceID, actor string) ([]string, error) {
-	rows, err := s.db.Query(ctx,
-		`SELECT je.id, fp.status
-		   FROM journal_entries je
-		   JOIN fiscal_periods fp ON fp.id = je.fiscal_period_id
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("beginning transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	rows, err := tx.Query(ctx,
+		`SELECT je.id FROM journal_entries je
 		  WHERE je.club_id = $1 AND je.source IN `+invoiceEntrySources+`
 		    AND je.source_id = $2 AND je.status = 'posted'
 		  ORDER BY je.created_at`,
@@ -394,36 +398,27 @@ func (s *Service) ReverseInvoice(ctx context.Context, clubID, invoiceID, actor s
 	if err != nil {
 		return nil, fmt.Errorf("loading invoice entries: %w", err)
 	}
-	var entryIDs []string
-	closed := false
-	for rows.Next() {
-		var id, status string
-		if err := rows.Scan(&id, &status); err != nil {
-			rows.Close()
-			return nil, fmt.Errorf("scanning invoice entry: %w", err)
-		}
-		entryIDs = append(entryIDs, id)
-		if status != "open" {
-			closed = true
-		}
+	entryIDs, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return nil, fmt.Errorf("scanning invoice entries: %w", err)
 	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	// VoidJournalEntry refuses a closed period per entry; checking the whole
-	// family first keeps the reversal all-or-nothing instead of voiding the
-	// entries in an open period and then failing on a closed one.
-	if closed {
-		return nil, ErrInvoicePeriodClosed
-	}
+	// Every void runs in this one transaction, each holding its period FOR
+	// SHARE until commit. A family member in a closed period fails its void
+	// and rolls back the ones before it, so the reversal is all-or-nothing
+	// without a separate period pre-check that ClosePeriod could race.
 	var reversals []string
 	for _, id := range entryIDs {
-		rev, err := s.VoidJournalEntry(ctx, clubID, id, actor)
+		rev, err := voidJournalEntryTx(ctx, tx, clubID, id, actor)
+		if errors.Is(err, ErrPeriodClosed) {
+			return nil, ErrInvoicePeriodClosed
+		}
 		if err != nil {
-			return reversals, err
+			return nil, err
 		}
 		reversals = append(reversals, rev.ID)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("committing transaction: %w", err)
 	}
 	return reversals, nil
 }

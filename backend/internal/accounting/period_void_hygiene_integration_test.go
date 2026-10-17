@@ -350,7 +350,9 @@ func TestClosePeriodWaitsForInFlightDraft(t *testing.T) {
 	}
 
 	done := make(chan error, 1)
-	go func() { done <- f.svc.ClosePeriod(context.Background(), f.club.ID, f.club.PeriodID, f.club.Treasurer.ID) }()
+	go func() {
+		done <- f.svc.ClosePeriod(context.Background(), f.club.ID, f.club.PeriodID, f.club.Treasurer.ID)
+	}()
 
 	select {
 	case err := <-done:

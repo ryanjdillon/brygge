@@ -377,26 +377,24 @@ func (s *Service) UnassignVippsCharge(ctx context.Context, clubID, actorID, rowI
 		priorInvoiceID = *invoiceID
 	}
 
-	var status, periodStatus string
+	var status string
 	if err := s.db.QueryRow(ctx,
-		`SELECT je.status, fp.status
-		   FROM journal_entries je JOIN fiscal_periods fp ON fp.id = je.fiscal_period_id
-		  WHERE je.id = $1 AND je.club_id = $2`,
+		`SELECT status FROM journal_entries WHERE id = $1 AND club_id = $2`,
 		priorEntryID, clubID,
-	).Scan(&status, &periodStatus); err != nil {
+	).Scan(&status); err != nil {
 		return "", "", fmt.Errorf("loading journal entry: %w", err)
 	}
 
 	// A posted booking is voided before anything is unlinked, so the GL never
 	// counts an entry for a charge that is already back in Tildel. The
-	// reversal lands in the entry's own period, which therefore has to be
-	// open. If the clearing below then fails, the entry is voided and a retry
-	// (status 'voided') just finishes the clearing.
+	// reversal lands in the entry's own period; VoidJournalEntry refuses a
+	// closed one under the period lock. If the clearing below then fails, the
+	// entry is voided and a retry (status 'voided') just finishes the clearing.
 	if status == "posted" {
-		if periodStatus != "open" {
-			return "", "", fmt.Errorf("charge is booked in a closed fiscal period — correct it with a new entry in an open period: %w", ErrPeriodClosed)
-		}
 		if _, err := s.VoidJournalEntry(ctx, clubID, priorEntryID, actorID); err != nil {
+			if errors.Is(err, ErrPeriodClosed) {
+				return "", "", fmt.Errorf("charge is booked in a closed fiscal period — correct it with a new entry in an open period: %w", ErrPeriodClosed)
+			}
 			return "", "", fmt.Errorf("voiding bilag: %w", err)
 		}
 	}

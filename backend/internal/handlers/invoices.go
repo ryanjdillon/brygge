@@ -1466,19 +1466,21 @@ func (h *InvoiceHandler) HandleVoidInvoice(w http.ResponseWriter, r *http.Reques
 	// so a payment, credit link or concurrent void that landed in between
 	// leaves the row untouched; only a row this call actually voided is
 	// audited and reversed.
-	tag, err := h.db.Exec(ctx,
+	var invoiceNumber *int
+	err = h.db.QueryRow(ctx,
 		`UPDATE invoices SET status = 'voided'
 		  WHERE id = $1 AND club_id = $2 AND status <> 'voided'
 		    AND credits_invoice_id IS NULL
-		    AND NOT `+finance.SettledForMemberSQL(""),
+		    AND NOT `+finance.SettledForMemberSQL("")+`
+		 RETURNING invoice_number`,
 		invoiceID, claims.ClubID,
-	)
-	if err != nil {
+	).Scan(&invoiceNumber)
+	if err != nil && err != pgx.ErrNoRows {
 		h.log.Error().Err(err).Msg("void invoice")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	if tag.RowsAffected() == 0 {
+	if err == pgx.ErrNoRows {
 		JSON(w, http.StatusConflict, map[string]string{
 			"error": "the faktura changed while voiding it (paid, credited or already voided); reload and try again",
 			"code":  "changed",
@@ -1494,7 +1496,7 @@ func (h *InvoiceHandler) HandleVoidInvoice(w http.ResponseWriter, r *http.Reques
 		reversals, reverseErr = h.ledger.ReverseInvoice(ctx, claims.ClubID, invoiceID, claims.UserID)
 	}
 	if h.audit != nil {
-		details := map[string]any{"reversal_entry_ids": reversals}
+		details := map[string]any{"invoice_number": invoiceNumber, "reversal_entry_ids": reversals}
 		if reverseErr != nil {
 			details["gl_reversal_error"] = reverseErr.Error()
 		}

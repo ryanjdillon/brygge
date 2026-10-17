@@ -297,9 +297,23 @@ func (s *Service) VoidJournalEntry(ctx context.Context, clubID, entryID, voidedB
 	}
 	defer tx.Rollback(ctx)
 
+	reversal, err := voidJournalEntryTx(ctx, tx, clubID, entryID, voidedBy)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("committing transaction: %w", err)
+	}
+	return reversal, nil
+}
+
+// voidJournalEntryTx is VoidJournalEntry inside the caller's transaction, so
+// several voids (an invoice's entry family, a bank row's entries) commit or
+// roll back together while each holds its period FOR SHARE until the end.
+func voidJournalEntryTx(ctx context.Context, tx pgx.Tx, clubID, entryID, voidedBy string) (*JournalEntry, error) {
 	// Get entry and verify it's posted
 	var entry JournalEntry
-	err = tx.QueryRow(ctx,
+	err := tx.QueryRow(ctx,
 		`SELECT id, club_id, fiscal_period_id, entry_number, entry_date::text, description, status, created_by
 		 FROM journal_entries WHERE id = $1 AND club_id = $2 FOR UPDATE`,
 		entryID, clubID,
@@ -404,10 +418,6 @@ func (s *Service) VoidJournalEntry(ctx context.Context, clubID, entryID, voidedB
 		if err != nil {
 			return nil, fmt.Errorf("inserting reversal line: %w", err)
 		}
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("committing transaction: %w", err)
 	}
 
 	return &reversal, nil

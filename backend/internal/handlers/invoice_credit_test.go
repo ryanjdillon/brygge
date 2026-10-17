@@ -59,6 +59,12 @@ func (f *creditFixture) book(t *testing.T, inv fin.Invoice) {
 
 func (f *creditFixture) call(t *testing.T, method, path string, body any) *httptest.ResponseRecorder {
 	t.Helper()
+	return f.serve(method, path, body)
+}
+
+// serve runs a request without touching *testing.T, so goroutines in the
+// concurrency tests can use it and report back through channels.
+func (f *creditFixture) serve(method, path string, body any) *httptest.ResponseRecorder {
 	r := chi.NewRouter()
 	r.Get("/invoices/{invoiceID}/credit-candidates", f.h.HandleListCreditCandidates)
 	r.Post("/invoices/{invoiceID}/credit-link", f.h.HandleLinkCreditNote)

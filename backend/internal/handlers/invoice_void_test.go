@@ -3,6 +3,8 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -139,10 +141,16 @@ func TestVoidRacingAPaymentReportsChanged(t *testing.T) {
 	if _, err := tx.Exec(ctx, `SELECT 1 FROM invoices WHERE id = $1 FOR UPDATE`, inv.ID); err != nil {
 		t.Fatalf("lock: %v", err)
 	}
+	var holder int
+	if err := tx.QueryRow(ctx, `SELECT pg_backend_pid()`).Scan(&holder); err != nil {
+		t.Fatalf("holder pid: %v", err)
+	}
 
 	done := make(chan *httptest.ResponseRecorder, 1)
-	go func() { done <- f.void(t, inv) }()
-	waitForLockWaiter(t, f)
+	go func() { done <- f.serve(http.MethodPost, "/invoices/"+inv.ID+"/void", nil) }()
+	if err := waitForBlockedBy(f, holder); err != nil {
+		t.Fatal(err)
+	}
 
 	if _, err := tx.Exec(ctx,
 		`WITH p AS (
@@ -168,25 +176,27 @@ func TestVoidRacingAPaymentReportsChanged(t *testing.T) {
 	}
 }
 
-// waitForLockWaiter blocks until some backend in the test database waits on a
-// row lock.
-func waitForLockWaiter(t *testing.T, f *creditFixture) {
-	t.Helper()
+// waitForBlockedBy waits until a backend is blocked by the transaction
+// running on holderPID: the void under test, queued on the held row. Keying
+// on the holder (rather than "any lock waiter in the database") keeps other
+// tests' locks from satisfying it early.
+func waitForBlockedBy(f *creditFixture, holderPID int) error {
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
-		var waiting bool
+		var blocked bool
 		if err := f.club.Pool.QueryRow(context.Background(),
 			`SELECT EXISTS (SELECT 1 FROM pg_stat_activity
-			                 WHERE datname = current_database() AND wait_event_type = 'Lock')`,
-		).Scan(&waiting); err != nil {
-			t.Fatalf("pg_stat_activity: %v", err)
+			                 WHERE $1 = ANY (pg_blocking_pids(pid)))`,
+			holderPID,
+		).Scan(&blocked); err != nil {
+			return fmt.Errorf("pg_stat_activity: %w", err)
 		}
-		if waiting {
-			return
+		if blocked {
+			return nil
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	t.Fatal("the void never reached its update")
+	return errors.New("the void never queued behind the held row")
 }
 
 // Two credit notes linked to one faktura at once: exactly one wins, the
@@ -205,7 +215,7 @@ func TestConcurrentCreditLinksOneWins(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				recs[i] = f.link(t, cn, faktura)
+				recs[i] = f.serve(http.MethodPost, "/invoices/"+cn.ID+"/credit-link", map[string]string{"invoice_id": faktura.ID})
 			}()
 		}
 		wg.Wait()
@@ -283,5 +293,88 @@ func TestCreditLinkBookedNoteToImportedFaktura(t *testing.T) {
 	// Opening DR 1500 900 and the credit note's CR 1500 900 cancel out.
 	if got := f.net(t, "1500"); got != 0 {
 		t.Errorf("1500 net = %v after the link, want 0", got)
+	}
+}
+
+// When one entry of the faktura's family can't be reversed (here the
+// resplit correction, after the sync entry's void already ran in the same
+// transaction) nothing is reversed: the faktura stays voided, the response
+// reports the GL failure, and the audit row names the faktura, no reversal
+// entries and the error, so the Bilag repair sync can finish the job.
+func TestVoidInvoiceResplitReversalFailureRollsBackFamily(t *testing.T) {
+	f := newCreditFixture(t)
+	f.withAudit()
+	ctx := context.Background()
+	inv := f.club.NewInvoice(t, fin.InvoiceOpts{Member: &f.alice, Cents: 60000,
+		Lines: []fin.Line{{Category: "membership", Cents: 60000}}})
+	f.book(t, inv)
+
+	sourceTable := "invoices"
+	resplit, err := f.svc.CreateJournalEntry(ctx, accounting.CreateJournalEntryInput{
+		FiscalPeriodID: f.club.PeriodID,
+		EntryDate:      time.Now().Format("2006-01-02"),
+		Description:    "Synthetic resplit",
+		Source:         "invoice_resplit",
+		SourceID:       &inv.ID,
+		SourceTable:    &sourceTable,
+		CreatedBy:      f.club.Treasurer.ID,
+		ClubID:         f.club.ID,
+		Lines: []accounting.CreateJournalLineInput{
+			{AccountCode: "3100", Debit: 100},
+			{AccountCode: "3200", Credit: 100},
+		},
+	})
+	if err != nil {
+		t.Fatalf("resplit entry: %v", err)
+	}
+	if err := f.svc.PostJournalEntry(ctx, f.club.ID, resplit.ID, f.club.Treasurer.ID); err != nil {
+		t.Fatalf("post resplit: %v", err)
+	}
+	if _, err := f.club.Pool.Exec(ctx, `
+		CREATE FUNCTION refuse_resplit_void() RETURNS trigger LANGUAGE plpgsql AS $$
+		BEGIN RAISE EXCEPTION 'synthetic void failure'; END $$;
+		CREATE TRIGGER refuse_resplit_void BEFORE UPDATE ON journal_entries FOR EACH ROW
+		  WHEN (OLD.id = '`+resplit.ID+`' AND NEW.status = 'voided')
+		  EXECUTE FUNCTION refuse_resplit_void();`); err != nil {
+		t.Fatalf("fault trigger: %v", err)
+	}
+
+	rec := f.void(t, inv)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"failed"`) {
+		t.Fatalf("void: status %d body %s, want 200 with gl_booking failed", rec.Code, rec.Body.String())
+	}
+	if got := f.status(t, inv); got != "voided" {
+		t.Errorf("faktura status = %q, want voided", got)
+	}
+	var posted, reversals int
+	if err := f.club.Pool.QueryRow(ctx,
+		`SELECT count(*) FILTER (WHERE source IN ('invoice_sync', 'invoice_resplit') AND source_id = $2 AND status = 'posted'),
+		        count(*) FILTER (WHERE description LIKE 'Reversering av bilag%')
+		   FROM journal_entries WHERE club_id = $1`,
+		f.club.ID, inv.ID,
+	).Scan(&posted, &reversals); err != nil {
+		t.Fatalf("entries: %v", err)
+	}
+	if posted != 2 || reversals != 0 {
+		t.Errorf("after a failed family reversal: %d posted family entries, %d reversals; want 2 and 0", posted, reversals)
+	}
+
+	var details struct {
+		InvoiceNumber    int      `json:"invoice_number"`
+		ReversalEntryIDs []string `json:"reversal_entry_ids"`
+		GLReversalError  string   `json:"gl_reversal_error"`
+	}
+	var raw []byte
+	if err := f.club.Pool.QueryRow(ctx,
+		`SELECT details FROM audit_log WHERE club_id = $1 AND action = $2 AND resource_id = $3`,
+		f.club.ID, audit.ActionInvoiceVoided, inv.ID,
+	).Scan(&raw); err != nil {
+		t.Fatalf("audit row: %v", err)
+	}
+	if err := json.Unmarshal(raw, &details); err != nil {
+		t.Fatalf("audit details: %v", err)
+	}
+	if details.InvoiceNumber != inv.Number || len(details.ReversalEntryIDs) != 0 || details.GLReversalError == "" {
+		t.Errorf("audit details = %+v, want invoice_number %d, no reversals, an error", details, inv.Number)
 	}
 }
