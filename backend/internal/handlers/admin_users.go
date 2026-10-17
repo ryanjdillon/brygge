@@ -23,16 +23,19 @@ import (
 	"github.com/brygge-klubb/brygge/internal/config"
 	brmail "github.com/brygge-klubb/brygge/internal/mail"
 	"github.com/brygge-klubb/brygge/internal/middleware"
+	"github.com/brygge-klubb/brygge/internal/roles"
 )
 
-var validUserRoles = map[string]bool{
-	"applicant": true, "member": true, "slip_holder": true,
-	"board": true, "harbor_master": true, "treasurer": true, "admin": true,
-	// Board-officer roles. Identifier strings stay English snake_case
-	// to match the existing convention; display labels are localized
-	// in the SPA.
-	"chair": true, "vice_chair": true, "deputy": true, "secretary": true,
-}
+// validUserRoles is every assignable role: the non-board roles plus the
+// canonical board set from internal/roles. Identifier strings stay English
+// snake_case; display labels are localized in the SPA.
+var validUserRoles = func() map[string]bool {
+	m := map[string]bool{"applicant": true, "member": true, "slip_holder": true, "admin": true}
+	for _, r := range roles.Board {
+		m[r] = true
+	}
+	return m
+}()
 
 type AdminUsersHandler struct {
 	db     *pgxpool.Pool

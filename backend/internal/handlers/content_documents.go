@@ -13,6 +13,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/brygge-klubb/brygge/internal/middleware"
+	"github.com/brygge-klubb/brygge/internal/roles"
 )
 
 var htmlPolicy = bluemonday.UGCPolicy()
@@ -347,14 +348,14 @@ func (h *ContentDocumentsHandler) HandlePortalList(w http.ResponseWriter, r *htt
 }
 
 // portalVisibilities returns the set of visibility values the caller can see.
-func portalVisibilities(roles []string) []string {
+func portalVisibilities(userRoles []string) []string {
 	isBoard := false
 	isSlipHolder := false
-	for _, r := range roles {
-		switch r {
-		case "board", "admin", "harbor_master", "treasurer":
+	for _, r := range userRoles {
+		switch {
+		case r == "admin" || roles.IsBoard(r):
 			isBoard = true
-		case "slip_holder":
+		case r == "slip_holder":
 			isSlipHolder = true
 		}
 	}
