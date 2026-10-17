@@ -57,6 +57,10 @@ type BankRowSummary struct {
 	// renders it as a quiet auto-clearing item rather than an unassignable
 	// "Ingen fakturaforslag" deposit.
 	VippsPayout bool `json:"vipps_payout"`
+	// Provisional is true for an in-flight row from a statement exported
+	// while the transfer was under way (provisionalRowSQL). It is dismissed
+	// on its own once a later export brings the settled row.
+	Provisional bool `json:"provisional"`
 }
 
 // ListUnmatchedBankRows returns the paginated set of rows that still
@@ -160,7 +164,8 @@ func (s *Service) ListUnmatchedBankRows(
 		             AND i.payment_id IS NULL
 		             AND ABS(i.total_amount - bir.amount) < 0.005
 		        ) ELSE 0 END) AS suggestion_count,
-		       (bir.description ~* 'Utb\.\s*[0-9]+\s+Vippsnr\s+[0-9]+') AS vipps_payout
+		       (bir.description ~* 'Utb\.\s*[0-9]+\s+Vippsnr\s+[0-9]+') AS vipps_payout,
+		       (` + provisionalRowSQL("bir") + `) AS provisional
 		  FROM bank_import_rows bir
 		  JOIN bank_imports bi ON bi.id = bir.bank_import_id
 		 WHERE ` + strings.Join(where, " AND ") + `
@@ -179,7 +184,7 @@ func (s *Service) ListUnmatchedBankRows(
 		if err := rows.Scan(&r.ID, &r.RowDate, &r.Amount, &r.KIDNumber,
 			&r.Reference, &r.Counterpart, &r.Description, &r.BankAccountCode,
 			&r.DismissedAt, &r.DismissedReason, &r.LikelyDuplicateOfMatched,
-			&r.PossibleDoublePayment, &r.SuggestionCount, &r.VippsPayout); err != nil {
+			&r.PossibleDoublePayment, &r.SuggestionCount, &r.VippsPayout, &r.Provisional); err != nil {
 			return nil, fmt.Errorf("scan: %w", err)
 		}
 		out = append(out, r)

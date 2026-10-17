@@ -95,11 +95,18 @@ type BankSyncResult struct {
 	// VippsPayouts reports the per-charge payout sweep (pass 5); its cleared
 	// settlements are also counted in VippsReconciled. Nil on the legacy model.
 	VippsPayouts *VippsPayoutSweepResult `json:"vipps_payouts,omitempty"`
+	// ProvisionalSuperseded counts provisional rows dismissed because their
+	// settled row is imported (pass 0b); ProvisionalAmbiguous lists those
+	// that could not be paired one to one.
+	ProvisionalSuperseded int                  `json:"provisional_superseded"`
+	ProvisionalAmbiguous  []ProvisionalBankRow `json:"provisional_ambiguous"`
 }
 
 // BankSync re-runs auto-correlation across every unmatched bank import row
 // for the club, in three passes (after releasing rows a crashed KID match
-// left linked to an unposted draft; see healStrandedKIDDrafts):
+// left linked to an unposted draft; see healStrandedKIDDrafts, and
+// dismissing provisional rows whose settled row has arrived; see
+// SupersedeProvisionalBankRows):
 //
 //  1. KID matching against open invoices.
 //  2. Vipps payout reconciliation for rows whose description matches the
@@ -126,6 +133,12 @@ func (s *Service) BankSync(ctx context.Context, clubID, createdBy string) (*Bank
 		s.log.Warn().Err(herr).Msg("releasing stranded KID drafts failed")
 	}
 	res.DraftsReleased = healed
+
+	// Pass 0b: dismiss provisional rows whose settled row has arrived, so
+	// no later pass books an in-flight placeholder.
+	sup := s.SupersedeProvisionalBankRowsReported(ctx, clubID, createdBy)
+	res.ProvisionalSuperseded = sup.Superseded
+	res.ProvisionalAmbiguous = sup.Ambiguous
 
 	// Pass 1: KID auto-match on all unmatched rows.
 	kidMatched, kidClosed, err := s.syncKIDMatches(ctx, clubID, createdBy)

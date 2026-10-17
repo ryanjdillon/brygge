@@ -47,7 +47,7 @@ Everything else stays in Tildel; the result reports `assigned` and `needs_review
 
 ## The bank-row KID matching cascade
 
-When a bank import lands or `BankSync` runs:
+When a bank import lands or `BankSync` runs (after provisional rows are refreshed or superseded; see Common misses):
 
 1. Extract KID from `bir.kid_number` (CSV column) or fall back to `ExtractKIDFromDescription`
 2. Match invoice by KID among fakturas still owed (`finance.OwedByMemberSQL`: not voided, paid, Vipps-captured or credited); tiebreak by checking no other matched row already used the same KID
@@ -94,6 +94,11 @@ See [`../../../docs/developer/reference/enums.md`](../../../docs/developer/refer
 - A faktura is booked when sent and reversed when voided (`BookInvoice` / `ReverseInvoice`, which reverses the whole `invoice_sync` + `invoice_resplit` family or nothing); `SyncInvoices` only repairs what was missed. At most one `invoice_sync` entry per faktura (unique index). `SyncPayments` skips invoice-settling payments
 
 Full list: [`../../../docs/developer/reference/invariants.md`](../../../docs/developer/reference/invariants.md).
+
+## Common misses
+
+- **Arkivref dedup.** `ImportBankRows` skips an incoming row whose bank reference another row already carries, before the hash insert. A provisional in-flight row (bare `Overførsel` on the export day) and its settled row usually share that reference, so the settled text would never land. The one exception is `refreshProvisionalByReference`, which updates the provisional row in place; keep its conditions narrow (see [invariants](../../../docs/developer/reference/invariants.md#a-provisional-bank-row-gives-way-to-its-settled-row)).
+- **Provisional rows are not matchable money.** Never book a bare `Overførsel` from an export's last day against a Vipps payout or a faktura by amount. The settled row arrives with the next export and would become an unbooked duplicate. `SupersedeProvisionalBankRows` dismisses the provisional row once the settled one is imported under another reference.
 
 ## Common changes
 

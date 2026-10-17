@@ -67,6 +67,15 @@ Charges naming a checkout order are left to `AutoReconcileOrderCharges`. Each bo
 
 **Failure mode:** before this, Stage 2 ran only from the per-row Tildel action, so a sync reported "Vipps-avstemt: 0" and the clearing account kept the full gross of every settlement while the bank deposits sat unbooked.
 
+### A provisional bank row gives way to its settled row
+
+**Rule (BRY-378):** a statement exported while a transfer is in flight carries it as a provisional row: description exactly `Overførsel` or `Bokført på vei`, no counterpart, no KID, dated on the last day of its own import (the export day). A later export carries the settled row (for a Vipps payout, `Utb. <settlement> Vippsnr <msn>`).
+- **Same bank reference (the usual case):** the arkivref dedup in `ImportBankRows` would skip the settled row. Instead `refreshProvisionalByReference` updates the existing row in place: description, counterpart, KID, `from_account`/`to_account` and `row_hash`. It does so only when exactly one row carries the reference, that row is bare, unbooked, undismissed and not refund-paired, the date and amount agree, the incoming row is not bare, and no other row already holds the new hash. Everything else with a known reference is skipped as before. A refresh is audited as `bank_row.refreshed` and counted as `refreshed` in the import result.
+- **Different reference:** both rows exist. `SupersedeProvisionalBankRows` (each import, and pass 0b of `BankSync`) dismisses the provisional row as `superseded` when it pairs one to one with a non-bare, undismissed row of another import on the same bank account, date and amount. Any other shape is reported as ambiguous and left alone. Booked rows are never touched.
+- A refreshed row is not KID-matched at import; the next bank sync (KID pass, payout sweep) picks it up.
+
+**Failure mode:** the settled row was skipped as already imported, so the deposit stayed a bare `Overførsel` in Tildel and its Vipps payout could never clear. Matching such a row to a payout by hand would have booked the provisional row, and the settled row would then arrive later as an unbooked duplicate.
+
 ### Vipps postings are posted on creation; no period closes with drafts
 
 **Rule (BRY-339):** every Vipps posting path posts its entry right away: per-charge charge→faktura and charge→account, the order-linked split, auto-assign, the payout's fee and bank entries, and the legacy `ReconcileVippsConfirm`.

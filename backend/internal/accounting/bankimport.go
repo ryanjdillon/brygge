@@ -240,6 +240,21 @@ type ImportResult struct {
 	// found. The row stays unmatched for manual Tildel; the reason is
 	// surfaced instead of being swallowed.
 	RowErrors []ImportRowError
+	// Refreshed counts provisional rows updated in place with the settled
+	// text of an incoming row carrying the same bank reference
+	// (refreshProvisionalByReference).
+	Refreshed int
+	// Superseded counts provisional rows (provisionalRowSQL) dismissed
+	// because their settled row is now imported; ProvisionalAmbiguous lists
+	// provisional rows that could not be paired one to one.
+	Superseded           int
+	ProvisionalAmbiguous []ProvisionalBankRow
+	// LastRowDate is the latest row date in the statement, and
+	// ProvisionalRows the unbooked provisional rows this import still holds
+	// on that day. A statement exported on the day it ends can carry
+	// in-flight transfers as provisional rows.
+	LastRowDate     string
+	ProvisionalRows int
 }
 
 // ImportRowError is one auto-match failure on an imported bank row.
@@ -398,6 +413,26 @@ func (s *Service) ReimportAccountBankRows(ctx context.Context, clubID, bankAccou
 	return res, nil
 }
 
+// enrichBankRow recovers what a statement row leaves out of its own columns.
+// Norwegian banks often leave the KID column empty for rows whose payer typed
+// the reference into the description ("Forklaring") instead, so the KID is
+// recovered from the description. And the Motpart column for inbound
+// transfers often carries the club's own account label rather than the
+// payer's name; when the description carries "Fra: <Name> Betalt:", that
+// name is the counterpart. The dedup hash is computed on the raw row, before
+// this, so re-imports of the same statement still dedup.
+func enrichBankRow(row BankRow) BankRow {
+	if row.KID == "" {
+		if extracted := ExtractKIDFromDescription(row.Description); extracted != "" {
+			row.KID = extracted
+		}
+	}
+	if payer := ExtractPayerFromDescription(row.Description); payer != "" {
+		row.Counterpart = payer
+	}
+	return row
+}
+
 // BankRowHash computes the dedup hash for a normalized bank row, scoped per club.
 // Recipe must stay in sync with the SQL backfill in the dedup migration.
 func BankRowHash(clubID string, row BankRow) string {
@@ -466,38 +501,27 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOv
 		// so re-imports of the same CSV still dedup correctly.
 		hash := BankRowHash(clubID, row)
 
+		row = enrichBankRow(row)
+
 		// Arkivref (bank's canonical booking ID) is stable across
 		// re-exports even when Sparebank reformats the description
 		// text. Check it before the hash insert so overlapping CSV
 		// date ranges never create a second row for the same booking.
+		// The one exception refreshes a provisional in-flight row with
+		// its settled text (refreshProvisionalByReference).
 		if row.Reference != "" {
-			var exists bool
-			_ = s.db.QueryRow(ctx,
-				`SELECT EXISTS(SELECT 1 FROM bank_import_rows WHERE club_id = $1 AND reference = $2)`,
-				clubID, row.Reference,
-			).Scan(&exists)
-			if exists {
+			outcome, rerr := s.refreshProvisionalByReference(ctx, clubID, importedBy, importID, row, hash)
+			if rerr != nil {
+				return res, rerr
+			}
+			switch outcome {
+			case refDuplicate:
 				res.SkippedDup++
 				continue
+			case refRefreshed:
+				res.Refreshed++
+				continue
 			}
-		}
-
-		// Norwegian banks often leave the KID column empty for
-		// rows whose payer typed the reference into the
-		// description ("Forklaring") instead. Recover the KID and
-		// payer identity from the description string here so the
-		// inserted row and the auto-match path both benefit.
-		if row.KID == "" {
-			if extracted := ExtractKIDFromDescription(row.Description); extracted != "" {
-				row.KID = extracted
-			}
-		}
-		// The Motpart column for inbound transfers often carries
-		// our own account label ("Klokkarvik Båtlag") rather than
-		// the payer's name. When the description carries
-		// "Fra: <Name> Betalt:", prefer that as the counterpart.
-		if payer := ExtractPayerFromDescription(row.Description); payer != "" {
-			row.Counterpart = payer
 		}
 
 		var rowID string
@@ -661,6 +685,10 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOv
 			num, importID,
 		)
 	}
+
+	// Settle provisional rows before transfer detection, so a stale
+	// in-flight row is never paired as one side of a transfer.
+	s.settleProvisionalRows(ctx, clubID, importID, importedBy, rows, &res)
 
 	// Detect intra-bank transfers: rows on this import that match an
 	// unmatched row on another of the club's bank imports (different

@@ -936,6 +936,8 @@ func (h *AccountingHandler) importBankStatement(w http.ResponseWriter, r *http.R
 				"deleted":           result.Deleted,
 				"skipped_booked":    result.SkippedBooked,
 				"row_errors":        len(result.RowErrors),
+				"refreshed":         result.Refreshed,
+				"superseded":        result.Superseded,
 			})
 	}
 
@@ -952,6 +954,12 @@ func (h *AccountingHandler) importBankStatement(w http.ResponseWriter, r *http.R
 		"bank_account_code": bankAccountCode,
 		"auto_matched":      autoMatched,
 		"row_errors":        result.RowErrors,
+		// Provisional in-flight rows (see accounting.SupersedeProvisionalBankRows).
+		"refreshed":             result.Refreshed,
+		"superseded":            result.Superseded,
+		"provisional_ambiguous": result.ProvisionalAmbiguous,
+		"last_row_date":         result.LastRowDate,
+		"provisional_rows":      result.ProvisionalRows,
 	}
 	if overwrite {
 		resp["deleted"] = result.Deleted

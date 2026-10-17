@@ -71,6 +71,7 @@ const (
 	ActionBankRowAssignedInvoice = "bank_row.assigned_invoice"
 	ActionBankRowAssignedAccount = "bank_row.assigned_account"
 	ActionBankRowDismissed       = "bank_row.dismissed"
+	ActionBankRowRefreshed       = "bank_row.refreshed"
 	ActionBankRowUnassigned      = "bank_row.unassigned"
 	ActionBankRowRefundPaired    = "bank_row.refund_paired"
 

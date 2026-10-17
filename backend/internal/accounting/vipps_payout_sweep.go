@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 )
 
 // VippsPayoutSweepItem is one settlement a payout sweep looked at.
@@ -136,7 +137,7 @@ func (s *Service) payoutsWithoutOpenDeposit(ctx context.Context, clubID string, 
 		}
 	}
 	prows, err := s.db.Query(ctx,
-		`SELECT msn, settlement_number FROM vipps_import_rows
+		`SELECT msn, settlement_number, amount, booking_date FROM vipps_import_rows
 		  WHERE club_id = $1 AND row_type = 'payout'
 		    AND journal_entry_id IS NULL AND dismissed_at IS NULL
 		    AND settlement_number IS NOT NULL AND settlement_number <> ''
@@ -146,24 +147,50 @@ func (s *Service) payoutsWithoutOpenDeposit(ctx context.Context, clubID string, 
 	if err != nil {
 		return nil, fmt.Errorf("listing open vipps payouts: %w", err)
 	}
-	defer prows.Close()
-	var out []VippsPayoutSweepItem
+	type openPayout struct {
+		msn, settlement string
+		amount          float64
+		booking         time.Time
+	}
+	var open []openPayout
 	for prows.Next() {
-		var msn, settlement string
-		if err := prows.Scan(&msn, &settlement); err != nil {
-			return out, fmt.Errorf("scanning open vipps payout: %w", err)
+		var p openPayout
+		if err := prows.Scan(&p.msn, &p.settlement, &p.amount, &p.booking); err != nil {
+			prows.Close()
+			return nil, fmt.Errorf("scanning open vipps payout: %w", err)
 		}
-		key := msn + "/" + settlement
+		open = append(open, p)
+	}
+	prows.Close()
+	if err := prows.Err(); err != nil {
+		return nil, fmt.Errorf("listing open vipps payouts: %w", err)
+	}
+
+	var out []VippsPayoutSweepItem
+	for _, p := range open {
+		key := p.msn + "/" + p.settlement
 		if seen[key] || booked[key] {
 			continue
 		}
-		reason := fmt.Sprintf("ingen bankinnbetaling med «Utb. %s Vippsnr %s»", settlement, msn)
+		reason := fmt.Sprintf("ingen bankinnbetaling med «Utb. %s Vippsnr %s»", p.settlement, p.msn)
 		if dismissed[key] {
-			reason = fmt.Sprintf("bankinnbetalingen med «Utb. %s Vippsnr %s» er avvist i Tildel", settlement, msn)
+			reason = fmt.Sprintf("bankinnbetalingen med «Utb. %s Vippsnr %s» er avvist i Tildel", p.settlement, p.msn)
+		} else {
+			// The deposit may be in the bank only as a provisional row from an
+			// export taken while it was in flight; a fresh export of that day
+			// brings the settled row with the reference.
+			d, err := s.provisionalDepositDate(ctx, clubID, p.amount, p.booking)
+			if err != nil {
+				return out, err
+			}
+			if !d.IsZero() {
+				day := d.Format("02.01.2006")
+				reason = fmt.Sprintf("bare en foreløpig «Overførsel» %s – importer kontoutskriften for %s på nytt", day, day)
+			}
 		}
-		out = append(out, VippsPayoutSweepItem{SettlementNumber: settlement, MSN: msn, Reason: reason})
+		out = append(out, VippsPayoutSweepItem{SettlementNumber: p.settlement, MSN: p.msn, Reason: reason})
 	}
-	return out, prows.Err()
+	return out, nil
 }
 
 type vippsPayoutDeposit struct {

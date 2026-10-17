@@ -265,6 +265,14 @@ Single fakturas go through the same draft → send → paid flow.
 
 When you upload a bank statement (`Admin → Accounting → Bank & Vipps`), the KID auto-matcher links each incoming row to the corresponding invoice and back-links `invoices.payment_id` so the faktura-status widgets update. After deploying improvements to the matcher, click **Synk Vipps** (Vipps drafts) or **Synk bank** (KID matches) to retroactively re-run the cascade over already-imported rows.
 
+### Export bank statements up to yesterday
+
+A transfer still under way when you export a statement appears as a bare **Overførsel**, with no sender and no reference text, dated on the export day. The settled row (for a Vipps payout, **Utb. … Vippsnr …**) only appears in a later export. So:
+
+- Export up to **yesterday**. If the statement does run to today, the upload result warns you; upload that day again once it has settled.
+- When a later statement brings the settled row, Brygge updates the provisional row with the settled text, or dismisses it as **Erstattet av oppgjort rad**. The upload result shows how many. The Vipps payout then clears on the next **Synkroniser**.
+- In **Tildel**, such rows carry a **Foreløpig** badge. Don't book them by hand; upload the day again instead.
+
 ### Vipps reconciliation cascade
 
 For Vipps payouts (the consolidated daily Utb. row in the bank statement), the reconciliation books a bilag per payer using this cascade (DIL-367). Vipps bilags are posted as soon as they are created, so they count in the reports immediately (BRY-339):
@@ -293,6 +301,7 @@ You do not need to clear the daily Vipps payout (the **Utb. … Vippsnr …** de
 
 - **Venter på belastninger** — some payments in the settlement are still in **Tildel**. Book or dismiss them and sync again.
 - **Ingen bankinnbetaling** — the bank statement with that deposit is not uploaded yet, or the deposit text has no Utb./Vippsnr reference.
+- **Bare en foreløpig «Overførsel»** — the deposit is in the bank only as a provisional row (see below). Export that day again and upload it.
 - **Ikke importert** — the bank deposit names a settlement whose Vipps export is not uploaded yet.
 
 ## Reference
