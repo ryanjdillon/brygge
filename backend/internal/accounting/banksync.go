@@ -46,8 +46,7 @@ func (s *Service) findInvoiceByCounterpartAndAmount(ctx context.Context, clubID,
 		   FROM invoices i
 		   JOIN users u ON u.id = i.user_id
 		  WHERE i.club_id = $1
-		    AND i.status = 'open'
-		    AND i.payment_id IS NULL
+		    AND `+finance.OwedByMemberSQL("i")+`
 		    AND ABS(i.total_amount - $2) < 0.005
 		    AND NOT EXISTS (
 		      SELECT 1 FROM bank_import_rows bir
@@ -408,6 +407,7 @@ func (s *Service) syncKIDMatches(ctx context.Context, clubID, createdBy string) 
 			_ = s.db.QueryRow(ctx,
 				`SELECT i.id FROM invoices i
 				 WHERE i.club_id = $1 AND i.kid_number = $2
+				 AND `+finance.OwedByMemberSQL("i")+`
 				 AND NOT EXISTS (
 				   SELECT 1 FROM bank_import_rows bir
 				   WHERE bir.kid_number = $2 AND bir.journal_entry_id IS NOT NULL
@@ -425,6 +425,7 @@ func (s *Service) syncKIDMatches(ctx context.Context, clubID, createdBy string) 
 					`SELECT i.id FROM invoices i
 					 WHERE i.club_id = $1 AND i.invoice_number::text = $2
 					   AND ABS(i.total_amount - $3) < 0.005
+					   AND `+finance.OwedByMemberSQL("i")+`
 					   AND NOT EXISTS (
 					     SELECT 1 FROM bank_import_rows bir
 					     WHERE bir.journal_entry_id IS NOT NULL
@@ -493,35 +494,39 @@ func (s *Service) syncKIDMatches(ctx context.Context, clubID, createdBy string) 
 				Msg("KID match: CreateJournalEntry failed; row stays unmatched")
 			continue
 		}
+		// Link the row before posting, guarded on it still being unbooked,
+		// so a concurrent import or sync that booked it first wins and this
+		// draft is discarded; a posted entry never exists without its row.
+		tag, uerr := s.db.Exec(ctx,
+			`UPDATE bank_import_rows SET journal_entry_id = $1, auto_matched = true
+			  WHERE id = $2 AND club_id = $3 AND journal_entry_id IS NULL`,
+			entry.ID, p.rowID, clubID,
+		)
+		if uerr != nil || tag.RowsAffected() != 1 {
+			if uerr != nil {
+				s.log.Error().Err(uerr).Str("bank_row_id", p.rowID).Msg("KID match: linking the bank row failed")
+			}
+			s.discardDraft(ctx, clubID, entry.ID)
+			continue
+		}
 		if perr := s.PostJournalEntry(ctx, entry.ID, createdBy); perr != nil {
 			s.log.Warn().Err(perr).
 				Str("bank_row_id", p.rowID).
 				Str("entry_id", entry.ID).
 				Msg("KID match: PostJournalEntry failed; row stays unmatched")
-			s.discardDraft(ctx, clubID, entry.ID)
+			s.unwindVippsPosting(ctx, clubID, entry.ID, "bank_import_rows", []string{p.rowID})
 			continue
 		}
-		if _, uerr := s.db.Exec(ctx,
-			`UPDATE bank_import_rows SET journal_entry_id = $1, auto_matched = true WHERE id = $2`,
-			entry.ID, p.rowID,
-		); uerr == nil {
-			matched++
-			// Mirror the GL credit-to-receivables side onto the
-			// invoice flag so the dashboard, faktura list, and
-			// priceItemSummary reflect the payment. Best-effort —
-			// failures here don't roll back the journal because
-			// the GL itself is already correct.
-			if lerr := s.linkInvoicePayment(ctx, clubID, invoiceID, p.date); lerr != nil {
-				s.log.Warn().Err(lerr).
-					Str("invoice_id", invoiceID).
-					Str("bank_row_id", p.rowID).
-					Msg("KID match journal posted but invoice payment back-link failed")
-			}
-		} else {
-			s.log.Error().Err(uerr).
+		matched++
+		// Mirror the GL credit-to-receivables side onto the invoice flag so
+		// the dashboard, faktura list, and priceItemSummary reflect the
+		// payment. Best-effort — failures here don't roll back the journal
+		// because the GL itself is already correct.
+		if lerr := s.linkInvoicePayment(ctx, clubID, invoiceID, p.date); lerr != nil {
+			s.log.Warn().Err(lerr).
+				Str("invoice_id", invoiceID).
 				Str("bank_row_id", p.rowID).
-				Str("entry_id", entry.ID).
-				Msg("KID match posted but linking the bank row failed")
+				Msg("KID match journal posted but invoice payment back-link failed")
 		}
 	}
 

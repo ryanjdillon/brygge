@@ -377,12 +377,28 @@ func (s *Service) UnassignVippsCharge(ctx context.Context, clubID, actorID, rowI
 		priorInvoiceID = *invoiceID
 	}
 
-	var status string
+	var status, periodStatus string
 	if err := s.db.QueryRow(ctx,
-		`SELECT status FROM journal_entries WHERE id = $1 AND club_id = $2`,
+		`SELECT je.status, fp.status
+		   FROM journal_entries je JOIN fiscal_periods fp ON fp.id = je.fiscal_period_id
+		  WHERE je.id = $1 AND je.club_id = $2`,
 		priorEntryID, clubID,
-	).Scan(&status); err != nil {
+	).Scan(&status, &periodStatus); err != nil {
 		return "", "", fmt.Errorf("loading journal entry: %w", err)
+	}
+
+	// A posted booking is voided before anything is unlinked, so the GL never
+	// counts an entry for a charge that is already back in Tildel. The
+	// reversal lands in the entry's own period, which therefore has to be
+	// open. If the clearing below then fails, the entry is voided and a retry
+	// (status 'voided') just finishes the clearing.
+	if status == "posted" {
+		if periodStatus != "open" {
+			return "", "", fmt.Errorf("charge is booked in a closed fiscal period — correct it with a new entry in an open period")
+		}
+		if _, err := s.VoidJournalEntry(ctx, priorEntryID, actorID); err != nil {
+			return "", "", fmt.Errorf("voiding bilag: %w", err)
+		}
 	}
 
 	tx, err := s.db.Begin(ctx)
@@ -431,12 +447,7 @@ func (s *Service) UnassignVippsCharge(ctx context.Context, clubID, actorID, rowI
 		}
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return "", "", fmt.Errorf("commit: %w", err)
-	}
-	if status == "posted" {
-		if _, err := s.VoidJournalEntry(ctx, priorEntryID, actorID); err != nil {
-			return priorEntryID, priorInvoiceID, fmt.Errorf("charge cleared but voiding bilag failed: %w", err)
-		}
+		return priorEntryID, priorInvoiceID, fmt.Errorf("bilag voided but clearing the charge failed, run Angre again: %w", err)
 	}
 	return priorEntryID, priorInvoiceID, nil
 }

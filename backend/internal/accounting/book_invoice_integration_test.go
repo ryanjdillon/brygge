@@ -111,9 +111,9 @@ func TestReverseInvoiceNetsToZero(t *testing.T) {
 		t.Fatalf("void: %v", err)
 	}
 
-	reversed, err := f.svc.ReverseInvoice(ctx, f.clubID, inv.ID, f.userID)
-	if err != nil || !reversed {
-		t.Fatalf("ReverseInvoice = %v, %v; want reversed", reversed, err)
+	reversals, err := f.svc.ReverseInvoice(ctx, f.clubID, inv.ID, f.userID)
+	if err != nil || len(reversals) != 1 {
+		t.Fatalf("ReverseInvoice = %v, %v; want one reversal", reversals, err)
 	}
 	if got := f.net(t, "1500"); got != 0 {
 		t.Errorf("1500 net = %v, want 0", got)
@@ -121,7 +121,7 @@ func TestReverseInvoiceNetsToZero(t *testing.T) {
 	if got := f.net(t, "3120"); got != 0 {
 		t.Errorf("3120 net = %v, want 0", got)
 	}
-	if again, err := f.svc.ReverseInvoice(ctx, f.clubID, inv.ID, f.userID); err != nil || again {
+	if again, err := f.svc.ReverseInvoice(ctx, f.clubID, inv.ID, f.userID); err != nil || len(again) != 0 {
 		t.Errorf("second ReverseInvoice = %v, %v; want nothing to reverse", again, err)
 	}
 	if res := f.sync(t); res.Reversed != 0 || res.Synced != 0 {

@@ -39,7 +39,7 @@ When a bank row matching `Utb. NNN Vippsnr MMM` arrives, the reconciliation pull
 1. `member_invoice`: a strong member match (`resolveCustomerToMemberPass` up to `memberPassFirstLast`) with exactly one open faktura of equal total goes through `AssignVippsChargeToInvoice`.
 2. `price_item`: `priceArticleCandidates` in one category, or a cross-category tie resolved by `clubs.vipps_auto_assign_tie_category` (only when every match is a per-night/day/hour price; an exact one-off price in any tied category leaves it manual), goes through `CreateVippsChargeBilag` to `vippsCategoryAccountMap[category]`. Members-only items also need a strong member match.
 
-Everything else stays in Tildel; the result reports `assigned` and `needs_review`. It runs where `AutoReconcileOrderCharges` runs. `UnassignVippsCharge` undoes any charge booking: it deletes a draft or voids a posted entry, and reopens the faktura recorded in `vipps_import_rows.invoice_id`.
+Everything else stays in Tildel; the result reports `assigned` and `needs_review`. It runs where `AutoReconcileOrderCharges` runs. `UnassignVippsCharge` undoes any charge booking: it refuses a closed period, voids a posted entry (or deletes a draft) *before* clearing the row, then reopens the faktura recorded in `vipps_import_rows.invoice_id`.
 
 ⚠️ **Never route to 2900.** The `vippsClearingAccountCode = "2900"` constant exists only for backwards-compat with legacy reports. New lines must land on 3900 — see [`../../../docs/developer/reference/invariants.md`](../../../docs/developer/reference/invariants.md).
 
@@ -48,9 +48,9 @@ Everything else stays in Tildel; the result reports `assigned` and `needs_review
 When a bank import lands or `BankSync` runs:
 
 1. Extract KID from `bir.kid_number` (CSV column) or fall back to `ExtractKIDFromDescription`
-2. Match invoice by KID; tiebreak by checking no other matched row already used the same KID
+2. Match invoice by KID among fakturas still owed (`finance.OwedByMemberSQL`: not voided, paid, Vipps-captured or credited); tiebreak by checking no other matched row already used the same KID
 3. If no KID match, try `ExtractInvoiceNumberFromDescription` + amount within 0.005
-4. If matched, create a balanced bilag (DR bank, CR receivables) and call `linkInvoicePayment` to back-link `invoices.payment_id`
+4. If matched, create a balanced bilag (DR bank, CR receivables), link the row with a guarded update, post, and call `linkInvoicePayment` to back-link `invoices.payment_id`. A lost link discards the draft; a failed post unwinds the link
 
 ## Helper functions worth knowing
 
@@ -82,7 +82,8 @@ See [`../../../docs/developer/reference/enums.md`](../../../docs/developer/refer
 - Bank rows with `journal_entry_id IS NOT NULL` cannot be reassigned without cascading `journal_lines`
 - Reports and momskomp count `posted` **and** `voided` entries (`bookedEntryFilter`), so a void and its reversal net to zero
 - KID auto-match (import and bank sync) posts as the importing user or discards its draft — never leaves an orphan; failures surface as `row_errors`
-- A faktura is booked when sent and reversed when voided (`BookInvoice` / `ReverseInvoice`); `SyncInvoices` only repairs what was missed. At most one `invoice_sync` entry per faktura (unique index). `SyncPayments` skips invoice-settling payments
+- Matching incoming money to a faktura uses `finance.OwedByMemberSQL`; only ePayment order reconciliation uses `finance.OpenReceivableSQL` (it books captures the webhook already flagged)
+- A faktura is booked when sent and reversed when voided (`BookInvoice` / `ReverseInvoice`, which reverses the whole `invoice_sync` + `invoice_resplit` family or nothing); `SyncInvoices` only repairs what was missed. At most one `invoice_sync` entry per faktura (unique index). `SyncPayments` skips invoice-settling payments
 
 Full list: [`../../../docs/developer/reference/invariants.md`](../../../docs/developer/reference/invariants.md).
 

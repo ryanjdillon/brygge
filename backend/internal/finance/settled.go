@@ -50,6 +50,20 @@ func OwedByMemberSQL(alias string) string {
 	return fmt.Sprintf("(%s AND NOT %s)", IsDebtSQL(alias), SettledForMemberSQL(alias))
 }
 
+// OpenReceivableSQL returns a SQL predicate that is true when the invoice's
+// receivable can still be cleared by a payment: a debt that is not voided,
+// not credited and has no payment linked. Unlike OwedByMemberSQL it ignores
+// vipps_paid_at, because the Vipps charge that set it is exactly the
+// payment that clears the receivable (ePayment order reconciliation).
+// Automatic matching of *other* money (bank KID, invoice number, payer name)
+// must use OwedByMemberSQL instead, so a second payment for a faktura already
+// captured by Vipps is left for a human rather than booked twice.
+func OpenReceivableSQL(alias string) string {
+	p := col(alias)
+	return fmt.Sprintf("(%s AND %sstatus <> 'voided' AND %spayment_id IS NULL AND NOT %s)",
+		IsDebtSQL(alias), p, p, CreditedSQL(alias))
+}
+
 // SettledForGLSQL returns a SQL predicate that is true when a payment has
 // been linked to the invoice, i.e. the receivable is cleared.
 func SettledForGLSQL(alias string) string {

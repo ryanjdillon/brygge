@@ -17,6 +17,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"gopkg.in/yaml.v3"
+
+	"github.com/brygge-klubb/brygge/internal/finance"
 )
 
 // BankRow is the internal normalized representation of a bank transaction.
@@ -531,6 +533,7 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOv
 			_ = s.db.QueryRow(ctx,
 				`SELECT i.id FROM invoices i
 				 WHERE i.club_id = $1 AND i.kid_number = $2
+				 AND `+finance.OwedByMemberSQL("i")+`
 				 AND NOT EXISTS (
 				   SELECT 1 FROM bank_import_rows bir
 				   WHERE bir.kid_number = $2 AND bir.journal_entry_id IS NOT NULL
@@ -552,6 +555,7 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOv
 					`SELECT i.id FROM invoices i
 					 WHERE i.club_id = $1 AND i.invoice_number::text = $2
 					   AND ABS(i.total_amount - $3) < 0.005
+					   AND `+finance.OwedByMemberSQL("i")+`
 					   AND NOT EXISTS (
 					     SELECT 1 FROM bank_import_rows bir
 					     WHERE bir.journal_entry_id IS NOT NULL
@@ -616,31 +620,39 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOv
 			res.rowError(rowID, row, "creating journal entry: "+createErr.Error())
 			continue
 		}
-		if postErr := s.PostJournalEntry(ctx, entry.ID, importedBy); postErr != nil {
+		// Link the row to the draft before posting, guarded on the row still
+		// being unbooked: a posted entry must never exist without its row,
+		// or a later bank sync would book the same money again. If the link
+		// or the post fails, unwind both.
+		tag, linkErr := s.db.Exec(ctx,
+			`UPDATE bank_import_rows SET journal_entry_id = $1, auto_matched = true
+			  WHERE id = $2 AND club_id = $3 AND journal_entry_id IS NULL`,
+			entry.ID, rowID, clubID,
+		)
+		if linkErr != nil || tag.RowsAffected() != 1 {
 			s.discardDraft(ctx, clubID, entry.ID)
+			reason := "row was booked concurrently"
+			if linkErr != nil {
+				reason = linkErr.Error()
+			}
+			res.rowError(rowID, row, "linking row: "+reason)
+			continue
+		}
+		if postErr := s.PostJournalEntry(ctx, entry.ID, importedBy); postErr != nil {
+			s.unwindVippsPosting(ctx, clubID, entry.ID, "bank_import_rows", []string{rowID})
 			res.rowError(rowID, row, "posting journal entry: "+postErr.Error())
 			continue
 		}
-		if _, err := s.db.Exec(ctx,
-			`UPDATE bank_import_rows SET journal_entry_id = $1, auto_matched = true WHERE id = $2`,
-			entry.ID, rowID,
-		); err != nil {
-			s.log.Error().Err(err).Str("bank_row_id", rowID).Str("entry_id", entry.ID).
-				Msg("import-time KID match posted but linking the bank row failed")
-			res.rowError(rowID, row, "linking row to posted entry "+entry.ID+": "+err.Error())
-		} else {
-			res.Matched++
-			// Mirror the GL credit-to-receivables side onto the
-			// invoice flag so the dashboard, faktura list, and
-			// priceItemSummary reflect the payment. Best-effort —
-			// failures here don't roll back the journal because
-			// the GL itself is already correct.
-			if lerr := s.linkInvoicePayment(ctx, clubID, invoiceID, row.Date); lerr != nil {
-				s.log.Warn().Err(lerr).
-					Str("invoice_id", invoiceID).
-					Str("bank_row_id", rowID).
-					Msg("import-time KID match journal posted but invoice payment back-link failed")
-			}
+		res.Matched++
+		// Mirror the GL credit-to-receivables side onto the invoice flag
+		// so the dashboard, faktura list, and priceItemSummary reflect the
+		// payment. Best-effort — failures here don't roll back the journal
+		// because the GL itself is already correct.
+		if lerr := s.linkInvoicePayment(ctx, clubID, invoiceID, row.Date); lerr != nil {
+			s.log.Warn().Err(lerr).
+				Str("invoice_id", invoiceID).
+				Str("bank_row_id", rowID).
+				Msg("import-time KID match journal posted but invoice payment back-link failed")
 		}
 	}
 

@@ -29,3 +29,22 @@ func TestSettledPredicates(t *testing.T) {
 		t.Errorf("OwedByMemberSQL(i) = %s, want a debt check before the settled check", got)
 	}
 }
+
+func TestOpenReceivablePredicate(t *testing.T) {
+	got := OpenReceivableSQL("i")
+	for _, part := range []string{
+		"i.total_amount > 0",
+		"i.status <> 'voided'",
+		"i.payment_id IS NULL",
+		"NOT EXISTS (SELECT 1 FROM invoices cn WHERE cn.credits_invoice_id = i.id",
+	} {
+		if !strings.Contains(got, part) {
+			t.Errorf("OpenReceivableSQL(i) = %s, missing %q", got, part)
+		}
+	}
+	// The Vipps charge that set vipps_paid_at is the payment that clears the
+	// receivable, so this predicate must not exclude it.
+	if strings.Contains(got, "vipps_paid_at") {
+		t.Errorf("OpenReceivableSQL(i) = %s, must not depend on vipps_paid_at", got)
+	}
+}

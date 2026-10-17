@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"github.com/brygge-klubb/brygge/internal/finance"
 )
 
 // Account codes used by the Vipps reconciliation draft bilag.
@@ -763,8 +765,7 @@ func (s *Service) findOpenInvoiceForMember(ctx context.Context, clubID, memberID
 		`SELECT id FROM invoices
 		  WHERE club_id = $1
 		    AND user_id = $2
-		    AND payment_id IS NULL
-		    AND status <> 'voided'
+		    AND `+finance.OwedByMemberSQL("")+`
 		    AND ABS(total_amount - $3) < 1.00
 		    AND issue_date > CURRENT_DATE - INTERVAL '90 days'
 		  ORDER BY issue_date DESC

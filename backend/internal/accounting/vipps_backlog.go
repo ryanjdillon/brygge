@@ -18,10 +18,12 @@ import (
 //   - refuses it when it is unsafe to post: unbalanced, linked from no row
 //     (an orphan), its source row already booked by another entry, or a
 //     receivable credit that cannot be tied to exactly one unsettled faktura;
-//   - reclassifies a charge parked on the 3900 fallback or on 1500 without a
-//     faktura when the club's auto-assign rules (BRY-340) give an unambiguous
-//     answer — the draft is removed and the charge rebooked (and posted)
-//     through the normal per-charge path;
+//   - reclassifies a charge parked on the 3900 fallback when the club's
+//     auto-assign rules (BRY-340) give an unambiguous answer — the draft is
+//     removed and the charge rebooked (and posted) through the normal
+//     per-charge path. A charge crediting 1500 without a recorded faktura is
+//     always refused, never reclassified: it may have settled a faktura
+//     before invoice_id was recorded (BRY-370);
 //   - otherwise posts it as it stands.
 //
 // Reclassification only runs when the club has enabled auto-assign, so the
@@ -266,9 +268,9 @@ type backlogReclass struct {
 }
 
 // backlogReclassification decides whether a charge draft parked on the 3900
-// fallback, or on 1500 without a faktura, should be rebooked by a rule. It
-// returns the reclassification, or — for a parked receivable no rule can
-// place — the reason it must stay for a human.
+// fallback should be rebooked by a rule. It returns the reclassification, or
+// — for a receivable credit with no recorded faktura — the reason it must
+// stay for a human.
 func (s *Service) backlogReclassification(ctx context.Context, clubID string, cfg vippsAutoAssignConfig, clearing string, d backlogDraft) (*backlogReclass, string, error) {
 	if d.sourceTable != "vipps_import_rows" {
 		return nil, "", nil
@@ -311,9 +313,16 @@ func (s *Service) backlogReclassification(ctx context.Context, clubID string, cf
 	if rowType != "belastning" || isOrder {
 		return nil, "", nil
 	}
-	parkedReceivable := from == receivablesAccountCode && invoiceID == nil
-	if from == receivablesAccountCode && !parkedReceivable {
-		return nil, "", nil // tied to a faktura: post as is
+	if from == receivablesAccountCode {
+		if invoiceID != nil {
+			return nil, "", nil // tied to a faktura: post as is
+		}
+		// A receivable credit with no recorded faktura may still have
+		// settled one: charges assigned before invoice_id existed set only
+		// invoices.payment_id (migration 000106 backfills the ones the audit
+		// trail proves). Rebooking it as revenue would credit the money a
+		// second time while the faktura stays paid, so a human decides.
+		return nil, "receivable credit with no recorded faktura — open it in Tildel, use Angre, then assign it (check whether it paid a faktura)", nil
 	}
 
 	if cfg.enabled {
@@ -335,13 +344,6 @@ func (s *Service) backlogReclassification(ctx context.Context, clubID string, cf
 				decision: dec,
 			}, "", nil
 		}
-		if parkedReceivable {
-			return nil, "receivable credit without a faktura (" + dec.Reason + ") — assign it in Tildel", nil
-		}
-		return nil, "", nil
-	}
-	if parkedReceivable {
-		return nil, "receivable credit without a faktura — assign it in Tildel, or enable auto-assign to classify it", nil
 	}
 	return nil, "", nil
 }

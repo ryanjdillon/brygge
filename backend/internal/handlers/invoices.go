@@ -1392,11 +1392,14 @@ func (h *InvoiceHandler) HandleVoidInvoice(w http.ResponseWriter, r *http.Reques
 	// nothing owed against it; that needs a refund or credit note instead.
 	var status string
 	var settled, creditLinked bool
+	var creditedBy *int
 	err := h.db.QueryRow(ctx,
-		`SELECT status, `+finance.SettledForMemberSQL("")+`, credits_invoice_id IS NOT NULL
+		`SELECT status, `+finance.SettledForMemberSQL("")+`, credits_invoice_id IS NOT NULL,
+		        (SELECT cn.invoice_number FROM invoices cn
+		          WHERE cn.credits_invoice_id = invoices.id AND cn.status <> 'voided' LIMIT 1)
 		   FROM invoices WHERE id = $1 AND club_id = $2`,
 		invoiceID, claims.ClubID,
-	).Scan(&status, &settled, &creditLinked)
+	).Scan(&status, &settled, &creditLinked, &creditedBy)
 	if err == pgx.ErrNoRows {
 		Error(w, http.StatusNotFound, "invoice not found")
 		return
@@ -1408,6 +1411,16 @@ func (h *InvoiceHandler) HandleVoidInvoice(w http.ResponseWriter, r *http.Reques
 	}
 	if status == "voided" {
 		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	// A credited faktura is settled by its credit note, not by money, so it
+	// gets its own answer: undo the credit link first if the void is meant.
+	if creditedBy != nil {
+		JSON(w, http.StatusConflict, map[string]any{
+			"error":              fmt.Sprintf("the faktura is credited by #%d; unlink the credit note first", *creditedBy),
+			"code":               "credited",
+			"credit_note_number": *creditedBy,
+		})
 		return
 	}
 	if settled {
@@ -1431,7 +1444,7 @@ func (h *InvoiceHandler) HandleVoidInvoice(w http.ResponseWriter, r *http.Reques
 			`SELECT EXISTS (
 			    SELECT 1 FROM journal_entries je
 			      JOIN fiscal_periods fp ON fp.id = je.fiscal_period_id
-			     WHERE je.club_id = $1 AND je.source = 'invoice_sync'
+			     WHERE je.club_id = $1 AND je.source IN ('invoice_sync', 'invoice_resplit')
 			       AND je.source_id = $2 AND je.status = 'posted'
 			       AND fp.status <> 'open')`,
 			claims.ClubID, invoiceID,
@@ -1449,33 +1462,52 @@ func (h *InvoiceHandler) HandleVoidInvoice(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
-	if _, err := h.db.Exec(ctx,
+	// The checks above ran on an earlier snapshot. The UPDATE repeats them,
+	// so a payment, credit link or concurrent void that landed in between
+	// leaves the row untouched; only a row this call actually voided is
+	// audited and reversed.
+	tag, err := h.db.Exec(ctx,
 		`UPDATE invoices SET status = 'voided'
-		  WHERE id = $1 AND club_id = $2 AND NOT `+finance.SettledForMemberSQL(""),
+		  WHERE id = $1 AND club_id = $2 AND status <> 'voided'
+		    AND credits_invoice_id IS NULL
+		    AND NOT `+finance.SettledForMemberSQL(""),
 		invoiceID, claims.ClubID,
-	); err != nil {
+	)
+	if err != nil {
 		h.log.Error().Err(err).Msg("void invoice")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	if h.audit != nil {
-		h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,
-			audit.ActionInvoiceCreated, "invoice", invoiceID,
-			map[string]any{"voided": true})
+	if tag.RowsAffected() == 0 {
+		JSON(w, http.StatusConflict, map[string]string{
+			"error": "the faktura changed while voiding it (paid, credited or already voided); reload and try again",
+			"code":  "changed",
+		})
+		return
 	}
-
 	// Reverse the booking in the same flow. The void has already happened,
 	// so a reversal failure is reported, not returned as an error; the
 	// Bilag repair sync reverses any voided faktura still booked.
+	var reversals []string
+	var reverseErr error
 	if h.ledger != nil {
-		if _, err := h.ledger.ReverseInvoice(ctx, claims.ClubID, invoiceID, claims.UserID); err != nil {
-			h.log.Error().Err(err).Str("invoice_id", invoiceID).Msg("faktura voided but GL reversal failed")
-			JSON(w, http.StatusOK, map[string]any{
-				"voided":     true,
-				"gl_booking": glBooking{Status: "failed", Error: err.Error()},
-			})
-			return
+		reversals, reverseErr = h.ledger.ReverseInvoice(ctx, claims.ClubID, invoiceID, claims.UserID)
+	}
+	if h.audit != nil {
+		details := map[string]any{"reversal_entry_ids": reversals}
+		if reverseErr != nil {
+			details["gl_reversal_error"] = reverseErr.Error()
 		}
+		h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,
+			audit.ActionInvoiceVoided, "invoice", invoiceID, details)
+	}
+	if reverseErr != nil {
+		h.log.Error().Err(reverseErr).Str("invoice_id", invoiceID).Msg("faktura voided but GL reversal failed")
+		JSON(w, http.StatusOK, map[string]any{
+			"voided":     true,
+			"gl_booking": glBooking{Status: "failed", Error: reverseErr.Error()},
+		})
+		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

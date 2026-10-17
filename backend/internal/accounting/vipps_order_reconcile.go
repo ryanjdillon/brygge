@@ -6,6 +6,8 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgconn"
+
+	"github.com/brygge-klubb/brygge/internal/finance"
 )
 
 // Order-linked Vipps charges (BRY-337). An ePayment charge (faktura pay-link,
@@ -62,15 +64,15 @@ func (s *Service) AssignVippsChargeToOrder(ctx context.Context, clubID, vippsRow
 		return nil, true, fmt.Errorf("order total %.2f does not match charge %.2f", sum, b.amount)
 	}
 	for _, id := range invoiceIDs {
-		var settled bool
+		var open bool
 		if err := s.db.QueryRow(ctx,
-			`SELECT payment_id IS NOT NULL OR status = 'voided' FROM invoices WHERE id = $1 AND club_id = $2`,
+			`SELECT `+finance.OpenReceivableSQL("i")+` FROM invoices i WHERE i.id = $1 AND i.club_id = $2`,
 			id, clubID,
-		).Scan(&settled); err != nil {
+		).Scan(&open); err != nil {
 			return nil, true, fmt.Errorf("loading invoice: %w", err)
 		}
-		if settled {
-			return nil, true, fmt.Errorf("a faktura on order %s is already paid or voided — book the charge by hand", b.orderRef)
+		if !open {
+			return nil, true, fmt.Errorf("a faktura on order %s is already paid, voided or credited — book the charge by hand", b.orderRef)
 		}
 	}
 

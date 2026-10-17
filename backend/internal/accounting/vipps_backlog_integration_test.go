@@ -163,38 +163,103 @@ func TestVippsBacklogReclassifiesParkedCharges(t *testing.T) {
 	slipRow := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 160000, CustomerName: "Walk Up"})
 	f.draftCharge(t, slipRow, vippsFallbackRevenueCode, 160000)
 
-	// A charge parked on 1500 for a known member with one matching faktura.
+	// A charge parked on 1500 for a known member with one matching open
+	// faktura. Even though a rule could place it, a 1500 credit with no
+	// recorded faktura may already have settled one, so it is refused.
 	payer := f.namedMember(t, "Parkedpayer")
 	inv := f.club.NewInvoice(t, fin.InvoiceOpts{Member: &payer, Cents: 45000, Lines: []fin.Line{{Category: "membership", Cents: 45000}}})
 	parkedRow := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 45000, CustomerName: "Synthetic Parkedpayer"})
-	f.draftCharge(t, parkedRow, receivablesAccountCode, 45000)
+	parked := f.draftCharge(t, parkedRow, receivablesAccountCode, 45000)
 
 	// A charge parked on 1500 that no rule can place.
 	strayRow := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 77700, CustomerName: "Nobody Known"})
 	stray := f.draftCharge(t, strayRow, receivablesAccountCode, 77700)
 
 	preview := f.backlog(t, false)
-	if len(preview.Reclassified) != 2 || preview.Posted != 0 || len(preview.Refused) != 1 {
-		t.Fatalf("preview = %+v, want 2 reclassified and 1 refused", preview)
+	if len(preview.Reclassified) != 1 || preview.Posted != 0 || len(preview.Refused) != 2 {
+		t.Fatalf("preview = %+v, want 1 reclassified and 2 refused", preview)
 	}
 
 	applied := f.backlog(t, true)
-	if len(applied.Reclassified) != 2 {
+	if len(applied.Reclassified) != 1 {
 		t.Fatalf("apply = %+v", applied)
 	}
 	if acct, status := f.bookedAccount(t, slipRow); acct != "3300" || status != "posted" {
 		t.Errorf("slipping charge booked to %s (%s), want 3300 posted", acct, status)
 	}
-	if acct, status := f.bookedAccount(t, parkedRow); acct != receivablesAccountCode || status != "posted" {
-		t.Errorf("parked charge booked to %s (%s), want 1500 posted", acct, status)
+	if f.invoicePaid(t, inv.ID) {
+		t.Errorf("faktura settled by a backlog run; a parked 1500 charge must be left for a human")
 	}
-	if !f.invoicePaid(t, inv.ID) {
-		t.Errorf("faktura not settled by the reclassified charge")
+	for _, id := range []string{parked, stray} {
+		if got := f.entryStatus(t, id); got != "draft" {
+			t.Errorf("parked receivable draft changed to %s, want it left as a draft", got)
+		}
 	}
-	if got := f.entryStatus(t, stray); got != "draft" {
-		t.Errorf("unplaceable parked charge changed to %s, want it left as a draft", got)
+	if again := f.backlog(t, true); len(again.Reclassified) != 0 || again.Posted != 0 || len(again.Refused) != 2 {
+		t.Errorf("second apply should only re-report the refusals: %+v", again)
 	}
-	if again := f.backlog(t, true); len(again.Reclassified) != 0 || again.Posted != 0 {
-		t.Errorf("second apply should only re-report the refusal: %+v", again)
+}
+
+// A legacy charge→faktura draft: the faktura was marked paid when the charge
+// was assigned, but vipps_import_rows.invoice_id predates the column. It must
+// be refused whether or not auto-assign is on, and never rebooked as revenue
+// (that would credit the money twice while the faktura stays paid).
+func TestVippsBacklogRefusesLegacyFakturaDraft(t *testing.T) {
+	for _, autoAssign := range []bool{true, false} {
+		f := newAutoAssignFixture(t)
+		f.exec(t, `UPDATE clubs SET vipps_auto_assign = $2 WHERE id = $1`, f.club.ID, autoAssign)
+		f.priceItem(t, "membership", "Medlemskontingent synthetic", 45000, "once", "all")
+
+		payer := f.namedMember(t, "Legacypayer")
+		inv := f.club.NewInvoice(t, fin.InvoiceOpts{Member: &payer, Cents: 45000, Paid: true,
+			Lines: []fin.Line{{Category: "membership", Cents: 45000}}})
+		row := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 45000, CustomerName: "Synthetic Legacypayer"})
+		draft := f.draftCharge(t, row, receivablesAccountCode, 45000)
+
+		res := f.backlog(t, true)
+		if len(res.Reclassified) != 0 || res.Posted != 0 || len(res.Refused) != 1 ||
+			!strings.Contains(res.Refused[0].Reason, "no recorded faktura") {
+			t.Fatalf("auto-assign=%v: result = %+v, want the legacy draft refused", autoAssign, res)
+		}
+		if got := f.entryStatus(t, draft); got != "draft" {
+			t.Errorf("auto-assign=%v: legacy draft changed to %s", autoAssign, got)
+		}
+		if !f.invoicePaid(t, inv.ID) {
+			t.Errorf("auto-assign=%v: faktura lost its payment", autoAssign)
+		}
+		var revenue int
+		if err := f.club.Pool.QueryRow(context.Background(),
+			`SELECT count(*) FROM journal_lines jl JOIN accounts a ON a.id = jl.account_id
+			  JOIN journal_entries je ON je.id = jl.journal_entry_id
+			 WHERE je.club_id = $1 AND a.code = '3100' AND jl.credit > 0 AND je.source = 'vipps'`,
+			f.club.ID).Scan(&revenue); err != nil || revenue != 0 {
+			t.Errorf("auto-assign=%v: charge credited to revenue (%d lines, err %v)", autoAssign, revenue, err)
+		}
+	}
+}
+
+// A charge with a recorded faktura posts as it stands, and several drafts
+// for one faktura can't both settle it.
+func TestVippsBacklogFakturaDraftsPostOnceEach(t *testing.T) {
+	f := newAutoAssignFixture(t)
+	payer := f.namedMember(t, "Twicepayer")
+	inv := f.club.NewInvoice(t, fin.InvoiceOpts{Member: &payer, Cents: 45000, Paid: true,
+		Lines: []fin.Line{{Category: "membership", Cents: 45000}}})
+	first := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 45000, CustomerName: "Synthetic Twicepayer"})
+	second := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 45000, CustomerName: "Synthetic Twicepayer"})
+	d1 := f.draftCharge(t, first, receivablesAccountCode, 45000)
+	d2 := f.draftCharge(t, second, receivablesAccountCode, 45000)
+	f.exec(t, `UPDATE vipps_import_rows SET invoice_id = $1 WHERE id IN ($2, $3)`, inv.ID, first, second)
+
+	res := f.backlog(t, true)
+	if res.Posted != 1 || len(res.Refused) != 1 || !strings.Contains(res.Refused[0].Reason, "already settled") {
+		t.Fatalf("result = %+v, want one posted and the second refused as already settled", res)
+	}
+	statuses := map[string]bool{f.entryStatus(t, d1): true, f.entryStatus(t, d2): true}
+	if !statuses["posted"] || !statuses["draft"] {
+		t.Errorf("drafts = %v, want one posted and one left as draft", statuses)
+	}
+	if again := f.backlog(t, true); again.Posted != 0 || len(again.Refused) != 1 {
+		t.Errorf("re-run after the first apply = %+v, want a no-op plus the same refusal", again)
 	}
 }

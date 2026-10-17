@@ -215,3 +215,67 @@ func TestRepairReportRowsThenPayoutClears(t *testing.T) {
 		t.Errorf("settlement clearing balance = %v, want 0", clear.ClearingBalance)
 	}
 }
+
+// A pay-all order covers two fakturas; after the webhook marked both captured,
+// one is paid by a bank transfer. The charge would credit 1500 twice for that
+// faktura, so the whole order is refused and nothing is booked.
+func TestAutoReconcileOrderRefusesWhenAFakturaWasPaidMeanwhile(t *testing.T) {
+	svc, club := newOrderReconcileFixture(t)
+	ctx := context.Background()
+	m := club.NewMember(t, "member")
+	a := club.NewInvoice(t, fin.InvoiceOpts{Member: &m, Cents: 45000, VippsPaid: true,
+		Lines: []fin.Line{{Category: "membership", Cents: 45000}}})
+	b := club.NewInvoice(t, fin.InvoiceOpts{Member: &m, Cents: 255000, VippsPaid: true,
+		Lines: []fin.Line{{Category: "slip_fee", Cents: 255000}}})
+	order := club.NewOrderForInvoices(t, a, b)
+	charge := club.NewVippsRow(t, fin.VippsRowOpts{Cents: 300000, OrderID: order.VippsReference})
+
+	if _, err := club.Pool.Exec(ctx,
+		`WITH p AS (
+		    INSERT INTO payments (club_id, user_id, type, amount, status, paid_at)
+		    VALUES ($1, $2, 'dues', 2550, 'completed', now()) RETURNING id)
+		 UPDATE invoices SET payment_id = (SELECT id FROM p) WHERE id = $3`,
+		club.ID, m.ID, b.ID); err != nil {
+		t.Fatalf("pay faktura: %v", err)
+	}
+
+	for run := 0; run < 2; run++ {
+		res, err := svc.AutoReconcileOrderCharges(ctx, club.ID, club.Treasurer.ID)
+		if err != nil {
+			t.Fatalf("run %d: %v", run, err)
+		}
+		if res.Booked != 0 || len(res.SkippedDetails) != 1 ||
+			!strings.Contains(res.SkippedDetails[0].Reason, "already paid") {
+			t.Errorf("run %d = %+v, want the order refused as already paid", run, res)
+		}
+	}
+	if rowEntry(t, club, charge) != "" {
+		t.Error("charge booked although a faktura on its order was already paid")
+	}
+	var aPaid bool
+	if err := club.Pool.QueryRow(ctx, `SELECT payment_id IS NOT NULL FROM invoices WHERE id = $1`, a.ID).Scan(&aPaid); err != nil || aPaid {
+		t.Errorf("the other faktura was settled (paid=%v, err=%v); want the order left whole", aPaid, err)
+	}
+}
+
+// A charge one øre off the order total is a mismatch, not a rounding slack.
+func TestAutoReconcileOrderRefusesOneOreMismatch(t *testing.T) {
+	svc, club := newOrderReconcileFixture(t)
+	ctx := context.Background()
+	m := club.NewMember(t, "member")
+	a := club.NewInvoice(t, fin.InvoiceOpts{Member: &m, Cents: 45000, Lines: []fin.Line{{Category: "membership", Cents: 45000}}})
+	b := club.NewInvoice(t, fin.InvoiceOpts{Member: &m, Cents: 255000, Lines: []fin.Line{{Category: "slip_fee", Cents: 255000}}})
+	order := club.NewOrderForInvoices(t, a, b)
+	charge := club.NewVippsRow(t, fin.VippsRowOpts{Cents: 299999, OrderID: order.VippsReference})
+
+	res, err := svc.AutoReconcileOrderCharges(ctx, club.ID, club.Treasurer.ID)
+	if err != nil {
+		t.Fatalf("AutoReconcileOrderCharges: %v", err)
+	}
+	if res.Booked != 0 || rowEntry(t, club, charge) != "" {
+		t.Errorf("a charge 0.01 short of its order was booked (%+v)", res)
+	}
+	if len(res.SkippedDetails) != 1 || !strings.Contains(res.SkippedDetails[0].Reason, "does not match") {
+		t.Errorf("skipped = %+v, want the mismatch reported", res.SkippedDetails)
+	}
+}

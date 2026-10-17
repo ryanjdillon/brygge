@@ -50,6 +50,7 @@ const (
 
 	// Finance operations
 	ActionInvoiceCreated              = "invoice.created"
+	ActionInvoiceVoided               = "invoice.voided"
 	ActionInvoicePDFGenerated         = "invoice.pdf_generated"
 	ActionInvoiceEmailed              = "invoice.emailed"
 	ActionInvoiceReminded             = "invoice.reminded"

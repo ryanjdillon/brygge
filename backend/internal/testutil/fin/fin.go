@@ -17,6 +17,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/brygge-klubb/brygge/internal/finance"
 	"github.com/brygge-klubb/brygge/internal/testutil"
 )
 
@@ -171,7 +172,9 @@ func (c *Club) NewInvoice(t *testing.T, o InvoiceOpts) Invoice {
 		o.Number = c.nextInvoice
 	}
 	if o.KID == "" {
-		o.KID = fmt.Sprintf("%010d%02d", o.Number, len(c.ID)%97)
+		// A real 12-digit mod-10 KID, so bank matching (which rejects
+		// anything that isn't a valid Brygge KID) treats it like prod data.
+		o.KID = finance.GenerateKID("000", o.Number, 1)
 	}
 	if o.Status == "" {
 		o.Status = "open"
@@ -266,19 +269,33 @@ type Order struct {
 // link) that a faktura pay link resolves to.
 func (c *Club) NewOrderForInvoice(t *testing.T, inv Invoice) Order {
 	t.Helper()
+	return c.NewOrderForInvoices(t, inv)
+}
+
+// NewOrderForInvoices seeds one checkout order paying several fakturas (a
+// member's combined pay-all), with an order_sources link per faktura. The
+// order total is the sum of the fakturas.
+func (c *Club) NewOrderForInvoices(t *testing.T, invs ...Invoice) Order {
+	t.Helper()
 	ctx := context.Background()
+	var total int64
+	for _, inv := range invs {
+		total += inv.TotalCents
+	}
 	o := Order{Token: "tok-" + testutil.RandomHex(12), VippsReference: "ref-" + testutil.RandomHex(8)}
 	if err := c.Pool.QueryRow(ctx,
 		`INSERT INTO orders (club_id, user_id, total_amount, token, vipps_reference)
 		 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-		c.ID, inv.MemberID, Kr(inv.TotalCents), o.Token, o.VippsReference,
+		c.ID, invs[0].MemberID, Kr(total), o.Token, o.VippsReference,
 	).Scan(&o.ID); err != nil {
 		t.Fatalf("fin: order: %v", err)
 	}
-	if _, err := c.Pool.Exec(ctx,
-		`INSERT INTO order_sources (order_id, invoice_id) VALUES ($1, $2)`, o.ID, inv.ID,
-	); err != nil {
-		t.Fatalf("fin: order source: %v", err)
+	for _, inv := range invs {
+		if _, err := c.Pool.Exec(ctx,
+			`INSERT INTO order_sources (order_id, invoice_id) VALUES ($1, $2)`, o.ID, inv.ID,
+		); err != nil {
+			t.Fatalf("fin: order source: %v", err)
+		}
 	}
 	return o
 }

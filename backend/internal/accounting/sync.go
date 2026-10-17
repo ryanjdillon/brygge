@@ -369,36 +369,63 @@ func (s *Service) BookInvoice(ctx context.Context, clubID, invoiceID, actor stri
 	return InvoiceBooked, nil
 }
 
-// ReverseInvoice reverses the posted invoice_sync entry of a faktura that is
-// being voided, in the same flow, so the receivable and revenue net to zero
-// immediately. It reports false when there is nothing to reverse (never
-// booked, or already reversed).
-func (s *Service) ReverseInvoice(ctx context.Context, clubID, invoiceID, actor string) (bool, error) {
-	var entryID, periodStatus string
-	err := s.db.QueryRow(ctx,
+// invoiceEntrySources are the journal sources that book a faktura: the
+// receivable entry itself and any revenue reclassifications posted against
+// it (ResplitInvoiceBilags). Voiding a faktura must reverse all of them, or
+// the reclassification's +/- per account survives the void forever.
+const invoiceEntrySources = `('invoice_sync', 'invoice_resplit')`
+
+// ReverseInvoice reverses every posted entry of a faktura that is being
+// voided (its invoice_sync entry and any invoice_resplit corrections), in the
+// same flow, so receivable and revenue net to zero immediately. It returns
+// the reversal entry ids; none when there is nothing to reverse (never
+// booked, or already reversed). If any of the entries sits in a closed
+// period nothing is reversed and ErrInvoicePeriodClosed is returned.
+func (s *Service) ReverseInvoice(ctx context.Context, clubID, invoiceID, actor string) ([]string, error) {
+	rows, err := s.db.Query(ctx,
 		`SELECT je.id, fp.status
 		   FROM journal_entries je
 		   JOIN fiscal_periods fp ON fp.id = je.fiscal_period_id
-		  WHERE je.club_id = $1 AND je.source = 'invoice_sync'
-		    AND je.source_id = $2 AND je.status = 'posted'`,
+		  WHERE je.club_id = $1 AND je.source IN `+invoiceEntrySources+`
+		    AND je.source_id = $2 AND je.status = 'posted'
+		  ORDER BY je.created_at`,
 		clubID, invoiceID,
-	).Scan(&entryID, &periodStatus)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return false, nil
-	}
+	)
 	if err != nil {
-		return false, fmt.Errorf("loading invoice entry: %w", err)
+		return nil, fmt.Errorf("loading invoice entries: %w", err)
+	}
+	var entryIDs []string
+	closed := false
+	for rows.Next() {
+		var id, status string
+		if err := rows.Scan(&id, &status); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("scanning invoice entry: %w", err)
+		}
+		entryIDs = append(entryIDs, id)
+		if status != "open" {
+			closed = true
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	// VoidJournalEntry posts the reversal into the original period without
-	// checking it (BRY-333), so refuse here rather than write into a closed
-	// year.
-	if periodStatus != "open" {
-		return false, ErrInvoicePeriodClosed
+	// checking it (BRY-333), so refuse up front rather than write into a
+	// closed year or reverse only part of the family.
+	if closed {
+		return nil, ErrInvoicePeriodClosed
 	}
-	if _, err := s.VoidJournalEntry(ctx, entryID, actor); err != nil {
-		return false, err
+	var reversals []string
+	for _, id := range entryIDs {
+		rev, err := s.VoidJournalEntry(ctx, id, actor)
+		if err != nil {
+			return reversals, err
+		}
+		reversals = append(reversals, rev.ID)
 	}
-	return true, nil
+	return reversals, nil
 }
 
 func isUniqueViolation(err error) bool {
@@ -415,10 +442,10 @@ func signedLine(code string, amount float64) CreateJournalLineInput {
 	return CreateJournalLineInput{AccountCode: code, Credit: -amount}
 }
 
-// reverseVoidedInvoiceEntries voids the posted invoice_sync entry of every
-// invoice in the period that has since been voided. VoidJournalEntry keeps
-// the original and posts a reversal, so the receivable and revenue net to
-// zero with a full trail. Restricted to the period being synced, which the
+// reverseVoidedInvoiceEntries voids every posted entry (invoice_sync and
+// invoice_resplit) of each invoice in the period that has since been voided.
+// VoidJournalEntry keeps the original and posts a reversal, so the
+// receivable and revenue net to zero with a full trail. Restricted to the period being synced, which the
 // caller has verified is open.
 func (s *Service) reverseVoidedInvoiceEntries(ctx context.Context, clubID, periodID, syncedBy string, result *SyncResult) error {
 	rows, err := s.db.Query(ctx,
@@ -426,9 +453,9 @@ func (s *Service) reverseVoidedInvoiceEntries(ctx context.Context, clubID, perio
 		 FROM journal_entries je
 		 JOIN invoices i ON i.id::text = je.source_id AND i.club_id = je.club_id
 		 WHERE je.club_id = $1 AND je.fiscal_period_id = $2
-		   AND je.source = 'invoice_sync' AND je.status = 'posted'
+		   AND je.source IN `+invoiceEntrySources+` AND je.status = 'posted'
 		   AND i.status = 'voided'
-		 ORDER BY i.invoice_number`,
+		 ORDER BY i.invoice_number, je.created_at`,
 		clubID, periodID,
 	)
 	if err != nil {
@@ -452,14 +479,18 @@ func (s *Service) reverseVoidedInvoiceEntries(ctx context.Context, clubID, perio
 		return err
 	}
 
+	reversed := map[int]bool{}
 	for _, p := range todo {
 		if _, err := s.VoidJournalEntry(ctx, p.entryID, syncedBy); err != nil {
 			s.log.Error().Err(err).Str("entry_id", p.entryID).Msg("failed to reverse voided invoice entry")
 			result.skip(fmt.Sprintf("faktura %d", p.invoiceNumber), "reversing voided faktura: "+err.Error())
 			continue
 		}
-		result.Reversed++
+		reversed[p.invoiceNumber] = true
 	}
+	// Reversed counts fakturas, not entries: one faktura may carry a sync
+	// entry plus resplit corrections.
+	result.Reversed += len(reversed)
 	return nil
 }
 
