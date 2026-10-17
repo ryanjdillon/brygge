@@ -90,11 +90,13 @@ type BankSyncResult struct {
 	VippsUnbalanced int      `json:"vipps_unbalanced"`
 	TransfersLinked int      `json:"transfers_linked"`
 	PaymentsLinked  int      `json:"payments_linked"`
+	DraftsReleased  int      `json:"drafts_released"`
 	ClosedPeriods   []string `json:"closed_periods"`
 }
 
 // BankSync re-runs auto-correlation across every unmatched bank import row
-// for the club, in three passes:
+// for the club, in three passes (after releasing rows a crashed KID match
+// left linked to an unposted draft; see healStrandedKIDDrafts):
 //
 //  1. KID matching against open invoices.
 //  2. Vipps payout reconciliation for rows whose description matches the
@@ -109,6 +111,14 @@ type BankSyncResult struct {
 func (s *Service) BankSync(ctx context.Context, clubID, createdBy string) (*BankSyncResult, error) {
 	res := &BankSyncResult{}
 	closedYears := map[int]bool{}
+
+	// Pass 0: release rows a crashed KID match left linked to its unposted
+	// draft, so pass 1 can match them afresh.
+	healed, herr := s.healStrandedKIDDrafts(ctx, clubID)
+	if herr != nil {
+		s.log.Warn().Err(herr).Msg("releasing stranded KID drafts failed")
+	}
+	res.DraftsReleased = healed
 
 	// Pass 1: KID auto-match on all unmatched rows.
 	kidMatched, kidClosed, err := s.syncKIDMatches(ctx, clubID, createdBy)
@@ -184,6 +194,66 @@ func (s *Service) BankSync(ctx context.Context, clubID, createdBy string) (*Bank
 		res.ClosedPeriods = append(res.ClosedPeriods, fmt.Sprintf("%d", y))
 	}
 	return res, nil
+}
+
+// strandedDraftGrace is how old a linked KID draft must be before bank sync
+// treats it as stranded rather than as an import or sync still in flight.
+const strandedDraftGrace = 15 * time.Minute
+
+// healStrandedKIDDrafts finds bank rows auto-matched to a KID payment draft
+// (bank_import source, credit on 1500) that never got posted. The KID paths
+// link the row before posting so a posted entry never exists without its
+// row; a crash between the two leaves the row looking booked while the
+// draft counts nowhere. Such rows are unlinked and the draft deleted, in
+// one transaction, and pass 1 then matches them again against the invoices
+// as they are now. Intra-bank transfer drafts (no 1500 line) and manual
+// matches (auto_matched false) are left alone.
+func (s *Service) healStrandedKIDDrafts(ctx context.Context, clubID string) (int, error) {
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("beginning transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	rows, err := tx.Query(ctx,
+		`SELECT je.id FROM journal_entries je
+		  WHERE je.club_id = $1 AND je.status = 'draft' AND je.source = 'bank_import'
+		    AND je.created_at < now() - $3::interval
+		    AND EXISTS (SELECT 1 FROM bank_import_rows b
+		                 WHERE b.club_id = je.club_id AND b.journal_entry_id = je.id AND b.auto_matched)
+		    AND EXISTS (SELECT 1 FROM journal_lines jl JOIN accounts a ON a.id = jl.account_id
+		                 WHERE jl.journal_entry_id = je.id AND a.code = $2 AND jl.credit > 0)
+		  FOR UPDATE OF je SKIP LOCKED`,
+		clubID, receivablesAccountCode, fmt.Sprintf("%d seconds", int(strandedDraftGrace.Seconds())),
+	)
+	if err != nil {
+		return 0, fmt.Errorf("finding stranded drafts: %w", err)
+	}
+	ids, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return 0, fmt.Errorf("scanning stranded drafts: %w", err)
+	}
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	if _, err := tx.Exec(ctx,
+		`UPDATE bank_import_rows SET journal_entry_id = NULL, auto_matched = false
+		  WHERE club_id = $1 AND journal_entry_id = ANY($2::uuid[])`,
+		clubID, ids,
+	); err != nil {
+		return 0, fmt.Errorf("unlinking stranded rows: %w", err)
+	}
+	if _, err := tx.Exec(ctx,
+		`DELETE FROM journal_entries WHERE club_id = $1 AND status = 'draft' AND id = ANY($2::uuid[])`,
+		clubID, ids,
+	); err != nil {
+		return 0, fmt.Errorf("deleting stranded drafts: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return 0, fmt.Errorf("committing: %w", err)
+	}
+	s.log.Warn().Int("count", len(ids)).Str("club_id", clubID).Msg("bank sync released rows linked to unposted KID drafts")
+	return len(ids), nil
 }
 
 // backfillUnlinkedPayments fixes up invoices whose KID-matching bank

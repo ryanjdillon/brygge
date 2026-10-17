@@ -50,7 +50,7 @@ When a bank import lands or `BankSync` runs:
 1. Extract KID from `bir.kid_number` (CSV column) or fall back to `ExtractKIDFromDescription`
 2. Match invoice by KID among fakturas still owed (`finance.OwedByMemberSQL`: not voided, paid, Vipps-captured or credited); tiebreak by checking no other matched row already used the same KID
 3. If no KID match, try `ExtractInvoiceNumberFromDescription` + amount within 0.005
-4. If matched, create a balanced bilag (DR bank, CR receivables), link the row with a guarded update, post, and call `linkInvoicePayment` to back-link `invoices.payment_id`. A lost link discards the draft; a failed post unwinds the link
+4. If matched, create a balanced bilag (DR bank, CR receivables), link the row with a guarded update, post, and call `linkInvoicePayment` to back-link `invoices.payment_id`. A lost link discards the draft; a failed post unwinds the link. A crash between link and post leaves the row `auto_matched` to an unposted draft; `BankSync` first releases such rows (KID drafts with a CR 1500 line, older than 15 minutes) so they match again
 
 ## Helper functions worth knowing
 
