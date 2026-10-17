@@ -989,7 +989,17 @@
       "vippsAutoAssignTieNone": "Laten voor controle",
       "vippsAutoAssignHint": "Boekt een betaling alleen als die duidelijk past bij de enige openstaande factuur van een lid of bij één prijscategorie. De rest blijft in Tildel. Elke boeking kan ongedaan worden gemaakt.",
       "vippsClearingAccount": "Tussenrekening",
-      "vippsFeeAccount": "Kostenrekening"
+      "vippsFeeAccount": "Kostenrekening",
+      "exemptions": {
+        "label": "Vrijstellingen per rol",
+        "hint": "Bestuursrollen die geen prijspost of hele prijscategorie betalen. De factuur toont nog steeds de volle prijs met een compenserende „Fritak”-regel, zodat de vrijstelling als kosten wordt geboekt. Niets is vrijgesteld totdat u het hier toevoegt.",
+        "add": "Vrijstelling toevoegen…",
+        "categories": "Categorieën",
+        "items": "Prijsposten",
+        "expenseAccount": "Kostenrekening voor vrijstellingen",
+        "accountHint": "Het vrijgestelde bedrag wordt op deze rekening gedebiteerd en de opbrengst volledig gecrediteerd. Verplicht zodra een vrijstelling is ingesteld.",
+        "accountRequired": "Kies de kostenrekening voor vrijstellingen."
+      }
     },
     "faktura": {
       "tabs": {

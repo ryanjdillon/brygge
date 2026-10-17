@@ -1676,7 +1676,17 @@
       "logoReplace": "Byt logo",
       "logoDeleteConfirm": "Fjerne logoen til klubben?",
       "logoSizeError": "Logoen må vere maks 2 MB.",
-      "saved": "Lagra"
+      "saved": "Lagra",
+      "exemptions": {
+        "label": "Fritak for roller",
+        "hint": "Styreroller som ikkje vert fakturerte for ein priskomponent eller ein heil priskategori. Fakturaen viser framleis full pris med ei motpostert «Fritak»-line, slik at fritaket vert bokført som ein kostnad i staden for tapt inntekt. Ingenting er fritatt før du legg det til her.",
+        "add": "Legg til fritak…",
+        "categories": "Kategoriar",
+        "items": "Priskomponentar",
+        "expenseAccount": "Kostnadskonto for fritak",
+        "accountHint": "Fritatt beløp vert debitert denne kontoen, og inntekta vert kreditert med fullt beløp. Påkravd når eit fritak er sett.",
+        "accountRequired": "Vel kostnadskontoen fritak skal bokførast på."
+      }
     },
     "bankAccounts": {
       "title": "Bankkontoar",
@@ -2409,7 +2419,13 @@
     "errors": {
       "fiscalPeriodRequired": "Vel eit rekneskapsår",
       "noSelection": "Vel minst éin prispost eller plassleigekategori"
-    }
+    },
+    "exemptionsHeader": "{n} line(r) vert fritekne for styreroller. Fjern haken for dei som skal fakturerast fullt.",
+    "exemptionApply": "Fritak",
+    "exemptionRole": "Rolle",
+    "exemptionItem": "Komponent",
+    "exemptionsHint": "Fritekne liner vert viste med full pris og ei motpostert «Fritak»-line; ein faktura på 0 kr vert send til orientering utan noko å betale.",
+    "exemptionsApplied": "{n} line(r) fritekne for styreroller."
   },
   "footer": {
     "poweredBy": "driven av",

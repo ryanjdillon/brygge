@@ -5,6 +5,7 @@ import { useFreshTotp } from '@/composables/useFreshTotp'
 import FileInput from '@/components/ui/form/FileInput.vue'
 import Tabs from '@/components/ui/Tabs.vue'
 import BankAccountsPanel from '@/components/admin/BankAccountsPanel.vue'
+import ExemptionsSettingsPanel from '@/components/admin/ExemptionsSettingsPanel.vue'
 
 const { t } = useI18n()
 const { ensureFreshTotp, totpAwareFetch } = useFreshTotp()
@@ -308,6 +309,8 @@ onMounted(load)
         </div>
         <p class="text-xs text-slate-500">{{ t('admin.economySettings.vippsAutoAssignHint') }}</p>
       </fieldset>
+
+      <ExemptionsSettingsPanel />
     </section>
 
     <BankAccountsPanel v-else-if="activeTab === 'bank-accounts'" />

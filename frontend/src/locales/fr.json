@@ -988,7 +988,17 @@
       "vippsAutoAssignTieNone": "Laisser pour vérification",
       "vippsAutoAssignHint": "Ne comptabilise un paiement que s'il correspond clairement à l'unique facture ouverte d'un membre ou à une seule catégorie de prix. Le reste reste dans Tildel. Chaque écriture peut être annulée.",
       "vippsClearingAccount": "Compte d'attente",
-      "vippsFeeAccount": "Compte de frais"
+      "vippsFeeAccount": "Compte de frais",
+      "exemptions": {
+        "label": "Exonérations par rôle",
+        "hint": "Rôles du conseil qui ne sont pas facturés pour un article ou une catégorie de prix entière. La facture affiche toujours le prix complet avec une ligne « Fritak » compensatoire, de sorte que l'exonération est comptabilisée en charge. Rien n'est exonéré tant que vous ne l'ajoutez pas ici.",
+        "add": "Ajouter une exonération…",
+        "categories": "Catégories",
+        "items": "Articles de prix",
+        "expenseAccount": "Compte de charge des exonérations",
+        "accountHint": "Le montant exonéré est débité sur ce compte et le produit est crédité en totalité. Obligatoire dès qu'une exonération est définie.",
+        "accountRequired": "Choisissez le compte de charge des exonérations."
+      }
     },
     "faktura": {
       "tabs": {

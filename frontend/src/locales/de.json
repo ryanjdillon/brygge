@@ -989,7 +989,17 @@
       "vippsAutoAssignTieNone": "Zur Prüfung lassen",
       "vippsAutoAssignHint": "Bucht eine Zahlung nur, wenn sie eindeutig zur einzigen offenen Rechnung eines Mitglieds oder zu einer Preiskategorie passt. Alles andere bleibt in Tildel. Jede Buchung kann rückgängig gemacht werden.",
       "vippsClearingAccount": "Verrechnungskonto",
-      "vippsFeeAccount": "Gebührenkonto"
+      "vippsFeeAccount": "Gebührenkonto",
+      "exemptions": {
+        "label": "Rollenbefreiungen",
+        "hint": "Vorstandsrollen, denen eine Preisposition oder eine ganze Preiskategorie nicht berechnet wird. Die Rechnung zeigt weiterhin den vollen Preis mit einer ausgleichenden „Fritak“-Zeile, sodass der Erlass als Aufwand gebucht wird. Nichts ist befreit, bis Sie es hier hinzufügen.",
+        "add": "Befreiung hinzufügen…",
+        "categories": "Kategorien",
+        "items": "Preispositionen",
+        "expenseAccount": "Aufwandskonto für Befreiungen",
+        "accountHint": "Der erlassene Betrag wird diesem Konto belastet, der Erlös wird voll gutgeschrieben. Erforderlich, sobald eine Befreiung gesetzt ist.",
+        "accountRequired": "Wählen Sie das Aufwandskonto für Befreiungen."
+      }
     },
     "faktura": {
       "tabs": {

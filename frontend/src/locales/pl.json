@@ -962,7 +962,17 @@
       "vippsAutoAssignTieNone": "Pozostaw do sprawdzenia",
       "vippsAutoAssignHint": "Księguje płatność tylko wtedy, gdy wyraźnie pasuje do jedynej otwartej faktury członka lub do jednej kategorii cenowej. Reszta pozostaje w Tildel. Każde księgowanie można cofnąć.",
       "vippsClearingAccount": "Konto rozrachunkowe",
-      "vippsFeeAccount": "Konto opłat"
+      "vippsFeeAccount": "Konto opłat",
+      "exemptions": {
+        "label": "Zwolnienia dla ról",
+        "hint": "Role zarządu, którym nie nalicza się pozycji cennika lub całej kategorii cen. Faktura nadal pokazuje pełną cenę z kompensującą linią „Fritak”, więc zwolnienie księgowane jest jako koszt. Nic nie jest zwolnione, dopóki nie dodasz tego tutaj.",
+        "add": "Dodaj zwolnienie…",
+        "categories": "Kategorie",
+        "items": "Pozycje cennika",
+        "expenseAccount": "Konto kosztów zwolnień",
+        "accountHint": "Zwolniona kwota obciąża to konto, a przychód jest uznawany w pełnej wysokości. Wymagane, gdy ustawiono jakiekolwiek zwolnienie.",
+        "accountRequired": "Wybierz konto kosztów dla zwolnień."
+      }
     },
     "faktura": {
       "tabs": {

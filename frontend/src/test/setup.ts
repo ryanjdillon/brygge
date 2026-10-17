@@ -12,6 +12,7 @@ vi.mock('vue-i18n', () => ({
       return key
     },
     te: () => false,
+    n: (value: number) => String(value),
     locale: { value: 'en' },
   }),
   createI18n: () => ({

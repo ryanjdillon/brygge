@@ -1798,7 +1798,17 @@
       "logoReplace": "Replace logo",
       "logoDeleteConfirm": "Remove the club logo?",
       "logoSizeError": "Logo must be 2 MB or smaller.",
-      "saved": "Saved"
+      "saved": "Saved",
+      "exemptions": {
+        "label": "Role exemptions",
+        "hint": "Board roles that are not charged for a price item or a whole price category. Fakturas still show the full price, with an offsetting \"Fritak\" line, so the waived amount is booked as an expense rather than lost revenue. Nothing is exempt until you add it here.",
+        "add": "Add exemption…",
+        "categories": "Categories",
+        "items": "Price items",
+        "expenseAccount": "Expense account for exemptions",
+        "accountHint": "The waived amount is debited to this account and the item's revenue is credited in full. Required when any exemption is set.",
+        "accountRequired": "Choose the expense account exemptions are booked to."
+      }
     },
     "bankAccounts": {
       "title": "Bank accounts",
@@ -2531,7 +2541,13 @@
     "errors": {
       "fiscalPeriodRequired": "Pick a fiscal year",
       "noSelection": "Pick at least one price item or slip-rental category"
-    }
+    },
+    "exemptionsHeader": "{n} line(s) will be exempted for board roles. Untick any that should be billed in full.",
+    "exemptionApply": "Exempt",
+    "exemptionRole": "Role",
+    "exemptionItem": "Item",
+    "exemptionsHint": "Exempt lines are shown at full price with an offsetting \"Fritak\" line; a faktura that nets to 0 kr is sent as information with nothing to pay.",
+    "exemptionsApplied": "{n} line(s) exempted for board roles."
   },
   "footer": {
     "poweredBy": "powered by",

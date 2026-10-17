@@ -30,6 +30,16 @@ interface BulkResult {
     dropped_lines?: string[]
   }[]
   skipped: { user_id: string; reason: string }[]
+  exemptions?: Exemption[]
+  warnings?: string[]
+}
+
+interface Exemption {
+  user_id: string
+  price_item_id: string
+  description: string
+  amount: number
+  role: string
 }
 
 const props = defineProps<{
@@ -50,6 +60,14 @@ const loading = ref(true)
 const submitting = ref(false)
 const error = ref<string | null>(null)
 const result = ref<BulkResult | null>(null)
+// Preview of role exemptions the run would apply; the operator can untick
+// any of them, and those lines are then billed in full.
+const preview = ref<BulkResult | null>(null)
+const applyExemption = ref<Record<string, boolean>>({})
+
+function exemptionKey(e: Exemption): string {
+  return `${e.user_id}:${e.price_item_id}`
+}
 
 const fiscalPeriodId = ref('')
 const selectedFlatIds = ref<string[]>([])
@@ -113,6 +131,34 @@ onMounted(async () => {
   }
 })
 
+function requestBody(extra: Record<string, unknown>) {
+  return JSON.stringify({
+    user_ids: props.userIds,
+    fiscal_period_id: fiscalPeriodId.value,
+    price_item_ids: selectedFlatIds.value,
+    beam_categories: selectedBeamCategories.value,
+    due_date: dueDate.value,
+    allow_duplicate_lines: allowDuplicateLines.value,
+    ...extra,
+  })
+}
+
+async function postBulk(extra: Record<string, unknown>): Promise<BulkResult> {
+  const res = await totpAwareFetch('/api/v1/admin/financials/invoices/bulk', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: requestBody(extra),
+  })
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '')
+    throw new Error(`${res.status} ${res.statusText} ${txt}`)
+  }
+  return (await res.json()) as BulkResult
+}
+
+// submit previews first; only when the run would apply exemptions or has
+// warnings does the operator see the review step before anything is created.
 async function submit() {
   if (!fiscalPeriodId.value) {
     error.value = t('bulkInvoices.errors.fiscalPeriodRequired')
@@ -126,25 +172,29 @@ async function submit() {
   error.value = null
   result.value = null
   try {
-    const body = {
-      user_ids: props.userIds,
-      fiscal_period_id: fiscalPeriodId.value,
-      price_item_ids: selectedFlatIds.value,
-      beam_categories: selectedBeamCategories.value,
-      due_date: dueDate.value,
-      allow_duplicate_lines: allowDuplicateLines.value,
+    const p = await postBulk({ preview: true })
+    if ((p.exemptions?.length ?? 0) > 0 || (p.warnings?.length ?? 0) > 0) {
+      applyExemption.value = Object.fromEntries((p.exemptions ?? []).map((e) => [exemptionKey(e), true]))
+      preview.value = p
+      return
     }
-    const res = await totpAwareFetch('/api/v1/admin/financials/invoices/bulk', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-    if (!res.ok) {
-      const txt = await res.text().catch(() => '')
-      throw new Error(`${res.status} ${res.statusText} ${txt}`)
-    }
-    result.value = (await res.json()) as BulkResult
+    await create()
+  } catch (e) {
+    error.value = (e as Error).message
+  } finally {
+    submitting.value = false
+  }
+}
+
+async function create() {
+  submitting.value = true
+  error.value = null
+  try {
+    const skip = Object.entries(applyExemption.value)
+      .filter(([, apply]) => !apply)
+      .map(([key]) => key)
+    result.value = await postBulk({ skip_exemptions: skip })
+    preview.value = null
     emit('completed')
   } catch (e) {
     error.value = (e as Error).message
@@ -166,6 +216,74 @@ function nameFor(id: string): string {
     @close="emit('close')"
   >
     <p v-if="loading" class="text-sm text-gray-500">{{ t('common.loading') }}…</p>
+
+    <template v-else-if="preview && !result">
+      <div class="space-y-3" data-testid="bulk-exemption-preview">
+        <div
+          v-for="w in preview.warnings ?? []"
+          :key="w"
+          class="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+        >
+          {{ w }}
+        </div>
+        <template v-if="preview.exemptions?.length">
+          <p class="text-sm text-gray-700">
+            {{ t('bulkInvoices.exemptionsHeader', { n: preview.exemptions.length }) }}
+          </p>
+          <div class="max-h-64 overflow-auto rounded-md border border-gray-200">
+            <table class="w-full text-xs">
+              <thead class="bg-gray-50 text-left text-gray-500">
+                <tr>
+                  <th class="px-2 py-1">{{ t('bulkInvoices.exemptionApply') }}</th>
+                  <th class="px-2 py-1">{{ t('bulkInvoices.member') }}</th>
+                  <th class="px-2 py-1">{{ t('bulkInvoices.exemptionRole') }}</th>
+                  <th class="px-2 py-1">{{ t('bulkInvoices.exemptionItem') }}</th>
+                  <th class="px-2 py-1">{{ t('bulkInvoices.amount') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="e in preview.exemptions" :key="exemptionKey(e)">
+                  <td class="px-2 py-1">
+                    <input
+                      v-model="applyExemption[exemptionKey(e)]"
+                      type="checkbox"
+                      class="h-3.5 w-3.5 rounded border-gray-300"
+                      data-testid="exemption-apply"
+                    />
+                  </td>
+                  <td class="px-2 py-1">{{ nameFor(e.user_id) }}</td>
+                  <td class="px-2 py-1">{{ t(`admin.users.role.${e.role}`) }}</td>
+                  <td class="px-2 py-1">{{ e.description }}</td>
+                  <td class="px-2 py-1">{{ formatNok(e.amount) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="text-xs text-gray-500">{{ t('bulkInvoices.exemptionsHint') }}</p>
+        </template>
+
+        <p v-if="error" class="rounded-md bg-red-50 px-2 py-1 text-xs text-red-700">{{ error }}</p>
+
+        <div class="flex justify-end gap-2 pt-1">
+          <button
+            type="button"
+            class="rounded-md px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100"
+            @click="preview = null"
+          >
+            {{ t('common.back') }}
+          </button>
+          <button
+            type="button"
+            :disabled="submitting"
+            class="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+            data-testid="bulk-confirm"
+            @click="create"
+          >
+            {{ submitting ? t('common.loading') : t('bulkInvoices.submit') }}
+          </button>
+        </div>
+      </div>
+    </template>
 
     <template v-else-if="!result">
         <form class="space-y-4" @submit.prevent="submit">
@@ -271,6 +389,10 @@ function nameFor(id: string): string {
                 skipped: result.skipped.length,
               })
             }}
+          </p>
+
+          <p v-if="result.exemptions?.length" class="text-sm text-gray-700" data-testid="bulk-exemptions-applied">
+            {{ t('bulkInvoices.exemptionsApplied', { n: result.exemptions.length }) }}
           </p>
 
           <div
