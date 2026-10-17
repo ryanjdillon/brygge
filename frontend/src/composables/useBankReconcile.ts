@@ -20,6 +20,9 @@ export interface BankRowSummary {
   // per-charge model its individual charges are reconciled one by one and this
   // row auto-clears — so it renders as a quiet auto-clearing item.
   vipps_payout: boolean
+  // An in-flight "Overførsel" from a statement exported on the day the
+  // transfer was under way; a re-export of that day replaces it (BRY-378).
+  provisional?: boolean
 }
 
 // A single individual Vipps settlement charge awaiting reconciliation — one

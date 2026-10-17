@@ -1054,7 +1054,11 @@
       "overwriteHint": "Verwijdert de niet-gematchte regels van deze rekening binnen het datumbereik van het bestand en importeert en matcht vervolgens het hele bestand opnieuw. Geboekte posten blijven ongemoeid.",
       "overwriteConfirm": "Niet-gematchte regels voor rekening {code} binnen het datumbereik van het geüploade bestand verwijderen en het hele bestand opnieuw importeren? Geboekte posten worden niet beïnvloed.",
       "cleared": "Verwijderd",
-      "payoutSweepCounts": "Vipps-uitbetalingen afgestemd: {cleared} · Wacht op afschrijvingen: {waiting} · Overgeslagen: {skipped} · Mislukt: {failed}"
+      "payoutSweepCounts": "Vipps-uitbetalingen afgestemd: {cleared} · Wacht op afschrijvingen: {waiting} · Overgeslagen: {skipped} · Mislukt: {failed}",
+      "refreshed": "Bijgewerkt",
+      "provisionalSettledNotice": "{count} voorlopige regel(s) uit een eerdere export hebben nu de definitieve banktekst.",
+      "exportDayNotice": "Het afschrift loopt tot en met {date}. Overboekingen die op de exportdag nog onderweg waren, kunnen als kale „Overførsel” verschijnen tot ze verwerkt zijn. Exporteer tot en met gisteren, of importeer {date} later opnieuw.",
+      "provisionalAmbiguousNotice": "{count} voorlopige regel(s) konden niet aan één verwerkte regel worden gekoppeld en blijven in Tildel staan."
     },
     "bankReconcile": {
       "filterAll": "All",
@@ -1136,7 +1140,9 @@
       "year": "Jaar",
       "yearAll": "Alle jaren",
       "likelyDuplicate": "Waarschijnlijk duplicaat — andere regel reeds gekoppeld",
-      "possibleDoublePayment": "Mogelijke dubbele betaling — terugbetaling nodig"
+      "possibleDoublePayment": "Mogelijke dubbele betaling — terugbetaling nodig",
+      "provisionalBadge": "Voorlopig",
+      "provisionalHint": "Geëxporteerd terwijl de overboeking onderweg was. Importeer deze dag later opnieuw; de verwerkte regel vervangt hem."
     },
     "sidebarTitle": "Beheerportaal"
   },

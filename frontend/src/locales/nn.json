@@ -1819,7 +1819,11 @@
       "overwrite": "Full avstemming (overskriv)",
       "overwriteHint": "Fjernar kontoen sine umatcha rader i filen sitt datoområde, og importerer og matchar heile filen på nytt. Bokførte postar vert ikkje rørte.",
       "overwriteConfirm": "Fjerne umatcha rader for konto {code} innanfor datoområdet i den opplasta filen og importere heile filen på nytt? Bokførte postar vert ikkje påverka.",
-      "cleared": "Fjerna"
+      "cleared": "Fjerna",
+      "refreshed": "Oppdatert",
+      "provisionalSettledNotice": "{count} førebels rad(er) frå ei tidlegare utskrift har no den oppgjorde bankteksten.",
+      "exportDayNotice": "Utskrifta går til og med {date}. Overføringar som var undervegs på eksportdagen kan stå som ei berr «Overførsel» til dei er oppgjorde. Eksporter til og med i går, eller importer {date} på nytt seinare.",
+      "provisionalAmbiguousNotice": "{count} førebels rad(er) kunne ikkje koplast til éi oppgjord rad og ligg att i Tildel."
     },
     "pdfArchive": {
       "title": "PDF-arkiv",
@@ -1972,7 +1976,9 @@
       "year": "År",
       "yearAll": "Alle år",
       "likelyDuplicate": "Truleg duplikat — anna rad er allereie matcha",
-      "possibleDoublePayment": "Mogleg dobbeltbetaling — krev tilbakebetaling"
+      "possibleDoublePayment": "Mogleg dobbeltbetaling — krev tilbakebetaling",
+      "provisionalBadge": "Førebels",
+      "provisionalHint": "Eksportert medan overføringa var undervegs. Importer dagen på nytt seinare; den oppgjorde rada erstattar ho."
     },
     "sidebarTitle": "Adminportal"
   },

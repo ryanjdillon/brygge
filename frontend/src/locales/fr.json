@@ -1053,7 +1053,11 @@
       "overwriteHint": "Supprime les lignes non rapprochées de ce compte dans la plage de dates du fichier, puis réimporte et rapproche l'ensemble du fichier. Les écritures comptabilisées ne sont pas touchées.",
       "overwriteConfirm": "Supprimer les lignes non rapprochées du compte {code} dans la plage de dates du fichier téléversé et réimporter l'ensemble du fichier ? Les écritures comptabilisées ne sont pas affectées.",
       "cleared": "Supprimées",
-      "payoutSweepCounts": "Versements Vipps rapprochés : {cleared} · En attente de débits : {waiting} · Ignorés : {skipped} · Échoués : {failed}"
+      "payoutSweepCounts": "Versements Vipps rapprochés : {cleared} · En attente de débits : {waiting} · Ignorés : {skipped} · Échoués : {failed}",
+      "refreshed": "Mis à jour",
+      "provisionalSettledNotice": "{count} ligne(s) provisoire(s) d’un export précédent portent désormais le libellé bancaire définitif.",
+      "exportDayNotice": "Le relevé va jusqu’au {date}. Les virements encore en cours le jour de l’export peuvent apparaître comme un simple « Overførsel » jusqu’à leur règlement. Exportez jusqu’à hier, ou réimportez le {date} plus tard.",
+      "provisionalAmbiguousNotice": "{count} ligne(s) provisoire(s) n’ont pu être associées à une seule ligne réglée et restent dans Tildel."
     },
     "bankReconcile": {
       "filterAll": "All",
@@ -1135,7 +1139,9 @@
       "year": "Année",
       "yearAll": "Toutes les années",
       "likelyDuplicate": "Probable doublon — autre ligne déjà rapprochée",
-      "possibleDoublePayment": "Possible double paiement — remboursement nécessaire"
+      "possibleDoublePayment": "Possible double paiement — remboursement nécessaire",
+      "provisionalBadge": "Provisoire",
+      "provisionalHint": "Exportée pendant que le virement était en cours. Réimportez ce jour plus tard ; la ligne réglée la remplace."
     },
     "sidebarTitle": "Portail admin"
   },

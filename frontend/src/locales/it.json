@@ -1054,7 +1054,11 @@
       "overwriteHint": "Rimuove le righe non abbinate di questo conto nell'intervallo di date del file, quindi reimporta e abbina l'intero file. Le registrazioni contabilizzate non vengono toccate.",
       "overwriteConfirm": "Rimuovere le righe non abbinate del conto {code} nell'intervallo di date del file caricato e reimportare l'intero file? Le registrazioni contabilizzate non sono interessate.",
       "cleared": "Rimosse",
-      "payoutSweepCounts": "Accrediti Vipps riconciliati: {cleared} · In attesa di addebiti: {waiting} · Saltati: {skipped} · Non riusciti: {failed}"
+      "payoutSweepCounts": "Accrediti Vipps riconciliati: {cleared} · In attesa di addebiti: {waiting} · Saltati: {skipped} · Non riusciti: {failed}",
+      "refreshed": "Aggiornate",
+      "provisionalSettledNotice": "{count} riga/e provvisoria/e di un’esportazione precedente ora riportano il testo bancario definitivo.",
+      "exportDayNotice": "L’estratto arriva fino al {date}. I bonifici ancora in corso il giorno dell’esportazione possono comparire come un semplice «Overførsel» finché non sono regolati. Esporta fino a ieri, oppure reimporta il {date} più tardi.",
+      "provisionalAmbiguousNotice": "{count} riga/e provvisoria/e non sono state abbinate a un’unica riga regolata e restano in Tildel."
     },
     "bankReconcile": {
       "filterAll": "All",
@@ -1136,7 +1140,9 @@
       "year": "Anno",
       "yearAll": "Tutti gli anni",
       "likelyDuplicate": "Probabile duplicato — altra riga già abbinata",
-      "possibleDoublePayment": "Possibile doppio pagamento — rimborso necessario"
+      "possibleDoublePayment": "Possibile doppio pagamento — rimborso necessario",
+      "provisionalBadge": "Provvisoria",
+      "provisionalHint": "Esportata mentre il bonifico era in corso. Reimporta questo giorno più tardi; la riga regolata la sostituisce."
     },
     "sidebarTitle": "Portale admin"
   },

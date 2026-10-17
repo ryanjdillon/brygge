@@ -1941,7 +1941,11 @@
       "overwrite": "Full reconcile (overwrite)",
       "overwriteHint": "Removes this account's unmatched rows within the file's date range, then re-imports and matches the whole file. Booked entries are untouched.",
       "overwriteConfirm": "Clear unmatched rows for account {code} within the uploaded file's date range and re-import the whole file? Booked entries are not affected.",
-      "cleared": "Cleared"
+      "cleared": "Cleared",
+      "refreshed": "Updated",
+      "provisionalSettledNotice": "{count} provisional row(s) from an earlier export now carry the settled bank text.",
+      "exportDayNotice": "The statement runs up to {date}. Transfers still under way on the export day can appear as a bare “Overførsel” until they settle. Export up to yesterday, or import {date} again later.",
+      "provisionalAmbiguousNotice": "{count} provisional row(s) could not be paired with one settled row and are left in Tildel."
     },
     "pdfArchive": {
       "title": "PDF archive",
@@ -2094,7 +2098,9 @@
       "year": "Year",
       "yearAll": "All years",
       "likelyDuplicate": "Likely duplicate — another row already matched",
-      "possibleDoublePayment": "Possible double payment — refund needed"
+      "possibleDoublePayment": "Possible double payment — refund needed",
+      "provisionalBadge": "Provisional",
+      "provisionalHint": "Exported while the transfer was under way. Import this day again later; the settled row replaces it."
     },
     "sidebarTitle": "Admin portal"
   },

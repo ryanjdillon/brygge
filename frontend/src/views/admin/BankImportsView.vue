@@ -39,6 +39,7 @@ import { formatNOK as nok, formatDate } from '@/lib/format'
 import { useFreshTotp } from '@/composables/useFreshTotp'
 import VippsAutoAssignSummary from '@/components/admin/VippsAutoAssignSummary.vue'
 import VippsPayoutSweepSummary from '@/components/admin/VippsPayoutSweepSummary.vue'
+import BankImportProvisionalNotices from '@/components/admin/BankImportProvisionalNotices.vue'
 import { useConfirm } from '@/stores/confirm'
 import { useCan } from '@/composables/useCan'
 
@@ -544,6 +545,12 @@ const filterMonthValue = computed<number>({
       <span v-if="syncResult.closed_periods?.length" class="ml-2 text-yellow-800">
         ({{ t('admin.bankImports.runSyncClosed', { years: syncResult.closed_periods.join(', ') }) }})
       </span>
+      <p v-if="syncResult.provisional_superseded" class="mt-1">
+        {{ t('admin.bankImports.provisionalSettledNotice', { count: syncResult.provisional_superseded }) }}
+      </p>
+      <p v-if="syncResult.provisional_ambiguous?.length" class="mt-1 text-yellow-800">
+        {{ t('admin.bankImports.provisionalAmbiguousNotice', { count: syncResult.provisional_ambiguous.length }) }}
+      </p>
       <VippsPayoutSweepSummary v-if="syncResult.vipps_payouts" :result="syncResult.vipps_payouts" />
     </div>
     <div v-if="vippsResyncResult" class="mt-3 rounded-md bg-brand-50 px-3 py-2 text-xs text-brand-900" data-testid="vipps-resync-result">
@@ -725,6 +732,10 @@ const filterMonthValue = computed<number>({
           <template v-if="bankResult.deleted !== undefined">
             · {{ t('admin.bankImports.cleared') }}: {{ bankResult.deleted }}
           </template>
+          <template v-if="bankResult.refreshed">
+            · {{ t('admin.bankImports.refreshed') }}: {{ bankResult.refreshed }}
+          </template>
+          <BankImportProvisionalNotices :result="bankResult" />
           <p v-if="bankResult.auto_matched" class="mt-2 rounded bg-brand-50 px-2 py-1 text-brand-800">
             {{ t('admin.bankImports.autoMatchedNotice', { code: bankResult.bank_account_code }) }}
           </p>

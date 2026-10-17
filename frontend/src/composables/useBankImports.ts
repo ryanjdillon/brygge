@@ -46,6 +46,23 @@ export interface BankImportResult {
   skipped_booked?: number
   // Rows whose auto-match failed; they stay unmatched for manual Tildel.
   row_errors?: BankImportRowError[] | null
+  // In-flight rows from a statement exported while a transfer was under way
+  // (BRY-378): refreshed in place with the settled text, or dismissed as
+  // superseded; ambiguous ones are left for Tildel.
+  refreshed?: number
+  superseded?: number
+  provisional_ambiguous?: ProvisionalBankRow[] | null
+  // Latest row date in the statement, and the provisional rows it still
+  // holds on that day.
+  last_row_date?: string
+  provisional_rows?: number
+}
+
+export interface ProvisionalBankRow {
+  row_id: string
+  date: string
+  amount: number
+  candidates: number
 }
 
 export interface BankImportRowError {
@@ -332,6 +349,8 @@ export interface BankSyncResult {
   transfers_linked: number
   closed_periods: string[]
   vipps_payouts?: VippsPayoutSweepResult | null
+  provisional_superseded?: number
+  provisional_ambiguous?: ProvisionalBankRow[] | null
 }
 
 export async function runBankSync(): Promise<BankSyncResult> {

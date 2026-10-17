@@ -658,6 +658,14 @@ async function doUnassign(rowId: string) {
                 <p v-if="row.possible_double_payment && !row.dismissed_at" class="mt-1 inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-800">
                   ⚠ {{ t('admin.bankReconcile.possibleDoublePayment') }}
                 </p>
+                <p
+                  v-if="row.provisional && !row.dismissed_at"
+                  class="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800"
+                  :title="t('admin.bankReconcile.provisionalHint')"
+                  data-testid="bank-row-provisional"
+                >
+                  {{ t('admin.bankReconcile.provisionalBadge') }}
+                </p>
               </div>
             </div>
             <!-- Batched Vipps payout under the per-charge model: quiet
