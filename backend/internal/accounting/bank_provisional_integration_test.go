@@ -295,8 +295,8 @@ func TestSettledRowRefreshesProvisionalRowWithSameReference(t *testing.T) {
 	}
 }
 
-// Only an open, bare row on the same date and amount is refreshed; booked,
-// dismissed or mismatched rows with the reference are skipped as before.
+// Only an open provisional row is refreshed; booked or dismissed rows with the
+// reference are skipped as before, and a date beyond the gap is reported.
 func TestReferenceRefreshLeavesSettledHistoryAlone(t *testing.T) {
 	f := newPayoutSweepFixture(t)
 	ctx := context.Background()
@@ -319,10 +319,11 @@ func TestReferenceRefreshLeavesSettledHistoryAlone(t *testing.T) {
 	res := f.importStatement(t,
 		settledPayout(day, 100.00, "3000701", "SYNT-BOOKED"),
 		settledPayout(day, 200.00, "3000702", "SYNT-DISMISSED"),
-		settledPayout(day.AddDate(0, 0, 1), 300.00, "3000703", "SYNT-OTHERDAY"),
+		settledPayout(day.AddDate(0, 0, 3), 300.00, "3000703", "SYNT-OTHERDAY"),
 	)
-	if res.Refreshed != 0 || res.SkippedDup != 3 {
-		t.Errorf("refreshed %d, skipped %d; want 0 and 3", res.Refreshed, res.SkippedDup)
+	if res.Refreshed != 0 || res.SkippedDup != 3 || len(res.ReferenceMismatches) != 1 {
+		t.Errorf("refreshed %d, skipped %d, mismatches %+v; want 0, 3 and the three-day gap",
+			res.Refreshed, res.SkippedDup, res.ReferenceMismatches)
 	}
 	var bare int
 	if err := f.club.Pool.QueryRow(ctx,
@@ -332,5 +333,248 @@ func TestReferenceRefreshLeavesSettledHistoryAlone(t *testing.T) {
 	}
 	if bare != 3 {
 		t.Errorf("%d rows still read Overførsel, want all 3 untouched", bare)
+	}
+}
+
+func (f *payoutSweepFixture) reseen(t *testing.T, ref string) bool {
+	t.Helper()
+	var seen bool
+	if err := f.club.Pool.QueryRow(context.Background(),
+		`SELECT reseen_at IS NOT NULL FROM bank_import_rows WHERE club_id = $1 AND reference = $2`,
+		f.club.ID, ref).Scan(&seen); err != nil {
+		t.Fatalf("read reseen_at for %s: %v", ref, err)
+	}
+	return seen
+}
+
+// A bare "Overførsel" that a later statement, running past its date, shows
+// again still bare is a settled transfer with a terse text. It must not be
+// superseded by an unrelated payment of the same amount on the same day.
+func TestBareRowSeenAgainIsNeverSuperseded(t *testing.T) {
+	f := newPayoutSweepFixture(t)
+	day := time.Date(f.club.Year, 5, 15, 0, 0, 0, 0, time.UTC)
+
+	f.importStatement(t, filler(day.AddDate(0, 0, -3), "SYNU-0"), provisional(day, 450.00, "SYNU-A"))
+	next := f.importStatement(t,
+		filler(day.AddDate(0, 0, -3), "SYNU-0"),
+		provisional(day, 450.00, "SYNU-A"),
+		BankRow{Date: day, Amount: 450.00, Description: "Fra: Synthetic Payer Betalt: 15.05", Counterpart: "Synthetic Payer", Reference: "SYNU-C"},
+		filler(day.AddDate(0, 0, 1), "SYNU-D"),
+	)
+	if !f.reseen(t, "SYNU-A") {
+		t.Errorf("bare row shown again by a later statement was not marked reseen")
+	}
+	if next.Superseded != 0 {
+		t.Errorf("later statement superseded %d rows, want 0", next.Superseded)
+	}
+	if _, why := f.rowByRef(t, "SYNU-A"); why != nil {
+		t.Errorf("persistent bare row dismissed as %s, want it left alone", *why)
+	}
+	if res := f.bankSync(t); res.ProvisionalSuperseded != 0 {
+		t.Errorf("bank sync superseded %d rows, want 0", res.ProvisionalSuperseded)
+	}
+
+	// Re-exporting the same day again (the statement still ends on it) is
+	// no evidence: the row may still be in flight.
+	d2 := day.AddDate(0, 1, 0)
+	f.importStatement(t, filler(d2.AddDate(0, 0, -1), "SYNU-E"), provisional(d2, 60.00, "SYNU-F"))
+	f.importStatement(t, filler(d2.AddDate(0, 0, -1), "SYNU-E"), provisional(d2, 60.00, "SYNU-F"))
+	if f.reseen(t, "SYNU-F") {
+		t.Errorf("bare row re-exported on its own export day was marked reseen")
+	}
+}
+
+// The settled row may be dated a banking day or two after the export showed
+// the transfer. Within that gap the row is refreshed and moves forward;
+// beyond it, or with another amount, the pair is reported and left alone.
+func TestReferenceRefreshDateGap(t *testing.T) {
+	f := newPayoutSweepFixture(t)
+	ctx := context.Background()
+	day := time.Date(f.club.Year, 6, 5, 0, 0, 0, 0, time.UTC)
+
+	f.importStatement(t,
+		provisional(day, 412.65, "SYNG-1"),
+		provisional(day, 200.00, "SYNG-2"),
+		provisional(day, 300.00, "SYNG-3"),
+	)
+	res := f.importStatement(t,
+		settledPayout(day.AddDate(0, 0, 2), 412.65, "3000801", "SYNG-1"),
+		settledPayout(day.AddDate(0, 0, 3), 200.00, "3000802", "SYNG-2"),
+		settledPayout(day, 300.50, "3000803", "SYNG-3"),
+	)
+	if res.Refreshed != 1 {
+		t.Errorf("refreshed %d, want 1 (the two-day gap)", res.Refreshed)
+	}
+	if len(res.ReferenceMismatches) != 2 {
+		t.Errorf("reference mismatches = %+v, want the three-day gap and the other amount", res.ReferenceMismatches)
+	}
+	var moved time.Time
+	var id string
+	if err := f.club.Pool.QueryRow(ctx,
+		`SELECT id::text, row_date FROM bank_import_rows WHERE club_id = $1 AND reference = 'SYNG-1'`, f.club.ID,
+	).Scan(&id, &moved); err != nil {
+		t.Fatalf("read refreshed row: %v", err)
+	}
+	if !moved.Equal(day.AddDate(0, 0, 2)) {
+		t.Errorf("refreshed row dated %s, want the settled date", moved.Format("2006-01-02"))
+	}
+	var oldDate, newDate string
+	if err := f.club.Pool.QueryRow(ctx,
+		`SELECT details->>'old_date', details->>'new_date' FROM audit_log
+		  WHERE club_id = $1 AND resource_id = $2 AND action = 'bank_row.refreshed'`, f.club.ID, id,
+	).Scan(&oldDate, &newDate); err != nil {
+		t.Fatalf("read audit: %v", err)
+	}
+	if oldDate != day.Format("2006-01-02") || newDate != day.AddDate(0, 0, 2).Format("2006-01-02") {
+		t.Errorf("audit dates %s → %s, want %s → %s", oldDate, newDate, day.Format("2006-01-02"), day.AddDate(0, 0, 2).Format("2006-01-02"))
+	}
+	for _, ref := range []string{"SYNG-2", "SYNG-3"} {
+		var desc string
+		if err := f.club.Pool.QueryRow(ctx,
+			`SELECT description FROM bank_import_rows WHERE club_id = $1 AND reference = $2`, f.club.ID, ref).Scan(&desc); err != nil {
+			t.Fatalf("read %s: %v", ref, err)
+		}
+		if desc != "Overførsel" {
+			t.Errorf("%s was changed to %q, want it left alone", ref, desc)
+		}
+	}
+}
+
+// Refresh needs the existing row to be provisional (on its statement's last
+// day) and on the importing bank account, and an actor to audit it.
+func TestReferenceRefreshScope(t *testing.T) {
+	f := newPayoutSweepFixture(t)
+	ctx := context.Background()
+	day := time.Date(f.club.Year, 7, 2, 0, 0, 0, 0, time.UTC)
+
+	// A bare row mid-statement is not provisional.
+	f.importStatement(t, provisional(day, 120.00, "SYNH-1"), filler(day.AddDate(0, 0, 2), "SYNH-2"))
+	// A provisional row on another bank account.
+	var otherImport string
+	if err := f.club.Pool.QueryRow(ctx,
+		`INSERT INTO bank_imports (club_id, filename, format, bank_account_code, imported_by, row_count)
+		 VALUES ($1, 'synthetic-savings.csv', 'sparebank-norge-v1', '1921', $2, 0) RETURNING id`,
+		f.club.ID, f.club.Treasurer.ID).Scan(&otherImport); err != nil {
+		t.Fatalf("other-account import: %v", err)
+	}
+	if _, err := f.svc.ImportBankRows(ctx, f.club.ID, otherImport, "", []BankRow{provisional(day, 130.00, "SYNH-3")}); err != nil {
+		t.Fatalf("import other account: %v", err)
+	}
+
+	res := f.importStatement(t,
+		settledPayout(day, 120.00, "3000901", "SYNH-1"),
+		settledPayout(day, 130.00, "3000902", "SYNH-3"),
+	)
+	if res.Refreshed != 0 || res.SkippedDup != 2 {
+		t.Errorf("refreshed %d, skipped %d; want 0 and 2", res.Refreshed, res.SkippedDup)
+	}
+
+	// No actor: nothing changes.
+	d2 := day.AddDate(0, 0, 10)
+	f.importStatement(t, provisional(d2, 140.00, "SYNH-4"))
+	imp := statementImport{id: f.club.NewBankImport(t), account: "1920", periodTo: d2}
+	out, _, err := f.svc.refreshProvisionalByReference(ctx, f.club.ID, "", imp, settledPayout(d2, 140.00, "3000903", "SYNH-4"),
+		BankRowHash(f.club.ID, settledPayout(d2, 140.00, "3000903", "SYNH-4")))
+	if err != nil {
+		t.Fatalf("refresh without actor: %v", err)
+	}
+	if out != refDuplicate {
+		t.Errorf("refresh without an actor = %v, want a plain skip", out)
+	}
+}
+
+// The statement's last day is recorded on the import, so an overwrite
+// reimport that deletes an older import's later rows does not turn a bare
+// mid-statement row into a provisional one.
+func TestOverwriteReimportKeepsStatementPeriod(t *testing.T) {
+	f := newPayoutSweepFixture(t)
+	ctx := context.Background()
+	day := time.Date(f.club.Year, 8, 20, 0, 0, 0, 0, time.UTC)
+
+	f.importStatement(t,
+		filler(day.AddDate(0, 0, -5), "SYNO-1"),
+		provisional(day, 250.00, "SYNO-2"),
+		filler(day.AddDate(0, 0, 1), "SYNO-3"),
+		filler(day.AddDate(0, 0, 2), "SYNO-4"),
+	)
+	over, err := f.svc.ReimportAccountBankRows(ctx, f.club.ID, "1920", f.club.NewBankImport(t), "",
+		[]BankRow{filler(day.AddDate(0, 0, 1), "SYNO-5"), filler(day.AddDate(0, 0, 2), "SYNO-6")})
+	if err != nil {
+		t.Fatalf("overwrite reimport: %v", err)
+	}
+	if over.Deleted != 2 {
+		t.Fatalf("overwrite deleted %d rows, want the older import's 2 rows in range", over.Deleted)
+	}
+	rows, err := f.svc.ListUnmatchedBankRows(ctx, f.club.ID, "", "", 0, 200, 0)
+	if err != nil {
+		t.Fatalf("list rows: %v", err)
+	}
+	for _, r := range rows {
+		if r.Reference == "SYNO-2" && r.Provisional {
+			t.Errorf("mid-statement bare row reads as provisional after the overwrite")
+		}
+	}
+	other := f.importStatement(t,
+		BankRow{Date: day, Amount: 250.00, Description: "Synthetic sender", Counterpart: "Synthetic Payer", Reference: "SYNO-7"},
+		filler(day.AddDate(0, 0, 4), "SYNO-8"),
+	)
+	if other.Superseded != 0 {
+		t.Errorf("superseded %d rows, want 0", other.Superseded)
+	}
+
+	// Overwrite reimport over an import that still holds a provisional
+	// row: the unbooked provisional row is cleared with the range and the
+	// settled row lands once.
+	d2 := day.AddDate(0, 0, 20)
+	f.importStatement(t, filler(d2.AddDate(0, 0, -1), "SYNO-9"), provisional(d2, 75.00, "SYNO-10"))
+	if _, err := f.svc.ReimportAccountBankRows(ctx, f.club.ID, "1920", f.club.NewBankImport(t), "",
+		[]BankRow{settledPayout(d2, 75.00, "3001001", "SYNO-10"), filler(d2.AddDate(0, 0, 1), "SYNO-11")}); err != nil {
+		t.Fatalf("overwrite over provisional: %v", err)
+	}
+	var n int
+	var desc string
+	if err := f.club.Pool.QueryRow(ctx,
+		`SELECT count(*), max(description) FROM bank_import_rows WHERE club_id = $1 AND reference = 'SYNO-10'`,
+		f.club.ID).Scan(&n, &desc); err != nil {
+		t.Fatalf("read rows: %v", err)
+	}
+	if n != 1 || desc == "Overførsel" {
+		t.Errorf("after overwrite: %d rows with the reference, text %q; want 1 settled row", n, desc)
+	}
+}
+
+// A refreshed row that now carries a KID is matched to its faktura by the
+// next bank sync.
+func TestRefreshedRowWithKIDMatchesOnSync(t *testing.T) {
+	f := newPayoutSweepFixture(t)
+	m := f.club.NewMember(t, "member")
+	inv := f.club.NewInvoice(t, fin.InvoiceOpts{Member: &m, Cents: 45000,
+		Lines: []fin.Line{{Category: "membership", Cents: 45000}}})
+	day := time.Date(f.club.Year, 9, 9, 0, 0, 0, 0, time.UTC)
+
+	f.importStatement(t, filler(day.AddDate(0, 0, -1), "SYNK-0"), provisional(day, 450.00, "SYNK-1"))
+	res := f.importStatement(t, BankRow{Date: day, Amount: 450.00, Description: "Giro " + inv.KID,
+		Counterpart: "Synthetic Payer", KID: inv.KID, Reference: "SYNK-1"})
+	if res.Refreshed != 1 {
+		t.Fatalf("refreshed %d, want 1", res.Refreshed)
+	}
+	id, _ := f.rowByRef(t, "SYNK-1")
+	if f.bankEntry(t, id) != nil {
+		t.Fatalf("refreshed row was booked at import; the KID match belongs to the next sync")
+	}
+	sync := f.bankSync(t)
+	if sync.KIDMatched != 1 {
+		t.Errorf("bank sync KID-matched %d rows, want 1", sync.KIDMatched)
+	}
+	if f.bankEntry(t, id) == nil {
+		t.Errorf("refreshed row with a KID not booked by the sync")
+	}
+	var paid bool
+	if err := f.club.Pool.QueryRow(context.Background(),
+		`SELECT payment_id IS NOT NULL FROM invoices WHERE id = $1`, inv.ID).Scan(&paid); err != nil {
+		t.Fatalf("read invoice: %v", err)
+	}
+	if !paid {
+		t.Errorf("faktura not marked paid after the KID match")
 	}
 }

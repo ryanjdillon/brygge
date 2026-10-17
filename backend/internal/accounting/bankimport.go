@@ -244,12 +244,16 @@ type ImportResult struct {
 	// text of an incoming row carrying the same bank reference
 	// (refreshProvisionalByReference).
 	Refreshed int
+	// ReferenceMismatches lists provisional rows whose settled row, under
+	// the same bank reference, came with another amount or date; both are
+	// left for the treasurer.
+	ReferenceMismatches []ReferenceMismatch
 	// Superseded counts provisional rows (provisionalRowSQL) dismissed
 	// because their settled row is now imported; ProvisionalAmbiguous lists
 	// provisional rows that could not be paired one to one.
 	Superseded           int
 	ProvisionalAmbiguous []ProvisionalBankRow
-	// LastRowDate is the latest row date in the statement, and
+	// LastRowDate is the statement's last day (bank_imports.period_to), and
 	// ProvisionalRows the unbooked provisional rows this import still holds
 	// on that day. A statement exported on the day it ends can carry
 	// in-flight transfers as provisional rows.
@@ -292,6 +296,9 @@ type ReimportResult struct {
 // cascade.
 func (s *Service) ReimportBankRows(ctx context.Context, clubID, importID, periodOverride string, rows []BankRow) (ReimportResult, error) {
 	var res ReimportResult
+	if err := s.recordStatementPeriod(ctx, clubID, importID, rows); err != nil {
+		return res, err
+	}
 
 	tag, err := s.db.Exec(ctx,
 		`DELETE FROM bank_import_rows
@@ -398,6 +405,9 @@ func (s *Service) ReimportAccountBankRows(ctx context.Context, clubID, bankAccou
 		return res, fmt.Errorf("clearing unmatched account rows: %w", err)
 	}
 	res.Deleted = tag.RowsAffected()
+	if err := s.recordStatementPeriod(ctx, clubID, targetImportID, rows); err != nil {
+		return res, err
+	}
 
 	fresh, skipped, err := s.skipRowsAlreadyBooked(ctx, clubID, rows)
 	if err != nil {
@@ -487,6 +497,10 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOv
 		// Fall back to default if the column isn't readable (pre-migration data).
 		bankAccount = bankAccountCode
 	}
+	imp, err := s.statementImportFor(ctx, clubID, importID, bankAccount, rows)
+	if err != nil {
+		return res, err
+	}
 
 	for _, row := range rows {
 		var balance *float64
@@ -509,19 +523,10 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOv
 		// date ranges never create a second row for the same booking.
 		// The one exception refreshes a provisional in-flight row with
 		// its settled text (refreshProvisionalByReference).
-		if row.Reference != "" {
-			outcome, rerr := s.refreshProvisionalByReference(ctx, clubID, importedBy, importID, row, hash)
-			if rerr != nil {
-				return res, rerr
-			}
-			switch outcome {
-			case refDuplicate:
-				res.SkippedDup++
-				continue
-			case refRefreshed:
-				res.Refreshed++
-				continue
-			}
+		if handled, rerr := s.importByReference(ctx, clubID, importedBy, imp, row, hash, &res); rerr != nil {
+			return res, rerr
+		} else if handled {
+			continue
 		}
 
 		var rowID string
@@ -536,6 +541,9 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOv
 		).Scan(&rowID)
 		if err == pgx.ErrNoRows {
 			res.SkippedDup++
+			if rerr := s.markReseenByHash(ctx, clubID, imp, row, hash); rerr != nil {
+				return res, rerr
+			}
 			continue
 		}
 		if err != nil {
@@ -688,7 +696,7 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOv
 
 	// Settle provisional rows before transfer detection, so a stale
 	// in-flight row is never paired as one side of a transfer.
-	s.settleProvisionalRows(ctx, clubID, importID, importedBy, rows, &res)
+	s.settleProvisionalRows(ctx, clubID, importedBy, imp, &res)
 
 	// Detect intra-bank transfers: rows on this import that match an
 	// unmatched row on another of the club's bank imports (different

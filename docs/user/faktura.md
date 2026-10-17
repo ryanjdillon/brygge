@@ -270,7 +270,9 @@ When you upload a bank statement (`Admin → Accounting → Bank & Vipps`), the 
 A transfer still under way when you export a statement appears as a bare **Overførsel**, with no sender and no reference text, dated on the export day. The settled row (for a Vipps payout, **Utb. … Vippsnr …**) only appears in a later export. So:
 
 - Export up to **yesterday**. If the statement does run to today, the upload result warns you; upload that day again once it has settled.
-- When a later statement brings the settled row, Brygge updates the provisional row with the settled text, or dismisses it as **Erstattet av oppgjort rad**. The upload result shows how many. The Vipps payout then clears on the next **Synkroniser**.
+- When a later statement brings the settled row, Brygge updates the provisional row with the settled text (and date, if the bank booked it a day or two later), or dismisses it as **Erstattet av oppgjort rad**. The upload result shows how many. The Vipps payout then clears on the next **Synkroniser**.
+- If the settled row has the same reference but another amount, or a date more than two days later, nothing is changed and the upload result lists it. Look at it in **Tildel**.
+- If an upload stops partway, upload the same file again. Rows already stored are skipped.
 - In **Tildel**, such rows carry a **Foreløpig** badge. Don't book them by hand; upload the day again instead.
 
 ### Vipps reconciliation cascade

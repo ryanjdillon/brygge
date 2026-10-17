@@ -320,7 +320,7 @@ in `backend/migrations/` for the source of truth. The high-level shape:
   default-for-invoices account; bank-statement upload auto-matches
   against `account_number`. Replaces the legacy single `clubs.bank_account`
   column (kept as fallback for one release).
-- `bank_imports`, `bank_import_rows` — statement uploads + per-row tagging
+- `bank_imports`, `bank_import_rows` — statement uploads + per-row tagging. `bank_imports.period_from`/`period_to` record the statement's span; `bank_import_rows.reseen_at` marks a bare row a later statement showed again, so it is not provisional (BRY-378)
   (KID auto-match writes `journal_entry_id`; reassign endpoint cascades
   to journal_lines).
 - `vipps_import_rows` — Vipps payout CSV ingestion. `journal_entry_id` is

@@ -900,7 +900,11 @@ func (h *AccountingHandler) importBankStatement(w http.ResponseWriter, r *http.R
 	}
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to import bank rows")
-		Error(w, http.StatusInternalServerError, "internal error")
+		// Rows are inserted one by one, so a failure can leave the import
+		// partial. Uploading the same file again is safe: rows already
+		// stored are skipped by the reference and hash dedup.
+		Error(w, http.StatusInternalServerError,
+			"Importen stoppet underveis. Rader som allerede er lagret beholdes; last opp samme fil på nytt for å fullføre (duplikater hoppes over).")
 		return
 	}
 
@@ -956,6 +960,7 @@ func (h *AccountingHandler) importBankStatement(w http.ResponseWriter, r *http.R
 		"row_errors":        result.RowErrors,
 		// Provisional in-flight rows (see accounting.SupersedeProvisionalBankRows).
 		"refreshed":             result.Refreshed,
+		"reference_mismatches":  result.ReferenceMismatches,
 		"superseded":            result.Superseded,
 		"provisional_ambiguous": result.ProvisionalAmbiguous,
 		"last_row_date":         result.LastRowDate,

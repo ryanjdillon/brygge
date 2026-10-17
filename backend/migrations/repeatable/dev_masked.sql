@@ -150,7 +150,7 @@ SELECT
     NULL::text AS from_account,
     NULL::text AS to_account,
     dismissed_at, dismissed_by, dismissed_reason, invoice_id,
-    refund_paired_with,
+    refund_paired_with, reseen_at,
     substring(description from '[0-9]{6,}') AS description_kid,
     length(description)                     AS description_length
 FROM public.bank_import_rows;

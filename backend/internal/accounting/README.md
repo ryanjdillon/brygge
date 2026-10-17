@@ -98,6 +98,7 @@ Full list: [`../../../docs/developer/reference/invariants.md`](../../../docs/dev
 ## Common misses
 
 - **Arkivref dedup.** `ImportBankRows` skips an incoming row whose bank reference another row already carries, before the hash insert. A provisional in-flight row (bare `Overførsel` on the export day) and its settled row usually share that reference, so the settled text would never land. The one exception is `refreshProvisionalByReference`, which updates the provisional row in place; keep its conditions narrow (see [invariants](../../../docs/developer/reference/invariants.md#a-provisional-bank-row-gives-way-to-its-settled-row)).
+- **The statement's last day is `bank_imports.period_to`, not the latest surviving row.** An overwrite reimport deletes some of an older import's rows; deriving "the export day" from what survives turns a bare mid-statement row into a provisional one. Reimport paths record the full statement with `recordStatementPeriod` before importing a subset.
 - **Provisional rows are not matchable money.** Never book a bare `Overførsel` from an export's last day against a Vipps payout or a faktura by amount. The settled row arrives with the next export and would become an unbooked duplicate. `SupersedeProvisionalBankRows` dismisses the provisional row once the settled one is imported under another reference.
 
 ## Common changes
