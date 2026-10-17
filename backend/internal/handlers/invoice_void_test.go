@@ -296,6 +296,46 @@ func TestCreditLinkBookedNoteToImportedFaktura(t *testing.T) {
 	}
 }
 
+// An opening balance can only contain receivables that existed when it was
+// taken. One dated before the imported faktura was issued can't hold that
+// faktura's receivable, so it doesn't open the exception.
+func TestCreditLinkOpeningBalanceBeforeFakturaIsRefused(t *testing.T) {
+	f := newCreditFixture(t)
+	ctx := context.Background()
+	faktura := f.club.NewInvoice(t, fin.InvoiceOpts{Member: &f.alice, Cents: 40000, Imported: true,
+		IssueDate: time.Date(f.club.Year, 3, 1, 0, 0, 0, 0, time.UTC)})
+	credit := f.club.NewInvoice(t, fin.InvoiceOpts{Member: &f.alice, Cents: -40000})
+	f.book(t, credit)
+
+	ob, err := f.svc.CreateJournalEntry(ctx, accounting.CreateJournalEntryInput{
+		FiscalPeriodID: f.club.PeriodID,
+		EntryDate:      time.Date(f.club.Year, 1, 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02"),
+		Description:    "Inngående balanse",
+		Source:         "opening_balance",
+		CreatedBy:      f.club.Treasurer.ID,
+		ClubID:         f.club.ID,
+		Lines: []accounting.CreateJournalLineInput{
+			{AccountCode: "1500", Debit: 400},
+			{AccountCode: "2050", Credit: 400},
+		},
+	})
+	if err != nil {
+		t.Fatalf("opening balance: %v", err)
+	}
+	if err := f.svc.PostJournalEntry(ctx, f.club.ID, ob.ID, f.club.Treasurer.ID); err != nil {
+		t.Fatalf("post opening balance: %v", err)
+	}
+
+	entries := f.journalCount(t)
+	wantCode(t, f.link(t, credit, faktura), http.StatusConflict, "booking_mismatch")
+	if f.journalCount(t) != entries {
+		t.Errorf("a refused link posted a journal entry")
+	}
+	if !f.owed(t, faktura) {
+		t.Errorf("imported faktura no longer owed after a refused link")
+	}
+}
+
 // When one entry of the faktura's family can't be reversed (here the
 // resplit correction, after the sync entry's void already ran in the same
 // transaction) nothing is reversed: the faktura stays voided, the response

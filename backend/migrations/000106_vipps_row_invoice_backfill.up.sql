@@ -14,7 +14,11 @@
 --     legacy charge bookings were drafts before BRY-339, so drafts count);
 --   * the faktura, in the same club, still reads as paid by the payment
 --     this assignment created (linkInvoicePayment writes 'KID-avstemming'
---     dated the charge date), not by some later, unrelated payment.
+--     for the charge's amount, dated the charge date), not by some later,
+--     unrelated payment. The date is compared with a one-day margin on
+--     both sides: tx_at is a timestamptz whose ::date depends on the
+--     migration session's time zone, and the margin keeps a charge near
+--     midnight from being missed without tying the migration to one zone.
 -- Anything without such evidence stays NULL and the backlog tool refuses
 -- it for a human.
 
@@ -42,7 +46,9 @@ UPDATE vipps_import_rows r
    AND i.club_id = r.club_id
    AND p.club_id = r.club_id
    AND p.description = 'KID-avstemming'
-   AND p.paid_at::date IN (r.tx_at::date, r.booking_date)
+   AND p.amount = r.amount
+   AND p.paid_at::date BETWEEN LEAST(r.tx_at::date, COALESCE(r.booking_date, r.tx_at::date)) - 1
+                           AND GREATEST(r.tx_at::date, COALESCE(r.booking_date, r.tx_at::date)) + 1
    AND je.club_id = r.club_id
    AND je.status <> 'voided'
    AND r.invoice_id IS NULL

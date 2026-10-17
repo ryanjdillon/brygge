@@ -113,6 +113,30 @@ func TestVippsInvoiceBackfillUsesOnlyExactAuditEvidence(t *testing.T) {
 		         jsonb_build_object('invoice_id', $4::text, 'journal_entry_id', $5::text))`,
 		other.ID, other.Treasurer.ID, foreign, foreignInv.ID, foreignEntry)
 
+	// The payment's date falls on the neighbouring calendar day (a charge
+	// near midnight read in another time zone): still exact evidence.
+	nearMidnight := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 45000})
+	nearMidnightInv := paidInvoice()
+	paidByCharge(nearMidnightInv, nearMidnight)
+	f.exec(t, `UPDATE payments SET paid_at = paid_at + interval '1 day'
+	            WHERE id = (SELECT payment_id FROM invoices WHERE id = $1)`, nearMidnightInv.ID)
+	audited(nearMidnight, nearMidnightInv.ID, f.draftCharge(t, nearMidnight, receivablesAccountCode, 45000))
+
+	// Two days off, or a different amount: not this charge's payment.
+	farOff := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 45000})
+	farOffInv := paidInvoice()
+	paidByCharge(farOffInv, farOff)
+	f.exec(t, `UPDATE payments SET paid_at = paid_at + interval '2 days'
+	            WHERE id = (SELECT payment_id FROM invoices WHERE id = $1)`, farOffInv.ID)
+	audited(farOff, farOffInv.ID, f.draftCharge(t, farOff, receivablesAccountCode, 45000))
+
+	otherAmount := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 45000})
+	otherAmountInv := paidInvoice()
+	paidByCharge(otherAmountInv, otherAmount)
+	f.exec(t, `UPDATE payments SET amount = amount + 1
+	            WHERE id = (SELECT payment_id FROM invoices WHERE id = $1)`, otherAmountInv.ID)
+	audited(otherAmount, otherAmountInv.ID, f.draftCharge(t, otherAmount, receivablesAccountCode, 45000))
+
 	// No audit evidence at all: left alone.
 	bare := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 45000})
 	f.draftCharge(t, bare, receivablesAccountCode, 45000)
@@ -125,6 +149,7 @@ func TestVippsInvoiceBackfillUsesOnlyExactAuditEvidence(t *testing.T) {
 	for name, c := range map[string]struct{ row, want string }{
 		"exact evidence":    {good, goodInv.ID},
 		"latest audit wins": {retried, retriedInv.ID},
+		"near midnight":     {nearMidnight, nearMidnightInv.ID},
 	} {
 		if got := invoiceOf(c.row); got != c.want {
 			t.Errorf("%s: invoice_id = %q, want %q", name, got, c.want)
@@ -133,6 +158,7 @@ func TestVippsInvoiceBackfillUsesOnlyExactAuditEvidence(t *testing.T) {
 	for name, row := range map[string]string{
 		"stale entry": stale, "reopened faktura": reopened, "other payment": otherPayment,
 		"voided entry": voided, "foreign audit": foreign, "no audit": bare,
+		"two days off": farOff, "other amount": otherAmount,
 	} {
 		if got := invoiceOf(row); got != "" {
 			t.Errorf("%s: invoice_id = %q, want it left NULL", name, got)
@@ -140,10 +166,10 @@ func TestVippsInvoiceBackfillUsesOnlyExactAuditEvidence(t *testing.T) {
 	}
 
 	// The backfilled draft now posts as a faktura settlement; the rest are refused.
-	// The voided booking is no longer a draft, so the backlog sees 7 drafts:
-	// the two backfilled settle their fakturas, the other five are refused.
+	// The voided booking is no longer a draft, so the backlog sees 10 drafts:
+	// the three backfilled settle their fakturas, the other seven are refused.
 	res := f.backlog(t, false)
-	if res.Posted != 2 || len(res.Refused) != 5 {
-		t.Errorf("backlog preview after backfill = %+v, want 2 postable and 5 refused", res)
+	if res.Posted != 3 || len(res.Refused) != 7 {
+		t.Errorf("backlog preview after backfill = %+v, want 3 postable and 7 refused", res)
 	}
 }

@@ -84,6 +84,8 @@ See [`../../../docs/developer/reference/enums.md`](../../../docs/developer/refer
 - Bank rows with `journal_entry_id IS NOT NULL` cannot be reassigned without cascading `journal_lines`
 - Reports and momskomp count `posted` **and** `voided` entries (`bookedEntryFilter`), so a void and its reversal net to zero
 - KID auto-match (import and bank sync) posts as the importing user or discards its draft — never leaves an orphan; failures surface as `row_errors`
+- Payment-match entries are sourced to their row and described by `kidMatchDescription`; bank sync's stranded-draft heal keys on exactly that, never on mapping-rule drafts
+- Manual bank-row assigns link the row (guarded) before posting; bilag numbers retry on a unique-key collision instead of failing
 - Matching incoming money to a faktura uses `finance.OwedByMemberSQL`; only ePayment order reconciliation uses `finance.OpenReceivableSQL` (it books captures the webhook already flagged)
 - A faktura is booked when sent and reversed when voided (`BookInvoice` / `ReverseInvoice`, which reverses the whole `invoice_sync` + `invoice_resplit` family or nothing); `SyncInvoices` only repairs what was missed. At most one `invoice_sync` entry per faktura (unique index). `SyncPayments` skips invoice-settling payments
 

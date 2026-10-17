@@ -234,6 +234,10 @@ func (h *InvoiceHandler) HandleLinkCreditNote(w http.ResponseWriter, r *http.Req
 	// when that faktura's receivable exists in Brygge's GL, i.e. an opening
 	// balance carried over at the cutover put it on 1500. Otherwise the
 	// credit note's CR 1500 would reduce a receivable that was never there.
+	// The opening balance must be dated on or after the faktura's issue date
+	// (it can only contain receivables that existed by then) and on or
+	// before the credit note's. Nothing writes source 'opening_balance' yet;
+	// until the cutover import does (BRY-365) this exception never applies.
 	importedException := cn.booked && !target.booked && target.imported
 	openingReceivable := false
 	if importedException {
@@ -244,8 +248,9 @@ func (h *InvoiceHandler) HandleLinkCreditNote(w http.ResponseWriter, r *http.Req
 			       JOIN accounts a ON a.id = jl.account_id
 			      WHERE je.club_id = $1 AND je.source = 'opening_balance' AND je.status = 'posted'
 			        AND a.code = '1500' AND jl.debit > 0
-			        AND je.entry_date <= (SELECT issue_date FROM invoices WHERE id = $2))`,
-			claims.ClubID, cn.id,
+			        AND je.entry_date <= (SELECT issue_date FROM invoices WHERE id = $2)
+			        AND je.entry_date >= (SELECT issue_date FROM invoices WHERE id = $3))`,
+			claims.ClubID, cn.id, target.id,
 		).Scan(&openingReceivable); err != nil {
 			h.log.Error().Err(err).Msg("link credit: opening balance check")
 			Error(w, http.StatusInternalServerError, "internal error")
@@ -281,8 +286,9 @@ func (h *InvoiceHandler) HandleLinkCreditNote(w http.ResponseWriter, r *http.Req
 		return
 	case importedException && !openingReceivable:
 		creditConflict(w, "booking_mismatch",
-			"the faktura was imported from the previous system and Brygge has no opening balance on 1500 that includes it; "+
-				"post the opening balance first, otherwise the credit note would clear a receivable that was never booked")
+			"the faktura was imported from the previous system and Brygge has no posted opening balance on 1500 "+
+				"dated between the faktura and the credit note; the opening balance is not imported yet, "+
+				"so this pair can't be linked until it is, otherwise the credit note would clear a receivable that was never booked")
 		return
 	case cn.booked != target.booked && !importedException:
 		// One side in the GL and the other not would leave the receivable
