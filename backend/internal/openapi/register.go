@@ -1708,6 +1708,33 @@ func registerAdminOps(api huma.API) {
 	}, stub[struct{ Body CreateInvoiceRequest }, struct{ Body Payment }]())
 
 	huma.Register(api, huma.Operation{
+		OperationID: "admin-bulk-create-invoices",
+		Method:      http.MethodPost,
+		Path:        "/api/v1/admin/financials/invoices/bulk",
+		Tags:        []string{"Admin", "Financials"},
+		Summary:     "Bulk-create invoices (preview, then create), applying role exemptions",
+		Security:    BearerSecurity,
+	}, stub[struct{ Body BulkInvoiceRequest }, struct{ Body BulkInvoiceResponse }]())
+
+	huma.Register(api, huma.Operation{
+		OperationID: "admin-get-exemptions",
+		Method:      http.MethodGet,
+		Path:        "/api/v1/admin/settings/economy/exemptions",
+		Tags:        []string{"Admin", "Financials"},
+		Summary:     "Get role-based price exemptions",
+		Security:    BearerSecurity,
+	}, stub[struct{}, struct{ Body ExemptionSettings }]())
+
+	huma.Register(api, huma.Operation{
+		OperationID: "admin-put-exemptions",
+		Method:      http.MethodPut,
+		Path:        "/api/v1/admin/settings/economy/exemptions",
+		Tags:        []string{"Admin", "Financials"},
+		Summary:     "Replace role-based price exemptions (fresh TOTP)",
+		Security:    BearerSecurity,
+	}, stub[struct{ Body PutExemptionSettings }, struct{ Body ExemptionSettings }]())
+
+	huma.Register(api, huma.Operation{
 		OperationID: "admin-list-overdue",
 		Method:      http.MethodGet,
 		Path:        "/api/v1/admin/financials/overdue",

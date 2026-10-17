@@ -261,6 +261,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/financials/invoices/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Bulk-create invoices (preview, then create), applying role exemptions */
+        post: operations["admin-bulk-create-invoices"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/financials/overdue": {
         parameters: {
             query?: never;
@@ -571,6 +588,24 @@ export interface paths {
         get: operations["get-booking-settings"];
         /** Update booking settings */
         put: operations["update-booking-settings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/settings/economy/exemptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get role-based price exemptions */
+        get: operations["admin-get-exemptions"];
+        /** Replace role-based price exemptions (fresh TOTP) */
+        put: operations["admin-put-exemptions"];
         post?: never;
         delete?: never;
         options?: never;
@@ -3086,6 +3121,94 @@ export interface components {
             /** @description Email subject */
             subject: string;
         };
+        BulkExemption: {
+            /**
+             * Format: double
+             * @description Amount exempted
+             */
+            amount: number;
+            /** @description Boat the line is for, on boat-bound lines */
+            boat_id?: string;
+            /** @description Line description */
+            description: string;
+            /** @description Identifier to pass back in skip_exemptions */
+            key: string;
+            /** @description Exempted price item */
+            price_item_id: string;
+            /** @description Board role granting the exemption */
+            role: string;
+            /** @description Member UUID */
+            user_id: string;
+        };
+        BulkInvoiceCreated: {
+            /**
+             * Format: double
+             * @description Invoice total
+             */
+            amount: number;
+            /** @description Lines dropped as already billed */
+            dropped_lines?: string[] | null;
+            /** @description Invoice UUID */
+            invoice_id: string;
+            /**
+             * Format: int64
+             * @description Invoice number
+             */
+            invoice_number: number;
+            /**
+             * Format: int64
+             * @description Number of lines
+             */
+            line_count: number;
+            /** @description Member UUID */
+            user_id: string;
+        };
+        BulkInvoiceRequest: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/BulkInvoiceRequest.json
+             */
+            readonly $schema?: string;
+            /** @description Bypass the per-line idempotency check */
+            allow_duplicate_lines?: boolean;
+            /** @description Tiered categories resolved per boat */
+            beam_categories?: string[] | null;
+            /** @description Due date (YYYY-MM-DD) */
+            due_date: string;
+            /** @description Fiscal period UUID */
+            fiscal_period_id: string;
+            /** @description Resolve lines and report exemptions without creating anything */
+            preview?: boolean;
+            /** @description Flat price items to bill */
+            price_item_ids?: string[] | null;
+            /** @description Exemption keys the operator unticked; those lines are billed in full */
+            skip_exemptions?: string[] | null;
+            /** @description Members to invoice */
+            user_ids: string[] | null;
+        };
+        BulkInvoiceResponse: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/BulkInvoiceResponse.json
+             */
+            readonly $schema?: string;
+            /** @description Invoices created */
+            created: components["schemas"]["BulkInvoiceCreated"][] | null;
+            /** @description Role exemptions applied (or, in a preview, that would apply) */
+            exemptions: components["schemas"]["BulkExemption"][] | null;
+            /** @description Members skipped */
+            skipped: components["schemas"]["BulkInvoiceSkipped"][] | null;
+            /** @description Problems that change the outcome without stopping the run */
+            warnings?: string[] | null;
+        };
+        BulkInvoiceSkipped: {
+            /** @description Why the member was skipped */
+            reason: string;
+            /** @description Member UUID */
+            user_id: string;
+        };
         CalendarEvent: {
             /**
              * Format: uri
@@ -3308,6 +3431,8 @@ export interface components {
             description: string;
             /** @description Due date */
             due_date: string;
+            /** @description Bill the member in full even when one of their board roles is exempt from a line's price item */
+            skip_exemptions?: boolean;
             /** @description Invoice type */
             type: string;
             /** @description User UUID */
@@ -3514,6 +3639,28 @@ export interface components {
              * @example https://example.com/errors/example
              */
             type: string;
+        };
+        ExemptionRule: {
+            /** @description Price category (exactly one of category / price_item_id) */
+            category?: string;
+            /** @description Price item UUID */
+            price_item_id?: string;
+            /** @description Board role */
+            role: string;
+        };
+        ExemptionSettings: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/ExemptionSettings.json
+             */
+            readonly $schema?: string;
+            /** @description Roles the rules may use, in display order */
+            board_roles: string[] | null;
+            /** @description Expense account code exemption lines are booked to */
+            expense_account: string;
+            /** @description Role x price item/category exemptions */
+            rules: components["schemas"]["ExemptionRule"][] | null;
         };
         FaqIDResponse: {
             /**
@@ -3982,6 +4129,8 @@ export interface components {
             issue_date: string;
             /** @description KID payment reference */
             kid_number: string;
+            /** @description Whether the member still owes this faktura; false for paid, credited, credit notes and 0 kr (fully exempted) fakturas */
+            owed: boolean;
             /** @description Whether a payment is linked to the invoice */
             paid: boolean;
             /** @description A Vipps pay-link payment was seen via webhook but settlement is not yet reconciled */
@@ -4610,6 +4759,18 @@ export interface components {
              * @description Last update timestamp
              */
             updated_at: string;
+        };
+        PutExemptionSettings: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/PutExemptionSettings.json
+             */
+            readonly $schema?: string;
+            /** @description Expense account code exemption lines are booked to */
+            expense_account: string;
+            /** @description Role x price item/category exemptions; replaces the current set */
+            rules: components["schemas"]["ExemptionRule"][] | null;
         };
         "Record-consentRequest": {
             /**
@@ -5751,6 +5912,39 @@ export interface operations {
             };
         };
     };
+    "admin-bulk-create-invoices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkInvoiceRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkInvoiceResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "admin-list-overdue": {
         parameters: {
             query?: never;
@@ -6569,6 +6763,68 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "admin-get-exemptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExemptionSettings"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "admin-put-exemptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PutExemptionSettings"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExemptionSettings"];
                 };
             };
             /** @description Error */

@@ -303,6 +303,7 @@ type MemberInvoice struct {
 	PaymentReceived bool    `json:"payment_received" doc:"A Vipps pay-link payment was seen via webhook but settlement is not yet reconciled"`
 	CreditNote      bool    `json:"credit_note" doc:"A credit note (negative total): money the club owes back, never a bill"`
 	Credited        bool    `json:"credited" doc:"Settled by a linked credit note"`
+	Owed            bool    `json:"owed" doc:"Whether the member still owes this faktura; false for paid, credited, credit notes and 0 kr (fully exempted) fakturas"`
 	PriceItemName   string  `json:"price_item_name" doc:"Price item name, if any"`
 	Description     string  `json:"description" doc:"First invoice-line description"`
 	HasPDF          bool    `json:"has_pdf" doc:"Whether a downloadable PDF exists for this invoice"`
@@ -651,11 +652,73 @@ type OverduePayment struct {
 }
 
 type CreateInvoiceRequest struct {
-	UserID      string  `json:"user_id" doc:"User UUID"`
-	Type        string  `json:"type" doc:"Invoice type"`
-	Amount      float64 `json:"amount" doc:"Invoice amount"`
-	Description string  `json:"description" doc:"Invoice description"`
-	DueDate     string  `json:"due_date" doc:"Due date"`
+	UserID         string  `json:"user_id" doc:"User UUID"`
+	Type           string  `json:"type" doc:"Invoice type"`
+	Amount         float64 `json:"amount" doc:"Invoice amount"`
+	Description    string  `json:"description" doc:"Invoice description"`
+	DueDate        string  `json:"due_date" doc:"Due date"`
+	SkipExemptions bool    `json:"skip_exemptions,omitempty" doc:"Bill the member in full even when one of their board roles is exempt from a line's price item"`
+}
+
+// --- Bulk invoicing and role exemptions (BRY-351) ---
+
+type BulkInvoiceRequest struct {
+	UserIDs             []string `json:"user_ids" doc:"Members to invoice"`
+	FiscalPeriodID      string   `json:"fiscal_period_id" doc:"Fiscal period UUID"`
+	PriceItemIDs        []string `json:"price_item_ids,omitempty" doc:"Flat price items to bill"`
+	BeamCategories      []string `json:"beam_categories,omitempty" doc:"Tiered categories resolved per boat"`
+	DueDate             string   `json:"due_date" doc:"Due date (YYYY-MM-DD)"`
+	AllowDuplicateLines bool     `json:"allow_duplicate_lines,omitempty" doc:"Bypass the per-line idempotency check"`
+	Preview             bool     `json:"preview,omitempty" doc:"Resolve lines and report exemptions without creating anything"`
+	SkipExemptions      []string `json:"skip_exemptions,omitempty" doc:"Exemption keys the operator unticked; those lines are billed in full"`
+}
+
+type BulkExemption struct {
+	Key         string  `json:"key" doc:"Identifier to pass back in skip_exemptions"`
+	UserID      string  `json:"user_id" doc:"Member UUID"`
+	PriceItemID string  `json:"price_item_id" doc:"Exempted price item"`
+	BoatID      string  `json:"boat_id,omitempty" doc:"Boat the line is for, on boat-bound lines"`
+	Description string  `json:"description" doc:"Line description"`
+	Amount      float64 `json:"amount" doc:"Amount exempted"`
+	Role        string  `json:"role" doc:"Board role granting the exemption"`
+}
+
+type BulkInvoiceCreated struct {
+	UserID        string   `json:"user_id" doc:"Member UUID"`
+	InvoiceID     string   `json:"invoice_id" doc:"Invoice UUID"`
+	InvoiceNumber int      `json:"invoice_number" doc:"Invoice number"`
+	Amount        float64  `json:"amount" doc:"Invoice total"`
+	LineCount     int      `json:"line_count" doc:"Number of lines"`
+	DroppedLines  []string `json:"dropped_lines,omitempty" doc:"Lines dropped as already billed"`
+}
+
+type BulkInvoiceSkipped struct {
+	UserID string `json:"user_id" doc:"Member UUID"`
+	Reason string `json:"reason" doc:"Why the member was skipped"`
+}
+
+type BulkInvoiceResponse struct {
+	Created    []BulkInvoiceCreated `json:"created" doc:"Invoices created"`
+	Skipped    []BulkInvoiceSkipped `json:"skipped" doc:"Members skipped"`
+	Exemptions []BulkExemption      `json:"exemptions" doc:"Role exemptions applied (or, in a preview, that would apply)"`
+	Warnings   []string             `json:"warnings,omitempty" doc:"Problems that change the outcome without stopping the run"`
+}
+
+type ExemptionRule struct {
+	Role        string  `json:"role" doc:"Board role"`
+	Category    *string `json:"category,omitempty" doc:"Price category (exactly one of category / price_item_id)"`
+	PriceItemID *string `json:"price_item_id,omitempty" doc:"Price item UUID"`
+}
+
+type ExemptionSettings struct {
+	ExpenseAccount string          `json:"expense_account" doc:"Expense account code exemption lines are booked to"`
+	Rules          []ExemptionRule `json:"rules" doc:"Role x price item/category exemptions"`
+	BoardRoles     []string        `json:"board_roles" doc:"Roles the rules may use, in display order"`
+}
+
+type PutExemptionSettings struct {
+	ExpenseAccount string          `json:"expense_account" doc:"Expense account code exemption lines are booked to"`
+	Rules          []ExemptionRule `json:"rules" doc:"Role x price item/category exemptions; replaces the current set"`
 }
 
 // --- Volunteer ---
