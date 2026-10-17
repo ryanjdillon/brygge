@@ -133,9 +133,18 @@ func TestVippsInvoiceBackfillUsesOnlyExactAuditEvidence(t *testing.T) {
 	otherAmount := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 45000})
 	otherAmountInv := paidInvoice()
 	paidByCharge(otherAmountInv, otherAmount)
-	f.exec(t, `UPDATE payments SET amount = amount + 1
+	f.exec(t, `UPDATE payments SET amount = amount + 5
 	            WHERE id = (SELECT payment_id FROM invoices WHERE id = $1)`, otherAmountInv.ID)
 	audited(otherAmount, otherAmountInv.ID, f.draftCharge(t, otherAmount, receivablesAccountCode, 45000))
+
+	// Assignment accepts a charge within 1 kr of the faktura total, and the
+	// payment carries the faktura total, so a 0.50 kr rounding gap still counts.
+	rounded := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 45000})
+	roundedInv := paidInvoice()
+	paidByCharge(roundedInv, rounded)
+	f.exec(t, `UPDATE payments SET amount = amount + 0.50
+	            WHERE id = (SELECT payment_id FROM invoices WHERE id = $1)`, roundedInv.ID)
+	audited(rounded, roundedInv.ID, f.draftCharge(t, rounded, receivablesAccountCode, 45000))
 
 	// No audit evidence at all: left alone.
 	bare := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 45000})
@@ -150,6 +159,7 @@ func TestVippsInvoiceBackfillUsesOnlyExactAuditEvidence(t *testing.T) {
 		"exact evidence":    {good, goodInv.ID},
 		"latest audit wins": {retried, retriedInv.ID},
 		"near midnight":     {nearMidnight, nearMidnightInv.ID},
+		"within 1 kr":       {rounded, roundedInv.ID},
 	} {
 		if got := invoiceOf(c.row); got != c.want {
 			t.Errorf("%s: invoice_id = %q, want %q", name, got, c.want)
@@ -166,10 +176,10 @@ func TestVippsInvoiceBackfillUsesOnlyExactAuditEvidence(t *testing.T) {
 	}
 
 	// The backfilled draft now posts as a faktura settlement; the rest are refused.
-	// The voided booking is no longer a draft, so the backlog sees 10 drafts:
-	// the three backfilled settle their fakturas, the other seven are refused.
+	// The voided booking is no longer a draft, so the backlog sees 11 drafts:
+	// the four backfilled settle their fakturas, the other seven are refused.
 	res := f.backlog(t, false)
-	if res.Posted != 3 || len(res.Refused) != 7 {
-		t.Errorf("backlog preview after backfill = %+v, want 3 postable and 7 refused", res)
+	if res.Posted != 4 || len(res.Refused) != 7 {
+		t.Errorf("backlog preview after backfill = %+v, want 4 postable and 7 refused", res)
 	}
 }

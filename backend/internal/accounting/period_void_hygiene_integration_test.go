@@ -376,3 +376,75 @@ func TestClosePeriodWaitsForInFlightDraft(t *testing.T) {
 		t.Errorf("period closed around an in-flight draft")
 	}
 }
+
+// An unassign that reads a row's entry while a manual assign is still
+// posting it must wait for the post and then reverse the now-posted entry,
+// never unlink the row and leave a posted entry behind.
+func TestUnassignBankRowWaitsForInFlightPost(t *testing.T) {
+	f := newHygieneFixture(t)
+	ctx := context.Background()
+	row := f.club.NewBankRow(t, f.club.NewBankImport(t), fin.BankRowOpts{Cents: 75000})
+	draft := f.entry(t, f.club, "1920", "3900", 750, false)
+	if _, err := f.club.Pool.Exec(ctx, `UPDATE bank_import_rows SET journal_entry_id = $1 WHERE id = $2`, draft, row); err != nil {
+		t.Fatalf("link draft: %v", err)
+	}
+
+	// Hold the entry row the way PostJournalEntry does, mid-post.
+	holder, err := f.club.Pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin holder: %v", err)
+	}
+	defer func() { _ = holder.Rollback(ctx) }()
+	var holderPID int
+	if err := holder.QueryRow(ctx, `SELECT pg_backend_pid()`).Scan(&holderPID); err != nil {
+		t.Fatalf("holder pid: %v", err)
+	}
+	if _, err := holder.Exec(ctx,
+		`UPDATE journal_entries SET status = 'posted', posted_by = $2, posted_at = now() WHERE id = $1`,
+		draft, f.club.Treasurer.ID); err != nil {
+		t.Fatalf("hold post: %v", err)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		_, _, err := f.svc.UnassignBankRow(ctx, f.club.ID, f.club.Treasurer.ID, row)
+		done <- err
+	}()
+
+	// Wait until the unassign is blocked on the holder's lock.
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		var waiting int
+		if err := f.club.Pool.QueryRow(ctx,
+			`SELECT count(*) FROM pg_stat_activity WHERE $1 = ANY(pg_blocking_pids(pid))`, holderPID,
+		).Scan(&waiting); err != nil {
+			t.Fatalf("poll waiters: %v", err)
+		}
+		if waiting > 0 {
+			break
+		}
+		select {
+		case err := <-done:
+			t.Fatalf("unassign returned (%v) without waiting for the in-flight post", err)
+		default:
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("unassign never blocked on the in-flight post")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	if err := holder.Commit(ctx); err != nil {
+		t.Fatalf("commit holder: %v", err)
+	}
+	if err := <-done; err != nil {
+		t.Fatalf("unassign after post: %v", err)
+	}
+
+	if n := f.scalar(t, `SELECT count(*) FROM journal_entries WHERE id = $1 AND status = 'voided'`, draft); n != 1 {
+		t.Errorf("posted entry was not reversed after the unassign waited for it")
+	}
+	if n := f.scalar(t, `SELECT count(*) FROM bank_import_rows WHERE id = $1 AND journal_entry_id IS NULL`, row); n != 1 {
+		t.Errorf("row still linked")
+	}
+}

@@ -429,14 +429,22 @@ func (s *Service) UnassignBankRow(
 		id, status string
 	}
 	rows, err := tx.Query(ctx,
-		`SELECT DISTINCT je.id, je.status
-		   FROM bank_import_rows b
-		   JOIN journal_entries je ON je.id = b.journal_entry_id AND je.club_id = b.club_id
-		  WHERE b.club_id = $1
-		    AND (b.id = $2
-		         OR ($3 <> '' AND b.invoice_id::text = $3)
-		         OR b.journal_entry_id::text = $4)
-		  ORDER BY je.id`,
+		// FOR UPDATE (in id order) waits out a concurrent post of the same
+		// entry, so a draft read here can't be posted behind our back and
+		// leave a posted entry with its row already unlinked.
+		`SELECT je.id, je.status
+		   FROM journal_entries je
+		  WHERE je.club_id = $1
+		    AND je.id IN (
+		        SELECT b.journal_entry_id
+		          FROM bank_import_rows b
+		         WHERE b.club_id = $1
+		           AND b.journal_entry_id IS NOT NULL
+		           AND (b.id = $2
+		                OR ($3 <> '' AND b.invoice_id::text = $3)
+		                OR b.journal_entry_id::text = $4))
+		  ORDER BY je.id
+		  FOR UPDATE`,
 		clubID, bankRowID, priorInvoiceID, priorJournalID,
 	)
 	if err != nil {

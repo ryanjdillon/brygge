@@ -829,12 +829,19 @@ func (s *Service) detectIntraBankTransfers(ctx context.Context, clubID, importID
 			s.log.Warn().Err(err).Str("bank_row_id", p.r1ID).Msg("intra-bank transfer: CreateJournalEntry failed; rows stay unmatched")
 			continue
 		}
-		if _, err := s.db.Exec(ctx,
+		tag, err := s.db.Exec(ctx,
 			`UPDATE bank_import_rows SET journal_entry_id = $1, auto_matched = true
 			  WHERE id = ANY($2::uuid[]) AND club_id = $3 AND journal_entry_id IS NULL`,
 			entry.ID, []string{p.r1ID, p.r2ID}, clubID,
-		); err != nil {
-			s.log.Warn().Err(err).Str("bank_row_id", p.r1ID).Msg("intra-bank transfer: linking rows failed; draft discarded")
+		)
+		if err != nil || tag.RowsAffected() != 2 {
+			// One side was booked concurrently: a transfer needs both rows,
+			// so release whichever row this call did link and drop the draft.
+			s.log.Warn().Err(err).Str("bank_row_id", p.r1ID).Msg("intra-bank transfer: could not link both rows; draft discarded")
+			_, _ = s.db.Exec(ctx,
+				`UPDATE bank_import_rows SET journal_entry_id = NULL, auto_matched = false
+				  WHERE journal_entry_id = $1 AND club_id = $2`,
+				entry.ID, clubID)
 			s.discardDraft(ctx, clubID, entry.ID)
 			continue
 		}

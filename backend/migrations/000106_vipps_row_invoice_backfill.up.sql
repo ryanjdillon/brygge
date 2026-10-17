@@ -46,7 +46,9 @@ UPDATE vipps_import_rows r
    AND i.club_id = r.club_id
    AND p.club_id = r.club_id
    AND p.description = 'KID-avstemming'
-   AND p.amount = r.amount
+   -- Assignment accepts a charge within 1 kr of the faktura total and
+   -- links a payment of the faktura total, so compare with that tolerance.
+   AND ABS(p.amount - r.amount) <= 1.00
    AND p.paid_at::date BETWEEN LEAST(r.tx_at::date, COALESCE(r.booking_date, r.tx_at::date)) - 1
                            AND GREATEST(r.tx_at::date, COALESCE(r.booking_date, r.tx_at::date)) + 1
    AND je.club_id = r.club_id

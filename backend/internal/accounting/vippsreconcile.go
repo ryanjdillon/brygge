@@ -400,12 +400,18 @@ func (s *Service) reconcileVippsConfirm(ctx context.Context, clubID, bankRowID, 
 		return "", fmt.Errorf("creating journal entry: %w", err)
 	}
 
-	if _, err := s.db.Exec(ctx,
-		`UPDATE bank_import_rows SET journal_entry_id = $1, auto_matched = true WHERE id = $2`,
-		entry.ID, bankRowID,
-	); err != nil {
+	tag, err := s.db.Exec(ctx,
+		`UPDATE bank_import_rows SET journal_entry_id = $1, auto_matched = true
+		  WHERE id = $2 AND club_id = $3 AND journal_entry_id IS NULL`,
+		entry.ID, bankRowID, clubID,
+	)
+	if err != nil {
 		s.discardDraft(ctx, clubID, entry.ID)
 		return "", fmt.Errorf("linking bank row: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		s.discardDraft(ctx, clubID, entry.ID)
+		return "", fmt.Errorf("bank row is already booked")
 	}
 
 	var vippsRowIDs []string
