@@ -2,7 +2,7 @@
 import { useI18n } from 'vue-i18n'
 import { ExternalLink } from 'lucide-vue-next'
 import { formatNOK, formatDate } from '@/lib/format'
-import { isOverdue, isNothingDue, type MemberInvoice } from '@/composables/useMyInvoices'
+import { invoiceStatus, invoiceStatusClass, isNothingDue, type MemberInvoice } from '@/composables/useMyInvoices'
 
 // Reusable list of the member's own invoices. Used both on the portal
 // dashboard (recent/unpaid summaries) and the full Fakturas page.
@@ -13,24 +13,8 @@ defineProps<{
 
 const { t } = useI18n()
 
-// A credit note is money the club owes back, and a faktura it settles is
-// done; neither is shown as unpaid or overdue (BRY-342).
-function statusClass(inv: MemberInvoice): string {
-  if (inv.credit_note) return 'bg-sky-100 text-sky-800'
-  if (inv.paid || inv.credited || isNothingDue(inv)) return 'bg-green-100 text-green-800'
-  if (inv.payment_received) return 'bg-blue-100 text-blue-800'
-  if (isOverdue(inv)) return 'bg-red-100 text-red-800'
-  return 'bg-amber-100 text-amber-800'
-}
-
 function statusLabel(inv: MemberInvoice): string {
-  if (inv.credit_note) return t('portal.invoices.status.credit_note')
-  if (inv.credited) return t('portal.invoices.status.credited')
-  if (isNothingDue(inv)) return t('portal.invoices.status.nothing_due')
-  if (inv.paid) return t('portal.invoices.status.paid')
-  if (inv.payment_received) return t('portal.invoices.status.received')
-  if (isOverdue(inv)) return t('portal.invoices.status.overdue')
-  return t('portal.invoices.status.unpaid')
+  return t(`portal.invoices.status.${invoiceStatus(inv)}`)
 }
 </script>
 
@@ -59,7 +43,7 @@ function statusLabel(inv: MemberInvoice): string {
             {{ formatNOK(inv.total_amount) }}
           </span>
           <span
-            :class="['inline-flex rounded-full px-2 py-0.5 text-xs font-medium', statusClass(inv)]"
+            :class="['inline-flex rounded-full px-2 py-0.5 text-xs font-medium', invoiceStatusClass(inv)]"
           >
             {{ statusLabel(inv) }}
           </span>

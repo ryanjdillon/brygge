@@ -8,8 +8,8 @@ import { useApiClient, unwrap } from '@/lib/apiClient'
 import { useFeatures } from '@/composables/useFeatures'
 import {
   useMyInvoices,
-  isOverdue,
-  isNothingDue,
+  invoiceStatus,
+  invoiceStatusClass,
   type MemberInvoice,
 } from '@/composables/useMyInvoices'
 import { usePaymentDataUpdatedAt } from '@/composables/usePaymentDataUpdatedAt'
@@ -58,22 +58,15 @@ const displayRole = computed(() => {
 })
 
 function chipBorderClass(inv: MemberInvoice): string {
-  if (inv.paid || !inv.owed) return 'border-l-green-400'
-  if (isOverdue(inv)) return 'border-l-red-400'
-  return 'border-l-amber-400'
-}
-
-function chipBadgeClass(inv: MemberInvoice): string {
-  if (inv.paid || !inv.owed) return 'bg-green-100 text-green-800'
-  if (isOverdue(inv)) return 'bg-red-100 text-red-800'
-  return 'bg-amber-100 text-amber-800'
+  const status = invoiceStatus(inv)
+  if (status === 'overdue') return 'border-l-red-400'
+  if (status === 'unpaid') return 'border-l-amber-400'
+  if (status === 'credit_note') return 'border-l-sky-400'
+  return 'border-l-green-400'
 }
 
 function chipBadgeLabel(inv: MemberInvoice): string {
-  if (isNothingDue(inv)) return t('portal.invoices.status.nothing_due')
-  if (inv.paid) return t('portal.invoices.status.paid')
-  if (isOverdue(inv)) return t('portal.invoices.status.overdue')
-  return t('portal.invoices.status.unpaid')
+  return t(`portal.invoices.status.${invoiceStatus(inv)}`)
 }
 
 // ── Documents section ─────────────────────────────────────────────────────────
@@ -327,7 +320,7 @@ watch(docSearch, () => nextTick(() => applyHighlights()))
                 <span class="text-sm font-semibold tabular-nums text-gray-900">
                   {{ formatNOK(inv.total_amount) }}
                 </span>
-                <span :class="['rounded-full px-2 py-0.5 text-xs font-medium', chipBadgeClass(inv)]">
+                <span :class="['rounded-full px-2 py-0.5 text-xs font-medium', invoiceStatusClass(inv)]">
                   {{ chipBadgeLabel(inv) }}
                 </span>
               </div>
@@ -358,7 +351,7 @@ watch(docSearch, () => nextTick(() => applyHighlights()))
               </div>
               <div class="flex shrink-0 items-center gap-2">
                 <span class="text-sm tabular-nums text-gray-500">{{ formatNOK(inv.total_amount) }}</span>
-                <span :class="['rounded-full px-2 py-0.5 text-xs font-medium', chipBadgeClass(inv)]">
+                <span :class="['rounded-full px-2 py-0.5 text-xs font-medium', invoiceStatusClass(inv)]">
                   {{ chipBadgeLabel(inv) }}
                 </span>
               </div>

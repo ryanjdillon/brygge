@@ -38,3 +38,40 @@ export function isOverdue(inv: MemberInvoice): boolean {
 export function isNothingDue(inv: MemberInvoice): boolean {
   return !inv.credit_note && inv.total_amount === 0
 }
+
+// One status vocabulary for every member-facing invoice badge (the full
+// list and the dashboard chips). A credit note is money the club owes
+// back, and a faktura it settles is done; neither reads as unpaid or
+// overdue (BRY-342). The key is the suffix of portal.invoices.status.*.
+export type InvoiceStatus =
+  | 'credit_note'
+  | 'credited'
+  | 'nothing_due'
+  | 'paid'
+  | 'received'
+  | 'overdue'
+  | 'unpaid'
+
+export function invoiceStatus(inv: MemberInvoice): InvoiceStatus {
+  if (inv.credit_note) return 'credit_note'
+  if (inv.credited) return 'credited'
+  if (isNothingDue(inv)) return 'nothing_due'
+  if (inv.paid) return 'paid'
+  if (inv.payment_received) return 'received'
+  if (isOverdue(inv)) return 'overdue'
+  return 'unpaid'
+}
+
+const statusTone: Record<InvoiceStatus, string> = {
+  credit_note: 'bg-sky-100 text-sky-800',
+  credited: 'bg-green-100 text-green-800',
+  nothing_due: 'bg-green-100 text-green-800',
+  paid: 'bg-green-100 text-green-800',
+  received: 'bg-blue-100 text-blue-800',
+  overdue: 'bg-red-100 text-red-800',
+  unpaid: 'bg-amber-100 text-amber-800',
+}
+
+export function invoiceStatusClass(inv: MemberInvoice): string {
+  return statusTone[invoiceStatus(inv)]
+}

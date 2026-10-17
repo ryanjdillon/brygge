@@ -95,19 +95,30 @@ const cashFlowTotals = computed(() => {
 })
 const cashFlowNet = computed(() => cashFlowTotals.value.income - cashFlowTotals.value.expense)
 
+// Role exemptions (BRY-351) are billed gross and waived on the same
+// faktura, so they never become received or outstanding. They get their
+// own slice so the slices still add up to the gross billed in the centre.
+const totalExempted = computed(() => priceItemSummary.value?.totals?.exempted ?? 0)
+const showExempted = computed(() => totalExempted.value > 0)
+
 const fakturaDonutSlices = computed(() => {
   const totals = priceItemSummary.value?.totals
   if (!totals) return []
   const waiting = Math.max(0, totals.outstanding - totals.overdue)
-  return [
+  const slices = [
     { label: t('admin.financials.statusPaid'), value: totals.received, color: '#16a34a' },
     { label: t('admin.financials.statusWaiting'), value: waiting, color: '#eab308' },
     { label: t('admin.financials.statusOverdue'), value: totals.overdue, color: '#dc2626' },
   ]
+  if (totals.exempted > 0) {
+    slices.push({ label: t('admin.financials.statusExempted'), value: totals.exempted, color: '#94a3b8' })
+  }
+  return slices
 })
 
 type CategorySubtotals = {
   billed: number
+  exempted: number
   received: number
   overdue: number
   outstanding: number
@@ -125,12 +136,13 @@ const priceItemGroups = computed<CategoryGroup[]>(() => {
       g = {
         category: it.category,
         items: [],
-        subtotals: { billed: 0, received: 0, overdue: 0, outstanding: 0, invoice_count: 0, paid_count: 0, overdue_count: 0 },
+        subtotals: { billed: 0, exempted: 0, received: 0, overdue: 0, outstanding: 0, invoice_count: 0, paid_count: 0, overdue_count: 0 },
       }
       byCat.set(it.category, g)
     }
     g.items.push(it)
     g.subtotals.billed += it.billed
+    g.subtotals.exempted += it.exempted
     g.subtotals.received += it.received
     g.subtotals.overdue += it.overdue
     g.subtotals.outstanding += it.outstanding
@@ -227,6 +239,9 @@ const postedCount = computed(() => entries.value?.filter(e => e.status === 'post
                 <p class="text-lg font-semibold text-gray-900">{{ formatNOK(priceItemSummary.totals.billed) }}</p>
                 <p class="text-xs text-gray-500 tabular-nums">{{ t('admin.financials.countSuffix', { n: totalCounts.invoiceCount }) }}</p>
               </div>
+              <p v-if="showExempted" class="mt-1 text-xs text-gray-500 tabular-nums" data-testid="billed-exempted">
+                {{ t('admin.financials.exemptedOfBilled', { amount: formatNOK(totalExempted) }) }}
+              </p>
             </RouterLink>
             <RouterLink
               :to="{ path: '/admin/accounting/faktura', query: { tab: 'sent', pay: 'paid' } }"
@@ -337,6 +352,7 @@ const postedCount = computed(() => entries.value?.filter(e => e.status === 'post
                   <th class="px-4 py-3 font-medium">{{ t('admin.financials.priceItem') }}</th>
                   <th class="px-4 py-3 text-right font-medium">{{ t('admin.financials.invoices') }}</th>
                   <th class="px-4 py-3 text-right font-medium">{{ t('admin.financials.billed') }}</th>
+                  <th v-if="showExempted" class="px-4 py-3 text-right font-medium">{{ t('admin.financials.exempted') }}</th>
                   <th class="px-4 py-3 text-right font-medium">{{ t('admin.financials.received') }}</th>
                   <th class="px-4 py-3 text-right font-medium">{{ t('admin.financials.outstanding') }}</th>
                   <th class="px-4 py-3 text-right font-medium">{{ t('admin.financials.forfall') }}</th>
@@ -349,7 +365,7 @@ const postedCount = computed(() => entries.value?.filter(e => e.status === 'post
                       {{ g.category ? categoryLabel(g.category) : t('admin.financials.unmappedLines') }}
                       <span class="ml-2 text-xs font-normal text-gray-500">{{ g.items.length }}</span>
                     </td>
-                    <td colspan="5" />
+                    <td :colspan="showExempted ? 6 : 5" />
                   </tr>
                   <tr v-for="row in g.items" :key="row.price_item_id" class="border-t border-gray-100">
                     <td class="px-4 py-2 text-gray-900">
@@ -360,6 +376,7 @@ const postedCount = computed(() => entries.value?.filter(e => e.status === 'post
                     </td>
                     <td class="px-4 py-2 text-right tabular-nums" :class="row.invoice_count === 0 ? 'text-gray-300' : 'text-gray-600'">{{ row.invoice_count }}</td>
                     <td class="px-4 py-2 text-right tabular-nums" :class="row.billed === 0 ? 'text-gray-300' : 'text-gray-900'">{{ formatNOK(row.billed) }}</td>
+                    <td v-if="showExempted" class="px-4 py-2 text-right tabular-nums" :class="row.exempted === 0 ? 'text-gray-300' : 'text-slate-600'">{{ formatNOK(row.exempted) }}</td>
                     <td class="px-4 py-2 text-right tabular-nums" :class="row.received === 0 ? 'text-gray-300' : 'text-green-700'">{{ formatNOK(row.received) }}</td>
                     <td class="px-4 py-2 text-right tabular-nums" :class="row.outstanding === 0 ? 'text-gray-300' : 'text-yellow-700'">{{ formatNOK(row.outstanding) }}</td>
                     <td class="px-4 py-2 text-right tabular-nums" :class="row.overdue === 0 ? 'text-gray-300' : 'text-red-700 font-medium'">{{ formatNOK(row.overdue) }}</td>
@@ -368,6 +385,7 @@ const postedCount = computed(() => entries.value?.filter(e => e.status === 'post
                     <td class="px-4 py-2 italic font-medium text-gray-700">{{ t('admin.financials.subtotal') }}</td>
                     <td class="px-4 py-2 text-right font-semibold tabular-nums text-gray-700">{{ g.subtotals.invoice_count }}</td>
                     <td class="px-4 py-2 text-right font-semibold tabular-nums text-gray-900">{{ formatNOK(g.subtotals.billed) }}</td>
+                    <td v-if="showExempted" class="px-4 py-2 text-right font-semibold tabular-nums" :class="g.subtotals.exempted === 0 ? 'text-gray-400' : 'text-slate-600'">{{ formatNOK(g.subtotals.exempted) }}</td>
                     <td class="px-4 py-2 text-right font-semibold tabular-nums" :class="g.subtotals.received === 0 ? 'text-gray-400' : 'text-green-700'">
                       <div>{{ formatNOK(g.subtotals.received) }}</div>
                       <div class="text-[10px] font-normal text-gray-500">{{ t('admin.financials.countSuffix', { n: g.subtotals.paid_count }) }}</div>
