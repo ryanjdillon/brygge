@@ -1941,7 +1941,8 @@
       "refreshed": "Oppdatert",
       "provisionalSettledNotice": "{count} foreløpig(e) rad(er) fra en tidligere utskrift har nå den oppgjorte bankteksten.",
       "exportDayNotice": "Utskriften går til og med {date}. Overføringer som var underveis på eksportdagen kan stå som en bar «Overførsel» til de er oppgjort. Eksporter til og med i går, eller importer {date} på nytt senere.",
-      "provisionalAmbiguousNotice": "{count} foreløpig(e) rad(er) kunne ikke kobles til én oppgjort rad og ligger igjen i Tildel."
+      "provisionalAmbiguousNotice": "{count} foreløpig(e) rad(er) kunne ikke kobles til én oppgjort rad og ligger igjen i Tildel.",
+      "referenceMismatchNotice": "{count} foreløpig(e) rad(er) har en oppgjort rad med samme referanse, men annet beløp eller senere dato. Ingen av dem er endret; sjekk dem i Tildel:"
     },
     "pdfArchive": {
       "title": "PDF-arkiv",

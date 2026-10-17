@@ -1823,7 +1823,8 @@
       "refreshed": "Oppdatert",
       "provisionalSettledNotice": "{count} førebels rad(er) frå ei tidlegare utskrift har no den oppgjorde bankteksten.",
       "exportDayNotice": "Utskrifta går til og med {date}. Overføringar som var undervegs på eksportdagen kan stå som ei berr «Overførsel» til dei er oppgjorde. Eksporter til og med i går, eller importer {date} på nytt seinare.",
-      "provisionalAmbiguousNotice": "{count} førebels rad(er) kunne ikkje koplast til éi oppgjord rad og ligg att i Tildel."
+      "provisionalAmbiguousNotice": "{count} førebels rad(er) kunne ikkje koplast til éi oppgjord rad og ligg att i Tildel.",
+      "referenceMismatchNotice": "{count} førebels rad(er) har ei oppgjord rad med same referanse, men anna beløp eller seinare dato. Ingen av dei er endra; sjekk dei i Tildel:"
     },
     "pdfArchive": {
       "title": "PDF-arkiv",

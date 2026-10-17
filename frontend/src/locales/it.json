@@ -1058,7 +1058,8 @@
       "refreshed": "Aggiornate",
       "provisionalSettledNotice": "{count} riga/e provvisoria/e di un’esportazione precedente ora riportano il testo bancario definitivo.",
       "exportDayNotice": "L’estratto arriva fino al {date}. I bonifici ancora in corso il giorno dell’esportazione possono comparire come un semplice «Overførsel» finché non sono regolati. Esporta fino a ieri, oppure reimporta il {date} più tardi.",
-      "provisionalAmbiguousNotice": "{count} riga/e provvisoria/e non sono state abbinate a un’unica riga regolata e restano in Tildel."
+      "provisionalAmbiguousNotice": "{count} riga/e provvisoria/e non sono state abbinate a un’unica riga regolata e restano in Tildel.",
+      "referenceMismatchNotice": "{count} riga/e provvisoria/e hanno una riga regolata con lo stesso riferimento ma un altro importo o una data successiva. Nessuna è stata modificata; controllale in Tildel:"
     },
     "bankReconcile": {
       "filterAll": "All",

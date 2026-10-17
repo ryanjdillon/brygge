@@ -65,4 +65,17 @@ describe('BankImportProvisionalNotices', () => {
     expect(wrapper.find('[data-testid="bank-provisional-settled"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="bank-provisional-ambiguous"]').exists()).toBe(true)
   })
+
+  it('lists provisional rows whose settled row did not fit', () => {
+    const wrapper = mountWithPlugins(BankImportProvisionalNotices, {
+      props: {
+        result: result({
+          reference_mismatches: [
+            { row_id: 'r1', reference: 'SYN1', date: '2026-06-05', amount: 200, new_date: '2026-06-08', new_amount: 200 },
+          ],
+        }),
+      },
+    })
+    expect(wrapper.get('[data-testid="bank-reference-mismatch"]').text()).toContain('SYN1')
+  })
 })

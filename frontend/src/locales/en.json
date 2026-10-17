@@ -1945,7 +1945,8 @@
       "refreshed": "Updated",
       "provisionalSettledNotice": "{count} provisional row(s) from an earlier export now carry the settled bank text.",
       "exportDayNotice": "The statement runs up to {date}. Transfers still under way on the export day can appear as a bare “Overførsel” until they settle. Export up to yesterday, or import {date} again later.",
-      "provisionalAmbiguousNotice": "{count} provisional row(s) could not be paired with one settled row and are left in Tildel."
+      "provisionalAmbiguousNotice": "{count} provisional row(s) could not be paired with one settled row and are left in Tildel.",
+      "referenceMismatchNotice": "{count} provisional row(s) have a settled row with the same reference but another amount or a later date. Neither was changed; check them in Tildel:"
     },
     "pdfArchive": {
       "title": "PDF archive",

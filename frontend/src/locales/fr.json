@@ -1057,7 +1057,8 @@
       "refreshed": "Mis à jour",
       "provisionalSettledNotice": "{count} ligne(s) provisoire(s) d’un export précédent portent désormais le libellé bancaire définitif.",
       "exportDayNotice": "Le relevé va jusqu’au {date}. Les virements encore en cours le jour de l’export peuvent apparaître comme un simple « Overførsel » jusqu’à leur règlement. Exportez jusqu’à hier, ou réimportez le {date} plus tard.",
-      "provisionalAmbiguousNotice": "{count} ligne(s) provisoire(s) n’ont pu être associées à une seule ligne réglée et restent dans Tildel."
+      "provisionalAmbiguousNotice": "{count} ligne(s) provisoire(s) n’ont pu être associées à une seule ligne réglée et restent dans Tildel.",
+      "referenceMismatchNotice": "{count} ligne(s) provisoire(s) ont une ligne réglée de même référence mais d’un autre montant ou d’une date ultérieure. Aucune n’a été modifiée ; vérifiez-les dans Tildel :"
     },
     "bankReconcile": {
       "filterAll": "All",

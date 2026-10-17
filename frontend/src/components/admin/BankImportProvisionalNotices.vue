@@ -32,6 +32,14 @@ const exportDay = computed(() => {
   <p v-if="exportDay" class="mt-2 rounded bg-yellow-50 px-2 py-1 text-yellow-800" data-testid="bank-export-day-notice">
     {{ t('admin.bankImports.exportDayNotice', { date: formatDate(props.result.last_row_date, locale) }) }}
   </p>
+  <div v-if="props.result.reference_mismatches?.length" class="mt-2 rounded bg-yellow-50 px-2 py-1 text-yellow-800" data-testid="bank-reference-mismatch">
+    <p>{{ t('admin.bankImports.referenceMismatchNotice', { count: props.result.reference_mismatches.length }) }}</p>
+    <ul class="list-disc pl-5">
+      <li v-for="m in props.result.reference_mismatches" :key="m.row_id">
+        Ref {{ m.reference }}: {{ formatDate(m.date, locale) }} · {{ m.amount }} kr → {{ formatDate(m.new_date, locale) }} · {{ m.new_amount }} kr
+      </li>
+    </ul>
+  </div>
   <p v-if="props.result.provisional_ambiguous?.length" class="mt-2 rounded bg-yellow-50 px-2 py-1 text-yellow-800" data-testid="bank-provisional-ambiguous">
     {{ t('admin.bankImports.provisionalAmbiguousNotice', { count: props.result.provisional_ambiguous.length }) }}
   </p>

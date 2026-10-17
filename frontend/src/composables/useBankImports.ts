@@ -50,12 +50,24 @@ export interface BankImportResult {
   // (BRY-378): refreshed in place with the settled text, or dismissed as
   // superseded; ambiguous ones are left for Tildel.
   refreshed?: number
+  // Provisional rows whose settled row carried the same reference but
+  // another amount or a date more than two days later; left for Tildel.
+  reference_mismatches?: ReferenceMismatch[] | null
   superseded?: number
   provisional_ambiguous?: ProvisionalBankRow[] | null
   // Latest row date in the statement, and the provisional rows it still
   // holds on that day.
   last_row_date?: string
   provisional_rows?: number
+}
+
+export interface ReferenceMismatch {
+  row_id: string
+  reference: string
+  date: string
+  amount: number
+  new_date: string
+  new_amount: number
 }
 
 export interface ProvisionalBankRow {
