@@ -421,6 +421,11 @@ func (h *InvoiceHandler) HandleBulkCreateInvoices(w http.ResponseWriter, r *http
 				continue
 			}
 			for i := range lines {
+				// Only a positive charge can be waived; a free or negative
+				// tier would get a meaningless or sign-flipped Fritak line.
+				if lines[i].tier.amount <= 0 {
+					continue
+				}
 				role, ok := exemptions.match(held, lines[i].tier.category, lines[i].tier.id)
 				if !ok {
 					continue
@@ -642,7 +647,7 @@ func (h *InvoiceHandler) createBulkInvoice(
 		stored = append(stored, item)
 		total += l.tier.amount
 
-		if l.exemptRole != "" && exemptionAccountID != "" {
+		if l.exemptRole != "" && exemptionAccountID != "" && l.tier.amount > 0 {
 			role := l.exemptRole
 			acct := exemptionAccountID
 			// Same price item as the line it offsets (so per-item billing

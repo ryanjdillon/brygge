@@ -3,9 +3,10 @@
 // the one place that says which of those roles make up the club board.
 package roles
 
-// Board lists the board (styre) roles in display order. Board-only
-// visibility, the officer pickers and the billing exemptions all read it,
-// so adding an officer role here is enough for all of them to see it.
+// Board lists the board (styre) roles in display order. The officer
+// pickers and the billing exemptions read it. Board-document visibility
+// deliberately does not: it uses CanReadBoardDocuments, a narrower set
+// kept until the owner decides whether every officer may read them.
 var Board = []string{"chair", "vice_chair", "treasurer", "secretary", "harbor_master", "deputy", "board"}
 
 // boardLabelsNB are the Norwegian labels printed on fakturas (the PDF is

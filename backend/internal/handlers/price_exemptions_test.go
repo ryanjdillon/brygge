@@ -785,3 +785,39 @@ func TestExemptionsAuditPayload(t *testing.T) {
 		t.Errorf("audit details = %s", raw)
 	}
 }
+
+// A free tier has nothing to waive: the bulk run neither lists it in the
+// preview nor writes a zero (or sign-flipped) Fritak line on the faktura.
+func TestExemptionsSkipZeroAmountTier(t *testing.T) {
+	f := newExemptionFixture(t)
+	ctx := context.Background()
+	if _, err := f.club.Pool.Exec(ctx,
+		`INSERT INTO price_items (club_id, category, name, description, amount, unit, is_active,
+		                          pricing_kind, tier_dimension, show_in_batch, requires_boat_selection, metadata)
+		 VALUES ($1, 'slip_fee', 'Plassleie over 4 m', 'Plassleie over 4 m', 0, 'year', true,
+		         'tiered', 'beam', true, false, '{"beam_min":4,"beam_max":6}'::jsonb)`,
+		f.club.ID); err != nil {
+		t.Fatalf("free tier: %v", err)
+	}
+	f.configure(t, "5000", catRule("treasurer", "slip_fee"))
+	treasurer := f.slipHolder(t, 5.0, "treasurer")
+
+	req := bulkInvoiceRequest{
+		UserIDs: []string{treasurer.ID}, PriceItemIDs: []string{f.dues}, BeamCategories: []string{"slip_fee"},
+	}
+	preview := req
+	preview.Preview = true
+	if p := f.bulk(t, preview); len(p.Exemptions) != 0 {
+		t.Fatalf("preview lists %d exemptions for a free tier, want 0", len(p.Exemptions))
+	}
+
+	total, lines := f.lines(t, f.createdFor(t, f.bulk(t, req), treasurer.ID))
+	if total != 450 {
+		t.Errorf("total %.2f, want 450 (dues only)", total)
+	}
+	for _, l := range lines {
+		if l.role != "" {
+			t.Errorf("unexpected exemption line %+v on a free tier", l)
+		}
+	}
+}
