@@ -6,6 +6,7 @@ import (
 	"embed"
 	"encoding/csv"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -231,15 +232,19 @@ func ListBankFormats() []string {
 
 // ImportResult summarizes one bank-import call.
 type ImportResult struct {
-	Imported       int
-	SkippedDup     int
-	Matched        int
-	Transfers      int      // intra-bank transfer pairs auto-linked
-	ClosedPeriods  []string // labels of closed periods that prevented auto-match (e.g. "2025")
+	Imported      int
+	SkippedDup    int
+	Matched       int
+	Transfers     int      // intra-bank transfer pairs auto-linked
+	ClosedPeriods []string // labels of closed periods that prevented auto-match (e.g. "2025")
 	// RowErrors lists rows whose auto-match failed after an invoice was
 	// found. The row stays unmatched for manual Tildel; the reason is
 	// surfaced instead of being swallowed.
 	RowErrors []ImportRowError
+	// KIDSkippedSettled counts rows the KID cascade matched to a faktura
+	// that turned out to be settled once it was locked (most likely a
+	// double payment); each also has a RowErrors entry.
+	KIDSkippedSettled int
 	// Refreshed counts provisional rows updated in place with the settled
 	// text of an incoming row carrying the same bank reference
 	// (refreshProvisionalByReference).
@@ -560,7 +565,10 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOv
 		}
 		res.Imported++
 
-		if row.Amount <= 0 {
+		// A rejected-KID notice ("KID … ble ikke akseptert") is the bank
+		// saying the money never arrived; it is stored for Tildel but never
+		// matched, as in bank sync.
+		if row.Amount <= 0 || IsRejectedKIDDescription(row.Description) {
 			continue
 		}
 
@@ -627,69 +635,22 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOv
 			continue
 		}
 
-		periodID, periodStatus, perr := s.resolvePeriod(ctx, clubID, row.Date, periodOverride)
-		if perr != nil {
-			res.rowError(rowID, row, "resolving fiscal period: "+perr.Error())
-			continue
-		}
-		if periodStatus == "closed" {
-			closedYears[row.Date.Year()] = true
-			continue
-		}
-
-		sourceID := rowID
-		sourceTable := "bank_import_rows"
-		entry, createErr := s.CreateJournalEntry(ctx, CreateJournalEntryInput{
-			FiscalPeriodID: periodID,
-			EntryDate:      row.Date.Format("2006-01-02"),
-			Description:    kidMatchDescription(row.KID, row.Description),
-			Source:         "bank_import",
-			SourceID:       &sourceID,
-			SourceTable:    &sourceTable,
-			CreatedBy:      importedBy,
-			ClubID:         clubID,
-			Lines: []CreateJournalLineInput{
-				{AccountCode: bankAccount, Debit: row.Amount, Credit: 0},
-				{AccountCode: receivablesAccountCode, Debit: 0, Credit: row.Amount},
-			},
+		err = s.bookKIDCascadeMatch(ctx, clubID, kidCascadeMatch{
+			rowID: rowID, invoiceID: invoiceID,
+			actorID: importedBy, bankAccount: bankAccount,
+			kid: row.KID, desc: row.Description, date: row.Date, amount: row.Amount,
+			periodOverride: periodOverride,
 		})
-		if createErr != nil {
-			res.rowError(rowID, row, "creating journal entry: "+createErr.Error())
-			continue
-		}
-		// Link the row to the draft before posting, guarded on the row still
-		// being unbooked: a posted entry must never exist without its row,
-		// or a later bank sync would book the same money again. If the link
-		// or the post fails, unwind both.
-		tag, linkErr := s.db.Exec(ctx,
-			`UPDATE bank_import_rows SET journal_entry_id = $1, auto_matched = true
-			  WHERE id = $2 AND club_id = $3 AND journal_entry_id IS NULL`,
-			entry.ID, rowID, clubID,
-		)
-		if linkErr != nil || tag.RowsAffected() != 1 {
-			s.discardDraft(ctx, clubID, entry.ID)
-			reason := "row was booked concurrently"
-			if linkErr != nil {
-				reason = linkErr.Error()
-			}
-			res.rowError(rowID, row, "linking row: "+reason)
-			continue
-		}
-		if postErr := s.PostJournalEntry(ctx, clubID, entry.ID, importedBy); postErr != nil {
-			s.unwindVippsPosting(ctx, clubID, entry.ID, "bank_import_rows", []string{rowID})
-			res.rowError(rowID, row, "posting journal entry: "+postErr.Error())
-			continue
-		}
-		res.Matched++
-		// Mirror the GL credit-to-receivables side onto the invoice flag
-		// so the dashboard, faktura list, and priceItemSummary reflect the
-		// payment. Best-effort — failures here don't roll back the journal
-		// because the GL itself is already correct.
-		if lerr := s.linkInvoicePayment(ctx, clubID, invoiceID, row.Date); lerr != nil {
-			s.log.Warn().Err(lerr).
-				Str("invoice_id", invoiceID).
-				Str("bank_row_id", rowID).
-				Msg("import-time KID match journal posted but invoice payment back-link failed")
+		switch {
+		case err == nil:
+			res.Matched++
+		case errors.Is(err, errInvoiceSettled):
+			res.KIDSkippedSettled++
+			res.rowError(rowID, row, "faktura already settled; possible double payment")
+		case errors.Is(err, errKIDPeriodClosed):
+			closedYears[row.Date.Year()] = true
+		default:
+			res.rowError(rowID, row, err.Error())
 		}
 	}
 

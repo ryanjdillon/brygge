@@ -245,3 +245,160 @@ func TestBankSyncReleasesStrandedKIDDraft(t *testing.T) {
 		}
 	}
 }
+
+// cascadeRow reports a bank row's booking, dismissal and recorded faktura.
+func (f *bankLinkFixture) cascadeRow(t *testing.T, rowID string) (entry string, dismissed bool, invoiceID string) {
+	t.Helper()
+	if err := f.club.Pool.QueryRow(context.Background(),
+		`SELECT COALESCE(journal_entry_id::text, ''), dismissed_at IS NOT NULL, COALESCE(invoice_id::text, '')
+		   FROM bank_import_rows WHERE id = $1`, rowID,
+	).Scan(&entry, &dismissed, &invoiceID); err != nil {
+		t.Fatalf("row: %v", err)
+	}
+	return entry, dismissed, invoiceID
+}
+
+func (f *bankLinkFixture) invoicePaid(t *testing.T, invoiceID string) bool {
+	t.Helper()
+	var paid bool
+	if err := f.club.Pool.QueryRow(context.Background(),
+		`SELECT payment_id IS NOT NULL FROM invoices WHERE id = $1`, invoiceID).Scan(&paid); err != nil {
+		t.Fatalf("invoice: %v", err)
+	}
+	return paid
+}
+
+func (f *bankLinkFixture) sync(t *testing.T) *BankSyncResult {
+	t.Helper()
+	res, err := f.svc.BankSync(context.Background(), f.club.ID, f.club.Treasurer.ID)
+	if err != nil {
+		t.Fatalf("bank sync: %v", err)
+	}
+	return res
+}
+
+// A row the treasurer dismissed is never booked by the KID cascade, even
+// with a KID that matches an open faktura; a row paired as a refund and
+// then unassigned isn't either.
+func TestBankSyncKIDSkipsDismissedAndRefundPairedRows(t *testing.T) {
+	f := newBankLinkFixture(t)
+	ctx := context.Background()
+	importID := f.club.NewBankImport(t)
+	date := time.Date(f.club.Year, 6, 14, 0, 0, 0, 0, time.UTC)
+
+	const dismissedKID, pairedKID = "000000881045", "000000881052"
+	dismissedInv := f.kidInvoice(t, dismissedKID)
+	pairedInv := f.kidInvoice(t, pairedKID)
+	dismissed := f.club.NewBankRow(t, importID, fin.BankRowOpts{Date: date, Cents: 45000, KID: dismissedKID})
+	if err := f.svc.DismissBankRow(ctx, f.club.ID, f.club.Treasurer.ID, dismissed, "double_payment"); err != nil {
+		t.Fatalf("dismiss: %v", err)
+	}
+	paired := f.club.NewBankRow(t, importID, fin.BankRowOpts{Date: date, Cents: 45000, KID: pairedKID})
+	outgoing := f.club.NewBankRow(t, importID, fin.BankRowOpts{Date: date, Cents: -45000})
+	if _, err := f.club.Pool.Exec(ctx,
+		`UPDATE bank_import_rows SET refund_paired_with = $2 WHERE id = $1`, paired, outgoing,
+	); err != nil {
+		t.Fatalf("pair refund: %v", err)
+	}
+
+	if res := f.sync(t); res.KIDMatched != 0 {
+		t.Errorf("KID matched = %d, want 0", res.KIDMatched)
+	}
+	if posted, drafts := f.entryCounts(t); posted != 0 || drafts != 0 {
+		t.Errorf("entries = %d posted, %d draft; want none", posted, drafts)
+	}
+	if entry, isDismissed, _ := f.cascadeRow(t, dismissed); entry != "" || !isDismissed {
+		t.Errorf("dismissed row: entry %q, dismissed %v; want unbooked and still dismissed", entry, isDismissed)
+	}
+	if entry, _, _ := f.cascadeRow(t, paired); entry != "" {
+		t.Errorf("refund-paired row booked to %s", entry)
+	}
+	if f.invoicePaid(t, dismissedInv.ID) || f.invoicePaid(t, pairedInv.ID) {
+		t.Errorf("a faktura was marked paid by a row the cascade must skip")
+	}
+}
+
+// A row dismissed after sync listed it, while the sync waits on the faktura
+// lock, is not booked: the link is guarded on the row still being eligible.
+func TestBankSyncKIDSkipsRowDismissedWhileWaiting(t *testing.T) {
+	f := newBankLinkFixture(t)
+	ctx := context.Background()
+	const kid = "000000881060"
+	inv := f.kidInvoice(t, kid)
+	row := f.club.NewBankRow(t, f.club.NewBankImport(t),
+		fin.BankRowOpts{Date: time.Date(f.club.Year, 6, 14, 0, 0, 0, 0, time.UTC), Cents: 45000, KID: kid})
+
+	var res *BankSyncResult
+	var serr error
+	contendWhile(t, f.club, inv.ID,
+		func() {
+			if err := f.svc.DismissBankRow(ctx, f.club.ID, f.club.Treasurer.ID, row, "double_payment"); err != nil {
+				t.Errorf("dismiss: %v", err)
+			}
+		},
+		func() { res, serr = f.svc.BankSync(ctx, f.club.ID, f.club.Treasurer.ID) },
+	)
+	if serr != nil {
+		t.Fatalf("bank sync: %v", serr)
+	}
+	if res.KIDMatched != 0 {
+		t.Errorf("KID matched = %d, want 0", res.KIDMatched)
+	}
+	if posted, drafts := f.entryCounts(t); posted != 0 || drafts != 0 {
+		t.Errorf("entries = %d posted, %d draft; want none", posted, drafts)
+	}
+	if entry, dismissed, _ := f.cascadeRow(t, row); entry != "" || !dismissed {
+		t.Errorf("row: entry %q, dismissed %v; want unbooked and dismissed", entry, dismissed)
+	}
+	if f.invoicePaid(t, inv.ID) {
+		t.Errorf("faktura marked paid by a dismissed row")
+	}
+}
+
+// A KID sync and a manual assign of another row race for one faktura:
+// exactly one books it. The sync's loser is left in Tildel and counted;
+// the KID booking records the faktura, so a manual loser sees it.
+func TestBankSyncKIDRacesManualAssign(t *testing.T) {
+	f := newBankLinkFixture(t)
+	ctx := context.Background()
+	const kid = "000000881078"
+	inv := f.kidInvoice(t, kid)
+	importID := f.club.NewBankImport(t)
+	date := time.Date(f.club.Year, 6, 14, 0, 0, 0, 0, time.UTC)
+	kidRow := f.club.NewBankRow(t, importID, fin.BankRowOpts{Date: date, Cents: 45000, KID: kid})
+	manual := f.club.NewBankRow(t, importID, fin.BankRowOpts{Date: date, Cents: 45000, Counterpart: "Synthetic Payer"})
+
+	var res *BankSyncResult
+	var serr, merr error
+	contend(t, f.club, inv.ID,
+		func() { res, serr = f.svc.BankSync(ctx, f.club.ID, f.club.Treasurer.ID) },
+		func() { _, merr = f.svc.AssignBankRowToInvoice(ctx, f.club.ID, f.club.Treasurer.ID, manual, inv.ID) },
+	)
+	if serr != nil {
+		t.Fatalf("bank sync: %v", serr)
+	}
+
+	if n := countPosted(t, f.club, "bank_import_rows"); n != 1 {
+		t.Fatalf("posted entries = %d, want exactly one", n)
+	}
+	kidEntry, _, kidInvoice := f.cascadeRow(t, kidRow)
+	manualEntry, _, _ := f.cascadeRow(t, manual)
+	switch {
+	case kidEntry != "" && manualEntry == "":
+		if merr == nil {
+			t.Errorf("manual assign succeeded without booking")
+		}
+		if res.KIDMatched != 1 || kidInvoice != inv.ID {
+			t.Errorf("KID won: matched %d, recorded faktura %q; want 1 and %s", res.KIDMatched, kidInvoice, inv.ID)
+		}
+	case manualEntry != "" && kidEntry == "":
+		if res.KIDMatched != 0 || res.KIDSkippedSettled != 1 {
+			t.Errorf("manual won: KID matched %d, skipped settled %d; want 0 and 1", res.KIDMatched, res.KIDSkippedSettled)
+		}
+	default:
+		t.Errorf("KID row booked %q, manual row booked %q; want exactly one", kidEntry, manualEntry)
+	}
+	if !f.invoicePaid(t, inv.ID) {
+		t.Errorf("faktura not marked paid")
+	}
+}

@@ -949,20 +949,21 @@ func (h *AccountingHandler) importBankStatement(w http.ResponseWriter, r *http.R
 		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,
 			auditAction, "bank_import", importID,
 			map[string]any{
-				"filename":          header.Filename,
-				"format":            formatName,
-				"bank_account_code": bankAccountCode,
-				"rows_total":        len(rows),
-				"imported":          result.Imported,
-				"skipped_dup":       result.SkippedDup,
-				"matched":           result.Matched,
-				"transfers":         result.Transfers,
-				"deleted":           result.Deleted,
-				"skipped_booked":    result.SkippedBooked,
-				"row_errors":        len(result.RowErrors),
-				"refreshed":         result.Refreshed,
-				"superseded":        result.Superseded,
-				"auto_assigned":     autoAssignedCount(result.AutoAssign),
+				"filename":            header.Filename,
+				"format":              formatName,
+				"bank_account_code":   bankAccountCode,
+				"rows_total":          len(rows),
+				"imported":            result.Imported,
+				"skipped_dup":         result.SkippedDup,
+				"matched":             result.Matched,
+				"transfers":           result.Transfers,
+				"deleted":             result.Deleted,
+				"skipped_booked":      result.SkippedBooked,
+				"row_errors":          len(result.RowErrors),
+				"kid_skipped_settled": result.KIDSkippedSettled,
+				"refreshed":           result.Refreshed,
+				"superseded":          result.Superseded,
+				"auto_assigned":       autoAssignedCount(result.AutoAssign),
 			})
 	}
 
@@ -979,6 +980,9 @@ func (h *AccountingHandler) importBankStatement(w http.ResponseWriter, r *http.R
 		"bank_account_code": bankAccountCode,
 		"auto_matched":      autoMatched,
 		"row_errors":        result.RowErrors,
+		// KID payments left in Tildel because their faktura was already
+		// settled; each is also in row_errors.
+		"kid_skipped_settled": result.KIDSkippedSettled,
 		// Provisional in-flight rows (see accounting.SupersedeProvisionalBankRows).
 		"refreshed":             result.Refreshed,
 		"reference_mismatches":  result.ReferenceMismatches,
@@ -1091,14 +1095,15 @@ func (h *AccountingHandler) HandleReimportBankStatement(w http.ResponseWriter, r
 	}
 
 	JSON(w, http.StatusOK, map[string]any{
-		"id":             importID,
-		"deleted":        result.Deleted,
-		"reimported":     result.Imported,
-		"skipped_dup":    result.SkippedDup,
-		"skipped_booked": result.SkippedBooked,
-		"matched":        result.Matched,
-		"row_errors":     result.RowErrors,
-		"auto_assign":    result.AutoAssign,
+		"id":                  importID,
+		"deleted":             result.Deleted,
+		"reimported":          result.Imported,
+		"skipped_dup":         result.SkippedDup,
+		"skipped_booked":      result.SkippedBooked,
+		"matched":             result.Matched,
+		"row_errors":          result.RowErrors,
+		"kid_skipped_settled": result.KIDSkippedSettled,
+		"auto_assign":         result.AutoAssign,
 	})
 }
 
@@ -2231,12 +2236,13 @@ func (h *AccountingHandler) HandleBankSync(w http.ResponseWriter, r *http.Reques
 		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,
 			"accounting.bank_synced", "bank", "",
 			map[string]any{
-				"kid_matched":      result.KIDMatched,
-				"vipps_reconciled": result.VippsReconciled,
-				"transfers_linked": result.TransfersLinked,
-				"payments_linked":  result.PaymentsLinked,
-				"closed_periods":   result.ClosedPeriods,
-				"auto_assigned":    autoAssignedCount(result.AutoAssign),
+				"kid_matched":         result.KIDMatched,
+				"kid_skipped_settled": result.KIDSkippedSettled,
+				"vipps_reconciled":    result.VippsReconciled,
+				"transfers_linked":    result.TransfersLinked,
+				"payments_linked":     result.PaymentsLinked,
+				"closed_periods":      result.ClosedPeriods,
+				"auto_assigned":       autoAssignedCount(result.AutoAssign),
 			})
 	}
 	JSON(w, http.StatusOK, result)

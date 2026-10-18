@@ -15,6 +15,13 @@ import (
 // the booking paths nobody waits and the test fails on the timeout.
 func contend(t *testing.T, c *fin.Club, invoiceID string, bookings ...func()) {
 	t.Helper()
+	contendWhile(t, c, invoiceID, nil, bookings...)
+}
+
+// contendWhile is contend, running whileWaiting once every booking is
+// waiting on the faktura lock and before the lock is released.
+func contendWhile(t *testing.T, c *fin.Club, invoiceID string, whileWaiting func(), bookings ...func()) {
+	t.Helper()
 	ctx := context.Background()
 	holder, err := c.Pool.Begin(ctx)
 	if err != nil {
@@ -52,6 +59,9 @@ func contend(t *testing.T, c *fin.Club, invoiceID string, bookings ...func()) {
 			t.Fatalf("only %d of %d bookings waited on the faktura lock", waiting, len(bookings))
 		}
 		time.Sleep(20 * time.Millisecond)
+	}
+	if whileWaiting != nil {
+		whileWaiting()
 	}
 	if err := holder.Commit(ctx); err != nil {
 		t.Fatalf("release holder: %v", err)

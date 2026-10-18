@@ -208,6 +208,12 @@ const (
 	// sent, not imported, nothing booked against it (incl. a KID-matched
 	// row) and a total equal to the row.
 	lockAutoAssign
+	// lockKIDCascade is the KID / invoice-number / counterpart cascade of
+	// bank import and sync: still owed and nothing booked against it. It
+	// has no amount, sent or import condition, because the cascade books
+	// any amount and imported fakturas too. A faktura that fails is
+	// errInvoiceSettled.
+	lockKIDCascade
 )
 
 // invoiceLockOpts tunes lockInvoiceForAssign.
@@ -218,11 +224,16 @@ type invoiceLockOpts struct {
 	rowCents int64
 }
 
+// errInvoiceSettled means the KID cascade found its faktura already settled
+// once it held the lock. The row is left in Tildel and counted, not failed:
+// it is most likely a double payment.
+var errInvoiceSettled = errors.New("invoice is already settled")
+
 // lockInvoiceForAssign locks the faktura for the rest of tx and refuses it
 // when it can't take this payment. It returns the faktura total in øre.
 // Every path that settles a faktura with a bank row or a Vipps charge
-// (single and multi-row bank assigns, the bank and Vipps auto-assign rules)
-// takes it; the KID cascade does not.
+// (single and multi-row bank assigns, the bank and Vipps auto-assign rules,
+// the KID cascade of bank import and sync) takes it.
 //
 // The faktura stays locked until the payment is linked and posted, so two
 // bookings racing for one faktura (a sync's auto-assign and a manual
@@ -267,6 +278,12 @@ func lockInvoiceForAssign(ctx context.Context, tx pgx.Tx, clubID, invoiceID stri
 		invoiceID, clubID,
 	).Scan(&invoiceCents, &paid, &invoiceStatus, &owed, &sentAndLive, &bookedByRow, &bookedAny); err != nil {
 		return 0, fmt.Errorf("load invoice: %w", err)
+	}
+	if opts.mode == lockKIDCascade {
+		if !owed || bookedAny {
+			return 0, errInvoiceSettled
+		}
+		return invoiceCents, nil
 	}
 	switch {
 	case invoiceStatus == "voided":

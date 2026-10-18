@@ -92,6 +92,92 @@ func TestImportBankRowsKIDMatchPostsAndLinks(t *testing.T) {
 	}
 }
 
+// A rejected-KID notice ("ble ikke akseptert": the money never arrived) is
+// stored but never matched, at import as at sync, even with a KID that
+// matches an open faktura.
+func TestImportBankRowsSkipsRejectedKID(t *testing.T) {
+	f := newBankLinkFixture(t)
+	const kid = "000000881086"
+	inv := f.kidInvoice(t, kid)
+	row := f.kidRow(kid)
+	row.Description = "KID " + kid + " ble ikke akseptert på denne kontoen"
+
+	importID := f.club.NewBankImport(t)
+	res, err := f.svc.ImportBankRows(context.Background(), f.club.ID, importID, "", []BankRow{row})
+	if err != nil {
+		t.Fatalf("import: %v", err)
+	}
+	if res.Imported != 1 || res.Matched != 0 || len(res.RowErrors) != 0 {
+		t.Errorf("import = imported %d, matched %d, errors %+v; want the row stored, unmatched, no errors",
+			res.Imported, res.Matched, res.RowErrors)
+	}
+	if sync := f.sync(t); sync.KIDMatched != 0 {
+		t.Errorf("sync KID matched = %d, want 0", sync.KIDMatched)
+	}
+	if posted, drafts := f.entryCounts(t); posted != 0 || drafts != 0 {
+		t.Errorf("entries = %d posted, %d draft; want none", posted, drafts)
+	}
+	if f.invoicePaid(t, inv.ID) {
+		t.Errorf("faktura marked paid by a rejected payment")
+	}
+}
+
+// An import's KID match and a Vipps charge assign race for one faktura:
+// exactly one books it. A losing KID row is left in Tildel and reported.
+func TestImportBankRowsKIDRacesVippsAssign(t *testing.T) {
+	f := newBankLinkFixture(t)
+	ctx := context.Background()
+	const kid = "000000881094"
+	inv := f.kidInvoice(t, kid)
+	vippsRow := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 45000, CustomerName: "Synthetic Payer"})
+	importID := f.club.NewBankImport(t)
+
+	var res ImportResult
+	var ierr, verr error
+	contend(t, f.club, inv.ID,
+		func() { res, ierr = f.svc.ImportBankRows(ctx, f.club.ID, importID, "", []BankRow{f.kidRow(kid)}) },
+		func() {
+			_, verr = f.svc.AssignVippsChargeToInvoice(ctx, f.club.ID, vippsRow, inv.ID, f.club.Treasurer.ID)
+		},
+	)
+	if ierr != nil {
+		t.Fatalf("import: %v", ierr)
+	}
+
+	if n := countPosted(t, f.club, "bank_import_rows") + countPosted(t, f.club, "vipps_import_rows"); n != 1 {
+		t.Fatalf("posted entries = %d, want exactly one", n)
+	}
+	var bankRow string
+	if err := f.club.Pool.QueryRow(ctx,
+		`SELECT id FROM bank_import_rows WHERE bank_import_id = $1`, importID).Scan(&bankRow); err != nil {
+		t.Fatalf("bank row: %v", err)
+	}
+	bankEntry, _, bankInvoice := f.cascadeRow(t, bankRow)
+	vippsEntry := rowEntry(t, f.club, vippsRow)
+	switch {
+	case bankEntry != "" && vippsEntry == "":
+		if verr == nil {
+			t.Errorf("Vipps assign succeeded without booking")
+		}
+		if res.Matched != 1 || bankInvoice != inv.ID {
+			t.Errorf("KID won: matched %d, recorded faktura %q; want 1 and %s", res.Matched, bankInvoice, inv.ID)
+		}
+	case vippsEntry != "" && bankEntry == "":
+		if verr != nil {
+			t.Errorf("Vipps assign: %v", verr)
+		}
+		if res.Matched != 0 || res.KIDSkippedSettled != 1 || len(res.RowErrors) != 1 {
+			t.Errorf("Vipps won: matched %d, skipped settled %d, errors %+v; want 0, 1 and one row error",
+				res.Matched, res.KIDSkippedSettled, res.RowErrors)
+		}
+	default:
+		t.Errorf("bank row booked %q, Vipps row booked %q; want exactly one", bankEntry, vippsEntry)
+	}
+	if !f.invoicePaid(t, inv.ID) {
+		t.Errorf("faktura not marked paid")
+	}
+}
+
 func TestDiscardDraftLeavesPostedEntries(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.SetupTestDB(t)

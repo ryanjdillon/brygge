@@ -2,6 +2,7 @@ package accounting
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -88,13 +89,17 @@ func (s *Service) findInvoiceByCounterpartAndAmount(ctx context.Context, clubID,
 
 // BankSyncResult summarizes one full-scope bank sync run.
 type BankSyncResult struct {
-	KIDMatched      int      `json:"kid_matched"`
-	VippsReconciled int      `json:"vipps_reconciled"`
-	VippsUnbalanced int      `json:"vipps_unbalanced"`
-	TransfersLinked int      `json:"transfers_linked"`
-	PaymentsLinked  int      `json:"payments_linked"`
-	DraftsReleased  int      `json:"drafts_released"`
-	ClosedPeriods   []string `json:"closed_periods"`
+	KIDMatched int `json:"kid_matched"`
+	// KIDSkippedSettled counts rows the KID cascade matched to a faktura
+	// that turned out to be settled once it was locked (most likely a
+	// double payment); they stay in Tildel.
+	KIDSkippedSettled int      `json:"kid_skipped_settled"`
+	VippsReconciled   int      `json:"vipps_reconciled"`
+	VippsUnbalanced   int      `json:"vipps_unbalanced"`
+	TransfersLinked   int      `json:"transfers_linked"`
+	PaymentsLinked    int      `json:"payments_linked"`
+	DraftsReleased    int      `json:"drafts_released"`
+	ClosedPeriods     []string `json:"closed_periods"`
 	// VippsPayouts reports the per-charge payout sweep (pass 5); its cleared
 	// settlements are also counted in VippsReconciled. Nil on the legacy model.
 	VippsPayouts *VippsPayoutSweepResult `json:"vipps_payouts,omitempty"`
@@ -154,12 +159,13 @@ func (s *Service) BankSync(ctx context.Context, clubID, createdBy string) (*Bank
 	}
 
 	// Pass 1: KID auto-match on all unmatched rows.
-	kidMatched, kidClosed, err := s.syncKIDMatches(ctx, clubID, createdBy, !bankAuto)
+	kid, err := s.syncKIDMatches(ctx, clubID, createdBy, !bankAuto)
 	if err != nil {
 		return nil, fmt.Errorf("kid sync: %w", err)
 	}
-	res.KIDMatched = kidMatched
-	for _, y := range kidClosed {
+	res.KIDMatched = kid.matched
+	res.KIDSkippedSettled = kid.skippedSettled
+	for _, y := range kid.closedYears {
 		closedYears[y] = true
 	}
 
@@ -252,7 +258,8 @@ const strandedDraftGrace = 15 * time.Minute
 // bank sync) that never got posted. Those paths link the row before posting
 // so a posted entry never exists without its row; a crash between the two
 // leaves the row looking booked while the draft counts nowhere. Such rows
-// are unlinked and the draft deleted, in one transaction, and pass 1 then
+// are unlinked (with the faktura the link recorded) and the draft deleted,
+// in one transaction, and pass 1 then
 // matches them again against the invoices as they are now.
 //
 // Only entries the payment-match paths created qualify: tied to the row by
@@ -293,7 +300,7 @@ func (s *Service) healStrandedKIDDrafts(ctx context.Context, clubID string) (int
 		return 0, nil
 	}
 	if _, err := tx.Exec(ctx,
-		`UPDATE bank_import_rows SET journal_entry_id = NULL, auto_matched = false
+		`UPDATE bank_import_rows SET journal_entry_id = NULL, invoice_id = NULL, auto_matched = false
 		  WHERE club_id = $1 AND journal_entry_id = ANY($2::uuid[])`,
 		clubID, ids,
 	); err != nil {
@@ -439,10 +446,21 @@ func (s *Service) backfillInvoiceNumberPayments(ctx context.Context, clubID stri
 	return n, nil
 }
 
+// kidSyncResult is what syncKIDMatches booked and left.
+type kidSyncResult struct {
+	matched int
+	// skippedSettled counts rows whose faktura was already settled once
+	// the faktura lock was held; they stay in Tildel.
+	skippedSettled int
+	closedYears    []int
+}
+
 // syncKIDMatches books unmatched incoming rows by KID, then by invoice
 // number; nameMatch adds the older counterpart-name + amount step, which
-// runs only while the club has bank auto-assign off.
-func (s *Service) syncKIDMatches(ctx context.Context, clubID, createdBy string, nameMatch bool) (int, []int, error) {
+// runs only while the club has bank auto-assign off. Only rows passing
+// kidCascadeEligibleSQL are considered.
+func (s *Service) syncKIDMatches(ctx context.Context, clubID, createdBy string, nameMatch bool) (kidSyncResult, error) {
+	var res kidSyncResult
 	// Drop the kid_number <> '' filter so we can ALSO process rows
 	// that lost their KID at import time because the bank's CSV
 	// left the KID column blank and embedded the reference in the
@@ -461,11 +479,11 @@ func (s *Service) syncKIDMatches(ctx context.Context, clubID, createdBy string, 
 		 JOIN bank_imports bi ON bi.id = bir.bank_import_id
 		 WHERE bir.club_id = $1
 		   AND bir.amount > 0
-		   AND bir.journal_entry_id IS NULL`,
+		   AND `+kidCascadeEligibleSQL("bir"),
 		clubID,
 	)
 	if err != nil {
-		return 0, nil, fmt.Errorf("listing unmatched rows: %w", err)
+		return res, fmt.Errorf("listing unmatched rows: %w", err)
 	}
 	defer rows.Close()
 
@@ -484,7 +502,6 @@ func (s *Service) syncKIDMatches(ctx context.Context, clubID, createdBy string, 
 	}
 	rows.Close()
 
-	matched := 0
 	closedYears := map[int]bool{}
 	for _, p := range work {
 		// Rejected-on-receiving-account rows ("KID … ble ikke
@@ -577,89 +594,37 @@ func (s *Service) syncKIDMatches(ctx context.Context, clubID, createdBy string, 
 			continue
 		}
 
-		periodID, periodStatus, perr := s.resolvePeriod(ctx, clubID, p.date, "")
-		if perr != nil {
-			s.log.Warn().Err(perr).
-				Str("bank_row_id", p.rowID).
-				Time("row_date", p.date).
-				Msg("KID match: resolvePeriod failed; row stays unmatched")
-			continue
-		}
-		if periodStatus == "closed" {
-			closedYears[p.date.Year()] = true
-			continue
-		}
-
-		sourceID := p.rowID
-		sourceTable := "bank_import_rows"
-		entry, cerr := s.CreateJournalEntry(ctx, CreateJournalEntryInput{
-			FiscalPeriodID: periodID,
-			EntryDate:      p.date.Format("2006-01-02"),
-			Description:    kidMatchDescription(p.kid, p.desc),
-			Source:         "bank_import",
-			SourceID:       &sourceID,
-			SourceTable:    &sourceTable,
-			CreatedBy:      createdBy,
-			ClubID:         clubID,
-			Lines: []CreateJournalLineInput{
-				{AccountCode: p.bankAccount, Debit: p.amount, Credit: 0},
-				{AccountCode: receivablesAccountCode, Debit: 0, Credit: p.amount},
-			},
+		err := s.bookKIDCascadeMatch(ctx, clubID, kidCascadeMatch{
+			rowID: p.rowID, invoiceID: invoiceID,
+			actorID: createdBy, bankAccount: p.bankAccount,
+			kid: p.kid, desc: p.desc, date: p.date, amount: p.amount,
 		})
-		if cerr != nil {
-			// Most common cause: bank_account_code not present in the
-			// club's chart of accounts (typically a new bank role
-			// added via DIL-340 with a gl_code that was never seeded).
-			// Surface this loudly so the operator/agent can fix the
-			// chart instead of staring at a silently-unmatched row.
-			s.log.Warn().Err(cerr).
+		switch {
+		case err == nil:
+			res.matched++
+		case errors.Is(err, errInvoiceSettled):
+			res.skippedSettled++
+		case errors.Is(err, errKIDPeriodClosed):
+			closedYears[p.date.Year()] = true
+		case errors.Is(err, errKIDRowTaken):
+			// A concurrent booking or a dismissal won the row.
+		default:
+			// Most often a bank_account_code missing from the chart of
+			// accounts (a bank role whose gl_code was never seeded); logged
+			// loudly so the chart gets fixed instead of the row sitting
+			// unmatched in silence.
+			s.log.Warn().Err(err).
 				Str("bank_row_id", p.rowID).
 				Str("bank_account_code", p.bankAccount).
 				Str("kid", p.kid).
-				Msg("KID match: CreateJournalEntry failed; row stays unmatched")
-			continue
-		}
-		// Link the row before posting, guarded on it still being unbooked,
-		// so a concurrent import or sync that booked it first wins and this
-		// draft is discarded; a posted entry never exists without its row.
-		tag, uerr := s.db.Exec(ctx,
-			`UPDATE bank_import_rows SET journal_entry_id = $1, auto_matched = true
-			  WHERE id = $2 AND club_id = $3 AND journal_entry_id IS NULL`,
-			entry.ID, p.rowID, clubID,
-		)
-		if uerr != nil || tag.RowsAffected() != 1 {
-			if uerr != nil {
-				s.log.Error().Err(uerr).Str("bank_row_id", p.rowID).Msg("KID match: linking the bank row failed")
-			}
-			s.discardDraft(ctx, clubID, entry.ID)
-			continue
-		}
-		if perr := s.PostJournalEntry(ctx, clubID, entry.ID, createdBy); perr != nil {
-			s.log.Warn().Err(perr).
-				Str("bank_row_id", p.rowID).
-				Str("entry_id", entry.ID).
-				Msg("KID match: PostJournalEntry failed; row stays unmatched")
-			s.unwindVippsPosting(ctx, clubID, entry.ID, "bank_import_rows", []string{p.rowID})
-			continue
-		}
-		matched++
-		// Mirror the GL credit-to-receivables side onto the invoice flag so
-		// the dashboard, faktura list, and priceItemSummary reflect the
-		// payment. Best-effort — failures here don't roll back the journal
-		// because the GL itself is already correct.
-		if lerr := s.linkInvoicePayment(ctx, clubID, invoiceID, p.date); lerr != nil {
-			s.log.Warn().Err(lerr).
-				Str("invoice_id", invoiceID).
-				Str("bank_row_id", p.rowID).
-				Msg("KID match journal posted but invoice payment back-link failed")
+				Msg("KID match failed; row stays unmatched")
 		}
 	}
 
-	var years []int
 	for y := range closedYears {
-		years = append(years, y)
+		res.closedYears = append(res.closedYears, y)
 	}
-	return matched, years, nil
+	return res, nil
 }
 
 func (s *Service) syncVippsReconciliations(ctx context.Context, clubID, createdBy string) (matched, unbalanced int, closed []int, err error) {
