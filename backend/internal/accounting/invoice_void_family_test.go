@@ -121,11 +121,14 @@ func TestBookInvoiceCustomLineAndResidual(t *testing.T) {
 		t.Fatalf("BookInvoice: %v", err)
 	}
 	lines := f.entryLines(t, inv.ID)
-	want := map[string][2]float64{"1500": {2751.50, 0}, "3120": {0, 2550}, "3900": {0, 201.50}, "3100": {0, 0}}
+	want := map[string][2]float64{"1500": {2751.50, 0}, "3120": {0, 2550}, "3900": {0, 201.50}}
 	for code, w := range want {
 		if lines[code] != w {
 			t.Errorf("%s = %v, want %v (all lines %v)", code, lines[code], w, lines)
 		}
+	}
+	if _, ok := lines["3100"]; ok {
+		t.Errorf("residual booked to 3100: %v", lines)
 	}
 }
 

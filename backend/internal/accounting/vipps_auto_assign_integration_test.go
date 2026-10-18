@@ -140,10 +140,21 @@ func TestAutoAssignPriceItemAmounts(t *testing.T) {
 	unique := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 160000, CustomerName: "Synthetic Walk-in"})
 	tie := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 120000, CustomerName: "Synthetic Camper"})
 	membersOnly := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 80000, CustomerName: "Synthetic Stranger"})
+	// `other` is a mapped category (3900), so a unique price in it is booked
+	// like any other category rather than left for review.
+	f.priceItem(t, "other", "Synthetic misc fee", 432100, "once", "all")
+	other := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 432100, CustomerName: "Synthetic Misc"})
 
 	res := f.run(t)
-	if len(res.Assigned) != 1 || res.Assigned[0].RowID != unique || res.Assigned[0].Target != "3300" {
-		t.Fatalf("result = %+v, want only the unique 1,600 charge booked to 3300", res)
+	targets := map[string]string{}
+	for _, a := range res.Assigned {
+		targets[a.RowID] = a.Target
+	}
+	if len(res.Assigned) != 2 || targets[unique] != "3300" || targets[other] != "3900" {
+		t.Fatalf("result = %+v, want the unique 1,600 charge booked to 3300 and the other-category charge to 3900", res)
+	}
+	if got := creditLines(t, f.club, rowEntry(t, f.club, other)); got["3900"][1] != 4321 {
+		t.Errorf("other entry lines = %v, want CR 3900 4321", got)
 	}
 	if rowEntry(t, f.club, tie) != "" {
 		t.Errorf("per-day tie was booked without a configured preference")
