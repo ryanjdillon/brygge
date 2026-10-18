@@ -82,7 +82,7 @@ type assignOpts struct {
 }
 
 var (
-	errInvoiceHasBookedRow = errors.New("invoice already has a booked bank payment — unassign it first")
+	errInvoiceHasBookedRow = errors.New("invoice already has a booked bank or Vipps payment — unassign it first")
 	errInvoiceNoLongerOpen = errors.New("invoice is no longer the open faktura for this deposit")
 )
 
@@ -128,7 +128,7 @@ func (s *Service) assignBankRowToInvoice(
 		return "", errors.New("assign-invoice requires a positive (incoming) amount; use assign-account for outgoing rows")
 	}
 
-	if err := lockInvoiceForAssign(ctx, tx, clubID, invoiceID, toCents(rowAmount), opts.auto); err != nil {
+	if _, err := lockInvoiceForAssign(ctx, tx, clubID, invoiceID, toCents(rowAmount), opts.auto); err != nil {
 		return "", err
 	}
 
@@ -192,27 +192,34 @@ func (s *Service) assignBankRowToInvoice(
 }
 
 // lockInvoiceForAssign locks the faktura for the rest of tx and refuses it
-// when it can't take this payment of rowCents.
+// when it can't take this payment of rowCents. It returns the faktura total
+// in øre. Every path that settles a faktura with a bank row or a Vipps
+// charge (single and multi-row bank assigns, the bank and Vipps
+// auto-assign rules) takes it; the KID cascade does not.
 //
-// The faktura stays locked until the row is linked and posted, so two
+// The faktura stays locked until the payment is linked and posted, so two
 // bookings racing for one faktura (a sync's auto-assign and a manual
-// assign of another row) run one after the other, and the second sees
-// the first's booked row. NO KEY UPDATE rather than UPDATE: linking the
-// row writes bank_import_rows.invoice_id from another connection, and
-// that foreign key takes KEY SHARE on this faktura, which FOR UPDATE
-// would block until this transaction ends — a deadlock with ourselves.
-// The checks run in a second statement: one that waited for the lock
-// still reads the rows as they were when it started, so it would miss
-// the booking it waited for.
-func lockInvoiceForAssign(ctx context.Context, tx pgx.Tx, clubID, invoiceID string, rowCents int64, auto bool) error {
+// assign of another row, or a Vipps and a bank auto-assign) run one after
+// the other, and the second sees the first's booked row. NO KEY UPDATE
+// rather than UPDATE: linking writes bank_import_rows.invoice_id or
+// vipps_import_rows.invoice_id from another connection, and that foreign
+// key takes KEY SHARE on this faktura, which FOR UPDATE would block until
+// this transaction ends — a deadlock with ourselves. The checks run in a
+// second statement: one that waited for the lock still reads the rows as
+// they were when it started, so it would miss the booking it waited for.
+//
+// auto adds the auto-assign rule's conditions: still owed, sent, not
+// imported, nothing booked against it (incl. a KID-matched row) and a
+// total equal to rowCents.
+func lockInvoiceForAssign(ctx context.Context, tx pgx.Tx, clubID, invoiceID string, rowCents int64, auto bool) (int64, error) {
 	if err := tx.QueryRow(ctx,
 		`SELECT id FROM invoices WHERE id = $1 AND club_id = $2 FOR NO KEY UPDATE`,
 		invoiceID, clubID,
 	).Scan(new(string)); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return errors.New("invoice not found")
+			return 0, errors.New("invoice not found")
 		}
-		return fmt.Errorf("lock invoice: %w", err)
+		return 0, fmt.Errorf("lock invoice: %w", err)
 	}
 	var (
 		invoiceCents  int64
@@ -226,25 +233,27 @@ func lockInvoiceForAssign(ctx context.Context, tx pgx.Tx, clubID, invoiceID stri
 		`SELECT round(i.total_amount * 100)::bigint, i.payment_id IS NOT NULL, i.status,
 		        `+finance.OwedByMemberSQL("i")+` AND i.sent_at IS NOT NULL AND i.import_source IS NULL,
 		        EXISTS (SELECT 1 FROM bank_import_rows b
-		                 WHERE b.club_id = i.club_id AND b.invoice_id = i.id AND b.journal_entry_id IS NOT NULL),
+		                 WHERE b.club_id = i.club_id AND b.invoice_id = i.id AND b.journal_entry_id IS NOT NULL)
+		        OR EXISTS (SELECT 1 FROM vipps_import_rows v
+		                 WHERE v.club_id = i.club_id AND v.invoice_id = i.id AND v.journal_entry_id IS NOT NULL),
 		        `+invoiceAlreadyBookedSQL("i")+`
 		   FROM invoices i
 		  WHERE i.id = $1 AND i.club_id = $2`,
 		invoiceID, clubID,
 	).Scan(&invoiceCents, &paid, &invoiceStatus, &owedAndLive, &bookedByRow, &bookedAny); err != nil {
-		return fmt.Errorf("load invoice: %w", err)
+		return 0, fmt.Errorf("load invoice: %w", err)
 	}
 	switch {
 	case invoiceStatus == "voided":
-		return errors.New("invoice is voided")
+		return 0, errors.New("invoice is voided")
 	case paid:
-		return errors.New("invoice is already paid")
+		return 0, errors.New("invoice is already paid")
 	case bookedByRow:
-		return errInvoiceHasBookedRow
+		return 0, errInvoiceHasBookedRow
 	case auto && (!owedAndLive || bookedAny || invoiceCents != rowCents):
-		return errInvoiceNoLongerOpen
+		return 0, errInvoiceNoLongerOpen
 	}
-	return nil
+	return invoiceCents, nil
 }
 
 // existingPeriod is resolvePeriod without the auto-create: an automatic
@@ -256,6 +265,7 @@ func (s *Service) existingPeriod(ctx context.Context, clubID string, date time.T
 	err = s.db.QueryRow(ctx,
 		`SELECT id, status FROM fiscal_periods
 		  WHERE club_id = $1 AND $2::date BETWEEN start_date AND end_date
+		  ORDER BY start_date DESC
 		  LIMIT 1`,
 		clubID, date.Format("2006-01-02"),
 	).Scan(&id, &status)
@@ -773,24 +783,13 @@ func (s *Service) AssignMultipleBankRowsToInvoice(
 		loaded = append(loaded, rd)
 	}
 
-	var invoiceTotal float64
-	var paymentID *string
-	var invoiceStatus string
-	if err := tx.QueryRow(ctx,
-		`SELECT total_amount, payment_id, status FROM invoices WHERE id = $1 AND club_id = $2`,
-		invoiceID, clubID,
-	).Scan(&invoiceTotal, &paymentID, &invoiceStatus); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, errors.New("invoice not found")
-		}
-		return nil, fmt.Errorf("load invoice: %w", err)
+	// Held until the rows are linked and their entries posted (the commit
+	// below), like the single-row path.
+	invCents, err := lockInvoiceForAssign(ctx, tx, clubID, invoiceID, 0, false)
+	if err != nil {
+		return nil, err
 	}
-	if invoiceStatus == "voided" {
-		return nil, errors.New("invoice is voided")
-	}
-	if paymentID != nil {
-		return nil, errors.New("invoice is already paid")
-	}
+	invoiceTotal := float64(invCents) / 100
 
 	var sumAmount float64
 	var latestDate time.Time

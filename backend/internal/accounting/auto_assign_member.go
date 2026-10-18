@@ -105,7 +105,7 @@ func (s *Service) loadMemberCands(ctx context.Context, clubID string) ([]memberC
 // The exact passes (full name, first+last) count as strong only when they
 // name exactly one member: two members sharing a normalised name would
 // otherwise hand a payment to whichever was listed first. A shared name falls
-// through to the weak passes, which only ever suggest.
+// through to the weak passes, which the auto-assign rules never act on.
 func matchMemberName(cands []memberCand, customerName string) (string, int) {
 	needle := normalizeName(customerName)
 	if needle == "" {

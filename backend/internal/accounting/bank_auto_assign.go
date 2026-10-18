@@ -45,7 +45,7 @@ const (
 	BankAutoAssignTriggerSync   = "bank_sync"
 )
 
-const bankAutoAssignFailedText = "Automatisk tildeling av bankinnbetalingar feila – prøv igjen, eller sjå loggen"
+const bankAutoAssignFailedText = "Automatisk tildeling av bankinnbetalinger feilet – prøv igjen, eller se loggen"
 
 // BankAutoAssignOpts says how AutoAssignBankDeposits runs.
 type BankAutoAssignOpts struct {
@@ -223,6 +223,7 @@ func (s *Service) loadBankDeposits(ctx context.Context, clubID string, opts Bank
 		         WHERE p.club_id = bir.club_id
 		           AND CASE WHEN $2 <> '' AND bir.bank_import_id::text = $3 THEN p.id::text = $2
 		                    ELSE bir.row_date BETWEEN p.start_date AND p.end_date END
+		         ORDER BY p.start_date DESC
 		         LIMIT 1) fp ON true
 		  WHERE bir.club_id = $1 AND bir.amount > 0
 		    AND `+partnerEligibleSQL("bir")+`
@@ -317,13 +318,8 @@ func (s *Service) decideBankDeposits(ctx context.Context, clubID string, rows []
 // decideBankDeposit runs the per-row checks. It returns the decision, or the
 // reason the row stays in Tildel.
 func (s *Service) decideBankDeposit(ctx context.Context, clubID string, cands []memberCand, sc partnerScoring, r bankDeposit) (bankDepositDecision, string, error) {
-	switch r.periodStatus {
-	case "":
-		return bankDepositDecision{}, reasonNoPeriod, nil
-	case "open":
-	default:
-		return bankDepositDecision{}, reasonPeriodClosed, nil
-	}
+	// The row-only checks come first, so a row that could never be
+	// auto-booked counts as that rather than as a period problem.
 	if ExtractKIDFromDescription(r.desc) != "" || ExtractInvoiceNumberFromDescription(r.desc) != "" ||
 		isBryggeKID(strings.TrimSpace(r.reference)) {
 		return bankDepositDecision{}, reasonHasReference, nil
@@ -336,6 +332,13 @@ func (s *Service) decideBankDeposit(ctx context.Context, clubID string, cands []
 	}
 	if payer == "" {
 		return bankDepositDecision{}, reasonNoPayer, nil
+	}
+	switch r.periodStatus {
+	case "":
+		return bankDepositDecision{}, reasonNoPeriod, nil
+	case "open":
+	default:
+		return bankDepositDecision{}, reasonPeriodClosed, nil
 	}
 	if sc.isOwn(partnerRow{Cents: r.cents, Counterpart: payer, FromAccount: r.fromAccount, ToAccount: r.toAccount}) {
 		return bankDepositDecision{}, reasonOwnClub, nil

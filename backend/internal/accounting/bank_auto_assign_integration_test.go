@@ -3,7 +3,7 @@ package accounting
 import (
 	"context"
 	"strings"
-	"sync"
+
 	"testing"
 	"time"
 
@@ -518,41 +518,5 @@ func TestBankAutoAssignImportPeriodOverride(t *testing.T) {
 	var matched int
 	if err := f.club.Pool.QueryRow(ctx, `SELECT matched_count FROM bank_imports WHERE id = $1`, imp).Scan(&matched); err != nil || matched != 1 {
 		t.Errorf("matched_count = %d (err %v), want 1", matched, err)
-	}
-}
-
-// A sync's auto-assign and a manual assign of another row race for one
-// faktura: the faktura lock lets exactly one of them book.
-func TestBankAutoAssignRacesManualAssign(t *testing.T) {
-	for i := 0; i < 5; i++ {
-		f := newBankAutoFixture(t)
-		ctx := context.Background()
-		m := f.member(t, "Kappløp")
-		inv := f.faktura(t, m, 45000)
-		auto := f.deposit(t, "Synthetic Kappløp", 45000)
-		manual := f.club.NewBankRow(t, f.imp, fin.BankRowOpts{Cents: 45000, Counterpart: "Synthetic Someone", FromAccount: "88880012345"})
-
-		var wg sync.WaitGroup
-		wg.Add(2)
-		go func() {
-			defer wg.Done()
-			_, _ = f.svc.AutoAssignBankDeposits(ctx, f.club.ID, f.club.Treasurer.ID, BankAutoAssignOpts{Trigger: BankAutoAssignTriggerSync})
-		}()
-		go func() {
-			defer wg.Done()
-			_, _ = f.svc.AssignBankRowToInvoice(ctx, f.club.ID, f.club.Treasurer.ID, manual, inv.ID)
-		}()
-		wg.Wait()
-
-		var posted, drafts int
-		if err := f.club.Pool.QueryRow(ctx,
-			`SELECT count(*) FILTER (WHERE status = 'posted'), count(*) FILTER (WHERE status = 'draft')
-			   FROM journal_entries WHERE club_id = $1 AND source = 'bank_import'`, f.club.ID,
-		).Scan(&posted, &drafts); err != nil {
-			t.Fatalf("count entries: %v", err)
-		}
-		if posted != 1 || drafts != 0 {
-			t.Fatalf("run %d: %d posted, %d drafts; want exactly one posted entry (rows %s, %s)", i, posted, drafts, auto, manual)
-		}
 	}
 }

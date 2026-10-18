@@ -566,7 +566,7 @@ func (s *Service) resolveCustomerToMember(ctx context.Context, clubID, customerN
 // Resolution passes, strongest first. Passes up to memberPassFirstLast are
 // exact (a taught alias, a KID, or the whole normalized name of exactly one
 // member) and safe to act on without a human; the later ones are heuristics
-// that only suggest.
+// the auto-assign rules never act on.
 const (
 	memberPassAlias = iota
 	memberPassKID

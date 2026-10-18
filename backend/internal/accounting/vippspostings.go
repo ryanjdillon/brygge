@@ -298,33 +298,22 @@ func (s *Service) AssignVippsChargeToInvoice(ctx context.Context, clubID, vippsR
 		return nil, fmt.Errorf("charge is dismissed — un-dismiss it before assigning")
 	}
 
-	// Validate the target invoice is a payable match. Requiring the amounts
-	// to agree keeps the payment_id back-link honest — a differently priced
-	// invoice should go through Lag bilag, not be silently marked paid.
-	var (
-		invUserID  *string
-		invAmount  float64
-		invPayment *string
-		invStatus  string
-	)
-	err = s.db.QueryRow(ctx,
-		`SELECT user_id, total_amount, payment_id, status
-		   FROM invoices WHERE id = $1 AND club_id = $2`,
-		invoiceID, clubID,
-	).Scan(&invUserID, &invAmount, &invPayment, &invStatus)
-	if err == pgx.ErrNoRows {
-		return nil, fmt.Errorf("invoice not found")
-	}
+	// Lock the faktura across the posting, as the bank assigns do
+	// (lockInvoiceForAssign), so a Vipps charge and a bank row can't both
+	// settle it: the loser sees the winner's booked row.
+	tx, err := s.db.Begin(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("loading invoice: %w", err)
+		return nil, fmt.Errorf("begin: %w", err)
 	}
-	if invPayment != nil {
-		return nil, fmt.Errorf("invoice already has a payment linked")
+	defer func() { _ = tx.Rollback(ctx) }()
+	invCents, err := lockInvoiceForAssign(ctx, tx, clubID, invoiceID, 0, false)
+	if err != nil {
+		return nil, err
 	}
-	if invStatus == "voided" {
-		return nil, fmt.Errorf("invoice is voided")
-	}
-	if !floatNear(invAmount, b.amount, 1.00) {
+	// Requiring the amounts to agree keeps the payment_id back-link honest —
+	// a differently priced invoice should go through Lag bilag, not be
+	// silently marked paid.
+	if invAmount := float64(invCents) / 100; !floatNear(invAmount, b.amount, 1.00) {
 		return nil, fmt.Errorf("charge %.2f does not match invoice total %.2f — use Lag bilag instead", b.amount, invAmount)
 	}
 
@@ -336,6 +325,20 @@ func (s *Service) AssignVippsChargeToInvoice(ctx context.Context, clubID, vippsR
 	if err != nil {
 		return nil, err
 	}
+	// Record the settled faktura while the lock is held, so a booking that
+	// waited for it sees this charge.
+	if _, err := s.db.Exec(ctx,
+		`UPDATE vipps_import_rows SET invoice_id = $3 WHERE id = $1 AND club_id = $2`,
+		vippsRowID, clubID, invoiceID,
+	); err != nil {
+		s.log.Warn().Err(err).Str("vipps_row_id", vippsRowID).
+			Msg("vipps per-charge assign: recording the settled invoice failed")
+	}
+	// Release the lock before the back-link, which updates the faktura from
+	// another connection and would otherwise wait on it.
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("release invoice lock: %w", err)
+	}
 
 	// Back-link the invoice payment. Best-effort: the GL is already correct
 	// if this fails, mirroring the legacy reconcile path.
@@ -345,13 +348,6 @@ func (s *Service) AssignVippsChargeToInvoice(ctx context.Context, clubID, vippsR
 			Str("vipps_row_id", vippsRowID).
 			Str("journal_entry_id", entryID).
 			Msg("vipps per-charge assign: invoice payment back-link failed")
-	}
-	if _, err := s.db.Exec(ctx,
-		`UPDATE vipps_import_rows SET invoice_id = $3 WHERE id = $1 AND club_id = $2`,
-		vippsRowID, clubID, invoiceID,
-	); err != nil {
-		s.log.Warn().Err(err).Str("vipps_row_id", vippsRowID).
-			Msg("vipps per-charge assign: recording the settled invoice failed")
 	}
 
 	return &VippsChargePostResult{EntryID: entryID}, nil
