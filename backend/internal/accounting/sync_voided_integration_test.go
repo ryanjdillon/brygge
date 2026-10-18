@@ -154,9 +154,6 @@ func TestSyncInvoicesCustomLineUsesItsAccount(t *testing.T) {
 	if lines["1500"] != [2]float64{400, 0} || lines["3900"] != [2]float64{0, 400} {
 		t.Errorf("custom line booking = %v, want DR 1500 / CR 3900 400", lines)
 	}
-	if _, ok := lines[defaultRevenueCode]; ok && defaultRevenueCode != "3900" {
-		t.Errorf("custom line fell back to %s: %v", defaultRevenueCode, lines)
-	}
 }
 
 func TestSyncInvoicesCreditNoteFlipsSides(t *testing.T) {

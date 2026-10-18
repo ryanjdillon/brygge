@@ -422,7 +422,7 @@ func TestPostVippsDraftBacklogClearsReadyPayouts(t *testing.T) {
 			ClubID:         f.club.ID,
 			Lines: []CreateJournalLineInput{
 				{AccountCode: vippsClearingAccountCode, Debit: fin.Kr(c)},
-				{AccountCode: vippsFallbackRevenueCode, Credit: fin.Kr(c)},
+				{AccountCode: fallbackRevenueCode, Credit: fin.Kr(c)},
 			},
 		})
 		if err != nil {

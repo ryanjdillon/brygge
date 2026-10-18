@@ -49,10 +49,7 @@ func buildOrderChargeSplit(sources []orderChargeSource, lines []orderChargeLine)
 		})
 	}
 	for _, l := range lines {
-		code, ok := vippsCategoryAccountMap[l.Category]
-		if !ok {
-			code = vippsFallbackRevenueCode
-		}
+		code := RevenueAccountOrFallback(l.Category)
 		desc := "Vipps innbetaling"
 		if l.Name != "" {
 			desc = "Vipps innbetaling: " + l.Name

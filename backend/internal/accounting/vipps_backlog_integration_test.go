@@ -71,7 +71,7 @@ func TestVippsBacklogPreviewThenApply(t *testing.T) {
 	f := newAutoAssignFixture(t)
 	f.exec(t, `UPDATE clubs SET vipps_auto_assign = false WHERE id = $1`, f.club.ID)
 	row := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 30000, CustomerName: "Walk Up"})
-	draft := f.draftCharge(t, row, vippsFallbackRevenueCode, 30000)
+	draft := f.draftCharge(t, row, fallbackRevenueCode, 30000)
 
 	preview := f.backlog(t, false)
 	if preview.Applied || preview.Drafts != 1 || preview.Posted != 1 || len(preview.Refused) != 0 {
@@ -89,8 +89,8 @@ func TestVippsBacklogPreviewThenApply(t *testing.T) {
 		t.Errorf("draft status after apply = %s, want posted", got)
 	}
 	// Auto-assign off: the fallback charge is posted where it stands.
-	if acct, _ := f.bookedAccount(t, row); acct != vippsFallbackRevenueCode {
-		t.Errorf("booked to %s, want %s", acct, vippsFallbackRevenueCode)
+	if acct, _ := f.bookedAccount(t, row); acct != fallbackRevenueCode {
+		t.Errorf("booked to %s, want %s", acct, fallbackRevenueCode)
 	}
 	if again := f.backlog(t, true); again.Drafts != 0 || again.Posted != 0 {
 		t.Errorf("second apply should find nothing: %+v", again)
@@ -103,24 +103,24 @@ func TestVippsBacklogRefusesUnsafeDrafts(t *testing.T) {
 
 	// Orphan: no row links to it.
 	orphanRow := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 10000})
-	orphan := f.draftCharge(t, orphanRow, vippsFallbackRevenueCode, 10000)
+	orphan := f.draftCharge(t, orphanRow, fallbackRevenueCode, 10000)
 	f.exec(t, `UPDATE vipps_import_rows SET journal_entry_id = NULL WHERE id = $1`, orphanRow)
 
 	// Unbalanced: a line edited after the fact.
 	unbalRow := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 20000})
-	unbal := f.draftCharge(t, unbalRow, vippsFallbackRevenueCode, 20000)
+	unbal := f.draftCharge(t, unbalRow, fallbackRevenueCode, 20000)
 	f.exec(t, `UPDATE journal_lines SET credit = 150 WHERE journal_entry_id = $1 AND credit > 0`, unbal)
 
 	// Already booked: a posted entry exists for the same source row.
 	dupRow := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 40000})
-	dup := f.draftCharge(t, dupRow, vippsFallbackRevenueCode, 40000)
+	dup := f.draftCharge(t, dupRow, fallbackRevenueCode, 40000)
 	src := "vipps_import_rows"
 	posted, err := f.svc.CreateJournalEntry(ctx, CreateJournalEntryInput{
 		FiscalPeriodID: f.club.PeriodID, EntryDate: "2026-06-01", Description: "earlier booking",
 		Source: "vipps", SourceID: &dupRow, SourceTable: &src, CreatedBy: f.club.Treasurer.ID, ClubID: f.club.ID,
 		Lines: []CreateJournalLineInput{
 			{AccountCode: vippsClearingAccountCode, Debit: 400},
-			{AccountCode: vippsFallbackRevenueCode, Credit: 400},
+			{AccountCode: fallbackRevenueCode, Credit: 400},
 		},
 	})
 	if err != nil {
@@ -161,7 +161,7 @@ func TestVippsBacklogReclassifiesParkedCharges(t *testing.T) {
 
 	// A 3900 fallback charge whose amount fits one price item.
 	slipRow := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 160000, CustomerName: "Walk Up"})
-	f.draftCharge(t, slipRow, vippsFallbackRevenueCode, 160000)
+	f.draftCharge(t, slipRow, fallbackRevenueCode, 160000)
 
 	// A charge parked on 1500 for a known member with one matching open
 	// faktura. Even though a rule could place it, a 1500 credit with no

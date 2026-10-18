@@ -15,39 +15,11 @@ import (
 // Account codes used by the Vipps reconciliation draft bilag.
 const (
 	vippsFeeAccountCode = "7700" // Bankgebyrer
-	// vippsFallbackRevenueCode is where unmatchable Vipps belastning
-	// lines land when neither the amount-to-price-article matcher nor
-	// the customer-to-member matcher finds anything. Previously these
-	// landed in 2900 (Annen kortsiktig gjeld), which is wrong: 2900
-	// implies we owe the payer money. Vipps walk-up payments are
-	// genuine revenue we just haven't classified yet; surfacing them
-	// in a review queue starts from 3900 (Andre inntekter) so the
-	// balance sheet doesn't lie while we sort categorization out.
-	// See DIL-367.
-	vippsFallbackRevenueCode = "3900"
 	// vippsClearingAccountCode is the legacy account name kept for
 	// backwards-compat with any operator-written reports that still
-	// reference 2900. New lines route to the fallback above.
+	// reference 2900. New lines route to fallbackRevenueCode.
 	vippsClearingAccountCode = "2900"
 )
-
-// vippsCategoryAccountMap mirrors `paymentTypeAccountMap` in sync.go
-// but is duplicated here intentionally so a future refactor can adjust
-// vipps-specific mapping (e.g. all Vipps gjestehavn always goes to
-// 3200 regardless of price_items.category quirks) without disturbing
-// invoice-side bookkeeping.
-var vippsCategoryAccountMap = map[string]string{
-	"membership":        "3100",
-	"harbor_membership": "3110",
-	"slip_fee":          "3120",
-	"seasonal_rental":   "3120",
-	"electricity":       "3130",
-	"guest":             "3200",
-	"motorhome":         "3210",
-	"room_hire":         "3220",
-	"service":           "3300",
-	"merchandise":       "3300",
-}
 
 // VippsSettlementPattern extracts (settlement_number, msn) from a bank row description.
 // Bank rows for Vipps payouts look like: "Utb. 2000591 Vippsnr 698382".
@@ -282,7 +254,7 @@ func (s *Service) ReconcileVippsPreview(ctx context.Context, clubID, bankRowID s
 					line.Resolved = true
 				} else {
 					line.Kind = "fallback_revenue"
-					line.AccountCode = vippsFallbackRevenueCode
+					line.AccountCode = fallbackRevenueCode
 					preview.UnresolvedCount++
 				}
 			}
@@ -472,11 +444,7 @@ func (s *Service) matchVippsAmountToPriceArticle(ctx context.Context, clubID str
 		return "", ""
 	}
 	m := matches[0]
-	code, ok := vippsCategoryAccountMap[m.category]
-	if !ok {
-		code = vippsFallbackRevenueCode
-	}
-	return code, m.label()
+	return RevenueAccountOrFallback(m.category), m.label()
 }
 
 // priceArticleCandidate is one active price item that produces an amount,

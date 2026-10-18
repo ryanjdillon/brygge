@@ -143,7 +143,7 @@ While `bank_auto_assign` is off, the KID cascade's third step (`findInvoiceByCou
 
 **Rule (BRY-377):** every posting path, report and the momskomp calculation finds an account by `code`, never by name. A treasurer may therefore rename a system (seeded) account and change its description in Kontoplan; `UpdateAccount` refuses only a change to its MVA eligibility (`ErrSystemAccountMVALocked`, 400) and the code, type, active state and deletion stay locked. An omitted or unchanged `mva_eligible` is not a change. The seed name only applies to new clubs: no migration renames an existing club's accounts.
 
-Price items carry no account. The category maps (`PriceCategoryAccount`) give a price item's default account, and `invoice_lines.account_id` overrides it per line. The account hints in the accounts list and the `price_item` suggestion pass name that default account, so they never claim a line override. Price items and invoice lines carry no MVA: amounts are gross.
+Price items carry no account. The category map (`revenueAccountMap`, read through `PriceCategoryAccount`) gives a price item's default account, and `invoice_lines.account_id` overrides it per line. The account hints in the accounts list and the `price_item` suggestion pass name that default account, so they never claim a line override. Price items and invoice lines carry no MVA: amounts are gross.
 
 **Failure mode:** treasurers could not recognise 3300 "Salgsinntekter" as the account slipping books to, and could not rename it because every system account was read-only.
 
@@ -169,7 +169,7 @@ Price items carry no account. The category maps (`PriceCategoryAccount`) give a 
 
 **Rule (BRY-352):** `SyncInvoices` books a faktura only when `sent_at IS NOT NULL` and `status <> 'voided'`.
 - A faktura voided after it was booked has its `invoice_sync` and `invoice_resplit` entries reversed on the next sync (`reverseVoidedInvoiceEntries`, within the open period being synced).
-- Each line books to its own `account_id` when set. Otherwise it uses its price-item category's account, and failing that 3100.
+- Each line books to its own `account_id` when set. Otherwise it uses its price-item category's account, and failing that 3900 (see *Revenue accounts resolve the same on every payment path*).
 - Signs drive the sides, so a credit note books DR revenue / CR 1500. A faktura that nets to zero books its lines without a 1500 line (a fully exempt faktura: CR revenue / DR the exemption expense account); one with no non-zero line is skipped with a reason.
 - `SyncPayments` never books a payment that settles an invoice (`invoices.payment_id`). The bank or Vipps reconciliation that created it already booked DR bank / CR 1500.
 
@@ -208,9 +208,15 @@ Price items carry no account. The category maps (`PriceCategoryAccount`) give a 
 
 **Failure mode:** member pays the wrong account. Or worse, an auditor finds two versions of the same invoice with different kontonr and the audit trail can't explain why.
 
+### Revenue accounts resolve the same on every payment path
+
+**Rule (BRY-384):** A category resolves to its revenue account through one map, `revenueAccountMap` (`revenue_accounts.go`), on every path: invoice sync, Vipps per-charge, Vipps auto-assign, order split and the price hints. Revenue nothing names an account for lands on `fallbackRevenueCode` (3900): an unmapped category, an invoice residual (total ≠ line sum), a faktura with no lines and a line with neither an account nor a category. Paths that book without a human (Vipps auto-assign) or show a default (price hints) use `RevenueAccount`, which reports an unknown category as unknown, so it is never auto-booked or hinted.
+
+**Failure mode:** before BRY-384 invoice sync fell back to 3100 and Vipps to 3900, so the same price item booked to different accounts depending on how it was paid, and unexplained invoice money was mixed into membership dues. Entries booked to 3100 that way were not rebooked.
+
 ### Vipps cascade lands on 3900, never 2900
 
-**Rule:** Unmatched Vipps `belastning` lines route to `vippsFallbackRevenueCode = "3900"` (Andre inntekter). The legacy `vippsClearingAccountCode = "2900"` is kept as a Go constant for backwards-compatible reports but no new lines route there.
+**Rule:** Unmatched Vipps `belastning` lines route to `fallbackRevenueCode = "3900"` (Andre inntekter). The legacy `vippsClearingAccountCode = "2900"` is kept as a Go constant for backwards-compatible reports but no new lines route there.
 
 **Failure mode:** 2900 (Annen kortsiktig gjeld) implies "we owe the payer money," which is wrong for revenue we just haven't classified yet. Treasurer's balance sheet lies.
 

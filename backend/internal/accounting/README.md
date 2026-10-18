@@ -22,7 +22,8 @@ The double-entry GL plus everything that posts to it: bank statement parsing, KI
 | `invoicepayment.go` | `Service.linkInvoicePayment` — inserts a `payments` row and back-links `invoices.payment_id`. Used by both bank KID match and Vipps invoice match so the dashboard faktura-status widgets reflect the payment. |
 | `vipps_backlog.go` | `PostVippsDraftBacklog`: posts a fiscal period's leftover Vipps drafts (preview, then apply). Parked charges on 3900, or on 1500 with no faktura, are rebooked by the auto-assign rules first when the club has auto-assign on. Unsafe drafts (unbalanced, orphan, source already booked, faktura already settled) are refused with a reason. |
 | `resplit.go` | `ResplitInvoiceBilags` — corrects the per-account revenue split of booked fakturas with `invoice_resplit` reclassification entries (preview + apply). |
-| `sync.go` | `paymentTypeAccountMap`, `BookInvoice` / `ReverseInvoice` (send- and void-time booking, called from the invoice handlers), `SyncInvoices` (the repair sync behind **Avstem periode**), `SyncPayments`, `bookedEntryFilter`. One per-faktura path (`bookInvoiceEntry`) serves both; results carry `skipped_details` with a reason per skipped row. |
+| `revenue_accounts.go` | `revenueAccountMap`, the one category → revenue account map for every payment path, and its two forms: `RevenueAccount` (code, known) for paths that must refuse an unknown category (Vipps auto-assign, price hints) and `RevenueAccountOrFallback` (unknown → `fallbackRevenueCode` 3900) for paths that must book regardless (invoice sync, Vipps per-charge, order split). |
+| `sync.go` | `BookInvoice` / `ReverseInvoice` (send- and void-time booking, called from the invoice handlers), `SyncInvoices` (the repair sync behind **Avstem periode**), `SyncPayments`, `bookedEntryFilter`. One per-faktura path (`bookInvoiceEntry`) serves both; results carry `skipped_details` with a reason per skipped row. |
 | `description_parse.go` | `ExtractKIDFromDescription`, `ExtractInvoiceNumberFromDescription`, `ExtractPayerFromDescription`. Vendor-specific (DNB/Sparebank) heuristics for pulling structure out of unstructured bank row descriptions. |
 | `momskomp.go`, `momskomp_pdf.go` | Momskompensasjon (VAT reimbursement for non-profits) report + PDF. |
 | `reports.go`, `reports_pdf.go` | Income statement, balance sheet generation. |
@@ -32,15 +33,15 @@ The double-entry GL plus everything that posts to it: bank statement parsing, KI
 When a bank row matching `Utb. NNN Vippsnr MMM` arrives, the reconciliation pulls the matching payout + all `belastning` + `fee` rows from the same booking date and proposes a balanced bilag. For each belastning, the classification cascade runs:
 
 1. **Member + matching open invoice** → CR 1500 receivables + `LinkedInvoiceID` (so confirm calls `linkInvoicePayment` after posting and back-links `invoices.payment_id`)
-2. **Amount → price-article** (`matchVippsAmountToPriceArticle`) → CR mapped revenue account from `vippsCategoryAccountMap` (handles guest-slip × N nights, motorhome × N nights via integer-multiple match)
+2. **Amount → price-article** (`matchVippsAmountToPriceArticle`) → CR the category's account from `RevenueAccountOrFallback` (handles guest-slip × N nights, motorhome × N nights via integer-multiple match)
 3. **Member resolved, no clear classification** → CR 1500 receivables (treasurer reconciles manually)
-4. **Fallback** → CR 3900 `vippsFallbackRevenueCode` (Andre inntekter)
+4. **Fallback** → CR 3900 `fallbackRevenueCode` (Andre inntekter)
 
 **Order-linked charges (per-charge model, BRY-337).** An ePayment charge (faktura pay link, QR checkout) carries our merchant reference (`chk-…`) as the row's `order_id`. `AutoReconcileOrderCharges` books it from the order itself, with no amount or name guessing: DR clearing / CR 1500 for each faktura in `order_sources` (with the `linkInvoicePayment` back-link), and CR the category revenue account for each catalog line (`resolveOrderChargeSplit`). It refuses if the order total and the charge differ, or if a faktura on the order is already paid or voided; those are reported in `skipped_details`. It runs from **Synk Vipps**, an operator Report API sync, and CSV upload. The nightly Report sync only repairs row types, because journal entries need a human `created_by`. Like every Vipps posting, the entry is posted on creation (BRY-339).
 
 **Auto-assign (per-charge model, BRY-340).** After order-linked charges, `AutoAssignVippsCharges` (`vipps_auto_assign.go`) books the rest of the queue when the outcome is unambiguous and the club has opted in (`clubs.vipps_auto_assign`):
 1. `member_invoice`: a strong member match (`resolveCustomerToMemberPass` up to `memberPassFirstLast`; a name two members share is never strong) where `decideMemberInvoice` (`auto_assign_member.go`) finds the member's single open faktura — issued by the charge date, nothing booked against it, not imported, total equal to the øre — goes through `AssignVippsChargeToInvoice`.
-2. `price_item`: `priceArticleCandidates` in one category, or a cross-category tie resolved by `clubs.vipps_auto_assign_tie_category` (only when every match is a per-night/day/hour price; an exact one-off price in any tied category leaves it manual), goes through `CreateVippsChargeBilag` to `vippsCategoryAccountMap[category]`. Members-only items also need a strong member match.
+2. `price_item`: `priceArticleCandidates` in one category, or a cross-category tie resolved by `clubs.vipps_auto_assign_tie_category` (only when every match is a per-night/day/hour price; an exact one-off price in any tied category leaves it manual), goes through `CreateVippsChargeBilag` to `RevenueAccount(category)`; a category the map does not know is left for review, never booked to the fallback. Members-only items also need a strong member match.
 
 Everything else stays in Tildel; the result reports `assigned` and `needs_review`. It runs where `AutoReconcileOrderCharges` runs. `UnassignVippsCharge` undoes any charge booking: it refuses a closed period, voids a posted entry (or deletes a draft) *before* clearing the row, then reopens the faktura recorded in `vipps_import_rows.invoice_id`.
 
@@ -73,8 +74,7 @@ When a bank import lands or `BankSync` runs (after provisional rows are refreshe
 |---|---|---|
 | `bankAccountCode` | 1920 | Bankkonto drift |
 | `receivablesAccountCode` | 1500 | Kundefordringer |
-| `defaultRevenueCode` | 3100 | Medlemskontingent (invoice sync fallback) |
-| `vippsFallbackRevenueCode` | 3900 | Andre inntekter (Vipps cascade fallback) |
+| `fallbackRevenueCode` | 3900 | Andre inntekter (fallback for every payment path: unmapped category, invoice residual or uncategorised line, unmatched Vipps charge) |
 | `vippsFeeAccountCode` | 7700 | Bankgebyrer |
 | `vippsClearingAccountCode` | 2900 | **Legacy** — kept for report compat, no new lines route here |
 
@@ -115,7 +115,7 @@ Full list: [`../../../docs/developer/reference/invariants.md`](../../../docs/dev
 
 ## Common changes
 
-- Adding a new price-item category → edit `PriceItemCategories` + `vippsCategoryAccountMap` + `paymentTypeAccountMap` + the handlers' `validCategories` + `frontend/src/lib/priceCategories.ts` (categories and their label keys, shared by pricing and the Tildel account hints) + [`enums.md`](../../../docs/developer/reference/enums.md)
+- Adding a new price-item category → edit `PriceItemCategories` + `revenueAccountMap` + `TestRevenueAccountResolver` + the handlers' `validCategories` + `frontend/src/lib/priceCategories.ts` (categories and their label keys, shared by pricing and the Tildel account hints) + [`enums.md`](../../../docs/developer/reference/enums.md)
 - Adding a new bank format → new YAML in `bankformats/`, no Go changes needed
 - Adding a new audit action → see [`../../../docs/developer/checklists/add-audit-action.md`](../../../docs/developer/checklists/add-audit-action.md)
 - Adding a new migration → see [`../../../docs/developer/checklists/add-migration.md`](../../../docs/developer/checklists/add-migration.md)

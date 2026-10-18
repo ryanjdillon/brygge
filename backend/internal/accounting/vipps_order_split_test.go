@@ -30,7 +30,7 @@ func TestBuildOrderChargeSplit(t *testing.T) {
 		t.Errorf("merchandise credit wrong: %+v", got[2])
 	}
 	// Unmapped category → fallback revenue.
-	if got[3].AccountCode != vippsFallbackRevenueCode || got[3].Credit != 50 {
+	if got[3].AccountCode != fallbackRevenueCode || got[3].Credit != 50 {
 		t.Errorf("fallback credit wrong: %+v", got[3])
 	}
 

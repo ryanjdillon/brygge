@@ -105,7 +105,8 @@ func TestResplitRefusesClosedPeriod(t *testing.T) {
 }
 
 // A multi-line faktura with a custom-account line and a line sum that falls
-// short of the header total books the residual to 3100 and still balances.
+// short of the header total books the residual to 3900 alongside the custom
+// line and still balances.
 func TestBookInvoiceCustomLineAndResidual(t *testing.T) {
 	f := newSyncFixture(t)
 	ctx := context.Background()
@@ -120,7 +121,7 @@ func TestBookInvoiceCustomLineAndResidual(t *testing.T) {
 		t.Fatalf("BookInvoice: %v", err)
 	}
 	lines := f.entryLines(t, inv.ID)
-	want := map[string][2]float64{"1500": {2751.50, 0}, "3120": {0, 2550}, "3900": {0, 200}, "3100": {0, 1.50}}
+	want := map[string][2]float64{"1500": {2751.50, 0}, "3120": {0, 2550}, "3900": {0, 201.50}, "3100": {0, 0}}
 	for code, w := range want {
 		if lines[code] != w {
 			t.Errorf("%s = %v, want %v (all lines %v)", code, lines[code], w, lines)

@@ -84,7 +84,7 @@ func (s *Service) ResyncVippsBilags(ctx context.Context, clubID, createdBy strin
 		    AND a.code IN ($2, $3)
 		    AND je.source_table = 'bank_import_rows'
 		    AND je.source_id IS NOT NULL`,
-		clubID, vippsClearingAccountCode, vippsFallbackRevenueCode,
+		clubID, vippsClearingAccountCode, fallbackRevenueCode,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("listing candidates: %w", err)

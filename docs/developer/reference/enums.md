@@ -154,11 +154,11 @@ membership   harbor_membership   slip_fee   seasonal_rental   guest   motorhome 
 
 Synchronized vocabularies:
 
-- `paymentTypeAccountMap` (`backend/internal/accounting/sync.go`) — maps category → revenue GL code
-- `vippsCategoryAccountMap` (`backend/internal/accounting/vippsreconcile.go`) — same shape, kept separate so Vipps-specific routing can evolve independently
-- `categoryKeys` (`frontend/src/composables/usePricing.ts`) — maps category → `admin.pricing.category*` i18n key
+- `revenueAccountMap` (`backend/internal/accounting/revenue_accounts.go`) — maps category → revenue GL code for every payment path
+- `PriceItemCategories` (`backend/internal/accounting/price_hints.go`) — the vocabulary the price-item handlers accept
+- `PRICE_CATEGORIES` and its label keys (`frontend/src/lib/priceCategories.ts`) — the SPA vocabulary and its `admin.pricing.category*` i18n keys
 
-Adding a new category requires touching **all three** plus this doc. Otherwise a faktura for that category routes to the default revenue code (3100) and the SPA shows the raw enum string.
+Adding a new category requires touching **all three** plus this doc. Otherwise a faktura or Vipps charge for that category routes to the fallback revenue code (3900), Vipps auto-assign leaves it for review, and the SPA shows the raw enum string.
 
 ### `price_exemptions.role` and `invoice_lines.exemption_role` (migration 000108)
 
@@ -228,7 +228,7 @@ Per-recipient delivery state. `pending` → claimed by the worker (`sending`) �
 
 ### Category → revenue GL code
 
-Source: `paymentTypeAccountMap` in `backend/internal/accounting/sync.go`.
+Source: `revenueAccountMap` in `backend/internal/accounting/revenue_accounts.go`. One map serves invoice sync, Vipps per-charge, Vipps auto-assign, the order split and the price hints.
 
 | Key (payment_type or category) | GL code | Name (NS 4102) |
 |---|---|---|
@@ -238,48 +238,28 @@ Source: `paymentTypeAccountMap` in `backend/internal/accounting/sync.go`.
 | `slip_fee` | 3120 | Plassleie |
 | `electricity` | 3130 | Strøm |
 | `booking` (payment_type) | 3200 | Gjestehavninntekter |
-| `seasonal_rental` | 3120 | Plassleie (seasonal slip rent; same account as the Vipps map) |
+| `seasonal_rental` | 3120 | Plassleie (seasonal slip rent) |
 | `guest` | 3200 | Gjestehavninntekter |
 | `motorhome` | 3210 | Bobil/campingplass, kept apart from 3200 because it may be taxed differently under MVA |
 | `room_hire` | 3220 | Lokalleie |
 | `merchandise`, `service` | 3300 | Salgs- og tjenesteinntekter (seeded name; clubs seeded earlier keep "Salgsinntekter" until a treasurer renames it in Kontoplan) |
 | `other` | 3900 | Andre inntekter |
 
-Fallback when no entry matches: `defaultRevenueCode = "3100"` (Medlemskontingent).
+Fallback when no entry matches: `fallbackRevenueCode = "3900"` (Andre inntekter), through `RevenueAccountOrFallback` on the paths that must book the money (invoice sync, including the residual, no-line and uncategorised-line cases; Vipps per-charge; order split). `RevenueAccount` returns the code and whether the category is known; Vipps auto-assign and the price hints use it so an unknown category is never auto-booked or hinted. `TestRevenueAccountResolver` lists every key.
 
-The two maps must agree on every key they share (`TestCategoryMapsAgree`). `PriceCategoryAccount(category)` resolves a price-item category (the ten keys in `PriceItemCategories`, the same set the price-item handlers accept) to its default account: the Vipps map first, then this one. Payment-type-only keys (`dues`, `booking`, `merchandise`) are not price-item categories and resolve to nothing. The accounts list (`GET /admin/accounting/accounts`) uses it to show, per account, the price items and categories that book there by default.
+`PriceCategoryAccount(category)` resolves a price-item category (the ten keys in `PriceItemCategories`, the same set the price-item handlers accept) to its default account through `RevenueAccount`. Payment-type-only keys (`dues`, `booking`, `merchandise`) are not price-item categories and resolve to nothing. The accounts list (`GET /admin/accounting/accounts`) uses it to show, per account, the price items and categories that book there by default.
 
-Every code in this table and the Vipps one below must exist in `DefaultKontoplan()`. `TestCategoryMapsResolveToDefaultKontoplan` enforces that. A code missing from the chart makes `CreateJournalEntry` fail with "account not found", and sync silently counts the invoice as skipped. That happened to 3130, 3210 and 3220 until migration `000099` (BRY-361).
-
-### Vipps category → revenue GL code
-
-Source: `vippsCategoryAccountMap` in `backend/internal/accounting/vippsreconcile.go`. Diverges from the table above because Vipps walk-up payments are mostly guest/motorhome, and we want them routed even when the category vocabulary differs slightly.
-
-| `price_items.category` | GL code |
-|---|---|
-| `membership` | 3100 |
-| `harbor_membership` | 3110 |
-| `slip_fee` | 3120 |
-| `seasonal_rental` | 3120 |
-| `electricity` | 3130 |
-| `guest` | 3200 |
-| `motorhome` | 3210 |
-| `room_hire` | 3220 |
-| `service` | 3300 |
-| `merchandise` | 3300 |
-
-Fallback: `vippsFallbackRevenueCode = "3900"` (Andre inntekter). **Not 2900** — see `invariants.md`.
+Every code in this table must exist in `DefaultKontoplan()`. `TestCategoryMapsResolveToDefaultKontoplan` enforces that. A code missing from the chart makes `CreateJournalEntry` fail with "account not found", and sync silently counts the invoice as skipped. That happened to 3130, 3210 and 3220 until migration `000099` (BRY-361).
 
 ### Fixed GL account constants
 
-Source: `backend/internal/accounting/sync.go` + `vippsreconcile.go`.
+Source: `backend/internal/accounting/sync.go`, `revenue_accounts.go` and `vippsreconcile.go`.
 
 | Constant | Code | Name |
 |---|---|---|
 | `bankAccountCode` | 1920 | Bankkonto drift |
 | `receivablesAccountCode` | 1500 | Kundefordringer |
-| `defaultRevenueCode` | 3100 | Medlemskontingent (fallback for invoice sync) |
-| `vippsFallbackRevenueCode` | 3900 | Andre inntekter (fallback for Vipps cascade) |
+| `fallbackRevenueCode` | 3900 | Andre inntekter (fallback for every payment path; **not 2900**, see `invariants.md`) |
 | `vippsFeeAccountCode` | 7700 | Bankgebyrer |
 | `vippsClearingAccountCode` | 2900 | Annen kortsiktig gjeld (legacy — kept as a constant for report compatibility, but **no new lines route here**) |
 
@@ -319,8 +299,8 @@ Report API rows (`vipps_imports.filename` "Vipps Report API …") map onto the s
 
 ## What to do when
 
-- **Adding a new `payment_type` enum value**: migration adds the value to the Postgres enum, update `paymentTypeAccountMap`, update this doc, update `internal/handlers/invoices.go` if the new type changes invoice flow.
-- **Adding a new `price_items.category` string**: no migration needed, but you must update `paymentTypeAccountMap`, `vippsCategoryAccountMap`, `categoryKeys` (frontend), and this doc. Otherwise the new category routes to 3100 and the SPA shows the raw string.
+- **Adding a new `payment_type` enum value**: migration adds the value to the Postgres enum, update `revenueAccountMap`, update this doc, update `internal/handlers/invoices.go` if the new type changes invoice flow.
+- **Adding a new `price_items.category` string**: no migration needed, but you must update `revenueAccountMap`, `PriceItemCategories`, the handlers' `validCategories`, `frontend/src/lib/priceCategories.ts`, `TestRevenueAccountResolver`, and this doc. Otherwise the new category routes to 3900 and the SPA shows the raw string.
 - **Adding a new `resource_type`**: migration adds the value, then audit `frontend/src/views/BookView.vue` and any reservations chart filter for vocabulary mismatches (see the `bobil_spot` cautionary tale).
 - **Adding a new `transaction_source`**: only audit-relevant filters in cash-flow and reconciliation depend on this; mostly safe.
 

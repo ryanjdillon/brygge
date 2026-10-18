@@ -101,32 +101,17 @@ func TestCategoryMapsResolveToDefaultKontoplan(t *testing.T) {
 			t.Errorf("%s[%q] = %s, which is not in DefaultKontoplan", source, key, code)
 		}
 	}
-	for k, code := range paymentTypeAccountMap {
-		check("paymentTypeAccountMap", k, code)
-	}
-	for k, code := range vippsCategoryAccountMap {
-		check("vippsCategoryAccountMap", k, code)
+	for k, code := range revenueAccountMap {
+		check("revenueAccountMap", k, code)
 	}
 	for name, code := range map[string]string{
 		"bankAccountCode":          bankAccountCode,
 		"receivablesAccountCode":   receivablesAccountCode,
-		"defaultRevenueCode":       defaultRevenueCode,
 		"vippsFeeAccountCode":      vippsFeeAccountCode,
-		"vippsFallbackRevenueCode": vippsFallbackRevenueCode,
+		"fallbackRevenueCode":      fallbackRevenueCode,
 		"vippsClearingAccountCode": vippsClearingAccountCode,
 	} {
 		check("const", name, code)
-	}
-}
-
-// The invoice and Vipps category maps must send every key they share to
-// the same account: the accounts list shows one default account per price
-// item, and a drift would book the same item to two accounts by channel.
-func TestCategoryMapsAgree(t *testing.T) {
-	for k, vipps := range vippsCategoryAccountMap {
-		if invoice, ok := paymentTypeAccountMap[k]; ok && invoice != vipps {
-			t.Errorf("category %q: vippsCategoryAccountMap = %s, paymentTypeAccountMap = %s", k, vipps, invoice)
-		}
 	}
 }
 

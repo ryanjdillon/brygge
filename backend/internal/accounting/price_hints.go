@@ -8,7 +8,7 @@ import (
 
 // PriceItemCategories is the price_items.category vocabulary, in the order
 // the pricing admin lists it. The payment-type keys that share
-// paymentTypeAccountMap (dues, booking, merchandise) are not price-item
+// revenueAccountMap (dues, booking, merchandise) are not price-item
 // categories and are left out.
 var PriceItemCategories = []string{
 	"membership",
@@ -25,19 +25,14 @@ var PriceItemCategories = []string{
 
 // PriceCategoryAccount returns the default revenue account a price-item
 // category books to. Price items carry no account of their own: the category
-// maps give the default and invoice_lines.account_id overrides it per line.
-// The Vipps map is consulted first, then the invoice map; the two agree on
-// every key they share (TestCategoryMapsAgree). A category neither map knows
-// returns false rather than a guessed fallback.
+// map gives the default and invoice_lines.account_id overrides it per line.
+// A category outside the price-item vocabulary, or one the map does not know,
+// returns false rather than the fallback, so no hint names a guessed account.
 func PriceCategoryAccount(category string) (string, bool) {
 	if !isPriceItemCategory(category) {
 		return "", false
 	}
-	if code, ok := vippsCategoryAccountMap[category]; ok {
-		return code, true
-	}
-	code, ok := paymentTypeAccountMap[category]
-	return code, ok
+	return RevenueAccount(category)
 }
 
 func isPriceItemCategory(category string) bool {

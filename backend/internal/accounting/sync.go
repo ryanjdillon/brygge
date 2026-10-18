@@ -11,34 +11,9 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-// paymentTypeAccountMap maps both Brygge payment_type enum values and
-// price_items.category strings to kontoplan account codes so that either
-// vocabulary resolves to the correct revenue account. The two sets share
-// harbor_membership and slip_fee verbatim; membership↔dues and the
-// booking/guest/motorhome group diverge in name only.
-var paymentTypeAccountMap = map[string]string{
-	// payment_type enum values
-	"dues":        "3100", // Medlemskontingent
-	"booking":     "3200", // Gjestehavninntekter
-	"merchandise": "3300", // Salgs- og tjenesteinntekter
-
-	// price_items.category values
-	"membership":        "3100", // Medlemskontingent
-	"harbor_membership": "3110", // Havneavgift
-	"slip_fee":          "3120", // Plassleie
-	"electricity":       "3130", // Strøm
-	"seasonal_rental":   "3120", // Plassleie (sesong)
-	"guest":             "3200", // Gjestehavninntekter
-	"motorhome":         "3210", // Bobil/campingplass
-	"room_hire":         "3220", // Lokalleie
-	"service":           "3300", // Salgs- og tjenesteinntekter
-	"other":             "3900", // Andre inntekter
-}
-
 const (
-	bankAccountCode       = "1920" // Bankkonto drift
+	bankAccountCode        = "1920" // Bankkonto drift
 	receivablesAccountCode = "1500" // Kundefordringer
-	defaultRevenueCode     = "3100" // Fallback for unmatched types
 )
 
 // bookedEntryFilter selects journal entries that were ever posted. A voided
@@ -125,10 +100,7 @@ func (s *Service) SyncPayments(ctx context.Context, clubID, periodID, syncedBy s
 			return nil, fmt.Errorf("scanning payment: %w", err)
 		}
 
-		revenueCode, ok := paymentTypeAccountMap[paymentType]
-		if !ok {
-			revenueCode = defaultRevenueCode
-		}
+		revenueCode := RevenueAccountOrFallback(paymentType)
 
 		description := fmt.Sprintf("Betaling: %s", paymentType)
 		if memberName != nil {
@@ -499,10 +471,10 @@ func (s *Service) reverseVoidedInvoiceEntries(ctx context.Context, clubID, perio
 // invoiceRevenueCredits computes the net revenue per account for an
 // invoice by walking its lines and summing line_total per account. A
 // line's own account_id (set on custom lines) wins; otherwise its price
-// item's category is mapped through paymentTypeAccountMap; otherwise it
-// falls to defaultRevenueCode. Nets may be negative (credit notes,
+// item's category is resolved by RevenueAccountOrFallback; a line with
+// neither falls to fallbackRevenueCode. Nets may be negative (credit notes,
 // discount lines). If the line sum diverges from the invoice total, the
-// residual goes to defaultRevenueCode so the bilag still balances.
+// residual goes to fallbackRevenueCode so the bilag still balances.
 func (s *Service) invoiceRevenueCredits(ctx context.Context, invoiceID string, invoiceTotal float64) (map[string]float64, error) {
 	rows, err := s.db.Query(ctx,
 		`SELECT il.line_total, pi.category, a.code
@@ -525,14 +497,12 @@ func (s *Service) invoiceRevenueCredits(ctx context.Context, invoiceID string, i
 		if err := rows.Scan(&lineTotal, &category, &accountCode); err != nil {
 			return nil, fmt.Errorf("scanning line: %w", err)
 		}
-		code := defaultRevenueCode
+		code := fallbackRevenueCode
 		switch {
 		case accountCode != nil:
 			code = *accountCode
 		case category != nil:
-			if c, ok := paymentTypeAccountMap[*category]; ok {
-				code = c
-			}
+			code = RevenueAccountOrFallback(*category)
 		}
 		credits[code] += lineTotal
 		lineSum += lineTotal
@@ -542,10 +512,10 @@ func (s *Service) invoiceRevenueCredits(ctx context.Context, invoiceID string, i
 	}
 
 	if residual := roundCents(invoiceTotal - lineSum); residual != 0 {
-		credits[defaultRevenueCode] += residual
+		credits[fallbackRevenueCode] += residual
 	}
 	if len(credits) == 0 {
-		credits[defaultRevenueCode] = invoiceTotal
+		credits[fallbackRevenueCode] = invoiceTotal
 	}
 	return credits, nil
 }

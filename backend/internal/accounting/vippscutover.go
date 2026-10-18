@@ -236,7 +236,7 @@ func (s *Service) regenerateOneSettlement(ctx context.Context, clubID, createdBy
 		if account == "" {
 			// No matching legacy credit line — book to the fallback revenue
 			// account so the charge still clears and the payout can net.
-			account = vippsFallbackRevenueCode
+			account = fallbackRevenueCode
 		}
 		bel := b // capture
 		desc := fmt.Sprintf("Vipps innbetaling: %s", bel.customerName)

@@ -221,7 +221,7 @@ func (s *Service) decideVippsCharge(ctx context.Context, clubID string, cfg vipp
 	if membersOnly && !strongMember {
 		return &vippsChargeDecision{Reason: "members-only price but the payer is not a known member"}, nil
 	}
-	account, ok := vippsCategoryAccountMap[category]
+	account, ok := RevenueAccount(category)
 	if !ok {
 		return &vippsChargeDecision{Reason: "price category has no revenue account"}, nil
 	}

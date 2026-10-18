@@ -294,7 +294,7 @@ func (s *Service) backlogReclassification(ctx context.Context, clubID string, cf
 		return nil, "", nil
 	}
 	from := credits[0].AccountCode
-	if from != vippsFallbackRevenueCode && from != receivablesAccountCode {
+	if from != fallbackRevenueCode && from != receivablesAccountCode {
 		return nil, "", nil
 	}
 
