@@ -53,6 +53,24 @@ Charges naming a checkout order are left to `AutoReconcileOrderCharges`. Each bo
 
 **Failure mode:** guessing on a weak name match or a cross-category amount books a member's dues as walk-up revenue, or the reverse. The member is then chased for a faktura they paid, or revenue lands on the wrong account. With no opt-in, a club that never chose this would find bookings it didn't make.
 
+### KID-less bank deposits are auto-booked only when unambiguous, and only on opt-in
+
+**Rule (BRY-366):** `AutoAssignBankDeposits` runs at the end of every bank import (upload and both reimports) and as pass 4c of `BankSync`, but books nothing unless `clubs.bank_auto_assign` is on. That switch is separate from `vipps_auto_assign`. Candidates are incoming rows that are unbooked, undismissed, not refund-paired, not a Vipps payout and not provisional (`partnerEligibleSQL`), carry none of our KIDs (`isBryggeKID`) and are not a bounced transfer. A row stays in Tildel, with the first reason it fails:
+- `no_period` / `period_closed`: its date (or the import's chosen period) is not in an existing open fiscal period. The rule never creates a period.
+- `has_reference`: the description carries a KID or an invoice number; the KID cascade owns it.
+- `no_payer`: no `Fra:` name in the description and no counterpart.
+- `own_club`: the payer is the club's own account, or its name when no account is known.
+- `no_strong_member`: no taught alias and no unique exact name.
+- the `decideMemberInvoice` reasons (see below).
+- `has_partner`: the row has a strong BRY-380 partner.
+- `possible_double_payment`: two or more rows in the run reach the same faktura; none is booked.
+
+A booking goes through `assignBankRowToInvoice` with the faktura locked (`FOR NO KEY UPDATE`, held until the row is linked and posted). Under the lock it re-checks that the faktura is still owed, sent, not imported, has nothing booked against it and equals the amount, so a racing manual assign or a second run books at most once. Manual assigns take the same lock and refuse a faktura another booked bank row already points at. The entry is described `Automatisk tildeling: …`, records `invoice_id`, and keeps `auto_matched = false` like every Tildel booking: `healStrandedKIDDrafts` only releases KID drafts, so an `auto_matched` rule booking stranded between link and post would never be healed. Provenance is the `bank_row.auto_assigned` audit row. There is no unattended bank sync; without an acting user the rows are reported as `no_actor`. Undo is `UnassignBankRow`, and the next sync books the row again if it is still unambiguous.
+
+While `bank_auto_assign` is off, the KID cascade's third step (`findInvoiceByCounterpartAndAmount`: full name + amount, no aliases or other guards) still runs at import and sync. When it is on, that step is skipped and this rule replaces it. `GET /admin/accounting/bank-rows/auto-assign/preview` projects the rule as if on, writes nothing and returns no names.
+
+**Failure mode:** the ungated name+amount step booked a deposit to whichever member's faktura matched, with no opt-in, no aliases and no check for a payment made before the faktura, a partly paid faktura or a member with two open fakturas. Turning a replacement on at deploy would have changed live bookings before anyone saw what it would do.
+
 ### A payment goes to a member's faktura only when it is the only one it can be
 
 **Rule (BRY-340, BRY-366):** every rule that books a payment to a member's faktura without a human (Vipps auto-assign and bank auto-assign) goes through two shared steps in `auto_assign_member.go`:
@@ -268,9 +286,9 @@ Price items carry no account. The category maps (`PriceCategoryAccount`) give a 
 
 **Rule (BRY-325):** whether an invoice still needs paying is decided only through `internal/finance/settled.go`:
 - **`SettledForMemberSQL`** returns true for `payment_id IS NOT NULL OR vipps_paid_at IS NOT NULL OR status = 'voided'`, or when a live credit note credits the invoice (`CreditedSQL`, BRY-342).
-- **`OwedByMemberSQL`** is `IsDebtSQL` (a positive total) and not settled for the member. It answers "is the member chased for this?" and is used by reminders (both enqueue *and* the worker's send-time check), KID reissue, the member payables page and "unpaid" filter, checkout totals, the Vipps-blocked check, Vipps auto-assign's open-faktura lookup, and the Økonomi overview's overdue figures.
+- **`OwedByMemberSQL`** is `IsDebtSQL` (a positive total) and not settled for the member. It answers "is the member chased for this?" and is used by reminders (both enqueue *and* the worker's send-time check), KID reissue, the member payables page and "unpaid" filter, checkout totals, the Vipps-blocked check, the open-faktura lookup of Vipps and bank auto-assign (`decideMemberInvoice`), and the Økonomi overview's overdue figures.
 - **`SettledForGLSQL`** returns true for `payment_id IS NOT NULL`. It is used where the receivable must actually be cleared: reconciliation and bookkeeping.
-- **Automatic matching of incoming money** to a faktura (bank KID and invoice-number lookups at import and in the bank sync, the counterpart-name match, the Vipps member match) uses `OwedByMemberSQL` (BRY-370). Money for a voided, Vipps-captured, credited or paid faktura is an overpayment a human must see, so the row stays in Tildel.
+- **Automatic matching of incoming money** to a faktura (bank KID and invoice-number lookups at import and in the bank sync, the counterpart-name match, the Vipps member match, bank auto-assign) uses `OwedByMemberSQL` (BRY-370). Money for a voided, Vipps-captured, credited or paid faktura is an overpayment a human must see, so the row stays in Tildel.
 - **`OpenReceivableSQL`** (a debt, not voided, no `payment_id`, not credited) is the one exception: ePayment order reconciliation books the capture of a faktura that the webhook already marked `vipps_paid_at`, so it must not treat that flag as settled.
 
 Voiding an invoice that is settled for the member (paid, or captured via Vipps) is refused with 409, because money arrived and it needs a refund or credit note instead. A credited faktura is refused with `code: credited` and the credit note's number (unlink first). The void's UPDATE repeats every check in its WHERE clause, so a payment or credit link that lands mid-request returns 409 `changed` and nothing is audited or reversed.

@@ -1354,6 +1354,9 @@ func main() {
 						r.Get("/bank-rows/unmatched", bankRowsHandler.HandleListUnmatched)
 						r.Get("/bank-rows/unmatched/count", bankRowsHandler.HandleCountUnmatched)
 						r.Get("/bank-rows/unmatched/count-by-year", bankRowsHandler.HandleCountUnmatchedByYear)
+						// BRY-366: read-only projection of the bank
+						// auto-assign rule, open to board readers.
+						r.Get("/bank-rows/auto-assign/preview", bankRowsHandler.HandleAutoAssignPreview)
 						r.Get("/bank-rows/{rowID}/suggestions", bankRowsHandler.HandleSuggestions)
 						r.Get("/bank-rows/{rowID}/potential-invoices", bankRowsHandler.HandlePotentialInvoices)
 						r.Get("/bank-rows/{rowID}/partners", bankRowsHandler.HandlePartners)

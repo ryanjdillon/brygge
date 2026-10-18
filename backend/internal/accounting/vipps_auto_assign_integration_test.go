@@ -52,7 +52,7 @@ func (f *autoAssignFixture) priceItem(t *testing.T, category, name string, cents
 		f.club.ID, category, name, fin.Kr(cents), unit, audience)
 }
 
-func (f *autoAssignFixture) run(t *testing.T) *VippsAutoAssignResult {
+func (f *autoAssignFixture) run(t *testing.T) *AutoAssignResult {
 	t.Helper()
 	res, err := f.svc.AutoAssignVippsCharges(context.Background(), f.club.ID, f.club.Treasurer.ID)
 	if err != nil {

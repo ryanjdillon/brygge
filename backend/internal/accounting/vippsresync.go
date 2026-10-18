@@ -24,7 +24,7 @@ type VippsResyncResult struct {
 	Orders *VippsOrderReconcileResult `json:"orders,omitempty"`
 	// AutoAssign reports the unambiguous charges booked without a human
 	// (BRY-340) and how many still wait in Tildel.
-	AutoAssign *VippsAutoAssignResult `json:"auto_assign,omitempty"`
+	AutoAssign *AutoAssignResult `json:"auto_assign,omitempty"`
 	// Payouts reports the settlements cleared once their charges were all
 	// booked (per-charge model only).
 	Payouts *VippsPayoutSweepResult `json:"payouts,omitempty"`

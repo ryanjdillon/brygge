@@ -243,9 +243,11 @@ type clubFinancialSettings struct {
 	// VippsAutoAssign opts the club into booking unambiguous Vipps charges
 	// without a human (BRY-340). VippsAutoAssignTieCategory is the price
 	// category to use when an amount fits items in several categories;
-	// empty leaves those charges for review.
+	// empty leaves those charges for review. BankAutoAssign is the separate
+	// opt-in for KID-less bank deposits (BRY-366).
 	VippsAutoAssign            bool   `json:"vipps_auto_assign"`
 	VippsAutoAssignTieCategory string `json:"vipps_auto_assign_tie_category"`
+	BankAutoAssign             bool   `json:"bank_auto_assign"`
 	WebsiteURL                 string `json:"website_url"`
 	ChairmanEmail              string `json:"chairman_email"`
 	ViceChairmanEmail          string `json:"vice_chairman_email"`
@@ -302,6 +304,7 @@ func (h *ClubSettingsHandler) HandleGetFinancialSettings(w http.ResponseWriter, 
 		        COALESCE(vipps_per_charge_enabled, false),
 		        vipps_max_amount,
 		        vipps_auto_assign, COALESCE(vipps_auto_assign_tie_category, ''),
+		        bank_auto_assign,
 		        COALESCE(website_url, ''),
 		        COALESCE(chairman_email, ''), COALESCE(vice_chairman_email, ''),
 		        COALESCE(treasurer_email, ''),
@@ -328,6 +331,7 @@ func (h *ClubSettingsHandler) HandleGetFinancialSettings(w http.ResponseWriter, 
 		&s.VippsPerChargeEnabled,
 		&s.VippsMaxAmount,
 		&s.VippsAutoAssign, &s.VippsAutoAssignTieCategory,
+		&s.BankAutoAssign,
 		&s.WebsiteURL,
 		&s.ChairmanEmail, &s.ViceChairmanEmail,
 		&s.TreasurerEmail,
@@ -369,6 +373,7 @@ type updateFinancialSettingsRequest struct {
 	// price_items category.
 	VippsAutoAssign            *bool   `json:"vipps_auto_assign,omitempty"`
 	VippsAutoAssignTieCategory *string `json:"vipps_auto_assign_tie_category,omitempty"`
+	BankAutoAssign             *bool   `json:"bank_auto_assign,omitempty"`
 	WebsiteURL                 *string `json:"website_url,omitempty"`
 	ChairmanEmail              *string `json:"chairman_email,omitempty"`
 	ViceChairmanEmail          *string `json:"vice_chairman_email,omitempty"`
@@ -475,7 +480,8 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		   vipps_auto_assign         = COALESCE($37, vipps_auto_assign),
 		   vipps_auto_assign_tie_category = CASE
 		                                 WHEN $38::text IS NULL THEN vipps_auto_assign_tie_category
-		                                 ELSE NULLIF($38::text, '') END
+		                                 ELSE NULLIF($38::text, '') END,
+		   bank_auto_assign          = COALESCE($39, bank_auto_assign)
 		 WHERE id = $1`,
 		claims.ClubID, req.OrgNumber, req.Address, req.Phone, req.VHFChannel,
 		req.Latitude, req.Longitude,
@@ -495,6 +501,7 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		req.VippsPerChargeEnabled,
 		req.VippsMaxAmount,
 		req.VippsAutoAssign, req.VippsAutoAssignTieCategory,
+		req.BankAutoAssign,
 	); err != nil {
 		h.log.Error().Err(err).Msg("update financial settings")
 		Error(w, http.StatusInternalServerError, "internal error")

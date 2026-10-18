@@ -16,7 +16,7 @@ type VippsReportSyncResult struct {
 	SkippedDup int  // rows skipped as duplicates
 	TryLater   bool // report for the date not finalised yet
 	Orders     *VippsOrderReconcileResult
-	AutoAssign *VippsAutoAssignResult
+	AutoAssign *AutoAssignResult
 	Payouts    *VippsPayoutSweepResult
 }
 

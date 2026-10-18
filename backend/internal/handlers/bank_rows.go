@@ -70,6 +70,26 @@ func (h *BankRowsHandler) HandleCountUnmatched(w http.ResponseWriter, r *http.Re
 	JSON(w, http.StatusOK, map[string]any{"count": n})
 }
 
+// HandleAutoAssignPreview projects what the bank auto-assign rule (BRY-366)
+// would book now, as if the club had opted in, and reports the real
+// setting. Read-only; the items carry row id, date, amount and faktura
+// number, never a payer name or description.
+func (h *BankRowsHandler) HandleAutoAssignPreview(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	preview, err := h.svc.PreviewBankAutoAssign(ctx, claims.ClubID)
+	if err != nil {
+		h.log.Error().Err(err).Msg("bank auto-assign preview")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	JSON(w, http.StatusOK, preview)
+}
+
 func (h *BankRowsHandler) HandleCountUnmatchedByYear(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)

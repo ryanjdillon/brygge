@@ -16,6 +16,43 @@ import (
 // payment goes to a faktura only when it is that member's single open
 // faktura for exactly the amount.
 
+// Where an auto-assigned payment came from; it picks the undo endpoint.
+const (
+	AutoAssignSourceVipps = "vipps"
+	AutoAssignSourceBank  = "bank"
+)
+
+// AutoAssignItem is one payment an auto-assign run booked (or, in a
+// preview, would book).
+type AutoAssignItem struct {
+	Source  string  `json:"source"`
+	RowID   string  `json:"row_id"`
+	Date    string  `json:"date"`
+	Amount  float64 `json:"amount"`
+	Rule    string  `json:"rule"`
+	Target  string  `json:"target"` // "faktura N" or an account code
+	EntryID string  `json:"entry_id"`
+	// InvoiceNumber and MatchPass are set for member_invoice bookings of
+	// bank deposits.
+	InvoiceNumber int    `json:"invoice_number,omitempty"`
+	MatchPass     string `json:"match_pass,omitempty"`
+}
+
+// AutoAssignResult summarises one auto-assign run over Vipps charges or bank
+// deposits.
+type AutoAssignResult struct {
+	Source         string           `json:"source"`
+	Enabled        bool             `json:"enabled"`
+	Assigned       []AutoAssignItem `json:"assigned"`
+	NeedsReview    int              `json:"needs_review"`
+	SkippedDetails []SkippedItem    `json:"skipped_details"`
+	// ByReason counts the payments left for a human, by why (bank only).
+	ByReason map[string]int `json:"by_reason,omitempty"`
+	// Error is set when the run itself failed; what it booked before
+	// failing is still listed.
+	Error string `json:"error,omitempty"`
+}
+
 // Reasons a payment is left for a human, as reported by both rules.
 const (
 	reasonNoOpenFaktura       = "no_open_faktura"
@@ -159,6 +196,38 @@ func (s *Service) aliasMember(ctx context.Context, clubID, payerName string) str
 		return ""
 	}
 	return userID
+}
+
+// resolveStrongMember resolves a payer name to a member only through a
+// strong pass: a taught alias (always wins) or a unique exact name. It
+// returns "" and memberPassNone otherwise.
+func (s *Service) resolveStrongMember(ctx context.Context, clubID string, cands []memberCand, payerName string) (string, int) {
+	if strings.TrimSpace(payerName) == "" {
+		return "", memberPassNone
+	}
+	if id := s.aliasMember(ctx, clubID, payerName); id != "" {
+		return id, memberPassAlias
+	}
+	id, pass := matchMemberName(cands, payerName)
+	if id == "" || pass > memberPassFirstLast {
+		return "", memberPassNone
+	}
+	return id, pass
+}
+
+// memberPassName is the audit/preview label for a strong resolution pass.
+func memberPassName(pass int) string {
+	switch pass {
+	case memberPassAlias:
+		return "alias"
+	case memberPassKID:
+		return "kid"
+	case memberPassFullName:
+		return "full_name"
+	case memberPassFirstLast:
+		return "first_last"
+	}
+	return ""
 }
 
 // toCents converts a NUMERIC kroner amount to integer øre.

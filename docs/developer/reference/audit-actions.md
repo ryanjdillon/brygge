@@ -95,8 +95,9 @@ These don't have constants in `audit.go` — they're inlined as strings because 
 
 | String | Resource | When | `extra` |
 |---|---|---|---|
-| `accounting.bank_synced` | `bank` | `HandleBankSync` completes | `kid_matched`, `vipps_reconciled`, `transfers_linked`, `payments_linked`, `closed_periods` |
+| `accounting.bank_synced` | `bank` | `HandleBankSync` completes | `kid_matched`, `vipps_reconciled`, `transfers_linked`, `payments_linked`, `closed_periods`, `auto_assigned` (deposits booked by bank auto-assign) |
 | `ActionBankRowAssignedInvoice` | `bank_row.assigned_invoice` | bank_import_row | Operator assigns a row to an open invoice via the Tildel tab (DIL-392). Creates the GL journal + `linkInvoicePayment` | `invoice_id`, `journal_entry_id` |
+| `ActionBankRowAutoAssigned` | `bank_row.auto_assigned` | bank_import_row | `AutoAssignBankDeposits` books an unambiguous KID-less deposit to a faktura after a bank import or **Synk bank** (BRY-366). The actor is the user who ran the import or sync; with none, nothing is booked. Undone with `bank_row.unassigned` | `rule` (`member_invoice`), `target` ("faktura N"), `invoice_id`, `journal_entry_id`, `match_pass` (`alias` / `full_name` / `first_last`), `trigger` (`bank_import` / `bank_sync`) |
 | `ActionBankRowAssignedAccount` | `bank_row.assigned_account` | bank_import_row | Operator assigns a row to a GL account (DIL-392). `kind` = `expense` (outgoing), `revenue` (incoming, not a faktura) or `group` (one row of rows booked together as one bilag, BRY-380; one audit row per row) | `account_code`, `kind`, `journal_entry_id`, `confirm_alone` (single row booked despite a strong partner); for `group`: `group_row_ids`, `net` |
 | `ActionBankRowDismissed` | `bank_row.dismissed` | bank_import_row | Operator marks a row not-actionable. `reason` is one of the enum values; no free text (DIL-392 + DIL-394 follow-up). Also written by `SupersedeProvisionalBankRows` when a provisional row gives way to its settled row (BRY-378), actor = the importing or syncing user | `reason`; on the automatic path `superseded_by`, `automatic` |
 | `ActionBankRowRefreshed` | `bank_row.refreshed` | bank_import_row | A bank import updated a provisional in-flight row in place with the settled text of an incoming row carrying the same bank reference (BRY-378) | `reference`, `bank_import_id`; `old_date`, `new_date` when the settled row is dated later |
@@ -107,7 +108,7 @@ These don't have constants in `audit.go` — they're inlined as strings because 
 | `accounting.account_updated` | `account` | `HandleUpdateAccount` renames an account or changes its description or MVA eligibility. System accounts take a name and description only (BRY-377) | `code`, `name`, `previous_name`, `description`, `previous_description`, `mva_eligible` (the effective value: the stored one when the request omits it) |
 | `accounting.vipps_resynced` | `vipps` | `HandleResyncVipps` completes | `scanned`, `resynced`, `skipped`, `failed` |
 | `accounting.bank_import_reassigned` | `bank_import` | `HandleReassignBankImport` succeeds (cascades through journal_lines) | `from`, `to`, `cascaded_journals` |
-| `accounting.bank_imported` | `bank_import` | `HandleImportBankStatement` after rows ingested | `format`, `rows_total`, `imported`, `skipped_dup`, `matched`, `transfers` |
+| `accounting.bank_imported` | `bank_import` | `HandleImportBankStatement` after rows ingested | `format`, `rows_total`, `imported`, `skipped_dup`, `matched`, `transfers`, `auto_assigned` |
 
 ## Booking
 

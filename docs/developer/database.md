@@ -326,6 +326,10 @@ in `backend/migrations/` for the source of truth. The high-level shape:
 - `vipps_import_rows` — Vipps payout CSV ingestion. `journal_entry_id` is
   set by `ReconcileVippsConfirm` after the cascade resolves; unresolved
   belastning lines land in 3900 (Andre inntekter) rather than 2900.
+- `clubs.bank_auto_assign` (migration 000110) — per-club opt-in for booking
+  unambiguous KID-less bank deposits to a faktura without a human (BRY-366),
+  separate from `vipps_auto_assign`. Default off; while off, the bank KID
+  cascade keeps its name+amount step.
 - `journal_entries`, `journal_lines`, `accounts`, `fiscal_periods` —
   double-entry GL with NS 4102 chart of accounts. New clubs get the default
   chart from `SeedKontoplan`. An account added to the default chart later

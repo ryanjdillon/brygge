@@ -40,24 +40,6 @@ const (
 	autoAssignRulePriceItem     = "price_item"
 )
 
-// VippsAutoAssignItem is one charge an auto-assign run booked.
-type VippsAutoAssignItem struct {
-	RowID   string  `json:"row_id"`
-	Date    string  `json:"date"`
-	Amount  float64 `json:"amount"`
-	Rule    string  `json:"rule"`
-	Target  string  `json:"target"` // "faktura N" or an account code
-	EntryID string  `json:"entry_id"`
-}
-
-// VippsAutoAssignResult summarises one AutoAssignVippsCharges run.
-type VippsAutoAssignResult struct {
-	Enabled        bool                  `json:"enabled"`
-	Assigned       []VippsAutoAssignItem `json:"assigned"`
-	NeedsReview    int                   `json:"needs_review"`
-	SkippedDetails []SkippedItem         `json:"skipped_details"`
-}
-
 type vippsAutoAssignConfig struct {
 	enabled     bool
 	tieCategory string
@@ -86,8 +68,8 @@ func (s *Service) vippsAutoAssignConfig(ctx context.Context, clubID string) (vip
 // rules above) and reports what it booked and how many charges still need a
 // human. Charges naming a checkout order are left to
 // AutoReconcileOrderCharges. Idempotent: booked charges leave the queue.
-func (s *Service) AutoAssignVippsCharges(ctx context.Context, clubID, createdBy string) (*VippsAutoAssignResult, error) {
-	res := &VippsAutoAssignResult{Assigned: []VippsAutoAssignItem{}, SkippedDetails: []SkippedItem{}}
+func (s *Service) AutoAssignVippsCharges(ctx context.Context, clubID, createdBy string) (*AutoAssignResult, error) {
+	res := &AutoAssignResult{Source: AutoAssignSourceVipps, Assigned: []AutoAssignItem{}, SkippedDetails: []SkippedItem{}}
 	cfg, err := s.vippsAutoAssignConfig(ctx, clubID)
 	if err != nil {
 		return nil, err
@@ -272,7 +254,7 @@ func (s *Service) bookVippsChargeDecision(ctx context.Context, clubID, createdBy
 
 // autoAssignOne applies the rules to one charge. It returns the booking, or
 // nil with the reason it was left for a human.
-func (s *Service) autoAssignOne(ctx context.Context, clubID, createdBy string, cfg vippsAutoAssignConfig, rowID, customer, message string, amount float64, paidOn time.Time) (*VippsAutoAssignItem, string, error) {
+func (s *Service) autoAssignOne(ctx context.Context, clubID, createdBy string, cfg vippsAutoAssignConfig, rowID, customer, message string, amount float64, paidOn time.Time) (*AutoAssignItem, string, error) {
 	d, err := s.decideVippsCharge(ctx, clubID, cfg, customer, message, amount, paidOn)
 	if err != nil {
 		return nil, "", err
@@ -284,7 +266,7 @@ func (s *Service) autoAssignOne(ctx context.Context, clubID, createdBy string, c
 	if err != nil {
 		return nil, "", err
 	}
-	return &VippsAutoAssignItem{RowID: rowID, Rule: d.Rule, Target: d.Target(), EntryID: entryID}, "", nil
+	return &AutoAssignItem{Source: AutoAssignSourceVipps, RowID: rowID, Rule: d.Rule, Target: d.Target(), EntryID: entryID}, "", nil
 }
 
 // markAutoAssigned records which rule booked the charge and writes the audit

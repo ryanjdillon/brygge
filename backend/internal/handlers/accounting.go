@@ -931,7 +931,14 @@ func (h *AccountingHandler) importBankStatement(w http.ResponseWriter, r *http.R
 			  WHERE club_id = $1 AND bank_account_code = $2`,
 			claims.ClubID, bankAccountCode)
 	} else {
-		h.svc.DB().Exec(r.Context(), `UPDATE bank_imports SET matched_count = $1, row_count = $2 WHERE id = $3`, result.Matched, result.Imported, importID)
+		// Recount from the rows: the bank auto-assign rule may have booked
+		// rows of this import that result.Matched does not count.
+		h.svc.DB().Exec(r.Context(),
+			`UPDATE bank_imports SET
+			    row_count = $2,
+			    matched_count = (SELECT count(*) FROM bank_import_rows WHERE bank_import_id = $1 AND journal_entry_id IS NOT NULL)
+			  WHERE id = $1`,
+			importID, result.Imported)
 	}
 
 	auditAction := "accounting.bank_imported"
@@ -955,6 +962,7 @@ func (h *AccountingHandler) importBankStatement(w http.ResponseWriter, r *http.R
 				"row_errors":        len(result.RowErrors),
 				"refreshed":         result.Refreshed,
 				"superseded":        result.Superseded,
+				"auto_assigned":     autoAssignedCount(result.AutoAssign),
 			})
 	}
 
@@ -978,6 +986,7 @@ func (h *AccountingHandler) importBankStatement(w http.ResponseWriter, r *http.R
 		"provisional_ambiguous": result.ProvisionalAmbiguous,
 		"last_row_date":         result.LastRowDate,
 		"provisional_rows":      result.ProvisionalRows,
+		"auto_assign":           result.AutoAssign,
 	}
 	if overwrite {
 		resp["deleted"] = result.Deleted
@@ -1077,6 +1086,7 @@ func (h *AccountingHandler) HandleReimportBankStatement(w http.ResponseWriter, r
 				"matched":        result.Matched,
 				"skipped_dup":    result.SkippedDup,
 				"skipped_booked": result.SkippedBooked,
+				"auto_assigned":  autoAssignedCount(result.AutoAssign),
 			})
 	}
 
@@ -1088,6 +1098,7 @@ func (h *AccountingHandler) HandleReimportBankStatement(w http.ResponseWriter, r
 		"skipped_booked": result.SkippedBooked,
 		"matched":        result.Matched,
 		"row_errors":     result.RowErrors,
+		"auto_assign":    result.AutoAssign,
 	})
 }
 
@@ -2225,9 +2236,19 @@ func (h *AccountingHandler) HandleBankSync(w http.ResponseWriter, r *http.Reques
 				"transfers_linked": result.TransfersLinked,
 				"payments_linked":  result.PaymentsLinked,
 				"closed_periods":   result.ClosedPeriods,
+				"auto_assigned":    autoAssignedCount(result.AutoAssign),
 			})
 	}
 	JSON(w, http.StatusOK, result)
+}
+
+// autoAssignedCount is how many payments an auto-assign run booked, for the
+// audit summary of the import or sync that ran it.
+func autoAssignedCount(r *accounting.AutoAssignResult) int {
+	if r == nil {
+		return 0
+	}
+	return len(r.Assigned)
 }
 
 // ── Vipps Reconciliation ────────────────────────────────────
@@ -2345,7 +2366,7 @@ func (h *AccountingHandler) HandleImportVippsSettlement(w http.ResponseWriter, r
 	// On the per-charge model, charges that name their checkout order are
 	// booked straight away (BRY-337); the rest wait in the Tildel queue.
 	var orders *accounting.VippsOrderReconcileResult
-	var autoAssign *accounting.VippsAutoAssignResult
+	var autoAssign *accounting.AutoAssignResult
 	var payouts *accounting.VippsPayoutSweepResult
 	if perCharge, perr := h.svc.VippsPerChargeEnabled(r.Context(), claims.ClubID); perr == nil && perCharge {
 		orders, err = h.svc.AutoReconcileOrderCharges(r.Context(), claims.ClubID, claims.UserID)

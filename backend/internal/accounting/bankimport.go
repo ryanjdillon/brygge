@@ -259,6 +259,9 @@ type ImportResult struct {
 	// in-flight transfers as provisional rows.
 	LastRowDate     string
 	ProvisionalRows int
+	// AutoAssign reports the KID-less deposits the bank auto-assign rule
+	// booked after the import; nil when the club has not opted in.
+	AutoAssign *AutoAssignResult
 }
 
 // ImportRowError is one auto-match failure on an imported bank row.
@@ -501,6 +504,12 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOv
 	if err != nil {
 		return res, err
 	}
+	// With bank auto-assign on, the name+amount step below stands down and
+	// the rule runs once the rows are stored.
+	bankAuto, err := s.BankAutoAssignEnabled(ctx, clubID)
+	if err != nil {
+		return res, err
+	}
 
 	for _, row := range rows {
 		var balance *float64
@@ -598,7 +607,7 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOv
 				).Scan(&invoiceID)
 			}
 		}
-		if invoiceID == "" && row.Counterpart != "" {
+		if invoiceID == "" && !bankAuto && row.Counterpart != "" {
 			// Tertiary: a unique open unpaid invoice whose member's name
 			// equals the bank counterpart and whose total matches the amount
 			// — catches giro-med-melding payments where the KID never
@@ -712,6 +721,15 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOv
 			closedYears[y] = true
 		}
 	}
+
+	// Book the unambiguous KID-less deposits (BRY-366). Club-wide, so rows
+	// an earlier import left in Tildel are booked too; without an importing
+	// user nothing is booked and the rows are reported as no_actor.
+	res.AutoAssign = s.AutoAssignBankDepositsReported(ctx, clubID, importedBy, BankAutoAssignOpts{
+		Trigger:        BankAutoAssignTriggerImport,
+		ImportID:       importID,
+		PeriodOverride: periodOverride,
+	})
 
 	for y := range closedYears {
 		res.ClosedPeriods = append(res.ClosedPeriods, fmt.Sprintf("%d", y))

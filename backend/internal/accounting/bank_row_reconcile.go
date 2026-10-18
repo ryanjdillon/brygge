@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"github.com/brygge-klubb/brygge/internal/finance"
 )
 
 // DIL-392 Phase 1: per-row manual reconciliation.
@@ -64,6 +66,29 @@ func IsValidDismissReason(r string) bool {
 func (s *Service) AssignBankRowToInvoice(
 	ctx context.Context, clubID, actorID, bankRowID, invoiceID string,
 ) (string, error) {
+	return s.assignBankRowToInvoice(ctx, clubID, actorID, bankRowID, invoiceID, assignOpts{})
+}
+
+// assignOpts tunes assignBankRowToInvoice for the auto-assign rule.
+type assignOpts struct {
+	// auto marks a booking by the bank auto-assign rule (BRY-366): it is
+	// described as automatic, re-checks inside the faktura lock that the
+	// faktura is still the clean single match the rule decided on, and
+	// never creates a fiscal period.
+	auto bool
+	// periodOverride forces the entry into that period, as an import with
+	// a chosen period does for its own rows.
+	periodOverride string
+}
+
+var (
+	errInvoiceHasBookedRow = errors.New("invoice already has a booked bank payment — unassign it first")
+	errInvoiceNoLongerOpen = errors.New("invoice is no longer the open faktura for this deposit")
+)
+
+func (s *Service) assignBankRowToInvoice(
+	ctx context.Context, clubID, actorID, bankRowID, invoiceID string, opts assignOpts,
+) (string, error) {
 	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return "", fmt.Errorf("begin tx: %w", err)
@@ -103,30 +128,18 @@ func (s *Service) AssignBankRowToInvoice(
 		return "", errors.New("assign-invoice requires a positive (incoming) amount; use assign-account for outgoing rows")
 	}
 
-	var invoiceTotal float64
-	var paymentID *string
-	var invoiceStatus string
-	if err := tx.QueryRow(ctx,
-		`SELECT total_amount, payment_id, status
-		   FROM invoices
-		  WHERE id = $1 AND club_id = $2`,
-		invoiceID, clubID,
-	).Scan(&invoiceTotal, &paymentID, &invoiceStatus); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return "", errors.New("invoice not found")
-		}
-		return "", fmt.Errorf("load invoice: %w", err)
-	}
-	if invoiceStatus == "voided" {
-		return "", errors.New("invoice is voided")
-	}
-	if paymentID != nil {
-		return "", errors.New("invoice is already paid")
+	if err := lockInvoiceForAssign(ctx, tx, clubID, invoiceID, toCents(rowAmount), opts.auto); err != nil {
+		return "", err
 	}
 
-	periodID, periodStatus, perr := s.resolvePeriod(ctx, clubID, rowDate, "")
-	if perr != nil {
-		return "", fmt.Errorf("resolve period: %w", perr)
+	var periodID, periodStatus string
+	if opts.auto {
+		periodID, periodStatus, err = s.existingPeriod(ctx, clubID, rowDate, opts.periodOverride)
+	} else {
+		periodID, periodStatus, err = s.resolvePeriod(ctx, clubID, rowDate, opts.periodOverride)
+	}
+	if err != nil {
+		return "", fmt.Errorf("resolve period: %w", err)
 	}
 	if periodStatus != "open" {
 		return "", fmt.Errorf("fiscal period for %s is closed; reopen first", rowDate.Format("2006-01-02"))
@@ -135,6 +148,9 @@ func (s *Service) AssignBankRowToInvoice(
 	sourceID := bankRowID
 	sourceTable := "bank_import_rows"
 	desc := fmt.Sprintf("Manuell tildeling: %s", truncate(rowDesc, 200))
+	if opts.auto {
+		desc = fmt.Sprintf("Automatisk tildeling: %s", truncate(rowDesc, 200))
+	}
 	entry, cerr := s.CreateJournalEntry(ctx, CreateJournalEntryInput{
 		FiscalPeriodID: periodID,
 		EntryDate:      rowDate.Format("2006-01-02"),
@@ -155,6 +171,11 @@ func (s *Service) AssignBankRowToInvoice(
 	if err := s.linkAndPostBankRow(ctx, clubID, actorID, entry.ID, bankRowID, &invoiceID); err != nil {
 		return "", err
 	}
+	// Release the faktura lock before the back-link, which updates the
+	// faktura from another connection and would otherwise wait on it.
+	if err := tx.Commit(ctx); err != nil {
+		return "", fmt.Errorf("release invoice lock: %w", err)
+	}
 
 	// linkInvoicePayment outside the tx — it's idempotent and best-effort
 	// per the existing DIL-363 contract. A failure here doesn't roll
@@ -168,6 +189,80 @@ func (s *Service) AssignBankRowToInvoice(
 			Msg("AssignBankRowToInvoice: linkInvoicePayment failed; GL is posted but dashboard back-link missing")
 	}
 	return entry.ID, nil
+}
+
+// lockInvoiceForAssign locks the faktura for the rest of tx and refuses it
+// when it can't take this payment of rowCents.
+//
+// The faktura stays locked until the row is linked and posted, so two
+// bookings racing for one faktura (a sync's auto-assign and a manual
+// assign of another row) run one after the other, and the second sees
+// the first's booked row. NO KEY UPDATE rather than UPDATE: linking the
+// row writes bank_import_rows.invoice_id from another connection, and
+// that foreign key takes KEY SHARE on this faktura, which FOR UPDATE
+// would block until this transaction ends — a deadlock with ourselves.
+// The checks run in a second statement: one that waited for the lock
+// still reads the rows as they were when it started, so it would miss
+// the booking it waited for.
+func lockInvoiceForAssign(ctx context.Context, tx pgx.Tx, clubID, invoiceID string, rowCents int64, auto bool) error {
+	if err := tx.QueryRow(ctx,
+		`SELECT id FROM invoices WHERE id = $1 AND club_id = $2 FOR NO KEY UPDATE`,
+		invoiceID, clubID,
+	).Scan(new(string)); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return errors.New("invoice not found")
+		}
+		return fmt.Errorf("lock invoice: %w", err)
+	}
+	var (
+		invoiceCents  int64
+		paid          bool
+		invoiceStatus string
+		owedAndLive   bool
+		bookedByRow   bool
+		bookedAny     bool
+	)
+	if err := tx.QueryRow(ctx,
+		`SELECT round(i.total_amount * 100)::bigint, i.payment_id IS NOT NULL, i.status,
+		        `+finance.OwedByMemberSQL("i")+` AND i.sent_at IS NOT NULL AND i.import_source IS NULL,
+		        EXISTS (SELECT 1 FROM bank_import_rows b
+		                 WHERE b.club_id = i.club_id AND b.invoice_id = i.id AND b.journal_entry_id IS NOT NULL),
+		        `+invoiceAlreadyBookedSQL("i")+`
+		   FROM invoices i
+		  WHERE i.id = $1 AND i.club_id = $2`,
+		invoiceID, clubID,
+	).Scan(&invoiceCents, &paid, &invoiceStatus, &owedAndLive, &bookedByRow, &bookedAny); err != nil {
+		return fmt.Errorf("load invoice: %w", err)
+	}
+	switch {
+	case invoiceStatus == "voided":
+		return errors.New("invoice is voided")
+	case paid:
+		return errors.New("invoice is already paid")
+	case bookedByRow:
+		return errInvoiceHasBookedRow
+	case auto && (!owedAndLive || bookedAny || invoiceCents != rowCents):
+		return errInvoiceNoLongerOpen
+	}
+	return nil
+}
+
+// existingPeriod is resolvePeriod without the auto-create: an automatic
+// booking never opens a fiscal year on its own.
+func (s *Service) existingPeriod(ctx context.Context, clubID string, date time.Time, override string) (id, status string, err error) {
+	if override != "" {
+		return s.resolvePeriod(ctx, clubID, date, override)
+	}
+	err = s.db.QueryRow(ctx,
+		`SELECT id, status FROM fiscal_periods
+		  WHERE club_id = $1 AND $2::date BETWEEN start_date AND end_date
+		  LIMIT 1`,
+		clubID, date.Format("2006-01-02"),
+	).Scan(&id, &status)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", "", fmt.Errorf("no fiscal period for %s", date.Format("2006-01-02"))
+	}
+	return id, status, err
 }
 
 // AssignBankRowToAccount creates a journal entry against an operator-

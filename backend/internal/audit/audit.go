@@ -69,6 +69,7 @@ const (
 
 	// Bank row reconciliation (DIL-392)
 	ActionBankRowAssignedInvoice = "bank_row.assigned_invoice"
+	ActionBankRowAutoAssigned    = "bank_row.auto_assigned"
 	ActionBankRowAssignedAccount = "bank_row.assigned_account"
 	ActionBankRowDismissed       = "bank_row.dismissed"
 	ActionBankRowRefreshed       = "bank_row.refreshed"

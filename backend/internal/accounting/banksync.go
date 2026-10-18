@@ -36,6 +36,9 @@ func isBryggeKID(s string) bool {
 // whose total matches the bank-row amount within 0.5 NOK. Returns
 // "" when the lookup is ambiguous (2+ candidates) or finds no match
 // — both cases leave the row for manual review.
+//
+// It runs only for clubs that have not opted into bank auto-assign
+// (BRY-366); for those that have, AutoAssignBankDeposits replaces it.
 func (s *Service) findInvoiceByCounterpartAndAmount(ctx context.Context, clubID, counterpart string, amount float64) string {
 	needle := normalizeName(counterpart)
 	if needle == "" {
@@ -100,6 +103,9 @@ type BankSyncResult struct {
 	// that could not be paired one to one.
 	ProvisionalSuperseded int                  `json:"provisional_superseded"`
 	ProvisionalAmbiguous  []ProvisionalBankRow `json:"provisional_ambiguous"`
+	// AutoAssign reports the KID-less deposits booked by the bank
+	// auto-assign rule (pass 4c); nil when the club has not opted in.
+	AutoAssign *AutoAssignResult `json:"auto_assign,omitempty"`
 }
 
 // BankSync re-runs auto-correlation across every unmatched bank import row
@@ -140,8 +146,15 @@ func (s *Service) BankSync(ctx context.Context, clubID, createdBy string) (*Bank
 	res.ProvisionalSuperseded = sup.Superseded
 	res.ProvisionalAmbiguous = sup.Ambiguous
 
+	// With bank auto-assign on, the cascade's name+amount step stands down
+	// and pass 4c books KID-less deposits instead.
+	bankAuto, err := s.BankAutoAssignEnabled(ctx, clubID)
+	if err != nil {
+		return nil, err
+	}
+
 	// Pass 1: KID auto-match on all unmatched rows.
-	kidMatched, kidClosed, err := s.syncKIDMatches(ctx, clubID, createdBy)
+	kidMatched, kidClosed, err := s.syncKIDMatches(ctx, clubID, createdBy, !bankAuto)
 	if err != nil {
 		return nil, fmt.Errorf("kid sync: %w", err)
 	}
@@ -209,6 +222,10 @@ func (s *Service) BankSync(ctx context.Context, clubID, createdBy string) (*Bank
 		s.log.Warn().Err(nerr).Msg("backfill invoice-number payments failed")
 	}
 	res.PaymentsLinked += numBackfilled
+
+	// Pass 4c: book the unambiguous KID-less deposits (BRY-366), after the
+	// KID passes have taken every row that carries a reference.
+	res.AutoAssign = s.AutoAssignBankDepositsReported(ctx, clubID, createdBy, BankAutoAssignOpts{Trigger: BankAutoAssignTriggerSync})
 
 	// Pass 5: per-charge model only — clear every Vipps payout deposit whose
 	// settlement has all its charges booked. Legacy clubs get an empty sweep.
@@ -422,7 +439,10 @@ func (s *Service) backfillInvoiceNumberPayments(ctx context.Context, clubID stri
 	return n, nil
 }
 
-func (s *Service) syncKIDMatches(ctx context.Context, clubID, createdBy string) (int, []int, error) {
+// syncKIDMatches books unmatched incoming rows by KID, then by invoice
+// number; nameMatch adds the older counterpart-name + amount step, which
+// runs only while the club has bank auto-assign off.
+func (s *Service) syncKIDMatches(ctx context.Context, clubID, createdBy string, nameMatch bool) (int, []int, error) {
 	// Drop the kid_number <> '' filter so we can ALSO process rows
 	// that lost their KID at import time because the bank's CSV
 	// left the KID column blank and embedded the reference in the
@@ -545,7 +565,7 @@ func (s *Service) syncKIDMatches(ctx context.Context, clubID, createdBy string) 
 				).Scan(&invoiceID)
 			}
 		}
-		if invoiceID == "" && p.counterpart != "" {
+		if invoiceID == "" && nameMatch && p.counterpart != "" {
 			// Tertiary: counterpart name (the bank's Debitornavn /
 			// Fra-prefix payer) + amount. Only auto-match when the
 			// (normalized name, amount) pair maps to EXACTLY one open
