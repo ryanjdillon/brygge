@@ -448,3 +448,34 @@ func TestUnassignBankRowWaitsForInFlightPost(t *testing.T) {
 		t.Errorf("row still linked")
 	}
 }
+
+// Unassigning an account booking (no receivables line) must not touch a
+// faktura that happens to be paid the same day for the same amount: only a
+// faktura booking can be traced back to a faktura.
+func TestUnassignAccountBookingLeavesSameDayPaidFakturaAlone(t *testing.T) {
+	f := newHygieneFixture(t)
+	ctx := context.Background()
+	day := time.Date(f.club.Year, 6, 3, 0, 0, 0, 0, time.UTC)
+	member := f.club.NewMember(t)
+	inv := f.club.NewInvoice(t, fin.InvoiceOpts{Member: &member, Cents: 100000, Paid: true})
+	if _, err := f.club.Pool.Exec(ctx,
+		`UPDATE payments SET paid_at = $1 WHERE id = (SELECT payment_id FROM invoices WHERE id = $2)`, day, inv.ID,
+	); err != nil {
+		t.Fatalf("date payment: %v", err)
+	}
+	row := f.club.NewBankRow(t, f.club.NewBankImport(t), fin.BankRowOpts{Cents: 100000, Date: day})
+	if _, err := f.svc.AssignBankRowToAccount(ctx, f.club.ID, f.club.Treasurer.ID, row, "3900", "revenue", ""); err != nil {
+		t.Fatalf("assign account: %v", err)
+	}
+
+	_, priorInvoice, err := f.svc.UnassignBankRow(ctx, f.club.ID, f.club.Treasurer.ID, row)
+	if err != nil {
+		t.Fatalf("unassign: %v", err)
+	}
+	if priorInvoice != "" {
+		t.Errorf("unassign recovered faktura %s from an account booking", priorInvoice)
+	}
+	if n := f.scalar(t, `SELECT count(*) FROM invoices WHERE id = $1 AND payment_id IS NOT NULL`, inv.ID); n != 1 {
+		t.Errorf("same-day paid faktura lost its payment")
+	}
+}

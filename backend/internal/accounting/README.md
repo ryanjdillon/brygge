@@ -82,7 +82,7 @@ See [`../../../docs/developer/reference/enums.md`](../../../docs/developer/refer
 - `ClosePeriod` refuses while the period holds drafts (409 `period_has_drafts`, listed per source); `DeleteDraftJournalEntry` removes an unlinked draft
 - `closed`/`locked` fiscal periods reject create, post **and void** (`ErrPeriodClosed` → 409 `period_closed`); a void is refused, never moved to a later period. Writers hold the period `FOR SHARE`; `ClosePeriod` takes it `FOR UPDATE` before counting drafts
 - Every function acting on a request id takes the club id and filters on it; a foreign id is not found (404)
-- `UnassignBankRow`: one tx voids the posted entries (`voidJournalEntryTx`, so a closed period rolls it all back), clears the rows (incl. a transfer's other row), deletes drafts and reopens the faktura; retry-safe
+- `UnassignBankRow`: one tx voids the posted entries (`voidJournalEntryTx`, so a closed period rolls it all back), clears the rows (incl. a transfer's other row), deletes drafts and reopens the faktura; retry-safe. For a row with no `invoice_id` (assigned before migration 000057) it recovers the faktura from the payment only when the entry credits receivables (1500); an account booking never reopens a faktura that happens to be paid the same day for the same amount
 - Vipps belastning amounts are positive; fees are negative
 - Bank rows with `journal_entry_id IS NOT NULL` cannot be reassigned without cascading `journal_lines`
 - Reports and momskomp count `posted` **and** `voided` entries (`bookedEntryFilter`), so a void and its reversal net to zero

@@ -401,6 +401,9 @@ func (s *Service) UnassignBankRow(
 	} else {
 		// Rows assigned before migration 000057 have no invoice back-link;
 		// recover the faktura through the payment the assignment created.
+		// Only a faktura booking credits receivables: an account booking
+		// (Lag bilag) has no 1500 line, and without that guard a faktura
+		// paid the same day for the same amount would lose its payment.
 		_ = s.db.QueryRow(ctx,
 			`SELECT i.id
 			   FROM invoices i
@@ -412,8 +415,12 @@ func (s *Service) UnassignBankRow(
 			  WHERE i.club_id = $2
 			    AND i.user_id = p.user_id
 			    AND i.total_amount = p.amount
+			    AND EXISTS (
+			        SELECT 1 FROM journal_lines jl
+			          JOIN accounts a ON a.id = jl.account_id
+			         WHERE jl.journal_entry_id = je.id AND a.code = $3)
 			  LIMIT 1`,
-			priorJournalID, clubID,
+			priorJournalID, clubID, receivablesAccountCode,
 		).Scan(&priorInvoiceID)
 	}
 
