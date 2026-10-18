@@ -9,7 +9,6 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/brygge-klubb/brygge/internal/audit"
-	"github.com/brygge-klubb/brygge/internal/finance"
 )
 
 // Auto-assignment of Vipps charges (BRY-340). After every import the
@@ -18,9 +17,11 @@ import (
 // rules, in order:
 //
 //  1. member_invoice — the payer resolves to exactly one member through a
-//     strong pass (taught alias, KID, or the whole normalized name), that
-//     member has exactly one open faktura, and the amounts are equal. Booked
-//     through AssignVippsChargeToInvoice, so the faktura reads as paid.
+//     strong pass (taught alias, KID, or the whole normalized name of one
+//     member), and decideMemberInvoice finds that member's single open
+//     faktura, issued by the charge date, with nothing booked against it and
+//     a total equal to the amount. Booked through
+//     AssignVippsChargeToInvoice, so the faktura reads as paid.
 //  2. price_item — the amount fits the club's active price items, and they
 //     all share one category (several items in one category book to the same
 //     account). When they span categories, the club's configured tie
@@ -110,6 +111,7 @@ func (s *Service) AutoAssignVippsCharges(ctx context.Context, clubID, createdBy 
 	type charge struct {
 		id, customer, message string
 		amount                float64
+		paidOn                time.Time
 		date                  string
 	}
 	var queue []charge
@@ -120,6 +122,7 @@ func (s *Service) AutoAssignVippsCharges(ctx context.Context, clubID, createdBy 
 			rows.Close()
 			return nil, fmt.Errorf("scanning queued charge: %w", err)
 		}
+		c.paidOn = d
 		c.date = d.Format("2006-01-02")
 		queue = append(queue, c)
 	}
@@ -134,7 +137,7 @@ func (s *Service) AutoAssignVippsCharges(ctx context.Context, clubID, createdBy 
 	}
 
 	for _, c := range queue {
-		item, _, err := s.autoAssignOne(ctx, clubID, createdBy, cfg, c.id, c.customer, c.message, c.amount)
+		item, _, err := s.autoAssignOne(ctx, clubID, createdBy, cfg, c.id, c.customer, c.message, c.amount, c.paidOn)
 		if err != nil {
 			res.SkippedDetails = append(res.SkippedDetails, SkippedItem{Ref: fmt.Sprintf("%s %.2f kr", c.date, c.amount), Reason: err.Error()})
 			res.NeedsReview++
@@ -179,9 +182,9 @@ func (d *vippsChargeDecision) Target() string {
 	return d.Account
 }
 
-// decideVippsCharge applies the auto-assign rules to one charge without
-// booking anything, so callers can preview the outcome.
-func (s *Service) decideVippsCharge(ctx context.Context, clubID string, cfg vippsAutoAssignConfig, customer, message string, amount float64) (*vippsChargeDecision, error) {
+// decideVippsCharge applies the auto-assign rules to one charge paid on
+// paidOn without booking anything, so callers can preview the outcome.
+func (s *Service) decideVippsCharge(ctx context.Context, clubID string, cfg vippsAutoAssignConfig, customer, message string, amount float64, paidOn time.Time) (*vippsChargeDecision, error) {
 	memberID, pass, err := s.resolveCustomerToMemberPass(ctx, clubID, customer, message)
 	if err != nil {
 		return nil, fmt.Errorf("resolving payer: %w", err)
@@ -189,17 +192,19 @@ func (s *Service) decideVippsCharge(ctx context.Context, clubID string, cfg vipp
 	strongMember := memberID != "" && pass <= memberPassFirstLast
 
 	if strongMember {
-		invoiceID, invoiceNumber, sameAmount, open, err := s.singleOpenInvoice(ctx, clubID, memberID, amount)
+		mi, err := s.decideMemberInvoice(ctx, clubID, memberID, toCents(amount), paidOn)
 		if err != nil {
 			return nil, err
 		}
-		if open == 1 && invoiceID != "" {
-			return &vippsChargeDecision{Rule: autoAssignRuleMemberInvoice, InvoiceID: invoiceID, InvoiceNumber: invoiceNumber}, nil
+		if mi.InvoiceID != "" {
+			return &vippsChargeDecision{Rule: autoAssignRuleMemberInvoice, InvoiceID: mi.InvoiceID, InvoiceNumber: mi.InvoiceNumber}, nil
 		}
-		// The payer has an open faktura for exactly this amount among others:
-		// it may be that faktura, so don't guess a revenue account instead.
-		if sameAmount > 0 {
-			return &vippsChargeDecision{Reason: "member has several open fakturas for this amount"}, nil
+		// The payer has an open faktura for exactly this amount that the
+		// rule could not settle (one of several, issued later, partly paid
+		// or imported): it may be that faktura, so don't guess a revenue
+		// account instead.
+		if mi.SameAmount > 0 {
+			return &vippsChargeDecision{Reason: mi.Reason}, nil
 		}
 	}
 
@@ -267,8 +272,8 @@ func (s *Service) bookVippsChargeDecision(ctx context.Context, clubID, createdBy
 
 // autoAssignOne applies the rules to one charge. It returns the booking, or
 // nil with the reason it was left for a human.
-func (s *Service) autoAssignOne(ctx context.Context, clubID, createdBy string, cfg vippsAutoAssignConfig, rowID, customer, message string, amount float64) (*VippsAutoAssignItem, string, error) {
-	d, err := s.decideVippsCharge(ctx, clubID, cfg, customer, message, amount)
+func (s *Service) autoAssignOne(ctx context.Context, clubID, createdBy string, cfg vippsAutoAssignConfig, rowID, customer, message string, amount float64, paidOn time.Time) (*VippsAutoAssignItem, string, error) {
+	d, err := s.decideVippsCharge(ctx, clubID, cfg, customer, message, amount, paidOn)
 	if err != nil {
 		return nil, "", err
 	}
@@ -280,46 +285,6 @@ func (s *Service) autoAssignOne(ctx context.Context, clubID, createdBy string, c
 		return nil, "", err
 	}
 	return &VippsAutoAssignItem{RowID: rowID, Rule: d.Rule, Target: d.Target(), EntryID: entryID}, "", nil
-}
-
-// singleOpenInvoice looks at the member's fakturas that are sent and not yet
-// settled for the member. It returns the faktura to book when there is
-// exactly one and its total equals the amount, the number of open fakturas
-// with that amount, and the number of open fakturas overall.
-func (s *Service) singleOpenInvoice(ctx context.Context, clubID, memberID string, amount float64) (invoiceID string, invoiceNumber, sameAmount, open int, err error) {
-	rows, err := s.db.Query(ctx,
-		`SELECT i.id, i.invoice_number, i.total_amount
-		   FROM invoices i
-		  WHERE i.club_id = $1 AND i.user_id = $2 AND i.sent_at IS NOT NULL
-		    AND `+finance.OwedByMemberSQL("i"),
-		clubID, memberID,
-	)
-	if err != nil {
-		return "", 0, 0, 0, fmt.Errorf("listing open fakturas: %w", err)
-	}
-	defer rows.Close()
-	var lastID string
-	var lastNumber int
-	for rows.Next() {
-		var id string
-		var number int
-		var total float64
-		if err := rows.Scan(&id, &number, &total); err != nil {
-			return "", 0, 0, 0, err
-		}
-		open++
-		if floatNear(total, amount, 0.005) {
-			sameAmount++
-			lastID, lastNumber = id, number
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return "", 0, 0, 0, err
-	}
-	if open == 1 && sameAmount == 1 {
-		return lastID, lastNumber, sameAmount, open, nil
-	}
-	return "", 0, sameAmount, open, nil
 }
 
 // markAutoAssigned records which rule booked the charge and writes the audit

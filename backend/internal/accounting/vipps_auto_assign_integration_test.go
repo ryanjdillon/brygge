@@ -3,6 +3,7 @@ package accounting
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/rs/zerolog"
 
@@ -196,5 +197,55 @@ func TestAutoAssignIsOptIn(t *testing.T) {
 	}
 	if rowEntry(t, f.club, row) != "" {
 		t.Errorf("charge booked while auto-assign is off")
+	}
+}
+
+// Two members sharing a name are no strong match, so neither member's
+// faktura is booked, and the resolver reports no strong pass.
+func TestAutoAssignVippsSkipsSharedMemberName(t *testing.T) {
+	f := newAutoAssignFixture(t)
+	a := f.namedMember(t, "Twinname")
+	b := f.namedMember(t, "Twinname")
+	f.club.NewInvoice(t, fin.InvoiceOpts{Member: &a, Lines: []fin.Line{{Category: "membership", Cents: 45000}}})
+	f.club.NewInvoice(t, fin.InvoiceOpts{Member: &b, Lines: []fin.Line{{Category: "membership", Cents: 30000}}})
+	row := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 45000, CustomerName: "Synthetic Twinname"})
+
+	if _, pass, err := f.svc.resolveCustomerToMemberPass(context.Background(), f.club.ID, "Synthetic Twinname", ""); err != nil || pass <= memberPassFirstLast {
+		t.Fatalf("resolver pass = %d (err %v), want no strong match for a shared name", pass, err)
+	}
+	if res := f.run(t); len(res.Assigned) != 0 || rowEntry(t, f.club, row) != "" {
+		t.Errorf("result = %+v, want the charge left for review", res)
+	}
+}
+
+// The member's only open faktura can't take the charge when it was issued
+// after the payment, already has a payment booked against it, or is an
+// imported faktura with no GL receivable.
+func TestAutoAssignVippsMemberGuards(t *testing.T) {
+	f := newAutoAssignFixture(t)
+	paid := time.Date(f.club.Year, 6, 1, 0, 0, 0, 0, time.UTC)
+
+	later := f.namedMember(t, "Laterone")
+	f.club.NewInvoice(t, fin.InvoiceOpts{Member: &later, IssueDate: paid.AddDate(0, 0, 1), Lines: []fin.Line{{Category: "membership", Cents: 45000}}})
+	laterRow := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 45000, Date: paid, CustomerName: "Synthetic Laterone"})
+
+	partly := f.namedMember(t, "Partlyone")
+	partInv := f.club.NewInvoice(t, fin.InvoiceOpts{Member: &partly, Lines: []fin.Line{{Category: "membership", Cents: 45000}}})
+	first := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 20000, Date: paid, CustomerName: "Synthetic Partlyfirst"})
+	if _, err := f.svc.CreateVippsChargeBilag(context.Background(), f.club.ID, first, "3100", "synthetic part payment", f.club.Treasurer.ID); err != nil {
+		t.Fatalf("booking the first part: %v", err)
+	}
+	f.exec(t, `UPDATE vipps_import_rows SET invoice_id = $2 WHERE id = $1`, first, partInv.ID)
+	partlyRow := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 45000, Date: paid, CustomerName: "Synthetic Partlyone"})
+
+	imported := f.namedMember(t, "Importone")
+	f.club.NewInvoice(t, fin.InvoiceOpts{Member: &imported, Imported: true, Lines: []fin.Line{{Category: "membership", Cents: 45000}}})
+	importedRow := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 45000, Date: paid, CustomerName: "Synthetic Importone"})
+
+	f.run(t)
+	for name, row := range map[string]string{"issued later": laterRow, "partly paid": partlyRow, "imported": importedRow} {
+		if rowEntry(t, f.club, row) != "" {
+			t.Errorf("%s faktura: charge was booked", name)
+		}
 	}
 }

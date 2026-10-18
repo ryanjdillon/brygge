@@ -301,17 +301,19 @@ func (s *Service) backlogReclassification(ctx context.Context, clubID string, cf
 	var (
 		rowID, rowType, customer, message, orderRef string
 		amount                                      float64
+		paidOn                                      time.Time
 		invoiceID                                   *string
 		isOrder                                     bool
 	)
 	err := s.db.QueryRow(ctx,
-		`SELECT r.id, r.row_type, r.amount, COALESCE(r.customer_name, ''), COALESCE(r.message, ''),
+		`SELECT r.id, r.row_type, r.amount, COALESCE(r.booking_date, r.tx_at::date),
+		        COALESCE(r.customer_name, ''), COALESCE(r.message, ''),
 		        COALESCE(r.order_id, ''), r.invoice_id::text,
 		        EXISTS (SELECT 1 FROM orders o WHERE o.club_id = r.club_id AND r.order_id <> '' AND o.vipps_reference = r.order_id)
 		   FROM vipps_import_rows r
 		  WHERE r.club_id = $1 AND r.journal_entry_id = $2`,
 		clubID, d.id,
-	).Scan(&rowID, &rowType, &amount, &customer, &message, &orderRef, &invoiceID, &isOrder)
+	).Scan(&rowID, &rowType, &amount, &paidOn, &customer, &message, &orderRef, &invoiceID, &isOrder)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, "", nil
 	}
@@ -334,7 +336,7 @@ func (s *Service) backlogReclassification(ctx context.Context, clubID string, cf
 	}
 
 	if cfg.enabled {
-		dec, err := s.decideVippsCharge(ctx, clubID, cfg, customer, message, amount)
+		dec, err := s.decideVippsCharge(ctx, clubID, cfg, customer, message, amount, paidOn)
 		if err != nil {
 			return nil, "", err
 		}

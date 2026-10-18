@@ -548,6 +548,8 @@ func (s *Service) priceArticleCandidates(ctx context.Context, clubID string, amo
 //  1. KID in the free-form message → invoice.user_id
 //  2. Normalized exact match on users.full_name
 //  3. Normalized exact match on first_name + ' ' + last_name
+//     (2 and 3 only when exactly one member carries that name; a name two
+//     members share falls through to the weak passes)
 //  4. Last-name-only when exactly one member in the club has that
 //     normalized last name (catches "Per Hansen" when the Vipps CSV
 //     dropped the first name and only "Per Hansen" exists)
@@ -562,8 +564,9 @@ func (s *Service) resolveCustomerToMember(ctx context.Context, clubID, customerN
 }
 
 // Resolution passes, strongest first. Passes up to memberPassFirstLast are
-// exact (a taught alias, a KID, or the whole normalized name) and safe to
-// act on without a human; the later ones are heuristics that only suggest.
+// exact (a taught alias, a KID, or the whole normalized name of exactly one
+// member) and safe to act on without a human; the later ones are heuristics
+// that only suggest.
 const (
 	memberPassAlias = iota
 	memberPassKID
@@ -579,14 +582,7 @@ const (
 // which pass matched (memberPassNone when none did).
 func (s *Service) resolveCustomerToMemberPass(ctx context.Context, clubID, customerName, message string) (string, int, error) {
 	// Pass 0: check treasurer-taught aliases first — skip all fuzzy work.
-	var aliasUserID string
-	aerr := s.db.QueryRow(ctx,
-		`SELECT user_id FROM vipps_customer_aliases
-		 WHERE club_id = $1 AND lower(customer_name) = lower($2)
-		 LIMIT 1`,
-		clubID, customerName,
-	).Scan(&aliasUserID)
-	if aerr == nil && aliasUserID != "" {
+	if aliasUserID := s.aliasMember(ctx, clubID, customerName); aliasUserID != "" {
 		return aliasUserID, memberPassAlias, nil
 	}
 
@@ -603,99 +599,19 @@ func (s *Service) resolveCustomerToMemberPass(ctx context.Context, clubID, custo
 		}
 	}
 
-	needle := normalizeName(customerName)
-	if needle == "" {
+	if normalizeName(customerName) == "" {
 		return "", memberPassNone, nil
 	}
 
 	// Load all members (small set per club) and match in Go so we can
 	// run the cascade without three round-trips and without depending
 	// on a Postgres fuzzy-string extension.
-	rows, err := s.db.Query(ctx,
-		`SELECT id, COALESCE(full_name, ''), COALESCE(first_name, ''), COALESCE(last_name, ''), COALESCE(email, '')
-		   FROM users WHERE club_id = $1`,
-		clubID,
-	)
+	cands, err := s.loadMemberCands(ctx, clubID)
 	if err != nil {
 		return "", memberPassNone, err
 	}
-	defer rows.Close()
-
-	type cand struct {
-		id, fullN, firstLastN, lastN, emailLocal string
-	}
-	var cands []cand
-	for rows.Next() {
-		var c cand
-		var fullName, firstName, lastName, email string
-		if err := rows.Scan(&c.id, &fullName, &firstName, &lastName, &email); err != nil {
-			continue
-		}
-		c.fullN = normalizeName(fullName)
-		c.firstLastN = normalizeName(firstName + " " + lastName)
-		c.lastN = normalizeName(lastName)
-		if at := strings.IndexByte(email, '@'); at > 0 {
-			c.emailLocal = normalizeName(email[:at])
-		}
-		cands = append(cands, c)
-	}
-
-	// Pass 1: exact normalized full_name
-	for _, c := range cands {
-		if c.fullN != "" && c.fullN == needle {
-			return c.id, memberPassFullName, nil
-		}
-	}
-	// Pass 2: exact normalized first+last
-	for _, c := range cands {
-		if c.firstLastN != "" && c.firstLastN != " " && c.firstLastN == needle {
-			return c.id, memberPassFirstLast, nil
-		}
-	}
-	// Pass 3: last name only when unique
-	matches := 0
-	var matchedID string
-	for _, c := range cands {
-		if c.lastN != "" && c.lastN == needle {
-			matches++
-			matchedID = c.id
-		}
-	}
-	if matches == 1 {
-		return matchedID, memberPassLastName, nil
-	}
-	// Pass 4: Levenshtein-1 on full name / first+last — catches typos and
-	// diacritic/spacing variants normalizeName missed — when exactly one
-	// candidate is that close. See DIL-367.
-	matches, matchedID = 0, ""
-	for _, c := range cands {
-		if (c.fullN != "" && levenshteinWithin1(c.fullN, needle)) ||
-			(c.firstLastN != "" && c.firstLastN != " " && levenshteinWithin1(c.firstLastN, needle)) {
-			matches++
-			matchedID = c.id
-		}
-	}
-	if matches == 1 {
-		return matchedID, memberPassFuzzy, nil
-	}
-	// Pass 5: email local-part (the Vipps name matches the part before @
-	// in the member's email) when unique. Compare with separators removed
-	// so "kari.berg" (email) matches "Kari Berg" (Vipps name).
-	needleTight := strings.ReplaceAll(needle, " ", "")
-	matches, matchedID = 0, ""
-	for _, c := range cands {
-		if c.emailLocal != "" && strings.ReplaceAll(c.emailLocal, " ", "") == needleTight {
-			matches++
-			matchedID = c.id
-		}
-	}
-	if matches == 1 {
-		return matchedID, memberPassEmail, nil
-	}
-	// Pass 6 (phone) is intentionally absent: the Vipps export only exposes
-	// a MASKED customer phone, so there is nothing to match against
-	// users.phone. See DIL-367.
-	return "", memberPassNone, nil
+	id, pass := matchMemberName(cands, customerName)
+	return id, pass, nil
 }
 
 // levenshteinWithin1 reports whether a and b are within Levenshtein

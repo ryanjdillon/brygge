@@ -46,12 +46,21 @@ It is refused when the split differs from the charge amount, or when a faktura o
 ### Vipps charges are auto-booked only when unambiguous, and only on opt-in
 
 **Rule (BRY-340):** `AutoAssignVippsCharges` runs after every Vipps CSV upload, operator Report API sync and **Synk Vipps**, but books nothing unless `clubs.vipps_auto_assign` is on. It books a charge in one of two cases. Anything else is left in Tildel.
-- **Member faktura:** the payer resolves to one member by a strong pass (taught alias, KID, or the exact normalized full or first+last name; never last-name-only, fuzzy or email), that member has exactly one sent faktura not settled for the member (`finance.SettledForMemberSQL`), and the totals are equal.
+- **Member faktura:** the payer resolves to one member by a strong pass (taught alias, KID, or the exact normalized full or first+last name; never last-name-only, fuzzy or email), and `decideMemberInvoice` settles it — see "A payment goes to a member's faktura only when it is the only one it can be" below.
 - **Price item:** the amount fits active price items in one category. Several categories count as a tie. The club's `vipps_auto_assign_tie_category` resolves a tie only when every match is a per-unit (night, day or hour) price, for example guest slip versus motorhome at the same nightly rate. If the amount is also an exact one-off price in any tied category (a season, slipping, slip rent), the charge stays manual, so the tie category never absorbs amounts it can't explain. A members-only item also needs a strong member match. A member who has an open faktura for the exact amount is never price-classified.
 
 Charges naming a checkout order are left to `AutoReconcileOrderCharges`. Each booking is audited (`vipps_charge.auto_assigned`) and can be undone with `UnassignVippsCharge`.
 
 **Failure mode:** guessing on a weak name match or a cross-category amount books a member's dues as walk-up revenue, or the reverse. The member is then chased for a faktura they paid, or revenue lands on the wrong account. With no opt-in, a club that never chose this would find bookings it didn't make.
+
+### A payment goes to a member's faktura only when it is the only one it can be
+
+**Rule (BRY-340, BRY-366):** every rule that books a payment to a member's faktura without a human (Vipps auto-assign and bank auto-assign) goes through two shared steps in `auto_assign_member.go`:
+- **One member.** A name pass (`matchMemberName`, passes full name and first+last) is strong only when the normalized name belongs to exactly one member. A name two members share is no strong match; resolution falls through to the weak passes, which only ever suggest. A taught alias always wins. The suggest-only callers (`vippsreconcile.go` member lookup, `vippsaudit.go`) see the same uniqueness.
+- **One faktura** (`decideMemberInvoice`). Candidates are the member's sent fakturas still owed (`finance.OwedByMemberSQL`). The payment is booked only when exactly one candidate was issued on or before the payment date, nothing is booked against it yet (no booked bank row with its `invoice_id` or its KID, no booked Vipps charge with its `invoice_id`), and its total equals the amount in integer øre. Imported fakturas (`import_source` set) are never targets, because they have no GL receivable; an imported open faktura of the same amount leaves the payment for a human. Reasons: `no_open_faktura`, `several_open_fakturas`, `amount_mismatch`, `faktura_after_payment`, `faktura_partly_paid`, `imported_faktura`.
+- For Vipps, a member with an open faktura of the same amount that the rule could not settle (`SameAmount > 0`) is never price-classified either.
+
+**Failure mode:** before BRY-366 the first of two same-named members took the payment, a payment made before the faktura existed settled it, and a second payment to a partly paid faktura was booked as if it covered all of it.
 
 ### A Vipps payout clears as soon as its settlement's charges are booked
 

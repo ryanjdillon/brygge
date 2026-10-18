@@ -182,9 +182,9 @@ func TestVippsMemberMatchingSkipsSettledFakturas(t *testing.T) {
 		if got := f.svc.findOpenInvoiceForMember(ctx, f.club.ID, inv.MemberID, fin.Kr(inv.TotalCents)); got != "" {
 			t.Errorf("%s faktura offered to a Vipps charge (%s)", name, got)
 		}
-		_, _, sameAmount, open, err := f.svc.singleOpenInvoice(ctx, f.club.ID, inv.MemberID, fin.Kr(inv.TotalCents))
-		if err != nil || sameAmount != 0 || open != 0 {
-			t.Errorf("%s faktura: auto-assign sees %d open (%d same amount), err %v; want none", name, open, sameAmount, err)
+		mi, err := f.svc.decideMemberInvoice(ctx, f.club.ID, inv.MemberID, inv.TotalCents, time.Date(f.club.Year, 12, 31, 0, 0, 0, 0, time.UTC))
+		if err != nil || mi.InvoiceID != "" || mi.SameAmount != 0 || mi.Reason != reasonNoOpenFaktura {
+			t.Errorf("%s faktura: auto-assign decided %+v, err %v; want no open faktura", name, mi, err)
 		}
 	}
 	if got := f.svc.findOpenInvoiceForMember(ctx, f.club.ID, f.open.MemberID, fin.Kr(f.open.TotalCents)); got != f.open.ID {
