@@ -128,7 +128,11 @@ func (s *Service) assignBankRowToInvoice(
 		return "", errors.New("assign-invoice requires a positive (incoming) amount; use assign-account for outgoing rows")
 	}
 
-	if _, err := lockInvoiceForAssign(ctx, tx, clubID, invoiceID, toCents(rowAmount), opts.auto); err != nil {
+	lockOpts := invoiceLockOpts{mode: lockManual}
+	if opts.auto {
+		lockOpts = invoiceLockOpts{mode: lockAutoAssign, rowCents: toCents(rowAmount)}
+	}
+	if _, err := lockInvoiceForAssign(ctx, tx, clubID, invoiceID, lockOpts); err != nil {
 		return "", err
 	}
 
@@ -191,11 +195,34 @@ func (s *Service) assignBankRowToInvoice(
 	return entry.ID, nil
 }
 
+// invoiceLockMode picks which re-checks lockInvoiceForAssign runs once it
+// holds the faktura.
+type invoiceLockMode int
+
+const (
+	// lockManual is a treasurer's assign (and the Vipps charge assign): it
+	// refuses a voided or paid faktura, or one a booked row is recorded
+	// against.
+	lockManual invoiceLockMode = iota
+	// lockAutoAssign adds the auto-assign rule's conditions: still owed,
+	// sent, not imported, nothing booked against it (incl. a KID-matched
+	// row) and a total equal to the row.
+	lockAutoAssign
+)
+
+// invoiceLockOpts tunes lockInvoiceForAssign.
+type invoiceLockOpts struct {
+	mode invoiceLockMode
+	// rowCents is the payment in øre; lockAutoAssign compares it to the
+	// faktura total.
+	rowCents int64
+}
+
 // lockInvoiceForAssign locks the faktura for the rest of tx and refuses it
-// when it can't take this payment of rowCents. It returns the faktura total
-// in øre. Every path that settles a faktura with a bank row or a Vipps
-// charge (single and multi-row bank assigns, the bank and Vipps
-// auto-assign rules) takes it; the KID cascade does not.
+// when it can't take this payment. It returns the faktura total in øre.
+// Every path that settles a faktura with a bank row or a Vipps charge
+// (single and multi-row bank assigns, the bank and Vipps auto-assign rules)
+// takes it; the KID cascade does not.
 //
 // The faktura stays locked until the payment is linked and posted, so two
 // bookings racing for one faktura (a sync's auto-assign and a manual
@@ -207,11 +234,7 @@ func (s *Service) assignBankRowToInvoice(
 // this transaction ends — a deadlock with ourselves. The checks run in a
 // second statement: one that waited for the lock still reads the rows as
 // they were when it started, so it would miss the booking it waited for.
-//
-// auto adds the auto-assign rule's conditions: still owed, sent, not
-// imported, nothing booked against it (incl. a KID-matched row) and a
-// total equal to rowCents.
-func lockInvoiceForAssign(ctx context.Context, tx pgx.Tx, clubID, invoiceID string, rowCents int64, auto bool) (int64, error) {
+func lockInvoiceForAssign(ctx context.Context, tx pgx.Tx, clubID, invoiceID string, opts invoiceLockOpts) (int64, error) {
 	if err := tx.QueryRow(ctx,
 		`SELECT id FROM invoices WHERE id = $1 AND club_id = $2 FOR NO KEY UPDATE`,
 		invoiceID, clubID,
@@ -225,13 +248,15 @@ func lockInvoiceForAssign(ctx context.Context, tx pgx.Tx, clubID, invoiceID stri
 		invoiceCents  int64
 		paid          bool
 		invoiceStatus string
-		owedAndLive   bool
+		owed          bool
+		sentAndLive   bool
 		bookedByRow   bool
 		bookedAny     bool
 	)
 	if err := tx.QueryRow(ctx,
 		`SELECT round(i.total_amount * 100)::bigint, i.payment_id IS NOT NULL, i.status,
-		        `+finance.OwedByMemberSQL("i")+` AND i.sent_at IS NOT NULL AND i.import_source IS NULL,
+		        `+finance.OwedByMemberSQL("i")+`,
+		        i.sent_at IS NOT NULL AND i.import_source IS NULL,
 		        EXISTS (SELECT 1 FROM bank_import_rows b
 		                 WHERE b.club_id = i.club_id AND b.invoice_id = i.id AND b.journal_entry_id IS NOT NULL)
 		        OR EXISTS (SELECT 1 FROM vipps_import_rows v
@@ -240,7 +265,7 @@ func lockInvoiceForAssign(ctx context.Context, tx pgx.Tx, clubID, invoiceID stri
 		   FROM invoices i
 		  WHERE i.id = $1 AND i.club_id = $2`,
 		invoiceID, clubID,
-	).Scan(&invoiceCents, &paid, &invoiceStatus, &owedAndLive, &bookedByRow, &bookedAny); err != nil {
+	).Scan(&invoiceCents, &paid, &invoiceStatus, &owed, &sentAndLive, &bookedByRow, &bookedAny); err != nil {
 		return 0, fmt.Errorf("load invoice: %w", err)
 	}
 	switch {
@@ -250,7 +275,7 @@ func lockInvoiceForAssign(ctx context.Context, tx pgx.Tx, clubID, invoiceID stri
 		return 0, errors.New("invoice is already paid")
 	case bookedByRow:
 		return 0, errInvoiceHasBookedRow
-	case auto && (!owedAndLive || bookedAny || invoiceCents != rowCents):
+	case opts.mode == lockAutoAssign && (!owed || !sentAndLive || bookedAny || invoiceCents != opts.rowCents):
 		return 0, errInvoiceNoLongerOpen
 	}
 	return invoiceCents, nil
@@ -785,7 +810,7 @@ func (s *Service) AssignMultipleBankRowsToInvoice(
 
 	// Held until the rows are linked and their entries posted (the commit
 	// below), like the single-row path.
-	invCents, err := lockInvoiceForAssign(ctx, tx, clubID, invoiceID, 0, false)
+	invCents, err := lockInvoiceForAssign(ctx, tx, clubID, invoiceID, invoiceLockOpts{mode: lockManual})
 	if err != nil {
 		return nil, err
 	}

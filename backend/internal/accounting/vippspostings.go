@@ -306,7 +306,7 @@ func (s *Service) AssignVippsChargeToInvoice(ctx context.Context, clubID, vippsR
 		return nil, fmt.Errorf("begin: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	invCents, err := lockInvoiceForAssign(ctx, tx, clubID, invoiceID, 0, false)
+	invCents, err := lockInvoiceForAssign(ctx, tx, clubID, invoiceID, invoiceLockOpts{mode: lockManual})
 	if err != nil {
 		return nil, err
 	}
