@@ -265,6 +265,18 @@ Single fakturas go through the same draft → send → paid flow.
 
 When you upload a bank statement (`Admin → Accounting → Bank & Vipps`), the KID auto-matcher links each incoming row to the corresponding invoice and back-links `invoices.payment_id` so the faktura-status widgets update. After deploying improvements to the matcher, click **Synk Vipps** (Vipps drafts) or **Synk bank** (KID matches) to retroactively re-run the cascade over already-imported rows.
 
+### Automatic booking of bank payments without a KID
+
+Some members pay by plain transfer, without the KID. Turn on **Bokfør entydige bankinnbetalinger uten KID automatisk** under **Admin → Økonomiinnstillinger → Bankinnbetalinger uten KID** to have Brygge book such a payment by itself after each bank upload and **Synk bank**, but only when the match is clear:
+
+- the payer's name (the "Fra:" name, or the bank's sender) matches exactly one member, or a name you taught in the Vipps queue;
+- that member has exactly one open faktura dated on or before the payment, with nothing paid on it yet;
+- the amount is the faktura total to the øre.
+
+It never books a payment that mentions a KID or a faktura number (the normal matching handles those), a payment from the club's own accounts, two payments for the same faktura, a row that seems to belong with another row (**Mogleg par**), an imported faktura from the old system, or a payment in a closed year. Everything else stays in **Tildel**.
+
+The upload and **Synk bank** results list what was booked, and each line has **Angre**, which puts the payment back in Tildel and reopens the faktura. The setting is separate from the Vipps one and is off until you turn it on. Until then, Brygge keeps using its older rule that books a payment whose sender has the same full name as one member with one open faktura of that amount.
+
 ### Export bank statements up to yesterday
 
 A transfer still under way when you export a statement appears as a bare **Overførsel**, with no sender and no reference text, dated on the export day. The settled row (for a Vipps payout, **Utb. … Vippsnr …**) only appears in a later export. So:
@@ -310,7 +322,7 @@ Member resolution uses fuzzy normalization (æøå/diacritics, hyphens, case, wh
 
 Turn on **Bokfør entydige Vipps-betalinger automatisk** under **Admin → Økonomiinnstillinger → Vipps**. After each Vipps upload and **Synk Vipps**, Brygge then books a payment by itself, but only when the match is clear:
 
-- **The payer is a member with exactly one open faktura for the same amount.** The faktura is marked paid. The name must match exactly (or through a taught alias or a KID); close-but-not-exact names are left for you.
+- **The payer is a member with exactly one open faktura for the same amount.** The faktura is marked paid. The name must match exactly (or through a taught alias or a KID); close-but-not-exact names, and names two members share, are left for you. So is a payment made before the faktura's date, or to a faktura that already has a payment on it.
 - **The amount fits one price category.** Examples: 1,600 kr is "Slipping <26 fot", or 900 kr is 3 nights at 300 kr. The payment is booked to that category's income account.
 
 If an amount fits several categories (a guest berth and a motorhome spot at the same nightly price, for example), choose which category wins under **Når et beløp passer flere priskategorier**, or leave it for review. Prices for members only are booked automatically only when the payer is a known member.

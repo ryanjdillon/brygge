@@ -1003,7 +1003,10 @@
         "expenseAccount": "Conto di costo per le esenzioni",
         "accountHint": "L'importo esentato è addebitato su questo conto e il ricavo è accreditato per intero. Obbligatorio quando è impostata un'esenzione.",
         "accountRequired": "Scegli il conto di costo per le esenzioni."
-      }
+      },
+      "bankAutoAssignLabel": "Pagamenti bancari senza KID",
+      "bankAutoAssign": "Registra automaticamente i pagamenti bancari univoci senza KID",
+      "bankAutoAssignHint": "Dopo ogni caricamento bancario e Synk bank, registra un pagamento senza KID solo se il nome del pagatore corrisponde esattamente a un socio con una sola fattura aperta dello stesso importo. Il resto rimane in Tildel. Ogni registrazione può essere annullata. Indipendente dall'impostazione Vipps."
     },
     "faktura": {
       "tabs": {
@@ -1062,7 +1065,13 @@
       "provisionalSettledNotice": "{count} riga/e provvisoria/e di un’esportazione precedente ora riportano il testo bancario definitivo.",
       "exportDayNotice": "L’estratto arriva fino al {date}. I bonifici ancora in corso il giorno dell’esportazione possono comparire come un semplice «Overførsel» finché non sono regolati. Esporta fino a ieri, oppure reimporta il {date} più tardi.",
       "provisionalAmbiguousNotice": "{count} riga/e provvisoria/e non sono state abbinate a un’unica riga regolata e restano in Tildel.",
-      "referenceMismatchNotice": "{count} riga/e provvisoria/e hanno una riga regolata con lo stesso riferimento ma un altro importo o una data successiva. Nessuna è stata modificata; controllale in Tildel:"
+      "referenceMismatchNotice": "{count} riga/e provvisoria/e hanno una riga regolata con lo stesso riferimento ma un altro importo o una data successiva. Nessuna è stata modificata; controllale in Tildel:",
+      "bankAutoAssignCounts": "Pagamenti bancari registrati automaticamente: {assigned} · Ancora in Tildel: {review}",
+      "autoAssignCounts": "Assegnati automaticamente: {assigned} · Da verificare in Tildel: {review}",
+      "autoAssignOff": "L'assegnazione automatica è disattivata ({review} pagamenti attendono in Tildel). Attivala in Økonomiinnstillinger → Vipps.",
+      "autoAssignAccount": "conto {code}",
+      "autoAssignUndo": "Annulla",
+      "autoAssignUndone": "Annullato — di nuovo in Tildel"
     },
     "bankReconcile": {
       "filterAll": "All",
@@ -1183,7 +1192,8 @@
           "revenue": "Ricavi",
           "expense": "Costi"
         }
-      }
+      },
+      "vippsClearPayout": "Salda il versamento"
     },
     "sidebarTitle": "Portale admin"
   },

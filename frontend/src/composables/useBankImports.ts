@@ -58,6 +58,8 @@ export interface BankImportResult {
   // Latest row date in the statement, and the provisional rows it still
   // holds on that day.
   last_row_date?: string
+  // KID-less deposits booked by bank auto-assign; absent when it is off.
+  auto_assign?: AutoAssignResult | null
   provisional_rows?: number
 }
 
@@ -111,20 +113,30 @@ export interface VippsImportRow {
   journal_entry_id: string | null
 }
 
-export interface VippsAutoAssignItem {
+export interface AutoAssignItem {
+  source?: 'vipps' | 'bank'
   row_id: string
   date: string
   amount: number
   rule: 'member_invoice' | 'price_item'
   target: string
   entry_id: string
+  // Bank deposits only: the faktura and how the payer was recognised.
+  invoice_number?: number
+  match_pass?: string
 }
 
-// Charges booked without review after an import or Synk Vipps (BRY-340).
-export interface VippsAutoAssignResult {
+// Payments booked without review after an import or sync: Vipps charges
+// (BRY-340) or KID-less bank deposits (BRY-366).
+export interface AutoAssignResult {
+  source?: 'vipps' | 'bank'
   enabled: boolean
-  assigned: VippsAutoAssignItem[]
+  assigned: AutoAssignItem[]
   needs_review: number
+  // Bank only: deposits left in Tildel, counted by reason.
+  by_reason?: Record<string, number>
+  // Set when the run itself failed; what it booked first is still listed.
+  error?: string
 }
 
 export interface VippsPayoutSweepItem {
@@ -152,7 +164,7 @@ export interface VippsImportResult {
   rows_total: number
   imported: number
   skipped_dup: number
-  auto_assign?: VippsAutoAssignResult | null
+  auto_assign?: AutoAssignResult | null
   payouts?: VippsPayoutSweepResult | null
 }
 
@@ -363,6 +375,8 @@ export interface BankSyncResult {
   vipps_payouts?: VippsPayoutSweepResult | null
   provisional_superseded?: number
   provisional_ambiguous?: ProvisionalBankRow[] | null
+  // KID-less deposits booked by bank auto-assign; absent when it is off.
+  auto_assign?: AutoAssignResult | null
 }
 
 export async function runBankSync(): Promise<BankSyncResult> {
@@ -374,7 +388,7 @@ export interface VippsResyncResult {
   resynced: number
   skipped: number
   failed: string[]
-  auto_assign?: VippsAutoAssignResult | null
+  auto_assign?: AutoAssignResult | null
   payouts?: VippsPayoutSweepResult | null
 }
 
@@ -385,4 +399,9 @@ export async function runVippsResync(): Promise<VippsResyncResult> {
 // Undoes a charge booking so it returns to Tildel. Behind fresh TOTP.
 export async function unassignVippsCharge(rowID: string): Promise<{ status: string }> {
   return fetchJSON(`${BASE}/vipps-charges/${rowID}/unassign`, { method: 'POST' })
+}
+
+// Undoes a bank row booking so it returns to Tildel. Behind fresh TOTP.
+export async function unassignBankRow(rowID: string): Promise<{ status: string }> {
+  return fetchJSON(`${BASE}/bank-rows/${rowID}/unassign`, { method: 'POST' })
 }

@@ -912,7 +912,8 @@
         "tooltipDescription": "What this entry is for",
         "tooltipStatus": "Draft = not finalized, Posted = finalized, Voided = reversed",
         "tooltipSource": "How this entry was created (manual, payment sync, bank import)",
-        "tooltipAccounts": "Which accounts are affected"
+        "tooltipAccounts": "Which accounts are affected",
+        "vippsDraftsAutoAssignOff": "Automatyczne przypisywanie jest wyłączone, więc płatności na 3900 Andre inntekter zostaną tam zaksięgowane bez klasyfikacji. Najpierw włącz je w Økonomiinnstillinger → Vipps, aby je sklasyfikować."
       },
       "journalForm": {
         "title": "New entry",
@@ -976,7 +977,10 @@
         "expenseAccount": "Konto kosztów zwolnień",
         "accountHint": "Zwolniona kwota obciąża to konto, a przychód jest uznawany w pełnej wysokości. Wymagane, gdy ustawiono jakiekolwiek zwolnienie.",
         "accountRequired": "Wybierz konto kosztów dla zwolnień."
-      }
+      },
+      "bankAutoAssignLabel": "Płatności bankowe bez KID",
+      "bankAutoAssign": "Automatycznie księguj jednoznaczne płatności bankowe bez KID",
+      "bankAutoAssignHint": "Po każdym imporcie bankowym i Synk bank księguje płatność bez KID tylko wtedy, gdy nazwa płatnika pasuje dokładnie do jednego członka z dokładnie jedną otwartą fakturą na tę samą kwotę. Reszta pozostaje w Tildel. Każde księgowanie można cofnąć. Niezależne od ustawienia Vipps."
     },
     "faktura": {
       "tabs": {
@@ -1035,7 +1039,13 @@
       "provisionalSettledNotice": "{count} tymczasowych wierszy z wcześniejszego eksportu ma teraz ostateczny opis bankowy.",
       "exportDayNotice": "Wyciąg obejmuje okres do {date}. Przelewy będące w toku w dniu eksportu mogą pojawić się jako samo „Overførsel”, dopóki nie zostaną rozliczone. Eksportuj do wczoraj albo zaimportuj {date} ponownie później.",
       "provisionalAmbiguousNotice": "{count} tymczasowych wierszy nie udało się przypisać do jednego rozliczonego wiersza; pozostają w Tildel.",
-      "referenceMismatchNotice": "{count} tymczasowych wierszy ma rozliczony wiersz z tą samą referencją, ale inną kwotą lub późniejszą datą. Żaden nie został zmieniony; sprawdź je w Tildel:"
+      "referenceMismatchNotice": "{count} tymczasowych wierszy ma rozliczony wiersz z tą samą referencją, ale inną kwotą lub późniejszą datą. Żaden nie został zmieniony; sprawdź je w Tildel:",
+      "bankAutoAssignCounts": "Płatności bankowe zaksięgowane automatycznie: {assigned} · Nadal w Tildel: {review}",
+      "autoAssignCounts": "Przypisane automatycznie: {assigned} · Do sprawdzenia w Tildel: {review}",
+      "autoAssignOff": "Automatyczne przypisywanie jest wyłączone ({review} płatności czeka w Tildel). Włącz je w Økonomiinnstillinger → Vipps.",
+      "autoAssignAccount": "konto {code}",
+      "autoAssignUndo": "Cofnij",
+      "autoAssignUndone": "Cofnięto — z powrotem w Tildel"
     },
     "bankReconcile": {
       "filterAll": "All",
@@ -1153,7 +1163,8 @@
           "revenue": "Przychody",
           "expense": "Koszty"
         }
-      }
+      },
+      "vippsClearPayout": "Rozlicz wypłatę"
     },
     "sidebarTitle": "Portal administratora"
   },

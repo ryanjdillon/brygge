@@ -41,6 +41,13 @@ function categoryLabel(c: string) {
 const vippsSaving = ref(false)
 const vippsSaved = ref(false)
 
+// Book unambiguous KID-less bank deposits without review (BRY-366); a
+// switch of its own, so turning on Vipps auto-assign never starts booking
+// bank payments.
+const bankAutoAssign = ref(false)
+const bankSaving = ref(false)
+const bankSaved = ref(false)
+
 async function load() {
   loading.value = true
   error.value = null
@@ -55,6 +62,7 @@ async function load() {
     vippsMaxAmount.value = body.vipps_max_amount != null ? String(body.vipps_max_amount) : ''
     vippsAutoAssign.value = !!body.vipps_auto_assign
     vippsAutoAssignTieCategory.value = body.vipps_auto_assign_tie_category || ''
+    bankAutoAssign.value = !!body.bank_auto_assign
     fakturaLogoCacheBust.value = Date.now()
   } catch (e) {
     error.value = (e as Error).message
@@ -115,6 +123,30 @@ async function saveVippsAccounts() {
     error.value = (e as Error).message
   } finally {
     vippsSaving.value = false
+  }
+}
+
+async function saveBankAutoAssign() {
+  if (!(await ensureFreshTotp())) return
+  bankSaving.value = true
+  bankSaved.value = false
+  error.value = null
+  try {
+    const res = await totpAwareFetch('/api/v1/admin/settings/site', {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bank_auto_assign: bankAutoAssign.value }),
+    })
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '')
+      throw new Error(`${res.status} ${txt}`)
+    }
+    bankSaved.value = true
+  } catch (e) {
+    error.value = (e as Error).message
+  } finally {
+    bankSaving.value = false
   }
 }
 
@@ -315,6 +347,30 @@ const canEdit = can('money')
           </label>
         </div>
         <p class="text-xs text-slate-500">{{ t('admin.economySettings.vippsAutoAssignHint') }}</p>
+      </fieldset>
+
+      <fieldset class="rounded-md border border-slate-200 bg-slate-50 p-3 space-y-3" data-testid="bank-auto-assign">
+        <legend class="px-1 text-xs font-semibold text-slate-700">
+          {{ t('admin.economySettings.bankAutoAssignLabel') }}
+        </legend>
+        <div class="flex flex-wrap items-center gap-3">
+          <label class="flex items-center gap-2 text-sm text-slate-700">
+            <input v-model="bankAutoAssign" type="checkbox" @change="bankSaved = false" />
+            {{ t('admin.economySettings.bankAutoAssign') }}
+          </label>
+          <button
+            type="button"
+            class="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+            :disabled="bankSaving"
+            @click="saveBankAutoAssign"
+          >
+            {{ t('common.save') }}
+          </button>
+          <span v-if="bankSaved" class="text-sm font-medium text-green-600">
+            {{ t('common.saved') }}
+          </span>
+        </div>
+        <p class="text-xs text-slate-500">{{ t('admin.economySettings.bankAutoAssignHint') }}</p>
       </fieldset>
 
       <ExemptionsSettingsPanel />

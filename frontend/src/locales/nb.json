@@ -1809,7 +1809,10 @@
         "expenseAccount": "Kostnadskonto for fritak",
         "accountHint": "Fritatt beløp debiteres denne kontoen, og inntekten krediteres med fullt beløp. Påkrevd når et fritak er satt.",
         "accountRequired": "Velg kostnadskontoen fritak skal bokføres på."
-      }
+      },
+      "bankAutoAssignLabel": "Bankinnbetalinger uten KID",
+      "bankAutoAssign": "Bokfør entydige bankinnbetalinger uten KID automatisk",
+      "bankAutoAssignHint": "Etter hver bankopplasting og Synk bank bokføres en betaling uten KID bare når betalerens navn passer nøyaktig ett medlem som har nøyaktig én åpen faktura på samme beløp. Alt annet blir liggende i Tildel. Alle bokføringer kan angres. Uavhengig av Vipps-innstillingen."
     },
     "bankAccounts": {
       "title": "Bankkontoer",
@@ -1943,7 +1946,8 @@
       "provisionalSettledNotice": "{count} foreløpig(e) rad(er) fra en tidligere utskrift har nå den oppgjorte bankteksten.",
       "exportDayNotice": "Utskriften går til og med {date}. Overføringer som var underveis på eksportdagen kan stå som en bar «Overførsel» til de er oppgjort. Eksporter til og med i går, eller importer {date} på nytt senere.",
       "provisionalAmbiguousNotice": "{count} foreløpig(e) rad(er) kunne ikke kobles til én oppgjort rad og ligger igjen i Tildel.",
-      "referenceMismatchNotice": "{count} foreløpig(e) rad(er) har en oppgjort rad med samme referanse, men annet beløp eller senere dato. Ingen av dem er endret; sjekk dem i Tildel:"
+      "referenceMismatchNotice": "{count} foreløpig(e) rad(er) har en oppgjort rad med samme referanse, men annet beløp eller senere dato. Ingen av dem er endret; sjekk dem i Tildel:",
+      "bankAutoAssignCounts": "Bankinnbetalinger bokført automatisk: {assigned} · Fortsatt i Tildel: {review}"
     },
     "pdfArchive": {
       "title": "PDF-arkiv",

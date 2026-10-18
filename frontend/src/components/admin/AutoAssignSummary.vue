@@ -3,11 +3,13 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQueryClient } from '@tanstack/vue-query'
 import { useFreshTotp } from '@/composables/useFreshTotp'
-import { unassignVippsCharge, type VippsAutoAssignResult } from '@/composables/useBankImports'
+import { unassignBankRow, unassignVippsCharge, type AutoAssignResult } from '@/composables/useBankImports'
 
-// Shows what an import or Synk Vipps booked without review (BRY-340) and lets
-// the treasurer undo a booking, which puts the charge back in Tildel.
-const props = defineProps<{ result: VippsAutoAssignResult }>()
+// Shows what an import or sync booked without review — Vipps charges
+// (BRY-340) or KID-less bank deposits (BRY-366) — and lets the treasurer
+// undo a booking, which puts the payment back in Tildel. source picks the
+// undo endpoint.
+const props = defineProps<{ result: AutoAssignResult; source: 'vipps' | 'bank' }>()
 
 const { t } = useI18n()
 const queryClient = useQueryClient()
@@ -22,7 +24,8 @@ async function undo(rowID: string) {
   busy.value = rowID
   error.value = null
   try {
-    await unassignVippsCharge(rowID)
+    if (props.source === 'bank') await unassignBankRow(rowID)
+    else await unassignVippsCharge(rowID)
     undone.value = new Set([...undone.value, rowID])
     queryClient.invalidateQueries({ queryKey: ['accounting'] })
   } catch (e) {
@@ -38,11 +41,16 @@ function targetLabel(rule: string, target: string) {
 </script>
 
 <template>
-  <div class="mt-2" data-testid="vipps-auto-assign-summary">
+  <div class="mt-2" :data-testid="`${props.source}-auto-assign-summary`">
     <p v-if="!props.result.enabled">{{ t('admin.bankImports.autoAssignOff', { review: props.result.needs_review }) }}</p>
     <template v-else>
       <p>
-        {{ t('admin.bankImports.autoAssignCounts', { assigned: props.result.assigned.length, review: props.result.needs_review }) }}
+        {{
+          t(props.source === 'bank' ? 'admin.bankImports.bankAutoAssignCounts' : 'admin.bankImports.autoAssignCounts', {
+            assigned: props.result.assigned.length,
+            review: props.result.needs_review,
+          })
+        }}
       </p>
       <ul v-if="props.result.assigned.length" class="mt-1 space-y-0.5">
         <li v-for="a in props.result.assigned" :key="a.row_id" class="flex items-center gap-2">
@@ -60,6 +68,7 @@ function targetLabel(rule: string, target: string) {
         </li>
       </ul>
     </template>
+    <p v-if="props.result.error" class="mt-1 text-red-700">{{ props.result.error }}</p>
     <p v-if="error" class="mt-1 text-red-700">{{ error }}</p>
   </div>
 </template>

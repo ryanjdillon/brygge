@@ -1003,7 +1003,10 @@
         "expenseAccount": "Kostenrekening voor vrijstellingen",
         "accountHint": "Het vrijgestelde bedrag wordt op deze rekening gedebiteerd en de opbrengst volledig gecrediteerd. Verplicht zodra een vrijstelling is ingesteld.",
         "accountRequired": "Kies de kostenrekening voor vrijstellingen."
-      }
+      },
+      "bankAutoAssignLabel": "Bankbetalingen zonder KID",
+      "bankAutoAssign": "Eenduidige bankbetalingen zonder KID automatisch boeken",
+      "bankAutoAssignHint": "Boekt na elke bankupload en Synk bank een betaling zonder KID alleen als de naam van de betaler precies bij één lid past met precies één openstaande factuur van hetzelfde bedrag. De rest blijft in Tildel. Elke boeking kan ongedaan worden gemaakt. Los van de Vipps-instelling."
     },
     "faktura": {
       "tabs": {
@@ -1062,7 +1065,13 @@
       "provisionalSettledNotice": "{count} voorlopige regel(s) uit een eerdere export hebben nu de definitieve banktekst.",
       "exportDayNotice": "Het afschrift loopt tot en met {date}. Overboekingen die op de exportdag nog onderweg waren, kunnen als kale „Overførsel” verschijnen tot ze verwerkt zijn. Exporteer tot en met gisteren, of importeer {date} later opnieuw.",
       "provisionalAmbiguousNotice": "{count} voorlopige regel(s) konden niet aan één verwerkte regel worden gekoppeld en blijven in Tildel staan.",
-      "referenceMismatchNotice": "{count} voorlopige regel(s) hebben een verwerkte regel met dezelfde referentie maar een ander bedrag of latere datum. Geen van beide is gewijzigd; controleer ze in Tildel:"
+      "referenceMismatchNotice": "{count} voorlopige regel(s) hebben een verwerkte regel met dezelfde referentie maar een ander bedrag of latere datum. Geen van beide is gewijzigd; controleer ze in Tildel:",
+      "bankAutoAssignCounts": "Automatisch geboekte bankbetalingen: {assigned} · Nog in Tildel: {review}",
+      "autoAssignCounts": "Automatisch toegewezen: {assigned} · Te controleren in Tildel: {review}",
+      "autoAssignOff": "Automatisch toewijzen staat uit ({review} betalingen wachten in Tildel). Zet het aan onder Økonomiinnstillinger → Vipps.",
+      "autoAssignAccount": "rekening {code}",
+      "autoAssignUndo": "Ongedaan maken",
+      "autoAssignUndone": "Ongedaan gemaakt — terug in Tildel"
     },
     "bankReconcile": {
       "filterAll": "All",
@@ -1183,7 +1192,8 @@
           "revenue": "Opbrengsten",
           "expense": "Kosten"
         }
-      }
+      },
+      "vippsClearPayout": "Uitbetaling afletteren"
     },
     "sidebarTitle": "Beheerportaal"
   },

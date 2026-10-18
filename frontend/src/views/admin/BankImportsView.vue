@@ -37,7 +37,7 @@ import { runBankSync, runVippsResync, type BankSyncResult, type VippsResyncResul
 import { importUni24CSV, type Uni24ImportResult } from '@/composables/useFinancials'
 import { formatNOK as nok, formatDate } from '@/lib/format'
 import { useFreshTotp } from '@/composables/useFreshTotp'
-import VippsAutoAssignSummary from '@/components/admin/VippsAutoAssignSummary.vue'
+import AutoAssignSummary from '@/components/admin/AutoAssignSummary.vue'
 import VippsPayoutSweepSummary from '@/components/admin/VippsPayoutSweepSummary.vue'
 import BankImportProvisionalNotices from '@/components/admin/BankImportProvisionalNotices.vue'
 import { useConfirm } from '@/stores/confirm'
@@ -551,6 +551,7 @@ const filterMonthValue = computed<number>({
       <p v-if="syncResult.provisional_ambiguous?.length" class="mt-1 text-yellow-800">
         {{ t('admin.bankImports.provisionalAmbiguousNotice', { count: syncResult.provisional_ambiguous.length }) }}
       </p>
+      <AutoAssignSummary v-if="syncResult.auto_assign" source="bank" :result="syncResult.auto_assign" />
       <VippsPayoutSweepSummary v-if="syncResult.vipps_payouts" :result="syncResult.vipps_payouts" />
     </div>
     <div v-if="vippsResyncResult" class="mt-3 rounded-md bg-brand-50 px-3 py-2 text-xs text-brand-900" data-testid="vipps-resync-result">
@@ -560,7 +561,7 @@ const filterMonthValue = computed<number>({
         skipped: vippsResyncResult.skipped,
         failed: vippsResyncResult.failed?.length ?? 0,
       }) }}
-      <VippsAutoAssignSummary v-if="vippsResyncResult.auto_assign" :result="vippsResyncResult.auto_assign" />
+      <AutoAssignSummary v-if="vippsResyncResult.auto_assign" source="vipps" :result="vippsResyncResult.auto_assign" />
       <VippsPayoutSweepSummary v-if="vippsResyncResult.payouts" :result="vippsResyncResult.payouts" />
     </div>
     <div v-if="syncError" class="mt-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">{{ syncError }}</div>
@@ -748,6 +749,7 @@ const filterMonthValue = computed<number>({
               <li v-for="e in bankResult.row_errors" :key="e.row_id">{{ e.date }} · {{ e.amount }} kr — {{ e.reason }}</li>
             </ul>
           </div>
+          <AutoAssignSummary v-if="bankResult.auto_assign" source="bank" :result="bankResult.auto_assign" />
         </div>
       </section>
 
@@ -782,7 +784,7 @@ const filterMonthValue = computed<number>({
           <span class="font-medium">{{ vippsResult.filename }}</span>
           — {{ t('admin.bankImports.imported') }}: {{ vippsResult.imported }}
           · {{ t('admin.bankImports.skipped') }}: {{ vippsResult.skipped_dup }}
-          <VippsAutoAssignSummary v-if="vippsResult.auto_assign" :result="vippsResult.auto_assign" />
+          <AutoAssignSummary v-if="vippsResult.auto_assign" source="vipps" :result="vippsResult.auto_assign" />
           <VippsPayoutSweepSummary v-if="vippsResult.payouts" :result="vippsResult.payouts" />
         </div>
       </section>

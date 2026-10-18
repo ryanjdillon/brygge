@@ -1813,7 +1813,10 @@
         "expenseAccount": "Expense account for exemptions",
         "accountHint": "The waived amount is debited to this account and the item's revenue is credited in full. Required when any exemption is set.",
         "accountRequired": "Choose the expense account exemptions are booked to."
-      }
+      },
+      "bankAutoAssignLabel": "Bank payments without KID",
+      "bankAutoAssign": "Book unambiguous bank payments without KID automatically",
+      "bankAutoAssignHint": "After each bank upload and Synk bank, books a payment without KID only when the payer's name matches exactly one member who has exactly one open faktura for the same amount. Everything else stays in Tildel. Every booking can be undone. Separate from the Vipps setting."
     },
     "bankAccounts": {
       "title": "Bank accounts",
@@ -1947,7 +1950,8 @@
       "provisionalSettledNotice": "{count} provisional row(s) from an earlier export now carry the settled bank text.",
       "exportDayNotice": "The statement runs up to {date}. Transfers still under way on the export day can appear as a bare “Overførsel” until they settle. Export up to yesterday, or import {date} again later.",
       "provisionalAmbiguousNotice": "{count} provisional row(s) could not be paired with one settled row and are left in Tildel.",
-      "referenceMismatchNotice": "{count} provisional row(s) have a settled row with the same reference but another amount or a later date. Neither was changed; check them in Tildel:"
+      "referenceMismatchNotice": "{count} provisional row(s) have a settled row with the same reference but another amount or a later date. Neither was changed; check them in Tildel:",
+      "bankAutoAssignCounts": "Bank payments booked automatically: {assigned} · Still in Tildel: {review}"
     },
     "pdfArchive": {
       "title": "PDF archive",

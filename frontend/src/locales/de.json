@@ -1003,7 +1003,10 @@
         "expenseAccount": "Aufwandskonto für Befreiungen",
         "accountHint": "Der erlassene Betrag wird diesem Konto belastet, der Erlös wird voll gutgeschrieben. Erforderlich, sobald eine Befreiung gesetzt ist.",
         "accountRequired": "Wählen Sie das Aufwandskonto für Befreiungen."
-      }
+      },
+      "bankAutoAssignLabel": "Bankzahlungen ohne KID",
+      "bankAutoAssign": "Eindeutige Bankzahlungen ohne KID automatisch buchen",
+      "bankAutoAssignHint": "Bucht nach jedem Bank-Upload und Synk bank eine Zahlung ohne KID nur, wenn der Name des Zahlers genau einem Mitglied entspricht, das genau eine offene Rechnung über denselben Betrag hat. Alles andere bleibt in Tildel. Jede Buchung kann rückgängig gemacht werden. Unabhängig von der Vipps-Einstellung."
     },
     "faktura": {
       "tabs": {
@@ -1062,7 +1065,13 @@
       "provisionalSettledNotice": "{count} vorläufige Zeile(n) aus einem früheren Export tragen jetzt den gebuchten Banktext.",
       "exportDayNotice": "Der Auszug reicht bis {date}. Überweisungen, die am Exporttag noch unterwegs waren, können als bloße „Overførsel“ erscheinen, bis sie gebucht sind. Exportieren Sie bis gestern oder importieren Sie {date} später erneut.",
       "provisionalAmbiguousNotice": "{count} vorläufige Zeile(n) ließen sich keiner einzelnen gebuchten Zeile zuordnen und bleiben in Tildel.",
-      "referenceMismatchNotice": "{count} vorläufige Zeile(n) haben eine gebuchte Zeile mit derselben Referenz, aber anderem Betrag oder späterem Datum. Keine wurde geändert; prüfen Sie sie in Tildel:"
+      "referenceMismatchNotice": "{count} vorläufige Zeile(n) haben eine gebuchte Zeile mit derselben Referenz, aber anderem Betrag oder späterem Datum. Keine wurde geändert; prüfen Sie sie in Tildel:",
+      "bankAutoAssignCounts": "Automatisch gebuchte Bankzahlungen: {assigned} · Noch in Tildel: {review}",
+      "autoAssignCounts": "Automatisch zugeordnet: {assigned} · Zur Prüfung in Tildel: {review}",
+      "autoAssignOff": "Die automatische Zuordnung ist aus ({review} Zahlungen warten in Tildel). Aktivieren Sie sie unter Økonomiinnstillinger → Vipps.",
+      "autoAssignAccount": "Konto {code}",
+      "autoAssignUndo": "Rückgängig",
+      "autoAssignUndone": "Rückgängig gemacht — zurück in Tildel"
     },
     "bankReconcile": {
       "filterAll": "All",
@@ -1183,7 +1192,8 @@
           "revenue": "Erträge",
           "expense": "Aufwendungen"
         }
-      }
+      },
+      "vippsClearPayout": "Auszahlung ausgleichen"
     },
     "sidebarTitle": "Admin-Portal"
   },
