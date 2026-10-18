@@ -188,7 +188,6 @@ function openVippsAccountPicker(charge: VippsCharge) {
   activeSource.value = 'vipps'
   accountPickerRowId.value = charge.id
   accountPickerKind.value = 'revenue'
-  accountPickerSuggestions.value = []
   accountPickerSearch.value = ''
   bilagDescription.value = charge.description ?? ''
   pickerRows.value = []
@@ -291,7 +290,6 @@ async function loadPotential() {
 const accountPickerOpen = ref(false)
 const accountPickerRowId = ref<string | null>(null)
 const accountPickerKind = ref<'expense' | 'revenue'>('expense')
-const accountPickerSuggestions = ref<AccountSuggestion[]>([])
 const accountPickerSearch = ref('')
 const bilagDescription = ref('')
 
@@ -299,7 +297,6 @@ function openAccountPicker(row: BankRowSummary) {
   activeSource.value = 'bank'
   accountPickerRowId.value = row.id
   accountPickerKind.value = row.amount < 0 ? 'expense' : 'revenue'
-  accountPickerSuggestions.value = suggestions.value?.accounts ?? []
   accountPickerSearch.value = ''
   bilagDescription.value = row.description ?? ''
   pickerRows.value = selectedRows.value.length > 1 ? [...selectedRows.value] : [row]
@@ -327,6 +324,20 @@ const partnerChoice = ref<string | null>(null)
 const ackSeparate = ref(false)
 const partnerNotice = ref('')
 const MAX_GROUP_ROWS = 5
+
+// The picker loads suggestions for the row it was opened on, never the
+// expanded row's: a picker opened from the bulk toolbar or after expanding
+// another row would otherwise offer that other row's accounts. Several rows
+// picked at once have no single row to suggest for.
+const pickerSuggestionRowId = computed(() =>
+  accountPickerOpen.value && activeSource.value === 'bank' && pickerRows.value.length === 1
+    ? accountPickerRowId.value
+    : null,
+)
+const { data: pickerSuggestions } = useBankRowSuggestions(pickerSuggestionRowId)
+const accountPickerSuggestions = computed<AccountSuggestion[]>(() =>
+  pickerSuggestionRowId.value ? (pickerSuggestions.value?.accounts ?? []) : [],
+)
 
 // Each load supersedes the one before: a late answer for an earlier row
 // must not overwrite the partners or the loading state of the current one.
@@ -1090,7 +1101,13 @@ async function doUnassign(rowId: string) {
         <div v-if="accountPickerSuggestions.length" class="mt-3">
           <p class="text-xs font-semibold uppercase text-gray-500">{{ t('admin.bankReconcile.accountSuggestions') }}</p>
           <ul class="mt-1 space-y-1">
-            <li v-for="sug in accountPickerSuggestions" :key="sug.code" class="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm" :class="confidenceClass[sug.confidence_label]">
+            <li
+              v-for="sug in accountPickerSuggestions"
+              :key="sug.code"
+              class="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm"
+              :class="confidenceClass[sug.confidence_label]"
+              :data-testid="`account-suggestion-${sug.code}`"
+            >
               <span class="font-mono">{{ sug.code }} — {{ sug.name }}</span>
               <button
                 type="button"
