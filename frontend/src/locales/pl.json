@@ -1037,6 +1037,7 @@
       "payoutSweepCounts": "Wypłaty Vipps uzgodnione: {cleared} · Oczekuje na obciążenia: {waiting} · Pominięte: {skipped} · Nieudane: {failed}",
       "refreshed": "Zaktualizowane",
       "provisionalSettledNotice": "{count} tymczasowych wierszy z wcześniejszego eksportu ma teraz ostateczny opis bankowy.",
+      "kidSkippedSettledNotice": "{count} płatności KID pasuje do już opłaconej faktury (możliwa podwójna płatność). Pozostają w Tildel.",
       "exportDayNotice": "Wyciąg obejmuje okres do {date}. Przelewy będące w toku w dniu eksportu mogą pojawić się jako samo „Overførsel”, dopóki nie zostaną rozliczone. Eksportuj do wczoraj albo zaimportuj {date} ponownie później.",
       "provisionalAmbiguousNotice": "{count} tymczasowych wierszy nie udało się przypisać do jednego rozliczonego wiersza; pozostają w Tildel.",
       "referenceMismatchNotice": "{count} tymczasowych wierszy ma rozliczony wiersz z tą samą referencją, ale inną kwotą lub późniejszą datą. Żaden nie został zmieniony; sprawdź je w Tildel:",

@@ -545,6 +545,9 @@ const filterMonthValue = computed<number>({
       <span v-if="syncResult.closed_periods?.length" class="ml-2 text-yellow-800">
         ({{ t('admin.bankImports.runSyncClosed', { years: syncResult.closed_periods.join(', ') }) }})
       </span>
+      <p v-if="syncResult.kid_skipped_settled" class="mt-1 text-yellow-800" data-testid="bank-sync-kid-skipped">
+        {{ t('admin.bankImports.kidSkippedSettledNotice', { count: syncResult.kid_skipped_settled }) }}
+      </p>
       <p v-if="syncResult.provisional_superseded" class="mt-1">
         {{ t('admin.bankImports.provisionalSettledNotice', { count: syncResult.provisional_superseded }) }}
       </p>

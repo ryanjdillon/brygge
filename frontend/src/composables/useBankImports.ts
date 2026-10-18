@@ -46,6 +46,8 @@ export interface BankImportResult {
   skipped_booked?: number
   // Rows whose auto-match failed; they stay unmatched for manual Tildel.
   row_errors?: BankImportRowError[] | null
+  // Of row_errors, the KID matches whose faktura was already settled.
+  kid_skipped_settled?: number
   // In-flight rows from a statement exported while a transfer was under way
   // (BRY-378): refreshed in place with the settled text, or dismissed as
   // superseded; ambiguous ones are left for Tildel.
@@ -368,6 +370,8 @@ export async function confirmVippsReconcile(
 
 export interface BankSyncResult {
   kid_matched: number
+  // KID-cascade rows whose faktura was already settled once locked; left in Tildel.
+  kid_skipped_settled?: number
   vipps_reconciled: number
   vipps_unbalanced: number
   transfers_linked: number
