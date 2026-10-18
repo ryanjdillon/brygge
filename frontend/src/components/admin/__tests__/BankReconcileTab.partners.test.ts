@@ -82,6 +82,7 @@ vi.mock('@/composables/useBankReconcile', async () => {
 vi.mock('@/composables/useAccounting', () => ({
   useAccountsList: () => ({
     data: ref([
+      { code: '1500', name: 'Kundefordringer', account_type: 'asset', is_active: true },
       { code: '1920', name: 'Bankkonto drift', account_type: 'asset', is_active: true },
       { code: '2050', name: 'Annen egenkapital', account_type: 'liability', is_active: true },
       { code: '3900', name: 'Andre inntekter', account_type: 'revenue', is_active: true },
@@ -172,7 +173,7 @@ describe('BankReconcileTab partner rows', () => {
     )
   })
 
-  it('books a selected pair together and gates a selection that leaves a partner out', async () => {
+  it('books a selected pair together as one group', async () => {
     partners.in = [partner('out', -63000, 'strong', -62000)]
     partners.out = [{ ...partner('in', 1000, 'strong', -62000), row_date: '2026-09-02' }]
     const wrapper = mountWithPlugins(BankReconcileTab, { global: { stubs: { teleport: true } } })
@@ -188,5 +189,39 @@ describe('BankReconcileTab partner rows', () => {
       expect.objectContaining({ rowIds: ['out', 'in'], accountCode: '2050' }),
     )
     expect(assignAccount.mutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('gates a group whose row has a strong partner outside the selection until acknowledged', async () => {
+    // A↔B are each other's strong partners and both selected; B also has
+    // a strong partner C that is not selected.
+    partners.out = [{ ...partner('in', 1000, 'strong', -62000), row_date: '2026-09-02' }]
+    partners.in = [partner('out', -63000, 'strong', -62000), partner('other', -500, 'strong', 500)]
+    const wrapper = mountWithPlugins(BankReconcileTab, { global: { stubs: { teleport: true } } })
+    const boxes = wrapper.findAll('input[type="checkbox"]')
+    await boxes[0].setValue(true)
+    await boxes[1].setValue(true)
+    await wrapper.findAll('button').find((b) => b.text().includes('admin.bankReconcile.lagBilag'))!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="partner-group-banner"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="partner-outside"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="assign-group-2050"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('[data-testid="assign-group-2050"]').trigger('click')
+    expect(assignAccountGroup.mutateAsync).not.toHaveBeenCalled()
+
+    await wrapper.get('[data-testid="partner-ack-separate"]').setValue(true)
+    expect(wrapper.get('[data-testid="assign-group-2050"]').attributes('disabled')).toBeUndefined()
+    await wrapper.get('[data-testid="assign-group-2050"]').trigger('click')
+    expect(assignAccountGroup.mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ rowIds: ['out', 'in'], accountCode: '2050' }),
+    )
+  })
+
+  it('does not offer receivables or bank accounts for a group', async () => {
+    partners.in = [partner('out', -63000, 'strong', -62000)]
+    const wrapper = await openPickerFor('in')
+    await wrapper.get('[data-testid="partner-option-out"]').setValue(true)
+    expect(wrapper.find('[data-testid="assign-group-1500"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="assign-group-1920"]').exists()).toBe(false)
   })
 })

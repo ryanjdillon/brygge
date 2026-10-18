@@ -328,7 +328,11 @@ const ackSeparate = ref(false)
 const partnerNotice = ref('')
 const MAX_GROUP_ROWS = 5
 
+// Each load supersedes the one before: a late answer for an earlier row
+// must not overwrite the partners or the loading state of the current one.
+let partnerRequest = 0
 async function loadPickerPartners() {
+  const request = ++partnerRequest
   partnerChoice.value = null
   ackSeparate.value = false
   partnerNotice.value = ''
@@ -338,9 +342,9 @@ async function loadPickerPartners() {
     const entries = await Promise.all(
       pickerRows.value.map(async (r) => [r.id, await fetchBankRowPartners(r.id)] as const),
     )
-    pickerPartners.value = Object.fromEntries(entries)
+    if (request === partnerRequest) pickerPartners.value = Object.fromEntries(entries)
   } finally {
-    partnersLoading.value = false
+    if (request === partnerRequest) partnersLoading.value = false
   }
 }
 
@@ -400,12 +404,13 @@ const assignBlockedReason = computed<string | null>(() => {
 
 // Booked together, the net may land on any non-bank account: a buy-back
 // net of a returned overpayment belongs on a balance account, not revenue.
+const RECEIVABLES_CODE = '1500'
 const ACCOUNT_TYPE_ORDER: Record<'in' | 'out', string[]> = {
   in: ['revenue', 'liability', 'equity', 'asset', 'expense'],
   out: ['expense', 'liability', 'equity', 'asset', 'revenue'],
 }
 const groupAccountSections = computed(() => {
-  const active = (accounts.value ?? []).filter((a) => a.is_active && !a.code.startsWith('19'))
+  const active = (accounts.value ?? []).filter((a) => a.is_active && !a.code.startsWith('19') && a.code !== RECEIVABLES_CODE)
   const order = ACCOUNT_TYPE_ORDER[groupNet.value < 0 ? 'out' : 'in']
   return order
     .map((type) => ({ type, accounts: matchAccountSearch(active.filter((a) => a.account_type === type)) }))
@@ -1036,7 +1041,7 @@ async function doUnassign(rowId: string) {
           <p v-else-if="selectionPartlyPaired" class="mt-3 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
             {{ t('admin.bankReconcile.partners.bulkPartlyPaired') }}
           </p>
-          <div v-else-if="strongOutside.length" class="mt-3 rounded-md border border-indigo-300 bg-indigo-50 p-3 text-xs" data-testid="partner-outside">
+          <div v-if="strongOutside.length && !selectionPartlyPaired" class="mt-3 rounded-md border border-indigo-300 bg-indigo-50 p-3 text-xs" data-testid="partner-outside">
             <p class="font-semibold text-indigo-900">{{ t('admin.bankReconcile.partners.bulkOutside') }}</p>
             <ul class="mt-1 space-y-0.5 text-gray-700">
               <li v-for="o in strongOutside" :key="o.row.id + o.partner.id">
