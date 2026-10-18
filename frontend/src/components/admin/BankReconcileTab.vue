@@ -5,10 +5,12 @@ import { useRoute, useRouter } from 'vue-router'
 import { ArrowDownLeft, ArrowUpRight, Sparkles, Search, FileText, Ban, Undo2, CheckSquare } from 'lucide-vue-next'
 import Modal from '@/components/ui/Modal.vue'
 import BankRowPartnerChoice from '@/components/admin/BankRowPartnerChoice.vue'
+import AccountOptionLabel from '@/components/admin/AccountOptionLabel.vue'
 import Select from '@/components/ui/form/Select.vue'
 import {
   useBankUnmatchedRows,
   useBankRowSuggestions,
+  useVippsChargeSuggestions,
   useBankUnmatchedCountsByYear,
   useMissingVippsSettlements,
   useReconcileMutations,
@@ -38,6 +40,8 @@ import {
 } from '@/composables/useBankReconcile'
 import { formatNOK as formatNOKBase, formatDate as fmtDate } from '@/lib/format'
 import { useAccountsList } from '@/composables/useAccounting'
+import { filterAccounts } from '@/lib/accountSearch'
+import { priceCategoryKey } from '@/lib/priceCategories'
 import { useConfirm } from '@/stores/confirm'
 
 const { t, locale } = useI18n()
@@ -307,10 +311,14 @@ const filteredAccounts = computed(() => {
   const base = accountPickerKind.value === 'expense' ? expenseAccounts.value : revenueAccounts.value
   return matchAccountSearch(base)
 })
+// Search covers what books to an account as well as its code and name, so
+// "slipping" finds the account slipping books to.
+function categoryLabel(category: string): string {
+  const key = priceCategoryKey(category)
+  return key ? t(key) : category
+}
 function matchAccountSearch<T extends { code: string; name: string }>(base: T[]): T[] {
-  const qq = accountPickerSearch.value.trim().toLowerCase()
-  if (!qq) return base
-  return base.filter((a) => a.code.includes(qq) || a.name.toLowerCase().includes(qq))
+  return filterAccounts(base, accountPickerSearch.value, categoryLabel)
 }
 
 // ── Rows that belong together (BRY-380) ──────────────────────
@@ -334,10 +342,16 @@ const pickerSuggestionRowId = computed(() =>
     ? accountPickerRowId.value
     : null,
 )
-const { data: pickerSuggestions } = useBankRowSuggestions(pickerSuggestionRowId)
-const accountPickerSuggestions = computed<AccountSuggestion[]>(() =>
-  pickerSuggestionRowId.value ? (pickerSuggestions.value?.accounts ?? []) : [],
+const pickerChargeId = computed(() =>
+  accountPickerOpen.value && activeSource.value === 'vipps' ? accountPickerRowId.value : null,
 )
+const { data: pickerSuggestions } = useBankRowSuggestions(pickerSuggestionRowId)
+const { data: chargeSuggestions } = useVippsChargeSuggestions(pickerChargeId)
+const accountPickerSuggestions = computed<AccountSuggestion[]>(() => {
+  if (pickerSuggestionRowId.value) return pickerSuggestions.value?.accounts ?? []
+  if (pickerChargeId.value) return chargeSuggestions.value?.accounts ?? []
+  return []
+})
 
 // Each load supersedes the one before: a late answer for an earlier row
 // must not overwrite the partners or the loading state of the current one.
@@ -1083,7 +1097,7 @@ async function doUnassign(rowId: string) {
           <p class="text-xs font-semibold uppercase text-gray-500">{{ t('admin.bankReconcile.partners.accountTypes.' + sec.type) }}</p>
           <ul class="divide-y divide-gray-100">
             <li v-for="a in sec.accounts" :key="a.code" class="flex items-center justify-between gap-3 py-2 text-sm">
-              <span class="font-mono">{{ a.code }} — {{ a.name }}</span>
+              <AccountOptionLabel :code="a.code" :name="a.name" />
               <button
                 type="button"
                 :disabled="!!assignBlockedReason"
@@ -1106,9 +1120,16 @@ async function doUnassign(rowId: string) {
               :key="sug.code"
               class="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm"
               :class="confidenceClass[sug.confidence_label]"
+              :title="sug.why_tooltip"
               :data-testid="`account-suggestion-${sug.code}`"
             >
-              <span class="font-mono">{{ sug.code }} — {{ sug.name }}</span>
+              <div class="min-w-0 flex-1">
+                <AccountOptionLabel :code="sug.code" :name="sug.name" />
+                <p v-if="sug.reason === 'price_item'" class="text-xs text-gray-700" data-testid="price-match-why">
+                  {{ t('admin.bankReconcile.confidence.' + sug.confidence_label) }} ·
+                  {{ t('admin.bankReconcile.priceMatchWhy', { items: sug.why_tooltip }) }}
+                </p>
+              </div>
               <button
                 type="button"
                 :disabled="!!assignBlockedReason"
@@ -1122,7 +1143,7 @@ async function doUnassign(rowId: string) {
         </div>
         <ul class="mt-3 max-h-72 divide-y divide-gray-100 overflow-y-auto">
           <li v-for="a in filteredAccounts" :key="a.code" class="flex items-center justify-between gap-3 py-2 text-sm">
-            <span class="font-mono">{{ a.code }} — {{ a.name }}</span>
+            <AccountOptionLabel :code="a.code" :name="a.name" />
             <button
               type="button"
               :disabled="!!assignBlockedReason"

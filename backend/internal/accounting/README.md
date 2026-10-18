@@ -107,7 +107,7 @@ Full list: [`../../../docs/developer/reference/invariants.md`](../../../docs/dev
 
 ## Common changes
 
-- Adding a new price-item category → edit `PriceItemCategories` + `vippsCategoryAccountMap` + `paymentTypeAccountMap` + the handlers' `validCategories` + `frontend/src/composables/usePricing.ts categoryKeys` + [`enums.md`](../../../docs/developer/reference/enums.md)
+- Adding a new price-item category → edit `PriceItemCategories` + `vippsCategoryAccountMap` + `paymentTypeAccountMap` + the handlers' `validCategories` + `frontend/src/lib/priceCategories.ts` (categories and their label keys, shared by pricing and the Tildel account hints) + [`enums.md`](../../../docs/developer/reference/enums.md)
 - Adding a new bank format → new YAML in `bankformats/`, no Go changes needed
 - Adding a new audit action → see [`../../../docs/developer/checklists/add-audit-action.md`](../../../docs/developer/checklists/add-audit-action.md)
 - Adding a new migration → see [`../../../docs/developer/checklists/add-migration.md`](../../../docs/developer/checklists/add-migration.md)

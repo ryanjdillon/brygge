@@ -1538,7 +1538,8 @@
         "save": "Save",
         "cancel": "Cancel",
         "confirmDelete": "Deactivate this account?",
-        "search": "Search accounts..."
+        "search": "Search accounts...",
+        "systemMvaLocked": "A system account's MVA status is fixed"
       },
       "periods": {
         "title": "Fiscal Periods",
@@ -2063,7 +2064,9 @@
       "accountPickerTitle": "Create voucher",
       "bilagDescriptionLabel": "Description",
       "bilagDescriptionPlaceholder": "Describe the payment…",
-      "searchAccountPlaceholder": "Search account code or name",
+      "searchAccountPlaceholder": "Search account code, name or price item",
+      "accountMoreItems": "+{count} more",
+      "priceMatchWhy": "Amount fits price item: {items}",
       "accountSuggestions": "Suggested",
       "dismissTitle": "Dismiss this row",
       "dismissHint": "Pick a reason. The row drops out of the queue but stays in the audit log.",

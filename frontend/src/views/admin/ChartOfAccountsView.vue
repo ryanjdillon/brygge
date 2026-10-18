@@ -84,12 +84,17 @@ const filteredAccounts = computed(() => {
   })
 })
 
+// A system account can be renamed (posting finds accounts by code, so the
+// name is the club's to choose), but its MVA eligibility stays as seeded.
 const editingId = ref<string | null>(null)
+const editingSystem = ref(false)
 const editForm = ref({ name: '', description: '', mva_eligible: '' })
 
 function startEdit(account: Account) {
-  if (account.is_system || !canEdit) return
+  if (!canEdit || editingId.value === account.id) return
+  updateMutation.reset()
   editingId.value = account.id
+  editingSystem.value = account.is_system
   editForm.value = {
     name: account.name,
     description: account.description,
@@ -291,7 +296,7 @@ function handleAddAccount() {
             <tr
               v-for="account in filteredAccounts"
               :key="account.id"
-              :class="{ 'cursor-pointer hover:bg-gray-50': canEdit && !account.is_system }"
+              :class="{ 'cursor-pointer hover:bg-gray-50': canEdit }"
               @click="startEdit(account)"
             >
               <template v-if="editingId === account.id">
@@ -299,18 +304,35 @@ function handleAddAccount() {
                   <AccountCodeChip :code="account.code" :account-type="account.account_type" />
                 </td>
                 <td class="px-4 py-3" @click.stop>
-                  <Input v-model="editForm.name" />
+                  <Input v-model="editForm.name" data-testid="account-edit-name" />
+                  <p v-if="updateMutation.isError.value" class="mt-1 text-xs text-red-600">
+                    {{ (updateMutation.error.value as Error)?.message }}
+                  </p>
                 </td>
                 <td class="px-4 py-3 text-sm text-gray-500">{{ typeLabels[account.account_type] }}</td>
                 <td class="px-4 py-3" @click.stop>
-                  <Select v-model="editForm.mva_eligible" :options="mvaOptions" width="content" />
+                  <Select
+                    v-model="editForm.mva_eligible"
+                    :options="mvaOptions"
+                    width="content"
+                    :disabled="editingSystem"
+                    :title="editingSystem ? t('admin.accounting.accounts.systemMvaLocked') : undefined"
+                  />
+                  <p v-if="editingSystem" class="mt-1 text-xs text-gray-500" data-testid="account-mva-locked">
+                    {{ t('admin.accounting.accounts.systemMvaLocked') }}
+                  </p>
                 </td>
                 <td class="px-4 py-3" @click.stop>
                   <Input v-model="editForm.description" />
                 </td>
                 <td class="whitespace-nowrap px-4 py-3">
                   <div class="flex gap-1">
-                    <button class="rounded p-1 text-green-600 hover:bg-green-50" @click.stop="saveEdit(account.id)">
+                    <button
+                      class="rounded p-1 text-green-600 hover:bg-green-50 disabled:opacity-50"
+                      :disabled="!editForm.name.trim() || updateMutation.isPending.value"
+                      data-testid="account-edit-save"
+                      @click.stop="saveEdit(account.id)"
+                    >
                       <Check class="h-4 w-4" />
                     </button>
                     <button class="rounded p-1 text-gray-400 hover:bg-gray-100" @click.stop="cancelEdit">

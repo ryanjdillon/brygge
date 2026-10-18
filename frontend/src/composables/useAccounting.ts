@@ -23,6 +23,16 @@ export interface Account {
   mva_eligible: 'eligible' | 'ineligible' | 'partial' | 'not_applicable'
   description: string
   sort_order: number
+  // What books to this account by default (list endpoint only): active
+  // price items by name, and the price-item categories mapped to it.
+  price_items?: AccountPriceItem[]
+  price_categories?: string[]
+}
+
+export interface AccountPriceItem {
+  id: string
+  name: string
+  category: string
 }
 
 export interface FiscalPeriod {

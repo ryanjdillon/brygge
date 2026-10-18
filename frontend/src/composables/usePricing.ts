@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/vue-query'
 import { useI18n } from 'vue-i18n'
 import { useApiClient, unwrap } from '@/lib/apiClient'
 import type { components } from '@/types/api'
+import { priceCategoryKey, priceUnitKey } from '@/lib/priceCategories'
 
 export type PriceItem = components['schemas']['PriceItem'] & { audience?: string }
 
@@ -29,37 +30,18 @@ export interface PricingCategory {
   hasSplit: boolean
 }
 
-const categoryKeys: Record<string, string> = {
-  harbor_membership: 'admin.pricing.categoryHarborMembership',
-  membership: 'admin.pricing.categoryMembership',
-  slip_fee: 'admin.pricing.categorySlipFee',
-  seasonal_rental: 'admin.pricing.categorySeasonalRental',
-  guest: 'admin.pricing.categoryGuest',
-  motorhome: 'admin.pricing.categoryMotorhome',
-  room_hire: 'admin.pricing.categoryRoomHire',
-  service: 'admin.pricing.categoryService',
-  other: 'admin.pricing.categoryOther',
-}
-
-const unitKeys: Record<string, string> = {
-  once: 'admin.pricing.unitOnce',
-  year: 'admin.pricing.unitYear',
-  season: 'admin.pricing.unitSeason',
-  day: 'admin.pricing.unitDay',
-  night: 'admin.pricing.unitNight',
-  hour: 'admin.pricing.unitHour',
-}
-
 export function usePricing() {
   const client = useApiClient()
   const { t } = useI18n()
 
   function categoryLabel(key: string): string {
-    return categoryKeys[key] ? t(categoryKeys[key]) : key
+    const k = priceCategoryKey(key)
+    return k ? t(k) : key
   }
 
   function unitLabel(unit: string): string {
-    return unitKeys[unit] ? t(unitKeys[unit]) : `/${unit}`
+    const k = priceUnitKey(unit)
+    return k ? t(k) : `/${unit}`
   }
 
   const query = useQuery({

@@ -861,7 +861,8 @@
         "save": "Save",
         "cancel": "Cancel",
         "confirmDelete": "Deactivate this account?",
-        "search": "Search accounts..."
+        "search": "Search accounts...",
+        "systemMvaLocked": "De btw-status van een systeemrekening ligt vast"
       },
       "periods": {
         "title": "Fiscal Periods",
@@ -1105,7 +1106,9 @@
       "accountPickerTitle": "Create voucher",
       "bilagDescriptionLabel": "Description",
       "bilagDescriptionPlaceholder": "Describe the payment…",
-      "searchAccountPlaceholder": "Search account code or name",
+      "searchAccountPlaceholder": "Zoek rekeningcode, naam of prijsartikel",
+      "accountMoreItems": "+{count} meer",
+      "priceMatchWhy": "Bedrag past bij prijsartikel: {items}",
       "accountSuggestions": "Suggested",
       "dismissTitle": "Dismiss this row",
       "dismissHint": "Pick a reason. The row drops out of the queue but stays in the audit log.",

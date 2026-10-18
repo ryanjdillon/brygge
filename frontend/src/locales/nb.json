@@ -1534,7 +1534,8 @@
         "save": "Lagre",
         "cancel": "Avbryt",
         "confirmDelete": "Deaktiver denne kontoen?",
-        "search": "Søk i kontoer..."
+        "search": "Søk i kontoer...",
+        "systemMvaLocked": "MVA-status på en systemkonto er låst"
       },
       "periods": {
         "title": "Regnskapsperioder",
@@ -2059,7 +2060,9 @@
       "accountPickerTitle": "Lag bilag",
       "bilagDescriptionLabel": "Beskrivelse",
       "bilagDescriptionPlaceholder": "Beskriv betalinga…",
-      "searchAccountPlaceholder": "Søk kontokode eller namn",
+      "searchAccountPlaceholder": "Søk kontokode, namn eller prisartikkel",
+      "accountMoreItems": "+{count} til",
+      "priceMatchWhy": "Beløpet passar prisartikkel: {items}",
       "accountSuggestions": "Foreslåtte",
       "dismissTitle": "Avvis denne raden",
       "dismissHint": "Vel ein grunn. Raden vert fjerna frå køen men ligg igjen i revisjonsloggen.",

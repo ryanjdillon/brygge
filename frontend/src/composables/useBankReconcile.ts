@@ -81,6 +81,8 @@ export interface AccountSuggestion {
   score: number
   confidence_label: 'sterk' | 'sannsynleg' | 'svak'
   why_tooltip: string
+  // 'price_item': the amount fits the price items named in why_tooltip.
+  reason?: 'price_item'
 }
 
 export interface BankRowSuggestions {
@@ -282,6 +284,20 @@ export function useBankRowSuggestions(rowId: Ref<string | null>) {
     enabled: computed(() => !!rowId.value),
     queryFn: async () => {
       return useApi().fetchApi<BankRowSuggestions>(`${BASE}/${rowId.value}/suggestions`)
+    },
+  })
+}
+
+// Faktura and account suggestions for one Vipps charge, ranked like a
+// bank row's.
+export function useVippsChargeSuggestions(chargeId: Ref<string | null>) {
+  return useQuery({
+    queryKey: computed(() => ['vipps-charges', 'suggestions', chargeId.value]),
+    enabled: computed(() => !!chargeId.value),
+    queryFn: async () => {
+      return useApi().fetchApi<BankRowSuggestions>(
+        `/api/v1/admin/accounting/vipps-charges/${chargeId.value}/suggestions`,
+      )
     },
   })
 }

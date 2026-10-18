@@ -275,6 +275,16 @@ A transfer still under way when you export a statement appears as a bare **Overf
 - If an upload stops partway, upload the same file again. Rows already stored are skipped.
 - In **Tildel**, such rows carry a **Foreløpig** badge. Don't book them by hand; upload the day again instead.
 
+### Finding the right account in Lag bilag
+
+**Lag bilag** in Tildel books a row or a Vipps payment to an account instead of a faktura. Under each account the picker shows, in grey, the price categories and price items that book to it by default, for example `3300 — Salgs- og tjenesteinntekter` with *Tenester · Slipping liten båt, Slipping stor båt*. The search box searches those too: typing **slipping** finds the account slipping is booked to, whatever the account is called. Case and æ/ø/å don't matter, and every word you type must match.
+
+When the amount fits a price item exactly (or a whole number of nights, days or hours of one), its account comes first under **Foreslåtte** with *Beløpet passar prisartikkel: …*. It is **Sannsynleg** when every fitting price item books to that account, and **Svak** when they spread over several. Members-only prices are suggested only when the payer is recognised as a member. Nothing is picked for you: press **Tildel** on the account you want.
+
+Price items have no account of their own: the account comes from the item's category. A faktura line can still be booked to another account when the faktura is made.
+
+**Renaming an account.** Clubs created before October 2026 have 3300 named *Salgsinntekter*; new clubs get *Salgs- og tjenesteinntekter*. Rename it in `Admin → Accounting → Kontoplan` (`/admin/accounting/accounts`): click the row, change the name or description, and save. This works for the standard (system) accounts too. Their MVA status is locked, and the account number, type and deletion stay as they are. Bookings and reports follow the account number, so renaming changes nothing already booked.
+
 ### Rows that belong together (Mogleg par)
 
 Some bank rows only make sense together: a harbour-share buy-back paid out and the overpayment the recipient sent back, or a payment and its refund. Booked one at a time, the return would land as income. Tildel marks such rows **Mogleg par** when they go opposite ways on the same bank account within 60 days and share the other party's account number or name, or reverse each other exactly within 14 days. **Sjå mogleg par** is a weaker hint: the two rows only net to a price item's amount.

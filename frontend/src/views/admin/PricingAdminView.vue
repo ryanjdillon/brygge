@@ -8,6 +8,7 @@ import { useConfirm } from '@/stores/confirm'
 import { useCan } from '@/composables/useCan'
 import { Plus, Pencil, Trash2, X, ChevronDown, ChevronRight } from 'lucide-vue-next'
 import type { PriceItem } from '@/composables/usePricing'
+import { PRICE_CATEGORIES, PRICE_CATEGORY_KEYS, PRICE_UNITS, PRICE_UNIT_KEYS } from '@/lib/priceCategories'
 import Input from '@/components/ui/form/Input.vue'
 import NumberInput from '@/components/ui/form/NumberInput.vue'
 import Select from '@/components/ui/form/Select.vue'
@@ -53,28 +54,11 @@ const tableRows = computed<TableRow[]>(() => {
   return rows
 })
 
-const categories = computed(() => [
-  { value: 'membership', label: t('admin.pricing.categoryMembership') },
-  { value: 'harbor_membership', label: t('admin.pricing.categoryHarborMembership') },
-  { value: 'slip_fee', label: t('admin.pricing.categorySlipFee') },
-  { value: 'electricity', label: t('admin.pricing.categoryElectricity') },
-  { value: 'seasonal_rental', label: t('admin.pricing.categorySeasonalRental') },
-  { value: 'guest', label: t('admin.pricing.categoryGuest') },
-  { value: 'motorhome', label: t('admin.pricing.categoryMotorhome') },
-  { value: 'room_hire', label: t('admin.pricing.categoryRoomHire') },
-  { value: 'service', label: t('admin.pricing.categoryService') },
-  { value: 'other', label: t('admin.pricing.categoryOther') },
-])
+const categories = computed(() =>
+  PRICE_CATEGORIES.map((value) => ({ value, label: t(PRICE_CATEGORY_KEYS[value]) })),
+)
 
-const units = computed(() => [
-  { value: 'once', label: t('admin.pricing.unitOnce') },
-  { value: 'year', label: t('admin.pricing.unitYear') },
-  { value: 'season', label: t('admin.pricing.unitSeason') },
-  { value: 'day', label: t('admin.pricing.unitDay') },
-  { value: 'night', label: t('admin.pricing.unitNight') },
-  { value: 'hour', label: t('admin.pricing.unitHour') },
-  { value: 'kwh', label: t('admin.pricing.unitKwh') },
-])
+const units = computed(() => PRICE_UNITS.map((value) => ({ value, label: t(PRICE_UNIT_KEYS[value]) })))
 
 const audiences = computed(() => [
   { value: 'all' as const, label: t('admin.pricing.audienceAll') },
