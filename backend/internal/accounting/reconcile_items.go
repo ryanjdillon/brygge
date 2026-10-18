@@ -118,6 +118,45 @@ func (s *Service) PotentialInvoicesForVippsCharge(ctx context.Context, clubID, c
 	return s.PotentialInvoicesForRow(ctx, clubID, "", q, limit, amount)
 }
 
+// VippsChargeSuggestionsFor ranks fakturas and accounts for one unbooked
+// Vipps charge with the same rules as a bank row: the payer's name for
+// fakturas, and the price items the amount fits for accounts.
+func (s *Service) VippsChargeSuggestionsFor(ctx context.Context, clubID, chargeID string) (*BankRowSuggestions, error) {
+	var (
+		amount         float64
+		date           *time.Time
+		payer, message string
+	)
+	if err := s.db.QueryRow(ctx,
+		`SELECT amount, COALESCE(booking_date, tx_at::date),
+		        COALESCE(customer_name, ''), COALESCE(message, '')
+		   FROM vipps_import_rows
+		  WHERE id = $1 AND club_id = $2 AND row_type = $3`,
+		chargeID, clubID, string(VippsRowBelastning),
+	).Scan(&amount, &date, &payer, &message); err != nil {
+		return nil, fmt.Errorf("vipps charge not found")
+	}
+	rowDate := time.Now()
+	if date != nil {
+		rowDate = *date
+	}
+
+	out := &BankRowSuggestions{Invoices: []InvoiceSuggestion{}, Accounts: []AccountSuggestion{}}
+	if amount > 0 {
+		invs, err := s.rankIncomingInvoices(ctx, clubID, amount, rowDate, payer)
+		if err != nil {
+			return nil, err
+		}
+		out.Invoices = invs
+	}
+	accs, err := s.rankAccountSuggestions(ctx, clubID, amount, message, payer)
+	if err != nil {
+		return nil, err
+	}
+	out.Accounts = accs
+	return out, nil
+}
+
 // ListUnreconciledVippsCharges returns the individual Vipps settlement charges
 // (belastning rows) not yet journaled, as unified reconcile items — the
 // per-payer lines that will populate the Tildel queue under the per-charge

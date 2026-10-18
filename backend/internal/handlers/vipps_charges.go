@@ -56,6 +56,25 @@ func (h *AccountingHandler) HandleVippsChargePotentialInvoices(w http.ResponseWr
 	JSON(w, http.StatusOK, map[string]any{"items": items, "potential": true})
 }
 
+// HandleVippsChargeSuggestions ranks fakturas and accounts for one Vipps
+// charge, the same suggestions a bank row gets.
+func (h *AccountingHandler) HandleVippsChargeSuggestions(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	rowID := chi.URLParam(r, "rowID")
+	res, err := h.svc.VippsChargeSuggestionsFor(ctx, claims.ClubID, rowID)
+	if err != nil {
+		h.log.Warn().Err(err).Str("row_id", rowID).Msg("vipps charge suggestions")
+		Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	JSON(w, http.StatusOK, res)
+}
+
 // HandleAssignVippsChargeToInvoice books a charge against an open faktura
 // (DR clearing / CR 1500) and back-links the invoice payment.
 func (h *AccountingHandler) HandleAssignVippsChargeToInvoice(w http.ResponseWriter, r *http.Request) {

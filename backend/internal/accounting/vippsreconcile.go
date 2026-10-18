@@ -507,7 +507,8 @@ func (s *Service) priceArticleCandidates(ctx context.Context, clubID string, amo
 	rows, err := s.db.Query(ctx,
 		`SELECT name, category, COALESCE(audience, 'all'), amount, unit
 		   FROM price_items
-		  WHERE club_id = $1 AND is_active = TRUE AND amount > 0`,
+		  WHERE club_id = $1 AND is_active = TRUE AND amount > 0
+		  ORDER BY sort_order, name`,
 		clubID,
 	)
 	if err != nil {

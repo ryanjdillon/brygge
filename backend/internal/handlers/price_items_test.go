@@ -8,7 +8,23 @@ import (
 	"testing"
 
 	"github.com/rs/zerolog"
+
+	"github.com/brygge-klubb/brygge/internal/accounting"
 )
+
+// The categories a price item may take are the ones accounting maps to a
+// default account; a category added here without a mapping would have its
+// items vanish from the account hints.
+func TestValidCategoriesMatchAccountingVocabulary(t *testing.T) {
+	if len(validCategories) != len(accounting.PriceItemCategories) {
+		t.Fatalf("validCategories has %d keys, accounting.PriceItemCategories %d", len(validCategories), len(accounting.PriceItemCategories))
+	}
+	for _, c := range accounting.PriceItemCategories {
+		if !validCategories[c] {
+			t.Errorf("accounting category %q is not a valid price-item category", c)
+		}
+	}
+}
 
 func newTestPriceItemsHandler(t *testing.T) *PriceItemsHandler {
 	t.Helper()

@@ -57,7 +57,7 @@ func DefaultKontoplan() []AccountDef {
 		{Code: "3200", Name: "Gjestehavninntekter", Type: AccountTypeRevenue, ParentCode: "3000", MVAEligible: MVANotApplicable, SortOrder: 110},
 		{Code: "3210", Name: "Bobil/campingplass", Type: AccountTypeRevenue, ParentCode: "3000", MVAEligible: MVANotApplicable, Description: "Bobil- og campingutleie, holdt adskilt fra gjestehavn fordi den kan ha en annen MVA-behandling ved registrering", SortOrder: 112},
 		{Code: "3220", Name: "Lokalleie", Type: AccountTypeRevenue, ParentCode: "3000", MVAEligible: MVANotApplicable, Description: "Utleie av klubbhus og lokaler", SortOrder: 114},
-		{Code: "3300", Name: "Salgsinntekter", Type: AccountTypeRevenue, ParentCode: "3000", MVAEligible: MVANotApplicable, SortOrder: 120},
+		{Code: "3300", Name: "Salgs- og tjenesteinntekter", Type: AccountTypeRevenue, ParentCode: "3000", MVAEligible: MVANotApplicable, SortOrder: 120},
 		{Code: "3400", Name: "Momskompensasjon", Type: AccountTypeRevenue, ParentCode: "3000", MVAEligible: MVANotApplicable, SortOrder: 130},
 		{Code: "3900", Name: "Andre inntekter", Type: AccountTypeRevenue, ParentCode: "3000", MVAEligible: MVANotApplicable, SortOrder: 140},
 

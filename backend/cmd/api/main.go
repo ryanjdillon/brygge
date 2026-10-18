@@ -1311,6 +1311,7 @@ func main() {
 						// batched payout bilag.
 						r.Get("/vipps-charges/unmatched", accountingHandler.HandleListUnreconciledVippsCharges)
 						r.Get("/vipps-charges/{rowID}/potential-invoices", accountingHandler.HandleVippsChargePotentialInvoices)
+						r.Get("/vipps-charges/{rowID}/suggestions", accountingHandler.HandleVippsChargeSuggestions)
 						r.With(middleware.RequireRole("treasurer", "admin"),
 							middleware.RequireFreshTOTPDefault()).
 							Post("/vipps-charges/{rowID}/assign-invoice", accountingHandler.HandleAssignVippsChargeToInvoice)

@@ -242,10 +242,12 @@ Source: `paymentTypeAccountMap` in `backend/internal/accounting/sync.go`.
 | `guest` | 3200 | Gjestehavninntekter |
 | `motorhome` | 3210 | Bobil/campingplass, kept apart from 3200 because it may be taxed differently under MVA |
 | `room_hire` | 3220 | Lokalleie |
-| `merchandise`, `service` | 3300 | Salgsinntekter |
+| `merchandise`, `service` | 3300 | Salgs- og tjenesteinntekter (seeded name; clubs seeded earlier keep "Salgsinntekter" until a treasurer renames it in Kontoplan) |
 | `other` | 3900 | Andre inntekter |
 
 Fallback when no entry matches: `defaultRevenueCode = "3100"` (Medlemskontingent).
+
+The two maps must agree on every key they share (`TestCategoryMapsAgree`). `PriceCategoryAccount(category)` resolves a price-item category (the ten keys in `PriceItemCategories`, the same set the price-item handlers accept) to its default account: the Vipps map first, then this one. Payment-type-only keys (`dues`, `booking`, `merchandise`) are not price-item categories and resolve to nothing. The accounts list (`GET /admin/accounting/accounts`) uses it to show, per account, the price items and categories that book there by default.
 
 Every code in this table and the Vipps one below must exist in `DefaultKontoplan()`. `TestCategoryMapsResolveToDefaultKontoplan` enforces that. A code missing from the chart makes `CreateJournalEntry` fail with "account not found", and sync silently counts the invoice as skipped. That happened to 3130, 3210 and 3220 until migration `000099` (BRY-361).
 

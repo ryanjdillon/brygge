@@ -181,7 +181,7 @@ reads admit any admin viewer (see *Board read access* above).
 | `POST /vipps-imports` | ✅ (treasurer, admin; BRY-370) | posts order-linked and auto-assigned charges |
 | `POST /bank-rows/{id}/reconcile-vipps/confirm` | ✅ (treasurer, admin; BRY-370) | posts the payout reconciliation |
 | `/vipps-imports` list | — | |
-| `bank-rows/{id}` suggestions/potential-invoices/partners | — | reads |
+| `bank-rows/{id}` suggestions/potential-invoices/partners, `vipps-charges/{id}` suggestions/potential-invoices | — | reads |
 | `assign-invoice[-multi]`, assign-account, assign-account-group, dismiss, unassign | ✅ (treasurer, admin) | manual reconcile (Tildel) |
 | `/rules/*` | — | reconciliation rules |
 | `/reports/*` (incl. momskomp save/status) | — | reporting |

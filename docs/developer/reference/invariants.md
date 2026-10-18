@@ -112,6 +112,14 @@ Charges naming a checkout order are left to `AutoReconcileOrderCharges`. Each bo
 
 **Failure mode:** before BRY-324 the importer passed the club id as `posted_by`. The users FK rejected it, and the error was swallowed. Every import-time match left an orphan draft, and the bank sync later booked the same row again, so the draft became a duplicate that would double-book the payment if posted. That left 56 in prod (230,831 kr), removed by migration `000100`.
 
+### Postings find accounts by code; a system account's name is the club's
+
+**Rule (BRY-377):** every posting path, report and the momskomp calculation finds an account by `code`, never by name. A treasurer may therefore rename a system (seeded) account and change its description in Kontoplan; `UpdateAccount` refuses only a change to its MVA eligibility (`ErrSystemAccountMVALocked`, 400) and the code, type, active state and deletion stay locked. An omitted or unchanged `mva_eligible` is not a change. The seed name only applies to new clubs: no migration renames an existing club's accounts.
+
+Price items carry no account. The category maps (`PriceCategoryAccount`) give a price item's default account, and `invoice_lines.account_id` overrides it per line. The account hints in the accounts list and the `price_item` suggestion pass name that default account, so they never claim a line override. Price items and invoice lines carry no MVA: amounts are gross.
+
+**Failure mode:** treasurers could not recognise 3300 "Salgsinntekter" as the account slipping books to, and could not rename it because every system account was read-only.
+
 ### Bilag numbers are allocated with a retry, not a lock
 
 **Rule (BRY-370):** a journal entry's number is `MAX(entry_number) + 1` within its club and period, read while the period is only share-locked. Two writers can read the same MAX, so the insert runs inside a savepoint: the loser hits the `(club_id, fiscal_period_id, entry_number)` unique key, rolls back to the savepoint and re-reads MAX, which by then includes the winner's committed number (`insertWithNextEntryNumber`, up to 25 attempts). Other unique violations are returned as they are.

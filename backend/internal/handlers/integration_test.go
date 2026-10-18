@@ -662,7 +662,7 @@ func TestIntegration_AccountingSeedAndCRUD(t *testing.T) {
 		t.Fatal("expected account ID in response")
 	}
 
-	// Step 6: Update custom account
+	// Step 6: Update custom account, MVA included
 	body = jsonBody(t, map[string]any{
 		"name":         "Ekstraordinære utgifter",
 		"description":  "Uforutsette kostnader",
@@ -675,6 +675,14 @@ func TestIntegration_AccountingSeedAndCRUD(t *testing.T) {
 	r.ServeHTTP(rec, req)
 	assertStatus(t, rec, http.StatusOK)
 
+	var customMVA string
+	env.db.QueryRow(context.Background(),
+		`SELECT mva_eligible::text FROM accounts WHERE id = $1`, customID,
+	).Scan(&customMVA)
+	if customMVA != "eligible" {
+		t.Fatalf("custom account mva_eligible = %q, want eligible", customMVA)
+	}
+
 	// Step 7: Delete custom account (should work — no journal lines)
 	req = httptest.NewRequest(http.MethodDelete, "/accounts/"+customID, nil)
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -685,34 +693,61 @@ func TestIntegration_AccountingSeedAndCRUD(t *testing.T) {
 	// Step 8: Try to delete a system account — should fail
 	var systemAccountID string
 	env.db.QueryRow(context.Background(),
-		`SELECT id FROM accounts WHERE club_id = $1 AND is_system = true LIMIT 1`,
+		`SELECT id FROM accounts WHERE club_id = $1 AND is_system = true AND code = '3300'`,
 		env.clubID,
 	).Scan(&systemAccountID)
-
-	if systemAccountID != "" {
-		req = httptest.NewRequest(http.MethodDelete, "/accounts/"+systemAccountID, nil)
-		req.Header.Set("Authorization", "Bearer "+token)
-		rec = httptest.NewRecorder()
-		r.ServeHTTP(rec, req)
-		if rec.Code != http.StatusBadRequest {
-			t.Fatalf("expected 400 for system account delete, got %d; body: %s", rec.Code, rec.Body.String())
-		}
+	if systemAccountID == "" {
+		t.Fatal("seeded kontoplan has no system account 3300")
 	}
 
-	// Step 9: Try to update a system account — should fail
-	if systemAccountID != "" {
-		body = jsonBody(t, map[string]any{
-			"name":         "Hacked",
-			"mva_eligible": "eligible",
-		})
-		req = httptest.NewRequest(http.MethodPut, "/accounts/"+systemAccountID, body)
+	req = httptest.NewRequest(http.MethodDelete, "/accounts/"+systemAccountID, nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for system account delete, got %d; body: %s", rec.Code, rec.Body.String())
+	}
+
+	putSystem := func(fields map[string]any) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPut, "/accounts/"+systemAccountID, jsonBody(t, fields))
 		req.Header.Set("Authorization", "Bearer "+token)
 		req.Header.Set("Content-Type", "application/json")
-		rec = httptest.NewRecorder()
+		rec := httptest.NewRecorder()
 		r.ServeHTTP(rec, req)
-		if rec.Code != http.StatusBadRequest {
-			t.Fatalf("expected 400 for system account update, got %d", rec.Code)
-		}
+		return rec
+	}
+	systemAccount := func() (name, description, mva string) {
+		env.db.QueryRow(context.Background(),
+			`SELECT name, description, mva_eligible::text FROM accounts WHERE id = $1`, systemAccountID,
+		).Scan(&name, &description, &mva)
+		return
+	}
+
+	// Step 9: Changing a system account's MVA eligibility is refused
+	rec = putSystem(map[string]any{"name": "Hacked", "mva_eligible": "eligible"})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for system account MVA change, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), accounting.ErrSystemAccountMVALocked.Error()) {
+		t.Errorf("MVA refusal body = %s, want %q", rec.Body.String(), accounting.ErrSystemAccountMVALocked.Error())
+	}
+	if name, _, _ := systemAccount(); name == "Hacked" {
+		t.Fatal("refused update still renamed the system account")
+	}
+
+	// Step 10: A system account takes a new name and description
+	rec = putSystem(map[string]any{"name": "Salgs- og tjenesteinntekter", "description": "Slipping og salg"})
+	assertStatus(t, rec, http.StatusOK)
+	name, description, mva := systemAccount()
+	if name != "Salgs- og tjenesteinntekter" || description != "Slipping og salg" || mva != "not_applicable" {
+		t.Errorf("system account after rename = %q / %q / %q, want the new name and description, MVA unchanged", name, description, mva)
+	}
+
+	// Step 11: Sending the stored MVA value back with a rename is allowed
+	rec = putSystem(map[string]any{"name": "Tjenesteinntekter", "description": "", "mva_eligible": "not_applicable"})
+	assertStatus(t, rec, http.StatusOK)
+	if name, _, _ := systemAccount(); name != "Tjenesteinntekter" {
+		t.Errorf("system account name = %q, want Tjenesteinntekter", name)
 	}
 }
 

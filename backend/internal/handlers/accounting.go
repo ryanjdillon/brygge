@@ -50,15 +50,11 @@ func (h *AccountingHandler) HandleListAccounts(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	accounts, err := h.svc.ListAccounts(r.Context(), claims.ClubID)
+	accounts, err := h.svc.ListAccountsWithPriceHints(r.Context(), claims.ClubID)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to list accounts")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
-	}
-
-	if accounts == nil {
-		accounts = []accounting.Account{}
 	}
 	JSON(w, http.StatusOK, accounts)
 }
@@ -167,7 +163,8 @@ func (h *AccountingHandler) HandleUpdateAccount(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	if err := h.svc.UpdateAccount(r.Context(), claims.ClubID, accountID, req.Name, req.Description, req.MVAEligible); err != nil {
+	prev, err := h.svc.UpdateAccount(r.Context(), claims.ClubID, accountID, req.Name, req.Description, req.MVAEligible)
+	if err != nil {
 		h.log.Error().Err(err).Msg("failed to update account")
 		if errors.Is(err, accounting.ErrAccountNotFound) {
 			Error(w, http.StatusNotFound, err.Error())
@@ -180,7 +177,14 @@ func (h *AccountingHandler) HandleUpdateAccount(w http.ResponseWriter, r *http.R
 	if h.audit != nil {
 		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,
 			"accounting.account_updated", "account", accountID,
-			map[string]any{"name": req.Name, "mva_eligible": req.MVAEligible})
+			map[string]any{
+				"code":                 prev.Code,
+				"name":                 req.Name,
+				"previous_name":        prev.Name,
+				"description":          req.Description,
+				"previous_description": prev.Description,
+				"mva_eligible":         req.MVAEligible,
+			})
 	}
 
 	JSON(w, http.StatusOK, map[string]string{"message": "account updated"})

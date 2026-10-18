@@ -290,6 +290,9 @@ type AccountSuggestion struct {
 	Score           int    `json:"score"`
 	ConfidenceLabel string `json:"confidence_label"`
 	WhyTooltip      string `json:"why_tooltip"`
+	// Reason is "price_item" when the amount fits the price items named in
+	// WhyTooltip, so the UI can say so in the viewer's language.
+	Reason string `json:"reason,omitempty"`
 }
 
 // BankRowSuggestions wraps both candidate lists. Incoming rows
@@ -323,9 +326,9 @@ var outgoingHints = []struct {
 
 // BankRowSuggestionsFor returns the ranked candidate set for one bank
 // row. Incoming rows: ranked invoices by amount + name + date.
-// Outgoing rows: ranked accounts by description regex + recently-used.
-// "Other incoming" surfaces revenue accounts as a secondary list when
-// no invoice matches.
+// Outgoing rows: ranked accounts by description regex. Incoming rows also
+// get accounts, led by the default account of any price item the amount
+// fits, for when the deposit is not a faktura.
 func (s *Service) BankRowSuggestionsFor(
 	ctx context.Context, clubID, bankRowID string,
 ) (*BankRowSuggestions, error) {
@@ -357,7 +360,7 @@ func (s *Service) BankRowSuggestionsFor(
 	// Account suggestions: outgoing rows get expense accounts;
 	// incoming rows can ALSO show revenue suggestions as a secondary
 	// "or assign to category" path when invoice suggestions miss.
-	accs, err := s.rankAccountSuggestions(ctx, clubID, rowAmount, rowDesc)
+	accs, err := s.rankAccountSuggestions(ctx, clubID, rowAmount, rowDesc, counterpart)
 	if err != nil {
 		return nil, err
 	}
@@ -466,13 +469,18 @@ func (s *Service) rankIncomingInvoices(
 	return out, nil
 }
 
+// rankAccountSuggestions ranks GL accounts for a row or charge: first the
+// default accounts of the price items the amount fits (incoming only), then
+// the description hints, then, when neither found anything, a small default
+// cohort of the row's direction. payer feeds the members-only audience rule.
 func (s *Service) rankAccountSuggestions(
-	ctx context.Context, clubID string, amount float64, desc string,
+	ctx context.Context, clubID string, amount float64, desc, payer string,
 ) ([]AccountSuggestion, error) {
 	rows, err := s.db.Query(ctx,
 		`SELECT code, name, account_type::text
 		   FROM accounts
-		  WHERE club_id = $1 AND is_active`,
+		  WHERE club_id = $1 AND is_active
+		  ORDER BY sort_order, code`,
 		clubID,
 	)
 	if err != nil {
@@ -480,38 +488,32 @@ func (s *Service) rankAccountSuggestions(
 	}
 	defer rows.Close()
 
-	type acct struct {
-		code, name, kind string
-	}
-	all := []acct{}
+	all := []suggestableAccount{}
+	byCode := map[string]suggestableAccount{}
 	for rows.Next() {
-		var a acct
+		var a suggestableAccount
 		if err := rows.Scan(&a.code, &a.name, &a.kind); err != nil {
 			continue
 		}
 		all = append(all, a)
+		byCode[a.code] = a
 	}
 
-	// Hint matching first.
 	suggestions := make([]AccountSuggestion, 0, 5)
-	for _, h := range outgoingHints {
-		if !strings.Contains(strings.ToLower(desc), strings.ToLower(h.pattern)) {
-			continue
+	suggested := map[string]bool{}
+	add := func(sug AccountSuggestion) {
+		if suggested[sug.Code] {
+			return
 		}
-		for _, a := range all {
-			if a.code != h.code {
-				continue
-			}
-			suggestions = append(suggestions, AccountSuggestion{
-				Code:            a.code,
-				Name:            a.name,
-				AccountType:     a.kind,
-				Score:           100,
-				ConfidenceLabel: "sterk",
-				WhyTooltip:      h.why,
-			})
-			break
-		}
+		suggested[sug.Code] = true
+		suggestions = append(suggestions, sug)
+	}
+
+	for _, sug := range s.priceItemSuggestions(ctx, clubID, amount, desc, payer, byCode) {
+		add(sug)
+	}
+	for _, sug := range descriptionHintSuggestions(desc, byCode) {
+		add(sug)
 	}
 
 	// If still empty, surface a small default cohort filtered by sign.
@@ -527,7 +529,7 @@ func (s *Service) rankAccountSuggestions(
 			if a.kind != wantKind {
 				continue
 			}
-			suggestions = append(suggestions, AccountSuggestion{
+			add(AccountSuggestion{
 				Code:            a.code,
 				Name:            a.name,
 				AccountType:     a.kind,
@@ -545,6 +547,47 @@ func (s *Service) rankAccountSuggestions(
 		suggestions = suggestions[:5]
 	}
 	return suggestions, nil
+}
+
+// priceItemSuggestions is the price_item pass: the default accounts of the
+// price items an incoming amount fits.
+func (s *Service) priceItemSuggestions(
+	ctx context.Context, clubID string, amount float64, desc, payer string, accounts map[string]suggestableAccount,
+) []AccountSuggestion {
+	if amount <= 0 {
+		return nil
+	}
+	cands := s.priceArticleCandidates(ctx, clubID, amount)
+	knownMember := false
+	for _, c := range cands {
+		if c.audience == "member" {
+			knownMember = s.payerIsKnownMember(ctx, clubID, payer, desc)
+			break
+		}
+	}
+	return priceItemAccountSuggestions(cands, knownMember, accounts)
+}
+
+// descriptionHintSuggestions applies outgoingHints to a row description.
+func descriptionHintSuggestions(desc string, accounts map[string]suggestableAccount) []AccountSuggestion {
+	var out []AccountSuggestion
+	lower := strings.ToLower(desc)
+	for _, h := range outgoingHints {
+		if !strings.Contains(lower, strings.ToLower(h.pattern)) {
+			continue
+		}
+		if a, ok := accounts[h.code]; ok {
+			out = append(out, AccountSuggestion{
+				Code:            a.code,
+				Name:            a.name,
+				AccountType:     a.kind,
+				Score:           100,
+				ConfidenceLabel: "sterk",
+				WhyTooltip:      h.why,
+			})
+		}
+	}
+	return out
 }
 
 // PotentialInvoicesForRow returns open invoices filtered ONLY by

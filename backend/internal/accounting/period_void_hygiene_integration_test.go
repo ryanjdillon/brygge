@@ -156,7 +156,7 @@ func TestAccountingMutationsAreClubScoped(t *testing.T) {
 		 RETURNING id, name`, f.club.ID).Scan(&accountID, &name); err != nil {
 		t.Fatalf("custom account: %v", err)
 	}
-	if err := f.svc.UpdateAccount(ctx, other.ID, accountID, "Renamed", "", MVANotApplicable); !errors.Is(err, ErrAccountNotFound) {
+	if _, err := f.svc.UpdateAccount(ctx, other.ID, accountID, "Renamed", "", MVANotApplicable); !errors.Is(err, ErrAccountNotFound) {
 		t.Errorf("update another club's account: err = %v, want ErrAccountNotFound", err)
 	}
 	if err := f.svc.DeactivateAccount(ctx, other.ID, accountID); !errors.Is(err, ErrAccountNotFound) {

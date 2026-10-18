@@ -119,6 +119,37 @@ func TestCategoryMapsResolveToDefaultKontoplan(t *testing.T) {
 	}
 }
 
+// The invoice and Vipps category maps must send every key they share to
+// the same account: the accounts list shows one default account per price
+// item, and a drift would book the same item to two accounts by channel.
+func TestCategoryMapsAgree(t *testing.T) {
+	for k, vipps := range vippsCategoryAccountMap {
+		if invoice, ok := paymentTypeAccountMap[k]; ok && invoice != vipps {
+			t.Errorf("category %q: vippsCategoryAccountMap = %s, paymentTypeAccountMap = %s", k, vipps, invoice)
+		}
+	}
+}
+
+func TestPriceCategoryAccount(t *testing.T) {
+	for _, c := range PriceItemCategories {
+		if _, ok := PriceCategoryAccount(c); !ok {
+			t.Errorf("price-item category %q has no default account", c)
+		}
+	}
+	want := map[string]string{"service": "3300", "slip_fee": "3120", "electricity": "3130", "other": "3900"}
+	for c, code := range want {
+		if got, _ := PriceCategoryAccount(c); got != code {
+			t.Errorf("PriceCategoryAccount(%q) = %s, want %s", c, got, code)
+		}
+	}
+	// Payment-type keys share the maps but are not price-item categories.
+	for _, c := range []string{"merchandise", "dues", "booking", "unknown", ""} {
+		if code, ok := PriceCategoryAccount(c); ok {
+			t.Errorf("PriceCategoryAccount(%q) = %s, want no account", c, code)
+		}
+	}
+}
+
 func TestDefaultKontoplanClubhouseEligible(t *testing.T) {
 	accounts := DefaultKontoplan()
 	for _, a := range accounts {

@@ -20,7 +20,7 @@ var paymentTypeAccountMap = map[string]string{
 	// payment_type enum values
 	"dues":        "3100", // Medlemskontingent
 	"booking":     "3200", // Gjestehavninntekter
-	"merchandise": "3300", // Salgsinntekter
+	"merchandise": "3300", // Salgs- og tjenesteinntekter
 
 	// price_items.category values
 	"membership":        "3100", // Medlemskontingent
@@ -31,7 +31,7 @@ var paymentTypeAccountMap = map[string]string{
 	"guest":             "3200", // Gjestehavninntekter
 	"motorhome":         "3210", // Bobil/campingplass
 	"room_hire":         "3220", // Lokalleie
-	"service":           "3300", // Tjenesteinntekter
+	"service":           "3300", // Salgs- og tjenesteinntekter
 	"other":             "3900", // Andre inntekter
 }
 

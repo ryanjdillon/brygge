@@ -116,30 +116,38 @@ func (s *Service) CreateAccount(ctx context.Context, clubID string, a AccountDef
 // belongs to another club.
 var ErrAccountNotFound = errors.New("account not found")
 
-// UpdateAccount modifies a non-system account's name, description, or MVA eligibility.
-func (s *Service) UpdateAccount(ctx context.Context, clubID, accountID string, name, description string, mvaEligible MVAEligibility) error {
-	var isSystem bool
-	err := s.db.QueryRow(ctx,
-		`SELECT is_system FROM accounts WHERE id = $1 AND club_id = $2`,
-		accountID, clubID,
-	).Scan(&isSystem)
-	if err == pgx.ErrNoRows {
-		return ErrAccountNotFound
-	}
+// ErrSystemAccountMVALocked refuses a change to a system account's MVA
+// eligibility: the seeded value is what momskompensasjon relies on.
+var ErrSystemAccountMVALocked = errors.New("cannot change MVA eligibility of a system account")
+
+// UpdateAccount changes an account's name, description and MVA eligibility,
+// and returns the account as it was before. A system account takes a new
+// name and description only (posting finds accounts by code, so a club may
+// call 3300 whatever its board reports it as); its MVA eligibility stays,
+// so mvaEligible must be empty or the stored value. An empty mvaEligible
+// keeps the stored value on any account.
+func (s *Service) UpdateAccount(ctx context.Context, clubID, accountID string, name, description string, mvaEligible MVAEligibility) (*Account, error) {
+	prev, err := s.GetAccount(ctx, clubID, accountID)
 	if err != nil {
-		return fmt.Errorf("checking account: %w", err)
+		return nil, fmt.Errorf("checking account: %w", err)
 	}
-	if isSystem {
-		return fmt.Errorf("cannot edit a system account")
+	if prev == nil {
+		return nil, ErrAccountNotFound
+	}
+	if mvaEligible == "" {
+		mvaEligible = prev.MVAEligible
+	}
+	if prev.IsSystem && mvaEligible != prev.MVAEligible {
+		return nil, ErrSystemAccountMVALocked
 	}
 	if _, err := s.db.Exec(ctx,
 		`UPDATE accounts SET name = $3, description = $4, mva_eligible = $5, updated_at = now()
-		 WHERE id = $1 AND club_id = $2 AND is_system = false`,
+		 WHERE id = $1 AND club_id = $2`,
 		accountID, clubID, name, description, mvaEligible,
 	); err != nil {
-		return fmt.Errorf("updating account: %w", err)
+		return nil, fmt.Errorf("updating account: %w", err)
 	}
-	return nil
+	return prev, nil
 }
 
 // DeactivateAccount soft-deletes an account if it has no journal lines.
