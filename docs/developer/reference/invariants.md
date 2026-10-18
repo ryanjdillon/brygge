@@ -101,7 +101,14 @@ Charges naming a checkout order are left to `AutoReconcileOrderCharges`. Each bo
 
 - Every payment-match entry (KID, invoice number or counterpart, from import or sync) is sourced to its row (`source_table = 'bank_import_rows'`, `source_id` = the row) and described exactly `kidMatchDescription` (`Innbetaling KID <kid>: <row description>`, or `Innbetaling: <row description>` without a KID).
 - A crash between link and post leaves the row linked to a draft. Bank sync releases such rows (`healStrandedKIDDrafts`) once the draft is older than 15 minutes and matches them again. It recognises them only by that source and exact description, so mapping-rule drafts from `AutoMatchImport`, which may also credit 1500 but carry the row's own description and wait for a gated post, are never touched.
-- Manual assignments (`AssignBankRowToInvoice`, `AssignBankRowToAccount`) follow the same order: guarded link (`journal_entry_id IS NULL`, not dismissed, club-scoped), then post, then unlink and discard on a failed post. Of two concurrent assigns of one row, exactly one books.
+- Manual assignments (`AssignBankRowToInvoice`, `AssignBankRowToAccount`, `AssignBankRowsToAccountGroup`) follow the same order: guarded link (`journal_entry_id IS NULL`, not dismissed, club-scoped), then post, then unlink and discard on a failed post. Of two concurrent assigns of one row, exactly one books. A group links all its rows in one transaction or none.
+- Rows that share a `journal_entry_id` were booked together (a group booking or an intra-bank transfer). Unassigning any of them releases them all and reverses the entry once.
+
+### Rows that belong together are booked together
+
+**Rule (BRY-380):** an unbooked bank row with a **strong** partner row (opposite sign on the same bank account within 60 days, and the same counterparty account number, the same counterparty name, or an exactly reversing amount within 14 days) cannot be booked to an account on its own unless the request says `confirm_alone: true`; assign-account answers 409 `has_partner` with the partners. Booking the pair goes through `AssignBankRowsToAccountGroup`: one entry, one bank line for the net, the net on the chosen account. A group must be on one bank account and in one open fiscal period, and must not net to zero (that is a transfer). Rows that are the club's own transfers, provisional, Vipps settlement payouts, dismissed or refund-paired never get partners. Amounts are compared in øre. Faktura assignment is not guarded: the faktura match is its own evidence.
+
+**Failure mode:** a buy-back payout and the overpayment the recipient returned were booked one at a time, the return as income, so revenue was overstated and the buy-back account understated by the returned amount.
 
 **Failure mode:** before BRY-324 the importer passed the club id as `posted_by`. The users FK rejected it, and the error was swallowed. Every import-time match left an orphan draft, and the bank sync later booked the same row again, so the draft became a duplicate that would double-book the payment if posted. That left 56 in prod (230,831 kr), removed by migration `000100`.
 

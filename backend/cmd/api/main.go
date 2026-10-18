@@ -1355,9 +1355,13 @@ func main() {
 						r.Get("/bank-rows/unmatched/count-by-year", bankRowsHandler.HandleCountUnmatchedByYear)
 						r.Get("/bank-rows/{rowID}/suggestions", bankRowsHandler.HandleSuggestions)
 						r.Get("/bank-rows/{rowID}/potential-invoices", bankRowsHandler.HandlePotentialInvoices)
+						r.Get("/bank-rows/{rowID}/partners", bankRowsHandler.HandlePartners)
 						r.With(middleware.RequireRole("treasurer", "admin"),
 							middleware.RequireFreshTOTPDefault()).
 							Post("/bank-rows/assign-invoice-multi", bankRowsHandler.HandleAssignInvoiceMulti)
+						r.With(middleware.RequireRole("treasurer", "admin"),
+							middleware.RequireFreshTOTPDefault()).
+							Post("/bank-rows/assign-account-group", bankRowsHandler.HandleAssignAccountGroup)
 						r.With(middleware.RequireRole("treasurer", "admin"),
 							middleware.RequireFreshTOTPDefault()).
 							Post("/bank-rows/{rowID}/assign-invoice", bankRowsHandler.HandleAssignInvoice)

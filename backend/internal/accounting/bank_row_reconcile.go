@@ -302,17 +302,15 @@ var errBankRowRaced = errors.New("bank row already reconciled — unassign first
 // a failed post unlinks the row and deletes the draft. invoiceID, when set,
 // is recorded on the row as the faktura it settles.
 func (s *Service) linkAndPostBankRow(ctx context.Context, clubID, actorID, entryID, bankRowID string, invoiceID *string) error {
-	tag, err := s.db.Exec(ctx,
-		`UPDATE bank_import_rows SET journal_entry_id = $1, invoice_id = COALESCE($2, invoice_id), auto_matched = false
-		  WHERE id = $3 AND club_id = $4 AND journal_entry_id IS NULL AND dismissed_at IS NULL`,
-		entryID, invoiceID, bankRowID, clubID,
-	)
-	if err != nil || tag.RowsAffected() != 1 {
+	return s.linkAndPostBankRows(ctx, clubID, actorID, entryID, []string{bankRowID}, invoiceID)
+}
+
+// linkAndPostBankRows is linkAndPostBankRow for rows booked together on one
+// entry: all of them link or none do.
+func (s *Service) linkAndPostBankRows(ctx context.Context, clubID, actorID, entryID string, bankRowIDs []string, invoiceID *string) error {
+	if err := s.linkBankRows(ctx, clubID, entryID, bankRowIDs, invoiceID); err != nil {
 		s.discardDraft(ctx, clubID, entryID)
-		if err != nil {
-			return fmt.Errorf("mark row matched: %w", err)
-		}
-		return errBankRowRaced
+		return err
 	}
 	if err := s.PostJournalEntry(ctx, clubID, entryID, actorID); err != nil {
 		if _, uerr := s.db.Exec(ctx,
@@ -326,6 +324,31 @@ func (s *Service) linkAndPostBankRow(ctx context.Context, clubID, actorID, entry
 		}
 		s.discardDraft(ctx, clubID, entryID)
 		return fmt.Errorf("post journal: %w", err)
+	}
+	return nil
+}
+
+// linkBankRows points every row at the entry in one transaction, guarded on
+// each row still being unbooked and not dismissed.
+func (s *Service) linkBankRows(ctx context.Context, clubID, entryID string, bankRowIDs []string, invoiceID *string) error {
+	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	tag, err := tx.Exec(ctx,
+		`UPDATE bank_import_rows SET journal_entry_id = $1, invoice_id = COALESCE($2, invoice_id), auto_matched = false
+		  WHERE id = ANY($3::uuid[]) AND club_id = $4 AND journal_entry_id IS NULL AND dismissed_at IS NULL`,
+		entryID, invoiceID, bankRowIDs, clubID,
+	)
+	if err != nil {
+		return fmt.Errorf("mark row matched: %w", err)
+	}
+	if tag.RowsAffected() != int64(len(bankRowIDs)) {
+		return errBankRowRaced
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit row link: %w", err)
 	}
 	return nil
 }
@@ -381,6 +404,31 @@ var ErrBankRowNotAssigned = errors.New("bank row not assigned")
 func (s *Service) UnassignBankRow(
 	ctx context.Context, clubID, actorID, bankRowID string,
 ) (priorJournalID, priorInvoiceID string, err error) {
+	res, err := s.UnassignBankRowReported(ctx, clubID, actorID, bankRowID)
+	return res.PriorJournalID, res.PriorInvoiceID, err
+}
+
+// UnassignResult is what UnassignBankRowReported undid: the row's prior
+// booking and the other rows released with it (a group booking's or a
+// transfer's other rows, a multi-row faktura's siblings).
+type UnassignResult struct {
+	PriorJournalID string
+	PriorInvoiceID string
+	SiblingRowIDs  []string
+}
+
+// UnassignBankRowReported is UnassignBankRow, also reporting the sibling
+// rows it released, for the audit row.
+func (s *Service) UnassignBankRowReported(
+	ctx context.Context, clubID, actorID, bankRowID string,
+) (UnassignResult, error) {
+	priorJournalID, priorInvoiceID, siblings, err := s.unassignBankRow(ctx, clubID, actorID, bankRowID)
+	return UnassignResult{PriorJournalID: priorJournalID, PriorInvoiceID: priorInvoiceID, SiblingRowIDs: siblings}, err
+}
+
+func (s *Service) unassignBankRow(
+	ctx context.Context, clubID, actorID, bankRowID string,
+) (priorJournalID, priorInvoiceID string, siblings []string, err error) {
 	var invoiceIDPtr *string
 	if err := s.db.QueryRow(ctx,
 		`SELECT COALESCE(journal_entry_id::text, ''), invoice_id
@@ -389,12 +437,12 @@ func (s *Service) UnassignBankRow(
 		bankRowID, clubID,
 	).Scan(&priorJournalID, &invoiceIDPtr); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return "", "", ErrBankRowNotFound
+			return "", "", nil, ErrBankRowNotFound
 		}
-		return "", "", fmt.Errorf("load row: %w", err)
+		return "", "", nil, fmt.Errorf("load row: %w", err)
 	}
 	if priorJournalID == "" {
-		return "", "", ErrBankRowNotAssigned
+		return "", "", nil, ErrBankRowNotAssigned
 	}
 	if invoiceIDPtr != nil {
 		priorInvoiceID = *invoiceIDPtr
@@ -426,7 +474,7 @@ func (s *Service) UnassignBankRow(
 
 	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
-		return "", "", fmt.Errorf("begin tx: %w", err)
+		return "", "", nil, fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
@@ -455,20 +503,20 @@ func (s *Service) UnassignBankRow(
 		clubID, bankRowID, priorInvoiceID, priorJournalID,
 	)
 	if err != nil {
-		return "", "", fmt.Errorf("load bookings: %w", err)
+		return "", "", nil, fmt.Errorf("load bookings: %w", err)
 	}
 	var entries []involved
 	for rows.Next() {
 		var e involved
 		if err := rows.Scan(&e.id, &e.status); err != nil {
 			rows.Close()
-			return "", "", fmt.Errorf("scan booking: %w", err)
+			return "", "", nil, fmt.Errorf("scan booking: %w", err)
 		}
 		entries = append(entries, e)
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
-		return "", "", fmt.Errorf("bookings: %w", err)
+		return "", "", nil, fmt.Errorf("bookings: %w", err)
 	}
 
 	var drafts []string
@@ -482,9 +530,9 @@ func (s *Service) UnassignBankRow(
 					continue
 				}
 				if errors.Is(err, ErrPeriodClosed) {
-					return "", "", fmt.Errorf("bank row is booked in a closed fiscal period; reopen it or correct with a new entry: %w", ErrPeriodClosed)
+					return "", "", nil, fmt.Errorf("bank row is booked in a closed fiscal period; reopen it or correct with a new entry: %w", ErrPeriodClosed)
 				}
-				return "", "", fmt.Errorf("voiding bilag: %w", err)
+				return "", "", nil, fmt.Errorf("voiding bilag: %w", err)
 			}
 		case "draft":
 			drafts = append(drafts, e.id)
@@ -495,16 +543,21 @@ func (s *Service) UnassignBankRow(
 	for _, e := range entries {
 		entryIDs = append(entryIDs, e.id)
 	}
-	if _, err := tx.Exec(ctx,
+	cleared, err := tx.Query(ctx,
 		`UPDATE bank_import_rows
 		    SET journal_entry_id = NULL, invoice_id = NULL, auto_matched = false
 		  WHERE club_id = $1
 		    AND (id = $2
 		         OR ($3 <> '' AND invoice_id::text = $3)
-		         OR journal_entry_id = ANY($4::uuid[]))`,
+		         OR journal_entry_id = ANY($4::uuid[]))
+		RETURNING id::text`,
 		clubID, bankRowID, priorInvoiceID, entryIDs,
-	); err != nil {
-		return "", "", fmt.Errorf("clear rows: %w", err)
+	)
+	if err != nil {
+		return "", "", nil, fmt.Errorf("clear rows: %w", err)
+	}
+	if siblings, err = otherRowIDs(cleared, bankRowID); err != nil {
+		return "", "", nil, fmt.Errorf("clear rows: %w", err)
 	}
 	if len(drafts) > 0 {
 		if _, err := tx.Exec(ctx,
@@ -512,7 +565,7 @@ func (s *Service) UnassignBankRow(
 			  WHERE club_id = $1 AND status = 'draft' AND id = ANY($2::uuid[])`,
 			clubID, drafts,
 		); err != nil {
-			return "", "", fmt.Errorf("delete draft bilag: %w", err)
+			return "", "", nil, fmt.Errorf("delete draft bilag: %w", err)
 		}
 	}
 	if priorInvoiceID != "" {
@@ -521,27 +574,42 @@ func (s *Service) UnassignBankRow(
 			`SELECT payment_id FROM invoices WHERE id = $1 AND club_id = $2`,
 			priorInvoiceID, clubID,
 		).Scan(&paymentID); err != nil {
-			return "", "", fmt.Errorf("load invoice payment: %w", err)
+			return "", "", nil, fmt.Errorf("load invoice payment: %w", err)
 		}
 		if _, err := tx.Exec(ctx,
 			`UPDATE invoices SET payment_id = NULL WHERE id = $1 AND club_id = $2`,
 			priorInvoiceID, clubID,
 		); err != nil {
-			return "", "", fmt.Errorf("clear invoice payment_id: %w", err)
+			return "", "", nil, fmt.Errorf("clear invoice payment_id: %w", err)
 		}
 		if paymentID != nil {
 			if _, err := tx.Exec(ctx,
 				`DELETE FROM payments WHERE id = $1 AND club_id = $2`,
 				*paymentID, clubID,
 			); err != nil {
-				return "", "", fmt.Errorf("delete payment row: %w", err)
+				return "", "", nil, fmt.Errorf("delete payment row: %w", err)
 			}
 		}
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return "", "", fmt.Errorf("commit: %w", err)
+		return "", "", nil, fmt.Errorf("commit: %w", err)
 	}
-	return priorJournalID, priorInvoiceID, nil
+	return priorJournalID, priorInvoiceID, siblings, nil
+}
+
+// otherRowIDs collects the row ids a query returned, except self.
+func otherRowIDs(rows pgx.Rows, self string) ([]string, error) {
+	ids, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return nil, err
+	}
+	out := []string{}
+	for _, id := range ids {
+		if id != self {
+			out = append(out, id)
+		}
+	}
+	return out, nil
 }
 
 // AssignMultipleBankRowsToInvoice assigns N bank rows to a single

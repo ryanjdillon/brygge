@@ -61,6 +61,12 @@ type BankRowSummary struct {
 	// while the transfer was under way (provisionalRowSQL). It is dismissed
 	// on its own once a later export brings the settled row.
 	Provisional bool `json:"provisional"`
+	// PartnerHint is the strongest partner suggestion for the row
+	// ("strong" | "weak"), or null: another unbooked row that looks like it
+	// belongs with this one (BankRowPartners). Computed over the club's
+	// rows, not just the listed page, so a partner on another page or in
+	// another year still shows.
+	PartnerHint *string `json:"partner_hint"`
 }
 
 // ListUnmatchedBankRows returns the paginated set of rows that still
@@ -189,7 +195,27 @@ func (s *Service) ListUnmatchedBankRows(
 		}
 		out = append(out, r)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close()
+
+	ids := make([]string, 0, len(out))
+	for _, r := range out {
+		if r.DismissedAt == nil {
+			ids = append(ids, r.ID)
+		}
+	}
+	hints, err := s.bankRowPartnerHints(ctx, clubID, ids)
+	if err != nil {
+		return nil, fmt.Errorf("partner hints: %w", err)
+	}
+	for i := range out {
+		if h, ok := hints[out[i].ID]; ok {
+			out[i].PartnerHint = &h
+		}
+	}
+	return out, nil
 }
 
 // CountUnmatchedBankRows backs the bubble badge. year=0 counts all years.

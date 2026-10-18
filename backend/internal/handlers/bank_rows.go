@@ -203,6 +203,9 @@ type assignAccountReq struct {
 	AccountCode string `json:"account_code"`
 	Kind        string `json:"kind"`
 	Description string `json:"description"`
+	// ConfirmAlone books the row on its own even though it has a strong
+	// partner row (BRY-380). Without it such a row is refused with 409.
+	ConfirmAlone bool `json:"confirm_alone"`
 }
 
 func (h *BankRowsHandler) HandleAssignAccount(w http.ResponseWriter, r *http.Request) {
@@ -218,6 +221,25 @@ func (h *BankRowsHandler) HandleAssignAccount(w http.ResponseWriter, r *http.Req
 		Error(w, http.StatusBadRequest, "account_code and kind required")
 		return
 	}
+	if !req.ConfirmAlone {
+		partners, err := h.svc.StrongBankRowPartners(ctx, claims.ClubID, rowID)
+		switch {
+		case errors.Is(err, accounting.ErrBankRowNotFound):
+			Error(w, http.StatusNotFound, err.Error())
+			return
+		case err != nil:
+			h.log.Error().Err(err).Str("row_id", rowID).Msg("assign account: partner check")
+			Error(w, http.StatusInternalServerError, "internal error")
+			return
+		case len(partners) > 0:
+			JSON(w, http.StatusConflict, map[string]any{
+				"error":    "has_partner",
+				"message":  "Denne rada ser ut til å høyra saman med ei anna. Bokfør dei saman, eller stadfest at ho skal bokførast åleine.",
+				"partners": partners,
+			})
+			return
+		}
+	}
 	journalID, err := h.svc.AssignBankRowToAccount(ctx, claims.ClubID, claims.UserID, rowID, req.AccountCode, req.Kind, req.Description)
 	if err != nil {
 		h.log.Warn().Err(err).Str("row_id", rowID).Msg("assign account")
@@ -232,9 +254,78 @@ func (h *BankRowsHandler) HandleAssignAccount(w http.ResponseWriter, r *http.Req
 				"kind":             req.Kind,
 				"description":      req.Description,
 				"journal_entry_id": journalID,
+				"confirm_alone":    req.ConfirmAlone,
 			})
 	}
 	JSON(w, http.StatusOK, map[string]any{"journal_entry_id": journalID})
+}
+
+// HandlePartners lists the rows suggested as belonging with this one.
+func (h *BankRowsHandler) HandlePartners(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	rowID := chi.URLParam(r, "rowID")
+	partners, err := h.svc.BankRowPartners(ctx, claims.ClubID, rowID)
+	if err != nil {
+		if errors.Is(err, accounting.ErrBankRowNotFound) {
+			Error(w, http.StatusNotFound, err.Error())
+			return
+		}
+		h.log.Warn().Err(err).Str("row_id", rowID).Msg("bank row partners")
+		Error(w, http.StatusBadRequest, "could not load partner rows")
+		return
+	}
+	JSON(w, http.StatusOK, map[string]any{"items": partners})
+}
+
+type assignAccountGroupReq struct {
+	RowIDs      []string `json:"row_ids"`
+	AccountCode string   `json:"account_code"`
+	Description string   `json:"description"`
+}
+
+// HandleAssignAccountGroup books rows that belong together as one bilag.
+func (h *BankRowsHandler) HandleAssignAccountGroup(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	var req assignAccountGroupReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.AccountCode == "" || len(req.RowIDs) < 2 {
+		Error(w, http.StatusBadRequest, "account_code and at least two row_ids required")
+		return
+	}
+	res, err := h.svc.AssignBankRowsToAccountGroup(ctx, claims.ClubID, claims.UserID, req.RowIDs, req.AccountCode, req.Description)
+	if err != nil {
+		if errors.Is(err, accounting.ErrBankRowNotFound) {
+			Error(w, http.StatusNotFound, err.Error())
+			return
+		}
+		h.log.Warn().Err(err).Strs("row_ids", req.RowIDs).Msg("assign account group")
+		Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if h.audit != nil {
+		for _, id := range res.RowIDs {
+			h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,
+				audit.ActionBankRowAssignedAccount, "bank_import_row", id,
+				map[string]any{
+					"account_code":     req.AccountCode,
+					"kind":             "group",
+					"description":      req.Description,
+					"journal_entry_id": res.JournalEntryID,
+					"group_row_ids":    res.RowIDs,
+					"net":              res.Net,
+				})
+		}
+	}
+	JSON(w, http.StatusOK, res)
 }
 
 type dismissReq struct {
@@ -287,7 +378,7 @@ func (h *BankRowsHandler) HandleUnassign(w http.ResponseWriter, r *http.Request)
 		Error(w, http.StatusBadRequest, "confirm: true required to unassign")
 		return
 	}
-	priorJournal, priorInvoice, err := h.svc.UnassignBankRow(ctx, claims.ClubID, claims.UserID, rowID)
+	res, err := h.svc.UnassignBankRowReported(ctx, claims.ClubID, claims.UserID, rowID)
 	if err != nil {
 		switch {
 		case errors.Is(err, accounting.ErrBankRowNotFound):
@@ -303,8 +394,9 @@ func (h *BankRowsHandler) HandleUnassign(w http.ResponseWriter, r *http.Request)
 		h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,
 			audit.ActionBankRowUnassigned, "bank_import_row", rowID,
 			map[string]any{
-				"prior_journal_entry_id": priorJournal,
-				"prior_invoice_id":       priorInvoice,
+				"prior_journal_entry_id": res.PriorJournalID,
+				"prior_invoice_id":       res.PriorInvoiceID,
+				"sibling_row_ids":        res.SiblingRowIDs,
 			})
 	}
 	JSON(w, http.StatusOK, map[string]string{"status": "unassigned"})

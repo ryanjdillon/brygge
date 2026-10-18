@@ -300,14 +300,21 @@ func (c *Club) NewOrderForInvoices(t *testing.T, invs ...Invoice) Order {
 	return o
 }
 
-// NewBankImport seeds a bank import owned by the treasurer and returns its ID.
+// NewBankImport seeds a bank import on 1920 owned by the treasurer and
+// returns its ID.
 func (c *Club) NewBankImport(t *testing.T) string {
+	t.Helper()
+	return c.NewBankImportOn(t, "1920")
+}
+
+// NewBankImportOn seeds a bank import on the given bank GL account.
+func (c *Club) NewBankImportOn(t *testing.T, accountCode string) string {
 	t.Helper()
 	var id string
 	if err := c.Pool.QueryRow(context.Background(),
 		`INSERT INTO bank_imports (club_id, filename, format, bank_account_code, imported_by, row_count)
-		 VALUES ($1, 'synthetic.csv', 'sparebank-norge-v1', '1920', $2, 0) RETURNING id`,
-		c.ID, c.Treasurer.ID,
+		 VALUES ($1, 'synthetic.csv', 'sparebank-norge-v1', $3, $2, 0) RETURNING id`,
+		c.ID, c.Treasurer.ID, accountCode,
 	).Scan(&id); err != nil {
 		t.Fatalf("fin: bank import: %v", err)
 	}
@@ -321,6 +328,11 @@ type BankRowOpts struct {
 	KID         string
 	Reference   string
 	Description string
+	// Counterpart is the other party's name; FromAccount/ToAccount the
+	// payer's and recipient's account numbers (synthetic).
+	Counterpart string
+	FromAccount string
+	ToAccount   string
 }
 
 // NewBankRow seeds an unbooked row on a bank import and returns its ID. Use
@@ -338,9 +350,11 @@ func (c *Club) NewBankRow(t *testing.T, importID string, o BankRowOpts) string {
 	}
 	var id string
 	if err := c.Pool.QueryRow(context.Background(),
-		`INSERT INTO bank_import_rows (bank_import_id, club_id, row_date, description, amount, reference, kid_number, row_hash)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+		`INSERT INTO bank_import_rows (bank_import_id, club_id, row_date, description, amount, reference, kid_number, row_hash,
+		                               counterpart, from_account, to_account)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
 		importID, c.ID, o.Date, o.Description, Kr(o.Cents), o.Reference, o.KID, testutil.RandomHex(32),
+		o.Counterpart, o.FromAccount, o.ToAccount,
 	).Scan(&id); err != nil {
 		t.Fatalf("fin: bank row: %v", err)
 	}
