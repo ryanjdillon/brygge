@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { computed, type Ref } from 'vue'
 import { useApi } from '@/composables/useApi'
+import { ApiError } from '@/lib/errors'
 
 export interface BankRowSummary {
   id: string
@@ -23,6 +24,26 @@ export interface BankRowSummary {
   // An in-flight "Overførsel" from a statement exported on the day the
   // transfer was under way; a re-export of that day replaces it (BRY-378).
   provisional?: boolean
+  // Another unbooked row looks like it belongs with this one (BRY-380):
+  // "strong" rows must be booked together or confirmed as separate.
+  partner_hint?: PartnerStrength | null
+}
+
+export type PartnerStrength = 'strong' | 'weak'
+export type PartnerReason = 'same_account' | 'same_name' | 'reverses' | 'nets_to_price'
+
+// A row suggested as belonging with another; `net` is what one bilag for
+// both would book.
+export interface PartnerSuggestion {
+  id: string
+  row_date: string
+  amount: number
+  counterpart: string
+  description: string
+  strength: PartnerStrength
+  reasons: PartnerReason[]
+  days_apart: number
+  net: number
 }
 
 // A single individual Vipps settlement charge awaiting reconciliation — one
@@ -273,6 +294,16 @@ export async function fetchPotentialInvoices(rowId: string, q: string, amount?: 
   return body.items
 }
 
+export async function fetchBankRowPartners(rowId: string): Promise<PartnerSuggestion[]> {
+  const body = await useApi().fetchApi<{ items: PartnerSuggestion[] }>(`${BASE}/${rowId}/partners`)
+  return body.items
+}
+
+/** True when assign-account refused a row because it has a strong partner. */
+export function isHasPartnerError(e: unknown): boolean {
+  return e instanceof ApiError && e.status === 409 && e.message === 'has_partner'
+}
+
 export function useReconcileMutations() {
   const qc = useQueryClient()
   const invalidate = () => {
@@ -289,10 +320,32 @@ export function useReconcileMutations() {
   })
 
   const assignAccount = useMutation({
-    mutationFn: ({ rowId, accountCode, kind, description }: { rowId: string; accountCode: string; kind: 'expense' | 'revenue'; description?: string }) =>
+    mutationFn: ({
+      rowId,
+      accountCode,
+      kind,
+      description,
+      confirmAlone,
+    }: {
+      rowId: string
+      accountCode: string
+      kind: 'expense' | 'revenue'
+      description?: string
+      confirmAlone?: boolean
+    }) =>
       useApi().fetchApi(`${BASE}/${rowId}/assign-account`, {
         method: 'POST',
-        body: JSON.stringify({ account_code: accountCode, kind, description }),
+        body: JSON.stringify({ account_code: accountCode, kind, description, confirm_alone: !!confirmAlone }),
+      }),
+    onSuccess: invalidate,
+  })
+
+  // Rows that belong together, booked as one bilag for their net.
+  const assignAccountGroup = useMutation({
+    mutationFn: ({ rowIds, accountCode, description }: { rowIds: string[]; accountCode: string; description?: string }) =>
+      useApi().fetchApi(`${BASE}/assign-account-group`, {
+        method: 'POST',
+        body: JSON.stringify({ row_ids: rowIds, account_code: accountCode, description }),
       }),
     onSuccess: invalidate,
   })
@@ -315,7 +368,7 @@ export function useReconcileMutations() {
     onSuccess: invalidate,
   })
 
-  return { assignInvoice, assignAccount, dismiss, unassign }
+  return { assignInvoice, assignAccount, assignAccountGroup, dismiss, unassign, invalidate }
 }
 
 export function useAssignMultiInvoiceMutation() {

@@ -1143,7 +1143,42 @@
       "likelyDuplicate": "Probabile duplicato — altra riga già abbinata",
       "possibleDoublePayment": "Possibile doppio pagamento — rimborso necessario",
       "provisionalBadge": "Provvisoria",
-      "provisionalHint": "Esportata mentre il bonifico era in corso. Reimporta questo giorno più tardi; la riga regolata la sostituisce."
+      "provisionalHint": "Esportata mentre il bonifico era in corso. Reimporta questo giorno più tardi; la riga regolata la sostituisce.",
+      "partners": {
+        "badgeStrong": "Coppia probabile",
+        "badgeWeak": "Coppia possibile",
+        "badgeHint": "Un’altra riga sembra legata a questa. Apri «Crea giustificativo» per vederla.",
+        "question": "Questa riga va con un’altra?",
+        "introStrong": "Le righe collegate vanno registrate come un unico giustificativo. Scegli un’opzione prima di assegnare.",
+        "introWeak": "Queste righe potrebbero andare con questa. Scegline una per registrarle insieme.",
+        "together": "Registra insieme",
+        "alone": "No, registra solo questa riga",
+        "net": "Netto insieme: {net}",
+        "daysApart": "stesso giorno | {n} giorno di distanza | {n} giorni di distanza",
+        "reasons": {
+          "same_account": "stesso numero di conto",
+          "same_name": "stesso beneficiario/pagatore",
+          "reverses": "stesso importo, direzione opposta",
+          "nets_to_price": "l’importo netto corrisponde a un articolo di listino"
+        },
+        "choiceRequired": "Scegli un’opzione sopra prima di assegnare.",
+        "groupBanner": "{count} righe saranno registrate come un unico giustificativo. Netto: {net}",
+        "groupAccountsHint": "Scegli il conto per l’importo netto ({net}). Sono ammessi tutti i conti tranne quelli bancari.",
+        "assignTogether": "Assegna insieme",
+        "bulkPartlyPaired": "La selezione mescola righe collegate con altre non collegate. Registra la coppia a parte.",
+        "bulkTooMany": "Un’assegnazione combinata può avere al massimo {max} righe.",
+        "bulkOutside": "Alcune righe selezionate sembrano legate a righe non selezionate:",
+        "bulkAck": "Ho visto i suggerimenti e voglio registrare le righe separatamente",
+        "bulkAckRequired": "Conferma che le righe vanno registrate separatamente.",
+        "stale": "Una riga ha ottenuto un probabile partner dal caricamento. Nessuna riga è stata registrata; scegli di nuovo. | Una riga ha ottenuto un probabile partner dal caricamento. {booked} riga è stata registrata; scegli di nuovo per il resto. | Una riga ha ottenuto un probabile partner dal caricamento. {booked} righe sono state registrate; scegli di nuovo per il resto.",
+        "accountTypes": {
+          "asset": "Attività",
+          "liability": "Passività e patrimonio netto",
+          "equity": "Patrimonio netto",
+          "revenue": "Ricavi",
+          "expense": "Costi"
+        }
+      }
     },
     "sidebarTitle": "Portale admin"
   },

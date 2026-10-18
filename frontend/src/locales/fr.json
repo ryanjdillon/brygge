@@ -1142,7 +1142,42 @@
       "likelyDuplicate": "Probable doublon — autre ligne déjà rapprochée",
       "possibleDoublePayment": "Possible double paiement — remboursement nécessaire",
       "provisionalBadge": "Provisoire",
-      "provisionalHint": "Exportée pendant que le virement était en cours. Réimportez ce jour plus tard ; la ligne réglée la remplace."
+      "provisionalHint": "Exportée pendant que le virement était en cours. Réimportez ce jour plus tard ; la ligne réglée la remplace.",
+      "partners": {
+        "badgeStrong": "Paire probable",
+        "badgeWeak": "Paire possible",
+        "badgeHint": "Une autre ligne semble aller avec celle-ci. Ouvrez « Créer une pièce » pour la voir.",
+        "question": "Cette ligne va-t-elle avec une autre ?",
+        "introStrong": "Les lignes liées doivent être comptabilisées en une seule pièce. Choisissez une option avant d’affecter.",
+        "introWeak": "Ces lignes pourraient aller avec celle-ci. Choisissez-en une pour les comptabiliser ensemble.",
+        "together": "Comptabiliser ensemble",
+        "alone": "Non, comptabiliser seulement cette ligne",
+        "net": "Net ensemble : {net}",
+        "daysApart": "le même jour | {n} jour d’écart | {n} jours d’écart",
+        "reasons": {
+          "same_account": "même numéro de compte",
+          "same_name": "même bénéficiaire/payeur",
+          "reverses": "même montant, sens inverse",
+          "nets_to_price": "le montant net correspond à un article tarifaire"
+        },
+        "choiceRequired": "Choisissez une option ci-dessus avant d’affecter.",
+        "groupBanner": "{count} lignes seront comptabilisées en une seule pièce. Net : {net}",
+        "groupAccountsHint": "Choisissez le compte du montant net ({net}). Tous les comptes sauf les comptes bancaires sont possibles.",
+        "assignTogether": "Affecter ensemble",
+        "bulkPartlyPaired": "La sélection mélange des lignes liées et d’autres qui ne le sont pas. Comptabilisez la paire à part.",
+        "bulkTooMany": "Une affectation groupée peut contenir au plus {max} lignes.",
+        "bulkOutside": "Certaines lignes sélectionnées semblent aller avec des lignes non sélectionnées :",
+        "bulkAck": "J’ai vu les suggestions et je veux comptabiliser les lignes séparément",
+        "bulkAckRequired": "Confirmez que les lignes doivent être comptabilisées séparément.",
+        "stale": "Une ligne a obtenu un partenaire probable depuis le chargement. Aucune ligne n’a été comptabilisée ; choisissez à nouveau. | Une ligne a obtenu un partenaire probable depuis le chargement. {booked} ligne a été comptabilisée ; choisissez à nouveau pour le reste. | Une ligne a obtenu un partenaire probable depuis le chargement. {booked} lignes ont été comptabilisées ; choisissez à nouveau pour le reste.",
+        "accountTypes": {
+          "asset": "Actifs",
+          "liability": "Passifs et capitaux propres",
+          "equity": "Capitaux propres",
+          "revenue": "Produits",
+          "expense": "Charges"
+        }
+      }
     },
     "sidebarTitle": "Portail admin"
   },

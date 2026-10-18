@@ -1143,7 +1143,42 @@
       "likelyDuplicate": "Waarschijnlijk duplicaat — andere regel reeds gekoppeld",
       "possibleDoublePayment": "Mogelijke dubbele betaling — terugbetaling nodig",
       "provisionalBadge": "Voorlopig",
-      "provisionalHint": "Geëxporteerd terwijl de overboeking onderweg was. Importeer deze dag later opnieuw; de verwerkte regel vervangt hem."
+      "provisionalHint": "Geëxporteerd terwijl de overboeking onderweg was. Importeer deze dag later opnieuw; de verwerkte regel vervangt hem.",
+      "partners": {
+        "badgeStrong": "Waarschijnlijk paar",
+        "badgeWeak": "Mogelijk paar",
+        "badgeHint": "Een andere regel lijkt bij deze te horen. Open ‘Boekstuk maken’ om hem te zien.",
+        "question": "Hoort deze regel bij een andere?",
+        "introStrong": "Regels die bij elkaar horen moeten als één boekstuk worden geboekt. Kies een optie voordat je toewijst.",
+        "introWeak": "Deze regels horen mogelijk bij deze. Kies er een om ze samen te boeken.",
+        "together": "Samen boeken",
+        "alone": "Nee, alleen deze regel boeken",
+        "net": "Samen netto: {net}",
+        "daysApart": "dezelfde dag | {n} dag uit elkaar | {n} dagen uit elkaar",
+        "reasons": {
+          "same_account": "zelfde rekeningnummer",
+          "same_name": "zelfde ontvanger/betaler",
+          "reverses": "zelfde bedrag, tegengestelde richting",
+          "nets_to_price": "nettobedrag komt overeen met een prijsartikel"
+        },
+        "choiceRequired": "Kies hierboven een optie voordat je toewijst.",
+        "groupBanner": "{count} regels worden als één boekstuk geboekt. Netto: {net}",
+        "groupAccountsHint": "Kies de rekening voor het nettobedrag ({net}). Alle rekeningen behalve bankrekeningen zijn mogelijk.",
+        "assignTogether": "Samen toewijzen",
+        "bulkPartlyPaired": "De selectie mengt regels die bij elkaar horen met regels die dat niet doen. Boek het paar apart.",
+        "bulkTooMany": "Een gezamenlijke toewijzing kan hoogstens {max} regels bevatten.",
+        "bulkOutside": "Sommige geselecteerde regels lijken bij niet-geselecteerde regels te horen:",
+        "bulkAck": "Ik heb de suggesties gezien en wil de regels apart boeken",
+        "bulkAckRequired": "Bevestig dat de regels apart geboekt moeten worden.",
+        "stale": "Een regel heeft sinds het laden een mogelijke partner gekregen. Er is niets geboekt; kies opnieuw. | Een regel heeft sinds het laden een mogelijke partner gekregen. {booked} regel is geboekt; kies opnieuw voor de rest. | Een regel heeft sinds het laden een mogelijke partner gekregen. {booked} regels zijn geboekt; kies opnieuw voor de rest.",
+        "accountTypes": {
+          "asset": "Activa",
+          "liability": "Passiva en eigen vermogen",
+          "equity": "Eigen vermogen",
+          "revenue": "Opbrengsten",
+          "expense": "Kosten"
+        }
+      }
     },
     "sidebarTitle": "Beheerportaal"
   },

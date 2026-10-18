@@ -2097,7 +2097,42 @@
       "likelyDuplicate": "Truleg duplikat — anna rad er allereie matcha",
       "possibleDoublePayment": "Mogleg dobbeltbetaling — krev tilbakebetaling",
       "provisionalBadge": "Foreløpig",
-      "provisionalHint": "Eksportert mens overføringen var underveis. Importer dagen på nytt senere; den oppgjorte raden erstatter den."
+      "provisionalHint": "Eksportert mens overføringen var underveis. Importer dagen på nytt senere; den oppgjorte raden erstatter den.",
+      "partners": {
+        "badgeStrong": "Mulig par",
+        "badgeWeak": "Se mulig par",
+        "badgeHint": "En annen rad ser ut til å høre sammen med denne. Åpne Lag bilag for å se den.",
+        "question": "Hører denne raden sammen med en annen?",
+        "introStrong": "Rader som hører sammen skal bokføres som ett bilag. Velg et alternativ før du tildeler.",
+        "introWeak": "Disse radene kan høre sammen med denne. Velg en hvis du vil bokføre dem sammen.",
+        "together": "Bokfør sammen",
+        "alone": "Nei, bokfør bare denne raden",
+        "net": "Netto sammen: {net}",
+        "daysApart": "samme dag | {n} dag fra hverandre | {n} dager fra hverandre",
+        "reasons": {
+          "same_account": "samme kontonummer",
+          "same_name": "samme mottaker/betaler",
+          "reverses": "samme beløp motsatt vei",
+          "nets_to_price": "nettobeløpet tilsvarer en prisartikkel"
+        },
+        "choiceRequired": "Velg et alternativ over før du tildeler.",
+        "groupBanner": "{count} rader blir bokført som ett bilag. Netto: {net}",
+        "groupAccountsHint": "Velg konto for nettobeløpet ({net}). Alle kontoer unntatt bankkontoer kan velges.",
+        "assignTogether": "Tildel samlet",
+        "bulkPartlyPaired": "Utvalget blander rader som hører sammen med rader som ikke gjør det. Bokfør paret for seg.",
+        "bulkTooMany": "En samlet tildeling kan ha høyst {max} rader.",
+        "bulkOutside": "Noen av de valgte radene ser ut til å høre sammen med rader du ikke har valgt:",
+        "bulkAck": "Jeg har sett forslagene og vil bokføre radene hver for seg",
+        "bulkAckRequired": "Bekreft at radene skal bokføres hver for seg.",
+        "stale": "En rad har fått en mulig partner siden listen ble lastet. Ingen rader ble bokført; velg på nytt. | En rad har fått en mulig partner siden listen ble lastet. {booked} rad ble bokført; velg på nytt for resten. | En rad har fått en mulig partner siden listen ble lastet. {booked} rader ble bokført; velg på nytt for resten.",
+        "accountTypes": {
+          "asset": "Eiendeler",
+          "liability": "Gjeld og egenkapital",
+          "equity": "Egenkapital",
+          "revenue": "Inntekter",
+          "expense": "Kostnader"
+        }
+      }
     },
     "sidebarTitle": "Adminportal"
   },

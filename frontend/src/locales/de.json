@@ -1143,7 +1143,42 @@
       "likelyDuplicate": "Wahrscheinlich Duplikat — andere Zeile bereits zugeordnet",
       "possibleDoublePayment": "Möglicherweise Doppelzahlung — Rückerstattung nötig",
       "provisionalBadge": "Vorläufig",
-      "provisionalHint": "Exportiert, während die Überweisung unterwegs war. Importieren Sie diesen Tag später erneut; die gebuchte Zeile ersetzt sie."
+      "provisionalHint": "Exportiert, während die Überweisung unterwegs war. Importieren Sie diesen Tag später erneut; die gebuchte Zeile ersetzt sie.",
+      "partners": {
+        "badgeStrong": "Wahrscheinliches Paar",
+        "badgeWeak": "Mögliches Paar",
+        "badgeHint": "Eine andere Zeile scheint zu dieser zu gehören. Öffnen Sie „Beleg erstellen“, um sie zu sehen.",
+        "question": "Gehört diese Zeile zu einer anderen?",
+        "introStrong": "Zusammengehörige Zeilen müssen als ein Beleg gebucht werden. Wählen Sie eine Option, bevor Sie zuordnen.",
+        "introWeak": "Diese Zeilen könnten zu dieser gehören. Wählen Sie eine, um sie zusammen zu buchen.",
+        "together": "Zusammen buchen",
+        "alone": "Nein, nur diese Zeile buchen",
+        "net": "Zusammen netto: {net}",
+        "daysApart": "am selben Tag | {n} Tag auseinander | {n} Tage auseinander",
+        "reasons": {
+          "same_account": "gleiche Kontonummer",
+          "same_name": "gleicher Empfänger/Zahler",
+          "reverses": "gleicher Betrag, Gegenrichtung",
+          "nets_to_price": "Nettobetrag entspricht einem Preisartikel"
+        },
+        "choiceRequired": "Wählen Sie oben eine Option, bevor Sie zuordnen.",
+        "groupBanner": "{count} Zeilen werden als ein Beleg gebucht. Netto: {net}",
+        "groupAccountsHint": "Wählen Sie das Konto für den Nettobetrag ({net}). Alle Konten außer Bankkonten sind möglich.",
+        "assignTogether": "Zusammen zuordnen",
+        "bulkPartlyPaired": "Die Auswahl mischt zusammengehörige Zeilen mit anderen. Buchen Sie das Paar separat.",
+        "bulkTooMany": "Eine gemeinsame Zuordnung kann höchstens {max} Zeilen haben.",
+        "bulkOutside": "Einige ausgewählte Zeilen scheinen zu nicht ausgewählten Zeilen zu gehören:",
+        "bulkAck": "Ich habe die Vorschläge gesehen und möchte die Zeilen einzeln buchen",
+        "bulkAckRequired": "Bestätigen Sie, dass die Zeilen einzeln gebucht werden sollen.",
+        "stale": "Eine Zeile hat seit dem Laden einen möglichen Partner erhalten. Keine Zeile wurde gebucht; bitte erneut wählen. | Eine Zeile hat seit dem Laden einen möglichen Partner erhalten. {booked} Zeile wurde gebucht; bitte für den Rest erneut wählen. | Eine Zeile hat seit dem Laden einen möglichen Partner erhalten. {booked} Zeilen wurden gebucht; bitte für den Rest erneut wählen.",
+        "accountTypes": {
+          "asset": "Aktiva",
+          "liability": "Verbindlichkeiten und Eigenkapital",
+          "equity": "Eigenkapital",
+          "revenue": "Erträge",
+          "expense": "Aufwendungen"
+        }
+      }
     },
     "sidebarTitle": "Admin-Portal"
   },

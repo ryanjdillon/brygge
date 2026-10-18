@@ -1979,7 +1979,42 @@
       "likelyDuplicate": "Truleg duplikat — anna rad er allereie matcha",
       "possibleDoublePayment": "Mogleg dobbeltbetaling — krev tilbakebetaling",
       "provisionalBadge": "Førebels",
-      "provisionalHint": "Eksportert medan overføringa var undervegs. Importer dagen på nytt seinare; den oppgjorde rada erstattar ho."
+      "provisionalHint": "Eksportert medan overføringa var undervegs. Importer dagen på nytt seinare; den oppgjorde rada erstattar ho.",
+      "partners": {
+        "badgeStrong": "Mogleg par",
+        "badgeWeak": "Sjå mogleg par",
+        "badgeHint": "Ei anna rad ser ut til å høyra saman med denne. Opne Lag bilag for å sjå ho.",
+        "question": "Høyrer denne rada saman med ei anna?",
+        "introStrong": "Rader som høyrer saman skal bokførast som eitt bilag. Vel eit alternativ før du tildeler.",
+        "introWeak": "Desse radene kan høyra saman med denne. Vel ei om du vil bokføre dei saman.",
+        "together": "Bokfør saman",
+        "alone": "Nei, bokfør berre denne rada",
+        "net": "Netto saman: {net}",
+        "daysApart": "same dag | {n} dag frå kvarandre | {n} dagar frå kvarandre",
+        "reasons": {
+          "same_account": "same kontonummer",
+          "same_name": "same mottakar/betalar",
+          "reverses": "same beløp motsett veg",
+          "nets_to_price": "nettobeløpet svarar til ein prisartikkel"
+        },
+        "choiceRequired": "Vel eit alternativ over før du tildeler.",
+        "groupBanner": "{count} rader blir bokførte som eitt bilag. Netto: {net}",
+        "groupAccountsHint": "Vel konto for nettobeløpet ({net}). Alle kontoar utanom bankkontoar kan veljast.",
+        "assignTogether": "Tildel samla",
+        "bulkPartlyPaired": "Utvalet blandar rader som høyrer saman med rader som ikkje gjer det. Bokfør paret for seg.",
+        "bulkTooMany": "Ei samla tildeling kan ha høgst {max} rader.",
+        "bulkOutside": "Nokre av dei valde radene ser ut til å høyra saman med rader du ikkje har valt:",
+        "bulkAck": "Eg har sett forslaga og vil bokføre radene kvar for seg",
+        "bulkAckRequired": "Stadfest at radene skal bokførast kvar for seg.",
+        "stale": "Ei rad har fått ein mogleg partnar sidan lista vart lasta. Ingen rader vart bokførte; vel på nytt. | Ei rad har fått ein mogleg partnar sidan lista vart lasta. {booked} rad vart bokført; vel på nytt for resten. | Ei rad har fått ein mogleg partnar sidan lista vart lasta. {booked} rader vart bokførte; vel på nytt for resten.",
+        "accountTypes": {
+          "asset": "Eigedelar",
+          "liability": "Gjeld og eigenkapital",
+          "equity": "Eigenkapital",
+          "revenue": "Inntekter",
+          "expense": "Kostnader"
+        }
+      }
     },
     "sidebarTitle": "Adminportal"
   },

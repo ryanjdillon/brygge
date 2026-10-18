@@ -275,6 +275,16 @@ A transfer still under way when you export a statement appears as a bare **Overf
 - If an upload stops partway, upload the same file again. Rows already stored are skipped.
 - In **Tildel**, such rows carry a **Foreløpig** badge. Don't book them by hand; upload the day again instead.
 
+### Rows that belong together (Mogleg par)
+
+Some bank rows only make sense together: a harbour-share buy-back paid out and the overpayment the recipient sent back, or a payment and its refund. Booked one at a time, the return would land as income. Tildel marks such rows **Mogleg par** when they go opposite ways on the same bank account within 60 days and share the other party's account number or name, or reverse each other exactly within 14 days. **Sjå mogleg par** is a weaker hint: the two rows only net to a price item's amount.
+
+- **Lag bilag** on such a row asks **Høyrer denne rada saman med ei anna?** For a **Mogleg par** you must choose before you can assign: **Bokfør saman** with the suggested row, or **Nei, bokfør berre denne rada**.
+- **Bokfør saman** makes one bilag for the net (e.g. −63 000 and +1 000 → −62 000), with one bank line and the net on the account you pick. Any account except a bank account can be picked, so a buy-back can go to a balance account rather than revenue.
+- Selecting both rows and pressing **Lag bilag** does the same. A selection that leaves a likely partner out asks you to confirm that the rows should be booked separately.
+- **Angre** on either row unbooks both.
+- The two rows must be on the same bank account and in the same fiscal year, and must not net to zero (that is a transfer between the club's own accounts: use **Synk bank** or dismiss them).
+
 ### Vipps reconciliation cascade
 
 For Vipps payouts (the consolidated daily Utb. row in the bank statement), the reconciliation books a bilag per payer using this cascade (DIL-367). Vipps bilags are posted as soon as they are created, so they count in the reports immediately (BRY-339):

@@ -1113,7 +1113,42 @@
       "likelyDuplicate": "Prawdopodobny duplikat — inny wiersz już dopasowany",
       "possibleDoublePayment": "Możliwa podwójna płatność — wymagany zwrot",
       "provisionalBadge": "Tymczasowy",
-      "provisionalHint": "Wyeksportowano, gdy przelew był w toku. Zaimportuj ten dzień ponownie później; rozliczony wiersz go zastąpi."
+      "provisionalHint": "Wyeksportowano, gdy przelew był w toku. Zaimportuj ten dzień ponownie później; rozliczony wiersz go zastąpi.",
+      "partners": {
+        "badgeStrong": "Prawdopodobna para",
+        "badgeWeak": "Możliwa para",
+        "badgeHint": "Inny wiersz wydaje się pasować do tego. Otwórz „Utwórz dowód”, aby go zobaczyć.",
+        "question": "Czy ten wiersz należy do innego?",
+        "introStrong": "Powiązane wiersze trzeba zaksięgować jako jeden dowód. Wybierz opcję przed przypisaniem.",
+        "introWeak": "Te wiersze mogą pasować do tego. Wybierz jeden, aby zaksięgować je razem.",
+        "together": "Zaksięguj razem",
+        "alone": "Nie, zaksięguj tylko ten wiersz",
+        "net": "Razem netto: {net}",
+        "daysApart": "ten sam dzień | {n} dzień różnicy | {n} dni różnicy",
+        "reasons": {
+          "same_account": "ten sam numer konta",
+          "same_name": "ten sam odbiorca/płatnik",
+          "reverses": "ta sama kwota, przeciwny kierunek",
+          "nets_to_price": "kwota netto odpowiada pozycji cennika"
+        },
+        "choiceRequired": "Wybierz powyżej opcję przed przypisaniem.",
+        "groupBanner": "{count} wiersze zostaną zaksięgowane jako jeden dowód. Netto: {net}",
+        "groupAccountsHint": "Wybierz konto dla kwoty netto ({net}). Dostępne są wszystkie konta poza bankowymi.",
+        "assignTogether": "Przypisz razem",
+        "bulkPartlyPaired": "Wybór łączy powiązane wiersze z niepowiązanymi. Zaksięguj parę osobno.",
+        "bulkTooMany": "Wspólne przypisanie może mieć najwyżej {max} wierszy.",
+        "bulkOutside": "Niektóre wybrane wiersze wydają się pasować do niewybranych wierszy:",
+        "bulkAck": "Widzę sugestie i chcę zaksięgować wiersze osobno",
+        "bulkAckRequired": "Potwierdź, że wiersze mają być zaksięgowane osobno.",
+        "stale": "Wiersz otrzymał prawdopodobnego partnera od czasu załadowania. Nic nie zaksięgowano; wybierz ponownie. | Wiersz otrzymał prawdopodobnego partnera od czasu załadowania. Zaksięgowano {booked} wiersz; wybierz ponownie dla reszty. | Wiersz otrzymał prawdopodobnego partnera od czasu załadowania. Zaksięgowano {booked} wierszy; wybierz ponownie dla reszty.",
+        "accountTypes": {
+          "asset": "Aktywa",
+          "liability": "Zobowiązania i kapitał",
+          "equity": "Kapitał własny",
+          "revenue": "Przychody",
+          "expense": "Koszty"
+        }
+      }
     },
     "sidebarTitle": "Portal administratora"
   },

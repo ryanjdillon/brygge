@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowDownLeft, ArrowUpRight, Sparkles, Search, FileText, Ban, Undo2, CheckSquare } from 'lucide-vue-next'
 import Modal from '@/components/ui/Modal.vue'
+import BankRowPartnerChoice from '@/components/admin/BankRowPartnerChoice.vue'
 import Select from '@/components/ui/form/Select.vue'
 import {
   useBankUnmatchedRows,
@@ -13,6 +14,8 @@ import {
   useReconcileMutations,
   useAssignMultiInvoiceMutation,
   fetchPotentialInvoices,
+  fetchBankRowPartners,
+  isHasPartnerError,
   useVippsPerChargeEnabled,
   useUnreconciledVippsCharges,
   useVippsChargeMutations,
@@ -31,6 +34,7 @@ import {
   type AccountSuggestion,
   type DismissReason,
   type VippsCharge,
+  type PartnerSuggestion,
 } from '@/composables/useBankReconcile'
 import { formatNOK as formatNOKBase, formatDate as fmtDate } from '@/lib/format'
 import { useAccountsList } from '@/composables/useAccounting'
@@ -145,7 +149,8 @@ const missingSettlementsTotal = computed(() =>
   (missingSettlements.value ?? []).reduce((sum, m) => sum + Number(m.amount), 0),
 )
 
-const { assignInvoice, assignAccount, dismiss, unassign } = useReconcileMutations()
+const { assignInvoice, assignAccount, assignAccountGroup, dismiss, unassign, invalidate: refetchBankRows } =
+  useReconcileMutations()
 const assignMultiInvoice = useAssignMultiInvoiceMutation()
 
 // ── Per-charge Vipps model (BRY-227) ─────────────────────────
@@ -186,6 +191,8 @@ function openVippsAccountPicker(charge: VippsCharge) {
   accountPickerSuggestions.value = []
   accountPickerSearch.value = ''
   bilagDescription.value = charge.description ?? ''
+  pickerRows.value = []
+  partnerChoice.value = null
   accountPickerOpen.value = true
 }
 function openVippsDismiss(charge: VippsCharge) {
@@ -295,13 +302,114 @@ function openAccountPicker(row: BankRowSummary) {
   accountPickerSuggestions.value = suggestions.value?.accounts ?? []
   accountPickerSearch.value = ''
   bilagDescription.value = row.description ?? ''
+  pickerRows.value = selectedRows.value.length > 1 ? [...selectedRows.value] : [row]
   accountPickerOpen.value = true
+  void loadPickerPartners()
 }
 const filteredAccounts = computed(() => {
   const base = accountPickerKind.value === 'expense' ? expenseAccounts.value : revenueAccounts.value
+  return matchAccountSearch(base)
+})
+function matchAccountSearch<T extends { code: string; name: string }>(base: T[]): T[] {
   const qq = accountPickerSearch.value.trim().toLowerCase()
   if (!qq) return base
   return base.filter((a) => a.code.includes(qq) || a.name.toLowerCase().includes(qq))
+}
+
+// ── Rows that belong together (BRY-380) ──────────────────────
+// Lag bilag shows each row's likely partner rows. A strong partner must be
+// either booked together (one bilag for the net) or explicitly declined;
+// the server refuses the row on its own otherwise (409 has_partner).
+const pickerRows = ref<BankRowSummary[]>([])
+const pickerPartners = ref<Record<string, PartnerSuggestion[]>>({})
+const partnersLoading = ref(false)
+const partnerChoice = ref<string | null>(null)
+const ackSeparate = ref(false)
+const partnerNotice = ref('')
+const MAX_GROUP_ROWS = 5
+
+async function loadPickerPartners() {
+  partnerChoice.value = null
+  ackSeparate.value = false
+  partnerNotice.value = ''
+  pickerPartners.value = {}
+  partnersLoading.value = true
+  try {
+    const entries = await Promise.all(
+      pickerRows.value.map(async (r) => [r.id, await fetchBankRowPartners(r.id)] as const),
+    )
+    pickerPartners.value = Object.fromEntries(entries)
+  } finally {
+    partnersLoading.value = false
+  }
+}
+
+const singlePick = computed(() => pickerRows.value.length === 1)
+const singlePartners = computed(() =>
+  singlePick.value ? (pickerPartners.value[pickerRows.value[0].id] ?? []) : [],
+)
+const pickedIds = computed(() => new Set(pickerRows.value.map((r) => r.id)))
+const pairedWithinSelection = (r: BankRowSummary) =>
+  (pickerPartners.value[r.id] ?? []).some((p) => pickedIds.value.has(p.id))
+// Every selected row has a suggested partner among the selection: book
+// them as one group.
+const selectionIsGroup = computed(
+  () => !singlePick.value && pickerRows.value.length > 0 && pickerRows.value.every(pairedWithinSelection),
+)
+const selectionPartlyPaired = computed(
+  () => !singlePick.value && !selectionIsGroup.value && pickerRows.value.some(pairedWithinSelection),
+)
+// Selected rows with a strong partner left out of the selection.
+const strongOutside = computed(() =>
+  singlePick.value
+    ? []
+    : pickerRows.value.flatMap((r) =>
+        (pickerPartners.value[r.id] ?? [])
+          .filter((p) => p.strength === 'strong' && !pickedIds.value.has(p.id))
+          .map((p) => ({ row: r, partner: p })),
+      ),
+)
+
+const groupRowIds = computed<string[] | null>(() => {
+  if (singlePick.value) {
+    const c = partnerChoice.value
+    return c && c !== 'alone' ? [pickerRows.value[0].id, c] : null
+  }
+  return selectionIsGroup.value ? pickerRows.value.map((r) => r.id) : null
+})
+const groupNet = computed(() => {
+  if (!groupRowIds.value) return 0
+  if (singlePick.value) return singlePartners.value.find((p) => p.id === partnerChoice.value)?.net ?? 0
+  return Math.round(pickerRows.value.reduce((sum, r) => sum + r.amount * 100, 0)) / 100
+})
+
+const assignBlockedReason = computed<string | null>(() => {
+  if (activeSource.value !== 'bank') return null
+  if (partnersLoading.value) return t('common.loading')
+  if (singlePick.value) {
+    const strong = singlePartners.value.some((p) => p.strength === 'strong')
+    return strong && partnerChoice.value === null ? t('admin.bankReconcile.partners.choiceRequired') : null
+  }
+  if (selectionPartlyPaired.value) return t('admin.bankReconcile.partners.bulkPartlyPaired')
+  if (selectionIsGroup.value && pickerRows.value.length > MAX_GROUP_ROWS) {
+    return t('admin.bankReconcile.partners.bulkTooMany', { max: MAX_GROUP_ROWS })
+  }
+  if (strongOutside.value.length && !ackSeparate.value) return t('admin.bankReconcile.partners.bulkAckRequired')
+  return null
+})
+
+// Booked together, the net may land on any non-bank account: a buy-back
+// net of a returned overpayment belongs on a balance account, not revenue.
+const ACCOUNT_TYPE_ORDER: Record<'in' | 'out', string[]> = {
+  in: ['revenue', 'liability', 'equity', 'asset', 'expense'],
+  out: ['expense', 'liability', 'equity', 'asset', 'revenue'],
+}
+const groupAccountSections = computed(() => {
+  const active = (accounts.value ?? []).filter((a) => a.is_active && !a.code.startsWith('19'))
+  const order = ACCOUNT_TYPE_ORDER[groupNet.value < 0 ? 'out' : 'in']
+  return order
+    .map((type) => ({ type, accounts: matchAccountSearch(active.filter((a) => a.account_type === type)) }))
+    .filter((sec) => sec.accounts.length > 0)
 })
 
 // ── Dismiss reason modal ─────────────────────────────────────
@@ -364,14 +472,38 @@ async function doAssignInvoice(rowId: string, invoiceId: string) {
   potentialOpen.value = false
 }
 async function doAssignAccount(rowId: string, accountCode: string, k: 'expense' | 'revenue') {
+  const description = bilagDescription.value || undefined
   if (activeSource.value === 'vipps') {
-    await vBilag.mutateAsync({ rowId, accountCode, description: bilagDescription.value || undefined })
+    await vBilag.mutateAsync({ rowId, accountCode, description })
     accountPickerOpen.value = false
     return
   }
-  const targetIds = selectedIds.value.size > 1 ? [...selectedIds.value] : [rowId]
-  for (const id of targetIds) {
-    await assignAccount.mutateAsync({ rowId: id, accountCode, kind: k, description: bilagDescription.value || undefined })
+  if (assignBlockedReason.value) return
+  if (groupRowIds.value) {
+    await assignAccountGroup.mutateAsync({ rowIds: groupRowIds.value, accountCode, description })
+    accountPickerOpen.value = false
+    clearSelection()
+    return
+  }
+  // Booking alone is confirmed only once the partners have been shown:
+  // the explicit "alone" choice, or the bulk acknowledgement.
+  const confirmAlone = singlePick.value ? partnerChoice.value === 'alone' : ackSeparate.value
+  const targetIds = pickerRows.value.map((r) => r.id)
+  let booked = 0
+  try {
+    for (const id of targetIds) {
+      await assignAccount.mutateAsync({ rowId: id, accountCode, kind: k, description, confirmAlone })
+      booked++
+    }
+  } catch (e) {
+    if (!isHasPartnerError(e)) throw e
+    // The list was stale: a partner appeared since it loaded. Show the
+    // choice again for what is left.
+    refetchBankRows()
+    pickerRows.value = pickerRows.value.slice(booked)
+    await loadPickerPartners()
+    partnerNotice.value = t('admin.bankReconcile.partners.stale', { booked }, booked)
+    return
   }
   accountPickerOpen.value = false
   clearSelection()
@@ -666,6 +798,15 @@ async function doUnassign(rowId: string) {
                 >
                   {{ t('admin.bankReconcile.provisionalBadge') }}
                 </p>
+                <p
+                  v-if="row.partner_hint && !row.dismissed_at"
+                  class="mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                  :class="row.partner_hint === 'strong' ? 'bg-indigo-100 text-indigo-800' : 'bg-gray-100 text-gray-700'"
+                  :title="t('admin.bankReconcile.partners.badgeHint')"
+                  data-testid="bank-row-partner-hint"
+                >
+                  {{ row.partner_hint === 'strong' ? t('admin.bankReconcile.partners.badgeStrong') : t('admin.bankReconcile.partners.badgeWeak') }}
+                </p>
               </div>
             </div>
             <!-- Batched Vipps payout under the per-charge model: quiet
@@ -877,31 +1018,101 @@ async function doUnassign(rowId: string) {
         :placeholder="t('admin.bankReconcile.bilagDescriptionPlaceholder')"
         class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
       />
+
+      <template v-if="activeSource === 'bank'">
+        <p v-if="partnerNotice" class="mt-3 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="partner-notice">
+          {{ partnerNotice }}
+        </p>
+        <BankRowPartnerChoice
+          v-if="singlePick"
+          v-model="partnerChoice"
+          :partners="singlePartners"
+          :loading="partnersLoading"
+        />
+        <template v-else-if="!partnersLoading">
+          <p v-if="selectionIsGroup" class="mt-3 rounded-md bg-indigo-50 px-3 py-2 text-xs text-indigo-900" data-testid="partner-group-banner">
+            {{ t('admin.bankReconcile.partners.groupBanner', { count: pickerRows.length, net: formatNOK(groupNet) }) }}
+          </p>
+          <p v-else-if="selectionPartlyPaired" class="mt-3 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            {{ t('admin.bankReconcile.partners.bulkPartlyPaired') }}
+          </p>
+          <div v-else-if="strongOutside.length" class="mt-3 rounded-md border border-indigo-300 bg-indigo-50 p-3 text-xs" data-testid="partner-outside">
+            <p class="font-semibold text-indigo-900">{{ t('admin.bankReconcile.partners.bulkOutside') }}</p>
+            <ul class="mt-1 space-y-0.5 text-gray-700">
+              <li v-for="o in strongOutside" :key="o.row.id + o.partner.id">
+                {{ formatNOK(o.row.amount) }} · {{ formatDate(o.row.row_date) }} ↔ {{ formatNOK(o.partner.amount) }} · {{ formatDate(o.partner.row_date) }}
+              </li>
+            </ul>
+            <label class="mt-2 flex items-center gap-2 text-gray-800">
+              <input v-model="ackSeparate" type="checkbox" data-testid="partner-ack-separate" />
+              {{ t('admin.bankReconcile.partners.bulkAck') }}
+            </label>
+          </div>
+        </template>
+        <p v-if="groupRowIds" class="mt-3 text-xs text-gray-600">
+          {{ t('admin.bankReconcile.partners.groupAccountsHint', { net: formatNOK(groupNet) }) }}
+        </p>
+      </template>
+
       <input
         v-model="accountPickerSearch"
         type="search"
         :placeholder="t('admin.bankReconcile.searchAccountPlaceholder')"
         class="mt-3 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
       />
-      <div v-if="accountPickerSuggestions.length" class="mt-3">
-        <p class="text-xs font-semibold uppercase text-gray-500">{{ t('admin.bankReconcile.accountSuggestions') }}</p>
-        <ul class="mt-1 space-y-1">
-          <li v-for="sug in accountPickerSuggestions" :key="sug.code" class="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm" :class="confidenceClass[sug.confidence_label]">
-            <span class="font-mono">{{ sug.code }} — {{ sug.name }}</span>
-            <button type="button" class="rounded-md bg-brand-600 px-3 py-1 text-xs font-semibold text-white hover:bg-brand-700" @click="accountPickerRowId && doAssignAccount(accountPickerRowId, sug.code, accountPickerKind)">
+
+      <!-- Booked together: every non-bank account, grouped by type. -->
+      <div v-if="groupRowIds" class="mt-3 max-h-72 overflow-y-auto" data-testid="group-accounts">
+        <div v-for="sec in groupAccountSections" :key="sec.type" class="mb-2">
+          <p class="text-xs font-semibold uppercase text-gray-500">{{ t('admin.bankReconcile.partners.accountTypes.' + sec.type) }}</p>
+          <ul class="divide-y divide-gray-100">
+            <li v-for="a in sec.accounts" :key="a.code" class="flex items-center justify-between gap-3 py-2 text-sm">
+              <span class="font-mono">{{ a.code }} — {{ a.name }}</span>
+              <button
+                type="button"
+                :disabled="!!assignBlockedReason"
+                class="rounded-md bg-brand-600 px-3 py-1 text-xs font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40"
+                :data-testid="`assign-group-${a.code}`"
+                @click="accountPickerRowId && doAssignAccount(accountPickerRowId, a.code, accountPickerKind)"
+              >
+                {{ t('admin.bankReconcile.partners.assignTogether') }}
+              </button>
+            </li>
+          </ul>
+        </div>
+      </div>
+      <template v-else>
+        <div v-if="accountPickerSuggestions.length" class="mt-3">
+          <p class="text-xs font-semibold uppercase text-gray-500">{{ t('admin.bankReconcile.accountSuggestions') }}</p>
+          <ul class="mt-1 space-y-1">
+            <li v-for="sug in accountPickerSuggestions" :key="sug.code" class="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm" :class="confidenceClass[sug.confidence_label]">
+              <span class="font-mono">{{ sug.code }} — {{ sug.name }}</span>
+              <button
+                type="button"
+                :disabled="!!assignBlockedReason"
+                class="rounded-md bg-brand-600 px-3 py-1 text-xs font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40"
+                @click="accountPickerRowId && doAssignAccount(accountPickerRowId, sug.code, accountPickerKind)"
+              >
+                {{ t('admin.bankReconcile.assign') }}
+              </button>
+            </li>
+          </ul>
+        </div>
+        <ul class="mt-3 max-h-72 divide-y divide-gray-100 overflow-y-auto">
+          <li v-for="a in filteredAccounts" :key="a.code" class="flex items-center justify-between gap-3 py-2 text-sm">
+            <span class="font-mono">{{ a.code }} — {{ a.name }}</span>
+            <button
+              type="button"
+              :disabled="!!assignBlockedReason"
+              class="rounded-md bg-brand-600 px-3 py-1 text-xs font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40"
+              :data-testid="`assign-account-${a.code}`"
+              @click="accountPickerRowId && doAssignAccount(accountPickerRowId, a.code, accountPickerKind)"
+            >
               {{ t('admin.bankReconcile.assign') }}
             </button>
           </li>
         </ul>
-      </div>
-      <ul class="mt-3 max-h-72 divide-y divide-gray-100 overflow-y-auto">
-        <li v-for="a in filteredAccounts" :key="a.code" class="flex items-center justify-between gap-3 py-2 text-sm">
-          <span class="font-mono">{{ a.code }} — {{ a.name }}</span>
-          <button type="button" class="rounded-md bg-brand-600 px-3 py-1 text-xs font-semibold text-white hover:bg-brand-700" @click="accountPickerRowId && doAssignAccount(accountPickerRowId, a.code, accountPickerKind)">
-            {{ t('admin.bankReconcile.assign') }}
-          </button>
-        </li>
-      </ul>
+      </template>
     </Modal>
 
     <!-- Dismiss reason modal -->

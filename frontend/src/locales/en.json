@@ -2101,7 +2101,42 @@
       "likelyDuplicate": "Likely duplicate — another row already matched",
       "possibleDoublePayment": "Possible double payment — refund needed",
       "provisionalBadge": "Provisional",
-      "provisionalHint": "Exported while the transfer was under way. Import this day again later; the settled row replaces it."
+      "provisionalHint": "Exported while the transfer was under way. Import this day again later; the settled row replaces it.",
+      "partners": {
+        "badgeStrong": "Likely pair",
+        "badgeWeak": "Possible pair",
+        "badgeHint": "Another row looks like it belongs with this one. Open Create voucher to see it.",
+        "question": "Does this row belong with another?",
+        "introStrong": "Rows that belong together must be booked as one voucher. Choose an option before assigning.",
+        "introWeak": "These rows may belong with this one. Pick one to book them together.",
+        "together": "Book together",
+        "alone": "No, book only this row",
+        "net": "Net together: {net}",
+        "daysApart": "same day | {n} day apart | {n} days apart",
+        "reasons": {
+          "same_account": "same account number",
+          "same_name": "same payee/payer",
+          "reverses": "same amount, opposite direction",
+          "nets_to_price": "net amount matches a price item"
+        },
+        "choiceRequired": "Choose an option above before assigning.",
+        "groupBanner": "{count} rows will be booked as one voucher. Net: {net}",
+        "groupAccountsHint": "Choose the account for the net amount ({net}). Any account except bank accounts can be used.",
+        "assignTogether": "Assign together",
+        "bulkPartlyPaired": "The selection mixes rows that belong together with rows that do not. Book the pair on its own.",
+        "bulkTooMany": "A combined assignment can have at most {max} rows.",
+        "bulkOutside": "Some selected rows look like they belong with rows you have not selected:",
+        "bulkAck": "I have seen the suggestions and want to book the rows separately",
+        "bulkAckRequired": "Confirm that the rows should be booked separately.",
+        "stale": "A row gained a likely partner since the list loaded. No rows were booked; choose again. | A row gained a likely partner since the list loaded. {booked} row was booked; choose again for the rest. | A row gained a likely partner since the list loaded. {booked} rows were booked; choose again for the rest.",
+        "accountTypes": {
+          "asset": "Assets",
+          "liability": "Liabilities and equity",
+          "equity": "Equity",
+          "revenue": "Revenue",
+          "expense": "Expenses"
+        }
+      }
     },
     "sidebarTitle": "Admin portal"
   },
