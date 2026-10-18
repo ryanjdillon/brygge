@@ -647,6 +647,11 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOv
 		case errors.Is(err, errInvoiceSettled):
 			res.KIDSkippedSettled++
 			res.rowError(rowID, row, "faktura already settled; possible double payment")
+		case errors.Is(err, errInvoiceNotOpen):
+			res.rowError(rowID, row, "faktura no longer open")
+		case errors.Is(err, errKIDRowTaken):
+			// A concurrent sync booked (or the treasurer dismissed) this
+			// very row; it is not in Tildel, so there is nothing to report.
 		case errors.Is(err, errKIDPeriodClosed):
 			closedYears[row.Date.Year()] = true
 		default:

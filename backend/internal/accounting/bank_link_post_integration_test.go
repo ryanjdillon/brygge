@@ -402,3 +402,39 @@ func TestBankSyncKIDRacesManualAssign(t *testing.T) {
 		t.Errorf("faktura not marked paid")
 	}
 }
+
+// Two syncs racing to book the same KID row book it once, and the loser,
+// which waited for its own row's booking, does not count it as a payment
+// to an already settled faktura.
+func TestBankSyncKIDRacesItself(t *testing.T) {
+	f := newBankLinkFixture(t)
+	ctx := context.Background()
+	const kid = "000000881102"
+	inv := f.kidInvoice(t, kid)
+	row := f.club.NewBankRow(t, f.club.NewBankImport(t),
+		fin.BankRowOpts{Date: time.Date(f.club.Year, 6, 14, 0, 0, 0, 0, time.UTC), Cents: 45000, KID: kid})
+
+	results := make([]*BankSyncResult, 2)
+	errs := make([]error, 2)
+	contend(t, f.club, inv.ID,
+		func() { results[0], errs[0] = f.svc.BankSync(ctx, f.club.ID, f.club.Treasurer.ID) },
+		func() { results[1], errs[1] = f.svc.BankSync(ctx, f.club.ID, f.club.Treasurer.ID) },
+	)
+	for i, err := range errs {
+		if err != nil {
+			t.Fatalf("bank sync %d: %v", i, err)
+		}
+	}
+	if got := results[0].KIDMatched + results[1].KIDMatched; got != 1 {
+		t.Errorf("KID matched across both syncs = %d, want 1", got)
+	}
+	if got := results[0].KIDSkippedSettled + results[1].KIDSkippedSettled; got != 0 {
+		t.Errorf("skipped as settled across both syncs = %d, want 0 (the row is booked, not a double payment)", got)
+	}
+	if n := countPosted(t, f.club, "bank_import_rows"); n != 1 {
+		t.Errorf("posted entries = %d, want exactly one", n)
+	}
+	if entry, _, recorded := f.cascadeRow(t, row); entry == "" || recorded != inv.ID {
+		t.Errorf("row entry %q, recorded faktura %q; want booked to %s", entry, recorded, inv.ID)
+	}
+}

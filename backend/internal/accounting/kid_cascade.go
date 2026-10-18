@@ -38,8 +38,9 @@ type kidCascadeMatch struct {
 }
 
 var (
-	// errKIDPeriodClosed means the row's fiscal period is closed; the row
-	// stays in Tildel and the year is reported.
+	// errKIDPeriodClosed means the row's fiscal period is closed or locked,
+	// including one closed while the match ran; the row stays in Tildel and
+	// the year is reported.
 	errKIDPeriodClosed = errors.New("fiscal period is closed")
 	// errKIDRowTaken means the row was booked, dismissed or refund-paired
 	// after the cascade picked it.
@@ -53,10 +54,14 @@ var (
 // before the entry is created until the row is linked and the entry
 // posted, in a transaction of its own, so a manual, auto or Vipps assign of
 // the same faktura runs before or after it, never alongside, and the lock
-// is never held across a whole import. The lock order is faktura, then
-// bank row, then period, as on every other settle path. A faktura already
-// settled is errInvoiceSettled; the caller leaves the row in Tildel and
-// counts it.
+// is never held across a whole import. Under the faktura lock the period is
+// held FOR SHARE briefly inside CreateJournalEntry, then the bank row is
+// linked, then the period is held again inside PostJournalEntry; only the
+// faktura lock spans them, as on the manual assign path. A faktura already
+// settled is errInvoiceSettled, and the caller leaves the row in Tildel and
+// counts it, unless the booking it waited for was this row's own
+// (errKIDRowTaken). A faktura voided or credited meanwhile is
+// errInvoiceNotOpen.
 //
 // The row is linked before the entry is posted, so a posted entry never
 // exists without its row (a later sync would book the money again), and the
@@ -68,15 +73,33 @@ func (s *Service) bookKIDCascadeMatch(ctx context.Context, clubID string, m kidC
 		return fmt.Errorf("begin: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if _, err := lockInvoiceForAssign(ctx, tx, clubID, m.invoiceID, invoiceLockOpts{mode: lockKIDCascade}); err != nil {
-		return err
+	_, lockErr := lockInvoiceForAssign(ctx, tx, clubID, m.invoiceID, invoiceLockOpts{mode: lockKIDCascade})
+	if lockErr != nil && !errors.Is(lockErr, errInvoiceSettled) && !errors.Is(lockErr, errInvoiceNotOpen) {
+		return lockErr
+	}
+	// The booking we waited for may have been this very row (a second sync,
+	// or an import during a sync): then the faktura reads settled, but the
+	// row is booked, not a double payment. Checked in a statement after the
+	// lock, so it sees what the lock holder committed.
+	var eligible bool
+	if err := tx.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM bank_import_rows WHERE id = $1 AND club_id = $2 AND `+kidCascadeEligibleSQL("")+`)`,
+		m.rowID, clubID,
+	).Scan(&eligible); err != nil {
+		return fmt.Errorf("re-checking row: %w", err)
+	}
+	if !eligible {
+		return errKIDRowTaken
+	}
+	if lockErr != nil {
+		return lockErr
 	}
 
 	periodID, periodStatus, err := s.resolvePeriod(ctx, clubID, m.date, m.periodOverride)
 	if err != nil {
 		return fmt.Errorf("resolving fiscal period: %w", err)
 	}
-	if periodStatus == "closed" {
+	if periodStatus != "open" {
 		return errKIDPeriodClosed
 	}
 
@@ -96,6 +119,10 @@ func (s *Service) bookKIDCascadeMatch(ctx context.Context, clubID string, m kidC
 			{AccountCode: receivablesAccountCode, Debit: 0, Credit: m.amount},
 		},
 	})
+	if errors.Is(err, ErrPeriodClosed) {
+		// Closed between resolvePeriod and here, by a concurrent ClosePeriod.
+		return errKIDPeriodClosed
+	}
 	if err != nil {
 		return fmt.Errorf("creating journal entry: %w", err)
 	}
@@ -120,6 +147,9 @@ func (s *Service) bookKIDCascadeMatch(ctx context.Context, clubID string, m kidC
 			s.log.Error().Err(uerr).Str("entry_id", entry.ID).Msg("KID match: unlinking the row after a failed post failed")
 		}
 		s.discardDraft(ctx, clubID, entry.ID)
+		if errors.Is(err, ErrPeriodClosed) {
+			return errKIDPeriodClosed
+		}
 		return fmt.Errorf("posting journal entry: %w", err)
 	}
 	// Release the faktura lock before the back-link, which updates the

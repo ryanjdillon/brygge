@@ -606,8 +606,10 @@ func (s *Service) syncKIDMatches(ctx context.Context, clubID, createdBy string, 
 			res.skippedSettled++
 		case errors.Is(err, errKIDPeriodClosed):
 			closedYears[p.date.Year()] = true
-		case errors.Is(err, errKIDRowTaken):
-			// A concurrent booking or a dismissal won the row.
+		case errors.Is(err, errKIDRowTaken), errors.Is(err, errInvoiceNotOpen):
+			// A concurrent booking or a dismissal won the row, or the
+			// faktura was voided or credited meanwhile; the row stays in
+			// Tildel for the treasurer.
 		default:
 			// Most often a bank_account_code missing from the chart of
 			// accounts (a bank role whose gl_code was never seeded); logged

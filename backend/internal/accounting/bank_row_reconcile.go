@@ -211,8 +211,8 @@ const (
 	// lockKIDCascade is the KID / invoice-number / counterpart cascade of
 	// bank import and sync: still owed and nothing booked against it. It
 	// has no amount, sent or import condition, because the cascade books
-	// any amount and imported fakturas too. A faktura that fails is
-	// errInvoiceSettled.
+	// any amount and imported fakturas too. A voided, credited or non-debt
+	// faktura is errInvoiceNotOpen; one paid or booked is errInvoiceSettled.
 	lockKIDCascade
 )
 
@@ -228,6 +228,11 @@ type invoiceLockOpts struct {
 // once it held the lock. The row is left in Tildel and counted, not failed:
 // it is most likely a double payment.
 var errInvoiceSettled = errors.New("invoice is already settled")
+
+// errInvoiceNotOpen means the KID cascade found its faktura voided, credited
+// or no longer a debt once it held the lock: the payment is not a double
+// payment, but it has nowhere to go and stays in Tildel.
+var errInvoiceNotOpen = errors.New("faktura no longer open")
 
 // lockInvoiceForAssign locks the faktura for the rest of tx and refuses it
 // when it can't take this payment. It returns the faktura total in øre.
@@ -260,13 +265,14 @@ func lockInvoiceForAssign(ctx context.Context, tx pgx.Tx, clubID, invoiceID stri
 		paid          bool
 		invoiceStatus string
 		owed          bool
+		credited      bool
 		sentAndLive   bool
 		bookedByRow   bool
 		bookedAny     bool
 	)
 	if err := tx.QueryRow(ctx,
 		`SELECT round(i.total_amount * 100)::bigint, i.payment_id IS NOT NULL, i.status,
-		        `+finance.OwedByMemberSQL("i")+`,
+		        `+finance.OwedByMemberSQL("i")+`, `+finance.CreditedSQL("i")+`,
 		        i.sent_at IS NOT NULL AND i.import_source IS NULL,
 		        EXISTS (SELECT 1 FROM bank_import_rows b
 		                 WHERE b.club_id = i.club_id AND b.invoice_id = i.id AND b.journal_entry_id IS NOT NULL)
@@ -276,11 +282,14 @@ func lockInvoiceForAssign(ctx context.Context, tx pgx.Tx, clubID, invoiceID stri
 		   FROM invoices i
 		  WHERE i.id = $1 AND i.club_id = $2`,
 		invoiceID, clubID,
-	).Scan(&invoiceCents, &paid, &invoiceStatus, &owed, &sentAndLive, &bookedByRow, &bookedAny); err != nil {
+	).Scan(&invoiceCents, &paid, &invoiceStatus, &owed, &credited, &sentAndLive, &bookedByRow, &bookedAny); err != nil {
 		return 0, fmt.Errorf("load invoice: %w", err)
 	}
 	if opts.mode == lockKIDCascade {
-		if !owed || bookedAny {
+		switch {
+		case invoiceStatus == "voided" || credited || invoiceCents <= 0:
+			return 0, errInvoiceNotOpen
+		case !owed || bookedAny:
 			return 0, errInvoiceSettled
 		}
 		return invoiceCents, nil
