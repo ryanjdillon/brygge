@@ -171,37 +171,55 @@ func TestAssignBankRowsToAccountGroupRefusals(t *testing.T) {
 		return f.club.NewBankRow(t, importID, fin.BankRowOpts{Cents: cents, Date: day})
 	}
 
-	t.Run("net zero", func(t *testing.T) {
-		ids := []string{newRow(imp, -50000, june), newRow(imp, 50000, june)}
-		if _, err := f.svc.AssignBankRowsToAccountGroup(ctx, f.club.ID, actor, ids, "3900", ""); err == nil {
-			t.Errorf("a group netting to zero was booked")
-		}
-	})
-	t.Run("different bank accounts", func(t *testing.T) {
-		ids := []string{newRow(imp, -50000, june), newRow(f.club.NewBankImportOn(t, "1925"), 1000, june)}
-		if _, err := f.svc.AssignBankRowsToAccountGroup(ctx, f.club.ID, actor, ids, "3900", ""); err == nil {
-			t.Errorf("rows on two bank accounts were grouped")
-		}
-	})
-	t.Run("across a year-end", func(t *testing.T) {
-		ids := []string{
-			newRow(imp, -50000, time.Date(f.club.Year, 12, 30, 0, 0, 0, 0, time.UTC)),
-			newRow(imp, 1000, time.Date(f.club.Year+1, 1, 2, 0, 0, 0, 0, time.UTC)),
-		}
-		if _, err := f.svc.AssignBankRowsToAccountGroup(ctx, f.club.ID, actor, ids, "3900", ""); err == nil {
-			t.Errorf("a group across a year-end was booked")
-		}
-	})
-	t.Run("a bank account as target", func(t *testing.T) {
+	refusals := []struct {
+		name    string
+		ids     func() []string
+		account string
+		want    error
+	}{
+		{"net zero", func() []string { return []string{newRow(imp, -50000, june), newRow(imp, 50000, june)} }, "3900", ErrGroupNetZero},
+		{"different bank accounts", func() []string {
+			return []string{newRow(imp, -50000, june), newRow(f.club.NewBankImportOn(t, "1925"), 1000, june)}
+		}, "3900", ErrGroupMixedBankAccounts},
+		{"across a year-end", func() []string {
+			return []string{
+				newRow(imp, -50000, time.Date(f.club.Year, 12, 30, 0, 0, 0, 0, time.UTC)),
+				newRow(imp, 1000, time.Date(f.club.Year+1, 1, 2, 0, 0, 0, 0, time.UTC)),
+			}
+		}, "3900", ErrGroupCrossesPeriod},
+		{"a bank account as target", func() []string { return []string{newRow(imp, -50000, june), newRow(imp, 1000, june)} }, "1925", ErrGroupTargetAccount},
+		{"receivables as target", func() []string { return []string{newRow(imp, -50000, june), newRow(imp, 1000, june)} }, "1500", ErrGroupTargetAccount},
+		{"too few rows", func() []string { id := newRow(imp, -50000, june); return []string{id, id} }, "3900", ErrGroupRowCount},
+		{"too many rows", func() []string {
+			var ids []string
+			for i := 0; i < 6; i++ {
+				ids = append(ids, newRow(imp, int64(-1000-i), june))
+			}
+			return ids
+		}, "3900", ErrGroupRowCount},
+	}
+	for _, tt := range refusals {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := f.svc.AssignBankRowsToAccountGroup(ctx, f.club.ID, actor, tt.ids(), tt.account, ""); !errors.Is(err, tt.want) {
+				t.Errorf("err = %v, want %v", err, tt.want)
+			}
+		})
+	}
+	t.Run("a closed period", func(t *testing.T) {
 		ids := []string{newRow(imp, -50000, june), newRow(imp, 1000, june)}
-		if _, err := f.svc.AssignBankRowsToAccountGroup(ctx, f.club.ID, actor, ids, "1925", ""); err == nil {
-			t.Errorf("a group was booked to a bank account")
+		f.setPeriod(t, f.club, "closed")
+		defer f.setPeriod(t, f.club, "open")
+		if _, err := f.svc.AssignBankRowsToAccountGroup(ctx, f.club.ID, actor, ids, "3900", ""); !errors.Is(err, ErrGroupPeriodClosed) {
+			t.Errorf("err = %v, want ErrGroupPeriodClosed", err)
 		}
 	})
-	t.Run("too few rows", func(t *testing.T) {
-		id := newRow(imp, -50000, june)
-		if _, err := f.svc.AssignBankRowsToAccountGroup(ctx, f.club.ID, actor, []string{id, id}, "3900", ""); err == nil {
-			t.Errorf("a one-row group was booked")
+	t.Run("a dismissed row", func(t *testing.T) {
+		ids := []string{newRow(imp, -50000, june), newRow(imp, 1000, june)}
+		if err := f.svc.DismissBankRow(ctx, f.club.ID, actor, ids[1], "unidentifiable"); err != nil {
+			t.Fatalf("dismiss: %v", err)
+		}
+		if _, err := f.svc.AssignBankRowsToAccountGroup(ctx, f.club.ID, actor, ids, "3900", ""); !errors.Is(err, ErrGroupRowNotBookable) {
+			t.Errorf("err = %v, want ErrGroupRowNotBookable", err)
 		}
 	})
 	t.Run("an already-booked row links nothing", func(t *testing.T) {
@@ -209,8 +227,8 @@ func TestAssignBankRowsToAccountGroupRefusals(t *testing.T) {
 		if _, err := f.svc.AssignBankRowToAccount(ctx, f.club.ID, actor, booked, "3900", "revenue", ""); err != nil {
 			t.Fatalf("book: %v", err)
 		}
-		if _, err := f.svc.AssignBankRowsToAccountGroup(ctx, f.club.ID, actor, []string{free, booked}, "2050", ""); err == nil {
-			t.Errorf("a group with a booked row was booked")
+		if _, err := f.svc.AssignBankRowsToAccountGroup(ctx, f.club.ID, actor, []string{free, booked}, "2050", ""); !errors.Is(err, errBankRowRaced) {
+			t.Errorf("err = %v, want errBankRowRaced", err)
 		}
 		if n := f.scalar(t, `SELECT count(*) FROM bank_import_rows WHERE id = $1 AND journal_entry_id IS NULL`, free); n != 1 {
 			t.Errorf("the free row was linked")

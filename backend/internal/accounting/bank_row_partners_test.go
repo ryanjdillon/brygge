@@ -158,3 +158,46 @@ func TestRankPartnersOrdersAndCaps(t *testing.T) {
 		t.Errorf("ranked %v, want %v (strong first, closest first, capped at %d)", ids, want, maxPartners)
 	}
 }
+
+// An inbound row whose Motpart is the club's own account label, but whose
+// payer account is another party's, is still a candidate: the account
+// number decides, and the club label is no name at all.
+func TestScorePartnerClubLabelWithForeignAccount(t *testing.T) {
+	sc := testScoring()
+	out := row("out", 0, -6300000)
+	out.ToAccount = "99990011111"
+	in := row("in", 2, 100000)
+	in.FromAccount = "99990011111"
+	in.Counterpart = "Synthetic Harbour Club - Drift"
+	s, ok := scorePartner(out, in, sc)
+	if !ok || s.Strength != PartnerStrong || s.Reasons[0] != partnerSameAccount {
+		t.Fatalf("got %+v (ok %v), want strong same_account", s, ok)
+	}
+
+	// Two rows both labelled with the club's name don't match on name.
+	a, b := row("a", 0, -50000), row("b", 3, 12345)
+	a.ToAccount, b.FromAccount = "99990022222", "99990033333"
+	a.Counterpart, b.Counterpart = "Synthetic Harbour Club", "Synthetic Harbour Club"
+	if s, ok := scorePartner(a, b, sc); ok {
+		t.Errorf("club label matched as a name: %+v", s)
+	}
+}
+
+func TestPartnerScoringIsOwn(t *testing.T) {
+	sc := testScoring()
+	tests := []struct {
+		name string
+		r    partnerRow
+		want bool
+	}{
+		{"own account", partnerRow{Cents: 100, FromAccount: "1111.22.22333"}, true},
+		{"foreign account with club label", partnerRow{Cents: 100, FromAccount: "99990011111", Counterpart: "Synthetic Harbour Club"}, false},
+		{"no account, club label", partnerRow{Cents: -100, Counterpart: "SYNTHETIC HARBOUR CLUB"}, true},
+		{"no account, other name", partnerRow{Cents: -100, Counterpart: "Ola Testmann"}, false},
+	}
+	for _, tt := range tests {
+		if got := sc.isOwn(tt.r); got != tt.want {
+			t.Errorf("%s: isOwn = %v, want %v", tt.name, got, tt.want)
+		}
+	}
+}

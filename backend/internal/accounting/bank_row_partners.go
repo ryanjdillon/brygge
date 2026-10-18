@@ -41,6 +41,17 @@ const (
 	partnerNetsToPrice = "nets_to_price"
 )
 
+// Reasons a group booking is refused. Handlers answer 400 with the message.
+var (
+	ErrGroupRowCount          = fmt.Errorf("ei samla tildeling må ha mellom %d og %d rader", minGroupRows, maxGroupRows)
+	ErrGroupTargetAccount     = errors.New("vel ein konto som ikkje er ein bankkonto eller kundefordringar")
+	ErrGroupRowNotBookable    = errors.New("ei av radene er avvist eller foreløpig")
+	ErrGroupMixedBankAccounts = errors.New("radene må høyra til same bankkonto")
+	ErrGroupNetZero           = errors.New("radene går i null: dette er ei overføring. Bruk Synk bank, eller avvis radene som intern overføring")
+	ErrGroupCrossesPeriod     = errors.New("radene ligg i ulike rekneskapsår; bokfør dei kvar for seg")
+	ErrGroupPeriodClosed      = errors.New("rekneskapsperioden er lukka")
+)
+
 // ErrBankRowHasPartner is returned when a row with a strong partner is
 // booked on its own without the operator confirming it.
 var ErrBankRowHasPartner = errors.New("bank row has a likely partner row")
@@ -92,11 +103,28 @@ type partnerScoring struct {
 
 // isOwn reports whether a row is the club moving money between its own
 // accounts, which is never a partner pair (Synk bank books those).
+//
+// A known counterparty account number decides it: an inbound row's Motpart
+// often carries the club's own account label even when the payer's account
+// is another party's. The name test applies only when no account is known.
 func (sc partnerScoring) isOwn(r partnerRow) bool {
-	if acct := r.otherParty(); acct != "" && sc.ownAccounts[acct] {
-		return true
+	if acct := r.otherParty(); acct != "" {
+		return sc.ownAccounts[acct]
 	}
-	return sc.clubName != "" && strings.Contains(normalizeName(r.Counterpart), sc.clubName)
+	return sc.isClubName(r.Counterpart)
+}
+
+func (sc partnerScoring) isClubName(name string) bool {
+	return sc.clubName != "" && strings.Contains(normalizeName(name), sc.clubName)
+}
+
+// partyName is the row's counterparty name for matching, or "" when it is
+// the club's own account label rather than the other party.
+func (sc partnerScoring) partyName(r partnerRow) string {
+	if sc.isClubName(r.Counterpart) {
+		return ""
+	}
+	return r.Counterpart
 }
 
 // scorePartner decides whether b is a partner of a. Signals:
@@ -126,7 +154,7 @@ func scorePartner(a, b partnerRow, sc partnerScoring) (PartnerSuggestion, bool) 
 	if acct := a.otherParty(); acct != "" && acct == b.otherParty() {
 		reasons = append(reasons, partnerSameAccount)
 	}
-	if namesMatch(a.Counterpart, b.Counterpart) {
+	if namesMatch(sc.partyName(a), sc.partyName(b)) {
 		reasons = append(reasons, partnerSameName)
 	}
 	absA, absB := abs64(a.Cents), abs64(b.Cents)
@@ -485,10 +513,10 @@ func (s *Service) AssignBankRowsToAccountGroup(
 ) (*GroupAssignResult, error) {
 	ids := uniqueStrings(rowIDs)
 	if len(ids) < minGroupRows || len(ids) > maxGroupRows {
-		return nil, fmt.Errorf("ei samla tildeling må ha mellom %d og %d rader", minGroupRows, maxGroupRows)
+		return nil, ErrGroupRowCount
 	}
-	if strings.HasPrefix(accountCode, "19") {
-		return nil, errors.New("vel ein konto som ikkje er ein bankkonto")
+	if strings.HasPrefix(accountCode, "19") || accountCode == receivablesAccountCode {
+		return nil, ErrGroupTargetAccount
 	}
 
 	loaded, err := s.loadGroupRows(ctx, clubID, ids)
@@ -500,7 +528,7 @@ func (s *Service) AssignBankRowsToAccountGroup(
 		return nil, err
 	}
 	if accountCode == source.bankAcct {
-		return nil, errors.New("vel ein konto som ikkje er ein bankkonto")
+		return nil, ErrGroupTargetAccount
 	}
 
 	periodID, periodStatus, err := s.resolvePeriod(ctx, clubID, latest, "")
@@ -508,7 +536,7 @@ func (s *Service) AssignBankRowsToAccountGroup(
 		return nil, fmt.Errorf("resolve period: %w", err)
 	}
 	if periodStatus != "open" {
-		return nil, fmt.Errorf("rekneskapsperioden for %s er lukka", latest.Format("2006-01-02"))
+		return nil, fmt.Errorf("%w: %s", ErrGroupPeriodClosed, latest.Format("2006-01-02"))
 	}
 	for _, g := range loaded {
 		pid, _, err := s.resolvePeriod(ctx, clubID, g.date, "")
@@ -516,7 +544,7 @@ func (s *Service) AssignBankRowsToAccountGroup(
 			return nil, fmt.Errorf("resolve period: %w", err)
 		}
 		if pid != periodID {
-			return nil, errors.New("radene ligg i ulike rekneskapsår; bokfør dei kvar for seg")
+			return nil, ErrGroupCrossesPeriod
 		}
 	}
 
@@ -620,11 +648,11 @@ func checkGroupRows(loaded []groupRow) (net int64, latest time.Time, source grou
 		case g.booked:
 			return 0, latest, source, errBankRowRaced
 		case g.dismissed:
-			return 0, latest, source, errors.New("ei av radene er avvist")
+			return 0, latest, source, ErrGroupRowNotBookable
 		case g.prv:
-			return 0, latest, source, errors.New("ei av radene er foreløpig; vent på den endelege rada")
+			return 0, latest, source, ErrGroupRowNotBookable
 		case g.bankAcct != loaded[0].bankAcct:
-			return 0, latest, source, errors.New("radene må høyra til same bankkonto")
+			return 0, latest, source, ErrGroupMixedBankAccounts
 		}
 		net += g.cents
 		if g.date.After(latest) {
@@ -635,7 +663,7 @@ func checkGroupRows(loaded []groupRow) (net int64, latest time.Time, source grou
 		}
 	}
 	if net == 0 {
-		return 0, latest, source, errors.New("radene går i null: dette er ei overføring. Bruk Synk bank, eller avvis radene som intern overføring")
+		return 0, latest, source, ErrGroupNetZero
 	}
 	return net, latest, source, nil
 }

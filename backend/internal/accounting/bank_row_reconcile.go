@@ -336,6 +336,14 @@ func (s *Service) linkBankRows(ctx context.Context, clubID, entryID string, bank
 		return fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback(ctx)
+	// Lock in id order first, so two overlapping group bookings queue
+	// instead of deadlocking on each other's rows.
+	if _, err := tx.Exec(ctx,
+		`SELECT id FROM bank_import_rows WHERE id = ANY($1::uuid[]) AND club_id = $2 ORDER BY id FOR UPDATE`,
+		bankRowIDs, clubID,
+	); err != nil {
+		return fmt.Errorf("lock rows: %w", err)
+	}
 	tag, err := tx.Exec(ctx,
 		`UPDATE bank_import_rows SET journal_entry_id = $1, invoice_id = COALESCE($2, invoice_id), auto_matched = false
 		  WHERE id = ANY($3::uuid[]) AND club_id = $4 AND journal_entry_id IS NULL AND dismissed_at IS NULL`,
