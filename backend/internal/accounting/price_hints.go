@@ -153,14 +153,17 @@ const (
 // priceItemAccountSuggestions turns the price items an amount fits
 // (priceArticleCandidates) into account suggestions, one per default
 // account, in the candidates' order. It follows the auto-assign audience
-// rule: an account whose fitting items are all members-only is offered only
-// when the payer is a known member. The suggestion is sannsynleg when every
-// remaining item points at one account, else svak; the tooltip names the
-// items ("3x Gjesteplass").
+// rule: members-only items count only when the payer is a known member, so
+// for anyone else they neither make an account nor appear in its tooltip.
+// The suggestion is sannsynleg when every remaining item points at one
+// account, else svak; the tooltip names the items ("3x Gjesteplass").
 func priceItemAccountSuggestions(cands []priceArticleCandidate, knownMember bool, accounts map[string]suggestableAccount) []AccountSuggestion {
 	var order []string
 	byAccount := map[string][]priceArticleCandidate{}
 	for _, c := range cands {
+		if !knownMember && c.audience == "member" {
+			continue
+		}
 		code, ok := PriceCategoryAccount(c.category)
 		if !ok {
 			continue
@@ -174,20 +177,12 @@ func priceItemAccountSuggestions(cands []priceArticleCandidate, knownMember bool
 		byAccount[code] = append(byAccount[code], c)
 	}
 
-	var kept []string
-	for _, code := range order {
-		if !knownMember && allMembersOnly(byAccount[code]) {
-			continue
-		}
-		kept = append(kept, code)
-	}
-
 	score := priceItemScoreSpread
-	if len(kept) == 1 {
+	if len(order) == 1 {
 		score = priceItemScoreSingle
 	}
-	out := make([]AccountSuggestion, 0, len(kept))
-	for _, code := range kept {
+	out := make([]AccountSuggestion, 0, len(order))
+	for _, code := range order {
 		a := accounts[code]
 		out = append(out, AccountSuggestion{
 			Code:            a.code,
@@ -200,15 +195,6 @@ func priceItemAccountSuggestions(cands []priceArticleCandidate, knownMember bool
 		})
 	}
 	return out
-}
-
-func allMembersOnly(cands []priceArticleCandidate) bool {
-	for _, c := range cands {
-		if c.audience != "member" {
-			return false
-		}
-	}
-	return len(cands) > 0
 }
 
 func priceItemLabels(cands []priceArticleCandidate) string {

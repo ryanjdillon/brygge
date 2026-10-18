@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -67,9 +68,13 @@ func (h *AccountingHandler) HandleVippsChargeSuggestions(w http.ResponseWriter, 
 	}
 	rowID := chi.URLParam(r, "rowID")
 	res, err := h.svc.VippsChargeSuggestionsFor(ctx, claims.ClubID, rowID)
+	if errors.Is(err, accounting.ErrVippsChargeNotFound) {
+		Error(w, http.StatusNotFound, err.Error())
+		return
+	}
 	if err != nil {
-		h.log.Warn().Err(err).Str("row_id", rowID).Msg("vipps charge suggestions")
-		Error(w, http.StatusBadRequest, err.Error())
+		h.log.Error().Err(err).Str("row_id", rowID).Msg("vipps charge suggestions")
+		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	JSON(w, http.StatusOK, res)

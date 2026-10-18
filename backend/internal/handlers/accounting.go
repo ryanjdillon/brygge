@@ -164,14 +164,23 @@ func (h *AccountingHandler) HandleUpdateAccount(w http.ResponseWriter, r *http.R
 	}
 
 	prev, err := h.svc.UpdateAccount(r.Context(), claims.ClubID, accountID, req.Name, req.Description, req.MVAEligible)
-	if err != nil {
-		h.log.Error().Err(err).Msg("failed to update account")
-		if errors.Is(err, accounting.ErrAccountNotFound) {
-			Error(w, http.StatusNotFound, err.Error())
-			return
-		}
+	switch {
+	case errors.Is(err, accounting.ErrAccountNotFound):
+		Error(w, http.StatusNotFound, err.Error())
+		return
+	case errors.Is(err, accounting.ErrSystemAccountMVALocked):
+		h.log.Warn().Err(err).Str("account_id", accountID).Msg("refused account update")
 		Error(w, http.StatusBadRequest, err.Error())
 		return
+	case err != nil:
+		h.log.Error().Err(err).Msg("failed to update account")
+		Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	// An omitted MVA status keeps the stored one; audit what took effect.
+	mva := req.MVAEligible
+	if mva == "" {
+		mva = prev.MVAEligible
 	}
 
 	if h.audit != nil {
@@ -183,7 +192,7 @@ func (h *AccountingHandler) HandleUpdateAccount(w http.ResponseWriter, r *http.R
 				"previous_name":        prev.Name,
 				"description":          req.Description,
 				"previous_description": prev.Description,
-				"mva_eligible":         req.MVAEligible,
+				"mva_eligible":         mva,
 			})
 	}
 

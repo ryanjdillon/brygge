@@ -359,8 +359,11 @@ func (s *Service) BankRowSuggestionsFor(
 
 	// Account suggestions: outgoing rows get expense accounts;
 	// incoming rows can ALSO show revenue suggestions as a secondary
-	// "or assign to category" path when invoice suggestions miss.
-	accs, err := s.rankAccountSuggestions(ctx, clubID, rowAmount, rowDesc, counterpart)
+	// "or assign to category" path when invoice suggestions miss. A Vipps
+	// settlement payout is the sum of many charges, so its amount fitting a
+	// price item is a coincidence: it gets no price_item pass.
+	payout := VippsSettlementPattern.MatchString(rowDesc)
+	accs, err := s.rankAccountSuggestions(ctx, clubID, rowAmount, rowDesc, counterpart, !payout)
 	if err != nil {
 		return nil, err
 	}
@@ -469,12 +472,14 @@ func (s *Service) rankIncomingInvoices(
 	return out, nil
 }
 
-// rankAccountSuggestions ranks GL accounts for a row or charge: first the
-// default accounts of the price items the amount fits (incoming only), then
-// the description hints, then, when neither found anything, a small default
-// cohort of the row's direction. payer feeds the members-only audience rule.
+// rankAccountSuggestions ranks GL accounts for a row or charge: first, when
+// matchPrices, the default accounts of the price items an incoming amount
+// fits; for outgoing amounts, the description hints (expense accounts, so
+// never offered for money coming in); then, when neither found anything, a
+// small default cohort of the row's direction. payer feeds the members-only
+// audience rule.
 func (s *Service) rankAccountSuggestions(
-	ctx context.Context, clubID string, amount float64, desc, payer string,
+	ctx context.Context, clubID string, amount float64, desc, payer string, matchPrices bool,
 ) ([]AccountSuggestion, error) {
 	rows, err := s.db.Query(ctx,
 		`SELECT code, name, account_type::text
@@ -509,11 +514,15 @@ func (s *Service) rankAccountSuggestions(
 		suggestions = append(suggestions, sug)
 	}
 
-	for _, sug := range s.priceItemSuggestions(ctx, clubID, amount, desc, payer, byCode) {
-		add(sug)
+	if matchPrices {
+		for _, sug := range s.priceItemSuggestions(ctx, clubID, amount, desc, payer, byCode) {
+			add(sug)
+		}
 	}
-	for _, sug := range descriptionHintSuggestions(desc, byCode) {
-		add(sug)
+	if amount < 0 {
+		for _, sug := range descriptionHintSuggestions(desc, byCode) {
+			add(sug)
+		}
 	}
 
 	// If still empty, surface a small default cohort filtered by sign.

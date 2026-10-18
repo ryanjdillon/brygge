@@ -2,8 +2,11 @@ package accounting
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // ReconcileItem is a single line awaiting reconciliation in the Tildel queue,
@@ -118,6 +121,10 @@ func (s *Service) PotentialInvoicesForVippsCharge(ctx context.Context, clubID, c
 	return s.PotentialInvoicesForRow(ctx, clubID, "", q, limit, amount)
 }
 
+// ErrVippsChargeNotFound is returned for a charge id that is not an
+// individual Vipps charge of the club.
+var ErrVippsChargeNotFound = errors.New("vipps charge not found")
+
 // VippsChargeSuggestionsFor ranks fakturas and accounts for one unbooked
 // Vipps charge with the same rules as a bank row: the payer's name for
 // fakturas, and the price items the amount fits for accounts.
@@ -134,7 +141,10 @@ func (s *Service) VippsChargeSuggestionsFor(ctx context.Context, clubID, chargeI
 		  WHERE id = $1 AND club_id = $2 AND row_type = $3`,
 		chargeID, clubID, string(VippsRowBelastning),
 	).Scan(&amount, &date, &payer, &message); err != nil {
-		return nil, fmt.Errorf("vipps charge not found")
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrVippsChargeNotFound
+		}
+		return nil, fmt.Errorf("load vipps charge: %w", err)
 	}
 	rowDate := time.Now()
 	if date != nil {
@@ -149,7 +159,7 @@ func (s *Service) VippsChargeSuggestionsFor(ctx context.Context, clubID, chargeI
 		}
 		out.Invoices = invs
 	}
-	accs, err := s.rankAccountSuggestions(ctx, clubID, amount, message, payer)
+	accs, err := s.rankAccountSuggestions(ctx, clubID, amount, message, payer, true)
 	if err != nil {
 		return nil, err
 	}

@@ -103,6 +103,24 @@ func TestVippsChargeSuggestionsPriceItem(t *testing.T) {
 		t.Errorf("accounts = %+v, want 3200 for 3x Gjesteplass first", res.Accounts)
 	}
 
+	// A payer's message naming an expense ("Strøm") is no reason to offer
+	// an expense account for money coming in.
+	electricity := club.NewVippsRow(t, fin.VippsRowOpts{Cents: 45000, CustomerName: "Kari Testdotter"})
+	if _, err := pool.Exec(context.Background(),
+		`UPDATE vipps_import_rows SET message = 'Strøm' WHERE id = $1`, electricity,
+	); err != nil {
+		t.Fatalf("set message: %v", err)
+	}
+	res, err = svc.VippsChargeSuggestionsFor(context.Background(), club.ID, electricity)
+	if err != nil {
+		t.Fatalf("suggestions: %v", err)
+	}
+	for _, a := range res.Accounts {
+		if a.AccountType != "revenue" {
+			t.Errorf("incoming charge with message Strøm suggested %s (%s)", a.Code, a.AccountType)
+		}
+	}
+
 	// 1 600.01 fits no price item: the default revenue cohort, all weak.
 	odd := club.NewVippsRow(t, fin.VippsRowOpts{Cents: 160001, CustomerName: "Kari Testdotter"})
 	res, err = svc.VippsChargeSuggestionsFor(context.Background(), club.ID, odd)
@@ -112,6 +130,50 @@ func TestVippsChargeSuggestionsPriceItem(t *testing.T) {
 	for _, a := range res.Accounts {
 		if a.ConfidenceLabel != "svak" {
 			t.Errorf("unmatched amount suggested %s as %s, want only weak defaults", a.Code, a.ConfidenceLabel)
+		}
+	}
+}
+
+// Incoming bank rows get the price_item pass and no expense hints; a Vipps
+// settlement payout gets neither, its amount fitting a price is chance.
+func TestBankRowSuggestionsIncoming(t *testing.T) {
+	testutil.SkipIfNoDB(t)
+	pool := testutil.SetupTestDB(t)
+	svc := NewService(pool, nil, zerolog.Nop())
+	club := fin.NewClub(t, pool, fin.WithKontoplan(svc.SeedKontoplan))
+	seedPriceItem(t, club, "service", "Slipping stor båt", "all", "once", 1600, 1, true)
+
+	imp := club.NewBankImport(t)
+	ctx := context.Background()
+
+	strom := club.NewBankRow(t, imp, fin.BankRowOpts{Cents: 45000, Description: "Strøm brygge B", Counterpart: "Ola Testmann"})
+	res, err := svc.BankRowSuggestionsFor(ctx, club.ID, strom)
+	if err != nil {
+		t.Fatalf("suggestions: %v", err)
+	}
+	for _, a := range res.Accounts {
+		if a.AccountType != "revenue" {
+			t.Errorf("incoming row described Strøm suggested %s (%s)", a.Code, a.AccountType)
+		}
+	}
+
+	slipping := club.NewBankRow(t, imp, fin.BankRowOpts{Cents: 160000, Counterpart: "Ola Testmann"})
+	res, err = svc.BankRowSuggestionsFor(ctx, club.ID, slipping)
+	if err != nil {
+		t.Fatalf("suggestions: %v", err)
+	}
+	if len(res.Accounts) == 0 || res.Accounts[0].Code != "3300" || res.Accounts[0].Reason != "price_item" {
+		t.Errorf("1 600 row accounts = %+v, want 3300 price_item first", res.Accounts)
+	}
+
+	payout := club.NewBankRow(t, imp, fin.BankRowOpts{Cents: 160000, Description: "Utb. 3000100 Vippsnr 548005"})
+	res, err = svc.BankRowSuggestionsFor(ctx, club.ID, payout)
+	if err != nil {
+		t.Fatalf("suggestions: %v", err)
+	}
+	for _, a := range res.Accounts {
+		if a.Reason == "price_item" {
+			t.Errorf("Vipps payout got a price_item suggestion: %+v", a)
 		}
 	}
 }

@@ -52,6 +52,14 @@ func TestPriceItemAccountSuggestions(t *testing.T) {
 			want: []want{{"3300", "sannsynleg", "Slipping liten båt"}},
 		},
 		{
+			name: "members-only items stay out of the tooltip for an unknown payer",
+			cands: []priceArticleCandidate{
+				{name: "Slipping medlem", category: "service", audience: "member", multiplier: 1},
+				{name: "Slipping", category: "service", audience: "all", multiplier: 1},
+			},
+			want: []want{{"3300", "sannsynleg", "Slipping"}},
+		},
+		{
 			name: "a known member keeps members-only items",
 			cands: []priceArticleCandidate{
 				{name: "Sesongplass medlem", category: "seasonal_rental", audience: "member", multiplier: 1},
