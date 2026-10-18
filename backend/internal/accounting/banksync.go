@@ -540,56 +540,10 @@ func (s *Service) syncKIDMatches(ctx context.Context, clubID, createdBy string, 
 			p.counterpart = newCounterpart
 		}
 
-		// Match cascade: KID candidates (kid / arkivref / from description)
-		// → "Fakturanummer NN" + amount → unique counterpart-name + amount.
-		var invoiceID string
-		kidCands := map[string]bool{}
-		for _, c := range []string{p.kid, p.reference, ExtractKIDFromDescription(p.desc)} {
-			c = strings.TrimSpace(c)
-			if c == "" || kidCands[c] {
-				continue
-			}
-			kidCands[c] = true
-			_ = s.db.QueryRow(ctx,
-				`SELECT i.id FROM invoices i
-				 WHERE i.club_id = $1 AND i.kid_number = $2
-				 AND `+finance.OwedByMemberSQL("i")+`
-				 AND NOT EXISTS (
-				   SELECT 1 FROM bank_import_rows bir
-				   WHERE bir.club_id = i.club_id AND bir.kid_number = $2 AND bir.journal_entry_id IS NOT NULL
-				 )
-				 LIMIT 1`,
-				clubID, c,
-			).Scan(&invoiceID)
-			if invoiceID != "" {
-				break
-			}
-		}
-		if invoiceID == "" {
-			if num := ExtractInvoiceNumberFromDescription(p.desc); num != "" {
-				_ = s.db.QueryRow(ctx,
-					`SELECT i.id FROM invoices i
-					 WHERE i.club_id = $1 AND i.invoice_number::text = $2
-					   AND ABS(i.total_amount - $3) < 0.005
-					   AND `+finance.OwedByMemberSQL("i")+`
-					   AND NOT EXISTS (
-					     SELECT 1 FROM bank_import_rows bir
-					     WHERE bir.club_id = i.club_id AND bir.journal_entry_id IS NOT NULL
-					       AND bir.kid_number = i.kid_number
-					   )
-					 LIMIT 1`,
-					clubID, num, p.amount,
-				).Scan(&invoiceID)
-			}
-		}
-		if invoiceID == "" && nameMatch && p.counterpart != "" {
-			// Tertiary: counterpart name (the bank's Debitornavn /
-			// Fra-prefix payer) + amount. Only auto-match when the
-			// (normalized name, amount) pair maps to EXACTLY one open
-			// unpaid invoice. Ambiguity (2+ candidates) falls through
-			// and the row stays unmatched for manual review.
-			invoiceID = s.findInvoiceByCounterpartAndAmount(ctx, clubID, p.counterpart, p.amount)
-		}
+		invoiceID := s.findCascadeInvoice(ctx, clubID, BankRow{
+			KID: p.kid, Reference: p.reference, Description: p.desc,
+			Counterpart: p.counterpart, Amount: p.amount,
+		}, nameMatch)
 		if invoiceID == "" {
 			continue
 		}

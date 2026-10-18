@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/brygge-klubb/brygge/internal/finance"
 )
 
 // kidCascadeEligibleSQL is true for a bank row the payment-match cascade
@@ -23,6 +25,57 @@ func kidCascadeEligibleSQL(alias string) string {
 		p = alias + "."
 	}
 	return "(" + p + "journal_entry_id IS NULL AND " + p + "dismissed_at IS NULL AND " + p + "refund_paired_with IS NULL)"
+}
+
+// findCascadeInvoice is the cascade's choice of faktura for an incoming row,
+// "" when none: each KID-like candidate (kidMatchCandidates: the parsed KID,
+// the arkivref, a KID in the description, since some giro-med-melding
+// exports carry the real KID outside the KID column), then "Fakturanummer
+// NN" with the amount equal to the total (a part payment of a multi-line
+// faktura must not land on it by number), then, with nameMatch, a unique
+// counterpart name + amount (findInvoiceByCounterpartAndAmount). Only
+// fakturas still owed and without a KID-booked row qualify; the booking
+// re-checks that under the faktura lock.
+func (s *Service) findCascadeInvoice(ctx context.Context, clubID string, row BankRow, nameMatch bool) string {
+	var invoiceID string
+	for _, cand := range kidMatchCandidates(row) {
+		_ = s.db.QueryRow(ctx,
+			`SELECT i.id FROM invoices i
+			 WHERE i.club_id = $1 AND i.kid_number = $2
+			 AND `+finance.OwedByMemberSQL("i")+`
+			 AND NOT EXISTS (
+			   SELECT 1 FROM bank_import_rows bir
+			   WHERE bir.club_id = i.club_id AND bir.kid_number = $2 AND bir.journal_entry_id IS NOT NULL
+			 )
+			 LIMIT 1`,
+			clubID, cand,
+		).Scan(&invoiceID)
+		if invoiceID != "" {
+			return invoiceID
+		}
+	}
+	if num := ExtractInvoiceNumberFromDescription(row.Description); num != "" {
+		_ = s.db.QueryRow(ctx,
+			`SELECT i.id FROM invoices i
+			 WHERE i.club_id = $1 AND i.invoice_number::text = $2
+			   AND ABS(i.total_amount - $3) < 0.005
+			   AND `+finance.OwedByMemberSQL("i")+`
+			   AND NOT EXISTS (
+			     SELECT 1 FROM bank_import_rows bir
+			     WHERE bir.club_id = i.club_id AND bir.journal_entry_id IS NOT NULL
+			       AND bir.kid_number = i.kid_number
+			   )
+			 LIMIT 1`,
+			clubID, num, row.Amount,
+		).Scan(&invoiceID)
+		if invoiceID != "" {
+			return invoiceID
+		}
+	}
+	if nameMatch && row.Counterpart != "" {
+		return s.findInvoiceByCounterpartAndAmount(ctx, clubID, row.Counterpart, row.Amount)
+	}
+	return ""
 }
 
 // kidCascadeMatch is one bank row the cascade matched to a faktura.

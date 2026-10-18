@@ -18,8 +18,6 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"gopkg.in/yaml.v3"
-
-	"github.com/brygge-klubb/brygge/internal/finance"
 )
 
 // BankRow is the internal normalized representation of a bank transaction.
@@ -572,57 +570,7 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOv
 			continue
 		}
 
-		// Resolve invoice id. Try each KID-like candidate (parsed KID,
-		// arkivref, KID embedded in the description) — some giro-med-melding
-		// exports carry the real KID in a column other than the KID field.
-		// Then fall back to "Fakturanummer NN" by invoice_number, and finally
-		// to a unique counterpart-name + amount match.
-		var invoiceID string
-		for _, cand := range kidMatchCandidates(row) {
-			_ = s.db.QueryRow(ctx,
-				`SELECT i.id FROM invoices i
-				 WHERE i.club_id = $1 AND i.kid_number = $2
-				 AND `+finance.OwedByMemberSQL("i")+`
-				 AND NOT EXISTS (
-				   SELECT 1 FROM bank_import_rows bir
-				   WHERE bir.club_id = i.club_id AND bir.kid_number = $2 AND bir.journal_entry_id IS NOT NULL
-				 )
-				 LIMIT 1`,
-				clubID, cand,
-			).Scan(&invoiceID)
-			if invoiceID != "" {
-				break
-			}
-		}
-		if invoiceID == "" {
-			if num := ExtractInvoiceNumberFromDescription(row.Description); num != "" {
-				// Match by invoice_number, but only when the
-				// amount matches the invoice total — otherwise
-				// a payer paying part of a multi-line invoice
-				// could land on the wrong row.
-				_ = s.db.QueryRow(ctx,
-					`SELECT i.id FROM invoices i
-					 WHERE i.club_id = $1 AND i.invoice_number::text = $2
-					   AND ABS(i.total_amount - $3) < 0.005
-					   AND `+finance.OwedByMemberSQL("i")+`
-					   AND NOT EXISTS (
-					     SELECT 1 FROM bank_import_rows bir
-					     WHERE bir.club_id = i.club_id AND bir.journal_entry_id IS NOT NULL
-					       AND bir.kid_number = i.kid_number
-					   )
-					 LIMIT 1`,
-					clubID, num, row.Amount,
-				).Scan(&invoiceID)
-			}
-		}
-		if invoiceID == "" && !bankAuto && row.Counterpart != "" {
-			// Tertiary: a unique open unpaid invoice whose member's name
-			// equals the bank counterpart and whose total matches the amount
-			// — catches giro-med-melding payments where the KID never
-			// validated. Same helper the on-demand BankSync uses; ambiguity
-			// (2+ candidates) leaves the row unmatched for manual review.
-			invoiceID = s.findInvoiceByCounterpartAndAmount(ctx, clubID, row.Counterpart, row.Amount)
-		}
+		invoiceID := s.findCascadeInvoice(ctx, clubID, row, !bankAuto)
 		if invoiceID == "" {
 			continue
 		}

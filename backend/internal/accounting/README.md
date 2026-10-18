@@ -13,7 +13,7 @@ The double-entry GL plus everything that posts to it: bank statement parsing, KI
 | `price_hints.go` | `PriceItemCategories`, `PriceCategoryAccount` (a price-item category's default account), `ListAccountsWithPriceHints` (the accounts list with the price items and categories that book to each account) and the `price_item` account-suggestion rule used by bank-row and Vipps-charge suggestions. |
 | `bankimport.go` | CSV parsing per `BankFormat`, `ImportBankRows`, infer-own-account-number heuristic, auto-match KID at import time, intra-bank transfer detection. |
 | `banksync.go` | On-demand re-run of KID matching + Vipps reconciliation across all of a club's unmatched bank rows. Called by the "Synk bank" button. |
-| `kid_cascade.go` | What import and sync share in the KID cascade: the row eligibility predicate (`kidCascadeEligibleSQL`) and the locked per-row booking (`bookKIDCascadeMatch`). |
+| `kid_cascade.go` | What import and sync share in the KID cascade: the row eligibility predicate (`kidCascadeEligibleSQL`), the faktura choice (`findCascadeInvoice`, steps 2–4 below) and the locked per-row booking (`bookKIDCascadeMatch`). |
 | `automatch.go` | `AutoMatchImport` — applies operator-defined `account_mapping_rules` against unmatched rows. |
 | `vippsimport.go` | Parse Vipps export CSV (rows are `payout`, `belastning`, `fee`). |
 | `vippsreconcile.go` | `ReconcileVippsPreview` + `ReconcileVippsConfirm` — the cascade that classifies each Vipps belastning. See cascade below. |
