@@ -419,59 +419,69 @@ type settledFaktura struct {
 	paid   float64
 }
 
+// There is no in-app way yet to fix the faktura side of such a charge
+// (BRY-397), so the reason says the draft waits rather than what to click.
 func (f *settledFaktura) reason() string {
-	return fmt.Sprintf("%s, and faktura %d is marked paid by a %.2f kr KID payment that no other booking explains — it may be this charge: check faktura %d and correct it by hand",
-		reasonParkedNoFaktura, f.number, f.paid, f.number)
+	return fmt.Sprintf("%s, and faktura %d is marked paid by a %.2f kr payment that no other booking explains — it may be this charge. The draft stays until the faktura link is resolved (BRY-397); contact the developer meanwhile",
+		reasonParkedNoFaktura, f.number, f.paid)
 }
 
+// settledWindowDays bounds how far a faktura payment's date may lie from a
+// charge date for the payment to count as possibly that charge. Legacy
+// KID-avstemming payments carry the payout date, a few days after the charge.
+const settledWindowDays = 7
+
 // receivableChargeSettledFaktura is the test that lets a Vipps charge
-// credited to 1500 without a recorded faktura be rebooked or released
-// (BRY-392). payments has no column naming a Vipps charge, so a charge is
-// taken to have settled a faktura when one that could be its payer's is
-// marked paid by a KID-avstemming payment of the charge's amount (±1 kr) and
-// no posted bank or Vipps booking linked to that faktura explains the
-// payment. The candidates are the fakturas of the member the payer resolves
-// to and the faktura whose KID is in the message. A payer with no strong
-// member match and no known KID could have paid anyone's faktura, so then
-// any such payment within 7 days of the charge counts. It returns the first
-// such faktura, or nil when the charge passes.
+// credited to 1500 without a recorded faktura be rebooked, released or
+// unassigned (BRY-392). payments has no column naming a Vipps charge, so a
+// charge is taken to have settled a faktura when that faktura is marked paid
+// for the charge's amount (±1 kr) and no non-voided bank or Vipps booking
+// linked to the faktura explains the payment:
+//
+//   - a KID-avstemming payment (invoices.payment_id) on a faktura of the
+//     member the payer resolves to, or the faktura whose KID is in the
+//     message, at any date;
+//   - a KID-avstemming payment on any faktura, paid within settledWindowDays
+//     of the charge date — the payer may have paid a household member's
+//     faktura, and name resolution can be wrong;
+//   - a faktura marked Vipps-paid (vipps_paid_at) within the window, unless a
+//     booked charge of a checkout order paying it explains it.
+//
+// It returns the first such faktura, or nil when the charge passes.
 func (s *Service) receivableChargeSettledFaktura(ctx context.Context, clubID, customer, message string, amount float64, paidOn time.Time) (*settledFaktura, error) {
-	memberID, pass, err := s.resolveCustomerToMemberPass(ctx, clubID, customer, message)
+	memberID, _, err := s.resolveCustomerToMemberPass(ctx, clubID, customer, message)
 	if err != nil {
 		return nil, fmt.Errorf("resolving payer: %w", err)
 	}
 	kid := extractKID(message)
-	kidKnown := false
-	if kid != "" {
-		if err := s.db.QueryRow(ctx,
-			`SELECT EXISTS (SELECT 1 FROM invoices WHERE club_id = $1 AND kid_number = $2)`,
-			clubID, kid,
-		).Scan(&kidKnown); err != nil {
-			return nil, fmt.Errorf("checking KID: %w", err)
-		}
-	}
-	strongMember := memberID != "" && pass <= memberPassFirstLast
-	anyMember := !strongMember && !kidKnown
 
 	var f settledFaktura
 	err = s.db.QueryRow(ctx,
-		`SELECT i.invoice_number, p.amount
+		`SELECT i.invoice_number, COALESCE(p.amount, i.total_amount)
 		   FROM invoices i
-		   JOIN payments p ON p.id = i.payment_id AND p.club_id = i.club_id
+		   LEFT JOIN payments p ON p.id = i.payment_id AND p.club_id = i.club_id
+		                       AND p.description = 'KID-avstemming'
 		  WHERE i.club_id = $1
-		    AND p.description = 'KID-avstemming'
-		    AND abs(p.amount - $2) <= 1
-		    AND (($3 <> '' AND i.user_id::text = $3)
-		      OR ($4 <> '' AND i.kid_number = $4)
-		      OR ($5 AND p.paid_at::date BETWEEN $6::date - 7 AND $6::date + 7))
+		    AND ((p.id IS NOT NULL AND abs(p.amount - $2) <= 1
+		          AND (($3 <> '' AND i.user_id::text = $3)
+		            OR ($4 <> '' AND i.kid_number = $4)
+		            OR p.paid_at::date BETWEEN $5::date - $6::int AND $5::date + $6::int))
+		      OR (i.vipps_paid_at IS NOT NULL AND abs(i.total_amount - $2) <= 1
+		          AND i.vipps_paid_at::date BETWEEN $5::date - $6::int AND $5::date + $6::int
+		          AND NOT EXISTS (
+		              SELECT 1 FROM order_sources os
+		                JOIN orders o ON o.id = os.order_id
+		                JOIN vipps_import_rows v ON v.club_id = o.club_id AND v.order_id = o.vipps_reference
+		                JOIN journal_entries je ON je.id = v.journal_entry_id AND je.status <> 'voided'
+		               WHERE os.invoice_id = i.id AND o.vipps_reference <> '')))
 		    AND NOT EXISTS (
 		        SELECT 1 FROM journal_entries je
-		         WHERE je.club_id = i.club_id AND je.status = 'posted'
+		         WHERE je.club_id = i.club_id AND je.status <> 'voided'
 		           AND (je.id IN (SELECT journal_entry_id FROM bank_import_rows WHERE club_id = i.club_id AND invoice_id = i.id)
 		             OR je.id IN (SELECT journal_entry_id FROM vipps_import_rows WHERE club_id = i.club_id AND invoice_id = i.id)))
 		  ORDER BY i.invoice_number
 		  LIMIT 1`,
-		clubID, amount, memberID, kid, anyMember, paidOn,
+		clubID, amount, memberID, kid, paidOn, settledWindowDays,
 	).Scan(&f.number, &f.paid)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
@@ -482,29 +492,74 @@ func (s *Service) receivableChargeSettledFaktura(ctx context.Context, clubID, cu
 	return &f, nil
 }
 
+// parkedDraftCheck reports whether entryID, the draft a charge row is booked
+// to, credits 1500 as its only line besides the clearing debit, and if so
+// the faktura the charge may already have paid.
+func (s *Service) parkedDraftCheck(ctx context.Context, clubID, rowID, entryID string) (bool, *settledFaktura, error) {
+	clearing, _, err := s.vippsAccounts(ctx, clubID)
+	if err != nil {
+		return false, nil, err
+	}
+	rows, err := s.db.Query(ctx,
+		`SELECT a.code, jl.debit, jl.credit
+		   FROM journal_lines jl JOIN accounts a ON a.id = jl.account_id
+		  WHERE jl.journal_entry_id = $1`,
+		entryID,
+	)
+	if err != nil {
+		return false, nil, fmt.Errorf("loading draft lines: %w", err)
+	}
+	var lines []AccountTotal
+	for rows.Next() {
+		var l AccountTotal
+		if err := rows.Scan(&l.AccountCode, &l.Debit, &l.Credit); err != nil {
+			rows.Close()
+			return false, nil, fmt.Errorf("scanning draft line: %w", err)
+		}
+		lines = append(lines, l)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return false, nil, err
+	}
+	if parkedCredit(lines, clearing) != receivablesAccountCode {
+		return false, nil, nil
+	}
+
+	var customer, message string
+	var amount float64
+	var paidOn time.Time
+	if err := s.db.QueryRow(ctx,
+		`SELECT r.amount, COALESCE(r.booking_date, r.tx_at::date),
+		        COALESCE(r.customer_name, ''), COALESCE(r.message, '')
+		   FROM vipps_import_rows r WHERE r.id = $1 AND r.club_id = $2`,
+		rowID, clubID,
+	).Scan(&amount, &paidOn, &customer, &message); err != nil {
+		return false, nil, fmt.Errorf("loading vipps charge: %w", err)
+	}
+	settled, err := s.receivableChargeSettledFaktura(ctx, clubID, customer, message, amount, paidOn)
+	return true, settled, err
+}
+
 // ReleaseVippsBacklogCharge removes the draft of a charge parked on 1500 with
 // no recorded faktura and returns the charge to the Vipps queue, so the
-// treasurer can assign by hand what the backlog run refused. Only a charge
-// that passes receivableChargeSettledFaktura is released: one that may have
-// paid a faktura stays put until that faktura is corrected. The draft's
-// period must be open. It returns the deleted draft's id.
+// treasurer can assign by hand what the backlog run refused. On top of
+// UnassignVippsCharge, which already refuses a parked draft that fails
+// receivableChargeSettledFaktura, it requires exactly that shape of draft
+// and an open period. It returns the deleted draft's id.
 func (s *Service) ReleaseVippsBacklogCharge(ctx context.Context, clubID, actorID, rowID string) (string, error) {
 	var (
 		entryID, invoiceID, entryStatus, periodStatus *string
-		rowType, customer, message                    string
-		amount                                        float64
-		paidOn                                        time.Time
+		rowType                                       string
 	)
 	err := s.db.QueryRow(ctx,
-		`SELECT r.row_type, r.journal_entry_id::text, r.invoice_id::text, je.status::text, fp.status::text,
-		        r.amount, COALESCE(r.booking_date, r.tx_at::date),
-		        COALESCE(r.customer_name, ''), COALESCE(r.message, '')
+		`SELECT r.row_type, r.journal_entry_id::text, r.invoice_id::text, je.status::text, fp.status::text
 		   FROM vipps_import_rows r
 		   LEFT JOIN journal_entries je ON je.id = r.journal_entry_id AND je.club_id = r.club_id
 		   LEFT JOIN fiscal_periods fp ON fp.id = je.fiscal_period_id
 		  WHERE r.id = $1 AND r.club_id = $2`,
 		rowID, clubID,
-	).Scan(&rowType, &entryID, &invoiceID, &entryStatus, &periodStatus, &amount, &paidOn, &customer, &message)
+	).Scan(&rowType, &entryID, &invoiceID, &entryStatus, &periodStatus)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", fmt.Errorf("vipps charge not found")
 	}
@@ -524,42 +579,12 @@ func (s *Service) ReleaseVippsBacklogCharge(ctx context.Context, clubID, actorID
 		return "", fmt.Errorf("the draft's fiscal period is not open: %w", ErrPeriodClosed)
 	}
 
-	clearing, _, err := s.vippsAccounts(ctx, clubID)
+	parked, _, err := s.parkedDraftCheck(ctx, clubID, rowID, *entryID)
 	if err != nil {
 		return "", err
 	}
-	rows, err := s.db.Query(ctx,
-		`SELECT a.code, jl.debit, jl.credit
-		   FROM journal_lines jl JOIN accounts a ON a.id = jl.account_id
-		  WHERE jl.journal_entry_id = $1`,
-		*entryID,
-	)
-	if err != nil {
-		return "", fmt.Errorf("loading draft lines: %w", err)
-	}
-	var lines []AccountTotal
-	for rows.Next() {
-		var l AccountTotal
-		if err := rows.Scan(&l.AccountCode, &l.Debit, &l.Credit); err != nil {
-			rows.Close()
-			return "", fmt.Errorf("scanning draft line: %w", err)
-		}
-		lines = append(lines, l)
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return "", err
-	}
-	if parkedCredit(lines, clearing) != receivablesAccountCode {
+	if !parked {
 		return "", fmt.Errorf("only a charge draft crediting %s can be released", receivablesAccountCode)
-	}
-
-	settled, err := s.receivableChargeSettledFaktura(ctx, clubID, customer, message, amount, paidOn)
-	if err != nil {
-		return "", err
-	}
-	if settled != nil {
-		return "", errors.New(settled.reason())
 	}
 	prior, _, err := s.UnassignVippsCharge(ctx, clubID, actorID, rowID)
 	return prior, err

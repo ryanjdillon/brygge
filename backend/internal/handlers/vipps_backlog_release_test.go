@@ -16,7 +16,8 @@ import (
 // Releasing a 1500-parked backlog draft goes through the Vipps unassign with
 // released_from_backlog: a charge that passes the settled-faktura test is
 // released and audited with the flag; one that may have paid a faktura is
-// refused and not audited. A bodyless unassign keeps working as before.
+// refused and not audited, with or without the flag. A bodyless unassign of
+// a draft that passes keeps working as before.
 func TestUnassignVippsChargeReleasedFromBacklog(t *testing.T) {
 	var svc *accounting.Service
 	env := newAliasTestEnv(t, func(r chi.Router, s *accounting.Service, as *audit.Service) {
@@ -70,6 +71,9 @@ func TestUnassignVippsChargeReleasedFromBacklog(t *testing.T) {
 	legacy, _ := parked(45000, "Synthetic Legacypayer")
 	if rec := env.serve([]string{"treasurer"}, http.MethodPost, "/vipps-charges/"+legacy+"/unassign", release); rec.Code != http.StatusBadRequest {
 		t.Errorf("release of a legacy-paid draft: %d %s, want 400", rec.Code, rec.Body)
+	}
+	if rec := env.serve([]string{"treasurer"}, http.MethodPost, "/vipps-charges/"+legacy+"/unassign", nil); rec.Code != http.StatusBadRequest {
+		t.Errorf("bodyless unassign of a legacy-paid draft: %d %s, want 400", rec.Code, rec.Body)
 	}
 	if n := len(env.audit(audit.ActionVippsChargeUnassigned)); n != 1 {
 		t.Errorf("a refused release was audited (%d rows)", n)

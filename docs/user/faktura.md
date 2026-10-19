@@ -270,8 +270,12 @@ Single fakturas go through the same draft → send → paid flow.
 
   Rebooking uses the same rules as automatic Vipps assignment. Turn that on first under `Økonomiinnstillinger → Vipps` (with the tie category). Otherwise the 3900 payments are posted there unclassified, and the 1500 payments with no faktura are left alone. Running it again does nothing new.
 
-  **Payments on 1500 with no faktura.** An early Vipps import booked some payments to 1500 as if they paid a faktura, without saying which one. Before rebooking one, Brygge checks whether it may have paid a faktura after all. It may have if a faktura of the same payer, or the faktura whose KID is in the Vipps message, is marked paid by a KID payment of the same amount (within 1 kr) and no bank or Vipps booking on that faktura explains the payment. When the payer is unknown and there is no KID, any such payment within 7 days of the Vipps payment counts. Then:
-  - **It may have paid a faktura:** it is left alone, and the reason names the faktura. Check that faktura and correct it by hand.
+  **Payments on 1500 with no faktura.** An early Vipps import booked some payments to 1500 as if they paid a faktura, without saying which one. Before rebooking one, Brygge checks whether it may have paid a faktura after all. It may have if a faktura is marked paid for the same amount (within 1 kr) and no bank or Vipps booking on that faktura explains the payment, and either:
+  - the faktura is the same payer's, or its KID is in the Vipps message; or
+  - the faktura was marked paid within 7 days of the Vipps payment, whoever it belongs to (people often pay a partner's faktura).
+
+  Then:
+  - **It may have paid a faktura:** it is left alone, and the reason names the faktura. It can't be released either. There is no way to sort this out in Brygge yet: the draft stays until the faktura link is resolved (BRY-397). Contact the developer in the meantime.
   - **It paid nothing, and a rule places it:** it is rebooked to the price item's account, or assigned to the payer's single open faktura of that amount.
   - **It paid nothing, but no rule places it** (or automatic assignment is off): it is left alone and gets a **Frigi** button under the preview. Frigi deletes the draft and puts the payment back in the Vipps queue, where you assign it by hand in Tildel. Frigi asks for a fresh 2FA code, and is refused once the year is locked or closed.
 

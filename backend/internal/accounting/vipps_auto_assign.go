@@ -291,7 +291,8 @@ func (s *Service) markAutoAssigned(ctx context.Context, clubID, actorID, rowID, 
 // Tildel queue: a draft entry is deleted, a posted one voided (the original
 // and its reversal stay, as bokføringsloven requires), and a faktura the
 // charge settled is reopened. Charges booked from a checkout order settle
-// fakturas through the order and are refused; void their bilag instead.
+// fakturas through the order and are refused; void their bilag instead. So
+// is a 1500 draft with no faktura that fails receivableChargeSettledFaktura.
 func (s *Service) UnassignVippsCharge(ctx context.Context, clubID, actorID, rowID string) (priorEntryID, priorInvoiceID string, err error) {
 	var entryID, invoiceID *string
 	var orderRef string
@@ -333,6 +334,19 @@ func (s *Service) UnassignVippsCharge(ctx context.Context, clubID, actorID, rowI
 		priorEntryID, clubID,
 	).Scan(&status); err != nil {
 		return "", "", fmt.Errorf("loading journal entry: %w", err)
+	}
+
+	// A draft crediting 1500 with no recorded faktura may be the only record
+	// that the charge paid a faktura (BRY-392): deleting it would leave that
+	// faktura paid by nothing, so it is refused whoever asks.
+	if invoiceID == nil && status == "draft" {
+		parked, settled, err := s.parkedDraftCheck(ctx, clubID, rowID, priorEntryID)
+		if err != nil {
+			return "", "", err
+		}
+		if parked && settled != nil {
+			return "", "", errors.New(settled.reason())
+		}
 	}
 
 	// A posted booking is voided before anything is unlinked, so the GL never

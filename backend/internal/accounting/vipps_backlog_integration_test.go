@@ -508,3 +508,106 @@ func TestVippsBacklogSettledTestForUnknownPayer(t *testing.T) {
 		t.Fatalf("explained payment: result = %+v, want the charge refused but releasable", res)
 	}
 }
+
+// settledFaktura runs the settled-faktura test on the charge rowID (with no
+// message) and returns the faktura that blocks it, or nil.
+func (f *autoAssignFixture) settledFaktura(t *testing.T, rowID string) *settledFaktura {
+	t.Helper()
+	var customer string
+	var amount float64
+	var paidOn time.Time
+	if err := f.club.Pool.QueryRow(context.Background(),
+		`SELECT COALESCE(customer_name, ''), amount, booking_date FROM vipps_import_rows WHERE id = $1`, rowID,
+	).Scan(&customer, &amount, &paidOn); err != nil {
+		t.Fatalf("row: %v", err)
+	}
+	s, err := f.svc.receivableChargeSettledFaktura(context.Background(), f.club.ID, customer, "", amount, paidOn)
+	if err != nil {
+		t.Fatalf("settled test: %v", err)
+	}
+	return s
+}
+
+// A draft (not only a posted entry) recorded against the faktura explains
+// its payment, so another parked charge of the same amount passes.
+func TestVippsBacklogSettledTestDraftExplains(t *testing.T) {
+	f := newAutoAssignFixture(t)
+	payer := f.namedMember(t, "Twodrafts")
+	inv := f.legacyPaidInvoice(t, &payer, 45000)
+	recorded := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 45000, CustomerName: "Synthetic Twodrafts"})
+	f.draftCharge(t, recorded, receivablesAccountCode, 45000)
+	f.exec(t, `UPDATE vipps_import_rows SET invoice_id = $1 WHERE id = $2`, inv.ID, recorded)
+	parked := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 45000, CustomerName: "Synthetic Twodrafts"})
+	f.draftCharge(t, parked, receivablesAccountCode, 45000)
+
+	if s := f.settledFaktura(t, parked); s != nil {
+		t.Fatalf("parked charge blocked by faktura %d, which the recorded draft explains", s.number)
+	}
+}
+
+// The window applies whoever the payer is: a member who paid a household
+// member's faktura is caught, and so is a faktura marked Vipps-paid.
+func TestVippsBacklogSettledTestOtherMembersFaktura(t *testing.T) {
+	f := newAutoAssignFixture(t)
+	f.namedMember(t, "Payerp")
+	spouse := f.namedMember(t, "Spouseq")
+	inv := f.legacyPaidInvoice(t, &spouse, 45000)
+	row := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 45000, CustomerName: "Synthetic Payerp"})
+	f.draftCharge(t, row, receivablesAccountCode, 45000)
+
+	res := f.backlog(t, false)
+	if len(res.Refused) != 1 || len(res.Releasable) != 0 ||
+		!strings.Contains(res.Refused[0].Reason, fmt.Sprintf("faktura %d", inv.Number)) {
+		t.Fatalf("result = %+v, want refused naming the spouse's faktura %d", res, inv.Number)
+	}
+
+	g := newAutoAssignFixture(t)
+	vippsPaid := g.club.NewInvoice(t, fin.InvoiceOpts{Cents: 33300, VippsPaid: true,
+		Lines: []fin.Line{{Category: "membership", Cents: 33300}}})
+	g.exec(t, `UPDATE invoices SET vipps_paid_at = $2 WHERE id = $1`,
+		vippsPaid.ID, time.Date(g.club.Year, 6, 3, 12, 0, 0, 0, time.UTC))
+	vRow := g.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 33300, CustomerName: "Nobody Known"})
+	g.draftCharge(t, vRow, receivablesAccountCode, 33300)
+	if s := g.settledFaktura(t, vRow); s == nil || s.number != vippsPaid.Number {
+		t.Errorf("Vipps-paid faktura in the window: got %+v, want faktura %d", s, vippsPaid.Number)
+	}
+}
+
+// The window is inclusive at 7 days from the charge date and ends there.
+func TestVippsBacklogSettledTestWindowEdge(t *testing.T) {
+	for _, tc := range []struct {
+		day     int
+		blocked bool
+	}{{8, true}, {9, false}} {
+		f := newAutoAssignFixture(t)
+		other := f.namedMember(t, "Edgeowner")
+		f.legacyPaidInvoice(t, &other, 45000)
+		f.exec(t, `UPDATE payments SET paid_at = $2 WHERE club_id = $1`,
+			f.club.ID, time.Date(f.club.Year, 6, tc.day, 12, 0, 0, 0, time.UTC))
+		row := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 45000, CustomerName: "Nobody Known"})
+		if got := f.settledFaktura(t, row) != nil; got != tc.blocked {
+			t.Errorf("payment on June %d for a June 1 charge: blocked = %v, want %v", tc.day, got, tc.blocked)
+		}
+	}
+}
+
+// A plain unassign of a 1500 draft that may have paid a faktura is refused,
+// not only a backlog release.
+func TestUnassignRefusesLegacyPaidParkedDraft(t *testing.T) {
+	f := newAutoAssignFixture(t)
+	payer := f.namedMember(t, "Plainundo")
+	inv := f.legacyPaidInvoice(t, &payer, 45000)
+	row := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 45000, CustomerName: "Synthetic Plainundo"})
+	draft := f.draftCharge(t, row, receivablesAccountCode, 45000)
+
+	_, _, err := f.svc.UnassignVippsCharge(context.Background(), f.club.ID, f.club.Treasurer.ID, row)
+	if err == nil || !strings.Contains(err.Error(), fmt.Sprintf("faktura %d", inv.Number)) {
+		t.Fatalf("unassign err = %v, want a refusal naming faktura %d", err, inv.Number)
+	}
+	if got := f.entryStatus(t, draft); got != "draft" {
+		t.Errorf("draft changed to %s", got)
+	}
+	if !f.invoicePaid(t, inv.ID) {
+		t.Errorf("faktura lost its payment")
+	}
+}
