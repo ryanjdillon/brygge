@@ -300,3 +300,48 @@ func TestUpsertCustomerAliasRefusesNonMember(t *testing.T) {
 		t.Errorf("second delete err = %v, want ErrAliasNotFound", err)
 	}
 }
+
+// A booking that fails after the alias is saved rolls the alias back with it:
+// the alias is written in the faktura-lock transaction, never on its own.
+func TestTildelAssignFailedBookingSavesNoAlias(t *testing.T) {
+	f := newBankAutoFixture(t)
+	ctx := context.Background()
+	m := f.member(t, "Fortoy")
+	single := f.faktura(t, m, 30000)
+	multi := f.faktura(t, m, 30000)
+	row := f.deposit(t, "SYN FORTOY HOLDING", 30000)
+	split := []string{f.deposit(t, "SYN FORTOY HOLDING", 10000), f.deposit(t, "SYN FORTOY HOLDING", 20000)}
+	// No such account: creating the entry fails after the alias is saved.
+	f.exec(t, `UPDATE bank_imports SET bank_account_code = '1999' WHERE id = $1`, f.imp)
+
+	noTrace := func(rowIDs ...string) {
+		t.Helper()
+		if f.aliasCount(t) != 0 {
+			t.Errorf("a failed booking saved the alias")
+		}
+		for _, id := range rowIDs {
+			var entries int
+			if err := f.club.Pool.QueryRow(ctx,
+				`SELECT count(*) FROM journal_entries WHERE club_id = $1 AND source_id = $2`, f.club.ID, id).Scan(&entries); err != nil {
+				t.Fatalf("entries: %v", err)
+			}
+			if f.entry(t, id) != "" || entries != 0 {
+				t.Errorf("row %s booked (entry %q) or left %d journal entries", id, f.entry(t, id), entries)
+			}
+		}
+	}
+
+	if _, err := f.assign(t, row, single.ID, PayerAliasRequest{Remember: true}); err == nil {
+		t.Fatalf("single assign to a missing bank account succeeded")
+	}
+	noTrace(row)
+
+	if _, _, err := f.svc.AssignMultipleBankRowsToInvoiceRemembering(ctx, f.club.ID, f.club.Treasurer.ID, split, multi.ID,
+		PayerAliasRequest{Remember: true}); err == nil {
+		t.Fatalf("multi assign to a missing bank account succeeded")
+	}
+	noTrace(split...)
+	if f.paid(t, single.ID) || f.paid(t, multi.ID) {
+		t.Errorf("a failed booking marked a faktura paid")
+	}
+}
