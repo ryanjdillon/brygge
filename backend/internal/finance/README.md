@@ -8,6 +8,7 @@ Pure helpers, no DB, no HTTP. Two main responsibilities: the `Invoice` data stru
 |---|---|
 | `invoice.go` | `Invoice`, `OrgRecipient`, `InvoiceLine` data structs + `GeneratePDF(inv) ([]byte, error)` |
 | `kid.go` | `GenerateKID(prefix, sequenceNumber, padding) string` + Luhn (mod-10) check digit |
+| `line_category.go` | `LineCategorySQL` — the one expression for an issued invoice line's category: the line's stored category, then its price item's (see invariants) |
 | `settled.go` | `SettledForMemberSQL` / `OwedByMemberSQL` / `IsDebtSQL` / `CreditedSQL` / `SettledForGLSQL` — the single definition of "is this invoice settled / still owed?", credit notes included (see invariants) |
 
 ## Invoice data contract

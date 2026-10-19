@@ -182,7 +182,7 @@ Price items carry no account. The category map (`revenueAccountMap`, read throug
 
 **Rule (BRY-352):** `SyncInvoices` books a faktura only when `sent_at IS NOT NULL` and `status <> 'voided'`.
 - A faktura voided after it was booked has its `invoice_sync` and `invoice_resplit` entries reversed on the next sync (`reverseVoidedInvoiceEntries`, within the open period being synced).
-- Each line books to its own `account_id` when set. Otherwise it uses its price-item category's account, and failing that 3900 (see *Revenue accounts resolve the same on every payment path*).
+- Each line books to its own `account_id` when set. Otherwise it uses the account of the category stored on the line at issue (`finance.LineCategorySQL`: the line's `category`, then its price item's current category only for a line that never stored one), and failing that 3900 (see *Revenue accounts resolve the same on every payment path* and *Invoice line snapshots are immutable*).
 - Signs drive the sides, so a credit note books DR revenue / CR 1500. A faktura that nets to zero books its lines without a 1500 line (a fully exempt faktura: CR revenue / DR the exemption expense account); one with no non-zero line is skipped with a reason.
 - `SyncPayments` never books a payment that settles an invoice (`invoices.payment_id`). The bank or Vipps reconciliation that created it already booked DR bank / CR 1500.
 
@@ -223,7 +223,7 @@ Price items carry no account. The category map (`revenueAccountMap`, read throug
 
 ### Revenue accounts resolve the same on every payment path
 
-**Rule (BRY-384):** A category resolves to its revenue account through one map, `revenueAccountMap` (`revenue_accounts.go`), on every path: invoice sync, Vipps per-charge, Vipps auto-assign, order split and the price hints. Revenue nothing names an account for lands on `fallbackRevenueCode` (3900): an unmapped category, an invoice residual (total ≠ line sum), a faktura with no lines and a line with neither an account nor a category. Paths that book without a human (Vipps auto-assign) or show a default (price hints) use `RevenueAccount`, which reports an unknown category as unknown, so it is never auto-booked or hinted.
+**Rule (BRY-384):** A category resolves to its revenue account through one map, `revenueAccountMap` (`revenue_accounts.go`), on every path: invoice sync, Vipps per-charge, Vipps auto-assign, order split and the price hints. Revenue nothing names an account for lands on `fallbackRevenueCode` (3900): an unmapped category, an invoice residual (total ≠ line sum), a faktura with no lines and a line with neither an account nor a category. On a faktura line the category is the one stored on the line at issue, not the price item's current one. Paths that book without a human (Vipps auto-assign) or show a default (price hints) use `RevenueAccount`, which reports an unknown category as unknown, so it is never auto-booked or hinted.
 
 **Failure mode:** before BRY-384 invoice sync fell back to 3100 and Vipps to 3900, so the same price item booked to different accounts depending on how it was paid, and unexplained invoice money was mixed into membership dues. Entries booked to 3100 that way were not rebooked.
 
@@ -326,7 +326,9 @@ Voiding an invoice that is settled for the member (paid, or captured via Vipps) 
 
 **Rule:** `invoice_lines.description`, `unit_price`, `line_total`, `category` are denormalized from `price_items` at issue time. Updating `price_items.amount` does NOT rewrite existing `invoice_lines`. Historical fakturas reflect the prices that were in effect when they were issued.
 
-**Failure mode:** a price-list correction silently changes amounts on already-issued invoices. Treasurer's totals start drifting.
+**Rule (BRY-389):** an issued faktura books by the category stored on its lines, never the price item's current category. Every line with a price item stores its category (CHECK `invoice_lines_price_item_category`, migration 000111), exemption lines included. Readers of an issued line's category use `finance.LineCategorySQL` (`COALESCE(il.category, pi.category)`); the item's category is only the fallback for lines written before the constraint. Paths that price a **new** faktura or charge (single and bulk creation, Vipps per-charge matching, the price hints) read the price item, since that is the category at issue. `invoices.category` (used for `payment_type`) is likewise stored at issue and must not be switched to the item's.
+
+**Failure mode:** a price-list correction silently changes amounts on already-issued invoices. Treasurer's totals start drifting. Re-categorising a price item would move an old faktura's revenue to another account on the next resync or resplit.
 
 ### A faktura and its lines are written together
 

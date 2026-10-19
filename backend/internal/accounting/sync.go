@@ -9,6 +9,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+
+	"github.com/brygge-klubb/brygge/internal/finance"
 )
 
 const (
@@ -470,14 +472,18 @@ func (s *Service) reverseVoidedInvoiceEntries(ctx context.Context, clubID, perio
 
 // invoiceRevenueCredits computes the net revenue per account for an
 // invoice by walking its lines and summing line_total per account. A
-// line's own account_id (set on custom lines) wins; otherwise its price
-// item's category is resolved by RevenueAccountOrFallback; a line with
-// neither falls to fallbackRevenueCode. Nets may be negative (credit notes,
-// discount lines). If the line sum diverges from the invoice total, the
-// residual goes to fallbackRevenueCode so the bilag still balances.
+// line's own account_id (set on custom and exemption lines) wins;
+// otherwise the category stored on the line at issue, or its price item's
+// category for a line that never stored one (finance.LineCategorySQL), is
+// resolved by RevenueAccountOrFallback; a line with neither falls to
+// fallbackRevenueCode. Re-categorising a price item therefore never moves
+// an already-issued faktura's revenue on a resync or resplit. Nets may be
+// negative (credit notes, discount lines). If the line sum diverges from
+// the invoice total, the residual goes to fallbackRevenueCode so the bilag
+// still balances.
 func (s *Service) invoiceRevenueCredits(ctx context.Context, invoiceID string, invoiceTotal float64) (map[string]float64, error) {
 	rows, err := s.db.Query(ctx,
-		`SELECT il.line_total, pi.category, a.code
+		`SELECT il.line_total, `+finance.LineCategorySQL("il", "pi")+`, a.code
 		 FROM invoice_lines il
 		 LEFT JOIN price_items pi ON pi.id = il.price_item_id
 		 LEFT JOIN accounts a ON a.id = il.account_id

@@ -76,7 +76,7 @@ When a bank import lands or `BankSync` runs (after provisional rows are refreshe
 |---|---|---|
 | `bankAccountCode` | 1920 | Bankkonto drift |
 | `receivablesAccountCode` | 1500 | Kundefordringer |
-| `fallbackRevenueCode` | 3900 | Andre inntekter (fallback for every payment path: unmapped category, invoice residual or uncategorised line, unmatched Vipps charge) |
+| `fallbackRevenueCode` | 3900 | Andre inntekter (fallback for every payment path: unmapped category, invoice residual or a line with neither an account nor a stored or item category, unmatched Vipps charge) |
 | `vippsFeeAccountCode` | 7700 | Bankgebyrer |
 | `vippsClearingAccountCode` | 2900 | **Legacy** — kept for report compat, no new lines route here |
 
@@ -101,6 +101,7 @@ See [`../../../docs/developer/reference/enums.md`](../../../docs/developer/refer
 - Bank auto-assign books only on opt-in, never creates a fiscal period, never targets an imported faktura, and locks the faktura across link + post; while it is off the cascade's name+amount step still runs
 - Matching incoming money to a faktura uses `finance.OwedByMemberSQL`; only ePayment order reconciliation uses `finance.OpenReceivableSQL` (it books captures the webhook already flagged)
 - A role-exemption line books to its own `account_id` (the club's exemption expense account), so an exempt item books gross: CR revenue, DR expense. A zero-total faktura books with no 1500 line
+- A faktura line without its own `account_id` books by the category stored on the line at issue (`finance.LineCategorySQL` in `invoiceRevenueCredits`), so re-categorising a price item never moves an issued faktura's revenue on a resync or resplit. `invoices.category` (mapped to `payment_type` by `linkInvoicePayment`) is likewise stored at issue; never switch either to the price item's current category
 - A faktura is booked when sent and reversed when voided (`BookInvoice` / `ReverseInvoice`, which reverses the whole `invoice_sync` + `invoice_resplit` family or nothing); `SyncInvoices` only repairs what was missed. At most one `invoice_sync` entry per faktura (unique index). `SyncPayments` skips invoice-settling payments
 
 Full list: [`../../../docs/developer/reference/invariants.md`](../../../docs/developer/reference/invariants.md).
