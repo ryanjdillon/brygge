@@ -173,11 +173,10 @@ func TestAssignInvoiceRemembersPayer(t *testing.T) {
 	row := deposit("Synthetic Kaiplass", 30000)
 	req := map[string]any{"invoice_id": inv.ID, "remember_payer": true}
 	rec := env.serve([]string{"treasurer"}, http.MethodPost, "/bank-rows/"+row+"/assign-invoice", req)
-	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), `"alias_conflict"`) {
-		t.Fatalf("conflicting assign: %d %s, want 409 alias_conflict", rec.Code, rec.Body)
-	}
-	if strings.Contains(rec.Body.String(), "Kaiplass") {
-		t.Errorf("409 names the other member: %s", rec.Body)
+	var body map[string]any
+	if rec.Code != http.StatusConflict || json.Unmarshal(rec.Body.Bytes(), &body) != nil ||
+		len(body) != 1 || body["error"] != "alias_conflict" {
+		t.Fatalf("conflicting assign: %d %s, want 409 with only error alias_conflict", rec.Code, rec.Body)
 	}
 	if booked(row) || len(env.audit(audit.ActionBankRowAssignedInvoice)) != 0 {
 		t.Fatalf("a refused alias booked or audited the assign")
@@ -201,5 +200,26 @@ func TestAssignInvoiceRemembersPayer(t *testing.T) {
 	}
 	if taught := env.audit(audit.ActionPayerAliasTaught); len(taught) != 2 || taught[1]["override"] != false {
 		t.Errorf("taught audit after multi = %v", taught)
+	}
+
+	// The assign's own audit row comes first, then the alias it taught.
+	actions, err := club.Pool.Query(context.Background(),
+		`SELECT action FROM audit_log WHERE club_id = $1 AND action = ANY($2) ORDER BY created_at, id`,
+		club.ID, []string{audit.ActionBankRowAssignedInvoice, audit.ActionPayerAliasTaught})
+	if err != nil {
+		t.Fatalf("audit order: %v", err)
+	}
+	var order []string
+	for actions.Next() {
+		var a string
+		if err := actions.Scan(&a); err != nil {
+			t.Fatalf("audit order scan: %v", err)
+		}
+		order = append(order, a)
+	}
+	actions.Close()
+	want := []string{audit.ActionBankRowAssignedInvoice, audit.ActionPayerAliasTaught, audit.ActionBankRowAssignedInvoice, audit.ActionPayerAliasTaught}
+	if strings.Join(order, ",") != strings.Join(want, ",") {
+		t.Errorf("audit order = %v, want %v", order, want)
 	}
 }

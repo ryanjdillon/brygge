@@ -164,15 +164,6 @@ func (r assignInvoiceReq) alias() accounting.PayerAliasRequest {
 	return accounting.PayerAliasRequest{Remember: r.RememberPayer, ConfirmOverride: r.ConfirmAliasOverride}
 }
 
-// writeAliasConflict answers a refused payer alias. It names no member: the
-// name belonging to someone else is all the treasurer needs to decide.
-func writeAliasConflict(w http.ResponseWriter) {
-	JSON(w, http.StatusConflict, map[string]any{
-		"error":   accounting.ErrAliasConflict.Error(),
-		"message": "Namnet høyrer alt til eit anna medlem. Stadfest at betalaren skal hugsast for dette medlemmet, eller tildel utan å hugsa.",
-	})
-}
-
 // logTaughtAlias audits an alias a faktura assign saved.
 func (h *BankRowsHandler) logTaughtAlias(r *http.Request, clubID, actorID string, a *accounting.TaughtAlias) {
 	if h.audit == nil || a == nil {
@@ -202,7 +193,8 @@ func (h *BankRowsHandler) HandleAssignInvoice(w http.ResponseWriter, r *http.Req
 	}
 	journalID, taught, err := h.svc.AssignBankRowToInvoiceRemembering(ctx, claims.ClubID, claims.UserID, rowID, req.InvoiceID, req.alias())
 	if errors.Is(err, accounting.ErrAliasConflict) {
-		writeAliasConflict(w)
+		// The code alone: the SPA words it, and names no member.
+		Error(w, http.StatusConflict, accounting.ErrAliasConflict.Error())
 		return
 	}
 	if err != nil {
@@ -210,7 +202,6 @@ func (h *BankRowsHandler) HandleAssignInvoice(w http.ResponseWriter, r *http.Req
 		Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	h.logTaughtAlias(r, claims.ClubID, claims.UserID, taught)
 	if h.audit != nil {
 		h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,
 			audit.ActionBankRowAssignedInvoice, "bank_import_row", rowID,
@@ -219,6 +210,7 @@ func (h *BankRowsHandler) HandleAssignInvoice(w http.ResponseWriter, r *http.Req
 				"journal_entry_id": journalID,
 			})
 	}
+	h.logTaughtAlias(r, claims.ClubID, claims.UserID, taught)
 	JSON(w, http.StatusOK, map[string]any{"journal_entry_id": journalID})
 }
 
@@ -245,7 +237,8 @@ func (h *BankRowsHandler) HandleAssignInvoiceMulti(w http.ResponseWriter, r *htt
 	journalIDs, taught, err := h.svc.AssignMultipleBankRowsToInvoiceRemembering(ctx, claims.ClubID, claims.UserID, req.RowIDs, req.InvoiceID,
 		accounting.PayerAliasRequest{Remember: req.RememberPayer, ConfirmOverride: req.ConfirmAliasOverride})
 	if errors.Is(err, accounting.ErrAliasConflict) {
-		writeAliasConflict(w)
+		// The code alone: the SPA words it, and names no member.
+		Error(w, http.StatusConflict, accounting.ErrAliasConflict.Error())
 		return
 	}
 	if err != nil {
