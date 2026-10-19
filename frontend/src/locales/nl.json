@@ -1036,6 +1036,22 @@
         "reissueKidBulkBody": "Genereer een nieuwe KID voor {n} onbetaalde factu(u)r(en) met de controlemethode van de club en bouw de PDF opnieuw op (de vorige PDF wordt gearchiveerd). Betaalde facturen worden overgeslagen. Er wordt geen e-mail verzonden — gebruik daarna «Herinnering sturen».",
         "reissueKidAction": "KID opnieuw uitgeven",
         "reissueKidNoneEligible": "Geen van de geselecteerde facturen komt in aanmerking — ze zijn allemaal al betaald."
+      },
+      "credit": {
+        "noCandidates": "Geen factuur met dezelfde betaler en hetzelfde bedrag gevonden voor creditnota #{number}. Zoek de factuur hieronder.",
+        "searchOption": "Andere factuur zoeken…",
+        "searchTitle": "Factuur zoeken voor creditnota #{number}",
+        "searchBody": "De creditnota is {amount}. Alleen een factuur met hetzelfde bedrag kan worden verrekend; gedeeltelijke creditering wordt niet ondersteund.",
+        "searchPlaceholder": "Zoek factuurnummer of betaler",
+        "searchEmpty": "Geen factuur komt overeen met de zoekopdracht.",
+        "pick": "Verrekenen",
+        "otherAmount": "Ander bedrag",
+        "otherPayer": "Andere betaler",
+        "stateOpen": "open",
+        "statePaid": "betaald → tegoed voor lid",
+        "differentPayerTitle": "Creditnota en factuur hebben verschillende betalers",
+        "differentPayerBody": "Creditnota #{credit} is voor een andere betaler dan factuur #{number} ({payer}). Toch verrekenen?",
+        "differentPayerAction": "Toch verrekenen"
       }
     },
     "devQuery": {

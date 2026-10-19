@@ -1010,6 +1010,22 @@
         "reissueKidBulkBody": "Wygeneruj nowy numer KID dla {n} nieopłaconych faktur metodą kontrolną klubu i odbuduj PDF (poprzedni PDF zostanie zarchiwizowany). Opłacone faktury są pomijane. Nie wysyła się żadnego e-maila — użyj następnie «Wyślij przypomnienie».",
         "reissueKidAction": "Wystaw nowy KID",
         "reissueKidNoneEligible": "Żadna z wybranych faktur nie kwalifikuje się — wszystkie są już opłacone."
+      },
+      "credit": {
+        "noCandidates": "Nie znaleziono faktury z tym samym płatnikiem i kwotą dla korekty #{number}. Wyszukaj ją poniżej.",
+        "searchOption": "Wyszukaj inną fakturę…",
+        "searchTitle": "Znajdź fakturę dla korekty #{number}",
+        "searchBody": "Korekta wynosi {amount}. Rozliczyć można tylko fakturę o tej samej kwocie; częściowe korekty nie są obsługiwane.",
+        "searchPlaceholder": "Szukaj numeru faktury lub płatnika",
+        "searchEmpty": "Żadna faktura nie pasuje do wyszukiwania.",
+        "pick": "Rozlicz",
+        "otherAmount": "Inna kwota",
+        "otherPayer": "Inny płatnik",
+        "stateOpen": "otwarta",
+        "statePaid": "opłacona → należność dla członka",
+        "differentPayerTitle": "Korekta i faktura mają różnych płatników",
+        "differentPayerBody": "Korekta #{credit} dotyczy innego płatnika niż faktura #{number} ({payer}). Rozliczyć mimo to?",
+        "differentPayerAction": "Rozlicz mimo to"
       }
     },
     "devQuery": {

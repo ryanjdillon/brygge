@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { FileDown, Send, Trash2, Ban, Bell, RefreshCw, KeyRound, Copy, Check, ChevronUp, ChevronDown, X, Link2, Scale, Undo2 } from 'lucide-vue-next'
 import FakturaArchiveButton from '@/components/admin/FakturaArchiveButton.vue'
 import DeliveryLogButton from '@/components/admin/DeliveryLogButton.vue'
+import CreditNoteSearchModal, { type CreditSearchHit } from '@/components/admin/CreditNoteSearchModal.vue'
 import InvoiceNumberChip from '@/components/ui/InvoiceNumberChip.vue'
 import { useConfirm, useConfirmStore } from '@/stores/confirm'
 import { useFreshTotp } from '@/composables/useFreshTotp'
@@ -398,6 +399,21 @@ async function doVoid(id: string) {
   }
 }
 
+// The choice value that opens the manual search instead of linking.
+const SEARCH_OTHER = '__search__'
+
+// Manual faktura search for a credit note (BRY-393). The Tildel picker in
+// BankReconcileTab is inline and bound to bank/Vipps rows (payer alias,
+// row-specific fetchers, assign), so this reuses its Modal and list layout
+// rather than the picker itself.
+const creditSearch = ref<{ note: Row; notice: string | null; error: string | null } | null>(null)
+const creditSearchOpen = computed({
+  get: () => creditSearch.value != null,
+  set: (open: boolean) => {
+    if (!open) creditSearch.value = null
+  },
+})
+
 // Settle a credit note against the faktura it credits. Linking changes what
 // the member owes, so the server requires a fresh step-up — prompt for it
 // at click time, before the picker.
@@ -412,7 +428,11 @@ async function settleCredit(d: Row) {
     }
     const candidates: CreditCandidate[] = (await res.json()).items ?? []
     if (candidates.length === 0) {
-      error.value = t('admin.faktura.credit.noCandidates', { number: d.invoice_number })
+      creditSearch.value = {
+        note: d,
+        notice: t('admin.faktura.credit.noCandidates', { number: d.invoice_number }),
+        error: null,
+      }
       return
     }
     const ok = await confirm({
@@ -420,14 +440,17 @@ async function settleCredit(d: Row) {
       body: t('admin.faktura.credit.settleBody', { amount: formatNOK(Math.abs(Number(d.total_amount))) }),
       choice: {
         label: t('admin.faktura.credit.settleChoice'),
-        options: candidates.map((c) => ({
-          value: c.id,
-          label: t(c.paid ? 'admin.faktura.credit.candidatePaid' : 'admin.faktura.credit.candidateOpen', {
-            number: c.invoice_number,
-            amount: formatNOK(Number(c.total_amount)),
-            date: c.issue_date.slice(0, 10),
-          }),
-        })),
+        options: [
+          ...candidates.map((c) => ({
+            value: c.id,
+            label: t(c.paid ? 'admin.faktura.credit.candidatePaid' : 'admin.faktura.credit.candidateOpen', {
+              number: c.invoice_number,
+              amount: formatNOK(Number(c.total_amount)),
+              date: c.issue_date.slice(0, 10),
+            }),
+          })),
+          { value: SEARCH_OTHER, label: t('admin.faktura.credit.searchOption') },
+        ],
         default: candidates[0].id,
       },
       confirmLabel: t('admin.faktura.credit.settleAction'),
@@ -435,28 +458,72 @@ async function settleCredit(d: Row) {
     })
     if (!ok) return
     const target = confirmStore.choiceValue
-    const link = await totpAwareFetch(`/api/v1/admin/financials/invoices/${d.id}/credit-link`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ invoice_id: target }),
-    })
-    const body = await link.json().catch(() => null)
-    if (!link.ok) {
-      error.value = body?.code
-        ? t(`admin.faktura.credit.error.${body.code}`, body?.error ?? '')
-        : `${link.status} ${body?.error ?? ''}`
+    if (target === SEARCH_OTHER) {
+      creditSearch.value = { note: d, notice: null, error: null }
       return
     }
-    flash(
-      t(body?.outcome === 'credit_owed' ? 'admin.faktura.credit.doneOwed' : 'admin.faktura.credit.donePair', {
-        credit: body?.credit_note_number,
-        number: body?.invoice_number,
-      }),
-    )
-    await load()
+    error.value = await linkCredit(d, { invoice_id: target })
   } finally {
     busyIds.value.delete(d.id)
   }
+}
+
+// A faktura picked in the manual search. Across payers the server needs an
+// explicit confirmation, unless the credit note has no payer at all.
+async function pickCredit(hit: CreditSearchHit, creditNoteHasPayer: boolean) {
+  const note = creditSearch.value?.note
+  if (!note) return
+  const otherPayer = creditNoteHasPayer && !hit.same_payer
+  if (otherPayer) {
+    const ok = await confirm({
+      title: t('admin.faktura.credit.differentPayerTitle'),
+      body: t('admin.faktura.credit.differentPayerBody', {
+        credit: note.invoice_number,
+        number: hit.invoice_number,
+        payer: hit.payer_name || '—',
+      }),
+      confirmLabel: t('admin.faktura.credit.differentPayerAction'),
+      tone: 'warning',
+    })
+    if (!ok) return
+  }
+  busyIds.value.add(note.id)
+  if (creditSearch.value) creditSearch.value.error = null
+  try {
+    const failed = await linkCredit(note, {
+      invoice_id: hit.id,
+      manual_pick: true,
+      ...(otherPayer ? { confirm_other_member: true } : {}),
+    })
+    // Keep the search open on a refusal so the reason shows next to the list.
+    if (failed && creditSearch.value) creditSearch.value.error = failed
+    else if (!failed) creditSearch.value = null
+  } finally {
+    busyIds.value.delete(note.id)
+  }
+}
+
+// Links the credit note; returns the refusal message, or null on success.
+async function linkCredit(d: Row, payload: Record<string, unknown>): Promise<string | null> {
+  const link = await totpAwareFetch(`/api/v1/admin/financials/invoices/${d.id}/credit-link`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  const body = await link.json().catch(() => null)
+  if (!link.ok) {
+    return body?.code
+      ? t(`admin.faktura.credit.error.${body.code}`, body?.error ?? '')
+      : `${link.status} ${body?.error ?? ''}`
+  }
+  flash(
+    t(body?.outcome === 'credit_owed' ? 'admin.faktura.credit.doneOwed' : 'admin.faktura.credit.donePair', {
+      credit: body?.credit_note_number,
+      number: body?.invoice_number,
+    }),
+  )
+  await load()
+  return null
 }
 
 async function unlinkCredit(d: Row) {
@@ -1087,5 +1154,14 @@ defineExpose({ load })
     </template>
 
     <p v-else class="mt-6 text-sm text-gray-500">{{ t(`admin.faktura.${status}.empty`) }}</p>
+
+    <CreditNoteSearchModal
+      v-model:open="creditSearchOpen"
+      :credit-note="creditSearch?.note ?? null"
+      :notice="creditSearch?.notice"
+      :link-error="creditSearch?.error"
+      :busy="creditSearch ? busyIds.has(creditSearch.note.id) : false"
+      @pick="pickCredit"
+    />
   </div>
 </template>

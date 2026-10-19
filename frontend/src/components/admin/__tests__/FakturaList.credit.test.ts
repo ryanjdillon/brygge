@@ -119,6 +119,121 @@ describe('FakturaList credit notes', () => {
   })
 })
 
+// Manual faktura search (BRY-393): when no faktura shares the credit note's
+// payer and amount, or the treasurer wants another one, the list opens a
+// search across the club's fakturas.
+describe('FakturaList credit-note faktura search', () => {
+  const hit = (over: Record<string, unknown>) => ({
+    id: 'hit',
+    invoice_number: 42,
+    total_amount: 2300,
+    issue_date: '2025-04-01',
+    settled: false,
+    imported: true,
+    payer_name: 'Synthetic Payer',
+    same_amount: true,
+    same_payer: false,
+    ...over,
+  })
+  const mountList = () =>
+    mountWithPlugins(FakturaList, {
+      props: { status: 'imported' },
+      piniaOptions: asTreasurer,
+      global: { stubs: { teleport: true } },
+    })
+
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ items: rows, status: 'imported' })))
+    totpAwareFetch.mockReset()
+    askConfirm.mockClear()
+    ensureFreshTotp.mockClear()
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('opens the search when nothing matches and links a credit note without a payer directly', async () => {
+    totpAwareFetch
+      .mockResolvedValueOnce(jsonResponse({ items: [], credit_note_has_payer: false }))
+      .mockResolvedValueOnce(jsonResponse({ items: [hit({})], credit_note_has_payer: false }))
+      .mockResolvedValueOnce(jsonResponse({ outcome: 'settled_pair', credit_note_number: 11, invoice_number: 42 }))
+    const w = mountList()
+    await flushPromises()
+
+    await w.get('[data-testid="credit-settle"]').trigger('click')
+    await flushPromises()
+
+    expect(ensureFreshTotp).toHaveBeenCalled()
+    expect(askConfirm).not.toHaveBeenCalled()
+    expect(w.get('[data-testid="credit-search-notice"]').text()).toBe('admin.faktura.credit.noCandidates')
+    expect(totpAwareFetch.mock.calls[1][0]).toBe('/api/v1/admin/financials/invoices/cn-open/credit-candidates?any=1')
+    // No payer on the credit note, so there is nobody to mismatch.
+    expect(w.text()).not.toContain('admin.faktura.credit.otherPayer')
+
+    await w.get('[data-testid="credit-search-pick"]').trigger('click')
+    await flushPromises()
+
+    expect(askConfirm).not.toHaveBeenCalled()
+    const [url, init] = totpAwareFetch.mock.calls[2]
+    expect(url).toBe('/api/v1/admin/financials/invoices/cn-open/credit-link')
+    expect(JSON.parse(init.body)).toEqual({ invoice_id: 'hit', manual_pick: true })
+    expect(w.find('[data-testid="credit-search-hit"]').exists()).toBe(false)
+  })
+
+  it('asks before linking a faktura of another payer and sends the confirmation', async () => {
+    totpAwareFetch
+      .mockResolvedValueOnce(
+        jsonResponse({ items: [{ id: 'cand', invoice_number: 9, total_amount: 2300, issue_date: '2025-05-08', paid: false, imported: true }] }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ items: [hit({})], credit_note_has_payer: true }))
+      .mockResolvedValueOnce(jsonResponse({ outcome: 'settled_pair', credit_note_number: 11, invoice_number: 42 }))
+    confirmStore.choiceValue = '__search__'
+    const w = mountList()
+    await flushPromises()
+
+    await w.get('[data-testid="credit-settle"]').trigger('click')
+    await flushPromises()
+    const choice = (askConfirm.mock.calls[0] as unknown as [{ choice: { options: { label: string }[] } }])[0].choice
+    expect(choice.options[choice.options.length - 1].label).toBe('admin.faktura.credit.searchOption')
+    expect(w.text()).toContain('admin.faktura.credit.otherPayer')
+
+    await w.get('[data-testid="credit-search-pick"]').trigger('click')
+    await flushPromises()
+
+    expect(askConfirm).toHaveBeenCalledTimes(2)
+    expect((askConfirm.mock.calls[1] as unknown as [{ title: string }])[0].title).toBe(
+      'admin.faktura.credit.differentPayerTitle',
+    )
+    expect(JSON.parse(totpAwareFetch.mock.calls[2][1].body)).toEqual({
+      invoice_id: 'hit',
+      manual_pick: true,
+      confirm_other_member: true,
+    })
+  })
+
+  it('does not offer a faktura of a different amount and shows a refusal in the search', async () => {
+    totpAwareFetch
+      .mockResolvedValueOnce(jsonResponse({ items: [], credit_note_has_payer: false }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          items: [hit({ id: 'odd', same_amount: false, total_amount: 300 }), hit({})],
+          credit_note_has_payer: false,
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ code: 'booking_mismatch', error: 'mismatch' }, 409))
+    const w = mountList()
+    await flushPromises()
+    await w.get('[data-testid="credit-settle"]').trigger('click')
+    await flushPromises()
+
+    const picks = w.findAll('[data-testid="credit-search-pick"]')
+    expect(picks[0].attributes('disabled')).toBeDefined()
+    expect(w.text()).toContain('admin.faktura.credit.otherAmount')
+
+    await picks[1].trigger('click')
+    await flushPromises()
+    expect(w.get('[data-testid="credit-search-error"]').text()).toBe('admin.faktura.credit.error.booking_mismatch')
+  })
+})
+
 describe('FakturaList for a board member (BRY-372)', () => {
   // Rows 11 (unlinked) and 13 (credit owed) carry the credit actions.
   const rowActions = [

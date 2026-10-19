@@ -190,12 +190,21 @@ A credit note is a faktura with a negative amount. It is never a debt: it is nev
 A credit note only settles the faktura it cancels once you link them:
 
 1. Click **Motregn mot faktura** (the scales icon) on the credit note. Brygge asks for a fresh TOTP.
-2. Pick the faktura from the list. Only fakturas with the same payer and the same amount are offered, and not ones already credited.
+2. Pick the faktura from the list. Only fakturas with the same payer and the same amount are offered, and not ones already credited. If the one you want isn't there, pick **Søk etter en annen faktura …** at the bottom of the list.
 3. The result depends on that faktura:
    - **Open** → both count as settled (**Motregnet mot #N**), and the faktura reads **Kreditert av #M**.
    - **Already paid** → the member has the amount owed back (**Tilgode medlem**). Refund it or carry it forward.
 
-Nothing new is booked in the accounts. A booked credit note already cancels its faktura's receivable, and imported history isn't booked at all. Brygge refuses links it can't make safely: a partial credit (settle the rest separately), different payers, or one side booked and the other not. **Angre motregning** (the undo icon) reopens the faktura. A linked credit note can't be voided until you undo the link.
+#### Credit notes without a member, or for another payer
+
+Some imported credit notes have no member, so no faktura matches the payer and the list is empty. Brygge then opens a search instead: type the faktura number or the payer's name and click **Motregn** on the right faktura. The search shows the club's open and paid fakturas that aren't voided or already credited, newest first, with the amount, date and payer. Matching by amount alone isn't enough (many imported fakturas share an amount), so check the number or payer before you pick.
+
+- A faktura with a different amount is marked **Annet beløp** and can't be picked: partial credits aren't supported.
+- If the credit note has a member and the faktura is for someone else, it is marked **Annen betaler**. Brygge asks "Kreditnotaen og fakturaen har ulik betaler" before linking them. A credit note without a member needs no such confirmation.
+
+The audit log records that the faktura was picked by hand and whether the payers differed. **Angre motregning** undoes a wrong pick.
+
+Nothing new is booked in the accounts. A booked credit note already cancels its faktura's receivable, and imported history isn't booked at all. Brygge refuses links it can't make safely: a partial credit (settle the rest separately), different payers you haven't confirmed, or one side booked and the other not. **Angre motregning** (the undo icon) reopens the faktura. A linked credit note can't be voided until you undo the link.
 
 ## PDF archive
 

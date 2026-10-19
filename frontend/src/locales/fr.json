@@ -1035,6 +1035,22 @@
         "reissueKidBulkBody": "Générer un nouveau KID pour {n} facture(s) impayée(s) selon la méthode de contrôle du club et reconstruire le PDF (le PDF précédent est archivé). Les factures payées sont ignorées. Aucun e-mail n'est envoyé — utilisez «Envoyer un rappel» ensuite.",
         "reissueKidAction": "Réémettre le KID",
         "reissueKidNoneEligible": "Aucune des factures sélectionnées n'est éligible — toutes sont déjà payées."
+      },
+      "credit": {
+        "noCandidates": "Aucune facture avec le même payeur et le même montant n'a été trouvée pour l'avoir #{number}. Recherchez-la ci-dessous.",
+        "searchOption": "Rechercher une autre facture…",
+        "searchTitle": "Trouver la facture de l'avoir #{number}",
+        "searchBody": "L'avoir s'élève à {amount}. Seule une facture du même montant peut être compensée ; les avoirs partiels ne sont pas pris en charge.",
+        "searchPlaceholder": "Rechercher un numéro de facture ou un payeur",
+        "searchEmpty": "Aucune facture ne correspond à la recherche.",
+        "pick": "Compenser",
+        "otherAmount": "Montant différent",
+        "otherPayer": "Autre payeur",
+        "stateOpen": "ouverte",
+        "statePaid": "payée → dû au membre",
+        "differentPayerTitle": "L'avoir et la facture ont des payeurs différents",
+        "differentPayerBody": "L'avoir #{credit} concerne un autre payeur que la facture #{number} ({payer}). Compenser quand même ?",
+        "differentPayerAction": "Compenser quand même"
       }
     },
     "devQuery": {

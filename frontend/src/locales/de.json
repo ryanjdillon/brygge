@@ -1036,6 +1036,22 @@
         "reissueKidBulkBody": "Neue KID für {n} unbezahlte Rechnung(en) mit der Prüfmethode des Vereins erzeugen und das PDF neu erstellen (das vorherige PDF wird archiviert). Bezahlte Rechnungen werden übersprungen. Es wird keine E-Mail gesendet — verwenden Sie anschließend «Mahnung senden».",
         "reissueKidAction": "KID neu ausstellen",
         "reissueKidNoneEligible": "Keine der ausgewählten Rechnungen ist geeignet — alle sind bereits bezahlt."
+      },
+      "credit": {
+        "noCandidates": "Für Gutschrift #{number} wurde keine Rechnung mit demselben Zahler und Betrag gefunden. Suchen Sie die Rechnung unten.",
+        "searchOption": "Andere Rechnung suchen …",
+        "searchTitle": "Rechnung für Gutschrift #{number} suchen",
+        "searchBody": "Die Gutschrift beträgt {amount}. Nur eine Rechnung mit demselben Betrag kann verrechnet werden; Teilgutschriften werden nicht unterstützt.",
+        "searchPlaceholder": "Rechnungsnummer oder Zahler suchen",
+        "searchEmpty": "Keine Rechnung entspricht der Suche.",
+        "pick": "Verrechnen",
+        "otherAmount": "Anderer Betrag",
+        "otherPayer": "Anderer Zahler",
+        "stateOpen": "offen",
+        "statePaid": "bezahlt → Guthaben des Mitglieds",
+        "differentPayerTitle": "Gutschrift und Rechnung haben unterschiedliche Zahler",
+        "differentPayerBody": "Gutschrift #{credit} gilt für einen anderen Zahler als Rechnung #{number} ({payer}). Trotzdem verrechnen?",
+        "differentPayerAction": "Trotzdem verrechnen"
       }
     },
     "devQuery": {

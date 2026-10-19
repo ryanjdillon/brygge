@@ -1036,6 +1036,22 @@
         "reissueKidBulkBody": "Genera un nuovo KID per {n} fattura/e non pagata/e con il metodo di controllo del club e ricostruisci il PDF (il PDF precedente viene archiviato). Le fatture pagate vengono ignorate. Nessuna e-mail viene inviata — usa «Invia sollecito» in seguito.",
         "reissueKidAction": "Riemetti KID",
         "reissueKidNoneEligible": "Nessuna delle fatture selezionate è idonea — sono tutte già pagate."
+      },
+      "credit": {
+        "noCandidates": "Nessuna fattura con lo stesso pagatore e lo stesso importo per la nota di credito #{number}. Cercala qui sotto.",
+        "searchOption": "Cerca un'altra fattura…",
+        "searchTitle": "Trova la fattura per la nota di credito #{number}",
+        "searchBody": "La nota di credito è di {amount}. Si può compensare solo una fattura dello stesso importo; i crediti parziali non sono supportati.",
+        "searchPlaceholder": "Cerca numero di fattura o pagatore",
+        "searchEmpty": "Nessuna fattura corrisponde alla ricerca.",
+        "pick": "Compensa",
+        "otherAmount": "Importo diverso",
+        "otherPayer": "Altro pagatore",
+        "stateOpen": "aperta",
+        "statePaid": "pagata → a credito del socio",
+        "differentPayerTitle": "La nota di credito e la fattura hanno pagatori diversi",
+        "differentPayerBody": "La nota di credito #{credit} riguarda un pagatore diverso dalla fattura #{number} ({payer}). Compensare comunque?",
+        "differentPayerAction": "Compensa comunque"
       }
     },
     "devQuery": {
