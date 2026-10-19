@@ -81,7 +81,10 @@ reset_db() {
         CREATE TABLE contacts (email text, ref text);
         INSERT INTO contacts VALUES
             ('synthetic.dup@example.invalid', 'not-a-uuid-SYNTHETIC-SECRET'),
-            ('synthetic.dup@example.invalid', NULL);
+            ('synthetic.dup@example.invalid', NULL),
+            (E'synthetic.multi\nline-SECRET2', NULL);
+        CREATE TABLE readings (v text, d text);
+        INSERT INTO readings VALUES ('99999999999123', '2024-13-45');
         CREATE SCHEMA dev_masked;
         CREATE VIEW dev_masked.boats AS SELECT id FROM public.boats;"
 }
@@ -276,7 +279,7 @@ sql "UPDATE schema_migrations SET version = 1" >/dev/null
 
 # 10. State handed in by the caller → no extra state read before the run.
 new_migrations
-rc=0; out="$(cd "$ROOT" && PROD_MIGRATION_STATE="1|false" bash "$SCRIPT" 2>&1)" || rc=$?
+rc=0; out="$(cd "$ROOT" && PROD_MIGRATION_STATE="1|false|false" bash "$SCRIPT" 2>&1)" || rc=$?
 check "folded state: exits 0" test "$rc" -eq 0
 check "folded state: one state read (the tripwire) + one dry-run" \
     test "$(grep -c '^=== call' "$tmp/psql.log")" -eq 2
@@ -297,13 +300,14 @@ new_migrations
 echo "SELECT 1;" > "$tmp/m/000002_good.up.sql"
 rc=0; out="$(cd "$ROOT" && DRYRUN_STREAM_COPY="$tmp/stream.sql" bash "$SCRIPT" 2>&1)" || rc=$?
 check "stream: exits 0" test "$rc" -eq 0
-check "stream: header is BEGIN, SET LOCAL timeouts, SAVEPOINT" test "$(head -5 "$tmp/stream.sql")" == \
+check "stream: header is BEGIN, SET LOCAL timeouts, SAVEPOINT, canary" test "$(head -6 "$tmp/stream.sql")" == \
 "BEGIN;
 SET LOCAL lock_timeout = '2s';
 SET LOCAL statement_timeout = '15s';
 SET LOCAL idle_in_transaction_session_timeout = '30s';
-SAVEPOINT dryrun;"
-check "stream: each file is wrapped in SAVEPOINT/RELEASE" test "$(sed -n 6,10p "$tmp/stream.sql")" == \
+SAVEPOINT dryrun;
+CREATE TABLE public._deploy_dryrun_canary ();"
+check "stream: each file is wrapped in SAVEPOINT/RELEASE" test "$(sed -n 7,11p "$tmp/stream.sql")" == \
 "\\echo '>>> 000002_good.up.sql'
 SAVEPOINT dryrun_file;
 SELECT 1;
@@ -313,26 +317,72 @@ check "stream: ends ROLLBACK TO SAVEPOINT, ROLLBACK" test "$(tail -2 "$tmp/strea
 "ROLLBACK TO SAVEPOINT dryrun;
 ROLLBACK;"
 
-# 11c. A COMMIT the scan missed (scan disabled) is caught by the guards:
-# hard abort, exit 2, and the warning is true — the stand-in prod changed.
+# 11c. Commits the scan missed (scan disabled) are caught by the canary:
+# exit 2, PROD WAS MODIFIED, canary dropped, and the warning is true — the
+# stand-in prod changed. Never "Nothing was committed".
+canary_gone() { test "$(sql "SELECT to_regclass('public._deploy_dryrun_canary') IS NULL")" == "t"; }
+never_says_nothing_committed() { ! grep -qF "Nothing was committed" <<< "$out"; }
+skip_scan_run() { rc=0; out="$(cd "$ROOT" && DRYRUN_TEST_SKIP_SCAN=1 bash "$SCRIPT" 2>&1)" || rc=$?; }
+
 new_migrations
 echo "ALTER TABLE boats ADD COLUMN leaked text; COMMIT;" > "$tmp/m/000002_sneaky.up.sql"
 echo "ALTER TABLE boats ADD COLUMN after_leak text;" > "$tmp/m/000003_next.up.sql"
-rc=0; out="$(cd "$ROOT" && DRYRUN_TEST_SKIP_SCAN=1 bash "$SCRIPT" 2>&1)" || rc=$?
+skip_scan_run
 check "inline COMMIT: exits 2" test "$rc" -eq 2
-check "inline COMMIT: says prod may have been modified" has "PROD MAY HAVE BEEN MODIFIED"
-check "inline COMMIT: names the file" has "(${tmp}/m/000002_sneaky.up.sql)"
+check "inline COMMIT: says PROD WAS MODIFIED" has "PROD WAS MODIFIED"
+check "inline COMMIT: names the file" has "ended by ${tmp}/m/000002_sneaky.up.sql"
+check "inline COMMIT: never says nothing was committed" never_says_nothing_committed
 check "inline COMMIT: halts before the next file" \
     test "$(sql "SELECT count(*) FROM pg_attribute WHERE attrelid = 'boats'::regclass AND attname = 'after_leak'")" -eq 0
 check "inline COMMIT: no snapshot fallback" test ! -f "$tmp/snapshot.log"
+check "inline COMMIT: canary dropped" canary_gone
 check "inline COMMIT: the leak is real (stand-in prod changed)" test "$(fingerprint)" != "$before"
 reset_db
 
 new_migrations
 echo "SELECT 1; COMMIT; BEGIN;" > "$tmp/m/000002_reopen.up.sql"
-rc=0; out="$(cd "$ROOT" && DRYRUN_TEST_SKIP_SCAN=1 bash "$SCRIPT" 2>&1)" || rc=$?
-check "COMMIT; BEGIN: exits 2 (3B001)" test "$rc" -eq 2
-check "COMMIT; BEGIN: says prod may have been modified" has "PROD MAY HAVE BEEN MODIFIED"
+skip_scan_run
+check "COMMIT; BEGIN: exits 2" test "$rc" -eq 2
+check "COMMIT; BEGIN: says PROD WAS MODIFIED" has "PROD WAS MODIFIED"
+check "COMMIT; BEGIN: canary dropped" canary_gone
+
+# COMMIT followed by an error in the same file: the error is not the story.
+new_migrations
+echo "ALTER TABLE boats ADD COLUMN leaked text; COMMIT; SELECT 1/0;" > "$tmp/m/000002_commit_then_error.up.sql"
+skip_scan_run
+check "COMMIT then error: exits 2" test "$rc" -eq 2
+check "COMMIT then error: says PROD WAS MODIFIED" has "PROD WAS MODIFIED"
+check "COMMIT then error: never says nothing was committed" never_says_nothing_committed
+check "COMMIT then error: canary dropped" canary_gone
+reset_db
+
+# Fable's straddle: comments that open in one file and close in the next
+# swallow the guards between them, and the reopened transaction recreates
+# the savepoints, so psql exits 0. Only the canary can see this.
+new_migrations
+printf 'ALTER TABLE boats ADD COLUMN straddled text; /*\n' > "$tmp/m/000002_a.up.sql"
+printf '*/ COMMIT; /*\n' > "$tmp/m/000003_b.up.sql"
+printf '*/ BEGIN; /*\n' > "$tmp/m/000004_c.up.sql"
+printf '*/ SAVEPOINT dryrun; SAVEPOINT dryrun_file;\n' > "$tmp/m/000005_d.up.sql"
+skip_scan_run
+check "straddle: exits 2" test "$rc" -eq 2
+check "straddle: says PROD WAS MODIFIED" has "PROD WAS MODIFIED"
+check "straddle: never says nothing was committed" never_says_nothing_committed
+check "straddle: canary dropped" canary_gone
+check "straddle: the leak is real (stand-in prod changed)" test "$(fingerprint)" != "$before"
+check "straddle: the scan alone would have refused it" \
+    bash -c "cd '$ROOT' && ! bash '$SCRIPT' --scan '$tmp'/m/00000[2-5]_*.up.sql >/dev/null"
+reset_db
+
+# A canary left on prod by an earlier leak stops the next run up front.
+new_migrations
+sql "CREATE TABLE public._deploy_dryrun_canary ()" >/dev/null
+run
+check "leftover canary: exits 2" test "$rc" -eq 2
+check "leftover canary: says PROD WAS MODIFIED" has "PROD WAS MODIFIED"
+check "leftover canary: no dry-run sent" bash -c "! grep -qF 'ROLLBACK;' '$tmp/psql.log'"
+check "leftover canary: dropped" canary_gone
+reset_db
 
 # 11d. Error output never shows row values (synthetic data).
 new_migrations
@@ -347,15 +397,37 @@ run
 check "redaction, uuid cast: exits 1" test "$rc" -eq 1
 check "redaction, uuid cast: value redacted" has 'invalid input syntax for type uuid: "[redacted]"'
 check "redaction, uuid cast: value not shown" bash -c "! grep -qF 'SYNTHETIC-SECRET' <<< \"\$1\"" _ "$out"
+new_migrations
+echo "ALTER TABLE readings ALTER COLUMN v TYPE int USING v::int;" > "$tmp/m/000002_int.up.sql"
+run
+check "redaction, out of range: exits 1" test "$rc" -eq 1
+check "redaction, out of range: value redacted" has 'value "[redacted]" is out of range'
+check "redaction, out of range: value not shown" bash -c "! grep -qF '99999999999123' <<< \"\$1\"" _ "$out"
+new_migrations
+echo "ALTER TABLE readings ALTER COLUMN d TYPE date USING d::date;" > "$tmp/m/000002_date.up.sql"
+run
+check "redaction, date out of range: exits 1" test "$rc" -eq 1
+check "redaction, date out of range: value not shown" bash -c "! grep -qF '2024-13-45' <<< \"\$1\"" _ "$out"
+new_migrations
+cat > "$tmp/m/000002_multiline_row.up.sql" <<'EOF'
+ALTER TABLE contacts ADD CONSTRAINT contacts_no_secret CHECK (email NOT LIKE '%SECRET%') NOT VALID;
+UPDATE contacts SET ref = ref;
+EOF
+run
+check "redaction, multi-line failing row: exits 1" test "$rc" -eq 1
+check "redaction, multi-line failing row: reports 23514" has "SQLSTATE 23514"
+check "redaction, multi-line failing row: no line of the value shown" \
+    bash -c "! grep -qE 'synthetic\.multi|line-SECRET2' <<< \"\$1\"" _ "$out"
 check "redaction: no trace" test "$(fingerprint)" == "$before"
 
 # 11e. ssh / connection failure → "could not reach prod", exit 1.
 new_migrations
-rc=0; out="$(cd "$ROOT" && FAKE_SSH_FAIL=1 PROD_MIGRATION_STATE="1|false" bash "$SCRIPT" 2>&1)" || rc=$?
+rc=0; out="$(cd "$ROOT" && FAKE_SSH_FAIL=1 PROD_MIGRATION_STATE="1|false|false" bash "$SCRIPT" 2>&1)" || rc=$?
 check "ssh failure during dry-run: exits 1" test "$rc" -eq 1
 check "ssh failure during dry-run: says could not reach prod" has "could not reach prod"
 check "ssh failure during dry-run: not reported as a migration failure" \
     bash -c "! grep -qF 'migration fails' <<< \"\$1\"" _ "$out"
+check "ssh failure during dry-run: does not claim nothing was committed" never_says_nothing_committed
 rc=0; out="$(cd "$ROOT" && FAKE_SSH_FAIL=1 bash "$SCRIPT" 2>&1)" || rc=$?
 check "ssh failure on state read: exits 1" test "$rc" -eq 1
 check "ssh failure on state read: shows the ssh error" has "Connection refused"
@@ -404,8 +476,20 @@ printf 'DO $a1$\nBEGIN\n    COMMIT;\nEND\n$a1$;\nSELECT $a1$ ; COMMIT; $a1$;\n' 
 printf '/*\n COMMIT;\n /* nested COMMIT; */ still a comment; COMMIT;\n*/\nSELECT 1;\n-- COMMIT;\n' | scan_fixture comments ""
 printf "SELECT E'it\\\\'s; COMMIT;';\nSELECT 'a''b; COMMIT;';\n" | scan_fixture escaped-strings ""
 printf 'SELECT 1 AS "x;COMMIT";\n' | scan_fixture quoted-identifier ""
-printf 'SAVEPOINT s;\nROLLBACK TO SAVEPOINT s;\nROLLBACK WORK TO s;\nRELEASE SAVEPOINT s;\nSET search_path = public;\nPREPARE q AS SELECT 1;\n' \
+printf 'SET search_path = public;\nPREPARE q AS SELECT 1;\nCOPY boats TO STDOUT;\n' \
     | scan_fixture allowed ""
+# Fail closed:
+printf 'SAVEPOINT s;\nROLLBACK TO SAVEPOINT s;\nRELEASE SAVEPOINT s;\n' | scan_fixture savepoints "savepoints:1: transaction control
+savepoints:2: transaction control
+savepoints:3: transaction control"
+printf 'SELECT 1;\n/* never closed\nCOMMIT;\n' | scan_fixture unterminated-comment "unterminated-comment:2: unterminated /* comment at end of file"
+printf "SELECT 'never closed;\nCOMMIT;\n" | scan_fixture unterminated-string "unterminated-string:1: unterminated string at end of file"
+# shellcheck disable=SC2016 # $x$ is a literal dollar-quote tag
+printf 'DO $x$ BEGIN\nCOMMIT;\n' | scan_fixture unterminated-dollar "unterminated-dollar:1: unterminated \$x\$ body at end of file"
+printf '*/ COMMIT;\n' | scan_fixture close-comment-commit "close-comment-commit:1: statement does not start with a keyword"
+printf 'COPY boats FROM STDIN;\n' | scan_fixture copy-stdin "copy-stdin:1: COPY FROM STDIN would read the rest of the stream as data"
+printf 'SET "statement_timeout" = 0;\n' | scan_fixture quoted-guc "quoted-guc:1: changes the dry-run's timeouts"
+printf "SELECT set_config('lock_timeout', '0', false);\n" | scan_fixture set-config "set-config:1: changes the dry-run's timeouts"
 printf "SELECT '\\\\d+';\nSELECT regexp_replace(x, '\\\\s', '');\n" | scan_fixture backslash-in-string ""
 printf 'UPDATE t SET v = CASE WHEN a THEN 1\nELSE 2\nEND;\n' | scan_fixture case-end ""
 

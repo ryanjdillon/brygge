@@ -294,21 +294,29 @@ If any of steps 1–2 fails, the deploy **aborts** and prints the real error plu
 `just migrate-check` only proves the migrations apply to an empty DB. After the snapshot, the deploy script runs [`scripts/deploy-migration-dryrun.sh`](../../scripts/deploy-migration-dryrun.sh), which checks the *pending* migrations against prod's real rows:
 
 1. Reads `schema_migrations` (folded into the snapshot step's first ssh). It refuses to continue if prod is `dirty`, or if prod's version has no file in this checkout (prod is ahead). A host with no `schema_migrations` yet has nothing to check.
-2. Scans the pending `*.up.sql` files and `repeatable/dev_masked.sql` **locally**, statement by statement. It skips comments, string literals and `$tag$` bodies, then flags any statement that could end the transaction (`BEGIN`, `START`, `COMMIT`, `END`, `ROLLBACK` other than `ROLLBACK TO`, `ABORT`, `PREPARE TRANSACTION`), any `SET`/`RESET` of the dry-run's timeouts, and any psql meta-command (a `\` outside a string). A flagged file could commit on prod, so it is never sent; the check falls back to the snapshot (below). `scripts/deploy-migration-dryrun.sh --scan <files>` runs the scan on its own.
-3. Streams `BEGIN; SET LOCAL lock_timeout = '2s'; SET LOCAL statement_timeout = '15s'; SET LOCAL idle_in_transaction_session_timeout = '30s'; SAVEPOINT dryrun;`, then each pending file and `dev_masked.sql` between `SAVEPOINT dryrun_file;` and `RELEASE SAVEPOINT dryrun_file;` (with a `\echo '>>> <file>'` marker), then `ROLLBACK TO SAVEPOINT dryrun; ROLLBACK;`. It goes to `psql -v ON_ERROR_STOP=1` as the `brygge` role over ssh, under a 90s local `timeout` and an 85s `timeout` on the host. On an error psql exits and the dropped connection rolls back. The savepoint guards are a second line of defence behind the scan: if a file somehow ended the transaction, the `RELEASE` right after it fails and no later file runs. Anything that file ran after its `COMMIT` has already committed, so this case is a hard abort. With nothing pending, only `dev_masked.sql` is dry-run (milliseconds).
-4. Re-reads `schema_migrations` and aborts if it changed during the run, which would mean another deploy or a manual migration was running at the same time.
+2. Scans the pending `*.up.sql` files and `repeatable/dev_masked.sql` **locally**, statement by statement. It skips comments, string literals and `$tag$` bodies, and it fails closed. It flags:
+   - any statement that could end the transaction or touch savepoints: `BEGIN`, `START`, `COMMIT`, `END`, `ROLLBACK` (including `ROLLBACK TO`), `ABORT`, `SAVEPOINT`, `RELEASE`, `PREPARE TRANSACTION`;
+   - any `SET`/`RESET` of the dry-run's timeouts, quoted or not, and any string or `$$` body that names one, such as `set_config('lock_timeout', …)`;
+   - `COPY … FROM STDIN`;
+   - a psql meta-command (a `\` outside a string);
+   - a comment, string or `$tag$` body still open at the end of a file;
+   - a statement that doesn't start with a keyword, such as `*/ COMMIT;`.
+
+   A flagged file is never sent; the check falls back to the snapshot (below). `scripts/deploy-migration-dryrun.sh --scan <files>` runs the scan on its own.
+3. Streams `BEGIN; SET LOCAL lock_timeout = '2s'; SET LOCAL statement_timeout = '15s'; SET LOCAL idle_in_transaction_session_timeout = '30s'; SAVEPOINT dryrun; CREATE TABLE public._deploy_dryrun_canary ();`. Each pending file and `dev_masked.sql` follows, between `SAVEPOINT dryrun_file;` and `RELEASE SAVEPOINT dryrun_file;` and with a `\echo '>>> <file>'` marker. The stream ends with `ROLLBACK TO SAVEPOINT dryrun; ROLLBACK;`. It goes to `psql -v ON_ERROR_STOP=1` as the `brygge` role over ssh, under a 90s local `timeout` and an 85s `timeout` on the host. On an error psql exits and the dropped connection rolls back. With nothing pending, only `dev_masked.sql` is dry-run (milliseconds).
+4. Re-reads `schema_migrations` and the **canary**, whatever psql's exit code was. The canary table is created inside the dry-run's transaction. It can only exist afterwards if something committed that transaction, so finding it is exact proof that prod was modified: **exit 2, "PROD WAS MODIFIED"**. The script drops the canary; restore the pre-deploy snapshot (below) before anything else. A canary already present when a run starts is treated the same way. A `RELEASE` guard that fails (`25P01`/`3B001`) also hard-aborts with exit 2, because a file that runs `ROLLBACK` and then more statements leaves no canary but has autocommitted those statements. The run aborts if `schema_migrations` changed, which would mean another deploy or a manual migration ran at the same time. "Nothing was committed" is printed only after this read succeeded and found no canary.
 5. Classifies a failure:
 
    | SQLSTATE / symptom | Meaning | Outcome |
    |--------------------|---------|---------|
-   | `25P01`, `3B001` | a file ended the dry-run's transaction | **hard abort, exit 2. Prod may have been modified**: restore the pre-deploy snapshot (below) before anything else |
-   | ssh exit 255, `psql: error:` | prod or psql on the host unreachable | abort, exit 1: nothing ran |
+   | canary table present | the dry-run's transaction was committed | **hard abort, exit 2. Prod was modified**: restore the pre-deploy snapshot before anything else |
+   | `25P01`, `3B001` | a file ended the dry-run's transaction | **hard abort, exit 2. Prod may have been modified**: restore the pre-deploy snapshot before anything else |
+   | ssh exit 255, `psql: error:` | prod or psql on the host unreachable | abort, exit 1. Says "nothing was committed" only if the canary read afterwards succeeded |
    | `55P04` | new enum value used in the same transaction | snapshot fallback |
    | `25001` | statement can't run in a transaction block (`CREATE INDEX CONCURRENTLY`, `VACUUM`) | snapshot fallback |
    | `55P03` | lock timeout: live traffic holds a conflicting lock | **"prod busy", exit 75**: retry in a minute |
    | anything else | the migration fails on prod data | abort, naming the file, line and statement |
-
-   Printed errors never show row values: `DETAIL`/`HINT`/`CONTEXT` lines are dropped, and the values in `Key (…)=(…)` and `invalid input syntax for type …: "…"` are redacted.
+   Printed errors never show row values. `DETAIL`, `HINT`, `CONTEXT` and `QUERY` fields are dropped together with their continuation lines, because a value can span lines. On `ERROR` lines, quoted values are redacted: `value "…" is out of range`, and a trailing `: "…"` as in `invalid input syntax for type uuid: "…"`, `date/time field value out of range: "…"` or `malformed array literal: "…"`. `Key (…)=(…)` and `Failing row contains …` are redacted wherever they appear.
 
 The dry-run takes the same locks the real migration would. Live requests that touch a locked table wait behind it, for at most 15s per statement and 90s in all, and an `ALTER TABLE` waits at most 2s for live traffic before giving up.
 

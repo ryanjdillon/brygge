@@ -5,23 +5,26 @@
 # Called by the flake deploy app (`nix run .#deploy`, `just deploy`) after the
 # pre-deploy snapshot. Flow:
 #
-#   1. Read prod's schema_migrations (version, dirty). Refuse if dirty, or if
-#      this checkout has no file for prod's version (prod is ahead of it).
-#      No schema_migrations at all (fresh host) → nothing to check.
+#   1. Read prod's schema_migrations (version, dirty) and the canary. Refuse
+#      if dirty, or if this checkout has no file for prod's version (prod is
+#      ahead of it). No schema_migrations at all (fresh host) → nothing to
+#      check.
 #   2. Pending = numbered *.up.sql above prod's version.
 #   3. Lex the pending files and repeatable/dev_masked.sql locally, statement
-#      by statement, for transaction control, SET/RESET of the dry-run's
-#      timeouts, and psql meta-commands. A hit means the file could commit,
-#      so nothing is sent: fall back to the snapshot check.
-#   4. Otherwise stream BEGIN; SET LOCAL timeouts; SAVEPOINT; each file
-#      between SAVEPOINT/RELEASE guards; dev_masked.sql; ROLLBACK TO
-#      SAVEPOINT; ROLLBACK; to psql as the brygge role. Nothing pending →
-#      only dev_masked.sql is dry-run.
-#   5. Classify a failure: a file that ended the transaction (25P01/3B001)
-#      → hard abort, prod may be modified; ssh/connection failure → error;
-#      55P04 / 25001 → snapshot fallback; 55P03 → prod busy; anything else
-#      → the migration fails. Row values in error output are redacted.
-#   6. Re-read schema_migrations; abort if it changed while we ran.
+#      by statement, failing closed: transaction control, savepoints, the
+#      dry-run's timeouts, COPY FROM STDIN, psql meta-commands, unterminated
+#      comments/strings/bodies, and statements that don't start with a
+#      keyword. A hit means nothing is sent: fall back to the snapshot check.
+#   4. Otherwise stream BEGIN; SET LOCAL timeouts; SAVEPOINT; the canary
+#      table; each file between SAVEPOINT/RELEASE guards; dev_masked.sql;
+#      ROLLBACK TO SAVEPOINT; ROLLBACK; to psql as the brygge role. Nothing
+#      pending → only dev_masked.sql is dry-run.
+#   5. Re-read prod. Canary present → PROD WAS MODIFIED, exit 2. A file
+#      that ended the transaction (25P01/3B001) → hard abort, exit 2.
+#   6. Abort if schema_migrations changed while we ran.
+#   7. Classify a failure: ssh/connection failure → error; 55P04 / 25001 →
+#      snapshot fallback; 55P03 → prod busy; anything else → the migration
+#      fails. Row values in error output are redacted.
 #
 # The dry-run is not a perfect model of golang-migrate: that runs each file
 # in its own implicit transaction, this runs them all in one. The SQLSTATEs
@@ -36,9 +39,10 @@
 #   PROD_PSQL            command (shell words) that runs psql against prod as
 #                        the brygge role; only simple flags are appended and
 #                        all SQL goes over stdin. Required unless skipped.
-#   PROD_MIGRATION_STATE "version|dirty" or "none", already read by the caller
-#                        (folds the read into an earlier ssh). Read via
-#                        PROD_PSQL when unset or empty.
+#   PROD_MIGRATION_STATE "version|dirty|canary" or "none|canary" (the output
+#                        of --state-sql), already read by the caller (folds
+#                        the read into an earlier ssh). Read via PROD_PSQL
+#                        when unset or empty.
 #   SNAPSHOT_DUMP        local pg_dump -Fc of prod for the snapshot fallback;
 #                        without it migrate-check-prod.sh fetches from S3.
 #   SKIP_PROD_CHECK=1    skip everything, loudly.
@@ -47,14 +51,14 @@
 #   DEV_MASKED_SQL       default $MIGRATIONS_DIR/repeatable/dev_masked.sql
 #   SNAPSHOT_CHECK_CMD   override the snapshot check (tests); gets the dump
 #                        path as its only argument, or none.
-#   DRYRUN_TIMEOUT       whole-run timeout in seconds, default 90
+#   DRYRUN_TIMEOUT       whole-run timeout in seconds, default 90, minimum 30
 #   DRYRUN_STREAM_COPY   tests: save a copy of the SQL stream here
 #   DRYRUN_TEST_SKIP_SCAN=1  tests only: disable step 3 to exercise the
 #                        in-stream guards; never against a real host
 #
 # Exit codes: 0 ok · 1 migration failed / check error / unreachable ·
-# 2 refused or hard stop (dirty, prod ahead, state changed, a file ended
-# the transaction) · 75 prod busy (lock timeout), retry later.
+# 2 refused or hard stop (dirty, prod ahead, state changed, canary found,
+# a file ended the transaction) · 75 prod busy (lock timeout), retry later.
 set -euo pipefail
 
 EXIT_FAIL=1
@@ -64,12 +68,23 @@ EXIT_BUSY=75
 MIGRATIONS_DIR="${MIGRATIONS_DIR:-backend/migrations}"
 DEV_MASKED_SQL="${DEV_MASKED_SQL:-${MIGRATIONS_DIR}/repeatable/dev_masked.sql}"
 DRYRUN_TIMEOUT="${DRYRUN_TIMEOUT:-90}"
+# The caller runs psql on the host under DRYRUN_TIMEOUT - 5; keep that sane.
+if [[ ! "$DRYRUN_TIMEOUT" =~ ^[0-9]+$ ]] || (( DRYRUN_TIMEOUT < 30 )); then
+    DRYRUN_TIMEOUT=30
+fi
 COMPOSE=(docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml)
 
-# One row, one line: "version|dirty", or "none" when golang-migrate has never
-# run. query_to_xml defers parsing the inner query to execution time, so the
-# statement is valid even where schema_migrations does not exist.
-STATE_SQL="SELECT CASE WHEN to_regclass('public.schema_migrations') IS NULL THEN 'none' ELSE coalesce((xpath('/table/row/s/text()', query_to_xml('SELECT version || ''|'' || dirty AS s FROM schema_migrations', false, false, '')))[1]::text, 'none') END;"
+# The canary is created first inside the dry-run's transaction. It can only
+# exist afterwards if something committed that transaction, so its presence
+# is exact proof that prod was modified, whatever the exit code said.
+CANARY="public._deploy_dryrun_canary"
+
+# One row, one line: "version|dirty|canary", or "none|canary" when
+# golang-migrate has never run. query_to_xml defers parsing the inner query
+# to execution time, so the statement is valid even where schema_migrations
+# does not exist.
+STATE_SQL="SELECT CASE WHEN to_regclass('public.schema_migrations') IS NULL THEN 'none' ELSE coalesce((xpath('/table/row/s/text()', query_to_xml('SELECT version || ''|'' || dirty AS s FROM schema_migrations', false, false, '')))[1]::text, 'none') END || '|' || (to_regclass('${CANARY}') IS NOT NULL)::text;"
+STATE_RE='^([0-9]+\|(true|false)|none)\|(true|false)$'
 
 say() { echo "deploy: $*"; }
 err() { echo "deploy: $*" >&2; }
@@ -87,11 +102,27 @@ read_state() {
     fi
     rm -f "$errf"
     out="${out//[[:space:]]/}"
-    if [[ "$out" != "none" && ! "$out" =~ ^[0-9]+\|(true|false)$ ]]; then
+    if [[ ! "$out" =~ $STATE_RE ]]; then
         err "ERROR — unexpected schema_migrations state from prod: '${out}'"
         return 1
     fi
     printf '%s' "$out"
+}
+
+# A canary on prod means a dry-run's transaction was committed. Report it,
+# then remove it so the next run starts clean.
+canary_found() {
+    err "ABORT — PROD WAS MODIFIED${1:+ ($1)}: the dry-run's canary table ${CANARY} exists,"
+    err "so a dry-run transaction was committed and its statements are live on prod."
+    err "Restore the pre-deploy snapshot before anything else (docs/developer/deploy.md,"
+    err "'Pre-deploy snapshot and restoring from it')."
+    if printf '%s\n' "DROP TABLE IF EXISTS ${CANARY};" \
+            | timeout 30 bash -c "${PROD_PSQL} -X -q -v ON_ERROR_STOP=1 -f -" >/dev/null 2>&1; then
+        err "(dropped ${CANARY})"
+    else
+        err "WARNING — could not drop ${CANARY}; drop it by hand after restoring."
+    fi
+    exit "$EXIT_REFUSE"
 }
 
 snapshot_check() {
@@ -138,31 +169,46 @@ function is_timeout(name) {
     return name == "STATEMENT_TIMEOUT" || name == "LOCK_TIMEOUT" ||
            name == "IDLE_IN_TRANSACTION_SESSION_TIMEOUT"
 }
-function flush(   s, n, w, k1, k2, k3, name) {
+function mentions_timeout(text) {
+    return text ~ /statement_timeout|lock_timeout|idle_in_transaction_session_timeout/
+}
+# Fails closed: anything it can't positively read as an ordinary statement
+# is flagged, since a false positive only costs the slower snapshot check.
+function flush(   s, up, n, w, k1, k2, k3, name) {
     s = stmt
     sub(/^[ \t\r\n]+/, "", s)
     if (s != "") {
-        n = split(toupper(s), w, /[ \t\r\n(=]+/)
+        up = toupper(s)
+        n = split(up, w, /[ \t\r\n(=]+/)
         k1 = w[1]; k2 = (n >= 2) ? w[2] : ""; k3 = (n >= 3) ? w[3] : ""
-        if (k1 == "BEGIN" || k1 == "START" || k1 == "COMMIT" || k1 == "END" || k1 == "ABORT") {
+        name = (k2 == "SESSION" || k2 == "LOCAL") ? k3 : k2
+        if (k1 !~ /^[A-Z_][A-Z0-9_]*$/) {
+            report(sline, "statement does not start with a keyword")
+        } else if (k1 == "BEGIN" || k1 == "START" || k1 == "COMMIT" || k1 == "END" ||
+                   k1 == "ABORT" || k1 == "ROLLBACK" || k1 == "SAVEPOINT" || k1 == "RELEASE" ||
+                   (k1 == "PREPARE" && k2 == "TRANSACTION")) {
+            # SAVEPOINT / RELEASE / ROLLBACK TO can't commit, but they would
+            # trip the dry-run's own savepoint guards; no migration needs them.
             report(sline, "transaction control")
-        } else if (k1 == "ROLLBACK" && k2 != "TO" &&
-                   !((k2 == "WORK" || k2 == "TRANSACTION") && k3 == "TO")) {
-            report(sline, "transaction control")
-        } else if (k1 == "PREPARE" && k2 == "TRANSACTION") {
-            report(sline, "transaction control")
-        } else if (k1 == "SET") {
-            name = (k2 == "SESSION" || k2 == "LOCAL") ? k3 : k2
-            if (is_timeout(name)) report(sline, "changes the dry-run's timeouts")
-        } else if (k1 == "RESET" && (is_timeout(k2) || k2 == "ALL")) {
+        } else if ((k1 == "SET" && is_timeout(name)) ||
+                   (k1 == "RESET" && (is_timeout(k2) || k2 == "ALL")) ||
+                   mentions_timeout(lits)) {
             report(sline, "changes the dry-run's timeouts")
+        } else if (k1 == "COPY" && up ~ /FROM[ \t\r\n]+STDIN/) {
+            report(sline, "COPY FROM STDIN would read the rest of the stream as data")
         }
     }
-    stmt = ""; sline = 0
+    stmt = ""; sline = 0; lits = ""
 }
 function endfile() {
-    if (fname != "") flush()
-    st = "code"; depth = 0; tag = ""; esc = 0; stmt = ""; sline = 0
+    if (fname != "") {
+        if (st == "block") report(tokline, "unterminated /* comment at end of file")
+        else if (st == "sq") report(tokline, "unterminated string at end of file")
+        else if (st == "id") report(tokline, "unterminated quoted identifier at end of file")
+        else if (st == "dq") report(tokline, "unterminated " tag " body at end of file")
+        flush()
+    }
+    st = "code"; depth = 0; tag = ""; esc = 0; stmt = ""; sline = 0; lits = ""; sbuf = ""
 }
 FNR == 1 { endfile(); fname = FILENAME }
 {
@@ -181,37 +227,45 @@ FNR == 1 { endfile(); fname = FILENAME }
             if (two == "*/") { depth--; i += 2; if (depth == 0) { st = "code"; stmt = stmt " " }; continue }
             i++; continue
         }
+        # String and body contents go to lits (checked for timeout names);
+        # a quoted identifier's text stays in stmt so SET "lock_timeout"
+        # reads like SET lock_timeout.
         if (st == "sq") {
-            if (esc && c == "\\") { i += 2; continue }
+            if (esc && c == "\\") { sbuf = sbuf substr(line, i, 2); i += 2; continue }
             if (c == "'") {
-                if (substr(line, i + 1, 1) == "'") { i += 2; continue }
-                st = "code"; stmt = stmt "''"
+                if (substr(line, i + 1, 1) == "'") { sbuf = sbuf "'"; i += 2; continue }
+                st = "code"; stmt = stmt "''"; lits = lits " " tolower(sbuf); sbuf = ""
+                i++; continue
             }
+            sbuf = sbuf c
             i++; continue
         }
         if (st == "id") {
             if (c == "\"") {
-                if (substr(line, i + 1, 1) == "\"") { i += 2; continue }
-                st = "code"; stmt = stmt "\"\""
+                if (substr(line, i + 1, 1) == "\"") { stmt = stmt "\""; i += 2; continue }
+                st = "code"
+                i++; continue
             }
+            stmt = stmt c
             i++; continue
         }
         if (st == "dq") {
             if (substr(line, i, length(tag)) == tag) { st = "code"; stmt = stmt "$$"; i += length(tag); continue }
+            lits = lits tolower(c)
             i++; continue
         }
         # st == "code"
         if (two == "--") { st = "line"; i += 2; continue }
-        if (two == "/*") { st = "block"; depth = 1; i += 2; continue }
+        if (two == "/*") { st = "block"; tokline = FNR; depth = 1; i += 2; continue }
         if (c == "'") {
             p = lastch()
             esc = (p == "E" || p == "e") && !ident(substr(stmt, length(stmt) - 1, 1))
-            start_here(); st = "sq"; i++; continue
+            start_here(); tokline = FNR; st = "sq"; sbuf = ""; i++; continue
         }
-        if (c == "\"") { start_here(); st = "id"; i++; continue }
+        if (c == "\"") { start_here(); tokline = FNR; st = "id"; i++; continue }
         if (c == "$" && !ident(lastch()) && match(substr(line, i), /^\$([A-Za-z_][A-Za-z0-9_]*)?\$/)) {
             tag = substr(line, i, RLENGTH)
-            start_here(); st = "dq"; stmt = stmt "$$"; i += RLENGTH; continue
+            start_here(); tokline = FNR; st = "dq"; stmt = stmt "$$"; i += RLENGTH; continue
         }
         if (c == "\\") { report(FNR, "psql meta-command"); i++; continue }
         if (c == ";") { flush(); i++; continue }
@@ -257,10 +311,14 @@ state="${PROD_MIGRATION_STATE:-}"
 state="${state//[[:space:]]/}"
 if [[ -z "$state" ]]; then
     state="$(read_state)" || exit "$EXIT_FAIL"
-elif [[ "$state" != "none" && ! "$state" =~ ^[0-9]+\|(true|false)$ ]]; then
+elif [[ ! "$state" =~ $STATE_RE ]]; then
     err "ERROR — unexpected PROD_MIGRATION_STATE '${state}'"
     exit "$EXIT_FAIL"
 fi
+if [[ "${state##*|}" == "true" ]]; then
+    canary_found "left by an earlier dry-run"
+fi
+state="${state%|*}"
 
 if [[ "$state" == "none" ]]; then
     say "prod has no schema_migrations table (fresh host); nothing to check"
@@ -344,7 +402,8 @@ printf '%s\n' "BEGIN;" \
     "SET LOCAL lock_timeout = '2s';" \
     "SET LOCAL statement_timeout = '15s';" \
     "SET LOCAL idle_in_transaction_session_timeout = '30s';" \
-    "SAVEPOINT dryrun;" > "$stream"
+    "SAVEPOINT dryrun;" \
+    "CREATE TABLE ${CANARY} ();" > "$stream"
 : > "$map"
 for f in "${files[@]}"; do
     printf '\\echo %s\n' "'>>> ${f##*/}'" >> "$stream"
@@ -369,13 +428,19 @@ out="$(timeout "$DRYRUN_TIMEOUT" bash -c \
     < "$stream" 2>&1)" || rc=$?
 
 # Error output can quote row values (Key (email)=(…), Failing row contains,
-# invalid input syntax for type uuid: "…"). Member data must never reach
-# the deployer's terminal or CI logs, so drop the detail lines and redact
-# the quoted values in what is left.
+# invalid input syntax for type uuid: "…", value "…" is out of range).
+# Member data must never reach the deployer's terminal or CI logs, so drop
+# DETAIL / HINT / CONTEXT / QUERY fields with their continuation lines (a
+# value can span lines) up to the next psql:, >>>, FIELD: or LINE n: marker,
+# and redact quoted values on ERROR lines.
 redact() {
-    sed -E \
-        -e '/^(psql:[^ ]*: )?(DETAIL|HINT|CONTEXT|QUERY):/d' \
-        -e 's/(invalid input (syntax|value) for [^:]*): ".*"/\1: "[redacted]"/' \
+    awk '
+        /^(psql:[^ ]*: )?(DETAIL|HINT|CONTEXT|QUERY):/ { skip = 1; next }
+        skip && /^(psql:|>>> |[A-Z][A-Z ]*:  |LINE [0-9]+:)/ { skip = 0 }
+        !skip { print }
+    ' | sed -E \
+        -e '/ERROR:/s/value "[^"]*"/value "[redacted]"/g' \
+        -e '/ERROR:/s/: ".*"$/: "[redacted]"/' \
         -e 's/Key \(([^)]*)\)=\(.*\)/Key (\1)=([redacted])/' \
         -e 's/(Failing row contains ).*/\1([redacted])/'
 }
@@ -398,7 +463,21 @@ if [[ -n "$errline" ]]; then
     done < "$map"
 fi
 
-# ── 5a. A file ended the transaction: hard stop, before anything else ──
+# ── 5. Re-read prod: the canary settles whether anything committed ──
+# Runs before any classification, whatever the exit code was.
+after=""
+verified=0
+if after="$(read_state)"; then
+    verified=1
+    if [[ "${after##*|}" == "true" ]]; then
+        show_output
+        canary_found "${ended_by:+ended by ${ended_by}}"
+    fi
+    after="${after%|*}"
+fi
+
+# A file ended the transaction, yet the canary is gone (e.g. it ran
+# ROLLBACK and then more statements): those statements autocommitted.
 if [[ "$sqlstate" == "25P01" || "$sqlstate" == "3B001" ]] \
         || grep -qE 'no transaction in progress|SET LOCAL can only be used in transaction blocks' <<< "$out"; then
     show_output
@@ -410,19 +489,26 @@ if [[ "$sqlstate" == "25P01" || "$sqlstate" == "3B001" ]] \
     exit "$EXIT_REFUSE"
 fi
 
-# ── 5b. Could not reach prod at all ────────────────────────────
+if (( verified == 0 )); then
+    show_output
+    if (( rc == 255 )) || grep -qE 'psql: error:' <<< "$out"; then
+        err "ERROR — could not reach prod / psql on the host (ssh or connection failure)."
+    else
+        err "ERROR — could not re-read prod after the dry-run."
+    fi
+    err "Prod could not be checked for the canary table ${CANARY}; check for it before"
+    err "retrying (it means the dry-run committed). Or deploy with SKIP_PROD_CHECK=1 if prod stays unreachable."
+    exit "$EXIT_FAIL"
+fi
+
 if (( rc == 255 )) || grep -qE 'psql: error:' <<< "$out"; then
     show_output
     err "ERROR — could not reach prod / psql on the host (ssh or connection failure)."
-    err "Nothing ran. Check the host and retry, or deploy with SKIP_PROD_CHECK=1 if it stays unreachable."
+    err "Nothing was committed (no canary on prod). Check the host and retry."
     exit "$EXIT_FAIL"
 fi
 
 # ── 6. Tripwire ────────────────────────────────────────────────
-after="$(read_state)" || {
-    err "ERROR — could not re-read schema_migrations after the dry-run; aborting"
-    exit "$EXIT_FAIL"
-}
 if [[ "$after" != "$state" ]]; then
     err "ABORT — prod schema_migrations changed during the check: '${state}' → '${after}'."
     err "Another deploy or a manual migration ran concurrently. Investigate before deploying."
@@ -430,22 +516,22 @@ if [[ "$after" != "$state" ]]; then
 fi
 
 if (( rc == 0 )); then
-    say "dry-run passed; prod unchanged (rolled back)"
+    say "dry-run passed; prod unchanged (rolled back, no canary on prod)"
     exit 0
 fi
 
-# ── 5c. Classify the remaining failures ────────────────────────
+# ── 7. Classify the remaining failures (canary verified absent) ──
 if (( rc == 124 )); then
     show_output
     err "ERROR — the dry-run did not finish within ${DRYRUN_TIMEOUT}s and was stopped before its ROLLBACK."
-    err "The server rolls back a transaction whose session ends, so nothing should have been committed."
+    err "Nothing was committed (no canary on prod)."
     err "Use PROD_CHECK=snapshot to check against the pre-deploy dump instead."
     exit "$EXIT_FAIL"
 fi
 
 if grep -qE 'FATAL:' <<< "$out"; then
     show_output
-    err "ERROR — prod terminated the dry-run's connection (see FATAL above); its transaction was rolled back."
+    err "ERROR — prod terminated the dry-run's connection (see FATAL above). Nothing was committed (no canary on prod)."
     exit "$EXIT_FAIL"
 fi
 
@@ -468,5 +554,5 @@ err "ABORT — migration fails against prod data${where:+ in ${where}}${sqlstate
 if [[ "$sqlstate" == "57014" ]]; then
     err "A statement ran longer than the 15s statement_timeout on prod data."
 fi
-err "Nothing was committed. Fix the migration and deploy again."
+err "Nothing was committed (no canary on prod). Fix the migration and deploy again."
 exit "$EXIT_FAIL"

@@ -382,6 +382,9 @@
             # before the local one would drop the ssh session.
             DRYRUN=scripts/deploy-migration-dryrun.sh
             export DRYRUN_TIMEOUT="''${DRYRUN_TIMEOUT:-90}"
+            if [[ ! "$DRYRUN_TIMEOUT" =~ ^[0-9]+$ ]] || (( DRYRUN_TIMEOUT < 30 )); then
+              DRYRUN_TIMEOUT=30
+            fi
             PROD_PSQL_REMOTE="timeout --foreground $((DRYRUN_TIMEOUT - 5)) sudo -u brygge psql 'postgres:///brygge?host=/run/postgresql&sslmode=disable'"
             PROD_MIGRATION_STATE=""
             LOCAL_DUMP=""
@@ -417,7 +420,7 @@
                 echo "''${REMOTE_OUT}"
                 abort_backup "could not read the host clock on ''${HOSTNAME}"
               fi
-              PROD_MIGRATION_STATE=$(${pkgs.gnugrep}/bin/grep -E '^([0-9]+[|](true|false)|none)$' <<< "''${REMOTE_OUT}" | head -1 || true)
+              PROD_MIGRATION_STATE=$(${pkgs.gnugrep}/bin/grep -E '^([0-9]+[|](true|false)|none)[|](true|false)$' <<< "''${REMOTE_OUT}" | head -1 || true)
 
               if ! out=$(ssh "root@''${HOSTNAME}" \
                   "systemctl start brygge-pre-deploy-backup.service" 2>&1); then
