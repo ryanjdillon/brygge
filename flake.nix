@@ -371,6 +371,13 @@
             # deployer's machine (last 10 kept). A failed snapshot aborts the
             # deploy: running migrations without one is exactly the risk this
             # guards against. SKIP_BACKUP=1 is the explicit, visible opt-out.
+            #
+            # The same first ssh also reads prod's schema_migrations for the
+            # pending-migration check below, so it costs no extra round trip.
+            DRYRUN=scripts/deploy-migration-dryrun.sh
+            PROD_PSQL_REMOTE="sudo -u brygge psql 'postgres:///brygge?host=/run/postgresql&sslmode=disable'"
+            PROD_MIGRATION_STATE=""
+            LOCAL_DUMP=""
             if [[ "''${SKIP_BACKUP:-0}" != "1" ]]; then
               PREDEPLOY_DIR=/var/lib/brygge/backups/pre-deploy
 
@@ -387,12 +394,23 @@
               # ReadWritePaths entry fails namespace setup (exit 226) when the
               # path is missing, and a host whose config predates the tmpfiles
               # rule won't have it yet. Also captures the host clock so the
-              # dump found below is provably from this run.
-              if ! REMOTE_START=$(ssh "root@''${HOSTNAME}" \
-                  "install -d -o brygge -g brygge -m 0750 ''${PREDEPLOY_DIR%/*} ''${PREDEPLOY_DIR} && date +%s" 2>&1); then
-                echo "''${REMOTE_START}"
+              # dump found below is provably from this run. The state read is
+              # best-effort here; the check re-reads it and fails loudly.
+              STATE_CMD=""
+              if [[ "''${SKIP_PROD_CHECK:-0}" != "1" ]]; then
+                STATE_CMD=" && { ''${PROD_PSQL_REMOTE} -X -q -t -A -f - 2>/dev/null || true; }"
+              fi
+              if ! REMOTE_OUT=$(bash "$DRYRUN" --state-sql | ssh "root@''${HOSTNAME}" \
+                  "install -d -o brygge -g brygge -m 0750 ''${PREDEPLOY_DIR%/*} ''${PREDEPLOY_DIR} && date +%s''${STATE_CMD}" 2>&1); then
+                echo "''${REMOTE_OUT}"
                 abort_backup "could not prepare the backup directory on ''${HOSTNAME}"
               fi
+              REMOTE_START=$(${pkgs.gnugrep}/bin/grep -E '^[0-9]+$' <<< "''${REMOTE_OUT}" | head -1 || true)
+              if [[ -z "''${REMOTE_START}" ]]; then
+                echo "''${REMOTE_OUT}"
+                abort_backup "could not read the host clock on ''${HOSTNAME}"
+              fi
+              PROD_MIGRATION_STATE=$(${pkgs.gnugrep}/bin/grep -E '^([0-9]+[|](true|false)|none)$' <<< "''${REMOTE_OUT}" | head -1 || true)
 
               if ! out=$(ssh "root@''${HOSTNAME}" \
                   "systemctl start brygge-pre-deploy-backup.service" 2>&1); then
@@ -416,6 +434,7 @@
               echo "deploy: pulling ''${LATEST} → ''${DEST}…"
               if ${pkgs.openssh}/bin/scp "root@''${HOSTNAME}:''${LATEST}" "''${DEST}"; then
                 echo "deploy: local backup saved to ''${DEST}"
+                LOCAL_DUMP="''${DEST}"
               else
                 # The host copy is the rollback point; the local copy is extra.
                 echo "deploy: WARNING — could not pull a local copy; the snapshot is still on the host"
@@ -433,6 +452,23 @@
               fi
             else
               echo "deploy: WARNING — SKIP_BACKUP=1: deploying WITHOUT a pre-deploy snapshot"
+            fi
+
+            # ── Pending migrations against prod data ─────────────────────
+            # After the snapshot, so there is a rollback point. Dry-runs the
+            # pending migrations on prod in a transaction that always rolls
+            # back, falling back to restoring the dump pulled above when a
+            # migration can't be modelled that way. SKIP_PROD_CHECK=1 is the
+            # explicit, visible opt-out; PROD_CHECK=snapshot forces the
+            # fallback. See scripts/deploy-migration-dryrun.sh.
+            check_rc=0
+            PROD_PSQL="ssh root@''${HOSTNAME} \"''${PROD_PSQL_REMOTE}\"" \
+              PROD_MIGRATION_STATE="''${PROD_MIGRATION_STATE}" \
+              SNAPSHOT_DUMP="''${LOCAL_DUMP}" \
+              bash "$DRYRUN" || check_rc=$?
+            if [[ "''${check_rc}" -ne 0 ]]; then
+              echo "deploy: aborting: pending migrations did not pass the prod check (see above)."
+              exit "''${check_rc}"
             fi
 
             ${deploy-rs.packages.${system}.default}/bin/deploy \

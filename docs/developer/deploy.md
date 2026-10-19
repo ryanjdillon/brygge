@@ -289,6 +289,34 @@ Rolling the system back does **not** roll back the database, because migrations 
 
 If any of steps 1–2 fails, the deploy **aborts** and prints the real error plus the unit's recent journal. To deploy without a snapshot anyway, re-run with `SKIP_BACKUP=1`, which is loudly reported. Don't use that to paper over a broken backup.
 
+### Pending migrations checked against prod data
+
+`just migrate-check` only proves the migrations apply to an empty DB. After the snapshot, the deploy script runs [`scripts/deploy-migration-dryrun.sh`](../../scripts/deploy-migration-dryrun.sh), which checks the *pending* migrations against prod's real rows:
+
+1. Reads `schema_migrations` (folded into the snapshot step's first ssh). It refuses to continue if prod is `dirty`, or if prod's version has no file in this checkout (prod is ahead). A host with no `schema_migrations` yet has nothing to check.
+2. Scans the pending `*.up.sql` files and `repeatable/dev_masked.sql` **locally** for top-level `BEGIN`/`COMMIT`/`ROLLBACK`/`END` and psql meta-commands (`\…`). Such a file could commit on prod, so it is never sent; the check falls back to the snapshot (step 5).
+3. Streams `BEGIN; SET LOCAL lock_timeout = '2s'; SET LOCAL statement_timeout = '15s';`, each pending file (with a `\echo '>>> <file>'` marker), `dev_masked.sql`, and `ROLLBACK;` to `psql -v ON_ERROR_STOP=1` as the `brygge` role over ssh, under a 90s `timeout`. On an error psql exits and the dropped connection rolls back. Nothing is committed either way. With nothing pending, only `dev_masked.sql` is dry-run (milliseconds).
+4. Re-reads `schema_migrations` and aborts if it changed during the run, which would mean another deploy or a manual migration was running at the same time.
+5. Classifies a failure by SQLSTATE:
+
+   | SQLSTATE | Meaning | Outcome |
+   |----------|---------|---------|
+   | `55P04` | new enum value used in the same transaction | snapshot fallback |
+   | `25001` | statement can't run in a transaction block (`CREATE INDEX CONCURRENTLY`, `VACUUM`) | snapshot fallback |
+   | `55P03` | lock timeout: live traffic holds a conflicting lock | **"prod busy", exit 75**: retry in a minute |
+   | anything else | the migration fails on prod data | abort, naming the file, line and statement |
+
+The snapshot fallback is `scripts/migrate-check-prod.sh <dump>`, run with the dump the deploy just pulled to `~/brygge-backups/`, so it needs no S3 credentials. It does need the local compose DB (`just up`), and says so when that isn't running. Without a local dump (`SKIP_BACKUP=1`, or the `scp` failed) it fetches the newest S3 snapshot instead.
+
+The dry-run runs all pending files in one transaction, while golang-migrate gives each file its own. The fallback SQLSTATEs above cover the cases where that difference matters.
+
+| Env | Effect |
+|-----|--------|
+| `SKIP_PROD_CHECK=1` | skip the check, with a loud warning. For when prod's DB or the bucket is unreachable |
+| `PROD_CHECK=snapshot` | skip the dry-run and run the snapshot check |
+
+Tests run against a scratch DB in the local compose db: `just test-deploy-dryrun`.
+
 To restore after a bad migration, roll the system back first so the old binary isn't fighting the restored schema, then restore the dump taken just before that deploy:
 
 ```bash

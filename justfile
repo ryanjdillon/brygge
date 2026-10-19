@@ -210,7 +210,9 @@ install host:
 # remotely). Gated on `just migrate-check` — every migration in
 # backend/migrations/ must apply end-to-end against a fresh DB before we
 # ship. Skip via `nix run .#deploy -- {{host}}` directly if you have a
-# good reason (e.g. the DB service isn't running locally).
+# good reason (e.g. the DB service isn't running locally). The deploy app
+# then snapshots prod and dry-runs the pending migrations against prod data
+# (SKIP_PROD_CHECK=1 to skip, PROD_CHECK=snapshot to force the dump restore).
 deploy host="brygge":
     just migrate-check
     nix run .#deploy -- {{host}}

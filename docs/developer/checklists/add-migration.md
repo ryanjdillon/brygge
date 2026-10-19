@@ -51,6 +51,8 @@ psql -h localhost -p 5433 -U brygge_dev -d brygge_test -f backend/migrations/NNN
 
 A down that errors when run after the up is a real bug — it means the up isn't atomically reversible.
 
+Checking against prod data needs no manual step for an ordinary migration. `just deploy` dry-runs the pending files on prod in a rolled-back transaction (see [deploy.md](../deploy.md#pending-migrations-checked-against-prod-data)). Run `just migrate-check-prod` by hand only to check early, before you deploy.
+
 ## 4. Schema overview
 
 Update `docs/developer/database.md` Schema overview to mention the new table or column. One-line bullet under the relevant subsystem is usually enough.
@@ -96,3 +98,5 @@ Most migrations need matching Go changes:
 - **Forgot the index** — sequential scans appear in slow query logs on first heavy use
 - **Enum value mismatch with Go switch statement** — silent fallthrough to default. The [DIL-376 enums doc](../reference/enums.md) is meant to surface these.
 - **Forgot to update Schema overview** — the next person grepping for the table doesn't find it in docs and assumes it doesn't exist
+- **Top-level `BEGIN;` / `COMMIT;` or a psql `\` meta-command in the file.** golang-migrate already runs each file in one implicit transaction, so you don't need them. With them, the deploy can't dry-run the file on prod and falls back to the slower snapshot restore. plpgsql `BEGIN … END` inside `$$` is fine.
+- **Side effects that survive the dry-run's `ROLLBACK`.** The deploy runs pending migrations on prod and rolls them back. Some effects stay anyway. Sequences advance and don't roll back: `nextval`, `setval`, or inserting into a `SERIAL` column. `invoices.invoice_number` is a `SERIAL`, so a migration that inserts invoices leaves a gap in prod's numbering. Work done through `dblink`, and anything written outside the DB, also stays. Deploy such a migration with `PROD_CHECK=snapshot`. These are safe: `NOTIFY`, which is only delivered on commit; advisory locks, which are released when the dry-run's session ends; and `CREATE DATABASE` / `ALTER SYSTEM`, which can't run in a transaction (25001) and so go to the snapshot fallback. Nothing like this is pending today.

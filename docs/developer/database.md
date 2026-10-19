@@ -347,13 +347,20 @@ Every table has `created_at` / `updated_at` `TIMESTAMPTZ` columns and a
 
 ## Migration dry-run against prod data
 
-`just migrate-check` applies every migration to an empty DB. `just
-migrate-check-prod` is the thorough variant: it restores the **latest
-daily snapshot** (from the automated S3 backup — `<bucket>/<s3Prefix>/daily/`, GFS
-retention daily×7 / weekly×4 / monthly×12) into a throwaway
-`brygge_migrate_check_prod` DB, applies the *pending* migrations against
-that real data, then drops it. Use it before any migration that changes a
-column type or adds a `NOT NULL` / `CHECK` to a populated table.
+`just migrate-check` applies every migration to an empty DB. Every deploy
+then dry-runs the *pending* migrations on prod itself, inside a
+transaction that always rolls back. See [deploy.md](deploy.md#pending-migrations-checked-against-prod-data).
+For an ordinary transactional migration that dry-run is the check. You
+don't need to run anything by hand.
+
+`just migrate-check-prod` is the snapshot check the deploy falls back to
+when a migration can't be dry-run in one transaction: files with their own
+`BEGIN`/`COMMIT`, a new enum value used by a later statement, or
+`CREATE INDEX CONCURRENTLY`. The deploy runs it with the pre-deploy dump it
+just pulled. By hand it restores the **latest daily snapshot** (from the
+automated S3 backup, `<bucket>/<s3Prefix>/daily/`, GFS retention daily×7 /
+weekly×4 / monthly×12) into a throwaway `brygge_migrate_check_prod` DB,
+applies the *pending* migrations against that real data, then drops it.
 
 ```bash
 just up                              # compose db must be running

@@ -198,9 +198,9 @@ material (`architecture.md`, `tech-stack.md`) lives at `docs/`.
 
 Migrations run automatically as part of every deploy — `brygge-migrate.service` fires before the API starts, so no manual migration step is needed after merging. Do not tell the user to run migrations manually.
 
-`brygge-migrate.service` runs as the `brygge` DB role inside a chain of separate `BEGIN/COMMIT` blocks (golang-migrate's pgx driver splits the file at `;` boundaries). A partially-applied migration that fails on statement N leaves statements 1..N-1 committed — so retries hit "already exists" errors unless every DDL statement is guarded with `IF NOT EXISTS` / `pg_constraint` checks.
+`brygge-migrate.service` runs as the `brygge` DB role. golang-migrate (lib/pq `postgres://` driver) sends each file in **one** exec, so a file without its own `BEGIN`/`COMMIT` runs in one implicit transaction: if statement N fails, statements 1..N-1 roll back too and the version is left `dirty` (verified BRY-395). Files apply in separate transactions, and a file that carries its own `BEGIN;`/`COMMIT;` (000001, 000006) commits in pieces — so keep DDL guarded with `IF NOT EXISTS` / `pg_constraint` checks for retries.
 
-**Before every deploy** — use `just deploy <host>`, which now gates on `just migrate-check`:
+**Before every deploy** — use `just deploy <host>`. Gate order: `just migrate-check` → pre-deploy snapshot → pending migrations dry-run on prod (rolled back) → deploy-rs:
 
 ```bash
 just deploy klokkarvikbaatlag.no    # runs migrate-check first; then nix run .#deploy
@@ -213,7 +213,8 @@ Run `just migrate-check` standalone when you just want to validate a migration i
 Two gates, cheapest first:
 
 - **`just migrate-check`** — applies every migration to an *empty* DB. Fast, catches ~80% of breakage (syntax, ordering, non-idempotent DDL). This is the default `just deploy` gate.
-- **`just migrate-check-prod`** — restores the latest prod snapshot (from the DIL-328 S3 backup) and applies *pending* migrations against that real data, then drops it. Catches data-shape failures that only surface on populated tables — e.g. a TEXT/UUID cast on a non-empty column (DIL-363), a `NOT NULL` / `CHECK` addition on existing rows. Needs `just up` running + `BACKUP_S3_*` env; pass a local `*.dump` to work offline. **Run this before any migration that changes a column type, adds a `NOT NULL`/`CHECK`, or otherwise depends on existing row contents.** The snapshot is fetched to a tmpdir and shredded on exit (carries member PII).
+- **Prod dry-run (automatic, in the deploy app)** — `scripts/deploy-migration-dryrun.sh` streams the *pending* files + `dev_masked.sql` to prod's psql inside `BEGIN … ROLLBACK` (lock_timeout 2s, statement_timeout 15s). Catches data-shape failures on populated tables (TEXT/UUID cast, DIL-363; `NOT NULL` / `CHECK` on existing rows). Exit 75 = prod busy (lock timeout), retry. Files with their own transaction control or psql meta-commands, and SQLSTATE 55P04/25001, fall back to the snapshot check against the dump the deploy just pulled. `SKIP_PROD_CHECK=1` skips it (loudly), `PROD_CHECK=snapshot` forces the fallback. Tests: `just test-deploy-dryrun`.
+- **`just migrate-check-prod`** — the snapshot fallback, also runnable by hand: restores a prod dump (S3 or a local `*.dump`) into the local compose DB, applies pending migrations, drops it. Needs `just up`. The snapshot is shredded on exit (carries member PII).
 
 The recipe spins up a fresh `brygge_migrate_check` DB, applies every migration in `backend/migrations/` end-to-end as the `brygge` role, then drops it. Failures here are deploy-blocking — fix the migration before shipping. Catches:
 
