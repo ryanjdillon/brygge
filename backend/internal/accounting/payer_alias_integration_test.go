@@ -2,7 +2,9 @@ package accounting
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/brygge-klubb/brygge/internal/testutil/fin"
@@ -35,6 +37,37 @@ func (f *bankAutoFixture) payerState(t *testing.T, rowID string) *PayerAliasStat
 	return sug.PayerAlias
 }
 
+// candidates returns the row's suggested and amount-matched fakturas, failing
+// when either response carries the id of a member who owns no candidate.
+func (f *bankAutoFixture) candidates(t *testing.T, rowID string, hidden ...string) map[string]InvoiceSuggestion {
+	t.Helper()
+	ctx := context.Background()
+	sug, err := f.svc.BankRowSuggestionsFor(ctx, f.club.ID, rowID)
+	if err != nil {
+		t.Fatalf("suggestions: %v", err)
+	}
+	pot, err := f.svc.PotentialInvoicesForRow(ctx, f.club.ID, rowID, "", 0, 0)
+	if err != nil {
+		t.Fatalf("potential invoices: %v", err)
+	}
+	for _, body := range []any{sug, pot} {
+		raw, _ := json.Marshal(body)
+		for _, id := range hidden {
+			if strings.Contains(string(raw), id) {
+				t.Fatalf("response names member %s: %s", id, raw)
+			}
+		}
+	}
+	out := map[string]InvoiceSuggestion{}
+	for _, inv := range append(sug.Invoices, pot...) {
+		if prev, ok := out[inv.InvoiceID]; ok && prev.PayerResolvesHere != inv.PayerResolvesHere {
+			t.Fatalf("suggestions and potential invoices disagree on faktura %s", inv.InvoiceID)
+		}
+		out[inv.InvoiceID] = inv
+	}
+	return out
+}
+
 func (f *bankAutoFixture) assign(t *testing.T, rowID, invoiceID string, req PayerAliasRequest) (*TaughtAlias, error) {
 	t.Helper()
 	_, taught, err := f.svc.AssignBankRowToInvoiceRemembering(context.Background(), f.club.ID, f.club.Treasurer.ID, rowID, invoiceID, req)
@@ -50,12 +83,11 @@ func TestTildelAssignTeachesPayerAlias(t *testing.T) {
 	row := f.deposit(t, "SYN FORTOY HOLDING", 30000)
 
 	st := f.payerState(t, row)
-	if st.Payer != "SYN FORTOY HOLDING" || st.Pass != "none" || st.MemberID != "" || st.Conflict || st.OwnClub {
+	if st.Payer != "SYN FORTOY HOLDING" || st.Pass != "none" || st.Taken || st.OwnClub {
 		t.Fatalf("payer state = %+v, want an unknown payer with nothing to conflict", st)
 	}
-	sug, err := f.svc.BankRowSuggestionsFor(context.Background(), f.club.ID, row)
-	if err != nil || len(sug.Invoices) == 0 || sug.Invoices[0].UserID != m.ID {
-		t.Fatalf("invoice suggestions = %+v (err %v), want the faktura with its member's user_id", sug, err)
+	if c := f.candidates(t, row)[inv.ID]; c.UserID != m.ID || c.PayerResolvesHere {
+		t.Fatalf("candidate = %+v, want the faktura with its member's user_id, not resolved", c)
 	}
 
 	taught, err := f.assign(t, row, inv.ID, PayerAliasRequest{Remember: true})
@@ -71,12 +103,14 @@ func TestTildelAssignTeachesPayerAlias(t *testing.T) {
 	if f.entry(t, row) == "" || !f.paid(t, inv.ID) {
 		t.Fatalf("the deposit was not booked")
 	}
-	if st := f.payerState(t, f.deposit(t, "SYN FORTOY HOLDING", 100)); st.MemberID != m.ID || st.Pass != "alias" {
-		t.Errorf("payer state after teaching = %+v, want the alias", st)
-	}
-
 	next := f.faktura(t, m, 30000)
 	nextRow := f.deposit(t, "SYN FORTOY HOLDING", 30000)
+	if st := f.payerState(t, nextRow); !st.Taken || st.Pass != "alias" {
+		t.Errorf("payer state after teaching = %+v, want the alias", st)
+	}
+	if c := f.candidates(t, nextRow)[next.ID]; !c.PayerResolvesHere {
+		t.Errorf("candidate = %+v, want the payer resolving to the member's faktura", c)
+	}
 	res := f.run(t)
 	if len(res.Assigned) != 1 || res.Assigned[0].RowID != nextRow || res.Assigned[0].MatchPass != "alias" || !f.paid(t, next.ID) {
 		t.Fatalf("auto-assign = %+v, want the next deposit booked through the taught alias", res)
@@ -120,9 +154,11 @@ func TestTildelAssignPayerAliasConflicts(t *testing.T) {
 			inv := f.faktura(t, m, 30000)
 			row := f.deposit(t, tc.payer, 30000)
 
-			st := f.payerState(t, row)
-			if !st.Conflict || st.MemberID != other.ID {
-				t.Fatalf("payer state = %+v, want a conflict resolving to the other member", st)
+			if st := f.payerState(t, row); !st.Taken {
+				t.Fatalf("payer state = %+v, want the name taken", st)
+			}
+			if c := f.candidates(t, row, other.ID)[inv.ID]; c.PayerResolvesHere {
+				t.Fatalf("candidate = %+v, want the payer not resolving to this member", c)
 			}
 
 			taught, err := f.assign(t, row, inv.ID, PayerAliasRequest{Remember: true})
@@ -161,8 +197,11 @@ func TestPayerAliasStateSharedName(t *testing.T) {
 	inv := f.faktura(t, a, 30000)
 	row := f.deposit(t, "Synthetic Kaiplass", 30000)
 
-	if st := f.payerState(t, row); !st.Conflict || st.MemberID != "" || st.Pass != "none" {
-		t.Fatalf("payer state = %+v, want a conflict naming no member", st)
+	if st := f.payerState(t, row); !st.Taken || st.Pass != "none" {
+		t.Fatalf("payer state = %+v, want the name taken but resolving to no one", st)
+	}
+	if c := f.candidates(t, row)[inv.ID]; c.PayerResolvesHere {
+		t.Fatalf("candidate = %+v, want a shared name to resolve nowhere", c)
 	}
 	if _, err := f.assign(t, row, inv.ID, PayerAliasRequest{Remember: true}); !errors.Is(err, ErrAliasConflict) {
 		t.Fatalf("assign err = %v, want ErrAliasConflict for a namesake's faktura", err)
@@ -177,8 +216,11 @@ func TestTildelAssignPayerAliasNothingToLearn(t *testing.T) {
 
 	inv := f.faktura(t, m, 30000)
 	row := f.deposit(t, "Synthetic Fortoy", 30000)
-	if st := f.payerState(t, row); st.MemberID != m.ID || st.Pass != "name" {
+	if st := f.payerState(t, row); !st.Taken || st.Pass != "name" {
 		t.Fatalf("payer state = %+v, want the member by name", st)
+	}
+	if c := f.candidates(t, row)[inv.ID]; !c.PayerResolvesHere {
+		t.Fatalf("candidate = %+v, want the payer resolving to the member's faktura", c)
 	}
 	if taught, err := f.assign(t, row, inv.ID, PayerAliasRequest{Remember: true}); err != nil || taught != nil {
 		t.Fatalf("assign = (%+v, %v), want booked with no alias", taught, err)

@@ -272,17 +272,20 @@ type InvoiceSuggestion struct {
 	InvoiceNumber int    `json:"invoice_number"`
 	// UserID is the faktura's member ("" for none), which Tildel compares
 	// with the member the payer already resolves to (BRY-383).
-	UserID          string  `json:"user_id"`
-	MemberName      string  `json:"member_name"`
-	MemberEmail     string  `json:"member_email"`
-	PriceItemName   string  `json:"price_item_name"`
-	IssueDate       string  `json:"issue_date"`
-	DueDate         string  `json:"due_date"`
-	TotalAmount     float64 `json:"total_amount"`
-	KIDNumber       string  `json:"kid_number"`
-	Score           int     `json:"score"`
-	ConfidenceLabel string  `json:"confidence_label"`
-	WhyTooltip      string  `json:"why_tooltip"`
+	UserID string `json:"user_id"`
+	// PayerResolvesHere is true when the bank row's payer already resolves
+	// to this faktura's member: there is no payer to remember for it.
+	PayerResolvesHere bool    `json:"payer_resolves_here"`
+	MemberName        string  `json:"member_name"`
+	MemberEmail       string  `json:"member_email"`
+	PriceItemName     string  `json:"price_item_name"`
+	IssueDate         string  `json:"issue_date"`
+	DueDate           string  `json:"due_date"`
+	TotalAmount       float64 `json:"total_amount"`
+	KIDNumber         string  `json:"kid_number"`
+	Score             int     `json:"score"`
+	ConfidenceLabel   string  `json:"confidence_label"`
+	WhyTooltip        string  `json:"why_tooltip"`
 }
 
 // AccountSuggestion is one ranked GL account for outgoing rows.
@@ -365,13 +368,15 @@ func (s *Service) BankRowSuggestionsFor(
 			return nil, err
 		}
 		out.Invoices = invs
-		out.PayerAlias, err = s.bankRowPayerState(ctx, clubID, partnerRow{
+		var resolved string
+		out.PayerAlias, resolved, err = s.bankRowPayerState(ctx, clubID, partnerRow{
 			Cents: toCents(rowAmount), Description: rowDesc, Counterpart: counterpart,
 			FromAccount: fromAccount, ToAccount: toAccount,
 		})
 		if err != nil {
 			return nil, err
 		}
+		markPayerResolvesHere(out.Invoices, resolved)
 	}
 
 	// Account suggestions: outgoing rows get expense accounts;
@@ -687,7 +692,15 @@ func (s *Service) PotentialInvoicesForRow(
 		s.WhyTooltip = "Berre beløp samsvarer — ikkje verifisert"
 		out = append(out, s)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	resolved, err := s.bankRowResolvedMember(ctx, clubID, bankRowID)
+	if err != nil {
+		return nil, err
+	}
+	markPayerResolvesHere(out, resolved)
+	return out, nil
 }
 
 func confidenceLabel(score int) string {

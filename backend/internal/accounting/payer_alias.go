@@ -37,16 +37,15 @@ var ErrAliasConflict = errors.New("alias_conflict")
 var ErrNotClubMember = errors.New("user is not a member of this club")
 
 // PayerAliasState is how a bank row's payer resolves today, for the Tildel
-// "remember this payer" box. MemberID is the member the payer already
-// resolves to (Pass alias or name). Conflict is true when the name is some
-// member's own name or an alias of one, so remembering it for any member
-// but MemberID would take it from them; it never says whose.
+// "remember this payer" box. Taken is true when the name is some member's
+// own name or an alias of one, so remembering it for anyone else would take
+// it from them. It never says whose: which faktura the payer already
+// resolves to is InvoiceSuggestion.PayerResolvesHere, per candidate.
 type PayerAliasState struct {
-	Payer    string `json:"payer"`
-	MemberID string `json:"member_id,omitempty"`
-	Pass     string `json:"pass"`
-	Conflict bool   `json:"conflict"`
-	OwnClub  bool   `json:"own_club"`
+	Payer   string `json:"payer"`
+	Pass    string `json:"pass"`
+	Taken   bool   `json:"taken"`
+	OwnClub bool   `json:"own_club"`
 }
 
 // PayerAliasRequest asks a faktura assign to remember the row's payer for the
@@ -115,27 +114,57 @@ func (p payerResolution) conflictsWith(memberID string) bool {
 	return false
 }
 
-// bankRowPayerState is PayerAliasState for one bank row.
-func (s *Service) bankRowPayerState(ctx context.Context, clubID string, r partnerRow) (*PayerAliasState, error) {
+// bankRowPayerState is PayerAliasState for one bank row, plus the member the
+// payer already resolves to ("" for none). The member stays server-side: it
+// only marks the candidates that are that member's fakturas.
+func (s *Service) bankRowPayerState(ctx context.Context, clubID string, r partnerRow) (*PayerAliasState, string, error) {
 	st := &PayerAliasState{Payer: bankRowPayer(r.Description, r.Counterpart), Pass: payerPassNone}
 	if st.Payer == "" {
-		return st, nil
+		return st, "", nil
 	}
 	sc, err := s.loadPartnerScoring(ctx, s.db, clubID)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	if sc.isOwn(partnerRow{Cents: r.Cents, Counterpart: st.Payer, FromAccount: r.FromAccount, ToAccount: r.ToAccount}) {
 		st.OwnClub = true
-		return st, nil
+		return st, "", nil
 	}
 	res, err := resolvePayer(ctx, s.db, clubID, st.Payer)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	st.MemberID, st.Pass = res.member()
-	st.Conflict = res.aliasUser != "" || len(res.nameMembers) > 0
-	return st, nil
+	memberID, pass := res.member()
+	st.Pass = pass
+	st.Taken = res.aliasUser != "" || len(res.nameMembers) > 0
+	return st, memberID, nil
+}
+
+// bankRowResolvedMember is the member a bank row's payer already resolves to
+// through a strong pass, or "".
+func (s *Service) bankRowResolvedMember(ctx context.Context, clubID, bankRowID string) (string, error) {
+	var r partnerRow
+	if err := s.db.QueryRow(ctx,
+		`SELECT round(amount * 100)::bigint, COALESCE(description, ''), COALESCE(counterpart, ''),
+		        COALESCE(from_account, ''), COALESCE(to_account, '')
+		   FROM bank_import_rows WHERE id = $1 AND club_id = $2`,
+		bankRowID, clubID,
+	).Scan(&r.Cents, &r.Description, &r.Counterpart, &r.FromAccount, &r.ToAccount); err != nil {
+		return "", fmt.Errorf("load row payer: %w", err)
+	}
+	_, memberID, err := s.bankRowPayerState(ctx, clubID, r)
+	return memberID, err
+}
+
+// markPayerResolvesHere flags the candidates whose member the payer already
+// resolves to: assigning one of them has nothing to teach.
+func markPayerResolvesHere(invs []InvoiceSuggestion, memberID string) {
+	if memberID == "" {
+		return
+	}
+	for i := range invs {
+		invs[i].PayerResolvesHere = invs[i].UserID == memberID
+	}
 }
 
 // teachPayerAlias saves the payer of rowIDs as an alias of the faktura's

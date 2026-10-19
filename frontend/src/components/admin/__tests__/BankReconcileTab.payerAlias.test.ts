@@ -8,7 +8,7 @@ import { ApiError } from '@/lib/errors'
 import type { BankRowSuggestions, BankRowSummary, PayerAliasState } from '@/composables/useBankReconcile'
 
 // Synthetic deposits from a company paying a member's faktura.
-const { icon, rows, state, invoice, assignInvoice, assignMulti, rowStates } = vi.hoisted(() => {
+const { icon, rows, state, resolvesHere, invoice, assignInvoice, assignMulti, rowStates } = vi.hoisted(() => {
   const row = (id: string, amount: number, counterpart: string) => ({
     id,
     row_date: '2026-09-01',
@@ -25,10 +25,11 @@ const { icon, rows, state, invoice, assignInvoice, assignMulti, rowStates } = vi
     provisional: false,
     partner_hint: null,
   })
-  const invoice = (id: string, userId: string, total: number) => ({
+  const invoice = (id: string, userId: string, total: number, resolvesHere = false) => ({
     invoice_id: id,
     invoice_number: 1001,
     user_id: userId,
+    payer_resolves_here: resolvesHere,
     member_name: 'Synthetic Fortoy',
     member_email: 'fortoy@example.invalid',
     price_item_name: 'Synthetic membership',
@@ -45,6 +46,7 @@ const { icon, rows, state, invoice, assignInvoice, assignMulti, rowStates } = vi
     icon: { template: '<span />' },
     rows: [row('a', 300, 'SYN FORTOY HOLDING'), row('b', 200, 'SYN FORTOY HOLDING'), row('c', 200, 'SYN OTHER PAYER')] as BankRowSummary[],
     state: { current: null as PayerAliasState | null },
+    resolvesHere: { value: false },
     invoice,
     assignInvoice: mutation(),
     assignMulti: mutation(),
@@ -80,7 +82,7 @@ vi.mock('@/composables/useBankReconcile', async () => {
     useBankRowSuggestions: (id: Ref<string | null>) => ({
       data: computed<BankRowSuggestions | undefined>(() =>
         id.value
-          ? { invoices: [invoice('inv-1', 'member-1', 300)], accounts: [], payer_alias: state.current ?? undefined }
+          ? { invoices: [invoice('inv-1', 'member-1', 300, resolvesHere.value)], accounts: [], payer_alias: state.current ?? undefined }
           : undefined,
       ),
     }),
@@ -113,7 +115,7 @@ vi.mock('@/composables/useAccounting', () => ({
 const payer = (o: Partial<PayerAliasState> = {}): PayerAliasState => ({
   payer: 'SYN FORTOY HOLDING',
   pass: 'none',
-  conflict: false,
+  taken: false,
   own_club: false,
   ...o,
 })
@@ -146,6 +148,7 @@ describe('BankReconcileTab Hugs betalaren', () => {
     assignInvoice.mutateAsync.mockReset()
     assignMulti.mutateAsync.mockReset()
     state.current = null
+    resolvesHere.value = false
     for (const k of Object.keys(rowStates)) delete rowStates[k]
   })
 
@@ -174,11 +177,12 @@ describe('BankReconcileTab Hugs betalaren', () => {
   })
 
   it.each([
-    ['the payer already is the faktura member', payer({ member_id: 'member-1', pass: 'name', conflict: true })],
-    ['the payer is the club', payer({ own_club: true })],
-    ['the row has no payer name', payer({ payer: '' })],
-  ])('is hidden when %s', async (_why, st) => {
+    ['the payer already is the faktura member', payer({ pass: 'name', taken: true }), true],
+    ['the payer is the club', payer({ own_club: true }), false],
+    ['the row has no payer name', payer({ payer: '' }), false],
+  ])('is hidden when %s', async (_why, st, here) => {
     state.current = st
+    resolvesHere.value = here
     const wrapper = await expandFirstRow()
     expect(wrapper.find('[data-testid="payer-alias"]').exists()).toBe(false)
     await clickAssign(wrapper)
@@ -186,12 +190,11 @@ describe('BankReconcileTab Hugs betalaren', () => {
   })
 
   it('starts unticked with a warning when the name is another member’s', async () => {
-    state.current = payer({ member_id: 'member-2', pass: 'alias', conflict: true })
+    state.current = payer({ pass: 'alias', taken: true })
     const wrapper = await expandFirstRow()
     const box = wrapper.get('[data-testid="payer-alias-checkbox"]')
     expect((box.element as HTMLInputElement).checked).toBe(false)
     expect(wrapper.get('[data-testid="payer-alias-conflict"]').text()).toBe('admin.bankReconcile.payerAlias.conflictWarning')
-    expect(wrapper.find('[data-testid="payer-alias"]').text()).not.toContain('member-2')
 
     await clickAssign(wrapper)
     expect(lastAlias()).toEqual({ remember_payer: false, confirm_alias_override: false })

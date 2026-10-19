@@ -64,6 +64,9 @@ export interface InvoiceSuggestion {
   invoice_number: number
   // The faktura's member; '' when it has none.
   user_id: string
+  // Bank rows only: the row's payer already resolves to this member, so
+  // there is nothing to remember for this faktura.
+  payer_resolves_here?: boolean
   member_name: string
   member_email: string
   price_item_name: string
@@ -94,16 +97,17 @@ export interface BankRowSuggestions {
   payer_alias?: PayerAliasState
 }
 
-// How a bank row's payer resolves today (BRY-383). member_id is the member
-// the payer already resolves to; conflict means the name is some member's
-// own name or alias, without saying whose.
+// How a bank row's payer resolves today (BRY-383). taken means the name is
+// some member's own name or alias, without saying whose; which candidate the
+// payer already resolves to is each faktura's payer_resolves_here.
 export interface PayerAliasState {
   payer: string
-  member_id?: string
   pass: 'alias' | 'name' | 'none'
-  conflict: boolean
+  taken: boolean
   own_club: boolean
 }
+
+type AliasCandidate = Pick<InvoiceSuggestion, 'user_id' | 'payer_resolves_here'>
 
 export interface PayerAliasFields {
   remember_payer: boolean
@@ -117,25 +121,25 @@ export interface PayerAliasFields {
  */
 export function payerAliasOffered(
   state: PayerAliasState | null | undefined,
-  candidates: { user_id?: string }[],
+  candidates: AliasCandidate[],
 ): boolean {
   if (!state || !state.payer.trim() || state.own_club) return false
-  return candidates.some((c) => !!c.user_id && c.user_id !== state.member_id)
+  return candidates.some((c) => !!c.user_id && !c.payer_resolves_here)
 }
 
 /**
- * The request fields for assigning to a faktura of userId. A faktura of the
- * member the payer already resolves to, or one without a member, never
- * remembers; ticking the box despite a conflict confirms the override.
+ * The request fields for assigning to inv. A faktura of the member the payer
+ * already resolves to, or one without a member, never remembers; ticking the
+ * box for a taken name confirms the override.
  */
 export function payerAliasFields(
   state: PayerAliasState | null | undefined,
   offered: boolean,
   checked: boolean,
-  userId: string | undefined,
+  inv: AliasCandidate,
 ): PayerAliasFields {
-  const remember = !!state && offered && checked && !!userId && userId !== state.member_id
-  return { remember_payer: remember, confirm_alias_override: remember && state!.conflict }
+  const remember = !!state && offered && checked && !!inv.user_id && !inv.payer_resolves_here
+  return { remember_payer: remember, confirm_alias_override: remember && !!state?.taken }
 }
 
 /**

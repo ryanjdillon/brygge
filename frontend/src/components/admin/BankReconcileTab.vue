@@ -310,7 +310,7 @@ const potentialStateRowId = computed(() =>
 const { data: potentialSuggestions } = useBankRowSuggestions(potentialStateRowId)
 const rememberChoice = ref<Record<string, boolean>>({})
 function rememberFor(rowId: string, st: PayerAliasState | undefined): boolean {
-  return rememberChoice.value[rowId] ?? !st?.conflict
+  return rememberChoice.value[rowId] ?? !st?.taken
 }
 function setRemember(rowId: string, value: boolean) {
   rememberChoice.value = { ...rememberChoice.value, [rowId]: value }
@@ -549,7 +549,7 @@ async function loadMultiAlias() {
     selectedRows.value.map(async (r) => (await fetchBankRowSuggestions(r.id)).payer_alias),
   )
   multiAlias.value = sharedPayerAlias(states)
-  multiRemember.value = !multiAlias.value?.conflict
+  multiRemember.value = !multiAlias.value?.taken
 }
 async function loadMultiInvoice() {
   if (!selectedRows.value.length) return
@@ -562,7 +562,7 @@ async function loadMultiInvoice() {
 }
 async function doAssignMultiInvoice(inv: InvoiceSuggestion) {
   const rowIds = [...selectedIds.value]
-  const alias = payerAliasFields(multiAlias.value, multiAliasOffered.value, multiRemember.value, inv.user_id)
+  const alias = payerAliasFields(multiAlias.value, multiAliasOffered.value, multiRemember.value, inv)
   const booked = await bookRemembering(alias, (a) =>
     assignMultiInvoice.mutateAsync({ rowIds, invoiceId: inv.invoice_id, alias: a }),
   )
@@ -581,7 +581,7 @@ async function doAssignInvoice(
   if (activeSource.value === 'vipps') {
     await vAssignInvoice.mutateAsync({ rowId, invoiceId })
   } else {
-    const fields = payerAliasFields(alias?.state, !!alias?.offered, rememberFor(rowId, alias?.state), inv.user_id)
+    const fields = payerAliasFields(alias?.state, !!alias?.offered, rememberFor(rowId, alias?.state), inv)
     const booked = await bookRemembering(fields, (a) => assignInvoice.mutateAsync({ rowId, invoiceId, alias: a }))
     if (!booked) return
   }
@@ -984,7 +984,7 @@ async function doUnassign(rowId: string) {
               v-if="panelAliasOffered && panelAlias"
               :model-value="rememberFor(row.id, panelAlias)"
               :payer="panelAlias.payer"
-              :conflict="panelAlias.conflict"
+              :taken="panelAlias.taken"
               @update:model-value="setRemember(row.id, $event)"
             />
             <div
@@ -1111,7 +1111,7 @@ async function doUnassign(rowId: string) {
         class="mt-3"
         :model-value="rememberFor(potentialRowId, potentialAlias)"
         :payer="potentialAlias.payer"
-        :conflict="potentialAlias.conflict"
+        :taken="potentialAlias.taken"
         @update:model-value="potentialRowId && setRemember(potentialRowId, $event)"
       />
       <input
@@ -1292,7 +1292,7 @@ async function doUnassign(rowId: string) {
         v-model="multiRemember"
         class="mt-3"
         :payer="multiAlias.payer"
-        :conflict="multiAlias.conflict"
+        :taken="multiAlias.taken"
       />
       <input
         v-model="multiInvoiceQuery"
