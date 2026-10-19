@@ -129,7 +129,7 @@ Even if `claims.ClubID` is the only club the user can access (typical for single
 - `auth.go` — `HandleMe` (`/session/me`), exposes `fresh_totp_window_ms` so the SPA countdown stays in sync
 - `features.go` — `/features` endpoint; reads per-club DB columns with env-var fallback
 - `invoices.go` + `invoices_bulk_actions.go` + `invoices_bulk.go` — faktura lifecycle. Bulk-create lives separately because it uses a different request shape (per-user lines) than the per-row actions.
-- `invoice_credit.go` — credit-note links (BRY-342): candidates, link (fresh TOTP) and unlink. A link only records the settlement and never posts; decide "is this owed?" with `finance.OwedByMemberSQL`, never `payment_id`.
+- `invoice_credit.go` — credit-note links (BRY-342): candidates, link (fresh TOTP) and unlink. A link only records the settlement and never posts; decide "is this owed?" with `finance.OwedByMemberSQL`, never `payment_id`. The candidates endpoint doubles as the manual search (BRY-393): `?any=1` drops the payer and amount predicates, `?q=` matches faktura number or payer name (LIKE-escaped), and the list is capped at 25 with `truncated`. A cross-payer link needs `confirm_other_member` unless the credit note has no payer.
 - `accounting.go` — bank imports, Vipps reconciliation endpoints, journal entries, periods
 - `club_settings.go` — settings split across modules now (site / economy / harbor / motorhome), but the GET/PATCH backing all of them is in this file
 

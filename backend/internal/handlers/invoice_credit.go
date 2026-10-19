@@ -94,6 +94,20 @@ func samePayer(a, b *creditInvoiceRow) bool {
 	return a.recipientID != nil && b.recipientID != nil && *a.recipientID == *b.recipientID
 }
 
+// payerConfirmMissing reports a cross-payer link the treasurer hasn't
+// confirmed. Crossing payers is allowed when the credit note has none
+// (imported history) or with confirmation. That is safe because the link
+// only sets credits_invoice_id, posts nothing, and unlinking reverses it.
+func payerConfirmMissing(cn *creditInvoiceRow, memberMismatch, confirmed bool) bool {
+	return memberMismatch && cn.hasPayer() && !confirmed
+}
+
+// isDefaultCandidate is true when the faktura is one the same-payer,
+// same-amount candidate list offers, whatever the client says it picked.
+func isDefaultCandidate(cn, target *creditInvoiceRow) bool {
+	return samePayer(cn, target) && amountsCancel(cn.total, target.total)
+}
+
 func isUniqueViolation(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"
@@ -171,8 +185,8 @@ func (h *InvoiceHandler) HandleListCreditCandidates(w http.ResponseWriter, r *ht
 	}
 	args := []any{claims.ClubID, cn.total, cn.userID, cn.recipientID}
 	if q != "" {
-		filter += " AND (i.invoice_number::text ILIKE $5 OR " + payerName + " ILIKE $5)"
-		args = append(args, "%"+q+"%")
+		filter += ` AND (i.invoice_number::text ILIKE $5 ESCAPE '\' OR ` + payerName + ` ILIKE $5 ESCAPE '\')`
+		args = append(args, "%"+likeEscaper.Replace(q)+"%")
 	}
 
 	rows, err := h.db.Query(ctx,
@@ -188,7 +202,7 @@ func (h *InvoiceHandler) HandleListCreditCandidates(w http.ResponseWriter, r *ht
 		    AND i.total_amount > 0
 		    AND (i.sent_at IS NOT NULL OR i.import_source IS NOT NULL)
 		    AND NOT `+finance.CreditedSQL("i")+filter+order+`
-		  LIMIT `+strconv.Itoa(creditSearchLimit),
+		  LIMIT `+strconv.Itoa(creditSearchLimit+1),
 		args...,
 	)
 	if err != nil {
@@ -213,10 +227,24 @@ func (h *InvoiceHandler) HandleListCreditCandidates(w http.ResponseWriter, r *ht
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	// One row past the cap tells the UI the list was cut, so the treasurer
+	// knows to narrow the search instead of assuming the faktura is missing.
+	truncated := len(out) > creditSearchLimit
+	if truncated {
+		out = out[:creditSearchLimit]
+	}
 	// The UI asks before linking across payers only when the credit note
 	// has one; a credit note without a payer has nobody to mismatch.
-	JSON(w, http.StatusOK, map[string]any{"items": out, "credit_note_has_payer": cn.hasPayer()})
+	JSON(w, http.StatusOK, map[string]any{
+		"items":                 out,
+		"truncated":             truncated,
+		"credit_note_has_payer": cn.hasPayer(),
+	})
 }
+
+// likeEscaper makes user input literal inside a LIKE pattern that uses
+// ESCAPE '\'.
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 
 type linkCreditRequest struct {
 	InvoiceID string `json:"invoice_id"`
@@ -333,11 +361,7 @@ func (h *InvoiceHandler) HandleLinkCreditNote(w http.ResponseWriter, r *http.Req
 	case target.credited:
 		creditConflict(w, "already_credited", "the faktura is already credited by another credit note")
 		return
-	case memberMismatch && cn.hasPayer() && !req.ConfirmOtherMember:
-		// Crossing payers is allowed when the credit note has none (imported
-		// history) or the treasurer confirms it. That is safe because the
-		// link only sets credits_invoice_id, posts nothing, and unlinking
-		// reverses it.
+	case payerConfirmMissing(cn, memberMismatch, req.ConfirmOtherMember):
 		creditConflict(w, "different_payer",
 			"the credit note and the faktura are for different payers; send confirm_other_member to link them anyway")
 		return
@@ -419,6 +443,7 @@ func (h *InvoiceHandler) HandleLinkCreditNote(w http.ResponseWriter, r *http.Req
 				// A manual pick can cross payers, so record whether this one
 				// did and whether the treasurer confirmed it.
 				"manual_pick":           req.ManualPick,
+				"default_candidate":     isDefaultCandidate(cn, target),
 				"member_mismatch":       memberMismatch,
 				"confirm_other_member":  req.ConfirmOtherMember,
 				"credit_note_has_payer": cn.hasPayer(),

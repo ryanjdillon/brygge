@@ -21,6 +21,7 @@ import (
 
 type creditSearchResult struct {
 	CreditNoteHasPayer bool `json:"credit_note_has_payer"`
+	Truncated          bool `json:"truncated"`
 	Items              []struct {
 		ID         string `json:"id"`
 		Number     int    `json:"invoice_number"`
@@ -111,7 +112,7 @@ func TestCreditLinkMemberlessCreditNoteToPickedFaktura(t *testing.T) {
 		t.Fatalf("audit row: %v", err)
 	}
 	want := map[string]any{
-		"manual_pick": true, "member_mismatch": true,
+		"manual_pick": true, "default_candidate": false, "member_mismatch": true,
 		"confirm_other_member": false, "credit_note_has_payer": false,
 		"outcome": "settled_pair",
 	}
@@ -209,5 +210,29 @@ func TestCreditSearchIsClubScopedAndEligibleOnly(t *testing.T) {
 	byName := f.search(t, credit, url.Values{"any": {"1"}, "q": {"harbour payer"}})
 	if len(byName.Items) != 1 || byName.Items[0].ID != eligible.ID || byName.Items[0].PayerName != "Synthetic Harbour Payer" {
 		t.Errorf("search by name = %+v, want only the named faktura", byName.Items)
+	}
+
+	// LIKE wildcards in the query are literal, not match-everything.
+	for _, q := range []string{"%", "_", `\`} {
+		if res := f.search(t, credit, url.Values{"any": {"1"}, "q": {q}}); len(res.Items) != 0 {
+			t.Errorf("search %q = %+v, want nothing", q, res.Items)
+		}
+	}
+}
+
+// The search is capped; one row past the cap tells the UI to narrow it.
+func TestCreditSearchReportsTruncation(t *testing.T) {
+	f := newCreditFixture(t)
+	credit := f.club.NewInvoice(t, fin.InvoiceOpts{Cents: -10000, Imported: true})
+	f.dropPayer(t, credit)
+	for range creditSearchLimit {
+		f.club.NewInvoice(t, fin.InvoiceOpts{Member: &f.alice, Cents: 10000, Imported: true})
+	}
+	if res := f.search(t, credit, url.Values{"any": {"1"}}); len(res.Items) != creditSearchLimit || res.Truncated {
+		t.Fatalf("at the cap: %d items, truncated=%v; want %d, false", len(res.Items), res.Truncated, creditSearchLimit)
+	}
+	f.club.NewInvoice(t, fin.InvoiceOpts{Member: &f.alice, Cents: 10000, Imported: true})
+	if res := f.search(t, credit, url.Values{"any": {"1"}}); len(res.Items) != creditSearchLimit || !res.Truncated {
+		t.Errorf("past the cap: %d items, truncated=%v; want %d, true", len(res.Items), res.Truncated, creditSearchLimit)
 	}
 }
