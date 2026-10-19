@@ -57,11 +57,6 @@ watch(
   { immediate: true },
 )
 
-function setTab(tab: Tab) {
-  if (tab === activeTab.value) return
-  router.push({ query: { ...route.query, tab } })
-}
-
 type CreateMode = '' | 'single' | 'group'
 const createMode = ref<CreateMode>('')
 const singleOpen = ref(false)
@@ -124,21 +119,21 @@ const tabs = computed<{ id: Tab; icon: typeof FilePlus; labelKey: string }[]>(()
 
     <div class="mt-4 border-b border-gray-200">
       <nav class="-mb-px flex gap-2 overflow-x-auto" :aria-label="t('admin.faktura.tabsAria')">
-        <button
+        <RouterLink
           v-for="tab in tabs"
           :key="tab.id"
-          type="button"
+          :to="{ query: { ...route.query, tab: tab.id } }"
+          :aria-current="activeTab === tab.id ? 'page' : undefined"
           :class="[
             'inline-flex items-center gap-2 whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium',
             activeTab === tab.id
               ? 'border-brand-600 text-brand-700'
               : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700',
           ]"
-          @click="setTab(tab.id)"
         >
           <component :is="tab.icon" class="h-4 w-4" />
           {{ t(tab.labelKey) }}
-        </button>
+        </RouterLink>
       </nav>
     </div>
 
