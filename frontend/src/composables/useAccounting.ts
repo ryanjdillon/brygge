@@ -407,7 +407,36 @@ export interface VippsBacklogResult {
   posted_totals: AccountTotal[]
   reclassified: { entry_number: number; date: string; amount: number; from: string; to: string; rule: string }[]
   refused: SkippedItem[]
+  // Refused charges parked on 1500 with no faktura that may be released to
+  // the Vipps queue; each is also in refused.
+  releasable: VippsBacklogRelease[]
   payouts?: VippsPayoutSweepResult | null
+}
+
+export interface VippsBacklogRelease {
+  ref: string
+  row_id: string
+  entry_number: number
+  date: string
+  amount: number
+}
+
+// Releases a refused backlog draft through the Vipps unassign; the flag
+// makes the server re-check that the charge paid no faktura. Behind fresh
+// TOTP on the server, so call ensureFreshTotp() first.
+export function useReleaseVippsBacklogCharge() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (rowId: string) =>
+      apiFetch<{ status: string }>(`${BASE}/vipps-charges/${rowId}/unassign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ released_from_backlog: true }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['accounting', 'journal'] })
+    },
+  })
 }
 
 // Preview is side-effect free; apply posts the period's Vipps drafts and is

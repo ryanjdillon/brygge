@@ -1635,7 +1635,12 @@
         "vippsDraftsCredit": "kredit",
         "vippsDraftsConfirm": "Bokfør utkast",
         "vippsDraftsNothing": "Ingen Vipps-utkast å bokføre i denne perioden.",
-        "vippsDraftsDone": "{posted} Vipps-bilag bokført, {reclassified} omklassifisert."
+        "vippsDraftsDone": "{posted} Vipps-bilag bokført, {reclassified} omklassifisert.",
+        "vippsDraftsReleasableHeading": "Betalinger du kan frigi til Vipps-køen",
+        "vippsDraftsRelease": "Frigi",
+        "vippsDraftsReleaseTitle": "Frigi {ref} til Vipps-køen?",
+        "vippsDraftsReleaseBody": "Utkastet slettes, og betalingen på {amount} kr fra {date} går tilbake til Vipps-køen, der du tildeler den manuelt i Tildel.",
+        "vippsDraftsReleased": "{ref} er frigitt til Vipps-køen."
       },
       "journalForm": {
         "title": "Nytt bilag",

@@ -939,7 +939,12 @@
         "vippsDraftsCredit": "credit",
         "vippsDraftsConfirm": "Concepten boeken",
         "vippsDraftsNothing": "Geen Vipps-concepten om te boeken in deze periode.",
-        "vippsDraftsDone": "{posted} Vipps-boeking(en) geboekt, {reclassified} omgeboekt."
+        "vippsDraftsDone": "{posted} Vipps-boeking(en) geboekt, {reclassified} omgeboekt.",
+        "vippsDraftsReleasableHeading": "Betalingen die u kunt terugzetten in de Vipps-wachtrij",
+        "vippsDraftsRelease": "Vrijgeven",
+        "vippsDraftsReleaseTitle": "{ref} terugzetten in de Vipps-wachtrij?",
+        "vippsDraftsReleaseBody": "Het concept wordt verwijderd en de betaling van {amount} kr van {date} gaat terug naar de Vipps-wachtrij, waar u deze handmatig toewijst in Tildel.",
+        "vippsDraftsReleased": "{ref} teruggezet in de Vipps-wachtrij."
       },
       "journalForm": {
         "title": "New entry",

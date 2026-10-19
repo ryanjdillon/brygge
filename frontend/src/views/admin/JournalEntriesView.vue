@@ -34,12 +34,14 @@ import {
   useApplyResplitInvoiceBilags,
   previewVippsDraftBacklog,
   useApplyVippsDraftBacklog,
+  useReleaseVippsBacklogCharge,
   fetchJournalAttachmentUrl,
   type JournalEntry,
   type SkippedItem,
   type SyncResult,
   type ResplitResult,
   type VippsBacklogResult,
+  type VippsBacklogRelease,
 } from '@/composables/useAccounting'
 import Select from '@/components/ui/form/Select.vue'
 import NumberInput from '@/components/ui/form/NumberInput.vue'
@@ -63,6 +65,9 @@ const expandedId = ref<string | null>(null)
 const syncing = ref(false)
 const syncMessage = ref('')
 const syncSkipped = ref<SkippedItem[]>([])
+// Release offers belong to the period the backlog preview ran for.
+const vippsReleasable = ref<VippsBacklogRelease[]>([])
+watch(selectedPeriodId, () => { vippsReleasable.value = [] })
 const showCreateYear = ref(false)
 
 function toggleSort(col: string) {
@@ -113,6 +118,7 @@ const syncPaymentsMutation = useSyncPayments()
 const syncInvoicesMutation = useSyncInvoices()
 const applyResplitMutation = useApplyResplitInvoiceBilags()
 const applyVippsBacklogMutation = useApplyVippsDraftBacklog()
+const releaseVippsChargeMutation = useReleaseVippsBacklogCharge()
 const { ensureFreshTotp } = useFreshTotp()
 const askConfirm = useConfirm()
 
@@ -194,6 +200,7 @@ async function handleSync() {
   syncing.value = true
   syncMessage.value = ''
   syncSkipped.value = []
+  vippsReleasable.value = []
 
   try {
     const payResult = await new Promise<SyncResult>((resolve, reject) => {
@@ -233,6 +240,7 @@ async function handleResplitInvoiceBilags() {
   resplitting.value = true
   syncMessage.value = ''
   syncSkipped.value = []
+  vippsReleasable.value = []
   try {
     const preview = await previewResplitInvoiceBilags(selectedPeriodId.value)
     syncSkipped.value = preview.skipped_details ?? []
@@ -279,9 +287,11 @@ async function handlePostVippsDrafts() {
   postingVippsDrafts.value = true
   syncMessage.value = ''
   syncSkipped.value = []
+  vippsReleasable.value = []
   try {
     const preview = await previewVippsDraftBacklog(selectedPeriodId.value)
     syncSkipped.value = preview.refused ?? []
+    vippsReleasable.value = preview.releasable ?? []
     if (!preview.posted && !preview.reclassified.length) {
       syncMessage.value = t('admin.accounting.journal.vippsDraftsNothing')
       return
@@ -342,11 +352,45 @@ async function handlePostVippsDrafts() {
         reason: p.reason ?? '',
       })),
     ]
+    vippsReleasable.value = result.releasable ?? []
   } catch (err) {
     syncMessage.value = `${t('common.error')}: ${(err as Error).message}`
   } finally {
     postingVippsDrafts.value = false
   }
+}
+
+// Releases a refused 1500-parked charge back to the Vipps queue so it can be
+// assigned by hand. Only charges the server listed as releasable are offered.
+const releasingRowId = ref('')
+async function handleReleaseVippsCharge(item: VippsBacklogRelease) {
+  if (!(await ensureFreshTotp())) return
+  const ok = await askConfirm({
+    title: t('admin.accounting.journal.vippsDraftsReleaseTitle', { ref: item.ref }),
+    body: t('admin.accounting.journal.vippsDraftsReleaseBody', {
+      amount: item.amount.toLocaleString('nb-NO'),
+      date: item.date,
+    }),
+    confirmLabel: t('admin.accounting.journal.vippsDraftsRelease'),
+    cancelLabel: t('common.cancel'),
+    tone: 'warning',
+  })
+  if (!ok) return
+  releasingRowId.value = item.row_id
+  syncMessage.value = ''
+  releaseVippsChargeMutation.mutate(item.row_id, {
+    onSuccess: () => {
+      vippsReleasable.value = vippsReleasable.value.filter((r) => r.row_id !== item.row_id)
+      syncSkipped.value = syncSkipped.value.filter((s) => s.ref !== item.ref)
+      syncMessage.value = t('admin.accounting.journal.vippsDraftsReleased', { ref: item.ref })
+    },
+    onError: (err) => {
+      syncMessage.value = `${t('common.error')}: ${(err as Error).message}`
+    },
+    onSettled: () => {
+      releasingRowId.value = ''
+    },
+  })
 }
 
 function handleCreatePeriod() {
@@ -526,6 +570,21 @@ function formatNOK(amount: number): string {
         <p class="font-medium">{{ t('admin.accounting.journal.syncSkippedHeading') }}</p>
         <ul class="list-disc pl-5">
           <li v-for="s in syncSkipped" :key="s.ref">{{ s.ref }}: {{ s.reason }}</li>
+        </ul>
+      </div>
+      <div v-if="canBook && vippsReleasable.length" class="mt-2 text-sm" data-testid="vipps-releasable">
+        <p class="font-medium text-gray-700">{{ t('admin.accounting.journal.vippsDraftsReleasableHeading') }}</p>
+        <ul class="mt-1 space-y-1">
+          <li v-for="r in vippsReleasable" :key="r.row_id" class="flex flex-wrap items-center gap-2">
+            <span>{{ r.ref }} · {{ r.date }} · {{ r.amount.toLocaleString('nb-NO') }} kr</span>
+            <button
+              class="rounded-md border border-gray-300 bg-white px-2 py-0.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              :disabled="releasingRowId !== ''"
+              @click="handleReleaseVippsCharge(r)"
+            >
+              {{ t('admin.accounting.journal.vippsDraftsRelease') }}
+            </button>
+          </li>
         </ul>
       </div>
 

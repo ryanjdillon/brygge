@@ -939,7 +939,12 @@
         "vippsDraftsCredit": "avere",
         "vippsDraftsConfirm": "Registra bozze",
         "vippsDraftsNothing": "Nessuna bozza Vipps da registrare in questo periodo.",
-        "vippsDraftsDone": "{posted} scrittura/e Vipps registrata/e, {reclassified} riclassificata/e."
+        "vippsDraftsDone": "{posted} scrittura/e Vipps registrata/e, {reclassified} riclassificata/e.",
+        "vippsDraftsReleasableHeading": "Pagamenti che puoi rimandare alla coda Vipps",
+        "vippsDraftsRelease": "Rilascia",
+        "vippsDraftsReleaseTitle": "Rimandare {ref} alla coda Vipps?",
+        "vippsDraftsReleaseBody": "La bozza viene eliminata e il pagamento di {amount} kr del {date} torna nella coda Vipps, dove lo assegni manualmente in Tildel.",
+        "vippsDraftsReleased": "{ref} rimandato alla coda Vipps."
       },
       "journalForm": {
         "title": "New entry",

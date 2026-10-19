@@ -265,10 +265,15 @@ Single fakturas go through the same draft → send → paid flow.
 
   **Vipps drafts from before automatic posting.** Vipps bilag created before posting became automatic are still drafts. On the Bilag page, pick the year and click **Bokfør Vipps-utkast**. A preview shows:
   - how many drafts will be posted as they are, with totals per account;
-  - which parked payments will be rebooked to the right account. These are payments sitting on 3900 Andre inntekter, or on 1500 with no faktura.
-  - which drafts are left alone, and why: unbalanced, linked to no row, already booked elsewhere, or a receivable with no faktura.
+  - which parked payments will be rebooked, and where to: an account, or the faktura they pay. These are payments sitting on 3900 Andre inntekter, or on 1500 Kundefordringer with no faktura.
+  - which drafts are left alone, and why: unbalanced, linked to no row, already booked elsewhere, or a 1500 payment with no faktura that no rule can place.
 
-  Rebooking uses the same rules as automatic Vipps assignment. Turn that on first under `Økonomiinnstillinger → Vipps` (with the tie category), or the 3900 payments are posted there unclassified. Running it again does nothing new.
+  Rebooking uses the same rules as automatic Vipps assignment. Turn that on first under `Økonomiinnstillinger → Vipps` (with the tie category). Otherwise the 3900 payments are posted there unclassified, and the 1500 payments with no faktura are left alone. Running it again does nothing new.
+
+  **Payments on 1500 with no faktura.** An early Vipps import booked some payments to 1500 as if they paid a faktura, without saying which one. Before rebooking one, Brygge checks whether it may have paid a faktura after all. It may have if a faktura of the same payer, or the faktura whose KID is in the Vipps message, is marked paid by a KID payment of the same amount (within 1 kr) and no bank or Vipps booking on that faktura explains the payment. When the payer is unknown and there is no KID, any such payment within 7 days of the Vipps payment counts. Then:
+  - **It may have paid a faktura:** it is left alone, and the reason names the faktura. Check that faktura and correct it by hand.
+  - **It paid nothing, and a rule places it:** it is rebooked to the price item's account, or assigned to the payer's single open faktura of that amount.
+  - **It paid nothing, but no rule places it** (or automatic assignment is off): it is left alone and gets a **Frigi** button under the preview. Frigi deletes the draft and puts the payment back in the Vipps queue, where you assign it by hand in Tildel. Frigi asks for a fresh 2FA code, and is refused once the year is locked or closed.
 
 ### Bank statement → invoice reconciliation
 

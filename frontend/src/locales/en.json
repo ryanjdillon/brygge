@@ -1639,7 +1639,12 @@
         "vippsDraftsCredit": "credit",
         "vippsDraftsConfirm": "Post drafts",
         "vippsDraftsNothing": "No Vipps drafts to post in this period.",
-        "vippsDraftsDone": "{posted} Vipps bilag(s) posted, {reclassified} rebooked."
+        "vippsDraftsDone": "{posted} Vipps bilag(s) posted, {reclassified} rebooked.",
+        "vippsDraftsReleasableHeading": "Payments you can release to the Vipps queue",
+        "vippsDraftsRelease": "Release",
+        "vippsDraftsReleaseTitle": "Release {ref} to the Vipps queue?",
+        "vippsDraftsReleaseBody": "The draft is deleted and the {amount} kr payment from {date} goes back to the Vipps queue, where you assign it by hand in Tildel.",
+        "vippsDraftsReleased": "{ref} released to the Vipps queue."
       },
       "journalForm": {
         "title": "New entry",

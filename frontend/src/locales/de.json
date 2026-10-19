@@ -939,7 +939,12 @@
         "vippsDraftsCredit": "Haben",
         "vippsDraftsConfirm": "Entwürfe buchen",
         "vippsDraftsNothing": "Keine Vipps-Entwürfe in dieser Periode.",
-        "vippsDraftsDone": "{posted} Vipps-Beleg(e) gebucht, {reclassified} umgebucht."
+        "vippsDraftsDone": "{posted} Vipps-Beleg(e) gebucht, {reclassified} umgebucht.",
+        "vippsDraftsReleasableHeading": "Zahlungen, die Sie in die Vipps-Warteschlange zurückgeben können",
+        "vippsDraftsRelease": "Freigeben",
+        "vippsDraftsReleaseTitle": "{ref} in die Vipps-Warteschlange zurückgeben?",
+        "vippsDraftsReleaseBody": "Der Entwurf wird gelöscht, und die Zahlung über {amount} kr vom {date} kommt zurück in die Vipps-Warteschlange, wo Sie sie in Tildel manuell zuordnen.",
+        "vippsDraftsReleased": "{ref} in die Vipps-Warteschlange zurückgegeben."
       },
       "journalForm": {
         "title": "New entry",

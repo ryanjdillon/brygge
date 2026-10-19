@@ -913,7 +913,12 @@
         "tooltipStatus": "Draft = not finalized, Posted = finalized, Voided = reversed",
         "tooltipSource": "How this entry was created (manual, payment sync, bank import)",
         "tooltipAccounts": "Which accounts are affected",
-        "vippsDraftsAutoAssignOff": "Automatyczne przypisywanie jest wyłączone, więc płatności na 3900 Andre inntekter zostaną tam zaksięgowane bez klasyfikacji. Najpierw włącz je w Økonomiinnstillinger → Vipps, aby je sklasyfikować."
+        "vippsDraftsAutoAssignOff": "Automatyczne przypisywanie jest wyłączone, więc płatności na 3900 Andre inntekter zostaną tam zaksięgowane bez klasyfikacji. Najpierw włącz je w Økonomiinnstillinger → Vipps, aby je sklasyfikować.",
+        "vippsDraftsReleasableHeading": "Płatności, które możesz zwolnić do kolejki Vipps",
+        "vippsDraftsRelease": "Zwolnij",
+        "vippsDraftsReleaseTitle": "Zwolnić {ref} do kolejki Vipps?",
+        "vippsDraftsReleaseBody": "Szkic zostanie usunięty, a płatność {amount} kr z {date} wróci do kolejki Vipps, gdzie przypiszesz ją ręcznie w Tildel.",
+        "vippsDraftsReleased": "{ref} zwolniono do kolejki Vipps."
       },
       "journalForm": {
         "title": "New entry",
