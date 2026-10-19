@@ -298,6 +298,10 @@
             fi
             shift
 
+            # Everything below reads repo-relative paths (tfvars, migrations,
+            # scripts/), so run from the checkout root wherever we were called.
+            cd "$(${pkgs.git}/bin/git rev-parse --show-toplevel)"
+
             # ── Preflight: refuse to deploy placeholder club identity ─────
             # terraform/terraform.tfvars.json is committed with PLACEHOLDER
             # values (domain=example.invalid); the deployer fills the working
@@ -374,8 +378,11 @@
             #
             # The same first ssh also reads prod's schema_migrations for the
             # pending-migration check below, so it costs no extra round trip.
+            # The host-side timeout ends psql (and so its transaction) a little
+            # before the local one would drop the ssh session.
             DRYRUN=scripts/deploy-migration-dryrun.sh
-            PROD_PSQL_REMOTE="sudo -u brygge psql 'postgres:///brygge?host=/run/postgresql&sslmode=disable'"
+            export DRYRUN_TIMEOUT="''${DRYRUN_TIMEOUT:-90}"
+            PROD_PSQL_REMOTE="timeout --foreground $((DRYRUN_TIMEOUT - 5)) sudo -u brygge psql 'postgres:///brygge?host=/run/postgresql&sslmode=disable'"
             PROD_MIGRATION_STATE=""
             LOCAL_DUMP=""
             if [[ "''${SKIP_BACKUP:-0}" != "1" ]]; then
