@@ -1009,10 +1009,20 @@
       "bankAutoAssignHint": "Boekt na elke bankupload en Synk bank een betaling zonder KID alleen als de naam van de betaler precies bij één lid past met precies één openstaande factuur van hetzelfde bedrag. De rest blijft in Tildel. Elke boeking kan ongedaan worden gemaakt. Los van de Vipps-instelling."
     },
     "faktura": {
+      "draft": {
+        "subtitle": "Niet-verzonden facturen. Verzend om de pdf te e-mailen, of annuleer om opnieuw uitgeven mogelijk te maken."
+      },
+      "voided": {
+        "subtitle": "Geannuleerde facturen. Ze tellen niet meer mee in de dubbelcontrole, dus voor dezelfde categorie en hetzelfde jaar kan een nieuwe factuur worden uitgegeven."
+      },
+      "imported": {
+        "subtitle": "Historische facturen geïmporteerd uit het vorige systeem van de club. Bewaard ter referentie en voor de betaalstatus; ze kunnen niet worden geannuleerd of verwijderd."
+      },
       "tabs": {
         "archive": "Archief"
       },
       "sent": {
+        "subtitle": "Facturen die al naar de ontvangers zijn gemaild. Verzonden facturen kunnen alleen worden geannuleerd — niet verwijderd.",
         "deliveryLog": {
           "title": "Bezorglogboek",
           "empty": "Geen bezorgpogingen gevonden in het Stalwart-logboek van de afgelopen 60 dagen.",

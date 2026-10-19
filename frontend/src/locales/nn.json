@@ -652,6 +652,9 @@
       "empty": "Ingen usende fakturaar."
     },
     "faktura": {
+      "imported": {
+        "subtitle": "Historiske fakturaar importerte frå klubben sitt tidlegare system. Vert haldne som referanse og betalingsstatus; dei kan ikkje annullerast eller slettast."
+      },
       "credit": {
         "filter": "Kreditnotaer",
         "state": {

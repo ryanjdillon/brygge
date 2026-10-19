@@ -660,6 +660,9 @@
       "empty": "No unsent fakturas."
     },
     "faktura": {
+      "imported": {
+        "subtitle": "Historical fakturas imported from the club's previous system. Kept for reference and payment status; they cannot be voided or deleted."
+      },
       "credit": {
         "filter": "Credit notes",
         "state": {

@@ -983,10 +983,20 @@
       "bankAutoAssignHint": "Po każdym imporcie bankowym i Synk bank księguje płatność bez KID tylko wtedy, gdy nazwa płatnika pasuje dokładnie do jednego członka z dokładnie jedną otwartą fakturą na tę samą kwotę. Reszta pozostaje w Tildel. Każde księgowanie można cofnąć. Niezależne od ustawienia Vipps."
     },
     "faktura": {
+      "draft": {
+        "subtitle": "Niewysłane faktury. Wyślij, aby przesłać PDF e-mailem, lub unieważnij, aby umożliwić ponowne wystawienie."
+      },
+      "voided": {
+        "subtitle": "Unieważnione faktury. Nie są już brane pod uwagę przy sprawdzaniu duplikatów, więc można wystawić nową fakturę dla tej samej kategorii i roku."
+      },
+      "imported": {
+        "subtitle": "Historyczne faktury zaimportowane z poprzedniego systemu klubu. Przechowywane jako odniesienie i do śledzenia statusu płatności; nie można ich unieważnić ani usunąć."
+      },
       "tabs": {
         "archive": "Archiwum"
       },
       "sent": {
+        "subtitle": "Faktury już wysłane e-mailem do odbiorców. Wysłane faktury można tylko unieważnić — nie usunąć.",
         "deliveryLog": {
           "title": "Dziennik dostaw",
           "empty": "Brak prób dostarczenia w dzienniku Stalwart z ostatnich 60 dni.",

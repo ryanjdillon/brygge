@@ -1008,10 +1008,20 @@
       "bankAutoAssignHint": "Après chaque import bancaire et Synk bank, ne comptabilise un paiement sans KID que si le nom du payeur correspond exactement à un seul membre ayant exactement une facture ouverte du même montant. Le reste reste dans Tildel. Chaque écriture peut être annulée. Indépendant du réglage Vipps."
     },
     "faktura": {
+      "draft": {
+        "subtitle": "Factures non envoyées. Envoyez-les pour transmettre le PDF par e-mail, ou annulez-les pour permettre une nouvelle émission."
+      },
+      "voided": {
+        "subtitle": "Factures annulées. Elles ne comptent plus dans le contrôle des doublons : une nouvelle facture peut être émise pour la même catégorie et la même année."
+      },
+      "imported": {
+        "subtitle": "Factures historiques importées depuis l'ancien système du club. Conservées pour référence et suivi des paiements ; elles ne peuvent être ni annulées ni supprimées."
+      },
       "tabs": {
         "archive": "Archives"
       },
       "sent": {
+        "subtitle": "Factures déjà envoyées par e-mail aux destinataires. Une facture envoyée peut seulement être annulée — pas supprimée.",
         "deliveryLog": {
           "title": "Journal de livraison",
           "empty": "Aucune tentative de livraison trouvée dans le journal Stalwart pour les 60 derniers jours.",

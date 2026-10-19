@@ -1009,10 +1009,20 @@
       "bankAutoAssignHint": "Bucht nach jedem Bank-Upload und Synk bank eine Zahlung ohne KID nur, wenn der Name des Zahlers genau einem Mitglied entspricht, das genau eine offene Rechnung über denselben Betrag hat. Alles andere bleibt in Tildel. Jede Buchung kann rückgängig gemacht werden. Unabhängig von der Vipps-Einstellung."
     },
     "faktura": {
+      "draft": {
+        "subtitle": "Nicht versendete Rechnungen. Versenden, um das PDF per E-Mail zu schicken, oder stornieren, um eine Neuausstellung zu ermöglichen."
+      },
+      "voided": {
+        "subtitle": "Stornierte Rechnungen. Sie zählen nicht mehr zur Duplikatprüfung, sodass für dieselbe Kategorie und dasselbe Jahr eine neue Rechnung ausgestellt werden kann."
+      },
+      "imported": {
+        "subtitle": "Historische Rechnungen, die aus dem früheren System des Vereins importiert wurden. Sie dienen als Referenz und zum Zahlungsstatus; sie können nicht storniert oder gelöscht werden."
+      },
       "tabs": {
         "archive": "Archiv"
       },
       "sent": {
+        "subtitle": "Bereits per E-Mail an die Empfänger versendete Rechnungen. Versendete Rechnungen können nur storniert — nicht gelöscht — werden.",
         "deliveryLog": {
           "title": "Zustellungsprotokoll",
           "empty": "Keine Zustellversuche im Stalwart-Log der letzten 60 Tage.",
