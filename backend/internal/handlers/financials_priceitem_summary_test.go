@@ -55,8 +55,9 @@ func TestPriceItemSummaryIncludesOrphanedLines(t *testing.T) {
 	}
 
 	if _, err := db.Exec(ctx,
-		`INSERT INTO invoice_lines (invoice_id, description, quantity, unit_price, line_total, price_item_id)
-		 VALUES ($1, 'Medlemskontingent 2026', 1, 1000, 1000, $2)`,
+		`INSERT INTO invoice_lines (invoice_id, description, quantity, unit_price, line_total,
+		                            price_item_id, category)
+		 VALUES ($1, 'Medlemskontingent 2026', 1, 1000, 1000, $2, 'membership')`,
 		invoiceID, priceItemID,
 	); err != nil {
 		t.Fatalf("inserting mapped line: %v", err)

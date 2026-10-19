@@ -246,9 +246,10 @@ func (c *Club) NewInvoice(t *testing.T, o InvoiceOpts) Invoice {
 				cat = "slip_fee"
 			}
 			_, err = c.Pool.Exec(ctx,
-				`INSERT INTO invoice_lines (invoice_id, description, quantity, unit_price, line_total, price_item_id)
-				 VALUES ($1, $2, 1, $3, $3, $4)`,
-				inv.ID, "Synthetic "+cat, Kr(l.Cents), c.PriceItem(t, cat),
+				`INSERT INTO invoice_lines (invoice_id, description, quantity, unit_price, line_total,
+				                            price_item_id, category)
+				 VALUES ($1, $2, 1, $3, $3, $4, $5)`,
+				inv.ID, "Synthetic "+cat, Kr(l.Cents), c.PriceItem(t, cat), cat,
 			)
 		}
 		if err != nil {

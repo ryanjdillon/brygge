@@ -128,8 +128,9 @@ func seedInvoices(ctx context.Context, db *pgxpool.Pool, clubID string, userIDs 
 		}
 
 		if _, err := db.Exec(ctx, `
-			INSERT INTO invoice_lines (invoice_id, description, quantity, unit_price, line_total, price_item_id)
-			VALUES ($1, $2, 1, $3, $3, $4)
+			INSERT INTO invoice_lines (invoice_id, description, quantity, unit_price, line_total,
+			                           price_item_id, category)
+			VALUES ($1, $2, 1, $3, $3, $4::uuid, (SELECT category FROM price_items WHERE id = $4::uuid))
 		`, invoiceID, s.priceItem, s.amount, priceItemID(s.priceItem)); err != nil {
 			fmt.Fprintf(os.Stderr, "  failed to create invoice line for %s: %v\n", s.email, err)
 			continue

@@ -86,8 +86,10 @@ func TestPriceItemDeleteArchiveAndAudit(t *testing.T) {
 			 VALUES ($1, $2, $3, 100, CURRENT_DATE + 14, $4)`,
 			invoiceID, clubID, userID, "9"+testutil.RandomHex(4))
 		mustExec(t, db, ctx,
-			`INSERT INTO invoice_lines (invoice_id, description, quantity, unit_price, line_total, price_item_id)
-			 VALUES ($1, 'Synthetic line', 1, 100, 100, $2)`,
+			`INSERT INTO invoice_lines (invoice_id, description, quantity, unit_price, line_total,
+			                            price_item_id, category)
+			 VALUES ($1, 'Synthetic line', 1, 100, 100, $2::uuid,
+			         (SELECT category FROM price_items WHERE id = $2::uuid))`,
 			invoiceID, id)
 
 		rec := do(h.HandleDelete, http.MethodDelete, "/admin/pricing/"+id, "")
