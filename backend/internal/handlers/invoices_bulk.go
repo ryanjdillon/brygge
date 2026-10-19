@@ -367,6 +367,7 @@ func (h *InvoiceHandler) HandleBulkCreateInvoices(w http.ResponseWriter, r *http
 						  WHERE i.club_id = $1 AND i.user_id = $2
 						    AND il.category = $3
 						    AND il.boat_id = $4
+						    AND il.exemption_role IS NULL
 						    AND i.fiscal_period_id = $5
 						    AND i.status <> 'voided'
 						  LIMIT 1`,
@@ -380,6 +381,7 @@ func (h *InvoiceHandler) HandleBulkCreateInvoices(w http.ResponseWriter, r *http
 						  WHERE i.club_id = $1 AND i.user_id = $2
 						    AND il.category = $3
 						    AND il.boat_id IS NULL
+						    AND il.exemption_role IS NULL
 						    AND i.fiscal_period_id = $4
 						    AND i.status <> 'voided'
 						  LIMIT 1`,
@@ -650,9 +652,9 @@ func (h *InvoiceHandler) createBulkInvoice(
 		if l.exemptRole != "" && exemptionAccountID != "" && l.tier.amount > 0 {
 			role := l.exemptRole
 			acct := exemptionAccountID
-			// Same price item as the line it offsets (so per-item billing
-			// nets to zero) but no category, so the per-line duplicate
-			// check keys on the item line only. The account wins over the
+			// Same price item and category as the line it offsets, so
+			// per-item billing nets to zero; the duplicate check skips
+			// exemption lines by exemption_role. The account wins over the
 			// item in GL sync, so the waived amount books to the expense.
 			stored = append(stored, storedLine{
 				pdf: finance.InvoiceLine{
@@ -661,6 +663,7 @@ func (h *InvoiceHandler) createBulkInvoice(
 				},
 				amount:        -l.tier.amount,
 				priceItemID:   l.tier.id,
+				category:      item.category,
 				accountID:     &acct,
 				exemptionRole: &role,
 			})

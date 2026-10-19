@@ -551,9 +551,7 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 		// Denormalize price_items.category onto the line so dedup and
 		// the admin chip query work per-line on multi-category invoices.
 		var lineCategory *string
-		// An exemption line shares its item's price_item_id but carries no
-		// category, so per-line duplicate checks key on the item line only.
-		if line.PriceItemID != nil && line.exemptionRole == "" {
+		if line.PriceItemID != nil {
 			var c string
 			if err := h.db.QueryRow(ctx,
 				`SELECT category FROM price_items WHERE id = $1`, *line.PriceItemID,

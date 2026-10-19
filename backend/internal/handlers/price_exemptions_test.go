@@ -150,10 +150,11 @@ func (f *exemptionFixture) bulk(t *testing.T, req bulkInvoiceRequest) bulkInvoic
 }
 
 type storedLine struct {
-	amount  float64
-	role    string
-	account string
-	item    string
+	amount   float64
+	role     string
+	account  string
+	item     string
+	category string
 }
 
 func (f *exemptionFixture) lines(t *testing.T, invoiceID string) (total float64, lines []storedLine) {
@@ -163,7 +164,8 @@ func (f *exemptionFixture) lines(t *testing.T, invoiceID string) (total float64,
 		t.Fatalf("invoice total: %v", err)
 	}
 	rows, err := f.club.Pool.Query(ctx,
-		`SELECT il.line_total, COALESCE(il.exemption_role, ''), COALESCE(a.code, ''), COALESCE(il.price_item_id::text, '')
+		`SELECT il.line_total, COALESCE(il.exemption_role, ''), COALESCE(a.code, ''), COALESCE(il.price_item_id::text, ''),
+		        COALESCE(il.category, '')
 		   FROM invoice_lines il LEFT JOIN accounts a ON a.id = il.account_id
 		  WHERE il.invoice_id = $1 ORDER BY il.line_total DESC`, invoiceID)
 	if err != nil {
@@ -172,7 +174,7 @@ func (f *exemptionFixture) lines(t *testing.T, invoiceID string) (total float64,
 	defer rows.Close()
 	for rows.Next() {
 		var l storedLine
-		if err := rows.Scan(&l.amount, &l.role, &l.account, &l.item); err != nil {
+		if err := rows.Scan(&l.amount, &l.role, &l.account, &l.item, &l.category); err != nil {
 			t.Fatalf("scan line: %v", err)
 		}
 		lines = append(lines, l)
@@ -437,6 +439,50 @@ func TestExemptionsSingleFakturaAndSkip(t *testing.T) {
 	}
 	if total, ex := create(true); total != 1250 || len(ex) != 0 {
 		t.Errorf("skip_exemptions total %.2f exemptions %v, want 1250 billed in full", total, ex)
+	}
+}
+
+// An exemption line stores its item's category like the line it offsets,
+// on both creation paths, and a re-run of the bulk still sees the exempt
+// faktura as already issued (BRY-389).
+func TestExemptionLinesStoreCategory(t *testing.T) {
+	f := newExemptionFixture(t)
+	f.configure(t, "5000", catRule("treasurer", "membership"), catRule("treasurer", "slip_fee"),
+		exemptionRule{Role: "treasurer", PriceItemID: &f.service})
+	treasurer := f.slipHolder(t, 2.2, "treasurer")
+
+	want := map[string]string{f.dues: "membership", f.slipLow: "slip_fee", f.service: "service"}
+	check := func(path, inv string, wantLines int) {
+		t.Helper()
+		_, lines := f.lines(t, inv)
+		if len(lines) != wantLines {
+			t.Fatalf("%s: %d lines, want %d", path, len(lines), wantLines)
+		}
+		exempt := 0
+		for _, l := range lines {
+			if l.category != want[l.item] {
+				t.Errorf("%s: line %+v stores category %q, want %q", path, l, l.category, want[l.item])
+			}
+			if l.role != "" {
+				exempt++
+			}
+		}
+		if exempt != wantLines/2 {
+			t.Errorf("%s: %d exemption lines, want %d", path, exempt, wantLines/2)
+		}
+	}
+
+	req := bulkInvoiceRequest{UserIDs: []string{treasurer.ID}, PriceItemIDs: []string{f.dues}, BeamCategories: []string{"slip_fee"}}
+	resp := f.bulk(t, req)
+	check("bulk", f.createdFor(t, resp, treasurer.ID), 4)
+
+	inv, _, _ := f.createFull(t, treasurer.ID,
+		invoiceLineInput{Description: "Slipping", Quantity: 1, UnitPrice: 800, PriceItemID: &f.service})
+	check("single", inv, 2)
+
+	again := f.bulk(t, req)
+	if len(again.Created) != 0 || len(again.Skipped) != 1 || !strings.Contains(again.Skipped[0].Reason, "already invoiced") {
+		t.Errorf("re-run = %+v, want the exempt member skipped as already invoiced", again)
 	}
 }
 
