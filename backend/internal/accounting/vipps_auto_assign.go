@@ -171,6 +171,9 @@ func (s *Service) decideVippsCharge(ctx context.Context, clubID string, cfg vipp
 	if err != nil {
 		return nil, fmt.Errorf("resolving payer: %w", err)
 	}
+	if pass == memberPassConflict {
+		return &vippsChargeDecision{Reason: "the message's KID and the payer's alias name different members"}, nil
+	}
 	strongMember := memberID != "" && pass <= memberPassFirstLast
 
 	if strongMember {

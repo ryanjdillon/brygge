@@ -512,8 +512,11 @@ func (s *Service) priceArticleCandidates(ctx context.Context, clubID string, amo
 // resolveCustomerToMember tries to map a Vipps customer to a member.
 // Resolution cascade:
 //
-//  0. Exact match in vipps_customer_aliases (treasurer-taught, checked first)
-//  1. KID in the free-form message → invoice.user_id
+//  0. KID in the free-form message → invoice.user_id. It beats a taught
+//     alias: the KID names the faktura being paid, the alias only who
+//     usually pays. An alias naming a different member is a conflict
+//     (memberPassConflict) and resolves to no one (BRY-383).
+//  1. Exact match in vipps_customer_aliases (treasurer-taught)
 //  2. Normalized exact match on users.full_name
 //  3. Normalized exact match on first_name + ' ' + last_name
 //     (2 and 3 only when exactly one member carries that name; a name two
@@ -544,16 +547,17 @@ const (
 	memberPassFuzzy
 	memberPassEmail
 	memberPassNone
+	// memberPassConflict: the message's KID and the payer's taught alias
+	// name different members. Nobody is resolved, and auto-assign leaves
+	// the charge for a human rather than classifying it by amount.
+	memberPassConflict
 )
 
 // resolveCustomerToMemberPass is resolveCustomerToMember that also reports
-// which pass matched (memberPassNone when none did).
+// which pass matched (memberPassNone when none did, memberPassConflict when
+// the KID and the alias disagree).
 func (s *Service) resolveCustomerToMemberPass(ctx context.Context, clubID, customerName, message string) (string, int, error) {
-	// Pass 0: check treasurer-taught aliases first — skip all fuzzy work.
-	if aliasUserID := aliasMember(ctx, s.db, clubID, customerName); aliasUserID != "" {
-		return aliasUserID, memberPassAlias, nil
-	}
-
+	aliasUserID := aliasMember(ctx, s.db, clubID, customerName)
 	if kid := extractKID(message); kid != "" {
 		var memberID string
 		err := s.db.QueryRow(ctx,
@@ -563,8 +567,15 @@ func (s *Service) resolveCustomerToMemberPass(ctx context.Context, clubID, custo
 			clubID, kid,
 		).Scan(&memberID)
 		if err == nil && memberID != "" {
+			if aliasUserID != "" && aliasUserID != memberID {
+				return "", memberPassConflict, nil
+			}
 			return memberID, memberPassKID, nil
 		}
+	}
+	// A taught alias skips all fuzzy work.
+	if aliasUserID != "" {
+		return aliasUserID, memberPassAlias, nil
 	}
 
 	if normalizeName(customerName) == "" {
