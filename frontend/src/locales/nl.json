@@ -1016,7 +1016,7 @@
         "subtitle": "Geannuleerde facturen. Ze tellen niet meer mee in de dubbelcontrole, dus voor dezelfde categorie en hetzelfde jaar kan een nieuwe factuur worden uitgegeven."
       },
       "imported": {
-        "subtitle": "Historische facturen geïmporteerd uit het vorige systeem van de club. Bewaard ter referentie en voor de betaalstatus; ze kunnen niet worden geannuleerd of verwijderd."
+        "subtitle": "Facturen uit het vorige systeem van de club, bewaard ter referentie en voor de betaalstatus. Ze zijn hier alleen-lezen."
       },
       "tabs": {
         "archive": "Archief"

@@ -124,6 +124,8 @@ const tabs = computed<{ id: Tab; icon: typeof FilePlus; labelKey: string }[]>(()
           :key="tab.id"
           :to="{ query: { ...route.query, tab: tab.id } }"
           :aria-current="activeTab === tab.id ? 'page' : undefined"
+          active-class=""
+          exact-active-class=""
           :class="[
             'inline-flex items-center gap-2 whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium',
             activeTab === tab.id

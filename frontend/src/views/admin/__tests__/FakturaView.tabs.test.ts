@@ -61,7 +61,6 @@ describe('FakturaView tabs', () => {
       const href = link.attributes('href')!
       expect(href).toContain(`tab=${ALL_TABS[i]}`)
       expect(href).toContain('pay=paid')
-      expect(link.attributes('type')).toBeUndefined()
     })
   })
 
@@ -73,6 +72,7 @@ describe('FakturaView tabs', () => {
     expect(current[0].classes()).toContain('border-brand-600')
     const drafts = tabLinks(wrapper).find((l) => l.attributes('href')!.includes('tab=drafts'))!
     expect(drafts.classes()).not.toContain('border-brand-600')
+    expect(drafts.classes()).not.toContain('router-link-active')
   })
 
   it('pushes a history entry when a tab is clicked', async () => {

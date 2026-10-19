@@ -1015,7 +1015,7 @@
         "subtitle": "Factures annulées. Elles ne comptent plus dans le contrôle des doublons : une nouvelle facture peut être émise pour la même catégorie et la même année."
       },
       "imported": {
-        "subtitle": "Factures historiques importées depuis l'ancien système du club. Conservées pour référence et suivi des paiements ; elles ne peuvent être ni annulées ni supprimées."
+        "subtitle": "Factures issues de l'ancien système du club, conservées pour référence et suivi des paiements. Elles sont ici en lecture seule."
       },
       "tabs": {
         "archive": "Archives"

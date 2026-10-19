@@ -1016,7 +1016,7 @@
         "subtitle": "Fatture annullate. Non contano più nel controllo dei duplicati, quindi è possibile emettere una nuova fattura per la stessa categoria e lo stesso anno."
       },
       "imported": {
-        "subtitle": "Fatture storiche importate dal sistema precedente del club. Conservate come riferimento e per lo stato dei pagamenti; non possono essere annullate né eliminate."
+        "subtitle": "Fatture dal sistema precedente del club, conservate come riferimento e per lo stato dei pagamenti. Qui sono di sola lettura."
       },
       "tabs": {
         "archive": "Archivio"

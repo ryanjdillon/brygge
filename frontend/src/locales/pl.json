@@ -990,7 +990,7 @@
         "subtitle": "Unieważnione faktury. Nie są już brane pod uwagę przy sprawdzaniu duplikatów, więc można wystawić nową fakturę dla tej samej kategorii i roku."
       },
       "imported": {
-        "subtitle": "Historyczne faktury zaimportowane z poprzedniego systemu klubu. Przechowywane jako odniesienie i do śledzenia statusu płatności; nie można ich unieważnić ani usunąć."
+        "subtitle": "Faktury z poprzedniego systemu klubu, przechowywane jako odniesienie i do śledzenia statusu płatności. Tutaj są tylko do odczytu."
       },
       "tabs": {
         "archive": "Archiwum"

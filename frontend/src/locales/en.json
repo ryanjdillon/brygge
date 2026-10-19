@@ -661,7 +661,7 @@
     },
     "faktura": {
       "imported": {
-        "subtitle": "Historical fakturas imported from the club's previous system. Kept for reference and payment status; they cannot be voided or deleted."
+        "subtitle": "Fakturas from the club's previous system, kept for reference and payment status. They are read-only here."
       },
       "credit": {
         "filter": "Credit notes",

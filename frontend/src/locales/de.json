@@ -1016,7 +1016,7 @@
         "subtitle": "Stornierte Rechnungen. Sie zählen nicht mehr zur Duplikatprüfung, sodass für dieselbe Kategorie und dasselbe Jahr eine neue Rechnung ausgestellt werden kann."
       },
       "imported": {
-        "subtitle": "Historische Rechnungen, die aus dem früheren System des Vereins importiert wurden. Sie dienen als Referenz und zum Zahlungsstatus; sie können nicht storniert oder gelöscht werden."
+        "subtitle": "Rechnungen aus dem früheren System des Vereins, aufbewahrt als Referenz und für den Zahlungsstatus. Sie sind hier schreibgeschützt."
       },
       "tabs": {
         "archive": "Archiv"

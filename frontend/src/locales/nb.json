@@ -657,7 +657,7 @@
     },
     "faktura": {
       "imported": {
-        "subtitle": "Historiske fakturaer importert fra klubbens tidligere system. Beholdes som referanse og betalingsstatus; de kan ikke annulleres eller slettes."
+        "subtitle": "Fakturaer fra klubbens tidligere system, beholdt som referanse og betalingsstatus. De er skrivebeskyttet her."
       },
       "credit": {
         "filter": "Kreditnotaer",
