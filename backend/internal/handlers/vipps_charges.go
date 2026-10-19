@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strconv"
 
@@ -149,6 +150,9 @@ func (h *AccountingHandler) HandleCreateVippsChargeBilag(w http.ResponseWriter, 
 
 // HandleUnassignVippsCharge undoes a charge booking (manual or automatic) so
 // the charge returns to the Tildel queue and a faktura it settled reopens.
+// With released_from_backlog the charge is a 1500-parked draft the Vipps
+// backlog run refused (BRY-392), and the release goes through the backlog's
+// settled-faktura test first.
 func (h *AccountingHandler) HandleUnassignVippsCharge(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
@@ -157,19 +161,36 @@ func (h *AccountingHandler) HandleUnassignVippsCharge(w http.ResponseWriter, r *
 		return
 	}
 	rowID := chi.URLParam(r, "rowID")
-	entryID, invoiceID, err := h.svc.UnassignVippsCharge(ctx, claims.ClubID, claims.UserID, rowID)
+	// The body is optional: a plain undo posts none.
+	var req struct {
+		ReleasedFromBacklog bool `json:"released_from_backlog"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
+		Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	var entryID, invoiceID string
+	var err error
+	if req.ReleasedFromBacklog {
+		entryID, err = h.svc.ReleaseVippsBacklogCharge(ctx, claims.ClubID, claims.UserID, rowID)
+	} else {
+		entryID, invoiceID, err = h.svc.UnassignVippsCharge(ctx, claims.ClubID, claims.UserID, rowID)
+	}
 	if err != nil {
 		h.log.Warn().Err(err).Str("row_id", rowID).Msg("unassign vipps charge")
 		Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	if h.audit != nil {
+		details := map[string]any{
+			"journal_entry_id": entryID,
+			"invoice_id":       invoiceID,
+		}
+		if req.ReleasedFromBacklog {
+			details["released_from_backlog"] = true
+		}
 		h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,
-			audit.ActionVippsChargeUnassigned, "vipps_import_row", rowID,
-			map[string]any{
-				"journal_entry_id": entryID,
-				"invoice_id":       invoiceID,
-			})
+			audit.ActionVippsChargeUnassigned, "vipps_import_row", rowID, details)
 	}
 	JSON(w, http.StatusOK, map[string]string{"status": "unassigned"})
 }

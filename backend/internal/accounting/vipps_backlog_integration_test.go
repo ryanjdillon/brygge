@@ -2,8 +2,11 @@ package accounting
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/brygge-klubb/brygge/internal/testutil/fin"
 )
@@ -163,47 +166,53 @@ func TestVippsBacklogReclassifiesParkedCharges(t *testing.T) {
 	slipRow := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 160000, CustomerName: "Walk Up"})
 	f.draftCharge(t, slipRow, fallbackRevenueCode, 160000)
 
-	// A charge parked on 1500 for a known member with one matching open
-	// faktura. Even though a rule could place it, a 1500 credit with no
-	// recorded faktura may already have settled one, so it is refused.
+	// A charge parked on 1500 with no recorded faktura, for a known member
+	// with one matching open faktura and nothing marking a faktura paid by
+	// it: the member_invoice rule assigns it to that faktura.
 	payer := f.namedMember(t, "Parkedpayer")
 	inv := f.club.NewInvoice(t, fin.InvoiceOpts{Member: &payer, Cents: 45000, Lines: []fin.Line{{Category: "membership", Cents: 45000}}})
 	parkedRow := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 45000, CustomerName: "Synthetic Parkedpayer"})
 	parked := f.draftCharge(t, parkedRow, receivablesAccountCode, 45000)
 
-	// A charge parked on 1500 that no rule can place.
+	// A charge parked on 1500 that no rule can place: refused, releasable.
 	strayRow := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 77700, CustomerName: "Nobody Known"})
 	stray := f.draftCharge(t, strayRow, receivablesAccountCode, 77700)
 
 	preview := f.backlog(t, false)
-	if len(preview.Reclassified) != 1 || preview.Posted != 0 || len(preview.Refused) != 2 {
-		t.Fatalf("preview = %+v, want 1 reclassified and 2 refused", preview)
+	if len(preview.Reclassified) != 2 || preview.Posted != 0 || len(preview.Refused) != 1 ||
+		len(preview.Releasable) != 1 || preview.Releasable[0].RowID != strayRow {
+		t.Fatalf("preview = %+v, want 2 reclassified and the stray refused and releasable", preview)
+	}
+	if !strings.Contains(preview.Refused[0].Reason, "release it to the Vipps queue") {
+		t.Errorf("stray refusal %q should point at the release action", preview.Refused[0].Reason)
 	}
 
 	applied := f.backlog(t, true)
-	if len(applied.Reclassified) != 1 {
+	if len(applied.Reclassified) != 2 {
 		t.Fatalf("apply = %+v", applied)
 	}
 	if acct, status := f.bookedAccount(t, slipRow); acct != "3300" || status != "posted" {
 		t.Errorf("slipping charge booked to %s (%s), want 3300 posted", acct, status)
 	}
-	if f.invoicePaid(t, inv.ID) {
-		t.Errorf("faktura settled by a backlog run; a parked 1500 charge must be left for a human")
+	if !f.invoicePaid(t, inv.ID) || f.rowInvoice(t, parkedRow) != inv.ID {
+		t.Errorf("parked charge not assigned to its member's open faktura")
 	}
-	for _, id := range []string{parked, stray} {
-		if got := f.entryStatus(t, id); got != "draft" {
-			t.Errorf("parked receivable draft changed to %s, want it left as a draft", got)
-		}
+	if got := f.entryStatus(t, parked); got != "missing" {
+		t.Errorf("parked draft is %s, want it deleted", got)
 	}
-	if again := f.backlog(t, true); len(again.Reclassified) != 0 || again.Posted != 0 || len(again.Refused) != 2 {
-		t.Errorf("second apply should only re-report the refusals: %+v", again)
+	if got := f.entryStatus(t, stray); got != "draft" {
+		t.Errorf("stray draft changed to %s, want it left as a draft", got)
+	}
+	if again := f.backlog(t, true); len(again.Reclassified) != 0 || again.Posted != 0 || len(again.Refused) != 1 {
+		t.Errorf("second apply should only re-report the refusal: %+v", again)
 	}
 }
 
-// A legacy charge→faktura draft: the faktura was marked paid when the charge
-// was assigned, but vipps_import_rows.invoice_id predates the column. It must
-// be refused whether or not auto-assign is on, and never rebooked as revenue
-// (that would credit the money twice while the faktura stays paid).
+// A legacy charge→faktura draft: the faktura was marked paid (a KID-avstemming
+// payment) when the charge was assigned, but vipps_import_rows.invoice_id
+// predates the column. It must be refused whether or not auto-assign is on,
+// never rebooked as revenue (that would credit the money twice while the
+// faktura stays paid), and never released to the queue.
 func TestVippsBacklogRefusesLegacyFakturaDraft(t *testing.T) {
 	for _, autoAssign := range []bool{true, false} {
 		f := newAutoAssignFixture(t)
@@ -211,15 +220,17 @@ func TestVippsBacklogRefusesLegacyFakturaDraft(t *testing.T) {
 		f.priceItem(t, "membership", "Medlemskontingent synthetic", 45000, "once", "all")
 
 		payer := f.namedMember(t, "Legacypayer")
-		inv := f.club.NewInvoice(t, fin.InvoiceOpts{Member: &payer, Cents: 45000, Paid: true,
-			Lines: []fin.Line{{Category: "membership", Cents: 45000}}})
+		inv := f.legacyPaidInvoice(t, &payer, 45000)
 		row := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 45000, CustomerName: "Synthetic Legacypayer"})
 		draft := f.draftCharge(t, row, receivablesAccountCode, 45000)
 
 		res := f.backlog(t, true)
-		if len(res.Reclassified) != 0 || res.Posted != 0 || len(res.Refused) != 1 ||
-			!strings.Contains(res.Refused[0].Reason, "no recorded faktura") {
-			t.Fatalf("auto-assign=%v: result = %+v, want the legacy draft refused", autoAssign, res)
+		if len(res.Reclassified) != 0 || res.Posted != 0 || len(res.Refused) != 1 || len(res.Releasable) != 0 ||
+			!strings.Contains(res.Refused[0].Reason, fmt.Sprintf("faktura %d", inv.Number)) {
+			t.Fatalf("auto-assign=%v: result = %+v, want the legacy draft refused naming faktura %d", autoAssign, res, inv.Number)
+		}
+		if _, err := f.svc.ReleaseVippsBacklogCharge(context.Background(), f.club.ID, f.club.Treasurer.ID, row); err == nil {
+			t.Errorf("auto-assign=%v: release of a draft that may have paid a faktura must be refused", autoAssign)
 		}
 		if got := f.entryStatus(t, draft); got != "draft" {
 			t.Errorf("auto-assign=%v: legacy draft changed to %s", autoAssign, got)
@@ -261,5 +272,239 @@ func TestVippsBacklogFakturaDraftsPostOnceEach(t *testing.T) {
 	}
 	if again := f.backlog(t, true); again.Posted != 0 || len(again.Refused) != 1 {
 		t.Errorf("re-run after the first apply = %+v, want a no-op plus the same refusal", again)
+	}
+}
+
+// legacyPaidInvoice seeds a member's faktura marked paid the way a charge
+// assignment did before vipps_import_rows.invoice_id existed: a
+// KID-avstemming payment back-linked through payment_id, dated on the
+// charge date, with no booking linked to the faktura.
+func (f *autoAssignFixture) legacyPaidInvoice(t *testing.T, m *fin.Member, cents int64) fin.Invoice {
+	t.Helper()
+	inv := f.club.NewInvoice(t, fin.InvoiceOpts{Member: m, Cents: cents, Paid: true,
+		Lines: []fin.Line{{Category: "membership", Cents: cents}}})
+	f.exec(t,
+		`UPDATE payments SET description = 'KID-avstemming', paid_at = $2
+		  WHERE id = (SELECT payment_id FROM invoices WHERE id = $1)`,
+		inv.ID, time.Date(f.club.Year, 6, 1, 12, 0, 0, 0, time.UTC))
+	return inv
+}
+
+func (f *autoAssignFixture) rowInvoice(t *testing.T, rowID string) string {
+	t.Helper()
+	var id *string
+	if err := f.club.Pool.QueryRow(context.Background(),
+		`SELECT invoice_id::text FROM vipps_import_rows WHERE id = $1`, rowID).Scan(&id); err != nil {
+		t.Fatalf("row invoice: %v", err)
+	}
+	if id == nil {
+		return ""
+	}
+	return *id
+}
+
+// rowEntryBalanced reports whether the row's booked entry balances.
+func (f *autoAssignFixture) rowEntryBalanced(t *testing.T, rowID string) bool {
+	t.Helper()
+	var balanced bool
+	if err := f.club.Pool.QueryRow(context.Background(),
+		`SELECT COALESCE((SELECT sum(debit) = sum(credit) AND sum(debit) > 0
+		                    FROM journal_lines WHERE journal_entry_id = r.journal_entry_id), false)
+		   FROM vipps_import_rows r WHERE r.id = $1`, rowID).Scan(&balanced); err != nil {
+		t.Fatalf("row entry: %v", err)
+	}
+	return balanced
+}
+
+// A 1500-parked charge with no faktura that paid nothing is rebooked to the
+// price item's account: the draft is deleted and a posted, balanced entry
+// replaces it.
+func TestVippsBacklogRebooksParkedChargeByPriceItem(t *testing.T) {
+	f := newAutoAssignFixture(t)
+	f.priceItem(t, "service", "Kranløft synthetic", 80000, "once", "all")
+	row := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 80000, CustomerName: "Walk Up"})
+	draft := f.draftCharge(t, row, receivablesAccountCode, 80000)
+
+	preview := f.backlog(t, false)
+	if len(preview.Reclassified) != 1 || preview.Reclassified[0].From != receivablesAccountCode ||
+		preview.Reclassified[0].To != "3300" || len(preview.Refused) != 0 {
+		t.Fatalf("preview = %+v, want 1500 → 3300", preview)
+	}
+	if got := f.entryStatus(t, draft); got != "draft" {
+		t.Fatalf("preview changed the draft: %s", got)
+	}
+
+	applied := f.backlog(t, true)
+	if len(applied.Reclassified) != 1 || len(applied.Refused) != 0 {
+		t.Fatalf("apply = %+v", applied)
+	}
+	if got := f.entryStatus(t, draft); got != "missing" {
+		t.Errorf("parked draft is %s, want it deleted", got)
+	}
+	if acct, status := f.bookedAccount(t, row); acct != "3300" || status != "posted" {
+		t.Errorf("charge booked to %s (%s), want 3300 posted", acct, status)
+	}
+	if !f.rowEntryBalanced(t, row) {
+		t.Errorf("rebooked entry does not balance")
+	}
+}
+
+// A KID in the message naming an open faktura routes the parked charge to
+// that faktura through the auto-assign decision.
+func TestVippsBacklogAssignsParkedChargeToKIDFaktura(t *testing.T) {
+	f := newAutoAssignFixture(t)
+	owner := f.namedMember(t, "Kidowner")
+	inv := f.club.NewInvoice(t, fin.InvoiceOpts{Member: &owner, Cents: 60000, Lines: []fin.Line{{Category: "membership", Cents: 60000}}})
+	row := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 60000, CustomerName: "Someone Else Entirely"})
+	f.exec(t, `UPDATE vipps_import_rows SET message = $2 WHERE id = $1`, row, "Kontingent "+inv.KID)
+	draft := f.draftCharge(t, row, receivablesAccountCode, 60000)
+
+	res := f.backlog(t, true)
+	if len(res.Reclassified) != 1 || res.Reclassified[0].Rule != autoAssignRuleMemberInvoice ||
+		res.Reclassified[0].To != fmt.Sprintf("faktura %d", inv.Number) {
+		t.Fatalf("result = %+v, want the charge assigned to faktura %d", res, inv.Number)
+	}
+	if f.entryStatus(t, draft) != "missing" || f.rowInvoice(t, row) != inv.ID || !f.invoicePaid(t, inv.ID) {
+		t.Errorf("charge not assigned to the KID faktura in place of its draft")
+	}
+	if !f.rowEntryBalanced(t, row) {
+		t.Errorf("assigned entry does not balance")
+	}
+}
+
+// No rule places the charge, or auto-assign is off: refused, offered for
+// release, never posted as a receivable credit nothing clears.
+func TestVippsBacklogRefusesUnplacedParkedCharge(t *testing.T) {
+	f := newAutoAssignFixture(t)
+	f.priceItem(t, "service", "Kranløft synthetic", 50000, "once", "all")
+	f.priceItem(t, "guest", "Gjesteplass uke synthetic", 50000, "once", "all")
+	ambiguous := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 50000, CustomerName: "Walk Up"})
+	ambiguousDraft := f.draftCharge(t, ambiguous, receivablesAccountCode, 50000)
+
+	res := f.backlog(t, true)
+	if res.Posted != 0 || len(res.Reclassified) != 0 || len(res.Refused) != 1 || len(res.Releasable) != 1 ||
+		!strings.Contains(res.Refused[0].Reason, "several categories") {
+		t.Fatalf("ambiguous: result = %+v, want it refused with the reason and releasable", res)
+	}
+	if got := f.entryStatus(t, ambiguousDraft); got != "draft" {
+		t.Errorf("ambiguous draft changed to %s", got)
+	}
+
+	f.exec(t, `UPDATE clubs SET vipps_auto_assign = false WHERE id = $1`, f.club.ID)
+	f.priceItem(t, "service", "Slipping synthetic", 80000, "once", "all")
+	fits := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 80000, CustomerName: "Walk Up"})
+	fitsDraft := f.draftCharge(t, fits, receivablesAccountCode, 80000)
+
+	off := f.backlog(t, true)
+	if off.Posted != 0 || len(off.Reclassified) != 0 || len(off.Refused) != 2 || len(off.Releasable) != 2 {
+		t.Fatalf("switch off: result = %+v, want both refused and releasable", off)
+	}
+	for _, r := range off.Refused {
+		if !strings.Contains(r.Reason, "auto-assign is off") {
+			t.Errorf("switch off: refusal %q should say auto-assign is off", r.Reason)
+		}
+	}
+	if got := f.entryStatus(t, fitsDraft); got != "draft" {
+		t.Errorf("switch off: draft changed to %s, want it left as a draft", got)
+	}
+}
+
+// Releasing a charge that passes the test deletes its draft and puts the
+// charge back in the Vipps queue.
+func TestVippsBacklogReleaseParkedCharge(t *testing.T) {
+	f := newAutoAssignFixture(t)
+	ctx := context.Background()
+	row := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 77700, CustomerName: "Nobody Known"})
+	draft := f.draftCharge(t, row, receivablesAccountCode, 77700)
+
+	prior, err := f.svc.ReleaseVippsBacklogCharge(ctx, f.club.ID, f.club.Treasurer.ID, row)
+	if err != nil {
+		t.Fatalf("release: %v", err)
+	}
+	if prior != draft {
+		t.Errorf("release returned %s, want the draft %s", prior, draft)
+	}
+	if got := f.entryStatus(t, draft); got != "missing" {
+		t.Errorf("draft is %s after release, want it deleted", got)
+	}
+	if entry := f.rowEntry(t, row); entry != "" {
+		t.Errorf("charge still booked to %s after release", entry)
+	}
+	queue, err := f.svc.ListUnreconciledVippsCharges(ctx, f.club.ID)
+	if err != nil {
+		t.Fatalf("queue: %v", err)
+	}
+	if len(queue) != 1 {
+		t.Errorf("queue has %d charges after release, want the released one", len(queue))
+	}
+	if _, err := f.svc.ReleaseVippsBacklogCharge(ctx, f.club.ID, f.club.Treasurer.ID, row); err == nil {
+		t.Errorf("a second release of an unbooked charge must be refused")
+	}
+}
+
+// Release refuses a locked period (a closed period cannot hold drafts) and
+// any draft that is not a 1500 credit with no faktura.
+func TestVippsBacklogReleaseRefusals(t *testing.T) {
+	f := newAutoAssignFixture(t)
+	ctx := context.Background()
+	fallbackRow := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 30000, CustomerName: "Walk Up"})
+	f.draftCharge(t, fallbackRow, fallbackRevenueCode, 30000)
+	if _, err := f.svc.ReleaseVippsBacklogCharge(ctx, f.club.ID, f.club.Treasurer.ID, fallbackRow); err == nil {
+		t.Errorf("a 3900 draft must not be released")
+	}
+
+	row := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 77700, CustomerName: "Nobody Known"})
+	draft := f.draftCharge(t, row, receivablesAccountCode, 77700)
+	f.exec(t, `UPDATE fiscal_periods SET status = 'locked' WHERE id = $1`, f.club.PeriodID)
+	if _, err := f.svc.ReleaseVippsBacklogCharge(ctx, f.club.ID, f.club.Treasurer.ID, row); !errors.Is(err, ErrPeriodClosed) {
+		t.Errorf("release in a locked period: err = %v, want ErrPeriodClosed", err)
+	}
+	if got := f.entryStatus(t, draft); got != "draft" {
+		t.Errorf("draft in a locked period changed to %s", got)
+	}
+	if _, err := f.svc.PostVippsDraftBacklog(ctx, f.club.ID, f.club.PeriodID, f.club.Treasurer.ID, true); err == nil {
+		t.Errorf("a backlog run in a locked period must be refused")
+	}
+}
+
+// A payer that resolves to no member and carries no KID could have paid any
+// faktura: an unexplained KID payment of the amount near the charge date
+// blocks it, one a posted bank booking explains does not.
+func TestVippsBacklogSettledTestForUnknownPayer(t *testing.T) {
+	f := newAutoAssignFixture(t)
+	ctx := context.Background()
+	other := f.namedMember(t, "Otherpayer")
+	inv := f.legacyPaidInvoice(t, &other, 45000)
+	row := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 45000, CustomerName: "Nobody Known"})
+	f.draftCharge(t, row, receivablesAccountCode, 45000)
+
+	res := f.backlog(t, false)
+	if len(res.Refused) != 1 || len(res.Releasable) != 0 ||
+		!strings.Contains(res.Refused[0].Reason, fmt.Sprintf("faktura %d", inv.Number)) {
+		t.Fatalf("unexplained payment: result = %+v, want refused naming faktura %d", res, inv.Number)
+	}
+
+	// The faktura's payment is explained by a posted bank booking.
+	src := "bank_import_rows"
+	bankRow := f.club.NewBankRow(t, f.club.NewBankImport(t), fin.BankRowOpts{Cents: 45000})
+	e, err := f.svc.CreateJournalEntry(ctx, CreateJournalEntryInput{
+		FiscalPeriodID: f.club.PeriodID, EntryDate: "2026-06-01", Description: "bank KID payment",
+		Source: "bank_import", SourceID: &bankRow, SourceTable: &src, CreatedBy: f.club.Treasurer.ID, ClubID: f.club.ID,
+		Lines: []CreateJournalLineInput{
+			{AccountCode: "1920", Debit: 450},
+			{AccountCode: receivablesAccountCode, Credit: 450},
+		},
+	})
+	if err != nil {
+		t.Fatalf("bank booking: %v", err)
+	}
+	if err := f.svc.PostJournalEntry(ctx, f.club.ID, e.ID, f.club.Treasurer.ID); err != nil {
+		t.Fatalf("post bank booking: %v", err)
+	}
+	f.exec(t, `UPDATE bank_import_rows SET journal_entry_id = $2, invoice_id = $3 WHERE id = $1`, bankRow, e.ID, inv.ID)
+
+	res = f.backlog(t, false)
+	if len(res.Refused) != 1 || len(res.Releasable) != 1 || res.Releasable[0].RowID != row {
+		t.Fatalf("explained payment: result = %+v, want the charge refused but releasable", res)
 	}
 }
