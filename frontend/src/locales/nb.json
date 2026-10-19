@@ -679,6 +679,7 @@
         "searchBody": "Kreditnotaen er på {amount}. Bare en faktura med samme beløp kan motregnes; delvis kreditering støttes ikke.",
         "searchPlaceholder": "Søk fakturanummer eller betaler",
         "searchEmpty": "Ingen faktura passer søket.",
+        "searchTruncated": "Viser de første {count} – søk på nummer eller navn for å snevre inn.",
         "pick": "Motregn",
         "otherAmount": "Annet beløp",
         "otherPayer": "Annen betaler",

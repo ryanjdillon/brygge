@@ -683,6 +683,7 @@
         "searchBody": "The credit note is {amount}. Only a faktura of the same amount can be settled; partial credits aren't supported.",
         "searchPlaceholder": "Search faktura number or payer",
         "searchEmpty": "No faktura matches the search.",
+        "searchTruncated": "Showing the first {count} – search by number or name to narrow it down.",
         "pick": "Settle",
         "otherAmount": "Different amount",
         "otherPayer": "Different payer",

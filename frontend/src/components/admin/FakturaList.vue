@@ -41,15 +41,6 @@ interface Row {
   credited_by_invoice_number: number | null
 }
 
-interface CreditCandidate {
-  id: string
-  invoice_number: number
-  total_amount: number
-  issue_date: string
-  paid: boolean
-  imported: boolean
-}
-
 type PaidStatus = 'paid' | 'waiting' | 'past_due' | 'credit'
 
 const props = defineProps<{
@@ -426,7 +417,7 @@ async function settleCredit(d: Row) {
       error.value = `${res.status} ${await res.text().catch(() => '')}`
       return
     }
-    const candidates: CreditCandidate[] = (await res.json()).items ?? []
+    const candidates: CreditSearchHit[] = (await res.json()).items ?? []
     if (candidates.length === 0) {
       creditSearch.value = {
         note: d,
@@ -443,7 +434,7 @@ async function settleCredit(d: Row) {
         options: [
           ...candidates.map((c) => ({
             value: c.id,
-            label: t(c.paid ? 'admin.faktura.credit.candidatePaid' : 'admin.faktura.credit.candidateOpen', {
+            label: t(c.settled ? 'admin.faktura.credit.candidatePaid' : 'admin.faktura.credit.candidateOpen', {
               number: c.invoice_number,
               amount: formatNOK(Number(c.total_amount)),
               date: c.issue_date.slice(0, 10),

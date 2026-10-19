@@ -18,6 +18,7 @@ const KEYS = [
   'searchBody',
   'searchPlaceholder',
   'searchEmpty',
+  'searchTruncated',
   'pick',
   'otherAmount',
   'otherPayer',

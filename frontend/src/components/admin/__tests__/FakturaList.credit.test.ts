@@ -87,7 +87,7 @@ describe('FakturaList credit notes', () => {
   it('settles an unlinked credit note against the chosen candidate after a step-up', async () => {
     totpAwareFetch
       .mockResolvedValueOnce(
-        jsonResponse({ items: [{ id: 'cand', invoice_number: 9, total_amount: 2300, issue_date: '2025-05-08', paid: false, imported: true }] }),
+        jsonResponse({ items: [{ id: 'cand', invoice_number: 9, total_amount: 2300, issue_date: '2025-05-08', paid: false, settled: false, imported: true }] }),
       )
       .mockResolvedValueOnce(jsonResponse({ outcome: 'settled_pair', credit_note_number: 11, invoice_number: 9 }))
     confirmStore.choiceValue = 'cand'
@@ -107,7 +107,7 @@ describe('FakturaList credit notes', () => {
   it('reports why a link was refused', async () => {
     totpAwareFetch
       .mockResolvedValueOnce(
-        jsonResponse({ items: [{ id: 'cand', invoice_number: 9, total_amount: 2300, issue_date: '2025-05-08', paid: false, imported: true }] }),
+        jsonResponse({ items: [{ id: 'cand', invoice_number: 9, total_amount: 2300, issue_date: '2025-05-08', paid: false, settled: false, imported: true }] }),
       )
       .mockResolvedValueOnce(jsonResponse({ code: 'partial_credit', error: 'partial' }, 409))
     confirmStore.choiceValue = 'cand'
@@ -128,6 +128,7 @@ describe('FakturaList credit-note faktura search', () => {
     invoice_number: 42,
     total_amount: 2300,
     issue_date: '2025-04-01',
+    paid: false,
     settled: false,
     imported: true,
     payer_name: 'Synthetic Payer',
@@ -181,7 +182,7 @@ describe('FakturaList credit-note faktura search', () => {
   it('asks before linking a faktura of another payer and sends the confirmation', async () => {
     totpAwareFetch
       .mockResolvedValueOnce(
-        jsonResponse({ items: [{ id: 'cand', invoice_number: 9, total_amount: 2300, issue_date: '2025-05-08', paid: false, imported: true }] }),
+        jsonResponse({ items: [{ id: 'cand', invoice_number: 9, total_amount: 2300, issue_date: '2025-05-08', paid: false, settled: false, imported: true }] }),
       )
       .mockResolvedValueOnce(jsonResponse({ items: [hit({})], credit_note_has_payer: true }))
       .mockResolvedValueOnce(jsonResponse({ outcome: 'settled_pair', credit_note_number: 11, invoice_number: 42 }))
@@ -207,6 +208,30 @@ describe('FakturaList credit-note faktura search', () => {
       manual_pick: true,
       confirm_other_member: true,
     })
+  })
+
+  it('debounces typing, says when the list is cut, and shows a failed search', async () => {
+    totpAwareFetch
+      .mockResolvedValueOnce(jsonResponse({ items: [], credit_note_has_payer: false }))
+      .mockResolvedValueOnce(jsonResponse({ items: [hit({})], truncated: true, credit_note_has_payer: false }))
+      .mockRejectedValueOnce(new Error('network down'))
+    const w = mountList()
+    await flushPromises()
+    await w.get('[data-testid="credit-settle"]').trigger('click')
+    await flushPromises()
+    expect(w.get('[data-testid="credit-search-truncated"]').text()).toBe('admin.faktura.credit.searchTruncated')
+
+    const input = w.get('[data-testid="credit-search-input"]')
+    await input.setValue('4')
+    await input.setValue('42')
+    expect(totpAwareFetch).toHaveBeenCalledTimes(2)
+    await new Promise((r) => setTimeout(r, 250))
+    await flushPromises()
+
+    expect(totpAwareFetch).toHaveBeenCalledTimes(3)
+    expect(totpAwareFetch.mock.calls[2][0]).toBe('/api/v1/admin/financials/invoices/cn-open/credit-candidates?any=1&q=42')
+    expect(w.text()).toContain('network down')
+    expect(w.find('[data-testid="credit-search-truncated"]').exists()).toBe(false)
   })
 
   it('does not offer a faktura of a different amount and shows a refusal in the search', async () => {

@@ -1018,6 +1018,7 @@
         "searchBody": "Korekta wynosi {amount}. Rozliczyć można tylko fakturę o tej samej kwocie; częściowe korekty nie są obsługiwane.",
         "searchPlaceholder": "Szukaj numeru faktury lub płatnika",
         "searchEmpty": "Żadna faktura nie pasuje do wyszukiwania.",
+        "searchTruncated": "Pokazano pierwsze {count} – wyszukaj po numerze lub nazwie, aby zawęzić.",
         "pick": "Rozlicz",
         "otherAmount": "Inna kwota",
         "otherPayer": "Inny płatnik",

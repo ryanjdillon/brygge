@@ -1044,6 +1044,7 @@
         "searchBody": "La nota di credito è di {amount}. Si può compensare solo una fattura dello stesso importo; i crediti parziali non sono supportati.",
         "searchPlaceholder": "Cerca numero di fattura o pagatore",
         "searchEmpty": "Nessuna fattura corrisponde alla ricerca.",
+        "searchTruncated": "Sono mostrate le prime {count} – cerca per numero o nome per restringere.",
         "pick": "Compensa",
         "otherAmount": "Importo diverso",
         "otherPayer": "Altro pagatore",

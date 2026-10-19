@@ -1044,6 +1044,7 @@
         "searchBody": "Die Gutschrift beträgt {amount}. Nur eine Rechnung mit demselben Betrag kann verrechnet werden; Teilgutschriften werden nicht unterstützt.",
         "searchPlaceholder": "Rechnungsnummer oder Zahler suchen",
         "searchEmpty": "Keine Rechnung entspricht der Suche.",
+        "searchTruncated": "Die ersten {count} werden angezeigt – nach Nummer oder Name suchen, um einzugrenzen.",
         "pick": "Verrechnen",
         "otherAmount": "Anderer Betrag",
         "otherPayer": "Anderer Zahler",

@@ -1044,6 +1044,7 @@
         "searchBody": "De creditnota is {amount}. Alleen een factuur met hetzelfde bedrag kan worden verrekend; gedeeltelijke creditering wordt niet ondersteund.",
         "searchPlaceholder": "Zoek factuurnummer of betaler",
         "searchEmpty": "Geen factuur komt overeen met de zoekopdracht.",
+        "searchTruncated": "De eerste {count} worden getoond – zoek op nummer of naam om te verfijnen.",
         "pick": "Verrekenen",
         "otherAmount": "Ander bedrag",
         "otherPayer": "Andere betaler",

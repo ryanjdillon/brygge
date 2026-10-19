@@ -1043,6 +1043,7 @@
         "searchBody": "L'avoir s'élève à {amount}. Seule une facture du même montant peut être compensée ; les avoirs partiels ne sont pas pris en charge.",
         "searchPlaceholder": "Rechercher un numéro de facture ou un payeur",
         "searchEmpty": "Aucune facture ne correspond à la recherche.",
+        "searchTruncated": "Affichage des {count} premières – recherchez par numéro ou nom pour affiner.",
         "pick": "Compenser",
         "otherAmount": "Montant différent",
         "otherPayer": "Autre payeur",

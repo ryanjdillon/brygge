@@ -197,7 +197,7 @@ A credit note only settles the faktura it cancels once you link them:
 
 #### Credit notes without a member, or for another payer
 
-Some imported credit notes have no member, so no faktura matches the payer and the list is empty. Brygge then opens a search instead: type the faktura number or the payer's name and click **Motregn** on the right faktura. The search shows the club's open and paid fakturas that aren't voided or already credited, newest first, with the amount, date and payer. Matching by amount alone isn't enough (many imported fakturas share an amount), so check the number or payer before you pick.
+Some imported credit notes have no member, so no faktura matches the payer and the list is empty. Brygge then opens a search instead: type the faktura number or the payer's name and click **Motregn** on the right faktura. The search shows the club's open and paid fakturas that aren't voided or already credited, newest first, with the amount, date and payer. It shows at most 25; if there are more, it says so, and you narrow the search by number or name. Matching by amount alone isn't enough (many imported fakturas share an amount), so check the number or payer before you pick.
 
 - A faktura with a different amount is marked **Annet beløp** and can't be picked: partial credits aren't supported.
 - If the credit note has a member and the faktura is for someone else, it is marked **Annen betaler**. Brygge asks "Kreditnotaen og fakturaen har ulik betaler" before linking them. A credit note without a member needs no such confirmation.
