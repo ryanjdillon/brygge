@@ -9,14 +9,18 @@
 #      this checkout has no file for prod's version (prod is ahead of it).
 #      No schema_migrations at all (fresh host) → nothing to check.
 #   2. Pending = numbered *.up.sql above prod's version.
-#   3. Scan the pending files and repeatable/dev_masked.sql locally for
-#      top-level transaction control and psql meta-commands. A hit means the
-#      file could commit, so nothing is sent: fall back to the snapshot check.
-#   4. Otherwise stream BEGIN; SET LOCAL timeouts; each pending file;
-#      dev_masked.sql; ROLLBACK; to psql as the brygge role. Nothing pending
-#      → only dev_masked.sql is dry-run.
-#   5. Classify a failure by SQLSTATE: 55P04 / 25001 → snapshot fallback;
-#      55P03 → prod busy; anything else → the migration fails.
+#   3. Lex the pending files and repeatable/dev_masked.sql locally, statement
+#      by statement, for transaction control, SET/RESET of the dry-run's
+#      timeouts, and psql meta-commands. A hit means the file could commit,
+#      so nothing is sent: fall back to the snapshot check.
+#   4. Otherwise stream BEGIN; SET LOCAL timeouts; SAVEPOINT; each file
+#      between SAVEPOINT/RELEASE guards; dev_masked.sql; ROLLBACK TO
+#      SAVEPOINT; ROLLBACK; to psql as the brygge role. Nothing pending →
+#      only dev_masked.sql is dry-run.
+#   5. Classify a failure: a file that ended the transaction (25P01/3B001)
+#      → hard abort, prod may be modified; ssh/connection failure → error;
+#      55P04 / 25001 → snapshot fallback; 55P03 → prod busy; anything else
+#      → the migration fails. Row values in error output are redacted.
 #   6. Re-read schema_migrations; abort if it changed while we ran.
 #
 # The dry-run is not a perfect model of golang-migrate: that runs each file
@@ -26,7 +30,7 @@
 # Usage:
 #   scripts/deploy-migration-dryrun.sh            # run the check
 #   scripts/deploy-migration-dryrun.sh --state-sql  # print the state query
-#   scripts/deploy-migration-dryrun.sh --scan FILE…  # list lines step 3 rejects
+#   scripts/deploy-migration-dryrun.sh --scan FILE…  # list statements step 3 rejects
 #
 # Env:
 #   PROD_PSQL            command (shell words) that runs psql against prod as
@@ -44,9 +48,13 @@
 #   SNAPSHOT_CHECK_CMD   override the snapshot check (tests); gets the dump
 #                        path as its only argument, or none.
 #   DRYRUN_TIMEOUT       whole-run timeout in seconds, default 90
+#   DRYRUN_STREAM_COPY   tests: save a copy of the SQL stream here
+#   DRYRUN_TEST_SKIP_SCAN=1  tests only: disable step 3 to exercise the
+#                        in-stream guards; never against a real host
 #
-# Exit codes: 0 ok · 1 migration failed / check error · 2 refused (dirty,
-# prod ahead, state changed) · 75 prod busy (lock timeout), retry later.
+# Exit codes: 0 ok · 1 migration failed / check error / unreachable ·
+# 2 refused or hard stop (dirty, prod ahead, state changed, a file ended
+# the transaction) · 75 prod busy (lock timeout), retry later.
 set -euo pipefail
 
 EXIT_FAIL=1
@@ -115,45 +123,109 @@ run_snapshot_fallback() {
     return "$EXIT_FAIL"
 }
 
-# Prints "file:line: reason" for each line that could end the dry-run's
-# transaction or run a psql meta-command. Lines inside dollar-quoted bodies
-# (plpgsql BEGIN … END) are skipped; comments are ignored.
+# A lexer over whole files, not lines: it drops -- and nested /* */
+# comments, '…' (with ''), E'…' (with backslash escapes), "identifiers" and
+# $tag$…$tag$ bodies, then splits what is left on ';'. It prints
+# "file:line: reason" (line = where the statement starts) for every
+# statement that could end the dry-run's transaction or loosen its
+# timeouts, and for a backslash outside a string (a psql meta-command).
+SCAN_AWK=$(cat <<'AWK'
+function ident(ch) { return ch ~ /[A-Za-z0-9_$]/ }
+function lastch() { return substr(stmt, length(stmt), 1) }
+function start_here() { if (sline == 0) sline = FNR }
+function report(line, why) { print fname ":" line ": " why }
+function is_timeout(name) {
+    return name == "STATEMENT_TIMEOUT" || name == "LOCK_TIMEOUT" ||
+           name == "IDLE_IN_TRANSACTION_SESSION_TIMEOUT"
+}
+function flush(   s, n, w, k1, k2, k3, name) {
+    s = stmt
+    sub(/^[ \t\r\n]+/, "", s)
+    if (s != "") {
+        n = split(toupper(s), w, /[ \t\r\n(=]+/)
+        k1 = w[1]; k2 = (n >= 2) ? w[2] : ""; k3 = (n >= 3) ? w[3] : ""
+        if (k1 == "BEGIN" || k1 == "START" || k1 == "COMMIT" || k1 == "END" || k1 == "ABORT") {
+            report(sline, "transaction control")
+        } else if (k1 == "ROLLBACK" && k2 != "TO" &&
+                   !((k2 == "WORK" || k2 == "TRANSACTION") && k3 == "TO")) {
+            report(sline, "transaction control")
+        } else if (k1 == "PREPARE" && k2 == "TRANSACTION") {
+            report(sline, "transaction control")
+        } else if (k1 == "SET") {
+            name = (k2 == "SESSION" || k2 == "LOCAL") ? k3 : k2
+            if (is_timeout(name)) report(sline, "changes the dry-run's timeouts")
+        } else if (k1 == "RESET" && (is_timeout(k2) || k2 == "ALL")) {
+            report(sline, "changes the dry-run's timeouts")
+        }
+    }
+    stmt = ""; sline = 0
+}
+function endfile() {
+    if (fname != "") flush()
+    st = "code"; depth = 0; tag = ""; esc = 0; stmt = ""; sline = 0
+}
+FNR == 1 { endfile(); fname = FILENAME }
+{
+    line = $0 "\n"
+    L = length(line)
+    i = 1
+    while (i <= L) {
+        c = substr(line, i, 1)
+        two = substr(line, i, 2)
+        if (st == "line") {
+            if (c == "\n") { st = "code"; stmt = stmt c }
+            i++; continue
+        }
+        if (st == "block") {
+            if (two == "/*") { depth++; i += 2; continue }
+            if (two == "*/") { depth--; i += 2; if (depth == 0) { st = "code"; stmt = stmt " " }; continue }
+            i++; continue
+        }
+        if (st == "sq") {
+            if (esc && c == "\\") { i += 2; continue }
+            if (c == "'") {
+                if (substr(line, i + 1, 1) == "'") { i += 2; continue }
+                st = "code"; stmt = stmt "''"
+            }
+            i++; continue
+        }
+        if (st == "id") {
+            if (c == "\"") {
+                if (substr(line, i + 1, 1) == "\"") { i += 2; continue }
+                st = "code"; stmt = stmt "\"\""
+            }
+            i++; continue
+        }
+        if (st == "dq") {
+            if (substr(line, i, length(tag)) == tag) { st = "code"; stmt = stmt "$$"; i += length(tag); continue }
+            i++; continue
+        }
+        # st == "code"
+        if (two == "--") { st = "line"; i += 2; continue }
+        if (two == "/*") { st = "block"; depth = 1; i += 2; continue }
+        if (c == "'") {
+            p = lastch()
+            esc = (p == "E" || p == "e") && !ident(substr(stmt, length(stmt) - 1, 1))
+            start_here(); st = "sq"; i++; continue
+        }
+        if (c == "\"") { start_here(); st = "id"; i++; continue }
+        if (c == "$" && !ident(lastch()) && match(substr(line, i), /^\$([A-Za-z_][A-Za-z0-9_]*)?\$/)) {
+            tag = substr(line, i, RLENGTH)
+            start_here(); st = "dq"; stmt = stmt "$$"; i += RLENGTH; continue
+        }
+        if (c == "\\") { report(FNR, "psql meta-command"); i++; continue }
+        if (c == ";") { flush(); i++; continue }
+        if (c !~ /[ \t\r\n]/) start_here()
+        stmt = stmt c
+        i++
+    }
+}
+END { endfile() }
+AWK
+)
+
 scan_unsafe() {
-    awk '
-    FNR == 1 { indq = 0; tag = "" }
-    {
-        line = $0
-        if (!indq) {
-            code = line
-            sub(/--.*/, "", code)
-            bare = code
-            gsub(/'"'"'[^'"'"']*'"'"'/, "", bare)
-            up = toupper(code)
-            if (bare ~ /\\/) {
-                print FILENAME ":" FNR ": psql meta-command"
-            } else if (up ~ /^[ \t]*(BEGIN|START[ \t]+TRANSACTION)([ \t][^;]*)?;/ ||
-                       up ~ /^[ \t]*(COMMIT|ROLLBACK|END|ABORT)([ \t]+(WORK|TRANSACTION))?([ \t]+AND[ \t]+(NO[ \t]+)?CHAIN)?[ \t]*;/ ||
-                       up ~ /^[ \t]*(COMMIT|ROLLBACK)[ \t]+PREPARED/ ||
-                       up ~ /^[ \t]*PREPARE[ \t]+TRANSACTION/) {
-                print FILENAME ":" FNR ": transaction control"
-            }
-        }
-        rest = line
-        if (!indq) sub(/--.*/, "", rest)
-        while (1) {
-            if (indq) {
-                p = index(rest, tag)
-                if (p == 0) break
-                rest = substr(rest, p + length(tag))
-                indq = 0
-            } else {
-                if (!match(rest, /\$[A-Za-z_]*\$/)) break
-                tag = substr(rest, RSTART, RLENGTH)
-                rest = substr(rest, RSTART + RLENGTH)
-                indq = 1
-            }
-        }
-    }' "$@"
+    awk "$SCAN_AWK" "$@"
 }
 
 case "${1:-}" in
@@ -242,8 +314,14 @@ fi
 files=("${pending[@]}")
 [[ -f "$DEV_MASKED_SQL" ]] && files+=("$DEV_MASKED_SQL")
 hits="$(scan_unsafe "${files[@]}")"
+if [[ "${DRYRUN_TEST_SKIP_SCAN:-0}" == "1" ]]; then
+    # Exists only so the tests can prove the in-stream guards below catch
+    # what the scan would have; never set it against a real host.
+    err "WARNING — DRYRUN_TEST_SKIP_SCAN=1: the local safety scan is disabled (tests only)"
+    hits=""
+fi
 if [[ -n "$hits" ]]; then
-    say "these lines cannot run inside the dry-run's transaction:"
+    say "these statements cannot run inside the dry-run's transaction:"
     while IFS= read -r h; do say "  $h"; done <<< "$hits"
     run_snapshot_fallback "a file controls its own transaction or uses psql meta-commands" \
         || exit "$EXIT_FAIL"
@@ -251,25 +329,38 @@ if [[ -n "$hits" ]]; then
 fi
 
 # ── 4. Dry-run ─────────────────────────────────────────────────
-# lineno maps a psql "<stdin>:N" error back to its file and line.
+# Second line of defence behind the scan: each file runs between
+# SAVEPOINT dryrun_file and RELEASE SAVEPOINT dryrun_file. If a file ends
+# the transaction, the RELEASE fails at once — 25P01 when no transaction
+# is open, 3B001 when the file opened a new one — and ON_ERROR_STOP halts
+# before the next file. The closing ROLLBACK TO SAVEPOINT dryrun catches
+# the same thing for the stream as a whole.
+#
+# The map records "start end guard file" so a psql "<stdin>:N" error can be
+# traced back to its file and line.
 stream="$workdir/stream.sql"
 map="$workdir/map"
-{
-    printf '%s\n' "BEGIN;" \
-        "SET LOCAL lock_timeout = '2s';" \
-        "SET LOCAL statement_timeout = '15s';"
-} > "$stream"
+printf '%s\n' "BEGIN;" \
+    "SET LOCAL lock_timeout = '2s';" \
+    "SET LOCAL statement_timeout = '15s';" \
+    "SET LOCAL idle_in_transaction_session_timeout = '30s';" \
+    "SAVEPOINT dryrun;" > "$stream"
 : > "$map"
 for f in "${files[@]}"; do
     printf '\\echo %s\n' "'>>> ${f##*/}'" >> "$stream"
+    printf '%s\n' "SAVEPOINT dryrun_file;" >> "$stream"
     start=$(( $(wc -l < "$stream") + 1 ))
     cat "$f" >> "$stream"
     # A file without a trailing newline would glue its last line to ours.
     [[ -n "$(tail -c1 "$f")" ]] && echo >> "$stream"
     end=$(wc -l < "$stream")
-    printf '%s %s %s\n' "$start" "$end" "$f" >> "$map"
+    printf '%s\n' "RELEASE SAVEPOINT dryrun_file;" >> "$stream"
+    printf '%s %s %s %s\n' "$start" "$end" "$(( end + 1 ))" "$f" >> "$map"
 done
-printf '%s\n' "ROLLBACK;" >> "$stream"
+printf '%s\n' "ROLLBACK TO SAVEPOINT dryrun;" "ROLLBACK;" >> "$stream"
+if [[ -n "${DRYRUN_STREAM_COPY:-}" ]]; then
+    cp "$stream" "$DRYRUN_STREAM_COPY"
+fi
 
 say "dry-running against prod in a rolled-back transaction (timeout ${DRYRUN_TIMEOUT}s)…"
 rc=0
@@ -277,7 +368,57 @@ out="$(timeout "$DRYRUN_TIMEOUT" bash -c \
     "${PROD_PSQL} -X -q -b -v ON_ERROR_STOP=1 -v VERBOSITY=verbose -f -" \
     < "$stream" 2>&1)" || rc=$?
 
-# ── 6. Tripwire (runs whatever the outcome) ────────────────────
+# Error output can quote row values (Key (email)=(…), Failing row contains,
+# invalid input syntax for type uuid: "…"). Member data must never reach
+# the deployer's terminal or CI logs, so drop the detail lines and redact
+# the quoted values in what is left.
+redact() {
+    sed -E \
+        -e '/^(psql:[^ ]*: )?(DETAIL|HINT|CONTEXT|QUERY):/d' \
+        -e 's/(invalid input (syntax|value) for [^:]*): ".*"/\1: "[redacted]"/' \
+        -e 's/Key \(([^)]*)\)=\(.*\)/Key (\1)=([redacted])/' \
+        -e 's/(Failing row contains ).*/\1([redacted])/'
+}
+show_output() { redact <<< "$out" >&2; }
+
+# VERBOSITY=verbose makes psql print "<stdin>:N: ERROR:  SQLSTATE: message".
+sqlstate="$(sed -nE 's/.*ERROR:  ([0-9A-Z]{5}): .*/\1/p' <<< "$out" | head -1)"
+where=""
+ended_by=""
+errline="$(sed -nE 's/.*<stdin>:([0-9]+): ERROR:.*/\1/p' <<< "$out" | head -1)"
+if [[ -n "$errline" ]]; then
+    while read -r s e g f; do
+        if (( errline >= s && errline <= e )); then
+            where="${f} line $(( errline - s + 1 ))"
+            break
+        elif (( errline == g )); then
+            ended_by="$f"
+            break
+        fi
+    done < "$map"
+fi
+
+# ── 5a. A file ended the transaction: hard stop, before anything else ──
+if [[ "$sqlstate" == "25P01" || "$sqlstate" == "3B001" ]] \
+        || grep -qE 'no transaction in progress|SET LOCAL can only be used in transaction blocks' <<< "$out"; then
+    show_output
+    err "ABORT — a migration file ended the dry-run's transaction${ended_by:+ (${ended_by})}."
+    err "PROD MAY HAVE BEEN MODIFIED: statements after that point ran outside the rolled-back"
+    err "transaction and committed. Restore the pre-deploy snapshot before anything else"
+    err "(docs/developer/deploy.md, 'Pre-deploy snapshot and restoring from it'), then"
+    err "remove the file's transaction control."
+    exit "$EXIT_REFUSE"
+fi
+
+# ── 5b. Could not reach prod at all ────────────────────────────
+if (( rc == 255 )) || grep -qE 'psql: error:' <<< "$out"; then
+    show_output
+    err "ERROR — could not reach prod / psql on the host (ssh or connection failure)."
+    err "Nothing ran. Check the host and retry, or deploy with SKIP_PROD_CHECK=1 if it stays unreachable."
+    exit "$EXIT_FAIL"
+fi
+
+# ── 6. Tripwire ────────────────────────────────────────────────
 after="$(read_state)" || {
     err "ERROR — could not re-read schema_migrations after the dry-run; aborting"
     exit "$EXIT_FAIL"
@@ -293,25 +434,19 @@ if (( rc == 0 )); then
     exit 0
 fi
 
-# ── 5. Classify the failure ────────────────────────────────────
+# ── 5c. Classify the remaining failures ────────────────────────
 if (( rc == 124 )); then
-    printf '%s\n' "$out" >&2
-    err "ERROR — dry-run timed out after ${DRYRUN_TIMEOUT}s; the connection was dropped and nothing was committed."
+    show_output
+    err "ERROR — the dry-run did not finish within ${DRYRUN_TIMEOUT}s and was stopped before its ROLLBACK."
+    err "The server rolls back a transaction whose session ends, so nothing should have been committed."
     err "Use PROD_CHECK=snapshot to check against the pre-deploy dump instead."
     exit "$EXIT_FAIL"
 fi
 
-# VERBOSITY=verbose makes psql print "<stdin>:N: ERROR:  SQLSTATE: message".
-sqlstate="$(sed -nE 's/.*ERROR:  ([0-9A-Z]{5}): .*/\1/p' <<< "$out" | head -1)"
-where=""
-errline="$(sed -nE 's/.*<stdin>:([0-9]+): ERROR:.*/\1/p' <<< "$out" | head -1)"
-if [[ -n "$errline" ]]; then
-    while read -r s e f; do
-        if (( errline >= s && errline <= e )); then
-            where="${f} line $(( errline - s + 1 ))"
-            break
-        fi
-    done < "$map"
+if grep -qE 'FATAL:' <<< "$out"; then
+    show_output
+    err "ERROR — prod terminated the dry-run's connection (see FATAL above); its transaction was rolled back."
+    exit "$EXIT_FAIL"
 fi
 
 case "$sqlstate" in
@@ -321,14 +456,14 @@ case "$sqlstate" in
         exit 0
         ;;
     55P03)
-        printf '%s\n' "$out" >&2
+        show_output
         err "PROD BUSY — a migration could not take its lock within 2s${where:+ (${where})}."
         err "Live traffic holds a conflicting lock. Retry the deploy in a minute."
         exit "$EXIT_BUSY"
         ;;
 esac
 
-printf '%s\n' "$out" >&2
+show_output
 err "ABORT — migration fails against prod data${where:+ in ${where}}${sqlstate:+ (SQLSTATE ${sqlstate})}."
 if [[ "$sqlstate" == "57014" ]]; then
     err "A statement ran longer than the 15s statement_timeout on prod data."

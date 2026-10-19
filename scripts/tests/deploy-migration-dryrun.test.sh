@@ -40,6 +40,10 @@ cat > "$tmp/fake-psql" <<EOF
 # concurrent migration right after a dry-run stream.
 set -uo pipefail
 input="\$(cat)"
+if [[ -n "\${FAKE_SSH_FAIL:-}" ]]; then
+    echo "ssh: connect to host prod.example.invalid port 22: Connection refused" >&2
+    exit 255
+fi
 { echo "=== call: \$*"; printf '%s\n' "\$input"; } >> "$tmp/psql.log"
 printf '%s\n' "\$input" | ${PSQL[*]} -d $DB "\$@"
 rc=\$?
@@ -74,6 +78,10 @@ reset_db() {
         CREATE TYPE mood AS ENUM ('sad');
         CREATE TABLE boats (id int PRIMARY KEY, length numeric NOT NULL);
         INSERT INTO boats VALUES (1, 5.5), (2, -1);
+        CREATE TABLE contacts (email text, ref text);
+        INSERT INTO contacts VALUES
+            ('synthetic.dup@example.invalid', 'not-a-uuid-SYNTHETIC-SECRET'),
+            ('synthetic.dup@example.invalid', NULL);
         CREATE SCHEMA dev_masked;
         CREATE VIEW dev_masked.boats AS SELECT id FROM public.boats;"
 }
@@ -284,6 +292,74 @@ rc=0; out="$(cd "$ROOT" && PROD_CHECK=snapshot bash "$SCRIPT" 2>&1)" || rc=$?
 check "PROD_CHECK=snapshot: runs the snapshot check" snapshot_called_with_dump
 check "PROD_CHECK=snapshot: no dry-run sent" bash -c "! grep -qF 'ROLLBACK;' '$tmp/psql.log'"
 
+# 11b. The stream opens and closes the transaction and guards each file.
+new_migrations
+echo "SELECT 1;" > "$tmp/m/000002_good.up.sql"
+rc=0; out="$(cd "$ROOT" && DRYRUN_STREAM_COPY="$tmp/stream.sql" bash "$SCRIPT" 2>&1)" || rc=$?
+check "stream: exits 0" test "$rc" -eq 0
+check "stream: header is BEGIN, SET LOCAL timeouts, SAVEPOINT" test "$(head -5 "$tmp/stream.sql")" == \
+"BEGIN;
+SET LOCAL lock_timeout = '2s';
+SET LOCAL statement_timeout = '15s';
+SET LOCAL idle_in_transaction_session_timeout = '30s';
+SAVEPOINT dryrun;"
+check "stream: each file is wrapped in SAVEPOINT/RELEASE" test "$(sed -n 6,10p "$tmp/stream.sql")" == \
+"\\echo '>>> 000002_good.up.sql'
+SAVEPOINT dryrun_file;
+SELECT 1;
+RELEASE SAVEPOINT dryrun_file;
+\\echo '>>> dev_masked.sql'"
+check "stream: ends ROLLBACK TO SAVEPOINT, ROLLBACK" test "$(tail -2 "$tmp/stream.sql")" == \
+"ROLLBACK TO SAVEPOINT dryrun;
+ROLLBACK;"
+
+# 11c. A COMMIT the scan missed (scan disabled) is caught by the guards:
+# hard abort, exit 2, and the warning is true — the stand-in prod changed.
+new_migrations
+echo "ALTER TABLE boats ADD COLUMN leaked text; COMMIT;" > "$tmp/m/000002_sneaky.up.sql"
+echo "ALTER TABLE boats ADD COLUMN after_leak text;" > "$tmp/m/000003_next.up.sql"
+rc=0; out="$(cd "$ROOT" && DRYRUN_TEST_SKIP_SCAN=1 bash "$SCRIPT" 2>&1)" || rc=$?
+check "inline COMMIT: exits 2" test "$rc" -eq 2
+check "inline COMMIT: says prod may have been modified" has "PROD MAY HAVE BEEN MODIFIED"
+check "inline COMMIT: names the file" has "(${tmp}/m/000002_sneaky.up.sql)"
+check "inline COMMIT: halts before the next file" \
+    test "$(sql "SELECT count(*) FROM pg_attribute WHERE attrelid = 'boats'::regclass AND attname = 'after_leak'")" -eq 0
+check "inline COMMIT: no snapshot fallback" test ! -f "$tmp/snapshot.log"
+check "inline COMMIT: the leak is real (stand-in prod changed)" test "$(fingerprint)" != "$before"
+reset_db
+
+new_migrations
+echo "SELECT 1; COMMIT; BEGIN;" > "$tmp/m/000002_reopen.up.sql"
+rc=0; out="$(cd "$ROOT" && DRYRUN_TEST_SKIP_SCAN=1 bash "$SCRIPT" 2>&1)" || rc=$?
+check "COMMIT; BEGIN: exits 2 (3B001)" test "$rc" -eq 2
+check "COMMIT; BEGIN: says prod may have been modified" has "PROD MAY HAVE BEEN MODIFIED"
+
+# 11d. Error output never shows row values (synthetic data).
+new_migrations
+echo "CREATE UNIQUE INDEX contacts_email ON contacts (email);" > "$tmp/m/000002_unique.up.sql"
+run
+check "redaction, unique violation: exits 1" test "$rc" -eq 1
+check "redaction, unique violation: reports 23505" has "SQLSTATE 23505"
+check "redaction, unique violation: value not shown" bash -c "! grep -qF 'synthetic.dup' <<< \"\$1\"" _ "$out"
+new_migrations
+echo "ALTER TABLE contacts ALTER COLUMN ref TYPE uuid USING ref::uuid;" > "$tmp/m/000002_uuid.up.sql"
+run
+check "redaction, uuid cast: exits 1" test "$rc" -eq 1
+check "redaction, uuid cast: value redacted" has 'invalid input syntax for type uuid: "[redacted]"'
+check "redaction, uuid cast: value not shown" bash -c "! grep -qF 'SYNTHETIC-SECRET' <<< \"\$1\"" _ "$out"
+check "redaction: no trace" test "$(fingerprint)" == "$before"
+
+# 11e. ssh / connection failure → "could not reach prod", exit 1.
+new_migrations
+rc=0; out="$(cd "$ROOT" && FAKE_SSH_FAIL=1 PROD_MIGRATION_STATE="1|false" bash "$SCRIPT" 2>&1)" || rc=$?
+check "ssh failure during dry-run: exits 1" test "$rc" -eq 1
+check "ssh failure during dry-run: says could not reach prod" has "could not reach prod"
+check "ssh failure during dry-run: not reported as a migration failure" \
+    bash -c "! grep -qF 'migration fails' <<< \"\$1\"" _ "$out"
+rc=0; out="$(cd "$ROOT" && FAKE_SSH_FAIL=1 bash "$SCRIPT" 2>&1)" || rc=$?
+check "ssh failure on state read: exits 1" test "$rc" -eq 1
+check "ssh failure on state read: shows the ssh error" has "Connection refused"
+
 # 12. Fresh host (no schema_migrations) → nothing to check.
 new_migrations
 sql "DROP TABLE schema_migrations" >/dev/null
@@ -295,6 +371,43 @@ check "fresh host: says nothing to check" has "nothing to check"
 rc=0; out="$(cd "$ROOT" && bash "$SCRIPT" --scan backend/migrations/*.up.sql backend/migrations/repeatable/dev_masked.sql 2>&1)" || rc=$?
 check "scan of real migrations: only 000001 and 000006" \
     test "$(grep -oE '^[^:]+' <<< "$out" | sort -u | xargs -n1 basename | tr '\n' ' ')" == "000001_init.up.sql 000006_accounting.up.sql "
+
+# 14. Scanner fixtures: statement-level, not line-level.
+mkdir -p "$tmp/scan"
+scan_fixture() {  # name, expected output ("" = clean); file content on stdin
+    local name="$1" want="$2" got
+    cat > "$tmp/scan/$name"
+    got="$(cd "$ROOT" && bash "$SCRIPT" --scan "$tmp/scan/$name" 2>&1 || true)"
+    got="${got//$tmp\/scan\//}"
+    rc=0; out="$got"
+    check "scan: $name" test "$got" == "$want"
+}
+echo "SELECT 1; COMMIT;" | scan_fixture same-line "same-line:1: transaction control"
+printf 'SELECT 1;\nCOMMIT\n;\n' | scan_fixture semicolon-next-line "semicolon-next-line:2: transaction control"
+printf 'COMMIT -- end\n;\n' | scan_fixture trailing-comment "trailing-comment:1: transaction control"
+echo "/* x */ COMMIT;" | scan_fixture block-comment-first "block-comment-first:1: transaction control"
+printf 'DO $$\nBEGIN\n    PERFORM 1;\nEND $$; COMMIT;\n' | scan_fixture after-dollar-body "after-dollar-body:4: transaction control"
+printf 'SELECT 1; COMMIT' | scan_fixture no-trailing-newline "no-trailing-newline:1: transaction control"
+printf "SELECT 'cost \$\$';\nCOMMIT;\n" | scan_fixture dollars-in-string "dollars-in-string:2: transaction control"
+printf 'ROLLBACK;\n' | scan_fixture rollback "rollback:1: transaction control"
+printf 'START TRANSACTION;\n' | scan_fixture start "start:1: transaction control"
+printf 'PREPARE TRANSACTION %s;\n' "'x'" | scan_fixture prepare-tx "prepare-tx:1: transaction control"
+printf 'SET statement_timeout = 0;\nSET LOCAL lock_timeout TO %s;\nRESET ALL;\nSET SESSION idle_in_transaction_session_timeout = 0;\n' "'1s'" \
+    | scan_fixture timeouts "timeouts:1: changes the dry-run's timeouts
+timeouts:2: changes the dry-run's timeouts
+timeouts:3: changes the dry-run's timeouts
+timeouts:4: changes the dry-run's timeouts"
+printf 'SELECT 1 \\gexec\n' | scan_fixture meta "meta:1: psql meta-command"
+# Must NOT be flagged:
+# shellcheck disable=SC2016 # $a1$ is a literal dollar-quote tag
+printf 'DO $a1$\nBEGIN\n    COMMIT;\nEND\n$a1$;\nSELECT $a1$ ; COMMIT; $a1$;\n' | scan_fixture dollar-tag-digits ""
+printf '/*\n COMMIT;\n /* nested COMMIT; */ still a comment; COMMIT;\n*/\nSELECT 1;\n-- COMMIT;\n' | scan_fixture comments ""
+printf "SELECT E'it\\\\'s; COMMIT;';\nSELECT 'a''b; COMMIT;';\n" | scan_fixture escaped-strings ""
+printf 'SELECT 1 AS "x;COMMIT";\n' | scan_fixture quoted-identifier ""
+printf 'SAVEPOINT s;\nROLLBACK TO SAVEPOINT s;\nROLLBACK WORK TO s;\nRELEASE SAVEPOINT s;\nSET search_path = public;\nPREPARE q AS SELECT 1;\n' \
+    | scan_fixture allowed ""
+printf "SELECT '\\\\d+';\nSELECT regexp_replace(x, '\\\\s', '');\n" | scan_fixture backslash-in-string ""
+printf 'UPDATE t SET v = CASE WHEN a THEN 1\nELSE 2\nEND;\n' | scan_fixture case-end ""
 
 echo
 echo "${pass} passed, ${fail} failed"
