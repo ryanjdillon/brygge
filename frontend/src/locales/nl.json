@@ -1194,7 +1194,17 @@
           "expense": "Kosten"
         }
       },
-      "vippsClearPayout": "Uitbetaling afletteren"
+      "vippsClearPayout": "Uitbetaling afletteren",
+      "payerAlias": {
+        "remember": "Betaler onthouden:",
+        "hint": "De volgende betaling van deze betaler wordt gekoppeld aan het lid van de gekozen factuur.",
+        "conflictWarning": "Deze naam hoort al bij een ander lid. Vinkt u het vakje aan, dan worden diens eigen betalingen niet meer automatisch gekoppeld.",
+        "conflictTitle": "De naam hoort bij een ander lid",
+        "conflictBody": "Sinds de suggesties zijn geladen, is de naam van de betaler de naam of alias van een ander lid geworden. Er is nog niets geboekt.",
+        "conflictChoice": "Wat moet er met de naam gebeuren?",
+        "conflictSkip": "Toewijzen zonder de betaler te onthouden",
+        "conflictOverride": "De betaler toch voor dit lid onthouden"
+      }
     },
     "sidebarTitle": "Beheerportaal"
   },

@@ -1194,7 +1194,17 @@
           "expense": "Aufwendungen"
         }
       },
-      "vippsClearPayout": "Auszahlung ausgleichen"
+      "vippsClearPayout": "Auszahlung ausgleichen",
+      "payerAlias": {
+        "remember": "Zahler merken:",
+        "hint": "Die nächste Zahlung dieses Zahlers wird dem Mitglied der gewählten Rechnung zugeordnet.",
+        "conflictWarning": "Dieser Name gehört bereits einem anderen Mitglied. Wenn Sie das Kästchen ankreuzen, werden dessen eigene Zahlungen nicht mehr automatisch zugeordnet.",
+        "conflictTitle": "Der Name gehört einem anderen Mitglied",
+        "conflictBody": "Seit die Vorschläge geladen wurden, ist der Zahlername zum Namen oder Alias eines anderen Mitglieds geworden. Noch ist nichts gebucht.",
+        "conflictChoice": "Was soll mit dem Namen geschehen?",
+        "conflictSkip": "Zuweisen, ohne den Zahler zu merken",
+        "conflictOverride": "Zahler trotzdem für dieses Mitglied merken"
+      }
     },
     "sidebarTitle": "Admin-Portal"
   },

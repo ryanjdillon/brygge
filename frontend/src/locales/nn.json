@@ -2022,6 +2022,16 @@
           "revenue": "Inntekter",
           "expense": "Kostnader"
         }
+      },
+      "payerAlias": {
+        "remember": "Hugs betalaren:",
+        "hint": "Neste innbetaling frå same betalar vert kopla til medlemmet på fakturaen du vel.",
+        "conflictWarning": "Namnet høyrer alt til eit anna medlem. Kryssar du av, får det medlemmet ikkje lenger sine eigne innbetalingar kopla automatisk.",
+        "conflictTitle": "Namnet høyrer til eit anna medlem",
+        "conflictBody": "Sidan forslaga vart lasta, har betalarnamnet vorte namnet eller aliaset til eit anna medlem. Ingenting er bokført enno.",
+        "conflictChoice": "Kva skal skje med namnet?",
+        "conflictSkip": "Tildel utan å hugsa betalaren",
+        "conflictOverride": "Hugs betalaren for dette medlemmet likevel"
       }
     },
     "sidebarTitle": "Adminportal"

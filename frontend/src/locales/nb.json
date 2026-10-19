@@ -2140,6 +2140,16 @@
           "revenue": "Inntekter",
           "expense": "Kostnader"
         }
+      },
+      "payerAlias": {
+        "remember": "Husk betaleren:",
+        "hint": "Neste innbetaling fra samme betaler kobles til medlemmet på fakturaen du velger.",
+        "conflictWarning": "Navnet tilhører allerede et annet medlem. Krysser du av, får det medlemmet ikke lenger sine egne innbetalinger koblet automatisk.",
+        "conflictTitle": "Navnet tilhører et annet medlem",
+        "conflictBody": "Siden forslagene ble lastet, har betalernavnet blitt navnet eller aliaset til et annet medlem. Ingenting er bokført ennå.",
+        "conflictChoice": "Hva skal skje med navnet?",
+        "conflictSkip": "Tildel uten å huske betaleren",
+        "conflictOverride": "Husk betaleren for dette medlemmet likevel"
       }
     },
     "sidebarTitle": "Adminportal"

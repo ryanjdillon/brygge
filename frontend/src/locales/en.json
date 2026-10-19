@@ -2144,6 +2144,16 @@
           "revenue": "Revenue",
           "expense": "Expenses"
         }
+      },
+      "payerAlias": {
+        "remember": "Remember the payer:",
+        "hint": "The next payment from this payer is matched to the member of the faktura you pick.",
+        "conflictWarning": "This name already belongs to another member. If you tick the box, that member's own payments are no longer matched to them automatically.",
+        "conflictTitle": "The name belongs to another member",
+        "conflictBody": "Since the suggestions loaded, the payer's name has become another member's name or alias. Nothing is booked yet.",
+        "conflictChoice": "What should happen to the name?",
+        "conflictSkip": "Assign without remembering the payer",
+        "conflictOverride": "Remember the payer for this member anyway"
       }
     },
     "sidebarTitle": "Admin portal"

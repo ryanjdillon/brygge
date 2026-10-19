@@ -1193,7 +1193,17 @@
           "expense": "Charges"
         }
       },
-      "vippsClearPayout": "Solder le versement"
+      "vippsClearPayout": "Solder le versement",
+      "payerAlias": {
+        "remember": "Mémoriser le payeur :",
+        "hint": "Le prochain paiement de ce payeur sera rapproché du membre de la facture choisie.",
+        "conflictWarning": "Ce nom appartient déjà à un autre membre. Si vous cochez la case, ses propres paiements ne lui seront plus rapprochés automatiquement.",
+        "conflictTitle": "Le nom appartient à un autre membre",
+        "conflictBody": "Depuis le chargement des suggestions, le nom du payeur est devenu le nom ou l'alias d'un autre membre. Rien n'est encore comptabilisé.",
+        "conflictChoice": "Que faire du nom ?",
+        "conflictSkip": "Attribuer sans mémoriser le payeur",
+        "conflictOverride": "Mémoriser quand même le payeur pour ce membre"
+      }
     },
     "sidebarTitle": "Portail admin"
   },

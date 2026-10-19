@@ -269,13 +269,22 @@ When you upload a bank statement (`Admin → Accounting → Bank & Vipps`), the 
 
 Some members pay by plain transfer, without the KID. Turn on **Bokfør entydige bankinnbetalinger uten KID automatisk** under **Admin → Økonomiinnstillinger → Bankinnbetalinger uten KID** to have Brygge book such a payment by itself after each bank upload and **Synk bank**, but only when the match is clear:
 
-- the payer's name (the "Fra:" name, or the bank's sender) matches exactly one member, or a name you taught in the Vipps queue;
+- the payer's name (the "Fra:" name, or the bank's sender) matches exactly one member, or a name you taught (in Tildel with **Hugs betalaren**, see below, or in the Vipps queue);
 - that member has exactly one open faktura dated on or before the payment, with nothing paid on it yet;
 - the amount is the faktura total to the øre.
 
 It never books a payment that mentions a KID or a faktura number (the normal matching handles those), a payment from the club's own accounts, two payments for the same faktura, a row that seems to belong with another row (**Mogleg par**), an imported faktura from the old system, or a payment in a closed year. Everything else stays in **Tildel**.
 
 The upload and **Synk bank** results list what was booked, and each line has **Angre**, which puts the payment back in Tildel and reopens the faktura. The setting is separate from the Vipps one and is off until you turn it on. Until then, Brygge keeps using its older rule that books a payment whose sender has the same full name as one member with one open faktura of that amount.
+
+### Teaching Brygge who a payer is (Hugs betalaren)
+
+A member's payment often comes from someone else's account: a spouse, or the member's company. Brygge can't match that sender's name to the member by itself. When you assign such a payment to the member's faktura in **Tildel**, the box **Hugs betalaren** above the suggested fakturas (and in the dialog for several rows) remembers the sender for that member. The next payment from the same sender is then matched to the member automatically, by both the bank and the Vipps automatic booking.
+
+- The box is ticked by default. Untick it when the sender paid for the member just this once.
+- It is hidden when there is nothing to learn: the sender already is the member (by name or an earlier alias), the payment comes from the club's own account, or the row has no sender name. For several rows it shows only when all the rows have the same sender.
+- When the sender's name is already another member's name, or remembered for another member, the box starts unticked with the warning **Namnet høyrer alt til eit anna medlem**. Ticking it anyway moves the name to this member, so that member's own payments would no longer be matched to them. Do that only when you are sure.
+- To undo, go to **Admin → Økonomi → Vipps-kø** and delete the name under **Lærte alias**. Teaching and removing a name both ask for a fresh two-factor code.
 
 ### Export bank statements up to yesterday
 

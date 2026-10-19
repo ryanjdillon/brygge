@@ -1194,7 +1194,17 @@
           "expense": "Costi"
         }
       },
-      "vippsClearPayout": "Salda il versamento"
+      "vippsClearPayout": "Salda il versamento",
+      "payerAlias": {
+        "remember": "Ricorda il pagatore:",
+        "hint": "Il prossimo pagamento di questo pagatore verrà abbinato al socio della fattura scelta.",
+        "conflictWarning": "Questo nome appartiene già a un altro socio. Se selezioni la casella, i suoi pagamenti non gli verranno più abbinati automaticamente.",
+        "conflictTitle": "Il nome appartiene a un altro socio",
+        "conflictBody": "Da quando sono stati caricati i suggerimenti, il nome del pagatore è diventato il nome o l'alias di un altro socio. Non è ancora stato registrato nulla.",
+        "conflictChoice": "Cosa fare con il nome?",
+        "conflictSkip": "Assegna senza ricordare il pagatore",
+        "conflictOverride": "Ricorda comunque il pagatore per questo socio"
+      }
     },
     "sidebarTitle": "Portale admin"
   },

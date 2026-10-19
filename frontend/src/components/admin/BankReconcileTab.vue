@@ -5,6 +5,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ArrowDownLeft, ArrowUpRight, Sparkles, Search, FileText, Ban, Undo2, CheckSquare } from 'lucide-vue-next'
 import Modal from '@/components/ui/Modal.vue'
 import BankRowPartnerChoice from '@/components/admin/BankRowPartnerChoice.vue'
+import PayerAliasToggle from '@/components/admin/PayerAliasToggle.vue'
 import AccountOptionLabel from '@/components/admin/AccountOptionLabel.vue'
 import Select from '@/components/ui/form/Select.vue'
 import {
@@ -17,7 +18,12 @@ import {
   useAssignMultiInvoiceMutation,
   fetchPotentialInvoices,
   fetchBankRowPartners,
+  fetchBankRowSuggestions,
   isHasPartnerError,
+  isAliasConflictError,
+  payerAliasOffered,
+  payerAliasFields,
+  sharedPayerAlias,
   useVippsPerChargeEnabled,
   useUnreconciledVippsCharges,
   useVippsChargeMutations,
@@ -37,15 +43,18 @@ import {
   type DismissReason,
   type VippsCharge,
   type PartnerSuggestion,
+  type PayerAliasState,
+  type PayerAliasFields,
 } from '@/composables/useBankReconcile'
 import { formatNOK as formatNOKBase, formatDate as fmtDate } from '@/lib/format'
 import { useAccountsList } from '@/composables/useAccounting'
 import { filterAccounts } from '@/lib/accountSearch'
 import { priceCategoryKey } from '@/lib/priceCategories'
-import { useConfirm } from '@/stores/confirm'
+import { useConfirm, useConfirmStore } from '@/stores/confirm'
 
 const { t, locale } = useI18n()
 const askConfirm = useConfirm()
+const confirmStore = useConfirmStore()
 
 const route = useRoute()
 const router = useRouter()
@@ -290,6 +299,59 @@ async function loadPotential() {
   }
 }
 
+// ── Remember the payer (BRY-383) ─────────────────────────────
+// One "Hugs betalaren" box per row, above its faktura cards and in the
+// search picker: ticked by default, unticked when the name already belongs
+// to another member. Clicking a faktura sends the box's state; a faktura of
+// the member the payer already resolves to never remembers.
+const potentialStateRowId = computed(() =>
+  potentialOpen.value && activeSource.value === 'bank' ? potentialRowId.value : null,
+)
+const { data: potentialSuggestions } = useBankRowSuggestions(potentialStateRowId)
+const rememberChoice = ref<Record<string, boolean>>({})
+function rememberFor(rowId: string, st: PayerAliasState | undefined): boolean {
+  return rememberChoice.value[rowId] ?? !st?.conflict
+}
+function setRemember(rowId: string, value: boolean) {
+  rememberChoice.value = { ...rememberChoice.value, [rowId]: value }
+}
+const panelAlias = computed(() => suggestions.value?.payer_alias)
+const panelAliasOffered = computed(() =>
+  payerAliasOffered(panelAlias.value, suggestions.value?.invoices.slice(0, 3) ?? []),
+)
+const potentialAlias = computed(() => potentialSuggestions.value?.payer_alias)
+const potentialAliasOffered = computed(() => payerAliasOffered(potentialAlias.value, potentialItems.value))
+
+// Books with the alias fields; when the server refuses the alias because the
+// name became another member's since the box was shown, asks whether to take
+// it over or book without remembering. Resolves false when cancelled.
+async function bookRemembering(alias: PayerAliasFields, book: (a: PayerAliasFields) => Promise<unknown>): Promise<boolean> {
+  try {
+    await book(alias)
+    return true
+  } catch (e) {
+    if (!alias.remember_payer || !isAliasConflictError(e)) throw e
+  }
+  const ok = await confirmStore.ask({
+    title: t('admin.bankReconcile.payerAlias.conflictTitle'),
+    body: t('admin.bankReconcile.payerAlias.conflictBody'),
+    tone: 'warning',
+    choice: {
+      label: t('admin.bankReconcile.payerAlias.conflictChoice'),
+      options: [
+        { value: 'skip', label: t('admin.bankReconcile.payerAlias.conflictSkip') },
+        { value: 'override', label: t('admin.bankReconcile.payerAlias.conflictOverride') },
+      ],
+      default: 'skip',
+    },
+    confirmLabel: t('admin.bankReconcile.assign'),
+  })
+  if (!ok) return false
+  const override = confirmStore.choiceValue === 'override'
+  await book({ remember_payer: override, confirm_alias_override: override })
+  return true
+}
+
 // ── Account picker / Lag bilag modal ─────────────────────────
 const accountPickerOpen = ref(false)
 const accountPickerRowId = ref<string | null>(null)
@@ -471,11 +533,23 @@ const multiInvoiceOpen = ref(false)
 const multiInvoiceQuery = ref('')
 const multiInvoiceItems = ref<InvoiceSuggestion[]>([])
 const multiInvoiceLoading = ref(false)
+// The box shows only when every selected row has the same payer.
+const multiAlias = ref<PayerAliasState | null>(null)
+const multiRemember = ref(true)
+const multiAliasOffered = computed(() => payerAliasOffered(multiAlias.value, multiInvoiceItems.value))
 
 async function openMultiInvoice() {
   multiInvoiceQuery.value = ''
+  multiAlias.value = null
   multiInvoiceOpen.value = true
-  await loadMultiInvoice()
+  await Promise.all([loadMultiInvoice(), loadMultiAlias()])
+}
+async function loadMultiAlias() {
+  const states = await Promise.all(
+    selectedRows.value.map(async (r) => (await fetchBankRowSuggestions(r.id)).payer_alias),
+  )
+  multiAlias.value = sharedPayerAlias(states)
+  multiRemember.value = !multiAlias.value?.conflict
 }
 async function loadMultiInvoice() {
   if (!selectedRows.value.length) return
@@ -486,18 +560,30 @@ async function loadMultiInvoice() {
     multiInvoiceLoading.value = false
   }
 }
-async function doAssignMultiInvoice(invoiceId: string) {
-  await assignMultiInvoice.mutateAsync({ rowIds: [...selectedIds.value], invoiceId })
+async function doAssignMultiInvoice(inv: InvoiceSuggestion) {
+  const rowIds = [...selectedIds.value]
+  const alias = payerAliasFields(multiAlias.value, multiAliasOffered.value, multiRemember.value, inv.user_id)
+  const booked = await bookRemembering(alias, (a) =>
+    assignMultiInvoice.mutateAsync({ rowIds, invoiceId: inv.invoice_id, alias: a }),
+  )
+  if (!booked) return
   multiInvoiceOpen.value = false
   clearSelection()
 }
 
 // ── Actions ──────────────────────────────────────────────────
-async function doAssignInvoice(rowId: string, invoiceId: string) {
+async function doAssignInvoice(
+  rowId: string,
+  inv: InvoiceSuggestion,
+  alias?: { state: PayerAliasState | undefined; offered: boolean },
+) {
+  const invoiceId = inv.invoice_id
   if (activeSource.value === 'vipps') {
     await vAssignInvoice.mutateAsync({ rowId, invoiceId })
   } else {
-    await assignInvoice.mutateAsync({ rowId, invoiceId })
+    const fields = payerAliasFields(alias?.state, !!alias?.offered, rememberFor(rowId, alias?.state), inv.user_id)
+    const booked = await bookRemembering(fields, (a) => assignInvoice.mutateAsync({ rowId, invoiceId, alias: a }))
+    if (!booked) return
   }
   potentialOpen.value = false
 }
@@ -894,6 +980,13 @@ async function doUnassign(rowId: string) {
             >
               {{ t('admin.bankReconcile.noNameMatchWarning', { name: row.counterpart }) }}
             </p>
+            <PayerAliasToggle
+              v-if="panelAliasOffered && panelAlias"
+              :model-value="rememberFor(row.id, panelAlias)"
+              :payer="panelAlias.payer"
+              :conflict="panelAlias.conflict"
+              @update:model-value="setRemember(row.id, $event)"
+            />
             <div
               v-for="sug in suggestions.invoices.slice(0, 3)"
               :key="sug.invoice_id"
@@ -916,7 +1009,7 @@ async function doUnassign(rowId: string) {
               <button
                 type="button"
                 class="rounded-md bg-brand-600 px-3 py-1 text-xs font-semibold text-white hover:bg-brand-700"
-                @click="doAssignInvoice(row.id, sug.invoice_id)"
+                @click="doAssignInvoice(row.id, sug, { state: panelAlias, offered: panelAliasOffered })"
               >
                 {{ t('admin.bankReconcile.assign') }}
               </button>
@@ -1013,6 +1106,14 @@ async function doUnassign(rowId: string) {
       <div class="rounded-md bg-brand-50 px-3 py-2 text-xs text-brand-900">
         {{ t('admin.bankReconcile.potentialBanner') }}
       </div>
+      <PayerAliasToggle
+        v-if="potentialRowId && potentialAliasOffered && potentialAlias"
+        class="mt-3"
+        :model-value="rememberFor(potentialRowId, potentialAlias)"
+        :payer="potentialAlias.payer"
+        :conflict="potentialAlias.conflict"
+        @update:model-value="potentialRowId && setRemember(potentialRowId, $event)"
+      />
       <input
         v-model="potentialQuery"
         type="search"
@@ -1030,7 +1131,7 @@ async function doUnassign(rowId: string) {
           <button
             type="button"
             class="rounded-md bg-brand-600 px-3 py-1 text-xs font-semibold text-white hover:bg-brand-700"
-            @click="potentialRowId && doAssignInvoice(potentialRowId, inv.invoice_id)"
+            @click="potentialRowId && doAssignInvoice(potentialRowId, inv, { state: potentialAlias, offered: potentialAliasOffered })"
           >
             {{ t('admin.bankReconcile.assign') }}
           </button>
@@ -1186,6 +1287,13 @@ async function doUnassign(rowId: string) {
       <div class="rounded-md bg-brand-50 px-3 py-2 text-xs text-brand-900">
         {{ t('admin.bankReconcile.multiInvoiceBanner', { total: formatNOK(selectedTotal), count: selectedRows.length }) }}
       </div>
+      <PayerAliasToggle
+        v-if="multiAliasOffered && multiAlias"
+        v-model="multiRemember"
+        class="mt-3"
+        :payer="multiAlias.payer"
+        :conflict="multiAlias.conflict"
+      />
       <input
         v-model="multiInvoiceQuery"
         type="search"
@@ -1206,7 +1314,7 @@ async function doUnassign(rowId: string) {
             class="rounded-md px-3 py-1 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
             :class="Math.round(selectedTotal * 100) === Math.round(inv.total_amount * 100) ? 'bg-brand-600 hover:bg-brand-700' : 'bg-gray-400'"
             :title="Math.round(selectedTotal * 100) !== Math.round(inv.total_amount * 100) ? t('admin.bankReconcile.multiInvoiceMismatch', { inv: formatNOK(inv.total_amount), sel: formatNOK(selectedTotal) }) : ''"
-            @click="doAssignMultiInvoice(inv.invoice_id)"
+            @click="doAssignMultiInvoice(inv)"
           >
             {{ t('admin.bankReconcile.assign') }}
           </button>

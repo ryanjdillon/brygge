@@ -62,6 +62,8 @@ export interface VippsCharge {
 export interface InvoiceSuggestion {
   invoice_id: string
   invoice_number: number
+  // The faktura's member; '' when it has none.
+  user_id: string
   member_name: string
   member_email: string
   price_item_name: string
@@ -88,6 +90,69 @@ export interface AccountSuggestion {
 export interface BankRowSuggestions {
   invoices: InvoiceSuggestion[]
   accounts: AccountSuggestion[]
+  // Incoming bank rows only.
+  payer_alias?: PayerAliasState
+}
+
+// How a bank row's payer resolves today (BRY-383). member_id is the member
+// the payer already resolves to; conflict means the name is some member's
+// own name or alias, without saying whose.
+export interface PayerAliasState {
+  payer: string
+  member_id?: string
+  pass: 'alias' | 'name' | 'none'
+  conflict: boolean
+  own_club: boolean
+}
+
+export interface PayerAliasFields {
+  remember_payer: boolean
+  confirm_alias_override: boolean
+}
+
+/**
+ * Whether Tildel offers "Hugs betalaren" for a payer: there is a name, it is
+ * not the club, and some candidate faktura belongs to a member the payer
+ * does not already resolve to. Otherwise there is nothing to learn.
+ */
+export function payerAliasOffered(
+  state: PayerAliasState | null | undefined,
+  candidates: { user_id?: string }[],
+): boolean {
+  if (!state || !state.payer.trim() || state.own_club) return false
+  return candidates.some((c) => !!c.user_id && c.user_id !== state.member_id)
+}
+
+/**
+ * The request fields for assigning to a faktura of userId. A faktura of the
+ * member the payer already resolves to, or one without a member, never
+ * remembers; ticking the box despite a conflict confirms the override.
+ */
+export function payerAliasFields(
+  state: PayerAliasState | null | undefined,
+  offered: boolean,
+  checked: boolean,
+  userId: string | undefined,
+): PayerAliasFields {
+  const remember = !!state && offered && checked && !!userId && userId !== state.member_id
+  return { remember_payer: remember, confirm_alias_override: remember && state!.conflict }
+}
+
+/**
+ * The payer state several rows share, or null when they have different
+ * payers (compared trimmed and case-insensitively, which the server's
+ * normalisation never splits further) or any is the club.
+ */
+export function sharedPayerAlias(states: (PayerAliasState | undefined)[]): PayerAliasState | null {
+  const first = states[0]
+  if (!first || !first.payer.trim()) return null
+  const key = (p: string) => p.trim().toLowerCase()
+  return states.every((st) => !!st && !st.own_club && key(st.payer) === key(first.payer)) ? first : null
+}
+
+/** True when an assign refused to remember a payer that is another member's. */
+export function isAliasConflictError(e: unknown): boolean {
+  return e instanceof ApiError && e.status === 409 && e.message === 'alias_conflict'
 }
 
 const BASE = '/api/v1/admin/accounting/bank-rows'
@@ -302,6 +367,10 @@ export function useVippsChargeSuggestions(chargeId: Ref<string | null>) {
   })
 }
 
+export async function fetchBankRowSuggestions(rowId: string): Promise<BankRowSuggestions> {
+  return useApi().fetchApi<BankRowSuggestions>(`${BASE}/${rowId}/suggestions`)
+}
+
 export async function fetchPotentialInvoices(rowId: string, q: string, amount?: number): Promise<InvoiceSuggestion[]> {
   const url = new URL(`${BASE}/${rowId}/potential-invoices`, window.location.origin)
   if (q) url.searchParams.set('q', q)
@@ -327,10 +396,10 @@ export function useReconcileMutations() {
   }
 
   const assignInvoice = useMutation({
-    mutationFn: ({ rowId, invoiceId }: { rowId: string; invoiceId: string }) =>
+    mutationFn: ({ rowId, invoiceId, alias }: { rowId: string; invoiceId: string; alias?: PayerAliasFields }) =>
       useApi().fetchApi(`${BASE}/${rowId}/assign-invoice`, {
         method: 'POST',
-        body: JSON.stringify({ invoice_id: invoiceId }),
+        body: JSON.stringify({ invoice_id: invoiceId, ...alias }),
       }),
     onSuccess: invalidate,
   })
@@ -390,10 +459,10 @@ export function useReconcileMutations() {
 export function useAssignMultiInvoiceMutation() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ rowIds, invoiceId }: { rowIds: string[]; invoiceId: string }) =>
+    mutationFn: ({ rowIds, invoiceId, alias }: { rowIds: string[]; invoiceId: string; alias?: PayerAliasFields }) =>
       useApi().fetchApi(`${BASE}/assign-invoice-multi`, {
         method: 'POST',
-        body: JSON.stringify({ row_ids: rowIds, invoice_id: invoiceId }),
+        body: JSON.stringify({ row_ids: rowIds, invoice_id: invoiceId, ...alias }),
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['bank-rows'] }),
   })

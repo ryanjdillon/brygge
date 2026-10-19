@@ -1165,7 +1165,17 @@
           "expense": "Koszty"
         }
       },
-      "vippsClearPayout": "Rozlicz wypłatę"
+      "vippsClearPayout": "Rozlicz wypłatę",
+      "payerAlias": {
+        "remember": "Zapamiętaj płatnika:",
+        "hint": "Następna wpłata od tego płatnika zostanie przypisana do członka wybranej faktury.",
+        "conflictWarning": "Ta nazwa należy już do innego członka. Jeśli zaznaczysz pole, jego własne wpłaty nie będą już przypisywane automatycznie.",
+        "conflictTitle": "Nazwa należy do innego członka",
+        "conflictBody": "Od załadowania propozycji nazwa płatnika stała się nazwą lub aliasem innego członka. Nic nie zostało jeszcze zaksięgowane.",
+        "conflictChoice": "Co zrobić z nazwą?",
+        "conflictSkip": "Przypisz bez zapamiętywania płatnika",
+        "conflictOverride": "Mimo to zapamiętaj płatnika dla tego członka"
+      }
     },
     "sidebarTitle": "Portal administratora"
   },
