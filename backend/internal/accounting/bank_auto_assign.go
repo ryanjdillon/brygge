@@ -161,7 +161,7 @@ func (s *Service) AutoAssignBankDeposits(ctx context.Context, clubID, actorID st
 		if opts.ImportID != "" && d.row.importID == opts.ImportID {
 			override = opts.PeriodOverride
 		}
-		entryID, err := s.assignBankRowToInvoice(ctx, clubID, actorID, d.row.id, d.invoiceID, assignOpts{auto: true, periodOverride: override})
+		entryID, _, err := s.assignBankRowToInvoice(ctx, clubID, actorID, d.row.id, d.invoiceID, assignOpts{auto: true, periodOverride: override})
 		if err != nil {
 			s.log.Warn().Err(err).Str("bank_row_id", d.row.id).Msg("bank auto-assign: booking failed; row stays in Tildel")
 			res.ByReason[reasonBookingFailed]++
@@ -254,7 +254,7 @@ func (s *Service) loadBankDeposits(ctx context.Context, clubID string, opts Bank
 // decideBankDeposits applies the checks in order; the first a row fails
 // leaves it in Tildel and counts the reason. It returns the rows to book.
 func (s *Service) decideBankDeposits(ctx context.Context, clubID string, rows []bankDeposit, byReason map[string]int) ([]bankDepositDecision, error) {
-	cands, err := s.loadMemberCands(ctx, clubID)
+	cands, err := loadMemberCands(ctx, s.db, clubID)
 	if err != nil {
 		return nil, err
 	}
@@ -324,12 +324,7 @@ func (s *Service) decideBankDeposit(ctx context.Context, clubID string, cands []
 		isBryggeKID(strings.TrimSpace(r.reference)) {
 		return bankDepositDecision{}, reasonHasReference, nil
 	}
-	// The payer is the "Fra:" name when the description has one, as import
-	// enrichment stores it; read here so a preview writes nothing.
-	payer := ExtractPayerFromDescription(r.desc)
-	if payer == "" {
-		payer = strings.TrimSpace(r.counterpart)
-	}
+	payer := bankRowPayer(r.desc, r.counterpart)
 	if payer == "" {
 		return bankDepositDecision{}, reasonNoPayer, nil
 	}
@@ -355,6 +350,18 @@ func (s *Service) decideBankDeposit(ctx context.Context, clubID string, cands []
 		return bankDepositDecision{}, mi.Reason, nil
 	}
 	return bankDepositDecision{row: r, invoiceID: mi.InvoiceID, number: mi.InvoiceNumber, pass: pass}, "", nil
+}
+
+// bankRowPayer is the payer name of a bank row: the "Fra:" name when the
+// description has one, as import enrichment stores it, else the
+// counterpart. It reads the description itself so a preview writes nothing.
+// Auto-assign resolves and Tildel teaches (BRY-383) the same name, so an
+// alias taught from a row matches that payer's next row.
+func bankRowPayer(desc, counterpart string) string {
+	if payer := ExtractPayerFromDescription(desc); payer != "" {
+		return payer
+	}
+	return strings.TrimSpace(counterpart)
 }
 
 func hasStrongPartner(ps []PartnerSuggestion) bool {

@@ -1336,10 +1336,13 @@ func main() {
 						r.With(middleware.RequireRole("treasurer", "admin"),
 							middleware.RequireFreshTOTPDefault()).
 							Post("/vipps/report-sync", accountingHandler.HandleVippsReportSync)
+						// BRY-383: an alias routes a payer's money to a
+						// member's faktura, so teaching or removing one is
+						// gated like the assigns.
 						r.Route("/vipps/customer-aliases", func(r chi.Router) {
-							r.Get("/", accountingHandler.HandleListCustomerAliases)
-							r.Post("/", accountingHandler.HandleUpsertCustomerAlias)
-							r.Delete("/{aliasID}", accountingHandler.HandleDeleteCustomerAlias)
+							accountingHandler.MountCustomerAliasRoutes(r,
+								middleware.RequireRole("treasurer", "admin"),
+								middleware.RequireFreshTOTPDefault())
 						})
 						r.Route("/vipps/message-rules", func(r chi.Router) {
 							r.Get("/", accountingHandler.HandleListMessageRules)

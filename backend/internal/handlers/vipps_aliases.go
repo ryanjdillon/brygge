@@ -2,13 +2,25 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/brygge-klubb/brygge/internal/accounting"
+	"github.com/brygge-klubb/brygge/internal/audit"
 	"github.com/brygge-klubb/brygge/internal/middleware"
 )
+
+// MountCustomerAliasRoutes mounts the payer aliases the Vipps queue teaches.
+// The writes take writeGate (treasurer/admin role and a fresh TOTP in
+// production): an alias decides which member's faktura a payer's money
+// settles on, the bank and Vipps auto-assign rules included.
+func (h *AccountingHandler) MountCustomerAliasRoutes(r chi.Router, writeGate ...func(http.Handler) http.Handler) {
+	r.Get("/", h.HandleListCustomerAliases)
+	r.With(writeGate...).Post("/", h.HandleUpsertCustomerAlias)
+	r.With(writeGate...).Delete("/{aliasID}", h.HandleDeleteCustomerAlias)
+}
 
 // HandleListCustomerAliases GET /admin/vipps/customer-aliases
 func (h *AccountingHandler) HandleListCustomerAliases(w http.ResponseWriter, r *http.Request) {
@@ -45,10 +57,23 @@ func (h *AccountingHandler) HandleUpsertCustomerAlias(w http.ResponseWriter, r *
 		return
 	}
 	a, err := h.svc.UpsertCustomerAlias(r.Context(), claims.ClubID, req.CustomerName, req.UserID)
+	if errors.Is(err, accounting.ErrNotClubMember) {
+		Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	if err != nil {
 		h.log.Error().Err(err).Msg("upsert customer alias")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
+	}
+	if h.audit != nil {
+		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,
+			audit.ActionPayerAliasTaught, "vipps_customer_alias", a.ID,
+			map[string]any{
+				"user_id":  a.UserID,
+				"source":   accounting.PayerAliasSourceVippsQueue,
+				"override": false,
+			})
 	}
 	JSON(w, http.StatusOK, a)
 }
@@ -61,10 +86,23 @@ func (h *AccountingHandler) HandleDeleteCustomerAlias(w http.ResponseWriter, r *
 		return
 	}
 	id := chi.URLParam(r, "aliasID")
-	if err := h.svc.DeleteCustomerAlias(r.Context(), claims.ClubID, id); err != nil {
+	userID, err := h.svc.DeleteCustomerAlias(r.Context(), claims.ClubID, id)
+	if errors.Is(err, accounting.ErrAliasNotFound) {
+		Error(w, http.StatusNotFound, err.Error())
+		return
+	}
+	if err != nil {
 		h.log.Error().Err(err).Msg("delete customer alias")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
+	}
+	if h.audit != nil {
+		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,
+			audit.ActionPayerAliasRemoved, "vipps_customer_alias", id,
+			map[string]any{
+				"user_id": userID,
+				"source":  accounting.PayerAliasSourceVippsQueue,
+			})
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

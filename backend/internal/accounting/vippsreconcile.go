@@ -550,7 +550,7 @@ const (
 // which pass matched (memberPassNone when none did).
 func (s *Service) resolveCustomerToMemberPass(ctx context.Context, clubID, customerName, message string) (string, int, error) {
 	// Pass 0: check treasurer-taught aliases first — skip all fuzzy work.
-	if aliasUserID := s.aliasMember(ctx, clubID, customerName); aliasUserID != "" {
+	if aliasUserID := aliasMember(ctx, s.db, clubID, customerName); aliasUserID != "" {
 		return aliasUserID, memberPassAlias, nil
 	}
 
@@ -574,7 +574,7 @@ func (s *Service) resolveCustomerToMemberPass(ctx context.Context, clubID, custo
 	// Load all members (small set per club) and match in Go so we can
 	// run the cascade without three round-trips and without depending
 	// on a Postgres fuzzy-string extension.
-	cands, err := s.loadMemberCands(ctx, clubID)
+	cands, err := loadMemberCands(ctx, s.db, clubID)
 	if err != nil {
 		return "", memberPassNone, err
 	}

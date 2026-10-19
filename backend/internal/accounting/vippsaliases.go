@@ -2,7 +2,10 @@ package accounting
 
 import (
 	"context"
+	"errors"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // VippsCustomerAlias maps a Vipps display name to a member.
@@ -46,10 +49,26 @@ func (s *Service) ListCustomerAliases(ctx context.Context, clubID string) ([]Vip
 	return out, nil
 }
 
-// UpsertCustomerAlias creates or replaces the alias for customerName.
+// UpsertCustomerAlias creates or replaces the alias for customerName. The
+// user must be in the club: an alias pointing elsewhere would route the
+// payer's payments to a stranger's fakturas.
 func (s *Service) UpsertCustomerAlias(ctx context.Context, clubID, customerName, userID string) (*VippsCustomerAlias, error) {
+	var inClub bool
+	if err := s.db.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM users WHERE id::text = $1 AND club_id = $2)`,
+		userID, clubID,
+	).Scan(&inClub); err != nil {
+		return nil, err
+	}
+	if !inClub {
+		return nil, ErrNotClubMember
+	}
+	return upsertCustomerAlias(ctx, s.db, clubID, customerName, userID)
+}
+
+func upsertCustomerAlias(ctx context.Context, q pgxQuerier, clubID, customerName, userID string) (*VippsCustomerAlias, error) {
 	var a VippsCustomerAlias
-	err := s.db.QueryRow(ctx,
+	err := q.QueryRow(ctx,
 		`INSERT INTO vipps_customer_aliases (club_id, customer_name, user_id)
 		 VALUES ($1, $2, $3)
 		 ON CONFLICT (club_id, lower(customer_name))
@@ -63,13 +82,22 @@ func (s *Service) UpsertCustomerAlias(ctx context.Context, clubID, customerName,
 	return &a, nil
 }
 
-// DeleteCustomerAlias removes an alias by id.
-func (s *Service) DeleteCustomerAlias(ctx context.Context, clubID, id string) error {
-	_, err := s.db.Exec(ctx,
-		`DELETE FROM vipps_customer_aliases WHERE id = $1 AND club_id = $2`,
+// ErrAliasNotFound is returned for an alias id that doesn't exist or belongs
+// to another club.
+var ErrAliasNotFound = errors.New("alias not found")
+
+// DeleteCustomerAlias removes an alias by id and returns the member it
+// pointed at.
+func (s *Service) DeleteCustomerAlias(ctx context.Context, clubID, id string) (string, error) {
+	var userID string
+	err := s.db.QueryRow(ctx,
+		`DELETE FROM vipps_customer_aliases WHERE id::text = $1 AND club_id = $2 RETURNING user_id::text`,
 		id, clubID,
-	)
-	return err
+	).Scan(&userID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrAliasNotFound
+	}
+	return userID, err
 }
 
 // ListMessageRules returns all message rules for the club, highest priority first.

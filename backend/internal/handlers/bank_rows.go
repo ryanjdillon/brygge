@@ -152,6 +152,39 @@ func (h *BankRowsHandler) HandlePotentialInvoices(w http.ResponseWriter, r *http
 
 type assignInvoiceReq struct {
 	InvoiceID string `json:"invoice_id"`
+	// RememberPayer saves the row's payer as an alias of the faktura's
+	// member (BRY-383). A payer that is another member's name or alias is
+	// refused with 409 alias_conflict, nothing booked, unless
+	// ConfirmAliasOverride is set.
+	RememberPayer        bool `json:"remember_payer"`
+	ConfirmAliasOverride bool `json:"confirm_alias_override"`
+}
+
+func (r assignInvoiceReq) alias() accounting.PayerAliasRequest {
+	return accounting.PayerAliasRequest{Remember: r.RememberPayer, ConfirmOverride: r.ConfirmAliasOverride}
+}
+
+// writeAliasConflict answers a refused payer alias. It names no member: the
+// name belonging to someone else is all the treasurer needs to decide.
+func writeAliasConflict(w http.ResponseWriter) {
+	JSON(w, http.StatusConflict, map[string]any{
+		"error":   accounting.ErrAliasConflict.Error(),
+		"message": "Namnet høyrer alt til eit anna medlem. Stadfest at betalaren skal hugsast for dette medlemmet, eller tildel utan å hugsa.",
+	})
+}
+
+// logTaughtAlias audits an alias a faktura assign saved.
+func (h *BankRowsHandler) logTaughtAlias(r *http.Request, clubID, actorID string, a *accounting.TaughtAlias) {
+	if h.audit == nil || a == nil {
+		return
+	}
+	h.audit.LogAction(r.Context(), clubID, actorID, r.RemoteAddr,
+		audit.ActionPayerAliasTaught, "vipps_customer_alias", a.ID,
+		map[string]any{
+			"user_id":  a.UserID,
+			"source":   accounting.PayerAliasSourceBankTildel,
+			"override": a.Override,
+		})
 }
 
 func (h *BankRowsHandler) HandleAssignInvoice(w http.ResponseWriter, r *http.Request) {
@@ -167,12 +200,17 @@ func (h *BankRowsHandler) HandleAssignInvoice(w http.ResponseWriter, r *http.Req
 		Error(w, http.StatusBadRequest, "invoice_id required")
 		return
 	}
-	journalID, err := h.svc.AssignBankRowToInvoice(ctx, claims.ClubID, claims.UserID, rowID, req.InvoiceID)
+	journalID, taught, err := h.svc.AssignBankRowToInvoiceRemembering(ctx, claims.ClubID, claims.UserID, rowID, req.InvoiceID, req.alias())
+	if errors.Is(err, accounting.ErrAliasConflict) {
+		writeAliasConflict(w)
+		return
+	}
 	if err != nil {
 		h.log.Warn().Err(err).Str("row_id", rowID).Msg("assign invoice")
 		Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	h.logTaughtAlias(r, claims.ClubID, claims.UserID, taught)
 	if h.audit != nil {
 		h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,
 			audit.ActionBankRowAssignedInvoice, "bank_import_row", rowID,
@@ -187,6 +225,9 @@ func (h *BankRowsHandler) HandleAssignInvoice(w http.ResponseWriter, r *http.Req
 type assignInvoiceMultiReq struct {
 	RowIDs    []string `json:"row_ids"`
 	InvoiceID string   `json:"invoice_id"`
+	// As on assignInvoiceReq; only saved when every row has the same payer.
+	RememberPayer        bool `json:"remember_payer"`
+	ConfirmAliasOverride bool `json:"confirm_alias_override"`
 }
 
 func (h *BankRowsHandler) HandleAssignInvoiceMulti(w http.ResponseWriter, r *http.Request) {
@@ -201,7 +242,12 @@ func (h *BankRowsHandler) HandleAssignInvoiceMulti(w http.ResponseWriter, r *htt
 		Error(w, http.StatusBadRequest, "invoice_id and at least two row_ids required")
 		return
 	}
-	journalIDs, err := h.svc.AssignMultipleBankRowsToInvoice(ctx, claims.ClubID, claims.UserID, req.RowIDs, req.InvoiceID)
+	journalIDs, taught, err := h.svc.AssignMultipleBankRowsToInvoiceRemembering(ctx, claims.ClubID, claims.UserID, req.RowIDs, req.InvoiceID,
+		accounting.PayerAliasRequest{Remember: req.RememberPayer, ConfirmOverride: req.ConfirmAliasOverride})
+	if errors.Is(err, accounting.ErrAliasConflict) {
+		writeAliasConflict(w)
+		return
+	}
 	if err != nil {
 		h.log.Warn().Err(err).Strs("row_ids", req.RowIDs).Msg("assign invoice multi")
 		Error(w, http.StatusBadRequest, err.Error())
@@ -216,6 +262,7 @@ func (h *BankRowsHandler) HandleAssignInvoiceMulti(w http.ResponseWriter, r *htt
 				"journal_entry_ids": journalIDs,
 			})
 	}
+	h.logTaughtAlias(r, claims.ClubID, claims.UserID, taught)
 	JSON(w, http.StatusOK, map[string]any{"journal_entry_ids": journalIDs})
 }
 

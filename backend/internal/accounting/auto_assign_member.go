@@ -71,8 +71,8 @@ type memberCand struct {
 
 // loadMemberCands loads every user of the club once, so a run that resolves
 // many payers does not reload the member list per payer.
-func (s *Service) loadMemberCands(ctx context.Context, clubID string) ([]memberCand, error) {
-	rows, err := s.db.Query(ctx,
+func loadMemberCands(ctx context.Context, q pgxQuerier, clubID string) ([]memberCand, error) {
+	rows, err := q.Query(ctx,
 		`SELECT id, COALESCE(full_name, ''), COALESCE(first_name, ''), COALESCE(last_name, ''), COALESCE(email, '')
 		   FROM users WHERE club_id = $1`,
 		clubID,
@@ -185,9 +185,9 @@ func uniqueCand(cands []memberCand, match func(memberCand) bool) string {
 
 // aliasMember returns the member a treasurer taught for this payer name, or
 // "" when there is none.
-func (s *Service) aliasMember(ctx context.Context, clubID, payerName string) string {
+func aliasMember(ctx context.Context, q pgxQuerier, clubID, payerName string) string {
 	var userID string
-	if err := s.db.QueryRow(ctx,
+	if err := q.QueryRow(ctx,
 		`SELECT user_id FROM vipps_customer_aliases
 		 WHERE club_id = $1 AND lower(customer_name) = lower($2)
 		 LIMIT 1`,
@@ -205,7 +205,7 @@ func (s *Service) resolveStrongMember(ctx context.Context, clubID string, cands 
 	if strings.TrimSpace(payerName) == "" {
 		return "", memberPassNone
 	}
-	if id := s.aliasMember(ctx, clubID, payerName); id != "" {
+	if id := aliasMember(ctx, s.db, clubID, payerName); id != "" {
 		return id, memberPassAlias
 	}
 	id, pass := matchMemberName(cands, payerName)

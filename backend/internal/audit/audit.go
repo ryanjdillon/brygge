@@ -84,6 +84,10 @@ const (
 	ActionVippsChargeUnassigned      = "vipps_charge.unassigned"
 	ActionVippsPayoutCleared         = "vipps_payout.cleared"
 
+	// Payer aliases taught from bank Tildel or the Vipps queue (BRY-383)
+	ActionPayerAliasTaught  = "payer_alias.taught"
+	ActionPayerAliasRemoved = "payer_alias.removed"
+
 	// Developer / DB inspection (DIL-365, BRY-115)
 	ActionDeveloperQuery        = "developer.db_query"
 	ActionDeveloperTokenCreated = "developer.token_created"

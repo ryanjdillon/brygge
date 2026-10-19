@@ -90,7 +90,9 @@ func (h *AccountingHandler) HandleAssignVippsChargeToInvoice(w http.ResponseWrit
 		return
 	}
 	rowID := chi.URLParam(r, "rowID")
-	var req assignInvoiceReq
+	var req struct {
+		InvoiceID string `json:"invoice_id"`
+	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.InvoiceID == "" {
 		Error(w, http.StatusBadRequest, "invoice_id required")
 		return

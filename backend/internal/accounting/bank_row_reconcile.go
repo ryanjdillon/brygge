@@ -66,11 +66,24 @@ func IsValidDismissReason(r string) bool {
 func (s *Service) AssignBankRowToInvoice(
 	ctx context.Context, clubID, actorID, bankRowID, invoiceID string,
 ) (string, error) {
-	return s.assignBankRowToInvoice(ctx, clubID, actorID, bankRowID, invoiceID, assignOpts{})
+	entryID, _, err := s.assignBankRowToInvoice(ctx, clubID, actorID, bankRowID, invoiceID, assignOpts{})
+	return entryID, err
 }
 
-// assignOpts tunes assignBankRowToInvoice for the auto-assign rule.
+// AssignBankRowToInvoiceRemembering is AssignBankRowToInvoice that can also
+// remember the row's payer for the faktura's member (BRY-383). It returns the
+// alias it saved, or nil. A conflicting payer is ErrAliasConflict with
+// nothing booked unless alias.ConfirmOverride is set.
+func (s *Service) AssignBankRowToInvoiceRemembering(
+	ctx context.Context, clubID, actorID, bankRowID, invoiceID string, alias PayerAliasRequest,
+) (string, *TaughtAlias, error) {
+	return s.assignBankRowToInvoice(ctx, clubID, actorID, bankRowID, invoiceID, assignOpts{alias: alias})
+}
+
+// assignOpts tunes assignBankRowToInvoice.
 type assignOpts struct {
+	// alias asks a manual assign to remember the payer.
+	alias PayerAliasRequest
 	// auto marks a booking by the bank auto-assign rule (BRY-366): it is
 	// described as automatic, re-checks inside the faktura lock that the
 	// faktura is still the clean single match the rule decided on, and
@@ -88,10 +101,10 @@ var (
 
 func (s *Service) assignBankRowToInvoice(
 	ctx context.Context, clubID, actorID, bankRowID, invoiceID string, opts assignOpts,
-) (string, error) {
+) (string, *TaughtAlias, error) {
 	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
-		return "", fmt.Errorf("begin tx: %w", err)
+		return "", nil, fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
@@ -114,18 +127,18 @@ func (s *Service) assignBankRowToInvoice(
 		bankRowID, clubID,
 	).Scan(&rowDate, &rowAmount, &rowDesc, &bankAcct, &alreadyJrnl, &dismissed); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return "", errors.New("bank row not found")
+			return "", nil, errors.New("bank row not found")
 		}
-		return "", fmt.Errorf("load bank row: %w", err)
+		return "", nil, fmt.Errorf("load bank row: %w", err)
 	}
 	if alreadyJrnl {
-		return "", errBankRowRaced
+		return "", nil, errBankRowRaced
 	}
 	if dismissed {
-		return "", errors.New("bank row is dismissed")
+		return "", nil, errors.New("bank row is dismissed")
 	}
 	if rowAmount <= 0 {
-		return "", errors.New("assign-invoice requires a positive (incoming) amount; use assign-account for outgoing rows")
+		return "", nil, errors.New("assign-invoice requires a positive (incoming) amount; use assign-account for outgoing rows")
 	}
 
 	lockOpts := invoiceLockOpts{mode: lockManual}
@@ -133,7 +146,7 @@ func (s *Service) assignBankRowToInvoice(
 		lockOpts = invoiceLockOpts{mode: lockAutoAssign, rowCents: toCents(rowAmount)}
 	}
 	if _, err := lockInvoiceForAssign(ctx, tx, clubID, invoiceID, lockOpts); err != nil {
-		return "", err
+		return "", nil, err
 	}
 
 	var periodID, periodStatus string
@@ -143,10 +156,17 @@ func (s *Service) assignBankRowToInvoice(
 		periodID, periodStatus, err = s.resolvePeriod(ctx, clubID, rowDate, opts.periodOverride)
 	}
 	if err != nil {
-		return "", fmt.Errorf("resolve period: %w", err)
+		return "", nil, fmt.Errorf("resolve period: %w", err)
 	}
 	if periodStatus != "open" {
-		return "", fmt.Errorf("fiscal period for %s is closed; reopen first", rowDate.Format("2006-01-02"))
+		return "", nil, fmt.Errorf("fiscal period for %s is closed; reopen first", rowDate.Format("2006-01-02"))
+	}
+
+	// Before the draft exists, so a refused alias leaves nothing to discard;
+	// in the lock tx, so a failed link or post rolls the alias back.
+	taught, err := s.teachPayerAlias(ctx, tx, clubID, invoiceID, []string{bankRowID}, opts.alias)
+	if err != nil {
+		return "", nil, err
 	}
 
 	sourceID := bankRowID
@@ -170,15 +190,15 @@ func (s *Service) assignBankRowToInvoice(
 		},
 	})
 	if cerr != nil {
-		return "", fmt.Errorf("create journal: %w", cerr)
+		return "", nil, fmt.Errorf("create journal: %w", cerr)
 	}
 	if err := s.linkAndPostBankRow(ctx, clubID, actorID, entry.ID, bankRowID, &invoiceID); err != nil {
-		return "", err
+		return "", nil, err
 	}
 	// Release the faktura lock before the back-link, which updates the
 	// faktura from another connection and would otherwise wait on it.
 	if err := tx.Commit(ctx); err != nil {
-		return "", fmt.Errorf("release invoice lock: %w", err)
+		return "", nil, fmt.Errorf("release invoice lock: %w", err)
 	}
 
 	// linkInvoicePayment outside the tx — it's idempotent and best-effort
@@ -192,7 +212,7 @@ func (s *Service) assignBankRowToInvoice(
 			Str("bank_row_id", bankRowID).
 			Msg("AssignBankRowToInvoice: linkInvoicePayment failed; GL is posted but dashboard back-link missing")
 	}
-	return entry.ID, nil
+	return entry.ID, taught, nil
 }
 
 // invoiceLockMode picks which re-checks lockInvoiceForAssign runs once it
@@ -785,27 +805,128 @@ func otherRowIDs(rows pgx.Rows, self string) ([]string, error) {
 func (s *Service) AssignMultipleBankRowsToInvoice(
 	ctx context.Context, clubID, actorID string, rowIDs []string, invoiceID string,
 ) ([]string, error) {
+	ids, _, err := s.AssignMultipleBankRowsToInvoiceRemembering(ctx, clubID, actorID, rowIDs, invoiceID, PayerAliasRequest{})
+	return ids, err
+}
+
+// AssignMultipleBankRowsToInvoiceRemembering is AssignMultipleBankRowsToInvoice
+// that can also remember the rows' payer for the faktura's member, when every
+// row has the same payer (BRY-383). It returns the alias it saved, or nil.
+func (s *Service) AssignMultipleBankRowsToInvoiceRemembering(
+	ctx context.Context, clubID, actorID string, rowIDs []string, invoiceID string, alias PayerAliasRequest,
+) ([]string, *TaughtAlias, error) {
 	if len(rowIDs) < 2 {
-		return nil, errors.New("use assign-invoice for single rows")
+		return nil, nil, errors.New("use assign-invoice for single rows")
 	}
 
 	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("begin tx: %w", err)
+		return nil, nil, fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
-	type rowData struct {
-		id       string
-		date     time.Time
-		amount   float64
-		desc     string
-		bankAcct string
+	loaded, err := loadMultiAssignRows(ctx, tx, clubID, rowIDs)
+	if err != nil {
+		return nil, nil, err
 	}
-	loaded := make([]rowData, 0, len(rowIDs))
+
+	// Held until the rows are linked and their entries posted (the commit
+	// below), like the single-row path.
+	invCents, err := lockInvoiceForAssign(ctx, tx, clubID, invoiceID, invoiceLockOpts{mode: lockManual})
+	if err != nil {
+		return nil, nil, err
+	}
+	invoiceTotal := float64(invCents) / 100
+
+	var sumAmount float64
+	var latestDate time.Time
+	for _, rd := range loaded {
+		sumAmount += rd.amount
+		if rd.date.After(latestDate) {
+			latestDate = rd.date
+		}
+	}
+	if sumCents, invCents := int64(sumAmount*100+0.5), int64(invoiceTotal*100+0.5); sumCents != invCents {
+		return nil, nil, fmt.Errorf("row sum %.2f does not match invoice total %.2f", sumAmount, invoiceTotal)
+	}
+
+	periodID, periodStatus, perr := s.resolvePeriod(ctx, clubID, latestDate, "")
+	if perr != nil {
+		return nil, nil, fmt.Errorf("resolve period: %w", perr)
+	}
+	if periodStatus != "open" {
+		return nil, nil, fmt.Errorf("fiscal period for %s is closed; reopen first", latestDate.Format("2006-01-02"))
+	}
+
+	// Before any entry exists and in the lock tx, as on the single-row path.
+	taught, err := s.teachPayerAlias(ctx, tx, clubID, invoiceID, rowIDs, alias)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	journalIDs := make([]string, 0, len(loaded))
+	for _, rd := range loaded {
+		srcID := rd.id
+		srcTable := "bank_import_rows"
+		desc := fmt.Sprintf("Manuell tildeling: %s", truncate(rd.desc, 200))
+		entry, cerr := s.CreateJournalEntry(ctx, CreateJournalEntryInput{
+			FiscalPeriodID: periodID,
+			EntryDate:      rd.date.Format("2006-01-02"),
+			Description:    desc,
+			Source:         "bank_import",
+			SourceID:       &srcID,
+			SourceTable:    &srcTable,
+			CreatedBy:      actorID,
+			ClubID:         clubID,
+			Lines: []CreateJournalLineInput{
+				{AccountCode: rd.bankAcct, Debit: rd.amount, Credit: 0},
+				{AccountCode: receivablesAccountCode, Debit: 0, Credit: rd.amount},
+			},
+		})
+		if cerr != nil {
+			return nil, nil, fmt.Errorf("create journal for row %s: %w", rd.id, cerr)
+		}
+		if err := s.PostJournalEntry(ctx, clubID, entry.ID, actorID); err != nil {
+			return nil, nil, fmt.Errorf("post journal for row %s: %w", rd.id, err)
+		}
+		if _, err := tx.Exec(ctx,
+			`UPDATE bank_import_rows
+			    SET journal_entry_id = $1, invoice_id = $2, auto_matched = false
+			  WHERE id = $3`,
+			entry.ID, invoiceID, rd.id,
+		); err != nil {
+			return nil, nil, fmt.Errorf("mark row %s matched: %w", rd.id, err)
+		}
+		journalIDs = append(journalIDs, entry.ID)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, nil, fmt.Errorf("commit: %w", err)
+	}
+
+	if err := s.linkInvoicePayment(ctx, clubID, invoiceID, latestDate); err != nil {
+		s.log.Warn().Err(err).
+			Str("invoice_id", invoiceID).
+			Msg("AssignMultipleBankRowsToInvoice: linkInvoicePayment failed; GL posted but dashboard back-link missing")
+	}
+	return journalIDs, taught, nil
+}
+
+// multiAssignRow is a row of a multi-row faktura assign.
+type multiAssignRow struct {
+	id       string
+	date     time.Time
+	amount   float64
+	desc     string
+	bankAcct string
+}
+
+// loadMultiAssignRows loads the rows of a multi-row assign, refusing any that
+// is missing, booked, dismissed or not incoming.
+func loadMultiAssignRows(ctx context.Context, tx pgx.Tx, clubID string, rowIDs []string) ([]multiAssignRow, error) {
+	loaded := make([]multiAssignRow, 0, len(rowIDs))
 	for _, rid := range rowIDs {
-		var rd rowData
-		rd.id = rid
+		rd := multiAssignRow{id: rid}
 		var alreadyJrnl, dismissed bool
 		if err := tx.QueryRow(ctx,
 			`SELECT bir.row_date, bir.amount, bir.description,
@@ -833,81 +954,7 @@ func (s *Service) AssignMultipleBankRowsToInvoice(
 		}
 		loaded = append(loaded, rd)
 	}
-
-	// Held until the rows are linked and their entries posted (the commit
-	// below), like the single-row path.
-	invCents, err := lockInvoiceForAssign(ctx, tx, clubID, invoiceID, invoiceLockOpts{mode: lockManual})
-	if err != nil {
-		return nil, err
-	}
-	invoiceTotal := float64(invCents) / 100
-
-	var sumAmount float64
-	var latestDate time.Time
-	for _, rd := range loaded {
-		sumAmount += rd.amount
-		if rd.date.After(latestDate) {
-			latestDate = rd.date
-		}
-	}
-	if sumCents, invCents := int64(sumAmount*100+0.5), int64(invoiceTotal*100+0.5); sumCents != invCents {
-		return nil, fmt.Errorf("row sum %.2f does not match invoice total %.2f", sumAmount, invoiceTotal)
-	}
-
-	periodID, periodStatus, perr := s.resolvePeriod(ctx, clubID, latestDate, "")
-	if perr != nil {
-		return nil, fmt.Errorf("resolve period: %w", perr)
-	}
-	if periodStatus != "open" {
-		return nil, fmt.Errorf("fiscal period for %s is closed; reopen first", latestDate.Format("2006-01-02"))
-	}
-
-	journalIDs := make([]string, 0, len(loaded))
-	for _, rd := range loaded {
-		srcID := rd.id
-		srcTable := "bank_import_rows"
-		desc := fmt.Sprintf("Manuell tildeling: %s", truncate(rd.desc, 200))
-		entry, cerr := s.CreateJournalEntry(ctx, CreateJournalEntryInput{
-			FiscalPeriodID: periodID,
-			EntryDate:      rd.date.Format("2006-01-02"),
-			Description:    desc,
-			Source:         "bank_import",
-			SourceID:       &srcID,
-			SourceTable:    &srcTable,
-			CreatedBy:      actorID,
-			ClubID:         clubID,
-			Lines: []CreateJournalLineInput{
-				{AccountCode: rd.bankAcct, Debit: rd.amount, Credit: 0},
-				{AccountCode: receivablesAccountCode, Debit: 0, Credit: rd.amount},
-			},
-		})
-		if cerr != nil {
-			return nil, fmt.Errorf("create journal for row %s: %w", rd.id, cerr)
-		}
-		if err := s.PostJournalEntry(ctx, clubID, entry.ID, actorID); err != nil {
-			return nil, fmt.Errorf("post journal for row %s: %w", rd.id, err)
-		}
-		if _, err := tx.Exec(ctx,
-			`UPDATE bank_import_rows
-			    SET journal_entry_id = $1, invoice_id = $2, auto_matched = false
-			  WHERE id = $3`,
-			entry.ID, invoiceID, rd.id,
-		); err != nil {
-			return nil, fmt.Errorf("mark row %s matched: %w", rd.id, err)
-		}
-		journalIDs = append(journalIDs, entry.ID)
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("commit: %w", err)
-	}
-
-	if err := s.linkInvoicePayment(ctx, clubID, invoiceID, latestDate); err != nil {
-		s.log.Warn().Err(err).
-			Str("invoice_id", invoiceID).
-			Msg("AssignMultipleBankRowsToInvoice: linkInvoicePayment failed; GL posted but dashboard back-link missing")
-	}
-	return journalIDs, nil
+	return loaded, nil
 }
 
 func truncate(s string, n int) string {

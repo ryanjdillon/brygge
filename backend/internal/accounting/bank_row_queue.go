@@ -268,8 +268,11 @@ func (s *Service) CountUnmatchedBankRowsByYear(ctx context.Context, clubID strin
 // suggestion endpoint. The UI uses ConfidenceLabel to colour the
 // card (sterk / sannsynleg / svak).
 type InvoiceSuggestion struct {
-	InvoiceID       string  `json:"invoice_id"`
-	InvoiceNumber   int     `json:"invoice_number"`
+	InvoiceID     string `json:"invoice_id"`
+	InvoiceNumber int    `json:"invoice_number"`
+	// UserID is the faktura's member ("" for none), which Tildel compares
+	// with the member the payer already resolves to (BRY-383).
+	UserID          string  `json:"user_id"`
 	MemberName      string  `json:"member_name"`
 	MemberEmail     string  `json:"member_email"`
 	PriceItemName   string  `json:"price_item_name"`
@@ -302,6 +305,10 @@ type AccountSuggestion struct {
 type BankRowSuggestions struct {
 	Invoices []InvoiceSuggestion `json:"invoices"`
 	Accounts []AccountSuggestion `json:"accounts"`
+	// PayerAlias is how an incoming bank row's payer resolves today, for the
+	// "remember this payer" box (BRY-383). Unset for outgoing rows and
+	// Vipps charges.
+	PayerAlias *PayerAliasState `json:"payer_alias,omitempty"`
 }
 
 // outgoingHints — small in-memory rules for GL category guessing.
@@ -337,13 +344,16 @@ func (s *Service) BankRowSuggestionsFor(
 		rowAmount   float64
 		rowDesc     string
 		counterpart string
+		fromAccount string
+		toAccount   string
 	)
 	if err := s.db.QueryRow(ctx,
-		`SELECT row_date, amount, COALESCE(description, ''), COALESCE(counterpart, '')
+		`SELECT row_date, amount, COALESCE(description, ''), COALESCE(counterpart, ''),
+		        COALESCE(from_account, ''), COALESCE(to_account, '')
 		   FROM bank_import_rows
 		  WHERE id = $1 AND club_id = $2`,
 		bankRowID, clubID,
-	).Scan(&rowDate, &rowAmount, &rowDesc, &counterpart); err != nil {
+	).Scan(&rowDate, &rowAmount, &rowDesc, &counterpart, &fromAccount, &toAccount); err != nil {
 		return nil, fmt.Errorf("load row: %w", err)
 	}
 
@@ -355,6 +365,13 @@ func (s *Service) BankRowSuggestionsFor(
 			return nil, err
 		}
 		out.Invoices = invs
+		out.PayerAlias, err = s.bankRowPayerState(ctx, clubID, partnerRow{
+			Cents: toCents(rowAmount), Description: rowDesc, Counterpart: counterpart,
+			FromAccount: fromAccount, ToAccount: toAccount,
+		})
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Account suggestions: outgoing rows get expense accounts;
@@ -377,6 +394,7 @@ func (s *Service) rankIncomingInvoices(
 	type candidate struct {
 		ID            string
 		Number        int
+		UserID        string
 		MemberName    string
 		MemberEmail   string
 		PriceItemName string
@@ -390,7 +408,7 @@ func (s *Service) rankIncomingInvoices(
 	}
 
 	rows, err := s.db.Query(ctx,
-		`SELECT i.id, i.invoice_number,
+		`SELECT i.id, i.invoice_number, COALESCE(i.user_id::text, ''),
 		        COALESCE(u.full_name, ''),
 		        COALESCE(u.email, ''),
 		        COALESCE(pi.name, ''),
@@ -418,7 +436,7 @@ func (s *Service) rankIncomingInvoices(
 	out := make([]InvoiceSuggestion, 0, 5)
 	for rows.Next() {
 		var c candidate
-		if err := rows.Scan(&c.ID, &c.Number, &c.MemberName, &c.MemberEmail,
+		if err := rows.Scan(&c.ID, &c.Number, &c.UserID, &c.MemberName, &c.MemberEmail,
 			&c.PriceItemName, &c.IssueDate, &c.DueDate, &c.TotalAmount, &c.KIDNumber,
 			&c.UserFullName, &c.UserFirstName, &c.UserLastName); err != nil {
 			continue
@@ -446,6 +464,7 @@ func (s *Service) rankIncomingInvoices(
 		out = append(out, InvoiceSuggestion{
 			InvoiceID:       c.ID,
 			InvoiceNumber:   c.Number,
+			UserID:          c.UserID,
 			MemberName:      c.MemberName,
 			MemberEmail:     c.MemberEmail,
 			PriceItemName:   c.PriceItemName,
@@ -637,7 +656,7 @@ func (s *Service) PotentialInvoicesForRow(
 	args = append(args, limit)
 
 	query := `
-		SELECT i.id, i.invoice_number,
+		SELECT i.id, i.invoice_number, COALESCE(i.user_id::text, ''),
 		       COALESCE(u.full_name, ''),
 		       COALESCE(u.email, ''),
 		       COALESCE(pi.name, ''),
@@ -658,7 +677,7 @@ func (s *Service) PotentialInvoicesForRow(
 	for rows.Next() {
 		var s InvoiceSuggestion
 		var issue, due time.Time
-		if err := rows.Scan(&s.InvoiceID, &s.InvoiceNumber, &s.MemberName, &s.MemberEmail,
+		if err := rows.Scan(&s.InvoiceID, &s.InvoiceNumber, &s.UserID, &s.MemberName, &s.MemberEmail,
 			&s.PriceItemName, &issue, &due, &s.TotalAmount, &s.KIDNumber); err != nil {
 			continue
 		}

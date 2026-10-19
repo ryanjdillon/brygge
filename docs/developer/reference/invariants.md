@@ -80,6 +80,16 @@ While `bank_auto_assign` is off, the KID cascade's third step (`findInvoiceByCou
 
 **Failure mode:** before BRY-366 the first of two same-named members took the payment, a payment made before the faktura existed settled it, and a second payment to a partly paid faktura was booked as if it covered all of it.
 
+### A payer alias never takes a name from another member unasked
+
+**Rule (BRY-383):** payer aliases (`vipps_customer_aliases`, unique per club and lowercased name) are taught from two places, and both auto-assign rules resolve them first:
+- **Tildel.** Assigning an incoming bank row (single or split) to a member's faktura with `remember_payer` saves the row's payer (`bankRowPayer`: the `Fra:` name, else the counterpart, the same name auto-assign resolves) for the faktura's member. `teachPayerAlias` runs inside the faktura-lock transaction before any entry is created: it re-checks the conflict, inserts the alias, and only then are the rows linked and posted, so a refused or failed booking saves no alias. It saves nothing when there is nothing to learn: a faktura without a member, an empty payer, the club's own payer (`partnerScoring.isOwn`), split rows with different normalized payers, or a payer that already resolves to that member.
+- **Vipps queue.** `POST /vipps/customer-aliases` (treasurer/admin, fresh TOTP) refuses a `user_id` that is not in the club. `DELETE` is gated the same way.
+
+A **conflict** is a payer whose normalized name equals *any* other member's full name or first+last (not only a unique match), or is already another member's alias. Tildel refuses it with 409 `alias_conflict` and books nothing unless the request carries `confirm_alias_override`. The suggestions response (`payer_alias`) reports a conflict as `conflict: true` and never names the other member; its `member_id` is only the member the payer already resolves to. Both sources audit `payer_alias.taught` / `payer_alias.removed` without the payer name.
+
+**Failure mode:** an alias silently pointing a member's own name at someone else sends that member's future payments to the wrong faktura through auto-assign, with no human in the loop. An ungated alias write did the same from any board session.
+
 ### A Vipps payout clears as soon as its settlement's charges are booked
 
 **Rule (BRY-340):** on the per-charge model, `ClearReadyVippsPayouts` clears every unbooked bank deposit carrying `Utb. <settlement> Vippsnr <msn>` whose settlement has no `belastning` (same MSN + booking date) left unbooked and undismissed. It runs at the end of `BankSync`, after auto-assign in each operator Vipps path (CSV upload, Report API sync, **Synk Vipps**) and after a `PostVippsDraftBacklog` apply — all behind the money gate. The nightly Report sync has no acting user and does not clear.
