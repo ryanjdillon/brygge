@@ -2,13 +2,20 @@
 import { ref, computed, onMounted } from 'vue'
 import { useApi } from '@/composables/useApi'
 import { useCan } from '@/composables/useCan'
+import { useFreshTotp } from '@/composables/useFreshTotp'
 import { formatNOK as nok } from '@/lib/format'
 import { UserPlus, Tag, Trash2, RefreshCw, Inbox } from 'lucide-vue-next'
 
 const { fetchApi } = useApi()
-// Aliases and rules are ledger settings; viewers without the role read them only (BRY-372).
+// Viewers without the role read aliases and rules only (BRY-372). An alias
+// decides whose faktura a payer's money settles, so it takes the money role
+// like Tildel (BRY-383); message rules stay ledger settings.
 const { can } = useCan()
-const canEdit = can('ledger')
+const canEditRules = can('ledger')
+const canEditAliases = can('money')
+// Teaching or removing an alias needs a fresh step-up, prompted before the
+// form opens.
+const { ensureFreshTotp } = useFreshTotp()
 
 interface QueueRow {
   id: string
@@ -87,7 +94,8 @@ onMounted(load)
 
 // ── Alias modal ─────────────────────────────────────────────────────────────
 
-function openAliasModal(row: QueueRow) {
+async function openAliasModal(row: QueueRow) {
+  if (!(await ensureFreshTotp())) return
   aliasModal.value = { row }
   aliasUserID.value = ''
 }
@@ -113,8 +121,13 @@ async function saveAlias() {
 }
 
 async function deleteAlias(id: string) {
-  await fetchApi(`/api/v1/admin/accounting/vipps/customer-aliases/${id}`, { method: 'DELETE' })
-  await load()
+  if (!(await ensureFreshTotp())) return
+  try {
+    await fetchApi(`/api/v1/admin/accounting/vipps/customer-aliases/${id}`, { method: 'DELETE' })
+    await load()
+  } catch (e) {
+    error.value = (e as Error).message
+  }
 }
 
 // ── Rule modal ───────────────────────────────────────────────────────────────
@@ -229,8 +242,9 @@ function dateLabel(row: QueueRow): string {
                 <span class="inline-flex rounded bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">Uklassifisert</span>
               </td>
               <td class="whitespace-nowrap px-3 py-2">
-                <div v-if="canEdit" class="flex gap-1">
+                <div v-if="canEditAliases || canEditRules" class="flex gap-1">
                   <button
+                    v-if="canEditAliases"
                     class="inline-flex items-center gap-1 rounded border border-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-100"
                     title="Knytt betalar til medlem"
                     @click="openAliasModal(row)"
@@ -239,7 +253,7 @@ function dateLabel(row: QueueRow): string {
                     Alias
                   </button>
                   <button
-                    v-if="row.message"
+                    v-if="canEditRules && row.message"
                     class="inline-flex items-center gap-1 rounded border border-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-100"
                     title="Lag meldingsregel"
                     @click="openRuleModal(row)"
@@ -277,7 +291,7 @@ function dateLabel(row: QueueRow): string {
               <td class="px-3 py-2 font-mono text-xs text-gray-500">{{ a.user_id }}</td>
               <td class="whitespace-nowrap px-3 py-2 text-gray-500">{{ a.created_at.slice(0, 10) }}</td>
               <td class="px-3 py-2">
-                <button v-if="canEdit" class="text-red-500 hover:text-red-700" @click="deleteAlias(a.id)">
+                <button v-if="canEditAliases" class="text-red-500 hover:text-red-700" @click="deleteAlias(a.id)">
                   <Trash2 class="h-4 w-4" />
                 </button>
               </td>
@@ -309,7 +323,7 @@ function dateLabel(row: QueueRow): string {
               <td class="px-3 py-2 tabular-nums">{{ r.account_code }}</td>
               <td class="px-3 py-2 tabular-nums text-gray-500">{{ r.priority }}</td>
               <td class="px-3 py-2">
-                <button v-if="canEdit" class="text-red-500 hover:text-red-700" @click="deleteRule(r.id)">
+                <button v-if="canEditRules" class="text-red-500 hover:text-red-700" @click="deleteRule(r.id)">
                   <Trash2 class="h-4 w-4" />
                 </button>
               </td>

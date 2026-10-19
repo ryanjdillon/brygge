@@ -34,7 +34,7 @@ Every board role (`chair`, `vice_chair`, `treasurer`, `secretary`, `harbor_maste
   const canEdit = can('money') // 'money' | 'ledger' | 'members' | 'harbor'
   ```
 
-  Each area's roles (`WRITE_ROLES`) are the server's write roles for it: `money` is treasurer/admin (faktura, Tildel, imports, syncs, pricing, economy and bank settings), `ledger` is treasurer/board/admin (accounts, periods, Vipps aliases and rules). Hide the button (`v-if`), or for a settings form wrap it in `<fieldset :disabled="!canEdit">`. The step-up prompt (`ensureFreshTotp()`) stays on the click for writers.
+  Each area's roles (`WRITE_ROLES`) are the server's write roles for it: `money` is treasurer/admin (faktura, Tildel, imports, syncs, pricing, economy and bank settings, Vipps aliases), `ledger` is treasurer/board/admin (accounts, periods, Vipps message rules). Hide the button (`v-if`), or for a settings form wrap it in `<fieldset :disabled="!canEdit">`. The step-up prompt (`ensureFreshTotp()`) stays on the click for writers.
 - **Covered so far:** faktura (create tab, row and bulk actions), bank imports (sync, uploads, Tildel and refund tabs, reassign/reimport), Vipps queue, economy settings, pricing, journal (periods, sync, new entry, post/void), chart of accounts. Other pages (users, slips, events, products, …) still show their write buttons to board members who lack the role; the server answers 403.
 
 ### Group titleKeys
@@ -125,7 +125,7 @@ If a new top-level button (outside the sidebar, like the NavBar Admin entry) nee
 
 ## Per-row action TOTP (separate from nav)
 
-For sensitive in-page actions (send faktura, regen PDF, void, and every button that can book a posted GL entry: bank and Vipps upload, Synkroniser, Synk Vipps, Vipps payout confirm, Avstem periode, journal post/void; see BRY-370 in the auth matrix; and every Economy-settings save that changes what is billed or booked, such as role exemptions, BRY-351), use `useFreshTotp()`'s `ensureFreshTotp()` at click time:
+For sensitive in-page actions (send faktura, regen PDF, void, and every button that can book a posted GL entry: bank and Vipps upload, Synkroniser, Synk Vipps, Vipps payout confirm, Avstem periode, journal post/void; see BRY-370 in the auth matrix; every Economy-settings save that changes what is billed or booked, such as role exemptions, BRY-351; and teaching or removing a Vipps-queue payer alias, BRY-383), use `useFreshTotp()`'s `ensureFreshTotp()` at click time:
 
 ```ts
 import { useFreshTotp } from '@/composables/useFreshTotp'
