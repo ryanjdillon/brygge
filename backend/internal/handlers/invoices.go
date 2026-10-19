@@ -150,6 +150,9 @@ type invoiceLineInput struct {
 	// exemptionRole is set by the server on an offsetting exemption line;
 	// clients cannot send it.
 	exemptionRole string
+	// category is the price item's category, resolved by the server when
+	// the line is validated and stored on the line as it was at issue.
+	category string
 }
 
 type invoiceResponse struct {
@@ -249,10 +252,10 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 			var pricingKind string
 			var requiresBoat bool
 			if err := h.db.QueryRow(ctx,
-				`SELECT pricing_kind, requires_boat_selection
+				`SELECT pricing_kind, requires_boat_selection, category
 				   FROM price_items WHERE id = $1 AND club_id = $2 AND is_active`,
 				*line.PriceItemID, claims.ClubID,
-			).Scan(&pricingKind, &requiresBoat); err != nil {
+			).Scan(&pricingKind, &requiresBoat, &resolved.category); err != nil {
 				Error(w, http.StatusBadRequest, "price item not found or inactive")
 				return
 			}
@@ -293,6 +296,7 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 			// Server-side resolution wins over whatever amount the client
 			// computed — keeps prices canonical.
 			resolved.PriceItemID = &tier.id
+			resolved.category = tier.category
 			resolved.TierCategory = nil
 			resolved.UnitPrice = tier.amount
 			if resolved.Description == "" {
@@ -345,12 +349,7 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 				if line.PriceItemID == nil {
 					continue
 				}
-				var category string
-				_ = h.db.QueryRow(ctx,
-					`SELECT category FROM price_items WHERE id = $1 AND club_id = $2`,
-					*line.PriceItemID, claims.ClubID,
-				).Scan(&category)
-				role, ok := exemptions.match(held, category, *line.PriceItemID)
+				role, ok := exemptions.match(held, line.category, *line.PriceItemID)
 				if !ok {
 					continue
 				}
@@ -367,6 +366,7 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 					AccountID:      &acct,
 					PriceItemID:    line.PriceItemID,
 					exemptionRole:  role,
+					category:       line.category,
 				}
 				withExemptions = append(withExemptions, offset)
 				withPDF = append(withPDF, finance.InvoiceLine{
@@ -515,9 +515,20 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 	if req.UserID != "" {
 		userIDArg = req.UserID
 	}
+	// The faktura and its lines are written in one transaction: a line the
+	// database refuses fails the whole faktura instead of leaving one whose
+	// total disagrees with its lines.
+	tx, err := h.db.Begin(ctx)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to begin invoice transaction")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	defer tx.Rollback(ctx)
+
 	var invoiceID string
 	var createdAt time.Time
-	err = h.db.QueryRow(ctx,
+	err = tx.QueryRow(ctx,
 		`INSERT INTO invoices (club_id, user_id, invoice_number, kid_number, due_date,
 		                       total_amount, pdf_data, fiscal_period_id,
 		                       recipient_kind, recipient_org_name, recipient_org_number,
@@ -539,43 +550,47 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Upload PDF to S3 and wipe pdf_data from DB to save storage.
-	// Non-fatal: if S3 upload fails the PDF stays in the DB (fallback).
-	h.uploadInvoicePDFToS3(ctx, invoiceID, claims.ClubID, pdfData)
-
 	// Store line items, including account_id and price_item_id so the
 	// journal posting can attribute revenue and the dedup index can
 	// see which price item drove the line.
 	for _, line := range resolvedLines {
 		lineTotal := float64(line.Quantity) * line.UnitPrice
-		// Denormalize price_items.category onto the line so dedup and
-		// the admin chip query work per-line on multi-category invoices.
+		// The item's category is stored on the line so GL booking resolves
+		// the revenue account as it was at issue, and dedup and the admin
+		// chip query work per line on multi-category invoices.
 		var lineCategory *string
 		if line.PriceItemID != nil {
-			var c string
-			if err := h.db.QueryRow(ctx,
-				`SELECT category FROM price_items WHERE id = $1`, *line.PriceItemID,
-			).Scan(&c); err == nil && c != "" {
-				lineCategory = &c
-			}
+			c := line.category
+			lineCategory = &c
 		}
 		var exemptionRole *string
 		if line.exemptionRole != "" {
 			r := line.exemptionRole
 			exemptionRole = &r
 		}
-		_, err = h.db.Exec(ctx,
+		if _, err := tx.Exec(ctx,
 			`INSERT INTO invoice_lines (invoice_id, description, sub_description, quantity,
 			                            unit_price, line_total, account_id, price_item_id, category,
 			                            exemption_role)
 			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
 			invoiceID, line.Description, line.SubDescription, line.Quantity,
 			line.UnitPrice, lineTotal, line.AccountID, line.PriceItemID, lineCategory, exemptionRole,
-		)
-		if err != nil {
+		); err != nil {
 			h.log.Error().Err(err).Msg("failed to store invoice line")
+			Error(w, http.StatusInternalServerError, "internal error")
+			return
 		}
 	}
+	if err := tx.Commit(ctx); err != nil {
+		h.log.Error().Err(err).Msg("failed to commit invoice")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	// Upload PDF to S3 and wipe pdf_data from DB to save storage. After the
+	// commit, because the wipe runs on its own connection and must see the
+	// faktura. Non-fatal: if S3 upload fails the PDF stays in the DB.
+	h.uploadInvoicePDFToS3(ctx, invoiceID, claims.ClubID, pdfData)
 
 	// Send email if requested. Org fakturas commonly have a shared
 	// invoicing inbox (e.g. faktura@org.no); when the admin supplied

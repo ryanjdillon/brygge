@@ -638,10 +638,8 @@ func (h *InvoiceHandler) createBulkInvoice(
 			amount:      l.tier.amount,
 			priceItemID: l.tier.id,
 		}
-		if l.tier.category != "" {
-			c := l.tier.category
-			item.category = &c
-		}
+		c := l.tier.category
+		item.category = &c
 		if l.slipInfo != nil && l.slipInfo.boatID != "" {
 			b := l.slipInfo.boatID
 			item.boatID = &b
@@ -710,8 +708,17 @@ func (h *InvoiceHandler) createBulkInvoice(
 		invoicePriceItem = &id
 	}
 
+	// The faktura and its lines are written in one transaction, so a line
+	// the database refuses fails this member's faktura and nothing of it is
+	// kept.
+	tx, err := h.db.Begin(ctx)
+	if err != nil {
+		return "", 0, 0, err
+	}
+	defer tx.Rollback(ctx)
+
 	var invoiceID string
-	if err := h.db.QueryRow(ctx,
+	if err := tx.QueryRow(ctx,
 		`INSERT INTO invoices (club_id, user_id, invoice_number, kid_number, due_date,
 		                       total_amount, pdf_data, price_item_id, fiscal_period_id,
 		                       category, status, member_name, member_email)
@@ -723,10 +730,8 @@ func (h *InvoiceHandler) createBulkInvoice(
 		return "", 0, 0, err
 	}
 
-	// Upload PDF to S3 and wipe pdf_data from DB (non-fatal).
-	h.uploadInvoicePDFToS3(ctx, invoiceID, clubID, pdfData)
 	for _, sl := range stored {
-		if _, err := h.db.Exec(ctx,
+		if _, err := tx.Exec(ctx,
 			`INSERT INTO invoice_lines (invoice_id, description, sub_description, quantity,
 			                            unit_price, line_total, price_item_id, category, boat_id,
 			                            account_id, exemption_role)
@@ -734,9 +739,16 @@ func (h *InvoiceHandler) createBulkInvoice(
 			invoiceID, sl.pdf.Description, sl.pdf.SubDescription, sl.amount, sl.priceItemID,
 			sl.category, sl.boatID, sl.accountID, sl.exemptionRole,
 		); err != nil {
-			h.log.Error().Err(err).Msg("failed to insert invoice line for bulk invoice")
+			return "", 0, 0, fmt.Errorf("storing line %q: %w", sl.pdf.Description, err)
 		}
 	}
+	if err := tx.Commit(ctx); err != nil {
+		return "", 0, 0, err
+	}
+
+	// Upload PDF to S3 and wipe pdf_data from DB (non-fatal), after the
+	// commit so the wipe on its own connection sees the faktura.
+	h.uploadInvoicePDFToS3(ctx, invoiceID, clubID, pdfData)
 	_ = actorID
 	return invoiceID, invoiceSeq, total, nil
 }

@@ -328,6 +328,12 @@ Voiding an invoice that is settled for the member (paid, or captured via Vipps) 
 
 **Failure mode:** a price-list correction silently changes amounts on already-issued invoices. Treasurer's totals start drifting.
 
+### A faktura and its lines are written together
+
+**Rule (BRY-389):** single (`HandleCreateInvoice`) and bulk (`createBulkInvoice`) creation insert the `invoices` row and all its `invoice_lines` in one transaction. A line the database refuses fails that faktura: the single request returns 500, and the bulk run reports that member under `skipped` (`create failed: …`) and carries on with the rest. The S3 PDF upload, the email, the GL booking and the audit rows run only after the commit; the upload's `pdf_data` wipe runs on its own connection and would not see an uncommitted faktura.
+
+**Failure mode:** before BRY-389 a failed line insert was only logged, leaving a faktura whose `total_amount` disagreed with its lines; the GL sync then booked the difference to 3900 as a residual.
+
 ### A referenced price item is archived, never deleted
 
 **Rule (BRY-360):** `HandleDelete` on `/admin/pricing/{id}` hard-deletes a price item only when no `invoice_lines`, `invoices`, `order_lines` or `harbor_payment_targets` row references it. Otherwise it returns 409 `price_item_in_use`, and the SPA offers to archive it instead (`is_active = false`). Archived items are excluded from the faktura pickers, bulk invoicing, the public price list, the QR checkout catalogue, and the public QR target lookup (`loadQRTarget`). A printed poster for an archived item therefore stops taking payments.
