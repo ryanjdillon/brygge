@@ -79,8 +79,15 @@ migrate-check:
 # empty-DB migrate-check misses (e.g. a TEXT/UUID cast on a populated
 # column). Needs `just up` running + BACKUP_S3_* env (same as the backup
 # job). Pass a local *.dump to skip the S3 fetch / work offline. See DIL-393.
+# The deploy runs the faster rolled-back dry-run on prod itself and only
+# falls back to this (with the pre-deploy dump) when it has to.
 migrate-check-prod *snapshot:
     nix develop --command bash scripts/migrate-check-prod.sh {{snapshot}}
+
+# Tests for the deploy's pending-migration check, against a scratch DB in
+# the local compose db (needs `just up`).
+test-deploy-dryrun:
+    bash scripts/tests/deploy-migration-dryrun.test.sh
 
 # Run all tests (Go unit + Vue + Playwright)
 test: test-go test-vue test-e2e
