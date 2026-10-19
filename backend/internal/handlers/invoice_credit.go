@@ -6,6 +6,8 @@ import (
 	"errors"
 	"math"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -77,6 +79,12 @@ func loadCreditInvoice(ctx context.Context, q interface {
 	return &r, nil
 }
 
+// hasPayer is true when the invoice bills a member or a billing recipient.
+// Imported credit notes can have neither.
+func (r *creditInvoiceRow) hasPayer() bool {
+	return r.userID != nil || r.recipientID != nil
+}
+
 // samePayer is true when both invoices bill the same member, or the same
 // billing recipient (organisation).
 func samePayer(a, b *creditInvoiceRow) bool {
@@ -101,12 +109,29 @@ type creditCandidate struct {
 	TotalAmount   float64   `json:"total_amount"`
 	IssueDate     time.Time `json:"issue_date"`
 	Paid          bool      `json:"paid"`
-	Imported      bool      `json:"imported"`
+	// Settled predicts the link's outcome: a settled faktura makes the
+	// credit note credit owed to the member, an open one a settled pair.
+	Settled    bool   `json:"settled"`
+	Imported   bool   `json:"imported"`
+	PayerName  string `json:"payer_name"`
+	SameAmount bool   `json:"same_amount"`
+	SamePayer  bool   `json:"same_payer"`
 }
+
+// creditSearchLimit caps the list: the treasurer narrows the manual search
+// by number or name rather than scrolling every faktura of the club.
+const creditSearchLimit = 25
 
 // HandleListCreditCandidates lists the fakturas a credit note can be linked
 // to: same payer, a positive total equal to the credit, live, and not
 // already credited. Partial credits are not linkable (see HandleLinkCreditNote).
+//
+// With ?any=1 it is the manual search (BRY-393): the payer and amount
+// predicates are dropped, so a credit note without a member, or one billed
+// to someone else, can still be linked. Each row says whether its amount and
+// payer match, so a mismatch is visible before the treasurer confirms; the
+// link itself still refuses a partial credit and needs confirmation for a
+// different payer. ?q= narrows either list by faktura number or payer name.
 func (h *InvoiceHandler) HandleListCreditCandidates(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
@@ -129,21 +154,42 @@ func (h *InvoiceHandler) HandleListCreditCandidates(w http.ResponseWriter, r *ht
 		return
 	}
 
+	anyPayer := r.URL.Query().Get("any") == "1"
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+
+	// The payer name as the faktura list shows it.
+	const payerName = `COALESCE(NULLIF(i.recipient_org_name, ''), NULLIF(i.member_name, ''),
+	                            u.full_name, u.first_name || ' ' || u.last_name, '')`
+	const sameAmount = `abs(i.total_amount + $2) < 0.005`
+	const samePayer = `COALESCE((i.user_id IS NOT NULL AND i.user_id = $3)
+	                            OR (i.recipient_id IS NOT NULL AND i.recipient_id = $4), false)`
+	filter := " AND " + sameAmount + " AND " + samePayer
+	order := " ORDER BY i.issue_date, i.invoice_number"
+	if anyPayer {
+		filter = ""
+		order = " ORDER BY i.issue_date DESC, i.invoice_number DESC"
+	}
+	args := []any{claims.ClubID, cn.total, cn.userID, cn.recipientID}
+	if q != "" {
+		filter += " AND (i.invoice_number::text ILIKE $5 OR " + payerName + " ILIKE $5)"
+		args = append(args, "%"+q+"%")
+	}
+
 	rows, err := h.db.Query(ctx,
 		`SELECT i.id, i.invoice_number, i.total_amount, i.issue_date,
 		        (i.payment_id IS NOT NULL OR i.vipps_paid_at IS NOT NULL),
-		        (i.import_source IS NOT NULL)
+		        `+finance.SettledForMemberSQL("i")+`,
+		        (i.import_source IS NOT NULL),
+		        `+payerName+`, `+sameAmount+`, `+samePayer+`
 		   FROM invoices i
+		   LEFT JOIN users u ON u.id = i.user_id
 		  WHERE i.club_id = $1
 		    AND i.status = 'open'
 		    AND i.total_amount > 0
-		    AND abs(i.total_amount + $2) < 0.005
 		    AND (i.sent_at IS NOT NULL OR i.import_source IS NOT NULL)
-		    AND ((i.user_id IS NOT NULL AND i.user_id = $3)
-		         OR (i.recipient_id IS NOT NULL AND i.recipient_id = $4))
-		    AND NOT `+finance.CreditedSQL("i")+`
-		  ORDER BY i.issue_date, i.invoice_number`,
-		claims.ClubID, cn.total, cn.userID, cn.recipientID,
+		    AND NOT `+finance.CreditedSQL("i")+filter+order+`
+		  LIMIT `+strconv.Itoa(creditSearchLimit),
+		args...,
 	)
 	if err != nil {
 		h.log.Error().Err(err).Msg("credit candidates: query")
@@ -154,7 +200,8 @@ func (h *InvoiceHandler) HandleListCreditCandidates(w http.ResponseWriter, r *ht
 	out := make([]creditCandidate, 0)
 	for rows.Next() {
 		var c creditCandidate
-		if err := rows.Scan(&c.ID, &c.InvoiceNumber, &c.TotalAmount, &c.IssueDate, &c.Paid, &c.Imported); err != nil {
+		if err := rows.Scan(&c.ID, &c.InvoiceNumber, &c.TotalAmount, &c.IssueDate, &c.Paid, &c.Settled,
+			&c.Imported, &c.PayerName, &c.SameAmount, &c.SamePayer); err != nil {
 			h.log.Error().Err(err).Msg("credit candidates: scan")
 			Error(w, http.StatusInternalServerError, "internal error")
 			return
@@ -166,11 +213,19 @@ func (h *InvoiceHandler) HandleListCreditCandidates(w http.ResponseWriter, r *ht
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	JSON(w, http.StatusOK, map[string]any{"items": out})
+	// The UI asks before linking across payers only when the credit note
+	// has one; a credit note without a payer has nobody to mismatch.
+	JSON(w, http.StatusOK, map[string]any{"items": out, "credit_note_has_payer": cn.hasPayer()})
 }
 
 type linkCreditRequest struct {
 	InvoiceID string `json:"invoice_id"`
+	// ConfirmOtherMember is the treasurer's explicit go-ahead to settle one
+	// payer's faktura with a credit note billed to another.
+	ConfirmOtherMember bool `json:"confirm_other_member"`
+	// ManualPick marks a faktura chosen in the manual search rather than
+	// from the same-payer candidates. It is only recorded in the audit.
+	ManualPick bool `json:"manual_pick"`
 }
 
 func creditConflict(w http.ResponseWriter, code, msg string) {
@@ -258,6 +313,7 @@ func (h *InvoiceHandler) HandleLinkCreditNote(w http.ResponseWriter, r *http.Req
 		}
 	}
 
+	memberMismatch := !samePayer(cn, target)
 	switch {
 	case cn.total >= 0:
 		Error(w, http.StatusBadRequest, "invoice is not a credit note")
@@ -277,8 +333,13 @@ func (h *InvoiceHandler) HandleLinkCreditNote(w http.ResponseWriter, r *http.Req
 	case target.credited:
 		creditConflict(w, "already_credited", "the faktura is already credited by another credit note")
 		return
-	case !samePayer(cn, target):
-		creditConflict(w, "different_payer", "the credit note and the faktura are for different payers")
+	case memberMismatch && cn.hasPayer() && !req.ConfirmOtherMember:
+		// Crossing payers is allowed when the credit note has none (imported
+		// history) or the treasurer confirms it. That is safe because the
+		// link only sets credits_invoice_id, posts nothing, and unlinking
+		// reverses it.
+		creditConflict(w, "different_payer",
+			"the credit note and the faktura are for different payers; send confirm_other_member to link them anyway")
 		return
 	case !amountsCancel(cn.total, target.total):
 		creditConflict(w, "partial_credit",
@@ -355,6 +416,12 @@ func (h *InvoiceHandler) HandleLinkCreditNote(w http.ResponseWriter, r *http.Req
 				"invoice_number":     target.number,
 				"amount":             target.total,
 				"outcome":            outcome,
+				// A manual pick can cross payers, so record whether this one
+				// did and whether the treasurer confirmed it.
+				"manual_pick":           req.ManualPick,
+				"member_mismatch":       memberMismatch,
+				"confirm_other_member":  req.ConfirmOtherMember,
+				"credit_note_has_payer": cn.hasPayer(),
 			})
 	}
 	JSON(w, http.StatusOK, map[string]any{
