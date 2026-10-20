@@ -208,6 +208,29 @@ func TestVippsBacklogReclassifiesParkedCharges(t *testing.T) {
 	}
 }
 
+// A 1500-parked charge whose amount fits a per-night price only as several
+// nights is not rebooked: it is refused with the auto-assign reason and
+// offered for release, like any charge no rule places.
+func TestVippsBacklogLeavesMultiplesReleasable(t *testing.T) {
+	f := newAutoAssignFixture(t)
+	f.priceItem(t, "motorhome", "Synthetic motorhome spot", 30000, "day", "all")
+
+	row := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 270000, CustomerName: "Synthetic Camper"})
+	draft := f.draftCharge(t, row, receivablesAccountCode, 270000)
+
+	res := f.backlog(t, true)
+	if len(res.Reclassified) != 0 || res.Posted != 0 || len(res.Refused) != 1 ||
+		len(res.Releasable) != 1 || res.Releasable[0].RowID != row {
+		t.Fatalf("result = %+v, want the 2,700 refused and releasable", res)
+	}
+	if !strings.Contains(res.Refused[0].Reason, "amount only fits as several nights (9x Synthetic motorhome spot)") {
+		t.Errorf("refusal %q should name the multiple", res.Refused[0].Reason)
+	}
+	if got := f.entryStatus(t, draft); got != "draft" {
+		t.Errorf("draft changed to %s, want it left as a draft", got)
+	}
+}
+
 // A legacy charge→faktura draft: the faktura was marked paid (a KID-avstemming
 // payment) when the charge was assigned, but vipps_import_rows.invoice_id
 // predates the column. It must be refused whether or not auto-assign is on,

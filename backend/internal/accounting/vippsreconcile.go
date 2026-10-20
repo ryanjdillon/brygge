@@ -426,21 +426,19 @@ func (s *Service) reconcileVippsConfirm(ctx context.Context, clubID, bankRowID, 
 
 // matchVippsAmountToPriceArticle returns the GL revenue account and a
 // human-readable price-item name when exactly ONE active price_items
-// row produces the supplied amount. Two flavours of match are
-// considered:
+// row produces the supplied amount, and produces it as a single unit
+// (an exact once / year / season price, or one night/day/hour). Its
+// callers book without a human, so an amount that fits only as a whole
+// number of per-time units ("3 nights × 250") is no match: it is as
+// likely a one-off price no item lists. Multiples stay suggestions
+// (priceItemAccountSuggestions).
 //
-//   - exact match against `amount` (covers once / year / season units)
-//   - integer multiple match against per-time units (`night`, `day`,
-//     `hour`) — guest slip @ 250/night fits a payment of 750 as
-//     "3 nights × 250". Multiplier capped at 60 to avoid silly false
-//     positives.
-//
-// If zero or more than one price_item produces the amount, returns
-// "" so the caller falls through to the next pass in the cascade.
-// See DIL-367.
+// If zero or more than one price_item produces the amount, or the one
+// that does needs a multiple, returns "" so the caller falls through to
+// the next pass in the cascade. See DIL-367.
 func (s *Service) matchVippsAmountToPriceArticle(ctx context.Context, clubID string, amount float64) (accountCode, name string) {
 	matches := s.priceArticleCandidates(ctx, clubID, amount)
-	if len(matches) != 1 {
+	if len(matches) != 1 || matches[0].multiplier != 1 {
 		return "", ""
 	}
 	m := matches[0]

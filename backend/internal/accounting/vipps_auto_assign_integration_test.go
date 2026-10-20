@@ -138,7 +138,8 @@ func TestAutoAssignPriceItemAmounts(t *testing.T) {
 	f.priceItem(t, "service", "Synthetic member slipping", 80000, "once", "member")
 
 	unique := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 160000, CustomerName: "Synthetic Walk-in"})
-	tie := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 120000, CustomerName: "Synthetic Camper"})
+	tie := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 30000, CustomerName: "Synthetic Camper"})
+	nights := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 120000, CustomerName: "Synthetic Traveller"})
 	membersOnly := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 80000, CustomerName: "Synthetic Stranger"})
 	// `other` is a mapped category (3900), so a unique price in it is booked
 	// like any other category rather than left for review.
@@ -163,14 +164,57 @@ func TestAutoAssignPriceItemAmounts(t *testing.T) {
 		t.Errorf("members-only price booked for a payer who is not a known member")
 	}
 
-	// With a tie preference the four-night stay books to motorhome.
+	// With a tie preference a one-night stay books to motorhome, but a
+	// four-night amount is still left for a human: it fits only as a
+	// multiple, and the tie preference never settles that.
 	f.exec(t, `UPDATE clubs SET vipps_auto_assign_tie_category = 'motorhome' WHERE id = $1`, f.club.ID)
 	res = f.run(t)
 	if len(res.Assigned) != 1 || res.Assigned[0].RowID != tie || res.Assigned[0].Target != "3210" {
-		t.Fatalf("result = %+v, want the tie booked to 3210", res)
+		t.Fatalf("result = %+v, want only the one-night tie booked to 3210", res)
 	}
-	if got := creditLines(t, f.club, rowEntry(t, f.club, tie)); got["3210"][1] != 1200 {
-		t.Errorf("tie entry lines = %v, want CR 3210 1200", got)
+	if got := creditLines(t, f.club, rowEntry(t, f.club, tie)); got["3210"][1] != 300 {
+		t.Errorf("tie entry lines = %v, want CR 3210 300", got)
+	}
+	if rowEntry(t, f.club, nights) != "" {
+		t.Errorf("a four-night multiple was booked by the tie preference")
+	}
+	if d := f.decide(t, 1200); d.Rule != "" || d.Reason != "amount only fits as several nights (4x Synthetic motorhome spot)" {
+		t.Errorf("1,200 decision = %+v, want left for a human as several nights", d)
+	}
+}
+
+func (f *autoAssignFixture) decide(t *testing.T, amount float64) *vippsChargeDecision {
+	t.Helper()
+	cfg, err := f.svc.vippsAutoAssignConfig(context.Background(), f.club.ID)
+	if err != nil {
+		t.Fatalf("config: %v", err)
+	}
+	d, err := f.svc.decideVippsCharge(context.Background(), f.club.ID, cfg, "Synthetic Nobody", "", amount, time.Date(f.club.Year, 6, 1, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("decideVippsCharge(%v): %v", amount, err)
+	}
+	return d
+}
+
+// An amount that fits a per-night price only as several nights (2,700 =
+// 9 × 300) is left for a human even when that is the only price it fits:
+// it is as likely a one-off price no item lists. A single night still books.
+func TestAutoAssignLeavesMultiplesManual(t *testing.T) {
+	f := newAutoAssignFixture(t)
+	f.priceItem(t, "motorhome", "Synthetic motorhome spot", 30000, "day", "all")
+
+	nine := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 270000, CustomerName: "Synthetic Camper"})
+	one := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 30000, CustomerName: "Synthetic Camper"})
+
+	res := f.run(t)
+	if len(res.Assigned) != 1 || res.Assigned[0].RowID != one || res.Assigned[0].Target != "3210" || res.NeedsReview != 1 {
+		t.Fatalf("result = %+v, want only the one-night charge booked and the 2,700 left for review", res)
+	}
+	if rowEntry(t, f.club, nine) != "" {
+		t.Errorf("2,700 was booked as nine nights")
+	}
+	if d := f.decide(t, 2700); d.Rule != "" || d.Reason != "amount only fits as several nights (9x Synthetic motorhome spot)" {
+		t.Errorf("2,700 decision = %+v, want left for a human as several nights", d)
 	}
 }
 
@@ -185,14 +229,17 @@ func TestAutoAssignTieIgnoresExactOneOffPrices(t *testing.T) {
 	f.exec(t, `UPDATE clubs SET vipps_auto_assign_tie_category = 'motorhome' WHERE id = $1`, f.club.ID)
 
 	season := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 300000, CustomerName: "Synthetic Seasonal"})
-	nights := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 60000, CustomerName: "Synthetic Camper"})
+	night := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 30000, CustomerName: "Synthetic Camper"})
 
 	res := f.run(t)
-	if len(res.Assigned) != 1 || res.Assigned[0].RowID != nights || res.Assigned[0].Target != "3210" {
-		t.Fatalf("result = %+v, want only the two-night stay booked to 3210", res)
+	if len(res.Assigned) != 1 || res.Assigned[0].RowID != night || res.Assigned[0].Target != "3210" {
+		t.Fatalf("result = %+v, want only the one-night stay booked to 3210", res)
 	}
 	if rowEntry(t, f.club, season) != "" {
 		t.Errorf("3,000 matching an exact season price was absorbed by the tie category")
+	}
+	if d := f.decide(t, 3000); d.Rule != "" || d.Reason != "amount fits price items in several categories" {
+		t.Errorf("3,000 decision = %+v, want several categories", d)
 	}
 }
 

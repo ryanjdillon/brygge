@@ -27,9 +27,11 @@ import (
 //     account). When they span categories, the club's configured tie
 //     category wins only if it is among them and every match is a per-unit
 //     (night/day/hour) price; an exact one-off price in any tied category,
-//     or no configured tie category, leaves the charge manual. An item for members only also needs the payer to resolve
-//     to a member. Booked through CreateVippsChargeBilag to the category's
-//     revenue account.
+//     or no configured tie category, leaves the charge manual. The chosen
+//     category must then have a single-unit match: an amount that fits only
+//     as several nights (2,700 = 9 × 300) is left manual. An item for
+//     members only also needs the payer to resolve to a member. Booked
+//     through CreateVippsChargeBilag to the category's revenue account.
 //
 // The whole feature is opt-in per club (clubs.vipps_auto_assign). Postings
 // follow the per-charge model and post on creation (BRY-339).
@@ -214,6 +216,19 @@ func (s *Service) decideVippsCharge(ctx context.Context, clubID string, cfg vipp
 		return &vippsChargeDecision{Reason: "amount fits price items in several categories"}, nil
 	}
 	chosen := byCategory[category]
+	// A multiple of a per-night price (9 × 300) is a guess at how many
+	// nights were paid for; the same amount is as likely a one-off price no
+	// item lists. Only a single-unit price is safe to book without a human.
+	single := -1
+	for i, c := range chosen {
+		if c.multiplier == 1 {
+			single = i
+			break
+		}
+	}
+	if single < 0 {
+		return &vippsChargeDecision{Reason: fmt.Sprintf("amount only fits as several nights (%s)", chosen[0].label())}, nil
+	}
 	membersOnly := true
 	for _, c := range chosen {
 		if c.audience != "member" {
@@ -228,7 +243,7 @@ func (s *Service) decideVippsCharge(ctx context.Context, clubID string, cfg vipp
 	if !ok {
 		return &vippsChargeDecision{Reason: "price category has no revenue account"}, nil
 	}
-	return &vippsChargeDecision{Rule: autoAssignRulePriceItem, Account: account, Label: chosen[0].label()}, nil
+	return &vippsChargeDecision{Rule: autoAssignRulePriceItem, Account: account, Label: chosen[single].label()}, nil
 }
 
 // bookVippsChargeDecision books an unbooked charge per a decision and

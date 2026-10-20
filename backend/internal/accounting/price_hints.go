@@ -151,7 +151,9 @@ const (
 // rule: members-only items count only when the payer is a known member, so
 // for anyone else they neither make an account nor appear in its tooltip.
 // The suggestion is sannsynleg when every remaining item points at one
-// account, else svak; the tooltip names the items ("3x Gjesteplass").
+// account and one of them fits as a single unit, else svak: a multiple of a
+// per-night price is the same guess auto-assign refuses to book. The tooltip
+// names the items ("3x Gjesteplass").
 func priceItemAccountSuggestions(cands []priceArticleCandidate, knownMember bool, accounts map[string]suggestableAccount) []AccountSuggestion {
 	var order []string
 	byAccount := map[string][]priceArticleCandidate{}
@@ -172,13 +174,13 @@ func priceItemAccountSuggestions(cands []priceArticleCandidate, knownMember bool
 		byAccount[code] = append(byAccount[code], c)
 	}
 
-	score := priceItemScoreSpread
-	if len(order) == 1 {
-		score = priceItemScoreSingle
-	}
 	out := make([]AccountSuggestion, 0, len(order))
 	for _, code := range order {
 		a := accounts[code]
+		score := priceItemScoreSpread
+		if len(order) == 1 && hasSingleUnit(byAccount[code]) {
+			score = priceItemScoreSingle
+		}
 		out = append(out, AccountSuggestion{
 			Code:            a.code,
 			Name:            a.name,
@@ -190,6 +192,15 @@ func priceItemAccountSuggestions(cands []priceArticleCandidate, knownMember bool
 		})
 	}
 	return out
+}
+
+func hasSingleUnit(cands []priceArticleCandidate) bool {
+	for _, c := range cands {
+		if c.multiplier == 1 {
+			return true
+		}
+	}
+	return false
 }
 
 func priceItemLabels(cands []priceArticleCandidate) string {

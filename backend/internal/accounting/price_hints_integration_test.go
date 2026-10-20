@@ -99,8 +99,11 @@ func TestVippsChargeSuggestionsPriceItem(t *testing.T) {
 	if err != nil {
 		t.Fatalf("suggestions: %v", err)
 	}
-	if len(res.Accounts) == 0 || res.Accounts[0].Code != "3200" || res.Accounts[0].WhyTooltip != "3x Gjesteplass" {
-		t.Errorf("accounts = %+v, want 3200 for 3x Gjesteplass first", res.Accounts)
+	// A multiple is still offered, but only as weak: auto-assign never books
+	// it, and the suggestion should not read as if it would.
+	if len(res.Accounts) == 0 || res.Accounts[0].Code != "3200" || res.Accounts[0].WhyTooltip != "3x Gjesteplass" ||
+		res.Accounts[0].ConfidenceLabel != "svak" {
+		t.Errorf("accounts = %+v, want 3200 svak for 3x Gjesteplass first", res.Accounts)
 	}
 
 	// A payer's message naming an expense ("Strøm") is no reason to offer

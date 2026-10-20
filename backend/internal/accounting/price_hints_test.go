@@ -44,6 +44,21 @@ func TestPriceItemAccountSuggestions(t *testing.T) {
 			want: []want{{"3200", "svak", "3x Gjesteplass"}, {"3210", "svak", "3x Bobilplass"}},
 		},
 		{
+			name: "a multiple on one account is still only weak",
+			cands: []priceArticleCandidate{
+				{name: "Bobilplass per døgn", category: "motorhome", audience: "all", multiplier: 9, perUnit: true},
+			},
+			want: []want{{"3210", "svak", "9x Bobilplass per døgn"}},
+		},
+		{
+			name: "one single-unit item makes its account likely",
+			cands: []priceArticleCandidate{
+				{name: "Bobilplass per døgn", category: "motorhome", audience: "all", multiplier: 1, perUnit: true},
+				{name: "Bobil strøm per døgn", category: "motorhome", audience: "all", multiplier: 2, perUnit: true},
+			},
+			want: []want{{"3210", "sannsynleg", "Bobilplass per døgn, 2x Bobil strøm per døgn"}},
+		},
+		{
 			name: "members-only items need a known member",
 			cands: []priceArticleCandidate{
 				{name: "Sesongplass medlem", category: "seasonal_rental", audience: "member", multiplier: 1},

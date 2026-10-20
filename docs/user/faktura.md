@@ -277,7 +277,7 @@ Single fakturas go through the same draft → send → paid flow.
   Then:
   - **It may have paid a faktura:** it is left alone, and the reason names the faktura. It can't be released either. There is no way to sort this out in Brygge yet: the draft stays until the faktura link is resolved (BRY-397). Contact the developer in the meantime.
   - **It paid nothing, and a rule places it:** it is rebooked to the price item's account, or assigned to the payer's single open faktura of that amount.
-  - **It paid nothing, but no rule places it** (or automatic assignment is off): it is left alone and gets a **Frigi** button under the preview. Frigi deletes the draft and puts the payment back in the Vipps queue, where you assign it by hand in Tildel. Frigi asks for a fresh 2FA code, and is refused once the year is locked or closed.
+  - **It paid nothing, but no rule places it** (or automatic assignment is off): it is left alone and gets a **Frigi** button under the preview. This includes an amount that only fits a price as several nights (2,700 kr = 9 × 300 kr): it is never rebooked automatically, so use Frigi and assign it in Tildel. Frigi deletes the draft and puts the payment back in the Vipps queue, where you assign it by hand in Tildel. Frigi asks for a fresh 2FA code, and is refused once the year is locked or closed.
 
 ### Bank statement → invoice reconciliation
 
@@ -318,7 +318,7 @@ A transfer still under way when you export a statement appears as a bare **Overf
 
 **Lag bilag** in Tildel books a row or a Vipps payment to an account instead of a faktura. Under each account the picker shows, in grey, the price categories and price items that book to it by default, for example `3300 — Salgs- og tjenesteinntekter` with *Tenester · Slipping liten båt, Slipping stor båt*. The search box searches those too: typing **slipping** finds the account slipping is booked to, whatever the account is called. Case and æ/ø/å don't matter, and every word you type must match.
 
-When the amount fits a price item exactly (or a whole number of nights, days or hours of one), its account comes first under **Foreslåtte** with *Beløpet passar prisartikkel: …*. It is **Sannsynleg** when every fitting price item books to that account, and **Svak** when they spread over several. Members-only prices are suggested only when the payer is recognised as a member. Nothing is picked for you: press **Tildel** on the account you want.
+When the amount fits a price item exactly (or a whole number of nights, days or hours of one), its account comes first under **Foreslåtte** with *Beløpet passar prisartikkel: …*. It is **Sannsynleg** when every fitting price item books to that account and one of them fits as a single price (one night, one season), and **Svak** when they spread over several or the amount fits only as several nights ("9x Bobilplass per døgn"): such an amount may as well be a price no item lists. Members-only prices are suggested only when the payer is recognised as a member. Nothing is picked for you: press **Tildel** on the account you want.
 
 Price items have no account of their own: the account comes from the item's category. A faktura line can still be booked to another account when the faktura is made.
 
@@ -339,7 +339,7 @@ Some bank rows only make sense together: a harbour-share buy-back paid out and t
 For Vipps payouts (the consolidated daily Utb. row in the bank statement), the reconciliation books a bilag per payer using this cascade (DIL-367). Vipps bilags are posted as soon as they are created, so they count in the reports immediately (BRY-339):
 
 1. **Member + matching open invoice** → CR 1500 receivables + back-link `invoices.payment_id`. The faktura-status donut reflects the payment immediately.
-2. **Amount → price-article match** → CR the mapped revenue account (3120 plassleie, 3200 gjestehavn, 3210 bobil/camping, 3300 tjenester such as slipping, etc.). Handles guest-slip × N nights, motorhome × N nights, sesongplass, slipping fees — the typical non-member walk-up payments. Exact amount match for once/year/season units; integer-multiple match (2–60×) for per-night/day/hour units.
+2. **Amount → price-article match** → CR the mapped revenue account (3120 plassleie, 3200 gjestehavn, 3210 bobil/camping, 3300 tjenester such as slipping, etc.). Handles guest-slip × N nights, motorhome × N nights, sesongplass, slipping fees — the typical non-member walk-up payments. Only a single price matches: an exact once/year/season price, or one night/day/hour. An amount that fits only as several nights is left to the next step.
 3. **Member resolved but no clear classification** → CR 1500 receivables for manual reconciliation.
 4. **Fallback** → CR 3900 Andre inntekter. (Previously this was 2900, which implied "we owe the payer money" — wrong for revenue.)
 
@@ -350,9 +350,9 @@ Member resolution uses fuzzy normalization (æøå/diacritics, hyphens, case, wh
 Turn on **Bokfør entydige Vipps-betalinger automatisk** under **Admin → Økonomiinnstillinger → Vipps**. After each Vipps upload and **Synk Vipps**, Brygge then books a payment by itself, but only when the match is clear:
 
 - **The payer is a member with exactly one open faktura for the same amount.** The faktura is marked paid. The name must match exactly (or through a taught alias or a KID); close-but-not-exact names, and names two members share, are left for you. So is a payment made before the faktura's date, or to a faktura that already has a payment on it.
-- **The amount fits one price category.** Examples: 1,600 kr is "Slipping <26 fot", or 900 kr is 3 nights at 300 kr. The payment is booked to that category's income account.
+- **The amount is one price in one price category.** Examples: 1,600 kr is "Slipping <26 fot", or 300 kr is one night at 300 kr. The payment is booked to that category's income account. An amount that fits only as several nights (900 kr = 3 nights at 300 kr) is never booked by itself: it may as well be a price no item lists, so it stays in Tildel with the price item as a suggestion.
 
-If an amount fits several categories (a guest berth and a motorhome spot at the same nightly price, for example), choose which category wins under **Når et beløp passer flere priskategorier**, or leave it for review. Prices for members only are booked automatically only when the payer is a known member.
+If an amount fits several categories (one night at a guest berth or a motorhome spot at the same price, for example), choose which category wins under **Når et beløp passer flere priskategorier**, or leave it for review. Prices for members only are booked automatically only when the payer is a known member.
 
 Everything else stays in **Tildel**. The upload and Synk Vipps results list what was booked, and each line has **Angre**, which puts the payment back in Tildel and reopens the faktura.
 
