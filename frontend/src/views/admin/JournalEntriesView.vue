@@ -330,13 +330,20 @@ async function handlePostVippsDrafts() {
       tone: 'warning',
     })
     if (!ok) return
-    // Sending the list even when every row is ticked limits the apply to the
-    // rows the treasurer saw.
-    const reclassifyIds = preview.reclassified.length ? [...confirmStore.checklistValues] : undefined
+    // Always send the list, with the target each row showed (empty when the
+    // preview had no rebookings): the apply then books only what the
+    // treasurer saw, never a draft that became reclassifiable, or moved to
+    // another target, after the preview.
+    const ticked = preview.reclassified.length ? [...confirmStore.checklistValues] : []
+    const targets = Object.fromEntries(preview.reclassified.map((r) => [r.entry_id, r.to]))
 
     const result = await new Promise<VippsBacklogResult>((resolve, reject) => {
       applyVippsBacklogMutation.mutate(
-        { period_id: selectedPeriodId.value, reclassify_entry_ids: reclassifyIds },
+        {
+          period_id: selectedPeriodId.value,
+          reclassify_entry_ids: ticked,
+          reclassify_targets: Object.fromEntries(ticked.map((id) => [id, targets[id] ?? ''])),
+        },
         { onSuccess: resolve, onError: reject },
       )
     })

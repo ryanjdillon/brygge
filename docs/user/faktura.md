@@ -268,7 +268,7 @@ Single fakturas go through the same draft → send → paid flow.
   - which parked payments will be rebooked, and where to: an account, or the faktura they pay. These are payments sitting on 3900 Andre inntekter, or on 1500 Kundefordringer with no faktura.
   - which drafts are left alone, and why: unbalanced, linked to no row, already booked elsewhere, or a 1500 payment with no faktura that no rule can place.
 
-  Each proposed rebooking has a tick box, ticked to begin with. Untick the ones you don't agree with: they are left exactly as they are (not rebooked, and not posted on 3900 or 1500 either) and are offered again the next time you run it. Brygge checks each ticked one again when you confirm; one that no longer fits is skipped.
+  Each proposed rebooking has a tick box, ticked to begin with. Untick the ones you don't agree with: they are left exactly as they are (not rebooked, and not posted on 3900 or 1500 either) and are offered again the next time you run it. Brygge checks each ticked one again when you confirm; one that no longer fits, or would now go somewhere else than the preview showed (say, a faktura was issued in between), is skipped and left as it is.
 
   Rebooking uses the same rules as automatic Vipps assignment. Turn that on first under `Økonomiinnstillinger → Vipps` (with the tie category). Otherwise the 3900 payments are posted there unclassified, and the 1500 payments with no faktura are left alone. Running it again does nothing new.
 

@@ -96,7 +96,31 @@ describe('JournalEntriesView backlog per-row choice', () => {
     expect(applies()).toEqual([
       ['/api/v1/admin/accounting/sync/vipps-drafts', expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({ period_id: 'p1', reclassify_entry_ids: ['entry-8'] }),
+        body: JSON.stringify({
+          period_id: 'p1',
+          reclassify_entry_ids: ['entry-8'],
+          reclassify_targets: { 'entry-8': '3300' },
+        }),
+      })],
+    ])
+  })
+
+  it('sends an empty list when the preview showed no rebookings', async () => {
+    fetchApi.mockImplementation((url: string) =>
+      String(url).endsWith('/sync/vipps-drafts/preview')
+        ? Promise.resolve(backlog({ posted: 1, reclassified: [] }))
+        : respond(url),
+    )
+    confirm.mockResolvedValue(true)
+    const wrapper = mountWithPlugins(JournalEntriesView)
+    await flushPromises()
+    await wrapper.get('[data-testid="post-vipps-drafts"]').trigger('click')
+    await flushPromises()
+
+    expect(confirm.mock.calls[0]![0].checklist).toBeUndefined()
+    expect(applies()).toEqual([
+      ['/api/v1/admin/accounting/sync/vipps-drafts', expect.objectContaining({
+        body: JSON.stringify({ period_id: 'p1', reclassify_entry_ids: [], reclassify_targets: {} }),
       })],
     ])
   })

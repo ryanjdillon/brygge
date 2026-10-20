@@ -227,7 +227,7 @@ func (s *Service) decideVippsCharge(ctx context.Context, clubID string, cfg vipp
 		}
 	}
 	if single < 0 {
-		return &vippsChargeDecision{Reason: fmt.Sprintf("amount only fits as several nights (%s)", chosen[0].label())}, nil
+		return &vippsChargeDecision{Reason: fmt.Sprintf("amount only fits as several nights (%s)", priceItemLabels(chosen))}, nil
 	}
 	membersOnly := true
 	for _, c := range chosen {

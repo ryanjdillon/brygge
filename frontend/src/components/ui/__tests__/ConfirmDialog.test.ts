@@ -3,6 +3,7 @@ import { flushPromises, DOMWrapper } from '@vue/test-utils'
 import { mountWithPlugins } from '@/test/test-utils'
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
 import { useConfirmStore } from '@/stores/confirm'
+import { vBackdropClose } from '@/directives/backdropClose'
 
 vi.mock('lucide-vue-next', () => {
   const icon = { template: '<span />' }
@@ -12,6 +13,8 @@ vi.mock('lucide-vue-next', () => {
 function mountDialog() {
   const wrapper = mountWithPlugins(ConfirmDialog, {
     attachTo: document.body,
+    // Registered globally in main.ts; Modal uses it.
+    global: { directives: { 'backdrop-close': vBackdropClose } },
     // The real ask/settle actions: the default spy factory drops the action.
     piniaOptions: { stubActions: false, createSpy: (fn?: (...args: unknown[]) => unknown) => vi.fn(fn) },
   })

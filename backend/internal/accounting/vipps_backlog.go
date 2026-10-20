@@ -34,12 +34,14 @@ import (
 //   - otherwise posts it as it stands.
 //
 // An apply may name the reclassifications the treasurer ticked in the
-// preview (reclassify: the drafts' entry ids). A reclassification not named
-// is skipped entirely — neither rebooked nor posted as it stands, since its
-// parked account is the one the treasurer has not accepted — and is listed
-// again next time. Every named draft is re-decided under the same guards;
-// one that no longer reclassifies is reported in StaleIDs. A nil list means
-// every reclassification.
+// preview, each with the target the preview showed (reclassify). A
+// reclassification not named is skipped entirely — neither rebooked nor
+// posted as it stands, since its parked account is the one the treasurer
+// has not accepted — and is listed again next time. Every named draft is
+// re-decided under the same guards and rebooked only if the target is still
+// the one shown; one that no longer reclassifies, or now would go elsewhere
+// (a faktura issued since the preview), is left untouched and reported in
+// StaleIDs. A nil list means every reclassification.
 //
 // Reclassification only runs when the club has enabled auto-assign, so the
 // club's opt-in and tie category govern the backlog exactly as they govern
@@ -95,11 +97,19 @@ type VippsBacklogResult struct {
 	// include-list; their drafts are untouched.
 	Unchecked int `json:"unchecked"`
 	// StaleIDs are included entry ids that are not a reclassification now
-	// (already handled, refused, or never one); nothing is done with them.
+	// (already handled, refused, or never one) or would now be rebooked to
+	// another target than the preview showed; nothing is done with them.
 	StaleIDs []string `json:"stale_ids"`
 	// Payouts reports the settlements an apply completed and cleared; nil in
 	// a preview.
 	Payouts *VippsPayoutSweepResult `json:"payouts,omitempty"`
+}
+
+// VippsBacklogChoice is one reclassification the treasurer ticked: the
+// draft's entry id and the target the preview showed for it.
+type VippsBacklogChoice struct {
+	EntryID string
+	To      string
 }
 
 type backlogDraft struct {
@@ -113,8 +123,8 @@ type backlogDraft struct {
 
 // PostVippsDraftBacklog previews (apply=false) or posts (apply=true) the
 // Vipps drafts of one fiscal period. actor posts the entries. reclassify is
-// the include-list of reclassified drafts' entry ids; nil includes all.
-func (s *Service) PostVippsDraftBacklog(ctx context.Context, clubID, periodID, actor string, apply bool, reclassify []string) (*VippsBacklogResult, error) {
+// the include-list of ticked reclassifications; nil includes all.
+func (s *Service) PostVippsDraftBacklog(ctx context.Context, clubID, periodID, actor string, apply bool, reclassify []VippsBacklogChoice) (*VippsBacklogResult, error) {
 	res := &VippsBacklogResult{
 		Applied:      apply,
 		PostedTotals: []AccountTotal{},
@@ -212,9 +222,12 @@ func (s *Service) PostVippsDraftBacklog(ctx context.Context, clubID, periodID, a
 // include-list leaves it out, else listed (and in an apply, rebooked, or
 // refused when the rebooking fails).
 func (s *Service) backlogReclassify(ctx context.Context, clubID, actor string, apply bool, choice *backlogChoice, ref string, r *backlogReclass, res *VippsBacklogResult) {
-	if !choice.take(r.EntryID) {
+	switch choice.take(r.EntryID, r.To) {
+	case choiceUnchecked:
 		res.Unchecked++
 		return
+	case choiceMoved:
+		return // reported in StaleIDs
 	}
 	if apply {
 		if err := s.applyBacklogReclass(ctx, clubID, actor, r); err != nil {
@@ -240,33 +253,48 @@ func addAccountTotals(totals map[string]*AccountTotal, lines []AccountTotal) {
 // backlogChoice is an apply's include-list of reclassified drafts; nil
 // includes every reclassification.
 type backlogChoice struct {
-	ids      []string
-	included map[string]bool
-	taken    map[string]bool
+	ids     []string
+	targets map[string]string
+	taken   map[string]bool
 }
 
-func newBacklogChoice(ids []string) *backlogChoice {
-	if ids == nil {
+func newBacklogChoice(choices []VippsBacklogChoice) *backlogChoice {
+	if choices == nil {
 		return nil
 	}
-	c := &backlogChoice{ids: ids, included: make(map[string]bool, len(ids)), taken: map[string]bool{}}
-	for _, id := range ids {
-		c.included[id] = true
+	c := &backlogChoice{targets: make(map[string]string, len(choices)), taken: map[string]bool{}}
+	for _, ch := range choices {
+		if _, dup := c.targets[ch.EntryID]; !dup {
+			c.ids = append(c.ids, ch.EntryID)
+		}
+		c.targets[ch.EntryID] = ch.To
 	}
 	return c
 }
 
-// take reports whether the reclassification of draft entryID is included,
-// and records that the id named one.
-func (c *backlogChoice) take(entryID string) bool {
+const (
+	choiceTaken = iota
+	choiceUnchecked
+	// choiceMoved: ticked, but the draft would now be rebooked somewhere
+	// other than the preview showed.
+	choiceMoved
+)
+
+// take classifies the reclassification of draft entryID to target to, and
+// records a taken one.
+func (c *backlogChoice) take(entryID, to string) int {
 	if c == nil {
-		return true
+		return choiceTaken
 	}
-	if !c.included[entryID] {
-		return false
+	want, ok := c.targets[entryID]
+	switch {
+	case !ok:
+		return choiceUnchecked
+	case want != to:
+		return choiceMoved
 	}
 	c.taken[entryID] = true
-	return true
+	return choiceTaken
 }
 
 // stale returns the included ids that named no reclassification, each once.
@@ -275,10 +303,8 @@ func (c *backlogChoice) stale() []string {
 	if c == nil {
 		return out
 	}
-	seen := map[string]bool{}
 	for _, id := range c.ids {
-		if !c.taken[id] && !seen[id] {
-			seen[id] = true
+		if !c.taken[id] {
 			out = append(out, id)
 		}
 	}

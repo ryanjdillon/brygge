@@ -236,7 +236,7 @@ func TestVippsBacklogAppliesOnlyChosenReclassifications(t *testing.T) {
 
 	const tampered = "00000000-0000-0000-0000-000000000000"
 	res, err := f.svc.PostVippsDraftBacklog(context.Background(), f.club.ID, f.club.PeriodID, f.club.Treasurer.ID, true,
-		[]string{keep, tampered, tampered})
+		[]VippsBacklogChoice{{EntryID: keep, To: "3300"}, {EntryID: tampered, To: "3300"}, {EntryID: tampered, To: "3300"}})
 	if err != nil {
 		t.Fatalf("apply: %v", err)
 	}
@@ -257,7 +257,7 @@ func TestVippsBacklogAppliesOnlyChosenReclassifications(t *testing.T) {
 	}
 
 	// The unticked draft is offered again; the handled one is now stale.
-	again, err := f.svc.PostVippsDraftBacklog(context.Background(), f.club.ID, f.club.PeriodID, f.club.Treasurer.ID, false, []string{keep})
+	again, err := f.svc.PostVippsDraftBacklog(context.Background(), f.club.ID, f.club.PeriodID, f.club.Treasurer.ID, false, []VippsBacklogChoice{{EntryID: keep, To: "3300"}})
 	if err != nil {
 		t.Fatalf("preview: %v", err)
 	}
@@ -266,6 +266,39 @@ func TestVippsBacklogAppliesOnlyChosenReclassifications(t *testing.T) {
 	}
 	if all := f.backlog(t, false); len(all.Reclassified) != 1 || all.Reclassified[0].EntryID != skip || all.Unchecked != 0 {
 		t.Errorf("preview without a list = %+v, want the unticked draft offered", all)
+	}
+}
+
+// A ticked reclassification is rebooked only to the target the preview
+// showed. A faktura issued between preview and apply would send the charge
+// there instead; that is not what the treasurer ticked, so the draft is left
+// untouched and reported stale, and the faktura stays open.
+func TestVippsBacklogSkipsAMovedTarget(t *testing.T) {
+	f := newAutoAssignFixture(t)
+	f.priceItem(t, "service", "Slipping synthetic", 50000, "once", "all")
+	payer := f.namedMember(t, "Movedpayer")
+	row := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 50000, CustomerName: "Synthetic Movedpayer"})
+	draft := f.draftCharge(t, row, fallbackRevenueCode, 50000)
+
+	preview := f.backlog(t, false)
+	if len(preview.Reclassified) != 1 || preview.Reclassified[0].To != "3300" {
+		t.Fatalf("preview = %+v, want the charge rebooked to 3300", preview)
+	}
+
+	inv := f.club.NewInvoice(t, fin.InvoiceOpts{Member: &payer, Cents: 50000, Lines: []fin.Line{{Category: "membership", Cents: 50000}}})
+	res, err := f.svc.PostVippsDraftBacklog(context.Background(), f.club.ID, f.club.PeriodID, f.club.Treasurer.ID, true,
+		[]VippsBacklogChoice{{EntryID: draft, To: "3300"}})
+	if err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	if len(res.Reclassified) != 0 || res.Unchecked != 0 || len(res.StaleIDs) != 1 || res.StaleIDs[0] != draft {
+		t.Fatalf("apply = %+v, want nothing rebooked and the draft stale", res)
+	}
+	if got := f.entryStatus(t, draft); got != "draft" {
+		t.Errorf("draft is %s, want it left as a draft", got)
+	}
+	if f.invoicePaid(t, inv.ID) {
+		t.Errorf("the faktura issued after the preview was paid by an unseen rebooking")
 	}
 }
 

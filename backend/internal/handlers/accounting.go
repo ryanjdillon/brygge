@@ -2151,12 +2151,34 @@ func (h *AccountingHandler) HandleApplyVippsDraftBacklog(w http.ResponseWriter, 
 }
 
 // vippsDraftBacklogRequest names the period and, optionally, the
-// reclassifications the treasurer ticked in the preview. An absent
-// reclassify_entry_ids applies every reclassification; a present one (even
-// empty) applies only those listed and leaves the rest untouched.
+// reclassifications the treasurer ticked in the preview. An absent (or null)
+// reclassify_entry_ids applies every reclassification; a present one, even
+// empty, applies only those listed and leaves the rest untouched.
+// reclassify_targets maps each listed id to the target the preview showed;
+// an id whose draft would now go elsewhere, or that has no target, is
+// skipped as stale.
 type vippsDraftBacklogRequest struct {
-	PeriodID           string   `json:"period_id"`
-	ReclassifyEntryIDs []string `json:"reclassify_entry_ids"`
+	PeriodID           string            `json:"period_id"`
+	ReclassifyEntryIDs []string          `json:"reclassify_entry_ids"`
+	ReclassifyTargets  map[string]string `json:"reclassify_targets"`
+}
+
+// choices returns the ticked reclassifications, each id once, or nil when
+// the request named no list.
+func (req vippsDraftBacklogRequest) choices() []accounting.VippsBacklogChoice {
+	if req.ReclassifyEntryIDs == nil {
+		return nil
+	}
+	out := []accounting.VippsBacklogChoice{}
+	seen := map[string]bool{}
+	for _, id := range req.ReclassifyEntryIDs {
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		out = append(out, accounting.VippsBacklogChoice{EntryID: id, To: req.ReclassifyTargets[id]})
+	}
+	return out
 }
 
 func (h *AccountingHandler) vippsDraftBacklog(w http.ResponseWriter, r *http.Request, apply bool) {
@@ -2175,7 +2197,8 @@ func (h *AccountingHandler) vippsDraftBacklog(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	result, err := h.svc.PostVippsDraftBacklog(r.Context(), claims.ClubID, req.PeriodID, claims.UserID, apply, req.ReclassifyEntryIDs)
+	choices := req.choices()
+	result, err := h.svc.PostVippsDraftBacklog(r.Context(), claims.ClubID, req.PeriodID, claims.UserID, apply, choices)
 	if err != nil {
 		Error(w, http.StatusBadRequest, err.Error())
 		return
@@ -2185,8 +2208,8 @@ func (h *AccountingHandler) vippsDraftBacklog(w http.ResponseWriter, r *http.Req
 		// chosen is null when the request named no list (every
 		// reclassification applied).
 		var chosen *int
-		if req.ReclassifyEntryIDs != nil {
-			n := len(req.ReclassifyEntryIDs)
+		if choices != nil {
+			n := len(choices)
 			chosen = &n
 		}
 		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,

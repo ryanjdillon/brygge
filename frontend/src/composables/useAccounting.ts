@@ -469,8 +469,13 @@ export function useApplyVippsDraftBacklog() {
   const qc = useQueryClient()
   return useMutation({
     // reclassify_entry_ids absent rebooks every reclassification; present,
-    // only those listed, leaving the other drafts untouched.
-    mutationFn: (body: { period_id: string; reclassify_entry_ids?: string[] }) =>
+    // only those listed whose target still equals reclassify_targets[id],
+    // leaving the other drafts untouched.
+    mutationFn: (body: {
+      period_id: string
+      reclassify_entry_ids?: string[]
+      reclassify_targets?: Record<string, string>
+    }) =>
       apiFetch<VippsBacklogResult>(`${BASE}/sync/vipps-drafts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
