@@ -940,6 +940,8 @@
         "vippsDraftsConfirm": "Entwürfe buchen",
         "vippsDraftsNothing": "Keine Vipps-Entwürfe in dieser Periode.",
         "vippsDraftsDone": "{posted} Vipps-Beleg(e) gebucht, {reclassified} umgebucht.",
+        "vippsDraftsChecklist": "Umbuchen (Haken entfernen, um einen Entwurf unverändert zu lassen)",
+        "vippsDraftsSkipped": "{unchecked} ohne Haken bleiben Entwürfe; {stale} passten nicht mehr und wurden übersprungen.",
         "vippsDraftsReleasableHeading": "Zahlungen, die Sie in die Vipps-Warteschlange zurückgeben können",
         "vippsDraftsRelease": "Freigeben",
         "vippsDraftsReleaseTitle": "{ref} in die Vipps-Warteschlange zurückgeben?",

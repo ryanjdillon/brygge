@@ -940,6 +940,8 @@
         "vippsDraftsConfirm": "Concepten boeken",
         "vippsDraftsNothing": "Geen Vipps-concepten om te boeken in deze periode.",
         "vippsDraftsDone": "{posted} Vipps-boeking(en) geboekt, {reclassified} omgeboekt.",
+        "vippsDraftsChecklist": "Omboeken (vink uit om een concept te laten zoals het is)",
+        "vippsDraftsSkipped": "{unchecked} zonder vinkje blijven concept; {stale} niet meer van toepassing en overgeslagen.",
         "vippsDraftsReleasableHeading": "Betalingen die u kunt terugzetten in de Vipps-wachtrij",
         "vippsDraftsRelease": "Vrijgeven",
         "vippsDraftsReleaseTitle": "{ref} terugzetten in de Vipps-wachtrij?",

@@ -1640,6 +1640,8 @@
         "vippsDraftsConfirm": "Post drafts",
         "vippsDraftsNothing": "No Vipps drafts to post in this period.",
         "vippsDraftsDone": "{posted} Vipps bilag(s) posted, {reclassified} rebooked.",
+        "vippsDraftsChecklist": "Rebook (untick to leave a draft as it is)",
+        "vippsDraftsSkipped": "{unchecked} unticked left as drafts; {stale} no longer applied and skipped.",
         "vippsDraftsReleasableHeading": "Payments you can release to the Vipps queue",
         "vippsDraftsRelease": "Release",
         "vippsDraftsReleaseTitle": "Release {ref} to the Vipps queue?",

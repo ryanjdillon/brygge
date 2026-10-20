@@ -940,6 +940,8 @@
         "vippsDraftsConfirm": "Registra bozze",
         "vippsDraftsNothing": "Nessuna bozza Vipps da registrare in questo periodo.",
         "vippsDraftsDone": "{posted} scrittura/e Vipps registrata/e, {reclassified} riclassificata/e.",
+        "vippsDraftsChecklist": "Riclassifica (togli la spunta per lasciare una bozza così com'è)",
+        "vippsDraftsSkipped": "{unchecked} senza spunta restano bozze; {stale} non più validi e saltati.",
         "vippsDraftsReleasableHeading": "Pagamenti che puoi rimandare alla coda Vipps",
         "vippsDraftsRelease": "Rilascia",
         "vippsDraftsReleaseTitle": "Rimandare {ref} alla coda Vipps?",

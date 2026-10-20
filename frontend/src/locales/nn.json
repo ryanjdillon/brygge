@@ -1536,6 +1536,8 @@
         "vippsDraftsConfirm": "Bokfør utkast",
         "vippsDraftsNothing": "Ingen Vipps-utkast å bokføre i denne perioden.",
         "vippsDraftsDone": "{posted} Vipps-bilag bokførte, {reclassified} omklassifiserte.",
+        "vippsDraftsChecklist": "Bokfør om (ta bort haken for å la eit utkast stå urørt)",
+        "vippsDraftsSkipped": "{unchecked} utan hake står att som utkast; {stale} passa ikkje lenger og vart hoppa over.",
         "vippsDraftsReleasableHeading": "Betalingar du kan frigje til Vipps-køen",
         "vippsDraftsRelease": "Frigje",
         "vippsDraftsReleaseTitle": "Frigje {ref} til Vipps-køen?",

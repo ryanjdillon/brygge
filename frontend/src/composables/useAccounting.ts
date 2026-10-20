@@ -405,12 +405,28 @@ export interface VippsBacklogResult {
   drafts: number
   posted: number
   posted_totals: AccountTotal[]
-  reclassified: { entry_number: number; date: string; amount: number; from: string; to: string; rule: string }[]
+  reclassified: VippsBacklogReclass[]
   refused: SkippedItem[]
   // Refused charges parked on 1500 with no faktura that may be released to
   // the Vipps queue; each is also in refused.
   releasable: VippsBacklogRelease[]
+  // Reclassifications left out of the apply's reclassify_entry_ids; their
+  // drafts are untouched and offered again next time.
+  unchecked: number
+  // Sent ids that were no reclassification at apply time; skipped.
+  stale_ids: string[]
   payouts?: VippsPayoutSweepResult | null
+}
+
+export interface VippsBacklogReclass {
+  entry_id: string
+  row_id: string
+  entry_number: number
+  date: string
+  amount: number
+  from: string
+  to: string
+  rule: string
 }
 
 export interface VippsBacklogRelease {
@@ -452,7 +468,9 @@ export function previewVippsDraftBacklog(periodId: string) {
 export function useApplyVippsDraftBacklog() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: { period_id: string }) =>
+    // reclassify_entry_ids absent rebooks every reclassification; present,
+    // only those listed, leaving the other drafts untouched.
+    mutationFn: (body: { period_id: string; reclassify_entry_ids?: string[] }) =>
       apiFetch<VippsBacklogResult>(`${BASE}/sync/vipps-drafts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

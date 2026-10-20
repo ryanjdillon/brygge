@@ -19,7 +19,7 @@ vi.mock('lucide-vue-next', () => ({
 vi.mock('@/composables/useFreshTotp', () => ({ useFreshTotp: () => ({ ensureFreshTotp }) }))
 vi.mock('@/composables/useCan', () => ({ useCan: () => ({ can: () => true }) }))
 vi.mock('@/composables/useApi', () => ({ useApi: () => ({ fetchApi }) }))
-vi.mock('@/stores/confirm', () => ({ useConfirm: () => confirm }))
+vi.mock('@/stores/confirm', () => ({ useConfirm: () => confirm, useConfirmStore: () => ({ checklistValues: [] }) }))
 // The global setup stubs Vue Query to return nothing; this view needs its
 // periods loaded and its mutations to reach fetchApi.
 vi.mock('@tanstack/vue-query', async () => {

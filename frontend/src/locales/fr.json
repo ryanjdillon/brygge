@@ -939,6 +939,8 @@
         "vippsDraftsConfirm": "Comptabiliser",
         "vippsDraftsNothing": "Aucun brouillon Vipps à comptabiliser pour cette période.",
         "vippsDraftsDone": "{posted} pièce(s) Vipps comptabilisée(s), {reclassified} reclassée(s).",
+        "vippsDraftsChecklist": "Reclasser (décochez pour laisser un brouillon tel quel)",
+        "vippsDraftsSkipped": "{unchecked} non cochés restent en brouillon ; {stale} ne correspondaient plus et ont été ignorés.",
         "vippsDraftsReleasableHeading": "Paiements que vous pouvez renvoyer dans la file Vipps",
         "vippsDraftsRelease": "Libérer",
         "vippsDraftsReleaseTitle": "Renvoyer {ref} dans la file Vipps ?",

@@ -914,6 +914,8 @@
         "tooltipSource": "How this entry was created (manual, payment sync, bank import)",
         "tooltipAccounts": "Which accounts are affected",
         "vippsDraftsAutoAssignOff": "Automatyczne przypisywanie jest wyłączone, więc płatności na 3900 Andre inntekter zostaną tam zaksięgowane bez klasyfikacji. Najpierw włącz je w Økonomiinnstillinger → Vipps, aby je sklasyfikować.",
+        "vippsDraftsChecklist": "Przeksięguj (odznacz, aby zostawić szkic bez zmian)",
+        "vippsDraftsSkipped": "{unchecked} odznaczonych zostaje jako szkice; {stale} już nie pasowało i pominięto.",
         "vippsDraftsReleasableHeading": "Płatności, które możesz zwolnić do kolejki Vipps",
         "vippsDraftsRelease": "Zwolnij",
         "vippsDraftsReleaseTitle": "Zwolnić {ref} do kolejki Vipps?",

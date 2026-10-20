@@ -2,7 +2,7 @@
 import { ref, computed, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useConfirm } from '@/stores/confirm'
+import { useConfirm, useConfirmStore } from '@/stores/confirm'
 import { useFreshTotp } from '@/composables/useFreshTotp'
 import { useCan } from '@/composables/useCan'
 import {
@@ -121,6 +121,7 @@ const applyVippsBacklogMutation = useApplyVippsDraftBacklog()
 const releaseVippsChargeMutation = useReleaseVippsBacklogCharge()
 const { ensureFreshTotp } = useFreshTotp()
 const askConfirm = useConfirm()
+const confirmStore = useConfirmStore()
 
 const statusLabels = computed<Record<string, string>>(() => ({
   draft: t('admin.accounting.journal.draft'),
@@ -296,12 +297,9 @@ async function handlePostVippsDrafts() {
       syncMessage.value = t('admin.accounting.journal.vippsDraftsNothing')
       return
     }
-    const details = [
-      ...preview.posted_totals.map(
-        (a) => `${a.account_code}: ${t('admin.accounting.journal.vippsDraftsDebit')} ${a.debit.toLocaleString('nb-NO')} · ${t('admin.accounting.journal.vippsDraftsCredit')} ${a.credit.toLocaleString('nb-NO')} kr`,
-      ),
-      ...preview.reclassified.map((r) => `${r.date} ${r.amount.toLocaleString('nb-NO')} kr: ${r.from} → ${r.to}`),
-    ]
+    const details = preview.posted_totals.map(
+      (a) => `${a.account_code}: ${t('admin.accounting.journal.vippsDraftsDebit')} ${a.debit.toLocaleString('nb-NO')} · ${t('admin.accounting.journal.vippsDraftsCredit')} ${a.credit.toLocaleString('nb-NO')} kr`,
+    )
     const body = [
       t('admin.accounting.journal.vippsDraftsBody', {
         posted: preview.posted,
@@ -316,15 +314,29 @@ async function handlePostVippsDrafts() {
       title: t('admin.accounting.journal.vippsDraftsTitle', { year: periodLabel }),
       body,
       details,
+      // One tick per rebooking, so a wrong one can be left out without
+      // cancelling the whole batch.
+      checklist: preview.reclassified.length
+        ? {
+            label: t('admin.accounting.journal.vippsDraftsChecklist'),
+            items: preview.reclassified.map((r) => ({
+              value: r.entry_id,
+              label: `${r.date} ${r.amount.toLocaleString('nb-NO')} kr: ${r.from} → ${r.to}`,
+            })),
+          }
+        : undefined,
       confirmLabel: t('admin.accounting.journal.vippsDraftsConfirm'),
       cancelLabel: t('common.cancel'),
       tone: 'warning',
     })
     if (!ok) return
+    // Sending the list even when every row is ticked limits the apply to the
+    // rows the treasurer saw.
+    const reclassifyIds = preview.reclassified.length ? [...confirmStore.checklistValues] : undefined
 
     const result = await new Promise<VippsBacklogResult>((resolve, reject) => {
       applyVippsBacklogMutation.mutate(
-        { period_id: selectedPeriodId.value },
+        { period_id: selectedPeriodId.value, reclassify_entry_ids: reclassifyIds },
         { onSuccess: resolve, onError: reject },
       )
     })
@@ -334,6 +346,12 @@ async function handlePostVippsDrafts() {
         posted: result.posted,
         reclassified: result.reclassified.length,
       }),
+      result.unchecked || result.stale_ids?.length
+        ? t('admin.accounting.journal.vippsDraftsSkipped', {
+            unchecked: result.unchecked ?? 0,
+            stale: result.stale_ids?.length ?? 0,
+          })
+        : '',
       payouts
         ? t('admin.bankImports.payoutSweepCounts', {
             cleared: payouts.cleared.length,
