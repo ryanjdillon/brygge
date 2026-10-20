@@ -121,6 +121,13 @@ in
     # `nix run .#gen-dendrite-token` and any manual recovery work.
     # NixOS doesn't put them on PATH automatically.
     dendrite
+    # Only `stalwart-cli` from the pinned 0.15 package: it also ships a
+    # `bin/stalwart` server binary that would collide with the running
+    # service's on PATH.
+    (runCommand "stalwart-cli" { } ''
+      mkdir -p $out/bin
+      ln -s ${stalwartCliPkg}/bin/stalwart-cli $out/bin/stalwart-cli
+    '')
   ];
 
   services.postgresql = {
@@ -438,17 +445,25 @@ in
         secret = "%{file:/run/credentials/stalwart.service/admin_password}%";
       };
 
-      # DKIM — Stalwart auto-generates a key on first boot. Publish the
-      # public key via tfvars.dkim_public_value after deploy (same flow as
-      # before).
-      signature."rsa-mail" = {
-        private-key = "%{file:/var/lib/stalwart/dkim/mail-private.pem}%";
-        domain = cfg.domain;
-        selector = "mail";
-        canonicalization = "relaxed/relaxed";
-        algorithm = "rsa-sha256";
-        set-body-length = false;
-      };
+      # DKIM signing uses the DB-held signature `mail` that
+      # stalwart-dkim-config (below) creates. Left unset, 0.15 defaults to
+      # `['rsa-' + sender_domain, 'ed25519-' + sender_domain]`; those ids
+      # don't exist, so Stalwart logs "DKIM signer not found" and sends
+      # unsigned. Keys set here shadow the same DB keys at boot and on
+      # reload, so a web-admin edit of them has no effect. Never set
+      # `config.local-keys` — it replaces the whole default list.
+      auth.dkim.sign = [
+        { "if" = "sender_domain == '${cfg.domain}'"; "then" = "['mail']"; }
+        { "else" = "false"; }
+      ];
+      # ARC sealing, report/DSN signing and Sieve-generated mail default
+      # to the same missing ids.
+      auth.arc.seal = "'mail'";
+      report.dmarc.sign = "['mail']";
+      report.dmarc.aggregate.sign = "['mail']";
+      report.tls.aggregate.sign = "['mail']";
+      report.dsn.sign = "['mail']";
+      sieve.trusted.sign = "['mail']";
 
     };
   };
@@ -544,18 +559,26 @@ in
   #   Stalwart owns the keypair, and the operator copies the public
   #   half out to DNS via tfvars.
   #
+  # The signature only exists in the DB; outbound mail is signed with it
+  # because `auth.dkim.sign` in services.stalwart.settings (above) names
+  # it.
+  #
   # Operator one-time setup per club instance:
   #   1. Deploy this host config. The unit runs `stalwart-cli dkim
   #      create rsa <domain> mail mail`, which is idempotent — the
   #      "already exists" failure on subsequent boots is swallowed.
-  #   2. Pull the generated public key out of Stalwart:
-  #        ssh root@mail.<domain> -- stalwart-cli dkim get-public-key mail
-  #      The output is the bare DNS-ready string starting with
-  #      `v=DKIM1; k=rsa; p=...` (1024-bit by default in 0.15.x — fits
-  #      inside Hetzner DNS's 255-byte TXT-string limit).
-  #   3. Paste that value into terraform/terraform.tfvars.json as
-  #      `dkim_public_value`, JSON-quoted:
-  #        "dkim_public_value": "\"v=DKIM1; k=rsa; p=...\""
+  #   2. Pull the generated public key out of Stalwart (as root on the
+  #      mail host; `stalwart-cli` is on PATH via systemPackages):
+  #        stalwart-cli --url http://127.0.0.1:8088 \
+  #          --credentials "admin:$(cat /etc/stalwart/admin-password)" \
+  #          dkim get-public-key mail
+  #      It prints `Public DKIM key for signature mail: "<base64>"` on
+  #      stderr — the bare base64 `p=` value, no `v=DKIM1` prefix. The key is
+  #      2048-bit RSA (hard-coded in 0.15), too long for one 255-byte
+  #      TXT string, so DNS carries it as two strings.
+  #   3. Wrap it as `v=DKIM1; k=rsa; p=<base64>` split into two quoted
+  #      strings and put it in terraform/terraform.tfvars.json as
+  #      `dkim_public_value`.
   #   4. `nix run .#tf-apply` to publish the public key at
   #      mail._domainkey.<domain>.
   #

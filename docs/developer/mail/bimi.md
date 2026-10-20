@@ -178,9 +178,9 @@ The PEM file is hosted on the same server at any path you like; nothing else cha
 
 ## DKIM provisioning
 
-Without a fixed-selector DKIM signature pinned in DNS, Stalwart can sign outbound mail with a selector that has no DNS counterpart. Gmail / Yahoo / Apple then see `dkim=permerror`, DMARC passes only via SPF (the weaker leg), and inbox placement plus BIMI eligibility both suffer.
+Without a DKIM signature that is both selected for signing and published in DNS, Stalwart sends outbound mail unsigned (or signed with a selector receivers can't verify). Gmail / Yahoo / Apple then pass DMARC only via SPF (the weaker leg), and inbox placement plus BIMI eligibility both suffer.
 
-The fix pins a single fixed signature with selector `mail`, whose public key is published at `mail._domainkey.<domain>` (wired in `terraform/dns.nix`).
+The fix pins a single fixed signature with selector `mail`, whose public key is published at `mail._domainkey.<domain>` (wired in `terraform/dns.nix`), and selects it for signing with `auth.dkim.sign` in `nix/host.nix`. Creating the signature alone is not enough: with `auth.dkim.sign` unset, Stalwart 0.15 looks for signatures named `rsa-<domain>` / `ed25519-<domain>`, logs `DKIM signer not found`, and sends unsigned. The TOML setting shadows the same key in Stalwart's DB, so it can't be overridden from the admin UI — see [setup.md § How signing is selected](setup.md#how-signing-is-selected).
 
 Under **Stalwart 0.15.x** the 0.15 CLI has no way to import an externally-managed private key — `stalwart-cli dkim create` always generates and stores a fresh keypair internally. So the data flow inverts from a typical IaC pattern:
 
@@ -191,17 +191,20 @@ Under **Stalwart 0.15.x** the 0.15 CLI has no way to import an externally-manage
 
 ```bash
 # 1. Deploy. The unit creates the DKIM signature in Stalwart on first
-#    run. 1024-bit RSA by default (fits Hetzner DNS's 255-byte TXT
-#    limit; 2048-bit would not).
+#    run. Always 2048-bit RSA in 0.15 — too long for one 255-byte TXT
+#    string, so DNS carries it as two strings.
 nix run .#deploy
 
-# 2. Pull the generated public key.
-ssh root@mail.<domain> -- stalwart-cli dkim get-public-key mail
-# → v=DKIM1; k=rsa; p=MIG...
+# 2. Pull the generated public key (on the mail host, as root). It is
+#    printed to stderr as `Public DKIM key for signature mail: "<base64>"`
+#    — the bare base64 `p=` value, no `v=DKIM1` prefix.
+stalwart-cli --url http://127.0.0.1:8088 \
+  --credentials "admin:$(cat /etc/stalwart/admin-password)" \
+  dkim get-public-key mail
 
-# 3. Paste into tfvars.dkim_public_value, JSON-quoted:
-#      "dkim_public_value": "\"v=DKIM1; k=rsa; p=...\""
-$EDITOR terraform/terraform.tfvars.json
+# 3. Put `v=DKIM1; k=rsa; p=<base64>`, split into two quoted strings,
+#    into tfvars.dkim_public_value — use the script in setup.md § 4,
+#    which does the split and the JSON escaping.
 
 # 4. Publish.
 nix run .#tf-apply
@@ -221,12 +224,17 @@ First run: `stalwart-cli dkim create rsa ... mail mail` exits 0. Subsequent runs
 Cross-check the keypair halves agree:
 
 ```bash
-ssh root@mail.<domain> -- stalwart-cli dkim get-public-key mail
+# On the mail host, as root:
+stalwart-cli --url http://127.0.0.1:8088 \
+  --credentials "admin:$(cat /etc/stalwart/admin-password)" \
+  dkim get-public-key mail
 dig +short TXT mail._domainkey.<domain> @hydrogen.ns.hetzner.com
-# The p= value in DNS must contain the bare base64 the CLI returned.
+# Joining the two DNS strings, the p= value must equal the base64 the CLI printed.
 ```
 
-Send a test message and check the recipient's `Authentication-Results` header — both DKIM lines should read `dkim=pass header.s=mail`.
+Confirm the signing rule selects `mail` (expect `auth.dkim.sign.0000.then = "['mail']"` and `auth.dkim.sign.0001.else = "false"`) and that nothing logs a missing signer — the read-only commands are in [setup.md § How signing is selected](setup.md#how-signing-is-selected).
+
+Send a test message to Gmail and Outlook and check the recipient's `Authentication-Results` header — it should read `dkim=pass header.d=<domain> header.s=mail`. No DKIM result at all means the mail went out unsigned: check `auth.dkim.sign`.
 
 If the service fails on first run, the most likely causes (in rough order of likelihood):
 

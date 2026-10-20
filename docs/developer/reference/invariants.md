@@ -453,6 +453,16 @@ So the amount cap is a **default**, not a hard ceiling — the per-invoice overr
 
 ---
 
+## Mail
+
+### Stalwart's local TOML shadows DB settings; never set `config.local-keys`
+
+**Rule (BRY-400):** a key set in `services.stalwart.settings` (`nix/host.nix`) shadows the same key in Stalwart's DB at boot and on reload, so mail settings that must hold — `auth.dkim.sign`, `auth.arc.seal`, `report.*.sign`, `sieve.trusted.sign`, which all name the DB-held signature `mail` — live in `host.nix`, not the admin UI. Never set `config.local-keys`: it replaces Stalwart's whole default list of local keys instead of adding to it.
+
+**Failure mode:** with `auth.dkim.sign` unset, Stalwart 0.15 signs with `rsa-<domain>` / `ed25519-<domain>`, which don't exist, logs `DKIM signer not found`, and sends every message unsigned — DMARC then passes on SPF alone and receivers rate-limit the domain. See [mail/setup.md § How signing is selected](../mail/setup.md#how-signing-is-selected).
+
+---
+
 ## Developer DB query (DIL-365)
 
 ### Query role is default-deny: masked views + a non-PII allowlist

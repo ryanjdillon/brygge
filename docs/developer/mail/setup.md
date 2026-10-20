@@ -36,8 +36,8 @@ Role mailbox data lives on the server in RocksDB, outlasting any individual boar
     @          MX  10 mail.<domain>
     mail       A   <server IP>          (plus rDNS PTR → mail.<domain>)
     webmail    A   <server IP>
-    @          TXT v=spf1 mx include:amazonses.com -all
-    mail._domainkey TXT v=DKIM1; k=rsa; p=...
+    @          TXT v=spf1 mx -all
+    mail._domainkey TXT "v=DKIM1; k=rsa; p=<part 1>" "<part 2>"   (2048-bit, two strings)
     _dmarc     TXT v=DMARC1; p=quarantine; rua=mailto:<admin>; fo=1
     autoconfig CNAME mail.<domain>
     _imaps._tcp      SRV 0 0 993 mail.<domain>.
@@ -99,11 +99,11 @@ DKIM is **not** configured through the UI — it's provisioned declaratively by 
 
 ### 4. Provision DKIM
 
-Without a fixed-selector DKIM signature pinned in DNS, Stalwart can sign with rotated selectors that have no DNS counterpart, so receivers see `dkim=permerror` and DMARC passes only via the weaker SPF leg — which weighs into spam scores at every major receiver and disqualifies the message from BIMI rendering on stricter providers (Yahoo / Apple).
+Without a DKIM signature whose selector is published in DNS — and a signing rule that actually selects it — outbound mail goes out unsigned or with an unverifiable signature, so DMARC passes only via the weaker SPF leg. That weighs into spam scores at every major receiver and disqualifies the message from BIMI rendering on stricter providers (Yahoo / Apple).
 
-The fix is to pin a single fixed signature with selector `mail` and publish its public key at `mail._domainkey.<domain>`. The flow under Stalwart **0.15.x** is:
+The fix is a single fixed signature with selector `mail`, selected for outbound signing, with its public key published at `mail._domainkey.<domain>`. The flow under Stalwart **0.15.x** is:
 
-- **Stalwart side**: `nix/host.nix` → `systemd.services.stalwart-dkim-config` runs after every boot and idempotently calls `stalwart-cli dkim create rsa <domain> mail mail`. Stalwart **generates and owns the keypair internally** — there is no way to import an externally-managed private key via the 0.15 CLI.
+- **Stalwart side**: `nix/host.nix` → `systemd.services.stalwart-dkim-config` runs after every boot and idempotently calls `stalwart-cli dkim create rsa <domain> mail mail`. Stalwart **generates and owns the keypair internally** — there is no way to import an externally-managed private key via the 0.15 CLI. The signature is stored as DB keys `signature.mail.*`; the command does not touch the signing rule (see [How signing is selected](#how-signing-is-selected)).
 - **DNS side**: `terraform/dns.nix` → `mail_dkim` publishes the public key at `mail._domainkey.<domain>`, sourced from `tfvars.dkim_public_value`. The operator copies the public half out of Stalwart and pastes it into tfvars.
 
 Operator one-time setup per club:
@@ -118,6 +118,9 @@ nix run .#deploy
 # 2. Derive the chunked TXT value on the server and save it locally.
 #    Two non-obvious bits inside the SSH script:
 #      a) `stalwart-cli` prints the public key to stderr, hence 2>&1.
+#         The line reads `Public DKIM key for signature mail: "<base64>"`;
+#         the sed keeps the bare base64 `p=` value — the `v=DKIM1; k=rsa;`
+#         prefix is added below.
 #      b) The CLI has no default URL/credentials — they must be passed
 #         explicitly. We read the admin password from the on-disk
 #         bootstrap file.
@@ -153,10 +156,13 @@ Verify the DNS record matches what Stalwart is signing with:
 
 ```bash
 dig TXT mail._domainkey.<domain> @hydrogen.ns.hetzner.com +short
-# expect: "v=DKIM1; k=rsa; p=MIG..."
+# expect two quoted strings: "v=DKIM1; k=rsa; p=MIIB..." "...AQAB"
 
-ssh root@mail.<domain> -- stalwart-cli dkim get-public-key mail
-# must match the p= value above byte-for-byte
+# On the mail host as root (stalwart-cli is on PATH; prints to stderr):
+stalwart-cli --url http://127.0.0.1:8088 \
+  --credentials "admin:$(cat /etc/stalwart/admin-password)" \
+  dkim get-public-key mail
+# the base64 must equal the p= value above with the two strings joined
 ```
 
 Verify the systemd unit:
@@ -168,7 +174,41 @@ ssh root@<server-ip> -- journalctl -u stalwart-dkim-config -n 50 --no-pager
 # Subsequent runs: log line "DKIM signature already present — nothing to do."
 ```
 
-End-to-end check: send a test message and look at the recipient's `Authentication-Results`. Both DKIM lines should read `dkim=pass header.s=mail`. If they show `header.s=YYYYMMr` / `YYYYMMe` instead, the unit didn't converge — see [BIMI guide § DKIM provisioning](bimi.md#dkim-provisioning-declarative) for troubleshooting.
+End-to-end check: send a test message to a Gmail and an Outlook mailbox and look at the recipient's `Authentication-Results` ("Show original" in Gmail). It should read `dkim=pass header.d=<domain> header.s=mail`. If there is no DKIM result at all, the message went out unsigned — check the signing rule below. If it shows another selector, the unit didn't converge — see [BIMI guide § DKIM provisioning](bimi.md#dkim-provisioning) for troubleshooting.
+
+#### How signing is selected
+
+Creating the `mail` signature does not make Stalwart use it. Which signatures sign outbound mail is decided by the `auth.dkim.sign` expression, set in `nix/host.nix` under `services.stalwart.settings`:
+
+```nix
+auth.dkim.sign = [
+  { "if" = "sender_domain == '${cfg.domain}'"; "then" = "['mail']"; }
+  { "else" = "false"; }
+];
+```
+
+Left unset, Stalwart 0.15 defaults to `['rsa-' + sender_domain, 'ed25519-' + sender_domain]`. Neither id exists, so it logs `DKIM signer not found` and sends the message unsigned. ARC sealing (`auth.arc.seal`), DMARC/TLS report signing (`report.dmarc.sign`, `report.dmarc.aggregate.sign`, `report.tls.aggregate.sign`), bounce/DSN signing (`report.dsn.sign`) and Sieve-generated mail (`sieve.trusted.sign`) default to `rsa-` / `ed25519-` + `report.domain`, which don't exist either, so all of them are set to `mail` alongside it.
+
+The generated TOML is the local configuration, and **a key set there shadows the same key in Stalwart's DB** at boot and on reload. So the signing rule in `host.nix` always wins; editing it in the admin UI has no effect, and Stalwart logs the expected "Database key defined in local configuration" warning. Never set `config.local-keys` — it replaces Stalwart's whole default list of local keys rather than adding to it. A change to these settings takes effect on deploy: the generated TOML is part of the unit's `ExecStart`, so the service restarts.
+
+Read-only verification on the mail host (as root):
+
+```bash
+PW=$(cat /etc/stalwart/admin-password); U=http://127.0.0.1:8088
+
+# The signing rule Stalwart resolved. Array entries are zero-padded:
+# expect auth.dkim.sign.0000.then = "['mail']", auth.dkim.sign.0001.else = "false"
+curl -fsS -u "admin:$PW" "$U/api/settings/keys?prefixes=auth.dkim" | jq .
+
+# The signature itself, without the private key
+curl -fsS -u "admin:$PW" "$U/api/settings/keys?prefixes=signature.mail" \
+  | jq 'del(.data["signature.mail.private-key"])'
+
+# No missing-signer or key-file errors since the last restart
+journalctl -u stalwart --since -30min | grep -iE 'signer not found|dkim|Failed to read file'
+```
+
+Then send to Gmail and Outlook as above and confirm `dkim=pass header.d=<domain> header.s=mail`.
 
 ### 5. Role mailboxes (board addresses)
 
@@ -331,11 +371,10 @@ The `mail`-selector keypair lives inside Stalwart's DB; DNS holds the public hal
 # 2. Trigger the systemd unit to create a new one.
 ssh root@mail.<domain> -- systemctl restart stalwart-dkim-config
 
-# 3. Pull the new public key.
-NEW_KEY=$(ssh root@mail.<domain> -- stalwart-cli dkim get-public-key mail)
-jq --arg v "\"$NEW_KEY\"" \
-  '.dkim_public_value = $v' \
-  terraform/terraform.tfvars.json > /tmp/t && mv /tmp/t terraform/terraform.tfvars.json
+# 3. Pull the new public key as the chunked TXT value and inject it
+#    into tfvars — same script as § 4 steps 2 and 3 (the CLI needs
+#    --url/--credentials, prints the bare base64 to stderr, and the
+#    2048-bit value must be split into two TXT strings).
 
 # 4. Publish the new public key.
 nix run .#tf-apply
@@ -409,9 +448,7 @@ Hetzner blocks outbound TCP/25 by default. Open a support ticket after your firs
 
 ### DKIM 255-byte limit
 
-Hetzner Cloud DNS rejects TXT records with substrings over 255 bytes. 2048-bit RSA DKIM public keys exceed this. Use 1024-bit (set in step 3 above). Gmail, Outlook, and most MTAs still accept 1024-bit; it's deprecated but not rejected.
-
-DIL-172 tracks a future upgrade to 2048-bit via either multi-record split or moving DNS off Hetzner Cloud DNS.
+Hetzner Cloud DNS rejects TXT strings over 255 bytes (RFC 1035's per-string limit). Stalwart 0.15 always generates a 2048-bit RSA key, whose `v=DKIM1; k=rsa; p=...` value is ~410 bytes, so it is published as one TXT record made of two quoted strings. Receivers concatenate the strings before parsing. The § 4 script does the split.
 
 ### IPv6 not auto-configured
 
@@ -450,10 +487,10 @@ Port collision — Stalwart and brygge both wanted `127.0.0.1:8080`. Stalwart's 
 
 ### DKIM TXT record rejected by Hetzner API
 
-Hetzner Cloud DNS requires exactly one double-quoted string per TXT record, ≤255 bytes. Common errors:
+Hetzner Cloud DNS requires each double-quoted string in a TXT record to be ≤255 bytes. Common errors:
 
-- `a TXT string exceeds 255 characters` → DKIM key too big. Use 1024-bit.
-- `TXT records must be fully escaped with double quotes` → value must be wrapped in outer quotes, no internal `" "` substring separators.
+- `a TXT string exceeds 255 characters` → the 2048-bit value wasn't split. Re-run the § 4 step 2 script; the value must be `"chunk1" "chunk2"`.
+- `TXT records must be fully escaped with double quotes` → each string must be wrapped in double quotes, separated by a single space.
 - Record exists but `dig` returns garbled content with `\010` or `\n` — JSON string has a literal newline. Use `printf` instead of pasting; see step 4.
 
 Build the tfvars value with jq's `--arg` to get proper escaping:
@@ -472,7 +509,7 @@ Bulwark authenticates via JMAP against `https://mail.<domain>`. Failure modes:
 
 ### Stalwart logs full of "Database key defined in local configuration"
 
-Informational — Stalwart prefers most runtime config to live in its own DB (editable via admin UI) rather than in the TOML. Doesn't affect behavior.
+Informational — Stalwart prefers most runtime config to live in its own DB (editable via admin UI) rather than in the TOML. Doesn't affect behavior: the TOML value shadows the DB value for the same key, which is what keeps settings like the DKIM signing rule (`auth.dkim.sign`) pinned. Don't silence it with `config.local-keys` — that replaces the whole default list.
 
 Long-term fix is to move those settings to the DB via the admin UI and remove them from `nix/host.nix`. Tracked as future work; for now they're cosmetic warnings.
 
@@ -489,7 +526,8 @@ Don't enable `mailserver.localDnsResolver` (knot-resolver). It breaks upstream D
 | Server, firewall, DNS records | Terranix | `nix run .#tf-apply` |
 | NixOS config (Stalwart, Caddy, Bulwark) | Nix flake | `nix run .#deploy -- <host>` |
 | Stalwart admin settings (spam, TLS) | Stalwart RocksDB | Admin UI at `https://mail.<domain>/` |
-| DKIM signature (`mail` selector) | Stalwart RocksDB (Stalwart owns the keypair) + `tfvars.dkim_public_value` mirrored to DNS | `deploy` creates the signature, then `stalwart-cli dkim get-public-key mail` → paste to tfvars → `tf-apply` (see § 4) |
+| DKIM signature (`mail` selector) | Stalwart RocksDB (Stalwart owns the keypair) + `tfvars.dkim_public_value` mirrored to DNS | `deploy` creates the signature, then `stalwart-cli ... dkim get-public-key mail` → paste to tfvars → `tf-apply` (see § 4) |
+| DKIM / ARC / report signing rule | `auth.dkim.sign`, `auth.arc.seal`, `report.*.sign`, `sieve.trusted.sign` in `nix/host.nix` (TOML shadows the DB) | Edit `host.nix` + deploy. **Not** the admin UI. |
 | Managed board/role mailboxes + their passwords | `stalwart-mailbox-config.service` from `tfvars.board_mailboxes`; service password generated into `/etc/stalwart/board-mailbox-passwords.json` (root:brygge 0640) | Edit `board_mailboxes` + `nix run .#deploy`; read/rotate the password via the JSON file (see § Day 2 → Role mailbox passwords). **Not** the admin UI. |
 | Unmanaged personal accounts + passwords | Stalwart RocksDB | Admin UI (Management → Accounts) |
 | Mail contents | Stalwart RocksDB | IMAP / JMAP clients |
