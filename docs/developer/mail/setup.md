@@ -210,6 +210,8 @@ journalctl -u stalwart --since -30min | grep -iE 'signer not found|dkim|Failed t
 
 Then send to Gmail and Outlook as above and confirm `dkim=pass header.d=<domain> header.s=mail`.
 
+Also confirm that the app's envelope sender (`EMAIL_FROM` / the `relay@<domain>` principal) and the board mailboxes use `@<domain>`. The rule only signs mail whose MAIL FROM domain is exactly the club domain; mail from any other domain, including a subdomain, goes out unsigned.
+
 ### 5. Role mailboxes (board addresses)
 
 Brygge provisions board-role mailboxes (`kasserar@`, `leiar@`, `hamnesjef@`, etc.) **declaratively** via the `stalwart-mailbox-config.service` systemd unit, sourced from `terraform/terraform.tfvars.json` → `board_mailboxes`. The same unit also generates a service password per shared principal at `/etc/stalwart/board-mailbox-passwords.json` so the brygge backend can authenticate JMAP calls on behalf of the role.
@@ -511,7 +513,7 @@ Bulwark authenticates via JMAP against `https://mail.<domain>`. Failure modes:
 
 Informational — Stalwart prefers most runtime config to live in its own DB (editable via admin UI) rather than in the TOML. Doesn't affect behavior: the TOML value shadows the DB value for the same key, which is what keeps settings like the DKIM signing rule (`auth.dkim.sign`) pinned. Don't silence it with `config.local-keys` — that replaces the whole default list.
 
-Long-term fix is to move those settings to the DB via the admin UI and remove them from `nix/host.nix`. Tracked as future work; for now they're cosmetic warnings.
+Long-term fix is to move those settings to the DB via the admin UI and remove them from `nix/host.nix`. Tracked as future work; for now they're cosmetic warnings. The exception is the signing rule (`auth.dkim.sign`, `auth.arc.seal`, `report.*.sign`, `sieve.trusted.sign`): it is pinned in `host.nix` on purpose and must stay there — see [How signing is selected](#how-signing-is-selected).
 
 ### "Temporary failure in name resolution" during activation
 

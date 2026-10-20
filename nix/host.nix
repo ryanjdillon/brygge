@@ -464,7 +464,6 @@ in
       report.tls.aggregate.sign = "['mail']";
       report.dsn.sign = "['mail']";
       sieve.trusted.sign = "['mail']";
-
     };
   };
 
@@ -644,6 +643,13 @@ in
               dkim create rsa "$DOMAIN" mail mail 2>&1) && RC=0 || RC=$?
       if [ "$RC" -eq 0 ]; then
         echo "DKIM signature created."
+        # Signatures are parsed only at boot or reload, so without this a
+        # fresh host would send unsigned until the next restart.
+        if curl -fsS -o /dev/null -u "admin:$ADMIN_PW" "$ADMIN_URL/reload"; then
+          echo "Stalwart config reloaded; the new signature is active."
+        else
+          echo "WARN: Stalwart reload failed; the signature takes effect on the next restart." >&2
+        fi
       elif printf '%s' "$OUT" | grep -qiE 'already exists|duplicate'; then
         echo "DKIM signature already present — nothing to do."
       else
