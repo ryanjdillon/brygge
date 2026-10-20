@@ -23,6 +23,13 @@ export interface ConfirmOptions {
    * `checkboxValue`.
    */
   choice?: { label: string; options: { value: string; label: string }[]; default?: string }
+  /**
+   * Optional list of checkboxes, one per item, shown above the buttons. The
+   * values of the ticked items are exposed on the store as `checklistValues`,
+   * read the same way as `checkboxValue`. Items are ticked unless `default`
+   * is false.
+   */
+  checklist?: { label: string; items: { value: string; label: string; default?: boolean }[] }
 }
 
 interface PendingConfirm extends ConfirmOptions {
@@ -39,6 +46,8 @@ export const useConfirmStore = defineStore('confirm', () => {
   const checkboxValue = ref(false)
   // Bound to the optional radio group; read the same way as checkboxValue.
   const choiceValue = ref('')
+  // Bound to the optional checklist; read the same way as checkboxValue.
+  const checklistValues = ref<string[]>([])
 
   function ask(opts: ConfirmOptions): Promise<boolean> {
     if (current.value) {
@@ -47,6 +56,7 @@ export const useConfirmStore = defineStore('confirm', () => {
     }
     checkboxValue.value = opts.checkbox?.default ?? false
     choiceValue.value = opts.choice?.default ?? opts.choice?.options[0]?.value ?? ''
+    checklistValues.value = (opts.checklist?.items ?? []).filter((i) => i.default !== false).map((i) => i.value)
     return new Promise((resolve) => {
       current.value = { ...opts, resolve }
     })
@@ -57,7 +67,7 @@ export const useConfirmStore = defineStore('confirm', () => {
     current.value = null
   }
 
-  return { current, checkboxValue, choiceValue, ask, settle }
+  return { current, checkboxValue, choiceValue, checklistValues, ask, settle }
 })
 
 /** Convenience: returns the `ask` function so callers don't deal with the store. */

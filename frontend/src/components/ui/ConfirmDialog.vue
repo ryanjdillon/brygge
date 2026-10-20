@@ -98,6 +98,29 @@ function onCancel() {
       </div>
     </fieldset>
 
+    <fieldset
+      v-if="store.current?.checklist"
+      class="mt-4 text-sm text-gray-700"
+      data-testid="confirm-checklist"
+    >
+      <legend class="mb-1 font-medium">{{ store.current.checklist.label }}</legend>
+      <div class="flex max-h-60 flex-col gap-1.5 overflow-y-auto">
+        <label
+          v-for="item in store.current.checklist.items"
+          :key="item.value"
+          class="flex items-center gap-2"
+        >
+          <input
+            v-model="store.checklistValues"
+            type="checkbox"
+            :value="item.value"
+            class="h-4 w-4 rounded border-gray-300"
+          />
+          {{ item.label }}
+        </label>
+      </div>
+    </fieldset>
+
     <template #footer>
       <div class="flex justify-end gap-2">
         <button
