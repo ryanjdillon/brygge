@@ -431,7 +431,7 @@ func TestPostVippsDraftBacklogClearsReadyPayouts(t *testing.T) {
 		f.exec(t, `UPDATE vipps_import_rows SET journal_entry_id = $1 WHERE id = $2`, e.ID, row)
 	}
 
-	res, err := f.svc.PostVippsDraftBacklog(ctx, f.club.ID, f.club.PeriodID, f.club.Treasurer.ID, true)
+	res, err := f.svc.PostVippsDraftBacklog(ctx, f.club.ID, f.club.PeriodID, f.club.Treasurer.ID, true, nil)
 	if err != nil {
 		t.Fatalf("PostVippsDraftBacklog: %v", err)
 	}

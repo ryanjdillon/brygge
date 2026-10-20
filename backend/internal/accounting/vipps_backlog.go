@@ -33,6 +33,14 @@ import (
 //     (ReleaseVippsBacklogCharge);
 //   - otherwise posts it as it stands.
 //
+// An apply may name the reclassifications the treasurer ticked in the
+// preview (reclassify: the drafts' entry ids). A reclassification not named
+// is skipped entirely — neither rebooked nor posted as it stands, since its
+// parked account is the one the treasurer has not accepted — and is listed
+// again next time. Every named draft is re-decided under the same guards;
+// one that no longer reclassifies is reported in StaleIDs. A nil list means
+// every reclassification.
+//
 // Reclassification only runs when the club has enabled auto-assign, so the
 // club's opt-in and tie category govern the backlog exactly as they govern
 // new charges. With it off a 1500-parked charge with no faktura is refused,
@@ -48,6 +56,8 @@ type AccountTotal struct {
 
 // VippsBacklogReclass is one charge whose draft is rebooked by a rule.
 type VippsBacklogReclass struct {
+	EntryID     string  `json:"entry_id"`
+	RowID       string  `json:"row_id"`
 	EntryNumber int     `json:"entry_number"`
 	Date        string  `json:"date"`
 	Amount      float64 `json:"amount"`
@@ -81,6 +91,12 @@ type VippsBacklogResult struct {
 	// Releasable lists the refused charges that may be released to the
 	// Vipps queue; each is also in Refused.
 	Releasable []VippsBacklogRelease `json:"releasable"`
+	// Unchecked counts the reclassifications left out of the apply's
+	// include-list; their drafts are untouched.
+	Unchecked int `json:"unchecked"`
+	// StaleIDs are included entry ids that are not a reclassification now
+	// (already handled, refused, or never one); nothing is done with them.
+	StaleIDs []string `json:"stale_ids"`
 	// Payouts reports the settlements an apply completed and cleared; nil in
 	// a preview.
 	Payouts *VippsPayoutSweepResult `json:"payouts,omitempty"`
@@ -96,8 +112,9 @@ type backlogDraft struct {
 }
 
 // PostVippsDraftBacklog previews (apply=false) or posts (apply=true) the
-// Vipps drafts of one fiscal period. actor posts the entries.
-func (s *Service) PostVippsDraftBacklog(ctx context.Context, clubID, periodID, actor string, apply bool) (*VippsBacklogResult, error) {
+// Vipps drafts of one fiscal period. actor posts the entries. reclassify is
+// the include-list of reclassified drafts' entry ids; nil includes all.
+func (s *Service) PostVippsDraftBacklog(ctx context.Context, clubID, periodID, actor string, apply bool, reclassify []string) (*VippsBacklogResult, error) {
 	res := &VippsBacklogResult{
 		Applied:      apply,
 		PostedTotals: []AccountTotal{},
@@ -105,6 +122,7 @@ func (s *Service) PostVippsDraftBacklog(ctx context.Context, clubID, periodID, a
 		Refused:      []SkippedItem{},
 		Releasable:   []VippsBacklogRelease{},
 	}
+	choice := newBacklogChoice(reclassify)
 	var status string
 	err := s.db.QueryRow(ctx,
 		`SELECT year, status FROM fiscal_periods WHERE id = $1 AND club_id = $2`,
@@ -152,13 +170,7 @@ func (s *Service) PostVippsDraftBacklog(ctx context.Context, clubID, periodID, a
 			return nil, err
 		}
 		if reclass != nil {
-			if apply {
-				if err := s.applyBacklogReclass(ctx, clubID, actor, reclass); err != nil {
-					res.Refused = append(res.Refused, SkippedItem{Ref: ref, Reason: err.Error()})
-					continue
-				}
-			}
-			res.Reclassified = append(res.Reclassified, reclass.VippsBacklogReclass)
+			s.backlogReclassify(ctx, clubID, actor, apply, choice, ref, reclass, res)
 			continue
 		}
 		if hold != nil {
@@ -177,16 +189,9 @@ func (s *Service) PostVippsDraftBacklog(ctx context.Context, clubID, periodID, a
 			}
 		}
 		res.Posted++
-		for _, l := range d.lines {
-			t := totals[l.AccountCode]
-			if t == nil {
-				t = &AccountTotal{AccountCode: l.AccountCode}
-				totals[l.AccountCode] = t
-			}
-			t.Debit += l.Debit
-			t.Credit += l.Credit
-		}
+		addAccountTotals(totals, d.lines)
 	}
+	res.StaleIDs = choice.stale()
 
 	for _, t := range totals {
 		t.Debit, t.Credit = roundCents(t.Debit), roundCents(t.Credit)
@@ -201,6 +206,83 @@ func (s *Service) PostVippsDraftBacklog(ctx context.Context, clubID, periodID, a
 		res.Payouts = s.ClearReadyVippsPayoutsReported(ctx, clubID, actor)
 	}
 	return res, nil
+}
+
+// backlogReclassify records one reclassification in res: skipped when the
+// include-list leaves it out, else listed (and in an apply, rebooked, or
+// refused when the rebooking fails).
+func (s *Service) backlogReclassify(ctx context.Context, clubID, actor string, apply bool, choice *backlogChoice, ref string, r *backlogReclass, res *VippsBacklogResult) {
+	if !choice.take(r.EntryID) {
+		res.Unchecked++
+		return
+	}
+	if apply {
+		if err := s.applyBacklogReclass(ctx, clubID, actor, r); err != nil {
+			res.Refused = append(res.Refused, SkippedItem{Ref: ref, Reason: err.Error()})
+			return
+		}
+	}
+	res.Reclassified = append(res.Reclassified, r.VippsBacklogReclass)
+}
+
+func addAccountTotals(totals map[string]*AccountTotal, lines []AccountTotal) {
+	for _, l := range lines {
+		t := totals[l.AccountCode]
+		if t == nil {
+			t = &AccountTotal{AccountCode: l.AccountCode}
+			totals[l.AccountCode] = t
+		}
+		t.Debit += l.Debit
+		t.Credit += l.Credit
+	}
+}
+
+// backlogChoice is an apply's include-list of reclassified drafts; nil
+// includes every reclassification.
+type backlogChoice struct {
+	ids      []string
+	included map[string]bool
+	taken    map[string]bool
+}
+
+func newBacklogChoice(ids []string) *backlogChoice {
+	if ids == nil {
+		return nil
+	}
+	c := &backlogChoice{ids: ids, included: make(map[string]bool, len(ids)), taken: map[string]bool{}}
+	for _, id := range ids {
+		c.included[id] = true
+	}
+	return c
+}
+
+// take reports whether the reclassification of draft entryID is included,
+// and records that the id named one.
+func (c *backlogChoice) take(entryID string) bool {
+	if c == nil {
+		return true
+	}
+	if !c.included[entryID] {
+		return false
+	}
+	c.taken[entryID] = true
+	return true
+}
+
+// stale returns the included ids that named no reclassification, each once.
+func (c *backlogChoice) stale() []string {
+	out := []string{}
+	if c == nil {
+		return out
+	}
+	seen := map[string]bool{}
+	for _, id := range c.ids {
+		if !c.taken[id] && !seen[id] {
+			seen[id] = true
+			out = append(out, id)
+		}
+	}
+	return out
 }
 
 func (s *Service) loadBacklogDrafts(ctx context.Context, clubID, periodID string) ([]backlogDraft, error) {
@@ -396,6 +478,8 @@ func (s *Service) backlogReclassification(ctx context.Context, clubID string, cf
 	if dec.Rule != "" && dec.Target() != from {
 		return &backlogReclass{
 			VippsBacklogReclass: VippsBacklogReclass{
+				EntryID:     d.id,
+				RowID:       rowID,
 				EntryNumber: d.number,
 				Date:        d.date.Format("2006-01-02"),
 				Amount:      amount,

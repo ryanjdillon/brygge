@@ -2150,13 +2150,22 @@ func (h *AccountingHandler) HandleApplyVippsDraftBacklog(w http.ResponseWriter, 
 	h.vippsDraftBacklog(w, r, true)
 }
 
+// vippsDraftBacklogRequest names the period and, optionally, the
+// reclassifications the treasurer ticked in the preview. An absent
+// reclassify_entry_ids applies every reclassification; a present one (even
+// empty) applies only those listed and leaves the rest untouched.
+type vippsDraftBacklogRequest struct {
+	PeriodID           string   `json:"period_id"`
+	ReclassifyEntryIDs []string `json:"reclassify_entry_ids"`
+}
+
 func (h *AccountingHandler) vippsDraftBacklog(w http.ResponseWriter, r *http.Request, apply bool) {
 	claims := middleware.GetClaims(r.Context())
 	if claims == nil {
 		Error(w, http.StatusUnauthorized, "authentication required")
 		return
 	}
-	var req syncRequest
+	var req vippsDraftBacklogRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		Error(w, http.StatusBadRequest, "invalid request body")
 		return
@@ -2166,13 +2175,20 @@ func (h *AccountingHandler) vippsDraftBacklog(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	result, err := h.svc.PostVippsDraftBacklog(r.Context(), claims.ClubID, req.PeriodID, claims.UserID, apply)
+	result, err := h.svc.PostVippsDraftBacklog(r.Context(), claims.ClubID, req.PeriodID, claims.UserID, apply, req.ReclassifyEntryIDs)
 	if err != nil {
 		Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	if apply && h.audit != nil {
+		// chosen is null when the request named no list (every
+		// reclassification applied).
+		var chosen *int
+		if req.ReclassifyEntryIDs != nil {
+			n := len(req.ReclassifyEntryIDs)
+			chosen = &n
+		}
 		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,
 			audit.ActionAccountingVippsDraftsPosted, "fiscal_period", req.PeriodID,
 			map[string]any{
@@ -2181,6 +2197,9 @@ func (h *AccountingHandler) vippsDraftBacklog(w http.ResponseWriter, r *http.Req
 				"posted":        result.Posted,
 				"reclassified":  len(result.Reclassified),
 				"refused":       len(result.Refused),
+				"chosen":        chosen,
+				"unchecked":     result.Unchecked,
+				"stale":         len(result.StaleIDs),
 				"posted_totals": result.PostedTotals,
 			})
 	}

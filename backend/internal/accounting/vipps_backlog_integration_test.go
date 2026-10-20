@@ -39,7 +39,7 @@ func (f *autoAssignFixture) draftCharge(t *testing.T, rowID, account string, cen
 
 func (f *autoAssignFixture) backlog(t *testing.T, apply bool) *VippsBacklogResult {
 	t.Helper()
-	res, err := f.svc.PostVippsDraftBacklog(context.Background(), f.club.ID, f.club.PeriodID, f.club.Treasurer.ID, apply)
+	res, err := f.svc.PostVippsDraftBacklog(context.Background(), f.club.ID, f.club.PeriodID, f.club.Treasurer.ID, apply, nil)
 	if err != nil {
 		t.Fatalf("PostVippsDraftBacklog(apply=%v): %v", apply, err)
 	}
@@ -153,7 +153,7 @@ func TestVippsBacklogRefusesUnsafeDrafts(t *testing.T) {
 	}
 
 	f.exec(t, `UPDATE fiscal_periods SET status = 'closed' WHERE id = $1`, f.club.PeriodID)
-	if _, err := f.svc.PostVippsDraftBacklog(ctx, f.club.ID, f.club.PeriodID, f.club.Treasurer.ID, false); err == nil {
+	if _, err := f.svc.PostVippsDraftBacklog(ctx, f.club.ID, f.club.PeriodID, f.club.Treasurer.ID, false, nil); err == nil {
 		t.Errorf("a closed period must be refused")
 	}
 }
@@ -205,6 +205,67 @@ func TestVippsBacklogReclassifiesParkedCharges(t *testing.T) {
 	}
 	if again := f.backlog(t, true); len(again.Reclassified) != 0 || again.Posted != 0 || len(again.Refused) != 1 {
 		t.Errorf("second apply should only re-report the refusal: %+v", again)
+	}
+}
+
+// An apply with an include-list rebooks only the ticked reclassifications.
+// An unticked one is left exactly as it was — not rebooked, and not posted
+// on its parked account either — and is offered again next time; an id that
+// is not a reclassification now is reported, not acted on.
+func TestVippsBacklogAppliesOnlyChosenReclassifications(t *testing.T) {
+	f := newAutoAssignFixture(t)
+	f.priceItem(t, "service", "Slipping synthetic", 160000, "once", "non_member")
+	f.priceItem(t, "service", "Spyling synthetic", 50000, "once", "non_member")
+
+	keepRow := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 160000, CustomerName: "Walk Up"})
+	keep := f.draftCharge(t, keepRow, fallbackRevenueCode, 160000)
+	skipRow := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 50000, CustomerName: "Walk Up"})
+	skip := f.draftCharge(t, skipRow, fallbackRevenueCode, 50000)
+
+	preview := f.backlog(t, false)
+	if len(preview.Reclassified) != 2 {
+		t.Fatalf("preview = %+v, want 2 reclassified", preview)
+	}
+	ids := map[string]string{}
+	for _, r := range preview.Reclassified {
+		ids[r.RowID] = r.EntryID
+	}
+	if ids[keepRow] != keep || ids[skipRow] != skip {
+		t.Fatalf("reclassified ids = %v, want each row's draft", ids)
+	}
+
+	const tampered = "00000000-0000-0000-0000-000000000000"
+	res, err := f.svc.PostVippsDraftBacklog(context.Background(), f.club.ID, f.club.PeriodID, f.club.Treasurer.ID, true,
+		[]string{keep, tampered, tampered})
+	if err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	if len(res.Reclassified) != 1 || res.Reclassified[0].EntryID != keep || res.Unchecked != 1 || res.Posted != 0 {
+		t.Fatalf("apply = %+v, want only the ticked draft rebooked and one unchecked", res)
+	}
+	if len(res.StaleIDs) != 1 || res.StaleIDs[0] != tampered {
+		t.Errorf("stale ids = %v, want the tampered id once", res.StaleIDs)
+	}
+	if acct, status := f.bookedAccount(t, keepRow); acct != "3300" || status != "posted" {
+		t.Errorf("ticked charge booked to %s (%s), want 3300 posted", acct, status)
+	}
+	if got := f.entryStatus(t, skip); got != "draft" {
+		t.Errorf("unticked draft is %s, want it left as a draft", got)
+	}
+	if acct, _ := f.bookedAccount(t, skipRow); acct != fallbackRevenueCode {
+		t.Errorf("unticked charge booked to %s, want it still on %s", acct, fallbackRevenueCode)
+	}
+
+	// The unticked draft is offered again; the handled one is now stale.
+	again, err := f.svc.PostVippsDraftBacklog(context.Background(), f.club.ID, f.club.PeriodID, f.club.Treasurer.ID, false, []string{keep})
+	if err != nil {
+		t.Fatalf("preview: %v", err)
+	}
+	if again.Unchecked != 1 || len(again.StaleIDs) != 1 || again.StaleIDs[0] != keep {
+		t.Errorf("re-preview = %+v, want the unticked draft unchecked and the booked one stale", again)
+	}
+	if all := f.backlog(t, false); len(all.Reclassified) != 1 || all.Reclassified[0].EntryID != skip || all.Unchecked != 0 {
+		t.Errorf("preview without a list = %+v, want the unticked draft offered", all)
 	}
 }
 
@@ -485,7 +546,7 @@ func TestVippsBacklogReleaseRefusals(t *testing.T) {
 	if got := f.entryStatus(t, draft); got != "draft" {
 		t.Errorf("draft in a locked period changed to %s", got)
 	}
-	if _, err := f.svc.PostVippsDraftBacklog(ctx, f.club.ID, f.club.PeriodID, f.club.Treasurer.ID, true); err == nil {
+	if _, err := f.svc.PostVippsDraftBacklog(ctx, f.club.ID, f.club.PeriodID, f.club.Treasurer.ID, true, nil); err == nil {
 		t.Errorf("a backlog run in a locked period must be refused")
 	}
 }
