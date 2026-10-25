@@ -121,6 +121,9 @@ in
     vim
     curl
     jq
+    # dig and openssl s_client, used by the alerts runbook's checks.
+    dnsutils
+    openssl
     postgresql_16
     redis
     go-migrate
