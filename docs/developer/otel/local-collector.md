@@ -105,14 +105,17 @@ systemd.services.opentelemetry-collector = {
 The host must be a tailnet node. Join it once after first deploy:
 
 ```bash
-tailscale up --login-server=<headscale-url> --advertise-tags=tag:downstream
+tailscale up --login-server=<headscale-url> --advertise-tags=tag:downstream --accept-dns=false --accept-routes=true
+systemctl restart tailscaled-set
 ```
 
-Login and tag flags are `tailscale up`-only, so they aren't in the Nix config; `--accept-dns=false --accept-routes=true` are reapplied by `tailscaled-set` on every activation. The Headscale ACL for `tag:downstream` should allow exactly one outbound flow from this node — to the upstream collector's OTLP port — so a compromised public VM can't pivot inward.
+Login and tag flags are `tailscale up`-only, so they aren't in the Nix config. `tailscale up` rejects a command that omits any non-default pref (and `--reset` would revert them), so it repeats the `extraSetFlags` values. Those are applied by `tailscaled-set` at boot and whenever `extraSetFlags` changes; prefs persist in tailscaled state. Restart `tailscaled-set` after any manual `tailscale up` so the Nix-declared prefs win. The Headscale ACL for `tag:downstream` should allow exactly one outbound flow from this node — to the upstream collector's OTLP port — so a compromised public VM can't pivot inward.
 
 ## Common misses
 
 - **The local resolver overrides tailnet DNS.** `services.unbound.resolveLocalQueries` sets `networking.resolvconf.useLocalResolver`, so openresolv *prepends* `127.0.0.1` / `::1` to `/etc/resolv.conf`. The tailnet client can only *append* `100.100.100.100`, and glibc never asks the next nameserver after `unbound` answers NXDOMAIN. The collector then gets zero addresses for the endpoint and logs `no children to pick from` on every export. The forward-zone is the fix; `--accept-dns=true` can't be.
 - **`services.tailscale.extraUpFlags` is dead config without `authKeyFile`.** Only `tailscaled-autoconnect` applies it, and that unit exists only when an auth key file is set. Use `extraSetFlags` for flags `tailscale set` accepts, and run `up`-only flags by hand.
 - **Short endpoint names don't resolve.** With `--accept-dns=false` there is no tailnet `search` domain; `OTLP_ENDPOINT` must be the FQDN.
+- **The collector name must be a MagicDNS record, not a split-DNS route.** With `--accept-dns=false`, `100.100.100.100` still answers MagicDNS peer names and Headscale `extra_records`, but not split-DNS routes. If the collector name is only served by a split-DNS nameserver it won't resolve here; make it an `extra_records` entry. Check with `tailscale dns status` — "Split DNS Routes" must not be what provides it.
+- **An empty `OTLP_ENDPOINT=` line crash-loops the collector.** The `${env:OTLP_ENDPOINT:-…}` build-time default applies only when the variable is unset, not when it is set to empty.
 - **A changed tailnet suffix** (Headscale `base_domain`) needs the matching `tailnet_domain` in tfvars and a redeploy, or the endpoint stops resolving.

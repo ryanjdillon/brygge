@@ -5,7 +5,7 @@ The Brygge VM ships telemetry to an upstream OTel collector. This page documents
 ## Transport
 
 - **Protocol:** OTLP over **gRPC** (not HTTP).
-- **Network path:** a tailnet controlled by Headscale — the VM joins via `tailscale up --login-server=<headscale-url> --advertise-tags=tag:downstream`; the cluster collector is reached at its tailnet (MagicDNS) name, directly or through a subnet route another node advertises.
+- **Network path:** a tailnet controlled by Headscale — the VM joins via `tailscale up --login-server=<headscale-url> --advertise-tags=tag:downstream --accept-dns=false --accept-routes=true` (then `systemctl restart tailscaled-set`); the cluster collector is reached at its tailnet (MagicDNS) name, directly or through a subnet route another node advertises.
 - **Name resolution:** the VM resolves the endpoint by forwarding the tailnet zone (`tailnet_domain` in the VM's tfvars) from its local `unbound` to MagicDNS at `100.100.100.100`. The VM does not accept tailnet DNS settings, so it has no `search` domain — the endpoint must be a **fully qualified** name inside that zone. If the Headscale `base_domain` changes, the VM operator must update `tailnet_domain`. See [local-collector.md § Name resolution](local-collector.md#name-resolution).
 - **ACL:** `tag:downstream` should be allowed exactly one outbound flow: the collector's IP on port 4317. No other ports, subnet hosts, or tailnet nodes.
 - **TLS:** Sender uses `tls.insecure = true` and relies on WireGuard for transport encryption. The cluster receiver does **not** need to terminate TLS on this listener; a plaintext gRPC OTLP receiver bound to the tailnet interface is fine.

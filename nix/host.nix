@@ -54,8 +54,6 @@ in
   networking = {
     hostName = clubConfig.hostname;
     useDHCP = lib.mkDefault true;
-    nameservers = [ "127.0.0.1" ];
-
     firewall = {
       enable = true;
       allowedTCPPorts = [
@@ -738,10 +736,13 @@ in
   # accept-routes: the upstream collector may sit on a subnet another node
   # advertises.
   #
-  # extraSetFlags is applied by tailscaled-set on every activation without
-  # re-authenticating. Login flags are `tailscale up`-only and are run once by
-  # the operator: `tailscale up --login-server=<headscale-url>
-  # --advertise-tags=tag:downstream`. The tag:downstream ACL lets tailnet
+  # extraSetFlags is applied by tailscaled-set, without re-authenticating, at
+  # boot and whenever extraSetFlags changes; prefs persist in tailscaled
+  # state. Login flags are `tailscale up`-only and are run by the operator,
+  # repeating every non-default pref because `up` rejects omitted ones:
+  # `tailscale up --login-server=<headscale-url>
+  # --advertise-tags=tag:downstream --accept-dns=false --accept-routes=true`,
+  # then `systemctl restart tailscaled-set`. The tag:downstream ACL lets tailnet
   # hosts dial in and allows exactly one outbound flow from this node, to the
   # upstream collector's OTLP port (<collector-ip>:4317), so a compromised
   # public VM can't pivot inward.
