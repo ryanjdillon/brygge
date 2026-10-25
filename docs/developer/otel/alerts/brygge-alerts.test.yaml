@@ -1,0 +1,270 @@
+# promtool unit tests for brygge-alerts.rules.yaml, run by `just alerts-check`
+# against the rules rendered for service_namespace=example.invalid,
+# club_slug=example and runbook_base=https://example.invalid/runbook.
+rule_files:
+  - brygge-alerts.rendered.yaml
+
+evaluation_interval: 1m
+
+tests:
+  # Host metrics stop after minute 10: absent from minute 41 on, and the alert
+  # carries the static routing labels plus the job from the matcher.
+  - interval: 1m
+    input_series:
+      - series: 'system_memory_usage_bytes{job="example.invalid/brygge-host", state="used"}'
+        values: '1x10'
+    alert_rule_test:
+      - eval_time: 39m
+        alertname: HostSilent
+        exp_alerts: []
+      - eval_time: 41m
+        alertname: HostSilent
+        exp_alerts:
+          - exp_labels:
+              job: example.invalid/brygge-host
+              service_namespace: example.invalid
+              club: example
+              severity: page
+            exp_annotations:
+              summary: "example.invalid: no host metrics for 30 minutes"
+              description: "No system_memory_usage_bytes sample from job example.invalid/brygge-host in the last 30 minutes. The host, its OTel collector, or the export path to the home cluster is down."
+              runbook_url: "https://example.invalid/runbook#hostsilent"
+
+  # Another club's host going quiet doesn't fire this club's alert.
+  - interval: 1m
+    input_series:
+      - series: 'system_memory_usage_bytes{job="example.invalid/brygge-host", state="used"}'
+        values: '1+0x60'
+      - series: 'system_memory_usage_bytes{job="other.example.invalid/brygge-host", state="used"}'
+        values: '1x5'
+    alert_rule_test:
+      - eval_time: 60m
+        alertname: HostSilent
+        exp_alerts: []
+
+  # Deferrals: a fires (4xx in both hours), b only in the last hour, c has
+  # no SMTP code (connection failure), d is a permanent 5xx.
+  - interval: 1m
+    input_series:
+      - series: 'stalwart_journal_remote_rejections{job="example.invalid/stalwart", server_address="a.example.net", smtp_code="421"}'
+        values: '_x10 1 _x59 2'
+      - series: 'stalwart_journal_remote_rejections{job="example.invalid/stalwart", server_address="b.example.net", smtp_code="451"}'
+        values: '_x70 1'
+      - series: 'stalwart_journal_remote_rejections{job="example.invalid/stalwart", server_address="c.example.net", smtp_code="none"}'
+        values: '_x10 1 _x59 1'
+      - series: 'stalwart_journal_remote_rejections{job="example.invalid/stalwart", server_address="d.example.net", smtp_code="550"}'
+        values: '_x10 1 _x59 1'
+    alert_rule_test:
+      - eval_time: 65m
+        alertname: MailDeferredByProvider
+        exp_alerts: []
+      - eval_time: 100m
+        alertname: MailDeferredByProvider
+        exp_alerts:
+          - exp_labels:
+              server_address: a.example.net
+              service_namespace: example.invalid
+              club: example
+              severity: page
+            exp_annotations:
+              summary: "example.invalid: a.example.net has deferred mail for over an hour"
+              description: "a.example.net returned 4xx to Stalwart in each of the last two hours (2 in the last hour). Mail to that provider is delayed and may bounce when Stalwart's retry window runs out."
+              runbook_url: "https://example.invalid/runbook#maildeferredbyprovider"
+      # The earlier hour has slid out of the offset window.
+      - eval_time: 131m
+        alertname: MailDeferredByProvider
+        exp_alerts: []
+
+  # Journal near its cap (500Mi > 0.85 * 500Mi) with short retention fires;
+  # the same retention below the size gate doesn't. A month-old user journal
+  # doesn't count as retention.
+  - interval: 1m
+    input_series:
+      - series: 'file_mtime_seconds{job="example.invalid/brygge-host", file_name="system@0001-0001-0001.journal"}'
+        values: '0x90'
+      - series: 'file_mtime_seconds{job="example.invalid/brygge-host", file_name="user-1000@0001-0001-0001.journal"}'
+        values: '-2592000x90'
+      - series: 'file_size_bytes{job="example.invalid/brygge-host", file_name="system@0001-0001-0001.journal"}'
+        values: '314572800x90'
+      - series: 'file_size_bytes{job="example.invalid/brygge-host", file_name="system.journal"}'
+        values: '209715200x90'
+    alert_rule_test:
+      - eval_time: 90m
+        alertname: JournalRetentionShort
+        exp_alerts:
+          - exp_labels:
+              service_namespace: example.invalid
+              club: example
+              severity: warn
+            exp_annotations:
+              summary: "example.invalid: journal keeps only 1h 30m 0s of history"
+              description: "The journal is near its 500M cap and its oldest archived system file is 1h 30m 0s old (threshold 7 days). Something is logging heavily."
+              runbook_url: "https://example.invalid/runbook#journalretentionshort"
+  - interval: 1m
+    input_series:
+      - series: 'file_mtime_seconds{job="example.invalid/brygge-host", file_name="system@0001-0001-0001.journal"}'
+        values: '0x90'
+      - series: 'file_size_bytes{job="example.invalid/brygge-host", file_name="system@0001-0001-0001.journal"}'
+        values: '104857600x90'
+      - series: 'file_size_bytes{job="example.invalid/brygge-host", file_name="system.journal"}'
+        values: '104857600x90'
+    alert_rule_test:
+      - eval_time: 90m
+        alertname: JournalRetentionShort
+        exp_alerts: []
+
+  # One DMARC report with DKIMFAIL > 0, counted at minute 5 by the collector,
+  # fires for the 6h window and then resolves.
+  - interval: 1m
+    input_series:
+      - series: 'stalwart_journal_dmarc_dkim_failures{job="example.invalid/stalwart"}'
+        values: '_x5 1'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: DmarcDkimFailing
+        exp_alerts:
+          - exp_labels:
+              service_namespace: example.invalid
+              club: example
+              severity: page
+            exp_annotations:
+              summary: "example.invalid: DMARC report shows DKIM failures"
+              description: "1 DMARC aggregate report(s) in the last 6 hours reported DKIM failures for mail from this domain."
+              runbook_url: "https://example.invalid/runbook#dmarcdkimfailing"
+      - eval_time: 7h
+        alertname: DmarcDkimFailing
+        exp_alerts: []
+
+  # Two send errors in 15 minutes stay under the threshold.
+  - interval: 1m
+    input_series:
+      - series: 'brygge_email_send_total{job="example.invalid/brygge-api", kind="invoice_reminder", result="error"}'
+        values: '0x10 1 2x10'
+      - series: 'brygge_email_send_total{job="example.invalid/brygge-api", kind="invoice_reminder", result="ok"}'
+        values: '0+5x21'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: EmailSendErrors
+        exp_alerts: []
+  # Three do, also when split across kinds.
+  - interval: 1m
+    input_series:
+      - series: 'brygge_email_send_total{job="example.invalid/brygge-api", kind="invoice_reminder", result="error"}'
+        values: '0x10 1 2x10'
+      - series: 'brygge_email_send_total{job="example.invalid/brygge-api", kind="magic_link", result="error"}'
+        values: '0x12 1x8'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: EmailSendErrors
+        exp_alerts:
+          - exp_labels:
+              service_namespace: example.invalid
+              club: example
+              severity: page
+            exp_annotations:
+              summary: "example.invalid: the API failed to hand mail to the relay"
+              description: "About 3 app email sends failed in the last 15 minutes (magic links, invoices, reminders)."
+              runbook_url: "https://example.invalid/runbook#emailsenderrors"
+
+  # The oldest message crosses 6h at minute 10; the API stops reporting the
+  # gauge after minute 20 (15 minutes without a good poll), and the alert
+  # resolves instead of sticking at the last value.
+  - interval: 1m
+    input_series:
+      - series: 'brygge_mail_queue_oldest_age_seconds{job="example.invalid/brygge-api"}'
+        values: '21000+60x20'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: MailQueueStuck
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: MailQueueStuck
+        exp_alerts:
+          - exp_labels:
+              service_namespace: example.invalid
+              club: example
+              severity: page
+            exp_annotations:
+              summary: "example.invalid: oldest queued mail is 6h 5m 0s old"
+              description: "Stalwart's outbound queue has held a message for 6h 5m 0s (threshold 6h)."
+              runbook_url: "https://example.invalid/runbook#mailqueuestuck"
+      - eval_time: 30m
+        alertname: MailQueueStuck
+        exp_alerts: []
+
+  # last_success is 0 until the first poll at minute 2 (no alert thanks to
+  # `for`), then tracks time() until the API stops exporting at minute 32.
+  # The stale value still counts: unknown from minute 47, firing after 5m.
+  - interval: 1m
+    input_series:
+      - series: 'brygge_mail_queue_last_success_seconds{job="example.invalid/brygge-api"}'
+        values: '0 0 120+60x30'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: MailQueueUnknown
+        exp_alerts: []
+      - eval_time: 50m
+        alertname: MailQueueUnknown
+        exp_alerts: []
+      - eval_time: 55m
+        alertname: MailQueueUnknown
+        exp_alerts:
+          - exp_labels:
+              service_namespace: example.invalid
+              club: example
+              severity: warn
+            exp_annotations:
+              summary: "example.invalid: mail queue state unknown"
+              description: "The API's last successful Stalwart queue poll was more than 15 minutes ago. MailQueueStuck can't fire while this is firing."
+              runbook_url: "https://example.invalid/runbook#mailqueueunknown"
+
+  # A club without the queue monitor has no last_success series and never fires.
+  - interval: 1m
+    input_series:
+      - series: 'brygge_email_send_total{job="example.invalid/brygge-api", kind="other", result="ok"}'
+        values: '0x60'
+    alert_rule_test:
+      - eval_time: 60m
+        alertname: MailQueueUnknown
+        exp_alerts: []
+
+  # Certificates: the minimum per endpoint across the renewal-changed CN
+  # labels, read from 10-minute probes.
+  - interval: 10m
+    input_series:
+      - series: 'tlscheck_time_left_seconds{job="example.invalid/brygge-host", tlscheck_target="example.invalid:443", tlscheck_x509_cn="example.invalid"}'
+        values: '864000 863400 862800'
+      - series: 'tlscheck_time_left_seconds{job="example.invalid/brygge-host", tlscheck_target="mail.example.invalid:465", tlscheck_x509_cn="mail.example.invalid"}'
+        values: '7776000 7775400 7774800'
+    alert_rule_test:
+      - eval_time: 27m
+        alertname: TlsCertExpiring
+        exp_alerts:
+          - exp_labels:
+              tlscheck_target: example.invalid:443
+              service_namespace: example.invalid
+              club: example
+              severity: warn
+            exp_annotations:
+              summary: "example.invalid: certificate on example.invalid:443 expires in 9d 23h 40m 0s"
+              description: "The certificate served on example.invalid:443 has 9d 23h 40m 0s left (threshold 14 days). Renewal is failing, or the service hasn't reloaded the renewed certificate."
+              runbook_url: "https://example.invalid/runbook#tlscertexpiring"
+
+  # One permanent-failure bounce: a daily notification.
+  - interval: 1m
+    input_series:
+      - series: 'stalwart_journal_bounces{job="example.invalid/stalwart", kind="dsn_permfail"}'
+        values: '_x3 1'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: MailBounced
+        exp_alerts:
+          - exp_labels:
+              kind: dsn_permfail
+              service_namespace: example.invalid
+              club: example
+              severity: daily
+            exp_annotations:
+              summary: "example.invalid: 1 bounce(s) (dsn_permfail) in the last 24h"
+              description: "Stalwart gave up on 1 message(s) in the last 24 hours (kind dsn_permfail: dsn_permfail = permanent failure notice sent to the sender, double_bounce = the notice itself bounced)."
+              runbook_url: "https://example.invalid/runbook#mailbounced"

@@ -6,15 +6,18 @@ Brygge exports metrics, traces, and logs via OTLP. The SDK lives in the Go API; 
 
 | Page | Read when you need to know… |
 |------|-----------------------------|
-| [instrumentation.md](instrumentation.md) | What signals the Brygge API emits (HTTP, DB pool, outbound traces, resource attributes) |
+| [instrumentation.md](instrumentation.md) | What signals the Brygge API emits (HTTP, DB pool, email send counter, mail queue gauges, outbound traces, resource attributes) |
 | [app-config.md](app-config.md) | How to point the Brygge API at a collector via env vars (`OTEL_EXPORTER_OTLP_*`) |
-| [local-collector.md](local-collector.md) | The OTel Collector running on the production VM — what it scrapes, how it's wired in NixOS |
+| [local-collector.md](local-collector.md) | The OTel Collector running on the production VM — what it scrapes (host metrics, cert expiry, journal files, Stalwart journal event counts), how it's wired in NixOS |
 | [upstream-contract.md](upstream-contract.md) | Contract the VM expects from the upstream collector (transport, auth, signals). Hand to a cluster-side operator |
+| [alerting.md](alerting.md) | Prometheus alert rules for mail and host health, ntfy routing, the label/job contract, the home-cluster operator recipe, `just alerts-check` |
+| [alerts-runbook.md](alerts-runbook.md) | What each alert means and what to do when it fires |
 | [docker-collector.md](docker-collector.md) | Self-contained docker-compose example collector with Prometheus + Grafana (for dev/standalone deploys) |
 
 ## Quick orientation
 
 - **Local dev:** spin up the docker-compose collector from [docker-collector.md](docker-collector.md), point `OTEL_EXPORTER_OTLP_ENDPOINT` at it.
 - **Production:** the NixOS VM already runs a collector on `127.0.0.1:4317` (see [local-collector.md](local-collector.md)). The Brygge API is wired to it via `services.brygge.extraEnvironment` in `nix/host.nix`. Forwarding to the home cluster requires `/etc/otel/env`, tailnet membership, and `tailnet_domain` in tfvars (see [upstream-contract.md](upstream-contract.md)).
+- **Alerts:** rules in [alerts/](alerts/), evaluated by the upstream Prometheus and pushed to ntfy (see [alerting.md](alerting.md)).
 
 See also: [../configuration.md](../configuration.md) · [../deploy.md](../deploy.md)

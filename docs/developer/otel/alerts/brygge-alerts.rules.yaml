@@ -1,0 +1,194 @@
+# Brygge alert rules: plain Prometheus rule groups for one deployment.
+#
+# Placeholders, substituted by scripts/render-brygge-alerts.sh:
+#   __SERVICE_NAMESPACE__  club domain = the OTel service.namespace; series
+#                          carry job="<service.namespace>/<service.name>"
+#   __CLUB_SLUG__          short club identifier, used in group names and
+#                          the `club` label
+#   __RUNBOOK_BASE__       URL of alerts-runbook.md; each rule appends its
+#                          section anchor
+# They are deliberately not ${...}: Flux post-build substitution would eat
+# those in the home-cluster repo.
+#
+# Every rule carries static service_namespace, club and severity labels:
+# the series only carry `job`, and absent_over_time() returns no labels,
+# so Alertmanager routing can't rely on series labels. severity is one of
+# page | warn | daily (not `info`, which kube-prometheus-stack's
+# InfoInhibitor silences).
+#
+# Metric names and labels: docs/developer/otel/alerting.md § Label and job
+# contract. Runbook: docs/developer/otel/alerts-runbook.md. Tests:
+# brygge-alerts.test.yaml (`just alerts-check`).
+groups:
+  - name: brygge-__CLUB_SLUG__-host
+    rules:
+      # Host metrics arrive every 30s, so 30 minutes without one means the
+      # VM, its collector, the tailnet path or the home ingress is down.
+      - alert: HostSilent
+        expr: absent_over_time(system_memory_usage_bytes{job="__SERVICE_NAMESPACE__/brygge-host"}[30m])
+        labels:
+          service_namespace: __SERVICE_NAMESPACE__
+          club: __CLUB_SLUG__
+          severity: page
+        annotations:
+          summary: "__SERVICE_NAMESPACE__: no host metrics for 30 minutes"
+          description: "No system_memory_usage_bytes sample from job __SERVICE_NAMESPACE__/brygge-host in the last 30 minutes. The host, its OTel collector, or the export path to the home cluster is down."
+          runbook_url: "__RUNBOOK_BASE__#hostsilent"
+
+      # tls_check runs every 10m, longer than the 5m lookback, so read the
+      # last sample in 20m. Series also carry the certificate's CN/issuer,
+      # which change on renewal: take the minimum per probed endpoint.
+      - alert: TlsCertExpiring
+        expr: |
+          min by (tlscheck_target) (
+            last_over_time(tlscheck_time_left_seconds{job="__SERVICE_NAMESPACE__/brygge-host"}[20m])
+          ) < 14 * 86400
+        labels:
+          service_namespace: __SERVICE_NAMESPACE__
+          club: __CLUB_SLUG__
+          severity: warn
+        annotations:
+          summary: "__SERVICE_NAMESPACE__: certificate on {{ $labels.tlscheck_target }} expires in {{ $value | humanizeDuration }}"
+          description: "The certificate served on {{ $labels.tlscheck_target }} has {{ $value | humanizeDuration }} left (threshold 14 days). Renewal is failing, or the service hasn't reloaded the renewed certificate."
+          runbook_url: "__RUNBOOK_BASE__#tlscertexpiring"
+
+      # The collector already skips tmpfs/overlay/squashfs; the type matcher
+      # keeps the rule honest if that scraper config changes.
+      - alert: DiskFilling
+        expr: |
+          max by (mountpoint) (
+            system_filesystem_utilization_ratio{job="__SERVICE_NAMESPACE__/brygge-host", type!~"tmpfs|devtmpfs|overlay|squashfs|ramfs"}
+          ) > 0.85
+        for: 15m
+        labels:
+          service_namespace: __SERVICE_NAMESPACE__
+          club: __CLUB_SLUG__
+          severity: warn
+        annotations:
+          summary: "__SERVICE_NAMESPACE__: {{ $labels.mountpoint }} is {{ $value | humanizePercentage }} full"
+          description: "Filesystem {{ $labels.mountpoint }} has been above 85% for 15 minutes."
+          runbook_url: "__RUNBOOK_BASE__#diskfilling"
+
+      # The journal is capped by size (SystemMaxUse=500M). Retention is the
+      # age of the oldest archived system journal (mtime = when it was
+      # sealed, so the estimate errs short). Only alert when the journal is
+      # also near its cap: a young host has a short history but plenty of
+      # room. file_stats runs every 5m, so read the last sample in 15m.
+      - alert: JournalRetentionShort
+        expr: |
+          (
+            time() - min(last_over_time(file_mtime_seconds{job="__SERVICE_NAMESPACE__/brygge-host", file_name=~"system@.*"}[15m]))
+          ) < 7 * 86400
+          and on ()
+          sum(last_over_time(file_size_bytes{job="__SERVICE_NAMESPACE__/brygge-host", file_name=~".*\\.journal"}[15m])) > 0.85 * 500 * 1024 * 1024
+        for: 1h
+        labels:
+          service_namespace: __SERVICE_NAMESPACE__
+          club: __CLUB_SLUG__
+          severity: warn
+        annotations:
+          summary: "__SERVICE_NAMESPACE__: journal keeps only {{ $value | humanizeDuration }} of history"
+          description: "The journal is near its 500M cap and its oldest archived system file is {{ $value | humanizeDuration }} old (threshold 7 days). Something is logging heavily."
+          runbook_url: "__RUNBOOK_BASE__#journalretentionshort"
+
+  - name: brygge-__CLUB_SLUG__-mail
+    rules:
+      # stalwart_journal_* are per-batch event counts exported as gauges:
+      # sum_over_time, never rate. A rejection is only seen when Stalwart
+      # retries, so 4xx in both adjacent hours means the provider is still
+      # refusing after the first hour. Once retries are more than an hour
+      # apart this resolves between attempts; MailQueueStuck covers that.
+      - alert: MailDeferredByProvider
+        expr: |
+          sum by (server_address) (
+            sum_over_time(stalwart_journal_remote_rejections{job="__SERVICE_NAMESPACE__/stalwart", smtp_code=~"4.."}[1h])
+          ) > 0
+          and
+          sum by (server_address) (
+            sum_over_time(stalwart_journal_remote_rejections{job="__SERVICE_NAMESPACE__/stalwart", smtp_code=~"4.."}[1h] offset 1h)
+          ) > 0
+        labels:
+          service_namespace: __SERVICE_NAMESPACE__
+          club: __CLUB_SLUG__
+          severity: page
+        annotations:
+          summary: "__SERVICE_NAMESPACE__: {{ $labels.server_address }} has deferred mail for over an hour"
+          description: "{{ $labels.server_address }} returned 4xx to Stalwart in each of the last two hours ({{ $value }} in the last hour). Mail to that provider is delayed and may bounce when Stalwart's retry window runs out."
+          runbook_url: "__RUNBOOK_BASE__#maildeferredbyprovider"
+
+      - alert: MailQueueStuck
+        expr: max(brygge_mail_queue_oldest_age_seconds{job="__SERVICE_NAMESPACE__/brygge-api"}) > 6 * 3600
+        labels:
+          service_namespace: __SERVICE_NAMESPACE__
+          club: __CLUB_SLUG__
+          severity: page
+        annotations:
+          summary: "__SERVICE_NAMESPACE__: oldest queued mail is {{ $value | humanizeDuration }} old"
+          description: "Stalwart's outbound queue has held a message for {{ $value | humanizeDuration }} (threshold 6h)."
+          runbook_url: "__RUNBOOK_BASE__#mailqueuestuck"
+
+      # last_success is the unix time of the API's last good queue poll.
+      # last_over_time keeps the alert alive when the API stops exporting
+      # (its series go stale) for up to a day; a club without the queue
+      # monitor has no series and never fires. max() spans restarts, which
+      # may start a new series. The value is 0 until the first poll: `for`
+      # covers that.
+      - alert: MailQueueUnknown
+        expr: |
+          time() - max(last_over_time(brygge_mail_queue_last_success_seconds{job="__SERVICE_NAMESPACE__/brygge-api"}[1d])) > 15 * 60
+        for: 5m
+        labels:
+          service_namespace: __SERVICE_NAMESPACE__
+          club: __CLUB_SLUG__
+          severity: warn
+        annotations:
+          summary: "__SERVICE_NAMESPACE__: mail queue state unknown"
+          description: "The API's last successful Stalwart queue poll was more than 15 minutes ago. MailQueueStuck can't fire while this is firing."
+          runbook_url: "__RUNBOOK_BASE__#mailqueueunknown"
+
+      - alert: DkimSignerMissing
+        expr: sum(sum_over_time(stalwart_journal_dkim_signer_missing{job="__SERVICE_NAMESPACE__/stalwart"}[1h])) > 0
+        labels:
+          service_namespace: __SERVICE_NAMESPACE__
+          club: __CLUB_SLUG__
+          severity: page
+        annotations:
+          summary: "__SERVICE_NAMESPACE__: Stalwart sent mail without a DKIM signature"
+          description: "Stalwart logged 'DKIM signer not found' {{ $value }} time(s) in the last hour. Outbound mail is unsigned and fails DMARC at strict receivers."
+          runbook_url: "__RUNBOOK_BASE__#dkimsignermissing"
+
+      # Aggregate reports arrive about daily; a 6h window keeps one failing
+      # report visible long enough to be routed.
+      - alert: DmarcDkimFailing
+        expr: sum(sum_over_time(stalwart_journal_dmarc_dkim_failures{job="__SERVICE_NAMESPACE__/stalwart"}[6h])) > 0
+        labels:
+          service_namespace: __SERVICE_NAMESPACE__
+          club: __CLUB_SLUG__
+          severity: page
+        annotations:
+          summary: "__SERVICE_NAMESPACE__: DMARC report shows DKIM failures"
+          description: "{{ $value }} DMARC aggregate report(s) in the last 6 hours reported DKIM failures for mail from this domain."
+          runbook_url: "__RUNBOOK_BASE__#dmarcdkimfailing"
+
+      # increase() extrapolates, so 3 errors in 15 minutes can read as 2.6.
+      - alert: EmailSendErrors
+        expr: sum(increase(brygge_email_send_total{job="__SERVICE_NAMESPACE__/brygge-api", result="error"}[15m])) >= 2.5
+        labels:
+          service_namespace: __SERVICE_NAMESPACE__
+          club: __CLUB_SLUG__
+          severity: page
+        annotations:
+          summary: "__SERVICE_NAMESPACE__: the API failed to hand mail to the relay"
+          description: "About {{ $value | printf \"%.0f\" }} app email sends failed in the last 15 minutes (magic links, invoices, reminders)."
+          runbook_url: "__RUNBOOK_BASE__#emailsenderrors"
+
+      - alert: MailBounced
+        expr: sum by (kind) (sum_over_time(stalwart_journal_bounces{job="__SERVICE_NAMESPACE__/stalwart"}[24h])) > 0
+        labels:
+          service_namespace: __SERVICE_NAMESPACE__
+          club: __CLUB_SLUG__
+          severity: daily
+        annotations:
+          summary: "__SERVICE_NAMESPACE__: {{ $value }} bounce(s) ({{ $labels.kind }}) in the last 24h"
+          description: "Stalwart gave up on {{ $value }} message(s) in the last 24 hours (kind {{ $labels.kind }}: dsn_permfail = permanent failure notice sent to the sender, double_bounce = the notice itself bounced)."
+          runbook_url: "__RUNBOOK_BASE__#mailbounced"

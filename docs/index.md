@@ -69,7 +69,7 @@ Each is a self-contained module covering one subject in depth. Per the deep-modu
 
 | Document | Audience | Description |
 |----------|----------|-------------|
-| [developer/otel/index.md](developer/otel/index.md) | Operators | Instrumentation, app config, local + upstream collectors |
+| [developer/otel/index.md](developer/otel/index.md) | Operators | Instrumentation, app config, local + upstream collectors, alert rules + runbook |
 
 #### [developer/security/](developer/security/)
 

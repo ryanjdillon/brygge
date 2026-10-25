@@ -1,0 +1,80 @@
+# Alertmanager fragment: route Brygge alerts to ntfy.
+#
+# Merge into the existing Alertmanager config (for kube-prometheus-stack, the
+# `alertmanager.config` Helm value): prepend the route below to `route.routes`
+# and append the receivers to `receivers`. Recipe and checks:
+# docs/developer/otel/alerting.md.
+#
+# Alertmanager has no native ntfy receiver; ntfy accepts Alertmanager's
+# webhook JSON and formats it itself with its built-in template:
+#
+#   https://ntfy.sh/<topic>?template=alertmanager&priority=<min|low|default|high|urgent>
+#
+# The URLs (which contain the unguessable topic) and the ntfy access token
+# live in a Secret, never here. Create `alertmanager-ntfy` with the keys
+# `token`, `url-page`, `url-warn` and `url-daily`, and list it under
+# `alertmanagerSpec.secrets` so it is mounted at
+# /etc/alertmanager/secrets/alertmanager-ntfy/<key>. Suggested priorities:
+# page → urgent, warn → default, daily → low.
+
+route:
+  routes:
+    # Every Brygge rule sets service_namespace statically, and nothing else in
+    # the cluster is expected to, so this catches exactly the Brygge alerts.
+    # It must come before any catch-all route.
+    - matchers:
+        - service_namespace=~".+"
+      receiver: brygge-ntfy-warn
+      group_by: [alertname, service_namespace]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 24h
+      # true: after the ntfy notification, keep matching the routes below
+      # (e.g. the existing Home Assistant receiver) as well.
+      continue: false
+      routes:
+        - matchers:
+            - severity="page"
+          receiver: brygge-ntfy-page
+          repeat_interval: 4h
+        - matchers:
+            - severity="warn"
+          receiver: brygge-ntfy-warn
+          repeat_interval: 24h
+        # Bounces: at most one notification per alert group a day.
+        - matchers:
+            - severity="daily"
+          receiver: brygge-ntfy-daily
+          group_wait: 5m
+          group_interval: 24h
+          repeat_interval: 24h
+
+receivers:
+  - name: brygge-ntfy-page
+    webhook_configs:
+      - url_file: /etc/alertmanager/secrets/alertmanager-ntfy/url-page
+        send_resolved: true
+        # Keep the payload small; ntfy messages are short anyway.
+        max_alerts: 10
+        http_config:
+          authorization:
+            type: Bearer
+            credentials_file: /etc/alertmanager/secrets/alertmanager-ntfy/token
+  - name: brygge-ntfy-warn
+    webhook_configs:
+      - url_file: /etc/alertmanager/secrets/alertmanager-ntfy/url-warn
+        send_resolved: true
+        max_alerts: 10
+        http_config:
+          authorization:
+            type: Bearer
+            credentials_file: /etc/alertmanager/secrets/alertmanager-ntfy/token
+  - name: brygge-ntfy-daily
+    webhook_configs:
+      - url_file: /etc/alertmanager/secrets/alertmanager-ntfy/url-daily
+        send_resolved: true
+        max_alerts: 10
+        http_config:
+          authorization:
+            type: Bearer
+            credentials_file: /etc/alertmanager/secrets/alertmanager-ntfy/token

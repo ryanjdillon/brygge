@@ -175,6 +175,16 @@ lint-vue:
 # Lint all
 lint: lint-go lint-vue
 
+# Render the alert rules for example.invalid and run promtool's rule check
+# and unit tests (docs/developer/otel/alerting.md)
+alerts-check:
+    nix develop --command bash scripts/check-brygge-alerts.sh
+
+# Render the alert rules as a PrometheusRule CR for one deployment
+# (BRYGGE_ALERTS_LABELS / BRYGGE_ALERTS_NAMESPACE set the CR's metadata)
+alerts-render service_namespace club_slug *runbook_base:
+    bash scripts/render-brygge-alerts.sh {{service_namespace}} {{club_slug}} {{runbook_base}}
+
 # Find unused exports, dependencies, and dead code in frontend
 knip:
     cd frontend && npx knip --reporter compact

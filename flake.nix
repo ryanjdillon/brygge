@@ -143,6 +143,17 @@
           mail-bounce = import ./nix/tests/mail-bounce.nix {
             pkgs = nixpkgs.legacyPackages.${system};
           };
+          # Same as `just alerts-check`: promtool check + unit tests on the
+          # alert rules rendered for a placeholder deployment.
+          alerts = let
+            pkgs = nixpkgs.legacyPackages.${system};
+          in pkgs.runCommand "brygge-alerts-check" {
+            nativeBuildInputs = [ pkgs.prometheus.cli ];
+          } ''
+            BRYGGE_ALERTS_DIR=${./docs/developer/otel/alerts} \
+              bash ${./scripts}/check-brygge-alerts.sh
+            touch $out
+          '';
         }) deploy-rs.lib;
     }
     // flake-utils.lib.eachSystem [ "x86_64-linux" "aarch64-linux" ] (
@@ -193,6 +204,8 @@
             git
             curl
             jq
+            # promtool only: the default output's `migrate` would shadow go-migrate.
+            prometheus.cli
             deploy-rs.packages.${system}.default
           ];
 

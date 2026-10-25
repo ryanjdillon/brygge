@@ -87,10 +87,11 @@ The DMARC count needs Stalwart to parse incoming aggregate reports: `report.anal
 
 ## Host metrics upstream
 
-Host signals the alert rules use, as named in Prometheus by an exporter with default unit/type suffixing (`job="<club domain>/brygge-host"`; dots in attribute names become underscores):
+Host signals the [alert rules](alerting.md) use, as named in Prometheus by an exporter with default unit/type suffixing (`job="<club domain>/brygge-host"`; dots in attribute names become underscores):
 
 | Metric (OTLP) | Prometheus name | Labels of note |
 |---|---|---|
+| `system.memory.usage` (By) | `system_memory_usage_bytes` | `state` — the HostSilent heartbeat |
 | `tlscheck.time_left` (s) | `tlscheck_time_left_seconds` | `tlscheck_target` (`host:port`) |
 | `file.size` (By) | `file_size_bytes` | `file_name` |
 | `file.mtime` (s) | `file_mtime_seconds` | `file_name` |

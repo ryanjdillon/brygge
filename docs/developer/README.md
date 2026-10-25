@@ -50,7 +50,7 @@ Audience: deployers, contributors, and anyone troubleshooting at the OS / protoc
 |--------|-------------|
 | [security/](security/) | TOTP / 2FA — enrollment, recovery, admin reset |
 | [mail/](mail/) | Self-hosted Stalwart + Bulwark — setup, shared inbox, internals, BIMI |
-| [otel/](otel/) | OpenTelemetry — instrumentation, collectors |
+| [otel/](otel/) | OpenTelemetry — instrumentation, collectors, alerting |
 
 ## Subsystem READMEs (colocated with code)
 
