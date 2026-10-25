@@ -183,6 +183,8 @@ identities, _ := jmap.ListIdentities(ctx, accountID)  // Identity/get with submi
 // Pick the one whose email matches the From address, else the first available.
 ```
 
+The default Identity is created lazily, on the account's first `Identity/get`, with `name` copied from the principal's `description` (`crates/jmap/src/identity/get.rs` in 0.15.5). It is never updated afterwards — changing the description later does not rename it. Rename it with `Identity/set { update: { <id>: { name } } }` (`JMAPClient.SetIdentityName`, which surfaces `notUpdated.<id>.description`). So a principal's `description` must be display text: anything put there (a provisioning marker, a personal email) ends up as the From name of every client that sends with the default Identity. Brygge keeps ownership markers in the principal's `urls` list instead.
+
 The `emailId` can use JMAP's creation-id back-reference (`"#tmp"`) when chained after an `Email/set { create: { tmp: ... } }` in the same request — Stalwart honours this correctly.
 
 ### `Mailbox/set` shareWith

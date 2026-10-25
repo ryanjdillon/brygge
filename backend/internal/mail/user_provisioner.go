@@ -98,8 +98,11 @@ func (p *UserProvisioner) EnsureUserPrincipal(ctx context.Context, userID, email
 		if err := p.setSecret(ctx, slug, password); err != nil {
 			return "", fmt.Errorf("rotate stalwart secret: %w", err)
 		}
+		if _, err := p.convergePrincipal(ctx, slug, userID); err != nil {
+			p.log.Warn().Err(err).Str("slug", slug).Msg("converge reclaimed principal metadata")
+		}
 	} else {
-		if err := p.createPrincipal(ctx, slug, email, password); err != nil {
+		if err := p.createPrincipal(ctx, slug, userID, password); err != nil {
 			return "", fmt.Errorf("create stalwart principal: %w", err)
 		}
 	}
@@ -212,13 +215,13 @@ func (p *UserProvisioner) principalExists(ctx context.Context, slug string) (boo
 	return id != "", nil
 }
 
-func (p *UserProvisioner) createPrincipal(ctx context.Context, slug, realEmail, password string) error {
+func (p *UserProvisioner) createPrincipal(ctx context.Context, slug, userID, password string) error {
 	// Stalwart only accepts emails on a domain it serves. The user's
 	// real email (e.g. gmail.com) lives in users.email for Brygge
 	// auth — Stalwart's principal carries a synthetic local address
 	// `<slug>@<club_domain>`. The user authenticates JMAP by `name`
 	// (slug) + password; their real email plays no role on the
-	// Stalwart side.
+	// Stalwart side, so it is kept out of the principal entirely.
 	//
 	// Pre-hash with bcrypt before POSTing (DIL-322). Stalwart's
 	// admin REST POST persists `secrets` verbatim — it does NOT
@@ -235,11 +238,116 @@ func (p *UserProvisioner) createPrincipal(ctx context.Context, slug, realEmail, 
 		"name":        slug,
 		"emails":      []string{synthetic},
 		"secrets":     []string{string(hashed)},
-		"description": fmt.Sprintf("Brygge user %s (managed_by=brygge-user)", realEmail),
+		"description": userPrincipalDescription,
+		"urls":        userPrincipalURLs(userID),
 		"roles":       []string{"user"},
 		"quota":       0,
 	}
 	return p.admin.doJSON(ctx, "POST", "/api/principal", body, nil)
+}
+
+// User principals carry display text in `description` and the
+// ownership marker plus a non-PII correlator in `urls`. Stalwart copies
+// the description into the account's default JMAP Identity name, so a
+// marker there would leak to anyone the account ever mails.
+const (
+	userPrincipalDescription = "Brygge user"
+	managedByUserURN         = "urn:brygge:managed-by:brygge-user"
+)
+
+func userPrincipalURLs(userID string) []string {
+	return []string{managedByUserURN, "urn:brygge:user:" + userID}
+}
+
+// ConvergePrincipalMetadata brings every provisioned user principal's
+// description and urls to the current shape. Idempotent: it reads each
+// principal and patches only on a difference, so running it at every
+// boot costs one GET per user once converged. Per-principal failures
+// are logged and skipped.
+func (p *UserProvisioner) ConvergePrincipalMetadata(ctx context.Context) {
+	rows, err := p.db.Query(ctx, `SELECT user_id::text, jmap_user FROM user_mail_credentials ORDER BY jmap_user`)
+	if err != nil {
+		p.log.Warn().Err(err).Msg("converge principal metadata: list credentials")
+		return
+	}
+	type cred struct{ userID, slug string }
+	var creds []cred
+	for rows.Next() {
+		var c cred
+		if err := rows.Scan(&c.userID, &c.slug); err != nil {
+			rows.Close()
+			p.log.Warn().Err(err).Msg("converge principal metadata: scan")
+			return
+		}
+		creds = append(creds, c)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		p.log.Warn().Err(err).Msg("converge principal metadata: rows")
+		return
+	}
+
+	patched := 0
+	for _, c := range creds {
+		changed, err := p.convergePrincipal(ctx, c.slug, c.userID)
+		if err != nil {
+			p.log.Warn().Err(err).Str("slug", c.slug).Msg("converge principal metadata")
+			continue
+		}
+		if changed {
+			patched++
+		}
+	}
+	if patched > 0 {
+		p.log.Info().Int("patched", patched).Int("principals", len(creds)).Msg("converged user principal metadata")
+	}
+}
+
+// convergePrincipal sets one user principal's description and urls when
+// they differ from the desired values. A principal that no longer
+// exists is left alone; EnsureUserPrincipal recreates it on demand.
+func (p *UserProvisioner) convergePrincipal(ctx context.Context, slug, userID string) (bool, error) {
+	var env struct {
+		Data *struct {
+			Description string   `json:"description"`
+			URLs        []string `json:"urls"`
+		} `json:"data"`
+	}
+	if err := p.admin.doJSON(ctx, "GET", "/api/principal/"+slug, nil, &env); err != nil {
+		return false, err
+	}
+	if env.Data == nil {
+		return false, nil
+	}
+	wantURLs := userPrincipalURLs(userID)
+	if env.Data.Description == userPrincipalDescription && sameStringSet(env.Data.URLs, wantURLs) {
+		return false, nil
+	}
+	body := []map[string]any{
+		{"action": "set", "field": "description", "value": userPrincipalDescription},
+		{"action": "set", "field": "urls", "value": wantURLs},
+	}
+	if err := p.admin.doJSON(ctx, "PATCH", "/api/principal/"+slug, body, nil); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func sameStringSet(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	seen := make(map[string]int, len(a))
+	for _, s := range a {
+		seen[s]++
+	}
+	for _, s := range b {
+		if seen[s] == 0 {
+			return false
+		}
+		seen[s]--
+	}
+	return true
 }
 
 func (p *UserProvisioner) setSecret(ctx context.Context, slug, password string) error {
@@ -269,4 +377,3 @@ func generateServicePassword() (string, error) {
 	// 24 random bytes -> 32 base64 chars (URL-safe, no padding).
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
-

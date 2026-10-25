@@ -226,7 +226,7 @@ func main() {
 			default:
 				jmapFactory := mail.NewJMAPFactory(cfg.StalwartAdminURL)
 				adminJMAP := jmapFactory.AsPrincipal(cfg.StalwartAdminUser, cfg.StalwartAdminPassword)
-				inboxReconciler = mail.NewReconciler(db, adminJMAP, jmapFactory, passwords, auditService, spec, cfg.ReconcilerDryRun, log)
+				inboxReconciler = mail.NewReconciler(db, adminJMAP, jmapFactory, passwords, auditService, spec, cfg.ClubSlug, cfg.ClubName, cfg.ReconcilerDryRun, log)
 			}
 		}
 	}
@@ -1445,6 +1445,17 @@ func main() {
 			log.Fatal().Err(err).Msg("server failed")
 		}
 	}()
+
+	// Bring existing user principals' description/urls to the current
+	// shape (display text, marker in urls). Idempotent, so every boot
+	// runs it; once converged it is one admin GET per user.
+	if userProvisioner != nil {
+		go func() {
+			bootCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+			defer cancel()
+			userProvisioner.ConvergePrincipalMetadata(bootCtx)
+		}()
+	}
 
 	// Shared-inbox ACL reconciler (DIL-275/276): one pass at boot to
 	// recover from out-of-band drift, then every 5 min as the

@@ -1152,6 +1152,11 @@ SQL
 
       ADMIN=$(cat "$ADMIN_FILE")
       API="http://127.0.0.1:8088/api/principal"
+      # Ownership marker for principals this unit manages. It lives in
+      # `urls`, never in `description`: Stalwart copies the description
+      # into the account's default JMAP Identity, whose name is the
+      # sender name every recipient sees.
+      MANAGED_URN="urn:brygge:managed-by:brygge-tf"
 
       # Initialise the password map if missing or empty. The
       # tmpfiles rule creates the file with the right perms; we just
@@ -1182,7 +1187,8 @@ SQL
 
       # System alias: postmaster@ → operator email (admin_email in tfvars).
       # Created on every deploy regardless of board_mailboxes config.
-      # Members are always synced so admin_email changes propagate on redeploy.
+      # Label, marker and members are always synced so admin_email changes
+      # propagate on redeploy.
       POSTMASTER_ADDR="postmaster@${clubConfig.domain}"
       ADMIN_EMAIL="${clubConfig.adminEmail}"
       EXISTS=$(curl -fsS -u "admin:$ADMIN" "$API/postmaster" \
@@ -1190,12 +1196,21 @@ SQL
       if [ "$EXISTS" = "no" ]; then
         BODY=$(jq -nc \
           --arg email "$POSTMASTER_ADDR" \
-          '{type:"list", name:"postmaster", emails:[$email], description:"System postmaster (managed_by=brygge-tf)", quota:0}')
+          --arg urn "$MANAGED_URN" \
+          '{type:"list", name:"postmaster", emails:[$email], description:"System postmaster", urls:[$urn], quota:0}')
         curl -fsS -u "admin:$ADMIN" -X POST "$API" \
              -H 'Content-Type: application/json' -d "$BODY" >/dev/null \
           && echo "created postmaster list" \
           || echo "WARN: failed to create postmaster" >&2
       fi
+      # Separate PATCHes: Stalwart rejects a PATCH as a whole, so a bad
+      # member must not also block the label/marker refresh.
+      BODY=$(jq -nc --arg urn "$MANAGED_URN" \
+        '[{action:"set",field:"description",value:"System postmaster"},
+          {action:"set",field:"urls",value:[$urn]}]')
+      curl -fsS -u "admin:$ADMIN" -X PATCH "$API/postmaster" \
+           -H 'Content-Type: application/json' -d "$BODY" >/dev/null \
+        || echo "WARN: failed to refresh postmaster description/urls" >&2
       BODY=$(jq -nc --arg m "$ADMIN_EMAIL" '[{action:"set",field:"members",value:[$m]}]')
       curl -fsS -u "admin:$ADMIN" -X PATCH "$API/postmaster" \
            -H 'Content-Type: application/json' -d "$BODY" >/dev/null \
@@ -1237,8 +1252,9 @@ SQL
             --arg name "$NAME" \
             --arg type "$STYPE" \
             --arg email "$ADDR" \
-            --arg desc "$DISP (managed_by=brygge-tf)" \
-            '{type:$type, name:$name, emails:[$email], description:$desc, quota:0}')
+            --arg desc "$DISP" \
+            --arg urn "$MANAGED_URN" \
+            '{type:$type, name:$name, emails:[$email], description:$desc, urls:[$urn], quota:0}')
           if curl -fsS -u "admin:$ADMIN" -X POST "$API" \
                   -H 'Content-Type: application/json' -d "$BODY" >/dev/null; then
             echo "created principal: $ADDR ($STYPE)"
@@ -1246,15 +1262,17 @@ SQL
             echo "WARN: failed to create $ADDR" >&2
           fi
         else
-          # Idempotent: refresh description so the managed_by marker
-          # survives manual edits. Member ACLs are NOT touched here —
-          # that's the backend reconciler's job.
+          # Idempotent: refresh the label and the ownership marker so
+          # both survive manual edits. Member ACLs and the JMAP Identity
+          # name are NOT touched here — the backend reconciler owns both.
           BODY=$(jq -nc \
-            --arg desc "$DISP (managed_by=brygge-tf)" \
-            '[{action:"set",field:"description",value:$desc}]')
+            --arg desc "$DISP" \
+            --arg urn "$MANAGED_URN" \
+            '[{action:"set",field:"description",value:$desc},
+              {action:"set",field:"urls",value:[$urn]}]')
           curl -fsS -u "admin:$ADMIN" -X PATCH "$API/$NAME" \
                -H 'Content-Type: application/json' -d "$BODY" >/dev/null \
-            || echo "WARN: failed to refresh $ADDR description" >&2
+            || echo "WARN: failed to refresh $ADDR description/urls" >&2
           echo "ensured principal: $ADDR ($STYPE)"
         fi
 

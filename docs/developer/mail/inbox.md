@@ -77,7 +77,8 @@ Fields:
 |---|---|
 | `address` | Full email at the club's mail domain. Must match a Stalwart principal (provisioned by `stalwart-mailbox-config.service`). |
 | `role` | A value of the `user_role` Postgres enum. Holders of this role get reader/contributor `shareWith` on the address's Inbox. |
-| `display_name` | Used as the From-name when sending — prefixed with the uppercased club slug (`"KBL Kasserar"`). |
+| `display_name` | Short sidebar label and the principal's Stalwart `description`. The sender name is `mail.SenderName`: club name first, then this label (`"<club name> – Kasserar"`); the uppercased club slug stands in when the club name is unset. |
+| `from_brand_only` | When `true`, the sender name is the bare club name (for the general mailbox, e.g. `post@`). Default `false`. |
 | `type` | `"shared"` for portal-readable mailboxes. `"list"` for pure forwarding aliases (not touched by the reconciler). |
 | `send_as` | Reserved for DIL-278 future polish — account-level delegation, not currently honored at JMAP layer. |
 | `bcc_members` | When `true`, outgoing sends include every role-holder as Bcc (each gets a personal copy). |
@@ -105,15 +106,17 @@ Each cycle:
 2. For each managed `type=shared` mailbox in the spec:
    1. Query `user_roles` for users holding the mapped role; JOIN `user_mail_credentials` so only users with a Stalwart principal participate.
    2. Build `shareWith: { jmap_id: ShareRights{...} }`.
-   3. Compute a canonical SHA-256 hash. If it matches `mailbox_sync_state.applied_hash`, skip (no-op).
-   4. Authenticate JMAP as the shared principal using the password from `/etc/stalwart/board-mailbox-passwords.json`.
-   5. Resolve the shared account's Inbox folder id.
-   6. `Mailbox/set { shareWith }` to apply.
+   3. Authenticate JMAP as the shared principal using the password from `/etc/stalwart/board-mailbox-passwords.json`, and list its folders.
+   4. **Identity sync**: `Identity/get`, then `Identity/set` the name of every Identity whose email is the mailbox address to `mail.SenderName(...)` when it differs (logs `renamed identity`). This runs before the hash check because the name is not part of the hash. A failure only warns; the ACL reconcile carries on.
+   5. Compute a canonical SHA-256 hash of folders + shares. If it matches `mailbox_sync_state.applied_hash`, skip (no-op).
+   6. `Mailbox/set { shareWith }` on every folder to apply.
    7. Update `mailbox_sync_state` with new hash + timestamp; write `inbox.acl_changed` audit row.
 
 Failures land in `mailbox_sync_state.last_error` and re-attempt on the next cycle.
 
-`BRYGGE_RECONCILER_DRY_RUN=1` in `/etc/brygge/env` short-circuits the JMAP call and logs `dry-run: would apply ACLs address=… desired_hash=… members=N`. Useful during cutover; flip off once the desired hash looks right.
+`BRYGGE_RECONCILER_DRY_RUN=1` in `/etc/brygge/env` short-circuits the JMAP writes and logs `dry-run: would apply ACLs address=… desired_hash=… members=N` and `dry-run: would rename identity`. Useful during cutover; flip off once the desired hash looks right.
+
+The reconciler gets the same `CLUB_SLUG` / `CLUB_NAME` values as `InboxHandler`, so the Identity name always equals the From name the app sends.
 
 ### shareWith rights (RFC 8621 §2.5)
 
@@ -148,9 +151,11 @@ Both call `EnsureUserPrincipal(ctx, userID, email)`:
 2. Build slug `bu<first-12-hex-of-userID>` (Stalwart's principal-name validator rejects dashes; alphanumeric only — see [stalwart-internals.md](stalwart-internals.md#principal-name-constraints)).
 3. Generate 32-char URL-safe password via `crypto/rand`.
 4. **bcrypt-hash** the password before sending (admin REST POST persists `secrets` verbatim — see [stalwart-internals.md § secret hashing](stalwart-internals.md#secret-hashing-on-create-vs-patch)).
-5. Create the Stalwart principal with `type=individual`, `name=slug`, `emails=[slug@<club_domain>]`. The user's real email (e.g. `@gmail.com`) is NOT used for Stalwart — only on the Brygge side. See [stalwart-internals.md § email domain validation](stalwart-internals.md#email-domain-validation).
+5. Create the Stalwart principal with `type=individual`, `name=slug`, `emails=[slug@<club_domain>]`, `description="Brygge user"` and `urls=["urn:brygge:managed-by:brygge-user", "urn:brygge:user:<user uuid>"]`. The user's real email (e.g. `@gmail.com`) is NOT used for Stalwart — only on the Brygge side; the user uuid in `urls` is the non-PII correlator back to Brygge. See [stalwart-internals.md § email domain validation](stalwart-internals.md#email-domain-validation).
 6. Encrypt the plaintext password with `auth.Encrypt(TOTP_ENCRYPTION_KEY)` and INSERT into `user_mail_credentials`.
 7. Audit `user.mail_provisioned`.
+
+At every boot `ConvergePrincipalMetadata` walks `user_mail_credentials`, reads each `bu…` principal and PATCHes `description` / `urls` only where they differ, so principals created before this shape (whose description carried the user's real email and a `managed_by` marker) converge once and later boots are read-only. A reclaimed orphan (step 2 finds an existing principal) is converged the same way.
 
 `Credentials(ctx, userID)` is the read-back: decrypt and return for use in the user-facing JMAP read path.
 
@@ -197,7 +202,7 @@ Flow:
 3. Build a JMAP client authenticated as the shared principal.
 4. `resolveSendMailboxes`: get accountId + Drafts/Sent ids. Stalwart 0.15 only auto-creates Inbox on principal init — Drafts/Sent are created on-demand via `Mailbox/set { create }` first time we send from a mailbox.
 5. `resolveIdentity`: `Identity/get` and pick the one whose email matches the shared address (or first available). `EmailSubmission/set` requires `identityId`.
-6. Build From name as `"KBL Kasserar"` (uppercased `cfg.ClubSlug` + spec display name). Gmail's contact-card override surfaces just the club name in inbox listings; the message header carries the role-specific form.
+6. Build the From name with `mail.SenderName` (`"<club name> – Kasserar"`, or the bare club name with `from_brand_only`). The app sets this name on every message itself, so its sends never depend on the Identity's stored name; the SPA's `from_name` (auto-signature) comes from the same function.
 7. If `spec.bcc_members` is true, query for every user with the role and add to Bcc.
 8. `Email/set { create: {tmp: ...} }` + `EmailSubmission/set { create: {sub: {emailId: "#tmp", identityId, envelope}}, onSuccessUpdateEmail: {Drafts→null, Sent→true} }` — moves the message from Drafts to Sent atomically on success.
 9. Audit `inbox.message_sent` with `target_address`, `recipient_count`, `in_reply_to`, `message_id`, `bcc_members`, `actor_id`.
@@ -238,7 +243,7 @@ curl -sS -o /dev/null -w 'verify=%{http_code}\n' \
   "https://<domain>/api/v1/auth/verify?token=$TOKEN"
 ```
 
-Inspect the resulting Stalwart principal (should be `bu<12hex>` with `bu…@<club_domain>` synthetic email, bcrypt-hashed secret, description marker `managed_by=brygge-user`):
+Inspect the resulting Stalwart principal (should be `bu<12hex>` with `bu…@<club_domain>` synthetic email, bcrypt-hashed secret, `description: "Brygge user"`, and `urls` holding `urn:brygge:managed-by:brygge-user` plus `urn:brygge:user:<user uuid>`):
 
 ```bash
 ADMIN=$(cat /etc/stalwart/admin-password)
@@ -279,6 +284,8 @@ journalctl -u brygge -f | grep -E 'inbox|jmap|reconciler|provisioner'
 - **Service-password regeneration**: `stalwart-mailbox-config.service` generates passwords on first run only (presence-check in the JSON map). Force a rotation by removing the address's entry from the file before redeploy.
 - **JMAP IDs are NOT the admin REST IDs**. `Principal/get` returns alphabetic ids (`f`, `i`); admin REST returns numeric (`5`, `7`). The reconciler uses JMAP ids for `shareWith`; do not mix them. Cross-reference with `jmap_user` in `user_mail_credentials` for users.
 - **Re-provisioning** (`TRUNCATE user_mail_credentials`): only DROPS the Brygge-side credential row. The Stalwart principal stays; `EnsureUserPrincipal` detects it (`principalExists`) and rotates the secret in place via PATCH. The user's JMAP id stays the same, so existing `shareWith` grants remain valid.
+- **Principal `description` becomes a sender name.** Stalwart creates an account's default JMAP Identity on the first `Identity/get`, names it after the principal's `description`, and never updates it. Identities are per account and ACL-shared users can't read or use a shared mailbox's Identities, so the Identity is used by a session logged in *as* the shared principal (webmail with its service credentials). That is why descriptions are plain display text and ownership markers live in `urls` (`urn:brygge:managed-by:brygge-tf` / `…:brygge-user`), and why the reconciler renames each shared mailbox's Identity to `mail.SenderName`.
+- **A new mailbox's Identity starts with the bare label.** Whichever client first calls `Identity/get` (usually the reconciler itself) creates it with the plain `display_name`; the reconciler renames it to the full sender name within one tick.
 - **bcc_members fan-out**: each role member gets a personal copy of every outbound message. Off by default; enable per-mailbox in tfvars when the board wants the audit trail.
 
 ---

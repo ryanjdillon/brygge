@@ -467,6 +467,12 @@ So the amount cap is a **default**, not a hard ceiling — the per-invoice overr
 
 **Failure mode:** with `auth.dkim.sign` unset, Stalwart 0.15 signs with `rsa-<domain>` / `ed25519-<domain>`, which don't exist, logs `DKIM signer not found`, and sends every message unsigned — DMARC then passes on SPF alone and receivers rate-limit the domain. See [mail/setup.md § How signing is selected](../mail/setup.md#how-signing-is-selected).
 
+### A principal's description is display text; ownership markers live in `urls`
+
+**Rule (BRY-406):** every Stalwart principal Brygge provisions (`stalwart-mailbox-config` in `nix/host.nix`, `UserProvisioner` in `backend/internal/mail`) carries only a plain label in `description` — the mailbox's `display_name`, `System postmaster`, `Brygge user`. The ownership marker goes in the principal's `urls` (`urn:brygge:managed-by:brygge-tf` / `urn:brygge:managed-by:brygge-user`), and user principals add `urn:brygge:user:<user uuid>` as a non-PII correlator; never a personal email. The sender name of a shared mailbox has one source, `mail.SenderName`, used by the app's From header, the SPA's `from_name` and the reconciler's Identity sync.
+
+**Failure mode:** Stalwart copies the description into the account's default JMAP Identity name once, on the first `Identity/get`. A marker in the description became the From name recipients saw (`"<club> (managed_by=brygge-tf)"`) for mail sent by a session logged in as the shared principal. See [mail/inbox.md § Operational gotchas](../mail/inbox.md#operational-gotchas).
+
 ---
 
 ## Developer DB query (DIL-365)

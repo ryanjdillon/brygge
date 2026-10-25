@@ -467,6 +467,54 @@ func (c *JMAPClient) ListIdentities(ctx context.Context, accountID string) ([]Id
 	return args.List, nil
 }
 
+// SetIdentityName renames one Identity. Stalwart creates an account's
+// default Identity once, on the first Identity/get, with the principal's
+// description as its name and never updates it afterwards, so a client
+// that sends with that Identity (webmail logged in as the principal)
+// keeps whatever name it was born with until something renames it.
+func (c *JMAPClient) SetIdentityName(ctx context.Context, accountID, identityID, name string) error {
+	resp, err := c.Call(ctx, []string{
+		"urn:ietf:params:jmap:core",
+		"urn:ietf:params:jmap:submission",
+	}, []invocation{
+		{"Identity/set", map[string]any{
+			"accountId": accountID,
+			"update": map[string]any{
+				identityID: map[string]any{"name": name},
+			},
+		}, "0"},
+	})
+	if err != nil {
+		return err
+	}
+	if len(resp) == 0 {
+		return fmt.Errorf("jmap Identity/set: empty response")
+	}
+	// A method-level error (e.g. a missing capability) has no
+	// notUpdated map, so it would otherwise read as success.
+	if name, _ := resp[0][0].(string); name == "error" {
+		var e struct {
+			Type        string `json:"type"`
+			Description string `json:"description"`
+		}
+		_ = decodeArgs(resp[0], &e)
+		return fmt.Errorf("jmap Identity/set: %s: %s", e.Type, e.Description)
+	}
+	var args struct {
+		NotUpdated map[string]struct {
+			Type        string `json:"type"`
+			Description string `json:"description"`
+		} `json:"notUpdated"`
+	}
+	if err := decodeArgs(resp[0], &args); err != nil {
+		return err
+	}
+	if e, bad := args.NotUpdated[identityID]; bad {
+		return fmt.Errorf("jmap Identity/set %s: %s: %s", identityID, e.Type, e.Description)
+	}
+	return nil
+}
+
 // CreateMailbox creates a folder with the given name + role. Stalwart
 // 0.15 only auto-creates Inbox on principal init — Drafts/Sent/etc.
 // have to be created explicitly the first time we need them. Returns

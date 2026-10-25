@@ -38,6 +38,29 @@ type MailboxSpec struct {
 	FromBrandOnly bool `json:"from_brand_only,omitempty"`
 }
 
+// SenderName is the outward sender name for a shared mailbox: the club
+// name as the brand, then the mailbox's role label (e.g. "<club name> –
+// Kasserar"), so recipients recognise the club first and the
+// function second. The general mailbox (FromBrandOnly, or one with no
+// display name) shows the bare club name; clubAbbrev stands in when the
+// club name is unset. It is the single source for the From header the
+// app sends, the SPA's auto-signature and the name of the mailbox's JMAP
+// Identity, so every way of sending from the mailbox shows the same name.
+func SenderName(clubName, clubAbbrev string, spec MailboxSpec) string {
+	brand := clubName
+	if brand == "" {
+		brand = clubAbbrev
+	}
+	switch {
+	case brand == "":
+		return spec.DisplayName
+	case spec.FromBrandOnly || spec.DisplayName == "":
+		return brand
+	default:
+		return brand + " – " + spec.DisplayName
+	}
+}
+
 func (s MailboxSpec) managed() bool {
 	if s.Managed == nil {
 		return true
@@ -86,6 +109,11 @@ type Reconciler struct {
 	dry       bool
 	log       zerolog.Logger
 
+	// Brand inputs for SenderName; must be the same values InboxHandler
+	// gets so the Identity name equals the From name the app sends.
+	clubName   string
+	clubAbbrev string
+
 	indexCache  sync.Mutex
 	cachedIndex map[string]string // shared between Reconcile() calls during a ReconcileAll loop
 }
@@ -95,17 +123,20 @@ type Reconciler struct {
 // `passwords` maps each shared principal's address to its service
 // password (set by stalwart-mailbox-config.service); an entry must
 // exist for every spec address with `type=shared` before the write
-// path can run.
-func NewReconciler(db *pgxpool.Pool, adminJMAP *JMAPClient, jmapFact *JMAPFactory, passwords PrincipalPasswords, auditSvc *audit.Service, spec []MailboxSpec, dryRun bool, log zerolog.Logger) *Reconciler {
+// path can run. `clubSlug`/`clubName` feed SenderName for the Identity
+// sync.
+func NewReconciler(db *pgxpool.Pool, adminJMAP *JMAPClient, jmapFact *JMAPFactory, passwords PrincipalPasswords, auditSvc *audit.Service, spec []MailboxSpec, clubSlug, clubName string, dryRun bool, log zerolog.Logger) *Reconciler {
 	return &Reconciler{
-		db:        db,
-		adminJMAP: adminJMAP,
-		jmapFact:  jmapFact,
-		passwords: passwords,
-		audit:     auditSvc,
-		spec:      spec,
-		dry:       dryRun,
-		log:       log.With().Str("component", "inbox-reconciler").Logger(),
+		db:         db,
+		adminJMAP:  adminJMAP,
+		jmapFact:   jmapFact,
+		passwords:  passwords,
+		audit:      auditSvc,
+		spec:       spec,
+		dry:        dryRun,
+		log:        log.With().Str("component", "inbox-reconciler").Logger(),
+		clubName:   clubName,
+		clubAbbrev: strings.ToUpper(clubSlug),
 	}
 }
 
@@ -236,6 +267,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, address string) error {
 		return fmt.Errorf("resolve mailboxes: %w", err)
 	}
 
+	// Before the hash short-circuit: the Identity name is not part of
+	// the ACL hash, so a steady-state mailbox must still get renamed.
+	r.syncIdentityName(ctx, jmap, ownerID, spec)
+
 	desiredHash := hashShareTargets(mailboxIDs, desired)
 
 	priorApplied, _, err := r.loadState(ctx, address)
@@ -271,6 +306,41 @@ func (r *Reconciler) Reconcile(ctx context.Context, address string) error {
 
 	r.logACLChanged(ctx, address, priorApplied, desiredHash, len(desired))
 	return r.persistState(ctx, address, desiredHash, &desiredHash, nil)
+}
+
+// syncIdentityName renames the mailbox's own JMAP Identities to
+// SenderName. Stalwart names an account's default Identity after the
+// principal's description, once, so without this a client logged in as
+// the shared principal (webmail with its service credentials) sends with
+// a stale or bare name. Failures only warn: a wrong sender name must not
+// stop the ACL reconcile that gates who can read the mailbox.
+func (r *Reconciler) syncIdentityName(ctx context.Context, jmap *JMAPClient, accountID string, spec MailboxSpec) {
+	want := SenderName(r.clubName, r.clubAbbrev, spec)
+	if want == "" {
+		return
+	}
+	idents, err := jmap.ListIdentities(ctx, accountID)
+	if err != nil {
+		r.log.Warn().Err(err).Str("address", spec.Address).Msg("identity sync: list identities")
+		return
+	}
+	for _, id := range idents {
+		if !strings.EqualFold(id.Email, spec.Address) || id.Name == want {
+			continue
+		}
+		if r.dry {
+			r.log.Info().Str("address", spec.Address).Str("identity", id.ID).
+				Str("from", id.Name).Str("to", want).Msg("dry-run: would rename identity")
+			continue
+		}
+		if err := jmap.SetIdentityName(ctx, accountID, id.ID, want); err != nil {
+			r.log.Warn().Err(err).Str("address", spec.Address).Str("identity", id.ID).
+				Msg("identity sync: rename failed")
+			continue
+		}
+		r.log.Info().Str("address", spec.Address).Str("identity", id.ID).
+			Str("from", id.Name).Str("to", want).Msg("renamed identity")
+	}
 }
 
 // resolveOwnerMailboxes returns the principal's JMAP account id (from
@@ -481,4 +551,3 @@ func (r *Reconciler) logACLFailed(ctx context.Context, address string, err error
 		Details:    map[string]any{"error": err.Error()},
 	})
 }
-

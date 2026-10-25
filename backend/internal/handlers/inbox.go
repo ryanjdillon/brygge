@@ -928,31 +928,15 @@ func (h *InboxHandler) resolveSendTarget(ctx context.Context, spec mail.MailboxS
 	return t, jmap, nil
 }
 
-// fromName builds the outward sender/signature name for a shared mailbox.
-// It leads with the full club name as the brand and appends the mailbox's
-// role label (e.g. "Klokkarvik Båtlag – Kasserar") so recipients recognise
-// the club first and the function second. The general mailbox (FromBrandOnly,
-// or one with no display name) shows the bare club name. Falls back to the
-// uppercased slug when the club name is unset. This is the single source of
-// truth for both the From header and the SPA's auto-signature.
+// fromName is mail.SenderName with this handler's club values; the
+// reconciler syncs the mailbox's JMAP Identity to the same name.
 func (h *InboxHandler) fromName(spec mail.MailboxSpec) string {
-	brand := h.clubName
-	if brand == "" {
-		brand = h.clubAbbrev
-	}
-	switch {
-	case brand == "":
-		return spec.DisplayName
-	case spec.FromBrandOnly || spec.DisplayName == "":
-		return brand
-	default:
-		return brand + " – " + spec.DisplayName
-	}
+	return mail.SenderName(h.clubName, h.clubAbbrev, spec)
 }
 
 // sendAsPrincipal submits one message as the shared principal for spec.
-// It fills the From identity (club abbreviation + role display name, e.g.
-// "KBL Kasserar") and Reply-To from spec, then submits via JMAP. Shared by
+// It fills the From name (mail.SenderName, e.g. "<club name> –
+// Kasserar") and Reply-To from spec, then submits via JMAP. Shared by
 // the interactive single-send path (HandleSend) and the bulk delivery
 // worker, so the From/identity logic lives in exactly one place.
 func (h *InboxHandler) sendAsPrincipal(ctx context.Context, spec mail.MailboxSpec, req mail.SendEmailRequest) (emailID, messageID string, err error) {
