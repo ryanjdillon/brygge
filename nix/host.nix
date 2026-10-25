@@ -9,11 +9,20 @@
 
 let
   cfg = config.services.brygge;
+  mailBounce = import ./mail-bounce.nix {
+    domain = cfg.domain;
+    inherit (clubConfig) boardMailboxes;
+  };
+  inherit (mailBounce) bounceAddress;
 in
 {
   imports = [
     ./disko.nix
   ];
+
+  # Fails evaluation (and so the deploy) on a board_mailboxes spec that
+  # flags more than one bounce mailbox, or flags a list.
+  assertions = mailBounce.assertions;
 
   system.stateVersion = "25.05";
   nixpkgs.hostPlatform = "x86_64-linux";
@@ -428,7 +437,26 @@ in
       session.auth = {
         mechanisms = "[plain login]";
         directory = "'internal'";
+        # Every login must send as one of its own addresses, except the
+        # app's `relay` login once its envelope sender has been rewritten
+        # to the bounce mailbox (below). Matching on the rewritten sender
+        # too means the exception closes again if the rewrite goes away.
+        must-match-sender = [
+          { "if" = "authenticated_as == 'relay' && sender == '${bounceAddress}'"; "then" = false; }
+          { "else" = true; }
+        ];
       };
+      # The app sends with relay@ as header From, but relay@ is send-only
+      # (quota 1): DSNs and remote bounces to it fail over quota and are
+      # dropped as double bounces. Rewrite relay's envelope sender
+      # (MAIL FROM / Return-Path) to the bounce mailbox so delivery
+      # failures land where a person reads them. Same domain, so SPF and
+      # DKIM stay aligned with the header From. `else = false` keeps
+      # every other sender as-is; an empty string would blank it.
+      session.mail.rewrite = [
+        { "if" = "authenticated_as == 'relay'"; "then" = "'${bounceAddress}'"; }
+        { "else" = false; }
+      ];
       session.rcpt.directory = "'internal'";
       # Default outbound routing: local delivery for our own domain, MX
       # lookup for everything else. Do NOT set queue.strategy.route to a
@@ -1186,7 +1214,9 @@ SQL
       fi
 
       # System alias: postmaster@ → operator email (admin_email in tfvars).
-      # Created on every deploy regardless of board_mailboxes config.
+      # Created on every deploy regardless of board_mailboxes config. Also
+      # the bounce address for app mail when no board mailbox sets
+      # receives_bounces (nix/mail-bounce.nix).
       # Label, marker and members are always synced so admin_email changes
       # propagate on redeploy.
       POSTMASTER_ADDR="postmaster@${clubConfig.domain}"
@@ -1196,8 +1226,9 @@ SQL
       if [ "$EXISTS" = "no" ]; then
         BODY=$(jq -nc \
           --arg email "$POSTMASTER_ADDR" \
+          --arg m "$ADMIN_EMAIL" \
           --arg urn "$MANAGED_URN" \
-          '{type:"list", name:"postmaster", emails:[$email], description:"System postmaster", urls:[$urn], quota:0}')
+          '{type:"list", name:"postmaster", emails:[$email], externalMembers:[$m], description:"System postmaster", urls:[$urn], quota:0}')
         curl -fsS -u "admin:$ADMIN" -X POST "$API" \
              -H 'Content-Type: application/json' -d "$BODY" >/dev/null \
           && echo "created postmaster list" \
@@ -1211,7 +1242,10 @@ SQL
       curl -fsS -u "admin:$ADMIN" -X PATCH "$API/postmaster" \
            -H 'Content-Type: application/json' -d "$BODY" >/dev/null \
         || echo "WARN: failed to refresh postmaster description/urls" >&2
-      BODY=$(jq -nc --arg m "$ADMIN_EMAIL" '[{action:"set",field:"members",value:[$m]}]')
+      # `externalMembers`, not `members`: Stalwart resolves `members` by
+      # principal name, so an outside address there is not found and a
+      # list with no members accepts and discards every message.
+      BODY=$(jq -nc --arg m "$ADMIN_EMAIL" '[{action:"set",field:"externalMembers",value:[$m]}]')
       curl -fsS -u "admin:$ADMIN" -X PATCH "$API/postmaster" \
            -H 'Content-Type: application/json' -d "$BODY" >/dev/null \
         && echo "synced postmaster → $ADMIN_EMAIL" \

@@ -111,11 +111,12 @@
         + "send_as = optional(bool, false),"
         + "bcc_members = optional(bool, false),"
         + "from_brand_only = optional(bool, false),"
+        + "receives_bounces = optional(bool, false),"
         + "retention_days = optional(number),"
         + "managed = optional(bool, true)"
         + "}))";
       default     = [];
-      description = "Role-mapped board mailboxes (e.g. kasserar@, styre@). `type=shared` participates in role-gated ACL reconciliation; `type=list` is a pure alias.";
+      description = "Role-mapped board mailboxes (e.g. kasserar@, styre@). `type=shared` participates in role-gated ACL reconciliation; `type=list` is a pure alias. At most one `type=shared` entry may set `receives_bounces` to receive bounces for the app's mail (default postmaster@).";
     };
   };
 }

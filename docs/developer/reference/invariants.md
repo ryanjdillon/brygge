@@ -473,6 +473,12 @@ So the amount cap is a **default**, not a hard ceiling — the per-invoice overr
 
 **Failure mode:** Stalwart copies the description into the account's default JMAP Identity name once, on the first `Identity/get`. A marker in the description became the From name recipients saw (`"<club> (managed_by=brygge-tf)"`) for mail sent by a session logged in as the shared principal. See [mail/inbox.md § Operational gotchas](../mail/inbox.md#operational-gotchas).
 
+### App SMTP mail's envelope sender is the bounce mailbox, never `relay@`
+
+**Rule (BRY-404):** Stalwart rewrites the envelope sender of the `relay` login (`session.mail.rewrite` in `nix/host.nix`) to the bounce mailbox — the single `type = "shared"` `board_mailboxes` entry with `receives_bounces`, else `postmaster@<domain>` (`nix/mail-bounce.nix`, whose module assertions reject two flagged entries or a flagged list). `session.auth.must-match-sender` is relaxed only for `relay` sending as exactly that address; every other login must still send as its own address. `postmaster` is a list whose `admin_email` member is set through `externalMembers` — `members` takes principal names, and a list with no resolvable member silently discards mail.
+
+**Failure mode:** `relay@` has quota 1, so with relay@ as the envelope sender every DSN failed "over quota" and was dropped as a double bounce — delivery failures of app mail were invisible. See [mail/setup.md § Where bounces for app mail go](../mail/setup.md#where-bounces-for-app-mail-go).
+
 ---
 
 ## Developer DB query (DIL-365)

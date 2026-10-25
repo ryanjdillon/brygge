@@ -79,6 +79,7 @@ Fields:
 | `role` | A value of the `user_role` Postgres enum. Holders of this role get reader/contributor `shareWith` on the address's Inbox. |
 | `display_name` | Short sidebar label and the principal's Stalwart `description`. The sender name is `mail.SenderName`: club name first, then this label (`"<club name> – Kasserar"`); the uppercased club slug stands in when the club name is unset. |
 | `from_brand_only` | When `true`, the sender name is the bare club name (for the general mailbox, e.g. `post@`). Default `false`. |
+| `receives_bounces` | When `true`, this mailbox is the envelope sender (Return-Path) of the app's own SMTP mail, so DSNs and remote bounces land here. At most one entry, and only `type = "shared"` (evaluation fails otherwise). With none flagged, bounces go to `postmaster@`. See [setup.md § Where bounces for app mail go](setup.md#where-bounces-for-app-mail-go). Default `false`. |
 | `type` | `"shared"` for portal-readable mailboxes. `"list"` for pure forwarding aliases (not touched by the reconciler). |
 | `send_as` | Reserved for DIL-278 future polish — account-level delegation, not currently honored at JMAP layer. |
 | `bcc_members` | When `true`, outgoing sends include every role-holder as Bcc (each gets a personal copy). |

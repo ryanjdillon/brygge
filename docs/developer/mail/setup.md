@@ -210,7 +210,7 @@ journalctl -u stalwart --since -30min | grep -iE 'signer not found|dkim|Failed t
 
 Then send to Gmail and Outlook as above and confirm `dkim=pass header.d=<domain> header.s=mail`.
 
-Also confirm that the app's envelope sender (`EMAIL_FROM` / the `relay@<domain>` principal) and the board mailboxes use `@<domain>`. The rule only signs mail whose MAIL FROM domain is exactly the club domain; mail from any other domain, including a subdomain, goes out unsigned.
+Also confirm that the app's header From (`EMAIL_FROM`, `relay@<domain>`), its envelope sender (the bounce mailbox, see [§ 6](#where-bounces-for-app-mail-go)) and the board mailboxes use `@<domain>`. The rule only signs mail whose MAIL FROM domain — after the relay rewrite — is exactly the club domain; mail from any other domain, including a subdomain, goes out unsigned.
 
 ### 5. Role mailboxes (board addresses)
 
@@ -235,6 +235,36 @@ ssh root@<server-ip> 'systemctl restart stalwart-relay-account.service'
 
 The unit waits for Stalwart's admin API, then either creates the principal (first run) or updates its bcrypt secret (subsequent runs). It runs at every boot, so the principal stays in sync with the password file.
 
+`relay@` is **send-only**: it has a 1-byte quota, so nothing can be delivered to it.
+
+#### Where bounces for app mail go
+
+A DSN or remote bounce goes to the envelope sender (`MAIL FROM`, later `Return-Path`). If that were `relay@`, the DSN would fail "over quota" and Stalwart would drop it as a double bounce, so delivery failures for magic links and fakturas would be invisible. `services.stalwart.settings` in `nix/host.nix` therefore sets, for the `relay` login only:
+
+- `session.mail.rewrite` — rewrites the envelope sender to the **bounce mailbox**: the one `board_mailboxes` entry with `"receives_bounces": true` (must be `type = "shared"`; evaluation fails on two flagged entries or a flagged list), else `postmaster@<domain>`, which forwards to `admin_email`. Every other sender is left as-is. The choice and its assertions live in `nix/mail-bounce.nix`; `nix flake check` runs them against fixtures (`nix/tests/mail-bounce.nix`), since CI never sees a real tfvars.
+- `session.auth.must-match-sender` — relaxed only when the login is `relay` **and** the sender is the bounce mailbox, so the check closes again if the rewrite is ever removed.
+
+The header From (`EMAIL_FROM`) and Reply-To are unchanged, and the rewrite stays on the club domain, so SPF, DKIM (signed for the rewritten domain) and DMARC alignment are unaffected. DSNs carry an empty sender, so they can't loop. Shared-inbox sends authenticate as their own principal and keep their own Return-Path.
+
+To route bounces to the general mailbox, set `"receives_bounces": true` on its entry (e.g. `post@`) in the local tfvars and deploy. Auto-replies ("out of office") are addressed to the header From, `relay@`, and still fail over quota — BRY-407 tracks a Bounces folder and refusing mail to `relay@` outright.
+
+Verify after a deploy:
+
+```bash
+PW=$(cat /etc/stalwart/admin-password); U=http://127.0.0.1:8088
+# The resolved rules (array entries are zero-padded): expect
+# session.mail.rewrite.0000.then = "'<bounce mailbox>'" and
+# session.auth.must-match-sender.0001.else = "true"
+curl -fsS -u "admin:$PW" "$U/api/settings/keys?prefixes=session.mail.rewrite&prefixes=session.auth.must-match-sender" | jq .
+# A magic link to a made-up mailbox at a large provider should log a DSN to
+# the bounce mailbox, with no "over quota" or "double bounce"
+journalctl -u stalwart --since -10min | grep -iE 'dsn|over quota|double bounce'
+# postmaster@ forwards to admin_email; this must print nothing
+journalctl -u stalwart-mailbox-config -b | grep 'failed to sync postmaster members'
+```
+
+Then check that the DSN appears in the bounce mailbox, and that a normal magic link still passes DKIM/SPF/DMARC with `Return-Path: <bounce mailbox>`.
+
 ### 7. Wire brygge to SMTP
 
 Edit `/etc/brygge/env` on the server:
@@ -253,6 +283,7 @@ Notes:
 - **Port 465 (implicit TLS)**, not 587. Brygge's SMTP client supports both; 465 sidesteps an intermittent STARTTLS hang in current Stalwart.
 - **`SMTP_USERNAME=relay`** — the bare principal name, not the email address. Stalwart's auth lookup uses the principal slug.
 - **`SMTP_HOST=mail.<domain>`** — use the public hostname so the TLS SNI matches the cert. Don't use `localhost` or `127.0.0.1`.
+- **`EMAIL_FROM`** is the header From. The app also hands `relay@<domain>` to Stalwart as the envelope sender, but Stalwart rewrites that to the bounce mailbox ([§ 6](#where-bounces-for-app-mail-go)), so `Return-Path` is never `relay@`.
 - **`EMAIL_REPLY_TO`** sets the `Reply-To:` header so member replies land in the monitored `post@` shared inbox instead of the send-only `relay@` account.
 - **`SMTP_PASSWORD` must equal the contents of `/etc/stalwart/relay-password`.** When rotating, update both files and restart `stalwart-relay-account.service` and `brygge.service`.
 

@@ -138,7 +138,12 @@
         activationTimeout = 300;
       };
 
-      checks = builtins.mapAttrs (_: lib: lib.deployChecks self.deploy) deploy-rs.lib;
+      checks = builtins.mapAttrs (system: lib:
+        lib.deployChecks self.deploy // {
+          mail-bounce = import ./nix/tests/mail-bounce.nix {
+            pkgs = nixpkgs.legacyPackages.${system};
+          };
+        }) deploy-rs.lib;
     }
     // flake-utils.lib.eachSystem [ "x86_64-linux" "aarch64-linux" ] (
       system: let
