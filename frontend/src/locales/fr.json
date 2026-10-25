@@ -1059,7 +1059,8 @@
         "differentPayerTitle": "L'avoir et la facture ont des payeurs différents",
         "differentPayerBody": "L'avoir #{credit} concerne un autre payeur que la facture #{number} ({payer}). Compenser quand même ?",
         "differentPayerAction": "Compenser quand même"
-      }
+      },
+      "importedReadOnly": "Les factures importées sont les pièces de l’ancien système et ne peuvent pas être modifiées dans Brygge."
     },
     "devQuery": {
       "title": "Requête base de données",

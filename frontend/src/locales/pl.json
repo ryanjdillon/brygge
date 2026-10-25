@@ -1034,7 +1034,8 @@
         "differentPayerTitle": "Korekta i faktura mają różnych płatników",
         "differentPayerBody": "Korekta #{credit} dotyczy innego płatnika niż faktura #{number} ({payer}). Rozliczyć mimo to?",
         "differentPayerAction": "Rozlicz mimo to"
-      }
+      },
+      "importedReadOnly": "Zaimportowane faktury są dokumentami poprzedniego systemu i nie można ich zmieniać w Brygge."
     },
     "devQuery": {
       "title": "Zapytanie do bazy danych",

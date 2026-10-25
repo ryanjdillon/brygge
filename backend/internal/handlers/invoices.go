@@ -1198,6 +1198,7 @@ func (h *InvoiceHandler) HandleSendInvoice(w http.ResponseWriter, r *http.Reques
 		pdfData        []byte
 		s3Key          string
 		alreadySent    *time.Time
+		imported       bool
 	)
 	if err := h.db.QueryRow(ctx,
 		`SELECT i.invoice_number, i.user_id,
@@ -1209,20 +1210,26 @@ func (h *InvoiceHandler) HandleSendInvoice(w http.ResponseWriter, r *http.Reques
 		        COALESCE(u.last_name, ''), COALESCE(u.first_name, ''),
 		        COALESCE(u.email, ''), COALESCE(i.recipient_email, ''),
 		        fp.year, i.total_amount, i.due_date, i.kid_number,
-		        i.pdf_data, COALESCE(i.s3_key, ''), i.sent_at
+		        i.pdf_data, COALESCE(i.s3_key, ''), i.sent_at, i.import_source IS NOT NULL
 		   FROM invoices i
 		   LEFT JOIN users u ON u.id = i.user_id
 		   LEFT JOIN fiscal_periods fp ON fp.id = i.fiscal_period_id
 		  WHERE i.id = $1 AND i.club_id = $2`,
 		invoiceID, claims.ClubID,
 	).Scan(&invoiceNumber, &userID, &memberName, &memberLast, &memberFirst, &memberEmail, &recipientEmail,
-		&fiscalYear, &total, &dueDate, &kid, &pdfData, &s3Key, &alreadySent); err != nil {
+		&fiscalYear, &total, &dueDate, &kid, &pdfData, &s3Key, &alreadySent, &imported); err != nil {
 		if err == pgx.ErrNoRows {
 			Error(w, http.StatusNotFound, "invoice not found")
 			return
 		}
 		h.log.Error().Err(err).Msg("load invoice for send")
 		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	// The previous system sent it; its sent_at is NULL only because the
+	// import doesn't know when.
+	if imported {
+		refuseImportedInvoice(w)
 		return
 	}
 	if alreadySent != nil {
@@ -1430,6 +1437,14 @@ func (h *InvoiceHandler) HandleResendInvoice(w http.ResponseWriter, r *http.Requ
 	JSON(w, http.StatusOK, map[string]any{"id": invoiceID, "resent": true})
 }
 
+// importedInvoiceReadOnly is the one refusal for every attempt to change an
+// imported faktura: it is the previous system's record (BRY-396).
+const importedInvoiceReadOnly = "imported fakturas are the previous system's record and can't be changed in Brygge"
+
+func refuseImportedInvoice(w http.ResponseWriter) {
+	JSON(w, http.StatusConflict, map[string]string{"error": importedInvoiceReadOnly, "code": "imported"})
+}
+
 // HandleDeleteInvoice permanently removes an invoice. Allowed for
 // drafts (sent_at IS NULL) and for voided invoices — sent+open
 // invoices must be voided first so an audit trail of the original
@@ -1447,9 +1462,30 @@ func (h *InvoiceHandler) HandleDeleteInvoice(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// An imported faktura has sent_at NULL like a draft, so it needs its own
+	// refusal before the draft rule would let it go.
+	var imported bool
+	err := h.db.QueryRow(ctx,
+		`SELECT import_source IS NOT NULL FROM invoices WHERE id = $1 AND club_id = $2`,
+		invoiceID, claims.ClubID,
+	).Scan(&imported)
+	if err == pgx.ErrNoRows {
+		Error(w, http.StatusNotFound, "invoice not found")
+		return
+	}
+	if err != nil {
+		h.log.Error().Err(err).Msg("delete invoice: load")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if imported {
+		refuseImportedInvoice(w)
+		return
+	}
+
 	tag, err := h.db.Exec(ctx,
 		`DELETE FROM invoices
-		  WHERE id = $1 AND club_id = $2
+		  WHERE id = $1 AND club_id = $2 AND import_source IS NULL
 		    AND (sent_at IS NULL OR status = 'voided')`,
 		invoiceID, claims.ClubID,
 	)
@@ -1491,15 +1527,16 @@ func (h *InvoiceHandler) HandleVoidInvoice(w http.ResponseWriter, r *http.Reques
 	// Vipps and awaiting settlement). Voiding it would hide a payment with
 	// nothing owed against it; that needs a refund or credit note instead.
 	var status string
-	var settled, creditLinked bool
+	var settled, creditLinked, imported bool
 	var creditedBy *int
 	err := h.db.QueryRow(ctx,
 		`SELECT status, `+finance.SettledForMemberSQL("")+`, credits_invoice_id IS NOT NULL,
 		        (SELECT cn.invoice_number FROM invoices cn
-		          WHERE cn.credits_invoice_id = invoices.id AND cn.status <> 'voided' LIMIT 1)
+		          WHERE cn.credits_invoice_id = invoices.id AND cn.status <> 'voided' LIMIT 1),
+		        import_source IS NOT NULL
 		   FROM invoices WHERE id = $1 AND club_id = $2`,
 		invoiceID, claims.ClubID,
-	).Scan(&status, &settled, &creditLinked, &creditedBy)
+	).Scan(&status, &settled, &creditLinked, &creditedBy, &imported)
 	if err == pgx.ErrNoRows {
 		Error(w, http.StatusNotFound, "invoice not found")
 		return
@@ -1507,6 +1544,12 @@ func (h *InvoiceHandler) HandleVoidInvoice(w http.ResponseWriter, r *http.Reques
 	if err != nil {
 		h.log.Error().Err(err).Msg("void invoice: load")
 		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	// Before the idempotent voided check: an imported row can carry any
+	// status from the previous system, and none of them is Brygge's to change.
+	if imported {
+		refuseImportedInvoice(w)
 		return
 	}
 	if status == "voided" {
@@ -1569,7 +1612,7 @@ func (h *InvoiceHandler) HandleVoidInvoice(w http.ResponseWriter, r *http.Reques
 	var invoiceNumber *int
 	err = h.db.QueryRow(ctx,
 		`UPDATE invoices SET status = 'voided'
-		  WHERE id = $1 AND club_id = $2 AND status <> 'voided'
+		  WHERE id = $1 AND club_id = $2 AND status <> 'voided' AND import_source IS NULL
 		    AND credits_invoice_id IS NULL
 		    AND NOT `+finance.SettledForMemberSQL("")+`
 		 RETURNING invoice_number`,

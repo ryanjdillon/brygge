@@ -1060,7 +1060,8 @@
         "differentPayerTitle": "Gutschrift und Rechnung haben unterschiedliche Zahler",
         "differentPayerBody": "Gutschrift #{credit} gilt für einen anderen Zahler als Rechnung #{number} ({payer}). Trotzdem verrechnen?",
         "differentPayerAction": "Trotzdem verrechnen"
-      }
+      },
+      "importedReadOnly": "Importierte Rechnungen sind Belege des vorherigen Systems und können in Brygge nicht geändert werden."
     },
     "devQuery": {
       "title": "Datenbankabfrage",

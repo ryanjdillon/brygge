@@ -794,7 +794,8 @@
         "copied": "{n} kopiert",
         "tooltip": "Kopier mottakernes e-poster til utklippstavlen (komma-separert)",
         "noneFound": "Ingen mottaker-e-poster funnet i utvalget."
-      }
+      },
+      "importedReadOnly": "Importerte fakturaer er bilag fra det forrige systemet og kan ikke endres i Brygge."
     },
     "memberSearch": {
       "placeholder": "Søk etter navn eller e-post…"

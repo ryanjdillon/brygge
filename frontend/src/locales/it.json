@@ -1060,7 +1060,8 @@
         "differentPayerTitle": "La nota di credito e la fattura hanno pagatori diversi",
         "differentPayerBody": "La nota di credito #{credit} riguarda un pagatore diverso dalla fattura #{number} ({payer}). Compensare comunque?",
         "differentPayerAction": "Compensa comunque"
-      }
+      },
+      "importedReadOnly": "Le fatture importate sono documenti del sistema precedente e non possono essere modificate in Brygge."
     },
     "devQuery": {
       "title": "Query database",

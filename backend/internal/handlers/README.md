@@ -138,3 +138,4 @@ Even if `claims.ClubID` is the only club the user can access (typical for single
 - Adding a route → [`../../../docs/developer/checklists/add-route.md`](../../../docs/developer/checklists/add-route.md)
 - Adding a bulk action → [`../../../docs/developer/checklists/add-bulk-action.md`](../../../docs/developer/checklists/add-bulk-action.md)
 - Adding an audit action → [`../../../docs/developer/checklists/add-audit-action.md`](../../../docs/developer/checklists/add-audit-action.md)
+- Adding an endpoint that changes an invoice → refuse imported fakturas (`import_source IS NOT NULL`) with `refuseImportedInvoice`, or skip them in a bulk action. `sent_at IS NULL` is not a safe proxy for "draft": imported rows have it too. See the "Imported fakturas are read-only" invariant.

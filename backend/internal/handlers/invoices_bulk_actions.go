@@ -431,20 +431,24 @@ func (h *InvoiceHandler) reissueOneKID(
 		kidNumber     string
 		sent          bool
 		paid          bool
+		imported      bool
 	)
 	err := h.db.QueryRow(ctx,
 		`SELECT invoice_number, COALESCE(kid_number, ''),
-		        (sent_at IS NOT NULL), NOT `+finance.OwedByMemberSQL("")+`
+		        (sent_at IS NOT NULL), NOT `+finance.OwedByMemberSQL("")+`,
+		        import_source IS NOT NULL
 		   FROM invoices WHERE id = $1 AND club_id = $2`,
 		invoiceID, clubID,
-	).Scan(&invoiceNumber, &kidNumber, &sent, &paid)
+	).Scan(&invoiceNumber, &kidNumber, &sent, &paid, &imported)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return errors.New("not found")
 		}
 		return err
 	}
-	if !sent || paid || kidNumber == "" {
+	// Imported fakturas are read-only (BRY-396); the KID is the previous
+	// system's and members may still pay with it.
+	if imported || !sent || paid || kidNumber == "" {
 		return errSkip
 	}
 
@@ -525,6 +529,7 @@ func (h *InvoiceHandler) regenerateOnePDF(
 		// Existing PDF bytes — archived before the overwrite so
 		// bokføringsloven §13 retention is honored. See DIL-374.
 		existingPDF []byte
+		imported    bool
 	)
 	err := h.db.QueryRow(ctx,
 		`SELECT i.invoice_number, i.user_id,
@@ -537,19 +542,24 @@ func (h *InvoiceHandler) regenerateOnePDF(
 		        COALESCE(i.recipient_contact_person, ''),
 		        COALESCE(i.recipient_their_ref, ''),
 		        i.issue_date, i.due_date, i.kid_number,
-		        i.pdf_data
+		        i.pdf_data, i.import_source IS NOT NULL
 		   FROM invoices i
 		   LEFT JOIN users u ON u.id = i.user_id
 		  WHERE i.id = $1 AND i.club_id = $2`,
 		invoiceID, clubID,
 	).Scan(&invoiceNumber, &userID, &memberName, &memberAddress,
 		&recipientKind, &orgName, &orgNumber, &orgAddress, &orgContact, &orgTheirRef,
-		&issueDate, &dueDate, &kid, &existingPDF)
+		&issueDate, &dueDate, &kid, &existingPDF, &imported)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return errors.New("not found")
 		}
 		return err
+	}
+	// A Brygge PDF must not replace or stand in for an imported faktura's
+	// original (BRY-396).
+	if imported {
+		return errSkip
 	}
 
 	// Build the buyer/recipient block exactly as it was on issue: an

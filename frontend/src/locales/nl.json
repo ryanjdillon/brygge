@@ -1060,7 +1060,8 @@
         "differentPayerTitle": "Creditnota en factuur hebben verschillende betalers",
         "differentPayerBody": "Creditnota #{credit} is voor een andere betaler dan factuur #{number} ({payer}). Toch verrekenen?",
         "differentPayerAction": "Toch verrekenen"
-      }
+      },
+      "importedReadOnly": "Geïmporteerde facturen zijn stukken uit het vorige systeem en kunnen in Brygge niet worden gewijzigd."
     },
     "devQuery": {
       "title": "Database-query",

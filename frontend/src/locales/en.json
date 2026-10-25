@@ -798,7 +798,8 @@
         "copied": "{n} copied",
         "tooltip": "Copy recipient emails to clipboard (comma-separated)",
         "noneFound": "No recipient emails found in the selection."
-      }
+      },
+      "importedReadOnly": "Imported fakturas are the previous system's record and can't be changed in Brygge."
     },
     "memberSearch": {
       "placeholder": "Search by name or email…"

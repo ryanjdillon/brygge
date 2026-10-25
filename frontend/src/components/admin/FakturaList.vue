@@ -346,6 +346,11 @@ async function doDelete(id: string) {
   busyIds.value.add(id)
   try {
     const res = await totpAwareFetch(`/api/v1/admin/financials/invoices/${id}`, { method: 'DELETE' })
+    if (res.status === 409) {
+      const body = await res.json().catch(() => null)
+      error.value = body?.code === 'imported' ? t('admin.faktura.importedReadOnly') : (body?.error ?? '409')
+      return
+    }
     if (!res.ok && res.status !== 204) {
       const txt = await res.text().catch(() => '')
       error.value = `${res.status} ${txt}`
@@ -368,7 +373,9 @@ async function doVoid(id: string) {
       // a void.
       const body = await res.json().catch(() => null)
       error.value =
-        body?.code === 'period_closed'
+        body?.code === 'imported'
+          ? t('admin.faktura.importedReadOnly')
+          : body?.code === 'period_closed'
           ? t('admin.invoiceDrafts.voidPeriodClosed')
           : body?.code === 'credit_linked'
             ? t('admin.faktura.credit.voidLinked')

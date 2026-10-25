@@ -399,6 +399,16 @@ So the amount cap is a **default**, not a hard ceiling — the per-invoice overr
 
 **Failure mode:** before BRY-342, 19 imported credit notes (−27,700 kr) counted as overdue debts. Five open pairs each showed both halves as overdue, even though they net to zero.
 
+### Imported fakturas are read-only
+
+**Rule (BRY-396):** a faktura with `import_source` set is the previous system's record. No endpoint changes it except two:
+- **Refused** with 409 `{code: "imported"}`: delete, void (checked before the idempotent "already voided" answer, since an imported row keeps whatever status it had there) and send. Delete and void repeat the guard in their write's WHERE.
+- **Skipped** by the bulk actions: regenerate PDF and reissue KID. A Brygge PDF or KID must never replace the original, and members may still pay with the old KID.
+- **Already excluded because `sent_at` is NULL:** resend, reminders, the invoice GL sync and the resplit. Don't rely on that when adding a path: imported rows have `sent_at` NULL only because the import doesn't know the send date.
+- **Allowed:** credit links (the opening-balance rule above), the Vipps-link preference, pay links, reading the PDF, and payments (BRY-386).
+
+**Failure mode:** before BRY-396 only the UI hid delete and void on the Importert tab, so a direct API call could delete or void the 2025 reference record.
+
 ### Only the payment provider can mark an order paid
 
 **Rule:** an order (or the invoice behind it) becomes paid only from evidence that money moved: the signed Vipps webhook (`onCaptured`), or reconciliation against a settlement or bank row. No HTTP route, public or admin, sets `orders.status = 'paid'` or `invoices.vipps_paid_at`/`payment_id` from a caller's say-so.
