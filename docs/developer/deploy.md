@@ -66,6 +66,7 @@ Required values:
 | `server_name` | terraform, NixOS | Hetzner server name + NixOS hostname |
 | `server_type`, `location`, `timezone` | terraform, NixOS | Defaults: `cx23`, `nbg1`, `Europe/Oslo` |
 | `dkim_public_value`, `dmarc_policy` | terraform | Mail DNS records (see [mail/setup.md](mail/setup.md)) |
+| `tailnet_domain` *(optional)* | NixOS (unbound) | Tailnet MagicDNS suffix (e.g. `tail.example.net`). The host resolver forwards only this zone to `100.100.100.100` so the OTel collector's upstream endpoint resolves. Unset or empty → telemetry export can't resolve its endpoint. See [otel/local-collector.md](otel/local-collector.md#name-resolution) |
 
 **Protection against committing secrets**: a pre-commit hook at `.githooks/pre-commit` rejects any attempt to stage `terraform/terraform.tfvars.json`. The dev shell's `shellHook` auto-installs it by setting `core.hooksPath` the first time you `nix develop`. If you accept the hook, `git status` will still show the file as modified, but `git commit` (with or without `-a`) will fail:
 

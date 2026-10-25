@@ -76,6 +76,11 @@
       s3BucketDocs     = tfvars.s3_bucket_docs or "";
       s3BucketBackups  = tfvars.s3_bucket_backups or "";
       s3BucketLegal    = tfvars.s3_bucket_legal or "";
+      # Tailnet DNS suffix (e.g. "tail.example.net"). The local resolver
+      # forwards only this zone to MagicDNS so the OTel collector's upstream
+      # endpoint resolves; null (unset or empty) forwards nothing.
+      tailnetDomain    = let d = tfvars.tailnet_domain or null; in
+        if d == "" then null else d;
     };
 
     overlay = final: prev: {

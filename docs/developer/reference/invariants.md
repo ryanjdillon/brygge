@@ -451,6 +451,12 @@ So the amount cap is a **default**, not a hard ceiling — the per-invoice overr
 
 **Failure mode:** the query throws 500 the first time it runs against a non-empty audit log. The `last_notified_at` subquery on `HandleListInvoices` got bitten by this in commit `b8573c4`; fix in the follow-up.
 
+### The system resolver forwards the tailnet zone to MagicDNS
+
+**Rule (BRY-402):** any change to the host's resolver (`services.unbound`, `networking.nameservers`, resolvconf, the tailnet client's DNS flags) must keep `clubConfig.tailnetDomain` forwarded to `100.100.100.100`, exempt from DNSSEC validation, with every other name still recursing locally. `OTLP_ENDPOINT` is a fully qualified tailnet name and nothing else resolves it. See [otel/local-collector.md § Name resolution](../otel/local-collector.md#name-resolution).
+
+**Failure mode:** with `unbound` recursing from the root and openresolv putting it first in `/etc/resolv.conf`, the tailnet name came back NXDOMAIN and glibc never asked MagicDNS. The collector logged `no children to pick from` on every export, nothing left the host for over a month, and its stack-trace log spam (~150k journal entries a day) cut journal retention from a month to ~5 days.
+
 ---
 
 ## Mail

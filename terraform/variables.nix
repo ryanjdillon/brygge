@@ -79,6 +79,14 @@
       description = "IANA timezone for the host (systemd time.timeZone).";
     };
 
+    # Read only by the NixOS flake; declared so Terraform doesn't warn about
+    # an undeclared variable in the shared tfvars file.
+    tailnet_domain = {
+      type        = "string";
+      default     = "";
+      description = "Tailnet DNS suffix (MagicDNS) the host's resolver forwards to 100.100.100.100, so the OTel collector's upstream endpoint resolves. Empty disables the forward.";
+    };
+
     # Self-hosted mail (Stalwart)
     dkim_public_value = {
       type        = "string";

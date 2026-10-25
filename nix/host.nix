@@ -696,32 +696,61 @@ in
   # change tracked separately (BRY-279).
   services.dbus.implementation = "dbus";
 
-  # Tailscale — used as the network path for forwarding telemetry to the
-  # home cluster's OTel stack. Run `tailscale up` once on first deploy
-  # to authenticate the node into the tailnet.
+  # Local recursive resolver and the system's only nameserver. Stalwart's
+  # Spamhaus ZEN lookups must come from our own IP: Spamhaus refuses DNSBL
+  # queries relayed through public or shared provider resolvers.
+  #
+  # Because this resolver recurses from the root, it cannot see tailnet
+  # names. The tailnet zone is forwarded to the tailnet client's MagicDNS
+  # stub (100.100.100.100) so the collector's upstream endpoint resolves;
+  # every other name still recurses. MagicDNS answers are unsigned, so the
+  # zone is exempt from DNSSEC validation. infra-keep-probing stops unbound
+  # from parking 100.100.100.100 as down for ~15 min after the queries it
+  # sees at boot, before tailscaled is up, time out.
   services.unbound = {
     enable = true;
-    settings.server = {
-      interface = [ "127.0.0.1" "::1" ];
-      access-control = [ "127.0.0.0/8 allow" "::1/128 allow" ];
+    settings = {
+      server = {
+        interface = [ "127.0.0.1" "::1" ];
+        access-control = [ "127.0.0.0/8 allow" "::1/128 allow" ];
+        infra-keep-probing = true;
+      } // lib.optionalAttrs (clubConfig.tailnetDomain != null) {
+        domain-insecure = [ clubConfig.tailnetDomain ];
+      };
+    } // lib.optionalAttrs (clubConfig.tailnetDomain != null) {
+      forward-zone = [
+        {
+          name = clubConfig.tailnetDomain;
+          forward-addr = [ "100.100.100.100" ];
+        }
+      ];
     };
   };
 
+  # Tailnet node (Headscale control server) used only as the network path for
+  # telemetry export to the upstream collector.
+  #
+  # accept-dns=false: the tailnet client could only append 100.100.100.100
+  # after the local resolver, and glibc never reaches it once unbound answers
+  # NXDOMAIN, so tailnet names resolve through unbound's forward-zone instead.
+  # There is no tailnet `search` domain either, so OTLP_ENDPOINT must be a
+  # fully qualified name.
+  # accept-routes: the upstream collector may sit on a subnet another node
+  # advertises.
+  #
+  # extraSetFlags is applied by tailscaled-set on every activation without
+  # re-authenticating. Login flags are `tailscale up`-only and are run once by
+  # the operator: `tailscale up --login-server=<headscale-url>
+  # --advertise-tags=tag:downstream`. The tag:downstream ACL lets tailnet
+  # hosts dial in and allows exactly one outbound flow from this node, to the
+  # upstream collector's OTLP port (<collector-ip>:4317), so a compromised
+  # public VM can't pivot inward.
   services.tailscale = {
     enable = true;
     openFirewall = true;
-    # accept-dns: use the tailnet's DNS resolver so MagicDNS hostnames resolve.
-    # accept-routes: accept subnet routes advertised by other peers (e.g. a
-    # gateway router exporting LAN access for the in-cluster collector).
-    # advertise-tags: brygge identifies as a downstream node — the tailnet ACL
-    # allows other hosts to dial in but blocks brygge from initiating
-    # connections to them (so a compromised public VM can't pivot inward).
-    # If the control server (Headscale URL) ever needs (re-)setting, do that
-    # interactively on the host: `tailscale up --login-server=<url>`.
-    extraUpFlags = [
-      "--accept-dns=true"
+    extraSetFlags = [
+      "--accept-dns=false"
       "--accept-routes=true"
-      "--advertise-tags=tag:downstream"
     ];
   };
 
@@ -780,13 +809,14 @@ in
       };
       exporters = {
         # Endpoint and auth come from /etc/otel/env (root-only, not committed):
-        #   OTLP_ENDPOINT=collector.example.com:4317
+        #   OTLP_ENDPOINT=collector.<tailnet-domain>:4317
         #   OTLP_AUTH_HEADER=Bearer <token>
         # No scheme on endpoint — gRPC OTLP exporter takes host:port directly.
-        # tls.insecure only disables transport TLS; if the path is over a
-        # private network (e.g. Tailscale's WireGuard tunnel) transport TLS
-        # is redundant. The bearer token still rides in gRPC metadata
-        # headers regardless of tls.insecure.
+        # The host must be a fully qualified tailnet name under
+        # clubConfig.tailnetDomain, which unbound forwards to MagicDNS.
+        # tls.insecure only disables transport TLS; over the tailnet's
+        # WireGuard tunnel transport TLS is redundant. The bearer token still
+        # rides in gRPC metadata headers regardless of tls.insecure.
         "otlp/upstream" = {
           # Build-time default: the newer otelcol validates this config when it
           # is built, but OTLP_ENDPOINT only exists at runtime (/etc/otel/env),
@@ -829,12 +859,17 @@ in
     };
   };
 
-  systemd.services.opentelemetry-collector.serviceConfig = {
-    # /etc/otel/env contains HOME_OTLP_ENDPOINT and (optionally)
-    # HOME_OTLP_AUTH_HEADER — managed by the deployer, not Nix.
-    EnvironmentFile = "/etc/otel/env";
-    # Read journald — needs the systemd-journal group.
-    SupplementaryGroups = [ "systemd-journal" ];
+  systemd.services.opentelemetry-collector = {
+    # The upstream endpoint is a tailnet name: wait for the tailnet client
+    # and the local resolver so the first export doesn't fail on DNS.
+    after = [ "tailscaled.service" "nss-lookup.target" ];
+    serviceConfig = {
+      # /etc/otel/env contains OTLP_ENDPOINT and OTLP_AUTH_HEADER — managed
+      # by the deployer, not Nix.
+      EnvironmentFile = "/etc/otel/env";
+      # Read journald — needs the systemd-journal group.
+      SupplementaryGroups = [ "systemd-journal" ];
+    };
   };
 
   # Brygge sends OTLP to the local collector. Per-club tagging
