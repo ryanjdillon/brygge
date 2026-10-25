@@ -135,3 +135,119 @@ func TestBackfillInvoiceNumberPayments(t *testing.T) {
 		t.Errorf("second run = %d (err %v), want 0", n2, err)
 	}
 }
+
+// backfillUnlinkedPayments keys on the KID, and an empty KID is no key:
+// imported fakturas (empty KID) must not be marked paid by a booked bank row
+// that also has no KID, however many share its amount. A faktura with a
+// real KID still links.
+func TestBackfillUnlinkedPaymentsIgnoresEmptyKID(t *testing.T) {
+	testutil.SkipIfNoDB(t)
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+
+	clubID := testutil.SeedClub(t, pool)
+	userID, _ := testutil.SeedUser(t, pool, clubID, []string{"treasurer"})
+	svc := NewService(pool, nil, zerolog.Nop())
+	if _, err := svc.SeedKontoplan(ctx, clubID); err != nil {
+		t.Fatalf("seed kontoplan: %v", err)
+	}
+	var periodID string
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO fiscal_periods (club_id, year, start_date, end_date, status)
+		 VALUES ($1, 2026, '2026-01-01', '2026-12-31', 'open') RETURNING id`,
+		clubID,
+	).Scan(&periodID); err != nil {
+		t.Fatalf("period: %v", err)
+	}
+
+	// Imported rows mirror the uni24 import: no sent_at, and often no user.
+	seedInv := func(number int, kid string, imported bool, member any) string {
+		t.Helper()
+		importSource, sentAt, externalID := any(nil), any(time.Now()), any(nil)
+		if imported {
+			importSource, sentAt, externalID = "uni24", nil, fmt.Sprintf("ext-%d", number)
+		}
+		var id string
+		if err := pool.QueryRow(ctx,
+			`INSERT INTO invoices
+			   (club_id, user_id, invoice_number, kid_number, due_date, total_amount,
+			    status, fiscal_period_id, recipient_kind, recipient_email, sent_at,
+			    import_source, external_id)
+			 VALUES ($1, $2, $3, $4, '2026-06-14', 620, 'open', $5, 'private', 'm@example.com', $6,
+			         $7, $8)
+			 RETURNING id`,
+			clubID, member, number, kid, periodID, sentAt, importSource, externalID,
+		).Scan(&id); err != nil {
+			t.Fatalf("invoice %d: %v", number, err)
+		}
+		return id
+	}
+	imported1 := seedInv(9101, "", true, nil)
+	imported2 := seedInv(9102, "", true, userID)
+	withKID := seedInv(9103, "000000091034", false, userID)
+	oldKID := seedInv(9104, "000000091045", false, userID)
+	thisYear := seedInv(9105, "000000091056", false, userID)
+
+	var importID string
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO bank_imports (club_id, filename, format, bank_account_code, imported_by, row_count)
+		 VALUES ($1, 'b.csv', 'sparebank-norge-v1', '1920', $2, 0) RETURNING id`,
+		clubID, userID,
+	).Scan(&importID); err != nil {
+		t.Fatalf("bank import: %v", err)
+	}
+	// Booked 620 kr deposits: one with no KID, one carrying withKID's, and one
+	// paid with oldKID's KID but assigned by hand to thisYear.
+	for _, r := range []struct{ ref, kid, assigned string }{
+		{"NOKID", "", ""}, {"KID", "000000091034", ""}, {"OLDKID", "000000091045", thisYear},
+	} {
+		row := BankRow{Date: time.Date(2026, 5, 15, 0, 0, 0, 0, time.UTC), Description: "Innbetaling " + r.ref, Amount: 620, Reference: r.ref}
+		entry, err := svc.CreateJournalEntry(ctx, CreateJournalEntryInput{
+			FiscalPeriodID: periodID, EntryDate: "2026-05-15", Description: "test",
+			Source: "bank_import", ClubID: clubID, CreatedBy: userID,
+			Lines: []CreateJournalLineInput{
+				{AccountCode: "1920", Debit: 620},
+				{AccountCode: receivablesAccountCode, Credit: 620},
+			},
+		})
+		if err != nil {
+			t.Fatalf("journal %s: %v", r.ref, err)
+		}
+		if _, err := pool.Exec(ctx,
+			`INSERT INTO bank_import_rows
+			   (bank_import_id, club_id, row_date, description, amount, reference, kid_number, row_hash,
+			    journal_entry_id, invoice_id)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NULLIF($10, '')::uuid)`,
+			importID, clubID, row.Date, row.Description, row.Amount, row.Reference, r.kid, BankRowHash(clubID, row),
+			entry.ID, r.assigned,
+		); err != nil {
+			t.Fatalf("insert row %s: %v", r.ref, err)
+		}
+	}
+
+	n, err := svc.backfillUnlinkedPayments(ctx, clubID)
+	if err != nil {
+		t.Fatalf("backfill: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("linked %d, want 1 (only the faktura with a real KID and an unassigned row)", n)
+	}
+	for _, c := range []struct {
+		name string
+		id   string
+		want bool
+	}{
+		{"imported, no member", imported1, false},
+		{"imported, member", imported2, false},
+		{"with KID", withKID, true},
+		{"old KID on a row assigned elsewhere", oldKID, false},
+	} {
+		var paid bool
+		if err := pool.QueryRow(ctx, `SELECT payment_id IS NOT NULL FROM invoices WHERE id=$1`, c.id).Scan(&paid); err != nil {
+			t.Fatalf("read %s: %v", c.name, err)
+		}
+		if paid != c.want {
+			t.Errorf("%s: paid=%v, want %v", c.name, paid, c.want)
+		}
+	}
+}

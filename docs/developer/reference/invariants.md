@@ -300,9 +300,12 @@ Price items carry no account. The category map (`revenueAccountMap`, read throug
 
 ### `invoices.kid_number` is unique per club
 
-**Rule:** `idx_invoices_kid` enforces `UNIQUE (club_id, kid_number)`. KID generation reserves the next sequence number atomically before issuing. The KID encodes club + sequence + check digit.
+**Rule:** `idx_invoices_kid` enforces `UNIQUE (club_id, kid_number) WHERE kid_number <> ''` (migration 059). KID generation reserves the next sequence number atomically before issuing. The KID encodes club + sequence + check digit.
+- **`''` means "no KID", not a key.** Imported fakturas and bank rows without a KID all carry it, and it isn't unique. Any join or match on `kid_number` must require it non-empty on the side it keys on. `backfillUnlinkedPayments` does (BRY-415).
+- **A bank row's KID is what the payer typed, so it isn't proof of the faktura.** A row already assigned (`bank_import_rows.invoice_id`) is that faktura's payment. The backfill skips a row assigned to another faktura, e.g. a member paying this year's dues with last year's KID.
+- Two `NOT EXISTS (… bir.kid_number = i.kid_number …)` checks still compare empty KIDs: the name matcher (`banksync.go`, `findInvoiceByCounterpartAndAmount`) and the invoice-number match in `kid_cascade.go`. For an imported faktura they find any booked KID-less row, so those matchers never pick an imported faktura. That is conservative, and it is currently relied on: booking CR 1500 for an imported faktura needs an opening balance first (BRY-386). Change both together with BRY-386, not separately. The lock they feed (`lockKIDCascade`, comment at `bank_row_reconcile.go:231`) deliberately has no import condition, so the SELECTs are the only thing keeping imported fakturas out.
 
-**Failure mode:** two invoices with the same KID — bank can't tell them apart, reconciliation pairs the wrong one.
+**Failure mode:** two invoices with the same KID — bank can't tell them apart, reconciliation pairs the wrong one. Joining on an empty KID did the same thing at scale: the bank-sync backfill marked 140 imported fakturas paid, several of them by a single bank row (BRY-415).
 
 ### `invoices.payment_id` is set only when a payment row exists
 

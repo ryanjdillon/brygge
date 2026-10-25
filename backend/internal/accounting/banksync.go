@@ -329,6 +329,14 @@ func (s *Service) healStrandedKIDDrafts(ctx context.Context, clubID string) (int
 // Only full-amount matches are backfilled (bir.amount = i.total_amount).
 // Partial payments would require a "partial" status on the payments
 // table that doesn't exist yet, so those rows are left alone.
+//
+// An empty KID is "no KID", not a key: imported fakturas and anonymous
+// bank rows all carry the empty string, so matching on it marked imported fakturas paid
+// by any same-amount row, several by one (BRY-415). A non-empty KID is
+// unique per club (idx_invoices_kid), so each row then names one faktura.
+// The KID on a bank row is whatever the payer typed, though: a row already
+// assigned to another faktura (a member paying with last year's KID) is
+// that faktura's payment, not this one's.
 func (s *Service) backfillUnlinkedPayments(ctx context.Context, clubID string) (int, error) {
 	rows, err := s.db.Query(ctx,
 		`SELECT DISTINCT ON (i.id) i.id, bir.row_date
@@ -337,6 +345,8 @@ func (s *Service) backfillUnlinkedPayments(ctx context.Context, clubID string) (
 		   JOIN bank_imports bi      ON bi.id = bir.bank_import_id
 		  WHERE bi.club_id = $1
 		    AND i.club_id  = $1
+		    AND i.kid_number <> ''
+		    AND (bir.invoice_id IS NULL OR bir.invoice_id = i.id)
 		    AND i.payment_id IS NULL
 		    AND i.status = 'open'
 		    AND bir.amount > 0
