@@ -298,7 +298,7 @@ func (h *InvoiceHandler) sendOneReminder(
 	vippsURL := h.orderPayURL(h.ensureFakturaOrderToken(ctx, clubID, invoiceID, true))
 	body := email.InvoiceReminderBody(locale, memberName, clubName, invoiceNumber, dueDate, total, kid, defaultBank, vippsURL)
 	filename := buildSimpleReminderFilename(invoiceNumber)
-	if err := h.email.SendWithAttachment(ctx, deliverTo, subject, body, filename, pdfData); err != nil {
+	if err := h.email.SendWithAttachment(email.WithKind(ctx, email.KindInvoiceReminder), deliverTo, subject, body, filename, pdfData); err != nil {
 		return err
 	}
 

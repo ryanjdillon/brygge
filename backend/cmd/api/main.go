@@ -136,12 +136,18 @@ func main() {
 		log.Info().Msg("connected to redis")
 	}
 
+	// Assign only a non-nil *SMTPClient: a typed nil stored in the Sender
+	// interface compares non-nil, so handlers' "email not configured"
+	// checks would pass and the first send would panic.
 	var emailClient email.Sender
-	if cfg.SMTPHost != "" {
-		emailClient = email.NewSMTPClient(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUsername, cfg.SMTPPassword, cfg.EmailFrom, cfg.EmailReplyTo)
+	switch smtpClient := email.NewSMTPClient(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUsername, cfg.SMTPPassword, cfg.EmailFrom, cfg.EmailReplyTo); {
+	case smtpClient != nil:
+		emailClient = email.Instrument(smtpClient)
 		log.Info().Str("host", cfg.SMTPHost).Int("port", cfg.SMTPPort).Str("from", cfg.EmailFrom).Str("reply_to", cfg.EmailReplyTo).Msg("email delivery enabled (SMTP)")
-	} else {
+	case cfg.SMTPHost == "":
 		log.Warn().Msg("email delivery disabled (SMTP_HOST unset)")
+	default:
+		log.Warn().Str("host", cfg.SMTPHost).Msg("email delivery disabled (EMAIL_FROM unset)")
 	}
 
 	var claudeClient *ai.ClaudeClient

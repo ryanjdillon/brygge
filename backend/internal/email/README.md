@@ -6,8 +6,9 @@ A small package: an interface (`Sender`), two implementations (SMTP, mock), and 
 
 | File | What |
 |---|---|
-| `sender.go` | `Sender` interface — `Send(ctx, to, subject, html) error` and `SendWithAttachment(ctx, to, subject, html, filename, attachment) error`. Implementations are interchangeable. |
+| `sender.go` | `Sender` interface — `Send`, `SendWithAttachment` and `SendWithHeaders`. Implementations are interchangeable. |
 | `smtp.go` | `SMTPClient` — production sender. Uses `mime/multipart` for the attachment variant; sends RFC-compliant `Content-Type: multipart/mixed`. |
+| `instrument.go` | `Instrument(Sender)` decorator counting `brygge.email.send{kind,result}`; `WithKind(ctx, Kind)` tags a send. See [instrumentation.md](../../../docs/developer/otel/instrumentation.md#app-email-sends). |
 | `mock.go` | `MockSender` — records every call in a slice for tests. Use with `&MockSender{}` and assert against `mock.Calls`. |
 | `templates.go` | `Subject(...)`, `Body(...)` helpers + `html/template` definitions for invoice, reminder, magic-link emails. Plus `DetectLocale`, `formatNOK`. |
 
@@ -50,7 +51,7 @@ Never `fmt.Sprintf("%.2f kr", amount)` — the format is different (decimal poin
 
 ## Sender lifecycle
 
-- Constructed once at server startup in `cmd/api/main.go` with `email.NewSMTPClient(host, port, user, pass, from, replyTo)`
+- Constructed once at server startup in `cmd/api/main.go` with `email.NewSMTPClient(host, port, user, pass, from, replyTo)` and wrapped with `email.Instrument`. `NewSMTPClient` returns a nil `*SMTPClient` when `SMTP_HOST` or `EMAIL_FROM` is empty; only assign it to an `email.Sender` after checking for nil — a typed nil inside the interface is non-nil, so the handlers' nil check passes and the first send panics
 - Stored as the `email` field on whatever handler needs it
 - Optional throughout — handlers must check `if h.email == nil` and return 503 if the operation requires email
 
@@ -63,9 +64,13 @@ if h.email == nil {
 
 ## Common changes
 
-- **New email type** (e.g. password reset, board announcement) → add `XSubject`, `XBody`, `xHTMLTpl` in `templates.go`. Mirror the InvoiceBody pattern: fallback on template error, sensible defaults for empty fields. The caller calls `SendWithAttachment` for attachments or `Send` for plain.
+- **New email type** (e.g. password reset, board announcement) → add `XSubject`, `XBody`, `xHTMLTpl` in `templates.go`. Mirror the InvoiceBody pattern: fallback on template error, sensible defaults for empty fields. The caller calls `SendWithAttachment` for attachments or `Send` for plain, passing `email.WithKind(ctx, …)` — add a `Kind` constant (and to `allKinds`) if none fits, otherwise the send is counted as `other`. Kinds are a closed set: never derive one from request data.
 - **Localize an existing template** → introduce a `switch locale { ... }` inside the helper. The helper signature already takes locale; today's implementations just ignore it.
 - **New rendering field** → add to the `data struct` literal, the template's `{{...}}` references, AND the fallback string. Forgetting the fallback is the most common miss.
+
+## Metrics
+
+Every send through the production sender increments `brygge.email.send` with `kind` and `result` (`ok` / `error`) only. Never add recipient, subject or error text as attributes — they are member data and unbounded. Broadcast mail goes through JMAP, not `Sender`, and is not counted here.
 
 ## Invariants
 

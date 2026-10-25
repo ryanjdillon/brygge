@@ -618,7 +618,7 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 		// just renders the KID-only email.
 		vippsURL := h.orderPayURL(h.ensureFakturaOrderToken(ctx, claims.ClubID, invoiceID, true))
 		htmlBody := email.InvoiceBody(locale, deliverName, clubName, invoiceSeq, dueDate, total, kid, bankAccount, vippsURL)
-		if err := h.email.SendWithAttachment(ctx, deliverTo, subject, htmlBody, filename, pdfData); err != nil {
+		if err := h.email.SendWithAttachment(email.WithKind(ctx, email.KindInvoice), deliverTo, subject, htmlBody, filename, pdfData); err != nil {
 			h.log.Error().Err(err).Str("email", deliverTo).Msg("failed to send invoice email")
 		} else {
 			now := time.Now().Format(time.RFC3339)
@@ -1283,7 +1283,7 @@ func (h *InvoiceHandler) HandleSendInvoice(w http.ResponseWriter, r *http.Reques
 		Error(w, http.StatusInternalServerError, "failed to mark invoice as sending")
 		return
 	}
-	if err := h.email.SendWithAttachment(ctx, deliverTo, subject, htmlBody, filename, pdfBytes); err != nil {
+	if err := h.email.SendWithAttachment(email.WithKind(ctx, email.KindInvoice), deliverTo, subject, htmlBody, filename, pdfBytes); err != nil {
 		h.log.Error().Err(err).Str("email", deliverTo).Msg("send invoice email — rolling back sent_at")
 		// Best-effort rollback. If this also fails we log loudly so the
 		// operator can spot the stuck row; the alternative (leaving it
@@ -1410,7 +1410,7 @@ func (h *InvoiceHandler) HandleResendInvoice(w http.ResponseWriter, r *http.Requ
 	htmlBody := email.InvoiceBody(locale, memberName, clubName, invoiceNumber, dueDate, total, kid, bankAccount, vippsURL)
 	filename := buildInvoiceFilename(invoiceNumber, memberLast, memberFirst, fiscalYear)
 
-	if err := h.email.SendWithAttachment(ctx, deliverTo, subject, htmlBody, filename, pdfBytesResend); err != nil {
+	if err := h.email.SendWithAttachment(email.WithKind(ctx, email.KindInvoice), deliverTo, subject, htmlBody, filename, pdfBytesResend); err != nil {
 		h.log.Error().Err(err).Str("email", deliverTo).Msg("resend invoice email failed")
 		Error(w, http.StatusBadGateway, "failed to send email")
 		return
