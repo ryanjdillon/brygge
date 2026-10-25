@@ -260,6 +260,30 @@ curl -fsS -u "kasserar:$PW" -X POST -H 'Content-Type: application/json' \
 
 ---
 
+## Outbound queue listing
+
+The API's queue monitor ([../otel/instrumentation.md § Mail queue](../otel/instrumentation.md#mail-queue-stalwart)) reads Stalwart's outbound queue with one admin-REST request:
+
+```
+GET /api/queue/messages?values=1&limit=1
+→ {"data": {"total": <messages in the whole queue>, "items": [{"id": …, "created": "<RFC 3339>", …}]}}
+```
+
+What it relies on, as of the 0.15.5 source:
+
+- **Empty-valued query parameters are dropped.** Stalwart's query parser ignores `values` with no value, so `?values&limit=1` returns bare ids without `created`. The flag must carry a value; any non-empty value works, `1` is used.
+- **Items come in ascending queue-id order, and queue ids are time-ordered** (snowflake ids). With `limit=1` the one item is the oldest message, while `total` still counts the whole queue. An empty queue returns `total: 0` and no items.
+- The usual [error envelope](#error-envelope-inside-200-ok) applies; `AdminClient.doJSON` handles it.
+
+By hand, as root on the mail host:
+
+```bash
+PW=$(cat /etc/stalwart/admin-password)
+curl -fsS -u "admin:$PW" "http://127.0.0.1:8088/api/queue/messages?values=1&limit=1" | jq '.data.total, .data.items[0].created'
+```
+
+---
+
 ## Journal events the collector counts
 
 The host collector turns some Stalwart journal records into metrics ([local-collector.md § Stalwart journal signals](../otel/local-collector.md#stalwart-journal-signals)). It matches them on `MESSAGE`, which the `journal` tracer fills with the event's description string from `crates/trc/src/event/description.rs`, and reads event keys as upper-cased fields. These strings are a contract with Stalwart 0.15.5:
@@ -291,5 +315,6 @@ When bumping Stalwart in nixpkgs / the flake input:
 4. Re-test the OAuth grants (§ no OAuth grant) — if any grant starts returning tokens, replace the service-password approach with per-user token mint per the DIL-322 follow-up.
 5. Verify principal-name validation hasn't changed (§ principal-name constraints) — if dashes become allowed, no code change needed but the next slug-encoder author should know.
 6. Diff the `MESSAGE` strings and field names in [§ journal events the collector counts](#journal-events-the-collector-counts) against the new `crates/trc/src/event/description.rs` and the event call sites. A changed string silently zeroes the matching `stalwart.journal.*` metric — update `filter/stalwart-signals`, `transform/stalwart-signals` and `count/stalwart` in `nix/host.nix` together. Also confirm the journal tracer is still the module default and `report.analysis.addresses` is still read.
+7. Re-run the [§ outbound queue listing](#outbound-queue-listing) request on a queue with at least two messages: `total` counts all of them, the single item is the oldest (compare `created` with the web admin's queue view), and the item still has `created`. If the order or the parameter handling changed, `brygge_mail_queue_oldest_age_seconds` is wrong and MailQueueStuck misfires — fix `AdminClient.QueueSummary` in `backend/internal/mail/queue_monitor.go`.
 
 The session-context comment on [DIL-275](https://linear.app/dillonteknisk/issue/DIL-275) captures the specific probes + their results at the time of writing. Use that as the regression baseline.
