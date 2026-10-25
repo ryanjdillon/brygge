@@ -35,6 +35,15 @@ OTLP_AUTH_HEADER=Bearer <token>
 
 The endpoint host must be a **fully qualified** tailnet (MagicDNS) name under `tailnet_domain` — see [Name resolution](#name-resolution). `tls.insecure = true` because the path runs over the tailnet's WireGuard tunnel. The bearer token rides in gRPC metadata regardless.
 
+Retry and queueing are bounded and memory-only:
+
+| Setting | Value |
+|---------|-------|
+| `retry_on_failure` | 5s initial, 60s max interval, give up after 10m |
+| `sending_queue` | 2 consumers, 1000 batches (the default, set explicitly) |
+
+There is no persistent queue: an upstream outage longer than the retry window, or one that fills the queue, **drops data**. A multi-hour outage leaves a gap upstream.
+
 For the upstream's side of the contract — what cluster operators need to provide — see [upstream-contract.md](upstream-contract.md).
 
 ## Pipelines
@@ -45,16 +54,26 @@ traces:  [otlp]               → [resourcedetection, resource, batch] → [otlp
 logs:    [otlp, journald]     → [resourcedetection, resource, batch] → [otlp/upstream]
 ```
 
-The collector's own internal-metrics endpoint is disabled (`telemetry.metrics.level = "none"`) to avoid an exporter loop.
-
 ## Name resolution
 
 The host's only nameserver is a local `unbound` that recurses from the root (Stalwart's Spamhaus DNSBL lookups must come from the host's own IP). A recursive resolver can't see tailnet names, so `unbound` forwards **only** the tailnet zone to the tailnet client's MagicDNS stub at `100.100.100.100`; every other name still recurses.
 
 - The zone is `clubConfig.tailnetDomain`, from `tailnet_domain` in `terraform/terraform.tfvars.json` (see [deploy.md](../deploy.md#1-configure-the-club)). Unset or empty → no forward-zone, and the upstream endpoint won't resolve.
 - The zone is `domain-insecure`: MagicDNS answers are unsigned, and DNSSEC validation would otherwise reject them.
-- `infra-keep-probing` keeps `unbound` retrying `100.100.100.100`. Queries at boot can arrive before `tailscaled` is up; without it `unbound` marks the address down for ~15 minutes. Expect a brief SERVFAIL window at boot until `tailscaled` answers.
+- `infra-keep-probing` keeps `unbound` retrying `100.100.100.100`. Queries at boot can arrive before `tailscaled` is up; without it `unbound` marks the address down for ~15 minutes. Expect a brief SERVFAIL window at boot until `tailscaled` answers — the exporter's retry covers it.
 - The tailnet client runs with `--accept-dns=false` (via `services.tailscale.extraSetFlags`), so `/etc/resolv.conf` lists only `127.0.0.1` / `::1` and has no tailnet `search` line.
+
+## Self-telemetry and log volume
+
+The collector's own logs go to journald, so they compete with every other unit for the journal's `SystemMaxUse` (500M) cap.
+
+| Setting | Value | Why |
+|---------|-------|-----|
+| `telemetry.logs.level` | `warn` | Info-level startup/shutdown chatter isn't useful on the host |
+| `telemetry.logs.disable_stacktrace` | `true` | **Load-bearing.** Each export error otherwise carries a ~20-frame stack trace, one journal entry per frame |
+| `telemetry.logs.sampling` | 5 per 60s, then 1 in 500 | Explicit; the collector samples by default |
+| `LogRateLimitIntervalSec` / `LogRateLimitBurst` (unit) | 60s / 600 | journald backstop independent of the collector's settings |
+| `telemetry.metrics` | `basic`, Prometheus pull reader on `127.0.0.1:8888` | Exporter health on the host. Nothing scrapes it into a pipeline, so it can't loop |
 
 ## Systemd integration
 
@@ -63,12 +82,13 @@ systemd.services.opentelemetry-collector = {
   after = [ "tailscaled.service" "nss-lookup.target" ];
   serviceConfig = {
     EnvironmentFile = "/etc/otel/env";
-    SupplementaryGroups = [ "systemd-journal" ];
+    LogRateLimitIntervalSec = "60s";
+    LogRateLimitBurst = 600;
   };
 };
 ```
 
-`SupplementaryGroups` is required for the journald receiver to read the system journal. `after` keeps the first export from failing on DNS before the tailnet client and resolver are up.
+`after` keeps the first export from failing on DNS before the tailnet client and resolver are up. The NixOS module already adds the `systemd-journal` supplementary group the journald receiver needs, and validates the generated config with `otelcol validate` at build time.
 
 ## Operating
 
@@ -77,8 +97,10 @@ systemd.services.opentelemetry-collector = {
 | Restart | `systemctl restart opentelemetry-collector` |
 | Logs | `journalctl -u opentelemetry-collector -f` |
 | Rotate upstream token | Edit `/etc/otel/env`, then restart the unit |
-| Verify receivers | `ss -tlnp \| grep -E '4317\|4318'` |
+| Verify receivers | `ss -tlnp \| grep -E '4317\|4318\|8888'` |
 | Endpoint resolves | `dig @127.0.0.1 <endpoint FQDN>` |
+| Export health | `curl -s 127.0.0.1:8888/metrics \| grep otelcol_exporter_` — `sent_*` rising, `send_failed_*` flat |
+| Log volume | `journalctl -u opentelemetry-collector --since -1h \| wc -l` — near 0 when healthy |
 
 The host must be a tailnet node. Join it once after first deploy:
 

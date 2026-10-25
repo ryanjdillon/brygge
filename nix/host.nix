@@ -817,6 +817,11 @@ in
         # tls.insecure only disables transport TLS; over the tailnet's
         # WireGuard tunnel transport TLS is redundant. The bearer token still
         # rides in gRPC metadata headers regardless of tls.insecure.
+        #
+        # Retry and queue are bounded and in memory: an upstream outage
+        # longer than max_elapsed_time, or one that fills the queue, drops
+        # data rather than growing without limit. queue_size is the default,
+        # set explicitly so the bound is visible here.
         "otlp/upstream" = {
           # Build-time default: the newer otelcol validates this config when it
           # is built, but OTLP_ENDPOINT only exists at runtime (/etc/otel/env),
@@ -829,6 +834,17 @@ in
           tls.insecure = true;
           headers = {
             Authorization = "\${env:OTLP_AUTH_HEADER}";
+          };
+          retry_on_failure = {
+            enabled = true;
+            initial_interval = "5s";
+            max_interval = "60s";
+            max_elapsed_time = "10m";
+          };
+          sending_queue = {
+            enabled = true;
+            num_consumers = 2;
+            queue_size = 1000;
           };
         };
       };
@@ -851,9 +867,34 @@ in
           };
         };
         telemetry = {
-          # Suppress the collector's own internal metrics endpoint to
-          # avoid yet another exporter loop.
-          metrics.level = "none";
+          # The collector's own logs go to journald. Without
+          # disable_stacktrace every export error carries a ~20-frame stack
+          # trace, one journal entry per frame, which during an upstream
+          # outage crowds every other unit out of the journal's size cap.
+          logs = {
+            level = "warn";
+            disable_stacktrace = true;
+            sampling = {
+              enabled = true;
+              tick = "60s";
+              initial = 5;
+              thereafter = 500;
+            };
+          };
+          # Exporter health (otelcol_exporter_sent_* / send_failed_*) on a
+          # loopback Prometheus endpoint for on-host checks. It is pulled,
+          # not fed into a pipeline, so it can't loop back into the exporter.
+          metrics = {
+            level = "basic";
+            readers = [
+              {
+                pull.exporter.prometheus = {
+                  host = "127.0.0.1";
+                  port = 8888;
+                };
+              }
+            ];
+          };
         };
       };
     };
@@ -867,8 +908,10 @@ in
       # /etc/otel/env contains OTLP_ENDPOINT and OTLP_AUTH_HEADER — managed
       # by the deployer, not Nix.
       EnvironmentFile = "/etc/otel/env";
-      # Read journald — needs the systemd-journal group.
-      SupplementaryGroups = [ "systemd-journal" ];
+      # Backstop for the collector's own log volume, independent of its
+      # telemetry.logs settings.
+      LogRateLimitIntervalSec = "60s";
+      LogRateLimitBurst = 600;
     };
   };
 

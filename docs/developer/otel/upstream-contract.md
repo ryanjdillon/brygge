@@ -11,6 +11,7 @@ The Brygge VM ships telemetry to an upstream OTel collector. This page documents
 - **TLS:** Sender uses `tls.insecure = true` and relies on WireGuard for transport encryption. The cluster receiver does **not** need to terminate TLS on this listener; a plaintext gRPC OTLP receiver bound to the tailnet interface is fine.
 - **Port:** `4317` (standard OTLP gRPC).
 - **Endpoint format expected:** `host:port` with no scheme, where `host` is the FQDN, e.g. `otel.tail.example.net:4317`.
+- **Delivery:** the sender retries for up to 10 minutes with a 1000-batch in-memory queue. A longer outage drops data; there is no on-disk buffer.
 
 ## Authentication
 
