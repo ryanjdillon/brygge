@@ -735,6 +735,8 @@ in
   };
 
   services.journald.settings.Journal = {
+    # The JournalRetentionShort alert (docs/developer/otel/alerts) gates on
+    # 85% of this cap; change both together.
     SystemMaxUse = "500M";
     MaxRetentionSec = "1month";
   };
@@ -843,7 +845,8 @@ in
         # Stalwart load the certificate independently, so a renewal one of
         # them hasn't picked up shows here. Stalwart's listeners share one
         # certificate, so 465 stands in for 993 too; each probe handshake
-        # also logs a line in Stalwart's journal.
+        # also logs a line in Stalwart's journal. The TlsProbeFailing alert
+        # (docs/developer/otel/alerts) lists these targets; change both.
         tls_check = {
           collection_interval = "10m";
           targets = [

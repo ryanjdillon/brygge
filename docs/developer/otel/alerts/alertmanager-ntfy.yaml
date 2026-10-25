@@ -29,9 +29,12 @@ route:
       group_wait: 30s
       group_interval: 5m
       repeat_interval: 24h
-      # true: after the ntfy notification, keep matching the routes below
-      # (e.g. the existing Home Assistant receiver) as well.
-      continue: false
+      # Keep matching the routes after this one, so the existing receiver
+      # (e.g. Home Assistant) still gets a copy. That needs a later sibling
+      # route to it (a catch-all `- receiver: <existing>` works): the root
+      # route's own receiver is only the fallback when no child matches.
+      # false: ntfy only.
+      continue: true
       routes:
         - matchers:
             - severity="page"
@@ -41,12 +44,13 @@ route:
             - severity="warn"
           receiver: brygge-ntfy-warn
           repeat_interval: 24h
-        # Bounces: at most one notification per alert group a day.
+        # Bounces: a new bounce kind is reported within the hour, an ongoing
+        # one once a day, and the end of a 24h window is not news.
         - matchers:
             - severity="daily"
           receiver: brygge-ntfy-daily
           group_wait: 5m
-          group_interval: 24h
+          group_interval: 1h
           repeat_interval: 24h
 
 receivers:
@@ -72,7 +76,7 @@ receivers:
   - name: brygge-ntfy-daily
     webhook_configs:
       - url_file: /etc/alertmanager/secrets/alertmanager-ntfy/url-daily
-        send_resolved: true
+        send_resolved: false
         max_alerts: 10
         http_config:
           authorization:

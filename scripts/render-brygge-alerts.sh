@@ -79,8 +79,8 @@ if [ -n "${BRYGGE_ALERTS_LABELS:-}" ]; then
   for pair in "${pairs[@]}"; do
     key="${pair%%=*}"
     value="${pair#*=}"
-    if [ -z "$key" ] || [ "$key" = "$pair" ] || [[ "$pair" == *[\"\\]* ]]; then
-      echo "BRYGGE_ALERTS_LABELS entry is not k=v: $pair" >&2
+    if [ "$key" = "$pair" ] || ! [[ "$key" =~ ^[A-Za-z0-9_./-]+$ ]] || [[ "$value" == *[\"\\]* ]]; then
+      echo "BRYGGE_ALERTS_LABELS entry is not k=v with a plain key and an unquoted value: $pair" >&2
       exit 2
     fi
     printf '    %s: "%s"\n' "$key" "$value"

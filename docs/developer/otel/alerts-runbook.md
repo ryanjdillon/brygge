@@ -11,6 +11,7 @@ PW=$(cat /etc/stalwart/admin-password); U=http://127.0.0.1:8088
 | Alert | Severity | Signal |
 |---|---|---|
 | [HostSilent](#hostsilent) | page | No host metrics for 30 minutes |
+| [ApiSilent](#apisilent) | page | No API metrics for 15 minutes |
 | [MailDeferredByProvider](#maildeferredbyprovider) | page | A receiving server answered 4xx in each of the last two hours |
 | [MailQueueStuck](#mailqueuestuck) | page | Oldest message in Stalwart's queue is older than 6 hours |
 | [MailQueueUnknown](#mailqueueunknown) | warn | The API hasn't read the queue for 15 minutes |
@@ -19,6 +20,7 @@ PW=$(cat /etc/stalwart/admin-password); U=http://127.0.0.1:8088
 | [EmailSendErrors](#emailsenderrors) | page | The API failed to hand 3+ messages to the relay in 15 minutes |
 | [MailBounced](#mailbounced) | daily | Stalwart gave up on a message |
 | [TlsCertExpiring](#tlscertexpiring) | warn | A served certificate expires within 14 days |
+| [TlsProbeFailing](#tlsprobefailing) | warn | The TLS probe of one endpoint has reported nothing for 30 minutes |
 | [DiskFilling](#diskfilling) | warn | A filesystem is over 85 % full |
 | [JournalRetentionShort](#journalretentionshort) | warn | The journal is near its size cap and keeps less than 7 days |
 
@@ -38,6 +40,19 @@ PW=$(cat /etc/stalwart/admin-password); U=http://127.0.0.1:8088
 6. Home side: is the `otel-ingress` / gateway healthy, and did other sources stop too? If everything stopped, the problem is at home, not on the VM.
 
 **Fixes.** Restart the collector (`systemctl restart opentelemetry-collector`); re-join the tailnet ([local-collector.md § Operating](local-collector.md#operating)); rotate the token in `/etc/otel/env` if the upstream rejects it. The collector's memory queue drops data after a 10-minute outage, so a gap upstream after recovery is expected.
+
+## ApiSilent
+
+**Meaning.** Prometheus has had no `brygge_email_send_total` sample from `job="<domain>/brygge-api"` for 15 minutes. With SMTP configured the API pre-creates those series at 0 and exports them every minute, so silence means the API is down or crash-looping, or its OTLP export to the local collector is failing. If HostSilent fires too, start there: the whole export path is down, not the API.
+
+**First checks.**
+
+1. `systemctl status brygge`; `journalctl -u brygge --since -30min | tail -50` — a crash loop shows as repeated start-up lines.
+2. Is the site answering? `curl -sI https://<domain>/`.
+3. If the API is up: `journalctl -u brygge | grep -i 'OpenTelemetry'` — `failed to initialize OpenTelemetry` at start-up means it runs without telemetry; restart it once the collector is up (`systemctl status opentelemetry-collector`).
+4. A deployment that never configured SMTP has no such series at all; there the rule shouldn't be loaded ([alerting.md § Label and job contract](alerting.md#label-and-job-contract)).
+
+**Fixes.** Fix whatever the journal shows (database, config, a bad deploy — roll back with the previous generation if needed), then `systemctl restart brygge`. The alert resolves within a couple of minutes of the first export.
 
 ## MailDeferredByProvider
 
@@ -62,13 +77,13 @@ The rule depends on Stalwart's retry schedule: a message is only rejected when S
 
 1. The oldest messages: `curl -fsS -u "admin:$PW" "$U/api/queue/messages?values=1&limit=5" | jq '.data.total, .data.items'` — the queue lists oldest first; look at each recipient's status and last error.
 2. Is any delivery working? `journalctl -u stalwart --since -1h | grep -iE 'delivered|rejected|connection'`.
-3. Port 25 egress and DNS from the host: `nc -vz <mx host> 25`, `dig MX <recipient domain>`.
+3. DNS and port 25 egress from the host: `dig MX <recipient domain>`, then `timeout 5 bash -c '</dev/tcp/<mx host>/25' && echo open` (or `curl -v telnet://<mx host>:25`, which also shows the server's banner; Ctrl-C to quit).
 
 **Fixes.** If one provider is deferring, see [MailDeferredByProvider](#maildeferredbyprovider). A message to a dead domain or mailbox can be cancelled in the web admin (Queue) or via the admin API once you've confirmed it will never deliver; the sender gets a DSN. The alert resolves once the oldest message is younger than 6 hours, and also when the API stops reporting the gauge — then [MailQueueUnknown](#mailqueueunknown) fires instead.
 
 ## MailQueueUnknown
 
-**Meaning.** The API's last successful poll of Stalwart's queue (`brygge_mail_queue_last_success_seconds`) is more than 15 minutes old. After 15 minutes without a good poll the API stops reporting the queue gauges, so MailQueueStuck can't fire. The alert also fires when the API stops exporting metrics at all (crashed, not running): the last reported value keeps counting for up to a day. Clubs that don't configure the queue monitor never report the series and never get this alert.
+**Meaning.** The API's last successful poll of Stalwart's queue (`brygge_mail_queue_last_success_seconds`) is more than 15 minutes old. After 15 minutes without a good poll the API stops reporting the queue gauges, so MailQueueStuck can't fire. The alert also fires when the API stops exporting metrics at all (crashed, not running): the last reported value keeps counting for up to a day. Past that day [ApiSilent](#apisilent) still fires for a dead API, and it fires after 15 minutes anyway. Clubs that don't configure the queue monitor never report the series and never get this alert.
 
 **First checks.**
 
@@ -98,7 +113,7 @@ The rule depends on Stalwart's retry schedule: a message is only rejected when S
 **First checks.**
 
 1. The report: Stalwart web admin → Reports (parsed reports are kept 30 days), or `journalctl -u stalwart --since -7h -o json | jq 'select(.MESSAGE == "DMARC report received with warnings")'` for the reporter and counts.
-2. Look at the source IPs with failures. Our host's IP → our signing is broken: go through [DkimSignerMissing](#dkimsignermissing), and check the published key: `dig +short TXT mail._domainkey.<domain>` against `stalwart-cli dkim get-public-key mail` ([../mail/setup.md § 4](../mail/setup.md#4-provision-dkim)). Unknown IPs → spoofing or a forwarder; DMARC policy already handles that and no fix is needed on the host.
+2. Look at the source IPs with failures. Our host's IP → our signing is broken: go through [DkimSignerMissing](#dkimsignermissing), and check the published key: `dig +short TXT mail._domainkey.<domain>` against `stalwart-cli --url http://127.0.0.1:8088 --credentials "admin:$(cat /etc/stalwart/admin-password)" dkim get-public-key mail 2>&1` (it prints to stderr; [../mail/setup.md § 4](../mail/setup.md#4-provision-dkim)). Unknown IPs → spoofing or a forwarder; DMARC policy already handles that and no fix is needed on the host.
 3. Send a test message to a Gmail or Outlook mailbox and check "Show original" for `dkim=pass header.d=<domain> header.s=mail`.
 
 **Fixes.** Fix signing or the DNS record. Reports cover a past day, so the alert keeps firing for 6 hours after the last bad report even when the fix is already in; check the next day's reports. If postmaster@ mail stops arriving at all, no reports are parsed and this alert can't fire: postmaster is a list with external members ([../mail/setup.md](../mail/setup.md)).
@@ -128,15 +143,33 @@ The reminder worker retries a failed delivery up to three times, so a single fai
 
 ## TlsCertExpiring
 
-**Meaning.** The certificate served on `tlscheck_target` (`<domain>:443`, `mail.<domain>:443` or `mail.<domain>:465`) expires within 14 days. These are what clients see, not the files on disk: renewal can have succeeded while a service still serves the old certificate, because Caddy and Stalwart load `mail.<domain>`'s certificate separately and nothing reloads them after an ACME renewal unless the cert has `reloadServices`.
+**Meaning.** The certificate served on `tlscheck_target` (`<domain>:443`, `mail.<domain>:443` or `mail.<domain>:465`) expires within 14 days. These are what clients see, not the files on disk. Caddy (`mail.<domain>:443`) and Stalwart (465/993) each load the `mail.<domain>` certificate from `/var/lib/acme`, and the cert's `reloadServices = [ "caddy.service" "stalwart.service" ]` makes a renewal reload Caddy and restart Stalwart. So either renewal is failing, or that reload didn't happen or didn't take. The site's own certificate (`<domain>:443`) is Caddy's own ACME, separate from this. Lifecycle: [../mail/setup.md § Certificate lifecycle](../mail/setup.md#certificate-lifecycle).
 
 **First checks.**
 
-1. What is served: `openssl s_client -connect mail.<domain>:465 -servername mail.<domain> </dev/null 2>/dev/null | openssl x509 -noout -enddate` (same for 443 and the site domain).
-2. What is on disk: `openssl x509 -noout -enddate -in /var/lib/acme/mail.<domain>/cert.pem`, and `systemctl status acme-mail.<domain>.service` / its journal.
-3. The site's own certificate comes from Caddy's ACME: `journalctl -u caddy --since -1d | grep -i -E 'certificate|acme'`.
+1. What is served: `openssl s_client -connect mail.<domain>:465 -servername mail.<domain> </dev/null 2>/dev/null | openssl x509 -noout -enddate` (same for `mail.<domain>:443`, `mail.<domain>:993` and `<domain>:443`).
+2. What is on disk: `openssl x509 -noout -enddate -in /var/lib/acme/mail.<domain>/cert.pem`, and `systemctl list-timers acme-renew-mail.<domain>.timer` and `journalctl -u acme-order-renew-mail.<domain>.service`.
+3. The site's certificate: `journalctl -u caddy --since -1d | grep -iE 'certificate|acme'`.
 
-**Fixes.** Disk newer than served → `systemctl restart stalwart` (and `systemctl reload caddy`), then re-check all three ports. Renewal failing → fix the ACME challenge (DNS, the webroot handler in Caddy, rate limits) and re-run `systemctl start acme-mail.<domain>.service`. After a fix the alert can linger for up to 20 minutes (the probe runs every 10).
+**Fixes.**
+
+- Disk newer than served: `systemctl reload caddy` for 443 — NixOS's Caddy unit reloads with `caddy reload --force`, which re-reads certificate files even when the config is unchanged (a plain `caddy reload` would not) — and `systemctl restart stalwart` for 465/993. Re-check all ports.
+- Renewal failing: fix the ACME challenge (DNS, Caddy's webroot handler for `/.well-known/acme-challenge`, rate limits) and re-run `systemctl start acme-order-renew-mail.<domain>.service`.
+
+After a fix the alert can linger for up to 20 minutes (the probe runs every 10).
+
+## TlsProbeFailing
+
+**Meaning.** The host collector's `tls_check` has reported nothing for one `tlscheck_target` for 30 minutes while the host's other metrics arrive. A probe that can't complete a TLS handshake produces no data point at all, so this is the only signal for a dead listener or a broken certificate; TlsCertExpiring stays silent then. The rule lists the targets of the collector's `tls_check` config; a target added or removed there without the matching rule change shows up here as a false alert (or a missing one).
+
+**First checks.**
+
+1. Handshake by hand: `openssl s_client -connect <target> -servername <host part of target> </dev/null` — connection refused means the listener is down; a handshake error or no certificate means a TLS config problem.
+2. The service: `systemctl status caddy` (443) or `systemctl status stalwart` (465); their journals since the last restart.
+3. The collector's view: `journalctl -u opentelemetry-collector --since -1h | grep -i tls`.
+4. DNS: `dig +short <host part of target>` from the host resolves to this host.
+
+**Fixes.** Restart the failing service; if it fails to start on a certificate error, see [TlsCertExpiring](#tlscertexpiring) for the certificate files. If the target list in `nix/host.nix` changed on purpose, update the rule and re-render.
 
 ## DiskFilling
 

@@ -7,8 +7,9 @@ rule_files:
 evaluation_interval: 1m
 
 tests:
-  # Host metrics stop after minute 10: absent from minute 41 on, and the alert
-  # carries the static routing labels plus the job from the matcher.
+  # Host metrics stop after minute 10: absent from minute 41 on, firing after
+  # `for: 2m`, and the alert carries the static routing labels plus the job
+  # from the matcher.
   - interval: 1m
     input_series:
       - series: 'system_memory_usage_bytes{job="example.invalid/brygge-host", state="used"}'
@@ -18,6 +19,9 @@ tests:
         alertname: HostSilent
         exp_alerts: []
       - eval_time: 41m
+        alertname: HostSilent
+        exp_alerts: []
+      - eval_time: 43m
         alertname: HostSilent
         exp_alerts:
           - exp_labels:
@@ -200,6 +204,9 @@ tests:
       - series: 'brygge_mail_queue_last_success_seconds{job="example.invalid/brygge-api"}'
         values: '0 0 120+60x30'
     alert_rule_test:
+      - eval_time: 1m
+        alertname: MailQueueUnknown
+        exp_alerts: []
       - eval_time: 10m
         alertname: MailQueueUnknown
         exp_alerts: []
@@ -268,3 +275,117 @@ tests:
               summary: "example.invalid: 1 bounce(s) (dsn_permfail) in the last 24h"
               description: "Stalwart gave up on 1 message(s) in the last 24 hours (kind dsn_permfail: dsn_permfail = permanent failure notice sent to the sender, double_bounce = the notice itself bounced)."
               runbook_url: "https://example.invalid/runbook#mailbounced"
+
+  # API metrics stop after minute 10: absent from minute 26 on, firing after
+  # `for: 2m`.
+  - interval: 1m
+    input_series:
+      - series: 'brygge_email_send_total{job="example.invalid/brygge-api", kind="other", result="ok"}'
+        values: '0x10'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: ApiSilent
+        exp_alerts: []
+      - eval_time: 26m
+        alertname: ApiSilent
+        exp_alerts: []
+      - eval_time: 28m
+        alertname: ApiSilent
+        exp_alerts:
+          - exp_labels:
+              job: example.invalid/brygge-api
+              service_namespace: example.invalid
+              club: example
+              severity: page
+            exp_annotations:
+              summary: "example.invalid: no metrics from the API for 15 minutes"
+              description: "No brygge_email_send_total sample from job example.invalid/brygge-api in the last 15 minutes. The API is down, crash-looping, or its telemetry export is failing."
+              runbook_url: "https://example.invalid/runbook#apisilent"
+
+  # The 465 probe stops reporting after its first run while the host and the
+  # other probes carry on: only that target fires.
+  - interval: 10m
+    input_series:
+      - series: 'system_memory_usage_bytes{job="example.invalid/brygge-host", state="used"}'
+        values: '1x9'
+      - series: 'tlscheck_time_left_seconds{job="example.invalid/brygge-host", tlscheck_target="example.invalid:443"}'
+        values: '7776000x9'
+      - series: 'tlscheck_time_left_seconds{job="example.invalid/brygge-host", tlscheck_target="mail.example.invalid:443"}'
+        values: '7776000x9'
+      - series: 'tlscheck_time_left_seconds{job="example.invalid/brygge-host", tlscheck_target="mail.example.invalid:465"}'
+        values: '7776000'
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: TlsProbeFailing
+        exp_alerts: []
+      - eval_time: 40m
+        alertname: TlsProbeFailing
+        exp_alerts:
+          - exp_labels:
+              job: example.invalid/brygge-host
+              tlscheck_target: mail.example.invalid:465
+              service_namespace: example.invalid
+              club: example
+              severity: warn
+            exp_annotations:
+              summary: "example.invalid: no TLS probe result for mail.example.invalid:465 in 30 minutes"
+              description: "The host collector's tls_check has reported nothing for mail.example.invalid:465 for 30 minutes while other host metrics arrive. The handshake is failing: the listener is down, or it serves no or an invalid certificate."
+              runbook_url: "https://example.invalid/runbook#tlsprobefailing"
+
+  # A silent host is HostSilent's alert, not three TlsProbeFailing ones.
+  - interval: 10m
+    input_series:
+      - series: 'tlscheck_time_left_seconds{job="example.invalid/brygge-host", tlscheck_target="example.invalid:443"}'
+        values: '7776000'
+    alert_rule_test:
+      - eval_time: 60m
+        alertname: TlsProbeFailing
+        exp_alerts: []
+
+  # tmpfs is never "the disk"; /nix/store mirrors the root filesystem; the
+  # root filesystem at 90% from minute 5 fires once it has held for 15m.
+  - interval: 1m
+    input_series:
+      - series: 'system_filesystem_utilization_ratio{job="example.invalid/brygge-host", mountpoint="/run", type="tmpfs", device="tmpfs", mode="rw"}'
+        values: '0.95x30'
+      - series: 'system_filesystem_utilization_ratio{job="example.invalid/brygge-host", mountpoint="/nix/store", type="ext4", device="/dev/sda1", mode="ro"}'
+        values: '0.5x4 0.9x25'
+      - series: 'system_filesystem_utilization_ratio{job="example.invalid/brygge-host", mountpoint="/", type="ext4", device="/dev/sda1", mode="rw"}'
+        values: '0.5x4 0.9x25'
+    alert_rule_test:
+      - eval_time: 19m
+        alertname: DiskFilling
+        exp_alerts: []
+      - eval_time: 21m
+        alertname: DiskFilling
+        exp_alerts:
+          - exp_labels:
+              mountpoint: /
+              service_namespace: example.invalid
+              club: example
+              severity: warn
+            exp_annotations:
+              summary: "example.invalid: / is 90% full"
+              description: "Filesystem / has been above 85% for 15 minutes."
+              runbook_url: "https://example.invalid/runbook#diskfilling"
+
+  # One unsigned message at minute 5: firing within the hour, resolved after.
+  - interval: 1m
+    input_series:
+      - series: 'stalwart_journal_dkim_signer_missing{job="example.invalid/stalwart"}'
+        values: '_x5 1'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: DkimSignerMissing
+        exp_alerts:
+          - exp_labels:
+              service_namespace: example.invalid
+              club: example
+              severity: page
+            exp_annotations:
+              summary: "example.invalid: Stalwart sent mail without a DKIM signature"
+              description: "Stalwart logged 'DKIM signer not found' 1 time(s) in the last hour. Outbound mail is unsigned and fails DMARC at strict receivers."
+              runbook_url: "https://example.invalid/runbook#dkimsignermissing"
+      - eval_time: 66m
+        alertname: DkimSignerMissing
+        exp_alerts: []

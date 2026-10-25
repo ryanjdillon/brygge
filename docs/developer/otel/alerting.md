@@ -26,12 +26,14 @@ Series carry `job` = `<service.namespace>/<service.name>`, built by the upstream
 |---|---|---|
 | `<domain>/brygge-host` | `resource/host-identity` in the host collector | `system_memory_usage_bytes` (heartbeat), `system_filesystem_utilization_ratio{mountpoint,type}`, `tlscheck_time_left_seconds{tlscheck_target}`, `file_size_bytes{file_name}`, `file_mtime_seconds{file_name}` |
 | `<domain>/stalwart` | `resource/stalwart-identity` (journal-derived counts) | `stalwart_journal_remote_rejections{server_address,smtp_code}`, `stalwart_journal_dkim_signer_missing`, `stalwart_journal_dmarc_dkim_failures`, `stalwart_journal_bounces{kind}` |
-| `<domain>/brygge-api` | the API's `ServiceName` constant ([instrumentation.md](instrumentation.md)) | `brygge_email_send_total{kind,result}`, `brygge_mail_queue_oldest_age_seconds`, `brygge_mail_queue_last_success_seconds` |
+| `<domain>/brygge-api` | the API's `ServiceName` constant ([instrumentation.md](instrumentation.md)) | `brygge_email_send_total{kind,result}` (also the ApiSilent heartbeat), `brygge_mail_queue_oldest_age_seconds`, `brygge_mail_queue_last_success_seconds` |
 
 Shapes the rules rely on:
 
 - `stalwart_journal_*` are gauges holding per-batch event counts. Rules use `sum_over_time`, never `rate`/`increase`. A series exists only after its first event, so "no series" means "no events", not a failure. `smtp_code` is `none` for connection/TLS failures and `server_address` can be `unknown`; deferrals are matched with `smtp_code=~"4.."`.
 - `tls_check` reports every 10 minutes and `file_stats` every 5, at or past Prometheus' 5-minute lookback, so their rules read `last_over_time(…[20m])` / `[15m]`. `tlscheck_*` series also carry the certificate's CN and issuer, which change on renewal: the rule takes `min by (tlscheck_target)`.
+- A failed TLS probe produces no data point at all, so TlsProbeFailing alerts on a target's absence. `absent_over_time` needs the exact target, so the rule lists the collector's `tls_check` endpoints (`<domain>:443`, `mail.<domain>:443`, `mail.<domain>:465`); a change to that list in `nix/host.nix` needs the same change in the rule.
+- `brygge_email_send_total` exists only when the API has SMTP configured (it then pre-creates all eight series at 0). A deployment without SMTP would see ApiSilent fire permanently; drop that rule from its rendered copy.
 - The queue gauges exist only on deployments with the queue monitor configured ([instrumentation.md § Mail queue](instrumentation.md#mail-queue-stalwart)); `last_success` is 0 before the first poll, and the other two go absent after 15 minutes without a good poll.
 
 Routing labels are **static on every rule**: `service_namespace`, `club` and `severity`. Series carry only `job`, and `absent_over_time` returns no series labels at all, so Alertmanager can't route on what the data carries. Severity is one of:
@@ -40,7 +42,7 @@ Routing labels are **static on every rule**: `service_namespace`, `club` and `se
 |---|---|---|---|
 | `page` | Members are or soon will be affected; act now | `urgent` | 4h |
 | `warn` | Needs attention within days | `default` | 24h |
-| `daily` | Digest-type notices (bounces) | `low` | 24h |
+| `daily` | Digest-type notices (bounces); no resolved notice | `low` | 24h |
 
 `info` is avoided on purpose: kube-prometheus-stack's `InfoInhibitor` silences `severity="info"`.
 
@@ -61,7 +63,7 @@ system_filesystem_utilization_ratio{job="<domain>/brygge-host"}
 file_mtime_seconds{job="<domain>/brygge-host", file_name=~"system@.*"}
 
 # App
-brygge_email_send_total{job="<domain>/brygge-api"}          # 8 series at 0 after start
+brygge_email_send_total{job="<domain>/brygge-api"}          # 8 series at 0 after start; ApiSilent's heartbeat
 brygge_mail_queue_last_success_seconds{job="<domain>/brygge-api"}
 ```
 
@@ -87,7 +89,7 @@ scripts/render-brygge-alerts.sh --groups <domain> <slug>
 
 Done once per Alertmanager, plus step B2 per club. Nothing in this repo deploys it. Stay in order: B1 confirms the data the rules need is there.
 
-**B1 — verify jobs and names.** Run the queries in [Verify metric names](#verify-metric-names-in-prometheus) for the club. All three jobs present (Stalwart's after its first event) before loading rules; otherwise HostSilent fires at once.
+**B1 — verify jobs and names.** Run the queries in [Verify metric names](#verify-metric-names-in-prometheus) for the club. All three jobs present (Stalwart's after its first event), and a `tlscheck_time_left_seconds` series for each of the three targets, before loading rules; otherwise HostSilent, ApiSilent or TlsProbeFailing fire at once.
 
 **B2 — render and load the rules.** Render into the home repo next to the existing alert files, with the same `metadata.labels` they carry:
 
@@ -109,15 +111,15 @@ Add the file to that directory's `kustomization.yaml`, commit, and let Flux appl
 
 Mount it with `alertmanager.alertmanagerSpec.secrets: [alertmanager-ntfy]` (kube-prometheus-stack), which puts the keys under `/etc/alertmanager/secrets/alertmanager-ntfy/`. `template=alertmanager` makes ntfy format Alertmanager's webhook JSON itself, so no bridge is needed.
 
-**B4 — route and receivers.** Merge [alerts/alertmanager-ntfy.yaml](alerts/alertmanager-ntfy.yaml) into the Alertmanager config: its route goes **first** in `route.routes` (it matches `service_namespace=~".+"`, which only Brygge rules set), its receivers are appended to `receivers`. Set `continue: true` on the Brygge route to also send these alerts to the existing receiver (Home Assistant). `group_by: [alertname, service_namespace]` keeps clubs apart.
+**B4 — route and receivers.** Merge [alerts/alertmanager-ntfy.yaml](alerts/alertmanager-ntfy.yaml) into the Alertmanager config: its route goes **first** in `route.routes` (it matches `service_namespace=~".+"`, which only Brygge rules set), its receivers are appended to `receivers`. The fragment ships with `continue: true`, so the existing receiver (Home Assistant) keeps getting a copy — but only through a later sibling route: the root route's own receiver is just the fallback when no child matches. If the existing receiver is reached only as the root default, add a catch-all `- receiver: <existing>` as the last entry in `route.routes`. Set `continue: false` for ntfy only. `group_by: [alertname, service_namespace]` keeps clubs apart.
 
 **B5 — egress.** From an Alertmanager pod: `kubectl exec -n <ns> <alertmanager pod> -c alertmanager -- wget -qO- --header "Authorization: Bearer <token>" https://ntfy.sh/<warn-topic>/json?poll=1` succeeds (network policies or an egress proxy may block `ntfy.sh`).
 
 **B6 — test.**
 
-1. Routing: with the merged config, `amtool config routes test --config.file=<file> 'service_namespace="<domain>"' 'severity="page"'` prints `brygge-ntfy-page`; same for `warn` and `daily`; an alert without `service_namespace` still reaches the existing receiver.
+1. Routing: with the merged config, `amtool config routes test --config.file=<file> 'alertname="HostSilent"' 'service_namespace="<domain>"' 'severity="page"'` prints `brygge-ntfy-page,<existing receiver>` (just `brygge-ntfy-page` with `continue: false`); same for `warn` and `daily`; an alert without `service_namespace` reaches only the existing receiver.
 2. Delivery: `kubectl port-forward -n <ns> svc/<alertmanager> 9093`, then `amtool alert add --alertmanager.url=http://127.0.0.1:9093 alertname=BryggeTest service_namespace=<domain> club=<slug> severity=page --annotation=summary="Brygge test alert"`; it arrives on the phone within `group_wait` (30s), and the resolved notice follows after Alertmanager's `resolve_timeout` (5 minutes by default).
-3. End to end: render the rules for a namespace that sends nothing (`hostsilent-test.invalid`, slug `hostsilent-test`), load them as in B2; HostSilent for that namespace fires on the first evaluation (no series at all) and reaches the phone. Remove the file afterwards.
+3. End to end: render the rules for a namespace that sends nothing (`hostsilent-test.invalid`, slug `hostsilent-test`), load them as in B2; HostSilent and ApiSilent for that namespace fire about two minutes after loading (no series at all, then `for: 2m`) and reach the phone; TlsProbeFailing stays quiet because the host itself is silent. Remove the file afterwards.
 
 BRY-414 tracks this recipe for the home cluster and stays open until step B6 reaches the phone.
 
@@ -127,7 +129,7 @@ BRY-414 tracks this recipe for the home cluster and stays open until step B6 rea
 just alerts-check
 ```
 
-Renders the rules for `example.invalid` / `example`, runs `promtool check rules`, and runs [alerts/brygge-alerts.test.yaml](alerts/brygge-alerts.test.yaml) with `promtool test rules`. `nix flake check` runs the same as the `alerts` check. The tests pin the behaviour the rules were designed for: HostSilent fires after 30 minutes and carries the routing labels; MailDeferredByProvider needs 4xx in both hours and ignores `none`/5xx; JournalRetentionShort stays quiet below the size gate and ignores user journals; DmarcDkimFailing fires on one DKIMFAIL-derived sample; EmailSendErrors needs three errors, not two; MailQueueStuck resolves when its gauge goes absent; MailQueueUnknown stays quiet before the first poll and without the queue monitor.
+Renders the rules for `example.invalid` / `example`, runs `promtool check rules`, and runs [alerts/brygge-alerts.test.yaml](alerts/brygge-alerts.test.yaml) with `promtool test rules`. `nix flake check` runs the same as the `alerts` check. The tests pin the behaviour the rules were designed for: HostSilent fires after 30 minutes plus `for` and carries the routing labels, and ApiSilent likewise after 15; TlsProbeFailing fires only for the target that stopped reporting and not while the host is silent; DiskFilling ignores tmpfs and `/nix/store` and waits 15 minutes; DkimSignerMissing fires within the hour and resolves after it; MailDeferredByProvider needs 4xx in both hours and ignores `none`/5xx; JournalRetentionShort stays quiet below the size gate and ignores user journals; DmarcDkimFailing fires on one DKIMFAIL-derived sample; EmailSendErrors needs three errors, not two; MailQueueStuck resolves when its gauge goes absent; MailQueueUnknown stays quiet before the first poll and without the queue monitor.
 
 When changing a rule, change the test first: a promtool test compares labels **and** annotations exactly, so an edited summary breaks its test case.
 
