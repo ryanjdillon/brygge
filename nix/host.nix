@@ -490,6 +490,19 @@ in
       report.tls.aggregate.sign = "['mail']";
       report.dsn.sign = "['mail']";
       sieve.trusted.sign = "['mail']";
+
+      # Parse DMARC/TLS aggregate reports sent to postmaster@ so each one
+      # logs a "DMARC report received …" journal event with its DKIM/SPF
+      # counts; the collector counts those (stalwart.journal.*). Without
+      # this key, reports are only forwarded unparsed. Forwarding stays on
+      # so the reports still reach the mailbox.
+      report.analysis = {
+        addresses = [ "postmaster@*" ];
+        forward = true;
+      };
+      # Metrics: Stalwart's OTLP push (metrics.open-telemetry) is not
+      # enabled; nothing consumes it yet. Never enable metrics.prometheus:
+      # it is served on the HTTP listener, which Caddy exposes publicly.
     };
   };
 
@@ -783,10 +796,12 @@ in
     ];
   };
 
-  # OpenTelemetry collector. Two responsibilities:
-  #   1. Scrape VM system metrics (CPU, memory, disk, network, processes)
-  #   2. Receive OTLP from brygge on 127.0.0.1:4317 and forward to the
-  #      home cluster's OTel stack (endpoint set via /etc/otel/env)
+  # OpenTelemetry collector. Three responsibilities:
+  #   1. Scrape VM system metrics (CPU, memory, disk, network, processes),
+  #      certificate expiry and journal file sizes
+  #   2. Count alert-relevant Stalwart journal events into metrics
+  #   3. Receive OTLP from brygge on 127.0.0.1:4317 and forward everything
+  #      to the home cluster's OTel stack (endpoint set via /etc/otel/env)
   services.opentelemetry-collector = {
     enable = true;
     package = pkgs.opentelemetry-collector-contrib;
@@ -798,12 +813,39 @@ in
             cpu = { };
             memory = { };
             disk = { };
-            filesystem = { };
+            filesystem = {
+              # Pseudo and image filesystems are never "the disk filling up".
+              exclude_fs_types = {
+                fs_types = [ "tmpfs" "devtmpfs" "overlay" "squashfs" "ramfs" ];
+                match_type = "strict";
+              };
+              metrics."system.filesystem.utilization".enabled = true;
+            };
             load = { };
             network = { };
             paging = { };
             processes = { };
           };
+        };
+        # Certificates as clients see them: the site through Caddy, and the
+        # mail host through Caddy (443) and Stalwart (implicit TLS on
+        # 465/993). Each listener loads the certificate independently, so a
+        # renewal one of them hasn't picked up shows here.
+        tls_check = {
+          collection_interval = "10m";
+          targets = [
+            { endpoint = "${clubConfig.domain}:443"; }
+            { endpoint = "mail.${clubConfig.domain}:443"; }
+            { endpoint = "mail.${clubConfig.domain}:465"; }
+            { endpoint = "mail.${clubConfig.domain}:993"; }
+          ];
+        };
+        # Journal file sizes and mtimes: with SystemMaxUse capping the
+        # journal, size near the cap plus a recent oldest file means
+        # retention has shrunk below MaxRetentionSec.
+        file_stats = {
+          include = "/var/log/journal/*/*.journal";
+          collection_interval = "5m";
         };
         otlp = {
           protocols = {
@@ -834,6 +876,132 @@ in
             { key = "host.name"; value = clubConfig.hostname; action = "upsert"; }
             { key = "service.namespace"; value = clubConfig.domain; action = "upsert"; }
           ];
+        };
+        # The upstream exporter derives the Prometheus `job` from
+        # service.namespace/service.name and leaves it unset without
+        # service.name, so host-level metrics need a name of their own.
+        "resource/host-identity" = {
+          attributes = [
+            { key = "service.name"; value = "brygge-host"; action = "insert"; }
+          ];
+        };
+        "resource/stalwart-identity" = {
+          attributes = [
+            { key = "service.name"; value = "stalwart"; action = "upsert"; }
+          ];
+        };
+        # Upstream, resource attributes other than the job/instance ones
+        # only reach target_info, not the series; copy the ones that tell
+        # series apart onto the data points. file_stats reports size in
+        # "b", which would become a `_b` suffix; "By" maps to `_bytes`.
+        "transform/host-attributes" = {
+          error_mode = "ignore";
+          metric_statements = [
+            {
+              context = "datapoint";
+              statements = [
+                ''set(datapoint.attributes["tlscheck.target"], resource.attributes["tlscheck.target"]) where resource.attributes["tlscheck.target"] != nil''
+                ''set(datapoint.attributes["file.name"], resource.attributes["file.name"]) where resource.attributes["file.name"] != nil''
+              ];
+            }
+            {
+              context = "metric";
+              statements = [
+                ''set(metric.unit, "By") where metric.name == "file.size"''
+              ];
+            }
+          ];
+        };
+        # Stalwart journal signals. The records carry Stalwart's event
+        # description as MESSAGE and its event keys as upper-cased fields
+        # (CODE, HOSTNAME, DKIMFAIL, …). The MESSAGE strings are Stalwart
+        # 0.15.5's, pinned: re-check them on every Stalwart upgrade
+        # (docs/developer/mail/stalwart-internals.md). Only the module's
+        # default `journal` tracer may write structured events to the
+        # journal; a second one would double the counts.
+        #
+        # A record this filter fails to evaluate is kept, not dropped, and a
+        # record that then makes a count condition error loses the counts
+        # for its whole batch. Non-map bodies are therefore dropped first;
+        # `or` short-circuits, so the field lookups never see them.
+        "filter/stalwart-signals" = {
+          error_mode = "ignore";
+          logs.log_record = [
+            ''not IsMap(body) or not (body["_SYSTEMD_UNIT"] == "stalwart.service" and (body["MESSAGE"] == "Message rejected by remote server" or body["MESSAGE"] == "DMARC report received with warnings" or body["MESSAGE"] == "DKIM signer not found" or body["MESSAGE"] == "DSN permanent failure notification" or body["MESSAGE"] == "Discarding message after double bounce"))''
+          ];
+        };
+        # The count connector only reads attributes, not body fields.
+        "transform/stalwart-signals" = {
+          error_mode = "ignore";
+          log_statements = [
+            {
+              context = "log";
+              conditions = [ ''log.body["MESSAGE"] == "Message rejected by remote server"'' ];
+              statements = [
+                ''set(log.attributes["server.address"], log.body["HOSTNAME"]) where log.body["HOSTNAME"] != nil''
+                ''set(log.attributes["smtp.code"], String(log.body["CODE"])) where log.body["CODE"] != nil''
+              ];
+            }
+            {
+              context = "log";
+              conditions = [ ''log.body["MESSAGE"] == "DSN permanent failure notification"'' ];
+              statements = [ ''set(log.attributes["kind"], "dsn_permfail")'' ];
+            }
+            {
+              context = "log";
+              conditions = [ ''log.body["MESSAGE"] == "Discarding message after double bounce"'' ];
+              statements = [ ''set(log.attributes["kind"], "double_bounce")'' ];
+            }
+          ];
+        };
+        # count emits delta sums, which the upstream Prometheus path drops.
+        # As gauges each point is "events in this batch"; alert rules use
+        # sum_over_time.
+        "transform/stalwart-gauges" = {
+          error_mode = "ignore";
+          metric_statements = [
+            {
+              context = "metric";
+              statements = [
+                ''convert_sum_to_gauge() where IsMatch(metric.name, "^stalwart\\.journal\\.")''
+              ];
+            }
+          ];
+        };
+      };
+      connectors = {
+        # A condition that errors drops the whole batch's counts, so every
+        # condition must evaluate cleanly on any Stalwart record: missing
+        # body keys compare as nil, and Int() of a non-number is nil.
+        "count/stalwart" = {
+          logs = {
+            "stalwart.journal.remote_rejections" = {
+              description = "Remote SMTP rejections of outbound mail, by remote host and reply code.";
+              conditions = [ ''log.body["MESSAGE"] == "Message rejected by remote server"'' ];
+              # Rejections raised by a failed connection or TLS handshake
+              # carry no reply code; count them rather than drop them.
+              attributes = [
+                { key = "server.address"; default_value = "unknown"; }
+                { key = "smtp.code"; default_value = "none"; }
+              ];
+            };
+            "stalwart.journal.dmarc_dkim_failures" = {
+              description = "Analysed DMARC aggregate reports that count at least one DKIM failure.";
+              conditions = [ ''log.body["MESSAGE"] == "DMARC report received with warnings" and Int(log.body["DKIMFAIL"]) > 0'' ];
+            };
+            "stalwart.journal.dkim_signer_missing" = {
+              description = "Outbound messages whose configured DKIM signature id does not exist.";
+              conditions = [ ''log.body["MESSAGE"] == "DKIM signer not found"'' ];
+            };
+            "stalwart.journal.bounces" = {
+              description = "Permanent delivery failures (DSN sent) and double bounces discarded.";
+              conditions = [
+                ''log.body["MESSAGE"] == "DSN permanent failure notification"''
+                ''log.body["MESSAGE"] == "Discarding message after double bounce"''
+              ];
+              attributes = [ { key = "kind"; } ];
+            };
+          };
         };
       };
       exporters = {
@@ -880,8 +1048,37 @@ in
       service = {
         pipelines = {
           metrics = {
-            receivers = [ "hostmetrics" "otlp" ];
+            receivers = [ "otlp" ];
             processors = [ "resourcedetection" "resource" "batch" ];
+            exporters = [ "otlp/upstream" ];
+          };
+          "metrics/host" = {
+            receivers = [ "hostmetrics" "tls_check" "file_stats" ];
+            processors = [
+              "resourcedetection"
+              "resource"
+              "resource/host-identity"
+              "transform/host-attributes"
+              "batch"
+            ];
+            exporters = [ "otlp/upstream" ];
+          };
+          # journald fans out to both `logs` (shipped as-is) and this
+          # pipeline, which keeps only the counted Stalwart events.
+          "logs/stalwart-signals" = {
+            receivers = [ "journald" ];
+            processors = [ "filter/stalwart-signals" "transform/stalwart-signals" ];
+            exporters = [ "count/stalwart" ];
+          };
+          "metrics/stalwart-signals" = {
+            receivers = [ "count/stalwart" ];
+            processors = [
+              "resourcedetection"
+              "resource"
+              "resource/stalwart-identity"
+              "transform/stalwart-gauges"
+              "batch"
+            ];
             exporters = [ "otlp/upstream" ];
           };
           traces = {

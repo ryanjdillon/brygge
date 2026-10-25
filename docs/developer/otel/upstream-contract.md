@@ -25,7 +25,7 @@ Three pipelines, all routed to the same upstream exporter:
 
 | Signal | Sources |
 |--------|---------|
-| **metrics** | `hostmetrics` (CPU, memory, disk, filesystem, load, network, paging, processes — 30s interval) + OTLP from `brygge.service` (app-level metrics) |
+| **metrics** | `hostmetrics` (CPU, memory, disk, filesystem, load, network, paging, processes — 30s interval), `tls_check`, `file_stats` (`service.name = brygge-host`); counts of Stalwart journal events (`stalwart.journal.*`, gauges, `service.name = stalwart`); OTLP from `brygge.service` (app-level metrics). See [local-collector.md](local-collector.md#stalwart-journal-signals) |
 | **traces** | OTLP from `brygge.service` |
 | **logs** | OTLP from `brygge.service` + `journald` for `brygge`, `stalwart`, `caddy`, `postgresql`, `podman-bulwark` |
 

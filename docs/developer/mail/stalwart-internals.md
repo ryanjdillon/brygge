@@ -260,6 +260,22 @@ curl -fsS -u "kasserar:$PW" -X POST -H 'Content-Type: application/json' \
 
 ---
 
+## Journal events the collector counts
+
+The host collector turns some Stalwart journal records into metrics ([local-collector.md § Stalwart journal signals](../otel/local-collector.md#stalwart-journal-signals)). It matches them on `MESSAGE`, which the `journal` tracer fills with the event's description string from `crates/trc/src/event/description.rs`, and reads event keys as upper-cased fields. These strings are a contract with Stalwart 0.15.5:
+
+| Event | `MESSAGE` | Fields used |
+|---|---|---|
+| `DeliveryEvent::MessageRejected` | `Message rejected by remote server` | `HOSTNAME`, `CODE` (absent when the rejection is a connection/TLS error) |
+| `IncomingReportEvent::DmarcReportWithWarnings` | `DMARC report received with warnings` | `DKIMFAIL` |
+| `DkimEvent::SignerNotFound` | `DKIM signer not found` | — |
+| `DeliveryEvent::DsnPermFail` | `DSN permanent failure notification` | — |
+| `DeliveryEvent::DoubleBounce` | `Discarding message after double bounce` | — |
+
+`DmarcReportWithWarnings` fires for any reject, quarantine, DKIM fail or SPF fail in a report, hence the `DKIMFAIL > 0` check. DMARC events exist only for reports Stalwart analyses: `report.analysis.addresses` must match the address reports arrive at (`postmaster@*` in `nix/host.nix`). Unset, reports are forwarded unparsed and no event is logged. The setting's built-in default is written to the settings store only on a fresh install, so it is set declaratively.
+
+---
+
 ## Upgrading Stalwart
 
 When bumping Stalwart in nixpkgs / the flake input:
@@ -269,5 +285,6 @@ When bumping Stalwart in nixpkgs / the flake input:
 3. Re-test `Email/set` charset placement (§ Email/set § 3) — the strictness might loosen.
 4. Re-test the OAuth grants (§ no OAuth grant) — if any grant starts returning tokens, replace the service-password approach with per-user token mint per the DIL-322 follow-up.
 5. Verify principal-name validation hasn't changed (§ principal-name constraints) — if dashes become allowed, no code change needed but the next slug-encoder author should know.
+6. Diff the `MESSAGE` strings and field names in [§ journal events the collector counts](#journal-events-the-collector-counts) against the new `crates/trc/src/event/description.rs` and the event call sites. A changed string silently zeroes the matching `stalwart.journal.*` metric — update `filter/stalwart-signals`, `transform/stalwart-signals` and `count/stalwart` in `nix/host.nix` together. Also confirm the journal tracer is still the module default and `report.analysis.addresses` is still read.
 
 The session-context comment on [DIL-275](https://linear.app/dillonteknisk/issue/DIL-275) captures the specific probes + their results at the time of writing. Use that as the regression baseline.
