@@ -337,12 +337,19 @@ func (s *Service) healStrandedKIDDrafts(ctx context.Context, clubID string) (int
 // The KID on a bank row is whatever the payer typed, though: a row already
 // assigned to another faktura (a member paying with last year's KID) is
 // that faktura's payment, not this one's.
+//
+// The row's own booking must be a posted payment of a receivable (CR 1500),
+// as in backfillInvoiceNumberPayments: a KID row a mapping rule booked to
+// another account, or whose entry is still a draft or was voided, paid
+// nothing off the faktura (BRY-417).
 func (s *Service) backfillUnlinkedPayments(ctx context.Context, clubID string) (int, error) {
 	rows, err := s.db.Query(ctx,
 		`SELECT DISTINCT ON (i.id) i.id, bir.row_date
 		   FROM invoices i
 		   JOIN bank_import_rows bir ON bir.kid_number = i.kid_number
 		   JOIN bank_imports bi      ON bi.id = bir.bank_import_id
+		   JOIN journal_entries je   ON je.id = bir.journal_entry_id
+		                            AND je.club_id = $1 AND je.status = 'posted'
 		  WHERE bi.club_id = $1
 		    AND i.club_id  = $1
 		    AND i.kid_number <> ''
@@ -351,9 +358,12 @@ func (s *Service) backfillUnlinkedPayments(ctx context.Context, clubID string) (
 		    AND i.status = 'open'
 		    AND bir.amount > 0
 		    AND bir.amount = i.total_amount
-		    AND bir.journal_entry_id IS NOT NULL
+		    AND EXISTS (
+		      SELECT 1 FROM journal_lines jl
+		        JOIN accounts a ON a.id = jl.account_id
+		       WHERE jl.journal_entry_id = je.id AND a.code = $2 AND jl.credit > 0)
 		  ORDER BY i.id, bir.row_date ASC`,
-		clubID,
+		clubID, receivablesAccountCode,
 	)
 	if err != nil {
 		return 0, err
@@ -395,7 +405,8 @@ func (s *Service) backfillUnlinkedPayments(ctx context.Context, clubID string) (
 // journal entry credits receivables — i.e. the payment is booked at the GL but
 // invoices.payment_id was never set. Only exact-amount matches on a genuine
 // receivables (1500) credit are healed, so the (invoice_number, amount) key is
-// high-confidence. Idempotent: linkInvoicePayment no-ops if already linked.
+// high-confidence. Only a posted entry counts: a draft or voided booking paid
+// nothing (BRY-417). Idempotent: linkInvoicePayment no-ops if already linked.
 //
 // This is the invoice-number counterpart to backfillUnlinkedPayments (which
 // keys on KID). It exists because members whose KID was rejected paid by
@@ -412,7 +423,9 @@ func (s *Service) backfillInvoiceNumberPayments(ctx context.Context, clubID stri
 		    AND bir.amount = i.total_amount
 		    AND (bir.invoice_id = i.id
 		         OR bir.description ~* ('faktura\D*' || i.invoice_number::text || '\y'))
-		   JOIN journal_lines jl ON jl.journal_entry_id = bir.journal_entry_id
+		   JOIN journal_entries je ON je.id = bir.journal_entry_id
+		                          AND je.club_id = i.club_id AND je.status = 'posted'
+		   JOIN journal_lines jl ON jl.journal_entry_id = je.id
 		   JOIN accounts a ON a.id = jl.account_id
 		  WHERE i.club_id = $1
 		    AND i.payment_id IS NULL

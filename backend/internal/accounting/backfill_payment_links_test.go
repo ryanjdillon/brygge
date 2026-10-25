@@ -98,6 +98,9 @@ func TestBackfillInvoiceNumberPayments(t *testing.T) {
 		if err != nil {
 			t.Fatalf("journal %s: %v", ref, err)
 		}
+		if err := svc.PostJournalEntry(ctx, clubID, entry.ID, userID); err != nil {
+			t.Fatalf("post %s: %v", ref, err)
+		}
 		if _, err := pool.Exec(ctx,
 			`UPDATE bank_import_rows SET journal_entry_id=$1 WHERE id=$2`, entry.ID, rowID,
 		); err != nil {
@@ -140,7 +143,7 @@ func TestBackfillInvoiceNumberPayments(t *testing.T) {
 // imported fakturas (empty KID) must not be marked paid by a booked bank row
 // that also has no KID, however many share its amount. A faktura with a
 // real KID still links.
-func TestBackfillUnlinkedPaymentsIgnoresEmptyKID(t *testing.T) {
+func TestBackfillUnlinkedPaymentsLinksOnlyRealKIDPayments(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
@@ -187,6 +190,9 @@ func TestBackfillUnlinkedPaymentsIgnoresEmptyKID(t *testing.T) {
 	withKID := seedInv(9103, "000000091034", false, userID)
 	oldKID := seedInv(9104, "000000091045", false, userID)
 	thisYear := seedInv(9105, "000000091056", false, userID)
+	toRevenue := seedInv(9106, "000000091067", false, userID)
+	draftOnly := seedInv(9107, "000000091078", false, userID)
+	voided := seedInv(9108, "000000091089", false, userID)
 
 	var importID string
 	if err := pool.QueryRow(ctx,
@@ -196,10 +202,16 @@ func TestBackfillUnlinkedPaymentsIgnoresEmptyKID(t *testing.T) {
 	).Scan(&importID); err != nil {
 		t.Fatalf("bank import: %v", err)
 	}
-	// Booked 620 kr deposits: one with no KID, one carrying withKID's, and one
-	// paid with oldKID's KID but assigned by hand to thisYear.
-	for _, r := range []struct{ ref, kid, assigned string }{
-		{"NOKID", "", ""}, {"KID", "000000091034", ""}, {"OLDKID", "000000091045", thisYear},
+	// Booked 620 kr deposits: one with no KID, one carrying withKID's, one
+	// paid with oldKID's KID but assigned by hand to thisYear, and three whose
+	// booking paid no receivable: to revenue, still a draft, and voided.
+	for _, r := range []struct{ ref, kid, assigned, credit, state string }{
+		{"NOKID", "", "", receivablesAccountCode, "posted"},
+		{"KID", "000000091034", "", receivablesAccountCode, "posted"},
+		{"OLDKID", "000000091045", thisYear, receivablesAccountCode, "posted"},
+		{"REVENUE", "000000091067", "", "3900", "posted"},
+		{"DRAFT", "000000091078", "", receivablesAccountCode, "draft"},
+		{"VOIDED", "000000091089", "", receivablesAccountCode, "voided"},
 	} {
 		row := BankRow{Date: time.Date(2026, 5, 15, 0, 0, 0, 0, time.UTC), Description: "Innbetaling " + r.ref, Amount: 620, Reference: r.ref}
 		entry, err := svc.CreateJournalEntry(ctx, CreateJournalEntryInput{
@@ -207,11 +219,21 @@ func TestBackfillUnlinkedPaymentsIgnoresEmptyKID(t *testing.T) {
 			Source: "bank_import", ClubID: clubID, CreatedBy: userID,
 			Lines: []CreateJournalLineInput{
 				{AccountCode: "1920", Debit: 620},
-				{AccountCode: receivablesAccountCode, Credit: 620},
+				{AccountCode: r.credit, Credit: 620},
 			},
 		})
 		if err != nil {
 			t.Fatalf("journal %s: %v", r.ref, err)
+		}
+		if r.state != "draft" {
+			if err := svc.PostJournalEntry(ctx, clubID, entry.ID, userID); err != nil {
+				t.Fatalf("post %s: %v", r.ref, err)
+			}
+		}
+		if r.state == "voided" {
+			if _, err := svc.VoidJournalEntry(ctx, clubID, entry.ID, userID); err != nil {
+				t.Fatalf("void %s: %v", r.ref, err)
+			}
 		}
 		if _, err := pool.Exec(ctx,
 			`INSERT INTO bank_import_rows
@@ -241,6 +263,9 @@ func TestBackfillUnlinkedPaymentsIgnoresEmptyKID(t *testing.T) {
 		{"imported, member", imported2, false},
 		{"with KID", withKID, true},
 		{"old KID on a row assigned elsewhere", oldKID, false},
+		{"KID row booked to revenue", toRevenue, false},
+		{"KID row on a draft entry", draftOnly, false},
+		{"KID row on a voided entry", voided, false},
 	} {
 		var paid bool
 		if err := pool.QueryRow(ctx, `SELECT payment_id IS NOT NULL FROM invoices WHERE id=$1`, c.id).Scan(&paid); err != nil {
