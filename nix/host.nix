@@ -828,16 +828,17 @@ in
           };
         };
         # Certificates as clients see them: the site through Caddy, and the
-        # mail host through Caddy (443) and Stalwart (implicit TLS on
-        # 465/993). Each listener loads the certificate independently, so a
-        # renewal one of them hasn't picked up shows here.
+        # mail host through Caddy (443) and Stalwart (465). Caddy and
+        # Stalwart load the certificate independently, so a renewal one of
+        # them hasn't picked up shows here. Stalwart's listeners share one
+        # certificate, so 465 stands in for 993 too; each probe handshake
+        # also logs a line in Stalwart's journal.
         tls_check = {
           collection_interval = "10m";
           targets = [
             { endpoint = "${clubConfig.domain}:443"; }
             { endpoint = "mail.${clubConfig.domain}:443"; }
             { endpoint = "mail.${clubConfig.domain}:465"; }
-            { endpoint = "mail.${clubConfig.domain}:993"; }
           ];
         };
         # Journal file sizes and mtimes: with SystemMaxUse capping the

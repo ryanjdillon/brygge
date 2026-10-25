@@ -272,7 +272,12 @@ The host collector turns some Stalwart journal records into metrics ([local-coll
 | `DeliveryEvent::DsnPermFail` | `DSN permanent failure notification` | — |
 | `DeliveryEvent::DoubleBounce` | `Discarding message after double bounce` | — |
 
-`DmarcReportWithWarnings` fires for any reject, quarantine, DKIM fail or SPF fail in a report, hence the `DKIMFAIL > 0` check. DMARC events exist only for reports Stalwart analyses: `report.analysis.addresses` must match the address reports arrive at (`postmaster@*` in `nix/host.nix`). Unset, reports are forwarded unparsed and no event is logged. The setting's built-in default is written to the settings store only on a fresh install, so it is set declaratively.
+`DmarcReportWithWarnings` fires for any reject, quarantine, DKIM fail or SPF fail in a report, hence the `DKIMFAIL > 0` check. DMARC events exist only for reports Stalwart analyses: `report.analysis.addresses` must match the address reports arrive at (`postmaster@*` in `nix/host.nix`). Unset, reports are forwarded unparsed and no event is logged. It is set in the TOML rather than the web admin because local TOML keys shadow the same keys in the settings store on every boot and reload (the store's entries are merged in only where no local key exists), so the value can't drift — the same reason as the `auth.dkim.sign` comment in `nix/host.nix`.
+
+Side effects of enabling analysis:
+
+- Parsed reports are kept for 30 days (`report.analysis.store`, default `30d`) and are visible under Reports in the web admin.
+- Stalwart no longer sends DMARC failure reports about incoming reports: a message recognised as a report is exempt, so postmaster@ stops getting failure reports triggered by other domains' aggregate reports.
 
 ---
 

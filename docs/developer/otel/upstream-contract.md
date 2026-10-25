@@ -21,7 +21,7 @@ The Brygge VM ships telemetry to an upstream OTel collector. This page documents
 
 ## Signals sent
 
-Three pipelines, all routed to the same upstream exporter:
+Three signals, carried by five exporting pipelines (`metrics`, `metrics/host`, `metrics/stalwart-signals`, `traces`, `logs`), all routed to the same upstream exporter:
 
 | Signal | Sources |
 |--------|---------|

@@ -14,7 +14,7 @@ Configured in `nix/host.nix` via `services.opentelemetry-collector`.
 | Receiver | Source |
 |----------|--------|
 | `hostmetrics` | CPU, memory, disk, filesystem, load, network, paging, processes — 30s interval. The filesystem scraper skips `tmpfs`/`devtmpfs`/`overlay`/`squashfs`/`ramfs` and also emits `system.filesystem.utilization` (off by default upstream) |
-| `tls_check` | Certificate time left on `<domain>:443`, `mail.<domain>:443`, `mail.<domain>:465`, `mail.<domain>:993` — 10m interval. Caddy (443) and Stalwart (465/993) load the certificate separately, so each listener is checked |
+| `tls_check` | Certificate time left on `<domain>:443`, `mail.<domain>:443`, `mail.<domain>:465` — 10m interval. Caddy (443) and Stalwart load the certificate separately, so both are checked; Stalwart's listeners share one certificate, so 465 stands in for 993 (each probe also logs a Stalwart journal line) |
 | `file_stats` | Size and mtime of `/var/log/journal/*/*.journal` — 5m interval |
 | `otlp` | gRPC on `127.0.0.1:4317`, HTTP on `127.0.0.1:4318` (from Brygge API) |
 | `journald` | Units: `brygge.service`, `stalwart.service`, `caddy.service`, `postgresql.service`, `podman-bulwark.service` |
