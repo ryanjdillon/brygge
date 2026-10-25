@@ -48,6 +48,23 @@ Used for magic link login, invoice delivery, and broadcasts. Brygge talks SMTP t
 
 If `SMTP_HOST` is not set, the app starts in degraded mode — magic link auth and invoice emails will not work.
 
+## Stalwart admin API
+
+The API's handle on the mail server's management REST API (`/api/…`). What it enables depends on what else is set:
+
+- **Outbound-queue gauges** (`brygge.mail.queue.*`, see [otel/instrumentation.md](otel/instrumentation.md#mail-queue-stalwart)) — the URL plus a credential (password or token).
+- **Per-user mail provisioning** — additionally needs `TOTP_ENCRYPTION_KEY`.
+- **Shared-inbox reconciler** — additionally needs the board-mailbox spec and mailbox passwords.
+
+| Variable                  | Required      | Default | Description |
+|---------------------------|---------------|---------|-------------|
+| `STALWART_ADMIN_URL`      | For mail admin | —      | Scheme + host of Stalwart's management API (e.g. `http://127.0.0.1:8088`). Unset disables everything above |
+| `STALWART_ADMIN_USER`     | No            | `admin` | Principal used with `STALWART_ADMIN_PASSWORD` |
+| `STALWART_ADMIN_PASSWORD` | For mail admin | —      | Secret (env file). Either this or `STALWART_ADMIN_TOKEN`; with neither, the queue gauges are not started |
+| `STALWART_ADMIN_TOKEN`    | No            | —       | Secret (env file). Pre-encoded `Basic …` credential; overrides user + password |
+
+The fallback admin has every permission. Any other principal used here needs at least `message-queue-list` for the queue gauges, plus the principal-management permissions provisioning uses.
+
 ## Vipps MobilePay
 
 | Variable                 | Required     | Default | Description                    |

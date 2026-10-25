@@ -42,7 +42,7 @@ What is **not** counted: broadcast mail (inbox compose and bulk send) goes out t
 | `brygge.mail.queue.oldest_age` (`s`) | `brygge_mail_queue_oldest_age_seconds` | Gauge | Age of the oldest queued message; 0 when the queue is empty |
 | `brygge.mail.queue.last_success` (`s`) | `brygge_mail_queue_last_success_seconds` | Gauge | Unix time of the last successful poll; 0 before the first |
 
-Registered only when `STALWART_ADMIN_URL` is set (independent of `TOTP_ENCRYPTION_KEY`). A background loop calls `GET /api/queue/messages?values=1&limit=1` every 60 s with a 5 s timeout: Stalwart lists the queue in time-ordered queue-id order, so the one returned item is the oldest message, and `total` counts the whole queue. The metric callbacks read only the cached result.
+Registered only when `STALWART_ADMIN_URL` and a credential (`STALWART_ADMIN_PASSWORD` or `STALWART_ADMIN_TOKEN`) are set, independent of `TOTP_ENCRYPTION_KEY`; a URL without a credential logs one warning and starts nothing ([configuration.md](../configuration.md#stalwart-admin-api)). A background loop calls `GET /api/queue/messages?values=1&limit=1` every 60 s with a 5 s timeout: Stalwart lists the queue in time-ordered queue-id order, so the one returned item is the oldest message, and `total` counts the whole queue. The metric callbacks read only the cached result.
 
 - Before the first successful poll only `last_success` (= 0) is observed.
 - A failed poll keeps reporting the previous `messages` / `oldest_age` (the age keeps growing from the cached creation time) for up to 15 minutes after the last success.

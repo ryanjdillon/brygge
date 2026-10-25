@@ -192,11 +192,17 @@ func main() {
 			cfg.StalwartAdminToken,
 			log,
 		)
-		queueMonitor := mail.NewQueueMonitor(stalwartAdmin, log)
-		if err := queueMonitor.RegisterMetrics(); err != nil {
-			log.Warn().Err(err).Msg("failed to register mail queue metrics")
+		// Without a credential every poll would 401; a single startup
+		// warning beats a gauge that only ever reports "unknown".
+		if cfg.StalwartAdminPassword == "" && cfg.StalwartAdminToken == "" {
+			log.Warn().Msg("mail queue metrics disabled (STALWART_ADMIN_PASSWORD and STALWART_ADMIN_TOKEN unset)")
 		} else {
-			go queueMonitor.Run(ctx, time.Minute)
+			queueMonitor := mail.NewQueueMonitor(stalwartAdmin, log)
+			if err := queueMonitor.RegisterMetrics(); err != nil {
+				log.Warn().Err(err).Msg("failed to register mail queue metrics")
+			} else {
+				go queueMonitor.Run(ctx, time.Minute)
+			}
 		}
 	}
 
