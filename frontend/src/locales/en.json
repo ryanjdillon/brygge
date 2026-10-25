@@ -2572,7 +2572,11 @@
     "archiveConfirm": "Archive \"{label}\"? Its QR will stop working, but history is kept.",
     "poster": "Poster",
     "editTitle": "Edit poster",
-    "kind": { "guest_slip": "Guest berth", "motorhome": "Motorhome", "service": "Service" },
+    "kind": {
+      "guest_slip": "Guest berth",
+      "motorhome": "Motorhome",
+      "service": "Service"
+    },
     "field": {
       "label": "Label",
       "location": "Location",
@@ -2582,6 +2586,19 @@
       "unitLabel": "Unit (e.g. night)",
       "minUnits": "Min",
       "maxUnits": "Max"
+    },
+    "print": {
+      "title": "Print QR cards",
+      "selectAll": "Select all",
+      "perPage": "Cards per page",
+      "perPageOption": "{n} per page",
+      "printSelected": "Print selected ({n})",
+      "printOne": "Print card",
+      "print": "Print",
+      "hint": "In the print dialog, choose A4 landscape, 100% scale and default margins.",
+      "empty": "No active QR posters selected.",
+      "instructions": "Scan the QR code with your phone camera, choose the quantity and pay with Vipps.",
+      "instructionsFixed": "Scan the QR code with your phone camera and pay with Vipps."
     }
   },
   "recentPayments": {

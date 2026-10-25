@@ -7,4 +7,5 @@ Cross-audience navigation: see [`../index.md`](../index.md).
 | Document | Description |
 |----------|-------------|
 | [faktura.md](faktura.md) | Treasurer's guide to the invoicing module (price catalogue, send, reconcile) |
+| [harbor-qr.md](harbor-qr.md) | Harbor master's guide to QR payment targets: full-page posters and 2/4/6-up card sheets |
 | [setting-up-email.md](setting-up-email.md) | Member + board guide to reading and sending club mail in Apple Mail, Outlook, Gmail, Thunderbird, etc. |

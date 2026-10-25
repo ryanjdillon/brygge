@@ -1488,5 +1488,45 @@
     "exemptionItem": "Pozycja",
     "exemptionsHint": "Zwolnione pozycje są pokazane w pełnej cenie z pozycją kompensującą „Fritak”; faktura na 0 kr jest wysyłana informacyjnie, bez kwoty do zapłaty.",
     "exemptionsApplied": "Zwolniono {n} pozycji dla ról zarządu."
+  },
+  "harborTargets": {
+    "title": "Plakaty płatności QR",
+    "subtitle": "Kody QR do druku dla miejsc gościnnych, kamperów i usług. Zeskanowanie otwiera stronę płatności, a płatność pojawia się w Płatnościach.",
+    "new": "Nowy plakat",
+    "showArchived": "Pokaż zarchiwizowane",
+    "empty": "Brak plakatów QR.",
+    "archived": "Zarchiwizowany",
+    "archiveAction": "Archiwizuj",
+    "archiveConfirm": "Zarchiwizować „{label}”? Kod QR przestanie działać, ale historia zostanie zachowana.",
+    "poster": "Plakat",
+    "editTitle": "Edytuj plakat",
+    "kind": {
+      "guest_slip": "Miejsce gościnne",
+      "motorhome": "Kamper",
+      "service": "Usługa"
+    },
+    "field": {
+      "label": "Nazwa",
+      "location": "Lokalizacja",
+      "kind": "Typ",
+      "priceItem": "Pozycja cennika",
+      "fixedUnits": "Stała cena (bez wyboru ilości)",
+      "unitLabel": "Jednostka (np. noc)",
+      "minUnits": "Min",
+      "maxUnits": "Maks"
+    },
+    "print": {
+      "title": "Drukuj karty QR",
+      "selectAll": "Zaznacz wszystkie",
+      "perPage": "Kart na stronę",
+      "perPageOption": "{n} na stronę",
+      "printSelected": "Drukuj zaznaczone ({n})",
+      "printOne": "Drukuj kartę",
+      "print": "Drukuj",
+      "hint": "W oknie drukowania wybierz A4 poziomo, skalę 100% i domyślne marginesy.",
+      "empty": "Nie zaznaczono aktywnych plakatów QR.",
+      "instructions": "Zeskanuj kod QR aparatem telefonu, wybierz liczbę i zapłać przez Vipps.",
+      "instructionsFixed": "Zeskanuj kod QR aparatem telefonu i zapłać przez Vipps."
+    }
   }
 }

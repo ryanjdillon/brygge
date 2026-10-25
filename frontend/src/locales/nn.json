@@ -2450,7 +2450,11 @@
     "archiveConfirm": "Arkivere «{label}»? QR-koden sluttar å verke, men historikken vert teken vare på.",
     "poster": "Plakat",
     "editTitle": "Rediger plakat",
-    "kind": { "guest_slip": "Gjesteplass", "motorhome": "Bubil", "service": "Teneste" },
+    "kind": {
+      "guest_slip": "Gjesteplass",
+      "motorhome": "Bubil",
+      "service": "Teneste"
+    },
     "field": {
       "label": "Namn",
       "location": "Plassering",
@@ -2460,6 +2464,19 @@
       "unitLabel": "Eining (t.d. natt)",
       "minUnits": "Min",
       "maxUnits": "Maks"
+    },
+    "print": {
+      "title": "Skriv ut QR-kort",
+      "selectAll": "Vel alle",
+      "perPage": "Kort per side",
+      "perPageOption": "{n} per side",
+      "printSelected": "Skriv ut valde ({n})",
+      "printOne": "Skriv ut kort",
+      "print": "Skriv ut",
+      "hint": "Vel A4 liggjande, 100 % skala og standardmargar i utskriftsdialogen.",
+      "empty": "Ingen aktive QR-plakatar er valde.",
+      "instructions": "Skann QR-koden med mobilkameraet, vel kor mange og betal med Vipps.",
+      "instructionsFixed": "Skann QR-koden med mobilkameraet og betal med Vipps."
     }
   },
   "recentPayments": {

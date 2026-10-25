@@ -1517,5 +1517,45 @@
     "exemptionItem": "Post",
     "exemptionsHint": "Vrijgestelde regels staan tegen volle prijs met een compenserende „Fritak”-regel; een faktura van 0 kr wordt ter informatie verstuurd, zonder te betalen bedrag.",
     "exemptionsApplied": "{n} regel(s) vrijgesteld voor bestuursrollen."
+  },
+  "harborTargets": {
+    "title": "QR-betaalposters",
+    "subtitle": "Afdrukbare QR-codes voor gastplaatsen, campers en diensten. Een scan opent een betaalpagina, en de betaling verschijnt onder Betalingen.",
+    "new": "Nieuwe poster",
+    "showArchived": "Gearchiveerde tonen",
+    "empty": "Nog geen QR-posters.",
+    "archived": "Gearchiveerd",
+    "archiveAction": "Archiveren",
+    "archiveConfirm": "\"{label}\" archiveren? De QR-code werkt dan niet meer, maar de geschiedenis blijft bewaard.",
+    "poster": "Poster",
+    "editTitle": "Poster bewerken",
+    "kind": {
+      "guest_slip": "Gastplaats",
+      "motorhome": "Camper",
+      "service": "Dienst"
+    },
+    "field": {
+      "label": "Naam",
+      "location": "Locatie",
+      "kind": "Type",
+      "priceItem": "Prijsitem",
+      "fixedUnits": "Vaste prijs (geen aantalkeuze)",
+      "unitLabel": "Eenheid (bijv. nacht)",
+      "minUnits": "Min",
+      "maxUnits": "Max"
+    },
+    "print": {
+      "title": "QR-kaarten afdrukken",
+      "selectAll": "Alles selecteren",
+      "perPage": "Kaarten per pagina",
+      "perPageOption": "{n} per pagina",
+      "printSelected": "Selectie afdrukken ({n})",
+      "printOne": "Kaart afdrukken",
+      "print": "Afdrukken",
+      "hint": "Kies in het afdrukvenster A4 liggend, 100% schaal en standaardmarges.",
+      "empty": "Geen actieve QR-posters geselecteerd.",
+      "instructions": "Scan de QR-code met je telefooncamera, kies het aantal en betaal met Vipps.",
+      "instructionsFixed": "Scan de QR-code met je telefooncamera en betaal met Vipps."
+    }
   }
 }

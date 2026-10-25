@@ -155,6 +155,20 @@ Per [`../../../../docs/developer/checklists/add-route.md`](../../../../docs/deve
 4. If the path matches `/admin/accounting/*` or `/admin/economy/*`, fresh-TOTP gating is automatic. Otherwise, no gate at click time — backend role + TOTP middleware enforce at request time.
 5. i18n: add `admin.sidebar.xyz` for the label, plus view-specific keys under `admin.xyz.*`
 
+## Print views (`bare` routes)
+
+A page meant to be printed, like the harbor QR card sheet (`/admin/harbor/payment-targets/print`, `HarborQrPrintView.vue`), cannot live under the admin layout: the sidebar would print, and the layout's padding would push fixed-size pages onto extra sheets. Register it as a **top-level** route next to `/admin/verify-totp`, with literal meta:
+
+```ts
+meta: { requiresAuth: true, requiresAdmin: true, bare: true }
+```
+
+- `requiresAdmin` must be spelled out: a top-level route doesn't inherit it from `/admin`.
+- `bare: true` makes `App.vue` skip the navbar and footer.
+- The page must load whatever NavBar normally loads for it, e.g. `useClubStore().ensureLoaded()` for the club name and logo.
+- Inject any `@page` rule on mount and remove it on unmount. A plain global style from a lazy chunk stays in the document after you navigate away and changes how every other page prints.
+- Hide screen-only controls with a scoped `@media print { display: none }`. A `print:hidden` toolbar still showed up in Chrome's print-to-PDF output for the QR sheet.
+
 ## Common misses
 
 - **Sidebar item without `roles`** — visible to every board role, by design. A page that only site admins may open needs `roles: ['admin']` **and** `meta: { adminOnly: true }` on its route; one without the other leaves either a dead link or a reachable page.

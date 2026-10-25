@@ -2568,7 +2568,11 @@
     "archiveConfirm": "Arkivere «{label}»? QR-koden slutter å virke, men historikken beholdes.",
     "poster": "Plakat",
     "editTitle": "Rediger plakat",
-    "kind": { "guest_slip": "Gjesteplass", "motorhome": "Bobil", "service": "Tjeneste" },
+    "kind": {
+      "guest_slip": "Gjesteplass",
+      "motorhome": "Bobil",
+      "service": "Tjeneste"
+    },
     "field": {
       "label": "Navn",
       "location": "Plassering",
@@ -2578,6 +2582,19 @@
       "unitLabel": "Enhet (f.eks. natt)",
       "minUnits": "Min",
       "maxUnits": "Maks"
+    },
+    "print": {
+      "title": "Skriv ut QR-kort",
+      "selectAll": "Velg alle",
+      "perPage": "Kort per side",
+      "perPageOption": "{n} per side",
+      "printSelected": "Skriv ut valgte ({n})",
+      "printOne": "Skriv ut kort",
+      "print": "Skriv ut",
+      "hint": "Velg A4 liggende, 100 % skala og standardmarger i utskriftsdialogen.",
+      "empty": "Ingen aktive QR-plakater er valgt.",
+      "instructions": "Skann QR-koden med mobilkameraet, velg antall og betal med Vipps.",
+      "instructionsFixed": "Skann QR-koden med mobilkameraet og betal med Vipps."
     }
   },
   "recentPayments": {

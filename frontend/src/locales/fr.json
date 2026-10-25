@@ -1516,5 +1516,45 @@
     "exemptionItem": "Article",
     "exemptionsHint": "Les lignes exonérées apparaissent au prix plein avec une ligne de compensation « Fritak » ; une faktura à 0 kr est envoyée pour information, sans rien à payer.",
     "exemptionsApplied": "{n} ligne(s) exonérée(s) pour les rôles du bureau."
+  },
+  "harborTargets": {
+    "title": "Affiches de paiement QR",
+    "subtitle": "Codes QR imprimables pour places visiteurs, camping-cars et services. Un scan ouvre une page de paiement, et le paiement apparaît sous Paiements.",
+    "new": "Nouvelle affiche",
+    "showArchived": "Afficher les archivées",
+    "empty": "Aucune affiche QR pour l’instant.",
+    "archived": "Archivée",
+    "archiveAction": "Archiver",
+    "archiveConfirm": "Archiver « {label} » ? Le code QR cessera de fonctionner, mais l’historique est conservé.",
+    "poster": "Affiche",
+    "editTitle": "Modifier l’affiche",
+    "kind": {
+      "guest_slip": "Place visiteur",
+      "motorhome": "Camping-car",
+      "service": "Service"
+    },
+    "field": {
+      "label": "Libellé",
+      "location": "Emplacement",
+      "kind": "Type",
+      "priceItem": "Article tarifaire",
+      "fixedUnits": "Prix fixe (pas de choix de quantité)",
+      "unitLabel": "Unité (ex. nuit)",
+      "minUnits": "Min",
+      "maxUnits": "Max"
+    },
+    "print": {
+      "title": "Imprimer les cartes QR",
+      "selectAll": "Tout sélectionner",
+      "perPage": "Cartes par page",
+      "perPageOption": "{n} par page",
+      "printSelected": "Imprimer la sélection ({n})",
+      "printOne": "Imprimer la carte",
+      "print": "Imprimer",
+      "hint": "Dans la boîte d'impression, choisissez A4 paysage, échelle 100 % et marges par défaut.",
+      "empty": "Aucune affiche QR active sélectionnée.",
+      "instructions": "Scannez le code QR avec l’appareil photo de votre téléphone, choisissez la quantité et payez avec Vipps.",
+      "instructionsFixed": "Scannez le code QR avec l’appareil photo de votre téléphone et payez avec Vipps."
+    }
   }
 }

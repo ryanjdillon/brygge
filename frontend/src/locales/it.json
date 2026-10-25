@@ -1517,5 +1517,45 @@
     "exemptionItem": "Voce",
     "exemptionsHint": "Le righe esentate appaiono a prezzo pieno con una riga di compensazione «Fritak»; una faktura da 0 kr viene inviata a titolo informativo, senza nulla da pagare.",
     "exemptionsApplied": "{n} riga/e esentata/e per i ruoli del consiglio."
+  },
+  "harborTargets": {
+    "title": "Poster di pagamento QR",
+    "subtitle": "Codici QR stampabili per posti ospiti, camper e servizi. Una scansione apre una pagina di pagamento, e il pagamento compare sotto Pagamenti.",
+    "new": "Nuovo poster",
+    "showArchived": "Mostra archiviati",
+    "empty": "Ancora nessun poster QR.",
+    "archived": "Archiviato",
+    "archiveAction": "Archivia",
+    "archiveConfirm": "Archiviare «{label}»? Il codice QR smetterà di funzionare, ma lo storico viene conservato.",
+    "poster": "Poster",
+    "editTitle": "Modifica poster",
+    "kind": {
+      "guest_slip": "Posto ospiti",
+      "motorhome": "Camper",
+      "service": "Servizio"
+    },
+    "field": {
+      "label": "Nome",
+      "location": "Posizione",
+      "kind": "Tipo",
+      "priceItem": "Voce di prezzo",
+      "fixedUnits": "Prezzo fisso (nessuna scelta di quantità)",
+      "unitLabel": "Unità (es. notte)",
+      "minUnits": "Min",
+      "maxUnits": "Max"
+    },
+    "print": {
+      "title": "Stampa schede QR",
+      "selectAll": "Seleziona tutto",
+      "perPage": "Schede per pagina",
+      "perPageOption": "{n} per pagina",
+      "printSelected": "Stampa selezionati ({n})",
+      "printOne": "Stampa scheda",
+      "print": "Stampa",
+      "hint": "Nella finestra di stampa scegli A4 orizzontale, scala 100% e margini predefiniti.",
+      "empty": "Nessun poster QR attivo selezionato.",
+      "instructions": "Scansiona il codice QR con la fotocamera del telefono, scegli la quantità e paga con Vipps.",
+      "instructionsFixed": "Scansiona il codice QR con la fotocamera del telefono e paga con Vipps."
+    }
   }
 }

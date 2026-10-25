@@ -19,6 +19,7 @@ Audience: site admins (in-app club setup, config, data correction), board member
 | Document | Description |
 |----------|-------------|
 | [user/faktura.md](user/faktura.md) | Treasurer's guide to the invoicing module (price catalogue, send, reconcile) |
+| [user/harbor-qr.md](user/harbor-qr.md) | Harbor master's guide to QR payment targets: full-page posters and 2/4/6-up card sheets |
 | [user/setting-up-email.md](user/setting-up-email.md) | Member + board guide to reading and sending club mail in Apple Mail, Outlook, Gmail, Thunderbird, etc. |
 
 ## Developer docs ([developer/](developer/))

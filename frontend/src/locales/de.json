@@ -1517,5 +1517,45 @@
     "exemptionItem": "Posten",
     "exemptionsHint": "Befreite Zeilen erscheinen zum vollen Preis mit einer ausgleichenden „Fritak“-Zeile; eine Faktura mit 0 kr wird zur Information versendet, ohne dass etwas zu zahlen ist.",
     "exemptionsApplied": "{n} Zeile(n) für Vorstandsrollen befreit."
+  },
+  "harborTargets": {
+    "title": "QR-Zahlungsplakate",
+    "subtitle": "Druckbare QR-Codes für Gastliegeplätze, Wohnmobile und Dienstleistungen. Ein Scan öffnet eine Zahlungsseite, und die Zahlung erscheint unter Zahlungen.",
+    "new": "Neues Plakat",
+    "showArchived": "Archivierte anzeigen",
+    "empty": "Noch keine QR-Plakate.",
+    "archived": "Archiviert",
+    "archiveAction": "Archivieren",
+    "archiveConfirm": "„{label}“ archivieren? Der QR-Code funktioniert dann nicht mehr, der Verlauf bleibt erhalten.",
+    "poster": "Plakat",
+    "editTitle": "Plakat bearbeiten",
+    "kind": {
+      "guest_slip": "Gastliegeplatz",
+      "motorhome": "Wohnmobil",
+      "service": "Dienstleistung"
+    },
+    "field": {
+      "label": "Bezeichnung",
+      "location": "Ort",
+      "kind": "Typ",
+      "priceItem": "Preisposten",
+      "fixedUnits": "Festpreis (keine Anzahlauswahl)",
+      "unitLabel": "Einheit (z. B. Nacht)",
+      "minUnits": "Min",
+      "maxUnits": "Max"
+    },
+    "print": {
+      "title": "QR-Karten drucken",
+      "selectAll": "Alle auswählen",
+      "perPage": "Karten pro Seite",
+      "perPageOption": "{n} pro Seite",
+      "printSelected": "Auswahl drucken ({n})",
+      "printOne": "Karte drucken",
+      "print": "Drucken",
+      "hint": "Wählen Sie im Druckdialog A4 Querformat, 100 % Skalierung und Standardränder.",
+      "empty": "Keine aktiven QR-Plakate ausgewählt.",
+      "instructions": "Scannen Sie den QR-Code mit der Handykamera, wählen Sie die Anzahl und bezahlen Sie mit Vipps.",
+      "instructionsFixed": "Scannen Sie den QR-Code mit der Handykamera und bezahlen Sie mit Vipps."
+    }
   }
 }

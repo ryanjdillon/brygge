@@ -8,6 +8,8 @@ declare module 'vue-router' {
     requiresAdmin?: boolean
     /** Developer and Site pages: site admins only, not the wider board. */
     adminOnly?: boolean
+    /** Renders without the navbar and footer, e.g. print sheets. */
+    bare?: boolean
   }
 }
 
@@ -202,6 +204,14 @@ const routes: RouteRecordRaw[] = [
     name: 'admin-verify-totp',
     component: () => import('@/views/auth/VerifyTotpView.vue'),
     meta: { requiresAuth: true },
+  },
+  {
+    // Print sheet of harbor QR cards (BRY-271). Outside AdminLayout and
+    // `bare`, so the sidebar, navbar and footer stay off the printed page.
+    path: '/admin/harbor/payment-targets/print',
+    name: 'admin-harbor-targets-print',
+    component: () => import('@/views/admin/HarborQrPrintView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, bare: true },
   },
   {
     path: '/admin',
