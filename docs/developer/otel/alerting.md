@@ -95,8 +95,11 @@ Done once per Alertmanager, plus step B2 per club. Nothing in this repo deploys 
 
 ```bash
 BRYGGE_ALERTS_LABELS="<labels of the existing alert files>" \
+BRYGGE_ALERTS_NAMESPACE="<namespace the rule lives in>" \
   scripts/render-brygge-alerts.sh <domain> <slug> > <home-repo>/…/alerts-brygge-<slug>.yaml
 ```
+
+Run the script directly (it needs only bash and sed) or through `just alerts-render`; the dev shell prints its banner on stderr, so redirecting stdout from `nix develop --command` stays valid YAML. Re-rendering with the same variables reproduces the committed file, so keep any hand edits out of it.
 
 Add the file to that directory's `kustomization.yaml`, commit, and let Flux apply it. Check it loaded: Prometheus UI → Alerts shows the `brygge-<slug>-*` groups. Re-render after every change to the rules file in this repo.
 

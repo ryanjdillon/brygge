@@ -210,7 +210,7 @@
           ];
 
           shellHook = ''
-            echo "brygge dev shell ready"
+            echo "brygge dev shell ready" >&2
             export GOPATH="$PWD/.go"
             export PATH="$GOPATH/bin:$PATH"
             export PATH="$PWD/node_modules/.bin:$PATH"
