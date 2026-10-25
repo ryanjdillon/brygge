@@ -428,6 +428,24 @@ printf '%s' "$NEW" | ssh root@<server-ip> "install -m 0400 -o root /dev/stdin /e
 ssh root@<server-ip> 'systemctl restart stalwart'
 ```
 
+### Certificate lifecycle
+
+The `mail.<domain>` certificate is issued by `security.acme` (HTTP-01 on the webroot Caddy serves) and renewed by the daily `acme-renew-mail.<domain>.timer`, which runs `acme-order-renew-mail.<domain>.service`; the reloads below are that service's `ExecStartPost`. Two services read it into memory: Caddy through the `tls <cert> <key>` file paths on the `mail.<domain>` vhost, and Stalwart through `%{file:…}%` macros for SMTP/IMAP. Neither watches the files, so the cert's `reloadServices` lists both:
+
+- **Caddy** reloads. While `services.caddy.enableReload` is true (the default), its NixOS `ExecReload` is `caddy reload --force`; a plain reload would skip an unchanged config and keep the old certificate.
+- **Stalwart** has no reload, so it restarts: a few seconds of SMTP/IMAP downtime on each renewal, at the timer's fixed random time of day.
+
+They are told only after a renewal actually installed a new cert. To check by hand, compare what each port serves with the file:
+
+```bash
+openssl x509 -in /var/lib/acme/mail.<domain>/fullchain.pem -noout -serial -enddate
+for p in 443 465 993; do
+  echo | openssl s_client -connect mail.<domain>:$p -servername mail.<domain> 2>/dev/null | openssl x509 -noout -serial -enddate
+done
+```
+
+If a port serves an older serial, run `systemctl reload caddy` (port 443) or `systemctl restart stalwart` (465/993). For Stalwart without a restart, `GET http://127.0.0.1:8088/api/reload/certificate` with admin credentials re-reads the files.
+
 ### Backups
 
 Critical data:

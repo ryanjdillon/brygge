@@ -345,13 +345,21 @@ in
   };
 
   # ACME cert for mail.<domain> — HTTP-01 challenge via webroot served by
-  # Caddy (above). simple-nixos-mailserver reads it via useACMEHost.
+  # Caddy (above). Caddy (`tls` file paths) and Stalwart (`%{file:…}%`)
+  # both read it into memory, so every consumer must be told after a
+  # renewal or it keeps serving the old certificate until it restarts.
   security.acme = {
     acceptTerms = true;
     defaults.email = clubConfig.adminEmail;
     certs."mail.${cfg.domain}" = {
       webroot = "/var/lib/acme/acme-challenge";
       group = "acme";
+      # Run only after a renewal actually installed a new cert. Caddy's
+      # NixOS ExecReload is `caddy reload --force`, which re-reads the `tls`
+      # files (a plain reload skips an unchanged config). Stalwart has no
+      # reload, so try-reload-or-restart restarts it: a few seconds of
+      # SMTP/IMAP downtime, roughly every 60 days.
+      reloadServices = [ "caddy.service" "stalwart.service" ];
     };
   };
 
