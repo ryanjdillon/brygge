@@ -15,7 +15,7 @@ import (
 // fakeAdmin serves GET/PATCH/POST on /api/principal for one principal
 // and records request bodies.
 type fakeAdmin struct {
-	principal map[string]any // nil → {"data": null}
+	principal map[string]any // nil → notFound error envelope
 	patches   [][]map[string]any
 	posts     []map[string]any
 }
@@ -25,6 +25,13 @@ func (f *fakeAdmin) server(t *testing.T) *httptest.Server {
 		body, _ := io.ReadAll(r.Body)
 		switch r.Method {
 		case http.MethodGet:
+			if f.principal == nil {
+				// Stalwart's real answer for an unknown principal.
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"error": "notFound", "item": strings.TrimPrefix(r.URL.Path, "/api/principal/"),
+				})
+				return
+			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"data": f.principal})
 		case http.MethodPatch:
 			var ops []map[string]any
@@ -71,6 +78,7 @@ func TestCreatePrincipalKeepsMarkerOutOfDescription(t *testing.T) {
 
 func TestConvergePrincipalPatchesLegacyShape(t *testing.T) {
 	f := &fakeAdmin{principal: map[string]any{
+		"id":          7,
 		"name":        "bu000000000000",
 		"description": "Brygge user someone@example.invalid (managed_by=brygge-user)",
 	}}
@@ -98,6 +106,7 @@ func TestConvergePrincipalPatchesLegacyShape(t *testing.T) {
 
 func TestConvergePrincipalIsIdempotent(t *testing.T) {
 	f := &fakeAdmin{principal: map[string]any{
+		"id":          7,
 		"name":        "bu000000000000",
 		"description": "Brygge user",
 		// Order differs from userPrincipalURLs; still converged.

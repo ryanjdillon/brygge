@@ -1,6 +1,9 @@
 # Fixture check for nix/mail-bounce.nix. A failing case throws at
 # evaluation, so `nix flake check --no-build` catches it; the real host
 # config can't, because it only ever sees the deployer's local tfvars.
+# This tests the pure function only: nix/host.nix must keep
+# `assertions = mailBounce.assertions;` wired for a bad spec to fail
+# the real evaluation.
 { pkgs }:
 let
   domain = "example.invalid";

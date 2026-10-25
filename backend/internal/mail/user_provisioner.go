@@ -307,6 +307,15 @@ func (p *UserProvisioner) ConvergePrincipalMetadata(ctx context.Context) {
 // they differ from the desired values. A principal that no longer
 // exists is left alone; EnsureUserPrincipal recreates it on demand.
 func (p *UserProvisioner) convergePrincipal(ctx context.Context, slug, userID string) (bool, error) {
+	// Stalwart answers an unknown principal with a `notFound` error
+	// envelope, which doJSON reports as an error; LookupPrincipal reads
+	// that (and 404 / data:null) as absent, so a deleted principal is
+	// skipped quietly instead of warning on every boot.
+	if exists, err := p.principalExists(ctx, slug); err != nil {
+		return false, err
+	} else if !exists {
+		return false, nil
+	}
 	var env struct {
 		Data *struct {
 			Description string   `json:"description"`
