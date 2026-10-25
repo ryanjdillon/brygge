@@ -45,7 +45,9 @@ What is **not** counted: broadcast mail (inbox compose and bulk send) goes out t
 Registered only when `STALWART_ADMIN_URL` is set (independent of `TOTP_ENCRYPTION_KEY`). A background loop calls `GET /api/queue/messages?values=1&limit=1` every 60 s with a 5 s timeout: Stalwart lists the queue in time-ordered queue-id order, so the one returned item is the oldest message, and `total` counts the whole queue. The metric callbacks read only the cached result.
 
 - Before the first successful poll only `last_success` (= 0) is observed.
-- A failed poll keeps the previous `messages` / `oldest_age` (the age keeps growing from the cached creation time); staleness is visible as `time() - brygge_mail_queue_last_success_seconds`. Failures log a warning on the first error and then at most every 15 minutes.
+- A failed poll keeps reporting the previous `messages` / `oldest_age` (the age keeps growing from the cached creation time) for up to 15 minutes after the last success.
+- Past 15 minutes without a successful poll only `last_success` is observed: `messages` and `oldest_age` go absent, so an alert on the queue's contents resolves and `time() - brygge_mail_queue_last_success_seconds` is the signal that the queue state is unknown. A later successful poll brings them back.
+- Failures log a warning on the first error and then at most every 15 minutes.
 - `values` must carry a value (`values=1`): Stalwart drops empty query parameters, so a bare `values` returns ids without creation times.
 
 ## Outbound HTTP traces

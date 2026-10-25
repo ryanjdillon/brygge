@@ -177,6 +177,43 @@ func TestQueueMonitor_ErrorKeepsLastSnapshot(t *testing.T) {
 	}
 }
 
+func TestQueueMonitor_StaleSnapshotGoesAbsent(t *testing.T) {
+	fq := &fakeQueue{created: []string{"2026-10-25T11:00:00Z"}}
+	srv := fq.server(t)
+	m, reader := newTestMonitor(t, srv.URL, queueTestNow)
+	m.poll(context.Background())
+
+	fq.status = http.StatusUnauthorized
+	m.now = func() time.Time { return queueTestNow.Add(queueStaleAfter + time.Second) }
+	m.poll(context.Background())
+
+	g := collectQueue(t, reader)
+	if g.hasMessages || g.hasAge {
+		t.Errorf("stale snapshot still observed: %+v", g)
+	}
+	if !g.hasLast || g.lastSuccess != queueTestNow.Unix() {
+		t.Errorf("last_success = %d (present %v), want %d", g.lastSuccess, g.hasLast, queueTestNow.Unix())
+	}
+
+	// A later successful poll brings the gauges back.
+	fq.status = 0
+	m.poll(context.Background())
+	if g := collectQueue(t, reader); !g.hasMessages || g.messages != 1 {
+		t.Errorf("messages after recovery = %d (present %v), want 1", g.messages, g.hasMessages)
+	}
+}
+
+func TestQueueSummary_RejectsTotalWithoutItems(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = fmt.Fprint(w, `{"data":{"items":[],"total":2,"status":true}}`)
+	}))
+	t.Cleanup(srv.Close)
+	c := NewAdminClient(srv.URL, "admin", "pw", "", zerolog.Nop())
+	if _, err := c.QueueSummary(context.Background()); err == nil {
+		t.Fatal("want an error when total is non-zero but no item is returned")
+	}
+}
+
 func TestQueueSummary_RejectsIDOnlyItems(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = fmt.Fprint(w, `{"data":{"items":[42],"total":1,"status":true}}`)

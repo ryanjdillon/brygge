@@ -67,6 +67,11 @@ type queueSummarizer interface {
 const (
 	queuePollTimeout   = 5 * time.Second
 	queueErrorLogEvery = 15 * time.Minute
+	// queueStaleAfter bounds how long a cached snapshot is reported. Past
+	// it the queue gauges go absent, so an alert on their values resolves
+	// and the one on last_success is left to report that the state is
+	// unknown, instead of a frozen count standing in for the live queue.
+	queueStaleAfter = 15 * time.Minute
 )
 
 // QueueMonitor polls Stalwart's outbound queue in the background and
@@ -75,9 +80,8 @@ const (
 // stalls a metrics collection.
 //
 // Until the first successful poll only brygge.mail.queue.last_success is
-// observed (as 0); afterwards a failed poll keeps the previous snapshot and
-// the stale last_success is what tells the alert rules the numbers can no
-// longer be trusted.
+// observed (as 0). A failed poll keeps the previous snapshot for up to
+// queueStaleAfter; after that only last_success is observed again.
 type QueueMonitor struct {
 	client queueSummarizer
 	log    zerolog.Logger
@@ -138,13 +142,17 @@ func (m *QueueMonitor) registerMetrics(meter metric.Meter) (metric.Registration,
 			o.ObserveInt64(lastSuccess, 0)
 			return nil
 		}
+		o.ObserveInt64(lastSuccess, m.lastSuccess.Unix())
+		now := m.now()
+		if now.Sub(m.lastSuccess) > queueStaleAfter {
+			return nil
+		}
 		o.ObserveInt64(messages, m.messages)
 		age := 0.0
 		if m.messages > 0 && !m.oldest.IsZero() {
-			age = max(m.now().Sub(m.oldest).Seconds(), 0)
+			age = max(now.Sub(m.oldest).Seconds(), 0)
 		}
 		o.ObserveFloat64(oldestAge, age)
-		o.ObserveInt64(lastSuccess, m.lastSuccess.Unix())
 		return nil
 	}, messages, oldestAge, lastSuccess)
 }
