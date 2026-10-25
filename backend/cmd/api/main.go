@@ -181,23 +181,35 @@ func main() {
 	auditService := audit.NewService(db, log)
 	sessionService := auth.NewSessionService(db)
 
+	// Stalwart admin client: the outbound-queue gauges need only the admin
+	// URL and credentials, so they run whenever it is configured.
+	var stalwartAdmin *mail.AdminClient
+	if cfg.StalwartAdminURL != "" {
+		stalwartAdmin = mail.NewAdminClient(
+			cfg.StalwartAdminURL,
+			cfg.StalwartAdminUser,
+			cfg.StalwartAdminPassword,
+			cfg.StalwartAdminToken,
+			log,
+		)
+		queueMonitor := mail.NewQueueMonitor(stalwartAdmin, log)
+		if err := queueMonitor.RegisterMetrics(); err != nil {
+			log.Warn().Err(err).Msg("failed to register mail queue metrics")
+		} else {
+			go queueMonitor.Run(ctx, time.Minute)
+		}
+	}
+
 	// Per-user Stalwart provisioning (DIL-321). Nil when admin creds
 	// aren't configured. Decoded once so handlers share it.
 	var userProvisioner *mail.UserProvisioner
-	if cfg.StalwartAdminURL != "" && cfg.TOTPEncryptionKey != "" {
+	if stalwartAdmin != nil && cfg.TOTPEncryptionKey != "" {
 		encKey, kerr := hex.DecodeString(cfg.TOTPEncryptionKey)
 		switch {
 		case kerr != nil || len(encKey) != 32:
 			log.Warn().Err(kerr).Msg("TOTP_ENCRYPTION_KEY invalid; user mail provisioning disabled")
 		default:
-			adminClient := mail.NewAdminClient(
-				cfg.StalwartAdminURL,
-				cfg.StalwartAdminUser,
-				cfg.StalwartAdminPassword,
-				cfg.StalwartAdminToken,
-				log,
-			)
-			userProvisioner = mail.NewUserProvisioner(db, adminClient, auditService, encKey, cfg.Domain, log)
+			userProvisioner = mail.NewUserProvisioner(db, stalwartAdmin, auditService, encKey, cfg.Domain, log)
 		}
 	}
 

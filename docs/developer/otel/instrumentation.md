@@ -1,6 +1,6 @@
 # OTel Instrumentation
 
-What the Brygge API emits over OTLP. SDK setup (resource, exporters, sampler) lives in `backend/internal/telemetry/`; the instruments live next to the code they measure (`internal/middleware/metrics.go`, `internal/telemetry/pgx.go`, `internal/email/instrument.go`). Every instrument uses the meter `otel.Meter("brygge-api")`.
+What the Brygge API emits over OTLP. SDK setup (resource, exporters, sampler) lives in `backend/internal/telemetry/`; the instruments live next to the code they measure (`internal/middleware/metrics.go`, `internal/telemetry/pgx.go`, `internal/email/instrument.go`, `internal/mail/queue_monitor.go`). Every instrument uses the meter `otel.Meter("brygge-api")`.
 
 Prometheus names below assume the upstream `prometheusremotewrite` exporter's default suffixing (unit suffix added, `_total` on counters, `{…}` annotation units dropped). The series carry `job` = `<service.namespace>/<service.name>`, e.g. `klokkarvikbaatlag.no/brygge-api`.
 
@@ -33,6 +33,20 @@ Prometheus names below assume the upstream `prometheusremotewrite` exporter's de
 Counted by the `email.Instrument` decorator around the SMTP sender, once per hand-off to the SMTP relay (Stalwart). `kind` comes from `email.WithKind(ctx, …)` at the call site; untagged sends count as `other`. All eight `kind` × `result` series are created at 0 on startup so `increase()` sees the first error. Recipients, subjects and error text are never attributes — the error itself is in the `brygge.service` journal.
 
 What is **not** counted: broadcast mail (inbox compose and bulk send) goes out through JMAP as the sending mailbox, not through `email.Sender`. A `result="ok"` only means the relay accepted the message; remote deferrals and bounces show up in Stalwart's queue and journal, not here.
+
+## Mail queue (Stalwart)
+
+| Metric | Prometheus name | Type | Meaning |
+|--------|-----------------|------|---------|
+| `brygge.mail.queue.messages` (`{message}`) | `brygge_mail_queue_messages` | Gauge | Messages in Stalwart's outbound queue |
+| `brygge.mail.queue.oldest_age` (`s`) | `brygge_mail_queue_oldest_age_seconds` | Gauge | Age of the oldest queued message; 0 when the queue is empty |
+| `brygge.mail.queue.last_success` (`s`) | `brygge_mail_queue_last_success_seconds` | Gauge | Unix time of the last successful poll; 0 before the first |
+
+Registered only when `STALWART_ADMIN_URL` is set (independent of `TOTP_ENCRYPTION_KEY`). A background loop calls `GET /api/queue/messages?values=1&limit=1` every 60 s with a 5 s timeout: Stalwart lists the queue in time-ordered queue-id order, so the one returned item is the oldest message, and `total` counts the whole queue. The metric callbacks read only the cached result.
+
+- Before the first successful poll only `last_success` (= 0) is observed.
+- A failed poll keeps the previous `messages` / `oldest_age` (the age keeps growing from the cached creation time); staleness is visible as `time() - brygge_mail_queue_last_success_seconds`. Failures log a warning on the first error and then at most every 15 minutes.
+- `values` must carry a value (`values=1`): Stalwart drops empty query parameters, so a bare `values` returns ids without creation times.
 
 ## Outbound HTTP traces
 
