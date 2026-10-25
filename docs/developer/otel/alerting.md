@@ -89,7 +89,7 @@ scripts/render-brygge-alerts.sh --groups <domain> <slug>
 
 Done once per Alertmanager, plus step B2 per club. Nothing in this repo deploys it. Stay in order: B1 confirms the data the rules need is there.
 
-**B1 — verify jobs and names.** Run the queries in [Verify metric names](#verify-metric-names-in-prometheus) for the club. All three jobs present (Stalwart's after its first event), and a `tlscheck_time_left_seconds` series for each of the three targets, before loading rules; otherwise HostSilent, ApiSilent or TlsProbeFailing fire at once.
+**B1 — verify jobs and names.** Run the queries in [Verify metric names](#verify-metric-names-in-prometheus) for the club. All three jobs present (Stalwart's after its first event; no rule fires on the Stalwart job's absence, so loading before it appears is safe), and a `tlscheck_time_left_seconds` series for each of the three targets, before loading rules; otherwise HostSilent, ApiSilent or TlsProbeFailing fire at once.
 
 **B2 — render and load the rules.** Render into the home repo next to the existing alert files, with the same `metadata.labels` they carry:
 
@@ -119,7 +119,7 @@ Mount it with `alertmanager.alertmanagerSpec.secrets: [alertmanager-ntfy]` (kube
 
 1. Routing: with the merged config, `amtool config routes test --config.file=<file> 'alertname="HostSilent"' 'service_namespace="<domain>"' 'severity="page"'` prints `brygge-ntfy-page,<existing receiver>` (just `brygge-ntfy-page` with `continue: false`); same for `warn` and `daily`; an alert without `service_namespace` reaches only the existing receiver.
 2. Delivery: `kubectl port-forward -n <ns> svc/<alertmanager> 9093`, then `amtool alert add --alertmanager.url=http://127.0.0.1:9093 alertname=BryggeTest service_namespace=<domain> club=<slug> severity=page --annotation=summary="Brygge test alert"`; it arrives on the phone within `group_wait` (30s), and the resolved notice follows after Alertmanager's `resolve_timeout` (5 minutes by default).
-3. End to end: render the rules for a namespace that sends nothing (`hostsilent-test.invalid`, slug `hostsilent-test`), load them as in B2; HostSilent and ApiSilent for that namespace fire about two minutes after loading (no series at all, then `for: 2m`) and reach the phone; TlsProbeFailing stays quiet because the host itself is silent. Remove the file afterwards.
+3. End to end: render the rules for a namespace that sends nothing (`hostsilent-test.invalid`, slug `hostsilent-test`), load them as in B2; HostSilent and ApiSilent for that namespace fire about two minutes after loading (no series at all, then `for: 2m`) and reach the phone; TlsProbeFailing stays quiet because the host itself is silent. Remove the file afterwards, together with its entry in the kustomization that lists it, in the same commit: a kustomization naming a missing file fails as a whole, taking every other alert file with it.
 
 BRY-414 tracks this recipe for the home cluster and stays open until step B6 reaches the phone.
 
