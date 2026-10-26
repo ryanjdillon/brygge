@@ -163,7 +163,7 @@ systemctl restart brygge-migrate
 The `services.brygge.backup` NixOS module (implemented in `nix/backup.nix`)
 runs `systemd.timers.brygge-backup` on a configurable schedule (default
 **02:30 UTC daily**). It uses `pg_dump --format=custom --compress=9` and
-uploads to any S3-compatible store via the MinIO client (`mc`).
+uploads to any S3-compatible store with `rclone`.
 
 ### GFS retention model
 
@@ -230,20 +230,21 @@ BACKUP_S3_SECRET_KEY=<your-secret-key>
 
 ### Restore recipe
 
-Download the desired dump from S3 using `mc`, then restore with `pg_restore`.
+Download the desired dump from S3 with `rclone` (in the dev shell), then restore with `pg_restore`.
 
 ```sh
-# 1. Configure the mc alias (same credentials as environmentFile)
-mc alias set bryggebackup \
-    https://s3.eu-central-003.backblazeb2.com \
-    <BACKUP_S3_ACCESS_KEY> \
-    <BACKUP_S3_SECRET_KEY>
+# 1. Define the remote from the environment (same credentials as environmentFile)
+export RCLONE_CONFIG_BRYGGEBACKUP_TYPE=s3
+export RCLONE_CONFIG_BRYGGEBACKUP_PROVIDER=Other
+export RCLONE_CONFIG_BRYGGEBACKUP_ENDPOINT=<BACKUP_S3_ENDPOINT>
+export RCLONE_CONFIG_BRYGGEBACKUP_ACCESS_KEY_ID=<BACKUP_S3_ACCESS_KEY>
+export RCLONE_CONFIG_BRYGGEBACKUP_SECRET_ACCESS_KEY=<BACKUP_S3_SECRET_KEY>
 
-# 2. List available dumps (example: daily tier)
-mc ls bryggebackup/brygge-backups/daily/
+# 2. List available dumps (example: daily tier; include the host's s3Prefix)
+rclone lsf bryggebackup:<bucket>/<s3Prefix>/daily/
 
 # 3. Download the chosen dump
-mc cp bryggebackup/brygge-backups/daily/brygge-YYYYMMDD-HHMMSS.dump ./brygge-YYYYMMDD.dump
+rclone copyto bryggebackup:<bucket>/<s3Prefix>/daily/brygge-YYYYMMDD-HHMMSS.dump ./brygge-YYYYMMDD.dump
 
 # 4. Restore — stop the app first, then restore
 ssh -i <key> -o IdentitiesOnly=yes root@<host-ip> 'systemctl stop brygge'

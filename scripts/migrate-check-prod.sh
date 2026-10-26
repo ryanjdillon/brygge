@@ -52,8 +52,13 @@ else
     : "${BACKUP_S3_ACCESS_KEY:?set BACKUP_S3_ACCESS_KEY}"
     : "${BACKUP_S3_SECRET_KEY:?set BACKUP_S3_SECRET_KEY}"
 
-    export MC_CONFIG_DIR="$workdir/mc"
-    mc alias set bryggesnap "$BACKUP_S3_ENDPOINT" "$BACKUP_S3_ACCESS_KEY" "$BACKUP_S3_SECRET_KEY" >/dev/null
+    export RCLONE_CONFIG="$workdir/rclone.conf"
+    : > "$RCLONE_CONFIG"
+    export RCLONE_CONFIG_BRYGGESNAP_TYPE=s3
+    export RCLONE_CONFIG_BRYGGESNAP_PROVIDER=Other
+    export RCLONE_CONFIG_BRYGGESNAP_ENDPOINT="$BACKUP_S3_ENDPOINT"
+    export RCLONE_CONFIG_BRYGGESNAP_ACCESS_KEY_ID="$BACKUP_S3_ACCESS_KEY"
+    export RCLONE_CONFIG_BRYGGESNAP_SECRET_ACCESS_KEY="$BACKUP_S3_SECRET_KEY"
 
     prefix="${BACKUP_S3_PREFIX:-}"
     prefix="${prefix#/}"; prefix="${prefix%/}"
@@ -61,14 +66,14 @@ else
     echo "▶ Finding newest daily snapshot in ${daily}/ ..."
     # List separately so a missing path or bad credentials is reported
     # instead of pipefail ending the script with no message.
-    if ! listing="$(mc ls "bryggesnap/${daily}/")"; then
+    if ! listing="$(rclone lsf --files-only "bryggesnap:${daily}/")"; then
         echo "✗ Could not list ${daily}/ — check BACKUP_S3_* and BACKUP_S3_PREFIX" >&2
         exit 1
     fi
-    latest="$(awk '{print $NF}' <<<"$listing" | { grep '\.dump$' || true; } | sort | tail -n1)"
+    latest="$({ grep '\.dump$' <<<"$listing" || true; } | sort | tail -n1)"
     [[ -n "$latest" ]] || { echo "✗ No *.dump snapshot found under ${daily}/ (is BACKUP_S3_PREFIX set to the host's s3Prefix?)" >&2; exit 1; }
     echo "▶ Fetching $latest ..."
-    mc cp --quiet "bryggesnap/${daily}/${latest}" "$workdir/snap.dump"
+    rclone copyto --quiet "bryggesnap:${daily}/${latest}" "$workdir/snap.dump"
 fi
 
 # ── 2. Fresh restore target ──────────────────────────────────

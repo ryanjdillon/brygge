@@ -197,7 +197,7 @@
             postgresql_16
             redis
             docker-compose
-            minio-client
+            rclone
             opentofu
             hcloud
             just

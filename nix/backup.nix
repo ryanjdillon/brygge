@@ -15,14 +15,12 @@ let
   # the host would fail.
   pgPackage = config.services.postgresql.package;
 
-  # Shared pg_dump + mc upload logic used by both GFS and pre-deploy scripts.
-  # Arguments: $1 = destination prefix path (e.g. "bryggebackup/bucket/daily")
-  #            $2 = dump file path
+  # rclone rather than minio-client: mc is abandoned upstream and nixpkgs
+  # refuses to evaluate it.
   commonInputs = [
     pgPackage
-    pkgs.minio-client
+    pkgs.rclone
     pkgs.coreutils
-    pkgs.gawk
     pkgs.curl
   ];
 
@@ -74,17 +72,22 @@ let
         --file="''${DUMPFILE}"
       echo "brygge-backup: dump complete ($(du -h "''${DUMPFILE}" | cut -f1))"
 
-      export MC_CONFIG_DIR="''${WORKDIR}/.mc"
-      mc alias set bryggebackup \
-        "''${S3_ENDPOINT}" \
-        "''${BACKUP_S3_ACCESS_KEY}" \
-        "''${BACKUP_S3_SECRET_KEY}" \
-        --quiet
+      # The remote is defined entirely by environment. The empty config file
+      # keeps rclone from looking in $HOME (the unit runs with ProtectHome).
+      export RCLONE_CONFIG="''${WORKDIR}/rclone.conf"
+      : > "''${RCLONE_CONFIG}"
+      export RCLONE_CONFIG_BRYGGEBACKUP_TYPE=s3
+      export RCLONE_CONFIG_BRYGGEBACKUP_PROVIDER=Other
+      export RCLONE_CONFIG_BRYGGEBACKUP_ENDPOINT="''${S3_ENDPOINT}"
+      export RCLONE_CONFIG_BRYGGEBACKUP_ACCESS_KEY_ID="''${BACKUP_S3_ACCESS_KEY}"
+      export RCLONE_CONFIG_BRYGGEBACKUP_SECRET_ACCESS_KEY="''${BACKUP_S3_SECRET_KEY}"
+      # The bucket already exists; the key may not be allowed to create one.
+      export RCLONE_CONFIG_BRYGGEBACKUP_NO_CHECK_BUCKET=true
 
       for PREFIX in "''${PREFIXES[@]}"; do
-        DEST="bryggebackup/''${S3_BUCKET}/''${S3_PREFIX}/''${PREFIX}/''${FILENAME}"
+        DEST="bryggebackup:''${S3_BUCKET}/''${S3_PREFIX}/''${PREFIX}/''${FILENAME}"
         echo "brygge-backup: uploading to ''${DEST}…"
-        mc cp --quiet "''${DUMPFILE}" "''${DEST}"
+        rclone copyto --quiet "''${DUMPFILE}" "''${DEST}"
         echo "brygge-backup: upload OK → ''${PREFIX}/"
       done
 
@@ -93,8 +96,7 @@ let
         local keep="''${2}"
 
         mapfile -t OBJECTS < <(
-          mc ls --quiet "bryggebackup/''${S3_BUCKET}/''${S3_PREFIX}/''${prefix}/" 2>/dev/null \
-            | awk '{print $NF}' \
+          rclone lsf --files-only "bryggebackup:''${S3_BUCKET}/''${S3_PREFIX}/''${prefix}/" 2>/dev/null \
             | sort -r
         )
 
@@ -109,7 +111,7 @@ let
 
         for (( i=keep; i<total; i++ )); do
           local obj="''${OBJECTS[''${i}]}"
-          mc rm --quiet "bryggebackup/''${S3_BUCKET}/''${S3_PREFIX}/''${prefix}/''${obj}"
+          rclone deletefile --quiet "bryggebackup:''${S3_BUCKET}/''${S3_PREFIX}/''${prefix}/''${obj}"
           echo "brygge-backup: removed ''${prefix}/''${obj}"
         done
       }
