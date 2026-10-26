@@ -179,7 +179,7 @@ func TestVippsMemberMatchingSkipsSettledFakturas(t *testing.T) {
 	f := newMatchingFixture(t)
 	ctx := context.Background()
 	for name, inv := range map[string]fin.Invoice{"credited": f.credited, "vipps-captured": f.vipps, "voided": f.voided, "paid": f.paid} {
-		if got := f.svc.findOpenInvoiceForMember(ctx, f.club.ID, inv.MemberID, fin.Kr(inv.TotalCents)); got != "" {
+		if got := f.svc.findOpenInvoiceForMember(ctx, f.club.ID, inv.MemberID, fin.Kr(inv.TotalCents), time.Now()); got != "" {
 			t.Errorf("%s faktura offered to a Vipps charge (%s)", name, got)
 		}
 		mi, err := f.svc.decideMemberInvoice(ctx, f.club.ID, inv.MemberID, inv.TotalCents, time.Date(f.club.Year, 12, 31, 0, 0, 0, 0, time.UTC))
@@ -187,7 +187,7 @@ func TestVippsMemberMatchingSkipsSettledFakturas(t *testing.T) {
 			t.Errorf("%s faktura: auto-assign decided %+v, err %v; want no open faktura", name, mi, err)
 		}
 	}
-	if got := f.svc.findOpenInvoiceForMember(ctx, f.club.ID, f.open.MemberID, fin.Kr(f.open.TotalCents)); got != f.open.ID {
+	if got := f.svc.findOpenInvoiceForMember(ctx, f.club.ID, f.open.MemberID, fin.Kr(f.open.TotalCents), time.Now()); got != f.open.ID {
 		t.Errorf("open faktura not offered: got %q", got)
 	}
 

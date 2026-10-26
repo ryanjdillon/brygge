@@ -48,3 +48,24 @@ func TestOpenReceivablePredicate(t *testing.T) {
 		t.Errorf("OpenReceivableSQL(i) = %s, must not depend on vipps_paid_at", got)
 	}
 }
+
+func TestImportedReceivableOpenPredicate(t *testing.T) {
+	got := ImportedReceivableOpenSQL("i", "$3::date")
+	for _, part := range []string{
+		"i.import_source IS NULL",
+		"ob_je.club_id = i.club_id AND ob_je.source = 'opening_balance'",
+		"ob_je.status = 'posted' AND ob_a.code = '1500' AND ob_jl.debit > 0",
+		"ob_je.entry_date >= i.issue_date AND ob_je.entry_date <= ($3::date)",
+		"is_je.source = 'invoice_sync'",
+		"is_je.source_id = i.id::text AND is_je.status = 'posted'",
+	} {
+		if !strings.Contains(got, part) {
+			t.Errorf("ImportedReceivableOpenSQL(i) = %s, missing %q", got, part)
+		}
+	}
+	// An unaliased UPDATE invoices ... WHERE needs the outer table named
+	// inside the correlated subqueries.
+	if got := ImportedReceivableOpenSQL("", "CURRENT_DATE"); !strings.Contains(got, "ob_je.entry_date >= invoices.issue_date") {
+		t.Errorf("ImportedReceivableOpenSQL() = %s, want the subquery to reference invoices.issue_date", got)
+	}
+}

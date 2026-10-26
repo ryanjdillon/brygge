@@ -64,15 +64,21 @@ func (s *Service) AssignVippsChargeToOrder(ctx context.Context, clubID, vippsRow
 		return nil, true, fmt.Errorf("order total %.2f does not match charge %.2f", sum, b.amount)
 	}
 	for _, id := range invoiceIDs {
-		var open bool
+		var open, receivableOK bool
 		if err := s.db.QueryRow(ctx,
-			`SELECT `+finance.OpenReceivableSQL("i")+` FROM invoices i WHERE i.id = $1 AND i.club_id = $2`,
-			id, clubID,
-		).Scan(&open); err != nil {
+			`SELECT `+finance.OpenReceivableSQL("i")+`, `+finance.ImportedReceivableOpenSQL("i", "$3::date")+`
+			   FROM invoices i WHERE i.id = $1 AND i.club_id = $2`,
+			id, clubID, b.date,
+		).Scan(&open, &receivableOK); err != nil {
 			return nil, true, fmt.Errorf("loading invoice: %w", err)
 		}
 		if !open {
 			return nil, true, fmt.Errorf("a faktura on order %s is already paid, voided or credited — book the charge by hand", b.orderRef)
+		}
+		// Checkout refuses such a faktura, but an order minted before the
+		// guard could still carry one (BRY-386).
+		if !receivableOK {
+			return nil, true, ErrImportedNoOpeningBalance
 		}
 	}
 

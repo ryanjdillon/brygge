@@ -5,6 +5,7 @@ import { mountWithPlugins } from '@/test/test-utils'
 import BankReconcileTab from '@/components/admin/BankReconcileTab.vue'
 import { useConfirmStore } from '@/stores/confirm'
 import { ApiError } from '@/lib/errors'
+import { useToast } from '@/composables/useToast'
 import type { BankRowSuggestions, BankRowSummary, PayerAliasState } from '@/composables/useBankReconcile'
 
 // Synthetic deposits from a company paying a member's faktura.
@@ -267,5 +268,30 @@ describe('BankReconcileTab Hugs betalaren', () => {
     expect(wrapper.find('[data-testid="payer-alias"]').exists()).toBe(false)
     await clickAssign(wrapper)
     expect(assignMulti.mutateAsync.mock.calls[0][0].alias).toEqual({ remember_payer: false, confirm_alias_override: false })
+  })
+
+  // BRY-386: the server refuses a payment for an imported faktura whose
+  // receivable isn't in the opening balance; the treasurer must be told.
+  const importedRefusal = () =>
+    new ApiError(409, 'This faktura was imported…', 'imported_no_opening_balance')
+  const toastMessages = () => useToast().toasts.value.map((m) => m.message)
+
+  it('tells the treasurer when a faktura assign is refused as imported', async () => {
+    const toast = useToast()
+    for (const m of [...toast.toasts.value]) toast.dismiss(m.id)
+    assignInvoice.mutateAsync.mockRejectedValueOnce(importedRefusal())
+    const wrapper = await expandFirstRow()
+    await clickAssign(wrapper)
+    expect(assignInvoice.mutateAsync).toHaveBeenCalledTimes(1)
+    expect(toastMessages()).toContain('admin.accounting.importedNoOpeningBalance')
+  })
+
+  it('tells the treasurer when a multi-row assign is refused as imported', async () => {
+    const toast = useToast()
+    for (const m of [...toast.toasts.value]) toast.dismiss(m.id)
+    assignMulti.mutateAsync.mockRejectedValueOnce(importedRefusal())
+    const wrapper = await openMulti(['a', 'b'])
+    await clickAssign(wrapper)
+    expect(toastMessages()).toContain('admin.accounting.importedNoOpeningBalance')
   })
 })

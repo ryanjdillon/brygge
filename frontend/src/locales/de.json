@@ -980,7 +980,8 @@
         "tooltipCredit": "Amount to credit (increase revenue/liabilities)",
         "tooltipMva": "VAT portion of this expense (for momskompensasjon)",
         "tooltipLineDesc": "Optional note for this line"
-      }
+      },
+      "importedNoOpeningBalance": "Diese Rechnung wurde aus dem bisherigen System importiert, und ihre Forderung ist noch nicht in Brygges Eröffnungsbilanz enthalten. Buchen Sie die Zahlung, sobald die Eröffnungsbilanz gebucht ist."
     },
     "groupEconomy": "Economy",
     "groupShop": "Shop",

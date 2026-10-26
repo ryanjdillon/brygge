@@ -1689,7 +1689,8 @@
         "receiptUploading": "Uploading receipt…",
         "receiptUploadFailed": "Receipt upload failed — entry saved, please retry the upload",
         "receiptUnknownVendor": "Unknown vendor"
-      }
+      },
+      "importedNoOpeningBalance": "This faktura was imported from the previous system and its receivable isn't in Brygge's opening balance yet. Book the payment after the opening balance is posted."
     },
     "groupEconomy": "Economy",
     "groupShop": "Shop",

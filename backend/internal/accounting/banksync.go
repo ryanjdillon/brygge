@@ -587,6 +587,13 @@ func (s *Service) syncKIDMatches(ctx context.Context, clubID, createdBy string, 
 			// A concurrent booking or a dismissal won the row, or the
 			// faktura was voided or credited meanwhile; the row stays in
 			// Tildel for the treasurer.
+		case errors.Is(err, ErrImportedNoOpeningBalance):
+			// Not a double payment: the row waits in Tildel until the
+			// opening balance carries the imported faktura's receivable.
+			s.log.Info().
+				Str("bank_row_id", p.rowID).
+				Str("invoice_id", invoiceID).
+				Msg("KID match refused: imported faktura has no opening balance; row stays in Tildel")
 		default:
 			// Most often a bank_account_code missing from the chart of
 			// accounts (a bank role whose gl_code was never seeded); logged

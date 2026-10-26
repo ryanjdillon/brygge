@@ -159,6 +159,14 @@ export function isAliasConflictError(e: unknown): boolean {
   return e instanceof ApiError && e.status === 409 && e.message === 'alias_conflict'
 }
 
+/**
+ * True when an assign was refused because the faktura was imported from the
+ * previous system and its receivable isn't in the opening balance yet (BRY-386).
+ */
+export function isImportedNoOpeningBalanceError(e: unknown): boolean {
+  return e instanceof ApiError && e.status === 409 && e.code === 'imported_no_opening_balance'
+}
+
 const BASE = '/api/v1/admin/accounting/bank-rows'
 
 export type BankRowDirection = 'incoming' | 'outgoing' | 'dismissed'

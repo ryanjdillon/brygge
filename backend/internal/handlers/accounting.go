@@ -2338,6 +2338,10 @@ func (h *AccountingHandler) HandleVippsReconcileConfirm(w http.ResponseWriter, r
 	}
 
 	entryID, err := h.svc.ReconcileVippsConfirm(r.Context(), claims.ClubID, rowID, req.PeriodID, claims.UserID, req.Lines)
+	if errors.Is(err, accounting.ErrImportedNoOpeningBalance) {
+		importedNoOpeningBalanceConflict(w)
+		return
+	}
 	if err != nil {
 		Error(w, http.StatusBadRequest, err.Error())
 		return

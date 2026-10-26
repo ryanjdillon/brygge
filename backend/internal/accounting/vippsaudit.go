@@ -98,7 +98,7 @@ func (s *Service) AuditUnlinkedVippsPayments(ctx context.Context, clubID string)
 		if memberID == "" {
 			continue
 		}
-		invoiceID := s.findOpenInvoiceForMember(ctx, clubID, memberID, c.amount)
+		invoiceID := s.findOpenInvoiceForMember(ctx, clubID, memberID, c.amount, c.bookingDate)
 		if invoiceID == "" {
 			continue
 		}

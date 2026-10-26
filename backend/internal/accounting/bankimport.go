@@ -597,6 +597,10 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOv
 			res.rowError(rowID, row, "faktura already settled; possible double payment")
 		case errors.Is(err, errInvoiceNotOpen):
 			res.rowError(rowID, row, "faktura no longer open")
+		case errors.Is(err, ErrImportedNoOpeningBalance):
+			// Not a double payment: the row waits in Tildel until the
+			// opening balance carries the imported faktura's receivable.
+			res.rowError(rowID, row, ErrImportedNoOpeningBalance.Error())
 		case errors.Is(err, errKIDRowTaken):
 			// A concurrent sync booked (or the treasurer dismissed) this
 			// very row; it is not in Tildel, so there is nothing to report.

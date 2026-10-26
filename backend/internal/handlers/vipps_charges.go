@@ -99,6 +99,10 @@ func (h *AccountingHandler) HandleAssignVippsChargeToInvoice(w http.ResponseWrit
 		return
 	}
 	res, err := h.svc.AssignVippsChargeToInvoice(ctx, claims.ClubID, rowID, req.InvoiceID, claims.UserID)
+	if errors.Is(err, accounting.ErrImportedNoOpeningBalance) {
+		importedNoOpeningBalanceConflict(w)
+		return
+	}
 	if err != nil {
 		h.log.Warn().Err(err).Str("row_id", rowID).Msg("assign vipps charge to invoice")
 		Error(w, http.StatusBadRequest, err.Error())

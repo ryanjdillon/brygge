@@ -70,6 +70,36 @@ func SettledForGLSQL(alias string) string {
 	return fmt.Sprintf("(%spayment_id IS NOT NULL)", col(alias))
 }
 
+// ImportedReceivableOpenSQL returns a SQL predicate that is true when the
+// invoice's receivable exists in Brygge's GL, so a payment or credit note may
+// credit 1500 for it (BRY-386). A Brygge faktura always qualifies. An
+// imported one (import_source set) was never booked by Brygge, so it
+// qualifies only when either
+//
+//   - a posted opening balance (source 'opening_balance') in the faktura's
+//     club debits 1500 and is dated on or after the faktura's issue date (it
+//     can only carry receivables that existed by then) and on or before
+//     bookingDateExpr, the date the payment or credit note is booked; or
+//   - the faktura has its own posted invoice_sync entry.
+//
+// bookingDateExpr is a SQL date expression such as "$3::date",
+// "CURRENT_DATE" or a subquery. The account code is the receivables account
+// (accounting's receivablesAccountCode); finance can't import accounting.
+func ImportedReceivableOpenSQL(invAlias, bookingDateExpr string) string {
+	r := ref(invAlias)
+	return fmt.Sprintf(`(%[1]simport_source IS NULL
+	 OR EXISTS (SELECT 1 FROM journal_entries ob_je
+	              JOIN journal_lines ob_jl ON ob_jl.journal_entry_id = ob_je.id
+	              JOIN accounts ob_a ON ob_a.id = ob_jl.account_id
+	             WHERE ob_je.club_id = %[1]sclub_id AND ob_je.source = 'opening_balance'
+	               AND ob_je.status = 'posted' AND ob_a.code = '1500' AND ob_jl.debit > 0
+	               AND ob_je.entry_date >= %[1]sissue_date AND ob_je.entry_date <= (%[2]s))
+	 OR EXISTS (SELECT 1 FROM journal_entries is_je
+	             WHERE is_je.club_id = %[1]sclub_id AND is_je.source = 'invoice_sync'
+	               AND is_je.source_id = %[1]sid::text AND is_je.status = 'posted'))`,
+		r, bookingDateExpr)
+}
+
 func col(alias string) string {
 	if alias == "" {
 		return ""

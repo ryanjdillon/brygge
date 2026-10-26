@@ -4,9 +4,9 @@
 // the members admin view use this so the fetch/clipboard/error handling stays in
 // one place. The caller maps the result to its own toast/flash and i18n.
 
-export type CopyPayLinkResult =
-  | { ok: true; url: string }
-  | { ok: false; reason: 'vipps_unavailable' | 'vipps_over_limit' | 'failed' }
+export type PayLinkFailure = 'vipps_unavailable' | 'vipps_over_limit' | 'imported_no_opening_balance' | 'failed'
+
+export type CopyPayLinkResult = { ok: true; url: string } | { ok: false; reason: PayLinkFailure }
 
 /**
  * Fetches a pay link from the given admin endpoint (cookie-authed) and copies it
@@ -19,9 +19,10 @@ export async function copyPayLink(url: string): Promise<CopyPayLinkResult> {
     const res = await fetch(url, { credentials: 'include' })
     if (!res.ok) {
       const data = await res.json().catch(() => null)
-      let reason: 'vipps_unavailable' | 'vipps_over_limit' | 'failed' = 'failed'
+      let reason: PayLinkFailure = 'failed'
       if (res.status === 409 && data?.error === 'vipps_unavailable') reason = 'vipps_unavailable'
       else if (res.status === 409 && data?.error === 'vipps_over_limit') reason = 'vipps_over_limit'
+      else if (res.status === 409 && data?.code === 'imported_no_opening_balance') reason = 'imported_no_opening_balance'
       return { ok: false, reason }
     }
     const { pay_url } = (await res.json()) as { pay_url: string }
@@ -34,12 +35,14 @@ export async function copyPayLink(url: string): Promise<CopyPayLinkResult> {
 
 // Maps a failure reason to its i18n key so both copy-link callers show the same
 // localized message (admin.payLink.*).
-export function payLinkErrorKey(reason: 'vipps_unavailable' | 'vipps_over_limit' | 'failed'): string {
+export function payLinkErrorKey(reason: PayLinkFailure): string {
   switch (reason) {
     case 'vipps_unavailable':
       return 'admin.payLink.vippsUnavailable'
     case 'vipps_over_limit':
       return 'admin.payLink.overLimit'
+    case 'imported_no_opening_balance':
+      return 'admin.accounting.importedNoOpeningBalance'
     default:
       return 'admin.payLink.failed'
   }

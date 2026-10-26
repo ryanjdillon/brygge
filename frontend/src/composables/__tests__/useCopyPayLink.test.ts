@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { copyPayLink } from '@/composables/useCopyPayLink'
+import { copyPayLink, payLinkErrorKey } from '@/composables/useCopyPayLink'
 
 const writeText = vi.fn().mockResolvedValue(undefined)
 
@@ -32,6 +32,20 @@ describe('copyPayLink (BRY-274/275 shared)', () => {
     const r = await copyPayLink('/x')
     expect(r).toEqual({ ok: false, reason: 'vipps_unavailable' })
     expect(writeText).not.toHaveBeenCalled()
+  })
+
+  it('reports an imported faktura without an opening balance by its code (BRY-386)', async () => {
+    mockFetch(
+      () =>
+        ({
+          ok: false,
+          status: 409,
+          json: async () => ({ error: 'This faktura was imported…', code: 'imported_no_opening_balance' }),
+        }) as Response,
+    )
+    const r = await copyPayLink('/x')
+    expect(r).toEqual({ ok: false, reason: 'imported_no_opening_balance' })
+    expect(payLinkErrorKey('imported_no_opening_balance')).toBe('admin.accounting.importedNoOpeningBalance')
   })
 
   it('reports a generic failure for other non-OK responses', async () => {

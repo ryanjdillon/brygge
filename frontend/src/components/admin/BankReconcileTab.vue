@@ -21,6 +21,7 @@ import {
   fetchBankRowSuggestions,
   isHasPartnerError,
   isAliasConflictError,
+  isImportedNoOpeningBalanceError,
   payerAliasOffered,
   payerAliasFields,
   sharedPayerAlias,
@@ -51,6 +52,7 @@ import { useAccountsList } from '@/composables/useAccounting'
 import { filterAccounts } from '@/lib/accountSearch'
 import { priceCategoryKey } from '@/lib/priceCategories'
 import { useConfirm, useConfirmStore } from '@/stores/confirm'
+import { useToast } from '@/composables/useToast'
 
 const { t, locale } = useI18n()
 const askConfirm = useConfirm()
@@ -528,6 +530,20 @@ async function submitDismiss() {
   dismissOpen.value = false
 }
 
+// Runs an assign and tells the treasurer when the server refused it because
+// the faktura is imported and its receivable isn't in the opening balance yet
+// (BRY-386): nothing was booked and the row stays here. Resolves false then.
+const toast = useToast()
+async function refusedAsImported(book: () => Promise<boolean>): Promise<boolean> {
+  try {
+    return await book()
+  } catch (e) {
+    if (!isImportedNoOpeningBalanceError(e)) throw e
+    toast.error(t('admin.accounting.importedNoOpeningBalance'), 10000)
+    return false
+  }
+}
+
 // ── Multi-invoice modal ──────────────────────────────────────
 const multiInvoiceOpen = ref(false)
 const multiInvoiceQuery = ref('')
@@ -563,8 +579,8 @@ async function loadMultiInvoice() {
 async function doAssignMultiInvoice(inv: InvoiceSuggestion) {
   const rowIds = [...selectedIds.value]
   const alias = payerAliasFields(multiAlias.value, multiAliasOffered.value, multiRemember.value, inv)
-  const booked = await bookRemembering(alias, (a) =>
-    assignMultiInvoice.mutateAsync({ rowIds, invoiceId: inv.invoice_id, alias: a }),
+  const booked = await refusedAsImported(() =>
+    bookRemembering(alias, (a) => assignMultiInvoice.mutateAsync({ rowIds, invoiceId: inv.invoice_id, alias: a })),
   )
   if (!booked) return
   multiInvoiceOpen.value = false
@@ -578,13 +594,15 @@ async function doAssignInvoice(
   alias?: { state: PayerAliasState | undefined; offered: boolean },
 ) {
   const invoiceId = inv.invoice_id
-  if (activeSource.value === 'vipps') {
-    await vAssignInvoice.mutateAsync({ rowId, invoiceId })
-  } else {
+  const booked = await refusedAsImported(async () => {
+    if (activeSource.value === 'vipps') {
+      await vAssignInvoice.mutateAsync({ rowId, invoiceId })
+      return true
+    }
     const fields = payerAliasFields(alias?.state, !!alias?.offered, rememberFor(rowId, alias?.state), inv)
-    const booked = await bookRemembering(fields, (a) => assignInvoice.mutateAsync({ rowId, invoiceId, alias: a }))
-    if (!booked) return
-  }
+    return bookRemembering(fields, (a) => assignInvoice.mutateAsync({ rowId, invoiceId, alias: a }))
+  })
+  if (!booked) return
   potentialOpen.value = false
 }
 async function doAssignAccount(rowId: string, accountCode: string, k: 'expense' | 'revenue') {

@@ -979,7 +979,8 @@
         "tooltipCredit": "Amount to credit (increase revenue/liabilities)",
         "tooltipMva": "VAT portion of this expense (for momskompensasjon)",
         "tooltipLineDesc": "Optional note for this line"
-      }
+      },
+      "importedNoOpeningBalance": "Cette facture a été importée de l'ancien système et sa créance ne figure pas encore dans le bilan d'ouverture de Brygge. Comptabilisez le paiement une fois le bilan d'ouverture passé."
     },
     "groupEconomy": "Economy",
     "groupShop": "Shop",

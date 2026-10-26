@@ -114,7 +114,8 @@ var (
 // settled is errInvoiceSettled, and the caller leaves the row in Tildel and
 // counts it, unless the booking it waited for was this row's own
 // (errKIDRowTaken). A faktura voided or credited meanwhile is
-// errInvoiceNotOpen.
+// errInvoiceNotOpen; an imported one whose receivable isn't in the GL by
+// the row date is ErrImportedNoOpeningBalance (BRY-386).
 //
 // The row is linked before the entry is posted, so a posted entry never
 // exists without its row (a later sync would book the money again), and the
@@ -126,8 +127,9 @@ func (s *Service) bookKIDCascadeMatch(ctx context.Context, clubID string, m kidC
 		return fmt.Errorf("begin: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	_, lockErr := lockInvoiceForAssign(ctx, tx, clubID, m.invoiceID, invoiceLockOpts{mode: lockKIDCascade})
-	if lockErr != nil && !errors.Is(lockErr, errInvoiceSettled) && !errors.Is(lockErr, errInvoiceNotOpen) {
+	_, lockErr := lockInvoiceForAssign(ctx, tx, clubID, m.invoiceID, invoiceLockOpts{mode: lockKIDCascade, bookingDate: m.date})
+	if lockErr != nil && !errors.Is(lockErr, errInvoiceSettled) && !errors.Is(lockErr, errInvoiceNotOpen) &&
+		!errors.Is(lockErr, ErrImportedNoOpeningBalance) {
 		return lockErr
 	}
 	// The booking we waited for may have been this very row (a second sync,

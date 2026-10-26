@@ -1577,7 +1577,8 @@
         "tooltipCredit": "Beløp å kreditere (aukar inntekter/gjeld)",
         "tooltipMva": "MVA-andel av denne kostnaden (for momskompensasjon)",
         "tooltipLineDesc": "Valfri merknad for denne linja"
-      }
+      },
+      "importedNoOpeningBalance": "Denne fakturaen er importert frå det førre systemet, og kundefordringa er ikkje med i den inngåande balansen til Brygge enno. Bokfør betalinga når inngåande balanse er postert."
     },
     "groupEconomy": "Økonomi",
     "groupShop": "Butikk",

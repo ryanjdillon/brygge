@@ -141,7 +141,7 @@ func (s *Service) assignBankRowToInvoice(
 		return "", nil, errors.New("assign-invoice requires a positive (incoming) amount; use assign-account for outgoing rows")
 	}
 
-	lockOpts := invoiceLockOpts{mode: lockManual}
+	lockOpts := invoiceLockOpts{mode: lockManual, bookingDate: rowDate}
 	if opts.auto {
 		lockOpts = invoiceLockOpts{mode: lockAutoAssign, rowCents: toCents(rowAmount)}
 	}
@@ -221,8 +221,9 @@ type invoiceLockMode int
 
 const (
 	// lockManual is a treasurer's assign (and the Vipps charge assign): it
-	// refuses a voided or paid faktura, or one a booked row is recorded
-	// against.
+	// refuses a voided or paid faktura, one a booked row is recorded
+	// against, or an imported one whose receivable isn't in the GL by the
+	// booking date (ErrImportedNoOpeningBalance).
 	lockManual invoiceLockMode = iota
 	// lockAutoAssign adds the auto-assign rule's conditions: still owed,
 	// sent, not imported, nothing booked against it (incl. a KID-matched
@@ -232,7 +233,10 @@ const (
 	// bank import and sync: still owed and nothing booked against it. It
 	// has no amount, sent or import condition, because the cascade books
 	// any amount and imported fakturas too. A voided, credited or non-debt
-	// faktura is errInvoiceNotOpen; one paid or booked is errInvoiceSettled.
+	// faktura is errInvoiceNotOpen; one paid or booked is errInvoiceSettled;
+	// an imported one without its receivable in the GL is
+	// ErrImportedNoOpeningBalance. The cascade's SELECTs never offer an
+	// imported faktura today (empty KID), so that check is defence in depth.
 	lockKIDCascade
 )
 
@@ -242,7 +246,22 @@ type invoiceLockOpts struct {
 	// rowCents is the payment in øre; lockAutoAssign compares it to the
 	// faktura total.
 	rowCents int64
+	// bookingDate is the date the payment is booked on. lockManual and
+	// lockKIDCascade need it to decide whether an imported faktura's
+	// receivable is in the GL by then; a zero date is refused as a caller
+	// bug rather than silently treated as "no opening balance".
+	bookingDate time.Time
 }
+
+// ErrImportedNoOpeningBalance means the faktura was imported from the
+// previous system and its receivable isn't on 1500 in Brygge's GL by the
+// payment's booking date, so crediting 1500 would leave a credit nothing
+// offsets (BRY-386). Nothing is booked and the payment stays in Tildel until
+// the opening balance is posted. See finance.ImportedReceivableOpenSQL. The
+// text is shown to the treasurer as is (Tildel, import row errors), so it is
+// a full sentence.
+var ErrImportedNoOpeningBalance = errors.New( //nolint:staticcheck // ST1005: a user-facing sentence, see above
+	"This faktura was imported from the previous system and its receivable isn't in Brygge's opening balance yet. Book the payment after the opening balance is posted.")
 
 // errInvoiceSettled means the KID cascade found its faktura already settled
 // once it held the lock. The row is left in Tildel and counted, not failed:
@@ -271,6 +290,9 @@ var errInvoiceNotOpen = errors.New("faktura no longer open")
 // second statement: one that waited for the lock still reads the rows as
 // they were when it started, so it would miss the booking it waited for.
 func lockInvoiceForAssign(ctx context.Context, tx pgx.Tx, clubID, invoiceID string, opts invoiceLockOpts) (int64, error) {
+	if opts.mode != lockAutoAssign && opts.bookingDate.IsZero() {
+		return 0, errors.New("lock invoice: booking date is required")
+	}
 	if err := tx.QueryRow(ctx,
 		`SELECT id FROM invoices WHERE id = $1 AND club_id = $2 FOR NO KEY UPDATE`,
 		invoiceID, clubID,
@@ -289,6 +311,7 @@ func lockInvoiceForAssign(ctx context.Context, tx pgx.Tx, clubID, invoiceID stri
 		sentAndLive   bool
 		bookedByRow   bool
 		bookedAny     bool
+		receivableOK  bool
 	)
 	if err := tx.QueryRow(ctx,
 		`SELECT round(i.total_amount * 100)::bigint, i.payment_id IS NOT NULL, i.status,
@@ -298,11 +321,12 @@ func lockInvoiceForAssign(ctx context.Context, tx pgx.Tx, clubID, invoiceID stri
 		                 WHERE b.club_id = i.club_id AND b.invoice_id = i.id AND b.journal_entry_id IS NOT NULL)
 		        OR EXISTS (SELECT 1 FROM vipps_import_rows v
 		                 WHERE v.club_id = i.club_id AND v.invoice_id = i.id AND v.journal_entry_id IS NOT NULL),
-		        `+invoiceAlreadyBookedSQL("i")+`
+		        `+invoiceAlreadyBookedSQL("i")+`,
+		        `+finance.ImportedReceivableOpenSQL("i", "$3::date")+`
 		   FROM invoices i
 		  WHERE i.id = $1 AND i.club_id = $2`,
-		invoiceID, clubID,
-	).Scan(&invoiceCents, &paid, &invoiceStatus, &owed, &credited, &sentAndLive, &bookedByRow, &bookedAny); err != nil {
+		invoiceID, clubID, opts.bookingDate,
+	).Scan(&invoiceCents, &paid, &invoiceStatus, &owed, &credited, &sentAndLive, &bookedByRow, &bookedAny, &receivableOK); err != nil {
 		return 0, fmt.Errorf("load invoice: %w", err)
 	}
 	if opts.mode == lockKIDCascade {
@@ -311,6 +335,8 @@ func lockInvoiceForAssign(ctx context.Context, tx pgx.Tx, clubID, invoiceID stri
 			return 0, errInvoiceNotOpen
 		case !owed || bookedAny:
 			return 0, errInvoiceSettled
+		case !receivableOK:
+			return 0, ErrImportedNoOpeningBalance
 		}
 		return invoiceCents, nil
 	}
@@ -323,6 +349,8 @@ func lockInvoiceForAssign(ctx context.Context, tx pgx.Tx, clubID, invoiceID stri
 		return 0, errInvoiceHasBookedRow
 	case opts.mode == lockAutoAssign && (!owed || !sentAndLive || bookedAny || invoiceCents != opts.rowCents):
 		return 0, errInvoiceNoLongerOpen
+	case opts.mode == lockManual && !receivableOK:
+		return 0, ErrImportedNoOpeningBalance
 	}
 	return invoiceCents, nil
 }
@@ -830,9 +858,18 @@ func (s *Service) AssignMultipleBankRowsToInvoiceRemembering(
 		return nil, nil, err
 	}
 
+	// Each row's entry is booked on its own date, so the imported-faktura
+	// receivable check takes the earliest: every row must find the
+	// receivable already in the GL.
+	var earliestDate time.Time
+	for _, rd := range loaded {
+		if earliestDate.IsZero() || rd.date.Before(earliestDate) {
+			earliestDate = rd.date
+		}
+	}
 	// Held until the rows are linked and their entries posted (the commit
 	// below), like the single-row path.
-	invCents, err := lockInvoiceForAssign(ctx, tx, clubID, invoiceID, invoiceLockOpts{mode: lockManual})
+	invCents, err := lockInvoiceForAssign(ctx, tx, clubID, invoiceID, invoiceLockOpts{mode: lockManual, bookingDate: earliestDate})
 	if err != nil {
 		return nil, nil, err
 	}

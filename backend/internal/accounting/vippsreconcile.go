@@ -2,6 +2,7 @@ package accounting
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -110,7 +111,8 @@ func (s *Service) ReconcileVippsPreview(ctx context.Context, clubID, bankRowID s
 		   WHERE club_id = $1 AND msn = $3 AND row_type = 'payout' AND settlement_number = $2
 		   LIMIT 1
 		 )
-		 SELECT vir.id, vir.row_type, vir.amount, vir.fee, vir.net_amount, vir.customer_name, vir.message
+		 SELECT vir.id, vir.row_type, vir.amount, vir.fee, vir.net_amount, vir.customer_name, vir.message,
+		        COALESCE(vir.booking_date, vir.tx_at::date)
 		 FROM vipps_import_rows vir, payout p
 		 WHERE vir.club_id = $1 AND vir.msn = $3
 		   AND (
@@ -131,14 +133,15 @@ func (s *Service) ReconcileVippsPreview(ctx context.Context, clubID, bankRowID s
 	defer rows.Close()
 
 	type vrow struct {
-		ID                                 string
-		RowType, CustomerName, Message     string
-		Amount, Fee, NetAmount             float64
+		ID                             string
+		RowType, CustomerName, Message string
+		Amount, Fee, NetAmount         float64
+		Date                           *time.Time
 	}
 	var detail []vrow
 	for rows.Next() {
 		var v vrow
-		if err := rows.Scan(&v.ID, &v.RowType, &v.Amount, &v.Fee, &v.NetAmount, &v.CustomerName, &v.Message); err != nil {
+		if err := rows.Scan(&v.ID, &v.RowType, &v.Amount, &v.Fee, &v.NetAmount, &v.CustomerName, &v.Message, &v.Date); err != nil {
 			return nil, fmt.Errorf("scanning row: %w", err)
 		}
 		detail = append(detail, v)
@@ -223,7 +226,11 @@ func (s *Service) ReconcileVippsPreview(ctx context.Context, clubID, bankRowID s
 			memberID, _ := s.resolveCustomerToMember(ctx, clubID, v.CustomerName, v.Message)
 			var invoiceID string
 			if memberID != "" {
-				invoiceID = s.findOpenInvoiceForMember(ctx, clubID, memberID, v.Amount)
+				chargeDate := bankDate
+				if v.Date != nil {
+					chargeDate = *v.Date
+				}
+				invoiceID = s.findOpenInvoiceForMember(ctx, clubID, memberID, v.Amount, chargeDate)
 			}
 			switch {
 			case invoiceID != "":
@@ -353,6 +360,31 @@ func (s *Service) reconcileVippsConfirm(ctx context.Context, clubID, bankRowID, 
 	}
 	if !floatNear(dr, cr, 0.005) {
 		return "", fmt.Errorf("lines do not balance: debit %.2f != credit %.2f", dr, cr)
+	}
+	// The lines may be an edited or stale preview, so each faktura it
+	// settles is re-checked rather than trusted: an imported one needs its
+	// receivable in the GL by the charge date (BRY-386).
+	for _, l := range lines {
+		if l.LinkedInvoiceID == "" {
+			continue
+		}
+		var ok bool
+		if err := s.db.QueryRow(ctx,
+			`SELECT `+finance.ImportedReceivableOpenSQL("i",
+				`COALESCE((SELECT COALESCE(v.booking_date, v.tx_at::date) FROM vipps_import_rows v
+				            WHERE v.id::text = $4 AND v.club_id = $2), $3::date)`)+`
+			   FROM invoices i
+			  WHERE i.id::text = $1 AND i.club_id = $2`,
+			l.LinkedInvoiceID, clubID, bankDate, l.VippsRowID,
+		).Scan(&ok); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return "", fmt.Errorf("linked invoice %s not found", l.LinkedInvoiceID)
+			}
+			return "", fmt.Errorf("checking linked invoice: %w", err)
+		}
+		if !ok {
+			return "", ErrImportedNoOpeningBalance
+		}
 	}
 
 	sourceID := bankRowID
@@ -659,18 +691,20 @@ func normalizeName(s string) string {
 // supplied member whose total matches the Vipps payment amount within
 // ±1.00 NOK and was issued in the last 90 days. Returns "" when zero
 // or multiple matches — ambiguity is left for the next pass in the
-// cascade or the review queue.
-func (s *Service) findOpenInvoiceForMember(ctx context.Context, clubID, memberID string, amount float64) string {
+// cascade or the review queue. An imported faktura whose receivable isn't
+// in the GL by chargeDate is never offered (BRY-386).
+func (s *Service) findOpenInvoiceForMember(ctx context.Context, clubID, memberID string, amount float64, chargeDate time.Time) string {
 	rows, err := s.db.Query(ctx,
 		`SELECT id FROM invoices
 		  WHERE club_id = $1
 		    AND user_id = $2
 		    AND `+finance.OwedByMemberSQL("")+`
+		    AND `+finance.ImportedReceivableOpenSQL("", "$4::date")+`
 		    AND ABS(total_amount - $3) < 1.00
 		    AND issue_date > CURRENT_DATE - INTERVAL '90 days'
 		  ORDER BY issue_date DESC
 		  LIMIT 2`,
-		clubID, memberID, amount,
+		clubID, memberID, amount, chargeDate,
 	)
 	if err != nil {
 		return ""

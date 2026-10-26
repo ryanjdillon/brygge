@@ -317,23 +317,18 @@ func (h *InvoiceHandler) HandleLinkCreditNote(w http.ResponseWriter, r *http.Req
 	// when that faktura's receivable exists in Brygge's GL, i.e. an opening
 	// balance carried over at the cutover put it on 1500. Otherwise the
 	// credit note's CR 1500 would reduce a receivable that was never there.
-	// The opening balance must be dated on or after the faktura's issue date
-	// (it can only contain receivables that existed by then) and on or
-	// before the credit note's. Nothing writes source 'opening_balance' yet;
-	// until the cutover import does (BRY-365) this exception never applies.
+	// The rule is the one payments obey (finance.ImportedReceivableOpenSQL),
+	// with the credit note's issue date as the booking date. Nothing writes
+	// source 'opening_balance' yet; until the cutover import does (BRY-365)
+	// this exception never applies.
 	importedException := cn.booked && !target.booked && target.imported
 	openingReceivable := false
 	if importedException {
 		if err := tx.QueryRow(ctx,
-			`SELECT EXISTS (
-			     SELECT 1 FROM journal_entries je
-			       JOIN journal_lines jl ON jl.journal_entry_id = je.id
-			       JOIN accounts a ON a.id = jl.account_id
-			      WHERE je.club_id = $1 AND je.source = 'opening_balance' AND je.status = 'posted'
-			        AND a.code = '1500' AND jl.debit > 0
-			        AND je.entry_date <= (SELECT issue_date FROM invoices WHERE id = $2)
-			        AND je.entry_date >= (SELECT issue_date FROM invoices WHERE id = $3))`,
-			claims.ClubID, cn.id, target.id,
+			`SELECT `+finance.ImportedReceivableOpenSQL("t", "SELECT issue_date FROM invoices WHERE id = $2")+`
+			   FROM invoices t
+			  WHERE t.id = $1 AND t.club_id = $3`,
+			target.id, cn.id, claims.ClubID,
 		).Scan(&openingReceivable); err != nil {
 			h.log.Error().Err(err).Msg("link credit: opening balance check")
 			Error(w, http.StatusInternalServerError, "internal error")

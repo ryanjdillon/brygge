@@ -285,6 +285,18 @@ Single fakturas go through the same draft → send → paid flow.
 
 When you upload a bank statement (`Admin → Accounting → Bank & Vipps`), the KID auto-matcher links each incoming row to the corresponding invoice and back-links `invoices.payment_id` so the faktura-status widgets update. After deploying improvements to the matcher, click **Synk Vipps** (Vipps drafts) or **Synk bank** (KID matches) to retroactively re-run the cascade over already-imported rows.
 
+### Payments for fakturas from the previous system
+
+A faktura imported from the previous system (the **Importert** tab) was never booked in Brygge. When a member pays it, booking the payment would reduce the amount owed to the club (1500 Kundefordringer) by money Brygge never recorded as owed, so the accounts would show a debt the club doesn't have. Brygge therefore books such a payment only once that faktura's amount owed is in Brygge's accounts, which happens when the **opening balance** (inngående balanse) from the previous system is posted. The opening balance must be dated on or after the faktura and on or before the payment.
+
+Until then:
+
+- In **Tildel**, assigning the payment to the imported faktura (bank or Vipps, one row or several) is refused with a message saying the opening balance is missing. Nothing is booked, and the payment stays in Tildel. Assign it again once the opening balance is posted.
+- The KID and name matching never books it either; it stays in Tildel.
+- The member still sees the faktura on their payables page, but without a Vipps button; they can pay by bank transfer. **Copy pay link** on such a faktura says the same as Tildel.
+
+Payments dated before the opening balance (for example in the previous year) stay refused even after it is posted, because the opening balance didn't exist yet when they were paid.
+
 ### Automatic booking of bank payments without a KID
 
 Some members pay by plain transfer, without the KID. Turn on **Bokfør entydige bankinnbetalinger uten KID automatisk** under **Admin → Økonomiinnstillinger → Bankinnbetalinger uten KID** to have Brygge book such a payment by itself after each bank upload and **Synk bank**, but only when the match is clear:

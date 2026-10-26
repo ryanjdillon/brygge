@@ -1685,7 +1685,8 @@
         "receiptUploading": "Laster opp kvittering…",
         "receiptUploadFailed": "Opplasting av kvittering feilet — bilaget er lagret, prøv opplastingen på nytt",
         "receiptUnknownVendor": "Ukjent leverandør"
-      }
+      },
+      "importedNoOpeningBalance": "Denne fakturaen er importert fra det forrige systemet, og kundefordringen er ikke med i Brygges inngående balanse ennå. Bokfør betalingen når inngående balanse er postert."
     },
     "groupEconomy": "Økonomi",
     "groupShop": "Butikk",

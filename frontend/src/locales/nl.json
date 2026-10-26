@@ -980,7 +980,8 @@
         "tooltipCredit": "Amount to credit (increase revenue/liabilities)",
         "tooltipMva": "VAT portion of this expense (for momskompensasjon)",
         "tooltipLineDesc": "Optional note for this line"
-      }
+      },
+      "importedNoOpeningBalance": "Deze factuur is geïmporteerd uit het vorige systeem en de vordering staat nog niet in de openingsbalans van Brygge. Boek de betaling zodra de openingsbalans is geboekt."
     },
     "groupEconomy": "Economy",
     "groupShop": "Shop",

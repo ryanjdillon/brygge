@@ -160,6 +160,20 @@ type assignInvoiceReq struct {
 	ConfirmAliasOverride bool `json:"confirm_alias_override"`
 }
 
+// importedNoOpeningBalanceCode is the 409 code for a payment refused because
+// its faktura was imported and its receivable isn't in the GL yet (BRY-386).
+const importedNoOpeningBalanceCode = "imported_no_opening_balance"
+
+// importedNoOpeningBalanceConflict answers 409 for
+// accounting.ErrImportedNoOpeningBalance. The message is club-agnostic and
+// shown as is; the code lets the SPA word it in the treasurer's locale.
+func importedNoOpeningBalanceConflict(w http.ResponseWriter) {
+	JSON(w, http.StatusConflict, map[string]string{
+		"error": accounting.ErrImportedNoOpeningBalance.Error(),
+		"code":  importedNoOpeningBalanceCode,
+	})
+}
+
 func (r assignInvoiceReq) alias() accounting.PayerAliasRequest {
 	return accounting.PayerAliasRequest{Remember: r.RememberPayer, ConfirmOverride: r.ConfirmAliasOverride}
 }
@@ -195,6 +209,10 @@ func (h *BankRowsHandler) HandleAssignInvoice(w http.ResponseWriter, r *http.Req
 	if errors.Is(err, accounting.ErrAliasConflict) {
 		// The code alone: the SPA words it, and names no member.
 		Error(w, http.StatusConflict, accounting.ErrAliasConflict.Error())
+		return
+	}
+	if errors.Is(err, accounting.ErrImportedNoOpeningBalance) {
+		importedNoOpeningBalanceConflict(w)
 		return
 	}
 	if err != nil {
@@ -239,6 +257,10 @@ func (h *BankRowsHandler) HandleAssignInvoiceMulti(w http.ResponseWriter, r *htt
 	if errors.Is(err, accounting.ErrAliasConflict) {
 		// The code alone: the SPA words it, and names no member.
 		Error(w, http.StatusConflict, accounting.ErrAliasConflict.Error())
+		return
+	}
+	if errors.Is(err, accounting.ErrImportedNoOpeningBalance) {
+		importedNoOpeningBalanceConflict(w)
 		return
 	}
 	if err != nil {

@@ -34,7 +34,8 @@ var errVippsBlocked = errors.New("order has a source not payable via Vipps")
 // order_sources link to the invoice) is created lazily the first time a faktura
 // should carry a Vipps link (create=true) and reused forever after, so resends
 // keep the same link. Returns "" when Vipps is unconfigured, the invoice is over
-// the club's Vipps amount cap (BRY-283), or nothing should be offered.
+// the club's Vipps amount cap (BRY-283), it is an imported faktura whose
+// receivable isn't in the GL yet (BRY-386), or nothing should be offered.
 //
 // The ePayment itself is NOT minted here: its redirectUrl is only valid ~10
 // minutes, so it is useless in a pay-later email. It is minted on click by
@@ -48,6 +49,12 @@ func (h *InvoiceHandler) ensureFakturaOrderToken(ctx context.Context, clubID, in
 	// Checked before the reuse SELECT below so an invoice that already has a
 	// durable order stops offering Vipps once the club sets a cap under it.
 	if !h.invoiceVippsAllowed(ctx, clubID, invoiceID) {
+		return ""
+	}
+	// Likewise before the reuse: the Vipps charge would credit 1500 for a
+	// receivable Brygge never booked. The member still owes it and pays by
+	// bank transfer, which waits in Tildel until the opening balance exists.
+	if !h.invoiceReceivableInGL(ctx, clubID, invoiceID) {
 		return ""
 	}
 
@@ -151,8 +158,49 @@ func (h *InvoiceHandler) invoiceVippsAllowed(ctx context.Context, clubID, invoic
 	return allowed
 }
 
+// invoiceReceivableInGL reports whether a payment today may credit 1500 for
+// the invoice (finance.ImportedReceivableOpenSQL): false for an imported
+// faktura with no opening balance or invoice sync carrying its receivable
+// (BRY-386). Errors fail open for a Brygge faktura and closed for an
+// imported one.
+func (h *InvoiceHandler) invoiceReceivableInGL(ctx context.Context, clubID, invoiceID string) bool {
+	// Only an imported faktura can lack its receivable, so a Brygge faktura
+	// never pays for a failed check: a transient error must not drop the
+	// Vipps link from an email that can't be sent again.
+	var imported bool
+	err := h.db.QueryRow(ctx,
+		`SELECT import_source IS NOT NULL FROM invoices WHERE id = $1 AND club_id = $2`,
+		invoiceID, clubID,
+	).Scan(&imported)
+	if errors.Is(err, pgx.ErrNoRows) {
+		// Unknown invoice: the create path refuses it.
+		return true
+	}
+	if err != nil {
+		h.log.Error().Err(err).Str("invoice_id", invoiceID).Msg("imported receivable check: load invoice failed")
+		return true
+	}
+	if !imported {
+		return true
+	}
+	// For an imported faktura a failed check blocks: a missing Vipps link
+	// still leaves bank transfer, a wrong one books a receivable never there.
+	var ok bool
+	if err := h.db.QueryRow(ctx,
+		`SELECT `+finance.ImportedReceivableOpenSQL("i", "CURRENT_DATE")+`
+		   FROM invoices i
+		  WHERE i.id = $1 AND i.club_id = $2`,
+		invoiceID, clubID,
+	).Scan(&ok); err != nil {
+		h.log.Error().Err(err).Str("invoice_id", invoiceID).Msg("imported receivable check failed")
+		return false
+	}
+	return ok
+}
+
 // orderHasVippsBlockedSource reports whether any still-unpaid invoice source of
-// the order is not allowed to be paid via Vipps (BRY-283). Used at mint time to
+// the order is not allowed to be paid via Vipps (BRY-283), or is an imported
+// faktura whose receivable isn't in the GL yet (BRY-386). Used at mint time to
 // refuse charging a link that was issued before the cap/override was set (or is
 // already sitting in a member's inbox).
 func (h *InvoiceHandler) orderHasVippsBlockedSource(ctx context.Context, orderID string) (bool, error) {
@@ -166,7 +214,8 @@ func (h *InvoiceHandler) orderHasVippsBlockedSource(ctx context.Context, orderID
 		     JOIN clubs c    ON c.id = o.club_id
 		    WHERE os.order_id = $1
 		      AND `+finance.OwedByMemberSQL("i")+`
-		      AND NOT (`+vippsAllowedExpr+`)
+		      AND (NOT (`+vippsAllowedExpr+`)
+		           OR NOT `+finance.ImportedReceivableOpenSQL("i", "CURRENT_DATE")+`)
 		 )`,
 		orderID,
 	).Scan(&blocked)
@@ -202,7 +251,9 @@ type invoicePayLinkResponse struct {
 // staff can hand it to a member directly (SMS, chat, read it out) rather than
 // only via the emailed faktura. It ensures the checkout order exists (reusing it
 // on later calls), refuses voided invoices, and returns 409 "vipps_unavailable"
-// when Vipps isn't configured so the UI can hide the affordance gracefully.
+// when Vipps isn't configured so the UI can hide the affordance gracefully. An
+// imported faktura without its receivable in the GL is 409 with code
+// imported_no_opening_balance (BRY-386).
 func (h *InvoiceHandler) HandleGetInvoicePayLink(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
@@ -238,6 +289,10 @@ func (h *InvoiceHandler) HandleGetInvoicePayLink(w http.ResponseWriter, r *http.
 	}
 	if status == "voided" {
 		Error(w, http.StatusConflict, "invoice is voided")
+		return
+	}
+	if !h.invoiceReceivableInGL(ctx, claims.ClubID, invoiceID) {
+		importedNoOpeningBalanceConflict(w)
 		return
 	}
 
