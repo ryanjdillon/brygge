@@ -15,11 +15,11 @@ import (
 )
 
 const (
-	anthropicAPIURL     = "https://api.anthropic.com/v1/messages"
-	anthropicVersion    = "2023-06-01"
-	anthropicModel      = "claude-sonnet-4-20250514"
-	defaultMaxTokens    = 2000
-	defaultHTTPTimeout  = 60 * time.Second
+	anthropicAPIURL    = "https://api.anthropic.com/v1/messages"
+	anthropicVersion   = "2023-06-01"
+	anthropicModel     = "claude-sonnet-4-20250514"
+	defaultMaxTokens   = 2000
+	defaultHTTPTimeout = 60 * time.Second
 )
 
 type Comment struct {
@@ -37,7 +37,7 @@ type Summary struct {
 
 type Agenda struct {
 	Items   []AgendaItem `json:"items"`
-	RawText string         `json:"raw_text"`
+	RawText string       `json:"raw_text"`
 }
 
 type AgendaItem struct {
@@ -97,9 +97,9 @@ type imageMessageContent struct {
 }
 
 type contentBlock struct {
-	Type   string         `json:"type"`
-	Text   string         `json:"text,omitempty"`
-	Source *imageSource   `json:"source,omitempty"`
+	Type   string       `json:"type"`
+	Text   string       `json:"text,omitempty"`
+	Source *imageSource `json:"source,omitempty"`
 }
 
 type imageSource struct {
@@ -109,11 +109,8 @@ type imageSource struct {
 }
 
 type messagesResponse struct {
-	Content []struct {
-		Type string `json:"type"`
-		Text string `json:"text"`
-	} `json:"content"`
-	Error *apiErrorBody `json:"error,omitempty"`
+	Content []contentBlock `json:"content"`
+	Error   *apiErrorBody  `json:"error,omitempty"`
 }
 
 type apiErrorBody struct {
