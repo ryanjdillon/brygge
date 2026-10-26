@@ -5,21 +5,27 @@ import HarborView from '@/views/HarborView.vue'
 
 vi.mock('maplibre-gl', () => ({
   default: {
-    Map: vi.fn().mockImplementation(() => ({
-      addControl: vi.fn(),
-      on: vi.fn(),
-      remove: vi.fn(),
-    })),
+    Map: vi.fn().mockImplementation(function () {
+      return {
+        addControl: vi.fn(),
+        on: vi.fn(),
+        remove: vi.fn(),
+      }
+    }),
     NavigationControl: vi.fn(),
     FullscreenControl: vi.fn(),
-    Marker: vi.fn().mockImplementation(() => ({
-      setLngLat: vi.fn().mockReturnThis(),
-      setPopup: vi.fn().mockReturnThis(),
-      addTo: vi.fn().mockReturnThis(),
-    })),
-    Popup: vi.fn().mockImplementation(() => ({
-      setHTML: vi.fn().mockReturnThis(),
-    })),
+    Marker: vi.fn().mockImplementation(function () {
+      return {
+        setLngLat: vi.fn().mockReturnThis(),
+        setPopup: vi.fn().mockReturnThis(),
+        addTo: vi.fn().mockReturnThis(),
+      }
+    }),
+    Popup: vi.fn().mockImplementation(function () {
+      return {
+        setHTML: vi.fn().mockReturnThis(),
+      }
+    }),
   },
 }))
 
