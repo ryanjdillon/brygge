@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch } from 'vue'
-import maplibregl from 'maplibre-gl'
+import { maplibregl } from '@/lib/maplibre'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import type { MapMarker } from '@/composables/useMap'
 

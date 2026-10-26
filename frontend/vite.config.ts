@@ -13,6 +13,11 @@ export default defineConfig({
   optimizeDeps: {
     include: ['maplibre-gl'],
   },
+  // maplibre-gl starts its worker with {type: 'module'}, so the bundled
+  // worker (src/lib/maplibre.ts) must be an ES module too.
+  worker: {
+    format: 'es',
+  },
   server: {
     proxy: {
       '/api': {

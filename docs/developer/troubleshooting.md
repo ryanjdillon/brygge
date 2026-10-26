@@ -26,6 +26,14 @@ Common issues and solutions for Brygge development and deployment.
 
 **Fix**: Run `just api-types` to regenerate `frontend/src/types/api.d.ts` from the OpenAPI spec. If you added new endpoints, register them in `backend/internal/openapi/register.go` first.
 
+### Map shows tiles but no slips or piers: "Worker failed to load"
+
+**Symptom**: the base map renders, but GeoJSON layers (piers, fingers, slips) are missing, and the console says `Worker failed to load. Check that the worker URL is correct.`
+
+**Cause**: maplibre-gl 6 starts its worker from a file next to its own module. Vite moves the module (pre-bundling in dev, hashed chunks in a build) without that file.
+
+**Fix**: import maplibre with `import { maplibregl } from '@/lib/maplibre'`, never straight from `maplibre-gl`. That module sets a worker URL that Vite bundles itself (`?worker&url`, with `worker.format: 'es'` in `vite.config.ts`). A test that mocks `maplibre-gl` must also provide `setWorkerUrl`.
+
 ### Vue i18n missing keys
 
 **Symptom**: `[intlify] Not found key` warnings in the browser console.

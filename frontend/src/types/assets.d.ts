@@ -17,3 +17,9 @@ declare module '*.jpg' {
   const src: string
   export default src
 }
+
+// A worker bundled by Vite, imported as its URL (src/lib/maplibre.ts).
+declare module '*?worker&url' {
+  const src: string
+  export default src
+}

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import maplibregl from 'maplibre-gl'
+import { maplibregl } from '@/lib/maplibre'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { ExternalLink } from 'lucide-vue-next'
 

@@ -1,20 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, shallowRef } from 'vue'
-import maplibregl from 'maplibre-gl'
+import { maplibregl } from '@/lib/maplibre'
 import 'maplibre-gl/dist/maplibre-gl.css'
-
-// Inject __publicField helper into maplibre's GeoJSON workers (vite dev
-// bundles the worker separately and esbuild's helper is missing there).
-{
-  const helperBlob = new Blob(
-    [
-      'self.__publicField = (obj, key, value) => { Object.defineProperty(obj, key, { enumerable: true, configurable: true, writable: true, value }); return value; };',
-    ],
-    { type: 'application/javascript' },
-  )
-  const helperUrl = URL.createObjectURL(helperBlob)
-  void maplibregl.importScriptInWorkers(helperUrl)
-}
 import {
   isFinger,
   isSlip,
