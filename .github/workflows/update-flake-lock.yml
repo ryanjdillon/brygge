@@ -9,25 +9,32 @@ on:
   schedule:
     - cron: "0 5 * * 1" # Mondays 05:00 UTC
 
+# The PR is opened with a GitHub App token, not GITHUB_TOKEN, so the job's own
+# token only needs to read the repo.
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   lockfile:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: DeterminateSystems/nix-installer-action@main
-      - uses: DeterminateSystems/update-flake-lock@main
+      # A PR opened with GITHUB_TOKEN doesn't trigger other workflows, so ci.yml's
+      # nix-build would never validate the bump. An App token does, and unlike a
+      # PAT it doesn't expire. Setup: docs/developer/deploy.md#automated-flakelock-updates.
+      - uses: actions/create-github-app-token@v3
+        id: app-token
         with:
-          # The built-in GITHUB_TOKEN deliberately does NOT trigger other
-          # workflows on the PR it opens — so the nix-build check in ci.yml
-          # would NOT run on the bot PR, defeating the point. Add a
-          # fine-grained PAT (contents+PRs write) as the FLAKE_UPDATE_TOKEN
-          # secret so the update PR gets validated by CI. Without it, the PR is
-          # still created; you'd just re-run CI manually before merging.
-          token: ${{ secrets.FLAKE_UPDATE_TOKEN || github.token }}
+          app-id: ${{ secrets.FLAKE_BOT_APP_ID }}
+          private-key: ${{ secrets.FLAKE_BOT_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+      - uses: DeterminateSystems/nix-installer-action@v23
+      - uses: DeterminateSystems/update-flake-lock@v29
+        with:
+          token: ${{ steps.app-token.outputs.token }}
           pr-title: "flake.lock: automated weekly update"
           commit-msg: "chore(flake): automated flake.lock update"
           pr-labels: |
