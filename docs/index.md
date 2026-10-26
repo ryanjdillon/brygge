@@ -106,7 +106,7 @@ Brygge is a **monorepo** with a Go API backend and a Vue 3 SPA frontend. In prod
 - **Dendrite** (Matrix homeserver) and **Element Web** for integrated forum
 - **Uptime Kuma** for status monitoring
 - Multi-stage Dockerfile producing a distroless container image
-- GitHub Actions CI: lint, test, security scan, build, deploy
+- GitHub Actions CI: lint, test, security scan, build
 
 ### Data Flow
 
