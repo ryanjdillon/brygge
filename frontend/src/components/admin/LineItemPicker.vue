@@ -66,7 +66,7 @@ function visible(i: PriceItem): boolean {
 // Treat any category with at least one tiered item as a tier-category
 // in its entirety — keeps a half-configured tiered item from leaking
 // into the flat pane.
-const tierCategories = computed(() => {
+const tieredCategorySet = computed(() => {
   const set = new Set<string>()
   for (const i of items.value) {
     if (visible(i) && i.pricing_kind === 'tiered') set.add(i.category)
@@ -76,7 +76,7 @@ const tierCategories = computed(() => {
 
 const flatOptions = computed(() =>
   items.value
-    .filter((i) => visible(i) && !tierCategories.value.has(i.category))
+    .filter((i) => visible(i) && !tieredCategorySet.value.has(i.category))
     .map((i) => ({
       value: i.id,
       label: i.name,

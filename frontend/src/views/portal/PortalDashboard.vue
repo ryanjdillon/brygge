@@ -472,7 +472,7 @@ watch(docSearch, () => nextTick(() => applyHighlights()))
             type="search"
             :placeholder="t('portal.documents.searchPlaceholder')"
             class="min-w-0 flex-1 bg-transparent text-sm focus:outline-none"
-            @keydown.enter.prevent="nextMatch"
+            @keydown.enter.exact.prevent="nextMatch"
             @keydown.shift.enter.prevent="prevMatch"
           />
           <span v-if="docSearch && matchCount > 0" class="shrink-0 text-xs text-gray-500">
