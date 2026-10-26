@@ -288,8 +288,8 @@ Or directly on the server: `nixos-rebuild switch --rollback`.
 2. Install the App on this repository only.
 3. Generate a private key for the App.
 4. In the repo, add two Actions secrets:
-   * `FLAKE_BOT_APP_ID`: the App ID;
-   * `FLAKE_BOT_PRIVATE_KEY`: the whole `.pem` contents.
+   * `CI_BOT_APP_ID`: the App ID;
+   * `CI_BOT_PRIVATE_KEY`: the whole `.pem` contents.
 5. Run the workflow once with `gh workflow run update-flake-lock`. It should open a PR labelled `dependencies` and `automated`, and CI should start on it.
 
 Review a bump before merging: check the closure diff for major version changes in Postgres, Stalwart, Caddy and Dendrite. Deploy it like any other change.
