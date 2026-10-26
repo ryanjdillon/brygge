@@ -1,3 +1,3 @@
 module github.com/brygge-klubb/brygge/dev/vipps-mock
 
-go 1.25
+go 1.26.10
