@@ -56,7 +56,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
-      DATABASE_URL: postgres://brygge:brygge@localhost:5432/brygge_test?sslmode=disable
+      DATABASE_URL: postgres://brygge:brygge@localhost:5432/brygge_test?sslmode=disable&pool_max_conns=4
       REDIS_URL: redis://localhost:6379
     steps:
       - uses: actions/checkout@v6
