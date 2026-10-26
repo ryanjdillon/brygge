@@ -19,6 +19,7 @@ Audience: site admins (in-app club setup, config, data correction), board member
 | Document | Description |
 |----------|-------------|
 | [user/faktura.md](user/faktura.md) | Treasurer's guide to the invoicing module (price catalogue, send, reconcile) |
+| [user/migrating-from-previous-system.md](user/migrating-from-previous-system.md) | Moving from a previous accounting system: exports, faktura import, open items, opening balance, the reference year |
 | [user/harbor-qr.md](user/harbor-qr.md) | Harbor master's guide to QR payment targets: full-page posters and 2/4/6-up card sheets |
 | [user/setting-up-email.md](user/setting-up-email.md) | Member + board guide to reading and sending club mail in Apple Mail, Outlook, Gmail, Thunderbird, etc. |
 
@@ -123,11 +124,11 @@ Key variable groups:
 
 - **Domain & club** — `DOMAIN`, `CLUB_SLUG`, `CLUB_NAME`
 - **Database** — `DATABASE_URL`, `POSTGRES_*`
-- **Auth** — `JWT_SECRET`, `VIPPS_*`
-- **Storage** — `S3_*` (documents, charts)
+- **Auth** — `TOTP_ENCRYPTION_KEY`, `AUTH_FRESH_TOTP_WINDOW`, `VIPPS_*`
+- **Storage** — `S3_*` (`S3_BUCKET_DOCS` for documents and charts, `S3_BUCKET_LEGAL` for faktura PDFs)
 - **Email** — `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `EMAIL_FROM` (self-hosted Stalwart; see [developer/mail/setup.md](developer/mail/setup.md))
 - **Inbox / shared mailboxes** — `STALWART_ADMIN_*`, `BRYGGE_MAILBOXES_PATH`, `STALWART_MAILBOX_PASSWORDS_PATH` (see [developer/mail/inbox.md](developer/mail/inbox.md))
-- **Features** — `FEATURE_BOOKINGS`, `FEATURE_PROJECTS`, `FEATURE_CALENDAR`, `FEATURE_COMMERCE`, `FEATURE_COMMUNICATIONS`
+- **Features** — `FEATURE_BOOKINGS`, `FEATURE_PROJECTS`, `FEATURE_CALENDAR`, `FEATURE_COMMERCE`, `FEATURE_ACCOUNTING`, `FEATURE_DEMO_AUTH` (see [developer/configuration.md](developer/configuration.md#feature-flags))
 
 ## Common Tasks
 

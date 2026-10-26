@@ -130,7 +130,7 @@ Switching the faktura default takes effect on the next faktura issuance. **Alrea
 
 ## Reviewing and sending — Admin → Faktura
 
-Open `Admin → Faktura`. Four tabs: **New**, **Drafts**, **Sent**, **Voided**.
+Open `Admin → Faktura`. Tabs: **Create**, **Drafts**, **Voided**, **Sent**, **Archive** (the [PDF archive](#pdf-archive)), and **Imported** (only when the club has fakturas imported from a previous system; see [Imported](#imported)).
 
 ### Drafts
 
@@ -181,7 +181,19 @@ Bulk actions on the selection:
 
 Read-only history of voided fakturas. Cannot be un-voided; create a new one if you need a corrected version. Voiding a sent faktura reverses its booking in the same step, so it nets to zero in the accounts. A faktura booked in a closed accounting year can't be voided; issue a credit note instead.
 
-**Avstem periode** in Bilag is a repair step, not part of the normal flow: it books any sent faktura that is still missing from the accounts and reverses voided ones that are still booked.
+**Avstem periode** in Bilag is a repair step, not part of the normal flow: it books any sent faktura that is still missing from the accounts and reverses voided ones that are still booked. There is no separate "sync fakturas" step: a faktura is booked when you send it and reversed when you void it.
+
+### Imported
+
+Fakturas imported from the club's previous system, kept for reference and payment status. They are the previous system's record, so Brygge doesn't change them: they can't be edited, sent, voided or deleted (the server refuses, and the list says why), and regenerate PDF and reissue KID skip them. They have no KID and were never booked in Brygge's accounts.
+
+What you can do with them:
+
+- see who paid and who still owes, and filter credit notes with the **Kreditnotaer** chip;
+- link a credit note to the faktura it cancels ([Credit notes](#credit-notes-kreditnotaer));
+- assign a payment to one in **Tildel**, once the opening balance is posted ([Payments for fakturas from the previous system](#payments-for-fakturas-from-the-previous-system)).
+
+Which of them were still unpaid when the club switched to Brygge comes from the previous system's open-items list, not from bank matching. How a club gets there is in [Moving from a previous system](migrating-from-previous-system.md).
 
 ### Credit notes (kreditnotaer)
 
@@ -204,14 +216,14 @@ Some imported credit notes have no member, so no faktura matches the payer and t
 
 The audit log records that the faktura was picked by hand and whether the payers differed. **Angre motregning** undoes a wrong pick.
 
-Nothing new is booked in the accounts. A booked credit note already cancels its faktura's receivable, and imported history isn't booked at all. Brygge refuses links it can't make safely: a partial credit (settle the rest separately), different payers you haven't confirmed, or one side booked and the other not. **Angre motregning** (the undo icon) reopens the faktura. A linked credit note can't be voided until you undo the link.
+Nothing new is booked in the accounts. A booked credit note already cancels its faktura's receivable, and imported history isn't booked at all. Brygge refuses links it can't make safely: a partial credit (settle the rest separately), different payers you haven't confirmed, or one side booked and the other not. The one exception is a Brygge credit note for an imported faktura: it can be linked once the opening balance carries that faktura (see [Payments for fakturas from the previous system](#payments-for-fakturas-from-the-previous-system)); before that it is refused as a booking mismatch (one side booked and the other not); the missing booking is the opening balance. **Angre motregning** (the undo icon) reopens the faktura. A linked credit note can't be voided until you undo the link.
 
 ## PDF archive
 
 Every regenerate inserts the prior PDF bytes into `invoice_pdf_archive` inside the same transaction as the overwrite, so a failure mid-flight leaves the original PDF in place. Two ways to access an archived version:
 
 1. **From the FakturaList row** — click the history (clock) icon next to the PDF download icon. Opens a popover with every archived version.
-2. **From `Admin → Accounting → PDF arkiv`** — search by invoice number. Shows the current PDF link plus every archived version. Use this when you only know the invoice number (e.g. a member dispute).
+2. **From the Archive tab in `Admin → Faktura`** — search by invoice number. Shows the current PDF link plus every archived version. Use this when you only know the invoice number (e.g. a member dispute).
 
 The audit log records every regenerate with the `prior_pdf_bytes` field so the trail confirms what was preserved.
 
@@ -263,6 +275,8 @@ Single fakturas go through the same draft → send → paid flow.
 - **Recurring members who never pay:** Sent tab → filter `Past due` chip → bulk **Send purring** to nudge.
 - **Closing the period:** once everything is reconciled, mark the fiscal period as closed in `Admin → Accounting`. After that, no new fakturas can be issued against that period — protects historical balance sheets. Closing is refused while the period still has **draft** (kladd) bilag, and the message lists them per source. Post them, or delete an abandoned draft with the bin icon on the Bilag page. Drafts that came from a bank or Vipps row are undone from **Tildel** instead.
 
+  **A year kept in the previous system.** If the club moved to Brygge from another system, the years before the cutover are booked there, not in Brygge. Don't post its drafts or run **Bokfør Vipps-utkast** for it: that income is already in the previous system's accounts. The one exception is the expense bookings momskompensasjon needs; keep the year open until they are complete. See [Moving from a previous system](migrating-from-previous-system.md#the-year-before-the-cutover).
+
   **Vipps drafts from before automatic posting.** Vipps bilag created before posting became automatic are still drafts. On the Bilag page, pick the year and click **Bokfør Vipps-utkast**. A preview shows:
   - how many drafts will be posted as they are, with totals per account;
   - which parked payments will be rebooked, and where to: an account, or the faktura they pay. These are payments sitting on 3900 Andre inntekter, or on 1500 Kundefordringer with no faktura.
@@ -285,6 +299,8 @@ Single fakturas go through the same draft → send → paid flow.
 
 When you upload a bank statement (`Admin → Accounting → Bank & Vipps`), the KID auto-matcher links each incoming row to the corresponding invoice and back-links `invoices.payment_id` so the faktura-status widgets update. After deploying improvements to the matcher, click **Synk Vipps** (Vipps drafts) or **Synk bank** (KID matches) to retroactively re-run the cascade over already-imported rows.
 
+**Synk bank** also marks a faktura paid when an earlier booking already paid it but the faktura wasn't marked. It trusts only a bank row whose booking is posted and credits 1500 Kundefordringer, and whose KID is the faktura's own (a row without a KID, or one already assigned to another faktura, is never used). A row a mapping rule booked to another account, or a draft or voided booking, doesn't count. Imported fakturas have no KID, so this never marks one paid.
+
 ### Payments for fakturas from the previous system
 
 A faktura imported from the previous system (the **Importert** tab) was never booked in Brygge. When a member pays it, booking the payment would reduce the amount owed to the club (1500 Kundefordringer) by money Brygge never recorded as owed, so the accounts would show a debt the club doesn't have. Brygge therefore books such a payment only once that faktura's amount owed is in Brygge's accounts, which happens when the **opening balance** (inngående balanse) from the previous system is posted. The opening balance must be dated on or after the faktura and on or before the payment.
@@ -295,7 +311,9 @@ Until then:
 - The KID and name matching never books it either; it stays in Tildel.
 - The member still sees the faktura on their payables page, but without a Vipps button; they can pay by bank transfer. **Copy pay link** on such a faktura says the same as Tildel.
 
-Payments dated before the opening balance (for example in the previous year) stay refused even after it is posted, because the opening balance didn't exist yet when they were paid.
+Payments dated before the opening balance (for example in the previous year) stay refused even after it is posted, because the opening balance didn't exist yet when they were paid. Those payments belong to the previous system's books; whether they settled a faktura shows in its open-items list.
+
+The opening balance is dated on the cutover (the first day of the club's first year in Brygge) and is posted as part of the move from the previous system. Brygge has no button for it yet. The whole workflow is in [Moving from a previous system](migrating-from-previous-system.md).
 
 ### Automatic booking of bank payments without a KID
 

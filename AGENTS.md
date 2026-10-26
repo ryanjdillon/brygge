@@ -286,7 +286,7 @@ For single-test examples and full dev workflow, see [CONTRIBUTING.md](CONTRIBUTI
 ### Backend (`backend/`)
 
 - **Go 1.25** with **chi/v5** router, **PostgreSQL 16** (pgx/v5 + sqlc), **Redis 7** (cache/sessions)
-- Routes in `cmd/api/main.go`, one handler struct per domain, auth via JWT middleware
+- Routes in `cmd/api/main.go`, one handler struct per domain, auth via server-side sessions (`middleware.AuthenticateSession`)
 - Claims: `middleware.GetClaims(ctx)` → `*middleware.Claims` (UserID, ClubID, Roles)
 - Pagination: `shared.PaginatedResponse` → `{ items, limit, offset, has_more }`
 - Feature flags: `cfg.Features.{Bookings, Projects, Calendar, Commerce, Communications}`
@@ -406,7 +406,7 @@ Real issues that have been encountered in passing but are deliberately out of sc
 
 ## Testing Tips
 
-- **Go unit tests**: Use nil db/redis — no containers needed. Handler tests use `setupAuthenticatedRouter()` + `generateTestToken()` for JWT mocking
+- **Go unit tests**: Use nil db/redis — no containers needed. Handler tests use `setupAuthenticatedRouter()` + `generateTestToken()`, an opaque test token the test middleware decodes into claims (not a JWT)
 - **Go integration tests**: Real Postgres/Redis via testcontainers. Run with `-count=1` to bypass cache
 - **Vue tests**: `mountWithPlugins()` from `src/test/test-utils.ts`, mock lucide-vue-next icons
 - **E2E**: Playwright specs in `e2e/`. Not yet in CI (local only)
