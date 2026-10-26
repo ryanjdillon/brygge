@@ -14,6 +14,7 @@ Brygge is configured entirely via environment variables. In production, set thes
 | `DEV_QUERY_TOKENS_ENABLED` | No | `false`           | Mounts `POST /api/v1/dev/query` for developer bearer tokens and allows admins to mint them (Admin → Developer tokens), so an external tool can query without a session or SSH (BRY-115). Off by default; requires `DEV_QUERY_DATABASE_URL`. See [security/dev-query.md](security/dev-query.md). |
 | `REDIS_URL`    | Yes      | —                       | Redis connection string                           |
 | `FRONTEND_URL` | No       | `http://localhost:5173` | Base URL for frontend (used in magic link emails) |
+| `TRUSTED_PROXY_CIDRS` | No | `127.0.0.0/8,::1/128` | Comma-separated CIDRs of reverse proxies whose `X-Forwarded-For` is believed for the client IP (rate limits, sessions, audit). Replaces the default. Leave unset behind Caddy on the same host; the docker-compose/Traefik deploy sets `172.16.0.0/12`. A malformed entry stops the API at startup. See [invariants.md](reference/invariants.md#the-client-ip-is-rremoteaddr-set-only-from-a-trusted-proxy). |
 | `CLUB_SLUG`    | No       | `brygge`                | Selects the club row; per-club DB settings and feature overrides are read by this slug |
 | `CLUB_NAME`    | Yes      | —                       | Human-readable club name in the UI and email subjects. Unset → the NavBar says "Brygge" and emails say "your club" |
 | `DOMAIN`       | Yes      | `localhost`             | Public domain, used in email footers and canonical URLs |

@@ -294,6 +294,12 @@ Price items carry no account. The category map (`revenueAccountMap`, read throug
 
 **Failure mode:** a confused middleware chain admits a request that shouldn't have been admitted.
 
+### The client IP is `r.RemoteAddr`, set only from a trusted proxy
+
+**Rule:** `middleware.ClientIP` rewrites `r.RemoteAddr` from `X-Forwarded-For`, and only when the immediate peer is in `TRUSTED_PROXY_CIDRS` (default loopback). It walks the header from the right and takes the first address that isn't a trusted proxy; otherwise `RemoteAddr` is the peer's IP. Either way it is a bare IP with no port. Handlers, rate-limit keys, sessions and audit logs read `r.RemoteAddr` and never a forwarding header. `True-Client-IP` and `X-Real-IP` are never believed: reverse proxies pass them through from the client unchanged.
+
+**Failure mode:** a client sets its own IP with a header. It gets around the per-IP rate limits on login and magic-link requests, and forges the IP in sessions and audit logs. chi's `RealIP` had this hole (BRY-423).
+
 ---
 
 ## Invoicing

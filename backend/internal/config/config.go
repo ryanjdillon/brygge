@@ -38,6 +38,11 @@ type Config struct {
 	// Frontend
 	FrontendURL string
 
+	// TrustedProxyCIDRs lists the reverse proxies whose X-Forwarded-For is
+	// believed (comma-separated CIDRs). Empty means loopback only; parsed
+	// by middleware.ParseTrustedProxies at startup.
+	TrustedProxyCIDRs string
+
 	// Object storage
 	S3Endpoint    string
 	S3BucketDocs  string
@@ -131,7 +136,8 @@ func Load() Config {
 		DBMaxConnIdleTime:  envDuration("DB_MAX_CONN_IDLE_TIME", 5*time.Minute),
 		DBStatementTimeout: envStr("DB_STATEMENT_TIMEOUT", "30000"),
 
-		FrontendURL: cleanBaseURL(envStr("FRONTEND_URL", "http://localhost:5173")),
+		FrontendURL:       cleanBaseURL(envStr("FRONTEND_URL", "http://localhost:5173")),
+		TrustedProxyCIDRs: envStr("TRUSTED_PROXY_CIDRS", ""),
 
 		S3Endpoint:    envStr("S3_ENDPOINT", ""),
 		S3BucketDocs:  envStr("S3_BUCKET_DOCS", "brygge"),

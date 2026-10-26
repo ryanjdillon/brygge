@@ -71,6 +71,11 @@ func main() {
 		log.Info().Msg("OpenTelemetry initialized")
 	}
 
+	trustedProxies, err := middleware.ParseTrustedProxies(cfg.TrustedProxyCIDRs)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to parse TRUSTED_PROXY_CIDRS")
+	}
+
 	poolCfg, err := pgxpool.ParseConfig(cfg.DatabaseURL)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to parse database URL")
@@ -350,7 +355,7 @@ func main() {
 	r := chi.NewRouter()
 
 	r.Use(chimw.RequestID)
-	r.Use(chimw.RealIP)
+	r.Use(middleware.ClientIP(trustedProxies))
 	r.Use(requestLogger(log))
 	r.Use(chimw.Recoverer)
 	r.Use(middleware.Metrics)

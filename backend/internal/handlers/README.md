@@ -74,6 +74,7 @@ if h.audit != nil {
 - Use existing `audit.Action*` constants; never inline literals
 - See [`../../../docs/developer/reference/audit-actions.md`](../../../docs/developer/reference/audit-actions.md) for the full list
 - Never let the audit error bubble — the operation succeeded, log the failure and move on
+- The actor IP is `r.RemoteAddr`. Never read `X-Real-IP`, `X-Forwarded-For` or `True-Client-IP` in a handler; `middleware.ClientIP` has already resolved the trusted value (see [invariants](../../../docs/developer/reference/invariants.md#the-client-ip-is-rremoteaddr-set-only-from-a-trusted-proxy))
 
 ## TOTP gating
 

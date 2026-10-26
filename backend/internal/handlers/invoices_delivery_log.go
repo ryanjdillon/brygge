@@ -81,11 +81,7 @@ func (h *InvoiceHandler) HandleGetDeliveryLog(w http.ResponseWriter, r *http.Req
 	}
 
 	if h.audit != nil {
-		actorIP := r.Header.Get("X-Real-IP")
-		if actorIP == "" {
-			actorIP = r.RemoteAddr
-		}
-		h.audit.LogAction(ctx, claims.ClubID, claims.UserID, actorIP,
+		h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,
 			audit.ActionInvoiceDeliveryLogViewed, "invoice", invoiceID,
 			map[string]any{
 				"recipient_email":  recipient,
