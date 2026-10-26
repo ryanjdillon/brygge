@@ -10,10 +10,10 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// boatErrNotFound is returned by the shared boat upsert helpers when the
+// errBoatNotFound is returned by the shared boat upsert helpers when the
 // row doesn't exist (for the given owner + club). Callers translate it
 // into a 404 response.
-var boatErrNotFound = errors.New("boat not found")
+var errBoatNotFound = errors.New("boat not found")
 
 // createBoatForUser inserts a new boat row for ownerID. When approve is
 // true (admin path), measurements_confirmed is set unconditionally with
@@ -87,7 +87,7 @@ func createBoatForUser(
 // updateBoatForUser fetches the boat scoped to (boatID, ownerID, clubID),
 // applies the partial update, recomputes measurement-confirmation status
 // (or stamps it if approve=true), and writes the row back. Returns
-// boatErrNotFound if no row matched.
+// errBoatNotFound if no row matched.
 func updateBoatForUser(
 	ctx context.Context,
 	db *pgxpool.Pool,
@@ -115,7 +115,7 @@ func updateBoatForUser(
 		&current.CreatedAt, &current.UpdatedAt,
 	)
 	if err == pgx.ErrNoRows {
-		return nil, boatErrNotFound
+		return nil, errBoatNotFound
 	}
 	if err != nil {
 		log.Error().Err(err).Msg("updateBoatForUser: fetch")
@@ -210,7 +210,7 @@ func deleteBoatForUser(
 		return err
 	}
 	if tag.RowsAffected() == 0 {
-		return boatErrNotFound
+		return errBoatNotFound
 	}
 	return nil
 }

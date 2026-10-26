@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/rs/zerolog"
+
 	"github.com/brygge-klubb/brygge/internal/config"
 )
 
@@ -19,7 +21,7 @@ func TestHandleGetFeatures(t *testing.T) {
 		},
 	}
 
-	h := NewFeaturesHandler(cfg, nil)
+	h := NewFeaturesHandler(cfg, nil, zerolog.Nop())
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/features", nil)
 	rec := httptest.NewRecorder()
 
@@ -65,7 +67,7 @@ func TestHandleGetFeaturesAllEnabled(t *testing.T) {
 		},
 	}
 
-	h := NewFeaturesHandler(cfg, nil)
+	h := NewFeaturesHandler(cfg, nil, zerolog.Nop())
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/features", nil)
 	rec := httptest.NewRecorder()
 

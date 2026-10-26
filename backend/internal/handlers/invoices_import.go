@@ -31,7 +31,7 @@ type uni24ImportRow struct {
 //
 //	date_from  YYYY-MM-DD  inclusive lower bound on dato (issue date)
 //	date_to    YYYY-MM-DD  inclusive upper bound on dato (issue date)
-func (h *InvoiceHandler) HandleImportUni24Invoices(w http.ResponseWriter, r *http.Request) {
+func (h *InvoiceHandler) HandleImportUni24Invoices(w http.ResponseWriter, r *http.Request) { //nolint:gocognit,cyclop // per-row CSV validation and insert in one pass; split tracked in BRY-424
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
 	if claims == nil {

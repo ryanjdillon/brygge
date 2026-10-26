@@ -289,7 +289,7 @@ var errInvoiceNotOpen = errors.New("faktura no longer open")
 // this transaction ends — a deadlock with ourselves. The checks run in a
 // second statement: one that waited for the lock still reads the rows as
 // they were when it started, so it would miss the booking it waited for.
-func lockInvoiceForAssign(ctx context.Context, tx pgx.Tx, clubID, invoiceID string, opts invoiceLockOpts) (int64, error) {
+func lockInvoiceForAssign(ctx context.Context, tx pgx.Tx, clubID, invoiceID string, opts invoiceLockOpts) (int64, error) { //nolint:cyclop // one guard per settlement rule, each with its own error; split tracked in BRY-424
 	if opts.mode != lockAutoAssign && opts.bookingDate.IsZero() {
 		return 0, errors.New("lock invoice: booking date is required")
 	}
@@ -384,7 +384,7 @@ func (s *Service) existingPeriod(ctx context.Context, clubID string, date time.T
 //     (e.g. donation, misc income). DR bank, CR account.
 //
 // Returns the new journal entry ID.
-func (s *Service) AssignBankRowToAccount(
+func (s *Service) AssignBankRowToAccount( //nolint:cyclop // validate, lock and post one bank row in a single transaction; split tracked in BRY-424
 	ctx context.Context, clubID, actorID, bankRowID, accountCode, kind, description string,
 ) (string, error) {
 	if kind != "expense" && kind != "revenue" {
@@ -638,7 +638,7 @@ func (s *Service) UnassignBankRowReported(
 	return UnassignResult{PriorJournalID: priorJournalID, PriorInvoiceID: priorInvoiceID, SiblingRowIDs: siblings}, err
 }
 
-func (s *Service) unassignBankRow(
+func (s *Service) unassignBankRow( //nolint:gocognit,cyclop // reverses each posting kind inside one transaction; split tracked in BRY-424
 	ctx context.Context, clubID, actorID, bankRowID string,
 ) (priorJournalID, priorInvoiceID string, siblings []string, err error) {
 	var invoiceIDPtr *string

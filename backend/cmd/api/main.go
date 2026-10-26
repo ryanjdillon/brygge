@@ -260,7 +260,7 @@ func main() {
 		}
 	}
 
-	featuresHandler := handlers.NewFeaturesHandler(&cfg, db)
+	featuresHandler := handlers.NewFeaturesHandler(&cfg, db, log)
 	healthHandler := handlers.NewHealthHandler(db, rdb)
 	auditHandler := handlers.NewAuditHandler(db, auditService, &cfg, log)
 	authHandler := handlers.NewAuthHandler(db, &cfg, log)

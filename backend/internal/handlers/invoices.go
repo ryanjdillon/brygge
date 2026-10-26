@@ -173,7 +173,7 @@ type invoiceResponse struct {
 }
 
 // HandleCreateInvoice generates a full invoice with KID, PDF, and optional email delivery.
-func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Request) {
+func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Request) { //nolint:gocognit,cyclop // sequential validation, pricing and insert of one faktura; split tracked in BRY-424
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
 	if claims == nil {

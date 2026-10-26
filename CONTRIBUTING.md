@@ -154,7 +154,9 @@ The API is available at `http://localhost:8080` and the Vue dev server at `http:
 ### Go
 
 - Format with `gofmt` (enforced by CI).
-- Lint with `golangci-lint`. The default configuration is used.
+- Lint with `golangci-lint` (`just lint-go`), configured in `backend/.golangci.yml`: the default linters except `errcheck`, plus `gocognit` (> 30), `cyclop` (> 20) and `nolintlint`. CI fails on any finding.
+- Suppress a finding only with `//nolint:<linter> // <reason>`. Name the linter and give the reason; `nolintlint` rejects a bare `//nolint`. Raise neither threshold to make a function pass. Existing complexity suppressions end with "split tracked in BRY-424"; split a function when you are already changing it.
+- golangci-lint shows at most three findings of the same kind per run. Run `golangci-lint run --max-same-issues=0 --max-issues-per-linter=0 ./...` to see them all before assuming a fix is complete.
 - Follow standard Go conventions: short variable names in small scopes, exported names documented with comments, errors wrapped with `fmt.Errorf("context: %w", err)`.
 - Destructure imports into standard library, external, and internal groups.
 

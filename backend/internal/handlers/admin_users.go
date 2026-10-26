@@ -85,7 +85,7 @@ func NewAdminUsersHandler(db *pgxpool.Pool, cfg *config.Config, log zerolog.Logg
 	}
 }
 
-func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Request) {
+func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Request) { //nolint:cyclop // one branch per sort key or filter parameter; split tracked in BRY-424
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
 	if claims == nil {
@@ -616,7 +616,7 @@ func (h *AdminUsersHandler) HandleGetUser(w http.ResponseWriter, r *http.Request
 	})
 }
 
-func (h *AdminUsersHandler) HandleUpdateUserRoles(w http.ResponseWriter, r *http.Request) {
+func (h *AdminUsersHandler) HandleUpdateUserRoles(w http.ResponseWriter, r *http.Request) { //nolint:cyclop // sequential validation of one request; split tracked in BRY-424
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
 	if claims == nil {
@@ -1123,7 +1123,7 @@ func (e *duplicateError) Error() string {
 // createUser inserts a single user + roles inside a transaction. Returns
 // the new user's ID. Errors are typed (validationError / duplicateError)
 // so callers can map them to HTTP status codes.
-func (h *AdminUsersHandler) createUser(ctx context.Context, clubID, actorID string, req adminUserCreateRequest) (string, error) {
+func (h *AdminUsersHandler) createUser(ctx context.Context, clubID, actorID string, req adminUserCreateRequest) (string, error) { //nolint:cyclop // sequential validation and insert of one member; split tracked in BRY-424
 	email := strings.TrimSpace(strings.ToLower(req.Email))
 	firstName := strings.TrimSpace(req.FirstName)
 	lastName := strings.TrimSpace(req.LastName)
@@ -1226,7 +1226,7 @@ type csvImportRow struct {
 // postal_code, city, is_local, roles (semicolon-separated, e.g.
 // "member;board"). Each row commits in its own transaction so a single
 // bad row doesn't poison the batch.
-func (h *AdminUsersHandler) HandleImportUsersCSV(w http.ResponseWriter, r *http.Request) {
+func (h *AdminUsersHandler) HandleImportUsersCSV(w http.ResponseWriter, r *http.Request) { //nolint:cyclop // per-row CSV validation in one pass; split tracked in BRY-424
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
 	if claims == nil {
@@ -1435,7 +1435,7 @@ type adminUserUpdateRequest struct {
 // HandleUpdateUser applies a partial update to a user's profile fields.
 // Only supplied keys are written; nil pointers are left untouched. Email
 // + roles are intentionally out of scope (separate endpoints).
-func (h *AdminUsersHandler) HandleUpdateUser(w http.ResponseWriter, r *http.Request) {
+func (h *AdminUsersHandler) HandleUpdateUser(w http.ResponseWriter, r *http.Request) { //nolint:cyclop // one optional field per branch of a partial update; split tracked in BRY-424
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
 	if claims == nil {
@@ -1555,7 +1555,7 @@ type adminBoatSlipUpdateRequest struct {
 // assignment for a specific boat. Pass slip_id=null to release. Honors
 // the per-boat unique active assignment constraint and the per-slip
 // vacancy check. Conflicts come back as 409.
-func (h *AdminUsersHandler) HandleSetUserBoatSlip(w http.ResponseWriter, r *http.Request) {
+func (h *AdminUsersHandler) HandleSetUserBoatSlip(w http.ResponseWriter, r *http.Request) { //nolint:gocognit,cyclop // validate and write one member's boat and slip in one transaction; split tracked in BRY-424
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
 	if claims == nil {
@@ -1734,7 +1734,7 @@ type adminUserSlipsUpdateRequest struct {
 //
 // On any conflict (slip taken by someone else) the whole transaction
 // rolls back.
-func (h *AdminUsersHandler) HandleSetUserSlips(w http.ResponseWriter, r *http.Request) {
+func (h *AdminUsersHandler) HandleSetUserSlips(w http.ResponseWriter, r *http.Request) { //nolint:gocognit,cyclop // diffs and writes a member's slip set in one transaction; split tracked in BRY-424
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
 	if claims == nil {
@@ -2163,7 +2163,7 @@ func (h *AdminUsersHandler) HandleUpdateUserBoat(w http.ResponseWriter, r *http.
 
 	b, err := updateBoatForUser(ctx, h.db, h.log,
 		boatID, userID, claims.ClubID, claims.UserID, req.updateBoatRequest, req.Approve)
-	if errors.Is(err, boatErrNotFound) {
+	if errors.Is(err, errBoatNotFound) {
 		Error(w, http.StatusNotFound, "boat not found")
 		return
 	}
@@ -2201,7 +2201,7 @@ func (h *AdminUsersHandler) HandleDeleteUserBoat(w http.ResponseWriter, r *http.
 	}
 
 	if err := deleteBoatForUser(ctx, h.db, h.log, boatID, userID, claims.ClubID); err != nil {
-		if errors.Is(err, boatErrNotFound) {
+		if errors.Is(err, errBoatNotFound) {
 			Error(w, http.StatusNotFound, "boat not found")
 			return
 		}

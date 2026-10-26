@@ -121,7 +121,7 @@ var (
 // exists without its row (a later sync would book the money again), and the
 // link records the faktura so the other settle paths see this booking. A
 // failed post unlinks the row and drops the draft.
-func (s *Service) bookKIDCascadeMatch(ctx context.Context, clubID string, m kidCascadeMatch) error {
+func (s *Service) bookKIDCascadeMatch(ctx context.Context, clubID string, m kidCascadeMatch) error { //nolint:cyclop // one transaction from lock to posting; each outcome is a cascade result; split tracked in BRY-424
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin: %w", err)

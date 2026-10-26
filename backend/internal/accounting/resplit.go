@@ -40,7 +40,7 @@ type ResplitResult struct {
 // by the sync entry plus any earlier resplits, and — when apply is true —
 // posts one balanced invoice_resplit entry moving the difference. Booked
 // entries stay immutable and a second run finds nothing to move.
-func (s *Service) ResplitInvoiceBilags(ctx context.Context, clubID, periodID, actor string, apply bool) (*ResplitResult, error) {
+func (s *Service) ResplitInvoiceBilags(ctx context.Context, clubID, periodID, actor string, apply bool) (*ResplitResult, error) { //nolint:gocognit,cyclop // computes and posts the revenue delta for every invoice in a period; split tracked in BRY-424
 	var status string
 	if err := s.db.QueryRow(ctx,
 		`SELECT status FROM fiscal_periods WHERE id = $1 AND club_id = $2`,

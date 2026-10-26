@@ -159,7 +159,7 @@ func (h *TOTPHandler) HandleConfirm(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	defer tx.Rollback(ctx) //nolint:errcheck
+	defer tx.Rollback(ctx) //nolint:errcheck // no-op after commit
 
 	if _, err := tx.Exec(ctx,
 		`UPDATE users SET totp_secret_encrypted = $1, totp_enabled = true WHERE id = $2`,
@@ -358,7 +358,7 @@ func (h *TOTPHandler) HandleRecover(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	defer tx.Rollback(ctx) //nolint:errcheck
+	defer tx.Rollback(ctx) //nolint:errcheck // no-op after commit
 
 	tag, err := tx.Exec(ctx,
 		`UPDATE totp_recovery_codes SET used_at = NOW()
@@ -433,7 +433,7 @@ func (h *TOTPHandler) HandleRegenerateCodes(w http.ResponseWriter, r *http.Reque
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	defer tx.Rollback(ctx) //nolint:errcheck
+	defer tx.Rollback(ctx) //nolint:errcheck // no-op after commit
 
 	if _, err := tx.Exec(ctx,
 		`DELETE FROM totp_recovery_codes WHERE user_id = $1`, claims.UserID,
@@ -578,7 +578,7 @@ func (h *TOTPHandler) HandleAdminDisableTOTP(w http.ResponseWriter, r *http.Requ
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	defer tx.Rollback(ctx) //nolint:errcheck
+	defer tx.Rollback(ctx) //nolint:errcheck // no-op after commit
 
 	if _, err := tx.Exec(ctx,
 		`UPDATE users SET totp_secret_encrypted = NULL, totp_enabled = false WHERE id = $1`,

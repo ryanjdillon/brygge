@@ -264,7 +264,7 @@ func creditConflict(w http.ResponseWriter, code, msg string) {
 // full credit is accepted: a partial credit would leave a remaining balance
 // that every "amount owed" (reminders, payables, pay-links) would have to
 // net, which nothing supports yet, so it is refused with a reason instead.
-func (h *InvoiceHandler) HandleLinkCreditNote(w http.ResponseWriter, r *http.Request) {
+func (h *InvoiceHandler) HandleLinkCreditNote(w http.ResponseWriter, r *http.Request) { //nolint:cyclop // one guard per credit-link rule, each with its own error code; split tracked in BRY-424
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
 	if claims == nil {
@@ -347,7 +347,7 @@ func (h *InvoiceHandler) HandleLinkCreditNote(w http.ResponseWriter, r *http.Req
 	case cn.status == "voided" || target.status == "voided":
 		creditConflict(w, "voided", "a voided invoice can't be linked")
 		return
-	case !(cn.sent || cn.imported) || !(target.sent || target.imported):
+	case !cn.sent && !cn.imported, !target.sent && !target.imported:
 		creditConflict(w, "not_issued", "only sent or imported invoices can be linked")
 		return
 	case cn.creditsID != nil:

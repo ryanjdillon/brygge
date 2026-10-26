@@ -5,6 +5,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/rs/zerolog"
 
 	"github.com/brygge-klubb/brygge/internal/config"
 )
@@ -12,10 +13,11 @@ import (
 type FeaturesHandler struct {
 	config *config.Config
 	db     *pgxpool.Pool
+	log    zerolog.Logger
 }
 
-func NewFeaturesHandler(cfg *config.Config, db *pgxpool.Pool) *FeaturesHandler {
-	return &FeaturesHandler{config: cfg, db: db}
+func NewFeaturesHandler(cfg *config.Config, db *pgxpool.Pool, log zerolog.Logger) *FeaturesHandler {
+	return &FeaturesHandler{config: cfg, db: db, log: log.With().Str("handler", "features").Logger()}
 }
 
 // HandleGetFeatures returns the resolved per-club module flags. The
@@ -63,6 +65,7 @@ func (h *FeaturesHandler) HandleGetFeatures(w http.ResponseWriter, r *http.Reque
 		} else if err != pgx.ErrNoRows {
 			// Don't fail the public features endpoint on a transient DB
 			// blip — fall through to env defaults so the SPA renders.
+			h.log.Warn().Err(err).Msg("reading club feature flags; using env defaults")
 		}
 	}
 

@@ -69,7 +69,7 @@ type InvoiceLine struct {
 // mojibake on Norwegian characters (e.g. "Båtlag" → "BÃ¥tlag"). We
 // route every string through fpdf's WinAnsi translator so å/æ/ø/Å/Æ/Ø
 // render correctly with the built-in fonts.
-func GeneratePDF(inv Invoice) ([]byte, error) {
+func GeneratePDF(inv Invoice) ([]byte, error) { //nolint:gocognit,cyclop // linear top-to-bottom PDF layout with optional sections; split tracked in BRY-424
 	pdf := fpdf.New("P", "mm", "A4", "")
 	pdf.SetAutoPageBreak(true, 20)
 	tr := pdf.UnicodeTranslatorFromDescriptor("")
@@ -96,7 +96,6 @@ func GeneratePDF(inv Invoice) ([]byte, error) {
 	pdf.AddPage()
 
 	const leftMargin = 10.0
-	const pageW = 190.0 // A4 - 10mm margins on each side
 
 	// Logo (top-left, optional)
 	logoBottomY := pdf.GetY()

@@ -654,7 +654,7 @@ func (h *InboxHandler) handleBulkSend(w http.ResponseWriter, r *http.Request, sp
 // To/Cc/Bcc plus named groups plus auto-bcc-members — into a deduplicated
 // recipient list (preferring entries that map to a known member) and a
 // human-readable summary label for the broadcast row.
-func (h *InboxHandler) resolveBulkRecipients(ctx context.Context, spec mail.MailboxSpec, req SendRequest, clubID string) ([]bcast.Recipient, string, error) {
+func (h *InboxHandler) resolveBulkRecipients(ctx context.Context, spec mail.MailboxSpec, req SendRequest, clubID string) ([]bcast.Recipient, string, error) { //nolint:gocognit,cyclop // one branch per recipient selector; split tracked in BRY-424
 	var out []bcast.Recipient
 	seen := map[string]int{} // lowercase email → index in out
 	add := func(rec bcast.Recipient) {
@@ -1108,7 +1108,7 @@ func (h *InboxHandler) HandleBlobDownload(w http.ResponseWriter, r *http.Request
 	w.Header().Set("Content-Disposition", `attachment; filename="`+sanitizeFilename(name)+`"`)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(http.StatusOK)
-	io.Copy(w, body) //nolint:errcheck
+	io.Copy(w, body) //nolint:errcheck // headers are sent; a client disconnect has no recovery
 }
 
 func sanitizeFilename(name string) string {
@@ -1163,7 +1163,7 @@ func (h *InboxHandler) HandleBlobUpload(w http.ResponseWriter, r *http.Request) 
 	detectedType := http.DetectContentType(buf[:n])
 	// Seek back so we can stream the full file.
 	if seeker, ok := file.(io.Seeker); ok {
-		seeker.Seek(0, io.SeekStart) //nolint:errcheck
+		seeker.Seek(0, io.SeekStart) //nolint:errcheck // multipart files are in memory or a temp file; rewinding to 0 does not fail
 	}
 
 	// Use declared Content-Type as canonical; fall back to detected.
@@ -1297,7 +1297,7 @@ func (h *InboxHandler) HandleProxyImage(w http.ResponseWriter, r *http.Request) 
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Cache-Control", "max-age=3600")
 	w.WriteHeader(http.StatusOK)
-	io.Copy(w, io.LimitReader(resp.Body, 5*1024*1024)) //nolint:errcheck
+	io.Copy(w, io.LimitReader(resp.Body, 5*1024*1024)) //nolint:errcheck // headers are sent; a client disconnect has no recovery
 }
 
 // isPrivateIP returns true for loopback, RFC1918, link-local, and

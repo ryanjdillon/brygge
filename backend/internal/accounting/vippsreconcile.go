@@ -69,7 +69,7 @@ type VippsReconcilePreview struct {
 
 // ReconcileVippsPreview reads a bank row, extracts the Utb./Vippsnr key from its
 // description, finds the matching settlement, and proposes a balanced bilag.
-func (s *Service) ReconcileVippsPreview(ctx context.Context, clubID, bankRowID string) (*VippsReconcilePreview, error) {
+func (s *Service) ReconcileVippsPreview(ctx context.Context, clubID, bankRowID string) (*VippsReconcilePreview, error) { //nolint:gocognit,cyclop // classifies every charge against the match cascade in one pass; split tracked in BRY-424
 	var (
 		bankDate    time.Time
 		description string
@@ -316,7 +316,7 @@ func (s *Service) ReconcileVippsConfirm(ctx context.Context, clubID, bankRowID, 
 // ResyncVippsBilags re-creates existing draft bilags and keeps them drafts:
 // posting a pre-existing backlog is a supervised step (BRY-341), not a side
 // effect of reclassifying it.
-func (s *Service) reconcileVippsConfirm(ctx context.Context, clubID, bankRowID, periodOverride, createdBy string, lines []VippsReconcileLine, post bool) (string, error) {
+func (s *Service) reconcileVippsConfirm(ctx context.Context, clubID, bankRowID, periodOverride, createdBy string, lines []VippsReconcileLine, post bool) (string, error) { //nolint:gocognit,cyclop // re-checks and posts each previewed match in one transaction; split tracked in BRY-424
 	if len(lines) == 0 {
 		return "", fmt.Errorf("at least one line is required")
 	}

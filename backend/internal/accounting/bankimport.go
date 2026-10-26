@@ -490,7 +490,7 @@ func kidMatchCandidates(row BankRow) []string {
 	return out
 }
 
-func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOverride string, rows []BankRow) (ImportResult, error) {
+func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOverride string, rows []BankRow) (ImportResult, error) { //nolint:gocognit,cyclop // per-row import and cascade in one pass; split tracked in BRY-424
 	var res ImportResult
 	closedYears := map[int]bool{}
 

@@ -188,7 +188,7 @@ func (c *JMAPClient) ListPrincipals(ctx context.Context, accountID string) ([]Pr
 		return nil, err
 	}
 	if len(resp) == 0 {
-		return nil, fmt.Errorf("Principal/get: empty response")
+		return nil, fmt.Errorf("jmap Principal/get: empty response")
 	}
 	var args struct {
 		List []Principal `json:"list"`
@@ -456,7 +456,7 @@ func (c *JMAPClient) ListIdentities(ctx context.Context, accountID string) ([]Id
 		return nil, err
 	}
 	if len(resp) == 0 {
-		return nil, fmt.Errorf("Identity/get: empty response")
+		return nil, fmt.Errorf("jmap Identity/get: empty response")
 	}
 	var args struct {
 		List []Identity `json:"list"`
@@ -536,7 +536,7 @@ func (c *JMAPClient) CreateMailbox(ctx context.Context, accountID, name, role st
 		return "", err
 	}
 	if len(resp) == 0 {
-		return "", fmt.Errorf("Mailbox/set: empty response")
+		return "", fmt.Errorf("jmap Mailbox/set: empty response")
 	}
 	var args struct {
 		Created    map[string]map[string]any `json:"created"`
@@ -549,14 +549,14 @@ func (c *JMAPClient) CreateMailbox(ctx context.Context, accountID, name, role st
 		return "", err
 	}
 	if e, bad := args.NotCreated["m1"]; bad {
-		return "", fmt.Errorf("Mailbox/set create %s: %s: %s", name, e.Type, e.Description)
+		return "", fmt.Errorf("jmap Mailbox/set create %s: %s: %s", name, e.Type, e.Description)
 	}
 	if m, ok := args.Created["m1"]; ok {
 		if id, ok := m["id"].(string); ok {
 			return id, nil
 		}
 	}
-	return "", fmt.Errorf("Mailbox/set: no id in response")
+	return "", fmt.Errorf("jmap Mailbox/set: no id in response")
 }
 
 // ShareRights is the per-principal grant set on a JMAP Mailbox.
@@ -599,7 +599,7 @@ func (c *JMAPClient) SetMailboxShareWith(ctx context.Context, accountID, mailbox
 		return err
 	}
 	if len(resp) == 0 {
-		return fmt.Errorf("Mailbox/set: empty response")
+		return fmt.Errorf("jmap Mailbox/set: empty response")
 	}
 	var args struct {
 		NotUpdated map[string]struct {
@@ -611,7 +611,7 @@ func (c *JMAPClient) SetMailboxShareWith(ctx context.Context, accountID, mailbox
 		return err
 	}
 	if e, bad := args.NotUpdated[mailboxID]; bad {
-		return fmt.Errorf("Mailbox/set %s: %s: %s", mailboxID, e.Type, e.Description)
+		return fmt.Errorf("jmap Mailbox/set %s: %s: %s", mailboxID, e.Type, e.Description)
 	}
 	return nil
 }
@@ -682,7 +682,7 @@ type SendEmailRequest struct {
 // ListIdentities; Stalwart auto-creates a default one per account.
 //
 // Returns the server-assigned Email id and Message-ID header.
-func (c *JMAPClient) SendEmail(ctx context.Context, accountID, identityID, draftsID, sentID string, req SendEmailRequest) (emailID, messageID string, err error) {
+func (c *JMAPClient) SendEmail(ctx context.Context, accountID, identityID, draftsID, sentID string, req SendEmailRequest) (emailID, messageID string, err error) { //nolint:cyclop // builds and checks one JMAP submission round trip; split tracked in BRY-424
 	if accountID == "" {
 		return "", "", fmt.Errorf("SendEmail: accountID required")
 	}
@@ -814,7 +814,7 @@ func (c *JMAPClient) SendEmail(ctx context.Context, accountID, identityID, draft
 		if len(e.Properties) > 0 {
 			props = " [" + strings.Join(e.Properties, ", ") + "]"
 		}
-		return "", "", fmt.Errorf("Email/set: %s: %s%s", e.Type, e.Description, props)
+		return "", "", fmt.Errorf("jmap Email/set: %s: %s%s", e.Type, e.Description, props)
 	}
 	created := emailSet.Created["tmp"]
 	if id, ok := created["id"].(string); ok {
@@ -842,7 +842,7 @@ func (c *JMAPClient) SendEmail(ctx context.Context, accountID, identityID, draft
 		if len(e.Properties) > 0 {
 			props = " [" + strings.Join(e.Properties, ", ") + "]"
 		}
-		return emailID, messageID, fmt.Errorf("EmailSubmission/set: %s: %s%s", e.Type, e.Description, props)
+		return emailID, messageID, fmt.Errorf("jmap EmailSubmission/set: %s: %s%s", e.Type, e.Description, props)
 	}
 	return emailID, messageID, nil
 }

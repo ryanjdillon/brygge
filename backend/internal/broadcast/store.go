@@ -108,7 +108,7 @@ func (s *Store) Enqueue(ctx context.Context, n New, recipients []Recipient) (str
 	br := tx.SendBatch(ctx, batch)
 	for range recipients {
 		if _, err := br.Exec(); err != nil {
-			br.Close() //nolint:errcheck
+			br.Close() //nolint:errcheck // the Exec error is the one worth returning
 			return "", fmt.Errorf("insert delivery: %w", err)
 		}
 	}
@@ -449,7 +449,7 @@ func (s *Store) RequeueFailed(ctx context.Context, clubID, id string) (int64, er
 	if err != nil {
 		return 0, fmt.Errorf("begin: %w", err)
 	}
-	defer tx.Rollback(ctx) //nolint:errcheck
+	defer tx.Rollback(ctx) //nolint:errcheck // no-op after commit
 
 	// Guard club ownership before touching delivery rows.
 	var owns bool

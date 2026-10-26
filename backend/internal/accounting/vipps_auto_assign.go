@@ -168,7 +168,7 @@ func (d *vippsChargeDecision) Target() string {
 
 // decideVippsCharge applies the auto-assign rules to one charge paid on
 // paidOn without booking anything, so callers can preview the outcome.
-func (s *Service) decideVippsCharge(ctx context.Context, clubID string, cfg vippsAutoAssignConfig, customer, message string, amount float64, paidOn time.Time) (*vippsChargeDecision, error) {
+func (s *Service) decideVippsCharge(ctx context.Context, clubID string, cfg vippsAutoAssignConfig, customer, message string, amount float64, paidOn time.Time) (*vippsChargeDecision, error) { //nolint:cyclop // flat decision table over the auto-assign rules; split tracked in BRY-424
 	memberID, pass, err := s.resolveCustomerToMemberPass(ctx, clubID, customer, message)
 	if err != nil {
 		return nil, fmt.Errorf("resolving payer: %w", err)
@@ -308,7 +308,7 @@ func (s *Service) markAutoAssigned(ctx context.Context, clubID, actorID, rowID, 
 // charge settled is reopened. Charges booked from a checkout order settle
 // fakturas through the order and are refused; void their bilag instead. So
 // is a 1500 draft with no faktura that fails receivableChargeSettledFaktura.
-func (s *Service) UnassignVippsCharge(ctx context.Context, clubID, actorID, rowID string) (priorEntryID, priorInvoiceID string, err error) {
+func (s *Service) UnassignVippsCharge(ctx context.Context, clubID, actorID, rowID string) (priorEntryID, priorInvoiceID string, err error) { //nolint:gocognit,cyclop // reverses each posting kind inside one transaction; split tracked in BRY-424
 	var entryID, invoiceID *string
 	var orderRef string
 	err = s.db.QueryRow(ctx,

@@ -200,7 +200,7 @@ type putExemptionsRequest struct {
 // HandlePutExemptions replaces the club's exemption configuration. It
 // changes what members are billed, so the route sits behind the money gate
 // (treasurer/admin + fresh TOTP) and every change is audited.
-func (h *InvoiceHandler) HandlePutExemptions(w http.ResponseWriter, r *http.Request) {
+func (h *InvoiceHandler) HandlePutExemptions(w http.ResponseWriter, r *http.Request) { //nolint:gocognit,cyclop // validates and replaces the exemption set in one transaction; split tracked in BRY-424
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
 	if claims == nil {

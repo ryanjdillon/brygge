@@ -62,7 +62,7 @@ type featureCollection struct {
 //   - anonymous: counts/positions only (no occupant or boat)
 //   - member: occupant last name + boat summary (length only)
 //   - admin/board/harbor_master: full owner contact + boat detail
-func (h *HarborHandler) HandleGetLayout(w http.ResponseWriter, r *http.Request) {
+func (h *HarborHandler) HandleGetLayout(w http.ResponseWriter, r *http.Request) { //nolint:gocognit,cyclop // assembles the harbor layout from several queries; split tracked in BRY-424
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
 
@@ -317,7 +317,7 @@ func deref(s *string) string {
 // slips (plus a `deleted_finger_ids` top-level array) and persists in
 // a single transaction. Slip features only update the slip's location;
 // slip rows themselves are managed via the existing admin slips API.
-func (h *HarborHandler) HandlePutLayout(w http.ResponseWriter, r *http.Request) {
+func (h *HarborHandler) HandlePutLayout(w http.ResponseWriter, r *http.Request) { //nolint:gocognit,cyclop // validates and writes the whole harbor layout in one transaction; split tracked in BRY-424
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
 	if claims == nil {

@@ -509,7 +509,7 @@ type pgxQuerier interface {
 // the invoice's payment reference is reissued in the same transaction:
 // the PDF is printed with newKID and invoices.kid_number is updated
 // alongside pdf_data, so the stored KID and the printed KID never diverge.
-func (h *InvoiceHandler) regenerateOnePDF(
+func (h *InvoiceHandler) regenerateOnePDF( //nolint:gocognit,cyclop // loads every PDF input for one faktura, then renders; split tracked in BRY-424
 	ctx context.Context, clubID, actorID, remoteAddr, invoiceID string, club *clubInvoiceFields, newKID string,
 ) error {
 	var (

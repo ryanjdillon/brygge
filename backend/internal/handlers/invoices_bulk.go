@@ -105,7 +105,7 @@ type bulkResolvedLine struct {
 	exemptRole string
 }
 
-func (h *InvoiceHandler) HandleBulkCreateInvoices(w http.ResponseWriter, r *http.Request) {
+func (h *InvoiceHandler) HandleBulkCreateInvoices(w http.ResponseWriter, r *http.Request) { //nolint:gocognit,cyclop // per-member pricing and insert of a bulk run in one transaction; split tracked in BRY-424
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
 	if claims == nil {

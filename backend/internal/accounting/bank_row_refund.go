@@ -141,7 +141,7 @@ func (s *Service) SuggestRefundOutbound(ctx context.Context, clubID, inboundRowI
 // Both rows are marked with refund_paired_with pointing at each other.
 // The inbound row keeps its dismissed_* columns for audit — it is not
 // un-dismissed.
-func (s *Service) PairRefund(
+func (s *Service) PairRefund( //nolint:cyclop // validate, lock and post a refund pair in a single transaction; split tracked in BRY-424
 	ctx context.Context, clubID, actorID, inboundRowID, outboundRowID string,
 ) (inboundJournalID, outboundJournalID string, err error) {
 	if inboundRowID == outboundRowID {

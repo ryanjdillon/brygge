@@ -391,7 +391,7 @@ func (s *Service) CreateVippsChargeBilag(ctx context.Context, clubID, vippsRowID
 // the bank row description. It refuses to clear until every belastning charge
 // in the settlement has been booked — so the clearing account nets to ~0 — and
 // is idempotent: an already-cleared bank row returns its existing entries.
-func (s *Service) ClearVippsPayout(ctx context.Context, clubID, bankRowID, createdBy string) (*VippsPayoutClearResult, error) {
+func (s *Service) ClearVippsPayout(ctx context.Context, clubID, bankRowID, createdBy string) (*VippsPayoutClearResult, error) { //nolint:gocognit,cyclop // validate, lock and post one payout clearing in a single transaction; split tracked in BRY-424
 	var (
 		bankDate    time.Time
 		description string

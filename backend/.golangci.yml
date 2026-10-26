@@ -4,6 +4,7 @@ linters:
   enable:
     - gocognit
     - cyclop
+    - nolintlint
   disable:
     - errcheck
 
@@ -12,6 +13,12 @@ linters:
       min-complexity: 30
     cyclop:
       max-complexity: 20
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+      # errcheck is disabled, so its directives would otherwise be reported
+      # as unused; they stay as documentation for when it is enabled.
+      allow-unused: true
 
   exclusions:
     generated: lax

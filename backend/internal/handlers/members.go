@@ -435,7 +435,7 @@ func (h *MembersHandler) HandleUpdateBoat(w http.ResponseWriter, r *http.Request
 
 	b, err := updateBoatForUser(ctx, h.db, h.log,
 		boatID, claims.UserID, claims.ClubID, claims.UserID, req, false)
-	if errors.Is(err, boatErrNotFound) {
+	if errors.Is(err, errBoatNotFound) {
 		Error(w, http.StatusNotFound, "boat not found")
 		return
 	}
