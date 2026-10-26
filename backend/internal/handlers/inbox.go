@@ -9,11 +9,13 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -1140,7 +1142,7 @@ func (h *InboxHandler) HandleBlobUpload(w http.ResponseWriter, r *http.Request) 
 	}
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxUploadBytes+1024)
-	if err := r.ParseMultipartForm(4 * 1024 * 1024); err != nil {
+	if err := r.ParseMultipartForm(4 * 1024 * 1024); err != nil { // #nosec G120 -- body capped by MaxBytesReader above
 		Error(w, http.StatusBadRequest, "file too large or bad form")
 		return
 	}
@@ -1223,8 +1225,11 @@ func (h *InboxHandler) HandleProxyImage(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// Fast, friendly refusal for hosts that plainly resolve inward. The
+	// authoritative check is refuseNonPublicDial, because the answer here
+	// can differ from the one the dial later gets (DNS rebinding).
 	host := parsed.Hostname()
-	addrs, err := net.LookupHost(host)
+	addrs, err := net.DefaultResolver.LookupHost(r.Context(), host)
 	if err != nil || len(addrs) == 0 {
 		Error(w, http.StatusBadGateway, "could not resolve host")
 		return
@@ -1236,47 +1241,14 @@ func (h *InboxHandler) HandleProxyImage(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	// Custom dialer that re-validates the IP after DNS resolution
-	// to guard against DNS rebinding.
-	dialer := &net.Dialer{Timeout: 5 * time.Second}
-	transport := &http.Transport{
-		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-			connHost, _, _ := net.SplitHostPort(addr)
-			if isPrivateIP(connHost) {
-				return nil, fmt.Errorf("forbidden: private IP %s", connHost)
-			}
-			return dialer.DialContext(ctx, network, addr)
-		},
-	}
-	client := &http.Client{
-		Timeout:   10 * time.Second,
-		Transport: transport,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if len(via) >= 1 {
-				return http.ErrUseLastResponse
-			}
-			rHost := req.URL.Hostname()
-			rAddrs, rerr := net.LookupHost(rHost)
-			if rerr != nil {
-				return fmt.Errorf("redirect host unresolvable")
-			}
-			for _, a := range rAddrs {
-				if isPrivateIP(a) {
-					return fmt.Errorf("redirect to private IP forbidden")
-				}
-			}
-			return nil
-		},
-	}
-
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, raw, nil)
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, raw, nil) // #nosec G704 -- every dial, redirects included, is vetted by refuseNonPublicDial
 	if err != nil {
 		Error(w, http.StatusBadRequest, "invalid url")
 		return
 	}
 	req.Header.Set("User-Agent", "Brygge-ImageProxy/1.0")
 
-	resp, err := client.Do(req)
+	resp, err := newImageProxyClient().Do(req) // #nosec G704 -- every dial, redirects included, is vetted by refuseNonPublicDial
 	if err != nil {
 		Error(w, http.StatusBadGateway, "upstream error")
 		return
@@ -1300,31 +1272,77 @@ func (h *InboxHandler) HandleProxyImage(w http.ResponseWriter, r *http.Request) 
 	io.Copy(w, io.LimitReader(resp.Body, 5*1024*1024)) //nolint:errcheck // headers are sent; a client disconnect has no recovery
 }
 
-// isPrivateIP returns true for loopback, RFC1918, link-local, and
-// IPv6 private ranges. Input is a string IP (from net.LookupHost or
-// net.SplitHostPort).
+// errForbiddenDial marks a proxy dial refused because the resolved address
+// is not publicly routable.
+var errForbiddenDial = errors.New("forbidden: non-public address")
+
+// newImageProxyClient builds the client that fetches user-supplied image
+// URLs. The address check lives in Dialer.Control because that hook sees
+// the resolved ip:port of every connection attempt — the first request,
+// the redirect, and each Happy-Eyeballs fallback — whereas DialContext
+// only sees the hostname the URL carried.
+func newImageProxyClient() *http.Client {
+	dialer := &net.Dialer{
+		Timeout: 5 * time.Second,
+		Control: refuseNonPublicDial,
+	}
+	return &http.Client{
+		Timeout: 10 * time.Second,
+		// Proxy is deliberately unset: through an environment proxy the
+		// dialled address would be the proxy's, so Control would vet the
+		// proxy rather than the image host.
+		Transport: &http.Transport{
+			DialContext:         dialer.DialContext,
+			TLSHandshakeTimeout: 5 * time.Second,
+		},
+		CheckRedirect: func(_ *http.Request, via []*http.Request) error {
+			if len(via) >= 1 {
+				return http.ErrUseLastResponse
+			}
+			return nil
+		},
+	}
+}
+
+// refuseNonPublicDial is a net.Dialer Control hook; address is the
+// already-resolved ip:port about to be connected.
+func refuseNonPublicDial(_, address string, _ syscall.RawConn) error {
+	host, _, err := net.SplitHostPort(address)
+	if err != nil {
+		return fmt.Errorf("%w: %q", errForbiddenDial, address)
+	}
+	if isPrivateIP(host) {
+		return fmt.Errorf("%w: %s", errForbiddenDial, host)
+	}
+	return nil
+}
+
+// nonPublicPrefixes are special-purpose ranges that netip's
+// IsPrivate/IsLoopback/IsGlobalUnicast do not cover but which must never
+// be reached from the proxy.
+var nonPublicPrefixes = []netip.Prefix{
+	netip.MustParsePrefix("100.64.0.0/10"), // CGNAT, incl. Tailscale
+	netip.MustParsePrefix("0.0.0.0/8"),     // "this network"
+	netip.MustParsePrefix("192.0.0.0/24"),  // IETF protocol assignments
+	netip.MustParsePrefix("198.18.0.0/15"), // benchmarking
+	netip.MustParsePrefix("240.0.0.0/4"),   // reserved, incl. broadcast
+	netip.MustParsePrefix("64:ff9b::/96"),  // NAT64, maps onto IPv4 space
+}
+
+// isPrivateIP reports whether addr is anything other than a publicly
+// routable unicast address. An unparseable addr counts as private so that
+// callers fail closed.
 func isPrivateIP(addr string) bool {
-	ip := net.ParseIP(addr)
-	if ip == nil {
-		return true // unparseable → treat as private
+	ip, err := netip.ParseAddr(addr)
+	if err != nil {
+		return true
 	}
-	private := []string{
-		"127.0.0.0/8",
-		"10.0.0.0/8",
-		"172.16.0.0/12",
-		"192.168.0.0/16",
-		"169.254.0.0/16",
-		"::1/128",
-		"fc00::/7",
-		"fe80::/10",
-		"100.64.0.0/10", // Tailscale/CGNAT
+	ip = ip.Unmap()
+	if !ip.IsGlobalUnicast() || ip.IsPrivate() || ip.IsLoopback() {
+		return true
 	}
-	for _, cidr := range private {
-		_, network, err := net.ParseCIDR(cidr)
-		if err != nil {
-			continue
-		}
-		if network.Contains(ip) {
+	for _, p := range nonPublicPrefixes {
+		if p.Contains(ip.WithZone("")) {
 			return true
 		}
 	}

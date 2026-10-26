@@ -11,7 +11,7 @@ var Board = []string{"chair", "vice_chair", "treasurer", "secretary", "harbor_ma
 
 // boardLabelsNB are the Norwegian labels printed on fakturas (the PDF is
 // always Norwegian). The SPA localises the same keys itself.
-var boardLabelsNB = map[string]string{
+var boardLabelsNB = map[string]string{ // #nosec G101 -- role display labels; "treasurer"/"Kasserer" trips the heuristic
 	"chair":         "Styreleder",
 	"vice_chair":    "Nestleder",
 	"treasurer":     "Kasserer",

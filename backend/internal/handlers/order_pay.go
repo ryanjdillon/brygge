@@ -354,7 +354,7 @@ func (h *InvoiceHandler) HandleOrderPayRedirect(w http.ResponseWriter, r *http.R
 	if errors.Is(err, errVippsBlocked) {
 		// Not payable via Vipps → send them to the checkout page, which shows
 		// KID + konto for bank transfer instead of a Vipps button (BRY-283).
-		http.Redirect(w, r, h.frontendBase()+"/betal/"+token, http.StatusFound)
+		http.Redirect(w, r, h.frontendBase()+"/betal/"+token, http.StatusFound) // #nosec G710 -- fixed configured origin; token is a path segment that just matched a server-minted orders.token
 		return
 	}
 	if err != nil {

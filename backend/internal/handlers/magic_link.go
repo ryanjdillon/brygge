@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -193,16 +194,18 @@ func (h *MagicLinkHandler) HandleVerifyMagicLink(w http.ResponseWriter, r *http.
 		return
 	}
 
-	secure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
-	middleware.SetSessionCookie(w, sessionID, secure)
+	middleware.SetSessionCookie(w, sessionID, cookieSecure(h.config))
 
 	// Lazy Stalwart provisioning (DIL-321). Detached so login
 	// latency isn't affected; reconciler picks up the new principal
 	// at most 5 min later if it was needed before this goroutine
 	// finished.
 	if h.MailProvisioner != nil {
+		// WithoutCancel keeps the request's trace/log values while
+		// outliving the response that ends the request context.
+		detached := context.WithoutCancel(r.Context())
 		go func(uid, email string) {
-			bg, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			bg, cancel := context.WithTimeout(detached, 30*time.Second)
 			defer cancel()
 			if _, err := h.MailProvisioner.EnsureUserPrincipal(bg, uid, email); err != nil {
 				h.log.Warn().Err(err).Str("user_id", uid).Msg("stalwart provisioning failed")
@@ -222,8 +225,16 @@ func (h *MagicLinkHandler) HandleSessionLogout(w http.ResponseWriter, r *http.Re
 			h.log.Error().Err(err).Msg("failed to delete session on logout")
 		}
 	}
-	middleware.ClearSessionCookie(w)
+	middleware.ClearSessionCookie(w, cookieSecure(h.config))
 	JSON(w, http.StatusOK, map[string]string{"message": "logged out"})
+}
+
+// cookieSecure decides the session cookie's Secure flag from the configured
+// public origin rather than the request: X-Forwarded-Proto is client-settable
+// unless a proxy overwrites it, and r.TLS is nil behind a TLS-terminating
+// proxy. Plain http is only expected for local development.
+func cookieSecure(cfg *config.Config) bool {
+	return cfg != nil && strings.HasPrefix(cfg.FrontendURL, "https://")
 }
 
 func generateToken() (string, error) {

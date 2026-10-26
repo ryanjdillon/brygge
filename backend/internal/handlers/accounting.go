@@ -606,7 +606,8 @@ func (h *AccountingHandler) HandleUploadJournalAttachment(w http.ResponseWriter,
 
 	entryID := chi.URLParam(r, "entryID")
 
-	if err := r.ParseMultipartForm(10 << 20); err != nil {
+	r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
+	if err := r.ParseMultipartForm(10 << 20); err != nil { // #nosec G120 -- body capped by MaxBytesReader above
 		Error(w, http.StatusBadRequest, "file too large or invalid multipart form")
 		return
 	}
@@ -695,7 +696,8 @@ func (h *AccountingHandler) HandleParseReceipt(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if err := r.ParseMultipartForm(10 << 20); err != nil {
+	r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
+	if err := r.ParseMultipartForm(10 << 20); err != nil { // #nosec G120 -- body capped by MaxBytesReader above
 		Error(w, http.StatusBadRequest, "file too large or invalid multipart form")
 		return
 	}
@@ -823,7 +825,8 @@ func (h *AccountingHandler) importBankStatement(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	if err := r.ParseMultipartForm(10 << 20); err != nil {
+	r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
+	if err := r.ParseMultipartForm(10 << 20); err != nil { // #nosec G120 -- body capped by MaxBytesReader above
 		Error(w, http.StatusBadRequest, "file too large or invalid multipart form")
 		return
 	}
@@ -921,25 +924,7 @@ func (h *AccountingHandler) importBankStatement(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	if overwrite {
-		// The delete also cleared ghost rows from the account's older imports,
-		// so recompute the whole account, not just this import.
-		h.svc.DB().Exec(r.Context(),
-			`UPDATE bank_imports SET
-			    row_count = (SELECT count(*) FROM bank_import_rows WHERE bank_import_id = bank_imports.id),
-			    matched_count = (SELECT count(*) FROM bank_import_rows WHERE bank_import_id = bank_imports.id AND journal_entry_id IS NOT NULL)
-			  WHERE club_id = $1 AND bank_account_code = $2`,
-			claims.ClubID, bankAccountCode)
-	} else {
-		// Recount from the rows: the bank auto-assign rule may have booked
-		// rows of this import that result.Matched does not count.
-		h.svc.DB().Exec(r.Context(),
-			`UPDATE bank_imports SET
-			    row_count = $2,
-			    matched_count = (SELECT count(*) FROM bank_import_rows WHERE bank_import_id = $1 AND journal_entry_id IS NOT NULL)
-			  WHERE id = $1`,
-			importID, result.Imported)
-	}
+	h.recountBankImport(r.Context(), claims.ClubID, bankAccountCode, importID, result.Imported, overwrite)
 
 	auditAction := "accounting.bank_imported"
 	if overwrite {
@@ -999,6 +984,35 @@ func (h *AccountingHandler) importBankStatement(w http.ResponseWriter, r *http.R
 	JSON(w, http.StatusCreated, resp)
 }
 
+// recountBankImport refreshes the stored row/matched counts after an import.
+// The rows are already committed and the counts are display metadata, not
+// books, so a failure is logged rather than failing the upload.
+func (h *AccountingHandler) recountBankImport(ctx context.Context, clubID, bankAccountCode, importID string, imported int, overwrite bool) {
+	if overwrite {
+		// The delete also cleared ghost rows from the account's older imports,
+		// so recompute the whole account, not just this import.
+		if _, err := h.svc.DB().Exec(ctx,
+			`UPDATE bank_imports SET
+			    row_count = (SELECT count(*) FROM bank_import_rows WHERE bank_import_id = bank_imports.id),
+			    matched_count = (SELECT count(*) FROM bank_import_rows WHERE bank_import_id = bank_imports.id AND journal_entry_id IS NOT NULL)
+			  WHERE club_id = $1 AND bank_account_code = $2`,
+			clubID, bankAccountCode); err != nil {
+			h.log.Error().Err(err).Str("bank_account_code", bankAccountCode).Msg("failed to recount bank imports after re-import")
+		}
+		return
+	}
+	// Recount from the rows: the bank auto-assign rule may have booked
+	// rows of this import that the import result does not count as matched.
+	if _, err := h.svc.DB().Exec(ctx,
+		`UPDATE bank_imports SET
+		    row_count = $2,
+		    matched_count = (SELECT count(*) FROM bank_import_rows WHERE bank_import_id = $1 AND journal_entry_id IS NOT NULL)
+		  WHERE id = $1`,
+		importID, imported); err != nil {
+		h.log.Error().Err(err).Str("import_id", importID).Msg("failed to record bank import counts")
+	}
+}
+
 // HandleReimportBankStatement re-parses a corrected upload for an existing
 // import and replaces ONLY its unmatched rows — matched rows (booked bilag +
 // payment) are never touched, and a parsed row a booked row already represents
@@ -1032,7 +1046,8 @@ func (h *AccountingHandler) HandleReimportBankStatement(w http.ResponseWriter, r
 		return
 	}
 
-	if err := r.ParseMultipartForm(10 << 20); err != nil {
+	r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
+	if err := r.ParseMultipartForm(10 << 20); err != nil { // #nosec G120 -- body capped by MaxBytesReader above
 		Error(w, http.StatusBadRequest, "file too large or invalid multipart form")
 		return
 	}
@@ -1071,13 +1086,15 @@ func (h *AccountingHandler) HandleReimportBankStatement(w http.ResponseWriter, r
 	}
 
 	// Recompute the import's row/matched counts from the current rows.
-	h.svc.DB().Exec(r.Context(),
+	if _, err := h.svc.DB().Exec(r.Context(),
 		`UPDATE bank_imports SET
 		    row_count = (SELECT count(*) FROM bank_import_rows WHERE bank_import_id = $1),
 		    matched_count = (SELECT count(*) FROM bank_import_rows WHERE bank_import_id = $1 AND journal_entry_id IS NOT NULL)
 		  WHERE id = $1`,
 		importID,
-	)
+	); err != nil {
+		h.log.Error().Err(err).Str("import_id", importID).Msg("failed to recount bank import after re-import")
+	}
 
 	if h.audit != nil {
 		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,
@@ -1800,7 +1817,12 @@ func (h *AccountingHandler) HandleIncomeStatementPDF(w http.ResponseWriter, r *h
 		return
 	}
 
-	header := h.getReportHeader(r.Context(), claims.ClubID, stmt.Year)
+	header, err := h.getReportHeader(r.Context(), claims.ClubID, stmt.Year)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to load report header")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
 	pdfData, err := accounting.IncomeStatementPDF(header, stmt)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to generate PDF")
@@ -1810,7 +1832,7 @@ func (h *AccountingHandler) HandleIncomeStatementPDF(w http.ResponseWriter, r *h
 
 	w.Header().Set("Content-Type", "application/pdf")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="resultatregnskap-%d.pdf"`, stmt.Year))
-	w.Write(pdfData)
+	w.Write(pdfData) // #nosec G705 -- server-rendered PDF bytes served as application/pdf, not HTML
 }
 
 func (h *AccountingHandler) HandleBalanceSheet(w http.ResponseWriter, r *http.Request) {
@@ -1858,7 +1880,12 @@ func (h *AccountingHandler) HandleBalanceSheetPDF(w http.ResponseWriter, r *http
 		return
 	}
 
-	header := h.getReportHeader(r.Context(), claims.ClubID, bs.Year)
+	header, err := h.getReportHeader(r.Context(), claims.ClubID, bs.Year)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to load report header")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
 	pdfData, err := accounting.BalanceSheetPDF(header, bs)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to generate PDF")
@@ -1868,7 +1895,7 @@ func (h *AccountingHandler) HandleBalanceSheetPDF(w http.ResponseWriter, r *http
 
 	w.Header().Set("Content-Type", "application/pdf")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="balanse-%d.pdf"`, bs.Year))
-	w.Write(pdfData)
+	w.Write(pdfData) // #nosec G705 -- server-rendered PDF bytes served as application/pdf, not HTML
 }
 
 func (h *AccountingHandler) HandleTrialBalance(w http.ResponseWriter, r *http.Request) {
@@ -1919,15 +1946,20 @@ func (h *AccountingHandler) HandleGeneralLedger(w http.ResponseWriter, r *http.R
 	JSON(w, http.StatusOK, gl)
 }
 
-func (h *AccountingHandler) getReportHeader(ctx context.Context, clubID string, year int) accounting.ReportHeader {
+// getReportHeader loads the club identity printed on report PDFs. A lookup
+// failure is an error rather than a blank header: a filed report without the
+// club's name and organisation number is not a usable document.
+func (h *AccountingHandler) getReportHeader(ctx context.Context, clubID string, year int) (accounting.ReportHeader, error) {
 	header := accounting.ReportHeader{Year: year}
 	if h.svc.DB() != nil {
-		h.svc.DB().QueryRow(ctx,
+		if err := h.svc.DB().QueryRow(ctx,
 			`SELECT name, COALESCE(org_number, '') FROM clubs WHERE id = $1`,
 			clubID,
-		).Scan(&header.ClubName, &header.OrgNumber)
+		).Scan(&header.ClubName, &header.OrgNumber); err != nil {
+			return header, fmt.Errorf("load report header for club %s: %w", clubID, err)
+		}
 	}
-	return header
+	return header, nil
 }
 
 // ── Momskompensasjon ────────────────────────────────────────
@@ -1983,7 +2015,12 @@ func (h *AccountingHandler) HandleMomskompensasjonPDF(w http.ResponseWriter, r *
 		return
 	}
 
-	header := h.getReportHeader(r.Context(), claims.ClubID, report.Year)
+	header, err := h.getReportHeader(r.Context(), claims.ClubID, report.Year)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to load report header")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
 	pdfData, err := accounting.MomskompPDF(header, report)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to generate momskomp PDF")
@@ -1999,7 +2036,7 @@ func (h *AccountingHandler) HandleMomskompensasjonPDF(w http.ResponseWriter, r *
 
 	w.Header().Set("Content-Type", "application/pdf")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="momskompensasjon-%d-%s.pdf"`, report.Year, model))
-	w.Write(pdfData)
+	w.Write(pdfData) // #nosec G705 -- server-rendered PDF bytes served as application/pdf, not HTML
 }
 
 type saveMomskompRequest struct {
@@ -2365,7 +2402,8 @@ func (h *AccountingHandler) HandleImportVippsSettlement(w http.ResponseWriter, r
 		return
 	}
 
-	if err := r.ParseMultipartForm(10 << 20); err != nil {
+	r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
+	if err := r.ParseMultipartForm(10 << 20); err != nil { // #nosec G120 -- body capped by MaxBytesReader above
 		Error(w, http.StatusBadRequest, "file too large or invalid multipart form")
 		return
 	}
@@ -2411,9 +2449,11 @@ func (h *AccountingHandler) HandleImportVippsSettlement(w http.ResponseWriter, r
 		return
 	}
 
-	h.svc.DB().Exec(r.Context(),
+	if _, err := h.svc.DB().Exec(r.Context(),
 		`UPDATE vipps_imports SET row_count = $1 WHERE id = $2`,
-		result.Imported, importID)
+		result.Imported, importID); err != nil {
+		h.log.Error().Err(err).Str("import_id", importID).Msg("failed to record vipps import row count")
+	}
 
 	// On the per-charge model, charges that name their checkout order are
 	// booked straight away (BRY-337); the rest wait in the Tildel queue.

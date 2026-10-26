@@ -3,8 +3,11 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -279,6 +282,22 @@ type boatDimensions struct {
 	length, beam, draft float64
 }
 
+// parseBoatDimensions reads the optional length/beam/draft filter. It
+// applies only when all three are given; a given value must parse.
+func parseBoatDimensions(q url.Values) (*boatDimensions, error) {
+	lengthStr, beamStr, draftStr := q.Get("length"), q.Get("beam"), q.Get("draft")
+	if lengthStr == "" || beamStr == "" || draftStr == "" {
+		return nil, nil
+	}
+	length, lerr := strconv.ParseFloat(lengthStr, 64)
+	beam, berr := strconv.ParseFloat(beamStr, 64)
+	draft, derr := strconv.ParseFloat(draftStr, 64)
+	if err := errors.Join(lerr, berr, derr); err != nil {
+		return nil, err
+	}
+	return &boatDimensions{length: length, beam: beam, draft: draft}, nil
+}
+
 func (h *BookingsHandler) countTotalUnits(ctx context.Context, clubSlug, resourceType string, dims *boatDimensions) (int, error) {
 	var totalUnits int
 	var err error
@@ -363,16 +382,10 @@ func (h *BookingsHandler) HandleAggregateAvailability(w http.ResponseWriter, r *
 		return
 	}
 
-	lengthStr := r.URL.Query().Get("length")
-	beamStr := r.URL.Query().Get("beam")
-	draftStr := r.URL.Query().Get("draft")
-
-	var dims *boatDimensions
-	if lengthStr != "" && beamStr != "" && draftStr != "" {
-		dims = &boatDimensions{}
-		fmt.Sscanf(lengthStr, "%f", &dims.length)
-		fmt.Sscanf(beamStr, "%f", &dims.beam)
-		fmt.Sscanf(draftStr, "%f", &dims.draft)
+	dims, err := parseBoatDimensions(r.URL.Query())
+	if err != nil {
+		Error(w, http.StatusBadRequest, "length, beam and draft must be numbers")
+		return
 	}
 
 	totalUnits, err := h.countTotalUnits(ctx, h.config.ClubSlug, resourceType, dims)

@@ -64,10 +64,10 @@ func main() {
 	if dryRun {
 		verb = "would regenerate"
 	}
-	log.Printf("scanned %d open-period bilags; %s %d settlements (%d charges, %d faktura-linked)",
+	log.Printf("scanned %d open-period bilags; %s %d settlements (%d charges, %d faktura-linked)", // #nosec G706 -- integer counts and a fixed verb; nothing user-controlled
 		res.ScannedBilags, verb, res.Regenerated, res.ChargesBooked, res.ReceivableCharges)
-	log.Printf("left %d closed-period bilags on the legacy model", res.SkippedClosedPeriod)
+	log.Printf("left %d closed-period bilags on the legacy model", res.SkippedClosedPeriod) // #nosec G706 -- integer count only
 	if len(res.Failed) > 0 {
-		log.Printf("FAILED (bank row ids, left for manual review): %v", res.Failed)
+		log.Printf("FAILED (bank row ids, left for manual review): %v", res.Failed) // #nosec G706 -- database-generated row ids, not operator or member input
 	}
 }

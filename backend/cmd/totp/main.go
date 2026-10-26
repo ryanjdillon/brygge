@@ -13,7 +13,7 @@ import (
 	"github.com/pquerna/otp/totp"
 )
 
-const seedTOTPSecretFile = ".seed-totp-secret"
+const seedTOTPSecretFile = ".seed-totp-secret" // #nosec G101 -- a file name, not the secret it holds
 
 func main() {
 	b, err := os.ReadFile(seedTOTPSecretFile)

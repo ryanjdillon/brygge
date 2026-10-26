@@ -77,13 +77,17 @@ func TestSetAndClearSessionCookie(t *testing.T) {
 
 	// Clear
 	rec2 := httptest.NewRecorder()
-	ClearSessionCookie(rec2)
+	ClearSessionCookie(rec2, true)
 	cookies2 := rec2.Result().Cookies()
 	if len(cookies2) != 1 {
 		t.Fatalf("expected 1 cookie, got %d", len(cookies2))
 	}
 	if cookies2[0].MaxAge != -1 {
 		t.Errorf("MaxAge = %d, want -1 (delete)", cookies2[0].MaxAge)
+	}
+	if !cookies2[0].Secure || !cookies2[0].HttpOnly || cookies2[0].SameSite != http.SameSiteLaxMode {
+		t.Errorf("cleared cookie attrs = Secure:%v HttpOnly:%v SameSite:%v; want the set cookie's",
+			cookies2[0].Secure, cookies2[0].HttpOnly, cookies2[0].SameSite)
 	}
 }
 

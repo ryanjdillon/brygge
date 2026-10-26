@@ -41,7 +41,7 @@ func TestInvoiceBodyWithVipps(t *testing.T) {
 		time.Date(2026, 9, 5, 0, 0, 0, 0, time.UTC), 1.0, "000002850028", "3470.05.02793",
 		url)
 	mustNoRawTemplate(t, "invoice", body)
-	// The button href must carry the exact URL (template.URL, not filtered).
+	// The button href must carry the exact URL, only HTML-escaped.
 	if !strings.Contains(body, `href="https://pay.vipps.no/v2/?token=xyz&amp;foo=bar"`) {
 		t.Errorf("invoice: Vipps URL missing/mangled in button href")
 	}

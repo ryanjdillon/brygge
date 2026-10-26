@@ -281,7 +281,11 @@ func (h *ForumHandler) HandleSendMessage(w http.ResponseWriter, r *http.Request)
 	var sendResp struct {
 		EventID string `json:"event_id"`
 	}
-	json.NewDecoder(resp.Body).Decode(&sendResp)
+	if err := json.NewDecoder(resp.Body).Decode(&sendResp); err != nil {
+		h.log.Error().Err(err).Msg("failed to decode Dendrite send response")
+		Error(w, http.StatusBadGateway, "messaging service returned an invalid response")
+		return
+	}
 
 	JSON(w, http.StatusOK, map[string]string{"id": sendResp.EventID})
 }

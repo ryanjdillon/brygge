@@ -19,7 +19,7 @@ import (
 // enrolled demo admin. It is gitignored and reused across re-seeds so a
 // developer can scan it into an authenticator once; CI runners start
 // without it and get a fresh secret each run.
-const seedTOTPSecretFile = ".seed-totp-secret"
+const seedTOTPSecretFile = ".seed-totp-secret" // #nosec G101 -- a file name, not the secret it holds
 
 // ensureSeedTOTPSecret returns the persisted base32 secret, generating
 // and writing one if the file is absent.

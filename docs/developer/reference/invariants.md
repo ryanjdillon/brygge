@@ -306,6 +306,18 @@ Price items carry no account. The category map (`revenueAccountMap`, read throug
 
 **Failure mode:** a client sets its own IP with a header. It gets around the per-IP rate limits on login and magic-link requests, and forges the IP in sessions and audit logs. chi's `RealIP` had this hole (BRY-423).
 
+### Outbound fetches of user-supplied URLs check the dialled IP
+
+**Rule:** a server-side fetch of a URL a user supplied (today: the inbox image proxy, `HandleProxyImage`) refuses non-public addresses in `net.Dialer.Control`, which receives the resolved `ip:port` of every connection attempt — the first request, each redirect hop, and each Happy-Eyeballs fallback. A `LookupHost` check before the request is only a fast 403, never the guard. `isPrivateIP` is the one definition of "non-public": anything not global unicast, RFC 1918 / ULA, loopback, link-local, CGNAT `100.64.0.0/10`, `0.0.0.0/8`, `192.0.0.0/24`, `198.18.0.0/15`, `240.0.0.0/4` and NAT64 `64:ff9b::/96`, with IPv4-mapped IPv6 unmapped first; an unparseable address counts as non-public. The client's Transport has no `Proxy`, because through a proxy Control would vet the proxy's address instead of the target's.
+
+**Failure mode:** a hostname that resolves to a public IP at check time and to `127.0.0.1` or `169.254.169.254` at dial time (DNS rebinding), or a redirect to an internal host, makes the server fetch internal services for the caller. Checking in `DialContext` does not help: the Transport passes it `host:port` with the name, not the IP.
+
+### The session cookie's Secure flag follows `FRONTEND_URL`
+
+**Rule:** `SetSessionCookie` and `ClearSessionCookie` take `Secure` from `cookieSecure(cfg)` (`FRONTEND_URL` starts with `https://`), never from `r.TLS` or `X-Forwarded-Proto`, and both set the same `Secure`/`HttpOnly`/`SameSite=Lax`.
+
+**Failure mode:** behind the TLS-terminating proxy `r.TLS` is nil and whether `X-Forwarded-Proto` is trustworthy depends on the proxy, so the session cookie can be issued without `Secure` and leak over a plain-http request.
+
 ---
 
 ## Invoicing
