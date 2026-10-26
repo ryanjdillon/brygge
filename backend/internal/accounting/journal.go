@@ -61,24 +61,24 @@ func (s *Service) DeleteDraftJournalEntry(ctx context.Context, clubID, entryID s
 
 // JournalEntry represents a bilag (voucher) with its lines.
 type JournalEntry struct {
-	ID             string         `json:"id"`
-	ClubID         string         `json:"club_id"`
-	FiscalPeriodID string         `json:"fiscal_period_id"`
-	EntryNumber    int            `json:"entry_number"`
-	EntryDate      string         `json:"entry_date"`
-	Description    string         `json:"description"`
-	Status         string         `json:"status"`
-	Source         string         `json:"source"`
-	SourceID       *string        `json:"source_id"`
-	SourceTable    *string        `json:"source_table"`
-	AttachmentURL  *string        `json:"attachment_url"`
-	CreatedBy      string         `json:"created_by"`
-	PostedBy       *string        `json:"posted_by"`
-	PostedAt       *time.Time     `json:"posted_at"`
-	VoidedBy       *string        `json:"voided_by"`
-	VoidedAt       *time.Time     `json:"voided_at"`
-	CreatedAt      time.Time      `json:"created_at"`
-	Lines          []JournalLine  `json:"lines,omitempty"`
+	ID             string        `json:"id"`
+	ClubID         string        `json:"club_id"`
+	FiscalPeriodID string        `json:"fiscal_period_id"`
+	EntryNumber    int           `json:"entry_number"`
+	EntryDate      string        `json:"entry_date"`
+	Description    string        `json:"description"`
+	Status         string        `json:"status"`
+	Source         string        `json:"source"`
+	SourceID       *string       `json:"source_id"`
+	SourceTable    *string       `json:"source_table"`
+	AttachmentURL  *string       `json:"attachment_url"`
+	CreatedBy      string        `json:"created_by"`
+	PostedBy       *string       `json:"posted_by"`
+	PostedAt       *time.Time    `json:"posted_at"`
+	VoidedBy       *string       `json:"voided_by"`
+	VoidedAt       *time.Time    `json:"voided_at"`
+	CreatedAt      time.Time     `json:"created_at"`
+	Lines          []JournalLine `json:"lines,omitempty"`
 }
 
 // JournalLine represents a single debit or credit posting.
@@ -126,11 +126,25 @@ func (s *Service) CreateJournalEntry(ctx context.Context, input CreateJournalEnt
 	}
 	defer tx.Rollback(ctx)
 
+	entry, err := createJournalEntryTx(ctx, tx, input)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("committing transaction: %w", err)
+	}
+	return entry, nil
+}
+
+// createJournalEntryTx is CreateJournalEntry inside the caller's
+// transaction, for a booking that already holds a row lock and must not
+// wait on a second pool connection while it does.
+func createJournalEntryTx(ctx context.Context, tx pgx.Tx, input CreateJournalEntryInput) (*JournalEntry, error) {
 	// Verify period is open. FOR SHARE holds the period open until this
 	// entry commits, so ClosePeriod (FOR UPDATE) waits for it and then sees
 	// the new draft instead of closing around it.
 	var periodStatus string
-	err = tx.QueryRow(ctx,
+	err := tx.QueryRow(ctx,
 		`SELECT status FROM fiscal_periods WHERE id = $1 AND club_id = $2 FOR SHARE`,
 		input.FiscalPeriodID, input.ClubID,
 	).Scan(&periodStatus)
@@ -202,10 +216,6 @@ func (s *Service) CreateJournalEntry(ctx context.Context, input CreateJournalEnt
 		entry.Lines = append(entry.Lines, jl)
 	}
 
-	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("committing transaction: %w", err)
-	}
-
 	return &entry, nil
 }
 
@@ -218,9 +228,18 @@ func (s *Service) PostJournalEntry(ctx context.Context, clubID, entryID, postedB
 	}
 	defer tx.Rollback(ctx)
 
+	if err := postJournalEntryTx(ctx, tx, clubID, entryID, postedBy); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+// postJournalEntryTx is PostJournalEntry inside the caller's transaction,
+// which then holds the entry and its period until it ends.
+func postJournalEntryTx(ctx context.Context, tx pgx.Tx, clubID, entryID, postedBy string) error {
 	// Get entry and verify it's draft
 	var status, periodID string
-	err = tx.QueryRow(ctx,
+	err := tx.QueryRow(ctx,
 		`SELECT status, fiscal_period_id FROM journal_entries WHERE id = $1 AND club_id = $2 FOR UPDATE`,
 		entryID, clubID,
 	).Scan(&status, &periodID)
@@ -270,8 +289,7 @@ func (s *Service) PostJournalEntry(ctx context.Context, clubID, entryID, postedB
 	if err != nil {
 		return fmt.Errorf("posting entry: %w", err)
 	}
-
-	return tx.Commit(ctx)
+	return nil
 }
 
 // VoidJournalEntry creates a reversal entry and marks the original as voided.

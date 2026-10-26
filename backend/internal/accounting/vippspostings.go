@@ -29,7 +29,9 @@ import (
 // first marks the source row's journal_entry_id with a guarded UPDATE ...
 // WHERE journal_entry_id IS NULL (the loser of a concurrent double booking
 // deletes its still-draft entry and returns the winner's), and only then
-// posts; a failed post unlinks the row and discards the draft.
+// posts; a failed post unlinks the row and discards the draft. A charge
+// assigned to a faktura is booked in the faktura-lock transaction instead
+// (postVippsChargeTx), where a rollback does both.
 
 // VippsChargePostResult is the outcome of booking a single Vipps belastning.
 type VippsChargePostResult struct {
@@ -60,7 +62,12 @@ type VippsPayoutClearResult struct {
 // vippsAccounts returns the club's configured Vipps clearing and fee account
 // codes, falling back to the model defaults (2900 / 7700) when unset.
 func (s *Service) vippsAccounts(ctx context.Context, clubID string) (clearing, fee string, err error) {
-	err = s.db.QueryRow(ctx,
+	return vippsAccountsIn(ctx, s.db, clubID)
+}
+
+// vippsAccountsIn is vippsAccounts on q.
+func vippsAccountsIn(ctx context.Context, q dbtx, clubID string) (clearing, fee string, err error) {
+	err = q.QueryRow(ctx,
 		`SELECT COALESCE(NULLIF(vipps_clearing_account, ''), $2),
 		        COALESCE(NULLIF(vipps_fee_account, ''), $3)
 		   FROM clubs WHERE id = $1`,
@@ -229,6 +236,85 @@ func (s *Service) postVippsChargeSplit(ctx context.Context, clubID, createdBy, d
 	return entry.ID, nil
 }
 
+// postVippsChargeTx is postVippsCharge inside the caller's transaction, for
+// a booking that holds the faktura lock.
+func postVippsChargeTx(ctx context.Context, tx pgx.Tx, clubID, createdBy, creditAccount, description string, b *vippsBelastning) (string, error) {
+	return postVippsChargeSplitTx(ctx, tx, clubID, createdBy, description, b, []CreateJournalLineInput{
+		{AccountCode: creditAccount, Debit: 0, Credit: b.amount, Description: description},
+	})
+}
+
+// postVippsChargeSplitTx is postVippsChargeSplit inside the caller's
+// transaction. A failed post leaves the transaction to roll back. Losing the
+// guarded mark (errChargeRaced) leaves it usable: the entry is created under
+// a savepoint that the loss rolls back to, so a caller that goes on to
+// commit never commits the losing draft.
+func postVippsChargeSplitTx(ctx context.Context, tx pgx.Tx, clubID, createdBy, description string, b *vippsBelastning, credits []CreateJournalLineInput) (string, error) {
+	clearing, _, err := vippsAccountsIn(ctx, tx, clubID)
+	if err != nil {
+		return "", err
+	}
+
+	periodID, periodStatus, err := resolvePeriodIn(ctx, tx, clubID, b.date, "")
+	if err != nil {
+		return "", fmt.Errorf("resolving fiscal period: %w", err)
+	}
+	if periodStatus == "closed" {
+		return "", fmt.Errorf("fiscal period %d is closed — reopen it or pick a different period", b.date.Year())
+	}
+
+	if _, err := tx.Exec(ctx, `SAVEPOINT vipps_charge`); err != nil {
+		return "", fmt.Errorf("savepoint: %w", err)
+	}
+	sourceID := b.id
+	sourceTable := "vipps_import_rows"
+	entry, err := createJournalEntryTx(ctx, tx, CreateJournalEntryInput{
+		FiscalPeriodID: periodID,
+		EntryDate:      b.date.Format("2006-01-02"),
+		Description:    description,
+		Source:         "vipps",
+		SourceID:       &sourceID,
+		SourceTable:    &sourceTable,
+		CreatedBy:      createdBy,
+		ClubID:         clubID,
+		Lines: append([]CreateJournalLineInput{
+			{AccountCode: clearing, Debit: b.amount, Credit: 0, Description: description},
+		}, credits...),
+	})
+	if err != nil {
+		return "", fmt.Errorf("creating journal entry: %w", err)
+	}
+
+	tag, err := tx.Exec(ctx,
+		`UPDATE vipps_import_rows SET journal_entry_id = $1
+		  WHERE id = $2 AND club_id = $3 AND journal_entry_id IS NULL`,
+		entry.ID, b.id, clubID,
+	)
+	if err != nil {
+		return "", fmt.Errorf("marking charge reconciled: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		if _, err := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT vipps_charge`); err != nil {
+			return "", fmt.Errorf("rollback to savepoint: %w", err)
+		}
+		var existing string
+		if err := tx.QueryRow(ctx,
+			`SELECT journal_entry_id FROM vipps_import_rows WHERE id = $1 AND club_id = $2`,
+			b.id, clubID,
+		).Scan(&existing); err != nil {
+			return "", fmt.Errorf("charge already reconciled but reading winner failed: %w", err)
+		}
+		return existing, errChargeRaced
+	}
+	if err := postJournalEntryTx(ctx, tx, clubID, entry.ID, createdBy); err != nil {
+		return "", fmt.Errorf("posting journal entry: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `RELEASE SAVEPOINT vipps_charge`); err != nil {
+		return "", fmt.Errorf("release savepoint: %w", err)
+	}
+	return entry.ID, nil
+}
+
 // unwindVippsPosting undoes a posting whose PostJournalEntry failed: it
 // unlinks the rows the draft was marked on and deletes the draft, so the
 // charge or payout goes back to the Tildel queue instead of sitting on an
@@ -318,26 +404,25 @@ func (s *Service) AssignVippsChargeToInvoice(ctx context.Context, clubID, vippsR
 	}
 
 	desc := fmt.Sprintf("Vipps innbetaling: %s", b.customerName)
-	entryID, err := s.postVippsCharge(ctx, clubID, createdBy, receivablesAccountCode, desc, b)
+	entryID, err := postVippsChargeTx(ctx, tx, clubID, createdBy, receivablesAccountCode, desc, b)
 	if err == errChargeRaced {
 		return &VippsChargePostResult{EntryID: entryID, AlreadyReconciled: true}, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	// Record the settled faktura while the lock is held, so a booking that
-	// waited for it sees this charge.
-	if _, err := s.db.Exec(ctx,
+	// Record the settled faktura in the same commit as the booking, so a
+	// booking that waited for the lock sees this charge.
+	if _, err := tx.Exec(ctx,
 		`UPDATE vipps_import_rows SET invoice_id = $3 WHERE id = $1 AND club_id = $2`,
 		vippsRowID, clubID, invoiceID,
 	); err != nil {
-		s.log.Warn().Err(err).Str("vipps_row_id", vippsRowID).
-			Msg("vipps per-charge assign: recording the settled invoice failed")
+		return nil, fmt.Errorf("recording the settled invoice: %w", err)
 	}
-	// Release the lock before the back-link, which updates the faktura from
-	// another connection and would otherwise wait on it.
+	// The back-link updates the faktura, so it runs once the commit has
+	// released the lock.
 	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("release invoice lock: %w", err)
+		return nil, fmt.Errorf("commit vipps charge assign: %w", err)
 	}
 
 	// Back-link the invoice payment. Best-effort: the GL is already correct

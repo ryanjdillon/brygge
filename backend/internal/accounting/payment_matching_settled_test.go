@@ -27,10 +27,10 @@ type matchingFixture struct {
 	paid     fin.Invoice
 }
 
-func newMatchingFixture(t *testing.T) *matchingFixture {
+func newMatchingFixture(t *testing.T, opts ...testutil.DBOption) *matchingFixture {
 	t.Helper()
 	testutil.SkipIfNoDB(t)
-	pool := testutil.SetupTestDB(t)
+	pool := testutil.SetupTestDB(t, opts...)
 	svc := NewService(pool, audit.NewService(pool, zerolog.Nop()), zerolog.Nop())
 	club := fin.NewClub(t, pool, fin.WithKontoplan(svc.SeedKontoplan))
 	f := &matchingFixture{svc: svc, club: club}
@@ -140,7 +140,11 @@ func TestBankSyncKIDMatchesOnlyOwedFakturas(t *testing.T) {
 // orphan draft: the row link is taken before posting and guarded on the row
 // still being unbooked.
 func TestConcurrentBankSyncsBookARowOnce(t *testing.T) {
-	f := newMatchingFixture(t)
+	// Two connections: four syncs queued on one faktura must still finish,
+	// so the lock holder never waits for a connection of its own.
+	f := newMatchingFixture(t, testutil.WithMaxConns(2))
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
+	defer cancel()
 	importID := f.club.NewBankImport(t)
 	row := f.club.NewBankRow(t, importID, fin.BankRowOpts{Cents: f.open.TotalCents, KID: f.open.KID})
 
@@ -150,7 +154,7 @@ func TestConcurrentBankSyncsBookARowOnce(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if _, err := f.svc.BankSync(context.Background(), f.club.ID, f.club.Treasurer.ID); err != nil {
+			if _, err := f.svc.BankSync(ctx, f.club.ID, f.club.Treasurer.ID); err != nil {
 				errs <- err
 			}
 		}()

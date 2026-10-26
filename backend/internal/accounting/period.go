@@ -2,10 +2,12 @@ package accounting
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // FiscalPeriod represents a fiscal year for a club.
@@ -44,12 +46,30 @@ func (s *Service) CreatePeriod(ctx context.Context, clubID string, year int) (*F
 // Returns (id, status, error). Status is "open" or "closed"; callers should
 // refuse to book new entries into a closed period.
 func (s *Service) ResolvePeriodForDate(ctx context.Context, clubID string, date time.Time) (id, status string, err error) {
-	err = s.db.QueryRow(ctx,
-		`SELECT id, status FROM fiscal_periods
-		 WHERE club_id = $1 AND $2::date BETWEEN start_date AND end_date
-		 LIMIT 1`,
-		clubID, date.Format("2006-01-02"),
-	).Scan(&id, &status)
+	return resolvePeriodForDate(ctx, s.db, clubID, date)
+}
+
+// dbtx is satisfied by both the pool and a transaction, for helpers that a
+// transaction holding a row lock must run on its own connection.
+type dbtx interface {
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
+// resolvePeriodForDate is ResolvePeriodForDate on q. The auto-create is ON
+// CONFLICT DO NOTHING followed by a re-read, so a concurrent create of the
+// same year neither fails this call nor aborts the caller's transaction.
+func resolvePeriodForDate(ctx context.Context, q dbtx, clubID string, date time.Time) (id, status string, err error) {
+	lookup := func() error {
+		return q.QueryRow(ctx,
+			`SELECT id, status FROM fiscal_periods
+			 WHERE club_id = $1 AND $2::date BETWEEN start_date AND end_date
+			 LIMIT 1`,
+			clubID, date.Format("2006-01-02"),
+		).Scan(&id, &status)
+	}
+	err = lookup()
 	if err == nil {
 		return id, status, nil
 	}
@@ -58,11 +78,28 @@ func (s *Service) ResolvePeriodForDate(ctx context.Context, clubID string, date 
 	}
 
 	// Auto-create as a calendar-year period.
-	p, cerr := s.CreatePeriod(ctx, clubID, date.Year())
-	if cerr != nil {
-		return "", "", cerr
+	year := date.Year()
+	err = q.QueryRow(ctx,
+		`INSERT INTO fiscal_periods (club_id, year, start_date, end_date)
+		 VALUES ($1, $2, $3, $4)
+		 ON CONFLICT (club_id, year) DO NOTHING
+		 RETURNING id, status`,
+		clubID, year, fmt.Sprintf("%d-01-01", year), fmt.Sprintf("%d-12-31", year),
+	).Scan(&id, &status)
+	if err == nil {
+		return id, status, nil
 	}
-	return p.ID, p.Status, nil
+	if err != pgx.ErrNoRows {
+		return "", "", fmt.Errorf("creating fiscal period: %w", err)
+	}
+	// The insert found a period for the year already there: either created
+	// concurrently, or one whose dates don't follow the calendar year.
+	if err := lookup(); errors.Is(err, pgx.ErrNoRows) {
+		return "", "", fmt.Errorf("no fiscal period covers %s; the %d period exists with other dates", date.Format("2006-01-02"), year)
+	} else if err != nil {
+		return "", "", fmt.Errorf("looking up fiscal period: %w", err)
+	}
+	return id, status, nil
 }
 
 // ListPeriods returns all fiscal periods for a club, newest first.

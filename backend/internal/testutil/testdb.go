@@ -71,11 +71,21 @@ func redisAddr() string {
 	return opt.Addr
 }
 
+// DBOption tunes the pool SetupTestDB returns.
+type DBOption func(*pgxpool.Config)
+
+// WithMaxConns caps the returned pool at n connections. Concurrency tests use
+// a small cap so that a code path waiting for a second connection while it
+// holds a row lock hangs in the test instead of only under production load.
+func WithMaxConns(n int32) DBOption {
+	return func(c *pgxpool.Config) { c.MaxConns = n }
+}
+
 // SetupTestDB connects to PostgreSQL via DATABASE_URL, creates an isolated
 // schema with a random name, runs all migrations against it, and returns a
 // pool whose search_path is set to that schema. The schema is dropped in
 // t.Cleanup.
-func SetupTestDB(t *testing.T) *pgxpool.Pool {
+func SetupTestDB(t *testing.T, opts ...DBOption) *pgxpool.Pool {
 	t.Helper()
 	SkipIfNoDB(t)
 
@@ -110,6 +120,9 @@ func SetupTestDB(t *testing.T) *pgxpool.Pool {
 		t.Fatalf("parsing database URL: %v", err)
 	}
 	poolCfg.ConnConfig.RuntimeParams["search_path"] = schema
+	for _, opt := range opts {
+		opt(poolCfg)
+	}
 
 	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
 	if err != nil {
