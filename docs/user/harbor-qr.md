@@ -32,17 +32,27 @@ There are two ways to print.
 
 **Poster** on a target's row downloads an A4 portrait PDF with the club name, label, location, a large QR code with the short address under it, the price and scan instructions.
 
-### Cards: 2, 4 or 6 per A4 page
+### Cards: 2, 3, 4 or 6 per A4 page
 
 For several codes on one sheet, or one smaller card:
 
 1. Tick the targets to print, or **Select all**. Archived targets can't be selected.
-2. Choose **Cards per page**: 2, 4 or 6. The page is A4 landscape.
+2. Choose **Cards per page**: 2, 3, 4 or 6. The page is A4 landscape; 3 per page is one row of tall cards.
 3. Click **Print selected**. To print a single card, use the printer button on its row instead.
 
-A print page opens in a new tab. Each page has the club logo (when one is uploaded under Admin → Site content) and the club name at the top, with the scan-and-pay instructions beside it, one line per chosen language. Each card has a border, the label, the target's names in the chosen languages in a smaller grey line, the price, the QR code and the short address under it. You can switch between 2, 4 and 6 per page there before printing.
+A print page opens in a new tab. Each page has the club logo (when one is uploaded under Admin → Site content) and the club name at the top, with the scan-and-pay instructions beside it, one line per chosen language. Each card has a border, the label, the target's names in the chosen languages in a smaller grey line, the price, the QR code and the short address under it. You can switch between 2, 3, 4 and 6 per page there before printing.
 
-The card size depends only on cards per page. A page with fewer cards, such as a single card or the last page of a selection, keeps the cards at that size and centres them. So to print one card at the size it would have on a 6-up sheet, print it with **6 per page**.
+The card size depends on cards per page, and a little on the header (see below). A page with fewer cards, such as a single card or the last page of a selection, keeps the cards at that size and centres them. So to print one card at the size it would have on a 6-up sheet, print it with **6 per page**.
+
+### Long names and many languages
+
+A card's label, translations and price shrink together to make room, down to about 60% of their normal size, so the QR code keeps a size phones scan reliably: at least 35 mm on 4- and 6-up cards, and 60 mm on 2- and 3-up cards. Nothing is cut off. The card size also depends on the header, so ticking more languages makes the cards a little shorter and their text a little smaller. If the browser has a minimum font size set, small text can't shrink that far, so on a crowded card the QR code may end up a little smaller than intended without being flagged; check the preview, or print fewer per page.
+
+If even the smallest text leaves too little room for the QR code, the card gets a red outline and the note "Too much text for this size", and the toolbar says how many cards have too much text. The outline and note show on screen only; they are not printed. To fix it, do one of:
+
+- shorten the label or its names in other languages (edit the target);
+- untick some languages;
+- print fewer cards per page.
 
 The instructions mention choosing a quantity unless every card on the page has a fixed price.
 

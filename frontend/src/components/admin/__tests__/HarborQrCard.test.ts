@@ -31,4 +31,14 @@ describe('HarborQrCard', () => {
     const wrapper = mount(HarborQrCard, { props: { ...base, translations: [] } })
     expect(wrapper.find('[data-testid="qr-card-translations"]').exists()).toBe(false)
   })
+
+  it('shows the overflow note and outline only when flagged', () => {
+    const fits = mount(HarborQrCard, { props: base })
+    expect(fits.find('[data-testid="qr-card-overflow"]').exists()).toBe(false)
+    expect(fits.classes()).not.toContain('qr-card--overflow')
+
+    const flagged = mount(HarborQrCard, { props: { ...base, overflow: true } })
+    expect(flagged.get('[data-testid="qr-card-overflow"]').text()).toBe('harborTargets.print.overflowNote')
+    expect(flagged.classes()).toContain('qr-card--overflow')
+  })
 })

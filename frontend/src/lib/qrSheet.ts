@@ -1,11 +1,11 @@
 // Layout helpers for the harbor QR print sheet (BRY-271): A4 landscape pages
-// holding 2, 4 or 6 cards. The page lays the cards out on a fixed grid for
+// holding 2, 3, 4 or 6 cards. The page lays the cards out on a fixed grid for
 // the cards-per-page choice, so a page with fewer cards (or a single card)
 // prints them at the size they would have on a full page.
 
-export type CardsPerPage = 2 | 4 | 6
+export type CardsPerPage = 2 | 3 | 4 | 6
 
-export const CARDS_PER_PAGE: readonly CardsPerPage[] = [2, 4, 6]
+export const CARDS_PER_PAGE: readonly CardsPerPage[] = [2, 3, 4, 6]
 export const DEFAULT_CARDS_PER_PAGE: CardsPerPage = 4
 
 export function parseCardsPerPage(v: unknown): CardsPerPage {
@@ -17,6 +17,8 @@ export function gridDims(per: CardsPerPage): { cols: number; rows: number } {
   switch (per) {
     case 2:
       return { cols: 2, rows: 1 }
+    case 3:
+      return { cols: 3, rows: 1 }
     case 6:
       return { cols: 3, rows: 2 }
     default:
@@ -79,4 +81,62 @@ export function cardTranslations(
     .filter((code) => code !== clubLang)
     .map((code) => translations?.[code]?.trim() ?? '')
     .filter(Boolean)
+}
+
+// Card text fitting (BRY-438). A card's title, translations and price shrink
+// together, down to FIT_FLOOR of their design size, so long names and many
+// languages still leave the QR at least its minimum printed size. Below
+// that the card is flagged rather than clipped or squashed.
+export const MIN_QR_MM = 35
+export const MIN_QR_MM_LARGE = 60
+export const FIT_FLOOR = 0.6
+export const FIT_STEP = 0.05
+
+// CSS pixels per millimetre: CSS fixes 1in = 96px = 25.4mm, on screen and in
+// print alike.
+export const PX_PER_MM = 96 / 25.4
+
+export function mmToPx(mm: number): number {
+  return mm * PX_PER_MM
+}
+
+export function minQrPx(per: CardsPerPage): number {
+  // 2- and 3-up cards are a full page tall, so they hold the larger code.
+  return mmToPx(per === 2 || per === 3 ? MIN_QR_MM_LARGE : MIN_QR_MM)
+}
+
+export type FitInput = {
+  // Height of the scalable text block at --fit: 1.
+  textHeightAt1: number
+  // Height that does not scale: margins, the short address line.
+  otherHeight: number
+  // The card's content-box height.
+  cardInnerHeight: number
+  minQrPx: number
+  floor?: number
+  step?: number
+}
+
+export type FitResult = { scale: number; overflow: boolean }
+
+// fitScale picks the largest scale, stepping down from 1, at which the text,
+// the fixed parts and a minimum-size QR fit the card. It treats the text
+// height as proportional to the scale; smaller type also wraps onto fewer
+// lines, so the real height is at most that and the estimate errs towards
+// leaving the QR more room.
+export function fitScale({
+  textHeightAt1,
+  otherHeight,
+  cardInnerHeight,
+  minQrPx,
+  floor = FIT_FLOOR,
+  step = FIT_STEP,
+}: FitInput): FitResult {
+  const steps = Math.max(0, Math.round((1 - floor) / step))
+  for (let i = 0; i <= steps; i++) {
+    // Rounded so repeated subtraction can't drift to 0.6499… and skip a step.
+    const scale = Math.max(floor, Math.round((1 - i * step) * 1000) / 1000)
+    if (textHeightAt1 * scale + otherHeight + minQrPx <= cardInnerHeight) return { scale, overflow: false }
+  }
+  return { scale: floor, overflow: true }
 }

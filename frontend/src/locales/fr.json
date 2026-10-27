@@ -1571,7 +1571,9 @@
       "empty": "Aucune affiche QR active sélectionnée.",
       "instructions": "Scannez le code QR avec l’appareil photo de votre téléphone, choisissez la quantité et payez avec Vipps.",
       "instructionsFixed": "Scannez le code QR avec l’appareil photo de votre téléphone et payez avec Vipps.",
-      "languages": "Langues"
+      "languages": "Langues",
+      "overflowNote": "Trop de texte pour cette taille — raccourcissez le nom ou imprimez moins de cartes par page",
+      "overflowCount": "Cartes avec trop de texte : {n}"
     }
   }
 }

@@ -2,10 +2,18 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
 import { mountWithPlugins } from '@/test/test-utils'
 import HarborQrPrintView from '@/views/admin/HarborQrPrintView.vue'
+import { minQrPx } from '@/lib/qrSheet'
 
 vi.mock('qrcode', () => ({
   default: { toString: vi.fn(async (url: string) => `<svg data-url="${url}"></svg>`) },
 }))
+
+// jsdom lays nothing out, so the fit measurement is replaced; by default
+// every card fits.
+const { measureQrCard } = vi.hoisted(() => ({
+  measureQrCard: vi.fn<(card: HTMLElement, minQrPx: number) => { scale: number; overflow: boolean }>(),
+}))
+vi.mock('@/lib/qrCardMeasure', () => ({ measureQrCard }))
 
 vi.mock('lucide-vue-next', () => ({ Printer: { template: '<span />' } }))
 
@@ -77,6 +85,8 @@ const headerLines = (wrapper: Awaited<ReturnType<typeof mountAt>>) =>
 describe('HarborQrPrintView', () => {
   beforeEach(() => {
     localStorage.clear()
+    measureQrCard.mockReset()
+    measureQrCard.mockReturnValue({ scale: 1, overflow: false })
     // The test router has no print route; silence only its no-match warning.
     const warn = console.warn
     vi.spyOn(console, 'warn').mockImplementation((...args: unknown[]) => {
@@ -100,12 +110,12 @@ describe('HarborQrPrintView', () => {
     expect(pages[0].text()).toContain('Testklubben')
   })
 
-  it('lays a single card out on the full grid of the chosen layout', async () => {
+  it('keeps a single card at its full-page cell size, in one centred track', async () => {
     mockTargets([target('a')])
     const wrapper = await mountAt('ids=a&per=6')
-    const grid = wrapper.get('.qr-page__grid')
-    expect(grid.attributes('style')).toContain('grid-template-columns: repeat(3, 1fr)')
-    expect(grid.attributes('style')).toContain('grid-template-rows: repeat(2, 1fr)')
+    const style = wrapper.get('.qr-page__grid').attributes('style')
+    expect(style).toContain('grid-template-columns: repeat(1, calc((100% - 2 * 6mm) / 3))')
+    expect(style).toContain('grid-template-rows: repeat(1, calc((100% - 1 * 6mm) / 2))')
   })
 
   it('shows the logo only when the club has one', async () => {
@@ -164,6 +174,39 @@ describe('HarborQrPrintView', () => {
     expect(wrapper.get('[data-testid="qr-card-short-url"]').text()).toBe('club.example.invalid/q/a-dock')
     const src = decodeURIComponent(wrapper.get('[data-testid="qr-card"] img').attributes('src')!)
     expect(src).toContain('data-url="https://club.example.invalid/qr/a"')
+  })
+
+  describe('text fit', () => {
+    it('sets each card to the measured scale and flags none when all fit', async () => {
+      mockTargets([target('a'), target('b')])
+      const wrapper = await mountAt('ids=a,b')
+      expect(measureQrCard).toHaveBeenCalled()
+      const cards = wrapper.findAll('[data-testid="qr-card"]')
+      for (const card of cards) expect((card.element as HTMLElement).style.getPropertyValue('--fit')).toBe('1')
+      expect(wrapper.find('[data-testid="qr-card-overflow"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="overflow-count"]').exists()).toBe(false)
+    })
+
+    it('flags the cards that overflow and counts them in the toolbar', async () => {
+      measureQrCard.mockImplementation((card) =>
+        card.dataset.targetId === 'b' ? { scale: 0.6, overflow: true } : { scale: 0.85, overflow: false },
+      )
+      mockTargets([target('a'), target('b')])
+      const wrapper = await mountAt('ids=a,b')
+      const cards = wrapper.findAll('[data-testid="qr-card"]')
+      expect((cards[0].element as HTMLElement).style.getPropertyValue('--fit')).toBe('0.85')
+      expect((cards[1].element as HTMLElement).style.getPropertyValue('--fit')).toBe('0.6')
+      expect(cards[0].find('[data-testid="qr-card-overflow"]').exists()).toBe(false)
+      expect(cards[1].find('[data-testid="qr-card-overflow"]').exists()).toBe(true)
+      expect(wrapper.get('[data-testid="overflow-count"]').text()).toBe('harborTargets.print.overflowCount')
+    })
+
+    it('uses the larger minimum QR size on 2-up cards', async () => {
+      mockTargets([target('a')])
+      await mountAt('ids=a&per=2')
+      const sizes = measureQrCard.mock.calls.map(([, min]) => min)
+      expect(sizes[sizes.length - 1]).toBeCloseTo(minQrPx(2))
+    })
   })
 
   describe('languages', () => {

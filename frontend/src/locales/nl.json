@@ -1572,7 +1572,9 @@
       "empty": "Geen actieve QR-posters geselecteerd.",
       "instructions": "Scan de QR-code met je telefooncamera, kies het aantal en betaal met Vipps.",
       "instructionsFixed": "Scan de QR-code met je telefooncamera en betaal met Vipps.",
-      "languages": "Talen"
+      "languages": "Talen",
+      "overflowNote": "Te veel tekst voor dit formaat — maak de naam korter of druk minder per pagina af",
+      "overflowCount": "Kaarten met te veel tekst: {n}"
     }
   }
 }

@@ -1572,7 +1572,9 @@
       "empty": "Keine aktiven QR-Plakate ausgewählt.",
       "instructions": "Scannen Sie den QR-Code mit der Handykamera, wählen Sie die Anzahl und bezahlen Sie mit Vipps.",
       "instructionsFixed": "Scannen Sie den QR-Code mit der Handykamera und bezahlen Sie mit Vipps.",
-      "languages": "Sprachen"
+      "languages": "Sprachen",
+      "overflowNote": "Zu viel Text für diese Größe — kürzen Sie den Namen oder drucken Sie weniger pro Seite",
+      "overflowCount": "Karten mit zu viel Text: {n}"
     }
   }
 }

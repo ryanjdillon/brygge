@@ -1572,7 +1572,9 @@
       "empty": "Nessun poster QR attivo selezionato.",
       "instructions": "Scansiona il codice QR con la fotocamera del telefono, scegli la quantità e paga con Vipps.",
       "instructionsFixed": "Scansiona il codice QR con la fotocamera del telefono e paga con Vipps.",
-      "languages": "Lingue"
+      "languages": "Lingue",
+      "overflowNote": "Troppo testo per questa dimensione — accorcia il nome o stampa meno schede per pagina",
+      "overflowCount": "Schede con troppo testo: {n}"
     }
   }
 }

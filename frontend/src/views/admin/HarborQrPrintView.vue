@@ -7,6 +7,7 @@ import { Printer } from 'lucide-vue-next'
 import { useClubStore } from '@/stores/club'
 import { i18n, LOCALE_OPTIONS } from '@/i18n'
 import HarborQrCard from '@/components/admin/HarborQrCard.vue'
+import { useFitCards } from '@/composables/useFitCards'
 import {
   CARDS_PER_PAGE,
   DEFAULT_PRINT_LANGS,
@@ -67,6 +68,8 @@ const ready = computed(
   () => !loading.value && selected.value.length > 0 && selected.value.every((tg) => qrSrc.value[tg.id]),
 )
 
+const sheetRoot = ref<HTMLElement | null>(null)
+
 function printSheet() {
   window.print()
 }
@@ -104,12 +107,31 @@ const langs = computed(() =>
   ),
 )
 
-// Fixed tracks for the cards-per-page choice: a page with fewer cards leaves
-// cells empty instead of growing its cards.
-const gridStyle = computed(() => {
+// Anything that changes a card's text or the header (and so the card's
+// height) calls for a new fit.
+const { overflow, overflowCount } = useFitCards(sheetRoot, per, () => [
+  pages.value,
+  langs.value,
+  ready.value,
+  club.name,
+  club.hasLogo,
+])
+
+// Each track is the size it has on a full page, so a page with fewer cards
+// (a single card, the last page) keeps the cards at that size. Only the tracks
+// the page needs are created, and the grid centres them.
+const GRID_GAP = '6mm'
+function gridStyle(count: number) {
   const { cols, rows } = gridDims(per.value)
-  return { gridTemplateColumns: `repeat(${cols}, 1fr)`, gridTemplateRows: `repeat(${rows}, 1fr)` }
-})
+  const usedCols = Math.min(cols, Math.max(count, 1))
+  const usedRows = Math.min(rows, Math.ceil(Math.max(count, 1) / cols))
+  const col = `calc((100% - ${cols - 1} * ${GRID_GAP}) / ${cols})`
+  const row = `calc((100% - ${rows - 1} * ${GRID_GAP}) / ${rows})`
+  return {
+    gridTemplateColumns: `repeat(${usedCols}, ${col})`,
+    gridTemplateRows: `repeat(${usedRows}, ${row})`,
+  }
+}
 
 // Pathed rather than relative so the replace resolves even where the route
 // has no record of its own.
@@ -224,7 +246,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="qr-sheet-root">
+  <div ref="sheetRoot" class="qr-sheet-root">
     <div class="qr-toolbar">
       <h1 class="text-base font-semibold text-slate-900">
         {{ t('harborTargets.print.title') }}
@@ -273,6 +295,14 @@ onBeforeUnmount(() => {
       >
         <Printer class="h-4 w-4" /> {{ t('harborTargets.print.print') }}
       </button>
+      <p
+        v-if="overflowCount"
+        class="w-full text-sm font-medium text-red-700"
+        role="status"
+        data-testid="overflow-count"
+      >
+        {{ t('harborTargets.print.overflowCount', { n: overflowCount }) }}
+      </p>
       <p class="w-full text-xs text-slate-500">
         {{ t('harborTargets.print.hint') }}
       </p>
@@ -307,7 +337,7 @@ onBeforeUnmount(() => {
             </p>
           </div>
         </header>
-        <div class="qr-page__grid" :style="gridStyle">
+        <div class="qr-page__grid" :style="gridStyle(page.length)">
           <HarborQrCard
             v-for="tg in page"
             :key="tg.id"
@@ -317,6 +347,8 @@ onBeforeUnmount(() => {
             :per="per"
             :short-url="tg.short_url"
             :translations="translationsOf(tg)"
+            :overflow="!!overflow[tg.id]"
+            :data-target-id="tg.id"
           />
         </div>
       </section>
@@ -426,6 +458,8 @@ onBeforeUnmount(() => {
   flex: 1 1 0;
   min-height: 0;
   display: grid;
+  justify-content: center;
+  align-content: center;
   gap: 6mm;
 }
 

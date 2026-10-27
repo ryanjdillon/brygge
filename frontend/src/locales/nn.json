@@ -2489,7 +2489,9 @@
       "empty": "Ingen aktive QR-plakatar er valde.",
       "instructions": "Skann QR-koden med mobilkameraet, vel kor mange og betal med Vipps.",
       "instructionsFixed": "Skann QR-koden med mobilkameraet og betal med Vipps.",
-      "languages": "Språk"
+      "languages": "Språk",
+      "overflowNote": "For mykje tekst for denne storleiken — gjer namnet kortare eller skriv ut færre per side",
+      "overflowCount": "Kort med for mykje tekst: {n}"
     }
   },
   "recentPayments": {
