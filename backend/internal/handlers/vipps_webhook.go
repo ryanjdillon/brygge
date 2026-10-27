@@ -15,18 +15,21 @@ import (
 // The endpoint carries no session; each request is authenticated by verifying
 // the Vipps HMAC-SHA256 signature over the body against the registration secret.
 type VippsWebhookHandler struct {
-	db    *pgxpool.Pool
-	cfg   *config.Config
-	vipps *vipps.Client // nil when the instance has no Vipps credentials
-	log   zerolog.Logger
+	db     *pgxpool.Pool
+	cfg    *config.Config
+	vipps  *vipps.Client // nil when the instance has no Vipps credentials
+	orders orderSettlement
+	log    zerolog.Logger
 }
 
 func NewVippsWebhookHandler(db *pgxpool.Pool, cfg *config.Config, vippsClient *vipps.Client, log zerolog.Logger) *VippsWebhookHandler {
+	log = log.With().Str("handler", "vipps_webhook").Logger()
 	return &VippsWebhookHandler{
-		db:    db,
-		cfg:   cfg,
-		vipps: vippsClient,
-		log:   log.With().Str("handler", "vipps_webhook").Logger(),
+		db:     db,
+		cfg:    cfg,
+		vipps:  vippsClient,
+		orders: orderSettlement{db: db, log: log},
+		log:    log,
 	}
 }
 
@@ -90,7 +93,7 @@ func (h *VippsWebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		clubID, eventID, evt.Name, evt.Reference, json.RawMessage(raw),
 	)
 	if err != nil {
-		h.log.Error().Err(err).Str("event_id", evt.IdempotencyKey).Msg("webhook: failed to persist event")
+		h.log.Error().Err(err).Str("event_id", eventID).Msg("webhook: failed to persist event")
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}

@@ -124,11 +124,27 @@ WHERE i.id = $1 AND i.club_id = $2
 
 Even if `claims.ClubID` is the only club the user can access (typical for single-tenant deploys), the scope clause is non-negotiable. It's defense in depth against the day we support multi-club admin.
 
+## Payment providers
+
+Online payment goes through the provider-neutral interfaces in [`internal/payments`](../payments/payments.go); the full design and the card-payment decisions are in [`docs/developer/payments.md`](../../../docs/developer/payments.md).
+
+- **Registry.** `InvoiceHandler` holds a `*payments.Registry` (`h.providers`), built in `cmd/api/main.go` from the providers the instance has credentials for. A nil or empty registry means bank transfer (KID) only: `h.providers.Configured()` is the gate on every pay route and on `ensureFakturaOrderToken`. The gate's error codes and texts still say Vipps (`vipps_unavailable`, `vipps_over_limit`) because the frontend matches on them.
+- **Minting.** `mintOrderPayment(ctx, providerName, orderID)` (`order_pay.go`) owns everything provider-neutral: the amount cap and imported-receivable gate (`orderHasVippsBlockedSource`), the total and description (`orderTotal`), whether the order is a guest order, and storing the returned reference on the order. The provider owns its reference format, length limits and API mapping. Callers pass `vipps.ProviderName` until the payer can choose.
+- **Vipps adapter.** `vipps.PaymentProvider` (`internal/vipps/provider.go`) wraps `*vipps.Client`. Only payment creation goes through the registry; `AccountingHandler` (settlement sync) and `VippsWebhookHandler` (capture, payer name) keep the concrete client.
+- **Settlement.** `orderSettlement.markOrderPaid` / `markOrderFailed` (`order_settle.go`) are the only code that marks an order paid or failed. Each provider's webhook handler verifies the signature, resolves the order from its reference, collects what only it knows (Vipps: the consented payer name via `GetPayment`), and calls them. Webhooks live per provider: `vipps_webhook.go` (verify, dedupe into `vipps_webhook_events`) and `vipps_webhook_dispatch.go` (event → settlement).
+
+### Common misses
+
+- Every settlement write is guarded (`status = 'pending'`, `vipps_paid_at IS NULL`, empty `guest_name`) because providers redeliver webhooks and `vipps_webhook.go` dispatches even when the event row already existed. Keep a new write idempotent the same way.
+- `orders.paid_at` is when Brygge received the webhook; `invoices.vipps_paid_at` is the provider's capture time. Don't unify them without checking what reads each.
+- A new pay route must use the `Configured()` gate *and* go through `mintOrderPayment`, never call a provider directly, or it skips the amount cap.
+
 ## Common files worth knowing
 
 - `responses.go` — `Error`, `JSON` helpers
 - `auth.go` — `HandleMe` (`/session/me`), exposes `fresh_totp_window_ms` so the SPA countdown stays in sync
 - `features.go` — `/features` endpoint; reads per-club DB columns with env-var fallback
+- `order_pay.go` + `checkout_public.go` + `harbor_qr_public.go` + `payables_public.go` — public pay links and checkout; `order_settle.go` — marking orders paid (see Payment providers above)
 - `invoices.go` + `invoices_bulk_actions.go` + `invoices_bulk.go` — faktura lifecycle. Bulk-create lives separately because it uses a different request shape (per-user lines) than the per-row actions.
 - `invoice_credit.go` — credit-note links (BRY-342): candidates, link (fresh TOTP) and unlink. A link only records the settlement and never posts; decide "is this owed?" with `finance.OwedByMemberSQL`, never `payment_id`. The candidates endpoint doubles as the manual search (BRY-393): `?any=1` drops the payer and amount predicates, `?q=` matches faktura number or payer name (LIKE-escaped), and the list is capped at 25 with `truncated`. A cross-payer link needs `confirm_other_member` unless the credit note has no payer.
 - `accounting.go` — bank imports, Vipps reconciliation endpoints, journal entries, periods

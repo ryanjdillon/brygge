@@ -110,7 +110,7 @@ func (h *InvoiceHandler) HandleGetUserPayLink(w http.ResponseWriter, r *http.Req
 		Error(w, http.StatusBadRequest, "user ID is required")
 		return
 	}
-	if h.vipps == nil {
+	if !h.providers.Configured() {
 		Error(w, http.StatusConflict, "vipps_unavailable")
 		return
 	}

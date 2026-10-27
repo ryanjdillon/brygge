@@ -19,6 +19,7 @@ Audience: deployers, contributors, and anyone troubleshooting at the OS / protoc
 | [configuration.md](configuration.md) | Environment variables, feature flags, env-layer rules |
 | [database.md](database.md) | Postgres ops: connecting, scripts, migrations, backups |
 | [reference/enums.md](reference/enums.md) | Postgres enums, TEXT vocabularies, payment / Vipps category → GL maps |
+| [payments.md](payments.md) | Online payment providers: the `payments` seam, Vipps adapter, marking orders paid, Stripe decisions |
 
 ## Cross-cutting invariants & audit
 

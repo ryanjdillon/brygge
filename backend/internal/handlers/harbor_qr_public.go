@@ -7,6 +7,8 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/brygge-klubb/brygge/internal/vipps"
 )
 
 // Public, token-addressed harbor QR checkout (BRY-6). A poster's QR encodes
@@ -129,7 +131,7 @@ type qrPayRequest struct {
 // category.
 func (h *InvoiceHandler) HandlePayQRTarget(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	if h.vipps == nil {
+	if !h.providers.Configured() {
 		Error(w, http.StatusServiceUnavailable, "Vipps-betaling er ikke tilgjengelig akkurat nå.")
 		return
 	}
@@ -190,7 +192,7 @@ func (h *InvoiceHandler) HandlePayQRTarget(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	redirectURL, err := h.mintOrderPayment(ctx, orderID)
+	redirectURL, err := h.mintOrderPayment(ctx, vipps.ProviderName, orderID)
 	if errors.Is(err, errNothingToPay) {
 		Error(w, http.StatusBadRequest, "nothing to pay")
 		return

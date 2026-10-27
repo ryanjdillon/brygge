@@ -15,6 +15,7 @@ import (
 
 	"github.com/brygge-klubb/brygge/internal/finance"
 	"github.com/brygge-klubb/brygge/internal/middleware"
+	"github.com/brygge-klubb/brygge/internal/payments"
 	"github.com/brygge-klubb/brygge/internal/vipps"
 )
 
@@ -33,15 +34,16 @@ var errVippsBlocked = errors.New("order has a source not payable via Vipps")
 // order, which the email links to. The order (an `orders` row with an
 // order_sources link to the invoice) is created lazily the first time a faktura
 // should carry a Vipps link (create=true) and reused forever after, so resends
-// keep the same link. Returns "" when Vipps is unconfigured, the invoice is over
-// the club's Vipps amount cap (BRY-283), it is an imported faktura whose
-// receivable isn't in the GL yet (BRY-386), or nothing should be offered.
+// keep the same link. Returns "" when no payment provider is configured, the
+// invoice is over the club's Vipps amount cap (BRY-283), it is an imported
+// faktura whose receivable isn't in the GL yet (BRY-386), or nothing should be
+// offered.
 //
 // The ePayment itself is NOT minted here: its redirectUrl is only valid ~10
 // minutes, so it is useless in a pay-later email. It is minted on click by
 // HandleOrderPayRedirect. This only ensures the durable order + link exist.
 func (h *InvoiceHandler) ensureFakturaOrderToken(ctx context.Context, clubID, invoiceID string, create bool) string {
-	if h.vipps == nil {
+	if !h.providers.Configured() {
 		return ""
 	}
 
@@ -266,7 +268,7 @@ func (h *InvoiceHandler) HandleGetInvoicePayLink(w http.ResponseWriter, r *http.
 		Error(w, http.StatusBadRequest, "invoice ID is required")
 		return
 	}
-	if h.vipps == nil {
+	if !h.providers.Configured() {
 		Error(w, http.StatusConflict, "vipps_unavailable")
 		return
 	}
@@ -338,17 +340,17 @@ func (h *InvoiceHandler) HandleOrderPayRedirect(w http.ResponseWriter, r *http.R
 	// Already captured or refunded → don't charge again; send them to the site.
 	// 'pending'/'failed' fall through so an abandoned or failed attempt can retry.
 	if status == "paid" || status == "refunded" {
-		http.Redirect(w, r, h.vippsReturnURL(), http.StatusFound)
+		http.Redirect(w, r, h.paymentReturnURL(), http.StatusFound)
 		return
 	}
-	if h.vipps == nil {
+	if !h.providers.Configured() {
 		http.Error(w, "Vipps-betaling er ikke tilgjengelig akkurat nå.", http.StatusServiceUnavailable)
 		return
 	}
 
-	redirectURL, err := h.mintOrderPayment(ctx, orderID)
+	redirectURL, err := h.mintOrderPayment(ctx, vipps.ProviderName, orderID)
 	if errors.Is(err, errNothingToPay) {
-		http.Redirect(w, r, h.vippsReturnURL(), http.StatusFound)
+		http.Redirect(w, r, h.paymentReturnURL(), http.StatusFound)
 		return
 	}
 	if errors.Is(err, errVippsBlocked) {
@@ -366,11 +368,16 @@ func (h *InvoiceHandler) HandleOrderPayRedirect(w http.ResponseWriter, r *http.R
 }
 
 // mintOrderPayment sums the order's still-unpaid invoice sources and its ad-hoc
-// lines, mints a fresh ePayment for the total, and stores its reference so the
-// CAPTURED webhook can match it back. Returns the short-lived Vipps checkout
-// URL, or errNothingToPay when nothing is outstanding.
-func (h *InvoiceHandler) mintOrderPayment(ctx context.Context, orderID string) (string, error) {
-	// Refuse to charge via Vipps when an unpaid source isn't allowed (over the
+// lines, has the named provider create a payment for the total, and stores its
+// reference so the provider's webhook can match it back. Returns the
+// short-lived checkout URL, or errNothingToPay when nothing is outstanding.
+func (h *InvoiceHandler) mintOrderPayment(ctx context.Context, providerName, orderID string) (string, error) {
+	provider, ok := h.providers.Get(providerName)
+	if !ok {
+		return "", fmt.Errorf("payment provider %q is not configured", providerName)
+	}
+
+	// Refuse to charge online when an unpaid source isn't allowed (over the
 	// club's cap with no override, or forced off) — closes the gap that a token
 	// issued before the cap/override (or already emailed) would otherwise leave
 	// open (BRY-283).
@@ -390,44 +397,40 @@ func (h *InvoiceHandler) mintOrderPayment(ctx context.Context, orderID string) (
 		return "", errNothingToPay
 	}
 
-	// Guest checkout (QR / walk-up, no linked member): ask the payer to share
-	// their name so the harbor overview shows who paid instead of "Gjest"
-	// (BRY-272). Members paying their own faktura are skipped — no consent
-	// friction, and we already know them.
-	var (
-		profile *vipps.Profile
-		userID  *string
-	)
+	// A guest checkout (QR / walk-up, no linked member) lets the provider ask
+	// who paid, so the harbor overview shows a name instead of "Gjest"
+	// (BRY-272). Members paying their own faktura are already known.
+	var userID *string
+	isGuest := false
 	if err := h.db.QueryRow(ctx, `SELECT user_id FROM orders WHERE id = $1`, orderID).Scan(&userID); err == nil && userID == nil {
-		profile = &vipps.Profile{Scope: "name"}
+		isGuest = true
 	}
 
-	ref := genVippsReference()
-	res, err := h.vipps.CreatePayment(ctx, ref, vipps.CreatePaymentRequest{
-		Amount:             vipps.Amount{Currency: "NOK", Value: int64(math.Round(total * 100))},
-		Reference:          ref,
-		ReturnURL:          h.vippsReturnURL(),
-		PaymentDescription: desc,
-		UserFlow:           "WEB_REDIRECT",
-		Profile:            profile,
+	res, err := provider.CreatePayment(ctx, payments.Request{
+		OrderID:     orderID,
+		AmountOre:   int64(math.Round(total * 100)),
+		Currency:    "NOK",
+		Description: desc,
+		IsGuest:     isGuest,
+		ReturnURL:   h.paymentReturnURL(),
 	})
 	if err != nil {
 		return "", err
 	}
 	if _, err := h.db.Exec(ctx,
 		`UPDATE orders SET vipps_reference = $1, total_amount = $2, updated_at = now() WHERE id = $3`,
-		ref, total, orderID,
+		res.Reference, total, orderID,
 	); err != nil {
-		// Payment exists at Vipps but the reference didn't persist — the webhook
-		// won't match it. Surface loudly but still redirect the payer.
-		h.log.Error().Err(err).Str("order_id", orderID).Str("vipps_reference", ref).
+		// Payment exists at the provider but the reference didn't persist — the
+		// webhook won't match it. Surface loudly but still redirect the payer.
+		h.log.Error().Err(err).Str("order_id", orderID).Str("provider", providerName).Str("reference", res.Reference).
 			Msg("order pay: created payment but failed to store reference — webhook match will miss")
 	}
 	return res.RedirectURL, nil
 }
 
 // orderTotal returns the amount still owed on a checkout order (unpaid invoice
-// sources + ad-hoc lines) and a Vipps payment description.
+// sources + ad-hoc lines) and a payment description for the payer.
 func (h *InvoiceHandler) orderTotal(ctx context.Context, orderID string) (float64, string, error) {
 	var total float64
 	var parts []string
@@ -494,25 +497,13 @@ func (h *InvoiceHandler) orderTotal(ctx context.Context, orderID string) (float6
 	if desc == "" {
 		desc = "Betaling"
 	}
-	// Vipps caps paymentDescription at 100 chars.
-	if len(desc) > 100 {
-		desc = desc[:100]
-	}
 	return total, desc, nil
 }
 
-// vippsReturnURL is where Vipps sends the payer's browser after they complete
-// (or abort) the payment: the club site.
-func (h *InvoiceHandler) vippsReturnURL() string {
+// paymentReturnURL is where the provider sends the payer's browser after they
+// complete (or abort) the payment: the club site.
+func (h *InvoiceHandler) paymentReturnURL() string {
 	return h.frontendBase()
-}
-
-// genVippsReference returns a globally unique, Vipps-safe payment reference
-// ([a-zA-Z0-9-], 8–50 chars). Vipps rejects reuse, so each payment is fresh.
-func genVippsReference() string {
-	var b [16]byte
-	_, _ = rand.Read(b[:])
-	return "chk-" + hex.EncodeToString(b[:])
 }
 
 // genCheckoutToken returns an unguessable token for the public pay link.

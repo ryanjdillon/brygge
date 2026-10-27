@@ -8,6 +8,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
+
+	"github.com/brygge-klubb/brygge/internal/vipps"
 )
 
 // Public token-addressed checkout API backing the /betal/{token} pay page
@@ -329,11 +331,11 @@ func (h *InvoiceHandler) HandlePayCheckout(w http.ResponseWriter, r *http.Reques
 		Error(w, http.StatusConflict, "checkout is already paid")
 		return
 	}
-	if h.vipps == nil {
+	if !h.providers.Configured() {
 		Error(w, http.StatusServiceUnavailable, "Vipps is not available")
 		return
 	}
-	redirectURL, err := h.mintOrderPayment(ctx, orderID)
+	redirectURL, err := h.mintOrderPayment(ctx, vipps.ProviderName, orderID)
 	if errors.Is(err, errNothingToPay) {
 		Error(w, http.StatusBadRequest, "nothing to pay")
 		return

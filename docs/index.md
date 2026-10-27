@@ -35,6 +35,7 @@ Audience: deployers, contributors, and anyone troubleshooting at the OS/protocol
 | [developer/configuration.md](developer/configuration.md) | Environment variables and feature flags |
 | [developer/database.md](developer/database.md) | Postgres ops: connecting, scripts, migrations, backups |
 | [developer/reference/enums.md](developer/reference/enums.md) | Postgres enums, TEXT vocabularies, payment / Vipps category → GL maps |
+| [developer/payments.md](developer/payments.md) | Online payment providers: the `payments` seam, Vipps adapter, marking orders paid, Stripe decisions |
 | [developer/reference/invariants.md](developer/reference/invariants.md) | Append-only list of rules other code must respect |
 | [developer/reference/audit-actions.md](developer/reference/audit-actions.md) | Every `audit.Action*` constant: string, resource, when, `extra` fields |
 | [developer/checklists/](developer/checklists/) | Per-change-type recipes (add route, migration, bulk action, audit action, feature flag) |

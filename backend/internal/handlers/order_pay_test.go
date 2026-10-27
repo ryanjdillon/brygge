@@ -16,6 +16,7 @@ import (
 	"github.com/brygge-klubb/brygge/internal/auth"
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/middleware"
+	"github.com/brygge-klubb/brygge/internal/payments"
 	"github.com/brygge-klubb/brygge/internal/testutil"
 	"github.com/brygge-klubb/brygge/internal/vipps"
 )
@@ -67,10 +68,10 @@ func TestInvoicePayLink(t *testing.T) {
 	userID, _ := testutil.SeedUser(t, pool, clubID, []string{"member"})
 
 	h := &InvoiceHandler{
-		db:     pool,
-		config: &config.Config{FrontendURL: "https://example.org"},
-		vipps:  vipps.New("", "", "", "", "", zerolog.Nop()),
-		log:    zerolog.Nop(),
+		db:        pool,
+		config:    &config.Config{FrontendURL: "https://example.org"},
+		providers: payments.NewRegistry(vipps.NewPaymentProvider(vipps.New("", "", "", "", "", zerolog.Nop()))),
+		log:       zerolog.Nop(),
 	}
 
 	invID := seedPayableInvoice(t, pool, clubID, userID, "open", 900)

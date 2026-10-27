@@ -33,6 +33,7 @@ import (
 	"github.com/brygge-klubb/brygge/internal/middleware"
 	oa "github.com/brygge-klubb/brygge/internal/openapi"
 	"github.com/brygge-klubb/brygge/internal/passkey"
+	"github.com/brygge-klubb/brygge/internal/payments"
 	"github.com/brygge-klubb/brygge/internal/storage"
 	"github.com/brygge-klubb/brygge/internal/telemetry"
 	"github.com/brygge-klubb/brygge/internal/vipps"
@@ -308,15 +309,20 @@ func main() {
 	projectsHandler := handlers.NewProjectsHandler(db, &cfg, log)
 	featureRequestsHandler := handlers.NewFeatureRequestsHandler(db, &cfg, log)
 	financialsHandler := handlers.NewFinancialsHandler(db, &cfg, auditService, log)
-	// Vipps ePayment client — constructed only when the instance has Vipps
-	// credentials (MSN present). Nil otherwise, in which case invoice/webhook
-	// handlers skip the Vipps flows and fall back to KID-only fakturas.
-	var vippsClient *vipps.Client
+	// Vipps ePayment client and the online payment providers built on it —
+	// constructed only when the instance has Vipps credentials (MSN present).
+	// Nil otherwise, in which case invoice/webhook handlers skip online
+	// payment and fall back to KID-only fakturas.
+	var (
+		vippsClient      *vipps.Client
+		paymentProviders *payments.Registry
+	)
 	if cfg.VippsMSN != "" {
 		vippsClient = vipps.New(cfg.VippsBaseURL(), cfg.VippsClientID, cfg.VippsClientSecret,
 			cfg.VippsSubscriptionKey, cfg.VippsMSN, log)
+		paymentProviders = payments.NewRegistry(vipps.NewPaymentProvider(vippsClient))
 	}
-	invoiceHandler := handlers.NewInvoiceHandler(db, &cfg, emailClient, auditService, s3LegalClient, vippsClient, log)
+	invoiceHandler := handlers.NewInvoiceHandler(db, &cfg, emailClient, auditService, s3LegalClient, paymentProviders, log)
 	// Invoice reminders reuse the shared delivery queue whenever SMTP is
 	// configured — independent of the inbox/JMAP stack, which may be absent
 	// (e.g. all of local dev). Create the worker here and register the

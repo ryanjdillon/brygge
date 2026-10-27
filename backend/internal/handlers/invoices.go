@@ -21,8 +21,8 @@ import (
 	"github.com/brygge-klubb/brygge/internal/email"
 	"github.com/brygge-klubb/brygge/internal/finance"
 	"github.com/brygge-klubb/brygge/internal/middleware"
+	"github.com/brygge-klubb/brygge/internal/payments"
 	"github.com/brygge-klubb/brygge/internal/storage"
-	"github.com/brygge-klubb/brygge/internal/vipps"
 )
 
 type InvoiceHandler struct {
@@ -31,8 +31,10 @@ type InvoiceHandler struct {
 	email   email.Sender
 	audit   *audit.Service
 	s3Legal *storage.Client
-	vipps   *vipps.Client // nil when the instance has no Vipps credentials
-	log     zerolog.Logger
+	// providers are the online payment services this instance can charge
+	// through; nil or empty means faktura are bank transfer (KID) only.
+	providers *payments.Registry
+	log       zerolog.Logger
 
 	// deliveries is the shared durable delivery queue (broadcasts +
 	// invoice reminders). Bulk-reminder sends enqueue 'invoice_reminder'
@@ -56,17 +58,17 @@ func NewInvoiceHandler(
 	emailClient email.Sender,
 	auditService *audit.Service,
 	s3Legal *storage.Client,
-	vippsClient *vipps.Client,
+	providers *payments.Registry,
 	log zerolog.Logger,
 ) *InvoiceHandler {
 	return &InvoiceHandler{
-		db:      db,
-		config:  cfg,
-		email:   emailClient,
-		audit:   auditService,
-		s3Legal: s3Legal,
-		vipps:   vippsClient,
-		log:     log.With().Str("handler", "invoices").Logger(),
+		db:        db,
+		config:    cfg,
+		email:     emailClient,
+		audit:     auditService,
+		s3Legal:   s3Legal,
+		providers: providers,
+		log:       log.With().Str("handler", "invoices").Logger(),
 	}
 }
 

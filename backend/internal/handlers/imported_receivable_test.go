@@ -14,6 +14,7 @@ import (
 	"github.com/brygge-klubb/brygge/internal/accounting"
 	"github.com/brygge-klubb/brygge/internal/audit"
 	"github.com/brygge-klubb/brygge/internal/config"
+	"github.com/brygge-klubb/brygge/internal/payments"
 	"github.com/brygge-klubb/brygge/internal/testutil"
 	"github.com/brygge-klubb/brygge/internal/testutil/fin"
 	"github.com/brygge-klubb/brygge/internal/vipps"
@@ -92,10 +93,10 @@ func TestImportedFakturaHasNoVippsPayLink(t *testing.T) {
 	native := club.NewInvoice(t, fin.InvoiceOpts{Member: &m, Cents: 45000})
 
 	h := &InvoiceHandler{
-		db:     pool,
-		config: &config.Config{FrontendURL: "https://example.org"},
-		vipps:  vipps.New("", "", "", "", "", zerolog.Nop()),
-		log:    zerolog.Nop(),
+		db:        pool,
+		config:    &config.Config{FrontendURL: "https://example.org"},
+		providers: payments.NewRegistry(vipps.NewPaymentProvider(vipps.New("", "", "", "", "", zerolog.Nop()))),
+		log:       zerolog.Nop(),
 	}
 
 	rec := httptest.NewRecorder()

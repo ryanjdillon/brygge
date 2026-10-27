@@ -13,6 +13,7 @@ import (
 	"github.com/brygge-klubb/brygge/internal/auth"
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/middleware"
+	"github.com/brygge-klubb/brygge/internal/payments"
 	"github.com/brygge-klubb/brygge/internal/testutil"
 	"github.com/brygge-klubb/brygge/internal/vipps"
 )
@@ -28,10 +29,10 @@ func TestVippsAmountThreshold(t *testing.T) {
 	userID, _ := testutil.SeedUser(t, pool, clubID, []string{"member"})
 
 	h := &InvoiceHandler{
-		db:     pool,
-		config: &config.Config{FrontendURL: "https://example.org"},
-		vipps:  vipps.New("", "", "", "", "", zerolog.Nop()),
-		log:    zerolog.Nop(),
+		db:        pool,
+		config:    &config.Config{FrontendURL: "https://example.org"},
+		providers: payments.NewRegistry(vipps.NewPaymentProvider(vipps.New("", "", "", "", "", zerolog.Nop()))),
+		log:       zerolog.Nop(),
 	}
 
 	// seedPayableInvoice issues invoices of 450.00 kr.
@@ -81,7 +82,7 @@ func TestVippsAmountThreshold(t *testing.T) {
 	}
 	// Redeem gate: the order minted while uncapped must now refuse at mint time,
 	// before any Vipps call — closing the already-issued-link leak.
-	if _, err := h.mintOrderPayment(ctx, orderID); err != errVippsBlocked {
+	if _, err := h.mintOrderPayment(ctx, vipps.ProviderName, orderID); err != errVippsBlocked {
 		t.Errorf("cap 100, Auto: mint should refuse with errVippsBlocked, got %v", err)
 	}
 	// Admin pay-link endpoint reports the distinct over-limit reason.

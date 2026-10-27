@@ -441,7 +441,7 @@ So the amount cap is a **default**, not a hard ceiling — the per-invoice overr
 
 ### Only the payment provider can mark an order paid
 
-**Rule:** an order (or the invoice behind it) becomes paid only from evidence that money moved: the signed Vipps webhook (`onCaptured`), or reconciliation against a settlement or bank row. No HTTP route, public or admin, sets `orders.status = 'paid'` or `invoices.vipps_paid_at`/`payment_id` from a caller's say-so.
+**Rule:** an order (or the invoice behind it) becomes paid only from evidence that money moved: a payment provider's signature-verified webhook, which calls `orderSettlement.markOrderPaid` (`handlers/order_settle.go`), or reconciliation against a settlement or bank row. No HTTP route, public or admin, sets `orders.status = 'paid'` or `invoices.vipps_paid_at`/`payment_id` from a caller's say-so, and a new provider's webhook goes through `markOrderPaid` rather than writing that state itself (see [../payments.md](../payments.md)).
 
 **Failure mode:** a "confirm" endpoint that flips status on request lets anyone holding an order id mark it paid with no money received. That is what the pre-BRY-259 `POST /orders/{id}/confirm` stub did; it was removed in BRY-306.
 
