@@ -134,8 +134,8 @@ func TestPriceItemDeleteArchiveAndAudit(t *testing.T) {
 		id := create("QR service")
 		token := "tok-" + testutil.RandomHex(8)
 		mustExec(t, db, ctx,
-			`INSERT INTO harbor_payment_targets (club_id, token, label, kind, price_item_id)
-			 VALUES ($1, $2, 'Synthetic poster', 'service', $3)`,
+			`INSERT INTO harbor_payment_targets (club_id, token, label, kind, price_item_id, short_code)
+			 VALUES ($1, $2, 'Synthetic poster', 'service', $3, 'poster')`,
 			clubID, token, id)
 		qr := &InvoiceHandler{db: db}
 		if _, ok := qr.loadQRTarget(ctx, token); !ok {

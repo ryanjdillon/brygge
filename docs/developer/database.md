@@ -306,6 +306,14 @@ in `backend/migrations/` for the source of truth. The high-level shape:
   `idx_slip_assignments_active`).
 - `boats`, `boat_models` — fleet, with manufacturer/model catalog.
 - `price_items`, `slip_fees` — pricing catalog and per-year billing.
+- `harbor_payment_targets` (000090) — printable harbor QR targets: a public
+  `token` (the QR encodes `/qr/{token}`), label/location, and the linked
+  `price_items` row that sets price and revenue category. `short_code`
+  (000112) is the typed fallback printed under the QR, served by `GET
+  /q/{code}` as a 302 to `/qr/{token}`. It is stored lowercase, unique per
+  club (`idx_harbor_targets_club_short_code`) and checked against
+  `^[a-z0-9-]{2,24}$`; generated defaults are 5 characters without the
+  look-alikes 0/o/1/l/i (BRY-436).
 - `resources`, `bookings` — guest slips, bobil spots, klubbhus, etc.
 - `events`, `documents`, `audit_log`, `notifications`, …
 - `invoices`, `invoice_lines`, `payments` — faktura issuance and payment

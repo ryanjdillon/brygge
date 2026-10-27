@@ -3,8 +3,10 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plus, FileDown, Pencil, Archive, Copy, QrCode, Printer } from 'lucide-vue-next'
 import { CARDS_PER_PAGE, DEFAULT_CARDS_PER_PAGE, type CardsPerPage } from '@/lib/qrSheet'
+import { useClubStore } from '@/stores/club'
 
 const { t } = useI18n()
+const club = useClubStore()
 
 type Target = {
   id: string
@@ -22,6 +24,8 @@ type Target = {
   fixed_units: boolean
   archived: boolean
   public_url: string
+  short_code: string
+  short_url: string
 }
 type PriceItem = { id: string; name: string; amount: number; category: string }
 
@@ -75,6 +79,34 @@ const form = reactive({
   min_units: 1,
   max_units: 14,
   fixed_units: false,
+  short_code: '',
+})
+// The code the target was loaded with, so the editor can warn when it changes.
+const originalShortCode = ref('')
+const shortCodeServerError = ref('')
+
+// Mirrors the server's CHECK; the server normalises the same way.
+const SHORT_CODE_PATTERN = /^[a-z0-9-]{2,24}$/
+const normalisedShortCode = computed(() => form.short_code.trim().toLowerCase())
+const shortCodeFormatError = computed(() =>
+  normalisedShortCode.value !== '' && !SHORT_CODE_PATTERN.test(normalisedShortCode.value)
+    ? t('harborTargets.field.shortCodeInvalid')
+    : '',
+)
+const shortCodeError = computed(() => shortCodeFormatError.value || shortCodeServerError.value)
+const shortCodeChanged = computed(
+  () => form.id !== '' && normalisedShortCode.value !== '' && normalisedShortCode.value !== originalShortCode.value,
+)
+
+// The server builds short_url from its own public base URL, so an existing
+// target's address is the best source for the prefix; the club domain covers
+// a club with no targets yet.
+const shortUrlPrefix = computed(() => {
+  const sample = targets.value.find((tg) => tg.short_url && tg.short_code)
+  if (sample) {
+    return sample.short_url.replace(/^https?:\/\//, '').slice(0, -sample.short_code.length)
+  }
+  return `${club.domain || window.location.host}/q/`
 })
 
 function fmt(n: number): string {
@@ -121,7 +153,10 @@ function openCreate() {
     min_units: 1,
     max_units: 14,
     fixed_units: false,
+    short_code: '',
   })
+  originalShortCode.value = ''
+  shortCodeServerError.value = ''
   editing.value = true
 }
 
@@ -136,11 +171,16 @@ function openEdit(tg: Target) {
     min_units: tg.min_units,
     max_units: tg.max_units,
     fixed_units: tg.fixed_units,
+    short_code: tg.short_code,
   })
+  originalShortCode.value = tg.short_code
+  shortCodeServerError.value = ''
   editing.value = true
 }
 
-const canSave = computed(() => form.label.trim() !== '' && form.price_item_id !== '')
+const canSave = computed(
+  () => form.label.trim() !== '' && form.price_item_id !== '' && shortCodeFormatError.value === '',
+)
 
 async function save() {
   if (!canSave.value || saving.value) return
@@ -155,7 +195,9 @@ async function save() {
     min_units: Number(form.min_units) || 1,
     max_units: Number(form.max_units) || 1,
     fixed_units: form.fixed_units,
+    short_code: normalisedShortCode.value,
   }
+  shortCodeServerError.value = ''
   try {
     const url = form.id
       ? `/api/v1/harbor/payment-targets/${form.id}`
@@ -166,7 +208,24 @@ async function save() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     })
-    if (!res.ok) throw new Error(`${res.status} ${await res.text().catch(() => '')}`)
+    if (!res.ok) {
+      const text = await res.text().catch(() => '')
+      let code = ''
+      try {
+        code = (JSON.parse(text) as { code?: string }).code ?? ''
+      } catch {
+        /* not JSON */
+      }
+      if (code === 'short_code_taken') {
+        shortCodeServerError.value = t('harborTargets.field.shortCodeTaken')
+        return
+      }
+      if (code === 'short_code_invalid') {
+        shortCodeServerError.value = t('harborTargets.field.shortCodeInvalid')
+        return
+      }
+      throw new Error(`${res.status} ${text}`)
+    }
     editing.value = false
     await load()
   } catch (e) {
@@ -199,7 +258,7 @@ async function copyUrl(url: string) {
 }
 
 onMounted(async () => {
-  await Promise.all([load(), loadPriceItems()])
+  await Promise.all([load(), loadPriceItems(), club.ensureLoaded()])
 })
 </script>
 
@@ -294,6 +353,14 @@ onMounted(async () => {
           <button class="mt-1 flex items-center gap-1 text-xs text-slate-400 hover:text-slate-700" @click="copyUrl(tg.public_url)">
             <Copy class="h-3 w-3" /> {{ tg.public_url }}
           </button>
+          <button
+            v-if="tg.short_url"
+            class="flex items-center gap-1 font-mono text-xs text-slate-500 hover:text-slate-800"
+            data-testid="short-url"
+            @click="copyUrl(tg.short_url)"
+          >
+            <Copy class="h-3 w-3" /> {{ tg.short_url }}
+          </button>
         </div>
         <div v-if="!tg.archived" class="flex shrink-0 items-center gap-1">
           <a
@@ -340,6 +407,46 @@ onMounted(async () => {
             <span class="mb-1 block text-xs font-medium text-slate-500">{{ t('harborTargets.field.location') }}</span>
             <input v-model="form.location" type="text" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
           </label>
+          <div>
+            <label for="harbor-target-short-code" class="mb-1 block text-xs font-medium text-slate-500">
+              {{ t('harborTargets.field.shortCode') }}
+            </label>
+            <div
+              class="flex items-center rounded-md border text-sm focus-within:ring-1"
+              :class="shortCodeError ? 'border-red-400 focus-within:ring-red-400' : 'border-slate-300 focus-within:ring-slate-400'"
+            >
+              <span class="select-none whitespace-nowrap pl-3 font-mono text-slate-400" data-testid="short-code-prefix">{{ shortUrlPrefix }}</span>
+              <input
+                id="harbor-target-short-code"
+                v-model="form.short_code"
+                type="text"
+                autocapitalize="off"
+                autocomplete="off"
+                spellcheck="false"
+                maxlength="24"
+                :placeholder="t('harborTargets.field.shortCodePlaceholder')"
+                :aria-invalid="shortCodeError !== ''"
+                aria-describedby="harbor-target-short-code-help"
+                class="min-w-0 flex-1 rounded-r-md border-0 bg-transparent py-2 pr-3 font-mono focus:outline-none"
+                data-testid="short-code-input"
+                @input="shortCodeServerError = ''"
+              />
+            </div>
+            <div id="harbor-target-short-code-help">
+              <p v-if="shortCodeError" class="mt-1 text-xs text-red-600" data-testid="short-code-error">{{ shortCodeError }}</p>
+              <p v-else class="mt-1 text-xs text-slate-500">
+                {{ form.id ? t('harborTargets.field.shortCodeHint') : t('harborTargets.field.shortCodeHintNew') }}
+              </p>
+              <p
+                v-if="form.id"
+                class="mt-1 text-xs"
+                :class="shortCodeChanged ? 'font-medium text-amber-700' : 'text-slate-500'"
+                data-testid="short-code-warning"
+              >
+                {{ t('harborTargets.field.shortCodeChangeWarning') }}
+              </p>
+            </div>
+          </div>
           <div class="grid grid-cols-2 gap-3">
             <label class="block">
               <span class="mb-1 block text-xs font-medium text-slate-500">{{ t('harborTargets.field.kind') }}</span>

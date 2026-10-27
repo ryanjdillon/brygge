@@ -45,10 +45,11 @@ type PosterData struct {
 	PriceLine    string   // e.g. "200 kr / natt" or "200 kr"
 	Instructions []string // scan-to-pay steps, in the club's language
 	URL          string   // the public /qr/{token} URL encoded in the QR
+	ShortURL     string   // optional typed fallback, printed without scheme
 }
 
 // Poster renders an A4 portrait PDF: club name, label, location, a large
-// centred QR, the price, and instructions. Fonts are the fpdf core Helvetica
+// centred QR, the short typed address, the price, and instructions. Fonts are the fpdf core Helvetica
 // set so no font files are needed.
 func Poster(d PosterData) ([]byte, error) {
 	qrPNG, err := QR(d.URL, 1024)
@@ -94,16 +95,25 @@ func Poster(d PosterData) ([]byte, error) {
 	}
 	pdf.ImageOptions("qr", qrX, qrY, qrSize, qrSize, false, fpdf.ImageOptions{ImageType: "PNG"}, 0, "")
 
+	// Space below the QR is reserved for the short address whether or not it
+	// is set, so the rest of the layout does not shift between posters.
+	if d.ShortURL != "" {
+		pdf.SetTextColor(40, 40, 40)
+		pdf.SetFont("Courier", "", 14)
+		pdf.SetY(qrY + qrSize + 7)
+		center(d.ShortURL)
+	}
+
 	if d.PriceLine != "" {
 		pdf.SetTextColor(20, 20, 20)
 		pdf.SetFont("Helvetica", "B", 22)
-		pdf.SetY(qrY + qrSize + 12)
+		pdf.SetY(qrY + qrSize + 20)
 		center(d.PriceLine)
 	}
 
 	pdf.SetFont("Helvetica", "", 13)
 	pdf.SetTextColor(70, 70, 70)
-	y := qrY + qrSize + 28
+	y := qrY + qrSize + 36
 	for _, line := range d.Instructions {
 		pdf.SetY(y)
 		center(line)

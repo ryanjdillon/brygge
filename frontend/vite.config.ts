@@ -24,6 +24,11 @@ export default defineConfig({
         target: 'http://localhost:8080',
         changeOrigin: true,
       },
+      // Short QR addresses redirect server-side (no SPA route).
+      '/q/': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+      },
     },
   },
 })

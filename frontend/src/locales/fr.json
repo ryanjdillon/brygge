@@ -1547,7 +1547,14 @@
       "fixedUnits": "Prix fixe (pas de choix de quantité)",
       "unitLabel": "Unité (ex. nuit)",
       "minUnits": "Min",
-      "maxUnits": "Max"
+      "maxUnits": "Max",
+      "shortCode": "Adresse courte",
+      "shortCodePlaceholder": "ex. invite",
+      "shortCodeHintNew": "Imprimée sous le QR code pour les visiteurs dont le téléphone ne scanne pas. Laissez vide pour en générer une.",
+      "shortCodeHint": "Imprimée sous le QR code pour les visiteurs dont le téléphone ne scanne pas. Minuscules, chiffres et tirets, 2 à 24 caractères.",
+      "shortCodeChangeWarning": "La modifier rend inutilisable l'adresse imprimée sur les cartes et affiches existantes. Le QR code lui-même continue de fonctionner.",
+      "shortCodeInvalid": "Utilisez 2 à 24 minuscules, chiffres ou tirets.",
+      "shortCodeTaken": "Cette adresse courte est déjà utilisée par une autre affiche."
     },
     "print": {
       "title": "Imprimer les cartes QR",

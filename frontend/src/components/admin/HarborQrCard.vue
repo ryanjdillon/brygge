@@ -7,7 +7,14 @@ const props = defineProps<{
   price: string
   qrSrc: string
   per: CardsPerPage
+  shortUrl?: string
 }>()
+
+// Printed without the scheme: shorter to read and type, and browsers add it.
+const shortAddress = computed(() => (props.shortUrl ?? '').replace(/^https?:\/\//, ''))
+// Each segment keeps its trailing "/", so a <wbr> between segments offers a
+// line break right after the slash.
+const shortSegments = computed(() => shortAddress.value.split(/(?<=\/)/))
 
 const size = computed(() => {
   const { width, height } = cellSizeMm(props.per)
@@ -20,6 +27,9 @@ const size = computed(() => {
     <h2 class="qr-card__title">{{ label }}</h2>
     <p class="qr-card__price" data-testid="qr-card-price">{{ price }}</p>
     <img v-if="qrSrc" class="qr-card__code" :src="qrSrc" :alt="label" />
+    <p v-if="shortAddress" class="qr-card__short-url" data-testid="qr-card-short-url">
+      <template v-for="(seg, i) in shortSegments" :key="i"><wbr v-if="i > 0" />{{ seg }}</template>
+    </p>
   </article>
 </template>
 
@@ -68,6 +78,20 @@ const size = computed(() => {
   object-fit: contain;
 }
 
+/* Allowed to wrap only after a "/", so a long domain on a small card breaks
+   at a readable point instead of mid-word. */
+.qr-card__short-url {
+  flex-shrink: 0;
+  margin: 1.5mm 0 0;
+  max-width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+  font-size: 9pt;
+  line-height: 1.2;
+  color: #1e293b;
+  overflow-wrap: normal;
+  word-break: keep-all;
+}
+
 .qr-card--large {
   padding: 8mm 8mm 6mm;
 }
@@ -79,5 +103,10 @@ const size = computed(() => {
 .qr-card--large .qr-card__price {
   margin: 2mm 0 4mm;
   font-size: 18pt;
+}
+
+.qr-card--large .qr-card__short-url {
+  margin-top: 3mm;
+  font-size: 14pt;
 }
 </style>

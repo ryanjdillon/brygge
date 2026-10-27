@@ -375,7 +375,7 @@ Voiding an invoice that is settled for the member (paid, or captured via Vipps) 
 
 ### A referenced price item is archived, never deleted
 
-**Rule (BRY-360):** `HandleDelete` on `/admin/pricing/{id}` hard-deletes a price item only when no `invoice_lines`, `invoices`, `order_lines` or `harbor_payment_targets` row references it. Otherwise it returns 409 `price_item_in_use`, and the SPA offers to archive it instead (`is_active = false`). Archived items are excluded from the faktura pickers, bulk invoicing, the public price list, the QR checkout catalogue, and the public QR target lookup (`loadQRTarget`). A printed poster for an archived item therefore stops taking payments.
+**Rule (BRY-360):** `HandleDelete` on `/admin/pricing/{id}` hard-deletes a price item only when no `invoice_lines`, `invoices`, `order_lines` or `harbor_payment_targets` row references it. Otherwise it returns 409 `price_item_in_use`, and the SPA offers to archive it instead (`is_active = false`). Archived items are excluded from the faktura pickers, bulk invoicing, the public price list, the QR checkout catalogue, and the public QR target lookup (`loadQRTarget`). The short-address resolver (`HandleShortCodeRedirect`, `GET /q/{code}`) applies the same filter, so a typed address never leads to a target the token page would refuse. A printed poster for an archived item therefore stops taking payments.
 
 **Failure mode:** `order_lines.price_item_id` and `invoices.price_item_id` are `ON DELETE SET NULL`. A delete that succeeded would silently strip the category from historical orders and invoices, and with it the revenue-account mapping used by GL sync and reconciliation. The other two FKs fail the delete, which used to surface only as a generic 500.
 

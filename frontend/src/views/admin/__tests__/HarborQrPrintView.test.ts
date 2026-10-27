@@ -19,6 +19,7 @@ const target = (id: string, over: Partial<T> = {}) => ({
   fixed_units: false,
   archived: false,
   public_url: `https://club.example.invalid/qr/${id}`,
+  short_url: `https://club.example.invalid/q/${id}-dock`,
   ...over,
 })
 
@@ -120,5 +121,13 @@ describe('HarborQrPrintView', () => {
     expect(wrapper.findAll('[data-testid="qr-page"]')).toHaveLength(2)
     expect(wrapper.get('[data-testid="print-button"]').attributes('disabled')).toBeUndefined()
     expect(wrapper.get('[data-testid="qr-card"] img').attributes('src')).toMatch(/^data:image\/svg\+xml;charset=utf-8,/)
+  })
+
+  it('prints the short address under a QR that still encodes the token url', async () => {
+    mockTargets([target('a')])
+    const wrapper = await mountAt('ids=a')
+    expect(wrapper.get('[data-testid="qr-card-short-url"]').text()).toBe('club.example.invalid/q/a-dock')
+    const src = decodeURIComponent(wrapper.get('[data-testid="qr-card"] img').attributes('src')!)
+    expect(src).toContain('data-url="https://club.example.invalid/qr/a"')
   })
 })

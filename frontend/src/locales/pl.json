@@ -1519,7 +1519,14 @@
       "fixedUnits": "Stała cena (bez wyboru ilości)",
       "unitLabel": "Jednostka (np. noc)",
       "minUnits": "Min",
-      "maxUnits": "Maks"
+      "maxUnits": "Maks",
+      "shortCode": "Krótki adres",
+      "shortCodePlaceholder": "np. gosc",
+      "shortCodeHintNew": "Drukowany pod kodem QR dla gości, których telefon nie skanuje. Zostaw puste, aby wygenerować.",
+      "shortCodeHint": "Drukowany pod kodem QR dla gości, których telefon nie skanuje. Małe litery, cyfry i myślniki, 2–24 znaki.",
+      "shortCodeChangeWarning": "Zmiana unieważnia adres wydrukowany na istniejących kartach i plakatach. Sam kod QR nadal działa.",
+      "shortCodeInvalid": "Użyj 2–24 małych liter, cyfr lub myślników.",
+      "shortCodeTaken": "Ten krótki adres jest już używany przez inny plakat."
     },
     "print": {
       "title": "Drukuj karty QR",

@@ -1452,6 +1452,13 @@ func main() {
 		log.Info().Msg("API docs available at /api/docs/docs")
 	}
 
+	// Typed short address printed under a harbor QR (BRY-436). Served here,
+	// outside /api/v1 and ahead of the SPA fallback, so the redirect to
+	// /qr/{token} works without JavaScript.
+	r.With(standardRL).Get("/q/{code}", harborHandler.HandleShortCodeRedirect)
+	// A typed address often gains a trailing slash; resolve it the same way.
+	r.With(standardRL).Get("/q/{code}/", harborHandler.HandleShortCodeRedirect)
+
 	frontendFS, err := backend.FrontendFS()
 	if err != nil {
 		log.Warn().Err(err).Msg("frontend assets not available")

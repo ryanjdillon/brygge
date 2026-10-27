@@ -23,6 +23,7 @@ type Target = {
   fixed_units: boolean
   archived: boolean
   public_url: string
+  short_url: string
 }
 
 // Bound, not a literal src, so Vite doesn't try to import it as an asset.
@@ -198,6 +199,7 @@ onBeforeUnmount(() => {
             :price="targetPriceLine(tg.unit_amount, tg.unit_label, tg.fixed_units)"
             :qr-src="qrSrc[tg.id] ?? ''"
             :per="per"
+            :short-url="tg.short_url"
           />
         </div>
       </section>

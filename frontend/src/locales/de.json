@@ -1548,7 +1548,14 @@
       "fixedUnits": "Festpreis (keine Anzahlauswahl)",
       "unitLabel": "Einheit (z. B. Nacht)",
       "minUnits": "Min",
-      "maxUnits": "Max"
+      "maxUnits": "Max",
+      "shortCode": "Kurzadresse",
+      "shortCodePlaceholder": "z. B. gast",
+      "shortCodeHintNew": "Wird unter dem QR-Code gedruckt, für Gäste, deren Handy nicht scannt. Leer lassen, um eine zu erzeugen.",
+      "shortCodeHint": "Wird unter dem QR-Code gedruckt, für Gäste, deren Handy nicht scannt. Kleinbuchstaben, Ziffern und Bindestriche, 2–24 Zeichen.",
+      "shortCodeChangeWarning": "Eine Änderung macht die auf bestehenden Karten und Plakaten gedruckte Adresse ungültig. Der QR-Code selbst funktioniert weiter.",
+      "shortCodeInvalid": "2–24 Kleinbuchstaben, Ziffern oder Bindestriche verwenden.",
+      "shortCodeTaken": "Diese Kurzadresse wird bereits von einem anderen Plakat verwendet."
     },
     "print": {
       "title": "QR-Karten drucken",

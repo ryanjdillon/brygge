@@ -2588,7 +2588,14 @@
       "fixedUnits": "Fixed price (no nights selector)",
       "unitLabel": "Unit (e.g. night)",
       "minUnits": "Min",
-      "maxUnits": "Max"
+      "maxUnits": "Max",
+      "shortCode": "Short address",
+      "shortCodePlaceholder": "e.g. guest",
+      "shortCodeHintNew": "Printed under the QR for guests whose phone won't scan. Leave blank to generate one.",
+      "shortCodeHint": "Printed under the QR for guests whose phone won't scan. Lowercase letters, digits and hyphens, 2–24 characters.",
+      "shortCodeChangeWarning": "Changing it breaks the address printed on existing cards and posters. The QR code itself keeps working.",
+      "shortCodeInvalid": "Use 2–24 lowercase letters, digits or hyphens.",
+      "shortCodeTaken": "This short address is already used by another poster."
     },
     "print": {
       "title": "Print QR cards",

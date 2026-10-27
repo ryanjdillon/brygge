@@ -2584,7 +2584,14 @@
       "fixedUnits": "Fast pris (ingen antall-velger)",
       "unitLabel": "Enhet (f.eks. natt)",
       "minUnits": "Min",
-      "maxUnits": "Maks"
+      "maxUnits": "Maks",
+      "shortCode": "Kortadresse",
+      "shortCodePlaceholder": "f.eks. gjest",
+      "shortCodeHintNew": "Skrives ut under QR-koden for gjester som ikke får skannet. La stå tom for å lage en automatisk.",
+      "shortCodeHint": "Skrives ut under QR-koden for gjester som ikke får skannet. Små bokstaver, tall og bindestrek, 2–24 tegn.",
+      "shortCodeChangeWarning": "Endrer du den, slutter adressen som står på utskrevne kort og plakater å virke. Selve QR-koden virker fortsatt.",
+      "shortCodeInvalid": "Bruk 2–24 små bokstaver, tall eller bindestrek.",
+      "shortCodeTaken": "Denne kortadressen brukes allerede av en annen plakat."
     },
     "print": {
       "title": "Skriv ut QR-kort",
