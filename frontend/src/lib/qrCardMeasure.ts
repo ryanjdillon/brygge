@@ -1,7 +1,7 @@
 // DOM side of the QR card text fit (BRY-438): reads one rendered card and
 // hands the numbers to fitScale. Kept apart from the composable so tests,
 // where jsdom lays nothing out, can replace the measurement alone.
-import { fitScale, type FitResult } from '@/lib/qrSheet'
+import { fitHeadlinePt, fitScale, type FitResult } from '@/lib/qrSheet'
 
 function px(v: string): number {
   const n = parseFloat(v)
@@ -37,4 +37,15 @@ export function measureQrCard(card: HTMLElement, minQrPx: number): FitResult {
     cardInnerHeight,
     minQrPx,
   })
+}
+
+// measureHeadline fits a page headline to one line across its box. The
+// element carries its design size in data-headline-pt and is sized by the
+// --headline-fit custom property, which this sets.
+export function measureHeadline(el: HTMLElement): number {
+  const target = Number(el.dataset.headlinePt) || 0
+  el.style.setProperty('--headline-fit', `${target}pt`)
+  const pt = fitHeadlinePt(el.scrollWidth, el.clientWidth, target)
+  el.style.setProperty('--headline-fit', `${pt}pt`)
+  return pt
 }

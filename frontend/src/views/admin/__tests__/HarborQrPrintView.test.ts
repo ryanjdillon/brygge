@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
 import { mountWithPlugins } from '@/test/test-utils'
 import HarborQrPrintView from '@/views/admin/HarborQrPrintView.vue'
-import { minQrPx } from '@/lib/qrSheet'
+import { HEADLINE_PT, minQrPx } from '@/lib/qrSheet'
 
 vi.mock('qrcode', () => ({
   default: { toString: vi.fn(async (url: string) => `<svg data-url="${url}"></svg>`) },
@@ -13,12 +13,12 @@ vi.mock('qrcode', () => ({
 const { measureQrCard } = vi.hoisted(() => ({
   measureQrCard: vi.fn<(card: HTMLElement, minQrPx: number) => { scale: number; overflow: boolean }>(),
 }))
-vi.mock('@/lib/qrCardMeasure', () => ({ measureQrCard }))
+vi.mock('@/lib/qrCardMeasure', () => ({ measureQrCard, measureHeadline: vi.fn(() => 44) }))
 
 vi.mock('lucide-vue-next', () => ({ Printer: { template: '<span />' } }))
 
-// Each locale's instruction strings are tagged with its code so a test can
-// tell which language a header line came from.
+// Each locale's header strings are tagged with its code so a test can tell
+// which language a line came from.
 vi.mock('@/i18n', () => {
   const codes = ['nb', 'nn', 'en', 'de', 'fr', 'nl', 'it', 'pl']
   return {
@@ -26,7 +26,7 @@ vi.mock('@/i18n', () => {
     i18n: {
       global: {
         getLocaleMessage: (code: string) => ({
-          harborTargets: { print: { instructions: `${code}: scan`, instructionsFixed: `${code}: scan fixed` } },
+          harborTargets: { print: { scanHint: `${code}: scan`, payHere: `${code}: pay` } },
         }),
       },
     },
@@ -150,14 +150,107 @@ describe('HarborQrPrintView', () => {
     expect(wrapper.find('[data-testid="qr-page"]').exists()).toBe(false)
   })
 
-  it('drops the quantity step from the instructions on an all-fixed page', async () => {
-    mockTargets([target('a', { fixed_units: true }), target('b')])
-    const fixedPage = await mountAt('ids=a,b&per=2&langs=nb')
-    expect(headerLines(fixedPage)).toEqual(['nb: scan'])
+  describe('headline', () => {
+    const headline = (wrapper: Awaited<ReturnType<typeof mountAt>>) => wrapper.get('[data-testid="headline"]').text()
 
+    it('is the club language, plus English when English is selected', async () => {
+      mockTargets([target('a')])
+      expect(headline(await mountAt('ids=a&langs=nb,en,de'))).toBe('nb: pay · en: pay')
+
+      mockTargets([target('a')])
+      expect(headline(await mountAt('ids=a&langs=nb,de,nl'))).toBe('nb: pay')
+    })
+
+    it('is just English for an English club', async () => {
+      mockTargets([target('a')])
+      const wrapper = await mountAt('ids=a&langs=en,de', { name: 'Testklubben', hasLogo: false, defaultLanguage: 'en' })
+      expect(headline(wrapper)).toBe('en: pay')
+    })
+
+    it('targets a larger size in high-visibility style', async () => {
+      mockTargets([target('a')])
+      const standard = await mountAt('ids=a&per=2&style=standard')
+      expect(standard.get('[data-testid="headline"]').attributes('data-headline-pt')).toBe(String(HEADLINE_PT.standard))
+
+      mockTargets([target('a')])
+      const highVis = await mountAt('ids=a&per=2&style=highvis')
+      expect(highVis.get('[data-testid="headline"]').attributes('data-headline-pt')).toBe(String(HEADLINE_PT.highvis))
+    })
+  })
+
+  it('prints the same instructions whether or not the targets have a fixed price', async () => {
     mockTargets([target('a', { fixed_units: true })])
     const allFixed = await mountAt('ids=a&langs=nb')
-    expect(headerLines(allFixed)).toEqual(['nb: scan fixed'])
+    expect(headerLines(allFixed)).toEqual(['nb: scan'])
+  })
+
+  it('puts more than two instruction lines in two columns', async () => {
+    mockTargets([target('a')])
+    const two = await mountAt('ids=a&langs=nb,en')
+    expect(two.get('[data-testid="instructions"]').classes()).not.toContain('qr-page__instructions--cols')
+
+    mockTargets([target('a')])
+    const three = await mountAt('ids=a&langs=nb,en,de')
+    expect(three.get('[data-testid="instructions"]').classes()).toContain('qr-page__instructions--cols')
+  })
+
+  it('lays out one large card per page', async () => {
+    mockTargets([target('a'), target('b')])
+    const wrapper = await mountAt('ids=a,b&per=1')
+    const pages = wrapper.findAll('[data-testid="qr-page"]')
+    expect(pages).toHaveLength(2)
+    expect(pages[0].findAll('[data-testid="qr-card"]')).toHaveLength(1)
+    expect(wrapper.get('[data-testid="qr-card"]').classes()).toContain('qr-card--xl')
+    const style = wrapper.get('.qr-page__grid').attributes('style')
+    expect(style).toContain('grid-template-columns: repeat(1, calc((100% - 0 * 6mm) / 1))')
+  })
+
+  describe('style', () => {
+    it('defaults to standard and writes it to the URL', async () => {
+      mockTargets([target('a')])
+      const wrapper = await mountAt('ids=a')
+      expect(wrapper.vm.$route.query.style).toBe('standard')
+      expect(wrapper.get('[data-testid="style-standard"]').attributes('aria-pressed')).toBe('true')
+      expect(wrapper.get('[data-testid="qr-card"]').classes()).not.toContain('qr-card--highvis')
+    })
+
+    it('remembers a chosen style and reflects it in the URL and the cards', async () => {
+      mockTargets([target('a')])
+      const wrapper = await mountAt('ids=a')
+      await wrapper.get('[data-testid="style-highvis"]').trigger('click')
+      await flushPromises()
+      expect(localStorage.getItem('brygge-qr-print-style')).toBe('highvis')
+      expect(wrapper.vm.$route.query.style).toBe('highvis')
+      expect(wrapper.get('.qr-sheet-root').classes()).toContain('qr-sheet-root--highvis')
+      expect(wrapper.get('[data-testid="qr-card"]').classes()).toContain('qr-card--highvis')
+    })
+
+    it('lets the query win over the remembered style', async () => {
+      localStorage.setItem('brygge-qr-print-style', 'highvis')
+      mockTargets([target('a')])
+      const fromQuery = await mountAt('ids=a&per=2&style=standard')
+      expect(fromQuery.get('[data-testid="qr-card"]').classes()).not.toContain('qr-card--highvis')
+
+      mockTargets([target('a')])
+      const fromStorage = await mountAt('ids=a')
+      expect(fromStorage.vm.$route.query.style).toBe('highvis')
+      expect(fromStorage.get('[data-testid="qr-card"]').classes()).toContain('qr-card--highvis')
+    })
+
+    it('falls back to standard when storage is unavailable', async () => {
+      vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+        throw new Error('blocked')
+      })
+      vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+        throw new Error('blocked')
+      })
+      mockTargets([target('a')])
+      const wrapper = await mountAt('ids=a')
+      expect(wrapper.vm.$route.query.style).toBe('standard')
+      await wrapper.get('[data-testid="style-highvis"]').trigger('click')
+      await flushPromises()
+      expect(wrapper.vm.$route.query.style).toBe('highvis')
+    })
   })
 
   it('falls back to 4 per page and enables printing once QRs are ready', async () => {
@@ -201,11 +294,17 @@ describe('HarborQrPrintView', () => {
       expect(wrapper.get('[data-testid="overflow-count"]').text()).toBe('harborTargets.print.overflowCount')
     })
 
-    it('uses the larger minimum QR size on 2-up cards', async () => {
+    it('uses the minimum QR size of the card size', async () => {
       mockTargets([target('a')])
       await mountAt('ids=a&per=2')
-      const sizes = measureQrCard.mock.calls.map(([, min]) => min)
-      expect(sizes[sizes.length - 1]).toBeCloseTo(minQrPx(2))
+      const large = measureQrCard.mock.calls.map(([, min]) => min)
+      expect(large[large.length - 1]).toBeCloseTo(minQrPx('large'))
+
+      measureQrCard.mockClear()
+      mockTargets([target('a')])
+      await mountAt('ids=a&per=1')
+      const xl = measureQrCard.mock.calls.map(([, min]) => min)
+      expect(xl[xl.length - 1]).toBeCloseTo(minQrPx('xl'))
     })
   })
 

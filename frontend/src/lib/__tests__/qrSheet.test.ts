@@ -1,8 +1,17 @@
 import { describe, it, expect } from 'vitest'
 import {
+  HEADLINE_FLOOR_PT,
   MIN_QR_MM,
   MIN_QR_MM_LARGE,
+  MIN_QR_MM_XL,
+  cardSize,
   cardTranslations,
+  fitHeadlinePt,
+  headlineTargetPt,
+  HEADLINE_PT,
+  HEADLINE_PT_DENSE,
+  headlineLangs,
+  parsePrintStyle,
   chunkPages,
   fitScale,
   minQrPx,
@@ -15,7 +24,8 @@ import {
 } from '@/lib/qrSheet'
 
 describe('parseCardsPerPage', () => {
-  it('accepts 2, 3, 4 and 6 as numbers or strings', () => {
+  it('accepts 1, 2, 3, 4 and 6 as numbers or strings', () => {
+    expect(parseCardsPerPage('1')).toBe(1)
     expect(parseCardsPerPage(2)).toBe(2)
     expect(parseCardsPerPage('3')).toBe(3)
     expect(parseCardsPerPage('4')).toBe(4)
@@ -30,11 +40,22 @@ describe('parseCardsPerPage', () => {
 })
 
 describe('gridDims', () => {
-  it('maps 2/3/4/6 to landscape grids', () => {
+  it('maps 1/2/3/4/6 to landscape grids', () => {
+    expect(gridDims(1)).toEqual({ cols: 1, rows: 1 })
     expect(gridDims(2)).toEqual({ cols: 2, rows: 1 })
     expect(gridDims(3)).toEqual({ cols: 3, rows: 1 })
     expect(gridDims(4)).toEqual({ cols: 2, rows: 2 })
     expect(gridDims(6)).toEqual({ cols: 3, rows: 2 })
+  })
+})
+
+describe('cardSize', () => {
+  it('is xl for one per page, large for 2 and 3, base for 4 and 6', () => {
+    expect(cardSize(1)).toBe('xl')
+    expect(cardSize(2)).toBe('large')
+    expect(cardSize(3)).toBe('large')
+    expect(cardSize(4)).toBe('base')
+    expect(cardSize(6)).toBe('base')
   })
 })
 
@@ -99,6 +120,67 @@ describe('print languages', () => {
   })
 })
 
+describe('parsePrintStyle', () => {
+  it('accepts the known styles from a query value or string', () => {
+    expect(parsePrintStyle('standard')).toBe('standard')
+    expect(parsePrintStyle(['highvis'])).toBe('highvis')
+  })
+
+  it('treats absent or unknown as null', () => {
+    for (const v of [undefined, null, '', 'HIGHVIS', 'loud', 1]) expect(parsePrintStyle(v)).toBeNull()
+  })
+})
+
+describe('headlineLangs', () => {
+  it('adds English after the club language when English is selected', () => {
+    expect(headlineLangs('nb', ['nb', 'en', 'de', 'nl'])).toEqual(['nb', 'en'])
+    expect(headlineLangs('de', ['de', 'en'])).toEqual(['de', 'en'])
+  })
+
+  it('is the club language alone without English', () => {
+    expect(headlineLangs('nb', ['nb', 'de', 'nl'])).toEqual(['nb'])
+  })
+
+  it('is English alone for an English club', () => {
+    expect(headlineLangs('en', ['en', 'de'])).toEqual(['en'])
+  })
+})
+
+describe('headlineTargetPt', () => {
+  it('gives signs with 1 to 3 cards the full headline and caps 4- and 6-up', () => {
+    for (const per of [1, 2, 3] as const) {
+      expect(headlineTargetPt('standard', per)).toBe(HEADLINE_PT.standard)
+      expect(headlineTargetPt('highvis', per)).toBe(HEADLINE_PT.highvis)
+    }
+    for (const per of [4, 6] as const) {
+      expect(headlineTargetPt('standard', per)).toBe(HEADLINE_PT_DENSE.standard)
+      expect(headlineTargetPt('highvis', per)).toBe(HEADLINE_PT_DENSE.highvis)
+    }
+  })
+})
+
+describe('fitHeadlinePt', () => {
+  it('keeps the target size when the line fits', () => {
+    expect(fitHeadlinePt(900, 1000, 64)).toBe(64)
+    expect(fitHeadlinePt(1000, 1000, 64)).toBe(64)
+  })
+
+  it('scales down in half points to fit the width', () => {
+    // 64 * 1000 / 1200 = 53.33 → 53.
+    expect(fitHeadlinePt(1200, 1000, 64)).toBe(53)
+    // 44 * 1000 / 1090 = 40.37 → 40.
+    expect(fitHeadlinePt(1090, 1000, 44)).toBe(40)
+  })
+
+  it('stops at the floor', () => {
+    expect(fitHeadlinePt(3000, 1000, 64)).toBe(HEADLINE_FLOOR_PT)
+  })
+
+  it('leaves an unmeasured line at the target size', () => {
+    expect(fitHeadlinePt(0, 0, 44)).toBe(44)
+  })
+})
+
 describe('mmToPx', () => {
   it('uses the CSS 96 px per inch', () => {
     expect(mmToPx(25.4)).toBeCloseTo(96)
@@ -107,10 +189,10 @@ describe('mmToPx', () => {
 })
 
 describe('minQrPx', () => {
-  it('needs a larger QR on the 2-up cards', () => {
-    expect(minQrPx(2)).toBeCloseTo(mmToPx(MIN_QR_MM_LARGE))
-    expect(minQrPx(4)).toBeCloseTo(mmToPx(MIN_QR_MM))
-    expect(minQrPx(6)).toBeCloseTo(mmToPx(MIN_QR_MM))
+  it('needs a larger QR on larger cards', () => {
+    expect(minQrPx('xl')).toBeCloseTo(mmToPx(MIN_QR_MM_XL))
+    expect(minQrPx('large')).toBeCloseTo(mmToPx(MIN_QR_MM_LARGE))
+    expect(minQrPx('base')).toBeCloseTo(mmToPx(MIN_QR_MM))
   })
 })
 
@@ -156,9 +238,9 @@ describe('fitScale', () => {
 
   it('demands more room for the large card QR', () => {
     const card = { textHeightAt1: 120, otherHeight: 30, cardInnerHeight: 330 }
-    expect(fitScale({ ...card, minQrPx: minQrPx(4) })).toEqual({ scale: 1, overflow: false })
+    expect(fitScale({ ...card, minQrPx: minQrPx('base') })).toEqual({ scale: 1, overflow: false })
     // 330 - 30 - 226.8 leaves 73 px of text room: 120 needs 0.6.
-    expect(fitScale({ ...card, minQrPx: minQrPx(2) })).toEqual({ scale: 0.6, overflow: false })
-    expect(fitScale({ ...card, cardInnerHeight: 320, minQrPx: minQrPx(2) })).toEqual({ scale: 0.6, overflow: true })
+    expect(fitScale({ ...card, minQrPx: minQrPx('large') })).toEqual({ scale: 0.6, overflow: false })
+    expect(fitScale({ ...card, cardInnerHeight: 320, minQrPx: minQrPx('large') })).toEqual({ scale: 0.6, overflow: true })
   })
 })

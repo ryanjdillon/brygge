@@ -1,6 +1,6 @@
 # Harbor QR posters and cards
 
-For the harbor master, treasurer and board. A QR target is a printed QR code that guests scan to pay with Vipps, for example for a guest berth, a motorhome spot or a shower. A scan opens a pay page; the payment then shows up under Harbor → Payments.
+For the harbor master, treasurer and board. A QR target is a printed QR code that guests scan to pay, for example for a guest berth, a motorhome spot or a shower. A scan opens a pay page; the payment then shows up under Harbor → Payments.
 
 Manage targets under **Admin → Harbor → QR posters** (`/admin/harbor/payment-targets`).
 
@@ -30,23 +30,29 @@ There are two ways to print.
 
 ### One full-page poster
 
-**Poster** on a target's row downloads an A4 portrait PDF with the club name, label, location, a large QR code with the short address under it, the price and scan instructions.
+**Poster** on a target's row downloads an A4 portrait PDF with the club name, a large "Betal her" headline, the label, location, a large QR code with the short address under it, the price and a scan instruction. The poster is in Norwegian only; for other languages, print cards (below).
 
-### Cards: 2, 3, 4 or 6 per A4 page
+### Cards: 1, 2, 3, 4 or 6 per A4 page
 
 For several codes on one sheet, or one smaller card:
 
 1. Tick the targets to print, or **Select all**. Archived targets can't be selected.
-2. Choose **Cards per page**: 2, 3, 4 or 6. The page is A4 landscape; 3 per page is one row of tall cards.
+2. Choose **Cards per page**: 1, 2, 3, 4 or 6. The page is A4 landscape; 1 per page is one large sign filling the page, and 3 per page is one row of tall cards.
 3. Click **Print selected**. To print a single card, use the printer button on its row instead.
 
-A print page opens in a new tab. Each page has the club logo (when one is uploaded under Admin → Site content) and the club name at the top, with the scan-and-pay instructions beside it, one line per chosen language. Each card has a border, the label, the target's names in the chosen languages in a smaller grey line, the price, the QR code and the short address under it. You can switch between 2, 3, 4 and 6 per page there before printing.
+A print page opens in a new tab. Each page has, from the top:
+
+- a small line with the club logo (when one is uploaded under Admin → Site content) and the club name;
+- a headline across the page, "Betal her" in the club's language, followed by "· Pay here" when English is ticked. It is the largest text on the page: as large as fits across the page on one line. With 4 or 6 cards a page it is kept smaller, so the cards keep their height;
+- a short scan instruction, one line per chosen language. It names no payment app and no quantity: guests choose those on the pay page.
+
+Each card has a border, the label, the target's names in the chosen languages in a smaller line, the price, the QR code and the short address under it. You can switch between 1, 2, 3, 4 and 6 per page there before printing.
 
 The card size depends on cards per page, and a little on the header (see below). A page with fewer cards, such as a single card or the last page of a selection, keeps the cards at that size and centres them. So to print one card at the size it would have on a 6-up sheet, print it with **6 per page**.
 
 ### Long names and many languages
 
-A card's label, translations and price shrink together to make room, down to about 60% of their normal size, so the QR code keeps a size phones scan reliably: at least 35 mm on 4- and 6-up cards, and 60 mm on 2- and 3-up cards. Nothing is cut off. The card size also depends on the header, so ticking more languages makes the cards a little shorter and their text a little smaller. If the browser has a minimum font size set, small text can't shrink that far, so on a crowded card the QR code may end up a little smaller than intended without being flagged; check the preview, or print fewer per page.
+A card's label, translations and price shrink together to make room, down to about 60% of their normal size, so the QR code keeps a size phones scan reliably: at least 35 mm on 4- and 6-up cards, and 60 mm on 1-, 2- and 3-up cards. Nothing is cut off. The card size also depends on the header, so ticking more languages makes the cards a little shorter and their text a little smaller. If the browser has a minimum font size set, small text can't shrink that far, so on a crowded card the QR code may end up a little smaller than intended without being flagged; check the preview, or print fewer per page.
 
 If even the smallest text leaves too little room for the QR code, the card gets a red outline and the note "Too much text for this size", and the toolbar says how many cards have too much text. The outline and note show on screen only; they are not printed. To fix it, do one of:
 
@@ -54,17 +60,35 @@ If even the smallest text leaves too little room for the QR code, the card gets 
 - untick some languages;
 - print fewer cards per page.
 
-The instructions mention choosing a quantity unless every card on the page has a fixed price.
-
 ### Languages
 
-The **Languages** checkboxes on the print page choose which languages the sheet is printed in. Norwegian (bokmål), English, German and Dutch are ticked to start with. The club's language is always ticked and always comes first, a little larger; the others follow in the order listed, smaller and grey. The language you use the app in does not matter.
+The **Languages** checkboxes on the print page choose which languages the sheet is printed in. Norwegian (bokmål), English, German and Dutch are ticked to start with. The club's language is always ticked and always comes first, a little larger; the others follow in the order listed, smaller. The language you use the app in does not matter.
 
 - The instructions get one line per ticked language.
 - A card's second line lists the target's names in the ticked languages it has a name for. A language without a name for that target is left out; a target with no other names has no second line.
-- Four extra languages fit beside the club name comfortably. Ticking more squeezes the instructions into two smaller columns.
+- With more than two languages ticked, the instruction lines go in two columns so the header stays short.
+- Only the club language and English appear in the headline; a longer headline would no longer read from a distance.
 
 The browser remembers your choice for next time, and the page address carries it (`?langs=nb,en,de,nl`), so a bookmarked or shared print link prints the same languages. In a private window the choice is not remembered, but the address still works.
+
+### Style
+
+The **Standard** and **Høy synlighet** (high visibility) buttons choose the look.
+
+- **Standard** is for signs read up close indoors: a black headline between two rules, dark text.
+- **High visibility** is for outdoor signs read from a distance: a yellow headline band, black text everywhere, heavier type, and thick black card borders. It is designed to read just as well from a black-and-white printer; the yellow prints as a light grey behind black text.
+
+Like the languages, the browser remembers the style and the page address carries it (`?style=standard` or `?style=highvis`).
+
+High visibility at 6 per page isn't supported: the larger text leaves too little room for the QR code, so the cards get flagged. Use 1 to 3 per page for outdoor signs.
+
+### Which setup for which sign
+
+| Sign | Style | Cards per page | Languages |
+|------|-------|----------------|-----------|
+| Guest berth, motorhome spot (outdoors) | High visibility | 1 or 2 | Norwegian, English, German, Dutch |
+| Slipping (in the clubhouse) | Standard | any | Norwegian only |
+| Fridge (small drinks and food) | Standard | 4 or 6 | Norwegian, English |
 
 ### Printer settings
 

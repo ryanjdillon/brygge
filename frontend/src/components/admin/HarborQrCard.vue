@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { type CardsPerPage } from '@/lib/qrSheet'
+import { type CardSize } from '@/lib/qrSheet'
 
 const props = defineProps<{
   label: string
   price: string
   qrSrc: string
-  per: CardsPerPage
+  size: CardSize
+  // High-visibility print style: black text only, thick border, larger type.
+  highVis?: boolean
   shortUrl?: string
   // Already filtered and ordered by the caller: the selected languages other
   // than the club's, and only those the target has a name for.
@@ -31,7 +33,7 @@ const shortSegments = computed(() => shortAddress.value.split(/(?<=\/)/))
 <template>
   <article
     class="qr-card"
-    :class="[per === 2 ? 'qr-card--large' : '', overflow ? 'qr-card--overflow' : '']"
+    :class="[`qr-card--${size}`, highVis ? 'qr-card--highvis' : '', overflow ? 'qr-card--overflow' : '']"
     data-testid="qr-card"
   >
     <div class="qr-card__text" data-fit="text">
@@ -88,7 +90,7 @@ const shortSegments = computed(() => shortAddress.value.split(/(?<=\/)/))
   margin: 0;
   max-width: 100%;
   overflow-wrap: break-word;
-  font-size: calc(15pt * var(--fit, 1));
+  font-size: calc(15pt * var(--hv, 1) * var(--fit, 1));
   font-weight: 700;
   line-height: 1.15;
   letter-spacing: -0.01em;
@@ -98,14 +100,14 @@ const shortSegments = computed(() => shortAddress.value.split(/(?<=\/)/))
   margin: 0.5mm 0 0;
   max-width: 100%;
   overflow-wrap: break-word;
-  font-size: calc(9pt * var(--fit, 1));
+  font-size: calc(9pt * var(--hv, 1) * var(--fit, 1));
   line-height: 1.2;
   color: #64748b;
 }
 
 .qr-card__price {
   margin: 1mm 0 2mm;
-  font-size: calc(12pt * var(--fit, 1));
+  font-size: calc(12pt * var(--hv, 1) * var(--fit, 1));
   font-weight: 500;
   color: #334155;
   font-variant-numeric: tabular-nums;
@@ -128,34 +130,87 @@ const shortSegments = computed(() => shortAddress.value.split(/(?<=\/)/))
   margin: 1.5mm 0 0;
   max-width: 100%;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
-  font-size: 9pt;
+  font-size: calc(10pt * var(--hv, 1));
   line-height: 1.2;
   color: #1e293b;
   overflow-wrap: normal;
   word-break: keep-all;
 }
 
+/* 2- and 3-up cards are a full page tall. */
 .qr-card--large {
   padding: 8mm 8mm 6mm;
 }
 
 .qr-card--large .qr-card__title {
-  font-size: calc(28pt * var(--fit, 1));
+  font-size: calc(28pt * var(--hv, 1) * var(--fit, 1));
 }
 
 .qr-card--large .qr-card__translations {
   margin-top: 1mm;
-  font-size: calc(14pt * var(--fit, 1));
+  font-size: calc(14pt * var(--hv, 1) * var(--fit, 1));
 }
 
 .qr-card--large .qr-card__price {
   margin: 2mm 0 4mm;
-  font-size: calc(18pt * var(--fit, 1));
+  font-size: calc(18pt * var(--hv, 1) * var(--fit, 1));
 }
 
 .qr-card--large .qr-card__short-url {
   margin-top: 3mm;
-  font-size: 14pt;
+  font-size: calc(14pt * var(--hv, 1));
+}
+
+/* One card filling the page under the header. */
+.qr-card--xl {
+  padding: 6mm 8mm 5mm;
+}
+
+.qr-card--xl .qr-card__title {
+  font-size: calc(40pt * var(--hv, 1) * var(--fit, 1));
+  line-height: 1.1;
+}
+
+.qr-card--xl .qr-card__translations {
+  margin-top: 1mm;
+  font-size: calc(18pt * var(--hv, 1) * var(--fit, 1));
+}
+
+.qr-card--xl .qr-card__price {
+  margin: 1.5mm 0 3mm;
+  font-size: calc(26pt * var(--hv, 1) * var(--fit, 1));
+}
+
+.qr-card--xl .qr-card__short-url {
+  margin-top: 2mm;
+  font-size: 16pt;
+}
+
+/* High visibility, for signs read outdoors and from a distance. It must read
+   correctly when printed in greyscale on a black-and-white printer, so every
+   line is black, no weight is light, the border is heavy and the type is a
+   step larger (--hv); nothing relies on colour. The xl card's short address
+   is already large, so it keeps its size. */
+.qr-card--highvis {
+  --hv: 1.15;
+  border: 1.5mm solid #000;
+  color: #000;
+}
+
+.qr-card--highvis .qr-card__translations,
+.qr-card--highvis .qr-card__price,
+.qr-card--highvis .qr-card__short-url {
+  color: #000;
+}
+
+.qr-card--highvis .qr-card__title,
+.qr-card--highvis .qr-card__price {
+  font-weight: 800;
+}
+
+.qr-card--highvis .qr-card__translations,
+.qr-card--highvis .qr-card__short-url {
+  font-weight: 600;
 }
 
 /* Screen-only warning: an outline and an overlaid note take no layout space,

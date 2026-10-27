@@ -2610,9 +2610,12 @@
       "print": "Print",
       "hint": "In the print dialog, choose A4 landscape, 100% scale and default margins.",
       "empty": "No active QR posters selected.",
-      "instructions": "Scan the QR code with your phone camera, choose the quantity and pay with Vipps.",
-      "instructionsFixed": "Scan the QR code with your phone camera and pay with Vipps.",
+      "payHere": "Pay here",
+      "scanHint": "Scan the code with your phone camera",
       "languages": "Languages",
+      "style": "Style",
+      "styleStandard": "Standard",
+      "styleHighVis": "High visibility",
       "overflowNote": "Too much text for this size — shorten the name or print fewer per page",
       "overflowCount": "Cards with too much text: {n}"
     }

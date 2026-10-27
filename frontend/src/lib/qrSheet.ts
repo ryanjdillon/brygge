@@ -1,11 +1,11 @@
 // Layout helpers for the harbor QR print sheet (BRY-271): A4 landscape pages
-// holding 2, 3, 4 or 6 cards. The page lays the cards out on a fixed grid for
+// holding 1, 2, 3, 4 or 6 cards. The page lays the cards out on a fixed grid for
 // the cards-per-page choice, so a page with fewer cards (or a single card)
 // prints them at the size they would have on a full page.
 
-export type CardsPerPage = 2 | 3 | 4 | 6
+export type CardsPerPage = 1 | 2 | 3 | 4 | 6
 
-export const CARDS_PER_PAGE: readonly CardsPerPage[] = [2, 3, 4, 6]
+export const CARDS_PER_PAGE: readonly CardsPerPage[] = [1, 2, 3, 4, 6]
 export const DEFAULT_CARDS_PER_PAGE: CardsPerPage = 4
 
 export function parseCardsPerPage(v: unknown): CardsPerPage {
@@ -15,6 +15,8 @@ export function parseCardsPerPage(v: unknown): CardsPerPage {
 
 export function gridDims(per: CardsPerPage): { cols: number; rows: number } {
   switch (per) {
+    case 1:
+      return { cols: 1, rows: 1 }
     case 2:
       return { cols: 2, rows: 1 }
     case 3:
@@ -24,6 +26,15 @@ export function gridDims(per: CardsPerPage): { cols: number; rows: number } {
     default:
       return { cols: 2, rows: 2 }
   }
+}
+
+// The card's type scale. 2- and 3-up cards are a full page tall, so they take
+// the larger type; a single card fills the page and takes the largest.
+export type CardSize = 'base' | 'large' | 'xl'
+
+export function cardSize(per: CardsPerPage): CardSize {
+  if (per === 1) return 'xl'
+  return per === 2 || per === 3 ? 'large' : 'base'
 }
 
 // "300 kr / natt", or "300 kr" for a fixed-price target; matches the poster
@@ -83,12 +94,69 @@ export function cardTranslations(
     .filter(Boolean)
 }
 
+// Print style (BRY-451): "standard" for indoor signs, "highvis" for outdoor
+// ones read from a distance.
+export type PrintStyle = 'standard' | 'highvis'
+
+export const PRINT_STYLES: readonly PrintStyle[] = ['standard', 'highvis']
+export const DEFAULT_PRINT_STYLE: PrintStyle = 'standard'
+export const PRINT_STYLE_STORAGE_KEY = 'brygge-qr-print-style'
+
+// parsePrintStyle reads a query value or stored string. Absent or unknown is
+// null, so the caller can fall through to the next source.
+export function parsePrintStyle(v: unknown): PrintStyle | null {
+  const raw = Array.isArray(v) ? v[0] : v
+  return (PRINT_STYLES as readonly unknown[]).includes(raw) ? (raw as PrintStyle) : null
+}
+
+// headlineLangs are the languages of the page's "Pay here" headline: the club
+// language, plus English when it is selected and not the club language. Other
+// languages stay in the instruction lines; a longer headline would no longer
+// read from a distance.
+export function headlineLangs(clubLang: string, langs: readonly string[]): string[] {
+  return clubLang !== 'en' && langs.includes('en') ? [clubLang, 'en'] : [clubLang]
+}
+
+// The headline's design size per print style, and the smallest it shrinks
+// to so a long translation still fits on one line across the page.
+// Targets are deliberately larger than most headlines fit: the fit pass
+// shrinks each one to the page width, so the headline is always as large as
+// the page allows ("Betal her" alone gets the full size).
+export const HEADLINE_PT: Record<PrintStyle, number> = { standard: 80, highvis: 100 }
+
+// With 4 or 6 cards a page the cards need the height, so the headline is
+// capped lower; a sign with 1 to 3 cards gets the full size.
+export const HEADLINE_PT_DENSE: Record<PrintStyle, number> = { standard: 54, highvis: 64 }
+
+export function headlineTargetPt(style: PrintStyle, per: CardsPerPage): number {
+  return per >= 4 ? HEADLINE_PT_DENSE[style] : HEADLINE_PT[style]
+}
+export const HEADLINE_FLOOR_PT = 36
+
+// fitHeadlinePt scales the headline down from targetPt so its one line fits
+// the available width, never below the floor. Text width is proportional to
+// the font size, so one measurement at targetPt is enough.
+export function fitHeadlinePt(
+  textWidthAtTarget: number,
+  availableWidth: number,
+  targetPt: number,
+  floorPt: number = HEADLINE_FLOOR_PT,
+): number {
+  if (textWidthAtTarget <= 0 || availableWidth <= 0 || textWidthAtTarget <= availableWidth) return targetPt
+  // Rounded down to a half point so the fitted line never overshoots.
+  const fitted = Math.floor(((targetPt * availableWidth) / textWidthAtTarget) * 2) / 2
+  return Math.max(floorPt, fitted)
+}
+
 // Card text fitting (BRY-438). A card's title, translations and price shrink
 // together, down to FIT_FLOOR of their design size, so long names and many
 // languages still leave the QR at least its minimum printed size. Below
 // that the card is flagged rather than clipped or squashed.
 export const MIN_QR_MM = 35
 export const MIN_QR_MM_LARGE = 60
+// A 1-per-page card is no taller than a 2-up one (both are a single row under
+// the same header), so it keeps the same minimum; its larger text yields first.
+export const MIN_QR_MM_XL = 60
 export const FIT_FLOOR = 0.6
 export const FIT_STEP = 0.05
 
@@ -100,9 +168,10 @@ export function mmToPx(mm: number): number {
   return mm * PX_PER_MM
 }
 
-export function minQrPx(per: CardsPerPage): number {
-  // 2- and 3-up cards are a full page tall, so they hold the larger code.
-  return mmToPx(per === 2 || per === 3 ? MIN_QR_MM_LARGE : MIN_QR_MM)
+const MIN_QR_MM_BY_SIZE: Record<CardSize, number> = { base: MIN_QR_MM, large: MIN_QR_MM_LARGE, xl: MIN_QR_MM_XL }
+
+export function minQrPx(size: CardSize): number {
+  return mmToPx(MIN_QR_MM_BY_SIZE[size])
 }
 
 export type FitInput = {

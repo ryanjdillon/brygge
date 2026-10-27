@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
 import HarborQrCard from '@/components/admin/HarborQrCard.vue'
 
-const base = { label: 'Dock A', price: '300 kr / natt', qrSrc: 'data:image/svg+xml,x', per: 4 as const }
+const base = { label: 'Dock A', price: '300 kr / natt', qrSrc: 'data:image/svg+xml,x', size: 'base' as const }
 
 describe('HarborQrCard', () => {
   it('prints the short address without the scheme, breakable after each slash', () => {
@@ -40,5 +40,16 @@ describe('HarborQrCard', () => {
     const flagged = mount(HarborQrCard, { props: { ...base, overflow: true } })
     expect(flagged.get('[data-testid="qr-card-overflow"]').text()).toBe('harborTargets.print.overflowNote')
     expect(flagged.classes()).toContain('qr-card--overflow')
+  })
+
+  it('takes the class of its size', () => {
+    for (const size of ['base', 'large', 'xl'] as const) {
+      expect(mount(HarborQrCard, { props: { ...base, size } }).classes()).toContain(`qr-card--${size}`)
+    }
+  })
+
+  it('takes the high-visibility class only when asked', () => {
+    expect(mount(HarborQrCard, { props: base }).classes()).not.toContain('qr-card--highvis')
+    expect(mount(HarborQrCard, { props: { ...base, highVis: true } }).classes()).toContain('qr-card--highvis')
   })
 })

@@ -30,13 +30,14 @@ func TestQREmptyURL(t *testing.T) {
 
 func TestPoster(t *testing.T) {
 	pdf, err := Poster(PosterData{
-		ClubName:     "Klokkarvik Båtlag",
+		ClubName:     "Synthetic Båtlag",
+		Headline:     "Betal her",
 		Label:        "Gjestehavn – Brygge A",
 		Location:     "Ytre molo",
 		PriceLine:    "200 kr / natt",
-		Instructions: []string{"Skann QR-koden med mobilen.", "Betal med Vipps."},
-		URL:          "https://klokkarvikbaatlag.no/qr/abc123",
-		ShortURL:     "klokkarvikbaatlag.no/q/gjest",
+		Instructions: []string{"Skann koden med mobilkameraet."},
+		URL:          "https://example.test/qr/abc123",
+		ShortURL:     "example.test/q/gjest",
 	})
 	if err != nil {
 		t.Fatalf("Poster: %v", err)
@@ -86,5 +87,21 @@ func TestPosterPrintsShortURL(t *testing.T) {
 	}
 	if bytes.Contains([]byte(pdfText(t, pdf)), []byte("/q/")) {
 		t.Fatal("Poster: drew a short URL that was not given")
+	}
+}
+
+func TestPosterPrintsHeadline(t *testing.T) {
+	data := PosterData{
+		Headline:  "Betal her",
+		Label:     "Synthetic dock",
+		PriceLine: "100 kr",
+		URL:       "https://example.test/qr/abc123",
+	}
+	pdf, err := Poster(data)
+	if err != nil {
+		t.Fatalf("Poster: %v", err)
+	}
+	if !bytes.Contains([]byte(pdfText(t, pdf)), []byte("(Betal her)")) {
+		t.Fatal("Poster: headline not drawn")
 	}
 }

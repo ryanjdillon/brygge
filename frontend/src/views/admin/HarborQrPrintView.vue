@@ -11,15 +11,23 @@ import { useFitCards } from '@/composables/useFitCards'
 import {
   CARDS_PER_PAGE,
   DEFAULT_PRINT_LANGS,
+  DEFAULT_PRINT_STYLE,
+  headlineTargetPt,
   PRINT_LANGS_STORAGE_KEY,
+  PRINT_STYLES,
+  PRINT_STYLE_STORAGE_KEY,
+  cardSize,
   cardTranslations,
   chunkPages,
   gridDims,
+  headlineLangs,
   normalisePrintLangs,
   parseCardsPerPage,
   parseLangList,
+  parsePrintStyle,
   targetPriceLine,
   type CardsPerPage,
+  type PrintStyle,
 } from '@/lib/qrSheet'
 
 type Target = {
@@ -48,6 +56,7 @@ const loading = ref(true)
 const error = ref('')
 
 const per = computed<CardsPerPage>(() => parseCardsPerPage(route.query.per))
+const size = computed(() => cardSize(per.value))
 
 const requestedIds = computed(() =>
   String(route.query.ids ?? '')
@@ -98,6 +107,36 @@ function storeLangs(list: string[]) {
 
 const storedLangs = ref<string[] | null>(readStoredLangs())
 
+function readStoredStyle(): PrintStyle | null {
+  try {
+    return parsePrintStyle(localStorage.getItem(PRINT_STYLE_STORAGE_KEY))
+  } catch {
+    return null
+  }
+}
+
+function storeStyle(value: PrintStyle) {
+  try {
+    localStorage.setItem(PRINT_STYLE_STORAGE_KEY, value)
+  } catch {
+    // Not remembered for next time; the URL still carries the choice.
+  }
+}
+
+const storedStyle = ref<PrintStyle | null>(readStoredStyle())
+
+// Like the languages, the query wins over the remembered choice.
+const style = computed<PrintStyle>(
+  () => parsePrintStyle(route.query.style) ?? storedStyle.value ?? DEFAULT_PRINT_STYLE,
+)
+const highVis = computed(() => style.value === 'highvis')
+const headlinePt = computed(() => headlineTargetPt(style.value, per.value))
+
+const STYLE_LABEL_KEYS: Record<PrintStyle, string> = {
+  standard: 'harborTargets.print.styleStandard',
+  highvis: 'harborTargets.print.styleHighVis',
+}
+
 // The query wins so a shared or bookmarked link reproduces the sheet.
 const langs = computed(() =>
   normalisePrintLangs(
@@ -112,6 +151,7 @@ const langs = computed(() =>
 const { overflow, overflowCount } = useFitCards(sheetRoot, per, () => [
   pages.value,
   langs.value,
+  style.value,
   ready.value,
   club.name,
   club.hasLogo,
@@ -143,6 +183,12 @@ function setLangs(list: string[]) {
   replaceQuery({ langs: list.join(',') })
 }
 
+function setStyle(value: PrintStyle) {
+  storedStyle.value = value
+  storeStyle(value)
+  replaceQuery({ style: value })
+}
+
 function toggleLang(code: string) {
   if (code === clubLang.value) return
   const current = langs.value
@@ -168,12 +214,20 @@ function messageIn(code: string, path: string): string {
   return typeof value === 'string' ? value : ''
 }
 
-function instructionLines(page: Target[]): { code: string; text: string }[] {
-  const key = page.every((tg) => tg.fixed_units)
-    ? 'harborTargets.print.instructionsFixed'
-    : 'harborTargets.print.instructions'
-  return langs.value.map((code) => ({ code, text: messageIn(code, key) })).filter((l) => l.text)
-}
+const headline = computed(() =>
+  headlineLangs(clubLang.value, langs.value)
+    .map((code) => messageIn(code, 'harborTargets.print.payHere'))
+    .filter(Boolean)
+    .join(' · '),
+)
+
+// The sign names no payment provider or quantity step: both are chosen on the
+// pay page, so the lines stay true whatever the target and provider.
+const instructionLines = computed(() =>
+  langs.value
+    .map((code) => ({ code, text: messageIn(code, 'harborTargets.print.scanHint') }))
+    .filter((l) => l.text),
+)
 
 function translationsOf(tg: Target): string[] {
   return cardTranslations(tg.label_translations, langs.value, clubLang.value)
@@ -235,9 +289,13 @@ onMounted(async () => {
   await Promise.all([club.ensureLoaded(), load()])
   // Put the effective choice in the URL so a copied link prints the same
   // sheet for someone with other remembered languages. Waiting for the
-  // router keeps the replace from dropping a query not yet resolved.
+  // router keeps the replace from dropping a query not yet resolved. One
+  // replace for both, since a second would start from the stale query.
   await router.isReady()
-  if (!route.query.langs) setLangs(langs.value)
+  const patch: Record<string, string> = {}
+  if (!route.query.langs) patch.langs = langs.value.join(',')
+  if (!parsePrintStyle(route.query.style)) patch.style = style.value
+  if (Object.keys(patch).length) replaceQuery(patch)
 })
 
 onBeforeUnmount(() => {
@@ -246,7 +304,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="sheetRoot" class="qr-sheet-root">
+  <div ref="sheetRoot" class="qr-sheet-root" :class="highVis ? 'qr-sheet-root--highvis' : ''">
     <div class="qr-toolbar">
       <h1 class="text-base font-semibold text-slate-900">
         {{ t('harborTargets.print.title') }}
@@ -266,6 +324,24 @@ onBeforeUnmount(() => {
           @click="setPer(n)"
         >
           {{ t('harborTargets.print.perPageOption', { n }) }}
+        </button>
+      </div>
+      <div class="flex items-center gap-1" role="group" :aria-label="t('harborTargets.print.style')">
+        <button
+          v-for="s in PRINT_STYLES"
+          :key="s"
+          type="button"
+          class="rounded-md border px-2.5 py-1 text-sm"
+          :class="
+            s === style
+              ? 'border-slate-900 bg-slate-900 text-white'
+              : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+          "
+          :aria-pressed="s === style"
+          :data-testid="`style-${s}`"
+          @click="setStyle(s)"
+        >
+          {{ t(STYLE_LABEL_KEYS[s]) }}
         </button>
       </div>
       <fieldset class="flex flex-wrap items-center gap-x-3 gap-y-1" data-testid="lang-picker">
@@ -323,11 +399,28 @@ onBeforeUnmount(() => {
         data-testid="qr-page"
       >
         <header class="qr-page__header" data-testid="qr-page-header">
-          <img v-if="club.hasLogo" :src="CLUB_LOGO_URL" alt="" class="qr-page__logo" data-testid="club-logo" />
-          <p class="qr-page__club">{{ club.name }}</p>
-          <div class="qr-page__instructions" data-testid="instructions">
+          <div class="qr-page__club-line">
+            <img v-if="club.hasLogo" :src="CLUB_LOGO_URL" alt="" class="qr-page__logo" data-testid="club-logo" />
+            <p class="qr-page__club">{{ club.name }}</p>
+          </div>
+          <div class="qr-page__band">
             <p
-              v-for="(line, j) in instructionLines(page)"
+              class="qr-page__headline"
+              data-fit-headline
+              :data-headline-pt="headlinePt"
+              :style="{ '--headline-target': `${headlinePt}pt` }"
+              data-testid="headline"
+            >
+              {{ headline }}
+            </p>
+          </div>
+          <div
+            class="qr-page__instructions"
+            :class="instructionLines.length > 2 ? 'qr-page__instructions--cols' : ''"
+            data-testid="instructions"
+          >
+            <p
+              v-for="(line, j) in instructionLines"
               :key="line.code"
               :lang="line.code"
               :class="j === 0 ? 'qr-page__instr-main' : 'qr-page__instr-other'"
@@ -344,7 +437,8 @@ onBeforeUnmount(() => {
             :label="tg.label"
             :price="targetPriceLine(tg.unit_amount, tg.unit_label, tg.fixed_units)"
             :qr-src="qrSrc[tg.id] ?? ''"
-            :per="per"
+            :size="size"
+            :high-vis="highVis"
             :short-url="tg.short_url"
             :translations="translationsOf(tg)"
             :overflow="!!overflow[tg.id]"
@@ -406,52 +500,115 @@ onBeforeUnmount(() => {
 .qr-page__header {
   box-sizing: border-box;
   display: flex;
-  align-items: center;
+  flex-direction: column;
   flex: none;
-  gap: 5mm;
-  min-height: 14mm;
-  margin-bottom: 6mm;
-  padding-bottom: 3mm;
-  border-bottom: 0.3mm solid #cbd5e1;
+  gap: 3mm;
+  margin-bottom: 5mm;
+}
+
+/* The club identifies the sign but is not what a passer-by reads first, so
+   it is a small line above the headline. */
+.qr-page__club-line {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3mm;
+  min-width: 0;
 }
 
 .qr-page__logo {
-  height: 14mm;
+  height: 9mm;
   width: auto;
   flex-shrink: 0;
 }
 
 .qr-page__club {
-  flex-shrink: 0;
-  max-width: 40%;
+  min-width: 0;
   margin: 0;
-  font-size: 20pt;
+  font-size: 13pt;
   font-weight: 700;
   line-height: 1.1;
+  color: #334155;
+}
+
+/* The headline is the dominant element. It stays on one line; the fit pass
+   sets --headline-fit to shrink a long one, down to a floor. */
+.qr-page__band {
+  padding: 1.5mm 0;
+  border-top: 0.6mm solid #0f172a;
+  border-bottom: 0.6mm solid #0f172a;
+}
+
+.qr-page__headline {
+  margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-align: center;
+  font-size: var(--headline-fit, var(--headline-target, 80pt));
+  font-weight: 800;
+  line-height: 1.05;
   letter-spacing: -0.01em;
 }
 
-/* Beside the club name: the club language a little larger, the others small
-   and grey. */
+/* The club language larger, the others smaller and grey; centred under the
+   headline like the rest of the header. */
 .qr-page__instructions {
-  flex: 1 1 0;
-  min-width: 0;
+  text-align: center;
 }
 
 .qr-page__instructions p {
   margin: 0;
 }
 
+/* More than two lines would make the header tall; two columns keep it at
+   most two or three rows. */
+.qr-page__instructions--cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 8mm;
+  align-items: baseline;
+  justify-items: center;
+}
+
 .qr-page__instr-main {
-  font-size: 10pt;
+  font-size: 18pt;
+  font-weight: 600;
   line-height: 1.2;
-  color: #334155;
+  color: #1e293b;
 }
 
 .qr-page__instr-other {
-  font-size: 7pt;
-  line-height: 1.15;
-  color: #64748b;
+  font-size: 14pt;
+  line-height: 1.2;
+  color: #475569;
+}
+
+/* High visibility, for signs read outdoors and from a distance. It must read
+   correctly when printed in greyscale on a black-and-white printer: emphasis
+   comes from black text, heavy weights, size and thick black rules, never
+   from colour. The yellow fill is only an accent; printed grey it stays light,
+   so the black text on it keeps its contrast (about 16:1 in colour). */
+.qr-sheet-root--highvis .qr-page__band {
+  padding: 1.5mm 4mm;
+  border: 1.5mm solid #000;
+  background: #ffd500;
+}
+
+.qr-sheet-root--highvis .qr-page__club,
+.qr-sheet-root--highvis .qr-page__headline,
+.qr-sheet-root--highvis .qr-page__instr-main,
+.qr-sheet-root--highvis .qr-page__instr-other {
+  color: #000;
+}
+
+.qr-sheet-root--highvis .qr-page__instr-main {
+  font-size: 22pt;
+  font-weight: 700;
+}
+
+.qr-sheet-root--highvis .qr-page__instr-other {
+  font-size: 16pt;
+  font-weight: 600;
 }
 
 .qr-page__grid {

@@ -500,6 +500,14 @@ func (h *HarborHandler) HandleTargetQR(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(png)
 }
 
+// The poster's sign copy, in Norwegian. It names no payment provider and no
+// quantity step: both are chosen on the pay page, so a printed poster stays
+// true when the provider or the target's pricing changes.
+var (
+	posterHeadline     = "Betal her"
+	posterInstructions = []string{"Skann koden med mobilkameraet."}
+)
+
 // HandleTargetPoster streams a print-ready A4 poster PDF.
 func (h *HarborHandler) HandleTargetPoster(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -521,16 +529,14 @@ func (h *HarborHandler) HandleTargetPoster(w http.ResponseWriter, r *http.Reques
 		priceLine = fmt.Sprintf("%s kr / %s", trimAmount(amount), unitLabel)
 	}
 	pdf, err := qrposter.Poster(qrposter.PosterData{
-		ClubName:  clubName,
-		Label:     label,
-		Location:  location,
-		PriceLine: priceLine,
-		Instructions: []string{
-			"Skann QR-koden med mobilkameraet.",
-			"Velg antall og betal med Vipps.",
-		},
-		URL:      h.qrPublicURL(token),
-		ShortURL: strings.TrimPrefix(strings.TrimPrefix(h.shortPublicURL(shortCode), "https://"), "http://"),
+		ClubName:     clubName,
+		Headline:     posterHeadline,
+		Label:        label,
+		Location:     location,
+		PriceLine:    priceLine,
+		Instructions: posterInstructions,
+		URL:          h.qrPublicURL(token),
+		ShortURL:     strings.TrimPrefix(strings.TrimPrefix(h.shortPublicURL(shortCode), "https://"), "http://"),
 	})
 	if err != nil {
 		h.log.Error().Err(err).Msg("targets: poster render failed")

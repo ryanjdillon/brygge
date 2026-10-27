@@ -2487,9 +2487,12 @@
       "print": "Skriv ut",
       "hint": "Vel A4 liggjande, 100 % skala og standardmargar i utskriftsdialogen.",
       "empty": "Ingen aktive QR-plakatar er valde.",
-      "instructions": "Skann QR-koden med mobilkameraet, vel kor mange og betal med Vipps.",
-      "instructionsFixed": "Skann QR-koden med mobilkameraet og betal med Vipps.",
+      "payHere": "Betal her",
+      "scanHint": "Skann koden med mobilkameraet",
       "languages": "Språk",
+      "style": "Stil",
+      "styleStandard": "Standard",
+      "styleHighVis": "Høg synlegheit",
       "overflowNote": "For mykje tekst for denne storleiken — gjer namnet kortare eller skriv ut færre per side",
       "overflowCount": "Kort med for mykje tekst: {n}"
     }

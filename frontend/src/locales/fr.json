@@ -1569,9 +1569,12 @@
       "print": "Imprimer",
       "hint": "Dans la boîte d'impression, choisissez A4 paysage, échelle 100 % et marges par défaut.",
       "empty": "Aucune affiche QR active sélectionnée.",
-      "instructions": "Scannez le code QR avec l’appareil photo de votre téléphone, choisissez la quantité et payez avec Vipps.",
-      "instructionsFixed": "Scannez le code QR avec l’appareil photo de votre téléphone et payez avec Vipps.",
+      "payHere": "Payez ici",
+      "scanHint": "Scannez le code avec l'appareil photo",
       "languages": "Langues",
+      "style": "Style",
+      "styleStandard": "Standard",
+      "styleHighVis": "Haute visibilité",
       "overflowNote": "Trop de texte pour cette taille — raccourcissez le nom ou imprimez moins de cartes par page",
       "overflowCount": "Cartes avec trop de texte : {n}"
     }

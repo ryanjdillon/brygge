@@ -1541,9 +1541,12 @@
       "print": "Drukuj",
       "hint": "W oknie drukowania wybierz A4 poziomo, skalę 100% i domyślne marginesy.",
       "empty": "Nie zaznaczono aktywnych plakatów QR.",
-      "instructions": "Zeskanuj kod QR aparatem telefonu, wybierz liczbę i zapłać przez Vipps.",
-      "instructionsFixed": "Zeskanuj kod QR aparatem telefonu i zapłać przez Vipps.",
+      "payHere": "Zapłać tutaj",
+      "scanHint": "Zeskanuj kod aparatem telefonu",
       "languages": "Języki",
+      "style": "Styl",
+      "styleStandard": "Standardowy",
+      "styleHighVis": "Wysoka widoczność",
       "overflowNote": "Za dużo tekstu na ten rozmiar — skróć nazwę lub drukuj mniej na stronie",
       "overflowCount": "Karty ze zbyt dużą ilością tekstu: {n}"
     }

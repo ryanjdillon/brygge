@@ -1570,9 +1570,12 @@
       "print": "Stampa",
       "hint": "Nella finestra di stampa scegli A4 orizzontale, scala 100% e margini predefiniti.",
       "empty": "Nessun poster QR attivo selezionato.",
-      "instructions": "Scansiona il codice QR con la fotocamera del telefono, scegli la quantità e paga con Vipps.",
-      "instructionsFixed": "Scansiona il codice QR con la fotocamera del telefono e paga con Vipps.",
+      "payHere": "Paga qui",
+      "scanHint": "Inquadra il codice con la fotocamera",
       "languages": "Lingue",
+      "style": "Stile",
+      "styleStandard": "Standard",
+      "styleHighVis": "Alta visibilità",
       "overflowNote": "Troppo testo per questa dimensione — accorcia il nome o stampa meno schede per pagina",
       "overflowCount": "Schede con troppo testo: {n}"
     }

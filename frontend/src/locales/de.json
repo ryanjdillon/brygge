@@ -1570,9 +1570,12 @@
       "print": "Drucken",
       "hint": "Wählen Sie im Druckdialog A4 Querformat, 100 % Skalierung und Standardränder.",
       "empty": "Keine aktiven QR-Plakate ausgewählt.",
-      "instructions": "Scannen Sie den QR-Code mit der Handykamera, wählen Sie die Anzahl und bezahlen Sie mit Vipps.",
-      "instructionsFixed": "Scannen Sie den QR-Code mit der Handykamera und bezahlen Sie mit Vipps.",
+      "payHere": "Hier bezahlen",
+      "scanHint": "Code mit der Handykamera scannen",
       "languages": "Sprachen",
+      "style": "Stil",
+      "styleStandard": "Standard",
+      "styleHighVis": "Hohe Sichtbarkeit",
       "overflowNote": "Zu viel Text für diese Größe — kürzen Sie den Namen oder drucken Sie weniger pro Seite",
       "overflowCount": "Karten mit zu viel Text: {n}"
     }

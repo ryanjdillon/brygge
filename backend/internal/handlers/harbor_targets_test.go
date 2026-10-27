@@ -301,6 +301,19 @@ func TestHarborTargetShortCode(t *testing.T) {
 	})
 }
 
+// A printed poster outlives a change of payment provider, so its copy must not
+// name one.
+func TestPosterCopyNamesNoProvider(t *testing.T) {
+	for _, line := range append([]string{posterHeadline}, posterInstructions...) {
+		if strings.Contains(strings.ToLower(line), "vipps") {
+			t.Errorf("poster copy names a provider: %q", line)
+		}
+	}
+	if posterHeadline == "" || len(posterInstructions) == 0 {
+		t.Fatal("poster copy is empty")
+	}
+}
+
 func TestNormaliseLabelTranslations(t *testing.T) {
 	got, ok := normaliseLabelTranslations(map[string]string{"en": "  Guest harbour ", "de": "   "})
 	if !ok || len(got) != 1 || got["en"] != "Guest harbour" {

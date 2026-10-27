@@ -1570,9 +1570,12 @@
       "print": "Afdrukken",
       "hint": "Kies in het afdrukvenster A4 liggend, 100% schaal en standaardmarges.",
       "empty": "Geen actieve QR-posters geselecteerd.",
-      "instructions": "Scan de QR-code met je telefooncamera, kies het aantal en betaal met Vipps.",
-      "instructionsFixed": "Scan de QR-code met je telefooncamera en betaal met Vipps.",
+      "payHere": "Betaal hier",
+      "scanHint": "Scan de code met je telefooncamera",
       "languages": "Talen",
+      "style": "Stijl",
+      "styleStandard": "Standaard",
+      "styleHighVis": "Hoge zichtbaarheid",
       "overflowNote": "Te veel tekst voor dit formaat — maak de naam korter of druk minder per pagina af",
       "overflowCount": "Kaarten met te veel tekst: {n}"
     }
