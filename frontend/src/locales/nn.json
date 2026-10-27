@@ -1057,8 +1057,6 @@
       "noSubject": "(utan emne)",
       "markUnread": "Merk som ulest",
       "archive": "Arkiver",
-      "imagesOn": "Vis bilete",
-      "imagesOff": "Skjul bilete",
       "empty": {
         "mailboxes": "Du har ikkje tilgang til nokon delt innboks.",
         "threads": "Ingen meldingar.",
@@ -1084,7 +1082,9 @@
         "sending": "Sender…",
         "sent": "Svaret er sendt.",
         "cancel": "Avbryt"
-      }
+      },
+      "showImages": "Vis bilete",
+      "hideImages": "Skjul bilete"
     },
     "communication": {
       "title": "Kommunikasjon",

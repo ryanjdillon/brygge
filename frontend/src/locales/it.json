@@ -1242,7 +1242,11 @@
         "conflictOverride": "Ricorda comunque il pagatore per questo socio"
       }
     },
-    "sidebarTitle": "Portale admin"
+    "sidebarTitle": "Portale admin",
+    "inbox": {
+      "showImages": "Mostra immagini",
+      "hideImages": "Nascondi immagini"
+    }
   },
   "projects": {
     "title": "Progetti",

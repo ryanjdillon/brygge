@@ -1213,7 +1213,11 @@
         "conflictOverride": "Mimo to zapamiętaj płatnika dla tego członka"
       }
     },
-    "sidebarTitle": "Portal administratora"
+    "sidebarTitle": "Portal administratora",
+    "inbox": {
+      "showImages": "Pokaż obrazy",
+      "hideImages": "Ukryj obrazy"
+    }
   },
   "projects": {
     "title": "Projekty",

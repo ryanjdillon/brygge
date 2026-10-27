@@ -1242,7 +1242,11 @@
         "conflictOverride": "De betaler toch voor dit lid onthouden"
       }
     },
-    "sidebarTitle": "Beheerportaal"
+    "sidebarTitle": "Beheerportaal",
+    "inbox": {
+      "showImages": "Afbeeldingen tonen",
+      "hideImages": "Afbeeldingen verbergen"
+    }
   },
   "projects": {
     "title": "Projecten",

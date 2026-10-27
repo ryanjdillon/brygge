@@ -1242,7 +1242,11 @@
         "conflictOverride": "Zahler trotzdem für dieses Mitglied merken"
       }
     },
-    "sidebarTitle": "Admin-Portal"
+    "sidebarTitle": "Admin-Portal",
+    "inbox": {
+      "showImages": "Bilder anzeigen",
+      "hideImages": "Bilder ausblenden"
+    }
   },
   "projects": {
     "title": "Projekte",

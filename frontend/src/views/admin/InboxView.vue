@@ -582,8 +582,8 @@ onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
                 class="inline-flex items-center gap-1 rounded border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50"
                 @click="showImages = !showImages"
               >
-                <component :is="showImages ? ImageIcon : ImageOff" class="h-4 w-4" />
-                {{ showImages ? t('admin.inbox.imagesOn') : t('admin.inbox.imagesOff') }}
+                <component :is="showImages ? ImageOff : ImageIcon" class="h-4 w-4" />
+                {{ showImages ? t('admin.inbox.hideImages') : t('admin.inbox.showImages') }}
               </button>
               <button
                 type="button"

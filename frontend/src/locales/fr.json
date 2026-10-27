@@ -1241,7 +1241,11 @@
         "conflictOverride": "Mémoriser quand même le payeur pour ce membre"
       }
     },
-    "sidebarTitle": "Portail admin"
+    "sidebarTitle": "Portail admin",
+    "inbox": {
+      "showImages": "Afficher les images",
+      "hideImages": "Masquer les images"
+    }
   },
   "projects": {
     "title": "Projets",
