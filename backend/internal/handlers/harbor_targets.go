@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
@@ -42,6 +43,9 @@ type harborTargetResp struct {
 	PublicURL   string  `json:"public_url"`
 	ShortCode   string  `json:"short_code"`
 	ShortURL    string  `json:"short_url"`
+	// LabelTranslations maps a UI locale code to the target's name in that
+	// language; Label stays the club-language name.
+	LabelTranslations map[string]string `json:"label_translations"`
 }
 
 func (h *HarborHandler) clubID(ctx context.Context) (string, error) {
@@ -116,6 +120,53 @@ func isShortCodeClash(err error) bool {
 		pgErr.ConstraintName == "idx_harbor_targets_club_short_code"
 }
 
+const (
+	labelTranslationInvalidCode = "label_translation_invalid"
+	// labelTranslationMaxRunes keeps a translated name to a line under the
+	// card title on the print sheet.
+	labelTranslationMaxRunes = 80
+)
+
+// normaliseLabelTranslations trims each value and drops empty ones, and
+// rejects a key that is not a UI locale or a value over the length limit.
+// The result is what gets stored, so it is never nil.
+func normaliseLabelTranslations(in map[string]string) (map[string]string, bool) {
+	out := make(map[string]string, len(in))
+	for lang, text := range in {
+		if !supportedUILocales[lang] {
+			return nil, false
+		}
+		text = strings.TrimSpace(text)
+		if text == "" {
+			continue
+		}
+		if utf8.RuneCountInString(text) > labelTranslationMaxRunes {
+			return nil, false
+		}
+		out[lang] = text
+	}
+	return out, true
+}
+
+// labelTranslationsJSON validates raw and encodes it for a $n::jsonb bind.
+// It writes the 400 itself and reports false when raw is invalid.
+func labelTranslationsJSON(w http.ResponseWriter, raw map[string]string) (string, bool) {
+	clean, ok := normaliseLabelTranslations(raw)
+	if !ok {
+		JSON(w, http.StatusBadRequest, map[string]any{
+			"error": "invalid label translation",
+			"code":  labelTranslationInvalidCode,
+		})
+		return "", false
+	}
+	b, err := json.Marshal(clean)
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "internal error")
+		return "", false
+	}
+	return string(b), true
+}
+
 // HandleListTargets returns the club's payment targets. Archived targets are
 // included only when ?include_archived=true.
 func (h *HarborHandler) HandleListTargets(w http.ResponseWriter, r *http.Request) {
@@ -134,7 +185,7 @@ func (h *HarborHandler) HandleListTargets(w http.ResponseWriter, r *http.Request
 		`SELECT t.id, t.token, t.label, t.location, t.kind, t.price_item_id,
 		        pi.name, pi.amount, pi.currency, t.unit_label,
 		        t.min_units, t.max_units, t.fixed_units, t.archived_at IS NOT NULL,
-		        t.short_code
+		        t.short_code, t.label_translations
 		   FROM harbor_payment_targets t
 		   JOIN price_items pi ON pi.id = t.price_item_id
 		  WHERE `+where+`
@@ -153,7 +204,7 @@ func (h *HarborHandler) HandleListTargets(w http.ResponseWriter, r *http.Request
 		var t harborTargetResp
 		if err := rows.Scan(&t.ID, &t.Token, &t.Label, &t.Location, &t.Kind, &t.PriceItemID,
 			&t.ItemName, &t.UnitAmount, &t.Currency, &t.UnitLabel,
-			&t.MinUnits, &t.MaxUnits, &t.FixedUnits, &t.Archived, &t.ShortCode); err != nil {
+			&t.MinUnits, &t.MaxUnits, &t.FixedUnits, &t.Archived, &t.ShortCode, &t.LabelTranslations); err != nil {
 			h.log.Error().Err(err).Msg("targets: scan failed")
 			Error(w, http.StatusInternalServerError, "internal error")
 			return
@@ -177,6 +228,9 @@ type targetWriteRequest struct {
 	// ShortCode is optional: blank on create gets a generated code, and
 	// blank or absent on update keeps the current one.
 	ShortCode *string `json:"short_code"`
+	// LabelTranslations replaces the whole stored map when present; absent
+	// (or null) on update keeps it.
+	LabelTranslations *map[string]string `json:"label_translations"`
 }
 
 // priceItemBelongsToClub reports whether the price_item exists for the club.
@@ -237,14 +291,23 @@ func (h *HarborHandler) HandleCreateTarget(w http.ResponseWriter, r *http.Reques
 		custom = code
 	}
 
+	var rawTranslations map[string]string
+	if req.LabelTranslations != nil {
+		rawTranslations = *req.LabelTranslations
+	}
+	translations, ok := labelTranslationsJSON(w, rawTranslations)
+	if !ok {
+		return
+	}
+
 	token := genCheckoutToken()
 	id, shortCode, err := insertWithShortCode(custom, func(code string) (string, error) {
 		var id string
 		err := h.db.QueryRow(ctx,
 			`INSERT INTO harbor_payment_targets
-			   (club_id, token, label, location, kind, price_item_id, unit_label, min_units, max_units, fixed_units, short_code)
-			 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
-			clubID, token, req.Label, req.Location, kind, req.PriceItemID, unitLabel, minU, maxU, req.FixedUnits, code,
+			   (club_id, token, label, location, kind, price_item_id, unit_label, min_units, max_units, fixed_units, short_code, label_translations)
+			 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb) RETURNING id`,
+			clubID, token, req.Label, req.Location, kind, req.PriceItemID, unitLabel, minU, maxU, req.FixedUnits, code, translations,
 		).Scan(&id)
 		return id, err
 	})
@@ -263,6 +326,8 @@ func (h *HarborHandler) HandleCreateTarget(w http.ResponseWriter, r *http.Reques
 		"public_url": h.qrPublicURL(token),
 		"short_code": shortCode,
 		"short_url":  h.shortPublicURL(shortCode),
+		// Echo the stored (normalised) map rather than the request.
+		"label_translations": json.RawMessage(translations),
 	})
 }
 
@@ -331,14 +396,24 @@ func (h *HarborHandler) HandleUpdateTarget(w http.ResponseWriter, r *http.Reques
 		}
 		shortCode = &code
 	}
+	// NULL keeps the stored map (COALESCE below).
+	var translations *string
+	if req.LabelTranslations != nil {
+		enc, ok := labelTranslationsJSON(w, *req.LabelTranslations)
+		if !ok {
+			return
+		}
+		translations = &enc
+	}
 	tag, err := h.db.Exec(ctx,
 		`UPDATE harbor_payment_targets
 		    SET label=$1, location=$2, kind=$3, price_item_id=$4, unit_label=$5,
 		        min_units=$6, max_units=$7, fixed_units=$8,
-		        short_code=COALESCE($11, short_code), updated_at=now()
+		        short_code=COALESCE($11, short_code),
+		        label_translations=COALESCE($12::jsonb, label_translations), updated_at=now()
 		  WHERE id=$9 AND club_id=$10 AND archived_at IS NULL`,
 		req.Label, req.Location, req.Kind, req.PriceItemID, unitLabel,
-		minU, maxU, req.FixedUnits, id, clubID, shortCode,
+		minU, maxU, req.FixedUnits, id, clubID, shortCode, translations,
 	)
 	if isShortCodeClash(err) {
 		shortCodeError(w, http.StatusConflict, shortCodeTakenCode, "short code is already in use")

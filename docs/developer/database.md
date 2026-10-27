@@ -313,7 +313,11 @@ in `backend/migrations/` for the source of truth. The high-level shape:
   /q/{code}` as a 302 to `/qr/{token}`. It is stored lowercase, unique per
   club (`idx_harbor_targets_club_short_code`) and checked against
   `^[a-z0-9-]{2,24}$`; generated defaults are 5 characters without the
-  look-alikes 0/o/1/l/i (BRY-436).
+  look-alikes 0/o/1/l/i (BRY-436). `label_translations` (000113) is a JSONB
+  map from UI locale code (the `clubs.default_language` set) to the target's
+  name in that language, at most 80 characters each; the handler validates
+  keys and drops empty values. The print sheet and the public `/qr/{token}`
+  page read it (BRY-437).
 - `resources`, `bookings` — guest slips, bobil spots, klubbhus, etc.
 - `events`, `documents`, `audit_log`, `notifications`, …
 - `invoices`, `invoice_lines`, `payments` — faktura issuance and payment

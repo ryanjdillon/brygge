@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Loader2, Minus, Plus } from 'lucide-vue-next'
+import { i18n } from '@/i18n'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -19,6 +20,7 @@ type Target = {
   max_units: number
   fixed_units: boolean
   club_name: string
+  label_translations?: Record<string, string>
 }
 
 const state = ref<'loading' | 'ready' | 'error'>('loading')
@@ -31,6 +33,13 @@ const error = ref('')
 function fmt(n: number): string {
   return n.toLocaleString('nb-NO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
+
+// A visitor reading another language sees the target's name in it, with the
+// club-language name (the one on the printed card) underneath to match up.
+const translatedLabel = computed(() => {
+  const name = target.value?.label_translations?.[i18n.global.locale.value]?.trim() ?? ''
+  return name && name !== target.value?.label ? name : ''
+})
 
 const total = computed(() => (target.value ? target.value.unit_amount * units.value : 0))
 
@@ -95,7 +104,11 @@ onMounted(load)
     <div v-else-if="target" class="space-y-6">
       <div class="space-y-1 text-center">
         <p class="text-xs font-medium uppercase tracking-wide text-slate-400">{{ target.club_name }}</p>
-        <h1 class="text-2xl font-bold text-slate-900">{{ target.label }}</h1>
+        <template v-if="translatedLabel">
+          <h1 class="text-2xl font-bold text-slate-900" data-testid="qr-heading">{{ translatedLabel }}</h1>
+          <p class="text-sm text-slate-500" data-testid="qr-club-label">{{ target.label }}</p>
+        </template>
+        <h1 v-else class="text-2xl font-bold text-slate-900" data-testid="qr-heading">{{ target.label }}</h1>
         <p v-if="target.location" class="text-sm text-slate-500">{{ target.location }}</p>
       </div>
 

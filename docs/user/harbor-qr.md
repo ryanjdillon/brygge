@@ -8,7 +8,8 @@ Manage targets under **Admin → Harbor → QR posters** (`/admin/harbor/payment
 
 **New poster** asks for:
 
-- **Label**: the title printed on the poster or card, e.g. "Gjesteplass".
+- **Label**: the title printed on the poster or card, e.g. "Gjesteplass". Write it in the club's language (the default language under Admin → Settings).
+- **Name in other languages**: optional, folded away under the label. One field per app language except the club's, each up to 80 characters. A card prints these under the label for the languages you pick when printing, and the pay page shows a guest the name in the language their phone or app is set to, with the club-language label under it. Leave a field blank to skip that language.
 - **Location**: optional. It is printed on the full-page poster only, not on cards.
 - **Type**: guest berth, motorhome or service.
 - **Price item**: the price comes from this item in the price catalogue. Change the price there, not on the target.
@@ -39,11 +40,21 @@ For several codes on one sheet, or one smaller card:
 2. Choose **Cards per page**: 2, 4 or 6. The page is A4 landscape.
 3. Click **Print selected**. To print a single card, use the printer button on its row instead.
 
-A print page opens in a new tab. Each page has the club logo (when one is uploaded under Admin → Site content) and the club name at the top, with one line of scan-and-pay instructions beneath. Each card has a border, the label, the price, the QR code and the short address under it. You can switch between 2, 4 and 6 per page there before printing.
+A print page opens in a new tab. Each page has the club logo (when one is uploaded under Admin → Site content) and the club name at the top, with the scan-and-pay instructions beside it, one line per chosen language. Each card has a border, the label, the target's names in the chosen languages in a smaller grey line, the price, the QR code and the short address under it. You can switch between 2, 4 and 6 per page there before printing.
 
 The card size depends only on cards per page. A page with fewer cards, such as a single card or the last page of a selection, keeps the cards at that size and centres them. So to print one card at the size it would have on a 6-up sheet, print it with **6 per page**.
 
-The instruction line mentions choosing a quantity unless every card on the page has a fixed price. It is printed in the language you are using the app in.
+The instructions mention choosing a quantity unless every card on the page has a fixed price.
+
+### Languages
+
+The **Languages** checkboxes on the print page choose which languages the sheet is printed in. Norwegian (bokmål), English, German and Dutch are ticked to start with. The club's language is always ticked and always comes first, a little larger; the others follow in the order listed, smaller and grey. The language you use the app in does not matter.
+
+- The instructions get one line per ticked language.
+- A card's second line lists the target's names in the ticked languages it has a name for. A language without a name for that target is left out; a target with no other names has no second line.
+- Four extra languages fit beside the club name comfortably. Ticking more squeezes the instructions into two smaller columns.
+
+The browser remembers your choice for next time, and the page address carries it (`?langs=nb,en,de,nl`), so a bookmarked or shared print link prints the same languages. In a private window the choice is not remembered, but the address still works.
 
 ### Printer settings
 

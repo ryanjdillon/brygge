@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -298,4 +299,204 @@ func TestHarborTargetShortCode(t *testing.T) {
 			t.Fatalf("Location = %q, want not-found", got)
 		}
 	})
+}
+
+func TestNormaliseLabelTranslations(t *testing.T) {
+	got, ok := normaliseLabelTranslations(map[string]string{"en": "  Guest harbour ", "de": "   "})
+	if !ok || len(got) != 1 || got["en"] != "Guest harbour" {
+		t.Fatalf("trim/drop: got %v ok %v", got, ok)
+	}
+	if got, ok := normaliseLabelTranslations(nil); !ok || got == nil || len(got) != 0 {
+		t.Fatalf("nil input: got %v ok %v, want empty non-nil map", got, ok)
+	}
+	if _, ok := normaliseLabelTranslations(map[string]string{"sv": "Gästhamn"}); ok {
+		t.Fatal("unknown locale accepted")
+	}
+	if _, ok := normaliseLabelTranslations(map[string]string{"de": strings.Repeat("ä", 81)}); ok {
+		t.Fatal("81-rune value accepted")
+	}
+	if _, ok := normaliseLabelTranslations(map[string]string{"de": strings.Repeat("ä", 80)}); !ok {
+		t.Fatal("80-rune value rejected")
+	}
+}
+
+func TestHarborTargetLabelTranslations(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	slug := "s-" + testutil.RandomHex(4)
+	clubID := "44444444-4444-4444-4444-" + testutil.RandomHex(6)
+	mustExec(t, db, ctx, "INSERT INTO clubs (id, slug, name) VALUES ($1, $2, 'Synthetic Club')", clubID, slug)
+	var priceItemID string
+	if err := db.QueryRow(ctx,
+		`INSERT INTO price_items (club_id, category, name, amount)
+		 VALUES ($1, 'guest_harbor', 'Synthetic guest night', 200) RETURNING id`, clubID,
+	).Scan(&priceItemID); err != nil {
+		t.Fatalf("insert price item: %v", err)
+	}
+
+	cfg := testConfig()
+	cfg.ClubSlug = slug
+	h := NewHarborHandler(db, cfg, zerolog.Nop())
+	inv := &InvoiceHandler{db: db, config: cfg, log: zerolog.Nop()}
+
+	r := chi.NewRouter()
+	r.Post("/harbor/payment-targets", h.HandleCreateTarget)
+	r.Patch("/harbor/payment-targets/{id}", h.HandleUpdateTarget)
+	r.Get("/harbor/payment-targets", h.HandleListTargets)
+	r.Get("/qr/{token}", inv.HandleGetQRTarget)
+	do := func(method, path, body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		return rec
+	}
+	errCode := func(rec *httptest.ResponseRecorder) string {
+		var body struct {
+			Code string `json:"code"`
+		}
+		_ = json.Unmarshal(rec.Body.Bytes(), &body)
+		return body.Code
+	}
+	listed := func(id string) map[string]string {
+		rec := do(http.MethodGet, "/harbor/payment-targets", "")
+		var list []harborTargetResp
+		if err := json.Unmarshal(rec.Body.Bytes(), &list); err != nil {
+			t.Fatalf("decode list: %v", err)
+		}
+		for _, tg := range list {
+			if tg.ID == id {
+				return tg.LabelTranslations
+			}
+		}
+		t.Fatalf("target %s not listed", id)
+		return nil
+	}
+	target := func(translations string) string {
+		return `{"label":"Gjestehavn","price_item_id":"` + priceItemID + `","label_translations":` + translations + `}`
+	}
+
+	t.Run("unknown locale returns 400", func(t *testing.T) {
+		rec := do(http.MethodPost, "/harbor/payment-targets", target(`{"sv":"Gästhamn"}`))
+		if rec.Code != http.StatusBadRequest || errCode(rec) != labelTranslationInvalidCode {
+			t.Fatalf("status %d code %q", rec.Code, errCode(rec))
+		}
+	})
+
+	t.Run("overlong value returns 400", func(t *testing.T) {
+		rec := do(http.MethodPost, "/harbor/payment-targets", target(`{"de":"`+strings.Repeat("x", 81)+`"}`))
+		if rec.Code != http.StatusBadRequest || errCode(rec) != labelTranslationInvalidCode {
+			t.Fatalf("status %d code %q", rec.Code, errCode(rec))
+		}
+	})
+
+	var created struct {
+		ID                string            `json:"id"`
+		Token             string            `json:"token"`
+		LabelTranslations map[string]string `json:"label_translations"`
+	}
+	t.Run("create trims, drops empty values and echoes the map", func(t *testing.T) {
+		rec := do(http.MethodPost, "/harbor/payment-targets", target(`{"en":" Guest harbour ","de":"Gastliegeplatz","nl":"  "}`))
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("create: status %d (%s)", rec.Code, rec.Body.String())
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
+			t.Fatalf("decode create: %v", err)
+		}
+		want := map[string]string{"en": "Guest harbour", "de": "Gastliegeplatz"}
+		if !maps.Equal(created.LabelTranslations, want) {
+			t.Fatalf("create echo = %v, want %v", created.LabelTranslations, want)
+		}
+		if got := listed(created.ID); !maps.Equal(got, want) {
+			t.Fatalf("list = %v, want %v", got, want)
+		}
+	})
+
+	t.Run("create without translations stores an empty map", func(t *testing.T) {
+		body := `{"label":"Dock","price_item_id":"` + priceItemID + `"}`
+		rec := do(http.MethodPost, "/harbor/payment-targets", body)
+		var c struct {
+			ID string `json:"id"`
+		}
+		_ = json.Unmarshal(rec.Body.Bytes(), &c)
+		if got := listed(c.ID); got == nil || len(got) != 0 {
+			t.Fatalf("list = %v, want empty map", got)
+		}
+	})
+
+	t.Run("PATCH without the field keeps the map", func(t *testing.T) {
+		body := `{"label":"Gjestehavn","price_item_id":"` + priceItemID + `"}`
+		if rec := do(http.MethodPatch, "/harbor/payment-targets/"+created.ID, body); rec.Code != http.StatusOK {
+			t.Fatalf("patch: status %d (%s)", rec.Code, rec.Body.String())
+		}
+		if got := listed(created.ID); len(got) != 2 || got["de"] != "Gastliegeplatz" {
+			t.Fatalf("list = %v, want unchanged", got)
+		}
+	})
+
+	t.Run("PATCH with the field replaces the whole map", func(t *testing.T) {
+		if rec := do(http.MethodPatch, "/harbor/payment-targets/"+created.ID, target(`{"pl":"Przystań"}`)); rec.Code != http.StatusOK {
+			t.Fatalf("patch: status %d (%s)", rec.Code, rec.Body.String())
+		}
+		if got := listed(created.ID); !maps.Equal(got, map[string]string{"pl": "Przystań"}) {
+			t.Fatalf("list = %v, want only pl", got)
+		}
+	})
+
+	t.Run("PATCH with an invalid key is rejected and keeps the map", func(t *testing.T) {
+		rec := do(http.MethodPatch, "/harbor/payment-targets/"+created.ID, target(`{"xx":"?"}`))
+		if rec.Code != http.StatusBadRequest || errCode(rec) != labelTranslationInvalidCode {
+			t.Fatalf("status %d code %q", rec.Code, errCode(rec))
+		}
+		if got := listed(created.ID); got["pl"] != "Przystań" {
+			t.Fatalf("list = %v, want pl kept", got)
+		}
+	})
+
+	t.Run("public QR endpoint includes translations", func(t *testing.T) {
+		rec := do(http.MethodGet, "/qr/"+created.Token, "")
+		if rec.Code != http.StatusOK {
+			t.Fatalf("public: status %d (%s)", rec.Code, rec.Body.String())
+		}
+		var body qrTargetResp
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatalf("decode public: %v", err)
+		}
+		if body.Label != "Gjestehavn" || body.LabelTranslations["pl"] != "Przystań" {
+			t.Fatalf("public = %+v", body)
+		}
+	})
+}
+
+func TestPublicClubDefaultLanguage(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	slug := "s-" + testutil.RandomHex(4)
+	mustExec(t, db, ctx,
+		"INSERT INTO clubs (id, slug, name, default_language) VALUES ($1, $2, 'Synthetic Club', 'de')",
+		"55555555-5555-5555-5555-"+testutil.RandomHex(6), slug)
+
+	get := func(slug string) string {
+		cfg := testConfig()
+		cfg.ClubSlug = slug
+		h := NewClubSettingsHandler(db, cfg, zerolog.Nop())
+		rec := httptest.NewRecorder()
+		h.HandleGetPublicClub(rec, httptest.NewRequest(http.MethodGet, "/club", nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status %d", rec.Code)
+		}
+		var body struct {
+			DefaultLanguage string `json:"default_language"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		return body.DefaultLanguage
+	}
+
+	if got := get(slug); got != "de" {
+		t.Fatalf("default_language = %q, want de", got)
+	}
+	if got := get("missing-" + testutil.RandomHex(4)); got != "nb" {
+		t.Fatalf("missing club default_language = %q, want nb", got)
+	}
 }

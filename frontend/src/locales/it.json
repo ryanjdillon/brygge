@@ -1555,7 +1555,10 @@
       "shortCodeHint": "Stampato sotto il codice QR per gli ospiti il cui telefono non lo legge. Lettere minuscole, cifre e trattini, 2–24 caratteri.",
       "shortCodeChangeWarning": "Modificarlo rende non valido l'indirizzo stampato su schede e poster esistenti. Il codice QR continua a funzionare.",
       "shortCodeInvalid": "Usa 2–24 lettere minuscole, cifre o trattini.",
-      "shortCodeTaken": "Questo indirizzo breve è già usato da un altro poster."
+      "shortCodeTaken": "Questo indirizzo breve è già usato da un altro poster.",
+      "translations": "Nome in altre lingue",
+      "translationsHint": "Facoltativo. Mostrato sotto il nome sulle schede stampate nelle lingue scelte al momento della stampa e ai visitatori che usano quella lingua. Massimo 80 caratteri ciascuno.",
+      "translationsInvalid": "Un nome in un'altra lingua è troppo lungo (max 80 caratteri)."
     },
     "print": {
       "title": "Stampa schede QR",
@@ -1568,7 +1571,8 @@
       "hint": "Nella finestra di stampa scegli A4 orizzontale, scala 100% e margini predefiniti.",
       "empty": "Nessun poster QR attivo selezionato.",
       "instructions": "Scansiona il codice QR con la fotocamera del telefono, scegli la quantità e paga con Vipps.",
-      "instructionsFixed": "Scansiona il codice QR con la fotocamera del telefono e paga con Vipps."
+      "instructionsFixed": "Scansiona il codice QR con la fotocamera del telefono e paga con Vipps.",
+      "languages": "Lingue"
     }
   }
 }

@@ -609,6 +609,109 @@ func (h *ClubSettingsHandler) HandleUploadSiteLogo(w http.ResponseWriter, r *htt
 	h.uploadLogo(w, r, "site")
 }
 
+// HandleGetPublicClub returns public club info. Name/slug/domain come from the
+// static deploy config so the response is available even before any admin has
+// opened the settings page; contact channels, the logo flag and the default
+// language come from the DB (edited in the admin UI) so they change without a
+// redeploy.
+func (h *ClubSettingsHandler) HandleGetPublicClub(w http.ResponseWriter, r *http.Request) {
+	var (
+		orgNumber               string
+		address                 string
+		phone                   string
+		vhf                     string
+		lat                     *float64
+		lon                     *float64
+		website                 string
+		chairman                string
+		viceChairman            string
+		treasurer               string
+		secretary               string
+		harborMaster            string
+		hasLogo                 bool
+		harborApproach          string
+		harborDepth             string
+		harborVHF               string
+		harborCTATitle          string
+		harborCTADescription    string
+		motorhomePower          string
+		motorhomeFacilities     string
+		motorhomeCheckin        string
+		motorhomeRules          string
+		motorhomeCTATitle       string
+		motorhomeCTADescription string
+		defaultLanguage         string
+	)
+	_ = h.db.QueryRow(r.Context(),
+		`SELECT COALESCE(org_number, ''),
+		        COALESCE(address, ''),
+		        COALESCE(phone, ''),
+		        COALESCE(vhf_channel, ''),
+		        latitude, longitude,
+		        COALESCE(website_url, ''),
+		        COALESCE(chairman_email, ''),
+		        COALESCE(vice_chairman_email, ''),
+		        COALESCE(treasurer_email, ''),
+		        COALESCE(secretary_email, ''),
+		        COALESCE(harbor_master_email, ''),
+		        (site_logo_data IS NOT NULL AND octet_length(site_logo_data) > 0),
+		        COALESCE(harbor_approach, ''),
+		        COALESCE(harbor_depth, ''),
+		        COALESCE(harbor_vhf, ''),
+		        COALESCE(harbor_cta_title, ''),
+		        COALESCE(harbor_cta_description, ''),
+		        COALESCE(motorhome_power, ''),
+		        COALESCE(motorhome_facilities, ''),
+		        COALESCE(motorhome_checkin, ''),
+		        COALESCE(motorhome_rules, ''),
+		        COALESCE(motorhome_cta_title, ''),
+		        COALESCE(motorhome_cta_description, ''),
+		        default_language
+		   FROM clubs WHERE slug = $1`,
+		h.config.ClubSlug,
+	).Scan(&orgNumber, &address, &phone, &vhf, &lat, &lon,
+		&website, &chairman, &viceChairman, &treasurer, &secretary, &harborMaster, &hasLogo,
+		&harborApproach, &harborDepth, &harborVHF, &harborCTATitle, &harborCTADescription,
+		&motorhomePower, &motorhomeFacilities, &motorhomeCheckin, &motorhomeRules,
+		&motorhomeCTATitle, &motorhomeCTADescription, &defaultLanguage)
+	// The clubs row may not exist yet on a fresh deploy; the column default
+	// is the right answer then too.
+	if defaultLanguage == "" {
+		defaultLanguage = "nb"
+	}
+	JSON(w, http.StatusOK, map[string]any{
+		"name":                      h.config.ClubName,
+		"slug":                      h.config.ClubSlug,
+		"domain":                    h.config.Domain,
+		"org_number":                orgNumber,
+		"address":                   address,
+		"phone":                     phone,
+		"vhf_channel":               vhf,
+		"latitude":                  lat,
+		"longitude":                 lon,
+		"website_url":               website,
+		"chairman_email":            chairman,
+		"vice_chairman_email":       viceChairman,
+		"treasurer_email":           treasurer,
+		"secretary_email":           secretary,
+		"harbor_master_email":       harborMaster,
+		"has_logo":                  hasLogo, // legacy alias for has_site_logo
+		"has_site_logo":             hasLogo,
+		"harbor_approach":           harborApproach,
+		"harbor_depth":              harborDepth,
+		"harbor_vhf":                harborVHF,
+		"harbor_cta_title":          harborCTATitle,
+		"harbor_cta_description":    harborCTADescription,
+		"motorhome_power":           motorhomePower,
+		"motorhome_facilities":      motorhomeFacilities,
+		"motorhome_checkin":         motorhomeCheckin,
+		"motorhome_rules":           motorhomeRules,
+		"motorhome_cta_title":       motorhomeCTATitle,
+		"motorhome_cta_description": motorhomeCTADescription,
+		"default_language":          defaultLanguage,
+	})
+}
+
 // HandleGetPublicClubLogo streams the stored *site* logo without
 // auth — that's the one consumed by the navbar and other public
 // pages. Returns 404 when no site logo is set so the frontend falls

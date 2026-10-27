@@ -1554,7 +1554,10 @@
       "shortCodeHint": "Imprimée sous le QR code pour les visiteurs dont le téléphone ne scanne pas. Minuscules, chiffres et tirets, 2 à 24 caractères.",
       "shortCodeChangeWarning": "La modifier rend inutilisable l'adresse imprimée sur les cartes et affiches existantes. Le QR code lui-même continue de fonctionner.",
       "shortCodeInvalid": "Utilisez 2 à 24 minuscules, chiffres ou tirets.",
-      "shortCodeTaken": "Cette adresse courte est déjà utilisée par une autre affiche."
+      "shortCodeTaken": "Cette adresse courte est déjà utilisée par une autre affiche.",
+      "translations": "Nom dans d'autres langues",
+      "translationsHint": "Facultatif. Affiché sous le nom sur les cartes imprimées dans les langues choisies à l'impression, et aux visiteurs utilisant cette langue. 80 caractères maximum chacun.",
+      "translationsInvalid": "Un nom dans une autre langue est trop long (80 caractères max.)."
     },
     "print": {
       "title": "Imprimer les cartes QR",
@@ -1567,7 +1570,8 @@
       "hint": "Dans la boîte d'impression, choisissez A4 paysage, échelle 100 % et marges par défaut.",
       "empty": "Aucune affiche QR active sélectionnée.",
       "instructions": "Scannez le code QR avec l’appareil photo de votre téléphone, choisissez la quantité et payez avec Vipps.",
-      "instructionsFixed": "Scannez le code QR avec l’appareil photo de votre téléphone et payez avec Vipps."
+      "instructionsFixed": "Scannez le code QR avec l’appareil photo de votre téléphone et payez avec Vipps.",
+      "languages": "Langues"
     }
   }
 }

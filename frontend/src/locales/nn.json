@@ -2472,7 +2472,10 @@
       "shortCodeHint": "Vert skriven ut under QR-koden for gjester som ikkje får skanna. Små bokstavar, tal og bindestrek, 2–24 teikn.",
       "shortCodeChangeWarning": "Endrar du ho, sluttar adressa som står på utskrivne kort og plakatar å verka. Sjølve QR-koden verkar framleis.",
       "shortCodeInvalid": "Bruk 2–24 små bokstavar, tal eller bindestrek.",
-      "shortCodeTaken": "Denne kortadressa er alt i bruk på ein annan plakat."
+      "shortCodeTaken": "Denne kortadressa er alt i bruk på ein annan plakat.",
+      "translations": "Namn på andre språk",
+      "translationsHint": "Valfritt. Blir vist under namnet på utskrivne kort for språka du vel ved utskrift, og for besøkande som brukar det språket. Maks 80 teikn kvar.",
+      "translationsInvalid": "Eit namn på eit anna språk er for langt (maks 80 teikn)."
     },
     "print": {
       "title": "Skriv ut QR-kort",
@@ -2485,7 +2488,8 @@
       "hint": "Vel A4 liggjande, 100 % skala og standardmargar i utskriftsdialogen.",
       "empty": "Ingen aktive QR-plakatar er valde.",
       "instructions": "Skann QR-koden med mobilkameraet, vel kor mange og betal med Vipps.",
-      "instructionsFixed": "Skann QR-koden med mobilkameraet og betal med Vipps."
+      "instructionsFixed": "Skann QR-koden med mobilkameraet og betal med Vipps.",
+      "languages": "Språk"
     }
   },
   "recentPayments": {

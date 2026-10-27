@@ -1555,7 +1555,10 @@
       "shortCodeHint": "Wordt onder de QR-code geprint voor gasten wiens telefoon niet scant. Kleine letters, cijfers en koppeltekens, 2–24 tekens.",
       "shortCodeChangeWarning": "Wijzigen maakt het adres op bestaande kaarten en posters ongeldig. De QR-code zelf blijft werken.",
       "shortCodeInvalid": "Gebruik 2–24 kleine letters, cijfers of koppeltekens.",
-      "shortCodeTaken": "Dit korte adres wordt al door een andere poster gebruikt."
+      "shortCodeTaken": "Dit korte adres wordt al door een andere poster gebruikt.",
+      "translations": "Naam in andere talen",
+      "translationsHint": "Optioneel. Staat onder de naam op afgedrukte kaarten in de talen die je bij het afdrukken kiest, en wordt getoond aan bezoekers die die taal gebruiken. Maximaal 80 tekens per naam.",
+      "translationsInvalid": "Een naam in een andere taal is te lang (max. 80 tekens)."
     },
     "print": {
       "title": "QR-kaarten afdrukken",
@@ -1568,7 +1571,8 @@
       "hint": "Kies in het afdrukvenster A4 liggend, 100% schaal en standaardmarges.",
       "empty": "Geen actieve QR-posters geselecteerd.",
       "instructions": "Scan de QR-code met je telefooncamera, kies het aantal en betaal met Vipps.",
-      "instructionsFixed": "Scan de QR-code met je telefooncamera en betaal met Vipps."
+      "instructionsFixed": "Scan de QR-code met je telefooncamera en betaal met Vipps.",
+      "languages": "Talen"
     }
   }
 }

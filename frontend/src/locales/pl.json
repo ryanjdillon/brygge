@@ -1526,7 +1526,10 @@
       "shortCodeHint": "Drukowany pod kodem QR dla gości, których telefon nie skanuje. Małe litery, cyfry i myślniki, 2–24 znaki.",
       "shortCodeChangeWarning": "Zmiana unieważnia adres wydrukowany na istniejących kartach i plakatach. Sam kod QR nadal działa.",
       "shortCodeInvalid": "Użyj 2–24 małych liter, cyfr lub myślników.",
-      "shortCodeTaken": "Ten krótki adres jest już używany przez inny plakat."
+      "shortCodeTaken": "Ten krótki adres jest już używany przez inny plakat.",
+      "translations": "Nazwa w innych językach",
+      "translationsHint": "Opcjonalnie. Wyświetlana pod nazwą na drukowanych kartach w językach wybranych przy drukowaniu oraz odwiedzającym korzystającym z danego języka. Maksymalnie 80 znaków każda.",
+      "translationsInvalid": "Nazwa w innym języku jest za długa (maks. 80 znaków)."
     },
     "print": {
       "title": "Drukuj karty QR",
@@ -1539,7 +1542,8 @@
       "hint": "W oknie drukowania wybierz A4 poziomo, skalę 100% i domyślne marginesy.",
       "empty": "Nie zaznaczono aktywnych plakatów QR.",
       "instructions": "Zeskanuj kod QR aparatem telefonu, wybierz liczbę i zapłać przez Vipps.",
-      "instructionsFixed": "Zeskanuj kod QR aparatem telefonu i zapłać przez Vipps."
+      "instructionsFixed": "Zeskanuj kod QR aparatem telefonu i zapłać przez Vipps.",
+      "languages": "Języki"
     }
   }
 }

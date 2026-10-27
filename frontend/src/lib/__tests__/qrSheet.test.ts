@@ -1,14 +1,12 @@
 import { describe, it, expect } from 'vitest'
 import {
-  cellSizeMm,
+  cardTranslations,
   chunkPages,
+  normalisePrintLangs,
+  parseLangList,
   gridDims,
   parseCardsPerPage,
   targetPriceLine,
-  GAP_MM,
-  GRID_HEIGHT_MM,
-  GRID_WIDTH_MM,
-  type CardsPerPage,
 } from '@/lib/qrSheet'
 
 describe('parseCardsPerPage', () => {
@@ -30,20 +28,6 @@ describe('gridDims', () => {
     expect(gridDims(2)).toEqual({ cols: 2, rows: 1 })
     expect(gridDims(4)).toEqual({ cols: 2, rows: 2 })
     expect(gridDims(6)).toEqual({ cols: 3, rows: 2 })
-  })
-})
-
-describe('cellSizeMm', () => {
-  it.each([2, 4, 6] as CardsPerPage[])('a full %i-up page fits the grid area', (per) => {
-    const { cols, rows } = gridDims(per)
-    const { width, height } = cellSizeMm(per)
-    expect(cols * width + (cols - 1) * GAP_MM).toBeLessThanOrEqual(GRID_WIDTH_MM)
-    expect(rows * height + (rows - 1) * GAP_MM).toBeLessThanOrEqual(GRID_HEIGHT_MM)
-  })
-
-  it('keeps 4- and 6-up cards tall enough for a ~50 mm QR', () => {
-    expect(cellSizeMm(4).height).toBeGreaterThanOrEqual(75)
-    expect(cellSizeMm(6).width).toBeGreaterThanOrEqual(85)
   })
 })
 
@@ -83,5 +67,27 @@ describe('chunkPages', () => {
 
   it('returns no pages for no items', () => {
     expect(chunkPages([], 4)).toEqual([])
+  })
+})
+
+describe('print languages', () => {
+  const order = ['nb', 'nn', 'en', 'de', 'fr', 'nl', 'it', 'pl']
+
+  it('parses a comma list and treats empty as absent', () => {
+    expect(parseLangList(' en, de ,')).toEqual(['en', 'de'])
+    expect(parseLangList(['nl,pl'])).toEqual(['nl', 'pl'])
+    expect(parseLangList('')).toBeNull()
+    expect(parseLangList(undefined)).toBeNull()
+  })
+
+  it('orders by the picker, drops unknown codes and forces the club language first', () => {
+    expect(normalisePrintLangs(['nl', 'xx', 'en'], 'de', order)).toEqual(['de', 'en', 'nl'])
+    expect(normalisePrintLangs(['nb', 'de'], 'nb', order)).toEqual(['nb', 'de'])
+  })
+
+  it('takes card translations for the non-club languages that have one', () => {
+    const tr = { nb: 'Gjest', en: 'Guest', de: ' ', fr: 'Invité' }
+    expect(cardTranslations(tr, ['nb', 'en', 'de', 'fr'], 'nb')).toEqual(['Guest', 'Invité'])
+    expect(cardTranslations(undefined, ['nb', 'en'], 'nb')).toEqual([])
   })
 })

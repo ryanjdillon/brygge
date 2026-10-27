@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { Plus, FileDown, Pencil, Archive, Copy, QrCode, Printer } from 'lucide-vue-next'
 import { CARDS_PER_PAGE, DEFAULT_CARDS_PER_PAGE, type CardsPerPage } from '@/lib/qrSheet'
 import { useClubStore } from '@/stores/club'
+import { LOCALE_OPTIONS } from '@/i18n'
 
 const { t } = useI18n()
 const club = useClubStore()
@@ -26,6 +27,7 @@ type Target = {
   public_url: string
   short_code: string
   short_url: string
+  label_translations?: Record<string, string>
 }
 type PriceItem = { id: string; name: string; amount: number; category: string }
 
@@ -80,7 +82,14 @@ const form = reactive({
   max_units: 14,
   fixed_units: false,
   short_code: '',
+  label_translations: {} as Record<string, string>,
 })
+// The main label is in the club's language, so it gets no translation field.
+const translationLocales = computed(() =>
+  LOCALE_OPTIONS.filter((o) => o.code !== (club.defaultLanguage || 'nb')),
+)
+const LABEL_TRANSLATION_MAX = 80
+const translationsServerError = ref('')
 // The code the target was loaded with, so the editor can warn when it changes.
 const originalShortCode = ref('')
 const shortCodeServerError = ref('')
@@ -154,9 +163,11 @@ function openCreate() {
     max_units: 14,
     fixed_units: false,
     short_code: '',
+    label_translations: {},
   })
   originalShortCode.value = ''
   shortCodeServerError.value = ''
+  translationsServerError.value = ''
   editing.value = true
 }
 
@@ -172,9 +183,11 @@ function openEdit(tg: Target) {
     max_units: tg.max_units,
     fixed_units: tg.fixed_units,
     short_code: tg.short_code,
+    label_translations: { ...(tg.label_translations ?? {}) },
   })
   originalShortCode.value = tg.short_code
   shortCodeServerError.value = ''
+  translationsServerError.value = ''
   editing.value = true
 }
 
@@ -196,8 +209,16 @@ async function save() {
     max_units: Number(form.max_units) || 1,
     fixed_units: form.fixed_units,
     short_code: normalisedShortCode.value,
+    // The whole map is sent, a club-language entry left over from an earlier
+    // club language included, since the server replaces it on update.
+    label_translations: Object.fromEntries(
+      Object.entries(form.label_translations)
+        .map(([code, text]) => [code, text.trim()])
+        .filter(([, text]) => text !== ''),
+    ),
   }
   shortCodeServerError.value = ''
+  translationsServerError.value = ''
   try {
     const url = form.id
       ? `/api/v1/harbor/payment-targets/${form.id}`
@@ -222,6 +243,10 @@ async function save() {
       }
       if (code === 'short_code_invalid') {
         shortCodeServerError.value = t('harborTargets.field.shortCodeInvalid')
+        return
+      }
+      if (code === 'label_translation_invalid') {
+        translationsServerError.value = t('harborTargets.field.translationsInvalid')
         return
       }
       throw new Error(`${res.status} ${text}`)
@@ -403,6 +428,33 @@ onMounted(async () => {
             <span class="mb-1 block text-xs font-medium text-slate-500">{{ t('harborTargets.field.label') }}</span>
             <input v-model="form.label" type="text" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
           </label>
+          <details
+            class="rounded-md border border-slate-200 px-3 py-2"
+            :open="Object.values(form.label_translations).some((v) => v.trim() !== '') || translationsServerError !== ''"
+            data-testid="label-translations"
+          >
+            <summary class="cursor-pointer text-xs font-medium text-slate-600">
+              {{ t('harborTargets.field.translations') }}
+            </summary>
+            <p class="mt-1 text-xs text-slate-500">{{ t('harborTargets.field.translationsHint') }}</p>
+            <div class="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <label v-for="opt in translationLocales" :key="opt.code" class="block">
+                <span class="mb-0.5 block text-xs text-slate-500">{{ opt.label }}</span>
+                <input
+                  v-model="form.label_translations[opt.code]"
+                  type="text"
+                  :lang="opt.code"
+                  :maxlength="LABEL_TRANSLATION_MAX"
+                  class="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+                  :data-testid="`label-translation-${opt.code}`"
+                  @input="translationsServerError = ''"
+                />
+              </label>
+            </div>
+            <p v-if="translationsServerError" class="mt-1 text-xs text-red-600" data-testid="translations-error">
+              {{ translationsServerError }}
+            </p>
+          </details>
           <label class="block">
             <span class="mb-1 block text-xs font-medium text-slate-500">{{ t('harborTargets.field.location') }}</span>
             <input v-model="form.location" type="text" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />

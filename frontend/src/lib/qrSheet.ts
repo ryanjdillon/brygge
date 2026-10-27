@@ -1,24 +1,12 @@
-// Layout maths for the harbor QR print sheet (BRY-271): A4 landscape pages
-// holding 2, 4 or 6 cards. The cell size depends only on the cards-per-page
-// choice, so a page with fewer cards (or a single card) prints them at the
-// same size they would have on a full page.
+// Layout helpers for the harbor QR print sheet (BRY-271): A4 landscape pages
+// holding 2, 4 or 6 cards. The page lays the cards out on a fixed grid for
+// the cards-per-page choice, so a page with fewer cards (or a single card)
+// prints them at the size they would have on a full page.
 
 export type CardsPerPage = 2 | 4 | 6
 
 export const CARDS_PER_PAGE: readonly CardsPerPage[] = [2, 4, 6]
 export const DEFAULT_CARDS_PER_PAGE: CardsPerPage = 4
-
-// Page geometry in mm. The printable box is the A4 landscape page minus the
-// page padding; the header takes a fixed band so the grid area is the same
-// on every page.
-export const PAGE_WIDTH_MM = 297
-export const PAGE_HEIGHT_MM = 210
-export const PAGE_PADDING_MM = 10
-export const HEADER_HEIGHT_MM = 24
-export const GAP_MM = 6
-
-export const GRID_WIDTH_MM = PAGE_WIDTH_MM - 2 * PAGE_PADDING_MM
-export const GRID_HEIGHT_MM = PAGE_HEIGHT_MM - 2 * PAGE_PADDING_MM - HEADER_HEIGHT_MM
 
 export function parseCardsPerPage(v: unknown): CardsPerPage {
   const n = Number(Array.isArray(v) ? v[0] : v)
@@ -36,20 +24,6 @@ export function gridDims(per: CardsPerPage): { cols: number; rows: number } {
   }
 }
 
-// Rounded down to 0.1 mm so a full row never overflows the grid width and
-// wraps early.
-export function cellSizeMm(per: CardsPerPage): {
-  width: number
-  height: number
-} {
-  const { cols, rows } = gridDims(per)
-  const floor = (v: number) => Math.floor(v * 10) / 10
-  return {
-    width: floor((GRID_WIDTH_MM - (cols - 1) * GAP_MM) / cols),
-    height: floor((GRID_HEIGHT_MM - (rows - 1) * GAP_MM) / rows),
-  }
-}
-
 // "300 kr / natt", or "300 kr" for a fixed-price target; matches the poster
 // PDF's price line.
 export function targetPriceLine(amount: number, unitLabel: string, fixedUnits: boolean): string {
@@ -61,4 +35,48 @@ export function chunkPages<T>(items: readonly T[], per: CardsPerPage): T[][] {
   const pages: T[][] = []
   for (let i = 0; i < items.length; i += per) pages.push(items.slice(i, i + per))
   return pages
+}
+
+// Languages for the print sheet's instruction lines and card translations
+// (BRY-437). Codes are UI locale codes; the order of `order` (the locale
+// picker's) decides the printed order after the club language.
+export const DEFAULT_PRINT_LANGS: readonly string[] = ['nb', 'en', 'de', 'nl']
+export const PRINT_LANGS_STORAGE_KEY = 'brygge-qr-print-langs'
+
+// parseLangList reads a comma-separated list from a query value or stored
+// string. Absent or empty is null, so the caller can fall through to the
+// next source.
+export function parseLangList(v: unknown): string[] | null {
+  const raw = Array.isArray(v) ? v[0] : v
+  if (typeof raw !== 'string') return null
+  const list = raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+  return list.length ? list : null
+}
+
+// normalisePrintLangs keeps the known codes from requested, in `order`, with
+// the club language always first whether it was requested or not.
+export function normalisePrintLangs(
+  requested: readonly string[],
+  clubLang: string,
+  order: readonly string[],
+): string[] {
+  const want = new Set(requested)
+  const rest = order.filter((code) => code !== clubLang && want.has(code))
+  return order.includes(clubLang) ? [clubLang, ...rest] : rest
+}
+
+// cardTranslations is the card's second line: the target's names in the
+// selected languages other than the club's, skipping ones it has none for.
+export function cardTranslations(
+  translations: Record<string, string> | undefined,
+  langs: readonly string[],
+  clubLang: string,
+): string[] {
+  return langs
+    .filter((code) => code !== clubLang)
+    .map((code) => translations?.[code]?.trim() ?? '')
+    .filter(Boolean)
 }

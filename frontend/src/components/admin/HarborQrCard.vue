@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { cellSizeMm, type CardsPerPage } from '@/lib/qrSheet'
+import { type CardsPerPage } from '@/lib/qrSheet'
 
 const props = defineProps<{
   label: string
@@ -8,23 +8,26 @@ const props = defineProps<{
   qrSrc: string
   per: CardsPerPage
   shortUrl?: string
+  // Already filtered and ordered by the caller: the selected languages other
+  // than the club's, and only those the target has a name for.
+  translations?: string[]
 }>()
+
+const translationLine = computed(() => (props.translations ?? []).join(' · '))
 
 // Printed without the scheme: shorter to read and type, and browsers add it.
 const shortAddress = computed(() => (props.shortUrl ?? '').replace(/^https?:\/\//, ''))
 // Each segment keeps its trailing "/", so a <wbr> between segments offers a
 // line break right after the slash.
 const shortSegments = computed(() => shortAddress.value.split(/(?<=\/)/))
-
-const size = computed(() => {
-  const { width, height } = cellSizeMm(props.per)
-  return { width: `${width}mm`, height: `${height}mm` }
-})
 </script>
 
 <template>
-  <article class="qr-card" :class="per === 2 ? 'qr-card--large' : ''" :style="size" data-testid="qr-card">
+  <article class="qr-card" :class="per === 2 ? 'qr-card--large' : ''" data-testid="qr-card">
     <h2 class="qr-card__title">{{ label }}</h2>
+    <p v-if="translationLine" class="qr-card__translations" data-testid="qr-card-translations">
+      {{ translationLine }}
+    </p>
     <p class="qr-card__price" data-testid="qr-card-price">{{ price }}</p>
     <img v-if="qrSrc" class="qr-card__code" :src="qrSrc" :alt="label" />
     <p v-if="shortAddress" class="qr-card__short-url" data-testid="qr-card-short-url">
@@ -34,8 +37,13 @@ const size = computed(() => {
 </template>
 
 <style scoped>
+/* The card fills its cell of the page grid, so its size follows the
+   cards-per-page choice and the height the header leaves. */
 .qr-card {
   box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -59,6 +67,20 @@ const size = computed(() => {
   font-weight: 700;
   line-height: 1.15;
   letter-spacing: -0.01em;
+}
+
+/* Clamped so a long list of names can't take the space the QR needs. */
+.qr-card__translations {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  flex-shrink: 0;
+  margin: 0.5mm 0 0;
+  font-size: 9pt;
+  line-height: 1.2;
+  color: #64748b;
 }
 
 .qr-card__price {
@@ -98,6 +120,11 @@ const size = computed(() => {
 
 .qr-card--large .qr-card__title {
   font-size: 28pt;
+}
+
+.qr-card--large .qr-card__translations {
+  margin-top: 1mm;
+  font-size: 14pt;
 }
 
 .qr-card--large .qr-card__price {

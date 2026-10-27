@@ -29,6 +29,8 @@ type qrTarget struct {
 	MinUnits    int
 	MaxUnits    int
 	FixedUnits  bool
+	// LabelTranslations maps a UI locale code to the label in that language.
+	LabelTranslations map[string]string
 }
 
 type qrTargetResp struct {
@@ -42,6 +44,9 @@ type qrTargetResp struct {
 	MaxUnits   int     `json:"max_units"`
 	FixedUnits bool    `json:"fixed_units"`
 	ClubName   string  `json:"club_name"`
+	// LabelTranslations lets the page show the visitor's language; Label is
+	// the club-language fallback.
+	LabelTranslations map[string]string `json:"label_translations"`
 }
 
 // resolveQRUnits clamps a requested unit count to the target's bounds. A
@@ -73,14 +78,14 @@ func (h *InvoiceHandler) loadQRTarget(ctx context.Context, token string) (qrTarg
 	err := h.db.QueryRow(ctx,
 		`SELECT t.id, t.club_id, t.label, t.location, t.kind, t.price_item_id,
 		        pi.name, t.unit_label, pi.amount, pi.currency,
-		        t.min_units, t.max_units, t.fixed_units
+		        t.min_units, t.max_units, t.fixed_units, t.label_translations
 		   FROM harbor_payment_targets t
 		   JOIN price_items pi ON pi.id = t.price_item_id
 		  WHERE t.token = $1 AND t.archived_at IS NULL AND pi.is_active`,
 		token,
 	).Scan(&t.ID, &t.ClubID, &t.Label, &t.Location, &t.Kind, &t.PriceItemID,
 		&t.ItemName, &t.UnitLabel, &t.UnitAmount, &t.Currency,
-		&t.MinUnits, &t.MaxUnits, &t.FixedUnits)
+		&t.MinUnits, &t.MaxUnits, &t.FixedUnits, &t.LabelTranslations)
 	if err != nil {
 		return t, false
 	}
@@ -98,16 +103,17 @@ func (h *InvoiceHandler) HandleGetQRTarget(w http.ResponseWriter, r *http.Reques
 	var clubName string
 	_ = h.db.QueryRow(ctx, `SELECT name FROM clubs WHERE id = $1`, t.ClubID).Scan(&clubName)
 	JSON(w, http.StatusOK, qrTargetResp{
-		Label:      t.Label,
-		Location:   t.Location,
-		Kind:       t.Kind,
-		UnitLabel:  t.UnitLabel,
-		UnitAmount: t.UnitAmount,
-		Currency:   t.Currency,
-		MinUnits:   t.MinUnits,
-		MaxUnits:   t.MaxUnits,
-		FixedUnits: t.FixedUnits,
-		ClubName:   clubName,
+		Label:             t.Label,
+		Location:          t.Location,
+		Kind:              t.Kind,
+		UnitLabel:         t.UnitLabel,
+		UnitAmount:        t.UnitAmount,
+		Currency:          t.Currency,
+		MinUnits:          t.MinUnits,
+		MaxUnits:          t.MaxUnits,
+		FixedUnits:        t.FixedUnits,
+		ClubName:          clubName,
+		LabelTranslations: t.LabelTranslations,
 	})
 }
 

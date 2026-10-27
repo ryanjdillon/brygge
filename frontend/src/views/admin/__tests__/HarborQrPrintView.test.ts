@@ -9,7 +9,31 @@ vi.mock('qrcode', () => ({
 
 vi.mock('lucide-vue-next', () => ({ Printer: { template: '<span />' } }))
 
-type T = { id: string; label: string; unit_amount: number; unit_label: string; fixed_units: boolean; archived: boolean }
+// Each locale's instruction strings are tagged with its code so a test can
+// tell which language a header line came from.
+vi.mock('@/i18n', () => {
+  const codes = ['nb', 'nn', 'en', 'de', 'fr', 'nl', 'it', 'pl']
+  return {
+    LOCALE_OPTIONS: codes.map((code) => ({ code, label: `name-${code}` })),
+    i18n: {
+      global: {
+        getLocaleMessage: (code: string) => ({
+          harborTargets: { print: { instructions: `${code}: scan`, instructionsFixed: `${code}: scan fixed` } },
+        }),
+      },
+    },
+  }
+})
+
+type T = {
+  id: string
+  label: string
+  unit_amount: number
+  unit_label: string
+  fixed_units: boolean
+  archived: boolean
+  label_translations: Record<string, string>
+}
 
 const target = (id: string, over: Partial<T> = {}) => ({
   id,
@@ -20,6 +44,7 @@ const target = (id: string, over: Partial<T> = {}) => ({
   archived: false,
   public_url: `https://club.example.invalid/qr/${id}`,
   short_url: `https://club.example.invalid/q/${id}-dock`,
+  label_translations: {} as Record<string, string>,
   ...over,
 })
 
@@ -30,7 +55,10 @@ function mockTargets(list: ReturnType<typeof target>[]) {
   )
 }
 
-async function mountAt(query: string, club = { name: 'Testklubben', hasLogo: true }) {
+async function mountAt(
+  query: string,
+  club: { name: string; hasLogo: boolean; defaultLanguage?: string } = { name: 'Testklubben', hasLogo: true },
+) {
   const wrapper = mountWithPlugins(HarborQrPrintView, {
     initialRoute: `/admin/harbor/payment-targets/print?${query}`,
     piniaOptions: { initialState: { club } },
@@ -40,8 +68,15 @@ async function mountAt(query: string, club = { name: 'Testklubben', hasLogo: tru
   return wrapper
 }
 
+const headerLines = (wrapper: Awaited<ReturnType<typeof mountAt>>) =>
+  wrapper
+    .get('[data-testid="qr-page-header"]')
+    .findAll('[data-testid="instruction-line"]')
+    .map((l) => l.text())
+
 describe('HarborQrPrintView', () => {
   beforeEach(() => {
+    localStorage.clear()
     // The test router has no print route; silence only its no-match warning.
     const warn = console.warn
     vi.spyOn(console, 'warn').mockImplementation((...args: unknown[]) => {
@@ -65,12 +100,12 @@ describe('HarborQrPrintView', () => {
     expect(pages[0].text()).toContain('Testklubben')
   })
 
-  it('renders a single card at the cell size of the chosen layout', async () => {
+  it('lays a single card out on the full grid of the chosen layout', async () => {
     mockTargets([target('a')])
     const wrapper = await mountAt('ids=a&per=6')
-    const card = wrapper.get('[data-testid="qr-card"]')
-    expect(card.attributes('style')).toContain('width: 88.3mm')
-    expect(card.attributes('style')).toContain('height: 80mm')
+    const grid = wrapper.get('.qr-page__grid')
+    expect(grid.attributes('style')).toContain('grid-template-columns: repeat(3, 1fr)')
+    expect(grid.attributes('style')).toContain('grid-template-rows: repeat(2, 1fr)')
   })
 
   it('shows the logo only when the club has one', async () => {
@@ -107,12 +142,12 @@ describe('HarborQrPrintView', () => {
 
   it('drops the quantity step from the instructions on an all-fixed page', async () => {
     mockTargets([target('a', { fixed_units: true }), target('b')])
-    const fixedPage = await mountAt('ids=a,b&per=2')
-    expect(fixedPage.get('[data-testid="instructions"]').text()).toBe('harborTargets.print.instructions')
+    const fixedPage = await mountAt('ids=a,b&per=2&langs=nb')
+    expect(headerLines(fixedPage)).toEqual(['nb: scan'])
 
     mockTargets([target('a', { fixed_units: true })])
-    const allFixed = await mountAt('ids=a')
-    expect(allFixed.get('[data-testid="instructions"]').text()).toBe('harborTargets.print.instructionsFixed')
+    const allFixed = await mountAt('ids=a&langs=nb')
+    expect(headerLines(allFixed)).toEqual(['nb: scan fixed'])
   })
 
   it('falls back to 4 per page and enables printing once QRs are ready', async () => {
@@ -129,5 +164,82 @@ describe('HarborQrPrintView', () => {
     expect(wrapper.get('[data-testid="qr-card-short-url"]').text()).toBe('club.example.invalid/q/a-dock')
     const src = decodeURIComponent(wrapper.get('[data-testid="qr-card"] img').attributes('src')!)
     expect(src).toContain('data-url="https://club.example.invalid/qr/a"')
+  })
+
+  describe('languages', () => {
+    const translated = () =>
+      target('a', { label_translations: { nb: 'Gjest', en: 'Guest', de: 'Gast', fr: 'Invité', pl: '' } })
+
+    it('defaults to nb, en, de, nl and writes the choice to the URL', async () => {
+      mockTargets([target('a')])
+      const wrapper = await mountAt('ids=a')
+      expect(headerLines(wrapper)).toEqual(['nb: scan', 'en: scan', 'de: scan', 'nl: scan'])
+      expect(wrapper.vm.$route.query.langs).toBe('nb,en,de,nl')
+    })
+
+    it('puts the club language first, larger, and always selected', async () => {
+      mockTargets([target('a')])
+      const wrapper = await mountAt('ids=a&langs=en,nl', { name: 'Testklubben', hasLogo: false, defaultLanguage: 'de' })
+      const lines = wrapper.findAll('[data-testid="instruction-line"]')
+      expect(lines.map((l) => l.text())).toEqual(['de: scan', 'en: scan', 'nl: scan'])
+      expect(lines[0].classes()).toContain('qr-page__instr-main')
+      expect(lines[1].classes()).toContain('qr-page__instr-other')
+      const clubBox = wrapper.get('[data-testid="lang-de"] input')
+      expect((clubBox.element as HTMLInputElement).checked).toBe(true)
+      expect(clubBox.attributes('disabled')).toBeDefined()
+      expect(wrapper.text().match(/Testklubben/g)).toHaveLength(1)
+    })
+
+    it('lets the query win over the remembered choice', async () => {
+      localStorage.setItem('brygge-qr-print-langs', 'nb,pl')
+      mockTargets([target('a')])
+      const fromQuery = await mountAt('ids=a&langs=fr,nb')
+      expect(headerLines(fromQuery)).toEqual(['nb: scan', 'fr: scan'])
+
+      mockTargets([target('a')])
+      const fromStorage = await mountAt('ids=a')
+      expect(headerLines(fromStorage)).toEqual(['nb: scan', 'pl: scan'])
+    })
+
+    it('remembers a toggled language and reflects it in the URL', async () => {
+      mockTargets([target('a')])
+      const wrapper = await mountAt('ids=a&langs=nb,en')
+      await wrapper.get('[data-testid="lang-fr"] input').trigger('change')
+      await flushPromises()
+      expect(localStorage.getItem('brygge-qr-print-langs')).toBe('nb,en,fr')
+      expect(wrapper.vm.$route.query.langs).toBe('nb,en,fr')
+      expect(headerLines(wrapper)).toEqual(['nb: scan', 'en: scan', 'fr: scan'])
+    })
+
+    it('falls back to the defaults when storage is unavailable', async () => {
+      vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+        throw new Error('blocked')
+      })
+      const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+        throw new Error('blocked')
+      })
+      mockTargets([target('a')])
+      const wrapper = await mountAt('ids=a')
+      expect(headerLines(wrapper)).toEqual(['nb: scan', 'en: scan', 'de: scan', 'nl: scan'])
+
+      await wrapper.get('[data-testid="lang-pl"] input').trigger('change')
+      await flushPromises()
+      expect(setItem).toHaveBeenCalled()
+      expect(headerLines(wrapper)).toContain('pl: scan')
+    })
+
+    it('shows only selected translations the target has, without the club language', async () => {
+      mockTargets([translated()])
+      const defaults = await mountAt('ids=a')
+      expect(defaults.get('[data-testid="qr-card-translations"]').text()).toBe('Guest · Gast')
+
+      mockTargets([translated()])
+      const picked = await mountAt('ids=a&langs=nb,fr,pl,nl')
+      expect(picked.get('[data-testid="qr-card-translations"]').text()).toBe('Invité')
+
+      mockTargets([translated()])
+      const none = await mountAt('ids=a&langs=nb,nl')
+      expect(none.find('[data-testid="qr-card-translations"]').exists()).toBe(false)
+    })
   })
 })

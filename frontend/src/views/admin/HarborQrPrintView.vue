@@ -5,12 +5,18 @@ import { useI18n } from 'vue-i18n'
 import QRCode from 'qrcode'
 import { Printer } from 'lucide-vue-next'
 import { useClubStore } from '@/stores/club'
+import { i18n, LOCALE_OPTIONS } from '@/i18n'
 import HarborQrCard from '@/components/admin/HarborQrCard.vue'
 import {
   CARDS_PER_PAGE,
-  GRID_HEIGHT_MM,
+  DEFAULT_PRINT_LANGS,
+  PRINT_LANGS_STORAGE_KEY,
+  cardTranslations,
   chunkPages,
+  gridDims,
+  normalisePrintLangs,
   parseCardsPerPage,
+  parseLangList,
   targetPriceLine,
   type CardsPerPage,
 } from '@/lib/qrSheet'
@@ -24,6 +30,7 @@ type Target = {
   archived: boolean
   public_url: string
   short_url: string
+  label_translations?: Record<string, string>
 }
 
 // Bound, not a literal src, so Vite doesn't try to import it as an asset.
@@ -64,14 +71,94 @@ function printSheet() {
   window.print()
 }
 
-function instructions(page: Target[]): string {
-  return page.every((tg) => tg.fixed_units)
-    ? t('harborTargets.print.instructionsFixed')
-    : t('harborTargets.print.instructions')
+const LOCALE_ORDER = LOCALE_OPTIONS.map((o) => o.code)
+
+const clubLang = computed(() => club.defaultLanguage || 'nb')
+
+// Storage can be unavailable (private mode, blocked site data); the
+// defaults and the URL query still work then.
+function readStoredLangs(): string[] | null {
+  try {
+    return parseLangList(localStorage.getItem(PRINT_LANGS_STORAGE_KEY))
+  } catch {
+    return null
+  }
+}
+
+function storeLangs(list: string[]) {
+  try {
+    localStorage.setItem(PRINT_LANGS_STORAGE_KEY, list.join(','))
+  } catch {
+    // Not remembered for next time; the URL still carries the choice.
+  }
+}
+
+const storedLangs = ref<string[] | null>(readStoredLangs())
+
+// The query wins so a shared or bookmarked link reproduces the sheet.
+const langs = computed(() =>
+  normalisePrintLangs(
+    parseLangList(route.query.langs) ?? storedLangs.value ?? DEFAULT_PRINT_LANGS,
+    clubLang.value,
+    LOCALE_ORDER,
+  ),
+)
+
+// Fixed tracks for the cards-per-page choice: a page with fewer cards leaves
+// cells empty instead of growing its cards.
+const gridStyle = computed(() => {
+  const { cols, rows } = gridDims(per.value)
+  return { gridTemplateColumns: `repeat(${cols}, 1fr)`, gridTemplateRows: `repeat(${rows}, 1fr)` }
+})
+
+// Pathed rather than relative so the replace resolves even where the route
+// has no record of its own.
+function replaceQuery(patch: Record<string, string>) {
+  router.replace({ path: route.path, query: { ...route.query, ...patch } })
+}
+
+function setLangs(list: string[]) {
+  replaceQuery({ langs: list.join(',') })
+}
+
+function toggleLang(code: string) {
+  if (code === clubLang.value) return
+  const current = langs.value
+  const next = normalisePrintLangs(
+    current.includes(code) ? current.filter((c) => c !== code) : [...current, code],
+    clubLang.value,
+    LOCALE_ORDER,
+  )
+  storedLangs.value = next
+  storeLangs(next)
+  setLangs(next)
+}
+
+// Read straight from the bundled messages so each line is in its own
+// language without switching the app's locale.
+function messageIn(code: string, path: string): string {
+  const value = path
+    .split('.')
+    .reduce<unknown>(
+      (node, key) => (node && typeof node === 'object' ? (node as Record<string, unknown>)[key] : undefined),
+      i18n.global.getLocaleMessage(code),
+    )
+  return typeof value === 'string' ? value : ''
+}
+
+function instructionLines(page: Target[]): { code: string; text: string }[] {
+  const key = page.every((tg) => tg.fixed_units)
+    ? 'harborTargets.print.instructionsFixed'
+    : 'harborTargets.print.instructions'
+  return langs.value.map((code) => ({ code, text: messageIn(code, key) })).filter((l) => l.text)
+}
+
+function translationsOf(tg: Target): string[] {
+  return cardTranslations(tg.label_translations, langs.value, clubLang.value)
 }
 
 function setPer(v: CardsPerPage) {
-  router.replace({ query: { ...route.query, per: String(v) } })
+  replaceQuery({ per: String(v) })
 }
 
 // Renders only the QRs not yet rendered, so switching the selection or the
@@ -124,6 +211,11 @@ onMounted(async () => {
   pageStyle.textContent = '@page { size: A4 landscape; margin: 0; }'
   document.head.appendChild(pageStyle)
   await Promise.all([club.ensureLoaded(), load()])
+  // Put the effective choice in the URL so a copied link prints the same
+  // sheet for someone with other remembered languages. Waiting for the
+  // router keeps the replace from dropping a query not yet resolved.
+  await router.isReady()
+  if (!route.query.langs) setLangs(langs.value)
 })
 
 onBeforeUnmount(() => {
@@ -154,6 +246,24 @@ onBeforeUnmount(() => {
           {{ t('harborTargets.print.perPageOption', { n }) }}
         </button>
       </div>
+      <fieldset class="flex flex-wrap items-center gap-x-3 gap-y-1" data-testid="lang-picker">
+        <legend class="sr-only">{{ t('harborTargets.print.languages') }}</legend>
+        <span class="text-sm text-slate-700" aria-hidden="true">{{ t('harborTargets.print.languages') }}:</span>
+        <label
+          v-for="opt in LOCALE_OPTIONS"
+          :key="opt.code"
+          class="flex items-center gap-1 text-sm text-slate-700"
+          :data-testid="`lang-${opt.code}`"
+        >
+          <input
+            type="checkbox"
+            :checked="langs.includes(opt.code)"
+            :disabled="opt.code === clubLang"
+            @change="toggleLang(opt.code)"
+          />
+          {{ opt.label }}
+        </label>
+      </fieldset>
       <button
         type="button"
         class="flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
@@ -184,14 +294,20 @@ onBeforeUnmount(() => {
       >
         <header class="qr-page__header" data-testid="qr-page-header">
           <img v-if="club.hasLogo" :src="CLUB_LOGO_URL" alt="" class="qr-page__logo" data-testid="club-logo" />
-          <div class="min-w-0">
-            <p class="qr-page__club">{{ club.name }}</p>
-            <p class="qr-page__instructions" data-testid="instructions">
-              {{ instructions(page) }}
+          <p class="qr-page__club">{{ club.name }}</p>
+          <div class="qr-page__instructions" data-testid="instructions">
+            <p
+              v-for="(line, j) in instructionLines(page)"
+              :key="line.code"
+              :lang="line.code"
+              :class="j === 0 ? 'qr-page__instr-main' : 'qr-page__instr-other'"
+              data-testid="instruction-line"
+            >
+              {{ line.text }}
             </p>
           </div>
         </header>
-        <div class="qr-page__grid" :style="{ height: `${GRID_HEIGHT_MM}mm` }">
+        <div class="qr-page__grid" :style="gridStyle">
           <HarborQrCard
             v-for="tg in page"
             :key="tg.id"
@@ -200,6 +316,7 @@ onBeforeUnmount(() => {
             :qr-src="qrSrc[tg.id] ?? ''"
             :per="per"
             :short-url="tg.short_url"
+            :translations="translationsOf(tg)"
           />
         </div>
       </section>
@@ -238,8 +355,13 @@ onBeforeUnmount(() => {
   font-size: 0.875rem;
 }
 
+/* A fixed A4 page laid out as a column: the header takes the height its
+   lines need, so no instruction line is ever clipped, and the card grid
+   takes the rest. */
 .qr-page {
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
   width: 297mm;
   height: 210mm;
   margin: 0 auto 8mm;
@@ -253,8 +375,9 @@ onBeforeUnmount(() => {
   box-sizing: border-box;
   display: flex;
   align-items: center;
+  flex: none;
   gap: 5mm;
-  height: 18mm;
+  min-height: 14mm;
   margin-bottom: 6mm;
   padding-bottom: 3mm;
   border-bottom: 0.3mm solid #cbd5e1;
@@ -267,6 +390,8 @@ onBeforeUnmount(() => {
 }
 
 .qr-page__club {
+  flex-shrink: 0;
+  max-width: 40%;
   margin: 0;
   font-size: 20pt;
   font-weight: 700;
@@ -274,19 +399,33 @@ onBeforeUnmount(() => {
   letter-spacing: -0.01em;
 }
 
+/* Beside the club name: the club language a little larger, the others small
+   and grey. */
 .qr-page__instructions {
-  margin: 1mm 0 0;
-  font-size: 11pt;
-  color: #475569;
+  flex: 1 1 0;
+  min-width: 0;
 }
 
-/* Cards keep the cell size fixed by cards-per-page; a short page centres
-   them rather than stretching. */
+.qr-page__instructions p {
+  margin: 0;
+}
+
+.qr-page__instr-main {
+  font-size: 10pt;
+  line-height: 1.2;
+  color: #334155;
+}
+
+.qr-page__instr-other {
+  font-size: 7pt;
+  line-height: 1.15;
+  color: #64748b;
+}
+
 .qr-page__grid {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-content: center;
+  flex: 1 1 0;
+  min-height: 0;
+  display: grid;
   gap: 6mm;
 }
 

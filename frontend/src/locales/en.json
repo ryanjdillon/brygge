@@ -2595,7 +2595,10 @@
       "shortCodeHint": "Printed under the QR for guests whose phone won't scan. Lowercase letters, digits and hyphens, 2–24 characters.",
       "shortCodeChangeWarning": "Changing it breaks the address printed on existing cards and posters. The QR code itself keeps working.",
       "shortCodeInvalid": "Use 2–24 lowercase letters, digits or hyphens.",
-      "shortCodeTaken": "This short address is already used by another poster."
+      "shortCodeTaken": "This short address is already used by another poster.",
+      "translations": "Name in other languages",
+      "translationsHint": "Optional. Shown under the name on printed cards in the languages you pick when printing, and to visitors using that language. Up to 80 characters each.",
+      "translationsInvalid": "A name in another language is too long (max 80 characters)."
     },
     "print": {
       "title": "Print QR cards",
@@ -2608,7 +2611,8 @@
       "hint": "In the print dialog, choose A4 landscape, 100% scale and default margins.",
       "empty": "No active QR posters selected.",
       "instructions": "Scan the QR code with your phone camera, choose the quantity and pay with Vipps.",
-      "instructionsFixed": "Scan the QR code with your phone camera and pay with Vipps."
+      "instructionsFixed": "Scan the QR code with your phone camera and pay with Vipps.",
+      "languages": "Languages"
     }
   },
   "recentPayments": {

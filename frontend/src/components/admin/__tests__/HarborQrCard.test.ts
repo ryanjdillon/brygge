@@ -19,4 +19,16 @@ describe('HarborQrCard', () => {
     const wrapper = mount(HarborQrCard, { props: base })
     expect(wrapper.find('[data-testid="qr-card-short-url"]').exists()).toBe(false)
   })
+
+  it('prints the translations as one line under the title', () => {
+    const wrapper = mount(HarborQrCard, { props: { ...base, translations: ['Guest harbour', 'Gastliegeplatz'] } })
+    const line = wrapper.get('[data-testid="qr-card-translations"]')
+    expect(line.text()).toBe('Guest harbour · Gastliegeplatz')
+    expect(wrapper.get('h2').element.nextElementSibling).toBe(line.element)
+  })
+
+  it('omits the translation line when there are none', () => {
+    const wrapper = mount(HarborQrCard, { props: { ...base, translations: [] } })
+    expect(wrapper.find('[data-testid="qr-card-translations"]').exists()).toBe(false)
+  })
 })

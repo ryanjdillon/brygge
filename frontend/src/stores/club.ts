@@ -31,6 +31,7 @@ interface ClubInfo {
   motorhome_rules?: string
   motorhome_cta_title?: string
   motorhome_cta_description?: string
+  default_language?: string
 }
 
 export const useClubStore = defineStore('club', () => {
@@ -61,6 +62,9 @@ export const useClubStore = defineStore('club', () => {
   const secretaryEmail = ref<string>('')
   const harborMasterEmail = ref<string>('')
   const hasLogo = ref<boolean>(false)
+  // The club's own language: what an unpersonalised page and the main
+  // label on printed material are written in.
+  const defaultLanguage = ref<string>('nb')
   const loaded = ref(false)
   let inflight: Promise<void> | null = null
 
@@ -103,6 +107,7 @@ export const useClubStore = defineStore('club', () => {
         // around as a synonym for backwards-compat with any callsite
         // that hasn't migrated yet.
         hasLogo.value = info.has_site_logo === true || info.has_logo === true
+        defaultLanguage.value = info.default_language || 'nb'
         loaded.value = true
       } finally {
         inflight = null
@@ -128,6 +133,7 @@ export const useClubStore = defineStore('club', () => {
     secretaryEmail,
     harborMasterEmail,
     hasLogo,
+    defaultLanguage,
     harborApproach,
     harborDepth,
     harborVhf,
