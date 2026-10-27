@@ -661,8 +661,14 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOv
 // given row date. If override is non-empty, it's used verbatim. Otherwise
 // the period containing the date is found-or-created.
 func (s *Service) resolvePeriod(ctx context.Context, clubID string, date time.Time, override string) (id, status string, err error) {
+	return resolvePeriodIn(ctx, s.db, clubID, date, override)
+}
+
+// resolvePeriodIn is resolvePeriod on q, so a transaction holding a lock
+// resolves the period on its own connection.
+func resolvePeriodIn(ctx context.Context, q dbtx, clubID string, date time.Time, override string) (id, status string, err error) {
 	if override != "" {
-		err = s.db.QueryRow(ctx,
+		err = q.QueryRow(ctx,
 			`SELECT id, status FROM fiscal_periods WHERE id = $1 AND club_id = $2`,
 			override, clubID,
 		).Scan(&id, &status)
@@ -671,7 +677,7 @@ func (s *Service) resolvePeriod(ctx context.Context, clubID string, date time.Ti
 		}
 		return id, status, nil
 	}
-	return s.ResolvePeriodForDate(ctx, clubID, date)
+	return resolvePeriodForDate(ctx, q, clubID, date)
 }
 
 // InferOwnAccountNumber picks the bank account number that this CSV

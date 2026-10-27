@@ -70,6 +70,19 @@ func TestDevMaskedViews(t *testing.T) {
 	}
 	defer admin.Close()
 
+	// The migrations grant to brygge_dev_ro only when the role already exists,
+	// as on a deployed host, where it is created before them. Create it here
+	// too, so the grant drift guards below see what production sees.
+	if _, err := admin.Exec(ctx, `DO $$
+		BEGIN
+			IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'brygge_dev_ro') THEN
+				CREATE ROLE brygge_dev_ro NOLOGIN;
+			END IF;
+		EXCEPTION WHEN duplicate_object THEN NULL;
+		END $$`); err != nil {
+		t.Skipf("cannot create brygge_dev_ro (need CREATEROLE): %v", err)
+	}
+
 	dbName := "devmasked_" + testutil.RandomHex(6)
 	if _, err := admin.Exec(ctx, "CREATE DATABASE "+dbName); err != nil {
 		t.Skipf("cannot CREATE DATABASE (need superuser): %v", err)
@@ -147,6 +160,9 @@ func TestDevMaskedViews(t *testing.T) {
 			if !rawTextColumns[col] {
 				t.Errorf("%s is free text readable raw by brygge_dev_ro — review it into rawTextColumns, or mask the table via a dev_masked view", col)
 			}
+		}
+		if err := rows.Err(); err != nil {
+			t.Fatalf("listing raw text columns: %v", err)
 		}
 		if seen == 0 {
 			t.Fatal("no raw-readable text columns found; the privilege query is broken, so this guard would pass vacuously")

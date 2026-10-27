@@ -151,9 +151,9 @@ func (s *Service) assignBankRowToInvoice(
 
 	var periodID, periodStatus string
 	if opts.auto {
-		periodID, periodStatus, err = s.existingPeriod(ctx, clubID, rowDate, opts.periodOverride)
+		periodID, periodStatus, err = existingPeriodIn(ctx, tx, clubID, rowDate, opts.periodOverride)
 	} else {
-		periodID, periodStatus, err = s.resolvePeriod(ctx, clubID, rowDate, opts.periodOverride)
+		periodID, periodStatus, err = resolvePeriodIn(ctx, tx, clubID, rowDate, opts.periodOverride)
 	}
 	if err != nil {
 		return "", nil, fmt.Errorf("resolve period: %w", err)
@@ -162,8 +162,8 @@ func (s *Service) assignBankRowToInvoice(
 		return "", nil, fmt.Errorf("fiscal period for %s is closed; reopen first", rowDate.Format("2006-01-02"))
 	}
 
-	// Before the draft exists, so a refused alias leaves nothing to discard;
-	// in the lock tx, so a failed link or post rolls the alias back.
+	// In the lock tx, so a failed link or post rolls the alias back with
+	// the entry.
 	taught, err := s.teachPayerAlias(ctx, tx, clubID, invoiceID, []string{bankRowID}, opts.alias)
 	if err != nil {
 		return "", nil, err
@@ -175,7 +175,7 @@ func (s *Service) assignBankRowToInvoice(
 	if opts.auto {
 		desc = fmt.Sprintf("Automatisk tildeling: %s", truncate(rowDesc, 200))
 	}
-	entry, cerr := s.CreateJournalEntry(ctx, CreateJournalEntryInput{
+	entry, cerr := createJournalEntryTx(ctx, tx, CreateJournalEntryInput{
 		FiscalPeriodID: periodID,
 		EntryDate:      rowDate.Format("2006-01-02"),
 		Description:    desc,
@@ -192,13 +192,13 @@ func (s *Service) assignBankRowToInvoice(
 	if cerr != nil {
 		return "", nil, fmt.Errorf("create journal: %w", cerr)
 	}
-	if err := s.linkAndPostBankRow(ctx, clubID, actorID, entry.ID, bankRowID, &invoiceID); err != nil {
+	if err := linkAndPostBankRowsTx(ctx, tx, clubID, actorID, entry.ID, []string{bankRowID}, &invoiceID); err != nil {
 		return "", nil, err
 	}
-	// Release the faktura lock before the back-link, which updates the
-	// faktura from another connection and would otherwise wait on it.
+	// The entry, the row link and the alias commit together; the back-link
+	// below updates the faktura, so it runs once the lock is released.
 	if err := tx.Commit(ctx); err != nil {
-		return "", nil, fmt.Errorf("release invoice lock: %w", err)
+		return "", nil, fmt.Errorf("commit invoice assign: %w", err)
 	}
 
 	// linkInvoicePayment outside the tx — it's idempotent and best-effort
@@ -283,12 +283,17 @@ var errInvoiceNotOpen = errors.New("faktura no longer open")
 // bookings racing for one faktura (a sync's auto-assign and a manual
 // assign of another row, or a Vipps and a bank auto-assign) run one after
 // the other, and the second sees the first's booked row. NO KEY UPDATE
-// rather than UPDATE: linking writes bank_import_rows.invoice_id or
-// vipps_import_rows.invoice_id from another connection, and that foreign
-// key takes KEY SHARE on this faktura, which FOR UPDATE would block until
-// this transaction ends — a deadlock with ourselves. The checks run in a
-// second statement: one that waited for the lock still reads the rows as
-// they were when it started, so it would miss the booking it waited for.
+// rather than UPDATE: a write that only references the faktura (a foreign
+// key on bank_import_rows.invoice_id or vipps_import_rows.invoice_id takes
+// KEY SHARE) need not queue behind the lock. The checks run in a second
+// statement: one that waited for the lock still reads the rows as they
+// were when it started, so it would miss the booking it waited for.
+//
+// Everything the booking does while the lock is held goes through tx,
+// never s.db: period resolution, the entry, the row link and the post. A
+// holder that waits for a second pool connection deadlocks once every
+// connection belongs to a booking queued on this faktura, and Postgres
+// cannot see that wait to break it.
 func lockInvoiceForAssign(ctx context.Context, tx pgx.Tx, clubID, invoiceID string, opts invoiceLockOpts) (int64, error) { //nolint:cyclop // one guard per settlement rule, each with its own error; split tracked in BRY-424
 	if opts.mode != lockAutoAssign && opts.bookingDate.IsZero() {
 		return 0, errors.New("lock invoice: booking date is required")
@@ -355,13 +360,13 @@ func lockInvoiceForAssign(ctx context.Context, tx pgx.Tx, clubID, invoiceID stri
 	return invoiceCents, nil
 }
 
-// existingPeriod is resolvePeriod without the auto-create: an automatic
+// existingPeriodIn is resolvePeriodIn without the auto-create: an automatic
 // booking never opens a fiscal year on its own.
-func (s *Service) existingPeriod(ctx context.Context, clubID string, date time.Time, override string) (id, status string, err error) {
+func existingPeriodIn(ctx context.Context, q dbtx, clubID string, date time.Time, override string) (id, status string, err error) {
 	if override != "" {
-		return s.resolvePeriod(ctx, clubID, date, override)
+		return resolvePeriodIn(ctx, q, clubID, date, override)
 	}
-	err = s.db.QueryRow(ctx,
+	err = q.QueryRow(ctx,
 		`SELECT id, status FROM fiscal_periods
 		  WHERE club_id = $1 AND $2::date BETWEEN start_date AND end_date
 		  ORDER BY start_date DESC
@@ -532,6 +537,19 @@ func (s *Service) linkAndPostBankRows(ctx context.Context, clubID, actorID, entr
 	return nil
 }
 
+// linkAndPostBankRowsTx is linkAndPostBankRows inside the caller's
+// transaction, for a booking that holds the faktura lock: a failed link or
+// post rolls back with the entry, so there is nothing to unlink or discard.
+func linkAndPostBankRowsTx(ctx context.Context, tx pgx.Tx, clubID, actorID, entryID string, bankRowIDs []string, invoiceID *string) error {
+	if err := linkBankRowsTx(ctx, tx, clubID, entryID, bankRowIDs, invoiceID); err != nil {
+		return err
+	}
+	if err := postJournalEntryTx(ctx, tx, clubID, entryID, actorID); err != nil {
+		return fmt.Errorf("post journal: %w", err)
+	}
+	return nil
+}
+
 // linkBankRows points every row at the entry in one transaction, guarded on
 // each row still being unbooked and not dismissed.
 func (s *Service) linkBankRows(ctx context.Context, clubID, entryID string, bankRowIDs []string, invoiceID *string) error {
@@ -540,6 +558,18 @@ func (s *Service) linkBankRows(ctx context.Context, clubID, entryID string, bank
 		return fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback(ctx)
+	if err := linkBankRowsTx(ctx, tx, clubID, entryID, bankRowIDs, invoiceID); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit row link: %w", err)
+	}
+	return nil
+}
+
+// linkBankRowsTx is linkBankRows inside the caller's transaction, which then
+// holds the rows until it ends.
+func linkBankRowsTx(ctx context.Context, tx pgx.Tx, clubID, entryID string, bankRowIDs []string, invoiceID *string) error {
 	// Lock in id order first, so two overlapping group bookings queue
 	// instead of deadlocking on each other's rows.
 	if _, err := tx.Exec(ctx,
@@ -558,9 +588,6 @@ func (s *Service) linkBankRows(ctx context.Context, clubID, entryID string, bank
 	}
 	if tag.RowsAffected() != int64(len(bankRowIDs)) {
 		return errBankRowRaced
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit row link: %w", err)
 	}
 	return nil
 }
@@ -868,7 +895,8 @@ func (s *Service) AssignMultipleBankRowsToInvoiceRemembering(
 		}
 	}
 	// Held until the rows are linked and their entries posted (the commit
-	// below), like the single-row path.
+	// below), like the single-row path; every entry is created and posted
+	// in this tx, so they all commit or none do.
 	invCents, err := lockInvoiceForAssign(ctx, tx, clubID, invoiceID, invoiceLockOpts{mode: lockManual, bookingDate: earliestDate})
 	if err != nil {
 		return nil, nil, err
@@ -887,7 +915,7 @@ func (s *Service) AssignMultipleBankRowsToInvoiceRemembering(
 		return nil, nil, fmt.Errorf("row sum %.2f does not match invoice total %.2f", sumAmount, invoiceTotal)
 	}
 
-	periodID, periodStatus, perr := s.resolvePeriod(ctx, clubID, latestDate, "")
+	periodID, periodStatus, perr := resolvePeriodIn(ctx, tx, clubID, latestDate, "")
 	if perr != nil {
 		return nil, nil, fmt.Errorf("resolve period: %w", perr)
 	}
@@ -906,7 +934,7 @@ func (s *Service) AssignMultipleBankRowsToInvoiceRemembering(
 		srcID := rd.id
 		srcTable := "bank_import_rows"
 		desc := fmt.Sprintf("Manuell tildeling: %s", truncate(rd.desc, 200))
-		entry, cerr := s.CreateJournalEntry(ctx, CreateJournalEntryInput{
+		entry, cerr := createJournalEntryTx(ctx, tx, CreateJournalEntryInput{
 			FiscalPeriodID: periodID,
 			EntryDate:      rd.date.Format("2006-01-02"),
 			Description:    desc,
@@ -923,7 +951,7 @@ func (s *Service) AssignMultipleBankRowsToInvoiceRemembering(
 		if cerr != nil {
 			return nil, nil, fmt.Errorf("create journal for row %s: %w", rd.id, cerr)
 		}
-		if err := s.PostJournalEntry(ctx, clubID, entry.ID, actorID); err != nil {
+		if err := postJournalEntryTx(ctx, tx, clubID, entry.ID, actorID); err != nil {
 			return nil, nil, fmt.Errorf("post journal for row %s: %w", rd.id, err)
 		}
 		if _, err := tx.Exec(ctx,

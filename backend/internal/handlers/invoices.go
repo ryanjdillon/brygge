@@ -623,7 +623,11 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 		} else {
 			now := time.Now().Format(time.RFC3339)
 			sentAt = &now
-			h.db.Exec(ctx, `UPDATE invoices SET sent_at = NOW() WHERE id = $1`, invoiceID)
+			// The email is already out, so the response still reports it sent;
+			// a stale sent_at only skews the sent/unsent views until resent.
+			if _, err := h.db.Exec(ctx, `UPDATE invoices SET sent_at = NOW() WHERE id = $1`, invoiceID); err != nil {
+				h.log.Error().Err(err).Str("invoice_id", invoiceID).Msg("invoice emailed but sent_at not recorded")
+			}
 			gl = h.bookSentInvoice(ctx, claims.ClubID, invoiceID, claims.UserID)
 			if h.audit != nil {
 				h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,

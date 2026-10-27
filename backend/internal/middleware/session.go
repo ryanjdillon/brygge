@@ -273,7 +273,7 @@ func GetSessionInfo(ctx context.Context) *auth.SessionInfo {
 
 // SetSessionCookie sets the session cookie on the response.
 func SetSessionCookie(w http.ResponseWriter, sessionID string, secure bool) {
-	http.SetCookie(w, &http.Cookie{
+	http.SetCookie(w, &http.Cookie{ // #nosec G124 -- Secure follows the configured origin scheme; false only for plain-http local dev
 		Name:     sessionCookieName,
 		Value:    sessionID,
 		Path:     "/",
@@ -284,13 +284,17 @@ func SetSessionCookie(w http.ResponseWriter, sessionID string, secure bool) {
 	})
 }
 
-// ClearSessionCookie removes the session cookie.
-func ClearSessionCookie(w http.ResponseWriter) {
-	http.SetCookie(w, &http.Cookie{
+// ClearSessionCookie removes the session cookie. secure should match what
+// SetSessionCookie used, so the expiring cookie carries the same attributes
+// as the one it replaces.
+func ClearSessionCookie(w http.ResponseWriter, secure bool) {
+	http.SetCookie(w, &http.Cookie{ // #nosec G124 -- Secure follows the configured origin scheme; false only for plain-http local dev
 		Name:     sessionCookieName,
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
+		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
 	})
 }

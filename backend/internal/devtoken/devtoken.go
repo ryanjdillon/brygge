@@ -84,7 +84,7 @@ func NewService(db *pgxpool.Pool) *Service {
 }
 
 const tokenColumns = `id::text, club_id::text, name, token_prefix, scope,
-	created_by::text, created_at, expires_at, last_used_at, revoked_at`
+	created_by::text, created_at, expires_at, last_used_at, revoked_at` // #nosec G101 -- a SELECT column list; token_prefix is a non-secret display prefix
 
 func scanToken(row pgx.Row) (Token, error) {
 	var t Token

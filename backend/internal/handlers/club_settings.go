@@ -527,7 +527,8 @@ func (h *ClubSettingsHandler) uploadLogo(w http.ResponseWriter, r *http.Request,
 		Error(w, http.StatusUnauthorized, "authentication required")
 		return
 	}
-	if err := r.ParseMultipartForm(maxLogoBytes + 1024); err != nil {
+	r.Body = http.MaxBytesReader(w, r.Body, maxLogoBytes+1024)
+	if err := r.ParseMultipartForm(maxLogoBytes + 1024); err != nil { // #nosec G120 -- body capped by MaxBytesReader above
 		Error(w, http.StatusBadRequest, "invalid multipart body")
 		return
 	}

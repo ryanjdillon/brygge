@@ -107,20 +107,19 @@ var (
 // before the entry is created until the row is linked and the entry
 // posted, in a transaction of its own, so a manual, auto or Vipps assign of
 // the same faktura runs before or after it, never alongside, and the lock
-// is never held across a whole import. Under the faktura lock the period is
-// held FOR SHARE briefly inside CreateJournalEntry, then the bank row is
-// linked, then the period is held again inside PostJournalEntry; only the
-// faktura lock spans them, as on the manual assign path. A faktura already
+// is never held across a whole import. The period, the entry, the row link
+// and the post all run in that transaction, which holds the period FOR
+// SHARE from the entry's creation to the commit. A faktura already
 // settled is errInvoiceSettled, and the caller leaves the row in Tildel and
 // counts it, unless the booking it waited for was this row's own
 // (errKIDRowTaken). A faktura voided or credited meanwhile is
 // errInvoiceNotOpen; an imported one whose receivable isn't in the GL by
 // the row date is ErrImportedNoOpeningBalance (BRY-386).
 //
-// The row is linked before the entry is posted, so a posted entry never
-// exists without its row (a later sync would book the money again), and the
-// link records the faktura so the other settle paths see this booking. A
-// failed post unlinks the row and drops the draft.
+// The entry, the row link and the post commit together, so a posted entry
+// never exists without its row (a later sync would book the money again),
+// and the link records the faktura so the other settle paths see this
+// booking. Any failure rolls all of it back.
 func (s *Service) bookKIDCascadeMatch(ctx context.Context, clubID string, m kidCascadeMatch) error { //nolint:cyclop // one transaction from lock to posting; each outcome is a cascade result; split tracked in BRY-424
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
@@ -150,7 +149,7 @@ func (s *Service) bookKIDCascadeMatch(ctx context.Context, clubID string, m kidC
 		return lockErr
 	}
 
-	periodID, periodStatus, err := s.resolvePeriod(ctx, clubID, m.date, m.periodOverride)
+	periodID, periodStatus, err := resolvePeriodIn(ctx, tx, clubID, m.date, m.periodOverride)
 	if err != nil {
 		return fmt.Errorf("resolving fiscal period: %w", err)
 	}
@@ -160,7 +159,7 @@ func (s *Service) bookKIDCascadeMatch(ctx context.Context, clubID string, m kidC
 
 	sourceID := m.rowID
 	sourceTable := "bank_import_rows"
-	entry, err := s.CreateJournalEntry(ctx, CreateJournalEntryInput{
+	entry, err := createJournalEntryTx(ctx, tx, CreateJournalEntryInput{
 		FiscalPeriodID: periodID,
 		EntryDate:      m.date.Format("2006-01-02"),
 		Description:    kidMatchDescription(m.kid, m.desc),
@@ -181,37 +180,27 @@ func (s *Service) bookKIDCascadeMatch(ctx context.Context, clubID string, m kidC
 	if err != nil {
 		return fmt.Errorf("creating journal entry: %w", err)
 	}
-	tag, err := s.db.Exec(ctx,
+	tag, err := tx.Exec(ctx,
 		`UPDATE bank_import_rows SET journal_entry_id = $1, invoice_id = $4, auto_matched = true
 		  WHERE id = $2 AND club_id = $3 AND `+kidCascadeEligibleSQL(""),
 		entry.ID, m.rowID, clubID, m.invoiceID,
 	)
 	if err != nil || tag.RowsAffected() != 1 {
-		s.discardDraft(ctx, clubID, entry.ID)
 		if err == nil {
 			err = errKIDRowTaken
 		}
 		return fmt.Errorf("linking row: %w", err)
 	}
-	if err := s.PostJournalEntry(ctx, clubID, entry.ID, m.actorID); err != nil {
-		if _, uerr := s.db.Exec(ctx,
-			`UPDATE bank_import_rows SET journal_entry_id = NULL, invoice_id = NULL, auto_matched = false
-			  WHERE id = $1 AND club_id = $2 AND journal_entry_id = $3`,
-			m.rowID, clubID, entry.ID,
-		); uerr != nil {
-			s.log.Error().Err(uerr).Str("entry_id", entry.ID).Msg("KID match: unlinking the row after a failed post failed")
-		}
-		s.discardDraft(ctx, clubID, entry.ID)
+	if err := postJournalEntryTx(ctx, tx, clubID, entry.ID, m.actorID); err != nil {
 		if errors.Is(err, ErrPeriodClosed) {
 			return errKIDPeriodClosed
 		}
 		return fmt.Errorf("posting journal entry: %w", err)
 	}
-	// Release the faktura lock before the back-link, which updates the
-	// faktura from another connection and would otherwise wait on it. The
-	// booking is complete either way; a failed commit only ends the lock.
+	// The back-link updates the faktura, so it runs once the commit has
+	// released the lock.
 	if err := tx.Commit(ctx); err != nil {
-		s.log.Warn().Err(err).Str("bank_row_id", m.rowID).Msg("KID match: releasing the faktura lock failed")
+		return fmt.Errorf("committing KID match: %w", err)
 	}
 
 	// Best-effort: the GL is already correct, and bank sync's back-link

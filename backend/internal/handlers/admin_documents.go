@@ -261,7 +261,7 @@ func (h *AdminDocumentsHandler) HandleUploadDocument(w http.ResponseWriter, r *h
 	}
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
-	if err := r.ParseMultipartForm(maxUploadSize); err != nil {
+	if err := r.ParseMultipartForm(maxUploadSize); err != nil { // #nosec G120 -- body capped by MaxBytesReader above
 		Error(w, http.StatusBadRequest, "file too large or invalid multipart form")
 		return
 	}

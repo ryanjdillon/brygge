@@ -4,6 +4,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
+	"net/url"
+	"slices"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
@@ -16,6 +18,10 @@ import (
 // optOutCategories are the broadcast categories members may opt out of.
 // Transactional categories (magic_link, invoice) are intentionally absent.
 var optOutCategories = []string{"broadcast"}
+
+func isOptOutCategory(category string) bool {
+	return slices.Contains(optOutCategories, category)
+}
 
 type EmailPrefsHandler struct {
 	db     *pgxpool.Pool
@@ -108,14 +114,7 @@ func (h *EmailPrefsHandler) HandleUpdateEmailPref(w http.ResponseWriter, r *http
 		return
 	}
 
-	allowed := false
-	for _, c := range optOutCategories {
-		if c == req.Category {
-			allowed = true
-			break
-		}
-	}
-	if !allowed {
+	if !isOptOutCategory(req.Category) {
 		Error(w, http.StatusBadRequest, "category cannot be configured")
 		return
 	}
@@ -147,8 +146,15 @@ func (h *EmailPrefsHandler) HandleUnsubscribeRedirect(w http.ResponseWriter, r *
 		return
 	}
 
-	target := h.config.FrontendURL + "/portal/profile?unsubscribe=" + category
-	http.Redirect(w, r, target, http.StatusFound)
+	// The token is ours, but a category outside the fixed set would still
+	// be echoed into the redirect, so it is checked like the POST path does.
+	if !isOptOutCategory(category) {
+		http.Error(w, "invalid or expired unsubscribe link", http.StatusBadRequest)
+		return
+	}
+
+	target := h.config.FrontendURL + "/portal/profile?unsubscribe=" + url.QueryEscape(category)
+	http.Redirect(w, r, target, http.StatusFound) // #nosec G710 -- fixed configured origin and path; category is checked against optOutCategories
 }
 
 // HandleUnsubscribeOneClick handles POST /unsubscribe as required by RFC 8058.
@@ -162,14 +168,7 @@ func (h *EmailPrefsHandler) HandleUnsubscribeOneClick(w http.ResponseWriter, r *
 		return
 	}
 
-	allowed := false
-	for _, c := range optOutCategories {
-		if c == category {
-			allowed = true
-			break
-		}
-	}
-	if !allowed {
+	if !isOptOutCategory(category) {
 		Error(w, http.StatusBadRequest, "category cannot be opted out")
 		return
 	}

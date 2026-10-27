@@ -111,8 +111,7 @@ func (h *DemoAuthHandler) HandleDemoLogin(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	secure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
-	middleware.SetSessionCookie(w, sessionID, secure)
+	middleware.SetSessionCookie(w, sessionID, cookieSecure(h.config))
 
 	h.log.Info().Str("email", req.Email).Str("user_id", userID).Msg("demo login")
 

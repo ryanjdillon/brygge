@@ -8,7 +8,7 @@ const { t } = useI18n()
 
 const BASE = '/api/v1/admin/accounting'
 
-async function apiFetch<T>(path: string, opts?: RequestInit): Promise<T> {
+async function apiFetch<T>(path: string, opts?: Parameters<typeof fetch>[1]): Promise<T> {
   const res = await fetch(path, { credentials: 'include', ...opts })
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
   return res.json()

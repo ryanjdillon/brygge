@@ -82,12 +82,12 @@ func MagicLinkBody(locale, clubName, domain, loginURL string) string {
 	data := struct {
 		Club     string
 		Domain   string
-		LoginURL template.URL
+		LoginURL string
 		Copy     magicLinkCopyT
 	}{
 		Club:     clubName,
 		Domain:   domain,
-		LoginURL: template.URL(loginURL),
+		LoginURL: loginURL,
 		Copy:     rendered,
 	}
 	var buf bytes.Buffer
@@ -217,7 +217,7 @@ func emailDict(pairs ...any) (map[string]any, error) {
 
 var emailFuncs = template.FuncMap{
 	"dict": emailDict,
-	"css":  func(s string) template.CSS { return template.CSS(s) },
+	"css":  func(s string) template.CSS { return template.CSS(s) }, // #nosec G203 -- only literal hex colours from the templates reach it, never caller data
 }
 
 const emailBaseLayout = `{{define "base"}}<!DOCTYPE html>
@@ -250,7 +250,7 @@ const emailBaseLayout = `{{define "base"}}<!DOCTYPE html>
 </html>{{end}}`
 
 // emailButton is the one CTA button: shared Gmail-safe structure (centered <p>
-// + inline-block <a>, template.URL href), brand colour via .BG.
+// + inline-block <a>; html/template URL-escapes the href), brand colour via .BG.
 const emailButton = `{{define "button"}}<p style="margin:0 0 8px 0;text-align:center;">
                 <a href="{{.URL}}" style="display:inline-block;background:{{css .BG}};color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:4px;font-weight:600;font-size:15px;">{{.Label}}</a>
               </p>{{end}}`
@@ -338,7 +338,7 @@ func InvoiceBody(_ /*locale*/, memberName, clubName string, invoiceNumber int, d
 		Amount        string
 		KID           string
 		BankAccount   string
-		VippsURL      template.URL
+		VippsURL      string
 	}{
 		Club:          clubName,
 		Member:        memberName,
@@ -347,7 +347,7 @@ func InvoiceBody(_ /*locale*/, memberName, clubName string, invoiceNumber int, d
 		Amount:        formatNOK(total),
 		KID:           kid,
 		BankAccount:   bankAccount,
-		VippsURL:      template.URL(vippsURL),
+		VippsURL:      vippsURL,
 	}
 	var buf bytes.Buffer
 	// A faktura that nets to zero (every line exempted) asks for nothing:
@@ -406,7 +406,7 @@ func InvoiceReminderBody(_ /*locale*/, memberName, clubName string, invoiceNumbe
 		KID           string
 		BankAccount   string
 		Overdue       bool
-		VippsURL      template.URL
+		VippsURL      string
 	}{
 		Club:          clubName,
 		Member:        memberName,
@@ -416,7 +416,7 @@ func InvoiceReminderBody(_ /*locale*/, memberName, clubName string, invoiceNumbe
 		KID:           kid,
 		BankAccount:   bankAccount,
 		Overdue:       overdue,
-		VippsURL:      template.URL(vippsURL),
+		VippsURL:      vippsURL,
 	}
 	var buf bytes.Buffer
 	if err := reminderHTMLTpl.ExecuteTemplate(&buf, "base", data); err != nil {

@@ -436,8 +436,7 @@ func (h *PasskeyHandler) HandleLoginFinish(w http.ResponseWriter, r *http.Reques
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	secure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
-	middleware.SetSessionCookie(w, sessionID, secure)
+	middleware.SetSessionCookie(w, sessionID, cookieSecure(h.config))
 
 	// A user-verifying assertion proves possession + inherence — enough to also
 	// satisfy the step-up gate, so an admin lands signed in and stepped up.

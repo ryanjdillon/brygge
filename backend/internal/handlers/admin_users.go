@@ -1234,7 +1234,8 @@ func (h *AdminUsersHandler) HandleImportUsersCSV(w http.ResponseWriter, r *http.
 		return
 	}
 
-	if err := r.ParseMultipartForm(8 << 20); err != nil {
+	r.Body = http.MaxBytesReader(w, r.Body, 8<<20)
+	if err := r.ParseMultipartForm(8 << 20); err != nil { // #nosec G120 -- body capped by MaxBytesReader above
 		Error(w, http.StatusBadRequest, "invalid multipart form")
 		return
 	}

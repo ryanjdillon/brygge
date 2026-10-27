@@ -294,6 +294,19 @@ Or directly on the server: `nixos-rebuild switch --rollback`.
 
 Review a bump before merging: check the closure diff for major version changes in Postgres, Stalwart, Caddy and Dendrite. Deploy it like any other change.
 
+**If the bump changes glibc**, Postgres warns afterwards that each database "has a collation version mismatch". Text indexes were built in the old sort order and may misbehave until they're rebuilt. Plan a quiet moment after the deploy, take a snapshot (`systemctl start brygge-pre-deploy-backup`), then on the host:
+
+```bash
+for db in brygge dendrite postgres template1; do
+  sudo -u postgres psql -d "$db" -v ON_ERROR_STOP=1 \
+    -c "REINDEX DATABASE \"$db\";" \
+    -c "ALTER DATABASE \"$db\" REFRESH COLLATION VERSION;"
+done
+sudo -u postgres psql -Atc "select datname, datcollversion from pg_database order by 1"
+```
+
+The reindex locks each table briefly. The last query should show the new glibc version for every database except `template0`.
+
 ### Pre-deploy snapshot and restoring from it
 
 Rolling the system back does **not** roll back the database, because migrations are applied on activation. Before deploy-rs runs, the deploy script therefore:

@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
 
+	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/email"
 )
 
@@ -132,5 +133,25 @@ func TestGenerateToken(t *testing.T) {
 	}
 	if token1 == token2 {
 		t.Error("two generated tokens should not be equal")
+	}
+}
+
+func TestCookieSecure(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  *config.Config
+		want bool
+	}{
+		{"https origin", &config.Config{FrontendURL: "https://club.example"}, true},
+		{"http origin", &config.Config{FrontendURL: "http://localhost:5173"}, false},
+		{"empty origin", &config.Config{}, false},
+		{"nil config", nil, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := cookieSecure(tt.cfg); got != tt.want {
+				t.Errorf("cookieSecure() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }

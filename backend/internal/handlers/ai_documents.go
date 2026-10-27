@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -131,8 +133,12 @@ func (h *AIDocumentsHandler) HandleGenerateAgenda(w http.ResponseWriter, r *http
 	var body struct {
 		ExistingAgenda string `json:"existing_agenda"`
 	}
+	// The body is optional, so only an empty one (io.EOF) is accepted.
 	if r.Body != nil {
-		json.NewDecoder(r.Body).Decode(&body)
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil && !errors.Is(err, io.EOF) {
+			Error(w, http.StatusBadRequest, "invalid request body")
+			return
+		}
 	}
 
 	h.log.Info().
