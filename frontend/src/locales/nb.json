@@ -1108,8 +1108,6 @@
       "markAsRead": "Merk som lest",
       "markAsUnread": "Merk som ulest",
       "archive": "Arkiver",
-      "imagesOn": "Vis bilete",
-      "imagesOff": "Skjul bilete",
       "empty": {
         "mailboxes": "Du har ikkje tilgang til nokon delt innboks.",
         "threads": "Ingen meldingar.",
@@ -1135,7 +1133,9 @@
         "sending": "Sender…",
         "sent": "Svaret er sendt.",
         "cancel": "Avbryt"
-      }
+      },
+      "showImages": "Vis bilder",
+      "hideImages": "Skjul bilder"
     },
     "products": {
       "title": "Produkter",
@@ -1682,6 +1682,7 @@
         "receiptParsing": "Skanner kvittering med Claude…",
         "receiptParsedOk": "Kvittering skannet — gjennomgå de forhåndsutfylte feltene nedenfor",
         "receiptParseFailed": "Kunne ikke lese kvitteringen — fyll inn beløp og beskrivelse manuelt",
+        "receiptParseUnavailable": "Automatisk lesing av kvitteringer er ikke satt opp (ingen Anthropic API-nøkkel i Nettstedsinnstillinger). Filen er lagt ved; fyll inn beløp og beskrivelse manuelt.",
         "receiptUploading": "Laster opp kvittering…",
         "receiptUploadFailed": "Opplasting av kvittering feilet — bilaget er lagret, prøv opplastingen på nytt",
         "receiptUnknownVendor": "Ukjent leverandør"

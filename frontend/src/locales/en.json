@@ -1112,8 +1112,6 @@
       "markAsRead": "Mark as read",
       "markAsUnread": "Mark as unread",
       "archive": "Archive",
-      "imagesOn": "Images on",
-      "imagesOff": "Images off",
       "empty": {
         "mailboxes": "You don't have access to any shared mailbox.",
         "threads": "No messages.",
@@ -1139,7 +1137,9 @@
         "sending": "Sending…",
         "sent": "Reply sent.",
         "cancel": "Cancel"
-      }
+      },
+      "showImages": "Show images",
+      "hideImages": "Hide images"
     },
     "products": {
       "title": "Products",
@@ -1686,6 +1686,7 @@
         "receiptParsing": "Scanning receipt with Claude…",
         "receiptParsedOk": "Receipt scanned — please review the pre-filled fields below",
         "receiptParseFailed": "Could not read the receipt — please fill in the amount and description manually",
+        "receiptParseUnavailable": "Automatic receipt reading isn’t set up (no Anthropic API key in Site settings). The file is attached; fill in the amount and description manually.",
         "receiptUploading": "Uploading receipt…",
         "receiptUploadFailed": "Receipt upload failed — entry saved, please retry the upload",
         "receiptUnknownVendor": "Unknown vendor"

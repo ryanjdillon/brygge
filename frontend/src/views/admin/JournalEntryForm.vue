@@ -3,6 +3,7 @@ import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useFreshTotp } from '@/composables/useFreshTotp'
+import { ApiError } from '@/lib/errors'
 import {
   ArrowLeft,
   Plus,
@@ -41,7 +42,7 @@ const parseMutation = useParseReceipt()
 const receiptFile = ref<File | null>(null)
 const uploadError = ref('')
 const parsedReceipt = ref<ReceiptData | null>(null)
-const parseStatus = ref<'idle' | 'parsing' | 'ok' | 'failed'>('idle')
+const parseStatus = ref<'idle' | 'parsing' | 'ok' | 'failed' | 'unavailable'>('idle')
 
 function handleFileChange(e: Event) {
   const input = e.target as HTMLInputElement
@@ -65,8 +66,9 @@ function handleFileChange(e: Event) {
         entryDate.value = data.date
       }
     },
-    onError: () => {
-      parseStatus.value = 'failed'
+    onError: (err) => {
+      // 503 means no Anthropic key is configured, not a bad receipt.
+      parseStatus.value = err instanceof ApiError && err.status === 503 ? 'unavailable' : 'failed'
     },
   })
 }
@@ -297,6 +299,9 @@ const accountOptions = computed(() => [
       </div>
       <div v-else-if="parseStatus === 'failed'" class="mt-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
         {{ t('admin.accounting.journalForm.receiptParseFailed') }}
+      </div>
+      <div v-else-if="parseStatus === 'unavailable'" class="mt-2 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700">
+        {{ t('admin.accounting.journalForm.receiptParseUnavailable') }}
       </div>
       <p v-if="uploadError" class="mt-1 text-xs text-red-600">{{ uploadError }}</p>
       <p v-if="uploadMutation.isPending.value" class="mt-1 text-xs text-brand-600">{{ t('admin.accounting.journalForm.receiptUploading') }}</p>
