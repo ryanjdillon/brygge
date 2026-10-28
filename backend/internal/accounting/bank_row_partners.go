@@ -81,7 +81,7 @@ type partnerRow struct {
 	ToAccount       string
 	BankAccountCode string
 	// Eligible is false for rows that never get partners: booked,
-	// dismissed, refund-paired, provisional or a Vipps settlement payout.
+	// dismissed, refund-paired, provisional or a provider payout deposit.
 	Eligible bool
 }
 
@@ -275,12 +275,14 @@ func daysBetween(a, b time.Time) int {
 }
 
 // partnerEligibleSQL is the predicate for a row that can have partners,
-// over the bank row alias a.
+// over the bank row alias a. It leaves out Vipps settlement deposits; the
+// loaders drop Stripe payout deposits in Go (providerPayouts), since the
+// club's descriptor is a Go regular expression.
 func partnerEligibleSQL(a string) string {
 	return a + `.journal_entry_id IS NULL
 	AND ` + a + `.dismissed_at IS NULL
 	AND ` + a + `.refund_paired_with IS NULL
-	AND ` + a + `.description !~* 'Utb\.\s*[0-9]+\s+Vippsnr\s+[0-9]+'
+	AND NOT (` + vippsPayoutRowSQL(a) + `)
 	AND NOT COALESCE((` + provisionalRowSQL(a) + `), false)`
 }
 
@@ -324,6 +326,15 @@ func (s *Service) loadPartnerRows(ctx context.Context, q pgxQuerier, clubID stri
 	if anchors, err = scanPartnerRows(rows, true); err != nil {
 		return nil, nil, fmt.Errorf("scan anchor rows: %w", err)
 	}
+	payouts, err := loadProviderPayouts(ctx, q, clubID)
+	if err != nil {
+		return nil, nil, err
+	}
+	for i := range anchors {
+		if anchors[i].Eligible && payouts.stripeOnly(anchors[i].Description, anchors[i].Counterpart, anchors[i].Cents) {
+			anchors[i].Eligible = false
+		}
+	}
 	var from, to time.Time
 	for _, a := range anchors {
 		if !a.Eligible {
@@ -351,8 +362,14 @@ func (s *Service) loadPartnerRows(ctx context.Context, q pgxQuerier, clubID stri
 	if err != nil {
 		return nil, nil, fmt.Errorf("load partner pool: %w", err)
 	}
-	if pool, err = scanPartnerRows(rows, false); err != nil {
+	loaded, err := scanPartnerRows(rows, false)
+	if err != nil {
 		return nil, nil, fmt.Errorf("scan partner pool: %w", err)
+	}
+	for _, r := range loaded {
+		if !payouts.stripeOnly(r.Description, r.Counterpart, r.Cents) {
+			pool = append(pool, r)
+		}
 	}
 	return anchors, pool, nil
 }

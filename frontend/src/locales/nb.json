@@ -2000,7 +2000,9 @@
         "receivable_not_open": "Fakturaen er allerede betalt, kreditert eller annullert",
         "imported_no_opening_balance": "Importert faktura uten inngående balanse",
         "split_mismatch": "Ordren stemmer ikke med beløpet"
-      }
+      },
+      "stripePayoutSweepCounts": "Stripe-utbetalinger avstemt: {cleared} · Venter: {waiting} · Hoppet over: {skipped} · Feilet: {failed}",
+      "stripePayoutDeposit": "Bankinnbetaling {date}"
     },
     "pdfArchive": {
       "title": "PDF-arkiv",
@@ -2202,7 +2204,9 @@
         "conflictChoice": "Hva skal skje med navnet?",
         "conflictSkip": "Tildel uten å huske betaleren",
         "conflictOverride": "Husk betaleren for dette medlemmet likevel"
-      }
+      },
+      "stripeAutoClearing": "Stripe-utbetaling – avstemmes automatisk",
+      "stripeBookByHand": "Bokfør for hånd i hovedboka (debet bank, kredit 1580) og avvis raden som intern overføring."
     },
     "sidebarTitle": "Adminportal"
   },

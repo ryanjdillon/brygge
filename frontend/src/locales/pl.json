@@ -1107,7 +1107,9 @@
         "receivable_not_open": "Faktura jest już opłacona, skorygowana lub anulowana",
         "imported_no_opening_balance": "Zaimportowana faktura bez bilansu otwarcia",
         "split_mismatch": "Zamówienie nie zgadza się z kwotą"
-      }
+      },
+      "stripePayoutSweepCounts": "Wypłaty Stripe uzgodnione: {cleared} · Oczekujące: {waiting} · Pominięte: {skipped} · Nieudane: {failed}",
+      "stripePayoutDeposit": "Wpływ bankowy {date}"
     },
     "bankReconcile": {
       "filterAll": "All",
@@ -1236,7 +1238,9 @@
         "conflictChoice": "Co zrobić z nazwą?",
         "conflictSkip": "Przypisz bez zapamiętywania płatnika",
         "conflictOverride": "Mimo to zapamiętaj płatnika dla tego członka"
-      }
+      },
+      "stripeAutoClearing": "Wypłata Stripe – uzgadniana automatycznie",
+      "stripeBookByHand": "Zaksięguj ręcznie w księdze głównej (Wn bank, Ma 1580) i odrzuć wiersz jako przelew wewnętrzny."
     },
     "sidebarTitle": "Portal administratora",
     "inbox": {

@@ -19,7 +19,8 @@ import (
 //
 // A fee transaction (Stripe billing the club outside a charge) books
 // DR payment fee / CR stripe clearing. What stays on the clearing account
-// is what Stripe owes the club; the payout clears it (BRY-457).
+// is what Stripe owes the club; the payout clears it
+// (stripe_payout_clearing.go).
 //
 // Each row is booked in a transaction of its own that locks the row, then
 // the fakturas its order settles, and holds both until the entry is posted
@@ -99,60 +100,70 @@ func (s *Service) BookStripeBalance(ctx context.Context, clubID, actorID string)
 }
 
 // BookStripeBalanceReported is the booking pass other work runs at its end
-// (bank sync, bank import). It never fails that work: a failure is logged
-// and set as the result's Error. It does not wait for a running Stripe sync
-// (Busy) and returns nil when there is nothing to book or no acting user.
-func (s *Service) BookStripeBalanceReported(ctx context.Context, clubID, actorID string) *StripeBookResult {
+// (bank sync, bank import), followed by the payout sweep
+// (ClearStripePayouts) in the same hold of the club's slot. It never fails
+// that work: a failure is logged and set as the result's Error. It does not
+// wait for a running Stripe sync (Busy, and no sweep) and returns nil
+// results when there is nothing to book or clear, or no acting user.
+func (s *Service) BookStripeBalanceReported(ctx context.Context, clubID, actorID string) (*StripeBookResult, *StripePayoutSweepResult) {
 	if actorID == "" {
-		return nil
+		return nil, nil
 	}
 	release, ok := s.stripeSync.tryAcquire(clubID)
 	if !ok {
 		res := newStripeBookResult()
 		res.Busy = true
-		return res
+		return res, nil
 	}
 	defer release()
 	res, err := s.bookStripeBalance(ctx, clubID, actorID)
 	if err != nil {
 		s.log.Error().Err(err).Str("club_id", clubID).Msg("stripe booking failed")
 		res.Error = stripeBookFailedText
-		return res
 	}
-	if res.candidates == 0 {
-		return nil
+	// The sweep runs even after a failed booking pass: it re-checks every
+	// member itself, so a payout whose members did get booked still clears.
+	payouts := s.clearStripePayoutsReported(ctx, clubID, actorID)
+	if err == nil && res.candidates == 0 {
+		return nil, payouts
 	}
-	return res
+	return res, payouts
 }
 
-// TrySyncAndBookStripeBalance ingests the Stripe balance and then books
-// what is ready, in one hold of the club's Stripe slot. Like
-// TrySyncStripeBalance it returns ErrStripeSyncBusy at once while another
-// Stripe sync or booking runs. A failed ingest books nothing and is the
-// error; a booking pass that fails after a good ingest is logged and
-// reported in the booking result's Error, so the ingest is not lost.
-func (s *Service) TrySyncAndBookStripeBalance(ctx context.Context, src StripeBalanceSource, clubID, actorID string) (StripeSyncResult, *StripeBookResult, error) {
+// TrySyncAndBookStripeBalance ingests the Stripe balance, books what is
+// ready and clears the payouts that are ready, in one hold of the club's
+// Stripe slot. Like TrySyncStripeBalance it returns ErrStripeSyncBusy at
+// once while another Stripe sync or booking runs. A failed ingest books
+// nothing and is the error; a booking pass or sweep that fails after a
+// good ingest is logged and reported in its result's Error, so the ingest
+// is not lost.
+func (s *Service) TrySyncAndBookStripeBalance(ctx context.Context, src StripeBalanceSource, clubID, actorID string) (StripeSyncResult, *StripeBookResult, *StripePayoutSweepResult, error) {
 	if src == nil {
-		return newStripeSyncResult(), nil, errors.New("stripe client not configured")
+		return newStripeSyncResult(), nil, nil, errors.New("stripe client not configured")
 	}
 	if actorID == "" {
-		return newStripeSyncResult(), nil, errors.New("booking stripe transactions needs an acting user")
+		return newStripeSyncResult(), nil, nil, errors.New("booking stripe transactions needs an acting user")
 	}
 	release, ok := s.stripeSync.tryAcquire(clubID)
 	if !ok {
-		return newStripeSyncResult(), nil, ErrStripeSyncBusy
+		return newStripeSyncResult(), nil, nil, ErrStripeSyncBusy
 	}
 	defer release()
 	synced, err := s.syncStripeBalance(ctx, src, clubID)
 	if err != nil {
-		return synced, nil, err
+		return synced, nil, nil, err
 	}
 	booked, err := s.bookStripeBalance(ctx, clubID, actorID)
 	if err != nil {
 		s.log.Error().Err(err).Str("club_id", clubID).Msg("stripe booking failed")
 		booked.Error = stripeBookFailedText
 	}
-	return synced, booked, nil
+	payouts, err := s.clearStripePayouts(ctx, clubID, actorID)
+	if err != nil {
+		s.log.Error().Err(err).Str("club_id", clubID).Msg("stripe payout sweep failed")
+		payouts.Error = stripePayoutSweepFailedTxt
+	}
+	return synced, booked, payouts, nil
 }
 
 func (s *Service) bookStripeBalance(ctx context.Context, clubID, actorID string) (*StripeBookResult, error) {

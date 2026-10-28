@@ -132,7 +132,7 @@ open   closed   locked
 manual   bank_import   payment_sync   invoice_sync   vipps   invoice_resplit   opening_balance   stripe
 ```
 
-The `source` field tags how a journal entry was created. `invoice_resplit` (migration 000101, BRY-364) marks a revenue reclassification posted against an invoice's `invoice_sync` entry; `source_id` is the invoice id. `opening_balance` (000107, BRY-370) marks the cutover entry carrying balances brought over from the previous system; a posted one debiting 1500 is what lets a booked credit note settle an imported faktura. `stripe` (000116) marks entries booked from the Stripe balance: card charges and Stripe fees (`source_table = 'stripe_balance_transactions'`, `source_id` the row), and payout clearing (BRY-457). Filters in cash-flow / reconciliation logic depend on this (e.g. Vipps resync targets `source = 'vipps' AND status = 'draft'`).
+The `source` field tags how a journal entry was created. `invoice_resplit` (migration 000101, BRY-364) marks a revenue reclassification posted against an invoice's `invoice_sync` entry; `source_id` is the invoice id. `opening_balance` (000107, BRY-370) marks the cutover entry carrying balances brought over from the previous system; a posted one debiting 1500 is what lets a booked credit note settle an imported faktura. `stripe` (000116) marks entries booked from the Stripe balance: card charges and Stripe fees (`source_table = 'stripe_balance_transactions'`, `source_id` the row), and payout clearing (`source_table = 'bank_import_rows'`, `source_id` the deposit, as the Vipps payout entries do). Filters in cash-flow / reconciliation logic depend on this (e.g. Vipps resync targets `source = 'vipps' AND status = 'draft'`).
 
 ### `mva_eligibility` — `accounts.mva_eligible`, `journal_lines.mva_eligible`
 
@@ -244,7 +244,7 @@ Stripe's own `reporting_category` of the balance transaction. Stripe's finer `ty
 unbooked   booked   needs_review   dismissed
 ```
 
-Booking state, set by `accounting.SyncStripeBalance` and `accounting.BookStripeBalance`. `unbooked` rows are ready to book (a charge matched to its attempt, a fee, a payout); `needs_review` rows carry a `review_reason` (CHECK: never NULL while in review); `booked` rows have their posted journal entry (`BookStripeBalance` sets it in the same transaction as the entry); `dismissed` rows were set aside by a person (BRY-456). A re-sync reclassifies only `needs_review` rows held for an ingest reason and never touches the others. A row the booking pass held for review (the last three reasons below) is left to the booking pass, which retries it on every run.
+Booking state, set by `accounting.SyncStripeBalance` and `accounting.BookStripeBalance`. `unbooked` rows are ready to book (a charge matched to its attempt, a fee, a payout); `needs_review` rows carry a `review_reason` (CHECK: never NULL while in review); `booked` rows have their posted journal entry (`BookStripeBalance` sets it in the same transaction as the entry; a `payout` row gets its payout's clearing entry from `ClearStripePayouts`); `dismissed` rows were set aside by a person (BRY-456). A re-sync reclassifies only `needs_review` rows held for an ingest reason and never touches the others. A row the booking pass held for review (the last three reasons below) is left to the booking pass, which retries it on every run.
 
 `review_reason` (TEXT, no CHECK):
 
@@ -266,6 +266,25 @@ pending   in_transit   paid   failed   canceled
 ```
 
 Stripe's payout status, refreshed from `GET /v1/payouts/{id}`. It never moves back: `failed` and `canceled` are final, and `paid` only gives way to `failed`. A failed or cancelled payout releases its member transactions (`payout_id` → NULL) unless it was already cleared in the books.
+
+### Stripe payout sweep results (`accounting.StripePayoutSweepResult`, no column)
+
+`ClearStripePayouts` sorts each payout it looks at (and each Stripe deposit no payout matches) into one list, with a Norwegian `reason` shown as is:
+
+| List | Reason (shape) | Meaning |
+|---|---|---|
+| `cleared` | — | The deposit is booked DR bank / CR Stripe clearing; `journal_entry_id` is the entry |
+| `waiting` | `venter på bankinnbetalingen: <beløp> med Stripe-teksten, datert <fra>–<til>` | No deposit matches yet (not imported, or its text misses the descriptor) |
+| `waiting` | `Stripe har ikke listet innholdet i utbetalingen ennå – kjør Synk Stripe` | `members_listed_at` is not set |
+| `waiting` | `<n> kortbetaling(er) venter på bokføring`, `… til gjennomgang`, `<n> Stripe-gebyr(er) venter på bokføring`, `<n> refusjon(er) eller tvist(er) venter (bokføres ikke automatisk ennå)`, `<n> annen/andre Stripe-transaksjon(er) til gjennomgang` (joined by commas) | Members not yet `booked` or `dismissed` |
+| `waiting` | `ingen regnskapsperiode for <dato>`, `regnskapsperioden for <dato> er lukket` | The bank date's period is missing or not open; the sweep never creates one |
+| `skipped` | `manuell utbetaling – bokfør for hånd` | A manual payout; never cleared automatically |
+| `skipped` | `flere Stripe-utbetalinger passer – avstem manuelt`, `flere bankrader passer – avstem manuelt` | The match is not one to one |
+| `skipped` | `Stripe-transaksjonene i utbetalingen summerer til <x>, ikke <y> – avstem manuelt` | The stored members' `net_ore` does not add up to the payout |
+| `skipped` | `ingen Stripe-utbetaling med dette beløpet rundt denne datoen – kjør Synk Stripe` | A Stripe deposit (no `payout_id` in the item) no candidate payout matches |
+| `failed` | `kunne ikke bokføres – se loggen` | Posting failed; logged, retried by the next sweep |
+
+`error` is set when the sweep itself could not run. Tildel's `provider_payout_reason` uses the same texts, and `klar – avstemmes ved neste synk` for a payout the next sweep will clear; `provider_payout_by_hand` is set for the `skipped` cases. A skipped deposit is reported on every sweep until it is booked or dismissed; dismissing it silences the report.
 
 ### `broadcasts.status` (migration 000069)
 
@@ -324,7 +343,7 @@ Source: `backend/internal/accounting/sync.go`, `revenue_accounts.go` and `vippsr
 | `vippsFeeAccountCode` | 7700 | Bankgebyrer — default of `clubs.payment_fee_account`, which books fees for every provider |
 | `vippsClearingAccountCode` | 2900 | Annen kortsiktig gjeld (legacy — kept as a constant for report compatibility, but **no new lines route here**) |
 
-`clubs.stripe_clearing_account` defaults to **1580** Til gode betalingsformidler (Stripe), an asset in `DefaultKontoplan()` that migration 000114 seeded into every existing chart that lacked it. It holds card payments until Stripe pays them out: a charge debits it gross and credits it Stripe's fee, a fee transaction credits it, the payout clears it (BRY-457). `clubs.stripe_payout_descriptor` (000117, default `(?i)stripe`) is the Go regular expression that recognises a Stripe payout in the bank text (BRY-457).
+`clubs.stripe_clearing_account` defaults to **1580** Til gode betalingsformidler (Stripe), an asset in `DefaultKontoplan()` that migration 000114 seeded into every existing chart that lacked it. It holds card payments until Stripe pays them out: a charge debits it gross and credits it Stripe's fee, a fee transaction credits it, the payout clears it (`ClearStripePayouts`: DR bank / CR 1580). `clubs.stripe_payout_descriptor` (000117, default `(?i)stripe`) is the Go regular expression that recognises a Stripe payout in the bank text: matched against a deposit's description or counterpart, in Go, never in SQL.
 
 ### Price-item unit → i18n key
 

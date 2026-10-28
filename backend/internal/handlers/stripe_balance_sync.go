@@ -9,18 +9,20 @@ import (
 	"github.com/brygge-klubb/brygge/internal/middleware"
 )
 
-// stripeSyncResponse is the ingest result with the booking pass that
-// followed it.
+// stripeSyncResponse is the ingest result with the booking pass and the
+// payout sweep that followed it.
 type stripeSyncResponse struct {
 	accounting.StripeSyncResult
-	Booking *accounting.StripeBookResult `json:"booking"`
+	Booking *accounting.StripeBookResult        `json:"booking"`
+	Payouts *accounting.StripePayoutSweepResult `json:"payouts"`
 }
 
 // HandleStripeSync is POST /accounting/stripe/sync: it pulls the club's
 // Stripe balance transactions and payouts, then books the charges and fees
-// that are ready as the calling user (accounting.TrySyncAndBookStripeBalance).
-// A failed ingest is 502; a booking pass that fails after it is still 200,
-// with the failure in booking.error, and audited.
+// that are ready and clears the payouts that are ready, as the calling user
+// (accounting.TrySyncAndBookStripeBalance). A failed ingest is 502; a
+// booking pass or payout sweep that fails after it is still 200, with the
+// failure in booking.error or payouts.error, and audited.
 // While another Stripe sync or booking for the club runs (the nightly job,
 // a payout webhook, a bank sync's booking pass) it answers 409 rather than
 // queueing behind it.
@@ -36,7 +38,7 @@ func (h *AccountingHandler) HandleStripeSync(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	res, booked, err := h.svc.TrySyncAndBookStripeBalance(ctx, h.stripe, claims.ClubID, claims.UserID)
+	res, booked, payouts, err := h.svc.TrySyncAndBookStripeBalance(ctx, h.stripe, claims.ClubID, claims.UserID)
 	if errors.Is(err, accounting.ErrStripeSyncBusy) {
 		Error(w, http.StatusConflict, "A Stripe sync is already running; try again shortly")
 		return
@@ -70,9 +72,14 @@ func (h *AccountingHandler) HandleStripeSync(w http.ResponseWriter, r *http.Requ
 				"booking_deferred":     len(booked.Deferred),
 				"booking_errors":       len(booked.Errors),
 				"booking_failed":       booked.Error != "",
+				"payouts_cleared":      len(payouts.Cleared),
+				"payouts_waiting":      len(payouts.Waiting),
+				"payouts_skipped":      len(payouts.Skipped),
+				"payouts_failed":       len(payouts.Failed),
+				"payout_sweep_failed":  payouts.Error != "",
 			})
 	}
-	JSON(w, http.StatusOK, stripeSyncResponse{StripeSyncResult: res, Booking: booked})
+	JSON(w, http.StatusOK, stripeSyncResponse{StripeSyncResult: res, Booking: booked, Payouts: payouts})
 }
 
 // HandleListStripeReview is GET /accounting/stripe/review: the club's

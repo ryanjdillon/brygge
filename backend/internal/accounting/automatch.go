@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 )
 
 // MappingRule represents an auto-categorization rule from account_mapping_rules.
@@ -58,14 +59,14 @@ func (s *Service) ListRules(ctx context.Context, clubID string) ([]MappingRule, 
 
 // CreateRuleInput is the input for creating a mapping rule.
 type CreateRuleInput struct {
-	Name            string
-	Priority        int
-	MatchField      string
-	MatchValue      string
-	MatchOperator   string
+	Name              string
+	Priority          int
+	MatchField        string
+	MatchValue        string
+	MatchOperator     string
 	DebitAccountCode  string
 	CreditAccountCode string
-	MVAEligible     MVAEligibility
+	MVAEligible       MVAEligibility
 }
 
 // CreateRule adds a new auto-categorization rule.
@@ -146,8 +147,15 @@ func (s *Service) DeleteRule(ctx context.Context, ruleID string) error {
 
 // AutoMatchImport runs all active rules against unmatched bank import rows.
 // Matched rows get draft journal entries (not auto-posted — treasurer reviews).
+// A provider payout deposit is never matched: a rule on its text ("Vipps",
+// "Stripe") would book money the provider's postings already put on a
+// clearing account a second time.
 func (s *Service) AutoMatchImport(ctx context.Context, clubID, importID, periodID, matchedBy string) (int, error) {
 	rules, err := s.ListRules(ctx, clubID)
+	if err != nil {
+		return 0, err
+	}
+	payouts, err := loadProviderPayouts(ctx, s.db, clubID)
 	if err != nil {
 		return 0, err
 	}
@@ -160,39 +168,8 @@ func (s *Service) AutoMatchImport(ctx context.Context, clubID, importID, periodI
 		}
 	}
 
-	// Get unmatched rows
-	rows, err := s.db.Query(ctx,
-		`SELECT bir.id, bir.row_date, bir.description, bir.amount, bir.counterpart, bir.kid_number
-		 FROM bank_import_rows bir
-		 JOIN bank_imports bi ON bi.id = bir.bank_import_id
-		 WHERE bi.id = $1 AND bi.club_id = $2 AND bir.journal_entry_id IS NULL
-		 ORDER BY bir.row_date`,
-		importID, clubID,
-	)
+	unmatched, err := s.loadAutoMatchRows(ctx, clubID, importID, payouts)
 	if err != nil {
-		return 0, fmt.Errorf("querying unmatched rows: %w", err)
-	}
-	defer rows.Close()
-
-	type unmatchedRow struct {
-		id          string
-		date        string
-		description string
-		amount      float64
-		counterpart string
-		kid         string
-	}
-
-	var unmatched []unmatchedRow
-	for rows.Next() {
-		var r unmatchedRow
-		if err := rows.Scan(&r.id, &r.date, &r.description, &r.amount, &r.counterpart, &r.kid); err != nil {
-			return 0, fmt.Errorf("scanning row: %w", err)
-		}
-		r.date = r.date[:10] // trim time portion
-		unmatched = append(unmatched, r)
-	}
-	if err := rows.Err(); err != nil {
 		return 0, err
 	}
 
@@ -254,6 +231,47 @@ func (s *Service) AutoMatchImport(ctx context.Context, clubID, importID, periodI
 	}
 
 	return matched, nil
+}
+
+// autoMatchRow is an unbooked bank row as the mapping rules see it.
+type autoMatchRow struct {
+	id          string
+	date        string
+	description string
+	amount      float64
+	counterpart string
+	kid         string
+}
+
+// loadAutoMatchRows lists the import's unbooked rows, leaving out provider
+// payout deposits.
+func (s *Service) loadAutoMatchRows(ctx context.Context, clubID, importID string, payouts providerPayouts) ([]autoMatchRow, error) {
+	rows, err := s.db.Query(ctx,
+		`SELECT bir.id, bir.row_date, bir.description, bir.amount, bir.counterpart, bir.kid_number
+		 FROM bank_import_rows bir
+		 JOIN bank_imports bi ON bi.id = bir.bank_import_id
+		 WHERE bi.id = $1 AND bi.club_id = $2 AND bir.journal_entry_id IS NULL
+		 ORDER BY bir.row_date`,
+		importID, clubID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("querying unmatched rows: %w", err)
+	}
+	defer rows.Close()
+	var out []autoMatchRow
+	for rows.Next() {
+		var r autoMatchRow
+		var date time.Time
+		if err := rows.Scan(&r.id, &date, &r.description, &r.amount, &r.counterpart, &r.kid); err != nil {
+			return nil, fmt.Errorf("scanning row: %w", err)
+		}
+		if payouts.is(r.description, r.counterpart, toCents(r.amount)) {
+			continue
+		}
+		r.date = date.Format("2006-01-02")
+		out = append(out, r)
+	}
+	return out, rows.Err()
 }
 
 // ruleMatches evaluates a single rule against a bank row's fields.

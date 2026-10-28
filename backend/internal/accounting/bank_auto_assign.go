@@ -206,11 +206,15 @@ func (d bankDepositDecision) item(entryID string) AutoAssignItem {
 }
 
 // loadBankDeposits loads the club's incoming rows the rule may book: unbooked,
-// undismissed, not refund-paired, not a Vipps payout, not provisional
-// (partnerEligibleSQL), without one of our KIDs and not a bounced transfer.
-// Each carries the status of the fiscal period it would post to, or "" when
-// none exists.
+// undismissed, not refund-paired, not a provider payout deposit, not
+// provisional (partnerEligibleSQL and providerPayouts), without one of our
+// KIDs and not a bounced transfer. Each carries the status of the fiscal
+// period it would post to, or "" when none exists.
 func (s *Service) loadBankDeposits(ctx context.Context, clubID string, opts BankAutoAssignOpts) ([]bankDeposit, error) {
+	payouts, err := loadProviderPayouts(ctx, s.db, clubID)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := s.db.Query(ctx,
 		`SELECT bir.id, bir.row_date, round(bir.amount * 100)::bigint,
 		        COALESCE(bir.kid_number, ''), COALESCE(bir.reference, ''), COALESCE(bir.description, ''),
@@ -244,6 +248,9 @@ func (s *Service) loadBankDeposits(ctx context.Context, clubID string, opts Bank
 		// A row carrying one of our KIDs belongs to the KID cascade, and a
 		// bounced transfer is money that never arrived.
 		if isBryggeKID(strings.TrimSpace(r.kid)) || IsRejectedKIDDescription(r.desc) {
+			continue
+		}
+		if payouts.stripeOnly(r.desc, r.counterpart, r.cents) {
 			continue
 		}
 		out = append(out, r)

@@ -57,6 +57,18 @@ type BankRowSummary struct {
 	// renders it as a quiet auto-clearing item rather than an unassignable
 	// "Ingen fakturaforslag" deposit.
 	VippsPayout bool `json:"vipps_payout"`
+	// ProviderPayout names the provider whose payout the row carries
+	// ("vipps" | "stripe"), or null (providerPayouts). Such a row is booked
+	// only by that provider's payout clearing.
+	ProviderPayout *string `json:"provider_payout"`
+	// ProviderPayoutReason says, for a Stripe payout deposit, what its
+	// clearing waits for or why it is left to a person, as the next payout
+	// sweep would decide it (Norwegian, from the server).
+	ProviderPayoutReason string `json:"provider_payout_reason,omitempty"`
+	// ProviderPayoutByHand is true for a Stripe payout deposit no sweep will
+	// clear (a manual payout, an ambiguous match, no payout): a person books
+	// it in the ledger and dismisses the row.
+	ProviderPayoutByHand bool `json:"provider_payout_by_hand,omitempty"`
 	// Provisional is true for an in-flight row from a statement exported
 	// while the transfer was under way (provisionalRowSQL). It is dismissed
 	// on its own once a later export brings the settled row.
@@ -170,7 +182,7 @@ func (s *Service) ListUnmatchedBankRows(
 		             AND i.payment_id IS NULL
 		             AND ABS(i.total_amount - bir.amount) < 0.005
 		        ) ELSE 0 END) AS suggestion_count,
-		       (bir.description ~* 'Utb\.\s*[0-9]+\s+Vippsnr\s+[0-9]+') AS vipps_payout,
+		       (` + vippsPayoutRowSQL("bir") + `) AS vipps_payout,
 		       (` + provisionalRowSQL("bir") + `) AS provisional
 		  FROM bank_import_rows bir
 		  JOIN bank_imports bi ON bi.id = bir.bank_import_id
@@ -200,6 +212,10 @@ func (s *Service) ListUnmatchedBankRows(
 	}
 	rows.Close()
 
+	if err := s.markProviderPayouts(ctx, clubID, out); err != nil {
+		return nil, err
+	}
+
 	ids := make([]string, 0, len(out))
 	for _, r := range out {
 		if r.DismissedAt == nil {
@@ -216,6 +232,42 @@ func (s *Service) ListUnmatchedBankRows(
 		}
 	}
 	return out, nil
+}
+
+// markProviderPayouts sets ProviderPayout on the listed rows and, for the
+// Stripe payout deposits among them, the reason the payout sweep would give.
+func (s *Service) markProviderPayouts(ctx context.Context, clubID string, rows []BankRowSummary) error {
+	payouts, err := loadProviderPayouts(ctx, s.db, clubID)
+	if err != nil {
+		return err
+	}
+	anyStripe := false
+	for i := range rows {
+		r := &rows[i]
+		kind := payouts.kind(r.Description, r.Counterpart, toCents(r.Amount))
+		if r.VippsPayout {
+			kind = ProviderPayoutVipps
+		}
+		if kind == "" {
+			continue
+		}
+		r.ProviderPayout = &kind
+		anyStripe = anyStripe || (kind == ProviderPayoutStripe && r.DismissedAt == nil)
+	}
+	if !anyStripe {
+		return nil
+	}
+	reasons, err := s.stripePayoutRowReasons(ctx, clubID, payouts)
+	if err != nil {
+		return fmt.Errorf("stripe payout reasons: %w", err)
+	}
+	for i := range rows {
+		if rows[i].ProviderPayout != nil && *rows[i].ProviderPayout == ProviderPayoutStripe {
+			st := reasons[rows[i].ID]
+			rows[i].ProviderPayoutReason, rows[i].ProviderPayoutByHand = st.reason, st.byHand
+		}
+	}
+	return nil
 }
 
 // CountUnmatchedBankRows backs the bubble badge. year=0 counts all years.
@@ -381,10 +433,15 @@ func (s *Service) BankRowSuggestionsFor(
 
 	// Account suggestions: outgoing rows get expense accounts;
 	// incoming rows can ALSO show revenue suggestions as a secondary
-	// "or assign to category" path when invoice suggestions miss. A Vipps
-	// settlement payout is the sum of many charges, so its amount fitting a
-	// price item is a coincidence: it gets no price_item pass.
-	payout := VippsSettlementPattern.MatchString(rowDesc)
+	// "or assign to category" path when invoice suggestions miss. A provider
+	// payout (Vipps settlement, Stripe payout) is the sum of many charges, so
+	// its amount fitting a price item is a coincidence: it gets no
+	// price_item pass.
+	payouts, err := loadProviderPayouts(ctx, s.db, clubID)
+	if err != nil {
+		return nil, err
+	}
+	payout := payouts.is(rowDesc, counterpart, toCents(rowAmount))
 	accs, err := s.rankAccountSuggestions(ctx, clubID, rowAmount, rowDesc, counterpart, !payout)
 	if err != nil {
 		return nil, err

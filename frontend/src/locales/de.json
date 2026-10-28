@@ -1133,7 +1133,9 @@
         "receivable_not_open": "Die Rechnung ist bereits bezahlt, gutgeschrieben oder storniert",
         "imported_no_opening_balance": "Importierte Rechnung ohne Eröffnungsbilanz",
         "split_mismatch": "Die Bestellung passt nicht zum Betrag"
-      }
+      },
+      "stripePayoutSweepCounts": "Stripe-Auszahlungen abgeglichen: {cleared} · Wartend: {waiting} · Übersprungen: {skipped} · Fehlgeschlagen: {failed}",
+      "stripePayoutDeposit": "Bankeingang {date}"
     },
     "bankReconcile": {
       "filterAll": "All",
@@ -1265,7 +1267,9 @@
         "conflictChoice": "Was soll mit dem Namen geschehen?",
         "conflictSkip": "Zuweisen, ohne den Zahler zu merken",
         "conflictOverride": "Zahler trotzdem für dieses Mitglied merken"
-      }
+      },
+      "stripeAutoClearing": "Stripe-Auszahlung – wird automatisch abgeglichen",
+      "stripeBookByHand": "Manuell im Hauptbuch buchen (Soll Bank, Haben 1580) und die Zeile als interne Umbuchung verwerfen."
     },
     "sidebarTitle": "Admin-Portal",
     "inbox": {

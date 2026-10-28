@@ -506,6 +506,11 @@ const groupAccountSections = computed(() => {
     .filter((sec) => sec.accounts.length > 0)
 })
 
+// An undismissed Stripe payout deposit is booked only by the payout sweep.
+function isStripePayout(row: BankRowSummary): boolean {
+  return row.provider_payout === 'stripe' && !row.dismissed_at
+}
+
 // ── Dismiss reason modal ─────────────────────────────────────
 const dismissOpen = ref(false)
 const dismissRowId = ref<string | null>(null)
@@ -514,7 +519,8 @@ const dismissReason = ref<DismissReason | null>(null)
 function openDismiss(row: BankRowSummary) {
   activeSource.value = 'bank'
   dismissRowId.value = row.id
-  if (row.likely_duplicate_of_matched) dismissReason.value = 'duplicate'
+  if (isStripePayout(row)) dismissReason.value = 'internal_transfer'
+  else if (row.likely_duplicate_of_matched) dismissReason.value = 'duplicate'
   else if (row.possible_double_payment) dismissReason.value = 'double_payment'
   else dismissReason.value = null
   dismissOpen.value = true
@@ -886,14 +892,14 @@ async function doUnassign(rowId: string) {
           <div class="flex items-start justify-between gap-4">
             <div class="flex items-start gap-3">
               <input
-                v-if="!row.dismissed_at"
+                v-if="!row.dismissed_at && !isStripePayout(row)"
                 type="checkbox"
                 :checked="selectedIds.has(row.id)"
                 class="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300 text-brand-600"
                 @change="toggleSelect(row.id)"
               />
               <component
-                v-else
+                v-else-if="row.dismissed_at"
                 :is="row.amount >= 0 ? ArrowDownLeft : ArrowUpRight"
                 :class="row.amount >= 0 ? 'text-emerald-600' : 'text-gray-500'"
                 class="mt-0.5 h-5 w-5 shrink-0"
@@ -960,6 +966,36 @@ async function doUnassign(rowId: string) {
               <span v-if="payoutRemaining[row.id]" class="text-[10px] text-amber-700">
                 {{ t('admin.bankReconcile.vippsChargesRemaining', { count: payoutRemaining[row.id] }) }}
               </span>
+            </div>
+            <!-- Stripe payout deposit: booked only by the payout sweep, so no
+                 faktura or account suggestions (a faktura assign would credit
+                 1500 a second time and the payout would never clear). One no
+                 sweep will clear is booked by hand in the ledger (DR bank /
+                 CR 1580) and dismissed here as an internal transfer. -->
+            <div
+              v-else-if="isStripePayout(row)"
+              class="flex max-w-xs flex-col items-end gap-1 text-right"
+              data-testid="bank-row-stripe-payout"
+            >
+              <span class="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700">
+                {{ t('admin.bankReconcile.stripeAutoClearing') }}
+              </span>
+              <span v-if="row.provider_payout_reason" class="text-[10px] text-amber-700" data-testid="bank-row-stripe-payout-reason">
+                {{ row.provider_payout_reason }}
+              </span>
+              <template v-if="row.provider_payout_by_hand">
+                <span class="text-[10px] text-gray-600" data-testid="bank-row-stripe-payout-by-hand">
+                  {{ t('admin.bankReconcile.stripeBookByHand') }}
+                </span>
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-white px-2.5 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-50"
+                  @click="openDismiss(row)"
+                >
+                  <Ban class="h-3 w-3" />
+                  {{ t('admin.bankReconcile.dismiss') }}
+                </button>
+              </template>
             </div>
             <button
               v-else

@@ -1132,7 +1132,9 @@
         "receivable_not_open": "La facture est déjà payée, créditée ou annulée",
         "imported_no_opening_balance": "Facture importée sans solde d'ouverture",
         "split_mismatch": "La commande ne correspond pas au montant"
-      }
+      },
+      "stripePayoutSweepCounts": "Versements Stripe rapprochés : {cleared} · En attente : {waiting} · Ignorés : {skipped} · Échecs : {failed}",
+      "stripePayoutDeposit": "Dépôt bancaire du {date}"
     },
     "bankReconcile": {
       "filterAll": "All",
@@ -1264,7 +1266,9 @@
         "conflictChoice": "Que faire du nom ?",
         "conflictSkip": "Attribuer sans mémoriser le payeur",
         "conflictOverride": "Mémoriser quand même le payeur pour ce membre"
-      }
+      },
+      "stripeAutoClearing": "Versement Stripe – rapproché automatiquement",
+      "stripeBookByHand": "Comptabilisez-le à la main dans le grand livre (débit banque, crédit 1580) et écartez la ligne comme virement interne."
     },
     "sidebarTitle": "Portail admin",
     "inbox": {

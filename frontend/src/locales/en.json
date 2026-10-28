@@ -2004,7 +2004,9 @@
         "receivable_not_open": "The faktura is already paid, credited or voided",
         "imported_no_opening_balance": "Imported faktura without an opening balance",
         "split_mismatch": "The order does not match the amount"
-      }
+      },
+      "stripePayoutSweepCounts": "Stripe payouts cleared: {cleared} · Waiting: {waiting} · Skipped: {skipped} · Failed: {failed}",
+      "stripePayoutDeposit": "Bank deposit {date}"
     },
     "pdfArchive": {
       "title": "PDF archive",
@@ -2206,7 +2208,9 @@
         "conflictChoice": "What should happen to the name?",
         "conflictSkip": "Assign without remembering the payer",
         "conflictOverride": "Remember the payer for this member anyway"
-      }
+      },
+      "stripeAutoClearing": "Stripe payout – clears automatically",
+      "stripeBookByHand": "Book it by hand in the ledger (debit bank, credit 1580) and dismiss the row as an internal transfer."
     },
     "sidebarTitle": "Admin portal"
   },

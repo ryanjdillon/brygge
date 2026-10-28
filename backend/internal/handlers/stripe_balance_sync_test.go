@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
@@ -90,6 +91,9 @@ func TestStripeSyncGatedAndAudited(t *testing.T) {
 	if res.Booking == nil || res.Booking.FeesBooked != 1 || res.Booking.ChargesBooked != 0 || len(res.Booking.Errors) != 0 {
 		t.Errorf("booking = %+v, want the fee booked", res.Booking)
 	}
+	if res.Payouts == nil {
+		t.Error("response has no payouts sweep")
+	}
 	got := env.audit(audit.ActionAccountingStripeSynced)
 	if len(got) != 1 || got[0]["fetched"] != float64(1) || got[0]["inserted"] != float64(1) ||
 		got[0]["fees_booked"] != float64(1) || got[0]["charges_booked"] != float64(0) {
@@ -116,6 +120,58 @@ func TestStripeSyncGatedAndAudited(t *testing.T) {
 	}
 	if journal != 1 {
 		t.Errorf("after a re-run: %d entries, want 1", journal)
+	}
+}
+
+// The sync clears a payout whose members it just booked against its bank
+// deposit, reports it in payouts and audits the count.
+func TestStripeSyncClearsPayout(t *testing.T) {
+	var h *AccountingHandler
+	env := newAliasTestEnv(t, func(r chi.Router, svc *accounting.Service, as *audit.Service) {
+		h = NewAccountingHandler(svc, as, nil, nil, nil, zerolog.Nop())
+		r.Route("/open", func(r chi.Router) { h.MountLedgerRoutes(r) })
+	})
+	// A fee Stripe returned (+3 kr), paid out by po_test_2 on 2026-09-24.
+	const fee = `{"id":"txn_test_fee_back","reporting_category":"fee","amount":300,"fee":0,"net":300,
+		"currency":"nok","created":1790000000,"source":null}`
+	const payoutTxn = `{"id":"txn_test_po2","reporting_category":"payout","amount":-300,"fee":0,"net":-300,
+		"currency":"nok","created":1790000100,"source":{"id":"po_test_2","object":"payout","status":"paid","automatic":true}}`
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /v1/balance_transactions", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("payout") == "po_test_2" {
+			_, _ = w.Write([]byte(`{"has_more":false,"data":[` + payoutTxn + `,` + fee + `]}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"has_more":false,"data":[` + payoutTxn + `,` + fee + `]}`))
+	})
+	mux.HandleFunc("GET /v1/payouts/po_test_2", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"id":"po_test_2","amount":300,"currency":"nok","arrival_date":1790208000,
+			"status":"paid","automatic":true,"statement_descriptor":"SYNTHETIC CLUB"}`))
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	h.SetStripe(stripe.New(srv.URL, stripeTestKey, zerolog.Nop()))
+	row := env.club.NewBankRow(t, env.club.NewBankImport(t), fin.BankRowOpts{
+		Date: time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC), Cents: 300, Description: "STRIPE PAYOUT"})
+
+	rec := env.serve([]string{"treasurer"}, http.MethodPost, "/open/stripe/sync", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST: %d %s", rec.Code, rec.Body)
+	}
+	var res stripeSyncResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &res); err != nil {
+		t.Fatal(err)
+	}
+	if res.Booking == nil || res.Booking.FeesBooked != 1 {
+		t.Errorf("booking = %+v, want the fee booked", res.Booking)
+	}
+	if res.Payouts == nil || len(res.Payouts.Cleared) != 1 || res.Payouts.Cleared[0].PayoutID != "po_test_2" ||
+		res.Payouts.Cleared[0].BankRowID != row {
+		t.Fatalf("payouts = %+v, want po_test_2 cleared against the deposit", res.Payouts)
+	}
+	got := env.audit(audit.ActionAccountingStripeSynced)
+	if len(got) != 1 || got[0]["payouts_cleared"] != float64(1) || got[0]["payout_sweep_failed"] != false {
+		t.Errorf("audit = %v, want the cleared payout counted", got)
 	}
 }
 

@@ -65,6 +65,8 @@ export interface BankImportResult {
   provisional_rows?: number
   // Stripe charges and fees booked after the import; absent when none waited.
   stripe_booking?: StripeBookResult | null
+  // The Stripe payout sweep after that booking; absent when there was nothing to look at.
+  stripe_payouts?: StripePayoutSweepResult | null
 }
 
 export interface ReferenceMismatch {
@@ -385,6 +387,8 @@ export interface BankSyncResult {
   auto_assign?: AutoAssignResult | null
   // Stripe charges and fees booked by the last pass; absent when none waited.
   stripe_booking?: StripeBookResult | null
+  // The Stripe payout sweep after that pass; absent when there was nothing to look at.
+  stripe_payouts?: StripePayoutSweepResult | null
 }
 
 export async function runBankSync(): Promise<BankSyncResult> {
@@ -419,6 +423,28 @@ export interface StripeBookResult {
   error?: string
 }
 
+// One Stripe payout (or a Stripe deposit no payout matches, without
+// payout_id) the payout sweep looked at.
+export interface StripePayoutSweepItem {
+  payout_id?: string
+  amount: number
+  arrival_date?: string
+  bank_row_id?: string
+  bank_date?: string
+  journal_entry_id?: string
+  // Server-provided text: what it waits for, or why it is left to a person.
+  reason?: string
+}
+
+// What the Stripe payout sweep cleared, and why the rest stays open.
+export interface StripePayoutSweepResult {
+  cleared: StripePayoutSweepItem[]
+  waiting: StripePayoutSweepItem[]
+  skipped: StripePayoutSweepItem[]
+  failed: StripePayoutSweepItem[]
+  error?: string
+}
+
 export interface StripeSyncResult {
   fetched: number
   inserted: number
@@ -428,9 +454,11 @@ export interface StripeSyncResult {
   members_linked: number
   errors?: string[] | null
   booking: StripeBookResult | null
+  payouts: StripePayoutSweepResult | null
 }
 
-// Ingests the Stripe balance and books what is ready. Behind fresh TOTP.
+// Ingests the Stripe balance, books what is ready and clears the payouts
+// that are ready. Behind fresh TOTP.
 export async function runStripeSync(): Promise<StripeSyncResult> {
   return fetchJSON<StripeSyncResult>(`${BASE}/stripe/sync`, { method: 'POST' })
 }

@@ -812,6 +812,9 @@ func (s *Service) unassignBankRow( //nolint:gocognit,cyclop // reverses each pos
 			return "", "", nil, fmt.Errorf("delete draft bilag: %w", err)
 		}
 	}
+	if err := releaseStripePayoutTx(ctx, tx, clubID, entryIDs); err != nil {
+		return "", "", nil, err
+	}
 	if priorInvoiceID != "" {
 		var paymentID *string
 		if err := tx.QueryRow(ctx,
@@ -839,6 +842,31 @@ func (s *Service) unassignBankRow( //nolint:gocognit,cyclop // reverses each pos
 		return "", "", nil, fmt.Errorf("commit: %w", err)
 	}
 	return priorJournalID, priorInvoiceID, siblings, nil
+}
+
+// releaseStripePayoutTx undoes a Stripe payout clearing whose entry the
+// unassign voided: the payout loses its deposit and entry, and its own
+// payout balance row is unbooked again, so the next sweep clears it afresh
+// (or reports why not). Without this the payout would look cleared for ever
+// and its deposit would come back to Tildel as a Stripe deposit no payout
+// explains.
+func releaseStripePayoutTx(ctx context.Context, tx pgx.Tx, clubID string, entryIDs []string) error {
+	if len(entryIDs) == 0 {
+		return nil
+	}
+	if _, err := tx.Exec(ctx,
+		`UPDATE stripe_payouts SET bank_row_id = NULL, journal_entry_id = NULL, updated_at = now()
+		  WHERE club_id = $1 AND journal_entry_id = ANY($2::uuid[])`,
+		clubID, entryIDs); err != nil {
+		return fmt.Errorf("release stripe payout: %w", err)
+	}
+	if _, err := tx.Exec(ctx,
+		`UPDATE stripe_balance_transactions SET status = 'unbooked', journal_entry_id = NULL, updated_at = now()
+		  WHERE club_id = $1 AND reporting_category = 'payout' AND journal_entry_id = ANY($2::uuid[])`,
+		clubID, entryIDs); err != nil {
+		return fmt.Errorf("release stripe payout transaction: %w", err)
+	}
+	return nil
 }
 
 // otherRowIDs collects the row ids a query returned, except self.

@@ -1133,7 +1133,9 @@
         "receivable_not_open": "De factuur is al betaald, gecrediteerd of geannuleerd",
         "imported_no_opening_balance": "Geïmporteerde factuur zonder openingsbalans",
         "split_mismatch": "De bestelling klopt niet met het bedrag"
-      }
+      },
+      "stripePayoutSweepCounts": "Stripe-uitbetalingen afgestemd: {cleared} · Wachtend: {waiting} · Overgeslagen: {skipped} · Mislukt: {failed}",
+      "stripePayoutDeposit": "Bankbijschrijving {date}"
     },
     "bankReconcile": {
       "filterAll": "All",
@@ -1265,7 +1267,9 @@
         "conflictChoice": "Wat moet er met de naam gebeuren?",
         "conflictSkip": "Toewijzen zonder de betaler te onthouden",
         "conflictOverride": "De betaler toch voor dit lid onthouden"
-      }
+      },
+      "stripeAutoClearing": "Stripe-uitbetaling – wordt automatisch afgestemd",
+      "stripeBookByHand": "Boek het handmatig in het grootboek (debet bank, credit 1580) en wijs de regel af als interne overboeking."
     },
     "sidebarTitle": "Beheerportaal",
     "inbox": {

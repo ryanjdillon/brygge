@@ -377,7 +377,9 @@ in `backend/migrations/` for the source of truth. The high-level shape:
   (default `(?i)stripe`) is the regular expression that recognises a Stripe
   payout in the bank text. 000116 adds `stripe` to `transaction_source` in a
   file of its own. Written by `accounting.SyncStripeBalance`; booked (status,
-  `journal_entry_id`) by `accounting.BookStripeBalance`; see
+  `journal_entry_id`) by `accounting.BookStripeBalance`; a payout's
+  `bank_row_id` / `journal_entry_id` (and its own `payout` row) set by
+  `accounting.ClearStripePayouts`; see
   [backend/internal/accounting/README.md](../../backend/internal/accounting/README.md#the-stripe-balance-pipeline).
 - `invoice_pdf_archive` (migration 000050) — preserves prior PDF bytes when
   `invoices.pdf_data` is regenerated, so Norwegian bokføringsloven §13's

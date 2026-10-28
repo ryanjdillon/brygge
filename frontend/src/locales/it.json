@@ -1133,7 +1133,9 @@
         "receivable_not_open": "La fattura è già pagata, accreditata o annullata",
         "imported_no_opening_balance": "Fattura importata senza saldo di apertura",
         "split_mismatch": "L'ordine non corrisponde all'importo"
-      }
+      },
+      "stripePayoutSweepCounts": "Pagamenti Stripe riconciliati: {cleared} · In attesa: {waiting} · Saltati: {skipped} · Non riusciti: {failed}",
+      "stripePayoutDeposit": "Accredito bancario del {date}"
     },
     "bankReconcile": {
       "filterAll": "All",
@@ -1265,7 +1267,9 @@
         "conflictChoice": "Cosa fare con il nome?",
         "conflictSkip": "Assegna senza ricordare il pagatore",
         "conflictOverride": "Ricorda comunque il pagatore per questo socio"
-      }
+      },
+      "stripeAutoClearing": "Pagamento Stripe – riconciliato automaticamente",
+      "stripeBookByHand": "Registralo a mano nel libro mastro (dare banca, avere 1580) e scarta la riga come giroconto interno."
     },
     "sidebarTitle": "Portale admin",
     "inbox": {

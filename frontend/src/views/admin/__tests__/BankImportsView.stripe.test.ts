@@ -37,6 +37,7 @@ const booked = {
   payouts_linked: 0,
   members_linked: 0,
   booking: { charges_booked: 1, fees_booked: 1, needs_review: {}, deferred: [] },
+  payouts: { cleared: [{ payout_id: 'po_test_1', amount: 115 }], waiting: [], skipped: [], failed: [] },
 }
 
 describe('BankImportsView Stripe sync', () => {
@@ -55,6 +56,7 @@ describe('BankImportsView Stripe sync', () => {
     const panel = wrapper.find('[data-testid="stripe-sync-result"]')
     expect(panel.text()).toContain('admin.bankImports.stripeSyncResult')
     expect(panel.find('[data-testid="stripe-book-summary"]').exists()).toBe(true)
+    expect(panel.find('[data-testid="stripe-payout-sweep-summary"]').exists()).toBe(true)
   })
 
   it('does not sync when the step-up is cancelled', async () => {

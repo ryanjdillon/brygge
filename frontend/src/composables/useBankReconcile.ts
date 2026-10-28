@@ -21,6 +21,16 @@ export interface BankRowSummary {
   // per-charge model its individual charges are reconciled one by one and this
   // row auto-clears — so it renders as a quiet auto-clearing item.
   vipps_payout: boolean
+  // Whose payout the row carries: a Vipps settlement or a Stripe payout
+  // (the club's payout descriptor). Such a row is booked only by that
+  // provider's payout clearing.
+  provider_payout?: ProviderPayout | null
+  // For a Stripe payout: what its clearing waits for, or why it is left to
+  // a person (server-provided text).
+  provider_payout_reason?: string
+  // A Stripe payout no sweep will clear (manual, ambiguous, no payout): book
+  // it by hand in the ledger and dismiss the row.
+  provider_payout_by_hand?: boolean
   // An in-flight "Overførsel" from a statement exported on the day the
   // transfer was under way; a re-export of that day replaces it (BRY-378).
   provisional?: boolean
@@ -28,6 +38,8 @@ export interface BankRowSummary {
   // "strong" rows must be booked together or confirmed as separate.
   partner_hint?: PartnerStrength | null
 }
+
+export type ProviderPayout = 'vipps' | 'stripe'
 
 export type PartnerStrength = 'strong' | 'weak'
 export type PartnerReason = 'same_account' | 'same_name' | 'reverses' | 'nets_to_price'

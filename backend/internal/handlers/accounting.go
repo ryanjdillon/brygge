@@ -943,22 +943,23 @@ func (h *AccountingHandler) importBankStatement(w http.ResponseWriter, r *http.R
 		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,
 			auditAction, "bank_import", importID,
 			map[string]any{
-				"filename":            header.Filename,
-				"format":              formatName,
-				"bank_account_code":   bankAccountCode,
-				"rows_total":          len(rows),
-				"imported":            result.Imported,
-				"skipped_dup":         result.SkippedDup,
-				"matched":             result.Matched,
-				"transfers":           result.Transfers,
-				"deleted":             result.Deleted,
-				"skipped_booked":      result.SkippedBooked,
-				"row_errors":          len(result.RowErrors),
-				"kid_skipped_settled": result.KIDSkippedSettled,
-				"refreshed":           result.Refreshed,
-				"superseded":          result.Superseded,
-				"auto_assigned":       autoAssignedCount(result.AutoAssign),
-				"stripe_booked":       stripeBookedCount(result.StripeBooking),
+				"filename":               header.Filename,
+				"format":                 formatName,
+				"bank_account_code":      bankAccountCode,
+				"rows_total":             len(rows),
+				"imported":               result.Imported,
+				"skipped_dup":            result.SkippedDup,
+				"matched":                result.Matched,
+				"transfers":              result.Transfers,
+				"deleted":                result.Deleted,
+				"skipped_booked":         result.SkippedBooked,
+				"row_errors":             len(result.RowErrors),
+				"kid_skipped_settled":    result.KIDSkippedSettled,
+				"refreshed":              result.Refreshed,
+				"superseded":             result.Superseded,
+				"auto_assigned":          autoAssignedCount(result.AutoAssign),
+				"stripe_booked":          stripeBookedCount(result.StripeBooking),
+				"stripe_payouts_cleared": stripePayoutsClearedCount(result.StripePayouts),
 			})
 	}
 
@@ -987,6 +988,7 @@ func (h *AccountingHandler) importBankStatement(w http.ResponseWriter, r *http.R
 		"provisional_rows":      result.ProvisionalRows,
 		"auto_assign":           result.AutoAssign,
 		"stripe_booking":        result.StripeBooking,
+		"stripe_payouts":        result.StripePayouts,
 	}
 	if overwrite {
 		resp["deleted"] = result.Deleted
@@ -2326,14 +2328,15 @@ func (h *AccountingHandler) HandleBankSync(w http.ResponseWriter, r *http.Reques
 		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,
 			"accounting.bank_synced", "bank", "",
 			map[string]any{
-				"kid_matched":         result.KIDMatched,
-				"kid_skipped_settled": result.KIDSkippedSettled,
-				"vipps_reconciled":    result.VippsReconciled,
-				"transfers_linked":    result.TransfersLinked,
-				"payments_linked":     result.PaymentsLinked,
-				"closed_periods":      result.ClosedPeriods,
-				"auto_assigned":       autoAssignedCount(result.AutoAssign),
-				"stripe_booked":       stripeBookedCount(result.StripeBooking),
+				"kid_matched":            result.KIDMatched,
+				"kid_skipped_settled":    result.KIDSkippedSettled,
+				"vipps_reconciled":       result.VippsReconciled,
+				"transfers_linked":       result.TransfersLinked,
+				"payments_linked":        result.PaymentsLinked,
+				"closed_periods":         result.ClosedPeriods,
+				"auto_assigned":          autoAssignedCount(result.AutoAssign),
+				"stripe_booked":          stripeBookedCount(result.StripeBooking),
+				"stripe_payouts_cleared": stripePayoutsClearedCount(result.StripePayouts),
 			})
 	}
 	JSON(w, http.StatusOK, result)
@@ -2346,6 +2349,15 @@ func stripeBookedCount(r *accounting.StripeBookResult) int {
 		return 0
 	}
 	return r.ChargesBooked + r.FeesBooked
+}
+
+// stripePayoutsClearedCount is how many Stripe payouts a sweep cleared, for
+// the audit summary of the import or sync that ran it.
+func stripePayoutsClearedCount(r *accounting.StripePayoutSweepResult) int {
+	if r == nil {
+		return 0
+	}
+	return len(r.Cleared)
 }
 
 // autoAssignedCount is how many payments an auto-assign run booked, for the
