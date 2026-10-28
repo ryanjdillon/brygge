@@ -133,7 +133,7 @@ function closeSidebar() {
       />
     </aside>
 
-    <div class="flex-1">
+    <div class="min-w-0 flex-1">
       <div class="flex items-center border-b border-gray-200 px-4 py-3 lg:hidden">
         <button class="text-gray-500 hover:text-gray-700" :aria-expanded="sidebarOpen" :aria-label="t('nav.ariaMenu')" @click="sidebarOpen = true">
           <Menu class="h-5 w-5" aria-hidden="true" />
