@@ -8,12 +8,57 @@ package payments
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sort"
 )
 
 // ErrNotSupported is returned by a Provider for an operation it does not
 // offer, so callers can tell "not available here" apart from a failed call.
 var ErrNotSupported = errors.New("payments: operation not supported by provider")
+
+// ErrAmountBelowMinimum matches (errors.Is) a *BelowMinimumError: the
+// provider will not charge an amount this small.
+var ErrAmountBelowMinimum = errors.New("payments: amount below the provider's minimum")
+
+// BelowMinimumError is a payment refused because its amount is under the
+// provider's smallest charge in that currency. It carries the minimum so the
+// payer can be told what the provider would accept.
+type BelowMinimumError struct {
+	Provider string
+	// MinOre is the smallest amount the provider charges, in minor units.
+	MinOre   int64
+	Currency string
+}
+
+func (e *BelowMinimumError) Error() string {
+	return fmt.Sprintf("payments: %s charges at least %d minor units of %s", e.Provider, e.MinOre, e.Currency)
+}
+
+// Is makes errors.Is(err, ErrAmountBelowMinimum) true for any minimum.
+func (e *BelowMinimumError) Is(target error) bool { return target == ErrAmountBelowMinimum }
+
+// MinimumAmount is implemented by providers that refuse to charge less than
+// a per-currency floor. Callers use it to leave such a provider out before
+// the payer picks it, rather than letting the create fail.
+type MinimumAmount interface {
+	// MinAmountOre is the smallest chargeable amount in currency's minor
+	// unit; false when the provider sets none or the currency is unknown.
+	MinAmountOre(currency string) (int64, bool)
+}
+
+// CheckMinimum returns a *BelowMinimumError when p has a minimum for
+// currency and amountOre is under it, and nil otherwise.
+func CheckMinimum(p Provider, currency string, amountOre int64) error {
+	m, ok := p.(MinimumAmount)
+	if !ok {
+		return nil
+	}
+	minOre, ok := m.MinAmountOre(currency)
+	if !ok || amountOre >= minOre {
+		return nil
+	}
+	return &BelowMinimumError{Provider: p.Name(), MinOre: minOre, Currency: currency}
+}
 
 // Request describes one payment attempt for a checkout order.
 type Request struct {

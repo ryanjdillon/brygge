@@ -7,6 +7,8 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/brygge-klubb/brygge/internal/payments"
 )
 
 // Public, token-addressed harbor QR checkout (BRY-6). A poster's QR encodes
@@ -50,6 +52,10 @@ type qrTargetResp struct {
 	// Providers are the payment providers the payer can choose, in display
 	// order (the default first); empty when none is configured.
 	Providers []string `json:"providers"`
+	// ProviderMinAmount is each provider's smallest charge in kroner, for
+	// those that have one: the payer changes the total on the page, so the
+	// page hides such a provider itself while the total is under it.
+	ProviderMinAmount map[string]float64 `json:"provider_min_amount"`
 }
 
 // resolveQRUnits clamps a requested unit count to the target's bounds. A
@@ -118,6 +124,7 @@ func (h *InvoiceHandler) HandleGetQRTarget(w http.ResponseWriter, r *http.Reques
 		ClubName:          clubName,
 		LabelTranslations: t.LabelTranslations,
 		Providers:         append([]string{}, h.availableProviders()...),
+		ProviderMinAmount: h.providerMinAmounts(),
 	})
 }
 
@@ -167,6 +174,13 @@ func (h *InvoiceHandler) HandlePayQRTarget(w http.ResponseWriter, r *http.Reques
 		Error(w, http.StatusBadRequest, "nothing to pay")
 		return
 	}
+	// Before the order exists, so a refused amount leaves no order behind.
+	// resolveProvider only names registered providers.
+	p, _ := h.providers.Get(provider)
+	if err := payments.CheckMinimum(p, paymentCurrency, toOre(total)); err != nil {
+		Error(w, http.StatusConflict, errCodeAmountBelowMinimum)
+		return
+	}
 
 	orderToken := genCheckoutToken()
 	tx, err := h.db.Begin(ctx)
@@ -205,6 +219,10 @@ func (h *InvoiceHandler) HandlePayQRTarget(w http.ResponseWriter, r *http.Reques
 	redirectURL, err := h.mintOrderPayment(ctx, provider, orderID, h.frontendBase()+"/qr/"+qrToken)
 	if errors.Is(err, errNothingToPay) {
 		Error(w, http.StatusBadRequest, "nothing to pay")
+		return
+	}
+	if errors.Is(err, payments.ErrAmountBelowMinimum) {
+		Error(w, http.StatusConflict, errCodeAmountBelowMinimum)
 		return
 	}
 	if err != nil {

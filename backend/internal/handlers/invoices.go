@@ -615,11 +615,11 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 		locale := email.DetectLocale(r)
 		subject := email.InvoiceSubject(locale, clubName, invoiceSeq)
 		// Offer online payment as a secondary option; the email frames bank
-		// transfer with KID as preferred. Non-fatal: an empty URL — no payment
-		// provider configured, or the invoice over the club's amount cap
-		// (BRY-283) — just renders the KID-only email.
+		// transfer with KID as preferred. Non-fatal: an empty URL (whenever
+		// ensureFakturaOrderToken offers no link) just renders the KID-only
+		// email.
 		payURL := h.orderPayURL(h.ensureFakturaOrderToken(ctx, claims.ClubID, invoiceID, true))
-		htmlBody := email.InvoiceBody(locale, deliverName, clubName, invoiceSeq, dueDate, total, kid, bankAccount, payURL, h.emailPayMethods(payURL))
+		htmlBody := email.InvoiceBody(locale, deliverName, clubName, invoiceSeq, dueDate, total, kid, bankAccount, payURL, h.emailPayMethods(payURL, total))
 		if err := h.email.SendWithAttachment(email.WithKind(ctx, email.KindInvoice), deliverTo, subject, htmlBody, filename, pdfData); err != nil {
 			h.log.Error().Err(err).Str("email", deliverTo).Msg("failed to send invoice email")
 		} else {
@@ -1271,11 +1271,11 @@ func (h *InvoiceHandler) HandleSendInvoice(w http.ResponseWriter, r *http.Reques
 
 	locale := email.DetectLocale(r)
 	subject := email.InvoiceSubject(locale, clubName, invoiceNumber)
-	// A pay link unless the invoice is over the club's amount cap (BRY-283) or
-	// no payment provider is configured, in which case this is "" (KID-only).
-	// The durable link is created on first send and reused on resends.
+	// A pay link unless ensureFakturaOrderToken offers none, in which case this
+	// is "" (KID-only). The durable link is created on first send and reused on
+	// resends.
 	payURL := h.orderPayURL(h.ensureFakturaOrderToken(ctx, claims.ClubID, invoiceID, true))
-	htmlBody := email.InvoiceBody(locale, memberName, clubName, invoiceNumber, dueDate, total, kid, bankAccount, payURL, h.emailPayMethods(payURL))
+	htmlBody := email.InvoiceBody(locale, memberName, clubName, invoiceNumber, dueDate, total, kid, bankAccount, payURL, h.emailPayMethods(payURL, total))
 	filename := buildInvoiceFilename(invoiceNumber, memberLast, memberFirst, fiscalYear)
 
 	// Stamp sent_at BEFORE handing the message to the mail server, then
@@ -1419,7 +1419,7 @@ func (h *InvoiceHandler) HandleResendInvoice(w http.ResponseWriter, r *http.Requ
 	locale := email.DetectLocale(r)
 	subject := email.InvoiceSubject(locale, clubName, invoiceNumber)
 	payURL := h.orderPayURL(h.ensureFakturaOrderToken(ctx, claims.ClubID, invoiceID, true))
-	htmlBody := email.InvoiceBody(locale, memberName, clubName, invoiceNumber, dueDate, total, kid, bankAccount, payURL, h.emailPayMethods(payURL))
+	htmlBody := email.InvoiceBody(locale, memberName, clubName, invoiceNumber, dueDate, total, kid, bankAccount, payURL, h.emailPayMethods(payURL, total))
 	filename := buildInvoiceFilename(invoiceNumber, memberLast, memberFirst, fiscalYear)
 
 	if err := h.email.SendWithAttachment(email.WithKind(ctx, email.KindInvoice), deliverTo, subject, htmlBody, filename, pdfBytesResend); err != nil {

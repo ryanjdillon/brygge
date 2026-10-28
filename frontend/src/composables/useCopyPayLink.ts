@@ -7,6 +7,7 @@
 export type PayLinkFailure =
   | 'online_payment_unavailable'
   | 'online_payment_over_limit'
+  | 'amount_below_minimum'
   | 'imported_no_opening_balance'
   | 'failed'
 
@@ -26,6 +27,7 @@ export async function copyPayLink(url: string): Promise<CopyPayLinkResult> {
       let reason: PayLinkFailure = 'failed'
       if (res.status === 409 && data?.error === 'online_payment_unavailable') reason = 'online_payment_unavailable'
       else if (res.status === 409 && data?.error === 'online_payment_over_limit') reason = 'online_payment_over_limit'
+      else if (res.status === 409 && data?.error === 'amount_below_minimum') reason = 'amount_below_minimum'
       else if (res.status === 409 && data?.code === 'imported_no_opening_balance') reason = 'imported_no_opening_balance'
       return { ok: false, reason }
     }
@@ -45,6 +47,8 @@ export function payLinkErrorKey(reason: PayLinkFailure): string {
       return 'admin.payLink.unavailable'
     case 'online_payment_over_limit':
       return 'admin.payLink.overLimit'
+    case 'amount_below_minimum':
+      return 'admin.payLink.belowMinimum'
     case 'imported_no_opening_balance':
       return 'admin.accounting.importedNoOpeningBalance'
     default:

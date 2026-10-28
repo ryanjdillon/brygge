@@ -575,7 +575,8 @@
       "copied": "Payment link copied to clipboard",
       "overLimit": "Over the club's online payment limit — bank transfer only",
       "failed": "Couldn't create the payment link",
-      "unavailable": "Online payment isn't set up for this club"
+      "unavailable": "Online payment isn't set up for this club",
+      "belowMinimum": "Too small to pay online — bank transfer only"
     },
     "title": "Administration",
     "ariaNav": "Admin navigation",
@@ -2705,7 +2706,10 @@
     "guestNamePlaceholder": "e.g. boat name or your name",
     "total": "To pay",
     "payError": "Could not start the payment. Please try again.",
-    "unavailable": "Online payment isn't available right now. Please ask the harbor master."
+    "unavailable": "Online payment isn't available right now. Please ask the harbor master.",
+    "cardMinimum": "Card payment from {amount} kr",
+    "belowMinimum": "The amount is too small to pay online. The minimum is {amount} kr.",
+    "cardRefused": "Card payment was refused for this amount. Try another payment method, or ask the harbor master."
   },
   "pay": {
     "loading": "Loading payment …",
@@ -2745,7 +2749,8 @@
       "tryAgain": "Try again",
       "notFoundTitle": "Payment not found",
       "notFoundBody": "The link is invalid or expired. Please contact the treasurer."
-    }
+    },
+    "belowMinimum": "This amount is too small to pay this way."
   },
   "harborTargets": {
     "title": "QR payment posters",

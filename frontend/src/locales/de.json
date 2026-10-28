@@ -1409,6 +1409,9 @@
     "inbox": {
       "showImages": "Bilder anzeigen",
       "hideImages": "Bilder ausblenden"
+    },
+    "payLink": {
+      "belowMinimum": "Betrag zu klein für Online-Zahlung — nur Überweisung"
     }
   },
   "projects": {
@@ -1765,6 +1768,12 @@
       "tryAgain": "Erneut versuchen",
       "notFoundTitle": "Zahlung nicht gefunden",
       "notFoundBody": "Der Link ist ungültig oder abgelaufen. Bitte wenden Sie sich an den Kassenwart."
-    }
+    },
+    "belowMinimum": "Der Betrag ist für diese Zahlungsart zu klein."
+  },
+  "qr": {
+    "cardMinimum": "Kartenzahlung ab {amount} kr",
+    "belowMinimum": "Der Betrag ist für eine Online-Zahlung zu klein. Der Mindestbetrag ist {amount} kr.",
+    "cardRefused": "Die Kartenzahlung wurde für diesen Betrag abgelehnt. Wählen Sie eine andere Zahlungsart oder fragen Sie den Hafenmeister."
   }
 }

@@ -24,6 +24,8 @@ type Target = {
   label_translations?: Record<string, string>
   // Configured payment providers in display order.
   providers: string[]
+  // Smallest charge in kroner per provider that has one (card).
+  provider_min_amount?: Record<string, number>
 }
 
 const state = ref<'loading' | 'ready' | 'error'>('loading')
@@ -45,6 +47,32 @@ const translatedLabel = computed(() => {
 })
 
 const total = computed(() => (target.value ? target.value.unit_amount * units.value : 0))
+
+// Compared in øre, rounded like the server, so float noise in unit × amount
+// cannot hide a provider at exactly its minimum.
+const ore = (kr: number) => Math.round(kr * 100)
+
+// A minimum reads as "3 kr", not "3,00 kr".
+function fmtMin(n: number): string {
+  return n.toLocaleString('nb-NO', { maximumFractionDigits: 2 })
+}
+
+function minFor(provider: string): number {
+  return target.value?.provider_min_amount?.[provider] ?? 0
+}
+
+// A provider whose minimum is above the total is hidden rather than offered
+// with a button its provider refuses; it reappears as the units go up.
+const visibleProviders = computed(() =>
+  (target.value?.providers ?? []).filter((p) => ore(total.value) >= ore(minFor(p))),
+)
+
+// The smallest minimum among the hidden providers; 0 when none is hidden.
+// Only card has a minimum, so a hidden provider is card.
+const hiddenMinimum = computed(() => {
+  const hidden = (target.value?.providers ?? []).filter((p) => !visibleProviders.value.includes(p))
+  return hidden.length ? Math.min(...hidden.map(minFor)) : 0
+})
 
 function step(delta: number) {
   if (!target.value) return
@@ -76,6 +104,19 @@ async function pay(provider: string) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ units: units.value, guest_name: guestName.value.trim(), provider }),
     })
+    if (res.status === 409) {
+      const body = await res.json().catch(() => null)
+      if (body?.error === 'amount_below_minimum') {
+        // Under the minimum the page knows, it says so; at or over it the
+        // provider applied a higher minimum of its own.
+        error.value =
+          ore(total.value) < ore(minFor(provider))
+            ? t('qr.cardMinimum', { amount: fmtMin(minFor(provider)) })
+            : t('qr.cardRefused')
+        busy.value = false
+        return
+      }
+    }
     if (!res.ok) throw new Error(String(res.status))
     const data = await res.json()
     if (data.redirect_url) {
@@ -170,7 +211,7 @@ onMounted(load)
 
       <!-- Guests are often visitors without Vipps, so card leads here. -->
       <PayMethodButtons
-        :providers="target.providers ?? []"
+        :providers="visibleProviders"
         emphasis="card"
         :busy="busy"
         :disabled="total <= 0"
@@ -178,6 +219,12 @@ onMounted(load)
       />
       <p v-if="!target.providers?.length" class="text-center text-sm text-slate-500" data-testid="qr-unavailable">
         {{ t('qr.unavailable') }}
+      </p>
+      <p v-else-if="!visibleProviders.length" class="text-center text-sm text-slate-500" data-testid="qr-below-minimum">
+        {{ t('qr.belowMinimum', { amount: fmtMin(hiddenMinimum) }) }}
+      </p>
+      <p v-else-if="hiddenMinimum > 0" class="text-center text-sm text-slate-500" data-testid="qr-card-minimum">
+        {{ t('qr.cardMinimum', { amount: fmtMin(hiddenMinimum) }) }}
       </p>
     </div>
   </div>

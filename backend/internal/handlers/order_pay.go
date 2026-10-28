@@ -36,6 +36,10 @@ var errOnlinePaymentBlocked = errors.New("order has a source not payable online"
 const (
 	errCodeOnlineUnavailable = "online_payment_unavailable"
 	errCodeOnlineOverLimit   = "online_payment_over_limit"
+	// errCodeAmountBelowMinimum is an amount under the provider's smallest
+	// charge (payments.ErrAmountBelowMinimum): the chosen provider's on a pay
+	// request, every configured provider's on the admin pay-link route.
+	errCodeAmountBelowMinimum = "amount_below_minimum"
 )
 
 // Payer-facing texts on the public pay routes. The Norwegian ones reach the
@@ -53,9 +57,9 @@ const (
 // order_sources link to the invoice) is created lazily the first time a faktura
 // should carry a pay link (create=true) and reused forever after, so resends
 // keep the same link. Returns "" when no payment provider is configured, the
-// invoice is over the club's online-payment amount cap (BRY-283), it is an imported
-// faktura whose receivable isn't in the GL yet (BRY-386), or nothing should be
-// offered.
+// invoice is over the club's online-payment amount cap (BRY-283), no configured
+// provider charges an amount that small, it is an imported faktura whose
+// receivable isn't in the GL yet (BRY-386), or nothing should be offered.
 //
 // The payment itself is NOT minted here: a provider's hosted page lives only
 // minutes, so it is useless in a pay-later email. It is minted when the payer
@@ -66,10 +70,11 @@ func (h *InvoiceHandler) ensureFakturaOrderToken(ctx context.Context, clubID, in
 		return ""
 	}
 
-	// Respect the club's online-payment amount cap: large invoices are bank-transfer only.
-	// Checked before the reuse SELECT below so an invoice that already has a
-	// durable order stops offering online payment once the club sets a cap under it.
-	if !h.invoiceOnlinePaymentAllowed(ctx, clubID, invoiceID) {
+	// Respect the club's online-payment amount cap: large invoices are bank-transfer
+	// only, and so are those too small for every configured provider. Checked
+	// before the reuse SELECT below so an invoice that already has a durable
+	// order stops offering online payment once the club sets a cap under it.
+	if allowed, chargeable := h.invoiceOnlineGate(ctx, clubID, invoiceID); !allowed || !chargeable {
 		return ""
 	}
 	// Likewise before the reuse: an online charge would credit 1500 for a
@@ -161,23 +166,34 @@ END`
 // for this invoice under the tri-state rule above. On error it fails open (returns true)
 // rather than silently suppressing a legitimate link.
 func (h *InvoiceHandler) invoiceOnlinePaymentAllowed(ctx context.Context, clubID, invoiceID string) bool {
-	var allowed bool
+	allowed, _ := h.invoiceOnlineGate(ctx, clubID, invoiceID)
+	return allowed
+}
+
+// invoiceOnlineGate reports, from one read of the invoice, whether it may be
+// paid online under the tri-state rule above (allowed) and whether some
+// configured provider charges its amount (chargeable): a link whose only
+// provider refuses the amount (a few kroner, under Stripe's minimum) leads to
+// a page with nothing to press. On error both fail open rather than silently
+// suppressing a legitimate link.
+func (h *InvoiceHandler) invoiceOnlineGate(ctx context.Context, clubID, invoiceID string) (allowed, chargeable bool) {
+	var total float64
 	err := h.db.QueryRow(ctx,
-		`SELECT `+onlinePaymentAllowedExpr+`
+		`SELECT `+onlinePaymentAllowedExpr+`, i.total_amount
 		   FROM invoices i
 		   JOIN clubs c ON c.id = i.club_id
 		  WHERE i.id = $1 AND i.club_id = $2`,
 		invoiceID, clubID,
-	).Scan(&allowed)
+	).Scan(&allowed, &total)
 	if errors.Is(err, pgx.ErrNoRows) {
 		// Unknown invoice — don't suppress here; the create path handles it.
-		return true
+		return true, true
 	}
 	if err != nil {
 		h.log.Error().Err(err).Str("invoice_id", invoiceID).Msg("online payment allowed check failed")
-		return true
+		return true, true
 	}
-	return allowed
+	return allowed, len(h.providersFor(toOre(total))) > 0
 }
 
 // invoiceReceivableInGL reports whether a payment today may credit 1500 for
@@ -320,9 +336,15 @@ func (h *InvoiceHandler) HandleGetInvoicePayLink(w http.ResponseWriter, r *http.
 	}
 
 	// Over the club's online-payment cap → bank transfer only; tell the UI distinctly so
-	// it shows "over limit" rather than "not configured" (BRY-283).
-	if !h.invoiceOnlinePaymentAllowed(ctx, claims.ClubID, invoiceID) {
+	// it shows "over limit" rather than "not configured" (BRY-283). Likewise an
+	// amount too small for every configured provider.
+	allowed, chargeable := h.invoiceOnlineGate(ctx, claims.ClubID, invoiceID)
+	if !allowed {
 		Error(w, http.StatusConflict, errCodeOnlineOverLimit)
+		return
+	}
+	if !chargeable {
+		Error(w, http.StatusConflict, errCodeAmountBelowMinimum)
 		return
 	}
 
@@ -381,9 +403,10 @@ func (h *InvoiceHandler) HandleOrderPayRedirect(w http.ResponseWriter, r *http.R
 		http.Redirect(w, r, h.frontendBase(), http.StatusFound)
 		return
 	}
-	if errors.Is(err, errOnlinePaymentBlocked) {
-		// Not payable online → send them to the checkout page, which shows
-		// KID + konto for bank transfer instead of pay buttons (BRY-283).
+	if errors.Is(err, errOnlinePaymentBlocked) || errors.Is(err, payments.ErrAmountBelowMinimum) {
+		// Not payable online, or not with the only provider → send them to
+		// the checkout page, which shows KID + konto for bank transfer
+		// instead of pay buttons (BRY-283).
 		http.Redirect(w, r, h.checkoutPageURL(token), http.StatusFound) // #nosec G710 -- fixed configured origin; token is a path segment that just matched a server-minted orders.token
 		return
 	}
@@ -430,14 +453,55 @@ func (h *InvoiceHandler) availableProviders() []string {
 	return out
 }
 
+// providersFor is availableProviders without the providers that will not
+// charge amountOre (in paymentCurrency), so a payer is never offered a button
+// whose provider refuses the amount.
+func (h *InvoiceHandler) providersFor(amountOre int64) []string {
+	var out []string
+	for _, name := range h.availableProviders() {
+		p, _ := h.providers.Get(name)
+		if payments.CheckMinimum(p, paymentCurrency, amountOre) == nil {
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
+// providerMinAmounts maps each configured provider with a minimum charge in
+// paymentCurrency to that minimum in kroner, for a page whose total the payer
+// changes (the QR page) to hide a provider without asking the server again.
+func (h *InvoiceHandler) providerMinAmounts() map[string]float64 {
+	out := map[string]float64{}
+	for _, name := range h.providers.Names() {
+		p, _ := h.providers.Get(name)
+		if m, ok := p.(payments.MinimumAmount); ok {
+			if minOre, ok := m.MinAmountOre(paymentCurrency); ok {
+				out[name] = float64(minOre) / 100
+			}
+		}
+	}
+	return out
+}
+
+// toOre converts a kroner amount to øre the way a payment request does, so
+// the gates and the charge agree on the amount.
+func toOre(kr float64) int64 { return int64(math.Round(kr * 100)) }
+
 // emailPayMethods is the line under an email's pay button naming the ways to
-// pay online; empty when the email carries no pay link.
-func (h *InvoiceHandler) emailPayMethods(payURL string) string {
+// pay online for amountKr; empty when the email carries no pay link.
+func (h *InvoiceHandler) emailPayMethods(payURL string, amountKr float64) string {
 	if payURL == "" {
 		return ""
 	}
-	_, hasVipps := h.providers.Get(vipps.ProviderName)
-	_, hasCard := h.providers.Get(stripe.ProviderName)
+	var hasVipps, hasCard bool
+	for _, name := range h.providersFor(toOre(amountKr)) {
+		switch name {
+		case vipps.ProviderName:
+			hasVipps = true
+		case stripe.ProviderName:
+			hasCard = true
+		}
+	}
 	return email.PayMethodsLabel(hasVipps, hasCard)
 }
 
@@ -484,6 +548,11 @@ func (h *InvoiceHandler) mintOrderPayment(ctx context.Context, providerName, ord
 	if total <= 0 {
 		return "", errNothingToPay
 	}
+	// Refused here rather than by the provider so no failed attempt is left
+	// behind for an amount that could never be charged.
+	if err := payments.CheckMinimum(provider, paymentCurrency, toOre(total)); err != nil {
+		return "", err
+	}
 
 	payer, err := h.orderPayer(ctx, orderID)
 	if err != nil {
@@ -497,7 +566,7 @@ func (h *InvoiceHandler) mintOrderPayment(ctx context.Context, providerName, ord
 	res, err := provider.CreatePayment(ctx, payments.Request{
 		OrderID:     orderID,
 		AttemptID:   attemptID,
-		AmountOre:   int64(math.Round(total * 100)),
+		AmountOre:   toOre(total),
 		Currency:    paymentCurrency,
 		Description: desc,
 		IsGuest:     payer.guest,

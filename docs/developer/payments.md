@@ -35,6 +35,7 @@ The provider-neutral seam ([`payments.go`](../../backend/internal/payments/payme
 
 - **`Provider`** — `Name()`, `CreatePayment(ctx, Request) (Result, error)`, `Refund(ctx, reference, amountOre, reason) (providerRefundID, error)`. `Refund` may return `ErrNotSupported`.
 - **`Canceller`** — optional; voids an authorized, uncaptured payment.
+- **`MinimumAmount`** — optional; `MinAmountOre(currency) (int64, bool)` is the provider's smallest charge, false when it has none for that currency. `CheckMinimum(provider, currency, amountOre)` returns a `*BelowMinimumError` (provider, `MinOre`, currency; `errors.Is(err, ErrAmountBelowMinimum)`) when the amount is under it, nil otherwise, including for a provider without the interface.
 - **`Request`** — order id, attempt id (unique per attempt, usable as an idempotency key), amount in øre, currency, the full description (the provider shortens it to its own limit), whether the order is a guest order, the linked member's email (empty for guests), the return URL (the order's receipt page) and the cancel URL (the page the payer came from). **`Result`** — the redirect URL and the provider's reference.
 - **`Registry`** — the providers this deployment has credentials for. `Get(name)`, `Names()` and `Configured()`. A nil registry is valid and empty, which is how an instance without payment credentials runs.
 
@@ -60,6 +61,8 @@ The package holds no database code. Deciding what is owed, enforcing the club's 
 - `success_url` = the receipt page, `cancel_url` = the page the payer came from, `expires_at` = now + 60 minutes;
 - the attempt id as `Idempotency-Key`, so a retried create returns the same session.
 
+Stripe will not charge less than a per-currency minimum ([Stripe's table](https://docs.stripe.com/currencies#minimum-and-maximum-charge-amounts)); below it the create answers 400 `amount_too_small`. The adapter implements `MinimumAmount` from its own copy of the table (NOK and SEK 300, DKK 250, EUR, USD and CHF 50, GBP 30, in minor units; any other currency has no local minimum and is left to Stripe), refuses a request under it before any HTTP call, and maps Stripe's own `amount_too_small` (its minimum follows the account's settlement currency, so it can be higher) to the same `*BelowMinimumError`. Vipps does not implement the interface: ePayment rejects amounts under 1 kr, a floor below anything Brygge prices, so the adapter does not model it.
+
 The reference is the session id (`cs_…`). `CancelPayment` retrieves the session: an authorized PaymentIntent (`requires_capture`) is cancelled, an open session is expired, a captured one returns `ErrNotCancellable`. `Refund` returns `ErrNotSupported` until BRY-446.
 
 Payment creation goes through the registry, and each webhook voids a stale authorization through its adapter's `Canceller`. Settlement sync (`AccountingHandler`) and the Vipps webhook's other calls (capture on AUTHORIZED, `GetPayment` for a guest's name) keep the concrete `*vipps.Client`, and the Stripe webhook captures through `*stripe.Client`, because those are provider-specific operations with no neutral equivalent yet.
@@ -75,9 +78,18 @@ The payer chooses on the page they are already on; there is no separate choice p
 - **`GET /api/v1/betal/{token}`** (`HandleOrderPayRedirect`) is the one-tap link in faktura emails sent before the checkout page existed. A paid order goes to its receipt; with one provider it mints at once and 302s to the provider; with several it 302s to the `/betal/{token}` page rather than choosing for the payer; with none it answers 503 with a plain-text message.
 - **The payables page** (`/betal/bruker/{token}`) routes each invoice's Pay button to its `/betal/{token}` page in the SPA.
 
+**Minimum charge.** A provider is only offered for a total it will charge. `providersFor(amountOre)` is `availableProviders()` without the providers whose `MinimumAmount` refuses the amount (in `paymentCurrency`, rounded to øre exactly as the payment request is):
+
+- The checkout GET lists `providersFor(total)`, so a faktura or order under 3 kr on a Stripe-only deployment gets `providers: []` and the bank-transfer box, and with Vipps too only the Vipps button.
+- The QR GET keeps `providers` unfiltered, because the payer changes the total with the unit stepper, and adds `provider_min_amount` (kroner per provider with a minimum, e.g. `{"stripe": 3}`; `{}` when none). `QrCheckoutView` hides (not disables) a provider while the total is under its minimum, shows "Card payment from 3 kr" while card is hidden, and, when nothing is left, says the amount is too small to pay online (not the "unavailable" text, which means nothing is configured).
+- `mintOrderPayment` checks the minimum before recording the attempt, so an amount that can never be charged leaves no failed attempt behind. `POST /checkout/{token}/pay` and `POST /qr/{token}/pay` answer 409 `amount_below_minimum` for it, and for Stripe's own `amount_too_small`; the QR POST checks before it inserts the order, so no stray order is left either. `PayInvoiceView` reloads on that 409 (like `online_payment_over_limit`), and if the provider the payer pressed is still offered after the reload (Stripe's own minimum is above the table) it says the amount can't be paid that way; `QrCheckoutView` shows the card minimum when the total is under it, and otherwise that card was refused for this amount. `GET /api/v1/betal/{token}` with that one provider redirects to the `/betal/{token}` page, which then shows the bank-transfer box.
+- `ensureFakturaOrderToken` issues no pay link when no configured provider charges the invoice's amount (read in the same query as the cap check, `invoiceOnlineGate`, before the reuse), and the email's methods line names only the providers that charge it (`emailPayMethods(payURL, amount)`). The admin copy-link route (`GET …/pay-link`) answers 409 `amount_below_minimum` for such an invoice, and `useCopyPayLink` shows why.
+
+The minimum is checked against `paymentCurrency` (NOK), the currency every payment request is made in.
+
 `POST` with a provider name that is not registered answers 400 `unknown payment provider`; no name uses the default. The buttons are one shared component, `frontend/src/components/pay/PayMethodButtons.vue`: it maps provider names to methods (`vipps` → Vipps, `stripe` → card, labelled "Kort · Apple Pay · Google Pay"), takes an optional `emphasis` to put one method first, and skips names it has no method for. There is no club setting for the order. The labels are `text-xl font-bold` on purpose: white on Vipps orange (`#ff5b24`) only meets WCAG AA contrast as large text. The visible label is each button's accessible name (icons are `aria-hidden`). If a pay POST answers 409 `online_payment_over_limit` (the order became blocked after the page loaded), `PayInvoiceView` reloads the checkout so the bank-transfer box replaces the buttons.
 
-Faktura and reminder emails link to `/betal/{token}` with a "Betal nå" button and a line naming the methods beneath it, built from the registry by `emailPayMethods` / `email.PayMethodsLabel`: "Vipps", "Kort" or "Vipps eller kort", and no line when there is no pay link. The emails are Norwegian only.
+Faktura and reminder emails link to `/betal/{token}` with a "Betal nå" button and a line naming the methods beneath it, built from the providers that charge the faktura's amount by `emailPayMethods` / `email.PayMethodsLabel`: "Vipps", "Kort" or "Vipps eller kort", and no line when there is no pay link. The emails are Norwegian only.
 
 ### Returning to the receipt page
 
@@ -139,7 +151,7 @@ The settings are `clubs.stripe_clearing_account` (default 1580, an active asset 
 - The stored audit value `invoice.vipps_link_set` (Go: `audit.ActionInvoiceOnlinePaymentSet`), kept so existing audit rows still match.
 - The club setting `vipps_clearing_account`, which is genuinely Vipps' clearing account.
 
-The API itself is provider-neutral: error codes `online_payment_unavailable` / `online_payment_over_limit`, the checkout GET's `online_blocked` and `providers`, the `PATCH /invoices/{id}/online-payment` route, the reminder batch's `online_payment` field, and the JSON fields `online_paid_at`, `online_payment_opt_in`, `online_max_amount` and `payment_fee_account`.
+The API itself is provider-neutral: error codes `online_payment_unavailable` / `online_payment_over_limit` / `amount_below_minimum`, the QR GET's `provider_min_amount`, the checkout GET's `online_blocked` and `providers`, the `PATCH /invoices/{id}/online-payment` route, the reminder batch's `online_payment` field, and the JSON fields `online_paid_at`, `online_payment_opt_in`, `online_max_amount` and `payment_fee_account`.
 
 ## Adding a provider
 

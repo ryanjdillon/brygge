@@ -33,19 +33,25 @@ func newStripeMintHandler(pool *pgxpool.Pool, f *fakeStripe) *InvoiceHandler {
 // seedQRTarget adds a guest-night QR target at 150 kr a unit.
 func seedQRTarget(t *testing.T, pool *pgxpool.Pool, clubID string) string {
 	t.Helper()
+	return seedQRTargetAt(t, pool, clubID, 150)
+}
+
+// seedQRTargetAt adds a guest-night QR target at unitAmount kr a unit.
+func seedQRTargetAt(t *testing.T, pool *pgxpool.Pool, clubID string, unitAmount float64) string {
+	t.Helper()
 	ctx := context.Background()
 	var priceItemID string
 	if err := pool.QueryRow(ctx,
-		`INSERT INTO price_items (club_id, category, name, amount) VALUES ($1, 'guest_slip', 'Test guest night', 150) RETURNING id`,
-		clubID,
+		`INSERT INTO price_items (club_id, category, name, amount) VALUES ($1, 'guest_slip', 'Test guest night', $2) RETURNING id`,
+		clubID, unitAmount,
 	).Scan(&priceItemID); err != nil {
 		t.Fatalf("insert price item: %v", err)
 	}
 	qrToken := "qr-" + testutil.RandomHex(8)
 	if _, err := pool.Exec(ctx,
 		`INSERT INTO harbor_payment_targets (club_id, token, label, price_item_id, short_code)
-		 VALUES ($1, $2, 'Test pier', $3, 'abcde')`,
-		clubID, qrToken, priceItemID,
+		 VALUES ($1, $2, 'Test pier', $3, $4)`,
+		clubID, qrToken, priceItemID, testutil.RandomHex(4),
 	); err != nil {
 		t.Fatalf("insert target: %v", err)
 	}

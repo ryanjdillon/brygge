@@ -1409,6 +1409,9 @@
     "inbox": {
       "showImages": "Afbeeldingen tonen",
       "hideImages": "Afbeeldingen verbergen"
+    },
+    "payLink": {
+      "belowMinimum": "Bedrag te laag voor online betalen — alleen bankoverschrijving"
     }
   },
   "projects": {
@@ -1765,6 +1768,12 @@
       "tryAgain": "Opnieuw proberen",
       "notFoundTitle": "Betaling niet gevonden",
       "notFoundBody": "De link is ongeldig of verlopen. Neem contact op met de penningmeester."
-    }
+    },
+    "belowMinimum": "Dit bedrag is te laag voor deze betaalmethode."
+  },
+  "qr": {
+    "cardMinimum": "Betalen met kaart vanaf {amount} kr",
+    "belowMinimum": "Het bedrag is te laag om online te betalen. Het minimum is {amount} kr.",
+    "cardRefused": "Kaartbetaling is geweigerd voor dit bedrag. Probeer een andere betaalmethode of vraag het de havenmeester."
   }
 }

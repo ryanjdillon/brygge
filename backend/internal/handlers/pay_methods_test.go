@@ -64,10 +64,10 @@ func TestAvailableProviders(t *testing.T) {
 			if got := h.availableProviders(); !reflect.DeepEqual(got, tc.want) {
 				t.Errorf("availableProviders = %v, want %v", got, tc.want)
 			}
-			if got := h.emailPayMethods("https://club.example.invalid/betal/x"); got != tc.wantEmail {
+			if got := h.emailPayMethods("https://club.example.invalid/betal/x", 450); got != tc.wantEmail {
 				t.Errorf("emailPayMethods = %q, want %q", got, tc.wantEmail)
 			}
-			if got := h.emailPayMethods(""); got != "" {
+			if got := h.emailPayMethods("", 450); got != "" {
 				t.Errorf("emailPayMethods without a link = %q, want empty", got)
 			}
 		})

@@ -43,9 +43,27 @@ type PaymentProvider struct {
 }
 
 var (
-	_ payments.Provider  = (*PaymentProvider)(nil)
-	_ payments.Canceller = (*PaymentProvider)(nil)
+	_ payments.Provider      = (*PaymentProvider)(nil)
+	_ payments.Canceller     = (*PaymentProvider)(nil)
+	_ payments.MinimumAmount = (*PaymentProvider)(nil)
 )
+
+// minChargeOre is Stripe's smallest charge per settlement currency, in minor
+// units (https://docs.stripe.com/currencies#minimum-and-maximum-charge-amounts).
+// Below it Stripe answers 400 amount_too_small, so the pages hide card
+// payment instead of offering a button that cannot work.
+var minChargeOre = map[string]int64{
+	"NOK": 300,
+	"SEK": 300,
+	"DKK": 250,
+	"EUR": 50,
+	"USD": 50,
+	"GBP": 30,
+	"CHF": 50,
+}
+
+// codeAmountTooSmall is Stripe's error code for a charge under its minimum.
+const codeAmountTooSmall = "amount_too_small"
 
 // NewPaymentProvider wraps a client as a payments.Provider. clubSlug is
 // recorded in the payment's metadata, so a payment in the shared Stripe
@@ -57,6 +75,13 @@ func NewPaymentProvider(client *Client, clubSlug string) *PaymentProvider {
 // Name implements payments.Provider.
 func (p *PaymentProvider) Name() string { return ProviderName }
 
+// MinAmountOre implements payments.MinimumAmount. A currency missing from the
+// table reports no minimum, leaving Stripe to judge it.
+func (p *PaymentProvider) MinAmountOre(currency string) (int64, bool) {
+	minOre, ok := minChargeOre[strings.ToUpper(currency)]
+	return minOre, ok
+}
+
 // CreatePayment creates a card-only Checkout Session for the attempt. The
 // attempt id is the idempotency key, so a create retried after a lost answer
 // returns the same session instead of a second payable page.
@@ -64,8 +89,21 @@ func (p *PaymentProvider) CreatePayment(ctx context.Context, req payments.Reques
 	if req.AttemptID == "" {
 		return payments.Result{}, errors.New("stripe: payment request without attempt id")
 	}
+	if err := payments.CheckMinimum(p, req.Currency, req.AmountOre); err != nil {
+		return payments.Result{}, err
+	}
 	s, err := p.client.CreateCheckoutSession(ctx, p.sessionParams(req), req.AttemptID)
 	if err != nil {
+		// Stripe's minimum can differ from the table (it follows the
+		// account's settlement currency), so its own refusal maps to the same
+		// error the local check gives.
+		var apiErr *APIError
+		if errors.As(err, &apiErr) && apiErr.Code == codeAmountTooSmall {
+			minOre, _ := p.MinAmountOre(req.Currency)
+			return payments.Result{}, fmt.Errorf("%w: %w", &payments.BelowMinimumError{
+				Provider: ProviderName, MinOre: minOre, Currency: req.Currency,
+			}, err)
+		}
 		return payments.Result{}, err
 	}
 	if s.ID == "" || s.URL == "" {

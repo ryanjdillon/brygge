@@ -137,7 +137,7 @@ func TestCreatePayment_GuestHasNoEmail(t *testing.T) {
 	f := newFakeAPI(t)
 	f.on("POST", "/v1/checkout/sessions", 200, `{"id":"cs_test_2","url":"https://checkout.stripe.example.invalid/c/2"}`)
 	p := NewPaymentProvider(f.client(), "testklubb")
-	if _, err := p.CreatePayment(context.Background(), payments.Request{AttemptID: "a", Currency: "NOK", AmountOre: 100}); err != nil {
+	if _, err := p.CreatePayment(context.Background(), payments.Request{AttemptID: "a", Currency: "NOK", AmountOre: 45000}); err != nil {
 		t.Fatal(err)
 	}
 	if _, ok := f.recorded()[0].Form["customer_email"]; ok {
@@ -152,10 +152,93 @@ func TestCreatePayment_Errors(t *testing.T) {
 		t.Error("request without attempt id accepted")
 	}
 	f.on("POST", "/v1/checkout/sessions", 400, `{"error":{"type":"invalid_request_error","code":"parameter_invalid_integer","message":"bad amount"}}`)
-	_, err := p.CreatePayment(context.Background(), payments.Request{AttemptID: "a", Currency: "NOK"})
+	_, err := p.CreatePayment(context.Background(), payments.Request{AttemptID: "a", Currency: "NOK", AmountOre: 45000})
 	var apiErr *APIError
 	if !errors.As(err, &apiErr) || apiErr.Status != 400 || apiErr.Code != "parameter_invalid_integer" {
 		t.Errorf("err = %v, want APIError 400", err)
+	}
+}
+
+func TestMinAmountOre(t *testing.T) {
+	p := NewPaymentProvider(nil, "testklubb")
+	tests := []struct {
+		currency string
+		want     int64
+		wantOK   bool
+	}{
+		{"NOK", 300, true},
+		{"nok", 300, true},
+		{"SEK", 300, true},
+		{"DKK", 250, true},
+		{"EUR", 50, true},
+		{"USD", 50, true},
+		{"GBP", 30, true},
+		{"CHF", 50, true},
+		{"XYZ", 0, false},
+		{"", 0, false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.currency, func(t *testing.T) {
+			got, ok := p.MinAmountOre(tc.currency)
+			if got != tc.want || ok != tc.wantOK {
+				t.Errorf("MinAmountOre(%q) = %d, %v; want %d, %v", tc.currency, got, ok, tc.want, tc.wantOK)
+			}
+		})
+	}
+}
+
+func TestCreatePayment_BelowMinimum(t *testing.T) {
+	const session = `{"id":"cs_test_3","url":"https://checkout.stripe.example.invalid/c/3"}`
+	tests := []struct {
+		name      string
+		currency  string
+		amountOre int64
+		wantBelow bool
+	}{
+		{"one øre under", "NOK", 299, true},
+		{"at the minimum", "NOK", 300, false},
+		{"lower-case currency", "nok", 100, true},
+		{"unknown currency is left to Stripe", "XYZ", 1, false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFakeAPI(t)
+			f.on("POST", "/v1/checkout/sessions", 200, session)
+			p := NewPaymentProvider(f.client(), "testklubb")
+			_, err := p.CreatePayment(context.Background(), payments.Request{AttemptID: "a", Currency: tc.currency, AmountOre: tc.amountOre})
+			if !tc.wantBelow {
+				if err != nil || len(f.recorded()) != 1 {
+					t.Fatalf("err = %v, calls = %d; want a created session", err, len(f.recorded()))
+				}
+				return
+			}
+			var below *payments.BelowMinimumError
+			if !errors.Is(err, payments.ErrAmountBelowMinimum) || !errors.As(err, &below) {
+				t.Fatalf("err = %v, want BelowMinimumError", err)
+			}
+			if below.MinOre != 300 || below.Provider != ProviderName || below.Currency != tc.currency {
+				t.Errorf("error = %+v", below)
+			}
+			if n := len(f.recorded()); n != 0 {
+				t.Errorf("Stripe was called %d times for an amount under its minimum", n)
+			}
+		})
+	}
+}
+
+func TestCreatePayment_StripeAmountTooSmall(t *testing.T) {
+	f := newFakeAPI(t)
+	f.on("POST", "/v1/checkout/sessions", 400,
+		`{"error":{"type":"invalid_request_error","code":"amount_too_small","message":"The Checkout Session's total amount due must add up to at least kr3.00 nok."}}`)
+	p := NewPaymentProvider(f.client(), "testklubb")
+	_, err := p.CreatePayment(context.Background(), payments.Request{AttemptID: "a", Currency: "NOK", AmountOre: 45000})
+	var below *payments.BelowMinimumError
+	if !errors.Is(err, payments.ErrAmountBelowMinimum) || !errors.As(err, &below) || below.MinOre != 300 {
+		t.Fatalf("err = %v, want BelowMinimumError with the NOK minimum", err)
+	}
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) || apiErr.Code != "amount_too_small" {
+		t.Errorf("err = %v, want Stripe's answer kept in the chain", err)
 	}
 }
 
@@ -186,7 +269,7 @@ func TestCreatePayment_LongDescriptionRuneSafe(t *testing.T) {
 	for range 200 {
 		long += "ø"
 	}
-	if _, err := p.CreatePayment(context.Background(), payments.Request{AttemptID: "a", Currency: "NOK", Description: long}); err != nil {
+	if _, err := p.CreatePayment(context.Background(), payments.Request{AttemptID: "a", Currency: "NOK", AmountOre: 45000, Description: long}); err != nil {
 		t.Fatal(err)
 	}
 	form := f.recorded()[0].Form
@@ -203,7 +286,7 @@ func TestCreatePayment_IntentDescriptionCappedInRunes(t *testing.T) {
 	f.on("POST", "/v1/checkout/sessions", 200, `{"id":"cs","url":"u"}`)
 	p := NewPaymentProvider(f.client(), "testklubb")
 	long := strings.Repeat("å", 1200)
-	if _, err := p.CreatePayment(context.Background(), payments.Request{AttemptID: "a", Currency: "NOK", Description: long}); err != nil {
+	if _, err := p.CreatePayment(context.Background(), payments.Request{AttemptID: "a", Currency: "NOK", AmountOre: 45000, Description: long}); err != nil {
 		t.Fatal(err)
 	}
 	got := []rune(f.recorded()[0].Form.Get("payment_intent_data[description]"))
@@ -229,7 +312,7 @@ func TestCreatePayment_CustomerEmailOnlyWhenBareAddress(t *testing.T) {
 			f := newFakeAPI(t)
 			f.on("POST", "/v1/checkout/sessions", 200, `{"id":"cs","url":"u"}`)
 			p := NewPaymentProvider(f.client(), "testklubb")
-			if _, err := p.CreatePayment(context.Background(), payments.Request{AttemptID: "a", Currency: "NOK", PayerEmail: tc.email}); err != nil {
+			if _, err := p.CreatePayment(context.Background(), payments.Request{AttemptID: "a", Currency: "NOK", AmountOre: 45000, PayerEmail: tc.email}); err != nil {
 				t.Fatal(err)
 			}
 			got, present := f.recorded()[0].Form["customer_email"]

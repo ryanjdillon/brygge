@@ -40,9 +40,16 @@ describe('copyPayLink (BRY-274/275 shared)', () => {
     expect(r).toEqual({ ok: false, reason: 'online_payment_over_limit' })
   })
 
+  it('reports an amount too small for every provider distinctly on a 409', async () => {
+    mockFetch(() => ({ ok: false, status: 409, json: async () => ({ error: 'amount_below_minimum' }) }) as Response)
+    const r = await copyPayLink('/x')
+    expect(r).toEqual({ ok: false, reason: 'amount_below_minimum' })
+  })
+
   it('maps each failure to its admin.payLink message', () => {
     expect(payLinkErrorKey('online_payment_unavailable')).toBe('admin.payLink.unavailable')
     expect(payLinkErrorKey('online_payment_over_limit')).toBe('admin.payLink.overLimit')
+    expect(payLinkErrorKey('amount_below_minimum')).toBe('admin.payLink.belowMinimum')
     expect(payLinkErrorKey('failed')).toBe('admin.payLink.failed')
   })
 

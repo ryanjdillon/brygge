@@ -112,6 +112,32 @@ describe('PayInvoiceView', () => {
     expect(w.text()).not.toContain('pay.payError')
   })
 
+  it('reloads without card when the total turned out to be under the card minimum', async () => {
+    stubFetch(
+      { providers: ['vipps', 'stripe'] },
+      { ok: false, status: 409, body: { error: 'amount_below_minimum' } },
+      { providers: ['vipps'] },
+    )
+    const w = await mountPage()
+    await w.get('[data-provider="stripe"]').trigger('click')
+    await flushPromises()
+    expect(providersShown(w)).toEqual(['vipps'])
+    expect(w.text()).not.toContain('pay.payError')
+  })
+
+  it('says the amount is too small when the reload still offers the refused provider', async () => {
+    stubFetch(
+      { providers: ['vipps', 'stripe'] },
+      { ok: false, status: 409, body: { error: 'amount_below_minimum' } },
+      { providers: ['vipps', 'stripe'] },
+    )
+    const w = await mountPage()
+    await w.get('[data-provider="stripe"]').trigger('click')
+    await flushPromises()
+    expect(providersShown(w)).toEqual(['vipps', 'stripe'])
+    expect(w.text()).toContain('pay.belowMinimum')
+  })
+
   it('posts the chosen provider', async () => {
     const fetchMock = stubFetch({ providers: ['vipps', 'stripe'] }, { ok: true, body: { redirect_url: '' } })
     const w = await mountPage()

@@ -1380,6 +1380,9 @@
     "inbox": {
       "showImages": "Pokaż obrazy",
       "hideImages": "Ukryj obrazy"
+    },
+    "payLink": {
+      "belowMinimum": "Kwota za mała na płatność online — tylko przelew"
     }
   },
   "projects": {
@@ -1736,6 +1739,12 @@
       "tryAgain": "Spróbuj ponownie",
       "notFoundTitle": "Nie znaleziono płatności",
       "notFoundBody": "Link jest nieprawidłowy lub wygasł. Skontaktuj się ze skarbnikiem."
-    }
+    },
+    "belowMinimum": "Ta kwota jest za mała dla tej metody płatności."
+  },
+  "qr": {
+    "cardMinimum": "Płatność kartą od {amount} kr",
+    "belowMinimum": "Kwota jest za mała, aby zapłacić online. Minimum to {amount} kr.",
+    "cardRefused": "Płatność kartą została odrzucona dla tej kwoty. Wybierz inną metodę płatności lub zapytaj kapitana portu."
   }
 }

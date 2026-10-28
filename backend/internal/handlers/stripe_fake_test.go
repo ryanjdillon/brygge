@@ -40,6 +40,9 @@ type fakeStripe struct {
 	piStatus map[string]string
 	// captureStatus, when non-zero, makes capture fail with that status.
 	captureStatus int
+	// createError, when set, is the error body a session create answers
+	// with status 400.
+	createError string
 	// intentAfterCapture is the PaymentIntent status a retrieve reports
 	// (requires_capture when unset), with the full 450 kr received when
 	// it is succeeded.
@@ -76,7 +79,13 @@ func (f *fakeStripe) handleCreate(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	f.creates = append(f.creates, fakeStripeCreate{IdempotencyKey: r.Header.Get("Idempotency-Key"), Form: r.PostForm})
 	id := fmt.Sprintf("cs_test_%d", len(f.creates))
+	createError := f.createError
 	f.mu.Unlock()
+	if createError != "" {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(createError))
+		return
+	}
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"id": id, "status": "open", "url": "https://checkout.stripe.example.invalid/" + id,
 	})

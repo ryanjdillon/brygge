@@ -58,11 +58,17 @@ async function pay(provider: string) {
     })
     if (res.status === 409) {
       const body = await res.json().catch(() => null)
-      if (body?.error === 'online_payment_over_limit') {
-        // The order stopped being payable online since the page loaded:
-        // reload so the bank-transfer details replace the buttons.
+      if (body?.error === 'online_payment_over_limit' || body?.error === 'amount_below_minimum') {
+        // The order stopped being payable online, or by the chosen provider,
+        // since the page loaded: reload so the server's provider list (or the
+        // bank-transfer details) replaces the buttons.
         busy.value = false
         await load()
+        // The provider's own minimum can be above the one the server lists
+        // providers by, so the reload may offer the same button again.
+        if (body.error === 'amount_below_minimum' && checkout.value?.providers?.includes(provider)) {
+          error.value = t('pay.belowMinimum')
+        }
         return
       }
     }

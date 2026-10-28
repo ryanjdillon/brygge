@@ -571,7 +571,8 @@
       "copied": "Betalingslenke kopiert til utklippstavlen",
       "overLimit": "Over klubbens grense for nettbetaling — kun bankoverføring",
       "failed": "Kunne ikke lage betalingslenken",
-      "unavailable": "Nettbetaling er ikke satt opp for denne klubben"
+      "unavailable": "Nettbetaling er ikke satt opp for denne klubben",
+      "belowMinimum": "For lite beløp til nettbetaling — kun bankoverføring"
     },
     "title": "Administrasjon",
     "ariaNav": "Admin-navigasjon",
@@ -2701,7 +2702,10 @@
     "guestNamePlaceholder": "f.eks. båtnavn eller navnet ditt",
     "total": "Å betale",
     "payError": "Kunne ikke starte betalingen. Prøv igjen.",
-    "unavailable": "Nettbetaling er ikke tilgjengelig akkurat nå. Spør havnesjefen."
+    "unavailable": "Nettbetaling er ikke tilgjengelig akkurat nå. Spør havnesjefen.",
+    "cardMinimum": "Kort fra {amount} kr",
+    "belowMinimum": "Beløpet er for lite til å betale på nett. Minstebeløpet er {amount} kr.",
+    "cardRefused": "Kortbetaling ble avvist for dette beløpet. Prøv en annen betalingsmåte, eller spør havnesjefen."
   },
   "pay": {
     "loading": "Laster betaling …",
@@ -2741,7 +2745,8 @@
       "tryAgain": "Prøv igjen",
       "notFoundTitle": "Fant ikke betalingen",
       "notFoundBody": "Lenken er ugyldig eller utløpt. Ta kontakt med kassereren."
-    }
+    },
+    "belowMinimum": "Beløpet er for lite til å betale på denne måten."
   },
   "harborTargets": {
     "title": "QR-betalingsplakater",

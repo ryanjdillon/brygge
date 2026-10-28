@@ -9,6 +9,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
+
+	"github.com/brygge-klubb/brygge/internal/payments"
 )
 
 // Public token-addressed checkout API backing the /betal/{token} pay page
@@ -59,8 +61,9 @@ type checkoutResp struct {
 	KID           string `json:"kid_number"`
 	BankAccount   string `json:"bank_account"`
 	// Providers are the payment providers the payer can choose, in display
-	// order (the default first). Empty when none is configured or the order is
-	// blocked, which leaves bank transfer with BankAccount set.
+	// order (the default first). A provider whose minimum charge is above the
+	// total is left out. Empty when none is configured, none charges the total,
+	// or the order is blocked, which leaves bank transfer with BankAccount set.
 	Providers []string `json:"providers"`
 }
 
@@ -182,7 +185,13 @@ func (h *InvoiceHandler) buildCheckoutResp(ctx context.Context, orderID, clubID,
 	resp.OnlineBlocked = blocked
 	resp.Providers = []string{}
 	if !blocked {
-		resp.Providers = append(resp.Providers, h.availableProviders()...)
+		providers := h.availableProviders()
+		if total > 0 {
+			// Same rounding as the payment request, so a total the page offers
+			// a provider for is one that provider accepts.
+			providers = h.providersFor(toOre(total))
+		}
+		resp.Providers = append(resp.Providers, providers...)
 	}
 	if len(resp.Providers) == 0 {
 		club, err := loadClubInvoiceFields(ctx, h.db, clubID)
@@ -392,6 +401,12 @@ func (h *InvoiceHandler) HandlePayCheckout(w http.ResponseWriter, r *http.Reques
 		// Not payable online → bank transfer only (BRY-283). The page already
 		// hides the buttons via online_blocked; this guards a stale client.
 		Error(w, http.StatusConflict, errCodeOnlineOverLimit)
+		return
+	}
+	if errors.Is(err, payments.ErrAmountBelowMinimum) {
+		// The page leaves such a provider out; this guards a stale client or
+		// a provider whose own minimum is higher than its table.
+		Error(w, http.StatusConflict, errCodeAmountBelowMinimum)
 		return
 	}
 	if err != nil {

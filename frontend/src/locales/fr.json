@@ -1408,6 +1408,9 @@
     "inbox": {
       "showImages": "Afficher les images",
       "hideImages": "Masquer les images"
+    },
+    "payLink": {
+      "belowMinimum": "Montant trop faible pour le paiement en ligne — virement uniquement"
     }
   },
   "projects": {
@@ -1764,6 +1767,12 @@
       "tryAgain": "Réessayer",
       "notFoundTitle": "Paiement introuvable",
       "notFoundBody": "Le lien est invalide ou a expiré. Veuillez contacter le trésorier."
-    }
+    },
+    "belowMinimum": "Ce montant est trop faible pour ce moyen de paiement."
+  },
+  "qr": {
+    "cardMinimum": "Paiement par carte à partir de {amount} kr",
+    "belowMinimum": "Le montant est trop faible pour un paiement en ligne. Le minimum est de {amount} kr.",
+    "cardRefused": "Le paiement par carte a été refusé pour ce montant. Essayez un autre moyen de paiement ou demandez au capitaine du port."
   }
 }
