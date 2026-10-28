@@ -1269,7 +1269,41 @@
         "conflictOverride": "Zahler trotzdem für dieses Mitglied merken"
       },
       "stripeAutoClearing": "Stripe-Auszahlung – wird automatisch abgeglichen",
-      "stripeBookByHand": "Manuell im Hauptbuch buchen (Soll Bank, Haben 1580) und die Zeile als interne Umbuchung verwerfen."
+      "stripeByHandHint": "Kein automatischer Abgleich. Wählen Sie die Stripe-Auszahlung, zu der diese Einzahlung gehört, oder verwerfen Sie die Zeile, wenn es keine Auszahlung ist.",
+      "stripeClearAction": "Mit Stripe-Auszahlung abgleichen",
+      "providerPayoutRefused": "Diese Zeile ist eine Auszahlung von {provider} und wird nur durch den Abgleich der Auszahlung gebucht. Die Liste wurde aktualisiert.",
+      "stripePayoutPicker": {
+        "title": "Mit Stripe-Auszahlung abgleichen",
+        "intro": "Einzahlung von {amount} am {date}. Wählen Sie die Auszahlung, aus der sie stammt.",
+        "posting": "Gebucht Soll Bankkonto, Haben Stripe-Verrechnungskonto, zum Bankdatum.",
+        "empty": "Keine offenen Stripe-Auszahlungen. Führen Sie Stripe synchronisieren aus, falls die Auszahlung fehlt.",
+        "arrival": "Eingang {date}",
+        "automatic": "Automatisch",
+        "manual": "Manuell",
+        "matchesRow": "Gleicher Betrag",
+        "amountDiffers": "Der Betrag weicht von der Einzahlung ab",
+        "openMembers": "{count} Transaktion ist noch nicht gebucht oder verworfen | {count} Transaktionen sind noch nicht gebucht oder verworfen",
+        "membersNotListed": "Stripe listet den Inhalt manueller Auszahlungen nicht auf – alle Kartenzahlungen vor dem Ankunftsdatum sind gebucht",
+        "confirm": "Abgleichen",
+        "success": "Die Stripe-Auszahlung ist abgeglichen.",
+        "residueManual": "Manuelle Auszahlung abgeglichen. Stripe listet ihren Inhalt nicht auf, prüfen Sie daher den Saldo des Stripe-Verrechnungskontos.",
+        "residue": "Die Transaktionen der Auszahlung ergeben nicht die Auszahlung: {amount} verbleibt auf dem Stripe-Verrechnungskonto. Bitte prüfen und korrigieren.",
+        "errors": {
+          "not_stripe_deposit": "Die Bankzeile ist keine Stripe-Auszahlung (der Text passt nicht zum Stripe-Muster).",
+          "bank_row_not_eligible": "Die Bankzeile ist bereits gebucht oder verworfen.",
+          "amount_mismatch": "Der Betrag der Bankzeile weicht von der Auszahlung ab.",
+          "payout_not_clearable": "Die Auszahlung ist bereits abgeglichen oder wurde nicht in NOK ausgezahlt.",
+          "members_open": "{count} Transaktion der Auszahlung ist noch nicht gebucht oder verworfen. | {count} Transaktionen der Auszahlung sind noch nicht gebucht oder verworfen.",
+          "no_period": "Für das Bankdatum gibt es keine Rechnungsperiode. Legen Sie sie zuerst an.",
+          "period_closed": "Die Rechnungsperiode für das Bankdatum ist abgeschlossen.",
+          "busy": "Eine Stripe-Synchronisierung läuft. Bitte gleich erneut versuchen.",
+          "generic": "Die Auszahlung konnte nicht abgeglichen werden.",
+          "members_not_listed": "Stripe hat den Inhalt der Auszahlung noch nicht aufgelistet. Führen Sie zuerst Stripe synchronisieren aus.",
+          "balance_open": "{count} Stripe-Transaktion bis zum Auszahlungsdatum ist nicht gebucht oder verworfen. Buchen oder verwerfen Sie sie zuerst. | {count} Stripe-Transaktionen bis zum Auszahlungsdatum sind nicht gebucht oder verworfen. Buchen oder verwerfen Sie sie zuerst."
+        },
+        "notListedBlocked": "Stripe hat den Inhalt noch nicht aufgelistet – führen Sie zuerst Stripe synchronisieren aus",
+        "openBalance": "{count} Stripe-Transaktion bis zum Eingang ist nicht gebucht oder verworfen | {count} Stripe-Transaktionen bis zum Eingang sind nicht gebucht oder verworfen"
+      }
     },
     "sidebarTitle": "Admin-Portal",
     "inbox": {

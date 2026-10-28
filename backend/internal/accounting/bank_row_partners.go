@@ -615,16 +615,18 @@ func (s *Service) AssignBankRowsToAccountGroup(
 // groupRow is a bank row as a group booking validates it.
 type groupRow struct {
 	id, desc, bankAcct     string
+	counterpart            string
 	date                   time.Time
 	cents                  int64
 	booked, dismissed, prv bool
 }
 
 // loadGroupRows loads the club's rows among ids; any id that is not the
-// club's makes the whole group not found.
+// club's makes the whole group not found, and a provider payout deposit
+// among them refuses it (ProviderPayoutDepositError).
 func (s *Service) loadGroupRows(ctx context.Context, clubID string, ids []string) ([]groupRow, error) {
 	rows, err := s.db.Query(ctx,
-		`SELECT bir.id, bir.row_date, round(bir.amount * 100)::bigint, bir.description,
+		`SELECT bir.id, bir.row_date, round(bir.amount * 100)::bigint, bir.description, COALESCE(bir.counterpart, ''),
 		        bi.bank_account_code,
 		        bir.journal_entry_id IS NOT NULL,
 		        bir.dismissed_at IS NOT NULL OR bir.refund_paired_with IS NOT NULL,
@@ -641,7 +643,7 @@ func (s *Service) loadGroupRows(ctx context.Context, clubID string, ids []string
 	var loaded []groupRow
 	for rows.Next() {
 		var g groupRow
-		if err := rows.Scan(&g.id, &g.date, &g.cents, &g.desc, &g.bankAcct, &g.booked, &g.dismissed, &g.prv); err != nil {
+		if err := rows.Scan(&g.id, &g.date, &g.cents, &g.desc, &g.counterpart, &g.bankAcct, &g.booked, &g.dismissed, &g.prv); err != nil {
 			return nil, fmt.Errorf("scan bank row: %w", err)
 		}
 		loaded = append(loaded, g)
@@ -651,6 +653,13 @@ func (s *Service) loadGroupRows(ctx context.Context, clubID string, ids []string
 	}
 	if len(loaded) != len(ids) {
 		return nil, ErrBankRowNotFound
+	}
+	texts := make([]assignRowText, 0, len(loaded))
+	for _, g := range loaded {
+		texts = append(texts, assignRowText{id: g.id, description: g.desc, counterpart: g.counterpart, cents: g.cents})
+	}
+	if err := refuseProviderPayouts(ctx, s.db, clubID, texts...); err != nil {
+		return nil, err
 	}
 	return loaded, nil
 }

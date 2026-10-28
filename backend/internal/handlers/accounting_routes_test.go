@@ -70,7 +70,7 @@ func TestLedgerRoutesGateMoneyMovesForBoard(t *testing.T) {
 			return nil
 		}
 		path := route
-		for _, p := range []string{"{entryID}", "{importID}", "{rowID}"} {
+		for _, p := range []string{"{entryID}", "{importID}", "{rowID}", "{payoutID}"} {
 			path = strings.ReplaceAll(path, p, "00000000-0000-0000-0000-000000000001")
 		}
 		if rec := serve(method, path, map[string]string{}); rec.Code != http.StatusForbidden {

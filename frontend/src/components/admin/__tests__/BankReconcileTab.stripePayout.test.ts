@@ -1,8 +1,20 @@
 import { describe, it, expect, vi } from 'vitest'
-import { ref } from 'vue'
+import { ref, nextTick } from 'vue'
+import { flushPromises } from '@vue/test-utils'
 import { mountWithPlugins } from '@/test/test-utils'
 import BankReconcileTab from '@/components/admin/BankReconcileTab.vue'
 import type { BankRowSummary } from '@/composables/useBankReconcile'
+
+const { ensureFreshTotp } = vi.hoisted(() => ({ ensureFreshTotp: vi.fn() }))
+vi.mock('@/composables/useFreshTotp', () => ({ useFreshTotp: () => ({ ensureFreshTotp }) }))
+vi.mock('@/composables/useStripePayouts', async () => {
+  const actual = await vi.importActual<typeof import('@/composables/useStripePayouts')>('@/composables/useStripePayouts')
+  return {
+    ...actual,
+    useUnclearedStripePayouts: () => ({ data: ref([]), isLoading: ref(false) }),
+    useClearStripePayout: () => ({ mutateAsync: vi.fn(), isPending: ref(false) }),
+  }
+})
 
 const { icon, rows } = vi.hoisted(() => {
   const row = (id: string, provider: 'stripe' | 'vipps' | null, reason?: string, byHand = false) => ({
@@ -26,7 +38,7 @@ const { icon, rows } = vi.hoisted(() => {
     icon: { template: '<span />' },
     rows: [
       row('stripe', 'stripe', '1 kortbetaling venter på bokføring'),
-      row('manual', 'stripe', 'manuell utbetaling – bokfør for hånd', true),
+      row('manual', 'stripe', 'manuell utbetaling – avstem manuelt', true),
       row('vipps', 'vipps'),
       row('plain', null),
     ] as BankRowSummary[],
@@ -97,13 +109,34 @@ describe('BankReconcileTab Stripe payout rows', () => {
     expect(item.text()).not.toContain('admin.bankReconcile.dismiss')
   })
 
-  it('tells the treasurer to book a manual payout by hand and lets the row be dismissed', () => {
+  it('offers a by-hand row the payout picker, and still lets it be dismissed', () => {
     const wrapper = mountWithPlugins(BankReconcileTab)
     const li = rowItem(wrapper, 'manual')
-    expect(li.find('[data-testid="bank-row-stripe-payout-by-hand"]').text()).toContain('admin.bankReconcile.stripeBookByHand')
+    const byHand = li.find('[data-testid="bank-row-stripe-payout-by-hand"]')
+    expect(byHand.text()).toContain('admin.bankReconcile.stripeByHandHint')
+    expect(byHand.find('[data-testid="bank-row-stripe-clear"]').text()).toContain('admin.bankReconcile.stripeClearAction')
     expect(li.text()).toContain('admin.bankReconcile.dismiss')
     expect(li.text()).not.toContain('admin.bankReconcile.showSuggestions')
     expect(li.text()).not.toContain('admin.bankReconcile.noInvoiceSuggestions')
+    expect(rowItem(wrapper, 'stripe').find('[data-testid="bank-row-stripe-clear"]').exists()).toBe(false)
+  })
+
+  it('asks for a fresh TOTP before opening the picker, and not at all when it is refused', async () => {
+    const wrapper = mountWithPlugins(BankReconcileTab, { global: { stubs: { teleport: true } } })
+    const button = rowItem(wrapper, 'manual').find('[data-testid="bank-row-stripe-clear"]')
+
+    ensureFreshTotp.mockResolvedValueOnce(false)
+    await button.trigger('click')
+    await flushPromises()
+    expect(ensureFreshTotp).toHaveBeenCalledTimes(1)
+    expect(wrapper.find('[data-testid="stripe-payout-picker"]').exists()).toBe(false)
+
+    ensureFreshTotp.mockResolvedValueOnce(true)
+    await button.trigger('click')
+    await flushPromises()
+    await nextTick()
+    expect(ensureFreshTotp).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('[data-testid="stripe-payout-picker"]').exists()).toBe(true)
   })
 
   it('keeps suggestions on an ordinary row', () => {

@@ -1269,7 +1269,41 @@
         "conflictOverride": "De betaler toch voor dit lid onthouden"
       },
       "stripeAutoClearing": "Stripe-uitbetaling – wordt automatisch afgestemd",
-      "stripeBookByHand": "Boek het handmatig in het grootboek (debet bank, credit 1580) en wijs de regel af als interne overboeking."
+      "stripeByHandHint": "Geen automatische afstemming. Kies de Stripe-uitbetaling waar deze storting bij hoort, of wijs de regel af als het geen uitbetaling is.",
+      "stripeClearAction": "Afstemmen met Stripe-uitbetaling",
+      "providerPayoutRefused": "Deze regel is een uitbetaling van {provider} en wordt alleen geboekt door de uitbetaling af te stemmen. De lijst is ververst.",
+      "stripePayoutPicker": {
+        "title": "Afstemmen met Stripe-uitbetaling",
+        "intro": "Storting van {amount} op {date}. Kies de uitbetaling waar die van komt.",
+        "posting": "Geboekt debet bankrekening, credit de Stripe-tussenrekening, op de bankdatum.",
+        "empty": "Geen openstaande Stripe-uitbetalingen. Voer Stripe synchroniseren uit als de uitbetaling ontbreekt.",
+        "arrival": "Aankomst {date}",
+        "automatic": "Automatisch",
+        "manual": "Handmatig",
+        "matchesRow": "Zelfde bedrag",
+        "amountDiffers": "Het bedrag wijkt af van de storting",
+        "openMembers": "{count} transactie is nog niet geboekt of afgewezen | {count} transacties zijn nog niet geboekt of afgewezen",
+        "membersNotListed": "Stripe toont de inhoud van handmatige uitbetalingen niet – alle kaartbetalingen vóór de aankomstdatum zijn geboekt",
+        "confirm": "Afstemmen",
+        "success": "De Stripe-uitbetaling is afgestemd.",
+        "residueManual": "Handmatige uitbetaling afgestemd. Stripe vermeldt de inhoud niet, controleer dus het saldo van de Stripe-tussenrekening.",
+        "residue": "De transacties van de uitbetaling tellen niet op tot de uitbetaling: er blijft {amount} op de Stripe-tussenrekening. Controleer en corrigeer.",
+        "errors": {
+          "not_stripe_deposit": "De bankregel is geen Stripe-uitbetaling (de tekst past niet bij het Stripe-patroon).",
+          "bank_row_not_eligible": "De bankregel is al geboekt of afgewezen.",
+          "amount_mismatch": "Het bedrag van de bankregel wijkt af van de uitbetaling.",
+          "payout_not_clearable": "De uitbetaling is al afgestemd, of is niet in NOK uitbetaald.",
+          "members_open": "{count} transactie in de uitbetaling is nog niet geboekt of afgewezen. | {count} transacties in de uitbetaling zijn nog niet geboekt of afgewezen.",
+          "no_period": "Er is geen boekingsperiode voor de bankdatum. Maak die eerst aan.",
+          "period_closed": "De boekingsperiode voor de bankdatum is gesloten.",
+          "busy": "Er loopt een Stripe-synchronisatie. Probeer het zo opnieuw.",
+          "generic": "De uitbetaling kon niet worden afgestemd.",
+          "members_not_listed": "Stripe heeft de inhoud van de uitbetaling nog niet vermeld. Voer eerst Stripe synchroniseren uit.",
+          "balance_open": "{count} Stripe-transactie tot de uitbetalingsdatum is niet geboekt of afgewezen. Boek of wijs die eerst af. | {count} Stripe-transacties tot de uitbetalingsdatum zijn niet geboekt of afgewezen. Boek of wijs die eerst af."
+        },
+        "notListedBlocked": "Stripe heeft de inhoud nog niet vermeld – voer eerst Stripe synchroniseren uit",
+        "openBalance": "{count} Stripe-transactie tot de aankomst is niet geboekt of afgewezen | {count} Stripe-transacties tot de aankomst zijn niet geboekt of afgewezen"
+      }
     },
     "sidebarTitle": "Beheerportaal",
     "inbox": {

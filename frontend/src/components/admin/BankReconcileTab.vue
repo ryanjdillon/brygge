@@ -7,6 +7,7 @@ import Modal from '@/components/ui/Modal.vue'
 import BankRowPartnerChoice from '@/components/admin/BankRowPartnerChoice.vue'
 import PayerAliasToggle from '@/components/admin/PayerAliasToggle.vue'
 import AccountOptionLabel from '@/components/admin/AccountOptionLabel.vue'
+import StripePayoutPicker from '@/components/admin/StripePayoutPicker.vue'
 import Select from '@/components/ui/form/Select.vue'
 import {
   useBankUnmatchedRows,
@@ -53,6 +54,8 @@ import { filterAccounts } from '@/lib/accountSearch'
 import { priceCategoryKey } from '@/lib/priceCategories'
 import { useConfirm, useConfirmStore } from '@/stores/confirm'
 import { useToast } from '@/composables/useToast'
+import { useFreshTotp } from '@/composables/useFreshTotp'
+import { providerPayoutRefusal } from '@/composables/useStripePayouts'
 
 const { t, locale } = useI18n()
 const askConfirm = useConfirm()
@@ -506,9 +509,22 @@ const groupAccountSections = computed(() => {
     .filter((sec) => sec.accounts.length > 0)
 })
 
-// An undismissed Stripe payout deposit is booked only by the payout sweep.
+// An undismissed Stripe payout deposit is booked only by a payout clearing:
+// the sweep's, or a person's through the picker.
 function isStripePayout(row: BankRowSummary): boolean {
   return row.provider_payout === 'stripe' && !row.dismissed_at
+}
+
+// ── Clear a Stripe payout by hand ────────────────────────────
+const { ensureFreshTotp } = useFreshTotp()
+const stripePickerOpen = ref(false)
+const stripePickerRow = ref<BankRowSummary | null>(null)
+
+// The clearing posts to the ledger, so the step-up comes before the picker.
+async function openStripePicker(row: BankRowSummary) {
+  if (!(await ensureFreshTotp())) return
+  stripePickerRow.value = row
+  stripePickerOpen.value = true
 }
 
 // ── Dismiss reason modal ─────────────────────────────────────
@@ -538,16 +554,26 @@ async function submitDismiss() {
 
 // Runs an assign and tells the treasurer when the server refused it because
 // the faktura is imported and its receivable isn't in the opening balance yet
-// (BRY-386): nothing was booked and the row stays here. Resolves false then.
+// (BRY-386), or because the row is a provider's payout deposit (only its
+// clearing books it; a stale page could still offer the assign): nothing was
+// booked and the row stays here. Resolves false then.
 const toast = useToast()
 async function refusedAsImported(book: () => Promise<boolean>): Promise<boolean> {
   try {
     return await book()
   } catch (e) {
+    if (refusedAsProviderPayout(e)) return false
     if (!isImportedNoOpeningBalanceError(e)) throw e
     toast.error(t('admin.accounting.importedNoOpeningBalance'), 10000)
     return false
   }
+}
+function refusedAsProviderPayout(e: unknown): boolean {
+  const provider = providerPayoutRefusal(e)
+  if (!provider) return false
+  toast.error(t('admin.bankReconcile.providerPayoutRefused', { provider: provider === 'vipps' ? 'Vipps' : 'Stripe' }), 10000)
+  refetchBankRows()
+  return true
 }
 
 // ── Multi-invoice modal ──────────────────────────────────────
@@ -620,7 +646,12 @@ async function doAssignAccount(rowId: string, accountCode: string, k: 'expense' 
   }
   if (assignBlockedReason.value) return
   if (groupRowIds.value) {
-    await assignAccountGroup.mutateAsync({ rowIds: groupRowIds.value, accountCode, description })
+    try {
+      await assignAccountGroup.mutateAsync({ rowIds: groupRowIds.value, accountCode, description })
+    } catch (e) {
+      if (!refusedAsProviderPayout(e)) throw e
+      return
+    }
     accountPickerOpen.value = false
     clearSelection()
     return
@@ -636,6 +667,7 @@ async function doAssignAccount(rowId: string, accountCode: string, k: 'expense' 
       booked++
     }
   } catch (e) {
+    if (refusedAsProviderPayout(e)) return
     if (!isHasPartnerError(e)) throw e
     // The list was stale: a partner appeared since it loaded. Show the
     // choice again for what is left.
@@ -889,7 +921,7 @@ async function doUnassign(rowId: string) {
           :class="selectedIds.has(row.id) ? 'border-brand-400 ring-1 ring-brand-300' : 'border-gray-200'"
         >
           <!-- Bank row info -->
-          <div class="flex items-start justify-between gap-4">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
             <div class="flex items-start gap-3">
               <input
                 v-if="!row.dismissed_at && !isStripePayout(row)"
@@ -951,7 +983,7 @@ async function doUnassign(rowId: string) {
             </div>
             <!-- Batched Vipps payout under the per-charge model: quiet
                  auto-clearing item, not an assignable deposit. -->
-            <div v-if="vippsEnabled && row.vipps_payout" class="flex flex-col items-end gap-1 text-right">
+            <div v-if="vippsEnabled && row.vipps_payout" class="flex flex-col items-start gap-1 text-left sm:items-end sm:text-right">
               <span class="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700">
                 {{ t('admin.bankReconcile.vippsAutoClearing') }}
               </span>
@@ -967,14 +999,14 @@ async function doUnassign(rowId: string) {
                 {{ t('admin.bankReconcile.vippsChargesRemaining', { count: payoutRemaining[row.id] }) }}
               </span>
             </div>
-            <!-- Stripe payout deposit: booked only by the payout sweep, so no
+            <!-- Stripe payout deposit: booked only by a payout clearing, so no
                  faktura or account suggestions (a faktura assign would credit
                  1500 a second time and the payout would never clear). One no
-                 sweep will clear is booked by hand in the ledger (DR bank /
-                 CR 1580) and dismissed here as an internal transfer. -->
+                 sweep will clear is cleared here against the payout a person
+                 picks; one that is not a payout at all is dismissed. -->
             <div
               v-else-if="isStripePayout(row)"
-              class="flex max-w-xs flex-col items-end gap-1 text-right"
+              class="flex w-full flex-col items-start gap-1 text-left sm:w-auto sm:max-w-xs sm:items-end sm:text-right"
               data-testid="bank-row-stripe-payout"
             >
               <span class="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700">
@@ -983,19 +1015,31 @@ async function doUnassign(rowId: string) {
               <span v-if="row.provider_payout_reason" class="text-[10px] text-amber-700" data-testid="bank-row-stripe-payout-reason">
                 {{ row.provider_payout_reason }}
               </span>
-              <template v-if="row.provider_payout_by_hand">
-                <span class="text-[10px] text-gray-600" data-testid="bank-row-stripe-payout-by-hand">
-                  {{ t('admin.bankReconcile.stripeBookByHand') }}
-                </span>
-                <button
-                  type="button"
-                  class="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-white px-2.5 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-50"
-                  @click="openDismiss(row)"
-                >
-                  <Ban class="h-3 w-3" />
-                  {{ t('admin.bankReconcile.dismiss') }}
-                </button>
-              </template>
+              <div
+                v-if="row.provider_payout_by_hand"
+                class="flex flex-col items-start gap-1 sm:items-end"
+                data-testid="bank-row-stripe-payout-by-hand"
+              >
+                <span class="text-xs text-gray-600">{{ t('admin.bankReconcile.stripeByHandHint') }}</span>
+                <div class="flex flex-wrap justify-start gap-2 sm:justify-end">
+                  <button
+                    type="button"
+                    class="inline-flex min-h-11 items-center gap-1 rounded-md border border-violet-300 bg-white px-3 py-1 text-xs font-semibold text-violet-700 hover:bg-violet-50"
+                    data-testid="bank-row-stripe-clear"
+                    @click="openStripePicker(row)"
+                  >
+                    {{ t('admin.bankReconcile.stripeClearAction') }}
+                  </button>
+                  <button
+                    type="button"
+                    class="inline-flex min-h-11 items-center gap-1 rounded-md border border-amber-300 bg-white px-3 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-50"
+                    @click="openDismiss(row)"
+                  >
+                    <Ban class="h-3 w-3" />
+                    {{ t('admin.bankReconcile.dismiss') }}
+                  </button>
+                </div>
+              </div>
             </div>
             <button
               v-else
@@ -1376,5 +1420,7 @@ async function doUnassign(rowId: string) {
       </ul>
       <p v-else class="mt-3 text-xs text-gray-500">{{ t('admin.bankReconcile.noPotential') }}</p>
     </Modal>
+
+    <StripePayoutPicker v-if="stripePickerRow" v-model:open="stripePickerOpen" :row="stripePickerRow" />
   </div>
 </template>

@@ -1269,7 +1269,41 @@
         "conflictOverride": "Ricorda comunque il pagatore per questo socio"
       },
       "stripeAutoClearing": "Pagamento Stripe – riconciliato automaticamente",
-      "stripeBookByHand": "Registralo a mano nel libro mastro (dare banca, avere 1580) e scarta la riga come giroconto interno."
+      "stripeByHandHint": "Nessuna riconciliazione automatica. Scegli il versamento Stripe a cui appartiene questo deposito, oppure scarta la riga se non è un versamento.",
+      "stripeClearAction": "Riconcilia con un versamento Stripe",
+      "providerPayoutRefused": "Questa riga è un versamento di {provider} e viene registrata solo riconciliando il versamento. L'elenco è stato aggiornato.",
+      "stripePayoutPicker": {
+        "title": "Riconcilia con un versamento Stripe",
+        "intro": "Deposito di {amount} del {date}. Scegli il versamento da cui proviene.",
+        "posting": "Registrato in dare sul conto bancario, in avere sul conto transitorio Stripe, alla data bancaria.",
+        "empty": "Nessun versamento Stripe da riconciliare. Esegui la sincronizzazione Stripe se il versamento manca.",
+        "arrival": "Arrivo {date}",
+        "automatic": "Automatico",
+        "manual": "Manuale",
+        "matchesRow": "Stesso importo",
+        "amountDiffers": "L'importo è diverso dal deposito",
+        "openMembers": "{count} transazione non è ancora registrata o scartata | {count} transazioni non sono ancora registrate o scartate",
+        "membersNotListed": "Stripe non elenca il contenuto dei pagamenti manuali – tutti i pagamenti con carta prima della data di arrivo sono registrati",
+        "confirm": "Riconcilia",
+        "success": "Il versamento Stripe è riconciliato.",
+        "residueManual": "Versamento manuale riconciliato. Stripe non ne elenca il contenuto, quindi controlla il saldo del conto transitorio Stripe.",
+        "residue": "Le transazioni del versamento non corrispondono al versamento: restano {amount} sul conto transitorio Stripe. Controlla e correggi.",
+        "errors": {
+          "not_stripe_deposit": "La riga bancaria non è un versamento Stripe (il testo non corrisponde al modello Stripe).",
+          "bank_row_not_eligible": "La riga bancaria è già registrata o scartata.",
+          "amount_mismatch": "L'importo della riga bancaria è diverso dal versamento.",
+          "payout_not_clearable": "Il versamento è già riconciliato, oppure non è stato pagato in NOK.",
+          "members_open": "{count} transazione del versamento non è ancora registrata o scartata. | {count} transazioni del versamento non sono ancora registrate o scartate.",
+          "no_period": "Non esiste un periodo contabile per la data bancaria. Crealo prima.",
+          "period_closed": "Il periodo contabile della data bancaria è chiuso.",
+          "busy": "È in corso una sincronizzazione Stripe. Riprova tra poco.",
+          "generic": "Impossibile riconciliare il versamento.",
+          "members_not_listed": "Stripe non ha ancora elencato il contenuto del versamento. Esegui prima la sincronizzazione Stripe.",
+          "balance_open": "{count} transazione Stripe fino alla data del versamento non è registrata o scartata. Registrala o scartala prima. | {count} transazioni Stripe fino alla data del versamento non sono registrate o scartate. Registrale o scartale prima."
+        },
+        "notListedBlocked": "Stripe non ne ha ancora elencato il contenuto – esegui prima la sincronizzazione Stripe",
+        "openBalance": "{count} transazione Stripe fino all'arrivo non è registrata o scartata | {count} transazioni Stripe fino all'arrivo non sono registrate o scartate"
+      }
     },
     "sidebarTitle": "Portale admin",
     "inbox": {

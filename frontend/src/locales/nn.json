@@ -2087,7 +2087,41 @@
         "conflictOverride": "Hugs betalaren for dette medlemmet likevel"
       },
       "stripeAutoClearing": "Stripe-utbetaling – vert avstemt automatisk",
-      "stripeBookByHand": "Bokfør for hand i hovudboka (debet bank, kredit 1580) og avvis rada som intern overføring."
+      "stripeByHandHint": "Inga automatisk avstemming. Vel Stripe-utbetalinga innskotet høyrer til, eller avvis rada om det ikkje er ei utbetaling.",
+      "stripeClearAction": "Avstem mot Stripe-utbetaling",
+      "providerPayoutRefused": "Rada er ei utbetaling frå {provider} og vert berre bokført ved avstemming av utbetalinga. Lista er oppdatert.",
+      "stripePayoutPicker": {
+        "title": "Avstem mot Stripe-utbetaling",
+        "intro": "Innskot på {amount} den {date}. Vel utbetalinga det kjem frå.",
+        "posting": "Vert bokført debet bankkonto, kredit Stripe-mellomkontoen, på bankdatoen.",
+        "empty": "Ingen uavstemte Stripe-utbetalingar. Køyr Synk Stripe om utbetalinga manglar.",
+        "arrival": "Ankomst {date}",
+        "automatic": "Automatisk",
+        "manual": "Manuell",
+        "matchesRow": "Same beløp",
+        "amountDiffers": "Beløpet er ikkje det same som innskotet",
+        "openMembers": "{count} transaksjon er ikkje bokført eller avvist enno | {count} transaksjonar er ikkje bokførte eller avviste enno",
+        "membersNotListed": "Stripe listar ikkje innhaldet i manuelle utbetalingar – alle kortbetalingar før ankomstdatoen er bokførte",
+        "confirm": "Avstem",
+        "success": "Stripe-utbetalinga er avstemt.",
+        "residueManual": "Manuell utbetaling avstemt. Stripe listar ikkje kva ho inneheld, så kontroller saldoen på Stripe-mellomkontoen.",
+        "residue": "Transaksjonane i utbetalinga går ikkje opp i utbetalinga: {amount} står att på Stripe-mellomkontoen. Kontroller og korriger.",
+        "errors": {
+          "not_stripe_deposit": "Bankrada er ikkje ei Stripe-utbetaling (teksten passar ikkje med Stripe-mønsteret).",
+          "bank_row_not_eligible": "Bankrada er alt bokført eller avvist.",
+          "amount_mismatch": "Beløpet på bankrada er ikkje det same som utbetalinga.",
+          "payout_not_clearable": "Utbetalinga er alt avstemt, eller er ikkje utbetalt i NOK.",
+          "members_open": "{count} transaksjon i utbetalinga er ikkje bokført eller avvist enno. | {count} transaksjonar i utbetalinga er ikkje bokførte eller avviste enno.",
+          "no_period": "Det finst inga rekneskapsperiode for bankdatoen. Opprett ho først.",
+          "period_closed": "Rekneskapsperioden for bankdatoen er lukka.",
+          "busy": "Ein Stripe-synk køyrer. Prøv att om litt.",
+          "generic": "Kunne ikkje avstemme utbetalinga.",
+          "members_not_listed": "Stripe har ikkje lista innhaldet i utbetalinga enno. Køyr Synk Stripe først.",
+          "balance_open": "{count} Stripe-transaksjon fram til utbetalingsdatoen er ikkje bokført eller avvist. Bokfør eller avvis ho først. | {count} Stripe-transaksjonar fram til utbetalingsdatoen er ikkje bokførte eller avviste. Bokfør eller avvis dei først."
+        },
+        "notListedBlocked": "Stripe har ikkje lista innhaldet enno – køyr Synk Stripe først",
+        "openBalance": "{count} Stripe-transaksjon fram til ankomst er ikkje bokført eller avvist | {count} Stripe-transaksjonar fram til ankomst er ikkje bokførte eller avviste"
+      }
     },
     "sidebarTitle": "Adminportal"
   },

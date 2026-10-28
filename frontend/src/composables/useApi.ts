@@ -67,7 +67,7 @@ export function useApi() {
         throw new ApiError(response.status, message, body?.error)
       }
 
-      throw new ApiError(response.status, message, code)
+      throw new ApiError(response.status, message, code, body && typeof body === 'object' ? body : undefined)
     }
 
     if (response.status === 204) {

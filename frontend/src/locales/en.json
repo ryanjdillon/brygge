@@ -2210,7 +2210,41 @@
         "conflictOverride": "Remember the payer for this member anyway"
       },
       "stripeAutoClearing": "Stripe payout – clears automatically",
-      "stripeBookByHand": "Book it by hand in the ledger (debit bank, credit 1580) and dismiss the row as an internal transfer."
+      "stripeByHandHint": "No automatic clearing. Pick the Stripe payout this deposit belongs to, or dismiss the row if it is not a payout.",
+      "stripeClearAction": "Clear against a Stripe payout",
+      "providerPayoutRefused": "This row is a {provider} payout and is booked only by clearing the payout. The list has been refreshed.",
+      "stripePayoutPicker": {
+        "title": "Clear against a Stripe payout",
+        "intro": "Deposit of {amount} on {date}. Pick the payout it comes from.",
+        "posting": "Booked debit bank account, credit the Stripe clearing account, on the bank date.",
+        "empty": "No uncleared Stripe payouts. Run Sync Stripe if the payout is missing.",
+        "arrival": "Arrival {date}",
+        "automatic": "Automatic",
+        "manual": "Manual",
+        "matchesRow": "Same amount",
+        "amountDiffers": "The amount differs from the deposit",
+        "openMembers": "{count} transaction is not booked or dismissed yet | {count} transactions are not booked or dismissed yet",
+        "membersNotListed": "Stripe does not list the contents of manual payouts – every card payment before the arrival date is booked",
+        "confirm": "Clear",
+        "success": "The Stripe payout is cleared.",
+        "residueManual": "Manual payout cleared. Stripe does not list what it contains, so check the balance of the Stripe clearing account.",
+        "residue": "The payout's transactions do not add up to the payout: {amount} is left on the Stripe clearing account. Check and correct it.",
+        "errors": {
+          "not_stripe_deposit": "The bank row is not a Stripe payout (its text does not match the Stripe pattern).",
+          "bank_row_not_eligible": "The bank row is already booked or dismissed.",
+          "amount_mismatch": "The bank row's amount differs from the payout.",
+          "payout_not_clearable": "The payout is already cleared, or was not paid out in NOK.",
+          "members_open": "{count} transaction in the payout is not booked or dismissed yet. | {count} transactions in the payout are not booked or dismissed yet.",
+          "no_period": "There is no fiscal period for the bank date. Create it first.",
+          "period_closed": "The fiscal period for the bank date is closed.",
+          "busy": "A Stripe sync is running. Try again shortly.",
+          "generic": "Could not clear the payout.",
+          "members_not_listed": "Stripe has not listed the payout's contents yet. Run Sync Stripe first.",
+          "balance_open": "{count} Stripe transaction up to the payout date is not booked or dismissed. Book or dismiss it first. | {count} Stripe transactions up to the payout date are not booked or dismissed. Book or dismiss them first."
+        },
+        "notListedBlocked": "Stripe has not listed its contents yet – run Sync Stripe first",
+        "openBalance": "{count} Stripe transaction up to the arrival is not booked or dismissed | {count} Stripe transactions up to the arrival are not booked or dismissed"
+      }
     },
     "sidebarTitle": "Admin portal"
   },

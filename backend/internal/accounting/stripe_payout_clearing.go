@@ -36,7 +36,7 @@ const (
 
 // Reasons the sweep gives (Norwegian, shown as is).
 const (
-	stripeReasonManual         = "manuell utbetaling – bokfør for hånd"
+	stripeReasonManual         = "manuell utbetaling – avstem manuelt"
 	stripeReasonManyPayouts    = "flere Stripe-utbetalinger passer – avstem manuelt"
 	stripeReasonManyRows       = "flere bankrader passer – avstem manuelt"
 	stripeReasonNotListed      = "Stripe har ikke listet innholdet i utbetalingen ennå – kjør Synk Stripe"
@@ -147,7 +147,7 @@ func (s *Service) clearStripePayouts(ctx context.Context, clubID, actorID string
 			res.Skipped = append(res.Skipped, item)
 			continue
 		}
-		out, err := s.clearStripePayout(ctx, clubID, actorID, pm.payout.id, pm.row.id)
+		out, err := s.clearStripePayout(ctx, clubID, actorID, pm.payout.id, pm.row.id, automaticStripeClear)
 		switch {
 		case err != nil:
 			s.log.Warn().Err(err).Str("payout_id", pm.payout.payoutID).Str("bank_row_id", pm.row.id).
@@ -182,7 +182,7 @@ type stripeRowStatus struct {
 	reason string
 	// byHand is true when no sweep will clear the row (a manual payout, an
 	// ambiguous match, members that do not add up, no payout at all): a
-	// person books it in the ledger.
+	// person clears it (ClearStripePayoutManually) or dismisses it.
 	byHand bool
 }
 
@@ -284,10 +284,11 @@ func (s *Service) planStripePayouts(ctx context.Context, clubID string, payouts 
 		if pm.state != stripePlanReady {
 			continue
 		}
-		pm.state, pm.reason, err = stripePayoutReadiness(ctx, s.db, clubID, pm.payout, pm.row.date, false)
+		v, err := stripePayoutReadiness(ctx, s.db, clubID, pm.payout, pm.row.date, false, automaticStripeClear)
 		if err != nil {
 			return nil, err
 		}
+		pm.state, pm.reason = v.state, v.reason
 	}
 	return plan, nil
 }
@@ -496,6 +497,39 @@ func (m *stripeMembers) add(category, status string, net int64) {
 	}
 }
 
+// open counts the members not yet booked or dismissed.
+func (m *stripeMembers) open() int {
+	return m.chargesOpen + m.chargesReview + m.feesOpen + m.refundsOpen + m.otherOpen
+}
+
+// openUnlinkedStripeRowsSQL selects the club's open balance rows linked to
+// no payout and available by the arrival date: what could have funded a
+// manual payout. club and arrival are SQL expressions.
+func openUnlinkedStripeRowsSQL(club, arrival string) string {
+	return `SELECT u.id FROM stripe_balance_transactions u
+	         WHERE u.club_id = ` + club + ` AND u.payout_id IS NULL
+	           AND u.reporting_category NOT IN ('payout', 'payout_reversal')
+	           AND COALESCE(u.available_on, u.created_at::date) <= ` + arrival + `
+	           AND u.status NOT IN ('booked', 'dismissed')`
+}
+
+// countOpenUnlinkedStripeRows counts openUnlinkedStripeRowsSQL for a
+// payout arriving on arrival. With lock (in the clearing transaction) the
+// rows are taken FOR SHARE in id order, as the members are, so a booking
+// pass marking one waits for, or is waited on by, the clearing.
+func countOpenUnlinkedStripeRows(ctx context.Context, q dbtx, clubID string, arrival time.Time, lock bool) (int, error) {
+	inner := openUnlinkedStripeRowsSQL("$1::uuid", "$2::date") + ` ORDER BY u.id`
+	if lock {
+		inner += ` FOR SHARE`
+	}
+	var n int
+	if err := q.QueryRow(ctx, `SELECT count(*) FROM (`+inner+`) open_rows`,
+		clubID, arrival.Format("2006-01-02")).Scan(&n); err != nil {
+		return 0, fmt.Errorf("counting open stripe balance rows: %w", err)
+	}
+	return n, nil
+}
+
 // waitingReason lists what still has to be booked, in Norwegian.
 func (m *stripeMembers) waitingReason() string {
 	var parts []string
@@ -525,80 +559,175 @@ func plural(n int, one, many string) string {
 	return fmt.Sprintf("%d %s", n, many)
 }
 
-// stripePayoutReadiness decides whether a matched payout can clear now:
-// its members are listed and add up to it, all are booked or dismissed,
-// and the bank date's fiscal period exists and is open. It never creates a
-// period. lock is passed to loadStripeMembers.
-func stripePayoutReadiness(ctx context.Context, q dbtx, clubID string, p stripePayoutCand, bankDate time.Time, lock bool) (state int, reason string, err error) {
-	if !p.listed {
-		return stripePlanWaiting, stripeReasonNotListed, nil
+// stripeClearOpts says which of the clearing's checks apply. The sweep
+// (automaticStripeClear) clears only on evidence; a person
+// (manualStripeClear) has chosen the payout and the deposit, so what only
+// served to find the pair, or that a person is better placed to judge, is
+// left out. What keeps the books right stays for both: the deposit is an
+// eligible Stripe deposit equal to the payout to the øre, the payout is a
+// paid, uncleared NOK payout, every member is booked or dismissed, and the
+// bank date's period exists and is open.
+type stripeClearOpts struct {
+	// requireAutomatic refuses a manual payout and a deposit outside the
+	// arrival window. Stripe cannot list what a manual payout paid out, so
+	// nothing but a person proves the clearing account holds it.
+	requireAutomatic bool
+	// requireNetSum wants the members listed and adding up to the payout.
+	// A person may clear one that does not (funds of a failed payout
+	// carried into a later one, a member kept on an earlier payout); the
+	// clearing account remainder is then reported back.
+	requireNetSum bool
+	// checkDescriptor re-checks, under the lock, that the deposit carries
+	// the club's Stripe descriptor. The sweep only ever picks such rows.
+	checkDescriptor bool
+	// autoMatched is what the deposit's auto_matched is set to.
+	autoMatched bool
+}
+
+var (
+	automaticStripeClear = stripeClearOpts{requireAutomatic: true, requireNetSum: true, autoMatched: true}
+	manualStripeClear    = stripeClearOpts{checkDescriptor: true}
+)
+
+// Codes of a refused clearing (StripeClearRefusal.Code). The API answers
+// them as 409 codes, so they are part of its contract.
+const (
+	StripeClearNotStripeDeposit   = "not_stripe_deposit"
+	StripeClearBankRowNotEligible = "bank_row_not_eligible"
+	StripeClearAmountMismatch     = "amount_mismatch"
+	StripeClearPayoutNotClearable = "payout_not_clearable"
+	StripeClearMembersOpen        = "members_open"
+	StripeClearMembersNotListed   = "members_not_listed"
+	StripeClearBalanceOpen        = "balance_open"
+	StripeClearNoPeriod           = "no_period"
+	StripeClearPeriodClosed       = "period_closed"
+)
+
+// Codes only the sweep's checks give, and not-found markers the manual
+// path turns into errors.
+const (
+	stripeClearMembersMismatch = "members_mismatch"
+	stripeClearNotMatched      = "not_matched"
+	stripeClearRowNotFound     = "bank_row_not_found"
+	stripeClearPayoutNotFound  = "payout_not_found"
+	stripeClearRaced           = "raced"
+)
+
+// stripeVerdict is what stripePayoutReadiness decided.
+type stripeVerdict struct {
+	state   int
+	reason  string
+	code    string
+	members stripeMembers
+	// openBalance counts, for a manual payout, the unlinked balance rows up
+	// to its arrival that are still open (balance_open).
+	openBalance int
+}
+
+// stripePayoutReadiness decides whether a matched payout can clear now: its
+// members are listed and add up to it (when opts.requireNetSum), all are
+// booked or dismissed, and the bank date's fiscal period exists and is
+// open. It never creates a period. lock is passed to loadStripeMembers.
+//
+// Without members the "all booked" test would hold vacuously, so a payout
+// that should have them must have them listed (an automatic one), and a
+// manual payout, which Stripe never lists, instead needs every balance row
+// that could have funded it (unlinked to a payout, available by its
+// arrival) booked or dismissed.
+func stripePayoutReadiness(ctx context.Context, q dbtx, clubID string, p stripePayoutCand, bankDate time.Time, lock bool, opts stripeClearOpts) (stripeVerdict, error) { //nolint:cyclop // one refusal per readiness rule, each with its own code
+	if (opts.requireNetSum || p.automatic) && !p.listed {
+		return stripeVerdict{state: stripePlanWaiting, reason: stripeReasonNotListed, code: StripeClearMembersNotListed}, nil
 	}
 	m, err := loadStripeMembers(ctx, q, clubID, p.id, lock)
 	if err != nil {
-		return 0, "", err
+		return stripeVerdict{}, err
+	}
+	if !p.automatic {
+		n, err := countOpenUnlinkedStripeRows(ctx, q, clubID, p.arrival, lock)
+		if err != nil {
+			return stripeVerdict{}, err
+		}
+		if n > 0 {
+			return stripeVerdict{state: stripePlanWaiting, code: StripeClearBalanceOpen, members: m, openBalance: n,
+				reason: plural(n, "Stripe-transaksjon", "Stripe-transaksjoner") + " fram til utbetalingsdatoen er ikke bokført eller avvist"}, nil
+		}
 	}
 	// Stripe pays out exactly the net of the transactions it lists for an
 	// automatic payout. Anything else means the stored membership is not
 	// the payout's (a member kept on an earlier, cleared payout; funds of a
 	// failed payout carried into this one), and clearing would leave the
 	// difference on the clearing account.
-	if m.netOre != p.amountOre {
-		return stripePlanSkipped, fmt.Sprintf("Stripe-transaksjonene i utbetalingen summerer til %s, ikke %s – avstem manuelt",
-			formatOre(m.netOre), formatOre(p.amountOre)), nil
+	if opts.requireNetSum && m.netOre != p.amountOre {
+		return stripeVerdict{state: stripePlanSkipped, code: stripeClearMembersMismatch, members: m,
+			reason: fmt.Sprintf("Stripe-transaksjonene i utbetalingen summerer til %s, ikke %s – avstem manuelt",
+				formatOre(m.netOre), formatOre(p.amountOre))}, nil
 	}
 	if m.pendingBlocker {
-		return stripePlanWaiting, m.waitingReason(), nil
+		return stripeVerdict{state: stripePlanWaiting, reason: m.waitingReason(), code: StripeClearMembersOpen, members: m}, nil
 	}
 	_, status, err := existingPeriodIn(ctx, q, clubID, bankDate, "")
 	if errors.Is(err, errNoFiscalPeriod) {
-		return stripePlanWaiting, "ingen regnskapsperiode for " + bankDate.Format("02.01.2006"), nil
+		return stripeVerdict{state: stripePlanWaiting, reason: "ingen regnskapsperiode for " + bankDate.Format("02.01.2006"),
+			code: StripeClearNoPeriod, members: m}, nil
 	}
 	if err != nil {
-		return 0, "", fmt.Errorf("resolving fiscal period: %w", err)
+		return stripeVerdict{}, fmt.Errorf("resolving fiscal period: %w", err)
 	}
 	if status != "open" {
-		return stripePlanWaiting, "regnskapsperioden for " + bankDate.Format("02.01.2006") + " er lukket", nil
+		return stripeVerdict{state: stripePlanWaiting, reason: periodClosedReason(bankDate), code: StripeClearPeriodClosed, members: m}, nil
 	}
-	return stripePlanReady, "", nil
+	return stripeVerdict{state: stripePlanReady, members: m}, nil
+}
+
+func periodClosedReason(day time.Time) string {
+	return "regnskapsperioden for " + day.Format("02.01.2006") + " er lukket"
 }
 
 // stripeClearOutcome is what one clearing attempt did.
 type stripeClearOutcome struct {
 	state   int
 	reason  string
+	code    string
 	entryID string
+	// payoutID is Stripe's payout id, once the payout was locked.
+	payoutID string
+	// members are the payout's members as the clearing read them.
+	members     stripeMembers
+	openBalance int
+	// clearingBalanceOre is the clearing account remainder over the
+	// members and the new entry, nil when it could not be read.
+	clearingBalanceOre *int64
 }
 
-// clearStripePayout books one matched payout in a transaction that locks
-// the bank row, then the payout (the order every clearing takes, so two
-// sweeps queue instead of deadlocking), then its members FOR SHARE, and
-// re-checks the match and readiness under those locks. The entry is
-// created, the bank row and the payout linked with guarded updates, the
+func racedOutcome(code string) stripeClearOutcome {
+	return stripeClearOutcome{state: stripePlanRaced, code: code}
+}
+
+// clearStripePayout books one payout against one deposit in a transaction
+// that locks the bank row, then the payout (the order every clearing
+// takes, so two sweeps queue instead of deadlocking), then its members FOR
+// SHARE, and re-checks the pair and readiness under those locks. The entry
+// is created, the bank row and the payout linked with guarded updates, the
 // payout's own balance row marked booked with it, and the entry posted,
 // all on the one transaction; a lost guard or a failed post rolls it all
 // back. No statement in the transaction uses the pool.
-func (s *Service) clearStripePayout(ctx context.Context, clubID, actorID, payoutRowID, bankRowID string) (stripeClearOutcome, error) { //nolint:cyclop // lock, re-check and post one payout in a single transaction
+func (s *Service) clearStripePayout(ctx context.Context, clubID, actorID, payoutRowID, bankRowID string, opts stripeClearOpts) (stripeClearOutcome, error) { //nolint:cyclop // lock, re-check and post one payout in a single transaction
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return stripeClearOutcome{}, fmt.Errorf("begin: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	row, ok, err := lockStripeDepositTx(ctx, tx, clubID, bankRowID)
-	if err != nil || !ok {
-		return stripeClearOutcome{state: stripePlanRaced}, err
+	row, pair, err := lockStripeClearPairTx(ctx, tx, clubID, payoutRowID, bankRowID, opts)
+	if err != nil || pair.state != 0 {
+		return pair.stripeClearOutcome, err
 	}
-	p, ok, err := lockStripePayoutTx(ctx, tx, clubID, payoutRowID)
-	if err != nil || !ok {
-		return stripeClearOutcome{state: stripePlanRaced}, err
-	}
-	if !p.automatic || row.cents != p.amountOre || !inStripePayoutWindow(row.date, p.arrival) {
-		return stripeClearOutcome{state: stripePlanRaced}, nil
-	}
+	p := pair.payout
 
-	state, reason, err := stripePayoutReadiness(ctx, tx, clubID, p, row.date, true)
-	if err != nil || state != stripePlanReady {
-		return stripeClearOutcome{state: state, reason: reason}, err
+	v, err := stripePayoutReadiness(ctx, tx, clubID, p, row.date, true, opts)
+	if err != nil || v.state != stripePlanReady {
+		return stripeClearOutcome{state: v.state, reason: v.reason, code: v.code, payoutID: p.payoutID, members: v.members,
+			openBalance: v.openBalance}, err
 	}
 	periodID, _, err := existingPeriodIn(ctx, tx, clubID, row.date, "")
 	if err != nil {
@@ -609,6 +738,8 @@ func (s *Service) clearStripePayout(ctx context.Context, clubID, actorID, payout
 		return stripeClearOutcome{}, err
 	}
 
+	closed := stripeClearOutcome{state: stripePlanWaiting, reason: periodClosedReason(row.date), code: StripeClearPeriodClosed,
+		payoutID: p.payoutID, members: v.members}
 	amount := oreToKr(p.amountOre)
 	desc := "Stripe-utbetaling (ankomst " + p.arrival.Format("02.01.2006") + ")"
 	sourceTable := "bank_import_rows"
@@ -627,16 +758,16 @@ func (s *Service) clearStripePayout(ctx context.Context, clubID, actorID, payout
 		},
 	})
 	if errors.Is(err, ErrPeriodClosed) {
-		return stripeClearOutcome{state: stripePlanWaiting, reason: "regnskapsperioden for " + row.date.Format("02.01.2006") + " er lukket"}, nil
+		return closed, nil
 	}
 	if err != nil {
 		return stripeClearOutcome{}, fmt.Errorf("creating journal entry: %w", err)
 	}
-	if raced, err := linkStripePayoutTx(ctx, tx, clubID, entry.ID, bankRowID, payoutRowID); err != nil || raced {
-		return stripeClearOutcome{state: stripePlanRaced}, err
+	if lost, err := linkStripePayoutTx(ctx, tx, clubID, entry.ID, bankRowID, payoutRowID, opts.autoMatched); err != nil || lost {
+		return racedOutcome(stripeClearRaced), err
 	}
 	if err := postJournalEntryTx(ctx, tx, clubID, entry.ID, actorID); errors.Is(err, ErrPeriodClosed) {
-		return stripeClearOutcome{state: stripePlanWaiting, reason: "regnskapsperioden for " + row.date.Format("02.01.2006") + " er lukket"}, nil
+		return closed, nil
 	} else if err != nil {
 		return stripeClearOutcome{}, fmt.Errorf("posting journal entry: %w", err)
 	}
@@ -644,32 +775,79 @@ func (s *Service) clearStripePayout(ctx context.Context, clubID, actorID, payout
 		return stripeClearOutcome{}, fmt.Errorf("commit: %w", err)
 	}
 
-	s.checkStripeClearingBalance(ctx, clubID, payoutRowID, entry.ID, p.payoutID)
-	return stripeClearOutcome{state: stripePlanReady, entryID: entry.ID}, nil
+	return stripeClearOutcome{
+		state: stripePlanReady, entryID: entry.ID, payoutID: p.payoutID, members: v.members,
+		clearingBalanceOre: s.checkStripeClearingBalance(ctx, clubID, payoutRowID, entry.ID, p.payoutID),
+	}, nil
+}
+
+// lockedStripePair is the outcome of lockStripeClearPairTx: state 0 with the
+// payout when the pair may clear, else the outcome to return.
+type lockedStripePair struct {
+	stripeClearOutcome
+	payout stripePayoutCand
+}
+
+// lockStripeClearPairTx locks the bank row, then the payout, and checks the
+// pair as opts asks.
+func lockStripeClearPairTx(ctx context.Context, tx pgx.Tx, clubID, payoutRowID, bankRowID string, opts stripeClearOpts) (lockedStripeDeposit, lockedStripePair, error) {
+	row, found, err := lockStripeDepositTx(ctx, tx, clubID, bankRowID)
+	if err != nil || !found {
+		return row, lockedStripePair{stripeClearOutcome: racedOutcome(stripeClearRowNotFound)}, err
+	}
+	p, found, open, err := lockStripePayoutTx(ctx, tx, clubID, payoutRowID)
+	if err != nil || !found {
+		return row, lockedStripePair{stripeClearOutcome: racedOutcome(stripeClearPayoutNotFound)}, err
+	}
+	// The payout first, so clearing a cleared payout again says so rather
+	// than that its (now booked) deposit is not eligible.
+	if !open {
+		return row, lockedStripePair{stripeClearOutcome: racedOutcome(StripeClearPayoutNotClearable)}, nil
+	}
+	if opts.checkDescriptor {
+		payouts, err := loadProviderPayouts(ctx, tx, clubID)
+		if err != nil {
+			return row, lockedStripePair{}, err
+		}
+		if !payouts.stripeOnly(row.description, row.counterpart, row.cents) {
+			return row, lockedStripePair{stripeClearOutcome: racedOutcome(StripeClearNotStripeDeposit)}, nil
+		}
+	}
+	switch {
+	case !row.eligible:
+		return row, lockedStripePair{stripeClearOutcome: racedOutcome(StripeClearBankRowNotEligible)}, nil
+	case opts.requireAutomatic && (!p.automatic || !inStripePayoutWindow(row.date, p.arrival)):
+		return row, lockedStripePair{stripeClearOutcome: racedOutcome(stripeClearNotMatched)}, nil
+	case row.cents != p.amountOre:
+		return row, lockedStripePair{stripeClearOutcome: racedOutcome(StripeClearAmountMismatch)}, nil
+	}
+	return row, lockedStripePair{payout: p}, nil
 }
 
 // lockedStripeDeposit is a deposit row as the clearing locked it.
 type lockedStripeDeposit struct {
-	date        time.Time
-	cents       int64
-	bankAccount string
+	date                     time.Time
+	cents                    int64
+	bankAccount              string
+	description, counterpart string
+	// eligible: incoming, unbooked, undismissed, not refund-paired, not
+	// provisional and not a Vipps settlement.
+	eligible bool
 }
 
-// lockStripeDepositTx locks the bank row and reports whether it is still a
-// deposit the clearing may book (incoming, unbooked, undismissed, not
-// refund-paired, not provisional).
-func lockStripeDepositTx(ctx context.Context, tx pgx.Tx, clubID, bankRowID string) (lockedStripeDeposit, bool, error) {
-	var d lockedStripeDeposit
-	var eligible bool
-	err := tx.QueryRow(ctx,
+// lockStripeDepositTx locks the bank row; found is false for a row that is
+// not the club's.
+func lockStripeDepositTx(ctx context.Context, tx pgx.Tx, clubID, bankRowID string) (d lockedStripeDeposit, found bool, err error) {
+	err = tx.QueryRow(ctx,
 		`SELECT bir.row_date, round(bir.amount * 100)::bigint, bi.bank_account_code,
+		        COALESCE(bir.description, ''), COALESCE(bir.counterpart, ''),
 		        COALESCE((`+stripeDepositEligibleSQL()+`), false)
 		   FROM bank_import_rows bir
 		   JOIN bank_imports bi ON bi.id = bir.bank_import_id
 		  WHERE bir.id = $1 AND bir.club_id = $2
 		  FOR UPDATE OF bir`,
 		bankRowID, clubID,
-	).Scan(&d.date, &d.cents, &d.bankAccount, &eligible)
+	).Scan(&d.date, &d.cents, &d.bankAccount, &d.description, &d.counterpart, &d.eligible)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return d, false, nil
 	}
@@ -679,15 +857,14 @@ func lockStripeDepositTx(ctx context.Context, tx pgx.Tx, clubID, bankRowID strin
 	if d.bankAccount == "" {
 		d.bankAccount = bankAccountCode
 	}
-	return d, eligible, nil
+	return d, true, nil
 }
 
 // lockStripePayoutTx locks the payout and reports whether it is still a
-// paid NOK payout not yet cleared.
-func lockStripePayoutTx(ctx context.Context, tx pgx.Tx, clubID, payoutRowID string) (stripePayoutCand, bool, error) {
-	p := stripePayoutCand{id: payoutRowID}
-	var open bool
-	err := tx.QueryRow(ctx,
+// paid NOK payout not yet cleared (open).
+func lockStripePayoutTx(ctx context.Context, tx pgx.Tx, clubID, payoutRowID string) (p stripePayoutCand, found, open bool, err error) {
+	p = stripePayoutCand{id: payoutRowID}
+	err = tx.QueryRow(ctx,
 		`SELECT payout_id, amount_ore, arrival_date, automatic, members_listed_at IS NOT NULL,
 		        status = 'paid' AND currency = 'nok' AND journal_entry_id IS NULL AND bank_row_id IS NULL
 		   FROM stripe_payouts
@@ -696,12 +873,12 @@ func lockStripePayoutTx(ctx context.Context, tx pgx.Tx, clubID, payoutRowID stri
 		payoutRowID, clubID,
 	).Scan(&p.payoutID, &p.amountOre, &p.arrival, &p.automatic, &p.listed, &open)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return p, false, nil
+		return p, false, false, nil
 	}
 	if err != nil {
-		return p, false, fmt.Errorf("locking payout: %w", err)
+		return p, false, false, fmt.Errorf("locking payout: %w", err)
 	}
-	return p, open, nil
+	return p, true, open, nil
 }
 
 // linkStripePayoutTx links the bank row and the payout to the clearing
@@ -714,11 +891,11 @@ func lockStripePayoutTx(ctx context.Context, tx pgx.Tx, clubID, payoutRowID stri
 // marked booked rather than left unbooked for ever. It is not a member and
 // never blocks a clearing; a payout ingested without it is cleared the
 // same.
-func linkStripePayoutTx(ctx context.Context, tx pgx.Tx, clubID, entryID, bankRowID, payoutRowID string) (raced bool, err error) {
+func linkStripePayoutTx(ctx context.Context, tx pgx.Tx, clubID, entryID, bankRowID, payoutRowID string, autoMatched bool) (raced bool, err error) {
 	tag, err := tx.Exec(ctx,
-		`UPDATE bank_import_rows SET journal_entry_id = $1, auto_matched = true
+		`UPDATE bank_import_rows SET journal_entry_id = $1, auto_matched = $4
 		  WHERE id = $2 AND club_id = $3 AND journal_entry_id IS NULL AND dismissed_at IS NULL`,
-		entryID, bankRowID, clubID)
+		entryID, bankRowID, clubID, autoMatched)
 	if err != nil {
 		return false, fmt.Errorf("linking bank row: %w", err)
 	}
@@ -745,15 +922,18 @@ func linkStripePayoutTx(ctx context.Context, tx pgx.Tx, clubID, entryID, bankRow
 	return false, nil
 }
 
-// checkStripeClearingBalance logs a warning when the clearing account does
-// not net to zero over the payout's members and its clearing entry. Every
-// member is booked or dismissed and they add up to the payout, so a
-// remainder means a member was dismissed rather than booked, or booked by
-// hand to other amounts; the clearing stands and the treasurer corrects it.
-func (s *Service) checkStripeClearingBalance(ctx context.Context, clubID, payoutRowID, entryID, payoutID string) {
-	var balance float64
+// checkStripeClearingBalance returns the clearing account remainder, in
+// øre, over the payout's members and its clearing entry, and logs a
+// warning when it is not zero. After an automatic clearing every member is
+// booked or dismissed and they add up to the payout, so a remainder means a
+// member was dismissed rather than booked, or booked by hand to other
+// amounts; after a manual one it is also what the members miss of the
+// payout. The clearing stands and the treasurer corrects it. Nil when the
+// balance could not be read; it runs after the commit, on the pool.
+func (s *Service) checkStripeClearingBalance(ctx context.Context, clubID, payoutRowID, entryID, payoutID string) *int64 {
+	var balance int64
 	err := s.db.QueryRow(ctx,
-		`SELECT COALESCE(SUM(jl.debit - jl.credit), 0)
+		`SELECT COALESCE(round(SUM(jl.debit - jl.credit) * 100), 0)::bigint
 		   FROM journal_lines jl
 		   JOIN accounts a ON a.id = jl.account_id
 		  WHERE a.club_id = $1
@@ -767,10 +947,11 @@ func (s *Service) checkStripeClearingBalance(ctx context.Context, clubID, payout
 	).Scan(&balance)
 	if err != nil {
 		s.log.Warn().Err(err).Str("payout_id", payoutID).Msg("stripe payout cleared; clearing balance check failed")
-		return
+		return nil
 	}
-	if !floatNear(balance, 0, 0.005) {
-		s.log.Warn().Str("payout_id", payoutID).Float64("clearing_balance", balance).
+	if balance != 0 {
+		s.log.Warn().Str("payout_id", payoutID).Int64("clearing_balance_ore", balance).
 			Msg("stripe payout cleared but its clearing account movements do not net to zero")
 	}
+	return &balance
 }

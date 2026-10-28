@@ -2206,7 +2206,41 @@
         "conflictOverride": "Husk betaleren for dette medlemmet likevel"
       },
       "stripeAutoClearing": "Stripe-utbetaling – avstemmes automatisk",
-      "stripeBookByHand": "Bokfør for hånd i hovedboka (debet bank, kredit 1580) og avvis raden som intern overføring."
+      "stripeByHandHint": "Ingen automatisk avstemming. Velg Stripe-utbetalingen innskuddet hører til, eller avvis raden hvis det ikke er en utbetaling.",
+      "stripeClearAction": "Avstem mot Stripe-utbetaling",
+      "providerPayoutRefused": "Raden er en utbetaling fra {provider} og bokføres bare ved avstemming av utbetalingen. Listen er oppdatert.",
+      "stripePayoutPicker": {
+        "title": "Avstem mot Stripe-utbetaling",
+        "intro": "Innskudd på {amount} den {date}. Velg utbetalingen det kommer fra.",
+        "posting": "Bokføres debet bankkonto, kredit Stripe-mellomkontoen, på bankdatoen.",
+        "empty": "Ingen uavstemte Stripe-utbetalinger. Kjør Synk Stripe hvis utbetalingen mangler.",
+        "arrival": "Ankomst {date}",
+        "automatic": "Automatisk",
+        "manual": "Manuell",
+        "matchesRow": "Samme beløp",
+        "amountDiffers": "Beløpet er ikke det samme som innskuddet",
+        "openMembers": "{count} transaksjon er ikke bokført eller avvist ennå | {count} transaksjoner er ikke bokført eller avvist ennå",
+        "membersNotListed": "Stripe lister ikke innholdet i manuelle utbetalinger – alle kortbetalinger før ankomstdatoen er bokført",
+        "confirm": "Avstem",
+        "success": "Stripe-utbetalingen er avstemt.",
+        "residueManual": "Manuell utbetaling avstemt. Stripe lister ikke hva den inneholder, så kontroller saldoen på Stripe-mellomkontoen.",
+        "residue": "Transaksjonene i utbetalingen går ikke opp i utbetalingen: {amount} står igjen på Stripe-mellomkontoen. Kontroller og korriger.",
+        "errors": {
+          "not_stripe_deposit": "Bankraden er ikke en Stripe-utbetaling (teksten passer ikke med Stripe-mønsteret).",
+          "bank_row_not_eligible": "Bankraden er allerede bokført eller avvist.",
+          "amount_mismatch": "Beløpet på bankraden er ikke det samme som utbetalingen.",
+          "payout_not_clearable": "Utbetalingen er allerede avstemt, eller er ikke utbetalt i NOK.",
+          "members_open": "{count} transaksjon i utbetalingen er ikke bokført eller avvist ennå. | {count} transaksjoner i utbetalingen er ikke bokført eller avvist ennå.",
+          "no_period": "Det finnes ingen regnskapsperiode for bankdatoen. Opprett den først.",
+          "period_closed": "Regnskapsperioden for bankdatoen er lukket.",
+          "busy": "En Stripe-synk pågår. Prøv igjen om litt.",
+          "generic": "Kunne ikke avstemme utbetalingen.",
+          "members_not_listed": "Stripe har ikke listet innholdet i utbetalingen ennå. Kjør Synk Stripe først.",
+          "balance_open": "{count} Stripe-transaksjon fram til utbetalingsdatoen er ikke bokført eller avvist. Bokfør eller avvis den først. | {count} Stripe-transaksjoner fram til utbetalingsdatoen er ikke bokført eller avvist. Bokfør eller avvis dem først."
+        },
+        "notListedBlocked": "Stripe har ikke listet innholdet ennå – kjør Synk Stripe først",
+        "openBalance": "{count} Stripe-transaksjon fram til ankomst er ikke bokført eller avvist | {count} Stripe-transaksjoner fram til ankomst er ikke bokført eller avvist"
+      }
     },
     "sidebarTitle": "Adminportal"
   },

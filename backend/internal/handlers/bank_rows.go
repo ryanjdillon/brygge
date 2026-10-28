@@ -174,6 +174,27 @@ func importedNoOpeningBalanceConflict(w http.ResponseWriter) {
 	})
 }
 
+// providerPayoutCode is the 409 code for a manual assign of a provider
+// payout deposit (accounting.ProviderPayoutDepositError).
+const providerPayoutCode = "provider_payout"
+
+// providerPayoutConflict answers 409 provider_payout, with the provider
+// and the row, when err refuses a provider payout deposit, and reports
+// whether it did.
+func providerPayoutConflict(w http.ResponseWriter, err error) bool {
+	var refusal *accounting.ProviderPayoutDepositError
+	if !errors.As(err, &refusal) {
+		return false
+	}
+	JSON(w, http.StatusConflict, map[string]string{
+		"error":       refusal.Error(),
+		"code":        providerPayoutCode,
+		"provider":    refusal.Kind,
+		"bank_row_id": refusal.RowID,
+	})
+	return true
+}
+
 func (r assignInvoiceReq) alias() accounting.PayerAliasRequest {
 	return accounting.PayerAliasRequest{Remember: r.RememberPayer, ConfirmOverride: r.ConfirmAliasOverride}
 }
@@ -213,6 +234,9 @@ func (h *BankRowsHandler) HandleAssignInvoice(w http.ResponseWriter, r *http.Req
 	}
 	if errors.Is(err, accounting.ErrImportedNoOpeningBalance) {
 		importedNoOpeningBalanceConflict(w)
+		return
+	}
+	if providerPayoutConflict(w, err) {
 		return
 	}
 	if err != nil {
@@ -261,6 +285,9 @@ func (h *BankRowsHandler) HandleAssignInvoiceMulti(w http.ResponseWriter, r *htt
 	}
 	if errors.Is(err, accounting.ErrImportedNoOpeningBalance) {
 		importedNoOpeningBalanceConflict(w)
+		return
+	}
+	if providerPayoutConflict(w, err) {
 		return
 	}
 	if err != nil {
@@ -323,6 +350,9 @@ func (h *BankRowsHandler) HandleAssignAccount(w http.ResponseWriter, r *http.Req
 		}
 	}
 	journalID, err := h.svc.AssignBankRowToAccount(ctx, claims.ClubID, claims.UserID, rowID, req.AccountCode, req.Kind, req.Description)
+	if providerPayoutConflict(w, err) {
+		return
+	}
 	if err != nil {
 		h.log.Warn().Err(err).Str("row_id", rowID).Msg("assign account")
 		Error(w, http.StatusBadRequest, err.Error())
@@ -384,6 +414,9 @@ func (h *BankRowsHandler) HandleAssignAccountGroup(w http.ResponseWriter, r *htt
 		return
 	}
 	res, err := h.svc.AssignBankRowsToAccountGroup(ctx, claims.ClubID, claims.UserID, req.RowIDs, req.AccountCode, req.Description)
+	if providerPayoutConflict(w, err) {
+		return
+	}
 	if err != nil {
 		if errors.Is(err, accounting.ErrBankRowNotFound) {
 			Error(w, http.StatusNotFound, err.Error())

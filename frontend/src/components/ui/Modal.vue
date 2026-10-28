@@ -13,6 +13,8 @@ interface Props {
   padding?: boolean
   /** Override z-index. Defaults to 50; pass `40` to render under elements that already live at z-50. */
   zIndex?: 40 | 50
+  /** Fill the screen below `md` (phones), as a long picker should; a centred card from `md` up. */
+  fullScreenOnMobile?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -22,6 +24,7 @@ const props = withDefaults(defineProps<Props>(), {
   showCloseButton: true,
   padding: true,
   zIndex: 50,
+  fullScreenOnMobile: false,
 })
 
 const emit = defineEmits<{
@@ -43,6 +46,28 @@ const sizeClass = computed(() => {
   }
 })
 
+// The md: variants are spelled out so Tailwind finds them in the source.
+const mdSizeClass = computed(() => {
+  switch (props.size) {
+    case 'sm': return 'md:max-w-sm'
+    case 'lg': return 'md:max-w-lg'
+    case 'xl': return 'md:max-w-xl'
+    case '2xl': return 'md:max-w-2xl'
+    case '3xl': return 'md:max-w-3xl'
+    case '4xl': return 'md:max-w-4xl'
+    default: return 'md:max-w-md'
+  }
+})
+
+const overlayClass = computed(() =>
+  props.fullScreenOnMobile ? 'items-stretch justify-center p-0 md:items-center md:p-4' : 'items-center justify-center p-4',
+)
+const panelClass = computed(() =>
+  props.fullScreenOnMobile
+    ? ['h-full w-full overflow-y-auto bg-white md:h-auto md:max-h-[90vh] md:rounded-lg md:shadow-xl', mdSizeClass.value]
+    : ['w-full rounded-lg bg-white shadow-xl', sizeClass.value],
+)
+
 const zClass = computed(() => (props.zIndex === 40 ? 'z-40' : 'z-50'))
 
 function close() {
@@ -55,14 +80,14 @@ function close() {
   <Teleport to="body">
     <div
       v-if="open"
-      :class="['fixed inset-0 flex items-center justify-center bg-black/50 p-4', zClass]"
+      :class="['fixed inset-0 flex bg-black/50', overlayClass, zClass]"
       role="dialog"
       aria-modal="true"
       v-backdrop-close="closeOnBackdrop ? close : () => {}"
       @keydown.esc="closeOnEsc && close()"
     >
       <div
-        :class="['w-full rounded-lg bg-white shadow-xl', sizeClass, padding ? 'p-5' : '']"
+        :class="[panelClass, padding ? 'p-5' : '']"
         @click.stop
       >
         <div

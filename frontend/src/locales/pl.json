@@ -1240,7 +1240,41 @@
         "conflictOverride": "Mimo to zapamiętaj płatnika dla tego członka"
       },
       "stripeAutoClearing": "Wypłata Stripe – uzgadniana automatycznie",
-      "stripeBookByHand": "Zaksięguj ręcznie w księdze głównej (Wn bank, Ma 1580) i odrzuć wiersz jako przelew wewnętrzny."
+      "stripeByHandHint": "Brak automatycznego uzgodnienia. Wybierz wypłatę Stripe, do której należy ten wpływ, lub odrzuć wiersz, jeśli to nie jest wypłata.",
+      "stripeClearAction": "Uzgodnij z wypłatą Stripe",
+      "providerPayoutRefused": "Ten wiersz to wypłata z {provider} i jest księgowany tylko przez uzgodnienie wypłaty. Lista została odświeżona.",
+      "stripePayoutPicker": {
+        "title": "Uzgodnij z wypłatą Stripe",
+        "intro": "Wpływ {amount} z dnia {date}. Wybierz wypłatę, z której pochodzi.",
+        "posting": "Księgowane Wn rachunek bankowy, Ma konto rozliczeniowe Stripe, z datą bankową.",
+        "empty": "Brak nieuzgodnionych wypłat Stripe. Uruchom synchronizację Stripe, jeśli brakuje wypłaty.",
+        "arrival": "Data wpływu: {date}",
+        "automatic": "Automatyczna",
+        "manual": "Ręczna",
+        "matchesRow": "Ta sama kwota",
+        "amountDiffers": "Kwota różni się od wpływu",
+        "openMembers": "Transakcje jeszcze niezaksięgowane ani nieodrzucone: {count}",
+        "membersNotListed": "Stripe nie wyszczególnia zawartości wypłat ręcznych – wszystkie płatności kartą przed datą wpływu są zaksięgowane",
+        "confirm": "Uzgodnij",
+        "success": "Wypłata Stripe została uzgodniona.",
+        "residueManual": "Wypłata ręczna uzgodniona. Stripe nie podaje jej zawartości, więc sprawdź saldo konta rozliczeniowego Stripe.",
+        "residue": "Transakcje wypłaty nie sumują się do wypłaty: na koncie rozliczeniowym Stripe pozostaje {amount}. Sprawdź i popraw.",
+        "errors": {
+          "not_stripe_deposit": "Wiersz bankowy nie jest wypłatą Stripe (tekst nie pasuje do wzorca Stripe).",
+          "bank_row_not_eligible": "Wiersz bankowy jest już zaksięgowany lub odrzucony.",
+          "amount_mismatch": "Kwota wiersza bankowego różni się od wypłaty.",
+          "payout_not_clearable": "Wypłata jest już uzgodniona albo nie została wypłacona w NOK.",
+          "members_open": "Transakcje wypłaty jeszcze niezaksięgowane ani nieodrzucone: {count}.",
+          "no_period": "Brak okresu rozliczeniowego dla daty bankowej. Najpierw go utwórz.",
+          "period_closed": "Okres rozliczeniowy dla daty bankowej jest zamknięty.",
+          "busy": "Trwa synchronizacja Stripe. Spróbuj ponownie za chwilę.",
+          "generic": "Nie udało się uzgodnić wypłaty.",
+          "members_not_listed": "Stripe nie podał jeszcze zawartości wypłaty. Najpierw uruchom synchronizację Stripe.",
+          "balance_open": "Transakcje Stripe do daty wypłaty jeszcze niezaksięgowane ani nieodrzucone: {count}. Najpierw je zaksięguj lub odrzuć."
+        },
+        "notListedBlocked": "Stripe nie podał jeszcze jej zawartości – najpierw uruchom synchronizację Stripe",
+        "openBalance": "Transakcje Stripe do daty wpływu jeszcze niezaksięgowane ani nieodrzucone: {count}"
+      }
     },
     "sidebarTitle": "Portal administratora",
     "inbox": {

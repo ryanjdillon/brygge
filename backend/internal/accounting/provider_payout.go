@@ -107,6 +107,55 @@ func loadProviderPayouts(ctx context.Context, q pgxQuerier, clubID string) (prov
 	return providerPayouts{stripe: compileStripeDescriptor(descriptor)}, nil
 }
 
+// ErrProviderPayoutDeposit is matched (errors.Is) by every
+// ProviderPayoutDepositError.
+var ErrProviderPayoutDeposit = errors.New("bank row is a provider payout deposit")
+
+// ProviderPayoutDepositError refuses a manual assign of a provider payout
+// deposit: booking it to a faktura or an account would credit money the
+// provider's own postings already credited, and the payout would never
+// clear. Tildel offers no such assign; this is the server's half of that
+// rule, for a stale page or a direct API call. There is no override: a
+// deposit that is genuinely not a payout is dismissed, or the club's
+// descriptor corrected.
+type ProviderPayoutDepositError struct {
+	RowID string
+	// Kind is ProviderPayoutVipps or ProviderPayoutStripe.
+	Kind string
+}
+
+func (e *ProviderPayoutDepositError) Error() string {
+	return fmt.Sprintf("bank row %s is a %s payout deposit; only its payout clearing books it", e.RowID, e.Kind)
+}
+
+// Is makes errors.Is(err, ErrProviderPayoutDeposit) true.
+func (e *ProviderPayoutDepositError) Is(target error) bool {
+	return target == ErrProviderPayoutDeposit
+}
+
+// assignRowText is what refuseProviderPayouts needs of a loaded bank row.
+type assignRowText struct {
+	id, description, counterpart string
+	cents                        int64
+}
+
+// refuseProviderPayouts is the manual assigns' guard: it loads the club's
+// descriptor on q (the assign's own transaction, so a caller holding a lock
+// never waits for a pool connection) and refuses the first row that is a
+// provider payout deposit.
+func refuseProviderPayouts(ctx context.Context, q pgxQuerier, clubID string, rows ...assignRowText) error {
+	payouts, err := loadProviderPayouts(ctx, q, clubID)
+	if err != nil {
+		return err
+	}
+	for _, r := range rows {
+		if kind := payouts.kind(r.description, r.counterpart, r.cents); kind != "" {
+			return &ProviderPayoutDepositError{RowID: r.id, Kind: kind}
+		}
+	}
+	return nil
+}
+
 // compileStripeDescriptor compiles a stored descriptor. The settings
 // endpoint refuses an empty or invalid one, so the fallback only covers a
 // value written some other way; falling back to the default keeps Stripe

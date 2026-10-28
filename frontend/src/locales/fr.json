@@ -1268,7 +1268,41 @@
         "conflictOverride": "Mémoriser quand même le payeur pour ce membre"
       },
       "stripeAutoClearing": "Versement Stripe – rapproché automatiquement",
-      "stripeBookByHand": "Comptabilisez-le à la main dans le grand livre (débit banque, crédit 1580) et écartez la ligne comme virement interne."
+      "stripeByHandHint": "Pas de rapprochement automatique. Choisissez le virement Stripe auquel ce dépôt correspond, ou rejetez la ligne s'il ne s'agit pas d'un virement.",
+      "stripeClearAction": "Rapprocher d'un virement Stripe",
+      "providerPayoutRefused": "Cette ligne est un virement de {provider} et n'est comptabilisée que par le rapprochement du virement. La liste a été actualisée.",
+      "stripePayoutPicker": {
+        "title": "Rapprocher d'un virement Stripe",
+        "intro": "Dépôt de {amount} le {date}. Choisissez le virement dont il provient.",
+        "posting": "Comptabilisé au débit du compte bancaire, au crédit du compte d'attente Stripe, à la date bancaire.",
+        "empty": "Aucun virement Stripe non rapproché. Lancez Synchroniser Stripe si le virement manque.",
+        "arrival": "Arrivée {date}",
+        "automatic": "Automatique",
+        "manual": "Manuel",
+        "matchesRow": "Même montant",
+        "amountDiffers": "Le montant diffère du dépôt",
+        "openMembers": "{count} transaction n'est pas encore comptabilisée ou rejetée | {count} transactions ne sont pas encore comptabilisées ou rejetées",
+        "membersNotListed": "Stripe ne détaille pas le contenu des virements manuels – tous les paiements par carte antérieurs à la date d'arrivée sont comptabilisés",
+        "confirm": "Rapprocher",
+        "success": "Le virement Stripe est rapproché.",
+        "residueManual": "Virement manuel rapproché. Stripe ne liste pas son contenu : vérifiez le solde du compte d'attente Stripe.",
+        "residue": "Les transactions du virement ne correspondent pas au virement : {amount} reste sur le compte d'attente Stripe. Vérifiez et corrigez.",
+        "errors": {
+          "not_stripe_deposit": "La ligne bancaire n'est pas un virement Stripe (son texte ne correspond pas au motif Stripe).",
+          "bank_row_not_eligible": "La ligne bancaire est déjà comptabilisée ou rejetée.",
+          "amount_mismatch": "Le montant de la ligne bancaire diffère du virement.",
+          "payout_not_clearable": "Le virement est déjà rapproché, ou n'a pas été versé en NOK.",
+          "members_open": "{count} transaction du virement n'est pas encore comptabilisée ou rejetée. | {count} transactions du virement ne sont pas encore comptabilisées ou rejetées.",
+          "no_period": "Il n'existe aucune période comptable pour la date bancaire. Créez-la d'abord.",
+          "period_closed": "La période comptable de la date bancaire est clôturée.",
+          "busy": "Une synchronisation Stripe est en cours. Réessayez dans un instant.",
+          "generic": "Impossible de rapprocher le virement.",
+          "members_not_listed": "Stripe n'a pas encore listé le contenu du virement. Lancez d'abord Synchroniser Stripe.",
+          "balance_open": "{count} transaction Stripe jusqu'à la date du virement n'est pas comptabilisée ou rejetée. Comptabilisez-la ou rejetez-la d'abord. | {count} transactions Stripe jusqu'à la date du virement ne sont pas comptabilisées ou rejetées. Comptabilisez-les ou rejetez-les d'abord."
+        },
+        "notListedBlocked": "Stripe n'a pas encore listé son contenu – lancez d'abord Synchroniser Stripe",
+        "openBalance": "{count} transaction Stripe jusqu'à l'arrivée n'est pas comptabilisée ou rejetée | {count} transactions Stripe jusqu'à l'arrivée ne sont pas comptabilisées ou rejetées"
+      }
     },
     "sidebarTitle": "Portail admin",
     "inbox": {

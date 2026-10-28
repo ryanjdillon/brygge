@@ -278,13 +278,32 @@ Stripe's payout status, refreshed from `GET /v1/payouts/{id}`. It never moves ba
 | `waiting` | `Stripe har ikke listet innholdet i utbetalingen ennå – kjør Synk Stripe` | `members_listed_at` is not set |
 | `waiting` | `<n> kortbetaling(er) venter på bokføring`, `… til gjennomgang`, `<n> Stripe-gebyr(er) venter på bokføring`, `<n> refusjon(er) eller tvist(er) venter (bokføres ikke automatisk ennå)`, `<n> annen/andre Stripe-transaksjon(er) til gjennomgang` (joined by commas) | Members not yet `booked` or `dismissed` |
 | `waiting` | `ingen regnskapsperiode for <dato>`, `regnskapsperioden for <dato> er lukket` | The bank date's period is missing or not open; the sweep never creates one |
-| `skipped` | `manuell utbetaling – bokfør for hånd` | A manual payout; never cleared automatically |
+| `skipped` | `manuell utbetaling – avstem manuelt` | A manual payout; never cleared automatically |
 | `skipped` | `flere Stripe-utbetalinger passer – avstem manuelt`, `flere bankrader passer – avstem manuelt` | The match is not one to one |
 | `skipped` | `Stripe-transaksjonene i utbetalingen summerer til <x>, ikke <y> – avstem manuelt` | The stored members' `net_ore` does not add up to the payout |
 | `skipped` | `ingen Stripe-utbetaling med dette beløpet rundt denne datoen – kjør Synk Stripe` | A Stripe deposit (no `payout_id` in the item) no candidate payout matches |
 | `failed` | `kunne ikke bokføres – se loggen` | Posting failed; logged, retried by the next sweep |
 
-`error` is set when the sweep itself could not run. Tildel's `provider_payout_reason` uses the same texts, and `klar – avstemmes ved neste synk` for a payout the next sweep will clear; `provider_payout_by_hand` is set for the `skipped` cases. A skipped deposit is reported on every sweep until it is booked or dismissed; dismissing it silences the report.
+`error` is set when the sweep itself could not run. Tildel's `provider_payout_reason` uses the same texts, and `klar – avstemmes ved neste synk` for a payout the next sweep will clear; `provider_payout_by_hand` is set for the `skipped` cases, which a person clears from Tildel (below). A skipped deposit is reported on every sweep until it is booked or dismissed; dismissing it silences the report.
+
+### Manual Stripe payout clearing 409 codes (no column)
+
+`POST /accounting/stripe/payouts/{payoutID}/clear` answers 409 with one of these as `code`. All but `busy` are refusals (`accounting.StripeClearRefusal.Code`, with a Norwegian `reason` where the sweep has one); `busy` is `ErrStripeSyncBusy`. The SPA words each in the treasurer's locale.
+
+| Code | Meaning |
+|---|---|
+| `not_stripe_deposit` | The bank row does not carry the club's Stripe descriptor (or the club does not use Stripe); a Vipps settlement is this too |
+| `bank_row_not_eligible` | The row is booked, dismissed, refund-paired or provisional |
+| `amount_mismatch` | The row is not the payout's amount to the øre |
+| `payout_not_clearable` | The payout is cleared already, not `paid`, or not NOK |
+| `members_open` | A member is not `booked` or `dismissed`; the body carries `open_members` |
+| `members_not_listed` | An automatic payout whose members Stripe has not listed yet (run Synk Stripe) |
+| `balance_open` | A manual payout while a balance row that could have funded it (no `payout_id`, available by its arrival) is not `booked` or `dismissed`; the body carries `open_balance` |
+| `no_period` | No fiscal period covers the bank date (none is created) |
+| `period_closed` | The bank date's period is not open |
+| `busy` | Another Stripe sync or booking of the club still holds its slot after a 5 s wait (`ErrStripeSyncBusy`) |
+
+The manual assigns (assign-invoice, assign-invoice-multi, assign-account, assign-account-group) answer 409 `provider_payout`, with `provider` (`vipps` / `stripe`) and `bank_row_id`, for a provider payout deposit.
 
 ### `broadcasts.status` (migration 000069)
 

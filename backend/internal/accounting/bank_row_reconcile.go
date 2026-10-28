@@ -112,12 +112,13 @@ func (s *Service) assignBankRowToInvoice(
 		rowDate     time.Time
 		rowAmount   float64
 		rowDesc     string
+		counterpart string
 		bankAcct    string
 		alreadyJrnl bool
 		dismissed   bool
 	)
 	if err := tx.QueryRow(ctx,
-		`SELECT bir.row_date, bir.amount, bir.description,
+		`SELECT bir.row_date, bir.amount, bir.description, COALESCE(bir.counterpart, ''),
 		        bi.bank_account_code,
 		        bir.journal_entry_id IS NOT NULL,
 		        bir.dismissed_at IS NOT NULL
@@ -125,7 +126,7 @@ func (s *Service) assignBankRowToInvoice(
 		   JOIN bank_imports bi ON bi.id = bir.bank_import_id
 		  WHERE bir.id = $1 AND bir.club_id = $2`,
 		bankRowID, clubID,
-	).Scan(&rowDate, &rowAmount, &rowDesc, &bankAcct, &alreadyJrnl, &dismissed); err != nil {
+	).Scan(&rowDate, &rowAmount, &rowDesc, &counterpart, &bankAcct, &alreadyJrnl, &dismissed); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "", nil, errors.New("bank row not found")
 		}
@@ -139,6 +140,11 @@ func (s *Service) assignBankRowToInvoice(
 	}
 	if rowAmount <= 0 {
 		return "", nil, errors.New("assign-invoice requires a positive (incoming) amount; use assign-account for outgoing rows")
+	}
+	// Before the faktura lock, so the guard's reads never hold it.
+	if err := refuseProviderPayouts(ctx, tx, clubID,
+		assignRowText{id: bankRowID, description: rowDesc, counterpart: counterpart, cents: toCents(rowAmount)}); err != nil {
+		return "", nil, err
 	}
 
 	lockOpts := invoiceLockOpts{mode: lockManual, bookingDate: rowDate}
@@ -410,12 +416,13 @@ func (s *Service) AssignBankRowToAccount( //nolint:cyclop // validate, lock and 
 		rowDate     time.Time
 		rowAmount   float64
 		rowDesc     string
+		counterpart string
 		bankAcct    string
 		alreadyJrnl bool
 		dismissed   bool
 	)
 	if err := tx.QueryRow(ctx,
-		`SELECT bir.row_date, bir.amount, bir.description,
+		`SELECT bir.row_date, bir.amount, bir.description, COALESCE(bir.counterpart, ''),
 		        bi.bank_account_code,
 		        bir.journal_entry_id IS NOT NULL,
 		        bir.dismissed_at IS NOT NULL
@@ -423,7 +430,7 @@ func (s *Service) AssignBankRowToAccount( //nolint:cyclop // validate, lock and 
 		   JOIN bank_imports bi ON bi.id = bir.bank_import_id
 		  WHERE bir.id = $1 AND bir.club_id = $2`,
 		bankRowID, clubID,
-	).Scan(&rowDate, &rowAmount, &rowDesc, &bankAcct, &alreadyJrnl, &dismissed); err != nil {
+	).Scan(&rowDate, &rowAmount, &rowDesc, &counterpart, &bankAcct, &alreadyJrnl, &dismissed); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "", errors.New("bank row not found")
 		}
@@ -434,6 +441,10 @@ func (s *Service) AssignBankRowToAccount( //nolint:cyclop // validate, lock and 
 	}
 	if dismissed {
 		return "", errors.New("bank row is dismissed")
+	}
+	if err := refuseProviderPayouts(ctx, tx, clubID,
+		assignRowText{id: bankRowID, description: rowDesc, counterpart: counterpart, cents: toCents(rowAmount)}); err != nil {
+		return "", err
 	}
 	if kind == "expense" && rowAmount >= 0 {
 		return "", errors.New("expense kind requires a negative (outgoing) amount")
@@ -1012,22 +1023,24 @@ func (s *Service) AssignMultipleBankRowsToInvoiceRemembering(
 
 // multiAssignRow is a row of a multi-row faktura assign.
 type multiAssignRow struct {
-	id       string
-	date     time.Time
-	amount   float64
-	desc     string
-	bankAcct string
+	id          string
+	date        time.Time
+	amount      float64
+	desc        string
+	counterpart string
+	bankAcct    string
 }
 
 // loadMultiAssignRows loads the rows of a multi-row assign, refusing any that
-// is missing, booked, dismissed or not incoming.
+// is missing, booked, dismissed, not incoming or a provider payout deposit.
+// It runs before the faktura lock, as the single-row path's checks do.
 func loadMultiAssignRows(ctx context.Context, tx pgx.Tx, clubID string, rowIDs []string) ([]multiAssignRow, error) {
 	loaded := make([]multiAssignRow, 0, len(rowIDs))
 	for _, rid := range rowIDs {
 		rd := multiAssignRow{id: rid}
 		var alreadyJrnl, dismissed bool
 		if err := tx.QueryRow(ctx,
-			`SELECT bir.row_date, bir.amount, bir.description,
+			`SELECT bir.row_date, bir.amount, bir.description, COALESCE(bir.counterpart, ''),
 			        bi.bank_account_code,
 			        bir.journal_entry_id IS NOT NULL,
 			        bir.dismissed_at IS NOT NULL
@@ -1035,7 +1048,7 @@ func loadMultiAssignRows(ctx context.Context, tx pgx.Tx, clubID string, rowIDs [
 			   JOIN bank_imports bi ON bi.id = bir.bank_import_id
 			  WHERE bir.id = $1 AND bir.club_id = $2`,
 			rid, clubID,
-		).Scan(&rd.date, &rd.amount, &rd.desc, &rd.bankAcct, &alreadyJrnl, &dismissed); err != nil {
+		).Scan(&rd.date, &rd.amount, &rd.desc, &rd.counterpart, &rd.bankAcct, &alreadyJrnl, &dismissed); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return nil, fmt.Errorf("bank row %s not found", rid)
 			}
@@ -1051,6 +1064,13 @@ func loadMultiAssignRows(ctx context.Context, tx pgx.Tx, clubID string, rowIDs [
 			return nil, fmt.Errorf("bank row %s has non-positive amount", rid)
 		}
 		loaded = append(loaded, rd)
+	}
+	texts := make([]assignRowText, 0, len(loaded))
+	for _, rd := range loaded {
+		texts = append(texts, assignRowText{id: rd.id, description: rd.desc, counterpart: rd.counterpart, cents: toCents(rd.amount)})
+	}
+	if err := refuseProviderPayouts(ctx, tx, clubID, texts...); err != nil {
+		return nil, err
 	}
 	return loaded, nil
 }

@@ -85,6 +85,9 @@ const (
 	ActionVippsChargeUnassigned      = "vipps_charge.unassigned"
 	ActionVippsPayoutCleared         = "vipps_payout.cleared"
 
+	// A Stripe payout cleared by a person (BRY-465)
+	ActionStripePayoutCleared = "stripe_payout.cleared"
+
 	// Payer aliases taught from bank Tildel or the Vipps queue (BRY-383)
 	ActionPayerAliasTaught  = "payer_alias.taught"
 	ActionPayerAliasRemoved = "payer_alias.removed"
