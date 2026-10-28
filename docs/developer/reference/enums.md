@@ -244,7 +244,7 @@ Stripe's own `reporting_category` of the balance transaction. Stripe's finer `ty
 unbooked   booked   needs_review   dismissed
 ```
 
-Booking state, set by `accounting.SyncStripeBalance` and `accounting.BookStripeBalance`. `unbooked` rows are ready to book (a charge matched to its attempt, a fee, a payout); `needs_review` rows carry a `review_reason` (CHECK: never NULL while in review); `booked` rows have their posted journal entry (`BookStripeBalance` sets it in the same transaction as the entry; a `payout` row gets its payout's clearing entry from `ClearStripePayouts`); `dismissed` rows were set aside by a person (BRY-456). A re-sync reclassifies only `needs_review` rows held for an ingest reason and never touches the others. A row the booking pass held for review (the last three reasons below) is left to the booking pass, which retries it on every run.
+Booking state, set by `accounting.SyncStripeBalance` and `accounting.BookStripeBalance`. `unbooked` rows are ready to book (a charge matched to its attempt, a fee, a payout); `needs_review` rows carry a `review_reason` (CHECK: never NULL while in review); `booked` rows have their posted journal entry (`BookStripeBalance` sets it in the same transaction as the entry; a `payout` row gets its payout's clearing entry from `ClearStripePayouts`); `dismissed` rows were set aside by a person (`DismissStripeTxn`, BRY-466). A row a person booked (`AssignStripeTxnToInvoice`, `AssignStripeTxnToAccount`) is `booked` and keeps its `review_reason`; the booking pass always clears it, so a `booked` row with a reason was booked by hand. A re-sync reclassifies only `needs_review` rows held for an ingest reason and never touches the others. A row the booking pass held for review (the last three reasons below) is left to the booking pass, which retries it on every run.
 
 `review_reason` (TEXT, no CHECK):
 
@@ -304,6 +304,26 @@ Stripe's payout status, refreshed from `GET /v1/payouts/{id}`. It never moves ba
 | `busy` | Another Stripe sync or booking of the club still holds its slot after a 5 s wait (`ErrStripeSyncBusy`) |
 
 The manual assigns (assign-invoice, assign-invoice-multi, assign-account, assign-account-group) answer 409 `provider_payout`, with `provider` (`vipps` / `stripe`) and `bank_row_id`, for a provider payout deposit.
+
+### Stripe dismissal reasons (`stripe_balance_transactions.dismissed_reason`, no CHECK)
+
+`accounting.IsValidStripeDismissReason`: `booked_manually` (booked another way, e.g. a ledger entry), `test_transaction`, `unidentifiable`, `refund_or_credit`, `duplicate`. The bank-row vocabulary (`internal_transfer`, `bounced`, ...) does not apply to a balance transaction and is refused. The column has no separate note: a note is stored after the code as `<reason>: <note>` (`splitStripeDismissal` reads it back), which is why the dev-query view masks the column.
+
+### Manual Stripe transaction action codes (no column)
+
+`StripeTxnItem.allowed_actions` (`GET /accounting/stripe/transactions`) lists, per row, what the server accepts now: `assign_invoice`, `assign_account`, `dismiss`, `undismiss` (`accounting.stripeAllowedActions`; the matrix is in the accounting README). The four `POST /accounting/stripe/transactions/{txnID}/…` actions answer 409 with one of these as `code` and a Norwegian `reason` (`accounting.StripeTxnRefusal`), or `busy` (`ErrStripeSyncBusy`):
+
+| Code | Meaning |
+|---|---|
+| `not_allowed` | The action is not one the row's category, status and review reason allow (a dismissed row must be undismissed first) |
+| `amount_mismatch` | The charge is not the faktura total to the øre |
+| `invoice_settled` | The faktura cannot take the payment: voided, paid, a booked payment recorded against it, or imported without its opening balance by the booking date |
+| `period_closed` | The booking date's fiscal period is closed or locked |
+| `already_booked` | The row has its journal entry (undo comes with BRY-467) |
+| `payout_cleared` | Assign or undismiss of a row whose payout is cleared in the books (only dismiss remains) |
+| `invalid_reason` | Not a Stripe dismissal reason |
+| `invalid_account` | The account does not exist, is inactive, or is excluded (1500, 2900, a provider clearing account, 19xx or a bank account the club uses) |
+| `busy` | Another Stripe sync or booking of the club still holds its slot after a 5 s wait |
 
 ### `broadcasts.status` (migration 000069)
 

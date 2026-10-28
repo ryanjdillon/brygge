@@ -78,7 +78,7 @@ func checkOrderChargeSplit(ctx context.Context, q dbtx, clubID string, split []V
 // chargePosting is one provider charge booked as DR clearing (the gross)
 // / CR the split, plus any extra balanced lines (a fee booked with the
 // charge). markSQL links the source row to the entry ($1 entry, $2 row,
-// $3 club) and must match no row once the charge is booked; winnerSQL
+// $3 club, then markArgs) and must match no row once the charge is booked; winnerSQL
 // ($1 row, $2 club) reads the entry that booked it.
 type chargePosting struct {
 	clubID, createdBy string
@@ -92,7 +92,9 @@ type chargePosting struct {
 	credits           []CreateJournalLineInput
 	extra             []CreateJournalLineInput
 	markSQL           string
-	winnerSQL         string
+	// markArgs are markSQL's parameters after the first three ($4 on).
+	markArgs  []any
+	winnerSQL string
 	// savepoint names the savepoint the Tx form takes before its entry.
 	savepoint string
 	// periodID, when set, is the open period the caller already resolved;
@@ -146,7 +148,7 @@ func postChargeTx(ctx context.Context, tx pgx.Tx, p *chargePosting) (string, err
 		return "", fmt.Errorf("creating journal entry: %w", err)
 	}
 
-	tag, err := tx.Exec(ctx, p.markSQL, entry.ID, p.sourceID, p.clubID)
+	tag, err := tx.Exec(ctx, p.markSQL, append([]any{entry.ID, p.sourceID, p.clubID}, p.markArgs...)...)
 	if err != nil {
 		return "", fmt.Errorf("marking charge reconciled: %w", err)
 	}

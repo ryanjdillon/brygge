@@ -61,6 +61,7 @@ func TestLedgerRoutesGateMoneyMovesForBoard(t *testing.T) {
 	}
 
 	gated := 0
+	walked := map[string]bool{}
 	err := chi.Walk(r, func(method, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
 		route = strings.TrimSuffix(route, "/")
 		if route == "" {
@@ -69,8 +70,9 @@ func TestLedgerRoutesGateMoneyMovesForBoard(t *testing.T) {
 		if method == http.MethodGet || ungatedLedgerWrites[method+" "+route] {
 			return nil
 		}
+		walked[method+" "+route] = true
 		path := route
-		for _, p := range []string{"{entryID}", "{importID}", "{rowID}", "{payoutID}"} {
+		for _, p := range []string{"{entryID}", "{importID}", "{rowID}", "{payoutID}", "{txnID}"} {
 			path = strings.ReplaceAll(path, p, "00000000-0000-0000-0000-000000000001")
 		}
 		if rec := serve(method, path, map[string]string{}); rec.Code != http.StatusForbidden {
@@ -81,6 +83,11 @@ func TestLedgerRoutesGateMoneyMovesForBoard(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("walk: %v", err)
+	}
+	for _, a := range []string{"assign-invoice", "assign-account", "dismiss", "undismiss"} {
+		if r := "POST /stripe/transactions/{txnID}/" + a; !walked[r] {
+			t.Errorf("%s not walked: not mounted under the gate", r)
+		}
 	}
 	if gated < 15 {
 		t.Errorf("walked %d gated routes; the router lost routes", gated)

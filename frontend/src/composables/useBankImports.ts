@@ -463,25 +463,6 @@ export async function runStripeSync(): Promise<StripeSyncResult> {
   return fetchJSON<StripeSyncResult>(`${BASE}/stripe/sync`, { method: 'POST' })
 }
 
-export interface StripeReviewItem {
-  id: string
-  balance_transaction_id: string
-  reporting_category: string
-  review_reason: string
-  amount_ore: number
-  currency: string
-  date: string
-}
-
-// Stripe balance transactions held for review; read-only.
-export function useStripeReview(enabled: Ref<boolean>) {
-  return useQuery({
-    queryKey: ['accounting', 'stripe-review'],
-    enabled,
-    queryFn: async () => (await fetchJSON<{ items: StripeReviewItem[] }>(`${BASE}/stripe/review`)).items,
-  })
-}
-
 // Whether this instance has Stripe credentials, so the Stripe sync is offered.
 export function useStripeConfigured() {
   return useQuery({

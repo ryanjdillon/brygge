@@ -1091,13 +1091,6 @@
       "stripeBookDeferred": "Niezaksięgowane, bo okres rozliczeniowy jest zamknięty lub jeszcze nie utworzony: {count}; zostaną zaksięgowane, gdy będzie otwarty.",
       "stripeBookBusy": "Trwała synchronizacja Stripe, więc nic nie zaksięgowano. Spróbuj ponownie za chwilę.",
       "stripeBookErrors": "Nie udało się zaksięgować: {count} – zobacz dziennik",
-      "stripeReviewTitle": "Transakcje Stripe do sprawdzenia ({count})",
-      "stripeReviewCols": {
-        "date": "Data",
-        "amount": "Kwota",
-        "reason": "Powód",
-        "id": "ID Stripe"
-      },
       "stripeReviewReasons": {
         "no_attempt": "Nie znaleziono płatności w Brygge",
         "amount_mismatch": "Kwota różni się od płatności",
@@ -1109,7 +1102,85 @@
         "split_mismatch": "Zamówienie nie zgadza się z kwotą"
       },
       "stripePayoutSweepCounts": "Wypłaty Stripe uzgodnione: {cleared} · Oczekujące: {waiting} · Pominięte: {skipped} · Nieudane: {failed}",
-      "stripePayoutDeposit": "Wpływ bankowy {date}"
+      "stripePayoutDeposit": "Wpływ bankowy {date}",
+      "stripeTxn": {
+        "title": "Transakcje Stripe",
+        "tabs": {
+          "review": "Do sprawdzenia",
+          "dismissed": "Odrzucone"
+        },
+        "empty": {
+          "review": "Żadne transakcje Stripe nie czekają na sprawdzenie.",
+          "dismissed": "Brak odrzuconych transakcji Stripe."
+        },
+        "page": "Strona {page}",
+        "fee": "Opłata {amount}",
+        "net": "Netto {amount}",
+        "type": "Typ: {type}",
+        "intro": "Transakcja Stripe na {amount}, {date}.",
+        "copyId": "Kopiuj ID Stripe",
+        "copied": "Skopiowano",
+        "dismissedOn": "Odrzucono {date}",
+        "payoutCleared": "Wypłata, w której się znalazła, jest uzgodniona, więc nie można jej tu zaksięgować ani przywrócić z odrzuconych.",
+        "noActions": "Dla tej transakcji nie ma dostępnych działań.",
+        "undismissSuccess": "Odrzucenie cofnięte",
+        "actions": {
+          "assign_invoice": "Zaksięguj na fakturę",
+          "assign_account": "Zaksięguj na konto",
+          "dismiss": "Odrzuć",
+          "undismiss": "Cofnij odrzucenie"
+        },
+        "dismissReasons": {
+          "booked_manually": "Zaksięgowano ręcznie",
+          "test_transaction": "Transakcja testowa",
+          "unidentifiable": "Nie do zidentyfikowania",
+          "refund_or_credit": "Zwrot lub korekta",
+          "duplicate": "Duplikat"
+        },
+        "invoiceDialog": {
+          "title": "Zaksięguj płatność kartą na fakturę",
+          "posting": "Księgowane jako zapłata faktury: konto rozliczeniowe Stripe wobec należności, z opłatą Stripe jako kosztem.",
+          "search": "Szukaj",
+          "searchPlaceholder": "Numer faktury lub członek",
+          "empty": "Żadna otwarta faktura nie ma tej kwoty.",
+          "invoice": "Faktura {number}",
+          "confirm": "Zaksięguj",
+          "success": "Płatność kartą została zaksięgowana na fakturę"
+        },
+        "accountDialog": {
+          "title": "Zaksięguj na konto",
+          "postingIn": "Kwota jest księgowana z konta rozliczeniowego Stripe na wybrane konto, z opłatą Stripe jako kosztem.",
+          "postingOut": "Kwota jest księgowana na wybrane konto i zdejmowana z konta rozliczeniowego Stripe, z opłatą Stripe jako kosztem.",
+          "account": "Konto",
+          "accountPlaceholder": "Wybierz konto",
+          "note": "Notatka",
+          "notePlaceholder": "Czego dotyczy transakcja?",
+          "confirm": "Zaksięguj",
+          "success": "Transakcja została zaksięgowana"
+        },
+        "dismissDialog": {
+          "title": "Odrzuć transakcję Stripe",
+          "warning": "Transakcja nie zostanie zaksięgowana. Wypłata, w której się znalazła, i tak zdejmuje jej kwotę netto ({amount}) z konta rozliczeniowego Stripe, więc saldo konta nie spadnie do zera, dopóki kwota nie zostanie zaksięgowana inaczej.",
+          "refundWarning": "Zwroty i spory będą z czasem księgowane automatycznie. Odrzucona transakcja nie zostanie wtedy uwzględniona.",
+          "reason": "Powód",
+          "reasonPlaceholder": "Wybierz powód",
+          "note": "Notatka (opcjonalnie)",
+          "confirm": "Odrzuć",
+          "success": "Transakcja została odrzucona"
+        },
+        "errors": {
+          "not_allowed": "To działanie jest niedozwolone dla tej transakcji.",
+          "amount_mismatch": "Kwota nie zgadza się z fakturą. Zaksięguj ją zamiast tego na konto.",
+          "invoice_settled": "Faktura nie może przyjąć płatności: jest opłacona, skorygowana lub nie ma bilansu otwarcia.",
+          "period_closed": "Okres rozliczeniowy jest zamknięty.",
+          "already_booked": "Transakcja jest już zaksięgowana.",
+          "payout_cleared": "Wypłata jest już uzgodniona, więc transakcji nie można zaksięgować ani przywrócić z odrzuconych.",
+          "invalid_reason": "Wybierz prawidłowy powód.",
+          "invalid_account": "Tego konta nie można użyć dla transakcji Stripe.",
+          "busy": "Trwa synchronizacja Stripe. Spróbuj ponownie za chwilę.",
+          "generic": "Coś poszło nie tak. Spróbuj ponownie."
+        }
+      }
     },
     "bankReconcile": {
       "filterAll": "All",

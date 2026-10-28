@@ -1117,13 +1117,6 @@
       "stripeBookDeferred": "{count} niet geboekt omdat de boekingsperiode gesloten of nog niet aangemaakt is; ze worden geboekt zodra die open is.",
       "stripeBookBusy": "Er liep een Stripe-synchronisatie, dus er is niets geboekt. Probeer het zo opnieuw.",
       "stripeBookErrors": "{count} konden niet worden geboekt – zie het logboek",
-      "stripeReviewTitle": "Stripe-transacties te controleren ({count})",
-      "stripeReviewCols": {
-        "date": "Datum",
-        "amount": "Bedrag",
-        "reason": "Reden",
-        "id": "Stripe-ID"
-      },
       "stripeReviewReasons": {
         "no_attempt": "Betaling niet gevonden in Brygge",
         "amount_mismatch": "Bedrag wijkt af van de betaling",
@@ -1135,7 +1128,85 @@
         "split_mismatch": "De bestelling klopt niet met het bedrag"
       },
       "stripePayoutSweepCounts": "Stripe-uitbetalingen afgestemd: {cleared} · Wachtend: {waiting} · Overgeslagen: {skipped} · Mislukt: {failed}",
-      "stripePayoutDeposit": "Bankbijschrijving {date}"
+      "stripePayoutDeposit": "Bankbijschrijving {date}",
+      "stripeTxn": {
+        "title": "Stripe-transacties",
+        "tabs": {
+          "review": "Te beoordelen",
+          "dismissed": "Afgewezen"
+        },
+        "empty": {
+          "review": "Er wachten geen Stripe-transacties op beoordeling.",
+          "dismissed": "Geen afgewezen Stripe-transacties."
+        },
+        "page": "Pagina {page}",
+        "fee": "Kosten {amount}",
+        "net": "Netto {amount}",
+        "type": "Type: {type}",
+        "intro": "Stripe-transactie van {amount}, {date}.",
+        "copyId": "Stripe-ID kopiëren",
+        "copied": "Gekopieerd",
+        "dismissedOn": "Afgewezen op {date}",
+        "payoutCleared": "De uitbetaling waar ze deel van was, is afgestemd; ze kan hier niet worden geboekt of uit afgewezen worden teruggehaald.",
+        "noActions": "Er zijn geen acties beschikbaar voor deze transactie.",
+        "undismissSuccess": "Afwijzing ongedaan gemaakt",
+        "actions": {
+          "assign_invoice": "Boeken op factuur",
+          "assign_account": "Boeken op rekening",
+          "dismiss": "Afwijzen",
+          "undismiss": "Afwijzing ongedaan maken"
+        },
+        "dismissReasons": {
+          "booked_manually": "Handmatig geboekt",
+          "test_transaction": "Testtransactie",
+          "unidentifiable": "Niet te identificeren",
+          "refund_or_credit": "Terugbetaling of creditering",
+          "duplicate": "Duplicaat"
+        },
+        "invoiceDialog": {
+          "title": "Kaartbetaling op factuur boeken",
+          "posting": "Geboekt als betaling van de factuur: de Stripe-tussenrekening tegen debiteuren, met de Stripe-kosten als kosten.",
+          "search": "Zoeken",
+          "searchPlaceholder": "Factuurnummer of lid",
+          "empty": "Geen openstaande factuur heeft dit bedrag.",
+          "invoice": "Factuur {number}",
+          "confirm": "Boeken",
+          "success": "De kaartbetaling is op de factuur geboekt"
+        },
+        "accountDialog": {
+          "title": "Boeken op rekening",
+          "postingIn": "Het bedrag wordt van de Stripe-tussenrekening naar de gekozen rekening geboekt, met de Stripe-kosten als kosten.",
+          "postingOut": "Het bedrag wordt op de gekozen rekening geboekt en van de Stripe-tussenrekening afgehaald, met de Stripe-kosten als kosten.",
+          "account": "Rekening",
+          "accountPlaceholder": "Kies een rekening",
+          "note": "Notitie",
+          "notePlaceholder": "Waar is de transactie voor?",
+          "confirm": "Boeken",
+          "success": "De transactie is geboekt"
+        },
+        "dismissDialog": {
+          "title": "Stripe-transactie afwijzen",
+          "warning": "De transactie wordt niet geboekt. De uitbetaling waar ze deel van was, haalt het nettobedrag ({amount}) toch van de Stripe-tussenrekening, zodat die pas op nul komt als het bedrag op een andere manier is geboekt.",
+          "refundWarning": "Terugbetalingen en geschillen worden op termijn automatisch geboekt. Een afgewezen transactie wordt dan ook niet meegenomen.",
+          "reason": "Reden",
+          "reasonPlaceholder": "Kies een reden",
+          "note": "Notitie (optioneel)",
+          "confirm": "Afwijzen",
+          "success": "De transactie is afgewezen"
+        },
+        "errors": {
+          "not_allowed": "Deze actie is niet toegestaan voor deze transactie.",
+          "amount_mismatch": "Het bedrag komt niet overeen met de factuur. Boek het in plaats daarvan op een rekening.",
+          "invoice_settled": "De factuur kan de betaling niet ontvangen: ze is betaald, gecrediteerd of heeft geen beginsaldo.",
+          "period_closed": "De boekingsperiode is gesloten.",
+          "already_booked": "De transactie is al geboekt.",
+          "payout_cleared": "De uitbetaling is al afgestemd; de transactie kan niet worden geboekt of uit afgewezen worden teruggehaald.",
+          "invalid_reason": "Kies een geldige reden.",
+          "invalid_account": "Deze rekening kan niet worden gebruikt voor een Stripe-transactie.",
+          "busy": "Er loopt een Stripe-synchronisatie. Probeer het zo opnieuw.",
+          "generic": "Er ging iets mis. Probeer het opnieuw."
+        }
+      }
     },
     "bankReconcile": {
       "filterAll": "All",

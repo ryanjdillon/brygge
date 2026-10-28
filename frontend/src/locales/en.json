@@ -1988,13 +1988,6 @@
       "stripeBookDeferred": "{count} left unbooked because their fiscal period is closed or not created yet; they are booked once it is open.",
       "stripeBookBusy": "A Stripe sync was running, so nothing was booked. Try again shortly.",
       "stripeBookErrors": "{count} could not be booked – see the log",
-      "stripeReviewTitle": "Stripe transactions to review ({count})",
-      "stripeReviewCols": {
-        "date": "Date",
-        "amount": "Amount",
-        "reason": "Reason",
-        "id": "Stripe ID"
-      },
       "stripeReviewReasons": {
         "no_attempt": "Payment not found in Brygge",
         "amount_mismatch": "Amount differs from the payment",
@@ -2006,7 +1999,85 @@
         "split_mismatch": "The order does not match the amount"
       },
       "stripePayoutSweepCounts": "Stripe payouts cleared: {cleared} · Waiting: {waiting} · Skipped: {skipped} · Failed: {failed}",
-      "stripePayoutDeposit": "Bank deposit {date}"
+      "stripePayoutDeposit": "Bank deposit {date}",
+      "stripeTxn": {
+        "title": "Stripe transactions",
+        "tabs": {
+          "review": "To review",
+          "dismissed": "Dismissed"
+        },
+        "empty": {
+          "review": "No Stripe transactions are waiting for review.",
+          "dismissed": "No dismissed Stripe transactions."
+        },
+        "page": "Page {page}",
+        "fee": "Fee {amount}",
+        "net": "Net {amount}",
+        "type": "Type: {type}",
+        "intro": "Stripe transaction of {amount}, {date}.",
+        "copyId": "Copy Stripe ID",
+        "copied": "Copied",
+        "dismissedOn": "Dismissed {date}",
+        "payoutCleared": "The payout it was part of is reconciled, so it cannot be booked here or taken back from dismissed.",
+        "noActions": "No actions are available for this transaction.",
+        "undismissSuccess": "Dismissal undone",
+        "actions": {
+          "assign_invoice": "Book to invoice",
+          "assign_account": "Book to account",
+          "dismiss": "Dismiss",
+          "undismiss": "Undo dismissal"
+        },
+        "dismissReasons": {
+          "booked_manually": "Booked manually",
+          "test_transaction": "Test transaction",
+          "unidentifiable": "Cannot be identified",
+          "refund_or_credit": "Refund or credit",
+          "duplicate": "Duplicate"
+        },
+        "invoiceDialog": {
+          "title": "Book card payment to invoice",
+          "posting": "Booked as a payment of the invoice: the Stripe clearing account against receivables, with the Stripe fee as an expense.",
+          "search": "Search",
+          "searchPlaceholder": "Invoice number or member",
+          "empty": "No open invoices have this amount.",
+          "invoice": "Invoice {number}",
+          "confirm": "Book",
+          "success": "The card payment is booked to the invoice"
+        },
+        "accountDialog": {
+          "title": "Book to account",
+          "postingIn": "The amount is booked from the Stripe clearing account to the account you choose, with the Stripe fee as an expense.",
+          "postingOut": "The amount is booked to the account you choose and taken off the Stripe clearing account, with the Stripe fee as an expense.",
+          "account": "Account",
+          "accountPlaceholder": "Choose an account",
+          "note": "Note",
+          "notePlaceholder": "What is the transaction for?",
+          "confirm": "Book",
+          "success": "The transaction is booked"
+        },
+        "dismissDialog": {
+          "title": "Dismiss Stripe transaction",
+          "warning": "The transaction will not be booked. The payout it was part of still takes its net amount ({amount}) off the Stripe clearing account, so the account will not reach zero until the amount is booked another way.",
+          "refundWarning": "Refunds and disputes will be booked automatically in time. A dismissed transaction will not be included then either.",
+          "reason": "Reason",
+          "reasonPlaceholder": "Choose a reason",
+          "note": "Note (optional)",
+          "confirm": "Dismiss",
+          "success": "The transaction is dismissed"
+        },
+        "errors": {
+          "not_allowed": "This action is not allowed for this transaction.",
+          "amount_mismatch": "The amount does not match the invoice. Book it to an account instead.",
+          "invoice_settled": "The invoice cannot take the payment: it is paid, credited or has no opening balance.",
+          "period_closed": "The fiscal period is closed.",
+          "already_booked": "The transaction is already booked.",
+          "payout_cleared": "The payout is already reconciled, so the transaction cannot be booked or taken back from dismissed.",
+          "invalid_reason": "Choose a valid reason.",
+          "invalid_account": "This account cannot be used for a Stripe transaction.",
+          "busy": "A Stripe sync is running. Try again shortly.",
+          "generic": "Something went wrong. Try again."
+        }
+      }
     },
     "pdfArchive": {
       "title": "PDF archive",

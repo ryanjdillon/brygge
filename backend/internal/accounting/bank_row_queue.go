@@ -687,9 +687,6 @@ func descriptionHintSuggestions(desc string, accounts map[string]suggestableAcco
 func (s *Service) PotentialInvoicesForRow(
 	ctx context.Context, clubID, bankRowID, q string, limit int, amountOverride float64,
 ) ([]InvoiceSuggestion, error) {
-	if limit <= 0 || limit > 100 {
-		limit = 25
-	}
 	amount := amountOverride
 	if amount <= 0 {
 		if err := s.db.QueryRow(ctx,
@@ -702,7 +699,25 @@ func (s *Service) PotentialInvoicesForRow(
 			return nil, fmt.Errorf("potential-invoices only applies to incoming rows")
 		}
 	}
+	out, err := s.potentialInvoicesByAmount(ctx, clubID, q, limit, amount)
+	if err != nil {
+		return nil, err
+	}
+	resolved, err := s.bankRowResolvedMember(ctx, clubID, bankRowID)
+	if err != nil {
+		return nil, err
+	}
+	markPayerResolvesHere(out, resolved)
+	return out, nil
+}
 
+// potentialInvoicesByAmount is PotentialInvoicesForRow's query: the open,
+// unpaid fakturas of exactly amount (±0.5 øre), newest first, narrowed by
+// q, with no payer resolution.
+func (s *Service) potentialInvoicesByAmount(ctx context.Context, clubID, q string, limit int, amount float64) ([]InvoiceSuggestion, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 25
+	}
 	where := []string{
 		"i.club_id = $1",
 		"i.status = 'open'",
@@ -752,11 +767,6 @@ func (s *Service) PotentialInvoicesForRow(
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	resolved, err := s.bankRowResolvedMember(ctx, clubID, bankRowID)
-	if err != nil {
-		return nil, err
-	}
-	markPayerResolvesHere(out, resolved)
 	return out, nil
 }
 

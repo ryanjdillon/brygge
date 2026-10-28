@@ -1117,13 +1117,6 @@
       "stripeBookDeferred": "{count} nicht gebucht, weil die Buchungsperiode geschlossen oder noch nicht angelegt ist; sie werden gebucht, sobald sie offen ist.",
       "stripeBookBusy": "Eine Stripe-Synchronisierung lief, daher wurde nichts gebucht. Bitte gleich erneut versuchen.",
       "stripeBookErrors": "{count} konnten nicht gebucht werden – siehe Protokoll",
-      "stripeReviewTitle": "Stripe-Transaktionen zur Prüfung ({count})",
-      "stripeReviewCols": {
-        "date": "Datum",
-        "amount": "Betrag",
-        "reason": "Grund",
-        "id": "Stripe-ID"
-      },
       "stripeReviewReasons": {
         "no_attempt": "Zahlung in Brygge nicht gefunden",
         "amount_mismatch": "Betrag weicht von der Zahlung ab",
@@ -1135,7 +1128,85 @@
         "split_mismatch": "Die Bestellung passt nicht zum Betrag"
       },
       "stripePayoutSweepCounts": "Stripe-Auszahlungen abgeglichen: {cleared} · Wartend: {waiting} · Übersprungen: {skipped} · Fehlgeschlagen: {failed}",
-      "stripePayoutDeposit": "Bankeingang {date}"
+      "stripePayoutDeposit": "Bankeingang {date}",
+      "stripeTxn": {
+        "title": "Stripe-Transaktionen",
+        "tabs": {
+          "review": "Zu prüfen",
+          "dismissed": "Verworfen"
+        },
+        "empty": {
+          "review": "Keine Stripe-Transaktionen warten auf Prüfung.",
+          "dismissed": "Keine verworfenen Stripe-Transaktionen."
+        },
+        "page": "Seite {page}",
+        "fee": "Gebühr {amount}",
+        "net": "Netto {amount}",
+        "type": "Typ: {type}",
+        "intro": "Stripe-Transaktion über {amount}, {date}.",
+        "copyId": "Stripe-ID kopieren",
+        "copied": "Kopiert",
+        "dismissedOn": "Verworfen am {date}",
+        "payoutCleared": "Die Auszahlung, zu der sie gehörte, ist abgestimmt; sie kann hier weder gebucht noch aus dem Verworfen-Status zurückgeholt werden.",
+        "noActions": "Für diese Transaktion sind keine Aktionen verfügbar.",
+        "undismissSuccess": "Verwerfen rückgängig gemacht",
+        "actions": {
+          "assign_invoice": "Auf Rechnung buchen",
+          "assign_account": "Auf Konto buchen",
+          "dismiss": "Verwerfen",
+          "undismiss": "Verwerfen rückgängig machen"
+        },
+        "dismissReasons": {
+          "booked_manually": "Manuell gebucht",
+          "test_transaction": "Testtransaktion",
+          "unidentifiable": "Nicht zuordenbar",
+          "refund_or_credit": "Erstattung oder Gutschrift",
+          "duplicate": "Duplikat"
+        },
+        "invoiceDialog": {
+          "title": "Kartenzahlung auf Rechnung buchen",
+          "posting": "Wird als Zahlung der Rechnung gebucht: Stripe-Verrechnungskonto gegen Forderungen, mit der Stripe-Gebühr als Aufwand.",
+          "search": "Suchen",
+          "searchPlaceholder": "Rechnungsnummer oder Mitglied",
+          "empty": "Keine offene Rechnung hat diesen Betrag.",
+          "invoice": "Rechnung {number}",
+          "confirm": "Buchen",
+          "success": "Die Kartenzahlung ist auf die Rechnung gebucht"
+        },
+        "accountDialog": {
+          "title": "Auf Konto buchen",
+          "postingIn": "Der Betrag wird vom Stripe-Verrechnungskonto auf das gewählte Konto gebucht, mit der Stripe-Gebühr als Aufwand.",
+          "postingOut": "Der Betrag wird auf das gewählte Konto gebucht und vom Stripe-Verrechnungskonto abgezogen, mit der Stripe-Gebühr als Aufwand.",
+          "account": "Konto",
+          "accountPlaceholder": "Konto wählen",
+          "note": "Notiz",
+          "notePlaceholder": "Wofür ist die Transaktion?",
+          "confirm": "Buchen",
+          "success": "Die Transaktion ist gebucht"
+        },
+        "dismissDialog": {
+          "title": "Stripe-Transaktion verwerfen",
+          "warning": "Die Transaktion wird nicht gebucht. Die Auszahlung, zu der sie gehörte, zieht ihren Nettobetrag ({amount}) trotzdem vom Stripe-Verrechnungskonto ab, sodass das Konto erst auf null geht, wenn der Betrag anders gebucht ist.",
+          "refundWarning": "Erstattungen und Rückbuchungen werden künftig automatisch gebucht. Eine verworfene Transaktion wird auch dann nicht berücksichtigt.",
+          "reason": "Grund",
+          "reasonPlaceholder": "Grund wählen",
+          "note": "Notiz (optional)",
+          "confirm": "Verwerfen",
+          "success": "Die Transaktion ist verworfen"
+        },
+        "errors": {
+          "not_allowed": "Diese Aktion ist für diese Transaktion nicht erlaubt.",
+          "amount_mismatch": "Der Betrag stimmt nicht mit der Rechnung überein. Buchen Sie ihn stattdessen auf ein Konto.",
+          "invoice_settled": "Die Rechnung kann die Zahlung nicht aufnehmen: Sie ist bezahlt, gutgeschrieben oder hat keinen Eröffnungssaldo.",
+          "period_closed": "Die Buchungsperiode ist geschlossen.",
+          "already_booked": "Die Transaktion ist bereits gebucht.",
+          "payout_cleared": "Die Auszahlung ist bereits abgestimmt; die Transaktion kann weder gebucht noch aus dem Verworfen-Status zurückgeholt werden.",
+          "invalid_reason": "Wählen Sie einen gültigen Grund.",
+          "invalid_account": "Dieses Konto kann nicht für eine Stripe-Transaktion verwendet werden.",
+          "busy": "Ein Stripe-Abgleich läuft gerade. Versuchen Sie es gleich noch einmal.",
+          "generic": "Etwas ist schiefgelaufen. Versuchen Sie es erneut."
+        }
+      }
     },
     "bankReconcile": {
       "filterAll": "All",

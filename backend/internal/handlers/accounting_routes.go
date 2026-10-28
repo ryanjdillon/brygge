@@ -76,6 +76,15 @@ func (h *AccountingHandler) MountLedgerRoutes(r chi.Router, moneyGate ...func(ht
 	r.With(moneyGate...).Post("/vipps-resync", h.HandleResyncVipps)
 	r.With(moneyGate...).Post("/stripe/sync", h.HandleStripeSync)
 	r.Get("/stripe/review", h.HandleListStripeReview)
+	r.Get("/stripe/assignable-accounts", h.HandleListStripeAssignableAccounts)
+	r.Route("/stripe/transactions", func(r chi.Router) {
+		r.Get("/", h.HandleListStripeTransactions)
+		r.Get("/{txnID}/potential-invoices", h.HandleStripeTxnPotentialInvoices)
+		r.With(moneyGate...).Post("/{txnID}/assign-invoice", h.HandleAssignStripeTxnToInvoice)
+		r.With(moneyGate...).Post("/{txnID}/assign-account", h.HandleAssignStripeTxnToAccount)
+		r.With(moneyGate...).Post("/{txnID}/dismiss", h.HandleDismissStripeTxn)
+		r.With(moneyGate...).Post("/{txnID}/undismiss", h.HandleUndismissStripeTxn)
+	})
 	r.Get("/stripe/payouts", h.HandleListStripePayouts)
 	r.With(moneyGate...).Post("/stripe/payouts/{payoutID}/clear", h.HandleClearStripePayout)
 

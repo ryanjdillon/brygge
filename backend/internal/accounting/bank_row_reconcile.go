@@ -283,6 +283,10 @@ var errInvoiceNotOpen = errors.New("faktura no longer open")
 // paid once it held the lock: a concurrent assignment got there first.
 var errInvoicePaid = errors.New("invoice is already paid")
 
+// errInvoiceVoided means a manual or Vipps assignment found its faktura
+// voided once it held the lock.
+var errInvoiceVoided = errors.New("invoice is voided")
+
 // lockInvoiceForAssign locks the faktura for the rest of tx and refuses it
 // when it can't take this payment. It returns the faktura total in øre.
 // Every path that settles a faktura with a bank row or a Vipps charge
@@ -354,7 +358,7 @@ func lockInvoiceForAssign(ctx context.Context, tx pgx.Tx, clubID, invoiceID stri
 	}
 	switch {
 	case invoiceStatus == "voided":
-		return 0, errors.New("invoice is voided")
+		return 0, errInvoiceVoided
 	case paid:
 		return 0, errInvoicePaid
 	case bookedByRow:

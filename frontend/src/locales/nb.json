@@ -1984,13 +1984,6 @@
       "stripeBookDeferred": "{count} er ikke bokført fordi regnskapsperioden er lukket eller ikke opprettet; de bokføres når perioden er åpen.",
       "stripeBookBusy": "En Stripe-synk pågikk, så ingenting ble bokført nå. Prøv igjen om litt.",
       "stripeBookErrors": "{count} kunne ikke bokføres – se loggen",
-      "stripeReviewTitle": "Stripe-transaksjoner til gjennomgang ({count})",
-      "stripeReviewCols": {
-        "date": "Dato",
-        "amount": "Beløp",
-        "reason": "Årsak",
-        "id": "Stripe-ID"
-      },
       "stripeReviewReasons": {
         "no_attempt": "Finner ikke betalingen i Brygge",
         "amount_mismatch": "Beløpet avviker fra betalingen",
@@ -2002,7 +1995,85 @@
         "split_mismatch": "Ordren stemmer ikke med beløpet"
       },
       "stripePayoutSweepCounts": "Stripe-utbetalinger avstemt: {cleared} · Venter: {waiting} · Hoppet over: {skipped} · Feilet: {failed}",
-      "stripePayoutDeposit": "Bankinnbetaling {date}"
+      "stripePayoutDeposit": "Bankinnbetaling {date}",
+      "stripeTxn": {
+        "title": "Stripe-transaksjoner",
+        "tabs": {
+          "review": "Til gjennomgang",
+          "dismissed": "Avvist"
+        },
+        "empty": {
+          "review": "Ingen Stripe-transaksjoner venter på gjennomgang.",
+          "dismissed": "Ingen avviste Stripe-transaksjoner."
+        },
+        "page": "Side {page}",
+        "fee": "Gebyr {amount}",
+        "net": "Netto {amount}",
+        "type": "Type: {type}",
+        "intro": "Stripe-transaksjon på {amount}, {date}.",
+        "copyId": "Kopier Stripe-ID",
+        "copied": "Kopiert",
+        "dismissedOn": "Avvist {date}",
+        "payoutCleared": "Utbetalingen transaksjonen var med i er avstemt, så den kan ikke bokføres her eller tas tilbake fra avvist.",
+        "noActions": "Ingen handlinger er tilgjengelige for denne transaksjonen.",
+        "undismissSuccess": "Avvisningen er angret",
+        "actions": {
+          "assign_invoice": "Bokfør mot faktura",
+          "assign_account": "Bokfør mot konto",
+          "dismiss": "Avvis",
+          "undismiss": "Angre avvisning"
+        },
+        "dismissReasons": {
+          "booked_manually": "Ført manuelt",
+          "test_transaction": "Testtransaksjon",
+          "unidentifiable": "Kan ikke identifiseres",
+          "refund_or_credit": "Refusjon eller kreditering",
+          "duplicate": "Duplikat"
+        },
+        "invoiceDialog": {
+          "title": "Bokfør kortbetaling mot faktura",
+          "posting": "Bokføres som innbetaling på fakturaen: Stripe-mellomkontoen mot kundefordringer, med Stripe-gebyret som kostnad.",
+          "search": "Søk",
+          "searchPlaceholder": "Fakturanummer eller medlem",
+          "empty": "Ingen åpne fakturaer har dette beløpet.",
+          "invoice": "Faktura {number}",
+          "confirm": "Bokfør",
+          "success": "Kortbetalingen er bokført mot fakturaen"
+        },
+        "accountDialog": {
+          "title": "Bokfør mot konto",
+          "postingIn": "Beløpet bokføres fra Stripe-mellomkontoen til kontoen du velger, med Stripe-gebyret som kostnad.",
+          "postingOut": "Beløpet bokføres på kontoen du velger og trekkes fra Stripe-mellomkontoen, med Stripe-gebyret som kostnad.",
+          "account": "Konto",
+          "accountPlaceholder": "Velg konto",
+          "note": "Notat",
+          "notePlaceholder": "Hva gjelder transaksjonen?",
+          "confirm": "Bokfør",
+          "success": "Transaksjonen er bokført"
+        },
+        "dismissDialog": {
+          "title": "Avvis Stripe-transaksjon",
+          "warning": "Transaksjonen blir ikke bokført. Utbetalingen den var med i trekker likevel nettobeløpet ({amount}) fra Stripe-mellomkontoen, så kontoen går ikke i null før beløpet er ført på annen måte.",
+          "refundWarning": "Refusjoner og tvister skal etter hvert bokføres automatisk. En avvist transaksjon blir ikke tatt med da heller.",
+          "reason": "Årsak",
+          "reasonPlaceholder": "Velg årsak",
+          "note": "Notat (valgfritt)",
+          "confirm": "Avvis",
+          "success": "Transaksjonen er avvist"
+        },
+        "errors": {
+          "not_allowed": "Handlingen er ikke tillatt for denne transaksjonen.",
+          "amount_mismatch": "Beløpet stemmer ikke med fakturaen. Bokfør mot konto i stedet.",
+          "invoice_settled": "Fakturaen kan ikke ta imot betalingen: den er betalt, kreditert eller mangler inngående balanse.",
+          "period_closed": "Regnskapsperioden er stengt.",
+          "already_booked": "Transaksjonen er allerede bokført.",
+          "payout_cleared": "Utbetalingen er allerede avstemt, så transaksjonen kan ikke bokføres eller tas tilbake fra avvist.",
+          "invalid_reason": "Velg en gyldig årsak.",
+          "invalid_account": "Denne kontoen kan ikke brukes for en Stripe-transaksjon.",
+          "busy": "En Stripe-synk kjører nå. Prøv igjen om litt.",
+          "generic": "Noe gikk galt. Prøv igjen."
+        }
+      }
     },
     "pdfArchive": {
       "title": "PDF-arkiv",

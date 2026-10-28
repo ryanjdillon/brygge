@@ -88,6 +88,12 @@ const (
 	// A Stripe payout cleared by a person (BRY-465)
 	ActionStripePayoutCleared = "stripe_payout.cleared"
 
+	// A Stripe balance transaction in review settled by a person (BRY-466)
+	ActionStripeTxnAssignedInvoice = "stripe_txn.assigned_invoice"
+	ActionStripeTxnAssignedAccount = "stripe_txn.assigned_account"
+	ActionStripeTxnDismissed       = "stripe_txn.dismissed"
+	ActionStripeTxnUndismissed     = "stripe_txn.undismissed"
+
 	// Payer aliases taught from bank Tildel or the Vipps queue (BRY-383)
 	ActionPayerAliasTaught  = "payer_alias.taught"
 	ActionPayerAliasRemoved = "payer_alias.removed"

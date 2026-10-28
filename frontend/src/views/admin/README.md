@@ -125,7 +125,7 @@ If a new top-level button (outside the sidebar, like the NavBar Admin entry) nee
 
 ## Per-row action TOTP (separate from nav)
 
-For sensitive in-page actions (send faktura, regen PDF, void, and every button that can book a posted GL entry: bank and Vipps upload, Synkroniser, Synk Vipps, Synk Stripe, Vipps payout confirm, Avstem mot Stripe-utbetaling (before its picker opens, BRY-465), Avstem periode, journal post/void; see BRY-370 in the auth matrix; every Economy-settings save that changes what is billed or booked, such as role exemptions, BRY-351; and teaching or removing a Vipps-queue payer alias, BRY-383), use `useFreshTotp()`'s `ensureFreshTotp()` at click time:
+For sensitive in-page actions (send faktura, regen PDF, void, and every button that can book a posted GL entry: bank and Vipps upload, Synkroniser, Synk Vipps, Synk Stripe, Vipps payout confirm, Avstem mot Stripe-utbetaling (before its picker opens, BRY-465), the Stripe review card's Bokfør mot faktura / Bokfør mot konto / Avvis (before each dialog opens) and Angre avvisning (`StripeTransactionCard`, BRY-466), Avstem periode, journal post/void; see BRY-370 in the auth matrix; every Economy-settings save that changes what is billed or booked, such as role exemptions, BRY-351; and teaching or removing a Vipps-queue payer alias, BRY-383), use `useFreshTotp()`'s `ensureFreshTotp()` at click time:
 
 ```ts
 import { useFreshTotp } from '@/composables/useFreshTotp'

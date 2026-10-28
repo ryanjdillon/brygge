@@ -1116,13 +1116,6 @@
       "stripeBookDeferred": "{count} non comptabilisée(s) car l'exercice est clôturé ou pas encore créé ; elles le seront dès qu'il sera ouvert.",
       "stripeBookBusy": "Une synchronisation Stripe était en cours, rien n'a été comptabilisé. Réessayez dans un instant.",
       "stripeBookErrors": "{count} n'ont pas pu être comptabilisées – voir le journal",
-      "stripeReviewTitle": "Transactions Stripe à vérifier ({count})",
-      "stripeReviewCols": {
-        "date": "Date",
-        "amount": "Montant",
-        "reason": "Motif",
-        "id": "ID Stripe"
-      },
       "stripeReviewReasons": {
         "no_attempt": "Paiement introuvable dans Brygge",
         "amount_mismatch": "Le montant diffère du paiement",
@@ -1134,7 +1127,85 @@
         "split_mismatch": "La commande ne correspond pas au montant"
       },
       "stripePayoutSweepCounts": "Versements Stripe rapprochés : {cleared} · En attente : {waiting} · Ignorés : {skipped} · Échecs : {failed}",
-      "stripePayoutDeposit": "Dépôt bancaire du {date}"
+      "stripePayoutDeposit": "Dépôt bancaire du {date}",
+      "stripeTxn": {
+        "title": "Transactions Stripe",
+        "tabs": {
+          "review": "À examiner",
+          "dismissed": "Écartées"
+        },
+        "empty": {
+          "review": "Aucune transaction Stripe n'attend d'examen.",
+          "dismissed": "Aucune transaction Stripe écartée."
+        },
+        "page": "Page {page}",
+        "fee": "Frais {amount}",
+        "net": "Net {amount}",
+        "type": "Type : {type}",
+        "intro": "Transaction Stripe de {amount}, {date}.",
+        "copyId": "Copier l'ID Stripe",
+        "copied": "Copié",
+        "dismissedOn": "Écartée le {date}",
+        "payoutCleared": "Le virement dont elle faisait partie est rapproché ; elle ne peut ni être comptabilisée ici ni sortir des transactions écartées.",
+        "noActions": "Aucune action n'est disponible pour cette transaction.",
+        "undismissSuccess": "Mise à l'écart annulée",
+        "actions": {
+          "assign_invoice": "Comptabiliser sur une facture",
+          "assign_account": "Comptabiliser sur un compte",
+          "dismiss": "Écarter",
+          "undismiss": "Annuler la mise à l'écart"
+        },
+        "dismissReasons": {
+          "booked_manually": "Comptabilisée manuellement",
+          "test_transaction": "Transaction de test",
+          "unidentifiable": "Non identifiable",
+          "refund_or_credit": "Remboursement ou avoir",
+          "duplicate": "Doublon"
+        },
+        "invoiceDialog": {
+          "title": "Comptabiliser le paiement par carte sur une facture",
+          "posting": "Comptabilisé comme paiement de la facture : le compte d'attente Stripe contre les créances clients, avec les frais Stripe en charge.",
+          "search": "Rechercher",
+          "searchPlaceholder": "Numéro de facture ou membre",
+          "empty": "Aucune facture ouverte n'a ce montant.",
+          "invoice": "Facture {number}",
+          "confirm": "Comptabiliser",
+          "success": "Le paiement par carte est comptabilisé sur la facture"
+        },
+        "accountDialog": {
+          "title": "Comptabiliser sur un compte",
+          "postingIn": "Le montant est comptabilisé du compte d'attente Stripe vers le compte choisi, avec les frais Stripe en charge.",
+          "postingOut": "Le montant est comptabilisé sur le compte choisi et retiré du compte d'attente Stripe, avec les frais Stripe en charge.",
+          "account": "Compte",
+          "accountPlaceholder": "Choisir un compte",
+          "note": "Note",
+          "notePlaceholder": "À quoi correspond la transaction ?",
+          "confirm": "Comptabiliser",
+          "success": "La transaction est comptabilisée"
+        },
+        "dismissDialog": {
+          "title": "Écarter la transaction Stripe",
+          "warning": "La transaction ne sera pas comptabilisée. Le virement dont elle faisait partie retire quand même son montant net ({amount}) du compte d'attente Stripe, qui ne reviendra à zéro qu'une fois le montant comptabilisé autrement.",
+          "refundWarning": "Les remboursements et litiges seront à terme comptabilisés automatiquement. Une transaction écartée ne sera pas prise en compte non plus.",
+          "reason": "Motif",
+          "reasonPlaceholder": "Choisir un motif",
+          "note": "Note (facultative)",
+          "confirm": "Écarter",
+          "success": "La transaction est écartée"
+        },
+        "errors": {
+          "not_allowed": "Cette action n'est pas autorisée pour cette transaction.",
+          "amount_mismatch": "Le montant ne correspond pas à la facture. Comptabilisez-le plutôt sur un compte.",
+          "invoice_settled": "La facture ne peut pas recevoir le paiement : elle est payée, créditée ou sans solde d'ouverture.",
+          "period_closed": "L'exercice est clôturé.",
+          "already_booked": "La transaction est déjà comptabilisée.",
+          "payout_cleared": "Le virement est déjà rapproché ; la transaction ne peut être ni comptabilisée ni sortie des transactions écartées.",
+          "invalid_reason": "Choisissez un motif valide.",
+          "invalid_account": "Ce compte ne peut pas être utilisé pour une transaction Stripe.",
+          "busy": "Une synchronisation Stripe est en cours. Réessayez dans un instant.",
+          "generic": "Une erreur s'est produite. Réessayez."
+        }
+      }
     },
     "bankReconcile": {
       "filterAll": "All",

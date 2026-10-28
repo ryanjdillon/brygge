@@ -236,13 +236,16 @@ func toCents(amount float64) int64 {
 }
 
 // invoiceBookedRowSQL is true when a booked row records that it settles the
-// faktura: a bank row or Vipps charge with its invoice_id, or an
-// order-linked charge (Stripe, or Vipps by merchant reference) whose
-// checkout order pays it through order_sources. An order charge settles the
-// faktura in the GL before its payment back-link lands, so without the
-// order clause a bank or Vipps assign in that window credits 1500 twice.
-// Every check of "is this faktura already booked" goes through this
-// fragment (lockInvoiceForAssign, invoiceAlreadyBookedSQL).
+// faktura: a bank row, Vipps charge or Stripe balance transaction with its
+// invoice_id, or an order-linked charge (Stripe, or Vipps by merchant
+// reference) whose checkout order pays it through order_sources. An order
+// charge settles the faktura in the GL before its payment back-link lands,
+// so without the order clause a bank or Vipps assign in that window credits
+// 1500 twice. A Stripe row is booked from its order only by the booking
+// pass, which clears review_reason; a row a person booked keeps its
+// review_reason and settles only the faktura in its invoice_id (if any), so
+// the order clause skips it. Every check of "is this faktura already booked"
+// goes through this fragment (lockInvoiceForAssign, invoiceAlreadyBookedSQL).
 func invoiceBookedRowSQL(alias string) string {
 	return `(EXISTS (SELECT 1 FROM bank_import_rows bb
 	                   WHERE bb.club_id = ` + alias + `.club_id AND bb.invoice_id = ` + alias + `.id
@@ -250,10 +253,13 @@ func invoiceBookedRowSQL(alias string) string {
 	      OR EXISTS (SELECT 1 FROM vipps_import_rows bv
 	                   WHERE bv.club_id = ` + alias + `.club_id AND bv.invoice_id = ` + alias + `.id
 	                     AND bv.journal_entry_id IS NOT NULL)
+	      OR EXISTS (SELECT 1 FROM stripe_balance_transactions bsi
+	                   WHERE bsi.club_id = ` + alias + `.club_id AND bsi.invoice_id = ` + alias + `.id
+	                     AND bsi.journal_entry_id IS NOT NULL)
 	      OR EXISTS (SELECT 1 FROM order_sources bos
 	                   JOIN stripe_balance_transactions bst ON bst.order_id = bos.order_id
 	                  WHERE bos.invoice_id = ` + alias + `.id AND bst.club_id = ` + alias + `.club_id
-	                    AND bst.journal_entry_id IS NOT NULL)
+	                    AND bst.journal_entry_id IS NOT NULL AND bst.review_reason IS NULL)
 	      OR EXISTS (SELECT 1 FROM order_sources bos
 	                   JOIN orders bo ON bo.id = bos.order_id AND bo.vipps_reference <> ''
 	                   JOIN vipps_import_rows bov ON bov.club_id = bo.club_id AND bov.order_id = bo.vipps_reference

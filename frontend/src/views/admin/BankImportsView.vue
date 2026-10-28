@@ -38,7 +38,6 @@ import {
   runVippsResync,
   runStripeSync,
   useStripeConfigured,
-  useStripeReview,
   type BankSyncResult,
   type VippsResyncResult,
   type StripeSyncResult,
@@ -256,7 +255,6 @@ async function runVippsResyncAction() {
 // Stripe: offered only when the instance has Stripe credentials.
 const { data: stripeConfigured } = useStripeConfigured()
 const showStripe = computed(() => !!stripeConfigured.value)
-const { data: stripeReview } = useStripeReview(showStripe)
 const stripeSyncBusy = ref(false)
 const stripeSyncResult = ref<StripeSyncResult | null>(null)
 const stripeSyncError = ref<string | null>(null)
@@ -625,7 +623,7 @@ const filterMonthValue = computed<number>({
     <div v-if="syncError" class="mt-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">{{ syncError }}</div>
     <div v-if="vippsResyncError" class="mt-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">{{ vippsResyncError }}</div>
     <div v-if="stripeSyncError" class="mt-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700" data-testid="stripe-sync-error">{{ stripeSyncError }}</div>
-    <StripeReviewList v-if="showStripe && stripeReview" :items="stripeReview" />
+    <StripeReviewList v-if="showStripe" />
 
     <div class="mt-6">
       <Tabs v-model="activeTab" :tabs="tabs" />

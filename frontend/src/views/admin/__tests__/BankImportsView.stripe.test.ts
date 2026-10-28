@@ -22,12 +22,12 @@ vi.mock('@/composables/useBankImports', async (importOriginal) => {
     ...actual,
     runStripeSync: () => runStripeSync(),
     useStripeConfigured: () => ({ data: stripeConfigured }),
-    useStripeReview: () => ({ data: ref([]) }),
   }
 })
 
 vi.mock('@/components/admin/BankReconcileTab.vue', () => ({ default: { template: '<div />' } }))
 vi.mock('@/components/admin/BankRefundTab.vue', () => ({ default: { template: '<div />' } }))
+vi.mock('@/components/admin/StripeReviewList.vue', () => ({ default: { template: '<div />' } }))
 
 const booked = {
   fetched: 3,

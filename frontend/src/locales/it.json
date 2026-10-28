@@ -1117,13 +1117,6 @@
       "stripeBookDeferred": "{count} non registrata/e perché il periodo contabile è chiuso o non ancora creato; verranno registrate quando sarà aperto.",
       "stripeBookBusy": "Era in corso una sincronizzazione Stripe, quindi non è stato registrato nulla. Riprova tra poco.",
       "stripeBookErrors": "{count} non registrabile/i – vedi il log",
-      "stripeReviewTitle": "Transazioni Stripe da verificare ({count})",
-      "stripeReviewCols": {
-        "date": "Data",
-        "amount": "Importo",
-        "reason": "Motivo",
-        "id": "ID Stripe"
-      },
       "stripeReviewReasons": {
         "no_attempt": "Pagamento non trovato in Brygge",
         "amount_mismatch": "L'importo differisce dal pagamento",
@@ -1135,7 +1128,85 @@
         "split_mismatch": "L'ordine non corrisponde all'importo"
       },
       "stripePayoutSweepCounts": "Pagamenti Stripe riconciliati: {cleared} · In attesa: {waiting} · Saltati: {skipped} · Non riusciti: {failed}",
-      "stripePayoutDeposit": "Accredito bancario del {date}"
+      "stripePayoutDeposit": "Accredito bancario del {date}",
+      "stripeTxn": {
+        "title": "Transazioni Stripe",
+        "tabs": {
+          "review": "Da esaminare",
+          "dismissed": "Scartate"
+        },
+        "empty": {
+          "review": "Nessuna transazione Stripe in attesa di esame.",
+          "dismissed": "Nessuna transazione Stripe scartata."
+        },
+        "page": "Pagina {page}",
+        "fee": "Commissione {amount}",
+        "net": "Netto {amount}",
+        "type": "Tipo: {type}",
+        "intro": "Transazione Stripe di {amount}, {date}.",
+        "copyId": "Copia ID Stripe",
+        "copied": "Copiato",
+        "dismissedOn": "Scartata il {date}",
+        "payoutCleared": "Il versamento di cui faceva parte è riconciliato, quindi non può essere registrata qui né tolta dalle scartate.",
+        "noActions": "Nessuna azione disponibile per questa transazione.",
+        "undismissSuccess": "Scarto annullato",
+        "actions": {
+          "assign_invoice": "Registra su fattura",
+          "assign_account": "Registra su conto",
+          "dismiss": "Scarta",
+          "undismiss": "Annulla scarto"
+        },
+        "dismissReasons": {
+          "booked_manually": "Registrata manualmente",
+          "test_transaction": "Transazione di prova",
+          "unidentifiable": "Non identificabile",
+          "refund_or_credit": "Rimborso o accredito",
+          "duplicate": "Duplicato"
+        },
+        "invoiceDialog": {
+          "title": "Registra il pagamento con carta su fattura",
+          "posting": "Registrato come pagamento della fattura: conto transitorio Stripe contro crediti verso clienti, con la commissione Stripe come costo.",
+          "search": "Cerca",
+          "searchPlaceholder": "Numero di fattura o socio",
+          "empty": "Nessuna fattura aperta ha questo importo.",
+          "invoice": "Fattura {number}",
+          "confirm": "Registra",
+          "success": "Il pagamento con carta è registrato sulla fattura"
+        },
+        "accountDialog": {
+          "title": "Registra su conto",
+          "postingIn": "L'importo è registrato dal conto transitorio Stripe al conto scelto, con la commissione Stripe come costo.",
+          "postingOut": "L'importo è registrato sul conto scelto e tolto dal conto transitorio Stripe, con la commissione Stripe come costo.",
+          "account": "Conto",
+          "accountPlaceholder": "Scegli un conto",
+          "note": "Nota",
+          "notePlaceholder": "A cosa si riferisce la transazione?",
+          "confirm": "Registra",
+          "success": "La transazione è registrata"
+        },
+        "dismissDialog": {
+          "title": "Scarta transazione Stripe",
+          "warning": "La transazione non sarà registrata. Il versamento di cui faceva parte toglie comunque l'importo netto ({amount}) dal conto transitorio Stripe, che non tornerà a zero finché l'importo non sarà registrato in altro modo.",
+          "refundWarning": "Rimborsi e contestazioni saranno in futuro registrati automaticamente. Una transazione scartata non sarà inclusa nemmeno allora.",
+          "reason": "Motivo",
+          "reasonPlaceholder": "Scegli un motivo",
+          "note": "Nota (facoltativa)",
+          "confirm": "Scarta",
+          "success": "La transazione è scartata"
+        },
+        "errors": {
+          "not_allowed": "Questa azione non è consentita per questa transazione.",
+          "amount_mismatch": "L'importo non corrisponde alla fattura. Registralo invece su un conto.",
+          "invoice_settled": "La fattura non può ricevere il pagamento: è pagata, accreditata o senza saldo di apertura.",
+          "period_closed": "Il periodo contabile è chiuso.",
+          "already_booked": "La transazione è già registrata.",
+          "payout_cleared": "Il versamento è già riconciliato, quindi la transazione non può essere registrata né tolta dalle scartate.",
+          "invalid_reason": "Scegli un motivo valido.",
+          "invalid_account": "Questo conto non può essere usato per una transazione Stripe.",
+          "busy": "È in corso una sincronizzazione Stripe. Riprova tra poco.",
+          "generic": "Qualcosa è andato storto. Riprova."
+        }
+      }
     },
     "bankReconcile": {
       "filterAll": "All",
