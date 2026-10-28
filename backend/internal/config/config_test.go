@@ -108,3 +108,27 @@ func TestLoadDBPoolDuration(t *testing.T) {
 		t.Errorf("DBMaxConnLifetime = %v, want %v", cfg.DBMaxConnLifetime, 20*time.Minute)
 	}
 }
+
+func TestStripeCredentials(t *testing.T) {
+	tests := []struct {
+		name                   string
+		key, hook              string
+		wantComplete, wantPart bool
+	}{
+		{"none", "", "", false, false},
+		{"both", "sk_test_fake", "whsec_test_fake", true, false},
+		{"key only", "sk_test_fake", "", false, true},
+		{"webhook secret only", "", "whsec_test_fake", false, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("STRIPE_SECRET_KEY", tt.key)
+			t.Setenv("STRIPE_WEBHOOK_SECRET", tt.hook)
+			cfg := Load()
+			complete, partial := cfg.StripeCredentials()
+			if complete != tt.wantComplete || partial != tt.wantPart {
+				t.Errorf("StripeCredentials() = %v, %v; want %v, %v", complete, partial, tt.wantComplete, tt.wantPart)
+			}
+		})
+	}
+}

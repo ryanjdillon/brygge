@@ -76,6 +76,13 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/PayablesView.vue'),
   },
   {
+    // Where a payment provider returns the payer: polls the order until the
+    // webhook has settled it. Listed before /betal/:token, like the payables
+    // page above.
+    path: '/betal/:token/kvittering',
+    component: () => import('@/views/PaymentReceiptView.vue'),
+  },
+  {
     path: '/betal/:token',
     component: () => import('@/views/PayInvoiceView.vue'),
   },

@@ -1579,5 +1579,23 @@
       "overflowNote": "Zu viel Text für diese Größe — kürzen Sie den Namen oder drucken Sie weniger pro Seite",
       "overflowCount": "Karten mit zu viel Text: {n}"
     }
+  },
+  "pay": {
+    "receipt": {
+      "loading": "Zahlung wird geladen …",
+      "paidTitle": "Zahlung erhalten",
+      "paidBody": "Vielen Dank für Ihre Zahlung!",
+      "amountPaid": "Bezahlter Betrag",
+      "invoice": "Rechnung Nr. {n}",
+      "pendingTitle": "Zahlung wird bestätigt …",
+      "pendingBody": "Das dauert normalerweise nur wenige Sekunden. Bitte lassen Sie diese Seite geöffnet.",
+      "confirmingTitle": "Zahlung wird bestätigt",
+      "confirmingBody": "Die Bestätigung ist noch nicht eingegangen. Die Zahlung wird erfasst, sobald sie eintrifft – Sie können diesen Link später erneut öffnen, um die Quittung zu sehen.",
+      "failedTitle": "Zahlung nicht abgeschlossen",
+      "failedBody": "Die Zahlung wurde abgebrochen oder ist nicht durchgegangen.",
+      "tryAgain": "Erneut versuchen",
+      "notFoundTitle": "Zahlung nicht gefunden",
+      "notFoundBody": "Der Link ist ungültig oder abgelaufen. Bitte wenden Sie sich an den Kassenwart."
+    }
   }
 }

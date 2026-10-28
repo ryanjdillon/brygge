@@ -82,7 +82,7 @@ func TestVippsAmountThreshold(t *testing.T) {
 	}
 	// Redeem gate: the order minted while uncapped must now refuse at mint time,
 	// before any Vipps call — closing the already-issued-link leak.
-	if _, err := h.mintOrderPayment(ctx, vipps.ProviderName, orderID); err != errOnlinePaymentBlocked {
+	if _, err := h.mintOrderPayment(ctx, vipps.ProviderName, orderID, ""); err != errOnlinePaymentBlocked {
 		t.Errorf("cap 100, Auto: mint should refuse with errOnlinePaymentBlocked, got %v", err)
 	}
 	// Admin pay-link endpoint reports the distinct over-limit reason.

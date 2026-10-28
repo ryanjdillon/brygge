@@ -1579,5 +1579,23 @@
       "overflowNote": "Te veel tekst voor dit formaat — maak de naam korter of druk minder per pagina af",
       "overflowCount": "Kaarten met te veel tekst: {n}"
     }
+  },
+  "pay": {
+    "receipt": {
+      "loading": "Betaling laden …",
+      "paidTitle": "Betaling ontvangen",
+      "paidBody": "Bedankt voor je betaling!",
+      "amountPaid": "Betaald bedrag",
+      "invoice": "Factuur #{n}",
+      "pendingTitle": "Betaling wordt bevestigd …",
+      "pendingBody": "Dit duurt meestal een paar seconden. Houd deze pagina open.",
+      "confirmingTitle": "Betaling wordt bevestigd",
+      "confirmingBody": "We hebben de bevestiging nog niet ontvangen. De betaling wordt geregistreerd zodra die binnenkomt – je kunt deze link later opnieuw openen om je ontvangstbewijs te zien.",
+      "failedTitle": "Betaling niet voltooid",
+      "failedBody": "De betaling is geannuleerd of niet gelukt.",
+      "tryAgain": "Opnieuw proberen",
+      "notFoundTitle": "Betaling niet gevonden",
+      "notFoundBody": "De link is ongeldig of verlopen. Neem contact op met de penningmeester."
+    }
   }
 }

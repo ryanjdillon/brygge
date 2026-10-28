@@ -7,8 +7,6 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-
-	"github.com/brygge-klubb/brygge/internal/vipps"
 )
 
 // Public, token-addressed harbor QR checkout (BRY-6). A poster's QR encodes
@@ -122,20 +120,23 @@ func (h *InvoiceHandler) HandleGetQRTarget(w http.ResponseWriter, r *http.Reques
 type qrPayRequest struct {
 	Units     int    `json:"units"`
 	GuestName string `json:"guest_name"`
+	// Provider picks the payment provider; empty uses the default.
+	Provider string `json:"provider"`
 }
 
 // HandlePayQRTarget creates a guest order for the chosen number of units, mints
-// a fresh Vipps ePayment, and returns the checkout redirect URL. The CAPTURED
-// webhook later flips the order to paid — no order_sources, so no faktura is
-// touched; the paid order surfaces in the harbor overview via its price_item
-// category.
+// a fresh payment, and returns the checkout redirect URL. The provider's
+// capture webhook later flips the order to paid — no order_sources, so no
+// faktura is touched; the paid order surfaces in the harbor overview via its
+// price_item category.
 func (h *InvoiceHandler) HandlePayQRTarget(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	if !h.providers.Configured() {
 		Error(w, http.StatusServiceUnavailable, "Vipps-betaling er ikke tilgjengelig akkurat nå.")
 		return
 	}
-	t, ok := h.loadQRTarget(ctx, chi.URLParam(r, "token"))
+	qrToken := chi.URLParam(r, "token")
+	t, ok := h.loadQRTarget(ctx, qrToken)
 	if !ok {
 		Error(w, http.StatusNotFound, "payment target not found")
 		return
@@ -144,6 +145,11 @@ func (h *InvoiceHandler) HandlePayQRTarget(w http.ResponseWriter, r *http.Reques
 	var req qrPayRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	provider, err := h.resolveProvider(req.Provider)
+	if err != nil {
+		Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	units, ok := resolveQRUnits(t.MinUnits, t.MaxUnits, t.FixedUnits, req.Units)
@@ -170,8 +176,8 @@ func (h *InvoiceHandler) HandlePayQRTarget(w http.ResponseWriter, r *http.Reques
 	var orderID string
 	if err := tx.QueryRow(ctx,
 		`INSERT INTO orders (club_id, guest_name, total_amount, currency, provider, token)
-		 VALUES ($1, $2, $3, $4, 'vipps', $5) RETURNING id`,
-		t.ClubID, req.GuestName, total, t.Currency, orderToken,
+		 VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+		t.ClubID, req.GuestName, total, t.Currency, provider, orderToken,
 	).Scan(&orderID); err != nil {
 		h.log.Error().Err(err).Str("target_id", t.ID).Msg("qr pay: insert order failed")
 		Error(w, http.StatusInternalServerError, "internal error")
@@ -192,7 +198,7 @@ func (h *InvoiceHandler) HandlePayQRTarget(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	redirectURL, err := h.mintOrderPayment(ctx, vipps.ProviderName, orderID)
+	redirectURL, err := h.mintOrderPayment(ctx, provider, orderID, h.frontendBase()+"/qr/"+qrToken)
 	if errors.Is(err, errNothingToPay) {
 		Error(w, http.StatusBadRequest, "nothing to pay")
 		return

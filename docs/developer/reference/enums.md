@@ -212,7 +212,7 @@ db_query   mcp
 vipps   stripe
 ```
 
-The `payments.Provider` name (`vipps.ProviderName` today; `stripe` arrives with BRY-443). No CHECK: the vocabulary grows with the providers registered in `cmd/api/main.go`. `orders.provider` is the provider of the order's latest attempt, and of the attempt that paid it once paid.
+The `payments.Provider` name (`vipps.ProviderName`, `stripe.ProviderName`). No CHECK: the vocabulary grows with the providers registered in `cmd/api/main.go`. `orders.provider` is the provider of the order's latest attempt, and of the attempt that paid it once paid.
 
 ### `payment_attempts.status` (CHECK since migration 000115)
 

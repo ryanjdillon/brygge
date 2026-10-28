@@ -51,9 +51,10 @@ func (h *VippsWebhookHandler) onAuthorized(ctx context.Context, clubID string, e
 	}
 }
 
-// cancelStaleAuthorization voids an authorization the order does not need.
-// If the void fails the reservation lapses at Vipps on its own; it is never
-// captured either way.
+// cancelStaleAuthorization voids an authorization the order does not need;
+// authorizeAttempt has already recorded the attempt as cancelled. If the void
+// fails the reservation lapses at Vipps on its own; it is never captured
+// either way.
 func (h *VippsWebhookHandler) cancelStaleAuthorization(ctx context.Context, a paymentAttempt, reference string, d authDecision) {
 	reason := "order already paid by another attempt"
 	if d == authCancelSibling {
@@ -66,9 +67,7 @@ func (h *VippsWebhookHandler) cancelStaleAuthorization(ctx context.Context, a pa
 	}
 	if err := h.canceller.CancelPayment(ctx, reference); err != nil {
 		h.log.Error().Err(err).Str("reference", reference).Msg("webhook authorized: cancel of stale authorization failed")
-		return
 	}
-	h.orders.markAttemptCancelled(ctx, a)
 }
 
 // onCaptured settles the checkout order (merch, harbor QR, or a faktura pay

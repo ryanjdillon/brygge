@@ -152,8 +152,8 @@ func TestMintOrderPayment_MemberFaktura(t *testing.T) {
 	if c.Body.Amount != (vipps.Amount{Currency: "NOK", Value: 50025}) {
 		t.Errorf("amount = %+v, want NOK 50025 øre", c.Body.Amount)
 	}
-	if c.Body.ReturnURL != mintTestFrontend {
-		t.Errorf("returnUrl = %q, want %q", c.Body.ReturnURL, mintTestFrontend)
+	if want := mintTestFrontend + "/betal/" + token + "/kvittering"; c.Body.ReturnURL != want {
+		t.Errorf("returnUrl = %q, want the receipt page %q", c.Body.ReturnURL, want)
 	}
 	wantDesc := ("Faktura #900, " + longName)[:100]
 	if c.Body.PaymentDescription != wantDesc {
@@ -343,8 +343,8 @@ func TestMintOrderPayment_NothingToPayAndSettled(t *testing.T) {
 	assertBody(t, serve(router, http.MethodPost, "/checkout/"+paid+"/pay", ""),
 		http.StatusConflict, `{"error":"checkout is already paid"}`+"\n")
 	rec = serve(router, http.MethodGet, "/betal/"+paid, "")
-	if rec.Code != http.StatusFound || rec.Header().Get("Location") != mintTestFrontend {
-		t.Errorf("paid order redirect = %d %q", rec.Code, rec.Header().Get("Location"))
+	if want := mintTestFrontend + "/betal/" + paid + "/kvittering"; rec.Code != http.StatusFound || rec.Header().Get("Location") != want {
+		t.Errorf("paid order redirect = %d %q, want the receipt page %q", rec.Code, rec.Header().Get("Location"), want)
 	}
 
 	if n := len(fake.createCalls()); n != 0 {

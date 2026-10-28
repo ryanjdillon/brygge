@@ -85,7 +85,7 @@ The fallback admin has every permission. Any other principal used here needs at 
 | `VIPPS_MOCK_URL`         | No (dev)     | —       | With `VIPPS_TEST_MODE`, sends every server-side Vipps call to this mock instead of the Vipps test API |
 | `VIPPS_MOCK_BROWSER_URL` | No (dev)     | `http://localhost:8090` | Browser-facing mock URL for redirects; read only when `VIPPS_MOCK_URL` is set |
 
-After setting the credentials, run `just vipps-verify` to confirm the
+After setting the Vipps credentials, run `just vipps-verify` to confirm the
 configured merchant authenticates against the Vipps Access Token API
 end-to-end before relying on any payment flow.
 
@@ -103,6 +103,17 @@ at both link issuance and payment mint — see the invariant in
 [reference/invariants.md](reference/invariants.md). Independently of the cap, an
 imported faktura gets no Vipps link until its receivable is in the opening
 balance (`imported_no_opening_balance`, BRY-386).
+
+## Stripe
+
+| Variable                 | Required          | Default | Description |
+|----------                |----------         |---------|-------------|
+| `STRIPE_SECRET_KEY`      | For card payments | —       | Secret API key (`sk_test_…` / `sk_live_…`; test or live mode follows the key). Secret: `/etc/brygge/env` |
+| `STRIPE_WEBHOOK_SECRET`  | For card payments | —       | Signing secret of the webhook endpoint (`whsec_…`) for `/api/v1/stripe/webhooks`. Secret: `/etc/brygge/env` |
+
+Card payments are offered only when both are set. One without the other logs a
+startup warning and leaves Stripe off: a payment whose webhook Brygge cannot
+verify would never be marked paid. See [payments.md](payments.md).
 
 ## Object Storage (S3)
 

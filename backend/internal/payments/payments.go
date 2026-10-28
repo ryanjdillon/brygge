@@ -8,6 +8,7 @@ package payments
 import (
 	"context"
 	"errors"
+	"sort"
 )
 
 // ErrNotSupported is returned by a Provider for an operation it does not
@@ -27,7 +28,18 @@ type Request struct {
 	// payer for their name do so only then, so the club learns who paid.
 	IsGuest bool
 	// ReturnURL is where the payer's browser lands after paying or aborting.
+	// Providers with a separate cancel destination send a completed payment
+	// here and an abandoned one to CancelURL.
 	ReturnURL string
+	// CancelURL is where a payer who backs out of the payment page lands.
+	CancelURL string
+	// AttemptID is the payment_attempts row this payment belongs to. It is
+	// unique per attempt, so a provider that supports idempotency keys can
+	// use it to make a retried create return the same payment.
+	AttemptID string
+	// PayerEmail is the linked member's email ("" for guests), for
+	// providers that prefill it and send their receipt there.
+	PayerEmail string
 }
 
 // Result is a created payment: the short-lived page to send the payer to, and
@@ -70,6 +82,19 @@ func NewRegistry(providers ...Provider) *Registry {
 		}
 	}
 	return r
+}
+
+// Names returns the registered provider names in sorted order.
+func (r *Registry) Names() []string {
+	if r == nil {
+		return nil
+	}
+	names := make([]string, 0, len(r.byName))
+	for n := range r.byName {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	return names
 }
 
 // Get returns the provider registered under name.

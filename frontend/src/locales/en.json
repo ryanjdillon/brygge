@@ -2562,7 +2562,23 @@
     "preferBankNote": "You can also pay by bank transfer using the KID from the invoice — it costs the club nothing.",
     "processing": "Starting Vipps …",
     "payButton": "Pay with Vipps",
-    "payError": "Could not start payment. Please try again."
+    "payError": "Could not start payment. Please try again.",
+    "receipt": {
+      "loading": "Loading payment …",
+      "paidTitle": "Payment received",
+      "paidBody": "Thank you for your payment!",
+      "amountPaid": "Amount paid",
+      "invoice": "Invoice #{n}",
+      "pendingTitle": "Confirming your payment …",
+      "pendingBody": "This usually takes a few seconds. Please keep this page open.",
+      "confirmingTitle": "Payment is being confirmed",
+      "confirmingBody": "We haven't received the confirmation yet. The payment will be recorded as soon as it arrives – you can open this link again later to see your receipt.",
+      "failedTitle": "Payment not completed",
+      "failedBody": "The payment was cancelled or did not go through.",
+      "tryAgain": "Try again",
+      "notFoundTitle": "Payment not found",
+      "notFoundBody": "The link is invalid or expired. Please contact the treasurer."
+    }
   },
   "harborTargets": {
     "title": "QR payment posters",

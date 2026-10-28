@@ -52,3 +52,28 @@ func TestRegistry(t *testing.T) {
 		})
 	}
 }
+
+func TestRegistryNames(t *testing.T) {
+	tests := []struct {
+		name string
+		reg  *payments.Registry
+		want []string
+	}{
+		{"nil registry", nil, nil},
+		{"empty registry", payments.NewRegistry(), []string{}},
+		{"sorted", payments.NewRegistry(stubProvider{name: "vipps"}, stubProvider{name: "stripe"}), []string{"stripe", "vipps"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := tc.reg.Names()
+			if len(got) != len(tc.want) {
+				t.Fatalf("Names() = %v, want %v", got, tc.want)
+			}
+			for i := range got {
+				if got[i] != tc.want[i] {
+					t.Errorf("Names() = %v, want %v", got, tc.want)
+				}
+			}
+		})
+	}
+}

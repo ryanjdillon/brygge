@@ -1550,5 +1550,23 @@
       "overflowNote": "Za dużo tekstu na ten rozmiar — skróć nazwę lub drukuj mniej na stronie",
       "overflowCount": "Karty ze zbyt dużą ilością tekstu: {n}"
     }
+  },
+  "pay": {
+    "receipt": {
+      "loading": "Wczytywanie płatności …",
+      "paidTitle": "Płatność otrzymana",
+      "paidBody": "Dziękujemy za płatność!",
+      "amountPaid": "Zapłacona kwota",
+      "invoice": "Faktura nr {n}",
+      "pendingTitle": "Potwierdzanie płatności …",
+      "pendingBody": "Zwykle trwa to kilka sekund. Nie zamykaj tej strony.",
+      "confirmingTitle": "Płatność jest potwierdzana",
+      "confirmingBody": "Nie otrzymaliśmy jeszcze potwierdzenia. Płatność zostanie zarejestrowana, gdy tylko dotrze – możesz później ponownie otworzyć ten link, aby zobaczyć potwierdzenie.",
+      "failedTitle": "Płatność nie została zakończona",
+      "failedBody": "Płatność została anulowana lub nie powiodła się.",
+      "tryAgain": "Spróbuj ponownie",
+      "notFoundTitle": "Nie znaleziono płatności",
+      "notFoundBody": "Link jest nieprawidłowy lub wygasł. Skontaktuj się ze skarbnikiem."
+    }
   }
 }

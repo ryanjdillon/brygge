@@ -342,9 +342,9 @@ in `backend/migrations/` for the source of truth. The high-level shape:
   attempt with a provider reference is the order's current one; older ones keep their rows so a late
   webhook still finds the order. 000115 backfilled one attempt per order with
   a `vipps_reference`. `payment_refunds` (refunds of a captured attempt,
-  BRY-446) and `payment_webhook_events` (raw events of providers other than
-  Vipps, unique on `club_id, provider, event_id`, BRY-443) are tables only so
-  far; Vipps keeps `vipps_webhook_events`. 000114 added the provider-neutral
+  BRY-446) is a table only so far. `payment_webhook_events` (raw events of
+  providers other than Vipps, unique on `club_id, provider, event_id`) is
+  written by the Stripe webhook; Vipps keeps `vipps_webhook_events`. 000114 added the provider-neutral
   `invoices.online_paid_at` / `online_paid_provider` (the "received, awaiting
   settlement" marker, set together, `invoices_online_paid_provider_set`),
   `invoices.online_payment_opt_in`, `clubs.online_max_amount`,

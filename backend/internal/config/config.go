@@ -35,6 +35,11 @@ type Config struct {
 	VippsSubscriptionKey string
 	VippsWebhookSecret   string
 
+	// Stripe Checkout (card payments). Both are secrets; Stripe is offered
+	// only when both are set.
+	StripeSecretKey     string
+	StripeWebhookSecret string
+
 	// Frontend
 	FrontendURL string
 
@@ -130,6 +135,9 @@ func Load() Config {
 		VippsSubscriptionKey: envStr("VIPPS_SUBSCRIPTION_KEY", ""),
 		VippsWebhookSecret:   envStr("VIPPS_WEBHOOK_SECRET", ""),
 
+		StripeSecretKey:     envStr("STRIPE_SECRET_KEY", ""),
+		StripeWebhookSecret: envStr("STRIPE_WEBHOOK_SECRET", ""),
+
 		DBMaxConns:         clampInt32(envInt("DB_MAX_CONNS", 20)),
 		DBMinConns:         clampInt32(envInt("DB_MIN_CONNS", 2)),
 		DBMaxConnLifetime:  envDuration("DB_MAX_CONN_LIFETIME", 30*time.Minute),
@@ -194,6 +202,15 @@ func (c *Config) VippsBaseURL() string {
 		return "https://apitest.vipps.no"
 	}
 	return "https://api.vipps.no"
+}
+
+// StripeCredentials reports whether both Stripe secrets are set (complete)
+// and whether only one of them is (partial). A payment Brygge cannot hear
+// back about would never be marked paid, so a key without its webhook secret
+// must not enable Stripe.
+func (c *Config) StripeCredentials() (complete, partial bool) {
+	key, hook := c.StripeSecretKey != "", c.StripeWebhookSecret != ""
+	return key && hook, key != hook
 }
 
 // VippsBrowserURL returns the Vipps base URL for browser redirects.

@@ -271,7 +271,7 @@ func TestMintOrderPayment_CancelledRequestStillRecordsAttempt(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	e.fake.onCreate = cancel
-	if _, err := h.mintOrderPayment(ctx, vipps.ProviderName, orderID); err == nil {
+	if _, err := h.mintOrderPayment(ctx, vipps.ProviderName, orderID, ""); err == nil {
 		t.Fatal("mint succeeded on a cancelled request")
 	}
 	if got := e.attempts(t, orderID); len(got) != 1 || got[0].Status != "failed" {

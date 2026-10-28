@@ -2439,7 +2439,23 @@
     "preferBankNote": "Du kan òg betale med bankoverføring og KID frå fakturaen — det er gratis for laget.",
     "processing": "Startar Vipps …",
     "payButton": "Betal med Vipps",
-    "payError": "Kunne ikkje starte betaling. Prøv igjen."
+    "payError": "Kunne ikkje starte betaling. Prøv igjen.",
+    "receipt": {
+      "loading": "Lastar betaling …",
+      "paidTitle": "Betaling motteken",
+      "paidBody": "Takk for betalinga!",
+      "amountPaid": "Betalt beløp",
+      "invoice": "Faktura #{n}",
+      "pendingTitle": "Stadfestar betalinga …",
+      "pendingBody": "Dette tek vanlegvis nokre sekund. La sida vere open.",
+      "confirmingTitle": "Betalinga blir stadfesta",
+      "confirmingBody": "Vi har ikkje fått stadfestinga enno. Betalinga blir registrert så snart ho kjem – du kan opne denne lenka igjen seinare for å sjå kvitteringa.",
+      "failedTitle": "Betalinga vart ikkje fullført",
+      "failedBody": "Betalinga vart avbroten eller gjekk ikkje gjennom.",
+      "tryAgain": "Prøv igjen",
+      "notFoundTitle": "Fann ikkje betalinga",
+      "notFoundBody": "Lenka er ugyldig eller utløpt. Ta kontakt med kasseraren."
+    }
   },
   "harborTargets": {
     "title": "QR-betalingsplakatar",

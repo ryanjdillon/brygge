@@ -4,12 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
-
-	"github.com/brygge-klubb/brygge/internal/vipps"
 )
 
 // Public token-addressed checkout API backing the /betal/{token} pay page
@@ -48,6 +47,10 @@ type checkoutResp struct {
 	Total       float64               `json:"total"`
 	Catalog     []checkoutCatalogItem `json:"catalog"`
 	AlreadyPaid bool                  `json:"already_paid"`
+	// PaidAmount is what the payment that settled the order charged, for the
+	// receipt page; 0 until the order is paid. Total is what is still owed,
+	// which a paid faktura keeps until settlement is imported.
+	PaidAmount float64 `json:"paid_amount"`
 	// VippsBlocked is set when the invoice is over the club's Vipps amount cap
 	// (BRY-283): the page hides the Vipps button and shows KID + Konto for bank
 	// transfer instead. KID/BankAccount are populated so it can.
@@ -96,48 +99,19 @@ func (h *InvoiceHandler) buildCheckoutResp(ctx context.Context, orderID, clubID,
 		Catalog:     []checkoutCatalogItem{},
 		AlreadyPaid: status == "paid" || status == "refunded",
 	}
+	if resp.AlreadyPaid {
+		if err := h.db.QueryRow(ctx,
+			`SELECT total_amount::float8 FROM orders WHERE id = $1`, orderID,
+		).Scan(&resp.PaidAmount); err != nil {
+			return nil, err
+		}
+	}
 
-	// The faktura being settled (phase 1: a single invoice source).
-	var (
-		invoiceID     string
-		invoiceNumber int
-		invoiceAmount float64
-	)
-	err := h.db.QueryRow(ctx,
-		`SELECT i.id, i.invoice_number, i.total_amount, COALESCE(i.kid_number, '')
-		   FROM order_sources os
-		   JOIN invoices i ON i.id = os.invoice_id
-		  WHERE os.order_id = $1
-		  ORDER BY i.invoice_number
-		  LIMIT 1`,
-		orderID,
-	).Scan(&invoiceID, &invoiceNumber, &invoiceAmount, &resp.KID)
-	if err == nil {
-		inv := &checkoutInvoiceResp{Number: invoiceNumber, Amount: invoiceAmount, Lines: []checkoutLineResp{}}
-		rows, err := h.db.Query(ctx,
-			`SELECT description, quantity, unit_price, line_total
-			   FROM invoice_lines WHERE invoice_id = $1 ORDER BY id`,
-			invoiceID,
-		)
-		if err != nil {
-			return nil, err
-		}
-		for rows.Next() {
-			var l checkoutLineResp
-			if err := rows.Scan(&l.Name, &l.Quantity, &l.UnitAmount, &l.Total); err != nil {
-				rows.Close()
-				return nil, err
-			}
-			inv.Lines = append(inv.Lines, l)
-		}
-		rows.Close()
-		if err := rows.Err(); err != nil {
-			return nil, err
-		}
-		resp.Invoice = inv
-	} else if !errors.Is(err, pgx.ErrNoRows) {
+	inv, kid, err := h.checkoutInvoice(ctx, orderID)
+	if err != nil {
 		return nil, err
 	}
+	resp.Invoice, resp.KID = inv, kid
 
 	// Ad-hoc add-ons.
 	lineRows, err := h.db.Query(ctx,
@@ -209,6 +183,53 @@ func (h *InvoiceHandler) buildCheckoutResp(ctx context.Context, orderID, clubID,
 	}
 
 	return resp, nil
+}
+
+// checkoutInvoice loads the faktura a checkout settles (phase 1: a single
+// invoice source) with its lines and KID; nil when the order has none.
+func (h *InvoiceHandler) checkoutInvoice(ctx context.Context, orderID string) (*checkoutInvoiceResp, string, error) {
+	var (
+		invoiceID     string
+		invoiceNumber int
+		invoiceAmount float64
+		kid           string
+	)
+	err := h.db.QueryRow(ctx,
+		`SELECT i.id, i.invoice_number, i.total_amount, COALESCE(i.kid_number, '')
+		   FROM order_sources os
+		   JOIN invoices i ON i.id = os.invoice_id
+		  WHERE os.order_id = $1
+		  ORDER BY i.invoice_number
+		  LIMIT 1`,
+		orderID,
+	).Scan(&invoiceID, &invoiceNumber, &invoiceAmount, &kid)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, "", nil
+	}
+	if err != nil {
+		return nil, "", err
+	}
+	inv := &checkoutInvoiceResp{Number: invoiceNumber, Amount: invoiceAmount, Lines: []checkoutLineResp{}}
+	rows, err := h.db.Query(ctx,
+		`SELECT description, quantity, unit_price, line_total
+		   FROM invoice_lines WHERE invoice_id = $1 ORDER BY id`,
+		invoiceID,
+	)
+	if err != nil {
+		return nil, "", err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var l checkoutLineResp
+		if err := rows.Scan(&l.Name, &l.Quantity, &l.UnitAmount, &l.Total); err != nil {
+			return nil, "", err
+		}
+		inv.Lines = append(inv.Lines, l)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, "", err
+	}
+	return inv, kid, nil
 }
 
 type addCheckoutLineRequest struct {
@@ -318,11 +339,18 @@ func (h *InvoiceHandler) HandleRemoveCheckoutLine(w http.ResponseWriter, r *http
 	JSON(w, http.StatusOK, resp)
 }
 
-// HandlePayCheckout mints a fresh Vipps ePayment for the current total and
-// returns the checkout URL for the browser to follow.
+// payCheckoutRequest is the optional body of POST /checkout/{token}/pay.
+type payCheckoutRequest struct {
+	// Provider picks the payment provider; empty uses the default.
+	Provider string `json:"provider"`
+}
+
+// HandlePayCheckout mints a fresh payment for the current total and returns
+// the provider's checkout URL for the browser to follow.
 func (h *InvoiceHandler) HandlePayCheckout(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	orderID, _, status, ok := h.checkoutByToken(ctx, chi.URLParam(r, "token"))
+	token := chi.URLParam(r, "token")
+	orderID, _, status, ok := h.checkoutByToken(ctx, token)
 	if !ok {
 		Error(w, http.StatusNotFound, "checkout not found")
 		return
@@ -335,7 +363,17 @@ func (h *InvoiceHandler) HandlePayCheckout(w http.ResponseWriter, r *http.Reques
 		Error(w, http.StatusServiceUnavailable, "Vipps is not available")
 		return
 	}
-	redirectURL, err := h.mintOrderPayment(ctx, vipps.ProviderName, orderID)
+	var req payCheckoutRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
+		Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	provider, err := h.resolveProvider(req.Provider)
+	if err != nil {
+		Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	redirectURL, err := h.mintOrderPayment(ctx, provider, orderID, h.checkoutPageURL(token))
 	if errors.Is(err, errNothingToPay) {
 		Error(w, http.StatusBadRequest, "nothing to pay")
 		return

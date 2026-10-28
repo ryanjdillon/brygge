@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
@@ -35,24 +36,53 @@ type paymentAttempt struct {
 	ID       string
 	OrderID  string
 	Provider string
+	// Status is the attempt's status when it was looked up.
+	Status string
+	// Amount and Currency are what the attempt was created to charge.
+	Amount   float64
+	Currency string
 	// Guest marks an order with no linked member.
 	Guest bool
+}
+
+// attemptColumns are scanned by scanAttempt, from payment_attempts pa joined
+// to orders o.
+const attemptColumns = `pa.id, pa.order_id, pa.status, pa.amount::float8, pa.currency, o.user_id IS NULL`
+
+func scanAttempt(row pgx.Row, provider string) (paymentAttempt, bool) {
+	a := paymentAttempt{Provider: provider}
+	if err := row.Scan(&a.ID, &a.OrderID, &a.Status, &a.Amount, &a.Currency, &a.Guest); err != nil {
+		return paymentAttempt{}, false
+	}
+	return a, true
 }
 
 // attemptByReference resolves a provider's reference to its attempt in the
 // club, and whether one was found.
 func (s orderSettlement) attemptByReference(ctx context.Context, clubID, provider, reference string) (paymentAttempt, bool) {
-	a := paymentAttempt{Provider: provider}
-	if err := s.db.QueryRow(ctx,
-		`SELECT pa.id, pa.order_id, o.user_id IS NULL
+	return scanAttempt(s.db.QueryRow(ctx,
+		`SELECT `+attemptColumns+`
 		   FROM payment_attempts pa
 		   JOIN orders o ON o.id = pa.order_id
 		  WHERE pa.club_id = $1 AND pa.provider = $2 AND pa.provider_reference = $3`,
 		clubID, provider, reference,
-	).Scan(&a.ID, &a.OrderID, &a.Guest); err != nil {
+	), provider)
+}
+
+// attemptByID resolves an attempt id a provider echoed back (from metadata
+// Brygge set) to the attempt in the club, and whether one was found. An id
+// that is not a UUID matches nothing rather than failing the query.
+func (s orderSettlement) attemptByID(ctx context.Context, clubID, provider, id string) (paymentAttempt, bool) {
+	if _, err := uuid.Parse(id); err != nil {
 		return paymentAttempt{}, false
 	}
-	return a, true
+	return scanAttempt(s.db.QueryRow(ctx,
+		`SELECT `+attemptColumns+`
+		   FROM payment_attempts pa
+		   JOIN orders o ON o.id = pa.order_id
+		  WHERE pa.club_id = $1 AND pa.provider = $2 AND pa.id = $3`,
+		clubID, provider, id,
+	), provider)
 }
 
 // authDecision is what to do with an authorized payment.
@@ -70,11 +100,14 @@ const (
 	authCancelSibling
 )
 
-// authorizeAttempt decides what to do with an authorization and, when the
-// answer is capture, records the attempt as authorized. The decision and the
-// write share one transaction holding the order row, so of two attempts
-// authorized at once only the first is captured; the other is voided. A
-// failed decision answers capture, so a transient error never strands a
+// authorizeAttempt decides what to do with an authorization and records the
+// answer on the attempt: authorized for capture, cancelled for a void. The
+// decision and the write share one transaction holding the order row, so of
+// two attempts authorized at once only the first is captured; the other is
+// voided. Recording the cancel before the provider is called means no later
+// event can read the attempt as still payable; the void itself is
+// best-effort, and an authorization whose void fails lapses at the provider.
+// A failed decision answers capture, so a transient error never strands a
 // payer's authorization; a resulting double capture is logged on CAPTURED.
 func (s orderSettlement) authorizeAttempt(ctx context.Context, a paymentAttempt) authDecision {
 	d, err := s.decideAuthorization(ctx, a)
@@ -110,22 +143,23 @@ func (s orderSettlement) decideAuthorization(ctx context.Context, a paymentAttem
 	).Scan(&own, &sibling); err != nil {
 		return authCapture, err
 	}
+	d, next := authCapture, "authorized"
 	switch {
 	case own == "captured" || own == "cancelled":
 		return authSkip, nil
 	case orderStatus == "paid" || orderStatus == "refunded":
-		return authCancelOrderSettled, nil
+		d, next = authCancelOrderSettled, "cancelled"
 	case sibling:
-		return authCancelSibling, nil
+		d, next = authCancelSibling, "cancelled"
 	}
 	if _, err := tx.Exec(ctx,
-		`UPDATE payment_attempts SET status = 'authorized', updated_at = now()
-		  WHERE id = $1 AND status IN ('created', 'failed')`,
-		a.ID,
+		`UPDATE payment_attempts SET status = $2, updated_at = now()
+		  WHERE id = $1 AND status IN ('created', 'authorized', 'failed')`,
+		a.ID, next,
 	); err != nil {
 		return authCapture, err
 	}
-	return authCapture, tx.Commit(ctx)
+	return d, tx.Commit(ctx)
 }
 
 // releaseAuthorization returns an attempt whose capture failed to created. An
@@ -139,18 +173,6 @@ func (s orderSettlement) releaseAuthorization(ctx context.Context, a paymentAtte
 		a.ID,
 	); err != nil {
 		s.log.Error().Err(err).Str("attempt_id", a.ID).Msg("attempt authorized: release after failed capture failed")
-	}
-}
-
-// markAttemptCancelled records that Brygge voided an authorization it will
-// not capture.
-func (s orderSettlement) markAttemptCancelled(ctx context.Context, a paymentAttempt) {
-	if _, err := s.db.Exec(ctx,
-		`UPDATE payment_attempts SET status = 'cancelled', updated_at = now()
-		  WHERE id = $1 AND status IN ('created', 'authorized')`,
-		a.ID,
-	); err != nil {
-		s.log.Error().Err(err).Str("attempt_id", a.ID).Msg("attempt cancelled: attempt update failed")
 	}
 }
 
@@ -262,6 +284,22 @@ func (s orderSettlement) markInvoicesPaidOnline(ctx context.Context, a paymentAt
 	}
 }
 
+// backfillGuestEmail records the email a provider collected on a guest order
+// that has none, so the club can reach a walk-up payer. Never overwrites a
+// linked member or an email the payer typed.
+func (s orderSettlement) backfillGuestEmail(ctx context.Context, a paymentAttempt, email string) {
+	if email == "" {
+		return
+	}
+	if _, err := s.db.Exec(ctx,
+		`UPDATE orders SET guest_email = $2
+		  WHERE id = $1 AND user_id IS NULL AND COALESCE(guest_email, '') = ''`,
+		a.OrderID, email,
+	); err != nil {
+		s.log.Error().Err(err).Str("order_id", a.OrderID).Msg("order paid: backfill guest email failed")
+	}
+}
+
 func callPayerName(ctx context.Context, payerName func(context.Context) string) string {
 	if payerName == nil {
 		return ""
@@ -275,9 +313,9 @@ func callPayerName(ctx context.Context, payerName func(context.Context) string) 
 // attempt is the newest one the provider created (it has a reference), so a
 // row whose provider call never returned can't shadow a real payment. An
 // authorized attempt that fails stops counting as authorized, so a later
-// attempt on the order can be captured. 'failed' is
-// the terminal-negative order_status (there is no 'cancelled'); the payer can
-// retry with a fresh attempt on the same durable order.
+// attempt on the order can be captured. 'failed' is the terminal-negative
+// order_status (there is no 'cancelled'); the payer can retry with a fresh
+// attempt on the same durable order.
 func (s orderSettlement) markAttemptFailed(ctx context.Context, a paymentAttempt) {
 	if _, err := s.db.Exec(ctx,
 		`UPDATE payment_attempts SET status = 'failed', updated_at = now()

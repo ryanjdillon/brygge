@@ -35,6 +35,7 @@ import (
 	"github.com/brygge-klubb/brygge/internal/passkey"
 	"github.com/brygge-klubb/brygge/internal/payments"
 	"github.com/brygge-klubb/brygge/internal/storage"
+	"github.com/brygge-klubb/brygge/internal/stripe"
 	"github.com/brygge-klubb/brygge/internal/telemetry"
 	"github.com/brygge-klubb/brygge/internal/vipps"
 )
@@ -309,18 +310,30 @@ func main() {
 	projectsHandler := handlers.NewProjectsHandler(db, &cfg, log)
 	featureRequestsHandler := handlers.NewFeatureRequestsHandler(db, &cfg, log)
 	financialsHandler := handlers.NewFinancialsHandler(db, &cfg, auditService, log)
-	// Vipps ePayment client and the online payment providers built on it —
-	// constructed only when the instance has Vipps credentials (MSN present).
-	// Nil otherwise, in which case invoice/webhook handlers skip online
-	// payment and fall back to KID-only fakturas.
+	// Online payment providers — each constructed only when the instance has
+	// its credentials (Vipps: MSN present; Stripe: secret key and webhook
+	// secret). With none, invoice/webhook handlers skip online payment and
+	// fall back to KID-only fakturas.
 	var (
-		vippsClient      *vipps.Client
-		paymentProviders *payments.Registry
+		vippsClient  *vipps.Client
+		stripeClient *stripe.Client
+		providerList []payments.Provider
 	)
 	if cfg.VippsMSN != "" {
 		vippsClient = vipps.New(cfg.VippsBaseURL(), cfg.VippsClientID, cfg.VippsClientSecret,
 			cfg.VippsSubscriptionKey, cfg.VippsMSN, log)
-		paymentProviders = payments.NewRegistry(vipps.NewPaymentProvider(vippsClient))
+		providerList = append(providerList, vipps.NewPaymentProvider(vippsClient))
+	}
+	switch complete, partial := cfg.StripeCredentials(); {
+	case complete:
+		stripeClient = stripe.New(stripe.DefaultBaseURL, cfg.StripeSecretKey, log)
+		providerList = append(providerList, stripe.NewPaymentProvider(stripeClient, cfg.ClubSlug))
+	case partial:
+		log.Warn().Msg("stripe: STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET must both be set; card payments are disabled")
+	}
+	var paymentProviders *payments.Registry
+	if len(providerList) > 0 {
+		paymentProviders = payments.NewRegistry(providerList...)
 	}
 	invoiceHandler := handlers.NewInvoiceHandler(db, &cfg, emailClient, auditService, s3LegalClient, paymentProviders, log)
 	// Invoice reminders reuse the shared delivery queue whenever SMTP is
@@ -346,6 +359,7 @@ func main() {
 	faqsHandler := handlers.NewFaqsHandler(db, &cfg, log)
 	productsHandler := handlers.NewProductsHandler(db, &cfg, log)
 	vippsWebhookHandler := handlers.NewVippsWebhookHandler(db, &cfg, vippsClient, log)
+	stripeWebhookHandler := handlers.NewStripeWebhookHandler(db, &cfg, stripeClient, log)
 	boatModelsHandler := handlers.NewBoatModelsHandler(db, log)
 	volunteerHandler := handlers.NewVolunteerHandler(db, &cfg, log)
 	shoppingListsHandler := handlers.NewShoppingListsHandler(db, &cfg, log)
@@ -528,6 +542,9 @@ func main() {
 
 		// Vipps webhook — public endpoint, authenticated by HMAC-SHA256 signature.
 		r.Post("/vipps/webhooks", vippsWebhookHandler.Handle)
+		// Stripe webhook — public, authenticated by the Stripe-Signature HMAC.
+		// No rate limiter: Stripe retries in bursts and the signature is the gate.
+		r.Post("/stripe/webhooks", stripeWebhookHandler.Handle)
 
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.AuthenticateSession(sessionService))

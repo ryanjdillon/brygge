@@ -1579,5 +1579,23 @@
       "overflowNote": "Troppo testo per questa dimensione — accorcia il nome o stampa meno schede per pagina",
       "overflowCount": "Schede con troppo testo: {n}"
     }
+  },
+  "pay": {
+    "receipt": {
+      "loading": "Caricamento del pagamento …",
+      "paidTitle": "Pagamento ricevuto",
+      "paidBody": "Grazie per il pagamento!",
+      "amountPaid": "Importo pagato",
+      "invoice": "Fattura n. {n}",
+      "pendingTitle": "Conferma del pagamento …",
+      "pendingBody": "Di solito bastano pochi secondi. Tieni aperta questa pagina.",
+      "confirmingTitle": "Il pagamento è in fase di conferma",
+      "confirmingBody": "Non abbiamo ancora ricevuto la conferma. Il pagamento verrà registrato non appena arriva: puoi riaprire questo link più tardi per vedere la ricevuta.",
+      "failedTitle": "Pagamento non completato",
+      "failedBody": "Il pagamento è stato annullato o non è andato a buon fine.",
+      "tryAgain": "Riprova",
+      "notFoundTitle": "Pagamento non trovato",
+      "notFoundBody": "Il link non è valido o è scaduto. Contatta il tesoriere."
+    }
   }
 }

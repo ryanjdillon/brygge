@@ -315,9 +315,10 @@ func (h *InvoiceHandler) HandleGetInvoicePayLink(w http.ResponseWriter, r *http.
 }
 
 // HandleOrderPayRedirect is the public GET /api/v1/betal/{token} endpoint the
-// faktura email links to. It mints a fresh ePayment for the checkout order and
-// 302-redirects to the Vipps checkout — the checkout URL lives only ~10 minutes
-// so it can't be emailed directly. No auth: the token is the capability.
+// faktura email links to. It mints a fresh payment with the default provider
+// for the checkout order and 302-redirects to its hosted page — that page
+// lives only minutes so it can't be emailed directly. No auth: the token is
+// the capability.
 func (h *InvoiceHandler) HandleOrderPayRedirect(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	token := chi.URLParam(r, "token")
@@ -338,10 +339,10 @@ func (h *InvoiceHandler) HandleOrderPayRedirect(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	// Already captured or refunded → don't charge again; send them to the site.
+	// Already captured or refunded → don't charge again; show the receipt.
 	// 'pending'/'failed' fall through so an abandoned or failed attempt can retry.
 	if status == "paid" || status == "refunded" {
-		http.Redirect(w, r, h.paymentReturnURL(), http.StatusFound)
+		http.Redirect(w, r, h.receiptURL(token), http.StatusFound) // #nosec G710 -- fixed configured origin; token is a path segment that just matched a server-minted orders.token
 		return
 	}
 	if !h.providers.Configured() {
@@ -349,15 +350,15 @@ func (h *InvoiceHandler) HandleOrderPayRedirect(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	redirectURL, err := h.mintOrderPayment(ctx, vipps.ProviderName, orderID)
+	redirectURL, err := h.mintOrderPayment(ctx, h.defaultProvider(), orderID, h.checkoutPageURL(token))
 	if errors.Is(err, errNothingToPay) {
-		http.Redirect(w, r, h.paymentReturnURL(), http.StatusFound)
+		http.Redirect(w, r, h.frontendBase(), http.StatusFound)
 		return
 	}
 	if errors.Is(err, errOnlinePaymentBlocked) {
 		// Not payable online → send them to the checkout page, which shows
 		// KID + konto for bank transfer instead of a Vipps button (BRY-283).
-		http.Redirect(w, r, h.frontendBase()+"/betal/"+token, http.StatusFound) // #nosec G710 -- fixed configured origin; token is a path segment that just matched a server-minted orders.token
+		http.Redirect(w, r, h.checkoutPageURL(token), http.StatusFound) // #nosec G710 -- fixed configured origin; token is a path segment that just matched a server-minted orders.token
 		return
 	}
 	if err != nil {
@@ -365,15 +366,45 @@ func (h *InvoiceHandler) HandleOrderPayRedirect(w http.ResponseWriter, r *http.R
 		http.Error(w, "Kunne ikke starte Vipps-betaling. Prøv igjen.", http.StatusBadGateway)
 		return
 	}
-	http.Redirect(w, r, redirectURL, http.StatusFound)
+	http.Redirect(w, r, redirectURL, http.StatusFound) // #nosec G710 -- the provider's hosted payment page from its API response; the token only reaches the provider as our own return/cancel URLs
+}
+
+// errUnknownProvider is a payer asking for a provider this deployment has no
+// credentials for.
+var errUnknownProvider = errors.New("unknown payment provider")
+
+// defaultProvider is the provider used when the payer has not chosen one:
+// Vipps when it is configured, otherwise the one that is. Callers check
+// Configured() first.
+func (h *InvoiceHandler) defaultProvider() string {
+	if _, ok := h.providers.Get(vipps.ProviderName); ok {
+		return vipps.ProviderName
+	}
+	if names := h.providers.Names(); len(names) > 0 {
+		return names[0]
+	}
+	return vipps.ProviderName
+}
+
+// resolveProvider maps a payer's requested provider ("" for none) to a
+// configured one.
+func (h *InvoiceHandler) resolveProvider(requested string) (string, error) {
+	if requested == "" {
+		return h.defaultProvider(), nil
+	}
+	if _, ok := h.providers.Get(requested); !ok {
+		return "", errUnknownProvider
+	}
+	return requested, nil
 }
 
 // mintOrderPayment sums the order's still-unpaid invoice sources and its ad-hoc
 // lines, has the named provider create a payment for the total, and records it
 // as a payment attempt whose reference the provider's webhook matches back.
-// Returns the short-lived checkout URL, or errNothingToPay when nothing is
-// outstanding.
-func (h *InvoiceHandler) mintOrderPayment(ctx context.Context, providerName, orderID string) (string, error) {
+// The payer returns to the order's receipt page, or to cancelURL if they back
+// out where the provider tells the two apart. Returns the short-lived checkout
+// URL, or errNothingToPay when nothing is outstanding.
+func (h *InvoiceHandler) mintOrderPayment(ctx context.Context, providerName, orderID, cancelURL string) (string, error) {
 	provider, ok := h.providers.Get(providerName)
 	if !ok {
 		return "", fmt.Errorf("payment provider %q is not configured", providerName)
@@ -399,13 +430,9 @@ func (h *InvoiceHandler) mintOrderPayment(ctx context.Context, providerName, ord
 		return "", errNothingToPay
 	}
 
-	// A guest checkout (QR / walk-up, no linked member) lets the provider ask
-	// who paid, so the harbor overview shows a name instead of "Gjest"
-	// (BRY-272). Members paying their own faktura are already known.
-	var userID *string
-	isGuest := false
-	if err := h.db.QueryRow(ctx, `SELECT user_id FROM orders WHERE id = $1`, orderID).Scan(&userID); err == nil && userID == nil {
-		isGuest = true
+	payer, err := h.orderPayer(ctx, orderID)
+	if err != nil {
+		return "", err
 	}
 
 	attemptID, err := h.startPaymentAttempt(ctx, orderID, providerName, total)
@@ -414,11 +441,14 @@ func (h *InvoiceHandler) mintOrderPayment(ctx context.Context, providerName, ord
 	}
 	res, err := provider.CreatePayment(ctx, payments.Request{
 		OrderID:     orderID,
+		AttemptID:   attemptID,
 		AmountOre:   int64(math.Round(total * 100)),
 		Currency:    paymentCurrency,
 		Description: desc,
-		IsGuest:     isGuest,
-		ReturnURL:   h.paymentReturnURL(),
+		IsGuest:     payer.guest,
+		PayerEmail:  payer.email,
+		ReturnURL:   h.receiptURL(payer.token),
+		CancelURL:   cancelURL,
 	})
 	// The provider has answered, so record it even if the payer's request was
 	// cancelled meanwhile: a reference lost here is a payment no webhook finds.
@@ -429,6 +459,30 @@ func (h *InvoiceHandler) mintOrderPayment(ctx context.Context, providerName, ord
 	}
 	h.recordPaymentReference(persistCtx, attemptID, res.Reference, total)
 	return res.RedirectURL, nil
+}
+
+// orderPayerInfo is who pays an order, as the provider needs it.
+type orderPayerInfo struct {
+	token string
+	// guest marks an order with no linked member. A guest checkout (QR /
+	// walk-up) lets the provider ask who paid, so the harbor overview shows a
+	// name instead of "Gjest" (BRY-272). Members are already known.
+	guest bool
+	email string
+}
+
+func (h *InvoiceHandler) orderPayer(ctx context.Context, orderID string) (orderPayerInfo, error) {
+	var p orderPayerInfo
+	if err := h.db.QueryRow(ctx,
+		`SELECT COALESCE(o.token, ''), o.user_id IS NULL, COALESCE(u.email, '')
+		   FROM orders o
+		   LEFT JOIN users u ON u.id = o.user_id
+		  WHERE o.id = $1`,
+		orderID,
+	).Scan(&p.token, &p.guest, &p.email); err != nil {
+		return p, fmt.Errorf("load order payer: %w", err)
+	}
+	return p, nil
 }
 
 // paymentCurrency is the only currency Brygge charges in.
@@ -556,10 +610,19 @@ func (h *InvoiceHandler) orderTotal(ctx context.Context, orderID string) (float6
 	return total, desc, nil
 }
 
-// paymentReturnURL is where the provider sends the payer's browser after they
-// complete (or abort) the payment: the club site.
-func (h *InvoiceHandler) paymentReturnURL() string {
-	return h.frontendBase()
+// receiptURL is where the payer's browser returns after a payment: the
+// order's receipt page, which polls for the webhook's verdict. A provider
+// that returns there on abort too (Vipps) relies on it not assuming success.
+func (h *InvoiceHandler) receiptURL(token string) string {
+	if token == "" {
+		return h.frontendBase()
+	}
+	return h.checkoutPageURL(token) + "/kvittering"
+}
+
+// checkoutPageURL is the order's /betal/{token} pay page.
+func (h *InvoiceHandler) checkoutPageURL(token string) string {
+	return h.frontendBase() + "/betal/" + token
 }
 
 // genCheckoutToken returns an unguessable token for the public pay link.
