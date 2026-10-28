@@ -35,6 +35,11 @@ const (
 	StripeActionAssignAccount = "assign_account"
 	StripeActionDismiss       = "dismiss"
 	StripeActionUndismiss     = "undismiss"
+	// StripeActionUnassign undoes a booking (UnassignStripeTxn).
+	StripeActionUnassign = "unassign"
+	// StripeActionRebook hands a row a person holds back to the booking
+	// pass (RebookStripeTxn).
+	StripeActionRebook = "rebook"
 )
 
 // Codes of a refused manual action (StripeTxnRefusal.Code).
@@ -62,6 +67,9 @@ const (
 	// StripeTxnInvalidAccount: the account does not exist, is inactive, or
 	// is one a Stripe row may not be booked against by hand.
 	StripeTxnInvalidAccount = "invalid_account"
+	// StripeTxnUseBankUnassign: the row is Stripe moving a payout, booked by
+	// the payout's clearing, which is undone from the bank deposit.
+	StripeTxnUseBankUnassign = "use_bank_unassign"
 )
 
 // StripeTxnRefusal is a manual action refused, nothing changed. Reason is
@@ -115,15 +123,20 @@ func splitStripeDismissal(stored string) (reason, note string) {
 	return reason, note
 }
 
-// stripeTxnState is what decides a row's manual actions.
+// stripeTxnState is what decides a row's manual actions. ownEntry is set
+// when the row's journal entry is sourced to the row itself (a charge, fee
+// or manual booking), unlike a payout row, which carries its clearing's.
 type stripeTxnState struct {
-	category, status, reviewReason, currency string
-	booked, payoutCleared                    bool
+	category, status, reviewReason, currency  string
+	booked, payoutCleared, hasOrder, ownEntry bool
 }
 
 // stripeAllowedActions lists the manual actions the row allows. Only rows in
 // review are assigned or dismissed: an unbooked row waits for the booking
-// pass, and fees and payouts book themselves. A row in another currency, or
+// pass, and fees and payouts book themselves. A booked row is unassigned
+// when its entry is its own; a payout row's is the payout clearing's, undone
+// from the bank deposit. A row a person unassigned is held for that person
+// (stripeHeldActions). A row in another currency, or
 // a refund or dispute (whose booking comes with Stripe refunds), can only
 // be dismissed. A charge whose order's faktura is no longer open, or whose
 // imported receivable is not in the GL, never goes to a faktura. A row whose
@@ -142,6 +155,9 @@ func stripeAllowedActions(st stripeTxnState) []string {
 func stripeReasonActions(st stripeTxnState) []string {
 	switch {
 	case st.booked:
+		if st.status == StripeTxnBooked && st.ownEntry && !stripePayoutCategory(st.category) {
+			return []string{StripeActionUnassign}
+		}
 		return []string{}
 	case st.status == StripeTxnDismissed:
 		return []string{StripeActionUndismiss}
@@ -149,6 +165,8 @@ func stripeReasonActions(st stripeTxnState) []string {
 		return []string{}
 	case st.currency != "nok", st.reviewReason == StripeReviewCurrency, st.reviewReason == StripeReviewRefundPending:
 		return []string{StripeActionDismiss}
+	case st.reviewReason == StripeReviewUnassigned:
+		return stripeHeldActions(st)
 	case st.category == "other_adjustment" && st.reviewReason == StripeReviewUnsupportedCategory:
 		return []string{StripeActionAssignAccount, StripeActionDismiss}
 	case st.category != "charge":
@@ -163,13 +181,39 @@ func stripeReasonActions(st stripeTxnState) []string {
 	return []string{}
 }
 
+// stripeHeldActions are the actions of a row a person unassigned: booked
+// again from its order or as a fee by the booking pass (rebook), or by hand
+// as any row in review of its kind is. Only charges go to a faktura.
+func stripeHeldActions(st stripeTxnState) []string {
+	switch st.category {
+	case "charge":
+		if st.hasOrder {
+			return []string{StripeActionRebook, StripeActionAssignInvoice, StripeActionAssignAccount, StripeActionDismiss}
+		}
+		return []string{StripeActionAssignInvoice, StripeActionAssignAccount, StripeActionDismiss}
+	case "fee":
+		return []string{StripeActionRebook, StripeActionAssignAccount, StripeActionDismiss}
+	case "other_adjustment":
+		return []string{StripeActionAssignAccount, StripeActionDismiss}
+	}
+	return []string{StripeActionDismiss}
+}
+
+// stripePayoutCategory reports whether a reporting category is Stripe
+// moving a payout itself, which only the payout's clearing books.
+func stripePayoutCategory(category string) bool {
+	return category == "payout" || category == "payout_reversal"
+}
+
 // stripeManualRow is a stripe_balance_transactions row as the manual
-// actions read it.
+// actions read it, with its journal entry's id and status (empty when
+// unbooked).
 type stripeManualRow struct {
 	stripeTxnState
-	id, btID          string
-	amountOre, feeOre int64
-	createdAt         time.Time
+	id, btID             string
+	amountOre, feeOre    int64
+	createdAt            time.Time
+	entryID, entryStatus string
 }
 
 // lockStripeTxnTx locks the row for the rest of tx and reads it with its
@@ -189,17 +233,25 @@ func lockStripeTxnTx(ctx context.Context, tx pgx.Tx, clubID, rowID string) (*str
 	if err := tx.QueryRow(ctx,
 		`SELECT t.balance_transaction_id, t.reporting_category, t.status, COALESCE(t.review_reason, ''), t.currency,
 		        t.amount_ore, t.fee_ore, t.created_at, t.journal_entry_id IS NOT NULL,
-		        COALESCE(p.journal_entry_id IS NOT NULL, false)
+		        COALESCE(p.journal_entry_id IS NOT NULL, false), t.order_id IS NOT NULL,
+		        `+stripeOwnEntrySQL+`, COALESCE(t.journal_entry_id::text, ''), COALESCE(e.status::text, '')
 		   FROM stripe_balance_transactions t
 		   LEFT JOIN stripe_payouts p ON p.id = t.payout_id
+		   LEFT JOIN journal_entries e ON e.id = t.journal_entry_id AND e.club_id = t.club_id
 		  WHERE t.id = $1 AND t.club_id = $2`,
 		rowID, clubID,
 	).Scan(&r.btID, &r.category, &r.status, &r.reviewReason, &r.currency,
-		&r.amountOre, &r.feeOre, &r.createdAt, &r.booked, &r.payoutCleared); err != nil {
+		&r.amountOre, &r.feeOre, &r.createdAt, &r.booked, &r.payoutCleared, &r.hasOrder,
+		&r.ownEntry, &r.entryID, &r.entryStatus); err != nil {
 		return nil, fmt.Errorf("reading stripe transaction: %w", err)
 	}
 	return r, nil
 }
+
+// stripeOwnEntrySQL is true when the journal entry e of row t is sourced to
+// t: the booking pass's and the manual actions' entries are; a payout row
+// carries its clearing's, sourced to the bank deposit.
+const stripeOwnEntrySQL = `COALESCE(e.source_table = 'stripe_balance_transactions' AND e.source_id::text = t.id::text, false)`
 
 // requireStripeAction refuses an action the row does not allow.
 func requireStripeAction(r *stripeManualRow, action string) error {
@@ -301,16 +353,18 @@ func stripeFeeLines(feeAccount, clearing string, feeOre int64, desc string) []Cr
 // and DR the payment fee account / CR clearing the fee Stripe kept, on the
 // charge's booking date. The faktura is locked as every settle path locks
 // it (lockInvoiceForAssign, lockManual) and recorded on the row
-// (invoice_id); its payment back-link runs after the commit. The charge must
+// (invoice_id); its payment back-link runs after the commit, still in the
+// club's Stripe slot, so an unassign of the row cannot run between the two
+// and leave the faktura marked paid by a voided entry. The charge must
 // equal the faktura total to the øre. A refusal is a *StripeTxnRefusal; an
 // unknown row or faktura is ErrStripeTxnNotFound or
 // ErrStripeInvoiceNotFound; a Stripe slot still busy after a short wait is
 // ErrStripeSyncBusy.
 func (s *Service) AssignStripeTxnToInvoice(ctx context.Context, clubID, actorID, txnID, invoiceID string) (*StripeTxnBookResult, error) {
 	var res *StripeTxnBookResult
-	var date time.Time
 	err := s.stripeManualTx(ctx, clubID, actorID, func(tx pgx.Tx) error {
 		var err error
+		var date time.Time
 		res, date, err = assignStripeTxnToInvoiceTx(ctx, tx, clubID, actorID, txnID, invoiceID)
 		if err != nil {
 			return err
@@ -318,15 +372,16 @@ func (s *Service) AssignStripeTxnToInvoice(ctx context.Context, clubID, actorID,
 		if err := tx.Commit(ctx); err != nil {
 			return fmt.Errorf("commit: %w", err)
 		}
+		// Best-effort, as on the bank and Vipps paths: the GL is already
+		// right. The commit released every lock, so the pool is safe here.
+		if err := s.linkInvoicePayment(ctx, clubID, invoiceID, date); err != nil {
+			s.log.Warn().Err(err).Str("invoice_id", invoiceID).Str("balance_transaction_id", res.BalanceTransactionID).
+				Msg("stripe manual assign: invoice payment back-link failed")
+		}
 		return nil
 	})
 	if err != nil {
 		return nil, err
-	}
-	// Best-effort, as on the bank and Vipps paths: the GL is already right.
-	if err := s.linkInvoicePayment(ctx, clubID, invoiceID, date); err != nil {
-		s.log.Warn().Err(err).Str("invoice_id", invoiceID).Str("balance_transaction_id", res.BalanceTransactionID).
-			Msg("stripe manual assign: invoice payment back-link failed")
 	}
 	return res, nil
 }
@@ -757,24 +812,52 @@ type StripeTxnItem struct {
 	DismissedAt     *string `json:"dismissed_at,omitempty"`
 	DismissedReason string  `json:"dismissed_reason,omitempty"`
 	DismissedNote   string  `json:"dismissed_note,omitempty"`
+	// JournalEntryID, JournalEntryNumber, JournalEntryDescription and
+	// JournalEntryStatus describe a booked row's entry.
+	JournalEntryID          *string `json:"journal_entry_id,omitempty"`
+	JournalEntryNumber      *int    `json:"journal_entry_number,omitempty"`
+	JournalEntryDescription string  `json:"journal_entry_description,omitempty"`
+	JournalEntryStatus      string  `json:"journal_entry_status,omitempty"`
+	// InvoiceNumbers are the fakturas a booked row settles
+	// (stripeSettledInvoiceSQL), by number.
+	InvoiceNumbers []int `json:"invoice_numbers,omitempty"`
 	// AllowedActions are the StripeAction* values the row allows now.
 	AllowedActions []string `json:"allowed_actions"`
 }
 
+// IsListableStripeTxnStatus reports whether ListStripeTransactions lists
+// rows in status.
+func IsListableStripeTxnStatus(status string) bool {
+	return status == StripeTxnNeedsReview || status == StripeTxnDismissed || status == StripeTxnBooked
+}
+
+// stripeSettledInvoiceSQL is true for a faktura i that the booked Stripe
+// row t settles: the one a person assigned it to (invoice_id) or, for a row
+// the booking pass booked from its order (no review_reason), every faktura
+// of the order. These are the Stripe clauses of invoiceBookedRowSQL.
+const stripeSettledInvoiceSQL = `(i.club_id = t.club_id AND t.journal_entry_id IS NOT NULL
+	      AND (i.id = t.invoice_id
+	           OR (t.review_reason IS NULL
+	               AND i.id IN (SELECT os.invoice_id FROM order_sources os WHERE os.order_id = t.order_id))))`
+
 // ListStripeTransactions lists the club's Stripe balance transactions in
-// status (needs_review or dismissed), newest first, from offset. hasMore
-// is set when more follow.
+// status (needs_review, dismissed or booked), newest first, from offset.
+// hasMore is set when more follow.
 func (s *Service) ListStripeTransactions(ctx context.Context, clubID, status string, limit, offset int) (items []StripeTxnItem, hasMore bool, err error) {
-	if status != StripeTxnNeedsReview && status != StripeTxnDismissed {
+	if !IsListableStripeTxnStatus(status) {
 		return nil, false, fmt.Errorf("unsupported status %q", status)
 	}
 	rows, err := s.db.Query(ctx,
 		`SELECT t.id, t.balance_transaction_id, t.reporting_category, t.stripe_type,
 		        t.amount_ore, t.fee_ore, t.net_ore, t.currency, t.created_at, t.status, COALESCE(t.review_reason, ''),
 		        t.order_id::text, t.attempt_id::text, p.payout_id, COALESCE(p.journal_entry_id IS NOT NULL, false),
-		        t.journal_entry_id IS NOT NULL, t.dismissed_at, COALESCE(t.dismissed_reason, '')
+		        t.journal_entry_id IS NOT NULL, t.dismissed_at, COALESCE(t.dismissed_reason, ''),
+		        t.journal_entry_id::text, e.entry_number, COALESCE(e.description, ''), COALESCE(e.status::text, ''),
+		        `+stripeOwnEntrySQL+`,
+		        ARRAY(SELECT i.invoice_number FROM invoices i WHERE `+stripeSettledInvoiceSQL+` ORDER BY i.invoice_number)
 		   FROM stripe_balance_transactions t
 		   LEFT JOIN stripe_payouts p ON p.id = t.payout_id
+		   LEFT JOIN journal_entries e ON e.id = t.journal_entry_id AND e.club_id = t.club_id
 		  WHERE t.club_id = $1 AND t.status = $2
 		  ORDER BY t.created_at DESC, t.id
 		  LIMIT $3 OFFSET $4`,
@@ -808,12 +891,18 @@ func scanStripeTxnItem(rows pgx.Rows) (StripeTxnItem, error) {
 		dismissedAt            *time.Time
 		stored                 string
 		st                     stripeTxnState
+		invoiceNumbers         []int
 	)
 	if err := rows.Scan(&it.ID, &it.BalanceTransactionID, &it.ReportingCategory, &it.StripeType,
 		&amountOre, &feeOre, &net, &it.Currency, &created, &it.Status, &it.ReviewReason,
 		&it.OrderID, &it.AttemptID, &it.PayoutID, &it.PayoutCleared,
-		&st.booked, &dismissedAt, &stored); err != nil {
+		&st.booked, &dismissedAt, &stored,
+		&it.JournalEntryID, &it.JournalEntryNumber, &it.JournalEntryDescription, &it.JournalEntryStatus,
+		&st.ownEntry, &invoiceNumbers); err != nil {
 		return it, fmt.Errorf("scanning stripe transaction: %w", err)
+	}
+	if len(invoiceNumbers) > 0 {
+		it.InvoiceNumbers = invoiceNumbers
 	}
 	it.Amount, it.Fee, it.Net = oreToKr(amountOre), oreToKr(feeOre), oreToKr(net)
 	it.Date = stripeBookingDate(created, time.Local).Format("2006-01-02")
@@ -824,7 +913,7 @@ func scanStripeTxnItem(rows pgx.Rows) (StripeTxnItem, error) {
 		it.DismissedReason, it.DismissedNote = splitStripeDismissal(stored)
 	}
 	st.category, st.status, st.reviewReason, st.currency = it.ReportingCategory, it.Status, it.ReviewReason, it.Currency
-	st.payoutCleared = it.PayoutCleared
+	st.payoutCleared, st.hasOrder = it.PayoutCleared, it.OrderID != nil
 	it.AllowedActions = stripeAllowedActions(st)
 	return it, nil
 }

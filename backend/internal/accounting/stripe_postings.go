@@ -500,18 +500,26 @@ func lockSplitInvoicesTx(ctx context.Context, tx pgx.Tx, clubID string, split []
 			ids = append(ids, l.LinkedInvoiceID)
 		}
 	}
+	return lockInvoicesTx(ctx, tx, clubID, ids)
+}
+
+// lockInvoicesTx locks fakturas FOR NO KEY UPDATE in id order, as
+// lockInvoiceForAssign locks one, so every path holding several takes them
+// in the same order.
+func lockInvoicesTx(ctx context.Context, tx pgx.Tx, clubID string, ids []string) error {
 	if len(ids) == 0 {
 		return nil
 	}
+	ids = slices.Clone(ids)
 	slices.Sort(ids)
 	rows, err := tx.Query(ctx,
 		`SELECT id FROM invoices WHERE club_id = $1 AND id = ANY($2::uuid[]) ORDER BY id FOR NO KEY UPDATE`,
 		clubID, ids)
 	if err != nil {
-		return fmt.Errorf("locking order fakturas: %w", err)
+		return fmt.Errorf("locking fakturas: %w", err)
 	}
 	if _, err := pgx.CollectRows(rows, pgx.RowTo[string]); err != nil {
-		return fmt.Errorf("locking order fakturas: %w", err)
+		return fmt.Errorf("locking fakturas: %w", err)
 	}
 	return nil
 }

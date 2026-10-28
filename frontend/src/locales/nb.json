@@ -1641,7 +1641,11 @@
         "vippsDraftsRelease": "Frigi",
         "vippsDraftsReleaseTitle": "Frigi {ref} til Vipps-køen?",
         "vippsDraftsReleaseBody": "Utkastet slettes, og betalingen på {amount} kr fra {date} går tilbake til Vipps-køen, der du tildeler den manuelt i Tildel.",
-        "vippsDraftsReleased": "{ref} er frigitt til Vipps-køen."
+        "vippsDraftsReleased": "{ref} er frigitt til Vipps-køen.",
+        "voidStripeEntry": "Bilaget er bokført fra en Stripe-transaksjon og kan ikke annulleres her. Bruk «Angre» på transaksjonen under Bank og Vipps → Stripe-transaksjoner (fanen Bokført), så åpnes fakturaene igjen.",
+        "voidStripeEntryLink": "Gå til Stripe-transaksjonene",
+        "voidBankEntry": "Bilaget er bokført fra en bankrad eller en Stripe-utbetaling og kan ikke annulleres her. Bruk «Angre» på raden under Bank og Vipps → Tildel, så legges raden tilbake i køen og fakturaen eller utbetalingen åpnes igjen.",
+        "voidBankEntryLink": "Gå til Tildel"
       },
       "journalForm": {
         "title": "Nytt bilag",
@@ -1992,7 +1996,8 @@
         "unsupported_category": "Ukjent transaksjonstype",
         "receivable_not_open": "Fakturaen er allerede betalt, kreditert eller annullert",
         "imported_no_opening_balance": "Importert faktura uten inngående balanse",
-        "split_mismatch": "Ordren stemmer ikke med beløpet"
+        "split_mismatch": "Ordren stemmer ikke med beløpet",
+        "unassigned": "Angret av deg – holdes til manuell behandling"
       },
       "stripePayoutSweepCounts": "Stripe-utbetalinger avstemt: {cleared} · Venter: {waiting} · Hoppet over: {skipped} · Feilet: {failed}",
       "stripePayoutDeposit": "Bankinnbetaling {date}",
@@ -2000,11 +2005,13 @@
         "title": "Stripe-transaksjoner",
         "tabs": {
           "review": "Til gjennomgang",
-          "dismissed": "Avvist"
+          "dismissed": "Avvist",
+          "booked": "Bokført"
         },
         "empty": {
           "review": "Ingen Stripe-transaksjoner venter på gjennomgang.",
-          "dismissed": "Ingen avviste Stripe-transaksjoner."
+          "dismissed": "Ingen avviste Stripe-transaksjoner.",
+          "booked": "Ingen bokførte Stripe-transaksjoner."
         },
         "page": "Side {page}",
         "fee": "Gebyr {amount}",
@@ -2021,7 +2028,9 @@
           "assign_invoice": "Bokfør mot faktura",
           "assign_account": "Bokfør mot konto",
           "dismiss": "Avvis",
-          "undismiss": "Angre avvisning"
+          "undismiss": "Angre avvisning",
+          "unassign": "Angre",
+          "rebook": "Bokfør fra ordren igjen"
         },
         "dismissReasons": {
           "booked_manually": "Ført manuelt",
@@ -2067,11 +2076,31 @@
           "invoice_settled": "Fakturaen kan ikke ta imot betalingen: den er betalt, kreditert eller mangler inngående balanse.",
           "period_closed": "Regnskapsperioden er stengt.",
           "already_booked": "Transaksjonen er allerede bokført.",
-          "payout_cleared": "Utbetalingen er allerede avstemt, så transaksjonen kan ikke bokføres eller tas tilbake fra avvist.",
+          "payout_cleared": "Utbetalingen transaksjonen var med i er allerede avstemt. Angre bankinnbetalingen for utbetalingen i Tildel først.",
           "invalid_reason": "Velg en gyldig årsak.",
           "invalid_account": "Denne kontoen kan ikke brukes for en Stripe-transaksjon.",
           "busy": "En Stripe-synk kjører nå. Prøv igjen om litt.",
-          "generic": "Noe gikk galt. Prøv igjen."
+          "generic": "Noe gikk galt. Prøv igjen.",
+          "use_bank_unassign": "Utbetalinger bokføres av avstemmingen. Angre bankinnbetalingen i Tildel i stedet."
+        },
+        "entry": "Bilag {number}: {description}",
+        "entryVoided": "annullert",
+        "invoices": "Faktura {invoices}",
+        "unassignDialog": {
+          "title": "Angre bokføringen",
+          "reverse": "Bilaget reverseres med et motbilag.",
+          "reverseNumbered": "Bilag {number} reverseres med et motbilag.",
+          "reopen": "Faktura {invoices} åpnes igjen og står som ubetalt.",
+          "hold": "Transaksjonen legges til gjennomgang og blir liggende til du bokfører den på nytt eller avviser den. Den bokføres ikke automatisk igjen.",
+          "confirm": "Angre bokføringen",
+          "success": "Bokføringen er angret",
+          "onlinePaid": "Fakturaene beholder merket «betalt på nett», siden pengene kom inn. Hører betalingen egentlig til en annen faktura, står denne fortsatt som betalt på nett, så purringer og bankavstemming hopper over den selv om den er ubetalt."
+        },
+        "rebook": {
+          "booked": "Transaksjonen er bokført fra ordren igjen",
+          "needsReview": "Transaksjonen kunne ikke bokføres fra ordren: {reason}",
+          "deferred": "Regnskapsperioden er ikke åpen. Transaksjonen bokføres når året er åpnet.",
+          "failed": "Bokføringen feilet. Transaksjonen venter på neste Stripe-synk."
         }
       }
     },

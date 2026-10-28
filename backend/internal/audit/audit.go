@@ -94,6 +94,11 @@ const (
 	ActionStripeTxnDismissed       = "stripe_txn.dismissed"
 	ActionStripeTxnUndismissed     = "stripe_txn.undismissed"
 
+	// A Stripe booking undone, and a held row handed back to the booking
+	// pass (BRY-467)
+	ActionStripeTxnUnassigned = "stripe_txn.unassigned"
+	ActionStripeTxnRebooked   = "stripe_txn.rebooked"
+
 	// Payer aliases taught from bank Tildel or the Vipps queue (BRY-383)
 	ActionPayerAliasTaught  = "payer_alias.taught"
 	ActionPayerAliasRemoved = "payer_alias.removed"

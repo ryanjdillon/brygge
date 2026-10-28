@@ -518,17 +518,37 @@ func (h *AccountingHandler) HandleVoidJournalEntry(w http.ResponseWriter, r *htt
 	}
 
 	entryID := chi.URLParam(r, "entryID")
-	reversal, err := h.svc.VoidJournalEntry(r.Context(), claims.ClubID, entryID, claims.UserID)
+	reversal, err := h.svc.VoidLedgerEntry(r.Context(), claims.ClubID, entryID, claims.UserID)
 	if err != nil {
-		h.log.Error().Err(err).Msg("failed to void journal entry")
+		// Refusals are expected outcomes, not server faults.
 		switch {
+		case errors.Is(err, accounting.ErrStripeSourcedEntry):
+			h.log.Info().Err(err).Str("entry_id", entryID).Msg("journal void refused: stripe entry")
+			JSON(w, http.StatusConflict, map[string]string{
+				"error": err.Error(),
+				"code":  "stripe_entry",
+				"reason": "Bilaget er bokført fra en Stripe-transaksjon. Angre det fra Stripe-raden under " +
+					"Bank og Vipps → Stripe-transaksjoner (Bokført), så fakturaene åpnes igjen og transaksjonen holdes til du har bestemt deg.",
+			})
+		case errors.Is(err, accounting.ErrBankLinkedEntry):
+			h.log.Info().Err(err).Str("entry_id", entryID).Msg("journal void refused: bank entry")
+			JSON(w, http.StatusConflict, map[string]string{
+				"error": err.Error(),
+				"code":  "bank_entry",
+				"reason": "Bilaget er bokført fra en bankrad. Angre det i Bank og Vipps → Tildel → Angre, " +
+					"så legges raden tilbake i køen og fakturaen eller utbetalingen åpnes igjen.",
+			})
 		case errors.Is(err, accounting.ErrEntryNotPosted):
+			h.log.Info().Err(err).Str("entry_id", entryID).Msg("journal void refused: not posted")
 			Error(w, http.StatusBadRequest, err.Error())
 		case errors.Is(err, accounting.ErrPeriodClosed):
+			h.log.Warn().Err(err).Str("entry_id", entryID).Msg("journal void refused: period closed")
 			writePeriodClosed(w, err)
 		case errors.Is(err, accounting.ErrEntryNotFound):
+			h.log.Info().Err(err).Str("entry_id", entryID).Msg("journal void: entry not found")
 			Error(w, http.StatusNotFound, err.Error())
 		default:
+			h.log.Error().Err(err).Str("entry_id", entryID).Msg("failed to void journal entry")
 			Error(w, http.StatusInternalServerError, "internal error")
 		}
 		return

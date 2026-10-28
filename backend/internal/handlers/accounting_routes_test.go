@@ -84,7 +84,7 @@ func TestLedgerRoutesGateMoneyMovesForBoard(t *testing.T) {
 	if err != nil {
 		t.Fatalf("walk: %v", err)
 	}
-	for _, a := range []string{"assign-invoice", "assign-account", "dismiss", "undismiss"} {
+	for _, a := range []string{"assign-invoice", "assign-account", "dismiss", "undismiss", "unassign", "rebook"} {
 		if r := "POST /stripe/transactions/{txnID}/" + a; !walked[r] {
 			t.Errorf("%s not walked: not mounted under the gate", r)
 		}

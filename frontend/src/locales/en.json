@@ -1645,7 +1645,11 @@
         "vippsDraftsRelease": "Release",
         "vippsDraftsReleaseTitle": "Release {ref} to the Vipps queue?",
         "vippsDraftsReleaseBody": "The draft is deleted and the {amount} kr payment from {date} goes back to the Vipps queue, where you assign it by hand in Tildel.",
-        "vippsDraftsReleased": "{ref} released to the Vipps queue."
+        "vippsDraftsReleased": "{ref} released to the Vipps queue.",
+        "voidStripeEntry": "This entry was booked from a Stripe transaction and cannot be voided here. Use \"Undo\" on the transaction under Bank & Vipps → Stripe transactions (Booked tab), which also reopens its invoices.",
+        "voidStripeEntryLink": "Go to the Stripe transactions",
+        "voidBankEntry": "This entry was booked from a bank row or a Stripe payout and cannot be voided here. Use \"Undo\" on the row under Bank & Vipps → Tildel, which puts the row back in the queue and reopens the invoice or payout.",
+        "voidBankEntryLink": "Go to Tildel"
       },
       "journalForm": {
         "title": "New entry",
@@ -1996,7 +2000,8 @@
         "unsupported_category": "Unknown transaction type",
         "receivable_not_open": "The faktura is already paid, credited or voided",
         "imported_no_opening_balance": "Imported faktura without an opening balance",
-        "split_mismatch": "The order does not match the amount"
+        "split_mismatch": "The order does not match the amount",
+        "unassigned": "Undone by you – held for manual handling"
       },
       "stripePayoutSweepCounts": "Stripe payouts cleared: {cleared} · Waiting: {waiting} · Skipped: {skipped} · Failed: {failed}",
       "stripePayoutDeposit": "Bank deposit {date}",
@@ -2004,11 +2009,13 @@
         "title": "Stripe transactions",
         "tabs": {
           "review": "To review",
-          "dismissed": "Dismissed"
+          "dismissed": "Dismissed",
+          "booked": "Booked"
         },
         "empty": {
           "review": "No Stripe transactions are waiting for review.",
-          "dismissed": "No dismissed Stripe transactions."
+          "dismissed": "No dismissed Stripe transactions.",
+          "booked": "No booked Stripe transactions."
         },
         "page": "Page {page}",
         "fee": "Fee {amount}",
@@ -2025,7 +2032,9 @@
           "assign_invoice": "Book to invoice",
           "assign_account": "Book to account",
           "dismiss": "Dismiss",
-          "undismiss": "Undo dismissal"
+          "undismiss": "Undo dismissal",
+          "unassign": "Undo",
+          "rebook": "Book from the order again"
         },
         "dismissReasons": {
           "booked_manually": "Booked manually",
@@ -2071,11 +2080,31 @@
           "invoice_settled": "The invoice cannot take the payment: it is paid, credited or has no opening balance.",
           "period_closed": "The fiscal period is closed.",
           "already_booked": "The transaction is already booked.",
-          "payout_cleared": "The payout is already reconciled, so the transaction cannot be booked or taken back from dismissed.",
+          "payout_cleared": "The payout the transaction was part of is already reconciled. Undo the bank deposit for the payout in Tildel first.",
           "invalid_reason": "Choose a valid reason.",
           "invalid_account": "This account cannot be used for a Stripe transaction.",
           "busy": "A Stripe sync is running. Try again shortly.",
-          "generic": "Something went wrong. Try again."
+          "generic": "Something went wrong. Try again.",
+          "use_bank_unassign": "Payouts are booked by their reconciliation. Undo the bank deposit in Tildel instead."
+        },
+        "entry": "Entry {number}: {description}",
+        "entryVoided": "voided",
+        "invoices": "Invoice {invoices}",
+        "unassignDialog": {
+          "title": "Undo the booking",
+          "reverse": "The entry is reversed with a reversal entry.",
+          "reverseNumbered": "Entry {number} is reversed with a reversal entry.",
+          "reopen": "Invoice {invoices} reopens and shows as unpaid.",
+          "hold": "The transaction goes back to review and stays there until you book it again or dismiss it. It is not booked automatically again.",
+          "confirm": "Undo the booking",
+          "success": "Booking undone",
+          "onlinePaid": "The invoices keep their \"paid online\" marker, since the money did arrive. If the payment really belonged to another invoice, this one still shows as paid online, so reminders and bank matching skip it although it is unpaid."
+        },
+        "rebook": {
+          "booked": "The transaction is booked from the order again",
+          "needsReview": "The transaction could not be booked from the order: {reason}",
+          "deferred": "The fiscal period is not open. The transaction is booked once the year is opened.",
+          "failed": "Booking failed. The transaction waits for the next Stripe sync."
         }
       }
     },

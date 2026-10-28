@@ -25,7 +25,7 @@ vi.mock('@/composables/useBankImports', async (importOriginal) => {
   }
 })
 
-vi.mock('@/components/admin/BankReconcileTab.vue', () => ({ default: { template: '<div />' } }))
+vi.mock('@/components/admin/BankReconcileTab.vue', () => ({ default: { template: '<div data-testid="reconcile-tab" />' } }))
 vi.mock('@/components/admin/BankRefundTab.vue', () => ({ default: { template: '<div />' } }))
 vi.mock('@/components/admin/StripeReviewList.vue', () => ({ default: { template: '<div />' } }))
 
@@ -72,5 +72,11 @@ describe('BankImportsView Stripe sync', () => {
     stripeConfigured.value = false
     const wrapper = mountWithPlugins(BankImportsView)
     expect(wrapper.find('[data-testid="stripe-sync-btn"]').exists()).toBe(false)
+  })
+
+  it('opens the tab a link names (the journal links to Tildel)', async () => {
+    const wrapper = mountWithPlugins(BankImportsView, { initialRoute: '/?tab=reconcile' })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="reconcile-tab"]').exists()).toBe(true)
   })
 })

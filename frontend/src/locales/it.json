@@ -944,7 +944,11 @@
         "vippsDraftsRelease": "Rilascia",
         "vippsDraftsReleaseTitle": "Rimandare {ref} alla coda Vipps?",
         "vippsDraftsReleaseBody": "La bozza viene eliminata e il pagamento di {amount} kr del {date} torna nella coda Vipps, dove lo assegni manualmente in Tildel.",
-        "vippsDraftsReleased": "{ref} rimandato alla coda Vipps."
+        "vippsDraftsReleased": "{ref} rimandato alla coda Vipps.",
+        "voidStripeEntry": "Questa registrazione proviene da una transazione Stripe e non può essere annullata qui. Usa «Annulla» sulla transazione in Banca & Vipps → Transazioni Stripe (scheda Registrate), che riapre anche le sue fatture.",
+        "voidStripeEntryLink": "Vai alle transazioni Stripe",
+        "voidBankEntry": "Questa registrazione proviene da una riga bancaria o da un versamento Stripe e non può essere annullata qui. Usa «Annulla» sulla riga in Banca & Vipps → Tildel, che rimette la riga in coda e riapre la fattura o il versamento.",
+        "voidBankEntryLink": "Vai a Tildel"
       },
       "journalForm": {
         "title": "New entry",
@@ -1125,7 +1129,8 @@
         "unsupported_category": "Tipo di transazione sconosciuto",
         "receivable_not_open": "La fattura è già pagata, accreditata o annullata",
         "imported_no_opening_balance": "Fattura importata senza saldo di apertura",
-        "split_mismatch": "L'ordine non corrisponde all'importo"
+        "split_mismatch": "L'ordine non corrisponde all'importo",
+        "unassigned": "Annullata da te – trattenuta per gestione manuale"
       },
       "stripePayoutSweepCounts": "Pagamenti Stripe riconciliati: {cleared} · In attesa: {waiting} · Saltati: {skipped} · Non riusciti: {failed}",
       "stripePayoutDeposit": "Accredito bancario del {date}",
@@ -1133,11 +1138,13 @@
         "title": "Transazioni Stripe",
         "tabs": {
           "review": "Da esaminare",
-          "dismissed": "Scartate"
+          "dismissed": "Scartate",
+          "booked": "Registrate"
         },
         "empty": {
           "review": "Nessuna transazione Stripe in attesa di esame.",
-          "dismissed": "Nessuna transazione Stripe scartata."
+          "dismissed": "Nessuna transazione Stripe scartata.",
+          "booked": "Nessuna transazione Stripe registrata."
         },
         "page": "Pagina {page}",
         "fee": "Commissione {amount}",
@@ -1154,7 +1161,9 @@
           "assign_invoice": "Registra su fattura",
           "assign_account": "Registra su conto",
           "dismiss": "Scarta",
-          "undismiss": "Annulla scarto"
+          "undismiss": "Annulla scarto",
+          "unassign": "Annulla",
+          "rebook": "Registra di nuovo dall'ordine"
         },
         "dismissReasons": {
           "booked_manually": "Registrata manualmente",
@@ -1200,11 +1209,31 @@
           "invoice_settled": "La fattura non può ricevere il pagamento: è pagata, accreditata o senza saldo di apertura.",
           "period_closed": "Il periodo contabile è chiuso.",
           "already_booked": "La transazione è già registrata.",
-          "payout_cleared": "Il versamento è già riconciliato, quindi la transazione non può essere registrata né tolta dalle scartate.",
+          "payout_cleared": "Il versamento di cui faceva parte la transazione è già riconciliato. Annulla prima il deposito bancario del versamento in Tildel.",
           "invalid_reason": "Scegli un motivo valido.",
           "invalid_account": "Questo conto non può essere usato per una transazione Stripe.",
           "busy": "È in corso una sincronizzazione Stripe. Riprova tra poco.",
-          "generic": "Qualcosa è andato storto. Riprova."
+          "generic": "Qualcosa è andato storto. Riprova.",
+          "use_bank_unassign": "I versamenti sono registrati dalla loro riconciliazione. Annulla invece il deposito bancario in Tildel."
+        },
+        "entry": "Registrazione {number}: {description}",
+        "entryVoided": "annullata",
+        "invoices": "Fattura {invoices}",
+        "unassignDialog": {
+          "title": "Annulla la registrazione",
+          "reverse": "La registrazione viene stornata con una registrazione di storno.",
+          "reverseNumbered": "La registrazione {number} viene stornata con una registrazione di storno.",
+          "reopen": "La fattura {invoices} viene riaperta e risulta non pagata.",
+          "hold": "La transazione torna da esaminare e vi resta finché non la registri di nuovo o la scarti. Non viene più registrata automaticamente.",
+          "confirm": "Annulla la registrazione",
+          "success": "Registrazione annullata",
+          "onlinePaid": "Le fatture mantengono il contrassegno «pagata online», perché il denaro è arrivato. Se il pagamento apparteneva in realtà a un'altra fattura, questa resta segnata come pagata online, quindi solleciti e riconciliazione bancaria la saltano anche se non è pagata."
+        },
+        "rebook": {
+          "booked": "La transazione è di nuovo registrata dall'ordine",
+          "needsReview": "Non è stato possibile registrare la transazione dall'ordine: {reason}",
+          "deferred": "Il periodo contabile non è aperto. La transazione verrà registrata quando l'esercizio sarà aperto.",
+          "failed": "La registrazione non è riuscita. La transazione attende la prossima sincronizzazione Stripe."
         }
       }
     },

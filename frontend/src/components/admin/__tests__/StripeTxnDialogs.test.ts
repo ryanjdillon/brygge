@@ -5,13 +5,15 @@ import { mountWithPlugins } from '@/test/test-utils'
 import StripeTxnInvoiceDialog from '@/components/admin/StripeTxnInvoiceDialog.vue'
 import StripeTxnAccountDialog from '@/components/admin/StripeTxnAccountDialog.vue'
 import StripeTxnDismissDialog from '@/components/admin/StripeTxnDismissDialog.vue'
+import StripeTxnUnassignDialog from '@/components/admin/StripeTxnUnassignDialog.vue'
 import { ApiError } from '@/lib/errors'
 import type { StripeTxnItem } from '@/composables/useStripeTransactions'
 
-const { assignInvoice, assignAccount, dismiss, toast, invoices, accounts } = vi.hoisted(() => ({
+const { assignInvoice, assignAccount, dismiss, unassign, toast, invoices, accounts } = vi.hoisted(() => ({
   assignInvoice: vi.fn(),
   assignAccount: vi.fn(),
   dismiss: vi.fn(),
+  unassign: vi.fn(),
   toast: { success: vi.fn(), info: vi.fn(), error: vi.fn() },
   invoices: { value: [] as unknown[] },
   accounts: { value: [] as unknown[] },
@@ -32,6 +34,8 @@ vi.mock('@/composables/useStripeTransactions', async () => {
       assignAccount: { mutateAsync: assignAccount, isPending: ref(false) },
       dismiss: { mutateAsync: dismiss, isPending: ref(false) },
       undismiss: { mutateAsync: vi.fn(), isPending: ref(false) },
+      unassign: { mutateAsync: unassign, isPending: ref(false) },
+      rebook: { mutateAsync: vi.fn(), isPending: ref(false) },
     }),
   }
 })
@@ -61,7 +65,7 @@ const mountOpts = (props: { open: boolean; item: StripeTxnItem }) => ({ props, g
 
 describe('Stripe transaction dialogs', () => {
   beforeEach(() => {
-    for (const f of [assignInvoice, assignAccount, dismiss]) f.mockReset().mockResolvedValue({})
+    for (const f of [assignInvoice, assignAccount, dismiss, unassign]) f.mockReset().mockResolvedValue({})
     Object.values(toast).forEach((f) => f.mockReset())
     invoices.value = [
       {
@@ -144,5 +148,40 @@ describe('Stripe transaction dialogs', () => {
     expect(w.find('[data-testid="stripe-txn-dismiss-refund-warning"]').exists()).toBe(true)
     const reasons = w.findAll('[data-testid="stripe-txn-dismiss-reason"] option').map((o) => o.attributes('value'))
     expect(reasons).not.toContain('internal_transfer')
+  })
+
+  it('says what an unassign does before undoing the booking', async () => {
+    const booked = item({
+      status: 'booked',
+      review_reason: undefined,
+      journal_entry_number: 17,
+      invoice_numbers: [1042, 1043],
+      allowed_actions: ['unassign'],
+    })
+    const w = mountWithPlugins(StripeTxnUnassignDialog, mountOpts({ open: true, item: booked }))
+    const effects = w.find('[data-testid="stripe-txn-unassign-effects"]').text()
+    expect(effects).toContain('admin.bankImports.stripeTxn.unassignDialog.reverseNumbered')
+    expect(effects).toContain('admin.bankImports.stripeTxn.unassignDialog.hold')
+    expect(w.find('[data-testid="stripe-txn-unassign-invoices"]').exists()).toBe(true)
+    expect(w.find('[data-testid="stripe-txn-unassign-online-paid"]').exists()).toBe(true)
+    await w.find('[data-testid="stripe-txn-unassign-dialog"]').trigger('submit')
+    await flushPromises()
+    expect(unassign).toHaveBeenCalledWith({ id: 'row-1' })
+    expect(toast.success).toHaveBeenCalled()
+    const emitted = w.emitted('update:open') ?? []
+    expect(emitted[emitted.length - 1]).toEqual([false])
+  })
+
+  it('shows a refused unassign and stays open', async () => {
+    unassign.mockRejectedValue(new ApiError(409, 'refused', 'payout_cleared', { reason: 'x' }))
+    const w = mountWithPlugins(
+      StripeTxnUnassignDialog,
+      mountOpts({ open: true, item: item({ status: 'booked', allowed_actions: ['unassign'] }) }),
+    )
+    expect(w.find('[data-testid="stripe-txn-unassign-invoices"]').exists()).toBe(false)
+    await w.find('[data-testid="stripe-txn-unassign-dialog"]').trigger('submit')
+    await flushPromises()
+    expect(w.find('[data-testid="stripe-txn-dialog-error"]').text()).toBe('admin.bankImports.stripeTxn.errors.payout_cleared')
+    expect(w.emitted('update:open')).toBeUndefined()
   })
 })

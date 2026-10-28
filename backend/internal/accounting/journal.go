@@ -21,6 +21,14 @@ var (
 	// ErrEntryNotFound is returned for an id that doesn't exist or belongs to
 	// another club; callers map it to 404 so a foreign id reveals nothing.
 	ErrEntryNotFound = errors.New("journal entry not found")
+	// ErrStripeSourcedEntry is a ledger void of an entry that books a Stripe
+	// balance transaction; it is undone from the Stripe row
+	// (UnassignStripeTxn), which also reopens its fakturas and holds the row.
+	ErrStripeSourcedEntry = errors.New("the entry books a Stripe transaction; undo it from the Stripe row")
+	// ErrBankLinkedEntry is a ledger void of an entry a bank row or a Stripe
+	// payout points at; it is undone from Tildel (UnassignBankRow), which
+	// also releases the row, its faktura and the payout.
+	ErrBankLinkedEntry = errors.New("the entry books a bank row; undo it from Tildel")
 )
 
 // DeleteDraftJournalEntry deletes a draft that nothing points at. Drafts are
@@ -308,6 +316,60 @@ func (s *Service) VoidJournalEntry(ctx context.Context, clubID, entryID, voidedB
 	}
 	defer tx.Rollback(ctx)
 
+	reversal, err := voidJournalEntryTx(ctx, tx, clubID, entryID, voidedBy)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("committing transaction: %w", err)
+	}
+	return reversal, nil
+}
+
+// VoidLedgerEntry is VoidJournalEntry for a person voiding an entry in the
+// ledger. An entry that books a Stripe balance transaction is refused with
+// ErrStripeSourcedEntry: voiding it there would leave the row booked, its
+// fakturas paid and the booking pass blind to it, so it is undone from the
+// Stripe row instead. An entry a bank row or a Stripe payout points at is
+// refused with ErrBankLinkedEntry for the same reason: the row would stay
+// booked against a voided entry, its faktura paid and the payout cleared,
+// so it is undone from Tildel. Vipps charge entries are not refused: an
+// order-booked Vipps charge is undone by voiding its bilag here
+// (UnassignVippsCharge refuses it). The checks read the entry under the
+// lock the void takes. Internal paths (the unassigns, faktura reversal)
+// call voidJournalEntryTx or VoidJournalEntry directly.
+func (s *Service) VoidLedgerEntry(ctx context.Context, clubID, entryID, voidedBy string) (*JournalEntry, error) {
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("beginning transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var sourceTable string
+	err = tx.QueryRow(ctx,
+		`SELECT COALESCE(source_table, '') FROM journal_entries WHERE id = $1 AND club_id = $2 FOR UPDATE`,
+		entryID, clubID,
+	).Scan(&sourceTable)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrEntryNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("getting entry: %w", err)
+	}
+	if sourceTable == "stripe_balance_transactions" {
+		return nil, ErrStripeSourcedEntry
+	}
+	var bankLinked bool
+	if err := tx.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM bank_import_rows WHERE club_id = $1 AND journal_entry_id = $2)
+		     OR EXISTS (SELECT 1 FROM stripe_payouts WHERE club_id = $1 AND journal_entry_id = $2)`,
+		clubID, entryID,
+	).Scan(&bankLinked); err != nil {
+		return nil, fmt.Errorf("checking bank links: %w", err)
+	}
+	if bankLinked {
+		return nil, ErrBankLinkedEntry
+	}
 	reversal, err := voidJournalEntryTx(ctx, tx, clubID, entryID, voidedBy)
 	if err != nil {
 		return nil, err

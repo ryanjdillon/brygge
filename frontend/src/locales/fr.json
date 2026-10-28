@@ -943,7 +943,11 @@
         "vippsDraftsRelease": "Libérer",
         "vippsDraftsReleaseTitle": "Renvoyer {ref} dans la file Vipps ?",
         "vippsDraftsReleaseBody": "Le brouillon est supprimé et le paiement de {amount} kr du {date} retourne dans la file Vipps, où vous l'affectez manuellement dans Tildel.",
-        "vippsDraftsReleased": "{ref} renvoyé dans la file Vipps."
+        "vippsDraftsReleased": "{ref} renvoyé dans la file Vipps.",
+        "voidStripeEntry": "Cette écriture a été comptabilisée depuis une transaction Stripe et ne peut pas être annulée ici. Utilisez « Annuler » sur la transaction sous Banque & Vipps → Transactions Stripe (onglet Comptabilisées), ce qui rouvre aussi ses factures.",
+        "voidStripeEntryLink": "Aller aux transactions Stripe",
+        "voidBankEntry": "Cette écriture a été comptabilisée depuis une ligne bancaire ou un virement Stripe et ne peut pas être annulée ici. Utilisez « Annuler » sur la ligne sous Banque & Vipps → Tildel, ce qui remet la ligne dans la file et rouvre la facture ou le virement.",
+        "voidBankEntryLink": "Aller à Tildel"
       },
       "journalForm": {
         "title": "New entry",
@@ -1124,7 +1128,8 @@
         "unsupported_category": "Type de transaction inconnu",
         "receivable_not_open": "La facture est déjà payée, créditée ou annulée",
         "imported_no_opening_balance": "Facture importée sans solde d'ouverture",
-        "split_mismatch": "La commande ne correspond pas au montant"
+        "split_mismatch": "La commande ne correspond pas au montant",
+        "unassigned": "Annulée par vous – retenue pour traitement manuel"
       },
       "stripePayoutSweepCounts": "Versements Stripe rapprochés : {cleared} · En attente : {waiting} · Ignorés : {skipped} · Échecs : {failed}",
       "stripePayoutDeposit": "Dépôt bancaire du {date}",
@@ -1132,11 +1137,13 @@
         "title": "Transactions Stripe",
         "tabs": {
           "review": "À examiner",
-          "dismissed": "Écartées"
+          "dismissed": "Écartées",
+          "booked": "Comptabilisées"
         },
         "empty": {
           "review": "Aucune transaction Stripe n'attend d'examen.",
-          "dismissed": "Aucune transaction Stripe écartée."
+          "dismissed": "Aucune transaction Stripe écartée.",
+          "booked": "Aucune transaction Stripe comptabilisée."
         },
         "page": "Page {page}",
         "fee": "Frais {amount}",
@@ -1153,7 +1160,9 @@
           "assign_invoice": "Comptabiliser sur une facture",
           "assign_account": "Comptabiliser sur un compte",
           "dismiss": "Écarter",
-          "undismiss": "Annuler la mise à l'écart"
+          "undismiss": "Annuler la mise à l'écart",
+          "unassign": "Annuler",
+          "rebook": "Recomptabiliser depuis la commande"
         },
         "dismissReasons": {
           "booked_manually": "Comptabilisée manuellement",
@@ -1199,11 +1208,31 @@
           "invoice_settled": "La facture ne peut pas recevoir le paiement : elle est payée, créditée ou sans solde d'ouverture.",
           "period_closed": "L'exercice est clôturé.",
           "already_booked": "La transaction est déjà comptabilisée.",
-          "payout_cleared": "Le virement est déjà rapproché ; la transaction ne peut être ni comptabilisée ni sortie des transactions écartées.",
+          "payout_cleared": "Le virement dont faisait partie la transaction est déjà rapproché. Annulez d’abord le dépôt bancaire du virement dans Tildel.",
           "invalid_reason": "Choisissez un motif valide.",
           "invalid_account": "Ce compte ne peut pas être utilisé pour une transaction Stripe.",
           "busy": "Une synchronisation Stripe est en cours. Réessayez dans un instant.",
-          "generic": "Une erreur s'est produite. Réessayez."
+          "generic": "Une erreur s'est produite. Réessayez.",
+          "use_bank_unassign": "Les virements sont comptabilisés par leur rapprochement. Annulez plutôt le dépôt bancaire dans Tildel."
+        },
+        "entry": "Écriture {number} : {description}",
+        "entryVoided": "annulée",
+        "invoices": "Facture {invoices}",
+        "unassignDialog": {
+          "title": "Annuler la comptabilisation",
+          "reverse": "L'écriture est contrepassée par une écriture d'extourne.",
+          "reverseNumbered": "L'écriture {number} est contrepassée par une écriture d'extourne.",
+          "reopen": "La facture {invoices} est rouverte et apparaît comme impayée.",
+          "hold": "La transaction revient à examiner et y reste jusqu'à ce que vous la comptabilisiez de nouveau ou l'écartiez. Elle n'est plus comptabilisée automatiquement.",
+          "confirm": "Annuler la comptabilisation",
+          "success": "Comptabilisation annulée",
+          "onlinePaid": "Les factures gardent leur marque « payée en ligne », puisque l'argent est bien arrivé. Si le paiement concernait en réalité une autre facture, celle-ci reste marquée payée en ligne : les relances et le rapprochement bancaire l'ignorent alors qu'elle est impayée."
+        },
+        "rebook": {
+          "booked": "La transaction est de nouveau comptabilisée depuis la commande",
+          "needsReview": "La transaction n'a pas pu être comptabilisée depuis la commande : {reason}",
+          "deferred": "La période comptable n'est pas ouverte. La transaction sera comptabilisée une fois l'exercice ouvert.",
+          "failed": "La comptabilisation a échoué. La transaction attend la prochaine synchronisation Stripe."
         }
       }
     },

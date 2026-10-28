@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ref, type Ref } from 'vue'
+import { flushPromises } from '@vue/test-utils'
 import { mountWithPlugins } from '@/test/test-utils'
 import StripeReviewList from '@/components/admin/StripeReviewList.vue'
 import type { StripeTxnItem, StripeTxnListStatus, StripeTxnPage } from '@/composables/useStripeTransactions'
@@ -82,6 +83,36 @@ describe('StripeReviewList', () => {
     expect(wrapper.findAll('.card').map((c) => c.attributes('data-id'))).toEqual(['d'])
     expect(calls[calls.length - 1]).toEqual({ status: 'dismissed', offset: 0 })
     expect(wrapper.find('[data-testid="stripe-review-tab-dismissed"]').attributes('aria-selected')).toBe('true')
+  })
+
+  it('lists the booked rows on their own tab', async () => {
+    pages['booked:0'] = page([item('b1', { status: 'booked', allowed_actions: ['unassign'] })], 0, false)
+    const wrapper = mountWithPlugins(StripeReviewList)
+    await wrapper.find('[data-testid="stripe-review-tab-booked"]').trigger('click')
+    expect(wrapper.findAll('.card').map((c) => c.attributes('data-id'))).toEqual(['b1'])
+    expect(calls[calls.length - 1]).toEqual({ status: 'booked', offset: 0 })
+  })
+
+  it('opens the tab the link names and brings the list into view', async () => {
+    pages['booked:0'] = page([item('b2', { status: 'booked', allowed_actions: ['unassign'] })], 0, false)
+    const original = Element.prototype.scrollIntoView
+    const scroll = vi.fn()
+    Element.prototype.scrollIntoView = scroll
+    try {
+      const wrapper = mountWithPlugins(StripeReviewList, { initialRoute: '/?stripe=booked' })
+      await flushPromises()
+      expect(wrapper.find('[data-testid="stripe-review-tab-booked"]').attributes('aria-selected')).toBe('true')
+      expect(wrapper.findAll('.card').map((c) => c.attributes('data-id'))).toEqual(['b2'])
+      expect(scroll).toHaveBeenCalled()
+    } finally {
+      Element.prototype.scrollIntoView = original
+    }
+  })
+
+  it('says when no row is booked', async () => {
+    const wrapper = mountWithPlugins(StripeReviewList)
+    await wrapper.find('[data-testid="stripe-review-tab-booked"]').trigger('click')
+    expect(wrapper.find('[data-testid="stripe-review-empty"]').text()).toBe('admin.bankImports.stripeTxn.empty.booked')
   })
 
   it('says when nothing waits', () => {

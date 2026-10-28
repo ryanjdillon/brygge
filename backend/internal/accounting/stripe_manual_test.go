@@ -11,6 +11,8 @@ func TestStripeAllowedActions(t *testing.T) {
 		acct = StripeActionAssignAccount
 		dis  = StripeActionDismiss
 		und  = StripeActionUndismiss
+		una  = StripeActionUnassign
+		reb  = StripeActionRebook
 	)
 	review := func(category, reason string) stripeTxnState {
 		return stripeTxnState{category: category, status: StripeTxnNeedsReview, reviewReason: reason, currency: "nok"}
@@ -24,6 +26,16 @@ func TestStripeAllowedActions(t *testing.T) {
 	dismissedCleared.payoutCleared = true
 	reviewCleared := review("charge", StripeReviewNoAttempt)
 	reviewCleared.payoutCleared = true
+	ownBooked := func(category string) stripeTxnState {
+		return stripeTxnState{category: category, status: StripeTxnBooked, currency: "nok", booked: true, ownEntry: true}
+	}
+	bookedCleared := ownBooked("charge")
+	bookedCleared.payoutCleared = true
+	clearingBooked := ownBooked("payout")
+	notOwn := ownBooked("charge")
+	notOwn.ownEntry = false
+	heldOrder := review("charge", StripeReviewUnassigned)
+	heldOrder.hasOrder = true
 
 	tests := []struct {
 		name string
@@ -46,6 +58,17 @@ func TestStripeAllowedActions(t *testing.T) {
 		{"dismissed", dismissed, []string{und}},
 		{"dismissed, payout cleared", dismissedCleared, []string{}},
 		{"in review, payout cleared", reviewCleared, []string{dis}},
+		{"booked charge", ownBooked("charge"), []string{una}},
+		{"booked fee", ownBooked("fee"), []string{una}},
+		{"booked adjustment", ownBooked("other_adjustment"), []string{una}},
+		{"booked, payout cleared", bookedCleared, []string{}},
+		{"payout row booked by its clearing", clearingBooked, []string{}},
+		{"payout reversal", ownBooked("payout_reversal"), []string{}},
+		{"booked, entry not its own", notOwn, []string{}},
+		{"held charge with order", heldOrder, []string{reb, inv, acct, dis}},
+		{"held charge without order", review("charge", StripeReviewUnassigned), []string{inv, acct, dis}},
+		{"held fee", review("fee", StripeReviewUnassigned), []string{reb, acct, dis}},
+		{"held adjustment", review("other_adjustment", StripeReviewUnassigned), []string{acct, dis}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -14,19 +14,23 @@ import {
 import StripeTxnInvoiceDialog from '@/components/admin/StripeTxnInvoiceDialog.vue'
 import StripeTxnAccountDialog from '@/components/admin/StripeTxnAccountDialog.vue'
 import StripeTxnDismissDialog from '@/components/admin/StripeTxnDismissDialog.vue'
+import StripeTxnUnassignDialog from '@/components/admin/StripeTxnUnassignDialog.vue'
 
-// One Stripe balance transaction in review or dismissed, with the actions
-// the server allows for it (allowed_actions). Every action is TOTP-gated on
-// the server, so the step-up is asked for at click time, before a dialog
-// opens.
+// One Stripe balance transaction in review, dismissed or booked, with the
+// actions the server allows for it (allowed_actions). Every action is
+// TOTP-gated on the server, so the step-up is asked for at click time,
+// before a dialog opens.
 const props = defineProps<{ item: StripeTxnItem }>()
 
 const { t, te, locale } = useI18n()
 const { ensureFreshTotp } = useFreshTotp()
 const toast = useToast()
-const { undismiss } = useStripeTxnMutations()
+const { undismiss, rebook } = useStripeTxnMutations()
 
-const ACTION_ORDER: StripeTxnAction[] = ['assign_invoice', 'assign_account', 'dismiss', 'undismiss']
+const ACTION_ORDER: StripeTxnAction[] = ['rebook', 'assign_invoice', 'assign_account', 'dismiss', 'undismiss', 'unassign']
+// Actions that run at once rather than through a dialog.
+const DIRECT: StripeTxnAction[] = ['undismiss', 'rebook']
+const SECONDARY: StripeTxnAction[] = ['dismiss', 'unassign']
 const actions = computed(() => ACTION_ORDER.filter((a) => props.item.allowed_actions.includes(a)))
 
 const money = (amount: number) => formatStripeAmount(amount, props.item.currency)
@@ -56,8 +60,32 @@ async function copyId() {
   }
 }
 
-const dialog = ref<'invoice' | 'account' | 'dismiss' | null>(null)
+const dialog = ref<'invoice' | 'account' | 'dismiss' | 'unassign' | null>(null)
 const errorText = ref('')
+
+const invoiceNumbers = computed(() => (props.item.invoice_numbers ?? []).join(', '))
+
+function showError(e: unknown) {
+  errorText.value = t(`admin.bankImports.stripeTxn.errors.${stripeTxnErrorCode(e) ?? 'generic'}`)
+}
+
+// The booking pass ran on the row at once; say what it did.
+async function runRebook() {
+  try {
+    const res = await rebook.mutateAsync({ id: props.item.id })
+    if (res.outcome === 'booked') {
+      toast.success(t('admin.bankImports.stripeTxn.rebook.booked'))
+    } else if (res.outcome === 'needs_review') {
+      toast.info(t('admin.bankImports.stripeTxn.rebook.needsReview', { reason: reasonLabel(res.reason ?? '') }))
+    } else if (res.outcome === 'deferred') {
+      toast.info(t('admin.bankImports.stripeTxn.rebook.deferred'))
+    } else {
+      toast.error(t('admin.bankImports.stripeTxn.rebook.failed'))
+    }
+  } catch (e) {
+    showError(e)
+  }
+}
 
 async function run(action: StripeTxnAction) {
   errorText.value = ''
@@ -72,14 +100,26 @@ async function run(action: StripeTxnAction) {
     case 'dismiss':
       dialog.value = 'dismiss'
       return
+    case 'unassign':
+      dialog.value = 'unassign'
+      return
+    case 'rebook':
+      await runRebook()
+      return
     case 'undismiss':
       try {
         await undismiss.mutateAsync({ id: props.item.id })
         toast.success(t('admin.bankImports.stripeTxn.undismissSuccess'))
       } catch (e) {
-        errorText.value = t(`admin.bankImports.stripeTxn.errors.${stripeTxnErrorCode(e) ?? 'generic'}`)
+        showError(e)
       }
   }
+}
+
+function pending(a: StripeTxnAction) {
+  if (a === 'undismiss') return undismiss.isPending.value
+  if (a === 'rebook') return rebook.isPending.value
+  return false
 }
 
 function closeDialog(open: boolean) {
@@ -108,6 +148,13 @@ function closeDialog(open: boolean) {
       </template>
       <template v-if="item.dismissed_note"> · {{ item.dismissed_note }}</template>
     </p>
+    <p v-if="item.status === 'booked' && item.journal_entry_number" class="mt-2 text-xs text-gray-700" data-testid="stripe-txn-entry">
+      {{ t('admin.bankImports.stripeTxn.entry', { number: item.journal_entry_number, description: item.journal_entry_description ?? '' }) }}
+      <template v-if="item.journal_entry_status === 'voided'"> · {{ t('admin.bankImports.stripeTxn.entryVoided') }}</template>
+    </p>
+    <p v-if="invoiceNumbers" class="mt-1 text-xs text-gray-700" data-testid="stripe-txn-invoices">
+      {{ t('admin.bankImports.stripeTxn.invoices', { invoices: invoiceNumbers }) }}
+    </p>
     <p v-if="item.payout_cleared" class="mt-1 text-xs text-gray-500" data-testid="stripe-txn-payout-cleared">
       {{ t('admin.bankImports.stripeTxn.payoutCleared') }}
     </p>
@@ -130,8 +177,8 @@ function closeDialog(open: boolean) {
         :key="a"
         type="button"
         class="min-h-11 rounded-md border px-3 py-2 text-sm font-semibold disabled:opacity-50"
-        :class="a === 'dismiss' ? 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50' : 'border-brand-600 bg-brand-600 text-white hover:bg-brand-700'"
-        :disabled="a === 'undismiss' && undismiss.isPending.value"
+        :class="SECONDARY.includes(a) ? 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50' : 'border-brand-600 bg-brand-600 text-white hover:bg-brand-700'"
+        :disabled="DIRECT.includes(a) && pending(a)"
         :data-testid="`stripe-txn-action-${a}`"
         @click="run(a)"
       >
@@ -148,5 +195,6 @@ function closeDialog(open: boolean) {
     <StripeTxnInvoiceDialog :open="dialog === 'invoice'" :item="item" @update:open="closeDialog" />
     <StripeTxnAccountDialog :open="dialog === 'account'" :item="item" @update:open="closeDialog" />
     <StripeTxnDismissDialog :open="dialog === 'dismiss'" :item="item" @update:open="closeDialog" />
+    <StripeTxnUnassignDialog :open="dialog === 'unassign'" :item="item" @update:open="closeDialog" />
   </article>
 </template>

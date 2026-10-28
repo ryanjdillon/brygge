@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute } from 'vue-router'
 import { useQueryClient } from '@tanstack/vue-query'
 import {
   useBankFormats,
@@ -219,7 +220,20 @@ async function confirmReconcile() {
 // list only (BRY-372).
 const { can } = useCan()
 const canAct = can('money')
-const activeTab = ref<'imports' | 'accounts' | 'reconcile' | 'refunds'>(canAct ? 'imports' : 'accounts')
+// ?tab= opens a tab directly (the journal's void refusal links to Tildel);
+// a money tab is honoured only for a role that sees it.
+type BankTab = 'imports' | 'accounts' | 'reconcile' | 'refunds'
+const route = useRoute()
+const activeTab = ref<BankTab>(canAct ? 'imports' : 'accounts')
+watch(
+  () => route.query.tab,
+  (q) => {
+    if (q === 'accounts' || (canAct && (q === 'imports' || q === 'reconcile' || q === 'refunds'))) {
+      activeTab.value = q as BankTab
+    }
+  },
+  { immediate: true },
+)
 const currentYear = ref(new Date().getFullYear())
 const { data: unmatchedCount } = useBankUnmatchedCount(currentYear)
 const { data: pendingRefundCount } = usePendingRefundCount()

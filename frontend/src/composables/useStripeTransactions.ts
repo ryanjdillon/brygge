@@ -7,12 +7,12 @@ import { formatNOK } from '@/lib/format'
 const BASE = '/api/v1/admin/accounting/stripe'
 
 /** A manual action on a Stripe balance transaction (accounting.StripeAction*). */
-export type StripeTxnAction = 'assign_invoice' | 'assign_account' | 'dismiss' | 'undismiss'
+export type StripeTxnAction = 'assign_invoice' | 'assign_account' | 'dismiss' | 'undismiss' | 'unassign' | 'rebook'
 
-/** The list's two states. */
-export type StripeTxnListStatus = 'needs_review' | 'dismissed'
+/** The list's states. */
+export type StripeTxnListStatus = 'needs_review' | 'dismissed' | 'booked'
 
-/** One Stripe balance transaction in review or dismissed (accounting.StripeTxnItem). */
+/** One Stripe balance transaction (accounting.StripeTxnItem). */
 export interface StripeTxnItem {
   id: string
   balance_transaction_id: string
@@ -36,6 +36,13 @@ export interface StripeTxnItem {
   dismissed_at?: string
   dismissed_reason?: string
   dismissed_note?: string
+  /** A booked row's journal entry. */
+  journal_entry_id?: string
+  journal_entry_number?: number
+  journal_entry_description?: string
+  journal_entry_status?: string
+  /** The fakturas a booked row settles, by number. */
+  invoice_numbers?: number[]
   /** What the server accepts for this row now. */
   allowed_actions: StripeTxnAction[]
 }
@@ -74,6 +81,7 @@ export const STRIPE_TXN_CODES = [
   'payout_cleared',
   'invalid_reason',
   'invalid_account',
+  'use_bank_unassign',
   'busy',
 ] as const
 export type StripeTxnCode = (typeof STRIPE_TXN_CODES)[number]
@@ -94,6 +102,17 @@ export function stripeTxnRefusalReason(e: unknown): string {
 export function formatStripeAmount(amount: number, currency: string): string {
   if (currency === 'nok') return formatNOK(amount)
   return new Intl.NumberFormat('nb-NO', { style: 'currency', currency: currency.toUpperCase() }).format(amount)
+}
+
+/** What the booking pass did with a rebooked row (accounting.StripeTxnRebookResult). */
+export interface StripeTxnRebookResult {
+  id: string
+  balance_transaction_id: string
+  outcome: 'booked' | 'needs_review' | 'deferred' | 'failed'
+  reason?: string
+  error?: string
+  status: string
+  journal_entry_id?: string
 }
 
 export const STRIPE_TXN_PAGE_SIZE = 20
@@ -172,6 +191,22 @@ export function useStripeTxnMutations() {
     undismiss: useMutation({
       mutationFn: ({ id }: { id: string }) => post(id, 'undismiss'),
       onSuccess,
+    }),
+    unassign: useMutation({
+      mutationFn: ({ id }: { id: string }) => post(id, 'unassign'),
+      onSuccess: () => {
+        onSuccess()
+        // The reversal lands in the ledger.
+        qc.invalidateQueries({ queryKey: ['accounting', 'journal'] })
+      },
+    }),
+    rebook: useMutation({
+      mutationFn: ({ id }: { id: string }) =>
+        useApi().fetchApi<StripeTxnRebookResult>(`${BASE}/transactions/${id}/rebook`, { method: 'POST' }),
+      onSuccess: () => {
+        onSuccess()
+        qc.invalidateQueries({ queryKey: ['accounting', 'journal'] })
+      },
     }),
   }
 }

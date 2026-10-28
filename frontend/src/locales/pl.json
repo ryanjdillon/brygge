@@ -918,7 +918,11 @@
         "vippsDraftsRelease": "Zwolnij",
         "vippsDraftsReleaseTitle": "Zwolnić {ref} do kolejki Vipps?",
         "vippsDraftsReleaseBody": "Szkic zostanie usunięty, a płatność {amount} kr z {date} wróci do kolejki Vipps, gdzie przypiszesz ją ręcznie w Tildel.",
-        "vippsDraftsReleased": "{ref} zwolniono do kolejki Vipps."
+        "vippsDraftsReleased": "{ref} zwolniono do kolejki Vipps.",
+        "voidStripeEntry": "Ten dokument zaksięgowano z transakcji Stripe i nie można go tu anulować. Użyj „Cofnij” przy transakcji w Bank i Vipps → Transakcje Stripe (karta Zaksięgowane); to także ponownie otwiera jej faktury.",
+        "voidStripeEntryLink": "Przejdź do transakcji Stripe",
+        "voidBankEntry": "Ten dokument zaksięgowano z wiersza bankowego lub wypłaty Stripe i nie można go tu anulować. Użyj „Cofnij” przy wierszu w Bank i Vipps → Tildel; wiersz wróci do kolejki, a faktura lub wypłata zostanie ponownie otwarta.",
+        "voidBankEntryLink": "Przejdź do Tildel"
       },
       "journalForm": {
         "title": "New entry",
@@ -1099,7 +1103,8 @@
         "unsupported_category": "Nieznany typ transakcji",
         "receivable_not_open": "Faktura jest już opłacona, skorygowana lub anulowana",
         "imported_no_opening_balance": "Zaimportowana faktura bez bilansu otwarcia",
-        "split_mismatch": "Zamówienie nie zgadza się z kwotą"
+        "split_mismatch": "Zamówienie nie zgadza się z kwotą",
+        "unassigned": "Cofnięte przez Ciebie – wstrzymane do ręcznej obsługi"
       },
       "stripePayoutSweepCounts": "Wypłaty Stripe uzgodnione: {cleared} · Oczekujące: {waiting} · Pominięte: {skipped} · Nieudane: {failed}",
       "stripePayoutDeposit": "Wpływ bankowy {date}",
@@ -1107,11 +1112,13 @@
         "title": "Transakcje Stripe",
         "tabs": {
           "review": "Do sprawdzenia",
-          "dismissed": "Odrzucone"
+          "dismissed": "Odrzucone",
+          "booked": "Zaksięgowane"
         },
         "empty": {
           "review": "Żadne transakcje Stripe nie czekają na sprawdzenie.",
-          "dismissed": "Brak odrzuconych transakcji Stripe."
+          "dismissed": "Brak odrzuconych transakcji Stripe.",
+          "booked": "Brak zaksięgowanych transakcji Stripe."
         },
         "page": "Strona {page}",
         "fee": "Opłata {amount}",
@@ -1128,7 +1135,9 @@
           "assign_invoice": "Zaksięguj na fakturę",
           "assign_account": "Zaksięguj na konto",
           "dismiss": "Odrzuć",
-          "undismiss": "Cofnij odrzucenie"
+          "undismiss": "Cofnij odrzucenie",
+          "unassign": "Cofnij",
+          "rebook": "Zaksięguj ponownie z zamówienia"
         },
         "dismissReasons": {
           "booked_manually": "Zaksięgowano ręcznie",
@@ -1174,11 +1183,31 @@
           "invoice_settled": "Faktura nie może przyjąć płatności: jest opłacona, skorygowana lub nie ma bilansu otwarcia.",
           "period_closed": "Okres rozliczeniowy jest zamknięty.",
           "already_booked": "Transakcja jest już zaksięgowana.",
-          "payout_cleared": "Wypłata jest już uzgodniona, więc transakcji nie można zaksięgować ani przywrócić z odrzuconych.",
+          "payout_cleared": "Wypłata, do której należała transakcja, jest już uzgodniona. Najpierw cofnij wpływ bankowy wypłaty w Tildel.",
           "invalid_reason": "Wybierz prawidłowy powód.",
           "invalid_account": "Tego konta nie można użyć dla transakcji Stripe.",
           "busy": "Trwa synchronizacja Stripe. Spróbuj ponownie za chwilę.",
-          "generic": "Coś poszło nie tak. Spróbuj ponownie."
+          "generic": "Coś poszło nie tak. Spróbuj ponownie.",
+          "use_bank_unassign": "Wypłaty są księgowane przez ich uzgodnienie. Zamiast tego cofnij wpływ bankowy w Tildel."
+        },
+        "entry": "Dokument {number}: {description}",
+        "entryVoided": "anulowany",
+        "invoices": "Faktura {invoices}",
+        "unassignDialog": {
+          "title": "Cofnij księgowanie",
+          "reverse": "Dokument zostanie odwrócony dokumentem stornującym.",
+          "reverseNumbered": "Dokument {number} zostanie odwrócony dokumentem stornującym.",
+          "reopen": "Faktura {invoices} zostanie ponownie otwarta i będzie nieopłacona.",
+          "hold": "Transakcja wraca do sprawdzenia i pozostaje tam, dopóki nie zaksięgujesz jej ponownie lub jej nie odrzucisz. Nie zostanie ponownie zaksięgowana automatycznie.",
+          "confirm": "Cofnij księgowanie",
+          "success": "Księgowanie cofnięte",
+          "onlinePaid": "Faktury zachowują oznaczenie „opłacona online”, bo pieniądze wpłynęły. Jeśli płatność w rzeczywistości dotyczyła innej faktury, ta nadal jest oznaczona jako opłacona online, więc przypomnienia i uzgadnianie bankowe ją pomijają, choć jest nieopłacona."
+        },
+        "rebook": {
+          "booked": "Transakcja została ponownie zaksięgowana z zamówienia",
+          "needsReview": "Nie udało się zaksięgować transakcji z zamówienia: {reason}",
+          "deferred": "Okres księgowy nie jest otwarty. Transakcja zostanie zaksięgowana po otwarciu roku.",
+          "failed": "Księgowanie nie powiodło się. Transakcja czeka na następną synchronizację Stripe."
         }
       }
     },

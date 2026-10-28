@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -69,19 +70,38 @@ const (
 	StripeReviewSplitMismatch = "split_mismatch"
 )
 
+// StripeReviewUnassigned: a person undid the row's booking
+// (UnassignStripeTxn). The row is held for that person: ingest never
+// reclassifies it and the booking pass never retries it, so it is booked
+// again only by a manual action (a rebook, an assign) or dismissed.
+const StripeReviewUnassigned = "unassigned"
+
 // stripeBookingReviewReasons are the review reasons BookStripeBalance sets
 // and retries.
 var stripeBookingReviewReasons = []string{
 	StripeReviewReceivableNotOpen, StripeReviewImportedNoOpeningBalance, StripeReviewSplitMismatch,
 }
 
-// stripeBookingReviewListSQL is stripeBookingReviewReasons as a SQL list.
-// The reasons are fixed identifiers, so quoting them needs no escaping.
-var stripeBookingReviewListSQL = "'" + strings.Join(stripeBookingReviewReasons, "', '") + "'"
+// stripeHeldReviewReasons are the review reasons ingest leaves alone: the
+// booking pass's, which it retries, and the person's hold, which nothing
+// retries. Only the other (ingest) reasons are reclassified by a re-sync.
+var stripeHeldReviewReasons = append(slices.Clone(stripeBookingReviewReasons), StripeReviewUnassigned)
+
+// sqlList quotes fixed identifiers as a SQL list; they need no escaping.
+func sqlList(values []string) string {
+	return "'" + strings.Join(values, "', '") + "'"
+}
 
 // stripeBookingReviewSQL is true for a row held for review by the booking
-// pass rather than by ingest.
-var stripeBookingReviewSQL = `(status = 'needs_review' AND review_reason IN (` + stripeBookingReviewListSQL + `))`
+// pass, the rows the pass retries.
+var stripeBookingReviewSQL = `(status = 'needs_review' AND review_reason IN (` + sqlList(stripeBookingReviewReasons) + `))`
+
+// stripeHeldReviewListSQL is stripeHeldReviewReasons as a SQL list.
+var stripeHeldReviewListSQL = sqlList(stripeHeldReviewReasons)
+
+// stripeHeldReviewSQL is true for a row in review that ingest must not
+// reclassify (stripeHeldReviewReasons).
+var stripeHeldReviewSQL = `(status = 'needs_review' AND review_reason IN (` + stripeHeldReviewListSQL + `))`
 
 // stripeCursorOverlap is how far before the recorded watermark a sync
 // starts again. Re-reading is free (rows are upserted), and the overlap
@@ -392,18 +412,18 @@ func (s *Service) ingestStripeTxnReported(ctx context.Context, src StripeBalance
 
 // ingestStripeTxn stores one balance transaction. A row already stored is
 // reclassified only while it waits for review on an ingest reason; booked,
-// dismissed and ready rows, and rows the booking pass holds for review,
-// are left exactly as they are. stored is false only when the row could not
-// be written; err may also be a failed lookup of a row that was stored for
-// review.
+// dismissed and ready rows, and rows held for review by the booking pass
+// or for a person (stripeHeldReviewReasons), are left exactly as they are.
+// stored is false only when the row could not be written; err may also be
+// a failed lookup of a row that was stored for review.
 func (s *Service) ingestStripeTxn(ctx context.Context, src StripeBalanceSource, clubID string, bt *stripe.BalanceTransaction, res *StripeSyncResult) (stored bool, err error) {
 	var status string
-	var bookingReview bool
+	var held bool
 	err = s.db.QueryRow(ctx,
-		`SELECT status, `+stripeBookingReviewSQL+` FROM stripe_balance_transactions WHERE club_id = $1 AND balance_transaction_id = $2`,
-		clubID, bt.ID).Scan(&status, &bookingReview)
+		`SELECT status, `+stripeHeldReviewSQL+` FROM stripe_balance_transactions WHERE club_id = $1 AND balance_transaction_id = $2`,
+		clubID, bt.ID).Scan(&status, &held)
 	switch {
-	case err == nil && (status != StripeTxnNeedsReview || bookingReview):
+	case err == nil && (status != StripeTxnNeedsReview || held):
 		return true, nil
 	case err != nil && !errors.Is(err, pgx.ErrNoRows):
 		return false, fmt.Errorf("reading stored transaction: %w", err)
@@ -437,7 +457,7 @@ func (s *Service) upsertStripeTxn(ctx context.Context, clubID string, bt *stripe
 		        review_reason     = EXCLUDED.review_reason,
 		        updated_at        = now()
 		  WHERE t.status = 'needs_review'
-		    AND t.review_reason NOT IN (`+stripeBookingReviewListSQL+`)
+		    AND t.review_reason NOT IN (`+stripeHeldReviewListSQL+`)
 		    AND t.journal_entry_id IS NULL
 		    AND (t.payment_intent_id, t.attempt_id, t.order_id, t.status, t.review_reason)
 		        IS DISTINCT FROM

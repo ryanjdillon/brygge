@@ -45,6 +45,7 @@ import {
 } from '@/composables/useAccounting'
 import Select from '@/components/ui/form/Select.vue'
 import NumberInput from '@/components/ui/form/NumberInput.vue'
+import { ApiError } from '@/lib/errors'
 
 const { t } = useI18n()
 // Periods are a ledger write; anything that books or voids an entry is a
@@ -158,10 +159,39 @@ async function handlePost(entryId: string) {
   postMutation.mutate(entryId)
 }
 
+// An entry booked from a Stripe row (409 stripe_entry) or one a bank row
+// or Stripe payout points at (409 bank_entry) is refused here: it is undone
+// from the Stripe row or from Tildel, which also release what it settled,
+// so the refusal links there.
+type VoidRefusal = 'stripe_entry' | 'bank_entry'
+const VOID_REFUSALS: Record<VoidRefusal, { text: string; link: string; to: string }> = {
+  stripe_entry: {
+    text: 'admin.accounting.journal.voidStripeEntry',
+    link: 'admin.accounting.journal.voidStripeEntryLink',
+    to: '/admin/accounting/bank-imports?stripe=booked',
+  },
+  bank_entry: {
+    text: 'admin.accounting.journal.voidBankEntry',
+    link: 'admin.accounting.journal.voidBankEntryLink',
+    to: '/admin/accounting/bank-imports?tab=reconcile',
+  },
+}
+const voidRefusal = ref<VoidRefusal | null>(null)
+
 async function handleVoid(entryId: string) {
   if (!(await ensureFreshTotp())) return
   if (confirm(t('admin.accounting.journal.confirmVoid'))) {
-    voidMutation.mutate(entryId)
+    voidRefusal.value = null
+    syncMessage.value = ''
+    voidMutation.mutate(entryId, {
+      onError: (err) => {
+        if (err instanceof ApiError && err.status === 409 && (err.code === 'stripe_entry' || err.code === 'bank_entry')) {
+          voidRefusal.value = err.code
+          return
+        }
+        syncMessage.value = `${t('common.error')}: ${(err as Error).message}`
+      },
+    })
   }
 }
 
@@ -585,6 +615,17 @@ function formatNOK(amount: number): string {
       </div>
 
       <p
+        v-if="voidRefusal"
+        class="mt-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900"
+        role="alert"
+        :data-testid="`void-refused-${voidRefusal}`"
+      >
+        {{ t(VOID_REFUSALS[voidRefusal].text) }}
+        <RouterLink :to="VOID_REFUSALS[voidRefusal].to" class="inline-flex min-h-11 items-center font-semibold text-brand-700 underline">
+          {{ t(VOID_REFUSALS[voidRefusal].link) }}
+        </RouterLink>
+      </p>
+      <p
         v-if="syncMessage"
         class="mt-2 text-sm"
         :class="syncMessage.startsWith(t('common.error')) ? 'text-red-600' : 'text-green-600'"
@@ -766,6 +807,7 @@ function formatNOK(amount: number): string {
                     class="text-red-600 hover:text-red-800 disabled:opacity-50"
                     :disabled="voidMutation.isPending.value"
                     :title="t('admin.accounting.journal.void')"
+                    :data-testid="`void-entry-${entry.id}`"
                     @click="handleVoid(entry.id)"
                   >
                     <Ban class="h-4 w-4" />

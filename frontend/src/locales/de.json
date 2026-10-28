@@ -944,7 +944,11 @@
         "vippsDraftsRelease": "Freigeben",
         "vippsDraftsReleaseTitle": "{ref} in die Vipps-Warteschlange zurückgeben?",
         "vippsDraftsReleaseBody": "Der Entwurf wird gelöscht, und die Zahlung über {amount} kr vom {date} kommt zurück in die Vipps-Warteschlange, wo Sie sie in Tildel manuell zuordnen.",
-        "vippsDraftsReleased": "{ref} in die Vipps-Warteschlange zurückgegeben."
+        "vippsDraftsReleased": "{ref} in die Vipps-Warteschlange zurückgegeben.",
+        "voidStripeEntry": "Dieser Beleg wurde aus einer Stripe-Transaktion gebucht und kann hier nicht storniert werden. Verwenden Sie „Rückgängig“ bei der Transaktion unter Bank & Vipps → Stripe-Transaktionen (Reiter Gebucht); dabei werden auch ihre Rechnungen wieder geöffnet.",
+        "voidStripeEntryLink": "Zu den Stripe-Transaktionen",
+        "voidBankEntry": "Dieser Beleg wurde aus einer Bankzeile oder einer Stripe-Auszahlung gebucht und kann hier nicht storniert werden. Verwenden Sie „Rückgängig“ bei der Zeile unter Bank & Vipps → Tildel; die Zeile kommt zurück in die Warteschlange und die Rechnung oder Auszahlung wird wieder geöffnet.",
+        "voidBankEntryLink": "Zu Tildel"
       },
       "journalForm": {
         "title": "New entry",
@@ -1125,7 +1129,8 @@
         "unsupported_category": "Unbekannter Transaktionstyp",
         "receivable_not_open": "Die Rechnung ist bereits bezahlt, gutgeschrieben oder storniert",
         "imported_no_opening_balance": "Importierte Rechnung ohne Eröffnungsbilanz",
-        "split_mismatch": "Die Bestellung passt nicht zum Betrag"
+        "split_mismatch": "Die Bestellung passt nicht zum Betrag",
+        "unassigned": "Von Ihnen rückgängig gemacht – zur manuellen Bearbeitung zurückgehalten"
       },
       "stripePayoutSweepCounts": "Stripe-Auszahlungen abgeglichen: {cleared} · Wartend: {waiting} · Übersprungen: {skipped} · Fehlgeschlagen: {failed}",
       "stripePayoutDeposit": "Bankeingang {date}",
@@ -1133,11 +1138,13 @@
         "title": "Stripe-Transaktionen",
         "tabs": {
           "review": "Zu prüfen",
-          "dismissed": "Verworfen"
+          "dismissed": "Verworfen",
+          "booked": "Gebucht"
         },
         "empty": {
           "review": "Keine Stripe-Transaktionen warten auf Prüfung.",
-          "dismissed": "Keine verworfenen Stripe-Transaktionen."
+          "dismissed": "Keine verworfenen Stripe-Transaktionen.",
+          "booked": "Keine gebuchten Stripe-Transaktionen."
         },
         "page": "Seite {page}",
         "fee": "Gebühr {amount}",
@@ -1154,7 +1161,9 @@
           "assign_invoice": "Auf Rechnung buchen",
           "assign_account": "Auf Konto buchen",
           "dismiss": "Verwerfen",
-          "undismiss": "Verwerfen rückgängig machen"
+          "undismiss": "Verwerfen rückgängig machen",
+          "unassign": "Rückgängig",
+          "rebook": "Erneut aus der Bestellung buchen"
         },
         "dismissReasons": {
           "booked_manually": "Manuell gebucht",
@@ -1200,11 +1209,31 @@
           "invoice_settled": "Die Rechnung kann die Zahlung nicht aufnehmen: Sie ist bezahlt, gutgeschrieben oder hat keinen Eröffnungssaldo.",
           "period_closed": "Die Buchungsperiode ist geschlossen.",
           "already_booked": "Die Transaktion ist bereits gebucht.",
-          "payout_cleared": "Die Auszahlung ist bereits abgestimmt; die Transaktion kann weder gebucht noch aus dem Verworfen-Status zurückgeholt werden.",
+          "payout_cleared": "Die Auszahlung, zu der die Transaktion gehört, ist bereits abgestimmt. Machen Sie zuerst den Bankeingang der Auszahlung in Tildel rückgängig.",
           "invalid_reason": "Wählen Sie einen gültigen Grund.",
           "invalid_account": "Dieses Konto kann nicht für eine Stripe-Transaktion verwendet werden.",
           "busy": "Ein Stripe-Abgleich läuft gerade. Versuchen Sie es gleich noch einmal.",
-          "generic": "Etwas ist schiefgelaufen. Versuchen Sie es erneut."
+          "generic": "Etwas ist schiefgelaufen. Versuchen Sie es erneut.",
+          "use_bank_unassign": "Auszahlungen werden durch ihre Abstimmung gebucht. Machen Sie stattdessen den Bankeingang in Tildel rückgängig."
+        },
+        "entry": "Beleg {number}: {description}",
+        "entryVoided": "storniert",
+        "invoices": "Rechnung {invoices}",
+        "unassignDialog": {
+          "title": "Buchung rückgängig machen",
+          "reverse": "Der Beleg wird mit einem Gegenbeleg storniert.",
+          "reverseNumbered": "Beleg {number} wird mit einem Gegenbeleg storniert.",
+          "reopen": "Rechnung {invoices} wird wieder geöffnet und gilt als unbezahlt.",
+          "hold": "Die Transaktion kommt zurück in die Prüfung und bleibt dort, bis Sie sie erneut buchen oder verwerfen. Sie wird nicht wieder automatisch gebucht.",
+          "confirm": "Buchung rückgängig machen",
+          "success": "Buchung rückgängig gemacht",
+          "onlinePaid": "Die Rechnungen behalten die Markierung „online bezahlt“, da das Geld eingegangen ist. Gehörte die Zahlung eigentlich zu einer anderen Rechnung, gilt diese weiter als online bezahlt, sodass Mahnungen und Bankabgleich sie überspringen, obwohl sie unbezahlt ist."
+        },
+        "rebook": {
+          "booked": "Die Transaktion ist erneut aus der Bestellung gebucht",
+          "needsReview": "Die Transaktion konnte nicht aus der Bestellung gebucht werden: {reason}",
+          "deferred": "Die Buchungsperiode ist nicht offen. Die Transaktion wird gebucht, sobald das Jahr eröffnet ist.",
+          "failed": "Die Buchung ist fehlgeschlagen. Die Transaktion wartet auf die nächste Stripe-Synchronisierung."
         }
       }
     },

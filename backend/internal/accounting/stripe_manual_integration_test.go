@@ -416,8 +416,8 @@ func TestListStripeTransactions(t *testing.T) {
 	if err != nil || len(page) != 1 || more || page[0].ReviewReason != StripeReviewNoAttempt {
 		t.Errorf("page 2 = %+v, more %v (%v)", page, more, err)
 	}
-	if _, _, err := f.svc.ListStripeTransactions(ctx, f.club.ID, StripeTxnBooked, 2, 0); err == nil {
-		t.Error("booked status listed")
+	if _, _, err := f.svc.ListStripeTransactions(ctx, f.club.ID, StripeTxnUnbooked, 2, 0); err == nil {
+		t.Error("unbooked status listed")
 	}
 }
 

@@ -125,7 +125,7 @@ If a new top-level button (outside the sidebar, like the NavBar Admin entry) nee
 
 ## Per-row action TOTP (separate from nav)
 
-For sensitive in-page actions (send faktura, regen PDF, void, and every button that can book a posted GL entry: bank and Vipps upload, Synkroniser, Synk Vipps, Synk Stripe, Vipps payout confirm, Avstem mot Stripe-utbetaling (before its picker opens, BRY-465), the Stripe review card's Bokfør mot faktura / Bokfør mot konto / Avvis (before each dialog opens) and Angre avvisning (`StripeTransactionCard`, BRY-466), Avstem periode, journal post/void; see BRY-370 in the auth matrix; every Economy-settings save that changes what is billed or booked, such as role exemptions, BRY-351; and teaching or removing a Vipps-queue payer alias, BRY-383), use `useFreshTotp()`'s `ensureFreshTotp()` at click time:
+For sensitive in-page actions (send faktura, regen PDF, void, and every button that can book a posted GL entry: bank and Vipps upload, Synkroniser, Synk Vipps, Synk Stripe, Vipps payout confirm, Avstem mot Stripe-utbetaling (before its picker opens, BRY-465), the Stripe review card's Bokfør mot faktura / Bokfør mot konto / Avvis (before each dialog opens) and Angre avvisning (`StripeTransactionCard`, BRY-466), its Angre on a booked row (before the confirm dialog opens) and Bokfør fra ordren igjen on a held row (BRY-467), Avstem periode, journal post/void; see BRY-370 in the auth matrix; every Economy-settings save that changes what is billed or booked, such as role exemptions, BRY-351; and teaching or removing a Vipps-queue payer alias, BRY-383), use `useFreshTotp()`'s `ensureFreshTotp()` at click time:
 
 ```ts
 import { useFreshTotp } from '@/composables/useFreshTotp'
@@ -175,6 +175,7 @@ meta: { requiresAuth: true, requiresAdmin: true, bare: true }
 - **Write button without `useCan()`** — on a page the board can view, a write control without a `useCan()` check is shown to members who will only get a 403. Pick the area whose roles match the route's server gate.
 - **TOTP gate omitted for a new economy sub-path** — backend enforces it, but the SPA navigates first and bounces, which is confusing. Extend `requiresFreshTotp` prefix list.
 - **`feature` flag forgotten** — the route shows up even when the module is disabled. Cross-reference [`add-feature-flag.md`](../../../../docs/developer/checklists/add-feature-flag.md).
+- **A journal void error swallowed** — the server refuses to void an entry booked from a Stripe row (409 `stripe_entry`) or one a bank row or Stripe payout points at (409 `bank_entry`); `JournalEntriesView` shows the refusal with a deep link: `/admin/accounting/bank-imports?stripe=booked` (the Stripe list opens on Bokført and scrolls into view) or `?tab=reconcile` (Tildel). A new place that voids entries must handle the code the same way, not fail silently.
 - **Component-level @click bypassing useNavGate** — works in isolation, breaks when the next change touches the gating policy. Always route through the composable.
 
 ## Related

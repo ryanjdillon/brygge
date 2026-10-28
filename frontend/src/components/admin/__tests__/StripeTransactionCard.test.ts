@@ -6,9 +6,10 @@ import StripeTransactionCard from '@/components/admin/StripeTransactionCard.vue'
 import { ApiError } from '@/lib/errors'
 import type { StripeTxnItem } from '@/composables/useStripeTransactions'
 
-const { ensureFreshTotp, undismiss, toast, dialog } = vi.hoisted(() => ({
+const { ensureFreshTotp, undismiss, rebook, toast, dialog } = vi.hoisted(() => ({
   ensureFreshTotp: vi.fn(),
   undismiss: vi.fn(),
+  rebook: vi.fn(),
   toast: { success: vi.fn(), info: vi.fn(), error: vi.fn() },
   dialog: (name: string) => ({
     default: { props: ['open', 'item'], template: `<div v-if="open" data-testid="${name}" />` },
@@ -29,12 +30,15 @@ vi.mock('@/composables/useStripeTransactions', async () => {
       assignAccount: m(),
       dismiss: m(),
       undismiss: { mutateAsync: undismiss, isPending: ref(false) },
+      unassign: m(),
+      rebook: { mutateAsync: rebook, isPending: ref(false) },
     }),
   }
 })
 vi.mock('@/components/admin/StripeTxnInvoiceDialog.vue', () => dialog('invoice-dialog'))
 vi.mock('@/components/admin/StripeTxnAccountDialog.vue', () => dialog('account-dialog'))
 vi.mock('@/components/admin/StripeTxnDismissDialog.vue', () => dialog('dismiss-dialog'))
+vi.mock('@/components/admin/StripeTxnUnassignDialog.vue', () => dialog('unassign-dialog'))
 
 const item = (extra: Partial<StripeTxnItem> = {}): StripeTxnItem => ({
   id: 'row-1',
@@ -64,6 +68,7 @@ describe('StripeTransactionCard', () => {
   beforeEach(() => {
     ensureFreshTotp.mockReset().mockResolvedValue(true)
     undismiss.mockReset().mockResolvedValue({})
+    rebook.mockReset().mockResolvedValue({ outcome: 'booked', status: 'booked' })
     Object.values(toast).forEach((f) => f.mockReset())
   })
 
@@ -162,5 +167,58 @@ describe('StripeTransactionCard', () => {
     })
     expect(w.find('[data-testid="stripe-txn-payout-cleared"]').exists()).toBe(true)
     expect(actionIds(w)).toEqual([])
+  })
+
+  it('shows a booked row with its entry and fakturas, and steps up before the undo dialog', async () => {
+    const booked = item({
+      status: 'booked',
+      review_reason: undefined,
+      journal_entry_id: 'entry-1',
+      journal_entry_number: 17,
+      journal_entry_description: 'Kortbetaling ordre 0a1b2c3d',
+      journal_entry_status: 'posted',
+      invoice_numbers: [1042],
+      allowed_actions: ['unassign'],
+    })
+    const w = mountWithPlugins(StripeTransactionCard, { props: { item: booked } })
+    expect(w.find('[data-testid="stripe-txn-entry"]').exists()).toBe(true)
+    expect(w.find('[data-testid="stripe-txn-invoices"]').exists()).toBe(true)
+    expect(actionIds(w)).toEqual(['unassign'])
+
+    ensureFreshTotp.mockResolvedValueOnce(false)
+    await w.find('[data-testid="stripe-txn-action-unassign"]').trigger('click')
+    await flushPromises()
+    expect(w.find('[data-testid="unassign-dialog"]').exists()).toBe(false)
+
+    await w.find('[data-testid="stripe-txn-action-unassign"]').trigger('click')
+    await flushPromises()
+    expect(ensureFreshTotp).toHaveBeenCalledTimes(2)
+    expect(w.find('[data-testid="unassign-dialog"]').exists()).toBe(true)
+  })
+
+  it('rebooks a held row from its order after the step-up', async () => {
+    const held = item({
+      review_reason: 'unassigned',
+      order_id: 'order-1',
+      allowed_actions: ['assign_invoice', 'assign_account', 'dismiss', 'rebook'],
+    })
+    const w = mountWithPlugins(StripeTransactionCard, { props: { item: held } })
+    expect(w.find('[data-testid="stripe-txn-reason"]').text()).toBe('unassigned')
+    expect(actionIds(w)).toEqual(['rebook', 'assign_invoice', 'assign_account', 'dismiss'])
+
+    ensureFreshTotp.mockResolvedValueOnce(false)
+    await w.find('[data-testid="stripe-txn-action-rebook"]').trigger('click')
+    await flushPromises()
+    expect(rebook).not.toHaveBeenCalled()
+
+    await w.find('[data-testid="stripe-txn-action-rebook"]').trigger('click')
+    await flushPromises()
+    expect(rebook).toHaveBeenCalledWith({ id: 'row-1' })
+    expect(toast.success).toHaveBeenCalledWith('admin.bankImports.stripeTxn.rebook.booked')
+
+    rebook.mockResolvedValue({ outcome: 'needs_review', reason: 'split_mismatch', status: 'needs_review' })
+    await w.find('[data-testid="stripe-txn-action-rebook"]').trigger('click')
+    await flushPromises()
+    expect(toast.info).toHaveBeenCalledWith('admin.bankImports.stripeTxn.rebook.needsReview')
   })
 })

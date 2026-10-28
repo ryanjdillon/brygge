@@ -244,7 +244,7 @@ Stripe's own `reporting_category` of the balance transaction. Stripe's finer `ty
 unbooked   booked   needs_review   dismissed
 ```
 
-Booking state, set by `accounting.SyncStripeBalance` and `accounting.BookStripeBalance`. `unbooked` rows are ready to book (a charge matched to its attempt, a fee, a payout); `needs_review` rows carry a `review_reason` (CHECK: never NULL while in review); `booked` rows have their posted journal entry (`BookStripeBalance` sets it in the same transaction as the entry; a `payout` row gets its payout's clearing entry from `ClearStripePayouts`); `dismissed` rows were set aside by a person (`DismissStripeTxn`, BRY-466). A row a person booked (`AssignStripeTxnToInvoice`, `AssignStripeTxnToAccount`) is `booked` and keeps its `review_reason`; the booking pass always clears it, so a `booked` row with a reason was booked by hand. A re-sync reclassifies only `needs_review` rows held for an ingest reason and never touches the others. A row the booking pass held for review (the last three reasons below) is left to the booking pass, which retries it on every run.
+Booking state, set by `accounting.SyncStripeBalance` and `accounting.BookStripeBalance`. `unbooked` rows are ready to book (a charge matched to its attempt, a fee, a payout); `needs_review` rows carry a `review_reason` (CHECK: never NULL while in review); `booked` rows have their posted journal entry (`BookStripeBalance` sets it in the same transaction as the entry; a `payout` row gets its payout's clearing entry from `ClearStripePayouts`); `dismissed` rows were set aside by a person (`DismissStripeTxn`, BRY-466). A row a person booked (`AssignStripeTxnToInvoice`, `AssignStripeTxnToAccount`) is `booked` and keeps its `review_reason`; the booking pass always clears it, so a `booked` row with a reason was booked by hand. A re-sync reclassifies only `needs_review` rows held for an ingest reason and never touches the others. A row the booking pass held for review (`receivable_not_open`, `imported_no_opening_balance`, `split_mismatch`) is left to the booking pass, which retries it on every run. A row a person unassigned (`unassigned`, BRY-467) is held for that person: neither ingest nor the booking pass touches it (`stripeHeldReviewReasons`).
 
 `review_reason` (TEXT, no CHECK):
 
@@ -258,6 +258,7 @@ Booking state, set by `accounting.SyncStripeBalance` and `accounting.BookStripeB
 | `receivable_not_open` | Set by the booking pass: a faktura on the charge's order is already paid, voided or credited (`finance.OpenReceivableSQL`), most likely paid another way too |
 | `imported_no_opening_balance` | Set by the booking pass: a faktura on the order is imported and its receivable is not in the GL by the charge's booking date (`finance.ImportedReceivableOpenSQL`) |
 | `split_mismatch` | Set by the booking pass: the order's fakturas and lines do not add up to the charge |
+| `unassigned` | Set by `UnassignStripeTxn`: a person undid the row's booking. Never retried or reclassified; the person rebooks it (`rebook`, back to `unbooked` for the pass), assigns it or dismisses it. A row booked by hand afterwards keeps it as its manual-booking marker |
 
 ### `stripe_payouts.status` (CHECK since migration 000117)
 
@@ -311,19 +312,26 @@ The manual assigns (assign-invoice, assign-invoice-multi, assign-account, assign
 
 ### Manual Stripe transaction action codes (no column)
 
-`StripeTxnItem.allowed_actions` (`GET /accounting/stripe/transactions`) lists, per row, what the server accepts now: `assign_invoice`, `assign_account`, `dismiss`, `undismiss` (`accounting.stripeAllowedActions`; the matrix is in the accounting README). The four `POST /accounting/stripe/transactions/{txnID}/…` actions answer 409 with one of these as `code` and a Norwegian `reason` (`accounting.StripeTxnRefusal`), or `busy` (`ErrStripeSyncBusy`):
+`StripeTxnItem.allowed_actions` (`GET /accounting/stripe/transactions?status=needs_review|dismissed|booked`) lists, per row, what the server accepts now: `assign_invoice`, `assign_account`, `dismiss`, `undismiss`, `unassign`, `rebook` (`accounting.stripeAllowedActions`; the matrix is in the accounting README). The six `POST /accounting/stripe/transactions/{txnID}/…` actions answer 409 with one of these as `code` and a Norwegian `reason` (`accounting.StripeTxnRefusal`), or `busy` (`ErrStripeSyncBusy`):
 
 | Code | Meaning |
 |---|---|
 | `not_allowed` | The action is not one the row's category, status and review reason allow (a dismissed row must be undismissed first) |
 | `amount_mismatch` | The charge is not the faktura total to the øre |
 | `invoice_settled` | The faktura cannot take the payment: voided, paid, a booked payment recorded against it, or imported without its opening balance by the booking date |
-| `period_closed` | The booking date's fiscal period is closed or locked |
-| `already_booked` | The row has its journal entry (undo comes with BRY-467) |
-| `payout_cleared` | Assign or undismiss of a row whose payout is cleared in the books (only dismiss remains) |
+| `period_closed` | The booking date's fiscal period is closed or locked; for an unassign, the period of the entry being voided |
+| `already_booked` | The row has its journal entry (unassign it first) |
+| `payout_cleared` | Assign, undismiss or unassign of a row whose payout is cleared in the books (only dismiss remains; undo the payout's bank deposit in Tildel first) |
+| `use_bank_unassign` | Unassign of a `payout` / `payout_reversal` row: its entry is the payout clearing, undone from the bank deposit (`UnassignBankRow`) |
 | `invalid_reason` | Not a Stripe dismissal reason |
 | `invalid_account` | The account does not exist, is inactive, or is excluded (1500, 2900, a provider clearing account, 19xx or a bank account the club uses) |
 | `busy` | Another Stripe sync or booking of the club still holds its slot after a 5 s wait |
+
+A rebook answers 200 with `outcome` (`booked`, `needs_review` with the pass's review `reason`, `deferred` with `period_closed` / `no_period`, `failed`): the row is released either way, and what the pass did is reported, not refused.
+
+### Ledger void 409 codes (no column)
+
+`POST /accounting/journal/{entryID}/void` (`VoidLedgerEntry`) answers 409 `period_closed` for a closed or locked period 409 `stripe_entry` (with a Norwegian `reason`) for an entry sourced to a Stripe balance transaction (`source_table = 'stripe_balance_transactions'`, `ErrStripeSourcedEntry`): it is undone from the Stripe row (`unassign`); and 409 `bank_entry` (with a Norwegian `reason`) for an entry a bank row or a Stripe payout points at (`ErrBankLinkedEntry`): it is undone in Tildel (`UnassignBankRow`), which also releases the row, its faktura and the payout. Vipps charge entries are not refused.
 
 ### `broadcasts.status` (migration 000069)
 

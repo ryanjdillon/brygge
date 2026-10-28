@@ -74,8 +74,8 @@ func TestStripeTxnActionsGatedAndAudited(t *testing.T) {
 	if a := actions[refund]; len(a) != 1 || a[0] != accounting.StripeActionDismiss {
 		t.Errorf("refund actions = %v", a)
 	}
-	if rec := env.serve([]string{"board"}, http.MethodGet, "/gated/stripe/transactions?status=booked", nil); rec.Code != http.StatusBadRequest {
-		t.Errorf("status=booked: %d, want 400", rec.Code)
+	if rec := env.serve([]string{"board"}, http.MethodGet, "/gated/stripe/transactions?status=unbooked", nil); rec.Code != http.StatusBadRequest {
+		t.Errorf("status=unbooked: %d, want 400", rec.Code)
 	}
 	rec = env.serve([]string{"board"}, http.MethodGet, "/gated/stripe/transactions/"+charge+"/potential-invoices", nil)
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), inv.ID) {
@@ -166,5 +166,120 @@ func TestStripeTxnActionsGatedAndAudited(t *testing.T) {
 	if rec := env.serve([]string{"treasurer"}, http.MethodPost, "/open/stripe/transactions/"+charge+"/assign-account",
 		map[string]string{"account_code": " "}); rec.Code != http.StatusBadRequest {
 		t.Errorf("no account_code: %d, want 400", rec.Code)
+	}
+}
+
+// Unassign and rebook need the money gate, are audited and answer their
+// refusals 409 with a code; the booked list offers unassign; the ledger
+// void of a Stripe entry is 409 stripe_entry.
+func TestStripeTxnUnassignAndRebookHandlers(t *testing.T) {
+	var svc *accounting.Service
+	env := newAliasTestEnv(t, func(r chi.Router, s *accounting.Service, as *audit.Service) {
+		svc = s
+		h := NewAccountingHandler(s, as, nil, nil, nil, zerolog.Nop())
+		r.Route("/gated", func(r chi.Router) {
+			h.MountLedgerRoutes(r, middleware.RequireRole("treasurer", "admin"), middleware.RequireFreshTOTPDefault())
+		})
+		r.Route("/open", func(r chi.Router) { h.MountLedgerRoutes(r) })
+	})
+	ctx := context.Background()
+	var fee string
+	if err := env.club.Pool.QueryRow(ctx,
+		`INSERT INTO stripe_balance_transactions
+		     (club_id, balance_transaction_id, reporting_category, stripe_type, amount_ore, fee_ore, net_ore,
+		      currency, created_at, status)
+		 VALUES ($1, 'txn_test_h_fee', 'fee', 'stripe_fee', -300, 0, -300, 'nok', make_date($2, 6, 8), 'unbooked')
+		 RETURNING id`, env.club.ID, env.club.Year,
+	).Scan(&fee); err != nil {
+		t.Fatal(err)
+	}
+	if res, err := svc.BookStripeBalance(ctx, env.club.ID, env.club.Treasurer.ID); err != nil || res.FeesBooked != 1 {
+		t.Fatalf("booking pass = %+v, %v", res, err)
+	}
+	var entry string
+	if err := env.club.Pool.QueryRow(ctx, `SELECT journal_entry_id::text FROM stripe_balance_transactions WHERE id = $1`, fee).Scan(&entry); err != nil {
+		t.Fatal(err)
+	}
+
+	rec := env.serve([]string{"board"}, http.MethodGet, "/gated/stripe/transactions?status=booked", nil)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"unassign"`) || !strings.Contains(rec.Body.String(), `"journal_entry_number"`) {
+		t.Errorf("booked list: %d %s", rec.Code, rec.Body)
+	}
+
+	rec = env.serve([]string{"treasurer"}, http.MethodPost, "/open/journal/"+entry+"/void", nil)
+	var out map[string]any
+	_ = json.Unmarshal(rec.Body.Bytes(), &out)
+	if rec.Code != http.StatusConflict || out["code"] != "stripe_entry" || out["reason"] == "" {
+		t.Errorf("ledger void of a Stripe entry: %d %s", rec.Code, rec.Body)
+	}
+
+	inv := env.club.NewInvoice(t, fin.InvoiceOpts{Cents: 15000})
+	bankRow := env.club.NewBankRow(t, env.club.NewBankImport(t), fin.BankRowOpts{Cents: 15000})
+	bankEntry, err := svc.AssignBankRowToInvoice(ctx, env.club.ID, env.club.Treasurer.ID, bankRow, inv.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec = env.serve([]string{"treasurer"}, http.MethodPost, "/open/journal/"+bankEntry+"/void", nil)
+	out = map[string]any{}
+	_ = json.Unmarshal(rec.Body.Bytes(), &out)
+	if rec.Code != http.StatusConflict || out["code"] != "bank_entry" || out["reason"] == "" {
+		t.Errorf("ledger void of a bank entry: %d %s", rec.Code, rec.Body)
+	}
+
+	unassign := "/stripe/transactions/" + fee + "/unassign"
+	rebook := "/stripe/transactions/" + fee + "/rebook"
+	for _, p := range []string{unassign, rebook} {
+		if rec := env.serve([]string{"board"}, http.MethodPost, "/gated"+p, nil); rec.Code != http.StatusForbidden {
+			t.Errorf("POST %s as board: %d, want 403", p, rec.Code)
+		}
+		if rec := env.serve([]string{"treasurer"}, http.MethodPost, "/gated"+p, nil); rec.Code != http.StatusForbidden ||
+			!strings.Contains(rec.Body.String(), "totp_fresh_required") {
+			t.Errorf("POST %s without step-up: %d %s", p, rec.Code, rec.Body)
+		}
+	}
+	conflict := func(path, code string) {
+		t.Helper()
+		rec := env.serve([]string{"treasurer"}, http.MethodPost, "/open"+path, nil)
+		var out map[string]any
+		_ = json.Unmarshal(rec.Body.Bytes(), &out)
+		if rec.Code != http.StatusConflict || out["code"] != code || out["reason"] == "" {
+			t.Errorf("POST %s: %d %s, want 409 %s", path, rec.Code, rec.Body, code)
+		}
+	}
+	conflict(rebook, accounting.StripeTxnAlreadyBooked)
+
+	rec = env.serve([]string{"treasurer"}, http.MethodPost, "/open"+unassign, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("unassign: %d %s", rec.Code, rec.Body)
+	}
+	if got := env.audit(audit.ActionStripeTxnUnassigned); len(got) != 1 || got[0]["journal_entry_id"] != entry ||
+		got[0]["reversal_entry_id"] == "" || got[0]["balance_transaction_id"] != "txn_test_h_fee" {
+		t.Errorf("unassign audit = %v", got)
+	}
+	conflict(unassign, accounting.StripeTxnNotAllowed)
+
+	rec = env.serve([]string{"treasurer"}, http.MethodPost, "/open"+rebook, nil)
+	var rb accounting.StripeTxnRebookResult
+	if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &rb) != nil || rb.Outcome != accounting.StripeRebookBooked {
+		t.Fatalf("rebook: %d %s", rec.Code, rec.Body)
+	}
+	if got := env.audit(audit.ActionStripeTxnRebooked); len(got) != 1 || got[0]["outcome"] != accounting.StripeRebookBooked ||
+		got[0]["journal_entry_id"] != rb.JournalEntryID {
+		t.Errorf("rebook audit = %v", got)
+	}
+
+	var payout string
+	if err := env.club.Pool.QueryRow(ctx,
+		`INSERT INTO stripe_balance_transactions
+		     (club_id, balance_transaction_id, reporting_category, stripe_type, amount_ore, fee_ore, net_ore,
+		      currency, created_at, status)
+		 VALUES ($1, 'txn_test_h_po', 'payout', 'payout', -1000, 0, -1000, 'nok', make_date($2, 6, 9), 'unbooked')
+		 RETURNING id`, env.club.ID, env.club.Year,
+	).Scan(&payout); err != nil {
+		t.Fatal(err)
+	}
+	conflict("/stripe/transactions/"+payout+"/unassign", accounting.StripeTxnUseBankUnassign)
+	if rec := env.serve([]string{"treasurer"}, http.MethodPost, "/open/stripe/transactions/00000000-0000-0000-0000-000000000001/unassign", nil); rec.Code != http.StatusNotFound {
+		t.Errorf("unknown row: %d, want 404", rec.Code)
 	}
 }

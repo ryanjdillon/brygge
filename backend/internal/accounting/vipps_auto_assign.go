@@ -393,26 +393,8 @@ func (s *Service) UnassignVippsCharge(ctx context.Context, clubID, actorID, rowI
 		return "", "", fmt.Errorf("clearing charge: %w", err)
 	}
 	if priorInvoiceID != "" {
-		var paymentID *string
-		if err := tx.QueryRow(ctx,
-			`SELECT payment_id::text FROM invoices WHERE id = $1 AND club_id = $2`,
-			priorInvoiceID, clubID,
-		).Scan(&paymentID); err != nil {
-			return "", "", fmt.Errorf("loading invoice payment: %w", err)
-		}
-		if paymentID != nil {
-			if _, err := tx.Exec(ctx,
-				`UPDATE invoices SET payment_id = NULL WHERE id = $1 AND club_id = $2`,
-				priorInvoiceID, clubID,
-			); err != nil {
-				return "", "", fmt.Errorf("reopening invoice: %w", err)
-			}
-			if _, err := tx.Exec(ctx,
-				`DELETE FROM payments WHERE id = $1 AND club_id = $2`,
-				*paymentID, clubID,
-			); err != nil {
-				return "", "", fmt.Errorf("removing payment: %w", err)
-			}
+		if _, err := reopenInvoicePaymentTx(ctx, tx, clubID, priorInvoiceID); err != nil {
+			return "", "", err
 		}
 	}
 	if status == "draft" {

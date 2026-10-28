@@ -16,16 +16,17 @@ import (
 	"github.com/brygge-klubb/brygge/internal/shared"
 )
 
-// The manual actions on a Stripe balance transaction in review: assign to
-// a faktura, assign to an account, dismiss and undismiss
-// (accounting/stripe_manual.go). The list carries each row's
-// allowed_actions, so the UI offers only what the server accepts.
+// The manual actions on a Stripe balance transaction: assign to a faktura,
+// assign to an account, dismiss and undismiss (accounting/stripe_manual.go),
+// unassign and rebook (accounting/stripe_unassign.go). The list carries
+// each row's allowed_actions, so the UI offers only what the server
+// accepts.
 
 // HandleListStripeTransactions is GET
-// /accounting/stripe/transactions?status=needs_review|dismissed&limit=&offset=:
+// /accounting/stripe/transactions?status=needs_review|dismissed|booked&limit=&offset=:
 // the club's Stripe rows in that state (needs_review by default), newest
-// first, each with its allowed_actions. Read only, so open to every
-// accounting role.
+// first, each with its allowed_actions; a booked row also with its entry
+// and the fakturas it settles. Read only, so open to every accounting role.
 func (h *AccountingHandler) HandleListStripeTransactions(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
@@ -37,8 +38,8 @@ func (h *AccountingHandler) HandleListStripeTransactions(w http.ResponseWriter, 
 	if status == "" {
 		status = accounting.StripeTxnNeedsReview
 	}
-	if status != accounting.StripeTxnNeedsReview && status != accounting.StripeTxnDismissed {
-		Error(w, http.StatusBadRequest, "status must be needs_review or dismissed")
+	if !accounting.IsListableStripeTxnStatus(status) {
+		Error(w, http.StatusBadRequest, "status must be needs_review, dismissed or booked")
 		return
 	}
 	pg := shared.ParsePagination(r, 50, 200)
@@ -248,6 +249,71 @@ func (h *AccountingHandler) HandleUndismissStripeTxn(w http.ResponseWriter, r *h
 				"balance_transaction_id": res.BalanceTransactionID,
 				"status":                 res.Status,
 				"review_reason":          res.ReviewReason,
+			})
+	}
+	JSON(w, http.StatusOK, res)
+}
+
+// HandleUnassignStripeTxn is POST
+// /accounting/stripe/transactions/{txnID}/unassign: voids the row's entry,
+// reopens the fakturas it settled and holds the row for the person.
+// Audited stripe_txn.unassigned.
+func (h *AccountingHandler) HandleUnassignStripeTxn(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	txnID, ok := stripeTxnIDParam(w, r)
+	if !ok {
+		return
+	}
+	res, err := h.svc.UnassignStripeTxn(ctx, claims.ClubID, claims.UserID, txnID)
+	if h.stripeTxnFailed(w, err, txnID, "unassign stripe transaction") {
+		return
+	}
+	if h.audit != nil {
+		h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,
+			audit.ActionStripeTxnUnassigned, "stripe_balance_transaction", txnID,
+			map[string]any{
+				"balance_transaction_id": res.BalanceTransactionID,
+				"journal_entry_id":       res.VoidedJournalEntryID,
+				"reversal_entry_id":      res.ReversalEntryID,
+				"already_voided":         res.AlreadyVoided,
+				"invoice_ids":            res.InvoiceIDs,
+			})
+	}
+	JSON(w, http.StatusOK, res)
+}
+
+// HandleRebookStripeTxn is POST
+// /accounting/stripe/transactions/{txnID}/rebook: hands a row the person
+// holds back to the booking pass, which books it at once. Audited
+// stripe_txn.rebooked with the pass's outcome.
+func (h *AccountingHandler) HandleRebookStripeTxn(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	txnID, ok := stripeTxnIDParam(w, r)
+	if !ok {
+		return
+	}
+	res, err := h.svc.RebookStripeTxn(ctx, claims.ClubID, claims.UserID, txnID)
+	if h.stripeTxnFailed(w, err, txnID, "rebook stripe transaction") {
+		return
+	}
+	if h.audit != nil {
+		h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,
+			audit.ActionStripeTxnRebooked, "stripe_balance_transaction", txnID,
+			map[string]any{
+				"balance_transaction_id": res.BalanceTransactionID,
+				"outcome":                res.Outcome,
+				"reason":                 res.Reason,
+				"journal_entry_id":       res.JournalEntryID,
 			})
 	}
 	JSON(w, http.StatusOK, res)

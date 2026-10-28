@@ -84,6 +84,8 @@ func (h *AccountingHandler) MountLedgerRoutes(r chi.Router, moneyGate ...func(ht
 		r.With(moneyGate...).Post("/{txnID}/assign-account", h.HandleAssignStripeTxnToAccount)
 		r.With(moneyGate...).Post("/{txnID}/dismiss", h.HandleDismissStripeTxn)
 		r.With(moneyGate...).Post("/{txnID}/undismiss", h.HandleUndismissStripeTxn)
+		r.With(moneyGate...).Post("/{txnID}/unassign", h.HandleUnassignStripeTxn)
+		r.With(moneyGate...).Post("/{txnID}/rebook", h.HandleRebookStripeTxn)
 	})
 	r.Get("/stripe/payouts", h.HandleListStripePayouts)
 	r.With(moneyGate...).Post("/stripe/payouts/{payoutID}/clear", h.HandleClearStripePayout)

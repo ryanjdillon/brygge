@@ -831,32 +831,45 @@ func (s *Service) unassignBankRow( //nolint:gocognit,cyclop // reverses each pos
 		return "", "", nil, err
 	}
 	if priorInvoiceID != "" {
-		var paymentID *string
-		if err := tx.QueryRow(ctx,
-			`SELECT payment_id FROM invoices WHERE id = $1 AND club_id = $2`,
-			priorInvoiceID, clubID,
-		).Scan(&paymentID); err != nil {
-			return "", "", nil, fmt.Errorf("load invoice payment: %w", err)
-		}
-		if _, err := tx.Exec(ctx,
-			`UPDATE invoices SET payment_id = NULL WHERE id = $1 AND club_id = $2`,
-			priorInvoiceID, clubID,
-		); err != nil {
-			return "", "", nil, fmt.Errorf("clear invoice payment_id: %w", err)
-		}
-		if paymentID != nil {
-			if _, err := tx.Exec(ctx,
-				`DELETE FROM payments WHERE id = $1 AND club_id = $2`,
-				*paymentID, clubID,
-			); err != nil {
-				return "", "", nil, fmt.Errorf("delete payment row: %w", err)
-			}
+		if _, err := reopenInvoicePaymentTx(ctx, tx, clubID, priorInvoiceID); err != nil {
+			return "", "", nil, err
 		}
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return "", "", nil, fmt.Errorf("commit: %w", err)
 	}
 	return priorJournalID, priorInvoiceID, siblings, nil
+}
+
+// reopenInvoicePaymentTx undoes linkInvoicePayment for a faktura whose
+// settling entry an unassign voids: the faktura's payment_id is cleared and
+// the payments row it pointed at deleted, so the faktura reads as unpaid
+// again. reopened is false when the faktura had no payment (its back-link
+// never landed).
+func reopenInvoicePaymentTx(ctx context.Context, tx pgx.Tx, clubID, invoiceID string) (reopened bool, err error) {
+	var paymentID *string
+	if err := tx.QueryRow(ctx,
+		`SELECT payment_id::text FROM invoices WHERE id = $1 AND club_id = $2`,
+		invoiceID, clubID,
+	).Scan(&paymentID); err != nil {
+		return false, fmt.Errorf("loading invoice payment: %w", err)
+	}
+	if paymentID == nil {
+		return false, nil
+	}
+	if _, err := tx.Exec(ctx,
+		`UPDATE invoices SET payment_id = NULL WHERE id = $1 AND club_id = $2`,
+		invoiceID, clubID,
+	); err != nil {
+		return false, fmt.Errorf("reopening invoice: %w", err)
+	}
+	if _, err := tx.Exec(ctx,
+		`DELETE FROM payments WHERE id = $1 AND club_id = $2`,
+		*paymentID, clubID,
+	); err != nil {
+		return false, fmt.Errorf("removing payment: %w", err)
+	}
+	return true, nil
 }
 
 // releaseStripePayoutTx undoes a Stripe payout clearing whose entry the

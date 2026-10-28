@@ -944,7 +944,11 @@
         "vippsDraftsRelease": "Vrijgeven",
         "vippsDraftsReleaseTitle": "{ref} terugzetten in de Vipps-wachtrij?",
         "vippsDraftsReleaseBody": "Het concept wordt verwijderd en de betaling van {amount} kr van {date} gaat terug naar de Vipps-wachtrij, waar u deze handmatig toewijst in Tildel.",
-        "vippsDraftsReleased": "{ref} teruggezet in de Vipps-wachtrij."
+        "vippsDraftsReleased": "{ref} teruggezet in de Vipps-wachtrij.",
+        "voidStripeEntry": "Deze boeking komt uit een Stripe-transactie en kan hier niet worden geannuleerd. Gebruik \"Ongedaan maken\" bij de transactie onder Bank & Vipps → Stripe-transacties (tabblad Geboekt); dat heropent ook de facturen.",
+        "voidStripeEntryLink": "Naar de Stripe-transacties",
+        "voidBankEntry": "Deze boeking komt uit een bankregel of een Stripe-uitbetaling en kan hier niet worden geannuleerd. Gebruik \"Ongedaan maken\" bij de regel onder Bank & Vipps → Tildel; de regel gaat terug in de wachtrij en de factuur of uitbetaling wordt heropend.",
+        "voidBankEntryLink": "Naar Tildel"
       },
       "journalForm": {
         "title": "New entry",
@@ -1125,7 +1129,8 @@
         "unsupported_category": "Onbekend transactietype",
         "receivable_not_open": "De factuur is al betaald, gecrediteerd of geannuleerd",
         "imported_no_opening_balance": "Geïmporteerde factuur zonder openingsbalans",
-        "split_mismatch": "De bestelling klopt niet met het bedrag"
+        "split_mismatch": "De bestelling klopt niet met het bedrag",
+        "unassigned": "Door u ongedaan gemaakt – vastgehouden voor handmatige afhandeling"
       },
       "stripePayoutSweepCounts": "Stripe-uitbetalingen afgestemd: {cleared} · Wachtend: {waiting} · Overgeslagen: {skipped} · Mislukt: {failed}",
       "stripePayoutDeposit": "Bankbijschrijving {date}",
@@ -1133,11 +1138,13 @@
         "title": "Stripe-transacties",
         "tabs": {
           "review": "Te beoordelen",
-          "dismissed": "Afgewezen"
+          "dismissed": "Afgewezen",
+          "booked": "Geboekt"
         },
         "empty": {
           "review": "Er wachten geen Stripe-transacties op beoordeling.",
-          "dismissed": "Geen afgewezen Stripe-transacties."
+          "dismissed": "Geen afgewezen Stripe-transacties.",
+          "booked": "Geen geboekte Stripe-transacties."
         },
         "page": "Pagina {page}",
         "fee": "Kosten {amount}",
@@ -1154,7 +1161,9 @@
           "assign_invoice": "Boeken op factuur",
           "assign_account": "Boeken op rekening",
           "dismiss": "Afwijzen",
-          "undismiss": "Afwijzing ongedaan maken"
+          "undismiss": "Afwijzing ongedaan maken",
+          "unassign": "Ongedaan maken",
+          "rebook": "Opnieuw boeken vanuit de bestelling"
         },
         "dismissReasons": {
           "booked_manually": "Handmatig geboekt",
@@ -1200,11 +1209,31 @@
           "invoice_settled": "De factuur kan de betaling niet ontvangen: ze is betaald, gecrediteerd of heeft geen beginsaldo.",
           "period_closed": "De boekingsperiode is gesloten.",
           "already_booked": "De transactie is al geboekt.",
-          "payout_cleared": "De uitbetaling is al afgestemd; de transactie kan niet worden geboekt of uit afgewezen worden teruggehaald.",
+          "payout_cleared": "De uitbetaling waar de transactie bij hoorde is al afgestemd. Maak eerst de bankontvangst van de uitbetaling in Tildel ongedaan.",
           "invalid_reason": "Kies een geldige reden.",
           "invalid_account": "Deze rekening kan niet worden gebruikt voor een Stripe-transactie.",
           "busy": "Er loopt een Stripe-synchronisatie. Probeer het zo opnieuw.",
-          "generic": "Er ging iets mis. Probeer het opnieuw."
+          "generic": "Er ging iets mis. Probeer het opnieuw.",
+          "use_bank_unassign": "Uitbetalingen worden geboekt door hun afstemming. Maak in plaats daarvan de bankontvangst in Tildel ongedaan."
+        },
+        "entry": "Boeking {number}: {description}",
+        "entryVoided": "geannuleerd",
+        "invoices": "Factuur {invoices}",
+        "unassignDialog": {
+          "title": "Boeking ongedaan maken",
+          "reverse": "De boeking wordt teruggedraaid met een tegenboeking.",
+          "reverseNumbered": "Boeking {number} wordt teruggedraaid met een tegenboeking.",
+          "reopen": "Factuur {invoices} wordt heropend en staat weer als onbetaald.",
+          "hold": "De transactie gaat terug naar beoordeling en blijft daar tot u haar opnieuw boekt of afwijst. Ze wordt niet meer automatisch geboekt.",
+          "confirm": "Boeking ongedaan maken",
+          "success": "Boeking ongedaan gemaakt",
+          "onlinePaid": "De facturen houden hun markering \"online betaald\", omdat het geld is binnengekomen. Hoorde de betaling eigenlijk bij een andere factuur, dan blijft deze als online betaald staan, zodat herinneringen en bankafstemming haar overslaan terwijl ze onbetaald is."
+        },
+        "rebook": {
+          "booked": "De transactie is opnieuw geboekt vanuit de bestelling",
+          "needsReview": "De transactie kon niet vanuit de bestelling worden geboekt: {reason}",
+          "deferred": "De boekingsperiode is niet open. De transactie wordt geboekt zodra het jaar is geopend.",
+          "failed": "Het boeken is mislukt. De transactie wacht op de volgende Stripe-synchronisatie."
         }
       }
     },
