@@ -30,12 +30,12 @@ type invoiceSeed struct {
 // regenerate PDF, void) have data to exercise in dev. Idempotent: clears
 // the club's invoices first (invoice_lines cascade).
 func seedInvoices(ctx context.Context, db *pgxpool.Pool, clubID string, userIDs map[string]string) {
-	// 2026 fiscal period drives the list's year column; created by an
-	// earlier migration/seed. Fall back to NULL if absent.
+	// The current fiscal year drives the list's year column; the seed opens
+	// it before this runs. Fall back to NULL if absent.
 	var fiscalPeriodID *string
 	var fp string
 	if err := db.QueryRow(ctx,
-		`SELECT id FROM fiscal_periods WHERE club_id = $1 AND year = 2026 LIMIT 1`, clubID,
+		`SELECT id FROM fiscal_periods WHERE club_id = $1 AND year = $2 LIMIT 1`, clubID, time.Now().Year(),
 	).Scan(&fp); err == nil {
 		fiscalPeriodID = &fp
 	}

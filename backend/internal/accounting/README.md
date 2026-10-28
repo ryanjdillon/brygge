@@ -9,7 +9,7 @@ The double-entry GL plus everything that posts to it: bank statement parsing, KI
 | `service.go` | `Service` struct (db, log, audit). Constructor takes a pgxpool, audit service, and zerolog logger. Every method in the package hangs off this struct. |
 | `journal.go` | `CreateJournalEntry`, `PostJournalEntry`, `VoidJournalEntry`. Double-entry validation lives here — every entry must balance debit = credit. |
 | `period.go` | Fiscal periods (open/closed/locked) + `resolvePeriod` (always go through this — never query `fiscal_periods` directly). |
-| `kontoplan.go` | NS 4102 chart of accounts seeding. `SeedKontoplan` runs on first club creation; adding a new account type adds to the seed list here. |
+| `kontoplan.go` | NS 4102 chart of accounts seeding. `SeedKontoplan` is idempotent; it runs from the admin "seed accounts" action and from `cmd/seed`; adding a new account type adds to the seed list here. |
 | `price_hints.go` | `PriceItemCategories`, `PriceCategoryAccount` (a price-item category's default account), `ListAccountsWithPriceHints` (the accounts list with the price items and categories that book to each account) and the `price_item` account-suggestion rule used by bank-row and Vipps-charge suggestions. |
 | `bankimport.go` | CSV parsing per `BankFormat`, `ImportBankRows`, infer-own-account-number heuristic, auto-match KID at import time, intra-bank transfer detection. |
 | `banksync.go` | On-demand re-run of KID matching + Vipps reconciliation across all of a club's unmatched bank rows. Called by the "Synk bank" button. |

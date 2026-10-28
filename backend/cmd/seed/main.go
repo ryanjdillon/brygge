@@ -10,7 +10,9 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/pquerna/otp/totp"
+	"github.com/rs/zerolog"
 
+	"github.com/brygge-klubb/brygge/internal/accounting"
 	"github.com/brygge-klubb/brygge/internal/auth"
 	"github.com/brygge-klubb/brygge/internal/config"
 )
@@ -132,6 +134,26 @@ func main() {
 	}
 	fmt.Printf("  club: %s (id: %s)\n", cfg.ClubSlug, clubID)
 
+	// The seeded fakturas and the payment flows book against the chart, so a
+	// fresh dev club needs it before anything else.
+	acct := accounting.NewService(db, nil, zerolog.Nop())
+	accounts, err := acct.SeedKontoplan(ctx, clubID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to seed the chart of accounts: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("  accounts: %d created\n", accounts)
+	// Paths that never open a fiscal year (provider postings, bank
+	// auto-assign) defer everything until one exists.
+	_, periodStatus, err := acct.ResolvePeriodForDate(ctx, clubID, time.Now())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to open the current fiscal year: %v\n", err)
+		os.Exit(1)
+	}
+	if periodStatus != "open" {
+		fmt.Printf("  warning: the current fiscal year is %s; postings will be deferred\n", periodStatus)
+	}
+
 	// All users to seed. Auth is magic-link only (DIL-22 + DIL-28); no
 	// password storage. Test logins go through the demo-auth handler when
 	// FEATURE_DEMO_AUTH is set.
@@ -221,16 +243,16 @@ func main() {
 	// Create waiting list entries
 	// wl-member (Per Venansen) is on the waiting list, plus the 8 filler users
 	waitingListEmails := []string{
-		"ola.nord@example.com",       // pos 1, local
-		"wl-member@brygge.local",     // pos 2, local (test login user)
-		"liv.strand@example.com",     // pos 3, non-local
-		"erik.berg@example.com",      // pos 4, local
-		"anne.fjord@example.com",     // pos 5, non-local
-		"bjorn.havn@example.com",     // pos 6, local
-		"member@brygge.local",        // pos 7, non-local (original member)
-		"ingrid.molo@example.com",    // pos 8, non-local
-		"lars.kai@example.com",       // pos 9, local
-		"sofie.brygge@example.com",   // pos 10, non-local
+		"ola.nord@example.com",     // pos 1, local
+		"wl-member@brygge.local",   // pos 2, local (test login user)
+		"liv.strand@example.com",   // pos 3, non-local
+		"erik.berg@example.com",    // pos 4, local
+		"anne.fjord@example.com",   // pos 5, non-local
+		"bjorn.havn@example.com",   // pos 6, local
+		"member@brygge.local",      // pos 7, non-local (original member)
+		"ingrid.molo@example.com",  // pos 8, non-local
+		"lars.kai@example.com",     // pos 9, local
+		"sofie.brygge@example.com", // pos 10, non-local
 	}
 
 	// Clear existing waiting list entries for idempotent re-seeding
