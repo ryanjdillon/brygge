@@ -103,6 +103,7 @@ Every provider returns the payer to `/betal/{token}/kvittering` (QR orders too, 
 | `checkout.session.expired`, `checkout.session.async_payment_failed` | `markAttemptFailed`, unless the attempt is already `captured` or `cancelled`. |
 | `payment_intent.canceled` | Attempt from `metadata.attempt_id`; `markAttemptFailed` unless already `captured` or `cancelled` (Brygge's own void arrives here too and must not fail an order another attempt pays). |
 | `payment_intent.succeeded` | Attempt from `metadata.attempt_id`; `markAttemptCaptured` at the event time only when `amount_received` and currency equal the attempt's (a partial capture is logged at error level and pays nothing). A safety net for a capture whose answer was lost. |
+| `payout.paid`, `payout.failed`, `payout.canceled` | With accounting on, `IngestStripePayout` runs in the background once the event is answered (at most 2 minutes, waiting for a sync of the club already running); it refreshes the payout in `stripe_payouts` and links the balance transactions it paid out, or releases them when it failed (see [Stripe accounting](#stripe-accounting)). Never books. |
 | `charge.refunded`, `charge.dispute.*`, anything else | Stored only (refunds: BRY-446). |
 
 The mint records the provider's answer (the reference, or `failed`) on a context detached from the payer's request, so a dropped request can't lose a reference to a payment the provider created.
@@ -116,7 +117,17 @@ Each write is guarded and runs on its own, so a redelivered or out-of-order even
 - `payment_webhook_events` — raw events for providers other than Vipps, deduplicated on `(club_id, provider, event_id)`. The Stripe webhook writes it. Vipps keeps `vipps_webhook_events`.
 - `invoices.online_paid_at` / `online_paid_provider` — the "received, awaiting settlement" marker for any provider. `invoices.online_payment_opt_in` and `clubs.online_max_amount` — the per-faktura override and the club's cap, for every provider. `clubs.payment_fee_account` — fees for every provider (default 7700). `clubs.stripe_clearing_account` — 1580, the card balance until payout.
 
+- `stripe_balance_transactions`, `stripe_payouts` — the Stripe balance mirrored for the books; see [Stripe accounting](#stripe-accounting).
+
 The legacy columns `invoices.vipps_paid_at`, `invoices.vipps_payment_link_opt_in`, `clubs.vipps_max_amount` and `clubs.vipps_fee_account` are still written with the same values and read by nothing; BRY-450 drops them. `orders.vipps_reference` is still written on every Vipps mint and is not legacy: the settlement reconciliation in `internal/accounting` matches Vipps charges on it until BRY-445.
+
+### Stripe accounting
+
+Ingest is in place; charge and fee postings come with BRY-454 and payout matching and clearing with BRY-457. `accounting.SyncStripeBalance` mirrors Stripe's balance transactions into `stripe_balance_transactions`, classifying each one (a charge is tied to its attempt through `metadata.attempt_id`), and the payouts into `stripe_payouts`, linking every transaction an automatic payout paid out. It posts nothing. It runs nightly, from `POST /api/v1/admin/accounting/stripe/sync`, and for one payout on the `payout.*` webhooks. The pipeline, the classification table and the review reasons are in [the accounting README](../../backend/internal/accounting/README.md#the-stripe-balance-pipeline).
+
+The webhook endpoint in the Stripe Dashboard must send, besides the Checkout and PaymentIntent events above, `payout.paid`, `payout.failed` and `payout.canceled`. Without them payouts are still picked up by the nightly sync, a day later.
+
+The settings are `clubs.stripe_clearing_account` (default 1580, an active asset account) and `clubs.stripe_payout_descriptor` (a Go regular expression for the payout's bank text, default `(?i)stripe`), both in **Økonomiinnstillinger → Betalingskonti**.
 
 ### Still Vipps-shaped
 
@@ -134,7 +145,7 @@ The API itself is provider-neutral: error codes `online_payment_unavailable` / `
 2. Register it in `cmd/api/main.go` when its credentials are present. Secrets go in `/etc/brygge/env` (see the env layering rules in [configuration.md](configuration.md)).
 3. Add its webhook handler: verify the signature, persist the event in `payment_webhook_events`, resolve the attempt with `attemptByReference` (or `attemptByID`), then call `authorizeAttempt` (if the provider authorizes before capturing) / `markAttemptCaptured` / `markAttemptFailed`. Do not write order or invoice payment state anywhere else.
 4. Let the payer choose it: the pay routes resolve a requested name with `resolveProvider` and pass it to `mintOrderPayment`; `availableProviders()` lists it to the pages. Give it a method in `PayMethodButtons.vue` (`METHOD_BY_PROVIDER`, a label under `pay.methods.*` in all locales) and in the email label (`emailPayMethods` / `email.PayMethodsLabel`); until then the pages skip it.
-5. Book its fees and clearing balance with the accounting owner before going live.
+5. Book its fees and clearing balance with the accounting owner before going live (Stripe's: [Stripe accounting](#stripe-accounting)).
 
 ## Card payments with Stripe: decisions
 
@@ -152,4 +163,4 @@ Taken by the owner on 2026-10-27. They bound the Stripe work; change them here f
 
 ### Sequencing
 
-BRY-442 (this provider seam) → BRY-441 (provider-neutral data model, payment attempts) → BRY-443 (Stripe Checkout and webhook) → then in parallel BRY-444 (payer UI, error-code renames), BRY-445 (accounting), BRY-446 (refunds) and BRY-447 (operations).
+BRY-442 (this provider seam) → BRY-441 (provider-neutral data model, payment attempts) → BRY-443 (Stripe Checkout and webhook) → then in parallel BRY-444 (payer UI, error-code renames), BRY-445 (accounting: ingest, then BRY-454 postings and BRY-457 payout clearing), BRY-446 (refunds) and BRY-447 (operations).

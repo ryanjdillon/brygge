@@ -23,7 +23,7 @@ var maskedTables = []string{
 	"slip_shares", "boats",
 	"journal_entries", "journal_lines", "payments", "invoice_lines",
 	"account_mapping_rules", "vipps_message_rules", "slips", "dock_fingers",
-	"payment_refunds", "payment_webhook_events",
+	"payment_refunds", "payment_webhook_events", "stripe_balance_transactions",
 }
 
 // rawTextColumns is every text/JSON column the role may read from a raw
@@ -56,6 +56,9 @@ var rawTextColumns = map[string]bool{
 	"price_exemptions.category": true, "price_exemptions.role": true,
 	// provider name, opaque provider reference, status and currency codes
 	"payment_attempts.currency": true, "payment_attempts.provider": true, "payment_attempts.provider_reference": true, "payment_attempts.status": true,
+	// Stripe payout ids, status and currency codes, and the payout's
+	// statement descriptor, which is the club's own text
+	"stripe_payouts.currency": true, "stripe_payouts.payout_id": true, "stripe_payouts.statement_descriptor": true, "stripe_payouts.status": true,
 }
 
 // TestDevMaskedViews migrates a throwaway database, applies the dev_masked

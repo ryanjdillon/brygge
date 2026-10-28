@@ -80,7 +80,8 @@ SELECT
     vipps_per_charge_enabled, vipps_max_amount,
     vipps_auto_assign, vipps_auto_assign_tie_category, bank_auto_assign,
     exemption_expense_account,
-    online_max_amount, payment_fee_account, stripe_clearing_account
+    online_max_amount, payment_fee_account, stripe_clearing_account,
+    stripe_payout_descriptor
 FROM public.clubs;
 
 CREATE VIEW dev_masked.billing_recipients AS
@@ -182,6 +183,18 @@ SELECT
     created_by, journal_entry_id, created_at, updated_at,
     length(reason) AS reason_length
 FROM public.payment_refunds;
+
+CREATE VIEW dev_masked.stripe_balance_transactions AS
+SELECT
+    id, club_id, balance_transaction_id, reporting_category, stripe_type,
+    amount_ore, fee_ore, net_ore, fee_details, currency, created_at, available_on,
+    source_id, charge_id, payment_intent_id,
+    attempt_id, order_id, payout_id, journal_entry_id, invoice_id,
+    status, review_reason, dismissed_at, dismissed_by,
+    NULL::text AS dismissed_reason,       -- staff-typed free text
+    inserted_at, updated_at,
+    length(dismissed_reason) AS dismissed_reason_length
+FROM public.stripe_balance_transactions;
 
 CREATE VIEW dev_masked.slip_shares AS
 SELECT

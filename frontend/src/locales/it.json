@@ -1000,6 +1000,9 @@
       "vippsAutoAssignHint": "Registra un pagamento solo se corrisponde chiaramente all'unica fattura aperta di un socio o a una sola categoria di prezzo. Il resto rimane in Tildel. Ogni registrazione può essere annullata.",
       "vippsClearingAccount": "Conto di transito",
       "paymentFeeAccount": "Conto commissioni",
+      "stripeClearingAccount": "Conto di transito Stripe",
+      "stripePayoutDescriptor": "Testo del pagamento Stripe",
+      "stripeAccountsHint": "Il conto di transito conserva i pagamenti con carta finché Stripe non li versa (predefinito 1580, un conto di attività attivo). Il testo è un'espressione regolare che riconosce un versamento Stripe nell'estratto conto (predefinito (?i)stripe).",
       "exemptions": {
         "label": "Esenzioni per ruolo",
         "hint": "Ruoli del consiglio a cui non viene addebitata una voce di prezzo o un'intera categoria. La fattura mostra comunque il prezzo pieno con una riga «Fritak» di compensazione, così l'esenzione è registrata come costo. Nulla è esente finché non lo aggiungi qui.",

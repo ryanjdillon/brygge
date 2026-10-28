@@ -17,6 +17,9 @@ type Service struct {
 	db    *pgxpool.Pool
 	audit *audit.Service
 	log   zerolog.Logger
+	// stripeSync serialises the Stripe balance ingest per club across the
+	// nightly job, the sync endpoint and the payout webhook.
+	stripeSync stripeSyncGuard
 }
 
 // NewService creates an accounting service.

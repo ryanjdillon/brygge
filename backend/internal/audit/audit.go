@@ -64,6 +64,7 @@ const (
 	ActionAccountingInvoicesResplit   = "accounting.invoices_resplit"
 	ActionAccountingVippsDraftsPosted = "accounting.vipps_drafts_posted"
 	ActionAccountingDraftDeleted      = "accounting.draft_deleted"
+	ActionAccountingStripeSynced      = "accounting.stripe_balance_synced"
 	ActionPaymentCreated              = "payment.created"
 	ActionPaymentViewed               = "finance.payment_viewed"
 

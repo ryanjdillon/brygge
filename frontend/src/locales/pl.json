@@ -974,6 +974,9 @@
       "vippsAutoAssignHint": "Księguje płatność tylko wtedy, gdy wyraźnie pasuje do jedynej otwartej faktury członka lub do jednej kategorii cenowej. Reszta pozostaje w Tildel. Każde księgowanie można cofnąć.",
       "vippsClearingAccount": "Konto rozrachunkowe",
       "paymentFeeAccount": "Konto opłat",
+      "stripeClearingAccount": "Konto rozrachunkowe Stripe",
+      "stripePayoutDescriptor": "Tekst wypłaty Stripe",
+      "stripeAccountsHint": "Konto rozrachunkowe przechowuje płatności kartą do czasu wypłaty przez Stripe (domyślnie 1580, aktywne konto aktywów). Tekst wypłaty to wyrażenie regularne rozpoznające wypłatę Stripe na wyciągu bankowym (domyślnie (?i)stripe).",
       "exemptions": {
         "label": "Zwolnienia dla ról",
         "hint": "Role zarządu, którym nie nalicza się pozycji cennika lub całej kategorii cen. Faktura nadal pokazuje pełną cenę z kompensującą linią „Fritak”, więc zwolnienie księgowane jest jako koszt. Nic nie jest zwolnione, dopóki nie dodasz tego tutaj.",

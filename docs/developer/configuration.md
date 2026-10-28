@@ -177,7 +177,8 @@ Per-club financial settings are stored on `clubs` and edited in **Admin → Øko
 |---|---|---|
 | `kid_check_method` | KID check digit for new fakturas: `mod11` (default) or `mod10`. Must match the method registered on the club's OCR/KID agreement, or the payer's bank rejects the KID | — |
 | `vipps_clearing_account`, `payment_fee_account` | GL accounts the Vipps clearing postings and every provider's fee postings use (the legacy fee column is dual-written until BRY-450) | — |
-| `stripe_clearing_account` | Card balance at Stripe until payout; default 1580. Not editable yet and unused until card payments are booked (BRY-445) | — |
+| `stripe_clearing_account` | Card balance at Stripe until payout; default 1580. Must be an active asset account in the club's chart. Unused until card payments are booked (BRY-454) | — |
+| `stripe_payout_descriptor` | Go regular expression (at most 200 characters) that recognises a Stripe payout in the bank statement text; default `(?i)stripe`. Unused until payouts are matched (BRY-457) | — |
 | `vipps_per_charge_enabled` | Per-charge Vipps model: charges are booked one by one in Tildel and payouts clear by themselves, instead of one bilag per payout (BRY-228) | [faktura.md](../user/faktura.md#vipps-payouts-clear-by-themselves) |
 | `online_max_amount` | Default amount cap for online payment (see above) | [faktura.md](../user/faktura.md#sent) |
 | `vipps_auto_assign`, `vipps_auto_assign_tie_category` | Book unambiguous Vipps charges without a human; tie category for same-price categories (BRY-340) | [faktura.md](../user/faktura.md#automatic-vipps-booking-per-charge-tildel) |

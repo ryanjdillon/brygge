@@ -999,6 +999,9 @@
       "vippsAutoAssignHint": "Ne comptabilise un paiement que s'il correspond clairement à l'unique facture ouverte d'un membre ou à une seule catégorie de prix. Le reste reste dans Tildel. Chaque écriture peut être annulée.",
       "vippsClearingAccount": "Compte d'attente",
       "paymentFeeAccount": "Compte de frais",
+      "stripeClearingAccount": "Compte d'attente Stripe",
+      "stripePayoutDescriptor": "Libellé du versement Stripe",
+      "stripeAccountsHint": "Le compte d'attente conserve les paiements par carte jusqu'à leur versement par Stripe (par défaut 1580, un compte d'actif actif). Le libellé est une expression régulière qui reconnaît un versement Stripe sur le relevé bancaire (par défaut (?i)stripe).",
       "exemptions": {
         "label": "Exonérations par rôle",
         "hint": "Rôles du conseil qui ne sont pas facturés pour un article ou une catégorie de prix entière. La facture affiche toujours le prix complet avec une ligne « Fritak » compensatoire, de sorte que l'exonération est comptabilisée en charge. Rien n'est exonéré tant que vous ne l'ajoutez pas ici.",

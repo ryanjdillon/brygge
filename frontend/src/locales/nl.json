@@ -1000,6 +1000,9 @@
       "vippsAutoAssignHint": "Boekt een betaling alleen als die duidelijk past bij de enige openstaande factuur van een lid of bij één prijscategorie. De rest blijft in Tildel. Elke boeking kan ongedaan worden gemaakt.",
       "vippsClearingAccount": "Tussenrekening",
       "paymentFeeAccount": "Kostenrekening",
+      "stripeClearingAccount": "Stripe-tussenrekening",
+      "stripePayoutDescriptor": "Tekst van Stripe-uitbetaling",
+      "stripeAccountsHint": "De tussenrekening houdt kaartbetalingen vast tot Stripe ze uitbetaalt (standaard 1580, een actieve activarekening). De uitbetalingstekst is een reguliere expressie die een Stripe-uitbetaling op het bankafschrift herkent (standaard (?i)stripe).",
       "exemptions": {
         "label": "Vrijstellingen per rol",
         "hint": "Bestuursrollen die geen prijspost of hele prijscategorie betalen. De factuur toont nog steeds de volle prijs met een compenserende „Fritak”-regel, zodat de vrijstelling als kosten wordt geboekt. Niets is vrijgesteld totdat u het hier toevoegt.",

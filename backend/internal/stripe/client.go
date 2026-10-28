@@ -1,7 +1,8 @@
 // Package stripe is a small hand-rolled client for the parts of the Stripe API
 // Brygge uses: hosted Checkout Sessions, capturing or voiding their
-// PaymentIntents, and verifying webhook signatures. The surface is a handful
-// of form-encoded calls, which is cheaper to own than the stripe-go module.
+// PaymentIntents, reading the balance and its payouts for the books, and
+// verifying webhook signatures. The surface is a handful of form-encoded
+// calls, which is cheaper to own than the stripe-go module.
 package stripe
 
 import (
@@ -12,6 +13,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -30,6 +32,13 @@ const APIVersion = "2024-06-20"
 
 // maxResponseBody caps how much of a Stripe response is buffered.
 const maxResponseBody = 1 << 20
+
+// maxListResponseBody caps a list page. Each balance transaction in a page
+// carries its expanded source object, and a charge alone runs to several KiB.
+const maxListResponseBody = 8 << 20
+
+// listPageSize is the page size for list calls whose items are expanded.
+const listPageSize = 50
 
 // Client calls the Stripe API with one account's secret key. Safe for
 // concurrent use.
@@ -121,9 +130,55 @@ func (c *Client) CancelPaymentIntent(ctx context.Context, id string) error {
 	return c.do(ctx, http.MethodPost, "/v1/payment_intents/"+url.PathEscape(id)+"/cancel", "", url.Values{}, nil)
 }
 
+// ListBalanceTransactions returns one page, newest first, of the balance
+// transactions created at or after createdGTE, each with its source object
+// expanded. startingAfter is the last id of the previous page ("" for the
+// first).
+func (c *Client) ListBalanceTransactions(ctx context.Context, createdGTE time.Time, startingAfter string) (*BalanceTransactionPage, error) {
+	q := url.Values{}
+	q.Set("created[gte]", strconv.FormatInt(createdGTE.Unix(), 10))
+	return c.listBalanceTransactions(ctx, q, startingAfter)
+}
+
+// ListPayoutTransactions returns one page of the balance transactions paid
+// out by an automatic payout, the payout's own included. Stripe answers this
+// only for automatic payouts.
+func (c *Client) ListPayoutTransactions(ctx context.Context, payoutID, startingAfter string) (*BalanceTransactionPage, error) {
+	q := url.Values{}
+	q.Set("payout", payoutID)
+	return c.listBalanceTransactions(ctx, q, startingAfter)
+}
+
+func (c *Client) listBalanceTransactions(ctx context.Context, q url.Values, startingAfter string) (*BalanceTransactionPage, error) {
+	q.Set("limit", strconv.Itoa(listPageSize))
+	q.Add("expand[]", "data.source")
+	if startingAfter != "" {
+		q.Set("starting_after", startingAfter)
+	}
+	var page BalanceTransactionPage
+	if err := c.doCapped(ctx, http.MethodGet, "/v1/balance_transactions?"+q.Encode(), "", nil, &page, maxListResponseBody); err != nil {
+		return nil, err
+	}
+	return &page, nil
+}
+
+// GetPayout retrieves a payout.
+func (c *Client) GetPayout(ctx context.Context, id string) (*Payout, error) {
+	var p Payout
+	if err := c.do(ctx, http.MethodGet, "/v1/payouts/"+url.PathEscape(id), "", nil, &p); err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
 // do sends one API call. form (nil: no body) is sent form-encoded; out (nil:
 // ignored) receives the decoded 2xx body. The secret key is never logged.
 func (c *Client) do(ctx context.Context, method, path, idempotencyKey string, form url.Values, out any) error {
+	return c.doCapped(ctx, method, path, idempotencyKey, form, out, maxResponseBody)
+}
+
+// doCapped is do with the response buffered up to maxBody bytes.
+func (c *Client) doCapped(ctx context.Context, method, path, idempotencyKey string, form url.Values, out any, maxBody int64) error {
 	var body io.Reader
 	if form != nil {
 		body = strings.NewReader(form.Encode())
@@ -147,7 +202,7 @@ func (c *Client) do(ctx context.Context, method, path, idempotencyKey string, fo
 		return fmt.Errorf("stripe %s %s: %w", method, path, err)
 	}
 	defer resp.Body.Close()
-	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBody))
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxBody))
 	if err != nil {
 		return fmt.Errorf("stripe %s %s: read response: %w", method, path, err)
 	}

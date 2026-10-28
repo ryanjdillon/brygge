@@ -25,6 +25,10 @@ const kidSaved = ref(false)
 
 const vippsClearingAccount = ref('2900')
 const paymentFeeAccount = ref('7700')
+// Card payments wait on the Stripe clearing account until payout; the
+// descriptor is a regular expression for the payout's bank statement text.
+const stripeClearingAccount = ref('1580')
+const stripePayoutDescriptor = ref('(?i)stripe')
 // Max invoice amount (kr) eligible for online payment; '' = no limit (BRY-283).
 const onlineMaxAmount = ref<string>('')
 // Book unambiguous Vipps charges without review (BRY-340); the tie category
@@ -59,6 +63,8 @@ async function load() {
     kidCheckMethod.value = body.kid_check_method === 'mod10' ? 'mod10' : 'mod11'
     vippsClearingAccount.value = body.vipps_clearing_account || '2900'
     paymentFeeAccount.value = body.payment_fee_account || '7700'
+    stripeClearingAccount.value = body.stripe_clearing_account || '1580'
+    stripePayoutDescriptor.value = body.stripe_payout_descriptor || '(?i)stripe'
     onlineMaxAmount.value = body.online_max_amount != null ? String(body.online_max_amount) : ''
     vippsAutoAssign.value = !!body.vipps_auto_assign
     vippsAutoAssignTieCategory.value = body.vipps_auto_assign_tie_category || ''
@@ -108,6 +114,8 @@ async function saveVippsAccounts() {
       body: JSON.stringify({
         vipps_clearing_account: vippsClearingAccount.value.trim(),
         payment_fee_account: paymentFeeAccount.value.trim(),
+        stripe_clearing_account: stripeClearingAccount.value.trim(),
+        stripe_payout_descriptor: stripePayoutDescriptor.value.trim(),
         // Empty field clears the cap (0 → NULL on the backend); otherwise set it.
         online_max_amount: onlineMaxAmount.value.trim() === '' ? 0 : Number(onlineMaxAmount.value),
         vipps_auto_assign: vippsAutoAssign.value,
@@ -306,6 +314,25 @@ const canEdit = can('money')
             />
           </label>
           <label class="flex flex-col gap-1 text-xs text-slate-700">
+            {{ t('admin.economySettings.stripeClearingAccount') }}
+            <input
+              v-model="stripeClearingAccount"
+              inputmode="numeric"
+              class="w-28 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              @input="vippsSaved = false"
+            />
+          </label>
+          <label class="flex flex-col gap-1 text-xs text-slate-700">
+            {{ t('admin.economySettings.stripePayoutDescriptor') }}
+            <input
+              v-model="stripePayoutDescriptor"
+              maxlength="200"
+              spellcheck="false"
+              class="w-40 rounded-md border border-slate-300 bg-white px-3 py-1.5 font-mono text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              @input="vippsSaved = false"
+            />
+          </label>
+          <label class="flex flex-col gap-1 text-xs text-slate-700">
             {{ t('admin.economySettings.onlineMaxAmount') }}
             <input
               v-model="onlineMaxAmount"
@@ -327,6 +354,7 @@ const canEdit = can('money')
             {{ t('common.saved') }}
           </span>
         </div>
+        <p class="text-xs text-slate-500">{{ t('admin.economySettings.stripeAccountsHint') }}</p>
         <p class="text-xs text-slate-500">{{ t('admin.economySettings.onlineMaxAmountHint') }}</p>
         <div class="mt-2 flex flex-wrap items-end gap-3" data-testid="vipps-auto-assign">
           <label class="flex items-center gap-2 text-sm text-slate-700">

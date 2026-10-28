@@ -95,6 +95,7 @@ Unqualified names (`users`) resolve to the view through the role's search_path;
 | `vipps_webhook_events` | payload (raw JSONB) | `payload_psp_ref`, `payload_state`, `payload_amount` |
 | `payment_webhook_events` | payload (raw JSONB; may carry payer name/email) | — |
 | `payment_refunds` | reason (staff-typed) | `reason_length` |
+| `stripe_balance_transactions` | dismissed_reason (staff-typed) | `dismissed_reason_length` |
 | `slip_shares` | notes | — |
 | `boats` | name, registration_number, mmsi, call_sign | — |
 | `journal_entries` | description (bank-import entries copy the bank text, payer name included), attachment_url | `description_kid`, `description_length`, `has_attachment` |
@@ -112,10 +113,15 @@ Org fields (`*_org_name/number/address`), the club's own `bank_account`/`org_num
 `accounts`, `bank_imports`, `docks`, `fiscal_periods`,
 `mva_compensation_reports`, `order_lines`, `order_sources`, `payment_attempts`,
 `price_exemptions`, `price_items`, `product_variants`, `products`,
-`slip_assignments`, `vipps_imports`, `waiting_list_entries`.
+`slip_assignments`, `stripe_payouts`, `stripe_sync_state`, `vipps_imports`,
+`waiting_list_entries`.
 
 `payment_attempts` (000115) holds only ids, the provider name, the opaque
-provider reference, status, amount and currency.
+provider reference, status, amount and currency. `stripe_payouts` (000117)
+holds Stripe ids, amounts, status, currency and the payout's statement
+descriptor, which is the club's own text; `stripe_sync_state` only a club id
+and timestamps. `stripe_balance_transactions.fee_details` (in its masked view)
+holds Stripe's fee types, amounts and Stripe-written descriptions.
 
 **Rule: a table is allowlisted raw only if none of its free-text columns can
 name a person.** "Structural" isn't enough: bank-import journal entries copy

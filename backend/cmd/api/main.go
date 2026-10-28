@@ -360,6 +360,12 @@ func main() {
 	productsHandler := handlers.NewProductsHandler(db, &cfg, log)
 	vippsWebhookHandler := handlers.NewVippsWebhookHandler(db, &cfg, vippsClient, log)
 	stripeWebhookHandler := handlers.NewStripeWebhookHandler(db, &cfg, stripeClient, log)
+	if stripeClient != nil {
+		accountingHandler.SetStripe(stripeClient)
+	}
+	if cfg.Features.Accounting {
+		stripeWebhookHandler.SetLedger(accountingSvc)
+	}
 	boatModelsHandler := handlers.NewBoatModelsHandler(db, log)
 	volunteerHandler := handlers.NewVolunteerHandler(db, &cfg, log)
 	shoppingListsHandler := handlers.NewShoppingListsHandler(db, &cfg, log)
@@ -1542,6 +1548,37 @@ func main() {
 							log.Info().Str("date", date).Int("imported", res.Imported).
 								Int("skipped", res.SkippedDup).Msg("vipps report synced")
 						}
+					}
+				}
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+				}
+			}
+		}()
+	}
+
+	// Nightly Stripe balance sync: mirror balance transactions and payouts
+	// into the Stripe review queue. Ingest only; booking needs an acting
+	// user. Idempotent, so the overlap with the previous run is free. Runs
+	// once at startup too.
+	if stripeClient != nil && cfg.Features.Accounting {
+		go func() {
+			ticker := time.NewTicker(24 * time.Hour)
+			defer ticker.Stop()
+			for {
+				var clubID string
+				if err := db.QueryRow(ctx, `SELECT id FROM clubs WHERE slug = $1`, cfg.ClubSlug).Scan(&clubID); err != nil {
+					log.Warn().Err(err).Msg("stripe balance sync: resolve club failed")
+				} else if res, err := accountingSvc.SyncStripeBalance(ctx, stripeClient, clubID); err != nil {
+					log.Warn().Err(err).Msg("stripe balance sync failed")
+				} else {
+					log.Info().Int("fetched", res.Fetched).Int("inserted", res.Inserted).
+						Int("payouts_seen", res.PayoutsSeen).Int("errors", len(res.Errors)).
+						Msg("stripe balance synced")
+					if len(res.Errors) > 0 {
+						log.Warn().Strs("errors", res.Errors).Msg("stripe balance sync: some rows failed")
 					}
 				}
 				select {

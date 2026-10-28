@@ -29,7 +29,16 @@ type AccountingHandler struct {
 	s3     *storage.Client
 	claude *ai.ClaudeClient
 	vipps  *vipps.Client // nil when the instance has no Vipps credentials
+	// stripe reads the Stripe balance; nil when the instance has no Stripe
+	// credentials.
+	stripe accounting.StripeBalanceSource
 	log    zerolog.Logger
+}
+
+// SetStripe gives the handler the Stripe balance to sync from. Left unset
+// when the instance has no Stripe credentials.
+func (h *AccountingHandler) SetStripe(src accounting.StripeBalanceSource) {
+	h.stripe = src
 }
 
 func NewAccountingHandler(svc *accounting.Service, auditService *audit.Service, s3 *storage.Client, claude *ai.ClaudeClient, vippsClient *vipps.Client, log zerolog.Logger) *AccountingHandler {

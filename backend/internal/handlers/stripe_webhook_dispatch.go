@@ -10,8 +10,9 @@ import (
 	"github.com/brygge-klubb/brygge/internal/stripe"
 )
 
-// dispatch routes an already-persisted event to settlement. Charge refunds
-// and disputes are only recorded; acting on them is the refunds work.
+// dispatch routes an already-persisted event to settlement, or a payout
+// event to the Stripe balance mirror. Charge refunds and disputes are only
+// recorded; acting on them is the refunds work.
 func (h *StripeWebhookHandler) dispatch(ctx context.Context, clubID string, evt *stripe.Event) {
 	switch evt.Type {
 	case stripe.EventCheckoutSessionCompleted, stripe.EventCheckoutSessionAsyncPaymentSucceeded:
@@ -22,7 +23,43 @@ func (h *StripeWebhookHandler) dispatch(ctx context.Context, clubID string, evt 
 		h.onIntentCanceled(ctx, clubID, evt)
 	case stripe.EventPaymentIntentSucceeded:
 		h.onIntentSucceeded(ctx, clubID, evt)
+	case stripe.EventPayoutPaid, stripe.EventPayoutFailed, stripe.EventPayoutCanceled:
+		h.onPayout(ctx, clubID, evt)
 	}
+}
+
+// payoutIngestTimeout bounds a payout ingest started by a webhook,
+// including the wait for a sync of the same club that is already running.
+const payoutIngestTimeout = 2 * time.Minute
+
+// onPayout refreshes the payout in the Stripe balance mirror, linking the
+// transactions it paid out or releasing them when it failed. It runs after
+// the event is answered, since listing a payout's members takes several
+// Stripe calls. It books nothing; a failure is logged and the nightly sync
+// repairs it.
+func (h *StripeWebhookHandler) onPayout(ctx context.Context, clubID string, evt *stripe.Event) {
+	if h.ledger == nil || h.stripe == nil {
+		return
+	}
+	var p stripe.Payout
+	if err := json.Unmarshal(evt.Data.Object, &p); err != nil || p.ID == "" {
+		h.log.Warn().Err(err).Str("event_id", evt.ID).Msg("webhook: undecodable payout")
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), payoutIngestTimeout)
+	h.payouts.Add(1)
+	go func() {
+		defer h.payouts.Done()
+		defer cancel()
+		res, err := h.ledger.IngestStripePayout(ctx, h.stripe, clubID, p.ID)
+		if err != nil {
+			h.log.Error().Err(err).Str("payout_id", p.ID).Msg("webhook payout: ingest failed")
+			return
+		}
+		if len(res.Errors) > 0 {
+			h.log.Warn().Strs("errors", res.Errors).Str("payout_id", p.ID).Msg("webhook payout: some transactions failed")
+		}
+	}()
 }
 
 // onSessionCompleted handles a paid Checkout Session. Sessions are created

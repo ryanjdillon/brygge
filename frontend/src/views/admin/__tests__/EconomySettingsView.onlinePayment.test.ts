@@ -16,6 +16,8 @@ const settings = {
   kid_check_method: 'mod11',
   vipps_clearing_account: '2900',
   payment_fee_account: '7790',
+  stripe_clearing_account: '1581',
+  stripe_payout_descriptor: '(?i)stripe payout',
   online_max_amount: 2500,
   vipps_auto_assign: false,
   vipps_auto_assign_tie_category: '',
@@ -51,5 +53,32 @@ describe('EconomySettingsView online payment settings', () => {
     expect(body).toMatchObject({ payment_fee_account: '7790', online_max_amount: 2500 })
     expect(body).not.toHaveProperty('vipps_max_amount')
     expect(body).not.toHaveProperty('vipps_fee_account')
+  })
+
+  it('reads and saves the Stripe clearing account and payout text', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => settings })))
+    totpAwareFetch.mockResolvedValue({ ok: true, text: async () => '' })
+    const wrapper = mountWithPlugins(EconomySettingsView, {
+      global: { stubs: { BankAccountsPanel: true, ExemptionsSettingsPanel: true, FileInput: true } },
+    })
+    await flushPromises()
+
+    const input = (label: string) =>
+      wrapper.findAll('label').find((l) => l.text().startsWith(label))!.get('input')
+    expect((input('admin.economySettings.stripeClearingAccount').element as HTMLInputElement).value).toBe('1581')
+    expect((input('admin.economySettings.stripePayoutDescriptor').element as HTMLInputElement).value).toBe(
+      '(?i)stripe payout',
+    )
+
+    await input('admin.economySettings.stripeClearingAccount').setValue(' 1580 ')
+    await input('admin.economySettings.stripePayoutDescriptor').setValue('(?i)stripe|str\\.')
+    const save = wrapper
+      .findAll('button')
+      .find((b) => b.text() === 'common.save' && b.element.closest('fieldset')?.textContent?.includes('stripeClearingAccount'))
+    await save!.trigger('click')
+    await flushPromises()
+
+    const body = JSON.parse(String(totpAwareFetch.mock.calls[0][1].body))
+    expect(body).toMatchObject({ stripe_clearing_account: '1580', stripe_payout_descriptor: '(?i)stripe|str\\.' })
   })
 })

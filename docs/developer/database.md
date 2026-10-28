@@ -356,6 +356,28 @@ in `backend/migrations/` for the source of truth. The high-level shape:
   nothing; BRY-450 drops them. `orders.vipps_reference` is still written on
   every Vipps mint because the settlement reconciliation matches on it
   (BRY-445). See [payments.md](payments.md).
+- **Stripe balance.** 000117 mirrors the club's Stripe balance for the
+  books. `stripe_balance_transactions` holds one row per Stripe balance
+  transaction (unique on `club_id, balance_transaction_id`): the
+  `reporting_category` (with Stripe's finer `stripe_type`),
+  `amount_ore` / `fee_ore` / `net_ore` (integer øre), `fee_details` (JSONB,
+  Stripe's fee breakdown),
+  `currency`, Stripe's `created_at` and `available_on`, the source, charge
+  and PaymentIntent ids, the matched `attempt_id` / `order_id`, the
+  `payout_id` (→ `stripe_payouts`) that paid it out, and the booking state
+  (`status`, `review_reason`, `journal_entry_id`, `invoice_id`, the
+  `dismissed_*` columns). `stripe_payouts` holds one row per payout (unique
+  on `club_id, payout_id`) with amount, `arrival_date`, `status`,
+  `automatic`, `statement_descriptor`, `members_listed_at` (set once the
+  payout's members were listed: membership known), and the matched `bank_row_id` /
+  clearing `journal_entry_id`. The charge object itself is never stored (it
+  carries the card holder's billing details). `stripe_sync_state` holds per
+  club the `listed_through` watermark of the last complete sync.
+  `clubs.stripe_payout_descriptor`
+  (default `(?i)stripe`) is the regular expression that recognises a Stripe
+  payout in the bank text. 000116 adds `stripe` to `transaction_source` in a
+  file of its own. Written by `accounting.SyncStripeBalance`; see
+  [backend/internal/accounting/README.md](../../backend/internal/accounting/README.md#the-stripe-balance-pipeline).
 - `invoice_pdf_archive` (migration 000050) — preserves prior PDF bytes when
   `invoices.pdf_data` is regenerated, so Norwegian bokføringsloven §13's
   5-year retention requirement is satisfied.

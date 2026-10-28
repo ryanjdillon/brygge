@@ -4,18 +4,20 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"sync"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 
+	"github.com/brygge-klubb/brygge/internal/accounting"
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/payments"
 	"github.com/brygge-klubb/brygge/internal/stripe"
 )
 
-// StripeWebhookHandler receives Checkout and PaymentIntent events from
-// Stripe. The endpoint carries no session; each request is authenticated by
+// StripeWebhookHandler receives Checkout, PaymentIntent and payout events
+// from Stripe. The endpoint carries no session; each request is authenticated by
 // the Stripe-Signature HMAC over the body.
 type StripeWebhookHandler struct {
 	db     *pgxpool.Pool
@@ -25,7 +27,24 @@ type StripeWebhookHandler struct {
 	// Stripe credentials.
 	canceller payments.Canceller
 	orders    orderSettlement
-	log       zerolog.Logger
+	// ledger ingests payouts into the Stripe balance mirror; nil when
+	// accounting is off.
+	ledger stripePayoutIngester
+	// payouts tracks payout ingests still running after their event was
+	// answered.
+	payouts sync.WaitGroup
+	log     zerolog.Logger
+}
+
+// stripePayoutIngester refreshes one payout in the Stripe balance mirror.
+type stripePayoutIngester interface {
+	IngestStripePayout(ctx context.Context, src accounting.StripeBalanceSource, clubID, payoutID string) (accounting.StripeSyncResult, error)
+}
+
+// SetLedger makes payout events refresh the payout in the Stripe balance
+// mirror. Left unset when accounting is off.
+func (h *StripeWebhookHandler) SetLedger(l stripePayoutIngester) {
+	h.ledger = l
 }
 
 // NewStripeWebhookHandler returns the webhook handler; client is nil when

@@ -104,4 +104,132 @@ const (
 	EventCheckoutSessionExpired               = "checkout.session.expired"
 	EventPaymentIntentSucceeded               = "payment_intent.succeeded"
 	EventPaymentIntentCanceled                = "payment_intent.canceled"
+	EventPayoutPaid                           = "payout.paid"
+	EventPayoutFailed                         = "payout.failed"
+	EventPayoutCanceled                       = "payout.canceled"
 )
+
+// Balance transaction reporting categories Brygge classifies.
+const (
+	CategoryCharge          = "charge"
+	CategoryRefund          = "refund"
+	CategoryDispute         = "dispute"
+	CategoryDisputeReversal = "dispute_reversal"
+	CategoryFee             = "fee"
+	CategoryPayout          = "payout"
+	CategoryPayoutReversal  = "payout_reversal"
+	CategoryOtherAdjustment = "other_adjustment"
+)
+
+// Payout statuses.
+const (
+	PayoutPending   = "pending"
+	PayoutInTransit = "in_transit"
+	PayoutPaid      = "paid"
+	PayoutFailed    = "failed"
+	PayoutCanceled  = "canceled"
+)
+
+// BalanceTransaction is one movement of the Stripe balance. Amounts are in
+// the currency's minor unit (øre for NOK); Amount is gross, Net is Amount
+// less Fee.
+type BalanceTransaction struct {
+	ID       string `json:"id"`
+	Amount   int64  `json:"amount"`
+	Fee      int64  `json:"fee"`
+	Net      int64  `json:"net"`
+	Currency string `json:"currency"`
+	// Created and AvailableOn are unix seconds.
+	Created     int64  `json:"created"`
+	AvailableOn int64  `json:"available_on"`
+	Type        string `json:"type"`
+	// ReportingCategory groups Type into what the books need to know
+	// (charge, refund, fee, payout, ...).
+	ReportingCategory string `json:"reporting_category"`
+	// FeeDetails breaks Fee down by kind (Stripe's processing fee, tax, ...).
+	FeeDetails []FeeDetail `json:"fee_details"`
+	// Source is the object that moved the balance: a charge, refund,
+	// dispute or payout. Expanded on the list calls.
+	Source *BalanceSource `json:"source"`
+}
+
+// FeeDetail is one part of a balance transaction's fee. Description is
+// Stripe's own text ("Stripe processing fees").
+type FeeDetail struct {
+	Amount      int64  `json:"amount"`
+	Currency    string `json:"currency"`
+	Description string `json:"description"`
+	Type        string `json:"type"`
+}
+
+// BalanceSource is the part of a balance transaction's source object Brygge
+// reads. Which fields are set depends on Object: charges, refunds and
+// disputes name their PaymentIntent (and refunds and disputes their charge);
+// payouts carry the payout fields.
+type BalanceSource struct {
+	ID            string            `json:"id"`
+	Object        string            `json:"object"`
+	PaymentIntent ObjectID          `json:"payment_intent"`
+	Charge        ObjectID          `json:"charge"`
+	Metadata      map[string]string `json:"metadata"`
+
+	Amount              int64  `json:"amount"`
+	Currency            string `json:"currency"`
+	ArrivalDate         int64  `json:"arrival_date"`
+	Status              string `json:"status"`
+	Automatic           bool   `json:"automatic"`
+	StatementDescriptor string `json:"statement_descriptor"`
+}
+
+// UnmarshalJSON accepts the bare id Stripe sends for an unexpanded source as
+// well as the object.
+func (s *BalanceSource) UnmarshalJSON(b []byte) error {
+	if len(b) > 0 && b[0] == '"' {
+		return json.Unmarshal(b, &s.ID)
+	}
+	type plain BalanceSource
+	return json.Unmarshal(b, (*plain)(s))
+}
+
+// ObjectID is a reference Stripe sends either as a bare id or, when it was
+// expanded, as the object; only the id is kept.
+type ObjectID string
+
+// UnmarshalJSON accepts null, the id string and an object with an id.
+func (o *ObjectID) UnmarshalJSON(b []byte) error {
+	if bytes.Equal(b, []byte("null")) {
+		*o = ""
+		return nil
+	}
+	if len(b) > 0 && b[0] == '"' {
+		return json.Unmarshal(b, (*string)(o))
+	}
+	var obj struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return err
+	}
+	*o = ObjectID(obj.ID)
+	return nil
+}
+
+// BalanceTransactionPage is one page of a balance transaction list.
+type BalanceTransactionPage struct {
+	Data    []BalanceTransaction `json:"data"`
+	HasMore bool                 `json:"has_more"`
+}
+
+// Payout is a transfer from the Stripe balance to the club's bank account.
+type Payout struct {
+	ID       string `json:"id"`
+	Amount   int64  `json:"amount"`
+	Currency string `json:"currency"`
+	// ArrivalDate is unix seconds at the start of the expected bank date.
+	ArrivalDate int64  `json:"arrival_date"`
+	Status      string `json:"status"`
+	// Automatic payouts are the scheduled ones; only for those can Stripe
+	// list the balance transactions a payout paid out.
+	Automatic           bool   `json:"automatic"`
+	StatementDescriptor string `json:"statement_descriptor"`
+}

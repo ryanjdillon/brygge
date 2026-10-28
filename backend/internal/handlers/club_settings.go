@@ -2,9 +2,12 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -236,6 +239,11 @@ type clubFinancialSettings struct {
 	VippsClearingAccount  string   `json:"vipps_clearing_account"`
 	PaymentFeeAccount     string   `json:"payment_fee_account"`
 	VippsPerChargeEnabled bool     `json:"vipps_per_charge_enabled"`
+	// StripeClearingAccount holds card payments until Stripe pays them out;
+	// StripePayoutDescriptor is the regular expression that recognises a
+	// Stripe payout in the bank statement text.
+	StripeClearingAccount  string `json:"stripe_clearing_account"`
+	StripePayoutDescriptor string `json:"stripe_payout_descriptor"`
 	// OnlineMaxAmount caps which invoices may offer online payment
 	// (BRY-283): null = no limit; otherwise invoices over this kr amount are
 	// bank-transfer only.
@@ -302,6 +310,7 @@ func (h *ClubSettingsHandler) HandleGetFinancialSettings(w http.ResponseWriter, 
 		        COALESCE(vipps_clearing_account, '2900'),
 		        COALESCE(payment_fee_account, '7700'),
 		        COALESCE(vipps_per_charge_enabled, false),
+		        stripe_clearing_account, stripe_payout_descriptor,
 		        online_max_amount,
 		        vipps_auto_assign, COALESCE(vipps_auto_assign_tie_category, ''),
 		        bank_auto_assign,
@@ -329,6 +338,7 @@ func (h *ClubSettingsHandler) HandleGetFinancialSettings(w http.ResponseWriter, 
 		&s.KIDCheckMethod,
 		&s.VippsClearingAccount, &s.PaymentFeeAccount,
 		&s.VippsPerChargeEnabled,
+		&s.StripeClearingAccount, &s.StripePayoutDescriptor,
 		&s.OnlineMaxAmount,
 		&s.VippsAutoAssign, &s.VippsAutoAssignTieCategory,
 		&s.BankAutoAssign,
@@ -366,6 +376,10 @@ type updateFinancialSettingsRequest struct {
 	VippsClearingAccount  *string  `json:"vipps_clearing_account,omitempty"`
 	PaymentFeeAccount     *string  `json:"payment_fee_account,omitempty"`
 	VippsPerChargeEnabled *bool    `json:"vipps_per_charge_enabled,omitempty"`
+	// StripeClearingAccount must be an active asset account in the club's
+	// chart; StripePayoutDescriptor must compile as a Go regular expression.
+	StripeClearingAccount  *string `json:"stripe_clearing_account,omitempty"`
+	StripePayoutDescriptor *string `json:"stripe_payout_descriptor,omitempty"`
 	// OnlineMaxAmount: omitted = keep; <= 0 = clear the cap (unlimited);
 	// > 0 = set the cap (BRY-283).
 	OnlineMaxAmount *float64 `json:"online_max_amount,omitempty"`
@@ -433,6 +447,16 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		Error(w, http.StatusBadRequest, "vipps_auto_assign_tie_category must be a price category")
 		return
 	}
+	msg, err := h.validateStripeSettings(ctx, claims.ClubID, &req)
+	if err != nil {
+		h.log.Error().Err(err).Msg("validate stripe settings")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if msg != "" {
+		Error(w, http.StatusBadRequest, msg)
+		return
+	}
 
 	// Build COALESCE-style update so unspecified fields stay as-is.
 	// Empty-fields check is intentionally relaxed: with this many
@@ -486,7 +510,9 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		   vipps_auto_assign_tie_category = CASE
 		                                 WHEN $38::text IS NULL THEN vipps_auto_assign_tie_category
 		                                 ELSE NULLIF($38::text, '') END,
-		   bank_auto_assign          = COALESCE($39, bank_auto_assign)
+		   bank_auto_assign          = COALESCE($39, bank_auto_assign),
+		   stripe_clearing_account   = COALESCE($40, stripe_clearing_account),
+		   stripe_payout_descriptor  = COALESCE($41, stripe_payout_descriptor)
 		 WHERE id = $1`,
 		claims.ClubID, req.OrgNumber, req.Address, req.Phone, req.VHFChannel,
 		req.Latitude, req.Longitude,
@@ -507,6 +533,7 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		req.OnlineMaxAmount,
 		req.VippsAutoAssign, req.VippsAutoAssignTieCategory,
 		req.BankAutoAssign,
+		req.StripeClearingAccount, req.StripePayoutDescriptor,
 	); err != nil {
 		h.log.Error().Err(err).Msg("update financial settings")
 		Error(w, http.StatusInternalServerError, "internal error")
@@ -516,6 +543,41 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		h.log.Error().Err(auditErr).Msg("audit financial settings")
 	}
 	JSON(w, http.StatusOK, map[string]string{"status": "updated"})
+}
+
+// maxPayoutDescriptorLen caps the payout descriptor pattern; a bank
+// statement line is short, and so is any pattern that matches one.
+const maxPayoutDescriptorLen = 200
+
+// validateStripeSettings checks the Stripe accounting settings in req,
+// trimming them in place. It returns a client-facing message for invalid
+// input, or an error when the check itself failed.
+func (h *ClubSettingsHandler) validateStripeSettings(ctx context.Context, clubID string, req *updateFinancialSettingsRequest) (string, error) {
+	if p := req.StripePayoutDescriptor; p != nil {
+		*p = strings.TrimSpace(*p)
+		if *p == "" || len(*p) > maxPayoutDescriptorLen {
+			return fmt.Sprintf("stripe_payout_descriptor must be 1-%d characters", maxPayoutDescriptorLen), nil
+		}
+		if _, err := regexp.Compile(*p); err != nil {
+			return "stripe_payout_descriptor is not a valid regular expression", nil
+		}
+	}
+	if code := req.StripeClearingAccount; code != nil {
+		*code = strings.TrimSpace(*code)
+		var ok bool
+		if err := h.db.QueryRow(ctx,
+			`SELECT EXISTS (SELECT 1 FROM accounts
+			                 WHERE club_id = $1 AND code = $2
+			                   AND is_active AND account_type = 'asset'::account_type)`,
+			clubID, *code,
+		).Scan(&ok); err != nil {
+			return "", err
+		}
+		if !ok {
+			return "stripe_clearing_account must be an active asset account in the chart of accounts", nil
+		}
+	}
+	return "", nil
 }
 
 const maxLogoBytes = 2 * 1024 * 1024

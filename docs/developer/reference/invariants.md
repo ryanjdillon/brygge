@@ -108,6 +108,12 @@ A **conflict** is a payer whose normalized name equals *any* other member's full
 
 **Failure mode:** before this, Stage 2 ran only from the per-row Tildel action, so a sync reported "Vipps-avstemt: 0" and the clearing account kept the full gross of every settlement while the bank deposits sat unbooked.
 
+### The Stripe balance ingest only mirrors; it never books or overrides a decision
+
+**Rule (BRY-453):** `SyncStripeBalance` and `IngestStripePayout` write only `stripe_balance_transactions` and `stripe_payouts`, never the journal. A stored balance transaction is reclassified only while it is `needs_review`; `unbooked`, `booked` and `dismissed` rows are skipped. A payout's status never moves back (`failed` and `canceled` are final, `paid` gives way only to `failed`), and a failed payout releases its members only while it is not cleared in the books. Every write is a single upsert or guarded update with no transaction open, and Stripe is never called while a lock is held. The listing cursor comes from the `stripe_sync_state` watermark, which only a complete, error-free sync advances; one ingest runs per club at a time.
+
+**Failure mode:** a re-sync that rewrote classified rows would undo a person's dismissal or re-point a booked charge, and a stale `in_transit` answer arriving after `payout.failed` would re-link transactions that are about to be paid out again in another payout. A cursor taken from the newest stored row skipped the older pages of a run that failed part-way, and a payout ingest storing a new row could jump it the same way.
+
 ### A provisional bank row gives way to its settled row
 
 **Rule (BRY-378):** a statement exported while a transfer is in flight carries it as a provisional row (`provisionalRowSQL`). That means description exactly `Overførsel` or `Bokført på vei`, no counterpart, no KID, dated on its statement's last day (`bank_imports.period_to`, recorded at import and widened by the reimport paths; the latest surviving row only for an import older than that column), and `reseen_at` unset. A later export carries the settled row (for a Vipps payout, `Utb. <settlement> Vippsnr <msn>`).
