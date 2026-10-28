@@ -338,7 +338,10 @@ in `backend/migrations/` for the source of truth. The high-level shape:
   `payment_attempts` (000115) holds one row per payment created at a
   provider: `provider`, `provider_reference` (unique per provider once set;
   the source of truth for references), `status` (`created`, `authorized`,
-  `captured`, `failed`, `cancelled`), `amount`, `currency`. The newest
+  `captured`, `failed`, `cancelled`), `amount`, `currency`, and for a
+  Stripe card payment the nullable `card_brand` / `card_wallet` (000118;
+  Stripe's raw codes, read from the charge for the harbor overview, never
+  card digits). The newest
   attempt with a provider reference is the order's current one; older ones keep their rows so a late
   webhook still finds the order. 000115 backfilled one attempt per order with
   a `vipps_reference`. `payment_refunds` (refunds of a captured attempt,

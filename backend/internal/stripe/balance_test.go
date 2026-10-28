@@ -194,3 +194,25 @@ func TestBalanceSourceAcceptsBareID(t *testing.T) {
 		t.Errorf("null source = %+v", page.Data[2].Source)
 	}
 }
+
+func TestBalanceSourceReadsCardDetails(t *testing.T) {
+	api := newBalanceAPI(t, func(string, url.Values) (int, string) {
+		return http.StatusOK, `{"has_more":false,"data":[
+			{"id":"txn_test_6","reporting_category":"charge","amount":100,"net":97,"currency":"nok",
+			 "source":{"id":"ch_test_6","object":"charge","payment_method_details":{"type":"card",
+			   "card":{"brand":"visa","last4":"4242","wallet":{"type":"apple_pay","apple_pay":{}}}}}},
+			{"id":"txn_test_7","reporting_category":"charge","amount":100,"net":97,"currency":"nok",
+			 "source":{"id":"ch_test_7","object":"charge","payment_method_details":{"card":{"wallet":"odd"}}}}]}`
+	})
+	page, err := api.client().ListBalanceTransactions(context.Background(), time.Unix(0, 0), "")
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if b, w := page.Data[0].Source.PaymentMethodDetails.CardBrandAndWallet(); b != "visa" || w != "apple_pay" {
+		t.Errorf("card = %q/%q, want visa/apple_pay", b, w)
+	}
+	// Details of an unexpected shape decode as empty, not as a failed page.
+	if b, w := page.Data[1].Source.PaymentMethodDetails.CardBrandAndWallet(); b != "" || w != "" {
+		t.Errorf("odd details = %q/%q, want empty", b, w)
+	}
+}

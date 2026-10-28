@@ -222,6 +222,18 @@ created   authorized   captured   failed   cancelled
 
 One payment created at a provider for an order (`handlers/order_pay.go`, `handlers/order_settle.go`). `created` on mint, before the provider is called → `authorized` when the provider reports an authorization Brygge will capture (back to `created` if the capture call fails) → `captured` when the money is taken (from any state: a capture means it was taken). `failed` when the provider refused to create it, or it was aborted, expired or terminated. `cancelled` when Brygge voided an authorization because the order was already paid or another attempt was already authorized or captured. Migration 000115 backfilled one attempt per order with a `vipps_reference`: paid or refunded → `captured`, failed → `failed`, else `created`.
 
+### `payment_attempts.card_brand` / `card_wallet` (migration 000118, no CHECK)
+
+Stripe's raw codes, lowercased, so a brand or wallet Stripe adds needs no migration. `card_brand`: `visa`, `mastercard`, `amex`, `diners`, `discover`, `jcb`, `unionpay`, `eftpos_au`, `unknown`, … `card_wallet` (NULL when the card was not in a wallet): `apple_pay`, `google_pay`, `link`, `samsung_pay`, `masterpass`, `visa_checkout`, `amex_express_checkout`, … Both NULL on Vipps attempts and on card attempts whose charge has not been read.
+
+The harbor overview's `method` (`handlers/harbor_payments.go` `paymentMethod`, response only, not stored) is derived from them:
+
+```
+vipps   card   apple_pay   google_pay
+```
+
+`vipps` when the order's provider is Vipps; `apple_pay` / `google_pay` for those wallets; anything else (other wallets, no wallet, not yet read) is `card`. The frontend labels a `card` by its brand (Visa, Mastercard, …), else "Kort".
+
 ### `payment_refunds.status` (CHECK since migration 000115)
 
 ```

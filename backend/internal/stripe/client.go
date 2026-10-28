@@ -71,9 +71,21 @@ func (e *APIError) Error() string {
 	return fmt.Sprintf("stripe %d %s/%s: %s", e.Status, e.Type, e.Code, e.Message)
 }
 
+// errResponseDecode marks a 2xx answer whose body did not decode, which
+// callers can tell apart from Stripe refusing the call.
+var errResponseDecode = errors.New("response did not decode")
+
 // codeUnexpectedState is Stripe's answer to an operation the object's
 // current status does not allow, such as capturing a captured PaymentIntent.
 const codeUnexpectedState = "payment_intent_unexpected_state"
+
+// typeIdempotencyError is the error type of a call whose Idempotency-Key was
+// first used with different parameters; codeIdempotencyKeyInUse is a call
+// whose key is still being processed. Stripe ran neither.
+const (
+	typeIdempotencyError    = "idempotency_error"
+	codeIdempotencyKeyInUse = "idempotency_key_in_use"
+)
 
 // CreateCheckoutSession creates a hosted Checkout Session from form-encoded
 // parameters. idempotencyKey makes a retried create return the same session.
@@ -100,29 +112,84 @@ func (c *Client) ExpireCheckoutSession(ctx context.Context, id string) error {
 	return c.do(ctx, http.MethodPost, "/v1/checkout/sessions/"+url.PathEscape(id)+"/expire", "", url.Values{}, nil)
 }
 
-// GetPaymentIntent retrieves a PaymentIntent.
+// GetPaymentIntent retrieves a PaymentIntent with its latest charge expanded.
 func (c *Client) GetPaymentIntent(ctx context.Context, id string) (*PaymentIntent, error) {
 	var pi PaymentIntent
-	if err := c.do(ctx, http.MethodGet, "/v1/payment_intents/"+url.PathEscape(id), "", nil, &pi); err != nil {
+	path := "/v1/payment_intents/" + url.PathEscape(id) + "?expand[]=latest_charge"
+	if err := c.do(ctx, http.MethodGet, path, "", nil, &pi); err != nil {
 		return nil, err
 	}
 	return &pi, nil
 }
 
-// CapturePaymentIntent takes the full authorized amount. A PaymentIntent that
-// is already captured counts as success, so a capture whose answer was lost
-// can be repeated safely.
-func (c *Client) CapturePaymentIntent(ctx context.Context, id, idempotencyKey string) error {
-	err := c.do(ctx, http.MethodPost, "/v1/payment_intents/"+url.PathEscape(id)+"/capture", idempotencyKey, url.Values{}, nil)
+// CapturePaymentIntent takes the full authorized amount and returns the
+// PaymentIntent with its latest charge expanded. A PaymentIntent that is
+// already captured counts as success, so a capture whose answer was lost can
+// be repeated safely.
+//
+// An idempotency error means Stripe refused to run this call because the key
+// was first used with other parameters (or is still in use): the capture was
+// not attempted. The PaymentIntent is read instead. Captured counts as
+// success; still authorized is captured once more under a key derived from
+// this one. Returning the error there would send the caller down its
+// failed-capture path, which voids an authorized PaymentIntent — releasing a
+// hold that should have been taken. Capturing twice is not a risk: Stripe
+// refuses a second capture with payment_intent_unexpected_state.
+//
+// The returned PaymentIntent is nil, with a nil error, when Stripe answered
+// 2xx but the body did not decode: the money was taken, and the answer is
+// only read for how the payer paid, so a body Brygge cannot read must never
+// turn a capture into a failure.
+func (c *Client) CapturePaymentIntent(ctx context.Context, id, idempotencyKey string) (*PaymentIntent, error) {
+	pi, err := c.capture(ctx, id, idempotencyKey)
+	if isIdempotencyError(err) {
+		got, getErr := c.GetPaymentIntent(ctx, id)
+		switch {
+		case getErr == nil && got.Status == PaymentIntentSucceeded:
+			return got, nil
+		case getErr == nil && got.Status == PaymentIntentRequiresCapture:
+			c.log.Warn().Err(err).Str("payment_intent", id).Msg("capture refused on its idempotency key, capturing again under a new key")
+			pi, err = c.capture(ctx, id, idempotencyKey+"-retry")
+		default:
+			return nil, err
+		}
+	}
+	if err == nil {
+		return pi, nil
+	}
 	var apiErr *APIError
-	if err == nil || !errors.As(err, &apiErr) || apiErr.Code != codeUnexpectedState {
-		return err
+	if !errors.As(err, &apiErr) || apiErr.Code != codeUnexpectedState {
+		return nil, err
 	}
-	pi, getErr := c.GetPaymentIntent(ctx, id)
-	if getErr == nil && pi.Status == PaymentIntentSucceeded {
-		return nil
+	got, getErr := c.GetPaymentIntent(ctx, id)
+	if getErr == nil && got.Status == PaymentIntentSucceeded {
+		return got, nil
 	}
-	return err
+	return nil, err
+}
+
+// capture sends one capture call. A 2xx answer that does not decode is a
+// success with a nil PaymentIntent.
+func (c *Client) capture(ctx context.Context, id, idempotencyKey string) (*PaymentIntent, error) {
+	form := url.Values{}
+	form.Add("expand[]", "latest_charge")
+	var pi PaymentIntent
+	err := c.do(ctx, http.MethodPost, "/v1/payment_intents/"+url.PathEscape(id)+"/capture", idempotencyKey, form, &pi)
+	switch {
+	case err == nil:
+		return &pi, nil
+	case errors.Is(err, errResponseDecode):
+		c.log.Warn().Err(err).Str("payment_intent", id).Msg("capture succeeded but its answer did not decode")
+		return nil, nil
+	}
+	return nil, err
+}
+
+// isIdempotencyError reports whether Stripe refused a call over its
+// Idempotency-Key rather than acting on it.
+func isIdempotencyError(err error) bool {
+	var apiErr *APIError
+	return errors.As(err, &apiErr) && (apiErr.Type == typeIdempotencyError || apiErr.Code == codeIdempotencyKeyInUse)
 }
 
 // CancelPaymentIntent voids an uncaptured PaymentIntent, releasing the hold.
@@ -220,7 +287,7 @@ func (c *Client) doCapped(ctx context.Context, method, path, idempotencyKey stri
 	}
 	if out != nil {
 		if err := json.Unmarshal(raw, out); err != nil {
-			return fmt.Errorf("stripe %s %s decode: %w", method, path, err)
+			return fmt.Errorf("stripe %s %s: %w: %w", method, path, errResponseDecode, err)
 		}
 	}
 	return nil

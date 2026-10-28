@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useApi } from '@/composables/useApi'
 import { formatNOK as nok } from '@/lib/format'
 import { RefreshCw, Inbox, Search, Anchor, Caravan, FileText, ShoppingBag, CircleDollarSign } from 'lucide-vue-next'
+import PaymentMethodChip, { type PaymentMethod } from '@/components/admin/PaymentMethodChip.vue'
 
 const { t } = useI18n()
 const { fetchApi } = useApi()
@@ -16,6 +17,8 @@ interface Payment {
   summary: string
   kind: 'guest' | 'motorhome' | 'faktura' | 'merch' | 'other'
   channel: string
+  method: PaymentMethod
+  card_brand: string | null
 }
 
 const payments = ref<Payment[]>([])
@@ -147,7 +150,10 @@ onMounted(load)
           </div>
           <div class="mt-0.5 flex items-center justify-between gap-2 text-xs text-slate-500">
             <span class="truncate">{{ p.summary || t('recentPayments.kind.' + p.kind) }}</span>
-            <span class="shrink-0">{{ fmtWhen(p.paid_at) }} · {{ p.channel }}</span>
+            <span class="shrink-0">{{ fmtWhen(p.paid_at) }}</span>
+          </div>
+          <div class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+            <PaymentMethodChip :method="p.method" :card-brand="p.card_brand" />
           </div>
         </div>
       </li>

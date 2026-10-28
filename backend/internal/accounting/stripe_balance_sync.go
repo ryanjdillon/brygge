@@ -138,6 +138,25 @@ type StripeSyncResult struct {
 	// the watermark must not move past it. A row stored for review after a
 	// failed lookup does not count: it is in the table.
 	incomplete bool
+	// cards are the stored charges of the run that carry a card brand, for
+	// recordStripeChargeCards.
+	cards []stripeChargeCard
+}
+
+type stripeChargeCard struct {
+	txnID, brand, wallet string
+}
+
+// noteCard keeps a stored charge's card brand and wallet for the run's
+// recordStripeChargeCards. A charge listed twice (balance list and payout)
+// is kept twice; the update is idempotent.
+func (r *StripeSyncResult) noteCard(bt *stripe.BalanceTransaction) {
+	if bt.Source == nil || bt.Source.Object != "charge" {
+		return
+	}
+	if brand, wallet := bt.Source.PaymentMethodDetails.CardBrandAndWallet(); brand != "" {
+		r.cards = append(r.cards, stripeChargeCard{txnID: bt.ID, brand: brand, wallet: wallet})
+	}
 }
 
 func newStripeSyncResult() StripeSyncResult {
@@ -229,6 +248,7 @@ func (s *Service) TrySyncStripeBalance(ctx context.Context, src StripeBalanceSou
 
 func (s *Service) syncStripeBalance(ctx context.Context, src StripeBalanceSource, clubID string) (StripeSyncResult, error) {
 	res := newStripeSyncResult()
+	defer s.recordStripeChargeCards(ctx, clubID, &res)
 	since, err := s.stripeSyncCursor(ctx, clubID)
 	if err != nil {
 		return res, err
@@ -305,6 +325,7 @@ func (s *Service) IngestStripePayout(ctx context.Context, src StripeBalanceSourc
 		return res, err
 	}
 	defer release()
+	defer s.recordStripeChargeCards(ctx, clubID, &res)
 	if err := s.ingestStripePayout(ctx, src, clubID, payoutID, &res); err != nil {
 		return res, err
 	}
@@ -407,7 +428,39 @@ func (s *Service) ingestStripeTxnReported(ctx context.Context, src StripeBalance
 	if !stored {
 		res.incomplete = true
 	}
+	if stored {
+		res.noteCard(bt)
+	}
 	return stored
+}
+
+// recordStripeChargeCards copies how each stored charge of the run was paid
+// (card brand and wallet) onto the attempt its row is tied to, for the
+// harbor overview, in one statement for the run. Only attempts still
+// without a brand are written, so it fills attempts whose capture answer
+// carried no charge, including rows stored by earlier runs whatever their
+// booking state, and never overwrites. Best-effort: the books do not depend
+// on it, so a failure is only logged.
+func (s *Service) recordStripeChargeCards(ctx context.Context, clubID string, res *StripeSyncResult) {
+	if len(res.cards) == 0 {
+		return
+	}
+	ids := make([]string, len(res.cards))
+	brands := make([]string, len(res.cards))
+	wallets := make([]string, len(res.cards))
+	for i, c := range res.cards {
+		ids[i], brands[i], wallets[i] = c.txnID, c.brand, c.wallet
+	}
+	if _, err := s.db.Exec(ctx,
+		`UPDATE payment_attempts pa SET card_brand = c.brand, card_wallet = NULLIF(c.wallet, '')
+		   FROM unnest($2::text[], $3::text[], $4::text[]) AS c(txn_id, brand, wallet)
+		   JOIN stripe_balance_transactions t
+		     ON t.club_id = $1 AND t.balance_transaction_id = c.txn_id
+		  WHERE pa.id = t.attempt_id AND pa.club_id = t.club_id AND pa.card_brand IS NULL`,
+		clubID, ids, brands, wallets,
+	); err != nil {
+		s.log.Warn().Err(err).Int("charges", len(ids)).Msg("stripe sync: recording card details failed")
+	}
 }
 
 // ingestStripeTxn stores one balance transaction. A row already stored is

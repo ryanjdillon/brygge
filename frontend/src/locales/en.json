@@ -2810,7 +2810,7 @@
   },
   "recentPayments": {
     "title": "Payments",
-    "subtitle": "Recent payments via Vipps — near realtime.",
+    "subtitle": "Recent payments — near realtime.",
     "refresh": "Refresh",
     "searchPlaceholder": "Search payer …",
     "since": "From",
@@ -2824,6 +2824,12 @@
       "faktura": "Invoice",
       "merch": "Shop",
       "other": "Other"
+    },
+    "method": {
+      "vipps": "Vipps",
+      "card": "Card",
+      "apple_pay": "Apple Pay",
+      "google_pay": "Google Pay"
     }
   },
   "bulkInvoices": {

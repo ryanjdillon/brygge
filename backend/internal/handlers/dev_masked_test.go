@@ -54,8 +54,10 @@ var rawTextColumns = map[string]bool{
 	"vipps_imports.filename": true, "vipps_imports.msn": true,
 	// exemption config: board-role keys and price categories
 	"price_exemptions.category": true, "price_exemptions.role": true,
-	// provider name, opaque provider reference, status and currency codes
+	// provider name, opaque provider reference, status and currency codes,
+	// and Stripe's card brand and wallet codes (never card digits)
 	"payment_attempts.currency": true, "payment_attempts.provider": true, "payment_attempts.provider_reference": true, "payment_attempts.status": true,
+	"payment_attempts.card_brand": true, "payment_attempts.card_wallet": true,
 	// Stripe payout ids, status and currency codes, and the payout's
 	// statement descriptor, which is the club's own text
 	"stripe_payouts.currency": true, "stripe_payouts.payout_id": true, "stripe_payouts.statement_descriptor": true, "stripe_payouts.status": true,

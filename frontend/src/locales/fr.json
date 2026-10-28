@@ -1745,6 +1745,30 @@
       "overflowCount": "Cartes avec trop de texte : {n}"
     }
   },
+  "recentPayments": {
+    "title": "Paiements",
+    "subtitle": "Paiements récents — quasi en temps réel.",
+    "refresh": "Actualiser",
+    "searchPlaceholder": "Rechercher un payeur …",
+    "since": "Du",
+    "until": "Au",
+    "empty": "Aucun paiement pour le moment.",
+    "anonymous": "Invité",
+    "kind": {
+      "all": "Tous",
+      "guest": "Place visiteur",
+      "motorhome": "Camping-car",
+      "faktura": "Facture",
+      "merch": "Boutique",
+      "other": "Autre"
+    },
+    "method": {
+      "vipps": "Vipps",
+      "card": "Carte",
+      "apple_pay": "Apple Pay",
+      "google_pay": "Google Pay"
+    }
+  },
   "pay": {
     "processing": "Démarrage du paiement …",
     "methods": {

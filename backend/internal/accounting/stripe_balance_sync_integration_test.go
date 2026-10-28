@@ -599,3 +599,69 @@ func TestStripeSyncSingleFlight(t *testing.T) {
 		t.Errorf("sync after release: %v", err)
 	}
 }
+
+func (f *stripeFixture) attemptCard(t *testing.T, id string) (brand, wallet string) {
+	t.Helper()
+	if err := f.club.Pool.QueryRow(context.Background(),
+		`SELECT COALESCE(card_brand, ''), COALESCE(card_wallet, '') FROM payment_attempts WHERE id = $1`, id,
+	).Scan(&brand, &wallet); err != nil {
+		t.Fatal(err)
+	}
+	return brand, wallet
+}
+
+func cardDetails(brand, wallet string) *stripe.PaymentMethodDetails {
+	d := &stripe.PaymentMethodDetails{Type: "card", Card: &stripe.CardDetails{Brand: brand}}
+	if wallet != "" {
+		d.Card.Wallet = &stripe.CardWallet{Type: wallet}
+	}
+	return d
+}
+
+func TestStripeSyncRecordsCard(t *testing.T) {
+	f := newStripeFixture(t)
+	a1, _ := f.attempt(t, 100, "NOK")
+	a2, _ := f.attempt(t, 100, "NOK")
+	a3, _ := f.attempt(t, 100, "NOK")
+	if _, err := f.club.Pool.Exec(context.Background(),
+		`UPDATE payment_attempts SET card_brand = 'amex' WHERE id = $1`, a2); err != nil {
+		t.Fatal(err)
+	}
+
+	f.charge("txn_card_1", 300, 10000, "nok", map[string]string{"attempt_id": a1}, "pi_card_1")
+	f.charge("txn_card_2", 200, 10000, "nok", map[string]string{"attempt_id": a2}, "pi_card_2")
+	f.charge("txn_card_3", 100, 10000, "nok", map[string]string{"attempt_id": a3}, "pi_card_3")
+	f.charge("txn_card_4", 150, 10000, "nok", map[string]string{"attempt_id": "00000000-0000-0000-0000-00000000beef"}, "")
+	f.src.mu.Lock()
+	f.src.txns[0].Source.PaymentMethodDetails = cardDetails("Visa", "apple_pay")
+	f.src.txns[1].Source.PaymentMethodDetails = cardDetails("visa", "")
+	f.src.txns[3].Source.PaymentMethodDetails = cardDetails("visa", "")
+	f.src.mu.Unlock()
+
+	if res := f.sync(t); len(res.Errors) != 0 {
+		t.Fatalf("errors: %v", res.Errors)
+	}
+	if b, w := f.attemptCard(t, a1); b != "visa" || w != "apple_pay" {
+		t.Errorf("a1 card = %q/%q, want visa/apple_pay", b, w)
+	}
+	if b, w := f.attemptCard(t, a2); b != "amex" || w != "" {
+		t.Errorf("a2 card = %q/%q, want the recorded amex kept", b, w)
+	}
+	if b, _ := f.attemptCard(t, a3); b != "" {
+		t.Errorf("a3 card = %q before its charge carried details", b)
+	}
+
+	// A row already stored and classified is filled when it is listed again.
+	f.src.mu.Lock()
+	f.src.txns[2].Source.PaymentMethodDetails = cardDetails("mastercard", "google_pay")
+	f.src.mu.Unlock()
+	if res := f.sync(t); len(res.Errors) != 0 || res.Inserted != 0 {
+		t.Fatalf("re-sync = %+v", res)
+	}
+	if b, w := f.attemptCard(t, a3); b != "mastercard" || w != "google_pay" {
+		t.Errorf("a3 card = %q/%q, want mastercard/google_pay", b, w)
+	}
+	if st := f.txns(t)["txn_card_3"].Status; st != "unbooked" {
+		t.Errorf("txn_card_3 status = %q, want unbooked", st)
+	}
+}

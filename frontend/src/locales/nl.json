@@ -1746,6 +1746,30 @@
       "overflowCount": "Kaarten met te veel tekst: {n}"
     }
   },
+  "recentPayments": {
+    "title": "Betalingen",
+    "subtitle": "Recente betalingen — vrijwel realtime.",
+    "refresh": "Vernieuwen",
+    "searchPlaceholder": "Zoek betaler …",
+    "since": "Van",
+    "until": "Tot",
+    "empty": "Nog geen betalingen.",
+    "anonymous": "Gast",
+    "kind": {
+      "all": "Alle",
+      "guest": "Gastligplaats",
+      "motorhome": "Camper",
+      "faktura": "Factuur",
+      "merch": "Winkel",
+      "other": "Overig"
+    },
+    "method": {
+      "vipps": "Vipps",
+      "card": "Kaart",
+      "apple_pay": "Apple Pay",
+      "google_pay": "Google Pay"
+    }
+  },
   "pay": {
     "processing": "Betaling wordt gestart …",
     "methods": {

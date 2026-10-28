@@ -31,6 +31,8 @@ type fakeAPI struct {
 	mu     sync.Mutex
 	calls  []recordedCall
 	routes map[string]fakeAnswer
+	// keyed answers override routes for one Idempotency-Key.
+	keyed map[string]fakeAnswer
 }
 
 type fakeAnswer struct {
@@ -40,7 +42,7 @@ type fakeAnswer struct {
 
 func newFakeAPI(t *testing.T) *fakeAPI {
 	t.Helper()
-	f := &fakeAPI{routes: map[string]fakeAnswer{}}
+	f := &fakeAPI{routes: map[string]fakeAnswer{}, keyed: map[string]fakeAnswer{}}
 	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = r.ParseForm()
 		f.mu.Lock()
@@ -50,7 +52,10 @@ func newFakeAPI(t *testing.T) *fakeAPI {
 			Version: r.Header.Get("Stripe-Version"),
 			Form:    r.PostForm,
 		})
-		a, ok := f.routes[r.Method+" "+r.URL.Path]
+		a, ok := f.keyed[r.Method+" "+r.URL.Path+" "+r.Header.Get("Idempotency-Key")]
+		if !ok {
+			a, ok = f.routes[r.Method+" "+r.URL.Path]
+		}
 		f.mu.Unlock()
 		if !ok {
 			http.Error(w, `{"error":{"type":"invalid_request_error","message":"no route"}}`, http.StatusNotFound)
@@ -67,6 +72,14 @@ func (f *fakeAPI) on(method, path string, status int, body string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.routes[method+" "+path] = fakeAnswer{status, body}
+}
+
+// onKey answers method and path with status and body only for calls made
+// with idempotencyKey.
+func (f *fakeAPI) onKey(method, path, idempotencyKey string, status int, body string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.keyed[method+" "+path+" "+idempotencyKey] = fakeAnswer{status, body}
 }
 
 func (f *fakeAPI) recorded() []recordedCall {
@@ -418,7 +431,7 @@ func TestCapturePaymentIntent(t *testing.T) {
 			f := newFakeAPI(t)
 			f.on("POST", "/v1/payment_intents/pi_1/capture", tc.captureStatus, tc.captureBody)
 			f.on("GET", "/v1/payment_intents/pi_1", 200, `{"id":"pi_1","status":"`+tc.piStatus+`"}`)
-			err := f.client().CapturePaymentIntent(context.Background(), "pi_1", "capture-a1")
+			_, err := f.client().CapturePaymentIntent(context.Background(), "pi_1", "capture-a1")
 			if (err != nil) != tc.wantErr {
 				t.Fatalf("err = %v, wantErr %v", err, tc.wantErr)
 			}
@@ -426,6 +439,126 @@ func TestCapturePaymentIntent(t *testing.T) {
 				t.Errorf("idempotency key = %q", k)
 			}
 		})
+	}
+}
+
+func TestCapturePaymentIntentIdempotencyError(t *testing.T) {
+	const mismatch = `{"error":{"type":"idempotency_error","message":"Keys for idempotent requests can only be used with the same parameters they were first used with."}}`
+	const inUse = `{"error":{"type":"invalid_request_error","code":"idempotency_key_in_use","message":"in use"}}`
+	tests := []struct {
+		name      string
+		refusal   string
+		piStatus  string
+		retry     int // status of the capture under the derived key
+		wantErr   bool
+		wantCalls []string
+	}{
+		// The key's first use already captured it.
+		{"captured already", mismatch, "succeeded", 0, false,
+			[]string{"POST capture-a1", "GET "}},
+		// Never captured: captured under the derived key, never voided.
+		{"still authorized is captured", mismatch, "requires_capture", 200, false,
+			[]string{"POST capture-a1", "GET ", "POST capture-a1-retry"}},
+		{"key in use, still authorized", inUse, "requires_capture", 200, false,
+			[]string{"POST capture-a1", "GET ", "POST capture-a1-retry"}},
+		// The retry fails: the caller's failed-capture path takes over.
+		{"retry fails", mismatch, "requires_capture", 402, true,
+			[]string{"POST capture-a1", "GET ", "POST capture-a1-retry"}},
+		{"cancelled", mismatch, "canceled", 0, true,
+			[]string{"POST capture-a1", "GET "}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFakeAPI(t)
+			f.onKey("POST", "/v1/payment_intents/pi_1/capture", "capture-a1", 400, tc.refusal)
+			if tc.retry == 200 {
+				f.onKey("POST", "/v1/payment_intents/pi_1/capture", "capture-a1-retry", 200, `{"id":"pi_1","status":"succeeded"}`)
+			} else {
+				f.onKey("POST", "/v1/payment_intents/pi_1/capture", "capture-a1-retry", 402, `{"error":{"type":"card_error","code":"card_declined","message":"declined"}}`)
+			}
+			f.on("GET", "/v1/payment_intents/pi_1", 200, `{"id":"pi_1","status":"`+tc.piStatus+`"}`)
+
+			pi, err := f.client().CapturePaymentIntent(context.Background(), "pi_1", "capture-a1")
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("err = %v, wantErr %v", err, tc.wantErr)
+			}
+			if !tc.wantErr && (pi == nil || pi.Status != PaymentIntentSucceeded) {
+				t.Errorf("pi = %+v, want succeeded", pi)
+			}
+			var got []string
+			for _, c := range f.recorded() {
+				got = append(got, c.Method+" "+c.IdempotencyKey)
+			}
+			if strings.Join(got, ",") != strings.Join(tc.wantCalls, ",") {
+				t.Errorf("calls = %v, want %v", got, tc.wantCalls)
+			}
+			for _, c := range f.recorded() {
+				if strings.HasSuffix(c.Path, "/cancel") {
+					t.Errorf("voided the PaymentIntent")
+				}
+			}
+		})
+	}
+}
+
+func TestCapturePaymentIntentReadsCard(t *testing.T) {
+	tests := []struct {
+		name       string
+		body       string
+		wantPI     bool
+		wantBrand  string
+		wantWallet string
+	}{
+		{"card", `{"id":"pi_1","status":"succeeded","latest_charge":{"id":"ch_1","payment_method_details":{"type":"card","card":{"brand":"visa","last4":"4242","country":"NO"}}}}`, true, "visa", ""},
+		{"apple pay", `{"id":"pi_1","status":"succeeded","latest_charge":{"id":"ch_1","payment_method_details":{"type":"card","card":{"brand":"Mastercard","wallet":{"type":"apple_pay"}}}}}`, true, "mastercard", "apple_pay"},
+		{"charge not expanded", `{"id":"pi_1","status":"succeeded","latest_charge":"ch_1"}`, true, "", ""},
+		{"not a card", `{"id":"pi_1","status":"succeeded","latest_charge":{"id":"ch_1","payment_method_details":{"type":"link","link":{}}}}`, true, "", ""},
+		// Details of an unexpected shape are dropped; the capture stands.
+		{"odd details", `{"id":"pi_1","status":"succeeded","latest_charge":{"id":"ch_1","payment_method_details":{"card":"visa"}}}`, true, "", ""},
+		{"odd charge", `{"id":"pi_1","status":"succeeded","latest_charge":{"id":"ch_1","metadata":[1]}}`, true, "", ""},
+		// The money was taken; an unreadable answer is not a failure.
+		{"malformed body", `{"id":"pi_1","status":`, false, "", ""},
+		{"not json", `<html>ok</html>`, false, "", ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFakeAPI(t)
+			f.on("POST", "/v1/payment_intents/pi_1/capture", 200, tc.body)
+			pi, err := f.client().CapturePaymentIntent(context.Background(), "pi_1", "capture-a1")
+			if err != nil {
+				t.Fatalf("err = %v, want success", err)
+			}
+			if (pi != nil) != tc.wantPI {
+				t.Fatalf("pi = %+v, want present %v", pi, tc.wantPI)
+			}
+			brand, wallet := pi.CardBrandAndWallet()
+			if brand != tc.wantBrand || wallet != tc.wantWallet {
+				t.Errorf("card = %q/%q, want %q/%q", brand, wallet, tc.wantBrand, tc.wantWallet)
+			}
+			calls := f.recorded()
+			if len(calls) != 1 {
+				t.Fatalf("calls = %+v, want only the capture", calls)
+			}
+			if got := calls[0].Form["expand[]"]; len(got) != 1 || got[0] != "latest_charge" {
+				t.Errorf("capture expand = %v, want latest_charge", got)
+			}
+		})
+	}
+}
+
+func TestGetPaymentIntentExpandsLatestCharge(t *testing.T) {
+	f := newFakeAPI(t)
+	f.on("GET", "/v1/payment_intents/pi_1", 200,
+		`{"id":"pi_1","status":"succeeded","latest_charge":{"id":"ch_1","payment_method_details":{"type":"card","card":{"brand":"visa","wallet":{"type":"google_pay"}}}}}`)
+	pi, err := f.client().GetPaymentIntent(context.Background(), "pi_1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b, w := pi.CardBrandAndWallet(); b != "visa" || w != "google_pay" {
+		t.Errorf("card = %q/%q", b, w)
+	}
+	if q := f.recorded()[0].Query; q != "expand[]=latest_charge" && q != "expand%5B%5D=latest_charge" {
+		t.Errorf("query = %q, want expand latest_charge", q)
 	}
 }
 

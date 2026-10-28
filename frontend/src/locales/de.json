@@ -1746,6 +1746,30 @@
       "overflowCount": "Karten mit zu viel Text: {n}"
     }
   },
+  "recentPayments": {
+    "title": "Zahlungen",
+    "subtitle": "Aktuelle Zahlungen — nahezu in Echtzeit.",
+    "refresh": "Aktualisieren",
+    "searchPlaceholder": "Zahler suchen …",
+    "since": "Von",
+    "until": "Bis",
+    "empty": "Noch keine Zahlungen.",
+    "anonymous": "Gast",
+    "kind": {
+      "all": "Alle",
+      "guest": "Gastliegeplatz",
+      "motorhome": "Wohnmobil",
+      "faktura": "Rechnung",
+      "merch": "Shop",
+      "other": "Sonstiges"
+    },
+    "method": {
+      "vipps": "Vipps",
+      "card": "Karte",
+      "apple_pay": "Apple Pay",
+      "google_pay": "Google Pay"
+    }
+  },
   "pay": {
     "processing": "Zahlung wird gestartet …",
     "methods": {

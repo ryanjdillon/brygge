@@ -10,6 +10,10 @@ import (
 	"github.com/brygge-klubb/brygge/internal/stripe"
 )
 
+// captureKeyPrefix starts the Idempotency-Key of an attempt's capture. Bump
+// it whenever the capture call's parameters change.
+const captureKeyPrefix = "capture2-"
+
 // dispatch routes an already-persisted event to settlement, or a payout
 // event to the Stripe balance mirror. Charge refunds and disputes are only
 // recorded; acting on them is the refunds work.
@@ -129,9 +133,14 @@ func (h *StripeWebhookHandler) rejectAmountMismatch(ctx context.Context, a payme
 }
 
 // capture takes the money and settles the order. The idempotency key is per
-// attempt, so a redelivered event cannot capture twice.
+// attempt, so a redelivered event cannot capture twice. It is versioned with
+// the capture call's parameters: Stripe refuses a key reused with other
+// parameters, so a new key keeps an event first handled by an earlier
+// version from being refused (and the client captures again rather than
+// reporting a failure if a key is refused anyway).
 func (h *StripeWebhookHandler) capture(ctx context.Context, a paymentAttempt, s *stripe.CheckoutSession) {
-	if err := h.stripe.CapturePaymentIntent(ctx, s.PaymentIntent.ID, "capture-"+a.ID); err != nil {
+	pi, err := h.stripe.CapturePaymentIntent(ctx, s.PaymentIntent.ID, captureKeyPrefix+a.ID)
+	if err != nil {
 		h.log.Error().Err(err).Str("session_id", s.ID).Msg("webhook completed: capture failed")
 		h.afterFailedCapture(ctx, a, s.PaymentIntent.ID)
 		return
@@ -146,11 +155,16 @@ func (h *StripeWebhookHandler) capture(ctx context.Context, a paymentAttempt, s 
 	}
 	h.orders.markAttemptCaptured(ctx, a, time.Now(), payerName)
 	h.orders.backfillGuestEmail(ctx, a, email)
+	brand, wallet := pi.CardBrandAndWallet()
+	h.orders.recordAttemptCard(ctx, a.ID, brand, wallet)
 }
 
 // afterFailedCapture settles an attempt whose capture call failed by asking
 // Stripe where the PaymentIntent stands. Stripe replays a key's first answer,
-// errors included, so retrying the capture would only repeat the failure.
+// errors included, so retrying the capture would only repeat the failure. A
+// capture Stripe refused over its key (never attempted) does not get here:
+// CapturePaymentIntent captures it under a new key instead, so a hold that
+// should be taken is not voided below.
 //   - Still authorized: void it, so the payer's card hold is released at once,
 //     and mark the attempt failed; the payer starts a fresh attempt.
 //   - Captured after all: settle it as captured.
@@ -167,6 +181,8 @@ func (h *StripeWebhookHandler) afterFailedCapture(ctx context.Context, a payment
 	switch pi.Status {
 	case stripe.PaymentIntentSucceeded:
 		h.settleSucceededIntent(ctx, a, pi, time.Now())
+		brand, wallet := pi.CardBrandAndWallet()
+		h.orders.recordAttemptCard(ctx, a.ID, brand, wallet)
 	case stripe.PaymentIntentRequiresCapture:
 		if err := h.stripe.CancelPaymentIntent(ctx, piID); err != nil {
 			h.log.Error().Err(err).Str("attempt_id", a.ID).Msg("webhook completed: void after failed capture failed")

@@ -1717,6 +1717,30 @@
       "overflowCount": "Karty ze zbyt dużą ilością tekstu: {n}"
     }
   },
+  "recentPayments": {
+    "title": "Płatności",
+    "subtitle": "Ostatnie płatności — prawie w czasie rzeczywistym.",
+    "refresh": "Odśwież",
+    "searchPlaceholder": "Szukaj płatnika …",
+    "since": "Od",
+    "until": "Do",
+    "empty": "Brak płatności.",
+    "anonymous": "Gość",
+    "kind": {
+      "all": "Wszystkie",
+      "guest": "Miejsce gościnne",
+      "motorhome": "Kamper",
+      "faktura": "Faktura",
+      "merch": "Sklep",
+      "other": "Inne"
+    },
+    "method": {
+      "vipps": "Vipps",
+      "card": "Karta",
+      "apple_pay": "Apple Pay",
+      "google_pay": "Google Pay"
+    }
+  },
   "pay": {
     "processing": "Uruchamianie płatności …",
     "methods": {

@@ -3,6 +3,7 @@ package stripe
 import (
 	"bytes"
 	"encoding/json"
+	"strings"
 )
 
 // Checkout Session statuses.
@@ -76,13 +77,105 @@ type PaymentIntent struct {
 	AmountReceived int64             `json:"amount_received"`
 	Currency       string            `json:"currency"`
 	Metadata       map[string]string `json:"metadata"`
+	// LatestCharge is the charge that took the money; set on the calls that
+	// expand it.
+	LatestCharge *ChargeRef `json:"latest_charge"`
 }
 
-// Charge is the part of a Charge event object Brygge reads.
+// CardBrandAndWallet reports the card brand and wallet the PaymentIntent's latest charge
+// was paid with, empty when the charge was not expanded or was not a card.
+func (pi *PaymentIntent) CardBrandAndWallet() (brand, wallet string) {
+	if pi == nil || pi.LatestCharge == nil || pi.LatestCharge.Object == nil {
+		return "", ""
+	}
+	return pi.LatestCharge.Object.PaymentMethodDetails.CardBrandAndWallet()
+}
+
+// Charge is the part of a Charge object Brygge reads.
 type Charge struct {
-	ID            string            `json:"id"`
-	PaymentIntent string            `json:"payment_intent"`
-	Metadata      map[string]string `json:"metadata"`
+	ID                   string                `json:"id"`
+	PaymentIntent        string                `json:"payment_intent"`
+	Metadata             map[string]string     `json:"metadata"`
+	PaymentMethodDetails *PaymentMethodDetails `json:"payment_method_details"`
+}
+
+// ChargeRef is a PaymentIntent's latest_charge, which Stripe sends as a bare
+// id unless the request expanded it into the object.
+type ChargeRef struct {
+	ID string
+	// Object is set only when the charge was expanded.
+	Object *Charge
+}
+
+// UnmarshalJSON accepts both the id string and the expanded object. An
+// object that does not decode is dropped rather than failing the
+// PaymentIntent around it: the charge only describes how a payment was
+// made, and must never stop Brygge reading whether it was made.
+func (r *ChargeRef) UnmarshalJSON(b []byte) error {
+	if bytes.Equal(b, []byte("null")) {
+		return nil
+	}
+	if len(b) > 0 && b[0] == '"' {
+		return json.Unmarshal(b, &r.ID)
+	}
+	var ch Charge
+	if err := json.Unmarshal(b, &ch); err != nil {
+		var id ObjectID
+		_ = json.Unmarshal(b, &id)
+		r.ID = string(id)
+		return nil
+	}
+	r.ID, r.Object = ch.ID, &ch
+	return nil
+}
+
+// PaymentMethodDetails is the part of a charge's payment_method_details
+// Brygge reads: how the payer paid, never the card number.
+type PaymentMethodDetails struct {
+	// Type is the payment method type (card, link, ...).
+	Type string       `json:"type"`
+	Card *CardDetails `json:"card"`
+}
+
+// CardDetails is the card a charge was paid with.
+type CardDetails struct {
+	// Brand is Stripe's lowercase brand code (visa, mastercard, amex, ...).
+	Brand string `json:"brand"`
+	// Wallet is set when the card was paid through a wallet.
+	Wallet *CardWallet `json:"wallet"`
+}
+
+// CardWallet names the wallet a card payment went through.
+type CardWallet struct {
+	// Type is apple_pay, google_pay, link, samsung_pay, ...
+	Type string `json:"type"`
+}
+
+// UnmarshalJSON decodes best-effort: details of an unexpected shape decode
+// as empty instead of failing the charge, balance page or PaymentIntent
+// they arrive in.
+func (d *PaymentMethodDetails) UnmarshalJSON(b []byte) error {
+	type plain PaymentMethodDetails
+	var p plain
+	if err := json.Unmarshal(b, &p); err != nil {
+		*d = PaymentMethodDetails{}
+		return nil
+	}
+	*d = PaymentMethodDetails(p)
+	return nil
+}
+
+// CardBrandAndWallet reports the card brand and wallet type, lowercased; both are empty
+// when the payment was not made with a card.
+func (d *PaymentMethodDetails) CardBrandAndWallet() (brand, wallet string) {
+	if d == nil || d.Card == nil {
+		return "", ""
+	}
+	brand = strings.ToLower(strings.TrimSpace(d.Card.Brand))
+	if d.Card.Wallet != nil {
+		wallet = strings.ToLower(strings.TrimSpace(d.Card.Wallet.Type))
+	}
+	return brand, wallet
 }
 
 // Event is a webhook event. Data.Object is decoded by the receiver according
@@ -172,6 +265,8 @@ type BalanceSource struct {
 	PaymentIntent ObjectID          `json:"payment_intent"`
 	Charge        ObjectID          `json:"charge"`
 	Metadata      map[string]string `json:"metadata"`
+	// PaymentMethodDetails is set on a charge: how it was paid.
+	PaymentMethodDetails *PaymentMethodDetails `json:"payment_method_details"`
 
 	Amount              int64  `json:"amount"`
 	Currency            string `json:"currency"`

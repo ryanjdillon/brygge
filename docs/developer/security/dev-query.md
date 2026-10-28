@@ -117,7 +117,8 @@ Org fields (`*_org_name/number/address`), the club's own `bank_account`/`org_num
 `waiting_list_entries`.
 
 `payment_attempts` (000115) holds only ids, the provider name, the opaque
-provider reference, status, amount and currency. `stripe_payouts` (000117)
+provider reference, status, amount and currency, plus (000118) Stripe's card
+brand and wallet codes — never card digits or country. `stripe_payouts` (000117)
 holds Stripe ids, amounts, status, currency and the payout's statement
 descriptor, which is the club's own text; `stripe_sync_state` only a club id
 and timestamps. `stripe_balance_transactions.fee_details` (in its masked view)

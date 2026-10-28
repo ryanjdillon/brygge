@@ -168,7 +168,7 @@ func TestStripeWebhook_CompletedCapturesAndPays(t *testing.T) {
 
 	assertWebhookOK(t, e.post(t, sessionCompletedEvent("evt_1", "cs_a", 45000, "Test Member", "member@example.invalid")))
 
-	if got := e.fake.captureCalls(); len(got) != 1 || got[0] != "pi_for_cs_a capture-"+attemptID {
+	if got := e.fake.captureCalls(); len(got) != 1 || got[0] != "pi_for_cs_a capture2-"+attemptID {
 		t.Fatalf("captures = %v", got)
 	}
 	if s := e.attemptStatus(t, attemptID); s != "captured" {
@@ -269,7 +269,7 @@ func TestStripeWebhook_TwoSessionsCaptureOnlyFirst(t *testing.T) {
 	assertWebhookOK(t, e.post(t, sessionCompletedEvent("evt_1", "cs_1", 45000, "", "")))
 	assertWebhookOK(t, e.post(t, sessionCompletedEvent("evt_2", "cs_2", 45000, "", "")))
 
-	if got := e.fake.captureCalls(); len(got) != 1 || got[0] != "pi_for_cs_1 capture-"+first {
+	if got := e.fake.captureCalls(); len(got) != 1 || got[0] != "pi_for_cs_1 capture2-"+first {
 		t.Errorf("captures = %v, want only the first", got)
 	}
 	if got := e.fake.cancelCalls(); len(got) != 1 || got[0] != "pi_for_cs_2" {
@@ -482,5 +482,150 @@ func TestStripeWebhook_UnhandledEventsAreStored(t *testing.T) {
 		`SELECT reference FROM payment_webhook_events WHERE club_id = $1 AND event_id = 'evt_refund'`, e.clubID,
 	).Scan(&ref); err != nil || ref != "pi_unknown" {
 		t.Errorf("stored reference = %q (%v), want the PaymentIntent", ref, err)
+	}
+}
+
+// attemptCard is the card brand and wallet recorded on an attempt, "" for
+// none.
+func (e *stripeEnv) attemptCard(t *testing.T, id string) (brand, wallet string) {
+	t.Helper()
+	if err := e.pool.QueryRow(context.Background(),
+		`SELECT COALESCE(card_brand, ''), COALESCE(card_wallet, '') FROM payment_attempts WHERE id = $1`, id,
+	).Scan(&brand, &wallet); err != nil {
+		t.Fatal(err)
+	}
+	return brand, wallet
+}
+
+func cardCharge(brand, wallet string) map[string]any {
+	card := map[string]any{"brand": brand, "last4": "4242", "country": "NO"}
+	if wallet != "" {
+		card["wallet"] = map[string]any{"type": wallet}
+	}
+	return map[string]any{"id": "ch_synthetic", "payment_method_details": map[string]any{"type": "card", "card": card}}
+}
+
+func TestStripeWebhook_CaptureRecordsCard(t *testing.T) {
+	tests := []struct {
+		name        string
+		charge      map[string]any
+		captureBody string
+		wantBrand   string
+		wantWallet  string
+	}{
+		{"card", cardCharge("visa", ""), "", "visa", ""},
+		{"apple pay", cardCharge("mastercard", "apple_pay"), "", "mastercard", "apple_pay"},
+		{"google pay", cardCharge("visa", "google_pay"), "", "visa", "google_pay"},
+		{"no charge in the answer", nil, "", "", ""},
+		// The capture went through; an unreadable answer only loses the card.
+		{"malformed answer", cardCharge("visa", ""), `{"id":"pi_x","status":`, "", ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			e := newStripeEnv(t)
+			e.fake.latestCharge = tc.charge
+			e.fake.captureBody = tc.captureBody
+			orderID := e.seedOrder(t, "")
+			attemptID := e.seedAttempt(t, orderID, "stripe", "cs_c", "created")
+
+			assertWebhookOK(t, e.post(t, sessionCompletedEvent("evt_c", "cs_c", 45000, "", "")))
+
+			if s := e.attemptStatus(t, attemptID); s != "captured" {
+				t.Errorf("attempt = %q, want captured", s)
+			}
+			if o := e.order(t, orderID); o.Status != "paid" || o.PaidAt == nil {
+				t.Errorf("order = %+v, want paid", o)
+			}
+			if len(e.fake.cancelCalls()) != 0 {
+				t.Errorf("voided %v after a successful capture", e.fake.cancelCalls())
+			}
+			if b, w := e.attemptCard(t, attemptID); b != tc.wantBrand || w != tc.wantWallet {
+				t.Errorf("card = %q/%q, want %q/%q", b, w, tc.wantBrand, tc.wantWallet)
+			}
+		})
+	}
+}
+
+func TestStripeWebhook_CapturedAfterAllRecordsCard(t *testing.T) {
+	e := newStripeEnv(t)
+	e.fake.captureStatus = http.StatusInternalServerError
+	e.fake.intentAfterCapture = stripe.PaymentIntentSucceeded
+	e.fake.latestCharge = cardCharge("visa", "apple_pay")
+	orderID := e.seedOrder(t, "")
+	attemptID := e.seedAttempt(t, orderID, "stripe", "cs_r", "created")
+
+	assertWebhookOK(t, e.post(t, sessionCompletedEvent("evt_r", "cs_r", 45000, "", "")))
+
+	if o := e.order(t, orderID); o.Status != "paid" {
+		t.Errorf("order = %q, want paid", o.Status)
+	}
+	if b, w := e.attemptCard(t, attemptID); b != "visa" || w != "apple_pay" {
+		t.Errorf("card = %q/%q, want visa/apple_pay", b, w)
+	}
+}
+
+func TestRecordAttemptCardKeepsFirst(t *testing.T) {
+	e := newStripeEnv(t)
+	orderID := e.seedOrder(t, "")
+	attemptID := e.seedAttempt(t, orderID, "stripe", "cs_k", "captured")
+	ctx := context.Background()
+
+	e.h.orders.recordAttemptCard(ctx, attemptID, "", "apple_pay")
+	if b, w := e.attemptCard(t, attemptID); b != "" || w != "" {
+		t.Errorf("recorded %q/%q without a brand", b, w)
+	}
+	e.h.orders.recordAttemptCard(ctx, attemptID, "visa", "")
+	e.h.orders.recordAttemptCard(ctx, attemptID, "mastercard", "google_pay")
+	if b, w := e.attemptCard(t, attemptID); b != "visa" || w != "" {
+		t.Errorf("card = %q/%q, want the first recorded visa/none", b, w)
+	}
+	// A bad id fails the update; it is logged and nothing else happens.
+	e.h.orders.recordAttemptCard(ctx, "not-a-uuid", "visa", "")
+}
+
+func TestStripeWebhook_RefusedCaptureKeyNeverVoids(t *testing.T) {
+	tests := []struct {
+		name        string
+		intentAfter string
+		wantCapture []string // idempotency key suffixes after the attempt id
+	}{
+		// Never captured under the refused key: captured under the derived one.
+		{"still authorized is captured", stripe.PaymentIntentRequiresCapture, []string{"", "-retry"}},
+		// The key's first use captured it: settled without another capture.
+		{"captured already is settled", stripe.PaymentIntentSucceeded, []string{""}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			e := newStripeEnv(t)
+			orderID := e.seedOrder(t, "")
+			attemptID := e.seedAttempt(t, orderID, "stripe", "cs_k", "created")
+			e.fake.refuseKey = "capture2-" + attemptID
+			e.fake.intentAfterCapture = tc.intentAfter
+			e.fake.latestCharge = cardCharge("visa", "")
+
+			assertWebhookOK(t, e.post(t, sessionCompletedEvent("evt_k", "cs_k", 45000, "", "")))
+
+			got := e.fake.captureCalls()
+			if len(got) != len(tc.wantCapture) {
+				t.Fatalf("captures = %v, want %d", got, len(tc.wantCapture))
+			}
+			for i, suffix := range tc.wantCapture {
+				if want := "pi_for_cs_k capture2-" + attemptID + suffix; got[i] != want {
+					t.Errorf("capture %d = %q, want %q", i, got[i], want)
+				}
+			}
+			if c := e.fake.cancelCalls(); len(c) != 0 {
+				t.Errorf("voided %v: the hold should have been captured", c)
+			}
+			if s := e.attemptStatus(t, attemptID); s != "captured" {
+				t.Errorf("attempt = %q, want captured", s)
+			}
+			if o := e.order(t, orderID); o.Status != "paid" {
+				t.Errorf("order = %q, want paid", o.Status)
+			}
+			if b, _ := e.attemptCard(t, attemptID); b != "visa" {
+				t.Errorf("card brand = %q, want visa", b)
+			}
+		})
 	}
 }

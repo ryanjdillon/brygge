@@ -1746,6 +1746,30 @@
       "overflowCount": "Schede con troppo testo: {n}"
     }
   },
+  "recentPayments": {
+    "title": "Pagamenti",
+    "subtitle": "Pagamenti recenti — quasi in tempo reale.",
+    "refresh": "Aggiorna",
+    "searchPlaceholder": "Cerca pagatore …",
+    "since": "Dal",
+    "until": "Al",
+    "empty": "Ancora nessun pagamento.",
+    "anonymous": "Ospite",
+    "kind": {
+      "all": "Tutti",
+      "guest": "Posto ospiti",
+      "motorhome": "Camper",
+      "faktura": "Fattura",
+      "merch": "Negozio",
+      "other": "Altro"
+    },
+    "method": {
+      "vipps": "Vipps",
+      "card": "Carta",
+      "apple_pay": "Apple Pay",
+      "google_pay": "Google Pay"
+    }
+  },
   "pay": {
     "processing": "Avvio del pagamento …",
     "methods": {

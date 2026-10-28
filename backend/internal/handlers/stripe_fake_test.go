@@ -47,6 +47,16 @@ type fakeStripe struct {
 	// (requires_capture when unset), with the full 450 kr received when
 	// it is succeeded.
 	intentAfterCapture string
+	// latestCharge, when set, is the expanded latest_charge both capture
+	// and retrieve answer with.
+	latestCharge map[string]any
+	// captureBody, when set, is the raw body a successful capture answers
+	// with instead of the PaymentIntent.
+	captureBody string
+	// refuseKey, when set, makes a capture under that Idempotency-Key answer
+	// with Stripe's idempotency_error, as a key first used with other
+	// parameters does.
+	refuseKey string
 }
 
 func newFakeStripe(t *testing.T) *fakeStripe {
@@ -116,8 +126,12 @@ func (f *fakeStripe) handleGetIntent(w http.ResponseWriter, r *http.Request) {
 	if status == stripe.PaymentIntentSucceeded {
 		received = 45000
 	}
+	f.mu.Lock()
+	charge := f.latestCharge
+	f.mu.Unlock()
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"id": r.PathValue("id"), "status": status, "amount": 45000, "amount_received": received, "currency": "nok",
+		"latest_charge": charge,
 	})
 }
 
@@ -131,14 +145,26 @@ func (f *fakeStripe) handleExpire(w http.ResponseWriter, r *http.Request) {
 func (f *fakeStripe) handleCapture(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	f.captures = append(f.captures, r.PathValue("id")+" "+r.Header.Get("Idempotency-Key"))
-	status := f.captureStatus
+	status, charge, body := f.captureStatus, f.latestCharge, f.captureBody
+	refused := f.refuseKey != "" && r.Header.Get("Idempotency-Key") == f.refuseKey
 	f.mu.Unlock()
+	if refused {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":{"type":"idempotency_error","message":"Keys for idempotent requests can only be used with the same parameters they were first used with."}}`))
+		return
+	}
 	if status != 0 {
 		w.WriteHeader(status)
 		_, _ = w.Write([]byte(`{"error":{"type":"api_error","message":"fake failure"}}`))
 		return
 	}
-	_, _ = w.Write([]byte(`{"status":"succeeded"}`))
+	if body != "" {
+		_, _ = w.Write([]byte(body))
+		return
+	}
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"id": r.PathValue("id"), "status": "succeeded", "latest_charge": charge,
+	})
 }
 
 func (f *fakeStripe) handleCancel(w http.ResponseWriter, r *http.Request) {

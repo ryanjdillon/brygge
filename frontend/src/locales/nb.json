@@ -2806,7 +2806,7 @@
   },
   "recentPayments": {
     "title": "Betalinger",
-    "subtitle": "Nylige innbetalinger via Vipps — nær sanntid.",
+    "subtitle": "Nylige innbetalinger — nær sanntid.",
     "refresh": "Oppdater",
     "searchPlaceholder": "Søk etter betaler …",
     "since": "Fra",
@@ -2820,6 +2820,12 @@
       "faktura": "Faktura",
       "merch": "Butikk",
       "other": "Annet"
+    },
+    "method": {
+      "vipps": "Vipps",
+      "card": "Kort",
+      "apple_pay": "Apple Pay",
+      "google_pay": "Google Pay"
     }
   },
   "bulkInvoices": {

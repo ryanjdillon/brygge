@@ -300,6 +300,24 @@ func (s orderSettlement) backfillGuestEmail(ctx context.Context, a paymentAttemp
 	}
 }
 
+// recordAttemptCard records the card brand and wallet a captured attempt was
+// paid with, for the harbor overview. It runs after settlement and only
+// describes the payment: a failure is logged and changes nothing about
+// whether the order is paid. The first recorded value is kept, so a later
+// source cannot overwrite it.
+func (s orderSettlement) recordAttemptCard(ctx context.Context, attemptID, brand, wallet string) {
+	if brand == "" {
+		return
+	}
+	if _, err := s.db.Exec(ctx,
+		`UPDATE payment_attempts SET card_brand = $2, card_wallet = NULLIF($3, '')
+		  WHERE id = $1 AND card_brand IS NULL`,
+		attemptID, brand, wallet,
+	); err != nil {
+		s.log.Warn().Err(err).Str("attempt_id", attemptID).Msg("attempt captured: recording card details failed")
+	}
+}
+
 func callPayerName(ctx context.Context, payerName func(context.Context) string) string {
 	if payerName == nil {
 		return ""
