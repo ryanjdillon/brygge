@@ -1976,7 +1976,31 @@
       "exportDayNotice": "Utskriften går til og med {date}. Overføringer som var underveis på eksportdagen kan stå som en bar «Overførsel» til de er oppgjort. Eksporter til og med i går, eller importer {date} på nytt senere.",
       "provisionalAmbiguousNotice": "{count} foreløpig(e) rad(er) kunne ikke kobles til én oppgjort rad og ligger igjen i Tildel.",
       "referenceMismatchNotice": "{count} foreløpig(e) rad(er) har en oppgjort rad med samme referanse, men annet beløp eller senere dato. Ingen av dem er endret; sjekk dem i Tildel:",
-      "bankAutoAssignCounts": "Bankinnbetalinger bokført automatisk: {assigned} · Fortsatt i Tildel: {review}"
+      "bankAutoAssignCounts": "Bankinnbetalinger bokført automatisk: {assigned} · Fortsatt i Tildel: {review}",
+      "runStripeSync": "Synk Stripe",
+      "stripeSyncResult": "Stripe: {fetched} hentet · {inserted} nye",
+      "stripeBookCounts": "Stripe bokført: {charges} kortbetaling(er) · {fees} gebyr",
+      "stripeBookReview": "{count} Stripe-transaksjon(er) venter på gjennomgang",
+      "stripeBookDeferred": "{count} er ikke bokført fordi regnskapsperioden er lukket eller ikke opprettet; de bokføres når perioden er åpen.",
+      "stripeBookBusy": "En Stripe-synk pågikk, så ingenting ble bokført nå. Prøv igjen om litt.",
+      "stripeBookErrors": "{count} kunne ikke bokføres – se loggen",
+      "stripeReviewTitle": "Stripe-transaksjoner til gjennomgang ({count})",
+      "stripeReviewCols": {
+        "date": "Dato",
+        "amount": "Beløp",
+        "reason": "Årsak",
+        "id": "Stripe-ID"
+      },
+      "stripeReviewReasons": {
+        "no_attempt": "Finner ikke betalingen i Brygge",
+        "amount_mismatch": "Beløpet avviker fra betalingen",
+        "currency": "Annen valuta enn NOK",
+        "refund_pending_bry446": "Refusjon eller tvist – bokføres senere",
+        "unsupported_category": "Ukjent transaksjonstype",
+        "receivable_not_open": "Fakturaen er allerede betalt, kreditert eller annullert",
+        "imported_no_opening_balance": "Importert faktura uten inngående balanse",
+        "split_mismatch": "Ordren stemmer ikke med beløpet"
+      }
     },
     "pdfArchive": {
       "title": "PDF-arkiv",

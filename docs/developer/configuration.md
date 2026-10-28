@@ -19,6 +19,7 @@ Brygge is configured entirely via environment variables. In production, set thes
 | `CLUB_NAME`    | Yes      | —                       | Human-readable club name in the UI and email subjects. Unset → the NavBar says "Brygge" and emails say "your club" |
 | `DOMAIN`       | Yes      | `localhost`             | Public domain, used in email footers and canonical URLs |
 | `DISABLE_API_DOCS` | No   | —                       | `true` stops mounting the OpenAPI docs at `/api/docs` |
+| `TZ`           | No       | the host's zone         | The process's local time zone. It must be the club's: Stripe postings are dated on the local calendar day of the transaction (`created_at` in `time.Local`). NixOS sets it through `time.timeZone = clubConfig.timezone` (no env var needed); the docker-compose deploy sets `TZ` in `deploy/.env` |
 
 In NixOS deploys `CLUB_SLUG`, `CLUB_NAME` and `DOMAIN` come from `clubConfig` (see the env-layering rules in the repo's `AGENTS.md`); don't put them in the secrets env file.
 
@@ -177,7 +178,7 @@ Per-club financial settings are stored on `clubs` and edited in **Admin → Øko
 |---|---|---|
 | `kid_check_method` | KID check digit for new fakturas: `mod11` (default) or `mod10`. Must match the method registered on the club's OCR/KID agreement, or the payer's bank rejects the KID | — |
 | `vipps_clearing_account`, `payment_fee_account` | GL accounts the Vipps clearing postings and every provider's fee postings use (the legacy fee column is dual-written until BRY-450) | — |
-| `stripe_clearing_account` | Card balance at Stripe until payout; default 1580. Must be an active asset account in the club's chart. Unused until card payments are booked (BRY-454) | — |
+| `stripe_clearing_account` | Card balance at Stripe until payout; default 1580. Must be an active asset account in the club's chart. Card charges and Stripe fees post to it; payouts clear it (BRY-457) | — |
 | `stripe_payout_descriptor` | Go regular expression (at most 200 characters) that recognises a Stripe payout in the bank statement text; default `(?i)stripe`. Unused until payouts are matched (BRY-457) | — |
 | `vipps_per_charge_enabled` | Per-charge Vipps model: charges are booked one by one in Tildel and payouts clear by themselves, instead of one bilag per payout (BRY-228) | [faktura.md](../user/faktura.md#vipps-payouts-clear-by-themselves) |
 | `online_max_amount` | Default amount cap for online payment (see above) | [faktura.md](../user/faktura.md#sent) |

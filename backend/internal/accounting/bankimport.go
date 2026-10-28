@@ -265,6 +265,9 @@ type ImportResult struct {
 	// AutoAssign reports the KID-less deposits the bank auto-assign rule
 	// booked after the import; nil when the club has not opted in.
 	AutoAssign *AutoAssignResult
+	// StripeBooking reports the Stripe charges and fees booked after the
+	// import; nil when there was nothing to book or no importing user.
+	StripeBooking *StripeBookResult
 }
 
 // ImportRowError is one auto-match failure on an imported bank row.
@@ -648,6 +651,10 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOv
 		ImportID:       importID,
 		PeriodOverride: periodOverride,
 	})
+
+	// Book the Stripe charges and fees that are ready, as the bank sync
+	// does, so an upload alone brings the books up to date.
+	res.StripeBooking = s.BookStripeBalanceReported(ctx, clubID, importedBy)
 
 	for y := range closedYears {
 		res.ClosedPeriods = append(res.ClosedPeriods, fmt.Sprintf("%d", y))

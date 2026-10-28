@@ -1108,7 +1108,31 @@
       "autoAssignOff": "L'attribution automatique est désactivée ({review} paiements attendent dans Tildel). Activez-la dans Økonomiinnstillinger → Vipps.",
       "autoAssignAccount": "compte {code}",
       "autoAssignUndo": "Annuler",
-      "autoAssignUndone": "Annulé — de retour dans Tildel"
+      "autoAssignUndone": "Annulé — de retour dans Tildel",
+      "runStripeSync": "Synchroniser Stripe",
+      "stripeSyncResult": "Stripe : {fetched} récupérées · {inserted} nouvelles",
+      "stripeBookCounts": "Stripe comptabilisé : {charges} paiement(s) par carte · {fees} frais",
+      "stripeBookReview": "{count} transaction(s) Stripe à vérifier",
+      "stripeBookDeferred": "{count} non comptabilisée(s) car l'exercice est clôturé ou pas encore créé ; elles le seront dès qu'il sera ouvert.",
+      "stripeBookBusy": "Une synchronisation Stripe était en cours, rien n'a été comptabilisé. Réessayez dans un instant.",
+      "stripeBookErrors": "{count} n'ont pas pu être comptabilisées – voir le journal",
+      "stripeReviewTitle": "Transactions Stripe à vérifier ({count})",
+      "stripeReviewCols": {
+        "date": "Date",
+        "amount": "Montant",
+        "reason": "Motif",
+        "id": "ID Stripe"
+      },
+      "stripeReviewReasons": {
+        "no_attempt": "Paiement introuvable dans Brygge",
+        "amount_mismatch": "Le montant diffère du paiement",
+        "currency": "Devise autre que NOK",
+        "refund_pending_bry446": "Remboursement ou litige – comptabilisé plus tard",
+        "unsupported_category": "Type de transaction inconnu",
+        "receivable_not_open": "La facture est déjà payée, créditée ou annulée",
+        "imported_no_opening_balance": "Facture importée sans solde d'ouverture",
+        "split_mismatch": "La commande ne correspond pas au montant"
+      }
     },
     "bankReconcile": {
       "filterAll": "All",

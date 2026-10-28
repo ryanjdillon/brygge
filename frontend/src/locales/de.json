@@ -1109,7 +1109,31 @@
       "autoAssignOff": "Die automatische Zuordnung ist aus ({review} Zahlungen warten in Tildel). Aktivieren Sie sie unter Økonomiinnstillinger → Vipps.",
       "autoAssignAccount": "Konto {code}",
       "autoAssignUndo": "Rückgängig",
-      "autoAssignUndone": "Rückgängig gemacht — zurück in Tildel"
+      "autoAssignUndone": "Rückgängig gemacht — zurück in Tildel",
+      "runStripeSync": "Stripe synchronisieren",
+      "stripeSyncResult": "Stripe: {fetched} abgerufen · {inserted} neu",
+      "stripeBookCounts": "Stripe gebucht: {charges} Kartenzahlung(en) · {fees} Gebühr(en)",
+      "stripeBookReview": "{count} Stripe-Transaktion(en) zur Prüfung",
+      "stripeBookDeferred": "{count} nicht gebucht, weil die Buchungsperiode geschlossen oder noch nicht angelegt ist; sie werden gebucht, sobald sie offen ist.",
+      "stripeBookBusy": "Eine Stripe-Synchronisierung lief, daher wurde nichts gebucht. Bitte gleich erneut versuchen.",
+      "stripeBookErrors": "{count} konnten nicht gebucht werden – siehe Protokoll",
+      "stripeReviewTitle": "Stripe-Transaktionen zur Prüfung ({count})",
+      "stripeReviewCols": {
+        "date": "Datum",
+        "amount": "Betrag",
+        "reason": "Grund",
+        "id": "Stripe-ID"
+      },
+      "stripeReviewReasons": {
+        "no_attempt": "Zahlung in Brygge nicht gefunden",
+        "amount_mismatch": "Betrag weicht von der Zahlung ab",
+        "currency": "Andere Währung als NOK",
+        "refund_pending_bry446": "Erstattung oder Streitfall – wird später gebucht",
+        "unsupported_category": "Unbekannter Transaktionstyp",
+        "receivable_not_open": "Die Rechnung ist bereits bezahlt, gutgeschrieben oder storniert",
+        "imported_no_opening_balance": "Importierte Rechnung ohne Eröffnungsbilanz",
+        "split_mismatch": "Die Bestellung passt nicht zum Betrag"
+      }
     },
     "bankReconcile": {
       "filterAll": "All",

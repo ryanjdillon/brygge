@@ -80,24 +80,114 @@ func TestStripeSyncGatedAndAudited(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("POST: %d %s", rec.Code, rec.Body)
 	}
-	var res accounting.StripeSyncResult
+	var res stripeSyncResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &res); err != nil {
 		t.Fatal(err)
 	}
 	if res.Fetched != 1 || res.Inserted != 1 || len(res.Errors) != 0 {
-		t.Errorf("result = %+v, want one fee fetched and inserted", res)
+		t.Errorf("result = %+v, want one fee fetched and inserted", res.StripeSyncResult)
+	}
+	if res.Booking == nil || res.Booking.FeesBooked != 1 || res.Booking.ChargesBooked != 0 || len(res.Booking.Errors) != 0 {
+		t.Errorf("booking = %+v, want the fee booked", res.Booking)
 	}
 	got := env.audit(audit.ActionAccountingStripeSynced)
-	if len(got) != 1 || got[0]["fetched"] != float64(1) || got[0]["inserted"] != float64(1) {
-		t.Errorf("audit = %v, want one row with the counts", got)
+	if len(got) != 1 || got[0]["fetched"] != float64(1) || got[0]["inserted"] != float64(1) ||
+		got[0]["fees_booked"] != float64(1) || got[0]["charges_booked"] != float64(0) {
+		t.Errorf("audit = %v, want one row with the ingest and booking counts", got)
 	}
 	var journal int
+	if err := env.club.Pool.QueryRow(context.Background(),
+		`SELECT count(*) FROM journal_entries
+		  WHERE club_id = $1 AND source = 'stripe' AND status = 'posted' AND created_by = $2`,
+		env.club.ID, env.club.Treasurer.ID).Scan(&journal); err != nil {
+		t.Fatal(err)
+	}
+	if journal != 1 {
+		t.Errorf("posted %d stripe entries as the caller, want the fee's one", journal)
+	}
+
+	// A second run books nothing new.
+	if rec := env.serve([]string{"treasurer"}, http.MethodPost, "/open/stripe/sync", nil); rec.Code != http.StatusOK {
+		t.Fatalf("second POST: %d %s", rec.Code, rec.Body)
+	}
 	if err := env.club.Pool.QueryRow(context.Background(),
 		`SELECT count(*) FROM journal_entries WHERE club_id = $1`, env.club.ID).Scan(&journal); err != nil {
 		t.Fatal(err)
 	}
-	if journal != 0 {
-		t.Errorf("the sync posted %d journal entries; it must only ingest", journal)
+	if journal != 1 {
+		t.Errorf("after a re-run: %d entries, want 1", journal)
+	}
+}
+
+// A booking pass that fails after a good ingest still answers 200, with the
+// failure in booking.error, and is audited.
+func TestStripeSyncBookingFailureIsReported(t *testing.T) {
+	var h *AccountingHandler
+	env := newAliasTestEnv(t, func(r chi.Router, svc *accounting.Service, as *audit.Service) {
+		h = NewAccountingHandler(svc, as, nil, nil, nil, zerolog.Nop())
+		r.Route("/open", func(r chi.Router) { h.MountLedgerRoutes(r) })
+	})
+	// An empty balance: the ingest never touches the transactions table.
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /v1/balance_transactions", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"has_more":false,"data":[]}`))
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	h.SetStripe(stripe.New(srv.URL, stripeTestKey, zerolog.Nop()))
+	// Takes the table away from the booking pass only.
+	if _, err := env.club.Pool.Exec(context.Background(),
+		`ALTER TABLE stripe_balance_transactions RENAME TO stripe_balance_transactions_gone`); err != nil {
+		t.Fatal(err)
+	}
+
+	rec := env.serve([]string{"treasurer"}, http.MethodPost, "/open/stripe/sync", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST: %d %s, want 200", rec.Code, rec.Body)
+	}
+	var res stripeSyncResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &res); err != nil {
+		t.Fatal(err)
+	}
+	if res.Booking == nil || res.Booking.Error == "" {
+		t.Errorf("booking = %+v, want the failure reported", res.Booking)
+	}
+	got := env.audit(audit.ActionAccountingStripeSynced)
+	if len(got) != 1 || got[0]["booking_failed"] != true {
+		t.Errorf("audit = %v, want one row marking the failed booking", got)
+	}
+}
+
+// The review list is read-only for every accounting role and returns the
+// rows held for review with their reason.
+func TestStripeReviewList(t *testing.T) {
+	env := newAliasTestEnv(t, func(r chi.Router, svc *accounting.Service, as *audit.Service) {
+		h := NewAccountingHandler(svc, as, nil, nil, nil, zerolog.Nop())
+		r.Route("/gated", func(r chi.Router) {
+			h.MountLedgerRoutes(r, middleware.RequireRole("treasurer", "admin"), middleware.RequireFreshTOTPDefault())
+		})
+	})
+	if _, err := env.club.Pool.Exec(context.Background(),
+		`INSERT INTO stripe_balance_transactions
+		     (club_id, balance_transaction_id, reporting_category, amount_ore, net_ore, currency, created_at, status, review_reason)
+		 VALUES ($1, 'txn_test_review', 'charge', 12300, 12300, 'nok', '2026-05-04T10:00:00Z', 'needs_review', 'split_mismatch'),
+		        ($1, 'txn_test_ready', 'fee', -300, -300, 'nok', '2026-05-04T11:00:00Z', 'unbooked', NULL)`,
+		env.club.ID); err != nil {
+		t.Fatal(err)
+	}
+	rec := env.serve([]string{"treasurer"}, http.MethodGet, "/gated/stripe/review", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET: %d %s", rec.Code, rec.Body)
+	}
+	var body struct {
+		Items []accounting.StripeReviewItem `json:"items"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if len(body.Items) != 1 || body.Items[0].BalanceTransactionID != "txn_test_review" ||
+		body.Items[0].ReviewReason != "split_mismatch" || body.Items[0].AmountOre != 12300 {
+		t.Errorf("items = %+v, want the one row in review", body.Items)
 	}
 }
 

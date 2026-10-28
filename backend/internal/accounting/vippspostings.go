@@ -178,6 +178,7 @@ func (s *Service) postVippsChargeSplit(ctx context.Context, clubID, createdBy, d
 	if err != nil {
 		return "", err
 	}
+	p := vippsChargePosting(clubID, createdBy, clearing, description, b, credits)
 
 	periodID, periodStatus, err := s.resolvePeriod(ctx, clubID, b.date, "")
 	if err != nil {
@@ -187,30 +188,12 @@ func (s *Service) postVippsChargeSplit(ctx context.Context, clubID, createdBy, d
 		return "", fmt.Errorf("fiscal period %d is closed — reopen it or pick a different period", b.date.Year())
 	}
 
-	sourceID := b.id
-	sourceTable := "vipps_import_rows"
-	entry, err := s.CreateJournalEntry(ctx, CreateJournalEntryInput{
-		FiscalPeriodID: periodID,
-		EntryDate:      b.date.Format("2006-01-02"),
-		Description:    description,
-		Source:         "vipps",
-		SourceID:       &sourceID,
-		SourceTable:    &sourceTable,
-		CreatedBy:      createdBy,
-		ClubID:         clubID,
-		Lines: append([]CreateJournalLineInput{
-			{AccountCode: clearing, Debit: b.amount, Credit: 0, Description: description},
-		}, credits...),
-	})
+	entry, err := s.CreateJournalEntry(ctx, p.entryInput(periodID))
 	if err != nil {
 		return "", fmt.Errorf("creating journal entry: %w", err)
 	}
 
-	tag, err := s.db.Exec(ctx,
-		`UPDATE vipps_import_rows SET journal_entry_id = $1
-		  WHERE id = $2 AND club_id = $3 AND journal_entry_id IS NULL`,
-		entry.ID, b.id, clubID,
-	)
+	tag, err := s.db.Exec(ctx, p.markSQL, entry.ID, b.id, clubID)
 	if err != nil {
 		return "", fmt.Errorf("marking charge reconciled: %w", err)
 	}
@@ -222,10 +205,7 @@ func (s *Service) postVippsChargeSplit(ctx context.Context, clubID, createdBy, d
 			entry.ID, clubID,
 		)
 		var existing string
-		if err := s.db.QueryRow(ctx,
-			`SELECT journal_entry_id FROM vipps_import_rows WHERE id = $1 AND club_id = $2`,
-			b.id, clubID,
-		).Scan(&existing); err != nil {
+		if err := s.db.QueryRow(ctx, p.winnerSQL, b.id, clubID).Scan(&existing); err != nil {
 			return "", fmt.Errorf("charge already reconciled but reading winner failed: %w", err)
 		}
 		return existing, errChargeRaced
@@ -237,6 +217,26 @@ func (s *Service) postVippsChargeSplit(ctx context.Context, clubID, createdBy, d
 	return entry.ID, nil
 }
 
+// vippsChargePosting is the chargePosting of one belastning.
+func vippsChargePosting(clubID, createdBy, clearing, description string, b *vippsBelastning, credits []CreateJournalLineInput) *chargePosting {
+	return &chargePosting{
+		clubID:      clubID,
+		createdBy:   createdBy,
+		source:      "vipps",
+		sourceTable: "vipps_import_rows",
+		sourceID:    b.id,
+		clearing:    clearing,
+		date:        b.date,
+		amount:      b.amount,
+		description: description,
+		credits:     credits,
+		markSQL: `UPDATE vipps_import_rows SET journal_entry_id = $1
+		  WHERE id = $2 AND club_id = $3 AND journal_entry_id IS NULL`,
+		winnerSQL: `SELECT journal_entry_id FROM vipps_import_rows WHERE id = $1 AND club_id = $2`,
+		savepoint: "vipps_charge",
+	}
+}
+
 // postVippsChargeTx is postVippsCharge inside the caller's transaction, for
 // a booking that holds the faktura lock.
 func postVippsChargeTx(ctx context.Context, tx pgx.Tx, clubID, createdBy, creditAccount, description string, b *vippsBelastning) (string, error) {
@@ -246,74 +246,13 @@ func postVippsChargeTx(ctx context.Context, tx pgx.Tx, clubID, createdBy, credit
 }
 
 // postVippsChargeSplitTx is postVippsChargeSplit inside the caller's
-// transaction. A failed post leaves the transaction to roll back. Losing the
-// guarded mark (errChargeRaced) leaves it usable: the entry is created under
-// a savepoint that the loss rolls back to, so a caller that goes on to
-// commit never commits the losing draft.
+// transaction (postChargeTx).
 func postVippsChargeSplitTx(ctx context.Context, tx pgx.Tx, clubID, createdBy, description string, b *vippsBelastning, credits []CreateJournalLineInput) (string, error) {
 	clearing, _, err := vippsAccountsIn(ctx, tx, clubID)
 	if err != nil {
 		return "", err
 	}
-
-	periodID, periodStatus, err := resolvePeriodIn(ctx, tx, clubID, b.date, "")
-	if err != nil {
-		return "", fmt.Errorf("resolving fiscal period: %w", err)
-	}
-	if periodStatus == "closed" {
-		return "", fmt.Errorf("fiscal period %d is closed — reopen it or pick a different period", b.date.Year())
-	}
-
-	if _, err := tx.Exec(ctx, `SAVEPOINT vipps_charge`); err != nil {
-		return "", fmt.Errorf("savepoint: %w", err)
-	}
-	sourceID := b.id
-	sourceTable := "vipps_import_rows"
-	entry, err := createJournalEntryTx(ctx, tx, CreateJournalEntryInput{
-		FiscalPeriodID: periodID,
-		EntryDate:      b.date.Format("2006-01-02"),
-		Description:    description,
-		Source:         "vipps",
-		SourceID:       &sourceID,
-		SourceTable:    &sourceTable,
-		CreatedBy:      createdBy,
-		ClubID:         clubID,
-		Lines: append([]CreateJournalLineInput{
-			{AccountCode: clearing, Debit: b.amount, Credit: 0, Description: description},
-		}, credits...),
-	})
-	if err != nil {
-		return "", fmt.Errorf("creating journal entry: %w", err)
-	}
-
-	tag, err := tx.Exec(ctx,
-		`UPDATE vipps_import_rows SET journal_entry_id = $1
-		  WHERE id = $2 AND club_id = $3 AND journal_entry_id IS NULL`,
-		entry.ID, b.id, clubID,
-	)
-	if err != nil {
-		return "", fmt.Errorf("marking charge reconciled: %w", err)
-	}
-	if tag.RowsAffected() == 0 {
-		if _, err := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT vipps_charge`); err != nil {
-			return "", fmt.Errorf("rollback to savepoint: %w", err)
-		}
-		var existing string
-		if err := tx.QueryRow(ctx,
-			`SELECT journal_entry_id FROM vipps_import_rows WHERE id = $1 AND club_id = $2`,
-			b.id, clubID,
-		).Scan(&existing); err != nil {
-			return "", fmt.Errorf("charge already reconciled but reading winner failed: %w", err)
-		}
-		return existing, errChargeRaced
-	}
-	if err := postJournalEntryTx(ctx, tx, clubID, entry.ID, createdBy); err != nil {
-		return "", fmt.Errorf("posting journal entry: %w", err)
-	}
-	if _, err := tx.Exec(ctx, `RELEASE SAVEPOINT vipps_charge`); err != nil {
-		return "", fmt.Errorf("release savepoint: %w", err)
-	}
-	return entry.ID, nil
+	return postChargeTx(ctx, tx, vippsChargePosting(clubID, createdBy, clearing, description, b, credits))
 }
 
 // unwindVippsPosting undoes a posting whose PostJournalEntry failed: it

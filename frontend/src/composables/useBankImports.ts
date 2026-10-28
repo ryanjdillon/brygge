@@ -63,6 +63,8 @@ export interface BankImportResult {
   // KID-less deposits booked by bank auto-assign; absent when it is off.
   auto_assign?: AutoAssignResult | null
   provisional_rows?: number
+  // Stripe charges and fees booked after the import; absent when none waited.
+  stripe_booking?: StripeBookResult | null
 }
 
 export interface ReferenceMismatch {
@@ -381,6 +383,8 @@ export interface BankSyncResult {
   provisional_ambiguous?: ProvisionalBankRow[] | null
   // KID-less deposits booked by bank auto-assign; absent when it is off.
   auto_assign?: AutoAssignResult | null
+  // Stripe charges and fees booked by the last pass; absent when none waited.
+  stripe_booking?: StripeBookResult | null
 }
 
 export async function runBankSync(): Promise<BankSyncResult> {
@@ -398,6 +402,66 @@ export interface VippsResyncResult {
 
 export async function runVippsResync(): Promise<VippsResyncResult> {
   return fetchJSON<VippsResyncResult>(`${BASE}/vipps-resync`, { method: 'POST' })
+}
+
+// One booking pass over the Stripe balance (accounting.StripeBookResult).
+export interface StripeBookResult {
+  charges_booked: number
+  fees_booked: number
+  // Charges held for review this pass, by review reason.
+  needs_review: Record<string, number>
+  // Rows left unbooked for now (closed fiscal period); retried next pass.
+  deferred: { balance_transaction_id: string; date: string; reason: string }[]
+  errors?: string[] | null
+  // Another Stripe sync was running, so nothing was booked.
+  busy?: boolean
+  // The pass itself failed; server-provided text.
+  error?: string
+}
+
+export interface StripeSyncResult {
+  fetched: number
+  inserted: number
+  needs_review: Record<string, number>
+  payouts_seen: number
+  payouts_linked: number
+  members_linked: number
+  errors?: string[] | null
+  booking: StripeBookResult | null
+}
+
+// Ingests the Stripe balance and books what is ready. Behind fresh TOTP.
+export async function runStripeSync(): Promise<StripeSyncResult> {
+  return fetchJSON<StripeSyncResult>(`${BASE}/stripe/sync`, { method: 'POST' })
+}
+
+export interface StripeReviewItem {
+  id: string
+  balance_transaction_id: string
+  reporting_category: string
+  review_reason: string
+  amount_ore: number
+  currency: string
+  date: string
+}
+
+// Stripe balance transactions held for review; read-only.
+export function useStripeReview(enabled: Ref<boolean>) {
+  return useQuery({
+    queryKey: ['accounting', 'stripe-review'],
+    enabled,
+    queryFn: async () => (await fetchJSON<{ items: StripeReviewItem[] }>(`${BASE}/stripe/review`)).items,
+  })
+}
+
+// Whether this instance has Stripe credentials, so the Stripe sync is offered.
+export function useStripeConfigured() {
+  return useQuery({
+    queryKey: ['accounting', 'stripe-configured'],
+    queryFn: async () =>
+      !!(await fetchJSON<{ stripe_configured?: boolean }>('/api/v1/admin/settings/site')).stripe_configured,
+    staleTime: 300_000,
+  })
 }
 
 // Undoes a charge booking so it returns to Tildel. Behind fresh TOTP.

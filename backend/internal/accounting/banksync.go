@@ -111,6 +111,9 @@ type BankSyncResult struct {
 	// AutoAssign reports the KID-less deposits booked by the bank
 	// auto-assign rule (pass 4c); nil when the club has not opted in.
 	AutoAssign *AutoAssignResult `json:"auto_assign,omitempty"`
+	// StripeBooking reports the Stripe charges and fees booked by the last
+	// pass (BookStripeBalanceReported); nil when there was nothing to book.
+	StripeBooking *StripeBookResult `json:"stripe_booking,omitempty"`
 }
 
 // BankSync re-runs auto-correlation across every unmatched bank import row
@@ -127,7 +130,8 @@ type BankSyncResult struct {
 //
 // On the per-charge Vipps model pass 2 stands down and a final pass clears
 // every payout deposit whose settlement has all its charges booked
-// (ClearReadyVippsPayouts).
+// (ClearReadyVippsPayouts). Last, the Stripe charges and fees that are
+// ready are booked (BookStripeBalanceReported).
 //
 // This is the on-demand counterpart to the per-upload auto-match that
 // already runs at import time. It lets the treasurer pull in matches that
@@ -242,6 +246,10 @@ func (s *Service) BankSync(ctx context.Context, clubID, createdBy string) (*Bank
 		res.VippsPayouts = sweep
 		res.VippsReconciled += len(sweep.Cleared)
 	}
+
+	// Pass 6: book the Stripe charges and fees that are ready. Reported, so
+	// a failure never undoes the bank work above.
+	res.StripeBooking = s.BookStripeBalanceReported(ctx, clubID, createdBy)
 
 	for y := range closedYears {
 		res.ClosedPeriods = append(res.ClosedPeriods, fmt.Sprintf("%d", y))

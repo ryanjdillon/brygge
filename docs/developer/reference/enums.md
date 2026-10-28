@@ -132,7 +132,7 @@ open   closed   locked
 manual   bank_import   payment_sync   invoice_sync   vipps   invoice_resplit   opening_balance   stripe
 ```
 
-The `source` field tags how a journal entry was created. `invoice_resplit` (migration 000101, BRY-364) marks a revenue reclassification posted against an invoice's `invoice_sync` entry; `source_id` is the invoice id. `opening_balance` (000107, BRY-370) marks the cutover entry carrying balances brought over from the previous system; a posted one debiting 1500 is what lets a booked credit note settle an imported faktura. `stripe` (000116) marks entries booked from the Stripe balance (card charges, Stripe fees, payout clearing); nothing writes it until BRY-454. Filters in cash-flow / reconciliation logic depend on this (e.g. Vipps resync targets `source = 'vipps' AND status = 'draft'`).
+The `source` field tags how a journal entry was created. `invoice_resplit` (migration 000101, BRY-364) marks a revenue reclassification posted against an invoice's `invoice_sync` entry; `source_id` is the invoice id. `opening_balance` (000107, BRY-370) marks the cutover entry carrying balances brought over from the previous system; a posted one debiting 1500 is what lets a booked credit note settle an imported faktura. `stripe` (000116) marks entries booked from the Stripe balance: card charges and Stripe fees (`source_table = 'stripe_balance_transactions'`, `source_id` the row), and payout clearing (BRY-457). Filters in cash-flow / reconciliation logic depend on this (e.g. Vipps resync targets `source = 'vipps' AND status = 'draft'`).
 
 ### `mva_eligibility` — `accounts.mva_eligible`, `journal_lines.mva_eligible`
 
@@ -244,7 +244,7 @@ Stripe's own `reporting_category` of the balance transaction. Stripe's finer `ty
 unbooked   booked   needs_review   dismissed
 ```
 
-Booking state, set by `accounting.SyncStripeBalance`. `unbooked` rows are ready to book (a charge matched to its attempt, a fee, a payout); `needs_review` rows carry a `review_reason` (CHECK: never NULL while in review); `booked` rows have their journal entry (BRY-454); `dismissed` rows were set aside by a person (BRY-456). A re-sync reclassifies only `needs_review` rows and never touches the others.
+Booking state, set by `accounting.SyncStripeBalance` and `accounting.BookStripeBalance`. `unbooked` rows are ready to book (a charge matched to its attempt, a fee, a payout); `needs_review` rows carry a `review_reason` (CHECK: never NULL while in review); `booked` rows have their posted journal entry (`BookStripeBalance` sets it in the same transaction as the entry); `dismissed` rows were set aside by a person (BRY-456). A re-sync reclassifies only `needs_review` rows held for an ingest reason and never touches the others. A row the booking pass held for review (the last three reasons below) is left to the booking pass, which retries it on every run.
 
 `review_reason` (TEXT, no CHECK):
 
@@ -255,6 +255,9 @@ Booking state, set by `accounting.SyncStripeBalance`. `unbooked` rows are ready 
 | `currency` | Not NOK, or not the attempt's currency |
 | `refund_pending_bry446` | Refunds, disputes, dispute reversals and other adjustments; booked once Stripe refunds land (BRY-446) |
 | `unsupported_category` | A Stripe reporting category Brygge has no booking for |
+| `receivable_not_open` | Set by the booking pass: a faktura on the charge's order is already paid, voided or credited (`finance.OpenReceivableSQL`), most likely paid another way too |
+| `imported_no_opening_balance` | Set by the booking pass: a faktura on the order is imported and its receivable is not in the GL by the charge's booking date (`finance.ImportedReceivableOpenSQL`) |
+| `split_mismatch` | Set by the booking pass: the order's fakturas and lines do not add up to the charge |
 
 ### `stripe_payouts.status` (CHECK since migration 000117)
 
@@ -321,7 +324,7 @@ Source: `backend/internal/accounting/sync.go`, `revenue_accounts.go` and `vippsr
 | `vippsFeeAccountCode` | 7700 | Bankgebyrer — default of `clubs.payment_fee_account`, which books fees for every provider |
 | `vippsClearingAccountCode` | 2900 | Annen kortsiktig gjeld (legacy — kept as a constant for report compatibility, but **no new lines route here**) |
 
-`clubs.stripe_clearing_account` defaults to **1580** Til gode betalingsformidler (Stripe), an asset in `DefaultKontoplan()` that migration 000114 seeded into every existing chart that lacked it. It holds card payments until Stripe pays them out; nothing posts to it until BRY-454. `clubs.stripe_payout_descriptor` (000117, default `(?i)stripe`) is the Go regular expression that recognises a Stripe payout in the bank text (BRY-457).
+`clubs.stripe_clearing_account` defaults to **1580** Til gode betalingsformidler (Stripe), an asset in `DefaultKontoplan()` that migration 000114 seeded into every existing chart that lacked it. It holds card payments until Stripe pays them out: a charge debits it gross and credits it Stripe's fee, a fee transaction credits it, the payout clears it (BRY-457). `clubs.stripe_payout_descriptor` (000117, default `(?i)stripe`) is the Go regular expression that recognises a Stripe payout in the bank text (BRY-457).
 
 ### Price-item unit → i18n key
 

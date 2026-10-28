@@ -1109,7 +1109,31 @@
       "autoAssignOff": "Automatisch toewijzen staat uit ({review} betalingen wachten in Tildel). Zet het aan onder Økonomiinnstillinger → Vipps.",
       "autoAssignAccount": "rekening {code}",
       "autoAssignUndo": "Ongedaan maken",
-      "autoAssignUndone": "Ongedaan gemaakt — terug in Tildel"
+      "autoAssignUndone": "Ongedaan gemaakt — terug in Tildel",
+      "runStripeSync": "Stripe synchroniseren",
+      "stripeSyncResult": "Stripe: {fetched} opgehaald · {inserted} nieuw",
+      "stripeBookCounts": "Stripe geboekt: {charges} kaartbetaling(en) · {fees} kosten",
+      "stripeBookReview": "{count} Stripe-transactie(s) te controleren",
+      "stripeBookDeferred": "{count} niet geboekt omdat de boekingsperiode gesloten of nog niet aangemaakt is; ze worden geboekt zodra die open is.",
+      "stripeBookBusy": "Er liep een Stripe-synchronisatie, dus er is niets geboekt. Probeer het zo opnieuw.",
+      "stripeBookErrors": "{count} konden niet worden geboekt – zie het logboek",
+      "stripeReviewTitle": "Stripe-transacties te controleren ({count})",
+      "stripeReviewCols": {
+        "date": "Datum",
+        "amount": "Bedrag",
+        "reason": "Reden",
+        "id": "Stripe-ID"
+      },
+      "stripeReviewReasons": {
+        "no_attempt": "Betaling niet gevonden in Brygge",
+        "amount_mismatch": "Bedrag wijkt af van de betaling",
+        "currency": "Andere valuta dan NOK",
+        "refund_pending_bry446": "Terugbetaling of geschil – later geboekt",
+        "unsupported_category": "Onbekend transactietype",
+        "receivable_not_open": "De factuur is al betaald, gecrediteerd of geannuleerd",
+        "imported_no_opening_balance": "Geïmporteerde factuur zonder openingsbalans",
+        "split_mismatch": "De bestelling klopt niet met het bedrag"
+      }
     },
     "bankReconcile": {
       "filterAll": "All",

@@ -6,8 +6,6 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgconn"
-
-	"github.com/brygge-klubb/brygge/internal/finance"
 )
 
 // Order-linked Vipps charges (BRY-337). An ePayment charge (faktura pay-link,
@@ -50,36 +48,12 @@ func (s *Service) AssignVippsChargeToOrder(ctx context.Context, clubID, vippsRow
 		return nil, true, fmt.Errorf("order %s has no fakturas or lines to book", b.orderRef)
 	}
 
-	var sum float64
-	credits := make([]CreateJournalLineInput, 0, len(split))
-	var invoiceIDs []string
-	for _, l := range split {
-		sum += l.Credit
-		credits = append(credits, CreateJournalLineInput{AccountCode: l.AccountCode, Credit: l.Credit, Description: l.Description})
-		if l.LinkedInvoiceID != "" {
-			invoiceIDs = append(invoiceIDs, l.LinkedInvoiceID)
-		}
+	credits, invoiceIDs, err := checkOrderChargeSplit(ctx, s.db, clubID, split, b.amount, b.date)
+	if errors.Is(err, errOrderReceivableNotOpen) {
+		return nil, true, fmt.Errorf("a faktura on order %s is already paid, voided or credited — book the charge by hand", b.orderRef)
 	}
-	if !floatNear(sum, b.amount, 0.01) {
-		return nil, true, fmt.Errorf("order total %.2f does not match charge %.2f", sum, b.amount)
-	}
-	for _, id := range invoiceIDs {
-		var open, receivableOK bool
-		if err := s.db.QueryRow(ctx,
-			`SELECT `+finance.OpenReceivableSQL("i")+`, `+finance.ImportedReceivableOpenSQL("i", "$3::date")+`
-			   FROM invoices i WHERE i.id = $1 AND i.club_id = $2`,
-			id, clubID, b.date,
-		).Scan(&open, &receivableOK); err != nil {
-			return nil, true, fmt.Errorf("loading invoice: %w", err)
-		}
-		if !open {
-			return nil, true, fmt.Errorf("a faktura on order %s is already paid, voided or credited — book the charge by hand", b.orderRef)
-		}
-		// Checkout refuses such a faktura, but an order minted before the
-		// guard could still carry one (BRY-386).
-		if !receivableOK {
-			return nil, true, ErrImportedNoOpeningBalance
-		}
+	if err != nil {
+		return nil, true, err
 	}
 
 	desc := fmt.Sprintf("Vipps innbetaling ordre %s", b.orderRef)

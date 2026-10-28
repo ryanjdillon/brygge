@@ -244,6 +244,9 @@ type clubFinancialSettings struct {
 	// Stripe payout in the bank statement text.
 	StripeClearingAccount  string `json:"stripe_clearing_account"`
 	StripePayoutDescriptor string `json:"stripe_payout_descriptor"`
+	// StripeConfigured is whether this instance has its Stripe credentials,
+	// so the accounting views offer the Stripe sync. Read only.
+	StripeConfigured bool `json:"stripe_configured"`
 	// OnlineMaxAmount caps which invoices may offer online payment
 	// (BRY-283): null = no limit; otherwise invoices over this kr amount are
 	// bank-transfer only.
@@ -360,6 +363,9 @@ func (h *ClubSettingsHandler) HandleGetFinancialSettings(w http.ResponseWriter, 
 		h.log.Error().Err(err).Msg("load financial settings")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
+	}
+	if h.config != nil {
+		s.StripeConfigured, _ = h.config.StripeCredentials()
 	}
 	JSON(w, http.StatusOK, s)
 }

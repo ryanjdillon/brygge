@@ -958,6 +958,7 @@ func (h *AccountingHandler) importBankStatement(w http.ResponseWriter, r *http.R
 				"refreshed":           result.Refreshed,
 				"superseded":          result.Superseded,
 				"auto_assigned":       autoAssignedCount(result.AutoAssign),
+				"stripe_booked":       stripeBookedCount(result.StripeBooking),
 			})
 	}
 
@@ -985,6 +986,7 @@ func (h *AccountingHandler) importBankStatement(w http.ResponseWriter, r *http.R
 		"last_row_date":         result.LastRowDate,
 		"provisional_rows":      result.ProvisionalRows,
 		"auto_assign":           result.AutoAssign,
+		"stripe_booking":        result.StripeBooking,
 	}
 	if overwrite {
 		resp["deleted"] = result.Deleted
@@ -2331,9 +2333,19 @@ func (h *AccountingHandler) HandleBankSync(w http.ResponseWriter, r *http.Reques
 				"payments_linked":     result.PaymentsLinked,
 				"closed_periods":      result.ClosedPeriods,
 				"auto_assigned":       autoAssignedCount(result.AutoAssign),
+				"stripe_booked":       stripeBookedCount(result.StripeBooking),
 			})
 	}
 	JSON(w, http.StatusOK, result)
+}
+
+// stripeBookedCount is how many Stripe rows a booking pass booked, for the
+// audit summary of the import or sync that ran it.
+func stripeBookedCount(r *accounting.StripeBookResult) int {
+	if r == nil {
+		return 0
+	}
+	return r.ChargesBooked + r.FeesBooked
 }
 
 // autoAssignedCount is how many payments an auto-assign run booked, for the

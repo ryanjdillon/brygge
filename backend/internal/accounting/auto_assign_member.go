@@ -235,18 +235,41 @@ func toCents(amount float64) int64 {
 	return int64(math.Round(amount * 100))
 }
 
-// invoiceAlreadyBookedSQL is true when a booked bank or Vipps row already
-// settles part of the faktura: one recorded against it, or a bank row
+// invoiceBookedRowSQL is true when a booked row records that it settles the
+// faktura: a bank row or Vipps charge with its invoice_id, or an
+// order-linked charge (Stripe, or Vipps by merchant reference) whose
+// checkout order pays it through order_sources. An order charge settles the
+// faktura in the GL before its payment back-link lands, so without the
+// order clause a bank or Vipps assign in that window credits 1500 twice.
+// Every check of "is this faktura already booked" goes through this
+// fragment (lockInvoiceForAssign, invoiceAlreadyBookedSQL).
+func invoiceBookedRowSQL(alias string) string {
+	return `(EXISTS (SELECT 1 FROM bank_import_rows bb
+	                   WHERE bb.club_id = ` + alias + `.club_id AND bb.invoice_id = ` + alias + `.id
+	                     AND bb.journal_entry_id IS NOT NULL)
+	      OR EXISTS (SELECT 1 FROM vipps_import_rows bv
+	                   WHERE bv.club_id = ` + alias + `.club_id AND bv.invoice_id = ` + alias + `.id
+	                     AND bv.journal_entry_id IS NOT NULL)
+	      OR EXISTS (SELECT 1 FROM order_sources bos
+	                   JOIN stripe_balance_transactions bst ON bst.order_id = bos.order_id
+	                  WHERE bos.invoice_id = ` + alias + `.id AND bst.club_id = ` + alias + `.club_id
+	                    AND bst.journal_entry_id IS NOT NULL)
+	      OR EXISTS (SELECT 1 FROM order_sources bos
+	                   JOIN orders bo ON bo.id = bos.order_id AND bo.vipps_reference <> ''
+	                   JOIN vipps_import_rows bov ON bov.club_id = bo.club_id AND bov.order_id = bo.vipps_reference
+	                  WHERE bos.invoice_id = ` + alias + `.id AND bov.club_id = ` + alias + `.club_id
+	                    AND bov.journal_entry_id IS NOT NULL))`
+}
+
+// invoiceAlreadyBookedSQL is true when a booked row already settles part of
+// the faktura: one recorded against it (invoiceBookedRowSQL), or a bank row
 // KID-matched to it whose payment back-link never landed. A second payment
 // to such a faktura is a remainder or a double payment, never a clean match.
 func invoiceAlreadyBookedSQL(alias string) string {
-	return `(EXISTS (SELECT 1 FROM bank_import_rows ab
+	return `(` + invoiceBookedRowSQL(alias) + `
+	      OR EXISTS (SELECT 1 FROM bank_import_rows ab
 	                   WHERE ab.club_id = ` + alias + `.club_id AND ab.journal_entry_id IS NOT NULL
-	                     AND (ab.invoice_id = ` + alias + `.id
-	                          OR (COALESCE(` + alias + `.kid_number, '') <> '' AND ab.kid_number = ` + alias + `.kid_number)))
-	      OR EXISTS (SELECT 1 FROM vipps_import_rows av
-	                   WHERE av.club_id = ` + alias + `.club_id AND av.journal_entry_id IS NOT NULL
-	                     AND av.invoice_id = ` + alias + `.id))`
+	                     AND COALESCE(` + alias + `.kid_number, '') <> '' AND ab.kid_number = ` + alias + `.kid_number))`
 }
 
 // memberInvoiceDecision is what decideMemberInvoice concludes. InvoiceID is

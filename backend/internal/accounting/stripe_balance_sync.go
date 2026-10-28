@@ -54,6 +54,35 @@ const (
 	StripeReviewUnsupportedCategory = "unsupported_category"
 )
 
+// Why a charge that ingest found ready could not be booked from its order
+// (BookStripeBalance). Unlike the ingest reasons above, a re-sync never
+// reclassifies a row held for one of these; the booking pass retries it.
+const (
+	// StripeReviewReceivableNotOpen: a faktura on the order is already
+	// paid, voided or credited (most likely paid another way as well).
+	StripeReviewReceivableNotOpen = "receivable_not_open"
+	// StripeReviewImportedNoOpeningBalance: a faktura on the order was
+	// imported and its receivable is not in the GL by the charge date.
+	StripeReviewImportedNoOpeningBalance = "imported_no_opening_balance"
+	// StripeReviewSplitMismatch: the order's fakturas and lines do not add
+	// up to the charge.
+	StripeReviewSplitMismatch = "split_mismatch"
+)
+
+// stripeBookingReviewReasons are the review reasons BookStripeBalance sets
+// and retries.
+var stripeBookingReviewReasons = []string{
+	StripeReviewReceivableNotOpen, StripeReviewImportedNoOpeningBalance, StripeReviewSplitMismatch,
+}
+
+// stripeBookingReviewListSQL is stripeBookingReviewReasons as a SQL list.
+// The reasons are fixed identifiers, so quoting them needs no escaping.
+var stripeBookingReviewListSQL = "'" + strings.Join(stripeBookingReviewReasons, "', '") + "'"
+
+// stripeBookingReviewSQL is true for a row held for review by the booking
+// pass rather than by ingest.
+var stripeBookingReviewSQL = `(status = 'needs_review' AND review_reason IN (` + stripeBookingReviewListSQL + `))`
+
 // stripeCursorOverlap is how far before the recorded watermark a sync
 // starts again. Re-reading is free (rows are upserted), and the overlap
 // covers transactions Stripe makes visible after later ones.
@@ -362,17 +391,19 @@ func (s *Service) ingestStripeTxnReported(ctx context.Context, src StripeBalance
 }
 
 // ingestStripeTxn stores one balance transaction. A row already stored is
-// reclassified only while it waits for review; booked, dismissed and
-// ready rows are left exactly as they are. stored is false only when the
-// row could not be written; err may also be a failed lookup of a row that
-// was stored for review.
+// reclassified only while it waits for review on an ingest reason; booked,
+// dismissed and ready rows, and rows the booking pass holds for review,
+// are left exactly as they are. stored is false only when the row could not
+// be written; err may also be a failed lookup of a row that was stored for
+// review.
 func (s *Service) ingestStripeTxn(ctx context.Context, src StripeBalanceSource, clubID string, bt *stripe.BalanceTransaction, res *StripeSyncResult) (stored bool, err error) {
 	var status string
+	var bookingReview bool
 	err = s.db.QueryRow(ctx,
-		`SELECT status FROM stripe_balance_transactions WHERE club_id = $1 AND balance_transaction_id = $2`,
-		clubID, bt.ID).Scan(&status)
+		`SELECT status, `+stripeBookingReviewSQL+` FROM stripe_balance_transactions WHERE club_id = $1 AND balance_transaction_id = $2`,
+		clubID, bt.ID).Scan(&status, &bookingReview)
 	switch {
-	case err == nil && status != StripeTxnNeedsReview:
+	case err == nil && (status != StripeTxnNeedsReview || bookingReview):
 		return true, nil
 	case err != nil && !errors.Is(err, pgx.ErrNoRows):
 		return false, fmt.Errorf("reading stored transaction: %w", err)
@@ -406,6 +437,7 @@ func (s *Service) upsertStripeTxn(ctx context.Context, clubID string, bt *stripe
 		        review_reason     = EXCLUDED.review_reason,
 		        updated_at        = now()
 		  WHERE t.status = 'needs_review'
+		    AND t.review_reason NOT IN (`+stripeBookingReviewListSQL+`)
 		    AND t.journal_entry_id IS NULL
 		    AND (t.payment_intent_id, t.attempt_id, t.order_id, t.status, t.review_reason)
 		        IS DISTINCT FROM

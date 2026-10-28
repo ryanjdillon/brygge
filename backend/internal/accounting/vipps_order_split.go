@@ -13,8 +13,8 @@ import (
 // book it exactly instead of guessing by amount/name: each faktura the order
 // settles credits the receivables-clearing account (and back-links the invoice
 // payment), and each ad-hoc / QR catalog line credits its category's revenue
-// account. This is the reusable core; wiring it into the reconcile posting rides
-// on the BRY-256 ePayment-primary cutover.
+// account. Stripe charges book from their order through the same split
+// (resolveOrderChargeSplitByOrderID), labelled as card payments.
 
 // orderChargeSource is one faktura settled by a checkout order.
 type orderChargeSource struct {
@@ -30,29 +30,38 @@ type orderChargeLine struct {
 	Total    float64
 }
 
-// buildOrderChargeSplit turns an order's faktura sources + catalog lines into
-// the credit side of its journal split: each faktura → receivables clearing
-// (with the invoice back-link so confirm can record the payment), each catalog
-// line → its category revenue account (fallback 3900 when the category is
-// unmapped). Pure — no DB, fully testable. The caller supplies the matching DR
-// bank/clearing line.
+// vippsSplitLabel prefixes the line descriptions of a Vipps order split.
+const vippsSplitLabel = "Vipps innbetaling"
+
+// buildOrderChargeSplit is the Vipps form of buildOrderChargeSplitAs.
 func buildOrderChargeSplit(sources []orderChargeSource, lines []orderChargeLine) []VippsReconcileLine {
+	return buildOrderChargeSplitAs(vippsSplitLabel, sources, lines)
+}
+
+// buildOrderChargeSplitAs turns an order's faktura sources + catalog lines
+// into the credit side of its journal split: each faktura → receivables
+// clearing (with the invoice back-link so confirm can record the payment),
+// each catalog line → its category revenue account (fallback 3900 when the
+// category is unmapped). label names the payment method in each line
+// description. Pure — no DB, fully testable. The caller supplies the
+// matching DR bank/clearing line.
+func buildOrderChargeSplitAs(label string, sources []orderChargeSource, lines []orderChargeLine) []VippsReconcileLine {
 	out := make([]VippsReconcileLine, 0, len(sources)+len(lines))
 	for _, src := range sources {
 		out = append(out, VippsReconcileLine{
 			Kind:            "receivable",
 			AccountCode:     receivablesAccountCode,
 			Credit:          src.Amount,
-			Description:     fmt.Sprintf("Vipps innbetaling faktura #%d", src.InvoiceNumber),
+			Description:     fmt.Sprintf("%s faktura #%d", label, src.InvoiceNumber),
 			LinkedInvoiceID: src.InvoiceID,
 			Resolved:        true,
 		})
 	}
 	for _, l := range lines {
 		code := RevenueAccountOrFallback(l.Category)
-		desc := "Vipps innbetaling"
+		desc := label
 		if l.Name != "" {
-			desc = "Vipps innbetaling: " + l.Name
+			desc = label + ": " + l.Name
 		}
 		out = append(out, VippsReconcileLine{
 			Kind:        "revenue",
@@ -84,20 +93,50 @@ func (s *Service) resolveOrderChargeSplit(ctx context.Context, clubID, reference
 	if err != nil {
 		return nil, false, fmt.Errorf("load order by reference: %w", err)
 	}
-
-	sources, err := s.loadOrderChargeSources(ctx, orderID)
+	lines, err = orderChargeSplit(ctx, s.db, orderID, vippsSplitLabel)
 	if err != nil {
 		return nil, false, err
 	}
-	catLines, err := s.loadOrderChargeLines(ctx, orderID)
-	if err != nil {
-		return nil, false, err
-	}
-	return buildOrderChargeSplit(sources, catLines), true, nil
+	return lines, true, nil
 }
 
-func (s *Service) loadOrderChargeSources(ctx context.Context, orderID string) ([]orderChargeSource, error) {
-	rows, err := s.db.Query(ctx,
+// resolveOrderChargeSplitByOrderID is resolveOrderChargeSplit for a charge
+// that names its order by id (a Stripe charge, through its payment
+// attempt). found=false when the club has no such order.
+func resolveOrderChargeSplitByOrderID(ctx context.Context, q dbtx, clubID, orderID, label string) (lines []VippsReconcileLine, found bool, err error) {
+	var exists bool
+	if err := q.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM orders WHERE id = $1 AND club_id = $2)`,
+		orderID, clubID,
+	).Scan(&exists); err != nil {
+		return nil, false, fmt.Errorf("load order: %w", err)
+	}
+	if !exists {
+		return nil, false, nil
+	}
+	lines, err = orderChargeSplit(ctx, q, orderID, label)
+	if err != nil {
+		return nil, false, err
+	}
+	return lines, true, nil
+}
+
+// orderChargeSplit loads an order's fakturas and catalog lines and builds
+// its credit split.
+func orderChargeSplit(ctx context.Context, q dbtx, orderID, label string) ([]VippsReconcileLine, error) {
+	sources, err := loadOrderChargeSources(ctx, q, orderID)
+	if err != nil {
+		return nil, err
+	}
+	catLines, err := loadOrderChargeLines(ctx, q, orderID)
+	if err != nil {
+		return nil, err
+	}
+	return buildOrderChargeSplitAs(label, sources, catLines), nil
+}
+
+func loadOrderChargeSources(ctx context.Context, q dbtx, orderID string) ([]orderChargeSource, error) {
+	rows, err := q.Query(ctx,
 		`SELECT i.id, i.invoice_number, i.total_amount
 		   FROM order_sources os
 		   JOIN invoices i ON i.id = os.invoice_id
@@ -120,8 +159,8 @@ func (s *Service) loadOrderChargeSources(ctx context.Context, orderID string) ([
 	return out, rows.Err()
 }
 
-func (s *Service) loadOrderChargeLines(ctx context.Context, orderID string) ([]orderChargeLine, error) {
-	rows, err := s.db.Query(ctx,
+func loadOrderChargeLines(ctx context.Context, q dbtx, orderID string) ([]orderChargeLine, error) {
+	rows, err := q.Query(ctx,
 		`SELECT ol.name, COALESCE(pi.category, ''), ol.total_price
 		   FROM order_lines ol
 		   LEFT JOIN price_items pi ON pi.id = ol.price_item_id

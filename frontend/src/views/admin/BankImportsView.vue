@@ -33,12 +33,23 @@ import Select from '@/components/ui/form/Select.vue'
 import FileInput from '@/components/ui/form/FileInput.vue'
 import { monthOptions } from '@/utils/month'
 import type { BankImportRow } from '@/composables/useBankImports'
-import { runBankSync, runVippsResync, type BankSyncResult, type VippsResyncResult } from '@/composables/useBankImports'
+import {
+  runBankSync,
+  runVippsResync,
+  runStripeSync,
+  useStripeConfigured,
+  useStripeReview,
+  type BankSyncResult,
+  type VippsResyncResult,
+  type StripeSyncResult,
+} from '@/composables/useBankImports'
 import { importUni24CSV, type Uni24ImportResult } from '@/composables/useFinancials'
 import { formatNOK as nok, formatDate } from '@/lib/format'
 import { useFreshTotp } from '@/composables/useFreshTotp'
 import AutoAssignSummary from '@/components/admin/AutoAssignSummary.vue'
 import VippsPayoutSweepSummary from '@/components/admin/VippsPayoutSweepSummary.vue'
+import StripeBookSummary from '@/components/admin/StripeBookSummary.vue'
+import StripeReviewList from '@/components/admin/StripeReviewList.vue'
 import BankImportProvisionalNotices from '@/components/admin/BankImportProvisionalNotices.vue'
 import { useConfirm } from '@/stores/confirm'
 import { useCan } from '@/composables/useCan'
@@ -241,6 +252,29 @@ async function runVippsResyncAction() {
     vippsResyncBusy.value = false
   }
 }
+// Stripe: offered only when the instance has Stripe credentials.
+const { data: stripeConfigured } = useStripeConfigured()
+const showStripe = computed(() => !!stripeConfigured.value)
+const { data: stripeReview } = useStripeReview(showStripe)
+const stripeSyncBusy = ref(false)
+const stripeSyncResult = ref<StripeSyncResult | null>(null)
+const stripeSyncError = ref<string | null>(null)
+
+async function runStripeSyncAction() {
+  // The sync books card payments and fees as posted entries.
+  if (!(await ensureFreshTotp())) return
+  stripeSyncBusy.value = true
+  stripeSyncError.value = null
+  try {
+    stripeSyncResult.value = await runStripeSync()
+    queryClient.invalidateQueries({ queryKey: ['accounting'] })
+  } catch (e) {
+    stripeSyncError.value = (e as Error)?.message ?? 'Failed'
+  } finally {
+    stripeSyncBusy.value = false
+  }
+}
+
 const syncResult = ref<BankSyncResult | null>(null)
 const syncError = ref<string | null>(null)
 
@@ -533,6 +567,16 @@ const filterMonthValue = computed<number>({
         >
           {{ vippsResyncBusy ? t('common.loading') : t('admin.bankImports.runVippsResync') }}
         </button>
+        <button
+          v-if="showStripe"
+          type="button"
+          :disabled="stripeSyncBusy"
+          class="rounded-md border border-brand-300 bg-white px-3 py-1.5 text-sm font-semibold text-brand-700 hover:bg-brand-50 disabled:opacity-50"
+          data-testid="stripe-sync-btn"
+          @click="runStripeSyncAction"
+        >
+          {{ stripeSyncBusy ? t('common.loading') : t('admin.bankImports.runStripeSync') }}
+        </button>
       </div>
     </div>
 
@@ -556,6 +600,7 @@ const filterMonthValue = computed<number>({
       </p>
       <AutoAssignSummary v-if="syncResult.auto_assign" source="bank" :result="syncResult.auto_assign" />
       <VippsPayoutSweepSummary v-if="syncResult.vipps_payouts" :result="syncResult.vipps_payouts" />
+      <StripeBookSummary v-if="syncResult.stripe_booking" :result="syncResult.stripe_booking" />
     </div>
     <div v-if="vippsResyncResult" class="mt-3 rounded-md bg-brand-50 px-3 py-2 text-xs text-brand-900" data-testid="vipps-resync-result">
       {{ t('admin.bankImports.vippsResyncResult', {
@@ -567,8 +612,17 @@ const filterMonthValue = computed<number>({
       <AutoAssignSummary v-if="vippsResyncResult.auto_assign" source="vipps" :result="vippsResyncResult.auto_assign" />
       <VippsPayoutSweepSummary v-if="vippsResyncResult.payouts" :result="vippsResyncResult.payouts" />
     </div>
+    <div v-if="stripeSyncResult" class="mt-3 rounded-md bg-brand-50 px-3 py-2 text-xs text-brand-900" data-testid="stripe-sync-result">
+      {{ t('admin.bankImports.stripeSyncResult', {
+        fetched: stripeSyncResult.fetched,
+        inserted: stripeSyncResult.inserted,
+      }) }}
+      <StripeBookSummary v-if="stripeSyncResult.booking" :result="stripeSyncResult.booking" />
+    </div>
     <div v-if="syncError" class="mt-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">{{ syncError }}</div>
     <div v-if="vippsResyncError" class="mt-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">{{ vippsResyncError }}</div>
+    <div v-if="stripeSyncError" class="mt-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700" data-testid="stripe-sync-error">{{ stripeSyncError }}</div>
+    <StripeReviewList v-if="showStripe && stripeReview" :items="stripeReview" />
 
     <div class="mt-6">
       <Tabs v-model="activeTab" :tabs="tabs" />
@@ -740,6 +794,7 @@ const filterMonthValue = computed<number>({
             · {{ t('admin.bankImports.refreshed') }}: {{ bankResult.refreshed }}
           </template>
           <BankImportProvisionalNotices :result="bankResult" />
+          <StripeBookSummary v-if="bankResult.stripe_booking" :result="bankResult.stripe_booking" />
           <p v-if="bankResult.auto_matched" class="mt-2 rounded bg-brand-50 px-2 py-1 text-brand-800">
             {{ t('admin.bankImports.autoMatchedNotice', { code: bankResult.bank_account_code }) }}
           </p>

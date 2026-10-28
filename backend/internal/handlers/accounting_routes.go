@@ -75,6 +75,7 @@ func (h *AccountingHandler) MountLedgerRoutes(r chi.Router, moneyGate ...func(ht
 	r.With(moneyGate...).Post("/bank-sync", h.HandleBankSync)
 	r.With(moneyGate...).Post("/vipps-resync", h.HandleResyncVipps)
 	r.With(moneyGate...).Post("/stripe/sync", h.HandleStripeSync)
+	r.Get("/stripe/review", h.HandleListStripeReview)
 
 	r.Route("/bank-rows/{rowID}/reconcile-vipps", func(r chi.Router) {
 		r.Get("/", h.HandleVippsReconcilePreview)

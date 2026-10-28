@@ -95,7 +95,7 @@ type assignOpts struct {
 }
 
 var (
-	errInvoiceHasBookedRow = errors.New("invoice already has a booked bank or Vipps payment — unassign it first")
+	errInvoiceHasBookedRow = errors.New("invoice already has a booked bank, Vipps or card payment — unassign it first")
 	errInvoiceNoLongerOpen = errors.New("invoice is no longer the open faktura for this deposit")
 )
 
@@ -326,10 +326,7 @@ func lockInvoiceForAssign(ctx context.Context, tx pgx.Tx, clubID, invoiceID stri
 		`SELECT round(i.total_amount * 100)::bigint, i.payment_id IS NOT NULL, i.status,
 		        `+finance.OwedByMemberSQL("i")+`, `+finance.CreditedSQL("i")+`,
 		        i.sent_at IS NOT NULL AND i.import_source IS NULL,
-		        EXISTS (SELECT 1 FROM bank_import_rows b
-		                 WHERE b.club_id = i.club_id AND b.invoice_id = i.id AND b.journal_entry_id IS NOT NULL)
-		        OR EXISTS (SELECT 1 FROM vipps_import_rows v
-		                 WHERE v.club_id = i.club_id AND v.invoice_id = i.id AND v.journal_entry_id IS NOT NULL),
+		        `+invoiceBookedRowSQL("i")+`,
 		        `+invoiceAlreadyBookedSQL("i")+`,
 		        `+finance.ImportedReceivableOpenSQL("i", "$3::date")+`
 		   FROM invoices i
@@ -364,6 +361,10 @@ func lockInvoiceForAssign(ctx context.Context, tx pgx.Tx, clubID, invoiceID stri
 	return invoiceCents, nil
 }
 
+// errNoFiscalPeriod: no fiscal period covers the date, and the caller must
+// not create one.
+var errNoFiscalPeriod = errors.New("no fiscal period")
+
 // existingPeriodIn is resolvePeriodIn without the auto-create: an automatic
 // booking never opens a fiscal year on its own.
 func existingPeriodIn(ctx context.Context, q dbtx, clubID string, date time.Time, override string) (id, status string, err error) {
@@ -378,7 +379,7 @@ func existingPeriodIn(ctx context.Context, q dbtx, clubID string, date time.Time
 		clubID, date.Format("2006-01-02"),
 	).Scan(&id, &status)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return "", "", fmt.Errorf("no fiscal period for %s", date.Format("2006-01-02"))
+		return "", "", fmt.Errorf("%w for %s", errNoFiscalPeriod, date.Format("2006-01-02"))
 	}
 	return id, status, err
 }

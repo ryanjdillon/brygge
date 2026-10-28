@@ -1083,7 +1083,31 @@
       "autoAssignOff": "Automatyczne przypisywanie jest wyłączone ({review} płatności czeka w Tildel). Włącz je w Økonomiinnstillinger → Vipps.",
       "autoAssignAccount": "konto {code}",
       "autoAssignUndo": "Cofnij",
-      "autoAssignUndone": "Cofnięto — z powrotem w Tildel"
+      "autoAssignUndone": "Cofnięto — z powrotem w Tildel",
+      "runStripeSync": "Synchronizuj Stripe",
+      "stripeSyncResult": "Stripe: pobrano {fetched} · nowe {inserted}",
+      "stripeBookCounts": "Zaksięgowano ze Stripe: płatności kartą {charges} · opłaty {fees}",
+      "stripeBookReview": "Transakcje Stripe do sprawdzenia: {count}",
+      "stripeBookDeferred": "Niezaksięgowane, bo okres rozliczeniowy jest zamknięty lub jeszcze nie utworzony: {count}; zostaną zaksięgowane, gdy będzie otwarty.",
+      "stripeBookBusy": "Trwała synchronizacja Stripe, więc nic nie zaksięgowano. Spróbuj ponownie za chwilę.",
+      "stripeBookErrors": "Nie udało się zaksięgować: {count} – zobacz dziennik",
+      "stripeReviewTitle": "Transakcje Stripe do sprawdzenia ({count})",
+      "stripeReviewCols": {
+        "date": "Data",
+        "amount": "Kwota",
+        "reason": "Powód",
+        "id": "ID Stripe"
+      },
+      "stripeReviewReasons": {
+        "no_attempt": "Nie znaleziono płatności w Brygge",
+        "amount_mismatch": "Kwota różni się od płatności",
+        "currency": "Waluta inna niż NOK",
+        "refund_pending_bry446": "Zwrot lub spór – zaksięgowane później",
+        "unsupported_category": "Nieznany typ transakcji",
+        "receivable_not_open": "Faktura jest już opłacona, skorygowana lub anulowana",
+        "imported_no_opening_balance": "Zaimportowana faktura bez bilansu otwarcia",
+        "split_mismatch": "Zamówienie nie zgadza się z kwotą"
+      }
     },
     "bankReconcile": {
       "filterAll": "All",
