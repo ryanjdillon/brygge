@@ -58,7 +58,7 @@ func loadCreditInvoice(ctx context.Context, q interface {
 	sql := `SELECT i.id, i.invoice_number, i.total_amount, i.status, i.user_id, i.recipient_id,
 	               (i.sent_at IS NOT NULL), (i.import_source IS NOT NULL), i.credits_invoice_id,
 	               ` + finance.SettledForMemberSQL("i") + `,
-	               (i.payment_id IS NOT NULL OR i.vipps_paid_at IS NOT NULL),
+	               (i.payment_id IS NOT NULL OR i.online_paid_at IS NOT NULL),
 	               EXISTS (SELECT 1 FROM journal_entries je
 	                        WHERE je.club_id = i.club_id AND je.source = 'invoice_sync'
 	                          AND je.source_id = i.id::text AND je.status = 'posted'),
@@ -191,7 +191,7 @@ func (h *InvoiceHandler) HandleListCreditCandidates(w http.ResponseWriter, r *ht
 
 	rows, err := h.db.Query(ctx,
 		`SELECT i.id, i.invoice_number, i.total_amount, i.issue_date,
-		        (i.payment_id IS NOT NULL OR i.vipps_paid_at IS NOT NULL),
+		        (i.payment_id IS NOT NULL OR i.online_paid_at IS NOT NULL),
 		        `+finance.SettledForMemberSQL("i")+`,
 		        (i.import_source IS NOT NULL),
 		        `+payerName+`, `+sameAmount+`, `+samePayer+`

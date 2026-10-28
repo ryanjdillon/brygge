@@ -80,7 +80,8 @@ func (e *webhookEnv) postRaw(body []byte, secret string) *httptest.ResponseRecor
 	return rec
 }
 
-// seedReferencedOrder inserts an order carrying a Vipps reference. userID ""
+// seedReferencedOrder inserts an order carrying a Vipps reference and the
+// payment attempt that reference belongs to, as a mint leaves them. userID ""
 // makes it a guest order.
 func (e *webhookEnv) seedReferencedOrder(t *testing.T, userID, ref, status, guestName string) string {
 	t.Helper()
@@ -95,6 +96,26 @@ func (e *webhookEnv) seedReferencedOrder(t *testing.T, userID, ref, status, gues
 		e.clubID, uid, guestName, ref, status, genCheckoutToken(),
 	).Scan(&id); err != nil {
 		t.Fatalf("insert order: %v", err)
+	}
+	attemptStatus := map[string]string{"paid": "captured", "refunded": "captured", "failed": "failed"}[status]
+	if attemptStatus == "" {
+		attemptStatus = "created"
+	}
+	e.seedAttempt(t, id, ref, attemptStatus)
+	return id
+}
+
+// seedAttempt adds a Vipps payment attempt to an order. Attempts seeded later
+// are newer.
+func (e *webhookEnv) seedAttempt(t *testing.T, orderID, ref, status string) string {
+	t.Helper()
+	var id string
+	if err := e.pool.QueryRow(context.Background(),
+		`INSERT INTO payment_attempts (club_id, order_id, provider, provider_reference, status, amount, created_at)
+		 VALUES ($1, $2, 'vipps', $3, $4, 450, clock_timestamp()) RETURNING id`,
+		e.clubID, orderID, ref, status,
+	).Scan(&id); err != nil {
+		t.Fatalf("insert attempt: %v", err)
 	}
 	return id
 }
@@ -168,9 +189,9 @@ func TestVippsWebhook_CapturedGuestOrder(t *testing.T) {
 	if got.Status != "paid" || got.PaidAt == nil {
 		t.Fatalf("order = %+v, want paid with paid_at", got)
 	}
-	// paid_at is when the webhook arrived, not the event's own timestamp.
-	if time.Since(*got.PaidAt) > time.Minute {
-		t.Errorf("paid_at = %v, want about now", got.PaidAt)
+	// paid_at is the provider's capture time, as the faktura marker is.
+	if want := time.Date(2026, 6, 20, 10, 0, 0, 0, time.UTC); !got.PaidAt.Equal(want) {
+		t.Errorf("paid_at = %v, want the event timestamp %v", got.PaidAt, want)
 	}
 	if got.GuestName != "Test Guest" {
 		t.Errorf("guest_name = %q, want backfilled from the Vipps profile", got.GuestName)
@@ -215,10 +236,9 @@ func TestVippsWebhook_CapturedFakturaOrder(t *testing.T) {
 	if got.Status != "paid" || got.GuestName != "" {
 		t.Errorf("member order = %+v, want paid with no guest name", got)
 	}
-	// The payer name is looked up for member orders too; only the write is
-	// limited to guests.
-	if gets := e.fake.getCalls(); len(gets) != 1 || gets[0] != "chk-faktura-1" {
-		t.Errorf("GetPayment calls = %v, want one for the member order", gets)
+	// Only guests share their name, so a member order is not looked up.
+	if gets := e.fake.getCalls(); len(gets) != 0 {
+		t.Errorf("GetPayment calls = %v, want none for a member order", gets)
 	}
 	want := time.Date(2026, 6, 20, 10, 0, 0, 0, time.UTC)
 	if at := e.invoiceVippsPaidAt(t, invOpen); at == nil || !at.Equal(want) {
@@ -253,20 +273,22 @@ func TestVippsWebhook_CapturedWithoutTimestampUsesNow(t *testing.T) {
 	}
 }
 
-func TestVippsWebhook_CapturedFailedOrderStaysFailed(t *testing.T) {
+func TestVippsWebhook_CapturedFailedOrderIsPaid(t *testing.T) {
 	e := newWebhookEnv(t, true)
 	userID, _ := testutil.SeedUser(t, e.pool, e.clubID, []string{"member"})
 	inv := seedPayableInvoice(t, e.pool, e.clubID, userID, "open", 933)
 	orderID := e.seedReferencedOrder(t, userID, "chk-failed-1", "failed", "")
 	addOrderSource(t, e.pool, orderID, inv)
 
+	// A capture means the money was taken, so it pays an order an earlier
+	// terminal event marked failed.
 	assertWebhookOK(t, e.post(t, capturedEvent("chk-failed-1", "evt-5", "2026-06-20T10:00:00Z")))
-	if got := e.order(t, orderID); got.Status != "failed" || got.PaidAt != nil {
-		t.Errorf("failed order = %+v, want still failed without paid_at", got)
+	want := time.Date(2026, 6, 20, 10, 0, 0, 0, time.UTC)
+	if got := e.order(t, orderID); got.Status != "paid" || got.PaidAt == nil || !got.PaidAt.Equal(want) {
+		t.Errorf("failed order = %+v, want paid at %v", got, want)
 	}
-	// The invoice marker is not guarded by order status.
-	if at := e.invoiceVippsPaidAt(t, inv); at == nil {
-		t.Error("invoice behind a failed order got no vipps_paid_at")
+	if at := e.invoiceVippsPaidAt(t, inv); at == nil || !at.Equal(want) {
+		t.Errorf("vipps_paid_at = %v, want %v", at, want)
 	}
 }
 

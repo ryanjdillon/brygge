@@ -34,9 +34,14 @@ type fakeVipps struct {
 	creates  []fakeVippsCreate
 	captures []fakeVippsCapture
 	gets     []string
+	cancels  []string
 
 	// createStatus, when non-zero, makes CreatePayment fail with that status.
 	createStatus int
+	// captureStatus, when non-zero, makes CapturePayment fail with that status.
+	captureStatus int
+	// onCreate, when set, runs as CreatePayment arrives, before it answers.
+	onCreate func()
 	// payerName is returned as the consented profile name on GET payment.
 	payerName string
 }
@@ -51,6 +56,7 @@ func newFakeVipps(t *testing.T) *fakeVipps {
 	mux.HandleFunc("POST /epayment/v1/payments", f.handleCreate)
 	mux.HandleFunc("GET /epayment/v1/payments/{ref}", f.handleGet)
 	mux.HandleFunc("POST /epayment/v1/payments/{ref}/capture", f.handleCapture)
+	mux.HandleFunc("POST /epayment/v1/payments/{ref}/cancel", f.handleCancel)
 	f.srv = httptest.NewServer(mux)
 	t.Cleanup(f.srv.Close)
 	return f
@@ -70,7 +76,11 @@ func (f *fakeVipps) handleCreate(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	f.creates = append(f.creates, fakeVippsCreate{IdempotencyKey: r.Header.Get("Idempotency-Key"), Body: body})
 	status := f.createStatus
+	hook := f.onCreate
 	f.mu.Unlock()
+	if hook != nil {
+		hook()
+	}
 	if status != 0 {
 		http.Error(w, `{"title":"fake failure"}`, status)
 		return
@@ -103,6 +113,18 @@ func (f *fakeVipps) handleCapture(w http.ResponseWriter, r *http.Request) {
 		Reference:      r.PathValue("ref"),
 		Body:           body,
 	})
+	status := f.captureStatus
+	f.mu.Unlock()
+	if status != 0 {
+		http.Error(w, `{"title":"fake failure"}`, status)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+func (f *fakeVipps) handleCancel(w http.ResponseWriter, r *http.Request) {
+	f.mu.Lock()
+	f.cancels = append(f.cancels, r.PathValue("ref"))
 	f.mu.Unlock()
 	w.WriteHeader(http.StatusOK)
 }
@@ -117,6 +139,12 @@ func (f *fakeVipps) captureCalls() []fakeVippsCapture {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]fakeVippsCapture(nil), f.captures...)
+}
+
+func (f *fakeVipps) cancelCalls() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.cancels...)
 }
 
 func (f *fakeVipps) getCalls() []string {

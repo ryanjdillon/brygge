@@ -289,12 +289,12 @@ func TestMintOrderPayment_Blocked(t *testing.T) {
 		setup func(invoiceID string)
 	}{
 		{"forced off", func(invoiceID string) {
-			if _, err := pool.Exec(ctx, `UPDATE invoices SET vipps_payment_link_opt_in = false WHERE id = $1`, invoiceID); err != nil {
+			if _, err := pool.Exec(ctx, `UPDATE invoices SET online_payment_opt_in = false WHERE id = $1`, invoiceID); err != nil {
 				t.Fatal(err)
 			}
 		}},
 		{"over club cap", func(string) {
-			if _, err := pool.Exec(ctx, `UPDATE clubs SET vipps_max_amount = 100 WHERE id = $1`, clubID); err != nil {
+			if _, err := pool.Exec(ctx, `UPDATE clubs SET online_max_amount = 100 WHERE id = $1`, clubID); err != nil {
 				t.Fatal(err)
 			}
 		}},

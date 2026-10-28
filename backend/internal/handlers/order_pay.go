@@ -24,18 +24,18 @@ import (
 // instead of a zero-amount Vipps checkout.
 var errNothingToPay = errors.New("order has nothing left to pay")
 
-// errVippsBlocked signals a checkout order whose unpaid invoice source is not
-// allowed to be paid via Vipps (BRY-283): either over the club's amount cap with
-// no override, or explicitly forced off. The payer is steered to bank transfer
-// (KID) instead of being charged via Vipps, so the club avoids the fee.
-var errVippsBlocked = errors.New("order has a source not payable via Vipps")
+// errOnlinePaymentBlocked signals a checkout order whose unpaid invoice source is
+// not allowed to be paid online (BRY-283): either over the club's amount cap
+// with no override, or explicitly forced off. The payer is steered to bank
+// transfer (KID) instead of being charged online, so the club avoids the fee.
+var errOnlinePaymentBlocked = errors.New("order has a source not payable online")
 
 // ensureFakturaOrderToken returns the durable token of the faktura's checkout
 // order, which the email links to. The order (an `orders` row with an
 // order_sources link to the invoice) is created lazily the first time a faktura
 // should carry a Vipps link (create=true) and reused forever after, so resends
 // keep the same link. Returns "" when no payment provider is configured, the
-// invoice is over the club's Vipps amount cap (BRY-283), it is an imported
+// invoice is over the club's online-payment amount cap (BRY-283), it is an imported
 // faktura whose receivable isn't in the GL yet (BRY-386), or nothing should be
 // offered.
 //
@@ -47,10 +47,10 @@ func (h *InvoiceHandler) ensureFakturaOrderToken(ctx context.Context, clubID, in
 		return ""
 	}
 
-	// Respect the club's Vipps amount cap: large invoices are bank-transfer only.
+	// Respect the club's online-payment amount cap: large invoices are bank-transfer only.
 	// Checked before the reuse SELECT below so an invoice that already has a
-	// durable order stops offering Vipps once the club sets a cap under it.
-	if !h.invoiceVippsAllowed(ctx, clubID, invoiceID) {
+	// durable order stops offering online payment once the club sets a cap under it.
+	if !h.invoiceOnlinePaymentAllowed(ctx, clubID, invoiceID) {
 		return ""
 	}
 	// Likewise before the reuse: the Vipps charge would credit 1500 for a
@@ -122,28 +122,29 @@ func (h *InvoiceHandler) ensureFakturaOrderToken(ctx context.Context, clubID, in
 	return token
 }
 
-// vippsAllowedExpr is the tri-state rule deciding whether an invoice may offer a
-// Vipps link (BRY-283), given aliases i (invoices) and c (clubs):
+// onlinePaymentAllowedExpr is the tri-state rule deciding whether an invoice may
+// offer online payment with any provider (BRY-283), given aliases i (invoices)
+// and c (clubs):
 //
 //	Nothing owed (total ≤ 0: a credit note, or a fully exempt faktura) → never
 //	On   (opt_in TRUE)  → always
 //	Off  (opt_in FALSE) → never
 //	Auto (opt_in NULL)  → iff the club has no cap or the amount is within it
-const vippsAllowedExpr = `CASE
-	WHEN i.total_amount <= 0                  THEN false
-	WHEN i.vipps_payment_link_opt_in IS TRUE  THEN true
-	WHEN i.vipps_payment_link_opt_in IS FALSE THEN false
-	WHEN c.vipps_max_amount IS NULL           THEN true
-	ELSE i.total_amount <= c.vipps_max_amount
+const onlinePaymentAllowedExpr = `CASE
+	WHEN i.total_amount <= 0              THEN false
+	WHEN i.online_payment_opt_in IS TRUE  THEN true
+	WHEN i.online_payment_opt_in IS FALSE THEN false
+	WHEN c.online_max_amount IS NULL      THEN true
+	ELSE i.total_amount <= c.online_max_amount
 END`
 
-// invoiceVippsAllowed reports whether a Vipps link should be offered for this
-// invoice under the tri-state rule above. On error it fails open (returns true)
+// invoiceOnlinePaymentAllowed reports whether online payment should be offered
+// for this invoice under the tri-state rule above. On error it fails open (returns true)
 // rather than silently suppressing a legitimate link.
-func (h *InvoiceHandler) invoiceVippsAllowed(ctx context.Context, clubID, invoiceID string) bool {
+func (h *InvoiceHandler) invoiceOnlinePaymentAllowed(ctx context.Context, clubID, invoiceID string) bool {
 	var allowed bool
 	err := h.db.QueryRow(ctx,
-		`SELECT `+vippsAllowedExpr+`
+		`SELECT `+onlinePaymentAllowedExpr+`
 		   FROM invoices i
 		   JOIN clubs c ON c.id = i.club_id
 		  WHERE i.id = $1 AND i.club_id = $2`,
@@ -154,7 +155,7 @@ func (h *InvoiceHandler) invoiceVippsAllowed(ctx context.Context, clubID, invoic
 		return true
 	}
 	if err != nil {
-		h.log.Error().Err(err).Str("invoice_id", invoiceID).Msg("vipps allowed check failed")
+		h.log.Error().Err(err).Str("invoice_id", invoiceID).Msg("online payment allowed check failed")
 		return true
 	}
 	return allowed
@@ -200,12 +201,12 @@ func (h *InvoiceHandler) invoiceReceivableInGL(ctx context.Context, clubID, invo
 	return ok
 }
 
-// orderHasVippsBlockedSource reports whether any still-unpaid invoice source of
-// the order is not allowed to be paid via Vipps (BRY-283), or is an imported
+// orderHasOnlineBlockedSource reports whether any still-unpaid invoice source of
+// the order is not allowed to be paid online (BRY-283), or is an imported
 // faktura whose receivable isn't in the GL yet (BRY-386). Used at mint time to
 // refuse charging a link that was issued before the cap/override was set (or is
 // already sitting in a member's inbox).
-func (h *InvoiceHandler) orderHasVippsBlockedSource(ctx context.Context, orderID string) (bool, error) {
+func (h *InvoiceHandler) orderHasOnlineBlockedSource(ctx context.Context, orderID string) (bool, error) {
 	var blocked bool
 	err := h.db.QueryRow(ctx,
 		`SELECT EXISTS (
@@ -216,7 +217,7 @@ func (h *InvoiceHandler) orderHasVippsBlockedSource(ctx context.Context, orderID
 		     JOIN clubs c    ON c.id = o.club_id
 		    WHERE os.order_id = $1
 		      AND `+finance.OwedByMemberSQL("i")+`
-		      AND (NOT (`+vippsAllowedExpr+`)
+		      AND (NOT (`+onlinePaymentAllowedExpr+`)
 		           OR NOT `+finance.ImportedReceivableOpenSQL("i", "CURRENT_DATE")+`)
 		 )`,
 		orderID,
@@ -298,9 +299,9 @@ func (h *InvoiceHandler) HandleGetInvoicePayLink(w http.ResponseWriter, r *http.
 		return
 	}
 
-	// Over the club's Vipps cap → bank transfer only; tell the UI distinctly so
+	// Over the club's online-payment cap → bank transfer only; tell the UI distinctly so
 	// it shows "over limit" rather than "Vipps not configured" (BRY-283).
-	if !h.invoiceVippsAllowed(ctx, claims.ClubID, invoiceID) {
+	if !h.invoiceOnlinePaymentAllowed(ctx, claims.ClubID, invoiceID) {
 		Error(w, http.StatusConflict, "vipps_over_limit")
 		return
 	}
@@ -353,8 +354,8 @@ func (h *InvoiceHandler) HandleOrderPayRedirect(w http.ResponseWriter, r *http.R
 		http.Redirect(w, r, h.paymentReturnURL(), http.StatusFound)
 		return
 	}
-	if errors.Is(err, errVippsBlocked) {
-		// Not payable via Vipps → send them to the checkout page, which shows
+	if errors.Is(err, errOnlinePaymentBlocked) {
+		// Not payable online → send them to the checkout page, which shows
 		// KID + konto for bank transfer instead of a Vipps button (BRY-283).
 		http.Redirect(w, r, h.frontendBase()+"/betal/"+token, http.StatusFound) // #nosec G710 -- fixed configured origin; token is a path segment that just matched a server-minted orders.token
 		return
@@ -368,9 +369,10 @@ func (h *InvoiceHandler) HandleOrderPayRedirect(w http.ResponseWriter, r *http.R
 }
 
 // mintOrderPayment sums the order's still-unpaid invoice sources and its ad-hoc
-// lines, has the named provider create a payment for the total, and stores its
-// reference so the provider's webhook can match it back. Returns the
-// short-lived checkout URL, or errNothingToPay when nothing is outstanding.
+// lines, has the named provider create a payment for the total, and records it
+// as a payment attempt whose reference the provider's webhook matches back.
+// Returns the short-lived checkout URL, or errNothingToPay when nothing is
+// outstanding.
 func (h *InvoiceHandler) mintOrderPayment(ctx context.Context, providerName, orderID string) (string, error) {
 	provider, ok := h.providers.Get(providerName)
 	if !ok {
@@ -381,12 +383,12 @@ func (h *InvoiceHandler) mintOrderPayment(ctx context.Context, providerName, ord
 	// club's cap with no override, or forced off) — closes the gap that a token
 	// issued before the cap/override (or already emailed) would otherwise leave
 	// open (BRY-283).
-	blocked, err := h.orderHasVippsBlockedSource(ctx, orderID)
+	blocked, err := h.orderHasOnlineBlockedSource(ctx, orderID)
 	if err != nil {
 		return "", err
 	}
 	if blocked {
-		return "", errVippsBlocked
+		return "", errOnlinePaymentBlocked
 	}
 
 	total, desc, err := h.orderTotal(ctx, orderID)
@@ -406,27 +408,81 @@ func (h *InvoiceHandler) mintOrderPayment(ctx context.Context, providerName, ord
 		isGuest = true
 	}
 
+	attemptID, err := h.startPaymentAttempt(ctx, orderID, providerName, total)
+	if err != nil {
+		return "", err
+	}
 	res, err := provider.CreatePayment(ctx, payments.Request{
 		OrderID:     orderID,
 		AmountOre:   int64(math.Round(total * 100)),
-		Currency:    "NOK",
+		Currency:    paymentCurrency,
 		Description: desc,
 		IsGuest:     isGuest,
 		ReturnURL:   h.paymentReturnURL(),
 	})
+	// The provider has answered, so record it even if the payer's request was
+	// cancelled meanwhile: a reference lost here is a payment no webhook finds.
+	persistCtx := context.WithoutCancel(ctx)
 	if err != nil {
+		h.failPaymentAttempt(persistCtx, attemptID)
 		return "", err
 	}
+	h.recordPaymentReference(persistCtx, attemptID, res.Reference, total)
+	return res.RedirectURL, nil
+}
+
+// paymentCurrency is the only currency Brygge charges in.
+const paymentCurrency = "NOK"
+
+// startPaymentAttempt records the attempt before the provider is called, so a
+// payment the provider creates always has a row for its webhook to land on.
+// Earlier attempts on the order stay, so a late capture of one still pays it.
+func (h *InvoiceHandler) startPaymentAttempt(ctx context.Context, orderID, providerName string, total float64) (string, error) {
+	var id string
+	if err := h.db.QueryRow(ctx,
+		`INSERT INTO payment_attempts (club_id, order_id, provider, amount, currency)
+		 SELECT club_id, id, $2, $3, $4 FROM orders WHERE id = $1
+		 RETURNING id`,
+		orderID, providerName, total, paymentCurrency,
+	).Scan(&id); err != nil {
+		return "", fmt.Errorf("record payment attempt: %w", err)
+	}
+	return id, nil
+}
+
+// failPaymentAttempt marks an attempt the provider refused to create.
+func (h *InvoiceHandler) failPaymentAttempt(ctx context.Context, attemptID string) {
 	if _, err := h.db.Exec(ctx,
-		`UPDATE orders SET vipps_reference = $1, total_amount = $2, updated_at = now() WHERE id = $3`,
-		res.Reference, total, orderID,
+		`UPDATE payment_attempts SET status = 'failed', updated_at = now()
+		  WHERE id = $1 AND status = 'created'`,
+		attemptID,
+	); err != nil {
+		h.log.Error().Err(err).Str("attempt_id", attemptID).Msg("order pay: mark attempt failed")
+	}
+}
+
+// recordPaymentReference stores the provider's reference on the attempt and
+// points the order at it in one statement. orders.vipps_reference is still
+// written for Vipps because the settlement reconciliation matches on it.
+func (h *InvoiceHandler) recordPaymentReference(ctx context.Context, attemptID, reference string, total float64) {
+	if _, err := h.db.Exec(ctx,
+		`WITH a AS (
+		   UPDATE payment_attempts SET provider_reference = $2, updated_at = now()
+		    WHERE id = $1
+		   RETURNING order_id, provider
+		 )
+		 UPDATE orders o
+		    SET vipps_reference = CASE WHEN a.provider = $4 THEN $2 ELSE o.vipps_reference END,
+		        provider = a.provider, total_amount = $3, updated_at = now()
+		   FROM a
+		  WHERE o.id = a.order_id`,
+		attemptID, reference, total, vipps.ProviderName,
 	); err != nil {
 		// Payment exists at the provider but the reference didn't persist — the
 		// webhook won't match it. Surface loudly but still redirect the payer.
-		h.log.Error().Err(err).Str("order_id", orderID).Str("provider", providerName).Str("reference", res.Reference).
+		h.log.Error().Err(err).Str("attempt_id", attemptID).Str("reference", reference).
 			Msg("order pay: created payment but failed to store reference — webhook match will miss")
 	}
-	return res.RedirectURL, nil
 }
 
 // orderTotal returns the amount still owed on a checkout order (unpaid invoice

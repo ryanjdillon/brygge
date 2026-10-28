@@ -19,7 +19,9 @@ func TestOrderSettlement(t *testing.T) {
 	userID, _ := testutil.SeedUser(t, pool, clubID, []string{"member"})
 	capturedAt := time.Date(2026, 6, 20, 10, 0, 0, 0, time.UTC)
 
-	seed := func(t *testing.T, user, status, guestName string) string {
+	// seed inserts an order in the given state with one attempt, and returns
+	// that attempt as settlement resolves it.
+	seed := func(t *testing.T, user, status, guestName string) paymentAttempt {
 		t.Helper()
 		orderID, _ := seedCheckoutOrder(t, pool, clubID, user)
 		if _, err := pool.Exec(ctx,
@@ -28,7 +30,19 @@ func TestOrderSettlement(t *testing.T) {
 		); err != nil {
 			t.Fatal(err)
 		}
-		return orderID
+		ref := "chk-settle-" + testutil.RandomHex(8)
+		if _, err := pool.Exec(ctx,
+			`INSERT INTO payment_attempts (club_id, order_id, provider, provider_reference, amount)
+			 VALUES ($1, $2, 'vipps', $3, 450)`,
+			clubID, orderID, ref,
+		); err != nil {
+			t.Fatal(err)
+		}
+		a, ok := s.attemptByReference(ctx, clubID, "vipps", ref)
+		if !ok || a.OrderID != orderID || a.Guest != (user == "") {
+			t.Fatalf("attemptByReference = %+v, %v", a, ok)
+		}
+		return a
 	}
 	load := func(t *testing.T, orderID string) (status, guestName string, paidAt *time.Time) {
 		t.Helper()
@@ -38,6 +52,15 @@ func TestOrderSettlement(t *testing.T) {
 			t.Fatal(err)
 		}
 		return status, guestName, paidAt
+	}
+	marker := func(t *testing.T, invID string) (online, legacy *time.Time, provider *string) {
+		t.Helper()
+		if err := pool.QueryRow(ctx,
+			`SELECT online_paid_at, vipps_paid_at, online_paid_provider FROM invoices WHERE id = $1`, invID,
+		).Scan(&online, &legacy, &provider); err != nil {
+			t.Fatal(err)
+		}
+		return online, legacy, provider
 	}
 
 	paidTests := []struct {
@@ -53,92 +76,91 @@ func TestOrderSettlement(t *testing.T) {
 		{"typed guest name kept", "", "pending", "Typed Name", "Test Guest", "paid", "Typed Name"},
 		{"member not named", userID, "pending", "", "Test Guest", "paid", ""},
 		{"no payer name", "", "pending", "", "", "paid", ""},
-		{"failed stays failed", "", "failed", "", "", "failed", ""},
-		{"failed guest still named", "", "failed", "", "Test Guest", "failed", "Test Guest"},
+		{"failed is paid", "", "failed", "", "", "paid", ""},
+		{"failed guest named", "", "failed", "", "Test Guest", "paid", "Test Guest"},
 		{"refunded stays refunded", "", "refunded", "", "", "refunded", ""},
 	}
 	for i, tc := range paidTests {
 		t.Run("paid/"+tc.name, func(t *testing.T) {
-			orderID := seed(t, tc.user, tc.status, tc.guestName)
+			a := seed(t, tc.user, tc.status, tc.guestName)
 			invID := seedPayableInvoice(t, pool, clubID, userID, "open", 960+i)
-			addOrderSource(t, pool, orderID, invID)
+			addOrderSource(t, pool, a.OrderID, invID)
 
-			s.markOrderPaid(ctx, orderID, capturedAt, namer(tc.payerName))
+			s.markAttemptCaptured(ctx, a, capturedAt, namer(tc.payerName))
 
-			status, guest, paidAt := load(t, orderID)
+			status, guest, paidAt := load(t, a.OrderID)
 			if status != tc.wantStatus || guest != tc.wantGuest {
 				t.Errorf("status/guest = %q/%q, want %q/%q", status, guest, tc.wantStatus, tc.wantGuest)
 			}
-			if (paidAt != nil) != (tc.status == "pending") {
+			if tc.wantStatus == "paid" {
+				if paidAt == nil || !paidAt.Equal(capturedAt) {
+					t.Errorf("paid_at = %v, want the capture time %v", paidAt, capturedAt)
+				}
+			} else if paidAt != nil {
 				t.Errorf("paid_at = %v for a %s order", paidAt, tc.status)
 			}
-			var marker *time.Time
-			if err := pool.QueryRow(ctx, `SELECT vipps_paid_at FROM invoices WHERE id = $1`, invID).Scan(&marker); err != nil {
-				t.Fatal(err)
-			}
-			if marker == nil || !marker.Equal(capturedAt) {
-				t.Errorf("invoice marker = %v, want %v", marker, capturedAt)
+			online, legacy, provider := marker(t, invID)
+			if online == nil || !online.Equal(capturedAt) || legacy == nil || !legacy.Equal(capturedAt) ||
+				provider == nil || *provider != "vipps" {
+				t.Errorf("invoice marker online/legacy/provider = %v/%v/%v, want %v/%v/vipps", online, legacy, provider, capturedAt, capturedAt)
 			}
 		})
 	}
 
 	t.Run("paid/zero capture time uses now", func(t *testing.T) {
-		orderID := seed(t, userID, "pending", "")
+		a := seed(t, userID, "pending", "")
 		invID := seedPayableInvoice(t, pool, clubID, userID, "open", 990)
-		addOrderSource(t, pool, orderID, invID)
-		s.markOrderPaid(ctx, orderID, time.Time{}, nil)
-		var marker *time.Time
-		if err := pool.QueryRow(ctx, `SELECT vipps_paid_at FROM invoices WHERE id = $1`, invID).Scan(&marker); err != nil {
-			t.Fatal(err)
+		addOrderSource(t, pool, a.OrderID, invID)
+		s.markAttemptCaptured(ctx, a, time.Time{}, nil)
+		online, _, _ := marker(t, invID)
+		if online == nil || time.Since(*online) > time.Minute {
+			t.Errorf("invoice marker = %v, want about now", online)
 		}
-		if marker == nil || time.Since(*marker) > time.Minute {
-			t.Errorf("invoice marker = %v, want about now", marker)
+		if _, _, paidAt := load(t, a.OrderID); paidAt == nil || !paidAt.Equal(*online) {
+			t.Errorf("paid_at = %v, want the marker time %v", paidAt, online)
 		}
 	})
 
 	t.Run("paid/name looked up after status, before marker", func(t *testing.T) {
-		orderID := seed(t, "", "pending", "")
+		a := seed(t, "", "pending", "")
 		invID := seedPayableInvoice(t, pool, clubID, userID, "open", 991)
-		addOrderSource(t, pool, orderID, invID)
+		addOrderSource(t, pool, a.OrderID, invID)
 		called := false
-		s.markOrderPaid(ctx, orderID, capturedAt, func(ctx context.Context) string {
+		s.markAttemptCaptured(ctx, a, capturedAt, func(ctx context.Context) string {
 			called = true
-			if status, _, _ := load(t, orderID); status != "paid" {
+			if status, _, _ := load(t, a.OrderID); status != "paid" {
 				t.Errorf("status during name lookup = %q, want paid", status)
 			}
-			var marker *time.Time
-			if err := pool.QueryRow(ctx, `SELECT vipps_paid_at FROM invoices WHERE id = $1`, invID).Scan(&marker); err != nil {
-				t.Fatal(err)
-			}
-			if marker != nil {
-				t.Errorf("invoice marker set before name lookup: %v", marker)
+			if online, _, _ := marker(t, invID); online != nil {
+				t.Errorf("invoice marker set before name lookup: %v", online)
 			}
 			return "Test Guest"
 		})
 		if !called {
 			t.Fatal("payer name source not called")
 		}
-		if _, guest, _ := load(t, orderID); guest != "Test Guest" {
+		if _, guest, _ := load(t, a.OrderID); guest != "Test Guest" {
 			t.Errorf("guest_name = %q", guest)
 		}
 	})
 
 	for _, from := range []string{"pending", "paid", "refunded", "failed"} {
 		t.Run("failed/from "+from, func(t *testing.T) {
-			orderID := seed(t, "", from, "")
-			s.markOrderFailed(ctx, orderID)
+			a := seed(t, "", from, "")
+			s.markAttemptFailed(ctx, a)
 			want := from
 			if from == "pending" {
 				want = "failed"
 			}
-			if status, _, _ := load(t, orderID); status != want {
+			if status, _, _ := load(t, a.OrderID); status != want {
 				t.Errorf("status = %q, want %q", status, want)
 			}
 		})
 	}
 }
 
-// namer adapts a fixed name to markOrderPaid's lazy name source; "" is none.
+// namer adapts a fixed name to markAttemptCaptured's lazy name source; "" is
+// none.
 func namer(name string) func(context.Context) string {
 	if name == "" {
 		return nil

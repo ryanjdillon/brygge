@@ -39,6 +39,7 @@ func DefaultKontoplan() []AccountDef {
 	return []AccountDef{
 		// Assets (Eiendeler)
 		{Code: "1500", Name: "Kundefordringer", Type: AccountTypeAsset, ParentCode: "1000", MVAEligible: MVANotApplicable, SortOrder: 10},
+		{Code: "1580", Name: "Til gode betalingsformidler (Stripe)", Type: AccountTypeAsset, ParentCode: "1000", MVAEligible: MVANotApplicable, Description: "Kortbetalinger hos Stripe som venter på utbetaling til bank", SortOrder: 15},
 		{Code: "1900", Name: "Kontanter/kasse", Type: AccountTypeAsset, ParentCode: "1000", MVAEligible: MVANotApplicable, SortOrder: 20},
 		{Code: "1920", Name: "Bankkonto drift", Type: AccountTypeAsset, ParentCode: "1000", MVAEligible: MVANotApplicable, SortOrder: 30},
 		{Code: "1925", Name: "Bankkonto høyrente", Type: AccountTypeAsset, ParentCode: "1000", MVAEligible: MVANotApplicable, SortOrder: 35},

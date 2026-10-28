@@ -681,12 +681,34 @@ func TestVippsBacklogSettledTestOtherMembersFaktura(t *testing.T) {
 	g := newAutoAssignFixture(t)
 	vippsPaid := g.club.NewInvoice(t, fin.InvoiceOpts{Cents: 33300, VippsPaid: true,
 		Lines: []fin.Line{{Category: "membership", Cents: 33300}}})
-	g.exec(t, `UPDATE invoices SET vipps_paid_at = $2 WHERE id = $1`,
+	g.exec(t, `UPDATE invoices SET vipps_paid_at = $2, online_paid_at = $2 WHERE id = $1`,
 		vippsPaid.ID, time.Date(g.club.Year, 6, 3, 12, 0, 0, 0, time.UTC))
 	vRow := g.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 33300, CustomerName: "Nobody Known"})
 	g.draftCharge(t, vRow, receivablesAccountCode, 33300)
 	if s := g.settledFaktura(t, vRow); s == nil || s.number != vippsPaid.Number {
 		t.Errorf("Vipps-paid faktura in the window: got %+v, want faktura %d", s, vippsPaid.Number)
+	}
+}
+
+// Only a Vipps online-payment marker can be the faktura this charge settled:
+// a faktura paid online with another provider is not matched.
+func TestVippsBacklogSettledTestVippsMarkerOnly(t *testing.T) {
+	for _, tc := range []struct {
+		provider string
+		blocked  bool
+	}{{"vipps", true}, {"stripe", false}} {
+		t.Run(tc.provider, func(t *testing.T) {
+			g := newAutoAssignFixture(t)
+			inv := g.club.NewInvoice(t, fin.InvoiceOpts{Cents: 33300,
+				Lines: []fin.Line{{Category: "membership", Cents: 33300}}})
+			g.exec(t, `UPDATE invoices SET online_paid_at = $2, online_paid_provider = $3 WHERE id = $1`,
+				inv.ID, time.Date(g.club.Year, 6, 3, 12, 0, 0, 0, time.UTC), tc.provider)
+			row := g.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 33300, CustomerName: "Nobody Known"})
+			g.draftCharge(t, row, receivablesAccountCode, 33300)
+			if s := g.settledFaktura(t, row); (s != nil) != tc.blocked {
+				t.Errorf("settled faktura = %+v, want blocked %v", s, tc.blocked)
+			}
+		})
 	}
 }
 

@@ -89,13 +89,16 @@ After setting the credentials, run `just vipps-verify` to confirm the
 configured merchant authenticates against the Vipps Access Token API
 end-to-end before relying on any payment flow.
 
-**Per-club amount cap (runtime, not env).** `clubs.vipps_max_amount` (set at
-`Admin → Economy → Settings`) is the **default** cutoff above which the "Betal med
-Vipps" link is suppressed and the member pays by bank transfer (KID), so the club
-avoids Vipps fees on large payments. `NULL` (empty field) means no limit. It is a
+**Per-club amount cap (runtime, not env).** `clubs.online_max_amount` (set at
+`Admin → Economy → Settings`; the API field is still `vipps_max_amount`) is the
+**default** cutoff above which online payment (every provider) is suppressed and
+the member pays by bank transfer (KID), so the club avoids provider fees on large
+payments. `NULL` (empty field) means no limit. It is a
 default, not a hard ceiling: each faktura carries a per-invoice override
-(`vipps_payment_link_opt_in`: Auto/On/Off, set from the faktura row or the
-reminder dialog) that can force Vipps on above the cap or off below it. Enforced
+(`online_payment_opt_in`: Auto/On/Off, set from the faktura row or the
+reminder dialog) that can force online payment on above the cap or off below it.
+The legacy `vipps_max_amount` / `vipps_payment_link_opt_in` columns are still
+written with the same values until BRY-450 drops them. Enforced
 at both link issuance and payment mint — see the invariant in
 [reference/invariants.md](reference/invariants.md). Independently of the cap, an
 imported faktura gets no Vipps link until its receivable is in the opening
@@ -162,9 +165,10 @@ Per-club financial settings are stored on `clubs` and edited in **Admin → Øko
 | Setting (`clubs` column) | Effect | User guide |
 |---|---|---|
 | `kid_check_method` | KID check digit for new fakturas: `mod11` (default) or `mod10`. Must match the method registered on the club's OCR/KID agreement, or the payer's bank rejects the KID | — |
-| `vipps_clearing_account`, `vipps_fee_account` | GL accounts the Vipps clearing and fee postings use | — |
+| `vipps_clearing_account`, `payment_fee_account` | GL accounts the Vipps clearing postings and every provider's fee postings use (API field for the fee account: `vipps_fee_account`; the legacy column is dual-written until BRY-450) | — |
+| `stripe_clearing_account` | Card balance at Stripe until payout; default 1580. Not editable yet and unused until card payments are booked (BRY-445) | — |
 | `vipps_per_charge_enabled` | Per-charge Vipps model: charges are booked one by one in Tildel and payouts clear by themselves, instead of one bilag per payout (BRY-228) | [faktura.md](../user/faktura.md#vipps-payouts-clear-by-themselves) |
-| `vipps_max_amount` | Default amount cap for the Vipps link (see above) | [faktura.md](../user/faktura.md#sent) |
+| `online_max_amount` | Default amount cap for online payment (see above; API field `vipps_max_amount`) | [faktura.md](../user/faktura.md#sent) |
 | `vipps_auto_assign`, `vipps_auto_assign_tie_category` | Book unambiguous Vipps charges without a human; tie category for same-price categories (BRY-340) | [faktura.md](../user/faktura.md#automatic-vipps-booking-per-charge-tildel) |
 | `bank_auto_assign` | Book unambiguous KID-less bank deposits to a faktura (BRY-366). While off, the KID cascade keeps its older full-name + amount step | [faktura.md](../user/faktura.md#automatic-booking-of-bank-payments-without-a-kid) |
 | `price_exemptions` table + `exemption_expense_account` | Role exemptions (BRY-351) | [faktura.md](../user/faktura.md#role-exemptions) |

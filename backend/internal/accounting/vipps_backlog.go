@@ -554,8 +554,10 @@ const settledWindowDays = 7
 //   - a KID-avstemming payment on any faktura, paid within settledWindowDays
 //     of the charge date — the payer may have paid a household member's
 //     faktura, and name resolution can be wrong;
-//   - a faktura marked Vipps-paid (vipps_paid_at) within the window, unless a
-//     booked charge of a checkout order paying it explains it.
+//   - a faktura marked paid by Vipps online (online_paid_at with provider
+//     vipps) within the window, unless a booked charge of a checkout order
+//     paying it explains it. Only Vipps markers count, because only a
+//     booked Vipps charge can explain one.
 //
 // It returns the first such faktura, or nil when the charge passes.
 func (s *Service) receivableChargeSettledFaktura(ctx context.Context, clubID, customer, message string, amount float64, paidOn time.Time) (*settledFaktura, error) {
@@ -576,8 +578,9 @@ func (s *Service) receivableChargeSettledFaktura(ctx context.Context, clubID, cu
 		          AND (($3 <> '' AND i.user_id::text = $3)
 		            OR ($4 <> '' AND i.kid_number = $4)
 		            OR p.paid_at::date BETWEEN $5::date - $6::int AND $5::date + $6::int))
-		      OR (i.vipps_paid_at IS NOT NULL AND abs(i.total_amount - $2) <= 1
-		          AND i.vipps_paid_at::date BETWEEN $5::date - $6::int AND $5::date + $6::int
+		      OR (i.online_paid_at IS NOT NULL AND i.online_paid_provider = 'vipps'
+		          AND abs(i.total_amount - $2) <= 1
+		          AND i.online_paid_at::date BETWEEN $5::date - $6::int AND $5::date + $6::int
 		          AND NOT EXISTS (
 		              SELECT 1 FROM order_sources os
 		                JOIN orders o ON o.id = os.order_id

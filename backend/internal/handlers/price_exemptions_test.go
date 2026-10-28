@@ -326,7 +326,7 @@ func TestExemptionsFullyExemptFakturaSettlesOnIssue(t *testing.T) {
 	// Never owed: not overdue, not in reminders or payables, no Vipps link.
 	var owed, vippsAllowed bool
 	if err := f.club.Pool.QueryRow(ctx,
-		`SELECT `+finance.OwedByMemberSQL("i")+`, `+vippsAllowedExpr+`
+		`SELECT `+finance.OwedByMemberSQL("i")+`, `+onlinePaymentAllowedExpr+`
 		   FROM invoices i JOIN clubs c ON c.id = i.club_id WHERE i.id = $1`, inv,
 	).Scan(&owed, &vippsAllowed); err != nil {
 		t.Fatalf("owed check: %v", err)

@@ -659,8 +659,8 @@ type memberInvoice struct {
 	DueDate       string  `json:"due_date"`
 	SentAt        *string `json:"sent_at"`
 	Paid          bool    `json:"paid"`
-	// PaymentReceived is a Vipps pay-link payment seen via webhook
-	// (vipps_paid_at set) but not yet authoritatively settled (payment_id still
+	// PaymentReceived is a pay-link payment seen via a provider webhook
+	// (online_paid_at set) but not yet authoritatively settled (payment_id still
 	// null). Surfaced so the member sees "betaling mottatt, venter oppgjør"
 	// instead of "ubetalt" and doesn't pay twice.
 	PaymentReceived bool `json:"payment_received"`
@@ -781,7 +781,7 @@ func (h *MembersHandler) HandleListMyInvoices(w http.ResponseWriter, r *http.Req
 	q := `SELECT i.id, i.invoice_number, i.kid_number, i.total_amount,
 	             i.issue_date, i.due_date, i.sent_at,
 	             (i.payment_id IS NOT NULL) AS paid,
-	             (i.payment_id IS NULL AND i.vipps_paid_at IS NOT NULL) AS payment_received,
+	             (i.payment_id IS NULL AND i.online_paid_at IS NOT NULL) AS payment_received,
 	             (i.total_amount < 0) AS credit_note,
 	             ` + finance.CreditedSQL("i") + ` AS credited,
 	             ` + finance.OwedByMemberSQL("i") + ` AS owed,

@@ -327,10 +327,35 @@ in `backend/migrations/` for the source of truth. The high-level shape:
   `external_id`, unique per club + source) marks a faktura imported from a
   previous system: it has `kid_number = ''`, `sent_at` NULL and no journal
   entry, and is read-only (see invariants.md, "Imported fakturas are
-  read-only"). `clubs.vipps_max_amount` (000093) is the club's default Vipps
-  amount cap; `invoices.vipps_payment_link_opt_in` (000094 made it a
-  nullable tri-state: NULL Auto, TRUE On, FALSE Off) overrides it per
-  faktura (BRY-283).
+  read-only"). `clubs.online_max_amount` (000114) is the club's default
+  online-payment amount cap; `invoices.online_payment_opt_in` (a nullable
+  tri-state: NULL Auto, TRUE On, FALSE Off) overrides it per faktura
+  (BRY-283). Both replace the Vipps-named columns from 000093/000094; see
+  "Orders and payments" below.
+- **Orders and payments.** `orders` is the durable thing a payer pays
+  online (faktura pay link via `order_sources`, harbor QR, checkout lines);
+  `orders.provider` is the provider of its latest or paying attempt.
+  `payment_attempts` (000115) holds one row per payment created at a
+  provider: `provider`, `provider_reference` (unique per provider once set;
+  the source of truth for references), `status` (`created`, `authorized`,
+  `captured`, `failed`, `cancelled`), `amount`, `currency`. The newest
+  attempt with a provider reference is the order's current one; older ones keep their rows so a late
+  webhook still finds the order. 000115 backfilled one attempt per order with
+  a `vipps_reference`. `payment_refunds` (refunds of a captured attempt,
+  BRY-446) and `payment_webhook_events` (raw events of providers other than
+  Vipps, unique on `club_id, provider, event_id`, BRY-443) are tables only so
+  far; Vipps keeps `vipps_webhook_events`. 000114 added the provider-neutral
+  `invoices.online_paid_at` / `online_paid_provider` (the "received, awaiting
+  settlement" marker, set together, `invoices_online_paid_provider_set`),
+  `invoices.online_payment_opt_in`, `clubs.online_max_amount`,
+  `clubs.payment_fee_account` (fees for every provider, default 7700) and
+  `clubs.stripe_clearing_account` (default 1580, seeded into existing charts),
+  backfilled from the Vipps-named columns. Those legacy columns
+  (`vipps_paid_at`, `vipps_payment_link_opt_in`, `vipps_max_amount`,
+  `vipps_fee_account`) are dual-written by the application and read by
+  nothing; BRY-450 drops them. `orders.vipps_reference` is still written on
+  every Vipps mint because the settlement reconciliation matches on it
+  (BRY-445). See [payments.md](payments.md).
 - `invoice_pdf_archive` (migration 000050) — preserves prior PDF bytes when
   `invoices.pdf_data` is regenerated, so Norwegian bokføringsloven §13's
   5-year retention requirement is satisfied.
@@ -353,8 +378,9 @@ in `backend/migrations/` for the source of truth. The high-level shape:
 - `journal_entries`, `journal_lines`, `accounts`, `fiscal_periods` —
   double-entry GL with NS 4102 chart of accounts. New clubs get the default
   chart from `SeedKontoplan`. An account added to the default chart later
-  needs a backfill migration for existing clubs, as in 000041 (1925) and
-  000099 (3130 Strøm, 3210 Bobil/campingplass, 3220 Lokalleie). Migration 000100 is a one-off data cleanup: it deletes the orphan import drafts that duplicated posted bookings (BRY-324). `journal_entries.source` gained `invoice_resplit` in 000101 for revenue reclassifications (BRY-364). Migration 000104 adds a unique index allowing one `invoice_sync` entry per faktura (BRY-363). 000102 adds `invoices_status_check` (`open`/`voided` only, BRY-325). 000103 adds Vipps auto-assign (BRY-340): `clubs.vipps_auto_assign` (opt-in, default off) and `clubs.vipps_auto_assign_tie_category`, plus `vipps_import_rows.invoice_id` (the faktura a charge settled, for unassign) and `vipps_import_rows.auto_assign_rule`. 000105 adds `invoices.credits_invoice_id` (BRY-342): a credit note's explicit link to the faktura it credits, checked to sit only on negative totals, and unique among live credit notes. 000106 is a data-only backfill (BRY-370): it fills `vipps_import_rows.invoice_id` for charges booked to a faktura before 000103, only where the latest same-club `vipps_charge.assigned_invoice` audit row names the charge, the entry is still linked to it and not voided, and the faktura is still paid by the `KID-avstemming` payment dated on the charge. 000107 adds `opening_balance` to `transaction_source` (BRY-370): the source of the cutover entry that carries a migrating club's balances (and its imported receivables on 1500) into its first Brygge year; nothing writes it yet (BRY-365). 000108 adds role-based price exemptions (BRY-351): `price_exemptions` (club, board role, and exactly one of `category` / `price_item_id`, unique per club+role+target), `clubs.exemption_expense_account` (the expense account code exemptions book to) and `invoice_lines.exemption_role` (set on the offsetting "Fritak" line). 000111 adds `invoice_lines_price_item_category` (BRY-389): `CHECK (price_item_id IS NULL OR category IS NOT NULL)`, so every line with a price item stores the category it was issued under and GL booking never depends on the item's current category.
+  needs a backfill migration for existing clubs, as in 000041 (1925),
+  000099 (3130 Strøm, 3210 Bobil/campingplass, 3220 Lokalleie) and 000114
+  (1580 Til gode betalingsformidler (Stripe)). Migration 000100 is a one-off data cleanup: it deletes the orphan import drafts that duplicated posted bookings (BRY-324). `journal_entries.source` gained `invoice_resplit` in 000101 for revenue reclassifications (BRY-364). Migration 000104 adds a unique index allowing one `invoice_sync` entry per faktura (BRY-363). 000102 adds `invoices_status_check` (`open`/`voided` only, BRY-325). 000103 adds Vipps auto-assign (BRY-340): `clubs.vipps_auto_assign` (opt-in, default off) and `clubs.vipps_auto_assign_tie_category`, plus `vipps_import_rows.invoice_id` (the faktura a charge settled, for unassign) and `vipps_import_rows.auto_assign_rule`. 000105 adds `invoices.credits_invoice_id` (BRY-342): a credit note's explicit link to the faktura it credits, checked to sit only on negative totals, and unique among live credit notes. 000106 is a data-only backfill (BRY-370): it fills `vipps_import_rows.invoice_id` for charges booked to a faktura before 000103, only where the latest same-club `vipps_charge.assigned_invoice` audit row names the charge, the entry is still linked to it and not voided, and the faktura is still paid by the `KID-avstemming` payment dated on the charge. 000107 adds `opening_balance` to `transaction_source` (BRY-370): the source of the cutover entry that carries a migrating club's balances (and its imported receivables on 1500) into its first Brygge year; nothing writes it yet (BRY-365). 000108 adds role-based price exemptions (BRY-351): `price_exemptions` (club, board role, and exactly one of `category` / `price_item_id`, unique per club+role+target), `clubs.exemption_expense_account` (the expense account code exemptions book to) and `invoice_lines.exemption_role` (set on the offsetting "Fritak" line). 000111 adds `invoice_lines_price_item_category` (BRY-389): `CHECK (price_item_id IS NULL OR category IS NOT NULL)`, so every line with a price item stores the category it was issued under and GL booking never depends on the item's current category.
 - `broadcasts`, `broadcast_deliveries` (migration 000069) — bulk member
   sends. A `broadcasts` row is the parent announcement (subject/body, the
   originating shared-mailbox `source_address`, a `status`); each recipient

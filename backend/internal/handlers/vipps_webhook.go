@@ -8,6 +8,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/brygge-klubb/brygge/internal/config"
+	"github.com/brygge-klubb/brygge/internal/payments"
 	"github.com/brygge-klubb/brygge/internal/vipps"
 )
 
@@ -15,22 +16,29 @@ import (
 // The endpoint carries no session; each request is authenticated by verifying
 // the Vipps HMAC-SHA256 signature over the body against the registration secret.
 type VippsWebhookHandler struct {
-	db     *pgxpool.Pool
-	cfg    *config.Config
-	vipps  *vipps.Client // nil when the instance has no Vipps credentials
-	orders orderSettlement
-	log    zerolog.Logger
+	db    *pgxpool.Pool
+	cfg   *config.Config
+	vipps *vipps.Client // nil when the instance has no Vipps credentials
+	// canceller voids authorizations that must not be captured; nil without
+	// Vipps credentials.
+	canceller payments.Canceller
+	orders    orderSettlement
+	log       zerolog.Logger
 }
 
 func NewVippsWebhookHandler(db *pgxpool.Pool, cfg *config.Config, vippsClient *vipps.Client, log zerolog.Logger) *VippsWebhookHandler {
 	log = log.With().Str("handler", "vipps_webhook").Logger()
-	return &VippsWebhookHandler{
+	h := &VippsWebhookHandler{
 		db:     db,
 		cfg:    cfg,
 		vipps:  vippsClient,
 		orders: orderSettlement{db: db, log: log},
 		log:    log,
 	}
+	if vippsClient != nil {
+		h.canceller = vipps.NewPaymentProvider(vippsClient)
+	}
+	return h
 }
 
 // Handle is the POST /api/v1/vipps/webhooks handler.
@@ -58,13 +66,14 @@ func (h *VippsWebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Resolve club_id from the reference: an order (checkout/QR) or an invoice
-	// (BRY-8 faktura payment link). Fall back to the instance-level club when
-	// the reference is unrecognised.
+	// Resolve club_id from the reference: a checkout-order payment attempt
+	// (checkout/QR/faktura pay link) or an invoice (BRY-8 faktura payment
+	// link). Fall back to the instance-level club when the reference is
+	// unrecognised.
 	var clubID string
 	err = h.db.QueryRow(ctx,
-		`SELECT club_id FROM orders WHERE vipps_reference = $1 LIMIT 1`,
-		evt.Reference,
+		`SELECT club_id FROM payment_attempts WHERE provider = $1 AND provider_reference = $2`,
+		vipps.ProviderName, evt.Reference,
 	).Scan(&clubID)
 	if err != nil {
 		err = h.db.QueryRow(ctx,

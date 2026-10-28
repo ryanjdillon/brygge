@@ -4,7 +4,7 @@ How Brygge charges a checkout order through a payment service, and the decisions
 
 ## The model
 
-Everything a payer can pay online is an **order** (`orders`): a faktura pay link (with `order_sources` rows pointing at the invoices it settles), a harbor QR guest payment, or a checkout with ad-hoc catalog lines (`order_lines`). An order is durable; a **payment** at the provider is a short-lived attempt to pay it. A payer who abandons an attempt clicks again and gets a fresh one on the same order.
+Everything a payer can pay online is an **order** (`orders`): a faktura pay link (with `order_sources` rows pointing at the invoices it settles), a harbor QR guest payment, or a checkout with ad-hoc catalog lines (`order_lines`). An order is durable; a **payment attempt** (`payment_attempts`) is one short-lived payment at a provider to pay it. A payer who abandons an attempt clicks again and gets a fresh one on the same order; the earlier attempt keeps its row and reference, so if the payer completes it after all, its webhook still finds the order. The newest attempt with a provider reference is the order's **current** one.
 
 ```
 /betal/{token}, /qr/{token}, checkout pay
@@ -12,14 +12,17 @@ Everything a payer can pay online is an **order** (`orders`): a faktura pay link
         ▼
 mintOrderPayment(ctx, providerName, orderID)        handlers/order_pay.go
         │  amount cap + imported-receivable gate, orderTotal, guest?
+        │  payment_attempts row inserted (created)
         ▼
 payments.Provider.CreatePayment(Request) → Result   e.g. vipps.PaymentProvider
-        │  reference stored on the order, payer redirected
+        │  reference stored on the attempt (and orders.vipps_reference for Vipps),
+        │  payer redirected; on error the attempt is marked failed
         ▼
 provider webhook (signature verified, event stored)  e.g. handlers/vipps_webhook.go
-        │  reference → order, provider-only facts (payer name)
+        │  reference → attempt → order, provider-only facts (payer name)
         ▼
-orderSettlement.markOrderPaid / markOrderFailed      handlers/order_settle.go
+orderSettlement: authorizeAttempt / markAttemptCaptured / markAttemptFailed
+                                                     handlers/order_settle.go
 ```
 
 ### `internal/payments`
@@ -44,32 +47,41 @@ The package holds no database code. Deciding what is owed, enforcing the club's 
 
 `Refund` returns `ErrNotSupported`: Brygge cannot issue a Vipps refund yet (BRY-14). `CancelPayment` implements `Canceller`.
 
-Only payment creation goes through the registry. Settlement sync (`AccountingHandler`) and the webhook (capture on AUTHORIZED, `GetPayment` for the payer name) keep the concrete `*vipps.Client`, because those are Vipps-specific operations with no neutral equivalent yet.
+Payment creation goes through the registry, and the webhook voids a stale authorization through the adapter's `Canceller`. Settlement sync (`AccountingHandler`) and the webhook's other calls (capture on AUTHORIZED, `GetPayment` for a guest's name) keep the concrete `*vipps.Client`, because those are Vipps-specific operations with no neutral equivalent yet.
 
 ### Marking an order paid
 
-`orderSettlement` ([`handlers/order_settle.go`](../../backend/internal/handlers/order_settle.go)) is the only code that changes an order's payment state, and it is only called from a signature-verified webhook (see the invariant "Only the payment provider can mark an order paid" in [reference/invariants.md](reference/invariants.md)).
+`orderSettlement` ([`handlers/order_settle.go`](../../backend/internal/handlers/order_settle.go)) is the only code that changes an order's payment state, and it is only called from a signature-verified webhook (see the invariants "Only the payment provider can mark an order paid" and "A payment attempt that is not needed is never captured" in [reference/invariants.md](reference/invariants.md)). It works per attempt:
 
-- `markOrderPaid(ctx, orderID, capturedAt, payerName)` — `orders.status = 'paid'`, `paid_at = now()` only from `pending`; `guest_name = payerName` only on a guest order with no name; `invoices.vipps_paid_at = capturedAt` (zero: now) on each source invoice that has no marker yet. It never sets `payment_id`, posts to the GL, sends email or writes audit: the settlement import owns those.
-- `markOrderFailed(ctx, orderID)` — `status = 'failed'` only from `pending`.
+- `attemptByReference(ctx, clubID, provider, reference)` — the attempt, its order and whether the order is a guest order.
+- `authorizeAttempt(ctx, attempt)` — one transaction holding the order row decides: skip (this attempt is already `captured` or `cancelled`: a replay), cancel (the order is paid or refunded, or another attempt is `authorized` or `captured`), or capture (the attempt becomes `authorized`). On cancel the webhook voids the payment through `payments.Canceller` and `markAttemptCancelled` records it; on capture it captures, and `releaseAuthorization` returns the attempt to `created` if the capture fails, so it doesn't block a retry. Only one of two concurrent authorizations is captured; if that capture then fails, the payer whose authorization was voided retries. Without Vipps credentials (no client, no `Canceller`) the webhook neither captures nor voids and leaves the attempt as it is; the reservation lapses at Vipps.
+- `markAttemptCaptured(ctx, attempt, capturedAt, payerName)` — the attempt becomes `captured`; the order becomes `paid` from `pending` or `failed` (a warning when from `failed`) with `paid_at = capturedAt` (zero: now) and `provider` set to the attempt's. If another attempt already paid the order, the order is left alone and the double payment is logged at error level for a refund. `guest_name = payerName` only on a guest order with no name (Vipps looks the name up for guest orders only). Each source invoice with no marker yet gets `online_paid_at = capturedAt` and `online_paid_provider`, and for Vipps also `vipps_paid_at`. It never sets `payment_id`, posts to the GL, sends email or writes audit: the settlement import owns those.
+- `markAttemptFailed(ctx, attempt)` — the attempt becomes `failed` (from `created` or `authorized`); the order becomes `failed` only if the attempt is its current one (newest with a reference) and it is still `pending`.
+
+The mint records the provider's answer (the reference, or `failed`) on a context detached from the payer's request, so a dropped request can't lose a reference to a payment the provider created.
 
 Each write is guarded and runs on its own, so a redelivered or out-of-order event is a no-op and one failed write does not undo the others.
 
+### Data model
+
+- `payment_attempts` — `order_id`, `provider`, `provider_reference` (unique per provider once set), `status` (`created`, `authorized`, `captured`, `failed`, `cancelled`), `amount`, `currency`. The source of truth for provider references.
+- `payment_refunds` — refunds of a captured attempt (`requested`, `succeeded`, `failed`). Table only; BRY-446 writes it.
+- `payment_webhook_events` — raw events for providers other than Vipps, deduplicated on `(club_id, provider, event_id)`. Table only; BRY-443 writes it. Vipps keeps `vipps_webhook_events`.
+- `invoices.online_paid_at` / `online_paid_provider` — the "received, awaiting settlement" marker for any provider. `invoices.online_payment_opt_in` and `clubs.online_max_amount` — the per-faktura override and the club's cap, for every provider. `clubs.payment_fee_account` — fees for every provider (default 7700). `clubs.stripe_clearing_account` — 1580, the card balance until payout.
+
+The legacy columns `invoices.vipps_paid_at`, `invoices.vipps_payment_link_opt_in`, `clubs.vipps_max_amount` and `clubs.vipps_fee_account` are still written with the same values and read by nothing; BRY-450 drops them. `orders.vipps_reference` is still written on every Vipps mint and is not legacy: the settlement reconciliation in `internal/accounting` matches Vipps charges on it until BRY-445.
+
 ### Still Vipps-shaped
 
-These carry Vipps in their names and are left for the data-model change (BRY-441):
-
-- `orders.vipps_reference` holds whichever provider's reference was minted last; an order has no record of earlier attempts, so a late capture of an older attempt does not match.
-- `invoices.vipps_paid_at` is the "received, awaiting settlement" marker for any provider.
+- `orders.vipps_reference` holds the latest Vipps attempt's reference for the settlement reconciliation (BRY-445).
 - `vipps_webhook_events` is Vipps' event store.
-- The gate's error codes and texts (`vipps_unavailable`, `vipps_over_limit`, "Vipps is not available") and the checkout GET's `vipps_blocked` response field are matched by the frontend; renaming them is BRY-444.
-- `clubs.vipps_max_amount` and `invoices.vipps_payment_link_opt_in` are the online-payment cap and per-faktura override.
+- The gate's error codes and texts (`vipps_unavailable`, `vipps_over_limit`, "Vipps is not available"), the checkout GET's `vipps_blocked` response field, the `PATCH /invoices/{id}/vipps-link` route, the `invoice.vipps_link_set` audit action and the JSON fields `vipps_paid_at`, `vipps_payment_link_opt_in`, `vipps_max_amount` and `vipps_fee_account` are matched by the frontend; renaming them is BRY-444. They are fed from and write to the provider-neutral columns.
 
 ## Adding a provider
 
 1. Implement `payments.Provider` (and `Canceller` if it can void) in the provider's own package, next to its API client.
 2. Register it in `cmd/api/main.go` when its credentials are present. Secrets go in `/etc/brygge/env` (see the env layering rules in [configuration.md](configuration.md)).
-3. Add its webhook handler: verify the signature, persist the event with a dedupe key, resolve the order from the reference, then call `markOrderPaid` / `markOrderFailed`. Do not write order or invoice payment state anywhere else.
+3. Add its webhook handler: verify the signature, persist the event in `payment_webhook_events`, resolve the attempt with `attemptByReference`, then call `authorizeAttempt` (if the provider authorizes before capturing) / `markAttemptCaptured` / `markAttemptFailed`. Do not write order or invoice payment state anywhere else.
 4. Let the payer choose it: callers of `mintOrderPayment` pass the provider name.
 5. Book its fees and clearing balance with the accounting owner before going live.
 

@@ -21,10 +21,11 @@ import (
 
 type bulkInvoiceActionRequest struct {
 	IDs []string `json:"ids"`
-	// VippsPaymentLink is the reminder batch's override of the per-invoice Vipps
-	// setting (BRY-283): nil = leave each invoice's setting as-is (Auto follows
-	// the club amount cap); true/false = set vipps_payment_link_opt_in On/Off for
-	// the reminded invoices, persisting so it holds when the member later clicks.
+	// VippsPaymentLink is the reminder batch's override of the per-invoice
+	// online-payment setting (BRY-283): nil = leave each invoice's setting
+	// as-is (Auto follows the club amount cap); true/false = set
+	// online_payment_opt_in On/Off for the reminded invoices, persisting so it
+	// holds when the member later clicks.
 	// Ignored by the non-reminder bulk actions that share this request shape.
 	VippsPaymentLink *bool `json:"vipps_payment_link"`
 }
@@ -211,7 +212,8 @@ func (h *InvoiceHandler) applyReminderVippsOverride(ctx context.Context, clubID,
 		ids[i] = it.InvoiceID
 	}
 	if _, err := h.db.Exec(ctx,
-		`UPDATE invoices SET vipps_payment_link_opt_in = $1 WHERE club_id = $2 AND id = ANY($3)`,
+		`UPDATE invoices SET online_payment_opt_in = $1, vipps_payment_link_opt_in = $1
+		  WHERE club_id = $2 AND id = ANY($3)`,
 		*optIn, clubID, ids,
 	); err != nil {
 		return err

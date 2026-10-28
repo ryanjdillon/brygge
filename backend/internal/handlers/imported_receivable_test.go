@@ -142,8 +142,8 @@ func TestImportedFakturaHasNoVippsPayLink(t *testing.T) {
 	// An order minted for the imported faktura before the guard can't be
 	// charged either.
 	order := club.NewOrderForInvoice(t, imported)
-	blocked, err := h.orderHasVippsBlockedSource(ctx, order.ID)
+	blocked, err := h.orderHasOnlineBlockedSource(ctx, order.ID)
 	if err != nil || !blocked {
-		t.Errorf("orderHasVippsBlockedSource = %v, %v; want blocked", blocked, err)
+		t.Errorf("orderHasOnlineBlockedSource = %v, %v; want blocked", blocked, err)
 	}
 }

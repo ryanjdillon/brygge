@@ -9,7 +9,7 @@ func TestSettledPredicates(t *testing.T) {
 	member := SettledForMemberSQL("i")
 	for _, part := range []string{
 		"i.payment_id IS NOT NULL",
-		"i.vipps_paid_at IS NOT NULL",
+		"i.online_paid_at IS NOT NULL",
 		"i.status = 'voided'",
 		"cn.credits_invoice_id = i.id AND cn.status <> 'voided'",
 	} {
@@ -42,10 +42,10 @@ func TestOpenReceivablePredicate(t *testing.T) {
 			t.Errorf("OpenReceivableSQL(i) = %s, missing %q", got, part)
 		}
 	}
-	// The Vipps charge that set vipps_paid_at is the payment that clears the
+	// The online charge that set online_paid_at is the payment that clears the
 	// receivable, so this predicate must not exclude it.
-	if strings.Contains(got, "vipps_paid_at") {
-		t.Errorf("OpenReceivableSQL(i) = %s, must not depend on vipps_paid_at", got)
+	if strings.Contains(got, "online_paid_at") {
+		t.Errorf("OpenReceivableSQL(i) = %s, must not depend on online_paid_at", got)
 	}
 }
 

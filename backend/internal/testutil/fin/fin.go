@@ -212,9 +212,10 @@ func (c *Club) NewInvoice(t *testing.T, o InvoiceOpts) Invoice {
 	inv := Invoice{Number: o.Number, KID: o.KID, TotalCents: total, MemberID: o.Member.ID}
 	if err := c.Pool.QueryRow(ctx,
 		`INSERT INTO invoices (club_id, user_id, invoice_number, kid_number, issue_date, due_date,
-		                       total_amount, status, sent_at, vipps_paid_at, fiscal_period_id,
-		                       import_source, external_id)
-		 VALUES ($1, $2, $3, $4, $5, $5::date + 14, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
+		                       total_amount, status, sent_at, vipps_paid_at, online_paid_at, online_paid_provider,
+		                       fiscal_period_id, import_source, external_id)
+		 VALUES ($1, $2, $3, $4, $5, $5::date + 14, $6, $7, $8, $9, $9, CASE WHEN $9::timestamptz IS NOT NULL THEN 'vipps' END,
+		         $10, $11, $12) RETURNING id`,
 		c.ID, o.Member.ID, o.Number, o.KID, o.IssueDate, Kr(total), o.Status, sentAt, vippsPaidAt, c.PeriodID,
 		importSource, externalID,
 	).Scan(&inv.ID); err != nil {

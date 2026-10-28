@@ -113,7 +113,7 @@ func TestGetPayables(t *testing.T) {
 	open2 := seedPayableInvoice(t, pool, clubID, userID, "open", 911)
 	_ = seedPayableInvoice(t, pool, clubID, userID, "voided", 912)
 	received := seedPayableInvoice(t, pool, clubID, userID, "open", 913)
-	if _, err := pool.Exec(ctx, `UPDATE invoices SET vipps_paid_at = now() WHERE id = $1`, received); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE invoices SET online_paid_at = now(), online_paid_provider = 'vipps' WHERE id = $1`, received); err != nil {
 		t.Fatalf("mark received: %v", err)
 	}
 
@@ -157,7 +157,7 @@ func TestGetPayables(t *testing.T) {
 
 	// Over the club's Vipps cap (BRY-283): the invoices still list, but with no
 	// pay_token, and the club bank account is surfaced for bank transfer.
-	if _, err := pool.Exec(ctx, `UPDATE clubs SET vipps_max_amount = 100 WHERE id = $1`, clubID); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE clubs SET online_max_amount = 100 WHERE id = $1`, clubID); err != nil {
 		t.Fatalf("set cap: %v", err)
 	}
 	recCap := httptest.NewRecorder()

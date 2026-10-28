@@ -59,8 +59,9 @@ type VippsPayoutClearResult struct {
 	ClearingBalance float64 `json:"clearing_balance"`
 }
 
-// vippsAccounts returns the club's configured Vipps clearing and fee account
-// codes, falling back to the model defaults (2900 / 7700) when unset.
+// vippsAccounts returns the club's configured Vipps clearing account and its
+// payment fee account (shared by all providers), falling back to the model
+// defaults (2900 / 7700) when unset.
 func (s *Service) vippsAccounts(ctx context.Context, clubID string) (clearing, fee string, err error) {
 	return vippsAccountsIn(ctx, s.db, clubID)
 }
@@ -69,7 +70,7 @@ func (s *Service) vippsAccounts(ctx context.Context, clubID string) (clearing, f
 func vippsAccountsIn(ctx context.Context, q dbtx, clubID string) (clearing, fee string, err error) {
 	err = q.QueryRow(ctx,
 		`SELECT COALESCE(NULLIF(vipps_clearing_account, ''), $2),
-		        COALESCE(NULLIF(vipps_fee_account, ''), $3)
+		        COALESCE(NULLIF(payment_fee_account, ''), $3)
 		   FROM clubs WHERE id = $1`,
 		clubID, vippsClearingAccountCode, vippsFeeAccountCode,
 	).Scan(&clearing, &fee)

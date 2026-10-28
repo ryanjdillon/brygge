@@ -24,33 +24,71 @@ func (h *VippsWebhookHandler) dispatch(ctx context.Context, clubID string, evt *
 // uses the Reserve-Capture model, so an authorized payment must be captured to
 // actually take the funds; capture is idempotent (stable key) so webhook retries
 // won't double-capture. A successful capture emits CAPTURED, handled in
-// onCaptured.
+// onCaptured. An authorization the order does not need (it is paid, or another
+// attempt is already authorized or captured) is voided instead, so the payer
+// is not charged twice.
 func (h *VippsWebhookHandler) onAuthorized(ctx context.Context, clubID string, evt *vipps.WebhookEvent) {
-	if _, ok := h.orderByReference(ctx, clubID, evt.Reference); !ok {
+	a, ok := h.orders.attemptByReference(ctx, clubID, vipps.ProviderName, evt.Reference)
+	if !ok {
 		return // not one of our checkout orders
 	}
+	// Without credentials Brygge can neither capture nor void, and without an
+	// amount it cannot capture; the attempt is left as it is and an uncaptured
+	// reservation lapses at Vipps.
 	if h.vipps == nil || evt.Amount == nil {
+		return
+	}
+	switch d := h.orders.authorizeAttempt(ctx, a); d {
+	case authSkip:
+		return
+	case authCancelOrderSettled, authCancelSibling:
+		h.cancelStaleAuthorization(ctx, a, evt.Reference, d)
 		return
 	}
 	if err := h.vipps.CapturePayment(ctx, "capture-"+evt.Reference, evt.Reference, evt.Amount.Value); err != nil {
 		h.log.Error().Err(err).Str("reference", evt.Reference).Msg("webhook authorized: capture failed")
+		h.orders.releaseAuthorization(ctx, a)
 	}
+}
+
+// cancelStaleAuthorization voids an authorization the order does not need.
+// If the void fails the reservation lapses at Vipps on its own; it is never
+// captured either way.
+func (h *VippsWebhookHandler) cancelStaleAuthorization(ctx context.Context, a paymentAttempt, reference string, d authDecision) {
+	reason := "order already paid by another attempt"
+	if d == authCancelSibling {
+		reason = "another attempt on the order is already authorized or captured"
+	}
+	h.log.Warn().Str("order_id", a.OrderID).Str("reference", reference).Str("reason", reason).
+		Msg("webhook authorized: cancelling, not capturing")
+	if h.canceller == nil {
+		return
+	}
+	if err := h.canceller.CancelPayment(ctx, reference); err != nil {
+		h.log.Error().Err(err).Str("reference", reference).Msg("webhook authorized: cancel of stale authorization failed")
+		return
+	}
+	h.orders.markAttemptCancelled(ctx, a)
 }
 
 // onCaptured settles the checkout order (merch, harbor QR, or a faktura pay
 // link) the captured payment belongs to.
 func (h *VippsWebhookHandler) onCaptured(ctx context.Context, clubID string, evt *vipps.WebhookEvent) {
-	orderID, ok := h.orderByReference(ctx, clubID, evt.Reference)
+	a, ok := h.orders.attemptByReference(ctx, clubID, vipps.ProviderName, evt.Reference)
 	if !ok {
 		return
 	}
-	h.orders.markOrderPaid(ctx, orderID, evt.Timestamp, func(ctx context.Context) string {
-		return h.payerName(ctx, evt.Reference)
-	})
+	// Only guests are asked to share their name, so only a guest order has
+	// one to look up.
+	var payerName func(context.Context) string
+	if a.Guest {
+		payerName = func(ctx context.Context) string { return h.payerName(ctx, evt.Reference) }
+	}
+	h.orders.markAttemptCaptured(ctx, a, evt.Timestamp, payerName)
 }
 
 // payerName returns the name the payer consented to share via the Vipps
-// profile (requested for guest orders only), or "" when there is none.
+// profile, or "" when there is none.
 func (h *VippsWebhookHandler) payerName(ctx context.Context, reference string) string {
 	if h.vipps == nil {
 		return ""
@@ -64,22 +102,9 @@ func (h *VippsWebhookHandler) payerName(ctx context.Context, reference string) s
 }
 
 func (h *VippsWebhookHandler) onTerminated(ctx context.Context, clubID string, evt *vipps.WebhookEvent) {
-	orderID, ok := h.orderByReference(ctx, clubID, evt.Reference)
+	a, ok := h.orders.attemptByReference(ctx, clubID, vipps.ProviderName, evt.Reference)
 	if !ok {
 		return
 	}
-	h.orders.markOrderFailed(ctx, orderID)
-}
-
-// orderByReference returns the checkout order id whose stored Vipps reference
-// matches, and whether one was found.
-func (h *VippsWebhookHandler) orderByReference(ctx context.Context, clubID, reference string) (string, bool) {
-	var orderID string
-	if err := h.db.QueryRow(ctx,
-		`SELECT id FROM orders WHERE club_id = $1 AND vipps_reference = $2 LIMIT 1`,
-		clubID, reference,
-	).Scan(&orderID); err != nil {
-		return "", false
-	}
-	return orderID, true
+	h.orders.markAttemptFailed(ctx, a)
 }

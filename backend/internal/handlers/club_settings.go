@@ -234,12 +234,12 @@ type clubFinancialSettings struct {
 	BankAccount           string   `json:"bank_account"`
 	KIDCheckMethod        string   `json:"kid_check_method"`
 	VippsClearingAccount  string   `json:"vipps_clearing_account"`
-	VippsFeeAccount       string   `json:"vipps_fee_account"`
+	PaymentFeeAccount     string   `json:"vipps_fee_account"`
 	VippsPerChargeEnabled bool     `json:"vipps_per_charge_enabled"`
-	// VippsMaxAmount caps which invoices may offer a Vipps link (BRY-283):
-	// null = no limit (Vipps for any amount); otherwise invoices over this
-	// kr amount are bank-transfer only.
-	VippsMaxAmount *float64 `json:"vipps_max_amount"`
+	// OnlineMaxAmount caps which invoices may offer online payment
+	// (BRY-283): null = no limit; otherwise invoices over this kr amount are
+	// bank-transfer only.
+	OnlineMaxAmount *float64 `json:"vipps_max_amount"`
 	// VippsAutoAssign opts the club into booking unambiguous Vipps charges
 	// without a human (BRY-340). VippsAutoAssignTieCategory is the price
 	// category to use when an amount fits items in several categories;
@@ -300,9 +300,9 @@ func (h *ClubSettingsHandler) HandleGetFinancialSettings(w http.ResponseWriter, 
 		        COALESCE(bank_account, ''),
 		        COALESCE(kid_check_method, 'mod11'),
 		        COALESCE(vipps_clearing_account, '2900'),
-		        COALESCE(vipps_fee_account, '7700'),
+		        COALESCE(payment_fee_account, '7700'),
 		        COALESCE(vipps_per_charge_enabled, false),
-		        vipps_max_amount,
+		        online_max_amount,
 		        vipps_auto_assign, COALESCE(vipps_auto_assign_tie_category, ''),
 		        bank_auto_assign,
 		        COALESCE(website_url, ''),
@@ -327,9 +327,9 @@ func (h *ClubSettingsHandler) HandleGetFinancialSettings(w http.ResponseWriter, 
 		&s.Latitude, &s.Longitude,
 		&s.BankAccount,
 		&s.KIDCheckMethod,
-		&s.VippsClearingAccount, &s.VippsFeeAccount,
+		&s.VippsClearingAccount, &s.PaymentFeeAccount,
 		&s.VippsPerChargeEnabled,
-		&s.VippsMaxAmount,
+		&s.OnlineMaxAmount,
 		&s.VippsAutoAssign, &s.VippsAutoAssignTieCategory,
 		&s.BankAutoAssign,
 		&s.WebsiteURL,
@@ -364,11 +364,11 @@ type updateFinancialSettingsRequest struct {
 	BankAccount           *string  `json:"bank_account,omitempty"`
 	KIDCheckMethod        *string  `json:"kid_check_method,omitempty"`
 	VippsClearingAccount  *string  `json:"vipps_clearing_account,omitempty"`
-	VippsFeeAccount       *string  `json:"vipps_fee_account,omitempty"`
+	PaymentFeeAccount     *string  `json:"vipps_fee_account,omitempty"`
 	VippsPerChargeEnabled *bool    `json:"vipps_per_charge_enabled,omitempty"`
-	// VippsMaxAmount: omitted = keep; <= 0 = clear the cap (unlimited);
+	// OnlineMaxAmount: omitted = keep; <= 0 = clear the cap (unlimited);
 	// > 0 = set the cap (BRY-283).
-	VippsMaxAmount *float64 `json:"vipps_max_amount,omitempty"`
+	OnlineMaxAmount *float64 `json:"vipps_max_amount,omitempty"`
 	// VippsAutoAssignTieCategory: omitted = keep; "" = clear; otherwise a
 	// price_items category.
 	VippsAutoAssign            *bool   `json:"vipps_auto_assign,omitempty"`
@@ -471,10 +471,15 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		   anthropic_api_key         = COALESCE($31, anthropic_api_key),
 		   kid_check_method          = COALESCE($32, kid_check_method),
 		   vipps_clearing_account    = COALESCE($33, vipps_clearing_account),
-		   vipps_fee_account         = COALESCE($34, vipps_fee_account),
+		   payment_fee_account       = COALESCE($34, payment_fee_account),
+		   vipps_fee_account         = COALESCE($34, payment_fee_account),
 		   vipps_per_charge_enabled  = COALESCE($35, vipps_per_charge_enabled),
+		   online_max_amount         = CASE
+		                                 WHEN $36::numeric IS NULL THEN online_max_amount
+		                                 WHEN $36::numeric <= 0    THEN NULL
+		                                 ELSE $36::numeric END,
 		   vipps_max_amount          = CASE
-		                                 WHEN $36::numeric IS NULL THEN vipps_max_amount
+		                                 WHEN $36::numeric IS NULL THEN online_max_amount
 		                                 WHEN $36::numeric <= 0    THEN NULL
 		                                 ELSE $36::numeric END,
 		   vipps_auto_assign         = COALESCE($37, vipps_auto_assign),
@@ -497,9 +502,9 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		req.FeatureCommerce, req.FeatureAccounting,
 		anthropicKey,
 		req.KIDCheckMethod,
-		req.VippsClearingAccount, req.VippsFeeAccount,
+		req.VippsClearingAccount, req.PaymentFeeAccount,
 		req.VippsPerChargeEnabled,
-		req.VippsMaxAmount,
+		req.OnlineMaxAmount,
 		req.VippsAutoAssign, req.VippsAutoAssignTieCategory,
 		req.BankAutoAssign,
 	); err != nil {

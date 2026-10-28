@@ -93,6 +93,8 @@ Unqualified names (`users`) resolve to the view through the role's search_path;
 | `vipps_import_rows` | customer_name, message | `message_kid`, `message_length` |
 | `bank_import_rows` | description, counterpart, from_account, to_account | `description_kid`, `description_length` |
 | `vipps_webhook_events` | payload (raw JSONB) | `payload_psp_ref`, `payload_state`, `payload_amount` |
+| `payment_webhook_events` | payload (raw JSONB; may carry payer name/email) | — |
+| `payment_refunds` | reason (staff-typed) | `reason_length` |
 | `slip_shares` | notes | — |
 | `boats` | name, registration_number, mmsi, call_sign | — |
 | `journal_entries` | description (bank-import entries copy the bank text, payer name included), attachment_url | `description_kid`, `description_length`, `has_attachment` |
@@ -108,9 +110,12 @@ Org fields (`*_org_name/number/address`), the club's own `bank_account`/`org_num
 ### Allowlist — readable raw (verified no PII)
 
 `accounts`, `bank_imports`, `docks`, `fiscal_periods`,
-`mva_compensation_reports`, `order_lines`, `order_sources`, `price_exemptions`, `price_items`,
-`product_variants`, `products`, `slip_assignments`, `vipps_imports`,
-`waiting_list_entries`.
+`mva_compensation_reports`, `order_lines`, `order_sources`, `payment_attempts`,
+`price_exemptions`, `price_items`, `product_variants`, `products`,
+`slip_assignments`, `vipps_imports`, `waiting_list_entries`.
+
+`payment_attempts` (000115) holds only ids, the provider name, the opaque
+provider reference, status, amount and currency.
 
 **Rule: a table is allowlisted raw only if none of its free-text columns can
 name a person.** "Structural" isn't enough: bank-import journal entries copy

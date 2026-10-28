@@ -195,7 +195,7 @@ func (h *InvoiceHandler) buildCheckoutResp(ctx context.Context, orderID, clubID,
 	// If an unpaid source isn't payable via Vipps, the page must steer to bank
 	// transfer: flag it and surface KID + konto so no Vipps button shows
 	// (BRY-283). KID is already loaded above; load the club's default account.
-	blocked, err := h.orderHasVippsBlockedSource(ctx, orderID)
+	blocked, err := h.orderHasOnlineBlockedSource(ctx, orderID)
 	if err != nil {
 		return nil, err
 	}
@@ -340,7 +340,7 @@ func (h *InvoiceHandler) HandlePayCheckout(w http.ResponseWriter, r *http.Reques
 		Error(w, http.StatusBadRequest, "nothing to pay")
 		return
 	}
-	if errors.Is(err, errVippsBlocked) {
+	if errors.Is(err, errOnlinePaymentBlocked) {
 		// Not payable via Vipps → bank transfer only (BRY-283). The page already
 		// hides the button via vipps_blocked; this guards a stale client.
 		Error(w, http.StatusConflict, "vipps_over_limit")

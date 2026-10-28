@@ -174,7 +174,7 @@ The board roles, defined once in `backend/internal/roles` (`roles.Board`) and va
 open   voided
 ```
 
-Enforced by `invoices_status_check` (BRY-325). This column is **not** the payment state: whether an invoice is paid lives in `payment_id` (reconciled) and `vipps_paid_at` (captured via the pay link, awaiting settlement). Ask "is it settled?" through `finance.SettledForMemberSQL` / `SettledForGLSQL`, never with ad-hoc checks. See the invariant "Settled means one thing, defined once".
+Enforced by `invoices_status_check` (BRY-325). This column is **not** the payment state: whether an invoice is paid lives in `payment_id` (reconciled) and `online_paid_at` (captured via the pay link by the provider in `online_paid_provider`, awaiting settlement; `vipps_paid_at` is its legacy Vipps-only copy, still written until BRY-450 drops it). Ask "is it settled?" through `finance.SettledForMemberSQL` / `SettledForGLSQL`, never with ad-hoc checks. See the invariant "Settled means one thing, defined once".
 
 ### `invoices.recipient_kind`
 
@@ -205,6 +205,30 @@ Semantic only — used by the operator to label accounts and (future) to pick th
 ```
 db_query   mcp
 ```
+
+### `orders.provider` and `payment_attempts.provider` / `payment_refunds.provider` / `payment_webhook_events.provider` / `invoices.online_paid_provider`
+
+```
+vipps   stripe
+```
+
+The `payments.Provider` name (`vipps.ProviderName` today; `stripe` arrives with BRY-443). No CHECK: the vocabulary grows with the providers registered in `cmd/api/main.go`. `orders.provider` is the provider of the order's latest attempt, and of the attempt that paid it once paid.
+
+### `payment_attempts.status` (CHECK since migration 000115)
+
+```
+created   authorized   captured   failed   cancelled
+```
+
+One payment created at a provider for an order (`handlers/order_pay.go`, `handlers/order_settle.go`). `created` on mint, before the provider is called → `authorized` when the provider reports an authorization Brygge will capture (back to `created` if the capture call fails) → `captured` when the money is taken (from any state: a capture means it was taken). `failed` when the provider refused to create it, or it was aborted, expired or terminated. `cancelled` when Brygge voided an authorization because the order was already paid or another attempt was already authorized or captured. Migration 000115 backfilled one attempt per order with a `vipps_reference`: paid or refunded → `captured`, failed → `failed`, else `created`.
+
+### `payment_refunds.status` (CHECK since migration 000115)
+
+```
+requested   succeeded   failed
+```
+
+Nothing writes it yet; refunds land with BRY-446.
 
 ### `broadcasts.status` (migration 000069)
 
@@ -260,8 +284,10 @@ Source: `backend/internal/accounting/sync.go`, `revenue_accounts.go` and `vippsr
 | `bankAccountCode` | 1920 | Bankkonto drift |
 | `receivablesAccountCode` | 1500 | Kundefordringer |
 | `fallbackRevenueCode` | 3900 | Andre inntekter (fallback for every payment path; **not 2900**, see `invariants.md`) |
-| `vippsFeeAccountCode` | 7700 | Bankgebyrer |
+| `vippsFeeAccountCode` | 7700 | Bankgebyrer — default of `clubs.payment_fee_account`, which books fees for every provider |
 | `vippsClearingAccountCode` | 2900 | Annen kortsiktig gjeld (legacy — kept as a constant for report compatibility, but **no new lines route here**) |
+
+`clubs.stripe_clearing_account` defaults to **1580** Til gode betalingsformidler (Stripe), an asset in `DefaultKontoplan()` that migration 000114 seeded into every existing chart that lacked it. It holds card payments until Stripe pays them out; nothing posts to it until BRY-445.
 
 ### Price-item unit → i18n key
 

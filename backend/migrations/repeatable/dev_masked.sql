@@ -79,7 +79,8 @@ SELECT
     kid_check_method, vipps_clearing_account, vipps_fee_account,
     vipps_per_charge_enabled, vipps_max_amount,
     vipps_auto_assign, vipps_auto_assign_tie_category, bank_auto_assign,
-    exemption_expense_account
+    exemption_expense_account,
+    online_max_amount, payment_fee_account, stripe_clearing_account
 FROM public.clubs;
 
 CREATE VIEW dev_masked.billing_recipients AS
@@ -122,6 +123,7 @@ SELECT
     NULL::text AS vipps_payment_url,      -- embeds the order pay-link token
     vipps_payment_expires_at, vipps_paid_at, vipps_payment_link_opt_in,
     credits_invoice_id,
+    online_paid_at, online_paid_provider, online_payment_opt_in,
     (pdf_data IS NOT NULL) AS has_pdf
 FROM public.invoices;
 
@@ -164,6 +166,22 @@ SELECT
     payload->>'state'              AS payload_state,
     payload->'amount'->>'value'    AS payload_amount
 FROM public.vipps_webhook_events;
+
+CREATE VIEW dev_masked.payment_webhook_events AS
+SELECT
+    id, club_id, provider, event_id, event_name, reference,
+    NULL::jsonb AS payload,               -- may carry payer name/email
+    received_at
+FROM public.payment_webhook_events;
+
+CREATE VIEW dev_masked.payment_refunds AS
+SELECT
+    id, club_id, attempt_id, provider, amount, currency, provider_refund_id,
+    status,
+    NULL::text AS reason,                 -- staff-typed free text
+    created_by, journal_entry_id, created_at, updated_at,
+    length(reason) AS reason_length
+FROM public.payment_refunds;
 
 CREATE VIEW dev_masked.slip_shares AS
 SELECT

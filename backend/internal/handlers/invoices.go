@@ -1068,9 +1068,9 @@ func (h *InvoiceHandler) HandleListInvoices(w http.ResponseWriter, r *http.Reque
 		             AND resource  = 'invoice'
 		             AND resource_id = i.id::text
 		             AND action = 'invoice.reminded') AS last_reminder_at,
-		        i.vipps_paid_at, i.vipps_payment_link_opt_in,
+		        i.online_paid_at, i.online_payment_opt_in,
 		        (SELECT o.invoice_number FROM invoices o WHERE o.id = i.credits_invoice_id),
-		        (SELECT o.payment_id IS NOT NULL OR o.vipps_paid_at IS NOT NULL
+		        (SELECT o.payment_id IS NOT NULL OR o.online_paid_at IS NOT NULL
 		           FROM invoices o WHERE o.id = i.credits_invoice_id),
 		        (SELECT cn.invoice_number FROM invoices cn
 		          WHERE cn.credits_invoice_id = i.id AND cn.status <> 'voided')
@@ -1673,7 +1673,7 @@ type setVippsLinkRequest struct {
 // reversible preference (not a destructive/money-moving action), so it is
 // role-gated but not fresh-TOTP gated. The effective link on every surface
 // (emails, copy-link, payables page, and the member's click) then follows
-// invoiceVippsAllowed / orderHasVippsBlockedSource.
+// invoiceOnlinePaymentAllowed / orderHasOnlineBlockedSource.
 func (h *InvoiceHandler) HandleSetInvoiceVippsLink(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
@@ -1692,7 +1692,7 @@ func (h *InvoiceHandler) HandleSetInvoiceVippsLink(w http.ResponseWriter, r *htt
 		return
 	}
 	tag, err := h.db.Exec(ctx,
-		`UPDATE invoices SET vipps_payment_link_opt_in = $1
+		`UPDATE invoices SET online_payment_opt_in = $1, vipps_payment_link_opt_in = $1
 		  WHERE id = $2 AND club_id = $3`,
 		req.OptIn, invoiceID, claims.ClubID,
 	)

@@ -23,6 +23,7 @@ var maskedTables = []string{
 	"slip_shares", "boats",
 	"journal_entries", "journal_lines", "payments", "invoice_lines",
 	"account_mapping_rules", "vipps_message_rules", "slips", "dock_fingers",
+	"payment_refunds", "payment_webhook_events",
 }
 
 // rawTextColumns is every text/JSON column the role may read from a raw
@@ -53,6 +54,8 @@ var rawTextColumns = map[string]bool{
 	"vipps_imports.filename": true, "vipps_imports.msn": true,
 	// exemption config: board-role keys and price categories
 	"price_exemptions.category": true, "price_exemptions.role": true,
+	// provider name, opaque provider reference, status and currency codes
+	"payment_attempts.currency": true, "payment_attempts.provider": true, "payment_attempts.provider_reference": true, "payment_attempts.status": true,
 }
 
 // TestDevMaskedViews migrates a throwaway database, applies the dev_masked
