@@ -45,7 +45,7 @@ func runLockPoolAssigns(t *testing.T, assign func(ctx context.Context, i int) er
 			ok++
 		case errors.Is(err, context.DeadlineExceeded) || ctx.Err() != nil:
 			t.Fatalf("assign %d hit the deadline (lock holder starved of a connection): %v", i, err)
-		case errors.Is(err, errInvoiceSettled), errors.Is(err, errInvoiceHasBookedRow), errors.Is(err, errInvoiceNotOpen):
+		case errors.Is(err, errInvoiceSettled), errors.Is(err, errInvoiceHasBookedRow), errors.Is(err, errInvoiceNotOpen), errors.Is(err, errInvoicePaid):
 			// The faktura was taken by the assign that won.
 		default:
 			t.Errorf("assign %d failed for a reason other than losing the faktura: %v", i, err)

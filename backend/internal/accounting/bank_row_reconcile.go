@@ -273,6 +273,10 @@ var errInvoiceSettled = errors.New("invoice is already settled")
 // payment, but it has nowhere to go and stays in Tildel.
 var errInvoiceNotOpen = errors.New("faktura no longer open")
 
+// errInvoicePaid means a manual or Vipps assignment found its faktura already
+// paid once it held the lock: a concurrent assignment got there first.
+var errInvoicePaid = errors.New("invoice is already paid")
+
 // lockInvoiceForAssign locks the faktura for the rest of tx and refuses it
 // when it can't take this payment. It returns the faktura total in øre.
 // Every path that settles a faktura with a bank row or a Vipps charge
@@ -349,7 +353,7 @@ func lockInvoiceForAssign(ctx context.Context, tx pgx.Tx, clubID, invoiceID stri
 	case invoiceStatus == "voided":
 		return 0, errors.New("invoice is voided")
 	case paid:
-		return 0, errors.New("invoice is already paid")
+		return 0, errInvoicePaid
 	case bookedByRow:
 		return 0, errInvoiceHasBookedRow
 	case opts.mode == lockAutoAssign && (!owed || !sentAndLive || bookedAny || invoiceCents != opts.rowCents):
