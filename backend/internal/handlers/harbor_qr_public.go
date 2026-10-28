@@ -47,6 +47,9 @@ type qrTargetResp struct {
 	// LabelTranslations lets the page show the visitor's language; Label is
 	// the club-language fallback.
 	LabelTranslations map[string]string `json:"label_translations"`
+	// Providers are the payment providers the payer can choose, in display
+	// order (the default first); empty when none is configured.
+	Providers []string `json:"providers"`
 }
 
 // resolveQRUnits clamps a requested unit count to the target's bounds. A
@@ -114,6 +117,7 @@ func (h *InvoiceHandler) HandleGetQRTarget(w http.ResponseWriter, r *http.Reques
 		FixedUnits:        t.FixedUnits,
 		ClubName:          clubName,
 		LabelTranslations: t.LabelTranslations,
+		Providers:         append([]string{}, h.availableProviders()...),
 	})
 }
 
@@ -132,7 +136,7 @@ type qrPayRequest struct {
 func (h *InvoiceHandler) HandlePayQRTarget(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	if !h.providers.Configured() {
-		Error(w, http.StatusServiceUnavailable, "Vipps-betaling er ikke tilgjengelig akkurat nå.")
+		Error(w, http.StatusServiceUnavailable, msgOnlineUnavailableNO)
 		return
 	}
 	qrToken := chi.URLParam(r, "token")
@@ -205,7 +209,7 @@ func (h *InvoiceHandler) HandlePayQRTarget(w http.ResponseWriter, r *http.Reques
 	}
 	if err != nil {
 		h.log.Error().Err(err).Str("order_id", orderID).Msg("qr pay: mint payment failed")
-		Error(w, http.StatusBadGateway, "Kunne ikke starte Vipps-betaling. Prøv igjen.")
+		Error(w, http.StatusBadGateway, msgPaymentStartFailedNO)
 		return
 	}
 	JSON(w, http.StatusOK, map[string]any{"redirect_url": redirectURL})

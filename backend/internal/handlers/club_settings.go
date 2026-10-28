@@ -234,12 +234,12 @@ type clubFinancialSettings struct {
 	BankAccount           string   `json:"bank_account"`
 	KIDCheckMethod        string   `json:"kid_check_method"`
 	VippsClearingAccount  string   `json:"vipps_clearing_account"`
-	PaymentFeeAccount     string   `json:"vipps_fee_account"`
+	PaymentFeeAccount     string   `json:"payment_fee_account"`
 	VippsPerChargeEnabled bool     `json:"vipps_per_charge_enabled"`
 	// OnlineMaxAmount caps which invoices may offer online payment
 	// (BRY-283): null = no limit; otherwise invoices over this kr amount are
 	// bank-transfer only.
-	OnlineMaxAmount *float64 `json:"vipps_max_amount"`
+	OnlineMaxAmount *float64 `json:"online_max_amount"`
 	// VippsAutoAssign opts the club into booking unambiguous Vipps charges
 	// without a human (BRY-340). VippsAutoAssignTieCategory is the price
 	// category to use when an amount fits items in several categories;
@@ -364,11 +364,11 @@ type updateFinancialSettingsRequest struct {
 	BankAccount           *string  `json:"bank_account,omitempty"`
 	KIDCheckMethod        *string  `json:"kid_check_method,omitempty"`
 	VippsClearingAccount  *string  `json:"vipps_clearing_account,omitempty"`
-	PaymentFeeAccount     *string  `json:"vipps_fee_account,omitempty"`
+	PaymentFeeAccount     *string  `json:"payment_fee_account,omitempty"`
 	VippsPerChargeEnabled *bool    `json:"vipps_per_charge_enabled,omitempty"`
 	// OnlineMaxAmount: omitted = keep; <= 0 = clear the cap (unlimited);
 	// > 0 = set the cap (BRY-283).
-	OnlineMaxAmount *float64 `json:"vipps_max_amount,omitempty"`
+	OnlineMaxAmount *float64 `json:"online_max_amount,omitempty"`
 	// VippsAutoAssignTieCategory: omitted = keep; "" = clear; otherwise a
 	// price_items category.
 	VippsAutoAssign            *bool   `json:"vipps_auto_assign,omitempty"`

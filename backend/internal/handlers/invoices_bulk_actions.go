@@ -21,13 +21,13 @@ import (
 
 type bulkInvoiceActionRequest struct {
 	IDs []string `json:"ids"`
-	// VippsPaymentLink is the reminder batch's override of the per-invoice
+	// OnlinePayment is the reminder batch's override of the per-invoice
 	// online-payment setting (BRY-283): nil = leave each invoice's setting
 	// as-is (Auto follows the club amount cap); true/false = set
 	// online_payment_opt_in On/Off for the reminded invoices, persisting so it
 	// holds when the member later clicks.
 	// Ignored by the non-reminder bulk actions that share this request shape.
-	VippsPaymentLink *bool `json:"vipps_payment_link"`
+	OnlinePayment *bool `json:"online_payment"`
 }
 
 type bulkInvoiceResult struct {
@@ -103,11 +103,11 @@ func (h *InvoiceHandler) HandleBulkSendReminder(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	// Batch Vipps-link override (BRY-283): if the operator chose On/Off in the
+	// Batch online-payment override (BRY-283): if the operator chose On/Off in the
 	// reminder dialog, persist it on the reminded invoices before enqueue so the
 	// async sends — and the member's later click — all honour it.
-	if err := h.applyReminderVippsOverride(ctx, claims.ClubID, claims.UserID, r.RemoteAddr, req.VippsPaymentLink, items); err != nil {
-		h.log.Error().Err(err).Msg("bulk reminder: set vipps opt-in")
+	if err := h.applyReminderOnlinePaymentOverride(ctx, claims.ClubID, claims.UserID, r.RemoteAddr, req.OnlinePayment, items); err != nil {
+		h.log.Error().Err(err).Msg("bulk reminder: set online payment opt-in")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
@@ -135,7 +135,7 @@ func (h *InvoiceHandler) HandleBulkSendReminder(w http.ResponseWriter, r *http.R
 
 // collectReminderItems runs the batched eligibility preflight for a bulk
 // reminder and returns the sendable deliveries plus the skipped/failure tally.
-// Eligible = originally sent, still unpaid, not vipps-received-pending-settlement,
+// Eligible = originally sent, still unpaid, not received online and pending settlement,
 // with a recipient email and a stored PDF.
 func (h *InvoiceHandler) collectReminderItems(ctx context.Context, clubID string, ids []string, payload []byte) ([]bcast.InvoiceDelivery, bulkInvoiceResult, error) {
 	res := bulkInvoiceResult{}
@@ -200,10 +200,10 @@ func (h *InvoiceHandler) collectReminderItems(ctx context.Context, clubID string
 	return items, res, nil
 }
 
-// applyReminderVippsOverride persists the reminder dialog's On/Off batch choice
+// applyReminderOnlinePaymentOverride persists the reminder dialog's On/Off batch choice
 // (BRY-283) onto the reminded invoices before enqueue. nil = leave each invoice
 // as set (Auto still follows the club cap); no-op when there is nothing to send.
-func (h *InvoiceHandler) applyReminderVippsOverride(ctx context.Context, clubID, actorID, remoteAddr string, optIn *bool, items []bcast.InvoiceDelivery) error {
+func (h *InvoiceHandler) applyReminderOnlinePaymentOverride(ctx context.Context, clubID, actorID, remoteAddr string, optIn *bool, items []bcast.InvoiceDelivery) error {
 	if optIn == nil || len(items) == 0 {
 		return nil
 	}
@@ -220,7 +220,7 @@ func (h *InvoiceHandler) applyReminderVippsOverride(ctx context.Context, clubID,
 	}
 	if h.audit != nil {
 		h.audit.LogAction(ctx, clubID, actorID, remoteAddr,
-			audit.ActionInvoiceVippsLinkSet, "invoice", "",
+			audit.ActionInvoiceOnlinePaymentSet, "invoice", "",
 			map[string]any{"opt_in": *optIn, "count": len(ids)})
 	}
 	return nil
@@ -293,12 +293,12 @@ func (h *InvoiceHandler) sendOneReminder(
 	}
 
 	subject := email.InvoiceReminderSubject(locale, clubName, invoiceNumber)
-	// Offer a "Betal med Vipps" link per the invoice's effective Vipps setting —
+	// Offer a pay link per the invoice's effective online-payment setting —
 	// its On/Off override or, for Auto, the club amount cap (all enforced inside
 	// ensureFakturaOrderToken, BRY-283). The copy keeps bank transfer preferred;
 	// an empty URL just renders the KID-only reminder.
-	vippsURL := h.orderPayURL(h.ensureFakturaOrderToken(ctx, clubID, invoiceID, true))
-	body := email.InvoiceReminderBody(locale, memberName, clubName, invoiceNumber, dueDate, total, kid, defaultBank, vippsURL)
+	payURL := h.orderPayURL(h.ensureFakturaOrderToken(ctx, clubID, invoiceID, true))
+	body := email.InvoiceReminderBody(locale, memberName, clubName, invoiceNumber, dueDate, total, kid, defaultBank, payURL, h.emailPayMethods(payURL))
 	filename := buildSimpleReminderFilename(invoiceNumber)
 	if err := h.email.SendWithAttachment(email.WithKind(ctx, email.KindInvoiceReminder), deliverTo, subject, body, filename, pdfData); err != nil {
 		return err

@@ -38,8 +38,8 @@ function row(over: Record<string, unknown>) {
     last_reminder_at: null,
     status: 'open',
     paid: false,
-    vipps_paid_at: null,
-    vipps_payment_link_opt_in: null,
+    online_paid_at: null,
+    online_payment_opt_in: null,
     credits_invoice_number: null,
     credit_state: null,
     credited_by_invoice_number: null,
@@ -284,13 +284,13 @@ describe('FakturaList for a board member (BRY-372)', () => {
     for (const key of rowActions) {
       expect(w.find(`[title="${key}"]`).exists(), key).toBe(false)
     }
-    expect(w.find('select[title="admin.faktura.sent.vippsLink.label"]').exists()).toBe(false)
+    expect(w.find('select[title="admin.faktura.sent.onlinePayment.label"]').exists()).toBe(false)
   })
 
   it('shows the same row actions to the treasurer', async () => {
     const w = mountWithPlugins(FakturaList, { props: { status: 'sent' }, piniaOptions: asTreasurer })
     await flushPromises()
-    expect(w.find('select[title="admin.faktura.sent.vippsLink.label"]').exists()).toBe(true)
+    expect(w.find('select[title="admin.faktura.sent.onlinePayment.label"]').exists()).toBe(true)
     for (const key of rowActions) {
       expect(w.find(`[title="${key}"]`).exists(), key).toBe(true)
     }

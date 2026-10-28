@@ -7,7 +7,9 @@ How Brygge charges a checkout order through a payment service, and the decisions
 Everything a payer can pay online is an **order** (`orders`): a faktura pay link (with `order_sources` rows pointing at the invoices it settles), a harbor QR guest payment, or a checkout with ad-hoc catalog lines (`order_lines`). An order is durable; a **payment attempt** (`payment_attempts`) is one short-lived payment at a provider to pay it. A payer who abandons an attempt clicks again and gets a fresh one on the same order; the earlier attempt keeps its row and reference, so if the payer completes it after all, its webhook still finds the order. The newest attempt with a provider reference is the order's **current** one.
 
 ```
-/betal/{token}, /qr/{token}, checkout pay
+/betal/{token} page, /qr/{token} page   payer picks a method (PayMethodButtons)
+  POST /checkout/{token}/pay, POST /qr/{token}/pay {provider}
+  (GET /api/v1/betal/{token}: one provider → mints; several → the /betal page)
         │  gate: providers.Configured(); provider: the payer's choice or defaultProvider()
         ▼
 mintOrderPayment(ctx, providerName, orderID, cancelURL)   handlers/order_pay.go
@@ -64,7 +66,18 @@ Payment creation goes through the registry, and each webhook voids a stale autho
 
 ### Choosing the provider
 
-`InvoiceHandler.defaultProvider()` is Vipps when it is configured, otherwise the one provider that is, so a Stripe-only deployment works end to end. `POST /checkout/{token}/pay` takes an optional `{"provider": "stripe"}` body and `POST /qr/{token}/pay` a `provider` field; a name that is not registered answers 400 `unknown payment provider`. `GET /betal/{token}` and the faktura email links use the default. Stripe is registered only when both `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` are set; one without the other logs a startup warning and registers nothing, because a payment Brygge never hears back about is never marked paid.
+`InvoiceHandler.defaultProvider()` is Vipps when it is configured, otherwise the one provider that is, so a Stripe-only deployment works end to end. `availableProviders()` lists the configured ones in display order: the default first, then the rest by name (`Registry.Names()` is alphabetical, so the order is set here, not by the registry). Stripe is registered only when both `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` are set; one without the other logs a startup warning and registers nothing, because a payment Brygge never hears back about is never marked paid.
+
+The payer chooses on the page they are already on; there is no separate choice page:
+
+- **`/betal/{token}`** (SPA, `PayInvoiceView`) is the itemised faktura page. `GET /api/v1/checkout/{token}` returns `providers` (display order; empty when none is configured or the order is blocked) and `online_blocked` (an unpaid source is over the cap, forced off, or an imported receivable not yet in the GL). Two or more providers show one button each, one shows a single labelled button, none shows the bank-transfer box (`bank_account` and `kid_number` are filled whenever `providers` is empty). The button posts `{"provider": …}` to `POST /checkout/{token}/pay`.
+- **`/qr/{token}`** (SPA, `QrCheckoutView`) gets the same `providers` from `GET /api/v1/qr/{token}` (no blocking rule applies to a guest order) and posts `provider` to `POST /qr/{token}/pay`. Card leads there, since guests are often visitors without Vipps.
+- **`GET /api/v1/betal/{token}`** (`HandleOrderPayRedirect`) is the one-tap link in faktura emails sent before the checkout page existed. A paid order goes to its receipt; with one provider it mints at once and 302s to the provider; with several it 302s to the `/betal/{token}` page rather than choosing for the payer; with none it answers 503 with a plain-text message.
+- **The payables page** (`/betal/bruker/{token}`) routes each invoice's Pay button to its `/betal/{token}` page in the SPA.
+
+`POST` with a provider name that is not registered answers 400 `unknown payment provider`; no name uses the default. The buttons are one shared component, `frontend/src/components/pay/PayMethodButtons.vue`: it maps provider names to methods (`vipps` → Vipps, `stripe` → card, labelled "Kort · Apple Pay · Google Pay"), takes an optional `emphasis` to put one method first, and skips names it has no method for. There is no club setting for the order. The labels are `text-xl font-bold` on purpose: white on Vipps orange (`#ff5b24`) only meets WCAG AA contrast as large text. The visible label is each button's accessible name (icons are `aria-hidden`). If a pay POST answers 409 `online_payment_over_limit` (the order became blocked after the page loaded), `PayInvoiceView` reloads the checkout so the bank-transfer box replaces the buttons.
+
+Faktura and reminder emails link to `/betal/{token}` with a "Betal nå" button and a line naming the methods beneath it, built from the registry by `emailPayMethods` / `email.PayMethodsLabel`: "Vipps", "Kort" or "Vipps eller kort", and no line when there is no pay link. The emails are Norwegian only.
 
 ### Returning to the receipt page
 
@@ -109,14 +122,18 @@ The legacy columns `invoices.vipps_paid_at`, `invoices.vipps_payment_link_opt_in
 
 - `orders.vipps_reference` holds the latest Vipps attempt's reference for the settlement reconciliation (BRY-445).
 - `vipps_webhook_events` is Vipps' event store.
-- The gate's error codes and texts (`vipps_unavailable`, `vipps_over_limit`, "Vipps is not available"), the checkout GET's `vipps_blocked` response field, the `PATCH /invoices/{id}/vipps-link` route, the `invoice.vipps_link_set` audit action and the JSON fields `vipps_paid_at`, `vipps_payment_link_opt_in`, `vipps_max_amount` and `vipps_fee_account` are matched by the frontend; renaming them is BRY-444. They are fed from and write to the provider-neutral columns.
+- The legacy columns listed above, still dual-written until BRY-450 drops them.
+- The stored audit value `invoice.vipps_link_set` (Go: `audit.ActionInvoiceOnlinePaymentSet`), kept so existing audit rows still match.
+- The club setting `vipps_clearing_account`, which is genuinely Vipps' clearing account.
+
+The API itself is provider-neutral: error codes `online_payment_unavailable` / `online_payment_over_limit`, the checkout GET's `online_blocked` and `providers`, the `PATCH /invoices/{id}/online-payment` route, the reminder batch's `online_payment` field, and the JSON fields `online_paid_at`, `online_payment_opt_in`, `online_max_amount` and `payment_fee_account`.
 
 ## Adding a provider
 
 1. Implement `payments.Provider` (and `Canceller` if it can void) in the provider's own package, next to its API client.
 2. Register it in `cmd/api/main.go` when its credentials are present. Secrets go in `/etc/brygge/env` (see the env layering rules in [configuration.md](configuration.md)).
 3. Add its webhook handler: verify the signature, persist the event in `payment_webhook_events`, resolve the attempt with `attemptByReference` (or `attemptByID`), then call `authorizeAttempt` (if the provider authorizes before capturing) / `markAttemptCaptured` / `markAttemptFailed`. Do not write order or invoice payment state anywhere else.
-4. Let the payer choose it: the pay routes resolve a requested name with `resolveProvider` and pass it to `mintOrderPayment`.
+4. Let the payer choose it: the pay routes resolve a requested name with `resolveProvider` and pass it to `mintOrderPayment`; `availableProviders()` lists it to the pages. Give it a method in `PayMethodButtons.vue` (`METHOD_BY_PROVIDER`, a label under `pay.methods.*` in all locales) and in the email label (`emailPayMethods` / `email.PayMethodsLabel`); until then the pages skip it.
 5. Book its fees and clearing balance with the accounting owner before going live.
 
 ## Card payments with Stripe: decisions
@@ -125,9 +142,9 @@ Taken by the owner on 2026-10-27. They bound the Stripe work; change them here f
 
 1. **Hosted Stripe Checkout** (redirect). Card data never touches Brygge, so PCI scope stays SAQ-A and the CSP needs no change.
 2. **Methods in v1:** card, Apple Pay and Google Pay, through `payment_method_types=["card"]` (the wallets ride on card). Not `automatic_payment_methods`, so a Dashboard toggle cannot add Klarna, Link or Stripe's own Vipps method, which are out.
-3. **`/betal/{token}` becomes a choice page** — Vipps or "Kort / Apple Pay / Google Pay" — when both are available, and goes straight through when only one is.
+3. **The payer chooses on the `/betal/{token}` page** — Vipps or "Kort · Apple Pay · Google Pay" — when both are available; with only one there is a single button for it. The choice page is the existing itemised faktura page, not a new step: nothing auto-redirects past it, so the payer always sees what they are paying first.
 4. **Email button** reads "Betal nå" with "Vipps eller kort" beneath it, and links to the choice page.
-5. **One cap for all online payment.** `vipps_max_amount` becomes `online_max_amount`, and the per-faktura Auto/On/Off override applies to both providers. The club carries the fees (EEA rules restrict surcharging).
+5. **One cap for all online payment.** `online_max_amount` (formerly `vipps_max_amount`), and the per-faktura Auto/On/Off override applies to both providers. The club carries the fees (EEA rules restrict surcharging).
 6. **One Stripe account per deployment**, secrets in `/etc/brygge/env`, no Stripe Connect.
 7. **Refunds:** an in-app refund button for Stripe in v1. Refunds made in the Stripe Dashboard are still picked up by webhook and booked. Vipps refunds stay with BRY-14, through the same `Refund` interface.
 8. **Accounting:** card fees go to account 7700, as Vipps fees do. The Stripe balance sits in a new clearing receivable, 1580, until payout.

@@ -3,6 +3,7 @@ package email
 import (
 	"bytes"
 	"fmt"
+	"html"
 	"html/template"
 	"math"
 	"net/http"
@@ -255,6 +256,14 @@ const emailButton = `{{define "button"}}<p style="margin:0 0 8px 0;text-align:ce
                 <a href="{{.URL}}" style="display:inline-block;background:{{css .BG}};color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:4px;font-weight:600;font-size:15px;">{{.Label}}</a>
               </p>{{end}}`
 
+// emailPayButton is the online pay CTA shared by the invoice and reminder
+// emails, with the accepted methods beneath; absent without a pay link.
+const emailPayButton = `{{define "payButton"}}{{if .PayURL}}
+              <p style="margin:0 0 4px 0;font-size:13px;color:#64748b;">Du kan også betale på nett om du ønsker det:</p>
+{{template "button" (dict "URL" .PayURL "Label" "Betal nå" "BG" "#0f172a")}}
+{{if .PayMethods}}              <p style="margin:0 0 8px 0;text-align:center;font-size:13px;color:#64748b;">{{.PayMethods}}</p>
+{{end}}{{end}}{{end}}`
+
 // emailInvoiceDetails is the label|value payment box shared by the invoice and
 // reminder emails.
 const emailInvoiceDetails = `{{define "invoiceDetails"}}<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 24px 0;background:#f8fafc;border-radius:6px;">
@@ -287,7 +296,7 @@ const emailDefaultFooter = `{{define "footer"}}<p style="margin:0;"><strong styl
 // sharedEmail holds the base layout + partials. Each email clones it and adds
 // its own "content" (and, for the magic-link, a "footer" override).
 var sharedEmail = template.Must(template.New("shared").Funcs(emailFuncs).
-	Parse(emailBaseLayout + emailButton + emailInvoiceDetails + emailDefaultFooter))
+	Parse(emailBaseLayout + emailButton + emailPayButton + emailInvoiceDetails + emailDefaultFooter))
 
 var magicLinkHTMLTpl = template.Must(template.Must(sharedEmail.Clone()).Parse(`{{define "content"}}
               <p style="margin:0 0 16px 0;">{{.Copy.Greeting}}</p>
@@ -323,7 +332,10 @@ func InvoiceSubject(_, clubName string, invoiceNumber int) string {
 // memberName, dueDate, total, kid and bankAccount are interpolated
 // into the Norwegian copy below. The PDF is attached separately by
 // the caller.
-func InvoiceBody(_ /*locale*/, memberName, clubName string, invoiceNumber int, dueDate time.Time, total float64, kid, bankAccount, vippsURL string) string {
+//
+// payURL is the faktura's online pay page ("" for a KID-only email) and
+// payMethods the line naming the ways to pay there (PayMethodsLabel).
+func InvoiceBody(_ /*locale*/, memberName, clubName string, invoiceNumber int, dueDate time.Time, total float64, kid, bankAccount, payURL, payMethods string) string {
 	if clubName == "" {
 		clubName = "klubben"
 	}
@@ -338,7 +350,8 @@ func InvoiceBody(_ /*locale*/, memberName, clubName string, invoiceNumber int, d
 		Amount        string
 		KID           string
 		BankAccount   string
-		VippsURL      string
+		PayURL        string
+		PayMethods    string
 	}{
 		Club:          clubName,
 		Member:        memberName,
@@ -347,11 +360,12 @@ func InvoiceBody(_ /*locale*/, memberName, clubName string, invoiceNumber int, d
 		Amount:        formatNOK(total),
 		KID:           kid,
 		BankAccount:   bankAccount,
-		VippsURL:      vippsURL,
+		PayURL:        payURL,
+		PayMethods:    payMethods,
 	}
 	var buf bytes.Buffer
 	// A faktura that nets to zero (every line exempted) asks for nothing:
-	// no KID, account number or Vipps button that could prompt a payment.
+	// no KID, account number or pay button that could prompt a payment.
 	if math.Round(total*100) == 0 {
 		if err := invoiceNoPaymentHTMLTpl.ExecuteTemplate(&buf, "base", data); err == nil {
 			return buf.String()
@@ -364,13 +378,9 @@ func InvoiceBody(_ /*locale*/, memberName, clubName string, invoiceNumber int, d
 	if err := invoiceHTMLTpl.ExecuteTemplate(&buf, "base", data); err != nil {
 		// Template bug — fall back to a flat readable summary so the
 		// member still has the payment details.
-		vippsLine := ""
-		if vippsURL != "" {
-			vippsLine = fmt.Sprintf(`<p>Betal med Vipps: <a href="%s">%s</a></p>`, vippsURL, vippsURL)
-		}
 		return fmt.Sprintf(
 			`<p>Hei %s,</p><p>Du har mottatt en ny faktura (#%d) fra %s.</p><p>Forfall: %s · Beløp: %s · KID: %s · Konto: %s</p>%s`,
-			memberName, invoiceNumber, clubName, data.DueDate, data.Amount, kid, bankAccount, vippsLine,
+			memberName, invoiceNumber, clubName, data.DueDate, data.Amount, kid, bankAccount, fallbackPayLine(payURL),
 		)
 	}
 	return buf.String()
@@ -388,8 +398,8 @@ func InvoiceReminderSubject(_, clubName string, invoiceNumber int) string {
 // InvoiceReminderBody renders a Norwegian purring email that explains
 // the invoice is past due (or pending), restates the payment details,
 // and notes the PDF copy is attached. The PDF is attached separately
-// by the caller — same as InvoiceBody.
-func InvoiceReminderBody(_ /*locale*/, memberName, clubName string, invoiceNumber int, dueDate time.Time, total float64, kid, bankAccount, vippsURL string) string {
+// by the caller — same as InvoiceBody, as are payURL and payMethods.
+func InvoiceReminderBody(_ /*locale*/, memberName, clubName string, invoiceNumber int, dueDate time.Time, total float64, kid, bankAccount, payURL, payMethods string) string {
 	if clubName == "" {
 		clubName = "klubben"
 	}
@@ -406,7 +416,8 @@ func InvoiceReminderBody(_ /*locale*/, memberName, clubName string, invoiceNumbe
 		KID           string
 		BankAccount   string
 		Overdue       bool
-		VippsURL      string
+		PayURL        string
+		PayMethods    string
 	}{
 		Club:          clubName,
 		Member:        memberName,
@@ -416,20 +427,43 @@ func InvoiceReminderBody(_ /*locale*/, memberName, clubName string, invoiceNumbe
 		KID:           kid,
 		BankAccount:   bankAccount,
 		Overdue:       overdue,
-		VippsURL:      vippsURL,
+		PayURL:        payURL,
+		PayMethods:    payMethods,
 	}
 	var buf bytes.Buffer
 	if err := reminderHTMLTpl.ExecuteTemplate(&buf, "base", data); err != nil {
-		vippsLine := ""
-		if vippsURL != "" {
-			vippsLine = fmt.Sprintf(`<p>Betal med Vipps: <a href="%s">%s</a></p>`, vippsURL, vippsURL)
-		}
 		return fmt.Sprintf(
 			`<p>Hei %s,</p><p>Påminnelse om ubetalt faktura (#%d) fra %s.</p><p>Forfall: %s · Beløp: %s · KID: %s · Konto: %s</p>%s`,
-			memberName, invoiceNumber, clubName, data.DueDate, data.Amount, kid, bankAccount, vippsLine,
+			memberName, invoiceNumber, clubName, data.DueDate, data.Amount, kid, bankAccount, fallbackPayLine(payURL),
 		)
 	}
 	return buf.String()
+}
+
+// PayMethodsLabel names the ways to pay online for the line under an email's
+// pay button: "Vipps", "Kort", "Vipps eller kort", or "" when neither is
+// offered. It stands as a line of its own, hence the capital on "Kort".
+// Norwegian, like the rest of the invoice emails.
+func PayMethodsLabel(vipps, card bool) string {
+	switch {
+	case vipps && card:
+		return "Vipps eller kort"
+	case vipps:
+		return "Vipps"
+	case card:
+		return "Kort"
+	}
+	return ""
+}
+
+// fallbackPayLine is the pay link in the flat summary sent when a template
+// fails to render; empty without a link.
+func fallbackPayLine(payURL string) string {
+	if payURL == "" {
+		return ""
+	}
+	u := html.EscapeString(payURL)
+	return fmt.Sprintf(`<p>Betal nå: <a href="%s">%s</a></p>`, u, u)
 }
 
 // formatNOK renders a money amount as "kr 1 234,50" with Norwegian
@@ -463,10 +497,7 @@ var reminderHTMLTpl = template.Must(template.Must(sharedEmail.Clone()).Parse(`{{
               {{end}}
 {{template "invoiceDetails" .}}
               <p style="margin:0 0 12px 0;font-size:13px;color:#334155;"><strong>Vi foretrekker bankoverføring med KID</strong> — det koster laget ingenting. Bruk KID-nummeret når du betaler i nettbanken.</p>
-{{if .VippsURL}}
-              <p style="margin:0 0 4px 0;font-size:13px;color:#64748b;">Du kan også betale med Vipps om du ønsker det:</p>
-{{template "button" (dict "URL" .VippsURL "Label" "Betal med Vipps" "BG" "#ff5b24")}}
-{{end}}
+{{template "payButton" .}}
               <p style="margin:0 0 8px 0;font-size:13px;color:#64748b;">Hvis betalingen allerede er sendt, kan du se bort fra denne påminnelsen.</p>
               <p style="margin:0;font-size:13px;color:#64748b;">Spørsmål kan sendes til kasserer ved å svare på denne e-posten.</p>{{end}}`))
 
@@ -483,8 +514,5 @@ var invoiceHTMLTpl = template.Must(template.Must(sharedEmail.Clone()).Parse(`{{d
               <p style="margin:0 0 20px 0;">Du har mottatt en ny faktura fra {{.Club}}. Den fullstendige fakturaen ligger som PDF-vedlegg til denne e-posten.</p>
 {{template "invoiceDetails" .}}
               <p style="margin:0 0 12px 0;font-size:13px;color:#334155;"><strong>Vi foretrekker bankoverføring med KID</strong> — det koster laget ingenting. Bruk KID-nummeret når du betaler i nettbanken, så registreres innbetalingen automatisk.</p>
-{{if .VippsURL}}
-              <p style="margin:0 0 4px 0;font-size:13px;color:#64748b;">Du kan også betale med Vipps om du ønsker det:</p>
-{{template "button" (dict "URL" .VippsURL "Label" "Betal med Vipps" "BG" "#ff5b24")}}
-{{end}}
+{{template "payButton" .}}
               <p style="margin:0;font-size:13px;color:#64748b;">Spørsmål om fakturaen kan sendes til kasserer ved å svare på denne e-posten.</p>{{end}}`))

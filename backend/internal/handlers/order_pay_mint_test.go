@@ -37,10 +37,13 @@ func newMintTestHandler(pool *pgxpool.Pool, client *vipps.Client) *InvoiceHandle
 	}
 }
 
-// mintTestRouter mounts the public pay routes that mint a payment.
+// mintTestRouter mounts the public pay routes that mint a payment, and the
+// GETs that tell the page which providers it may offer.
 func mintTestRouter(h *InvoiceHandler) http.Handler {
 	r := chi.NewRouter()
 	r.Get("/betal/{token}", h.HandleOrderPayRedirect)
+	r.Get("/checkout/{token}", h.HandleGetCheckout)
+	r.Get("/qr/{token}", h.HandleGetQRTarget)
 	r.Post("/checkout/{token}/pay", h.HandlePayCheckout)
 	r.Post("/qr/{token}/pay", h.HandlePayQRTarget)
 	return r
@@ -307,7 +310,7 @@ func TestMintOrderPayment_Blocked(t *testing.T) {
 			tc.setup(invID)
 
 			assertBody(t, serve(router, http.MethodPost, "/checkout/"+token+"/pay", ""),
-				http.StatusConflict, `{"error":"vipps_over_limit"}`+"\n")
+				http.StatusConflict, `{"error":"online_payment_over_limit"}`+"\n")
 
 			rec := serve(router, http.MethodGet, "/betal/"+token, "")
 			if rec.Code != http.StatusFound || rec.Header().Get("Location") != mintTestFrontend+"/betal/"+token {
@@ -365,9 +368,9 @@ func TestMintOrderPayment_ProviderError(t *testing.T) {
 	addOrderLine(t, pool, orderID, "Test item", 100)
 
 	assertBody(t, serve(router, http.MethodPost, "/checkout/"+token+"/pay", ""),
-		http.StatusBadGateway, `{"error":"could not start Vipps payment"}`+"\n")
+		http.StatusBadGateway, `{"error":"could not start online payment"}`+"\n")
 	assertBody(t, serve(router, http.MethodGet, "/betal/"+token, ""),
-		http.StatusBadGateway, "Kunne ikke starte Vipps-betaling. Prøv igjen.\n")
+		http.StatusBadGateway, "Kunne ikke starte betalingen. Prøv igjen.\n")
 	if ref, _ := orderReference(t, pool, orderID); ref != "" {
 		t.Errorf("failed mint stored reference %q", ref)
 	}
@@ -388,7 +391,7 @@ func TestMintOrderPayment_ProviderError(t *testing.T) {
 		t.Fatalf("insert target: %v", err)
 	}
 	assertBody(t, serve(router, http.MethodPost, "/qr/"+qrToken+"/pay", `{"units":1}`),
-		http.StatusBadGateway, `{"error":"Kunne ikke starte Vipps-betaling. Prøv igjen."}`+"\n")
+		http.StatusBadGateway, `{"error":"Kunne ikke starte betalingen. Prøv igjen."}`+"\n")
 }
 
 func TestPayment_NoProviderConfigured(t *testing.T) {
@@ -405,19 +408,19 @@ func TestPayment_NoProviderConfigured(t *testing.T) {
 	addOrderLine(t, pool, orderID, "Test item", 100)
 
 	assertBody(t, serve(router, http.MethodGet, "/betal/"+token, ""),
-		http.StatusServiceUnavailable, "Vipps-betaling er ikke tilgjengelig akkurat nå.\n")
+		http.StatusServiceUnavailable, "Nettbetaling er ikke tilgjengelig akkurat nå.\n")
 	assertBody(t, serve(router, http.MethodPost, "/checkout/"+token+"/pay", ""),
-		http.StatusServiceUnavailable, `{"error":"Vipps is not available"}`+"\n")
+		http.StatusServiceUnavailable, `{"error":"online payment is not available"}`+"\n")
 	assertBody(t, serve(router, http.MethodPost, "/qr/any-token/pay", `{"units":1}`),
-		http.StatusServiceUnavailable, `{"error":"Vipps-betaling er ikke tilgjengelig akkurat nå."}`+"\n")
+		http.StatusServiceUnavailable, `{"error":"Nettbetaling er ikke tilgjengelig akkurat nå."}`+"\n")
 
 	rec := httptest.NewRecorder()
 	h.HandleGetInvoicePayLink(rec, payLinkReq(invID, clubID))
-	assertBody(t, rec, http.StatusConflict, `{"error":"vipps_unavailable"}`+"\n")
+	assertBody(t, rec, http.StatusConflict, `{"error":"online_payment_unavailable"}`+"\n")
 
 	rec = httptest.NewRecorder()
 	h.HandleGetUserPayLink(rec, userPayLinkReq(userID, clubID))
-	assertBody(t, rec, http.StatusConflict, `{"error":"vipps_unavailable"}`+"\n")
+	assertBody(t, rec, http.StatusConflict, `{"error":"online_payment_unavailable"}`+"\n")
 
 	if tok := h.ensureFakturaOrderToken(ctx, clubID, invID, true); tok != "" {
 		t.Errorf("ensureFakturaOrderToken = %q with no provider, want empty", tok)

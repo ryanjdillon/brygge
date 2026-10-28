@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Loader2, CreditCard } from 'lucide-vue-next'
 import InvoiceList from '@/components/portal/InvoiceList.vue'
@@ -8,10 +8,11 @@ import type { MemberInvoice } from '@/composables/useMyInvoices'
 
 // Public per-member payables page (BRY-275): a durable personal link lists the
 // member's open fakturas with no login. Reuses the portal InvoiceList row
-// presentation; the "Pay" action hands off to the existing per-invoice redirect
-// (/api/v1/betal/{token}), which mints a fresh Vipps payment on click.
+// presentation; the "Pay" action opens the invoice's own /betal/{token} page,
+// where the member sees the faktura and chooses how to pay.
 const { t } = useI18n()
 const route = useRoute()
+const router = useRouter()
 const token = route.params.token as string
 
 type PayableInvoice = MemberInvoice & { pay_token: string }
@@ -42,10 +43,10 @@ function payTokenFor(id: string): string {
 
 function pay(id: string) {
   const tok = payTokenFor(id)
-  if (tok) window.location.href = `/api/v1/betal/${tok}`
+  if (tok) router.push(`/betal/${tok}`)
 }
 
-// True when any listed invoice is over the club's Vipps cap (no pay token) and
+// True when any listed invoice is over the club's online cap (no pay token) and
 // must be paid by bank transfer (BRY-283) — gates the konto hint below the list.
 const anyBankOnly = computed(() => (data.value?.invoices ?? []).some((i) => !i.pay_token))
 
@@ -78,7 +79,7 @@ onMounted(load)
           <template #actions="{ invoice }">
             <button
               v-if="payTokenFor(invoice.id)"
-              class="inline-flex items-center gap-1.5 rounded-md bg-orange-500 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-orange-600"
+              class="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-slate-900"
               @click="pay(invoice.id)"
             >
               <CreditCard class="h-3.5 w-3.5" />

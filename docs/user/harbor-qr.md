@@ -2,6 +2,8 @@
 
 For the harbor master, treasurer and board. A QR target is a printed QR code that guests scan to pay, for example for a guest berth, a motorhome spot or a shower. A scan opens a pay page; the payment then shows up under Harbor → Payments.
 
+On the pay page the guest chooses the quantity and pays online. When the club has both Vipps and card payment set up, the page offers both, with **Kort · Apple Pay · Google Pay** first because many guests are visitors without Vipps; with only one set up there is a single button for it.
+
 Manage targets under **Admin → Harbor → QR posters** (`/admin/harbor/payment-targets`).
 
 ## Creating a target

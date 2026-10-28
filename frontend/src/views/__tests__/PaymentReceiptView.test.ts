@@ -22,7 +22,8 @@ function checkoutBody(a: Answer) {
     catalog: [],
     already_paid: a.already_paid,
     paid_amount: a.paid_amount ?? 0,
-    vipps_blocked: false,
+    online_blocked: false,
+    providers: [],
     kid_number: '',
     bank_account: '',
   }

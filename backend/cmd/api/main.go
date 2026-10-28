@@ -485,15 +485,16 @@ func main() {
 			r.Post("/contact", contactHandler.HandleContactForm)
 			r.Get("/unsubscribe", emailPrefsHandler.HandleUnsubscribeRedirect)
 			r.Post("/unsubscribe", emailPrefsHandler.HandleUnsubscribeOneClick)
-			// Public "Betal med Vipps" link from faktura emails — one-tap redirect
-			// that mints a fresh ePayment (BRY-8). Kept for already-sent emails;
-			// new emails link to the /betal/{token} checkout page below.
+			// One-tap pay link from older faktura emails: mints a payment with
+			// the only configured provider, or sends the payer to the
+			// /betal/{token} page to choose when there are several. New emails
+			// link to that page directly.
 			r.Get("/betal/{token}", invoiceHandler.HandleOrderPayRedirect)
 			// Public per-member payables page (BRY-275): a durable personal token
 			// lists the member's open fakturas; paying one reuses /betal/{token}.
 			r.Get("/betal/bruker/{token}", invoiceHandler.HandleGetPayables)
 			// Token-addressed checkout page API: itemised faktura + ad-hoc catalog
-			// add-ons, then mint a Vipps payment on demand (BRY-263).
+			// add-ons, then mint a payment with the payer's provider on demand.
 			r.Get("/checkout/{token}", invoiceHandler.HandleGetCheckout)
 			r.Post("/checkout/{token}/lines", invoiceHandler.HandleAddCheckoutLine)
 			r.Delete("/checkout/{token}/lines/{lineID}", invoiceHandler.HandleRemoveCheckoutLine)
@@ -892,10 +893,10 @@ func main() {
 						// the per-invoice link above.
 						r.With(middleware.RequireRole("treasurer", "admin")).
 							Get("/users/{userID}/pay-link", invoiceHandler.HandleGetUserPayLink)
-						// Per-invoice Vipps-link override (BRY-283): Auto/On/Off. A
+						// Per-invoice online-payment override (BRY-283): Auto/On/Off. A
 						// reversible preference, role-gated but no fresh-TOTP step-up.
 						r.With(middleware.RequireRole("treasurer", "admin")).
-							Patch("/invoices/{invoiceID}/vipps-link", invoiceHandler.HandleSetInvoiceVippsLink)
+							Patch("/invoices/{invoiceID}/online-payment", invoiceHandler.HandleSetInvoiceOnlinePayment)
 						r.With(middleware.RequireRole("treasurer", "admin"),
 							middleware.RequireFreshTOTPDefault()).
 							Get("/invoices/{invoiceID}/delivery-log", invoiceHandler.HandleGetDeliveryLog)

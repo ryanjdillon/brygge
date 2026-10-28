@@ -614,12 +614,12 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 		// DIL-185 (users.preferred_locale) will swap this for per-member.
 		locale := email.DetectLocale(r)
 		subject := email.InvoiceSubject(locale, clubName, invoiceSeq)
-		// Offer "Betal med Vipps" as a secondary option; the email frames bank
-		// transfer with KID as preferred. Non-fatal: an empty URL — Vipps
-		// unconfigured, or the invoice over the club's amount cap (BRY-283) —
-		// just renders the KID-only email.
-		vippsURL := h.orderPayURL(h.ensureFakturaOrderToken(ctx, claims.ClubID, invoiceID, true))
-		htmlBody := email.InvoiceBody(locale, deliverName, clubName, invoiceSeq, dueDate, total, kid, bankAccount, vippsURL)
+		// Offer online payment as a secondary option; the email frames bank
+		// transfer with KID as preferred. Non-fatal: an empty URL — no payment
+		// provider configured, or the invoice over the club's amount cap
+		// (BRY-283) — just renders the KID-only email.
+		payURL := h.orderPayURL(h.ensureFakturaOrderToken(ctx, claims.ClubID, invoiceID, true))
+		htmlBody := email.InvoiceBody(locale, deliverName, clubName, invoiceSeq, dueDate, total, kid, bankAccount, payURL, h.emailPayMethods(payURL))
 		if err := h.email.SendWithAttachment(email.WithKind(ctx, email.KindInvoice), deliverTo, subject, htmlBody, filename, pdfData); err != nil {
 			h.log.Error().Err(err).Str("email", deliverTo).Msg("failed to send invoice email")
 		} else {
@@ -1095,8 +1095,8 @@ func (h *InvoiceHandler) HandleListInvoices(w http.ResponseWriter, r *http.Reque
 		Status         string     `json:"status"`
 		Paid           bool       `json:"paid"`
 		LastReminderAt *time.Time `json:"last_reminder_at"`
-		VippsPaidAt    *time.Time `json:"vipps_paid_at"`
-		VippsLinkOptIn *bool      `json:"vipps_payment_link_opt_in"`
+		OnlinePaidAt   *time.Time `json:"online_paid_at"`
+		OnlineOptIn    *bool      `json:"online_payment_opt_in"`
 		// Credit-note links (BRY-342). CreditsInvoiceNumber is set on a
 		// credit note linked to the faktura it credits; CreditState is
 		// "settled_pair" (that faktura was owed), "credit_owed" (it was
@@ -1115,7 +1115,7 @@ func (h *InvoiceHandler) HandleListInvoices(w http.ResponseWriter, r *http.Reque
 			&d.MemberName, &d.MemberEmail, &d.MemberPhone,
 			&d.TotalAmount, &issue, &due,
 			&d.PriceItemName, &d.FiscalYear, &d.Description, &d.CreatedAt,
-			&d.SentAt, &d.Status, &d.Paid, &d.LastReminderAt, &d.VippsPaidAt, &d.VippsLinkOptIn,
+			&d.SentAt, &d.Status, &d.Paid, &d.LastReminderAt, &d.OnlinePaidAt, &d.OnlineOptIn,
 			&d.CreditsInvoiceNumber, &creditTargetPaid, &d.CreditedByNumber); err != nil {
 			h.log.Error().Err(err).Msg("scan invoice row")
 			Error(w, http.StatusInternalServerError, "internal error")
@@ -1271,12 +1271,11 @@ func (h *InvoiceHandler) HandleSendInvoice(w http.ResponseWriter, r *http.Reques
 
 	locale := email.DetectLocale(r)
 	subject := email.InvoiceSubject(locale, clubName, invoiceNumber)
-	// A "Betal med Vipps" link unless the invoice is over the club's amount cap
-	// (BRY-283) or Vipps is unconfigured, in which case this is "" (KID-only).
-	// This is the send moment for a draft, so mint the payment now (amount is
-	// final); a still-live link is reused, an expired one refreshed.
-	vippsURL := h.orderPayURL(h.ensureFakturaOrderToken(ctx, claims.ClubID, invoiceID, true))
-	htmlBody := email.InvoiceBody(locale, memberName, clubName, invoiceNumber, dueDate, total, kid, bankAccount, vippsURL)
+	// A pay link unless the invoice is over the club's amount cap (BRY-283) or
+	// no payment provider is configured, in which case this is "" (KID-only).
+	// The durable link is created on first send and reused on resends.
+	payURL := h.orderPayURL(h.ensureFakturaOrderToken(ctx, claims.ClubID, invoiceID, true))
+	htmlBody := email.InvoiceBody(locale, memberName, clubName, invoiceNumber, dueDate, total, kid, bankAccount, payURL, h.emailPayMethods(payURL))
 	filename := buildInvoiceFilename(invoiceNumber, memberLast, memberFirst, fiscalYear)
 
 	// Stamp sent_at BEFORE handing the message to the mail server, then
@@ -1419,8 +1418,8 @@ func (h *InvoiceHandler) HandleResendInvoice(w http.ResponseWriter, r *http.Requ
 
 	locale := email.DetectLocale(r)
 	subject := email.InvoiceSubject(locale, clubName, invoiceNumber)
-	vippsURL := h.orderPayURL(h.ensureFakturaOrderToken(ctx, claims.ClubID, invoiceID, true))
-	htmlBody := email.InvoiceBody(locale, memberName, clubName, invoiceNumber, dueDate, total, kid, bankAccount, vippsURL)
+	payURL := h.orderPayURL(h.ensureFakturaOrderToken(ctx, claims.ClubID, invoiceID, true))
+	htmlBody := email.InvoiceBody(locale, memberName, clubName, invoiceNumber, dueDate, total, kid, bankAccount, payURL, h.emailPayMethods(payURL))
 	filename := buildInvoiceFilename(invoiceNumber, memberLast, memberFirst, fiscalYear)
 
 	if err := h.email.SendWithAttachment(email.WithKind(ctx, email.KindInvoice), deliverTo, subject, htmlBody, filename, pdfBytesResend); err != nil {
@@ -1529,8 +1528,8 @@ func (h *InvoiceHandler) HandleVoidInvoice(w http.ResponseWriter, r *http.Reques
 		Error(w, http.StatusBadRequest, "invoice ID is required")
 		return
 	}
-	// Money has already arrived on a settled invoice (paid, or captured via
-	// Vipps and awaiting settlement). Voiding it would hide a payment with
+	// Money has already arrived on a settled invoice (paid, or captured
+	// online and awaiting settlement). Voiding it would hide a payment with
 	// nothing owed against it; that needs a refund or credit note instead.
 	var status string
 	var settled, creditLinked, imported bool
@@ -1663,18 +1662,18 @@ func (h *InvoiceHandler) HandleVoidInvoice(w http.ResponseWriter, r *http.Reques
 	w.WriteHeader(http.StatusNoContent)
 }
 
-type setVippsLinkRequest struct {
-	// OptIn is the per-invoice Vipps-link override (BRY-283): null = Auto (follow
+type setOnlinePaymentRequest struct {
+	// OptIn is the per-invoice online-payment override (BRY-283): null = Auto (follow
 	// the club amount cap), true = On (always offer), false = Off (never offer).
 	OptIn *bool `json:"opt_in"`
 }
 
-// HandleSetInvoiceVippsLink sets an invoice's Vipps-link override. It's a
+// HandleSetInvoiceOnlinePayment sets an invoice's online-payment override. It's a
 // reversible preference (not a destructive/money-moving action), so it is
 // role-gated but not fresh-TOTP gated. The effective link on every surface
 // (emails, copy-link, payables page, and the member's click) then follows
 // invoiceOnlinePaymentAllowed / orderHasOnlineBlockedSource.
-func (h *InvoiceHandler) HandleSetInvoiceVippsLink(w http.ResponseWriter, r *http.Request) {
+func (h *InvoiceHandler) HandleSetInvoiceOnlinePayment(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
 	if claims == nil {
@@ -1686,7 +1685,7 @@ func (h *InvoiceHandler) HandleSetInvoiceVippsLink(w http.ResponseWriter, r *htt
 		Error(w, http.StatusBadRequest, "invoice ID is required")
 		return
 	}
-	var req setVippsLinkRequest
+	var req setOnlinePaymentRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		Error(w, http.StatusBadRequest, "invalid request body")
 		return
@@ -1697,7 +1696,7 @@ func (h *InvoiceHandler) HandleSetInvoiceVippsLink(w http.ResponseWriter, r *htt
 		req.OptIn, invoiceID, claims.ClubID,
 	)
 	if err != nil {
-		h.log.Error().Err(err).Msg("set invoice vipps link")
+		h.log.Error().Err(err).Msg("set invoice online payment")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
@@ -1707,7 +1706,7 @@ func (h *InvoiceHandler) HandleSetInvoiceVippsLink(w http.ResponseWriter, r *htt
 	}
 	if h.audit != nil {
 		h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,
-			audit.ActionInvoiceVippsLinkSet, "invoice", invoiceID,
+			audit.ActionInvoiceOnlinePaymentSet, "invoice", invoiceID,
 			map[string]any{"opt_in": req.OptIn})
 	}
 	w.WriteHeader(http.StatusNoContent)

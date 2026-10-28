@@ -208,7 +208,6 @@
     "boatLength": "Lengde (m)",
     "boatBeam": "Bredde (m)",
     "boatDraft": "Dypgående (m)",
-    "payWithVipps": "Betal med Vipps",
     "payComingSoon": "Betaling kommer snart",
     "submit": "Bli med",
     "queuePosition": "Din plass i køen",
@@ -279,7 +278,6 @@
     "cartEmpty": "Handlekurven er tom",
     "continueShopping": "Fortsett å handle",
     "each": "stk",
-    "payWithVipps": "Betal med Vipps",
     "processingPayment": "Behandler betaling...",
     "paymentReceived": "Betaling mottatt!",
     "orderConfirmed": "Ordre {id} er bekreftet.",
@@ -312,10 +310,10 @@
       "title": "Betal fakturaene dine",
       "intro": "Ubetalte fakturaer for {name}",
       "club": "{club}",
-      "pay": "Betal med Vipps",
+      "pay": "Betal",
       "none": "Du har ingen ubetalte fakturaer akkurat nå.",
       "bankOnly": "Bankoverføring",
-      "bankTransferHint": "Fakturaer merket «bankoverføring» er over Vipps-grensen — betal til konto {account} med KID-en som vises på hver.",
+      "bankTransferHint": "Fakturaer merket «bankoverføring» er over grensen for nettbetaling — betal til konto {account} med KID-en som vises på hver.",
       "loadError": "Vi klarte ikke å hente fakturaene dine. Åpne lenken på nytt.",
       "notFound": "Denne betalingslenken er ikke lenger gyldig. Be klubben om en ny."
     },
@@ -569,11 +567,11 @@
   },
   "admin": {
     "payLink": {
-      "title": "Kopier Vipps-betalingslenke",
+      "title": "Kopier betalingslenke",
       "copied": "Betalingslenke kopiert til utklippstavlen",
-      "overLimit": "Over klubbens Vipps-grense — kun bankoverføring",
+      "overLimit": "Over klubbens grense for nettbetaling — kun bankoverføring",
       "failed": "Kunne ikke lage betalingslenken",
-      "vippsUnavailable": "Vipps er ikke konfigurert for denne klubben"
+      "unavailable": "Nettbetaling er ikke satt opp for denne klubben"
     },
     "title": "Administrasjon",
     "ariaNav": "Admin-navigasjon",
@@ -637,7 +635,7 @@
       "voidConfirmTitle": "Annullere faktura?",
       "voidOneBody": "Annuller fakturaen for {name}. Den fjernes fra dedup-sjekken, så en ny kan utstedes for samme kategori og år.",
       "voidAction": "Annuller",
-      "voidSettled": "Fakturaen er allerede betalt (eller betalt med Vipps). Refunder eller krediter den i stedet for å annullere.",
+      "voidSettled": "Fakturaen er allerede betalt (eller betalt på nett). Refunder eller krediter den i stedet for å annullere.",
       "voidPeriodClosed": "Fakturaen er bokført i et lukket regnskapsår og kan ikke annulleres. Lag en kreditnota i stedet.",
       "glBookingFailed": "Utført, men fakturaen kunne ikke bokføres i regnskapet: {reason}. Kjør «Avstem periode» i Bilag når dette er rettet.",
       "filterMember": "Medlemsnavn eller e-post",
@@ -746,21 +744,21 @@
         "reminderSelected": "Send purring",
         "reminderConfirmTitle": "Send purringer?",
         "reminderBulkBody": "Send e-postpurring for {n} faktura(er). Allerede betalte rader hoppes automatisk over.",
-        "vippsLink": {
-          "label": "Vipps-lenke",
-          "auto": "Auto",
-          "on": "Vipps på",
-          "off": "Vipps av"
+        "onlinePayment": {
+          "label": "Nettbetaling",
+          "auto": "Nettbetaling: Auto",
+          "on": "Nettbetaling: På",
+          "off": "Nettbetaling: Av"
         },
-        "reminderVippsChoice": {
-          "label": "Vipps-betalingslenke",
+        "reminderOnlinePaymentChoice": {
+          "label": "Lenke til nettbetaling",
           "auto": "La stå (etter beløp)",
           "on": "Ta med for alle valgte",
-          "off": "Kun bankoverføring (ingen Vipps)"
+          "off": "Kun bankoverføring (ingen nettbetaling)"
         },
         "reminderAction": "Send purringer",
-        "vippsReceived": "Vipps mottatt",
-        "vippsReceivedTitle": "Betaling mottatt via Vipps – venter på oppgjør og avstemming",
+        "onlineReceived": "Nettbetaling mottatt",
+        "onlineReceivedTitle": "Betaling mottatt på nett – venter på oppgjør og avstemming",
         "reminderNoneEligible": "Ingen valgte fakturaer er aktuelle — alle er allerede markert som betalt.",
         "regenSelected": "Regenerer PDF",
         "regenConfirmTitle": "Regenerer fakturaer?",
@@ -1801,17 +1799,17 @@
     },
     "economySettings": {
       "title": "Økonomi-innstillinger",
-      "vippsAccountsLabel": "Vipps-konti",
-      "vippsAccountsHint": "Regnskapskonti brukt ved avstemming av Vipps-utbetalinger: mellomværende-konto (samlekonto) og gebyrkonto. Standard er 2900 og 7700.",
-      "vippsMaxAmount": "Maksbeløp for Vipps (kr)",
-      "vippsMaxAmountPlaceholder": "Ingen grense",
-      "vippsMaxAmountHint": "Fakturaer over dette beløpet tilbys kun bankoverføring (KID), så klubben slipper Vipps-gebyr. La stå tom for ingen grense.",
+      "paymentAccountsLabel": "Betalingskonti",
+      "paymentAccountsHint": "Mellomværende-konto for Vipps-utbetalinger og gebyrkonto for nettbetaling (Vipps og kort). Standard er 2900 og 7700.",
+      "onlineMaxAmount": "Maksbeløp for nettbetaling (kr)",
+      "onlineMaxAmountPlaceholder": "Ingen grense",
+      "onlineMaxAmountHint": "Fakturaer over dette beløpet tilbys kun bankoverføring (KID), så klubben slipper gebyr. Gjelder både Vipps og kort. La stå tom for ingen grense.",
       "vippsAutoAssign": "Bokfør entydige Vipps-betalinger automatisk",
       "vippsAutoAssignTieCategory": "Når et beløp passer flere priskategorier",
       "vippsAutoAssignTieNone": "La stå til gjennomgang",
       "vippsAutoAssignHint": "Bokfører en betaling bare når den tydelig passer ett medlems eneste åpne faktura, eller én priskategori. Alt annet blir liggende i Tildel. Alle bokføringer kan angres.",
       "vippsClearingAccount": "Mellomværende-konto",
-      "vippsFeeAccount": "Gebyrkonto",
+      "paymentFeeAccount": "Gebyrkonto",
       "subtitle": "Faktura-standarder, registrerte bankkontoer og (snart) Vipps-merchant — alt regnskapsmodulen trenger på ett sted.",
       "fakturaTab": "Faktura",
       "bankAccountsTab": "Bankkontoer",
@@ -2537,9 +2535,8 @@
     "guestNameLabel": "Navnet ditt (valgfritt)",
     "guestNamePlaceholder": "f.eks. båtnavn eller navnet ditt",
     "total": "Å betale",
-    "processing": "Starter Vipps …",
-    "payButton": "Betal med Vipps",
-    "payError": "Kunne ikke starte Vipps-betalingen. Prøv igjen."
+    "payError": "Kunne ikke starte betalingen. Prøv igjen.",
+    "unavailable": "Nettbetaling er ikke tilgjengelig akkurat nå. Spør havnesjefen."
   },
   "pay": {
     "loading": "Laster betaling …",
@@ -2553,12 +2550,17 @@
     "itemsSection": "Varer",
     "total": "Å betale",
     "bankOnlyTitle": "Betal med bankoverføring",
-    "bankOnlyBody": "Dette beløpet er over grensen for Vipps-betaling. Betal med bankoverføring til kontoen og KID-en under.",
+    "bankOnlyBody": "Dette beløpet er over grensen for nettbetaling. Betal med bankoverføring til kontoen og KID-en under.",
+    "bankOnlyBodyNoProvider": "Betal med bankoverføring til kontoen og KID-en under.",
     "account": "Konto",
     "preferBankNote": "Du kan også betale med bankoverføring og KID fra fakturaen — det er gratis for laget.",
-    "processing": "Starter Vipps …",
-    "payButton": "Betal med Vipps",
+    "processing": "Starter betalingen …",
     "payError": "Kunne ikke starte betaling. Prøv igjen.",
+    "methods": {
+      "chooseTitle": "Velg betalingsmåte",
+      "vipps": "Vipps",
+      "card": "Kort · Apple Pay · Google Pay"
+    },
     "receipt": {
       "loading": "Laster betaling …",
       "paidTitle": "Betaling mottatt",
@@ -2723,7 +2725,7 @@
     },
     "betaling": {
       "title": "Betaling",
-      "body": "Betaling skjer via de kanalene vi tilbyr — typisk Vipps, bankoverføring med KID eller faktura. Beløp, forfall og KID-nummer fremgår av fakturaen/bestillingsbekreftelsen. Ved forsinket betaling påløper purregebyr og forsinkelsesrente etter forsinkelsesrenteloven."
+      "body": "Betaling skjer via de kanalene vi tilbyr — typisk Vipps, kort (også Apple Pay og Google Pay), bankoverføring med KID eller faktura. Beløp, forfall og KID-nummer fremgår av fakturaen/bestillingsbekreftelsen. Ved forsinket betaling påløper purregebyr og forsinkelsesrente etter forsinkelsesrenteloven."
     },
     "oppsigelse": {
       "title": "Oppsigelse og avslutning av faste betalinger",

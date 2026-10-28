@@ -13,15 +13,17 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/brygge-klubb/brygge/internal/email"
 	"github.com/brygge-klubb/brygge/internal/finance"
 	"github.com/brygge-klubb/brygge/internal/middleware"
 	"github.com/brygge-klubb/brygge/internal/payments"
+	"github.com/brygge-klubb/brygge/internal/stripe"
 	"github.com/brygge-klubb/brygge/internal/vipps"
 )
 
 // errNothingToPay signals a checkout order whose invoice sources are all already
 // settled and which carries no ad-hoc lines — the payer is sent back to the site
-// instead of a zero-amount Vipps checkout.
+// instead of a zero-amount payment.
 var errNothingToPay = errors.New("order has nothing left to pay")
 
 // errOnlinePaymentBlocked signals a checkout order whose unpaid invoice source is
@@ -30,18 +32,35 @@ var errNothingToPay = errors.New("order has nothing left to pay")
 // transfer (KID) instead of being charged online, so the club avoids the fee.
 var errOnlinePaymentBlocked = errors.New("order has a source not payable online")
 
+// Error codes the admin UI matches on for the pay-link affordances.
+const (
+	errCodeOnlineUnavailable = "online_payment_unavailable"
+	errCodeOnlineOverLimit   = "online_payment_over_limit"
+)
+
+// Payer-facing texts on the public pay routes. The Norwegian ones reach the
+// payer as they are (a plain-text page, or the QR page's error), so they are
+// in the club's language.
+const (
+	msgOnlineUnavailable    = "online payment is not available"
+	msgPaymentStartFailed   = "could not start online payment"
+	msgOnlineUnavailableNO  = "Nettbetaling er ikke tilgjengelig akkurat nå."
+	msgPaymentStartFailedNO = "Kunne ikke starte betalingen. Prøv igjen."
+)
+
 // ensureFakturaOrderToken returns the durable token of the faktura's checkout
 // order, which the email links to. The order (an `orders` row with an
 // order_sources link to the invoice) is created lazily the first time a faktura
-// should carry a Vipps link (create=true) and reused forever after, so resends
+// should carry a pay link (create=true) and reused forever after, so resends
 // keep the same link. Returns "" when no payment provider is configured, the
 // invoice is over the club's online-payment amount cap (BRY-283), it is an imported
 // faktura whose receivable isn't in the GL yet (BRY-386), or nothing should be
 // offered.
 //
-// The ePayment itself is NOT minted here: its redirectUrl is only valid ~10
-// minutes, so it is useless in a pay-later email. It is minted on click by
-// HandleOrderPayRedirect. This only ensures the durable order + link exist.
+// The payment itself is NOT minted here: a provider's hosted page lives only
+// minutes, so it is useless in a pay-later email. It is minted when the payer
+// clicks pay on the /betal/{token} page. This only ensures the durable order +
+// link exist.
 func (h *InvoiceHandler) ensureFakturaOrderToken(ctx context.Context, clubID, invoiceID string, create bool) string {
 	if !h.providers.Configured() {
 		return ""
@@ -53,7 +72,7 @@ func (h *InvoiceHandler) ensureFakturaOrderToken(ctx context.Context, clubID, in
 	if !h.invoiceOnlinePaymentAllowed(ctx, clubID, invoiceID) {
 		return ""
 	}
-	// Likewise before the reuse: the Vipps charge would credit 1500 for a
+	// Likewise before the reuse: an online charge would credit 1500 for a
 	// receivable Brygge never booked. The member still owes it and pays by
 	// bank transfer, which waits in Tildel until the opening balance exists.
 	if !h.invoiceReceivableInGL(ctx, clubID, invoiceID) {
@@ -169,7 +188,7 @@ func (h *InvoiceHandler) invoiceOnlinePaymentAllowed(ctx context.Context, clubID
 func (h *InvoiceHandler) invoiceReceivableInGL(ctx context.Context, clubID, invoiceID string) bool {
 	// Only an imported faktura can lack its receivable, so a Brygge faktura
 	// never pays for a failed check: a transient error must not drop the
-	// Vipps link from an email that can't be sent again.
+	// pay link from an email that can't be sent again.
 	var imported bool
 	err := h.db.QueryRow(ctx,
 		`SELECT import_source IS NOT NULL FROM invoices WHERE id = $1 AND club_id = $2`,
@@ -186,7 +205,7 @@ func (h *InvoiceHandler) invoiceReceivableInGL(ctx context.Context, clubID, invo
 	if !imported {
 		return true
 	}
-	// For an imported faktura a failed check blocks: a missing Vipps link
+	// For an imported faktura a failed check blocks: a missing pay link
 	// still leaves bank transfer, a wrong one books a receivable never there.
 	var ok bool
 	if err := h.db.QueryRow(ctx,
@@ -227,13 +246,13 @@ func (h *InvoiceHandler) orderHasOnlineBlockedSource(ctx context.Context, orderI
 
 // orderPayURL builds the public, tokenised pay link put in the email. It points
 // at the /betal/{token} checkout page (which itemises the faktura, lets the
-// payer add catalog items, then mints a fresh ePayment on demand), not Vipps
-// directly. Empty token → empty URL (KID-only email).
+// payer choose a provider, then mints a fresh payment on demand), not a
+// provider directly. Empty token → empty URL (KID-only email).
 func (h *InvoiceHandler) orderPayURL(token string) string {
 	if token == "" {
 		return ""
 	}
-	return h.frontendBase() + "/betal/" + token
+	return h.checkoutPageURL(token)
 }
 
 // frontendBase is the trimmed public site origin used to build member-facing
@@ -253,8 +272,9 @@ type invoicePayLinkResponse struct {
 // HandleGetInvoicePayLink returns the durable /betal pay link for one invoice so
 // staff can hand it to a member directly (SMS, chat, read it out) rather than
 // only via the emailed faktura. It ensures the checkout order exists (reusing it
-// on later calls), refuses voided invoices, and returns 409 "vipps_unavailable"
-// when Vipps isn't configured so the UI can hide the affordance gracefully. An
+// on later calls), refuses voided invoices, and returns 409
+// "online_payment_unavailable" when no payment provider is configured so the
+// UI can hide the affordance gracefully. An
 // imported faktura without its receivable in the GL is 409 with code
 // imported_no_opening_balance (BRY-386).
 func (h *InvoiceHandler) HandleGetInvoicePayLink(w http.ResponseWriter, r *http.Request) {
@@ -270,7 +290,7 @@ func (h *InvoiceHandler) HandleGetInvoicePayLink(w http.ResponseWriter, r *http.
 		return
 	}
 	if !h.providers.Configured() {
-		Error(w, http.StatusConflict, "vipps_unavailable")
+		Error(w, http.StatusConflict, errCodeOnlineUnavailable)
 		return
 	}
 
@@ -300,25 +320,27 @@ func (h *InvoiceHandler) HandleGetInvoicePayLink(w http.ResponseWriter, r *http.
 	}
 
 	// Over the club's online-payment cap → bank transfer only; tell the UI distinctly so
-	// it shows "over limit" rather than "Vipps not configured" (BRY-283).
+	// it shows "over limit" rather than "not configured" (BRY-283).
 	if !h.invoiceOnlinePaymentAllowed(ctx, claims.ClubID, invoiceID) {
-		Error(w, http.StatusConflict, "vipps_over_limit")
+		Error(w, http.StatusConflict, errCodeOnlineOverLimit)
 		return
 	}
 
 	url := h.orderPayURL(h.ensureFakturaOrderToken(ctx, claims.ClubID, invoiceID, true))
 	if url == "" {
-		Error(w, http.StatusConflict, "vipps_unavailable")
+		Error(w, http.StatusConflict, errCodeOnlineUnavailable)
 		return
 	}
 	JSON(w, http.StatusOK, invoicePayLinkResponse{PayURL: url})
 }
 
-// HandleOrderPayRedirect is the public GET /api/v1/betal/{token} endpoint the
-// faktura email links to. It mints a fresh payment with the default provider
-// for the checkout order and 302-redirects to its hosted page — that page
-// lives only minutes so it can't be emailed directly. No auth: the token is
-// the capability.
+// HandleOrderPayRedirect is the public GET /api/v1/betal/{token} one-tap pay
+// link in faktura emails sent before they linked to the /betal/{token} page.
+// With one provider configured
+// it mints a fresh payment and 302-redirects to the provider's hosted page —
+// that page lives only minutes so it can't be emailed directly. With several,
+// the payer has a choice to make, so it redirects to the /betal/{token} page
+// instead of picking for them. No auth: the token is the capability.
 func (h *InvoiceHandler) HandleOrderPayRedirect(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	token := chi.URLParam(r, "token")
@@ -346,7 +368,11 @@ func (h *InvoiceHandler) HandleOrderPayRedirect(w http.ResponseWriter, r *http.R
 		return
 	}
 	if !h.providers.Configured() {
-		http.Error(w, "Vipps-betaling er ikke tilgjengelig akkurat nå.", http.StatusServiceUnavailable)
+		http.Error(w, msgOnlineUnavailableNO, http.StatusServiceUnavailable)
+		return
+	}
+	if len(h.providers.Names()) > 1 {
+		http.Redirect(w, r, h.checkoutPageURL(token), http.StatusFound) // #nosec G710 -- fixed configured origin; token is a path segment that just matched a server-minted orders.token
 		return
 	}
 
@@ -357,13 +383,13 @@ func (h *InvoiceHandler) HandleOrderPayRedirect(w http.ResponseWriter, r *http.R
 	}
 	if errors.Is(err, errOnlinePaymentBlocked) {
 		// Not payable online → send them to the checkout page, which shows
-		// KID + konto for bank transfer instead of a Vipps button (BRY-283).
+		// KID + konto for bank transfer instead of pay buttons (BRY-283).
 		http.Redirect(w, r, h.checkoutPageURL(token), http.StatusFound) // #nosec G710 -- fixed configured origin; token is a path segment that just matched a server-minted orders.token
 		return
 	}
 	if err != nil {
 		h.log.Error().Err(err).Str("order_id", orderID).Msg("order pay redirect: mint payment failed")
-		http.Error(w, "Kunne ikke starte Vipps-betaling. Prøv igjen.", http.StatusBadGateway)
+		http.Error(w, msgPaymentStartFailedNO, http.StatusBadGateway)
 		return
 	}
 	http.Redirect(w, r, redirectURL, http.StatusFound) // #nosec G710 -- the provider's hosted payment page from its API response; the token only reaches the provider as our own return/cancel URLs
@@ -384,6 +410,35 @@ func (h *InvoiceHandler) defaultProvider() string {
 		return names[0]
 	}
 	return vipps.ProviderName
+}
+
+// availableProviders lists the configured providers in the order the payer
+// sees them: the default first, then the rest by name. Nil when none is.
+func (h *InvoiceHandler) availableProviders() []string {
+	names := h.providers.Names()
+	if len(names) == 0 {
+		return nil
+	}
+	first := h.defaultProvider()
+	out := make([]string, 0, len(names))
+	out = append(out, first)
+	for _, n := range names {
+		if n != first {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+// emailPayMethods is the line under an email's pay button naming the ways to
+// pay online; empty when the email carries no pay link.
+func (h *InvoiceHandler) emailPayMethods(payURL string) string {
+	if payURL == "" {
+		return ""
+	}
+	_, hasVipps := h.providers.Get(vipps.ProviderName)
+	_, hasCard := h.providers.Get(stripe.ProviderName)
+	return email.PayMethodsLabel(hasVipps, hasCard)
 }
 
 // resolveProvider maps a payer's requested provider ("" for none) to a

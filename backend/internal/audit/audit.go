@@ -55,7 +55,7 @@ const (
 	ActionInvoicePDFGenerated         = "invoice.pdf_generated"
 	ActionInvoiceEmailed              = "invoice.emailed"
 	ActionInvoiceReminded             = "invoice.reminded"
-	ActionInvoiceVippsLinkSet         = "invoice.vipps_link_set"
+	ActionInvoiceOnlinePaymentSet     = "invoice.vipps_link_set" // value predates card payments; kept so stored rows still match
 	ActionInvoiceCreditLinked         = "invoice.credit_linked"
 	ActionInvoiceCreditUnlinked       = "invoice.credit_unlinked"
 	ActionInvoiceRegenerated          = "invoice.pdf_regenerated"

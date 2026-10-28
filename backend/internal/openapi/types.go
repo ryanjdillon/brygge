@@ -300,7 +300,7 @@ type MemberInvoice struct {
 	DueDate         string  `json:"due_date" doc:"Due date (YYYY-MM-DD)"`
 	SentAt          *string `json:"sent_at,omitempty" doc:"When the invoice was sent"`
 	Paid            bool    `json:"paid" doc:"Whether a payment is linked to the invoice"`
-	PaymentReceived bool    `json:"payment_received" doc:"A Vipps pay-link payment was seen via webhook but settlement is not yet reconciled"`
+	PaymentReceived bool    `json:"payment_received" doc:"An online payment was seen via webhook but settlement is not yet reconciled"`
 	CreditNote      bool    `json:"credit_note" doc:"A credit note (negative total): money the club owes back, never a bill"`
 	Credited        bool    `json:"credited" doc:"Settled by a linked credit note"`
 	Owed            bool    `json:"owed" doc:"Whether the member still owes this faktura; false for paid, credited, credit notes and 0 kr (fully exempted) fakturas"`

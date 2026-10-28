@@ -23,7 +23,7 @@ import (
 
 // payableInvoice mirrors the member-portal MemberInvoice shape (so the frontend
 // reuses the same invoice-list presentation) plus pay_token — the invoice's
-// durable checkout token used to start its Vipps payment.
+// durable checkout token used to start its online payment.
 type payableInvoice struct {
 	ID              string  `json:"id"`
 	InvoiceNumber   int     `json:"invoice_number"`
@@ -44,7 +44,7 @@ type payablesResponse struct {
 	ClubName   string `json:"club_name"`
 	MemberName string `json:"member_name"`
 	// BankAccount is the club's default faktura account, shown so a member can
-	// pay by bank transfer — needed for invoices over the club's Vipps cap,
+	// pay by bank transfer — needed for invoices over the club's online cap,
 	// which carry an empty pay_token (BRY-283).
 	BankAccount string           `json:"bank_account"`
 	Invoices    []payableInvoice `json:"invoices"`
@@ -96,8 +96,8 @@ func (h *InvoiceHandler) userPayablesURL(token string) string {
 // HandleGetUserPayLink returns the durable per-member payables link so staff can
 // hand a member their personal "pay my fakturas" link (SMS, chat, read it out).
 // It mirrors HandleGetInvoicePayLink: no fresh-TOTP gate (a benign read that only
-// ensures the token exists), and 409 "vipps_unavailable" when Vipps is off so the
-// UI can hide the affordance gracefully.
+// ensures the token exists), and 409 "online_payment_unavailable" when no payment
+// provider is configured so the UI can hide the affordance gracefully.
 func (h *InvoiceHandler) HandleGetUserPayLink(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
@@ -111,7 +111,7 @@ func (h *InvoiceHandler) HandleGetUserPayLink(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if !h.providers.Configured() {
-		Error(w, http.StatusConflict, "vipps_unavailable")
+		Error(w, http.StatusConflict, errCodeOnlineUnavailable)
 		return
 	}
 
@@ -133,7 +133,7 @@ func (h *InvoiceHandler) HandleGetUserPayLink(w http.ResponseWriter, r *http.Req
 
 	url := h.userPayablesURL(h.ensureUserPayablesToken(ctx, claims.ClubID, userID, true))
 	if url == "" {
-		Error(w, http.StatusConflict, "vipps_unavailable")
+		Error(w, http.StatusConflict, errCodeOnlineUnavailable)
 		return
 	}
 	JSON(w, http.StatusOK, invoicePayLinkResponse{PayURL: url})
@@ -142,7 +142,7 @@ func (h *InvoiceHandler) HandleGetUserPayLink(w http.ResponseWriter, r *http.Req
 // HandleGetPayables is the public GET /api/v1/betal/bruker/{token} endpoint: it
 // resolves the member from their durable token and returns their open, unpaid
 // invoices (each with its own durable pay token) for the payables page. No auth:
-// the token is the capability. Already-paid and vipps-received invoices are
+// the token is the capability. Already-paid and online-received invoices are
 // excluded so the member is never prompted to pay what is already settled or
 // pending settlement (BRY-276).
 func (h *InvoiceHandler) HandleGetPayables(w http.ResponseWriter, r *http.Request) {

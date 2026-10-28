@@ -88,8 +88,8 @@ func TestVippsAmountThreshold(t *testing.T) {
 	// Admin pay-link endpoint reports the distinct over-limit reason.
 	rec := httptest.NewRecorder()
 	h.HandleGetInvoicePayLink(rec, payLinkReq(invID, clubID))
-	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "vipps_over_limit") {
-		t.Errorf("cap 100, Auto: pay-link = %d %q, want 409 vipps_over_limit", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "online_payment_over_limit") {
+		t.Errorf("cap 100, Auto: pay-link = %d %q, want 409 online_payment_over_limit", rec.Code, rec.Body.String())
 	}
 
 	// Override On → forces Vipps on even above the cap: issuance mints, mint allows.
@@ -117,8 +117,8 @@ func TestVippsAmountThreshold(t *testing.T) {
 	}
 }
 
-// TestSetInvoiceVippsLink covers the per-invoice Auto/On/Off override endpoint.
-func TestSetInvoiceVippsLink(t *testing.T) {
+// TestSetInvoiceOnlinePayment covers the per-invoice Auto/On/Off override endpoint.
+func TestSetInvoiceOnlinePayment(t *testing.T) {
 	testutil.SkipIfNoDB(t)
 	pool := testutil.SetupTestDB(t)
 	ctx := context.Background()
@@ -160,7 +160,7 @@ func TestSetInvoiceVippsLink(t *testing.T) {
 	}
 	for _, tc := range cases {
 		rec := httptest.NewRecorder()
-		h.HandleSetInvoiceVippsLink(rec, req(invID, tc.body))
+		h.HandleSetInvoiceOnlinePayment(rec, req(invID, tc.body))
 		if rec.Code != http.StatusNoContent {
 			t.Fatalf("body %s: status = %d, want 204 (%s)", tc.body, rec.Code, rec.Body.String())
 		}
@@ -175,7 +175,7 @@ func TestSetInvoiceVippsLink(t *testing.T) {
 	otherUser, _ := testutil.SeedUser(t, pool, otherClub, []string{"member"})
 	otherInv := seedPayableInvoice(t, pool, otherClub, otherUser, "open", 961)
 	rec := httptest.NewRecorder()
-	h.HandleSetInvoiceVippsLink(rec, req(otherInv, `{"opt_in":true}`))
+	h.HandleSetInvoiceOnlinePayment(rec, req(otherInv, `{"opt_in":true}`))
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("cross-club: status = %d, want 404", rec.Code)
 	}

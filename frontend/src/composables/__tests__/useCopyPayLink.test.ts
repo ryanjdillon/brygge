@@ -27,11 +27,23 @@ describe('copyPayLink (BRY-274/275 shared)', () => {
     expect(writeText).toHaveBeenCalledWith('https://x/betal/abc')
   })
 
-  it('reports vipps_unavailable distinctly on a 409', async () => {
-    mockFetch(() => ({ ok: false, status: 409, json: async () => ({ error: 'vipps_unavailable' }) }) as Response)
+  it('reports online_payment_unavailable distinctly on a 409', async () => {
+    mockFetch(() => ({ ok: false, status: 409, json: async () => ({ error: 'online_payment_unavailable' }) }) as Response)
     const r = await copyPayLink('/x')
-    expect(r).toEqual({ ok: false, reason: 'vipps_unavailable' })
+    expect(r).toEqual({ ok: false, reason: 'online_payment_unavailable' })
     expect(writeText).not.toHaveBeenCalled()
+  })
+
+  it('reports online_payment_over_limit distinctly on a 409', async () => {
+    mockFetch(() => ({ ok: false, status: 409, json: async () => ({ error: 'online_payment_over_limit' }) }) as Response)
+    const r = await copyPayLink('/x')
+    expect(r).toEqual({ ok: false, reason: 'online_payment_over_limit' })
+  })
+
+  it('maps each failure to its admin.payLink message', () => {
+    expect(payLinkErrorKey('online_payment_unavailable')).toBe('admin.payLink.unavailable')
+    expect(payLinkErrorKey('online_payment_over_limit')).toBe('admin.payLink.overLimit')
+    expect(payLinkErrorKey('failed')).toBe('admin.payLink.failed')
   })
 
   it('reports an imported faktura without an opening balance by its code (BRY-386)', async () => {

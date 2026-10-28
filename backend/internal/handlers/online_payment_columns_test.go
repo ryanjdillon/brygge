@@ -266,7 +266,7 @@ func TestFinancialSettingsDualWrite(t *testing.T) {
 		return online, legacy, fee, legacyFee
 	}
 
-	update(`{"vipps_fee_account":"7790","vipps_max_amount":250}`)
+	update(`{"payment_fee_account":"7790","online_max_amount":250}`)
 	if online, legacy, fee, legacyFee := stored(); online == nil || *online != 250 || legacy == nil || *legacy != 250 ||
 		fee != "7790" || legacyFee != "7790" {
 		t.Errorf("after set: cap %v/%v fee %q/%q, want 250 and 7790 in both", online, legacy, fee, legacyFee)
@@ -278,12 +278,12 @@ func TestFinancialSettingsDualWrite(t *testing.T) {
 		t.Errorf("after omit: cap %v/%v fee %q/%q, want both kept", online, legacy, fee, legacyFee)
 	}
 
-	update(`{"vipps_max_amount":0}`)
+	update(`{"online_max_amount":0}`)
 	if online, legacy, _, _ := stored(); online != nil || legacy != nil {
 		t.Errorf("after clear: cap %v/%v, want both NULL", online, legacy)
 	}
 
-	// The API keeps its field names and reads the provider-neutral columns.
+	// The API reads the provider-neutral columns.
 	if _, err := pool.Exec(ctx, `UPDATE clubs SET online_max_amount = 123, payment_fee_account = '7701' WHERE id = $1`, clubID); err != nil {
 		t.Fatal(err)
 	}
@@ -293,8 +293,11 @@ func TestFinancialSettingsDualWrite(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatalf("decode %q: %v", rec.Body.String(), err)
 	}
-	if got["vipps_max_amount"] != 123.0 || got["vipps_fee_account"] != "7701" {
-		t.Errorf("GET vipps_max_amount/vipps_fee_account = %v/%v, want 123/7701", got["vipps_max_amount"], got["vipps_fee_account"])
+	if got["online_max_amount"] != 123.0 || got["payment_fee_account"] != "7701" {
+		t.Errorf("GET online_max_amount/payment_fee_account = %v/%v, want 123/7701", got["online_max_amount"], got["payment_fee_account"])
+	}
+	if _, ok := got["vipps_max_amount"]; ok {
+		t.Error("GET still carries vipps_max_amount")
 	}
 }
 
@@ -307,7 +310,7 @@ func TestReminderOverrideDualWrite(t *testing.T) {
 	invID := seedPayableInvoice(t, pool, clubID, userID, "open", 811)
 	h := &InvoiceHandler{db: pool, config: &config.Config{}, log: zerolog.Nop()}
 
-	if err := h.applyReminderVippsOverride(ctx, clubID, userID, "", ptr(false),
+	if err := h.applyReminderOnlinePaymentOverride(ctx, clubID, userID, "", ptr(false),
 		[]bcast.InvoiceDelivery{{InvoiceID: invID}}); err != nil {
 		t.Fatal(err)
 	}

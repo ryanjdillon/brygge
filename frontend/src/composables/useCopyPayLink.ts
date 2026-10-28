@@ -4,15 +4,19 @@
 // the members admin view use this so the fetch/clipboard/error handling stays in
 // one place. The caller maps the result to its own toast/flash and i18n.
 
-export type PayLinkFailure = 'vipps_unavailable' | 'vipps_over_limit' | 'imported_no_opening_balance' | 'failed'
+export type PayLinkFailure =
+  | 'online_payment_unavailable'
+  | 'online_payment_over_limit'
+  | 'imported_no_opening_balance'
+  | 'failed'
 
 export type CopyPayLinkResult = { ok: true; url: string } | { ok: false; reason: PayLinkFailure }
 
 /**
  * Fetches a pay link from the given admin endpoint (cookie-authed) and copies it
  * to the clipboard. Returns a discriminated result so callers can show their own
- * localized message. A 409 with `{ error: 'vipps_unavailable' }` is reported
- * distinctly so the UI can explain Vipps isn't configured.
+ * localized message. A 409 with `{ error: 'online_payment_unavailable' }` is
+ * reported distinctly so the UI can explain no payment provider is configured.
  */
 export async function copyPayLink(url: string): Promise<CopyPayLinkResult> {
   try {
@@ -20,8 +24,8 @@ export async function copyPayLink(url: string): Promise<CopyPayLinkResult> {
     if (!res.ok) {
       const data = await res.json().catch(() => null)
       let reason: PayLinkFailure = 'failed'
-      if (res.status === 409 && data?.error === 'vipps_unavailable') reason = 'vipps_unavailable'
-      else if (res.status === 409 && data?.error === 'vipps_over_limit') reason = 'vipps_over_limit'
+      if (res.status === 409 && data?.error === 'online_payment_unavailable') reason = 'online_payment_unavailable'
+      else if (res.status === 409 && data?.error === 'online_payment_over_limit') reason = 'online_payment_over_limit'
       else if (res.status === 409 && data?.code === 'imported_no_opening_balance') reason = 'imported_no_opening_balance'
       return { ok: false, reason }
     }
@@ -37,9 +41,9 @@ export async function copyPayLink(url: string): Promise<CopyPayLinkResult> {
 // localized message (admin.payLink.*).
 export function payLinkErrorKey(reason: PayLinkFailure): string {
   switch (reason) {
-    case 'vipps_unavailable':
-      return 'admin.payLink.vippsUnavailable'
-    case 'vipps_over_limit':
+    case 'online_payment_unavailable':
+      return 'admin.payLink.unavailable'
+    case 'online_payment_over_limit':
       return 'admin.payLink.overLimit'
     case 'imported_no_opening_balance':
       return 'admin.accounting.importedNoOpeningBalance'

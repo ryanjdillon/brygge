@@ -24,9 +24,9 @@ const kidSaving = ref(false)
 const kidSaved = ref(false)
 
 const vippsClearingAccount = ref('2900')
-const vippsFeeAccount = ref('7700')
-// Max invoice amount (kr) eligible for a Vipps link; '' = no limit (BRY-283).
-const vippsMaxAmount = ref<string>('')
+const paymentFeeAccount = ref('7700')
+// Max invoice amount (kr) eligible for online payment; '' = no limit (BRY-283).
+const onlineMaxAmount = ref<string>('')
 // Book unambiguous Vipps charges without review (BRY-340); the tie category
 // decides amounts that fit price items in several categories ('' = review).
 const vippsAutoAssign = ref(false)
@@ -58,8 +58,8 @@ async function load() {
     hasFakturaLogo.value = !!body.has_faktura_logo
     kidCheckMethod.value = body.kid_check_method === 'mod10' ? 'mod10' : 'mod11'
     vippsClearingAccount.value = body.vipps_clearing_account || '2900'
-    vippsFeeAccount.value = body.vipps_fee_account || '7700'
-    vippsMaxAmount.value = body.vipps_max_amount != null ? String(body.vipps_max_amount) : ''
+    paymentFeeAccount.value = body.payment_fee_account || '7700'
+    onlineMaxAmount.value = body.online_max_amount != null ? String(body.online_max_amount) : ''
     vippsAutoAssign.value = !!body.vipps_auto_assign
     vippsAutoAssignTieCategory.value = body.vipps_auto_assign_tie_category || ''
     bankAutoAssign.value = !!body.bank_auto_assign
@@ -107,9 +107,9 @@ async function saveVippsAccounts() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         vipps_clearing_account: vippsClearingAccount.value.trim(),
-        vipps_fee_account: vippsFeeAccount.value.trim(),
+        payment_fee_account: paymentFeeAccount.value.trim(),
         // Empty field clears the cap (0 → NULL on the backend); otherwise set it.
-        vipps_max_amount: vippsMaxAmount.value.trim() === '' ? 0 : Number(vippsMaxAmount.value),
+        online_max_amount: onlineMaxAmount.value.trim() === '' ? 0 : Number(onlineMaxAmount.value),
         vipps_auto_assign: vippsAutoAssign.value,
         vipps_auto_assign_tie_category: vippsAutoAssignTieCategory.value,
       }),
@@ -283,9 +283,9 @@ const canEdit = can('money')
 
       <fieldset class="rounded-md border border-slate-200 bg-slate-50 p-3 space-y-3">
         <legend class="px-1 text-xs font-semibold text-slate-700">
-          {{ t('admin.economySettings.vippsAccountsLabel') }}
+          {{ t('admin.economySettings.paymentAccountsLabel') }}
         </legend>
-        <p class="text-xs text-slate-600">{{ t('admin.economySettings.vippsAccountsHint') }}</p>
+        <p class="text-xs text-slate-600">{{ t('admin.economySettings.paymentAccountsHint') }}</p>
         <div class="flex flex-wrap items-end gap-3">
           <label class="flex flex-col gap-1 text-xs text-slate-700">
             {{ t('admin.economySettings.vippsClearingAccount') }}
@@ -297,20 +297,20 @@ const canEdit = can('money')
             />
           </label>
           <label class="flex flex-col gap-1 text-xs text-slate-700">
-            {{ t('admin.economySettings.vippsFeeAccount') }}
+            {{ t('admin.economySettings.paymentFeeAccount') }}
             <input
-              v-model="vippsFeeAccount"
+              v-model="paymentFeeAccount"
               inputmode="numeric"
               class="w-28 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
               @input="vippsSaved = false"
             />
           </label>
           <label class="flex flex-col gap-1 text-xs text-slate-700">
-            {{ t('admin.economySettings.vippsMaxAmount') }}
+            {{ t('admin.economySettings.onlineMaxAmount') }}
             <input
-              v-model="vippsMaxAmount"
+              v-model="onlineMaxAmount"
               inputmode="numeric"
-              :placeholder="t('admin.economySettings.vippsMaxAmountPlaceholder')"
+              :placeholder="t('admin.economySettings.onlineMaxAmountPlaceholder')"
               class="w-32 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
               @input="vippsSaved = false"
             />
@@ -327,7 +327,7 @@ const canEdit = can('money')
             {{ t('common.saved') }}
           </span>
         </div>
-        <p class="text-xs text-slate-500">{{ t('admin.economySettings.vippsMaxAmountHint') }}</p>
+        <p class="text-xs text-slate-500">{{ t('admin.economySettings.onlineMaxAmountHint') }}</p>
         <div class="mt-2 flex flex-wrap items-end gap-3" data-testid="vipps-auto-assign">
           <label class="flex items-center gap-2 text-sm text-slate-700">
             <input v-model="vippsAutoAssign" type="checkbox" @change="vippsSaved = false" />

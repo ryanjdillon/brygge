@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Loader2, Minus, Plus } from 'lucide-vue-next'
 import { i18n } from '@/i18n'
+import PayMethodButtons from '@/components/pay/PayMethodButtons.vue'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -21,6 +22,8 @@ type Target = {
   fixed_units: boolean
   club_name: string
   label_translations?: Record<string, string>
+  // Configured payment providers in display order.
+  providers: string[]
 }
 
 const state = ref<'loading' | 'ready' | 'error'>('loading')
@@ -63,7 +66,7 @@ async function load() {
   }
 }
 
-async function pay() {
+async function pay(provider: string) {
   if (busy.value || !target.value) return
   busy.value = true
   error.value = ''
@@ -71,7 +74,7 @@ async function pay() {
     const res = await fetch(`/api/v1/qr/${token}/pay`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ units: units.value, guest_name: guestName.value.trim() }),
+      body: JSON.stringify({ units: units.value, guest_name: guestName.value.trim(), provider }),
     })
     if (!res.ok) throw new Error(String(res.status))
     const data = await res.json()
@@ -161,16 +164,21 @@ onMounted(load)
         </div>
       </div>
 
-      <div v-if="error" class="rounded-md bg-red-50 p-3 text-sm text-red-800">{{ error }}</div>
+      <div role="alert">
+        <div v-if="error" class="rounded-md bg-red-50 p-3 text-sm text-red-800">{{ error }}</div>
+      </div>
 
-      <button
-        class="flex w-full items-center justify-center gap-2 rounded-md bg-orange-500 px-6 py-3 text-base font-semibold text-white shadow-sm hover:bg-orange-600 disabled:opacity-50"
-        :disabled="busy || total <= 0"
-        @click="pay"
-      >
-        <Loader2 v-if="busy" class="h-5 w-5 animate-spin" />
-        {{ busy ? t('qr.processing') : t('qr.payButton') }}
-      </button>
+      <!-- Guests are often visitors without Vipps, so card leads here. -->
+      <PayMethodButtons
+        :providers="target.providers ?? []"
+        emphasis="card"
+        :busy="busy"
+        :disabled="total <= 0"
+        @pay="pay"
+      />
+      <p v-if="!target.providers?.length" class="text-center text-sm text-slate-500" data-testid="qr-unavailable">
+        {{ t('qr.unavailable') }}
+      </p>
     </div>
   </div>
 </template>

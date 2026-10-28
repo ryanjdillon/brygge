@@ -51,12 +51,17 @@ type checkoutResp struct {
 	// receipt page; 0 until the order is paid. Total is what is still owed,
 	// which a paid faktura keeps until settlement is imported.
 	PaidAmount float64 `json:"paid_amount"`
-	// VippsBlocked is set when the invoice is over the club's Vipps amount cap
-	// (BRY-283): the page hides the Vipps button and shows KID + Konto for bank
-	// transfer instead. KID/BankAccount are populated so it can.
-	VippsBlocked bool   `json:"vipps_blocked"`
-	KID          string `json:"kid_number"`
-	BankAccount  string `json:"bank_account"`
+	// OnlineBlocked is set when an unpaid source may not be paid online (over
+	// the club's amount cap, forced off, or an imported receivable not yet in
+	// the GL; BRY-283): the page hides the pay buttons and shows KID + Konto for
+	// bank transfer instead. KID/BankAccount are populated so it can.
+	OnlineBlocked bool   `json:"online_blocked"`
+	KID           string `json:"kid_number"`
+	BankAccount   string `json:"bank_account"`
+	// Providers are the payment providers the payer can choose, in display
+	// order (the default first). Empty when none is configured or the order is
+	// blocked, which leaves bank transfer with BankAccount set.
+	Providers []string `json:"providers"`
 }
 
 // checkoutByToken loads the order behind a pay token.
@@ -166,20 +171,25 @@ func (h *InvoiceHandler) buildCheckoutResp(ctx context.Context, orderID, clubID,
 		return nil, err
 	}
 
-	// If an unpaid source isn't payable via Vipps, the page must steer to bank
-	// transfer: flag it and surface KID + konto so no Vipps button shows
-	// (BRY-283). KID is already loaded above; load the club's default account.
+	// If an unpaid source isn't payable online, the page must steer to bank
+	// transfer: flag it so no pay button shows (BRY-283). With no provider to
+	// offer, for either reason, surface KID + konto; KID is already loaded
+	// above, so load the club's default account.
 	blocked, err := h.orderHasOnlineBlockedSource(ctx, orderID)
 	if err != nil {
 		return nil, err
 	}
-	if blocked {
-		resp.VippsBlocked = true
-		if club, err := loadClubInvoiceFields(ctx, h.db, clubID); err != nil {
+	resp.OnlineBlocked = blocked
+	resp.Providers = []string{}
+	if !blocked {
+		resp.Providers = append(resp.Providers, h.availableProviders()...)
+	}
+	if len(resp.Providers) == 0 {
+		club, err := loadClubInvoiceFields(ctx, h.db, clubID)
+		if err != nil {
 			return nil, err
-		} else {
-			resp.BankAccount = club.BankAccount
 		}
+		resp.BankAccount = club.BankAccount
 	}
 
 	return resp, nil
@@ -360,7 +370,7 @@ func (h *InvoiceHandler) HandlePayCheckout(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if !h.providers.Configured() {
-		Error(w, http.StatusServiceUnavailable, "Vipps is not available")
+		Error(w, http.StatusServiceUnavailable, msgOnlineUnavailable)
 		return
 	}
 	var req payCheckoutRequest
@@ -379,14 +389,14 @@ func (h *InvoiceHandler) HandlePayCheckout(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if errors.Is(err, errOnlinePaymentBlocked) {
-		// Not payable via Vipps → bank transfer only (BRY-283). The page already
-		// hides the button via vipps_blocked; this guards a stale client.
-		Error(w, http.StatusConflict, "vipps_over_limit")
+		// Not payable online → bank transfer only (BRY-283). The page already
+		// hides the buttons via online_blocked; this guards a stale client.
+		Error(w, http.StatusConflict, errCodeOnlineOverLimit)
 		return
 	}
 	if err != nil {
 		h.log.Error().Err(err).Str("order_id", orderID).Msg("checkout: mint payment failed")
-		Error(w, http.StatusBadGateway, "could not start Vipps payment")
+		Error(w, http.StatusBadGateway, msgPaymentStartFailed)
 		return
 	}
 	JSON(w, http.StatusOK, map[string]string{"redirect_url": redirectURL})

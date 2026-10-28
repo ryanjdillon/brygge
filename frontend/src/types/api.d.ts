@@ -4133,7 +4133,7 @@ export interface components {
             owed: boolean;
             /** @description Whether a payment is linked to the invoice */
             paid: boolean;
-            /** @description A Vipps pay-link payment was seen via webhook but settlement is not yet reconciled */
+            /** @description An online payment was seen via webhook but settlement is not yet reconciled */
             payment_received: boolean;
             /** @description Price item name, if any */
             price_item_name: string;

@@ -109,7 +109,7 @@ Some clubs don't charge board members for certain things — for example slip re
 
 Nothing is exempt until you add it. Changes are logged.
 
-What the member gets: the faktura still lists the item at full price, followed by a line **"Fritak – <rolle>"** for the same amount with a minus sign. If everything on the faktura is exempt, the total is 0 kr: the PDF and email say there is nothing to pay, there is no KID or Vipps link, and the faktura never shows as overdue or gets reminders. A mixed faktura (say exempt slip rent plus normal dues) only asks for the dues. In the member portal a 0 kr faktura shows as **Ingenting å betale**. Credit notes are never given an exemption line.
+What the member gets: the faktura still lists the item at full price, followed by a line **"Fritak – <rolle>"** for the same amount with a minus sign. If everything on the faktura is exempt, the total is 0 kr: the PDF and email say there is nothing to pay, there is no KID or pay link, and the faktura never shows as overdue or gets reminders. A mixed faktura (say exempt slip rent plus normal dues) only asks for the dues. In the member portal a 0 kr faktura shows as **Ingenting å betale**. Credit notes are never given an exemption line.
 
 In the accounts, the item's income is booked in full and the exemption is booked as an expense on the chosen account, so the reports show what the exemption costs the club.
 
@@ -152,22 +152,24 @@ Per-row actions:
 
 - **Preview PDF** — current version.
 - **Resend** — re-emails the stored PDF (no re-generation; just delivery).
-- **Copy pay link** (link icon) — copies this faktura's durable Vipps pay link (`/betal/{token}`) to the clipboard so you can send it however you like (SMS, chat, read it out) — handy for members who don't cope with email or magic-link login.
+- **Copy pay link** (link icon) — copies this faktura's durable pay link (`/betal/{token}`) to the clipboard so you can send it however you like (SMS, chat, read it out) — handy for members who don't cope with email or magic-link login.
 - **History** (clock icon) — opens the **Previous PDF versions** popover. Every PDF that was overwritten by a regenerate is archived here with timestamp, who did it, and view/download links. See [PDF archive](#pdf-archive).
 - **Void** — moves the row to Voided without deletion (audit trail preserved).
 
-> **Per-member payables link.** For a member with several open fakturas, open them under `Admin → Members`, and use **Copy pay link** in their detail to get their personal `/betal/bruker/…` page. It lists *all* their open fakturas with a Vipps button on each — no login — so a less technical member pays everything from one link. Already-paid and already-received (awaiting settlement) fakturas are hidden so nobody is asked to pay twice.
+> **Per-member payables link.** For a member with several open fakturas, open them under `Admin → Members`, and use **Copy pay link** in their detail to get their personal `/betal/bruker/…` page. It lists *all* their open fakturas with a **Betal** button on each — no login — so a less technical member pays everything from one link. Already-paid and already-received (awaiting settlement) fakturas are hidden so nobody is asked to pay twice.
 
 Bulk actions on the selection:
 
 - **Copy emails** — same as Drafts; useful when emails are routing to spam and you want to send a personal heads-up before/after the automated send.
-- **Send purring** — bulk reminder email. Skips already-paid rows automatically; uses the stored PDF as attachment. The reminder copy automatically shifts between "ubetalt" and "forfalt" tone based on the due date. The confirm dialog has a **Vipps payment link** choice: *Leave as set* (default — each invoice follows its own setting), *Include for all selected*, or *Bank transfer only*. The last two are saved on the selected invoices, so the choice also holds when the member opens the link later.
+- **Send purring** — bulk reminder email. Skips already-paid rows automatically; uses the stored PDF as attachment. The reminder copy automatically shifts between "ubetalt" and "forfalt" tone based on the due date. The confirm dialog has an **Online payment link** choice: *Leave as set* (default — each invoice follows its own setting), *Include for all selected*, or *Bank transfer only*. The last two are saved on the selected invoices, so the choice also holds when the member opens the link later.
 - **Regenerer PDF** — rebuilds `invoices.pdf_data` in place using the **current** club bank-account default. Invoice number, KID, dates, recipient, and lines stay identical. No email is sent. Each regenerate archives the prior PDF under [bokføringsloven §13](https://lovdata.no/lov/2004-11-19-73/§13) so the original is still retrievable.
 - **Void** — same as per-row but for the selection.
 
-> **Large payments → bank transfer.** To avoid Vipps fees on big invoices, set a **max amount for Vipps** under `Admin → Economy → Settings`. By default any invoice over that amount hides the Vipps button everywhere — on the faktura, on reminders, on the copy-link, and on the member's payables page — so the member pays by bank transfer (KID). Leave it empty for no limit.
+> **Large payments → bank transfer.** To avoid payment fees on big invoices, set a **max amount for online payment** under `Admin → Economy → Settings`. It applies to Vipps and card alike. By default any invoice over that amount hides the pay buttons everywhere — on the faktura, on reminders, on the copy-link, and on the member's payables page — so the member pays by bank transfer (KID). Leave it empty for no limit.
 >
-> It's a default, not a hard rule: each Sent-tab row has a small **Vipps link** selector — *Auto* (follow the amount limit), *Vipps on* (always offer, even over the limit), or *Vipps off* (never) — so you can make an exception for a specific invoice either way.
+> It's a default, not a hard rule: each Sent-tab row has a small **Online payment** selector — *Auto* (follow the amount limit), *On* (always offer, even over the limit), or *Off* (never) — so you can make an exception for a specific invoice either way.
+
+> **What the member sees.** The faktura and reminder emails have a **Betal nå** button with the ways to pay online underneath ("Vipps", "Kort", or "Vipps eller kort", depending on what the club has set up). The button opens the faktura's pay page, which lists what is being paid. When both Vipps and card are set up, the member picks one there: **Vipps**, or **Kort · Apple Pay · Google Pay**; with only one there is a single button. Over the limit, or with online payment off, the page shows the account number and KID for bank transfer instead.
 
 **Typical incident recovery flow** (we built this for the operator who issued a batch of fakturas with the wrong bank account):
 
@@ -309,7 +311,7 @@ Until then:
 
 - In **Tildel**, assigning the payment to the imported faktura (bank or Vipps, one row or several) is refused with a message saying the opening balance is missing. Nothing is booked, and the payment stays in Tildel. Assign it again once the opening balance is posted.
 - The KID and name matching never books it either; it stays in Tildel.
-- The member still sees the faktura on their payables page, but without a Vipps button; they can pay by bank transfer. **Copy pay link** on such a faktura says the same as Tildel.
+- The member still sees the faktura on their payables page, but without a pay button; they can pay by bank transfer. **Copy pay link** on such a faktura says the same as Tildel.
 
 Payments dated before the opening balance (for example in the previous year) stay refused even after it is posted, because the opening balance didn't exist yet when they were paid. Those payments belong to the previous system's books; whether they settled a faktura shows in its open-items list.
 

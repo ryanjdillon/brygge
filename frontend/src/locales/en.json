@@ -208,7 +208,6 @@
     "boatLength": "Length (m)",
     "boatBeam": "Beam (m)",
     "boatDraft": "Draft (m)",
-    "payWithVipps": "Pay with Vipps",
     "payComingSoon": "Payment coming soon",
     "submit": "Join",
     "queuePosition": "Your queue position",
@@ -283,7 +282,6 @@
     "cartEmpty": "Your cart is empty",
     "continueShopping": "Continue shopping",
     "each": "each",
-    "payWithVipps": "Pay with Vipps",
     "processingPayment": "Processing payment...",
     "paymentReceived": "Payment received!",
     "orderConfirmed": "Order {id} is confirmed.",
@@ -316,10 +314,10 @@
       "title": "Pay your invoices",
       "intro": "Open invoices for {name}",
       "club": "{club}",
-      "pay": "Pay with Vipps",
+      "pay": "Pay",
       "none": "You have no open invoices right now.",
       "bankOnly": "Bank transfer",
-      "bankTransferHint": "Invoices marked “bank transfer” are over the Vipps limit — pay to account {account} using the KID shown on each.",
+      "bankTransferHint": "Invoices marked “bank transfer” are over the online payment limit — pay to account {account} using the KID shown on each.",
       "loadError": "We couldn't load your invoices. Please open the link again.",
       "notFound": "This payment link is no longer valid. Ask the club for a new one."
     },
@@ -573,11 +571,11 @@
   },
   "admin": {
     "payLink": {
-      "title": "Copy Vipps payment link",
+      "title": "Copy payment link",
       "copied": "Payment link copied to clipboard",
-      "overLimit": "Over the club's Vipps limit — bank transfer only",
+      "overLimit": "Over the club's online payment limit — bank transfer only",
       "failed": "Couldn't create the payment link",
-      "vippsUnavailable": "Vipps isn't configured for this club"
+      "unavailable": "Online payment isn't set up for this club"
     },
     "title": "Administration",
     "ariaNav": "Admin navigation",
@@ -641,7 +639,7 @@
       "voidConfirmTitle": "Void faktura?",
       "voidOneBody": "Void the faktura for {name}. It will fall out of dedup so a re-issue under the same category and year is allowed.",
       "voidAction": "Void",
-      "voidSettled": "This faktura is already paid (or paid via Vipps). Refund or credit it instead of voiding.",
+      "voidSettled": "This faktura is already paid (or paid online). Refund or credit it instead of voiding.",
       "voidPeriodClosed": "This faktura is booked in a closed accounting year, so it can't be voided. Issue a credit note instead.",
       "glBookingFailed": "Done, but the faktura could not be booked in the accounts: {reason}. Run \"Reconcile period\" in Bilag once this is fixed.",
       "filterMember": "Member name or email",
@@ -750,21 +748,21 @@
         "reminderSelected": "Send reminder",
         "reminderConfirmTitle": "Send payment reminders?",
         "reminderBulkBody": "Email a payment reminder for {n} invoice(s). Already-paid rows in the selection are skipped automatically.",
-        "vippsLink": {
-          "label": "Vipps link",
-          "auto": "Auto",
-          "on": "Vipps on",
-          "off": "Vipps off"
+        "onlinePayment": {
+          "label": "Online payment",
+          "auto": "Online payment: Auto",
+          "on": "Online payment: On",
+          "off": "Online payment: Off"
         },
-        "reminderVippsChoice": {
-          "label": "Vipps payment link",
+        "reminderOnlinePaymentChoice": {
+          "label": "Online payment link",
           "auto": "Leave as set (by amount)",
           "on": "Include for all selected",
-          "off": "Bank transfer only (no Vipps)"
+          "off": "Bank transfer only (no online payment)"
         },
         "reminderAction": "Send reminders",
-        "vippsReceived": "Vipps received",
-        "vippsReceivedTitle": "Payment received via Vipps — awaiting settlement and reconciliation",
+        "onlineReceived": "Online payment received",
+        "onlineReceivedTitle": "Payment received online — awaiting settlement and reconciliation",
         "reminderNoneEligible": "No selected invoices are eligible — all are already marked as paid.",
         "regenSelected": "Regenerate PDF",
         "regenConfirmTitle": "Regenerate PDFs?",
@@ -1805,17 +1803,17 @@
     },
     "economySettings": {
       "title": "Economy settings",
-      "vippsAccountsLabel": "Vipps accounts",
-      "vippsAccountsHint": "Ledger accounts used when reconciling Vipps payouts: the clearing (holding) account and the fee account. Defaults are 2900 and 7700.",
-      "vippsMaxAmount": "Max amount for Vipps (kr)",
-      "vippsMaxAmountPlaceholder": "No limit",
-      "vippsMaxAmountHint": "Invoices over this amount are offered bank transfer (KID) only, so the club avoids Vipps fees. Leave empty for no limit.",
+      "paymentAccountsLabel": "Payment accounts",
+      "paymentAccountsHint": "Clearing account for Vipps payouts, and the fee account for online payment fees (Vipps and card). Defaults are 2900 and 7700.",
+      "onlineMaxAmount": "Max amount for online payment (kr)",
+      "onlineMaxAmountPlaceholder": "No limit",
+      "onlineMaxAmountHint": "Invoices over this amount are offered bank transfer (KID) only, so the club avoids payment fees. Applies to Vipps and card alike. Leave empty for no limit.",
       "vippsAutoAssign": "Book unambiguous Vipps payments automatically",
       "vippsAutoAssignTieCategory": "When an amount fits several price categories",
       "vippsAutoAssignTieNone": "Leave for review",
       "vippsAutoAssignHint": "Books a payment only when it clearly matches one member's single open faktura, or one price category. Everything else stays in Tildel. Every booking can be undone.",
       "vippsClearingAccount": "Clearing account",
-      "vippsFeeAccount": "Fee account",
+      "paymentFeeAccount": "Fee account",
       "subtitle": "Faktura defaults, registered bank accounts, and (soon) Vipps merchant configuration — everything the accounting module needs in one place.",
       "fakturaTab": "Faktura",
       "bankAccountsTab": "Bank accounts",
@@ -2541,9 +2539,8 @@
     "guestNameLabel": "Your name (optional)",
     "guestNamePlaceholder": "e.g. boat name or your name",
     "total": "To pay",
-    "processing": "Starting Vipps …",
-    "payButton": "Pay with Vipps",
-    "payError": "Could not start the Vipps payment. Please try again."
+    "payError": "Could not start the payment. Please try again.",
+    "unavailable": "Online payment isn't available right now. Please ask the harbor master."
   },
   "pay": {
     "loading": "Loading payment …",
@@ -2557,12 +2554,17 @@
     "itemsSection": "Items",
     "total": "To pay",
     "bankOnlyTitle": "Pay by bank transfer",
-    "bankOnlyBody": "This amount is above the limit for Vipps payment. Please pay by bank transfer using the account and KID below.",
+    "bankOnlyBody": "This amount is above the limit for online payment. Please pay by bank transfer using the account and KID below.",
+    "bankOnlyBodyNoProvider": "Please pay by bank transfer using the account and KID below.",
     "account": "Account",
     "preferBankNote": "You can also pay by bank transfer using the KID from the invoice — it costs the club nothing.",
-    "processing": "Starting Vipps …",
-    "payButton": "Pay with Vipps",
+    "processing": "Starting payment …",
     "payError": "Could not start payment. Please try again.",
+    "methods": {
+      "chooseTitle": "Choose how to pay",
+      "vipps": "Vipps",
+      "card": "Card · Apple Pay · Google Pay"
+    },
     "receipt": {
       "loading": "Loading payment …",
       "paidTitle": "Payment received",
@@ -2727,7 +2729,7 @@
     },
     "betaling": {
       "title": "Payment",
-      "body": "Payment is made via the channels we offer — typically Vipps, bank transfer with KID, or invoice. The amount due, payment deadline, and KID number are stated on the invoice/order confirmation. Late payment may incur reminder fees and interest in accordance with the Late Payment Interest Act (forsinkelsesrenteloven)."
+      "body": "Payment is made via the channels we offer — typically Vipps, card (including Apple Pay and Google Pay), bank transfer with KID, or invoice. The amount due, payment deadline, and KID number are stated on the invoice/order confirmation. Late payment may incur reminder fees and interest in accordance with the Late Payment Interest Act (forsinkelsesrenteloven)."
     },
     "oppsigelse": {
       "title": "Cancellation and stopping recurring payments",

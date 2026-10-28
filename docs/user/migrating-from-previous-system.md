@@ -60,7 +60,7 @@ The entry must be marked as an opening balance (source `opening_balance`). Brygg
 Until the opening balance is posted:
 
 - a payment of an imported faktura can't be booked. Assigning it in **Tildel** is refused with a message saying the opening balance is missing, and the payment stays in Tildel;
-- such a faktura has no Vipps button on the member's payables page, and **Copy pay link** is refused; the member can still pay by bank transfer;
+- such a faktura has no pay button on the member's payables page, and **Copy pay link** is refused; the member can still pay by bank transfer;
 - a Brygge credit note can't be linked to an imported faktura.
 
 Once it is posted, assign the waiting payments again. Only payments dated on or after the cutover can be booked against an imported faktura; earlier ones belong to the previous system's books. Neither the automatic matching (KID, name, and the automatic bank and Vipps booking) nor **Synk bank** ever books or marks paid an imported faktura: assign those payments by hand in Tildel. See [Payments for fakturas from the previous system](faktura.md#payments-for-fakturas-from-the-previous-system).

@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Loader2, CheckCircle } from 'lucide-vue-next'
+import PayMethodButtons from '@/components/pay/PayMethodButtons.vue'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -16,11 +17,13 @@ type Checkout = {
   lines: Line[]
   total: number
   already_paid: boolean
-  // Over the club's Vipps cap (BRY-283): no Vipps button; pay by bank transfer
-  // using the KID + konto shown instead.
-  vipps_blocked: boolean
+  // Not payable online (over the club's cap, BRY-283): no pay buttons; pay by
+  // bank transfer using the KID + konto shown instead.
+  online_blocked: boolean
   kid_number: string
   bank_account: string
+  // Configured payment providers in display order; empty when blocked.
+  providers: string[]
 }
 
 const state = ref<'loading' | 'ready' | 'error'>('loading')
@@ -43,12 +46,26 @@ async function load() {
   }
 }
 
-async function pay() {
+async function pay(provider: string) {
   if (busy.value) return
   busy.value = true
   error.value = ''
   try {
-    const res = await fetch(`/api/v1/checkout/${token}/pay`, { method: 'POST' })
+    const res = await fetch(`/api/v1/checkout/${token}/pay`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider }),
+    })
+    if (res.status === 409) {
+      const body = await res.json().catch(() => null)
+      if (body?.error === 'online_payment_over_limit') {
+        // The order stopped being payable online since the page loaded:
+        // reload so the bank-transfer details replace the buttons.
+        busy.value = false
+        await load()
+        return
+      }
+    }
     if (!res.ok) throw new Error(String(res.status))
     const data = await res.json()
     if (data.redirect_url) {
@@ -130,10 +147,16 @@ onMounted(load)
 
         <p class="text-xs text-slate-500">{{ t('pay.preferBankNote') }}</p>
 
-        <!-- Over the club's Vipps cap → bank transfer only (BRY-283). -->
-        <div v-if="checkout.vipps_blocked" class="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm">
+        <!-- Not payable online, or no provider configured → bank transfer only. -->
+        <div
+          v-if="checkout.online_blocked || !checkout.providers?.length"
+          class="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm"
+          data-testid="bank-only"
+        >
           <p class="font-semibold text-slate-900">{{ t('pay.bankOnlyTitle') }}</p>
-          <p class="text-slate-600">{{ t('pay.bankOnlyBody') }}</p>
+          <p class="text-slate-600">
+            {{ checkout.online_blocked ? t('pay.bankOnlyBody') : t('pay.bankOnlyBodyNoProvider') }}
+          </p>
           <dl class="space-y-1 pt-1">
             <div v-if="checkout.bank_account" class="flex justify-between">
               <dt class="text-slate-500">{{ t('pay.account') }}</dt>
@@ -147,16 +170,16 @@ onMounted(load)
         </div>
 
         <template v-else>
-          <div v-if="error" class="rounded-md bg-red-50 p-3 text-sm text-red-800">{{ error }}</div>
+          <div role="alert">
+            <div v-if="error" class="rounded-md bg-red-50 p-3 text-sm text-red-800">{{ error }}</div>
+          </div>
 
-          <button
-            class="flex w-full items-center justify-center gap-2 rounded-md bg-orange-500 px-6 py-3 text-sm font-semibold text-white shadow-sm hover:bg-orange-600 disabled:opacity-50"
-            :disabled="busy || checkout.total <= 0"
-            @click="pay"
-          >
-            <Loader2 v-if="busy" class="h-5 w-5 animate-spin" />
-            {{ busy ? t('pay.processing') : t('pay.payButton') }}
-          </button>
+          <PayMethodButtons
+            :providers="checkout.providers"
+            :busy="busy"
+            :disabled="checkout.total <= 0"
+            @pay="pay"
+          />
         </template>
       </template>
     </div>
