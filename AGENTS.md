@@ -317,6 +317,13 @@ Spec generation (`backend/cmd/openapi/main.go`) → `just api-types` → `fronte
 - **After OpenAPI changes**: `just api-types` to regenerate types. Register new endpoints in `backend/internal/openapi/register.go`, add wrapper types in `openapi/types.go`
 - **API calls in views**: `const client = useApiClient()` + `unwrap(await client.GET(...))`. Only use `fetchApi` for endpoints not in OpenAPI spec
 - **TOTP gating (frontend UX)**: action buttons that trigger sensitive operations (anything behind `RequireFreshTOTP` middleware on the server) must call `ensureFreshTotp()` at **click time**, not on form submit. Pattern: prompt the step-up first, then show the confirm dialog (or open the form modal), then run the action. The backend middleware is the hard gate; the frontend prompt is just so users re-verify before they fill in a form, not after
+- **Mobile and tablet (ratchet, BRY-464)**: every view you add or change must work at 375px (phone), 768px (tablet) and desktop widths:
+  - no horizontal page scroll; wide tables become stacked cards below `md`
+  - touch targets at least 44px; nothing that only works on hover
+  - forms single-column below `md`; dialogs fit the screen (full-screen on phones)
+  - leave a view you touch no worse on mobile than you found it; note remaining gaps on BRY-464
+
+  Check the view at 375px and 768px in a browser before calling a UI change done.
 
 ## CI Pipeline
 
