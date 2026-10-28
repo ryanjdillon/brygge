@@ -19,6 +19,7 @@ const KEYS = [
   'until',
   'empty',
   'anonymous',
+  'kind.harbor',
   'kind.all',
   'kind.guest',
   'kind.motorhome',

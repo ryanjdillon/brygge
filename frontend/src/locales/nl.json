@@ -1756,6 +1756,7 @@
     "empty": "Nog geen betalingen.",
     "anonymous": "Gast",
     "kind": {
+      "harbor": "Haven",
       "all": "Alle",
       "guest": "Gastligplaats",
       "motorhome": "Camper",

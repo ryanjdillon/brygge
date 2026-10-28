@@ -1755,6 +1755,7 @@
     "empty": "Aucun paiement pour le moment.",
     "anonymous": "Invité",
     "kind": {
+      "harbor": "Port",
       "all": "Tous",
       "guest": "Place visiteur",
       "motorhome": "Camping-car",

@@ -1756,6 +1756,7 @@
     "empty": "Noch keine Zahlungen.",
     "anonymous": "Gast",
     "kind": {
+      "harbor": "Hafen",
       "all": "Alle",
       "guest": "Gastliegeplatz",
       "motorhome": "Wohnmobil",

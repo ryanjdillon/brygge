@@ -1756,6 +1756,7 @@
     "empty": "Ancora nessun pagamento.",
     "anonymous": "Ospite",
     "kind": {
+      "harbor": "Porto",
       "all": "Tutti",
       "guest": "Posto ospiti",
       "motorhome": "Camper",

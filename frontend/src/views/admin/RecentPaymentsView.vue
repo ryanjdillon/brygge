@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute, useRouter } from 'vue-router'
 import { useApi } from '@/composables/useApi'
 import { formatNOK as nok } from '@/lib/format'
 import { RefreshCw, Inbox, Search, Anchor, Caravan, FileText, ShoppingBag, CircleDollarSign } from 'lucide-vue-next'
@@ -8,6 +9,8 @@ import PaymentMethodChip, { type PaymentMethod } from '@/components/admin/Paymen
 
 const { t } = useI18n()
 const { fetchApi } = useApi()
+const route = useRoute()
+const router = useRouter()
 
 interface Payment {
   id: string
@@ -23,12 +26,58 @@ interface Payment {
 
 const payments = ref<Payment[]>([])
 const loading = ref(false)
-const kind = ref('')
 const since = ref('')
 const until = ref('')
 const search = ref('')
 
-const kinds = ['', 'guest', 'motorhome', 'faktura', 'merch', 'other'] as const
+// Filters the harbor master picks from, single-select. "harbor" is what the
+// harbor is paid for on the spot (guest berths and motorhomes) and is the
+// default; each maps to the API's kind list ('' for every kind).
+const filters = {
+  harbor: 'guest,motorhome',
+  all: '',
+  guest: 'guest',
+  motorhome: 'motorhome',
+  faktura: 'faktura',
+  merch: 'merch',
+  other: 'other',
+} as const
+type FilterId = keyof typeof filters
+const filterIds = Object.keys(filters) as FilterId[]
+const DEFAULT_FILTER: FilterId = 'harbor'
+const STORAGE_KEY = 'recentPayments.kind'
+
+// A membership test on the id list, not `in`: `?kind=constructor` must not
+// pass as a filter.
+function isFilterId(v: unknown): v is FilterId {
+  return typeof v === 'string' && (filterIds as string[]).includes(v)
+}
+
+function storedFilter(): FilterId | null {
+  try {
+    const v = localStorage.getItem(STORAGE_KEY)
+    return isFilterId(v) ? v : null
+  } catch {
+    return null
+  }
+}
+
+// The URL is the source of truth, so a shared or reloaded link shows the
+// same list; the last choice on this device fills in when the URL has none.
+const kind = computed<FilterId>(() => {
+  const q = route.query.kind
+  if (isFilterId(q)) return q
+  return storedFilter() ?? DEFAULT_FILTER
+})
+
+function selectFilter(id: FilterId) {
+  try {
+    localStorage.setItem(STORAGE_KEY, id)
+  } catch {
+    // Private browsing can refuse storage; the URL still carries the choice.
+  }
+  router.replace({ query: { ...route.query, kind: id } })
+}
 
 const kindMeta: Record<string, { icon: any; classes: string }> = {
   guest: { icon: Anchor, classes: 'bg-blue-50 text-blue-700 ring-blue-200' },
@@ -40,18 +89,24 @@ const kindMeta: Record<string, { icon: any; classes: string }> = {
 
 let searchTimer: ReturnType<typeof setTimeout> | undefined
 
+// Only the newest request may fill the list: on a slow connection an answer
+// for a filter tapped earlier can arrive after the current one.
+let loadSeq = 0
+
 async function load() {
+  const seq = ++loadSeq
   loading.value = true
   try {
     const p = new URLSearchParams()
-    if (kind.value) p.set('kind', kind.value)
+    const kinds = filters[kind.value]
+    if (kinds) p.set('kind', kinds)
     if (since.value) p.set('since', since.value)
     if (until.value) p.set('until', until.value)
     if (search.value.trim()) p.set('q', search.value.trim())
     const res = await fetchApi<{ payments: Payment[] }>(`/api/v1/harbor/recent-payments?${p.toString()}`)
-    payments.value = res?.payments ?? []
+    if (seq === loadSeq) payments.value = res?.payments ?? []
   } finally {
-    loading.value = false
+    if (seq === loadSeq) loading.value = false
   }
 }
 
@@ -67,7 +122,15 @@ function fmtWhen(s: string): string {
   })
 }
 
-onMounted(load)
+watch(kind, load)
+
+onMounted(async () => {
+  await router.isReady()
+  if (route.query.kind !== kind.value) {
+    router.replace({ query: { ...route.query, kind: kind.value } })
+  }
+  load()
+})
 </script>
 
 <template>
@@ -78,8 +141,9 @@ onMounted(load)
         <p class="mt-1 text-sm text-slate-500">{{ t('recentPayments.subtitle') }}</p>
       </div>
       <button
-        class="flex shrink-0 items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+        class="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
         :disabled="loading"
+        :aria-label="t('recentPayments.refresh')"
         @click="load"
       >
         <RefreshCw class="h-4 w-4" :class="loading ? 'animate-spin' : ''" />
@@ -89,15 +153,18 @@ onMounted(load)
 
     <!-- Filters -->
     <div class="mt-4 space-y-3">
-      <div class="flex flex-wrap gap-1.5">
+      <div class="flex flex-wrap gap-2" data-testid="kind-filters">
         <button
-          v-for="k in kinds"
-          :key="k || 'all'"
-          class="rounded-full px-3 py-1 text-xs font-medium ring-1 ring-inset"
-          :class="kind === k ? 'bg-slate-900 text-white ring-slate-900' : 'bg-white text-slate-600 ring-slate-200 hover:bg-slate-50'"
-          @click="kind = k; load()"
+          v-for="id in filterIds"
+          :key="id"
+          type="button"
+          class="min-h-11 rounded-full px-4 text-sm font-medium ring-1 ring-inset"
+          :class="kind === id ? 'bg-slate-900 text-white ring-slate-900' : 'bg-white text-slate-600 ring-slate-200 hover:bg-slate-50'"
+          :aria-pressed="kind === id"
+          :data-filter="id"
+          @click="selectFilter(id)"
         >
-          {{ t('recentPayments.kind.' + (k || 'all')) }}
+          {{ t('recentPayments.kind.' + id) }}
         </button>
       </div>
 
@@ -107,7 +174,7 @@ onMounted(load)
           v-model="search"
           type="search"
           :placeholder="t('recentPayments.searchPlaceholder')"
-          class="w-full rounded-md border border-slate-300 py-2 pl-9 pr-3 text-sm"
+          class="min-h-11 w-full rounded-md border border-slate-300 py-2 pl-9 pr-3 text-sm"
           @input="onSearchInput"
         />
       </div>
@@ -115,11 +182,11 @@ onMounted(load)
       <div class="flex gap-2">
         <label class="flex-1 text-xs text-slate-500">
           {{ t('recentPayments.since') }}
-          <input v-model="since" type="date" class="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm" @change="load" />
+          <input v-model="since" type="date" class="mt-1 min-h-11 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm" @change="load" />
         </label>
         <label class="flex-1 text-xs text-slate-500">
           {{ t('recentPayments.until') }}
-          <input v-model="until" type="date" class="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm" @change="load" />
+          <input v-model="until" type="date" class="mt-1 min-h-11 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm" @change="load" />
         </label>
       </div>
     </div>

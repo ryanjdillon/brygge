@@ -2695,6 +2695,7 @@
     "empty": "Ingen betalingar enno.",
     "anonymous": "Gjest",
     "kind": {
+      "harbor": "Hamn",
       "all": "Alle",
       "guest": "Gjesteplass",
       "motorhome": "Bubil",

@@ -2818,6 +2818,7 @@
     "empty": "No payments yet.",
     "anonymous": "Guest",
     "kind": {
+      "harbor": "Harbor",
       "all": "All",
       "guest": "Guest berth",
       "motorhome": "Motorhome",

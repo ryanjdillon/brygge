@@ -2814,6 +2814,7 @@
     "empty": "Ingen betalinger ennå.",
     "anonymous": "Gjest",
     "kind": {
+      "harbor": "Havn",
       "all": "Alle",
       "guest": "Gjesteplass",
       "motorhome": "Bobil",
