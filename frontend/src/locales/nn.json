@@ -659,7 +659,9 @@
         "state": {
           "settled_pair": "Motrekna mot #{number}",
           "credit_owed": "Tilgode medlem (#{number} er betalt)",
-          "unlinked": "Kreditnota – ikkje kopla"
+          "unlinked": "Kreditnota – ikkje kopla",
+          "refund": "Kreditnota for refusjon av #{number}",
+          "refund_order": "Kreditnota for kortrefusjon"
         },
         "creditedBy": "Kreditert av #{number}",
         "settleAction": "Motrekn mot faktura",
@@ -1865,7 +1867,7 @@
       "bankAutoAssignCounts": "Bankinnbetalingar bokførte automatisk: {assigned} · Framleis i Tildel: {review}",
       "runStripeSync": "Synk Stripe",
       "stripeSyncResult": "Stripe: {fetched} henta · {inserted} nye",
-      "stripeBookCounts": "Stripe bokført: {charges} kortbetaling(ar) · {fees} gebyr",
+      "stripeBookCounts": "Stripe bokført: {charges} kortbetaling(ar) · {fees} gebyr · {refunds} refusjon(ar)",
       "stripeBookReview": "{count} Stripe-transaksjon(ar) ventar på gjennomgang",
       "stripeBookDeferred": "{count} er ikkje bokførte fordi rekneskapsperioden er lukka eller ikkje oppretta; dei blir bokførte når perioden er open.",
       "stripeBookBusy": "Ein Stripe-synk var i gang, så ingenting vart bokført no. Prøv att om litt.",
@@ -1874,12 +1876,18 @@
         "no_attempt": "Finn ikkje betalinga i Brygge",
         "amount_mismatch": "Beløpet avvik frå betalinga",
         "currency": "Anna valuta enn NOK",
-        "refund_pending_bry446": "Refusjon eller tvist – blir bokført seinare",
+        "refund_pending_bry446": "Tvist – blir bokført seinare",
         "unsupported_category": "Ukjend transaksjonstype",
         "receivable_not_open": "Fakturaen er alt betalt, kreditert eller annullert",
         "imported_no_opening_balance": "Importert faktura utan inngåande balanse",
         "split_mismatch": "Ordren stemmer ikkje med beløpet",
-        "unassigned": "Angra av deg – halde att for manuell handsaming"
+        "unassigned": "Angra av deg – halde att for manuell handsaming",
+        "refund_unlinked": "Refusjon – kortbetalinga er ikkje henta enno",
+        "refund_charge_unbooked": "Refusjon – kortbetalinga er ikkje bokført enno",
+        "refund_origin_dismissed": "Refusjon av ei avvist kortbetaling",
+        "refund_legacy": "Refusjon frå før refusjonar vart bokførte",
+        "refund_failure_settled": "Mislukka refusjon – fakturaen er gjort opp på anna vis",
+        "refund_split": "Refusjonen kan ikkje fordelast på fakturaene"
       },
       "stripePayoutSweepCounts": "Stripe-utbetalingar avstemde: {cleared} · Ventar: {waiting} · Hoppa over: {skipped} · Feila: {failed}",
       "stripePayoutDeposit": "Bankinnbetaling {date}",
@@ -1945,7 +1953,7 @@
         "dismissDialog": {
           "title": "Avvis Stripe-transaksjon",
           "warning": "Transaksjonen blir ikkje bokført. Utbetalinga han var med i trekkjer likevel nettobeløpet ({amount}) frå Stripe-mellomkontoen, så kontoen går ikkje i null før beløpet er ført på anna vis.",
-          "refundWarning": "Refusjonar og tvistar skal etter kvart bli bokførte automatisk. Ein avvist transaksjon blir ikkje teken med då heller.",
+          "refundWarning": "Tvistar skal etter kvart bli bokførte automatisk. Ei avvist transaksjon blir ikkje teken med då heller.",
           "reason": "Årsak",
           "reasonPlaceholder": "Vel årsak",
           "note": "Notat (valfritt)",
@@ -1963,7 +1971,10 @@
           "invalid_account": "Denne kontoen kan ikkje brukast for ein Stripe-transaksjon.",
           "busy": "Ein Stripe-synk køyrer no. Prøv igjen om litt.",
           "generic": "Noko gjekk gale. Prøv igjen.",
-          "use_bank_unassign": "Utbetalingar blir bokførte av avstemminga. Angre bankinnbetalinga i Tildel i staden."
+          "use_bank_unassign": "Utbetalingar blir bokførte av avstemminga. Angre bankinnbetalinga i Tildel i staden.",
+          "refund_booked": "Kortbetalinga har ein bokført refusjon. Angre refusjonen først.",
+          "credit_note_issued": "Refusjonen har skrive ut kreditnota, som ikkje kan annullerast. Lag ein ny faktura i staden.",
+          "faktura_settled_since": "Fakturaen refusjonen opna igjen er betalt, kreditert eller bokført sidan."
         },
         "entry": "Bilag {number}: {description}",
         "entryVoided": "annullert",

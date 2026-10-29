@@ -37,6 +37,8 @@ watch(
   },
 )
 
+// Disputes are still held under the reason refunds had before they were
+// booked; their booking comes later.
 const isRefund = computed(() => props.item.review_reason === 'refund_pending_bry446')
 
 function close() {

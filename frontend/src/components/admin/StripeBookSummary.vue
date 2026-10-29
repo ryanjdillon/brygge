@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { StripeBookResult } from '@/composables/useBankImports'
 
-// Shows what a Stripe booking pass booked and what it left: charges held
+// Shows what a Stripe booking pass booked and what it left: rows held
 // for review (listed in StripeReviewList), rows waiting on a closed fiscal
 // period, a pass that stood aside for a running Stripe sync, and failures.
 const props = defineProps<{ result: StripeBookResult }>()
@@ -25,6 +25,7 @@ const errorCount = computed(() => props.result.errors?.length ?? 0)
       {{ t('admin.bankImports.stripeBookCounts', {
         charges: props.result.charges_booked,
         fees: props.result.fees_booked,
+        refunds: props.result.refunds_booked ?? 0,
       }) }}
     </p>
     <p v-if="reviewCount" class="text-yellow-800" data-testid="stripe-book-review">

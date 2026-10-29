@@ -37,8 +37,14 @@ interface Row {
   // Credit-note links (BRY-342): set on a credit note linked to the faktura
   // it credits, and on a faktura settled by one.
   credits_invoice_number: number | null
-  credit_state: 'settled_pair' | 'credit_owed' | 'unlinked' | null
+  // 'refund': a credit note a card refund issued, linked to its faktura
+  // (credits_invoice_number; none for an order with no faktura) through
+  // the refund. It is never linked, unlinked or voided by hand.
+  credit_state: 'settled_pair' | 'credit_owed' | 'unlinked' | 'refund' | null
   credited_by_invoice_number: number | null
+  // A document a card refund issued (its credit note, or the faktura after
+  // a failed refund): corrected by a new document, never voided.
+  refund_document?: boolean
 }
 
 type PaidStatus = 'paid' | 'waiting' | 'past_due' | 'credit'
@@ -583,6 +589,13 @@ async function deleteOne(d: Row) {
   if (!ok) return
   await doDelete(d.id)
 }
+// The badge label of a credit note's state; a refund's credit note for an
+// order with no faktura has no number to name.
+function creditStateKey(d: Row): string {
+  if (d.credit_state === 'refund' && d.credits_invoice_number == null) return 'refund_order'
+  return d.credit_state ?? ''
+}
+
 async function voidOne(d: Row) {
   if (!(await ensureFreshTotp())) return
   const ok = await confirm({
@@ -1029,12 +1042,12 @@ defineExpose({ load })
                   class="mt-1 inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ring-1"
                   :class="d.credit_state === 'credit_owed'
                     ? 'bg-amber-50 text-amber-800 ring-amber-200'
-                    : d.credit_state === 'settled_pair'
+                    : d.credit_state === 'settled_pair' || d.credit_state === 'refund'
                       ? 'bg-sky-50 text-sky-800 ring-sky-200'
                       : 'bg-gray-50 text-gray-700 ring-gray-200'"
                   data-testid="credit-badge"
                 >
-                  {{ t(`admin.faktura.credit.state.${d.credit_state}`, { number: d.credits_invoice_number }) }}
+                  {{ t(`admin.faktura.credit.state.${creditStateKey(d)}`, { number: d.credits_invoice_number }) }}
                 </span>
                 <span
                   v-else-if="d.credited_by_invoice_number != null"
@@ -1126,7 +1139,7 @@ defineExpose({ load })
                     <Undo2 class="h-4 w-4" />
                   </button>
                   <button
-                    v-if="showVoid"
+                    v-if="showVoid && !d.refund_document"
                     class="text-amber-600 hover:text-amber-800 disabled:opacity-50"
                     :disabled="busyIds.has(d.id)"
                     :title="t('admin.invoiceDrafts.void')"

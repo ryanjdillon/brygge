@@ -295,4 +295,21 @@ describe('FakturaList for a board member (BRY-372)', () => {
       expect(w.find(`[title="${key}"]`).exists(), key).toBe(true)
     }
   })
+
+  it('shows a refund credit note with its faktura and offers no link, unlink or void', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({
+      items: [
+        row({ id: 'refund-cn', invoice_number: 21, total_amount: -90, sent_at: '2025-05-08T00:00:00Z', credit_state: 'refund', credits_invoice_number: 20, refund_document: true }),
+        row({ id: 'order-cn', invoice_number: 22, total_amount: -300, sent_at: '2025-05-08T00:00:00Z', credit_state: 'refund', refund_document: true }),
+      ],
+      status: 'sent',
+    })))
+    const w = mountWithPlugins(FakturaList, { props: { status: 'sent' }, piniaOptions: asTreasurer })
+    await flushPromises()
+    const badges = w.findAll('[data-testid="credit-badge"]').map((b) => b.text())
+    expect(badges).toEqual(['admin.faktura.credit.state.refund', 'admin.faktura.credit.state.refund_order'])
+    expect(w.find('[data-testid="credit-settle"]').exists()).toBe(false)
+    expect(w.find('[data-testid="credit-unlink"]').exists()).toBe(false)
+    expect(w.find('button[title="admin.invoiceDrafts.void"]').exists()).toBe(false)
+  })
 })

@@ -412,7 +412,9 @@ export async function runVippsResync(): Promise<VippsResyncResult> {
 export interface StripeBookResult {
   charges_booked: number
   fees_booked: number
-  // Charges held for review this pass, by review reason.
+  // Refunds and refund failures booked this pass.
+  refunds_booked?: number
+  // Rows held for review this pass, by review reason.
   needs_review: Record<string, number>
   // Rows left unbooked for now (closed fiscal period); retried next pass.
   deferred: { balance_transaction_id: string; date: string; reason: string }[]
