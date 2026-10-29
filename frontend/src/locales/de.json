@@ -1421,6 +1421,60 @@
     },
     "payLink": {
       "belowMinimum": "Betrag zu klein für Online-Zahlung — nur Überweisung"
+    },
+    "refund": {
+      "button": "Erstatten",
+      "buttonAria": "Zahlung erstatten",
+      "title": "Kartenzahlung erstatten",
+      "loading": "Zahlung wird geladen …",
+      "loadFailed": "Die Zahlung konnte nicht geladen werden.",
+      "nothingToRefund": "Für diese Zahlung bleibt nichts zu erstatten.",
+      "attempt": "Zahlung",
+      "attemptOption": "{amount} · {date}",
+      "duplicate": "Doppelzahlung",
+      "refundable": "Erstattbar: {refundable} von {amount}",
+      "amount": "Betrag (kr)",
+      "amountHelp": "Geben Sie für eine Teilerstattung einen niedrigeren Betrag ein.",
+      "reason": "Begründung",
+      "reasonHelp": "Wird im Erstattungsverlauf und im Prüfprotokoll gespeichert. Wird nicht an den Zahler gesendet.",
+      "outcome": "Was geschieht mit der Rechnung?",
+      "outcomeCredit": "Gutschreiben",
+      "outcomeCreditHelp": "Eine Gutschrift wird automatisch an den Zahler gesendet, und die Rechnung gilt als gutgeschrieben.",
+      "outcomeRecollect": "Erneut einfordern",
+      "outcomeRecollectHelp": "Keine Gutschrift. Die Rechnung wird wieder geöffnet, und der Zahler kann sie erneut bezahlen.",
+      "explainMoney": "Das Geld ist innerhalb von 5–10 Tagen zurück auf der Karte.",
+      "explainCredit": "Eine Gutschrift wird automatisch an den Zahler gesendet.",
+      "explainBooked": "Die Erstattung wird gebucht, sobald sie im Stripe-Saldo erscheint.",
+      "dashboard": "Zahlung in Stripe öffnen",
+      "history": "Frühere Erstattungen",
+      "historyDashboard": "Stripe Dashboard",
+      "status": {
+        "requested": "Ausstehend",
+        "succeeded": "Abgeschlossen",
+        "failed": "Fehlgeschlagen"
+      },
+      "submit": "{amount} erstatten",
+      "submitting": "Wird erstattet …",
+      "toast": {
+        "done": "Die Erstattung wurde bei Stripe gestartet.",
+        "awaiting": "Stripe hat noch nicht bestätigt. Die Erstattung ist gespeichert und wird automatisch nachverfolgt – bitte nicht erneut versuchen."
+      },
+      "errors": {
+        "amountInvalid": "Geben Sie einen Betrag in Kronen mit höchstens zwei Dezimalstellen ein.",
+        "amountTooHigh": "Der Betrag übersteigt den erstattbaren Betrag ({max}).",
+        "reasonRequired": "Geben Sie eine Begründung an.",
+        "reasonTooLong": "Die Begründung darf höchstens {max} Zeichen lang sein.",
+        "not_supported": "Diese Zahlungsart kann noch nicht über Brygge erstattet werden.",
+        "not_captured": "Die Zahlung wurde nicht abgeschlossen und kann daher nicht erstattet werden.",
+        "disputed": "Die Zahlung wird beim Kartenaussteller angefochten. Beantworten Sie die Anfechtung stattdessen in Stripe.",
+        "amount_exceeds_refundable": "Der Betrag übersteigt den noch erstattbaren Betrag. Öffnen Sie den Dialog erneut.",
+        "recollect_after_partial": "Die Rechnung kann nach einer Teilerstattung nicht erneut eingefordert werden. Wählen Sie Gutschreiben.",
+        "request_key_reused": "Diese Anfrage wurde bereits für eine andere Erstattung verwendet. Schließen Sie den Dialog und öffnen Sie ihn erneut.",
+        "refund_failed": "Stripe hat die Erstattung abgelehnt. Prüfen Sie die Zahlung in Stripe und versuchen Sie es erneut.",
+        "not_found": "Die Zahlung wurde nicht gefunden.",
+        "invalid": "Bitte prüfen Sie das Formular: Betrag, Begründung oder Auswahl sind ungültig.",
+        "generic": "Etwas ist schiefgelaufen. Sie können es gefahrlos erneut versuchen: Dieselbe Anfrage erstattet nie doppelt."
+      }
     }
   },
   "projects": {

@@ -37,6 +37,12 @@ Every board role (`chair`, `vice_chair`, `treasurer`, `secretary`, `harbor_maste
   Each area's roles (`WRITE_ROLES`) are the server's write roles for it: `money` is treasurer/admin (faktura, Tildel, imports, syncs, pricing, economy and bank settings, Vipps aliases), `ledger` is treasurer/board/admin (accounts, periods, Vipps message rules). Hide the button (`v-if`), or for a settings form wrap it in `<fieldset :disabled="!canEdit">`. The step-up prompt (`ensureFreshTotp()`) stays on the click for writers.
 - **Covered so far:** faktura (create tab, row and bulk actions), bank imports (sync, uploads, Tildel and refund tabs, reassign/reimport), Vipps queue, economy settings, pricing, journal (periods, sync, new entry, post/void), chart of accounts. Other pages (users, slips, events, products, …) still show their write buttons to board members who lack the role; the server answers 403.
 
+### TOTP-gated actions
+
+An action button whose endpoint sits behind `RequireFreshTOTP` calls `ensureFreshTotp()` at click time, before the dialog opens (the server is the hard gate; the prompt is so the person re-verifies before filling in a form, not after).
+
+- **Refund a card payment (BRY-497).** `RefundOrderButton` (payment overview row in `RecentPaymentsView`, faktura row in `FakturaList`) asks for the step-up on click and then builds `RefundOrderDialog`, which reads `GET /admin/orders/{orderID}/refunds` through `useOrderRefunds` and sends `POST /admin/orders/{orderID}/refund` through `useRefundOrder` (typed client, `composables/useOrderRefund.ts`). The server marks the rows to show it on (`can_refund` on a payment, `refund_order_id` on a faktura, only for a treasurer or admin); the view also hides it behind `can('money')`. The dialog makes its `request_key` when it opens and sends the same one on every retry, so a lost answer cannot refund twice; only a refund Stripe refused (`refund_failed`) makes a new key. See [`docs/developer/payments.md`](../../../docs/developer/payments.md#refunds).
+
 ### Group titleKeys
 
 Stable enums. Adding a new group means adding a new key here:

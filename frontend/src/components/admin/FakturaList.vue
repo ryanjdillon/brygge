@@ -7,6 +7,7 @@ import FakturaArchiveButton from '@/components/admin/FakturaArchiveButton.vue'
 import DeliveryLogButton from '@/components/admin/DeliveryLogButton.vue'
 import CreditNoteSearchModal, { type CreditSearchHit } from '@/components/admin/CreditNoteSearchModal.vue'
 import InvoiceNumberChip from '@/components/ui/InvoiceNumberChip.vue'
+import RefundOrderButton from '@/components/admin/RefundOrderButton.vue'
 import { useConfirm, useConfirmStore } from '@/stores/confirm'
 import { useFreshTotp } from '@/composables/useFreshTotp'
 import { copyPayLink as copyPayLinkFor, payLinkErrorKey } from '@/composables/useCopyPayLink'
@@ -45,6 +46,9 @@ interface Row {
   // A document a card refund issued (its credit note, or the faktura after
   // a failed refund): corrected by a new document, never voided.
   refund_document?: boolean
+  // The order to open the refund dialog for: set by the server on a
+  // card-paid faktura the treasurer or admin can refund.
+  refund_order_id?: string | null
 }
 
 type PaidStatus = 'paid' | 'waiting' | 'past_due' | 'credit'
@@ -1118,6 +1122,7 @@ defineExpose({ load })
                   >
                     <Link2 class="h-4 w-4" />
                   </button>
+                  <RefundOrderButton v-if="canAct && d.refund_order_id" compact :order-id="d.refund_order_id" @refunded="load" />
                   <button
                     v-if="canAct && props.status !== 'draft' && d.credit_state === 'unlinked'"
                     class="text-sky-600 hover:text-sky-800 disabled:opacity-50"

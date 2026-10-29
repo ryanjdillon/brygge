@@ -2354,7 +2354,61 @@
         "openBalance": "{count} Stripe-transaksjon fram til ankomst er ikke bokført eller avvist | {count} Stripe-transaksjoner fram til ankomst er ikke bokført eller avvist"
       }
     },
-    "sidebarTitle": "Adminportal"
+    "sidebarTitle": "Adminportal",
+    "refund": {
+      "button": "Refunder",
+      "buttonAria": "Refunder betalingen",
+      "title": "Refunder kortbetaling",
+      "loading": "Henter betalingen …",
+      "loadFailed": "Kunne ikke hente betalingen.",
+      "nothingToRefund": "Det er ingenting igjen å refundere på denne betalingen.",
+      "attempt": "Betaling",
+      "attemptOption": "{amount} · {date}",
+      "duplicate": "dobbeltbetaling",
+      "refundable": "Kan refunderes: {refundable} av {amount}",
+      "amount": "Beløp (kr)",
+      "amountHelp": "Fyll inn et lavere beløp for en delvis refusjon.",
+      "reason": "Begrunnelse",
+      "reasonHelp": "Lagres i refusjonshistorikken og revisjonsloggen. Sendes ikke til betaleren.",
+      "outcome": "Hva skjer med fakturaen?",
+      "outcomeCredit": "Krediter",
+      "outcomeCreditHelp": "En kreditnota sendes automatisk til betaleren, og fakturaen regnes som kreditert.",
+      "outcomeRecollect": "Krev inn på nytt",
+      "outcomeRecollectHelp": "Ingen kreditnota. Fakturaen åpnes igjen, og betaleren kan betale den på nytt.",
+      "explainMoney": "Pengene er tilbake på kortet innen 5–10 dager.",
+      "explainCredit": "En kreditnota sendes automatisk til betaleren.",
+      "explainBooked": "Refusjonen bokføres når Stripe melder den i saldoen.",
+      "dashboard": "Åpne betalingen i Stripe",
+      "history": "Tidligere refusjoner",
+      "historyDashboard": "Stripe Dashboard",
+      "status": {
+        "requested": "Venter",
+        "succeeded": "Gjennomført",
+        "failed": "Mislyktes"
+      },
+      "submit": "Refunder {amount}",
+      "submitting": "Refunderer …",
+      "toast": {
+        "done": "Refusjonen er startet hos Stripe.",
+        "awaiting": "Stripe har ikke bekreftet ennå. Refusjonen er lagret og følges opp automatisk – ikke prøv igjen."
+      },
+      "errors": {
+        "amountInvalid": "Fyll inn et beløp i kroner, med høyst to desimaler.",
+        "amountTooHigh": "Beløpet er mer enn det som kan refunderes ({max}).",
+        "reasonRequired": "Skriv en begrunnelse.",
+        "reasonTooLong": "Begrunnelsen kan ha høyst {max} tegn.",
+        "not_supported": "Denne betalingsmåten kan ikke refunderes fra Brygge ennå.",
+        "not_captured": "Betalingen er ikke gjennomført, så den kan ikke refunderes.",
+        "disputed": "Betalingen er omstridt hos kortutstederen. Svar på innsigelsen i Stripe i stedet.",
+        "amount_exceeds_refundable": "Beløpet er mer enn det som er igjen å refundere. Åpne dialogen på nytt.",
+        "recollect_after_partial": "Fakturaen kan ikke kreves inn på nytt etter en delvis refusjon. Velg Krediter.",
+        "request_key_reused": "Forespørselen er allerede brukt til en annen refusjon. Lukk og åpne dialogen på nytt.",
+        "refund_failed": "Stripe avslo refusjonen. Sjekk betalingen i Stripe og prøv igjen.",
+        "not_found": "Fant ikke betalingen.",
+        "invalid": "Sjekk skjemaet: beløpet, begrunnelsen eller valget er ikke gyldig.",
+        "generic": "Noe gikk galt. Det er trygt å prøve igjen: den samme forespørselen refunderer aldri to ganger."
+      }
+    }
   },
   "projects": {
     "title": "Prosjekter",

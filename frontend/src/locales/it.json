@@ -1421,6 +1421,60 @@
     },
     "payLink": {
       "belowMinimum": "Importo troppo basso per il pagamento online — solo bonifico"
+    },
+    "refund": {
+      "button": "Rimborsa",
+      "buttonAria": "Rimborsa il pagamento",
+      "title": "Rimborsa un pagamento con carta",
+      "loading": "Caricamento del pagamento …",
+      "loadFailed": "Impossibile caricare il pagamento.",
+      "nothingToRefund": "Non resta nulla da rimborsare su questo pagamento.",
+      "attempt": "Pagamento",
+      "attemptOption": "{amount} · {date}",
+      "duplicate": "doppio pagamento",
+      "refundable": "Rimborsabile: {refundable} su {amount}",
+      "amount": "Importo (kr)",
+      "amountHelp": "Inserisci un importo inferiore per un rimborso parziale.",
+      "reason": "Motivo",
+      "reasonHelp": "Conservato nella cronologia dei rimborsi e nel registro di controllo. Non inviato a chi ha pagato.",
+      "outcome": "Che ne è della fattura?",
+      "outcomeCredit": "Accredita",
+      "outcomeCreditHelp": "Una nota di credito viene inviata automaticamente a chi ha pagato e la fattura risulta accreditata.",
+      "outcomeRecollect": "Riscuoti di nuovo",
+      "outcomeRecollectHelp": "Nessuna nota di credito. La fattura viene riaperta e chi ha pagato può pagarla di nuovo.",
+      "explainMoney": "Il denaro torna sulla carta entro 5–10 giorni.",
+      "explainCredit": "Una nota di credito viene inviata automaticamente a chi ha pagato.",
+      "explainBooked": "Il rimborso viene registrato quando compare nel saldo Stripe.",
+      "dashboard": "Apri il pagamento in Stripe",
+      "history": "Rimborsi precedenti",
+      "historyDashboard": "Stripe Dashboard",
+      "status": {
+        "requested": "In attesa",
+        "succeeded": "Completato",
+        "failed": "Non riuscito"
+      },
+      "submit": "Rimborsa {amount}",
+      "submitting": "Rimborso in corso …",
+      "toast": {
+        "done": "Il rimborso è stato avviato presso Stripe.",
+        "awaiting": "Stripe non ha ancora confermato. Il rimborso è salvato e verrà seguito automaticamente – non riprovare."
+      },
+      "errors": {
+        "amountInvalid": "Inserisci un importo in corone con al massimo due decimali.",
+        "amountTooHigh": "L'importo supera quanto può essere rimborsato ({max}).",
+        "reasonRequired": "Scrivi un motivo.",
+        "reasonTooLong": "Il motivo può avere al massimo {max} caratteri.",
+        "not_supported": "Questo metodo di pagamento non può ancora essere rimborsato da Brygge.",
+        "not_captured": "Il pagamento non è stato completato, quindi non può essere rimborsato.",
+        "disputed": "Il pagamento è contestato presso l'emittente della carta. Rispondi invece alla contestazione in Stripe.",
+        "amount_exceeds_refundable": "L'importo supera quanto resta da rimborsare. Riapri la finestra.",
+        "recollect_after_partial": "La fattura non può essere riscossa di nuovo dopo un rimborso parziale. Scegli Accredita.",
+        "request_key_reused": "Questa richiesta è già stata usata per un altro rimborso. Chiudi e riapri la finestra.",
+        "refund_failed": "Stripe ha rifiutato il rimborso. Controlla il pagamento in Stripe e riprova.",
+        "not_found": "Pagamento non trovato.",
+        "invalid": "Controlla il modulo: importo, motivo o scelta non sono validi.",
+        "generic": "Qualcosa è andato storto. Puoi riprovare senza rischi: la stessa richiesta non rimborsa mai due volte."
+      }
     }
   },
   "projects": {

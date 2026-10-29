@@ -1420,6 +1420,60 @@
     },
     "payLink": {
       "belowMinimum": "Montant trop faible pour le paiement en ligne — virement uniquement"
+    },
+    "refund": {
+      "button": "Rembourser",
+      "buttonAria": "Rembourser le paiement",
+      "title": "Rembourser un paiement par carte",
+      "loading": "Chargement du paiement …",
+      "loadFailed": "Impossible de charger le paiement.",
+      "nothingToRefund": "Il ne reste rien à rembourser sur ce paiement.",
+      "attempt": "Paiement",
+      "attemptOption": "{amount} · {date}",
+      "duplicate": "double paiement",
+      "refundable": "Remboursable : {refundable} sur {amount}",
+      "amount": "Montant (kr)",
+      "amountHelp": "Saisissez un montant plus bas pour un remboursement partiel.",
+      "reason": "Motif",
+      "reasonHelp": "Conservé dans l'historique des remboursements et le journal d'audit. Non envoyé au payeur.",
+      "outcome": "Que devient la facture ?",
+      "outcomeCredit": "Créditer",
+      "outcomeCreditHelp": "Une note de crédit est envoyée automatiquement au payeur et la facture est considérée comme créditée.",
+      "outcomeRecollect": "Réclamer à nouveau",
+      "outcomeRecollectHelp": "Pas de note de crédit. La facture est rouverte et le payeur peut la payer à nouveau.",
+      "explainMoney": "L’argent est de retour sur la carte sous 5 à 10 jours.",
+      "explainCredit": "Une note de crédit est envoyée automatiquement au payeur.",
+      "explainBooked": "Le remboursement est comptabilisé dès qu’il apparaît dans le solde Stripe.",
+      "dashboard": "Ouvrir le paiement dans Stripe",
+      "history": "Remboursements précédents",
+      "historyDashboard": "Stripe Dashboard",
+      "status": {
+        "requested": "En attente",
+        "succeeded": "Terminé",
+        "failed": "Échoué"
+      },
+      "submit": "Rembourser {amount}",
+      "submitting": "Remboursement …",
+      "toast": {
+        "done": "Le remboursement a été lancé chez Stripe.",
+        "awaiting": "Stripe n'a pas encore confirmé. Le remboursement est enregistré et suivi automatiquement – ne réessayez pas."
+      },
+      "errors": {
+        "amountInvalid": "Saisissez un montant en couronnes avec au plus deux décimales.",
+        "amountTooHigh": "Le montant dépasse ce qui peut être remboursé ({max}).",
+        "reasonRequired": "Indiquez un motif.",
+        "reasonTooLong": "Le motif ne peut pas dépasser {max} caractères.",
+        "not_supported": "Ce moyen de paiement ne peut pas encore être remboursé depuis Brygge.",
+        "not_captured": "Le paiement n'a pas abouti et ne peut donc pas être remboursé.",
+        "disputed": "Le paiement est contesté auprès de l'émetteur de la carte. Répondez plutôt au litige dans Stripe.",
+        "amount_exceeds_refundable": "Le montant dépasse ce qui reste à rembourser. Rouvrez la fenêtre.",
+        "recollect_after_partial": "La facture ne peut pas être réclamée à nouveau après un remboursement partiel. Choisissez Créditer.",
+        "request_key_reused": "Cette demande a déjà servi pour un autre remboursement. Fermez et rouvrez la fenêtre.",
+        "refund_failed": "Stripe a refusé le remboursement. Vérifiez le paiement dans Stripe et réessayez.",
+        "not_found": "Paiement introuvable.",
+        "invalid": "Vérifiez le formulaire : le montant, le motif ou le choix n’est pas valide.",
+        "generic": "Une erreur est survenue. Vous pouvez réessayer sans risque : une même demande ne rembourse jamais deux fois."
+      }
     }
   },
   "projects": {

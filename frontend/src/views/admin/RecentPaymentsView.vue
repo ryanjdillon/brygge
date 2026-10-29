@@ -6,8 +6,12 @@ import { useApi } from '@/composables/useApi'
 import { formatNOK as nok } from '@/lib/format'
 import { RefreshCw, Inbox, Search, Anchor, Caravan, FileText, ShoppingBag, CircleDollarSign } from 'lucide-vue-next'
 import PaymentMethodChip, { type PaymentMethod } from '@/components/admin/PaymentMethodChip.vue'
+import RefundOrderButton from '@/components/admin/RefundOrderButton.vue'
+import { useCan } from '@/composables/useCan'
 
 const { t } = useI18n()
+const { can } = useCan()
+const canRefund = can('money')
 const { fetchApi } = useApi()
 const route = useRoute()
 const router = useRouter()
@@ -22,6 +26,9 @@ interface Payment {
   channel: string
   method: PaymentMethod
   card_brand: string | null
+  // Set by the server for a treasurer or admin, for a card payment with
+  // money left to refund.
+  can_refund?: boolean
 }
 
 const payments = ref<Payment[]>([])
@@ -221,6 +228,7 @@ onMounted(async () => {
           </div>
           <div class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
             <PaymentMethodChip :method="p.method" :card-brand="p.card_brand" />
+            <RefundOrderButton v-if="canRefund && p.can_refund" class="ml-auto" :order-id="p.id" @refunded="load" />
           </div>
         </div>
       </li>

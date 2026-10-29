@@ -1421,6 +1421,60 @@
     },
     "payLink": {
       "belowMinimum": "Bedrag te laag voor online betalen — alleen bankoverschrijving"
+    },
+    "refund": {
+      "button": "Terugbetalen",
+      "buttonAria": "Betaling terugbetalen",
+      "title": "Kaartbetaling terugbetalen",
+      "loading": "Betaling laden …",
+      "loadFailed": "De betaling kon niet worden geladen.",
+      "nothingToRefund": "Er valt niets meer terug te betalen op deze betaling.",
+      "attempt": "Betaling",
+      "attemptOption": "{amount} · {date}",
+      "duplicate": "dubbele betaling",
+      "refundable": "Terug te betalen: {refundable} van {amount}",
+      "amount": "Bedrag (kr)",
+      "amountHelp": "Vul een lager bedrag in voor een gedeeltelijke terugbetaling.",
+      "reason": "Reden",
+      "reasonHelp": "Bewaard in de terugbetalingsgeschiedenis en het auditlog. Niet naar de betaler gestuurd.",
+      "outcome": "Wat gebeurt er met de factuur?",
+      "outcomeCredit": "Crediteren",
+      "outcomeCreditHelp": "Er wordt automatisch een creditnota naar de betaler gestuurd en de factuur geldt als gecrediteerd.",
+      "outcomeRecollect": "Opnieuw innen",
+      "outcomeRecollectHelp": "Geen creditnota. De factuur wordt heropend en de betaler kan opnieuw betalen.",
+      "explainMoney": "Het geld staat binnen 5–10 dagen weer op de kaart.",
+      "explainCredit": "Er wordt automatisch een creditnota naar de betaler gestuurd.",
+      "explainBooked": "De terugbetaling wordt geboekt zodra die in het Stripe-saldo verschijnt.",
+      "dashboard": "Betaling openen in Stripe",
+      "history": "Eerdere terugbetalingen",
+      "historyDashboard": "Stripe Dashboard",
+      "status": {
+        "requested": "In behandeling",
+        "succeeded": "Voltooid",
+        "failed": "Mislukt"
+      },
+      "submit": "{amount} terugbetalen",
+      "submitting": "Bezig met terugbetalen …",
+      "toast": {
+        "done": "De terugbetaling is gestart bij Stripe.",
+        "awaiting": "Stripe heeft nog niet bevestigd. De terugbetaling is opgeslagen en wordt automatisch opgevolgd – probeer het niet opnieuw."
+      },
+      "errors": {
+        "amountInvalid": "Vul een bedrag in kronen in met hooguit twee decimalen.",
+        "amountTooHigh": "Het bedrag is hoger dan wat kan worden terugbetaald ({max}).",
+        "reasonRequired": "Geef een reden op.",
+        "reasonTooLong": "De reden mag hooguit {max} tekens bevatten.",
+        "not_supported": "Deze betaalmethode kan nog niet via Brygge worden terugbetaald.",
+        "not_captured": "De betaling is niet voltooid en kan dus niet worden terugbetaald.",
+        "disputed": "De betaling wordt betwist bij de kaartuitgever. Beantwoord de betwisting in plaats daarvan in Stripe.",
+        "amount_exceeds_refundable": "Het bedrag is hoger dan wat nog kan worden terugbetaald. Open het venster opnieuw.",
+        "recollect_after_partial": "De factuur kan na een gedeeltelijke terugbetaling niet opnieuw worden geïnd. Kies Crediteren.",
+        "request_key_reused": "Dit verzoek is al gebruikt voor een andere terugbetaling. Sluit het venster en open het opnieuw.",
+        "refund_failed": "Stripe heeft de terugbetaling geweigerd. Controleer de betaling in Stripe en probeer het opnieuw.",
+        "not_found": "De betaling is niet gevonden.",
+        "invalid": "Controleer het formulier: het bedrag, de reden of de keuze is ongeldig.",
+        "generic": "Er ging iets mis. Opnieuw proberen is veilig: hetzelfde verzoek betaalt nooit twee keer terug."
+      }
     }
   },
   "projects": {

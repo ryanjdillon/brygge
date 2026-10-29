@@ -1392,6 +1392,60 @@
     },
     "payLink": {
       "belowMinimum": "Kwota za mała na płatność online — tylko przelew"
+    },
+    "refund": {
+      "button": "Zwróć",
+      "buttonAria": "Zwróć płatność",
+      "title": "Zwrot płatności kartą",
+      "loading": "Wczytywanie płatności …",
+      "loadFailed": "Nie udało się wczytać płatności.",
+      "nothingToRefund": "Nie ma już nic do zwrotu z tej płatności.",
+      "attempt": "Płatność",
+      "attemptOption": "{amount} · {date}",
+      "duplicate": "podwójna płatność",
+      "refundable": "Do zwrotu: {refundable} z {amount}",
+      "amount": "Kwota (kr)",
+      "amountHelp": "Wpisz niższą kwotę, aby zwrócić tylko część.",
+      "reason": "Powód",
+      "reasonHelp": "Zapisywany w historii zwrotów i dzienniku audytu. Nie jest wysyłany płatnikowi.",
+      "outcome": "Co stanie się z fakturą?",
+      "outcomeCredit": "Wystaw notę kredytową",
+      "outcomeCreditHelp": "Nota kredytowa zostanie automatycznie wysłana płatnikowi, a faktura zostanie uznana za skorygowaną.",
+      "outcomeRecollect": "Pobierz ponownie",
+      "outcomeRecollectHelp": "Bez noty kredytowej. Faktura zostanie otwarta ponownie, a płatnik może zapłacić ją jeszcze raz.",
+      "explainMoney": "Pieniądze wrócą na kartę w ciągu 5–10 dni.",
+      "explainCredit": "Nota kredytowa zostanie automatycznie wysłana płatnikowi.",
+      "explainBooked": "Zwrot zostanie zaksięgowany, gdy pojawi się w saldzie Stripe.",
+      "dashboard": "Otwórz płatność w Stripe",
+      "history": "Wcześniejsze zwroty",
+      "historyDashboard": "Stripe Dashboard",
+      "status": {
+        "requested": "Oczekuje",
+        "succeeded": "Zakończony",
+        "failed": "Nieudany"
+      },
+      "submit": "Zwróć {amount}",
+      "submitting": "Zwracanie …",
+      "toast": {
+        "done": "Zwrot został rozpoczęty w Stripe.",
+        "awaiting": "Stripe jeszcze nie potwierdził. Zwrot jest zapisany i będzie automatycznie sprawdzany – nie próbuj ponownie."
+      },
+      "errors": {
+        "amountInvalid": "Wpisz kwotę w koronach z maksymalnie dwoma miejscami po przecinku.",
+        "amountTooHigh": "Kwota przekracza kwotę możliwą do zwrotu ({max}).",
+        "reasonRequired": "Podaj powód.",
+        "reasonTooLong": "Powód może mieć najwyżej {max} znaków.",
+        "not_supported": "Tej metody płatności nie można jeszcze zwrócić z poziomu Brygge.",
+        "not_captured": "Płatność nie została zrealizowana, więc nie można jej zwrócić.",
+        "disputed": "Płatność jest kwestionowana u wydawcy karty. Odpowiedz na spór w Stripe.",
+        "amount_exceeds_refundable": "Kwota przekracza to, co pozostało do zwrotu. Otwórz okno ponownie.",
+        "recollect_after_partial": "Po częściowym zwrocie nie można ponownie pobrać faktury. Wybierz wystawienie noty kredytowej.",
+        "request_key_reused": "To żądanie zostało już użyte do innego zwrotu. Zamknij i otwórz okno ponownie.",
+        "refund_failed": "Stripe odrzucił zwrot. Sprawdź płatność w Stripe i spróbuj ponownie.",
+        "not_found": "Nie znaleziono płatności.",
+        "invalid": "Sprawdź formularz: kwota, powód lub wybór są nieprawidłowe.",
+        "generic": "Coś poszło nie tak. Można bezpiecznie spróbować ponownie: to samo żądanie nigdy nie zwraca pieniędzy dwa razy."
+      }
     }
   },
   "projects": {

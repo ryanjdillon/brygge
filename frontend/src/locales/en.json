@@ -2358,7 +2358,61 @@
         "openBalance": "{count} Stripe transaction up to the arrival is not booked or dismissed | {count} Stripe transactions up to the arrival are not booked or dismissed"
       }
     },
-    "sidebarTitle": "Admin portal"
+    "sidebarTitle": "Admin portal",
+    "refund": {
+      "button": "Refund",
+      "buttonAria": "Refund the payment",
+      "title": "Refund a card payment",
+      "loading": "Loading the payment …",
+      "loadFailed": "Could not load the payment.",
+      "nothingToRefund": "There is nothing left to refund on this payment.",
+      "attempt": "Payment",
+      "attemptOption": "{amount} · {date}",
+      "duplicate": "double payment",
+      "refundable": "Refundable: {refundable} of {amount}",
+      "amount": "Amount (kr)",
+      "amountHelp": "Enter a lower amount for a partial refund.",
+      "reason": "Reason",
+      "reasonHelp": "Kept in the refund history and the audit log. Not sent to the payer.",
+      "outcome": "What happens to the faktura?",
+      "outcomeCredit": "Credit",
+      "outcomeCreditHelp": "A credit note is sent to the payer automatically and the faktura counts as credited.",
+      "outcomeRecollect": "Collect again",
+      "outcomeRecollectHelp": "No credit note. The faktura reopens and the payer can pay it again.",
+      "explainMoney": "The money is back on the card within 5–10 days.",
+      "explainCredit": "A credit note is sent to the payer automatically.",
+      "explainBooked": "The refund is booked once it shows up in Stripe's balance.",
+      "dashboard": "Open the payment in Stripe",
+      "history": "Earlier refunds",
+      "historyDashboard": "Stripe Dashboard",
+      "status": {
+        "requested": "Pending",
+        "succeeded": "Completed",
+        "failed": "Failed"
+      },
+      "submit": "Refund {amount}",
+      "submitting": "Refunding …",
+      "toast": {
+        "done": "The refund has been started at Stripe.",
+        "awaiting": "Stripe has not confirmed yet. The refund is saved and followed up automatically – do not try again."
+      },
+      "errors": {
+        "amountInvalid": "Enter an amount in kroner with at most two decimals.",
+        "amountTooHigh": "The amount is more than can be refunded ({max}).",
+        "reasonRequired": "Write a reason.",
+        "reasonTooLong": "The reason can be at most {max} characters.",
+        "not_supported": "This payment method cannot be refunded from Brygge yet.",
+        "not_captured": "The payment was not completed, so it cannot be refunded.",
+        "disputed": "The payment is disputed with the card issuer. Answer the dispute in Stripe instead.",
+        "amount_exceeds_refundable": "The amount is more than is left to refund. Open the dialog again.",
+        "recollect_after_partial": "The faktura cannot be collected again after a partial refund. Choose Credit.",
+        "request_key_reused": "This request was already used for another refund. Close and reopen the dialog.",
+        "refund_failed": "Stripe declined the refund. Check the payment in Stripe and try again.",
+        "not_found": "The payment was not found.",
+        "invalid": "Check the form: the amount, the reason or the choice is not valid.",
+        "generic": "Something went wrong. It is safe to try again: the same request never refunds twice."
+      }
+    }
   },
   "projects": {
     "title": "Projects",
