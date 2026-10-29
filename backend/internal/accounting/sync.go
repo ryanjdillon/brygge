@@ -223,8 +223,51 @@ var errNothingToBook = errors.New("net total is 0, nothing to book")
 // DR the exemption expense account) is booked gross with no 1500 line, so it
 // never becomes a receivable. A draft whose post fails is discarded so no
 // orphan is left. This is the one code path both the send-time booking
-// (BookInvoice) and the repair sync use.
+// (BookInvoice) and the repair sync use; bookInvoiceEntryTx is the same
+// booking inside a caller's transaction.
 func (s *Service) bookInvoiceEntry(ctx context.Context, clubID, periodID, invoiceID string, invoiceNumber int, amount float64, entryDate string, memberName *string, actor string) error {
+	input, err := invoiceEntryInput(ctx, s.db, clubID, periodID, invoiceID, invoiceNumber, amount, entryDate, memberName, actor)
+	if err != nil {
+		if !errors.Is(err, errNothingToBook) {
+			s.log.Error().Err(err).Str("invoice_id", invoiceID).Msg("failed to aggregate invoice lines")
+		}
+		return err
+	}
+	entry, err := s.CreateJournalEntry(ctx, input)
+	if err != nil {
+		s.log.Error().Err(err).Str("invoice_id", invoiceID).Msg("failed to book invoice")
+		return err
+	}
+	if err := s.PostJournalEntry(ctx, clubID, entry.ID, actor); err != nil {
+		s.log.Error().Err(err).Str("entry_id", entry.ID).Msg("failed to post invoice entry")
+		s.discardDraft(ctx, clubID, entry.ID)
+		return fmt.Errorf("post: %w", err)
+	}
+	return nil
+}
+
+// bookInvoiceEntryTx is bookInvoiceEntry on tx: the lines are read, and the
+// entry created and posted, through the caller's transaction, which a
+// failure rolls back whole. It serves a caller holding row locks (the
+// Stripe booking pass issuing a credit note), which must not touch the pool.
+func bookInvoiceEntryTx(ctx context.Context, tx pgx.Tx, clubID, periodID, invoiceID string, invoiceNumber int, amount float64, entryDate string, memberName *string, actor string) (string, error) {
+	input, err := invoiceEntryInput(ctx, tx, clubID, periodID, invoiceID, invoiceNumber, amount, entryDate, memberName, actor)
+	if err != nil {
+		return "", err
+	}
+	entry, err := createJournalEntryTx(ctx, tx, input)
+	if err != nil {
+		return "", fmt.Errorf("creating invoice entry: %w", err)
+	}
+	if err := postJournalEntryTx(ctx, tx, clubID, entry.ID, actor); err != nil {
+		return "", fmt.Errorf("posting invoice entry: %w", err)
+	}
+	return entry.ID, nil
+}
+
+// invoiceEntryInput builds a faktura's invoice_sync entry from its lines,
+// read on q; errNothingToBook when every amount nets to zero.
+func invoiceEntryInput(ctx context.Context, q dbtx, clubID, periodID, invoiceID string, invoiceNumber int, amount float64, entryDate string, memberName *string, actor string) (CreateJournalEntryInput, error) {
 	amount = roundCents(amount)
 
 	description := fmt.Sprintf("Faktura #%d", invoiceNumber)
@@ -232,10 +275,9 @@ func (s *Service) bookInvoiceEntry(ctx context.Context, clubID, periodID, invoic
 		description = fmt.Sprintf("Faktura #%d: %s", invoiceNumber, *memberName)
 	}
 
-	netByAccount, err := s.invoiceRevenueCredits(ctx, invoiceID, amount)
+	netByAccount, err := invoiceRevenueCreditsIn(ctx, q, invoiceID, amount)
 	if err != nil {
-		s.log.Error().Err(err).Str("invoice_id", invoiceID).Msg("failed to aggregate invoice lines")
-		return fmt.Errorf("reading lines: %w", err)
+		return CreateJournalEntryInput{}, fmt.Errorf("reading lines: %w", err)
 	}
 
 	// journal_line_one_side forbids zero or negative amounts, so each line
@@ -250,12 +292,12 @@ func (s *Service) bookInvoiceEntry(ctx context.Context, clubID, periodID, invoic
 		}
 	}
 	if len(journalLines) == 0 {
-		return errNothingToBook
+		return CreateJournalEntryInput{}, errNothingToBook
 	}
 
 	sourceID := invoiceID
 	sourceTable := "invoices"
-	entry, err := s.CreateJournalEntry(ctx, CreateJournalEntryInput{
+	return CreateJournalEntryInput{
 		FiscalPeriodID: periodID,
 		EntryDate:      entryDate,
 		Description:    description,
@@ -265,17 +307,7 @@ func (s *Service) bookInvoiceEntry(ctx context.Context, clubID, periodID, invoic
 		CreatedBy:      actor,
 		ClubID:         clubID,
 		Lines:          journalLines,
-	})
-	if err != nil {
-		s.log.Error().Err(err).Str("invoice_id", invoiceID).Msg("failed to book invoice")
-		return err
-	}
-	if err := s.PostJournalEntry(ctx, clubID, entry.ID, actor); err != nil {
-		s.log.Error().Err(err).Str("entry_id", entry.ID).Msg("failed to post invoice entry")
-		s.discardDraft(ctx, clubID, entry.ID)
-		return fmt.Errorf("post: %w", err)
-	}
-	return nil
+	}, nil
 }
 
 // InvoiceBooking reports what BookInvoice did.
@@ -482,7 +514,13 @@ func (s *Service) reverseVoidedInvoiceEntries(ctx context.Context, clubID, perio
 // the invoice total, the residual goes to fallbackRevenueCode so the bilag
 // still balances.
 func (s *Service) invoiceRevenueCredits(ctx context.Context, invoiceID string, invoiceTotal float64) (map[string]float64, error) {
-	rows, err := s.db.Query(ctx,
+	return invoiceRevenueCreditsIn(ctx, s.db, invoiceID, invoiceTotal)
+}
+
+// invoiceRevenueCreditsIn is invoiceRevenueCredits on q, so a transaction
+// holding row locks reads the lines through itself.
+func invoiceRevenueCreditsIn(ctx context.Context, q dbtx, invoiceID string, invoiceTotal float64) (map[string]float64, error) {
+	rows, err := q.Query(ctx,
 		`SELECT il.line_total, `+finance.LineCategorySQL("il", "pi")+`, a.code
 		 FROM invoice_lines il
 		 LEFT JOIN price_items pi ON pi.id = il.price_item_id

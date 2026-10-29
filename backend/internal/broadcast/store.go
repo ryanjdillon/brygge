@@ -30,6 +30,12 @@ const (
 const (
 	KindBroadcast       = "broadcast"
 	KindInvoiceReminder = "invoice_reminder"
+	// KindInvoiceRefundDocument delivers a document a card refund issued
+	// (a credit note, or the debit faktura after a failed refund): the
+	// worker renders its PDF and emails it when the row has an address.
+	// The booking pass queues it in the transaction that issues the
+	// document, so delivery happens after the commit.
+	KindInvoiceRefundDocument = "invoice_refund_document"
 )
 
 // Broadcast (parent) statuses.

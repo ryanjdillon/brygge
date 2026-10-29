@@ -47,7 +47,7 @@ func TestStripeTxnActionsGatedAndAudited(t *testing.T) {
 	inv := env.club.NewInvoice(t, fin.InvoiceOpts{Cents: 45000})
 	charge := insertReviewTxn(t, env.club, "txn_test_h_charge", "charge", accounting.StripeReviewNoAttempt, 45000, 1125)
 	walkup := insertReviewTxn(t, env.club, "txn_test_h_walkup", "charge", accounting.StripeReviewReceivableNotOpen, 20000, 500)
-	refund := insertReviewTxn(t, env.club, "txn_test_h_refund", "refund", accounting.StripeReviewRefundPending, -5000, 0)
+	refund := insertReviewTxn(t, env.club, "txn_test_h_refund", "dispute", accounting.StripeReviewDisputePending, -5000, 0)
 
 	rec := env.serve([]string{"board"}, http.MethodGet, "/gated/stripe/transactions?status=needs_review&limit=10", nil)
 	if rec.Code != http.StatusOK {
@@ -141,7 +141,7 @@ func TestStripeTxnActionsGatedAndAudited(t *testing.T) {
 		}
 	}
 	if got := env.audit(audit.ActionStripeTxnDismissed); len(got) != 1 || got[0]["reason"] != "refund_or_credit" ||
-		got[0]["review_reason"] != accounting.StripeReviewRefundPending {
+		got[0]["review_reason"] != accounting.StripeReviewDisputePending {
 		t.Errorf("dismiss audit = %v, want one row", got)
 	}
 	rec = env.serve([]string{"board"}, http.MethodGet, "/gated/stripe/transactions?status=dismissed", nil)

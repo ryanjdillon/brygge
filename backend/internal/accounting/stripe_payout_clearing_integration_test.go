@@ -218,11 +218,11 @@ func TestStripePayoutWaitsForRefund(t *testing.T) {
 	po := f.insertPayout(t, payoutSpec{id: "po_test_refund", amountOre: 5000, arrival: f.day(6, 10)})
 	f.member(t, po, stripeBT{id: "txn_test_c", category: "charge", amountOre: 6000, status: StripeTxnBooked})
 	refund := f.member(t, po, stripeBT{id: "txn_test_r", category: "refund", amountOre: -1000,
-		status: StripeTxnNeedsReview, reason: StripeReviewRefundPending})
+		status: StripeTxnNeedsReview, reason: StripeReviewRefundLegacy})
 	f.stripeDeposit(t, f.club.NewBankImport(t), f.day(6, 10), 5000, "Stripe")
 
 	res := f.sweep(t)
-	if sweepCounts(res) != [4]int{0, 1, 0, 0} || !strings.Contains(res.Waiting[0].Reason, "1 refusjon eller tvist venter") {
+	if sweepCounts(res) != [4]int{0, 1, 0, 0} || !strings.Contains(res.Waiting[0].Reason, "1 refusjon til gjennomgang") {
 		t.Fatalf("result = %+v, want waiting on the refund", res)
 	}
 	if n := f.clearingEntries(t); n != 0 {

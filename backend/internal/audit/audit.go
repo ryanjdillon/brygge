@@ -99,6 +99,13 @@ const (
 	ActionStripeTxnUnassigned = "stripe_txn.unassigned"
 	ActionStripeTxnRebooked   = "stripe_txn.rebooked"
 
+	// A card refund (or refund failure) booked by the Stripe booking pass,
+	// a duplicate capture booked with the refund that returned it, and a
+	// credit note a refund issued (BRY-446)
+	ActionStripeTxnRefundBooked      = "stripe_txn.refund_booked"
+	ActionStripeTxnDuplicateRefunded = "stripe_txn.duplicate_refunded"
+	ActionInvoiceRefundCreditIssued  = "invoice.refund_credit_issued"
+
 	// Payer aliases taught from bank Tildel or the Vipps queue (BRY-383)
 	ActionPayerAliasTaught  = "payer_alias.taught"
 	ActionPayerAliasRemoved = "payer_alias.removed"

@@ -345,7 +345,11 @@ in `backend/migrations/` for the source of truth. The high-level shape:
   attempt with a provider reference is the order's current one; older ones keep their rows so a late
   webhook still finds the order. 000115 backfilled one attempt per order with
   a `vipps_reference`. `payment_refunds` (refunds of a captured attempt,
-  BRY-446) is a table only so far. `payment_webhook_events` (raw events of
+  BRY-446): 000119 adds `provider_payment_ref`, `charge_ref`,
+  `failure_reason`, `request_key` (unique per club when set: the key the
+  refund button sends in the refund's metadata) and `outcome` (`credit` /
+  `recollect`, NULL meaning credit); the Stripe booking pass makes the row
+  for a refund that has none (a Dashboard refund). `payment_webhook_events` (raw events of
   providers other than Vipps, unique on `club_id, provider, event_id`) is
   written by the Stripe webhook; Vipps keeps `vipps_webhook_events`. 000114 added the provider-neutral
   `invoices.online_paid_at` / `online_paid_provider` (the "received, awaiting
@@ -384,6 +388,29 @@ in `backend/migrations/` for the source of truth. The high-level shape:
   `bank_row_id` / `journal_entry_id` (and its own `payout` row) set by
   `accounting.ClearStripePayouts`; see
   [backend/internal/accounting/README.md](../../backend/internal/accounting/README.md#the-stripe-balance-pipeline).
+- **Stripe refunds.** 000119 (BRY-446) books card refunds.
+  `stripe_balance_transactions` gains the `refund_failure` category,
+  `origin_txn_id` (a refund's charge row, a refund failure's refund row;
+  `order_id` / `attempt_id` stay charge-only), `refunded_ore` on a charge
+  (booked refunds less booked refund failures), `recollected_at` on a charge
+  (refunded in full to collect again: it no longer settles its fakturas) and
+  `refund_request_key` (from the refund's metadata at ingest).
+  `refund_documents` holds one row per faktura (or order with no faktura,
+  `invoice_id` NULL) a booked refund touched: `refund_txn_id`, the
+  `payment_refund_id`, `invoice_id`, `order_id`, `credit_invoice_id` (the
+  document the row issued: the credit note, or for `refail_invoice` the debit
+  faktura), `amount_ore`, `kind` (`credit` / `recollect` /
+  `refail_invoice`), `detached_order_id`; unique on
+  `(refund_txn_id, invoice_id)` with NULLs not distinct. It is how a refund
+  credit note is linked to its faktura (never `credits_invoice_id`) and what
+  refund failures and unassigns read. `clubs.stripe_suspense_account`
+  (NULL: 2900) parks a duplicate card capture until its refund books.
+  `invoices` gets a unique index on `(club_id, invoice_number)`; every
+  creation path numbers through `accounting.NextInvoiceNumberTx`. The
+  migration also moves refunds and disputes held as `refund_pending_bry446`
+  to `refund_legacy`, other adjustments held that way to
+  `unsupported_category`, and refund failures stored as `other_adjustment`
+  to `refund_failure`.
 - `invoice_pdf_archive` (migration 000050) — preserves prior PDF bytes when
   `invoices.pdf_data` is regenerated, so Norwegian bokføringsloven §13's
   5-year retention requirement is satisfied.

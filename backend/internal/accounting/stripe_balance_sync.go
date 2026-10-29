@@ -46,10 +46,11 @@ const (
 	StripeReviewAmountMismatch = "amount_mismatch"
 	// StripeReviewCurrency: not NOK, or not the attempt's currency.
 	StripeReviewCurrency = "currency"
-	// StripeReviewRefundPending: refunds, disputes and their reversals, and
-	// Stripe's other balance adjustments. None has a booking yet; it comes
-	// with Stripe refunds.
-	StripeReviewRefundPending = "refund_pending_bry446"
+	// StripeReviewDisputePending: a dispute or a dispute reversal. Neither
+	// has a booking yet; it comes with dispute booking (BRY-446). The value
+	// is the one refunds were held under before they were booked, so rows
+	// stored then keep reading the same.
+	StripeReviewDisputePending = "refund_pending_bry446"
 	// StripeReviewUnsupportedCategory: a reporting category Brygge has no
 	// booking for. Stored as other_adjustment so the row is not lost.
 	StripeReviewUnsupportedCategory = "unsupported_category"
@@ -70,22 +71,65 @@ const (
 	StripeReviewSplitMismatch = "split_mismatch"
 )
 
+// Why the booking pass could not book a refund or a refund failure
+// (stripe_refunds.go). Like the charge reasons above, ingest never
+// reclassifies a row held for one of these. The pass retries the first two;
+// the rest wait for a person.
+const (
+	// StripeReviewRefundUnlinked: the charge (or, for a refund failure, the
+	// refund) the row books against is not stored yet.
+	StripeReviewRefundUnlinked = "refund_unlinked"
+	// StripeReviewRefundChargeUnbooked: the charge (or refund) is stored
+	// but not booked, or held for review on a faktura reason.
+	StripeReviewRefundChargeUnbooked = "refund_charge_unbooked"
+	// StripeReviewRefundOriginDismissed: the charge (or refund) was
+	// dismissed, so there is no booking to take the money back from.
+	StripeReviewRefundOriginDismissed = "refund_origin_dismissed"
+	// StripeReviewRefundLegacy: stored as refund_pending_bry446 before
+	// refunds were booked. A person rebooks or dismisses it.
+	StripeReviewRefundLegacy = "refund_legacy"
+	// StripeReviewRefundFailureSettled: a refund that collected again has
+	// failed, and its faktura was settled another way in between.
+	StripeReviewRefundFailureSettled = "refund_failure_settled"
+	// StripeReviewRefundSplit: the refund cannot be divided over the
+	// charge's fakturas exactly (one was credited or voided since, or the
+	// choice to collect again no longer applies).
+	StripeReviewRefundSplit = "refund_split"
+)
+
 // StripeReviewUnassigned: a person undid the row's booking
 // (UnassignStripeTxn). The row is held for that person: ingest never
 // reclassifies it and the booking pass never retries it, so it is booked
 // again only by a manual action (a rebook, an assign) or dismissed.
 const StripeReviewUnassigned = "unassigned"
 
-// stripeBookingReviewReasons are the review reasons BookStripeBalance sets
-// and retries.
-var stripeBookingReviewReasons = []string{
+// stripeChargeReviewReasons are the review reasons the booking pass sets on
+// a charge and retries.
+var stripeChargeReviewReasons = []string{
 	StripeReviewReceivableNotOpen, StripeReviewImportedNoOpeningBalance, StripeReviewSplitMismatch,
 }
 
+// stripeRefundRetryReasons are the review reasons the booking pass sets on
+// a refund or refund failure and retries: what it waits for may arrive.
+var stripeRefundRetryReasons = []string{StripeReviewRefundUnlinked, StripeReviewRefundChargeUnbooked}
+
+// stripeBookingReviewReasons are the review reasons BookStripeBalance sets
+// and retries.
+var stripeBookingReviewReasons = append(slices.Clone(stripeChargeReviewReasons), stripeRefundRetryReasons...)
+
 // stripeHeldReviewReasons are the review reasons ingest leaves alone: the
-// booking pass's, which it retries, and the person's hold, which nothing
-// retries. Only the other (ingest) reasons are reclassified by a re-sync.
-var stripeHeldReviewReasons = append(slices.Clone(stripeBookingReviewReasons), StripeReviewUnassigned)
+// booking pass's, which it retries or leaves for a person, and the person's
+// hold, which nothing retries. Only the other (ingest) reasons are
+// reclassified by a re-sync.
+var stripeHeldReviewReasons = append(slices.Clone(stripeBookingReviewReasons),
+	StripeReviewRefundOriginDismissed, StripeReviewRefundLegacy, StripeReviewRefundFailureSettled,
+	StripeReviewRefundSplit, StripeReviewUnassigned)
+
+// stripeRefundCategory reports whether a reporting category is money a
+// refund moved: the refund itself, or its failure bringing it back.
+func stripeRefundCategory(category string) bool {
+	return category == stripe.CategoryRefund || category == stripe.CategoryRefundFailure
+}
 
 // sqlList quotes fixed identifiers as a SQL list; they need no escaping.
 func sqlList(values []string) string {
@@ -411,6 +455,9 @@ type stripeTxnClass struct {
 	piID         string
 	attemptID    *string
 	orderID      *string
+	// requestKey is the refund_request_key Brygge put in a refund's
+	// metadata when it asked for the refund (nil for a Dashboard refund).
+	requestKey *string
 }
 
 func (c *stripeTxnClass) review(reason string) {
@@ -500,8 +547,8 @@ func (s *Service) upsertStripeTxn(ctx context.Context, clubID string, bt *stripe
 		`INSERT INTO stripe_balance_transactions AS t
 		     (club_id, balance_transaction_id, reporting_category, amount_ore, fee_ore, net_ore,
 		      currency, created_at, available_on, source_id, charge_id, payment_intent_id,
-		      attempt_id, order_id, status, review_reason, stripe_type, fee_details)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+		      attempt_id, order_id, status, review_reason, stripe_type, fee_details, refund_request_key)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
 		 ON CONFLICT (club_id, balance_transaction_id) DO UPDATE
 		    SET payment_intent_id = EXCLUDED.payment_intent_id,
 		        attempt_id        = EXCLUDED.attempt_id,
@@ -519,7 +566,7 @@ func (s *Service) upsertStripeTxn(ctx context.Context, clubID string, bt *stripe
 		clubID, bt.ID, c.category, bt.Amount, bt.Fee, bt.Net,
 		strings.ToLower(bt.Currency), time.Unix(bt.Created, 0).UTC(), availableOn,
 		c.sourceID, c.chargeID, c.piID, c.attemptID, c.orderID, c.status, c.reviewReason,
-		bt.Type, feeDetails(bt),
+		bt.Type, feeDetails(bt), c.requestKey,
 	).Scan(&inserted)
 	if errors.Is(err, pgx.ErrNoRows) {
 		// Stored already, and nothing about it changed.
@@ -565,8 +612,14 @@ func (s *Service) classifyStripeTxn(ctx context.Context, src StripeBalanceSource
 	case stripe.CategoryCharge:
 		err = s.classifyStripeCharge(ctx, src, clubID, bt, &c)
 	case stripe.CategoryFee, stripe.CategoryPayout, stripe.CategoryPayoutReversal:
-	case stripe.CategoryRefund, stripe.CategoryDispute, stripe.CategoryDisputeReversal, stripe.CategoryOtherAdjustment:
-		c.review(StripeReviewRefundPending)
+	case stripe.CategoryRefund, stripe.CategoryRefundFailure:
+		// The booking pass links the row to what it books against (its
+		// charge, or its refund) when it books it.
+		c.requestKey = refundRequestKey(bt.Source)
+	case stripe.CategoryDispute, stripe.CategoryDisputeReversal:
+		c.review(StripeReviewDisputePending)
+	case stripe.CategoryOtherAdjustment:
+		c.review(StripeReviewUnsupportedCategory)
 	default:
 		c.category = stripe.CategoryOtherAdjustment
 		c.review(StripeReviewUnsupportedCategory)
@@ -576,6 +629,19 @@ func (s *Service) classifyStripeTxn(ctx context.Context, src StripeBalanceSource
 		c.review(StripeReviewCurrency)
 	}
 	return c, err
+}
+
+// refundRequestKey is the refund_request_key in a refund's metadata, when
+// it is a UUID (a key Brygge made); nil otherwise.
+func refundRequestKey(source *stripe.BalanceSource) *string {
+	if source == nil {
+		return nil
+	}
+	key := source.Metadata["refund_request_key"]
+	if _, err := uuid.Parse(key); err != nil {
+		return nil
+	}
+	return &key
 }
 
 // classifyStripeCharge ties a charge to the payment attempt that created it

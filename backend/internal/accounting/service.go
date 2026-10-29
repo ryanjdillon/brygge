@@ -20,6 +20,16 @@ type Service struct {
 	// stripeSync serialises the Stripe balance ingest per club across the
 	// nightly job, the sync endpoint and the payout webhook.
 	stripeSync stripeSyncGuard
+	// kickDeliveries nudges the delivery worker after the booking pass
+	// queued a refund document (SetDeliveryKick); nil leaves the rows for
+	// the worker's next tick.
+	kickDeliveries func()
+}
+
+// SetDeliveryKick wires the delivery worker's kick, so a refund's credit
+// note is rendered and sent as soon as its booking commits.
+func (s *Service) SetDeliveryKick(kick func()) {
+	s.kickDeliveries = kick
 }
 
 // NewService creates an accounting service.

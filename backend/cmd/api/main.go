@@ -338,15 +338,20 @@ func main() {
 	invoiceHandler := handlers.NewInvoiceHandler(db, &cfg, emailClient, auditService, s3LegalClient, paymentProviders, log)
 	// Invoice reminders reuse the shared delivery queue whenever SMTP is
 	// configured — independent of the inbox/JMAP stack, which may be absent
-	// (e.g. all of local dev). Create the worker here and register the
-	// invoice-reminder Sender; the broadcast Sender is added later inside
-	// the inbox block when that stack is present.
+	// (e.g. all of local dev). The worker always exists, because the Stripe
+	// booking pass queues the documents of card refunds on it whether or
+	// not mail is configured: their sender renders the PDF and emails only
+	// with SMTP, so a club that enables mail later never sends old credit
+	// notes. The reminder Sender needs SMTP; the broadcast Sender is added
+	// later inside the inbox block when that stack is present.
+	deliveryWorker = broadcast.NewWorker(deliveryStore, cfg.BulkSendThrottle, log)
+	deliveryWorker.RegisterSender(broadcast.KindInvoiceRefundDocument, handlers.NewRefundDocumentSender(invoiceHandler))
 	if emailClient != nil {
-		deliveryWorker = broadcast.NewWorker(deliveryStore, cfg.BulkSendThrottle, log)
 		deliveryWorker.RegisterSender(broadcast.KindInvoiceReminder, handlers.NewInvoiceReminderSender(invoiceHandler))
 		invoiceHandler.SetDeliveryQueue(deliveryStore, deliveryWorker.Kick)
 	}
 	accountingSvc := accounting.NewService(db, auditService, log)
+	accountingSvc.SetDeliveryKick(deliveryWorker.Kick)
 	if cfg.Features.Accounting {
 		invoiceHandler.SetLedger(accountingSvc)
 	}

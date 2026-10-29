@@ -61,6 +61,8 @@ var rawTextColumns = map[string]bool{
 	// Stripe payout ids, status and currency codes, and the payout's
 	// statement descriptor, which is the club's own text
 	"stripe_payouts.currency": true, "stripe_payouts.payout_id": true, "stripe_payouts.statement_descriptor": true, "stripe_payouts.status": true,
+	// what a booked refund did to a faktura: a fixed code
+	"refund_documents.kind": true,
 }
 
 // TestDevMaskedViews migrates a throwaway database, applies the dev_masked

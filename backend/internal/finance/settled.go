@@ -31,10 +31,19 @@ func SettledForMemberSQL(alias string) string {
 		p, CreditedSQL(alias))
 }
 
-// CreditedSQL returns a SQL predicate that is true when a live (non-voided)
-// credit note credits the invoice.
+// CreditedSQL returns a SQL predicate that is true when the invoice is
+// credited in full: a live (non-voided) credit note linked to it by hand
+// (credits_invoice_id, always the whole faktura), or the live credit notes
+// card refunds issued for it (refund_documents, kind 'credit') adding up to
+// its total. A partial refund's credit notes alone never make it credited;
+// the refund already paid the member back, so nothing is owed either way.
 func CreditedSQL(alias string) string {
-	return fmt.Sprintf("EXISTS (SELECT 1 FROM invoices cn WHERE cn.credits_invoice_id = %sid AND cn.status <> 'voided')", ref(alias))
+	r := ref(alias)
+	return fmt.Sprintf(`(EXISTS (SELECT 1 FROM invoices cn WHERE cn.credits_invoice_id = %[1]sid AND cn.status <> 'voided')
+	 OR (%[1]stotal_amount > 0
+	     AND (SELECT COALESCE(SUM(rd.amount_ore), 0) FROM refund_documents rd
+	            JOIN invoices rcn ON rcn.id = rd.credit_invoice_id AND rcn.status <> 'voided'
+	           WHERE rd.invoice_id = %[1]sid AND rd.kind = 'credit') = round(%[1]stotal_amount * 100)))`, r)
 }
 
 // IsDebtSQL returns a SQL predicate that is true for an invoice the member

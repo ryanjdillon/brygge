@@ -271,13 +271,23 @@ func (s orderSettlement) logIfPaidTwice(ctx context.Context, a paymentAttempt) {
 // API-primary GL ownership is BRY-256, gated on BRY-4. A Vipps capture also
 // sets the legacy vipps_paid_at, so the column stays consistent for as long
 // as it exists.
+//
+// A replayed capture never marks a faktura a refund of this order has
+// touched: not on an order the refund moved to refunded, and not on a
+// faktura with a refund_documents row from this order (a refund that chose
+// to collect again cleared the marker on purpose, and the faktura must read
+// as open). A capture on the faktura's new order, after it was collected
+// again, still marks it.
 func (s orderSettlement) markInvoicesPaidOnline(ctx context.Context, a paymentAttempt, capturedAt time.Time) {
 	if _, err := s.db.Exec(ctx,
 		`UPDATE invoices
 		    SET online_paid_at = $2, online_paid_provider = $3::text,
 		        vipps_paid_at = CASE WHEN $3::text = $4::text THEN COALESCE(vipps_paid_at, $2) ELSE vipps_paid_at END
 		  WHERE online_paid_at IS NULL
-		    AND id IN (SELECT invoice_id FROM order_sources WHERE order_id = $1)`,
+		    AND id IN (SELECT invoice_id FROM order_sources WHERE order_id = $1)
+		    AND NOT EXISTS (SELECT 1 FROM orders o WHERE o.id = $1 AND o.status = 'refunded')
+		    AND NOT EXISTS (SELECT 1 FROM refund_documents rd
+		                     WHERE rd.invoice_id = invoices.id AND (rd.order_id = $1 OR rd.detached_order_id = $1))`,
 		a.OrderID, capturedAt, a.Provider, vipps.ProviderName,
 	); err != nil {
 		s.log.Error().Err(err).Str("order_id", a.OrderID).Msg("order paid: invoice marker failed")

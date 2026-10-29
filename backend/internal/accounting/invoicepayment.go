@@ -26,6 +26,12 @@ import (
 //     overlap; everything else falls through to `dues` which is the
 //     least-surprising default for membership-style billing.
 func (s *Service) linkInvoicePayment(ctx context.Context, clubID, invoiceID string, paidAt time.Time) error {
+	return linkInvoicePaymentIn(ctx, s.db, clubID, invoiceID, paidAt)
+}
+
+// linkInvoicePaymentIn is linkInvoicePayment on q, for a transaction that
+// holds row locks and must not touch the pool.
+func linkInvoicePaymentIn(ctx context.Context, q dbtx, clubID, invoiceID string, paidAt time.Time) error {
 	var (
 		userID         *string
 		amount         float64
@@ -38,7 +44,7 @@ func (s *Service) linkInvoicePayment(ctx context.Context, clubID, invoiceID stri
 		recipientEmail *string
 		memberName     *string
 	)
-	err := s.db.QueryRow(ctx,
+	err := q.QueryRow(ctx,
 		`SELECT user_id, total_amount, category,
 		        COALESCE(recipient_kind, 'private'),
 		        recipient_org_name, recipient_org_number, recipient_org_address,
@@ -75,7 +81,7 @@ func (s *Service) linkInvoicePayment(ctx context.Context, clubID, invoiceID stri
 	// recipient (org / non-member). Exactly one is set on the payment row.
 	var recipientID *string
 	if userID == nil {
-		rid, rerr := s.resolveBillingRecipient(ctx, clubID, recipientKind,
+		rid, rerr := resolveBillingRecipient(ctx, q, clubID, recipientKind,
 			orgName, orgNumber, orgAddress, contactPerson, recipientEmail, memberName)
 		if rerr != nil {
 			return rerr
@@ -84,7 +90,7 @@ func (s *Service) linkInvoicePayment(ctx context.Context, clubID, invoiceID stri
 	}
 
 	var paymentID string
-	if err := s.db.QueryRow(ctx,
+	if err := q.QueryRow(ctx,
 		`INSERT INTO payments
 		   (club_id, user_id, recipient_id, type, amount, status, paid_at, description)
 		 VALUES ($1, $2, $3, $4::payment_type, $5, 'completed', $6, 'KID-avstemming')
@@ -94,7 +100,7 @@ func (s *Service) linkInvoicePayment(ctx context.Context, clubID, invoiceID stri
 		return err
 	}
 
-	if _, err := s.db.Exec(ctx,
+	if _, err := q.Exec(ctx,
 		`UPDATE invoices SET payment_id = $1, recipient_id = COALESCE(recipient_id, $4)
 		  WHERE id = $2 AND club_id = $3 AND payment_id IS NULL`,
 		paymentID, invoiceID, clubID, recipientID,
@@ -109,8 +115,8 @@ func (s *Service) linkInvoicePayment(ctx context.Context, clubID, invoiceID stri
 // none exists yet. Orgs are keyed on (club, org_number|org_name);
 // private non-members on (club, email|name) — so repeat invoices to the same
 // payer reuse one recipient. See BRY-234.
-func (s *Service) resolveBillingRecipient(
-	ctx context.Context, clubID, recipientKind string,
+func resolveBillingRecipient(
+	ctx context.Context, q dbtx, clubID, recipientKind string,
 	orgName, orgNumber, orgAddress, contactPerson, email, memberName *string,
 ) (string, error) {
 	kind := "organization"
@@ -135,7 +141,7 @@ func (s *Service) resolveBillingRecipient(
 
 	if key != nil {
 		var existing string
-		err := s.db.QueryRow(ctx,
+		err := q.QueryRow(ctx,
 			`SELECT id FROM billing_recipients
 			  WHERE club_id = $1 AND kind = $2
 			    AND COALESCE(NULLIF(org_number, ''), NULLIF(org_name, ''),
@@ -152,7 +158,7 @@ func (s *Service) resolveBillingRecipient(
 	}
 
 	var id string
-	if err := s.db.QueryRow(ctx,
+	if err := q.QueryRow(ctx,
 		`INSERT INTO billing_recipients
 		   (club_id, kind, org_name, org_number, org_address, contact_person, email)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7)

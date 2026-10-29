@@ -506,14 +506,18 @@ type pgxQuerier interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
-// regenerateOnePDF rebuilds and stores an invoice's PDF, archiving the
-// prior one for bokføringsloven §13 retention. When newKID is non-empty
-// the invoice's payment reference is reissued in the same transaction:
-// the PDF is printed with newKID and invoices.kid_number is updated
-// alongside pdf_data, so the stored KID and the printed KID never diverge.
-func (h *InvoiceHandler) regenerateOnePDF( //nolint:gocognit,cyclop // loads every PDF input for one faktura, then renders; split tracked in BRY-424
-	ctx context.Context, clubID, actorID, remoteAddr, invoiceID string, club *clubInvoiceFields, newKID string,
-) error {
+// storedInvoicePDF is what an invoice's PDF is rendered from, read from the
+// stored faktura, with the PDF it has now (nil when none is stored in the
+// database).
+type storedInvoicePDF struct {
+	inv         finance.Invoice
+	existingPDF []byte
+	imported    bool
+}
+
+// loadStoredInvoicePDF reads every input of an invoice's PDF as it was on
+// issue, so a regenerated PDF reproduces the faktura.
+func (h *InvoiceHandler) loadStoredInvoicePDF(ctx context.Context, clubID, invoiceID string, club *clubInvoiceFields) (*storedInvoicePDF, error) {
 	var (
 		invoiceNumber int
 		userID        *string
@@ -528,10 +532,7 @@ func (h *InvoiceHandler) regenerateOnePDF( //nolint:gocognit,cyclop // loads eve
 		issueDate     time.Time
 		dueDate       time.Time
 		kid           string
-		// Existing PDF bytes — archived before the overwrite so
-		// bokføringsloven §13 retention is honored. See DIL-374.
-		existingPDF []byte
-		imported    bool
+		st            storedInvoicePDF
 	)
 	err := h.db.QueryRow(ctx,
 		`SELECT i.invoice_number, i.user_id,
@@ -543,7 +544,7 @@ func (h *InvoiceHandler) regenerateOnePDF( //nolint:gocognit,cyclop // loads eve
 		        COALESCE(i.recipient_org_address, ''),
 		        COALESCE(i.recipient_contact_person, ''),
 		        COALESCE(i.recipient_their_ref, ''),
-		        i.issue_date, i.due_date, i.kid_number,
+		        i.issue_date, i.due_date, COALESCE(i.kid_number, ''),
 		        i.pdf_data, i.import_source IS NOT NULL
 		   FROM invoices i
 		   LEFT JOIN users u ON u.id = i.user_id
@@ -551,17 +552,12 @@ func (h *InvoiceHandler) regenerateOnePDF( //nolint:gocognit,cyclop // loads eve
 		invoiceID, clubID,
 	).Scan(&invoiceNumber, &userID, &memberName, &memberAddress,
 		&recipientKind, &orgName, &orgNumber, &orgAddress, &orgContact, &orgTheirRef,
-		&issueDate, &dueDate, &kid, &existingPDF, &imported)
+		&issueDate, &dueDate, &kid, &st.existingPDF, &st.imported)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return errors.New("not found")
+			return nil, errors.New("not found")
 		}
-		return err
-	}
-	// A Brygge PDF must not replace or stand in for an imported faktura's
-	// original (BRY-396).
-	if imported {
-		return errSkip
+		return nil, err
 	}
 
 	// Build the buyer/recipient block exactly as it was on issue: an
@@ -587,17 +583,9 @@ func (h *InvoiceHandler) regenerateOnePDF( //nolint:gocognit,cyclop // loads eve
 
 	lines, err := h.loadInvoiceLinesForPDF(ctx, invoiceID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-
-	// A reissue prints the new KID; a plain regenerate reprints the
-	// existing one.
-	pdfKID := kid
-	if newKID != "" {
-		pdfKID = newKID
-	}
-
-	inv := finance.Invoice{
+	st.inv = finance.Invoice{
 		ClubName:       club.Name,
 		OrgNumber:      club.OrgNumber,
 		ClubAddress:    club.Address,
@@ -611,9 +599,39 @@ func (h *InvoiceHandler) regenerateOnePDF( //nolint:gocognit,cyclop // loads eve
 		InvoiceNumber:  invoiceNumber,
 		IssueDate:      issueDate,
 		DueDate:        dueDate,
-		KID:            pdfKID,
+		KID:            kid,
 		BankAccount:    club.BankAccount,
 		Lines:          lines,
+	}
+	return &st, nil
+}
+
+// regenerateOnePDF rebuilds and stores an invoice's PDF, archiving the
+// prior one for bokføringsloven §13 retention. When newKID is non-empty
+// the invoice's payment reference is reissued in the same transaction:
+// the PDF is printed with newKID and invoices.kid_number is updated
+// alongside pdf_data, so the stored KID and the printed KID never diverge.
+func (h *InvoiceHandler) regenerateOnePDF( //nolint:gocognit,cyclop // archives the prior PDF, then stores the new one; split tracked in BRY-424
+	ctx context.Context, clubID, actorID, remoteAddr, invoiceID string, club *clubInvoiceFields, newKID string,
+) error {
+	st, err := h.loadStoredInvoicePDF(ctx, clubID, invoiceID, club)
+	if err != nil {
+		return err
+	}
+	// A Brygge PDF must not replace or stand in for an imported faktura's
+	// original (BRY-396).
+	if st.imported {
+		return errSkip
+	}
+	// Existing PDF bytes — archived before the overwrite so
+	// bokføringsloven §13 retention is honored. See DIL-374.
+	existingPDF, invoiceNumber, kid := st.existingPDF, st.inv.InvoiceNumber, st.inv.KID
+
+	// A reissue prints the new KID; a plain regenerate reprints the
+	// existing one.
+	inv := st.inv
+	if newKID != "" {
+		inv.KID = newKID
 	}
 	pdfData, err := finance.GeneratePDF(inv)
 	if err != nil {

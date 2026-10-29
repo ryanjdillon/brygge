@@ -1033,7 +1033,10 @@ func (h *InvoiceHandler) HandleListInvoices(w http.ResponseWriter, r *http.Reque
 		        (SELECT o.payment_id IS NOT NULL OR o.online_paid_at IS NOT NULL
 		           FROM invoices o WHERE o.id = i.credits_invoice_id),
 		        (SELECT cn.invoice_number FROM invoices cn
-		          WHERE cn.credits_invoice_id = i.id AND cn.status <> 'voided')
+		          WHERE cn.credits_invoice_id = i.id AND cn.status <> 'voided'),
+		        `+refundDocumentSQL("i")+`,
+		        (SELECT o.invoice_number FROM refund_documents rd JOIN invoices o ON o.id = rd.invoice_id
+		          WHERE rd.credit_invoice_id = i.id LIMIT 1)
 		   FROM invoices i
 		   LEFT JOIN users u ON u.id = i.user_id
 		   LEFT JOIN price_items pi ON pi.id = i.price_item_id
@@ -1062,21 +1065,29 @@ func (h *InvoiceHandler) HandleListInvoices(w http.ResponseWriter, r *http.Reque
 		// "settled_pair" (that faktura was owed), "credit_owed" (it was
 		// already paid, so the member is owed the credit) or "unlinked".
 		// CreditedByNumber is set on a faktura settled by a credit note.
+		// A credit note a card refund issued has CreditState "refund" and
+		// CreditsInvoiceNumber the faktura it credits (none for an order
+		// with no faktura); it is never linked or unlinked by hand.
+		// RefundDocument marks it, and the debit faktura a failed refund
+		// issued, so neither offers a void.
 		CreditsInvoiceNumber *int    `json:"credits_invoice_number"`
 		CreditState          *string `json:"credit_state"`
 		CreditedByNumber     *int    `json:"credited_by_invoice_number"`
+		RefundDocument       bool    `json:"refund_document"`
 	}
 	out := make([]listRow, 0)
 	for rows.Next() {
 		var d listRow
 		var issue, due time.Time
 		var creditTargetPaid *bool
+		var refundTargetNumber *int
 		if err := rows.Scan(&d.ID, &d.InvoiceNumber, &d.UserID,
 			&d.MemberName, &d.MemberEmail, &d.MemberPhone,
 			&d.TotalAmount, &issue, &due,
 			&d.PriceItemName, &d.FiscalYear, &d.Description, &d.CreatedAt,
 			&d.SentAt, &d.Status, &d.Paid, &d.LastReminderAt, &d.OnlinePaidAt, &d.OnlineOptIn,
-			&d.CreditsInvoiceNumber, &creditTargetPaid, &d.CreditedByNumber); err != nil {
+			&d.CreditsInvoiceNumber, &creditTargetPaid, &d.CreditedByNumber,
+			&d.RefundDocument, &refundTargetNumber); err != nil {
 			h.log.Error().Err(err).Msg("scan invoice row")
 			Error(w, http.StatusInternalServerError, "internal error")
 			return
@@ -1086,6 +1097,9 @@ func (h *InvoiceHandler) HandleListInvoices(w http.ResponseWriter, r *http.Reque
 		if d.TotalAmount < 0 {
 			state := "unlinked"
 			switch {
+			case d.RefundDocument:
+				state = "refund"
+				d.CreditsInvoiceNumber = refundTargetNumber
 			case d.CreditsInvoiceNumber != nil && creditTargetPaid != nil && *creditTargetPaid:
 				state = creditOwed
 			case d.CreditsInvoiceNumber != nil:
@@ -1447,6 +1461,22 @@ func (h *InvoiceHandler) HandleDeleteInvoice(w http.ResponseWriter, r *http.Requ
 		refuseImportedInvoice(w)
 		return
 	}
+	// A card refund's record points at the faktura (and at the documents it
+	// issued); they are accounting history and stay.
+	var refunded bool
+	if err := h.db.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM refund_documents
+		                 WHERE club_id = $2 AND (invoice_id = $1 OR credit_invoice_id = $1))`,
+		invoiceID, claims.ClubID,
+	).Scan(&refunded); err != nil {
+		h.log.Error().Err(err).Msg("delete invoice: refund documents")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if refunded {
+		refuseRefundDocument(w)
+		return
+	}
 
 	tag, err := h.db.Exec(ctx,
 		`DELETE FROM invoices
@@ -1492,16 +1522,16 @@ func (h *InvoiceHandler) HandleVoidInvoice(w http.ResponseWriter, r *http.Reques
 	// online and awaiting settlement). Voiding it would hide a payment with
 	// nothing owed against it; that needs a refund or credit note instead.
 	var status string
-	var settled, creditLinked, imported bool
+	var settled, creditLinked, imported, refundDocument bool
 	var creditedBy *int
 	err := h.db.QueryRow(ctx,
 		`SELECT status, `+finance.SettledForMemberSQL("")+`, credits_invoice_id IS NOT NULL,
 		        (SELECT cn.invoice_number FROM invoices cn
 		          WHERE cn.credits_invoice_id = invoices.id AND cn.status <> 'voided' LIMIT 1),
-		        import_source IS NOT NULL
+		        import_source IS NOT NULL, `+refundDocumentSQL("invoices")+`
 		   FROM invoices WHERE id = $1 AND club_id = $2`,
 		invoiceID, claims.ClubID,
-	).Scan(&status, &settled, &creditLinked, &creditedBy, &imported)
+	).Scan(&status, &settled, &creditLinked, &creditedBy, &imported, &refundDocument)
 	if err == pgx.ErrNoRows {
 		Error(w, http.StatusNotFound, "invoice not found")
 		return
@@ -1521,27 +1551,7 @@ func (h *InvoiceHandler) HandleVoidInvoice(w http.ResponseWriter, r *http.Reques
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	// A credited faktura is settled by its credit note, not by money, so it
-	// gets its own answer: undo the credit link first if the void is meant.
-	if creditedBy != nil {
-		JSON(w, http.StatusConflict, map[string]any{
-			"error":              fmt.Sprintf("the faktura is credited by #%d; unlink the credit note first", *creditedBy),
-			"code":               "credited",
-			"credit_note_number": *creditedBy,
-		})
-		return
-	}
-	if settled {
-		Error(w, http.StatusConflict, "invoice is already paid; refund or credit it instead of voiding")
-		return
-	}
-	// Voiding a linked credit note would silently reopen the faktura it
-	// settles; the link has to be undone first, deliberately.
-	if creditLinked {
-		JSON(w, http.StatusConflict, map[string]string{
-			"error": "the credit note settles a faktura; remove the credit link before voiding it",
-			"code":  "credit_linked",
-		})
+	if refuseVoidOfSettled(w, refundDocument, creditedBy, settled, creditLinked) {
 		return
 	}
 	// A faktura booked into a closed year can't be reversed there; voiding
@@ -1580,6 +1590,7 @@ func (h *InvoiceHandler) HandleVoidInvoice(w http.ResponseWriter, r *http.Reques
 		  WHERE id = $1 AND club_id = $2 AND status <> 'voided' AND import_source IS NULL
 		    AND credits_invoice_id IS NULL
 		    AND NOT `+finance.SettledForMemberSQL("")+`
+		    AND NOT `+refundDocumentSQL("invoices")+`
 		 RETURNING invoice_number`,
 		invoiceID, claims.ClubID,
 	).Scan(&invoiceNumber)
@@ -1620,6 +1631,38 @@ func (h *InvoiceHandler) HandleVoidInvoice(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// refuseVoidOfSettled answers a void of an invoice that money or a credit
+// settles, and reports whether it did.
+func refuseVoidOfSettled(w http.ResponseWriter, refundDocument bool, creditedBy *int, settled, creditLinked bool) bool {
+	switch {
+	case refundDocument:
+		// An issued refund document is corrected by a new document, never
+		// voided (ACC-9).
+		refuseRefundDocument(w)
+	case creditedBy != nil:
+		// A credited faktura is settled by its credit note, not by money, so
+		// it gets its own answer: undo the credit link first if the void is
+		// meant.
+		JSON(w, http.StatusConflict, map[string]any{
+			"error":              fmt.Sprintf("the faktura is credited by #%d; unlink the credit note first", *creditedBy),
+			"code":               "credited",
+			"credit_note_number": *creditedBy,
+		})
+	case settled:
+		Error(w, http.StatusConflict, "invoice is already paid; refund or credit it instead of voiding")
+	case creditLinked:
+		// Voiding a linked credit note would silently reopen the faktura it
+		// settles; the link has to be undone first, deliberately.
+		JSON(w, http.StatusConflict, map[string]string{
+			"error": "the credit note settles a faktura; remove the credit link before voiding it",
+			"code":  "credit_linked",
+		})
+	default:
+		return false
+	}
+	return true
 }
 
 type setOnlinePaymentRequest struct {

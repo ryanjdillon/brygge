@@ -48,15 +48,19 @@ func TestStripeMembersWaitingReason(t *testing.T) {
 	m.add("charge", StripeTxnNeedsReview, 100)
 	m.add("fee", StripeTxnUnbooked, -5)
 	m.add("refund", StripeTxnNeedsReview, -50)
+	m.add("refund", StripeTxnUnbooked, -20)
+	m.add("refund_failure", StripeTxnUnbooked, 20)
+	m.add("dispute", StripeTxnNeedsReview, -30)
 	m.add("other_adjustment", StripeTxnNeedsReview, 0)
 	m.add("charge", StripeTxnBooked, 100)
 	m.add("charge", StripeTxnDismissed, 100)
 	want := "2 kortbetalinger venter på bokføring, 1 kortbetaling til gjennomgang, 1 Stripe-gebyr venter på bokføring, " +
-		"1 refusjon eller tvist venter (bokføres ikke automatisk ennå), 1 annen Stripe-transaksjon til gjennomgang"
+		"2 refusjoner venter på bokføring, 1 refusjon til gjennomgang, 1 tvist venter (bokføres ikke automatisk ennå), " +
+		"1 annen Stripe-transaksjon til gjennomgang"
 	if got := m.waitingReason(); got != want {
 		t.Errorf("reason = %q\nwant %q", got, want)
 	}
-	if m.count != 8 || m.netOre != 445 || !m.pendingBlocker {
+	if m.count != 11 || m.netOre != 415 || !m.pendingBlocker {
 		t.Errorf("members = %+v", m)
 	}
 }

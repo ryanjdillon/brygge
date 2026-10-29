@@ -113,15 +113,15 @@ Org fields (`*_org_name/number/address`), the club's own `bank_account`/`org_num
 `accounts`, `bank_imports`, `docks`, `fiscal_periods`,
 `mva_compensation_reports`, `order_lines`, `order_sources`, `payment_attempts`,
 `price_exemptions`, `price_items`, `product_variants`, `products`,
-`slip_assignments`, `stripe_payouts`, `stripe_sync_state`, `vipps_imports`,
-`waiting_list_entries`.
+`refund_documents`, `slip_assignments`, `stripe_payouts`, `stripe_sync_state`,
+`vipps_imports`, `waiting_list_entries`.
 
 `payment_attempts` (000115) holds only ids, the provider name, the opaque
 provider reference, status, amount and currency, plus (000118) Stripe's card
 brand and wallet codes — never card digits or country. `stripe_payouts` (000117)
 holds Stripe ids, amounts, status, currency and the payout's statement
 descriptor, which is the club's own text; `stripe_sync_state` only a club id
-and timestamps. `stripe_balance_transactions.fee_details` (in its masked view)
+and timestamps; `refund_documents` (000119) only ids, amounts and a kind code. `stripe_balance_transactions.fee_details` (in its masked view)
 holds Stripe's fee types, amounts and Stripe-written descriptions.
 
 **Rule: a table is allowlisted raw only if none of its free-text columns can

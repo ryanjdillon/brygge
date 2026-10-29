@@ -70,6 +70,7 @@ func (f *creditFixture) serve(method, path string, body any) *httptest.ResponseR
 	r.Post("/invoices/{invoiceID}/credit-link", f.h.HandleLinkCreditNote)
 	r.Delete("/invoices/{invoiceID}/credit-link", f.h.HandleUnlinkCreditNote)
 	r.Post("/invoices/{invoiceID}/void", f.h.HandleVoidInvoice)
+	r.Delete("/invoices/{invoiceID}", f.h.HandleDeleteInvoice)
 	r.Get("/invoices", f.h.HandleListInvoices)
 	var buf bytes.Buffer
 	if body != nil {

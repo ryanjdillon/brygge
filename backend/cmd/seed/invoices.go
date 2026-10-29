@@ -72,7 +72,13 @@ func seedInvoices(ctx context.Context, db *pgxpool.Pool, clubID string, userIDs 
 		{"admin@brygge.local", "Strøm vinter", 2000, 25, 14, "voided"},
 	}
 
-	// Idempotent re-seed: invoice_lines cascade on invoice delete.
+	// Idempotent re-seed: invoice_lines cascade on invoice delete. What card
+	// refunds recorded against the old fakturas goes first, or their
+	// foreign keys would stop the delete.
+	if _, err := db.Exec(ctx, `DELETE FROM refund_documents WHERE club_id = $1`, clubID); err != nil {
+		fmt.Fprintf(os.Stderr, "  failed to clear refund documents: %v\n", err)
+		return
+	}
 	if _, err := db.Exec(ctx, `DELETE FROM invoices WHERE club_id = $1`, clubID); err != nil {
 		fmt.Fprintf(os.Stderr, "  failed to clear invoices: %v\n", err)
 		return

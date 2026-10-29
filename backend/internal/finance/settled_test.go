@@ -36,7 +36,8 @@ func TestOpenReceivablePredicate(t *testing.T) {
 		"i.total_amount > 0",
 		"i.status <> 'voided'",
 		"i.payment_id IS NULL",
-		"NOT EXISTS (SELECT 1 FROM invoices cn WHERE cn.credits_invoice_id = i.id",
+		"NOT (EXISTS (SELECT 1 FROM invoices cn WHERE cn.credits_invoice_id = i.id",
+		"rd.invoice_id = i.id AND rd.kind = 'credit') = round(i.total_amount * 100)",
 	} {
 		if !strings.Contains(got, part) {
 			t.Errorf("OpenReceivableSQL(i) = %s, missing %q", got, part)

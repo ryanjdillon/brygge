@@ -456,6 +456,41 @@ func PayMethodsLabel(vipps, card bool) string {
 	return ""
 }
 
+// RefundDocumentSubject is the Subject header for a document a card refund
+// issued: a credit note (negative total), or the new faktura after a failed
+// refund.
+func RefundDocumentSubject(clubName string, number int, total float64) string {
+	if clubName == "" {
+		clubName = "klubben"
+	}
+	if total < 0 {
+		return fmt.Sprintf("Kreditnota fra %s [Kreditnota %d]", clubName, number)
+	}
+	return fmt.Sprintf("Ny faktura fra %s [Faktura %d]", clubName, number)
+}
+
+// RefundDocumentBody is the HTML body for a document a card refund issued.
+// Nothing is to be paid either way: a credit note documents money already
+// returned to the card, and the new faktura after a failed refund is
+// settled by the money that came back. The PDF is attached by the caller.
+func RefundDocumentBody(memberName, clubName string, number int, total float64) string {
+	if clubName == "" {
+		clubName = "klubben"
+	}
+	if memberName == "" {
+		memberName = "medlem"
+	}
+	name, club, amount := html.EscapeString(memberName), html.EscapeString(clubName), formatNOK(math.Abs(total))
+	if total < 0 {
+		return fmt.Sprintf(`<p>Hei %s,</p><p>Vedlagt er kreditnota #%d fra %s på %s for kortbetalingen som er refundert. `+
+			`Pengene kommer tilbake på kortet du betalte med, vanligvis innen 5–10 dager. Du skal ikke gjøre noe.</p>`,
+			name, number, club, amount)
+	}
+	return fmt.Sprintf(`<p>Hei %s,</p><p>Refusjonen av kortbetalingen din kunne ikke gjennomføres, så pengene ble værende hos %s. `+
+		`Vedlagt er faktura #%d på %s for beløpet. Den er allerede betalt, og du skal ikke betale noe.</p>`,
+		name, club, number, amount)
+}
+
 // fallbackPayLine is the pay link in the flat summary sent when a template
 // fails to render; empty without a link.
 func fallbackPayLine(payURL string) string {

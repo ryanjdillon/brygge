@@ -81,7 +81,7 @@ SELECT
     vipps_auto_assign, vipps_auto_assign_tie_category, bank_auto_assign,
     exemption_expense_account,
     online_max_amount, payment_fee_account, stripe_clearing_account,
-    stripe_payout_descriptor
+    stripe_payout_descriptor, stripe_suspense_account
 FROM public.clubs;
 
 CREATE VIEW dev_masked.billing_recipients AS
@@ -181,6 +181,9 @@ SELECT
     status,
     NULL::text AS reason,                 -- staff-typed free text
     created_by, journal_entry_id, created_at, updated_at,
+    provider_payment_ref, charge_ref,
+    failure_reason,                       -- the provider's reason code
+    request_key, outcome,
     length(reason) AS reason_length
 FROM public.payment_refunds;
 
@@ -193,6 +196,7 @@ SELECT
     status, review_reason, dismissed_at, dismissed_by,
     NULL::text AS dismissed_reason,       -- staff-typed free text
     inserted_at, updated_at,
+    origin_txn_id, refunded_ore, recollected_at, refund_request_key,
     length(dismissed_reason) AS dismissed_reason_length
 FROM public.stripe_balance_transactions;
 

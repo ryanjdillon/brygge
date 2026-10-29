@@ -100,6 +100,14 @@ func TestOrderSettlement(t *testing.T) {
 				t.Errorf("paid_at = %v for a %s order", paidAt, tc.status)
 			}
 			online, legacy, provider := marker(t, invID)
+			if tc.status == "refunded" {
+				// A replayed capture never marks the fakturas of an order a
+				// refund settled.
+				if online != nil || legacy != nil || provider != nil {
+					t.Errorf("invoice marker = %v/%v/%v on a refunded order, want none", online, legacy, provider)
+				}
+				return
+			}
 			if online == nil || !online.Equal(capturedAt) || legacy == nil || !legacy.Equal(capturedAt) ||
 				provider == nil || *provider != "vipps" {
 				t.Errorf("invoice marker online/legacy/provider = %v/%v/%v, want %v/%v/vipps", online, legacy, provider, capturedAt, capturedAt)

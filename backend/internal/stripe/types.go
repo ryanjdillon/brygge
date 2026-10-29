@@ -206,6 +206,7 @@ const (
 const (
 	CategoryCharge          = "charge"
 	CategoryRefund          = "refund"
+	CategoryRefundFailure   = "refund_failure"
 	CategoryDispute         = "dispute"
 	CategoryDisputeReversal = "dispute_reversal"
 	CategoryFee             = "fee"

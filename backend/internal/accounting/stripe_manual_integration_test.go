@@ -128,7 +128,7 @@ func TestAssignStripeTxnToInvoiceRefusals(t *testing.T) {
 	}
 	inv := f.club.NewInvoice(t, fin.InvoiceOpts{Cents: 45000})
 
-	refund := f.reviewRow(t, "txn_test_r_refund", "refund", StripeReviewRefundPending, -45000, 0, "")
+	refund := f.reviewRow(t, "txn_test_r_refund", "refund", StripeReviewRefundLegacy, -45000, 0, "")
 	wantRefusal(t, assign(refund, inv.ID), StripeTxnNotAllowed)
 
 	eur := f.reviewRow(t, "txn_test_r_eur", "charge", StripeReviewNoAttempt, 45000, 0, "")
@@ -240,7 +240,7 @@ func TestAssignStripeTxnToAccount(t *testing.T) {
 		t.Errorf("clearing = %v, want the nets %v", clearing, want)
 	}
 
-	refund := f.reviewRow(t, "txn_test_a_refund", "refund", StripeReviewRefundPending, -5000, 0, "")
+	refund := f.reviewRow(t, "txn_test_a_refund", "refund", StripeReviewRefundLegacy, -5000, 0, "")
 	_, err = acct(refund, "3900", "")
 	wantRefusal(t, err, StripeTxnNotAllowed)
 }

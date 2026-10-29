@@ -24,10 +24,11 @@ import (
 // does goes through it; the faktura's payment back-link runs after the
 // commit.
 //
-// A row a person booked keeps its review_reason: the booking pass always
-// clears it, so a booked row with a review_reason was booked by hand and
-// settles only the faktura in its invoice_id, never its order's
-// (invoiceBookedRowSQL).
+// A row a person booked keeps its review_reason: the booking pass clears
+// it on everything it books from an order (except a duplicate capture it
+// books with its refund, which keeps the reason it was held under), so a
+// booked charge with a review_reason settles only the faktura in its
+// invoice_id, never its order's (invoiceBookedRowSQL).
 
 // Manual actions on a Stripe balance transaction (StripeTxnItem.AllowedActions).
 const (
@@ -70,6 +71,15 @@ const (
 	// StripeTxnUseBankUnassign: the row is Stripe moving a payout, booked by
 	// the payout's clearing, which is undone from the bank deposit.
 	StripeTxnUseBankUnassign = "use_bank_unassign"
+	// StripeTxnRefundBooked: a refund of the charge is booked, so the
+	// charge's booking is what the refund booked against.
+	StripeTxnRefundBooked = "refund_booked"
+	// StripeTxnCreditNoteIssued: the refund issued credit notes, which are
+	// never voided (ACC-9); the correction is a new faktura.
+	StripeTxnCreditNoteIssued = "credit_note_issued"
+	// StripeTxnFakturaSettledSince: a faktura the refund reopened has been
+	// paid, credited or booked another way since.
+	StripeTxnFakturaSettledSince = "faktura_settled_since"
 )
 
 // StripeTxnRefusal is a manual action refused, nothing changed. Reason is
@@ -136,9 +146,9 @@ type stripeTxnState struct {
 // pass, and fees and payouts book themselves. A booked row is unassigned
 // when its entry is its own; a payout row's is the payout clearing's, undone
 // from the bank deposit. A row a person unassigned is held for that person
-// (stripeHeldActions). A row in another currency, or
-// a refund or dispute (whose booking comes with Stripe refunds), can only
-// be dismissed. A charge whose order's faktura is no longer open, or whose
+// (stripeHeldActions). A row in another currency, or a dispute (whose
+// booking is still to come), can only be dismissed; a refund follows its
+// review reason (stripeRefundReasonActions). A charge whose order's faktura is no longer open, or whose
 // imported receivable is not in the GL, never goes to a faktura. A row whose
 // payout is cleared in the books was counted as done by that clearing, so
 // it is never booked (that would put its net on clearing a second time) nor
@@ -163,14 +173,14 @@ func stripeReasonActions(st stripeTxnState) []string {
 		return []string{StripeActionUndismiss}
 	case st.status != StripeTxnNeedsReview:
 		return []string{}
-	case st.currency != "nok", st.reviewReason == StripeReviewCurrency, st.reviewReason == StripeReviewRefundPending:
+	case st.currency != "nok", st.reviewReason == StripeReviewCurrency, st.reviewReason == StripeReviewDisputePending:
 		return []string{StripeActionDismiss}
 	case st.reviewReason == StripeReviewUnassigned:
 		return stripeHeldActions(st)
 	case st.category == "other_adjustment" && st.reviewReason == StripeReviewUnsupportedCategory:
 		return []string{StripeActionAssignAccount, StripeActionDismiss}
 	case st.category != "charge":
-		return []string{}
+		return stripeRefundReasonActions(st)
 	}
 	switch st.reviewReason {
 	case StripeReviewNoAttempt, StripeReviewAmountMismatch, StripeReviewSplitMismatch:
@@ -181,9 +191,35 @@ func stripeReasonActions(st stripeTxnState) []string {
 	return []string{}
 }
 
+// stripeRefundReasonActions are the actions of a refund or refund failure
+// the booking pass could not book. Those it retries (the charge or refund
+// it books against may still arrive or be booked) are only dismissed; those
+// it leaves for a person can go to an account, or back to the pass once
+// rebooking them makes sense (a row stored before refunds were booked).
+// Disputes and anything else wait for their own booking.
+func stripeRefundReasonActions(st stripeTxnState) []string {
+	if !stripeRefundCategory(st.category) {
+		if st.reviewReason == StripeReviewRefundLegacy {
+			return []string{StripeActionDismiss}
+		}
+		return []string{}
+	}
+	switch st.reviewReason {
+	case StripeReviewRefundUnlinked, StripeReviewRefundOriginDismissed, StripeReviewRefundSplit,
+		StripeReviewRefundFailureSettled:
+		return []string{StripeActionAssignAccount, StripeActionDismiss}
+	case StripeReviewRefundLegacy:
+		return []string{StripeActionRebook, StripeActionDismiss}
+	case StripeReviewRefundChargeUnbooked:
+		return []string{StripeActionDismiss}
+	}
+	return []string{}
+}
+
 // stripeHeldActions are the actions of a row a person unassigned: booked
-// again from its order or as a fee by the booking pass (rebook), or by hand
-// as any row in review of its kind is. Only charges go to a faktura.
+// again from its order or as a fee or refund by the booking pass (rebook),
+// or by hand as any row in review of its kind is. Only charges go to a
+// faktura.
 func stripeHeldActions(st stripeTxnState) []string {
 	switch st.category {
 	case "charge":
@@ -191,7 +227,7 @@ func stripeHeldActions(st stripeTxnState) []string {
 			return []string{StripeActionRebook, StripeActionAssignInvoice, StripeActionAssignAccount, StripeActionDismiss}
 		}
 		return []string{StripeActionAssignInvoice, StripeActionAssignAccount, StripeActionDismiss}
-	case "fee":
+	case "fee", "refund", "refund_failure":
 		return []string{StripeActionRebook, StripeActionAssignAccount, StripeActionDismiss}
 	case "other_adjustment":
 		return []string{StripeActionAssignAccount, StripeActionDismiss}
@@ -210,10 +246,11 @@ func stripePayoutCategory(category string) bool {
 // unbooked).
 type stripeManualRow struct {
 	stripeTxnState
-	id, btID             string
-	amountOre, feeOre    int64
-	createdAt            time.Time
-	entryID, entryStatus string
+	id, btID                       string
+	amountOre, feeOre, refundedOre int64
+	createdAt                      time.Time
+	entryID, entryStatus           string
+	originID                       *string
 }
 
 // lockStripeTxnTx locks the row for the rest of tx and reads it with its
@@ -234,7 +271,8 @@ func lockStripeTxnTx(ctx context.Context, tx pgx.Tx, clubID, rowID string) (*str
 		`SELECT t.balance_transaction_id, t.reporting_category, t.status, COALESCE(t.review_reason, ''), t.currency,
 		        t.amount_ore, t.fee_ore, t.created_at, t.journal_entry_id IS NOT NULL,
 		        COALESCE(p.journal_entry_id IS NOT NULL, false), t.order_id IS NOT NULL,
-		        `+stripeOwnEntrySQL+`, COALESCE(t.journal_entry_id::text, ''), COALESCE(e.status::text, '')
+		        `+stripeOwnEntrySQL+`, COALESCE(t.journal_entry_id::text, ''), COALESCE(e.status::text, ''),
+		        t.refunded_ore, t.origin_txn_id::text
 		   FROM stripe_balance_transactions t
 		   LEFT JOIN stripe_payouts p ON p.id = t.payout_id
 		   LEFT JOIN journal_entries e ON e.id = t.journal_entry_id AND e.club_id = t.club_id
@@ -242,7 +280,7 @@ func lockStripeTxnTx(ctx context.Context, tx pgx.Tx, clubID, rowID string) (*str
 		rowID, clubID,
 	).Scan(&r.btID, &r.category, &r.status, &r.reviewReason, &r.currency,
 		&r.amountOre, &r.feeOre, &r.createdAt, &r.booked, &r.payoutCleared, &r.hasOrder,
-		&r.ownEntry, &r.entryID, &r.entryStatus); err != nil {
+		&r.ownEntry, &r.entryID, &r.entryStatus, &r.refundedOre, &r.originID); err != nil {
 		return nil, fmt.Errorf("reading stripe transaction: %w", err)
 	}
 	return r, nil
@@ -831,11 +869,22 @@ func IsListableStripeTxnStatus(status string) bool {
 	return status == StripeTxnNeedsReview || status == StripeTxnDismissed || status == StripeTxnBooked
 }
 
+// stripeChargeSettlesSQL is true when the Stripe row alias is a charge
+// whose booking still settles what it paid: booked, and not refunded in
+// full with the choice to collect again (recollected_at). It is the one
+// definition every "does this card payment settle the faktura" check uses
+// (invoiceBookedRowSQL, stripeSettledInvoiceSQL); a refund never settles
+// anything, and a recollected charge has given its fakturas back.
+func stripeChargeSettlesSQL(alias string) string {
+	return `(` + alias + `.reporting_category = 'charge' AND ` + alias + `.journal_entry_id IS NOT NULL AND ` +
+		alias + `.recollected_at IS NULL)`
+}
+
 // stripeSettledInvoiceSQL is true for a faktura i that the booked Stripe
-// row t settles: the one a person assigned it to (invoice_id) or, for a row
-// the booking pass booked from its order (no review_reason), every faktura
-// of the order. These are the Stripe clauses of invoiceBookedRowSQL.
-const stripeSettledInvoiceSQL = `(i.club_id = t.club_id AND t.journal_entry_id IS NOT NULL
+// charge t settles: the one a person assigned it to (invoice_id) or, for a
+// charge the booking pass booked from its order (no review_reason), every
+// faktura of the order. These are the Stripe clauses of invoiceBookedRowSQL.
+var stripeSettledInvoiceSQL = `(i.club_id = t.club_id AND ` + stripeChargeSettlesSQL("t") + `
 	      AND (i.id = t.invoice_id
 	           OR (t.review_reason IS NULL
 	               AND i.id IN (SELECT os.invoice_id FROM order_sources os WHERE os.order_id = t.order_id))))`

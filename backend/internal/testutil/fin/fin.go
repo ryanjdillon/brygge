@@ -168,7 +168,15 @@ func (c *Club) NewInvoice(t *testing.T, o InvoiceOpts) Invoice {
 	ctx := context.Background()
 
 	if o.Number == 0 {
-		c.nextInvoice++
+		// Numbers are unique per club, and code under test numbers its own
+		// fakturas (credit notes, imports) from the club's maximum.
+		var dbNext int
+		if err := c.Pool.QueryRow(ctx,
+			`SELECT COALESCE(MAX(invoice_number), 0) + 1 FROM invoices WHERE club_id = $1`, c.ID,
+		).Scan(&dbNext); err != nil {
+			t.Fatalf("fin: next invoice number: %v", err)
+		}
+		c.nextInvoice = max(c.nextInvoice+1, dbNext)
 		o.Number = c.nextInvoice
 	}
 	if o.KID == "" {

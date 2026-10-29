@@ -50,6 +50,13 @@ type creditInvoiceRow struct {
 	paid        bool
 	booked      bool
 	credited    bool
+	// refundDocument: a credit note (or debit faktura) a card refund
+	// issued, linked to its faktura through refund_documents and never
+	// linked, unlinked or voided by hand (ACC-9).
+	refundDocument bool
+	// refundCredited: card refunds issued credit notes for part of it, so a
+	// manual credit of its whole total would credit it twice.
+	refundCredited bool
 }
 
 func loadCreditInvoice(ctx context.Context, q interface {
@@ -62,7 +69,9 @@ func loadCreditInvoice(ctx context.Context, q interface {
 	               EXISTS (SELECT 1 FROM journal_entries je
 	                        WHERE je.club_id = i.club_id AND je.source = 'invoice_sync'
 	                          AND je.source_id = i.id::text AND je.status = 'posted'),
-	               ` + finance.CreditedSQL("i") + `
+	               ` + finance.CreditedSQL("i") + `,
+	               ` + refundDocumentSQL("i") + `,
+	               ` + refundCreditedSQL("i") + `
 	          FROM invoices i
 	         WHERE i.id = $1 AND i.club_id = $2`
 	if forUpdate {
@@ -71,12 +80,32 @@ func loadCreditInvoice(ctx context.Context, q interface {
 	var r creditInvoiceRow
 	err := q.QueryRow(ctx, sql, invoiceID, clubID).Scan(
 		&r.id, &r.number, &r.total, &r.status, &r.userID, &r.recipientID,
-		&r.sent, &r.imported, &r.creditsID, &r.settled, &r.paid, &r.booked, &r.credited,
+		&r.sent, &r.imported, &r.creditsID, &r.settled, &r.paid, &r.booked, &r.credited, &r.refundDocument, &r.refundCredited,
 	)
 	if err != nil {
 		return nil, err
 	}
 	return &r, nil
+}
+
+// refundDocumentSQL is true for an invoice a card refund issued: a credit
+// note for the refund, or the debit faktura after a failed one.
+func refundDocumentSQL(alias string) string {
+	return `EXISTS (SELECT 1 FROM refund_documents rdoc WHERE rdoc.credit_invoice_id = ` + alias + `.id)`
+}
+
+// refundCreditedSQL is true for a faktura card refunds issued credit notes
+// for (refund_documents, kind credit), live or not: a manual credit of the
+// whole faktura on top of them would credit it twice.
+func refundCreditedSQL(alias string) string {
+	return `EXISTS (SELECT 1 FROM refund_documents rcr WHERE rcr.invoice_id = ` + alias + `.id AND rcr.kind = 'credit')`
+}
+
+// refuseRefundDocument is the one refusal for linking, unlinking or voiding
+// a document a card refund issued.
+func refuseRefundDocument(w http.ResponseWriter) {
+	creditConflict(w, "refund_document",
+		"this was issued by a card refund and is linked to its faktura through the refund; it can't be linked, unlinked, voided or deleted by hand")
 }
 
 // hasPayer is true when the invoice bills a member or a billing recipient.
@@ -167,6 +196,10 @@ func (h *InvoiceHandler) HandleListCreditCandidates(w http.ResponseWriter, r *ht
 		Error(w, http.StatusBadRequest, "invoice is not a credit note")
 		return
 	}
+	if cn.refundDocument {
+		refuseRefundDocument(w)
+		return
+	}
 
 	anyPayer := r.URL.Query().Get("any") == "1"
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
@@ -201,7 +234,9 @@ func (h *InvoiceHandler) HandleListCreditCandidates(w http.ResponseWriter, r *ht
 		    AND i.status = 'open'
 		    AND i.total_amount > 0
 		    AND (i.sent_at IS NOT NULL OR i.import_source IS NOT NULL)
-		    AND NOT `+finance.CreditedSQL("i")+filter+order+`
+		    AND NOT `+finance.CreditedSQL("i")+`
+		    AND NOT `+refundDocumentSQL("i")+`
+		    AND NOT `+refundCreditedSQL("i")+filter+order+`
 		  LIMIT `+strconv.Itoa(creditSearchLimit+1),
 		args...,
 	)
@@ -338,6 +373,13 @@ func (h *InvoiceHandler) HandleLinkCreditNote(w http.ResponseWriter, r *http.Req
 
 	memberMismatch := !samePayer(cn, target)
 	switch {
+	case cn.refundDocument || target.refundDocument:
+		refuseRefundDocument(w)
+		return
+	case target.refundCredited:
+		creditConflict(w, "refund_credited",
+			"card refunds have issued credit notes for this faktura; a manual credit would credit it twice")
+		return
 	case cn.total >= 0:
 		Error(w, http.StatusBadRequest, "invoice is not a credit note")
 		return

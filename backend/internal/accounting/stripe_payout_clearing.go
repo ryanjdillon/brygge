@@ -441,6 +441,8 @@ type stripeMembers struct {
 	chargesReview  int
 	feesOpen       int
 	refundsOpen    int
+	refundsReview  int
+	disputesOpen   int
 	otherOpen      int
 	pendingBlocker bool
 }
@@ -490,8 +492,14 @@ func (m *stripeMembers) add(category, status string, net int64) {
 		}
 	case "fee":
 		m.feesOpen++
-	case "refund", "dispute", "dispute_reversal":
-		m.refundsOpen++
+	case "refund", "refund_failure":
+		if status == StripeTxnNeedsReview {
+			m.refundsReview++
+		} else {
+			m.refundsOpen++
+		}
+	case "dispute", "dispute_reversal":
+		m.disputesOpen++
 	default:
 		m.otherOpen++
 	}
@@ -499,7 +507,7 @@ func (m *stripeMembers) add(category, status string, net int64) {
 
 // open counts the members not yet booked or dismissed.
 func (m *stripeMembers) open() int {
-	return m.chargesOpen + m.chargesReview + m.feesOpen + m.refundsOpen + m.otherOpen
+	return m.chargesOpen + m.chargesReview + m.feesOpen + m.refundsOpen + m.refundsReview + m.disputesOpen + m.otherOpen
 }
 
 // openUnlinkedStripeRowsSQL selects the club's open balance rows linked to
@@ -543,7 +551,13 @@ func (m *stripeMembers) waitingReason() string {
 		parts = append(parts, plural(m.feesOpen, "Stripe-gebyr venter", "Stripe-gebyrer venter")+" på bokføring")
 	}
 	if m.refundsOpen > 0 {
-		parts = append(parts, plural(m.refundsOpen, "refusjon eller tvist venter", "refusjoner eller tvister venter")+
+		parts = append(parts, plural(m.refundsOpen, "refusjon venter", "refusjoner venter")+" på bokføring")
+	}
+	if m.refundsReview > 0 {
+		parts = append(parts, plural(m.refundsReview, "refusjon", "refusjoner")+" til gjennomgang")
+	}
+	if m.disputesOpen > 0 {
+		parts = append(parts, plural(m.disputesOpen, "tvist venter", "tvister venter")+
 			" (bokføres ikke automatisk ennå)")
 	}
 	if m.otherOpen > 0 {

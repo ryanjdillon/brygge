@@ -6,6 +6,8 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+
+	"github.com/brygge-klubb/brygge/internal/stripe"
 )
 
 // Undoing a Stripe booking, and handing the row back. A booked charge, fee
@@ -75,6 +77,13 @@ func unassignStripeTxnTx(ctx context.Context, tx pgx.Tx, clubID, actorID, txnID 
 	if err := requireStripeUnassign(row); err != nil {
 		return nil, err
 	}
+	switch {
+	case row.category == stripe.CategoryCharge && row.refundedOre > 0:
+		return nil, stripeRefusal(StripeTxnRefundBooked,
+			"kortbetalingen har en bokført refusjon – angre refusjonen først")
+	case stripeRefundCategory(row.category):
+		return unassignStripeRefundTx(ctx, tx, clubID, actorID, row)
+	}
 
 	// The row is locked, so the fields the faktura set derives from
 	// (invoice_id, review_reason, order_id) cannot change under us.
@@ -99,6 +108,23 @@ func unassignStripeTxnTx(ctx context.Context, tx pgx.Tx, clubID, actorID, txnID 
 		ID: row.id, BalanceTransactionID: row.btID, VoidedJournalEntryID: row.entryID,
 		InvoiceIDs: invoiceIDs, Status: StripeTxnNeedsReview, ReviewReason: StripeReviewUnassigned,
 	}
+	if err := voidStripeEntryTx(ctx, tx, clubID, actorID, row, res); err != nil {
+		return nil, err
+	}
+	for _, id := range invoiceIDs {
+		if _, err := reopenInvoicePaymentTx(ctx, tx, clubID, id); err != nil {
+			return nil, err
+		}
+	}
+	if err := holdUnassignedTx(ctx, tx, clubID, row); err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+// voidStripeEntryTx voids the row's entry (a reversal in its own period),
+// tolerating one voided already.
+func voidStripeEntryTx(ctx context.Context, tx pgx.Tx, clubID, actorID string, row *stripeManualRow, res *StripeTxnUnassignResult) error {
 	reversal, err := voidJournalEntryTx(ctx, tx, clubID, row.entryID, actorID)
 	switch {
 	case err == nil:
@@ -108,29 +134,29 @@ func unassignStripeTxnTx(ctx context.Context, tx pgx.Tx, clubID, actorID, txnID 
 		// here is a bug and falls through to the error below.
 		res.AlreadyVoided = true
 	case errors.Is(err, ErrPeriodClosed):
-		return nil, stripeRefusal(StripeTxnPeriodClosed,
+		return stripeRefusal(StripeTxnPeriodClosed,
 			"regnskapsperioden bilaget er ført i er stengt – åpne perioden eller korriger med et nytt bilag")
 	default:
-		return nil, fmt.Errorf("voiding stripe entry: %w", err)
+		return fmt.Errorf("voiding stripe entry: %w", err)
 	}
+	return nil
+}
 
-	for _, id := range invoiceIDs {
-		if _, err := reopenInvoicePaymentTx(ctx, tx, clubID, id); err != nil {
-			return nil, err
-		}
-	}
+// holdUnassignedTx holds the row in review as unassigned, with no entry
+// and no faktura.
+func holdUnassignedTx(ctx context.Context, tx pgx.Tx, clubID string, row *stripeManualRow) error {
 	tag, err := tx.Exec(ctx,
 		`UPDATE stripe_balance_transactions
 		    SET status = 'needs_review', review_reason = $4, journal_entry_id = NULL, invoice_id = NULL, updated_at = now()
 		  WHERE id = $1 AND club_id = $2 AND status = 'booked' AND journal_entry_id = $3`,
 		row.id, clubID, row.entryID, StripeReviewUnassigned)
 	if err != nil {
-		return nil, fmt.Errorf("holding stripe transaction: %w", err)
+		return fmt.Errorf("holding stripe transaction: %w", err)
 	}
 	if tag.RowsAffected() != 1 {
-		return nil, errors.New("stripe transaction changed under its lock")
+		return errors.New("stripe transaction changed under its lock")
 	}
-	return res, nil
+	return nil
 }
 
 // requireStripeUnassign refuses an unassign the row does not allow, with
@@ -174,10 +200,11 @@ const (
 	StripeRebookFailed      = "failed"
 )
 
-// RebookStripeTxn hands a row a person holds (unassigned) back to the
-// booking pass, as actorID: a charge with an order or a fee goes back to
-// unbooked with no review reason (a guarded update, so only a held row
-// moves), and the pass books that row at once, in the same hold of the
+// RebookStripeTxn hands a row a person holds (unassigned, or a refund
+// stored before refunds were booked) back to the booking pass, as actorID:
+// a charge with an order, a fee or a refund goes back to unbooked with no
+// review reason (a guarded update, so only a held row moves), and the pass
+// books that row at once, in the same hold of the
 // club's Stripe slot. The pass re-checks everything as for any ready row,
 // so a charge whose order no longer adds up is held for review again with
 // the pass's reason. Refused with not_allowed for any other row.
@@ -194,8 +221,8 @@ func (s *Service) RebookStripeTxn(ctx context.Context, clubID, actorID, txnID st
 		tag, err := tx.Exec(ctx,
 			`UPDATE stripe_balance_transactions SET status = 'unbooked', review_reason = NULL, updated_at = now()
 			  WHERE id = $1 AND club_id = $2 AND journal_entry_id IS NULL
-			    AND status = 'needs_review' AND review_reason = $3`,
-			row.id, clubID, StripeReviewUnassigned)
+			    AND status = 'needs_review' AND review_reason IN ($3, $4)`,
+			row.id, clubID, StripeReviewUnassigned, StripeReviewRefundLegacy)
 		if err != nil {
 			return fmt.Errorf("releasing stripe transaction: %w", err)
 		}
@@ -247,7 +274,7 @@ func stripeRebookOutcome(out stripeBookOutcome, err error) (outcome, reason stri
 	switch {
 	case err != nil:
 		return StripeRebookFailed, ""
-	case out.kind == stripeOutcomeCharge, out.kind == stripeOutcomeFee:
+	case out.kind == stripeOutcomeCharge, out.kind == stripeOutcomeFee, out.kind == stripeOutcomeRefund:
 		return StripeRebookBooked, ""
 	case out.kind == stripeOutcomeReview:
 		return StripeRebookNeedsReview, out.reason

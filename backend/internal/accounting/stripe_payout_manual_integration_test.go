@@ -261,7 +261,7 @@ func TestManualClearOfManualPayoutWaitsForOpenBalance(t *testing.T) {
 	f.insertBT(t, stripeBT{id: "txn_test_funding_fee", category: "fee", amountOre: 4000,
 		created: time.Date(f.club.Year, 6, 5, 10, 0, 0, 0, time.UTC)})
 	f.insertBT(t, stripeBT{id: "txn_test_later_refund", category: "refund", amountOre: -500,
-		status: StripeTxnNeedsReview, reason: StripeReviewRefundPending,
+		status: StripeTxnNeedsReview, reason: StripeReviewRefundLegacy,
 		created: time.Date(f.club.Year, 6, 20, 10, 0, 0, 0, time.UTC)})
 	row := f.stripeDeposit(t, f.club.NewBankImport(t), f.day(6, 10), 4000, "STRIPE")
 

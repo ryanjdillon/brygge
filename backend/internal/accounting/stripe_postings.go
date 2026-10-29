@@ -56,6 +56,8 @@ const stripeWinnerSQL = `SELECT journal_entry_id FROM stripe_balance_transaction
 type StripeBookResult struct {
 	ChargesBooked int `json:"charges_booked"`
 	FeesBooked    int `json:"fees_booked"`
+	// RefundsBooked counts refunds and refund failures booked.
+	RefundsBooked int `json:"refunds_booked"`
 	// NeedsReview counts, by review_reason, the charges this pass held for
 	// review (newly, or again on a retry).
 	NeedsReview map[string]int `json:"needs_review"`
@@ -173,6 +175,8 @@ func (s *Service) bookStripeBalance(ctx context.Context, clubID, actorID string)
 		  WHERE club_id = $1 AND journal_entry_id IS NULL AND currency = 'nok'
 		    AND ((reporting_category = 'fee' AND status = 'unbooked')
 		      OR (reporting_category = 'charge' AND order_id IS NOT NULL
+		          AND (status = 'unbooked' OR `+stripeBookingReviewSQL+`))
+		      OR (reporting_category IN ('refund', 'refund_failure')
 		          AND (status = 'unbooked' OR `+stripeBookingReviewSQL+`)))
 		  ORDER BY created_at, id`,
 		clubID)
@@ -202,6 +206,7 @@ const (
 	stripeOutcomeFee
 	stripeOutcomeReview
 	stripeOutcomeDeferred
+	stripeOutcomeRefund
 )
 
 type stripeBookOutcome struct {
@@ -221,6 +226,8 @@ func (r *StripeBookResult) record(out stripeBookOutcome, err error) {
 		r.ChargesBooked++
 	case stripeOutcomeFee:
 		r.FeesBooked++
+	case stripeOutcomeRefund:
+		r.RefundsBooked++
 	case stripeOutcomeReview:
 		r.NeedsReview[out.reason]++
 	case stripeOutcomeDeferred:
@@ -233,22 +240,26 @@ func (r *StripeBookResult) record(out stripeBookOutcome, err error) {
 // stripeTxnRow is a stripe_balance_transactions row as the booking reads it.
 type stripeTxnRow struct {
 	id, btID, category, stripeType, status, reviewReason string
+	sourceID, chargeID, paymentIntentID                  string
 	amountOre, feeOre                                    int64
 	createdAt                                            time.Time
-	orderID                                              *string
+	orderID, originID, requestKey                        *string
 	booked                                               bool
 }
 
-// bookable reports whether the row is still waiting to be booked.
+// bookable reports whether the row is still waiting to be booked: an
+// unbooked charge, fee or refund, or one the pass held for review on a
+// reason it retries.
 func (r *stripeTxnRow) bookable() bool {
 	if r.booked {
 		return false
 	}
 	switch r.status {
 	case StripeTxnUnbooked:
-		return r.category == "charge" || r.category == "fee"
+		return r.category == "charge" || r.category == "fee" || stripeRefundCategory(r.category)
 	case StripeTxnNeedsReview:
-		return r.category == "charge" && slices.Contains(stripeBookingReviewReasons, r.reviewReason)
+		return (r.category == "charge" && slices.Contains(stripeChargeReviewReasons, r.reviewReason)) ||
+			(stripeRefundCategory(r.category) && slices.Contains(stripeRefundRetryReasons, r.reviewReason))
 	}
 	return false
 }
@@ -266,13 +277,16 @@ func (s *Service) bookStripeTxn(ctx context.Context, clubID, actorID, rowID stri
 	var row stripeTxnRow
 	err = tx.QueryRow(ctx,
 		`SELECT id, balance_transaction_id, reporting_category, stripe_type, status, COALESCE(review_reason, ''),
-		        amount_ore, fee_ore, created_at, order_id, journal_entry_id IS NOT NULL
+		        source_id, charge_id, payment_intent_id,
+		        amount_ore, fee_ore, created_at, order_id, origin_txn_id::text, refund_request_key::text,
+		        journal_entry_id IS NOT NULL
 		   FROM stripe_balance_transactions
 		  WHERE id = $1 AND club_id = $2
 		  FOR UPDATE`,
 		rowID, clubID,
 	).Scan(&row.id, &row.btID, &row.category, &row.stripeType, &row.status, &row.reviewReason,
-		&row.amountOre, &row.feeOre, &row.createdAt, &row.orderID, &row.booked)
+		&row.sourceID, &row.chargeID, &row.paymentIntentID,
+		&row.amountOre, &row.feeOre, &row.createdAt, &row.orderID, &row.originID, &row.requestKey, &row.booked)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return out, nil
 	}
@@ -301,24 +315,36 @@ func (s *Service) bookStripeTxn(ctx context.Context, clubID, actorID, rowID stri
 	}
 
 	var invoiceIDs []string
+	var refund *refundEffects
 	switch row.category {
 	case "charge":
 		out.kind, out.reason, invoiceIDs, err = bookStripeChargeTx(ctx, tx, clubID, actorID, &row, out.date, periodID)
 	case "fee":
 		out.kind, err = bookStripeFeeTx(ctx, tx, clubID, actorID, &row, out.date, periodID)
+	case "refund", "refund_failure":
+		out.kind, out.reason, refund, err = bookStripeRefundRowTx(ctx, tx, clubID, actorID, &row, out.date, periodID)
 	}
-	if errors.Is(err, ErrPeriodClosed) {
+	switch {
+	case errors.Is(err, ErrPeriodClosed):
 		out.kind, out.reason = stripeOutcomeDeferred, StripeDeferPeriodClosed
 		return out, nil
-	}
-	if err != nil {
+	case errors.Is(err, errChargeRaced):
+		return stripeBookOutcome{btID: row.btID}, nil
+	case err != nil:
 		return out, err
-	}
-	if out.kind == stripeOutcomeSkipped {
+	case out.kind == stripeOutcomeSkipped:
+		return out, nil
+	case out.kind == stripeOutcomeDeferred:
+		// A deferral found inside the booking (a duplicate capture's own
+		// period) wrote nothing worth keeping.
 		return out, nil
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return out, fmt.Errorf("commit: %w", err)
+	}
+	if refund != nil {
+		refund.rowID, refund.btID, refund.category = row.id, row.btID, row.category
+		s.afterRefundBooked(ctx, clubID, actorID, refund)
 	}
 
 	// The back-link updates the fakturas, so it runs once the commit has
