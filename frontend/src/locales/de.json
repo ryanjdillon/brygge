@@ -134,7 +134,11 @@
     "send": "Nachricht senden",
     "sending": "Wird gesendet...",
     "sent": "Nachricht gesendet!",
-    "sendError": "Nachricht konnte nicht gesendet werden. Bitte versuchen Sie es erneut."
+    "sendError": "Nachricht konnte nicht gesendet werden. Bitte versuchen Sie es erneut.",
+    "rateLimited": "Sie haben in kurzer Zeit mehrere Nachrichten gesendet. Warten Sie eine Minute und versuchen Sie es erneut.",
+    "deliveryFailed": "Ihre Nachricht wurde möglicherweise nicht zugestellt. Bitte versuchen Sie es in einigen Minuten erneut oder kontaktieren Sie uns auf anderem Weg.",
+    "checkInput": "Bitte prüfen Sie Ihre Eingaben: Die Nachricht braucht mindestens 10 Zeichen, und jedes Feld hat eine maximale Länge.",
+    "unavailable": "Das Kontaktformular ist derzeit nicht verfügbar. Nutzen Sie stattdessen eine der E-Mail-Adressen auf dieser Seite oder versuchen Sie es später erneut."
   },
   "pricing": {
     "title": "Preise",

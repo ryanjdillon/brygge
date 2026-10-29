@@ -134,7 +134,11 @@
     "send": "Envoyer le message",
     "sending": "Envoi en cours...",
     "sent": "Message envoyé !",
-    "sendError": "Impossible d'envoyer le message. Veuillez réessayer."
+    "sendError": "Impossible d'envoyer le message. Veuillez réessayer.",
+    "rateLimited": "Vous avez envoyé plusieurs messages en peu de temps. Attendez une minute, puis réessayez.",
+    "deliveryFailed": "Votre message n'a peut-être pas été remis. Veuillez réessayer dans quelques minutes ou nous contacter autrement.",
+    "checkInput": "Vérifiez votre saisie : le message doit comporter au moins 10 caractères et chaque champ a une longueur maximale.",
+    "unavailable": "Le formulaire de contact n'est pas disponible pour le moment. Utilisez plutôt l'une des adresses e-mail de cette page, ou réessayez plus tard."
   },
   "pricing": {
     "title": "Tarifs",

@@ -134,7 +134,11 @@
     "send": "Bericht versturen",
     "sending": "Versturen...",
     "sent": "Bericht verzonden!",
-    "sendError": "Kon bericht niet versturen. Probeer het opnieuw."
+    "sendError": "Kon bericht niet versturen. Probeer het opnieuw.",
+    "rateLimited": "Je hebt in korte tijd meerdere berichten verstuurd. Wacht een minuut en probeer het opnieuw.",
+    "deliveryFailed": "Je bericht is mogelijk niet bezorgd. Probeer het over een paar minuten opnieuw of neem op een andere manier contact met ons op.",
+    "checkInput": "Controleer wat je hebt ingevuld: het bericht moet minstens 10 tekens hebben en elk veld heeft een maximale lengte.",
+    "unavailable": "Het contactformulier is nu niet beschikbaar. Gebruik in plaats daarvan een van de e-mailadressen op deze pagina, of probeer het later opnieuw."
   },
   "pricing": {
     "title": "Tarieven",

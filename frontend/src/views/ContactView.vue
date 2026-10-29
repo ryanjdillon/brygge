@@ -35,31 +35,42 @@ const boardContacts = computed<BoardContact[]>(() =>
   ].filter((c) => c.email),
 )
 
-const form = ref({
-  name: '',
-  email: '',
-  subject: '',
-  message: '',
-})
+// `website` is the honeypot: it is hidden from people, so only a script
+// that fills every input sets it, and the server then drops the message.
+const emptyForm = () => ({ name: '', email: '', subject: '', message: '', website: '' })
+const form = ref(emptyForm())
 const sending = ref(false)
 const sent = ref(false)
-const error = ref(false)
+const errorKey = ref<string | null>(null)
+
+// The server never claims success for a message that was not delivered, so
+// each failure says what the visitor can do about it.
+function errorKeyFor(status: number): string {
+  if (status === 400 || status === 413) return 'contact.checkInput'
+  if (status === 429) return 'contact.rateLimited'
+  if (status === 502) return 'contact.deliveryFailed'
+  if (status === 503) return 'contact.unavailable'
+  return 'contact.sendError'
+}
 
 async function handleSubmit() {
   sending.value = true
   sent.value = false
-  error.value = false
+  errorKey.value = null
   try {
     const response = await fetch('/api/v1/contact', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(form.value),
     })
-    if (!response.ok) throw new Error('Send failed')
+    if (!response.ok) {
+      errorKey.value = errorKeyFor(response.status)
+      return
+    }
     sent.value = true
-    form.value = { name: '', email: '', subject: '', message: '' }
+    form.value = emptyForm()
   } catch {
-    error.value = true
+    errorKey.value = 'contact.sendError'
   } finally {
     sending.value = false
   }
@@ -157,36 +168,49 @@ async function handleSubmit() {
         </div>
 
         <form
-          class="space-y-4 rounded-2xl border border-slate-200 bg-white p-7 shadow-md"
+          class="relative space-y-4 rounded-2xl border border-slate-200 bg-white p-7 shadow-md"
           @submit.prevent="handleSubmit"
         >
           <FormField :label="t('contact.formName')" for="contact-name" required>
-            <Input id="contact-name" v-model="form.name" type="text" required />
+            <Input id="contact-name" v-model="form.name" type="text" required :maxlength="100" />
           </FormField>
 
           <FormField :label="t('contact.formEmail')" for="contact-email" required>
-            <Input id="contact-email" v-model="form.email" type="email" required />
+            <Input id="contact-email" v-model="form.email" type="email" required :maxlength="254" />
           </FormField>
 
           <FormField :label="t('contact.formSubject')" for="contact-subject" required>
-            <Input id="contact-subject" v-model="form.subject" type="text" required />
+            <Input id="contact-subject" v-model="form.subject" type="text" required :maxlength="200" />
           </FormField>
 
           <FormField :label="t('contact.formMessage')" for="contact-message" required>
-            <Textarea id="contact-message" v-model="form.message" :rows="5" required />
+            <Textarea id="contact-message" v-model="form.message" :rows="5" required :minlength="10" :maxlength="5000" />
           </FormField>
 
           <div v-if="sent" class="rounded-md bg-green-50 p-3 text-sm text-green-700">
             {{ t('contact.sent') }}
           </div>
-          <div v-if="error" class="rounded-md bg-red-50 p-3 text-sm text-red-700">
-            {{ t('contact.sendError') }}
+          <div v-if="errorKey" role="alert" class="rounded-md bg-red-50 p-3 text-sm text-red-700">
+            {{ t(errorKey) }}
+          </div>
+
+          <!-- Honeypot: off-screen rather than display:none, which some bots
+               skip; out of the tab order and the accessibility tree. -->
+          <div aria-hidden="true" class="absolute -left-[9999px] h-0 w-0 overflow-hidden">
+            <input
+              id="contact-website"
+              v-model="form.website"
+              type="text"
+              name="website"
+              tabindex="-1"
+              autocomplete="off"
+            />
           </div>
 
           <button
             type="submit"
             :disabled="sending"
-            class="w-full rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+            class="min-h-[44px] w-full rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
           >
             {{ sending ? t('contact.sending') : t('contact.send') }}
           </button>

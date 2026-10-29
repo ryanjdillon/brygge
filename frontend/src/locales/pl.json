@@ -134,7 +134,11 @@
     "send": "Wyślij wiadomość",
     "sending": "Wysyłanie...",
     "sent": "Wiadomość wysłana!",
-    "sendError": "Nie udało się wysłać wiadomości. Spróbuj ponownie."
+    "sendError": "Nie udało się wysłać wiadomości. Spróbuj ponownie.",
+    "rateLimited": "Wysłano kilka wiadomości w krótkim czasie. Poczekaj minutę i spróbuj ponownie.",
+    "deliveryFailed": "Twoja wiadomość mogła nie zostać dostarczona. Spróbuj ponownie za kilka minut lub skontaktuj się z nami w inny sposób.",
+    "checkInput": "Sprawdź wpisane dane: wiadomość musi mieć co najmniej 10 znaków, a każde pole ma maksymalną długość.",
+    "unavailable": "Formularz kontaktowy jest teraz niedostępny. Użyj jednego z adresów e-mail na tej stronie lub spróbuj ponownie później."
   },
   "pricing": {
     "title": "Cennik",

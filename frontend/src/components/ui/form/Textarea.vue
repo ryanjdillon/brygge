@@ -9,6 +9,7 @@ const props = withDefaults(
     readonly?: boolean
     required?: boolean
     maxlength?: number
+    minlength?: number
     rows?: number
     error?: string
     name?: string
@@ -45,6 +46,7 @@ const cls = computed(() => [
       :readonly="readonly"
       :required="required"
       :maxlength="maxlength"
+      :minlength="minlength"
       :aria-label="ariaLabel"
       :aria-invalid="!!error"
       :class="cls"

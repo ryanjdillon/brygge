@@ -134,7 +134,11 @@
     "send": "Invia messaggio",
     "sending": "Invio in corso...",
     "sent": "Messaggio inviato!",
-    "sendError": "Impossibile inviare il messaggio. Riprova."
+    "sendError": "Impossibile inviare il messaggio. Riprova.",
+    "rateLimited": "Hai inviato diversi messaggi in poco tempo. Attendi un minuto e riprova.",
+    "deliveryFailed": "Il tuo messaggio potrebbe non essere stato recapitato. Riprova tra qualche minuto o contattaci in un altro modo.",
+    "checkInput": "Controlla quanto hai scritto: il messaggio deve avere almeno 10 caratteri e ogni campo ha una lunghezza massima.",
+    "unavailable": "Il modulo di contatto non è disponibile al momento. Usa invece uno degli indirizzi e-mail di questa pagina, oppure riprova più tardi."
   },
   "pricing": {
     "title": "Tariffe",
