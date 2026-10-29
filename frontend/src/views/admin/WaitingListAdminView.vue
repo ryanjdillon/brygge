@@ -7,11 +7,13 @@ import { formatDate } from '@/lib/format'
 import SortableTh from '@/components/admin/SortableTh.vue'
 import { UserPlus, GripVertical, X } from 'lucide-vue-next'
 import { useApi } from '@/composables/useApi'
+import { useFreshTotp } from '@/composables/useFreshTotp'
 
 const { t } = useI18n()
 const client = useApiClient()
 const queryClient = useQueryClient()
 const { fetchApi } = useApi()
+const { ensureFreshTotp, totpAwareFetch } = useFreshTotp()
 
 type SortField = 'position' | 'name' | 'registered'
 const sortField = ref<SortField>('position')
@@ -32,7 +34,7 @@ const offset = ref(0)
 const { data: response, isLoading, isError } = useQuery({
   queryKey: ['admin', 'waiting-list', offset],
   queryFn: async () => {
-    const res = unwrap(await client.GET('/api/v1/waiting-list', {
+    const res = unwrap(await client.GET('/api/v1/admin/waiting-list', {
       params: { query: { limit: PAGE_SIZE, offset: offset.value } as any },
     }))
     return res as unknown as { items: any[]; has_more: boolean; limit: number; offset: number }
@@ -90,10 +92,9 @@ function onDragEnd() {
 
 const { mutate: reorder } = useMutation({
   mutationFn: async ({ entryId, newPosition }: { entryId: string; newPosition: number }) => {
-    const res = await fetch(`/api/v1/waiting-list/${entryId}/position`, {
+    const res = await totpAwareFetch(`/api/v1/admin/waiting-list/${entryId}/position`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
       body: JSON.stringify({ new_position: newPosition }),
     })
     if (!res.ok) {
@@ -105,16 +106,20 @@ const { mutate: reorder } = useMutation({
   onSettled: () => { reorderingId.value = null },
 })
 
-function onDrop(e: DragEvent, targetId: string) {
+async function onDrop(e: DragEvent, targetId: string) {
   e.preventDefault()
   draggingId.value = null
   dragOverId.value = null
 
+  // dataTransfer is only readable during the event, so read it before awaiting.
   const sourceId = e.dataTransfer?.getData('text/plain')
   if (!sourceId || sourceId === targetId) return
 
   const target = sorted.value.find(e => e.id === targetId)
   if (!target) return
+
+  // A drag cannot pause for a prompt, so the drop is the click-time gate.
+  if (!(await ensureFreshTotp())) return
 
   reorderingId.value = sourceId
   reorder({ entryId: sourceId, newPosition: target.position })
@@ -154,7 +159,8 @@ watch(memberSearch, (q) => {
   }, 250)
 })
 
-function openAddModal() {
+async function openAddModal() {
+  if (!(await ensureFreshTotp())) return
   memberSearch.value = ''
   searchResults.value = []
   addError.value = ''
@@ -168,10 +174,9 @@ function closeAddModal() {
 
 const { mutate: enroll, isPending: enrolling } = useMutation({
   mutationFn: async (userId: string) => {
-    const res = await fetch('/api/v1/waiting-list/enroll', {
+    const res = await totpAwareFetch('/api/v1/admin/waiting-list/enroll', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
       body: JSON.stringify({ user_id: userId }),
     })
     if (!res.ok) {
