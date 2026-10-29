@@ -51,3 +51,9 @@ PAY-1 to PAY-9 were taken together on 2026-10-27 (BRY-440) and bound the Stripe 
 
 - **Status:** accepted · 2026-10-28 · BRY-470
 - **Decision:** a provider with a minimum amount (Stripe: 3 kr in NOK) is not offered below it; the payer sees the other options.
+
+### PAY-10: A full refund of a booking order cancels the booking
+
+- **Status:** accepted · 2026-10-29 · BRY-446
+- **Decision:** when an order that paid for a booking (a guest slip or a room) is refunded in full, the booking is cancelled and the slip or room is freed.
+- **Consequences:** online orders don't create bookings yet (QR guest payments carry no booking), so this applies once a booking checkout exists.

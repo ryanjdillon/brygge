@@ -14,11 +14,11 @@ See [README.md](README.md) for the format. Implementation: [`backend/internal/ac
 - **Status:** accepted · 2026-10-29 · BRY-446
 - **Decision:** when a card refund on a faktura or an order is booked, Brygge issues a credit note for the refunded amount (lines copied from the faktura or order, scaled proportionally for a partial refund), books it (DR revenue / CR 1500), links it to the faktura, and sends it to the payer. The refund itself books DR 1500 / CR the provider clearing account. A partial refund leaves the faktura paid; the refund-generated credit note never counts as credit owed to the member, because the refund already paid it.
 - **Why:** of the options considered, booking the refund straight against revenue without a credit note is not compliant (ACC-1); a manual credit note per refund creates work and is easy to forget; sending every partial refund to manual review creates work for no added safety. Automatic generation is compliant and costs nothing per refund.
-- **Consequences:** the rule that a linked credit equals the faktura's total (BRY-342) is relaxed only for refund-generated credit notes whose amount equals the booked refund; manual partial credits are still refused. A charge that the treasurer assigned to an account by hand isn't a sale through Brygge, so its refund books against that account with no credit note.
+- **Consequences:** refund credit notes are linked to the faktura through their refund, not through the manual credit link, so the rule that a manual credit equals the faktura's total (BRY-342) is unchanged. A faktura whose refund credit notes add up to its total counts as credited. A charge that the treasurer assigned to an account by hand isn't a sale through Brygge, so its refund books against that account with no credit note.
 
 ### ACC-3: A full refund of a faktura waits for the treasurer's choice
 
-- **Status:** accepted · 2026-10-29 · BRY-446
+- **Status:** superseded by ACC-8 · 2026-10-29 · BRY-446
 - **Decision:** a full refund means either the sale is cancelled (**credit the faktura**) or the money must be collected another way (**collect again**). A refund started in Brygge asks which, with crediting as the default. A full refund made in the provider's dashboard holds the faktura as "refunded – awaiting a choice": no reminders, no pay link, and a task for the treasurer with the same two one-click choices.
 - **Why:** only the treasurer knows why the money went back. Reopening the faktura automatically would send reminders to a member who was just refunded; crediting automatically would write off money the club may still be owed.
 - **Consequences:** "collect again" reopens the receivable and detaches the faktura from the refunded order so that a new payment link can be made.
@@ -48,3 +48,15 @@ See [README.md](README.md) for the format. Implementation: [`backend/internal/ac
 - **Status:** accepted · 2026-10-16 · BRY-351
 - **Decision:** exemptions (for example a free slip for a board role) are configured as role × price item per club, and the configuration starts empty. An exempt faktura is still issued and booked gross, with an exemption line, and nets to 0 kr.
 - **Why:** which roles get a perk differs between clubs (see PLAT-1); booking gross keeps the cost of the perk visible in the accounts.
+
+### ACC-8: A full refund credits the faktura automatically
+
+- **Status:** accepted · 2026-10-29 · BRY-446 · supersedes ACC-3
+- **Decision:** a full card refund credits the faktura automatically (a credit note per ACC-2), whether it was made in Brygge or in the provider's dashboard. A refund started in Brygge can choose **Krev inn på nytt** instead, if no partial refund was credited before: no credit note, and the faktura reopens as an ordinary unpaid faktura. After an automatic credit, the treasurer collects again by issuing a new faktura.
+- **Why:** holding a dashboard refund until the treasurer chooses (ACC-3) leaves the ledger and the faktura list disagreeing for as long as nobody decides, possibly across year-end, and needs a waiting state, reminder suppression and a task. Crediting is the usual reason for a full refund, so making it the automatic outcome is the least work and keeps the books consistent.
+
+### ACC-9: An issued credit note is never voided
+
+- **Status:** accepted · 2026-10-29 · BRY-446
+- **Decision:** a credit note made by a refund is an issued sales document and stays. If the refund later fails and the money comes back, or the refund booking is corrected, Brygge issues a new faktura for the amount instead of voiding the credit note.
+- **Why:** under ACC-1 a sales document that has been issued is corrected by a new document, not withdrawn.
