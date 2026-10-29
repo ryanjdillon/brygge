@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/brygge-klubb/brygge/internal/accounting"
 	"github.com/brygge-klubb/brygge/internal/audit"
 	"github.com/brygge-klubb/brygge/internal/finance"
 	"github.com/brygge-klubb/brygge/internal/middleware"
@@ -600,19 +601,6 @@ func (h *InvoiceHandler) createBulkInvoice(
 		return "", 0, 0, err
 	}
 
-	var invoiceSeq int
-	if err := h.db.QueryRow(ctx,
-		`SELECT COALESCE(MAX(invoice_number), 0) + 1 FROM invoices WHERE club_id = $1`,
-		clubID,
-	).Scan(&invoiceSeq); err != nil {
-		return "", 0, 0, err
-	}
-
-	kid, err := finance.GenerateKIDMethod("000", invoiceSeq, 1, kidMethod)
-	if err != nil {
-		return "", 0, 0, err
-	}
-
 	// Each resolved line becomes one stored line, plus an offsetting
 	// exemption line right after it when a role exemption applies.
 	type storedLine struct {
@@ -672,28 +660,6 @@ func (h *InvoiceHandler) createBulkInvoice(
 		pdfLines = append(pdfLines, sl.pdf)
 	}
 
-	inv := finance.Invoice{
-		ClubName:       clubName,
-		OrgNumber:      orgNumber,
-		ClubAddress:    clubAddress,
-		Website:        website,
-		TreasurerEmail: treasurerEmail,
-		LogoData:       logoData,
-		LogoMIME:       logoMIME,
-		MemberName:     memberName,
-		MemberAddress:  memberAddress,
-		InvoiceNumber:  invoiceSeq,
-		IssueDate:      time.Now(),
-		DueDate:        dueDate,
-		KID:            kid,
-		BankAccount:    bankAccount,
-		Lines:          pdfLines,
-	}
-	pdfData, err := finance.GeneratePDF(inv)
-	if err != nil {
-		return "", 0, 0, err
-	}
-
 	// invoices.category stays NULL when an invoice covers multiple
 	// categories so the (user, category, period) unique partial index
 	// only constrains single-category invoices. The per-line idempotency
@@ -716,6 +682,37 @@ func (h *InvoiceHandler) createBulkInvoice(
 		return "", 0, 0, err
 	}
 	defer tx.Rollback(ctx)
+
+	// Numbered under the club's numbering lock, which the transaction holds
+	// until the faktura is committed; the KID and PDF print the number.
+	invoiceSeq, err := accounting.NextInvoiceNumberTx(ctx, tx, clubID)
+	if err != nil {
+		return "", 0, 0, err
+	}
+	kid, err := finance.GenerateKIDMethod("000", invoiceSeq, 1, kidMethod)
+	if err != nil {
+		return "", 0, 0, err
+	}
+	pdfData, err := finance.GeneratePDF(finance.Invoice{
+		ClubName:       clubName,
+		OrgNumber:      orgNumber,
+		ClubAddress:    clubAddress,
+		Website:        website,
+		TreasurerEmail: treasurerEmail,
+		LogoData:       logoData,
+		LogoMIME:       logoMIME,
+		MemberName:     memberName,
+		MemberAddress:  memberAddress,
+		InvoiceNumber:  invoiceSeq,
+		IssueDate:      time.Now(),
+		DueDate:        dueDate,
+		KID:            kid,
+		BankAccount:    bankAccount,
+		Lines:          pdfLines,
+	})
+	if err != nil {
+		return "", 0, 0, err
+	}
 
 	var invoiceID string
 	if err := tx.QueryRow(ctx,

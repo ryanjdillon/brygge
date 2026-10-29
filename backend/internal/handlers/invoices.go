@@ -382,23 +382,11 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
-	// Get next invoice sequence for KID
-	var invoiceSeq int
-	err = h.db.QueryRow(ctx,
-		`SELECT COALESCE(MAX(invoice_number), 0) + 1 FROM invoices WHERE club_id = $1`,
-		claims.ClubID,
-	).Scan(&invoiceSeq)
-	if err != nil {
-		h.log.Error().Err(err).Msg("failed to get invoice sequence")
-		Error(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-
 	// Get club settings for PDF. bank_account resolution prefers the
 	// row flagged is_default_for_invoices in club_bank_accounts; the
 	// clubs.bank_account column is the fallback for the deprecation
 	// window. See DIL-338/341.
-	var clubName, orgNumber, clubAddress, bankAccount, website, treasurerEmail, logoMIME, kidMethod string
+	var clubName, orgNumber, clubAddress, bankAccount, website, treasurerEmail, logoMIME string
 	var logoData []byte
 	err = h.db.QueryRow(ctx,
 		`SELECT name, COALESCE(org_number, ''), COALESCE(address, ''),
@@ -408,20 +396,12 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 		            LIMIT 1),
 		          bank_account, ''),
 		        COALESCE(website_url, ''), COALESCE(treasurer_email, ''),
-		        faktura_logo_data, COALESCE(faktura_logo_mime, ''),
-		        COALESCE(kid_check_method, 'mod11')
+		        faktura_logo_data, COALESCE(faktura_logo_mime, '')
 		 FROM clubs WHERE id = $1`,
 		claims.ClubID,
-	).Scan(&clubName, &orgNumber, &clubAddress, &bankAccount, &website, &treasurerEmail, &logoData, &logoMIME, &kidMethod)
+	).Scan(&clubName, &orgNumber, &clubAddress, &bankAccount, &website, &treasurerEmail, &logoData, &logoMIME)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to get club details for invoice")
-		Error(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-
-	kid, err := finance.GenerateKIDMethod("000", invoiceSeq, 1, kidMethod)
-	if err != nil {
-		h.log.Error().Err(err).Msg("failed to generate KID")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
@@ -476,46 +456,75 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
-	// Generate PDF
-	inv := finance.Invoice{
-		ClubName:       clubName,
-		OrgNumber:      orgNumber,
-		ClubAddress:    clubAddress,
-		Website:        website,
-		TreasurerEmail: treasurerEmail,
-		LogoData:       logoData,
-		LogoMIME:       logoMIME,
-		MemberName:     pdfMemberName,
-		MemberAddress:  pdfMemberAddress,
-		OrgRecipient:   orgRecipient,
-		InvoiceNumber:  invoiceSeq,
-		IssueDate:      time.Now(),
-		DueDate:        dueDate,
-		KID:            kid,
-		BankAccount:    bankAccount,
-		Lines:          pdfLines,
-	}
-
-	pdfData, err := finance.GeneratePDF(inv)
-	if err != nil {
-		h.log.Error().Err(err).Msg("failed to generate invoice PDF")
-		Error(w, http.StatusInternalServerError, "internal error")
-		return
+	// The PDF prints the number and KID, which are only known once the
+	// faktura is numbered under the club's numbering lock.
+	renderPDF := func(number int, kid string) ([]byte, error) {
+		return finance.GeneratePDF(finance.Invoice{
+			ClubName:       clubName,
+			OrgNumber:      orgNumber,
+			ClubAddress:    clubAddress,
+			Website:        website,
+			TreasurerEmail: treasurerEmail,
+			LogoData:       logoData,
+			LogoMIME:       logoMIME,
+			MemberName:     pdfMemberName,
+			MemberAddress:  pdfMemberAddress,
+			OrgRecipient:   orgRecipient,
+			InvoiceNumber:  number,
+			IssueDate:      time.Now(),
+			DueDate:        dueDate,
+			KID:            kid,
+			BankAccount:    bankAccount,
+			Lines:          pdfLines,
+		})
 	}
 
 	// Store invoice. Recipient overrides (org_name, org_number, etc.)
 	// are persisted alongside the linked user_id so the contact still
 	// sees the invoice in their portal but reissues / PDF regenerations
-	// will faithfully reproduce the org-addressed version.
-	recipientKind := req.RecipientKind
-	if recipientKind == "" {
-		recipientKind = "private"
+	// will faithfully reproduce the org-addressed version. Lines carry
+	// account_id and price_item_id so the journal posting can attribute
+	// revenue and the dedup index can see which price item drove the line;
+	// the item's category is stored on the line so GL booking resolves the
+	// revenue account as it was at issue, and dedup and the admin chip
+	// query work per line on multi-category invoices.
+	draft := accounting.InvoiceDraft{
+		DueDate:                dueDate,
+		FiscalPeriodID:         req.FiscalPeriodID,
+		RecipientKind:          req.RecipientKind,
+		RecipientOrgName:       req.RecipientOrgName,
+		RecipientOrgNumber:     req.RecipientOrgNumber,
+		RecipientOrgAddress:    req.RecipientOrgAddress,
+		RecipientContactPerson: req.RecipientContactPerson,
+		RecipientTheirRef:      req.RecipientTheirRef,
+		RecipientEmail:         req.RecipientEmail,
+		MemberName:             memberName,
+		MemberEmail:            memberEmail,
+		RenderPDF:              renderPDF,
 	}
-	// user_id is now nullable — pass NULL when not supplied so the FK
-	// stays satisfied for member-less invoices.
-	var userIDArg any
+	// user_id is nullable: NULL when not supplied so the FK stays satisfied
+	// for member-less invoices.
 	if req.UserID != "" {
-		userIDArg = req.UserID
+		draft.UserID = &req.UserID
+	}
+	for _, line := range resolvedLines {
+		dl := accounting.InvoiceDraftLine{
+			Description:    line.Description,
+			SubDescription: line.SubDescription,
+			Quantity:       line.Quantity,
+			UnitPrice:      line.UnitPrice,
+			AccountID:      line.AccountID,
+			PriceItemID:    line.PriceItemID,
+		}
+		if line.PriceItemID != nil {
+			c := line.category
+			dl.Category = &c
+		}
+		if line.exemptionRole != "" {
+			r := line.exemptionRole
+			dl.ExemptionRole = &r
+		}
+		draft.Lines = append(draft.Lines, dl)
 	}
 	// The faktura and its lines are written in one transaction: a line the
 	// database refuses fails the whole faktura instead of leaving one whose
@@ -527,67 +536,18 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	defer tx.Rollback(ctx)
-
-	var invoiceID string
-	var createdAt time.Time
-	err = tx.QueryRow(ctx,
-		`INSERT INTO invoices (club_id, user_id, invoice_number, kid_number, due_date,
-		                       total_amount, pdf_data, fiscal_period_id,
-		                       recipient_kind, recipient_org_name, recipient_org_number,
-		                       recipient_org_address, recipient_contact_person,
-		                       recipient_their_ref, recipient_email,
-		                       member_name, member_email)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
-		 RETURNING id, created_at`,
-		claims.ClubID, userIDArg, invoiceSeq, kid, dueDate, total, pdfData, req.FiscalPeriodID,
-		recipientKind,
-		req.RecipientOrgName, req.RecipientOrgNumber,
-		req.RecipientOrgAddress, req.RecipientContactPerson,
-		req.RecipientTheirRef, req.RecipientEmail,
-		memberName, memberEmail,
-	).Scan(&invoiceID, &createdAt)
+	created, err := accounting.CreateInvoiceTx(ctx, tx, claims.ClubID, draft)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to store invoice")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
-	}
-
-	// Store line items, including account_id and price_item_id so the
-	// journal posting can attribute revenue and the dedup index can
-	// see which price item drove the line.
-	for _, line := range resolvedLines {
-		lineTotal := float64(line.Quantity) * line.UnitPrice
-		// The item's category is stored on the line so GL booking resolves
-		// the revenue account as it was at issue, and dedup and the admin
-		// chip query work per line on multi-category invoices.
-		var lineCategory *string
-		if line.PriceItemID != nil {
-			c := line.category
-			lineCategory = &c
-		}
-		var exemptionRole *string
-		if line.exemptionRole != "" {
-			r := line.exemptionRole
-			exemptionRole = &r
-		}
-		if _, err := tx.Exec(ctx,
-			`INSERT INTO invoice_lines (invoice_id, description, sub_description, quantity,
-			                            unit_price, line_total, account_id, price_item_id, category,
-			                            exemption_role)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-			invoiceID, line.Description, line.SubDescription, line.Quantity,
-			line.UnitPrice, lineTotal, line.AccountID, line.PriceItemID, lineCategory, exemptionRole,
-		); err != nil {
-			h.log.Error().Err(err).Msg("failed to store invoice line")
-			Error(w, http.StatusInternalServerError, "internal error")
-			return
-		}
 	}
 	if err := tx.Commit(ctx); err != nil {
 		h.log.Error().Err(err).Msg("failed to commit invoice")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	invoiceID, invoiceSeq, kid, pdfData, createdAt := created.ID, created.Number, created.KID, created.PDF, created.CreatedAt
 
 	// Upload PDF to S3 and wipe pdf_data from DB to save storage. After the
 	// commit, because the wipe runs on its own connection and must see the

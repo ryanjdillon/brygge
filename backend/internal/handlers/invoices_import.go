@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"context"
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -9,6 +11,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
+	"github.com/brygge-klubb/brygge/internal/accounting"
 	"github.com/brygge-klubb/brygge/internal/middleware"
 )
 
@@ -178,43 +183,8 @@ func (h *InvoiceHandler) HandleImportUni24Invoices(w http.ResponseWriter, r *htt
 			}
 		}
 
-		// Allocate the next invoice number for this club.
-		var invoiceSeq int
-		err = h.db.QueryRow(ctx,
-			`SELECT COALESCE(MAX(invoice_number), 0) + 1 FROM invoices WHERE club_id = $1`,
-			claims.ClubID,
-		).Scan(&invoiceSeq)
-		if err != nil {
-			results = append(results, uni24ImportRow{
-				Row: rowNum, ExternalID: externalID, Name: custName,
-				Status: "error", Error: "could not allocate invoice number",
-			})
-			continue
-		}
-
-		// For unmatched recipients, store their name in recipient_org_name
-		// so the invoice list COALESCE falls back to it correctly.
-		var invoiceID string
-		err = h.db.QueryRow(ctx,
-			`INSERT INTO invoices
-			    (club_id, user_id, invoice_number, kid_number,
-			     issue_date, due_date, total_amount,
-			     status, import_source, external_id,
-			     recipient_kind, recipient_org_name)
-			 VALUES
-			    ($1, $2, $3, '',
-			     $4, $5, $6,
-			     $7, $8, $9,
-			     'private', $10)
-			 ON CONFLICT (club_id, import_source, external_id)
-			     WHERE import_source IS NOT NULL AND external_id IS NOT NULL
-			     DO NOTHING
-			 RETURNING id`,
-			claims.ClubID, userID, invoiceSeq,
-			issueDate, dueDate, amount,
-			invoiceStatus, importSourceUni24, externalID,
-			custName,
-		).Scan(&invoiceID)
+		invoiceID, err := h.insertImportedInvoice(ctx, claims.ClubID, userID, issueDate, dueDate, amount,
+			invoiceStatus, externalID, custName)
 
 		row := uni24ImportRow{Row: rowNum, ExternalID: externalID, Name: custName}
 		switch {
@@ -257,6 +227,52 @@ func (h *InvoiceHandler) HandleImportUni24Invoices(w http.ResponseWriter, r *htt
 		"total":    len(results) + skipped,
 		"rows":     results,
 	})
+}
+
+// insertImportedInvoice stores one imported faktura under the club's next
+// number (accounting.NextInvoiceNumberTx), or nothing when the previous
+// system's id is already imported: invoiceID is then "". For unmatched
+// recipients the name goes in recipient_org_name, so the invoice list
+// falls back to it.
+func (h *InvoiceHandler) insertImportedInvoice(ctx context.Context, clubID string, userID *string,
+	issueDate, dueDate time.Time, amount float64, status, externalID, custName string) (string, error) {
+	tx, err := h.db.Begin(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer tx.Rollback(ctx)
+	invoiceSeq, err := accounting.NextInvoiceNumberTx(ctx, tx, clubID)
+	if err != nil {
+		return "", err
+	}
+	var invoiceID string
+	err = tx.QueryRow(ctx,
+		`INSERT INTO invoices
+		    (club_id, user_id, invoice_number, kid_number,
+		     issue_date, due_date, total_amount,
+		     status, import_source, external_id,
+		     recipient_kind, recipient_org_name)
+		 VALUES
+		    ($1, $2, $3, '',
+		     $4, $5, $6,
+		     $7, $8, $9,
+		     'private', $10)
+		 ON CONFLICT (club_id, import_source, external_id)
+		     WHERE import_source IS NOT NULL AND external_id IS NOT NULL
+		     DO NOTHING
+		 RETURNING id`,
+		clubID, userID, invoiceSeq,
+		issueDate, dueDate, amount,
+		status, importSourceUni24, externalID,
+		custName,
+	).Scan(&invoiceID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return invoiceID, tx.Commit(ctx)
 }
 
 func parseDateRange(w http.ResponseWriter, r *http.Request) (dateFrom, dateTo time.Time, ok bool) {
