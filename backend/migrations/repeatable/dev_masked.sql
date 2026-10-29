@@ -123,7 +123,7 @@ SELECT
     recipient_id, vipps_payment_reference,
     NULL::text AS vipps_payment_url,      -- embeds the order pay-link token
     vipps_payment_expires_at, vipps_paid_at, vipps_payment_link_opt_in,
-    credits_invoice_id,
+    credits_invoice_id, reissued_as_invoice_id,
     online_paid_at, online_paid_provider, online_payment_opt_in,
     (pdf_data IS NOT NULL) AS has_pdf
 FROM public.invoices;

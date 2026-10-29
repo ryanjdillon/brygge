@@ -86,6 +86,10 @@ const (
 	// StripeReviewRefundFailureSettled: a refund that collected again has
 	// failed, and its faktura was settled another way in between.
 	StripeReviewRefundFailureSettled = "refund_failure_settled"
+	// StripeReviewRefundFailureReissued: a refund that credited a faktura
+	// has failed after the faktura was issued again ("Ny faktura"); a debit
+	// faktura for the returned money would bill the payer twice.
+	StripeReviewRefundFailureReissued = "refund_failure_reissued"
 	// StripeReviewRefundSplit: the refund cannot be divided over the
 	// charge's fakturas exactly (one was credited or voided since, or the
 	// choice to collect again no longer applies).
@@ -136,7 +140,7 @@ var stripeBookingReviewReasons = slices.Concat(stripeChargeReviewReasons, stripe
 // reclassified by a re-sync.
 var stripeHeldReviewReasons = append(slices.Clone(stripeBookingReviewReasons),
 	StripeReviewRefundOriginDismissed, StripeReviewRefundLegacy, StripeReviewRefundFailureSettled,
-	StripeReviewRefundSplit, StripeReviewDisputeDirection, StripeReviewUnassigned)
+	StripeReviewRefundFailureReissued, StripeReviewRefundSplit, StripeReviewDisputeDirection, StripeReviewUnassigned)
 
 // stripeRefundCategory reports whether a reporting category is money a
 // refund moved: the refund itself, or its failure bringing it back.

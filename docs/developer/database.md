@@ -434,6 +434,16 @@ in `backend/migrations/` for the source of truth. The high-level shape:
   back to the booking pass when that is safe (NOK, no entry, not dismissed,
   payout not cleared in the books). Read raw by the dev role (ids, an
   amount and codes only).
+- **Ny faktura after a refund.** 000121 (BRY-498) adds
+  `invoices.reissued_as_invoice_id` (nullable, references `invoices(id)` `ON DELETE SET NULL`):
+  on a faktura that card refunds credited in full, the faktura the treasurer
+  issued to collect again. Set in the same transaction that creates the new
+  faktura, under the credited faktura's row lock, so the action is
+  once-only (409 `already_reissued`) while the new faktura is not voided
+  (a voided one is replaced by the next; deleting a draft clears the link);
+  `idx_invoices_reissued_as` (unique, partial) keeps one new faktura from
+  standing in for two. The id passes
+  through the `dev_masked.invoices` view as it is.
 - `invoice_pdf_archive` (migration 000050) — preserves prior PDF bytes when
   `invoices.pdf_data` is regenerated, so Norwegian bokføringsloven §13's
   5-year retention requirement is satisfied.

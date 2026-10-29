@@ -938,6 +938,12 @@ func main() {
 						r.With(middleware.RequireRole("treasurer", "admin"),
 							middleware.RequireFreshTOTPDefault()).
 							Delete("/invoices/{invoiceID}/credit-link", invoiceHandler.HandleUnlinkCreditNote)
+						// "Ny faktura" after a card refund credited a faktura in
+						// full (BRY-498): collects the money again, so it takes
+						// the same step-up as creating a faktura.
+						r.With(middleware.RequireRole("treasurer", "admin"),
+							middleware.RequireFreshTOTPDefault()).
+							Post("/invoices/{invoiceID}/reissue-after-refund", invoiceHandler.HandleReissueAfterRefund)
 						r.With(middleware.RequireRole("treasurer", "admin"),
 							middleware.RequireFreshTOTPDefault()).
 							Delete("/invoices/{invoiceID}", invoiceHandler.HandleDeleteInvoice)

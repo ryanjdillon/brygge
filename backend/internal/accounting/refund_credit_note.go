@@ -71,9 +71,15 @@ type documentRecipient struct {
 type documentLine struct {
 	description, subDescription string
 	amountOre                   int64
-	accountID, priceItemID      *string
-	category, exemptionRole     *string
-	boatID                      *string
+	// quantity and unitPriceOre are the line as it was issued; a line that
+	// had an exemption folded into it has netted set and is one unit of its
+	// net amount.
+	quantity                int
+	unitPriceOre            int64
+	netted                  bool
+	accountID, priceItemID  *string
+	category, exemptionRole *string
+	boatID                  *string
 }
 
 func derefOr(p *string, fallback string) string {
@@ -165,6 +171,7 @@ func loadTargetLinesTx(ctx context.Context, tx pgx.Tx, t *refundTarget) ([]docum
 func loadInvoiceLinesTx(ctx context.Context, tx pgx.Tx, invoiceID string) ([]documentLine, error) {
 	rows, err := tx.Query(ctx,
 		`SELECT il.description, COALESCE(il.sub_description, ''), round(il.line_total * 100)::bigint,
+		        il.quantity, round(il.unit_price * 100)::bigint,
 		        il.account_id::text, il.price_item_id::text, `+finance.LineCategorySQL("il", "pi")+`,
 		        il.exemption_role, il.boat_id::text
 		   FROM invoice_lines il
@@ -177,8 +184,8 @@ func loadInvoiceLinesTx(ctx context.Context, tx pgx.Tx, invoiceID string) ([]doc
 	}
 	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (documentLine, error) {
 		var l documentLine
-		err := r.Scan(&l.description, &l.subDescription, &l.amountOre, &l.accountID, &l.priceItemID,
-			&l.category, &l.exemptionRole, &l.boatID)
+		err := r.Scan(&l.description, &l.subDescription, &l.amountOre, &l.quantity, &l.unitPriceOre,
+			&l.accountID, &l.priceItemID, &l.category, &l.exemptionRole, &l.boatID)
 		return l, err
 	})
 }
@@ -188,30 +195,43 @@ func loadInvoiceLinesTx(ctx context.Context, tx pgx.Tx, invoiceID string) ([]doc
 // member actually paid for; a fully exempt pair drops out, and so does any
 // other line that nets to nothing.
 func netExemptions(lines []documentLine) []documentLine {
-	out := make([]documentLine, 0, len(lines))
+	items, orphans := foldExemptions(lines)
+	return dropZeroLines(append(items, orphans...))
+}
+
+// foldExemptions folds each exemption line into the item line it offsets
+// (same price item and boat). The folded items come back with netted set;
+// an exemption with no such item is an orphan, returned apart.
+func foldExemptions(lines []documentLine) (items, orphans []documentLine) {
+	items = make([]documentLine, 0, len(lines))
 	var exemptions []documentLine
 	for _, l := range lines {
 		if l.exemptionRole != nil {
 			exemptions = append(exemptions, l)
 			continue
 		}
-		out = append(out, l)
+		items = append(items, l)
 	}
 	for _, e := range exemptions {
 		folded := false
-		for i := range out {
-			if sameRef(out[i].priceItemID, e.priceItemID) && sameRef(out[i].boatID, e.boatID) && out[i].amountOre > 0 {
-				out[i].amountOre += e.amountOre
+		for i := range items {
+			if sameRef(items[i].priceItemID, e.priceItemID) && sameRef(items[i].boatID, e.boatID) && items[i].amountOre > 0 {
+				items[i].amountOre += e.amountOre
+				items[i].netted = true
 				folded = true
 				break
 			}
 		}
 		if !folded {
-			out = append(out, e)
+			orphans = append(orphans, e)
 		}
 	}
-	kept := out[:0]
-	for _, l := range out {
+	return items, orphans
+}
+
+func dropZeroLines(lines []documentLine) []documentLine {
+	kept := lines[:0]
+	for _, l := range lines {
 		if l.amountOre != 0 {
 			kept = append(kept, l)
 		}

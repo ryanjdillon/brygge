@@ -278,6 +278,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/financials/invoices/{invoiceID}/reissue-after-refund": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Issue a new faktura for one that card refunds credited in full (treasurer/admin, fresh TOTP)
+         * @description Copies the credited faktura's lines (net of role exemptions) to the same payer, dated today and due in 21 days, numbered under the club's numbering lock, then emails and books it as a faktura made by hand is. The credit notes the refund issued stand. 201 the new faktura; 404 no such faktura; 409 refused with a `code`: `not_refunded` (the faktura is not credited in full by card refunds) or `already_reissued` (once per credited faktura).
+         */
+        post: operations["admin-reissue-invoice-after-refund"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/financials/overdue": {
         parameters: {
             query?: never;
@@ -4177,6 +4197,20 @@ export interface components {
             payment_received: boolean;
             /** @description Price item name, if any */
             price_item_name: string;
+            /** @description The credit notes that did it */
+            refund_credit_notes?: components["schemas"]["MemberRefundCreditNote"][] | null;
+            /** @description A credit note a card refund issued: it repays the card payment and is never credit the club still owes */
+            refund_document?: boolean;
+            /**
+             * @description How much of this faktura a card refund returned
+             * @enum {string}
+             */
+            refund_state?: "none" | "partial" | "full";
+            /**
+             * Format: double
+             * @description Kr returned to the card
+             */
+            refunded_amount?: number;
             /** @description When the invoice was sent */
             sent_at?: string;
             /**
@@ -4222,6 +4256,22 @@ export interface components {
              * @description Last update timestamp
              */
             updated_at: string;
+        };
+        MemberRefundCreditNote: {
+            /**
+             * Format: double
+             * @description Kr credited
+             */
+            amount: number;
+            /** @description Whether a downloadable PDF exists */
+            has_pdf: boolean;
+            /** @description Credit note UUID */
+            id: string;
+            /**
+             * Format: int64
+             * @description Credit note number
+             */
+            number: number;
         };
         MemberSlip: {
             /**
@@ -4960,6 +5010,43 @@ export interface components {
             consent_type: string;
             /** @description Consent version */
             version: string;
+        };
+        ReissuedInvoice: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/ReissuedInvoice.json
+             */
+            readonly $schema?: string;
+            /** @description YYYY-MM-DD */
+            due_date: string;
+            /** @description The ledger booking made when it was sent. */
+            gl_booking?: components["schemas"]["ReissuedInvoiceGLBookingStruct"];
+            /** Format: uuid */
+            id: string;
+            /** Format: int64 */
+            invoice_number: number;
+            /** @description YYYY-MM-DD */
+            issue_date: string;
+            kid_number: string;
+            /**
+             * Format: int64
+             * @description The credited faktura this one replaces.
+             */
+            original_invoice_number: number;
+            /** @description When it was emailed to the payer; null when it was not (no address or no mail service), and it is then a draft in the faktura list. */
+            sent_at: string | null;
+            /**
+             * Format: double
+             * @description Kr
+             */
+            total_amount: number;
+            /** @description Steps after the faktura was stored that failed: club_details_unavailable, pdf_unavailable. */
+            warnings?: string[] | null;
+        };
+        ReissuedInvoiceGLBookingStruct: {
+            error?: string;
+            status: string;
         };
         "Reorder-waiting-list-entryRequest": {
             /**
@@ -6109,6 +6196,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BulkInvoiceResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "admin-reissue-invoice-after-refund": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invoiceID: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReissuedInvoice"];
                 };
             };
             /** @description Error */

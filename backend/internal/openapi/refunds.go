@@ -75,7 +75,36 @@ type OrderRefundsResponse struct {
 	RecollectAllowed bool                 `json:"recollect_allowed"`
 }
 
+// ReissuedInvoice is the faktura "Ny faktura" after a refund issued.
+type ReissuedInvoice struct {
+	ID                    string  `json:"id" format:"uuid"`
+	InvoiceNumber         int     `json:"invoice_number"`
+	KID                   string  `json:"kid_number"`
+	TotalAmount           float64 `json:"total_amount" doc:"Kr"`
+	IssueDate             string  `json:"issue_date" doc:"YYYY-MM-DD"`
+	DueDate               string  `json:"due_date" doc:"YYYY-MM-DD"`
+	OriginalInvoiceNumber int     `json:"original_invoice_number" doc:"The credited faktura this one replaces."`
+	SentAt                *string `json:"sent_at" doc:"When it was emailed to the payer; null when it was not (no address or no mail service), and it is then a draft in the faktura list."`
+	GLBooking             *struct {
+		Status string `json:"status"`
+		Error  string `json:"error,omitempty"`
+	} `json:"gl_booking,omitempty" doc:"The ledger booking made when it was sent."`
+	Warnings []string `json:"warnings,omitempty" doc:"Steps after the faktura was stored that failed: club_details_unavailable, pdf_unavailable."`
+}
+
 func registerRefundOps(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "admin-reissue-invoice-after-refund",
+		Method:      http.MethodPost,
+		Path:        "/api/v1/admin/financials/invoices/{invoiceID}/reissue-after-refund",
+		Tags:        []string{"Admin", "Financials"},
+		Summary:     "Issue a new faktura for one that card refunds credited in full (treasurer/admin, fresh TOTP)",
+		Description: "Copies the credited faktura's lines (net of role exemptions) to the same payer, dated today and due in 21 days, numbered under the club's numbering lock, then emails and books it as a faktura made by hand is. The credit notes the refund issued stand. 201 the new faktura; 404 no such faktura; 409 refused with a `code`: `not_refunded` (the faktura is not credited in full by card refunds) or `already_reissued` (once per credited faktura).",
+		Security:    BearerSecurity,
+	}, stub[struct {
+		InvoiceID string `path:"invoiceID" format:"uuid"`
+	}, struct{ Body ReissuedInvoice }]())
+
 	huma.Register(api, huma.Operation{
 		OperationID: "admin-refund-order",
 		Method:      http.MethodPost,

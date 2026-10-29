@@ -926,9 +926,9 @@ func bookRefundFailureTx(ctx context.Context, tx pgx.Tx, clubID, actorID string,
 		return stripeOutcomeSkipped, "", nil, err
 	}
 	eff := &refundEffects{outcome: refundOutcomeMirror, amountOre: returnedOre}
-	if held, err := applyRefundFailureDocsTx(ctx, tx, clubID, actorID, row.id, docs, charge, date, periodID, eff); err != nil || held {
-		if held {
-			return holdRefundTx(ctx, tx, clubID, row.id, StripeReviewRefundFailureSettled)
+	if heldReason, err := applyRefundFailureDocsTx(ctx, tx, clubID, actorID, row.id, docs, charge, date, periodID, eff); err != nil || heldReason != "" {
+		if heldReason != "" {
+			return holdRefundTx(ctx, tx, clubID, row.id, heldReason)
 		}
 		return stripeOutcomeSkipped, "", nil, err
 	}
@@ -956,18 +956,31 @@ func bookRefundFailureTx(ctx context.Context, tx pgx.Tx, clubID, actorID string,
 }
 
 // applyRefundFailureDocsTx does what a refund failure does to the
-// documents of its refund. held is true when a faktura the refund reopened
-// was settled another way since: the failure then waits for a person and
-// nothing is written.
+// documents of its refund. heldReason is set when the failure must wait for
+// a person and nothing is written: a faktura the refund reopened was settled
+// another way since (refund_failure_settled), or a faktura it credited was
+// already issued again with "Ny faktura" (refund_failure_reissued), so a debit
+// faktura for the returned money would bill the payer twice.
 func applyRefundFailureDocsTx(ctx context.Context, tx pgx.Tx, clubID, actorID, failureRowID string, docs []refundDocument,
-	charge *stripeOrigin, date time.Time, periodID string, eff *refundEffects) (held bool, err error) {
+	charge *stripeOrigin, date time.Time, periodID string, eff *refundEffects) (heldReason string, err error) {
 	for _, d := range docs {
-		if d.kind != refundOutcomeRecollect {
-			continue
-		}
-		open, err := recollectStillOpenTx(ctx, tx, clubID, derefOr(d.invoiceID, ""))
-		if err != nil || !open || charge == nil {
-			return err == nil, err
+		switch d.kind {
+		case refundOutcomeRecollect:
+			open, err := recollectStillOpenTx(ctx, tx, clubID, derefOr(d.invoiceID, ""))
+			if err != nil {
+				return "", err
+			}
+			if !open || charge == nil {
+				return StripeReviewRefundFailureSettled, nil
+			}
+		case refundOutcomeCredit:
+			reissued, err := reissuedStillLiveTx(ctx, tx, clubID, derefOr(d.invoiceID, ""))
+			if err != nil {
+				return "", err
+			}
+			if reissued {
+				return StripeReviewRefundFailureReissued, nil
+			}
 		}
 	}
 	credited := false
@@ -976,14 +989,14 @@ func applyRefundFailureDocsTx(ctx context.Context, tx pgx.Tx, clubID, actorID, f
 		case refundOutcomeRecollect:
 			eff.outcome = refundOutcomeRecollect
 			if err := restoreRecollectTx(ctx, tx, clubID, d, charge); err != nil {
-				return false, err
+				return "", err
 			}
 		case refundOutcomeCredit:
 			credited = true
 			eff.outcome = refundOutcomeCredit
 			doc, err := refailCreditNoteTx(ctx, tx, clubID, actorID, failureRowID, d, date, periodID)
 			if err != nil {
-				return false, err
+				return "", err
 			}
 			eff.documents = append(eff.documents, *doc)
 		}
@@ -992,10 +1005,29 @@ func applyRefundFailureDocsTx(ctx context.Context, tx pgx.Tx, clubID, actorID, f
 		if _, err := tx.Exec(ctx,
 			`UPDATE orders SET status = 'paid', updated_at = now()
 			  WHERE id = $1 AND club_id = $2 AND status = 'refunded'`, *charge.orderID, clubID); err != nil {
-			return false, fmt.Errorf("restoring the order: %w", err)
+			return "", fmt.Errorf("restoring the order: %w", err)
 		}
 	}
-	return false, nil
+	return "", nil
+}
+
+// reissuedStillLiveTx reports whether the faktura was issued again with
+// "Ny faktura" and the new faktura still stands (a voided one collects
+// nothing). The caller holds the faktura's lock, which "Ny faktura" also
+// takes before it writes the link.
+func reissuedStillLiveTx(ctx context.Context, tx pgx.Tx, clubID, invoiceID string) (bool, error) {
+	if invoiceID == "" {
+		return false, nil
+	}
+	var live bool
+	if err := tx.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM invoices o
+		                  JOIN invoices n ON n.id = o.reissued_as_invoice_id AND n.status <> 'voided'
+		                 WHERE o.id = $1 AND o.club_id = $2)`, invoiceID, clubID,
+	).Scan(&live); err != nil {
+		return false, fmt.Errorf("reading the faktura's reissue: %w", err)
+	}
+	return live, nil
 }
 
 // refailCreditNoteTx issues the debit faktura for one credit note of a

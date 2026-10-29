@@ -109,6 +109,10 @@ const (
 	// A refund of a card payment requested from the refund button (BRY-497)
 	ActionOrderRefundRequested = "order.refund_requested"
 
+	// A new faktura issued to collect again after a refund credited the
+	// original in full (BRY-498)
+	ActionInvoiceReissuedAfterRefund = "invoice.reissued_after_refund"
+
 	// A card dispute (or its reversal) booked by the Stripe booking pass
 	// (BRY-446)
 	ActionStripeTxnDisputeBooked = "stripe_txn.dispute_booked"

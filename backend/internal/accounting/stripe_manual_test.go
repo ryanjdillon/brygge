@@ -65,6 +65,7 @@ func TestStripeAllowedActions(t *testing.T) {
 		{"refund origin dismissed", review("refund", StripeReviewRefundOriginDismissed), []string{acct, dis}},
 		{"refund split", review("refund", StripeReviewRefundSplit), []string{acct, dis}},
 		{"refund failure settled", review("refund_failure", StripeReviewRefundFailureSettled), []string{acct, dis}},
+		{"refund failure reissued", review("refund_failure", StripeReviewRefundFailureReissued), []string{acct, dis}},
 		{"unbooked refund", stripeTxnState{category: "refund", status: StripeTxnUnbooked, currency: "nok"}, []string{}},
 		{"booked refund", ownBooked("refund"), []string{una}},
 		{"held refund", review("refund", StripeReviewUnassigned), []string{reb, acct, dis}},

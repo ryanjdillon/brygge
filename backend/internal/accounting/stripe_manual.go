@@ -214,7 +214,7 @@ func stripeRefundReasonActions(st stripeTxnState) []string {
 	}
 	switch st.reviewReason {
 	case StripeReviewRefundUnlinked, StripeReviewRefundOriginDismissed, StripeReviewRefundSplit,
-		StripeReviewRefundFailureSettled:
+		StripeReviewRefundFailureSettled, StripeReviewRefundFailureReissued:
 		return []string{StripeActionAssignAccount, StripeActionDismiss}
 	case StripeReviewRefundLegacy:
 		return []string{StripeActionRebook, StripeActionDismiss}

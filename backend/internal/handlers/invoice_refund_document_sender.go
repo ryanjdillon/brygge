@@ -2,15 +2,10 @@ package handlers
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"math"
-
-	"github.com/jackc/pgx/v5"
 
 	bcast "github.com/brygge-klubb/brygge/internal/broadcast"
 	"github.com/brygge-klubb/brygge/internal/email"
-	"github.com/brygge-klubb/brygge/internal/finance"
 )
 
 // RefundDocumentSender is the broadcast.Sender for 'invoice_refund_document'
@@ -42,7 +37,7 @@ func (s *RefundDocumentSender) Send(ctx context.Context, c bcast.Claimed) error 
 	if err != nil {
 		return fmt.Errorf("loading club: %w", err)
 	}
-	pdf, number, total, err := s.ensurePDF(ctx, c.ClubID, *c.InvoiceID, club)
+	pdf, number, total, err := h.ensureInvoicePDF(ctx, c.ClubID, *c.InvoiceID, club)
 	if err != nil {
 		return err
 	}
@@ -66,41 +61,4 @@ func (s *RefundDocumentSender) Send(ctx context.Context, c bcast.Claimed) error 
 		filename = fmt.Sprintf("kreditnota-%d.pdf", number)
 	}
 	return h.email.SendWithAttachment(email.WithKind(ctx, email.KindInvoice), c.Email, subject, body, filename, pdf)
-}
-
-// ensurePDF returns the document's stored PDF, rendering and storing it
-// first when there is none.
-func (s *RefundDocumentSender) ensurePDF(ctx context.Context, clubID, invoiceID string, club *clubInvoiceFields) ([]byte, int, float64, error) {
-	h := s.h
-	var s3Key string
-	var stored []byte
-	var number int
-	var total float64
-	err := h.db.QueryRow(ctx,
-		`SELECT COALESCE(s3_key, ''), pdf_data, invoice_number, total_amount FROM invoices WHERE id = $1 AND club_id = $2`,
-		invoiceID, clubID,
-	).Scan(&s3Key, &stored, &number, &total)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, 0, 0, errInvoiceNotFound
-	}
-	if err != nil {
-		return nil, 0, 0, fmt.Errorf("loading document: %w", err)
-	}
-	if pdf, _ := h.fetchInvoicePDFBytes(ctx, s3Key, stored); pdf != nil {
-		return pdf, number, total, nil
-	}
-	st, err := h.loadStoredInvoicePDF(ctx, clubID, invoiceID, club)
-	if err != nil {
-		return nil, 0, 0, err
-	}
-	pdf, err := finance.GeneratePDF(st.inv)
-	if err != nil {
-		return nil, 0, 0, fmt.Errorf("rendering document: %w", err)
-	}
-	if _, err := h.db.Exec(ctx,
-		`UPDATE invoices SET pdf_data = $3 WHERE id = $1 AND club_id = $2`, invoiceID, clubID, pdf); err != nil {
-		return nil, 0, 0, fmt.Errorf("storing document PDF: %w", err)
-	}
-	h.uploadInvoicePDFToS3(ctx, invoiceID, clubID, pdf)
-	return pdf, number, math.Round(total*100) / 100, nil
 }

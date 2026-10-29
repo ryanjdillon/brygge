@@ -300,6 +300,7 @@ Booking state, set by `accounting.SyncStripeBalance` and `accounting.BookStripeB
 | `refund_origin_dismissed` | Set by the booking pass: that charge (or refund) was dismissed. Waits for a person (assign to an account, or dismiss) |
 | `refund_legacy` | Set by migration 000119 on refunds, disputes and refund failures held before refunds were booked. Waits for a person: rebooked (handed to the pass) or dismissed. Migration 000120 already handed back the disputes it could (NOK, no entry, not dismissed, payout not cleared in the books) |
 | `refund_failure_settled` | Set by the booking pass: a refund that reopened a faktura failed, and the faktura was paid, credited or booked another way since. Waits for a person |
+| `refund_failure_reissued` | Set by the booking pass: a refund that credited a faktura failed after "Ny faktura" issued it again (and the new faktura is not voided), so a debit faktura for the returned money would bill the payer twice. Waits for a person (assign to an account, or dismiss) |
 | `refund_split` | Set by the booking pass: the refund cannot be divided over the charge's fakturas exactly (one was voided or credited by hand since, a refund past the charge, or collecting again after a partial was credited). Waits for a person |
 | `unassigned` | Set by `UnassignStripeTxn`: a person undid the row's booking. Never retried or reclassified; the person rebooks it (`rebook`, back to `unbooked` for the pass), assigns it or dismisses it. A row booked by hand afterwards keeps it as its manual-booking marker |
 
@@ -380,6 +381,27 @@ The manual assigns (assign-invoice, assign-invoice-multi, assign-account, assign
 | `refund_failed` | 502, not 409: Stripe refused the refund; `reason` is Stripe's code (e.g. `charge_disputed`) and the row is `failed` |
 
 A 400 is a request that is wrong whatever the state (no reason, a reason over 500 characters, a non-positive or sub-øre amount, a malformed key, an unknown `outcome`, or an `outcome` on a partial refund, a payment that paid no faktura or a duplicate capture); 404 an order or attempt the club does not have. A 202 (`awaiting_confirmation`) is not an error: Stripe's answer is not known yet.
+
+### Refund and dispute states in the lists (no column, BRY-498)
+
+Computed by the list handlers (`handlers/refund_surface.go`, `harbor_payments.go`); the SPA chooses a chip from them (`frontend/src/lib/refundState.ts`, `RefundStateChip.vue`).
+
+| Field | Values | Meaning |
+|---|---|---|
+| `refund_state` (payment overview, faktura list, member invoice list) | `none`, `partial`, `full` | How much of the payment (overview: the confirmed refunds of the attempt that paid the order) or of the faktura (lists: its live refund credit notes, less debit fakturas failed refunds issued) went back to the card |
+| `credit_state` (faktura list, in addition to the manual credit states) | `refund`, `refunded` | `refund`: a credit note a card refund issued (never `credit_owed`); `refunded`: a faktura whose refund credit notes add up to its total |
+| `dispute_status` (payment overview, faktura list) | Stripe's `payment_disputes.status` | The latest dispute of the payment. Chip: `needs_response`, `under_review`, `warning_needs_response`, `warning_under_review` read *Omstridt*; `lost` *Tvist tapt*; `won` *Tvist vunnet*; the rest (`warning_closed`, `charge_refunded`, `prevented`, unknown) show no chip |
+
+Member invoice status (`portal.invoices.status.*`) gained `refunded` (a faktura with `refund_state` `full`) and `refund_credit_note` (a credit note with `refund_document`).
+
+### "Ny faktura" refusal codes (no column)
+
+`POST /admin/financials/invoices/{invoiceID}/reissue-after-refund` (BRY-498) answers 409 with `code`; `accounting.ReissueRefusal`. A faktura that does not exist (or an id that is not a uuid) is 404.
+
+| Code | Meaning |
+|---|---|
+| `not_refunded` | `accounting.ReissueEligible` fails, or the faktura is voided: it is a credit note, its live `credit` refund documents do not equal its total (not refunded, refunded in part, only reopened by a recollect), or it has a `refail_invoice` document (its refund failed and was billed again) |
+| `already_reissued` | `invoices.reissued_as_invoice_id` names a faktura that is not voided |
 
 ### Manual Stripe transaction action codes (no column)
 

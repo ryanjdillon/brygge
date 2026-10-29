@@ -292,21 +292,32 @@ type DashboardResponse struct {
 }
 
 type MemberInvoice struct {
-	ID              string  `json:"id" doc:"Invoice UUID"`
-	InvoiceNumber   int     `json:"invoice_number" doc:"Sequential invoice number"`
-	KID             string  `json:"kid_number" doc:"KID payment reference"`
-	TotalAmount     float64 `json:"total_amount" doc:"Total amount due"`
-	IssueDate       string  `json:"issue_date" doc:"Issue date (YYYY-MM-DD)"`
-	DueDate         string  `json:"due_date" doc:"Due date (YYYY-MM-DD)"`
-	SentAt          *string `json:"sent_at,omitempty" doc:"When the invoice was sent"`
-	Paid            bool    `json:"paid" doc:"Whether a payment is linked to the invoice"`
-	PaymentReceived bool    `json:"payment_received" doc:"An online payment was seen via webhook but settlement is not yet reconciled"`
-	CreditNote      bool    `json:"credit_note" doc:"A credit note (negative total): money the club owes back, never a bill"`
-	Credited        bool    `json:"credited" doc:"Settled by a linked credit note"`
-	Owed            bool    `json:"owed" doc:"Whether the member still owes this faktura; false for paid, credited, credit notes and 0 kr (fully exempted) fakturas"`
-	PriceItemName   string  `json:"price_item_name" doc:"Price item name, if any"`
-	Description     string  `json:"description" doc:"First invoice-line description"`
-	HasPDF          bool    `json:"has_pdf" doc:"Whether a downloadable PDF exists for this invoice"`
+	ID                string                   `json:"id" doc:"Invoice UUID"`
+	InvoiceNumber     int                      `json:"invoice_number" doc:"Sequential invoice number"`
+	KID               string                   `json:"kid_number" doc:"KID payment reference"`
+	TotalAmount       float64                  `json:"total_amount" doc:"Total amount due"`
+	IssueDate         string                   `json:"issue_date" doc:"Issue date (YYYY-MM-DD)"`
+	DueDate           string                   `json:"due_date" doc:"Due date (YYYY-MM-DD)"`
+	SentAt            *string                  `json:"sent_at,omitempty" doc:"When the invoice was sent"`
+	Paid              bool                     `json:"paid" doc:"Whether a payment is linked to the invoice"`
+	PaymentReceived   bool                     `json:"payment_received" doc:"An online payment was seen via webhook but settlement is not yet reconciled"`
+	CreditNote        bool                     `json:"credit_note" doc:"A credit note (negative total): money the club owes back, never a bill"`
+	Credited          bool                     `json:"credited" doc:"Settled by a linked credit note"`
+	Owed              bool                     `json:"owed" doc:"Whether the member still owes this faktura; false for paid, credited, credit notes and 0 kr (fully exempted) fakturas"`
+	PriceItemName     string                   `json:"price_item_name" doc:"Price item name, if any"`
+	Description       string                   `json:"description" doc:"First invoice-line description"`
+	HasPDF            bool                     `json:"has_pdf" doc:"Whether a downloadable PDF exists for this invoice"`
+	RefundDocument    bool                     `json:"refund_document,omitempty" doc:"A credit note a card refund issued: it repays the card payment and is never credit the club still owes"`
+	RefundState       string                   `json:"refund_state,omitempty" enum:"none,partial,full" doc:"How much of this faktura a card refund returned"`
+	RefundedAmount    float64                  `json:"refunded_amount,omitempty" doc:"Kr returned to the card"`
+	RefundCreditNotes []MemberRefundCreditNote `json:"refund_credit_notes,omitempty" doc:"The credit notes that did it"`
+}
+
+type MemberRefundCreditNote struct {
+	ID     string  `json:"id" doc:"Credit note UUID"`
+	Number int     `json:"number" doc:"Credit note number"`
+	Amount float64 `json:"amount" doc:"Kr credited"`
+	HasPDF bool    `json:"has_pdf" doc:"Whether a downloadable PDF exists"`
 }
 
 // --- Boats ---

@@ -577,35 +577,15 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 		deliverName = orgRecipient.Name
 	}
 	var gl *glBooking
-	if req.SendEmail && h.email != nil && deliverTo != "" {
-		filename := fmt.Sprintf("faktura-%d.pdf", invoiceSeq)
+	if req.SendEmail {
 		// Invoice locale follows the requesting admin's UI language for now.
 		// DIL-185 (users.preferred_locale) will swap this for per-member.
-		locale := email.DetectLocale(r)
-		subject := email.InvoiceSubject(locale, clubName, invoiceSeq)
-		// Offer online payment as a secondary option; the email frames bank
-		// transfer with KID as preferred. Non-fatal: an empty URL (whenever
-		// ensureFakturaOrderToken offers no link) just renders the KID-only
-		// email.
-		payURL := h.orderPayURL(h.ensureFakturaOrderToken(ctx, claims.ClubID, invoiceID, true))
-		htmlBody := email.InvoiceBody(locale, deliverName, clubName, invoiceSeq, dueDate, total, kid, bankAccount, payURL, h.emailPayMethods(payURL, total))
-		if err := h.email.SendWithAttachment(email.WithKind(ctx, email.KindInvoice), deliverTo, subject, htmlBody, filename, pdfData); err != nil {
-			h.log.Error().Err(err).Str("email", deliverTo).Msg("failed to send invoice email")
-		} else {
-			now := time.Now().Format(time.RFC3339)
-			sentAt = &now
-			// The email is already out, so the response still reports it sent;
-			// a stale sent_at only skews the sent/unsent views until resent.
-			if _, err := h.db.Exec(ctx, `UPDATE invoices SET sent_at = NOW() WHERE id = $1`, invoiceID); err != nil {
-				h.log.Error().Err(err).Str("invoice_id", invoiceID).Msg("invoice emailed but sent_at not recorded")
-			}
-			gl = h.bookSentInvoice(ctx, claims.ClubID, invoiceID, claims.UserID)
-			if h.audit != nil {
-				h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,
-					audit.ActionInvoiceEmailed, "invoice", invoiceID,
-					map[string]any{"email": deliverTo, "invoice_number": invoiceSeq})
-			}
-		}
+		sentAt, gl = h.emailNewInvoice(ctx, newInvoiceMail{
+			clubID: claims.ClubID, actorID: claims.UserID, remoteAddr: r.RemoteAddr,
+			invoiceID: invoiceID, number: invoiceSeq, kid: kid, total: total, dueDate: dueDate,
+			deliverTo: deliverTo, deliverName: deliverName,
+			clubName: clubName, bankAccount: bankAccount, locale: email.DetectLocale(r), pdf: pdfData,
+		})
 	}
 
 	if h.audit != nil {
@@ -629,6 +609,56 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 		Exemptions:    appliedExemptions,
 		Warnings:      warnings,
 	})
+}
+
+// newInvoiceMail is a just-created faktura on its way to its payer.
+type newInvoiceMail struct {
+	clubID, actorID, remoteAddr string
+	invoiceID                   string
+	number                      int
+	kid                         string
+	total                       float64
+	dueDate                     time.Time
+	deliverTo, deliverName      string
+	clubName, bankAccount       string
+	locale                      string
+	pdf                         []byte
+}
+
+// emailNewInvoice is the step after a faktura is created that sends it: it
+// emails the PDF with the pay link and, once the mail is out, stamps sent_at,
+// books the faktura and audits the send. sentAt is nil when nothing went out
+// (no mail service or address, or the mail failed); the faktura then stays a
+// draft. The single create form and "Ny faktura" after a refund both use it.
+func (h *InvoiceHandler) emailNewInvoice(ctx context.Context, m newInvoiceMail) (sentAt *string, gl *glBooking) {
+	if h.email == nil || m.deliverTo == "" {
+		return nil, nil
+	}
+	filename := fmt.Sprintf("faktura-%d.pdf", m.number)
+	subject := email.InvoiceSubject(m.locale, m.clubName, m.number)
+	// Offer online payment as a secondary option; the email frames bank
+	// transfer with KID as preferred. Non-fatal: an empty URL (whenever
+	// ensureFakturaOrderToken offers no link) just renders the KID-only
+	// email.
+	payURL := h.orderPayURL(h.ensureFakturaOrderToken(ctx, m.clubID, m.invoiceID, true))
+	htmlBody := email.InvoiceBody(m.locale, m.deliverName, m.clubName, m.number, m.dueDate, m.total, m.kid, m.bankAccount, payURL, h.emailPayMethods(payURL, m.total))
+	if err := h.email.SendWithAttachment(email.WithKind(ctx, email.KindInvoice), m.deliverTo, subject, htmlBody, filename, m.pdf); err != nil {
+		h.log.Error().Err(err).Str("email", m.deliverTo).Msg("failed to send invoice email")
+		return nil, nil
+	}
+	now := time.Now().Format(time.RFC3339)
+	// The email is already out, so the response still reports it sent;
+	// a stale sent_at only skews the sent/unsent views until resent.
+	if _, err := h.db.Exec(ctx, `UPDATE invoices SET sent_at = NOW() WHERE id = $1`, m.invoiceID); err != nil {
+		h.log.Error().Err(err).Str("invoice_id", m.invoiceID).Msg("invoice emailed but sent_at not recorded")
+	}
+	gl = h.bookSentInvoice(ctx, m.clubID, m.invoiceID, m.actorID)
+	if h.audit != nil {
+		h.audit.LogAction(ctx, m.clubID, m.actorID, m.remoteAddr,
+			audit.ActionInvoiceEmailed, "invoice", m.invoiceID,
+			map[string]any{"email": m.deliverTo, "invoice_number": m.number})
+	}
+	return &now, gl
 }
 
 // boatInfo loads the boat + matching slip context (if any) for a
@@ -973,6 +1003,55 @@ type draftInvoiceRow struct {
 	CreatedAt     time.Time `json:"created_at"`
 }
 
+// invoiceListRow is one faktura of the list.
+type invoiceListRow struct {
+	draftInvoiceRow
+	SentAt         *time.Time `json:"sent_at"`
+	Status         string     `json:"status"`
+	Paid           bool       `json:"paid"`
+	LastReminderAt *time.Time `json:"last_reminder_at"`
+	OnlinePaidAt   *time.Time `json:"online_paid_at"`
+	OnlineOptIn    *bool      `json:"online_payment_opt_in"`
+	// Credit-note links (BRY-342). CreditsInvoiceNumber is set on a
+	// credit note linked to the faktura it credits; CreditState is
+	// "settled_pair" (that faktura was owed), "credit_owed" (it was
+	// already paid, so the member is owed the credit) or "unlinked".
+	// CreditedByNumber is set on a faktura settled by a credit note.
+	// A credit note a card refund issued has CreditState "refund" and
+	// CreditsInvoiceNumber the faktura it credits (none for an order
+	// with no faktura); it is never linked or unlinked by hand.
+	// RefundDocument marks it, and the debit faktura a failed refund
+	// issued, so neither offers a void.
+	CreditsInvoiceNumber *int    `json:"credits_invoice_number"`
+	CreditState          *string `json:"credit_state"`
+	CreditedByNumber     *int    `json:"credited_by_invoice_number"`
+	RefundDocument       bool    `json:"refund_document"`
+	// RefundOrderID is the order to open the refund dialog for: set on a
+	// faktura paid by card that the caller may refund, with money left.
+	RefundOrderID *string `json:"refund_order_id"`
+	// What card refunds did to a faktura (BRY-498), from the credit
+	// notes they issued: RefundState is none, partial (RefundedAmount of
+	// it is back on the card, the faktura stays paid) or full, in which
+	// case CreditState is "refunded". RefundCreditNotes are the notes.
+	RefundState       string             `json:"refund_state"`
+	RefundedAmount    float64            `json:"refunded_amount"`
+	RefundCreditNotes []refundCreditNote `json:"refund_credit_notes"`
+	// "Ny faktura" after a full refund: CanReissue is set for the
+	// treasurer or admin while none was issued; ReissuedInvoice* name
+	// the faktura that was, and ReissueOfNumber the credited faktura
+	// this one replaces.
+	CanReissue            bool    `json:"can_reissue"`
+	ReissuedInvoiceID     *string `json:"reissued_invoice_id"`
+	ReissuedInvoiceNumber *int    `json:"reissued_invoice_number"`
+	ReissueOfNumber       *int    `json:"reissue_of_invoice_number"`
+	// The latest dispute against the card payment, in Stripe's words.
+	DisputeStatus *string    `json:"dispute_status"`
+	DisputeDueBy  *time.Time `json:"dispute_due_by"`
+	// Stripe Dashboard links, for the treasurer and admin only.
+	DisputeURL string `json:"dispute_url,omitempty"`
+	PaymentURL string `json:"payment_url,omitempty"`
+}
+
 // HandleListInvoices returns invoices for the club filtered by a
 // lifecycle status passed via ?status=. Supported values:
 //
@@ -1045,7 +1124,10 @@ func (h *InvoiceHandler) HandleListInvoices(w http.ResponseWriter, r *http.Reque
 		          WHERE cn.credits_invoice_id = i.id AND cn.status <> 'voided'),
 		        `+refundDocumentSQL("i")+`,
 		        (SELECT o.invoice_number FROM refund_documents rd JOIN invoices o ON o.id = rd.invoice_id
-		          WHERE rd.credit_invoice_id = i.id LIMIT 1)
+		          WHERE rd.credit_invoice_id = i.id LIMIT 1),
+		        (SELECT n.id::text FROM invoices n WHERE n.id = i.reissued_as_invoice_id AND n.status <> 'voided'),
+		        (SELECT n.invoice_number FROM invoices n WHERE n.id = i.reissued_as_invoice_id AND n.status <> 'voided'),
+		        (SELECT o.invoice_number FROM invoices o WHERE o.reissued_as_invoice_id = i.id)
 		   FROM invoices i
 		   LEFT JOIN users u ON u.id = i.user_id
 		   LEFT JOIN price_items pi ON pi.id = i.price_item_id
@@ -1061,35 +1143,9 @@ func (h *InvoiceHandler) HandleListInvoices(w http.ResponseWriter, r *http.Reque
 	}
 	defer rows.Close()
 
-	type listRow struct {
-		draftInvoiceRow
-		SentAt         *time.Time `json:"sent_at"`
-		Status         string     `json:"status"`
-		Paid           bool       `json:"paid"`
-		LastReminderAt *time.Time `json:"last_reminder_at"`
-		OnlinePaidAt   *time.Time `json:"online_paid_at"`
-		OnlineOptIn    *bool      `json:"online_payment_opt_in"`
-		// Credit-note links (BRY-342). CreditsInvoiceNumber is set on a
-		// credit note linked to the faktura it credits; CreditState is
-		// "settled_pair" (that faktura was owed), "credit_owed" (it was
-		// already paid, so the member is owed the credit) or "unlinked".
-		// CreditedByNumber is set on a faktura settled by a credit note.
-		// A credit note a card refund issued has CreditState "refund" and
-		// CreditsInvoiceNumber the faktura it credits (none for an order
-		// with no faktura); it is never linked or unlinked by hand.
-		// RefundDocument marks it, and the debit faktura a failed refund
-		// issued, so neither offers a void.
-		CreditsInvoiceNumber *int    `json:"credits_invoice_number"`
-		CreditState          *string `json:"credit_state"`
-		CreditedByNumber     *int    `json:"credited_by_invoice_number"`
-		RefundDocument       bool    `json:"refund_document"`
-		// RefundOrderID is the order to open the refund dialog for: set on a
-		// faktura paid by card that the caller may refund, with money left.
-		RefundOrderID *string `json:"refund_order_id"`
-	}
-	out := make([]listRow, 0)
+	out := make([]invoiceListRow, 0)
 	for rows.Next() {
-		var d listRow
+		var d invoiceListRow
 		var issue, due time.Time
 		var creditTargetPaid *bool
 		var refundTargetNumber *int
@@ -1099,7 +1155,8 @@ func (h *InvoiceHandler) HandleListInvoices(w http.ResponseWriter, r *http.Reque
 			&d.PriceItemName, &d.FiscalYear, &d.Description, &d.CreatedAt,
 			&d.SentAt, &d.Status, &d.Paid, &d.LastReminderAt, &d.OnlinePaidAt, &d.OnlineOptIn,
 			&d.CreditsInvoiceNumber, &creditTargetPaid, &d.CreditedByNumber,
-			&d.RefundDocument, &refundTargetNumber); err != nil {
+			&d.RefundDocument, &refundTargetNumber,
+			&d.ReissuedInvoiceID, &d.ReissuedInvoiceNumber, &d.ReissueOfNumber); err != nil {
 			h.log.Error().Err(err).Msg("scan invoice row")
 			Error(w, http.StatusInternalServerError, "internal error")
 			return
@@ -1110,7 +1167,7 @@ func (h *InvoiceHandler) HandleListInvoices(w http.ResponseWriter, r *http.Reque
 			state := "unlinked"
 			switch {
 			case d.RefundDocument:
-				state = "refund"
+				state = creditRefund
 				d.CreditsInvoiceNumber = refundTargetNumber
 			case d.CreditsInvoiceNumber != nil && creditTargetPaid != nil && *creditTargetPaid:
 				state = creditOwed
@@ -1135,6 +1192,7 @@ func (h *InvoiceHandler) HandleListInvoices(w http.ResponseWriter, r *http.Reque
 			out[i].RefundOrderID = &orderID
 		}
 	}
+	h.addRefundState(ctx, claims, out)
 
 	JSON(w, http.StatusOK, map[string]any{"items": out, "status": status})
 }
