@@ -82,6 +82,22 @@ type offerRequest struct {
 	DeadlineDays *int `json:"deadline_days,omitempty"`
 }
 
+// MountAdminRoutes registers the board's queue management under /admin
+// (behind the group's RequireAdminTOTP). The list carries every entry's
+// name, email and phone, so it belongs behind the 12-hour step-up like the
+// rest of the admin area. Offer, enroll and reorder change a member's place
+// in the queue, so they also take the fresh-TOTP gate, as slip assignment
+// does. The member routes (join, me, accept, ...) stay on /waiting-list.
+func (h *WaitingListHandler) MountAdminRoutes(r chi.Router, roleGate, freshGate func(http.Handler) http.Handler) {
+	r.Route("/waiting-list", func(r chi.Router) {
+		r.Use(roleGate)
+		r.Get("/", h.HandleListWaitingList)
+		r.With(freshGate).Post("/enroll", h.HandleAdminEnrollMember)
+		r.With(freshGate).Post("/{entryID}/offer", h.HandleOfferSlip)
+		r.With(freshGate).Put("/{entryID}/position", h.HandleReorderEntry)
+	})
+}
+
 type reorderRequest struct {
 	NewPosition int `json:"new_position"`
 }

@@ -396,6 +396,12 @@ Price items carry no account. The category map (`revenueAccountMap`, read throug
 
 **Failure mode:** with only the accounting-router role check, a board member with a stale session could post or void entries, import statements that auto-book, or run syncs that book a whole period.
 
+### Board-facing member data lives under `/admin`
+
+**Rule (BRY-477):** a route that returns members' contact details or changes who is offered a slip is mounted in the `/admin` group, so it inherits `RequireAdminTOTP` (the 12-hour step-up). The waiting list's admin side is `/admin/waiting-list` (`WaitingListHandler.MountAdminRoutes`): the list takes the step-up alone, and enroll, offer and reorder add `RequireFreshTOTPDefault()`, like slip assignment. The member routes (`/waiting-list/join`, `me`, `portal`, `withdraw`, `{entryID}/accept`, `decline`) stay outside it. `TestWaitingListAdminRouteGates` pins every route's gate.
+
+**Failure mode:** the admin routes sat under `/waiting-list` behind a role check only, so a board member whose step-up had lapsed still read every entry's name, email and phone and could change queue positions with a stale session.
+
 ### Board viewing never widens a write
 
 **Rule (BRY-372):** every board role and admin (`roles.CanViewAdmin`) may read every admin page except Developer and Site. Reads open through `middleware.RequireRoleOrBoardRead(<write roles>)`, which admits viewers only on `GET`/`HEAD` and applies `RequireRole(<write roles>)` to every other method, so a surface's write roles are the ones it had before. A handler mounted on `GET` behind it must not write, mint a credential or send anything; such a `GET` keeps its own `RequireRole` (the pay-link endpoints do). In the SPA, write controls on viewable pages hide behind `useCan()`.

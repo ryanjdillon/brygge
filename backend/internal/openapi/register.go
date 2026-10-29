@@ -646,7 +646,7 @@ func registerWaitingListOps(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "admin-list-waiting-list",
 		Method:      http.MethodGet,
-		Path:        "/api/v1/waiting-list",
+		Path:        "/api/v1/admin/waiting-list",
 		Tags:        []string{"Waiting List"},
 		Summary:     "List all entries (admin)",
 		Security:    BearerSecurity,
@@ -655,7 +655,7 @@ func registerWaitingListOps(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "offer-slip",
 		Method:      http.MethodPost,
-		Path:        "/api/v1/waiting-list/{entryID}/offer",
+		Path:        "/api/v1/admin/waiting-list/{entryID}/offer",
 		Tags:        []string{"Waiting List"},
 		Summary:     "Offer slip to entry (admin)",
 		Security:    BearerSecurity,
@@ -669,7 +669,7 @@ func registerWaitingListOps(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "reorder-waiting-list-entry",
 		Method:      http.MethodPut,
-		Path:        "/api/v1/waiting-list/{entryID}/position",
+		Path:        "/api/v1/admin/waiting-list/{entryID}/position",
 		Tags:        []string{"Waiting List"},
 		Summary:     "Reorder entry (admin)",
 		Security:    BearerSecurity,

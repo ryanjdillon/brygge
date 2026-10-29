@@ -87,6 +87,8 @@ r.With(
 ).Post("/.../invoices/bulk-reminder", invoiceHandler.HandleBulkSendReminder)
 ```
 
+A handler that serves a whole sub-area under `/admin` can own its mount: `WaitingListHandler.MountAdminRoutes(r, roleGate, freshGate)` (BRY-477) registers the list behind the role gate alone (the parent `/admin` group supplies the 12-hour `RequireAdminTOTP`) and enroll, offer and reorder behind `freshGate` too. Admin routes never live beside the member routes: a list that returns member contact details outside `/admin` skips the step-up. `TestWaitingListAdminRouteGates` walks every route and fails when one is added without a gate decision.
+
 Don't reinvent TOTP checks inside the handler — the middleware enforces and the SPA's `totpAwareFetch` re-prompts transparently on 403.
 
 ## Bulk action conventions

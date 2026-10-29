@@ -264,6 +264,14 @@ func WithSessionID(ctx context.Context, sessionID string) context.Context {
 	return context.WithValue(ctx, sessionContextKey{}, sessionID)
 }
 
+// WithSessionInfo returns a context carrying the session's step-up state,
+// matching what AuthenticateSession injects. Lets route-gate tests exercise
+// the real RequireAdminTOTP / RequireFreshTOTP middleware without a session
+// store.
+func WithSessionInfo(ctx context.Context, info *auth.SessionInfo) context.Context {
+	return context.WithValue(ctx, sessionInfoContextKey{}, info)
+}
+
 // GetSessionInfo returns the SessionInfo populated by AuthenticateSession,
 // or nil for unauthenticated requests / contexts where it wasn't set.
 func GetSessionInfo(ctx context.Context) *auth.SessionInfo {

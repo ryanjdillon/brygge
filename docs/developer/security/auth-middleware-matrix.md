@@ -109,8 +109,6 @@ live in the handlers.
 | `GET /harbor/recent-payments`, `/harbor/payment-targets[/{id}/qr.png]` | any admin viewer (writes: board, admin, harbor_master) |
 | `POST /bookings/{id}/confirm` | board, harbor_master |
 | `POST/PUT/DELETE /calendar/*` | board |
-| `GET /waiting-list/` | any admin viewer |
-| enroll, offer, reorder | board |
 | `POST /projects`, project tasks; `PUT/DELETE /tasks/{id}`, assign, hours | board |
 | `PUT /feature-requests/{id}/status`, promote | board |
 
@@ -141,6 +139,8 @@ reads admit any admin viewer (see *Board read access* above).
 | `POST /users/{id}/totp/disable` | admin | ✅ |
 | **Inbox** (`/admin/inbox`) | board-mailbox roles | — for reads |
 | `POST /inbox/{address}/send` | (same) | ✅ |
+| **Waiting list** (`/admin/waiting-list`) † | board | — for reads (the list carries name, email and phone) |
+| `POST /waiting-list/enroll`, `/{entryID}/offer`, `PUT /{entryID}/position` | board | ✅ (BRY-477) |
 | **Slips** (`/admin/slips`) † | board, harbor_master, admin | — for reads |
 | create, update, **delete**, assign, assignment-type, release | (same) | ✅ |
 | `/admin/settings/general` | board, admin | — |

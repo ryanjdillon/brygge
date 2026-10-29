@@ -593,14 +593,6 @@ func main() {
 			r.Post("/withdraw", waitingListHandler.HandleWithdraw)
 			r.Post("/{entryID}/accept", waitingListHandler.HandleAcceptOffer)
 			r.Post("/{entryID}/decline", waitingListHandler.HandleDeclineOffer)
-
-			r.Group(func(r chi.Router) {
-				r.Use(middleware.RequireRoleOrBoardRead("board"))
-				r.Get("/", waitingListHandler.HandleListWaitingList)
-				r.Post("/enroll", waitingListHandler.HandleAdminEnrollMember)
-				r.Post("/{entryID}/offer", waitingListHandler.HandleOfferSlip)
-				r.Put("/{entryID}/position", waitingListHandler.HandleReorderEntry)
-			})
 		})
 
 		if cfg.Features.Bookings {
@@ -1078,6 +1070,13 @@ func main() {
 							Post("/{address}/blob", inboxHandler.HandleBlobUpload)
 					})
 				}
+
+				// Queue management (BRY-477): list behind the step-up, offer /
+				// enroll / reorder behind a fresh TOTP.
+				waitingListHandler.MountAdminRoutes(r,
+					middleware.RequireRoleOrBoardRead("board"),
+					middleware.RequireFreshTOTPDefault(),
+				)
 
 				r.Route("/slips", func(r chi.Router) {
 					r.Use(middleware.RequireRoleOrBoardRead("board", "harbor_master", "admin"))

@@ -40,6 +40,7 @@ r.With(
 ```
 
 - Role middleware always present for admin routes
+- Admin routes live under `/admin` (inherits the 12-hour `RequireAdminTOTP`). A route outside it that returns member PII or changes who gets what skips that step-up (the waiting list did until BRY-477)
 - TOTP gate for any mutation more sensitive than a lookup
 - Use `RequireFreshTOTPDefault()` (configured window) unless you specifically need a custom duration
 
