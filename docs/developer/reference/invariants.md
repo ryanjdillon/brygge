@@ -664,6 +664,12 @@ So the amount cap is a **default**, not a hard ceiling — the per-invoice overr
 
 **Failure mode:** `relay@` has quota 1, so with relay@ as the envelope sender every DSN failed "over quota" and was dropped as a double bounce — delivery failures of app mail were invisible. See [mail/setup.md § Where bounces for app mail go](../mail/setup.md#where-bounces-for-app-mail-go).
 
+### A public route that sends mail never lets the visitor choose From or To
+
+**Rule (BRY-475):** `POST /contact` (`handlers/contact.go`) sends to a club-configured address (`contactRecipient`: `secretary_email`, else `chairman_email`) from the app's own sender; the visitor's address is only the `Reply-To` header, and it is a bare mailbox that passed `parseBareEmail`. The visitor's subject (which reaches the Subject header) and name (body only) go through `cleanSingleLine`, which turns CR, LF and every other control character into a space; the subject is also cut to 60 runes in `email.ContactSubject` because the Q-encoded header is not folded and a long run of four-byte characters would pass the 998-character line limit. The route has its own per-IP limiter, and a failed send answers 502 and logs without the submitter's text.
+
+**Failure mode:** a visitor-controlled From spoofs the club's domain and fails DMARC for the whole domain; an unstripped CR/LF in the subject injects headers (extra Bcc recipients, so the club's mailbox relays spam); a "received" answer for a message that was only logged loses every enquiry without anyone knowing.
+
 ---
 
 ## Developer DB query (DIL-365)

@@ -1512,7 +1512,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Submit contact form */
+        /**
+         * Submit contact form
+         * @description Emails the message to the club's secretary (else chairman) with Reply-To set to the submitter. 502 when delivery fails, 503 when the club has no recipient or the server has no mail transport, 429 when rate limited (strict limiter).
+         */
         post: operations["submit-contact-form"];
         delete?: never;
         options?: never;
@@ -3370,7 +3373,7 @@ export interface components {
             readonly $schema?: string;
             /**
              * Format: email
-             * @description Sender email
+             * @description Sender email; used as Reply-To on the mail to the club
              */
             email: string;
             /** @description Message body */
@@ -3379,6 +3382,8 @@ export interface components {
             name: string;
             /** @description Subject line */
             subject: string;
+            /** @description Honeypot; leave empty. A non-empty value is acknowledged but not delivered */
+            website?: string;
         };
         "Create-document-commentRequest": {
             /**

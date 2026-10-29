@@ -83,7 +83,7 @@ keep `moneyGate` (treasurer/admin + fresh step-up).
 |---|---|
 | `GET /health`, `GET /features` | none |
 | `GET /pricing`, `GET /products`, `GET /boat-models`, `GET /weather`, `GET /club`, `GET /club/logo[.svg]` | none (rate-limited) |
-| `POST /contact` | none (rate-limited) |
+| `POST /contact` | none (own 5/min per-IP limiter keyed `contact:<ip>`, separate from the strict auth bucket; fails open if Redis errors; mails the club; honeypot field `website`) |
 | `GET /legal/{docType}` | none |
 | `GET /map/*` | none |
 | `POST /auth/magic-link`, `GET /auth/verify` | none (strict rate-limit) |

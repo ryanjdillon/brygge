@@ -207,6 +207,7 @@ func registerPublicContentOps(api huma.API) {
 		Path:        "/api/v1/contact",
 		Tags:        []string{"Contact"},
 		Summary:     "Submit contact form",
+		Description: "Emails the message to the club's secretary (else chairman) with Reply-To set to the submitter. 502 when delivery fails, 503 when the club has no recipient or the server has no mail transport, 429 when rate limited (strict limiter).",
 	}, stub[struct{ Body ContactRequest }, struct{ Body StatusResponse }]())
 
 	huma.Register(api, huma.Operation{

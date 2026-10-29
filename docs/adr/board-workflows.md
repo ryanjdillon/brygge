@@ -38,3 +38,10 @@ See [README.md](README.md) for the format. The board task inbox spec and its imp
 
 - **Status:** accepted · 2026-10-29 · BRY-78
 - **Decision:** a board decision triggers an offer to the next person on the list by email or text. They accept online, with the terms snapshotted, which issues a faktura; once paid and settled the share is allocated. A timeout or a decline offers the next person, and the person who declined chooses whether to stay on the list. Reordering the list is allowed only with a reason, and is recorded in the board decision log.
+
+### BRD-8: Contact-form messages are mailed to the secretary, else the chairman
+
+- **Status:** accepted · 2026-10-29 · BRY-475, BRY-482
+- **Decision:** the public contact form mails each message, synchronously, to the club's `secretary_email`, falling back to `chairman_email`, with Reply-To set to the submitter and From the app's own sender. A failed or impossible delivery is an error the visitor sees (502/503), never a silent success. The recipient moves to the BRD-3 function allocation once BRY-482 ships; until then the address is read from club settings, which works on every deploy.
+- **Why:** the old handler only logged the submission and answered success, so every enquiry was lost and the visitor was never told. Settings are used rather than a new mailbox flag because they exist on every deploy, Compose included.
+- **Consequences:** the rules a public mail-sending route must keep are in the invariant "A public route that sends mail never lets the visitor choose From or To" in [invariants.md](../developer/reference/invariants.md); the recipient lookup is `contactRecipient` in `backend/internal/handlers/contact.go`, the one function BRY-482 changes.

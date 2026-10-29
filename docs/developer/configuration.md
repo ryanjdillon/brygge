@@ -53,6 +53,14 @@ Used for magic link login, invoice delivery, and broadcasts. Brygge talks SMTP t
 
 If `SMTP_HOST` is not set, the app starts in degraded mode — magic link auth and invoice emails will not work.
 
+### Contact form recipient
+
+The public contact form (`POST /api/v1/contact`) mails each message to the club's **secretary** address, falling back to the **chairman** address. Both are club settings, edited under Admin > Site settings (`secretary_email`, `chairman_email` on the `clubs` row); nothing is configured through the environment, so Compose and NixOS deploys behave the same. Nothing is hard-coded: a club with neither address set gets no delivery.
+
+- The mail comes from `EMAIL_FROM`; the submitter's address is set as `Reply-To` (this replaces `EMAIL_REPLY_TO` for these messages), so answering from the inbox reaches the visitor.
+- With neither address set the form answers 503 `contact_recipient_not_configured`, and without `SMTP_HOST`/`EMAIL_FROM` it answers 503 `mail_not_configured`. A failed send answers 502 `contact_delivery_failed`. The page tells the visitor to retry or use the addresses listed on it; nothing is queued or retried.
+- The recipient is meant to move to the board-config function allocation (BRY-482; decision BRD-3 in [../adr/board-workflows.md](../adr/board-workflows.md)). The choice lives in one function, `contactRecipient` in `backend/internal/handlers/contact.go`.
+
 ## Stalwart admin API
 
 The API's handle on the mail server's management REST API (`/api/…`). What it enables depends on what else is set:

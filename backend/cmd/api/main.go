@@ -297,7 +297,7 @@ func main() {
 	calendarHandler := handlers.NewCalendarHandler(db, &cfg, log)
 	membersHandler := handlers.NewMembersHandler(db, &cfg, log)
 	weatherHandler := handlers.NewWeatherHandler(db, rdb, &cfg, log)
-	contactHandler := handlers.NewContactHandler(&cfg, log)
+	contactHandler := handlers.NewContactHandler(db, &cfg, emailClient, log)
 	// History/retry surface for bulk sends (BRY-165). The retry kick is a
 	// lazy closure because broadcastWorker is assigned later, when the
 	// inbox/mail stack is wired; by the time a retry fires at runtime it's set.
@@ -492,6 +492,19 @@ func main() {
 			})
 		})
 
+		// The contact form is public and sends a real email on every
+		// submission, so it gets the strict budget rather than the standard
+		// one (BRY-475). Its own key keeps a visitor hammering the form from
+		// using up the IP's strict budget for magic-link login. RemoteAddr
+		// is already the client IP here (middleware.ClientIP).
+		contactRL := middleware.NewRateLimiter(rdb, log, 5, time.Minute, func(r *http.Request) string {
+			return "contact:" + r.RemoteAddr
+		})
+		r.Group(func(r chi.Router) {
+			r.Use(contactRL.Handler)
+			r.Post("/contact", contactHandler.HandleContactForm)
+		})
+
 		r.Group(func(r chi.Router) {
 			r.Use(standardRL)
 			// Pricing belongs to the Accounting module (membership dues,
@@ -506,7 +519,6 @@ func main() {
 			r.Get("/boat-models", boatModelsHandler.HandleSearch)
 			r.Get("/faqs", faqsHandler.HandleListPublic)
 			r.Get("/weather", weatherHandler.HandleGetWeather)
-			r.Post("/contact", contactHandler.HandleContactForm)
 			r.Get("/unsubscribe", emailPrefsHandler.HandleUnsubscribeRedirect)
 			r.Post("/unsubscribe", emailPrefsHandler.HandleUnsubscribeOneClick)
 			// One-tap pay link from older faktura emails: mints a payment with

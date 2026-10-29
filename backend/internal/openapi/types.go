@@ -115,10 +115,11 @@ type MapMarker struct {
 // --- Contact ---
 
 type ContactRequest struct {
-	Name    string `json:"name" minLength:"1" doc:"Sender name"`
-	Email   string `json:"email" format:"email" doc:"Sender email"`
-	Subject string `json:"subject" minLength:"1" doc:"Subject line"`
-	Message string `json:"message" minLength:"10" doc:"Message body"`
+	Name    string `json:"name" minLength:"1" maxLength:"100" doc:"Sender name"`
+	Email   string `json:"email" format:"email" maxLength:"254" doc:"Sender email; used as Reply-To on the mail to the club"`
+	Subject string `json:"subject" minLength:"1" maxLength:"200" doc:"Subject line"`
+	Message string `json:"message" minLength:"10" maxLength:"5000" doc:"Message body"`
+	Website string `json:"website,omitempty" doc:"Honeypot; leave empty. A non-empty value is acknowledged but not delivered"`
 }
 
 type StatusResponse struct {
