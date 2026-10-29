@@ -151,7 +151,7 @@ For single-test examples and full dev workflow, see [CONTRIBUTING.md](CONTRIBUTI
 
 ### Frontend (`frontend/`)
 
-- **Vue 3.5** Composition API, **TanStack Vue Query**, **Pinia**, **vue-i18n** (7 locales)
+- **Vue 3.5** Composition API, **TanStack Vue Query**, **Pinia**, **vue-i18n 11** (8 locales)
 - **Shadcn-vue** + TailwindCSS 4, **lucide-vue-next** icons, **MapLibre GL** for maps
 - **openapi-fetch** typed client in `src/lib/apiClient.ts` → `useApiClient()` + `unwrap()`
 - Composables in `src/composables/` wrap API calls with TanStack Query
@@ -167,7 +167,7 @@ Spec generation (`backend/cmd/openapi/main.go`) → `just api-types` → `fronte
 - **Vue**: Composition API with `<script setup>`, destructured imports, all user-facing strings via `t('key')` from vue-i18n
 - **Go**: Standard gofmt, errors returned (not panicked), zerolog for structured logging
 - **Responses**: `handlers.JSON(w, status, data)` and `handlers.Error(w, status, msg)`
-- **i18n**: When adding/modifying locale keys, update all 7 JSON files. Norwegian (nb) has unicode — use jq or Python for safe JSON editing
+- **i18n**: When adding/modifying locale keys, update all 8 JSON files. Norwegian (nb) has unicode — use jq or Python for safe JSON editing
 - **Migrations**: Sequential numbered files (`000002_feature.up.sql` / `.down.sql`)
 - **After schema changes**: `just generate` to update sqlc code in `backend/gen/`
 - **After OpenAPI changes**: `just api-types` to regenerate types. Register new endpoints in `backend/internal/openapi/register.go`, add wrapper types in `openapi/types.go`

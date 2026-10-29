@@ -16,7 +16,7 @@ A high level inventory. For why and how the pieces connect see [architecture.md]
 - **Vue 3.5** with Composition API and `<script setup lang="ts">`
 - **openapi-fetch** typed client (types regenerated from the live OpenAPI spec)
 - **TanStack Vue Query** for server state, **Pinia** for client state
-- **vue-i18n** — Norwegian is the primary locale, English is the fallback (German, French, Italian, Dutch, Polish are partial)
+- **vue-i18n** — Norwegian is the primary locale, English is the fallback (German, French, Italian, Dutch, Polish are partial). Version 11, Composition API only (`legacy: false`): plurals use `t(key, params, n)` or `t(key, n)`; `tc`/`$tc` no longer exist in v11
 - **Shadcn-vue** components in `frontend/src/components/ui/` (source-owned, edit them directly)
 - **TailwindCSS 4** + **MapLibre GL** for the harbour map
 

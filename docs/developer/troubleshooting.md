@@ -38,7 +38,7 @@ Common issues and solutions for Brygge development and deployment.
 
 **Symptom**: `[intlify] Not found key` warnings in the browser console.
 
-**Fix**: When adding or modifying locale keys, update all 7 JSON files in `frontend/src/locales/`. Norwegian (`nb.json`) is the primary locale. Use `jq` or Python for safe editing — `nb.json` contains unicode characters that can be corrupted by naive string replacement.
+**Fix**: When adding or modifying locale keys, update all 8 JSON files in `frontend/src/locales/`. Norwegian (`nb.json`) is the primary locale. Use `jq` or Python for safe editing — `nb.json` contains unicode characters that can be corrupted by naive string replacement.
 
 ---
 

@@ -109,7 +109,7 @@ Brygge is a **monorepo** with a Go API backend and a Vue 3 SPA frontend. In prod
 - **Vue 3.5** with Composition API (`<script setup lang="ts">`)
 - **openapi-fetch** typed API client with compile-time type safety
 - **TanStack Vue Query** for server state management
-- **Pinia** for client state, **vue-i18n** for 7 locales
+- **Pinia** for client state, **vue-i18n** for 8 locales
 - **Shadcn-vue** + TailwindCSS 4 for UI components
 
 ### Infrastructure
