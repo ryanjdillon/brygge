@@ -470,8 +470,14 @@
         "overdue": "Achterstallig",
         "nothing_due": "Niets te betalen",
         "credit_note": "Creditnota",
-        "credited": "Gecrediteerd"
-      }
+        "credited": "Gecrediteerd",
+        "refunded": "Terugbetaald",
+        "refund_credit_note": "Creditnota – terugbetaling"
+      },
+      "refundCreditNote": "Het bedrag is teruggestort op je kaart.",
+      "refundedFull": "Het volledige bedrag is teruggestort op je kaart.",
+      "refundedPartly": "Deels terugbetaald: {amount} is teruggestort op je kaart.",
+      "creditNoteNumber": "Creditnota #{number}"
     }
   },
   "admin": {
@@ -1137,6 +1143,7 @@
         "refund_origin_dismissed": "Terugbetaling van een afgewezen kaartbetaling",
         "refund_legacy": "Terugbetaling of geschil van vóór het boeken",
         "refund_failure_settled": "Mislukte terugbetaling – de factuur is op een andere manier voldaan",
+        "refund_failure_reissued": "Mislukte terugbetaling – de factuur is opnieuw uitgegeven",
         "refund_split": "De terugbetaling kan niet over de facturen worden verdeeld"
       },
       "stripePayoutSweepCounts": "Stripe-uitbetalingen afgestemd: {cleared} · Wachtend: {waiting} · Overgeslagen: {skipped} · Mislukt: {failed}",
@@ -1474,6 +1481,39 @@
         "not_found": "De betaling is niet gevonden.",
         "invalid": "Controleer het formulier: het bedrag, de reden of de keuze is ongeldig.",
         "generic": "Er ging iets mis. Opnieuw proberen is veilig: hetzelfde verzoek betaalt nooit twee keer terug."
+      },
+      "chip": {
+        "refunded": "Terugbetaald",
+        "partial": "Deels terugbetaald",
+        "partialAmount": "Deels terugbetaald {amount}",
+        "refundedTitle": "{amount} is teruggestort op de kaart",
+        "disputed": "Betwist",
+        "disputedDue": "Betwist – reageer vóór {date}",
+        "disputeLost": "Geschil verloren",
+        "disputeWon": "Geschil gewonnen",
+        "openStripe": "Openen in Stripe",
+        "disputesWaiting": "Betwiste kaartbetalingen die op antwoord wachten: {count}",
+        "answerInStripe": "Beantwoorden in Stripe"
+      },
+      "creditNote": "Creditnota #{number}",
+      "reissue": {
+        "button": "Nieuwe factuur",
+        "buttonAria": "Nieuwe factuur uitgeven voor #{number}",
+        "confirmTitle": "Nieuwe factuur uitgeven?",
+        "confirmBody": "Factuur #{number} is gecrediteerd na een kaartterugbetaling. Er wordt een nieuwe factuur van {amount} uitgegeven met dezelfde regels voor dezelfde betaler. Deze vervalt over 21 dagen en wordt net als elke andere factuur per e-mail verstuurd. De creditnota's blijven staan en dit kan maar één keer.",
+        "confirmAction": "Factuur uitgeven",
+        "done": "Factuur #{number} is uitgegeven en verstuurd.",
+        "doneUnsent": "Factuur #{number} is uitgegeven maar niet verstuurd: de betaler heeft geen e-mailadres of e-mail is niet ingesteld. Je vindt hem bij Concepten.",
+        "doneWarning": "Factuur #{number} is uitgegeven, maar de pdf kon niet worden gemaakt, dus de factuur is niet verstuurd. Je vindt hem bij Concepten.",
+        "doneNoClub": "Factuur #{number} is uitgegeven, maar de gegevens van de club konden niet worden gelezen, dus de factuur is niet verstuurd. Je vindt hem bij Concepten.",
+        "reissuedAs": "Nieuwe factuur #{number}",
+        "reissueOf": "Vervangt #{number}",
+        "errors": {
+          "not_refunded": "De factuur is niet volledig gecrediteerd door een kaartterugbetaling, dus er kan geen nieuwe worden uitgegeven.",
+          "already_reissued": "Voor deze factuur is al een nieuwe uitgegeven.",
+          "not_found": "De factuur bestaat niet meer.",
+          "generic": "Kon geen nieuwe factuur uitgeven. Probeer het opnieuw."
+        }
       }
     }
   },

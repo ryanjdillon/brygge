@@ -19,6 +19,7 @@ const KEYS = [
     'refund_origin_dismissed',
     'refund_legacy',
     'refund_failure_settled',
+    'refund_failure_reissued',
     'refund_split',
     'dispute_account_missing',
     'dispute_direction',

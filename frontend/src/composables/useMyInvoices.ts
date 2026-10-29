@@ -42,9 +42,13 @@ export function isNothingDue(inv: MemberInvoice): boolean {
 // One status vocabulary for every member-facing invoice badge (the full
 // list and the dashboard chips). A credit note is money the club owes
 // back, and a faktura it settles is done; neither reads as unpaid or
-// overdue (BRY-342). The key is the suffix of portal.invoices.status.*.
+// overdue (BRY-342). A card refund repays the card at once, so its credit
+// note is not credit owed and a faktura it credited reads as refunded
+// (BRY-498). The key is the suffix of portal.invoices.status.*.
 export type InvoiceStatus =
+  | 'refund_credit_note'
   | 'credit_note'
+  | 'refunded'
   | 'credited'
   | 'nothing_due'
   | 'paid'
@@ -53,7 +57,9 @@ export type InvoiceStatus =
   | 'unpaid'
 
 export function invoiceStatus(inv: MemberInvoice): InvoiceStatus {
+  if (inv.credit_note && inv.refund_document) return 'refund_credit_note'
   if (inv.credit_note) return 'credit_note'
+  if (inv.refund_state === 'full') return 'refunded'
   if (inv.credited) return 'credited'
   if (isNothingDue(inv)) return 'nothing_due'
   if (inv.paid) return 'paid'
@@ -63,7 +69,9 @@ export function invoiceStatus(inv: MemberInvoice): InvoiceStatus {
 }
 
 const statusTone: Record<InvoiceStatus, string> = {
+  refund_credit_note: 'bg-sky-100 text-sky-800',
   credit_note: 'bg-sky-100 text-sky-800',
+  refunded: 'bg-sky-100 text-sky-800',
   credited: 'bg-green-100 text-green-800',
   nothing_due: 'bg-green-100 text-green-800',
   paid: 'bg-green-100 text-green-800',

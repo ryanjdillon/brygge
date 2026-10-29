@@ -125,14 +125,14 @@ function onCancel() {
       <div class="flex justify-end gap-2">
         <button
           type="button"
-          class="rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-700 ring-1 ring-gray-300 hover:bg-gray-50"
+          class="min-h-11 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-700 ring-1 ring-gray-300 hover:bg-gray-50"
           @click="onCancel"
         >
           {{ store.current?.cancelLabel ?? t('common.cancel') }}
         </button>
         <button
           type="button"
-          :class="['rounded-md px-3 py-2 text-sm font-semibold text-white focus:outline-none focus:ring-2 focus:ring-offset-2', confirmBtnClass]"
+          :class="['min-h-11 rounded-md px-3 py-2 text-sm font-semibold text-white focus:outline-none focus:ring-2 focus:ring-offset-2', confirmBtnClass]"
           @click="onConfirm"
         >
           {{ store.current?.confirmLabel ?? t('common.confirm') }}

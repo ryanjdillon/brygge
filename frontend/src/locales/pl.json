@@ -468,8 +468,14 @@
         "received": "Płatność otrzymana",
         "unpaid": "Nieopłacona",
         "overdue": "Zaległa",
-        "nothing_due": "Nic do zapłaty"
-      }
+        "nothing_due": "Nic do zapłaty",
+        "refunded": "Zwrócona",
+        "refund_credit_note": "Nota kredytowa – zwrot"
+      },
+      "refundCreditNote": "Kwota została zwrócona na Twoją kartę.",
+      "refundedFull": "Cała kwota została zwrócona na Twoją kartę.",
+      "refundedPartly": "Zwrócono częściowo: {amount} wróciło na Twoją kartę.",
+      "creditNoteNumber": "Nota kredytowa #{number}"
     }
   },
   "admin": {
@@ -1111,6 +1117,7 @@
         "refund_origin_dismissed": "Zwrot odrzuconej płatności kartą",
         "refund_legacy": "Zwrot lub spór sprzed księgowania",
         "refund_failure_settled": "Nieudany zwrot – faktura została rozliczona w inny sposób",
+        "refund_failure_reissued": "Nieudany zwrot – faktura została wystawiona ponownie",
         "refund_split": "Zwrotu nie można rozdzielić na faktury"
       },
       "stripePayoutSweepCounts": "Wypłaty Stripe uzgodnione: {cleared} · Oczekujące: {waiting} · Pominięte: {skipped} · Nieudane: {failed}",
@@ -1445,6 +1452,39 @@
         "not_found": "Nie znaleziono płatności.",
         "invalid": "Sprawdź formularz: kwota, powód lub wybór są nieprawidłowe.",
         "generic": "Coś poszło nie tak. Można bezpiecznie spróbować ponownie: to samo żądanie nigdy nie zwraca pieniędzy dwa razy."
+      },
+      "chip": {
+        "refunded": "Zwrócono",
+        "partial": "Zwrócono częściowo",
+        "partialAmount": "Zwrócono częściowo {amount}",
+        "refundedTitle": "{amount} wróciło na kartę",
+        "disputed": "Zakwestionowana",
+        "disputedDue": "Zakwestionowana – odpowiedz do {date}",
+        "disputeLost": "Spór przegrany",
+        "disputeWon": "Spór wygrany",
+        "openStripe": "Otwórz w Stripe",
+        "disputesWaiting": "Zakwestionowane płatności kartą czekające na odpowiedź: {count}",
+        "answerInStripe": "Odpowiedz w Stripe"
+      },
+      "creditNote": "Nota kredytowa #{number}",
+      "reissue": {
+        "button": "Nowa faktura",
+        "buttonAria": "Wystaw nową fakturę dla #{number}",
+        "confirmTitle": "Wystawić nową fakturę?",
+        "confirmBody": "Faktura #{number} została skredytowana po zwrocie na kartę. Zostanie wystawiona nowa faktura na {amount} z tymi samymi pozycjami dla tego samego płatnika. Termin płatności wynosi 21 dni, a faktura zostanie wysłana e-mailem jak każda inna. Noty kredytowe pozostają w mocy, a to można zrobić tylko raz.",
+        "confirmAction": "Wystaw fakturę",
+        "done": "Faktura #{number} została wystawiona i wysłana.",
+        "doneUnsent": "Faktura #{number} została wystawiona, ale nie wysłana: płatnik nie ma adresu e-mail lub poczta nie jest skonfigurowana. Znajdziesz ją w Szkicach.",
+        "doneWarning": "Faktura #{number} została wystawiona, ale nie udało się utworzyć pliku PDF, więc nie została wysłana. Znajdziesz ją w Szkicach.",
+        "doneNoClub": "Faktura #{number} została wystawiona, ale nie udało się odczytać danych klubu, więc nie została wysłana. Znajdziesz ją w Szkicach.",
+        "reissuedAs": "Nowa faktura #{number}",
+        "reissueOf": "Zastępuje #{number}",
+        "errors": {
+          "not_refunded": "Faktura nie jest w całości skredytowana zwrotem na kartę, więc nie można wystawić nowej.",
+          "already_reissued": "Dla tej faktury wystawiono już nową.",
+          "not_found": "Faktura już nie istnieje.",
+          "generic": "Nie udało się wystawić nowej faktury. Spróbuj ponownie."
+        }
       }
     }
   },

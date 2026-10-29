@@ -558,8 +558,14 @@
         "overdue": "Forfalle",
         "nothing_due": "Ingenting å betale",
         "credit_note": "Kreditnota",
-        "credited": "Kreditert"
-      }
+        "credited": "Kreditert",
+        "refunded": "Refundert",
+        "refund_credit_note": "Kreditnota – refusjon"
+      },
+      "refundCreditNote": "Beløpet er betalt tilbake til kortet ditt.",
+      "refundedFull": "Heile beløpet er betalt tilbake til kortet ditt.",
+      "refundedPartly": "Delvis refundert: {amount} er betalt tilbake til kortet ditt.",
+      "creditNoteNumber": "Kreditnota #{number}"
     }
   },
   "admin": {
@@ -1888,6 +1894,7 @@
         "refund_origin_dismissed": "Refusjon av ei avvist kortbetaling",
         "refund_legacy": "Refusjon eller tvist frå før dei vart bokførte",
         "refund_failure_settled": "Mislukka refusjon – fakturaen er gjort opp på anna vis",
+        "refund_failure_reissued": "Mislukka refusjon – fakturaen er utstedt på nytt",
         "refund_split": "Refusjonen kan ikkje fordelast på fakturaene"
       },
       "stripePayoutSweepCounts": "Stripe-utbetalingar avstemde: {cleared} · Ventar: {waiting} · Hoppa over: {skipped} · Feila: {failed}",
@@ -2288,6 +2295,39 @@
         "not_found": "Fann ikkje betalinga.",
         "invalid": "Sjekk skjemaet: beløpet, grunngjevinga eller valet er ikkje gyldig.",
         "generic": "Noko gjekk gale. Det er trygt å prøve igjen: den same førespurnaden refunderer aldri to gonger."
+      },
+      "chip": {
+        "refunded": "Refundert",
+        "partial": "Delvis refundert",
+        "partialAmount": "Delvis refundert {amount}",
+        "refundedTitle": "{amount} er tilbake på kortet",
+        "disputed": "Omstridd",
+        "disputedDue": "Omstridd – svar innan {date}",
+        "disputeLost": "Tvist tapt",
+        "disputeWon": "Tvist vunnen",
+        "openStripe": "Opne i Stripe",
+        "disputesWaiting": "Omstridde kortbetalingar som ventar på svar: {count}",
+        "answerInStripe": "Svar i Stripe"
+      },
+      "creditNote": "Kreditnota #{number}",
+      "reissue": {
+        "button": "Ny faktura",
+        "buttonAria": "Utsted ny faktura for #{number}",
+        "confirmTitle": "Utsted ny faktura?",
+        "confirmBody": "Faktura #{number} er kreditert etter ein kortrefusjon. Det vert utstedt ei ny faktura på {amount} med dei same linjene til same betalar. Ho forfell om 21 dagar og vert send på e-post som ei vanleg faktura. Kreditnotaene blir ståande, og dette kan berre gjerast éin gong.",
+        "confirmAction": "Utsted faktura",
+        "done": "Faktura #{number} er utstedt og send.",
+        "doneUnsent": "Faktura #{number} er utstedt, men ikkje send: betalaren har inga e-postadresse, eller e-post er ikkje sett opp. Du finn ho under Utkast.",
+        "doneWarning": "Faktura #{number} er utstedt, men PDF-en kunne ikkje lagast, så ho er ikkje send. Du finn ho under Utkast.",
+        "doneNoClub": "Faktura #{number} er utstedt, men klubbinformasjonen kunne ikkje lesast, så ho er ikkje send. Du finn ho under Utkast.",
+        "reissuedAs": "Ny faktura #{number}",
+        "reissueOf": "Erstattar #{number}",
+        "errors": {
+          "not_refunded": "Fakturaen er ikkje kreditert i sin heilskap etter ein kortrefusjon, så det kan ikkje utstedast ei ny.",
+          "already_reissued": "Det er allereie utstedt ei ny faktura for denne.",
+          "not_found": "Fakturaen finst ikkje lenger.",
+          "generic": "Kunne ikkje utstede ny faktura. Prøv igjen."
+        }
       }
     }
   },

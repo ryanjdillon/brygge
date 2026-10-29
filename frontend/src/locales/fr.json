@@ -470,8 +470,14 @@
         "overdue": "En retard",
         "nothing_due": "Rien à payer",
         "credit_note": "Avoir",
-        "credited": "Crédité"
-      }
+        "credited": "Crédité",
+        "refunded": "Remboursée",
+        "refund_credit_note": "Avoir – remboursement"
+      },
+      "refundCreditNote": "Le montant a été remboursé sur votre carte.",
+      "refundedFull": "Le montant total a été remboursé sur votre carte.",
+      "refundedPartly": "Remboursée en partie : {amount} ont été remboursés sur votre carte.",
+      "creditNoteNumber": "Avoir #{number}"
     }
   },
   "admin": {
@@ -1136,6 +1142,7 @@
         "refund_origin_dismissed": "Remboursement d’un paiement par carte écarté",
         "refund_legacy": "Remboursement ou litige antérieur à la comptabilisation",
         "refund_failure_settled": "Remboursement échoué – la facture a été réglée autrement",
+        "refund_failure_reissued": "Remboursement échoué – la facture a été émise à nouveau",
         "refund_split": "Le remboursement ne peut pas être réparti sur les factures"
       },
       "stripePayoutSweepCounts": "Versements Stripe rapprochés : {cleared} · En attente : {waiting} · Ignorés : {skipped} · Échecs : {failed}",
@@ -1473,6 +1480,39 @@
         "not_found": "Paiement introuvable.",
         "invalid": "Vérifiez le formulaire : le montant, le motif ou le choix n’est pas valide.",
         "generic": "Une erreur est survenue. Vous pouvez réessayer sans risque : une même demande ne rembourse jamais deux fois."
+      },
+      "chip": {
+        "refunded": "Remboursé",
+        "partial": "Remboursé en partie",
+        "partialAmount": "Remboursé en partie {amount}",
+        "refundedTitle": "{amount} ont été recrédités sur la carte",
+        "disputed": "Contesté",
+        "disputedDue": "Contesté – répondre avant le {date}",
+        "disputeLost": "Litige perdu",
+        "disputeWon": "Litige gagné",
+        "openStripe": "Ouvrir dans Stripe",
+        "disputesWaiting": "Paiements par carte contestés en attente de réponse : {count}",
+        "answerInStripe": "Répondre dans Stripe"
+      },
+      "creditNote": "Avoir #{number}",
+      "reissue": {
+        "button": "Nouvelle facture",
+        "buttonAria": "Émettre une nouvelle facture pour #{number}",
+        "confirmTitle": "Émettre une nouvelle facture ?",
+        "confirmBody": "La facture #{number} a été créditée après un remboursement par carte. Une nouvelle facture de {amount} est émise avec les mêmes lignes au même payeur. Elle est due dans 21 jours et envoyée par e-mail comme toute autre facture. Les avoirs restent en place, et cela ne peut se faire qu'une seule fois.",
+        "confirmAction": "Émettre la facture",
+        "done": "La facture #{number} a été émise et envoyée.",
+        "doneUnsent": "La facture #{number} a été émise mais pas envoyée : le payeur n'a pas d'adresse e-mail ou l'e-mail n'est pas configuré. Elle se trouve sous Brouillons.",
+        "doneWarning": "La facture #{number} a été émise, mais son PDF n'a pas pu être créé, elle n'a donc pas été envoyée. Elle se trouve sous Brouillons.",
+        "doneNoClub": "La facture #{number} a été émise, mais les informations du club n'ont pas pu être lues, elle n'a donc pas été envoyée. Elle se trouve sous Brouillons.",
+        "reissuedAs": "Nouvelle facture #{number}",
+        "reissueOf": "Remplace #{number}",
+        "errors": {
+          "not_refunded": "La facture n'est pas entièrement créditée par un remboursement par carte, une nouvelle ne peut donc pas être émise.",
+          "already_reissued": "Une nouvelle facture a déjà été émise pour celle-ci.",
+          "not_found": "La facture n'existe plus.",
+          "generic": "Impossible d'émettre une nouvelle facture. Réessayez."
+        }
       }
     }
   },

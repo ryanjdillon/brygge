@@ -61,7 +61,7 @@ function chipBorderClass(inv: MemberInvoice): string {
   const status = invoiceStatus(inv)
   if (status === 'overdue') return 'border-l-red-400'
   if (status === 'unpaid') return 'border-l-amber-400'
-  if (status === 'credit_note') return 'border-l-sky-400'
+  if (status === 'credit_note' || status === 'refund_credit_note' || status === 'refunded') return 'border-l-sky-400'
   return 'border-l-green-400'
 }
 

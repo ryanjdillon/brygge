@@ -470,8 +470,14 @@
         "overdue": "Scaduta",
         "nothing_due": "Nulla da pagare",
         "credit_note": "Nota di credito",
-        "credited": "Accreditata"
-      }
+        "credited": "Accreditata",
+        "refunded": "Rimborsata",
+        "refund_credit_note": "Nota di credito – rimborso"
+      },
+      "refundCreditNote": "L'importo è stato rimborsato sulla tua carta.",
+      "refundedFull": "L'intero importo è stato rimborsato sulla tua carta.",
+      "refundedPartly": "Rimborsata in parte: {amount} sono stati rimborsati sulla tua carta.",
+      "creditNoteNumber": "Nota di credito #{number}"
     }
   },
   "admin": {
@@ -1137,6 +1143,7 @@
         "refund_origin_dismissed": "Rimborso di un pagamento con carta scartato",
         "refund_legacy": "Rimborso o contestazione precedente alla registrazione",
         "refund_failure_settled": "Rimborso non riuscito – la fattura è stata saldata in altro modo",
+        "refund_failure_reissued": "Rimborso non riuscito – la fattura è stata emessa di nuovo",
         "refund_split": "Il rimborso non può essere ripartito sulle fatture"
       },
       "stripePayoutSweepCounts": "Pagamenti Stripe riconciliati: {cleared} · In attesa: {waiting} · Saltati: {skipped} · Non riusciti: {failed}",
@@ -1474,6 +1481,39 @@
         "not_found": "Pagamento non trovato.",
         "invalid": "Controlla il modulo: importo, motivo o scelta non sono validi.",
         "generic": "Qualcosa è andato storto. Puoi riprovare senza rischi: la stessa richiesta non rimborsa mai due volte."
+      },
+      "chip": {
+        "refunded": "Rimborsato",
+        "partial": "Rimborsato in parte",
+        "partialAmount": "Rimborsato in parte {amount}",
+        "refundedTitle": "{amount} sono stati riaccreditati sulla carta",
+        "disputed": "Contestato",
+        "disputedDue": "Contestato – rispondere entro il {date}",
+        "disputeLost": "Contestazione persa",
+        "disputeWon": "Contestazione vinta",
+        "openStripe": "Apri in Stripe",
+        "disputesWaiting": "Pagamenti con carta contestati in attesa di risposta: {count}",
+        "answerInStripe": "Rispondi in Stripe"
+      },
+      "creditNote": "Nota di credito #{number}",
+      "reissue": {
+        "button": "Nuova fattura",
+        "buttonAria": "Emetti una nuova fattura per #{number}",
+        "confirmTitle": "Emettere una nuova fattura?",
+        "confirmBody": "La fattura #{number} è stata accreditata dopo un rimborso con carta. Viene emessa una nuova fattura di {amount} con le stesse righe allo stesso pagatore. Scade tra 21 giorni e viene inviata per e-mail come ogni altra fattura. Le note di credito restano valide e questo si può fare una sola volta.",
+        "confirmAction": "Emetti fattura",
+        "done": "La fattura #{number} è stata emessa e inviata.",
+        "doneUnsent": "La fattura #{number} è stata emessa ma non inviata: il pagatore non ha un indirizzo e-mail oppure la posta non è configurata. La trovi in Bozze.",
+        "doneWarning": "La fattura #{number} è stata emessa, ma non è stato possibile creare il PDF, quindi non è stata inviata. La trovi in Bozze.",
+        "doneNoClub": "La fattura #{number} è stata emessa, ma non è stato possibile leggere i dati del club, quindi non è stata inviata. La trovi in Bozze.",
+        "reissuedAs": "Nuova fattura #{number}",
+        "reissueOf": "Sostituisce #{number}",
+        "errors": {
+          "not_refunded": "La fattura non è accreditata per intero da un rimborso con carta, quindi non se ne può emettere una nuova.",
+          "already_reissued": "Per questa fattura ne è già stata emessa una nuova.",
+          "not_found": "La fattura non esiste più.",
+          "generic": "Impossibile emettere una nuova fattura. Riprova."
+        }
       }
     }
   },

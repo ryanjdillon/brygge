@@ -220,6 +220,72 @@ The audit log records that the faktura was picked by hand and whether the payers
 
 Nothing new is booked in the accounts. A booked credit note already cancels its faktura's receivable, and imported history isn't booked at all. Brygge refuses links it can't make safely: a partial credit (settle the rest separately), different payers you haven't confirmed, or one side booked and the other not. The one exception is a Brygge credit note for an imported faktura: it can be linked once the opening balance carries that faktura (see [Payments for fakturas from the previous system](#payments-for-fakturas-from-the-previous-system)); before that it is refused as a booking mismatch (one side booked and the other not); the missing booking is the opening balance. **Angre motregning** (the undo icon) reopens the faktura. A linked credit note can't be voided until you undo the link.
 
+## Kortbetaling: refusjon og innsigelser
+
+A card payment (Stripe) can be paid back from Brygge, and a member's bank can also dispute one. Both show on the payment and the faktura, and both end in the accounts without you booking anything by hand. Only the treasurer and admin can refund, and Brygge asks for a fresh TOTP first.
+
+### Refunding a card payment
+
+The **Refunder** button is on the payment in `Admin → Betalinger` and on the faktura row in the **Sent** list. It shows only for a card payment that still has money left and no open dispute. It opens a dialog:
+
+1. **Which payment.** Normally one. When the member paid the same faktura twice, the second payment is marked **dobbeltbetaling** and preselected (see [Paid twice](#paid-twice-dobbeltbetaling)).
+2. **Amount.** Prefilled with everything that is left. Type a smaller amount for a partial refund.
+3. **Reason.** Required. It is kept on the refund for the audit trail and is never shown to the member.
+4. **Krediter or Krev inn på nytt**, only when you refund all of a faktura's payment (below).
+
+The money is back on the card in 5–10 days. Brygge books nothing when you click: the refund is booked, with its credit note, when Stripe lists it (the nightly Stripe sync, or **Synk Stripe** in Tildel). Until then the payment shows the refund but the faktura looks unchanged.
+
+A refund made in the Stripe Dashboard instead is picked up the same way, and a refund of the whole payment is credited automatically. You don't need the button for it.
+
+### What Brygge does with a refund
+
+Every refund of a sale issues a **credit note** (kreditnota) for the refunded amount, to the same payer as the faktura, dated the day the refund was booked. It is booked in the accounts and emailed to the payer (the PDF only, when the payer has no email address). A credit note made by a refund is never voided: a correction is a new document.
+
+- **Partial refund.** The faktura stays paid and gets the chip **Delvis refundert 90 kr**. Its credit notes are listed under the chip (**Kreditnota #N**, click for the PDF). Several partial refunds each make a credit note; when they add up to the whole faktura it counts as fully refunded.
+- **Full refund.** The chip reads **Refundert** and the faktura counts as credited: it is settled, never past due and never reminded. The payment in `Betalinger` stays in the list with the same chip, so you can see where the money went.
+- A refund's credit note reads **Kreditnota for refusjon av #N** in the list. It is never **Tilgode medlem**: the money went back to the card, so the club owes nothing and you can't link or void it by hand.
+
+### Krediter or Krev inn på nytt
+
+When you refund all of a faktura's payment you choose what the faktura becomes:
+
+| | Credit note | The faktura |
+|---|---|---|
+| **Krediter** (default) | yes, for the full amount | credited, closed |
+| **Krev inn på nytt** | none | open again, as if never paid: reminders, a new pay link and bank KID matching all work |
+
+**Krev inn på nytt** is hidden once part of the payment was refunded, because those credit notes already stand. Use it when the money came back for a reason on the card side and the member still owes the faktura.
+
+### Ny faktura
+
+After **Krediter**, the club often still wants the money (a wrong card, a payment the member changed their mind about). The credited faktura has a **Ny faktura** button. It asks for a fresh TOTP and a confirmation, then issues a new faktura:
+
+- the same lines as the credited faktura (quantity and price kept), with any role exemption folded into the line it reduced, so it bills what the member actually paid; an exemption that belongs to no line is left out;
+- the same payer, at the member's current name and email (an organisation's own invoice address is kept);
+- issued today and due in 21 days, numbered like any faktura, booked and emailed like one you create by hand (to a payer with no email address it waits in **Utkast**).
+
+It can be done once per credited faktura: the old row then reads **Ny faktura #N** and the new one **Erstatter #M**. If you delete that new faktura (while it is a draft) or void it, **Ny faktura** is offered again. The credit notes stay. If the refund later fails, Brygge does not bill again for the money that came back, since the new faktura already collects it: the failed refund waits in Tildel (**Mislykket refusjon – fakturaen er utstedt på nytt**) for you to assign it to an account or dismiss it. **Ny faktura** is not offered after a partial refund, after **Krev inn på nytt** (the faktura is open already), or for a refund that failed and was re-billed automatically.
+
+### Disputes (innsigelser)
+
+When a cardholder disputes a payment with their bank, the bank takes the money back from the club's Stripe balance until the dispute is decided.
+
+- The payment shows the red chip **Omstridt** (hover for the deadline) to the treasurer and admin; the harbor master and board do not see disputes, since they name a member who charged back. The club's treasurer address gets an email with the amount, the faktura and the deadline, and a link to the dispute in Stripe.
+- `Betalinger` shows **Omstridte kortbetalinger som venter på svar** at the top while any wait, with a link to Stripe's list sorted by deadline (treasurer and admin only).
+- **You answer in the Stripe Dashboard**, before the deadline: evidence is given there, not in Brygge. The chips link straight to the dispute.
+- While a dispute is open the payment can't be refunded.
+- In the accounts the withdrawn amount and Stripe's dispute fee are booked as a loss (account 7830 *Tap på fordringer* by default) and reversed if the club wins. The faktura stays paid. When it is decided the chip becomes **Tvist tapt** or **Tvist vunnet**. Whether to invoice again after a lost dispute is a board decision; Brygge never does it on its own.
+
+### Paid twice (dobbeltbetaling)
+
+A member who pays the same faktura twice by card (two browser tabs, say) has the second payment held in Tildel as a card payment that settles nothing. Refund it from `Betalinger` (the dialog preselects it): Brygge then books the payment and its refund together, with no credit note and no change to the faktura, which stays paid by the first payment. A partial refund of a duplicate is left in Tildel for you to decide.
+
+### What the member sees
+
+In `Min side → Fakturaer` a fully refunded faktura reads **Refundert**, with the line "Hele beløpet er betalt tilbake til kortet ditt" and links to the credit notes. A partly refunded one stays **Betalt**, with "Delvis refundert: 90 kr er betalt tilbake til kortet ditt". The credit note itself reads **Kreditnota – refusjon**. Members don't see the reason, the Stripe links or any dispute.
+
+If a refund made in Stripe doesn't show up in Brygge, run **Synk Stripe** in Tildel; a refund Brygge can't place yet is listed there with the reason.
+
 ## PDF archive
 
 Every regenerate inserts the prior PDF bytes into `invoice_pdf_archive` inside the same transaction as the overwrite, so a failure mid-flight leaves the original PDF in place. Two ways to access an archived version:

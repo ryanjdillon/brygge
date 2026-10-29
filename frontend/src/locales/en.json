@@ -565,8 +565,14 @@
         "overdue": "Overdue",
         "nothing_due": "Nothing to pay",
         "credit_note": "Credit note",
-        "credited": "Credited"
-      }
+        "credited": "Credited",
+        "refunded": "Refunded",
+        "refund_credit_note": "Credit note – refund"
+      },
+      "refundCreditNote": "The amount has been paid back to your card.",
+      "refundedFull": "The full amount has been paid back to your card.",
+      "refundedPartly": "Partly refunded: {amount} has been paid back to your card.",
+      "creditNoteNumber": "Credit note #{number}"
     }
   },
   "admin": {
@@ -2011,6 +2017,7 @@
         "refund_origin_dismissed": "Refund of a dismissed card payment",
         "refund_legacy": "Refund or dispute from before they were booked",
         "refund_failure_settled": "Failed refund – the invoice was settled another way",
+        "refund_failure_reissued": "Failed refund – the invoice was issued again",
         "refund_split": "The refund cannot be divided over the invoices"
       },
       "stripePayoutSweepCounts": "Stripe payouts cleared: {cleared} · Waiting: {waiting} · Skipped: {skipped} · Failed: {failed}",
@@ -2411,6 +2418,39 @@
         "not_found": "The payment was not found.",
         "invalid": "Check the form: the amount, the reason or the choice is not valid.",
         "generic": "Something went wrong. It is safe to try again: the same request never refunds twice."
+      },
+      "chip": {
+        "refunded": "Refunded",
+        "partial": "Partly refunded",
+        "partialAmount": "Partly refunded {amount}",
+        "refundedTitle": "{amount} was returned to the card",
+        "disputed": "Disputed",
+        "disputedDue": "Disputed – answer by {date}",
+        "disputeLost": "Dispute lost",
+        "disputeWon": "Dispute won",
+        "openStripe": "Open in Stripe",
+        "disputesWaiting": "Disputed card payments waiting for an answer: {count}",
+        "answerInStripe": "Answer in Stripe"
+      },
+      "creditNote": "Credit note #{number}",
+      "reissue": {
+        "button": "New invoice",
+        "buttonAria": "Issue a new invoice for #{number}",
+        "confirmTitle": "Issue a new invoice?",
+        "confirmBody": "Invoice #{number} was credited after a card refund. A new invoice for {amount} is issued with the same lines to the same payer. It falls due in 21 days and is emailed like any other invoice. The credit notes stand, and this can only be done once.",
+        "confirmAction": "Issue invoice",
+        "done": "Invoice #{number} has been issued and sent.",
+        "doneUnsent": "Invoice #{number} has been issued but not sent: the payer has no email address, or email is not set up. It is under Drafts.",
+        "doneWarning": "Invoice #{number} has been issued, but its PDF could not be made, so it was not sent. It is under Drafts.",
+        "doneNoClub": "Invoice #{number} has been issued, but the club details could not be read, so it was not sent. It is under Drafts.",
+        "reissuedAs": "New invoice #{number}",
+        "reissueOf": "Replaces #{number}",
+        "errors": {
+          "not_refunded": "The invoice is not credited in full by a card refund, so a new one cannot be issued.",
+          "already_reissued": "A new invoice has already been issued for this one.",
+          "not_found": "The invoice no longer exists.",
+          "generic": "Could not issue a new invoice. Try again."
+        }
       }
     }
   },

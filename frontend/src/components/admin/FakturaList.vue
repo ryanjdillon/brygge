@@ -8,6 +8,10 @@ import DeliveryLogButton from '@/components/admin/DeliveryLogButton.vue'
 import CreditNoteSearchModal, { type CreditSearchHit } from '@/components/admin/CreditNoteSearchModal.vue'
 import InvoiceNumberChip from '@/components/ui/InvoiceNumberChip.vue'
 import RefundOrderButton from '@/components/admin/RefundOrderButton.vue'
+import ReissueAfterRefundButton from '@/components/admin/ReissueAfterRefundButton.vue'
+import RefundStateChip from '@/components/admin/RefundStateChip.vue'
+import { disputeChipKind, refundChipKind } from '@/lib/refundState'
+import type { ReissuedInvoice } from '@/composables/useReissueAfterRefund'
 import { useConfirm, useConfirmStore } from '@/stores/confirm'
 import { useFreshTotp } from '@/composables/useFreshTotp'
 import { copyPayLink as copyPayLinkFor, payLinkErrorKey } from '@/composables/useCopyPayLink'
@@ -41,7 +45,8 @@ interface Row {
   // 'refund': a credit note a card refund issued, linked to its faktura
   // (credits_invoice_number; none for an order with no faktura) through
   // the refund. It is never linked, unlinked or voided by hand.
-  credit_state: 'settled_pair' | 'credit_owed' | 'unlinked' | 'refund' | null
+  // 'refunded': a faktura that card refunds credited in full.
+  credit_state: 'settled_pair' | 'credit_owed' | 'unlinked' | 'refund' | 'refunded' | null
   credited_by_invoice_number: number | null
   // A document a card refund issued (its credit note, or the faktura after
   // a failed refund): corrected by a new document, never voided.
@@ -49,6 +54,23 @@ interface Row {
   // The order to open the refund dialog for: set by the server on a
   // card-paid faktura the treasurer or admin can refund.
   refund_order_id?: string | null
+  // What card refunds did to it (none | partial | full), from the credit
+  // notes they issued, and those notes.
+  refund_state?: string
+  refunded_amount?: number
+  refund_credit_notes?: { id: string; number: number; amount: number; has_pdf: boolean }[]
+  // "Ny faktura" after a full refund: possible for a treasurer or admin
+  // until one is issued; then the number of the new faktura, and on that
+  // one the number it replaces.
+  can_reissue?: boolean
+  reissued_invoice_number?: number | null
+  reissue_of_invoice_number?: number | null
+  // The latest dispute against the card payment, and Stripe Dashboard
+  // pages (treasurer and admin only).
+  dispute_status?: string | null
+  dispute_due_by?: string | null
+  dispute_url?: string
+  payment_url?: string
 }
 
 type PaidStatus = 'paid' | 'waiting' | 'past_due' | 'credit'
@@ -600,6 +622,25 @@ function creditStateKey(d: Row): string {
   return d.credit_state ?? ''
 }
 
+// "Ny faktura" after a refund went through: say what became of it, since a
+// faktura with nobody to email it to waits among the drafts.
+function onReissued(res: ReissuedInvoice) {
+  // Which step failed decides the words: no PDF, or no club details to make one from.
+  const key = res.warnings?.includes('pdf_unavailable')
+    ? 'doneWarning'
+    : res.warnings?.length
+      ? 'doneNoClub'
+      : res.sent_at
+        ? 'done'
+        : 'doneUnsent'
+  flash(t(`admin.refund.reissue.${key}`, { number: res.invoice_number }))
+  load()
+}
+function onReissueFailed(message: string) {
+  error.value = message
+  load()
+}
+
 async function voidOne(d: Row) {
   if (!(await ensureFreshTotp())) return
   const ok = await confirm({
@@ -1042,7 +1083,7 @@ defineExpose({ load })
                   {{ t('admin.faktura.sent.onlineReceived') }}
                 </span>
                 <span
-                  v-if="d.credit_state"
+                  v-if="d.credit_state && d.credit_state !== 'refunded'"
                   class="mt-1 inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ring-1"
                   :class="d.credit_state === 'credit_owed'
                     ? 'bg-amber-50 text-amber-800 ring-amber-200'
@@ -1059,6 +1100,52 @@ defineExpose({ load })
                 >
                   {{ t('admin.faktura.credit.creditedBy', { number: d.credited_by_invoice_number }) }}
                 </span>
+                <div
+                  v-if="refundChipKind(d.refund_state) || disputeChipKind(d.dispute_status) || d.reissued_invoice_number != null || d.reissue_of_invoice_number != null"
+                  class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1"
+                  data-testid="refund-info"
+                >
+                  <RefundStateChip
+                    v-if="refundChipKind(d.refund_state)"
+                    :kind="refundChipKind(d.refund_state)!"
+                    :amount="d.refunded_amount"
+                    :href="d.payment_url"
+                  />
+                  <RefundStateChip
+                    v-if="disputeChipKind(d.dispute_status)"
+                    :kind="disputeChipKind(d.dispute_status)!"
+                    :due-by="d.dispute_due_by"
+                    :href="d.dispute_url"
+                  />
+                  <template v-for="n in d.refund_credit_notes ?? []" :key="n.id">
+                    <a
+                      v-if="n.has_pdf"
+                      :href="`/api/v1/admin/financials/invoices/${n.id}/pdf`"
+                      target="_blank"
+                      rel="noopener"
+                      class="-my-3.5 inline-flex items-center py-3.5 text-[11px] font-medium text-sky-700 hover:underline"
+                      data-testid="refund-credit-note"
+                    >{{ t('admin.refund.creditNote', { number: n.number }) }}</a>
+                    <span v-else class="text-[11px] text-gray-600" data-testid="refund-credit-note">{{ t('admin.refund.creditNote', { number: n.number }) }}</span>
+                  </template>
+                  <span v-if="d.reissued_invoice_number != null" class="text-[11px] font-medium text-gray-700" data-testid="reissued-as">
+                    {{ t('admin.refund.reissue.reissuedAs', { number: d.reissued_invoice_number }) }}
+                  </span>
+                  <span v-if="d.reissue_of_invoice_number != null" class="text-[11px] font-medium text-gray-700" data-testid="reissue-of">
+                    {{ t('admin.refund.reissue.reissueOf', { number: d.reissue_of_invoice_number }) }}
+                  </span>
+                  <!-- The actions column is off-screen on a phone or tablet (the table
+                       scrolls sideways), so the action also sits here below lg. -->
+                  <div v-if="canAct && d.can_reissue" class="lg:hidden">
+                    <ReissueAfterRefundButton
+                      :invoice-id="d.id"
+                      :invoice-number="d.invoice_number"
+                      :amount="Number(d.total_amount)"
+                      @reissued="onReissued"
+                      @failed="onReissueFailed"
+                    />
+                  </div>
+                </div>
               </td>
               <td class="px-3 py-2 text-sm text-gray-700">{{ d.price_item_name || d.description || '—' }}</td>
               <td class="whitespace-nowrap px-3 py-2 text-sm text-gray-600">{{ d.fiscal_year ?? '—' }}</td>
@@ -1123,6 +1210,15 @@ defineExpose({ load })
                     <Link2 class="h-4 w-4" />
                   </button>
                   <RefundOrderButton v-if="canAct && d.refund_order_id" compact :order-id="d.refund_order_id" @refunded="load" />
+                  <div v-if="canAct && d.can_reissue" class="hidden lg:block">
+                    <ReissueAfterRefundButton
+                      :invoice-id="d.id"
+                      :invoice-number="d.invoice_number"
+                      :amount="Number(d.total_amount)"
+                      @reissued="onReissued"
+                      @failed="onReissueFailed"
+                    />
+                  </div>
                   <button
                     v-if="canAct && props.status !== 'draft' && d.credit_state === 'unlinked'"
                     class="text-sky-600 hover:text-sky-800 disabled:opacity-50"

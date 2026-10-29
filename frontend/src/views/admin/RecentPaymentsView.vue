@@ -4,8 +4,10 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { useApi } from '@/composables/useApi'
 import { formatNOK as nok } from '@/lib/format'
-import { RefreshCw, Inbox, Search, Anchor, Caravan, FileText, ShoppingBag, CircleDollarSign } from 'lucide-vue-next'
+import { RefreshCw, Inbox, Search, Anchor, Caravan, FileText, ShoppingBag, CircleDollarSign, TriangleAlert, ExternalLink } from 'lucide-vue-next'
 import PaymentMethodChip, { type PaymentMethod } from '@/components/admin/PaymentMethodChip.vue'
+import RefundStateChip from '@/components/admin/RefundStateChip.vue'
+import { disputeChipKind, refundChipKind } from '@/lib/refundState'
 import RefundOrderButton from '@/components/admin/RefundOrderButton.vue'
 import { useCan } from '@/composables/useCan'
 
@@ -29,9 +31,22 @@ interface Payment {
   // Set by the server for a treasurer or admin, for a card payment with
   // money left to refund.
   can_refund?: boolean
+  // What refunds the provider confirmed took back (none | partial | full),
+  // and the latest dispute in the provider's words.
+  refund_state?: string
+  refunded_amount?: number
+  dispute_status?: string | null
+  dispute_due_by?: string | null
+  // Stripe Dashboard pages, sent to a treasurer or admin only.
+  payment_url?: string
+  dispute_url?: string
 }
 
 const payments = ref<Payment[]>([])
+// Card disputes waiting for the club's answer in Stripe, with the Dashboard
+// list of them; sent to a treasurer or admin only.
+const openDisputes = ref(0)
+const openDisputesUrl = ref('')
 const loading = ref(false)
 const since = ref('')
 const until = ref('')
@@ -110,8 +125,14 @@ async function load() {
     if (since.value) p.set('since', since.value)
     if (until.value) p.set('until', until.value)
     if (search.value.trim()) p.set('q', search.value.trim())
-    const res = await fetchApi<{ payments: Payment[] }>(`/api/v1/harbor/recent-payments?${p.toString()}`)
-    if (seq === loadSeq) payments.value = res?.payments ?? []
+    const res = await fetchApi<{ payments: Payment[]; open_disputes?: number; open_disputes_url?: string }>(
+      `/api/v1/harbor/recent-payments?${p.toString()}`,
+    )
+    if (seq === loadSeq) {
+      payments.value = res?.payments ?? []
+      openDisputes.value = res?.open_disputes ?? 0
+      openDisputesUrl.value = res?.open_disputes_url ?? ''
+    }
   } finally {
     if (seq === loadSeq) loading.value = false
   }
@@ -157,6 +178,23 @@ onMounted(async () => {
         <span class="hidden sm:inline">{{ t('recentPayments.refresh') }}</span>
       </button>
     </div>
+
+    <!-- Disputes waiting for an answer: the evidence is given in Stripe -->
+    <a
+      v-if="openDisputes > 0 && openDisputesUrl"
+      :href="openDisputesUrl"
+      target="_blank"
+      rel="noopener noreferrer"
+      class="mt-4 flex min-h-11 items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-800 hover:bg-red-100"
+      data-testid="open-disputes"
+    >
+      <TriangleAlert class="h-4 w-4 shrink-0" aria-hidden="true" />
+      <span class="min-w-0 flex-1">{{ t('admin.refund.chip.disputesWaiting', { count: openDisputes }) }}</span>
+      <span class="inline-flex shrink-0 items-center gap-1 font-semibold">
+        {{ t('admin.refund.chip.answerInStripe') }}
+        <ExternalLink class="h-3.5 w-3.5" aria-hidden="true" />
+      </span>
+    </a>
 
     <!-- Filters -->
     <div class="mt-4 space-y-3">
@@ -228,6 +266,18 @@ onMounted(async () => {
           </div>
           <div class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
             <PaymentMethodChip :method="p.method" :card-brand="p.card_brand" />
+            <RefundStateChip
+              v-if="refundChipKind(p.refund_state)"
+              :kind="refundChipKind(p.refund_state)!"
+              :amount="p.refunded_amount"
+              :href="p.payment_url"
+            />
+            <RefundStateChip
+              v-if="disputeChipKind(p.dispute_status)"
+              :kind="disputeChipKind(p.dispute_status)!"
+              :due-by="p.dispute_due_by"
+              :href="p.dispute_url"
+            />
             <RefundOrderButton v-if="canRefund && p.can_refund" class="ml-auto" :order-id="p.id" @refunded="load" />
           </div>
         </div>

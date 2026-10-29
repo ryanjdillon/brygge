@@ -470,8 +470,14 @@
         "overdue": "Überfällig",
         "nothing_due": "Nichts zu zahlen",
         "credit_note": "Gutschrift",
-        "credited": "Gutgeschrieben"
-      }
+        "credited": "Gutgeschrieben",
+        "refunded": "Erstattet",
+        "refund_credit_note": "Gutschrift – Erstattung"
+      },
+      "refundCreditNote": "Der Betrag wurde auf Ihre Karte zurückgezahlt.",
+      "refundedFull": "Der gesamte Betrag wurde auf Ihre Karte zurückgezahlt.",
+      "refundedPartly": "Teilweise erstattet: {amount} wurden auf Ihre Karte zurückgezahlt.",
+      "creditNoteNumber": "Gutschrift #{number}"
     }
   },
   "admin": {
@@ -1137,6 +1143,7 @@
         "refund_origin_dismissed": "Erstattung einer abgewiesenen Kartenzahlung",
         "refund_legacy": "Erstattung oder Streitfall aus der Zeit vor der Buchung",
         "refund_failure_settled": "Fehlgeschlagene Erstattung – die Rechnung wurde anders beglichen",
+        "refund_failure_reissued": "Fehlgeschlagene Erstattung – die Rechnung wurde neu ausgestellt",
         "refund_split": "Die Erstattung lässt sich nicht auf die Rechnungen aufteilen"
       },
       "stripePayoutSweepCounts": "Stripe-Auszahlungen abgeglichen: {cleared} · Wartend: {waiting} · Übersprungen: {skipped} · Fehlgeschlagen: {failed}",
@@ -1474,6 +1481,39 @@
         "not_found": "Die Zahlung wurde nicht gefunden.",
         "invalid": "Bitte prüfen Sie das Formular: Betrag, Begründung oder Auswahl sind ungültig.",
         "generic": "Etwas ist schiefgelaufen. Sie können es gefahrlos erneut versuchen: Dieselbe Anfrage erstattet nie doppelt."
+      },
+      "chip": {
+        "refunded": "Erstattet",
+        "partial": "Teilweise erstattet",
+        "partialAmount": "Teilweise erstattet {amount}",
+        "refundedTitle": "{amount} wurden auf die Karte zurückgebucht",
+        "disputed": "Angefochten",
+        "disputedDue": "Angefochten – Antwort bis {date}",
+        "disputeLost": "Streitfall verloren",
+        "disputeWon": "Streitfall gewonnen",
+        "openStripe": "In Stripe öffnen",
+        "disputesWaiting": "Angefochtene Kartenzahlungen, die auf eine Antwort warten: {count}",
+        "answerInStripe": "In Stripe beantworten"
+      },
+      "creditNote": "Gutschrift #{number}",
+      "reissue": {
+        "button": "Neue Rechnung",
+        "buttonAria": "Neue Rechnung für #{number} ausstellen",
+        "confirmTitle": "Neue Rechnung ausstellen?",
+        "confirmBody": "Rechnung #{number} wurde nach einer Kartenerstattung gutgeschrieben. Es wird eine neue Rechnung über {amount} mit denselben Positionen an denselben Zahler ausgestellt. Sie ist in 21 Tagen fällig und wird wie jede andere Rechnung per E-Mail versendet. Die Gutschriften bleiben bestehen, und dies ist nur einmal möglich.",
+        "confirmAction": "Rechnung ausstellen",
+        "done": "Rechnung #{number} wurde ausgestellt und versendet.",
+        "doneUnsent": "Rechnung #{number} wurde ausgestellt, aber nicht versendet: Der Zahler hat keine E-Mail-Adresse oder E-Mail ist nicht eingerichtet. Sie liegt unter Entwürfe.",
+        "doneWarning": "Rechnung #{number} wurde ausgestellt, aber das PDF konnte nicht erstellt werden, daher wurde sie nicht versendet. Sie liegt unter Entwürfe.",
+        "doneNoClub": "Rechnung #{number} wurde ausgestellt, aber die Vereinsdaten konnten nicht gelesen werden, daher wurde sie nicht versendet. Sie liegt unter Entwürfe.",
+        "reissuedAs": "Neue Rechnung #{number}",
+        "reissueOf": "Ersetzt #{number}",
+        "errors": {
+          "not_refunded": "Die Rechnung ist nicht vollständig durch eine Kartenerstattung gutgeschrieben, daher kann keine neue ausgestellt werden.",
+          "already_reissued": "Für diese Rechnung wurde bereits eine neue ausgestellt.",
+          "not_found": "Die Rechnung existiert nicht mehr.",
+          "generic": "Die neue Rechnung konnte nicht ausgestellt werden. Bitte erneut versuchen."
+        }
       }
     }
   },
