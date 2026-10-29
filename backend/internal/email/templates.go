@@ -491,6 +491,90 @@ func RefundDocumentBody(memberName, clubName string, number int, total float64) 
 		name, club, number, amount)
 }
 
+// DisputeNotice is what the treasurer is told about a card dispute. Nothing
+// here identifies the payer or the card: only the amount, what it was for,
+// Stripe's reason code and the deadline.
+type DisputeNotice struct {
+	ClubName string
+	// AmountOre is the disputed amount in øre; nil when Stripe did not say.
+	AmountOre *int64
+	// Reference says what was paid, such as "faktura 1042" or "ordre ab12cd34";
+	// empty when the payment cannot be tied to one.
+	Reference string
+	// Reason is Stripe's reason code, such as "fraudulent".
+	Reason string
+	// EvidenceDueBy is the deadline for answering; nil when unknown.
+	EvidenceDueBy *time.Time
+	// DashboardURL is the dispute's page in the Stripe Dashboard.
+	DashboardURL string
+}
+
+// disputeReasonLabels name Stripe's dispute reason codes in Norwegian.
+var disputeReasonLabels = map[string]string{
+	"bank_cannot_process":       "banken kunne ikke behandle betalingen",
+	"check_returned":            "sjekk returnert",
+	"credit_not_processed":      "kreditering ikke gjennomført",
+	"customer_initiated":        "startet av kortholder",
+	"debit_not_authorized":      "belastning ikke autorisert",
+	"duplicate":                 "dobbeltbetaling",
+	"fraudulent":                "svindel",
+	"general":                   "generell",
+	"incorrect_account_details": "feil kontodetaljer",
+	"insufficient_funds":        "manglende dekning",
+	"product_not_acceptable":    "varen ikke som avtalt",
+	"product_not_received":      "varen ikke mottatt",
+	"subscription_canceled":     "abonnement avsluttet",
+	"unrecognized":              "kortholder kjenner ikke igjen belastningen",
+}
+
+func formatDisputeDeadline(t time.Time) string {
+	return t.In(time.Local).Format("02.01.2006")
+}
+
+// DisputeSubject is the Subject header for the notice of a card dispute.
+func DisputeSubject(dueBy *time.Time) string {
+	if dueBy == nil {
+		return "Omstridt kortbetaling"
+	}
+	return "Omstridt kortbetaling – svar innen " + formatDisputeDeadline(*dueBy)
+}
+
+// DisputeBody is the HTML body for the notice of a card dispute to the
+// treasurer. The answer is given in the Stripe Dashboard; Brygge keeps no
+// evidence.
+func DisputeBody(n DisputeNotice) string {
+	club := n.ClubName
+	if club == "" {
+		club = "klubben"
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, `<p>Hei,</p><p>En kortbetaling til %s er omstridt: kortholder har bedt kortutstederen om å trekke pengene tilbake.</p><ul>`,
+		html.EscapeString(club))
+	if n.AmountOre != nil {
+		fmt.Fprintf(&b, `<li>Beløp: %s</li>`, formatNOK(float64(*n.AmountOre)/100))
+	}
+	if n.Reference != "" {
+		fmt.Fprintf(&b, `<li>Gjelder: %s</li>`, html.EscapeString(n.Reference))
+	}
+	if n.Reason != "" {
+		label, ok := disputeReasonLabels[n.Reason]
+		if !ok {
+			label = n.Reason
+		}
+		fmt.Fprintf(&b, `<li>Årsak: %s</li>`, html.EscapeString(label))
+	}
+	if n.EvidenceDueBy != nil {
+		fmt.Fprintf(&b, `<li>Frist for å svare: <strong>%s</strong></li>`, formatDisputeDeadline(*n.EvidenceDueBy))
+	}
+	b.WriteString(`</ul><p>Svar med dokumentasjon i Stripe. Svarer klubben ikke innen fristen, tapes beløpet, og Stripe tar et gebyr for tvisten.`)
+	if n.DashboardURL != "" {
+		u := html.EscapeString(n.DashboardURL)
+		fmt.Fprintf(&b, ` Åpne saken: <a href="%s">%s</a>.`, u, u)
+	}
+	b.WriteString(`</p><p>Brygge bokfører tapet når Stripe trekker pengene, og fører det tilbake hvis klubben vinner. Fakturaen blir stående som betalt.</p>`)
+	return b.String()
+}
+
 // fallbackPayLine is the pay link in the flat summary sent when a template
 // fails to render; empty without a link.
 func fallbackPayLine(payURL string) string {

@@ -284,7 +284,7 @@ func TestSyncStripeBalanceClassifiesAndLinks(t *testing.T) {
 	}
 	wantReview := map[string]int{
 		StripeReviewAmountMismatch: 1, StripeReviewCurrency: 1, StripeReviewNoAttempt: 1,
-		StripeReviewDisputePending: 1, StripeReviewUnsupportedCategory: 1,
+		StripeReviewUnsupportedCategory: 1,
 	}
 	if fmt.Sprint(res.NeedsReview) != fmt.Sprint(wantReview) {
 		t.Errorf("needs_review = %v, want %v", res.NeedsReview, wantReview)
@@ -302,7 +302,7 @@ func TestSyncStripeBalanceClassifiesAndLinks(t *testing.T) {
 		"txn_test_5":    {Category: "charge", Status: "needs_review", Reason: "no_attempt", Charge: "ch_txn_test_5", Amount: 5000, Fee: 125, Net: 4875},
 		"txn_test_6":    {Category: "fee", Status: "unbooked", Payout: "po_test_1", Amount: -300, Net: -300},
 		"txn_test_7":    {Category: "refund", Status: "unbooked", Charge: "ch_txn_test_1", PI: "pi_test_1", Amount: -10000, Net: -10000},
-		"txn_test_8":    {Category: "dispute", Status: "needs_review", Reason: "refund_pending_bry446", Charge: "ch_txn_test_2", Amount: -25000, Net: -25000},
+		"txn_test_8":    {Category: "dispute", Status: "unbooked", Charge: "ch_txn_test_2", Amount: -25000, Net: -25000},
 		"txn_test_9":    {Category: "other_adjustment", Status: "needs_review", Reason: "unsupported_category", Amount: -100, Net: -100},
 		"txn_test_10":   {Category: "charge", Status: "unbooked", Attempt: a5, Order: o5, Payout: "po_test_1", Charge: "ch_txn_test_10", PI: "pi_test_10", Amount: 7550, Fee: 188, Net: 7362},
 		"txn_po_test_1": {Category: "payout", Status: "unbooked", Payout: "po_test_1", Amount: -48000, Net: -48000},

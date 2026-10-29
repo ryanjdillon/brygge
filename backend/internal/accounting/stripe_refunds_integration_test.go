@@ -786,16 +786,17 @@ func isRefusal(err error, code string) bool {
 // one keeps its state), other adjustments unsupported_category, and refund
 // failures stored as other adjustments get their category.
 func TestRefundLegacyMigration(t *testing.T) {
+	const legacyPendingReason = "refund_pending_bry446"
 	f := newStripeFixture(t)
 	ctx := context.Background()
 	refund := f.insertBT(t, stripeBT{id: "txn_test_lg_refund", category: "refund", amountOre: -100,
-		status: StripeTxnNeedsReview, reason: StripeReviewDisputePending})
+		status: StripeTxnNeedsReview, reason: legacyPendingReason})
 	dispute := f.insertBT(t, stripeBT{id: "txn_test_lg_dispute", category: "dispute", amountOre: -100,
-		status: StripeTxnNeedsReview, reason: StripeReviewDisputePending})
+		status: StripeTxnNeedsReview, reason: legacyPendingReason})
 	dismissed := f.insertBT(t, stripeBT{id: "txn_test_lg_dismissed", category: "refund", amountOre: -100,
-		status: StripeTxnDismissed, reason: StripeReviewDisputePending})
+		status: StripeTxnDismissed, reason: legacyPendingReason})
 	adj := f.insertBT(t, stripeBT{id: "txn_test_lg_adj", category: "other_adjustment", amountOre: -100,
-		status: StripeTxnNeedsReview, reason: StripeReviewDisputePending})
+		status: StripeTxnNeedsReview, reason: legacyPendingReason})
 	failure := f.insertBT(t, stripeBT{id: "txn_test_lg_fail", category: "other_adjustment", stripeTyp: "refund_failure",
 		amountOre: 100, status: StripeTxnNeedsReview, reason: StripeReviewUnsupportedCategory})
 

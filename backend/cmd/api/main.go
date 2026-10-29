@@ -371,6 +371,9 @@ func main() {
 	if cfg.Features.Accounting {
 		stripeWebhookHandler.SetLedger(accountingSvc)
 	}
+	if emailClient != nil {
+		stripeWebhookHandler.SetMailer(emailClient)
+	}
 	boatModelsHandler := handlers.NewBoatModelsHandler(db, log)
 	volunteerHandler := handlers.NewVolunteerHandler(db, &cfg, log)
 	shoppingListsHandler := handlers.NewShoppingListsHandler(db, &cfg, log)

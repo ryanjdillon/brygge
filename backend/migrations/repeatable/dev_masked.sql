@@ -81,7 +81,7 @@ SELECT
     vipps_auto_assign, vipps_auto_assign_tie_category, bank_auto_assign,
     exemption_expense_account,
     online_max_amount, payment_fee_account, stripe_clearing_account,
-    stripe_payout_descriptor, stripe_suspense_account
+    stripe_payout_descriptor, stripe_suspense_account, stripe_dispute_account
 FROM public.clubs;
 
 CREATE VIEW dev_masked.billing_recipients AS

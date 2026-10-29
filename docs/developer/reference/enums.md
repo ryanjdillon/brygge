@@ -280,7 +280,7 @@ Stripe's own `reporting_category` of the balance transaction; `refund_failure` (
 unbooked   booked   needs_review   dismissed
 ```
 
-Booking state, set by `accounting.SyncStripeBalance` and `accounting.BookStripeBalance`. `unbooked` rows are ready to book (a charge matched to its attempt, a fee, a refund or refund failure, a payout); `needs_review` rows carry a `review_reason` (CHECK: never NULL while in review); `booked` rows have their posted journal entry (`BookStripeBalance` sets it in the same transaction as the entry; a `payout` row gets its payout's clearing entry from `ClearStripePayouts`); `dismissed` rows were set aside by a person (`DismissStripeTxn`, BRY-466). A row a person booked (`AssignStripeTxnToInvoice`, `AssignStripeTxnToAccount`) is `booked` and keeps its `review_reason`; the booking pass clears it on everything it books from an order, so a `booked` charge with a reason was booked by hand or is a duplicate capture the pass booked with its refund (it keeps the reason it was held under, so it settles nothing). A re-sync reclassifies only `needs_review` rows held for an ingest reason and never touches the others. A row the booking pass held for review (`receivable_not_open`, `imported_no_opening_balance`, `split_mismatch`, `refund_unlinked`, `refund_charge_unbooked`) is left to the booking pass, which retries it on every run; the pass's other refund reasons wait for a person and are never retried. A row a person unassigned (`unassigned`, BRY-467) is held for that person: neither ingest nor the booking pass touches it (`stripeHeldReviewReasons`).
+Booking state, set by `accounting.SyncStripeBalance` and `accounting.BookStripeBalance`. `unbooked` rows are ready to book (a charge matched to its attempt, a fee, a refund or refund failure, a dispute or dispute reversal, a payout); `needs_review` rows carry a `review_reason` (CHECK: never NULL while in review); `booked` rows have their posted journal entry (`BookStripeBalance` sets it in the same transaction as the entry; a `payout` row gets its payout's clearing entry from `ClearStripePayouts`); `dismissed` rows were set aside by a person (`DismissStripeTxn`, BRY-466). A row a person booked (`AssignStripeTxnToInvoice`, `AssignStripeTxnToAccount`) is `booked` and keeps its `review_reason`; the booking pass clears it on everything it books from an order, so a `booked` charge with a reason was booked by hand or is a duplicate capture the pass booked with its refund (it keeps the reason it was held under, so it settles nothing). A re-sync reclassifies only `needs_review` rows held for an ingest reason and never touches the others. A row the booking pass held for review (`receivable_not_open`, `imported_no_opening_balance`, `split_mismatch`, `refund_unlinked`, `refund_charge_unbooked`) is left to the booking pass, which retries it on every run; the pass's other refund reasons wait for a person and are never retried. A row a person unassigned (`unassigned`, BRY-467) is held for that person: neither ingest nor the booking pass touches it (`stripeHeldReviewReasons`).
 
 `review_reason` (TEXT, no CHECK):
 
@@ -289,7 +289,8 @@ Booking state, set by `accounting.SyncStripeBalance` and `accounting.BookStripeB
 | `no_attempt` | A charge without a Stripe payment attempt of the club, by `metadata.attempt_id` on the charge or its PaymentIntent |
 | `amount_mismatch` | The charge's amount differs from the attempt's (`round(amount * 100)` øre) |
 | `currency` | Not NOK, or not the attempt's currency |
-| `refund_pending_bry446` | Disputes and dispute reversals, booked once dispute booking lands (BRY-446). Ingest reason: a re-sync reclassifies it (`accounting.StripeReviewDisputePending`). Refunds and other adjustments held here before migration 000119 became `refund_legacy` / `unsupported_category` |
+| `dispute_direction` | Set by the booking pass: a dispute that paid the club (amount > 0), or a dispute reversal that took money (amount < 0). Not retried: a person assigns it to an account or dismisses it |
+| `dispute_account_missing` | Set by the booking pass: a dispute or dispute reversal cannot be booked because the club's dispute account (`clubs.stripe_dispute_account`, default 7830) is not an active account in its chart. Retried; dismissable by hand. The value `refund_pending_bry446` that held disputes before dispute booking (BRY-446) is gone: migration 000119 moved every row held that way to `refund_legacy` / `unsupported_category`, and migration 000120 hands the safe `refund_legacy` disputes back to the pass |
 | `unsupported_category` | A Stripe reporting category Brygge has no booking for |
 | `receivable_not_open` | Set by the booking pass: a faktura on the charge's order is already paid, voided or credited (`finance.OpenReceivableSQL`), most likely paid another way too |
 | `imported_no_opening_balance` | Set by the booking pass: a faktura on the order is imported and its receivable is not in the GL by the charge's booking date (`finance.ImportedReceivableOpenSQL`) |
@@ -297,10 +298,22 @@ Booking state, set by `accounting.SyncStripeBalance` and `accounting.BookStripeB
 | `refund_unlinked` | Set by the booking pass: the charge a refund books against (or the refund a refund failure books against) is not stored yet. Retried |
 | `refund_charge_unbooked` | Set by the booking pass: that charge (or refund) is not booked, or held for review on a faktura reason. Retried |
 | `refund_origin_dismissed` | Set by the booking pass: that charge (or refund) was dismissed. Waits for a person (assign to an account, or dismiss) |
-| `refund_legacy` | Set by migration 000119 on refunds, disputes and refund failures held before refunds were booked. Waits for a person: a refund is rebooked (handed to the pass) or dismissed; a dispute is dismissed |
+| `refund_legacy` | Set by migration 000119 on refunds, disputes and refund failures held before refunds were booked. Waits for a person: rebooked (handed to the pass) or dismissed. Migration 000120 already handed back the disputes it could (NOK, no entry, not dismissed, payout not cleared in the books) |
 | `refund_failure_settled` | Set by the booking pass: a refund that reopened a faktura failed, and the faktura was paid, credited or booked another way since. Waits for a person |
 | `refund_split` | Set by the booking pass: the refund cannot be divided over the charge's fakturas exactly (one was voided or credited by hand since, a refund past the charge, or collecting again after a partial was credited). Waits for a person |
 | `unassigned` | Set by `UnassignStripeTxn`: a person undid the row's booking. Never retried or reclassified; the person rebooks it (`rebook`, back to `unbooked` for the pass), assigns it or dismisses it. A row booked by hand afterwards keeps it as its manual-booking marker |
+
+### `payment_disputes.status` (TEXT, no CHECK, migration 000120)
+
+Stripe's own word for where the dispute stands, kept as it arrives from the `charge.dispute.*` events:
+
+```
+warning_needs_response   warning_under_review   warning_closed   needs_response   under_review   won   lost   charge_refunded   prevented
+```
+
+A dispute starts as an inquiry (`warning_*`) that the bank may escalate to a chargeback under the same id (`needs_response`, with a new `evidence_due_by`), or close without taking money (`warning_closed`, which is not final: it can still escalate). `payments.UpsertDispute` only moves a dispute forward: `warning_needs_response` (1) < `warning_under_review` (2) < `warning_closed` (3) < `needs_response` (4) < `under_review` (5) < the end of a chargeback, `won` / `lost` / `charge_refunded` / `prevented` (6), which is final. An event for an earlier rank is ignored; a status this code does not know ranks 0 and is accepted unless the dispute is final; an event with no status keeps the stored one. `reason` is Stripe's reason code (`fraudulent`, `product_not_received`, ...).
+
+`is_charge_refundable` (nullable BOOLEAN) is Stripe's own answer to whether the payment can still be refunded. `payments.OpenDisputeForAttempt` trusts it when present (false blocks a refund, true does not); without it, `needs_response`, `under_review` and `lost` block, and an inquiry (`warning_*`), `won`, `charge_refunded`, `prevented` and an unknown status do not. `notified_phase` (SMALLINT) is the last phase the treasurer was emailed about: 1 an inquiry, 2 a chargeback.
 
 ### `stripe_payouts.status` (CHECK since migration 000117)
 
@@ -319,7 +332,7 @@ Stripe's payout status, refreshed from `GET /v1/payouts/{id}`. It never moves ba
 | `cleared` | — | The deposit is booked DR bank / CR Stripe clearing; `journal_entry_id` is the entry |
 | `waiting` | `venter på bankinnbetalingen: <beløp> med Stripe-teksten, datert <fra>–<til>` | No deposit matches yet (not imported, or its text misses the descriptor) |
 | `waiting` | `Stripe har ikke listet innholdet i utbetalingen ennå – kjør Synk Stripe` | `members_listed_at` is not set |
-| `waiting` | `<n> kortbetaling(er) venter på bokføring`, `… til gjennomgang`, `<n> Stripe-gebyr(er) venter på bokføring`, `<n> refusjon(er) venter på bokføring`, `<n> refusjon(er) til gjennomgang`, `<n> tvist(er) venter (bokføres ikke automatisk ennå)`, `<n> annen/andre Stripe-transaksjon(er) til gjennomgang` (joined by commas) | Members not yet `booked` or `dismissed` |
+| `waiting` | `<n> kortbetaling(er) venter på bokføring`, `… til gjennomgang`, `<n> Stripe-gebyr(er) venter på bokføring`, `<n> refusjon(er) venter på bokføring`, `<n> refusjon(er) til gjennomgang`, `<n> tvist(er) venter på bokføring`, `<n> tvist(er) til gjennomgang`, `<n> annen/andre Stripe-transaksjon(er) til gjennomgang` (joined by commas) | Members not yet `booked` or `dismissed` |
 | `waiting` | `ingen regnskapsperiode for <dato>`, `regnskapsperioden for <dato> er lukket` | The bank date's period is missing or not open; the sweep never creates one |
 | `skipped` | `manuell utbetaling – avstem manuelt` | A manual payout; never cleared automatically |
 | `skipped` | `flere Stripe-utbetalinger passer – avstem manuelt`, `flere bankrader passer – avstem manuelt` | The match is not one to one |

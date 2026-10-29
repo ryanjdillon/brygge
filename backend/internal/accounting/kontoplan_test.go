@@ -144,3 +144,17 @@ func TestDefaultKontoplanClubhouseEligible(t *testing.T) {
 		}
 	}
 }
+
+// A lost card dispute books to 7830 unless the club chose another account
+// (stripeDisputeAccountCode), so the default chart must have it.
+func TestDefaultKontoplanHasDisputeAccount(t *testing.T) {
+	for _, a := range DefaultKontoplan() {
+		if a.Code == stripeDisputeAccountCode {
+			if a.Type != AccountTypeExpense || a.Name != "Tap på fordringer" {
+				t.Errorf("account %s = %+v", a.Code, a)
+			}
+			return
+		}
+	}
+	t.Errorf("default kontoplan has no account %s", stripeDisputeAccountCode)
+}

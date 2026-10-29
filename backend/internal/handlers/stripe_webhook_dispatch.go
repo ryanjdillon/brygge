@@ -14,10 +14,12 @@ import (
 // it whenever the capture call's parameters change.
 const captureKeyPrefix = "capture2-"
 
-// dispatch routes an already-persisted event to settlement, or a payout
-// event to the Stripe balance mirror. Charge refunds and disputes are only
-// recorded; acting on them is the refunds work.
-func (h *StripeWebhookHandler) dispatch(ctx context.Context, clubID string, evt *stripe.Event) {
+// dispatch routes an already-persisted event to settlement, a payout event
+// to the Stripe balance mirror, and a dispute event to payment_disputes.
+// Charge refunds are only recorded. The error is a dispute that could not
+// be stored, which makes the event be delivered again; every other outcome
+// is handled and logged.
+func (h *StripeWebhookHandler) dispatch(ctx context.Context, clubID string, evt *stripe.Event, dispute *disputeContext) error {
 	switch evt.Type {
 	case stripe.EventCheckoutSessionCompleted, stripe.EventCheckoutSessionAsyncPaymentSucceeded:
 		h.onSessionCompleted(ctx, clubID, evt)
@@ -29,7 +31,11 @@ func (h *StripeWebhookHandler) dispatch(ctx context.Context, clubID string, evt 
 		h.onIntentSucceeded(ctx, clubID, evt)
 	case stripe.EventPayoutPaid, stripe.EventPayoutFailed, stripe.EventPayoutCanceled:
 		h.onPayout(ctx, clubID, evt)
+	case stripe.EventChargeDisputeCreated, stripe.EventChargeDisputeUpdated, stripe.EventChargeDisputeClosed,
+		stripe.EventChargeDisputeFundsWithdrawn, stripe.EventChargeDisputeFundsReinstated:
+		return h.onDispute(ctx, clubID, evt, dispute)
 	}
+	return nil
 }
 
 // payoutIngestTimeout bounds a payout ingest started by a webhook,

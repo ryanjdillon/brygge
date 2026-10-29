@@ -10,7 +10,8 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Stripe charge and fee postings. A charge is booked from its checkout
+// Stripe charge and fee postings (refunds are in stripe_refunds.go, disputes
+// in stripe_disputes.go). A charge is booked from its checkout
 // order, the way an order-linked Vipps charge is (checkOrderChargeSplit,
 // chargePosting), with Stripe's fee in the same entry:
 //
@@ -58,6 +59,8 @@ type StripeBookResult struct {
 	FeesBooked    int `json:"fees_booked"`
 	// RefundsBooked counts refunds and refund failures booked.
 	RefundsBooked int `json:"refunds_booked"`
+	// DisputesBooked counts disputes and dispute reversals booked.
+	DisputesBooked int `json:"disputes_booked"`
 	// NeedsReview counts, by review_reason, the charges this pass held for
 	// review (newly, or again on a retry).
 	NeedsReview map[string]int `json:"needs_review"`
@@ -176,7 +179,7 @@ func (s *Service) bookStripeBalance(ctx context.Context, clubID, actorID string)
 		    AND ((reporting_category = 'fee' AND status = 'unbooked')
 		      OR (reporting_category = 'charge' AND order_id IS NOT NULL
 		          AND (status = 'unbooked' OR `+stripeBookingReviewSQL+`))
-		      OR (reporting_category IN ('refund', 'refund_failure')
+		      OR (reporting_category IN ('refund', 'refund_failure', 'dispute', 'dispute_reversal')
 		          AND (status = 'unbooked' OR `+stripeBookingReviewSQL+`)))
 		  ORDER BY created_at, id`,
 		clubID)
@@ -207,6 +210,7 @@ const (
 	stripeOutcomeReview
 	stripeOutcomeDeferred
 	stripeOutcomeRefund
+	stripeOutcomeDispute
 )
 
 type stripeBookOutcome struct {
@@ -228,6 +232,8 @@ func (r *StripeBookResult) record(out stripeBookOutcome, err error) {
 		r.FeesBooked++
 	case stripeOutcomeRefund:
 		r.RefundsBooked++
+	case stripeOutcomeDispute:
+		r.DisputesBooked++
 	case stripeOutcomeReview:
 		r.NeedsReview[out.reason]++
 	case stripeOutcomeDeferred:
@@ -248,18 +254,19 @@ type stripeTxnRow struct {
 }
 
 // bookable reports whether the row is still waiting to be booked: an
-// unbooked charge, fee or refund, or one the pass held for review on a
-// reason it retries.
+// unbooked charge, fee, refund or dispute, or one the pass held for review on
+// a reason it retries.
 func (r *stripeTxnRow) bookable() bool {
 	if r.booked {
 		return false
 	}
 	switch r.status {
 	case StripeTxnUnbooked:
-		return r.category == "charge" || r.category == "fee" || stripeRefundCategory(r.category)
+		return r.category == "charge" || r.category == "fee" || stripeRefundCategory(r.category) || stripeDisputeCategory(r.category)
 	case StripeTxnNeedsReview:
 		return (r.category == "charge" && slices.Contains(stripeChargeReviewReasons, r.reviewReason)) ||
-			(stripeRefundCategory(r.category) && slices.Contains(stripeRefundRetryReasons, r.reviewReason))
+			(stripeRefundCategory(r.category) && slices.Contains(stripeRefundRetryReasons, r.reviewReason)) ||
+			(stripeDisputeCategory(r.category) && slices.Contains(stripeDisputeRetryReasons, r.reviewReason))
 	}
 	return false
 }
@@ -314,16 +321,7 @@ func (s *Service) bookStripeTxn(ctx context.Context, clubID, actorID, rowID stri
 		return out, nil
 	}
 
-	var invoiceIDs []string
-	var refund *refundEffects
-	switch row.category {
-	case "charge":
-		out.kind, out.reason, invoiceIDs, err = bookStripeChargeTx(ctx, tx, clubID, actorID, &row, out.date, periodID)
-	case "fee":
-		out.kind, err = bookStripeFeeTx(ctx, tx, clubID, actorID, &row, out.date, periodID)
-	case "refund", "refund_failure":
-		out.kind, out.reason, refund, err = bookStripeRefundRowTx(ctx, tx, clubID, actorID, &row, out.date, periodID)
-	}
+	booked, err := bookStripeRowTx(ctx, tx, clubID, actorID, &row, &out, periodID)
 	switch {
 	case errors.Is(err, ErrPeriodClosed):
 		out.kind, out.reason = stripeOutcomeDeferred, StripeDeferPeriodClosed
@@ -342,21 +340,56 @@ func (s *Service) bookStripeTxn(ctx context.Context, clubID, actorID, rowID stri
 	if err := tx.Commit(ctx); err != nil {
 		return out, fmt.Errorf("commit: %w", err)
 	}
-	if refund != nil {
-		refund.rowID, refund.btID, refund.category = row.id, row.btID, row.category
-		s.afterRefundBooked(ctx, clubID, actorID, refund)
+	s.afterStripeBooked(ctx, clubID, actorID, &row, out.date, booked)
+	return out, nil
+}
+
+// stripeBooked is what booking a row leaves for after the commit.
+type stripeBooked struct {
+	// invoiceIDs are the fakturas a charge settled, to back-link.
+	invoiceIDs []string
+	refund     *refundEffects
+	dispute    *disputeEffects
+}
+
+// bookStripeRowTx books the row by its category on tx, recording the
+// outcome in out.
+func bookStripeRowTx(ctx context.Context, tx pgx.Tx, clubID, actorID string, row *stripeTxnRow, out *stripeBookOutcome, periodID string) (b stripeBooked, err error) {
+	switch row.category {
+	case "charge":
+		out.kind, out.reason, b.invoiceIDs, err = bookStripeChargeTx(ctx, tx, clubID, actorID, row, out.date, periodID)
+	case "fee":
+		out.kind, err = bookStripeFeeTx(ctx, tx, clubID, actorID, row, out.date, periodID)
+	case "refund", "refund_failure":
+		out.kind, out.reason, b.refund, err = bookStripeRefundRowTx(ctx, tx, clubID, actorID, row, out.date, periodID)
+	case "dispute", "dispute_reversal":
+		out.kind, out.reason, b.dispute, err = bookStripeDisputeTx(ctx, tx, clubID, actorID, row, out.date, periodID)
+	}
+	return b, err
+}
+
+// afterStripeBooked audits a committed booking and runs what must not hold
+// the booking's locks: the refund's delivery nudge and the charge's faktura
+// payment back-link.
+func (s *Service) afterStripeBooked(ctx context.Context, clubID, actorID string, row *stripeTxnRow, date time.Time, b stripeBooked) {
+	if b.refund != nil {
+		b.refund.rowID, b.refund.btID, b.refund.category = row.id, row.btID, row.category
+		s.afterRefundBooked(ctx, clubID, actorID, b.refund)
+	}
+	if b.dispute != nil {
+		b.dispute.rowID, b.dispute.btID, b.dispute.category = row.id, row.btID, row.category
+		s.afterDisputeBooked(ctx, clubID, actorID, b.dispute)
 	}
 
 	// The back-link updates the fakturas, so it runs once the commit has
 	// released their locks. Best-effort, as on the Vipps paths: the GL is
 	// already right.
-	for _, id := range invoiceIDs {
-		if err := s.linkInvoicePayment(ctx, clubID, id, out.date); err != nil {
+	for _, id := range b.invoiceIDs {
+		if err := s.linkInvoicePayment(ctx, clubID, id, date); err != nil {
 			s.log.Warn().Err(err).Str("invoice_id", id).Str("balance_transaction_id", row.btID).
 				Msg("stripe charge: invoice payment back-link failed")
 		}
 	}
-	return out, nil
 }
 
 // bookStripeChargeTx books a charge from its order, or holds it for review

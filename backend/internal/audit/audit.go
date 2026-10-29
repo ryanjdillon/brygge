@@ -106,6 +106,10 @@ const (
 	ActionStripeTxnDuplicateRefunded = "stripe_txn.duplicate_refunded"
 	ActionInvoiceRefundCreditIssued  = "invoice.refund_credit_issued"
 
+	// A card dispute (or its reversal) booked by the Stripe booking pass
+	// (BRY-446)
+	ActionStripeTxnDisputeBooked = "stripe_txn.dispute_booked"
+
 	// Payer aliases taught from bank Tildel or the Vipps queue (BRY-383)
 	ActionPayerAliasTaught  = "payer_alias.taught"
 	ActionPayerAliasRemoved = "payer_alias.removed"

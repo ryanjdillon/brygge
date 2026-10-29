@@ -200,6 +200,11 @@ const (
 	EventPayoutPaid                           = "payout.paid"
 	EventPayoutFailed                         = "payout.failed"
 	EventPayoutCanceled                       = "payout.canceled"
+	EventChargeDisputeCreated                 = "charge.dispute.created"
+	EventChargeDisputeUpdated                 = "charge.dispute.updated"
+	EventChargeDisputeClosed                  = "charge.dispute.closed"
+	EventChargeDisputeFundsWithdrawn          = "charge.dispute.funds_withdrawn"
+	EventChargeDisputeFundsReinstated         = "charge.dispute.funds_reinstated"
 )
 
 // Balance transaction reporting categories Brygge classifies.

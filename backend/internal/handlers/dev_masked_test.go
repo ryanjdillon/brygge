@@ -63,6 +63,10 @@ var rawTextColumns = map[string]bool{
 	"stripe_payouts.currency": true, "stripe_payouts.payout_id": true, "stripe_payouts.statement_descriptor": true, "stripe_payouts.status": true,
 	// what a booked refund did to a faktura: a fixed code
 	"refund_documents.kind": true,
+	// Stripe dispute ids, status, reason and currency codes
+	"payment_disputes.provider": true, "payment_disputes.provider_dispute_id": true, "payment_disputes.charge_ref": true,
+	"payment_disputes.provider_payment_ref": true, "payment_disputes.currency": true, "payment_disputes.reason": true,
+	"payment_disputes.status": true,
 }
 
 // TestDevMaskedViews migrates a throwaway database, applies the dev_masked

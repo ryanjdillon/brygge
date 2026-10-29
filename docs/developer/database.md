@@ -411,6 +411,27 @@ in `backend/migrations/` for the source of truth. The high-level shape:
   to `refund_legacy`, other adjustments held that way to
   `unsupported_category`, and refund failures stored as `other_adjustment`
   to `refund_failure`.
+- **Stripe disputes.** 000120 (BRY-446) books card disputes.
+  `payment_disputes` holds one row per dispute Stripe reports:
+  `club_id`, `attempt_id` and `order_id` (NULL when Brygge cannot tie the
+  dispute to a payment), `provider` + `provider_dispute_id` (unique),
+  `charge_ref`, `provider_payment_ref` (the PaymentIntent), `amount` (kr,
+  NULL when the event left it out), `currency`, `reason` (Stripe's code),
+  `status` (Stripe's word, free TEXT, see
+  [enums.md](reference/enums.md)), `evidence_due_by`, `is_charge_refundable`
+  (Stripe's own answer, NULL when absent) and `notified_phase` (the phase the
+  treasurer was last emailed about). The Stripe webhook is
+  its only writer (`payments.UpsertDispute`, idempotent and forward-only)
+  and writes nothing else; the booking pass never reads it. Queried for the
+  open disputes of an attempt (`payments.OpenDisputeForAttempt`) and, by a
+  later inbox, for what waits for evidence (`status`, `evidence_due_by`).
+  `clubs.stripe_dispute_account` (NULL: 7830 Tap på fordringer) is where a
+  lost dispute is booked. The migration adds account 7830 to the charts of
+  clubs seeded without it (as 000099 did for 3130, 3210 and 3220; new clubs
+  get it from `SeedKontoplan`) and hands disputes held as `refund_legacy`
+  back to the booking pass when that is safe (NOK, no entry, not dismissed,
+  payout not cleared in the books). Read raw by the dev role (ids, an
+  amount and codes only).
 - `invoice_pdf_archive` (migration 000050) — preserves prior PDF bytes when
   `invoices.pdf_data` is regenerated, so Norwegian bokføringsloven §13's
   5-year retention requirement is satisfied.

@@ -146,10 +146,10 @@ type stripeTxnState struct {
 // pass, and fees and payouts book themselves. A booked row is unassigned
 // when its entry is its own; a payout row's is the payout clearing's, undone
 // from the bank deposit. A row a person unassigned is held for that person
-// (stripeHeldActions). A row in another currency, or a dispute (whose
-// booking is still to come), can only be dismissed; a refund follows its
-// review reason (stripeRefundReasonActions). A charge whose order's faktura is no longer open, or whose
-// imported receivable is not in the GL, never goes to a faktura. A row whose
+// (stripeHeldActions). A row in another currency can only be dismissed; a
+// refund or dispute follows its review reason (stripeRefundReasonActions).
+// A charge whose order's faktura is no longer open, or whose imported
+// receivable is not in the GL, never goes to a faktura. A row whose
 // payout is cleared in the books was counted as done by that clearing, so
 // it is never booked (that would put its net on clearing a second time) nor
 // taken out of the dismissed state.
@@ -173,7 +173,7 @@ func stripeReasonActions(st stripeTxnState) []string {
 		return []string{StripeActionUndismiss}
 	case st.status != StripeTxnNeedsReview:
 		return []string{}
-	case st.currency != "nok", st.reviewReason == StripeReviewCurrency, st.reviewReason == StripeReviewDisputePending:
+	case st.currency != "nok", st.reviewReason == StripeReviewCurrency:
 		return []string{StripeActionDismiss}
 	case st.reviewReason == StripeReviewUnassigned:
 		return stripeHeldActions(st)
@@ -191,17 +191,25 @@ func stripeReasonActions(st stripeTxnState) []string {
 	return []string{}
 }
 
-// stripeRefundReasonActions are the actions of a refund or refund failure
-// the booking pass could not book. Those it retries (the charge or refund
-// it books against may still arrive or be booked) are only dismissed; those
-// it leaves for a person can go to an account, or back to the pass once
-// rebooking them makes sense (a row stored before refunds were booked).
-// Disputes and anything else wait for their own booking.
+// stripeRefundReasonActions are the actions of a refund, refund failure or
+// dispute the booking pass could not book. Those it retries (the charge or
+// refund it books against may still arrive or be booked, the dispute account
+// may be added) are only dismissed; those it leaves for a person can go to
+// an account, or back to the pass once rebooking them makes sense (a row
+// stored before refunds and disputes were booked).
 func stripeRefundReasonActions(st stripeTxnState) []string {
-	if !stripeRefundCategory(st.category) {
-		if st.reviewReason == StripeReviewRefundLegacy {
+	if stripeDisputeCategory(st.category) {
+		switch st.reviewReason {
+		case StripeReviewRefundLegacy:
+			return []string{StripeActionRebook, StripeActionDismiss}
+		case StripeReviewDisputeAccountMissing:
 			return []string{StripeActionDismiss}
+		case StripeReviewDisputeDirection:
+			return []string{StripeActionAssignAccount, StripeActionDismiss}
 		}
+		return []string{}
+	}
+	if !stripeRefundCategory(st.category) {
 		return []string{}
 	}
 	switch st.reviewReason {
@@ -217,7 +225,7 @@ func stripeRefundReasonActions(st stripeTxnState) []string {
 }
 
 // stripeHeldActions are the actions of a row a person unassigned: booked
-// again from its order or as a fee or refund by the booking pass (rebook),
+// again from its order or as a fee, refund or dispute by the booking pass (rebook),
 // or by hand as any row in review of its kind is. Only charges go to a
 // faktura.
 func stripeHeldActions(st stripeTxnState) []string {
@@ -227,7 +235,7 @@ func stripeHeldActions(st stripeTxnState) []string {
 			return []string{StripeActionRebook, StripeActionAssignInvoice, StripeActionAssignAccount, StripeActionDismiss}
 		}
 		return []string{StripeActionAssignInvoice, StripeActionAssignAccount, StripeActionDismiss}
-	case "fee", "refund", "refund_failure":
+	case "fee", "refund", "refund_failure", "dispute", "dispute_reversal":
 		return []string{StripeActionRebook, StripeActionAssignAccount, StripeActionDismiss}
 	case "other_adjustment":
 		return []string{StripeActionAssignAccount, StripeActionDismiss}

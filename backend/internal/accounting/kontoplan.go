@@ -81,5 +81,6 @@ func DefaultKontoplan() []AccountDef {
 		{Code: "7500", Name: "Gaver og kontingenter", Type: AccountTypeExpense, ParentCode: "7000", MVAEligible: MVAEligible, Description: "Forbundskontingent, gaver til frivillige", SortOrder: 300},
 		{Code: "7700", Name: "Bankgebyrer", Type: AccountTypeExpense, ParentCode: "7000", MVAEligible: MVAIneligible, SortOrder: 310},
 		{Code: "7790", Name: "Andre driftskostnader", Type: AccountTypeExpense, ParentCode: "7000", MVAEligible: MVAEligible, SortOrder: 320},
+		{Code: "7830", Name: "Tap på fordringer", Type: AccountTypeExpense, ParentCode: "7000", MVAEligible: MVAIneligible, Description: "Tapt kortbetalingstvist", SortOrder: 330},
 	}
 }

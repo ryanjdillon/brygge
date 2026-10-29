@@ -12,12 +12,13 @@ import (
 
 	"github.com/brygge-klubb/brygge/internal/accounting"
 	"github.com/brygge-klubb/brygge/internal/config"
+	"github.com/brygge-klubb/brygge/internal/email"
 	"github.com/brygge-klubb/brygge/internal/payments"
 	"github.com/brygge-klubb/brygge/internal/stripe"
 )
 
-// StripeWebhookHandler receives Checkout, PaymentIntent and payout events
-// from Stripe. The endpoint carries no session; each request is authenticated by
+// StripeWebhookHandler receives Checkout, PaymentIntent, payout and dispute
+// events from Stripe. The endpoint carries no session; each request is authenticated by
 // the Stripe-Signature HMAC over the body.
 type StripeWebhookHandler struct {
 	db     *pgxpool.Pool
@@ -30,6 +31,8 @@ type StripeWebhookHandler struct {
 	// ledger ingests payouts into the Stripe balance mirror; nil when
 	// accounting is off.
 	ledger stripePayoutIngester
+	// mailer tells the treasurer about a new dispute; nil without SMTP.
+	mailer email.Sender
 	// payouts tracks payout ingests still running after their event was
 	// answered.
 	payouts sync.WaitGroup
@@ -45,6 +48,12 @@ type stripePayoutIngester interface {
 // mirror. Left unset when accounting is off.
 func (h *StripeWebhookHandler) SetLedger(l stripePayoutIngester) {
 	h.ledger = l
+}
+
+// SetMailer lets the handler email the club's treasurer when a card payment
+// is disputed. Left unset without a mail transport.
+func (h *StripeWebhookHandler) SetMailer(m email.Sender) {
+	h.mailer = m
 }
 
 // NewStripeWebhookHandler returns the webhook handler; client is nil when
@@ -93,8 +102,9 @@ func eventRefs(evt *stripe.Event) (reference, attemptID string) {
 // Handle is the POST /api/v1/stripe/webhooks handler. Every verified event is
 // stored once and then dispatched, also when it was already stored: all
 // settlement writes are guarded, so a redelivery is a no-op, and a dispatch
-// that failed part-way gets another chance. Only a failure to store answers
-// 5xx, so Stripe retries; anything Brygge does not act on is 200.
+// that failed part-way gets another chance. Only a failure to store (the
+// event, or a dispute) answers 5xx, so Stripe retries; anything Brygge does
+// not act on is 200.
 func (h *StripeWebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -106,7 +116,18 @@ func (h *StripeWebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	reference, attemptID := eventRefs(evt)
-	clubID := h.resolveClub(ctx, reference, attemptID)
+	// A dispute names its payment only through the payment's PaymentIntent
+	// and charge, so its club comes from there, not from the reference.
+	var dispute *disputeContext
+	if stripe.IsDisputeEvent(evt.Type) {
+		dispute = h.resolveDispute(ctx, evt)
+	}
+	var clubID string
+	if dispute != nil && dispute.clubID != "" {
+		clubID = dispute.clubID
+	} else {
+		clubID = h.resolveClub(ctx, reference, attemptID)
+	}
 	if clubID == "" {
 		h.log.Warn().Str("event_id", evt.ID).Str("reference", reference).Msg("webhook: could not resolve club_id — dropping")
 		w.WriteHeader(http.StatusOK)
@@ -131,7 +152,10 @@ func (h *StripeWebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		Str("club_id", clubID).
 		Msg("stripe webhook received")
 
-	h.dispatch(ctx, clubID, evt)
+	if err := h.dispatch(ctx, clubID, evt, dispute); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
 
 	w.WriteHeader(http.StatusOK)
 }

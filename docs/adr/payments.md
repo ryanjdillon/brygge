@@ -57,3 +57,10 @@ PAY-1 to PAY-9 were taken together on 2026-10-27 (BRY-440) and bound the Stripe 
 - **Status:** accepted · 2026-10-29 · BRY-446
 - **Decision:** when an order that paid for a booking (a guest slip or a room) is refunded in full, the booking is cancelled and the slip or room is freed.
 - **Consequences:** online orders don't create bookings yet (QR guest payments carry no booking), so this applies once a booking checkout exists.
+
+### PAY-11: Brygge links to the Stripe Dashboard for what only Stripe can do
+
+- **Status:** accepted · 2026-10-29 · BRY-446
+- **Decision:** where only Stripe can act (answering a dispute with evidence, looking into a payment), Brygge links to the page in the Stripe Dashboard instead of building the screen. A link is `https://dashboard.stripe.com/<path>`, with `/test` after the domain when the configured key is a test key, and never contains the account id.
+- **Why:** the evidence for a dispute lives in Stripe, and an account id in a link would put it in every email and screenshot.
+- **Consequences:** `stripe.DashboardURL` builds the links; the first use is the dispute link in the treasurer's email.

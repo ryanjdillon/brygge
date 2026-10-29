@@ -46,11 +46,6 @@ const (
 	StripeReviewAmountMismatch = "amount_mismatch"
 	// StripeReviewCurrency: not NOK, or not the attempt's currency.
 	StripeReviewCurrency = "currency"
-	// StripeReviewDisputePending: a dispute or a dispute reversal. Neither
-	// has a booking yet; it comes with dispute booking (BRY-446). The value
-	// is the one refunds were held under before they were booked, so rows
-	// stored then keep reading the same.
-	StripeReviewDisputePending = "refund_pending_bry446"
 	// StripeReviewUnsupportedCategory: a reporting category Brygge has no
 	// booking for. Stored as other_adjustment so the row is not lost.
 	StripeReviewUnsupportedCategory = "unsupported_category"
@@ -97,6 +92,20 @@ const (
 	StripeReviewRefundSplit = "refund_split"
 )
 
+// Why the booking pass could not book a dispute or a dispute reversal
+// (stripe_disputes.go). Like the reasons above, ingest never reclassifies a
+// row held for it, and the pass retries it.
+const (
+	// StripeReviewDisputeAccountMissing: the club's dispute account
+	// (clubs.stripe_dispute_account, default 7830) is not an active account
+	// in its chart.
+	StripeReviewDisputeAccountMissing = "dispute_account_missing"
+	// StripeReviewDisputeDirection: the money moved the wrong way for the
+	// category (a dispute that paid the club, a reversal that took money).
+	// Nothing retries it; a person books it to an account or dismisses it.
+	StripeReviewDisputeDirection = "dispute_direction"
+)
+
 // StripeReviewUnassigned: a person undid the row's booking
 // (UnassignStripeTxn). The row is held for that person: ingest never
 // reclassifies it and the booking pass never retries it, so it is booked
@@ -113,9 +122,13 @@ var stripeChargeReviewReasons = []string{
 // a refund or refund failure and retries: what it waits for may arrive.
 var stripeRefundRetryReasons = []string{StripeReviewRefundUnlinked, StripeReviewRefundChargeUnbooked}
 
+// stripeDisputeRetryReasons are the review reasons the booking pass sets on
+// a dispute or dispute reversal and retries: the account may be added.
+var stripeDisputeRetryReasons = []string{StripeReviewDisputeAccountMissing}
+
 // stripeBookingReviewReasons are the review reasons BookStripeBalance sets
 // and retries.
-var stripeBookingReviewReasons = append(slices.Clone(stripeChargeReviewReasons), stripeRefundRetryReasons...)
+var stripeBookingReviewReasons = slices.Concat(stripeChargeReviewReasons, stripeRefundRetryReasons, stripeDisputeRetryReasons)
 
 // stripeHeldReviewReasons are the review reasons ingest leaves alone: the
 // booking pass's, which it retries or leaves for a person, and the person's
@@ -123,12 +136,18 @@ var stripeBookingReviewReasons = append(slices.Clone(stripeChargeReviewReasons),
 // reclassified by a re-sync.
 var stripeHeldReviewReasons = append(slices.Clone(stripeBookingReviewReasons),
 	StripeReviewRefundOriginDismissed, StripeReviewRefundLegacy, StripeReviewRefundFailureSettled,
-	StripeReviewRefundSplit, StripeReviewUnassigned)
+	StripeReviewRefundSplit, StripeReviewDisputeDirection, StripeReviewUnassigned)
 
 // stripeRefundCategory reports whether a reporting category is money a
 // refund moved: the refund itself, or its failure bringing it back.
 func stripeRefundCategory(category string) bool {
 	return category == stripe.CategoryRefund || category == stripe.CategoryRefundFailure
+}
+
+// stripeDisputeCategory reports whether a reporting category is money a
+// card dispute moved: withdrawn from the balance, or given back.
+func stripeDisputeCategory(category string) bool {
+	return category == stripe.CategoryDispute || category == stripe.CategoryDisputeReversal
 }
 
 // sqlList quotes fixed identifiers as a SQL list; they need no escaping.
@@ -617,7 +636,7 @@ func (s *Service) classifyStripeTxn(ctx context.Context, src StripeBalanceSource
 		// charge, or its refund) when it books it.
 		c.requestKey = refundRequestKey(bt.Source)
 	case stripe.CategoryDispute, stripe.CategoryDisputeReversal:
-		c.review(StripeReviewDisputePending)
+		// The booking pass links the row to its charge when it books it.
 	case stripe.CategoryOtherAdjustment:
 		c.review(StripeReviewUnsupportedCategory)
 	default:

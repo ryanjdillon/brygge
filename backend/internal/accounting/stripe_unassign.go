@@ -200,9 +200,10 @@ const (
 	StripeRebookFailed      = "failed"
 )
 
-// RebookStripeTxn hands a row a person holds (unassigned, or a refund
-// stored before refunds were booked) back to the booking pass, as actorID:
-// a charge with an order, a fee or a refund goes back to unbooked with no
+// RebookStripeTxn hands a row a person holds (unassigned, or a refund or
+// dispute stored before they were booked) back to the booking pass, as
+// actorID: a charge with an order, a fee, a refund or a dispute goes back to
+// unbooked with no
 // review reason (a guarded update, so only a held row moves), and the pass
 // books that row at once, in the same hold of the
 // club's Stripe slot. The pass re-checks everything as for any ready row,
@@ -274,7 +275,7 @@ func stripeRebookOutcome(out stripeBookOutcome, err error) (outcome, reason stri
 	switch {
 	case err != nil:
 		return StripeRebookFailed, ""
-	case out.kind == stripeOutcomeCharge, out.kind == stripeOutcomeFee, out.kind == stripeOutcomeRefund:
+	case out.kind == stripeOutcomeCharge, out.kind == stripeOutcomeFee, out.kind == stripeOutcomeRefund, out.kind == stripeOutcomeDispute:
 		return StripeRebookBooked, ""
 	case out.kind == stripeOutcomeReview:
 		return StripeRebookNeedsReview, out.reason

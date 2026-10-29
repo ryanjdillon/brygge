@@ -57,11 +57,18 @@ type fakeStripe struct {
 	// with Stripe's idempotency_error, as a key first used with other
 	// parameters does.
 	refuseKey string
+	// intentMeta is the metadata a retrieve answers with, by PaymentIntent
+	// id; intentMissing lists ids a retrieve answers 404 for.
+	intentMeta    map[string]map[string]string
+	intentMissing map[string]bool
+	// intentErrors makes a retrieve answer that HTTP status.
+	intentErrors map[string]int
+	intentGets   []string
 }
 
 func newFakeStripe(t *testing.T) *fakeStripe {
 	t.Helper()
-	f := &fakeStripe{piStatus: map[string]string{}}
+	f := &fakeStripe{piStatus: map[string]string{}, intentMeta: map[string]map[string]string{}, intentMissing: map[string]bool{}, intentErrors: map[string]int{}}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /v1/checkout/sessions", f.handleCreate)
 	mux.HandleFunc("GET /v1/checkout/sessions/{id}", f.handleGetSession)
@@ -118,7 +125,20 @@ func (f *fakeStripe) handleGetSession(w http.ResponseWriter, r *http.Request) {
 func (f *fakeStripe) handleGetIntent(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	status := f.intentAfterCapture
+	f.intentGets = append(f.intentGets, r.PathValue("id"))
+	meta, missing := f.intentMeta[r.PathValue("id")], f.intentMissing[r.PathValue("id")]
+	failWith := f.intentErrors[r.PathValue("id")]
 	f.mu.Unlock()
+	if failWith != 0 {
+		w.WriteHeader(failWith)
+		_, _ = w.Write([]byte(`{"error":{"type":"api_error","message":"synthetic outage"}}`))
+		return
+	}
+	if missing {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"error":{"type":"invalid_request_error","code":"resource_missing","message":"no such payment_intent"}}`))
+		return
+	}
 	if status == "" {
 		status = stripe.PaymentIntentRequiresCapture
 	}
@@ -131,7 +151,7 @@ func (f *fakeStripe) handleGetIntent(w http.ResponseWriter, r *http.Request) {
 	f.mu.Unlock()
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"id": r.PathValue("id"), "status": status, "amount": 45000, "amount_received": received, "currency": "nok",
-		"latest_charge": charge,
+		"latest_charge": charge, "metadata": meta,
 	})
 }
 
@@ -178,6 +198,13 @@ func (f *fakeStripe) createCalls() []fakeStripeCreate {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]fakeStripeCreate(nil), f.creates...)
+}
+
+// intentGetCalls are the PaymentIntent ids retrieved so far.
+func (f *fakeStripe) intentGetCalls() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.intentGets...)
 }
 
 func (f *fakeStripe) captureCalls() []string {
