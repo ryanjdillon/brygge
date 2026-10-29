@@ -106,6 +106,9 @@ const (
 	ActionStripeTxnDuplicateRefunded = "stripe_txn.duplicate_refunded"
 	ActionInvoiceRefundCreditIssued  = "invoice.refund_credit_issued"
 
+	// A refund of a card payment requested from the refund button (BRY-497)
+	ActionOrderRefundRequested = "order.refund_requested"
+
 	// A card dispute (or its reversal) booked by the Stripe booking pass
 	// (BRY-446)
 	ActionStripeTxnDisputeBooked = "stripe_txn.dispute_booked"

@@ -18,7 +18,13 @@ type HarborHandler struct {
 	db     *pgxpool.Pool
 	config *config.Config
 	log    zerolog.Logger
+	// refunds tells the payment overview which payments the signed-in
+	// treasurer or admin can refund; nil without refund support.
+	refunds refundableOrders
 }
+
+// SetRefunds lets the payment overview mark the payments that can be refunded.
+func (h *HarborHandler) SetRefunds(r refundableOrders) { h.refunds = r }
 
 func NewHarborHandler(db *pgxpool.Pool, cfg *config.Config, log zerolog.Logger) *HarborHandler {
 	return &HarborHandler{

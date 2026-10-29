@@ -17,8 +17,8 @@ import (
 	"github.com/brygge-klubb/brygge/internal/stripe"
 )
 
-// StripeWebhookHandler receives Checkout, PaymentIntent, payout and dispute
-// events from Stripe. The endpoint carries no session; each request is authenticated by
+// StripeWebhookHandler receives Checkout, PaymentIntent, payout, refund and
+// dispute events from Stripe. The endpoint carries no session; each request is authenticated by
 // the Stripe-Signature HMAC over the body.
 type StripeWebhookHandler struct {
 	db     *pgxpool.Pool
@@ -103,8 +103,8 @@ func eventRefs(evt *stripe.Event) (reference, attemptID string) {
 // stored once and then dispatched, also when it was already stored: all
 // settlement writes are guarded, so a redelivery is a no-op, and a dispatch
 // that failed part-way gets another chance. Only a failure to store (the
-// event, or a dispute) answers 5xx, so Stripe retries; anything Brygge does
-// not act on is 200.
+// event, or a dispute or refund) answers 5xx, so Stripe retries; anything
+// Brygge does not act on is 200.
 func (h *StripeWebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -116,15 +116,27 @@ func (h *StripeWebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	reference, attemptID := eventRefs(evt)
-	// A dispute names its payment only through the payment's PaymentIntent
-	// and charge, so its club comes from there, not from the reference.
-	var dispute *disputeContext
-	if stripe.IsDisputeEvent(evt.Type) {
-		dispute = h.resolveDispute(ctx, evt)
+	// A dispute or a refund names its payment only through the payment's
+	// PaymentIntent and charge, so its club comes from there, not from the
+	// reference.
+	var (
+		dispute *disputeContext
+		refund  *refundContext
+		placed  *intentPayment
+	)
+	switch {
+	case stripe.IsDisputeEvent(evt.Type):
+		if dispute = h.resolveDispute(ctx, evt); dispute != nil {
+			placed = &dispute.intentPayment
+		}
+	case stripe.IsRefundEvent(evt.Type):
+		if refund = h.resolveRefundEvent(ctx, evt); refund != nil {
+			placed = &refund.intentPayment
+		}
 	}
 	var clubID string
-	if dispute != nil && dispute.clubID != "" {
-		clubID = dispute.clubID
+	if placed != nil && placed.clubID != "" {
+		clubID = placed.clubID
 	} else {
 		clubID = h.resolveClub(ctx, reference, attemptID)
 	}
@@ -152,7 +164,7 @@ func (h *StripeWebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		Str("club_id", clubID).
 		Msg("stripe webhook received")
 
-	if err := h.dispatch(ctx, clubID, evt, dispute); err != nil {
+	if err := h.dispatch(ctx, clubID, evt, dispute, refund); err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}

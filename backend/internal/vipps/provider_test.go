@@ -3,7 +3,6 @@ package vipps_test
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -124,14 +123,16 @@ func TestPaymentProvider_FreshReferencePerAttempt(t *testing.T) {
 	}
 }
 
-func TestPaymentProvider_RefundAndCancel(t *testing.T) {
+func TestPaymentProvider_CancelAndNoRefund(t *testing.T) {
 	rs, srv := newRecordingServer(t)
 	p := vipps.NewPaymentProvider(newTestClient(srv.URL))
 	if p.Name() != vipps.ProviderName {
 		t.Errorf("Name() = %q", p.Name())
 	}
-	if _, err := p.Refund(context.Background(), "chk-x", 100, "test"); !errors.Is(err, payments.ErrNotSupported) {
-		t.Errorf("Refund err = %v, want ErrNotSupported", err)
+	// Vipps refunds are BRY-14; until then the optional interface is absent,
+	// which is what hides the refund button for Vipps payments.
+	if _, ok := payments.Provider(p).(payments.Refunder); ok {
+		t.Error("Vipps provider implements Refunder")
 	}
 	if err := p.CancelPayment(context.Background(), "chk-x"); err != nil {
 		t.Fatalf("CancelPayment: %v", err)

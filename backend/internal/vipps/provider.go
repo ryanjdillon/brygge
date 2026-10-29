@@ -61,12 +61,6 @@ func (p *PaymentProvider) CreatePayment(ctx context.Context, req payments.Reques
 	return payments.Result{RedirectURL: res.RedirectURL, Reference: ref}, nil
 }
 
-// Refund is not supported yet: issuing Vipps refunds from Brygge is BRY-14,
-// which will implement it here.
-func (p *PaymentProvider) Refund(context.Context, string, int64, string) (string, error) {
-	return "", payments.ErrNotSupported
-}
-
 // CancelPayment implements payments.Canceller.
 func (p *PaymentProvider) CancelPayment(ctx context.Context, reference string) error {
 	return p.client.CancelPayment(ctx, reference)

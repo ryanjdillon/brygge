@@ -402,12 +402,8 @@ func TestCancelPayment(t *testing.T) {
 	}
 }
 
-func TestRefundNotSupported(t *testing.T) {
-	p := NewPaymentProvider(nil, "")
-	if _, err := p.Refund(context.Background(), "cs", 1, ""); !errors.Is(err, payments.ErrNotSupported) {
-		t.Errorf("err = %v", err)
-	}
-	if p.Name() != ProviderName {
+func TestProviderName(t *testing.T) {
+	if p := NewPaymentProvider(nil, ""); p.Name() != ProviderName {
 		t.Errorf("name = %q", p.Name())
 	}
 }

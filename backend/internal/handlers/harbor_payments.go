@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/brygge-klubb/brygge/internal/middleware"
 	"github.com/brygge-klubb/brygge/internal/vipps"
 )
 
@@ -25,6 +26,9 @@ type recentPayment struct {
 	// CardBrand is Stripe's brand code (visa, mastercard, ...) for a card
 	// payment whose charge has been read; null otherwise.
 	CardBrand *string `json:"card_brand"`
+	// CanRefund is set only for a treasurer or admin, for a payment that has
+	// money left to refund through its provider.
+	CanRefund bool `json:"can_refund"`
 }
 
 // Payment methods the overview distinguishes.
@@ -182,7 +186,29 @@ func (h *HarborHandler) HandleRecentPayments(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	h.markRefundable(r, clubID, out)
 	JSON(w, http.StatusOK, map[string]any{"payments": out})
+}
+
+// markRefundable sets can_refund on the payments the caller may refund. A
+// failed lookup leaves the buttons hidden rather than failing the overview.
+func (h *HarborHandler) markRefundable(r *http.Request, clubID string, payments []recentPayment) {
+	claims := middleware.GetClaims(r.Context())
+	if h.refunds == nil || claims == nil || !mayRefund(claims.Roles) || len(payments) == 0 {
+		return
+	}
+	ids := make([]string, len(payments))
+	for i, p := range payments {
+		ids[i] = p.ID
+	}
+	refundable, err := h.refunds.RefundableOrders(r.Context(), clubID, ids)
+	if err != nil {
+		h.log.Warn().Err(err).Msg("recent payments: refundable lookup failed")
+		return
+	}
+	for i := range payments {
+		payments[i].CanRefund = refundable[payments[i].ID]
+	}
 }
 
 func strval(s *string) string {

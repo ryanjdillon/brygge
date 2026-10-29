@@ -45,6 +45,7 @@ type PaymentProvider struct {
 var (
 	_ payments.Provider      = (*PaymentProvider)(nil)
 	_ payments.Canceller     = (*PaymentProvider)(nil)
+	_ payments.Refunder      = (*PaymentProvider)(nil)
 	_ payments.MinimumAmount = (*PaymentProvider)(nil)
 )
 
@@ -148,11 +149,6 @@ func (p *PaymentProvider) metadata(req payments.Request) map[string]string {
 		"order_id":   req.OrderID,
 		"club_slug":  p.clubSlug,
 	}
-}
-
-// Refund is not supported yet; BRY-446 implements Stripe refunds here.
-func (p *PaymentProvider) Refund(context.Context, string, int64, string) (string, error) {
-	return "", payments.ErrNotSupported
 }
 
 // CancelPayment makes the session at reference unable to take money: an

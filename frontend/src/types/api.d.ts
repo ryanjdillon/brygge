@@ -468,6 +468,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/orders/{orderID}/refund": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refund a card payment of an order (treasurer/admin, fresh TOTP)
+         * @description Stores the request, then asks Stripe for the refund under an Idempotency-Key derived from `request_key`. Books nothing: the booking pass books the refund and issues the credit note once Stripe's balance lists it. 200 the refund (status says whether Stripe finished it; a repeated request key returns the same refund); 202 Stripe's answer is not known and the refund is looked up again; 409 refused with a `code` (`not_supported`, `not_captured`, `disputed`, `amount_exceeds_refundable`, `recollect_after_partial`, `request_key_reused`); 502 Stripe refused the refund (`code` `refund_failed`).
+         */
+        post: operations["admin-refund-order"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/orders/{orderID}/refunds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * An order's payments, refunds and disputes, and whether it can be refunded (treasurer/admin)
+         * @description Looks up requested refunds Stripe has not confirmed for ten minutes before answering.
+         */
+        get: operations["admin-list-order-refunds"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/pricing": {
         parameters: {
             query?: never;
@@ -4267,6 +4307,106 @@ export interface components {
             /** @description Slip UUID to offer */
             slip_id: string;
         };
+        OrderRefundAttempt: {
+            /**
+             * Format: double
+             * @description Kr paid
+             */
+            amount: number;
+            can_refund: boolean;
+            /** Format: date-time */
+            created_at: string;
+            currency: string;
+            disputed: boolean;
+            /** @description A payment of an order an earlier payment had paid (dobbeltbetaling). */
+            duplicate: boolean;
+            /** Format: uuid */
+            id: string;
+            /** @description The payment in the Stripe Dashboard; absent until its PaymentIntent is known. */
+            payment_url?: string;
+            provider: string;
+            recollect_allowed: boolean;
+            /**
+             * Format: double
+             * @description Kr left to refund
+             */
+            refundable: number;
+            /**
+             * Format: double
+             * @description Kr in requested and succeeded refunds
+             */
+            refunded: number;
+        };
+        OrderRefundDispute: {
+            /** Format: double */
+            amount: number | null;
+            /** Format: uuid */
+            attempt_id: string | null;
+            /** Format: date-time */
+            evidence_due_by: string | null;
+            id: string;
+            /** @description A dispute that stops a refund. */
+            open: boolean;
+            reason: string;
+            status: string;
+        };
+        OrderRefundRequest: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/OrderRefundRequest.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: double
+             * @description Kr to refund, at most two decimals; omitted refunds all that is refundable.
+             */
+            amount?: number;
+            /**
+             * Format: uuid
+             * @description The captured payment to refund. A duplicate capture is a separate attempt.
+             */
+            attempt_id: string;
+            /**
+             * @description Only for a full refund of a faktura's payment: credit (the default, a credit note is issued) or recollect (no credit note, the faktura reopens). recollect is refused with 409 recollect_after_partial once part of it was refunded.
+             * @enum {string}
+             */
+            outcome?: "credit" | "recollect";
+            /** @description Why the money is returned; kept on the refund. */
+            reason: string;
+            /**
+             * Format: uuid
+             * @description Identifies this click. Made when the dialog opens and repeated on a retry, so a repeated request never refunds twice.
+             */
+            request_key: string;
+        };
+        OrderRefundResponse: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/OrderRefundResponse.json
+             */
+            readonly $schema?: string;
+            /** @description Stripe's answer is not known; the refund is looked up again later (HTTP 202). */
+            awaiting_confirmation: boolean;
+            refund: components["schemas"]["PaymentRefund"];
+            /** @description The request key was used before; nothing new was started. */
+            replayed: boolean;
+        };
+        OrderRefundsResponse: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/OrderRefundsResponse.json
+             */
+            readonly $schema?: string;
+            attempts: components["schemas"]["OrderRefundAttempt"][] | null;
+            can_refund: boolean;
+            disputes: components["schemas"]["OrderRefundDispute"][] | null;
+            has_fakturas: boolean;
+            recollect_allowed: boolean;
+            refunds: components["schemas"]["PaymentRefund"][] | null;
+        };
         OverduePayment: {
             /**
              * Format: double
@@ -4502,6 +4642,43 @@ export interface components {
             user_name: string;
             /** @description Vipps payment reference */
             vipps_reference: string;
+        };
+        PaymentRefund: {
+            /**
+             * Format: double
+             * @description Kr
+             */
+            amount: number;
+            /** Format: uuid */
+            attempt_id: string;
+            /** Format: date-time */
+            created_at: string;
+            /**
+             * Format: uuid
+             * @description Null for a refund made in the provider's dashboard.
+             */
+            created_by: string | null;
+            /** @example NOK */
+            currency: string;
+            failure_reason: string | null;
+            /** Format: uuid */
+            id: string;
+            /**
+             * @description Null means credit.
+             * @enum {string|null}
+             */
+            outcome: "credit" | "recollect" | null;
+            /** @example stripe */
+            provider: string;
+            provider_refund_id: string | null;
+            /** @description The person's reason; "Stripe Dashboard" for a refund made there. */
+            reason: string;
+            /** Format: uuid */
+            request_key: string | null;
+            /** @enum {string} */
+            status: "requested" | "succeeded" | "failed";
+            /** Format: date-time */
+            updated_at: string;
         };
         PaymentsListResponse: {
             /**
@@ -6373,6 +6550,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StatusResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "admin-refund-order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orderID: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrderRefundRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderRefundResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "admin-list-order-refunds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orderID: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderRefundsResponse"];
                 };
             };
             /** @description Error */

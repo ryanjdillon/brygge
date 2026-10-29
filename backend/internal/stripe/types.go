@@ -200,6 +200,8 @@ const (
 	EventPayoutPaid                           = "payout.paid"
 	EventPayoutFailed                         = "payout.failed"
 	EventPayoutCanceled                       = "payout.canceled"
+	EventChargeRefunded                       = "charge.refunded"
+	EventChargeRefundUpdated                  = "charge.refund.updated"
 	EventChargeDisputeCreated                 = "charge.dispute.created"
 	EventChargeDisputeUpdated                 = "charge.dispute.updated"
 	EventChargeDisputeClosed                  = "charge.dispute.closed"

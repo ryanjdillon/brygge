@@ -16,6 +16,7 @@ import (
 
 	"github.com/brygge-klubb/brygge/internal/accounting"
 	"github.com/brygge-klubb/brygge/internal/audit"
+	"github.com/brygge-klubb/brygge/internal/auth"
 	bcast "github.com/brygge-klubb/brygge/internal/broadcast"
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/email"
@@ -50,7 +51,15 @@ type InvoiceHandler struct {
 	// when it is voided. Nil when the accounting feature is off; the
 	// repair sync in Bilag then remains the only booking path.
 	ledger *accounting.Service
+
+	// refunds tells the faktura list which card-paid fakturas the signed-in
+	// treasurer or admin can refund; nil without refund support.
+	refunds refundableOrders
 }
+
+// SetRefunds lets the faktura list mark the card-paid fakturas that can be
+// refunded.
+func (h *InvoiceHandler) SetRefunds(r refundableOrders) { h.refunds = r }
 
 func NewInvoiceHandler(
 	db *pgxpool.Pool,
@@ -1074,6 +1083,9 @@ func (h *InvoiceHandler) HandleListInvoices(w http.ResponseWriter, r *http.Reque
 		CreditState          *string `json:"credit_state"`
 		CreditedByNumber     *int    `json:"credited_by_invoice_number"`
 		RefundDocument       bool    `json:"refund_document"`
+		// RefundOrderID is the order to open the refund dialog for: set on a
+		// faktura paid by card that the caller may refund, with money left.
+		RefundOrderID *string `json:"refund_order_id"`
 	}
 	out := make([]listRow, 0)
 	for rows.Next() {
@@ -1109,8 +1121,66 @@ func (h *InvoiceHandler) HandleListInvoices(w http.ResponseWriter, r *http.Reque
 		}
 		out = append(out, d)
 	}
+	rows.Close()
+
+	var paidOnline []string
+	for _, d := range out {
+		if d.OnlinePaidAt != nil {
+			paidOnline = append(paidOnline, d.ID)
+		}
+	}
+	refundOrders := h.refundOrdersFor(ctx, claims, paidOnline)
+	for i := range out {
+		if orderID, ok := refundOrders[out[i].ID]; ok {
+			out[i].RefundOrderID = &orderID
+		}
+	}
 
 	JSON(w, http.StatusOK, map[string]any{"items": out, "status": status})
+}
+
+// refundOrdersFor maps the card-paid fakturas the caller may refund to the
+// order that paid them. Empty for a caller who may not refund, without refund
+// support, or when the lookup fails (the buttons stay hidden).
+func (h *InvoiceHandler) refundOrdersFor(ctx context.Context, claims *auth.Claims, invoiceIDs []string) map[string]string {
+	if h.refunds == nil || !mayRefund(claims.Roles) || len(invoiceIDs) == 0 {
+		return nil
+	}
+	rows, err := h.db.Query(ctx,
+		`SELECT os.invoice_id::text, os.order_id::text
+		   FROM order_sources os JOIN orders o ON o.id = os.order_id
+		  WHERE o.club_id = $1 AND o.status = 'paid' AND os.invoice_id = ANY($2::uuid[])`,
+		claims.ClubID, invoiceIDs)
+	if err != nil {
+		h.log.Warn().Err(err).Msg("list invoices: refund orders lookup failed")
+		return nil
+	}
+	type pair struct{ invoice, order string }
+	pairs, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (pair, error) {
+		var p pair
+		err := row.Scan(&p.invoice, &p.order)
+		return p, err
+	})
+	if err != nil {
+		h.log.Warn().Err(err).Msg("list invoices: refund orders lookup failed")
+		return nil
+	}
+	orderIDs := make([]string, len(pairs))
+	for i, p := range pairs {
+		orderIDs[i] = p.order
+	}
+	refundable, err := h.refunds.RefundableOrders(ctx, claims.ClubID, orderIDs)
+	if err != nil {
+		h.log.Warn().Err(err).Msg("list invoices: refundable lookup failed")
+		return nil
+	}
+	out := map[string]string{}
+	for _, p := range pairs {
+		if refundable[p.order] {
+			out[p.invoice] = p.order
+		}
+	}
+	return out
 }
 
 // HandleCountImportedInvoices returns how many open invoices were migrated

@@ -163,6 +163,12 @@ func UpsertDispute(ctx context.Context, q Querier, d Dispute) (notify bool, err 
 	return notify, nil
 }
 
+// openDisputeSQL is the condition, on payment_disputes columns, for a
+// dispute that stands in the way of refunding its payment; see
+// OpenDisputeForAttempt for why each status counts.
+const openDisputeSQL = `(is_charge_refundable = false
+		         OR (is_charge_refundable IS NULL AND status IN ('needs_response', 'under_review', 'lost')))`
+
 // OpenDispute is a dispute that stands in the way of refunding a payment.
 type OpenDispute struct {
 	ProviderDisputeID string
@@ -186,8 +192,7 @@ func OpenDisputeForAttempt(ctx context.Context, q Querier, clubID, attemptID str
 		`SELECT provider_dispute_id, status, evidence_due_by
 		   FROM payment_disputes
 		  WHERE club_id = $1 AND attempt_id = $2
-		    AND (is_charge_refundable = false
-		         OR (is_charge_refundable IS NULL AND status IN ('needs_response', 'under_review', 'lost')))
+		    AND `+openDisputeSQL+`
 		  ORDER BY created_at, id LIMIT 1`,
 		clubID, attemptID,
 	).Scan(&d.ProviderDisputeID, &d.Status, &d.EvidenceDueBy)

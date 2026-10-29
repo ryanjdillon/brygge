@@ -348,8 +348,10 @@ in `backend/migrations/` for the source of truth. The high-level shape:
   BRY-446): 000119 adds `provider_payment_ref`, `charge_ref`,
   `failure_reason`, `request_key` (unique per club when set: the key the
   refund button sends in the refund's metadata) and `outcome` (`credit` /
-  `recollect`, NULL meaning credit); the Stripe booking pass makes the row
-  for a refund that has none (a Dashboard refund). `payment_webhook_events` (raw events of
+  `recollect`, NULL meaning credit). The rows are written by the refund
+  button (`requested`, before Stripe is called, BRY-497), the Stripe refund
+  webhook and the refund sweep (their state), and the Stripe booking pass
+  (for a refund that has none, a Dashboard refund); no migration. `payment_webhook_events` (raw events of
   providers other than Vipps, unique on `club_id, provider, event_id`) is
   written by the Stripe webhook; Vipps keeps `vipps_webhook_events`. 000114 added the provider-neutral
   `invoices.online_paid_at` / `online_paid_provider` (the "received, awaiting

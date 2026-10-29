@@ -465,11 +465,50 @@ type paymentRefundMatch struct {
 // refund id, else by the request key Brygge sent with it. A refund made in
 // the Stripe Dashboard before its webhook arrived has none: one is made
 // from the row (no person, reason "Stripe Dashboard"), when the charge
-// names its attempt. A row matched by key learns the Stripe refund id.
+// names its attempt. A row matched by key learns the Stripe refund id. The
+// webhook may insert the same Dashboard refund at the same moment: the
+// insert then yields to the other row (a unique-index conflict must not
+// abort the booking), which is read again.
 func matchPaymentRefundTx(ctx context.Context, tx pgx.Tx, clubID string, row *stripeTxnRow, charge *stripeOrigin) (paymentRefundMatch, error) {
-	var m paymentRefundMatch
+	m, found, err := findPaymentRefundTx(ctx, tx, clubID, row)
+	if err != nil || found || charge.attemptID == nil {
+		return m, err
+	}
+	var id string
+	err = tx.QueryRow(ctx,
+		`INSERT INTO payment_refunds (club_id, attempt_id, provider, amount, currency, provider_refund_id,
+		                              status, reason, charge_ref, request_key, provider_payment_ref)
+		 VALUES ($1, $2, $3, $4::bigint / 100.0, 'NOK', NULLIF($5, ''), 'succeeded', 'Stripe Dashboard',
+		         NULLIF($6, ''), $7::uuid, NULLIF($8, ''))
+		 ON CONFLICT DO NOTHING
+		 RETURNING id::text`,
+		clubID, *charge.attemptID, stripe.ProviderName, -row.amountOre, row.sourceID, row.chargeID,
+		row.requestKey, row.paymentIntentID,
+	).Scan(&id)
+	switch {
+	case err == nil:
+		m.id = &id
+		return m, nil
+	case errors.Is(err, pgx.ErrNoRows):
+		// Another transaction made the row first.
+		m, found, err = findPaymentRefundTx(ctx, tx, clubID, row)
+		if err != nil {
+			return m, err
+		}
+		if !found {
+			return m, errors.New("the dashboard refund's row conflicted but cannot be found")
+		}
+		return m, nil
+	}
+	return m, fmt.Errorf("recording the dashboard refund: %w", err)
+}
+
+// findPaymentRefundTx reads the refund's request row by Stripe's refund id,
+// else by the request key, and records the Stripe refund id on a row matched
+// by key.
+func findPaymentRefundTx(ctx context.Context, tx pgx.Tx, clubID string, row *stripeTxnRow) (m paymentRefundMatch, found bool, err error) {
 	var id, outcome string
-	err := tx.QueryRow(ctx,
+	err = tx.QueryRow(ctx,
 		`SELECT id, outcome FROM (
 		     SELECT 1 AS pref, id::text AS id, COALESCE(outcome, '') AS outcome FROM payment_refunds
 		      WHERE club_id = $1 AND provider = $2 AND $3 <> '' AND provider_refund_id = $3
@@ -480,34 +519,20 @@ func matchPaymentRefundTx(ctx context.Context, tx pgx.Tx, clubID string, row *st
 		clubID, stripe.ProviderName, row.sourceID, row.requestKey,
 	).Scan(&id, &outcome)
 	switch {
-	case err == nil:
-		m.id, m.outcome = &id, outcome
-		if row.sourceID != "" {
-			if _, err := tx.Exec(ctx,
-				`UPDATE payment_refunds SET provider_refund_id = $3, updated_at = now()
-				  WHERE id = $1 AND club_id = $2 AND provider_refund_id IS NULL`, id, clubID, row.sourceID); err != nil {
-				return m, fmt.Errorf("recording the stripe refund id: %w", err)
-			}
+	case errors.Is(err, pgx.ErrNoRows):
+		return m, false, nil
+	case err != nil:
+		return m, false, fmt.Errorf("finding the refund request: %w", err)
+	}
+	m.id, m.outcome = &id, outcome
+	if row.sourceID != "" {
+		if _, err := tx.Exec(ctx,
+			`UPDATE payment_refunds SET provider_refund_id = $3, updated_at = now()
+			  WHERE id = $1 AND club_id = $2 AND provider_refund_id IS NULL`, id, clubID, row.sourceID); err != nil {
+			return m, true, fmt.Errorf("recording the stripe refund id: %w", err)
 		}
-		return m, nil
-	case !errors.Is(err, pgx.ErrNoRows):
-		return m, fmt.Errorf("finding the refund request: %w", err)
-	case charge.attemptID == nil:
-		return m, nil
 	}
-	if err := tx.QueryRow(ctx,
-		`INSERT INTO payment_refunds (club_id, attempt_id, provider, amount, currency, provider_refund_id,
-		                              status, reason, charge_ref, request_key, provider_payment_ref)
-		 VALUES ($1, $2, $3, $4::bigint / 100.0, 'NOK', NULLIF($5, ''), 'succeeded', 'Stripe Dashboard',
-		         NULLIF($6, ''), $7::uuid, NULLIF($8, ''))
-		 RETURNING id::text`,
-		clubID, *charge.attemptID, stripe.ProviderName, -row.amountOre, row.sourceID, row.chargeID,
-		row.requestKey, row.paymentIntentID,
-	).Scan(&id); err != nil {
-		return m, fmt.Errorf("recording the dashboard refund: %w", err)
-	}
-	m.id = &id
-	return m, nil
+	return m, true, nil
 }
 
 // loadRefundTargetsTx reads and locks what a charge settled (before any

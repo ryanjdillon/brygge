@@ -67,6 +67,9 @@ Update the subsystem README in `backend/internal/<pkg>/README.md` if the new rou
 
 ## Common misses
 
+- **A route that calls a provider is stored first.** A route that asks a payment provider to move money (the refund button, `POST /admin/orders/{orderID}/refund`) stores the request in a transaction that holds the row locks, commits, and only then calls the provider with an idempotency key derived from a client-made request key; a retry returns the stored row and never re-sends under a new key (see the refund rule in [`../reference/invariants.md`](../reference/invariants.md)).
+- **A list that shows a button decides it on the server.** Add the flag (`can_refund`, `refund_order_id`) to the list response for the roles that may act, so the SPA never re-derives permission or state; the frontend hides the control with `useCan()` as well.
+
 - **Forgot to gate on role**: route works for any authenticated user. Test with a member-tier session to catch it.
 - **Forgot the audit log**: trail has a hole. The handler tests should assert the audit row exists.
 - **Forgot the i18n keys**: SPA shows `admin.something.title` as raw text instead of the translation.

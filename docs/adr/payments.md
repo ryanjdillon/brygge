@@ -63,4 +63,11 @@ PAY-1 to PAY-9 were taken together on 2026-10-27 (BRY-440) and bound the Stripe 
 - **Status:** accepted · 2026-10-29 · BRY-446
 - **Decision:** where only Stripe can act (answering a dispute with evidence, looking into a payment), Brygge links to the page in the Stripe Dashboard instead of building the screen. A link is `https://dashboard.stripe.com/<path>`, with `/test` after the domain when the configured key is a test key, and never contains the account id.
 - **Why:** the evidence for a dispute lives in Stripe, and an account id in a link would put it in every email and screenshot.
-- **Consequences:** `stripe.DashboardURL` builds the links; the first use is the dispute link in the treasurer's email.
+- **Consequences:** `stripe.DashboardURL` builds the links; the first use is the dispute link in the treasurer's email, the second the link to the payment (`/payments/<pi_…>`) in the refund dialog (BRY-497).
+
+### PAY-12: A refund request is sent again under its own key, and only a Stripe error is a refusal
+
+- **Status:** accepted · 2026-10-29 · BRY-497
+- **Decision:** a stored refund request the provider has no refund for is sent again under the same request key while the key is young (under 23 hours), by the replay of the click and by the sweep; after 24 hours with nothing found it is marked failed. A refund is never sent under a new key. Only a parseable Stripe error object (it has a `type`) answered with a 4xx that does not mean "try again" is a refusal that fails the request; an unparseable body, a 408, a 409, a 429 (rate limit, lock timeout), an idempotency error, a key still in use and every 5xx leave the outcome unknown, and the request stays requested.
+- **Why:** a request that never left (a crash between the commit and the call, a lost commit answer) must not hold its amount for a day, and the provider's idempotency makes a second send under the same key safe. A 4xx from a proxy or edge in front of a request that did arrive must not be read as "Stripe refused": failing the row would let the person refund again under a new key and refund twice.
+- **Consequences:** `RefundService` resends from the replay and the sweep (`refundResendWindow`, 23 hours; give-up 24 hours). `stripe.classifyRefundError` holds the rule. The refund list is read to the end (up to ten pages) or the look-up fails, so "not found" is never a truncated list.

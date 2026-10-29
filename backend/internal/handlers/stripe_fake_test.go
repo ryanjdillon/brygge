@@ -64,11 +64,31 @@ type fakeStripe struct {
 	// intentErrors makes a retrieve answer that HTTP status.
 	intentErrors map[string]int
 	intentGets   []string
+
+	// refunds are the refunds the fake holds, those created through POST
+	// /v1/refunds and those a test injects with addRefund. A create under an
+	// Idempotency-Key already used answers the first refund again, as Stripe
+	// does.
+	refunds     []map[string]any
+	refundPosts []fakeStripeCreate
+	refundByKey map[string]map[string]any
+	// refundStatus is the status a created refund has (succeeded when unset).
+	refundStatus string
+	// refundFail, when set, is the status a create answers with and its
+	// error body; refundLost makes a create succeed but answer 500, as a
+	// connection lost after Stripe acted does.
+	refundFailStatus int
+	refundFailBody   string
+	refundLost       bool
+	// refundListStatus, when set, makes a refund list answer that status.
+	refundListStatus int
+	refundLists      []string
 }
 
 func newFakeStripe(t *testing.T) *fakeStripe {
 	t.Helper()
-	f := &fakeStripe{piStatus: map[string]string{}, intentMeta: map[string]map[string]string{}, intentMissing: map[string]bool{}, intentErrors: map[string]int{}}
+	f := &fakeStripe{piStatus: map[string]string{}, intentMeta: map[string]map[string]string{}, intentMissing: map[string]bool{}, intentErrors: map[string]int{},
+		refundByKey: map[string]map[string]any{}}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /v1/checkout/sessions", f.handleCreate)
 	mux.HandleFunc("GET /v1/checkout/sessions/{id}", f.handleGetSession)
@@ -76,6 +96,8 @@ func newFakeStripe(t *testing.T) *fakeStripe {
 	mux.HandleFunc("GET /v1/payment_intents/{id}", f.handleGetIntent)
 	mux.HandleFunc("POST /v1/payment_intents/{id}/capture", f.handleCapture)
 	mux.HandleFunc("POST /v1/payment_intents/{id}/cancel", f.handleCancel)
+	mux.HandleFunc("POST /v1/refunds", f.handleCreateRefund)
+	mux.HandleFunc("GET /v1/refunds", f.handleListRefunds)
 	f.srv = httptest.NewServer(mux)
 	t.Cleanup(f.srv.Close)
 	return f

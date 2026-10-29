@@ -240,7 +240,7 @@ vipps   card   apple_pay   google_pay
 requested   succeeded   failed
 ```
 
-The Stripe booking pass makes a `succeeded` row for a refund it books that has none yet (a refund made in the Stripe Dashboard before its webhook), with `created_by` NULL and reason "Stripe Dashboard". The refund button and the webhook write the rest (446c).
+`requested` is a refund Stripe has not finished (the button stored it, or Stripe reports `pending` / `requires_action`), `failed` one that did not happen (Stripe refused it, reports `failed` / `canceled`, or the sweep gave up on a request Stripe never made after 24 hours), `succeeded` one Stripe completed. The refund button writes `requested` first and moves it; the Stripe webhook maps Stripe's status onto these and writes a row for a refund made in the Dashboard (`created_by` NULL, reason "Stripe Dashboard", outcome NULL); the Stripe booking pass makes a `succeeded` row for a Dashboard refund it books before the webhook. A finished row never goes back to `requested`.
 
 ### `payment_refunds.outcome` (CHECK since migration 000119)
 
@@ -248,7 +248,7 @@ The Stripe booking pass makes a `succeeded` row for a refund it books that has n
 credit   recollect   (NULL)
 ```
 
-What a full refund of an order with fakturas does: `credit` (and NULL, a Dashboard refund) issues credit notes; `recollect` reopens the fakturas to collect again, allowed only before any partial refund was credited (ACC-8). `request_key` (unique per club) is the key the refund button sends to Stripe in the refund's metadata, which ingest stores as `stripe_balance_transactions.refund_request_key` so the booking pass finds the request.
+What a full refund of an order with fakturas does (the refund endpoint accepts `outcome` only for the refund that completes the payment of a faktura's order, not for a duplicate capture): `credit` (and NULL, a Dashboard refund) issues credit notes; `recollect` reopens the fakturas to collect again, allowed only before any partial refund was credited (ACC-8). `request_key` (unique per club) is the key the refund button sends to Stripe in the refund's metadata, which ingest stores as `stripe_balance_transactions.refund_request_key` so the booking pass finds the request.
 
 ### `refund_documents.kind` (CHECK since migration 000119)
 
@@ -364,6 +364,22 @@ The manual assigns (assign-invoice, assign-invoice-multi, assign-account, assign
 ### Stripe dismissal reasons (`stripe_balance_transactions.dismissed_reason`, no CHECK)
 
 `accounting.IsValidStripeDismissReason`: `booked_manually` (booked another way, e.g. a ledger entry), `test_transaction`, `unidentifiable`, `refund_or_credit`, `duplicate`. The bank-row vocabulary (`internal_transfer`, `bounced`, ...) does not apply to a balance transaction and is refused. The column has no separate note: a note is stored after the code as `<reason>: <note>` (`splitStripeDismissal` reads it back), which is why the dev-query view masks the column.
+
+### Order refund refusal codes (no column)
+
+`POST /admin/orders/{orderID}/refund` (BRY-497) answers 409 with `code`, or 502 when Stripe refuses; `RefundRefusal` in `payments/refunds.go`. The refusal is made before anything is stored.
+
+| Code | Meaning |
+|---|---|
+| `not_supported` | The attempt's provider does not implement `payments.Refunder` (Vipps, until BRY-14) |
+| `not_captured` | The attempt is not `captured` |
+| `disputed` | The attempt has an open dispute (`payments.OpenDisputeForAttempt`) |
+| `amount_exceeds_refundable` | The amount is more than the attempt's amount less its `requested` and `succeeded` refunds (also when nothing is left) |
+| `recollect_after_partial` | `outcome` `recollect` after any refund of the attempt, or when a credit note already exists among the fakturas' refund documents |
+| `request_key_reused` | The request key is stored for another attempt or amount |
+| `refund_failed` | 502, not 409: Stripe refused the refund; `reason` is Stripe's code (e.g. `charge_disputed`) and the row is `failed` |
+
+A 400 is a request that is wrong whatever the state (no reason, a reason over 500 characters, a non-positive or sub-øre amount, a malformed key, an unknown `outcome`, or an `outcome` on a partial refund, a payment that paid no faktura or a duplicate capture); 404 an order or attempt the club does not have. A 202 (`awaiting_confirmation`) is not an error: Stripe's answer is not known yet.
 
 ### Manual Stripe transaction action codes (no column)
 

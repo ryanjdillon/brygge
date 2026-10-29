@@ -34,10 +34,6 @@ func (p *stubPayProvider) CreatePayment(_ context.Context, req payments.Request)
 	}, nil
 }
 
-func (p *stubPayProvider) Refund(context.Context, string, int64, string) (string, error) {
-	return "", payments.ErrNotSupported
-}
-
 func (p *stubPayProvider) createCalls() int {
 	p.mu.Lock()
 	defer p.mu.Unlock()

@@ -335,7 +335,14 @@ func main() {
 	if len(providerList) > 0 {
 		paymentProviders = payments.NewRegistry(providerList...)
 	}
+	refundService := payments.NewRefundService(db, paymentProviders, log)
+	orderRefundHandler := handlers.NewOrderRefundHandler(refundService, &cfg, auditService, log)
 	invoiceHandler := handlers.NewInvoiceHandler(db, &cfg, emailClient, auditService, s3LegalClient, paymentProviders, log)
+	// The refund routes exist only with accounting (a refund is booked by
+	// its pass), so the lists show a refund button only then too.
+	if cfg.Features.Accounting {
+		invoiceHandler.SetRefunds(refundService)
+	}
 	// Invoice reminders reuse the shared delivery queue whenever SMTP is
 	// configured — independent of the inbox/JMAP stack, which may be absent
 	// (e.g. all of local dev). The worker always exists, because the Stripe
@@ -379,6 +386,9 @@ func main() {
 	shoppingListsHandler := handlers.NewShoppingListsHandler(db, &cfg, log)
 	mapHandler := handlers.NewMapHandler(db, &cfg, log)
 	harborHandler := handlers.NewHarborHandler(db, &cfg, log)
+	if cfg.Features.Accounting {
+		harborHandler.SetRefunds(refundService)
+	}
 	clubSettingsHandler := handlers.NewClubSettingsHandler(db, &cfg, log)
 	bankAccountsHandler := handlers.NewBankAccountsHandler(db, log)
 	slipSharesHandler := handlers.NewSlipSharesHandler(db, &cfg, log)
@@ -945,6 +955,14 @@ func main() {
 							Post("/invoices/import/uni24", invoiceHandler.HandleImportUni24Invoices)
 					}
 				})
+
+				if cfg.Features.Accounting {
+					// The refund button (BRY-497). Starting a refund moves
+					// money, so it is treasurer/admin with a fresh step-up
+					// like the ledger's money gate; the order's refund
+					// history is a read for the same roles.
+					orderRefundHandler.Mount(r, middleware.RequireRole("treasurer", "admin"), middleware.RequireFreshTOTPDefault())
+				}
 
 				r.Route("/users", func(r chi.Router) {
 					r.Use(middleware.RequireRoleOrBoardRead("board", "admin"))
@@ -1587,6 +1605,16 @@ func main() {
 						Msg("stripe balance synced")
 					if len(res.Errors) > 0 {
 						log.Warn().Strs("errors", res.Errors).Msg("stripe balance sync: some rows failed")
+					}
+				}
+				// Refunds Stripe never confirmed are looked up once a day too;
+				// the refund list does it for the order being read.
+				if clubID != "" {
+					if res, err := refundService.SweepRequested(ctx, clubID); err != nil {
+						log.Warn().Err(err).Msg("stripe refund sweep failed")
+					} else if res.Checked > 0 {
+						log.Info().Int("checked", res.Checked).Int("settled", res.Settled).
+							Int("failed", res.Failed).Int("errors", res.Errors).Msg("stripe refunds swept")
 					}
 				}
 				select {

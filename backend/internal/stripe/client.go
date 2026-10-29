@@ -79,6 +79,10 @@ var errResponseDecode = errors.New("response did not decode")
 // current status does not allow, such as capturing a captured PaymentIntent.
 const codeUnexpectedState = "payment_intent_unexpected_state"
 
+// typeUnparseable is the Type of an error whose body was not a Stripe error
+// object, so nothing says Stripe itself answered.
+const typeUnparseable = "unknown"
+
 // typeIdempotencyError is the error type of a call whose Idempotency-Key was
 // first used with different parameters; codeIdempotencyKeyInUse is a call
 // whose key is still being processed. Stripe ran neither.
@@ -298,7 +302,7 @@ func decodeAPIError(status int, raw []byte) error {
 		Error APIError `json:"error"`
 	}
 	if err := json.Unmarshal(raw, &env); err != nil || env.Error.Type == "" {
-		return &APIError{Status: status, Type: "unknown", Message: truncate(raw, 200)}
+		return &APIError{Status: status, Type: typeUnparseable, Message: truncate(raw, 200)}
 	}
 	env.Error.Status = status
 	return &env.Error

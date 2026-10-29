@@ -15,11 +15,11 @@ import (
 const captureKeyPrefix = "capture2-"
 
 // dispatch routes an already-persisted event to settlement, a payout event
-// to the Stripe balance mirror, and a dispute event to payment_disputes.
-// Charge refunds are only recorded. The error is a dispute that could not
-// be stored, which makes the event be delivered again; every other outcome
-// is handled and logged.
-func (h *StripeWebhookHandler) dispatch(ctx context.Context, clubID string, evt *stripe.Event, dispute *disputeContext) error {
+// to the Stripe balance mirror, a dispute event to payment_disputes and a
+// refund event to payment_refunds. The error is a dispute or refund that
+// could not be stored, which makes the event be delivered again; every other
+// outcome is handled and logged.
+func (h *StripeWebhookHandler) dispatch(ctx context.Context, clubID string, evt *stripe.Event, dispute *disputeContext, refund *refundContext) error {
 	switch evt.Type {
 	case stripe.EventCheckoutSessionCompleted, stripe.EventCheckoutSessionAsyncPaymentSucceeded:
 		h.onSessionCompleted(ctx, clubID, evt)
@@ -34,6 +34,8 @@ func (h *StripeWebhookHandler) dispatch(ctx context.Context, clubID string, evt 
 	case stripe.EventChargeDisputeCreated, stripe.EventChargeDisputeUpdated, stripe.EventChargeDisputeClosed,
 		stripe.EventChargeDisputeFundsWithdrawn, stripe.EventChargeDisputeFundsReinstated:
 		return h.onDispute(ctx, clubID, evt, dispute)
+	case stripe.EventChargeRefunded, stripe.EventChargeRefundUpdated:
+		return h.onRefund(ctx, clubID, evt, refund)
 	}
 	return nil
 }

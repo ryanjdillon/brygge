@@ -19,10 +19,6 @@ func (stubProvider) CreatePayment(context.Context, payments.Request) (payments.R
 	return payments.Result{}, nil
 }
 
-func (stubProvider) Refund(context.Context, string, int64, string) (string, error) {
-	return "", payments.ErrNotSupported
-}
-
 func TestRegistry(t *testing.T) {
 	first := stubProvider{name: "alpha"}
 	second := stubProvider{name: "beta"}

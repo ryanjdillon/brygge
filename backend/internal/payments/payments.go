@@ -12,10 +12,6 @@ import (
 	"sort"
 )
 
-// ErrNotSupported is returned by a Provider for an operation it does not
-// offer, so callers can tell "not available here" apart from a failed call.
-var ErrNotSupported = errors.New("payments: operation not supported by provider")
-
 // ErrAmountBelowMinimum matches (errors.Is) a *BelowMinimumError: the
 // provider will not charge an amount this small.
 var ErrAmountBelowMinimum = errors.New("payments: amount below the provider's minimum")
@@ -94,14 +90,11 @@ type Result struct {
 	Reference   string
 }
 
-// Provider creates and refunds payments with one payment service.
+// Provider creates payments with one payment service.
 type Provider interface {
 	// Name is the stable identifier callers select the provider by.
 	Name() string
 	CreatePayment(ctx context.Context, req Request) (Result, error)
-	// Refund returns money for a captured payment and the provider's id for
-	// the refund, or ErrNotSupported.
-	Refund(ctx context.Context, reference string, amountOre int64, reason string) (providerRefundID string, err error)
 }
 
 // Canceller is implemented by providers that can void a payment which is
