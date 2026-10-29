@@ -53,6 +53,8 @@ club.ensureLoaded()
 
 const { isEnabled } = useFeatures()
 const currentYear = ref(new Date().getFullYear())
+// The two bank counts never overlap (Tildel lists undismissed rows, a pending
+// refund is a dismissed one), so the sidebar badge can add them.
 const { data: bankUnmatchedCount } = useBankUnmatchedCount(currentYear)
 const { data: pendingRefundCount } = usePendingRefundCount()
 

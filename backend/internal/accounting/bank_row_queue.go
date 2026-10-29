@@ -89,7 +89,7 @@ type BankRowSummary struct {
 // filter. Only "dismissed" includes dismissed rows. q filters
 // substrings against description + counterpart or matches the raw
 // amount. year (0 = no filter) restricts to rows whose row_date falls
-// in that calendar year.
+// in that calendar year. The row set is tildelScope's, shared with the counts.
 //
 // Each returned row carries `likely_duplicate_of_matched` — true when
 // another bank row in the same club has identical (row_date, amount,
@@ -106,18 +106,11 @@ func (s *Service) ListUnmatchedBankRows(
 		offset = 0
 	}
 
-	where := []string{
-		"bir.club_id = $1",
-		"bir.journal_entry_id IS NULL",
-	}
-	args := []any{clubID}
-	next := 2
-
-	filters, err := bankRowKindClauses(kind)
+	where, args, err := tildelScope(clubID, kind, year)
 	if err != nil {
 		return nil, err
 	}
-	where = append(where, filters...)
+	next := len(args) + 1
 
 	if q := strings.TrimSpace(q); q != "" {
 		ph := fmt.Sprintf("$%d", next)
@@ -125,12 +118,6 @@ func (s *Service) ListUnmatchedBankRows(
 			"(bir.description ILIKE "+ph+" OR bir.counterpart ILIKE "+ph+" OR bir.amount::text = "+fmt.Sprintf("$%d", next+1)+")")
 		args = append(args, "%"+q+"%", q)
 		next += 2
-	}
-
-	if year > 0 {
-		where = append(where, fmt.Sprintf("EXTRACT(YEAR FROM bir.row_date)::int = $%d", next))
-		args = append(args, year)
-		next++
 	}
 
 	args = append(args, limit, offset)
@@ -270,36 +257,65 @@ func (s *Service) markProviderPayouts(ctx context.Context, clubID string, rows [
 	return nil
 }
 
-// CountUnmatchedBankRows backs the bubble badge. year=0 counts all years.
-func (s *Service) CountUnmatchedBankRows(ctx context.Context, clubID string, year int) (int, error) {
-	var n int
-	var err error
-	if year > 0 {
-		err = s.db.QueryRow(ctx,
-			`SELECT count(*) FROM bank_import_rows
-			  WHERE club_id = $1 AND journal_entry_id IS NULL
-			    AND EXTRACT(YEAR FROM row_date)::int = $2`,
-			clubID, year,
-		).Scan(&n)
-	} else {
-		err = s.db.QueryRow(ctx,
-			`SELECT count(*) FROM bank_import_rows
-			  WHERE club_id = $1 AND journal_entry_id IS NULL`,
-			clubID,
-		).Scan(&n)
+// tildelScope is the one definition of what the Tildel tab lists: the club's
+// bank rows that are not booked and, unless kind asks for "dismissed", not
+// dismissed, narrowed by the kind filters and, when year > 0, by calendar
+// year. The list and every count (the Tildel badge, the year dropdown, a
+// board task) build their WHERE from it, so they cannot drift apart.
+//
+// It returns clauses over alias bir (FROM bank_import_rows bir) and the
+// arguments they use: $1 is the club, $2 the year when there is one.
+//
+// A refund-paired row needs no clause of its own: pairing links its journal
+// entry, so it is booked. A dismissed refund row waits on the refund tab, and
+// the dismissed clause keeps it out of Tildel. Provider payout deposits stay
+// in scope because the tab lists them (a quiet item that clears itself, or
+// one a person clears by hand), so the badge counts them too.
+func tildelScope(clubID, kind string, year int) (clauses []string, args []any, err error) {
+	filters, err := bankRowKindClauses(kind)
+	if err != nil {
+		return nil, nil, err
 	}
+	clauses = append([]string{"bir.club_id = $1", "bir.journal_entry_id IS NULL"}, filters...)
+	args = []any{clubID}
+	if year > 0 {
+		clauses = append(clauses, "EXTRACT(YEAR FROM bir.row_date)::int = $2")
+		args = append(args, year)
+	}
+	return clauses, args, nil
+}
+
+// CountUnmatchedBankRows is how many rows the Tildel tab lists for the year
+// (0 = all years) with no filter: the sidebar and tab badge, and the number a
+// board task reports. It is ListUnmatchedBankRows's row set for kind "" (see
+// tildelScope), so the two always agree.
+func (s *Service) CountUnmatchedBankRows(ctx context.Context, clubID string, year int) (int, error) {
+	clauses, args, err := tildelScope(clubID, "", year)
+	if err != nil {
+		return 0, err
+	}
+	var n int
+	err = s.db.QueryRow(ctx,
+		`SELECT count(*) FROM bank_import_rows bir WHERE `+strings.Join(clauses, " AND "),
+		args...,
+	).Scan(&n)
 	return n, err
 }
 
-// CountUnmatchedBankRowsByYear returns unmatched row counts per calendar year,
-// used to populate badges on each year option in the Tildel dropdown.
+// CountUnmatchedBankRowsByYear returns the Tildel row count per calendar year
+// (the rows CountUnmatchedBankRows counts, split by year), used to populate
+// badges on each year option in the Tildel dropdown.
 func (s *Service) CountUnmatchedBankRowsByYear(ctx context.Context, clubID string) (map[int]int, error) {
+	clauses, args, err := tildelScope(clubID, "", 0)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := s.db.Query(ctx,
-		`SELECT EXTRACT(YEAR FROM row_date)::int, count(*)
-		   FROM bank_import_rows
-		  WHERE club_id = $1 AND journal_entry_id IS NULL
+		`SELECT EXTRACT(YEAR FROM bir.row_date)::int, count(*)
+		   FROM bank_import_rows bir
+		  WHERE `+strings.Join(clauses, " AND ")+`
 		  GROUP BY 1`,
-		clubID,
+		args...,
 	)
 	if err != nil {
 		return nil, err

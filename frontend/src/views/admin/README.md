@@ -21,6 +21,8 @@ Navigation lives in `navGroups` inside `AdminLayout.vue`. Each group is `{ title
 
 Filter logic at the bottom of the `<script setup>` block removes items whose `roles` the user lacks AND items whose `feature` flag is off. Empty groups disappear from the sidebar.
 
+The bank-imports item's `badge` is the Tildel count plus the pending-refund count, the same two numbers `BankImportsView` puts on its Tildel and Refunds tabs. Adding them is right only because the server keeps the two disjoint (Tildel lists undismissed rows, a pending refund is a dismissed one); see "Tildel has one row set" in [`accounting/README.md`](../../../../backend/internal/accounting/README.md).
+
 ## Who sees what (BRY-372)
 
 Every board role (`chair`, `vice_chair`, `treasurer`, `secretary`, `harbor_master`, `deputy`, `board`) and `admin` may **view** every admin page except Developer and Site. The rules live in [`../../lib/adminAccess.ts`](../../lib/adminAccess.ts) and mirror the server:
