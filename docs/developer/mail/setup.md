@@ -42,6 +42,12 @@ Role mailbox data lives on the server in RocksDB, outlasting any individual boar
     autoconfig CNAME mail.<domain>
     _imaps._tcp      SRV 0 0 993 mail.<domain>.
     _submission._tcp SRV 0 0 587 mail.<domain>.
+
+  Optional, when Stripe sends receipts from the club's domain
+  (see "Stripe custom email domain" below):
+    @          TXT stripe-verification=<value>   (second string beside SPF)
+    <token>._domainkey CNAME <token>.dkim.custom-email-domain.stripe.com.  (six)
+    bounce     CNAME custom-email-domain.stripe.com.
 ```
 
 All config lives in `nix/host.nix` under `services.stalwart` and the Caddy/oci-containers blocks. Per-club values (domain, admin email, ACME contact) come from `terraform/terraform.tfvars.json` via the flake's `clubConfig`.
@@ -475,7 +481,7 @@ open "https://mxtoolbox.com/SuperTool.aspx?action=mx%3a<domain>"
 
 # Individual queries
 dig MX <domain> +short
-dig TXT <domain> +short    # SPF
+dig TXT <domain> +short    # SPF (plus stripe-verification if set)
 dig TXT _dmarc.<domain> +short
 dig TXT mail._domainkey.<domain> +short
 dig -x <server-ip> +short  # rDNS → mail.<domain>.
@@ -490,6 +496,18 @@ dig -x <server-ip> +short  # rDNS → mail.<domain>.
 Use [mail-tester.com](https://mail-tester.com) to get a spam score — aim for 9+/10.
 
 ---
+
+### Stripe custom email domain
+
+Stripe can send its payment and refund receipts from the club's domain instead of stripe.com. The records are optional Terraform variables, empty by default:
+
+1. In Stripe: Settings → Custom email domain → **Connect your domain**.
+2. Copy into `terraform.tfvars.json`:
+   - `stripe_email_verification`: the full `stripe-verification=…` value, without quotes;
+   - `stripe_email_dkim_tokens`: the six DKIM tokens, the part of each name before `._domainkey`. Check one row's value: it should be `<token>.dkim.custom-email-domain.stripe.com`, which is what `terraform/dns.nix` publishes.
+3. `nix run .#tf-apply`, then **Try verifying now** in Stripe. Verification can take up to 72 hours.
+
+Skip the dialog's `_dmarc` row: Stripe's DKIM (`d=<domain>`) and SPF (`MAIL FROM bounce.<domain>`) both align under the existing relaxed DMARC policy. The Stripe selectors don't touch the mail server's `mail._domainkey`.
 
 ## Hetzner-specific gotchas
 

@@ -99,6 +99,26 @@
       description = "DMARC policy: none | quarantine | reject. Start with quarantine; tighten to reject once deliverability is proven.";
     };
 
+    # Stripe custom email domain: Stripe sends receipts from the club's domain.
+    stripe_email_verification = {
+      type        = "string";
+      default     = "";
+      description = "Full `stripe-verification=…` value from Stripe's \"Connect your domain\" dialog, published as an apex TXT record next to SPF. Empty publishes nothing.";
+      validation = {
+        condition     = "\${var.stripe_email_verification == \"\" || can(regex(\"^stripe-verification=[A-Za-z0-9]+$\", var.stripe_email_verification))}";
+        error_message = "stripe_email_verification must be the bare stripe-verification=<value> string, without quotes.";
+      };
+    };
+    stripe_email_dkim_tokens = {
+      type        = "list(string)";
+      default     = [ ];
+      description = "The DKIM selector tokens from Stripe's \"Connect your domain\" dialog (the part before `._domainkey`). Each is published as `<token>._domainkey` CNAME → `<token>.dkim.custom-email-domain.stripe.com.`. Setting either Stripe email variable also publishes the `bounce` CNAME.";
+      validation = {
+        condition     = "\${alltrue([for t in var.stripe_email_dkim_tokens : can(regex(\"^[a-z0-9]+$\", t))])}";
+        error_message = "stripe_email_dkim_tokens must hold only the token, without the ._domainkey suffix.";
+      };
+    };
+
     # Shared role-mapped board mailboxes (DIL-275/276). Reader ACLs are
     # reconciled from `user_roles` by the Brygge backend; this variable
     # only declares the principals and role mapping.

@@ -57,12 +57,38 @@
       ttl     = 300;
       records = [{ value = "10 mail.\${var.domain}."; }];
     };
+    # One rrset holds every apex TXT value, so other apex TXT records
+    # (domain verifications) are appended here rather than added as a
+    # separate resource, which would fight over the same rrset.
     root_spf = {
       zone    = "\${var.domain}";
       name    = "@";
       type    = "TXT";
       ttl     = 300;
-      records = [{ value = "\"v=spf1 mx -all\""; }];
+      records = "\${concat([{ value = \"\\\"v=spf1 mx -all\\\"\" }], var.stripe_email_verification == \"\" ? [] : [{ value = format(\"\\\"%s\\\"\", var.stripe_email_verification) }])}";
+    };
+
+    # Stripe custom email domain. Stripe signs with its own selectors, so
+    # these sit beside the mail server's `mail._domainkey` without
+    # conflict; bounces go to `bounce.<domain>`, which points at Stripe,
+    # so the apex SPF needs no Stripe include. Both DKIM (d=<domain>) and
+    # SPF (MAIL FROM bounce.<domain>) align under relaxed DMARC, so the
+    # existing `_dmarc` record applies unchanged.
+    stripe_email_dkim = {
+      for_each = "\${toset(var.stripe_email_dkim_tokens)}";
+      zone     = "\${var.domain}";
+      name     = "\${each.value}._domainkey";
+      type     = "CNAME";
+      ttl      = 300;
+      records  = [{ value = "\${each.value}.dkim.custom-email-domain.stripe.com."; }];
+    };
+    stripe_email_bounce = {
+      count   = "\${length(var.stripe_email_dkim_tokens) > 0 || var.stripe_email_verification != \"\" ? 1 : 0}";
+      zone    = "\${var.domain}";
+      name    = "bounce";
+      type    = "CNAME";
+      ttl     = 300;
+      records = [{ value = "custom-email-domain.stripe.com."; }];
     };
     mail_dkim = {
       count   = "\${var.dkim_public_value != \"\" ? 1 : 0}";
