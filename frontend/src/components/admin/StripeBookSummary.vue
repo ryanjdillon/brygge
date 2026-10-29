@@ -26,6 +26,7 @@ const errorCount = computed(() => props.result.errors?.length ?? 0)
         charges: props.result.charges_booked,
         fees: props.result.fees_booked,
         refunds: props.result.refunds_booked ?? 0,
+        disputes: props.result.disputes_booked ?? 0,
       }) }}
     </p>
     <p v-if="reviewCount" class="text-yellow-800" data-testid="stripe-book-review">

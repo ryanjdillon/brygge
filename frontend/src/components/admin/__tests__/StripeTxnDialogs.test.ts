@@ -140,12 +140,12 @@ describe('Stripe transaction dialogs', () => {
     expect(dismiss).toHaveBeenCalledWith({ id: 'row-1', reason: 'booked_manually', note: 'Synthetic bilag' })
   })
 
-  it('warns that a refund dismissal bypasses its later booking', () => {
+  it('offers the Stripe dismissal reasons for a dispute, without bank-only ones', () => {
     const w = mountWithPlugins(
       StripeTxnDismissDialog,
-      mountOpts({ open: true, item: item({ reporting_category: 'refund', review_reason: 'refund_pending_bry446', amount: -50 }) }),
+      mountOpts({ open: true, item: item({ reporting_category: 'dispute', review_reason: 'dispute_account_missing', amount: -50 }) }),
     )
-    expect(w.find('[data-testid="stripe-txn-dismiss-refund-warning"]').exists()).toBe(true)
+    expect(w.find('[data-testid="stripe-txn-dismiss-warning"]').exists()).toBe(true)
     const reasons = w.findAll('[data-testid="stripe-txn-dismiss-reason"] option').map((o) => o.attributes('value'))
     expect(reasons).not.toContain('internal_transfer')
   })

@@ -414,6 +414,8 @@ export interface StripeBookResult {
   fees_booked: number
   // Refunds and refund failures booked this pass.
   refunds_booked?: number
+  // Disputes and dispute reversals booked this pass.
+  disputes_booked?: number
   // Rows held for review this pass, by review reason.
   needs_review: Record<string, number>
   // Rows left unbooked for now (closed fiscal period); retried next pass.

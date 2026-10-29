@@ -78,10 +78,14 @@ describe('StripeTransactionCard', () => {
       'assign_account',
       'dismiss',
     ])
-    const refund = mountWithPlugins(StripeTransactionCard, {
-      props: { item: item({ reporting_category: 'refund', review_reason: 'refund_pending_bry446', allowed_actions: ['dismiss'] }) },
+    const noAccount = mountWithPlugins(StripeTransactionCard, {
+      props: { item: item({ reporting_category: 'dispute', review_reason: 'dispute_account_missing', allowed_actions: ['dismiss'] }) },
     })
-    expect(actionIds(refund)).toEqual(['dismiss'])
+    expect(actionIds(noAccount)).toEqual(['dismiss'])
+    const legacyDispute = mountWithPlugins(StripeTransactionCard, {
+      props: { item: item({ reporting_category: 'dispute', review_reason: 'refund_legacy', allowed_actions: ['rebook', 'dismiss'] }) },
+    })
+    expect(actionIds(legacyDispute)).toEqual(['rebook', 'dismiss'])
     const none = mountWithPlugins(StripeTransactionCard, { props: { item: item({ allowed_actions: [] }) } })
     expect(actionIds(none)).toEqual([])
     expect(none.find('[data-testid="stripe-txn-no-actions"]').exists()).toBe(true)

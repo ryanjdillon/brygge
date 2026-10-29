@@ -8,7 +8,7 @@ import nl from '@/locales/nl.json'
 import nn from '@/locales/nn.json'
 import pl from '@/locales/pl.json'
 
-// The review reasons and refusal codes card refund booking (BRY-446) adds to
+// The review reasons and refusal codes card refund and dispute booking (BRY-446) add to
 // the Stripe transaction list exist in every locale. The faktura list's
 // credit states still fall back to English in some locales, so those are
 // pinned only where the section exists.
@@ -20,6 +20,8 @@ const KEYS = [
     'refund_legacy',
     'refund_failure_settled',
     'refund_split',
+    'dispute_account_missing',
+    'dispute_direction',
   ].map((k) => `admin.bankImports.stripeReviewReasons.${k}`),
   ...['refund_booked', 'credit_note_issued', 'faktura_settled_since'].map(
     (k) => `admin.bankImports.stripeTxn.errors.${k}`,
@@ -39,6 +41,10 @@ describe('Stripe refund locale keys', () => {
       const missing = KEYS.filter((k) => typeof lookup(messages, k) !== 'string' || lookup(messages, k) === '')
       expect(missing).toEqual([])
       expect(lookup(messages, 'admin.bankImports.stripeBookCounts')).toContain('{refunds}')
+      expect(lookup(messages, 'admin.bankImports.stripeBookCounts')).toContain('{disputes}')
+      // Disputes are booked now: the held-until-booked reason and the dismiss warning that went with it are gone.
+      expect(lookup(messages, 'admin.bankImports.stripeReviewReasons.refund_pending_bry446')).toBeUndefined()
+      expect(lookup(messages, 'admin.bankImports.stripeTxn.dismissDialog.refundWarning')).toBeUndefined()
       if (lookup(messages, 'admin.faktura.credit.state') !== undefined) {
         expect(STATE_KEYS.filter((k) => typeof lookup(messages, k) !== 'string')).toEqual([])
       }

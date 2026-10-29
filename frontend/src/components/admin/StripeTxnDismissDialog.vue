@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Modal from '@/components/ui/Modal.vue'
 import { formatDate } from '@/lib/format'
@@ -37,10 +37,6 @@ watch(
   },
 )
 
-// Disputes are still held under the reason refunds had before they were
-// booked; their booking comes later.
-const isRefund = computed(() => props.item.review_reason === 'refund_pending_bry446')
-
 function close() {
   emit('update:open', false)
 }
@@ -72,14 +68,6 @@ async function confirm() {
       </p>
       <p class="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900" role="note" data-testid="stripe-txn-dismiss-warning">
         {{ t('admin.bankImports.stripeTxn.dismissDialog.warning', { amount: formatStripeAmount(item.net, item.currency) }) }}
-      </p>
-      <p
-        v-if="isRefund"
-        class="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"
-        role="note"
-        data-testid="stripe-txn-dismiss-refund-warning"
-      >
-        {{ t('admin.bankImports.stripeTxn.dismissDialog.refundWarning') }}
       </p>
 
       <label class="mt-4 block text-sm font-medium text-gray-700" for="stripe-txn-dismiss-reason">
