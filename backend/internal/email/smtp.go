@@ -79,6 +79,12 @@ func (c *SMTPClient) send(ctx context.Context, to, subject, htmlBody, filename s
 	if err != nil {
 		return fmt.Errorf("smtp dial %s: %w", addr, err)
 	}
+	// The dial honours ctx, but every later read and write would not: a relay
+	// that accepts the connection and then stalls would hold the caller
+	// forever. The connection deadline makes the whole exchange obey ctx's.
+	if dl, ok := ctx.Deadline(); ok {
+		_ = conn.SetDeadline(dl)
+	}
 
 	var client *smtp.Client
 	tlsConfig := &tls.Config{ServerName: c.host, MinVersion: tls.VersionTLS12}
@@ -138,7 +144,13 @@ func (c *SMTPClient) send(ctx context.Context, to, subject, htmlBody, filename s
 	if err := w.Close(); err != nil {
 		return fmt.Errorf("smtp close DATA: %w", err)
 	}
-	return client.Quit()
+	// The relay accepted the message when DATA closed cleanly; a QUIT that
+	// fails after that must not report a delivered message as failed, or the
+	// caller retries and the recipient gets it twice.
+	// The package has no logger, and the error carries nothing to act on, so
+	// it is dropped; the deferred Close ends the connection either way.
+	_ = client.Quit()
+	return nil
 }
 
 func (c *SMTPClient) buildMessage(to, subject, htmlBody, filename string, attachment []byte, extraHeaders map[string]string) ([]byte, error) {
