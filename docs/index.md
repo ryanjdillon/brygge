@@ -12,6 +12,17 @@ Docs are split by audience. Load just the section you need rather than all of it
 | [tech-stack.md](tech-stack.md) | What the moving parts are |
 | [../CONTRIBUTING.md](../CONTRIBUTING.md) | Development environment, code style, testing, and PR workflow |
 
+## Decision records ([adr/](adr/))
+
+The owner's decisions about how Brygge behaves, one file per area. Read the area's file before designing in it. Index and format: [adr/README.md](adr/README.md).
+
+| Document | Description |
+|----------|-------------|
+| [adr/accounting.md](adr/accounting.md) | Bookkeeping standard (MVA-compliant), credit notes, refunds and disputes in the ledger, imported history, exemptions |
+| [adr/payments.md](adr/payments.md) | Payment providers, Stripe card payments, refund button, fees, minimum amounts |
+| [adr/board-workflows.md](adr/board-workflows.md) | Board task inbox, responsibility allocation, reminders, bookings, membership, harbour share offers |
+| [adr/platform.md](adr/platform.md) | Cross-cutting product rules: per-club configuration, mobile support |
+
 ## User docs ([user/](user/))
 
 Audience: site admins (in-app club setup, config, data correction), board members, and members. Operating the running app from the frontend — not deploying or coding it.
@@ -35,7 +46,7 @@ Audience: deployers, contributors, and anyone troubleshooting at the OS/protocol
 | [developer/configuration.md](developer/configuration.md) | Environment variables and feature flags |
 | [developer/database.md](developer/database.md) | Postgres ops: connecting, scripts, migrations, backups |
 | [developer/reference/enums.md](developer/reference/enums.md) | Postgres enums, TEXT vocabularies, payment / Vipps category → GL maps |
-| [developer/payments.md](developer/payments.md) | Online payment providers: the `payments` seam, Vipps adapter, marking orders paid, Stripe decisions |
+| [developer/payments.md](developer/payments.md) | Online payment providers: the `payments` seam, Vipps adapter, marking orders paid, Stripe events and data model |
 | [developer/reference/invariants.md](developer/reference/invariants.md) | Append-only list of rules other code must respect |
 | [developer/reference/audit-actions.md](developer/reference/audit-actions.md) | Every `audit.Action*` constant: string, resource, when, `extra` fields |
 | [developer/checklists/](developer/checklists/) | Per-change-type recipes (add route, migration, bulk action, audit action, feature flag) |

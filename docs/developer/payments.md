@@ -172,17 +172,7 @@ The API itself is provider-neutral: error codes `online_payment_unavailable` / `
 
 ## Card payments with Stripe: decisions
 
-Taken by the owner on 2026-10-27. They bound the Stripe work; change them here first if they change.
-
-1. **Hosted Stripe Checkout** (redirect). Card data never touches Brygge, so PCI scope stays SAQ-A and the CSP needs no change.
-2. **Methods in v1:** card, Apple Pay and Google Pay, through `payment_method_types=["card"]` (the wallets ride on card). Not `automatic_payment_methods`, so a Dashboard toggle cannot add Klarna, Link or Stripe's own Vipps method, which are out.
-3. **The payer chooses on the `/betal/{token}` page** — Vipps or "Kort · Apple Pay · Google Pay" — when both are available; with only one there is a single button for it. The choice page is the existing itemised faktura page, not a new step: nothing auto-redirects past it, so the payer always sees what they are paying first.
-4. **Email button** reads "Betal nå" with "Vipps eller kort" beneath it, and links to the choice page.
-5. **One cap for all online payment.** `online_max_amount` (formerly `vipps_max_amount`), and the per-faktura Auto/On/Off override applies to both providers. The club carries the fees (EEA rules restrict surcharging).
-6. **One Stripe account per deployment**, secrets in `/etc/brygge/env`, no Stripe Connect.
-7. **Refunds:** an in-app refund button for Stripe in v1. Refunds made in the Stripe Dashboard are still picked up by webhook and booked. Vipps refunds stay with BRY-14, through the same `Refund` interface.
-8. **Accounting:** card fees go to account 7700, as Vipps fees do. The Stripe balance sits in a new clearing receivable, 1580, until payout.
-9. **Payouts** daily in NOK to the club's main bank account. Stripe's email receipt is on. Checkout collects the guest's name and email for `orders.guest_name`.
+The owner's decisions for card payments (hosted Checkout, methods, provider choice, the online cap, one account per deployment, refunds, fee and clearing accounts, payouts, minimum amounts) are recorded in [`docs/adr/payments.md`](../adr/payments.md); how refunds and disputes are booked is in [`docs/adr/accounting.md`](../adr/accounting.md). Change a decision there first.
 
 ### Sequencing
 

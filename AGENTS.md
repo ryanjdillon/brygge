@@ -155,6 +155,7 @@ All docs are indexed at **[docs/index.md](docs/index.md)**. Each subdirectory ha
 - [docs/developer/README.md](docs/developer/README.md) — setup, deploy, configuration, database, enums, invariants, audit actions, change checklists, mail / otel / security subject subdirs
 - [docs/user/README.md](docs/user/README.md) — in-app guides (faktura today)
 - [docs/developer/checklists/README.md](docs/developer/checklists/README.md) — per-change-type recipes
+- [docs/adr/README.md](docs/adr/README.md) — **decision records** by area (`accounting.md`, `payments.md`, `board-workflows.md`, `platform.md`). Read the area's file before designing in it; record every owner decision there (append-only, `superseded by` instead of rewriting) in the same commit as the spec or code it shapes, and reference the record from the Linear issue
 
 Source-tree subsystems also carry colocated READMEs that cross-link up:
 - `backend/internal/{accounting,handlers,email,middleware,finance}/README.md`
@@ -179,6 +180,7 @@ means specifically:
 
 ### Where to write back what you learn
 
+- A product or accounting decision the owner made → the matching [docs/adr/](docs/adr/README.md) area file
 - A rule other code must obey → [docs/developer/reference/invariants.md](docs/developer/reference/invariants.md)
 - A subsystem-specific footgun → the "Common misses" section of that subsystem's README
 - A change-type-specific trap → the matching checklist's "Common misses"
