@@ -575,6 +575,42 @@ func DisputeBody(n DisputeNotice) string {
 	return b.String()
 }
 
+// ContactMessage is one submission of the public contact form. Name, Email
+// and Subject are already single-line and free of control characters.
+type ContactMessage struct {
+	Name    string
+	Email   string
+	Subject string
+	Message string
+}
+
+// ContactSubject is the Subject header for a contact-form message: a fixed
+// prefix so the club can filter them, then the visitor's subject. It is cut
+// to 60 runes because the Q-encoding is not folded: four-byte runes encode to
+// twelve characters each, and 150 of them overran the 998-character header
+// line limit of RFC 5322. The full subject is in the body.
+func ContactSubject(subject string) string {
+	const maxRunes = 60
+	if r := []rune(subject); len(r) > maxRunes {
+		subject = string(r[:maxRunes]) + "…"
+	}
+	return "[Kontaktskjema] " + subject
+}
+
+// ContactBody is the HTML body of a contact-form message to the club. Every
+// visitor-supplied value is escaped; the message keeps its line breaks.
+func ContactBody(m ContactMessage) string {
+	var b strings.Builder
+	b.WriteString(`<p>Ny melding fra kontaktskjemaet på nettsiden. Svar på denne e-posten for å svare avsenderen.</p><ul>`)
+	fmt.Fprintf(&b, `<li>Navn: %s</li>`, html.EscapeString(m.Name))
+	fmt.Fprintf(&b, `<li>E-post: %s</li>`, html.EscapeString(m.Email))
+	fmt.Fprintf(&b, `<li>Emne: %s</li>`, html.EscapeString(m.Subject))
+	b.WriteString(`</ul><p>`)
+	b.WriteString(strings.ReplaceAll(html.EscapeString(m.Message), "\n", "<br>\n"))
+	b.WriteString(`</p>`)
+	return b.String()
+}
+
 // fallbackPayLine is the pay link in the flat summary sent when a template
 // fails to render; empty without a link.
 func fallbackPayLine(payURL string) string {

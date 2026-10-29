@@ -14,6 +14,8 @@ type MockCall struct {
 	Subject  string
 	HTML     string
 	Filename string
+	// Headers are the extra headers of a SendWithHeaders call.
+	Headers map[string]string
 }
 
 func (m *MockSender) Send(_ context.Context, to, subject, html string) error {
@@ -26,8 +28,8 @@ func (m *MockSender) SendWithAttachment(_ context.Context, to, subject, html, fi
 	return m.Err
 }
 
-func (m *MockSender) SendWithHeaders(_ context.Context, to, subject, html string, _ map[string]string) error {
-	m.Calls = append(m.Calls, MockCall{To: to, Subject: subject, HTML: html})
+func (m *MockSender) SendWithHeaders(_ context.Context, to, subject, html string, headers map[string]string) error {
+	m.Calls = append(m.Calls, MockCall{To: to, Subject: subject, HTML: html, Headers: headers})
 	return m.Err
 }
 
