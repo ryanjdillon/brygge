@@ -26,6 +26,7 @@ import {
   isImportedNoOpeningBalanceError,
   isInvoiceCreditedError,
   isInvoiceNotDebtError,
+  isInvoiceVoidedError,
   payerAliasOffered,
   payerAliasFields,
   sharedPayerAlias,
@@ -569,8 +570,8 @@ async function submitDismiss() {
 
 // Runs an assign and tells the treasurer when the server refused it because
 // the faktura is imported and its receivable isn't in the opening balance yet
-// (BRY-386), because the faktura is credited (a stale list could still offer
-// it, BRY-508), or because the row is a provider's payout deposit (only its
+// (BRY-386), because the faktura is credited or voided (a stale list could
+// still offer it, BRY-508), or because the row is a provider's payout deposit (only its
 // clearing books it; a stale page could still offer the assign): nothing was
 // booked and the row stays here. Resolves false then.
 const toast = useToast()
@@ -583,7 +584,9 @@ async function refusedAsImported(book: () => Promise<boolean>): Promise<boolean>
       ? 'admin.bankReconcile.invoiceCreditedRefused'
       : isInvoiceNotDebtError(e)
         ? 'admin.bankReconcile.invoiceNotDebtRefused'
-        : null
+        : isInvoiceVoidedError(e)
+          ? 'admin.bankReconcile.invoiceVoidedRefused'
+          : null
     if (notAssignable) {
       toast.error(t(notAssignable), 10000)
       // The faktura was offered from a stale list or panel: refresh the

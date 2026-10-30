@@ -1398,6 +1398,7 @@
       "providerPayoutRefused": "Diese Zeile ist eine Auszahlung von {provider} und wird nur durch den Abgleich der Auszahlung gebucht. Die Liste wurde aktualisiert.",
       "invoiceCreditedRefused": "Die Rechnung ist durch Gutschrift storniert, daher kann die Zahlung ihr nicht zugeordnet werden.",
       "invoiceNotDebtRefused": "Die Rechnung ist eine Gutschrift, daher kann die Zahlung ihr nicht zugeordnet werden.",
+      "invoiceVoidedRefused": "Die Rechnung ist storniert, daher kann die Zahlung ihr nicht zugeordnet werden.",
       "stripePayoutPicker": {
         "title": "Mit Stripe-Auszahlung abgleichen",
         "intro": "Einzahlung von {amount} am {date}. Wählen Sie die Auszahlung, aus der sie stammt.",

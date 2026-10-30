@@ -2338,6 +2338,7 @@
       "providerPayoutRefused": "Raden er en utbetaling fra {provider} og bokføres bare ved avstemming av utbetalingen. Listen er oppdatert.",
       "invoiceCreditedRefused": "Fakturaen er kreditert, så betalingen kan ikke knyttes til den.",
       "invoiceNotDebtRefused": "Fakturaen er en kreditnota, så betalingen kan ikke knyttes til den.",
+      "invoiceVoidedRefused": "Fakturaen er annullert, så betalingen kan ikke knyttes til den.",
       "stripePayoutPicker": {
         "title": "Avstem mot Stripe-utbetaling",
         "intro": "Innskudd på {amount} den {date}. Velg utbetalingen det kommer fra.",

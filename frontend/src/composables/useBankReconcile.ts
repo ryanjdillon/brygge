@@ -193,6 +193,11 @@ export function isInvoiceNotDebtError(e: unknown): boolean {
   return e instanceof ApiError && e.status === 409 && e.code === 'invoice_not_debt'
 }
 
+/** True when an assign was aimed at a voided faktura, which no payment can clear. */
+export function isInvoiceVoidedError(e: unknown): boolean {
+  return e instanceof ApiError && e.status === 409 && e.code === 'invoice_voided'
+}
+
 const BASE = '/api/v1/admin/accounting/bank-rows'
 
 export type BankRowDirection = 'incoming' | 'outgoing' | 'dismissed'

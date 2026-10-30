@@ -137,6 +137,7 @@ describe('BankReconcileTab faktura search', () => {
   it.each([
     ['invoice_credited', 'admin.bankReconcile.invoiceCreditedRefused'],
     ['invoice_not_debt', 'admin.bankReconcile.invoiceNotDebtRefused'],
+    ['invoice_voided', 'admin.bankReconcile.invoiceVoidedRefused'],
   ])('refreshes the suggestion panel after a %s refusal', async (code, message) => {
     assignInvoice.mutateAsync.mockRejectedValueOnce(new ApiError(409, 'refused', code))
     const wrapper = mountWithPlugins(BankReconcileTab, { global: { stubs: { teleport: true } } })

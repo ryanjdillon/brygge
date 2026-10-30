@@ -2219,6 +2219,7 @@
       "providerPayoutRefused": "Rada er ei utbetaling frå {provider} og vert berre bokført ved avstemming av utbetalinga. Lista er oppdatert.",
       "invoiceCreditedRefused": "Fakturaen er kreditert, så betalinga kan ikkje knytast til han.",
       "invoiceNotDebtRefused": "Fakturaen er ei kreditnota, så betalinga kan ikkje knytast til han.",
+      "invoiceVoidedRefused": "Fakturaen er annullert, så betalinga kan ikkje knytast til han.",
       "stripePayoutPicker": {
         "title": "Avstem mot Stripe-utbetaling",
         "intro": "Innskot på {amount} den {date}. Vel utbetalinga det kjem frå.",

@@ -2342,6 +2342,7 @@
       "providerPayoutRefused": "This row is a {provider} payout and is booked only by clearing the payout. The list has been refreshed.",
       "invoiceCreditedRefused": "The invoice is credited, so the payment cannot be linked to it.",
       "invoiceNotDebtRefused": "The invoice is a credit note, so the payment cannot be linked to it.",
+      "invoiceVoidedRefused": "The invoice is voided, so the payment cannot be linked to it.",
       "stripePayoutPicker": {
         "title": "Clear against a Stripe payout",
         "intro": "Deposit of {amount} on {date}. Pick the payout it comes from.",

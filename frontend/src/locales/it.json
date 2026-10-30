@@ -1398,6 +1398,7 @@
       "providerPayoutRefused": "Questa riga è un versamento di {provider} e viene registrata solo riconciliando il versamento. L'elenco è stato aggiornato.",
       "invoiceCreditedRefused": "La fattura è stornata con nota di credito, quindi il pagamento non può esserle associato.",
       "invoiceNotDebtRefused": "La fattura è una nota di credito, quindi il pagamento non può esserle associato.",
+      "invoiceVoidedRefused": "La fattura è annullata, quindi il pagamento non può esserle associato.",
       "stripePayoutPicker": {
         "title": "Riconcilia con un versamento Stripe",
         "intro": "Deposito di {amount} del {date}. Scegli il versamento da cui proviene.",

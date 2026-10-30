@@ -1397,6 +1397,7 @@
       "providerPayoutRefused": "Cette ligne est un virement de {provider} et n'est comptabilisée que par le rapprochement du virement. La liste a été actualisée.",
       "invoiceCreditedRefused": "La facture est créditée, le paiement ne peut donc pas lui être associé.",
       "invoiceNotDebtRefused": "La facture est une note de crédit, le paiement ne peut donc pas lui être associé.",
+      "invoiceVoidedRefused": "La facture est annulée, le paiement ne peut donc pas lui être associé.",
       "stripePayoutPicker": {
         "title": "Rapprocher d'un virement Stripe",
         "intro": "Dépôt de {amount} le {date}. Choisissez le virement dont il provient.",

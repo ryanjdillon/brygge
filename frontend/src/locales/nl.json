@@ -1398,6 +1398,7 @@
       "providerPayoutRefused": "Deze regel is een uitbetaling van {provider} en wordt alleen geboekt door de uitbetaling af te stemmen. De lijst is ververst.",
       "invoiceCreditedRefused": "De factuur is gecrediteerd, dus de betaling kan er niet aan worden gekoppeld.",
       "invoiceNotDebtRefused": "De factuur is een creditnota, dus de betaling kan er niet aan worden gekoppeld.",
+      "invoiceVoidedRefused": "De factuur is geannuleerd, dus de betaling kan er niet aan worden gekoppeld.",
       "stripePayoutPicker": {
         "title": "Afstemmen met Stripe-uitbetaling",
         "intro": "Storting van {amount} op {date}. Kies de uitbetaling waar die van komt.",
