@@ -558,6 +558,7 @@ func registerMemberOps(api huma.API) {
 		Path:        "/api/v1/members/directory",
 		Tags:        []string{"Members"},
 		Summary:     "List member directory",
+		Description: "Members who set hide_in_directory are left out, except members who hold a board role: they are always listed with name and email, and their phone follows the setting.",
 		Security:    BearerSecurity,
 	}, stub[struct{}, struct {
 		Body PaginatedResponse[DirectoryMember]

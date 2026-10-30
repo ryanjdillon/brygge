@@ -196,7 +196,9 @@ func (h *HarborHandler) HandleGetLayout(w http.ResponseWriter, r *http.Request) 
 		}
 
 		// Member mode honors hide_in_directory; admin mode always sees the
-		// occupant since admins need it for harbour operations.
+		// occupant since admins need it for harbour operations. A board member
+		// who hides is hidden here too: the BRD-12 exception keeps the board
+		// reachable in the directory, it does not say who sits in a slip.
 		hidden := hideInDirectory != nil && *hideInDirectory
 		if mode == "member" && !hidden && lastName != nil && *lastName != "" {
 			props["occupant_last_name"] = *lastName

@@ -415,6 +415,12 @@ Price items carry no account. The category map (`revenueAccountMap`, read throug
 
 **Failure mode:** `delete_user` stored `old_email` and `old_full_name`, and `user.deactivated` stored both too, so a member erased for GDPR stayed named in the log indefinitely.
 
+### The member directory always lists the board, and never the erased
+
+**Rule (BRD-12, BRY-545):** `HandleGetDirectory` (`directoryQuery`) lists every active member who holds a role in `roles.Board` with name and email, whatever their `hide_in_directory`; only the phone follows it. Other members who set it are left out. `admin` is not a board role. Deactivated rows and rows whose email ends in `accounting.ErasedEmailSuffix` are never listed. The response carries no field saying a member hid themselves. A new member-facing list of members' contact details decides explicitly whether the board exception applies and reuses `roles.Board`; it never keeps a second board list. The harbour map occupant deliberately keeps honouring the flag for board members too.
+
+**Failure mode:** a board member who ticked "hide me" vanished from the directory, so members had nobody to contact; the opposite slip, a second hand-written role list, drops a role such as vice chair or deputy from the directory or lists a former board member's contact details.
+
 ### Board viewing never widens a write
 
 **Rule (BRY-372):** every board role and admin (`roles.CanViewAdmin`) may read every admin page except Developer and Site. Reads open through `middleware.RequireRoleOrBoardRead(<write roles>)`, which admits viewers only on `GET`/`HEAD` and applies `RequireRole(<write roles>)` to every other method, so a surface's write roles are the ones it had before. A handler mounted on `GET` behind it must not write, mint a credential or send anything; such a `GET` keeps its own `RequireRole` (the pay-link endpoints do). In the SPA, write controls on viewable pages hide behind `useCan()`.

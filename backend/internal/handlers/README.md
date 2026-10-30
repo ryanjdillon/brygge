@@ -128,6 +128,10 @@ WHERE i.id = $1 AND i.club_id = $2
 
 Even if `claims.ClubID` is the only club the user can access (typical for single-tenant deploys), the scope clause is non-negotiable. It's defense in depth against the day we support multi-club admin.
 
+## Lists of members seen by other members
+
+A handler that shows a member's contact details to other members honours `users.hide_in_directory`, with one exception: members who hold a board role (`roles.Board`) keep their name and email in the directory (BRD-12), and only their phone follows the setting. Reuse `roles.Board`; do not write a second list. Keep deactivated members and `accounting.ErasedEmailSuffix` addresses out. The harbour map occupant is not part of the exception. The response must not carry the hide flag. `directoryQuery` in `members.go` is the model.
+
 ## Payment providers
 
 Online payment goes through the provider-neutral interfaces in [`internal/payments`](../payments/payments.go); the full design and the card-payment decisions are in [`docs/developer/payments.md`](../../../docs/developer/payments.md).

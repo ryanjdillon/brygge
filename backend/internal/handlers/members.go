@@ -13,9 +13,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 
+	"github.com/brygge-klubb/brygge/internal/accounting"
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/finance"
 	"github.com/brygge-klubb/brygge/internal/middleware"
+	"github.com/brygge-klubb/brygge/internal/roles"
 	"github.com/brygge-klubb/brygge/internal/shared"
 )
 
@@ -589,6 +591,29 @@ func (h *MembersHandler) HandleReportIssue(w http.ResponseWriter, r *http.Reques
 	})
 }
 
+// directoryQuery lists the members other members may see. $4 is the board role
+// set and $5 the erased-email suffix.
+//
+// A member who set hide_in_directory is left out unless they hold a board role
+// (BRD-12): members must be able to reach the board, so a board member keeps
+// their name and email in the list and only the phone follows the setting.
+// Chair, vice chair, secretary and deputy are listed on the strength of their
+// board role even without the plain member role. admin is not a board role and
+// stays hidden when it asks to be. Deactivated and erased rows never appear.
+const directoryQuery = `SELECT u.first_name, u.last_name, u.full_name,
+	        CASE WHEN u.hide_in_directory THEN '' ELSE u.phone END,
+	        u.email
+	 FROM users u
+	 JOIN user_roles ur ON ur.user_id = u.id AND ur.club_id = u.club_id
+	 WHERE u.club_id = $1
+	 AND u.deactivated_at IS NULL
+	 AND u.email NOT LIKE '%' || $5
+	 AND (ur.role::text IN ('member', 'slip_holder', 'admin') OR ur.role::text = ANY($4::text[]))
+	 GROUP BY u.id, u.first_name, u.last_name, u.full_name, u.phone, u.email, u.hide_in_directory
+	 HAVING NOT u.hide_in_directory OR bool_or(ur.role::text = ANY($4::text[]))
+	 ORDER BY u.last_name, u.first_name, u.id
+	 LIMIT $2 OFFSET $3`
+
 func (h *MembersHandler) HandleGetDirectory(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
@@ -599,18 +624,8 @@ func (h *MembersHandler) HandleGetDirectory(w http.ResponseWriter, r *http.Reque
 
 	pg := shared.ParsePagination(r, 100, 500)
 
-	rows, err := h.db.Query(ctx,
-		`SELECT u.first_name, u.last_name, u.full_name, u.phone, u.email
-		 FROM users u
-		 JOIN user_roles ur ON ur.user_id = u.id AND ur.club_id = u.club_id
-		 WHERE u.club_id = $1
-		 AND u.hide_in_directory = FALSE
-		 AND u.deactivated_at IS NULL
-		 AND ur.role IN ('member', 'slip_holder', 'board', 'harbor_master', 'treasurer', 'admin')
-		 GROUP BY u.id, u.first_name, u.last_name, u.full_name, u.phone, u.email
-		 ORDER BY u.last_name, u.first_name
-		 LIMIT $2 OFFSET $3`,
-		claims.ClubID, pg.Limit, pg.Offset,
+	rows, err := h.db.Query(ctx, directoryQuery,
+		claims.ClubID, pg.Limit, pg.Offset, roles.Board, accounting.ErasedEmailSuffix,
 	)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to list directory")

@@ -1936,7 +1936,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List member directory */
+        /**
+         * List member directory
+         * @description Members who set hide_in_directory are left out, except members who hold a board role: they are always listed with name and email, and their phone follows the setting.
+         */
         get: operations["get-member-directory"];
         put?: never;
         post?: never;
@@ -4349,7 +4352,7 @@ export interface components {
             email: string;
             /** @description Full name */
             full_name: string;
-            /** @description Hide email/phone from member directory and harbor map */
+            /** @description Hide me from the member directory and harbor map. A member who holds a board role is still listed in the directory with name and email; only the phone follows this setting. */
             hide_in_directory: boolean;
             /** @description Member UUID */
             id: string;

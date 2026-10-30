@@ -263,7 +263,7 @@ type MemberProfile struct {
 	PostalCode      string    `json:"postal_code" doc:"Postal code"`
 	City            string    `json:"city" doc:"City"`
 	IsLocal         bool      `json:"is_local" doc:"Whether member is a local resident"`
-	HideInDirectory bool      `json:"hide_in_directory" doc:"Hide email/phone from member directory and harbor map"`
+	HideInDirectory bool      `json:"hide_in_directory" doc:"Hide me from the member directory and harbor map. A member who holds a board role is still listed in the directory with name and email; only the phone follows this setting."`
 	CreatedAt       time.Time `json:"created_at" doc:"Creation timestamp"`
 	UpdatedAt       time.Time `json:"updated_at" doc:"Last update timestamp"`
 }
