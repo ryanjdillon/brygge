@@ -10,6 +10,7 @@ Read the area's file before proposing a design in that area, and don't re-open a
 | Payments | [payments.md](payments.md) | Online payment providers, Stripe card payments, refund button, provider fees |
 | Board workflows | [board-workflows.md](board-workflows.md) | Board task inbox, responsibility allocation, automation of manual steps, notifications |
 | Platform | [platform.md](platform.md) | Cross-cutting product rules: multi-club configuration, mobile support |
+| Mail | [mail.md](mail.md) | DMARC policy, third-party senders on the club domain, mail alert sensitivity |
 
 ## Format
 

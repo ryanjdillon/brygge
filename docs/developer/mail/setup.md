@@ -497,6 +497,14 @@ Use [mail-tester.com](https://mail-tester.com) to get a spam score — aim for 9
 
 ---
 
+### DMARC policy
+
+Every club publishes one `_dmarc` record, built by `terraform/dns.nix` from the `dmarc_policy` tfvars value: `v=DMARC1; p=<policy>; rua=mailto:postmaster@<domain>; fo=1`. The default and the recommended value is `quarantine`; the reasoning and the rule for when to tighten to `reject` are in [adr/mail.md](../../adr/mail.md) (MAIL-1).
+
+- **One record only.** A domain can't carry two `_dmarc` records. When a service asks for "your DMARC policy" (Stripe's custom email domain dialog does), the existing record is the answer; don't add one.
+- **Changing the policy:** set `dmarc_policy` in `terraform.tfvars.json` to `none`, `quarantine` or `reject`, run `nix run .#tf-apply`, and check `dig TXT _dmarc.<domain> +short`.
+- **Aggregate reports** go to `postmaster@<domain>`, which Stalwart parses (the `DmarcDkimFailing` alert reads them). A report covers a past day, so after a fix the alert can stay up until the next clean report: compare the report's date range with the fix. See the [alert runbook](../otel/alerts-runbook.md#dmarcdkimfailing).
+
 ### Stripe custom email domain
 
 Stripe can send its payment and refund receipts from the club's domain instead of stripe.com. The records are optional Terraform variables, empty by default:

@@ -22,6 +22,7 @@ The owner's decisions about how Brygge behaves, one file per area. Read the area
 | [adr/payments.md](adr/payments.md) | Payment providers, Stripe card payments, refund button, fees, minimum amounts |
 | [adr/board-workflows.md](adr/board-workflows.md) | Board task inbox, responsibility allocation, reminders, bookings, membership, harbour share offers |
 | [adr/platform.md](adr/platform.md) | Cross-cutting product rules: per-club configuration, mobile support |
+| [adr/mail.md](adr/mail.md) | DMARC policy, third-party senders on the club domain, mail alert sensitivity |
 
 ## User docs ([user/](user/))
 
