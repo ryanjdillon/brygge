@@ -57,6 +57,19 @@ type fakeStripe struct {
 	// with Stripe's idempotency_error, as a key first used with other
 	// parameters does.
 	refuseKey string
+	// dedupCaptures makes captures behave like Stripe's: the first capture of
+	// a PaymentIntent takes it and is remembered under its Idempotency-Key, a
+	// repeat under that key replays the first answer without capturing, a
+	// capture under another key (or once forgetCaptureKeys has run, as after
+	// the key's 24 hours) is refused with payment_intent_unexpected_state, and
+	// a retrieve of a captured PaymentIntent reports it succeeded.
+	dedupCaptures bool
+	capturedPIs   map[string]bool
+	captureByKey  map[string]string // Idempotency-Key -> first answer's body
+	// captureGate, when set, holds a dedupCaptures capture after Stripe has
+	// taken the money and before it answers, so a test can deliver an event
+	// while the capture's caller is still waiting.
+	captureGate *captureGate
 	// intentMeta is the metadata a retrieve answers with, by PaymentIntent
 	// id; intentMissing lists ids a retrieve answers 404 for.
 	intentMeta    map[string]map[string]string
@@ -88,7 +101,7 @@ type fakeStripe struct {
 func newFakeStripe(t *testing.T) *fakeStripe {
 	t.Helper()
 	f := &fakeStripe{piStatus: map[string]string{}, intentMeta: map[string]map[string]string{}, intentMissing: map[string]bool{}, intentErrors: map[string]int{},
-		refundByKey: map[string]map[string]any{}}
+		refundByKey: map[string]map[string]any{}, capturedPIs: map[string]bool{}, captureByKey: map[string]string{}}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /v1/checkout/sessions", f.handleCreate)
 	mux.HandleFunc("GET /v1/checkout/sessions/{id}", f.handleGetSession)
@@ -147,6 +160,9 @@ func (f *fakeStripe) handleGetSession(w http.ResponseWriter, r *http.Request) {
 func (f *fakeStripe) handleGetIntent(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	status := f.intentAfterCapture
+	if f.dedupCaptures && f.capturedPIs[r.PathValue("id")] {
+		status = stripe.PaymentIntentSucceeded
+	}
 	f.intentGets = append(f.intentGets, r.PathValue("id"))
 	meta, missing := f.intentMeta[r.PathValue("id")], f.intentMissing[r.PathValue("id")]
 	failWith := f.intentErrors[r.PathValue("id")]
@@ -204,9 +220,65 @@ func (f *fakeStripe) handleCapture(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(body))
 		return
 	}
+	if f.dedupCaptures {
+		f.captureDeduped(w, r, charge)
+		return
+	}
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"id": r.PathValue("id"), "status": "succeeded", "latest_charge": charge,
 	})
+}
+
+// captureGate pauses a capture between taking the money and answering:
+// arrived is signalled when the capture is held, release lets it answer.
+type captureGate struct {
+	arrived chan struct{}
+	release chan struct{}
+}
+
+func newCaptureGate() *captureGate {
+	return &captureGate{arrived: make(chan struct{}, 8), release: make(chan struct{})}
+}
+
+func (f *fakeStripe) captureDeduped(w http.ResponseWriter, r *http.Request, charge map[string]any) {
+	id, key := r.PathValue("id"), r.Header.Get("Idempotency-Key")
+	f.mu.Lock()
+	if first, ok := f.captureByKey[key]; ok && key != "" {
+		f.mu.Unlock()
+		_, _ = w.Write([]byte(first))
+		return
+	}
+	if f.capturedPIs[id] {
+		f.mu.Unlock()
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":{"type":"invalid_request_error","code":"payment_intent_unexpected_state","message":"This PaymentIntent could not be captured because it has already been captured."}}`))
+		return
+	}
+	f.capturedPIs[id] = true
+	answer, err := json.Marshal(map[string]any{"id": id, "status": "succeeded", "latest_charge": charge})
+	if err != nil {
+		f.mu.Unlock()
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if key != "" {
+		f.captureByKey[key] = string(answer)
+	}
+	gate := f.captureGate
+	f.mu.Unlock()
+	if gate != nil {
+		gate.arrived <- struct{}{}
+		<-gate.release
+	}
+	_, _ = w.Write(answer)
+}
+
+// forgetCaptureKeys makes Stripe forget the Idempotency-Keys it has seen, as
+// it does after 24 hours; the PaymentIntents stay captured.
+func (f *fakeStripe) forgetCaptureKeys() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.captureByKey = map[string]string{}
 }
 
 func (f *fakeStripe) handleCancel(w http.ResponseWriter, r *http.Request) {

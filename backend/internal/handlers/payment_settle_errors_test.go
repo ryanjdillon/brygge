@@ -21,7 +21,8 @@ import (
 
 // injectFault makes every UPDATE of table that matches the trigger condition
 // fail with a database error, the way a lock timeout or a dropped connection
-// fails one statement, and returns the function that heals it. A trigger
+// fails one statement, and returns the function that heals it (also run when
+// the test ends; healing twice is harmless). A trigger
 // rather than a closed pool: the lookups before the statement keep working, so
 // the fault lands on exactly the write under test, and a settlement
 // transaction that hits it rolls back as a real failure would.
@@ -41,12 +42,16 @@ func injectFault(t *testing.T, pool *pgxpool.Pool, table, when string) (heal fun
 	)); err != nil {
 		t.Fatalf("create fault trigger: %v", err)
 	}
-	return func() {
+	heal = func() {
 		t.Helper()
 		if _, err := pool.Exec(ctx, fmt.Sprintf(`DROP TRIGGER IF EXISTS %s ON %s`, name, table)); err != nil {
 			t.Fatalf("drop fault trigger: %v", err)
 		}
 	}
+	// A test that fails before it heals must not leave the fault behind for
+	// the cleanups and subtests that run after it.
+	t.Cleanup(heal)
+	return heal
 }
 
 // settleFaults are the writes a capture's settlement makes, each as a fault on
