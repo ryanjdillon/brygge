@@ -38,6 +38,10 @@ type Invoice struct {
     KID           string
     BankAccount   string
 
+    // A credit note asks for nothing: see "Credit notes" below.
+    CreditNote bool
+    CardRefund bool  // CreditNote only: the amount went back to the card
+
     Lines []InvoiceLine
 }
 
@@ -68,8 +72,23 @@ The handler builds an `Invoice` literal from:
 3. Buyer — `users.full_name` + `users.address_line + postal_code + city` for private; `invoices.recipient_*` columns for organization
 4. Invoice metadata — `invoices.invoice_number`, `invoices.issue_date`, `invoices.due_date`, `invoices.kid_number`
 5. Lines — `invoice_lines.description`, `sub_description`, `quantity`, `unit_price`
+6. Document kind — `CreditNote` from `invoices.total_amount < 0`, `CardRefund` from a `refund_documents` row of kind `credit` pointing at it (`refundCreditNoteSQL`)
 
 See `handlers/invoices_bulk_actions.go:regenerateOnePDF` for the canonical "rebuild Invoice from DB row" pattern.
+
+## Credit notes
+
+A credit note is an invoice with a negative total, and it shares the faktura number series (`NextInvoiceNumberTx`), so `InvoiceNumber` is its number. `GeneratePDF` renders it from `Invoice.CreditNote`:
+
+- heading **Kreditnota**; the info box has **Kreditnotanummer**, **Kreditnotadato**, "Deres ref." when set, and **Kreditbeløp** (the absolute amount); the lines table and "Totalt" keep their negative amounts;
+- no Kontonummer, KID, Forfallsdato or "Beløp å betale", and the closing line is "Ingen betaling kreves." instead of "Vennligst betal …";
+- with `CardRefund`, one more line says the amount is refunded to the card the payer used. Only a credit note a card refund issued (`refund_documents.kind = 'credit'`) sets it; a credit note made by hand says nothing about how the money moves.
+
+`CreditNote` is the explicit signal, and callers set it: `HandleCreateInvoice` from the total it computes for the new faktura (`isCreditTotal`), and `loadStoredInvoicePDF` (regenerate, reissue KID, and the refund delivery's `ensureInvoicePDF`) from the stored `total_amount`. Bulk creation only makes fakturas. As a fail-safe, `GeneratePDF` also renders any negative line total as a credit note, so a caller that omits the flag never prints "Vennligst betal kr -X"; `CardRefund` is never inferred and stays with the caller.
+
+The faktura that nets to zero (every line exempted) is unchanged: still a Faktura, with "Beløp å betale: kr 0.00" and no payment details. The debit faktura a failed refund issues is a Faktura too.
+
+The email that carries a credit note is `email.CreditNoteSubject` / `CreditNoteBody` (no KID, account, due date or pay link), chosen by `InvoiceHandler.invoiceMessage` for the send, resend and create-and-send paths, and by `RefundDocumentSender` for a refund's credit note.
 
 ## KID generation
 
@@ -101,5 +120,6 @@ These helpers are unexported (`finance/invoice.go`). When generating user-facing
 ## Common changes
 
 - **New layout element on the PDF** (e.g. QR code, payment-link block) → edit `GeneratePDF` body. Test against the rendered output, not byte equality, since fpdf timestamps embedded objects
+- **New payment detail on the PDF or an invoice email** → hide it for a credit note too (`Invoice.CreditNote`, `email.CreditNoteBody`); a credit note must never prompt a payment
 - **New invoice field** (e.g. payment terms text) → add to the `Invoice` struct, the DB column, the `regenerateOnePDF` reload path, and any `HandleCreateInvoice`-style construction sites. Don't forget the archive path test (it'd silently drop the new field otherwise).
 - **New KID format** → edit `GenerateKID` and `extractKID` together; the parser must accept what the generator emits

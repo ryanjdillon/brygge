@@ -12,10 +12,10 @@ import (
 // Invoice holds all data needed to generate a Norwegian faktura PDF.
 type Invoice struct {
 	// Seller
-	ClubName    string
-	OrgNumber   string
-	ClubAddress string
-	Website     string
+	ClubName       string
+	OrgNumber      string
+	ClubAddress    string
+	Website        string
 	TreasurerEmail string
 	// LogoData is raw PNG or JPEG bytes; LogoMIME is "image/png" or
 	// "image/jpeg". Both empty = no logo.
@@ -42,6 +42,17 @@ type Invoice struct {
 	DueDate       time.Time
 	KID           string
 	BankAccount   string
+
+	// CreditNote renders the document as a Kreditnota: it asks nothing of the
+	// recipient, so there is no account number, KID, due date or "amount to
+	// pay", and its amount is shown as the credited amount. A credit note
+	// shares the faktura number series, so InvoiceNumber is its number.
+	// Callers set it for a document with a negative total; GeneratePDF also
+	// treats any negative total as a credit note.
+	CreditNote bool
+	// CardRefund, for a CreditNote, says the amount is refunded to the card
+	// the payer paid with. Set only for a credit note a card refund issued.
+	CardRefund bool
 
 	// Line items
 	Lines []InvoiceLine
@@ -166,18 +177,26 @@ func GeneratePDF(inv Invoice) ([]byte, error) { //nolint:gocognit,cyclop // line
 		pdf.SetY(buyerY + 22)
 	}
 
-	// "Faktura" title above the info box
-	pdf.SetX(leftMargin)
-	pdf.SetFont("Helvetica", "B", 18)
-	pdf.Cell(0, 9, tr("Faktura"))
-	pdf.Ln(11)
-
-	// Invoice info box: yellow fill + border, hugs only the info rows
-	// with an even inset on all sides matching the inside left margin.
 	var total float64
 	for _, line := range inv.Lines {
 		total += float64(line.Quantity) * line.UnitPrice
 	}
+	// A negative total is a credit note whether or not the caller said so, so
+	// a caller that forgets the flag can never print "Vennligst betal kr -X".
+	creditNote := inv.CreditNote || roundOre(total) < 0
+
+	// "Faktura" (or "Kreditnota") title above the info box
+	pdf.SetX(leftMargin)
+	pdf.SetFont("Helvetica", "B", 18)
+	if creditNote {
+		pdf.Cell(0, 9, tr("Kreditnota"))
+	} else {
+		pdf.Cell(0, 9, tr("Faktura"))
+	}
+	pdf.Ln(11)
+
+	// Invoice info box: yellow fill + border, hugs only the info rows
+	// with an even inset on all sides matching the inside left margin.
 	const infoPad = 3.0
 	const infoRowH = 6.0
 	const infoLabelW = 38.0
@@ -185,9 +204,13 @@ func GeneratePDF(inv Invoice) ([]byte, error) { //nolint:gocognit,cyclop // line
 		k, v string
 		bold bool
 	}
+	numberLabel, dateLabel := "Fakturanummer:", "Fakturadato:"
+	if creditNote {
+		numberLabel, dateLabel = "Kreditnotanummer:", "Kreditnotadato:"
+	}
 	rs := []row{
-		{tr("Fakturanummer:"), fmt.Sprintf("%d", inv.InvoiceNumber), false},
-		{tr("Fakturadato:"), inv.IssueDate.Format("02.01.2006"), false},
+		{tr(numberLabel), fmt.Sprintf("%d", inv.InvoiceNumber), false},
+		{tr(dateLabel), inv.IssueDate.Format("02.01.2006"), false},
 	}
 	// "Deres ref." sits between the dates and the payment block when
 	// the recipient supplied one — that's where Norwegian B2B
@@ -195,11 +218,15 @@ func GeneratePDF(inv Invoice) ([]byte, error) { //nolint:gocognit,cyclop // line
 	if inv.OrgRecipient != nil && inv.OrgRecipient.TheirRef != "" {
 		rs = append(rs, row{tr("Deres ref.:"), tr(inv.OrgRecipient.TheirRef), false})
 	}
-	// A faktura that nets to zero (every line exempted) asks for nothing, so
-	// it carries no payment details a member could act on by mistake.
-	if roundOre(total) == 0 {
+	// A credit note, and a faktura that nets to zero (every line exempted),
+	// ask for nothing, so they carry no payment details a member could act on
+	// by mistake.
+	switch {
+	case creditNote:
+		rs = append(rs, row{tr("Kreditbeløp:"), tr(formatNOK(math.Abs(total))), true})
+	case roundOre(total) == 0:
 		rs = append(rs, row{tr("Beløp å betale:"), tr(formatNOK(0)), true})
-	} else {
+	default:
 		rs = append(rs,
 			row{tr("Kontonummer:"), tr(inv.BankAccount), true},
 			row{"KID:", inv.KID, true},
@@ -303,9 +330,15 @@ func GeneratePDF(inv Invoice) ([]byte, error) { //nolint:gocognit,cyclop // line
 
 	// Payment instruction
 	pdf.SetFont("Helvetica", "", 9)
-	if roundOre(total) == 0 {
+	switch {
+	case creditNote:
+		pdf.MultiCell(0, 5, tr("Ingen betaling kreves."), "", "L", false)
+		if inv.CardRefund {
+			pdf.MultiCell(0, 5, tr("Beløpet refunderes til kortet som ble brukt ved betalingen."), "", "L", false)
+		}
+	case roundOre(total) == 0:
 		pdf.MultiCell(0, 5, tr("Ingen betaling – fakturaen er fullt fritatt. Den er kun til orientering."), "", "L", false)
-	} else {
+	default:
 		pdf.MultiCell(0, 5, tr(fmt.Sprintf(
 			"Vennligst betal %s til kontonummer %s med KID %s innen %s.",
 			formatNOK(total), inv.BankAccount, inv.KID, inv.DueDate.Format("02.01.2006"))), "", "L", false)
