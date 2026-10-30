@@ -13,6 +13,9 @@ import (
 )
 
 var (
+	// ErrNegativeMVA: a line's mva_amount is an amount on the line's own side,
+	// never negative; momskompensasjon signs it by the side.
+	ErrNegativeMVA     = errors.New("mva_amount cannot be negative")
 	ErrUnbalancedEntry = errors.New("journal entry is not balanced: total debits must equal total credits")
 	ErrPeriodClosed    = errors.New("cannot post to a closed or locked period")
 	ErrEntryNotDraft   = errors.New("only draft entries can be modified")
@@ -148,14 +151,20 @@ func (s *Service) CreateJournalEntry(ctx context.Context, input CreateJournalEnt
 // transaction, for a booking that already holds a row lock and must not
 // wait on a second pool connection while it does.
 func createJournalEntryTx(ctx context.Context, tx pgx.Tx, input CreateJournalEntryInput) (*JournalEntry, error) {
+	for _, l := range input.Lines {
+		if l.MVAAmount < 0 {
+			return nil, ErrNegativeMVA
+		}
+	}
 	// Verify period is open. FOR SHARE holds the period open until this
 	// entry commits, so ClosePeriod (FOR UPDATE) waits for it and then sees
 	// the new draft instead of closing around it.
 	var periodStatus string
+	var periodReference bool
 	err := tx.QueryRow(ctx,
-		`SELECT status FROM fiscal_periods WHERE id = $1 AND club_id = $2 FOR SHARE`,
+		`SELECT status, reference_only FROM fiscal_periods WHERE id = $1 AND club_id = $2 FOR SHARE`,
 		input.FiscalPeriodID, input.ClubID,
-	).Scan(&periodStatus)
+	).Scan(&periodStatus, &periodReference)
 	if err == pgx.ErrNoRows {
 		return nil, fmt.Errorf("fiscal period not found")
 	}
@@ -164,6 +173,25 @@ func createJournalEntryTx(ctx context.Context, tx pgx.Tx, input CreateJournalEnt
 	}
 	if periodStatus != "open" {
 		return nil, ErrPeriodClosed
+	}
+
+	// Reference-period guard. Every journal entry is inserted here (a test
+	// scans for it), so this one check covers every booking path. It keys on
+	// the entry date as well as the period: a deposit dated in a reference
+	// year must not become income of another year by being booked into it.
+	if !periodReference {
+		if periodReference, err = dateInReferenceIn(ctx, tx, input.ClubID, input.EntryDate); err != nil {
+			return nil, err
+		}
+	}
+	if periodReference {
+		codes := make([]string, 0, len(input.Lines))
+		for _, l := range input.Lines {
+			codes = append(codes, l.AccountCode)
+		}
+		if err := refuseNonExpenseShapeTx(ctx, tx, input.ClubID, codes); err != nil {
+			return nil, err
+		}
 	}
 
 	source := input.Source
@@ -246,11 +274,11 @@ func (s *Service) PostJournalEntry(ctx context.Context, clubID, entryID, postedB
 // which then holds the entry and its period until it ends.
 func postJournalEntryTx(ctx context.Context, tx pgx.Tx, clubID, entryID, postedBy string) error {
 	// Get entry and verify it's draft
-	var status, periodID string
+	var status, periodID, entryDate string
 	err := tx.QueryRow(ctx,
-		`SELECT status, fiscal_period_id FROM journal_entries WHERE id = $1 AND club_id = $2 FOR UPDATE`,
+		`SELECT status, fiscal_period_id, entry_date::text FROM journal_entries WHERE id = $1 AND club_id = $2 FOR UPDATE`,
 		entryID, clubID,
-	).Scan(&status, &periodID)
+	).Scan(&status, &periodID, &entryDate)
 	if err == pgx.ErrNoRows {
 		return ErrEntryNotFound
 	}
@@ -263,15 +291,19 @@ func postJournalEntryTx(ctx context.Context, tx pgx.Tx, clubID, entryID, postedB
 
 	// Verify period is still open
 	var periodStatus string
+	var periodReference bool
 	err = tx.QueryRow(ctx,
-		`SELECT status FROM fiscal_periods WHERE id = $1 AND club_id = $2 FOR SHARE`,
+		`SELECT status, reference_only FROM fiscal_periods WHERE id = $1 AND club_id = $2 FOR SHARE`,
 		periodID, clubID,
-	).Scan(&periodStatus)
+	).Scan(&periodStatus, &periodReference)
 	if err != nil {
 		return fmt.Errorf("checking period: %w", err)
 	}
 	if periodStatus != "open" {
 		return ErrPeriodClosed
+	}
+	if err := refuseIfReferenceEntryTx(ctx, tx, clubID, entryID, entryDate, periodReference); err != nil {
+		return err
 	}
 
 	// Balance check: sum debits must equal sum credits
@@ -450,14 +482,19 @@ func voidJournalEntryTx(ctx context.Context, tx pgx.Tx, clubID, entryID, voidedB
 	}
 
 	var periodStatus string
+	var periodReference bool
 	if err := tx.QueryRow(ctx,
-		`SELECT status FROM fiscal_periods WHERE id = $1 AND club_id = $2 FOR SHARE`,
+		`SELECT status, reference_only FROM fiscal_periods WHERE id = $1 AND club_id = $2 FOR SHARE`,
 		entry.FiscalPeriodID, clubID,
-	).Scan(&periodStatus); err != nil {
+	).Scan(&periodStatus, &periodReference); err != nil {
 		return nil, fmt.Errorf("checking period: %w", err)
 	}
 	if periodStatus != "open" {
 		return nil, ErrPeriodClosed
+	}
+	// The reversal has the original's accounts and date, so it has its shape.
+	if err := refuseIfReferenceEntryTx(ctx, tx, clubID, entryID, entry.EntryDate, periodReference); err != nil {
+		return nil, err
 	}
 
 	// Get original lines

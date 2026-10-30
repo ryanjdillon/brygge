@@ -82,12 +82,12 @@ type GeneralLedger struct {
 // requested. It restricts entries to those that touch a bank/cash account
 // (1900 or 1920–1949), which approximates cash recognition: an invoice
 // line only appears once payment has actually hit the bank.
-const cashWhereClause = `
+var cashWhereClause = `
   AND EXISTS (
     SELECT 1 FROM journal_lines jl2
     JOIN accounts a2 ON a2.id = jl2.account_id
     WHERE jl2.journal_entry_id = je.id
-      AND (a2.code = '1900' OR (a2.code >= '1920' AND a2.code <= '1949'))
+      AND ` + cashRangeSQL("a2.code") + `
   )`
 
 // IncomeStatement generates the resultatregnskap for a fiscal period.

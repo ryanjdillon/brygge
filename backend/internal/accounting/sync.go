@@ -64,6 +64,9 @@ func (s *Service) SyncPayments(ctx context.Context, clubID, periodID, syncedBy s
 	if err != nil {
 		return nil, fmt.Errorf("getting period: %w", err)
 	}
+	if err := s.refuseReferencePeriod(ctx, clubID, periodID); err != nil {
+		return nil, err
+	}
 
 	// Add one day to end date for inclusive range
 	endDatePlusOne := endDate.AddDate(0, 0, 1)
@@ -159,6 +162,9 @@ func (s *Service) SyncInvoices(ctx context.Context, clubID, periodID, syncedBy s
 	}
 	if err != nil {
 		return nil, fmt.Errorf("getting period: %w", err)
+	}
+	if err := s.refuseReferencePeriod(ctx, clubID, periodID); err != nil {
+		return nil, err
 	}
 
 	// Only sent, non-voided invoices are receivables. A draft hasn't been
@@ -324,6 +330,12 @@ const (
 // either; the period has to be reopened.
 var ErrInvoicePeriodClosed = fmt.Errorf("the faktura's fiscal period is closed: %w", ErrPeriodClosed)
 
+// ErrInvoiceReferencePeriod means the faktura's entry sits in a reference
+// year, which takes cost bookings only (BRY-418): the faktura cannot be
+// reversed there, as ErrInvoicePeriodClosed says for a closed year. A credit
+// note belongs in the year being kept.
+var ErrInvoiceReferencePeriod = fmt.Errorf("the faktura is booked in a reference year: %w", ErrReferencePeriod)
+
 // BookInvoice books one sent, non-voided faktura into the period its
 // issue_date falls in. It is idempotent: a faktura that already has an
 // invoice_sync entry (the unique index enforces one) is reported as
@@ -424,6 +436,9 @@ func (s *Service) ReverseInvoice(ctx context.Context, clubID, invoiceID, actor s
 		rev, err := voidJournalEntryTx(ctx, tx, clubID, id, actor)
 		if errors.Is(err, ErrPeriodClosed) {
 			return nil, ErrInvoicePeriodClosed
+		}
+		if errors.Is(err, ErrReferencePeriod) {
+			return nil, ErrInvoiceReferencePeriod
 		}
 		if err != nil {
 			return nil, err

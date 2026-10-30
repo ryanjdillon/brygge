@@ -622,6 +622,10 @@ const (
 	StripeClearBalanceOpen        = "balance_open"
 	StripeClearNoPeriod           = "no_period"
 	StripeClearPeriodClosed       = "period_closed"
+	// StripeClearReferencePeriod: the deposit's date lies in a reference
+	// year (BRY-418). Its booking would put money in transit into a year that
+	// takes costs only, so the payout waits for ever and nothing is booked.
+	StripeClearReferencePeriod = "reference_period"
 )
 
 // Codes only the sweep's checks give, and not-found markers the manual
@@ -686,7 +690,7 @@ func stripePayoutReadiness(ctx context.Context, q dbtx, clubID string, p stripeP
 	if m.pendingBlocker {
 		return stripeVerdict{state: stripePlanWaiting, reason: m.waitingReason(), code: StripeClearMembersOpen, members: m}, nil
 	}
-	_, status, err := existingPeriodIn(ctx, q, clubID, bankDate, "")
+	periodID, status, err := existingPeriodIn(ctx, q, clubID, bankDate, "")
 	if errors.Is(err, errNoFiscalPeriod) {
 		return stripeVerdict{state: stripePlanWaiting, reason: "ingen regnskapsperiode for " + bankDate.Format("02.01.2006"),
 			code: StripeClearNoPeriod, members: m}, nil
@@ -697,7 +701,18 @@ func stripePayoutReadiness(ctx context.Context, q dbtx, clubID string, p stripeP
 	if status != "open" {
 		return stripeVerdict{state: stripePlanWaiting, reason: periodClosedReason(bankDate), code: StripeClearPeriodClosed, members: m}, nil
 	}
+	if ref, err := periodIsReferenceIn(ctx, q, clubID, periodID); err != nil {
+		return stripeVerdict{}, err
+	} else if ref {
+		return stripeVerdict{state: stripePlanWaiting, reason: referencePeriodReason(bankDate), code: StripeClearReferencePeriod, members: m}, nil
+	}
 	return stripeVerdict{state: stripePlanReady, members: m}, nil
+}
+
+// referencePeriodReason is the Norwegian reason a deposit in a reference year
+// is left alone.
+func referencePeriodReason(day time.Time) string {
+	return "bankdatoen " + day.Format("02.01.2006") + " ligger i et referanseår"
 }
 
 func periodClosedReason(day time.Time) string {
@@ -761,6 +776,8 @@ func (s *Service) clearStripePayout(ctx context.Context, clubID, actorID, payout
 
 	closed := stripeClearOutcome{state: stripePlanWaiting, reason: periodClosedReason(row.date), code: StripeClearPeriodClosed,
 		payoutID: p.payoutID, members: v.members}
+	referenceOutcome := stripeClearOutcome{state: stripePlanWaiting, reason: referencePeriodReason(row.date), code: StripeClearReferencePeriod,
+		payoutID: p.payoutID, members: v.members}
 	amount := oreToKr(p.amountOre)
 	desc := "Stripe-utbetaling (ankomst " + p.arrival.Format("02.01.2006") + ")"
 	sourceTable := "bank_import_rows"
@@ -781,6 +798,9 @@ func (s *Service) clearStripePayout(ctx context.Context, clubID, actorID, payout
 	if errors.Is(err, ErrPeriodClosed) {
 		return closed, nil
 	}
+	if errors.Is(err, ErrReferencePeriod) {
+		return referenceOutcome, nil
+	}
 	if err != nil {
 		return stripeClearOutcome{}, fmt.Errorf("creating journal entry: %w", err)
 	}
@@ -789,6 +809,8 @@ func (s *Service) clearStripePayout(ctx context.Context, clubID, actorID, payout
 	}
 	if err := postJournalEntryTx(ctx, tx, clubID, entry.ID, actorID); errors.Is(err, ErrPeriodClosed) {
 		return closed, nil
+	} else if errors.Is(err, ErrReferencePeriod) {
+		return referenceOutcome, nil
 	} else if err != nil {
 		return stripeClearOutcome{}, fmt.Errorf("posting journal entry: %w", err)
 	}

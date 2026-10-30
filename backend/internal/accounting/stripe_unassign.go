@@ -136,6 +136,8 @@ func voidStripeEntryTx(ctx context.Context, tx pgx.Tx, clubID, actorID string, r
 	case errors.Is(err, ErrPeriodClosed):
 		return stripeRefusal(StripeTxnPeriodClosed,
 			"regnskapsperioden bilaget er ført i er stengt – åpne perioden eller korriger med et nytt bilag")
+	case errors.Is(err, ErrReferencePeriod):
+		return stripeRefusal(StripeTxnReferencePeriod, ErrReferencePeriod.Error())
 	default:
 		return fmt.Errorf("voiding stripe entry: %w", err)
 	}

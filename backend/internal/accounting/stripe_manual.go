@@ -65,6 +65,9 @@ const (
 	// StripeTxnPeriodClosed: the booking date's fiscal period is closed or
 	// locked.
 	StripeTxnPeriodClosed = "period_closed"
+	// StripeTxnReferencePeriod: the booking date lies in a reference year
+	// (BRY-418), which takes cost bookings only; a Stripe row is never one.
+	StripeTxnReferencePeriod = "reference_period"
 	// StripeTxnAlreadyBooked: the row has its journal entry.
 	StripeTxnAlreadyBooked = "already_booked"
 	// StripeTxnPayoutCleared: the row's payout is cleared in the books, so
@@ -381,6 +384,11 @@ func stripeManualPeriodTx(ctx context.Context, tx pgx.Tx, clubID string, date ti
 		return "", stripeRefusal(StripeTxnPeriodClosed,
 			fmt.Sprintf("regnskapsperioden for %s er stengt", date.Format("02.01.2006")))
 	}
+	if ref, err := periodIsReferenceIn(ctx, tx, clubID, periodID); err != nil {
+		return "", err
+	} else if ref {
+		return "", stripeRefusal(StripeTxnReferencePeriod, ErrReferencePeriod.Error())
+	}
 	return periodID, nil
 }
 
@@ -536,6 +544,8 @@ func stripePostRefusal(err error) error {
 	switch {
 	case errors.Is(err, ErrPeriodClosed):
 		return stripeRefusal(StripeTxnPeriodClosed, "regnskapsperioden er stengt")
+	case errors.Is(err, ErrReferencePeriod):
+		return stripeRefusal(StripeTxnReferencePeriod, ErrReferencePeriod.Error())
 	case errors.Is(err, errChargeRaced):
 		return stripeRefusal(StripeTxnAlreadyBooked, "transaksjonen ble bokført samtidig")
 	}
@@ -661,18 +671,11 @@ func stripeExcludedAccountsIn(ctx context.Context, q dbtx, clubID, stripeClearin
 		receivablesAccountCode: true, vippsClearingAccountCode: true,
 		stripeClearing: true, vippsClearing: true,
 	}
-	rows, err := q.Query(ctx,
-		`SELECT bank_account_code FROM bank_imports WHERE club_id = $1 AND bank_account_code <> ''
-		 UNION
-		 SELECT gl_code FROM club_bank_accounts WHERE club_id = $1 AND gl_code <> ''`, clubID)
+	banks, err := bankAccountCodesIn(ctx, q, clubID)
 	if err != nil {
-		return nil, fmt.Errorf("listing bank accounts: %w", err)
+		return nil, err
 	}
-	codes, err := pgx.CollectRows(rows, pgx.RowTo[string])
-	if err != nil {
-		return nil, fmt.Errorf("listing bank accounts: %w", err)
-	}
-	for _, c := range codes {
+	for c := range banks {
 		excluded[c] = true
 	}
 	return excluded, nil

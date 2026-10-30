@@ -54,6 +54,9 @@ func (s *Service) ResplitInvoiceBilags(ctx context.Context, clubID, periodID, ac
 	if status != "open" {
 		return nil, fmt.Errorf("fiscal period is %s — reopen it before correcting bilags", status)
 	}
+	if err := s.refuseReferencePeriod(ctx, clubID, periodID); err != nil {
+		return nil, err
+	}
 
 	type target struct {
 		invoiceID     string
