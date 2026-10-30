@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 
+	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/testutil"
 )
 
@@ -43,6 +45,74 @@ func TestSplitList(t *testing.T) {
 	}
 	if got := splitList(""); got != nil {
 		t.Errorf("splitList(\"\") = %q, want none", got)
+	}
+}
+
+func TestProviderLinksFor(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  config.Config
+		want providerLinks
+	}{
+		{"nothing configured", config.Config{}, providerLinks{}},
+		{
+			"live Stripe and Vipps",
+			config.Config{StripeSecretKey: "sk_live_x", StripeWebhookSecret: "whsec_x", VippsMSN: "123456"},
+			providerLinks{Stripe: "https://dashboard.stripe.com/payments", Vipps: "https://portal.vippsmobilepay.com/123456/home"},
+		},
+		{
+			"test-mode Stripe key",
+			config.Config{StripeSecretKey: "sk_test_x", StripeWebhookSecret: "whsec_x"},
+			providerLinks{Stripe: "https://dashboard.stripe.com/test/payments"},
+		},
+		{
+			"Stripe key without its webhook secret is not enabled",
+			config.Config{StripeSecretKey: "sk_live_x"},
+			providerLinks{},
+		},
+		{
+			"Vipps mock",
+			config.Config{VippsMSN: "mock-msn", VippsTestMode: true},
+			providerLinks{},
+		},
+		{"Vipps test API", config.Config{VippsMSN: "123456", VippsTestMode: true}, providerLinks{}},
+		{"Vipps without a serial number", config.Config{}, providerLinks{}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := providerLinksFor(&tc.cfg); got != tc.want {
+				t.Errorf("providerLinksFor = %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestInclusiveUntil(t *testing.T) {
+	for in, want := range map[string]string{
+		"2026-06-30": "2026-07-01",
+		"2026-12-31": "2027-01-01",
+		"2028-02-28": "2028-02-29",
+		"not-a-date": "not-a-date",
+	} {
+		if got := inclusiveUntil(in); got != want {
+			t.Errorf("inclusiveUntil(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestRecentPaymentsQueryLimit(t *testing.T) {
+	for query, want := range map[string]int{
+		"":           50,
+		"limit=7":    7,
+		"limit=200":  200,
+		"limit=201":  50,
+		"limit=0":    50,
+		"limit=nope": 50,
+	} {
+		q, _ := url.ParseQuery(query)
+		if _, _, got := recentPaymentsQuery("club", q); got != want {
+			t.Errorf("limit for %q = %d, want %d", query, got, want)
+		}
 	}
 }
 
@@ -235,9 +305,104 @@ func TestHandleRecentPayments(t *testing.T) {
 		}
 	})
 
+	t.Run("has_more says the list was cut short", func(t *testing.T) {
+		hasMore := func(query string) (bool, int) {
+			t.Helper()
+			rec := httptest.NewRecorder()
+			e.h.HandleRecentPayments(rec, httptest.NewRequest(http.MethodGet, "/api/v1/harbor/recent-payments?"+query, nil))
+			var body struct {
+				Payments []recentPayment `json:"payments"`
+				HasMore  *bool           `json:"has_more"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil || body.HasMore == nil {
+				t.Fatalf("body %s: %v", rec.Body.String(), err)
+			}
+			return *body.HasMore, len(body.Payments)
+		}
+		// Seven payments: asking for fewer cuts the list, asking for exactly as
+		// many or more does not.
+		if more, n := hasMore("limit=3"); !more || n != 3 {
+			t.Errorf("limit=3: has_more %v with %d payments, want true with 3", more, n)
+		}
+		if more, n := hasMore("limit=6"); !more || n != 6 {
+			t.Errorf("limit=6: has_more %v with %d payments, want true with 6", more, n)
+		}
+		if more, n := hasMore("limit=7"); more || n != 7 {
+			t.Errorf("limit=7: has_more %v with %d payments, want false with 7", more, n)
+		}
+		if more, n := hasMore(""); more || n != 7 {
+			t.Errorf("default: has_more %v with %d payments, want false with 7", more, n)
+		}
+	})
+
+	t.Run("until includes its whole day", func(t *testing.T) {
+		// Fra = Til is one day. Dates are read in the database's time zone, so
+		// take the day from the database rather than from the test clock.
+		var newest, quiet string
+		if err := e.pool.QueryRow(context.Background(),
+			`SELECT paid_at::date::text, (paid_at::date - 10)::text FROM orders WHERE paid_at IS NOT NULL ORDER BY paid_at DESC LIMIT 1`,
+		).Scan(&newest, &quiet); err != nil {
+			t.Fatal(err)
+		}
+		if got := e.get(t, "since="+newest+"&until="+newest); len(got) == 0 {
+			t.Error("since = until = the newest payment's day returned nothing")
+		}
+		if got := e.get(t, "since="+quiet+"&until="+quiet); len(got) != 0 {
+			t.Errorf("a day with no payments returned %v", recentIDs(got))
+		}
+	})
+
 	t.Run("unknown kind matches nothing", func(t *testing.T) {
 		if got := e.get(t, "kind=nonsense"); len(got) != 0 {
 			t.Errorf("got %v, want none", recentIDs(got))
 		}
 	})
+}
+
+// Slipping is a service price item recognised by name; a guest stay on the
+// same order still wins, and the kind filter finds it.
+func TestRecentPaymentsSlippingKind(t *testing.T) {
+	e := newRecentPaymentsEnv(t)
+	ctx := context.Background()
+	addLine := func(orderID, category, name string) {
+		t.Helper()
+		var itemID string
+		if err := e.pool.QueryRow(ctx,
+			`INSERT INTO price_items (club_id, category, name, amount) VALUES ($1, $2, $3, 1600) RETURNING id`,
+			e.clubID, category, name,
+		).Scan(&itemID); err != nil {
+			t.Fatalf("insert price item: %v", err)
+		}
+		if _, err := e.pool.Exec(ctx,
+			`INSERT INTO order_lines (order_id, price_item_id, name, unit_price, total_price) VALUES ($1, $2, $3, 1600, 1600)`,
+			orderID, itemID, name,
+		); err != nil {
+			t.Fatalf("insert order line: %v", err)
+		}
+	}
+
+	slipping := e.paidOrder(t, "vipps", 10)
+	addLine(slipping, "service", "Slipping liten bat")
+	otherService := e.paidOrder(t, "vipps", 20)
+	addLine(otherService, "service", "Synthetic crane hire")
+	guestAndSlipping := e.paidOrder(t, "vipps", 30)
+	addLine(guestAndSlipping, "guest_harbor", "Synthetic guest night")
+	addLine(guestAndSlipping, "service", "Slipping stor bat")
+
+	got := e.get(t, "kind=slipping")
+	if len(got) != 1 || got[0].ID != slipping || got[0].Kind != "slipping" {
+		t.Errorf("slipping filter = %v, want only %s", recentIDs(got), slipping)
+	}
+	for _, p := range e.get(t, "") {
+		switch p.ID {
+		case otherService:
+			if p.Kind != "other" {
+				t.Errorf("other service kind = %q, want other", p.Kind)
+			}
+		case guestAndSlipping:
+			if p.Kind != "guest" {
+				t.Errorf("guest + slipping kind = %q, want guest", p.Kind)
+			}
+		}
+	}
 }

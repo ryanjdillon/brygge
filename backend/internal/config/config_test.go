@@ -132,3 +132,23 @@ func TestStripeCredentials(t *testing.T) {
 		})
 	}
 }
+
+func TestVippsPortalURL(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  Config
+		want string
+	}{
+		{"live merchant", Config{VippsMSN: "123456"}, "https://portal.vippsmobilepay.com/123456/home"},
+		{"padding is trimmed", Config{VippsMSN: " 123456 "}, "https://portal.vippsmobilepay.com/123456/home"},
+		{"unsafe serial number is escaped", Config{VippsMSN: "1/../2"}, "https://portal.vippsmobilepay.com/1%2F..%2F2/home"},
+		{"no serial number", Config{}, ""},
+		{"local mock", Config{VippsMSN: "mock-msn", VippsTestMode: true}, ""},
+		{"Vipps test API", Config{VippsMSN: "123456", VippsTestMode: true}, ""},
+	}
+	for _, tc := range tests {
+		if got := tc.cfg.VippsPortalURL(); got != tc.want {
+			t.Errorf("%s: VippsPortalURL() = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}

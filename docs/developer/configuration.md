@@ -88,7 +88,7 @@ The fallback admin has every permission. Any other principal used here needs at 
 | `VIPPS_CLIENT_ID`        | For Vipps    | —       | API client ID                  |
 | `VIPPS_CLIENT_SECRET`    | For Vipps    | —       | API client secret              |
 | `VIPPS_TEST_MODE`        | No           | `true`  | Use Vipps test environment     |
-| `VIPPS_MSN`              | For payments | —       | Merchant serial number         |
+| `VIPPS_MSN`              | For payments | —       | Merchant serial number; also builds the Vipps portal link on the payment overview (live mode only, see [Payments](payments.md#provider-links-on-the-payment-overview)) |
 | `VIPPS_SUBSCRIPTION_KEY` | For payments | —       | API subscription key           |
 | `VIPPS_WEBHOOK_SECRET`   | For payments | —       | Webhook signature verification |
 | `VIPPS_MOCK_URL`         | No (dev)     | —       | With `VIPPS_TEST_MODE`, sends every server-side Vipps call to this mock instead of the Vipps test API |
@@ -123,6 +123,9 @@ balance (`imported_no_opening_balance`, BRY-386).
 Card payments are offered only when both are set. One without the other logs a
 startup warning and leaves Stripe off: a payment whose webhook Brygge cannot
 verify would never be marked paid. See [payments.md](payments.md).
+
+The Stripe Dashboard link on the payment overview is shown under the same
+condition, and points at test mode (`/test`) for a test key.
 
 ## Object Storage (S3)
 

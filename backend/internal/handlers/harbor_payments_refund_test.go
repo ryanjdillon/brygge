@@ -186,6 +186,30 @@ func TestRecentPaymentsRefundsAndDisputes(t *testing.T) {
 		}
 	})
 
+	t.Run("provider links are for the treasurer and admin", func(t *testing.T) {
+		cfg := e.h.config
+		saved := *cfg
+		t.Cleanup(func() { *cfg = saved })
+		cfg.StripeSecretKey, cfg.StripeWebhookSecret = "sk_live_synthetic", "whsec_synthetic"
+		cfg.VippsMSN, cfg.VippsTestMode = "123456", false
+
+		_, top := e.getAs(t, []string{"treasurer"}, "")
+		links, _ := top["provider_links"].(map[string]any)
+		if links["stripe"] != "https://dashboard.stripe.com/payments" ||
+			links["vipps"] != "https://portal.vippsmobilepay.com/123456/home" {
+			t.Errorf("provider_links = %v", top["provider_links"])
+		}
+		for _, roles := range [][]string{nil, {"harbor_master"}} {
+			if _, top := e.getAs(t, roles, ""); top["provider_links"] != nil {
+				t.Errorf("provider_links = %v for roles %v", top["provider_links"], roles)
+			}
+		}
+		cfg.StripeSecretKey, cfg.VippsMSN = "", ""
+		if _, top := e.getAs(t, []string{"admin"}, ""); top["provider_links"] != nil {
+			t.Errorf("provider_links = %v with no provider configured", top["provider_links"])
+		}
+	})
+
 	t.Run("no waiting dispute, no reminder", func(t *testing.T) {
 		if _, err := e.pool.Exec(context.Background(),
 			`UPDATE payment_disputes SET status = 'won' WHERE provider_dispute_id = 'dp_new'`); err != nil {

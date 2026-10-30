@@ -2,6 +2,7 @@ package config
 
 import (
 	"math"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -202,6 +203,19 @@ func (c *Config) VippsBaseURL() string {
 		return "https://apitest.vipps.no"
 	}
 	return "https://api.vipps.no"
+}
+
+// VippsPortalURL is the merchant's home page in the Vipps MobilePay portal,
+// where settlements and payments are read. Empty when there is no merchant
+// serial number to build it from, and in test mode (the local mock and the
+// Vipps test API): a test sales unit's payments are not the club's real
+// payments, so there is nothing real to open.
+func (c *Config) VippsPortalURL() string {
+	msn := strings.TrimSpace(c.VippsMSN)
+	if msn == "" || c.VippsTestMode {
+		return ""
+	}
+	return "https://portal.vippsmobilepay.com/" + url.PathEscape(msn) + "/home"
 }
 
 // StripeCredentials reports whether both Stripe secrets are set (complete)

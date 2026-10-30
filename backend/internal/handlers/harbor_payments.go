@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/middleware"
 	"github.com/brygge-klubb/brygge/internal/vipps"
 )
@@ -20,7 +21,7 @@ type recentPayment struct {
 	Amount  float64   `json:"amount"`
 	Payer   string    `json:"payer"`
 	Summary string    `json:"summary"`
-	Kind    string    `json:"kind"`    // guest | motorhome | faktura | merch | other
+	Kind    string    `json:"kind"`    // guest | motorhome | slipping | faktura | merch | other
 	Channel string    `json:"channel"` // the provider: vipps | stripe
 	// Method is how the payer paid: vipps | card | apple_pay | google_pay.
 	Method string `json:"method"`
@@ -44,6 +45,25 @@ type recentPayment struct {
 	// treasurer or admin (who can open the Dashboard).
 	PaymentURL string `json:"payment_url,omitempty"`
 	DisputeURL string `json:"dispute_url,omitempty"`
+}
+
+// providerLinks are the provider back offices the overview links to, for the
+// providers the club has configured. They are the final URLs, never the keys
+// they were derived from.
+type providerLinks struct {
+	Stripe string `json:"stripe,omitempty"`
+	Vipps  string `json:"vipps,omitempty"`
+}
+
+// providerLinksFor builds the links from config; a provider that is not fully
+// configured gets none.
+func providerLinksFor(cfg *config.Config) providerLinks {
+	var l providerLinks
+	if complete, _ := cfg.StripeCredentials(); complete {
+		l.Stripe = stripeDashboardURL(cfg, "/payments")
+	}
+	l.Vipps = cfg.VippsPortalURL()
+	return l
 }
 
 // Payment methods the overview distinguishes.
@@ -72,14 +92,21 @@ func paymentMethod(provider string, wallet *string) string {
 
 // recentPaymentKindSQL classifies a paid order for the harbor overview. Guest
 // stays take priority (that is what the harbor master watches for), then
-// motorhomes, then faktura, then merchandise. It runs in SQL so the kind
-// filter applies before LIMIT.
+// motorhomes, then slipping, then faktura, then merchandise. It runs in SQL so
+// the kind filter applies before LIMIT.
+//
+// Slipping has no price-item category of its own, so this interim rule treats
+// any price item whose name contains "slipping", in any category, as slipping.
+// It is the one place that rule lives; the configurable filter groups (BRY-522)
+// replace it.
 const recentPaymentKindSQL = `
 	CASE
 	    WHEN EXISTS (SELECT 1 FROM order_lines ol JOIN price_items pi ON pi.id = ol.price_item_id
 	                  WHERE ol.order_id = o.id AND pi.category LIKE '%guest%') THEN 'guest'
 	    WHEN EXISTS (SELECT 1 FROM order_lines ol JOIN price_items pi ON pi.id = ol.price_item_id
 	                  WHERE ol.order_id = o.id AND (pi.category LIKE '%motorhome%' OR pi.category LIKE '%bobil%')) THEN 'motorhome'
+	    WHEN EXISTS (SELECT 1 FROM order_lines ol JOIN price_items pi ON pi.id = ol.price_item_id
+	                  WHERE ol.order_id = o.id AND pi.name ILIKE '%slipping%') THEN 'slipping'
 	    WHEN EXISTS (SELECT 1 FROM order_sources os WHERE os.order_id = o.id) THEN 'faktura'
 	    WHEN EXISTS (SELECT 1 FROM order_lines ol JOIN price_items pi ON pi.id = ol.price_item_id
 	                  WHERE ol.order_id = o.id AND pi.category LIKE '%merch%') THEN 'merch'
@@ -87,11 +114,13 @@ const recentPaymentKindSQL = `
 	END`
 
 // recentPaymentsQuery builds the overview query from the request filters:
-// since/until (dates), kind (one kind or a comma-separated list), q (payer
-// search) and limit.
-func recentPaymentsQuery(clubID string, q url.Values) (string, []any) {
-	limit := 50
-	if v, err := strconv.Atoi(q.Get("limit")); err == nil && v > 0 && v <= 200 {
+// since/until (dates, both inclusive of their whole day), kind (one kind or a
+// comma-separated list), q (payer search) and limit. It also returns the
+// limit it applied: the query fetches one row more, so the caller can tell the
+// list was cut short.
+func recentPaymentsQuery(clubID string, q url.Values) (string, []any, int) {
+	limit := defaultRecentLimit
+	if v, err := strconv.Atoi(q.Get("limit")); err == nil && v > 0 && v <= maxRecentLimit {
 		limit = v
 	}
 
@@ -104,7 +133,9 @@ func recentPaymentsQuery(clubID string, q url.Values) (string, []any) {
 		where += fmt.Sprintf(" AND o.paid_at >= $%d", len(args))
 	}
 	if until := q.Get("until"); until != "" {
-		args = append(args, until)
+		// until names the last day to include, so the bound is the start of the
+		// day after; a value that is not a date is bound as given.
+		args = append(args, inclusiveUntil(until))
 		where += fmt.Sprintf(" AND o.paid_at < $%d", len(args))
 	}
 	if search := strings.TrimSpace(q.Get("q")); search != "" {
@@ -162,8 +193,24 @@ func recentPaymentsQuery(clubID string, q url.Values) (string, []any) {
 		        LIMIT 1) dp ON true
 		 WHERE ` + where + `
 		 ORDER BY o.paid_at DESC NULLS LAST
-		 LIMIT ` + strconv.Itoa(limit)
-	return sql, args
+		 LIMIT ` + strconv.Itoa(limit+1)
+	return sql, args, limit
+}
+
+const (
+	defaultRecentLimit = 50
+	maxRecentLimit     = 200
+)
+
+// inclusiveUntil turns the last day to include (YYYY-MM-DD) into the exclusive
+// upper bound: the next day. Like since, the date is read by the database in
+// its session time zone.
+func inclusiveUntil(until string) string {
+	d, err := time.Parse("2006-01-02", until)
+	if err != nil {
+		return until
+	}
+	return d.AddDate(0, 0, 1).Format("2006-01-02")
 }
 
 // splitList splits a comma-separated query value, dropping blanks.
@@ -193,7 +240,7 @@ func (h *HarborHandler) HandleRecentPayments(w http.ResponseWriter, r *http.Requ
 
 	claims := middleware.GetClaims(ctx)
 	staff := claims != nil && mayRefund(claims.Roles)
-	sql, args := recentPaymentsQuery(clubID, r.URL.Query())
+	sql, args, limit := recentPaymentsQuery(clubID, r.URL.Query())
 	rows, err := h.db.Query(ctx, sql, args...)
 	if err != nil {
 		h.log.Error().Err(err).Msg("recent payments: query failed")
@@ -203,7 +250,13 @@ func (h *HarborHandler) HandleRecentPayments(w http.ResponseWriter, r *http.Requ
 	defer rows.Close()
 
 	out := make([]recentPayment, 0)
+	hasMore := false
 	for rows.Next() {
+		if len(out) == limit {
+			// The one extra row the query fetched: there is more than was asked for.
+			hasMore = true
+			break
+		}
 		var (
 			p              recentPayment
 			paidAt         *time.Time
@@ -247,8 +300,13 @@ func (h *HarborHandler) HandleRecentPayments(w http.ResponseWriter, r *http.Requ
 	}
 
 	h.markRefundable(r, clubID, out)
-	resp := map[string]any{"payments": out}
+	resp := map[string]any{"payments": out, "has_more": hasMore}
 	if staff {
+		// The back offices are for the treasurer and admin, like the
+		// per-payment Dashboard links above.
+		if links := providerLinksFor(h.config); links != (providerLinks{}) {
+			resp["provider_links"] = links
+		}
 		// The disputes waiting for evidence are the overview's reminder to
 		// answer them in Stripe, whatever the list is filtered to.
 		var waiting int
