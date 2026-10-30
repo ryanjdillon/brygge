@@ -1,6 +1,8 @@
 package finance
 
 import (
+	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -139,5 +141,110 @@ func TestGeneratePDFZeroTotalStaysAFaktura(t *testing.T) {
 		if strings.Contains(text, unwanted) {
 			t.Errorf("zero faktura PDF shows %q", unwanted)
 		}
+	}
+}
+
+func settledFixture() Invoice {
+	return Invoice{
+		ClubName:      "Testvik Båtforening",
+		InvoiceNumber: 290,
+		IssueDate:     time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC),
+		DueDate:       time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC),
+		KID:           GenerateKID("000", 290, 1),
+		BankAccount:   "1234.56.78901",
+		Lines:         []InvoiceLine{{Description: "Plassleie", Quantity: 1, UnitPrice: 5}},
+	}
+}
+
+// The faktura a failed refund issues is already paid: it stays a Faktura with
+// its number and date, but shows no way to pay and says so.
+func TestGeneratePDFSettledFakturaAsksForNothing(t *testing.T) {
+	inv := settledFixture()
+	inv.Settled = true
+	pdf, err := GeneratePDF(inv)
+	if err != nil {
+		t.Fatalf("GeneratePDF: %v", err)
+	}
+	text := pdfText(t, pdf)
+	for _, want := range []string{
+		"(Faktura)", "Fakturanummer:", "290", "Fakturadato:", "01.03.2026", "Status:", "(Betalt)",
+		"kr 5.00", "Ingen betaling kreves. Fakturaen er allerede betalt.",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("settled faktura PDF lacks %q", want)
+		}
+	}
+	for _, unwanted := range []string{
+		"Kreditnota", "Kontonummer", "KID", inv.KID, "1234.56.78901", "Forfallsdato", "Bel\xf8p \xe5 betale", "Vennligst",
+	} {
+		if strings.Contains(text, unwanted) {
+			t.Errorf("settled faktura PDF shows %q", unwanted)
+		}
+	}
+}
+
+// drawnStrings lists the text a PDF draws, in drawing order.
+func drawnStrings(text string) []string {
+	var out []string
+	for _, m := range regexp.MustCompile(`\(([^)]*)\)Tj`).FindAllStringSubmatch(text, -1) {
+		out = append(out, m[1])
+	}
+	return out
+}
+
+// An unsettled faktura renders exactly the text it always has: the whole
+// payment block (account, KID, amount to pay, due date) and the request to
+// pay, in this order, and nothing of the settled layout.
+func TestGeneratePDFUnsettledFakturaUnchanged(t *testing.T) {
+	inv := settledFixture()
+	inv.Settled = false
+	pdf, err := GeneratePDF(inv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"Testvik B\xe5tforening", "Faktura",
+		"Fakturanummer:", "290", "Fakturadato:", "01.03.2026",
+		"Kontonummer:", "1234.56.78901", "KID:", inv.KID,
+		"Bel\xf8p \xe5 betale:", "kr 5.00", "Forfallsdato:", "01.03.2026",
+		"#", "Beskrivelse", "Antall", "Enhetspris", "Sum",
+		"1", "Plassleie", "1", "kr 5.00", "kr 5.00",
+		"Totalt", "kr 5.00",
+		"Vennligst betal kr 5.00 til kontonummer 1234.56.78901 med KID " + inv.KID + " innen 01.03.2026.",
+		"Testvik B\xe5tforening",
+	}
+	if got := drawnStrings(pdfText(t, pdf)); !slices.Equal(got, want) {
+		t.Errorf("faktura text = %q\nwant %q", got, want)
+	}
+}
+
+// Settled never overrides the other kinds: a negative total is a credit note
+// and a zero total keeps its own wording, whether or not Settled is set.
+func TestGeneratePDFSettledDoesNotChangeCreditNoteOrZeroFaktura(t *testing.T) {
+	credit := settledFixture()
+	credit.Lines[0].UnitPrice = -5
+	zero := settledFixture()
+	zero.Lines = []InvoiceLine{
+		{Description: "Plassleie", Quantity: 1, UnitPrice: 2600},
+		{Description: "Fritak", Quantity: 1, UnitPrice: -2600},
+	}
+	for name, inv := range map[string]Invoice{"credit note": credit, "zero faktura": zero} {
+		t.Run(name, func(t *testing.T) {
+			without, err := GeneratePDF(inv)
+			if err != nil {
+				t.Fatal(err)
+			}
+			inv.Settled = true
+			with, err := GeneratePDF(inv)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if pdfText(t, without) != pdfText(t, with) {
+				t.Error("Settled changes the document")
+			}
+			if text := pdfText(t, with); strings.Contains(text, "Betalt") || strings.Contains(text, "allerede betalt") {
+				t.Errorf("shows a paid status: %s", text)
+			}
+		})
 	}
 }

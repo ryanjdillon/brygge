@@ -53,6 +53,15 @@ type Invoice struct {
 	// CardRefund, for a CreditNote, says the amount is refunded to the card
 	// the payer paid with. Set only for a credit note a card refund issued.
 	CardRefund bool
+	// Settled marks a faktura that is already paid when it is issued: the
+	// replacement a failed card refund issues, settled by the money that came
+	// back. It keeps the heading and the number and date rows but carries no
+	// payment details (account number, KID, due date, "amount to pay") and
+	// says "Betalt" instead, so the payer is not asked to pay it twice. It is
+	// never inferred from a payment: an ordinary faktura that has been paid
+	// still prints how to pay when a copy is sent. A credit note or a faktura
+	// that nets to zero is rendered as such whether or not it is set.
+	Settled bool
 
 	// Line items
 	Lines []InvoiceLine
@@ -226,6 +235,8 @@ func GeneratePDF(inv Invoice) ([]byte, error) { //nolint:gocognit,cyclop // line
 		rs = append(rs, row{tr("Kreditbeløp:"), tr(formatNOK(math.Abs(total))), true})
 	case roundOre(total) == 0:
 		rs = append(rs, row{tr("Beløp å betale:"), tr(formatNOK(0)), true})
+	case inv.Settled:
+		rs = append(rs, row{"Status:", "Betalt", true})
 	default:
 		rs = append(rs,
 			row{tr("Kontonummer:"), tr(inv.BankAccount), true},
@@ -338,6 +349,8 @@ func GeneratePDF(inv Invoice) ([]byte, error) { //nolint:gocognit,cyclop // line
 		}
 	case roundOre(total) == 0:
 		pdf.MultiCell(0, 5, tr("Ingen betaling – fakturaen er fullt fritatt. Den er kun til orientering."), "", "L", false)
+	case inv.Settled:
+		pdf.MultiCell(0, 5, tr("Ingen betaling kreves. Fakturaen er allerede betalt."), "", "L", false)
 	default:
 		pdf.MultiCell(0, 5, tr(fmt.Sprintf(
 			"Vennligst betal %s til kontonummer %s med KID %s innen %s.",

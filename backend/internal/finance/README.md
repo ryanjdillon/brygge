@@ -42,6 +42,9 @@ type Invoice struct {
     CreditNote bool
     CardRefund bool  // CreditNote only: the amount went back to the card
 
+    // A settled faktura asks for nothing either: see "Settled fakturas" below.
+    Settled bool
+
     Lines []InvoiceLine
 }
 
@@ -72,7 +75,7 @@ The handler builds an `Invoice` literal from:
 3. Buyer — `users.full_name` + `users.address_line + postal_code + city` for private; `invoices.recipient_*` columns for organization
 4. Invoice metadata — `invoices.invoice_number`, `invoices.issue_date`, `invoices.due_date`, `invoices.kid_number`
 5. Lines — `invoice_lines.description`, `sub_description`, `quantity`, `unit_price`
-6. Document kind — `CreditNote` from `invoices.total_amount < 0`, `CardRefund` from a `refund_documents` row of kind `credit` pointing at it (`refundCreditNoteSQL`)
+6. Document kind — `CreditNote` from `invoices.total_amount < 0`, `CardRefund` from a `refund_documents` row of kind `credit` pointing at it (`refundCreditNoteSQL`), `Settled` from a `refund_documents` row of kind `refail_invoice` pointing at it (`refundRefailInvoiceSQL`)
 
 See `handlers/invoices_bulk_actions.go:regenerateOnePDF` for the canonical "rebuild Invoice from DB row" pattern.
 
@@ -86,7 +89,13 @@ A credit note is an invoice with a negative total, and it shares the faktura num
 
 `CreditNote` is the explicit signal, and callers set it: `HandleCreateInvoice` from the total it computes for the new faktura (`isCreditTotal`), and `loadStoredInvoicePDF` (regenerate, reissue KID, and the refund delivery's `ensureInvoicePDF`) from the stored `total_amount`. Bulk creation only makes fakturas. As a fail-safe, `GeneratePDF` also renders any negative line total as a credit note, so a caller that omits the flag never prints "Vennligst betal kr -X"; `CardRefund` is never inferred and stays with the caller.
 
-The faktura that nets to zero (every line exempted) is unchanged: still a Faktura, with "Beløp å betale: kr 0.00" and no payment details. The debit faktura a failed refund issues is a Faktura too.
+The faktura that nets to zero (every line exempted) is unchanged: still a Faktura, with "Beløp å betale: kr 0.00" and no payment details.
+
+## Settled fakturas
+
+The debit faktura a failed card refund issues is a Faktura (it is a debt on paper) but is paid in the same transaction that issues it, and its email says "Den er allerede betalt, og du skal ikke betale noe". `Invoice.Settled` makes the PDF say the same: the heading, number and date rows stay, the payment block (Kontonummer, KID, Forfallsdato, "Beløp å betale") is replaced by the info-box row **Status: Betalt**, and the closing line is "Ingen betaling kreves. Fakturaen er allerede betalt."
+
+`Settled` is explicit and comes from the refund document, not from the invoice having a payment: an ordinary faktura that has been paid and is printed again as a copy keeps its payment block, because that PDF is the record of what was asked of the payer. A credit note and a zero-total faktura keep their own layouts whatever `Settled` says. `loadStoredInvoicePDF` sets it for regenerate, KID reissue and the refund delivery's `ensureInvoicePDF`; `HandleCreateInvoice` and bulk creation only make ordinary fakturas. A manual resend of such a faktura (it is issued already sent, so Send answers 409) goes through `invoiceMessage`, which is handed the marker read with the faktura and sends `email.RefundDocumentBody` instead of the usual email with a KID and pay link. Reminders, overdue lists, payables and pay-link totals already skip it, because its linked payment keeps it out of `finance.OwedByMemberSQL`.
 
 The email that carries a credit note is `email.CreditNoteSubject` / `CreditNoteBody` (no KID, account, due date or pay link), chosen by `InvoiceHandler.invoiceMessage` for the send, resend and create-and-send paths, and by `RefundDocumentSender` for a refund's credit note.
 
@@ -120,6 +129,6 @@ These helpers are unexported (`finance/invoice.go`). When generating user-facing
 ## Common changes
 
 - **New layout element on the PDF** (e.g. QR code, payment-link block) → edit `GeneratePDF` body. Test against the rendered output, not byte equality, since fpdf timestamps embedded objects
-- **New payment detail on the PDF or an invoice email** → hide it for a credit note too (`Invoice.CreditNote`, `email.CreditNoteBody`); a credit note must never prompt a payment
+- **New payment detail on the PDF or an invoice email** → hide it for a credit note too (`Invoice.CreditNote`, `email.CreditNoteBody`) and for a settled faktura (`Invoice.Settled`, `email.RefundDocumentBody`); neither must prompt a payment
 - **New invoice field** (e.g. payment terms text) → add to the `Invoice` struct, the DB column, the `regenerateOnePDF` reload path, and any `HandleCreateInvoice`-style construction sites. Don't forget the archive path test (it'd silently drop the new field otherwise).
 - **New KID format** → edit `GenerateKID` and `extractKID` together; the parser must accept what the generator emits
