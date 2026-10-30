@@ -454,6 +454,24 @@ in `backend/migrations/` for the source of truth. The high-level shape:
   uses a partial index when the query's `WHERE` implies its predicate, so a
   change to `stripeChargeSettlesSQL`, the booked-row clauses or the overview's
   status filter must change the matching index in a new migration.
+- **Payment filter groups.** 000123 (BRY-522) adds `payment_filter_groups`
+  (per club: `slug`, `name`, `label_key`, `icon`, `sort_order`, `enabled`,
+  `builtin`; `club_id` cascades) and `payment_filter_group_items`
+  (`price_item_id` is the primary key, so an item is in at most one group;
+  rows cascade with the group and the item). They are the chips of the
+  Payments page and decide each order's `kind`; the rule is the
+  `paymentfilters.OrderGroupLateralSQL` join, in
+  [`backend/internal/paymentfilters`](../../backend/internal/paymentfilters/README.md).
+  The migration backfills each club's built-ins (faktura, other) and the guest,
+  motorhome and slipping groups only where the club has a price item the old
+  rules matched, assigning those items; a club created later has no rows until
+  its first write (reads synthesise the built-ins). Both tables hold labels and
+  codes only and are readable raw by `brygge_dev_ro`. The same migration adds
+  `idx_order_lines_price_item` (partial, `price_item_id IS NOT NULL`) on
+  `order_lines`, which had no index on the item: the settings page and the
+  Payments page's nudge ask per price item whether an order line has it, and
+  the price-item delete's reference count does too. Vocabulary:
+  [`enums.md`](reference/enums.md#payment-overview-groups-payment_filter_groups-migration-000123-bry-522).
 - `invoice_pdf_archive` (migration 000050) — preserves prior PDF bytes when
   `invoices.pdf_data` is regenerated, so Norwegian bokføringsloven §13's
   5-year retention requirement is satisfied.

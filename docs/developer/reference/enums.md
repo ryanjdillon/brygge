@@ -234,6 +234,20 @@ vipps   card   apple_pay   google_pay
 
 `vipps` when the order's provider is Vipps; `apple_pay` / `google_pay` for those wallets; anything else (other wallets, no wallet, not yet read) is `card`. The frontend labels a `card` by its brand (Visa, Mastercard, …), else "Kort".
 
+### Payment overview groups: `payment_filter_groups` (migration 000123, BRY-522)
+
+The overview's `kind` on each payment, and the `kind` query parameter, are **group slugs**: the club's payment filter groups, no longer a fixed vocabulary in code (`recentPaymentKindSQL` is gone). The price-item category no longer drives the overview; the groups a club has were derived from its items once, at migration, and are edited on the settings page. One module decides an order's group: `internal/paymentfilters` ([README](../../../backend/internal/paymentfilters/README.md)).
+
+| Column | Values | Notes |
+|---|---|---|
+| `slug` | `^[a-z0-9][a-z0-9-]{0,39}$` (CHECK `pfg_slug_format`) | Made from the name at create (`Slugify`: lowercase, æ/ø/å/ä/ö/ü transliterated, other characters a hyphen, at most 40, `-2`, `-3` on a clash), never changed by a rename. Unique per club. Reserved for item groups: `all` and `alle` (the SPA's no-filter chip; a name equal to its label in any locale is refused too, `reserved_name`), `harbor` (the old chip, expands to `guest` and `motorhome` in the SPA), `faktura`, `other` |
+| `builtin` | `NULL`, `faktura`, `other` (CHECK `pfg_builtin`; `pfg_builtin_slug` makes the slug equal it) | `NULL` is an item group. `faktura` matches orders that pay a faktura; `other` is the fallback, never matched, always last, cannot be disabled (`pfg_other_enabled`) or deleted. Unique per club |
+| `label_key` | `guest`, `motorhome`, `slipping`, `faktura`, `other`, or `NULL` (CHECK `pfg_label_key`) | A seeded row's default name, translated by the SPA as `recentPayments.kind.<key>`; a row needs a `name` or a `label_key` (`pfg_label`) |
+| `name` | 1 to 40 characters, stored NFC and trimmed, no control or Unicode format characters (CHECK `pfg_name_len` for the length), unique per club case-insensitively | Typed by the board, shown as typed in every locale; `NULL` on a seeded row that shows its `label_key` |
+| `icon` | the allow-list: `sailboat`, `van`, `forklift`, `file-text`, `store`, `circle-dollar-sign`, `anchor`, `zap`, `wrench`, `tent`, `key-round`, `shopping-bag`, `coffee`, `ticket` | The column is format-checked only (`pfg_icon_format`). The list is `paymentfilters.IconAllowList`, in the OpenAPI enum of `PaymentFilterGroup.icon`; the SPA's map (`frontend/src/lib/paymentFilterIcons.ts`) is typed against that generated enum, so an icon missing there is a compile error. Keep the three in step |
+
+A price item is in at most one group (`payment_filter_group_items.price_item_id` is the primary key). The admin API refusal codes (`handlers/payment_filters.go`): 400 `invalid_name`, `reserved_name`, `invalid_icon`, `no_default_name`, `unknown_price_item`, `price_item_ids_required` (`PUT …/items` without the list; `[]` empties the group), `order_mismatch`; 404 `not_found`; 409 `name_taken`, `too_many_groups` (20 per club, built-ins included), `builtin_group`.
+
 ### `payment_refunds.status` (CHECK since migration 000115)
 
 ```

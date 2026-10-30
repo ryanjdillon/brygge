@@ -6,6 +6,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,6 +16,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/brygge-klubb/brygge/internal/config"
+	"github.com/brygge-klubb/brygge/internal/paymentfilters"
 	"github.com/brygge-klubb/brygge/internal/testutil"
 )
 
@@ -116,6 +120,27 @@ func TestRecentPaymentsQueryLimit(t *testing.T) {
 	}
 }
 
+// The kind filter is only ever a bound argument: a value that looks like SQL
+// reaches the database as data, and the classifier is the shared constant.
+func TestRecentPaymentsQueryBindsKinds(t *testing.T) {
+	evil := "x'; DROP TABLE orders; --"
+	q, _ := url.ParseQuery(url.Values{"kind": {"guest," + evil}}.Encode())
+	sql, args, _ := recentPaymentsQuery("club", q)
+	if strings.Contains(sql, "DROP TABLE") || strings.Contains(sql, evil) {
+		t.Fatalf("kind value reached the SQL text:\n%s", sql)
+	}
+	if !strings.Contains(sql, "COALESCE(pfg.slug, 'other') = ANY($2::text[])") {
+		t.Errorf("kind filter is not a bound text[] on the group slug:\n%s", sql)
+	}
+	kinds, ok := args[1].([]string)
+	if !ok || len(kinds) != 2 || kinds[0] != "guest" || kinds[1] != evil {
+		t.Errorf("args = %#v, want the kinds bound as a []string", args)
+	}
+	if !strings.Contains(sql, paymentfilters.OrderGroupLateralSQL) {
+		t.Error("the overview must classify through paymentfilters.OrderGroupLateralSQL")
+	}
+}
+
 type recentPaymentsEnv struct {
 	pool   *pgxpool.Pool
 	h      *HarborHandler
@@ -137,6 +162,20 @@ func newRecentPaymentsEnv(t *testing.T) *recentPaymentsEnv {
 	return &recentPaymentsEnv{
 		pool: pool, h: NewHarborHandler(pool, cfg, zerolog.Nop()), clubID: clubID,
 		now: time.Now().Truncate(time.Second),
+	}
+}
+
+// backfill runs migration 000123 over the club's price items: the schema is
+// migrated before any club exists, so the groups an existing club got at
+// deploy are made by re-executing the file (it is idempotent).
+func (e *recentPaymentsEnv) backfill(t *testing.T) {
+	t.Helper()
+	sql, err := os.ReadFile(filepath.Join(testutil.MigrationsDir(), "000123_payment_filter_groups.up.sql"))
+	if err != nil {
+		t.Fatalf("read migration: %v", err)
+	}
+	if _, err := e.pool.Exec(context.Background(), string(sql)); err != nil {
+		t.Fatalf("apply 000123: %v", err)
 	}
 }
 
@@ -238,21 +277,40 @@ func TestHandleRecentPayments(t *testing.T) {
 	motorhome := e.paidOrder(t, "vipps", 70, "motorhome")
 	e.attempt(t, motorhome, "vipps", "captured", "", "")
 
+	// A line with no price item (the item was deleted) and a category the
+	// groups never matched fall to the fallback, as before.
+	noItem := e.paidOrder(t, "vipps", 80)
+	if _, err := e.pool.Exec(context.Background(),
+		`INSERT INTO order_lines (order_id, price_item_id, name, unit_price, total_price) VALUES ($1, NULL, 'Synthetic line', 450, 450)`, noItem); err != nil {
+		t.Fatal(err)
+	}
+	e.attempt(t, noItem, "vipps", "captured", "", "")
+	unknownCategory := e.paidOrder(t, "vipps", 90, "synthetic_unknown")
+	e.attempt(t, unknownCategory, "vipps", "captured", "", "")
+
 	// Not paid: never listed.
 	pending := e.paidOrder(t, "stripe", 5, "guest_harbor")
 	if _, err := e.pool.Exec(context.Background(), `UPDATE orders SET status = 'pending', paid_at = NULL WHERE id = $1`, pending); err != nil {
 		t.Fatal(err)
 	}
 
+	// The groups an existing club got when the migration ran over its price
+	// items. Every order below must classify as the old CASE did, except
+	// merchandise: no price-item category ever contained "merch", so that
+	// chip was always empty and is not seeded.
+	e.backfill(t)
+
 	type want struct{ kind, method, channel, brand string }
 	wants := map[string]want{
-		faktura:      {"faktura", "card", "stripe", ""},
-		guestVipps:   {"guest", "vipps", "vipps", ""},
-		merchVisa:    {"merch", "card", "stripe", "visa"},
-		bobilApple:   {"motorhome", "apple_pay", "stripe", "mastercard"},
-		otherGoogle:  {"other", "google_pay", "stripe", "visa"},
-		guestFaktura: {"guest", "card", "stripe", "amex"},
-		motorhome:    {"motorhome", "vipps", "vipps", ""},
+		faktura:         {"faktura", "card", "stripe", ""},
+		guestVipps:      {"guest", "vipps", "vipps", ""},
+		merchVisa:       {"other", "card", "stripe", "visa"},
+		bobilApple:      {"motorhome", "apple_pay", "stripe", "mastercard"},
+		otherGoogle:     {"other", "google_pay", "stripe", "visa"},
+		guestFaktura:    {"guest", "card", "stripe", "amex"},
+		motorhome:       {"motorhome", "vipps", "vipps", ""},
+		noItem:          {"other", "vipps", "vipps", ""},
+		unknownCategory: {"other", "vipps", "vipps", ""},
 	}
 
 	t.Run("every payment says how it was paid", func(t *testing.T) {
@@ -260,7 +318,7 @@ func TestHandleRecentPayments(t *testing.T) {
 		if len(got) != len(wants) {
 			t.Fatalf("got %d payments %v, want %d", len(got), recentIDs(got), len(wants))
 		}
-		if got[0].ID != faktura || got[len(got)-1].ID != motorhome {
+		if got[0].ID != faktura || got[len(got)-1].ID != unknownCategory {
 			t.Errorf("order = %v, want newest first", recentIDs(got))
 		}
 		for _, p := range got {
@@ -319,19 +377,19 @@ func TestHandleRecentPayments(t *testing.T) {
 			}
 			return *body.HasMore, len(body.Payments)
 		}
-		// Seven payments: asking for fewer cuts the list, asking for exactly as
+		// Nine payments: asking for fewer cuts the list, asking for exactly as
 		// many or more does not.
 		if more, n := hasMore("limit=3"); !more || n != 3 {
 			t.Errorf("limit=3: has_more %v with %d payments, want true with 3", more, n)
 		}
-		if more, n := hasMore("limit=6"); !more || n != 6 {
-			t.Errorf("limit=6: has_more %v with %d payments, want true with 6", more, n)
+		if more, n := hasMore("limit=8"); !more || n != 8 {
+			t.Errorf("limit=8: has_more %v with %d payments, want true with 8", more, n)
 		}
-		if more, n := hasMore("limit=7"); more || n != 7 {
-			t.Errorf("limit=7: has_more %v with %d payments, want false with 7", more, n)
+		if more, n := hasMore("limit=9"); more || n != 9 {
+			t.Errorf("limit=9: has_more %v with %d payments, want false with 9", more, n)
 		}
-		if more, n := hasMore(""); more || n != 7 {
-			t.Errorf("default: has_more %v with %d payments, want false with 7", more, n)
+		if more, n := hasMore(""); more || n != 9 {
+			t.Errorf("default: has_more %v with %d payments, want false with 9", more, n)
 		}
 	})
 
@@ -352,57 +410,35 @@ func TestHandleRecentPayments(t *testing.T) {
 		}
 	})
 
+	t.Run("the response names the groups for the chips", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		e.h.HandleRecentPayments(rec, httptest.NewRequest(http.MethodGet, "/api/v1/harbor/recent-payments", nil))
+		var body struct {
+			Groups []struct {
+				Slug     string  `json:"slug"`
+				Name     *string `json:"name"`
+				LabelKey *string `json:"label_key"`
+				Icon     string  `json:"icon"`
+			} `json:"groups"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		var slugs []string
+		for _, g := range body.Groups {
+			slugs = append(slugs, g.Slug)
+			if g.Name != nil || g.LabelKey == nil || g.Icon == "" {
+				t.Errorf("seeded group %s = %+v, want a label key and no name", g.Slug, g)
+			}
+		}
+		if strings.Join(slugs, ",") != "guest,motorhome,faktura,other" {
+			t.Errorf("groups = %v, want guest, motorhome, faktura, other (no slipping item, no slipping chip)", slugs)
+		}
+	})
+
 	t.Run("unknown kind matches nothing", func(t *testing.T) {
 		if got := e.get(t, "kind=nonsense"); len(got) != 0 {
 			t.Errorf("got %v, want none", recentIDs(got))
 		}
 	})
-}
-
-// Slipping is a service price item recognised by name; a guest stay on the
-// same order still wins, and the kind filter finds it.
-func TestRecentPaymentsSlippingKind(t *testing.T) {
-	e := newRecentPaymentsEnv(t)
-	ctx := context.Background()
-	addLine := func(orderID, category, name string) {
-		t.Helper()
-		var itemID string
-		if err := e.pool.QueryRow(ctx,
-			`INSERT INTO price_items (club_id, category, name, amount) VALUES ($1, $2, $3, 1600) RETURNING id`,
-			e.clubID, category, name,
-		).Scan(&itemID); err != nil {
-			t.Fatalf("insert price item: %v", err)
-		}
-		if _, err := e.pool.Exec(ctx,
-			`INSERT INTO order_lines (order_id, price_item_id, name, unit_price, total_price) VALUES ($1, $2, $3, 1600, 1600)`,
-			orderID, itemID, name,
-		); err != nil {
-			t.Fatalf("insert order line: %v", err)
-		}
-	}
-
-	slipping := e.paidOrder(t, "vipps", 10)
-	addLine(slipping, "service", "Slipping liten bat")
-	otherService := e.paidOrder(t, "vipps", 20)
-	addLine(otherService, "service", "Synthetic crane hire")
-	guestAndSlipping := e.paidOrder(t, "vipps", 30)
-	addLine(guestAndSlipping, "guest_harbor", "Synthetic guest night")
-	addLine(guestAndSlipping, "service", "Slipping stor bat")
-
-	got := e.get(t, "kind=slipping")
-	if len(got) != 1 || got[0].ID != slipping || got[0].Kind != "slipping" {
-		t.Errorf("slipping filter = %v, want only %s", recentIDs(got), slipping)
-	}
-	for _, p := range e.get(t, "") {
-		switch p.ID {
-		case otherService:
-			if p.Kind != "other" {
-				t.Errorf("other service kind = %q, want other", p.Kind)
-			}
-		case guestAndSlipping:
-			if p.Kind != "guest" {
-				t.Errorf("guest + slipping kind = %q, want guest", p.Kind)
-			}
-		}
-	}
 }

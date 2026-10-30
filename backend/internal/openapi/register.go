@@ -36,6 +36,7 @@ func RegisterAllOperations(api huma.API) {
 	registerGDPROps(api)
 	registerAdminOps(api)
 	registerRefundOps(api)
+	registerPaymentFilterOps(api)
 }
 
 func registerHealthOps(api huma.API) {

@@ -528,6 +528,94 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/payment-filter-groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the payment overview's filter groups, the club's price items and the icon list (any admin viewer)
+         * @description Never writes: a club without group rows gets the faktura and other built-ins synthesised.
+         */
+        get: operations["admin-list-payment-filter-groups"];
+        put?: never;
+        /**
+         * Create a filter group (board, harbor master, treasurer, admin)
+         * @description The slug comes from the name and never changes. The group goes after the existing ones, before the fallback; at most 20 groups per club. Refusals carry a `code`: 400 `invalid_name`, `reserved_name`, `invalid_icon`, `no_default_name`, `unknown_price_item`, `price_item_ids_required` (PUT items without the key; send [] to empty a group), `order_mismatch`; 404 `not_found`; 409 `name_taken`, `too_many_groups`, `builtin_group`.
+         */
+        post: operations["admin-create-payment-filter-group"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/payment-filter-groups/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set the display and priority order of the groups (board, harbor master, treasurer, admin)
+         * @description An order in two groups takes the first of them in this order. Refusals carry a `code`: 400 `invalid_name`, `reserved_name`, `invalid_icon`, `no_default_name`, `unknown_price_item`, `price_item_ids_required` (PUT items without the key; send [] to empty a group), `order_mismatch`; 404 `not_found`; 409 `name_taken`, `too_many_groups`, `builtin_group`.
+         */
+        put: operations["admin-reorder-payment-filter-groups"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/payment-filter-groups/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a filter group (board, harbor master, treasurer, admin)
+         * @description Its items become unassigned. The built-ins cannot be deleted. Refusals carry a `code`: 400 `invalid_name`, `reserved_name`, `invalid_icon`, `no_default_name`, `unknown_price_item`, `price_item_ids_required` (PUT items without the key; send [] to empty a group), `order_mismatch`; 404 `not_found`; 409 `name_taken`, `too_many_groups`, `builtin_group`.
+         */
+        delete: operations["admin-delete-payment-filter-group"];
+        options?: never;
+        head?: never;
+        /**
+         * Rename, re-icon, enable or disable a filter group (board, harbor master, treasurer, admin)
+         * @description The fallback group cannot be disabled. Refusals carry a `code`: 400 `invalid_name`, `reserved_name`, `invalid_icon`, `no_default_name`, `unknown_price_item`, `price_item_ids_required` (PUT items without the key; send [] to empty a group), `order_mismatch`; 404 `not_found`; 409 `name_taken`, `too_many_groups`, `builtin_group`.
+         */
+        patch: operations["admin-update-payment-filter-group"];
+        trace?: never;
+    };
+    "/api/v1/admin/payment-filter-groups/{slug}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace the price items of a filter group (board, harbor master, treasurer, admin)
+         * @description A price item is in at most one group: an item that is in another group moves, and `moved` lists them. A built-in group has no items. Refusals carry a `code`: 400 `invalid_name`, `reserved_name`, `invalid_icon`, `no_default_name`, `unknown_price_item`, `price_item_ids_required` (PUT items without the key; send [] to empty a group), `order_mismatch`; 404 `not_found`; 409 `name_taken`, `too_many_groups`, `builtin_group`.
+         */
+        put: operations["admin-set-payment-filter-group-items"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/pricing": {
         parameters: {
             query?: never;
@@ -3503,6 +3591,21 @@ export interface components {
             /** @description User UUID */
             user_id: string;
         };
+        CreatePaymentFilterGroupRequest: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/CreatePaymentFilterGroupRequest.json
+             */
+            readonly $schema?: string;
+            /** @description Defaults to true. */
+            enabled?: boolean;
+            /** @enum {string} */
+            icon: "sailboat" | "van" | "forklift" | "file-text" | "store" | "circle-dollar-sign" | "anchor" | "zap" | "wrench" | "tent" | "key-round" | "shopping-bag" | "coffee" | "ticket";
+            name: string;
+            /** @description Items to put in the group; one that is in another group moves. */
+            price_item_ids?: string[] | null;
+        };
         DashboardResponse: {
             /**
              * Format: uri
@@ -4698,6 +4801,84 @@ export interface components {
             /** @description Vipps payment reference */
             vipps_reference: string;
         };
+        PaymentFilterGroup: {
+            /**
+             * @description faktura matches orders that pay a faktura; other is the fallback and cannot be disabled or deleted. Null for an item group.
+             * @enum {string|null}
+             */
+            builtin: "faktura" | "other" | null;
+            enabled: boolean;
+            /** @enum {string} */
+            icon: "sailboat" | "van" | "forklift" | "file-text" | "store" | "circle-dollar-sign" | "anchor" | "zap" | "wrench" | "tent" | "key-round" | "shopping-bag" | "coffee" | "ticket";
+            /** Format: int64 */
+            item_count: number;
+            /**
+             * @description Translation key of a seeded row's default name (recentPayments.kind.<key>).
+             * @enum {string|null}
+             */
+            label_key: "guest" | "motorhome" | "slipping" | "faktura" | "other" | null;
+            /** @description The name the board typed, shown as typed in every locale. Null on a seeded row, which shows the translation of label_key. */
+            name: string | null;
+            price_item_ids: string[];
+            /** @description Stable id used in ?kind= links; set at create and never changed by a rename. */
+            slug: string;
+            /** Format: int64 */
+            sort_order: number;
+        };
+        PaymentFilterGroupResult: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/PaymentFilterGroupResult.json
+             */
+            readonly $schema?: string;
+            group: components["schemas"]["PaymentFilterGroup"];
+            /** @description Items that left another group for this one. */
+            moved: components["schemas"]["PaymentFilterMove"][];
+        };
+        PaymentFilterGroupsListResponse: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/PaymentFilterGroupsListResponse.json
+             */
+            readonly $schema?: string;
+            /** @description Display order, disabled groups included, the fallback last. Built-ins the club has no row for are synthesised. */
+            groups: components["schemas"]["PaymentFilterGroup"][];
+            icons: ("sailboat" | "van" | "forklift" | "file-text" | "store" | "circle-dollar-sign" | "anchor" | "zap" | "wrench" | "tent" | "key-round" | "shopping-bag" | "coffee" | "ticket")[];
+            /** @description Every price item of the club, archived ones included. */
+            price_items: components["schemas"]["PaymentFilterPriceItem"][];
+        };
+        PaymentFilterGroupsResponse: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/PaymentFilterGroupsResponse.json
+             */
+            readonly $schema?: string;
+            groups: components["schemas"]["PaymentFilterGroup"][];
+        };
+        PaymentFilterMove: {
+            /** @description Slug of the group the item left. */
+            from_group: string;
+            /** Format: uuid */
+            price_item_id: string;
+        };
+        PaymentFilterPriceItem: {
+            category: string;
+            /** @description The group the item is in; null when it is in none. */
+            group_slug: string | null;
+            /** Format: uuid */
+            id: string;
+            is_active: boolean;
+            name: string;
+            /** @description False for an item that cannot be on an order line: a category the checkout never offers, on no active QR poster and on no order line. Only a faktura bills it, so assigning it changes nothing. */
+            order_reachable: boolean;
+            /** @description The active QR posters that sell the item. */
+            qr_labels: string[];
+            /** @description An active QR poster sells it or an order line has it. Only an active, sold item in no group counts as unassigned. */
+            sold: boolean;
+        };
         PaymentRefund: {
             /**
              * Format: double
@@ -5066,6 +5247,16 @@ export interface components {
              */
             position: number;
         };
+        ReorderPaymentFilterGroupsRequest: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/ReorderPaymentFilterGroupsRequest.json
+             */
+            readonly $schema?: string;
+            /** @description Every group except the fallback, once, in the new order. */
+            slugs: string[] | null;
+        };
         "Report-slip-issueRequest": {
             /**
              * Format: uri
@@ -5088,6 +5279,16 @@ export interface components {
              * @description Email address to send the link to
              */
             email: string;
+        };
+        SetPaymentFilterGroupItemsRequest: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/SetPaymentFilterGroupItemsRequest.json
+             */
+            readonly $schema?: string;
+            /** @description The complete item set of the group. */
+            price_item_ids: string[] | null;
         };
         Slip: {
             /**
@@ -5431,6 +5632,20 @@ export interface components {
             readonly $schema?: string;
             /** @description Boat UUID */
             boat_id: string;
+        };
+        UpdatePaymentFilterGroupRequest: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/UpdatePaymentFilterGroupRequest.json
+             */
+            readonly $schema?: string;
+            enabled?: boolean;
+            /** @enum {string} */
+            icon?: "sailboat" | "van" | "forklift" | "file-text" | "store" | "circle-dollar-sign" | "anchor" | "zap" | "wrench" | "tent" | "key-round" | "shopping-bag" | "coffee" | "ticket";
+            name?: string;
+            /** @description Back to the translated default name; only a group with a label_key has one (400 no_default_name). */
+            reset_name?: boolean;
         };
         UserProfile: {
             /**
@@ -6739,6 +6954,200 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OrderRefundsResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "admin-list-payment-filter-groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentFilterGroupsListResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "admin-create-payment-filter-group": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePaymentFilterGroupRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentFilterGroupResult"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "admin-reorder-payment-filter-groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReorderPaymentFilterGroupsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentFilterGroupsResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "admin-delete-payment-filter-group": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "admin-update-payment-filter-group": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePaymentFilterGroupRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentFilterGroupResult"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "admin-set-payment-filter-group-items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetPaymentFilterGroupItemsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentFilterGroupResult"];
                 };
             };
             /** @description Error */

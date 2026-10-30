@@ -279,6 +279,7 @@ func main() {
 	}
 	passkeyHandler := handlers.NewPasskeyHandler(webAuthn, passkey.NewStore(db), passkey.NewChallengeStore(rdb), sessionService, auditService, &cfg, log)
 	waitingListHandler := handlers.NewWaitingListHandler(db, rdb, &cfg, log)
+	paymentFilterHandler := handlers.NewPaymentFilterHandler(db, auditService, log)
 	adminUsersHandler := handlers.NewAdminUsersHandler(db, &cfg, log)
 	if inboxReconciler != nil && inboxReconciler.HasMailboxes() {
 		adminUsersHandler.RoleChangeHook = inboxReconciler.OnRoleChanged
@@ -1091,6 +1092,16 @@ func main() {
 				waitingListHandler.MountAdminRoutes(r,
 					middleware.RequireRoleOrBoardRead("board"),
 					middleware.RequireFreshTOTPDefault(),
+				)
+
+				// The Payments page's filter groups (BRY-522): any admin viewer
+				// reads them, the roles that run the page and own the price
+				// list change them. Display configuration only, so no fresh
+				// TOTP, like /admin/pricing (PAY-15); no feature flag, as the
+				// Payments page has none. The SPA mirrors the roles as
+				// WRITE_ROLES.paymentFilters.
+				paymentFilterHandler.MountAdminRoutes(r,
+					middleware.RequireRoleOrBoardRead(handlers.PaymentFilterWriteRoles...),
 				)
 
 				r.Route("/slips", func(r chi.Router) {

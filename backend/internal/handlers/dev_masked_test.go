@@ -67,6 +67,10 @@ var rawTextColumns = map[string]bool{
 	"payment_disputes.provider": true, "payment_disputes.provider_dispute_id": true, "payment_disputes.charge_ref": true,
 	"payment_disputes.provider_payment_ref": true, "payment_disputes.currency": true, "payment_disputes.reason": true,
 	"payment_disputes.status": true,
+	// the club's own filter-group labels and codes (BRY-522); a group name is
+	// typed by the board for a chip and holds no member data
+	"payment_filter_groups.slug": true, "payment_filter_groups.name": true, "payment_filter_groups.label_key": true,
+	"payment_filter_groups.icon": true, "payment_filter_groups.builtin": true,
 }
 
 // TestDevMaskedViews migrates a throwaway database, applies the dev_masked

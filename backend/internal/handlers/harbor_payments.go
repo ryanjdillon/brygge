@@ -10,6 +10,7 @@ import (
 
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/middleware"
+	"github.com/brygge-klubb/brygge/internal/paymentfilters"
 	"github.com/brygge-klubb/brygge/internal/vipps"
 )
 
@@ -21,8 +22,11 @@ type recentPayment struct {
 	Amount  float64   `json:"amount"`
 	Payer   string    `json:"payer"`
 	Summary string    `json:"summary"`
-	Kind    string    `json:"kind"`    // guest | motorhome | slipping | faktura | merch | other
-	Channel string    `json:"channel"` // the provider: vipps | stripe
+	// Kind is the slug of the filter group the payment is in (BRY-522); the
+	// seeded groups keep the old ids (guest, motorhome, slipping, faktura,
+	// other).
+	Kind    string `json:"kind"`
+	Channel string `json:"channel"` // the provider: vipps | stripe
 	// Method is how the payer paid: vipps | card | apple_pay | google_pay.
 	Method string `json:"method"`
 	// CardBrand is Stripe's brand code (visa, mastercard, ...) for a card
@@ -90,32 +94,11 @@ func paymentMethod(provider string, wallet *string) string {
 	return methodCard
 }
 
-// recentPaymentKindSQL classifies a paid order for the harbor overview. Guest
-// stays take priority (that is what the harbor master watches for), then
-// motorhomes, then slipping, then faktura, then merchandise. It runs in SQL so
-// the kind filter applies before LIMIT.
-//
-// Slipping has no price-item category of its own, so this interim rule treats
-// any price item whose name contains "slipping", in any category, as slipping.
-// It is the one place that rule lives; the configurable filter groups (BRY-522)
-// replace it.
-const recentPaymentKindSQL = `
-	CASE
-	    WHEN EXISTS (SELECT 1 FROM order_lines ol JOIN price_items pi ON pi.id = ol.price_item_id
-	                  WHERE ol.order_id = o.id AND pi.category LIKE '%guest%') THEN 'guest'
-	    WHEN EXISTS (SELECT 1 FROM order_lines ol JOIN price_items pi ON pi.id = ol.price_item_id
-	                  WHERE ol.order_id = o.id AND (pi.category LIKE '%motorhome%' OR pi.category LIKE '%bobil%')) THEN 'motorhome'
-	    WHEN EXISTS (SELECT 1 FROM order_lines ol JOIN price_items pi ON pi.id = ol.price_item_id
-	                  WHERE ol.order_id = o.id AND pi.name ILIKE '%slipping%') THEN 'slipping'
-	    WHEN EXISTS (SELECT 1 FROM order_sources os WHERE os.order_id = o.id) THEN 'faktura'
-	    WHEN EXISTS (SELECT 1 FROM order_lines ol JOIN price_items pi ON pi.id = ol.price_item_id
-	                  WHERE ol.order_id = o.id AND pi.category LIKE '%merch%') THEN 'merch'
-	    ELSE 'other'
-	END`
-
 // recentPaymentsQuery builds the overview query from the request filters:
-// since/until (dates, both inclusive of their whole day), kind (one kind or a
-// comma-separated list), q (payer search) and limit. It also returns the
+// since/until (dates, both inclusive of their whole day), kind (one group slug
+// or a comma-separated list; the group is decided in SQL by
+// paymentfilters.OrderGroupLateralSQL, so the filter applies before LIMIT),
+// q (payer search) and limit. It also returns the
 // limit it applied: the query fetches one row more, so the caller can tell the
 // list was cut short.
 func recentPaymentsQuery(clubID string, q url.Values) (string, []any, int) {
@@ -144,7 +127,7 @@ func recentPaymentsQuery(clubID string, q url.Values) (string, []any, int) {
 	}
 	if kinds := splitList(q.Get("kind")); len(kinds) > 0 {
 		args = append(args, kinds)
-		where += fmt.Sprintf(" AND k.kind = ANY($%d::text[])", len(args))
+		where += fmt.Sprintf(" AND COALESCE(pfg.slug, 'other') = ANY($%d::text[])", len(args))
 	}
 
 	sql := `
@@ -155,12 +138,12 @@ func recentPaymentsQuery(clubID string, q url.Values) (string, []any, int) {
 		         WHERE os.order_id = o.id),
 		       (SELECT string_agg(ol.name, ', ')
 		          FROM order_lines ol WHERE ol.order_id = o.id),
-		       k.kind, ca.card_brand, ca.card_wallet,
+		       COALESCE(pfg.slug, 'other'), ca.card_brand, ca.card_wallet,
 		       o.status = 'refunded', pr.amount_ore, pr.refunded_ore, pr.payment_ref,
 		       dp.status, dp.evidence_due_by, dp.provider_dispute_id
 		  FROM orders o
 		  LEFT JOIN users u ON u.id = o.user_id
-		 CROSS JOIN LATERAL (SELECT ` + recentPaymentKindSQL + ` AS kind) k
+		 ` + paymentfilters.OrderGroupLateralSQL + `
 		  LEFT JOIN LATERAL (
 		       SELECT pa.card_brand, pa.card_wallet
 		         FROM payment_attempts pa
@@ -301,6 +284,23 @@ func (h *HarborHandler) HandleRecentPayments(w http.ResponseWriter, r *http.Requ
 
 	h.markRefundable(r, clubID, out)
 	resp := map[string]any{"payments": out, "has_more": hasMore}
+	groups, err := paymentfilters.ListGroups(ctx, h.db, clubID, false)
+	if err != nil {
+		// Without the groups the page cannot draw its chips, so this is a
+		// failed overview, not a partial one.
+		h.log.Error().Err(err).Msg("recent payments: filter groups failed")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	resp["groups"] = overviewGroups(groups)
+	if claims != nil && mayEditPaymentFilters(claims.Roles) {
+		// The nudge for those who can assign price items to groups.
+		if n, err := paymentfilters.CountUnassigned(ctx, h.db, clubID); err != nil {
+			h.log.Warn().Err(err).Msg("recent payments: unassigned count failed")
+		} else {
+			resp["unassigned_items"] = n
+		}
+	}
 	if staff {
 		// The back offices are for the treasurer and admin, like the
 		// per-payment Dashboard links above.
@@ -320,6 +320,23 @@ func (h *HarborHandler) HandleRecentPayments(w http.ResponseWriter, r *http.Requ
 		}
 	}
 	JSON(w, http.StatusOK, resp)
+}
+
+// overviewGroup is a filter group as the overview's chips need it.
+type overviewGroup struct {
+	Slug     string  `json:"slug"`
+	Name     *string `json:"name"`
+	LabelKey *string `json:"label_key"`
+	Icon     string  `json:"icon"`
+	Builtin  *string `json:"builtin"`
+}
+
+func overviewGroups(groups []paymentfilters.Group) []overviewGroup {
+	out := make([]overviewGroup, 0, len(groups))
+	for _, g := range groups {
+		out = append(out, overviewGroup{Slug: g.Slug, Name: g.Name, LabelKey: g.LabelKey, Icon: g.Icon, Builtin: g.Builtin})
+	}
+	return out
 }
 
 // overviewRefund says how much of an order's payment went back, in kr. The

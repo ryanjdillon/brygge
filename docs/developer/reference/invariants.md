@@ -605,6 +605,14 @@ A new provider's webhook uses the same split.
 
 **Failure mode:** a capture whose answer fails to decode reported as failed sends the webhook into `afterFailedCapture`, and a PaymentIntent lookup failing on the charge it expands releases a captured attempt instead of settling it — money taken, order left unpaid, over a field that only labels the overview.
 
+### An order's payment group comes only from `paymentfilters`, and a price item is in at most one group
+
+**Rule (BRY-522, PAY-15):** the filter group of an order (the `kind` on the Payments page, the `kind` filter, and the group the SMS alerts of BRY-521 route by) is decided by `internal/paymentfilters` and nowhere else: the overview joins `paymentfilters.OrderGroupLateralSQL`, single orders call `paymentfilters.ClassifyOrder`. The rule is the enabled group with the lowest position among the groups that hold one of the order's **order lines**' price items and the faktura built-in when the order has an `order_sources` row, else the `other` built-in, which is never matched. A `kind` filter stays in that SQL, before `LIMIT`, bound as a `text[]`. A price item is in at most one group: `payment_filter_group_items.price_item_id` is the primary key, and a move is `ON CONFLICT (price_item_id) DO UPDATE`. Every write of the groups takes `paymentfilters.Lock` (a per-club advisory lock) and `EnsureBuiltins` first, so two admins serialise and a club without rows gets its built-ins on its first write; a GET only reads and synthesises them.
+
+A new group is created just before the faktura built-in and the positions are renumbered under the same lock, so it ranks above Faktura like the seeded groups. A price item can be on an order line when its category is offered by the checkout, an active QR poster sells it, or an order line has it (`paymentfilters.ListPriceItems`, from data); only an item that is none of these is billed on fakturas only.
+
+**Failure mode:** a second copy of the rule (an SMS alert that classifies on its own) tells the harbor master a "Slipping" payment came in that the Payments page shows under Annet. An item in two groups made the chip an order was filed under depend on which group sorted first, so filtering by the second group missed it. Two admins moving the same item or sorting at once interleaved and left gaps or an order nobody chose. An item that only a faktura bills can never put an order in a group, since the classifier sees only order lines; treating whole categories as such was wrong (a `membership` item can be a checkout add-on and a QR poster can sell any item), so reachability is read from data. An order that pays a faktura is Faktura unless one of its order lines holds an item of a group that ranks above it. A group created below Faktura silently lost to it on a faktura checkout with that group's add-on, while the migration-seeded ones won.
+
 ---
 
 ## Sessions

@@ -273,3 +273,7 @@ The owner's decisions for card payments (hosted Checkout, methods, provider choi
 ### Sequencing
 
 BRY-442 (this provider seam) → BRY-441 (provider-neutral data model, payment attempts) → BRY-443 (Stripe Checkout and webhook) → then in parallel BRY-444 (payer UI, error-code renames), BRY-445 (accounting: ingest, then BRY-454 postings and BRY-457 payout clearing), BRY-446 (refunds) and BRY-447 (operations).
+
+### Filter groups on the payment overview
+
+The `kind` of each payment on `GET /api/v1/harbor/recent-payments`, and the `kind` filter, are the slug of the club's **payment filter group** (BRY-522, PAY-15), not a fixed list. The response also carries `groups` (the enabled groups, display order, the fallback last; every caller) and, for the roles that may edit them, `unassigned_items`. Which group an order is in is decided in SQL by `paymentfilters.OrderGroupLateralSQL` and only from its **order lines** (and whether it pays a faktura): what a faktura bills never counts, so an order that pays a faktura is Faktura unless one of its order lines (an add-on) holds an item of a group that ranks above Faktura. The module, its edge cases and the admin API are in [`backend/internal/paymentfilters`](../../backend/internal/paymentfilters/README.md); the vocabulary in [`enums.md`](reference/enums.md#payment-overview-groups-payment_filter_groups-migration-000123-bry-522); the user view in [`payments-overview.md`](../user/payments-overview.md).

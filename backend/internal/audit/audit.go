@@ -117,6 +117,13 @@ const (
 	// (BRY-446)
 	ActionStripeTxnDisputeBooked = "stripe_txn.dispute_booked"
 
+	// The payment overview's filter groups and their price items (BRY-522)
+	ActionPaymentFilterGroupCreated      = "payment_filter_group.created"
+	ActionPaymentFilterGroupUpdated      = "payment_filter_group.updated"
+	ActionPaymentFilterGroupItemsUpdated = "payment_filter_group.items_updated"
+	ActionPaymentFilterGroupsReordered   = "payment_filter_group.reordered"
+	ActionPaymentFilterGroupDeleted      = "payment_filter_group.deleted"
+
 	// Payer aliases taught from bank Tildel or the Vipps queue (BRY-383)
 	ActionPayerAliasTaught  = "payer_alias.taught"
 	ActionPayerAliasRemoved = "payer_alias.removed"

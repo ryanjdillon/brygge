@@ -108,7 +108,7 @@ live in the handlers.
 | Route | Roles |
 |---|---|
 | `PUT /harbor/layout` | board, admin, harbor_master |
-| `GET /harbor/recent-payments`, `/harbor/payment-targets[/{id}/qr.png]` | any admin viewer (writes: board, admin, harbor_master) |
+| `GET /harbor/recent-payments`, `/harbor/payment-targets[/{id}/qr.png]` | any admin viewer (writes: board, admin, harbor_master). The recent-payments answer carries `groups` (the enabled filter groups) for every caller and `unassigned_items` only for the roles that may edit the groups |
 | `POST /bookings/{id}/confirm` | board, harbor_master |
 | `POST/PUT/DELETE /calendar/*` | board |
 | `POST /projects`, project tasks; `PUT/DELETE /tasks/{id}`, assign, hours | board |
@@ -156,6 +156,7 @@ reads admit any admin viewer (see *Board read access* above).
 | `/admin/settings/site-logo` (POST/DELETE) | treasurer, admin | ✅ |
 | `/admin/slip-shares/*` † | board, harbor_master | — |
 | `/admin/pricing` † (CUD) | admin, treasurer | — |
+| `/admin/payment-filter-groups` † (GET; POST, PATCH, PUT `/order`, PUT `/{slug}/items`, DELETE) | reads: any admin viewer; writes: board, harbor_master, treasurer, admin | — (BRY-522; display configuration only, like `/admin/pricing`; revisit when alerts route by group, PAY-15) |
 | `/admin/products` † (CUD) | board, admin | — |
 | `/admin/content-documents` † | board | — |
 | `/admin/bookings` † | board, harbor_master | — |

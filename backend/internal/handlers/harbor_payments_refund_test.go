@@ -119,6 +119,8 @@ func TestRecentPaymentsRefundsAndDisputes(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// The guest group an existing club got from its price items.
+	e.backfill(t)
 	got, top := e.getAs(t, nil, "kind=guest,motorhome")
 	if _, ok := got[pending]; ok {
 		t.Error("pending order listed")

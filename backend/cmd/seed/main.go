@@ -15,6 +15,7 @@ import (
 	"github.com/brygge-klubb/brygge/internal/accounting"
 	"github.com/brygge-klubb/brygge/internal/auth"
 	"github.com/brygge-klubb/brygge/internal/config"
+	"github.com/brygge-klubb/brygge/internal/paymentfilters"
 )
 
 // seedTOTPSecretFile holds the plaintext base32 TOTP secret for the
@@ -572,6 +573,16 @@ func main() {
 	}
 	fmt.Printf("  price items: %d created\n", len(priceItems))
 
+	// Payment filter groups for the demo club (BRY-522): the built-ins and
+	// groups for its guest, motorhome and crane items, so the Payments page
+	// has chips to show. Demo data only; a real club's groups come from its own
+	// price items (migration 000123) or from the board.
+	if err := seedPaymentFilterGroups(ctx, db, clubID); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to seed payment filter groups: %v\n", err)
+	} else {
+		fmt.Println("  payment filter groups: seeded")
+	}
+
 	// Create some sample events
 	now := time.Now()
 	events := []struct {
@@ -662,4 +673,44 @@ func main() {
 	fmt.Println("  member (wl):    wl-member@brygge.local / member123  (Per Venansen, on waiting list #2)")
 	fmt.Println("  member:         member@brygge.local / member123  (Medlem Hansen, on waiting list #7)")
 	fmt.Println("\n  or via Vipps mock with corresponding test users")
+}
+
+// seedPaymentFilterGroups gives the demo club filter groups over its seeded
+// price items. Re-seeding replaces the price items, which drops their
+// assignments, so the items are assigned again each run.
+func seedPaymentFilterGroups(ctx context.Context, db *pgxpool.Pool, clubID string) error {
+	tx, err := db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if err := paymentfilters.EnsureBuiltins(ctx, tx, clubID); err != nil {
+		return err
+	}
+	groups := []struct {
+		slug, icon, category, namePattern string
+		sort                              int
+	}{
+		{"guest", "sailboat", "guest", "%", 10},
+		{"motorhome", "van", "motorhome", "%", 20},
+		{"slipping", "forklift", "service", "Kran%", 30},
+	}
+	for _, g := range groups {
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO payment_filter_groups (club_id, slug, label_key, icon, sort_order)
+			 VALUES ($1, $2, $2, $3, $4) ON CONFLICT DO NOTHING`,
+			clubID, g.slug, g.icon, g.sort); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO payment_filter_group_items (price_item_id, group_id)
+			 SELECT pi.id, pg.id FROM price_items pi, payment_filter_groups pg
+			  WHERE pi.club_id = $1 AND pg.club_id = $1 AND pg.slug = $2
+			    AND pi.category = $3 AND pi.name LIKE $4
+			 ON CONFLICT (price_item_id) DO UPDATE SET group_id = EXCLUDED.group_id`,
+			clubID, g.slug, g.category, g.namePattern); err != nil {
+			return err
+		}
+	}
+	return tx.Commit(ctx)
 }
