@@ -1,6 +1,8 @@
 import { computed } from 'vue'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useApiClient, unwrap } from '@/lib/apiClient'
+import { ApiError } from '@/lib/errors'
+import { useFreshTotp } from '@/composables/useFreshTotp'
 import type { components } from '@/types/api'
 
 export type DeletionRequest = components['schemas']['DeletionRequest']
@@ -97,13 +99,23 @@ export function useAdminDeletionRequests() {
 }
 
 export function useProcessDeletion() {
-  const client = useApiClient()
   const queryClient = useQueryClient()
+  const { totpAwareFetch } = useFreshTotp()
   return useMutation({
-    mutationFn: async (id: string) =>
-      unwrap(await client.POST('/api/v1/admin/gdpr/deletion-requests/{requestID}/process', {
-        params: { path: { requestID: id } },
-      })),
+    // Erasure is irreversible, so the route sits behind a fresh TOTP
+    // (BRY-509); totpAwareFetch re-prompts and replays once if the window
+    // lapses between the click-time prompt and the request.
+    mutationFn: async (id: string) => {
+      const res = await totpAwareFetch(
+        `/api/v1/admin/gdpr/deletion-requests/${encodeURIComponent(id)}/process`,
+        { method: 'POST' },
+      )
+      if (!res.ok) {
+        const err = await res.json().catch(() => null)
+        throw new ApiError(res.status, err?.error ?? res.statusText ?? 'Request failed', err?.code)
+      }
+      return res.json()
+    },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'deletion-requests'] }),
   })
 }

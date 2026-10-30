@@ -7,12 +7,20 @@ import Input from '@/components/ui/form/Input.vue'
 import Textarea from '@/components/ui/form/Textarea.vue'
 import Checkbox from '@/components/ui/form/Checkbox.vue'
 import { formatDate as fmtDate } from '@/lib/format'
+import { useFreshTotp } from '@/composables/useFreshTotp'
+import { useConfirm } from '@/stores/confirm'
+import { useToast } from '@/composables/useToast'
+import { ApiError } from '@/lib/errors'
 
 const { t, locale } = useI18n()
 const { requests, isLoading: requestsLoading } = useAdminDeletionRequests()
 const { mutate: processDeletion, isPending: processing } = useProcessDeletion()
 const { documents, isLoading: docsLoading } = useAdminLegalDocuments()
 const { mutate: createDocument, isPending: creating } = useCreateLegalDocument()
+
+const { ensureFreshTotp } = useFreshTotp()
+const confirm = useConfirm()
+const toast = useToast()
 
 const showForm = ref(false)
 const form = ref({
@@ -28,6 +36,27 @@ function isGraceExpired(graceEnd: string): boolean {
 
 function formatDate(d: string): string {
   return fmtDate(d, locale.value)
+}
+
+// Erasure cannot be undone: step up first so the admin re-verifies before
+// the confirm dialog, not after it (BRY-509).
+async function handleProcess(req: { id: string; user_name?: string }) {
+  if (!(await ensureFreshTotp())) return
+  const ok = await confirm({
+    title: t('gdpr.admin.processConfirmTitle'),
+    body: t('gdpr.admin.processConfirmBody', { name: req.user_name || t('gdpr.admin.thisMember') }),
+    confirmLabel: t('gdpr.admin.process'),
+    tone: 'danger',
+  })
+  if (!ok) return
+  processDeletion(req.id, {
+    onError: (err) => {
+      // A cancelled re-prompt hands back the 403 untouched; the admin chose
+      // not to proceed, so it is not a failure to report.
+      if (err instanceof ApiError && err.message === 'totp_fresh_required') return
+      toast.error(t('gdpr.admin.processFailed'))
+    },
+  })
 }
 
 const docTypeOptions = computed(() => [
@@ -99,7 +128,7 @@ function handleCreate() {
                   v-if="isGraceExpired(req.grace_end)"
                   :disabled="processing"
                   class="rounded-md bg-red-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
-                  @click="processDeletion(req.id)"
+                  @click="handleProcess(req as any)"
                 >
                   {{ processing ? t('common.loading') : t('gdpr.admin.process') }}
                 </button>
