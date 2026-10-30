@@ -314,7 +314,7 @@ watch(docSearch, () => nextTick(() => applyHighlights()))
                     — {{ inv.price_item_name || inv.description }}
                   </span>
                 </p>
-                <p class="text-xs text-gray-500">{{ t('portal.invoices.due') }}: {{ formatDate(inv.due_date) }}</p>
+                <p v-if="!inv.credit_note" class="text-xs text-gray-500">{{ t('portal.invoices.due') }}: {{ formatDate(inv.due_date) }}</p>
               </div>
               <div class="flex shrink-0 items-center gap-2">
                 <span class="text-sm font-semibold tabular-nums text-gray-900">
@@ -347,7 +347,7 @@ watch(docSearch, () => nextTick(() => applyHighlights()))
                     — {{ inv.price_item_name || inv.description }}
                   </span>
                 </p>
-                <p class="text-xs text-gray-400">{{ t('portal.invoices.due') }}: {{ formatDate(inv.due_date) }}</p>
+                <p v-if="!inv.credit_note" class="text-xs text-gray-400">{{ t('portal.invoices.due') }}: {{ formatDate(inv.due_date) }}</p>
               </div>
               <div class="flex shrink-0 items-center gap-2">
                 <span class="text-sm tabular-nums text-gray-500">{{ formatNOK(inv.total_amount) }}</span>

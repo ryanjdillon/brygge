@@ -40,6 +40,18 @@ describe('InvoiceList status chip (BRY-276)', () => {
     expect(chip(w).classes()).toContain('bg-sky-100')
   })
 
+  it('shows no due date or KID on a credit note, which asks for nothing', () => {
+    const w = mountWithPlugins(InvoiceList, {
+      props: { invoices: [invoice({ total_amount: -1500, credit_note: true, owed: false })] },
+    })
+    expect(w.text()).not.toContain('portal.invoices.due')
+    expect(w.text()).not.toContain('KID')
+
+    const owed = mountWithPlugins(InvoiceList, { props: { invoices: [invoice()] } })
+    expect(owed.text()).toContain('portal.invoices.due')
+    expect(owed.text()).toContain('KID 1234567890')
+  })
+
   it('shows a faktura settled by a credit note as credited, not overdue (BRY-342)', () => {
     const w = mountWithPlugins(InvoiceList, {
       props: { invoices: [invoice({ credited: true, due_date: '2020-01-01' })] },

@@ -45,7 +45,8 @@ function refundNote(inv: MemberInvoice): string {
                 — {{ inv.price_item_name || inv.description }}
               </span>
             </p>
-            <p class="mt-0.5 text-xs text-gray-500">
+            <!-- A credit note asks for nothing, so it has no due date or KID. -->
+            <p v-if="!inv.credit_note" class="mt-0.5 text-xs text-gray-500">
               {{ t('portal.invoices.due') }}: {{ formatDate(inv.due_date) }}
               <span v-if="inv.kid_number && !isNothingDue(inv)"> · KID {{ inv.kid_number }}</span>
             </p>

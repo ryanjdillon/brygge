@@ -726,7 +726,7 @@ async function deleteSelected() {
 async function sendRemindersSelected() {
   if (selected.value.size === 0) return
   if (!(await ensureFreshTotp())) return
-  const items = rows.value.filter((d) => selected.value.has(d.id) && !d.paid)
+  const items = rows.value.filter((d) => selected.value.has(d.id) && !d.paid && !isCreditNote(d))
   if (items.length === 0) {
     error.value = t('admin.faktura.sent.reminderNoneEligible')
     return
@@ -802,7 +802,7 @@ async function reissueKidSelected() {
   if (!(await ensureFreshTotp())) return
   // Only unpaid invoices are eligible — a paid one carries a booked
   // payment/bilag keyed on its current KID (the backend also enforces this).
-  const items = rows.value.filter((d) => selected.value.has(d.id) && !d.paid)
+  const items = rows.value.filter((d) => selected.value.has(d.id) && !d.paid && !isCreditNote(d))
   if (items.length === 0) {
     error.value = t('admin.faktura.sent.reissueKidNoneEligible')
     return
@@ -1150,7 +1150,7 @@ defineExpose({ load })
               <td class="px-3 py-2 text-sm text-gray-700">{{ d.price_item_name || d.description || '—' }}</td>
               <td class="whitespace-nowrap px-3 py-2 text-sm text-gray-600">{{ d.fiscal_year ?? '—' }}</td>
               <td class="whitespace-nowrap px-3 py-2 text-right text-sm tabular-nums">{{ formatNOK(Number(d.total_amount)) }}</td>
-              <td class="whitespace-nowrap px-3 py-2 text-sm text-gray-600">{{ d.due_date }}</td>
+              <td class="whitespace-nowrap px-3 py-2 text-sm text-gray-600">{{ isCreditNote(d) ? '—' : d.due_date }}</td>
               <td v-if="status === 'sent'" class="whitespace-nowrap px-3 py-2 text-sm text-gray-600">
                 {{ d.sent_at ? formatDate(d.sent_at) : '—' }}
               </td>
