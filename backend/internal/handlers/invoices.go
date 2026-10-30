@@ -1717,16 +1717,16 @@ func (h *InvoiceHandler) HandleVoidInvoice(w http.ResponseWriter, r *http.Reques
 	// A faktura booked into a closed year can't be reversed there; voiding
 	// it would leave the receivable standing in the closed accounts.
 	if h.ledger != nil {
-		var inClosedPeriod bool
+		var inClosedPeriod, inReferencePeriod bool
 		if err := h.db.QueryRow(ctx,
-			`SELECT EXISTS (
-			    SELECT 1 FROM journal_entries je
-			      JOIN fiscal_periods fp ON fp.id = je.fiscal_period_id
-			     WHERE je.club_id = $1 AND je.source IN ('invoice_sync', 'invoice_resplit')
-			       AND je.source_id = $2 AND je.status = 'posted'
-			       AND fp.status <> 'open')`,
+			`SELECT COALESCE(bool_or(fp.status <> 'open'), false),
+			        COALESCE(bool_or(fp.reference_only), false)
+			   FROM journal_entries je
+			   JOIN fiscal_periods fp ON fp.id = je.fiscal_period_id
+			  WHERE je.club_id = $1 AND je.source IN ('invoice_sync', 'invoice_resplit')
+			    AND je.source_id = $2 AND je.status = 'posted'`,
 			claims.ClubID, invoiceID,
-		).Scan(&inClosedPeriod); err != nil {
+		).Scan(&inClosedPeriod, &inReferencePeriod); err != nil {
 			h.log.Error().Err(err).Msg("void invoice: check booked period")
 			Error(w, http.StatusInternalServerError, "internal error")
 			return
@@ -1736,6 +1736,12 @@ func (h *InvoiceHandler) HandleVoidInvoice(w http.ResponseWriter, r *http.Reques
 				"error": "invoice is booked in a closed fiscal period; issue a credit note instead",
 				"code":  "period_closed",
 			})
+			return
+		}
+		// A reference year takes cost bookings only, so the faktura's
+		// receivable can't be reversed there either.
+		if inReferencePeriod {
+			writeReferencePeriod(w)
 			return
 		}
 	}

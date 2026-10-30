@@ -177,6 +177,7 @@ reads admit any admin viewer (see *Board read access* above).
 | `DELETE /accounts/{id}` | ✅ (DIL-245) | destroys a GL account |
 | `/periods` list/create | — | |
 | `POST /periods/{id}/close`, `/reopen` | ✅ (DIL-245) | locks/unlocks the books |
+| `POST /periods/{id}/reference` | ✅ (treasurer, admin; BRY-418) | marks or unmarks a reference year: changes what is booked and what later years carry |
 | `/journal` list/get | — | |
 | `POST /journal`, `/{id}/post`, `/{id}/void`, `DELETE /journal/{id}` | ✅ (treasurer, admin; BRY-370) | the double-entry ledger itself |
 | `POST /sync/payments`, `/sync/invoices` (Avstem periode), `/sync/invoices/resplit`, `/sync/vipps-drafts` | ✅ (treasurer, admin; BRY-370) | book posted entries |
@@ -192,6 +193,7 @@ reads admit any admin viewer (see *Board read access* above).
 | `/vipps-imports` list | — | |
 | `bank-rows/{id}` suggestions/potential-invoices/partners, `vipps-charges/{id}` suggestions/potential-invoices | — | reads |
 | `assign-invoice[-multi]`, assign-account, assign-account-group, dismiss, unassign | ✅ (treasurer, admin) | manual reconcile (Tildel) |
+| `POST /bank-rows/{rowID}/undismiss` | ✅ (treasurer, admin; BRY-418) | returns a dismissed reference-year row to the Referanseår list |
 | `/rules/*` | — | reconciliation rules |
 | `/reports/*` (incl. momskomp save/status) | — | reporting |
 

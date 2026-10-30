@@ -122,6 +122,9 @@ func (h *AccountingHandler) HandleAssignVippsChargeToInvoice(w http.ResponseWrit
 		return
 	}
 	res, err := h.svc.AssignVippsChargeToInvoice(ctx, claims.ClubID, rowID, req.InvoiceID, claims.UserID)
+	if referencePeriodConflict(w, err) {
+		return
+	}
 	if invoiceNotAssignableConflict(w, err) {
 		return
 	}
@@ -161,6 +164,9 @@ func (h *AccountingHandler) HandleCreateVippsChargeBilag(w http.ResponseWriter, 
 		return
 	}
 	res, err := h.svc.CreateVippsChargeBilag(ctx, claims.ClubID, rowID, req.AccountCode, req.Description, claims.UserID)
+	if referencePeriodConflict(w, err) {
+		return
+	}
 	if err != nil {
 		h.log.Warn().Err(err).Str("row_id", rowID).Msg("create vipps charge bilag")
 		Error(w, http.StatusBadRequest, err.Error())
@@ -205,6 +211,9 @@ func (h *AccountingHandler) HandleUnassignVippsCharge(w http.ResponseWriter, r *
 		entryID, err = h.svc.ReleaseVippsBacklogCharge(ctx, claims.ClubID, claims.UserID, rowID)
 	} else {
 		entryID, invoiceID, err = h.svc.UnassignVippsCharge(ctx, claims.ClubID, claims.UserID, rowID)
+	}
+	if referencePeriodConflict(w, err) {
+		return
 	}
 	if errors.Is(err, accounting.ErrVippsChargeInSettlement) {
 		JSON(w, http.StatusConflict, map[string]string{"error": err.Error(), "code": "charge_in_settlement"})

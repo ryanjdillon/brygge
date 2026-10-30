@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/rs/zerolog"
 
@@ -350,6 +351,72 @@ func (h *AccountingHandler) HandleReopenPeriod(w http.ResponseWriter, r *http.Re
 	JSON(w, http.StatusOK, map[string]string{"message": "period reopened"})
 }
 
+type setPeriodReferenceRequest struct {
+	ReferenceOnly *bool `json:"reference_only"`
+}
+
+// HandleSetPeriodReference marks a fiscal period as a reference year, or
+// clears the mark (BRY-418, ACC-12). The answer is the updated period. A
+// request that leaves the value as it is changes nothing and logs nothing.
+func (h *AccountingHandler) HandleSetPeriodReference(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	var req setPeriodReferenceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.ReferenceOnly == nil {
+		Error(w, http.StatusBadRequest, "reference_only (true or false) required")
+		return
+	}
+
+	periodID := chi.URLParam(r, "periodID")
+	if _, err := uuid.Parse(periodID); err != nil {
+		Error(w, http.StatusNotFound, "period not found")
+		return
+	}
+	period, changed, err := h.svc.SetPeriodReference(r.Context(), claims.ClubID, periodID, *req.ReferenceOnly)
+	if err != nil {
+		switch {
+		case errors.Is(err, accounting.ErrPeriodNotFound):
+			Error(w, http.StatusNotFound, "period not found")
+		case errors.Is(err, accounting.ErrReferenceCurrentYear):
+			JSON(w, http.StatusConflict, map[string]string{"error": err.Error(), "code": "reference_current_year"})
+		case errors.Is(err, accounting.ErrReferenceHasOpeningBalance):
+			JSON(w, http.StatusConflict, map[string]string{"error": err.Error(), "code": "reference_has_opening_balance"})
+		case errors.Is(err, accounting.ErrPeriodClosed):
+			JSON(w, http.StatusConflict, map[string]string{
+				"error": "åpne året igjen før referansemerkingen fjernes",
+				"code":  "period_closed",
+			})
+		default:
+			h.log.Error().Err(err).Str("period_id", periodID).Msg("failed to set period reference")
+			Error(w, http.StatusInternalServerError, "internal error")
+		}
+		return
+	}
+
+	if changed && h.audit != nil {
+		action := audit.ActionAccountingPeriodReferenceCleared
+		extra := map[string]any{"year": period.Year, "status": period.Status}
+		if period.ReferenceOnly {
+			action = audit.ActionAccountingPeriodReferenceSet
+			// What the marking leaves in place, so the audit row shows it.
+			drafts, err := h.svc.PeriodDraftCount(r.Context(), claims.ClubID, periodID)
+			if err != nil {
+				h.log.Warn().Err(err).Str("period_id", periodID).Msg("counting drafts for the reference audit row")
+			} else {
+				extra["drafts"] = drafts
+			}
+		}
+		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,
+			action, "fiscal_period", periodID, extra)
+	}
+
+	JSON(w, http.StatusOK, period)
+}
+
 // ── Journal Entries ─────────────────────────────────────────
 
 func (h *AccountingHandler) HandleListJournalEntries(w http.ResponseWriter, r *http.Request) {
@@ -442,10 +509,15 @@ func (h *AccountingHandler) HandleCreateJournalEntry(w http.ResponseWriter, r *h
 		Lines:          lines,
 	})
 	if err != nil {
-		h.log.Error().Err(err).Msg("failed to create journal entry")
-		if err == accounting.ErrPeriodClosed {
+		switch {
+		case errors.Is(err, accounting.ErrReferencePeriod):
+			writeReferencePeriod(w)
+		case errors.Is(err, accounting.ErrNegativeMVA):
+			JSON(w, http.StatusBadRequest, map[string]string{"error": err.Error(), "code": "negative_mva"})
+		case err == accounting.ErrPeriodClosed:
 			Error(w, http.StatusConflict, err.Error())
-		} else {
+		default:
+			h.log.Error().Err(err).Msg("failed to create journal entry")
 			Error(w, http.StatusBadRequest, err.Error())
 		}
 		return
@@ -490,6 +562,8 @@ func (h *AccountingHandler) HandlePostJournalEntry(w http.ResponseWriter, r *htt
 		switch {
 		case errors.Is(err, accounting.ErrUnbalancedEntry):
 			Error(w, http.StatusBadRequest, err.Error())
+		case errors.Is(err, accounting.ErrReferencePeriod):
+			writeReferencePeriod(w)
 		case errors.Is(err, accounting.ErrPeriodClosed):
 			writePeriodClosed(w, err)
 		case errors.Is(err, accounting.ErrEntryNotDraft):
@@ -547,6 +621,8 @@ func (h *AccountingHandler) HandleVoidJournalEntry(w http.ResponseWriter, r *htt
 		case errors.Is(err, accounting.ErrEntryNotPosted):
 			h.log.Info().Err(err).Str("entry_id", entryID).Msg("journal void refused: not posted")
 			Error(w, http.StatusBadRequest, err.Error())
+		case errors.Is(err, accounting.ErrReferencePeriod):
+			writeReferencePeriod(w)
 		case errors.Is(err, accounting.ErrPeriodClosed):
 			h.log.Warn().Err(err).Str("entry_id", entryID).Msg("journal void refused: period closed")
 			writePeriodClosed(w, err)
@@ -789,6 +865,9 @@ func (h *AccountingHandler) HandleSyncPayments(w http.ResponseWriter, r *http.Re
 	}
 
 	result, err := h.svc.SyncPayments(r.Context(), claims.ClubID, req.PeriodID, claims.UserID)
+	if referencePeriodConflict(w, err) {
+		return
+	}
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to sync payments")
 		Error(w, http.StatusBadRequest, err.Error())
@@ -822,6 +901,9 @@ func (h *AccountingHandler) HandleSyncInvoices(w http.ResponseWriter, r *http.Re
 	}
 
 	result, err := h.svc.SyncInvoices(r.Context(), claims.ClubID, req.PeriodID, claims.UserID)
+	if referencePeriodConflict(w, err) {
+		return
+	}
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to sync invoices")
 		Error(w, http.StatusBadRequest, err.Error())
@@ -1472,6 +1554,9 @@ func (h *AccountingHandler) HandleMatchBankRow(w http.ResponseWriter, r *http.Re
 
 	err := h.svc.MatchBankRow(r.Context(), claims.ClubID, req.PeriodID, rowID,
 		req.DebitAccountCode, req.CreditAccountCode, claims.UserID, req.MVAAmount)
+	if referencePeriodConflict(w, err) {
+		return
+	}
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to match bank row")
 		Error(w, http.StatusBadRequest, err.Error())
@@ -1639,6 +1724,9 @@ func (h *AccountingHandler) HandleAutoMatchImport(w http.ResponseWriter, r *http
 	}
 
 	matched, err := h.svc.AutoMatchImport(r.Context(), claims.ClubID, importID, req.PeriodID, claims.UserID)
+	if referencePeriodConflict(w, err) {
+		return
+	}
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to auto-match import")
 		Error(w, http.StatusInternalServerError, "internal error")
@@ -1667,7 +1755,9 @@ type reassignBankImportRequest struct {
 //
 // Refuses only when the cascade would touch a journal entry whose
 // fiscal period is closed or locked, or that has been voided — those
-// are immutable accounting state. See DIL-343.
+// are immutable accounting state — or one in (or dated in) a reference
+// year, whose bookings only the central guard may add (BRY-418). See
+// DIL-343.
 func (h *AccountingHandler) HandleReassignBankImport(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
@@ -1724,8 +1814,10 @@ func (h *AccountingHandler) HandleReassignBankImport(w http.ResponseWriter, r *h
 		return
 	}
 
-	// Refuse if any affected journal entry is in a closed/locked period
-	// or has been voided — those are accounting facts we can't rewrite.
+	// Refuse if any affected journal entry is in a closed/locked period,
+	// is in or dated in a reference year, or has been voided — those are
+	// accounting facts we can't rewrite. The cascade updates posted lines
+	// directly, so it never reaches the journal guard.
 	var blockedPeriods []string
 	rows, err := tx.Query(ctx,
 		`SELECT DISTINCT fp.year::text
@@ -1733,7 +1825,8 @@ func (h *AccountingHandler) HandleReassignBankImport(w http.ResponseWriter, r *h
 		   JOIN journal_entries je ON je.id = bir.journal_entry_id
 		   JOIN fiscal_periods fp ON fp.id = je.fiscal_period_id
 		  WHERE bir.bank_import_id = $1
-		    AND (fp.status IN ('closed','locked') OR je.status = 'voided')`,
+		    AND (fp.status IN ('closed','locked') OR fp.reference_only
+		         OR je.status = 'voided' OR `+accounting.ReferenceDateSQL("je.club_id", "je.entry_date")+`)`,
 		importID,
 	)
 	if err != nil {
@@ -1750,7 +1843,7 @@ func (h *AccountingHandler) HandleReassignBankImport(w http.ResponseWriter, r *h
 	rows.Close()
 	if len(blockedPeriods) > 0 {
 		Error(w, http.StatusConflict,
-			"cannot reassign: some matched rows live in closed/locked or voided journals ("+strings.Join(blockedPeriods, ", ")+") — reopen them first or void the entries manually")
+			"cannot reassign: some matched rows live in closed/locked, reference-year or voided journals ("+strings.Join(blockedPeriods, ", ")+") — reopen them first or void the entries manually")
 		return
 	}
 
@@ -2194,6 +2287,9 @@ func (h *AccountingHandler) resplitInvoiceBilags(w http.ResponseWriter, r *http.
 	}
 
 	result, err := h.svc.ResplitInvoiceBilags(r.Context(), claims.ClubID, req.PeriodID, claims.UserID, apply)
+	if referencePeriodConflict(w, err) {
+		return
+	}
 	if err != nil {
 		Error(w, http.StatusBadRequest, err.Error())
 		return
@@ -2275,6 +2371,9 @@ func (h *AccountingHandler) vippsDraftBacklog(w http.ResponseWriter, r *http.Req
 
 	choices := req.choices()
 	result, err := h.svc.PostVippsDraftBacklog(r.Context(), claims.ClubID, req.PeriodID, claims.UserID, apply, choices)
+	if referencePeriodConflict(w, err) {
+		return
+	}
 	if err != nil {
 		Error(w, http.StatusBadRequest, err.Error())
 		return
@@ -2403,6 +2502,8 @@ func (h *AccountingHandler) vippsFallbackReclassError(w http.ResponseWriter, err
 		JSON(w, http.StatusConflict, map[string]string{"error": err.Error(), "code": "auto_assign_off"})
 	case errors.Is(err, accounting.ErrPeriodClosed):
 		JSON(w, http.StatusConflict, map[string]string{"error": err.Error(), "code": "period_closed"})
+	case errors.Is(err, accounting.ErrReferencePeriod):
+		writeReferencePeriod(w)
 	default:
 		h.log.Warn().Err(err).Msg("vipps fallback reclass")
 		Error(w, http.StatusBadRequest, err.Error())

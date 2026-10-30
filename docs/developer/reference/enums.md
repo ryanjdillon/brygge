@@ -126,6 +126,12 @@ open   closed   locked
 
 **Invariant**: `closed` periods are immutable per bokføringsloven §13. `resolvePeriod` enforces this; never bypass it.
 
+A second, orthogonal dimension is the boolean `fiscal_periods.reference_only` (migration 000128, BRY-418, ACC-12): a year whose books of record live in another system. It is a column rather than a fourth status because the year stays `open` for cost bookings until its momskompensasjon is filed, may then be `closed`, and stays a reference year throughout; about 15 existing checks test `status != 'open'` and would refuse the cost bookings with a misleading message. See [invariants.md](invariants.md#a-reference-period-books-only-costs-and-carries-nothing-forward).
+
+`GET /accounting/periods` also returns `reference_blocked` per period: why the toggle is unavailable (`current_year`, `opening_balance` when marking; `period_closed` when unmarking), and `open_invoice_bookings`. `POST /accounting/periods/{id}/reference` answers 409 `reference_current_year`, `reference_has_opening_balance` or `period_closed`.
+
+Booking refusals: any booking a reference period does not take (or one dated in it) answers 409 `reference_period` with a Norwegian `error` (`accounting.ErrReferencePeriod`) on the journal create, post and void routes, the bank-row assigns, unassign and pair-refund, the manual match, the Vipps charge assigns and unassign, and the faktura void. The manual Stripe assigns and unassign carry it as `StripeTxnRefusal.Code` `reference_period`, and the manual payout clearing as `StripeClearRefusal.Code` `reference_period`.
+
 ### `transaction_source` — `journal_entries.source`
 
 ```
@@ -372,6 +378,7 @@ Stripe's payout status, refreshed from `GET /v1/payouts/{id}`. It never moves ba
 | `balance_open` | A manual payout while a balance row that could have funded it (no `payout_id`, available by its arrival) is not `booked` or `dismissed`; the body carries `open_balance` |
 | `no_period` | No fiscal period covers the bank date (none is created) |
 | `period_closed` | The bank date's period is not open |
+| `reference_period` | The bank date lies in a reference year (BRY-418): the deposit is never booked there. The sweep reports it as waiting with a Norwegian reason |
 | `busy` | Another Stripe sync or booking of the club still holds its slot after a 5 s wait (`ErrStripeSyncBusy`) |
 
 The manual assigns (assign-invoice, assign-invoice-multi, assign-account, assign-account-group) answer 409 `provider_payout`, with `provider` (`vipps` / `stripe`) and `bank_row_id`, for a provider payout deposit.
@@ -431,6 +438,7 @@ Member invoice status (`portal.invoices.status.*`) gained `refunded` (a faktura 
 | `invoice_credited` | The faktura is credited in full (a live credit note links to it, or its refunds' credit notes add up to its total): a payment assigned to it would credit 1500 twice (BRY-508) |
 | `invoice_not_debt` | The faktura is a credit note (total not positive): money owed back, so no payment can be assigned to it (BRY-508) |
 | `period_closed` | The booking date's fiscal period is closed or locked; for an unassign, the period of the entry being voided |
+| `reference_period` | The booking date (or, for an unassign, the entry being voided) is in a reference year, which takes cost bookings only (BRY-418); a Stripe row never is one |
 | `already_booked` | The row has its journal entry (unassign it first) |
 | `payout_cleared` | Assign, undismiss or unassign of a row whose payout is cleared in the books (only dismiss remains; undo the payout's bank deposit in Tildel first) |
 | `use_bank_unassign` | Unassign of a `payout` / `payout_reversal` row: its entry is the payout clearing, undone from the bank deposit (`UnassignBankRow`) |

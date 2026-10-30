@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 
 	"github.com/brygge-klubb/brygge/internal/accounting"
@@ -45,6 +46,10 @@ func (h *BankRowsHandler) HandleListUnmatched(w http.ResponseWriter, r *http.Req
 	year, _ := strconv.Atoi(q.Get("year"))
 	kind := q.Get("kind")
 	rows, err := h.svc.ListUnmatchedBankRows(ctx, claims.ClubID, kind, q.Get("q"), year, limit, offset)
+	if errors.Is(err, accounting.ErrInvalidBankRowKind) {
+		Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	if err != nil {
 		h.log.Error().Err(err).Msg("list unmatched bank rows")
 		Error(w, http.StatusInternalServerError, "internal error")
@@ -61,7 +66,11 @@ func (h *BankRowsHandler) HandleCountUnmatched(w http.ResponseWriter, r *http.Re
 		return
 	}
 	year, _ := strconv.Atoi(r.URL.Query().Get("year"))
-	n, err := h.svc.CountUnmatchedBankRows(ctx, claims.ClubID, year)
+	n, err := h.svc.CountUnmatchedBankRowsKind(ctx, claims.ClubID, r.URL.Query().Get("kind"), year)
+	if errors.Is(err, accounting.ErrInvalidBankRowKind) {
+		Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	if err != nil {
 		h.log.Error().Err(err).Msg("count unmatched bank rows")
 		Error(w, http.StatusInternalServerError, "internal error")
@@ -236,6 +245,30 @@ func providerPayoutConflict(w http.ResponseWriter, err error) bool {
 	return true
 }
 
+// referencePeriodCode is the 409 code for a booking refused because it
+// would put anything but a cost into a reference period (BRY-418).
+const referencePeriodCode = "reference_period"
+
+// writeReferencePeriod answers 409 reference_period. The message is
+// Norwegian and shown as is; the code lets the SPA word it in the
+// treasurer's locale.
+func writeReferencePeriod(w http.ResponseWriter) {
+	JSON(w, http.StatusConflict, map[string]string{
+		"error": accounting.ErrReferencePeriod.Error(),
+		"code":  referencePeriodCode,
+	})
+}
+
+// referencePeriodConflict answers 409 reference_period when err is
+// accounting.ErrReferencePeriod, and reports whether it did.
+func referencePeriodConflict(w http.ResponseWriter, err error) bool {
+	if !errors.Is(err, accounting.ErrReferencePeriod) {
+		return false
+	}
+	writeReferencePeriod(w)
+	return true
+}
+
 func (r assignInvoiceReq) alias() accounting.PayerAliasRequest {
 	return accounting.PayerAliasRequest{Remember: r.RememberPayer, ConfirmOverride: r.ConfirmAliasOverride}
 }
@@ -268,6 +301,9 @@ func (h *BankRowsHandler) HandleAssignInvoice(w http.ResponseWriter, r *http.Req
 		return
 	}
 	journalID, taught, err := h.svc.AssignBankRowToInvoiceRemembering(ctx, claims.ClubID, claims.UserID, rowID, req.InvoiceID, req.alias())
+	if referencePeriodConflict(w, err) {
+		return
+	}
 	if errors.Is(err, accounting.ErrAliasConflict) {
 		// The code alone: the SPA words it, and names no member.
 		Error(w, http.StatusConflict, accounting.ErrAliasConflict.Error())
@@ -322,6 +358,9 @@ func (h *BankRowsHandler) HandleAssignInvoiceMulti(w http.ResponseWriter, r *htt
 	}
 	journalIDs, taught, err := h.svc.AssignMultipleBankRowsToInvoiceRemembering(ctx, claims.ClubID, claims.UserID, req.RowIDs, req.InvoiceID,
 		accounting.PayerAliasRequest{Remember: req.RememberPayer, ConfirmOverride: req.ConfirmAliasOverride})
+	if referencePeriodConflict(w, err) {
+		return
+	}
 	if errors.Is(err, accounting.ErrAliasConflict) {
 		// The code alone: the SPA words it, and names no member.
 		Error(w, http.StatusConflict, accounting.ErrAliasConflict.Error())
@@ -397,6 +436,9 @@ func (h *BankRowsHandler) HandleAssignAccount(w http.ResponseWriter, r *http.Req
 		}
 	}
 	journalID, err := h.svc.AssignBankRowToAccount(ctx, claims.ClubID, claims.UserID, rowID, req.AccountCode, req.Kind, req.Description)
+	if referencePeriodConflict(w, err) {
+		return
+	}
 	if providerPayoutConflict(w, err) {
 		return
 	}
@@ -461,6 +503,9 @@ func (h *BankRowsHandler) HandleAssignAccountGroup(w http.ResponseWriter, r *htt
 		return
 	}
 	res, err := h.svc.AssignBankRowsToAccountGroup(ctx, claims.ClubID, claims.UserID, req.RowIDs, req.AccountCode, req.Description)
+	if referencePeriodConflict(w, err) {
+		return
+	}
 	if providerPayoutConflict(w, err) {
 		return
 	}
@@ -523,6 +568,42 @@ func (h *BankRowsHandler) HandleDismiss(w http.ResponseWriter, r *http.Request) 
 	JSON(w, http.StatusOK, map[string]string{"status": "dismissed"})
 }
 
+// HandleUndismiss returns a dismissed reference-year row to the Referanseår
+// list (BRY-418). Dismissals elsewhere are permanent.
+func (h *BankRowsHandler) HandleUndismiss(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	rowID := chi.URLParam(r, "rowID")
+	if _, err := uuid.Parse(rowID); err != nil {
+		Error(w, http.StatusNotFound, "bank row not found")
+		return
+	}
+	prior, err := h.svc.UndismissReferenceBankRow(ctx, claims.ClubID, rowID)
+	if err != nil {
+		if errors.Is(err, accounting.ErrBankRowNotUndismissable) {
+			Error(w, http.StatusConflict, err.Error())
+			return
+		}
+		h.log.Error().Err(err).Str("row_id", rowID).Msg("undismiss bank row")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if h.audit != nil {
+		h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,
+			audit.ActionBankRowUndismissed, "bank_import_row", rowID,
+			map[string]any{
+				"prior_reason":       prior.Reason,
+				"prior_dismissed_by": prior.By,
+				"prior_dismissed_at": prior.At,
+			})
+	}
+	JSON(w, http.StatusOK, map[string]string{"status": "undismissed"})
+}
+
 type unassignReq struct {
 	Confirm bool `json:"confirm"`
 }
@@ -545,6 +626,8 @@ func (h *BankRowsHandler) HandleUnassign(w http.ResponseWriter, r *http.Request)
 		switch {
 		case errors.Is(err, accounting.ErrBankRowNotFound):
 			Error(w, http.StatusNotFound, err.Error())
+		case errors.Is(err, accounting.ErrReferencePeriod):
+			writeReferencePeriod(w)
 		case errors.Is(err, accounting.ErrPeriodClosed):
 			writePeriodClosed(w, err)
 		default:
@@ -639,6 +722,9 @@ func (h *BankRowsHandler) HandlePairRefund(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	inboundJournal, outboundJournal, err := h.svc.PairRefund(ctx, claims.ClubID, claims.UserID, rowID, req.OutboundRowID)
+	if referencePeriodConflict(w, err) {
+		return
+	}
 	if err != nil {
 		h.log.Warn().Err(err).Str("inbound_row_id", rowID).Str("outbound_row_id", req.OutboundRowID).Msg("pair refund")
 		Error(w, http.StatusBadRequest, err.Error())

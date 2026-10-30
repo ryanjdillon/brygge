@@ -1333,6 +1333,11 @@ func main() {
 								Post("/{periodID}/close", accountingHandler.HandleClosePeriod)
 							r.With(middleware.RequireFreshTOTPDefault()).
 								Post("/{periodID}/reopen", accountingHandler.HandleReopenPeriod)
+							// Marking a year reference changes what gets booked
+							// and what is carried forward, so it is a money
+							// action, not the board-writable period group's.
+							r.With(moneyGate...).
+								Post("/{periodID}/reference", accountingHandler.HandleSetPeriodReference)
 						})
 
 						accountingHandler.MountLedgerRoutes(r, moneyGate...)
@@ -1409,6 +1414,9 @@ func main() {
 						r.With(middleware.RequireRole("treasurer", "admin"),
 							middleware.RequireFreshTOTPDefault()).
 							Post("/bank-rows/{rowID}/dismiss", bankRowsHandler.HandleDismiss)
+						r.With(middleware.RequireRole("treasurer", "admin"),
+							middleware.RequireFreshTOTPDefault()).
+							Post("/bank-rows/{rowID}/undismiss", bankRowsHandler.HandleUndismiss)
 						r.With(middleware.RequireRole("treasurer", "admin"),
 							middleware.RequireFreshTOTPDefault()).
 							Post("/bank-rows/{rowID}/unassign", bankRowsHandler.HandleUnassign)

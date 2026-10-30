@@ -155,6 +155,11 @@ const (
 	// Shared-inbox compose path (DIL-278)
 	ActionInboxMessageSent = "inbox.message_sent"
 
+	// Reference years (BRY-418, ACC-12)
+	ActionAccountingPeriodReferenceSet     = "accounting.period_reference_set"
+	ActionAccountingPeriodReferenceCleared = "accounting.period_reference_cleared"
+	ActionBankRowUndismissed               = "bank_row.undismissed"
+
 	// GDPR operations
 	ActionGDPRExportRequested       = "gdpr.export_requested"
 	ActionGDPRDeletionRequested     = "gdpr.deletion_requested"
