@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 
@@ -18,9 +19,13 @@ import (
 // that marks an order paid or failed, and it is called only from a provider's
 // signature-verified webhook (see the "Only the payment provider can mark an
 // order paid" invariant). Every write is guarded so a redelivered or
-// out-of-order event is a no-op. The writes are best-effort and each runs on
-// its own, so one failing does not undo the others: the event is already
-// persisted and the provider redelivers it.
+// out-of-order event is a no-op. A write that fails is returned to the webhook,
+// which answers 5xx so the provider redelivers the event; the guards make the
+// redelivery finish what the first delivery left undone (see the invariant
+// "A webhook never acknowledges an event whose lookup or settlement failed").
+// Only descriptive data (guest name and email, card brand, the double-payment
+// diagnostic) is best-effort: a failure there is logged and changes nothing
+// about whether the order is paid.
 //
 // An order can carry several attempts (a payer who abandons one clicks again
 // and gets a fresh one). The newest is the order's current attempt; an older
@@ -29,6 +34,25 @@ import (
 type orderSettlement struct {
 	db  *pgxpool.Pool
 	log zerolog.Logger
+}
+
+// settleWriteTimeout bounds the writes that record a provider outcome which
+// has already happened.
+const settleWriteTimeout = 15 * time.Second
+
+// settleContext returns the context for the writes that follow a provider call
+// that has already taken effect (a capture, a void). It outlives the request:
+// a provider that times out or a client that disconnects after the money moved
+// must not roll back a healthy settlement and leave the redelivery to redo it.
+func settleContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(ctx), settleWriteTimeout)
+}
+
+// dbtx is what a settlement write needs of a pool or a transaction, so the
+// same statement runs on either.
+type dbtx interface {
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
 // paymentAttempt is a payment_attempts row as settlement needs it.
@@ -140,23 +164,30 @@ const (
 // voided. Recording the cancel before the provider is called means no later
 // event can read the attempt as still payable; the void itself is
 // best-effort, and an authorization whose void fails lapses at the provider.
-// A failed decision answers capture, so a transient error never strands a
-// payer's authorization; a resulting double capture is logged on CAPTURED.
-func (s orderSettlement) authorizeAttempt(ctx context.Context, a paymentAttempt) authDecision {
+//
+// A decision that fails (database error) is returned and answers authSkip: the
+// webhook answers 5xx and the provider delivers the event again. Capturing
+// without the row lock could take a payment the order does not need (a
+// duplicate for an order another attempt already paid), which can only be
+// refunded afterwards; a payer's authorization that is left undecided just
+// waits for the redelivery, and lapses at the provider if none comes.
+func (s orderSettlement) authorizeAttempt(ctx context.Context, a paymentAttempt) (authDecision, error) {
 	d, err := s.decideAuthorization(ctx, a)
 	if err != nil {
-		s.log.Error().Err(err).Str("attempt_id", a.ID).Msg("attempt authorized: decision failed, capturing")
-		return authCapture
+		s.log.Error().Err(err).Str("attempt_id", a.ID).Msg("attempt authorized: decision failed, not capturing")
+		return authSkip, err
 	}
-	return d
+	return d, nil
 }
 
 // decideAuthorization runs entirely on its transaction: it holds the order's
-// row lock and must not touch another pool connection or the provider.
+// row lock from before it reads anything to the commit, and must not touch
+// another pool connection or the provider. Every error it returns leaves the
+// attempt as it was (the transaction rolls back) and the answer unusable.
 func (s orderSettlement) decideAuthorization(ctx context.Context, a paymentAttempt) (authDecision, error) {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
-		return authCapture, err
+		return authSkip, err
 	}
 	defer tx.Rollback(ctx)
 
@@ -165,7 +196,7 @@ func (s orderSettlement) decideAuthorization(ctx context.Context, a paymentAttem
 	if err := tx.QueryRow(ctx,
 		`SELECT status::text FROM orders WHERE id = $1 FOR UPDATE`, a.OrderID,
 	).Scan(&orderStatus); err != nil {
-		return authCapture, err
+		return authSkip, err
 	}
 	if err := tx.QueryRow(ctx,
 		`SELECT pa.status,
@@ -174,7 +205,7 @@ func (s orderSettlement) decideAuthorization(ctx context.Context, a paymentAttem
 		                   AND o.status IN ('authorized', 'captured'))
 		   FROM payment_attempts pa WHERE pa.id = $1`, a.ID,
 	).Scan(&own, &sibling); err != nil {
-		return authCapture, err
+		return authSkip, err
 	}
 	d, next := authCapture, "authorized"
 	switch {
@@ -190,46 +221,53 @@ func (s orderSettlement) decideAuthorization(ctx context.Context, a paymentAttem
 		  WHERE id = $1 AND status IN ('created', 'authorized', 'failed')`,
 		a.ID, next,
 	); err != nil {
-		return authCapture, err
+		return authSkip, err
 	}
-	return d, tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return authSkip, err
+	}
+	return d, nil
 }
 
 // releaseAuthorization returns an attempt whose capture failed to created. An
 // attempt left authorized would make every later attempt on the order be
 // voided, so a payer who retries could never pay; the uncaptured reservation
-// lapses at the provider.
-func (s orderSettlement) releaseAuthorization(ctx context.Context, a paymentAttempt) {
+// lapses at the provider. A failed write is returned, so the webhook answers
+// 5xx and the redelivery decides and releases again.
+func (s orderSettlement) releaseAuthorization(ctx context.Context, a paymentAttempt) error {
 	if _, err := s.db.Exec(ctx,
 		`UPDATE payment_attempts SET status = 'created', updated_at = now()
 		  WHERE id = $1 AND status = 'authorized'`,
 		a.ID,
 	); err != nil {
 		s.log.Error().Err(err).Str("attempt_id", a.ID).Msg("attempt authorized: release after failed capture failed")
+		return err
 	}
+	return nil
 }
 
 // markAttemptCaptured settles an attempt whose payment the provider has
 // captured. capturedAt is the provider's capture time (zero: now); it is what
 // both the order's paid_at and the faktura marker record. payerName (nil:
 // none) returns the name the provider shared, to name a guest order that has
-// none yet. It is called only after the status update, so a slow or failing
-// provider lookup cannot hold up marking the order paid.
-func (s orderSettlement) markAttemptCaptured(ctx context.Context, a paymentAttempt, capturedAt time.Time, payerName func(context.Context) string) {
+// none yet. The attempt, the order and the faktura markers are written in one
+// transaction, so a failure leaves all of them as they were and the
+// redelivered event settles them together: a half-settled capture (attempt
+// captured, order still pending) would be read as done by the next
+// authorization, which skips an attempt already captured. The payer name is
+// looked up only after that transaction commits, so a slow or failing
+// provider lookup cannot hold up marking the order paid, and a failed
+// backfill is logged, not returned.
+func (s orderSettlement) markAttemptCaptured(ctx context.Context, a paymentAttempt, capturedAt time.Time, payerName func(context.Context) string) error {
 	if capturedAt.IsZero() {
 		capturedAt = time.Now()
 	}
-	tag, err := s.db.Exec(ctx,
-		`UPDATE payment_attempts SET status = 'captured', updated_at = now()
-		  WHERE id = $1 AND status <> 'captured'`,
-		a.ID,
-	)
+	orderPaid, firstCapture, err := s.settleCapture(ctx, a, capturedAt)
 	if err != nil {
-		s.log.Error().Err(err).Str("attempt_id", a.ID).Msg("attempt captured: attempt update failed")
+		s.log.Error().Err(err).Str("attempt_id", a.ID).Str("order_id", a.OrderID).Msg("attempt captured: settlement failed")
+		return err
 	}
-	firstCapture := err == nil && tag.RowsAffected() == 1
-
-	if !s.payOrder(ctx, a, capturedAt) && firstCapture {
+	if !orderPaid && firstCapture {
 		s.logIfPaidTwice(ctx, a)
 	}
 
@@ -245,17 +283,62 @@ func (s orderSettlement) markAttemptCaptured(ctx context.Context, a paymentAttem
 			s.log.Error().Err(err).Str("order_id", a.OrderID).Msg("order paid: backfill guest name failed")
 		}
 	}
+	return nil
+}
 
-	s.markInvoicesPaidOnline(ctx, a, capturedAt)
+// settleCapture is markAttemptCaptured's transaction. It reports whether this
+// call moved the order to paid and whether it was the first to mark the
+// attempt captured.
+//
+// Locks are taken fakturas (in id order), then the order (payOrder), then the
+// attempt. The Stripe refund booking locks an order's fakturas first and writes
+// the order after, so taking the order first here would deadlock with it; the
+// decision and the refund request take order then attempt and never a faktura,
+// which this order is consistent with. The decision's own transaction
+// (authorizeAttempt) has committed before the provider is called and so holds
+// nothing by now.
+func (s orderSettlement) settleCapture(ctx context.Context, a paymentAttempt, capturedAt time.Time) (orderPaid, firstCapture bool, err error) {
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return false, false, err
+	}
+	defer tx.Rollback(ctx)
+
+	if _, err = tx.Exec(ctx,
+		`SELECT id FROM invoices
+		  WHERE id IN (SELECT invoice_id FROM order_sources WHERE order_id = $1)
+		  ORDER BY id FOR NO KEY UPDATE`, a.OrderID,
+	); err != nil {
+		return false, false, err
+	}
+	if orderPaid, err = s.payOrder(ctx, tx, a, capturedAt); err != nil {
+		return false, false, err
+	}
+	tag, err := tx.Exec(ctx,
+		`UPDATE payment_attempts SET status = 'captured', updated_at = now()
+		  WHERE id = $1 AND status <> 'captured'`,
+		a.ID,
+	)
+	if err != nil {
+		return false, false, err
+	}
+	if err := s.markInvoicesPaidOnline(ctx, tx, a, capturedAt); err != nil {
+		return false, false, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return false, false, err
+	}
+	return orderPaid, tag.RowsAffected() == 1, nil
 }
 
 // payOrder moves the order to paid from pending or failed and reports whether
 // it did. A capture means the money was taken, so it pays an order an earlier
 // terminal event failed; a paid or refunded order keeps its state, so a
-// replayed capture cannot move paid_at.
-func (s orderSettlement) payOrder(ctx context.Context, a paymentAttempt, capturedAt time.Time) bool {
+// replayed capture cannot move paid_at (no row is not an error). It locks the
+// order row whether or not it updates it.
+func (s orderSettlement) payOrder(ctx context.Context, db dbtx, a paymentAttempt, capturedAt time.Time) (bool, error) {
 	var from string
-	err := s.db.QueryRow(ctx,
+	err := db.QueryRow(ctx,
 		`WITH prev AS (SELECT id, status FROM orders WHERE id = $1 FOR UPDATE)
 		 UPDATE orders o
 		    SET status = 'paid', paid_at = $2, provider = $3, updated_at = now()
@@ -265,16 +348,16 @@ func (s orderSettlement) payOrder(ctx context.Context, a paymentAttempt, capture
 		a.OrderID, capturedAt, a.Provider,
 	).Scan(&from)
 	if err != nil {
-		if !errors.Is(err, pgx.ErrNoRows) {
-			s.log.Error().Err(err).Str("order_id", a.OrderID).Msg("order paid: order update failed")
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
 		}
-		return false
+		return false, err
 	}
 	if from == "failed" {
 		s.log.Warn().Str("order_id", a.OrderID).Str("attempt_id", a.ID).
 			Msg("order paid: capture arrived for an order marked failed")
 	}
-	return true
+	return true, nil
 }
 
 // logIfPaidTwice reports a capture on an order another attempt already paid:
@@ -311,8 +394,8 @@ func (s orderSettlement) logIfPaidTwice(ctx context.Context, a paymentAttempt) {
 // to collect again cleared the marker on purpose, and the faktura must read
 // as open). A capture on the faktura's new order, after it was collected
 // again, still marks it.
-func (s orderSettlement) markInvoicesPaidOnline(ctx context.Context, a paymentAttempt, capturedAt time.Time) {
-	if _, err := s.db.Exec(ctx,
+func (s orderSettlement) markInvoicesPaidOnline(ctx context.Context, db dbtx, a paymentAttempt, capturedAt time.Time) error {
+	_, err := db.Exec(ctx,
 		`UPDATE invoices
 		    SET online_paid_at = $2, online_paid_provider = $3::text,
 		        vipps_paid_at = CASE WHEN $3::text = $4::text THEN COALESCE(vipps_paid_at, $2) ELSE vipps_paid_at END
@@ -322,9 +405,8 @@ func (s orderSettlement) markInvoicesPaidOnline(ctx context.Context, a paymentAt
 		    AND NOT EXISTS (SELECT 1 FROM refund_documents rd
 		                     WHERE rd.invoice_id = invoices.id AND (rd.order_id = $1 OR rd.detached_order_id = $1))`,
 		a.OrderID, capturedAt, a.Provider, vipps.ProviderName,
-	); err != nil {
-		s.log.Error().Err(err).Str("order_id", a.OrderID).Msg("order paid: invoice marker failed")
-	}
+	)
+	return err
 }
 
 // backfillGuestEmail records the email a provider collected on a guest order
@@ -376,14 +458,17 @@ func callPayerName(ctx context.Context, payerName func(context.Context) string) 
 // authorized attempt that fails stops counting as authorized, so a later
 // attempt on the order can be captured. 'failed' is the terminal-negative
 // order_status (there is no 'cancelled'); the payer can retry with a fresh
-// attempt on the same durable order.
-func (s orderSettlement) markAttemptFailed(ctx context.Context, a paymentAttempt) {
+// attempt on the same durable order. The two writes are separate and each is
+// guarded, so when the second fails the redelivery repeats the first as a
+// no-op and finishes the second.
+func (s orderSettlement) markAttemptFailed(ctx context.Context, a paymentAttempt) error {
 	if _, err := s.db.Exec(ctx,
 		`UPDATE payment_attempts SET status = 'failed', updated_at = now()
 		  WHERE id = $1 AND status IN ('created', 'authorized')`,
 		a.ID,
 	); err != nil {
 		s.log.Error().Err(err).Str("attempt_id", a.ID).Msg("attempt failed: attempt update failed")
+		return err
 	}
 	if _, err := s.db.Exec(ctx,
 		`UPDATE orders o SET status = 'failed', updated_at = now()
@@ -395,5 +480,7 @@ func (s orderSettlement) markAttemptFailed(ctx context.Context, a paymentAttempt
 		a.OrderID, a.ID,
 	); err != nil {
 		s.log.Error().Err(err).Str("order_id", a.OrderID).Msg("order failed: order update failed")
+		return err
 	}
+	return nil
 }

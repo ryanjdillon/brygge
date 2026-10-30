@@ -7,10 +7,11 @@ import (
 )
 
 // dispatch routes an already-persisted event to the appropriate business logic.
-// The settlement writes are best-effort: the event row is already persisted
-// and Vipps redelivers the event. The error is a failed attempt lookup, which
-// makes Vipps deliver the event again; a reference that is not one of ours is
-// not an error.
+// The error is a failed attempt lookup, or a settlement decision or write that
+// failed in the database, which makes Vipps deliver the event again; the
+// event row is already persisted and every settlement write is guarded, so the
+// redelivery finishes what this one left. A reference that is not one of ours,
+// and a provider call that fails, are not errors.
 func (h *VippsWebhookHandler) dispatch(ctx context.Context, clubID string, evt *vipps.WebhookEvent) error {
 	switch evt.Name {
 	case vipps.EventPaymentAuthorized:
@@ -52,7 +53,11 @@ func (h *VippsWebhookHandler) onAuthorized(ctx context.Context, clubID string, e
 	if h.vipps == nil || evt.Amount == nil {
 		return nil
 	}
-	switch d := h.orders.authorizeAttempt(ctx, a); d {
+	d, err := h.orders.authorizeAttempt(ctx, a)
+	if err != nil {
+		return err
+	}
+	switch d {
 	case authSkip:
 		return nil
 	case authCancelOrderSettled, authCancelSibling:
@@ -61,7 +66,11 @@ func (h *VippsWebhookHandler) onAuthorized(ctx context.Context, clubID string, e
 	}
 	if err := h.vipps.CapturePayment(ctx, "capture-"+evt.Reference, evt.Reference, evt.Amount.Value); err != nil {
 		h.log.Error().Err(err).Str("reference", evt.Reference).Msg("webhook authorized: capture failed")
-		h.orders.releaseAuthorization(ctx, a)
+		// Recording the outcome of a provider call must not depend on the
+		// request still being alive.
+		wctx, cancel := settleContext(ctx)
+		defer cancel()
+		return h.orders.releaseAuthorization(wctx, a)
 	}
 	return nil
 }
@@ -86,7 +95,9 @@ func (h *VippsWebhookHandler) cancelStaleAuthorization(ctx context.Context, a pa
 }
 
 // onCaptured settles the checkout order (merch, harbor QR, or a faktura pay
-// link) the captured payment belongs to.
+// link) the captured payment belongs to. Vipps settles only here, never in
+// onAuthorized, so a settlement write that fails after the capture answers 5xx
+// and Vipps sends the CAPTURED event again; nothing is captured a second time.
 func (h *VippsWebhookHandler) onCaptured(ctx context.Context, clubID string, evt *vipps.WebhookEvent) error {
 	a, ok, err := h.lookupAttempt(ctx, clubID, evt)
 	if err != nil || !ok {
@@ -98,8 +109,7 @@ func (h *VippsWebhookHandler) onCaptured(ctx context.Context, clubID string, evt
 	if a.Guest {
 		payerName = func(ctx context.Context) string { return h.payerName(ctx, evt.Reference) }
 	}
-	h.orders.markAttemptCaptured(ctx, a, evt.Timestamp, payerName)
-	return nil
+	return h.orders.markAttemptCaptured(ctx, a, evt.Timestamp, payerName)
 }
 
 // payerName returns the name the payer consented to share via the Vipps
@@ -121,6 +131,5 @@ func (h *VippsWebhookHandler) onTerminated(ctx context.Context, clubID string, e
 	if err != nil || !ok {
 		return err
 	}
-	h.orders.markAttemptFailed(ctx, a)
-	return nil
+	return h.orders.markAttemptFailed(ctx, a)
 }

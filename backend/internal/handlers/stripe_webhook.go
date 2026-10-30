@@ -103,9 +103,9 @@ func eventRefs(evt *stripe.Event) (reference, attemptID string) {
 // stored once and then dispatched, also when it was already stored: all
 // settlement writes are guarded, so a redelivery is a no-op, and a dispatch
 // that failed part-way gets another chance. A failure to store (the event, or
-// a dispute or refund) or to look up the attempt or club an event belongs to
-// answers 5xx, so Stripe retries; a payment that is not Brygge's, and
-// anything else Brygge does not act on, is 200.
+// a dispute or refund), to look up the attempt or club an event belongs to, or
+// to decide or write its settlement answers 5xx, so Stripe retries; a payment
+// that is not Brygge's, and anything else Brygge does not act on, is 200.
 func (h *StripeWebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 

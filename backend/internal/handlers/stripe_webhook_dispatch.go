@@ -17,8 +17,10 @@ const captureKeyPrefix = "capture2-"
 // dispatch routes an already-persisted event to settlement, a payout event
 // to the Stripe balance mirror, a dispute event to payment_disputes and a
 // refund event to payment_refunds. The error is a dispute or refund that
-// could not be stored, or an attempt that could not be looked up, which makes
-// the event be delivered again; every other outcome is handled and logged.
+// could not be stored, an attempt that could not be looked up, or a settlement
+// decision or write that failed in the database, which makes the event be
+// delivered again; every other outcome (including a provider call that
+// failed) is handled and logged.
 func (h *StripeWebhookHandler) dispatch(ctx context.Context, clubID string, evt *stripe.Event, dispute *disputeContext, refund *refundContext) error {
 	switch evt.Type {
 	case stripe.EventCheckoutSessionCompleted, stripe.EventCheckoutSessionAsyncPaymentSucceeded:
@@ -93,18 +95,20 @@ func (h *StripeWebhookHandler) onSessionCompleted(ctx context.Context, clubID st
 		return nil
 	}
 	if !sessionAmountMatches(a, s) {
-		h.rejectAmountMismatch(ctx, a, s)
-		return nil
+		return h.rejectAmountMismatch(ctx, a, s)
 	}
-	switch d := h.orders.authorizeAttempt(ctx, a); d {
+	d, err := h.orders.authorizeAttempt(ctx, a)
+	if err != nil {
+		return err
+	}
+	switch d {
 	case authSkip:
 		return nil
 	case authCancelOrderSettled, authCancelSibling:
 		h.cancelStaleAuthorization(ctx, a, s.ID, d)
 		return nil
 	}
-	h.capture(ctx, a, s)
-	return nil
+	return h.capture(ctx, a, s)
 }
 
 // sessionAttempt resolves a Checkout Session event to its attempt by the
@@ -141,7 +145,7 @@ func amountMatches(a paymentAttempt, amountOre int64, currency string) bool {
 	return amountOre == int64(math.Round(a.Amount*100)) && strings.EqualFold(currency, a.Currency)
 }
 
-func (h *StripeWebhookHandler) rejectAmountMismatch(ctx context.Context, a paymentAttempt, s *stripe.CheckoutSession) {
+func (h *StripeWebhookHandler) rejectAmountMismatch(ctx context.Context, a paymentAttempt, s *stripe.CheckoutSession) error {
 	h.log.Error().Str("attempt_id", a.ID).Str("session_id", s.ID).
 		Int64("session_amount", s.AmountTotal).Str("session_currency", s.Currency).
 		Float64("attempt_amount", a.Amount).Str("attempt_currency", a.Currency).
@@ -149,7 +153,9 @@ func (h *StripeWebhookHandler) rejectAmountMismatch(ctx context.Context, a payme
 	if err := h.canceller.CancelPayment(ctx, s.ID); err != nil {
 		h.log.Error().Err(err).Str("session_id", s.ID).Msg("webhook completed: void of mismatched payment failed")
 	}
-	h.orders.markAttemptFailed(ctx, a)
+	wctx, cancel := settleContext(ctx)
+	defer cancel()
+	return h.orders.markAttemptFailed(wctx, a)
 }
 
 // capture takes the money and settles the order. The idempotency key is per
@@ -158,12 +164,17 @@ func (h *StripeWebhookHandler) rejectAmountMismatch(ctx context.Context, a payme
 // parameters, so a new key keeps an event first handled by an earlier
 // version from being refused (and the client captures again rather than
 // reporting a failure if a key is refused anyway).
-func (h *StripeWebhookHandler) capture(ctx context.Context, a paymentAttempt, s *stripe.CheckoutSession) {
+//
+// The error is a settlement write that failed after the capture went through.
+// The webhook then answers 5xx and the redelivery runs the same decision (the
+// attempt is still authorized) and the same capture call: Stripe answers it
+// from the key's first use, or, past the key's lifetime, the PaymentIntent is
+// found already succeeded, so the money is taken once and the writes finish.
+func (h *StripeWebhookHandler) capture(ctx context.Context, a paymentAttempt, s *stripe.CheckoutSession) error {
 	pi, err := h.stripe.CapturePaymentIntent(ctx, s.PaymentIntent.ID, captureKeyPrefix+a.ID)
 	if err != nil {
 		h.log.Error().Err(err).Str("session_id", s.ID).Msg("webhook completed: capture failed")
-		h.afterFailedCapture(ctx, a, s.PaymentIntent.ID)
-		return
+		return h.afterFailedCapture(ctx, a, s.PaymentIntent.ID)
 	}
 	var payerName func(context.Context) string
 	var email string
@@ -173,10 +184,16 @@ func (h *StripeWebhookHandler) capture(ctx context.Context, a paymentAttempt, s 
 			payerName = func(context.Context) string { return name }
 		}
 	}
-	h.orders.markAttemptCaptured(ctx, a, time.Now(), payerName)
-	h.orders.backfillGuestEmail(ctx, a, email)
+	// The money is taken: record it even if the request's context has ended.
+	wctx, cancel := settleContext(ctx)
+	defer cancel()
+	if err := h.orders.markAttemptCaptured(wctx, a, time.Now(), payerName); err != nil {
+		return err
+	}
+	h.orders.backfillGuestEmail(wctx, a, email)
 	brand, wallet := pi.CardBrandAndWallet()
-	h.orders.recordAttemptCard(ctx, a.ID, brand, wallet)
+	h.orders.recordAttemptCard(wctx, a.ID, brand, wallet)
+	return nil
 }
 
 // afterFailedCapture settles an attempt whose capture call failed by asking
@@ -191,27 +208,43 @@ func (h *StripeWebhookHandler) capture(ctx context.Context, a paymentAttempt, s 
 //   - Unknown (lookup or void failed): release the attempt to created; the
 //     hold lapses at Stripe, and payment_intent.succeeded or .canceled
 //     settles it if Stripe moves it on.
-func (h *StripeWebhookHandler) afterFailedCapture(ctx context.Context, a paymentAttempt, piID string) {
+//
+// The error is the database write that records the outcome failing; a
+// provider call that fails is one of the outcomes above, not an error.
+func (h *StripeWebhookHandler) afterFailedCapture(ctx context.Context, a paymentAttempt, piID string) error {
+	// The provider calls keep the request's context; the writes that record
+	// their outcome do not, as for a successful capture. Each gets its own
+	// bounded context, started after the provider call it follows.
+	release := func() error {
+		wctx, cancel := settleContext(ctx)
+		defer cancel()
+		return h.orders.releaseAuthorization(wctx, a)
+	}
 	pi, err := h.stripe.GetPaymentIntent(ctx, piID)
 	if err != nil {
 		h.log.Error().Err(err).Str("attempt_id", a.ID).Msg("webhook completed: payment intent lookup after failed capture failed")
-		h.orders.releaseAuthorization(ctx, a)
-		return
+		return release()
 	}
 	switch pi.Status {
 	case stripe.PaymentIntentSucceeded:
-		h.settleSucceededIntent(ctx, a, pi, time.Now())
+		wctx, cancel := settleContext(ctx)
+		defer cancel()
+		if err := h.settleSucceededIntent(wctx, a, pi, time.Now()); err != nil {
+			return err
+		}
 		brand, wallet := pi.CardBrandAndWallet()
-		h.orders.recordAttemptCard(ctx, a.ID, brand, wallet)
+		h.orders.recordAttemptCard(wctx, a.ID, brand, wallet)
+		return nil
 	case stripe.PaymentIntentRequiresCapture:
 		if err := h.stripe.CancelPaymentIntent(ctx, piID); err != nil {
 			h.log.Error().Err(err).Str("attempt_id", a.ID).Msg("webhook completed: void after failed capture failed")
-			h.orders.releaseAuthorization(ctx, a)
-			return
+			return release()
 		}
-		h.orders.markAttemptFailed(ctx, a)
+		wctx, cancel := settleContext(ctx)
+		defer cancel()
+		return h.orders.markAttemptFailed(wctx, a)
 	default:
-		h.orders.releaseAuthorization(ctx, a)
+		return release()
 	}
 }
 
@@ -240,8 +273,7 @@ func (h *StripeWebhookHandler) onSessionFailed(ctx context.Context, clubID strin
 	if err != nil || !ok {
 		return err
 	}
-	h.failAttempt(ctx, a)
-	return nil
+	return h.failAttempt(ctx, a)
 }
 
 func (h *StripeWebhookHandler) onIntentCanceled(ctx context.Context, clubID string, evt *stripe.Event) error {
@@ -249,8 +281,7 @@ func (h *StripeWebhookHandler) onIntentCanceled(ctx context.Context, clubID stri
 	if err != nil || !ok {
 		return err
 	}
-	h.failAttempt(ctx, a)
-	return nil
+	return h.failAttempt(ctx, a)
 }
 
 // onIntentSucceeded settles an attempt whose capture went through. Normally
@@ -260,32 +291,32 @@ func (h *StripeWebhookHandler) onIntentSucceeded(ctx context.Context, clubID str
 	if err != nil || !ok {
 		return err
 	}
-	h.settleSucceededIntent(ctx, a, pi, time.Unix(evt.Created, 0))
-	return nil
+	return h.settleSucceededIntent(ctx, a, pi, time.Unix(evt.Created, 0))
 }
 
 // settleSucceededIntent pays the order only when the full amount was
 // captured: a partial capture (made by hand in the Dashboard) does not
-// settle what is owed and is left for the board to resolve.
-func (h *StripeWebhookHandler) settleSucceededIntent(ctx context.Context, a paymentAttempt, pi *stripe.PaymentIntent, capturedAt time.Time) {
+// settle what is owed and is left for the board to resolve (not an error: a
+// redelivery would read the same amount).
+func (h *StripeWebhookHandler) settleSucceededIntent(ctx context.Context, a paymentAttempt, pi *stripe.PaymentIntent, capturedAt time.Time) error {
 	if !amountMatches(a, pi.AmountReceived, pi.Currency) {
 		h.log.Error().Str("attempt_id", a.ID).Str("payment_intent", pi.ID).
 			Int64("amount_received", pi.AmountReceived).Str("currency", pi.Currency).
 			Float64("attempt_amount", a.Amount).Str("attempt_currency", a.Currency).
 			Msg("webhook: captured amount does not match the attempt, not marking paid")
-		return
+		return nil
 	}
-	h.orders.markAttemptCaptured(ctx, a, capturedAt, nil)
+	return h.orders.markAttemptCaptured(ctx, a, capturedAt, nil)
 }
 
 // failAttempt marks an attempt failed unless Brygge already captured or
 // voided it: the cancellation Brygge itself caused arrives as an event too,
 // and must not fail an order another attempt is paying.
-func (h *StripeWebhookHandler) failAttempt(ctx context.Context, a paymentAttempt) {
+func (h *StripeWebhookHandler) failAttempt(ctx context.Context, a paymentAttempt) error {
 	if a.Status == "captured" || a.Status == "cancelled" {
-		return
+		return nil
 	}
-	h.orders.markAttemptFailed(ctx, a)
+	return h.orders.markAttemptFailed(ctx, a)
 }
 
 // intentAttempt resolves a PaymentIntent event to its attempt through the

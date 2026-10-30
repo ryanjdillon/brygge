@@ -63,6 +63,19 @@ func TestOrderSettlement(t *testing.T) {
 		return online, legacy, provider
 	}
 
+	captured := func(t *testing.T, a paymentAttempt, at time.Time, name func(context.Context) string) {
+		t.Helper()
+		if err := s.markAttemptCaptured(ctx, a, at, name); err != nil {
+			t.Fatalf("markAttemptCaptured: %v", err)
+		}
+	}
+	failed := func(t *testing.T, a paymentAttempt) {
+		t.Helper()
+		if err := s.markAttemptFailed(ctx, a); err != nil {
+			t.Fatalf("markAttemptFailed: %v", err)
+		}
+	}
+
 	paidTests := []struct {
 		name       string
 		user       string
@@ -86,7 +99,7 @@ func TestOrderSettlement(t *testing.T) {
 			invID := seedPayableInvoice(t, pool, clubID, userID, "open", 960+i)
 			addOrderSource(t, pool, a.OrderID, invID)
 
-			s.markAttemptCaptured(ctx, a, capturedAt, namer(tc.payerName))
+			captured(t, a, capturedAt, namer(tc.payerName))
 
 			status, guest, paidAt := load(t, a.OrderID)
 			if status != tc.wantStatus || guest != tc.wantGuest {
@@ -119,7 +132,7 @@ func TestOrderSettlement(t *testing.T) {
 		a := seed(t, userID, "pending", "")
 		invID := seedPayableInvoice(t, pool, clubID, userID, "open", 990)
 		addOrderSource(t, pool, a.OrderID, invID)
-		s.markAttemptCaptured(ctx, a, time.Time{}, nil)
+		captured(t, a, time.Time{}, nil)
 		online, _, _ := marker(t, invID)
 		if online == nil || time.Since(*online) > time.Minute {
 			t.Errorf("invoice marker = %v, want about now", online)
@@ -129,18 +142,20 @@ func TestOrderSettlement(t *testing.T) {
 		}
 	})
 
-	t.Run("paid/name looked up after status, before marker", func(t *testing.T) {
+	t.Run("paid/name looked up after the settlement commits", func(t *testing.T) {
 		a := seed(t, "", "pending", "")
 		invID := seedPayableInvoice(t, pool, clubID, userID, "open", 991)
 		addOrderSource(t, pool, a.OrderID, invID)
 		called := false
-		s.markAttemptCaptured(ctx, a, capturedAt, func(ctx context.Context) string {
+		captured(t, a, capturedAt, func(ctx context.Context) string {
 			called = true
+			// The provider lookup must not hold up, or be needed for, marking
+			// the order paid: everything is already committed.
 			if status, _, _ := load(t, a.OrderID); status != "paid" {
 				t.Errorf("status during name lookup = %q, want paid", status)
 			}
-			if online, _, _ := marker(t, invID); online != nil {
-				t.Errorf("invoice marker set before name lookup: %v", online)
+			if online, _, _ := marker(t, invID); online == nil {
+				t.Error("invoice marker not set before name lookup")
 			}
 			return "Test Guest"
 		})
@@ -155,7 +170,7 @@ func TestOrderSettlement(t *testing.T) {
 	for _, from := range []string{"pending", "paid", "refunded", "failed"} {
 		t.Run("failed/from "+from, func(t *testing.T) {
 			a := seed(t, "", from, "")
-			s.markAttemptFailed(ctx, a)
+			failed(t, a)
 			want := from
 			if from == "pending" {
 				want = "failed"
@@ -165,6 +180,30 @@ func TestOrderSettlement(t *testing.T) {
 			}
 		})
 	}
+
+	// A guarded write with nothing left to do (another delivery got there
+	// first, or the order is past it) is the normal redelivery, not a failure
+	// to return to the provider.
+	t.Run("guarded writes with no row to change are not errors", func(t *testing.T) {
+		a := seed(t, "", "pending", "")
+		captured(t, a, capturedAt, nil)
+		captured(t, a, capturedAt, nil) // replay: attempt and order already settled
+		failed(t, a)                    // a late terminal event for a paid order
+		if status, _, _ := load(t, a.OrderID); status != "paid" {
+			t.Errorf("status after replay = %q, want paid", status)
+		}
+
+		refunded := seed(t, "", "refunded", "")
+		captured(t, refunded, capturedAt, nil)
+		if paid, err := s.payOrder(ctx, pool, refunded, capturedAt); err != nil || paid {
+			t.Errorf("payOrder on a refunded order = %v, %v; want false, nil", paid, err)
+		}
+
+		// Releasing an attempt that is not authorized changes nothing.
+		if err := s.releaseAuthorization(ctx, seed(t, "", "pending", "")); err != nil {
+			t.Errorf("releaseAuthorization of an attempt that is not authorized: %v", err)
+		}
+	})
 }
 
 // namer adapts a fixed name to markAttemptCaptured's lazy name source; "" is
