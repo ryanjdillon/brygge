@@ -109,16 +109,24 @@ func (s *Service) ListMissingVippsSettlements(ctx context.Context, clubID string
 
 // PotentialInvoicesForVippsCharge lists open unpaid invoices whose amount
 // matches the given Vipps charge — the candidate list for assigning the charge
-// to a faktura. It reuses the bank-row candidate query via its amount override.
+// to a faktura. A charge is not a bank row, so it uses the amount-only query
+// rather than PotentialInvoicesForRow, whose payer resolution loads the row
+// from bank_import_rows.
 func (s *Service) PotentialInvoicesForVippsCharge(ctx context.Context, clubID, chargeID, q string, limit int) ([]InvoiceSuggestion, error) {
 	var amount float64
 	if err := s.db.QueryRow(ctx,
 		`SELECT amount FROM vipps_import_rows WHERE id = $1 AND club_id = $2 AND row_type = $3`,
 		chargeID, clubID, string(VippsRowBelastning),
 	).Scan(&amount); err != nil {
-		return nil, fmt.Errorf("vipps charge not found")
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrVippsChargeNotFound
+		}
+		return nil, fmt.Errorf("load vipps charge: %w", err)
 	}
-	return s.PotentialInvoicesForRow(ctx, clubID, "", q, limit, amount)
+	if amount <= 0 {
+		return []InvoiceSuggestion{}, nil
+	}
+	return s.potentialInvoicesByAmount(ctx, clubID, q, limit, amount)
 }
 
 // ErrVippsChargeNotFound is returned for a charge id that is not an

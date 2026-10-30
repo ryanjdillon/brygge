@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 
 	"github.com/brygge-klubb/brygge/internal/accounting"
 	"github.com/brygge-klubb/brygge/internal/audit"
@@ -37,9 +38,21 @@ func (h *AccountingHandler) HandleListUnreconciledVippsCharges(w http.ResponseWr
 	JSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
+// vippsChargeIDParam reads {rowID}; an id that is not a uuid is answered 404
+// rather than reaching Postgres as an invalid uuid (a 500).
+func vippsChargeIDParam(w http.ResponseWriter, r *http.Request) (string, bool) {
+	id := chi.URLParam(r, "rowID")
+	if _, err := uuid.Parse(id); err != nil {
+		Error(w, http.StatusNotFound, accounting.ErrVippsChargeNotFound.Error())
+		return "", false
+	}
+	return id, true
+}
+
 // HandleVippsChargePotentialInvoices lists open unpaid invoices whose amount
-// matches the charge — the candidate list for Tildel→faktura. Reuses the
-// bank-row potential-invoices query via its amount override.
+// matches the charge — the candidate list for Tildel→faktura. A charge that
+// is not the club's, or an id that is not a uuid, is 404, like the
+// suggestions route.
 func (h *AccountingHandler) HandleVippsChargePotentialInvoices(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
@@ -47,12 +60,19 @@ func (h *AccountingHandler) HandleVippsChargePotentialInvoices(w http.ResponseWr
 		Error(w, http.StatusUnauthorized, "authentication required")
 		return
 	}
-	rowID := chi.URLParam(r, "rowID")
+	rowID, ok := vippsChargeIDParam(w, r)
+	if !ok {
+		return
+	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	items, err := h.svc.PotentialInvoicesForVippsCharge(ctx, claims.ClubID, rowID, r.URL.Query().Get("q"), limit)
+	if errors.Is(err, accounting.ErrVippsChargeNotFound) {
+		Error(w, http.StatusNotFound, err.Error())
+		return
+	}
 	if err != nil {
-		h.log.Warn().Err(err).Str("row_id", rowID).Msg("vipps charge potential invoices")
-		Error(w, http.StatusBadRequest, err.Error())
+		h.log.Error().Err(err).Str("row_id", rowID).Msg("vipps charge potential invoices")
+		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	JSON(w, http.StatusOK, map[string]any{"items": items, "potential": true})
@@ -67,7 +87,10 @@ func (h *AccountingHandler) HandleVippsChargeSuggestions(w http.ResponseWriter, 
 		Error(w, http.StatusUnauthorized, "authentication required")
 		return
 	}
-	rowID := chi.URLParam(r, "rowID")
+	rowID, ok := vippsChargeIDParam(w, r)
+	if !ok {
+		return
+	}
 	res, err := h.svc.VippsChargeSuggestionsFor(ctx, claims.ClubID, rowID)
 	if errors.Is(err, accounting.ErrVippsChargeNotFound) {
 		Error(w, http.StatusNotFound, err.Error())
