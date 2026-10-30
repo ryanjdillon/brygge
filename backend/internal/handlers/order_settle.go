@@ -216,8 +216,14 @@ func (s orderSettlement) decideAuthorization(ctx context.Context, a paymentAttem
 	case sibling:
 		d, next = authCancelSibling, "cancelled"
 	}
+	// updated_at is kept when the status does not change: a redelivery that
+	// decides capture again for an attempt already authorized must not make it
+	// look newly authorized, or the age of a stuck authorization (the
+	// brygge.payment.attempt.oldest_authorized_age gauge) would reset on every
+	// provider retry.
 	if _, err := tx.Exec(ctx,
-		`UPDATE payment_attempts SET status = $2, updated_at = now()
+		`UPDATE payment_attempts
+		    SET status = $2, updated_at = CASE WHEN status = $2 THEN updated_at ELSE now() END
 		  WHERE id = $1 AND status IN ('created', 'authorized', 'failed')`,
 		a.ID, next,
 	); err != nil {
