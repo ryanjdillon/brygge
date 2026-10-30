@@ -118,7 +118,7 @@ func (h *InvoiceHandler) HandleGetUserPayLink(w http.ResponseWriter, r *http.Req
 	// Club-scope the member before minting a token for them.
 	var exists bool
 	err := h.db.QueryRow(ctx,
-		`SELECT true FROM users WHERE id = $1 AND club_id = $2`,
+		`SELECT true FROM users WHERE id = $1 AND club_id = $2 AND deactivated_at IS NULL`,
 		userID, claims.ClubID,
 	).Scan(&exists)
 	if errors.Is(err, pgx.ErrNoRows) {

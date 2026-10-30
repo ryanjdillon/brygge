@@ -3,15 +3,19 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 
 	"github.com/brygge-klubb/brygge/internal/accounting"
+	"github.com/brygge-klubb/brygge/internal/audit"
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/middleware"
 )
@@ -462,6 +466,73 @@ func (h *GDPRHandler) HandleListDeletionRequests(w http.ResponseWriter, r *http.
 	JSON(w, http.StatusOK, map[string]any{"requests": requests})
 }
 
+// revokeMemberAccess ends every way a member can authenticate: it deactivates
+// the account (blocking login and the session lookup), drops all sessions, and
+// removes passkeys, TOTP enrolment, recovery codes, magic links, the durable
+// pay link and developer tokens. It
+// is the single step both deletion outcomes (identity erased now, or deferred
+// behind retention) run, so neither can leave a usable credential behind.
+// Sessions live in Postgres, so deleting them in the caller's transaction is
+// what makes the revocation atomic with the deactivation. Must run before the
+// identity is anonymised: the magic-link rows are keyed by the old email.
+// Returns the number of session rows deleted, which includes expired sessions
+// the purge job has not yet removed.
+func revokeMemberAccess(ctx context.Context, tx pgx.Tx, clubID, userID, actorID string) (int64, error) {
+	var email string
+	if err := tx.QueryRow(ctx,
+		`SELECT email FROM users WHERE id = $1 AND club_id = $2`,
+		userID, clubID,
+	).Scan(&email); err != nil {
+		return 0, fmt.Errorf("read member email: %w", err)
+	}
+
+	if _, err := tx.Exec(ctx,
+		`UPDATE users SET deactivated_at = now(), deactivated_by = $2, updated_at = now()
+		  WHERE id = $1 AND deactivated_at IS NULL`,
+		userID, actorID,
+	); err != nil {
+		return 0, fmt.Errorf("deactivate member: %w", err)
+	}
+
+	tag, err := tx.Exec(ctx, `DELETE FROM sessions WHERE user_id = $1`, userID)
+	if err != nil {
+		return 0, fmt.Errorf("revoke sessions: %w", err)
+	}
+	revoked := tag.RowsAffected()
+
+	for _, stmt := range []string{
+		`DELETE FROM webauthn_credentials WHERE user_id = $1`,
+		`DELETE FROM totp_recovery_codes WHERE user_id = $1`,
+		`UPDATE users SET totp_secret_encrypted = NULL, totp_enabled = false WHERE id = $1`,
+	} {
+		if _, err := tx.Exec(ctx, stmt, userID); err != nil {
+			return 0, fmt.Errorf("clear credentials: %w", err)
+		}
+	}
+	// The durable pay link is a standing capability that needs no login, so it
+	// must not outlive the member's access. Developer tokens minted by the
+	// member would otherwise keep working too.
+	for _, stmt := range []string{
+		`UPDATE users SET payables_token = NULL WHERE id = $1`,
+		`UPDATE developer_tokens SET revoked_at = now() WHERE created_by = $1 AND revoked_at IS NULL`,
+	} {
+		if _, err := tx.Exec(ctx, stmt, userID); err != nil {
+			return 0, fmt.Errorf("revoke tokens: %w", err)
+		}
+	}
+	if _, err := tx.Exec(ctx,
+		`DELETE FROM magic_links WHERE club_id = $1 AND email = $2`,
+		clubID, email,
+	); err != nil {
+		return 0, fmt.Errorf("clear magic links: %w", err)
+	}
+	return revoked, nil
+}
+
+// HandleProcessDeletion carries out a member's deletion request once its
+// cooling-off window has passed. The request row is locked for the whole
+// transaction, so two admins processing the same request serialise and the
+// second sees it already processed.
 func (h *GDPRHandler) HandleProcessDeletion(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
@@ -471,15 +542,34 @@ func (h *GDPRHandler) HandleProcessDeletion(w http.ResponseWriter, r *http.Reque
 	}
 
 	requestID := chi.URLParam(r, "requestID")
+	// deletion_requests.id is a UUID; a malformed id would otherwise surface
+	// as a cast error from Postgres and answer 500.
+	parsedID, err := uuid.Parse(requestID)
+	if err != nil {
+		Error(w, http.StatusNotFound, "deletion request not found")
+		return
+	}
+	// Use the canonical form: uuid.Parse also accepts urn:uuid: and braced
+	// forms that Postgres would reject.
+	requestID = parsedID.String()
+
+	tx, err := h.db.Begin(ctx)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to begin transaction")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // no-op after commit
 
 	var userID string
 	var graceEnd time.Time
 	var status string
-	err := h.db.QueryRow(ctx,
-		`SELECT user_id, grace_end, status FROM deletion_requests WHERE id = $1 AND club_id = $2`,
+	err = tx.QueryRow(ctx,
+		`SELECT user_id, grace_end, status FROM deletion_requests
+		  WHERE id = $1 AND club_id = $2 FOR UPDATE`,
 		requestID, claims.ClubID,
 	).Scan(&userID, &graceEnd, &status)
-	if err == pgx.ErrNoRows {
+	if errors.Is(err, pgx.ErrNoRows) {
 		Error(w, http.StatusNotFound, "deletion request not found")
 		return
 	}
@@ -494,26 +584,24 @@ func (h *GDPRHandler) HandleProcessDeletion(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// An admin erasing their own account would lock themselves out mid-request
+	// and leave the club without the actor who can undo it.
+	if userID == claims.UserID {
+		Error(w, http.StatusBadRequest, "cannot process your own deletion request")
+		return
+	}
+
 	if time.Now().Before(graceEnd) {
 		Error(w, http.StatusBadRequest, "grace period has not expired")
 		return
 	}
 
-	tx, err := h.db.Begin(ctx)
-	if err != nil {
-		h.log.Error().Err(err).Msg("failed to begin transaction")
-		Error(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-	defer tx.Rollback(ctx)
-
 	// Retention gate (BRY-208). Data with no bookkeeping obligation is
 	// always wiped now. But if the member still has in-window financial
 	// records, their name/email must be retained for those records
-	// (bokføringsloven §13) — so we defer identity erasure by deactivating
-	// them (BRY-203) and let the scheduled purge (BRY-207) finish once
-	// retention clears. Only when retention is already cleared do we erase
-	// identity immediately.
+	// (bokføringsloven §13) — so we defer identity erasure and let the
+	// scheduled purge (BRY-207) finish once retention clears. Only when
+	// retention is already cleared do we erase identity immediately.
 	ret, rerr := accounting.MemberFinancialRetention(ctx, tx, claims.ClubID, userID)
 	if rerr != nil {
 		h.log.Error().Err(rerr).Msg("failed to evaluate member retention")
@@ -535,34 +623,26 @@ func (h *GDPRHandler) HandleProcessDeletion(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
+	// Both outcomes lock the member out; only the identity differs. A deferred
+	// member keeps their name until the purge job erases it once ret.ClearsAt
+	// passes.
+	sessionsRevoked, err := revokeMemberAccess(ctx, tx, claims.ClubID, userID, claims.UserID)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to revoke member access")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
 	identityErased := ret.Eligible
 	if identityErased {
 		if _, err = tx.Exec(ctx,
 			`UPDATE users SET first_name = 'Slettet', last_name = 'bruker',
-			    email = gen_random_uuid()::text || '@deleted.local', phone = '',
+			    email = gen_random_uuid()::text || '`+accounting.ErasedEmailSuffix+`', phone = '',
 			    address_line = '', postal_code = '', city = '', updated_at = now()
 			  WHERE id = $1`,
 			userID,
 		); err != nil {
 			h.log.Error().Err(err).Msg("failed to anonymize user")
-			Error(w, http.StatusInternalServerError, "internal error")
-			return
-		}
-	} else {
-		// Defer identity erasure: deactivate so they're hidden and blocked
-		// from login, and drop their sessions. The purge job erases the
-		// remaining PII once ret.ClearsAt passes.
-		if _, err = tx.Exec(ctx,
-			`UPDATE users SET deactivated_at = now(), deactivated_by = $2, updated_at = now()
-			  WHERE id = $1 AND deactivated_at IS NULL`,
-			userID, claims.UserID,
-		); err != nil {
-			h.log.Error().Err(err).Msg("failed to deactivate user for deferred erasure")
-			Error(w, http.StatusInternalServerError, "internal error")
-			return
-		}
-		if _, err = tx.Exec(ctx, `DELETE FROM sessions WHERE user_id = $1`, userID); err != nil {
-			h.log.Error().Err(err).Msg("failed to clear sessions")
 			Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
@@ -577,24 +657,32 @@ func (h *GDPRHandler) HandleProcessDeletion(w http.ResponseWriter, r *http.Reque
 		"records_wiped":       recordsWiped,
 		"identity_erased":     identityErased,
 		"retention_clears_at": ret.ClearsAt,
+		"sessions_revoked":    sessionsRevoked,
 	})
 	if _, err = tx.Exec(ctx,
-		`INSERT INTO audit_log (club_id, actor_id, action, resource, resource_id, details)
-		 VALUES ($1, $2, 'gdpr.deletion_processed', 'user', $3, $4)`,
-		claims.ClubID, claims.UserID, userID, auditDetails,
+		`INSERT INTO audit_log (club_id, actor_id, actor_ip, action, resource, resource_id, details)
+		 VALUES ($1, $2, $3, $4, 'user', $5, $6)`,
+		claims.ClubID, claims.UserID, r.RemoteAddr, audit.ActionGDPRDeletionProcessed, userID, auditDetails,
 	); err != nil {
 		h.log.Error().Err(err).Msg("failed to write audit log")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
-	_, err = tx.Exec(ctx,
-		`UPDATE deletion_requests SET processed_at = now(), status = 'processed' WHERE id = $1`,
+	// The row is locked above, so the status guard cannot lose a race; it
+	// keeps the update correct if the lock is ever dropped.
+	tag, err := tx.Exec(ctx,
+		`UPDATE deletion_requests SET processed_at = now(), status = 'processed'
+		  WHERE id = $1 AND status = 'pending'`,
 		requestID,
 	)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to update deletion request status")
 		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if tag.RowsAffected() != 1 {
+		Error(w, http.StatusBadRequest, "deletion request is not pending")
 		return
 	}
 

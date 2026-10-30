@@ -38,11 +38,22 @@ identity at issue"*.
 A member-initiated deletion request (My page → Privacy) still runs after its
 14-day cooling-off window, but reconciles with retention: data with no bookkeeping
 obligation (push subscriptions, notification preferences, consents) is wiped
-immediately, while identity erasure is **deferred** — the member is deactivated
-so the purge finishes the erasure once retention clears. The audit row
-(`gdpr.deletion_processed`) records the processing admin as actor, the erased
-user as the resource, and `request_id`, `records_wiped`, `identity_erased` and
-`retention_clears_at` in its details. Processing needs a fresh TOTP on top of
+immediately, while identity erasure is **deferred** when retention still
+applies, so the purge finishes the erasure once it clears. Either way the member
+is locked out in the same transaction (`revokeMemberAccess`): the account is
+deactivated, and sessions, passkeys, TOTP enrolment, recovery codes, every
+magic link for the member's email, the durable pay link
+(`users.payables_token`, so `/betal/bruker/{token}` answers 404 and no new link
+can be minted for a deactivated member) and developer tokens the member created
+are removed or revoked. An immediately erased member keeps `deactivated_at`
+and an `@deleted.local` email, which the purge sweep skips. The request row is
+locked (`FOR UPDATE`) while it is processed, so a second run is refused; an id
+that is not a UUID answers 404. The audit row (`gdpr.deletion_processed`)
+records the processing admin as actor with their IP, the erased user as the
+resource, and `request_id`, `records_wiped`, `identity_erased`,
+`retention_clears_at` and `sessions_revoked` (session rows deleted, including
+expired ones the purge job had not yet removed) in its details. An admin cannot
+process their own deletion request (400). Processing needs a fresh TOTP on top of
 the admin step-up (BRY-509): the admin page asks for it on the click, before
 the confirm dialog, and the route answers `totp_fresh_required` if the window
 has lapsed.

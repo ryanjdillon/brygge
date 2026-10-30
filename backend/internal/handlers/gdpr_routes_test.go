@@ -49,7 +49,7 @@ func handlerReached(code int) bool {
 
 var gdprAdminCalls = []routeCall{
 	{http.MethodGet, "/admin/gdpr/deletion-requests", false},
-	{http.MethodPost, "/admin/gdpr/deletion-requests/req-1/process", true},
+	{http.MethodPost, "/admin/gdpr/deletion-requests/00000000-0000-4000-8000-000000000001/process", true},
 	{http.MethodGet, "/admin/gdpr/legal", false},
 	{http.MethodPost, "/admin/gdpr/legal", false},
 }
