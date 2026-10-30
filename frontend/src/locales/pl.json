@@ -1872,11 +1872,13 @@
       "notFoundTitle": "Nie znaleziono płatności",
       "notFoundBody": "Link jest nieprawidłowy lub wygasł. Skontaktuj się ze skarbnikiem."
     },
-    "belowMinimum": "Ta kwota jest za mała dla tej metody płatności."
+    "belowMinimum": "Ta kwota jest za mała dla tej metody płatności.",
+    "unsupportedCurrency": "Płatność online jest dostępna tylko w koronach norweskich. Zapłać przelewem bankowym lub skontaktuj się ze skarbnikiem."
   },
   "qr": {
     "cardMinimum": "Płatność kartą od {amount} kr",
     "belowMinimum": "Kwota jest za mała, aby zapłacić online. Minimum to {amount} kr.",
-    "cardRefused": "Płatność kartą została odrzucona dla tej kwoty. Wybierz inną metodę płatności lub zapytaj kapitana portu."
+    "cardRefused": "Płatność kartą została odrzucona dla tej kwoty. Wybierz inną metodę płatności lub zapytaj kapitana portu.",
+    "unsupportedCurrency": "Tutaj ten punkt płatności można opłacić tylko w koronach. Zapytaj kapitana portu."
   }
 }

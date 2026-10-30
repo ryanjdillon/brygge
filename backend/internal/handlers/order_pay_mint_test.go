@@ -426,3 +426,123 @@ func TestPayment_NoProviderConfigured(t *testing.T) {
 		t.Errorf("ensureFakturaOrderToken = %q with no provider, want empty", tok)
 	}
 }
+
+// A mint charges in NOK only, so an order in another currency is refused
+// before any provider is called or attempt recorded (BRY-452); a lower-case
+// or blank currency reads as NOK.
+func TestMintOrderPayment_UnsupportedCurrency(t *testing.T) {
+	testutil.SkipIfNoDB(t)
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	fake := newFakeVipps(t)
+	router := mintTestRouter(newMintTestHandler(pool, fake.client()))
+	clubID := testutil.SeedClub(t, pool)
+
+	order := func(t *testing.T, currency string) (orderID, token string) {
+		t.Helper()
+		orderID, token = seedCheckoutOrder(t, pool, clubID, "")
+		addOrderLine(t, pool, orderID, "Gjesteplass", 200)
+		if _, err := pool.Exec(ctx, `UPDATE orders SET currency = $2 WHERE id = $1`, orderID, currency); err != nil {
+			t.Fatal(err)
+		}
+		return orderID, token
+	}
+	attempts := func(t *testing.T, orderID string) (n int) {
+		t.Helper()
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM payment_attempts WHERE order_id = $1`, orderID).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+
+	t.Run("checkout pay", func(t *testing.T) {
+		orderID, token := order(t, "EUR")
+		assertBody(t, serve(router, http.MethodPost, "/checkout/"+token+"/pay", ""),
+			http.StatusConflict, `{"error":"unsupported_currency"}`+"\n")
+		if n, a := len(fake.createCalls()), attempts(t, orderID); n != 0 || a != 0 {
+			t.Errorf("refused order reached Vipps %d times, left %d attempts", n, a)
+		}
+	})
+
+	t.Run("pay link redirect", func(t *testing.T) {
+		orderID, token := order(t, "SEK")
+		rec := serve(router, http.MethodGet, "/betal/"+token, "")
+		if rec.Code != http.StatusConflict || rec.Header().Get("Location") != "" {
+			t.Errorf("redirect = %d %q, want a plain 409", rec.Code, rec.Header().Get("Location"))
+		}
+		if n, a := len(fake.createCalls()), attempts(t, orderID); n != 0 || a != 0 {
+			t.Errorf("refused order reached Vipps %d times, left %d attempts", n, a)
+		}
+	})
+
+	t.Run("QR target", func(t *testing.T) {
+		var priceItemID string
+		if err := pool.QueryRow(ctx,
+			`INSERT INTO price_items (club_id, category, name, amount, currency) VALUES ($1, 'guest_slip', 'Test guest night', 15, 'EUR') RETURNING id`,
+			clubID,
+		).Scan(&priceItemID); err != nil {
+			t.Fatalf("insert price item: %v", err)
+		}
+		qrToken := "qr-" + testutil.RandomHex(8)
+		if _, err := pool.Exec(ctx,
+			`INSERT INTO harbor_payment_targets (club_id, token, label, price_item_id, short_code)
+			 VALUES ($1, $2, 'Test pier', $3, 'abcdf')`,
+			clubID, qrToken, priceItemID,
+		); err != nil {
+			t.Fatalf("insert target: %v", err)
+		}
+		countOrders := func() (n int) {
+			if err := pool.QueryRow(ctx, `SELECT count(*) FROM orders WHERE club_id = $1`, clubID).Scan(&n); err != nil {
+				t.Fatal(err)
+			}
+			return n
+		}
+		before := countOrders()
+		assertBody(t, serve(router, http.MethodPost, "/qr/"+qrToken+"/pay", `{"units":1}`),
+			http.StatusConflict, `{"error":"unsupported_currency"}`+"\n")
+		if n, left := len(fake.createCalls()), countOrders()-before; n != 0 || left != 0 {
+			t.Errorf("refused QR payment reached Vipps %d times, left %d orders", n, left)
+		}
+	})
+
+	for _, currency := range []string{"NOK", "nok", ""} {
+		t.Run("pays as NOK: "+currency, func(t *testing.T) {
+			before := len(fake.createCalls())
+			_, token := order(t, currency)
+			rec := serve(router, http.MethodPost, "/checkout/"+token+"/pay", "")
+			calls := fake.createCalls()
+			if rec.Code != http.StatusOK || len(calls) != before+1 {
+				t.Fatalf("status %d %q, create calls %d", rec.Code, rec.Body.String(), len(calls)-before)
+			}
+			if got := calls[before].Body.Amount; got != (vipps.Amount{Currency: "NOK", Value: 20000}) {
+				t.Errorf("amount = %+v, want NOK 20000", got)
+			}
+		})
+	}
+}
+
+// The description limit is in characters: an order line that crosses the
+// 100-character mark inside a multi-byte character is cut before it, never
+// through it.
+func TestMintOrderPayment_DescriptionCutAtACharacter(t *testing.T) {
+	testutil.SkipIfNoDB(t)
+	pool := testutil.SetupTestDB(t)
+	fake := newFakeVipps(t)
+	router := mintTestRouter(newMintTestHandler(pool, fake.client()))
+	clubID := testutil.SeedClub(t, pool)
+
+	orderID, token := seedCheckoutOrder(t, pool, clubID, "")
+	name := strings.Repeat("æøå🚤", 40)
+	addOrderLine(t, pool, orderID, name, 200)
+
+	if rec := serve(router, http.MethodPost, "/checkout/"+token+"/pay", ""); rec.Code != http.StatusOK {
+		t.Fatalf("status %d %q", rec.Code, rec.Body.String())
+	}
+	calls := fake.createCalls()
+	if len(calls) != 1 {
+		t.Fatalf("create calls = %d, want 1", len(calls))
+	}
+	if got, want := calls[0].Body.PaymentDescription, string([]rune(name)[:100]); got != want {
+		t.Errorf("description = %q, want the first 100 characters %q", got, want)
+	}
+}

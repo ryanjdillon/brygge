@@ -1901,11 +1901,13 @@
       "notFoundTitle": "Betaling niet gevonden",
       "notFoundBody": "De link is ongeldig of verlopen. Neem contact op met de penningmeester."
     },
-    "belowMinimum": "Dit bedrag is te laag voor deze betaalmethode."
+    "belowMinimum": "Dit bedrag is te laag voor deze betaalmethode.",
+    "unsupportedCurrency": "Online betalen kan alleen in Noorse kronen. Betaal per bankoverschrijving of neem contact op met de penningmeester."
   },
   "qr": {
     "cardMinimum": "Betalen met kaart vanaf {amount} kr",
     "belowMinimum": "Het bedrag is te laag om online te betalen. Het minimum is {amount} kr.",
-    "cardRefused": "Kaartbetaling is geweigerd voor dit bedrag. Probeer een andere betaalmethode of vraag het de havenmeester."
+    "cardRefused": "Kaartbetaling is geweigerd voor dit bedrag. Probeer een andere betaalmethode of vraag het de havenmeester.",
+    "unsupportedCurrency": "Dit betaalpunt kan hier alleen in kronen worden betaald. Vraag het aan de havenmeester."
   }
 }

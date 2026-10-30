@@ -397,6 +397,10 @@ func (h *InvoiceHandler) HandlePayCheckout(w http.ResponseWriter, r *http.Reques
 		Error(w, http.StatusBadRequest, "nothing to pay")
 		return
 	}
+	if errors.Is(err, errUnsupportedCurrency) {
+		Error(w, http.StatusConflict, errCodeUnsupportedCurrency)
+		return
+	}
 	if errors.Is(err, errOnlinePaymentBlocked) {
 		// Not payable online → bank transfer only (BRY-283). The page already
 		// hides the buttons via online_blocked; this guards a stale client.

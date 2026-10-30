@@ -32,6 +32,12 @@ var errNothingToPay = errors.New("order has nothing left to pay")
 // transfer (KID) instead of being charged online, so the club avoids the fee.
 var errOnlinePaymentBlocked = errors.New("order has a source not payable online")
 
+// errUnsupportedCurrency signals an order in a currency other than
+// paymentCurrency. Brygge's books and both providers' reconciliation are NOK
+// only, so such an order is refused rather than charged in the wrong currency
+// (BRY-452).
+var errUnsupportedCurrency = errors.New("order currency is not payable online")
+
 // Error codes the admin UI matches on for the pay-link affordances.
 const (
 	errCodeOnlineUnavailable = "online_payment_unavailable"
@@ -40,16 +46,20 @@ const (
 	// charge (payments.ErrAmountBelowMinimum): the chosen provider's on a pay
 	// request, every configured provider's on the admin pay-link route.
 	errCodeAmountBelowMinimum = "amount_below_minimum"
+	// errCodeUnsupportedCurrency is an order or QR target priced in a
+	// currency other than paymentCurrency.
+	errCodeUnsupportedCurrency = "unsupported_currency"
 )
 
 // Payer-facing texts on the public pay routes. The Norwegian ones reach the
 // payer as they are (a plain-text page, or the QR page's error), so they are
 // in the club's language.
 const (
-	msgOnlineUnavailable    = "online payment is not available"
-	msgPaymentStartFailed   = "could not start online payment"
-	msgOnlineUnavailableNO  = "Nettbetaling er ikke tilgjengelig akkurat nå."
-	msgPaymentStartFailedNO = "Kunne ikke starte betalingen. Prøv igjen."
+	msgOnlineUnavailable     = "online payment is not available"
+	msgPaymentStartFailed    = "could not start online payment"
+	msgOnlineUnavailableNO   = "Nettbetaling er ikke tilgjengelig akkurat nå."
+	msgPaymentStartFailedNO  = "Kunne ikke starte betalingen. Prøv igjen."
+	msgUnsupportedCurrencyNO = "Nettbetaling er bare tilgjengelig i norske kroner."
 )
 
 // ensureFakturaOrderToken returns the durable token of the faktura's checkout
@@ -403,6 +413,10 @@ func (h *InvoiceHandler) HandleOrderPayRedirect(w http.ResponseWriter, r *http.R
 		http.Redirect(w, r, h.frontendBase(), http.StatusFound)
 		return
 	}
+	if errors.Is(err, errUnsupportedCurrency) {
+		http.Error(w, msgUnsupportedCurrencyNO, http.StatusConflict)
+		return
+	}
 	if errors.Is(err, errOnlinePaymentBlocked) || errors.Is(err, payments.ErrAmountBelowMinimum) {
 		// Not payable online, or not with the only provider → send them to
 		// the checkout page, which shows KID + konto for bank transfer
@@ -529,6 +543,10 @@ func (h *InvoiceHandler) mintOrderPayment(ctx context.Context, providerName, ord
 		return "", fmt.Errorf("payment provider %q is not configured", providerName)
 	}
 
+	if err := h.requirePaymentCurrency(ctx, orderID); err != nil {
+		return "", err
+	}
+
 	// Refuse to charge online when an unpaid source isn't allowed (over the
 	// club's cap with no override, or forced off) — closes the gap that a token
 	// issued before the cap/override (or already emailed) would otherwise leave
@@ -611,6 +629,27 @@ func (h *InvoiceHandler) orderPayer(ctx context.Context, orderID string) (orderP
 
 // paymentCurrency is the only currency Brygge charges in.
 const paymentCurrency = "NOK"
+
+// requirePaymentCurrency refuses an order whose currency is not
+// paymentCurrency with errUnsupportedCurrency, before any provider is called.
+// orders.currency is NOT NULL DEFAULT 'NOK', so an order written before the
+// column mattered reads as NOK; a blank value is treated the same.
+func (h *InvoiceHandler) requirePaymentCurrency(ctx context.Context, orderID string) error {
+	var currency string
+	if err := h.db.QueryRow(ctx, `SELECT currency FROM orders WHERE id = $1`, orderID).Scan(&currency); err != nil {
+		return fmt.Errorf("load order currency: %w", err)
+	}
+	return checkPaymentCurrency(currency)
+}
+
+// checkPaymentCurrency is errUnsupportedCurrency unless currency is
+// paymentCurrency (any case, or blank).
+func checkPaymentCurrency(currency string) error {
+	if c := strings.TrimSpace(currency); c != "" && !strings.EqualFold(c, paymentCurrency) {
+		return fmt.Errorf("%w: %s", errUnsupportedCurrency, c)
+	}
+	return nil
+}
 
 // startPaymentAttempt records the attempt before the provider is called, so a
 // payment the provider creates always has a row for its webhook to land on.

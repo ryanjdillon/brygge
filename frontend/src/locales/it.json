@@ -1901,11 +1901,13 @@
       "notFoundTitle": "Pagamento non trovato",
       "notFoundBody": "Il link non è valido o è scaduto. Contatta il tesoriere."
     },
-    "belowMinimum": "Questo importo è troppo basso per questo metodo di pagamento."
+    "belowMinimum": "Questo importo è troppo basso per questo metodo di pagamento.",
+    "unsupportedCurrency": "Il pagamento online è disponibile solo in corone norvegesi. Paga con bonifico bancario o contatta il tesoriere."
   },
   "qr": {
     "cardMinimum": "Pagamento con carta da {amount} kr",
     "belowMinimum": "L'importo è troppo basso per il pagamento online. Il minimo è {amount} kr.",
-    "cardRefused": "Il pagamento con carta è stato rifiutato per questo importo. Prova un altro metodo di pagamento o chiedi al responsabile del porto."
+    "cardRefused": "Il pagamento con carta è stato rifiutato per questo importo. Prova un altro metodo di pagamento o chiedi al responsabile del porto.",
+    "unsupportedCurrency": "Questo punto di pagamento può essere pagato qui solo in corone. Chiedi al capitano di porto."
   }
 }

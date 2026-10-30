@@ -169,6 +169,12 @@ func (h *InvoiceHandler) HandlePayQRTarget(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// Before the order exists, so a refused currency leaves no order behind.
+	if err := checkPaymentCurrency(t.Currency); err != nil {
+		Error(w, http.StatusConflict, errCodeUnsupportedCurrency)
+		return
+	}
+
 	total := t.UnitAmount * float64(units)
 	if total <= 0 {
 		Error(w, http.StatusBadRequest, "nothing to pay")
@@ -223,6 +229,10 @@ func (h *InvoiceHandler) HandlePayQRTarget(w http.ResponseWriter, r *http.Reques
 	}
 	if errors.Is(err, payments.ErrAmountBelowMinimum) {
 		Error(w, http.StatusConflict, errCodeAmountBelowMinimum)
+		return
+	}
+	if errors.Is(err, errUnsupportedCurrency) {
+		Error(w, http.StatusConflict, errCodeUnsupportedCurrency)
 		return
 	}
 	if err != nil {

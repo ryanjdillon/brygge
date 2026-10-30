@@ -2814,7 +2814,8 @@
     "unavailable": "Nettbetaling er ikke tilgjengelig akkurat nå. Spør havnesjefen.",
     "cardMinimum": "Kort fra {amount} kr",
     "belowMinimum": "Beløpet er for lite til å betale på nett. Minstebeløpet er {amount} kr.",
-    "cardRefused": "Kortbetaling ble avvist for dette beløpet. Prøv en annen betalingsmåte, eller spør havnesjefen."
+    "cardRefused": "Kortbetaling ble avvist for dette beløpet. Prøv en annen betalingsmåte, eller spør havnesjefen.",
+    "unsupportedCurrency": "Dette betalingsstedet kan bare betales i kroner her. Spør havnesjefen."
   },
   "pay": {
     "loading": "Laster betaling …",
@@ -2855,7 +2856,8 @@
       "notFoundTitle": "Fant ikke betalingen",
       "notFoundBody": "Lenken er ugyldig eller utløpt. Ta kontakt med kassereren."
     },
-    "belowMinimum": "Beløpet er for lite til å betale på denne måten."
+    "belowMinimum": "Beløpet er for lite til å betale på denne måten.",
+    "unsupportedCurrency": "Nettbetaling er bare tilgjengelig i norske kroner. Betal med bankoverføring eller ta kontakt med kassereren."
   },
   "harborTargets": {
     "title": "QR-betalingsplakater",

@@ -1901,11 +1901,13 @@
       "notFoundTitle": "Zahlung nicht gefunden",
       "notFoundBody": "Der Link ist ungültig oder abgelaufen. Bitte wenden Sie sich an den Kassenwart."
     },
-    "belowMinimum": "Der Betrag ist für diese Zahlungsart zu klein."
+    "belowMinimum": "Der Betrag ist für diese Zahlungsart zu klein.",
+    "unsupportedCurrency": "Online-Zahlung ist nur in norwegischen Kronen möglich. Bitte per Banküberweisung zahlen oder den Kassenwart kontaktieren."
   },
   "qr": {
     "cardMinimum": "Kartenzahlung ab {amount} kr",
     "belowMinimum": "Der Betrag ist für eine Online-Zahlung zu klein. Der Mindestbetrag ist {amount} kr.",
-    "cardRefused": "Die Kartenzahlung wurde für diesen Betrag abgelehnt. Wählen Sie eine andere Zahlungsart oder fragen Sie den Hafenmeister."
+    "cardRefused": "Die Kartenzahlung wurde für diesen Betrag abgelehnt. Wählen Sie eine andere Zahlungsart oder fragen Sie den Hafenmeister.",
+    "unsupportedCurrency": "Dieses Zahlungsziel kann hier nur in Kronen bezahlt werden. Bitte den Hafenmeister fragen."
   }
 }

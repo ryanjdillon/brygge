@@ -2818,7 +2818,8 @@
     "unavailable": "Online payment isn't available right now. Please ask the harbor master.",
     "cardMinimum": "Card payment from {amount} kr",
     "belowMinimum": "The amount is too small to pay online. The minimum is {amount} kr.",
-    "cardRefused": "Card payment was refused for this amount. Try another payment method, or ask the harbor master."
+    "cardRefused": "Card payment was refused for this amount. Try another payment method, or ask the harbor master.",
+    "unsupportedCurrency": "This payment target can only be paid in kroner here. Ask the harbor master."
   },
   "pay": {
     "loading": "Loading payment …",
@@ -2859,7 +2860,8 @@
       "notFoundTitle": "Payment not found",
       "notFoundBody": "The link is invalid or expired. Please contact the treasurer."
     },
-    "belowMinimum": "This amount is too small to pay this way."
+    "belowMinimum": "This amount is too small to pay this way.",
+    "unsupportedCurrency": "Online payment is only available in Norwegian kroner. Pay by bank transfer or contact the treasurer."
   },
   "harborTargets": {
     "title": "QR payment posters",

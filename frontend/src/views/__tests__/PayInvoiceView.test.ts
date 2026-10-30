@@ -138,6 +138,14 @@ describe('PayInvoiceView', () => {
     expect(w.text()).toContain('pay.belowMinimum')
   })
 
+  it('says online payment is unavailable in the order currency instead of asking to retry', async () => {
+    stubFetch({ providers: ['vipps'] }, { ok: false, status: 409, body: { error: 'unsupported_currency' } })
+    const w = await mountPage()
+    await w.get('[data-provider="vipps"]').trigger('click')
+    await flushPromises()
+    expect(w.get('[role="alert"]').text()).toBe('pay.unsupportedCurrency')
+  })
+
   it('posts the chosen provider', async () => {
     const fetchMock = stubFetch({ providers: ['vipps', 'stripe'] }, { ok: true, body: { redirect_url: '' } })
     const w = await mountPage()

@@ -116,6 +116,17 @@ describe('QrCheckoutView', () => {
     expect(wrapper.get('[role="alert"]').text()).toBe('qr.cardRefused')
   })
 
+  it('says the currency is unsupported when the server refuses it', async () => {
+    const { wrapper } = await mountIn('en', ['vipps'], {}, {
+      ok: false,
+      status: 409,
+      body: { error: 'unsupported_currency' },
+    })
+    await wrapper.get('[data-provider="vipps"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[role="alert"]').text()).toBe('qr.unsupportedCurrency')
+  })
+
   it('says payment is unavailable without a provider', async () => {
     const { wrapper } = await mountIn('en', [])
     expect(shown(wrapper)).toEqual([])

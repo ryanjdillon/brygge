@@ -58,6 +58,12 @@ async function pay(provider: string) {
     })
     if (res.status === 409) {
       const body = await res.json().catch(() => null)
+      if (body?.error === 'unsupported_currency') {
+        // Retrying cannot help: the order is not in a currency Brygge charges.
+        error.value = t('pay.unsupportedCurrency')
+        busy.value = false
+        return
+      }
       if (body?.error === 'online_payment_over_limit' || body?.error === 'amount_below_minimum') {
         // The order stopped being payable online, or by the chosen provider,
         // since the page loaded: reload so the server's provider list (or the

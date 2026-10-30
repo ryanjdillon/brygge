@@ -106,6 +106,11 @@ async function pay(provider: string) {
     })
     if (res.status === 409) {
       const body = await res.json().catch(() => null)
+      if (body?.error === 'unsupported_currency') {
+        error.value = t('qr.unsupportedCurrency')
+        busy.value = false
+        return
+      }
       if (body?.error === 'amount_below_minimum') {
         // Under the minimum the page knows, it says so; at or over it the
         // provider applied a higher minimum of its own.

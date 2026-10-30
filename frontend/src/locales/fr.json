@@ -1900,11 +1900,13 @@
       "notFoundTitle": "Paiement introuvable",
       "notFoundBody": "Le lien est invalide ou a expiré. Veuillez contacter le trésorier."
     },
-    "belowMinimum": "Ce montant est trop faible pour ce moyen de paiement."
+    "belowMinimum": "Ce montant est trop faible pour ce moyen de paiement.",
+    "unsupportedCurrency": "Le paiement en ligne n'est disponible qu'en couronnes norvégiennes. Payez par virement bancaire ou contactez le trésorier."
   },
   "qr": {
     "cardMinimum": "Paiement par carte à partir de {amount} kr",
     "belowMinimum": "Le montant est trop faible pour un paiement en ligne. Le minimum est de {amount} kr.",
-    "cardRefused": "Le paiement par carte a été refusé pour ce montant. Essayez un autre moyen de paiement ou demandez au capitaine du port."
+    "cardRefused": "Le paiement par carte a été refusé pour ce montant. Essayez un autre moyen de paiement ou demandez au capitaine du port.",
+    "unsupportedCurrency": "Ce point de paiement ne peut être réglé qu'en couronnes ici. Demandez au capitaine de port."
   }
 }
