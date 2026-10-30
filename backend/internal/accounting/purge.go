@@ -5,21 +5,24 @@ import (
 	"fmt"
 )
 
-// anonymizedEmailSentinel marks a user row whose PII has already been scrubbed.
-// Matches the value HandleDeleteUser writes so the purge and manual erasure
-// converge on the same "no PII left" state.
-const anonymizedEmailSentinel = "deleted@deleted"
+// legacyAnonymizedEmail is the constant address earlier versions wrote when
+// anonymising a member. users carries UNIQUE (club_id, email), so only one
+// member per club could ever hold it. The sweep still skips rows that have it;
+// nothing writes it any more.
+const legacyAnonymizedEmail = "deleted@deleted"
 
-// ErasedEmailSuffix marks a user whose identity the GDPR deletion flow erased
-// immediately: a random local part plus this suffix. The sweep leaves these
-// alone rather than rewriting them to the shared sentinel.
+// ErasedEmailSuffix marks every user whose identity has been erased, by the
+// purge sweep, the admin delete, or a processed GDPR request. The address is
+// gen_random_uuid()::text plus this suffix, so it is unique per member and
+// never collides on UNIQUE (club_id, email). The sweep skips rows that carry
+// it, which is what makes erasure idempotent.
 const ErasedEmailSuffix = "@deleted.local"
 
 // PurgeExpiredMemberPII anonymizes the PII of deactivated members whose
 // financial records have all cleared the retention window (BRY-207). It never
 // deletes the user row — invoices reference it (no ON DELETE cascade) and keep
 // their snapshot identity (BRY-205) — it only scrubs name/email/phone/address
-// in place. Idempotent: rows already scrubbed (sentinel email) are skipped, so
+// in place. Idempotent: rows already scrubbed (erased or legacy sentinel email) are skipped, so
 // it is safe to run on any schedule without duplicating work or audit entries.
 // Returns the number of members purged this run.
 func (s *Service) PurgeExpiredMemberPII(ctx context.Context) (int64, error) {
@@ -33,7 +36,7 @@ func (s *Service) PurgeExpiredMemberPII(ctx context.Context) (int64, error) {
 		         WHERE i.user_id = u.id
 		           AND make_date(EXTRACT(YEAR FROM i.issue_date)::int + $2, 1, 1) > now()
 		    )`,
-		anonymizedEmailSentinel, RetentionYears+1, ErasedEmailSuffix,
+		legacyAnonymizedEmail, RetentionYears+1, ErasedEmailSuffix,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("select purge-eligible members: %w", err)
@@ -55,11 +58,14 @@ func (s *Service) PurgeExpiredMemberPII(ctx context.Context) (int64, error) {
 
 	var purged int64
 	for _, t := range targets {
-		if err := s.purgeOneMember(ctx, t.id, t.clubID); err != nil {
+		done, err := s.purgeOneMember(ctx, t.id, t.clubID)
+		if err != nil {
 			s.log.Error().Err(err).Str("user_id", t.id).Msg("failed to purge member PII")
 			continue
 		}
-		purged++
+		if done {
+			purged++
+		}
 	}
 	return purged, nil
 }
@@ -150,28 +156,43 @@ func (s *Service) purgeOneRecipient(ctx context.Context, recipientID, clubID str
 	return tx.Commit(ctx)
 }
 
-func (s *Service) purgeOneMember(ctx context.Context, userID, clubID string) error {
+// purgeOneMember scrubs one member's PII and reports whether it did. The
+// update repeats the sweep's eligibility filters, so a member reactivated (or
+// already erased) between the sweep's SELECT and this statement is left alone:
+// no row changes, no audit row is written, and it is not an error.
+func (s *Service) purgeOneMember(ctx context.Context, userID, clubID string) (bool, error) {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer tx.Rollback(ctx)
 
-	if _, err := tx.Exec(ctx,
-		`UPDATE users SET email = $1, first_name = 'Deleted', last_name = 'User',
+	tag, err := tx.Exec(ctx,
+		`UPDATE users SET email = gen_random_uuid()::text || $1,
+		        first_name = 'Deleted', last_name = 'User',
 		        phone = '', address_line = '', postal_code = '', city = '',
 		        updated_at = now()
-		  WHERE id = $2`,
-		anonymizedEmailSentinel, userID,
-	); err != nil {
-		return err
+		  WHERE id = $2
+		    AND deactivated_at IS NOT NULL
+		    AND email <> $3
+		    AND email NOT LIKE '%' || $1`,
+		ErasedEmailSuffix, userID, legacyAnonymizedEmail,
+	)
+	if err != nil {
+		return false, err
+	}
+	if tag.RowsAffected() == 0 {
+		return false, nil
 	}
 	if _, err := tx.Exec(ctx,
 		`INSERT INTO audit_log (club_id, actor_id, action, resource, resource_id, details)
 		 VALUES ($1, NULL, 'user.pii_purged', 'user', $2, '{"reason":"retention_cleared"}')`,
 		clubID, userID,
 	); err != nil {
-		return err
+		return false, err
 	}
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return false, err
+	}
+	return true, nil
 }

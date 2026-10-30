@@ -15,6 +15,18 @@ distinct states.
 | **Erase** (`DELETE /admin/users/{id}?erasure=true`) | For a member with financial records: refused while those records are in-window; once retention has cleared it scrubs their PII in place (the row stays because invoices reference it). For a member with **no** financial records: hard-deletes the row. | No | Rare. Prefer Deactivate; the scheduled purge handles PII erasure automatically. |
 | **Purge** (automatic) | A daily background sweep (`accounting.PurgeExpiredMemberPII`) anonymizes the PII of *deactivated* members whose most recent invoice has cleared retention. Never deletes the row. | No | Nothing to do — it runs itself. |
 
+## Anonymised address
+
+`users` has `UNIQUE (club_id, email)`, so an anonymised member cannot share an
+address with another. Every path that erases identity (the purge sweep, the
+admin delete, a processed GDPR request) writes
+`gen_random_uuid()::text || accounting.ErasedEmailSuffix` (`<uuid>@deleted.local`),
+a fresh value per member. The suffix is the one exported constant; never spell it
+out elsewhere. The sweep skips rows that carry it, which is what makes erasure
+idempotent, and it also skips the constant `deleted@deleted` that earlier versions
+wrote (one per club at most), so such a row is harmless but keeps that address
+until someone rewrites it.
+
 ## Retention rule
 
 `accounting.MemberFinancialRetention` is the single source of truth. A member's
