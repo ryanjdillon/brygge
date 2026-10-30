@@ -2306,6 +2306,109 @@ func (h *AccountingHandler) vippsDraftBacklog(w http.ResponseWriter, r *http.Req
 	JSON(w, http.StatusOK, result)
 }
 
+// ── Vipps revenue parked on 3900 ────────────────────────────
+
+// vippsFallbackReclassRequest optionally limits the run to one fiscal period
+// (default: every open one). targets, for an apply, maps each charge's entry
+// id to the account the preview proposed for it; the apply moves only those.
+type vippsFallbackReclassRequest struct {
+	PeriodID string            `json:"period_id"`
+	Targets  map[string]string `json:"targets"`
+}
+
+// HandlePreviewVippsFallbackReclass reports, without changing anything, what
+// moving the posted Vipps charges on 3900 to their price-item accounts would
+// do (BRY-557).
+func (h *AccountingHandler) HandlePreviewVippsFallbackReclass(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	var req vippsFallbackReclassRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
+		Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	result, err := h.svc.PreviewVippsFallbackReclass(r.Context(), claims.ClubID, req.PeriodID)
+	if err != nil {
+		h.vippsFallbackReclassError(w, err)
+		return
+	}
+	JSON(w, http.StatusOK, result)
+}
+
+// HandleApplyVippsFallbackReclass moves the previewed charges. The route is
+// behind RequireFreshTOTP because it voids and books posted entries. One
+// audit row per batch.
+func (h *AccountingHandler) HandleApplyVippsFallbackReclass(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	var req vippsFallbackReclassRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.Targets == nil {
+		Error(w, http.StatusBadRequest, "targets is required: the charges and accounts the preview showed")
+		return
+	}
+	// A client that disconnects mid-batch must not cancel it half way or
+	// lose the audit row of the charges already committed.
+	ctx := context.WithoutCancel(r.Context())
+	result, err := h.svc.ApplyVippsFallbackReclass(ctx, claims.ClubID, claims.UserID, req.PeriodID, req.Targets)
+	if err != nil {
+		h.vippsFallbackReclassError(w, err)
+		return
+	}
+
+	if h.audit != nil {
+		replaced := make([]map[string]any, 0, result.Reclassified)
+		for _, it := range result.Items {
+			if it.Outcome == accounting.FallbackOutcomeReclassified {
+				replaced = append(replaced, map[string]any{
+					"entry_number": it.EntryNumber,
+					"reversal":     it.ReversalEntryNumber,
+					"replacement":  it.NewEntryNumber,
+					"to":           it.To,
+					"amount":       it.Amount,
+				})
+			}
+		}
+		h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,
+			audit.ActionAccountingVippsFallbackReclassified, "journal_entry", "",
+			map[string]any{
+				"from_account": result.FromAccount,
+				"requested":    len(req.Targets),
+				"proposed":     result.Proposed,
+				"reclassified": result.Reclassified,
+				"skipped":      result.Skipped,
+				"failed":       result.Failed,
+				"stale":        len(result.StaleIDs),
+				"needs_tildel": result.NeedsTildel,
+				"stays":        result.Stays,
+				"totals":       result.Totals,
+				"replaced":     replaced,
+			})
+	}
+	JSON(w, http.StatusOK, result)
+}
+
+func (h *AccountingHandler) vippsFallbackReclassError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, accounting.ErrVippsAutoAssignOff):
+		JSON(w, http.StatusConflict, map[string]string{"error": err.Error(), "code": "auto_assign_off"})
+	case errors.Is(err, accounting.ErrPeriodClosed):
+		JSON(w, http.StatusConflict, map[string]string{"error": err.Error(), "code": "period_closed"})
+	default:
+		h.log.Warn().Err(err).Msg("vipps fallback reclass")
+		Error(w, http.StatusBadRequest, err.Error())
+	}
+}
+
 // ── Full bank sync ──────────────────────────────────────────
 
 // HandleResyncVipps re-runs the Vipps classification cascade on every

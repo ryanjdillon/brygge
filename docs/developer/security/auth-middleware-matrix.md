@@ -59,7 +59,7 @@ keep `moneyGate` (treasurer/admin + fresh step-up).
   gate: they mint a credential, feed a write dialog, export bulk PII,
   expose security data, or belong to the excluded pages.
 - **Previews.** The `POST` previews (`/sync/invoices/resplit/preview`,
-  `/sync/vipps-drafts/preview`) are writes by method, so they keep the
+  `/sync/vipps-drafts/preview`, `/sync/vipps-fallback-reclass/preview`) are writes by method, so they keep the
   accounting group's write roles (treasurer, board, admin); they never
   open to the wider board.
 - **PII.** Board viewers now read member data (`/admin/users`, slips,
@@ -180,7 +180,8 @@ reads admit any admin viewer (see *Board read access* above).
 | `/journal` list/get | — | |
 | `POST /journal`, `/{id}/post`, `/{id}/void`, `DELETE /journal/{id}` | ✅ (treasurer, admin; BRY-370) | the double-entry ledger itself |
 | `POST /sync/payments`, `/sync/invoices` (Avstem periode), `/sync/invoices/resplit`, `/sync/vipps-drafts` | ✅ (treasurer, admin; BRY-370) | book posted entries |
-| `POST /sync/invoices/resplit/preview`, `/sync/vipps-drafts/preview` | — | read-only previews |
+| `POST /sync/vipps-fallback-reclass` | ✅ (treasurer, admin; BRY-557) | voids and rebooks posted Vipps charges from 3900 to their price-item accounts |
+| `POST /sync/invoices/resplit/preview`, `/sync/vipps-drafts/preview`, `/sync/vipps-fallback-reclass/preview` | — | read-only previews |
 | `POST /bank-sync`, `/vipps-resync` | ✅ (treasurer, admin; BRY-370) | auto-match and post (KID, Vipps order and auto-assign) |
 | `POST /bank-import` | ✅ (treasurer, admin; BRY-370) | posts import-time KID matches |
 | `/bank-import/{id}/rows/{row}/match`, `/auto-match` | — | create drafts only |

@@ -26,6 +26,7 @@ var ungatedLedgerWrites = map[string]bool{
 	"POST /journal/{entryID}/attachment":              true,
 	"POST /sync/invoices/resplit/preview":             true,
 	"POST /sync/vipps-drafts/preview":                 true,
+	"POST /sync/vipps-fallback-reclass/preview":       true,
 	"POST /bank-import/{importID}/rows/{rowID}/match": true,
 	"POST /bank-import/{importID}/auto-match":         true,
 }
@@ -84,6 +85,9 @@ func TestLedgerRoutesGateMoneyMovesForBoard(t *testing.T) {
 	if err != nil {
 		t.Fatalf("walk: %v", err)
 	}
+	if !walked["POST /sync/vipps-fallback-reclass"] {
+		t.Errorf("POST /sync/vipps-fallback-reclass not walked: not mounted under the gate")
+	}
 	for _, a := range []string{"assign-invoice", "assign-account", "dismiss", "undismiss", "unassign", "rebook"} {
 		if r := "POST /stripe/transactions/{txnID}/" + a; !walked[r] {
 			t.Errorf("%s not walked: not mounted under the gate", r)
@@ -93,7 +97,7 @@ func TestLedgerRoutesGateMoneyMovesForBoard(t *testing.T) {
 		t.Errorf("walked %d gated routes; the router lost routes", gated)
 	}
 
-	for _, p := range []string{"/sync/invoices/resplit/preview", "/sync/vipps-drafts/preview"} {
+	for _, p := range []string{"/sync/invoices/resplit/preview", "/sync/vipps-drafts/preview", "/sync/vipps-fallback-reclass/preview"} {
 		if rec := serve(http.MethodPost, p, map[string]string{"period_id": club.PeriodID}); rec.Code != http.StatusOK {
 			t.Errorf("POST %s as board: status %d (%s), want 200", p, rec.Code, rec.Body.String())
 		}

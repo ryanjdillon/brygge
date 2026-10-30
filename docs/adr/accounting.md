@@ -61,6 +61,18 @@ See [README.md](README.md) for the format. Implementation: [`backend/internal/ac
 - **Decision:** a credit note made by a refund is an issued sales document and stays. If the refund later fails and the money comes back, or the refund booking is corrected, Brygge issues a new faktura for the amount instead of voiding the credit note.
 - **Why:** under ACC-1 a sales document that has been issued is corrected by a new document, not withdrawn.
 
+### ACC-10: Vipps income parked on 3900 is reclassified through the price-item rules
+
+- **Status:** accepted · 2026-10-30 · BRY-557
+- **Decision:** the Jan-Jun 2026 Vipps charges that the legacy model parked on 3900 Andre inntekter and that were then posted are reclassified through the club's price-item rules, the same rules automatic Vipps booking uses, by an explicit treasurer action.
+- **Why:** automatic booking now classifies new charges, so the parked ones are the only remainder, and the price-item rules already say which amount is which item.
+- **Consequences:** `ApplyVippsFallbackReclass`; see [invariants.md](../developer/reference/invariants.md) "A posted charge on 3900 may be reclassified" and [the accounting README](../../backend/internal/accounting/README.md). These follow from how it was built, not from a separate owner decision:
+  - the entry is reversed and rebooked (`rebookVippsChargeTx`) rather than edited, so the charge's own entry stays its booking and the payout clearing is untouched; Angre treats the replacement like any charge booking (in a cleared settlement only after the deposit is undone, ACC-11);
+  - a charge the rules cannot place unambiguously stays on 3900 with the reason shown;
+  - a charge matching a member's open faktura is left to Tildel, because assigning it settles a faktura and a reclass only moves revenue;
+  - a charge that may already have paid a faktura (`receivableChargeSettledFaktura`) stays, so a double count is not hidden behind a revenue account;
+  - only open periods are touched; reopening a closed year is a separate, deliberate step.
+
 ### ACC-11: A charge in a cleared Vipps settlement is not unbooked on its own
 
 - **Status:** proposed pending owner confirmation · 2026-10-30 · BRY-555

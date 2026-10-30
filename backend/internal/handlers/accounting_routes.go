@@ -40,6 +40,9 @@ func (h *AccountingHandler) MountLedgerRoutes(r chi.Router, moneyGate ...func(ht
 		r.Post("/vipps-drafts/preview", h.HandlePreviewVippsDraftBacklog)
 		r.With(moneyGate...).
 			Post("/vipps-drafts", h.HandleApplyVippsDraftBacklog)
+		r.Post("/vipps-fallback-reclass/preview", h.HandlePreviewVippsFallbackReclass)
+		r.With(moneyGate...).
+			Post("/vipps-fallback-reclass", h.HandleApplyVippsFallbackReclass)
 	})
 
 	r.Get("/bank-formats", h.HandleListBankFormats)

@@ -72,6 +72,9 @@ const (
 	ActionPaymentCreated              = "payment.created"
 	ActionPaymentViewed               = "finance.payment_viewed"
 
+	// Posted Vipps charges moved off the 3900 fallback (BRY-557)
+	ActionAccountingVippsFallbackReclassified = "accounting.vipps_fallback_reclassified"
+
 	// Bank row reconciliation (DIL-392)
 	ActionBankRowAssignedInvoice = "bank_row.assigned_invoice"
 	ActionBankRowAutoAssigned    = "bank_row.auto_assigned"

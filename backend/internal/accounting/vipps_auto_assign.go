@@ -148,7 +148,9 @@ func allPerUnit(cands []priceArticleCandidate) bool {
 }
 
 // vippsChargeDecision is what the auto-assign rules conclude for one charge.
-// Rule is empty when the charge is ambiguous; Reason then says why.
+// Rule is empty when the charge is ambiguous; Reason then says why, in
+// English for logs and Code as a stable key a UI can translate (the
+// decide* codes below).
 type vippsChargeDecision struct {
 	Rule          string
 	InvoiceID     string
@@ -156,7 +158,19 @@ type vippsChargeDecision struct {
 	Account       string
 	Label         string
 	Reason        string
+	Code          string
 }
+
+// Why a charge was left for a human (vippsChargeDecision.Code).
+const (
+	decideCodeKIDAliasConflict   = "kid_alias_conflict"
+	decideCodeOpenFakturaSameAmt = "open_faktura_same_amount"
+	decideCodeNoMatch            = "no_match"
+	decideCodeSeveralCategories  = "several_categories"
+	decideCodeSeveralNights      = "several_nights"
+	decideCodeMembersOnlyUnknown = "members_only_unknown_payer"
+	decideCodeNoRevenueAccount   = "no_revenue_account"
+)
 
 // Target is the human-readable booking target: "faktura N" or an account.
 func (d *vippsChargeDecision) Target() string {
@@ -174,7 +188,7 @@ func (s *Service) decideVippsCharge(ctx context.Context, clubID string, cfg vipp
 		return nil, fmt.Errorf("resolving payer: %w", err)
 	}
 	if pass == memberPassConflict {
-		return &vippsChargeDecision{Reason: "the message's KID and the payer's alias name different members"}, nil
+		return &vippsChargeDecision{Reason: "the message's KID and the payer's alias name different members", Code: decideCodeKIDAliasConflict}, nil
 	}
 	strongMember := memberID != "" && pass <= memberPassFirstLast
 
@@ -191,7 +205,7 @@ func (s *Service) decideVippsCharge(ctx context.Context, clubID string, cfg vipp
 		// or imported): it may be that faktura, so don't guess a revenue
 		// account instead.
 		if mi.SameAmount > 0 {
-			return &vippsChargeDecision{Reason: mi.Reason}, nil
+			return &vippsChargeDecision{Reason: mi.Reason, Code: decideCodeOpenFakturaSameAmt}, nil
 		}
 	}
 
@@ -200,7 +214,7 @@ func (s *Service) decideVippsCharge(ctx context.Context, clubID string, cfg vipp
 		return nil, fmt.Errorf("loading price items: %w", err)
 	}
 	if len(cands) == 0 {
-		return &vippsChargeDecision{Reason: "no faktura or price item fits"}, nil
+		return &vippsChargeDecision{Reason: "no faktura or price item fits", Code: decideCodeNoMatch}, nil
 	}
 	byCategory := map[string][]priceArticleCandidate{}
 	for _, c := range cands {
@@ -216,7 +230,7 @@ func (s *Service) decideVippsCharge(ctx context.Context, clubID string, cfg vipp
 		// rent), it could be that item, so a human decides.
 		category = cfg.tieCategory
 	} else {
-		return &vippsChargeDecision{Reason: "amount fits price items in several categories"}, nil
+		return &vippsChargeDecision{Reason: "amount fits price items in several categories", Code: decideCodeSeveralCategories}, nil
 	}
 	chosen := byCategory[category]
 	// A multiple of a per-night price (9 × 300) is a guess at how many
@@ -230,7 +244,7 @@ func (s *Service) decideVippsCharge(ctx context.Context, clubID string, cfg vipp
 		}
 	}
 	if single < 0 {
-		return &vippsChargeDecision{Reason: fmt.Sprintf("amount only fits as several nights (%s)", priceItemLabels(chosen))}, nil
+		return &vippsChargeDecision{Reason: fmt.Sprintf("amount only fits as several nights (%s)", priceItemLabels(chosen)), Code: decideCodeSeveralNights}, nil
 	}
 	membersOnly := true
 	for _, c := range chosen {
@@ -240,11 +254,11 @@ func (s *Service) decideVippsCharge(ctx context.Context, clubID string, cfg vipp
 		}
 	}
 	if membersOnly && !strongMember {
-		return &vippsChargeDecision{Reason: "members-only price but the payer is not a known member"}, nil
+		return &vippsChargeDecision{Reason: "members-only price but the payer is not a known member", Code: decideCodeMembersOnlyUnknown}, nil
 	}
 	account, ok := RevenueAccount(category)
 	if !ok {
-		return &vippsChargeDecision{Reason: "price category has no revenue account"}, nil
+		return &vippsChargeDecision{Reason: "price category has no revenue account", Code: decideCodeNoRevenueAccount}, nil
 	}
 	return &vippsChargeDecision{Rule: autoAssignRulePriceItem, Account: account, Label: chosen[single].label()}, nil
 }

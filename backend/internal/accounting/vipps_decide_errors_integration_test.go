@@ -126,3 +126,44 @@ func TestRankAccountSuggestionsReturnsPriceItemErrors(t *testing.T) {
 		t.Errorf("suggestions swallowed the price item error")
 	}
 }
+
+// In the reclass a decision error leaves the charge undecided, never
+// guessed: the preview marks it to retry, and an apply that hits it reports
+// the charge failed and changes nothing.
+func TestFallbackReclassDecisionErrorsFailTheChargeNotTheBatch(t *testing.T) {
+	f := newFallbackFixture(t)
+	f.priceItem(t, "guest", "Gjesteplass synthetic", 80000, "day", "all")
+	row := f.parked(t, 80000, "Retry Payer")
+	other := f.parked(t, 12300, "Other Payer")
+	preview := f.preview(t)
+	it := f.item(t, preview, row)
+	if it.Status != FallbackReclassReclassify {
+		t.Fatalf("item = %+v", it)
+	}
+	targets := targetsOf(preview)
+	entries := f.entryCount(t)
+
+	// The price list breaks between the preview and the apply.
+	f.exec(t, `ALTER TABLE price_items RENAME TO price_items_gone`)
+	applied := f.apply(t, targets)
+	if applied.Reclassified != 0 || applied.Failed != 1 {
+		t.Fatalf("apply = %+v, want the one charge failed", applied)
+	}
+	if got := f.item(t, applied, row); got.Outcome != FallbackOutcomeFailed || !strings.Contains(got.Reason, "price items") {
+		t.Errorf("item = %+v, want failed with the error", got)
+	}
+	if f.entryCount(t) != entries || f.rowEntry(t, row) != it.EntryID {
+		t.Errorf("a failed decision changed the books")
+	}
+
+	// A fresh preview marks every charge to retry instead of failing whole.
+	again := f.preview(t)
+	for _, id := range []string{row, other} {
+		if got := f.item(t, again, id); got.Status != FallbackReclassStays || got.ReasonCode != reasonCodeDecisionFailed {
+			t.Errorf("charge %s = %+v, want a decision_failed stay", id, got)
+		}
+	}
+	if again.Proposed != 0 {
+		t.Errorf("proposed = %d with no price list", again.Proposed)
+	}
+}
