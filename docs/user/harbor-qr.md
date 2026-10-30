@@ -105,3 +105,4 @@ To keep a PDF, choose "Save as PDF" as the printer. Cards print best on matte pa
 ## Related
 
 - [faktura.md](faktura.md): the price catalogue that sets each target's price.
+- [payments-overview.md](payments-overview.md): the Payments page, where the payments from a poster show up, and the filter groups that sort them (a new price item shows under Annet until it is put in a group).
