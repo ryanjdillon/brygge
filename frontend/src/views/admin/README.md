@@ -19,6 +19,8 @@ Navigation lives in `navGroups` inside `AdminLayout.vue`. Each group is `{ title
 },
 ```
 
+"Payments" (`/admin/harbor/recent-payments`) and "QR posters" (`/admin/harbor/payment-targets`) sit first in the Economy group although their URLs keep the `harbor` prefix, so bookmarks and printed QR codes still resolve. They carry no `roles` and no `feature`, so every admin viewer, harbor master included, sees them even with the accounting flag off; do not give them the `accounting` flag of the items below. They are outside the `/admin/accounting` and `/admin/economy` prefixes, so `requiresFreshTotp` does not gate their sidebar clicks.
+
 Filter logic at the bottom of the `<script setup>` block removes items whose `roles` the user lacks AND items whose `feature` flag is off. Empty groups disappear from the sidebar.
 
 The bank-imports item's `badge` is the Tildel count plus the pending-refund count, the same two numbers `BankImportsView` puts on its Tildel and Refunds tabs. Adding them is right only because the server keeps the two disjoint (Tildel lists undismissed rows, a pending refund is a dismissed one); see "Tildel has one row set" in [`accounting/README.md`](../../../../backend/internal/accounting/README.md).

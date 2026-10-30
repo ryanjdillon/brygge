@@ -85,8 +85,6 @@ const navGroups = computed<NavGroup[]>(() => {
       items: [
         { to: '/admin/slips', icon: Anchor, label: t('admin.sidebar.slips') },
         { to: '/admin/harbor-map', icon: Map, label: t('admin.sidebar.harborMap') },
-        { to: '/admin/harbor/recent-payments', icon: Receipt, label: t('admin.sidebar.recentPayments') },
-        { to: '/admin/harbor/payment-targets', icon: QrCode, label: t('admin.sidebar.qrTargets') },
         { to: '/admin/boats', icon: Ship, label: t('admin.sidebar.boats') },
         { to: '/admin/bookings', icon: CalendarCheck, label: t('admin.sidebar.bookings'), feature: 'bookings' },
         { to: '/admin/projects', icon: FolderKanban, label: t('admin.sidebar.projects'), feature: 'projects' },
@@ -97,6 +95,11 @@ const navGroups = computed<NavGroup[]>(() => {
     {
       titleKey: 'admin.groupEconomy',
       items: [
+        // Open to every board role, harbor master included, and not behind
+        // the accounting flag: the pair is the harbor's day-to-day payment
+        // view, so it must not inherit the gates of the items below.
+        { to: '/admin/harbor/recent-payments', icon: Receipt, label: t('admin.sidebar.recentPayments') },
+        { to: '/admin/harbor/payment-targets', icon: QrCode, label: t('admin.sidebar.qrTargets') },
         { to: '/admin/accounting', icon: Calculator, label: t('admin.sidebar.accountingOverview'), feature: 'accounting' },
         { to: '/admin/accounting/reports', icon: BarChart2, label: t('admin.sidebar.reports'), feature: 'accounting' },
         { to: '/admin/accounting/faktura', icon: Receipt, label: t('admin.sidebar.faktura'), feature: 'accounting' },

@@ -39,7 +39,7 @@ To test a payment:
    `http://localhost:8090/mock/approve`.
 3. Click **Approve** → mock fires `authorized` → API captures → mock fires
    `captured` → the order flips to `paid`.
-4. It appears under **Harbor → Payments** (recent-payments) within seconds.
+4. It appears under **Economy → Payments** (recent-payments) within seconds.
 
 Watch the mock: `docker compose ... logs -f vipps-mock` (it logs every call and
 webhook, including the send status code — a non-2xx means the signature or
