@@ -8,6 +8,7 @@ import BankRowPartnerChoice from '@/components/admin/BankRowPartnerChoice.vue'
 import PayerAliasToggle from '@/components/admin/PayerAliasToggle.vue'
 import AccountOptionLabel from '@/components/admin/AccountOptionLabel.vue'
 import StripePayoutPicker from '@/components/admin/StripePayoutPicker.vue'
+import SuggestionsLoadError from '@/components/admin/SuggestionsLoadError.vue'
 import Select from '@/components/ui/form/Select.vue'
 import {
   useBankUnmatchedRows,
@@ -23,6 +24,8 @@ import {
   isHasPartnerError,
   isAliasConflictError,
   isImportedNoOpeningBalanceError,
+  isInvoiceCreditedError,
+  isInvoiceNotDebtError,
   payerAliasOffered,
   payerAliasFields,
   sharedPayerAlias,
@@ -178,7 +181,13 @@ const assignMultiInvoice = useAssignMultiInvoiceMutation()
 const { data: perChargeEnabled } = useVippsPerChargeEnabled()
 const vippsEnabled = computed(() => !!perChargeEnabled.value)
 const { data: vippsCharges } = useUnreconciledVippsCharges(vippsEnabled)
-const { assignInvoice: vAssignInvoice, bilag: vBilag, dismiss: vDismiss, clearPayout } = useVippsChargeMutations()
+const {
+  assignInvoice: vAssignInvoice,
+  bilag: vBilag,
+  dismiss: vDismiss,
+  clearPayout,
+  invalidate: refetchVippsCharges,
+} = useVippsChargeMutations()
 
 // The modals below are shared between bank rows and Vipps charges; activeSource
 // tells the submit handlers which mutation + candidate fetch to use.
@@ -284,6 +293,7 @@ const potentialRowId = ref<string | null>(null)
 const potentialQuery = ref('')
 const potentialItems = ref<InvoiceSuggestion[]>([])
 const potentialLoading = ref(false)
+const potentialError = ref(false)
 
 async function openPotential(row: BankRowSummary) {
   activeSource.value = 'bank'
@@ -295,10 +305,15 @@ async function openPotential(row: BankRowSummary) {
 async function loadPotential() {
   if (!potentialRowId.value) return
   potentialLoading.value = true
+  potentialError.value = false
   try {
     potentialItems.value = activeSource.value === 'vipps'
       ? await fetchVippsChargePotentialInvoices(potentialRowId.value, potentialQuery.value)
       : await fetchPotentialInvoices(potentialRowId.value, potentialQuery.value)
+  } catch {
+    // An empty list would read as "no matching faktura"; say the load failed.
+    potentialItems.value = []
+    potentialError.value = true
   } finally {
     potentialLoading.value = false
   }
@@ -554,7 +569,8 @@ async function submitDismiss() {
 
 // Runs an assign and tells the treasurer when the server refused it because
 // the faktura is imported and its receivable isn't in the opening balance yet
-// (BRY-386), or because the row is a provider's payout deposit (only its
+// (BRY-386), because the faktura is credited (a stale list could still offer
+// it, BRY-508), or because the row is a provider's payout deposit (only its
 // clearing books it; a stale page could still offer the assign): nothing was
 // booked and the row stays here. Resolves false then.
 const toast = useToast()
@@ -563,6 +579,21 @@ async function refusedAsImported(book: () => Promise<boolean>): Promise<boolean>
     return await book()
   } catch (e) {
     if (refusedAsProviderPayout(e)) return false
+    const notAssignable = isInvoiceCreditedError(e)
+      ? 'admin.bankReconcile.invoiceCreditedRefused'
+      : isInvoiceNotDebtError(e)
+        ? 'admin.bankReconcile.invoiceNotDebtRefused'
+        : null
+    if (notAssignable) {
+      toast.error(t(notAssignable), 10000)
+      // The faktura was offered from a stale list or panel: refresh the
+      // suggestions, the counts and the search results it came from.
+      refetchBankRows()
+      refetchVippsCharges()
+      if (potentialOpen.value) void loadPotential()
+      if (multiInvoiceOpen.value) void loadMultiInvoice()
+      return false
+    }
     if (!isImportedNoOpeningBalanceError(e)) throw e
     toast.error(t('admin.accounting.importedNoOpeningBalance'), 10000)
     return false
@@ -581,6 +612,7 @@ const multiInvoiceOpen = ref(false)
 const multiInvoiceQuery = ref('')
 const multiInvoiceItems = ref<InvoiceSuggestion[]>([])
 const multiInvoiceLoading = ref(false)
+const multiInvoiceError = ref(false)
 // The box shows only when every selected row has the same payer.
 const multiAlias = ref<PayerAliasState | null>(null)
 const multiRemember = ref(true)
@@ -602,8 +634,12 @@ async function loadMultiAlias() {
 async function loadMultiInvoice() {
   if (!selectedRows.value.length) return
   multiInvoiceLoading.value = true
+  multiInvoiceError.value = false
   try {
     multiInvoiceItems.value = await fetchPotentialInvoices(selectedRows.value[0].id, multiInvoiceQuery.value, selectedTotal.value)
+  } catch {
+    multiInvoiceItems.value = []
+    multiInvoiceError.value = true
   } finally {
     multiInvoiceLoading.value = false
   }
@@ -1220,6 +1256,7 @@ async function doUnassign(rowId: string) {
         @input="loadPotential"
       />
       <p v-if="potentialLoading" class="mt-3 text-xs text-gray-500">{{ t('common.loading') }}…</p>
+      <SuggestionsLoadError v-else-if="potentialError" @retry="loadPotential" />
       <ul v-else-if="potentialItems.length" class="mt-3 max-h-96 divide-y divide-gray-100 overflow-y-auto">
         <li v-for="inv in potentialItems" :key="inv.invoice_id" class="flex items-center justify-between gap-3 py-2 text-sm">
           <div>
@@ -1400,6 +1437,7 @@ async function doUnassign(rowId: string) {
         @input="loadMultiInvoice"
       />
       <p v-if="multiInvoiceLoading" class="mt-3 text-xs text-gray-500">{{ t('common.loading') }}…</p>
+      <SuggestionsLoadError v-else-if="multiInvoiceError" @retry="loadMultiInvoice" />
       <ul v-else-if="multiInvoiceItems.length" class="mt-3 max-h-96 divide-y divide-gray-100 overflow-y-auto">
         <li v-for="inv in multiInvoiceItems" :key="inv.invoice_id" class="flex items-center justify-between gap-3 py-2 text-sm">
           <div class="min-w-0 flex-1">

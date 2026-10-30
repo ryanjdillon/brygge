@@ -2,6 +2,7 @@
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Modal from '@/components/ui/Modal.vue'
+import SuggestionsLoadError from '@/components/admin/SuggestionsLoadError.vue'
 import { formatNOK, formatDate } from '@/lib/format'
 import { useToast } from '@/composables/useToast'
 import {
@@ -32,7 +33,7 @@ watch(search, (v) => {
 
 const enabled = computed(() => props.open)
 const txnId = computed<string | null>(() => props.item.id)
-const { data: invoices, isLoading } = useStripeTxnPotentialInvoices(txnId, q, enabled)
+const { data: invoices, isLoading, isError, refetch } = useStripeTxnPotentialInvoices(txnId, q, enabled)
 
 const selectedId = ref<string | null>(null)
 const errorText = ref('')
@@ -59,7 +60,13 @@ async function confirm() {
     toast.success(t('admin.bankImports.stripeTxn.invoiceDialog.success'))
     close()
   } catch (e) {
-    errorText.value = t(`admin.bankImports.stripeTxn.errors.${stripeTxnErrorCode(e) ?? 'generic'}`)
+    const code = stripeTxnErrorCode(e)
+    errorText.value = t(`admin.bankImports.stripeTxn.errors.${code ?? 'generic'}`)
+    if (code === 'invoice_credited') {
+      // The faktura was credited since the list loaded: drop it from the list.
+      selectedId.value = null
+      void refetch()
+    }
   }
 }
 </script>
@@ -92,6 +99,7 @@ async function confirm() {
       />
 
       <p v-if="isLoading" class="mt-4 text-sm text-gray-500">{{ t('common.loading') }}…</p>
+      <SuggestionsLoadError v-else-if="isError" @retry="refetch()" />
       <p
         v-else-if="!invoices?.length"
         class="mt-4 rounded-md border border-dashed border-gray-300 px-4 py-6 text-center text-sm text-gray-500"

@@ -9,7 +9,7 @@ import StripeTxnUnassignDialog from '@/components/admin/StripeTxnUnassignDialog.
 import { ApiError } from '@/lib/errors'
 import type { StripeTxnItem } from '@/composables/useStripeTransactions'
 
-const { assignInvoice, assignAccount, dismiss, unassign, toast, invoices, accounts } = vi.hoisted(() => ({
+const { assignInvoice, assignAccount, dismiss, unassign, toast, invoices, accounts, potential } = vi.hoisted(() => ({
   assignInvoice: vi.fn(),
   assignAccount: vi.fn(),
   dismiss: vi.fn(),
@@ -17,6 +17,7 @@ const { assignInvoice, assignAccount, dismiss, unassign, toast, invoices, accoun
   toast: { success: vi.fn(), info: vi.fn(), error: vi.fn() },
   invoices: { value: [] as unknown[] },
   accounts: { value: [] as unknown[] },
+  potential: { isError: false, refetch: vi.fn() },
 }))
 
 vi.mock('lucide-vue-next', () => ({ X: { template: '<span />' } }))
@@ -27,7 +28,12 @@ vi.mock('@/composables/useStripeTransactions', async () => {
   )
   return {
     ...actual,
-    useStripeTxnPotentialInvoices: () => ({ data: ref(invoices.value), isLoading: ref(false) }),
+    useStripeTxnPotentialInvoices: () => ({
+      data: ref(invoices.value),
+      isLoading: ref(false),
+      isError: ref(potential.isError),
+      refetch: potential.refetch,
+    }),
     useStripeAssignableAccounts: () => ({ data: ref(accounts.value), isLoading: ref(false) }),
     useStripeTxnMutations: () => ({
       assignInvoice: { mutateAsync: assignInvoice, isPending: ref(false) },
@@ -67,6 +73,8 @@ describe('Stripe transaction dialogs', () => {
   beforeEach(() => {
     for (const f of [assignInvoice, assignAccount, dismiss, unassign]) f.mockReset().mockResolvedValue({})
     Object.values(toast).forEach((f) => f.mockReset())
+    potential.isError = false
+    potential.refetch.mockReset()
     invoices.value = [
       {
         invoice_id: 'inv-1',
@@ -103,6 +111,26 @@ describe('Stripe transaction dialogs', () => {
     await flushPromises()
     expect(w.find('[data-testid="stripe-txn-dialog-error"]').text()).toBe('admin.bankImports.stripeTxn.errors.amount_mismatch')
     expect(w.emitted('update:open')).toBeUndefined()
+  })
+
+  it('says a credited faktura cannot take the payment and refreshes the list', async () => {
+    assignInvoice.mockRejectedValue(new ApiError(409, 'refused', 'invoice_credited', { reason: 'x' }))
+    const w = mountWithPlugins(StripeTxnInvoiceDialog, mountOpts({ open: true, item: item() }))
+    await w.find('[data-testid="stripe-txn-invoice-1042"]').trigger('click')
+    await w.find('[data-testid="stripe-txn-invoice-confirm"]').trigger('click')
+    await flushPromises()
+    expect(w.find('[data-testid="stripe-txn-dialog-error"]').text()).toBe('admin.bankImports.stripeTxn.errors.invoice_credited')
+    expect(potential.refetch).toHaveBeenCalledOnce()
+    expect(w.find('[data-testid="stripe-txn-invoice-confirm"]').attributes('disabled')).toBeDefined()
+    expect(w.emitted('update:open')).toBeUndefined()
+  })
+
+  it('shows a failed faktura load with a retry', async () => {
+    potential.isError = true
+    const w = mountWithPlugins(StripeTxnInvoiceDialog, mountOpts({ open: true, item: item() }))
+    expect(w.find('[data-testid="stripe-txn-invoice-empty"]').exists()).toBe(false)
+    await w.find('[data-testid="suggestions-load-retry"]').trigger('click')
+    expect(potential.refetch).toHaveBeenCalledOnce()
   })
 
   it('says when no faktura matches', () => {

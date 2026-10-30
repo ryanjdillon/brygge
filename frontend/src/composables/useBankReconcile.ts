@@ -179,6 +179,20 @@ export function isImportedNoOpeningBalanceError(e: unknown): boolean {
   return e instanceof ApiError && e.status === 409 && e.code === 'imported_no_opening_balance'
 }
 
+/**
+ * True when an assign was refused because the faktura is credited in full:
+ * booking a payment against it would credit receivables a second time
+ * (BRY-508). Nothing was booked.
+ */
+export function isInvoiceCreditedError(e: unknown): boolean {
+  return e instanceof ApiError && e.status === 409 && e.code === 'invoice_credited'
+}
+
+/** True when an assign was aimed at a credit note, which no payment can clear. */
+export function isInvoiceNotDebtError(e: unknown): boolean {
+  return e instanceof ApiError && e.status === 409 && e.code === 'invoice_not_debt'
+}
+
 const BASE = '/api/v1/admin/accounting/bank-rows'
 
 export type BankRowDirection = 'incoming' | 'outgoing' | 'dismissed'
@@ -353,7 +367,7 @@ export function useVippsChargeMutations() {
     onSuccess: invalidate,
   })
 
-  return { assignInvoice, bilag, dismiss, clearPayout }
+  return { assignInvoice, bilag, dismiss, clearPayout, invalidate }
 }
 
 // Candidate invoices for assigning a Vipps charge to a faktura.

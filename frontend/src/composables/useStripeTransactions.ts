@@ -76,6 +76,8 @@ export const STRIPE_TXN_CODES = [
   'not_allowed',
   'amount_mismatch',
   'invoice_settled',
+  'invoice_credited',
+  'invoice_not_debt',
   'period_closed',
   'already_booked',
   'payout_cleared',
