@@ -12,7 +12,11 @@ import (
 
 // aliasOf returns the member the club's alias for name points at, or "".
 func (f *bankAutoFixture) aliasOf(name string) string {
-	return aliasMember(context.Background(), f.club.Pool, f.club.ID, name)
+	id, err := aliasMember(context.Background(), f.club.Pool, f.club.ID, name)
+	if err != nil {
+		panic(err)
+	}
+	return id
 }
 
 func (f *bankAutoFixture) aliasCount(t *testing.T) int {

@@ -345,7 +345,10 @@ func (s *Service) decideBankDeposit(ctx context.Context, clubID string, cands []
 	if sc.isOwn(partnerRow{Cents: r.cents, Counterpart: payer, FromAccount: r.fromAccount, ToAccount: r.toAccount}) {
 		return bankDepositDecision{}, reasonOwnClub, nil
 	}
-	memberID, pass := s.resolveStrongMember(ctx, clubID, cands, payer)
+	memberID, pass, err := s.resolveStrongMember(ctx, clubID, cands, payer)
+	if err != nil {
+		return bankDepositDecision{}, "", err
+	}
 	if memberID == "" {
 		return bankDepositDecision{}, reasonNoStrongMember, nil
 	}

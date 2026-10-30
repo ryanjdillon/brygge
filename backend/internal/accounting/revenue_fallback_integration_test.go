@@ -30,7 +30,10 @@ func TestUnmappedCategoryBooksToFallbackOnEveryPath(t *testing.T) {
 		t.Errorf("invoice booking = %v, want DR 1500 / CR 3900 100", lines)
 	}
 
-	code, label := f.svc.matchVippsAmountToPriceArticle(ctx, f.clubID, 100)
+	code, label, err := f.svc.matchVippsAmountToPriceArticle(ctx, f.clubID, 100)
+	if err != nil {
+		t.Fatalf("matchVippsAmountToPriceArticle: %v", err)
+	}
 	if label == "" {
 		t.Fatal("Vipps matcher found no price item for 100 kr")
 	}

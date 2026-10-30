@@ -222,7 +222,10 @@ func priceItemLabels(cands []priceArticleCandidate) string {
 
 // payerIsKnownMember reports whether a payer name resolves to a member on
 // one of the strong passes, the bar auto-assign sets for members-only prices.
-func (s *Service) payerIsKnownMember(ctx context.Context, clubID, payer, message string) bool {
+func (s *Service) payerIsKnownMember(ctx context.Context, clubID, payer, message string) (bool, error) {
 	memberID, pass, err := s.resolveCustomerToMemberPass(ctx, clubID, payer, message)
-	return err == nil && memberID != "" && pass <= memberPassFirstLast
+	if err != nil {
+		return false, err
+	}
+	return memberID != "" && pass <= memberPassFirstLast, nil
 }

@@ -2,10 +2,13 @@ package accounting
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/brygge-klubb/brygge/internal/finance"
 )
@@ -184,35 +187,45 @@ func uniqueCand(cands []memberCand, match func(memberCand) bool) string {
 }
 
 // aliasMember returns the member a treasurer taught for this payer name, or
-// "" when there is none.
-func aliasMember(ctx context.Context, q pgxQuerier, clubID, payerName string) string {
+// "" when there is none. A failed lookup is an error, not "no alias": an
+// alias always wins, so reading a failure as none would resolve the payer
+// by name to someone else.
+func aliasMember(ctx context.Context, q pgxQuerier, clubID, payerName string) (string, error) {
 	var userID string
-	if err := q.QueryRow(ctx,
+	err := q.QueryRow(ctx,
 		`SELECT user_id FROM vipps_customer_aliases
 		 WHERE club_id = $1 AND lower(customer_name) = lower($2)
 		 LIMIT 1`,
 		clubID, payerName,
-	).Scan(&userID); err != nil {
-		return ""
+	).Scan(&userID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
 	}
-	return userID
+	if err != nil {
+		return "", fmt.Errorf("looking up the payer alias: %w", err)
+	}
+	return userID, nil
 }
 
 // resolveStrongMember resolves a payer name to a member only through a
 // strong pass: a taught alias (always wins) or a unique exact name. It
 // returns "" and memberPassNone otherwise.
-func (s *Service) resolveStrongMember(ctx context.Context, clubID string, cands []memberCand, payerName string) (string, int) {
+func (s *Service) resolveStrongMember(ctx context.Context, clubID string, cands []memberCand, payerName string) (string, int, error) {
 	if strings.TrimSpace(payerName) == "" {
-		return "", memberPassNone
+		return "", memberPassNone, nil
 	}
-	if id := aliasMember(ctx, s.db, clubID, payerName); id != "" {
-		return id, memberPassAlias
+	alias, err := aliasMember(ctx, s.db, clubID, payerName)
+	if err != nil {
+		return "", memberPassNone, err
+	}
+	if alias != "" {
+		return alias, memberPassAlias, nil
 	}
 	id, pass := matchMemberName(cands, payerName)
 	if id == "" || pass > memberPassFirstLast {
-		return "", memberPassNone
+		return "", memberPassNone, nil
 	}
-	return id, pass
+	return id, pass, nil
 }
 
 // memberPassName is the audit/preview label for a strong resolution pass.

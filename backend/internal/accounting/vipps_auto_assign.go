@@ -195,7 +195,10 @@ func (s *Service) decideVippsCharge(ctx context.Context, clubID string, cfg vipp
 		}
 	}
 
-	cands := s.priceArticleCandidates(ctx, clubID, amount)
+	cands, err := s.priceArticleCandidates(ctx, clubID, amount)
+	if err != nil {
+		return nil, fmt.Errorf("loading price items: %w", err)
+	}
 	if len(cands) == 0 {
 		return &vippsChargeDecision{Reason: "no faktura or price item fits"}, nil
 	}

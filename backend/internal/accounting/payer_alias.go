@@ -71,7 +71,11 @@ type payerResolution struct {
 }
 
 func resolvePayer(ctx context.Context, q pgxQuerier, clubID, payer string) (payerResolution, error) {
-	res := payerResolution{aliasUser: aliasMember(ctx, q, clubID, payer), nameMembers: map[string]bool{}}
+	res := payerResolution{nameMembers: map[string]bool{}}
+	var err error
+	if res.aliasUser, err = aliasMember(ctx, q, clubID, payer); err != nil {
+		return res, err
+	}
 	cands, err := loadMemberCands(ctx, q, clubID)
 	if err != nil {
 		return res, err

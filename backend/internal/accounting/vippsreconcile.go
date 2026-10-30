@@ -226,7 +226,10 @@ func (s *Service) ReconcileVippsPreview(ctx context.Context, clubID, bankRowID s
 			//     match it manually.
 			// (4) Nothing matched → fallback 3900 so the balance
 			//     sheet stays honest. See DIL-367.
-			memberID, _ := s.resolveCustomerToMember(ctx, clubID, v.CustomerName, v.Message)
+			memberID, err := s.resolveCustomerToMember(ctx, clubID, v.CustomerName, v.Message)
+			if err != nil {
+				return nil, err
+			}
 			var invoiceID string
 			if memberID != "" {
 				chargeDate := bankDate
@@ -253,7 +256,9 @@ func (s *Service) ReconcileVippsPreview(ctx context.Context, clubID, bankRowID s
 					line.Kind = "revenue"
 					line.AccountCode = account
 					line.Resolved = true
-				} else if account, name := s.matchVippsAmountToPriceArticle(ctx, clubID, v.Amount); account != "" {
+				} else if account, name, err := s.matchVippsAmountToPriceArticle(ctx, clubID, v.Amount); err != nil {
+					return nil, err
+				} else if account != "" {
 					line.Kind = "revenue"
 					line.AccountCode = account
 					line.Resolved = true
@@ -542,13 +547,16 @@ func (s *Service) reconcileVippsConfirm(ctx context.Context, clubID, bankRowID, 
 // If zero or more than one price_item produces the amount, or the one
 // that does needs a multiple, returns "" so the caller falls through to
 // the next pass in the cascade. See DIL-367.
-func (s *Service) matchVippsAmountToPriceArticle(ctx context.Context, clubID string, amount float64) (accountCode, name string) {
-	matches := s.priceArticleCandidates(ctx, clubID, amount)
+func (s *Service) matchVippsAmountToPriceArticle(ctx context.Context, clubID string, amount float64) (accountCode, name string, err error) {
+	matches, err := s.priceArticleCandidates(ctx, clubID, amount)
+	if err != nil {
+		return "", "", err
+	}
 	if len(matches) != 1 || matches[0].multiplier != 1 {
-		return "", ""
+		return "", "", nil
 	}
 	m := matches[0]
-	return RevenueAccountOrFallback(m.category), m.label()
+	return RevenueAccountOrFallback(m.category), m.label(), nil
 }
 
 // priceArticleCandidate is one active price item that produces an amount,
@@ -572,9 +580,9 @@ func (c priceArticleCandidate) label() string {
 // amount: an exact match (once / year / season units) or an integer multiple
 // of a per-time unit (night, day, hour; 2–60×, so a guest slip at 250/night
 // fits 750 as three nights).
-func (s *Service) priceArticleCandidates(ctx context.Context, clubID string, amount float64) []priceArticleCandidate {
+func (s *Service) priceArticleCandidates(ctx context.Context, clubID string, amount float64) ([]priceArticleCandidate, error) {
 	if amount <= 0 {
-		return nil
+		return nil, nil
 	}
 	rows, err := s.db.Query(ctx,
 		`SELECT name, category, COALESCE(audience, 'all'), amount, unit
@@ -584,16 +592,18 @@ func (s *Service) priceArticleCandidates(ctx context.Context, clubID string, amo
 		clubID,
 	)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("querying price items: %w", err)
 	}
 	defer rows.Close()
 
+	// A partial list could turn a tie between categories into a single
+	// category, so any error ends the lookup instead of being skipped.
 	var matches []priceArticleCandidate
 	for rows.Next() {
 		var n, cat, aud, unit string
 		var unitAmount float64
 		if err := rows.Scan(&n, &cat, &aud, &unitAmount, &unit); err != nil {
-			continue
+			return nil, fmt.Errorf("scanning price item: %w", err)
 		}
 		perUnit := unit == "night" || unit == "day" || unit == "hour"
 		if floatNear(unitAmount, amount, 0.005) {
@@ -610,7 +620,10 @@ func (s *Service) priceArticleCandidates(ctx context.Context, clubID string, amo
 			}
 		}
 	}
-	return matches
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("reading price items: %w", err)
+	}
+	return matches, nil
 }
 
 // resolveCustomerToMember tries to map a Vipps customer to a member.
@@ -661,7 +674,10 @@ const (
 // which pass matched (memberPassNone when none did, memberPassConflict when
 // the KID and the alias disagree).
 func (s *Service) resolveCustomerToMemberPass(ctx context.Context, clubID, customerName, message string) (string, int, error) {
-	aliasUserID := aliasMember(ctx, s.db, clubID, customerName)
+	aliasUserID, err := aliasMember(ctx, s.db, clubID, customerName)
+	if err != nil {
+		return "", memberPassNone, err
+	}
 	if kid := extractKID(message); kid != "" {
 		var memberID string
 		err := s.db.QueryRow(ctx,
@@ -670,6 +686,12 @@ func (s *Service) resolveCustomerToMemberPass(ctx context.Context, clubID, custo
 			 ORDER BY i.issue_date DESC LIMIT 1`,
 			clubID, kid,
 		).Scan(&memberID)
+		// No faktura carries the KID: fall through to the alias and names.
+		// Any other error must not read as "no KID": the KID outranks an
+		// alias, so a swallowed failure could pick the wrong member.
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return "", memberPassNone, fmt.Errorf("looking up the KID: %w", err)
+		}
 		if err == nil && memberID != "" {
 			if aliasUserID != "" && aliasUserID != memberID {
 				return "", memberPassConflict, nil

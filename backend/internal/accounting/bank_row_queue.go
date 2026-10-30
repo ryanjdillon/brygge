@@ -610,7 +610,11 @@ func (s *Service) rankAccountSuggestions(
 	}
 
 	if matchPrices {
-		for _, sug := range s.priceItemSuggestions(ctx, clubID, amount, desc, payer, byCode) {
+		priced, err := s.priceItemSuggestions(ctx, clubID, amount, desc, payer, byCode)
+		if err != nil {
+			return nil, err
+		}
+		for _, sug := range priced {
 			add(sug)
 		}
 	}
@@ -657,19 +661,24 @@ func (s *Service) rankAccountSuggestions(
 // price items an incoming amount fits.
 func (s *Service) priceItemSuggestions(
 	ctx context.Context, clubID string, amount float64, desc, payer string, accounts map[string]suggestableAccount,
-) []AccountSuggestion {
+) ([]AccountSuggestion, error) {
 	if amount <= 0 {
-		return nil
+		return nil, nil
 	}
-	cands := s.priceArticleCandidates(ctx, clubID, amount)
+	cands, err := s.priceArticleCandidates(ctx, clubID, amount)
+	if err != nil {
+		return nil, err
+	}
 	knownMember := false
 	for _, c := range cands {
 		if c.audience == "member" {
-			knownMember = s.payerIsKnownMember(ctx, clubID, payer, desc)
+			if knownMember, err = s.payerIsKnownMember(ctx, clubID, payer, desc); err != nil {
+				return nil, err
+			}
 			break
 		}
 	}
-	return priceItemAccountSuggestions(cands, knownMember, accounts)
+	return priceItemAccountSuggestions(cands, knownMember, accounts), nil
 }
 
 // descriptionHintSuggestions applies outgoingHints to a row description.
