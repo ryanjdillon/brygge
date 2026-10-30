@@ -2932,20 +2932,36 @@
   "recentPayments": {
     "title": "Payments",
     "subtitle": "Recent payments — near realtime.",
+    "providerLinks": {
+      "label": "Payment provider portals",
+      "stripe": "Open Stripe",
+      "vipps": "Open Vipps"
+    },
     "refresh": "Refresh",
     "searchPlaceholder": "Search payer …",
     "since": "From",
     "until": "To",
     "empty": "No payments yet.",
+    "emptyRecent": "No payments in the last 7 days.",
+    "loadError": "Could not load payments.",
+    "retry": "Try again",
+    "truncated": "Showing the newest {count} payments. Narrow by search, type or period to see the rest.",
+    "clearRange": "Clear period",
     "anonymous": "Guest",
     "kind": {
       "harbor": "Harbor",
       "all": "All",
       "guest": "Guest berth",
       "motorhome": "Motorhome",
+      "slipping": "Haul-out",
       "faktura": "Invoice",
       "merch": "Shop",
       "other": "Other"
+    },
+    "group": {
+      "today": "Today",
+      "last7": "Last 7 days",
+      "range": "Selected period"
     },
     "method": {
       "vipps": "Vipps",

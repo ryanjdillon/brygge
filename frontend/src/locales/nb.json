@@ -2928,20 +2928,36 @@
   "recentPayments": {
     "title": "Betalinger",
     "subtitle": "Nylige innbetalinger — nær sanntid.",
+    "providerLinks": {
+      "label": "Leverandørportaler",
+      "stripe": "Åpne Stripe",
+      "vipps": "Åpne Vipps"
+    },
     "refresh": "Oppdater",
     "searchPlaceholder": "Søk etter betaler …",
     "since": "Fra",
     "until": "Til",
     "empty": "Ingen betalinger ennå.",
+    "emptyRecent": "Ingen betalinger de siste 7 dagene.",
+    "loadError": "Kunne ikke hente betalinger.",
+    "retry": "Prøv igjen",
+    "truncated": "Viser de nyeste {count} betalingene. Avgrens med søk, type eller periode for å se resten.",
+    "clearRange": "Fjern periode",
     "anonymous": "Gjest",
     "kind": {
       "harbor": "Havn",
       "all": "Alle",
       "guest": "Gjesteplass",
       "motorhome": "Bobil",
+      "slipping": "Slipping",
       "faktura": "Faktura",
       "merch": "Butikk",
       "other": "Annet"
+    },
+    "group": {
+      "today": "I dag",
+      "last7": "Siste 7 dager",
+      "range": "Valgt periode"
     },
     "method": {
       "vipps": "Vipps",

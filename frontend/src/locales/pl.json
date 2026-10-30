@@ -1837,20 +1837,36 @@
   "recentPayments": {
     "title": "Płatności",
     "subtitle": "Ostatnie płatności — prawie w czasie rzeczywistym.",
+    "providerLinks": {
+      "label": "Portale operatorów płatności",
+      "stripe": "Otwórz Stripe",
+      "vipps": "Otwórz Vipps"
+    },
     "refresh": "Odśwież",
     "searchPlaceholder": "Szukaj płatnika …",
     "since": "Od",
     "until": "Do",
     "empty": "Brak płatności.",
+    "emptyRecent": "Brak płatności w ostatnich 7 dniach.",
+    "loadError": "Nie udało się wczytać płatności.",
+    "retry": "Spróbuj ponownie",
+    "truncated": "Wyświetlono {count} najnowszych płatności. Zawęź wyszukiwaniem, typem lub okresem, aby zobaczyć resztę.",
+    "clearRange": "Wyczyść okres",
     "anonymous": "Gość",
     "kind": {
       "harbor": "Port",
       "all": "Wszystkie",
       "guest": "Miejsce gościnne",
       "motorhome": "Kamper",
+      "slipping": "Slipowanie",
       "faktura": "Faktura",
       "merch": "Sklep",
       "other": "Inne"
+    },
+    "group": {
+      "today": "Dzisiaj",
+      "last7": "Ostatnie 7 dni",
+      "range": "Wybrany okres"
     },
     "method": {
       "vipps": "Vipps",

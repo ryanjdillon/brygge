@@ -1865,20 +1865,36 @@
   "recentPayments": {
     "title": "Paiements",
     "subtitle": "Paiements récents — quasi en temps réel.",
+    "providerLinks": {
+      "label": "Portails des prestataires de paiement",
+      "stripe": "Ouvrir Stripe",
+      "vipps": "Ouvrir Vipps"
+    },
     "refresh": "Actualiser",
     "searchPlaceholder": "Rechercher un payeur …",
     "since": "Du",
     "until": "Au",
     "empty": "Aucun paiement pour le moment.",
+    "emptyRecent": "Aucun paiement ces 7 derniers jours.",
+    "loadError": "Impossible de charger les paiements.",
+    "retry": "Réessayer",
+    "truncated": "Affichage des {count} paiements les plus récents. Affinez par recherche, type ou période pour voir le reste.",
+    "clearRange": "Effacer la période",
     "anonymous": "Invité",
     "kind": {
       "harbor": "Port",
       "all": "Tous",
       "guest": "Place visiteur",
       "motorhome": "Camping-car",
+      "slipping": "Halage",
       "faktura": "Facture",
       "merch": "Boutique",
       "other": "Autre"
+    },
+    "group": {
+      "today": "Aujourd'hui",
+      "last7": "7 derniers jours",
+      "range": "Période choisie"
     },
     "method": {
       "vipps": "Vipps",

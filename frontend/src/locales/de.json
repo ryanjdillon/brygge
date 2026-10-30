@@ -1866,20 +1866,36 @@
   "recentPayments": {
     "title": "Zahlungen",
     "subtitle": "Aktuelle Zahlungen — nahezu in Echtzeit.",
+    "providerLinks": {
+      "label": "Portale der Zahlungsanbieter",
+      "stripe": "Stripe öffnen",
+      "vipps": "Vipps öffnen"
+    },
     "refresh": "Aktualisieren",
     "searchPlaceholder": "Zahler suchen …",
     "since": "Von",
     "until": "Bis",
     "empty": "Noch keine Zahlungen.",
+    "emptyRecent": "Keine Zahlungen in den letzten 7 Tagen.",
+    "loadError": "Zahlungen konnten nicht geladen werden.",
+    "retry": "Erneut versuchen",
+    "truncated": "Die neuesten {count} Zahlungen werden angezeigt. Mit Suche, Art oder Zeitraum eingrenzen, um den Rest zu sehen.",
+    "clearRange": "Zeitraum zurücksetzen",
     "anonymous": "Gast",
     "kind": {
       "harbor": "Hafen",
       "all": "Alle",
       "guest": "Gastliegeplatz",
       "motorhome": "Wohnmobil",
+      "slipping": "Slippen",
       "faktura": "Rechnung",
       "merch": "Shop",
       "other": "Sonstiges"
+    },
+    "group": {
+      "today": "Heute",
+      "last7": "Letzte 7 Tage",
+      "range": "Gewählter Zeitraum"
     },
     "method": {
       "vipps": "Vipps",

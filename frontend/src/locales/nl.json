@@ -1866,20 +1866,36 @@
   "recentPayments": {
     "title": "Betalingen",
     "subtitle": "Recente betalingen — vrijwel realtime.",
+    "providerLinks": {
+      "label": "Portalen van betaalproviders",
+      "stripe": "Stripe openen",
+      "vipps": "Vipps openen"
+    },
     "refresh": "Vernieuwen",
     "searchPlaceholder": "Zoek betaler …",
     "since": "Van",
     "until": "Tot",
     "empty": "Nog geen betalingen.",
+    "emptyRecent": "Geen betalingen in de afgelopen 7 dagen.",
+    "loadError": "Betalingen konden niet worden geladen.",
+    "retry": "Opnieuw proberen",
+    "truncated": "De nieuwste {count} betalingen worden getoond. Beperk met zoeken, type of periode om de rest te zien.",
+    "clearRange": "Periode wissen",
     "anonymous": "Gast",
     "kind": {
       "harbor": "Haven",
       "all": "Alle",
       "guest": "Gastligplaats",
       "motorhome": "Camper",
+      "slipping": "Helling",
       "faktura": "Factuur",
       "merch": "Winkel",
       "other": "Overig"
+    },
+    "group": {
+      "today": "Vandaag",
+      "last7": "Laatste 7 dagen",
+      "range": "Gekozen periode"
     },
     "method": {
       "vipps": "Vipps",
