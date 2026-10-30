@@ -512,6 +512,14 @@ func (h *MembersHandler) HandleGetMySlip(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *MembersHandler) HandleReportIssue(w http.ResponseWriter, r *http.Request) {
+	// A report lands as a task in a project, which nobody can see while the
+	// Projects module is off. BRY-515 (reporting module) replaces this gate
+	// with per-module intake.
+	if !h.config.Features.Projects {
+		Error(w, http.StatusNotFound, "feature disabled")
+		return
+	}
+
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
 	if claims == nil {

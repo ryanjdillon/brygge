@@ -204,13 +204,13 @@ Feature flags have two layers since migration 000049: env-var defaults (set at d
 | Variable                 | Default | Description                                                                                                                                |
 |----------                |---------|--------------------------------------------------------------------------------------------------------------------------------------------|
 | `FEATURE_BOOKINGS`       | `true`  | Enable harbor/hoist booking system                                                                                                         |
-| `FEATURE_PROJECTS`       | `true`  | Enable project/task management                                                                                                             |
+| `FEATURE_PROJECTS`       | `true`  | Enable project/task management. Also gates the member's slip-issue report (`POST /members/me/slip/issues`, 404 while off; the portal slip page hides its button), since reports are filed as project tasks |
 | `FEATURE_CALENDAR`       | `true`  | Enable club calendar                                                                                                                       |
 | `FEATURE_COMMERCE`       | `true`  | Enable product catalog and orders                                                                                                          |
 | `FEATURE_ACCOUNTING`     | `false` | Enable faktura + GL + bank-imports + Vipps reconciliation                                                                                  |
 | `FEATURE_DEMO_AUTH`      | `false` | Mounts the demo login (`/demo/users`, `/demo/login`) for demo deploys. Env-only: no DB override, never toggleable at runtime                |
 
-**Env gates routes, DB gates UI.** The env value decides whether a module's routes are registered in `main.go` at all; the DB value (`clubs.feature_*`) only decides what the SPA shows. With the env flag on, admins can freely hide or show the module; with it off, the DB switch can be flipped but the routes are unreachable. A club that uses accounting must therefore deploy with `FEATURE_ACCOUNTING=true`. The feedback module (`clubs.feature_feedback`) has no env flag and is DB-only.
+**Env gates routes, DB gates UI.** The env value decides whether a module's routes are registered in `main.go` at all; the DB value (`clubs.feature_*`) only decides what the SPA shows. With the env flag on, admins can freely hide or show the module; with it off, the DB switch can be flipped but the routes are unreachable. A club that uses accounting must therefore deploy with `FEATURE_ACCOUNTING=true`. The feedback module (`clubs.feature_feedback`) has no env flag and is DB-only. The slip-issue report follows the split: the endpoint refuses on the env flag, the button hides on the DB flag, so switching Projects off only in Site settings hides the button but leaves the endpoint answering until `FEATURE_PROJECTS=false` is deployed.
 
 ## AI (Optional)
 

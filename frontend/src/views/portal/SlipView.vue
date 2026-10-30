@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation } from '@tanstack/vue-query'
 import { useApiClient, unwrap } from '@/lib/apiClient'
 import { formatDate } from '@/lib/format'
+import { useFeatures } from '@/composables/useFeatures'
 import { AlertTriangle } from 'lucide-vue-next'
 import Input from '@/components/ui/form/Input.vue'
 import Textarea from '@/components/ui/form/Textarea.vue'
@@ -12,6 +13,7 @@ import FormField from '@/components/ui/form/FormField.vue'
 
 const { t } = useI18n()
 const client = useApiClient()
+const { isEnabled } = useFeatures()
 
 const { data: slip, isLoading, isError } = useQuery({
   queryKey: ['portal', 'slip'],
@@ -104,7 +106,8 @@ const { mutate: reportIssue, isPending: isReporting } = useMutation({
         </p>
       </div>
 
-      <div class="mt-8">
+      <!-- Reports are stored as Projects tasks; BRY-515 replaces this gate. -->
+      <div v-if="isEnabled('projects')" class="mt-8">
         <button
           v-if="!showIssueForm"
           class="flex items-center gap-1.5 rounded-md bg-yellow-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-yellow-700"
