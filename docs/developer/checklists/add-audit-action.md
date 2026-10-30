@@ -73,6 +73,7 @@ The `extra` map is whatever the call site passes. It's free-form JSON, so use it
 - **Forgot the reference doc update** — the next person adds another action and invents a name that overlaps yours.
 - **Audit log inside a transaction that might roll back** — the audit insert happens outside the transaction in current handlers, so a rollback doesn't lose the audit. Mirror that.
 - **`extra` field with sensitive data** — never log raw passwords, full PDF bytes, full TOTP secrets. The audit log is queryable by anyone with admin role.
+- **A whole request struct as the audit payload.** `LogAudit(..., req)` records every field the client sent, and a settings request can carry a secret (the Anthropic key was logged in clear text by the club settings update until BRY-556). For an update, record the names of the fields set, as `update_user` and `update_financial_settings` do, and keep secrets and members' addresses out of `details` altogether.
 
 ## When the action might fire many times
 

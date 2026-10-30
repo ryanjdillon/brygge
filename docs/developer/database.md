@@ -489,6 +489,16 @@ in `backend/migrations/` for the source of truth. The high-level shape:
   through `dev_masked.clubs` as is (a club-owned address on a fixed host, no
   person in it). The down drops the `dev_masked.clubs` view first; the
   repeatable file rebuilds it.
+- **Settings audit scrub.** 000127 (BRY-556) is a data-only migration, no
+  schema change. `PATCH /admin/settings/site` used to log its whole request
+  under `new` in `audit_log.details`: the Anthropic API key in clear text and
+  the board members' emails, phone and address. It now logs the names of the
+  fields set (`{"fields":[...]}`), and 000127 rewrites every existing
+  `update_financial_settings` row to that form (the keys of `new`, or of the
+  row itself, sorted). **This deliberately rewrites history:** such a row keeps
+  who, when and which fields, not the values. Rows already in the new form and
+  rows whose details are not an object are left alone, so it is idempotent; its
+  down is a no-op.
 - `invoice_pdf_archive` (migration 000050) — preserves prior PDF bytes when
   `invoices.pdf_data` is regenerated, so Norwegian bokføringsloven §13's
   5-year retention requirement is satisfied.

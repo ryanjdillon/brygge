@@ -79,6 +79,7 @@ The other member writes in `admin_users.go` also use raw strings: `create_user` 
 
 | Constant | String | Resource | When | `extra` |
 |---|---|---|---|---|
+| `ActionFinancialSettingsUpdated` | `update_financial_settings` | clubs (the club id) | `PATCH /admin/settings/site` (Økonomiinnstillinger and the other club settings): any field of the request was saved. The string predates the `<resource>.<verb>` convention and is shipped, so it stays | `fields`: the names of the fields set, sorted. **Never values**: the request carries a secret (`anthropic_api_key`) and board members' addresses and phone. Rows written before BRY-556 held the whole request under `new`, the Anthropic key and board contact details included; migration 000127 deliberately rewrote them all to `{"fields":[...]}` (who and when are kept, the values are not). The other club-settings writes (`update_booking_settings`: allow-listed ints and season dates; `update_session_settings`: three minute counts) and the bank-account create/update (the club's own account number, role, GL code, label) hold only club configuration and log their payload as before |
 | `ActionInvoiceCreated` | `invoice.created` | invoice | After `INSERT invoices` succeeds | `invoice_number`, `total_amount` |
 | `ActionInvoicePDFGenerated` | `invoice.pdf_generated` | invoice | `finance.GeneratePDF` succeeded and bytes stored | `invoice_number` |
 | `ActionInvoiceEmailed` | `invoice.emailed` | invoice | After `SendWithAttachment` succeeds (post-`sent_at` stamp) | `email`, `invoice_number` |

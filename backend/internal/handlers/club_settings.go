@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"reflect"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -15,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 
+	"github.com/brygge-klubb/brygge/internal/audit"
 	"github.com/brygge-klubb/brygge/internal/auth"
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/finance"
@@ -565,10 +568,37 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	if auditErr := LogAudit(ctx, h.db, claims.ClubID, claims.UserID, "update_financial_settings", "clubs", claims.ClubID, nil, req); auditErr != nil {
+	// Field names only. The request carries a secret (the Anthropic key) and
+	// board members' addresses; a value in the log outlives a rotation or an
+	// erasure.
+	auditData, _ := json.Marshal(map[string]any{"fields": suppliedSettingFields(req)})
+	if _, auditErr := h.db.Exec(ctx,
+		`INSERT INTO audit_log (club_id, actor_id, actor_ip, action, resource, resource_id, details)
+		 VALUES ($1, $2, '', $3, 'clubs', $5, $4)`,
+		claims.ClubID, claims.UserID, audit.ActionFinancialSettingsUpdated, auditData, claims.ClubID,
+	); auditErr != nil {
 		h.log.Error().Err(auditErr).Msg("audit financial settings")
 	}
 	JSON(w, http.StatusOK, map[string]string{"status": "updated"})
+}
+
+// suppliedSettingFields names, sorted, the fields the request set. It reads
+// the JSON tags of the request type, so a field added later is covered
+// without a list to keep in step.
+func suppliedSettingFields(req updateFinancialSettingsRequest) []string {
+	fields := []string{}
+	v := reflect.ValueOf(req)
+	t := v.Type()
+	for i := range t.NumField() {
+		if v.Field(i).Kind() != reflect.Pointer || v.Field(i).IsNil() {
+			continue
+		}
+		if name, _, _ := strings.Cut(t.Field(i).Tag.Get("json"), ","); name != "" && name != "-" {
+			fields = append(fields, name)
+		}
+	}
+	slices.Sort(fields)
+	return fields
 }
 
 // maxPayoutDescriptorLen caps the payout descriptor pattern; a bank

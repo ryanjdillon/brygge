@@ -50,6 +50,10 @@ const (
 	ActionDocumentDeleted          = "document.deleted"
 
 	// Finance operations
+	// ActionFinancialSettingsUpdated is the club settings PATCH. Its string
+	// predates the <resource>.<verb> convention and is kept so stored rows
+	// still match. The row holds the names of the fields changed, never values.
+	ActionFinancialSettingsUpdated    = "update_financial_settings"
 	ActionInvoiceCreated              = "invoice.created"
 	ActionInvoiceVoided               = "invoice.voided"
 	ActionInvoicePDFGenerated         = "invoice.pdf_generated"
