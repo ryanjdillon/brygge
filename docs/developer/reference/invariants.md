@@ -314,7 +314,7 @@ Price items carry no account. The category map (`revenueAccountMap`, read throug
 
 ### Reports count posted and voided entries
 
-**Rule (BRY-352):** `VoidJournalEntry` sets the original to `voided` but keeps its lines, and adds a *posted* reversal. Every report and the momskomp calculation therefore select `je.status IN ('posted', 'voided')` (`bookedEntryFilter` in `sync.go`), so the original and its reversal net to zero. Only `VoidJournalEntry` sets `voided`, and only on a posted entry, so the filter means "was ever posted". Drafts are never counted.
+**Rule (BRY-352):** `VoidJournalEntry` sets the original to `voided` but keeps its lines, and adds a *posted* reversal. Every report and the momskomp calculation therefore select `je.status IN ('posted', 'voided')` (`bookedEntryFilter` in `sync.go`), so the original and its reversal net to zero. Only `VoidJournalEntry` sets `voided`, and only on a posted entry, so the filter means "was ever posted". Drafts are never counted. The period and status filters belong in the `WHERE` of an inner join to `journal_entries`: in the `ON` of a `LEFT JOIN` they only blank the entry columns, and `SUM(jl.*)` still covers every period and every draft on the account (the momskomp query summed lines that way).
 
 **Failure mode:** counting only `posted` drops the original but keeps the reversal, so a voided entry shows as its own **negative**. A voided 2,500 kr faktura would push receivables and revenue down 2,500 kr instead of back to zero.
 

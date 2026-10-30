@@ -55,18 +55,25 @@ func (s *Service) Momskompensasjon(ctx context.Context, clubID, periodID, model 
 		return nil, fmt.Errorf("checking drafts: %w", err)
 	}
 
-	// Query expense accounts with their totals and MVA amounts
+	// A line's MVA follows its side: a void's reversal copies mva_amount onto
+	// swapped sides, so an unsigned sum would count a voided cost's MVA twice.
+	// The period and status filters sit in WHERE on inner joins: in a LEFT
+	// JOIN's ON they would only blank the entry columns, and the line sums
+	// would still cover every period and every draft on the account. An
+	// inactive expense account that holds postings stays in the breakdown,
+	// as documentedCompensation counts its lines too.
 	rows, err := s.db.Query(ctx,
 		`SELECT a.code, a.name, a.mva_eligible, a.mva_partial_ratio,
 		        COALESCE(SUM(jl.debit) - SUM(jl.credit), 0) AS total_amount,
-		        COALESCE(SUM(jl.mva_amount), 0) AS total_mva
+		        COALESCE(SUM(jl.mva_amount * SIGN(jl.debit - jl.credit)), 0) AS total_mva
 		 FROM accounts a
-		 LEFT JOIN journal_lines jl ON jl.account_id = a.id
-		 LEFT JOIN journal_entries je ON je.id = jl.journal_entry_id
-		   AND je.fiscal_period_id = $2 AND `+bookedEntryFilter+`
+		 JOIN journal_lines jl ON jl.account_id = a.id
+		 JOIN journal_entries je ON je.id = jl.journal_entry_id
 		 WHERE a.club_id = $1
 		   AND a.account_type = 'expense'
-		   AND a.is_active = true
+		   AND je.club_id = $1
+		   AND je.fiscal_period_id = $2
+		   AND `+bookedEntryFilter+`
 		 GROUP BY a.code, a.name, a.mva_eligible, a.mva_partial_ratio, a.sort_order
 		 HAVING COALESCE(SUM(jl.debit) - SUM(jl.credit), 0) != 0
 		 ORDER BY a.sort_order, a.code`,
@@ -160,7 +167,7 @@ func SimplifiedCompensation(eligibleCosts float64) float64 {
 func (s *Service) documentedCompensation(ctx context.Context, clubID, periodID string) float64 {
 	var total float64
 	err := s.db.QueryRow(ctx,
-		`SELECT COALESCE(SUM(jl.mva_amount), 0)
+		`SELECT COALESCE(SUM(jl.mva_amount * SIGN(jl.debit - jl.credit)), 0)
 		 FROM journal_lines jl
 		 JOIN journal_entries je ON je.id = jl.journal_entry_id
 		 JOIN accounts a ON a.id = jl.account_id
