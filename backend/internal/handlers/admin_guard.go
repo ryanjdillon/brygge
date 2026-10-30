@@ -150,3 +150,17 @@ func writeAdminRequired(w http.ResponseWriter) {
 		"code":  codeAdminRequired,
 	})
 }
+
+// revokeDeveloperTokens revokes the developer tokens a user minted. A token
+// authenticates as its minter's admin role, so it must stop working when the
+// minter is deactivated or loses that role, and stay revoked if they come back.
+func revokeDeveloperTokens(ctx context.Context, tx pgx.Tx, clubID, userID string) error {
+	if _, err := tx.Exec(ctx,
+		`UPDATE developer_tokens SET revoked_at = now()
+		  WHERE created_by = $1 AND club_id = $2 AND revoked_at IS NULL`,
+		userID, clubID,
+	); err != nil {
+		return fmt.Errorf("revoke developer tokens: %w", err)
+	}
+	return nil
+}

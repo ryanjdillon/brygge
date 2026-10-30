@@ -532,9 +532,9 @@ func normalizeRecoveryCode(in string) string {
 // HandleAdminDisableTOTP is the lost-device backstop: another admin
 // disables a target user's TOTP entirely so they can re-enroll from
 // scratch via /admin/totp/setup. All of the target's recovery codes
-// and active sessions are wiped in the same transaction so any
-// in-flight elevated state (a stolen cookie that's somehow still
-// valid) loses access immediately.
+// and active sessions are wiped, and the developer tokens they minted
+// revoked, in the same transaction so any in-flight elevated state (a
+// stolen cookie that's somehow still valid) loses access immediately.
 //
 // The acting admin must be fresh-TOTP-verified (RequireFreshTOTP at
 // the route level). Audit logged.
@@ -601,6 +601,14 @@ func (h *TOTPHandler) HandleAdminDisableTOTP(w http.ResponseWriter, r *http.Requ
 		`DELETE FROM sessions WHERE user_id = $1`, targetID,
 	); err != nil {
 		h.log.Error().Err(err).Msg("failed to revoke sessions")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	// Minting a developer token needs a fresh TOTP, so an admin without TOTP
+	// can no longer mint; the tokens they already hold must not outlive it.
+	if err := revokeDeveloperTokens(ctx, tx, actor.ClubID, targetID); err != nil {
+		h.log.Error().Err(err).Msg("failed to revoke developer tokens")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}

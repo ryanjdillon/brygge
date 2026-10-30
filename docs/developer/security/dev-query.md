@@ -60,11 +60,14 @@ All three run as the same `brygge_dev_ro` role, so they see the same masked data
 - **Tied to the minter's standing:** a token authenticates only while its
   minter is an active member of the token's club (`users.deactivated_at IS NULL`,
   same `club_id`) and still holds the `admin` role (`devtoken.MinterRole`, the
-  role the mint routes require). `Authenticate` checks this on every request, so
-  deactivating or demoting an admin ends their tokens' access on the next call
-  without a revoke step. A token whose minter row is gone (`created_by` is NULL
-  after a hard delete) never authenticates. A database error during the check
-  refuses the request (500), never admits it.
+  role the token routes require). Deactivating the member, removing their
+  `admin` role and disabling their TOTP revoke their tokens outright, in the
+  same transaction (`revokeDeveloperTokens`), so reactivating or regranting
+  never brings a token back. `Authenticate` still checks the minter's standing
+  on every request as the backstop for paths that do not revoke (direct SQL, a
+  future role writer). A token whose minter row is gone (`created_by` is NULL)
+  never authenticates. A database error during the check refuses the request
+  (500), never admits it.
 - **Scoped, not privileged:** the token authenticates only
   `POST /api/v1/dev/query`. The middleware injects the creator and club with
   **no roles**, so a token can't reach any session-authenticated route.

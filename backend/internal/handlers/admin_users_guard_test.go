@@ -381,3 +381,47 @@ func TestIntegration_GDPRProcessRefusesLastAdmin(t *testing.T) {
 		t.Errorf("the admin should be deactivated once another admin exists")
 	}
 }
+
+// Deactivating a member or taking the admin role from them revokes the
+// developer tokens they minted, and reactivating or regranting does not bring
+// them back.
+func TestIntegration_DeactivateAndDemoteRevokeDeveloperTokens(t *testing.T) {
+	t.Parallel()
+	e := newGuardEnv(t)
+	asAdmin := []string{"admin"}
+
+	t.Run("deactivate then reactivate", func(t *testing.T) {
+		target := e.seedAdmin(t)
+		e.seedDevToken(t, target)
+		assertStatus(t, e.call(e.admin, asAdmin, http.MethodPost, "/admin/users/"+target+"/deactivate", ""), http.StatusOK)
+		if n := e.activeTokens(t, target); n != 0 {
+			t.Errorf("tokens active after deactivate = %d, want 0", n)
+		}
+		assertStatus(t, e.call(e.admin, asAdmin, http.MethodPost, "/admin/users/"+target+"/reactivate", ""), http.StatusOK)
+		if n := e.activeTokens(t, target); n != 0 {
+			t.Errorf("reactivation must not resurrect tokens, active = %d", n)
+		}
+	})
+
+	t.Run("demote then regrant", func(t *testing.T) {
+		target := e.seedAdmin(t)
+		e.seedDevToken(t, target)
+		assertStatus(t, e.call(e.admin, asAdmin, http.MethodPut, "/admin/users/"+target+"/roles", rolesBody("member")), http.StatusOK)
+		if n := e.activeTokens(t, target); n != 0 {
+			t.Errorf("tokens active after losing admin = %d, want 0", n)
+		}
+		assertStatus(t, e.call(e.admin, asAdmin, http.MethodPut, "/admin/users/"+target+"/roles", rolesBody("admin")), http.StatusOK)
+		if n := e.activeTokens(t, target); n != 0 {
+			t.Errorf("regranting must not resurrect tokens, active = %d", n)
+		}
+	})
+
+	t.Run("a role change that keeps admin keeps the tokens", func(t *testing.T) {
+		target := e.seedAdmin(t)
+		e.seedDevToken(t, target)
+		assertStatus(t, e.call(e.admin, asAdmin, http.MethodPut, "/admin/users/"+target+"/roles", rolesBody("admin", "board")), http.StatusOK)
+		if n := e.activeTokens(t, target); n != 1 {
+			t.Errorf("tokens active = %d, want 1", n)
+		}
+	})
+}

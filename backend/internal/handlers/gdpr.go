@@ -512,13 +512,11 @@ func revokeMemberAccess(ctx context.Context, tx pgx.Tx, clubID, userID, actorID 
 	// The durable pay link is a standing capability that needs no login, so it
 	// must not outlive the member's access. Developer tokens minted by the
 	// member would otherwise keep working too.
-	for _, stmt := range []string{
-		`UPDATE users SET payables_token = NULL WHERE id = $1`,
-		`UPDATE developer_tokens SET revoked_at = now() WHERE created_by = $1 AND revoked_at IS NULL`,
-	} {
-		if _, err := tx.Exec(ctx, stmt, userID); err != nil {
-			return 0, fmt.Errorf("revoke tokens: %w", err)
-		}
+	if _, err := tx.Exec(ctx, `UPDATE users SET payables_token = NULL WHERE id = $1`, userID); err != nil {
+		return 0, fmt.Errorf("revoke tokens: %w", err)
+	}
+	if err := revokeDeveloperTokens(ctx, tx, clubID, userID); err != nil {
+		return 0, err
 	}
 	if _, err := tx.Exec(ctx,
 		`DELETE FROM magic_links WHERE club_id = $1 AND email = $2`,

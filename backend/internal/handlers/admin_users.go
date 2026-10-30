@@ -771,8 +771,9 @@ func (h *AdminUsersHandler) HandleUpdateUserRoles(w http.ResponseWriter, r *http
 }
 
 // guardAdminRoleChange applies BRD-9 to a role change: granting or changing the
-// admin role is the admin's call (the board could otherwise promote itself)
-// and the club must keep one active admin. Call it under lockClubAdmins.
+// admin role is the admin's call (the board could otherwise promote itself),
+// the club must keep one active admin, and a member who loses the role loses
+// the developer tokens they minted with it. Call it under lockClubAdmins.
 // It writes the response and returns false when the change must not proceed.
 func (h *AdminUsersHandler) guardAdminRoleChange(ctx context.Context, w http.ResponseWriter, tx pgx.Tx, callerRoles []string, clubID, userID string, oldRoles, newRoles []string) bool {
 	wasAdmin := slices.Contains(oldRoles, "admin")
@@ -789,6 +790,11 @@ func (h *AdminUsersHandler) guardAdminRoleChange(ctx context.Context, w http.Res
 			h.log.Error().Err(err).Msg("failed to check last admin")
 			Error(w, http.StatusInternalServerError, "internal error")
 		}
+		return false
+	}
+	if err := revokeDeveloperTokens(ctx, tx, clubID, userID); err != nil {
+		h.log.Error().Err(err).Msg("failed to revoke developer tokens")
+		Error(w, http.StatusInternalServerError, "internal error")
 		return false
 	}
 	return true
@@ -1046,6 +1052,15 @@ func (h *AdminUsersHandler) HandleDeactivateUser(w http.ResponseWriter, r *http.
 	// members, so this is belt-and-suspenders).
 	if _, err := tx.Exec(ctx, `DELETE FROM sessions WHERE user_id = $1`, userID); err != nil {
 		h.log.Error().Err(err).Msg("failed to clear sessions")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	// Reactivating must not bring a developer token back to life, so the
+	// member's tokens are revoked now. Passkeys and TOTP stay: this is the
+	// reversible state.
+	if err := revokeDeveloperTokens(ctx, tx, claims.ClubID, userID); err != nil {
+		h.log.Error().Err(err).Msg("failed to revoke developer tokens")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}

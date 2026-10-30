@@ -826,11 +826,16 @@ func main() {
 					r.Use(middleware.RequireRole("admin"))
 					r.Use(middleware.RequireFreshTOTPDefault())
 					r.Post("/dev/query", devQueryHandler.HandleQuery)
-					// BRY-115: mint / revoke developer bearer tokens.
+				})
+				// BRY-115: mint / revoke / list developer bearer tokens, gated on
+				// the role a token's minter must keep (devtoken.MinterRole).
+				r.Group(func(r chi.Router) {
+					r.Use(middleware.RequireRole(devtoken.MinterRole))
+					r.Use(middleware.RequireFreshTOTPDefault())
 					r.Post("/dev/tokens", devTokenHandler.HandleCreate)
 					r.Delete("/dev/tokens/{tokenID}", devTokenHandler.HandleRevoke)
 				})
-				r.With(middleware.RequireRole("admin")).Get("/dev/tokens", devTokenHandler.HandleList)
+				r.With(middleware.RequireRole(devtoken.MinterRole)).Get("/dev/tokens", devTokenHandler.HandleList)
 
 				if cfg.Features.Projects {
 					r.Route("/volunteer", func(r chi.Router) {

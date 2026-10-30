@@ -37,9 +37,9 @@ const (
 	ScopeDBQuery = "db_query"
 
 	// MinterRole is the role a user must hold to mint a token, and must keep
-	// holding for the token to authenticate. The mint routes
-	// (POST/DELETE /admin/dev/tokens in cmd/api/main.go) gate on the same
-	// role; change both together.
+	// holding for the token to authenticate. The token routes (POST mint,
+	// DELETE revoke and GET list under /admin/dev/tokens in cmd/api/main.go)
+	// gate on this constant, so there is one place to change it.
 	MinterRole = "admin"
 
 	// DefaultTTL and MaxTTL bound a token's life. An agent session lasts
@@ -137,8 +137,10 @@ func (s *Service) Mint(ctx context.Context, clubID, createdBy, name string, ttl 
 
 // Authenticate resolves a live token for the given scope and stamps its
 // last use. A token is live only while its minter is still an active member
-// of the token's club holding MinterRole, so deactivating or demoting the
-// minter ends the token's access on the next request without a revoke step.
+// of the token's club holding MinterRole. Deactivating a member, removing
+// their admin role and disabling their TOTP revoke their tokens outright;
+// this check is the backstop for paths that do not (direct SQL, a future
+// role writer), ending access on the next request.
 // Any refusal returns ErrInvalid; a database error is returned wrapped and
 // never authenticates.
 func (s *Service) Authenticate(ctx context.Context, plaintext, scope string) (Token, error) {
