@@ -42,3 +42,22 @@ immediately, while identity erasure is **deferred** — the member is deactivate
 so the purge finishes the erasure once retention clears. The audit row
 (`gdpr.deletion_processed`) records `records_wiped`, `identity_erased` and
 `retention_clears_at`.
+
+### Timeline
+
+| Moment | Date | Effect |
+|---|---|---|
+| Request | `requested_at` | The member's request is stored `pending`; `grace_end` is `requested_at` + 14 days (`deletionGracePeriod`). |
+| Grace end | `grace_end` | Before this, `POST /admin/gdpr/deletion-requests/{id}/process` is refused (400 "grace period has not expired"). From here the request is actionable. The member can cancel any `pending` request until it is processed. |
+| Deadline | `requested_at` + 1 month | GDPR Art. 12(3) gives the club one month to respond. A request still `pending` after this is overdue. |
+
+The grace period is shorter than the legal deadline on purpose: it leaves about
+two weeks to act. Anything that surfaces these requests as work (the planned
+board task inbox, BRY-462) should show an item from `grace_end` and mark it
+overdue at `requested_at` + 1 month, not from `requested_at`, when nobody can
+act yet.
+
+The queue and the legal-document editor (`/admin/gdpr/*`) are admin-only in the
+API as well as the SPA: GDPR is one function, assigned to the site admin by
+default (docs/adr/board-workflows.md, BRD-3). The member's own routes under
+`/members/me` (data export, delete request, consents) are unaffected.

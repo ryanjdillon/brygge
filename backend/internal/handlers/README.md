@@ -89,6 +89,8 @@ r.With(
 
 A handler that serves a whole sub-area under `/admin` can own its mount: `WaitingListHandler.MountAdminRoutes(r, roleGate, freshGate)` (BRY-477) registers the list behind the role gate alone (the parent `/admin` group supplies the 12-hour `RequireAdminTOTP`) and enroll, offer and reorder behind `freshGate` too. Admin routes never live beside the member routes: a list that returns member contact details outside `/admin` skips the step-up. `TestWaitingListAdminRouteGates` walks every route and fails when one is added without a gate decision.
 
+`GDPRHandler.MountAdminRoutes(r, roleGate)` (BRY-481) follows the same pattern: the deletion-request queue and legal-document editor sit behind an admin-only role gate (GDPR is one function, held by the site admin; the SPA page is admin-only too), inside the `/admin` step-up. A member's own export, deletion request and consents stay on `/members/me`. A request cannot be processed before `grace_end` (14 days after the request) while Art. 12(3) allows one month, so anything listing requests as work shows them from `grace_end` and calls them overdue at request + 1 month (see `docs/developer/security/member-lifecycle.md`). `TestGDPRAdminRouteGates` walks the mount and proves board is refused.
+
 Don't reinvent TOTP checks inside the handler — the middleware enforces and the SPA's `totpAwareFetch` re-prompts transparently on 403.
 
 ## Bulk action conventions

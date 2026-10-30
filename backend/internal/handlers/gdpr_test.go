@@ -179,7 +179,7 @@ func TestHandleGetDeletionStatusUnauthenticated(t *testing.T) {
 
 func TestHandleListDeletionRequestsUnauthenticated(t *testing.T) {
 	h := newTestGDPRHandler(t)
-	r := setupRoleProtectedRouter(http.MethodGet, "/admin/gdpr/deletion-requests", h.HandleListDeletionRequests, "board", "admin")
+	r := setupRoleProtectedRouter(http.MethodGet, "/admin/gdpr/deletion-requests", h.HandleListDeletionRequests, "admin")
 
 	req := httptest.NewRequest(http.MethodGet, "/admin/gdpr/deletion-requests", nil)
 	rec := httptest.NewRecorder()
@@ -193,7 +193,7 @@ func TestHandleListDeletionRequestsUnauthenticated(t *testing.T) {
 
 func TestHandleListDeletionRequestsForbidden(t *testing.T) {
 	h := newTestGDPRHandler(t)
-	r := setupRoleProtectedRouter(http.MethodGet, "/admin/gdpr/deletion-requests", h.HandleListDeletionRequests, "board", "admin")
+	r := setupRoleProtectedRouter(http.MethodGet, "/admin/gdpr/deletion-requests", h.HandleListDeletionRequests, "admin")
 
 	token := generateTestToken("user-123", "club-456", []string{"member"})
 
@@ -210,7 +210,7 @@ func TestHandleListDeletionRequestsForbidden(t *testing.T) {
 
 func TestHandleProcessDeletionUnauthenticated(t *testing.T) {
 	h := newTestGDPRHandler(t)
-	r := setupRoleProtectedRouter(http.MethodPost, "/admin/gdpr/deletion-requests/{requestID}/process", h.HandleProcessDeletion, "board", "admin")
+	r := setupRoleProtectedRouter(http.MethodPost, "/admin/gdpr/deletion-requests/{requestID}/process", h.HandleProcessDeletion, "admin")
 
 	req := httptest.NewRequest(http.MethodPost, "/admin/gdpr/deletion-requests/some-id/process", nil)
 	rec := httptest.NewRecorder()
@@ -224,7 +224,7 @@ func TestHandleProcessDeletionUnauthenticated(t *testing.T) {
 
 func TestHandleProcessDeletionForbidden(t *testing.T) {
 	h := newTestGDPRHandler(t)
-	r := setupRoleProtectedRouter(http.MethodPost, "/admin/gdpr/deletion-requests/{requestID}/process", h.HandleProcessDeletion, "board", "admin")
+	r := setupRoleProtectedRouter(http.MethodPost, "/admin/gdpr/deletion-requests/{requestID}/process", h.HandleProcessDeletion, "admin")
 
 	token := generateTestToken("user-123", "club-456", []string{"member"})
 
@@ -241,7 +241,7 @@ func TestHandleProcessDeletionForbidden(t *testing.T) {
 
 func TestHandleAdminCreateLegalDocumentUnauthenticated(t *testing.T) {
 	h := newTestGDPRHandler(t)
-	r := setupRoleProtectedRouter(http.MethodPost, "/admin/gdpr/legal", h.HandleAdminCreateLegalDocument, "board", "admin")
+	r := setupRoleProtectedRouter(http.MethodPost, "/admin/gdpr/legal", h.HandleAdminCreateLegalDocument, "admin")
 
 	body := `{"doc_type":"privacy_policy","version":"1.0","content":"test","publish":true}`
 	req := httptest.NewRequest(http.MethodPost, "/admin/gdpr/legal", strings.NewReader(body))
@@ -257,9 +257,9 @@ func TestHandleAdminCreateLegalDocumentUnauthenticated(t *testing.T) {
 
 func TestHandleAdminCreateLegalDocumentInvalidBody(t *testing.T) {
 	h := newTestGDPRHandler(t)
-	r := setupRoleProtectedRouter(http.MethodPost, "/admin/gdpr/legal", h.HandleAdminCreateLegalDocument, "board", "admin")
+	r := setupRoleProtectedRouter(http.MethodPost, "/admin/gdpr/legal", h.HandleAdminCreateLegalDocument, "admin")
 
-	token := generateTestToken("user-123", "club-456", []string{"board"})
+	token := generateTestToken("user-123", "club-456", []string{"admin"})
 
 	req := httptest.NewRequest(http.MethodPost, "/admin/gdpr/legal", strings.NewReader("not json"))
 	req.Header.Set("Content-Type", "application/json")
@@ -275,9 +275,9 @@ func TestHandleAdminCreateLegalDocumentInvalidBody(t *testing.T) {
 
 func TestHandleAdminCreateLegalDocumentMissingFields(t *testing.T) {
 	h := newTestGDPRHandler(t)
-	r := setupRoleProtectedRouter(http.MethodPost, "/admin/gdpr/legal", h.HandleAdminCreateLegalDocument, "board", "admin")
+	r := setupRoleProtectedRouter(http.MethodPost, "/admin/gdpr/legal", h.HandleAdminCreateLegalDocument, "admin")
 
-	token := generateTestToken("user-123", "club-456", []string{"board"})
+	token := generateTestToken("user-123", "club-456", []string{"admin"})
 
 	tests := []struct {
 		name string
@@ -314,7 +314,7 @@ func TestHandleAdminCreateLegalDocumentMissingFields(t *testing.T) {
 
 func TestHandleAdminListLegalDocumentsUnauthenticated(t *testing.T) {
 	h := newTestGDPRHandler(t)
-	r := setupRoleProtectedRouter(http.MethodGet, "/admin/gdpr/legal", h.HandleAdminListLegalDocuments, "board", "admin")
+	r := setupRoleProtectedRouter(http.MethodGet, "/admin/gdpr/legal", h.HandleAdminListLegalDocuments, "admin")
 
 	req := httptest.NewRequest(http.MethodGet, "/admin/gdpr/legal", nil)
 	rec := httptest.NewRecorder()

@@ -36,6 +36,28 @@ func panicAsTeapot(next http.Handler) http.Handler {
 	})
 }
 
+// testSessionState plants the session info a route walk asks for through the
+// X-Test-Session header, in place of the session middleware.
+func testSessionState(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		info := &auth.SessionInfo{TOTPEnabled: true}
+		var verified time.Duration
+		switch req.Header.Get(headerState) {
+		case sessLapsed:
+			verified = 13 * time.Hour
+		case sessStepUp:
+			verified = time.Hour
+		case sessFresh:
+			verified = time.Minute
+		}
+		if verified > 0 {
+			at := time.Now().Add(-verified)
+			info.TOTPVerifiedAt = &at
+		}
+		next.ServeHTTP(w, req.WithContext(middleware.WithSessionInfo(req.Context(), info)))
+	})
+}
+
 // waitingListAdminRouter composes the gates the way cmd/api does: session
 // auth, the /admin group's RequireAdminTOTP, then the waiting-list mount with
 // its role and fresh-TOTP gates.
@@ -43,25 +65,7 @@ func waitingListAdminRouter(h *WaitingListHandler) *chi.Mux {
 	r := chi.NewRouter()
 	r.Route("/admin", func(r chi.Router) {
 		r.Use(testAuthMiddleware)
-		r.Use(func(next http.Handler) http.Handler {
-			return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-				info := &auth.SessionInfo{TOTPEnabled: true}
-				var verified time.Duration
-				switch req.Header.Get(headerState) {
-				case sessLapsed:
-					verified = 13 * time.Hour
-				case sessStepUp:
-					verified = time.Hour
-				case sessFresh:
-					verified = time.Minute
-				}
-				if verified > 0 {
-					at := time.Now().Add(-verified)
-					info.TOTPVerifiedAt = &at
-				}
-				next.ServeHTTP(w, req.WithContext(middleware.WithSessionInfo(req.Context(), info)))
-			})
-		})
+		r.Use(testSessionState)
 		r.Use(middleware.RequireAdminTOTP(nil))
 		r.Use(panicAsTeapot)
 		h.MountAdminRoutes(r,

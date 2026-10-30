@@ -16,7 +16,7 @@ See [README.md](README.md) for the format. The board task inbox spec and its imp
 ### BRD-3: Tasks are routed by function, through a board configuration with reserves
 
 - **Status:** accepted · 2026-10-29 · BRY-462, BRY-482
-- **Decision:** each club configures which role or person handles each function (accounting, harbour, membership, the contact form, GDPR, …), with reserves. Board status comes from holding any board role. A task goes to the holder of its function, then to the reserve, then to the site admin. Role-specific tasks go only to that role; the site admin is the exception and sees everything. GDPR is a function, assigned to the site admin by default. The contact-form recipient is configurable (secretary, chair or vice-chair).
+- **Decision:** each club configures which role or person handles each function (accounting, harbour, membership, the contact form, GDPR, …), with reserves. Board status comes from holding any board role. A task goes to the holder of its function, then to the reserve, then to the site admin. Role-specific tasks go only to that role; the site admin is the exception and sees everything. GDPR is a function, assigned to the site admin by default; the GDPR admin API is admin-only to match (BRY-481). The contact-form recipient is configurable (secretary, chair or vice-chair).
 - **Why:** clubs divide board work differently (PLAT-1); reserves cover holidays and vacant roles without everyone seeing everything.
 
 ### BRD-4: Automatic faktura reminders stay off until email is reliable

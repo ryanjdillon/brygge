@@ -1268,13 +1268,9 @@ func main() {
 					r.Post("/test", notificationsHandler.HandleTestPush)
 				})
 
-				r.Route("/gdpr", func(r chi.Router) {
-					r.Use(middleware.RequireRole("board", "admin"))
-					r.Get("/deletion-requests", gdprHandler.HandleListDeletionRequests)
-					r.Post("/deletion-requests/{requestID}/process", gdprHandler.HandleProcessDeletion)
-					r.Get("/legal", gdprHandler.HandleAdminListLegalDocuments)
-					r.Post("/legal", gdprHandler.HandleAdminCreateLegalDocument)
-				})
+				// GDPR is one function, held by the site admin by default
+				// (BRD-3, BRY-481); the SPA page is admin-only, so the API is too.
+				gdprHandler.MountAdminRoutes(r, middleware.RequireRole("admin"))
 
 				if cfg.Features.Accounting {
 					r.Route("/accounting", func(r chi.Router) {

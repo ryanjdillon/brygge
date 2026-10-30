@@ -70,7 +70,9 @@ keep `moneyGate` (treasurer/admin + fresh step-up).
   and Site — the whole "Nettsted" sidebar group (`/admin/settings/general`,
   `/settings/security`, `/settings/site`, `/settings/faq`, `/map`,
   `/notifications`, `/gdpr`) — are admin-only in the SPA (route meta
-  `adminOnly`). Their API gates are unchanged; `GET /admin/settings/site`
+  `adminOnly`). Their API gates are unchanged, except `/admin/gdpr/*`, which
+  moved from board+admin to admin only so the API matches the page (GDPR is
+  one function, admin by default: BRD-3, BRY-481); `GET /admin/settings/site`
   opens to board reads only because Havn and Økonomi pages read the same
   club row (no secrets: the Anthropic key is reported as a boolean).
 - **SPA.** The router guard admits any admin viewer to `/admin`; write
@@ -159,7 +161,7 @@ reads admit any admin viewer (see *Board read access* above).
 | `/admin/bookings` † | board, harbor_master | — |
 | `/admin/documents` (upload/delete/AI) | board | — |
 | `/admin/notifications/config` | board, admin | — |
-| `/admin/gdpr/*` | board, admin | — |
+| `/admin/gdpr/*` (deletion requests, legal documents; BRY-481) | admin | — |
 
 ### Accounting (`/admin/accounting`) † — write roles: treasurer, board, admin; reads: any admin viewer
 

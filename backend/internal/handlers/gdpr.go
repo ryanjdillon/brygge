@@ -16,6 +16,12 @@ import (
 	"github.com/brygge-klubb/brygge/internal/middleware"
 )
 
+// deletionGracePeriod is the cooling-off window between a member's deletion
+// request and the earliest moment an admin may process it. GDPR Art. 12(3)
+// gives the club one month from the request to act, so the work item belongs
+// from grace_end and is overdue one calendar month after requested_at.
+const deletionGracePeriod = 14 * 24 * time.Hour
+
 type GDPRHandler struct {
 	db     *pgxpool.Pool
 	config *config.Config
@@ -168,7 +174,7 @@ func (h *GDPRHandler) HandleRequestDeletion(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	graceEnd := time.Now().Add(14 * 24 * time.Hour)
+	graceEnd := time.Now().Add(deletionGracePeriod)
 
 	var id string
 	var requestedAt time.Time
@@ -383,6 +389,22 @@ func (h *GDPRHandler) HandleGetLegalDocument(w http.ResponseWriter, r *http.Requ
 		"version":      version,
 		"content":      content,
 		"published_at": publishedAt,
+	})
+}
+
+// MountAdminRoutes registers the deletion-request queue and the legal-document
+// editor under /admin (behind the group's RequireAdminTOTP). GDPR is one
+// function held by the site admin by default (docs/adr/board-workflows.md,
+// BRD-3), so the caller passes an admin-only roleGate, matching the SPA page.
+// The member's own routes (data export, delete request, consents) stay under
+// /members/me.
+func (h *GDPRHandler) MountAdminRoutes(r chi.Router, roleGate func(http.Handler) http.Handler) {
+	r.Route("/gdpr", func(r chi.Router) {
+		r.Use(roleGate)
+		r.Get("/deletion-requests", h.HandleListDeletionRequests)
+		r.Post("/deletion-requests/{requestID}/process", h.HandleProcessDeletion)
+		r.Get("/legal", h.HandleAdminListLegalDocuments)
+		r.Post("/legal", h.HandleAdminCreateLegalDocument)
 	})
 }
 
