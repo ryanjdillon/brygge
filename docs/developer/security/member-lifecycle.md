@@ -12,7 +12,7 @@ distinct states.
 | Action | What it does | Reversible | When to use |
 |---|---|---|---|
 | **Deactivate** | Sets `users.deactivated_at`. Hides the member from active lists, member counts, the directory, broadcast/bulk-send recipients and dues runs; blocks login and drops their sessions. Their row, invoices and history are fully retained. | Yes — **Reactivate** clears it. | The normal "this person left the club" action. |
-| **Erase** (`DELETE /admin/users/{id}?erasure=true`) | For a member with financial records: refused while those records are in-window; once retention has cleared it scrubs their PII in place (the row stays because invoices reference it). For a member with **no** financial records: hard-deletes the row. | No | Rare. Prefer Deactivate; the scheduled purge handles PII erasure automatically. |
+| **Erase** (`DELETE /admin/users/{id}`, with or without `?erasure=true`) | Without `erasure`: anonymises the row in place and deactivates it. With `erasure=true` and in-window financial records: refused (409). With `erasure=true` and records past retention: anonymises in place (the row stays because invoices reference it). With `erasure=true` and **no** financial records: hard-deletes the row. Every outcome locks the member out first, see [Locking a member out](#locking-a-member-out). | No | Rare. Prefer Deactivate; the scheduled purge handles PII erasure automatically. |
 | **Purge** (automatic) | A daily background sweep (`accounting.PurgeExpiredMemberPII`) anonymizes the PII of *deactivated* members whose most recent invoice has cleared retention. Never deletes the row. | No | Nothing to do — it runs itself. |
 
 ## Anonymised address
@@ -26,6 +26,25 @@ out elsewhere. The sweep skips rows that carry it, which is what makes erasure
 idempotent, and it also skips the constant `deleted@deleted` that earlier versions
 wrote (one per club at most), so such a row is harmless but keeps that address
 until someone rewrites it.
+
+## Locking a member out
+
+`revokeMemberAccess` (`handlers/gdpr.go`) is the single step that ends every way
+a member can authenticate. It runs in the caller's transaction, before the
+identity is anonymised because magic links are keyed by the old email. Both
+`HandleProcessDeletion` and `HandleDeleteUser` call it; `HandleDeactivateUser`
+(reversible) only sets `deactivated_at` and drops sessions, since reactivation
+must keep passkeys and TOTP.
+
+`HandleDeleteUser` runs the same step for the anonymise-in-place and the hard
+delete paths (a hard delete cascades sessions and passkeys but only detaches
+developer tokens from their creator, so revocation must still run first). Its
+`delete_user` audit row records `old_email`, `old_full_name`, `erasure` and
+`sessions_revoked`. The retention refusal (409) and the refusal to delete your own
+account happen before anything is revoked. `HandleDeleteUser` and
+`HandleDeactivateUser` compare the canonical form of the `{userID}` parameter with
+the caller's id (a non-UUID answers 404), because Postgres also accepts uppercase
+and braced spellings of the same UUID.
 
 ## Retention rule
 

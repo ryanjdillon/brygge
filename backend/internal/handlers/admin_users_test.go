@@ -194,9 +194,9 @@ func TestHandleDeleteUserSelfDeletion(t *testing.T) {
 	h := newTestAdminUsersHandler(t)
 	r := setupRoleProtectedRouter(http.MethodDelete, "/admin/users/{userID}", h.HandleDeleteUser, "board", "admin")
 
-	token := generateTestToken("user-1", "club-1", []string{"admin"})
+	token := generateTestToken("6f1d5c1e-8a4b-4c1e-9d55-0c2a7e3b9a10", "club-1", []string{"admin"})
 
-	req := httptest.NewRequest(http.MethodDelete, "/admin/users/user-1", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/admin/users/6f1d5c1e-8a4b-4c1e-9d55-0c2a7e3b9a10", nil)
 	req.Header.Set("Authorization", authHeader(token))
 	rec := httptest.NewRecorder()
 

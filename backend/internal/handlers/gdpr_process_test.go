@@ -124,8 +124,8 @@ func (e *gdprProcessEnv) seedMember(t *testing.T, withRecords bool) (userID, ema
 
 	if withRecords {
 		if _, err := e.db.Exec(ctx,
-			`INSERT INTO invoices (club_id, user_id, invoice_number, kid_number, total_amount, status, issue_date, due_date)
-			 VALUES ($1, $2, 1, $3, 450, 'open', CURRENT_DATE, CURRENT_DATE)`,
+			`INSERT INTO invoices (club_id, user_id, kid_number, total_amount, status, issue_date, due_date)
+			 VALUES ($1, $2, $3, 450, 'open', CURRENT_DATE, CURRENT_DATE)`,
 			e.clubID, userID, "99"+testutil.RandomHex(5),
 		); err != nil {
 			t.Fatalf("seed invoice: %v", err)
@@ -278,6 +278,43 @@ func TestIntegration_GDPRErasedMemberSkippedByPurgeSweep(t *testing.T) {
 	}
 	if purged != 0 {
 		t.Errorf("purged = %d, want 0 for an already-erased member", purged)
+	}
+}
+
+// Two deferred erasures in one club must both complete once retention clears:
+// each gets its own address, so the sweep never collides on UNIQUE (club_id, email).
+func TestIntegration_GDPRDeferredErasuresCompleteViaPurgeSweep(t *testing.T) {
+	t.Parallel()
+	e := newGDPRProcessEnv(t)
+	ctx := context.Background()
+
+	var userIDs []string
+	for range 2 {
+		userID, _, _, requestID := e.seedMember(t, true)
+		assertStatus(t, e.process(requestID), http.StatusOK)
+		userIDs = append(userIDs, userID)
+	}
+
+	svc := accounting.NewService(e.db, nil, zerolog.Nop())
+	if purged, err := svc.PurgeExpiredMemberPII(ctx); err != nil || purged != 0 {
+		t.Fatalf("sweep inside retention = (%d, %v), want (0, nil)", purged, err)
+	}
+
+	if _, err := e.db.Exec(ctx,
+		`UPDATE invoices SET issue_date = CURRENT_DATE - interval '8 years' WHERE club_id = $1`, e.clubID); err != nil {
+		t.Fatalf("age invoices: %v", err)
+	}
+	purged, err := svc.PurgeExpiredMemberPII(ctx)
+	if err != nil {
+		t.Fatalf("PurgeExpiredMemberPII: %v", err)
+	}
+	if purged != 2 {
+		t.Fatalf("purged = %d, want 2", purged)
+	}
+	if n := gdprCount(t, e.db,
+		`SELECT count(DISTINCT email) FROM users WHERE id = ANY($1) AND email LIKE '%'||$2`,
+		userIDs, accounting.ErasedEmailSuffix); n != 2 {
+		t.Errorf("distinct erased addresses = %d, want 2", n)
 	}
 }
 

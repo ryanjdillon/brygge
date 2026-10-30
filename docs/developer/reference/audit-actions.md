@@ -36,12 +36,14 @@ The action string is the JSON wire format (`row.action`); the constant is the Go
 | Constant | String | Resource | When | `extra` |
 |---|---|---|---|---|
 | `ActionUserRoleUpdated` | `user.role_updated` | user | Grant/revoke a role on a user | `role`, `granted` (bool) |
-| `ActionUserDeleted` | `user.deleted` | user | Hard-delete via admin action (not the soft GDPR path) | — |
+| `ActionUserDeleted` | `user.deleted` | user | Reserved, currently unused: nothing writes it. The admin delete writes the raw string `delete_user` (below). | — |
 | `ActionUserDeactivated` | `user.deactivated` | user | Admin deactivates a member (reversible; hides + blocks login, keeps data) | `email`, `full_name` |
 | `ActionUserReactivated` | `user.reactivated` | user | Admin reactivates a deactivated member | `email`, `full_name` |
 | `ActionMemberPIIPurged` | `user.pii_purged` | user | Scheduled sweep erases a deactivated member's PII once retention clears (actor is NULL — system job) | `reason` |
 | `ActionUserMailProvisioned` | `user.mail_provisioned` | user | Stalwart mailbox created for the user | `email` |
 | `ActionUserMailDeprovisioned` | `user.mail_deprovisioned` | user | Stalwart mailbox removed | `email` |
+
+`HandleDeleteUser` (`DELETE /admin/users/{userID}`, soft or hard) writes the raw action string `delete_user` rather than `ActionUserDeleted`: resource `user`, `extra` `old_email`, `old_full_name`, `erasure` (bool), `sessions_revoked` (session rows deleted by `revokeMemberAccess`, including expired ones). The string is shipped, so it stays.
 
 ## Slips
 

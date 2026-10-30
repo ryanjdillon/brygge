@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -758,6 +759,20 @@ func (h *AdminUsersHandler) HandleUpdateUserRoles(w http.ResponseWriter, r *http
 	})
 }
 
+// canonicalUserIDParam returns the {userID} route parameter in canonical form
+// (lowercase, no braces or urn: prefix). Postgres accepts several spellings of
+// one UUID, so comparing the raw string with the caller's id would let an
+// uppercase or braced spelling of their own id slip past a self-action check.
+// Anything that is not a UUID answers 404 and the response is already written.
+func canonicalUserIDParam(w http.ResponseWriter, r *http.Request) (string, bool) {
+	parsed, err := uuid.Parse(chi.URLParam(r, "userID"))
+	if err != nil {
+		Error(w, http.StatusNotFound, "user not found")
+		return "", false
+	}
+	return parsed.String(), true
+}
+
 func (h *AdminUsersHandler) HandleDeleteUser(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
@@ -766,9 +781,8 @@ func (h *AdminUsersHandler) HandleDeleteUser(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	userID := chi.URLParam(r, "userID")
-	if userID == "" {
-		Error(w, http.StatusBadRequest, "user ID is required")
+	userID, ok := canonicalUserIDParam(w, r)
+	if !ok {
 		return
 	}
 
@@ -789,7 +803,7 @@ func (h *AdminUsersHandler) HandleDeleteUser(w http.ResponseWriter, r *http.Requ
 
 	var userEmail, userName string
 	err = tx.QueryRow(ctx,
-		`SELECT email, full_name FROM users WHERE id = $1 AND club_id = $2`,
+		`SELECT email, full_name FROM users WHERE id = $1 AND club_id = $2 FOR UPDATE`,
 		userID, clubID,
 	).Scan(&userEmail, &userName)
 	if err == pgx.ErrNoRows {
@@ -828,10 +842,22 @@ func (h *AdminUsersHandler) HandleDeleteUser(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
+	// Both outcomes lock the member out in this transaction, before the email
+	// is overwritten (magic links are keyed by it). A hard delete needs it too:
+	// the cascade removes sessions and passkeys, but developer tokens only lose
+	// their creator and would otherwise keep working.
+	sessionsRevoked, err := revokeMemberAccess(ctx, tx, clubID, userID, claims.UserID)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to revoke member access")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
 	auditDetails, _ := json.Marshal(map[string]any{
-		"old_email":     userEmail,
-		"old_full_name": userName,
-		"erasure":       erasure,
+		"old_email":        userEmail,
+		"old_full_name":    userName,
+		"erasure":          erasure,
+		"sessions_revoked": sessionsRevoked,
 	})
 	_, err = tx.Exec(ctx,
 		`INSERT INTO audit_log (club_id, actor_id, action, resource, resource_id, details)
@@ -848,11 +874,12 @@ func (h *AdminUsersHandler) HandleDeleteUser(w http.ResponseWriter, r *http.Requ
 		_, err = tx.Exec(ctx, `DELETE FROM users WHERE id = $1 AND club_id = $2`, userID, clubID)
 	} else {
 		_, err = tx.Exec(ctx,
-			`UPDATE users SET email = 'deleted@deleted', first_name = 'Deleted', last_name = 'User',
+			`UPDATE users SET email = gen_random_uuid()::text || $3,
+			 first_name = 'Deleted', last_name = 'User',
 			 phone = '', address_line = '', postal_code = '', city = '',
 			 updated_at = now()
 			 WHERE id = $1 AND club_id = $2`,
-			userID, clubID,
+			userID, clubID, accounting.ErasedEmailSuffix,
 		)
 	}
 	if err != nil {
@@ -906,9 +933,8 @@ func (h *AdminUsersHandler) HandleDeactivateUser(w http.ResponseWriter, r *http.
 		return
 	}
 
-	userID := chi.URLParam(r, "userID")
-	if userID == "" {
-		Error(w, http.StatusBadRequest, "user ID is required")
+	userID, ok := canonicalUserIDParam(w, r)
+	if !ok {
 		return
 	}
 	if userID == claims.UserID {
