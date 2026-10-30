@@ -1009,7 +1009,11 @@ func main() {
 							r.Delete("/{userID}/boats/{boatID}", adminUsersHandler.HandleDeleteUserBoat)
 							r.Put("/{userID}/boats/{boatID}/slip", adminUsersHandler.HandleSetUserBoatSlip)
 						})
-						r.Delete("/{userID}", adminUsersHandler.HandleDeleteUser)
+						// Erasing a member is admin-only (BRD-9). Deactivate and
+						// reactivate stay open to the board for ordinary members;
+						// the handlers refuse an admin target for a non-admin.
+						r.With(middleware.RequireRole("admin")).
+							Delete("/{userID}", adminUsersHandler.HandleDeleteUser)
 						r.Post("/{userID}/deactivate", adminUsersHandler.HandleDeactivateUser)
 						r.Post("/{userID}/reactivate", adminUsersHandler.HandleReactivateUser)
 

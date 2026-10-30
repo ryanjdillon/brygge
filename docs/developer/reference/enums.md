@@ -447,6 +447,15 @@ A rebook answers 200 with `outcome` (`booked`, `needs_review` with the pass's re
 
 `POST /accounting/journal/{entryID}/void` (`VoidLedgerEntry`) answers 409 `period_closed` for a closed or locked period 409 `stripe_entry` (with a Norwegian `reason`) for an entry sourced to a Stripe balance transaction (`source_table = 'stripe_balance_transactions'`, `ErrStripeSourcedEntry`): it is undone from the Stripe row (`unassign`); and 409 `bank_entry` (with a Norwegian `reason`) for an entry a bank row or a Stripe payout points at (`ErrBankLinkedEntry`): it is undone in Tildel (`UnassignBankRow`), which also releases the row, its faktura and the payout. Vipps charge entries are not refused.
 
+### Admin user-lifecycle refusal codes (no column)
+
+The `/admin/users` writes answer these as `{error, code}` (BRD-9). The SPA words the first two in the admin's locale (`userLifecycleErrorKey`, `admin.users.lastAdminError` / `adminRequiredError`).
+
+| `code` | Status | Meaning |
+|---|---|---|
+| `last_admin` | 409 | The change (delete, deactivate, demote, or processing the GDPR deletion) would leave the club with no active admin. Nothing is changed. |
+| `admin_required` | 403 | A non-admin caller acted on a member who holds `admin`, or granted the role (role change, create). The delete route itself is admin-only and answers the gate's plain 403. |
+
 ### `broadcasts.status` (migration 000069)
 
 ```

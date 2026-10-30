@@ -3,7 +3,9 @@ import { ref, computed, reactive, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
-import { useApiClient, unwrap } from '@/lib/apiClient'
+import { useApiClient, unwrap, ApiError } from '@/lib/apiClient'
+import { userLifecycleErrorKey } from '@/lib/userLifecycleErrors'
+import { canManageMember, assignableRoles } from '@/lib/adminTargets'
 import { sortBySlip } from '@/lib/slipSort'
 import DockFilter from '@/components/admin/DockFilter.vue'
 import SpotFilter, { type SpotFilterValue } from '@/components/admin/SpotFilter.vue'
@@ -230,6 +232,7 @@ function prevPage() { if (hasPrev.value) offset.value = Math.max(0, offset.value
 const editingRoles = ref<Record<string, string[]>>({})
 
 async function startEditRoles(user: User) {
+  if (!canManage(user)) return
   if (!(await ensureFreshTotp())) return
   editingRoles.value[user.id] = [...(user.roles ?? [])]
 }
@@ -248,12 +251,17 @@ const { mutate: updateRoles } = useMutation({
     delete editingRoles.value[userId]
     queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
   },
+  onError: (err) => {
+    toast.error(t(userLifecycleErrorKey(err instanceof ApiError ? err.code : undefined)))
+  },
 })
 
-const allRoles = [
+const ALL_ROLES = [
   'member', 'slip_holder', 'board', 'harbor_master', 'treasurer', 'admin',
   'chair', 'vice_chair', 'deputy', 'secretary',
 ]
+// The board cannot grant admin, so the role picker does not offer it.
+const allRoles = computed(() => assignableRoles(auth.hasRole('admin'), ALL_ROLES))
 
 // --- Multiselect for bulk actions ---
 const selectedIds = ref<Set<string>>(new Set())
@@ -358,6 +366,17 @@ function toggleRole(userId: string, role: string) {
   else roles.push(role)
 }
 
+async function toastLifecycleError(res: Response) {
+  const body = await res.json().catch(() => null)
+  toast.error(t(userLifecycleErrorKey(body?.code)))
+}
+
+// An admin target can only be changed by an admin, so the board is not offered
+// the controls for one (the server refuses it either way).
+function canManage(user: User) {
+  return canManageMember(auth.hasRole('admin'), user.roles)
+}
+
 async function deactivateUser(userId: string) {
   if (!(await ensureFreshTotp())) return
   const ok = await confirm({
@@ -373,6 +392,8 @@ async function deactivateUser(userId: string) {
   })
   if (res.ok) {
     queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
+  } else {
+    await toastLifecycleError(res)
   }
 }
 
@@ -391,6 +412,8 @@ async function reactivateUser(userId: string) {
   })
   if (res.ok) {
     queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
+  } else {
+    await toastLifecycleError(res)
   }
 }
 
@@ -618,6 +641,7 @@ function setBoatSlipType(boatId: string, t: 'permanent' | 'seasonal') {
 }
 
 async function openEditDirect(user: User) {
+  if (!canManage(user)) return
   openDetail(user)
   await startDetailEdit()
 }
@@ -692,7 +716,9 @@ async function submitEdit() {
     // so the next edit sees the new state.
     if (slipsChanged) loadSlips()
   } catch (err: any) {
-    detailError.value = err?.message ?? t('admin.users.updateError')
+    detailError.value = err instanceof ApiError && err.code
+      ? t(userLifecycleErrorKey(err.code))
+      : err?.message ?? t('admin.users.updateError')
   } finally {
     savingEdit.value = false
   }
@@ -1110,25 +1136,27 @@ async function submitImport() {
             </td>
             <td class="whitespace-nowrap px-4 py-3 text-sm" @click.stop>
               <div class="flex items-center gap-3">
-                <button class="text-gray-500 hover:text-brand-700" :title="t('common.edit')" @click="openEditDirect(user)">
+                <button v-if="canManage(user)" class="text-gray-500 hover:text-brand-700" :title="t('common.edit')" @click="openEditDirect(user)">
                   <Pencil class="h-4 w-4" />
                 </button>
-                <button
-                  v-if="!user.deactivated_at"
-                  class="text-gray-500 hover:text-red-700"
-                  :title="t('admin.users.deactivate')"
-                  @click="deactivateUser(user.id)"
-                >
-                  <Ban class="h-4 w-4" />
-                </button>
-                <button
-                  v-else
-                  class="text-gray-500 hover:text-emerald-700"
-                  :title="t('admin.users.reactivate')"
-                  @click="reactivateUser(user.id)"
-                >
-                  <RotateCcw class="h-4 w-4" />
-                </button>
+                <template v-if="canManage(user)">
+                  <button
+                    v-if="!user.deactivated_at"
+                    class="text-gray-500 hover:text-red-700"
+                    :title="t('admin.users.deactivate')"
+                    @click="deactivateUser(user.id)"
+                  >
+                    <Ban class="h-4 w-4" />
+                  </button>
+                  <button
+                    v-else
+                    class="text-gray-500 hover:text-emerald-700"
+                    :title="t('admin.users.reactivate')"
+                    @click="reactivateUser(user.id)"
+                  >
+                    <RotateCcw class="h-4 w-4" />
+                  </button>
+                </template>
               </div>
             </td>
           </tr>
@@ -1244,6 +1272,7 @@ async function submitImport() {
               <Link2 class="h-4 w-4" /> {{ t('admin.users.copyPayLink') }}
             </button>
             <button
+              v-if="canManage(detailUser)"
               class="inline-flex items-center gap-1 rounded-md bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-700"
               @click="startDetailEdit"
             >

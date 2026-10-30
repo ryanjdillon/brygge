@@ -403,6 +403,12 @@ Price items carry no account. The category map (`revenueAccountMap`, read throug
 
 **Failure mode:** the admin routes sat under `/waiting-list` behind a role check only, so a board member whose step-up had lapsed still read every entry's name, email and phone and could change queue positions with a stale session.
 
+### The club always keeps an active admin
+
+**Rule (BRD-9, BRY-535):** nothing removes the last active admin of a club: not a delete, a deactivation, a role change that drops `admin`, nor processing that admin's GDPR deletion. An active admin holds the `admin` role and has `deactivated_at IS NULL`. Each such path takes `lockClubAdmins` (a per-club `pg_advisory_xact_lock`) before any row lock and checks `ensureNotLastActiveAdmin` under it; a refusal is 409 `last_admin` and writes nothing. A member who holds `admin`, and the grant of the role, can only be changed by an admin (403 `admin_required`) even though the board reaches `/admin/users` writes: that covers the profile and email (`PATCH`; the email is a login credential, so a board edit would be an account takeover), slips, deactivate, reactivate and roles; `DELETE /admin/users/{id}` is `RequireRole("admin")`, and boats, TOTP, passkeys and CSV are admin-only at the route. A new path that takes a `{userID}` the board can reach, deactivates a user or edits `user_roles` must call the same guards (`requireAdminForAdminTarget`, `checkAdminTarget`, `lockClubAdmins`).
+
+**Failure mode:** a board member with a fresh TOTP deleted or deactivated an admin, and since BRY-525 a delete also removes the admin's passkeys, TOTP and tokens; for the club's only admin nobody could undo it and recovery needed SQL. Two admins removed at once, each seeing the other still present, would do the same.
+
 ### Board viewing never widens a write
 
 **Rule (BRY-372):** every board role and admin (`roles.CanViewAdmin`) may read every admin page except Developer and Site. Reads open through `middleware.RequireRoleOrBoardRead(<write roles>)`, which admits viewers only on `GET`/`HEAD` and applies `RequireRole(<write roles>)` to every other method, so a surface's write roles are the ones it had before. A handler mounted on `GET` behind it must not write, mint a credential or send anything; such a `GET` keeps its own `RequireRole` (the pay-link endpoints do). In the SPA, write controls on viewable pages hide behind `useCan()`.

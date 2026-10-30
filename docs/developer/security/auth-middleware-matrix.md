@@ -137,8 +137,12 @@ reads admit any admin viewer (see *Board read access* above).
 | **Users** (`/admin/users`) † | board, admin | — for reads |
 | `export.csv` | admin | — |
 | `POST import` (CSV) | admin | ✅ |
-| create, update, roles, slips, **delete**, boats CRUD | admin (boats) / board+admin | ✅ |
-| `POST /users/{id}/totp/disable` | admin | ✅ |
+| create; `PATCH /users/{id}`; `PUT /users/{id}/slips` | board, admin; **admin** when the target holds `admin` (403 `admin_required`) — an admin's email is their login (BRD-9) | ✅ |
+| `PUT /users/{id}/roles`; create with the `admin` role | board, admin; **admin** when the target holds `admin` or the new role set grants it (403 `admin_required`); demoting the last active admin 409 `last_admin` (BRD-9) | ✅ |
+| `POST /users/{id}/deactivate`, `/reactivate` | board, admin; **admin** when the target holds `admin` (403 `admin_required`); deactivating the last active admin 409 `last_admin`; deactivation revokes the member's developer tokens | ✅ |
+| **`DELETE /users/{id}`** | **admin** (route gate, BRD-9), always anonymises in place; the last active admin 409 `last_admin`; mailbox not removable 502 `mailbox_deprovision_failed` | ✅ |
+| boats CRUD | admin | ✅ |
+| `POST /users/{id}/totp/disable` | admin (also revokes the target's developer tokens) | ✅ |
 | **Inbox** (`/admin/inbox`) | board-mailbox roles | — for reads |
 | `POST /inbox/{address}/send` | (same) | ✅ |
 | **Waiting list** (`/admin/waiting-list`) † | board | — for reads (the list carries name, email and phone) |

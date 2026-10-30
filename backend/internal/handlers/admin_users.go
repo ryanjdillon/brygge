@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/mail"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -656,6 +657,12 @@ func (h *AdminUsersHandler) HandleUpdateUserRoles(w http.ResponseWriter, r *http
 
 	clubID := claims.ClubID
 
+	if err := lockClubAdmins(ctx, tx, clubID); err != nil {
+		h.log.Error().Err(err).Msg("failed to lock club admins")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
 	var exists bool
 	err = tx.QueryRow(ctx,
 		`SELECT EXISTS(SELECT 1 FROM users WHERE id = $1 AND club_id = $2)`,
@@ -687,6 +694,10 @@ func (h *AdminUsersHandler) HandleUpdateUserRoles(w http.ResponseWriter, r *http
 		oldRoles = append(oldRoles, role)
 	}
 	rows.Close()
+
+	if !h.guardAdminRoleChange(ctx, w, tx, claims.Roles, clubID, userID, oldRoles, req.Roles) {
+		return
+	}
 
 	_, err = tx.Exec(ctx,
 		`DELETE FROM user_roles WHERE user_id = $1 AND club_id = $2`,
@@ -759,6 +770,30 @@ func (h *AdminUsersHandler) HandleUpdateUserRoles(w http.ResponseWriter, r *http
 	})
 }
 
+// guardAdminRoleChange applies BRD-9 to a role change: granting or changing the
+// admin role is the admin's call (the board could otherwise promote itself)
+// and the club must keep one active admin. Call it under lockClubAdmins.
+// It writes the response and returns false when the change must not proceed.
+func (h *AdminUsersHandler) guardAdminRoleChange(ctx context.Context, w http.ResponseWriter, tx pgx.Tx, callerRoles []string, clubID, userID string, oldRoles, newRoles []string) bool {
+	wasAdmin := slices.Contains(oldRoles, "admin")
+	willBeAdmin := slices.Contains(newRoles, "admin")
+	if (wasAdmin || willBeAdmin) && !hasRole(callerRoles, "admin") {
+		writeAdminRequired(w)
+		return false
+	}
+	if !wasAdmin || willBeAdmin {
+		return true
+	}
+	if err := ensureNotLastActiveAdmin(ctx, tx, clubID, userID); err != nil {
+		if !writeAdminGuard(w, err) {
+			h.log.Error().Err(err).Msg("failed to check last admin")
+			Error(w, http.StatusInternalServerError, "internal error")
+		}
+		return false
+	}
+	return true
+}
+
 // canonicalUserIDParam returns the {userID} route parameter in canonical form
 // (lowercase, no braces or urn: prefix). Postgres accepts several spellings of
 // one UUID, so comparing the raw string with the caller's id would let an
@@ -801,6 +836,12 @@ func (h *AdminUsersHandler) HandleDeleteUser(w http.ResponseWriter, r *http.Requ
 
 	clubID := claims.ClubID
 
+	if err := lockClubAdmins(ctx, tx, clubID); err != nil {
+		h.log.Error().Err(err).Msg("failed to lock club admins")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
 	var userEmail, userName string
 	err = tx.QueryRow(ctx,
 		`SELECT email, full_name FROM users WHERE id = $1 AND club_id = $2 FOR UPDATE`,
@@ -813,6 +854,14 @@ func (h *AdminUsersHandler) HandleDeleteUser(w http.ResponseWriter, r *http.Requ
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to query user for deletion")
 		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	if err := checkAdminTarget(ctx, tx, claims.Roles, clubID, userID, true); err != nil {
+		if !writeAdminGuard(w, err) {
+			h.log.Error().Err(err).Msg("failed to check admin target")
+			Error(w, http.StatusInternalServerError, "internal error")
+		}
 		return
 	}
 
@@ -950,6 +999,19 @@ func (h *AdminUsersHandler) HandleDeactivateUser(w http.ResponseWriter, r *http.
 	}
 	defer tx.Rollback(ctx)
 
+	if err := lockClubAdmins(ctx, tx, claims.ClubID); err != nil {
+		h.log.Error().Err(err).Msg("failed to lock club admins")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if err := checkAdminTarget(ctx, tx, claims.Roles, claims.ClubID, userID, true); err != nil {
+		if !writeAdminGuard(w, err) {
+			h.log.Error().Err(err).Msg("failed to check admin target")
+			Error(w, http.StatusInternalServerError, "internal error")
+		}
+		return
+	}
+
 	var userEmail, userName string
 	err = tx.QueryRow(ctx,
 		`UPDATE users SET deactivated_at = now(), deactivated_by = $3, updated_at = now()
@@ -1008,9 +1070,8 @@ func (h *AdminUsersHandler) HandleReactivateUser(w http.ResponseWriter, r *http.
 		return
 	}
 
-	userID := chi.URLParam(r, "userID")
-	if userID == "" {
-		Error(w, http.StatusBadRequest, "user ID is required")
+	userID, ok := canonicalUserIDParam(w, r)
+	if !ok {
 		return
 	}
 
@@ -1021,6 +1082,15 @@ func (h *AdminUsersHandler) HandleReactivateUser(w http.ResponseWriter, r *http.
 		return
 	}
 	defer tx.Rollback(ctx)
+
+	// Bringing an admin back is the admin's call, like taking them away.
+	if err := checkAdminTarget(ctx, tx, claims.Roles, claims.ClubID, userID, false); err != nil {
+		if !writeAdminGuard(w, err) {
+			h.log.Error().Err(err).Msg("failed to check admin target")
+			Error(w, http.StatusInternalServerError, "internal error")
+		}
+		return
+	}
 
 	var userEmail, userName string
 	err = tx.QueryRow(ctx,
@@ -1102,6 +1172,11 @@ func (h *AdminUsersHandler) HandleCreateUser(w http.ResponseWriter, r *http.Requ
 	var req adminUserCreateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if slices.Contains(req.Roles, "admin") && !hasRole(claims.Roles, "admin") {
+		writeAdminRequired(w)
 		return
 	}
 
@@ -1470,15 +1545,23 @@ func (h *AdminUsersHandler) HandleUpdateUser(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	userID := chi.URLParam(r, "userID")
-	if userID == "" {
-		Error(w, http.StatusBadRequest, "user ID is required")
+	userID, ok := canonicalUserIDParam(w, r)
+	if !ok {
 		return
 	}
 
 	var req adminUserUpdateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	// An admin's profile, email above all (it is their login), is the admin's to edit.
+	if err := requireAdminForAdminTarget(ctx, h.db, claims.Roles, claims.ClubID, userID); err != nil {
+		if !writeAdminGuard(w, err) {
+			h.log.Error().Err(err).Msg("failed to check admin target")
+			Error(w, http.StatusInternalServerError, "internal error")
+		}
 		return
 	}
 
@@ -1831,6 +1914,13 @@ func (h *AdminUsersHandler) HandleSetUserSlips(w http.ResponseWriter, r *http.Re
 		userID, claims.ClubID,
 	).Scan(&exists); err != nil || !exists {
 		Error(w, http.StatusNotFound, "user not found")
+		return
+	}
+	if err := checkAdminTarget(ctx, tx, claims.Roles, claims.ClubID, userID, false); err != nil {
+		if !writeAdminGuard(w, err) {
+			h.log.Error().Err(err).Msg("failed to check admin target")
+			Error(w, http.StatusInternalServerError, "internal error")
+		}
 		return
 	}
 

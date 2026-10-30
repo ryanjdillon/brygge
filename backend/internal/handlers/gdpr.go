@@ -533,7 +533,7 @@ func revokeMemberAccess(ctx context.Context, tx pgx.Tx, clubID, userID, actorID 
 // cooling-off window has passed. The request row is locked for the whole
 // transaction, so two admins processing the same request serialise and the
 // second sees it already processed.
-func (h *GDPRHandler) HandleProcessDeletion(w http.ResponseWriter, r *http.Request) {
+func (h *GDPRHandler) HandleProcessDeletion(w http.ResponseWriter, r *http.Request) { //nolint:cyclop // one branch per erasure step in one transaction; split tracked in BRY-424
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
 	if claims == nil {
@@ -560,6 +560,14 @@ func (h *GDPRHandler) HandleProcessDeletion(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck // no-op after commit
+
+	// Processing deactivates the member, so it can take the club's last active
+	// admin; the lock goes before any row lock (see lockClubAdmins).
+	if err = lockClubAdmins(ctx, tx, claims.ClubID); err != nil {
+		h.log.Error().Err(err).Msg("failed to lock club admins")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
 
 	var userID string
 	var graceEnd time.Time
@@ -593,6 +601,17 @@ func (h *GDPRHandler) HandleProcessDeletion(w http.ResponseWriter, r *http.Reque
 
 	if time.Now().Before(graceEnd) {
 		Error(w, http.StatusBadRequest, "grace period has not expired")
+		return
+	}
+
+	// The club's only active admin cannot be erased: processing deactivates
+	// them and nobody could undo it. The request stays pending until another
+	// admin exists.
+	if err = ensureNotLastActiveAdmin(ctx, tx, claims.ClubID, userID); err != nil {
+		if !writeAdminGuard(w, err) {
+			h.log.Error().Err(err).Msg("failed to check last admin")
+			Error(w, http.StatusInternalServerError, "internal error")
+		}
 		return
 	}
 
