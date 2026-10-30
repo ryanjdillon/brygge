@@ -19,13 +19,14 @@ const KEYS = [
   'until',
   'empty',
   'anonymous',
-  'kind.harbor',
   'kind.all',
   'kind.guest',
   'kind.motorhome',
+  'kind.slipping',
   'kind.faktura',
-  'kind.merch',
   'kind.other',
+  'filters.link',
+  'filters.unassignedHint',
   'method.vipps',
   'method.card',
   'method.apple_pay',
@@ -40,6 +41,13 @@ function lookup(messages: unknown, key: string): unknown {
 
 describe('recent payments locale keys', () => {
   for (const [locale, messages] of Object.entries(LOCALES)) {
+    // The chips are the club's filter groups (BRY-522): the legacy harbor chip
+    // and the merch kind (no category ever matched it) are gone.
+    it(`${locale} has no string for the removed harbor and merch kinds`, () => {
+      expect(lookup(messages, 'recentPayments.kind.harbor')).toBeUndefined()
+      expect(lookup(messages, 'recentPayments.kind.merch')).toBeUndefined()
+    })
+
     it(`${locale} has every overview string`, () => {
       const missing = KEYS.filter((k) => typeof lookup(messages, k) !== 'string' || lookup(messages, k) === '')
       expect(missing).toEqual([])

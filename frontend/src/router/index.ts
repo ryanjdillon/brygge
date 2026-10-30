@@ -250,6 +250,13 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/RecentPaymentsView.vue'),
       },
       {
+        // Reached from the Payments page; no sidebar item, and outside the
+        // accounting and economy prefixes, so no fresh-TOTP navigation gate.
+        path: 'harbor/recent-payments/filters',
+        name: 'admin-payment-filters',
+        component: () => import('@/views/admin/PaymentFiltersView.vue'),
+      },
+      {
         path: 'harbor/payment-targets',
         name: 'admin-harbor-targets',
         component: () => import('@/views/admin/HarborTargetsView.vue'),

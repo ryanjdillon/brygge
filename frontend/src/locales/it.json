@@ -51,7 +51,10 @@
     "dock": "Pontile",
     "dockAll": "Tutti",
     "clearSelection": "Cancella selezione",
-    "ok": "OK"
+    "ok": "OK",
+    "selectAll": "Tutti",
+    "deselectAll": "Nessuno",
+    "clearSearch": "Cancella la ricerca"
   },
   "home": {
     "welcome": "Benvenuti a Brygge",
@@ -1884,13 +1887,11 @@
     "clearRange": "Cancella periodo",
     "anonymous": "Ospite",
     "kind": {
-      "harbor": "Porto",
       "all": "Tutti",
       "guest": "Posto ospiti",
       "motorhome": "Camper",
       "slipping": "Alaggio",
       "faktura": "Fattura",
-      "merch": "Negozio",
       "other": "Altro"
     },
     "group": {
@@ -1903,6 +1904,10 @@
       "card": "Carta",
       "apple_pay": "Apple Pay",
       "google_pay": "Google Pay"
+    },
+    "filters": {
+      "link": "Filtri",
+      "unassignedHint": "Tariffe senza gruppo: {count}. Imposta i filtri"
     }
   },
   "pay": {
@@ -1936,5 +1941,82 @@
     "belowMinimum": "L'importo è troppo basso per il pagamento online. Il minimo è {amount} kr.",
     "cardRefused": "Il pagamento con carta è stato rifiutato per questo importo. Prova un altro metodo di pagamento o chiedi al responsabile del porto.",
     "unsupportedCurrency": "Questo punto di pagamento può essere pagato qui solo in corone. Chiedi al capitano di porto."
+  },
+  "paymentFilters": {
+    "title": "Filtri dei pagamenti",
+    "subtitle": "I filtri della pagina Pagamenti. Un gruppo raccoglie tariffe. Un pagamento compare nel primo gruppo, dall'alto, che contiene una delle tariffe pagate.",
+    "back": "Torna a Pagamenti",
+    "readOnly": "Puoi vedere i filtri ma non modificarli.",
+    "newGroup": "Nuovo gruppo",
+    "edit": "Modifica",
+    "editGroup": "Modifica {name}",
+    "loadError": "Impossibile caricare i filtri.",
+    "retry": "Riprova",
+    "hidden": "Nascosto",
+    "showAria": "Mostra {name} come filtro",
+    "moveUp": "Sposta {name} in alto",
+    "moveDown": "Sposta {name} in basso",
+    "itemCount": "{count} tariffa | {count} tariffe",
+    "builtinFaktura": "Pagamenti di fatture",
+    "builtinOther": "Tutto ciò che non è in un altro gruppo. Sempre per ultimo.",
+    "unassignedTitle": "In nessun gruppo",
+    "unassignedBody": "I pagamenti per queste tariffe compaiono sotto {group}.",
+    "unassignedNone": "Ogni tariffa attiva venduta online è in un gruppo.",
+    "saved": "Salvato",
+    "deleted": "Gruppo eliminato",
+    "editor": {
+      "titleNew": "Nuovo gruppo",
+      "titleEdit": "Modifica gruppo",
+      "name": "Nome",
+      "nameHelp": "Mostrato come scritto, in ogni lingua.",
+      "useDefault": "Usa il nome predefinito ({name})",
+      "icon": "Icona",
+      "items": "Tariffe in questo gruppo",
+      "itemsHelp": "Una tariffa è in un solo gruppo alla volta: selezionarne una di un altro gruppo la sposta qui.",
+      "itemsSearch": "Cerca tariffe",
+      "itemsEmpty": "Nessuna tariffa",
+      "inGroup": "Nel gruppo: {group}",
+      "archived": "Archiviato",
+      "fakturaOnly": "Solo fattura: non venduto online",
+      "qr": "QR: {labels}"
+    },
+    "moveConfirm": {
+      "title": "Spostare tariffe?",
+      "body": "{count} tariffa è in un altro gruppo e passa a {group}. I suoi pagamenti compariranno sotto {group} d'ora in poi, anche quelli precedenti. | {count} tariffe sono in altri gruppi e passano a {group}. I loro pagamenti compariranno sotto {group} d'ora in poi, anche quelli precedenti.",
+      "confirm": "Sposta"
+    },
+    "delete": {
+      "title": "Eliminare {name}?",
+      "body": "{count} tariffa resterà senza gruppo e i suoi pagamenti compariranno nell'ultimo gruppo, anche quelli precedenti. | {count} tariffe resteranno senza gruppo e i loro pagamenti compariranno nell'ultimo gruppo, anche quelli precedenti."
+    },
+    "errors": {
+      "generic": "Impossibile salvare. Riprova.",
+      "invalid_name": "Dai al gruppo un nome di 1–40 caratteri.",
+      "reserved_name": "Questo nome è riservato. Scegline un altro.",
+      "name_taken": "Un altro filtro ha già questo nome.",
+      "invalid_icon": "Scegli una delle icone.",
+      "too_many_groups": "Non possono esserci più di 20 gruppi.",
+      "builtin_group": "Questo gruppo è predefinito e non si può modificare così.",
+      "no_default_name": "Questo gruppo non ha un nome predefinito.",
+      "unknown_price_item": "Una tariffa non è stata trovata. Ricarica la pagina.",
+      "order_mismatch": "I gruppi sono stati modificati da qualcun altro. L'elenco è stato ricaricato.",
+      "not_found": "Questo gruppo non esiste più. L'elenco è stato ricaricato."
+    },
+    "icons": {
+      "sailboat": "Barca a vela",
+      "van": "Camper",
+      "forklift": "Carrello elevatore",
+      "file-text": "Documento",
+      "store": "Negozio",
+      "circle-dollar-sign": "Denaro",
+      "anchor": "Ancora",
+      "zap": "Elettricità",
+      "wrench": "Attrezzi",
+      "tent": "Tenda",
+      "key-round": "Chiave",
+      "shopping-bag": "Borsa della spesa",
+      "coffee": "Caffè",
+      "ticket": "Biglietto"
+    }
   }
 }

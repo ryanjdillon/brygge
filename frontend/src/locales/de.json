@@ -51,7 +51,10 @@
     "dock": "Steg",
     "dockAll": "Alle",
     "clearSelection": "Auswahl aufheben",
-    "ok": "OK"
+    "ok": "OK",
+    "selectAll": "Alle",
+    "deselectAll": "Keine",
+    "clearSearch": "Suche leeren"
   },
   "home": {
     "welcome": "Willkommen bei Brygge",
@@ -1884,13 +1887,11 @@
     "clearRange": "Zeitraum zurücksetzen",
     "anonymous": "Gast",
     "kind": {
-      "harbor": "Hafen",
       "all": "Alle",
       "guest": "Gastliegeplatz",
       "motorhome": "Wohnmobil",
       "slipping": "Slippen",
       "faktura": "Rechnung",
-      "merch": "Shop",
       "other": "Sonstiges"
     },
     "group": {
@@ -1903,6 +1904,10 @@
       "card": "Karte",
       "apple_pay": "Apple Pay",
       "google_pay": "Google Pay"
+    },
+    "filters": {
+      "link": "Filter",
+      "unassignedHint": "Preise ohne Gruppe: {count}. Filter einrichten"
     }
   },
   "pay": {
@@ -1936,5 +1941,82 @@
     "belowMinimum": "Der Betrag ist für eine Online-Zahlung zu klein. Der Mindestbetrag ist {amount} kr.",
     "cardRefused": "Die Kartenzahlung wurde für diesen Betrag abgelehnt. Wählen Sie eine andere Zahlungsart oder fragen Sie den Hafenmeister.",
     "unsupportedCurrency": "Dieses Zahlungsziel kann hier nur in Kronen bezahlt werden. Bitte den Hafenmeister fragen."
+  },
+  "paymentFilters": {
+    "title": "Zahlungsfilter",
+    "subtitle": "Die Filter der Zahlungsseite. Eine Gruppe fasst Preise zusammen. Eine Zahlung erscheint unter der ersten Gruppe von oben, die einen der bezahlten Preise enthält.",
+    "back": "Zurück zu Zahlungen",
+    "readOnly": "Sie können die Filter ansehen, aber nicht ändern.",
+    "newGroup": "Neue Gruppe",
+    "edit": "Bearbeiten",
+    "editGroup": "{name} bearbeiten",
+    "loadError": "Die Filter konnten nicht geladen werden.",
+    "retry": "Erneut versuchen",
+    "hidden": "Ausgeblendet",
+    "showAria": "{name} als Filter anzeigen",
+    "moveUp": "{name} nach oben",
+    "moveDown": "{name} nach unten",
+    "itemCount": "{count} Preis | {count} Preise",
+    "builtinFaktura": "Zahlungen von Rechnungen",
+    "builtinOther": "Alles, was in keiner anderen Gruppe ist. Immer zuletzt.",
+    "unassignedTitle": "In keiner Gruppe",
+    "unassignedBody": "Zahlungen für diese Preise erscheinen unter {group}.",
+    "unassignedNone": "Jeder aktive Preis, der online verkauft wurde, ist in einer Gruppe.",
+    "saved": "Gespeichert",
+    "deleted": "Gruppe gelöscht",
+    "editor": {
+      "titleNew": "Neue Gruppe",
+      "titleEdit": "Gruppe bearbeiten",
+      "name": "Name",
+      "nameHelp": "Wird so angezeigt, wie eingegeben, in jeder Sprache.",
+      "useDefault": "Standardnamen verwenden ({name})",
+      "icon": "Symbol",
+      "items": "Preise in dieser Gruppe",
+      "itemsHelp": "Ein Preis gehört immer nur zu einer Gruppe: Wählen Sie einen aus einer anderen Gruppe, wird er hierher verschoben.",
+      "itemsSearch": "Preise suchen",
+      "itemsEmpty": "Keine Preise",
+      "inGroup": "In Gruppe: {group}",
+      "archived": "Archiviert",
+      "fakturaOnly": "Nur Rechnung: nicht online verkauft",
+      "qr": "QR: {labels}"
+    },
+    "moveConfirm": {
+      "title": "Preise verschieben?",
+      "body": "{count} Preis liegt in einer anderen Gruppe und wird nach {group} verschoben. Seine Zahlungen erscheinen ab jetzt unter {group}, auch die früheren. | {count} Preise liegen in anderen Gruppen und werden nach {group} verschoben. Ihre Zahlungen erscheinen ab jetzt unter {group}, auch die früheren.",
+      "confirm": "Verschieben"
+    },
+    "delete": {
+      "title": "{name} löschen?",
+      "body": "{count} Preis ist danach in keiner Gruppe, und seine Zahlungen erscheinen unter der letzten Gruppe, auch die früheren. | {count} Preise sind danach in keiner Gruppe, und ihre Zahlungen erscheinen unter der letzten Gruppe, auch die früheren."
+    },
+    "errors": {
+      "generic": "Speichern fehlgeschlagen. Bitte erneut versuchen.",
+      "invalid_name": "Geben Sie der Gruppe einen Namen mit 1 bis 40 Zeichen.",
+      "reserved_name": "Dieser Name ist reserviert. Wählen Sie einen anderen.",
+      "name_taken": "Ein anderer Filter hat bereits diesen Namen.",
+      "invalid_icon": "Wählen Sie eines der Symbole.",
+      "too_many_groups": "Es sind höchstens 20 Gruppen möglich.",
+      "builtin_group": "Diese Gruppe ist fest eingebaut und lässt sich so nicht ändern.",
+      "no_default_name": "Diese Gruppe hat keinen Standardnamen.",
+      "unknown_price_item": "Ein Preis wurde nicht gefunden. Laden Sie die Seite neu.",
+      "order_mismatch": "Die Gruppen wurden von jemand anderem geändert. Die Liste wurde neu geladen.",
+      "not_found": "Diese Gruppe gibt es nicht mehr. Die Liste wurde neu geladen."
+    },
+    "icons": {
+      "sailboat": "Segelboot",
+      "van": "Wohnmobil",
+      "forklift": "Gabelstapler",
+      "file-text": "Dokument",
+      "store": "Geschäft",
+      "circle-dollar-sign": "Geld",
+      "anchor": "Anker",
+      "zap": "Strom",
+      "wrench": "Werkzeug",
+      "tent": "Zelt",
+      "key-round": "Schlüssel",
+      "shopping-bag": "Einkaufstasche",
+      "coffee": "Kaffee",
+      "ticket": "Ticket"
+    }
   }
 }

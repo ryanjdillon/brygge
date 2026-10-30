@@ -59,7 +59,10 @@
     "dockAll": "Alle",
     "clearSelection": "Tøm utval",
     "uploading": "Lastar opp…",
-    "ok": "OK"
+    "ok": "OK",
+    "selectAll": "Alle",
+    "deselectAll": "Fjern",
+    "clearSearch": "Tøm søket"
   },
   "privacyPolicy": {
     "title": "Personvernerklæring",
@@ -2946,13 +2949,11 @@
     "clearRange": "Fjern periode",
     "anonymous": "Gjest",
     "kind": {
-      "harbor": "Havn",
       "all": "Alle",
       "guest": "Gjesteplass",
       "motorhome": "Bobil",
       "slipping": "Slipping",
       "faktura": "Faktura",
-      "merch": "Butikk",
       "other": "Annet"
     },
     "group": {
@@ -2965,6 +2966,10 @@
       "card": "Kort",
       "apple_pay": "Apple Pay",
       "google_pay": "Google Pay"
+    },
+    "filters": {
+      "link": "Filtre",
+      "unassignedHint": "Priser uten gruppe: {count}. Sett opp filtre"
     }
   },
   "bulkInvoices": {
@@ -3100,6 +3105,83 @@
       "members": "For medlemmer",
       "deposit": "Innskudd og andel",
       "general": "Annet"
+    }
+  },
+  "paymentFilters": {
+    "title": "Betalingsfiltre",
+    "subtitle": "Filtrene på betalingssiden. En gruppe samler priser. En betaling vises under den første gruppen, ovenfra, som har en av prisene den gjaldt.",
+    "back": "Tilbake til Betalinger",
+    "readOnly": "Du kan se filtrene, men ikke endre dem.",
+    "newGroup": "Ny gruppe",
+    "edit": "Rediger",
+    "editGroup": "Rediger {name}",
+    "loadError": "Filtrene kunne ikke lastes.",
+    "retry": "Prøv igjen",
+    "hidden": "Skjult",
+    "showAria": "Vis {name} som filter",
+    "moveUp": "Flytt {name} opp",
+    "moveDown": "Flytt {name} ned",
+    "itemCount": "{count} pris | {count} priser",
+    "builtinFaktura": "Betalinger av faktura",
+    "builtinOther": "Alt som ikke er i en annen gruppe. Alltid sist.",
+    "unassignedTitle": "Ikke i noen gruppe",
+    "unassignedBody": "Betalinger for disse prisene vises under {group}.",
+    "unassignedNone": "Alle aktive priser som er solgt på nett er i en gruppe.",
+    "saved": "Lagret",
+    "deleted": "Gruppen er slettet",
+    "editor": {
+      "titleNew": "Ny gruppe",
+      "titleEdit": "Rediger gruppe",
+      "name": "Navn",
+      "nameHelp": "Vises slik du skriver det, på alle språk.",
+      "useDefault": "Bruk standardnavn ({name})",
+      "icon": "Ikon",
+      "items": "Priser i gruppen",
+      "itemsHelp": "En pris er i én gruppe om gangen. Velger du en som ligger i en annen gruppe, flyttes den hit.",
+      "itemsSearch": "Søk i priser",
+      "itemsEmpty": "Ingen priser",
+      "inGroup": "I gruppe: {group}",
+      "archived": "Arkivert",
+      "fakturaOnly": "Bare faktura: selges ikke på nett",
+      "qr": "QR: {labels}"
+    },
+    "moveConfirm": {
+      "title": "Flytte priser?",
+      "body": "{count} pris ligger i en annen gruppe og flyttes til {group}. Betalingene for den vises under {group} fra nå av, også de tidligere. | {count} priser ligger i andre grupper og flyttes til {group}. Betalingene deres vises under {group} fra nå av, også de tidligere.",
+      "confirm": "Flytt"
+    },
+    "delete": {
+      "title": "Slette {name}?",
+      "body": "{count} pris havner uten gruppe, og betalingene for den vises under den siste gruppen, også de tidligere. | {count} priser havner uten gruppe, og betalingene deres vises under den siste gruppen, også de tidligere."
+    },
+    "errors": {
+      "generic": "Kunne ikke lagre. Prøv igjen.",
+      "invalid_name": "Gi gruppen et navn på 1 til 40 tegn.",
+      "reserved_name": "Det navnet er reservert. Velg et annet.",
+      "name_taken": "Et annet filter har allerede det navnet.",
+      "invalid_icon": "Velg et av ikonene.",
+      "too_many_groups": "Det kan være høyst 20 grupper.",
+      "builtin_group": "Den gruppen er innebygd og kan ikke endres slik.",
+      "no_default_name": "Den gruppen har ikke noe standardnavn.",
+      "unknown_price_item": "En pris ble ikke funnet. Last siden på nytt.",
+      "order_mismatch": "Gruppene ble endret av noen andre. Listen er lastet på nytt.",
+      "not_found": "Den gruppen finnes ikke lenger. Listen er lastet på nytt."
+    },
+    "icons": {
+      "sailboat": "Seilbåt",
+      "van": "Bobil",
+      "forklift": "Truck",
+      "file-text": "Dokument",
+      "store": "Butikk",
+      "circle-dollar-sign": "Penger",
+      "anchor": "Anker",
+      "zap": "Strøm",
+      "wrench": "Verktøy",
+      "tent": "Telt",
+      "key-round": "Nøkkel",
+      "shopping-bag": "Handlepose",
+      "coffee": "Kaffe",
+      "ticket": "Billett"
     }
   }
 }

@@ -27,6 +27,15 @@ describe('adminAccess (BRY-372)', () => {
     expect(canWrite('harbor', ['deputy'])).toBe(false)
   })
 
+  it('lets the roles that run the Payments page and own the price list change its filter groups', () => {
+    for (const r of ['board', 'harbor_master', 'treasurer', 'admin']) {
+      expect(canWrite('paymentFilters', [r])).toBe(true)
+    }
+    for (const r of ['chair', 'vice_chair', 'secretary', 'deputy', 'member']) {
+      expect(canWrite('paymentFilters', [r])).toBe(false)
+    }
+  })
+
   it('opens adminOnly routes to admin alone', () => {
     const meta = { requiresAdmin: true, adminOnly: true }
     expect(canOpenAdminRoute(meta, ['admin'])).toBe(true)

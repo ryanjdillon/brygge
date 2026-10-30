@@ -1,5 +1,6 @@
 <script setup lang="ts" generic="T extends string | number">
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Search, X } from 'lucide-vue-next'
 
 interface Option {
@@ -8,7 +9,15 @@ interface Option {
   hint?: string
   meta?: string
   disabled?: boolean
+  /**
+   * Left out of the select-all toggle; a person can still tick it. For an
+   * option whose selection has a side effect elsewhere (moving an item out of
+   * another group) that one click on "All" must not cause.
+   */
+  bulkSkip?: boolean
 }
+
+const { t } = useI18n()
 
 const props = withDefaults(
   defineProps<{
@@ -20,8 +29,8 @@ const props = withDefaults(
     maxHeightClass?: string
   }>(),
   {
-    placeholder: 'Search…',
-    emptyText: 'No options',
+    placeholder: undefined,
+    emptyText: undefined,
     searchable: true,
     maxHeightClass: 'max-h-56',
   },
@@ -44,8 +53,10 @@ const filtered = computed(() => {
 })
 
 const selectedSet = computed(() => new Set<T>(props.modelValue))
+// What the select-all toggle acts on: the shown options it may add.
+const bulkOptions = computed(() => filtered.value.filter((o) => !o.disabled && !o.bulkSkip))
 const allFilteredSelected = computed(
-  () => filtered.value.length > 0 && filtered.value.every((o) => selectedSet.value.has(o.value)),
+  () => bulkOptions.value.length > 0 && bulkOptions.value.every((o) => selectedSet.value.has(o.value)),
 )
 
 function toggle(value: T, disabled?: boolean) {
@@ -65,7 +76,7 @@ function toggleAll() {
     )
   } else {
     const next = new Set(props.modelValue)
-    for (const o of filtered.value) if (!o.disabled) next.add(o.value)
+    for (const o of bulkOptions.value) next.add(o.value)
     emit('update:modelValue', [...next])
   }
 }
@@ -82,35 +93,37 @@ function clearSearch() {
       <input
         v-model="query"
         type="search"
-        :placeholder="placeholder"
-        class="w-full bg-transparent text-sm outline-none placeholder:text-gray-400"
+        :placeholder="placeholder ?? t('common.search')"
+        class="min-h-11 w-full bg-transparent text-sm outline-none placeholder:text-gray-400"
       />
       <button
         v-if="query"
         type="button"
-        class="text-gray-400 hover:text-gray-600"
+        class="flex min-h-11 min-w-11 items-center justify-center text-gray-400 hover:text-gray-600"
+        :aria-label="t('common.clearSearch')"
         @click="clearSearch"
       >
         <X class="h-3.5 w-3.5" />
       </button>
       <button
-        v-if="filtered.length"
+        v-if="bulkOptions.length"
         type="button"
-        class="ml-1 whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] font-medium text-brand-700 hover:bg-brand-50"
+        class="ml-1 min-h-11 min-w-11 whitespace-nowrap rounded px-3 text-xs font-medium text-brand-700 hover:bg-brand-50"
+        data-testid="multi-select-toggle-all"
         @click="toggleAll"
       >
-        {{ allFilteredSelected ? 'Clear' : 'All' }}
+        {{ allFilteredSelected ? t('common.deselectAll') : t('common.selectAll') }}
       </button>
     </div>
 
     <ul :class="['divide-y divide-gray-100 overflow-y-auto', maxHeightClass]">
       <li v-if="filtered.length === 0" class="px-3 py-3 text-center text-xs text-gray-400">
-        {{ emptyText }}
+        {{ emptyText ?? t('common.noResults') }}
       </li>
       <li v-for="o in filtered" :key="String(o.value)">
         <label
           :class="[
-            'flex cursor-pointer items-start gap-2 px-3 py-2 text-sm',
+            'flex min-h-11 cursor-pointer items-start gap-2 px-3 py-2 text-sm',
             o.disabled ? 'cursor-not-allowed opacity-50' : 'hover:bg-brand-50/50',
             selectedSet.has(o.value) && !o.disabled ? 'bg-brand-50/40' : '',
           ]"

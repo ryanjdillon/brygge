@@ -51,7 +51,10 @@
     "dock": "Ponton",
     "dockAll": "Tous",
     "clearSelection": "Effacer la sélection",
-    "ok": "OK"
+    "ok": "OK",
+    "selectAll": "Tous",
+    "deselectAll": "Aucun",
+    "clearSearch": "Effacer la recherche"
   },
   "home": {
     "welcome": "Bienvenue à Brygge",
@@ -1883,13 +1886,11 @@
     "clearRange": "Effacer la période",
     "anonymous": "Invité",
     "kind": {
-      "harbor": "Port",
       "all": "Tous",
       "guest": "Place visiteur",
       "motorhome": "Camping-car",
       "slipping": "Halage",
       "faktura": "Facture",
-      "merch": "Boutique",
       "other": "Autre"
     },
     "group": {
@@ -1902,6 +1903,10 @@
       "card": "Carte",
       "apple_pay": "Apple Pay",
       "google_pay": "Google Pay"
+    },
+    "filters": {
+      "link": "Filtres",
+      "unassignedHint": "Tarifs sans groupe : {count}. Configurer les filtres"
     }
   },
   "pay": {
@@ -1935,5 +1940,82 @@
     "belowMinimum": "Le montant est trop faible pour un paiement en ligne. Le minimum est de {amount} kr.",
     "cardRefused": "Le paiement par carte a été refusé pour ce montant. Essayez un autre moyen de paiement ou demandez au capitaine du port.",
     "unsupportedCurrency": "Ce point de paiement ne peut être réglé qu'en couronnes ici. Demandez au capitaine de port."
+  },
+  "paymentFilters": {
+    "title": "Filtres de paiement",
+    "subtitle": "Les filtres de la page Paiements. Un groupe rassemble des tarifs. Un paiement apparaît dans le premier groupe, en partant du haut, qui contient l'un des tarifs payés.",
+    "back": "Retour aux Paiements",
+    "readOnly": "Vous pouvez voir les filtres, mais pas les modifier.",
+    "newGroup": "Nouveau groupe",
+    "edit": "Modifier",
+    "editGroup": "Modifier {name}",
+    "loadError": "Les filtres n'ont pas pu être chargés.",
+    "retry": "Réessayer",
+    "hidden": "Masqué",
+    "showAria": "Afficher {name} comme filtre",
+    "moveUp": "Monter {name}",
+    "moveDown": "Descendre {name}",
+    "itemCount": "{count} tarif | {count} tarifs",
+    "builtinFaktura": "Paiements de factures",
+    "builtinOther": "Tout ce qui n'est dans aucun autre groupe. Toujours en dernier.",
+    "unassignedTitle": "Dans aucun groupe",
+    "unassignedBody": "Les paiements pour ces tarifs apparaissent sous {group}.",
+    "unassignedNone": "Chaque tarif actif vendu en ligne est dans un groupe.",
+    "saved": "Enregistré",
+    "deleted": "Groupe supprimé",
+    "editor": {
+      "titleNew": "Nouveau groupe",
+      "titleEdit": "Modifier le groupe",
+      "name": "Nom",
+      "nameHelp": "Affiché tel que saisi, dans toutes les langues.",
+      "useDefault": "Utiliser le nom par défaut ({name})",
+      "icon": "Icône",
+      "items": "Tarifs de ce groupe",
+      "itemsHelp": "Un tarif n'est que dans un groupe à la fois : cocher un tarif d'un autre groupe le déplace ici.",
+      "itemsSearch": "Rechercher un tarif",
+      "itemsEmpty": "Aucun tarif",
+      "inGroup": "Dans le groupe : {group}",
+      "archived": "Archivé",
+      "fakturaOnly": "Facture uniquement : non vendu en ligne",
+      "qr": "QR: {labels}"
+    },
+    "moveConfirm": {
+      "title": "Déplacer des tarifs ?",
+      "body": "{count} tarif est dans un autre groupe et passe dans {group}. Ses paiements apparaîtront désormais sous {group}, y compris les précédents. | {count} tarifs sont dans d'autres groupes et passent dans {group}. Leurs paiements apparaîtront désormais sous {group}, y compris les précédents.",
+      "confirm": "Déplacer"
+    },
+    "delete": {
+      "title": "Supprimer {name} ?",
+      "body": "{count} tarif ne sera plus dans aucun groupe, et ses paiements apparaîtront dans le dernier groupe, y compris les précédents. | {count} tarifs ne seront plus dans aucun groupe, et leurs paiements apparaîtront dans le dernier groupe, y compris les précédents."
+    },
+    "errors": {
+      "generic": "Enregistrement impossible. Réessayez.",
+      "invalid_name": "Donnez au groupe un nom de 1 à 40 caractères.",
+      "reserved_name": "Ce nom est réservé. Choisissez-en un autre.",
+      "name_taken": "Un autre filtre porte déjà ce nom.",
+      "invalid_icon": "Choisissez l'une des icônes.",
+      "too_many_groups": "Il ne peut y avoir plus de 20 groupes.",
+      "builtin_group": "Ce groupe est intégré et ne peut pas être modifié ainsi.",
+      "no_default_name": "Ce groupe n'a pas de nom par défaut.",
+      "unknown_price_item": "Un tarif est introuvable. Rechargez la page.",
+      "order_mismatch": "Les groupes ont été modifiés par quelqu'un d'autre. La liste a été rechargée.",
+      "not_found": "Ce groupe n'existe plus. La liste a été rechargée."
+    },
+    "icons": {
+      "sailboat": "Voilier",
+      "van": "Camping-car",
+      "forklift": "Chariot élévateur",
+      "file-text": "Document",
+      "store": "Boutique",
+      "circle-dollar-sign": "Argent",
+      "anchor": "Ancre",
+      "zap": "Électricité",
+      "wrench": "Outils",
+      "tent": "Tente",
+      "key-round": "Clé",
+      "shopping-bag": "Sac de courses",
+      "coffee": "Café",
+      "ticket": "Billet"
+    }
   }
 }

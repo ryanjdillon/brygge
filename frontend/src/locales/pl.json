@@ -51,7 +51,10 @@
     "dock": "Pomost",
     "dockAll": "Wszystkie",
     "clearSelection": "Wyczyść wybór",
-    "ok": "OK"
+    "ok": "OK",
+    "selectAll": "Wszystkie",
+    "deselectAll": "Wyczyść",
+    "clearSearch": "Wyczyść wyszukiwanie"
   },
   "home": {
     "welcome": "Witamy w Brygge",
@@ -1855,13 +1858,11 @@
     "clearRange": "Wyczyść okres",
     "anonymous": "Gość",
     "kind": {
-      "harbor": "Port",
       "all": "Wszystkie",
       "guest": "Miejsce gościnne",
       "motorhome": "Kamper",
       "slipping": "Slipowanie",
       "faktura": "Faktura",
-      "merch": "Sklep",
       "other": "Inne"
     },
     "group": {
@@ -1874,6 +1875,10 @@
       "card": "Karta",
       "apple_pay": "Apple Pay",
       "google_pay": "Google Pay"
+    },
+    "filters": {
+      "link": "Filtry",
+      "unassignedHint": "Ceny bez grupy: {count}. Ustaw filtry"
     }
   },
   "pay": {
@@ -1907,5 +1912,82 @@
     "belowMinimum": "Kwota jest za mała, aby zapłacić online. Minimum to {amount} kr.",
     "cardRefused": "Płatność kartą została odrzucona dla tej kwoty. Wybierz inną metodę płatności lub zapytaj kapitana portu.",
     "unsupportedCurrency": "Tutaj ten punkt płatności można opłacić tylko w koronach. Zapytaj kapitana portu."
+  },
+  "paymentFilters": {
+    "title": "Filtry płatności",
+    "subtitle": "Filtry na stronie płatności. Grupa zbiera ceny. Płatność jest pokazana w pierwszej grupie od góry, która zawiera jedną z opłaconych cen.",
+    "back": "Wróć do Płatności",
+    "readOnly": "Możesz zobaczyć filtry, ale nie możesz ich zmieniać.",
+    "newGroup": "Nowa grupa",
+    "edit": "Edytuj",
+    "editGroup": "Edytuj {name}",
+    "loadError": "Nie udało się wczytać filtrów.",
+    "retry": "Spróbuj ponownie",
+    "hidden": "Ukryty",
+    "showAria": "Pokaż {name} jako filtr",
+    "moveUp": "Przesuń {name} w górę",
+    "moveDown": "Przesuń {name} w dół",
+    "itemCount": "Ceny: {count} | Ceny: {count}",
+    "builtinFaktura": "Płatności faktur",
+    "builtinOther": "Wszystko, co nie należy do innej grupy. Zawsze na końcu.",
+    "unassignedTitle": "Bez grupy",
+    "unassignedBody": "Płatności za te ceny są pokazane w grupie {group}.",
+    "unassignedNone": "Każda aktywna cena sprzedana online należy do grupy.",
+    "saved": "Zapisano",
+    "deleted": "Grupa usunięta",
+    "editor": {
+      "titleNew": "Nowa grupa",
+      "titleEdit": "Edytuj grupę",
+      "name": "Nazwa",
+      "nameHelp": "Wyświetlane tak, jak wpisano, w każdym języku.",
+      "useDefault": "Użyj nazwy domyślnej ({name})",
+      "icon": "Ikona",
+      "items": "Ceny w tej grupie",
+      "itemsHelp": "Cena należy do jednej grupy naraz: zaznaczenie ceny z innej grupy przenosi ją tutaj.",
+      "itemsSearch": "Szukaj cen",
+      "itemsEmpty": "Brak cen",
+      "inGroup": "W grupie: {group}",
+      "archived": "Zarchiwizowane",
+      "fakturaOnly": "Tylko faktura: niesprzedawane online",
+      "qr": "QR: {labels}"
+    },
+    "moveConfirm": {
+      "title": "Przenieść ceny?",
+      "body": "Ceny przenoszone do {group}: {count}. Ich płatności będą od teraz pokazywane w {group}, także wcześniejsze. | Ceny przenoszone do {group}: {count}. Ich płatności będą od teraz pokazywane w {group}, także wcześniejsze.",
+      "confirm": "Przenieś"
+    },
+    "delete": {
+      "title": "Usunąć {name}?",
+      "body": "Ceny bez grupy po usunięciu: {count}. Ich płatności będą pokazywane w ostatniej grupie, także wcześniejsze. | Ceny bez grupy po usunięciu: {count}. Ich płatności będą pokazywane w ostatniej grupie, także wcześniejsze."
+    },
+    "errors": {
+      "generic": "Nie udało się zapisać. Spróbuj ponownie.",
+      "invalid_name": "Nadaj grupie nazwę o długości 1–40 znaków.",
+      "reserved_name": "Ta nazwa jest zarezerwowana. Wybierz inną.",
+      "name_taken": "Inny filtr ma już taką nazwę.",
+      "invalid_icon": "Wybierz jedną z ikon.",
+      "too_many_groups": "Może być co najwyżej 20 grup.",
+      "builtin_group": "Ta grupa jest wbudowana i nie można jej tak zmienić.",
+      "no_default_name": "Ta grupa nie ma nazwy domyślnej.",
+      "unknown_price_item": "Nie znaleziono ceny. Odśwież stronę.",
+      "order_mismatch": "Grupy zostały zmienione przez kogoś innego. Lista została wczytana ponownie.",
+      "not_found": "Ta grupa już nie istnieje. Lista została wczytana ponownie."
+    },
+    "icons": {
+      "sailboat": "Żaglówka",
+      "van": "Kamper",
+      "forklift": "Wózek widłowy",
+      "file-text": "Dokument",
+      "store": "Sklep",
+      "circle-dollar-sign": "Pieniądze",
+      "anchor": "Kotwica",
+      "zap": "Prąd",
+      "wrench": "Narzędzia",
+      "tent": "Namiot",
+      "key-round": "Klucz",
+      "shopping-bag": "Torba na zakupy",
+      "coffee": "Kawa",
+      "ticket": "Bilet"
+    }
   }
 }

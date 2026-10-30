@@ -33,6 +33,12 @@ export const WRITE_ROLES = {
   members: ['board', 'admin'],
   /** Slips and harbor layout. */
   harbor: ['board', 'harbor_master', 'admin'],
+  /**
+   * The Payments page's filter groups (BRY-522): the roles that run the page
+   * and own the price list. The list is handlers.PaymentFilterWriteRoles,
+   * mounted at /admin/payment-filter-groups.
+   */
+  paymentFilters: ['board', 'harbor_master', 'treasurer', 'admin'],
 } as const satisfies Record<string, readonly string[]>
 
 export type WriteArea = keyof typeof WRITE_ROLES

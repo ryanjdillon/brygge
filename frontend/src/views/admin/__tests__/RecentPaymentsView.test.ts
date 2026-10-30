@@ -55,10 +55,27 @@ describe('RecentPaymentsView payment methods', () => {
   })
 })
 
+// The chips come from the groups the server sends with the payments (BRY-522).
+const group = (slug: string, extra: Record<string, unknown> = {}) => ({
+  slug,
+  name: null,
+  label_key: slug,
+  icon: 'circle-dollar-sign',
+  builtin: null,
+  ...extra,
+})
+const GROUPS = [
+  group('guest', { icon: 'sailboat' }),
+  group('motorhome', { icon: 'van' }),
+  group('slipping', { name: 'Haul-out', label_key: null, icon: 'forklift' }),
+  group('faktura', { icon: 'file-text', builtin: 'faktura' }),
+  group('other', { builtin: 'other' }),
+]
+
 describe('RecentPaymentsView kind filter', () => {
   beforeEach(() => {
     fetchApi.mockReset()
-    fetchApi.mockResolvedValue({ payments: [] })
+    fetchApi.mockResolvedValue({ payments: [], groups: GROUPS })
     localStorage.clear()
   })
 
@@ -68,8 +85,8 @@ describe('RecentPaymentsView kind filter', () => {
     wrapper.findAll('[data-testid="kind-filters"] button').filter((b) => b.attributes('aria-pressed') === 'true')
   const pressedIds = (wrapper: ReturnType<typeof mountWithPlugins>) => pressed(wrapper).map((b) => b.attributes('data-filter'))
 
-  async function mountAt(url: string) {
-    const wrapper = mountWithPlugins(RecentPaymentsView, { initialRoute: url })
+  async function mountAt(url: string, piniaOptions?: Record<string, unknown>) {
+    const wrapper = mountWithPlugins(RecentPaymentsView, { initialRoute: url, piniaOptions })
     const router = wrapper.vm.$router as Router
     await router.isReady()
     await flushPromises()
@@ -83,14 +100,40 @@ describe('RecentPaymentsView kind filter', () => {
     expect(router.currentRoute.value.query.kind).toBe('all')
   })
 
-  it('lists all first, then harbor and each kind, as targets of at least 44px', async () => {
+  it('lists all first, then the groups in the order the server sent, as targets of at least 44px', async () => {
     const { wrapper } = await mountAt('/admin')
     const buttons = wrapper.findAll('[data-testid="kind-filters"] button')
-    expect(buttons.map((b) => b.attributes('data-filter'))).toEqual([
-      'all', 'harbor', 'guest', 'motorhome', 'slipping', 'faktura', 'merch', 'other',
-    ])
-    for (const b of buttons) expect(b.classes()).toContain('min-h-11')
+    expect(buttons.map((b) => b.attributes('data-filter'))).toEqual(['all', 'guest', 'motorhome', 'slipping', 'faktura', 'other'])
+    for (const b of buttons) {
+      expect(b.classes()).toContain('min-h-11')
+      expect(b.classes()).toContain('truncate')
+      expect(b.classes()).toContain('max-w-full')
+    }
     for (const input of wrapper.findAll('input[type="date"]')) expect(input.classes()).toContain('min-h-11')
+  })
+
+  it('labels a chip with the name the board typed, or the translation of a seeded key', async () => {
+    const { wrapper } = await mountAt('/admin')
+    const text = (slug: string) => wrapper.find(`[data-filter="${slug}"]`).text()
+    expect(text('slipping')).toBe('Haul-out')
+    expect(text('guest')).toBe('recentPayments.kind.guest')
+    expect(text('other')).toBe('recentPayments.kind.other')
+  })
+
+  it('shows placeholders of chip height until the first answer, and no chip the server did not send', async () => {
+    let answer: (v: unknown) => void = () => {}
+    fetchApi.mockReturnValue(new Promise((resolve) => (answer = resolve)))
+    const wrapper = mountWithPlugins(RecentPaymentsView, { initialRoute: '/admin' })
+    await flushPromises()
+    expect(wrapper.findAll('[data-testid="kind-filters"] button').map((b) => b.attributes('data-filter'))).toEqual(['all'])
+    const placeholders = wrapper.findAll('[data-testid="kind-filter-placeholder"]')
+    expect(placeholders.length).toBeGreaterThan(0)
+    for (const p of placeholders) expect(p.classes()).toContain('h-11')
+
+    answer({ payments: [], groups: [group('guest')] })
+    await flushPromises()
+    expect(wrapper.findAll('[data-testid="kind-filter-placeholder"]')).toHaveLength(0)
+    expect(wrapper.findAll('[data-testid="kind-filters"] button').map((b) => b.attributes('data-filter'))).toEqual(['all', 'guest'])
   })
 
   it('reads ?kind= from the URL, one kind or several', async () => {
@@ -109,22 +152,22 @@ describe('RecentPaymentsView kind filter', () => {
     const replace = vi.spyOn(router, 'replace')
     const push = vi.spyOn(router, 'push')
 
-    await wrapper.find('[data-filter="harbor"]').trigger('click')
+    await wrapper.find('[data-filter="guest"]').trigger('click')
     await flushPromises()
-    expect(pressedIds(wrapper)).toEqual(['harbor'])
-    expect(requestedKind()).toBe('guest,motorhome')
+    expect(pressedIds(wrapper)).toEqual(['guest'])
+    expect(requestedKind()).toBe('guest')
 
     await wrapper.find('[data-filter="motorhome"]').trigger('click')
     await flushPromises()
     await wrapper.find('[data-filter="slipping"]').trigger('click')
     await flushPromises()
-    expect(pressedIds(wrapper)).toEqual(['harbor', 'motorhome', 'slipping'])
+    expect(pressedIds(wrapper)).toEqual(['guest', 'motorhome', 'slipping'])
     expect(requestedKind()?.split(',').sort()).toEqual(['guest', 'motorhome', 'slipping'])
-    expect(router.currentRoute.value.query.kind).toBe('harbor,motorhome,slipping')
+    expect(router.currentRoute.value.query.kind).toBe('guest,motorhome,slipping')
     expect(router.currentRoute.value.query.q).toBe('keep')
     expect(replace).toHaveBeenCalled()
     expect(push).not.toHaveBeenCalled()
-    expect(localStorage.getItem('recentPayments.kinds')).toBe('harbor,motorhome,slipping')
+    expect(localStorage.getItem('recentPayments.kinds')).toBe('guest,motorhome,slipping')
   })
 
   it('removes a pressed chip, and falls back to all when none is left', async () => {
@@ -141,50 +184,137 @@ describe('RecentPaymentsView kind filter', () => {
   })
 
   it('clears the other chips when all is pressed, and all when another is', async () => {
-    const { wrapper } = await mountAt('/admin?kind=guest,merch')
+    const { wrapper } = await mountAt('/admin?kind=guest,other')
     await wrapper.find('[data-filter="all"]').trigger('click')
     await flushPromises()
     expect(pressedIds(wrapper)).toEqual(['all'])
     expect(requestedKind()).toBeNull()
 
-    await wrapper.find('[data-filter="merch"]').trigger('click')
+    await wrapper.find('[data-filter="other"]').trigger('click')
     await flushPromises()
-    expect(pressedIds(wrapper)).toEqual(['merch'])
+    expect(pressedIds(wrapper)).toEqual(['other'])
   })
 
   it('restores the remembered filters when the URL has none', async () => {
-    localStorage.setItem('recentPayments.kinds', 'merch,other')
+    localStorage.setItem('recentPayments.kinds', 'faktura,other')
     const { router } = await mountAt('/admin')
-    expect(requestedKind()?.split(',').sort()).toEqual(['merch', 'other'])
-    expect(router.currentRoute.value.query.kind).toBe('merch,other')
-  })
-
-  it('ignores a single choice stored under the previous key', async () => {
-    localStorage.setItem('recentPayments.kind', 'harbor')
-    const { wrapper } = await mountAt('/admin')
-    expect(pressedIds(wrapper)).toEqual(['all'])
+    expect(requestedKind()?.split(',').sort()).toEqual(['faktura', 'other'])
+    expect(router.currentRoute.value.query.kind).toBe('faktura,other')
   })
 
   it('lets the URL win over the remembered filters, and ignores junk in either', async () => {
-    localStorage.setItem('recentPayments.kinds', 'merch')
+    localStorage.setItem('recentPayments.kinds', 'faktura')
     await mountAt('/admin?kind=other')
     expect(requestedKind()).toBe('other')
 
-    for (const junk of ['bogus', 'constructor', 'toString', '__proto__']) {
+    for (const junk of ['Bogus!', 'constructor,', '../x', '__proto__', 'a b']) {
       fetchApi.mockClear()
       localStorage.setItem('recentPayments.kinds', junk)
-      const { router } = await mountAt(`/admin?kind=${junk}`)
+      const { router } = await mountAt(`/admin?kind=${encodeURIComponent(junk)}`)
       expect(requestedKind()).toBeNull()
       expect(router.currentRoute.value.query.kind).toBe('all')
     }
   })
 
+  it('expands the old harbor chip to guest and motorhome, from a link or from storage', async () => {
+    const { wrapper } = await mountAt('/admin?kind=harbor')
+    expect(requestedKind()?.split(',').sort()).toEqual(['guest', 'motorhome'])
+    expect(pressedIds(wrapper)).toEqual(['guest', 'motorhome'])
+
+    fetchApi.mockClear()
+    localStorage.setItem('recentPayments.kinds', 'harbor,faktura')
+    const stored = await mountAt('/admin')
+    expect(requestedKind()?.split(',').sort()).toEqual(['faktura', 'guest', 'motorhome'])
+    expect(pressedIds(stored.wrapper)).toEqual(['guest', 'motorhome', 'faktura'])
+  })
+
+  it('drops a slug that is no group, and rewrites the URL and storage, then falls back to all', async () => {
+    // merch and slipping-2 were chips once; this club has neither.
+    const { wrapper, router } = await mountAt('/admin?kind=guest,merch,gone-group')
+    expect(router.currentRoute.value.query.kind).toBe('guest')
+    expect(localStorage.getItem('recentPayments.kinds')).toBe('guest')
+    expect(pressedIds(wrapper)).toEqual(['guest'])
+    expect(requestedKind()).toBe('guest')
+
+    fetchApi.mockClear()
+    const none = await mountAt('/admin?kind=merch')
+    expect(none.router.currentRoute.value.query.kind).toBe('all')
+    expect(localStorage.getItem('recentPayments.kinds')).toBe('all')
+    expect(pressedIds(none.wrapper)).toEqual(['all'])
+    expect(requestedKind()).toBeNull()
+  })
+
   it('keeps the valid ids of a mixed list and lets all win', async () => {
-    const { wrapper } = await mountAt('/admin?kind=guest,bogus,guest')
+    const { wrapper } = await mountAt('/admin?kind=guest,bogus!,guest')
     expect(pressedIds(wrapper)).toEqual(['guest'])
     fetchApi.mockClear()
     const withAll = await mountAt('/admin?kind=guest,all')
     expect(pressedIds(withAll.wrapper)).toEqual(['all'])
+  })
+
+  it('draws an unknown kind as the club\'s fallback group, renamed and re-iconed as it is', async () => {
+    fetchApi.mockResolvedValue({
+      payments: [payment('p1', 'vipps', null, 'removed-group')],
+      groups: [group('guest'), group('other', { builtin: 'other', name: 'Diverse', label_key: null, icon: 'ticket' })],
+    })
+    const { wrapper } = await mountAt('/admin')
+    const row = wrapper.find('li')
+    expect(row.find('[data-testid="filter-group-icon"]').attributes('data-icon')).toBe('ticket')
+    expect(row.text()).toContain('Diverse')
+    expect(row.text()).not.toContain('recentPayments.kind.other')
+  })
+
+  it('draws each row with the icon and label of its group, an unknown kind as Annet', async () => {
+    fetchApi.mockResolvedValue({
+      payments: [
+        payment('p1', 'vipps', null, 'slipping'),
+        payment('p2', 'vipps', null, 'removed-group'),
+      ],
+      groups: GROUPS,
+    })
+    const { wrapper } = await mountAt('/admin')
+    const rows = wrapper.findAll('li')
+    expect(rows[0].find('[data-testid="filter-group-icon"]').attributes('data-icon')).toBe('forklift')
+    expect(rows[0].text()).toContain('Haul-out')
+    expect(rows[1].find('[data-testid="filter-group-icon"]').attributes('data-icon')).toBe('circle-dollar-sign')
+    expect(rows[1].text()).toContain('recentPayments.kind.other')
+  })
+
+  it('draws an icon this build does not know as the fallback', async () => {
+    fetchApi.mockResolvedValue({
+      payments: [payment('p1', 'vipps', null, 'new-group')],
+      groups: [group('new-group', { name: 'New', label_key: null, icon: 'from-a-newer-server' })],
+    })
+    const { wrapper } = await mountAt('/admin')
+    const badge = wrapper.find('li [data-testid="filter-group-icon"]')
+    expect(badge.exists()).toBe(true)
+    expect(badge.classes().join(' ')).toContain('bg-gray-50')
+  })
+
+  it('links to the group settings for every viewer, as a 44px target', async () => {
+    const { wrapper } = await mountAt('/admin', { initialState: { auth: { user: { roles: ['chair'] } } } })
+    const link = wrapper.find('[data-testid="filters-link"]')
+    expect(link.exists()).toBe(true)
+    expect(link.attributes('href')).toBe('/admin/harbor/recent-payments/filters')
+    expect(link.classes()).toContain('min-h-11')
+  })
+
+  it('nudges those who may assign prices when some are in no group', async () => {
+    fetchApi.mockResolvedValue({ payments: [], groups: GROUPS, unassigned_items: 3 })
+    const writer = await mountAt('/admin', { initialState: { auth: { user: { roles: ['harbor_master'] } } } })
+    const hint = writer.wrapper.find('[data-testid="unassigned-hint"]')
+    expect(hint.exists()).toBe(true)
+    expect(hint.text()).toContain('recentPayments.filters.unassignedHint')
+    expect(hint.attributes('href')).toBe('/admin/harbor/recent-payments/filters')
+    expect(hint.classes()).toContain('min-h-11')
+
+    // A viewer who cannot assign gets no nudge, even if the server sent a count.
+    const reader = await mountAt('/admin', { initialState: { auth: { user: { roles: ['chair'] } } } })
+    expect(reader.wrapper.find('[data-testid="unassigned-hint"]').exists()).toBe(false)
+
+    fetchApi.mockResolvedValue({ payments: [], groups: GROUPS, unassigned_items: 0 })
+    const none = await mountAt('/admin', { initialState: { auth: { user: { roles: ['harbor_master'] } } } })
+    expect(none.wrapper.find('[data-testid="unassigned-hint"]').exists()).toBe(false)
   })
 })
 

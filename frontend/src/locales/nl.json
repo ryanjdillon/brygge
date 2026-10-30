@@ -51,7 +51,10 @@
     "dock": "Steiger",
     "dockAll": "Alle",
     "clearSelection": "Selectie wissen",
-    "ok": "OK"
+    "ok": "OK",
+    "selectAll": "Alle",
+    "deselectAll": "Geen",
+    "clearSearch": "Zoekopdracht wissen"
   },
   "home": {
     "welcome": "Welkom bij Brygge",
@@ -1884,13 +1887,11 @@
     "clearRange": "Periode wissen",
     "anonymous": "Gast",
     "kind": {
-      "harbor": "Haven",
       "all": "Alle",
       "guest": "Gastligplaats",
       "motorhome": "Camper",
       "slipping": "Helling",
       "faktura": "Factuur",
-      "merch": "Winkel",
       "other": "Overig"
     },
     "group": {
@@ -1903,6 +1904,10 @@
       "card": "Kaart",
       "apple_pay": "Apple Pay",
       "google_pay": "Google Pay"
+    },
+    "filters": {
+      "link": "Filters",
+      "unassignedHint": "Tarieven zonder groep: {count}. Filters instellen"
     }
   },
   "pay": {
@@ -1936,5 +1941,82 @@
     "belowMinimum": "Het bedrag is te laag om online te betalen. Het minimum is {amount} kr.",
     "cardRefused": "Kaartbetaling is geweigerd voor dit bedrag. Probeer een andere betaalmethode of vraag het de havenmeester.",
     "unsupportedCurrency": "Dit betaalpunt kan hier alleen in kronen worden betaald. Vraag het aan de havenmeester."
+  },
+  "paymentFilters": {
+    "title": "Betalingsfilters",
+    "subtitle": "De filters op de betalingspagina. Een groep bundelt tarieven. Een betaling staat onder de eerste groep, van boven, die een van de betaalde tarieven bevat.",
+    "back": "Terug naar Betalingen",
+    "readOnly": "U kunt de filters bekijken maar niet wijzigen.",
+    "newGroup": "Nieuwe groep",
+    "edit": "Bewerken",
+    "editGroup": "{name} bewerken",
+    "loadError": "De filters konden niet worden geladen.",
+    "retry": "Opnieuw proberen",
+    "hidden": "Verborgen",
+    "showAria": "{name} als filter tonen",
+    "moveUp": "{name} omhoog",
+    "moveDown": "{name} omlaag",
+    "itemCount": "{count} tarief | {count} tarieven",
+    "builtinFaktura": "Betalingen van facturen",
+    "builtinOther": "Alles wat in geen andere groep zit. Altijd als laatste.",
+    "unassignedTitle": "In geen enkele groep",
+    "unassignedBody": "Betalingen voor deze tarieven staan onder {group}.",
+    "unassignedNone": "Elk actief tarief dat online is verkocht zit in een groep.",
+    "saved": "Opgeslagen",
+    "deleted": "Groep verwijderd",
+    "editor": {
+      "titleNew": "Nieuwe groep",
+      "titleEdit": "Groep bewerken",
+      "name": "Naam",
+      "nameHelp": "Wordt getoond zoals getypt, in elke taal.",
+      "useDefault": "Standaardnaam gebruiken ({name})",
+      "icon": "Pictogram",
+      "items": "Tarieven in deze groep",
+      "itemsHelp": "Een tarief zit in één groep tegelijk: een tarief uit een andere groep aanvinken verplaatst het hierheen.",
+      "itemsSearch": "Tarieven zoeken",
+      "itemsEmpty": "Geen tarieven",
+      "inGroup": "In groep: {group}",
+      "archived": "Gearchiveerd",
+      "fakturaOnly": "Alleen factuur: niet online verkocht",
+      "qr": "QR: {labels}"
+    },
+    "moveConfirm": {
+      "title": "Tarieven verplaatsen?",
+      "body": "{count} tarief zit in een andere groep en gaat naar {group}. De betalingen ervan staan voortaan onder {group}, ook de eerdere. | {count} tarieven zitten in andere groepen en gaan naar {group}. Hun betalingen staan voortaan onder {group}, ook de eerdere.",
+      "confirm": "Verplaatsen"
+    },
+    "delete": {
+      "title": "{name} verwijderen?",
+      "body": "{count} tarief komt in geen enkele groep te zitten en de betalingen ervan staan onder de laatste groep, ook de eerdere. | {count} tarieven komen in geen enkele groep te zitten en hun betalingen staan onder de laatste groep, ook de eerdere."
+    },
+    "errors": {
+      "generic": "Opslaan mislukt. Probeer het opnieuw.",
+      "invalid_name": "Geef de groep een naam van 1 tot 40 tekens.",
+      "reserved_name": "Die naam is gereserveerd. Kies een andere.",
+      "name_taken": "Een andere filter heeft al die naam.",
+      "invalid_icon": "Kies een van de pictogrammen.",
+      "too_many_groups": "Er kunnen maximaal 20 groepen zijn.",
+      "builtin_group": "Die groep is ingebouwd en kan zo niet worden gewijzigd.",
+      "no_default_name": "Die groep heeft geen standaardnaam.",
+      "unknown_price_item": "Een tarief is niet gevonden. Laad de pagina opnieuw.",
+      "order_mismatch": "De groepen zijn door iemand anders gewijzigd. De lijst is opnieuw geladen.",
+      "not_found": "Die groep bestaat niet meer. De lijst is opnieuw geladen."
+    },
+    "icons": {
+      "sailboat": "Zeilboot",
+      "van": "Camper",
+      "forklift": "Heftruck",
+      "file-text": "Document",
+      "store": "Winkel",
+      "circle-dollar-sign": "Geld",
+      "anchor": "Anker",
+      "zap": "Elektriciteit",
+      "wrench": "Gereedschap",
+      "tent": "Tent",
+      "key-round": "Sleutel",
+      "shopping-bag": "Boodschappentas",
+      "coffee": "Koffie",
+      "ticket": "Kaartje"
+    }
   }
 }

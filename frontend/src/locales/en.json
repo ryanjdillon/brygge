@@ -59,7 +59,10 @@
     "dockAll": "All",
     "clearSelection": "Clear selection",
     "uploading": "Uploading…",
-    "ok": "OK"
+    "ok": "OK",
+    "selectAll": "All",
+    "deselectAll": "Clear",
+    "clearSearch": "Clear search"
   },
   "privacyPolicy": {
     "title": "Privacy policy",
@@ -2950,13 +2953,11 @@
     "clearRange": "Clear period",
     "anonymous": "Guest",
     "kind": {
-      "harbor": "Harbor",
       "all": "All",
       "guest": "Guest berth",
       "motorhome": "Motorhome",
       "slipping": "Haul-out",
       "faktura": "Invoice",
-      "merch": "Shop",
       "other": "Other"
     },
     "group": {
@@ -2969,6 +2970,10 @@
       "card": "Card",
       "apple_pay": "Apple Pay",
       "google_pay": "Google Pay"
+    },
+    "filters": {
+      "link": "Filters",
+      "unassignedHint": "Prices in no group: {count}. Set up filters"
     }
   },
   "bulkInvoices": {
@@ -3104,6 +3109,83 @@
       "members": "For members",
       "deposit": "Deposit and share",
       "general": "General"
+    }
+  },
+  "paymentFilters": {
+    "title": "Payment filters",
+    "subtitle": "The filters on the Payments page. A group holds prices; a payment is shown under the first group, from the top, that holds one of the prices it paid for.",
+    "back": "Back to Payments",
+    "readOnly": "You can see the filters but not change them.",
+    "newGroup": "New group",
+    "edit": "Edit",
+    "editGroup": "Edit {name}",
+    "loadError": "The filters could not be loaded.",
+    "retry": "Try again",
+    "hidden": "Hidden",
+    "showAria": "Show {name} as a filter",
+    "moveUp": "Move {name} up",
+    "moveDown": "Move {name} down",
+    "itemCount": "{count} price | {count} prices",
+    "builtinFaktura": "Payments of fakturas (invoices)",
+    "builtinOther": "Everything not in another group. Always last.",
+    "unassignedTitle": "Not in any group",
+    "unassignedBody": "Payments for these prices show under {group}.",
+    "unassignedNone": "Every active price that has been sold online is in a group.",
+    "saved": "Saved",
+    "deleted": "Group deleted",
+    "editor": {
+      "titleNew": "New group",
+      "titleEdit": "Edit group",
+      "name": "Name",
+      "nameHelp": "Shown as typed, in every language.",
+      "useDefault": "Use the default name ({name})",
+      "icon": "Icon",
+      "items": "Prices in this group",
+      "itemsHelp": "A price is in one group at a time: ticking one that is in another group moves it here.",
+      "itemsSearch": "Search prices",
+      "itemsEmpty": "No prices",
+      "inGroup": "In group: {group}",
+      "archived": "Archived",
+      "fakturaOnly": "Faktura only: not sold online",
+      "qr": "QR: {labels}"
+    },
+    "moveConfirm": {
+      "title": "Move prices?",
+      "body": "{count} price is in another group and moves to {group}. Its payments will show under {group} from now on, the earlier ones too. | {count} prices are in other groups and move to {group}. Their payments will show under {group} from now on, the earlier ones too.",
+      "confirm": "Move"
+    },
+    "delete": {
+      "title": "Delete {name}?",
+      "body": "{count} price ends up in no group, and its payments show under the last group, the earlier ones too. | {count} prices end up in no group, and their payments show under the last group, the earlier ones too."
+    },
+    "errors": {
+      "generic": "Could not save. Try again.",
+      "invalid_name": "Give the group a name of 1 to 40 characters.",
+      "reserved_name": "That name is reserved. Choose another.",
+      "name_taken": "Another filter already has that name.",
+      "invalid_icon": "Choose one of the icons.",
+      "too_many_groups": "There can be at most 20 groups.",
+      "builtin_group": "That group is built in and cannot be changed that way.",
+      "no_default_name": "That group has no default name.",
+      "unknown_price_item": "A price was not found. Reload the page.",
+      "order_mismatch": "The groups were changed by someone else. The list has been reloaded.",
+      "not_found": "That group no longer exists. The list has been reloaded."
+    },
+    "icons": {
+      "sailboat": "Sailboat",
+      "van": "Motorhome",
+      "forklift": "Forklift",
+      "file-text": "Document",
+      "store": "Shop",
+      "circle-dollar-sign": "Money",
+      "anchor": "Anchor",
+      "zap": "Electricity",
+      "wrench": "Tools",
+      "tent": "Tent",
+      "key-round": "Key",
+      "shopping-bag": "Shopping bag",
+      "coffee": "Coffee",
+      "ticket": "Ticket"
     }
   }
 }

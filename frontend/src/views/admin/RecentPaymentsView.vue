@@ -4,16 +4,22 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { useApi } from '@/composables/useApi'
 import { formatNOK as nok } from '@/lib/format'
-import { RefreshCw, Inbox, Search, Sailboat, Van, Forklift, FileText, Store, CircleDollarSign, TriangleAlert, ExternalLink } from 'lucide-vue-next'
+import { RefreshCw, Inbox, Search, SlidersHorizontal, TriangleAlert, ExternalLink } from 'lucide-vue-next'
 import PaymentMethodChip, { type PaymentMethod } from '@/components/admin/PaymentMethodChip.vue'
 import RefundStateChip from '@/components/admin/RefundStateChip.vue'
 import { disputeChipKind, refundChipKind } from '@/lib/refundState'
 import RefundOrderButton from '@/components/admin/RefundOrderButton.vue'
 import { useCan } from '@/composables/useCan'
+import PaymentGroupIcon from '@/components/admin/PaymentGroupIcon.vue'
+import { groupLabel, type FilterGroupRef } from '@/lib/paymentFilterIcons'
 
 const { t } = useI18n()
 const { can } = useCan()
 const canRefund = can('money')
+// Who may change the filter groups; everyone else reads the page and the groups.
+const canEditFilters = can('paymentFilters')
+// The group settings, reached from here (no sidebar item).
+const FILTERS_PATH = '/admin/harbor/recent-payments/filters'
 const { fetchApi } = useApi()
 const route = useRoute()
 const router = useRouter()
@@ -24,7 +30,8 @@ interface Payment {
   amount: number
   payer: string
   summary: string
-  kind: 'guest' | 'motorhome' | 'slipping' | 'faktura' | 'merch' | 'other'
+  // The slug of the filter group the payment is in.
+  kind: string
   channel: string
   method: PaymentMethod
   card_brand: string | null
@@ -64,43 +71,52 @@ const since = ref('')
 const until = ref('')
 const search = ref('')
 
-// Filters the harbor master picks from, additive: every chip pressed adds its
-// kinds to the list, and "all" (no kind filter) is what is left when none is.
-// "harbor" is what the harbor is paid for on the spot (guest berths and
-// motorhomes); each id maps to the API's kind list ('' for every kind).
-const filters = {
-  all: '',
-  harbor: 'guest,motorhome',
-  guest: 'guest',
-  motorhome: 'motorhome',
-  slipping: 'slipping',
-  faktura: 'faktura',
-  merch: 'merch',
-  other: 'other',
-} as const
-type FilterId = keyof typeof filters
-const filterIds = Object.keys(filters) as FilterId[]
-const DEFAULT_KINDS: FilterId[] = ['all']
-// A key of its own: a single choice stored under the previous key does not
-// apply to additive filters, so such a device starts on "all".
+// The chips are the club's filter groups (BRY-522), as the server sends them
+// with the payments. Pressing a chip adds its group to the filter, and "all"
+// (no kind filter) is what is left when none is pressed. The ids are group
+// slugs; the seeded groups keep the old kind ids, so links and the choice
+// stored on a device keep working.
+const ALL = 'all'
+const DEFAULT_KINDS = [ALL]
+// The same key as before the groups: a stored slug that still exists keeps
+// filtering, and one that does not is dropped after the first answer.
 const STORAGE_KEY = 'recentPayments.kinds'
+// What a slug looks like (paymentfilters.Slugify); anything else in a link or
+// in storage is dropped before it reaches the server.
+const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,39}$/
+// The "harbor" chip from before the groups: guest berths and motorhomes.
+const LEGACY_HARBOR = ['guest', 'motorhome']
 
-// A membership test on the id list, not `in`: `?kind=constructor` must not
-// pass as a filter.
-function isFilterId(v: unknown): v is FilterId {
-  return typeof v === 'string' && (filterIds as string[]).includes(v)
+interface FilterGroup extends FilterGroupRef {
+  builtin: string | null
 }
 
-// "guest,motorhome" to its valid, de-duplicated ids; null when none is valid.
-// "all" excludes every other id, since it is the absence of a filter.
-function parseKinds(v: unknown): FilterId[] | null {
+// The chips, in the order the server sent; empty until the first answer.
+const filterGroups = ref<FilterGroup[]>([])
+// The first answer has arrived; before it the chips are placeholders.
+const filterGroupsLoaded = ref(false)
+// Active price items in no group, sent to those who may assign them.
+const unassignedItems = ref(0)
+
+// "guest,motorhome" to its slug-shaped, de-duplicated ids; null when none is.
+// "all" excludes every other id, since it is the absence of a filter, and the
+// legacy "harbor" expands to its two groups. Whether a slug is a group is
+// decided against the server's list once it has answered.
+function parseKinds(v: unknown): string[] | null {
   if (typeof v !== 'string') return null
-  const ids = [...new Set(v.split(',').filter(isFilterId))]
+  const ids = [
+    ...new Set(
+      v
+        .split(',')
+        .flatMap((id) => (id === 'harbor' ? LEGACY_HARBOR : [id]))
+        .filter((id) => SLUG_RE.test(id)),
+    ),
+  ]
   if (ids.length === 0) return null
-  return ids.includes('all') ? ['all'] : ids
+  return ids.includes(ALL) ? [ALL] : ids
 }
 
-function storedKinds(): FilterId[] | null {
+function storedKinds(): string[] | null {
   try {
     return parseKinds(localStorage.getItem(STORAGE_KEY))
   } catch {
@@ -114,40 +130,59 @@ const kindKey = computed(() => {
   const q = route.query.kind
   return (parseKinds(Array.isArray(q) ? q[0] : q) ?? storedKinds() ?? DEFAULT_KINDS).join(',')
 })
-const kinds = computed(() => kindKey.value.split(',') as FilterId[])
+const kinds = computed(() => kindKey.value.split(','))
 
 // Pressing a pressed chip removes it; "all" clears the rest, and removing the
 // last one falls back to "all".
-function nextKinds(current: FilterId[], id: FilterId): FilterId[] {
-  if (id === 'all') return ['all']
-  const rest = current.filter((k) => k !== 'all')
+function nextKinds(current: string[], id: string): string[] {
+  if (id === ALL) return [ALL]
+  const rest = current.filter((k) => k !== ALL)
   const next = rest.includes(id) ? rest.filter((k) => k !== id) : [...rest, id]
-  return next.length ? next : ['all']
+  return next.length ? next : [ALL]
 }
 
-function selectFilter(id: FilterId) {
-  const next = nextKinds(kinds.value, id).join(',')
+function writeKinds(next: string[]) {
+  const key = next.join(',')
   try {
-    localStorage.setItem(STORAGE_KEY, next)
+    localStorage.setItem(STORAGE_KEY, key)
   } catch {
     // Private browsing can refuse storage; the URL still carries the choice.
   }
-  router.replace({ query: { ...route.query, kind: next } })
+  router.replace({ query: { ...route.query, kind: key } })
+}
+
+function selectFilter(id: string) {
+  writeKinds(nextKinds(kinds.value, id))
 }
 
 // The API's kind list for the pressed chips; empty means every kind.
 function apiKinds(): string[] {
-  if (kinds.value.includes('all')) return []
-  return [...new Set(kinds.value.flatMap((id) => filters[id].split(',')))]
+  return kinds.value.includes(ALL) ? [] : kinds.value
 }
 
-const kindMeta: Record<string, { icon: any; classes: string }> = {
-  guest: { icon: Sailboat, classes: 'bg-blue-50 text-blue-700 ring-blue-200' },
-  motorhome: { icon: Van, classes: 'bg-teal-50 text-teal-700 ring-teal-200' },
-  slipping: { icon: Forklift, classes: 'bg-indigo-50 text-indigo-700 ring-indigo-200' },
-  faktura: { icon: FileText, classes: 'bg-slate-100 text-slate-700 ring-slate-200' },
-  merch: { icon: Store, classes: 'bg-amber-50 text-amber-700 ring-amber-200' },
-  other: { icon: CircleDollarSign, classes: 'bg-gray-50 text-gray-600 ring-gray-200' },
+// Drops the requested slugs that are not groups (a deleted or disabled group,
+// a stale link) and rewrites the URL and storage, so the page does not stay
+// filtered on a chip it cannot show. Only once the server has listed the
+// groups.
+function pruneKinds() {
+  if (!filterGroupsLoaded.value || kinds.value.includes(ALL)) return
+  const known = new Set(filterGroups.value.map((g) => g.slug))
+  const kept = kinds.value.filter((k) => known.has(k))
+  if (kept.length !== kinds.value.length) writeKinds(kept.length ? kept : [ALL])
+}
+
+// The group a payment is in; a slug the list does not have reads as Annet.
+function groupOf(kind: string): FilterGroup | undefined {
+  return filterGroups.value.find((g) => g.slug === kind)
+}
+// The fallback group as the club has it, renamed or re-iconed if it was.
+const fallbackGroup = computed(() => filterGroups.value.find((g) => g.builtin === 'other'))
+function kindIcon(kind: string): string {
+  return (groupOf(kind) ?? fallbackGroup.value)?.icon ?? 'circle-dollar-sign'
+}
+function kindLabel(kind: string): string {
+  const g = groupOf(kind) ?? fallbackGroup.value
+  return g ? groupLabel(g, t) : t('recentPayments.kind.other')
 }
 
 // Without a chosen range the list is the last 7 days, split into today and
@@ -216,6 +251,8 @@ async function load() {
     if (search.value.trim()) p.set('q', search.value.trim())
     const res = await fetchApi<{
       payments: Payment[]
+      groups?: FilterGroup[]
+      unassigned_items?: number
       has_more?: boolean
       open_disputes?: number
       open_disputes_url?: string
@@ -230,6 +267,12 @@ async function load() {
       openDisputes.value = res?.open_disputes ?? 0
       openDisputesUrl.value = res?.open_disputes_url ?? ''
       providerLinks.value = res?.provider_links ?? {}
+      unassignedItems.value = res?.unassigned_items ?? 0
+      if (res?.groups) {
+        filterGroups.value = res.groups
+        filterGroupsLoaded.value = true
+        pruneKinds()
+      }
     }
   } catch {
     // Rows from an earlier load stay on screen, with the failure above them.
@@ -269,15 +312,27 @@ onMounted(async () => {
         <h1 class="text-xl font-bold text-slate-900 sm:text-2xl">{{ t('recentPayments.title') }}</h1>
         <p class="mt-1 text-sm text-slate-500">{{ t('recentPayments.subtitle') }}</p>
       </div>
-      <button
-        class="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-        :disabled="loading"
-        :aria-label="t('recentPayments.refresh')"
-        @click="load"
-      >
-        <RefreshCw class="h-4 w-4" :class="loading ? 'animate-spin' : ''" />
-        <span class="hidden sm:inline">{{ t('recentPayments.refresh') }}</span>
-      </button>
+      <div class="flex shrink-0 gap-2">
+        <!-- Every admin viewer may open the groups; only writers can change them -->
+        <RouterLink
+          :to="FILTERS_PATH"
+          class="flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          :aria-label="t('recentPayments.filters.link')"
+          data-testid="filters-link"
+        >
+          <SlidersHorizontal class="h-4 w-4" aria-hidden="true" />
+          <span class="hidden sm:inline">{{ t('recentPayments.filters.link') }}</span>
+        </RouterLink>
+        <button
+          class="flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          :disabled="loading"
+          :aria-label="t('recentPayments.refresh')"
+          @click="load"
+        >
+          <RefreshCw class="h-4 w-4" :class="loading ? 'animate-spin' : ''" />
+          <span class="hidden sm:inline">{{ t('recentPayments.refresh') }}</span>
+        </button>
+      </div>
     </div>
 
     <!-- Provider back offices, so they are one tap away without a workflow of their own -->
@@ -318,21 +373,51 @@ onMounted(async () => {
       </span>
     </a>
 
+    <!-- Price items that fall under Annet for want of a group, for those who can assign them -->
+    <RouterLink
+      v-if="canEditFilters && unassignedItems > 0"
+      :to="FILTERS_PATH"
+      class="mt-4 flex min-h-11 items-center rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
+      data-testid="unassigned-hint"
+    >
+      {{ t('recentPayments.filters.unassignedHint', { count: unassignedItems }) }}
+    </RouterLink>
+
     <!-- Filters -->
     <div class="mt-4 space-y-3">
       <div class="flex flex-wrap gap-2" data-testid="kind-filters">
         <button
-          v-for="id in filterIds"
-          :key="id"
           type="button"
-          class="min-h-11 rounded-full px-4 text-sm font-medium ring-1 ring-inset"
-          :class="kinds.includes(id) ? 'bg-slate-900 text-white ring-slate-900' : 'bg-white text-slate-600 ring-slate-200 hover:bg-slate-50'"
-          :aria-pressed="kinds.includes(id)"
-          :data-filter="id"
-          @click="selectFilter(id)"
+          class="min-h-11 max-w-full truncate rounded-full px-4 text-sm font-medium ring-1 ring-inset"
+          :class="kinds.includes(ALL) ? 'bg-slate-900 text-white ring-slate-900' : 'bg-white text-slate-600 ring-slate-200 hover:bg-slate-50'"
+          :aria-pressed="kinds.includes(ALL)"
+          :data-filter="ALL"
+          @click="selectFilter(ALL)"
         >
-          {{ t('recentPayments.kind.' + id) }}
+          {{ t('recentPayments.kind.all') }}
         </button>
+        <button
+          v-for="g in filterGroups"
+          :key="g.slug"
+          type="button"
+          class="min-h-11 max-w-full truncate rounded-full px-4 text-sm font-medium ring-1 ring-inset"
+          :class="kinds.includes(g.slug) ? 'bg-slate-900 text-white ring-slate-900' : 'bg-white text-slate-600 ring-slate-200 hover:bg-slate-50'"
+          :aria-pressed="kinds.includes(g.slug)"
+          :data-filter="g.slug"
+          @click="selectFilter(g.slug)"
+        >
+          {{ groupLabel(g, t) }}
+        </button>
+        <!-- Before the first answer the club's chips are not known: keep the row's height -->
+        <template v-if="!filterGroupsLoaded">
+          <span
+            v-for="n in 3"
+            :key="n"
+            class="h-11 w-24 animate-pulse rounded-full bg-slate-100"
+            aria-hidden="true"
+            data-testid="kind-filter-placeholder"
+          />
+        </template>
       </div>
 
       <div class="relative">
@@ -410,19 +495,14 @@ onMounted(async () => {
           :key="p.id"
           class="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3"
         >
-          <span
-            class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full ring-1 ring-inset"
-            :class="(kindMeta[p.kind] || kindMeta.other).classes"
-          >
-            <component :is="(kindMeta[p.kind] || kindMeta.other).icon" class="h-4 w-4" />
-          </span>
+          <PaymentGroupIcon :icon="kindIcon(p.kind)" />
           <div class="min-w-0 flex-1">
             <div class="flex items-baseline justify-between gap-2">
               <p class="truncate font-medium text-slate-900">{{ p.payer || t('recentPayments.anonymous') }}</p>
               <p class="shrink-0 font-semibold text-slate-900">{{ nok(p.amount) }}</p>
             </div>
             <div class="mt-0.5 flex items-center justify-between gap-2 text-xs text-slate-500">
-              <span class="truncate">{{ p.summary || t('recentPayments.kind.' + p.kind) }}</span>
+              <span class="truncate">{{ p.summary || kindLabel(p.kind) }}</span>
               <span class="shrink-0">{{ fmtWhen(p.paid_at) }}</span>
             </div>
             <div class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
