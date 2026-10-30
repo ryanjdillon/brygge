@@ -487,6 +487,81 @@ export function useApplyVippsDraftBacklog() {
   })
 }
 
+// Posted Vipps charges parked on 3900 (BRY-557). status is what the rules
+// give now: reclassify (to the price item's account), needs_tildel (the
+// payer's faktura matches; reclass is revenue-only) or stays (reason_code).
+export interface VippsFallbackReclassItem {
+  entry_id: string
+  row_id: string
+  entry_number: number
+  date: string
+  amount: number
+  from: string
+  status: 'reclassify' | 'needs_tildel' | 'stays'
+  to?: string
+  price_item?: string
+  invoice_number?: number
+  reason_code?: string
+  reason?: string
+  // Set in an apply result only.
+  outcome?: 'reclassified' | 'skipped' | 'failed'
+  new_entry_number?: number
+  reversal_entry_number?: number
+}
+
+export interface VippsFallbackReclassTotal {
+  account_code: string
+  count: number
+  amount: number
+}
+
+export interface VippsFallbackReclassResult {
+  applied: boolean
+  auto_assign_enabled: boolean
+  from_account: string
+  // The club's Vipps clearing account, debited again by each repost.
+  clearing_account: string
+  items: VippsFallbackReclassItem[]
+  proposed: number
+  totals: VippsFallbackReclassTotal[]
+  needs_tildel: number
+  needs_tildel_amount: number
+  stays: number
+  stays_amount: number
+  reclassified: number
+  skipped: number
+  failed: number
+  stale_ids: string[]
+  closed_period_charges: number
+  closed_period_amount: number
+}
+
+// Preview is side-effect free; the apply is behind fresh TOTP on the server,
+// so call ensureFreshTotp() first. It moves only the charges listed in
+// targets (entry id -> the account the preview showed).
+export function previewVippsFallbackReclass() {
+  return apiFetch<VippsFallbackReclassResult>(`${BASE}/sync/vipps-fallback-reclass/preview`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  })
+}
+
+export function useApplyVippsFallbackReclass() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { targets: Record<string, string> }) =>
+      apiFetch<VippsFallbackReclassResult>(`${BASE}/sync/vipps-fallback-reclass`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['accounting', 'journal'] })
+    },
+  })
+}
+
 export function useApplyResplitInvoiceBilags() {
   const qc = useQueryClient()
   return useMutation({

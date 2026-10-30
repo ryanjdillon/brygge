@@ -45,6 +45,7 @@ import {
 } from '@/composables/useAccounting'
 import Select from '@/components/ui/form/Select.vue'
 import NumberInput from '@/components/ui/form/NumberInput.vue'
+import VippsFallbackReclass from '@/components/admin/VippsFallbackReclass.vue'
 import { ApiError } from '@/lib/errors'
 import { asClearedSettlementRefusal, type ClearedSettlementRefusal } from '@/composables/useClearedSettlement'
 import ClearedSettlementRefusalNote from '@/components/admin/ClearedSettlementRefusal.vue'
@@ -678,6 +679,9 @@ function formatNOK(amount: number): string {
           </li>
         </ul>
       </div>
+
+      <!-- Posted Vipps charges parked on 3900: preview, then apply with a fresh TOTP (BRY-557). -->
+      <VippsFallbackReclass v-if="canBook" />
 
     </div>
 
