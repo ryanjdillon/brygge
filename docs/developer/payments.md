@@ -47,7 +47,7 @@ The package holds no database code. Deciding what is owed, enforcing the club's 
 `vipps.PaymentProvider` ([`internal/vipps/provider.go`](../../backend/internal/vipps/provider.go)) wraps the ePayment client. It owns what is specific to Vipps:
 
 - the `chk-<32 hex>` reference, which is also the idempotency key (Vipps rejects a reused reference, so each attempt is new);
-- the 100-byte `paymentDescription` limit;
+- the 100-character `paymentDescription` limit, cut by rune so æ, ø, å and emoji are never split into invalid UTF-8;
 - asking guests (and only guests) for their name via profile sharing;
 - `WEB_REDIRECT` user flow.
 

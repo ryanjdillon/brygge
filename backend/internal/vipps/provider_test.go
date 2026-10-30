@@ -79,6 +79,21 @@ func TestPaymentProvider_CreatePaymentMapping(t *testing.T) {
 			req:      payments.Request{OrderID: "o3", AmountOre: 1, Currency: "NOK", Description: long, ReturnURL: "https://club.example.invalid"},
 			wantDesc: long[:100],
 		},
+		{
+			name:     "description cut at a character, not a byte",
+			req:      payments.Request{OrderID: "o4", AmountOre: 1, Currency: "NOK", Description: strings.Repeat("æøå", 50), ReturnURL: "https://club.example.invalid"},
+			wantDesc: strings.Repeat("æøå", 33) + "æ",
+		},
+		{
+			name:     "emoji description cut at a character",
+			req:      payments.Request{OrderID: "o5", AmountOre: 1, Currency: "NOK", Description: strings.Repeat("🚤", 150), ReturnURL: "https://club.example.invalid"},
+			wantDesc: strings.Repeat("🚤", 100),
+		},
+		{
+			name:     "100 multi-byte characters kept whole",
+			req:      payments.Request{OrderID: "o6", AmountOre: 1, Currency: "NOK", Description: strings.Repeat("ø", 100), ReturnURL: "https://club.example.invalid"},
+			wantDesc: strings.Repeat("ø", 100),
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

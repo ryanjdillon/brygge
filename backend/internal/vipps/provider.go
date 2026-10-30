@@ -11,7 +11,8 @@ import (
 // ProviderName identifies Vipps in a payments.Registry.
 const ProviderName = "vipps"
 
-// maxDescriptionLen is the ePayment API's limit on paymentDescription.
+// maxDescriptionLen is the ePayment API's limit on paymentDescription, in
+// characters rather than bytes.
 const maxDescriptionLen = 100
 
 // PaymentProvider adapts the ePayment client to payments.Provider.
@@ -39,10 +40,7 @@ func (p *PaymentProvider) Name() string { return ProviderName }
 // members are not, to spare them the consent step.
 func (p *PaymentProvider) CreatePayment(ctx context.Context, req payments.Request) (payments.Result, error) {
 	ref := newReference()
-	desc := req.Description
-	if len(desc) > maxDescriptionLen {
-		desc = desc[:maxDescriptionLen]
-	}
+	desc := truncateRunes(req.Description, maxDescriptionLen)
 	var profile *Profile
 	if req.IsGuest {
 		profile = &Profile{Scope: "name"}
@@ -72,4 +70,20 @@ func newReference() string {
 	var b [16]byte
 	_, _ = rand.Read(b[:])
 	return "chk-" + hex.EncodeToString(b[:])
+}
+
+// truncateRunes shortens s to at most n runes, so a multi-byte character such
+// as æ, ø, å or an emoji is never split into invalid UTF-8.
+func truncateRunes(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	i := 0
+	for pos := range s {
+		if i == n {
+			return s[:pos]
+		}
+		i++
+	}
+	return s
 }
