@@ -3,6 +3,7 @@ package accounting
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -285,6 +286,137 @@ func TestVippsSettlePathsSeeChangeCommittedWhileWaiting(t *testing.T) {
 	}
 }
 
+func (f *settleLockFixture) charge(t *testing.T, rowID string) (entryID, invoiceID *string) {
+	t.Helper()
+	if err := f.club.Pool.QueryRow(context.Background(),
+		`SELECT journal_entry_id::text, invoice_id::text FROM vipps_import_rows WHERE id = $1`, rowID).Scan(&entryID, &invoiceID); err != nil {
+		t.Fatal(err)
+	}
+	return entryID, invoiceID
+}
+
+// Undoing a legacy settlement (Angre on its bank row), posted or still a
+// draft (the resync's), releases the bank row, every Vipps row it booked and
+// every faktura those charges recorded, so the fakturas can be settled again
+// by a confirm or by a manual assign.
+func TestUnassignLegacySettlementReopensEveryFaktura(t *testing.T) {
+	for _, post := range []bool{true, false} {
+		name := "posted"
+		if !post {
+			name = "draft"
+		}
+		t.Run(name, func(t *testing.T) {
+			f := newSettleLockFixture(t)
+			ctx := context.Background()
+			c := f.club
+			imp := c.NewBankImport(t)
+			invA := c.NewInvoice(t, fin.InvoiceOpts{Member: &f.member, Cents: 45000})
+			invB := c.NewInvoice(t, fin.InvoiceOpts{Member: &f.member, Cents: 30000})
+			chargeA := c.NewVippsRow(t, fin.VippsRowOpts{Cents: 45000, CustomerName: "Synthetic Payer"})
+			chargeB := c.NewVippsRow(t, fin.VippsRowOpts{Cents: 30000, CustomerName: "Synthetic Payer"})
+			lines := []VippsReconcileLine{
+				{Kind: "bank_in", AccountCode: "1920", Debit: 750},
+				{Kind: "receivable", AccountCode: receivablesAccountCode, Credit: 450, LinkedInvoiceID: invA.ID, VippsRowID: chargeA},
+				{Kind: "receivable", AccountCode: receivablesAccountCode, Credit: 300, LinkedInvoiceID: invB.ID, VippsRowID: chargeB},
+			}
+			confirm := func(row string) {
+				t.Helper()
+				if _, err := f.svc.reconcileVippsConfirm(ctx, c.ID, row, "", c.Treasurer.ID, lines, post); err != nil {
+					t.Fatalf("confirm: %v", err)
+				}
+			}
+
+			bankRow := c.NewBankRow(t, imp, fin.BankRowOpts{Cents: 75000})
+			confirm(bankRow)
+			if !f.paid(t, invA) || !f.paid(t, invB) {
+				t.Fatalf("confirm did not pay both fakturas")
+			}
+
+			res, err := f.svc.UnassignBankRowReported(ctx, c.ID, c.Treasurer.ID, bankRow)
+			if err != nil {
+				t.Fatalf("unassign: %v", err)
+			}
+			for label, charge := range map[string]string{"A": chargeA, "B": chargeB} {
+				if entry, inv := f.charge(t, charge); entry != nil || inv != nil {
+					t.Errorf("charge %s after unassign: entry %v, faktura %v; want both cleared", label, entry, inv)
+				}
+			}
+			if f.paid(t, invA) || f.paid(t, invB) {
+				t.Errorf("unassign left a faktura paid: A %v, B %v", f.paid(t, invA), f.paid(t, invB))
+			}
+			wantInvoices := []string{invA.ID, invB.ID}
+			slices.Sort(wantInvoices)
+			wantCharges := []string{chargeA, chargeB}
+			slices.Sort(wantCharges)
+			if !slices.Equal(res.ReopenedInvoiceIDs, wantInvoices) || !slices.Equal(res.ReleasedVippsRowIDs, wantCharges) {
+				t.Errorf("result reopened %v, released %v; want %v, %v",
+					res.ReopenedInvoiceIDs, res.ReleasedVippsRowIDs, wantInvoices, wantCharges)
+			}
+
+			// The same settlement books again.
+			confirm(bankRow)
+			if _, _, err := f.svc.UnassignBankRow(ctx, c.ID, c.Treasurer.ID, bankRow); err != nil {
+				t.Fatalf("second unassign: %v", err)
+			}
+			// And a manual assign of a released faktura is not blocked.
+			other := c.NewBankRow(t, imp, fin.BankRowOpts{Cents: 45000})
+			if _, err := f.svc.AssignBankRowToInvoice(ctx, c.ID, c.Treasurer.ID, other, invA.ID); err != nil {
+				t.Errorf("manual assign after unassign: %v", err)
+			}
+		})
+	}
+}
+
+// Undoing a settlement touches only what the settlement booked. A settlement
+// with a charge booked to 1500 unlinked, and another member's faktura paid by
+// a manual bank assign the same day for the same amount, leaves that
+// faktura, its payment and its entry alone.
+func TestUnassignLegacySettlementLeavesSameDayBookingAlone(t *testing.T) {
+	f := newSettleLockFixture(t)
+	ctx := context.Background()
+	c := f.club
+	imp := c.NewBankImport(t)
+	day := time.Date(c.Year, 6, 10, 0, 0, 0, 0, time.UTC)
+
+	other := fin.Member{ID: c.NewMember(t, "member").ID}
+	otherInv := c.NewInvoice(t, fin.InvoiceOpts{Member: &other, Cents: 45000})
+	otherRow := c.NewBankRow(t, imp, fin.BankRowOpts{Cents: 45000, Date: day})
+	otherEntry, err := f.svc.AssignBankRowToInvoice(ctx, c.ID, c.Treasurer.ID, otherRow, otherInv.ID)
+	if err != nil {
+		t.Fatalf("book the other faktura: %v", err)
+	}
+	if !f.paid(t, otherInv) {
+		t.Fatal("the other faktura is not paid")
+	}
+
+	charge := c.NewVippsRow(t, fin.VippsRowOpts{Cents: 45000, CustomerName: "Synthetic Payer"})
+	settlementRow := c.NewBankRow(t, imp, fin.BankRowOpts{Cents: 45000, Date: day})
+	if _, err := f.svc.ReconcileVippsConfirm(ctx, c.ID, settlementRow, "", c.Treasurer.ID, []VippsReconcileLine{
+		{AccountCode: "1920", Debit: 450},
+		{AccountCode: receivablesAccountCode, Credit: 450, VippsRowID: charge},
+	}); err != nil {
+		t.Fatalf("confirm: %v", err)
+	}
+
+	if _, _, err := f.svc.UnassignBankRow(ctx, c.ID, c.Treasurer.ID, settlementRow); err != nil {
+		t.Fatalf("unassign: %v", err)
+	}
+	if !f.paid(t, otherInv) {
+		t.Errorf("undoing the settlement removed another faktura's payment")
+	}
+	var status string
+	if err := c.Pool.QueryRow(ctx,
+		`SELECT status FROM journal_entries WHERE id = $1`, otherEntry).Scan(&status); err != nil || status != "posted" {
+		t.Errorf("the other booking's entry is %q (%v), want posted", status, err)
+	}
+	if !f.bankRowBooked(t, otherRow) {
+		t.Errorf("the other booking's bank row was released")
+	}
+	if f.bankRowBooked(t, settlementRow) || f.vippsBooked(t, charge) {
+		t.Errorf("the settlement was not released")
+	}
+}
+
 // A settlement whose Vipps row was booked another way meanwhile (per charge)
 // is refused with nothing booked, rather than booking the charge twice.
 func TestReconcileVippsConfirmRefusesRowAlreadyBooked(t *testing.T) {
@@ -308,6 +440,26 @@ func TestReconcileVippsConfirmRefusesRowAlreadyBooked(t *testing.T) {
 	}
 	if f.bankRowBooked(t, bankRow) || f.entries(t) != before {
 		t.Errorf("a refused confirm booked the bank row or left an entry")
+	}
+}
+
+// A single charge of a settlement is not undone on its own: that would void
+// the bilag the bank row and the other charges share.
+func TestUnassignVippsChargeRefusesLegacySettlementCharge(t *testing.T) {
+	f := newSettleLockFixture(t)
+	ctx := context.Background()
+	c := f.club
+	inv := c.NewInvoice(t, fin.InvoiceOpts{Member: &f.member, Cents: 45000})
+	charge := c.NewVippsRow(t, fin.VippsRowOpts{Cents: 45000, CustomerName: "Synthetic Payer"})
+	bankRow := c.NewBankRow(t, c.NewBankImport(t), fin.BankRowOpts{Cents: 45000})
+	if _, err := f.svc.ReconcileVippsConfirm(ctx, c.ID, bankRow, "", c.Treasurer.ID, confirmLines(inv, charge)); err != nil {
+		t.Fatalf("confirm: %v", err)
+	}
+	if _, _, err := f.svc.UnassignVippsCharge(ctx, c.ID, c.Treasurer.ID, charge); err == nil {
+		t.Fatal("unassigning one charge of a settlement succeeded")
+	}
+	if !f.bankRowBooked(t, bankRow) || !f.vippsBooked(t, charge) {
+		t.Errorf("the refused unassign changed the settlement")
 	}
 }
 

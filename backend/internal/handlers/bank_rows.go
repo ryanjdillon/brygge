@@ -559,6 +559,8 @@ func (h *BankRowsHandler) HandleUnassign(w http.ResponseWriter, r *http.Request)
 				"prior_journal_entry_id": res.PriorJournalID,
 				"prior_invoice_id":       res.PriorInvoiceID,
 				"sibling_row_ids":        res.SiblingRowIDs,
+				"reopened_invoice_ids":   res.ReopenedInvoiceIDs,
+				"released_vipps_row_ids": res.ReleasedVippsRowIDs,
 			})
 	}
 	JSON(w, http.StatusOK, map[string]string{"status": "unassigned"})

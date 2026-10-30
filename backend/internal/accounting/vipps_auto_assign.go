@@ -302,6 +302,13 @@ func (s *Service) markAutoAssigned(ctx context.Context, clubID, actorID, rowID, 
 	}
 }
 
+// ErrVippsChargeInSettlement means a charge was booked together with its
+// Vipps settlement (one entry shared with the bank deposit) and is undone from
+// the bank row. The handlers answer 409 charge_in_settlement. Shown as is, so
+// a full Norwegian sentence.
+var ErrVippsChargeInSettlement = errors.New( //nolint:staticcheck // ST1005: a user-facing sentence, see above
+	"Vipps-betalingen er bokført sammen med oppgjøret. Angre oppgjøret fra bankraden.")
+
 // UnassignVippsCharge undoes a charge booking so the charge returns to the
 // Tildel queue: a draft entry is deleted, a posted one voided (the original
 // and its reversal stay, as bokføringsloven requires), and a faktura the
@@ -337,6 +344,19 @@ func (s *Service) UnassignVippsCharge(ctx context.Context, clubID, actorID, rowI
 		if isOrder {
 			return "", "", fmt.Errorf("charge was booked from checkout order %s — void its bilag instead", orderRef)
 		}
+	}
+	// A legacy settlement books one entry for its bank row and every charge
+	// it pays. Voiding it from one charge would leave the bank row and the
+	// other charges on a voided entry, so it is undone from the bank row.
+	var shared bool
+	if err := s.db.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM bank_import_rows WHERE club_id = $1 AND journal_entry_id = $2::uuid)`,
+		clubID, *entryID,
+	).Scan(&shared); err != nil {
+		return "", "", fmt.Errorf("checking settlement booking: %w", err)
+	}
+	if shared {
+		return "", "", ErrVippsChargeInSettlement
 	}
 	priorEntryID = *entryID
 	if invoiceID != nil {

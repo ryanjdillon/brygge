@@ -178,3 +178,72 @@ func TestAssignVoidedFakturaIsConflict(t *testing.T) {
 		t.Errorf("a refused confirm booked the bank row")
 	}
 }
+
+// Undoing a legacy Vipps settlement from its bank row audits every faktura it
+// reopened and every Vipps row it released; undoing one of its charges alone
+// is 409 charge_in_settlement, and a settlement with a Vipps row that is
+// already booked is 409 vipps_row_booked.
+func TestUnassignLegacySettlementRoutes(t *testing.T) {
+	env := newAliasTestEnv(t, func(r chi.Router, svc *accounting.Service, as *audit.Service) {
+		h := NewBankRowsHandler(svc, as, zerolog.Nop())
+		r.Post("/bank-rows/{rowID}/unassign", h.HandleUnassign)
+		ah := NewAccountingHandler(svc, as, nil, nil, nil, zerolog.Nop())
+		r.Post("/bank-rows/{rowID}/reconcile-vipps/confirm", ah.HandleVippsReconcileConfirm)
+		r.Post("/vipps-charges/{rowID}/unassign", ah.HandleUnassignVippsCharge)
+	})
+	club := env.club
+	ctx := context.Background()
+	imp := club.NewBankImport(t)
+	m := club.NewMember(t, "member")
+	invA := club.NewInvoice(t, fin.InvoiceOpts{Member: &m, Cents: 30000})
+	invB := club.NewInvoice(t, fin.InvoiceOpts{Member: &m, Cents: 20000})
+	chargeA := club.NewVippsRow(t, fin.VippsRowOpts{Cents: 30000})
+	chargeB := club.NewVippsRow(t, fin.VippsRowOpts{Cents: 20000})
+	row := club.NewBankRow(t, imp, fin.BankRowOpts{Cents: 50000})
+	confirm := map[string]any{"lines": []accounting.VippsReconcileLine{
+		{AccountCode: "1920", Debit: 500},
+		{AccountCode: "1500", Credit: 300, LinkedInvoiceID: invA.ID, VippsRowID: chargeA},
+		{AccountCode: "1500", Credit: 200, LinkedInvoiceID: invB.ID, VippsRowID: chargeB},
+	}}
+	if rec := env.serve([]string{"treasurer"}, http.MethodPost, "/bank-rows/"+row+"/reconcile-vipps/confirm", confirm); rec.Code != http.StatusCreated {
+		t.Fatalf("confirm: %d %s", rec.Code, rec.Body.String())
+	}
+
+	// A second settlement naming a booked charge is refused.
+	row2 := club.NewBankRow(t, imp, fin.BankRowOpts{Cents: 30000})
+	wantRefusalCode(t, env.serve([]string{"treasurer"}, http.MethodPost, "/bank-rows/"+row2+"/reconcile-vipps/confirm",
+		map[string]any{"lines": []accounting.VippsReconcileLine{
+			{AccountCode: "1920", Debit: 300},
+			{AccountCode: "1500", Credit: 300, VippsRowID: chargeA},
+		}}), vippsRowBookedCode)
+
+	wantRefusalCode(t, env.serve([]string{"treasurer"}, http.MethodPost, "/vipps-charges/"+chargeA+"/unassign", map[string]any{}),
+		"charge_in_settlement")
+
+	if rec := env.serve([]string{"treasurer"}, http.MethodPost, "/bank-rows/"+row+"/unassign", map[string]any{"confirm": true}); rec.Code != http.StatusOK {
+		t.Fatalf("unassign: %d %s", rec.Code, rec.Body.String())
+	}
+	logged := env.audit(audit.ActionBankRowUnassigned)
+	if len(logged) != 1 {
+		t.Fatalf("%d unassign audit rows, want 1", len(logged))
+	}
+	ids := func(key string) []string {
+		var out []string
+		list, _ := logged[0][key].([]any)
+		for _, v := range list {
+			out = append(out, v.(string))
+		}
+		return out
+	}
+	if got := ids("reopened_invoice_ids"); len(got) != 2 {
+		t.Errorf("audited reopened fakturas = %v, want both", got)
+	}
+	if got := ids("released_vipps_row_ids"); len(got) != 2 {
+		t.Errorf("audited released Vipps rows = %v, want both", got)
+	}
+	var paid int
+	if err := club.Pool.QueryRow(ctx,
+		`SELECT count(*) FROM invoices WHERE id = ANY($1::uuid[]) AND payment_id IS NOT NULL`, []string{invA.ID, invB.ID}).Scan(&paid); err != nil || paid != 0 {
+		t.Errorf("%d fakturas still paid after the unassign (%v)", paid, err)
+	}
+}

@@ -194,9 +194,11 @@ func (s *Service) regenerateOneSettlement(ctx context.Context, clubID, createdBy
 		}
 	}
 	// Detach the settlement's rows from the legacy entry so they can be
-	// re-booked. invoices.payment_id is deliberately NOT touched.
+	// re-booked. invoices.payment_id is deliberately NOT touched, so a faktura
+	// the legacy bilag paid stays paid; the charges' own invoice_id is cleared
+	// because the re-post may book a charge to an account other than 1500.
 	if _, derr := s.db.Exec(ctx,
-		`UPDATE vipps_import_rows SET journal_entry_id = NULL
+		`UPDATE vipps_import_rows SET journal_entry_id = NULL, invoice_id = NULL
 		  WHERE journal_entry_id = $1 AND club_id = $2`,
 		entryID, clubID,
 	); derr != nil {

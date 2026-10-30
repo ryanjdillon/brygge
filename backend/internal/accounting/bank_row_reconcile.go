@@ -760,6 +760,11 @@ type UnassignResult struct {
 	PriorJournalID string
 	PriorInvoiceID string
 	SiblingRowIDs  []string
+	// ReopenedInvoiceIDs are the fakturas whose payment the unassign
+	// removed (the row's own and every faktura a released charge recorded);
+	// ReleasedVippsRowIDs the Vipps rows of a legacy settlement it released.
+	ReopenedInvoiceIDs  []string
+	ReleasedVippsRowIDs []string
 }
 
 // UnassignBankRowReported is UnassignBankRow, also reporting the sibling
@@ -767,13 +772,13 @@ type UnassignResult struct {
 func (s *Service) UnassignBankRowReported(
 	ctx context.Context, clubID, actorID, bankRowID string,
 ) (UnassignResult, error) {
-	priorJournalID, priorInvoiceID, siblings, err := s.unassignBankRow(ctx, clubID, actorID, bankRowID)
-	return UnassignResult{PriorJournalID: priorJournalID, PriorInvoiceID: priorInvoiceID, SiblingRowIDs: siblings}, err
+	return s.unassignBankRow(ctx, clubID, actorID, bankRowID)
 }
 
 func (s *Service) unassignBankRow( //nolint:gocognit,cyclop // reverses each posting kind inside one transaction; split tracked in BRY-424
 	ctx context.Context, clubID, actorID, bankRowID string,
-) (priorJournalID, priorInvoiceID string, siblings []string, err error) {
+) (res UnassignResult, err error) {
+	var priorJournalID, priorInvoiceID string
 	var invoiceIDPtr *string
 	if err := s.db.QueryRow(ctx,
 		`SELECT COALESCE(journal_entry_id::text, ''), invoice_id
@@ -782,12 +787,12 @@ func (s *Service) unassignBankRow( //nolint:gocognit,cyclop // reverses each pos
 		bankRowID, clubID,
 	).Scan(&priorJournalID, &invoiceIDPtr); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return "", "", nil, ErrBankRowNotFound
+			return UnassignResult{}, ErrBankRowNotFound
 		}
-		return "", "", nil, fmt.Errorf("load row: %w", err)
+		return UnassignResult{}, fmt.Errorf("load row: %w", err)
 	}
 	if priorJournalID == "" {
-		return "", "", nil, ErrBankRowNotAssigned
+		return UnassignResult{}, ErrBankRowNotAssigned
 	}
 	if invoiceIDPtr != nil {
 		priorInvoiceID = *invoiceIDPtr
@@ -796,7 +801,10 @@ func (s *Service) unassignBankRow( //nolint:gocognit,cyclop // reverses each pos
 		// recover the faktura through the payment the assignment created.
 		// Only a faktura booking credits receivables: an account booking
 		// (Lag bilag) has no 1500 line, and without that guard a faktura
-		// paid the same day for the same amount would lose its payment.
+		// paid the same day for the same amount would lose its payment. The
+		// faktura must also be one this entry credited 1500 for and no other
+		// booked row records (a settlement's charges name their fakturas
+		// themselves, see releaseVippsRowsTx).
 		_ = s.db.QueryRow(ctx,
 			`SELECT i.id
 			   FROM invoices i
@@ -808,10 +816,13 @@ func (s *Service) unassignBankRow( //nolint:gocognit,cyclop // reverses each pos
 			  WHERE i.club_id = $2
 			    AND i.user_id = p.user_id
 			    AND i.total_amount = p.amount
+			    AND NOT `+invoiceBookedRowSQL("i")+`
+			    AND NOT EXISTS (SELECT 1 FROM vipps_import_rows vr WHERE vr.journal_entry_id = je.id)
 			    AND EXISTS (
 			        SELECT 1 FROM journal_lines jl
 			          JOIN accounts a ON a.id = jl.account_id
-			         WHERE jl.journal_entry_id = je.id AND a.code = $3)
+			         WHERE jl.journal_entry_id = je.id AND a.code = $3
+			           AND jl.credit = i.total_amount)
 			  LIMIT 1`,
 			priorJournalID, clubID, receivablesAccountCode,
 		).Scan(&priorInvoiceID)
@@ -819,7 +830,7 @@ func (s *Service) unassignBankRow( //nolint:gocognit,cyclop // reverses each pos
 
 	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
-		return "", "", nil, fmt.Errorf("begin tx: %w", err)
+		return UnassignResult{}, fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
@@ -848,20 +859,20 @@ func (s *Service) unassignBankRow( //nolint:gocognit,cyclop // reverses each pos
 		clubID, bankRowID, priorInvoiceID, priorJournalID,
 	)
 	if err != nil {
-		return "", "", nil, fmt.Errorf("load bookings: %w", err)
+		return UnassignResult{}, fmt.Errorf("load bookings: %w", err)
 	}
 	var entries []involved
 	for rows.Next() {
 		var e involved
 		if err := rows.Scan(&e.id, &e.status); err != nil {
 			rows.Close()
-			return "", "", nil, fmt.Errorf("scan booking: %w", err)
+			return UnassignResult{}, fmt.Errorf("scan booking: %w", err)
 		}
 		entries = append(entries, e)
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
-		return "", "", nil, fmt.Errorf("bookings: %w", err)
+		return UnassignResult{}, fmt.Errorf("bookings: %w", err)
 	}
 
 	var drafts []string
@@ -875,9 +886,9 @@ func (s *Service) unassignBankRow( //nolint:gocognit,cyclop // reverses each pos
 					continue
 				}
 				if errors.Is(err, ErrPeriodClosed) {
-					return "", "", nil, fmt.Errorf("bank row is booked in a closed fiscal period; reopen it or correct with a new entry: %w", ErrPeriodClosed)
+					return UnassignResult{}, fmt.Errorf("bank row is booked in a closed fiscal period; reopen it or correct with a new entry: %w", ErrPeriodClosed)
 				}
-				return "", "", nil, fmt.Errorf("voiding bilag: %w", err)
+				return UnassignResult{}, fmt.Errorf("voiding bilag: %w", err)
 			}
 		case "draft":
 			drafts = append(drafts, e.id)
@@ -899,10 +910,21 @@ func (s *Service) unassignBankRow( //nolint:gocognit,cyclop // reverses each pos
 		clubID, bankRowID, priorInvoiceID, entryIDs,
 	)
 	if err != nil {
-		return "", "", nil, fmt.Errorf("clear rows: %w", err)
+		return UnassignResult{}, fmt.Errorf("clear rows: %w", err)
 	}
-	if siblings, err = otherRowIDs(cleared, bankRowID); err != nil {
-		return "", "", nil, fmt.Errorf("clear rows: %w", err)
+	siblings, err := otherRowIDs(cleared, bankRowID)
+	if err != nil {
+		return UnassignResult{}, fmt.Errorf("clear rows: %w", err)
+	}
+	// A legacy Vipps settlement books one entry for the bank row and every
+	// Vipps row it pays (charges, payouts, fees). Those go back to Tildel
+	// with it, and each faktura a charge recorded is reopened, or
+	// invoiceBookedRowSQL would keep reading them as booked. Before the draft
+	// delete: vipps_import_rows.journal_entry_id is ON DELETE SET NULL, after
+	// which the rows can no longer be found by their entry.
+	released, err := releaseVippsRowsTx(ctx, tx, clubID, entryIDs)
+	if err != nil {
+		return UnassignResult{}, err
 	}
 	if len(drafts) > 0 {
 		if _, err := tx.Exec(ctx,
@@ -910,21 +932,90 @@ func (s *Service) unassignBankRow( //nolint:gocognit,cyclop // reverses each pos
 			  WHERE club_id = $1 AND status = 'draft' AND id = ANY($2::uuid[])`,
 			clubID, drafts,
 		); err != nil {
-			return "", "", nil, fmt.Errorf("delete draft bilag: %w", err)
+			return UnassignResult{}, fmt.Errorf("delete draft bilag: %w", err)
 		}
 	}
 	if err := releaseStripePayoutTx(ctx, tx, clubID, entryIDs); err != nil {
-		return "", "", nil, err
+		return UnassignResult{}, err
 	}
+	reopen := slices.Clone(released.invoiceIDs)
 	if priorInvoiceID != "" {
-		if _, err := reopenInvoicePaymentTx(ctx, tx, clubID, priorInvoiceID); err != nil {
-			return "", "", nil, err
+		reopen = append(reopen, priorInvoiceID)
+	} else if len(released.invoiceIDs) > 0 {
+		priorInvoiceID = released.invoiceIDs[0]
+	}
+	slices.Sort(reopen)
+	reopened := []string{}
+	for _, id := range slices.Compact(reopen) {
+		ok, err := reopenInvoicePaymentTx(ctx, tx, clubID, id)
+		if err != nil {
+			return UnassignResult{}, err
+		}
+		if ok {
+			reopened = append(reopened, id)
 		}
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return "", "", nil, fmt.Errorf("commit: %w", err)
+		return UnassignResult{}, fmt.Errorf("commit: %w", err)
 	}
-	return priorJournalID, priorInvoiceID, siblings, nil
+	return UnassignResult{
+		PriorJournalID:      priorJournalID,
+		PriorInvoiceID:      priorInvoiceID,
+		SiblingRowIDs:       siblings,
+		ReopenedInvoiceIDs:  reopened,
+		ReleasedVippsRowIDs: released.rowIDs,
+	}, nil
+}
+
+// releasedVippsRows is what releaseVippsRowsTx unlinked: the Vipps rows and
+// the fakturas (distinct, in id order) their charges recorded.
+type releasedVippsRows struct {
+	rowIDs     []string
+	invoiceIDs []string
+}
+
+// releaseVippsRowsTx unlinks the Vipps rows (charges, payouts, fees) booked
+// on the given entries, clearing the faktura each charge recorded. A charge
+// left pointing at a voided entry would read as booked for ever.
+func releaseVippsRowsTx(ctx context.Context, tx pgx.Tx, clubID string, entryIDs []string) (releasedVippsRows, error) {
+	var out releasedVippsRows
+	if len(entryIDs) == 0 {
+		return out, nil
+	}
+	rows, err := tx.Query(ctx,
+		`UPDATE vipps_import_rows
+		    SET journal_entry_id = NULL, invoice_id = NULL
+		   FROM (SELECT id, invoice_id AS prior_invoice_id FROM vipps_import_rows
+		          WHERE club_id = $1 AND journal_entry_id = ANY($2::uuid[])) old
+		  WHERE vipps_import_rows.id = old.id
+		RETURNING vipps_import_rows.id::text, old.prior_invoice_id::text`,
+		clubID, entryIDs)
+	if err != nil {
+		return out, fmt.Errorf("release vipps rows: %w", err)
+	}
+	type released struct {
+		id      string
+		invoice *string
+	}
+	got, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (released, error) {
+		var x released
+		err := r.Scan(&x.id, &x.invoice)
+		return x, err
+	})
+	if err != nil {
+		return out, fmt.Errorf("release vipps rows: %w", err)
+	}
+	seen := map[string]bool{}
+	for _, g := range got {
+		out.rowIDs = append(out.rowIDs, g.id)
+		if g.invoice != nil && !seen[*g.invoice] {
+			seen[*g.invoice] = true
+			out.invoiceIDs = append(out.invoiceIDs, *g.invoice)
+		}
+	}
+	slices.Sort(out.rowIDs)
+	slices.Sort(out.invoiceIDs)
+	return out, nil
 }
 
 // reopenInvoicePaymentTx undoes linkInvoicePayment for a faktura whose

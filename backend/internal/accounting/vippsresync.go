@@ -121,7 +121,7 @@ func (s *Service) ResyncVippsBilags(ctx context.Context, clubID, createdBy strin
 		// Unlink any Vipps rows attached to the old draft so the
 		// cascade can re-tag them.
 		_, _ = s.db.Exec(ctx,
-			`UPDATE vipps_import_rows SET journal_entry_id = NULL
+			`UPDATE vipps_import_rows SET journal_entry_id = NULL, invoice_id = NULL
 			  WHERE journal_entry_id = $1 AND club_id = $2`,
 			c.entryID, clubID,
 		)

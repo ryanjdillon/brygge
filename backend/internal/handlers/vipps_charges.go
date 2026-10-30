@@ -206,6 +206,10 @@ func (h *AccountingHandler) HandleUnassignVippsCharge(w http.ResponseWriter, r *
 	} else {
 		entryID, invoiceID, err = h.svc.UnassignVippsCharge(ctx, claims.ClubID, claims.UserID, rowID)
 	}
+	if errors.Is(err, accounting.ErrVippsChargeInSettlement) {
+		JSON(w, http.StatusConflict, map[string]string{"error": err.Error(), "code": "charge_in_settlement"})
+		return
+	}
 	if err != nil {
 		h.log.Warn().Err(err).Str("row_id", rowID).Msg("unassign vipps charge")
 		Error(w, http.StatusBadRequest, err.Error())
