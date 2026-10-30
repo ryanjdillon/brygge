@@ -94,6 +94,20 @@ in
     };
   };
 
+  # Internet scanners are most of sshd's journal volume. Every entry is a
+  # deny (`~`) pattern on MESSAGE for a pre-authentication or scanner-only
+  # line; `Accepted …`, `session opened`, `Failed …` and other `error:` /
+  # `fatal:` lines are not matched and stay. Dropped lines are gone for good,
+  # so debug with `sshd -D -e` (alerts-runbook.md, JournalRetentionShort).
+  systemd.services.sshd.serviceConfig.LogFilterPatterns = [
+    "~^WARNING: connection from .* is not using a post-quantum key exchange algorithm"
+    "~^Invalid user"
+    "~^(Received disconnect from|Disconnected from (invalid|authenticating) user|Connection (closed|reset) by) .*\\[preauth\\]$"
+    "~^banner exchange: Connection from"
+    "~^error: kex_exchange_identification:"
+    "~^(fatal: )?Timeout before authentication for"
+  ];
+
   security.sudo.wheelNeedsPassword = false;
 
   nix.settings = {
@@ -736,7 +750,9 @@ in
 
   services.journald.settings.Journal = {
     # The JournalRetentionShort alert (docs/developer/otel/alerts) gates on
-    # 85% of this cap; change both together.
+    # 85% of this cap; change both together. The cap stays fixed and the
+    # steady scanner volume is filtered at the source instead
+    # (LogFilterPatterns on sshd).
     SystemMaxUse = "500M";
     MaxRetentionSec = "1month";
   };
