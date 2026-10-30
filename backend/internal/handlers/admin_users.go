@@ -815,6 +815,14 @@ func canonicalUserIDParam(w http.ResponseWriter, r *http.Request) (string, bool)
 	return parsed.String(), true
 }
 
+// codeMailboxDeprovisionFailed is the typed 502 of HandleDeleteUser when the
+// member's Stalwart mailbox could not be removed and the delete was rolled back.
+const codeMailboxDeprovisionFailed = "mailbox_deprovision_failed"
+
+// HandleDeleteUser erases a member's identity. It always anonymises the row in
+// place (a `?erasure` query parameter from older callers is ignored) and
+// removes their Stalwart mailbox before the credentials row that names it is
+// touched. A mailbox that cannot be removed fails the whole call with 502.
 func (h *AdminUsersHandler) HandleDeleteUser(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
@@ -872,36 +880,8 @@ func (h *AdminUsersHandler) HandleDeleteUser(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	erasure := r.URL.Query().Get("erasure") == "true"
-
-	// Retention guard (BRY-206). A member with financial records cannot be
-	// hard-deleted: their invoices reference this row (no ON DELETE cascade)
-	// and bokføringsloven §13 requires those records for ~5 years. Refuse an
-	// erasure while records are in-window; once cleared, downgrade to
-	// anonymize-in-place so the retained invoices keep their snapshot identity
-	// (BRY-205) rather than orphaning on a hard delete.
-	if erasure {
-		ret, rerr := accounting.MemberFinancialRetention(ctx, tx, clubID, userID)
-		if rerr != nil {
-			h.log.Error().Err(rerr).Msg("failed to evaluate member retention")
-			Error(w, http.StatusInternalServerError, "internal error")
-			return
-		}
-		if ret.HasRecords && !ret.Eligible {
-			Error(w, http.StatusConflict, fmt.Sprintf(
-				"member has financial records retained until %s (bokføringsloven §13); erase after that date or deactivate instead",
-				ret.ClearsAt.Format("2006-01-02")))
-			return
-		}
-		if ret.HasRecords {
-			erasure = false
-		}
-	}
-
-	// Both outcomes lock the member out in this transaction, before the email
-	// is overwritten (magic links are keyed by it). A hard delete needs it too:
-	// the cascade removes sessions and passkeys, but developer tokens only lose
-	// their creator and would otherwise keep working.
+	// The member is locked out in this transaction, before the email is
+	// overwritten (magic links are keyed by it).
 	sessionsRevoked, err := revokeMemberAccess(ctx, tx, clubID, userID, claims.UserID)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to revoke member access")
@@ -911,10 +891,7 @@ func (h *AdminUsersHandler) HandleDeleteUser(w http.ResponseWriter, r *http.Requ
 
 	// Ids only: the member is named by resource_id, and an erased member's
 	// name and address must not live on in the log.
-	auditDetails, _ := json.Marshal(map[string]any{
-		"erasure":          erasure,
-		"sessions_revoked": sessionsRevoked,
-	})
+	auditDetails, _ := json.Marshal(map[string]any{"sessions_revoked": sessionsRevoked})
 	_, err = tx.Exec(ctx,
 		`INSERT INTO audit_log (club_id, actor_id, action, resource, resource_id, details)
 		 VALUES ($1, $2, 'delete_user', 'user', $3, $4)`,
@@ -926,20 +903,21 @@ func (h *AdminUsersHandler) HandleDeleteUser(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if erasure {
-		_, err = tx.Exec(ctx, `DELETE FROM users WHERE id = $1 AND club_id = $2`, userID, clubID)
-	} else {
-		_, err = tx.Exec(ctx,
-			`UPDATE users SET email = gen_random_uuid()::text || $3,
-			 first_name = 'Deleted', last_name = 'User',
-			 phone = '', address_line = '', postal_code = '', city = '',
-			 updated_at = now()
-			 WHERE id = $1 AND club_id = $2`,
-			userID, clubID, accounting.ErasedEmailSuffix,
-		)
-	}
+	// The row is anonymised in place and never deleted. Other tables reference
+	// it without a cascade (audit actors, deletion requests, orders, journal
+	// authors), so a delete would answer 500, and payments
+	// cascade from it, so a delete would take financial rows along. Invoices
+	// keep their own identity snapshot.
+	_, err = tx.Exec(ctx,
+		`UPDATE users SET email = gen_random_uuid()::text || $3,
+		 first_name = 'Deleted', last_name = 'User',
+		 phone = '', address_line = '', postal_code = '', city = '',
+		 updated_at = now()
+		 WHERE id = $1 AND club_id = $2`,
+		userID, clubID, accounting.ErasedEmailSuffix,
+	)
 	if err != nil {
-		h.log.Error().Err(err).Msg("failed to delete user")
+		h.log.Error().Err(err).Msg("failed to anonymise user")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
@@ -949,36 +927,34 @@ func (h *AdminUsersHandler) HandleDeleteUser(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// The Stalwart mailbox goes last, still inside the transaction. If Stalwart
+	// cannot remove it the erasure rolls back and the member is left as they
+	// were: a committed erasure with a live mailbox would be unfindable,
+	// because the credentials row that names it is what DeleteUserPrincipal
+	// reads. The call is idempotent, so the admin just retries.
+	if h.MailProvisioner != nil {
+		if err := h.MailProvisioner.DeleteUserPrincipal(ctx, userID); err != nil {
+			h.log.Error().Err(err).Str("user_id", userID).Msg("stalwart deprovisioning failed; erasure rolled back")
+			JSON(w, http.StatusBadGateway, map[string]string{
+				"error": "the member's mailbox could not be removed; nothing was changed, try again",
+				"code":  codeMailboxDeprovisionFailed,
+			})
+			return
+		}
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		h.log.Error().Err(err).Msg("failed to commit transaction")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
-	// Deprovision the Stalwart principal (DIL-321). On soft-delete
-	// this prevents the (now-disabled) account from authenticating
-	// to JMAP. On erasure the cascade already removed our DB row;
-	// this call removes the Stalwart side. Best-effort: a Stalwart
-	// outage here leaves an orphan principal, which we surface via
-	// audit but don't block the deletion response on.
-	if h.MailProvisioner != nil {
-		if err := h.MailProvisioner.DeleteUserPrincipal(ctx, userID); err != nil {
-			h.log.Warn().Err(err).Str("user_id", userID).Msg("stalwart deprovisioning failed")
-		}
-	}
-
-	action := "soft_deleted"
-	if erasure {
-		action = "erased"
-	}
-
 	h.log.Info().
 		Str("target_user", userID).
 		Str("actor", claims.UserID).
-		Str("action", action).
-		Msg("user deleted")
+		Msg("user anonymised")
 
-	JSON(w, http.StatusOK, map[string]string{"status": action})
+	JSON(w, http.StatusOK, map[string]string{"status": "soft_deleted"})
 }
 
 // HandleDeactivateUser marks a member as deactivated (BRY-204): a

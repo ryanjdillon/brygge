@@ -53,6 +53,13 @@ See [README.md](README.md) for the format. The board task inbox spec and its imp
 - **Why:** a board member with a fresh TOTP could delete or deactivate an admin, and since BRY-525 a delete also removes the admin's passkeys, TOTP and developer tokens. If that admin was the club's only one, nobody could undo it and recovery needed SQL. A club cannot be left to depend on a person it can no longer reach.
 - **Consequences:** the route gate and the guards (`checkAdminTarget`, `ensureNotLastActiveAdmin`, `lockClubAdmins`) are in `backend/internal/handlers/admin_guard.go`; the rules and the one case left to people (an admin's own erasure request) are in [member-lifecycle.md](../developer/security/member-lifecycle.md#who-may-change-an-admin), and the invariant is "The club always keeps an active admin" in [invariants.md](../developer/reference/invariants.md).
 
+### BRD-10: Deleting a member always anonymises the row in place
+
+- **Status:** accepted · 2026-10-30 · BRY-537
+- **Decision:** `DELETE /admin/users/{id}` anonymises the member in place and locks them out; it never deletes the row. The `?erasure=true` option is gone (an old caller that sends it gets the same anonymisation). The member's Stalwart mailbox is removed in the same call, before the credentials row that names it is touched, and a mailbox that cannot be removed fails the call (502 `mailbox_deprovision_failed`) with nothing changed. When the anonymisation waits for the retention window is a separate decision (BRY-538).
+- **Why:** a hard delete answered 500 whenever another table pointed at the member without a cascade (audit actor, deletion request, order, journal author), and silently dropped the member's payments, which cascade from the user, when retention only looked at invoices. It also orphaned the Stalwart principal. Anonymising in place is what invoices and the purge sweep already rely on.
+- **Consequences:** [member-lifecycle.md](../developer/security/member-lifecycle.md) describes the flow; `HandleDeleteUser` in `backend/internal/handlers/admin_users.go`.
+
 ### BRD-11: The audit log holds ids, and erasing a member scrubs their identity from it
 
 - **Status:** accepted · 2026-10-30 · BRY-536

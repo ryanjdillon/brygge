@@ -160,7 +160,7 @@ At every boot `ConvergePrincipalMetadata` walks `user_mail_credentials`, reads e
 
 `Credentials(ctx, userID)` is the read-back: decrypt and return for use in the user-facing JMAP read path.
 
-Deletion (`DeleteUserPrincipal`) fires from `HandleDeleteUser` (both soft-delete and erasure paths) — Stalwart principal removed, `user_mail_credentials` row deleted (CASCADE handles the latter when the user row is erased).
+Deletion (`DeleteUserPrincipal`) fires from `HandleDeleteUser`, which always anonymises the user row in place and never deletes it, so nothing cascades: the call removes the Stalwart principal and then deletes the `user_mail_credentials` row itself, and is idempotent (a principal already gone is not an error). It runs last inside the delete's transaction; if Stalwart cannot remove the principal the delete answers 502 `mailbox_deprovision_failed` and changes nothing (see [member-lifecycle.md](../security/member-lifecycle.md#the-mailbox)). The GDPR deletion and the purge sweep do not remove the mailbox yet.
 
 ---
 

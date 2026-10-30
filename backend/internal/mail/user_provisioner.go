@@ -138,8 +138,10 @@ func (p *UserProvisioner) EnsureUserPrincipal(ctx context.Context, userID, email
 // DeleteUserPrincipal removes the Stalwart principal AND the
 // credentials row. ON DELETE CASCADE on user_mail_credentials would
 // remove the row when the user is deleted, but Stalwart wouldn't
-// know about that — so callers must invoke this before deleting the
-// users row.
+// know about that — so callers must invoke this before the
+// credentials row goes. It is idempotent: a principal that is already
+// gone is not an error, so a retry after a failure between the two
+// deletes finishes the job instead of failing forever.
 func (p *UserProvisioner) DeleteUserPrincipal(ctx context.Context, userID string) error {
 	slug, ok, err := p.lookupCredentials(ctx, userID)
 	if err != nil {
@@ -149,8 +151,14 @@ func (p *UserProvisioner) DeleteUserPrincipal(ctx context.Context, userID string
 		return nil // not provisioned, nothing to do
 	}
 
-	if err := p.deletePrincipal(ctx, slug); err != nil {
-		return fmt.Errorf("delete stalwart principal: %w", err)
+	exists, err := p.principalExists(ctx, slug)
+	if err != nil {
+		return fmt.Errorf("check stalwart principal: %w", err)
+	}
+	if exists {
+		if err := p.deletePrincipal(ctx, slug); err != nil {
+			return fmt.Errorf("delete stalwart principal: %w", err)
+		}
 	}
 	if _, err := p.db.Exec(ctx, `DELETE FROM user_mail_credentials WHERE user_id = $1`, userID); err != nil {
 		return fmt.Errorf("delete credentials row: %w", err)

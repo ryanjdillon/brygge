@@ -449,12 +449,13 @@ A rebook answers 200 with `outcome` (`booked`, `needs_review` with the pass's re
 
 ### Admin user-lifecycle refusal codes (no column)
 
-The `/admin/users` writes answer these as `{error, code}` (BRD-9). The SPA words the first two in the admin's locale (`userLifecycleErrorKey`, `admin.users.lastAdminError` / `adminRequiredError`).
+The `/admin/users` writes answer these as `{error, code}` (BRD-9, BRD-10). The SPA words the first two in the admin's locale (`userLifecycleErrorKey`, `admin.users.lastAdminError` / `adminRequiredError`).
 
 | `code` | Status | Meaning |
 |---|---|---|
 | `last_admin` | 409 | The change (delete, deactivate, demote, or processing the GDPR deletion) would leave the club with no active admin. Nothing is changed. |
 | `admin_required` | 403 | A non-admin caller acted on a member who holds `admin`, or granted the role (role change, create). The delete route itself is admin-only and answers the gate's plain 403. |
+| `mailbox_deprovision_failed` | 502 | `DELETE /admin/users/{id}`: the member's Stalwart mailbox could not be removed, so the erasure was rolled back. Retry. |
 
 ### `broadcasts.status` (migration 000069)
 
