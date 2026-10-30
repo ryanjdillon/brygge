@@ -636,6 +636,31 @@ func TestBookStripeSplitMismatchBookedAfterCorrection(t *testing.T) {
 	}
 }
 
+// A charge one øre off its order's split is held as split_mismatch, not
+// booked and not left to fail the post on every pass (BRY-458).
+func TestBookStripeOneOreMismatchHeldForReview(t *testing.T) {
+	f := newStripeFixture(t)
+	over := f.insertBT(t, stripeBT{id: "txn_test_ore_over", category: "charge", amountOre: 25001, feeOre: 775,
+		orderID: catalogOrder(t, f.club, map[string]float64{"service": 250})})
+	under := f.insertBT(t, stripeBT{id: "txn_test_ore_under", category: "charge", amountOre: 24999, feeOre: 775,
+		orderID: catalogOrder(t, f.club, map[string]float64{"service": 250})})
+
+	for pass := 1; pass <= 2; pass++ {
+		res := f.book(t)
+		if res.ChargesBooked != 0 || len(res.Errors) != 0 || res.NeedsReview[StripeReviewSplitMismatch] != 2 {
+			t.Fatalf("pass %d: result = %+v, want both held as split_mismatch with no error", pass, res)
+		}
+		for _, id := range []string{over, under} {
+			if row := f.bt(t, id); row.status != StripeTxnNeedsReview || row.reason != StripeReviewSplitMismatch || row.entry != "" {
+				t.Errorf("pass %d: row %s = %+v, want needs_review split_mismatch", pass, id, row)
+			}
+		}
+	}
+	if n := f.entryCount(t); n != 0 {
+		t.Errorf("%d entries, want none", n)
+	}
+}
+
 // A faktura whose order charge is booked, Stripe or Vipps, refuses a bank
 // assign even while its payment back-link is missing.
 func TestOrderChargeBlocksSecondAssign(t *testing.T) {

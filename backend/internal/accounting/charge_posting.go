@@ -32,8 +32,8 @@ func (e *orderSplitMismatchError) Error() string {
 }
 
 // checkOrderChargeSplit decides whether a charge of amount may be booked
-// with split on bookingDate: the credits must sum to the charge, and every
-// faktura the split settles must still have an open receivable
+// with split on bookingDate: the credits must sum to the charge to the øre,
+// and every faktura the split settles must still have an open receivable
 // (finance.OpenReceivableSQL) that is in the GL by the booking date
 // (finance.ImportedReceivableOpenSQL). It returns the credit lines and the
 // fakturas to back-link once the entry is committed. Refusals are
@@ -42,17 +42,25 @@ func (e *orderSplitMismatchError) Error() string {
 // that holds the fakturas locked passes its transaction as q, so the check
 // sees the lock holder it waited for.
 func checkOrderChargeSplit(ctx context.Context, q dbtx, clubID string, split []VippsReconcileLine, amount float64, bookingDate time.Time) (credits []CreateJournalLineInput, invoiceIDs []string, err error) {
-	var sum float64
+	var sumOre int64
 	credits = make([]CreateJournalLineInput, 0, len(split))
 	for _, l := range split {
-		sum += l.Credit
+		sumOre += toCents(l.Credit)
 		credits = append(credits, CreateJournalLineInput{AccountCode: l.AccountCode, Credit: l.Credit, Description: l.Description})
 		if l.LinkedInvoiceID != "" {
 			invoiceIDs = append(invoiceIDs, l.LinkedInvoiceID)
 		}
 	}
-	if !floatNear(sum, amount, 0.01) {
-		return nil, nil, &orderSplitMismatchError{Sum: sum, Amount: amount}
+	// Whole øre, per line, because that is what the entry will hold: journal
+	// lines are NUMERIC(12,2), and postJournalEntryTx refuses any imbalance
+	// above 0.001, so any øre of difference would fail the post. A float
+	// tolerance here would let a one-øre mismatch through this guard only to
+	// fail the post on every pass instead of being held for review; integer
+	// øre also keeps float noise (0.1 + 0.2) from reading as a difference. A
+	// line price finer than an øre can still round differently here than in
+	// Postgres; order line prices are not scaled to two decimals.
+	if sumOre != toCents(amount) {
+		return nil, nil, &orderSplitMismatchError{Sum: float64(sumOre) / 100, Amount: amount}
 	}
 	for _, id := range invoiceIDs {
 		var open, receivableOK bool

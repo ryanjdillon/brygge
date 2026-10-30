@@ -258,6 +258,41 @@ func TestAutoReconcileOrderRefusesWhenAFakturaWasPaidMeanwhile(t *testing.T) {
 	}
 }
 
+// The same one-øre refusal where the float difference lands under 0.01
+// (250.00 vs 250.01), so it is the guard's tolerance, not float noise, that
+// decides (BRY-458): the charge is reported as a mismatch, not left to fail
+// the post.
+func TestAutoReconcileOrderRefusesOneOreMismatchUnderTolerance(t *testing.T) {
+	svc, club := newOrderReconcileFixture(t)
+	ctx := context.Background()
+	var orderID string
+	if err := club.Pool.QueryRow(ctx,
+		`INSERT INTO orders (club_id, total_amount, token, vipps_reference, status)
+		 VALUES ($1, 250, $2, 'ref-ore', 'paid') RETURNING id`,
+		club.ID, "tok-"+testutil.RandomHex(8),
+	).Scan(&orderID); err != nil {
+		t.Fatalf("order: %v", err)
+	}
+	if _, err := club.Pool.Exec(ctx,
+		`INSERT INTO order_lines (order_id, price_item_id, name, quantity, unit_price, total_price)
+		 VALUES ($1, $2, 'Synthetic service', 1, 250, 250)`, orderID, club.PriceItem(t, "service"),
+	); err != nil {
+		t.Fatalf("order line: %v", err)
+	}
+	charge := club.NewVippsRow(t, fin.VippsRowOpts{Cents: 25001, OrderID: "ref-ore"})
+
+	res, err := svc.AutoReconcileOrderCharges(ctx, club.ID, club.Treasurer.ID)
+	if err != nil {
+		t.Fatalf("AutoReconcileOrderCharges: %v", err)
+	}
+	if res.Booked != 0 || rowEntry(t, club, charge) != "" {
+		t.Errorf("a charge 0.01 over its order was booked (%+v)", res)
+	}
+	if len(res.SkippedDetails) != 1 || !strings.Contains(res.SkippedDetails[0].Reason, "does not match") {
+		t.Errorf("skipped = %+v, want the mismatch reported", res.SkippedDetails)
+	}
+}
+
 // A charge one øre off the order total is a mismatch, not a rounding slack.
 func TestAutoReconcileOrderRefusesOneOreMismatch(t *testing.T) {
 	svc, club := newOrderReconcileFixture(t)
