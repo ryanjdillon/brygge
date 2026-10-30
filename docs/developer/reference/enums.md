@@ -457,6 +457,14 @@ The `/admin/users` writes answer these as `{error, code}` (BRD-9, BRD-10). The S
 | `admin_required` | 403 | A non-admin caller acted on a member who holds `admin`, or granted the role (role change, create). The delete route itself is admin-only and answers the gate's plain 403. |
 | `mailbox_deprovision_failed` | 502 | `DELETE /admin/users/{id}`: the member's Stalwart mailbox could not be removed, so the erasure was rolled back. Retry. |
 
+### Club settings 400 codes (no column)
+
+`PATCH /admin/settings/site` answers a refused value as `{error, code}` when the SPA words it next to the field; other refusals are a plain `{error}`.
+
+| `code` | Status | Meaning |
+|---|---|---|
+| `invalid_vipps_portal_url` | 400 | `vipps_portal_url` is not an `https` address on exactly `portal.vippsmobilepay.com` (or has userinfo, a port, a fragment, whitespace, or is over 200 characters). Nothing is changed. The SPA shows `admin.economySettings.vippsPortalUrlInvalid`. |
+
 ### `broadcasts.status` (migration 000069)
 
 ```

@@ -1012,7 +1012,10 @@
       },
       "bankAutoAssignLabel": "Płatności bankowe bez KID",
       "bankAutoAssign": "Automatycznie księguj jednoznaczne płatności bankowe bez KID",
-      "bankAutoAssignHint": "Po każdym imporcie bankowym i Synk bank księguje płatność bez KID tylko wtedy, gdy nazwa płatnika pasuje dokładnie do jednego członka z dokładnie jedną otwartą fakturą na tę samą kwotę. Reszta pozostaje w Tildel. Każde księgowanie można cofnąć. Niezależne od ustawienia Vipps."
+      "bankAutoAssignHint": "Po każdym imporcie bankowym i Synk bank księguje płatność bez KID tylko wtedy, gdy nazwa płatnika pasuje dokładnie do jednego członka z dokładnie jedną otwartą fakturą na tę samą kwotę. Reszta pozostaje w Tildel. Każde księgowanie można cofnąć. Niezależne od ustawienia Vipps.",
+      "vippsPortalUrlLabel": "Adres portalu Vipps",
+      "vippsPortalUrlHint": "Wklej adres widoczny po zalogowaniu na portal.vippsmobilepay.com, np. https://portal.vippsmobilepay.com/123456/home. Numer w nim należy do portalu i nie jest numerem sprzedawcy (MSN). Wyświetlany jako link na stronie Płatności, dopóki Vipps przyjmuje prawdziwe płatności. Zostaw puste, jeśli link ma się nie pojawiać.",
+      "vippsPortalUrlInvalid": "To nie jest adres portalu Vipps. Musi zaczynać się od https://portal.vippsmobilepay.com/ i nie może zawierać nazwy użytkownika, portu ani #fragmentu."
     },
     "faktura": {
       "draft": {

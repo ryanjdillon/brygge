@@ -1038,7 +1038,10 @@
       },
       "bankAutoAssignLabel": "Bankbetalingen zonder KID",
       "bankAutoAssign": "Eenduidige bankbetalingen zonder KID automatisch boeken",
-      "bankAutoAssignHint": "Boekt na elke bankupload en Synk bank een betaling zonder KID alleen als de naam van de betaler precies bij één lid past met precies één openstaande factuur van hetzelfde bedrag. De rest blijft in Tildel. Elke boeking kan ongedaan worden gemaakt. Los van de Vipps-instelling."
+      "bankAutoAssignHint": "Boekt na elke bankupload en Synk bank een betaling zonder KID alleen als de naam van de betaler precies bij één lid past met precies één openstaande factuur van hetzelfde bedrag. De rest blijft in Tildel. Elke boeking kan ongedaan worden gemaakt. Los van de Vipps-instelling.",
+      "vippsPortalUrlLabel": "Adres van het Vipps-portaal",
+      "vippsPortalUrlHint": "Plak het adres dat u ziet nadat u bent ingelogd op portal.vippsmobilepay.com, bijvoorbeeld https://portal.vippsmobilepay.com/123456/home. Het nummer daarin hoort bij het portaal en is niet het verkopersnummer (MSN). Wordt als link getoond op de pagina Betalingen zolang Vipps echte betalingen accepteert. Laat leeg als er geen link moet komen.",
+      "vippsPortalUrlInvalid": "Dit is geen adres van het Vipps-portaal. Het moet beginnen met https://portal.vippsmobilepay.com/ en mag geen gebruikersnaam, poort of #fragment bevatten."
     },
     "faktura": {
       "draft": {

@@ -194,11 +194,14 @@ func TestRecentPaymentsRefundsAndDisputes(t *testing.T) {
 		t.Cleanup(func() { *cfg = saved })
 		cfg.StripeSecretKey, cfg.StripeWebhookSecret = "sk_live_synthetic", "whsec_synthetic"
 		cfg.VippsMSN, cfg.VippsTestMode = "123456", false
+		if _, err := e.pool.Exec(context.Background(),
+			`UPDATE clubs SET vipps_portal_url = $2 WHERE id = $1`, e.clubID, syntheticPortalURL); err != nil {
+			t.Fatal(err)
+		}
 
 		_, top := e.getAs(t, []string{"treasurer"}, "")
 		links, _ := top["provider_links"].(map[string]any)
-		if links["stripe"] != "https://dashboard.stripe.com/payments" ||
-			links["vipps"] != "https://portal.vippsmobilepay.com/123456/home" {
+		if links["stripe"] != "https://dashboard.stripe.com/payments" || links["vipps"] != syntheticPortalURL {
 			t.Errorf("provider_links = %v", top["provider_links"])
 		}
 		for _, roles := range [][]string{nil, {"harbor_master"}} {
@@ -206,9 +209,22 @@ func TestRecentPaymentsRefundsAndDisputes(t *testing.T) {
 				t.Errorf("provider_links = %v for roles %v", top["provider_links"], roles)
 			}
 		}
-		cfg.StripeSecretKey, cfg.VippsMSN = "", ""
+		cfg.VippsTestMode = true
+		_, top = e.getAs(t, []string{"admin"}, "")
+		if links, _ := top["provider_links"].(map[string]any); links["vipps"] != nil {
+			t.Errorf("vipps link = %v in test mode", links["vipps"])
+		}
+		cfg.StripeSecretKey, cfg.VippsMSN, cfg.VippsTestMode = "", "", false
 		if _, top := e.getAs(t, []string{"admin"}, ""); top["provider_links"] != nil {
 			t.Errorf("provider_links = %v with no provider configured", top["provider_links"])
+		}
+		if _, err := e.pool.Exec(context.Background(),
+			`UPDATE clubs SET vipps_portal_url = NULL WHERE id = $1`, e.clubID); err != nil {
+			t.Fatal(err)
+		}
+		cfg.VippsMSN = "123456"
+		if _, top := e.getAs(t, []string{"admin"}, ""); top["provider_links"] != nil {
+			t.Errorf("provider_links = %v with Vipps live but no stored address", top["provider_links"])
 		}
 	})
 

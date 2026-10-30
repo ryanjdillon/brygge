@@ -1037,7 +1037,10 @@
       },
       "bankAutoAssignLabel": "Paiements bancaires sans KID",
       "bankAutoAssign": "Comptabiliser automatiquement les paiements bancaires sans KID sans ambiguïté",
-      "bankAutoAssignHint": "Après chaque import bancaire et Synk bank, ne comptabilise un paiement sans KID que si le nom du payeur correspond exactement à un seul membre ayant exactement une facture ouverte du même montant. Le reste reste dans Tildel. Chaque écriture peut être annulée. Indépendant du réglage Vipps."
+      "bankAutoAssignHint": "Après chaque import bancaire et Synk bank, ne comptabilise un paiement sans KID que si le nom du payeur correspond exactement à un seul membre ayant exactement une facture ouverte du même montant. Le reste reste dans Tildel. Chaque écriture peut être annulée. Indépendant du réglage Vipps.",
+      "vippsPortalUrlLabel": "Adresse du portail Vipps",
+      "vippsPortalUrlHint": "Collez l'adresse affichée après votre connexion à portal.vippsmobilepay.com, par exemple https://portal.vippsmobilepay.com/123456/home. Le numéro qu'elle contient appartient au portail et n'est pas le numéro de marchand (MSN). Affichée sous forme de lien sur la page Paiements tant que Vipps accepte de vrais paiements. Laissez vide pour ne pas afficher de lien.",
+      "vippsPortalUrlInvalid": "Ce n'est pas une adresse du portail Vipps. Elle doit commencer par https://portal.vippsmobilepay.com/ et ne peut contenir ni nom d'utilisateur, ni port, ni #fragment."
     },
     "faktura": {
       "draft": {

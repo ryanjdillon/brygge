@@ -206,9 +206,11 @@ Only then is Stripe called, on a context that outlives a client that gave up. St
 `GET /api/v1/harbor/recent-payments` also returns `provider_links` (`{ "stripe": "…", "vipps": "…" }`, either key omitted), for a treasurer or admin only, like the per-payment Dashboard links. The SPA shows each as an external link at the top of the Payments page and holds no URL of its own. Only the final URLs leave the server, never the keys they come from.
 
 - **Stripe** is `stripe.DashboardURL(STRIPE_SECRET_KEY, "/payments")` (adds `/test` for a test key, never an account id). Present only when Stripe is fully configured (key and webhook secret, `Config.StripeCredentials`).
-- **Vipps** is `Config.VippsPortalURL()`: `https://portal.vippsmobilepay.com/<VIPPS_MSN>/home`, built from the merchant serial number in config. Absent when `VIPPS_MSN` is empty and in test mode (`VIPPS_TEST_MODE=true`, which covers the local mock and the Vipps test API: a test sales unit's payments are not the club's real payments, so there is nothing real to open).
+- **Vipps** is the club's own `clubs.vipps_portal_url` (migration 000125, BRY-556), the address the treasurer sees after logging in to the Vipps MobilePay portal, e.g. `https://portal.vippsmobilepay.com/<number>/home`. It is **not derived** from `VIPPS_MSN`: the number in the portal path is the portal's own identifier and is none of the merchant serial numbers Brygge sees, so a link built from the merchant serial number opens the wrong page and the address is entered explicitly. Absent when the club has not set it, when Vipps is not live (`Config.VippsLive()`: `VIPPS_MSN` set and not `VIPPS_TEST_MODE`, so the local mock and the Vipps test API never link: a test sales unit's payments are not the club's real payments) and when the stored value fails the check below, so a value written around the settings endpoint is never linked.
 
-The endpoint is not in the OpenAPI spec (the view reads it with the legacy `fetchApi`), so there is no generated type to update.
+The address is set in **Admin → Økonomiinnstillinger** (`PATCH /admin/settings/site`, treasurer/admin with fresh TOTP, `vipps_portal_url`: omitted keeps it, empty clears it). `normalizeVippsPortalURL` accepts only an `https` address whose host is exactly `portal.vippsmobilepay.com`: trimmed, at most 200 characters, no userinfo, port, `#fragment`, backslash, whitespace or control character. Anything else is a 400 `invalid_vipps_portal_url` ([enums.md](reference/enums.md#club-settings-400-codes-no-column)) and nothing is written.
+
+The endpoint is not in the OpenAPI spec (the view reads it with the legacy `fetchApi`, and the settings view with a plain `fetch`), so there is no generated type to update.
 
 ### Disputes
 

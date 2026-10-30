@@ -1868,7 +1868,10 @@
       },
       "bankAutoAssignLabel": "Bank payments without KID",
       "bankAutoAssign": "Book unambiguous bank payments without KID automatically",
-      "bankAutoAssignHint": "After each bank upload and Synk bank, books a payment without KID only when the payer's name matches exactly one member who has exactly one open faktura for the same amount. Everything else stays in Tildel. Every booking can be undone. Separate from the Vipps setting."
+      "bankAutoAssignHint": "After each bank upload and Synk bank, books a payment without KID only when the payer's name matches exactly one member who has exactly one open faktura for the same amount. Everything else stays in Tildel. Every booking can be undone. Separate from the Vipps setting.",
+      "vippsPortalUrlLabel": "Vipps portal address",
+      "vippsPortalUrlHint": "Paste the address you see after logging in to portal.vippsmobilepay.com, e.g. https://portal.vippsmobilepay.com/123456/home. The number in it belongs to the portal; it is not the merchant serial number. Shown as a link on the Payments page while Vipps takes live payments. Leave empty for no link.",
+      "vippsPortalUrlInvalid": "That is not a Vipps portal address. It must start with https://portal.vippsmobilepay.com/ and have no username, port or #fragment."
     },
     "bankAccounts": {
       "title": "Bank accounts",

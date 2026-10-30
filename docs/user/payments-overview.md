@@ -55,6 +55,15 @@ A new price is in no group, so its payments show under Annet until someone puts 
 
 A payment of a faktura through its pay link is shown as **Faktura**, whatever the faktura bills; only the prices added to the payment itself (an add-on in the checkout, or a QR poster) can put it in another group. Prices that are only ever billed on a faktura, such as membership dues, harbor membership and the yearly slip fee, are therefore of no use in a group. The page works this out from how the price is sold: it can be an add-on in the checkout, a QR poster sells it, or a payment already holds it. A price that is none of these is marked "Bare faktura" in the list and **Alle** skips it. A membership price that is offered as an add-on is not marked.
 
+## Links to Stripe and Vipps
+
+Treasurer and admin see a link to each provider's own back office at the top of the page. The Stripe link needs nothing from you. The Vipps link needs the address of your club's page in the Vipps MobilePay portal, which Brygge cannot work out for you:
+
+1. Log in to **portal.vippsmobilepay.com** and copy the address in the browser's address bar, e.g. `https://portal.vippsmobilepay.com/123456/home`. The number in it belongs to the portal; it is not your Vipps merchant number.
+2. Paste it into **Admin → Økonomiinnstillinger → Faktura → Adresse til Vipps-portalen** and press **Lagre**. You are asked to confirm with your authenticator code first.
+
+Only an address on `portal.vippsmobilepay.com` is accepted. Empty the field and save to remove the link. The link is shown only while Vipps takes real payments, not in a test setup.
+
 ## Related
 
 - [harbor-qr.md](harbor-qr.md): QR posters and cards, which send guests to the pay page.

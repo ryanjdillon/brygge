@@ -88,7 +88,7 @@ The fallback admin has every permission. Any other principal used here needs at 
 | `VIPPS_CLIENT_ID`        | For Vipps    | —       | API client ID                  |
 | `VIPPS_CLIENT_SECRET`    | For Vipps    | —       | API client secret              |
 | `VIPPS_TEST_MODE`        | No           | `true`  | Use Vipps test environment     |
-| `VIPPS_MSN`              | For payments | —       | Merchant serial number; also builds the Vipps portal link on the payment overview (live mode only, see [Payments](payments.md#provider-links-on-the-payment-overview)) |
+| `VIPPS_MSN`              | For payments | —       | Merchant serial number. A non-empty value also marks Vipps as configured for live payments (`Config.VippsLive()`, with `VIPPS_TEST_MODE` off), which is a condition for the Vipps link on the payment overview; the link itself is the in-app `vipps_portal_url` setting, not built from this number (see [Payments](payments.md#provider-links-on-the-payment-overview)) |
 | `VIPPS_SUBSCRIPTION_KEY` | For payments | —       | API subscription key           |
 | `VIPPS_WEBHOOK_SECRET`   | For payments | —       | Webhook signature verification |
 | `VIPPS_MOCK_URL`         | No (dev)     | —       | With `VIPPS_TEST_MODE`, sends every server-side Vipps call to this mock instead of the Vipps test API |
@@ -196,6 +196,7 @@ Per-club financial settings are stored on `clubs` and edited in **Admin → Øko
 | `online_max_amount` | Default amount cap for online payment (see above) | [faktura.md](../user/faktura.md#sent) |
 | `vipps_auto_assign`, `vipps_auto_assign_tie_category` | Book unambiguous Vipps charges without a human; tie category for same-price categories (BRY-340) | [faktura.md](../user/faktura.md#automatic-vipps-booking-per-charge-tildel) |
 | `bank_auto_assign` | Book unambiguous KID-less bank deposits to a faktura (BRY-366). While off, the KID cascade keeps its older full-name + amount step | [faktura.md](../user/faktura.md#automatic-booking-of-bank-payments-without-a-kid) |
+| `vipps_portal_url` | Optional address of the club's page in the Vipps MobilePay portal (the one shown after logging in), linked from the Payments page for treasurer and admin while Vipps takes live payments. Must be an `https` address on `portal.vippsmobilepay.com` (at most 200 characters, no userinfo, port or fragment); empty clears it. Not derived from `VIPPS_MSN`: the portal's number is its own | [payments-overview.md](../user/payments-overview.md#links-to-stripe-and-vipps) |
 | `price_exemptions` table + `exemption_expense_account` | Role exemptions (BRY-351) | [faktura.md](../user/faktura.md#role-exemptions) |
 
 No switch books a payment to an imported faktura; see [invariants.md](reference/invariants.md#imported-fakturas-are-read-only).

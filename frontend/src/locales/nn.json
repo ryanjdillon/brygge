@@ -1745,7 +1745,10 @@
       },
       "bankAutoAssignLabel": "Bankinnbetalingar utan KID",
       "bankAutoAssign": "Bokfør eintydige bankinnbetalingar utan KID automatisk",
-      "bankAutoAssignHint": "Etter kvar bankopplasting og Synk bank blir ei betaling utan KID bokført berre når namnet til betalaren passar nøyaktig eitt medlem som har nøyaktig éin open faktura på same beløp. Alt anna blir liggjande i Tildel. Alle bokføringar kan angrast. Uavhengig av Vipps-innstillinga."
+      "bankAutoAssignHint": "Etter kvar bankopplasting og Synk bank blir ei betaling utan KID bokført berre når namnet til betalaren passar nøyaktig eitt medlem som har nøyaktig éin open faktura på same beløp. Alt anna blir liggjande i Tildel. Alle bokføringar kan angrast. Uavhengig av Vipps-innstillinga.",
+      "vippsPortalUrlLabel": "Adresse til Vipps-portalen",
+      "vippsPortalUrlHint": "Lim inn adressa du ser etter at du har logga inn på portal.vippsmobilepay.com, til dømes https://portal.vippsmobilepay.com/123456/home. Talet i adressa høyrer til portalen og er ikkje selgarnummeret (MSN). Blir vist som ei lenkje på Betalingar-sida så lenge Vipps tek imot ekte betalingar. La feltet stå tomt om du ikkje vil ha lenkje.",
+      "vippsPortalUrlInvalid": "Dette er ikkje ei adresse i Vipps-portalen. Ho må starte med https://portal.vippsmobilepay.com/ og kan ikkje ha brukarnamn, portnummer eller #fragment."
     },
     "bankAccounts": {
       "title": "Bankkontoar",

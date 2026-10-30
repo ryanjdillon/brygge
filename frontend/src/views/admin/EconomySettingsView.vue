@@ -52,6 +52,14 @@ const bankAutoAssign = ref(false)
 const bankSaving = ref(false)
 const bankSaved = ref(false)
 
+// The club's page in the Vipps portal, linked from the Payments page. Its
+// number is the portal's own, so the treasurer pastes the address; the server
+// refuses anything that is not an https address on the portal's host.
+const vippsPortalUrl = ref('')
+const portalSaving = ref(false)
+const portalSaved = ref(false)
+const portalError = ref<string | null>(null)
+
 async function load() {
   loading.value = true
   error.value = null
@@ -69,6 +77,7 @@ async function load() {
     vippsAutoAssign.value = !!body.vipps_auto_assign
     vippsAutoAssignTieCategory.value = body.vipps_auto_assign_tie_category || ''
     bankAutoAssign.value = !!body.bank_auto_assign
+    vippsPortalUrl.value = body.vipps_portal_url || ''
     fakturaLogoCacheBust.value = Date.now()
   } catch (e) {
     error.value = (e as Error).message
@@ -155,6 +164,46 @@ async function saveBankAutoAssign() {
     error.value = (e as Error).message
   } finally {
     bankSaving.value = false
+  }
+}
+
+async function saveVippsPortalUrl() {
+  if (!(await ensureFreshTotp())) return
+  portalSaving.value = true
+  portalSaved.value = false
+  portalError.value = null
+  error.value = null
+  try {
+    const res = await totpAwareFetch('/api/v1/admin/settings/site', {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      // An empty field clears the link; the server trims and validates.
+      body: JSON.stringify({ vipps_portal_url: vippsPortalUrl.value }),
+    })
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '')
+      if (res.status === 400 && errorCode(txt) === 'invalid_vipps_portal_url') {
+        portalError.value = t('admin.economySettings.vippsPortalUrlInvalid')
+        return
+      }
+      throw new Error(`${res.status} ${txt}`)
+    }
+    portalSaved.value = true
+  } catch (e) {
+    error.value = (e as Error).message
+  } finally {
+    portalSaving.value = false
+  }
+}
+
+// The typed error code of a refused write, or '' when the body has none.
+function errorCode(body: string): string {
+  try {
+    const code = JSON.parse(body)?.code
+    return typeof code === 'string' ? code : ''
+  } catch {
+    return ''
   }
 }
 
@@ -375,6 +424,43 @@ const canEdit = can('money')
           </label>
         </div>
         <p class="text-xs text-slate-500">{{ t('admin.economySettings.vippsAutoAssignHint') }}</p>
+      </fieldset>
+
+      <fieldset class="rounded-md border border-slate-200 bg-slate-50 p-3 space-y-3" data-testid="vipps-portal-url">
+        <legend class="px-1 text-xs font-semibold text-slate-700">
+          {{ t('admin.economySettings.vippsPortalUrlLabel') }}
+        </legend>
+        <p id="vipps-portal-url-hint" class="text-xs text-slate-600">{{ t('admin.economySettings.vippsPortalUrlHint') }}</p>
+        <div class="flex flex-col gap-3 md:flex-row md:items-start">
+          <input
+            v-model="vippsPortalUrl"
+            type="url"
+            inputmode="url"
+            maxlength="200"
+            spellcheck="false"
+            autocomplete="off"
+            placeholder="https://portal.vippsmobilepay.com/…/home"
+            :aria-label="t('admin.economySettings.vippsPortalUrlLabel')"
+            :aria-describedby="portalError ? 'vipps-portal-url-hint vipps-portal-url-error' : 'vipps-portal-url-hint'"
+            :aria-invalid="portalError ? 'true' : undefined"
+            class="min-h-[44px] w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 md:max-w-xl"
+            @input="portalSaved = false; portalError = null"
+          />
+          <button
+            type="button"
+            class="min-h-[44px] rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+            :disabled="portalSaving"
+            @click="saveVippsPortalUrl"
+          >
+            {{ t('common.save') }}
+          </button>
+          <span v-if="portalSaved" class="text-sm font-medium text-green-600 md:self-center">
+            {{ t('common.saved') }}
+          </span>
+        </div>
+        <p v-if="portalError" id="vipps-portal-url-error" role="alert" class="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+          {{ portalError }}
+        </p>
       </fieldset>
 
       <fieldset class="rounded-md border border-slate-200 bg-slate-50 p-3 space-y-3" data-testid="bank-auto-assign">

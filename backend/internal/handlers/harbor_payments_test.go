@@ -53,38 +53,50 @@ func TestSplitList(t *testing.T) {
 }
 
 func TestProviderLinksFor(t *testing.T) {
+	const portal = "https://portal.vippsmobilepay.com/100200/home"
 	tests := []struct {
-		name string
-		cfg  config.Config
-		want providerLinks
+		name   string
+		cfg    config.Config
+		portal string
+		want   providerLinks
 	}{
-		{"nothing configured", config.Config{}, providerLinks{}},
+		{"nothing configured", config.Config{}, "", providerLinks{}},
 		{
 			"live Stripe and Vipps",
 			config.Config{StripeSecretKey: "sk_live_x", StripeWebhookSecret: "whsec_x", VippsMSN: "123456"},
-			providerLinks{Stripe: "https://dashboard.stripe.com/payments", Vipps: "https://portal.vippsmobilepay.com/123456/home"},
+			portal,
+			providerLinks{Stripe: "https://dashboard.stripe.com/payments", Vipps: portal},
+		},
+		{
+			"live Vipps without a stored address",
+			config.Config{VippsMSN: "123456"},
+			"",
+			providerLinks{},
 		},
 		{
 			"test-mode Stripe key",
 			config.Config{StripeSecretKey: "sk_test_x", StripeWebhookSecret: "whsec_x"},
+			"",
 			providerLinks{Stripe: "https://dashboard.stripe.com/test/payments"},
 		},
 		{
 			"Stripe key without its webhook secret is not enabled",
 			config.Config{StripeSecretKey: "sk_live_x"},
+			"",
 			providerLinks{},
 		},
 		{
 			"Vipps mock",
 			config.Config{VippsMSN: "mock-msn", VippsTestMode: true},
+			portal,
 			providerLinks{},
 		},
-		{"Vipps test API", config.Config{VippsMSN: "123456", VippsTestMode: true}, providerLinks{}},
-		{"Vipps without a serial number", config.Config{}, providerLinks{}},
+		{"Vipps test API", config.Config{VippsMSN: "123456", VippsTestMode: true}, portal, providerLinks{}},
+		{"Vipps without a serial number", config.Config{}, portal, providerLinks{}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := providerLinksFor(&tc.cfg); got != tc.want {
+			if got := providerLinksFor(&tc.cfg, tc.portal); got != tc.want {
 				t.Errorf("providerLinksFor = %+v, want %+v", got, tc.want)
 			}
 		})

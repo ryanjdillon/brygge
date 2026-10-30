@@ -244,6 +244,9 @@ type clubFinancialSettings struct {
 	// Stripe payout in the bank statement text.
 	StripeClearingAccount  string `json:"stripe_clearing_account"`
 	StripePayoutDescriptor string `json:"stripe_payout_descriptor"`
+	// VippsPortalURL is the address of the club's page in the Vipps
+	// MobilePay portal, linked from the payment overview; empty = no link.
+	VippsPortalURL string `json:"vipps_portal_url"`
 	// StripeConfigured is whether this instance has its Stripe credentials,
 	// so the accounting views offer the Stripe sync. Read only.
 	StripeConfigured bool `json:"stripe_configured"`
@@ -314,6 +317,7 @@ func (h *ClubSettingsHandler) HandleGetFinancialSettings(w http.ResponseWriter, 
 		        COALESCE(payment_fee_account, '7700'),
 		        COALESCE(vipps_per_charge_enabled, false),
 		        stripe_clearing_account, stripe_payout_descriptor,
+		        COALESCE(vipps_portal_url, ''),
 		        online_max_amount,
 		        vipps_auto_assign, COALESCE(vipps_auto_assign_tie_category, ''),
 		        bank_auto_assign,
@@ -342,6 +346,7 @@ func (h *ClubSettingsHandler) HandleGetFinancialSettings(w http.ResponseWriter, 
 		&s.VippsClearingAccount, &s.PaymentFeeAccount,
 		&s.VippsPerChargeEnabled,
 		&s.StripeClearingAccount, &s.StripePayoutDescriptor,
+		&s.VippsPortalURL,
 		&s.OnlineMaxAmount,
 		&s.VippsAutoAssign, &s.VippsAutoAssignTieCategory,
 		&s.BankAutoAssign,
@@ -386,6 +391,9 @@ type updateFinancialSettingsRequest struct {
 	// chart; StripePayoutDescriptor must compile as a Go regular expression.
 	StripeClearingAccount  *string `json:"stripe_clearing_account,omitempty"`
 	StripePayoutDescriptor *string `json:"stripe_payout_descriptor,omitempty"`
+	// VippsPortalURL: omitted = keep; "" = clear; otherwise an https address
+	// on portal.vippsmobilepay.com.
+	VippsPortalURL *string `json:"vipps_portal_url,omitempty"`
 	// OnlineMaxAmount: omitted = keep; <= 0 = clear the cap (unlimited);
 	// > 0 = set the cap (BRY-283).
 	OnlineMaxAmount *float64 `json:"online_max_amount,omitempty"`
@@ -453,6 +461,14 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		Error(w, http.StatusBadRequest, "vipps_auto_assign_tie_category must be a price category")
 		return
 	}
+	if p := req.VippsPortalURL; p != nil {
+		norm, ok := normalizeVippsPortalURL(*p)
+		if !ok {
+			writeInvalidVippsPortalURL(w)
+			return
+		}
+		*p = norm
+	}
 	msg, err := h.validateStripeSettings(ctx, claims.ClubID, &req)
 	if err != nil {
 		h.log.Error().Err(err).Msg("validate stripe settings")
@@ -518,7 +534,10 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		                                 ELSE NULLIF($38::text, '') END,
 		   bank_auto_assign          = COALESCE($39, bank_auto_assign),
 		   stripe_clearing_account   = COALESCE($40, stripe_clearing_account),
-		   stripe_payout_descriptor  = COALESCE($41, stripe_payout_descriptor)
+		   stripe_payout_descriptor  = COALESCE($41, stripe_payout_descriptor),
+		   vipps_portal_url          = CASE
+		                                 WHEN $42::text IS NULL THEN vipps_portal_url
+		                                 ELSE NULLIF($42::text, '') END
 		 WHERE id = $1`,
 		claims.ClubID, req.OrgNumber, req.Address, req.Phone, req.VHFChannel,
 		req.Latitude, req.Longitude,
@@ -540,6 +559,7 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		req.VippsAutoAssign, req.VippsAutoAssignTieCategory,
 		req.BankAutoAssign,
 		req.StripeClearingAccount, req.StripePayoutDescriptor,
+		req.VippsPortalURL,
 	); err != nil {
 		h.log.Error().Err(err).Msg("update financial settings")
 		Error(w, http.StatusInternalServerError, "internal error")

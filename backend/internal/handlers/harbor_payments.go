@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -59,15 +60,38 @@ type providerLinks struct {
 	Vipps  string `json:"vipps,omitempty"`
 }
 
-// providerLinksFor builds the links from config; a provider that is not fully
-// configured gets none.
-func providerLinksFor(cfg *config.Config) providerLinks {
+// providerLinksFor builds the links from config and the club's stored Vipps
+// portal address; a provider that is not fully configured gets none. The Vipps
+// link is the stored address, never derived from the merchant serial number
+// (the portal path is an identifier of its own), and only while Vipps takes
+// real payments. The address is checked again here, so a value written around
+// the settings endpoint is never linked.
+func providerLinksFor(cfg *config.Config, vippsPortalURL string) providerLinks {
 	var l providerLinks
 	if complete, _ := cfg.StripeCredentials(); complete {
 		l.Stripe = stripeDashboardURL(cfg, "/payments")
 	}
-	l.Vipps = cfg.VippsPortalURL()
+	if cfg.VippsLive() {
+		if u, ok := normalizeVippsPortalURL(vippsPortalURL); ok {
+			l.Vipps = u
+		}
+	}
 	return l
+}
+
+// providerLinksForClub is providerLinksFor with the club's stored Vipps portal
+// address, read only while Vipps is live (nothing else uses it). A failed read
+// leaves the Vipps link out and does not fail the overview.
+func (h *HarborHandler) providerLinksForClub(ctx context.Context, clubID string) providerLinks {
+	var portalURL *string
+	if h.config.VippsLive() {
+		if err := h.db.QueryRow(ctx,
+			`SELECT vipps_portal_url FROM clubs WHERE id = $1`, clubID,
+		).Scan(&portalURL); err != nil {
+			h.log.Warn().Err(err).Msg("recent payments: vipps portal url failed")
+		}
+	}
+	return providerLinksFor(h.config, strval(portalURL))
 }
 
 // Payment methods the overview distinguishes.
@@ -304,7 +328,7 @@ func (h *HarborHandler) HandleRecentPayments(w http.ResponseWriter, r *http.Requ
 	if staff {
 		// The back offices are for the treasurer and admin, like the
 		// per-payment Dashboard links above.
-		if links := providerLinksFor(h.config); links != (providerLinks{}) {
+		if links := h.providerLinksForClub(ctx, clubID); links != (providerLinks{}) {
 			resp["provider_links"] = links
 		}
 		// The disputes waiting for evidence are the overview's reminder to

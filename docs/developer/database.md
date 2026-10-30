@@ -480,6 +480,15 @@ in `backend/migrations/` for the source of truth. The high-level shape:
   only (no trigger or privilege), and `audit.ScrubMemberPII` is the one
   sanctioned `UPDATE`; see
   [`security/member-lifecycle.md`](security/member-lifecycle.md#the-audit-log-keeps-no-identity).
+- **Vipps portal address.** 000125 (BRY-556) adds nullable `clubs.vipps_portal_url`,
+  the address of the club's page in the Vipps MobilePay portal, linked from
+  the Payments page. NULL means no link. Written only by
+  `PATCH /admin/settings/site`, which accepts an `https` address on
+  `portal.vippsmobilepay.com` and nothing else; the portal path's number is
+  the portal's own, so the link is never derived from `VIPPS_MSN`. Passed
+  through `dev_masked.clubs` as is (a club-owned address on a fixed host, no
+  person in it). The down drops the `dev_masked.clubs` view first; the
+  repeatable file rebuilds it.
 - `invoice_pdf_archive` (migration 000050) — preserves prior PDF bytes when
   `invoices.pdf_data` is regenerated, so Norwegian bokføringsloven §13's
   5-year retention requirement is satisfied.

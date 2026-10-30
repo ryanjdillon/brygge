@@ -1038,7 +1038,10 @@
       },
       "bankAutoAssignLabel": "Bankzahlungen ohne KID",
       "bankAutoAssign": "Eindeutige Bankzahlungen ohne KID automatisch buchen",
-      "bankAutoAssignHint": "Bucht nach jedem Bank-Upload und Synk bank eine Zahlung ohne KID nur, wenn der Name des Zahlers genau einem Mitglied entspricht, das genau eine offene Rechnung über denselben Betrag hat. Alles andere bleibt in Tildel. Jede Buchung kann rückgängig gemacht werden. Unabhängig von der Vipps-Einstellung."
+      "bankAutoAssignHint": "Bucht nach jedem Bank-Upload und Synk bank eine Zahlung ohne KID nur, wenn der Name des Zahlers genau einem Mitglied entspricht, das genau eine offene Rechnung über denselben Betrag hat. Alles andere bleibt in Tildel. Jede Buchung kann rückgängig gemacht werden. Unabhängig von der Vipps-Einstellung.",
+      "vippsPortalUrlLabel": "Adresse des Vipps-Portals",
+      "vippsPortalUrlHint": "Fügen Sie die Adresse ein, die Sie nach der Anmeldung bei portal.vippsmobilepay.com sehen, z. B. https://portal.vippsmobilepay.com/123456/home. Die Nummer darin gehört zum Portal und ist nicht die Händlernummer (MSN). Wird auf der Seite „Zahlungen“ als Link angezeigt, solange Vipps echte Zahlungen annimmt. Leer lassen, wenn kein Link angezeigt werden soll.",
+      "vippsPortalUrlInvalid": "Das ist keine Adresse des Vipps-Portals. Sie muss mit https://portal.vippsmobilepay.com/ beginnen und darf keinen Benutzernamen, keinen Port und kein #Fragment enthalten."
     },
     "faktura": {
       "draft": {

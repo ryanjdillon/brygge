@@ -133,22 +133,22 @@ func TestStripeCredentials(t *testing.T) {
 	}
 }
 
-func TestVippsPortalURL(t *testing.T) {
+func TestVippsLive(t *testing.T) {
 	tests := []struct {
 		name string
 		cfg  Config
-		want string
+		want bool
 	}{
-		{"live merchant", Config{VippsMSN: "123456"}, "https://portal.vippsmobilepay.com/123456/home"},
-		{"padding is trimmed", Config{VippsMSN: " 123456 "}, "https://portal.vippsmobilepay.com/123456/home"},
-		{"unsafe serial number is escaped", Config{VippsMSN: "1/../2"}, "https://portal.vippsmobilepay.com/1%2F..%2F2/home"},
-		{"no serial number", Config{}, ""},
-		{"local mock", Config{VippsMSN: "mock-msn", VippsTestMode: true}, ""},
-		{"Vipps test API", Config{VippsMSN: "123456", VippsTestMode: true}, ""},
+		{"live merchant", Config{VippsMSN: "123456"}, true},
+		{"padding is ignored", Config{VippsMSN: " 123456 "}, true},
+		{"blank serial number", Config{VippsMSN: "  "}, false},
+		{"no serial number", Config{}, false},
+		{"local mock", Config{VippsMSN: "mock-msn", VippsTestMode: true}, false},
+		{"Vipps test API", Config{VippsMSN: "123456", VippsTestMode: true}, false},
 	}
 	for _, tc := range tests {
-		if got := tc.cfg.VippsPortalURL(); got != tc.want {
-			t.Errorf("%s: VippsPortalURL() = %q, want %q", tc.name, got, tc.want)
+		if got := tc.cfg.VippsLive(); got != tc.want {
+			t.Errorf("%s: VippsLive() = %v, want %v", tc.name, got, tc.want)
 		}
 	}
 }
