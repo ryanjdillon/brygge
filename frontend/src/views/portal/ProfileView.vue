@@ -243,6 +243,7 @@ onMounted(() => {
           <span>
             <span class="font-medium text-gray-800">{{ t('portal.profile.hideInDirectoryLabel') }}</span>
             <span class="block text-xs text-gray-500">{{ t('portal.profile.hideInDirectoryHint') }}</span>
+            <span class="mt-1 block text-xs text-gray-500">{{ t('portal.profile.hideInDirectoryBoardNote') }}</span>
           </span>
         </Checkbox>
       </fieldset>

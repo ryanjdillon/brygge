@@ -404,6 +404,7 @@
       "privacyTitle": "Personvern",
       "hideInDirectoryLabel": "Skjul meg i medlemskatalogen",
       "hideInDirectoryHint": "Namn, telefon og e-post blir ikkje viste for andre medlemmer i katalogen eller på hamnekartet. Administratorar ser framleis detaljane dine for hamnedrift.",
+      "hideInDirectoryBoardNote": "Har du ei styrerolle, er namn og e-post synleg for medlemmene sjølv om du skjuler deg. Telefonnummeret ditt følgjer framleis dette valet.",
       "privacyAgreePrefix": "Eg har lese og godtek",
       "privacyAgreeLink": "personvernerklæringa",
       "emailPrefsTitle": "E-postvarslingar",

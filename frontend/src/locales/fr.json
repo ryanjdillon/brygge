@@ -332,7 +332,10 @@
       "nonLocal": "Non-local",
       "saveSuccess": "Profil mis à jour",
       "saveError": "Impossible d'enregistrer le profil",
-      "saving": "Enregistrement..."
+      "saving": "Enregistrement...",
+      "hideInDirectoryLabel": "Me masquer dans l'annuaire des membres",
+      "hideInDirectoryHint": "Votre nom, votre téléphone et votre e-mail ne sont pas affichés aux autres membres dans l'annuaire ni sur la carte du port. Les administrateurs voient toujours vos coordonnées pour l'exploitation du port.",
+      "hideInDirectoryBoardNote": "Si vous occupez une fonction au comité, votre nom et votre e-mail restent visibles pour les membres même si vous vous masquez ; votre numéro de téléphone suit toujours ce choix."
     },
     "boats": {
       "title": "Mes bateaux",

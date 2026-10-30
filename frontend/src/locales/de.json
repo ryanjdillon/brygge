@@ -332,7 +332,10 @@
       "nonLocal": "Auswärtig",
       "saveSuccess": "Profil aktualisiert",
       "saveError": "Profil konnte nicht gespeichert werden",
-      "saving": "Wird gespeichert..."
+      "saving": "Wird gespeichert...",
+      "hideInDirectoryLabel": "Mich im Mitgliederverzeichnis ausblenden",
+      "hideInDirectoryHint": "Ihr Name, Ihre Telefonnummer und Ihre E-Mail-Adresse werden anderen Mitgliedern im Verzeichnis und auf der Hafenkarte nicht angezeigt. Administratoren sehen Ihre Daten weiterhin für den Hafenbetrieb.",
+      "hideInDirectoryBoardNote": "Wenn Sie ein Vorstandsamt innehaben, bleiben Ihr Name und Ihre E-Mail für die Mitglieder sichtbar, auch wenn Sie sich ausblenden; Ihre Telefonnummer folgt weiterhin dieser Auswahl."
     },
     "boats": {
       "title": "Meine Boote",

@@ -407,6 +407,7 @@
       "privacyTitle": "Personvern",
       "hideInDirectoryLabel": "Skjul meg i medlemskatalogen",
       "hideInDirectoryHint": "Navn, telefon og e-post vises ikke for andre medlemmer i katalogen eller på havnekartet. Administratorer ser fortsatt detaljene dine for havnedrift.",
+      "hideInDirectoryBoardNote": "Har du en styrerolle, er navn og e-post synlig for medlemmene selv om du skjuler deg. Telefonnummeret ditt følger fortsatt dette valget.",
       "privacyAgreePrefix": "Jeg har lest og godtar",
       "privacyAgreeLink": "personvernerklæringen",
       "emailPrefsTitle": "E-postvarsler",

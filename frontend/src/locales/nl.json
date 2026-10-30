@@ -332,7 +332,10 @@
       "nonLocal": "Niet-lokaal",
       "saveSuccess": "Profiel bijgewerkt",
       "saveError": "Kon profiel niet opslaan",
-      "saving": "Opslaan..."
+      "saving": "Opslaan...",
+      "hideInDirectoryLabel": "Verberg mij in het ledenoverzicht",
+      "hideInDirectoryHint": "Je naam, telefoonnummer en e-mailadres worden niet aan andere leden getoond in het overzicht of op de havenkaart. Beheerders zien je gegevens nog steeds voor het havenbeheer.",
+      "hideInDirectoryBoardNote": "Als je een bestuursfunctie hebt, blijven je naam en e-mailadres zichtbaar voor leden, ook als je jezelf verbergt; je telefoonnummer volgt nog steeds deze keuze."
     },
     "boats": {
       "title": "Mijn boten",

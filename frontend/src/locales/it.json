@@ -332,7 +332,10 @@
       "nonLocal": "Non residente",
       "saveSuccess": "Profilo aggiornato",
       "saveError": "Impossibile salvare il profilo",
-      "saving": "Salvataggio..."
+      "saving": "Salvataggio...",
+      "hideInDirectoryLabel": "Nascondimi dall'elenco dei soci",
+      "hideInDirectoryHint": "Il tuo nome, telefono ed e-mail non vengono mostrati agli altri soci nell'elenco né sulla mappa del porto. Gli amministratori continuano a vedere i tuoi dati per la gestione del porto.",
+      "hideInDirectoryBoardNote": "Se ricopri un incarico nel consiglio direttivo, il tuo nome e la tua e-mail restano visibili ai soci anche se ti nascondi; il tuo numero di telefono continua a seguire questa scelta."
     },
     "boats": {
       "title": "Le mie imbarcazioni",

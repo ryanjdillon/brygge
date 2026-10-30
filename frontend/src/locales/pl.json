@@ -332,7 +332,10 @@
       "nonLocal": "Zamiejscowy",
       "saveSuccess": "Profil zaktualizowany",
       "saveError": "Nie udało się zapisać profilu",
-      "saving": "Zapisywanie..."
+      "saving": "Zapisywanie...",
+      "hideInDirectoryLabel": "Ukryj mnie w katalogu członków",
+      "hideInDirectoryHint": "Twoje imię i nazwisko, telefon oraz adres e-mail nie są pokazywane innym członkom w katalogu ani na mapie portu. Administratorzy nadal widzą Twoje dane na potrzeby obsługi portu.",
+      "hideInDirectoryBoardNote": "Jeśli pełnisz funkcję w zarządzie, Twoje imię, nazwisko i adres e-mail pozostają widoczne dla członków, nawet jeśli się ukryjesz; numer telefonu nadal podlega temu wyborowi."
     },
     "boats": {
       "title": "Moje łodzie",
