@@ -356,7 +356,7 @@ Single fakturas go through the same draft → send → paid flow.
   - which parked payments will be rebooked, and where to: an account, or the faktura they pay. These are payments sitting on 3900 Andre inntekter, or on 1500 Kundefordringer with no faktura.
   - which drafts are left alone, and why: unbalanced, linked to no row, already booked elsewhere, or a 1500 payment with no faktura that no rule can place.
 
-  Each proposed rebooking has a tick box, ticked to begin with. Untick the ones you don't agree with: they are left exactly as they are (not rebooked, and not posted on 3900 or 1500 either) and are offered again the next time you run it. Brygge checks each ticked one again when you confirm; one that no longer fits, or would now go somewhere else than the preview showed (say, a faktura was issued in between), is skipped and left as it is.
+  Each proposed rebooking has a tick box, ticked to begin with. Untick the ones you don't agree with: they are left exactly as they are (not rebooked, and not posted on 3900 or 1500 either) and are offered again the next time you run it. A settlement's fee and payout drafts are posted only when every payment in the settlement is posted. The preview counts every proposed rebooking as done, so if you untick one, the settlement it belongs to keeps its fee and payout as drafts until that payment is booked. Brygge checks each ticked one again when you confirm; one that no longer fits, or would now go somewhere else than the preview showed (say, a faktura was issued in between), is skipped and left as it is.
 
   Rebooking uses the same rules as automatic Vipps assignment. Turn that on first under `Økonomiinnstillinger → Vipps` (with the tie category). Otherwise the 3900 payments are posted there unclassified, and the 1500 payments with no faktura are left alone. Running it again does nothing new.
 
@@ -466,7 +466,7 @@ Everything else stays in **Tildel**. The upload and Synk Vipps results list what
 
 You do not need to clear the daily Vipps payout (the **Utb. … Vippsnr …** deposit in the bank statement) by hand. As soon as every payment in that settlement is booked or dismissed, the next **Synkroniser**, **Synk Vipps**, Vipps upload or **Bokfør Vipps-utkast** books the Vipps fee and the deposit, and the result shows how many payouts were cleared. Payouts that stay open are listed with the reason:
 
-- **Venter på belastninger** — some payments in the settlement are still in **Tildel**. Book or dismiss them and sync again.
+- **Venter på belastninger** — some payments in the settlement are not booked: still in **Tildel**, or only a draft bilag (post it with **Bokfør Vipps-utkast**). Book or dismiss them and sync again.
 - **Ingen bankinnbetaling** — the bank statement with that deposit is not uploaded yet, or the deposit text has no Utb./Vippsnr reference.
 - **Bare en foreløpig «Overførsel»** — the deposit is in the bank only as a provisional row (see below). Export that day again and upload it.
 - **Ikke importert** — the bank deposit names a settlement whose Vipps export is not uploaded yet.

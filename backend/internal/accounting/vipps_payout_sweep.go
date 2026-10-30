@@ -235,9 +235,9 @@ func (s *Service) vippsPayoutDeposits(ctx context.Context, clubID string) ([]vip
 
 func waitingReason(n int) string {
 	if n == 1 {
-		return "1 belastning venter i Tildel"
+		return "1 belastning er ikke bokført (i Tildel, som utkast eller på et annullert bilag)"
 	}
-	return fmt.Sprintf("%d belastninger venter i Tildel", n)
+	return fmt.Sprintf("%d belastninger er ikke bokført (i Tildel, som utkast eller på et annullert bilag)", n)
 }
 
 // payoutSweepReason turns a ClearVippsPayout error into the reason shown to

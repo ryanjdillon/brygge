@@ -33,6 +33,17 @@ import (
 //     (ReleaseVippsBacklogCharge);
 //   - otherwise posts it as it stands.
 //
+// A settlement's fee and payout drafts are the exception to "posts it as it
+// stands": they post only when every charge of the settlement is posted, so
+// the clearing account is never left holding their credits without the
+// charge debits. The check and the posting of one settlement's drafts run
+// in one transaction under the settlement's payout-row lock
+// (lockSettlementPayoutsTx), after the period's charge drafts were posted or
+// rebooked. A settlement with a charge that is still unbooked, on a draft the
+// run did not post, or on a voided entry keeps its drafts and is listed in
+// Refused with the count. A reclassification is one transaction too
+// (applyBacklogReclass): the draft is replaced or the charge keeps it.
+//
 // An apply may name the reclassifications the treasurer ticked in the
 // preview, each with the target the preview showed (reclassify). A
 // reclassification not named is skipped entirely — neither rebooked nor
@@ -133,20 +144,11 @@ func (s *Service) PostVippsDraftBacklog(ctx context.Context, clubID, periodID, a
 		Releasable:   []VippsBacklogRelease{},
 	}
 	choice := newBacklogChoice(reclassify)
-	var status string
-	err := s.db.QueryRow(ctx,
-		`SELECT year, status FROM fiscal_periods WHERE id = $1 AND club_id = $2`,
-		periodID, clubID,
-	).Scan(&res.Year, &status)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, fmt.Errorf("fiscal period not found")
-	}
+	year, err := s.backlogPeriodYear(ctx, clubID, periodID)
 	if err != nil {
-		return nil, fmt.Errorf("loading period: %w", err)
+		return nil, err
 	}
-	if status != "open" {
-		return nil, fmt.Errorf("fiscal period %d is %s — reopen it before posting drafts", res.Year, status)
-	}
+	res.Year = year
 
 	cfg, err := s.vippsAutoAssignConfig(ctx, clubID)
 	if err != nil {
@@ -165,6 +167,10 @@ func (s *Service) PostVippsDraftBacklog(ctx context.Context, clubID, periodID, a
 	res.Drafts = len(drafts)
 
 	totals := map[string]*AccountTotal{}
+	// willBook holds the charge rows the run has posted (a preview: would
+	// post), for the settlement check that follows the charge drafts.
+	willBook := map[string]bool{}
+	var settle []backlogSettleDraft
 	for _, d := range drafts {
 		ref := fmt.Sprintf("bilag %d", d.number)
 
@@ -175,20 +181,27 @@ func (s *Service) PostVippsDraftBacklog(ctx context.Context, clubID, periodID, a
 			continue
 		}
 
+		key, err := s.backlogSettlementOf(ctx, clubID, d)
+		if err != nil {
+			return nil, err
+		}
+		if key != nil {
+			settle = append(settle, backlogSettleDraft{key: *key, d: d})
+			continue
+		}
+
 		reclass, hold, err := s.backlogReclassification(ctx, clubID, cfg, clearing, d)
 		if err != nil {
 			return nil, err
 		}
 		if reclass != nil {
-			s.backlogReclassify(ctx, clubID, actor, apply, choice, ref, reclass, res)
+			if s.backlogReclassify(ctx, clubID, actor, apply, choice, ref, reclass, res) {
+				willBook[reclass.rowID] = true
+			}
 			continue
 		}
 		if hold != nil {
-			res.Refused = append(res.Refused, SkippedItem{Ref: ref, Reason: hold.reason})
-			if hold.release != nil {
-				hold.release.Ref = ref
-				res.Releasable = append(res.Releasable, *hold.release)
-			}
+			hold.record(ref, res)
 			continue
 		}
 
@@ -200,16 +213,17 @@ func (s *Service) PostVippsDraftBacklog(ctx context.Context, clubID, periodID, a
 		}
 		res.Posted++
 		addAccountTotals(totals, d.lines)
+		if d.sourceTable == "vipps_import_rows" {
+			willBook[d.sourceID] = true
+		}
+	}
+	runBacklogHook()
+	if err := s.backlogPostSettlements(ctx, clubID, actor, apply, settle, willBook, totals, res); err != nil {
+		return nil, err
 	}
 	res.StaleIDs = choice.stale()
 
-	for _, t := range totals {
-		t.Debit, t.Credit = roundCents(t.Debit), roundCents(t.Credit)
-		res.PostedTotals = append(res.PostedTotals, *t)
-	}
-	sort.Slice(res.PostedTotals, func(i, j int) bool {
-		return res.PostedTotals[i].AccountCode < res.PostedTotals[j].AccountCode
-	})
+	res.PostedTotals = sortedTotals(totals)
 
 	// Posting the backlog books charges, which can complete settlements.
 	if apply {
@@ -218,24 +232,220 @@ func (s *Service) PostVippsDraftBacklog(ctx context.Context, clubID, periodID, a
 	return res, nil
 }
 
+// backlogPeriodYear returns the year of an open fiscal period; a backlog is
+// only posted into an open one.
+func (s *Service) backlogPeriodYear(ctx context.Context, clubID, periodID string) (int, error) {
+	var year int
+	var status string
+	err := s.db.QueryRow(ctx,
+		`SELECT year, status FROM fiscal_periods WHERE id = $1 AND club_id = $2`,
+		periodID, clubID,
+	).Scan(&year, &status)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, fmt.Errorf("fiscal period not found")
+	}
+	if err != nil {
+		return 0, fmt.Errorf("loading period: %w", err)
+	}
+	if status != "open" {
+		return 0, fmt.Errorf("fiscal period %d is %s — reopen it before posting drafts", year, status)
+	}
+	return year, nil
+}
+
 // backlogReclassify records one reclassification in res: skipped when the
 // include-list leaves it out, else listed (and in an apply, rebooked, or
-// refused when the rebooking fails).
-func (s *Service) backlogReclassify(ctx context.Context, clubID, actor string, apply bool, choice *backlogChoice, ref string, r *backlogReclass, res *VippsBacklogResult) {
+// refused when the rebooking fails). It reports whether the charge is (in a
+// preview: would be) rebooked.
+func (s *Service) backlogReclassify(ctx context.Context, clubID, actor string, apply bool, choice *backlogChoice, ref string, r *backlogReclass, res *VippsBacklogResult) bool {
 	switch choice.take(r.EntryID, r.To) {
 	case choiceUnchecked:
 		res.Unchecked++
-		return
+		return false
 	case choiceMoved:
-		return // reported in StaleIDs
+		return false // reported in StaleIDs
 	}
 	if apply {
 		if err := s.applyBacklogReclass(ctx, clubID, actor, r); err != nil {
 			res.Refused = append(res.Refused, SkippedItem{Ref: ref, Reason: err.Error()})
-			return
+			return false
 		}
 	}
 	res.Reclassified = append(res.Reclassified, r.VippsBacklogReclass)
+	return true
+}
+
+// backlogBeforeSettlementsHook runs after a backlog run's charge drafts and
+// before its settlement drafts, so a test can change a charge in between.
+var backlogBeforeSettlementsHook func()
+
+func runBacklogHook() {
+	if backlogBeforeSettlementsHook != nil {
+		backlogBeforeSettlementsHook()
+	}
+}
+
+// backlogSettlementKey names the settlement a fee or payout draft belongs to.
+type backlogSettlementKey struct {
+	number, msn string
+	booking     time.Time
+}
+
+type backlogSettleDraft struct {
+	key backlogSettlementKey
+	d   backlogDraft
+}
+
+// backlogSettlementOf returns the settlement a draft clears when it is a
+// per-charge fee entry (sourced to the payout row) or payout entry (sourced
+// to the deposit's bank row), or nil for any other draft. A legacy
+// settlement bilag has its charges linked to the same entry, so it is not
+// one: its charges and bank row stand or fall together.
+func (s *Service) backlogSettlementOf(ctx context.Context, clubID string, d backlogDraft) (*backlogSettlementKey, error) {
+	switch d.sourceTable {
+	case "vipps_import_rows":
+		var rowType, msn, number string
+		var booking *time.Time
+		err := s.db.QueryRow(ctx,
+			`SELECT row_type, COALESCE(msn, ''), COALESCE(settlement_number, ''), booking_date
+			   FROM vipps_import_rows WHERE id = $1 AND club_id = $2`,
+			d.sourceID, clubID,
+		).Scan(&rowType, &msn, &number, &booking)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, fmt.Errorf("loading the source of bilag %d: %w", d.number, err)
+		}
+		if rowType != string(VippsRowPayout) || msn == "" || booking == nil {
+			return nil, nil
+		}
+		return &backlogSettlementKey{number: number, msn: msn, booking: *booking}, nil
+	case "bank_import_rows":
+		var desc string
+		var legacy bool
+		err := s.db.QueryRow(ctx,
+			`SELECT description,
+			        EXISTS (SELECT 1 FROM vipps_import_rows WHERE club_id = $2 AND journal_entry_id = $3 AND row_type = 'belastning')
+			   FROM bank_import_rows WHERE id = $1 AND club_id = $2`,
+			d.sourceID, clubID, d.id,
+		).Scan(&desc, &legacy)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, fmt.Errorf("loading the source of bilag %d: %w", d.number, err)
+		}
+		m := VippsSettlementPattern.FindStringSubmatch(desc)
+		if legacy || len(m) != 3 {
+			return nil, nil
+		}
+		var booking *time.Time
+		err = s.db.QueryRow(ctx,
+			`SELECT booking_date FROM vipps_import_rows
+			  WHERE club_id = $1 AND msn = $2 AND row_type = 'payout' AND settlement_number = $3
+			  ORDER BY booking_date, id LIMIT 1`,
+			clubID, m[2], m[1],
+		).Scan(&booking)
+		if errors.Is(err, pgx.ErrNoRows) || (err == nil && booking == nil) {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, fmt.Errorf("loading the payout of bilag %d: %w", d.number, err)
+		}
+		return &backlogSettlementKey{number: m[1], msn: m[2], booking: *booking}, nil
+	}
+	return nil, nil
+}
+
+// backlogPostSettlements posts (apply) or previews the fee and payout drafts
+// of each settlement whose charges are all posted, and refuses the rest.
+func (s *Service) backlogPostSettlements(ctx context.Context, clubID, actor string, apply bool, settle []backlogSettleDraft, willBook map[string]bool, totals map[string]*AccountTotal, res *VippsBacklogResult) error {
+	var order []backlogSettlementKey
+	groups := map[backlogSettlementKey][]backlogDraft{}
+	for _, sd := range settle {
+		if _, ok := groups[sd.key]; !ok {
+			order = append(order, sd.key)
+		}
+		groups[sd.key] = append(groups[sd.key], sd.d)
+	}
+	for _, key := range order {
+		drafts := groups[key]
+		reason, err := s.backlogPostSettlement(ctx, clubID, actor, apply, key, drafts, willBook)
+		if err != nil {
+			return err
+		}
+		for _, d := range drafts {
+			if reason != "" {
+				res.Refused = append(res.Refused, SkippedItem{Ref: fmt.Sprintf("bilag %d", d.number), Reason: reason})
+				continue
+			}
+			res.Posted++
+			addAccountTotals(totals, d.lines)
+		}
+	}
+	return nil
+}
+
+// backlogPostSettlement checks that every charge of the settlement is posted
+// (or, in a preview, would be) and posts its drafts, all in one transaction
+// holding the settlement's payout rows. It returns why the drafts must stay,
+// or "".
+func (s *Service) backlogPostSettlement(ctx context.Context, clubID, actor string, apply bool, key backlogSettlementKey, drafts []backlogDraft, willBook map[string]bool) (string, error) {
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return "", fmt.Errorf("begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := lockSettlementPayoutsTx(ctx, tx, clubID, key.msn, key.booking); err != nil {
+		return "", err
+	}
+	rows, err := tx.Query(ctx,
+		`SELECT r.id::text FROM vipps_import_rows r
+		  WHERE r.club_id = $1 AND r.msn = $2 AND r.row_type = 'belastning' AND r.booking_date = $3::date
+		    AND r.dismissed_at IS NULL AND NOT `+chargePostedSQL("r"),
+		clubID, key.msn, key.booking)
+	if err != nil {
+		return "", fmt.Errorf("counting unposted charges: %w", err)
+	}
+	unposted, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return "", fmt.Errorf("counting unposted charges: %w", err)
+	}
+	// willBook is a preview's prediction. An apply trusts only the database:
+	// a charge it posted may have been unassigned or voided since.
+	waiting := 0
+	for _, id := range unposted {
+		if apply || !willBook[id] {
+			waiting++
+		}
+	}
+	if waiting > 0 {
+		return fmt.Sprintf("settlement Utb. %s Vippsnr %s has %d charge(s) that are not posted — book them first; its fee and payout stay as drafts",
+			key.number, key.msn, waiting), nil
+	}
+	if !apply {
+		return "", nil
+	}
+	for _, d := range drafts {
+		if err := postJournalEntryTx(ctx, tx, clubID, d.id, actor); err != nil {
+			return "posting: " + err.Error(), nil
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return "", fmt.Errorf("commit settlement drafts: %w", err)
+	}
+	return "", nil
+}
+
+// sortedTotals returns the totals rounded to øre, in account order.
+func sortedTotals(totals map[string]*AccountTotal) []AccountTotal {
+	out := make([]AccountTotal, 0, len(totals))
+	for _, t := range totals {
+		out = append(out, AccountTotal{AccountCode: t.AccountCode, Debit: roundCents(t.Debit), Credit: roundCents(t.Credit)})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].AccountCode < out[j].AccountCode })
+	return out
 }
 
 func addAccountTotals(totals map[string]*AccountTotal, lines []AccountTotal) {
@@ -415,6 +625,16 @@ type backlogReclass struct {
 type backlogHold struct {
 	reason  string
 	release *VippsBacklogRelease
+}
+
+// record lists the held charge as refused, and as releasable when it may be
+// released to the Vipps queue.
+func (h *backlogHold) record(ref string, res *VippsBacklogResult) {
+	res.Refused = append(res.Refused, SkippedItem{Ref: ref, Reason: h.reason})
+	if h.release != nil {
+		h.release.Ref = ref
+		res.Releasable = append(res.Releasable, *h.release)
+	}
 }
 
 // parkedCredit returns the account a charge draft credits — its one line
@@ -703,14 +923,49 @@ func (s *Service) ReleaseVippsBacklogCharge(ctx context.Context, clubID, actorID
 	return prior, err
 }
 
-// applyBacklogReclass removes the parked draft and rebooks the charge per
-// the rule. If the rebooking fails the charge is back in the Tildel queue.
+// applyBacklogReclass replaces the parked draft with the rule's booking in
+// one transaction (rebookVippsChargeTx): the draft is deleted and the charge
+// posted to its new target together, or, when anything fails, the charge
+// keeps the draft it had.
 func (s *Service) applyBacklogReclass(ctx context.Context, clubID, actor string, r *backlogReclass) error {
-	if _, _, err := s.UnassignVippsCharge(ctx, clubID, actor, r.rowID); err != nil {
-		return fmt.Errorf("removing the parked draft: %w", err)
+	b, err := s.loadVippsBelastning(ctx, clubID, r.rowID)
+	if err != nil {
+		return err
 	}
-	if _, err := s.bookVippsChargeDecision(ctx, clubID, actor, r.rowID, r.decision); err != nil {
-		return fmt.Errorf("rebooking failed, the charge is back in Tildel: %w", err)
+	d := r.decision
+	desc := fmt.Sprintf("Vipps innbetaling: %s", b.customerName)
+	var account, invoiceID string
+	switch d.Rule {
+	case autoAssignRuleMemberInvoice:
+		account, invoiceID = receivablesAccountCode, d.InvoiceID
+	case autoAssignRulePriceItem:
+		account, desc = d.Account, desc+" — auto: "+d.Label
+	default:
+		return fmt.Errorf("no booking rule for this charge")
 	}
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	rb, err := rebookVippsChargeTx(ctx, tx, clubID, actor, r.rowID,
+		[]CreateJournalLineInput{{AccountCode: account, Credit: b.amount, Description: desc}}, invoiceID)
+	if err != nil {
+		return fmt.Errorf("rebooking failed, the charge keeps its draft: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit rebooking: %w", err)
+	}
+	if rb.InvoiceID != "" {
+		// Best-effort, as in AssignVippsChargeToInvoice: the ledger is right.
+		if err := s.linkInvoicePayment(ctx, clubID, rb.InvoiceID, rb.Date); err != nil {
+			s.log.Warn().Err(err).Str("invoice_id", rb.InvoiceID).Str("vipps_row_id", r.rowID).
+				Msg("vipps backlog rebook: invoice payment back-link failed")
+		}
+	}
+	s.markAutoAssignedWith(ctx, clubID, actor, r.rowID, d.Rule, d.Target(), rb.EntryID, map[string]any{
+		"prior_journal_entry_id": rb.PriorEntryID,
+		"prior_invoice_id":       rb.PriorInvoiceID,
+	})
 	return nil
 }

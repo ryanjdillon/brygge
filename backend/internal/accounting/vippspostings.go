@@ -45,7 +45,8 @@ type VippsChargePostResult struct {
 type VippsPayoutClearResult struct {
 	SettlementNumber string `json:"settlement_number"`
 	MSN              string `json:"msn"`
-	// Ready is false when the settlement still has unreconciled charges; no
+	// Ready is false when the settlement still has charges that are not
+	// posted (unbooked, on a draft or on a voided entry) and not dismissed; no
 	// postings are made and UnreconciledCharges says how many remain.
 	Ready               bool `json:"ready"`
 	UnreconciledCharges int  `json:"unreconciled_charges"`
@@ -99,9 +100,14 @@ type vippsBelastning struct {
 // unbooked, positive customer payment. entryID is non-nil when the row has
 // already been reconciled; dismissedAt is non-nil when it was avvist.
 func (s *Service) loadVippsBelastning(ctx context.Context, clubID, rowID string) (*vippsBelastning, error) {
+	return loadVippsBelastningIn(ctx, s.db, clubID, rowID)
+}
+
+// loadVippsBelastningIn is loadVippsBelastning on q.
+func loadVippsBelastningIn(ctx context.Context, q dbtx, clubID, rowID string) (*vippsBelastning, error) {
 	var b vippsBelastning
 	var rowType string
-	err := s.db.QueryRow(ctx,
+	err := q.QueryRow(ctx,
 		`SELECT id, row_type, amount,
 		        COALESCE(booking_date, tx_at::date),
 		        COALESCE(customer_name, ''), COALESCE(message, ''),
@@ -211,7 +217,7 @@ func (s *Service) postVippsChargeSplit(ctx context.Context, clubID, createdBy, d
 		return existing, errChargeRaced
 	}
 	if err := s.PostJournalEntry(ctx, clubID, entry.ID, createdBy); err != nil {
-		s.unwindVippsPosting(ctx, clubID, entry.ID, "vipps_import_rows", []string{b.id})
+		s.unwindVippsPosting(ctx, clubID, entry.ID, []string{b.id})
 		return "", fmt.Errorf("posting journal entry: %w", err)
 	}
 	return entry.ID, nil
@@ -255,23 +261,16 @@ func postVippsChargeSplitTx(ctx context.Context, tx pgx.Tx, clubID, createdBy, d
 	return postChargeTx(ctx, tx, vippsChargePosting(clubID, createdBy, clearing, description, b, credits))
 }
 
-// unwindVippsPosting undoes a posting whose PostJournalEntry failed: it
+// unwindVippsPosting undoes a charge posting whose PostJournalEntry failed: it
 // unlinks the rows the draft was marked on and deletes the draft, so the
-// charge or payout goes back to the Tildel queue instead of sitting on an
-// unposted orphan.
-func (s *Service) unwindVippsPosting(ctx context.Context, clubID, entryID, table string, rowIDs []string) {
-	var q string
-	switch table {
-	case "vipps_import_rows":
-		q = `UPDATE vipps_import_rows SET journal_entry_id = NULL
-		      WHERE club_id = $1 AND journal_entry_id = $2 AND id = ANY($3::uuid[])`
-	case "bank_import_rows":
-		q = `UPDATE bank_import_rows SET journal_entry_id = NULL, auto_matched = false
-		      WHERE club_id = $1 AND journal_entry_id = $2 AND id = ANY($3::uuid[])`
-	default:
-		return
-	}
-	if _, err := s.db.Exec(ctx, q, clubID, entryID, rowIDs); err != nil {
+// charge goes back to the Tildel queue instead of sitting on an unposted
+// orphan.
+func (s *Service) unwindVippsPosting(ctx context.Context, clubID, entryID string, rowIDs []string) {
+	if _, err := s.db.Exec(ctx,
+		`UPDATE vipps_import_rows SET journal_entry_id = NULL
+		  WHERE club_id = $1 AND journal_entry_id = $2 AND id = ANY($3::uuid[])`,
+		clubID, entryID, rowIDs,
+	); err != nil {
 		s.log.Error().Err(err).Str("entry_id", entryID).Msg("vipps posting: unlinking rows after a failed post failed")
 	}
 	s.discardDraft(ctx, clubID, entryID)
@@ -471,23 +470,57 @@ func (s *Service) ClearVippsPayout(ctx context.Context, clubID, bankRowID, creat
 	// If the bank row is already linked, the settlement is cleared. Report the
 	// existing entries and the clearing balance so callers stay idempotent.
 	if bankEntry != nil {
-		res.AlreadyCleared = true
-		res.Ready = true
-		res.BankEntryID = *bankEntry
-		res.ClearingBalance, _ = s.settlementClearingBalance(ctx, clubID, res.SettlementNumber, res.MSN, payoutBooking, bankRowID)
-		return res, nil
+		return s.alreadyClearedResult(ctx, clubID, res, bankRowID, *bankEntry, payoutBooking), nil
 	}
 
-	if err := s.checkSettlementClearable(ctx, clubID, res, bankRowID, payoutBooking, payoutEntry); err != nil {
+	// Everything below runs in one transaction that holds the settlement's
+	// payout rows locked, so the charges it counts as booked stay booked until
+	// the clearing commits (the unbooks of a charge take the same lock before
+	// they check whether the settlement is cleared), and a failure anywhere
+	// leaves neither entry behind.
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := lockSettlementPayoutsTx(ctx, tx, clubID, res.MSN, payoutBooking); err != nil {
+		return nil, err
+	}
+	// A clear that held the lock first may have booked the deposit and the
+	// payout row since they were read above.
+	var winner *string
+	if err := tx.QueryRow(ctx,
+		`SELECT journal_entry_id::text FROM bank_import_rows WHERE id = $1 AND club_id = $2`,
+		bankRowID, clubID,
+	).Scan(&winner); err != nil {
+		return nil, fmt.Errorf("re-reading bank row: %w", err)
+	}
+	if winner != nil {
+		_ = tx.Rollback(ctx)
+		return s.alreadyClearedResult(ctx, clubID, res, bankRowID, *winner, payoutBooking), nil
+	}
+	if err := tx.QueryRow(ctx,
+		`SELECT journal_entry_id::text FROM vipps_import_rows WHERE id = $1 AND club_id = $2`,
+		payoutRowID, clubID,
+	).Scan(&payoutEntry); err != nil {
+		return nil, fmt.Errorf("re-reading payout row: %w", err)
+	}
+
+	if err := checkSettlementClearable(ctx, tx, clubID, res, bankRowID, payoutBooking, payoutEntry); err != nil {
 		return nil, err
 	}
 
-	// Gate: every belastning in the settlement must be booked first.
-	if err := s.db.QueryRow(ctx,
-		`SELECT count(*) FROM vipps_import_rows
-		  WHERE club_id = $1 AND msn = $2 AND row_type = 'belastning'
-		    AND booking_date = $3::date
-		    AND journal_entry_id IS NULL AND dismissed_at IS NULL`,
+	// Gate: every belastning in the settlement must be booked first, and
+	// booked means posted. A charge linked to a draft is not in the ledger,
+	// and one linked to a voided entry is not either, so clearing around it
+	// would leave the clearing account holding the fee and payout credits
+	// with no charge debit against them.
+	if err := tx.QueryRow(ctx,
+		`SELECT count(*) FROM vipps_import_rows r
+		  WHERE r.club_id = $1 AND r.msn = $2 AND r.row_type = 'belastning'
+		    AND r.booking_date = $3::date
+		    AND r.dismissed_at IS NULL
+		    AND NOT `+chargePostedSQL("r"),
 		clubID, res.MSN, payoutBooking,
 	).Scan(&res.UnreconciledCharges); err != nil {
 		return nil, fmt.Errorf("counting unreconciled charges: %w", err)
@@ -503,20 +536,19 @@ func (s *Service) ClearVippsPayout(ctx context.Context, clubID, bankRowID, creat
 		return nil, err
 	}
 
-	clearing, feeAccount, err := s.vippsAccounts(ctx, clubID)
+	clearing, feeAccount, err := vippsAccountsIn(ctx, tx, clubID)
 	if err != nil {
 		return nil, err
 	}
 
-	feeRows, feeTotal, err := s.unbookedSettlementFees(ctx, clubID, res.MSN, payoutBooking)
+	feeRows, feeTotal, err := unbookedSettlementFees(ctx, tx, clubID, res.MSN, payoutBooking)
 	if err != nil {
 		return nil, err
 	}
 
 	// Resolve both periods before posting either entry, so a period that is
-	// not open does not leave the fee booked against a settlement that never
-	// clears.
-	feePeriod, bankPeriod, err := s.payoutPeriods(ctx, clubID, payoutBooking, bankDate, feeTotal > 0.005)
+	// not open is reported as such instead of as a failed post.
+	feePeriod, bankPeriod, err := payoutPeriods(ctx, tx, clubID, payoutBooking, bankDate, feeTotal > 0.005)
 	if err != nil {
 		return nil, err
 	}
@@ -527,7 +559,7 @@ func (s *Service) ClearVippsPayout(ctx context.Context, clubID, bankRowID, creat
 		feeSource := payoutRowID
 		feeTable := "vipps_import_rows"
 		feeDesc := fmt.Sprintf("Vipps gebyr oppgjør %s", res.SettlementNumber)
-		feeJE, cerr := s.CreateJournalEntry(ctx, CreateJournalEntryInput{
+		feeJE, cerr := createJournalEntryTx(ctx, tx, CreateJournalEntryInput{
 			FiscalPeriodID: feePeriod,
 			EntryDate:      payoutBooking.Format("2006-01-02"),
 			Description:    feeDesc,
@@ -544,34 +576,31 @@ func (s *Service) ClearVippsPayout(ctx context.Context, clubID, bankRowID, creat
 		if cerr != nil {
 			return nil, fmt.Errorf("creating fee entry: %w", cerr)
 		}
-		tag, err := s.db.Exec(ctx,
+		tag, err := tx.Exec(ctx,
 			`UPDATE vipps_import_rows SET journal_entry_id = $1
 			  WHERE club_id = $2 AND journal_entry_id IS NULL AND id = ANY($3::uuid[])`,
 			feeJE.ID, clubID, feeRows,
 		)
 		if err != nil {
-			s.discardDraft(ctx, clubID, feeJE.ID)
 			return nil, fmt.Errorf("linking fee rows: %w", err)
 		}
-		// A concurrent clear (a manual Tildel racing a sync sweep) linked some
-		// of the fee rows first; posting this total would book the fee twice.
+		// Another path linked some of the fee rows meanwhile; posting this
+		// total would book the fee twice.
 		if tag.RowsAffected() != int64(len(feeRows)) {
-			s.unwindVippsPosting(ctx, clubID, feeJE.ID, "vipps_import_rows", feeRows)
 			return nil, fmt.Errorf("%w: fee for Utb. %s", ErrVippsPayoutRaced, res.SettlementNumber)
 		}
-		if err := s.PostJournalEntry(ctx, clubID, feeJE.ID, createdBy); err != nil {
-			s.unwindVippsPosting(ctx, clubID, feeJE.ID, "vipps_import_rows", feeRows)
+		if err := postJournalEntryTx(ctx, tx, clubID, feeJE.ID, createdBy); err != nil {
 			return nil, fmt.Errorf("posting fee entry: %w", err)
 		}
 		res.FeeEntryID = feeJE.ID
 	}
 
 	// Bank entry (DR bank / CR clearing) for the net payout, dated at the bank
-	// value date. The guarded mark protects against a concurrent clear.
+	// value date.
 	bankSource := bankRowID
 	bankTable := "bank_import_rows"
 	bankDesc := fmt.Sprintf("Vipps utbetaling %s (Vippsnr %s)", res.SettlementNumber, res.MSN)
-	bankJE, cerr := s.CreateJournalEntry(ctx, CreateJournalEntryInput{
+	bankJE, cerr := createJournalEntryTx(ctx, tx, CreateJournalEntryInput{
 		FiscalPeriodID: bankPeriod,
 		EntryDate:      bankDate.Format("2006-01-02"),
 		Description:    bankDesc,
@@ -588,40 +617,36 @@ func (s *Service) ClearVippsPayout(ctx context.Context, clubID, bankRowID, creat
 	if cerr != nil {
 		return nil, fmt.Errorf("creating bank entry: %w", cerr)
 	}
-	tag, uerr := s.db.Exec(ctx,
+	tag, uerr := tx.Exec(ctx,
 		`UPDATE bank_import_rows SET journal_entry_id = $1, auto_matched = true
 		  WHERE id = $2 AND club_id = $3 AND journal_entry_id IS NULL`,
 		bankJE.ID, bankRowID, clubID,
 	)
 	if uerr != nil {
-		s.discardDraft(ctx, clubID, bankJE.ID)
 		return nil, fmt.Errorf("linking bank row: %w", uerr)
 	}
 	if tag.RowsAffected() == 0 {
-		// Concurrent clear won — drop our draft and report the winner.
-		_, _ = s.db.Exec(ctx,
-			`DELETE FROM journal_entries WHERE id = $1 AND club_id = $2 AND status = 'draft'`,
-			bankJE.ID, clubID,
-		)
-		res.AlreadyCleared = true
-		_ = s.db.QueryRow(ctx,
-			`SELECT journal_entry_id FROM bank_import_rows WHERE id = $1 AND club_id = $2`,
-			bankRowID, clubID,
-		).Scan(&res.BankEntryID)
-	} else {
-		if err := s.PostJournalEntry(ctx, clubID, bankJE.ID, createdBy); err != nil {
-			s.unwindVippsPosting(ctx, clubID, bankJE.ID, "bank_import_rows", []string{bankRowID})
-			return nil, fmt.Errorf("posting payout entry: %w", err)
+		// Booked by something else (a manual assign) since the lock was taken:
+		// drop the whole clearing and report that booking.
+		_ = tx.Rollback(ctx)
+		return s.alreadyClearedResult(ctx, clubID, res, bankRowID, s.bankRowEntry(ctx, clubID, bankRowID), payoutBooking), nil
+	}
+	if err := postJournalEntryTx(ctx, tx, clubID, bankJE.ID, createdBy); err != nil {
+		return nil, fmt.Errorf("posting payout entry: %w", err)
+	}
+	res.BankEntryID = bankJE.ID
+	// Mark the payout row reconciled against the bank entry.
+	if payoutEntry == nil {
+		if _, err := tx.Exec(ctx,
+			`UPDATE vipps_import_rows SET journal_entry_id = $1
+			  WHERE id = $2 AND club_id = $3 AND journal_entry_id IS NULL`,
+			bankJE.ID, payoutRowID, clubID,
+		); err != nil {
+			return nil, fmt.Errorf("marking payout row: %w", err)
 		}
-		res.BankEntryID = bankJE.ID
-		// Mark the payout row reconciled against the bank entry.
-		if payoutEntry == nil {
-			_, _ = s.db.Exec(ctx,
-				`UPDATE vipps_import_rows SET journal_entry_id = $1
-				  WHERE id = $2 AND club_id = $3 AND journal_entry_id IS NULL`,
-				bankJE.ID, payoutRowID, clubID,
-			)
-		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit payout clearing: %w", err)
 	}
 
 	res.ClearingBalance, err = s.settlementClearingBalance(ctx, clubID, res.SettlementNumber, res.MSN, payoutBooking, bankRowID)
@@ -637,6 +662,29 @@ func (s *Service) ClearVippsPayout(ctx context.Context, clubID, bankRowID, creat
 	return res, nil
 }
 
+// alreadyClearedResult fills res for a deposit another booking already
+// cleared: the existing entry and the settlement's clearing balance.
+func (s *Service) alreadyClearedResult(ctx context.Context, clubID string, res *VippsPayoutClearResult, bankRowID, entryID string, payoutBooking time.Time) *VippsPayoutClearResult {
+	res.AlreadyCleared = true
+	res.Ready = true
+	res.BankEntryID = entryID
+	res.ClearingBalance, _ = s.settlementClearingBalance(ctx, clubID, res.SettlementNumber, res.MSN, payoutBooking, bankRowID)
+	return res
+}
+
+// bankRowEntry reads the entry a bank row is booked on, or "" if none.
+func (s *Service) bankRowEntry(ctx context.Context, clubID, bankRowID string) string {
+	var id *string
+	_ = s.db.QueryRow(ctx,
+		`SELECT journal_entry_id::text FROM bank_import_rows WHERE id = $1 AND club_id = $2`,
+		bankRowID, clubID,
+	).Scan(&id)
+	if id == nil {
+		return ""
+	}
+	return *id
+}
+
 // checkPayoutAmount compares a deposit with an imported payout row in øre.
 func checkPayoutAmount(bankAmount, payoutAmount float64, settlement string) error {
 	if math.Round(bankAmount*100) != math.Round(-payoutAmount*100) {
@@ -648,9 +696,9 @@ func checkPayoutAmount(bankAmount, payoutAmount float64, settlement string) erro
 
 // payoutPeriods resolves the open periods for a payout clear's fee entry
 // (when there is a fee to post) and bank entry.
-func (s *Service) payoutPeriods(ctx context.Context, clubID string, feeDate, bankDate time.Time, withFee bool) (feePeriod, bankPeriod string, err error) {
+func payoutPeriods(ctx context.Context, q dbtx, clubID string, feeDate, bankDate time.Time, withFee bool) (feePeriod, bankPeriod string, err error) {
 	if withFee {
-		id, status, err := s.resolvePeriod(ctx, clubID, feeDate, "")
+		id, status, err := resolvePeriodIn(ctx, q, clubID, feeDate, "")
 		if err != nil {
 			return "", "", fmt.Errorf("resolving fee period: %w", err)
 		}
@@ -659,7 +707,7 @@ func (s *Service) payoutPeriods(ctx context.Context, clubID string, feeDate, ban
 		}
 		feePeriod = id
 	}
-	id, status, err := s.resolvePeriod(ctx, clubID, bankDate, "")
+	id, status, err := resolvePeriodIn(ctx, q, clubID, bankDate, "")
 	if err != nil {
 		return "", "", fmt.Errorf("resolving bank period: %w", err)
 	}
@@ -675,8 +723,8 @@ func (s *Service) payoutPeriods(ctx context.Context, clubID string, feeDate, ban
 // deposit is a second one (a bank correction, a re-exported statement whose
 // row hash differs). And charges and fees carry only MSN + booking date, so
 // two payouts sharing both cannot be told apart.
-func (s *Service) checkSettlementClearable(ctx context.Context, clubID string, res *VippsPayoutClearResult, bankRowID string, payoutBooking time.Time, payoutEntry *string) error {
-	cleared, err := s.settlementClearedElsewhere(ctx, clubID, res.SettlementNumber, res.MSN, bankRowID, payoutEntry)
+func checkSettlementClearable(ctx context.Context, q dbtx, clubID string, res *VippsPayoutClearResult, bankRowID string, payoutBooking time.Time, payoutEntry *string) error {
+	cleared, err := settlementClearedElsewhere(ctx, q, clubID, res.SettlementNumber, res.MSN, bankRowID, payoutEntry)
 	if err != nil {
 		return err
 	}
@@ -684,7 +732,7 @@ func (s *Service) checkSettlementClearable(ctx context.Context, clubID string, r
 		return fmt.Errorf("%w: Utb. %s Vippsnr %s", ErrVippsSettlementAlreadyCleared, res.SettlementNumber, res.MSN)
 	}
 	var sameDay int
-	if err := s.db.QueryRow(ctx,
+	if err := q.QueryRow(ctx,
 		`SELECT count(*) FROM vipps_import_rows
 		  WHERE club_id = $1 AND msn = $2 AND row_type = 'payout' AND booking_date = $3::date`,
 		clubID, res.MSN, payoutBooking,
@@ -702,10 +750,10 @@ func (s *Service) checkSettlementClearable(ctx context.Context, clubID string, r
 // booked bank deposit other than bankRowID naming it. Descriptions are
 // matched with VippsSettlementPattern in Go; settlement and MSN are digit
 // runs, so the ILIKE prefilter carries no pattern characters.
-func (s *Service) settlementClearedElsewhere(ctx context.Context, clubID, settlement, msn, bankRowID string, payoutEntry *string) (bool, error) {
+func settlementClearedElsewhere(ctx context.Context, q dbtx, clubID, settlement, msn, bankRowID string, payoutEntry *string) (bool, error) {
 	if payoutEntry != nil {
 		var standing bool
-		if err := s.db.QueryRow(ctx,
+		if err := q.QueryRow(ctx,
 			`SELECT EXISTS (SELECT 1 FROM journal_entries WHERE id = $1 AND club_id = $2 AND status <> 'voided')`,
 			*payoutEntry, clubID,
 		).Scan(&standing); err != nil {
@@ -715,7 +763,7 @@ func (s *Service) settlementClearedElsewhere(ctx context.Context, clubID, settle
 			return true, nil
 		}
 	}
-	rows, err := s.db.Query(ctx,
+	rows, err := q.Query(ctx,
 		`SELECT b.description FROM bank_import_rows b
 		   JOIN journal_entries je ON je.id = b.journal_entry_id AND je.club_id = b.club_id
 		  WHERE b.club_id = $1 AND b.id <> $2 AND je.status <> 'voided'
@@ -741,8 +789,8 @@ func (s *Service) settlementClearedElsewhere(ctx context.Context, clubID, settle
 // unbookedSettlementFees returns the ids and summed absolute amount of the
 // settlement's fee rows that have not yet been journaled. Fee-row amounts are
 // stored negative (a deduction), so the total is negated to a positive expense.
-func (s *Service) unbookedSettlementFees(ctx context.Context, clubID, msn string, booking time.Time) (ids []string, total float64, err error) {
-	rows, err := s.db.Query(ctx,
+func unbookedSettlementFees(ctx context.Context, q dbtx, clubID, msn string, booking time.Time) (ids []string, total float64, err error) {
+	rows, err := q.Query(ctx,
 		`SELECT id, amount FROM vipps_import_rows
 		  WHERE club_id = $1 AND msn = $2 AND row_type = 'fee'
 		    AND booking_date = $3::date AND journal_entry_id IS NULL`,
@@ -767,9 +815,17 @@ func (s *Service) unbookedSettlementFees(ctx context.Context, clubID, msn string
 	return ids, total, rows.Err()
 }
 
+// chargePostedSQL holds when the Vipps row aliased alias is booked on a
+// posted entry: the only booking that is in the ledger.
+func chargePostedSQL(alias string) string {
+	return `EXISTS (SELECT 1 FROM journal_entries je WHERE je.id = ` + alias + `.journal_entry_id AND je.status = 'posted')`
+}
+
 // settlementClearingBalance sums debit-minus-credit on the club's Vipps
-// clearing account across every journal entry belonging to the settlement —
-// the charge, fee, and payout postings — so callers can assert it nets to ~0.
+// clearing account across the posted journal entries belonging to the
+// settlement — the charge, fee, and payout postings — so callers can assert
+// it nets to ~0. Drafts are not in the ledger, and a voided original is left
+// out with its reversal (which no row points at).
 func (s *Service) settlementClearingBalance(ctx context.Context, clubID, settlement, msn string, booking time.Time, bankRowID string) (float64, error) {
 	clearing, _, err := s.vippsAccounts(ctx, clubID)
 	if err != nil {
@@ -780,6 +836,7 @@ func (s *Service) settlementClearingBalance(ctx context.Context, clubID, settlem
 		`SELECT COALESCE(SUM(jl.debit - jl.credit), 0)
 		   FROM journal_lines jl
 		   JOIN accounts a ON a.id = jl.account_id
+		   JOIN journal_entries je ON je.id = jl.journal_entry_id AND je.status = 'posted'
 		  WHERE a.club_id = $1 AND a.code = $2
 		    AND jl.journal_entry_id IN (
 		      SELECT journal_entry_id FROM vipps_import_rows

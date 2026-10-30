@@ -290,6 +290,12 @@ func (s *Service) autoAssignOne(ctx context.Context, clubID, createdBy string, c
 // markAutoAssigned records which rule booked the charge and writes the audit
 // row. Failures are logged: the booking itself already stands.
 func (s *Service) markAutoAssigned(ctx context.Context, clubID, actorID, rowID, rule, target, entryID string) {
+	s.markAutoAssignedWith(ctx, clubID, actorID, rowID, rule, target, entryID, nil)
+}
+
+// markAutoAssignedWith is markAutoAssigned with extra audit details, such as
+// the entry and faktura a rebooking replaced.
+func (s *Service) markAutoAssignedWith(ctx context.Context, clubID, actorID, rowID, rule, target, entryID string, extra map[string]any) {
 	if _, err := s.db.Exec(ctx,
 		`UPDATE vipps_import_rows SET auto_assign_rule = $3 WHERE id = $1 AND club_id = $2`,
 		rowID, clubID, rule,
@@ -297,8 +303,11 @@ func (s *Service) markAutoAssigned(ctx context.Context, clubID, actorID, rowID, 
 		s.log.Warn().Err(err).Str("vipps_row_id", rowID).Msg("auto-assign: recording the rule failed")
 	}
 	if s.audit != nil {
-		s.audit.LogAction(ctx, clubID, actorID, "", audit.ActionVippsChargeAutoAssigned, "vipps_import_row", rowID,
-			map[string]any{"rule": rule, "target": target, "journal_entry_id": entryID})
+		details := map[string]any{"rule": rule, "target": target, "journal_entry_id": entryID}
+		for k, v := range extra {
+			details[k] = v
+		}
+		s.audit.LogAction(ctx, clubID, actorID, "", audit.ActionVippsChargeAutoAssigned, "vipps_import_row", rowID, details)
 	}
 }
 
