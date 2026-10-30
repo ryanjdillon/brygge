@@ -1081,7 +1081,7 @@
     "inbox": {
       "title": "Innboks",
       "tabInbox": "E-post",
-      "tabBroadcasts": "Utsendingar",
+      "tabBroadcasts": "Utsendinger",
       "folders": {
         "expand": "Vis mapper",
         "collapse": "Skjul mapper"
@@ -1095,43 +1095,43 @@
         "trash": "Papirkurv"
       },
       "broadcasts": {
-        "empty": "Ingen utsendingar enno.",
-        "error": "Kunne ikkje laste utsendingar.",
-        "selectPrompt": "Vel ei utsending for å sjå leveringsstatus.",
-        "sentN": "{n} sende",
-        "failedN": "{n} feila",
-        "pendingN": "{n} ventar",
-        "retryFailed": "Prøv {n} feila på nytt",
-        "recipient": "Mottakar",
+        "empty": "Ingen utsendinger ennå.",
+        "error": "Klarte ikke å laste utsendinger.",
+        "selectPrompt": "Velg en utsending for å se leveringsstatus.",
+        "sentN": "{n} sendt",
+        "failedN": "{n} feilet",
+        "pendingN": "{n} venter",
+        "retryFailed": "Prøv {n} feilede på nytt",
+        "recipient": "Mottaker",
         "statusCol": "Status",
         "attempts": "Forsøk",
         "detail": "Detalj",
-        "status_pending": "Ventar",
+        "status_pending": "Venter",
         "status_sending": "Sender",
         "status_complete": "Fullført",
         "status_sent": "Sendt",
-        "status_failed": "Feila"
+        "status_failed": "Feilet"
       },
-      "clientNotice": "Visste du at du kan lese og sende klubbpost frå Apple Mail, Outlook, Gmail eller Thunderbird?",
-      "clientNoticeLink": "Sjå korleis du set opp e-postklienten din →",
-      "searchPlaceholder": "Søk i meldingar",
-      "noSubject": "(utan emne)",
+      "clientNotice": "Visste du at du kan lese og sende klubbpost fra Apple Mail, Outlook, Gmail eller Thunderbird?",
+      "clientNoticeLink": "Se hvordan du setter opp e-postklienten din →",
+      "searchPlaceholder": "Søk i meldinger",
+      "noSubject": "(uten emne)",
       "markAsRead": "Merk som lest",
       "markAsUnread": "Merk som ulest",
       "archive": "Arkiver",
       "empty": {
-        "mailboxes": "Du har ikkje tilgang til nokon delt innboks.",
-        "threads": "Ingen meldingar.",
-        "reader": "Vel ei melding"
+        "mailboxes": "Du har ikke tilgang til noen delt innboks.",
+        "threads": "Ingen meldinger.",
+        "reader": "Velg en melding"
       },
       "error": {
-        "loadMailboxes": "Klarte ikkje laste innboksar.",
-        "loadThreads": "Klarte ikkje laste meldingar.",
-        "loadThread": "Klarte ikkje opne meldinga.",
-        "markRead": "Klarte ikkje endre lesestatus.",
-        "archive": "Klarte ikkje arkivere tråden.",
-        "send": "Klarte ikkje sende meldinga.",
-        "toRequired": "Legg til minst éin mottakar før du sender."
+        "loadMailboxes": "Klarte ikke å laste innbokser.",
+        "loadThreads": "Klarte ikke å laste meldinger.",
+        "loadThread": "Klarte ikke å åpne meldingen.",
+        "markRead": "Klarte ikke å endre lesestatus.",
+        "archive": "Klarte ikke å arkivere tråden.",
+        "send": "Klarte ikke å sende meldingen.",
+        "toRequired": "Legg til minst én mottaker før du sender."
       },
       "reply": {
         "button": "Svar",
