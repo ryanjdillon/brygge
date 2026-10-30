@@ -96,6 +96,7 @@ Most migrations need matching Go changes:
 - **Forgot the down.sql** — migration is irreversible in dev, painful to test
 - **Down deletes data the up created** — fine for new tables, dangerous for backfills. If the up backfilled an existing column, the down should restore to nil/zero, not silently re-derive
 - **Forgot the index** — sequential scans appear in slow query logs on first heavy use
+- **Index the planner can't use** — a partial index is used only when the query's `WHERE` implies its predicate, and an index serves `ORDER BY ... DESC` only if its `NULLS FIRST/LAST` matches (`DESC` defaults to `NULLS FIRST`, so a query saying `DESC NULLS LAST` needs the index to say so). Check with `EXPLAIN` on loaded data and drop an index the plan doesn't pick
 - **Enum value mismatch with Go switch statement** — silent fallthrough to default. The [DIL-376 enums doc](../reference/enums.md) is meant to surface these.
 - **Forgot to update Schema overview** — the next person grepping for the table doesn't find it in docs and assumes it doesn't exist
 - **Top-level `BEGIN;` / `COMMIT;`, savepoints, timeout changes, `COPY … FROM STDIN` or a psql `\` meta-command in the file.** golang-migrate already runs each file in one implicit transaction, so you don't need transaction control. With any of these, the deploy can't dry-run the file on prod and falls back to the slower snapshot restore. plpgsql `BEGIN … END` inside `$$` is fine. Run `scripts/deploy-migration-dryrun.sh --scan <file>` to see what the scan flags.

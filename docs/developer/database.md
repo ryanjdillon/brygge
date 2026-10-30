@@ -444,6 +444,16 @@ in `backend/migrations/` for the source of truth. The high-level shape:
   `idx_invoices_reissued_as` (unique, partial) keeps one new faktura from
   standing in for two. The id passes
   through the `dev_masked.invoices` view as it is.
+- **Order-lookup indexes.** 000122 (BRY-473, BRY-459) adds five partial
+  indexes, no columns. `idx_orders_club_paid` (`club_id, paid_at DESC NULLS
+  LAST`, paid or refunded orders) serves the payment overview's
+  newest-first list, so it stops after `LIMIT` instead of sorting every paid
+  order. `idx_stripe_bt_settling_invoice` / `_order` and
+  `idx_vipps_import_rows_booked_invoice` / `_order` serve the "is this
+  faktura already booked" check (`invoiceBookedRowSQL`). The planner only
+  uses a partial index when the query's `WHERE` implies its predicate, so a
+  change to `stripeChargeSettlesSQL`, the booked-row clauses or the overview's
+  status filter must change the matching index in a new migration.
 - `invoice_pdf_archive` (migration 000050) — preserves prior PDF bytes when
   `invoices.pdf_data` is regenerated, so Norwegian bokføringsloven §13's
   5-year retention requirement is satisfied.
