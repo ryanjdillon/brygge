@@ -897,7 +897,23 @@
         "createYear": "Create new year",
         "noPeriods": "No fiscal periods yet.",
         "confirmClose": "Are you sure you want to close this period? Entries cannot be modified in closed periods.",
-        "closeBlocked": "Die Periode enthält noch Entwürfe. Buchen oder löschen Sie sie zuerst; in einer geschlossenen Periode kann nicht mehr gebucht werden."
+        "closeBlocked": "Die Periode enthält noch Entwürfe. Buchen oder löschen Sie sie zuerst; in einer geschlossenen Periode kann nicht mehr gebucht werden.",
+        "reference": "Referenzjahr",
+        "referenceLabel": "{year} (Referenzjahr)",
+        "markReference": "Als Referenzjahr markieren",
+        "clearReference": "Referenzmarkierung entfernen",
+        "markReferenceTitle": "{year} als Referenzjahr markieren?",
+        "markReferenceBody": "{year} wird ein Referenzjahr. Das Jahr erscheint nicht mehr in Tildel, der Vipps-Warteschlange, den Zählern, der automatischen Buchung und der Bilanz späterer Jahre. In dem Jahr können nur Kosten gebucht werden; die Entwürfe bleiben liegen. Die Berichte für {year} lassen sich weiterhin öffnen, als Referenz gekennzeichnet.",
+        "markReferenceConfirm": "Als Referenzjahr markieren",
+        "markReferenceInvoices": "Das Jahr enthält {count} gebuchte Fakturen, die noch unbezahlt sind. Nach der Markierung können sie hier weder storniert noch gutgeschrieben werden.",
+        "clearReferenceTitle": "Referenzmarkierung von {year} entfernen?",
+        "clearReferenceBody": "Die Zahlen für {year} fließen wieder in die Bilanz späterer Jahre ein, das Jahr kehrt in Tildel und die Zähler zurück, und die Entwürfe können gebucht werden. Tun Sie das nur, wenn Brygge die Buchhaltung für das Jahr führen soll.",
+        "clearReferenceConfirm": "Markierung entfernen",
+        "referenceBlocked": {
+          "current_year": "Das laufende Jahr kann kein Referenzjahr sein.",
+          "opening_balance": "Das Jahr hat eine Eröffnungsbilanz und kann kein Referenzjahr sein.",
+          "period_closed": "Öffnen Sie das Jahr wieder, bevor Sie die Referenzmarkierung entfernen."
+        }
       },
       "journal": {
         "title": "Journal",
@@ -1015,7 +1031,8 @@
           "several_nights": "Der Betrag passt nur als mehrere Nächte",
           "members_only_unknown_payer": "Der Preis gilt nur für Mitglieder, aber der Zahler ist kein bekanntes Mitglied",
           "no_revenue_account": "Die Preiskategorie hat kein Ertragskonto",
-          "decision_failed": "Konnte gerade nicht entschieden werden. Bitte erneut versuchen"
+          "decision_failed": "Konnte gerade nicht entschieden werden. Bitte erneut versuchen",
+          "reference_period": "Das Jahr ist ein Referenzjahr. Hier können nur Kosten gebucht werden."
         }
       },
       "journalForm": {
@@ -1062,6 +1079,11 @@
         "detailDeposit": "Die Bankeinzahlung „Utb. {settlement} Vippsnr {msn}“ kommt zurück in Tildel",
         "detailFee": "Die Vipps-Gebühr bleibt gebucht",
         "noDeposit": "Dieser Abgleich lässt sich hier nicht rückgängig machen. Machen Sie die Einzahlung unter Bank & Vipps rückgängig."
+      },
+      "referencePeriod": "Das Jahr ist ein Referenzjahr. Hier können nur Kosten gebucht werden (ausgehende Bankzeilen auf ein Kostenkonto).",
+      "reports": {
+        "referenceBanner": "Referenzjahr: {year} ist in Brygge nicht die Buchhaltung des Vereins. Die Zahlen dienen dem Vergleich und fließen nicht in spätere Jahre ein.",
+        "referenceMomskomp": "Die Momskompensasjon für ein Referenzjahr wird aus den hier gebuchten Kosten berechnet."
       }
     },
     "groupEconomy": "Economy",
@@ -1308,7 +1330,8 @@
           "use_bank_unassign": "Auszahlungen werden durch ihre Abstimmung gebucht. Machen Sie stattdessen den Bankeingang in Tildel rückgängig.",
           "refund_booked": "Die Kartenzahlung hat eine gebuchte Erstattung. Machen Sie zuerst die Erstattung rückgängig.",
           "credit_note_issued": "Die Erstattung hat Gutschriften ausgestellt, die nicht storniert werden können. Stellen Sie stattdessen eine neue Rechnung aus.",
-          "faktura_settled_since": "Die Rechnung, die die Erstattung wieder geöffnet hat, wurde inzwischen bezahlt, gutgeschrieben oder gebucht."
+          "faktura_settled_since": "Die Rechnung, die die Erstattung wieder geöffnet hat, wurde inzwischen bezahlt, gutgeschrieben oder gebucht.",
+          "reference_period": "Das Jahr ist ein Referenzjahr. Hier können nur Kosten gebucht werden."
         },
         "entry": "Beleg {number}: {description}",
         "entryVoided": "storniert",
@@ -1498,11 +1521,21 @@
           "busy": "Eine Stripe-Synchronisierung läuft. Bitte gleich erneut versuchen.",
           "generic": "Die Auszahlung konnte nicht abgeglichen werden.",
           "members_not_listed": "Stripe hat den Inhalt der Auszahlung noch nicht aufgelistet. Führen Sie zuerst Stripe synchronisieren aus.",
-          "balance_open": "{count} Stripe-Transaktion bis zum Auszahlungsdatum ist nicht gebucht oder verworfen. Buchen oder verwerfen Sie sie zuerst. | {count} Stripe-Transaktionen bis zum Auszahlungsdatum sind nicht gebucht oder verworfen. Buchen oder verwerfen Sie sie zuerst."
+          "balance_open": "{count} Stripe-Transaktion bis zum Auszahlungsdatum ist nicht gebucht oder verworfen. Buchen oder verwerfen Sie sie zuerst. | {count} Stripe-Transaktionen bis zum Auszahlungsdatum sind nicht gebucht oder verworfen. Buchen oder verwerfen Sie sie zuerst.",
+          "reference_period": "Das Jahr ist ein Referenzjahr. Hier können nur Kosten gebucht werden."
         },
         "notListedBlocked": "Stripe hat den Inhalt noch nicht aufgelistet – führen Sie zuerst Stripe synchronisieren aus",
         "openBalance": "{count} Stripe-Transaktion bis zum Eingang ist nicht gebucht oder verworfen | {count} Stripe-Transaktionen bis zum Eingang sind nicht gebucht oder verworfen"
-      }
+      },
+      "filterReferenceDismissed": "Abgewiesen",
+      "undismiss": "Abweisung rückgängig",
+      "filterReference": "Referenzjahr",
+      "referenceHint": "Nicht gebuchte ausgehende Bankzeilen aus Referenzjahren. Buchen Sie sie auf ein Kostenkonto, damit die Momskompensasjon des Jahres stimmt, oder weisen Sie sie ab. Zahlungseingänge aus Referenzjahren werden nicht angezeigt.",
+      "referenceEmpty": "Keine ausgehenden Bankzeilen aus Referenzjahren warten auf Buchung.",
+      "yearReference": "{year} (Referenzjahr)",
+      "yearReferenceEmpty": "{year} ist ein Referenzjahr und erscheint nicht in der Warteschlange. Ausgehende Bankzeilen lassen sich unter dem Filter „Referenzjahr“ buchen.",
+      "referenceDismissedEmpty": "Keine abgewiesenen ausgehenden Bankzeilen aus Referenzjahren, die sich wiederherstellen lassen.",
+      "undismissRefused": "Die Zeile lässt sich nicht wiederherstellen: Sie ist nicht mehr abgewiesen, oder die Abweisung ist endgültig (Duplikat oder ersetzte Zeile)."
     },
     "sidebarTitle": "Admin-Portal",
     "inbox": {

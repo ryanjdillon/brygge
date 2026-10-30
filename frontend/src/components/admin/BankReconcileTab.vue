@@ -24,6 +24,9 @@ import {
   isHasPartnerError,
   isAliasConflictError,
   isImportedNoOpeningBalanceError,
+  isReferencePeriodError,
+  useReferenceRowCount,
+  useReferenceYears,
   isInvoiceCreditedError,
   isInvoiceNotDebtError,
   isInvoiceVoidedError,
@@ -58,6 +61,7 @@ import { filterAccounts } from '@/lib/accountSearch'
 import { priceCategoryKey } from '@/lib/priceCategories'
 import { useConfirm, useConfirmStore } from '@/stores/confirm'
 import { useToast } from '@/composables/useToast'
+import { ApiError } from '@/lib/errors'
 import { useFreshTotp } from '@/composables/useFreshTotp'
 import { providerPayoutRefusal } from '@/composables/useStripePayouts'
 
@@ -78,12 +82,14 @@ function filterFromQuery(): BankRowFilter {
     direction: one(route.query.dir, BANK_ROW_DIRECTIONS),
     source: one(route.query.src, BANK_ROW_SOURCES),
     flags: BANK_ROW_FLAGS.filter((f) => flagsRaw.includes(f)),
+    reference: route.query.ref === '1' || route.query.ref === 'd',
+    referenceDismissed: route.query.ref === 'd',
   }
 }
 
 const filter = ref<BankRowFilter>(filterFromQuery())
 const filterActive = computed(
-  () => !!filter.value.direction || !!filter.value.source || filter.value.flags.length > 0,
+  () => !!filter.value.direction || !!filter.value.source || filter.value.flags.length > 0 || !!filter.value.reference,
 )
 
 watch(
@@ -93,6 +99,8 @@ watch(
     delete query.dir
     delete query.src
     delete query.flags
+    delete query.ref
+    if (f.reference) query.ref = f.referenceDismissed ? 'd' : '1'
     if (f.direction) query.dir = f.direction
     if (f.source) query.src = f.source
     if (f.flags.length) query.flags = f.flags.join(',')
@@ -104,16 +112,25 @@ watch(
 // Direction and source are single-choice groups: clicking the active chip
 // clears the group. Flags toggle independently. Groups narrow together.
 function toggleDirection(d: BankRowDirection) {
-  filter.value = { ...filter.value, direction: filter.value.direction === d ? null : d }
+  filter.value = { ...filter.value, reference: false, direction: filter.value.direction === d ? null : d }
 }
 function toggleSource(s: BankRowSource) {
-  filter.value = { ...filter.value, source: filter.value.source === s ? null : s }
+  filter.value = { ...filter.value, reference: false, source: filter.value.source === s ? null : s }
 }
 function toggleFlag(fl: BankRowFlag) {
   const flags = filter.value.flags.includes(fl)
     ? filter.value.flags.filter((x) => x !== fl)
     : [...filter.value.flags, fl]
-  filter.value = { ...filter.value, flags }
+  filter.value = { ...filter.value, reference: false, flags }
+}
+// The reference chip is a mode of its own: it lists the outgoing rows of
+// reference years, which no other view shows, and shares no group with them.
+function toggleReference() {
+  filter.value = filter.value.reference ? emptyBankRowFilter() : { ...emptyBankRowFilter(), reference: true }
+}
+// Within the mode: the dismissed rows, so a mistaken dismissal can be undone.
+function toggleReferenceDismissed() {
+  filter.value = { ...filter.value, reference: true, referenceDismissed: !filter.value.referenceDismissed }
 }
 function clearFilters() {
   filter.value = emptyBankRowFilter()
@@ -124,7 +141,8 @@ function clearFilters() {
 // through.
 const showVippsCharges = computed(() => {
   const f = filter.value
-  return (f.source === null || f.source === 'vipps')
+  return !f.reference
+    && (f.source === null || f.source === 'vipps')
     && (f.direction === null || f.direction === 'incoming')
     && f.flags.length === 0
 })
@@ -133,11 +151,28 @@ const q = ref('')
 const currentYear = new Date().getFullYear()
 
 const { data: countsByYear } = useBankUnmatchedCountsByYear()
+// Reference years (BRY-418) are out of the default list and its counts; the
+// chip appears only while a reference year has outgoing rows left to book.
+const { data: referenceCount } = useReferenceRowCount()
+const { data: referenceYears } = useReferenceYears()
+// Shown while any year is a reference year, so the dismissed rows stay
+// reachable (to undo a dismissal) after the last open one is handled.
+const showReferenceChip = computed(
+  () => (referenceCount.value ?? 0) > 0 || (referenceYears.value?.size ?? 0) > 0 || !!filter.value.reference,
+)
 
 // 0 = "all years" sentinel for the Select component (which requires string|number values).
 // Converted to null for API calls where 0 means no year filter.
 const yearSelectValue = ref<number>(currentYear)
-const year = computed(() => yearSelectValue.value === 0 ? null : yearSelectValue.value)
+// The Referanseår mode lists the rows of reference years, whatever year the
+// picker holds: it sends no year, shows "all years" and is disabled, and the
+// picked year comes back when the mode is left.
+const year = computed(() => filter.value.reference || yearSelectValue.value === 0 ? null : yearSelectValue.value)
+const yearPickerValue = computed({
+  get: () => (filter.value.reference ? 0 : yearSelectValue.value),
+  set: (v) => { yearSelectValue.value = v },
+})
+const yearIsReference = computed(() => year.value !== null && !!referenceYears.value?.has(year.value))
 
 const yearOptions = computed(() => {
   const years = [0, ...Array.from({ length: 5 }, (_, i) => currentYear - i)]
@@ -149,7 +184,9 @@ const yearOptions = computed(() => {
       value: y,
       label: y === 0
         ? `${t('admin.bankReconcile.yearAll')}${count > 0 ? ` (${count})` : ''}`
-        : `${y}${count > 0 ? ` (${count})` : ''}`,
+        : referenceYears.value?.has(y)
+          ? t('admin.bankReconcile.yearReference', { year: y })
+          : `${y}${count > 0 ? ` (${count})` : ''}`,
     }
   })
 })
@@ -171,7 +208,7 @@ const missingSettlementsTotal = computed(() =>
   (missingSettlements.value ?? []).reduce((sum, m) => sum + Number(m.amount), 0),
 )
 
-const { assignInvoice, assignAccount, assignAccountGroup, dismiss, unassign, invalidate: refetchBankRows } =
+const { assignInvoice, assignAccount, assignAccountGroup, dismiss, unassign, undismiss, invalidate: refetchBankRows } =
   useReconcileMutations()
 const assignMultiInvoice = useAssignMultiInvoiceMutation()
 
@@ -519,7 +556,9 @@ const ACCOUNT_TYPE_ORDER: Record<'in' | 'out', string[]> = {
 }
 const groupAccountSections = computed(() => {
   const active = (accounts.value ?? []).filter((a) => a.is_active && !a.code.startsWith('19') && a.code !== RECEIVABLES_CODE)
-  const order = ACCOUNT_TYPE_ORDER[groupNet.value < 0 ? 'out' : 'in']
+  // A reference year takes costs only, so its rows go to a cost account.
+  const referenceOnly = pickerRows.value.some((r) => r.reference_period)
+  const order = referenceOnly ? ['expense'] : ACCOUNT_TYPE_ORDER[groupNet.value < 0 ? 'out' : 'in']
   return order
     .map((type) => ({ type, accounts: matchAccountSearch(active.filter((a) => a.account_type === type)) }))
     .filter((sec) => sec.accounts.length > 0)
@@ -597,10 +636,20 @@ async function refusedAsImported(book: () => Promise<boolean>): Promise<boolean>
       if (multiInvoiceOpen.value) void loadMultiInvoice()
       return false
     }
+    if (refusedAsReference(e)) return false
     if (!isImportedNoOpeningBalanceError(e)) throw e
     toast.error(t('admin.accounting.importedNoOpeningBalance'), 10000)
     return false
   }
+}
+// A reference year refuses everything but costs (409 reference_period); the
+// row is not booked, and a stale list may still have offered it.
+function refusedAsReference(e: unknown): boolean {
+  if (!isReferencePeriodError(e)) return false
+  toast.error(t('admin.accounting.referencePeriod'), 10000)
+  refetchBankRows()
+  refetchVippsCharges()
+  return true
 }
 function refusedAsProviderPayout(e: unknown): boolean {
   const provider = providerPayoutRefusal(e)
@@ -679,7 +728,12 @@ async function doAssignInvoice(
 async function doAssignAccount(rowId: string, accountCode: string, k: 'expense' | 'revenue') {
   const description = bilagDescription.value || undefined
   if (activeSource.value === 'vipps') {
-    await vBilag.mutateAsync({ rowId, accountCode, description })
+    try {
+      await vBilag.mutateAsync({ rowId, accountCode, description })
+    } catch (e) {
+      if (refusedAsReference(e)) return
+      throw e
+    }
     accountPickerOpen.value = false
     return
   }
@@ -688,7 +742,7 @@ async function doAssignAccount(rowId: string, accountCode: string, k: 'expense' 
     try {
       await assignAccountGroup.mutateAsync({ rowIds: groupRowIds.value, accountCode, description })
     } catch (e) {
-      if (!refusedAsProviderPayout(e)) throw e
+      if (!refusedAsProviderPayout(e) && !refusedAsReference(e)) throw e
       return
     }
     accountPickerOpen.value = false
@@ -706,7 +760,7 @@ async function doAssignAccount(rowId: string, accountCode: string, k: 'expense' 
       booked++
     }
   } catch (e) {
-    if (refusedAsProviderPayout(e)) return
+    if (refusedAsProviderPayout(e) || refusedAsReference(e)) return
     if (!isHasPartnerError(e)) throw e
     // The list was stale: a partner appeared since it loaded. Show the
     // choice again for what is left.
@@ -718,6 +772,18 @@ async function doAssignAccount(rowId: string, accountCode: string, k: 'expense' 
   }
   accountPickerOpen.value = false
   clearSelection()
+}
+async function doUndismiss(rowId: string) {
+  try {
+    await undismiss.mutateAsync({ rowId })
+  } catch (e) {
+    // 409: not (or no longer) a dismissed row whose dismissal can be undone.
+    const text = e instanceof ApiError && e.status === 409
+      ? t('admin.bankReconcile.undismissRefused')
+      : `${t('common.error')}: ${(e as Error).message}`
+    toast.error(text, 10000)
+    refetchBankRows()
+  }
 }
 async function doUnassign(rowId: string) {
   const ok = await askConfirm({
@@ -800,9 +866,32 @@ async function doUnassign(rowId: string) {
           {{ t(chip.labelKey) }}
         </button>
       </div>
+      <button
+        v-if="showReferenceChip"
+        type="button"
+        class="min-h-11 rounded-full px-3 py-1 text-xs font-semibold sm:min-h-0"
+        :class="chipClass(!!filter.reference)"
+        :aria-pressed="!!filter.reference"
+        data-testid="filter-reference"
+        @click="toggleReference"
+      >
+        {{ t('admin.bankReconcile.filterReference') }}
+        <span v-if="referenceCount">({{ referenceCount }})</span>
+      </button>
+      <button
+        v-if="filter.reference"
+        type="button"
+        class="min-h-11 rounded-full px-3 py-1 text-xs font-semibold sm:min-h-0"
+        :class="chipClass(!!filter.referenceDismissed)"
+        :aria-pressed="!!filter.referenceDismissed"
+        data-testid="filter-reference-dismissed"
+        @click="toggleReferenceDismissed"
+      >
+        {{ t('admin.bankReconcile.filterReferenceDismissed') }}
+      </button>
       <div class="ml-auto flex items-center gap-2">
         <label class="text-xs text-gray-600">{{ t('admin.bankReconcile.year') }}</label>
-        <Select v-model="yearSelectValue" :options="yearOptions" width="content" />
+        <Select v-model="yearPickerValue" :options="yearOptions" :disabled="!!filter.reference" width="content" />
       </div>
     </div>
 
@@ -894,9 +983,20 @@ async function doUnassign(rowId: string) {
       </ul>
     </div>
 
+    <p
+      v-if="filter.reference"
+      class="mt-4 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-900"
+      data-testid="reference-hint"
+    >
+      {{ t('admin.bankReconcile.referenceHint') }}
+    </p>
+
     <p v-if="isLoading" class="mt-6 text-sm text-gray-500">{{ t('common.loading') }}…</p>
     <p v-else-if="!rows?.length" class="mt-6 rounded-md border border-dashed border-gray-300 px-4 py-6 text-center text-sm text-gray-500">
-      {{ t('admin.bankReconcile.empty') }}
+      <template v-if="filter.reference && filter.referenceDismissed">{{ t('admin.bankReconcile.referenceDismissedEmpty') }}</template>
+      <template v-else-if="filter.reference">{{ t('admin.bankReconcile.referenceEmpty') }}</template>
+      <template v-else-if="yearIsReference">{{ t('admin.bankReconcile.yearReferenceEmpty', { year }) }}</template>
+      <template v-else>{{ t('admin.bankReconcile.empty') }}</template>
     </p>
 
     <template v-else>
@@ -1080,6 +1180,44 @@ async function doUnassign(rowId: string) {
                 </div>
               </div>
             </div>
+            <!-- A reference-year row: a cost to book or to dismiss, nothing else.
+                 No faktura suggestions, since no incoming money is booked here. -->
+            <div
+              v-else-if="row.reference_period"
+              class="flex flex-wrap gap-2 sm:justify-end"
+              data-testid="bank-row-reference-actions"
+            >
+              <button
+                v-if="row.dismissed_at"
+                type="button"
+                class="inline-flex min-h-11 items-center gap-1 rounded-md border border-gray-300 bg-white px-3 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50 sm:min-h-0"
+                data-testid="bank-row-reference-undismiss"
+                @click="doUndismiss(row.id)"
+              >
+                <Undo2 class="h-3 w-3" />
+                {{ t('admin.bankReconcile.undismiss') }}
+              </button>
+              <template v-else>
+                <button
+                  type="button"
+                  class="inline-flex min-h-11 items-center gap-1 rounded-md border border-gray-300 bg-white px-3 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50 sm:min-h-0"
+                  data-testid="bank-row-reference-book"
+                  @click="openAccountPicker(row)"
+                >
+                  <FileText class="h-3 w-3" />
+                  {{ t('admin.bankReconcile.lagBilag') }}
+                </button>
+                <button
+                  type="button"
+                  class="inline-flex min-h-11 items-center gap-1 rounded-md border border-amber-300 bg-white px-3 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-50 sm:min-h-0"
+                  data-testid="bank-row-reference-dismiss"
+                  @click="openDismiss(row)"
+                >
+                  <Ban class="h-3 w-3" />
+                  {{ t('admin.bankReconcile.dismiss') }}
+                </button>
+              </template>
+            </div>
             <button
               v-else
               type="button"
@@ -1220,7 +1358,7 @@ async function doUnassign(rowId: string) {
           {{ t('admin.bankReconcile.lagBilag') }}
         </button>
         <button
-          v-if="selectedRows.length >= 2"
+          v-if="selectedRows.length >= 2 && !selectedRows.some((r) => r.reference_period)"
           type="button"
           class="inline-flex items-center gap-1.5 rounded-md bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700"
           @click="openMultiInvoice()"

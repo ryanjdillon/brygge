@@ -1531,7 +1531,9 @@
         "compensation": "Compensation",
         "totalAmount": "Total",
         "eligible": "Eligible",
-        "eligibility": "Eligibility"
+        "eligibility": "Eligibility",
+        "referenceBanner": "Reference year: {year} is not the club's books in Brygge. The figures are shown for comparison and are not carried into later years.",
+        "referenceMomskomp": "Momskompensasjon for a reference year is calculated from the costs booked here."
       },
       "dashboard": {
         "title": "Accounting",
@@ -1591,7 +1593,23 @@
         "createYear": "Create new year",
         "noPeriods": "No fiscal periods yet.",
         "confirmClose": "Are you sure you want to close this period? Entries cannot be modified in closed periods.",
-        "closeBlocked": "The period still has draft entries. Post or delete them first; a closed period can no longer take posts."
+        "closeBlocked": "The period still has draft entries. Post or delete them first; a closed period can no longer take posts.",
+        "reference": "Reference year",
+        "referenceLabel": "{year} (reference year)",
+        "markReference": "Mark as reference year",
+        "clearReference": "Remove reference mark",
+        "markReferenceTitle": "Mark {year} as a reference year?",
+        "markReferenceBody": "{year} becomes a reference year. It is left out of Tildel, the Vipps queue, counters, automatic booking and the balance sheet of later years. Only costs can be booked in the year; its drafts stay as they are. The {year} reports can still be opened, marked as reference.",
+        "markReferenceConfirm": "Mark as reference year",
+        "markReferenceInvoices": "The year holds {count} booked fakturas that are still unpaid. Once the year is marked, they cannot be voided or credited here.",
+        "clearReferenceTitle": "Remove the reference mark from {year}?",
+        "clearReferenceBody": "The {year} figures are carried into the balance sheet of later years again, the year returns to Tildel and the counters, and its drafts can be posted. Do this only if Brygge is to keep the books for the year.",
+        "clearReferenceConfirm": "Remove the mark",
+        "referenceBlocked": {
+          "current_year": "The current year cannot be a reference year.",
+          "opening_balance": "The year has an opening balance and cannot be a reference year.",
+          "period_closed": "Reopen the year before removing the reference mark."
+        }
       },
       "journal": {
         "title": "Journal",
@@ -1717,7 +1735,8 @@
           "several_nights": "The amount only fits as several nights",
           "members_only_unknown_payer": "The price is for members only, but the payer is not a known member",
           "no_revenue_account": "The price category has no income account",
-          "decision_failed": "Could not be decided right now. Try again"
+          "decision_failed": "Could not be decided right now. Try again",
+          "reference_period": "The year is a reference year. Only costs can be booked in it."
         }
       },
       "journalForm": {
@@ -1773,7 +1792,8 @@
         "detailDeposit": "The bank deposit \"Utb. {settlement} Vippsnr {msn}\" goes back to Tildel",
         "detailFee": "The Vipps fee stays booked",
         "noDeposit": "This matching cannot be undone from here. Undo the deposit under Bank & Vipps."
-      }
+      },
+      "referencePeriod": "This year is a reference year. Only costs can be booked in it (outgoing bank rows to a cost account)."
     },
     "groupEconomy": "Economy",
     "groupShop": "Shop",
@@ -2180,7 +2200,8 @@
           "use_bank_unassign": "Payouts are booked by their reconciliation. Undo the bank deposit in Tildel instead.",
           "refund_booked": "The card payment has a booked refund. Undo the refund first.",
           "credit_note_issued": "The refund issued credit notes, which cannot be voided. Issue a new invoice instead.",
-          "faktura_settled_since": "The invoice the refund reopened has been paid, credited or booked since."
+          "faktura_settled_since": "The invoice the refund reopened has been paid, credited or booked since.",
+          "reference_period": "This year is a reference year. Only costs can be booked in it."
         },
         "entry": "Entry {number}: {description}",
         "entryVoided": "voided",
@@ -2440,11 +2461,21 @@
           "busy": "A Stripe sync is running. Try again shortly.",
           "generic": "Could not clear the payout.",
           "members_not_listed": "Stripe has not listed the payout's contents yet. Run Sync Stripe first.",
-          "balance_open": "{count} Stripe transaction up to the payout date is not booked or dismissed. Book or dismiss it first. | {count} Stripe transactions up to the payout date are not booked or dismissed. Book or dismiss them first."
+          "balance_open": "{count} Stripe transaction up to the payout date is not booked or dismissed. Book or dismiss it first. | {count} Stripe transactions up to the payout date are not booked or dismissed. Book or dismiss them first.",
+          "reference_period": "This year is a reference year. Only costs can be booked in it."
         },
         "notListedBlocked": "Stripe has not listed its contents yet – run Sync Stripe first",
         "openBalance": "{count} Stripe transaction up to the arrival is not booked or dismissed | {count} Stripe transactions up to the arrival are not booked or dismissed"
-      }
+      },
+      "filterReferenceDismissed": "Dismissed",
+      "undismiss": "Undo dismissal",
+      "filterReference": "Reference year",
+      "referenceHint": "Outgoing bank rows from reference years that are not booked. Book them to a cost account so the year's momskompensasjon is right, or dismiss them. Incoming payments from reference years are not shown.",
+      "referenceEmpty": "No outgoing bank rows from reference years are waiting to be booked.",
+      "yearReference": "{year} (reference year)",
+      "yearReferenceEmpty": "{year} is a reference year and is not shown in the queue. Outgoing bank rows can be booked under the “Reference year” filter.",
+      "referenceDismissedEmpty": "No dismissed outgoing rows from reference years can be restored.",
+      "undismissRefused": "The row cannot be restored: it is no longer dismissed, or the dismissal is final (a duplicate or a replaced row)."
     },
     "sidebarTitle": "Admin portal",
     "refund": {

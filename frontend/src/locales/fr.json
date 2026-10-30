@@ -897,7 +897,23 @@
         "createYear": "Create new year",
         "noPeriods": "No fiscal periods yet.",
         "confirmClose": "Are you sure you want to close this period? Entries cannot be modified in closed periods.",
-        "closeBlocked": "La période contient encore des écritures en brouillon. Comptabilisez-les ou supprimez-les d'abord ; une période clôturée ne peut plus recevoir d'écritures."
+        "closeBlocked": "La période contient encore des écritures en brouillon. Comptabilisez-les ou supprimez-les d'abord ; une période clôturée ne peut plus recevoir d'écritures.",
+        "reference": "Année de référence",
+        "referenceLabel": "{year} (année de référence)",
+        "markReference": "Marquer comme année de référence",
+        "clearReference": "Retirer le marquage de référence",
+        "markReferenceTitle": "Marquer {year} comme année de référence ?",
+        "markReferenceBody": "{year} devient une année de référence. Elle n’apparaît plus dans Tildel, la file Vipps, les compteurs, la comptabilisation automatique ni le bilan des années suivantes. Seuls les coûts peuvent être comptabilisés dans l’année ; les brouillons restent en place. Les rapports de {year} peuvent toujours être ouverts, marqués comme référence.",
+        "markReferenceConfirm": "Marquer comme année de référence",
+        "markReferenceInvoices": "L’année contient {count} factures comptabilisées encore impayées. Une fois l’année marquée, elles ne peuvent plus être annulées ni créditées ici.",
+        "clearReferenceTitle": "Retirer le marquage de référence de {year} ?",
+        "clearReferenceBody": "Les chiffres de {year} sont de nouveau repris dans le bilan des années suivantes, l’année revient dans Tildel et les compteurs, et les brouillons peuvent être comptabilisés. Ne le faites que si Brygge doit tenir la comptabilité de l’année.",
+        "clearReferenceConfirm": "Retirer le marquage",
+        "referenceBlocked": {
+          "current_year": "L’année en cours ne peut pas être une année de référence.",
+          "opening_balance": "L’année a un bilan d’ouverture et ne peut pas être une année de référence.",
+          "period_closed": "Rouvrez l’année avant de retirer le marquage de référence."
+        }
       },
       "journal": {
         "title": "Journal",
@@ -1014,7 +1030,8 @@
           "several_nights": "Le montant ne correspond qu’à plusieurs nuits",
           "members_only_unknown_payer": "Le prix est réservé aux membres, mais le payeur n’est pas un membre connu",
           "no_revenue_account": "La catégorie de prix n’a pas de compte de produits",
-          "decision_failed": "Impossible de trancher pour le moment. Réessayez"
+          "decision_failed": "Impossible de trancher pour le moment. Réessayez",
+          "reference_period": "L’année est une année de référence. Seuls les coûts peuvent y être comptabilisés."
         }
       },
       "journalForm": {
@@ -1061,6 +1078,11 @@
         "detailDeposit": "Le dépôt bancaire « Utb. {settlement} Vippsnr {msn} » retourne dans Tildel",
         "detailFee": "Les frais Vipps restent comptabilisés",
         "noDeposit": "Ce rapprochement ne peut pas être annulé ici. Annulez le dépôt sous Banque & Vipps."
+      },
+      "referencePeriod": "L’année est une année de référence. Seuls les coûts peuvent y être comptabilisés (lignes bancaires sortantes vers un compte de charges).",
+      "reports": {
+        "referenceBanner": "Année de référence : {year} n’est pas la comptabilité du club dans Brygge. Les chiffres sont affichés à titre de comparaison et ne sont pas repris dans les années suivantes.",
+        "referenceMomskomp": "La compensation de TVA (momskompensasjon) d’une année de référence est calculée à partir des coûts comptabilisés ici."
       }
     },
     "groupEconomy": "Economy",
@@ -1307,7 +1329,8 @@
           "use_bank_unassign": "Les virements sont comptabilisés par leur rapprochement. Annulez plutôt le dépôt bancaire dans Tildel.",
           "refund_booked": "Le paiement par carte a un remboursement comptabilisé. Annulez d’abord le remboursement.",
           "credit_note_issued": "Le remboursement a émis des avoirs, qui ne peuvent pas être annulés. Émettez plutôt une nouvelle facture.",
-          "faktura_settled_since": "La facture rouverte par le remboursement a depuis été payée, créditée ou comptabilisée."
+          "faktura_settled_since": "La facture rouverte par le remboursement a depuis été payée, créditée ou comptabilisée.",
+          "reference_period": "L’année est une année de référence. Seuls les coûts peuvent y être comptabilisés."
         },
         "entry": "Écriture {number} : {description}",
         "entryVoided": "annulée",
@@ -1497,11 +1520,21 @@
           "busy": "Une synchronisation Stripe est en cours. Réessayez dans un instant.",
           "generic": "Impossible de rapprocher le virement.",
           "members_not_listed": "Stripe n'a pas encore listé le contenu du virement. Lancez d'abord Synchroniser Stripe.",
-          "balance_open": "{count} transaction Stripe jusqu'à la date du virement n'est pas comptabilisée ou rejetée. Comptabilisez-la ou rejetez-la d'abord. | {count} transactions Stripe jusqu'à la date du virement ne sont pas comptabilisées ou rejetées. Comptabilisez-les ou rejetez-les d'abord."
+          "balance_open": "{count} transaction Stripe jusqu'à la date du virement n'est pas comptabilisée ou rejetée. Comptabilisez-la ou rejetez-la d'abord. | {count} transactions Stripe jusqu'à la date du virement ne sont pas comptabilisées ou rejetées. Comptabilisez-les ou rejetez-les d'abord.",
+          "reference_period": "L’année est une année de référence. Seuls les coûts peuvent y être comptabilisés."
         },
         "notListedBlocked": "Stripe n'a pas encore listé son contenu – lancez d'abord Synchroniser Stripe",
         "openBalance": "{count} transaction Stripe jusqu'à l'arrivée n'est pas comptabilisée ou rejetée | {count} transactions Stripe jusqu'à l'arrivée ne sont pas comptabilisées ou rejetées"
-      }
+      },
+      "filterReferenceDismissed": "Rejetées",
+      "undismiss": "Annuler le rejet",
+      "filterReference": "Année de référence",
+      "referenceHint": "Lignes bancaires sortantes des années de référence non comptabilisées. Comptabilisez-les sur un compte de charges pour que la compensation de TVA de l’année soit juste, ou rejetez-les. Les encaissements des années de référence ne sont pas affichés.",
+      "referenceEmpty": "Aucune ligne bancaire sortante d’une année de référence n’attend d’être comptabilisée.",
+      "yearReference": "{year} (année de référence)",
+      "yearReferenceEmpty": "{year} est une année de référence et n’apparaît pas dans la file. Les lignes bancaires sortantes peuvent être comptabilisées sous le filtre « Année de référence ».",
+      "referenceDismissedEmpty": "Aucune ligne bancaire sortante rejetée d’une année de référence ne peut être rétablie.",
+      "undismissRefused": "La ligne ne peut pas être rétablie : elle n’est plus rejetée, ou le rejet est définitif (doublon ou ligne remplacée)."
     },
     "sidebarTitle": "Portail admin",
     "inbox": {

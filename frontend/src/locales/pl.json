@@ -886,7 +886,23 @@
         "reopen": "Reopen",
         "createYear": "Create new year",
         "noPeriods": "No fiscal periods yet.",
-        "confirmClose": "Are you sure you want to close this period? Entries cannot be modified in closed periods."
+        "confirmClose": "Are you sure you want to close this period? Entries cannot be modified in closed periods.",
+        "reference": "Rok referencyjny",
+        "referenceLabel": "{year} (rok referencyjny)",
+        "markReference": "Oznacz jako rok referencyjny",
+        "clearReference": "Usuń oznaczenie referencyjne",
+        "markReferenceTitle": "Oznaczyć {year} jako rok referencyjny?",
+        "markReferenceBody": "{year} stanie się rokiem referencyjnym. Rok nie będzie uwzględniany w Tildel, kolejce Vipps, licznikach, automatycznym księgowaniu ani w bilansie kolejnych lat. W tym roku można księgować tylko koszty; wersje robocze pozostają bez zmian. Raporty za {year} nadal można otworzyć, z oznaczeniem referencyjnym.",
+        "markReferenceConfirm": "Oznacz jako rok referencyjny",
+        "markReferenceInvoices": "W roku są {count} zaksięgowane faktury, które nadal są niezapłacone. Po oznaczeniu roku nie można ich tu anulować ani korygować.",
+        "clearReferenceTitle": "Usunąć oznaczenie referencyjne z {year}?",
+        "clearReferenceBody": "Dane za {year} znów trafią do bilansu kolejnych lat, rok wróci do Tildel i liczników, a wersje robocze będzie można księgować. Zrób to tylko wtedy, gdy Brygge ma prowadzić księgi za ten rok.",
+        "clearReferenceConfirm": "Usuń oznaczenie",
+        "referenceBlocked": {
+          "current_year": "Bieżący rok nie może być rokiem referencyjnym.",
+          "opening_balance": "Rok ma bilans otwarcia i nie może być rokiem referencyjnym.",
+          "period_closed": "Otwórz rok ponownie, zanim usuniesz oznaczenie referencyjne."
+        }
       },
       "journal": {
         "title": "Journal",
@@ -989,7 +1005,8 @@
           "several_nights": "Kwota pasuje tylko jako kilka nocy",
           "members_only_unknown_payer": "Cena dotyczy tylko członków, ale płatnik nie jest znanym członkiem",
           "no_revenue_account": "Kategoria cennika nie ma konta przychodów",
-          "decision_failed": "Nie można teraz rozstrzygnąć. Spróbuj ponownie"
+          "decision_failed": "Nie można teraz rozstrzygnąć. Spróbuj ponownie",
+          "reference_period": "Rok jest rokiem referencyjnym. Można w nim księgować tylko koszty."
         }
       },
       "journalForm": {
@@ -1036,6 +1053,11 @@
         "detailDeposit": "Wpłata bankowa „Utb. {settlement} Vippsnr {msn}” wraca do Tildel",
         "detailFee": "Opłata Vipps pozostaje zaksięgowana",
         "noDeposit": "Tego uzgodnienia nie można cofnąć tutaj. Cofnij wpłatę w Bank i Vipps."
+      },
+      "referencePeriod": "Ten rok jest rokiem referencyjnym. Można w nim księgować tylko koszty (wychodzące wiersze bankowe na konto kosztowe).",
+      "reports": {
+        "referenceBanner": "Rok referencyjny: {year} nie jest księgowością klubu w Brygge. Dane są pokazane dla porównania i nie przechodzą do kolejnych lat.",
+        "referenceMomskomp": "Momskompensasjon za rok referencyjny jest liczony z kosztów zaksięgowanych tutaj."
       }
     },
     "groupEconomy": "Economy",
@@ -1282,7 +1304,8 @@
           "use_bank_unassign": "Wypłaty są księgowane przez ich uzgodnienie. Zamiast tego cofnij wpływ bankowy w Tildel.",
           "refund_booked": "Płatność kartą ma zaksięgowany zwrot. Najpierw cofnij zwrot.",
           "credit_note_issued": "Zwrot wystawił faktury korygujące, których nie można anulować. Zamiast tego wystaw nową fakturę.",
-          "faktura_settled_since": "Faktura ponownie otwarta przez zwrot została od tego czasu opłacona, skorygowana lub zaksięgowana."
+          "faktura_settled_since": "Faktura ponownie otwarta przez zwrot została od tego czasu opłacona, skorygowana lub zaksięgowana.",
+          "reference_period": "Ten rok jest rokiem referencyjnym. Można w nim księgować tylko koszty."
         },
         "entry": "Dokument {number}: {description}",
         "entryVoided": "anulowany",
@@ -1469,11 +1492,21 @@
           "busy": "Trwa synchronizacja Stripe. Spróbuj ponownie za chwilę.",
           "generic": "Nie udało się uzgodnić wypłaty.",
           "members_not_listed": "Stripe nie podał jeszcze zawartości wypłaty. Najpierw uruchom synchronizację Stripe.",
-          "balance_open": "Transakcje Stripe do daty wypłaty jeszcze niezaksięgowane ani nieodrzucone: {count}. Najpierw je zaksięguj lub odrzuć."
+          "balance_open": "Transakcje Stripe do daty wypłaty jeszcze niezaksięgowane ani nieodrzucone: {count}. Najpierw je zaksięguj lub odrzuć.",
+          "reference_period": "Ten rok jest rokiem referencyjnym. Można w nim księgować tylko koszty."
         },
         "notListedBlocked": "Stripe nie podał jeszcze jej zawartości – najpierw uruchom synchronizację Stripe",
         "openBalance": "Transakcje Stripe do daty wpływu jeszcze niezaksięgowane ani nieodrzucone: {count}"
-      }
+      },
+      "filterReferenceDismissed": "Odrzucone",
+      "undismiss": "Cofnij odrzucenie",
+      "filterReference": "Rok referencyjny",
+      "referenceHint": "Niezaksięgowane wychodzące wiersze bankowe z lat referencyjnych. Zaksięguj je na konto kosztowe, aby momskompensasjon za rok się zgadzał, albo je odrzuć. Wpływy z lat referencyjnych nie są pokazywane.",
+      "referenceEmpty": "Żaden wychodzący wiersz bankowy z roku referencyjnego nie czeka na księgowanie.",
+      "yearReference": "{year} (rok referencyjny)",
+      "yearReferenceEmpty": "{year} jest rokiem referencyjnym i nie pojawia się w kolejce. Wychodzące wiersze bankowe można księgować pod filtrem „Rok referencyjny”.",
+      "referenceDismissedEmpty": "Żaden odrzucony wychodzący wiersz bankowy z roku referencyjnego nie może zostać przywrócony.",
+      "undismissRefused": "Wiersza nie można przywrócić: nie jest już odrzucony albo odrzucenie jest ostateczne (duplikat lub zastąpiony wiersz)."
     },
     "sidebarTitle": "Portal administratora",
     "inbox": {

@@ -1527,7 +1527,9 @@
         "compensation": "Kompensasjonsbeløp",
         "totalAmount": "Sum",
         "eligible": "Grunnlag",
-        "eligibility": "Berettiget"
+        "eligibility": "Berettiget",
+        "referenceBanner": "Referanseår: {year} er ikke klubbens regnskap i Brygge. Tallene vises til sammenligning og tas ikke med i senere år.",
+        "referenceMomskomp": "Momskompensasjon for et referanseår regnes av kostnadene bokført her."
       },
       "dashboard": {
         "title": "Regnskap",
@@ -1587,7 +1589,23 @@
         "createYear": "Opprett nytt år",
         "noPeriods": "Ingen regnskapsperioder ennå.",
         "confirmClose": "Er du sikker på at du vil lukke denne perioden? Bilag kan ikke endres i lukkede perioder.",
-        "closeBlocked": "Perioden har fortsatt kladdbilag. Bokfør eller slett dem først; en lukket periode kan ikke lenger bokføres i."
+        "closeBlocked": "Perioden har fortsatt kladdbilag. Bokfør eller slett dem først; en lukket periode kan ikke lenger bokføres i.",
+        "reference": "Referanseår",
+        "referenceLabel": "{year} (referanseår)",
+        "markReference": "Merk som referanseår",
+        "clearReference": "Fjern referansemerking",
+        "markReferenceTitle": "Merke {year} som referanseår?",
+        "markReferenceBody": "{year} blir et referanseår. Året tas ikke med i Tildel, Vipps-kø, tellere, automatisk bokføring eller balansen for senere år. Bare kostnader kan bokføres i året; utkastene blir liggende. Rapportene for {year} kan fortsatt åpnes, merket som referanse.",
+        "markReferenceConfirm": "Merk som referanseår",
+        "markReferenceInvoices": "Året har {count} bokførte fakturaer som ikke er betalt. Når året er merket, kan de ikke annulleres eller krediteres her.",
+        "clearReferenceTitle": "Fjerne referansemerkingen fra {year}?",
+        "clearReferenceBody": "Tallene for {year} tas med igjen i balansen for senere år, året kommer tilbake i Tildel og tellerne, og utkastene kan bokføres. Gjør dette bare hvis Brygge skal føre regnskapet for året.",
+        "clearReferenceConfirm": "Fjern merkingen",
+        "referenceBlocked": {
+          "current_year": "Inneværende år kan ikke være et referanseår.",
+          "opening_balance": "Året har inngående balanse og kan ikke være et referanseår.",
+          "period_closed": "Gjenåpne året før referansemerkingen fjernes."
+        }
       },
       "journal": {
         "title": "Bilagsjournal",
@@ -1713,7 +1731,8 @@
           "several_nights": "Beløpet passer bare som flere netter",
           "members_only_unknown_payer": "Prisen gjelder bare medlemmer, men betaleren er ikke et kjent medlem",
           "no_revenue_account": "Priskategorien har ingen inntektskonto",
-          "decision_failed": "Kunne ikke avgjøres nå. Prøv igjen"
+          "decision_failed": "Kunne ikke avgjøres nå. Prøv igjen",
+          "reference_period": "Året er et referanseår. Her kan bare kostnader bokføres."
         }
       },
       "journalForm": {
@@ -1769,7 +1788,8 @@
         "detailDeposit": "Bankinnbetalingen «Utb. {settlement} Vippsnr {msn}» legges tilbake i Tildel",
         "detailFee": "Vipps-avgiften forblir bokført",
         "noDeposit": "Avstemmingen kan ikke angres herfra. Angre innbetalingen under Bank og Vipps."
-      }
+      },
+      "referencePeriod": "Året er et referanseår. Her kan bare kostnader bokføres (utgående bankrader mot en kostnadskonto)."
     },
     "groupEconomy": "Økonomi",
     "groupShop": "Butikk",
@@ -2176,7 +2196,8 @@
           "use_bank_unassign": "Utbetalinger bokføres av avstemmingen. Angre bankinnbetalingen i Tildel i stedet.",
           "refund_booked": "Kortbetalingen har en bokført refusjon. Angre refusjonen først.",
           "credit_note_issued": "Refusjonen har utstedt kreditnota, som ikke kan annulleres. Lag en ny faktura i stedet.",
-          "faktura_settled_since": "Fakturaen refusjonen åpnet igjen er betalt, kreditert eller bokført siden."
+          "faktura_settled_since": "Fakturaen refusjonen åpnet igjen er betalt, kreditert eller bokført siden.",
+          "reference_period": "Året er et referanseår. Her kan bare kostnader bokføres."
         },
         "entry": "Bilag {number}: {description}",
         "entryVoided": "annullert",
@@ -2436,11 +2457,21 @@
           "busy": "En Stripe-synk pågår. Prøv igjen om litt.",
           "generic": "Kunne ikke avstemme utbetalingen.",
           "members_not_listed": "Stripe har ikke listet innholdet i utbetalingen ennå. Kjør Synk Stripe først.",
-          "balance_open": "{count} Stripe-transaksjon fram til utbetalingsdatoen er ikke bokført eller avvist. Bokfør eller avvis den først. | {count} Stripe-transaksjoner fram til utbetalingsdatoen er ikke bokført eller avvist. Bokfør eller avvis dem først."
+          "balance_open": "{count} Stripe-transaksjon fram til utbetalingsdatoen er ikke bokført eller avvist. Bokfør eller avvis den først. | {count} Stripe-transaksjoner fram til utbetalingsdatoen er ikke bokført eller avvist. Bokfør eller avvis dem først.",
+          "reference_period": "Året er et referanseår. Her kan bare kostnader bokføres."
         },
         "notListedBlocked": "Stripe har ikke listet innholdet ennå – kjør Synk Stripe først",
         "openBalance": "{count} Stripe-transaksjon fram til ankomst er ikke bokført eller avvist | {count} Stripe-transaksjoner fram til ankomst er ikke bokført eller avvist"
-      }
+      },
+      "filterReferenceDismissed": "Avviste",
+      "undismiss": "Angre avvisning",
+      "filterReference": "Referanseår",
+      "referenceHint": "Utgående bankrader fra referanseår som ikke er bokført. Bokfør dem mot en kostnadskonto, slik at momskompensasjonen for året blir riktig, eller avvis dem. Innbetalinger fra referanseår vises ikke.",
+      "referenceEmpty": "Ingen utgående bankrader i referanseår venter på bokføring.",
+      "yearReference": "{year} (referanseår)",
+      "yearReferenceEmpty": "{year} er et referanseår og vises ikke i køen. Utgående bankrader kan bokføres under filteret «Referanseår».",
+      "referenceDismissedEmpty": "Ingen avviste utgående bankrader i referanseår som kan gjenopprettes.",
+      "undismissRefused": "Raden kan ikke gjenopprettes: den er ikke avvist lenger, eller avvisningen er endelig (duplikat eller erstattet rad)."
     },
     "sidebarTitle": "Adminportal",
     "refund": {

@@ -897,7 +897,23 @@
         "createYear": "Create new year",
         "noPeriods": "No fiscal periods yet.",
         "confirmClose": "Are you sure you want to close this period? Entries cannot be modified in closed periods.",
-        "closeBlocked": "De periode bevat nog conceptboekingen. Boek of verwijder ze eerst; in een afgesloten periode kan niet meer worden geboekt."
+        "closeBlocked": "De periode bevat nog conceptboekingen. Boek of verwijder ze eerst; in een afgesloten periode kan niet meer worden geboekt.",
+        "reference": "Referentiejaar",
+        "referenceLabel": "{year} (referentiejaar)",
+        "markReference": "Markeren als referentiejaar",
+        "clearReference": "Referentiemarkering verwijderen",
+        "markReferenceTitle": "{year} markeren als referentiejaar?",
+        "markReferenceBody": "{year} wordt een referentiejaar. Het jaar komt niet meer voor in Tildel, de Vipps-wachtrij, de tellers, het automatisch boeken en de balans van latere jaren. In het jaar kunnen alleen kosten worden geboekt; de concepten blijven liggen. De rapporten van {year} zijn nog te openen, gemarkeerd als referentie.",
+        "markReferenceConfirm": "Markeren als referentiejaar",
+        "markReferenceInvoices": "Het jaar bevat {count} geboekte facturen die nog niet zijn betaald. Zodra het jaar is gemarkeerd, kunnen ze hier niet meer worden geannuleerd of gecrediteerd.",
+        "clearReferenceTitle": "Referentiemarkering van {year} verwijderen?",
+        "clearReferenceBody": "De cijfers van {year} tellen weer mee in de balans van latere jaren, het jaar komt terug in Tildel en de tellers, en de concepten kunnen worden geboekt. Doe dit alleen als Brygge de boekhouding van het jaar moet voeren.",
+        "clearReferenceConfirm": "Markering verwijderen",
+        "referenceBlocked": {
+          "current_year": "Het lopende jaar kan geen referentiejaar zijn.",
+          "opening_balance": "Het jaar heeft een openingsbalans en kan geen referentiejaar zijn.",
+          "period_closed": "Heropen het jaar voordat u de referentiemarkering verwijdert."
+        }
       },
       "journal": {
         "title": "Journal",
@@ -1015,7 +1031,8 @@
           "several_nights": "Het bedrag past alleen als meerdere nachten",
           "members_only_unknown_payer": "De prijs is alleen voor leden, maar de betaler is geen bekend lid",
           "no_revenue_account": "De prijscategorie heeft geen opbrengstrekening",
-          "decision_failed": "Kon nu niet worden bepaald. Probeer het opnieuw"
+          "decision_failed": "Kon nu niet worden bepaald. Probeer het opnieuw",
+          "reference_period": "Het jaar is een referentiejaar. Hier kunnen alleen kosten worden geboekt."
         }
       },
       "journalForm": {
@@ -1062,6 +1079,11 @@
         "detailDeposit": "De bankstorting \"Utb. {settlement} Vippsnr {msn}\" gaat terug naar Tildel",
         "detailFee": "De Vipps-kosten blijven geboekt",
         "noDeposit": "Deze afstemming kan hier niet ongedaan worden gemaakt. Maak de storting ongedaan onder Bank & Vipps."
+      },
+      "referencePeriod": "Dit jaar is een referentiejaar. Hier kunnen alleen kosten worden geboekt (uitgaande bankregels op een kostenrekening).",
+      "reports": {
+        "referenceBanner": "Referentiejaar: {year} is in Brygge niet de boekhouding van de club. De cijfers worden getoond ter vergelijking en tellen niet mee in latere jaren.",
+        "referenceMomskomp": "De momskompensasjon voor een referentiejaar wordt berekend uit de hier geboekte kosten."
       }
     },
     "groupEconomy": "Economy",
@@ -1308,7 +1330,8 @@
           "use_bank_unassign": "Uitbetalingen worden geboekt door hun afstemming. Maak in plaats daarvan de bankontvangst in Tildel ongedaan.",
           "refund_booked": "De kaartbetaling heeft een geboekte terugbetaling. Maak eerst de terugbetaling ongedaan.",
           "credit_note_issued": "De terugbetaling heeft creditnota’s uitgegeven, die niet kunnen worden vernietigd. Maak in plaats daarvan een nieuwe factuur.",
-          "faktura_settled_since": "De factuur die de terugbetaling heropende is sindsdien betaald, gecrediteerd of geboekt."
+          "faktura_settled_since": "De factuur die de terugbetaling heropende is sindsdien betaald, gecrediteerd of geboekt.",
+          "reference_period": "Dit jaar is een referentiejaar. Hier kunnen alleen kosten worden geboekt."
         },
         "entry": "Boeking {number}: {description}",
         "entryVoided": "geannuleerd",
@@ -1498,11 +1521,21 @@
           "busy": "Er loopt een Stripe-synchronisatie. Probeer het zo opnieuw.",
           "generic": "De uitbetaling kon niet worden afgestemd.",
           "members_not_listed": "Stripe heeft de inhoud van de uitbetaling nog niet vermeld. Voer eerst Stripe synchroniseren uit.",
-          "balance_open": "{count} Stripe-transactie tot de uitbetalingsdatum is niet geboekt of afgewezen. Boek of wijs die eerst af. | {count} Stripe-transacties tot de uitbetalingsdatum zijn niet geboekt of afgewezen. Boek of wijs die eerst af."
+          "balance_open": "{count} Stripe-transactie tot de uitbetalingsdatum is niet geboekt of afgewezen. Boek of wijs die eerst af. | {count} Stripe-transacties tot de uitbetalingsdatum zijn niet geboekt of afgewezen. Boek of wijs die eerst af.",
+          "reference_period": "Dit jaar is een referentiejaar. Hier kunnen alleen kosten worden geboekt."
         },
         "notListedBlocked": "Stripe heeft de inhoud nog niet vermeld – voer eerst Stripe synchroniseren uit",
         "openBalance": "{count} Stripe-transactie tot de aankomst is niet geboekt of afgewezen | {count} Stripe-transacties tot de aankomst zijn niet geboekt of afgewezen"
-      }
+      },
+      "filterReferenceDismissed": "Afgewezen",
+      "undismiss": "Afwijzing ongedaan maken",
+      "filterReference": "Referentiejaar",
+      "referenceHint": "Niet-geboekte uitgaande bankregels uit referentiejaren. Boek ze op een kostenrekening zodat de momskompensasjon van het jaar klopt, of wijs ze af. Inkomende betalingen uit referentiejaren worden niet getoond.",
+      "referenceEmpty": "Er wachten geen uitgaande bankregels uit referentiejaren op boeking.",
+      "yearReference": "{year} (referentiejaar)",
+      "yearReferenceEmpty": "{year} is een referentiejaar en staat niet in de wachtrij. Uitgaande bankregels kunnen worden geboekt onder het filter ‘Referentiejaar’.",
+      "referenceDismissedEmpty": "Geen afgewezen uitgaande bankregels uit referentiejaren kunnen worden hersteld.",
+      "undismissRefused": "De regel kan niet worden hersteld: hij is niet meer afgewezen, of de afwijzing is definitief (dubbel of vervangen regel)."
     },
     "sidebarTitle": "Beheerportaal",
     "inbox": {

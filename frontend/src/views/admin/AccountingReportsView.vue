@@ -2,7 +2,7 @@
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
-import { useFiscalPeriods } from '@/composables/useAccounting'
+import { useFiscalPeriods, defaultPeriodId } from '@/composables/useAccounting'
 
 const { t } = useI18n()
 
@@ -25,10 +25,13 @@ const selectedPeriodId = ref('')
 
 watch(periods, (val) => {
   if (val && val.length > 0 && !selectedPeriodId.value) {
-    const open = val.find(p => p.status === 'open')
-    selectedPeriodId.value = open?.id ?? val[0].id
+    selectedPeriodId.value = defaultPeriodId(val)
   }
 }, { immediate: true })
+
+// A reference year is not the club's books in Brygge: its reports open when it
+// is picked, marked as such, and its figures are not carried forward.
+const selectedPeriod = computed(() => periods.value?.find(p => p.id === selectedPeriodId.value))
 
 
 // ── Report types ──────────────────────────────────────────────────────────────
@@ -162,9 +165,20 @@ const tabs: { key: Tab; label: string }[] = [
           v-model="selectedPeriodId"
           class="rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
         >
-          <option v-for="p in periods" :key="p.id" :value="p.id">{{ p.year }}</option>
+          <option v-for="p in periods" :key="p.id" :value="p.id">
+            {{ p.reference_only ? t('admin.accounting.periods.referenceLabel', { year: p.year }) : p.year }}
+          </option>
         </select>
       </div>
+    </div>
+
+    <div
+      v-if="selectedPeriod?.reference_only"
+      class="rounded-md bg-amber-50 px-4 py-3 text-sm text-amber-900"
+      data-testid="reference-banner"
+    >
+      <p>{{ t('admin.accounting.reports.referenceBanner', { year: selectedPeriod.year }) }}</p>
+      <p v-if="activeTab === 'momskomp'" class="mt-1">{{ t('admin.accounting.reports.referenceMomskomp') }}</p>
     </div>
 
     <!-- Cash / Accrual toggle -->

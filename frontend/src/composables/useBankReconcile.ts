@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { computed, type Ref } from 'vue'
 import { useApi } from '@/composables/useApi'
 import { ApiError } from '@/lib/errors'
+import { useFiscalPeriods } from '@/composables/useAccounting'
 
 export interface BankRowSummary {
   id: string
@@ -37,6 +38,9 @@ export interface BankRowSummary {
   // Another unbooked row looks like it belongs with this one (BRY-380):
   // "strong" rows must be booked together or confirmed as separate.
   partner_hint?: PartnerStrength | null
+  // Dated in a reference year (BRY-418): only booking an outgoing row to a
+  // cost account, and dismissing it, are left.
+  reference_period?: boolean
 }
 
 export type ProviderPayout = 'vipps' | 'stripe'
@@ -180,6 +184,14 @@ export function isImportedNoOpeningBalanceError(e: unknown): boolean {
 }
 
 /**
+ * True when a booking was refused because it would put anything but a cost
+ * into a reference year (BRY-418). Nothing was booked.
+ */
+export function isReferencePeriodError(e: unknown): boolean {
+  return e instanceof ApiError && e.status === 409 && e.code === 'reference_period'
+}
+
+/**
  * True when an assign was refused because the faktura is credited in full:
  * booking a payment against it would credit receivables a second time
  * (BRY-508). Nothing was booked.
@@ -210,6 +222,11 @@ export interface BankRowFilter {
   direction: BankRowDirection | null
   source: BankRowSource | null
   flags: BankRowFlag[]
+  // Not a filter but a mode: the outgoing rows of reference years, which the
+  // other views leave out entirely. It excludes the other groups.
+  reference?: boolean
+  // With reference: the dismissed rows instead of the open ones.
+  referenceDismissed?: boolean
 }
 
 export const BANK_ROW_DIRECTIONS: BankRowDirection[] = ['incoming', 'outgoing', 'dismissed']
@@ -217,11 +234,12 @@ export const BANK_ROW_SOURCES: BankRowSource[] = ['bank', 'vipps']
 export const BANK_ROW_FLAGS: BankRowFlag[] = ['duplicate', 'double_payment']
 
 export function emptyBankRowFilter(): BankRowFilter {
-  return { direction: null, source: null, flags: [] }
+  return { direction: null, source: null, flags: [], reference: false }
 }
 
 /** The comma-separated `kind` query value for a filter; '' means no filter. */
 export function bankRowKindParam(f: BankRowFilter): string {
+  if (f.reference) return f.referenceDismissed ? 'reference,dismissed' : 'reference'
   return [f.direction, f.source, ...f.flags].filter(Boolean).join(',')
 }
 
@@ -252,6 +270,27 @@ export function useBankUnmatchedCount(year?: Ref<number | null>) {
     refetchInterval: 30_000,
     refetchOnWindowFocus: true,
   })
+}
+
+// How many outgoing reference-year rows wait to be booked to a cost account;
+// the Referanseår chip shows only while it is above zero.
+export function useReferenceRowCount() {
+  return useQuery({
+    queryKey: ['bank-rows', 'unmatched', 'count', 'reference'],
+    queryFn: async () => {
+      const url = new URL(`${BASE}/unmatched/count`, window.location.origin)
+      url.searchParams.set('kind', 'reference')
+      const body = await useApi().fetchApi<{ count: number }>(url.toString())
+      return body.count
+    },
+    refetchOnWindowFocus: true,
+  })
+}
+
+// The years marked as reference years, from the shared periods query.
+export function useReferenceYears() {
+  const { data: periods } = useFiscalPeriods()
+  return { data: computed(() => new Set((periods.value ?? []).filter((p) => p.reference_only).map((p) => p.year))) }
 }
 
 export function useBankUnmatchedCountsByYear() {
@@ -496,7 +535,15 @@ export function useReconcileMutations() {
     onSuccess: invalidate,
   })
 
-  return { assignInvoice, assignAccount, assignAccountGroup, dismiss, unassign, invalidate }
+  // Only a dismissed reference-year row can be undismissed; every other
+  // dismissal is permanent.
+  const undismiss = useMutation({
+    mutationFn: ({ rowId }: { rowId: string }) =>
+      useApi().fetchApi(`${BASE}/${rowId}/undismiss`, { method: 'POST' }),
+    onSuccess: invalidate,
+  })
+
+  return { assignInvoice, assignAccount, assignAccountGroup, dismiss, unassign, undismiss, invalidate }
 }
 
 export function useAssignMultiInvoiceMutation() {

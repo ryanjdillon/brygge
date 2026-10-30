@@ -16,6 +16,7 @@ type Totals = {
 }
 
 const summary = ref<{ items: unknown[]; totals: Totals } | null>(null)
+const periods = ref<{ year: number; reference_only: boolean }[]>([])
 
 vi.mock('@/composables/useFinancials', () => ({
   useFinancialSummary: () => ({ data: ref(null), isLoading: ref(false) }),
@@ -26,6 +27,7 @@ vi.mock('@/composables/useFinancials', () => ({
 
 vi.mock('@/composables/useAccounting', () => ({
   useAccountsList: () => ({ data: ref([]), isLoading: ref(false) }),
+  useFiscalPeriods: () => ({ data: periods, isLoading: ref(false) }),
   useJournalEntries: () => ({ data: ref([]), isLoading: ref(false) }),
 }))
 
@@ -78,6 +80,7 @@ function mountDashboard() {
 describe('AccountingDashboard role exemptions', () => {
   beforeEach(() => {
     lastSlices = []
+    periods.value = []
   })
 
   it('shows the exempted column, card note and donut slice when exemptions exist', () => {
@@ -115,5 +118,23 @@ describe('AccountingDashboard role exemptions', () => {
     expect(wrapper.find('[data-testid="billed-exempted"]').exists()).toBe(false)
     expect(lastSlices.map((s) => s.label)).not.toContain('admin.financials.statusExempted')
     expect(lastSlices).toHaveLength(3)
+  })
+})
+
+describe('AccountingDashboard reference years', () => {
+  beforeEach(() => {
+    summary.value = null
+  })
+
+  it('banners the selected year when it is a reference year', () => {
+    periods.value = [{ year: new Date().getFullYear(), reference_only: true }]
+    expect(mountDashboard().get('[data-testid="reference-banner"]').text()).toContain(
+      'admin.accounting.reports.referenceBanner',
+    )
+  })
+
+  it('shows no banner for an ordinary year', () => {
+    periods.value = [{ year: new Date().getFullYear(), reference_only: false }]
+    expect(mountDashboard().find('[data-testid="reference-banner"]').exists()).toBe(false)
   })
 })

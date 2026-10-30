@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useFreshTotp } from '@/composables/useFreshTotp'
 import { ApiError } from '@/lib/errors'
+import { isReferencePeriodError } from '@/composables/useBankReconcile'
 import {
   ArrowLeft,
   Plus,
@@ -104,8 +105,10 @@ const openPeriods = computed(() => periods.value?.filter(p => p.status === 'open
 
 watch(periods, (val) => {
   if (val && val.length > 0 && !selectedPeriodId.value) {
-    const open = val.find(p => p.status === 'open')
-    if (open) selectedPeriodId.value = open.id
+    // A reference year is open for costs only, so it is never the default.
+    const open = val.filter(p => p.status === 'open')
+    const pick = open.find(p => !p.reference_only) ?? open[0]
+    if (pick) selectedPeriodId.value = pick.id
   }
 }, { immediate: true })
 
@@ -179,7 +182,7 @@ async function handleSaveDraft() {
       router.push('/admin/accounting/journal')
     },
     onError: (err) => {
-      errorMessage.value = (err as Error).message
+      errorMessage.value = bookingError(err)
     },
   })
 }
@@ -200,12 +203,12 @@ async function handlePost() {
           router.push('/admin/accounting/journal')
         },
         onError: (err) => {
-          errorMessage.value = `${t('common.error')}: ${(err as Error).message}`
+          errorMessage.value = `${t('common.error')}: ${bookingError(err)}`
         },
       })
     },
     onError: (err) => {
-      errorMessage.value = (err as Error).message
+      errorMessage.value = bookingError(err)
     },
   })
 }
@@ -219,8 +222,16 @@ function accountLabel(a: Account): string {
 }
 
 const periodOptions = computed(() =>
-  openPeriods.value.map((p) => ({ value: p.id, label: String(p.year) })),
+  openPeriods.value.map((p) => ({
+    value: p.id,
+    label: p.reference_only ? t('admin.accounting.periods.referenceLabel', { year: p.year }) : String(p.year),
+  })),
 )
+
+// A reference year refuses everything but costs with a typed 409.
+function bookingError(err: unknown): string {
+  return isReferencePeriodError(err) ? t('admin.accounting.referencePeriod') : (err as Error).message
+}
 
 const accountOptions = computed(() => [
   { value: '', label: t('admin.accounting.journalForm.selectAccount') },

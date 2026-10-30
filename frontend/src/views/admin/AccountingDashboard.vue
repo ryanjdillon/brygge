@@ -23,6 +23,7 @@ import {
 } from 'lucide-vue-next'
 import {
   useAccountsList,
+  useFiscalPeriods,
   useJournalEntries,
 } from '@/composables/useAccounting'
 import { usePricing } from '@/composables/usePricing'
@@ -201,6 +202,13 @@ const financeCards = computed(() => {
 })
 
 const { data: accounts } = useAccountsList()
+const { data: periods } = useFiscalPeriods()
+// The cash-flow chart leaves a reference year out, so the year picked says why
+// it is empty.
+const selectedReferenceYear = computed(() =>
+  selectedYear.value !== undefined
+  && !!periods.value?.some((p) => p.year === selectedYear.value && p.reference_only),
+)
 const dummyPeriodId = ref('')
 const { data: entries } = useJournalEntries(dummyPeriodId)
 
@@ -220,6 +228,13 @@ const postedCount = computed(() => entries.value?.filter(e => e.status === 'post
         <h2 class="text-lg font-semibold text-gray-700">{{ t('admin.financials.title') }}</h2>
         <Select v-model="selectedYearValue" :options="yearOptions" width="content" />
       </div>
+      <p
+        v-if="selectedReferenceYear"
+        class="mt-3 rounded-md bg-amber-50 px-4 py-3 text-sm text-amber-900"
+        data-testid="reference-banner"
+      >
+        {{ t('admin.accounting.reports.referenceBanner', { year: selectedYear }) }}
+      </p>
 
       <!-- Per-price-item totals (faktura side — works even without Vipps) -->
       <div class="mt-4">

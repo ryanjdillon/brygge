@@ -1488,7 +1488,23 @@
         "createYear": "Opprett nytt år",
         "noPeriods": "Ingen rekneskapsperiodar enno.",
         "confirmClose": "Er du sikker på at du vil lukke denne perioden? Bilag kan ikkje endrast i lukka periodar.",
-        "closeBlocked": "Perioden har framleis kladdebilag. Bokfør eller slett dei først; ein lukka periode kan ikkje lenger bokførast i."
+        "closeBlocked": "Perioden har framleis kladdebilag. Bokfør eller slett dei først; ein lukka periode kan ikkje lenger bokførast i.",
+        "reference": "Referanseår",
+        "referenceLabel": "{year} (referanseår)",
+        "markReference": "Merk som referanseår",
+        "clearReference": "Fjern referansemerking",
+        "markReferenceTitle": "Merke {year} som referanseår?",
+        "markReferenceBody": "{year} blir eit referanseår. Året blir ikkje med i Tildel, Vipps-kø, teljarar, automatisk bokføring eller balansen for seinare år. Berre kostnader kan førast i året; utkasta blir liggjande. Rapportane for {year} kan framleis opnast, merkte som referanse.",
+        "markReferenceConfirm": "Merk som referanseår",
+        "markReferenceInvoices": "Året har {count} bokførte fakturaer som ikkje er betalte. Når året er merkt, kan dei ikkje annullerast eller krediterast her.",
+        "clearReferenceTitle": "Fjerne referansemerkinga frå {year}?",
+        "clearReferenceBody": "Tala for {year} blir tekne med att i balansen for seinare år, året kjem tilbake i Tildel og teljarane, og utkasta kan førast. Gjer dette berre om Brygge skal føre rekneskapen for året.",
+        "clearReferenceConfirm": "Fjern merkinga",
+        "referenceBlocked": {
+          "current_year": "Inneverande år kan ikkje vere eit referanseår.",
+          "opening_balance": "Året har inngåande balanse og kan ikkje vere eit referanseår.",
+          "period_closed": "Opne året att før referansemerkinga blir fjerna."
+        }
       },
       "journal": {
         "title": "Bilagsjournal",
@@ -1613,7 +1629,8 @@
           "several_nights": "Beløpet passar berre som fleire netter",
           "members_only_unknown_payer": "Prisen gjeld berre medlemmer, men betalaren er ikkje eit kjent medlem",
           "no_revenue_account": "Priskategorien har ingen inntektskonto",
-          "decision_failed": "Kunne ikkje avgjerast no. Prøv igjen"
+          "decision_failed": "Kunne ikkje avgjerast no. Prøv igjen",
+          "reference_period": "Året er eit referanseår. Her kan berre kostnader førast."
         }
       },
       "journalForm": {
@@ -1660,6 +1677,11 @@
         "detailDeposit": "Bankinnbetalinga «Utb. {settlement} Vippsnr {msn}» blir lagd tilbake i Tildel",
         "detailFee": "Vipps-avgifta blir ståande bokført",
         "noDeposit": "Avstemminga kan ikkje angrast herfrå. Angre innbetalinga under Bank og Vipps."
+      },
+      "referencePeriod": "Året er eit referanseår. Her kan berre kostnader førast (utgåande bankrader mot ein kostnadskonto).",
+      "reports": {
+        "referenceBanner": "Referanseår: {year} er ikkje rekneskapen til klubben i Brygge. Tala blir viste til samanlikning og blir ikkje tekne med i seinare år.",
+        "referenceMomskomp": "Momskompensasjon for eit referanseår blir rekna av kostnadene førte her."
       }
     },
     "groupEconomy": "Økonomi",
@@ -2057,7 +2079,8 @@
           "use_bank_unassign": "Utbetalingar blir bokførte av avstemminga. Angre bankinnbetalinga i Tildel i staden.",
           "refund_booked": "Kortbetalinga har ein bokført refusjon. Angre refusjonen først.",
           "credit_note_issued": "Refusjonen har skrive ut kreditnota, som ikkje kan annullerast. Lag ein ny faktura i staden.",
-          "faktura_settled_since": "Fakturaen refusjonen opna igjen er betalt, kreditert eller bokført sidan."
+          "faktura_settled_since": "Fakturaen refusjonen opna igjen er betalt, kreditert eller bokført sidan.",
+          "reference_period": "Året er eit referanseår. Her kan berre kostnader førast."
         },
         "entry": "Bilag {number}: {description}",
         "entryVoided": "annullert",
@@ -2317,11 +2340,21 @@
           "busy": "Ein Stripe-synk køyrer. Prøv att om litt.",
           "generic": "Kunne ikkje avstemme utbetalinga.",
           "members_not_listed": "Stripe har ikkje lista innhaldet i utbetalinga enno. Køyr Synk Stripe først.",
-          "balance_open": "{count} Stripe-transaksjon fram til utbetalingsdatoen er ikkje bokført eller avvist. Bokfør eller avvis ho først. | {count} Stripe-transaksjonar fram til utbetalingsdatoen er ikkje bokførte eller avviste. Bokfør eller avvis dei først."
+          "balance_open": "{count} Stripe-transaksjon fram til utbetalingsdatoen er ikkje bokført eller avvist. Bokfør eller avvis ho først. | {count} Stripe-transaksjonar fram til utbetalingsdatoen er ikkje bokførte eller avviste. Bokfør eller avvis dei først.",
+          "reference_period": "Året er eit referanseår. Her kan berre kostnader førast."
         },
         "notListedBlocked": "Stripe har ikkje lista innhaldet enno – køyr Synk Stripe først",
         "openBalance": "{count} Stripe-transaksjon fram til ankomst er ikkje bokført eller avvist | {count} Stripe-transaksjonar fram til ankomst er ikkje bokførte eller avviste"
-      }
+      },
+      "filterReferenceDismissed": "Avviste",
+      "undismiss": "Angre avvising",
+      "filterReference": "Referanseår",
+      "referenceHint": "Utgåande bankrader frå referanseår som ikkje er førte. Før dei mot ein kostnadskonto, slik at momskompensasjonen for året blir rett, eller avvis dei. Innbetalingar frå referanseår blir ikkje viste.",
+      "referenceEmpty": "Ingen utgåande bankrader i referanseår ventar på føring.",
+      "yearReference": "{year} (referanseår)",
+      "yearReferenceEmpty": "{year} er eit referanseår og blir ikkje vist i køen. Utgåande bankrader kan førast under filteret «Referanseår».",
+      "referenceDismissedEmpty": "Ingen avviste utgåande bankrader i referanseår som kan gjenopprettast.",
+      "undismissRefused": "Raden kan ikkje gjenopprettast: ho er ikkje avvist lenger, eller avvisinga er endeleg (duplikat eller erstatta rad)."
     },
     "sidebarTitle": "Adminportal",
     "refund": {

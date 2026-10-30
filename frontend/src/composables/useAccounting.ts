@@ -45,6 +45,24 @@ export interface FiscalPeriod {
   closed_by: string | null
   closed_at: string | null
   created_at: string
+  // A year whose books of record live in another system (BRY-418): kept for
+  // comparison and momskompensasjon, left out of queues and carried balances.
+  reference_only: boolean
+  // Why the reference toggle is unavailable, decided by the server.
+  reference_blocked: 'current_year' | 'opening_balance' | 'period_closed' | null
+  // Posted faktura bookings whose faktura is still open; a reference year
+  // can never reverse them.
+  open_invoice_bookings: number
+}
+
+/**
+ * The period a view opens on: the first open non-reference period, else the
+ * first non-reference one, else the first. Periods arrive newest first, and a
+ * reference year is never the club's working year.
+ */
+export function defaultPeriodId(periods: FiscalPeriod[]): string {
+  const live = periods.filter((p) => !p.reference_only)
+  return (live.find((p) => p.status === 'open') ?? live[0] ?? periods[0])?.id ?? ''
 }
 
 export interface JournalLine {
@@ -194,6 +212,24 @@ export function useClosePeriod() {
       apiFetch<{ message: string }>(`${BASE}/periods/${periodId}/close`, { method: 'POST' }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['accounting', 'periods'] })
+    },
+  })
+}
+
+export function useSetPeriodReference() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { periodId: string; referenceOnly: boolean }) =>
+      apiFetch<FiscalPeriod>(`${BASE}/periods/${body.periodId}/reference`, {
+        method: 'POST',
+        body: JSON.stringify({ reference_only: body.referenceOnly }),
+      }),
+    onSuccess: () => {
+      // The flag moves rows in and out of the queues, counts and reports.
+      qc.invalidateQueries({ queryKey: ['accounting'] })
+      qc.invalidateQueries({ queryKey: ['reports'] })
+      qc.invalidateQueries({ queryKey: ['bank-rows'] })
+      qc.invalidateQueries({ queryKey: ['vipps-charges'] })
     },
   })
 }

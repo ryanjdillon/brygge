@@ -16,7 +16,7 @@ const CODES = [
   'auto_assign_off', 'kid_alias_conflict', 'open_faktura_same_amount', 'no_match', 'several_categories',
   'several_nights', 'members_only_unknown_payer', 'no_revenue_account', 'same_account', 'maybe_paid_faktura',
   'has_faktura', 'order_charge', 'bank_linked', 'unexpected_shape', 'target_account_missing', 'already_moved',
-  'not_in_request', 'target_changed', 'period_not_open', 'decision_failed', 'failed',
+  'not_in_request', 'target_changed', 'period_not_open', 'reference_period', 'decision_failed', 'failed',
 ]
 
 const locales = { de, en, fr, it: it_, nb, nl, nn, pl } as Record<string, {

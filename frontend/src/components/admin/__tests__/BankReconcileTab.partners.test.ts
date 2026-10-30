@@ -80,6 +80,7 @@ vi.mock('@/composables/useBankReconcile', async () => {
 })
 
 vi.mock('@/composables/useAccounting', () => ({
+  useFiscalPeriods: () => ({ data: ref([]) }),
   useAccountsList: () => ({
     data: ref([
       { code: '1500', name: 'Kundefordringer', account_type: 'asset', is_active: true },

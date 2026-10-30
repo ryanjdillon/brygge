@@ -897,7 +897,23 @@
         "createYear": "Create new year",
         "noPeriods": "No fiscal periods yet.",
         "confirmClose": "Are you sure you want to close this period? Entries cannot be modified in closed periods.",
-        "closeBlocked": "Il periodo contiene ancora bozze. Registrale o eliminale prima; in un periodo chiuso non si può più registrare."
+        "closeBlocked": "Il periodo contiene ancora bozze. Registrale o eliminale prima; in un periodo chiuso non si può più registrare.",
+        "reference": "Anno di riferimento",
+        "referenceLabel": "{year} (anno di riferimento)",
+        "markReference": "Contrassegna come anno di riferimento",
+        "clearReference": "Rimuovi il contrassegno di riferimento",
+        "markReferenceTitle": "Contrassegnare {year} come anno di riferimento?",
+        "markReferenceBody": "{year} diventa un anno di riferimento. Non compare più in Tildel, nella coda Vipps, nei contatori, nella registrazione automatica né nel bilancio degli anni successivi. Nell’anno si possono registrare solo costi; le bozze restano dove sono. I rapporti del {year} si possono ancora aprire, contrassegnati come riferimento.",
+        "markReferenceConfirm": "Contrassegna come anno di riferimento",
+        "markReferenceInvoices": "L’anno contiene {count} fatture registrate ancora non pagate. Dopo il contrassegno non possono essere annullate né stornate qui.",
+        "clearReferenceTitle": "Rimuovere il contrassegno di riferimento da {year}?",
+        "clearReferenceBody": "Le cifre del {year} tornano nel bilancio degli anni successivi, l’anno ricompare in Tildel e nei contatori, e le bozze possono essere registrate. Fallo solo se Brygge deve tenere la contabilità dell’anno.",
+        "clearReferenceConfirm": "Rimuovi il contrassegno",
+        "referenceBlocked": {
+          "current_year": "L’anno in corso non può essere un anno di riferimento.",
+          "opening_balance": "L’anno ha un bilancio di apertura e non può essere un anno di riferimento.",
+          "period_closed": "Riapri l’anno prima di rimuovere il contrassegno di riferimento."
+        }
       },
       "journal": {
         "title": "Journal",
@@ -1015,7 +1031,8 @@
           "several_nights": "L’importo corrisponde solo a più notti",
           "members_only_unknown_payer": "Il prezzo è riservato ai soci, ma il pagatore non è un socio noto",
           "no_revenue_account": "La categoria di prezzo non ha un conto di ricavo",
-          "decision_failed": "Non è stato possibile decidere ora. Riprova"
+          "decision_failed": "Non è stato possibile decidere ora. Riprova",
+          "reference_period": "L’anno è un anno di riferimento. Qui si possono registrare solo costi."
         }
       },
       "journalForm": {
@@ -1062,6 +1079,11 @@
         "detailDeposit": "Il versamento bancario «Utb. {settlement} Vippsnr {msn}» torna in Tildel",
         "detailFee": "La commissione Vipps resta registrata",
         "noDeposit": "Questa riconciliazione non può essere annullata da qui. Annulla il versamento in Banca & Vipps."
+      },
+      "referencePeriod": "L’anno è un anno di riferimento. Qui si possono registrare solo costi (righe bancarie in uscita su un conto di costo).",
+      "reports": {
+        "referenceBanner": "Anno di riferimento: {year} non è la contabilità del club in Brygge. Le cifre sono mostrate per confronto e non confluiscono negli anni successivi.",
+        "referenceMomskomp": "La compensazione IVA (momskompensasjon) di un anno di riferimento si calcola dai costi registrati qui."
       }
     },
     "groupEconomy": "Economy",
@@ -1308,7 +1330,8 @@
           "use_bank_unassign": "I versamenti sono registrati dalla loro riconciliazione. Annulla invece il deposito bancario in Tildel.",
           "refund_booked": "Il pagamento con carta ha un rimborso registrato. Annulla prima il rimborso.",
           "credit_note_issued": "Il rimborso ha emesso note di credito, che non possono essere annullate. Emetti invece una nuova fattura.",
-          "faktura_settled_since": "La fattura riaperta dal rimborso è stata nel frattempo pagata, accreditata o registrata."
+          "faktura_settled_since": "La fattura riaperta dal rimborso è stata nel frattempo pagata, accreditata o registrata.",
+          "reference_period": "L’anno è un anno di riferimento. Qui si possono registrare solo costi."
         },
         "entry": "Registrazione {number}: {description}",
         "entryVoided": "annullata",
@@ -1498,11 +1521,21 @@
           "busy": "È in corso una sincronizzazione Stripe. Riprova tra poco.",
           "generic": "Impossibile riconciliare il versamento.",
           "members_not_listed": "Stripe non ha ancora elencato il contenuto del versamento. Esegui prima la sincronizzazione Stripe.",
-          "balance_open": "{count} transazione Stripe fino alla data del versamento non è registrata o scartata. Registrala o scartala prima. | {count} transazioni Stripe fino alla data del versamento non sono registrate o scartate. Registrale o scartale prima."
+          "balance_open": "{count} transazione Stripe fino alla data del versamento non è registrata o scartata. Registrala o scartala prima. | {count} transazioni Stripe fino alla data del versamento non sono registrate o scartate. Registrale o scartale prima.",
+          "reference_period": "L’anno è un anno di riferimento. Qui si possono registrare solo costi."
         },
         "notListedBlocked": "Stripe non ne ha ancora elencato il contenuto – esegui prima la sincronizzazione Stripe",
         "openBalance": "{count} transazione Stripe fino all'arrivo non è registrata o scartata | {count} transazioni Stripe fino all'arrivo non sono registrate o scartate"
-      }
+      },
+      "filterReferenceDismissed": "Scartate",
+      "undismiss": "Annulla lo scarto",
+      "filterReference": "Anno di riferimento",
+      "referenceHint": "Righe bancarie in uscita degli anni di riferimento non registrate. Registrale su un conto di costo, così la compensazione IVA dell’anno è corretta, oppure scartale. Gli incassi degli anni di riferimento non vengono mostrati.",
+      "referenceEmpty": "Nessuna riga bancaria in uscita di un anno di riferimento attende di essere registrata.",
+      "yearReference": "{year} (anno di riferimento)",
+      "yearReferenceEmpty": "{year} è un anno di riferimento e non compare nella coda. Le righe bancarie in uscita si possono registrare con il filtro «Anno di riferimento».",
+      "referenceDismissedEmpty": "Nessuna riga bancaria in uscita scartata di un anno di riferimento può essere ripristinata.",
+      "undismissRefused": "La riga non può essere ripristinata: non è più scartata, oppure lo scarto è definitivo (duplicato o riga sostituita)."
     },
     "sidebarTitle": "Portale admin",
     "inbox": {

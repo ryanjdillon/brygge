@@ -99,7 +99,8 @@ vi.mock('@/composables/useBankReconcile', async () => {
     }),
   }
 })
-vi.mock('@/composables/useAccounting', () => ({ useAccountsList: () => ({ data: ref([]) }) }))
+vi.mock('@/composables/useAccounting', () => ({
+  useFiscalPeriods: () => ({ data: ref([]) }), useAccountsList: () => ({ data: ref([]) }) }))
 
 async function openSearch() {
   const wrapper = mountWithPlugins(BankReconcileTab, { global: { stubs: { teleport: true } } })

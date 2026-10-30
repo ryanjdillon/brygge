@@ -28,6 +28,8 @@ import {
   useCreatePeriod,
   useClosePeriod,
   useReopenPeriod,
+  useSetPeriodReference,
+  defaultPeriodId,
   useSyncPayments,
   useSyncInvoices,
   previewResplitInvoiceBilags,
@@ -49,6 +51,7 @@ import VippsFallbackReclass from '@/components/admin/VippsFallbackReclass.vue'
 import { ApiError } from '@/lib/errors'
 import { asClearedSettlementRefusal, type ClearedSettlementRefusal } from '@/composables/useClearedSettlement'
 import ClearedSettlementRefusalNote from '@/components/admin/ClearedSettlementRefusal.vue'
+import { isReferencePeriodError } from '@/composables/useBankReconcile'
 
 const { t } = useI18n()
 // Periods are a ledger write; anything that books or voids an entry is a
@@ -93,14 +96,16 @@ watch(nextYear, (val) => { newYear.value = val }, { immediate: true })
 
 watch(periods, (val) => {
   if (val && val.length > 0 && !selectedPeriodId.value) {
-    const open = val.find(p => p.status === 'open')
-    selectedPeriodId.value = open?.id ?? val[0].id
+    selectedPeriodId.value = defaultPeriodId(val)
   }
 }, { immediate: true })
 
 const selectedPeriod = computed(() =>
   periods.value?.find(p => p.id === selectedPeriodId.value),
 )
+// A reference year books costs only; the buttons that book or correct whole
+// periods would be refused, so they are not offered.
+const isReference = computed(() => !!selectedPeriod.value?.reference_only)
 
 const hasPeriods = computed(() => (periods.value?.length ?? 0) > 0)
 
@@ -118,6 +123,7 @@ const deleteDraftMutation = useDeleteDraftEntry()
 const createPeriodMutation = useCreatePeriod()
 const closePeriodMutation = useClosePeriod()
 const reopenPeriodMutation = useReopenPeriod()
+const setReferenceMutation = useSetPeriodReference()
 const syncPaymentsMutation = useSyncPayments()
 const syncInvoicesMutation = useSyncInvoices()
 const applyResplitMutation = useApplyResplitInvoiceBilags()
@@ -157,9 +163,20 @@ function toggleExpand(entry: JournalEntry) {
   expandedId.value = expandedId.value === entry.id ? null : entry.id
 }
 
+// What a failed booking says. A reference year refuses everything but costs
+// with a typed 409, worded here in the viewer's language.
+function bookingError(err: unknown): string {
+  return `${t('common.error')}: ${isReferencePeriodError(err) ? t('admin.accounting.referencePeriod') : (err as Error).message}`
+}
+
 async function handlePost(entryId: string) {
   if (!(await ensureFreshTotp())) return
-  postMutation.mutate(entryId)
+  syncMessage.value = ''
+  postMutation.mutate(entryId, {
+    onError: (err) => {
+      syncMessage.value = bookingError(err)
+    },
+  })
 }
 
 // An entry booked from a Stripe row (409 stripe_entry) or one a bank row
@@ -200,7 +217,7 @@ function runVoid(entryId: string) {
         clearedRefusal.value = { entryId, refusal: cleared }
         return
       }
-      syncMessage.value = `${t('common.error')}: ${(err as Error).message}`
+      syncMessage.value = bookingError(err)
     },
   })
 }
@@ -430,7 +447,7 @@ async function handlePostVippsDrafts() {
     ]
     vippsReleasable.value = result.releasable ?? []
   } catch (err) {
-    syncMessage.value = `${t('common.error')}: ${(err as Error).message}`
+    syncMessage.value = bookingError(err)
   } finally {
     postingVippsDrafts.value = false
   }
@@ -496,9 +513,58 @@ function handleReopenPeriod() {
   reopenPeriodMutation.mutate(selectedPeriodId.value)
 }
 
+// The toggle's 409 codes and the reason line each one shares.
+const REFERENCE_REFUSALS: Record<string, string> = {
+  reference_current_year: 'current_year',
+  reference_has_opening_balance: 'opening_balance',
+  period_closed: 'period_closed',
+}
+
+// Marking a year as reference changes what gets booked and what later years
+// carry, so the step-up is asked for at click time, before the confirm.
+async function handleToggleReference() {
+  const period = selectedPeriod.value
+  if (!period) return
+  if (!(await ensureFreshTotp())) return
+  const marking = !period.reference_only
+  const prefix = marking ? 'admin.accounting.periods.markReference' : 'admin.accounting.periods.clearReference'
+  const body = [
+    t(`${prefix}Body`, { year: period.year }),
+    marking && period.open_invoice_bookings > 0
+      ? t('admin.accounting.periods.markReferenceInvoices', { count: period.open_invoice_bookings })
+      : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+  const ok = await askConfirm({
+    title: t(`${prefix}Title`, { year: period.year }),
+    body,
+    confirmLabel: t(`${prefix}Confirm`),
+    cancelLabel: t('common.cancel'),
+    tone: 'warning',
+  })
+  if (!ok) return
+  syncMessage.value = ''
+  setReferenceMutation.mutate(
+    { periodId: period.id, referenceOnly: marking },
+    {
+      onError: (err) => {
+        // The server's refusals have wording of their own in the viewer's language.
+        const blocked = err instanceof ApiError ? REFERENCE_REFUSALS[err.code ?? ''] : undefined
+        syncMessage.value = `${t('common.error')}: ${
+          blocked ? t(`admin.accounting.periods.referenceBlocked.${blocked}`) : (err as Error).message
+        }`
+      },
+    },
+  )
+}
+
 
 const periodOptions = computed(() =>
-  (periods.value ?? []).map((p) => ({ value: p.id, label: String(p.year) })),
+  (periods.value ?? []).map((p) => ({
+    value: p.id,
+    label: p.reference_only ? t('admin.accounting.periods.referenceLabel', { year: p.year }) : String(p.year),
+  })),
 )
 
 const statusFilterOptions = computed(() => [
@@ -559,6 +625,13 @@ function formatNOK(amount: number): string {
         >
           {{ selectedPeriod.status === 'open' ? t('admin.accounting.periods.open') : t('admin.accounting.periods.closed') }}
         </span>
+        <span
+          v-if="isReference"
+          class="inline-flex rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800"
+          data-testid="reference-chip"
+        >
+          {{ t('admin.accounting.periods.reference') }}
+        </span>
 
         <button
           v-if="canEditPeriods && selectedPeriod?.status === 'open'"
@@ -579,6 +652,15 @@ function formatNOK(amount: number): string {
         >
           <Unlock class="h-4 w-4" />
           {{ t('admin.accounting.journal.reopenPeriod') }}
+        </button>
+        <button
+          v-if="canBook && selectedPeriod"
+          class="inline-flex min-h-11 items-center gap-1.5 rounded-md border border-amber-300 bg-white px-3 py-2 text-sm font-medium text-amber-800 hover:bg-amber-50 disabled:opacity-50"
+          :disabled="!!selectedPeriod.reference_blocked || setReferenceMutation.isPending.value"
+          data-testid="toggle-reference"
+          @click="handleToggleReference"
+        >
+          {{ isReference ? t('admin.accounting.periods.clearReference') : t('admin.accounting.periods.markReference') }}
         </button>
 
         <div class="ml-auto flex items-center gap-2">
@@ -603,6 +685,7 @@ function formatNOK(amount: number): string {
           </template>
           <template v-if="canBook">
           <button
+            v-if="!isReference"
             class="inline-flex items-center gap-1.5 rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
             :disabled="syncing || !selectedPeriodId"
             :title="t('admin.accounting.journal.updatePeriodTooltip')"
@@ -612,6 +695,7 @@ function formatNOK(amount: number): string {
             {{ syncing ? t('admin.accounting.journal.updating') : t('admin.accounting.journal.updatePeriod') }}
           </button>
           <button
+            v-if="!isReference"
             class="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
             :disabled="resplitting || !selectedPeriodId"
             :title="t('admin.accounting.journal.resplitTooltip')"
@@ -622,6 +706,7 @@ function formatNOK(amount: number): string {
             {{ resplitting ? t('admin.accounting.journal.updating') : t('admin.accounting.journal.resplitInvoiceBilags') }}
           </button>
           <button
+            v-if="!isReference"
             class="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
             :disabled="postingVippsDrafts || !selectedPeriodId"
             :title="t('admin.accounting.journal.vippsDraftsTooltip')"
@@ -635,6 +720,20 @@ function formatNOK(amount: number): string {
         </div>
       </div>
 
+      <p
+        v-if="selectedPeriod?.reference_blocked && canBook"
+        class="mt-2 text-sm text-gray-600"
+        data-testid="reference-blocked"
+      >
+        {{ t(`admin.accounting.periods.referenceBlocked.${selectedPeriod.reference_blocked}`) }}
+      </p>
+      <p
+        v-if="isReference"
+        class="mt-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900"
+        data-testid="reference-note"
+      >
+        {{ t('admin.accounting.referencePeriod') }}
+      </p>
       <p
         v-if="voidRefusal"
         class="mt-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900"
