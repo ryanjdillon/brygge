@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -283,6 +284,45 @@ func TestVippsSettlePathsSeeChangeCommittedWhileWaiting(t *testing.T) {
 				t.Errorf("a booking that lost to the void was committed")
 			}
 		})
+	}
+}
+
+// The invoice-number backfill reads a bank row's text only when no one has
+// assigned the row: a row recorded against faktura B does not pay faktura A
+// because its description names A. A row with no faktura is still healed by
+// its text.
+func TestBackfillInvoiceNumberPaymentsSkipsRowAssignedElsewhere(t *testing.T) {
+	f := newSettleLockFixture(t)
+	ctx := context.Background()
+	c := f.club
+	imp := c.NewBankImport(t)
+	a := c.NewInvoice(t, fin.InvoiceOpts{Member: &f.member, Cents: 45000})
+	b := c.NewInvoice(t, fin.InvoiceOpts{Member: &f.member, Cents: 45000})
+
+	row := c.NewBankRow(t, imp, fin.BankRowOpts{Cents: 45000, Description: "Betaling faktura " + strconv.Itoa(a.Number)})
+	if _, err := f.svc.AssignBankRowToInvoice(ctx, c.ID, c.Treasurer.ID, row, b.ID); err != nil {
+		t.Fatalf("assign to B: %v", err)
+	}
+	f.exec(t, `UPDATE invoices SET payment_id = NULL WHERE id = $1`, b.ID)
+
+	if _, err := f.svc.backfillInvoiceNumberPayments(ctx, c.ID); err != nil {
+		t.Fatalf("backfill: %v", err)
+	}
+	if f.paid(t, a) {
+		t.Errorf("faktura A was marked paid by a row assigned to B")
+	}
+	if !f.paid(t, b) {
+		t.Errorf("faktura B, the row's own faktura, was not healed")
+	}
+
+	// Control: the same text on a row with no faktura recorded heals A.
+	f.exec(t, `UPDATE bank_import_rows SET invoice_id = NULL WHERE id = $1`, row)
+	f.exec(t, `UPDATE invoices SET payment_id = NULL WHERE id = $1`, b.ID)
+	if _, err := f.svc.backfillInvoiceNumberPayments(ctx, c.ID); err != nil {
+		t.Fatalf("backfill: %v", err)
+	}
+	if !f.paid(t, a) {
+		t.Errorf("faktura A was not healed by an unassigned row naming it")
 	}
 }
 

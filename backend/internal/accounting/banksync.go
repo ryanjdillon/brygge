@@ -420,7 +420,10 @@ func (s *Service) backfillUnlinkedPayments(ctx context.Context, clubID string) (
 // invoices.payment_id was never set. Only exact-amount matches on a genuine
 // receivables (1500) credit are healed, so the (invoice_number, amount) key is
 // high-confidence. Only a posted entry counts: a draft or voided booking paid
-// nothing (BRY-417). Idempotent: linkInvoicePayment no-ops if already linked.
+// nothing (BRY-417). The description is read only for a row no one has
+// assigned: a row recorded against another faktura (invoice_id) settles that
+// one, whatever its text mentions. Idempotent: linkInvoicePayment no-ops if
+// already linked.
 //
 // This is the invoice-number counterpart to backfillUnlinkedPayments (which
 // keys on KID). It exists because members whose KID was rejected paid by
@@ -436,7 +439,8 @@ func (s *Service) backfillInvoiceNumberPayments(ctx context.Context, clubID stri
 		    AND bir.amount > 0
 		    AND bir.amount = i.total_amount
 		    AND (bir.invoice_id = i.id
-		         OR bir.description ~* ('faktura\D*' || i.invoice_number::text || '\y'))
+		         OR (bir.invoice_id IS NULL
+		             AND bir.description ~* ('faktura\D*' || i.invoice_number::text || '\y')))
 		   JOIN journal_entries je ON je.id = bir.journal_entry_id
 		                          AND je.club_id = i.club_id AND je.status = 'posted'
 		   JOIN journal_lines jl ON jl.journal_entry_id = je.id
