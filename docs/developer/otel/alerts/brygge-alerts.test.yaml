@@ -389,3 +389,418 @@ tests:
       - eval_time: 66m
         alertname: DkimSignerMissing
         exp_alerts: []
+
+  # Payment webhooks. A multi-minute burst of 5xx that then succeeds (a
+  # database blip) is not an alert: no evaluation sees it in both the last
+  # hour and the hour that ended 90 minutes ago. a: stripe
+  # payment_intent.succeeded fails at minutes 10-13 and never again; b: vipps
+  # CAPTURED fails once; c is another club's API with a stuck event.
+  - interval: 1m
+    input_series:
+      - series: 'brygge_payment_webhook_failure_total{job="example.invalid/brygge-api", provider="stripe", event_type="payment_intent.succeeded"}'
+        values: '0x9 1 2 3 4x286'
+      - series: 'brygge_payment_webhook_failure_total{job="example.invalid/brygge-api", provider="vipps", event_type="CAPTURED"}'
+        values: '0x19 1x279'
+      - series: 'brygge_payment_webhook_failure_total{job="other.example.invalid/brygge-api", provider="stripe", event_type="charge.refunded"}'
+        values: '0x9 1 2 3 4x61 5x61 6x61 7x61 8x38'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: PaymentWebhookFailing
+        exp_alerts: []
+      - eval_time: 60m
+        alertname: PaymentWebhookFailing
+        exp_alerts: []
+      - eval_time: 75m
+        alertname: PaymentWebhookFailing
+        exp_alerts: []
+      - eval_time: 100m
+        alertname: PaymentWebhookFailing
+        exp_alerts: []
+      - eval_time: 120m
+        alertname: PaymentWebhookFailing
+        exp_alerts: []
+      - eval_time: 140m
+        alertname: PaymentWebhookFailing
+        exp_alerts: []
+      - eval_time: 165m
+        alertname: PaymentWebhookFailing
+        exp_alerts: []
+      - eval_time: 250m
+        alertname: PaymentWebhookFailing
+        exp_alerts: []
+
+  # A stuck stripe event: the burst at minutes 10-13, then retries drifting a
+  # little past the hour (75, 137, 199, 261, 323), the last at minute 323. It
+  # fires once the burst is 90 minutes behind and a retry is inside the last
+  # hour (minute 100), stays firing across the minutes where a window is
+  # momentarily empty (keep_firing_for), and resolves about 1h15 after the
+  # last failure.
+  - interval: 1m
+    input_series:
+      - series: 'brygge_payment_webhook_failure_total{job="example.invalid/brygge-api", provider="stripe", event_type="payment_intent.succeeded"}'
+        values: '0x9 1 2 3 4x61 5x61 6x61 7x61 8x61 9x106'
+    alert_rule_test:
+      - eval_time: 90m
+        alertname: PaymentWebhookFailing
+        exp_alerts: []
+      - eval_time: 105m
+        alertname: PaymentWebhookFailing
+        exp_alerts:
+          - exp_labels:
+              provider: stripe
+              event_type: payment_intent.succeeded
+              service_namespace: example.invalid
+              club: example
+              severity: page
+            exp_annotations:
+              summary: "example.invalid: stripe payment_intent.succeeded webhooks keep failing"
+              description: "stripe payment_intent.succeeded webhooks were answered 5xx in the last hour and again 90 to 150 minutes ago (1 in the last hour). The provider keeps retrying an event Brygge can't look up or settle; a payment may be taken and not booked."
+              runbook_url: "https://example.invalid/runbook#paymentwebhookfailing"
+    promql_expr_test:
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 105m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 110m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 115m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 120m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 125m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 130m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 135m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 140m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 145m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 150m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 155m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 160m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 165m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 170m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 175m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 180m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 185m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 190m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 195m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 200m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 205m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 210m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 215m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 220m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 225m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 230m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 235m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 240m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 245m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 250m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 255m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 260m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 265m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 270m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 275m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 280m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 285m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 290m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 295m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 300m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 305m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 310m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 315m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 320m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 325m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 330m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 335m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 340m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 345m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 350m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 355m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 360m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 365m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 370m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 375m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 380m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 400m
+        exp_samples: []
+      - expr: count(ALERTS{alertname="PaymentWebhookFailing", alertstate="firing"})
+        eval_time: 420m
+        exp_samples: []
+
+  # A club that has never had a failure has only the series at 0.
+  - interval: 1m
+    input_series:
+      - series: 'brygge_payment_webhook_failure_total{job="example.invalid/brygge-api", provider="vipps", event_type="AUTHORIZED"}'
+        values: '0x200'
+    alert_rule_test:
+      - eval_time: 180m
+        alertname: PaymentWebhookFailing
+        exp_alerts: []
+
+  # An attempt stays authorized from minute 10: over the hour at minute 70,
+  # firing; settled at minute 80 (the gauge returns to 0), resolved. The
+  # first attempt of the day, authorized seconds ago, is not an alert.
+  - interval: 1m
+    input_series:
+      - series: 'brygge_payment_attempt_oldest_authorized_age_seconds{job="example.invalid/brygge-api"}'
+        values: '0x9 0+60x70 0x30'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: PaymentAttemptStuckAuthorized
+        exp_alerts: []
+      - eval_time: 69m
+        alertname: PaymentAttemptStuckAuthorized
+        exp_alerts: []
+      - eval_time: 72m
+        alertname: PaymentAttemptStuckAuthorized
+        exp_alerts:
+          - exp_labels:
+              service_namespace: example.invalid
+              club: example
+              severity: page
+            exp_annotations:
+              summary: "example.invalid: a payment has been authorized but unsettled for 1h 2m 0s"
+              description: "The oldest payment attempt in status authorized is 1h 2m 0s old (threshold 1h). The provider holds or has taken the money and Brygge has not booked it."
+              runbook_url: "https://example.invalid/runbook#paymentattemptstuckauthorized"
+      - eval_time: 100m
+        alertname: PaymentAttemptStuckAuthorized
+        exp_alerts: []
+
+  # The gauge goes absent when the API can't read the database: the alert
+  # resolves instead of sticking at the last value.
+  - interval: 1m
+    input_series:
+      - series: 'brygge_payment_attempt_oldest_authorized_age_seconds{job="example.invalid/brygge-api"}'
+        values: '4000x10'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: PaymentAttemptStuckAuthorized
+        exp_alerts:
+          - exp_labels:
+              service_namespace: example.invalid
+              club: example
+              severity: page
+            exp_annotations:
+              summary: "example.invalid: a payment has been authorized but unsettled for 1h 6m 40s"
+              description: "The oldest payment attempt in status authorized is 1h 6m 40s old (threshold 1h). The provider holds or has taken the money and Brygge has not booked it."
+              runbook_url: "https://example.invalid/runbook#paymentattemptstuckauthorized"
+      - eval_time: 20m
+        alertname: PaymentAttemptStuckAuthorized
+        exp_alerts: []

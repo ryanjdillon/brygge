@@ -1,6 +1,6 @@
 # OTel Instrumentation
 
-What the Brygge API emits over OTLP. SDK setup (resource, exporters, sampler) lives in `backend/internal/telemetry/`; the instruments live next to the code they measure (`internal/middleware/metrics.go`, `internal/telemetry/pgx.go`, `internal/email/instrument.go`, `internal/mail/queue_monitor.go`). Every instrument uses the meter `otel.Meter("brygge-api")`.
+What the Brygge API emits over OTLP. SDK setup (resource, exporters, sampler) lives in `backend/internal/telemetry/`; the instruments live next to the code they measure (`internal/middleware/metrics.go`, `internal/telemetry/pgx.go`, `internal/email/instrument.go`, `internal/mail/queue_monitor.go`, `internal/payments/metrics.go`). Every instrument uses the meter `otel.Meter("brygge-api")`.
 
 Prometheus names below assume the upstream `prometheusremotewrite` exporter's default suffixing (unit suffix added, `_total` on counters, `{…}` annotation units dropped). The series carry `job` = `<service.namespace>/<service.name>`, e.g. `klokkarvikbaatlag.no/brygge-api`.
 
@@ -49,6 +49,17 @@ Registered only when `STALWART_ADMIN_URL` and a credential (`STALWART_ADMIN_PASS
 - Past 15 minutes without a successful poll only `last_success` is observed: `messages` and `oldest_age` go absent, so an alert on the queue's contents resolves and `time() - brygge_mail_queue_last_success_seconds` is the signal that the queue state is unknown. A later successful poll brings them back.
 - Failures log a warning on the first error and then at most every 15 minutes.
 - `values` must carry a value (`values=1`): Stalwart drops empty query parameters, so a bare `values` returns ids without creation times.
+
+## Payment webhooks and attempts
+
+| Metric | Prometheus name | Type | Attributes / meaning |
+|--------|-----------------|------|----------------------|
+| `brygge.payment.webhook.failure` (`{response}`) | `brygge_payment_webhook_failure_total` | Counter (cumulative) | `provider` = `stripe` \| `vipps`; `event_type` = the provider's event type or name from a fixed list (`stripe.WebhookEventTypes`, `vipps.WebhookEventNames`), anything else `other` |
+| `brygge.payment.attempt.oldest_authorized_age` (`s`) | `brygge_payment_attempt_oldest_authorized_age_seconds` | Gauge | Age of the oldest `payment_attempts` row in status `authorized` (from `updated_at`, which a redelivered decision leaves alone), across clubs; 0 when none |
+
+The counter is incremented by `StripeWebhookHandler.internalError` and `VippsWebhookHandler.internalError`, which every 5xx the handlers write themselves goes through (club or attempt lookup failed, event not stored, dispatch returned an error), once per delivery. Not counted: a panic (answered 500 by the router's `middleware.Recoverer`, which has no payment context), a handler that outlives the provider's timeout (Vipps gives up after 10 s, so the delivery is retried without any 5xx being written), and a 5xx from a proxy or the host in front of the API. Signature failures (401) and acknowledged events (200) are not counted. Event ids, payment references and error text are never attributes; the error is in the `brygge.service` journal. All series for both providers are created at 0 on startup so `increase()` sees the first failure.
+
+The gauge is an observable gauge: each export runs one `SELECT` over `payment_attempts` (5 s timeout). When the read fails it observes nothing rather than 0 (a 0 would read as "everything settled") and logs a warning at most every 15 minutes. It is registered whenever the API has a database. Alerts: [PaymentWebhookFailing, PaymentAttemptStuckAuthorized](alerts-runbook.md#paymentwebhookfailing).
 
 ## Outbound HTTP traces
 

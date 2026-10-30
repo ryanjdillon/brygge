@@ -235,3 +235,56 @@ groups:
           summary: "__SERVICE_NAMESPACE__: {{ $value }} bounce(s) ({{ $labels.kind }}) in the last 24h"
           description: "Stalwart gave up on {{ $value }} message(s) in the last 24 hours (kind {{ $labels.kind }}: dsn_permfail = permanent failure notice sent to the sender, double_bounce = the notice itself bounced)."
           runbook_url: "__RUNBOOK_BASE__#mailbounced"
+
+  - name: brygge-__CLUB_SLUG__-payments
+    rules:
+      # A payment webhook answers 5xx when it could not look up or settle an
+      # event, so the provider delivers it again (PAY-14). Both providers
+      # retry a failed event in a burst first (Vipps: six attempts within
+      # about three minutes; Stripe's early gaps are undocumented) and then
+      # hours apart (Vipps hourly), so a count inside one window can't tell a
+      # database blip that healed from an event that is still being refused.
+      # The two windows are an hour wide and half an hour apart: a burst
+      # shorter than the gap never lands in both, while hourly retries keep
+      # both populated. (Adjacent windows split a multi-minute burst at their
+      # boundary and page for it.) Detection therefore takes about 1h30 from
+      # the first failure. keep_firing_for bridges retries that drift past the
+      # hour and the minutes where a window is momentarily empty, so a stuck
+      # event doesn't flap; the alert resolves about 1h15 after the last
+      # failure. The counter has no event id (cardinality), so "the same
+      # event" is approximated by the same provider and event type.
+      # increase() extrapolates, so one failure can read slightly off 1:
+      # > 0.5 is "at least one".
+      - alert: PaymentWebhookFailing
+        expr: |
+          sum by (provider, event_type) (
+            increase(brygge_payment_webhook_failure_total{job="__SERVICE_NAMESPACE__/brygge-api"}[1h])
+          ) > 0.5
+          and
+          sum by (provider, event_type) (
+            increase(brygge_payment_webhook_failure_total{job="__SERVICE_NAMESPACE__/brygge-api"}[1h] offset 90m)
+          ) > 0.5
+        keep_firing_for: 15m
+        labels:
+          service_namespace: __SERVICE_NAMESPACE__
+          club: __CLUB_SLUG__
+          severity: page
+        annotations:
+          summary: "__SERVICE_NAMESPACE__: {{ $labels.provider }} {{ $labels.event_type }} webhooks keep failing"
+          description: "{{ $labels.provider }} {{ $labels.event_type }} webhooks were answered 5xx in the last hour and again 90 to 150 minutes ago ({{ $value | printf \"%.0f\" }} in the last hour). The provider keeps retrying an event Brygge can't look up or settle; a payment may be taken and not booked."
+          runbook_url: "__RUNBOOK_BASE__#paymentwebhookfailing"
+
+      # An attempt is authorized only between the decision to capture it and
+      # the write that records the capture, seconds in normal operation. The
+      # gauge is 0 when none is. It goes absent when the API can't read the
+      # database or stops exporting (ApiSilent covers a dead API).
+      - alert: PaymentAttemptStuckAuthorized
+        expr: max(brygge_payment_attempt_oldest_authorized_age_seconds{job="__SERVICE_NAMESPACE__/brygge-api"}) > 3600
+        labels:
+          service_namespace: __SERVICE_NAMESPACE__
+          club: __CLUB_SLUG__
+          severity: page
+        annotations:
+          summary: "__SERVICE_NAMESPACE__: a payment has been authorized but unsettled for {{ $value | humanizeDuration }}"
+          description: "The oldest payment attempt in status authorized is {{ $value | humanizeDuration }} old (threshold 1h). The provider holds or has taken the money and Brygge has not booked it."
+          runbook_url: "__RUNBOOK_BASE__#paymentattemptstuckauthorized"
