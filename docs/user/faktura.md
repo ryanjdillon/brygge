@@ -471,6 +471,18 @@ You do not need to clear the daily Vipps payout (the **Utb. … Vippsnr …** de
 - **Bare en foreløpig «Overførsel»** — the deposit is in the bank only as a provisional row (see below). Export that day again and upload it.
 - **Ikke importert** — the bank deposit names a settlement whose Vipps export is not uploaded yet.
 
+### Angre on a payment in a settlement that is already cleared
+
+Once a Vipps payout is cleared, **Angre** on one of its payments is refused with a message naming the settlement (for example *Utb. 1234567 Vippsnr 123456*). The same goes for **Annuller** on that payment's bilag in the journal. The fee and the deposit are booked against the payment, so taking it back on its own would leave the Vipps clearing account (2900) with their amounts and no payment against them.
+
+The message has an **Angre innbetalingen** button. After you confirm, it:
+
+- voids the payout bilag of that settlement (DR bank / CR 2900),
+- puts the bank deposit **Utb. … Vippsnr …** back in **Tildel**,
+- keeps the Vipps fee bilag as it is.
+
+Then the Angre you started runs again. Book the payment again (to the right faktura or account). The next sync clears the payout again once every payment in the settlement is booked, with a new bank bilag and no second fee.
+
 ## Reference
 
 - Pricing admin: `/admin/pricing`

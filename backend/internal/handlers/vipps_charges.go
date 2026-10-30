@@ -210,6 +210,10 @@ func (h *AccountingHandler) HandleUnassignVippsCharge(w http.ResponseWriter, r *
 		JSON(w, http.StatusConflict, map[string]string{"error": err.Error(), "code": "charge_in_settlement"})
 		return
 	}
+	if errors.Is(err, accounting.ErrVippsChargeInClearedSettlement) {
+		writeChargeInClearedSettlement(w, err)
+		return
+	}
 	if err != nil {
 		h.log.Warn().Err(err).Str("row_id", rowID).Msg("unassign vipps charge")
 		Error(w, http.StatusBadRequest, err.Error())
@@ -227,6 +231,29 @@ func (h *AccountingHandler) HandleUnassignVippsCharge(w http.ResponseWriter, r *
 			audit.ActionVippsChargeUnassigned, "vipps_import_row", rowID, details)
 	}
 	JSON(w, http.StatusOK, map[string]string{"status": "unassigned"})
+}
+
+// chargeInClearedSettlementCode is the 409 code of a refused unbook of a
+// charge whose Vipps settlement is already cleared.
+const chargeInClearedSettlementCode = "charge_in_cleared_settlement"
+
+// writeChargeInClearedSettlement answers 409 charge_in_cleared_settlement
+// for a charge whose settlement's payout is already cleared against the bank
+// deposit (BRY-555). The message is a Norwegian sentence naming the settlement
+// and the deposit to undo first; the settlement and the deposit's bank row are
+// also given as fields, so the SPA can offer that undo (BankRowID is the row
+// whose unassign undoes the clearing).
+func writeChargeInClearedSettlement(w http.ResponseWriter, err error) {
+	body := map[string]string{"error": err.Error(), "code": chargeInClearedSettlementCode}
+	var cleared *accounting.ChargeInClearedSettlementError
+	if errors.As(err, &cleared) {
+		body["settlement_number"] = cleared.SettlementNumber
+		body["msn"] = cleared.MSN
+		if cleared.BankRowID != "" {
+			body["bank_row_id"] = cleared.BankRowID
+		}
+	}
+	JSON(w, http.StatusConflict, body)
 }
 
 // HandleDismissVippsCharge marks a charge avvist so it leaves the queue and no

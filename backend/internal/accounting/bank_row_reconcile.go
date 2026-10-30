@@ -834,6 +834,14 @@ func (s *Service) unassignBankRow( //nolint:gocognit,cyclop // reverses each pos
 	}
 	defer tx.Rollback(ctx)
 
+	// A deposit that cleared a Vipps settlement is released together with its
+	// payout row. The settlement's payout rows are locked first, the order
+	// ClearVippsPayout and the backlog posting of its drafts take them in
+	// (payout rows, then entries), so the two cannot wait on each other.
+	if err := lockBankRowSettlementsTx(ctx, tx, clubID, priorJournalID); err != nil {
+		return UnassignResult{}, err
+	}
+
 	// Every entry booked for this assignment: this row's, its invoice
 	// siblings', and any other row pointing at the same entry.
 	type involved struct {

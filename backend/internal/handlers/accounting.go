@@ -538,6 +538,12 @@ func (h *AccountingHandler) HandleVoidJournalEntry(w http.ResponseWriter, r *htt
 				"reason": "Bilaget er bokført fra en bankrad. Angre det i Bank og Vipps → Tildel → Angre, " +
 					"så legges raden tilbake i køen og fakturaen eller utbetalingen åpnes igjen.",
 			})
+		case errors.Is(err, accounting.ErrVippsSettlementEntry):
+			h.log.Info().Err(err).Str("entry_id", entryID).Msg("journal void refused: vipps settlement entry")
+			JSON(w, http.StatusConflict, map[string]string{"error": err.Error(), "code": "vipps_settlement_entry"})
+		case errors.Is(err, accounting.ErrVippsChargeInClearedSettlement):
+			h.log.Info().Err(err).Str("entry_id", entryID).Msg("journal void refused: vipps charge in a cleared settlement")
+			writeChargeInClearedSettlement(w, err)
 		case errors.Is(err, accounting.ErrEntryNotPosted):
 			h.log.Info().Err(err).Str("entry_id", entryID).Msg("journal void refused: not posted")
 			Error(w, http.StatusBadRequest, err.Error())

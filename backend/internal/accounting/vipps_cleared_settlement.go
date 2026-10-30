@@ -182,3 +182,156 @@ func clearedSettlementOfChargeTx(ctx context.Context, tx pgx.Tx, clubID, rowID s
 	}
 	return nil, nil
 }
+
+// chargeFakturaIDsTx returns, in id order, the fakturas a charge booking may
+// have settled: the one recorded on the charge (invoice_id) and the ones its
+// checkout order pays through order_sources (an order charge records no
+// invoice_id).
+func chargeFakturaIDsTx(ctx context.Context, q dbtx, clubID, rowID string) ([]string, error) {
+	rows, err := q.Query(ctx,
+		`SELECT id FROM (
+		     SELECT r.invoice_id::text AS id FROM vipps_import_rows r
+		      WHERE r.id = $1 AND r.club_id = $2 AND r.invoice_id IS NOT NULL
+		     UNION
+		     SELECT os.invoice_id::text FROM vipps_import_rows r
+		       JOIN orders o ON o.club_id = r.club_id AND o.vipps_reference = r.order_id AND o.vipps_reference <> ''
+		       JOIN order_sources os ON os.order_id = o.id
+		      WHERE r.id = $1 AND r.club_id = $2) f
+		  ORDER BY id`,
+		rowID, clubID)
+	if err != nil {
+		return nil, fmt.Errorf("loading the charge's fakturas: %w", err)
+	}
+	ids, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return nil, fmt.Errorf("loading the charge's fakturas: %w", err)
+	}
+	return ids, nil
+}
+
+// lockFakturasTx locks the fakturas (given in id order) for the rest of tx:
+// fakturas come first in the lock order every settle path shares.
+func lockFakturasTx(ctx context.Context, tx pgx.Tx, clubID string, ids []string) error {
+	for _, id := range ids {
+		if _, err := tx.Exec(ctx, `SELECT 1 FROM invoices WHERE id = $1 AND club_id = $2 FOR NO KEY UPDATE`, id, clubID); err != nil {
+			return fmt.Errorf("locking invoice: %w", err)
+		}
+	}
+	return nil
+}
+
+// reopenUnbookedFakturasTx reopens each faktura that reads as paid while no
+// booked row settles it any more (invoiceBookedRowSQL), after the charge that
+// settled it was unlinked from its entry. A faktura another booked row still
+// settles stays paid.
+func reopenUnbookedFakturasTx(ctx context.Context, tx pgx.Tx, clubID string, ids []string) error {
+	for _, id := range ids {
+		var reopen bool
+		if err := tx.QueryRow(ctx,
+			`SELECT i.payment_id IS NOT NULL AND NOT `+invoiceBookedRowSQL("i")+`
+			   FROM invoices i WHERE i.id = $1 AND i.club_id = $2`,
+			id, clubID,
+		).Scan(&reopen); err != nil {
+			return fmt.Errorf("checking invoice: %w", err)
+		}
+		if !reopen {
+			continue
+		}
+		if _, err := reopenInvoicePaymentTx(ctx, tx, clubID, id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// VippsSettlementEntryError is the refusal to void a Vipps settlement's fee
+// or payout entry from the ledger. The handlers answer 409
+// vipps_settlement_entry. Its text is a full Norwegian sentence.
+type VippsSettlementEntryError struct {
+	// RowType is "fee" or "payout".
+	RowType string
+}
+
+func (e *VippsSettlementEntryError) Error() string {
+	if e.RowType == "payout" {
+		return "Bilaget er utbetalingsbilaget for et Vipps-oppgjør og kan ikke annulleres her. " +
+			"Angre i stedet en av betalingene i oppgjøret og velg «Angre innbetalingen»."
+	}
+	return "Bilaget bokfører Vipps-avgiften for et oppgjør og kan ikke annulleres alene: avgiften ville stå igjen uten bilag " +
+		"og bokføres ikke på nytt. Det finnes ingen angre for den i appen; rett den med et nytt manuelt bilag."
+}
+
+// Is makes errors.Is(err, ErrVippsSettlementEntry) hold.
+func (e *VippsSettlementEntryError) Is(target error) bool { return target == ErrVippsSettlementEntry }
+
+// ErrVippsSettlementEntry matches a *VippsSettlementEntryError.
+var ErrVippsSettlementEntry = errors.New("the entry books a Vipps settlement's fee or payout")
+
+// lockBankRowSettlementsTx locks the payout rows of every Vipps settlement
+// whose payout row is linked to the entry (the clearing entry of a Vipps
+// deposit), without locking the entry first.
+func lockBankRowSettlementsTx(ctx context.Context, tx pgx.Tx, clubID, entryID string) error {
+	type key struct {
+		msn     string
+		booking time.Time
+	}
+	rows, err := tx.Query(ctx,
+		`SELECT DISTINCT msn, booking_date FROM vipps_import_rows
+		  WHERE club_id = $1 AND row_type = 'payout' AND journal_entry_id = $2::uuid
+		    AND COALESCE(msn, '') <> '' AND booking_date IS NOT NULL
+		  ORDER BY msn, booking_date`,
+		clubID, entryID)
+	if err != nil {
+		return fmt.Errorf("finding the deposit's settlement: %w", err)
+	}
+	keys, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (key, error) {
+		var k key
+		err := r.Scan(&k.msn, &k.booking)
+		return k, err
+	})
+	if err != nil {
+		return fmt.Errorf("finding the deposit's settlement: %w", err)
+	}
+	for _, k := range keys {
+		if _, err := lockSettlementPayoutsTx(ctx, tx, clubID, k.msn, k.booking); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// refuseVippsSettlementEntryTx returns a *VippsSettlementEntryError when a
+// Vipps fee or payout row points at the entry.
+func refuseVippsSettlementEntryTx(ctx context.Context, tx pgx.Tx, clubID, entryID string) error {
+	var rowType string
+	err := tx.QueryRow(ctx,
+		`SELECT row_type FROM vipps_import_rows
+		  WHERE club_id = $1 AND journal_entry_id = $2 AND row_type IN ('fee', 'payout') ORDER BY row_type LIMIT 1`,
+		clubID, entryID,
+	).Scan(&rowType)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("checking settlement rows: %w", err)
+	}
+	return &VippsSettlementEntryError{RowType: rowType}
+}
+
+// releaseVoidedChargeTx releases a Vipps charge whose entry the ledger just
+// voided: unlinked, it is back in the Vipps queue, and the fakturas it settled
+// are reopened. Left linked it would read as booked for ever (no queue lists
+// it, its settlement could not clear) and keep those fakturas paid.
+func releaseVoidedChargeTx(ctx context.Context, tx pgx.Tx, clubID, rowID, entryID string, fakturas []string) error {
+	tag, err := tx.Exec(ctx,
+		`UPDATE vipps_import_rows SET journal_entry_id = NULL, invoice_id = NULL, auto_assign_rule = NULL
+		  WHERE id = $1 AND club_id = $2 AND journal_entry_id = $3`,
+		rowID, clubID, entryID)
+	if err != nil {
+		return fmt.Errorf("releasing the vipps charge: %w", err)
+	}
+	if tag.RowsAffected() != 1 {
+		return errors.New("the Vipps charge changed while its bilag was being voided — try again")
+	}
+	return reopenUnbookedFakturasTx(ctx, tx, clubID, fakturas)
+}

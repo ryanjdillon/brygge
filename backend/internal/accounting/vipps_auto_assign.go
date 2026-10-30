@@ -321,9 +321,13 @@ var ErrVippsChargeInSettlement = errors.New( //nolint:staticcheck // ST1005: a u
 // UnassignVippsCharge undoes a charge booking so the charge returns to the
 // Tildel queue: a draft entry is deleted, a posted one voided (the original
 // and its reversal stay, as bokføringsloven requires), and a faktura the
-// charge settled is reopened. Charges booked from a checkout order settle
-// fakturas through the order and are refused; void their bilag instead. So
-// is a 1500 draft with no faktura that fails receivableChargeSettledFaktura.
+// charge settled is reopened, all in one transaction. Charges booked from a
+// checkout order settle fakturas through the order and are refused; void their
+// bilag instead (the ledger void releases the charge and reopens the order's
+// fakturas). So is a 1500 draft with no faktura that fails
+// receivableChargeSettledFaktura. A posted booking whose settlement is already
+// cleared against the bank deposit is refused with
+// *ChargeInClearedSettlementError (see vipps_cleared_settlement.go).
 func (s *Service) UnassignVippsCharge(ctx context.Context, clubID, actorID, rowID string) (priorEntryID, priorInvoiceID string, err error) { //nolint:gocognit,cyclop // reverses each posting kind inside one transaction; split tracked in BRY-424
 	var entryID, invoiceID *string
 	var orderRef string
@@ -342,7 +346,17 @@ func (s *Service) UnassignVippsCharge(ctx context.Context, clubID, actorID, rowI
 	if entryID == nil {
 		return "", "", fmt.Errorf("charge is not booked")
 	}
-	if invoiceID == nil && orderRef != "" {
+	var status string
+	if err := s.db.QueryRow(ctx,
+		`SELECT status FROM journal_entries WHERE id = $1 AND club_id = $2`,
+		*entryID, clubID,
+	).Scan(&status); err != nil {
+		return "", "", fmt.Errorf("loading journal entry: %w", err)
+	}
+	// An order-booked charge is undone by voiding its bilag, which also
+	// releases the charge. One still linked to an already voided entry (a void
+	// from before the ledger void released it) just has to be released.
+	if invoiceID == nil && orderRef != "" && status != "voided" {
 		var isOrder bool
 		if err := s.db.QueryRow(ctx,
 			`SELECT EXISTS (SELECT 1 FROM orders WHERE club_id = $1 AND vipps_reference = $2)`,
@@ -372,14 +386,6 @@ func (s *Service) UnassignVippsCharge(ctx context.Context, clubID, actorID, rowI
 		priorInvoiceID = *invoiceID
 	}
 
-	var status string
-	if err := s.db.QueryRow(ctx,
-		`SELECT status FROM journal_entries WHERE id = $1 AND club_id = $2`,
-		priorEntryID, clubID,
-	).Scan(&status); err != nil {
-		return "", "", fmt.Errorf("loading journal entry: %w", err)
-	}
-
 	// A draft crediting 1500 with no recorded faktura may be the only record
 	// that the charge paid a faktura (BRY-392): deleting it would leave that
 	// faktura paid by nothing, so it is refused whoever asks.
@@ -393,25 +399,66 @@ func (s *Service) UnassignVippsCharge(ctx context.Context, clubID, actorID, rowI
 		}
 	}
 
-	// A posted booking is voided before anything is unlinked, so the GL never
-	// counts an entry for a charge that is already back in Tildel. The
-	// reversal lands in the entry's own period; VoidJournalEntry refuses a
-	// closed one under the period lock. If the clearing below then fails, the
-	// entry is voided and a retry (status 'voided') just finishes the clearing.
+	// The void, the unlink and the faktura reopening commit together, so the
+	// GL never counts an entry for a charge that is back in Tildel and a
+	// failure anywhere (a closed period included) leaves everything booked.
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return "", "", fmt.Errorf("begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	// Lock order: faktura, then the charge, then the settlement's payout rows
+	// (the lock ClearVippsPayout takes), then the entry.
+	fakturas, err := chargeFakturaIDsTx(ctx, tx, clubID, rowID)
+	if err != nil {
+		return "", "", err
+	}
+	if err := lockFakturasTx(ctx, tx, clubID, fakturas); err != nil {
+		return "", "", err
+	}
+	var lockedEntry, lockedInvoice *string
+	if err := tx.QueryRow(ctx,
+		`SELECT journal_entry_id::text, invoice_id::text FROM vipps_import_rows
+		  WHERE id = $1 AND club_id = $2 AND row_type = 'belastning' FOR UPDATE`,
+		rowID, clubID,
+	).Scan(&lockedEntry, &lockedInvoice); err != nil {
+		return "", "", fmt.Errorf("locking vipps charge: %w", err)
+	}
+	if lockedEntry == nil {
+		return "", "", fmt.Errorf("charge is not booked")
+	}
+	if *lockedEntry != priorEntryID || (lockedInvoice == nil) != (invoiceID == nil) ||
+		(lockedInvoice != nil && *lockedInvoice != priorInvoiceID) {
+		return "", "", fmt.Errorf("charge was changed while it was being undone — try again")
+	}
+
+	cleared, err := clearedSettlementOfChargeTx(ctx, tx, clubID, rowID)
+	if err != nil {
+		return "", "", err
+	}
+	if err := tx.QueryRow(ctx,
+		`SELECT status FROM journal_entries WHERE id = $1 AND club_id = $2 FOR UPDATE`,
+		priorEntryID, clubID,
+	).Scan(&status); err != nil {
+		return "", "", fmt.Errorf("loading journal entry: %w", err)
+	}
+	// Only a posted booking is in the ledger. Taking it back after the
+	// settlement's fee and payout were posted leaves 2900 off by the charge
+	// until the charge is booked again, so it is refused; changing what the
+	// charge books goes through rebookVippsChargeTx instead. A draft never
+	// counted, and a voided entry's charge is only released.
+	if status == "posted" && cleared != nil {
+		return "", "", cleared
+	}
 	if status == "posted" {
-		if _, err := s.VoidJournalEntry(ctx, clubID, priorEntryID, actorID); err != nil {
+		if _, err := voidJournalEntryTx(ctx, tx, clubID, priorEntryID, actorID); err != nil {
 			if errors.Is(err, ErrPeriodClosed) {
 				return "", "", fmt.Errorf("charge is booked in a closed fiscal period — correct it with a new entry in an open period: %w", ErrPeriodClosed)
 			}
 			return "", "", fmt.Errorf("voiding bilag: %w", err)
 		}
 	}
-
-	tx, err := s.db.Begin(ctx)
-	if err != nil {
-		return "", "", fmt.Errorf("begin: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
 
 	if _, err := tx.Exec(ctx,
 		`UPDATE vipps_import_rows
@@ -426,6 +473,13 @@ func (s *Service) UnassignVippsCharge(ctx context.Context, clubID, actorID, rowI
 			return "", "", err
 		}
 	}
+	if status == "voided" {
+		// A leftover link to a voided entry may still hold fakturas paid
+		// through the charge's order.
+		if err := reopenUnbookedFakturasTx(ctx, tx, clubID, fakturas); err != nil {
+			return "", "", err
+		}
+	}
 	if status == "draft" {
 		if _, err := tx.Exec(ctx,
 			`DELETE FROM journal_entries WHERE id = $1 AND club_id = $2 AND status = 'draft'`,
@@ -435,7 +489,7 @@ func (s *Service) UnassignVippsCharge(ctx context.Context, clubID, actorID, rowI
 		}
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return priorEntryID, priorInvoiceID, fmt.Errorf("bilag voided but clearing the charge failed, run Angre again: %w", err)
+		return "", "", fmt.Errorf("commit: %w", err)
 	}
 	return priorEntryID, priorInvoiceID, nil
 }

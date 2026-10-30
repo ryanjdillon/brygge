@@ -112,6 +112,16 @@ func TestVippsPostingsArePostedOnCreation(t *testing.T) {
 		t.Errorf("1920 net = %v, want 790 (net payout)", got)
 	}
 
+	// The settlement is cleared, so its posted charge cannot be taken back
+	// (BRY-555); the deposit is undone first.
+	var cleared *ChargeInClearedSettlementError
+	if _, _, err := svc.UnassignVippsCharge(ctx, club.ID, club.Treasurer.ID, toAccount); !errors.As(err, &cleared) {
+		t.Fatalf("unassign in a cleared settlement: err = %v, want ChargeInClearedSettlementError", err)
+	}
+	if _, _, err := svc.UnassignBankRow(ctx, club.ID, club.Treasurer.ID, bankRow); err != nil {
+		t.Fatalf("undo the deposit: %v", err)
+	}
+
 	// Unassigning a posted charge voids it with a reversal; the income nets
 	// back to zero and the original stays for the audit trail.
 	if _, _, err := svc.UnassignVippsCharge(ctx, club.ID, club.Treasurer.ID, toAccount); err != nil {

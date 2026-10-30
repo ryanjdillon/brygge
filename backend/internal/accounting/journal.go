@@ -333,9 +333,13 @@ func (s *Service) VoidJournalEntry(ctx context.Context, clubID, entryID, voidedB
 // Stripe row instead. An entry a bank row or a Stripe payout points at is
 // refused with ErrBankLinkedEntry for the same reason: the row would stay
 // booked against a voided entry, its faktura paid and the payout cleared,
-// so it is undone from Tildel. Vipps charge entries are not refused: an
-// order-booked Vipps charge is undone by voiding its bilag here
-// (UnassignVippsCharge refuses it). The checks read the entry under the
+// so it is undone from Tildel. A Vipps settlement's fee or payout entry is
+// refused with VippsSettlementEntryError. Vipps charge entries are refused
+// only once the charge's settlement is cleared
+// (ErrVippsChargeInClearedSettlement): an order-booked Vipps charge is
+// otherwise undone by voiding its bilag here (UnassignVippsCharge refuses it),
+// which releases the charge to the Vipps queue and reopens the fakturas it
+// settled. The checks read the entry under the
 // lock the void takes. Internal paths (the unassigns, faktura reversal)
 // call voidJournalEntryTx or VoidJournalEntry directly.
 func (s *Service) VoidLedgerEntry(ctx context.Context, clubID, entryID, voidedBy string) (*JournalEntry, error) {
@@ -345,11 +349,40 @@ func (s *Service) VoidLedgerEntry(ctx context.Context, clubID, entryID, voidedBy
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	var sourceTable string
+	// A Vipps charge's entry is voided here only for an order-booked charge
+	// (see above). Voiding it releases the charge (back to the Vipps queue)
+	// and reopens the fakturas it settled, in this transaction. Once the
+	// charge's settlement is cleared the void would leave 2900 off by the
+	// charge (BRY-555), so the fakturas and then the settlement's payout rows
+	// are locked before the entry, as UnassignVippsCharge does, and the
+	// refusal below reads their answer.
+	var chargeRowID *string
+	if err := tx.QueryRow(ctx,
+		`SELECT id::text FROM vipps_import_rows
+		  WHERE club_id = $1 AND journal_entry_id = $2 AND row_type = 'belastning' LIMIT 1`,
+		clubID, entryID,
+	).Scan(&chargeRowID); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return nil, fmt.Errorf("checking vipps charge: %w", err)
+	}
+	var clearedCharge *ChargeInClearedSettlementError
+	var chargeFakturas []string
+	if chargeRowID != nil {
+		if chargeFakturas, err = chargeFakturaIDsTx(ctx, tx, clubID, *chargeRowID); err != nil {
+			return nil, err
+		}
+		if err = lockFakturasTx(ctx, tx, clubID, chargeFakturas); err != nil {
+			return nil, err
+		}
+		if clearedCharge, err = clearedSettlementOfChargeTx(ctx, tx, clubID, *chargeRowID); err != nil {
+			return nil, err
+		}
+	}
+
+	var sourceTable, status string
 	err = tx.QueryRow(ctx,
-		`SELECT COALESCE(source_table, '') FROM journal_entries WHERE id = $1 AND club_id = $2 FOR UPDATE`,
+		`SELECT COALESCE(source_table, ''), status FROM journal_entries WHERE id = $1 AND club_id = $2 FOR UPDATE`,
 		entryID, clubID,
-	).Scan(&sourceTable)
+	).Scan(&sourceTable, &status)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrEntryNotFound
 	}
@@ -370,9 +403,23 @@ func (s *Service) VoidLedgerEntry(ctx context.Context, clubID, entryID, voidedBy
 	if bankLinked {
 		return nil, ErrBankLinkedEntry
 	}
+	// A settlement's fee or payout entry is not undone on its own: the fee
+	// rows would stay linked to a voided entry, and the sweep never books a
+	// fee again.
+	if err := refuseVippsSettlementEntryTx(ctx, tx, clubID, entryID); err != nil {
+		return nil, err
+	}
+	if clearedCharge != nil && status == "posted" {
+		return nil, clearedCharge
+	}
 	reversal, err := voidJournalEntryTx(ctx, tx, clubID, entryID, voidedBy)
 	if err != nil {
 		return nil, err
+	}
+	if chargeRowID != nil {
+		if err := releaseVoidedChargeTx(ctx, tx, clubID, *chargeRowID, entryID, chargeFakturas); err != nil {
+			return nil, err
+		}
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("committing transaction: %w", err)
