@@ -156,7 +156,7 @@ These don't have constants in `audit.go` — they're inlined as strings because 
 | `ActionGDPRExportRequested` | `gdpr.export_requested` | user | Member kicks off an export from My page → Privacy | — |
 | `ActionGDPRDeletionRequested` | `gdpr.deletion_requested` | user | Member kicks off the deletion countdown | `cooling_off_days` |
 | `ActionGDPRDeletionCancelled` | `gdpr.deletion_cancelled` | user | Member cancels during the cooling-off window | — |
-| `ActionGDPRDeletionProcessed` | `gdpr.deletion_processed` | user | Cooling-off elapsed; non-retained data wiped, identity erased or deferred behind retention | `records_wiped`, `identity_erased` (bool), `retention_clears_at` |
+| `ActionGDPRDeletionProcessed` | `gdpr.deletion_processed` | user | Cooling-off elapsed; non-retained data wiped, identity erased or deferred behind retention | `request_id` (the `deletion_requests` row; `resource_id` is the erased user, `actor_id` the processing admin), `records_wiped`, `identity_erased` (bool), `retention_clears_at` |
 | `ActionLegalDocumentCreated` | `legal_document.created` | legal_document | New club bylaw / vedtekt uploaded | `kind`, `version` |
 | `ActionNotificationConfigUpdated` | `notification_config.updated` | user | User updates notification prefs (per-channel, per-category) | — |
 

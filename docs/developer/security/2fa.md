@@ -11,7 +11,7 @@ Two layers, both implemented in `backend/internal/middleware/session.go`:
 | Layer | Window | When it triggers | What the user sees |
 |-------|--------|------------------|--------------------|
 | Session-level (`RequireAdminTOTP`) | 12 hours | Every `/admin/*` route | Full-page redirect to `/admin/verify-totp` |
-| Per-action (`RequireFreshTOTP`) | 10 minutes (configurable via `AUTH_FRESH_TOTP_WINDOW`) | Role grants/revokes, member deletion, recovery-code rotation, admin TOTP reset, every economy sidebar navigation, bank-account changes, faktura send/regen/purring | In-context modal that replays the failed request after success |
+| Per-action (`RequireFreshTOTP`) | 10 minutes (configurable via `AUTH_FRESH_TOTP_WINDOW`) | Role grants/revokes, member deletion, recovery-code rotation, admin TOTP reset, every economy sidebar navigation, bank-account changes, faktura send/regen/purring, GDPR deletion processing (`POST /admin/gdpr/deletion-requests/{id}/process`) | In-context modal that replays the failed request after success |
 
 The per-action window defaults to 10 minutes but is configurable per deployment via the `AUTH_FRESH_TOTP_WINDOW` environment variable (e.g. `5m`, `15m`). The value is surfaced to the SPA on `/api/v1/session/me` as `fresh_totp_window_ms`, so the countdown modal and the warning lead-time stay in sync with the backend gate.
 

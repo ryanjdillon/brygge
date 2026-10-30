@@ -161,7 +161,8 @@ reads admit any admin viewer (see *Board read access* above).
 | `/admin/bookings` † | board, harbor_master | — |
 | `/admin/documents` (upload/delete/AI) | board | — |
 | `/admin/notifications/config` | board, admin | — |
-| `/admin/gdpr/*` (deletion requests, legal documents; BRY-481) | admin | — |
+| `/admin/gdpr/*` (deletion requests, legal documents; BRY-481) | admin | — for reads and the legal editor |
+| `POST /admin/gdpr/deletion-requests/{id}/process` (erases or anonymises the member) | admin | ✅ (BRY-509) |
 
 ### Accounting (`/admin/accounting`) † — write roles: treasurer, board, admin; reads: any admin viewer
 

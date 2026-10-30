@@ -957,3 +957,57 @@ func TestIntegration_JournalEntryLifecycle(t *testing.T) {
 	r.ServeHTTP(rec, req)
 	assertStatus(t, rec, http.StatusOK)
 }
+
+// The erasure's audit row must say who did it and which request it closed:
+// resource_id is the erased user, so the request id rides in the details
+// (BRY-509).
+func TestIntegration_GDPRProcessDeletionAudit(t *testing.T) {
+	t.Parallel()
+	// Postgres only: the handler never touches Redis.
+	testutil.SkipIfNoDB(t)
+	db := testutil.SetupTestDB(t)
+	clubID := testutil.SeedClub(t, db)
+	h := NewGDPRHandler(db, &config.Config{Port: 8080}, zerolog.Nop())
+	ctx := context.Background()
+
+	adminID, _ := testutil.SeedUser(t, db, clubID, []string{"admin"})
+	targetID, _ := testutil.SeedUser(t, db, clubID, []string{"member"})
+
+	var requestID string
+	if err := db.QueryRow(ctx,
+		`INSERT INTO deletion_requests (user_id, club_id, grace_end)
+		 VALUES ($1, $2, now() - interval '1 day') RETURNING id`,
+		targetID, clubID,
+	).Scan(&requestID); err != nil {
+		t.Fatalf("seed deletion request: %v", err)
+	}
+
+	r := chi.NewRouter()
+	r.Use(testAuthMiddleware)
+	r.Post("/admin/gdpr/deletion-requests/{requestID}/process", h.HandleProcessDeletion)
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/gdpr/deletion-requests/"+requestID+"/process", nil)
+	req.Header.Set("Authorization", authHeader(generateTestToken(adminID, clubID, []string{"admin"})))
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	assertStatus(t, rec, http.StatusOK)
+
+	var actorID, resourceID, detailsRequestID string
+	if err := db.QueryRow(ctx,
+		`SELECT actor_id::text, resource_id, details->>'request_id'
+		   FROM audit_log
+		  WHERE club_id = $1 AND action = 'gdpr.deletion_processed'`,
+		clubID,
+	).Scan(&actorID, &resourceID, &detailsRequestID); err != nil {
+		t.Fatalf("read audit row: %v", err)
+	}
+	if actorID != adminID {
+		t.Errorf("audit actor_id = %s, want the processing admin %s", actorID, adminID)
+	}
+	if resourceID != targetID {
+		t.Errorf("audit resource_id = %s, want the erased user %s", resourceID, targetID)
+	}
+	if detailsRequestID != requestID {
+		t.Errorf("audit details.request_id = %q, want %s", detailsRequestID, requestID)
+	}
+}

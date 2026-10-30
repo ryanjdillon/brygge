@@ -12,7 +12,7 @@ import (
 
 // gdprRouter composes the gates the way cmd/api does: session auth, the
 // /admin group's RequireAdminTOTP, then the GDPR mount behind the admin-only
-// role gate, plus the member's own GDPR routes under /members/me.
+// role gate and the fresh-TOTP gate, plus the member's own GDPR routes under /members/me.
 func gdprRouter(h *GDPRHandler) *chi.Mux {
 	r := chi.NewRouter()
 	r.Route("/admin", func(r chi.Router) {
@@ -20,7 +20,7 @@ func gdprRouter(h *GDPRHandler) *chi.Mux {
 		r.Use(testSessionState)
 		r.Use(middleware.RequireAdminTOTP(nil))
 		r.Use(panicAsTeapot)
-		h.MountAdminRoutes(r, middleware.RequireRole("admin"))
+		h.MountAdminRoutes(r, middleware.RequireRole("admin"), middleware.RequireFreshTOTPDefault())
 	})
 
 	r.Route("/members", func(r chi.Router) {
@@ -49,14 +49,16 @@ func handlerReached(code int) bool {
 
 var gdprAdminCalls = []routeCall{
 	{http.MethodGet, "/admin/gdpr/deletion-requests", false},
-	{http.MethodPost, "/admin/gdpr/deletion-requests/req-1/process", false},
+	{http.MethodPost, "/admin/gdpr/deletion-requests/req-1/process", true},
 	{http.MethodGet, "/admin/gdpr/legal", false},
 	{http.MethodPost, "/admin/gdpr/legal", false},
 }
 
 // GDPR is one function held by the site admin, and the SPA page is
 // admin-only, so a board member must be refused by the API even with a valid
-// step-up (BRY-481).
+// step-up (BRY-481). Processing a deletion erases a member irreversibly, so it
+// also needs a fresh TOTP; the reads and the legal editor need only the
+// step-up (BRY-509).
 func TestGDPRAdminRouteGates(t *testing.T) {
 	h := newTestGDPRHandler(t)
 	r := gdprRouter(h)
@@ -93,17 +95,30 @@ func TestGDPRAdminRouteGates(t *testing.T) {
 		}
 
 		// Every role except admin is refused, board included, even stepped up.
+		// The role gate runs before the fresh gate, so a non-admin is told
+		// "insufficient permissions" whatever the fresh state.
 		for _, role := range []string{"board", "treasurer", "harbor_master", "member"} {
-			rec := serveWaitingList(r, c, []string{role}, sessFresh)
-			if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "insufficient permissions") {
-				t.Errorf("%s as %s: %d %s, want 403 insufficient permissions", name, role, rec.Code, rec.Body.String())
+			for _, s := range []string{sessStepUp, sessFresh} {
+				rec := serveWaitingList(r, c, []string{role}, s)
+				if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "insufficient permissions") {
+					t.Errorf("%s as %s, session %s: %d %s, want 403 insufficient permissions", name, role, s, rec.Code, rec.Body.String())
+				}
 			}
 		}
 
-		for _, s := range []string{sessStepUp, sessFresh} {
-			if rec := serveWaitingList(r, c, []string{"admin"}, s); !handlerReached(rec.Code) {
-				t.Errorf("%s as admin, session %s: %d, want handler reached", name, s, rec.Code)
+		// Inside the step-up window but past the fresh window: reads and the
+		// legal editor pass, the erasure asks for a fresh TOTP.
+		rec := serveWaitingList(r, c, []string{"admin"}, sessStepUp)
+		if c.fresh {
+			if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), `"totp_fresh_required"`) {
+				t.Errorf("%s as admin, stale fresh TOTP: %d %s, want 403 totp_fresh_required", name, rec.Code, rec.Body.String())
 			}
+		} else if !handlerReached(rec.Code) {
+			t.Errorf("%s as admin with step-up: %d %s, want handler reached", name, rec.Code, rec.Body.String())
+		}
+
+		if rec := serveWaitingList(r, c, []string{"admin"}, sessFresh); !handlerReached(rec.Code) {
+			t.Errorf("%s as admin, fresh TOTP: %d %s, want handler reached", name, rec.Code, rec.Body.String())
 		}
 	}
 }

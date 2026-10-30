@@ -396,13 +396,15 @@ func (h *GDPRHandler) HandleGetLegalDocument(w http.ResponseWriter, r *http.Requ
 // editor under /admin (behind the group's RequireAdminTOTP). GDPR is one
 // function held by the site admin by default (docs/adr/board-workflows.md,
 // BRD-3), so the caller passes an admin-only roleGate, matching the SPA page.
-// The member's own routes (data export, delete request, consents) stay under
-// /members/me.
-func (h *GDPRHandler) MountAdminRoutes(r chi.Router, roleGate func(http.Handler) http.Handler) {
+// Processing a deletion erases or anonymises a member irreversibly, so it
+// additionally takes freshGate (a fresh TOTP, BRY-509); reads and the legal
+// editor stay behind the 12-hour step-up. The member's own routes (data
+// export, delete request, consents) stay under /members/me.
+func (h *GDPRHandler) MountAdminRoutes(r chi.Router, roleGate, freshGate func(http.Handler) http.Handler) {
 	r.Route("/gdpr", func(r chi.Router) {
 		r.Use(roleGate)
 		r.Get("/deletion-requests", h.HandleListDeletionRequests)
-		r.Post("/deletion-requests/{requestID}/process", h.HandleProcessDeletion)
+		r.With(freshGate).Post("/deletion-requests/{requestID}/process", h.HandleProcessDeletion)
 		r.Get("/legal", h.HandleAdminListLegalDocuments)
 		r.Post("/legal", h.HandleAdminCreateLegalDocument)
 	})
@@ -568,7 +570,10 @@ func (h *GDPRHandler) HandleProcessDeletion(w http.ResponseWriter, r *http.Reque
 
 	// Audit the outcome, including what was wiped now vs deferred, so the
 	// records_wiped trail is populated (see docs/developer/reference/audit-actions.md).
+	// resource_id is the erased user, so the request id lives in the details
+	// to tie the entry back to the deletion_requests row.
 	auditDetails, _ := json.Marshal(map[string]any{
+		"request_id":          requestID,
 		"records_wiped":       recordsWiped,
 		"identity_erased":     identityErased,
 		"retention_clears_at": ret.ClearsAt,

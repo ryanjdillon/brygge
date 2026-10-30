@@ -40,8 +40,12 @@ A member-initiated deletion request (My page → Privacy) still runs after its
 obligation (push subscriptions, notification preferences, consents) is wiped
 immediately, while identity erasure is **deferred** — the member is deactivated
 so the purge finishes the erasure once retention clears. The audit row
-(`gdpr.deletion_processed`) records `records_wiped`, `identity_erased` and
-`retention_clears_at`.
+(`gdpr.deletion_processed`) records the processing admin as actor, the erased
+user as the resource, and `request_id`, `records_wiped`, `identity_erased` and
+`retention_clears_at` in its details. Processing needs a fresh TOTP on top of
+the admin step-up (BRY-509): the admin page asks for it on the click, before
+the confirm dialog, and the route answers `totp_fresh_required` if the window
+has lapsed.
 
 ### Timeline
 

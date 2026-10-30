@@ -1270,7 +1270,11 @@ func main() {
 
 				// GDPR is one function, held by the site admin by default
 				// (BRD-3, BRY-481); the SPA page is admin-only, so the API is too.
-				gdprHandler.MountAdminRoutes(r, middleware.RequireRole("admin"))
+				// Processing a deletion also needs a fresh TOTP (BRY-509).
+				gdprHandler.MountAdminRoutes(r,
+					middleware.RequireRole("admin"),
+					middleware.RequireFreshTOTPDefault(),
+				)
 
 				if cfg.Features.Accounting {
 					r.Route("/accounting", func(r chi.Router) {
