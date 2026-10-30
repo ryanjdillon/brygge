@@ -474,6 +474,12 @@ Voiding an invoice that is settled for the member (paid, or captured via Vipps) 
 - Settlement lags the Vipps capture by days. A check on `payment_id` alone chases members who already paid through the pay link. The reminder worker did exactly that at send time until BRY-325.
 - A voided paid invoice hides received money that nothing is owed against.
 
+### A credit note never asks for payment
+
+**Rule (BRY-534):** a credit note (an invoice with a negative total, in the same number series as fakturas) is never presented as something to pay. Its PDF is a Kreditnota with no kontonummer, KID, forfallsdato or "Beløp å betale": `Invoice.CreditNote` is set by `HandleCreateInvoice` from the total it computes and by `loadStoredInvoicePDF` from the stored total, and `GeneratePDF` treats any negative line total as a credit note regardless. Its email is `email.CreditNoteBody`, with no payment details or pay link. Reminders, KID reissue, the payables page, pay links and bank-assignment lists exclude it through `finance.IsDebtSQL` ([Settled means one thing](#settled-means-one-thing-defined-once)). A new surface that lists or prints an invoice's payment details must handle a negative total the same way.
+
+**Failure mode:** a refund's credit note went out headed "Faktura" with "Beløp å betale: kr -5.00", a KID and "Vennligst betal kr -5.00 …", inviting the payer to pay a document that returns money.
+
 ### Voided invoices stay in the table
 
 **Rule:** `invoices.status = 'voided'` is terminal. Voided rows are excluded from receivables totals but remain in the table for audit. Never DELETE a voided invoice.

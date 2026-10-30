@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -484,6 +485,7 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 			DueDate:        dueDate,
 			KID:            kid,
 			BankAccount:    bankAccount,
+			CreditNote:     isCreditTotal(total),
 			Lines:          pdfLines,
 		})
 	}
@@ -634,14 +636,9 @@ func (h *InvoiceHandler) emailNewInvoice(ctx context.Context, m newInvoiceMail) 
 	if h.email == nil || m.deliverTo == "" {
 		return nil, nil
 	}
-	filename := fmt.Sprintf("faktura-%d.pdf", m.number)
-	subject := email.InvoiceSubject(m.locale, m.clubName, m.number)
-	// Offer online payment as a secondary option; the email frames bank
-	// transfer with KID as preferred. Non-fatal: an empty URL (whenever
-	// ensureFakturaOrderToken offers no link) just renders the KID-only
-	// email.
-	payURL := h.orderPayURL(h.ensureFakturaOrderToken(ctx, m.clubID, m.invoiceID, true))
-	htmlBody := email.InvoiceBody(m.locale, m.deliverName, m.clubName, m.number, m.dueDate, m.total, m.kid, m.bankAccount, payURL, h.emailPayMethods(payURL, m.total))
+	filename := invoiceAttachmentName(fmt.Sprintf("faktura-%d.pdf", m.number), m.total)
+	subject, htmlBody := h.invoiceMessage(ctx, m.locale, m.clubID, m.invoiceID, m.deliverName, m.clubName,
+		m.number, m.dueDate, m.total, m.kid, m.bankAccount)
 	if err := h.email.SendWithAttachment(email.WithKind(ctx, email.KindInvoice), m.deliverTo, subject, htmlBody, filename, m.pdf); err != nil {
 		h.log.Error().Err(err).Str("email", m.deliverTo).Msg("failed to send invoice email")
 		return nil, nil
@@ -659,6 +656,37 @@ func (h *InvoiceHandler) emailNewInvoice(ctx context.Context, m newInvoiceMail) 
 			map[string]any{"email": m.deliverTo, "invoice_number": m.number})
 	}
 	return &now, gl
+}
+
+// invoiceMessage is the subject and HTML body of the email that carries an
+// issued faktura or credit note. A credit note (negative total) asks for
+// nothing: no payment details and no pay link, so a recipient is never
+// prompted to pay one.
+func (h *InvoiceHandler) invoiceMessage(ctx context.Context, locale, clubID, invoiceID, memberName, clubName string,
+	number int, dueDate time.Time, total float64, kid, bankAccount string) (subject, body string) {
+	if isCreditTotal(total) {
+		return email.CreditNoteSubject(clubName, number), email.CreditNoteBody(memberName, clubName, number, total)
+	}
+	// Offer online payment as a secondary option; the email frames bank
+	// transfer with KID as preferred. Non-fatal: an empty URL (whenever
+	// ensureFakturaOrderToken offers no link) just renders the KID-only
+	// email. The durable link is created on first send and reused on resends.
+	payURL := h.orderPayURL(h.ensureFakturaOrderToken(ctx, clubID, invoiceID, true))
+	return email.InvoiceSubject(locale, clubName, number),
+		email.InvoiceBody(locale, memberName, clubName, number, dueDate, total, kid, bankAccount, payURL, h.emailPayMethods(payURL, total))
+}
+
+// isCreditTotal is true for the total of a credit note.
+func isCreditTotal(total float64) bool {
+	return math.Round(total*100) < 0
+}
+
+// invoiceAttachmentName renames a faktura's PDF filename for a credit note.
+func invoiceAttachmentName(name string, total float64) string {
+	if rest, ok := strings.CutPrefix(name, "faktura-"); ok && isCreditTotal(total) {
+		return "kreditnota-" + rest
+	}
+	return name
 }
 
 // boatInfo loads the boat + matching slip context (if any) for a
@@ -1371,14 +1399,9 @@ func (h *InvoiceHandler) HandleSendInvoice(w http.ResponseWriter, r *http.Reques
 		claims.ClubID,
 	).Scan(&clubName, &bankAccount)
 
-	locale := email.DetectLocale(r)
-	subject := email.InvoiceSubject(locale, clubName, invoiceNumber)
-	// A pay link unless ensureFakturaOrderToken offers none, in which case this
-	// is "" (KID-only). The durable link is created on first send and reused on
-	// resends.
-	payURL := h.orderPayURL(h.ensureFakturaOrderToken(ctx, claims.ClubID, invoiceID, true))
-	htmlBody := email.InvoiceBody(locale, memberName, clubName, invoiceNumber, dueDate, total, kid, bankAccount, payURL, h.emailPayMethods(payURL, total))
-	filename := buildInvoiceFilename(invoiceNumber, memberLast, memberFirst, fiscalYear)
+	subject, htmlBody := h.invoiceMessage(ctx, email.DetectLocale(r), claims.ClubID, invoiceID, memberName, clubName,
+		invoiceNumber, dueDate, total, kid, bankAccount)
+	filename := invoiceAttachmentName(buildInvoiceFilename(invoiceNumber, memberLast, memberFirst, fiscalYear), total)
 
 	// Stamp sent_at BEFORE handing the message to the mail server, then
 	// roll back to NULL if the SMTP submission fails. The reverse order
@@ -1518,11 +1541,9 @@ func (h *InvoiceHandler) HandleResendInvoice(w http.ResponseWriter, r *http.Requ
 		claims.ClubID,
 	).Scan(&clubName, &bankAccount)
 
-	locale := email.DetectLocale(r)
-	subject := email.InvoiceSubject(locale, clubName, invoiceNumber)
-	payURL := h.orderPayURL(h.ensureFakturaOrderToken(ctx, claims.ClubID, invoiceID, true))
-	htmlBody := email.InvoiceBody(locale, memberName, clubName, invoiceNumber, dueDate, total, kid, bankAccount, payURL, h.emailPayMethods(payURL, total))
-	filename := buildInvoiceFilename(invoiceNumber, memberLast, memberFirst, fiscalYear)
+	subject, htmlBody := h.invoiceMessage(ctx, email.DetectLocale(r), claims.ClubID, invoiceID, memberName, clubName,
+		invoiceNumber, dueDate, total, kid, bankAccount)
+	filename := invoiceAttachmentName(buildInvoiceFilename(invoiceNumber, memberLast, memberFirst, fiscalYear), total)
 
 	if err := h.email.SendWithAttachment(email.WithKind(ctx, email.KindInvoice), deliverTo, subject, htmlBody, filename, pdfBytesResend); err != nil {
 		h.log.Error().Err(err).Str("email", deliverTo).Msg("resend invoice email failed")

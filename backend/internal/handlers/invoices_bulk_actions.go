@@ -532,6 +532,8 @@ func (h *InvoiceHandler) loadStoredInvoicePDF(ctx context.Context, clubID, invoi
 		issueDate     time.Time
 		dueDate       time.Time
 		kid           string
+		creditNote    bool
+		cardRefund    bool
 		st            storedInvoicePDF
 	)
 	err := h.db.QueryRow(ctx,
@@ -545,14 +547,15 @@ func (h *InvoiceHandler) loadStoredInvoicePDF(ctx context.Context, clubID, invoi
 		        COALESCE(i.recipient_contact_person, ''),
 		        COALESCE(i.recipient_their_ref, ''),
 		        i.issue_date, i.due_date, COALESCE(i.kid_number, ''),
-		        i.pdf_data, i.import_source IS NOT NULL
+		        i.pdf_data, i.import_source IS NOT NULL,
+		        i.total_amount < 0, `+refundCreditNoteSQL("i")+`
 		   FROM invoices i
 		   LEFT JOIN users u ON u.id = i.user_id
 		  WHERE i.id = $1 AND i.club_id = $2`,
 		invoiceID, clubID,
 	).Scan(&invoiceNumber, &userID, &memberName, &memberAddress,
 		&recipientKind, &orgName, &orgNumber, &orgAddress, &orgContact, &orgTheirRef,
-		&issueDate, &dueDate, &kid, &st.existingPDF, &st.imported)
+		&issueDate, &dueDate, &kid, &st.existingPDF, &st.imported, &creditNote, &cardRefund)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errors.New("not found")
@@ -601,6 +604,8 @@ func (h *InvoiceHandler) loadStoredInvoicePDF(ctx context.Context, clubID, invoi
 		DueDate:        dueDate,
 		KID:            kid,
 		BankAccount:    club.BankAccount,
+		CreditNote:     creditNote,
+		CardRefund:     creditNote && cardRefund,
 		Lines:          lines,
 	}
 	return &st, nil

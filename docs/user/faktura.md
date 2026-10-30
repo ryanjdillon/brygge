@@ -199,7 +199,9 @@ Which of them were still unpaid when the club switched to Brygge comes from the 
 
 ### Credit notes (kreditnotaer)
 
-A credit note is a faktura with a negative amount. It is never a debt: it is never overdue, never reminded, and members see it as **Kreditnota**, not "ubetalt". The **Kreditnotaer** chip in the Sent and Importert lists filters them.
+A credit note is a faktura with a negative amount. It is never a debt: it is never overdue, never reminded, and members see it as **Kreditnota**, not "ubetalt". The **Kreditnotaer** chip in the Sent and Importert lists filters them. A credit note has no due date: the list shows a dash in **Forfall**, and a credit note is never offered for **Send påminnelse** or **Ny KID**.
+
+A credit note asks nothing of the person who gets it. Its PDF is headed **Kreditnota** and shows **Kreditnotanummer**, **Kreditnotadato** and the amount as **Kreditbeløp**, with the line "Ingen betaling kreves." It has no kontonummer, KID, forfallsdato or "Beløp å betale". The email that carries it is **Kreditnota fra <klubb>**, says nothing is to be paid, and has no payment details or pay link; the attachment is named `kreditnota-…`. In `Min side` it shows no due date or KID. Credit notes and fakturas share one number series, so a credit note gets the next free number (a credit note #289 is followed by faktura #290), and the PDF calls that number **Kreditnotanummer**. An existing credit note keeps its stored PDF until **Regenerer PDF** is run on it.
 
 A credit note only settles the faktura it cancels once you link them:
 
@@ -239,7 +241,7 @@ A refund made in the Stripe Dashboard instead is picked up the same way, and a r
 
 ### What Brygge does with a refund
 
-Every refund of a sale issues a **credit note** (kreditnota) for the refunded amount, to the same payer as the faktura, dated the day the refund was booked. It is booked in the accounts and emailed to the payer (the PDF only, when the payer has no email address). A credit note made by a refund is never voided: a correction is a new document.
+Every refund of a sale issues a **credit note** (kreditnota) for the refunded amount, to the same payer as the faktura, dated the day the refund was booked. It is booked in the accounts and emailed to the payer (the PDF only, when the payer has no email address). The PDF says "Beløpet refunderes til kortet som ble brukt ved betalingen" and asks for no payment (see [Credit notes](#credit-notes-kreditnotaer)). A credit note made by a refund is never voided: a correction is a new document.
 
 - **Partial refund.** The faktura stays paid and gets the chip **Delvis refundert 90 kr**. Its credit notes are listed under the chip (**Kreditnota #N**, click for the PDF). Several partial refunds each make a credit note; when they add up to the whole faktura it counts as fully refunded.
 - **Full refund.** The chip reads **Refundert** and the faktura counts as credited: it is settled, never past due and never reminded. The payment in `Betalinger` stays in the list with the same chip, so you can see where the money went.

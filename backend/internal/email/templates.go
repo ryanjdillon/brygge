@@ -456,15 +456,39 @@ func PayMethodsLabel(vipps, card bool) string {
 	return ""
 }
 
+// CreditNoteSubject is the Subject header for the email that carries a credit
+// note.
+func CreditNoteSubject(clubName string, number int) string {
+	if clubName == "" {
+		clubName = "klubben"
+	}
+	return fmt.Sprintf("Kreditnota fra %s [Kreditnota %d]", clubName, number)
+}
+
+// CreditNoteBody is the HTML body for the email that carries a credit note
+// the treasurer issued. It asks for no payment. The PDF is attached by the
+// caller.
+func CreditNoteBody(memberName, clubName string, number int, total float64) string {
+	if clubName == "" {
+		clubName = "klubben"
+	}
+	if memberName == "" {
+		memberName = "medlem"
+	}
+	return fmt.Sprintf(`<p>Hei %s,</p><p>Vedlagt er kreditnota #%d fra %s på %s. `+
+		`Du skal ikke betale noe.</p>`,
+		html.EscapeString(memberName), number, html.EscapeString(clubName), formatNOK(math.Abs(total)))
+}
+
 // RefundDocumentSubject is the Subject header for a document a card refund
 // issued: a credit note (negative total), or the new faktura after a failed
 // refund.
 func RefundDocumentSubject(clubName string, number int, total float64) string {
+	if total < 0 {
+		return CreditNoteSubject(clubName, number)
+	}
 	if clubName == "" {
 		clubName = "klubben"
-	}
-	if total < 0 {
-		return fmt.Sprintf("Kreditnota fra %s [Kreditnota %d]", clubName, number)
 	}
 	return fmt.Sprintf("Ny faktura fra %s [Faktura %d]", clubName, number)
 }
